@@ -36,7 +36,7 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
     <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=9" />
   </head>
   <body>
     <div class="page-shell">
@@ -161,19 +161,6 @@
                 ofta mer känsla än ännu ett fullt torg i centrum.
               </p>
             </article>
-          </section>
-
-          <section class="city-pulse-section">
-            <div class="city-pulse-header">
-              <div>
-                <p class="eyebrow">JUST NU I ROM</p>
-                <h2>Stadspuls som gör dagen smartare</h2>
-              </div>
-              <p id="cityPulseNote" class="section-note">
-                Visar dagens rytm, speciella datum och små officiella tips som kan förändra kvällen.
-              </p>
-            </div>
-            <div id="cityPulseGrid" class="city-pulse-grid" aria-live="polite"></div>
           </section>
 
           <section class="spotlight-section">
@@ -388,16 +375,53 @@
             </div>
           </section>
 
+          <section class="city-pulse-edition">
+            <div class="city-pulse-edition-glow" aria-hidden="true"></div>
+            <div class="city-pulse-masthead">
+              <div class="city-pulse-intro">
+                <div class="city-pulse-live">
+                  <span class="city-pulse-live-dot" aria-hidden="true"></span>
+                  <p class="city-pulse-live-label">LIVE • UPPDATERAD JUST NU</p>
+                </div>
+                <p id="cityPulseEditionLabel" class="city-pulse-edition-label">
+                  Just nu i Rom
+                </p>
+                <h2 id="cityPulseHeadline">Laddar dagens Rom-puls...</h2>
+                <p id="cityPulseSubhead" class="city-pulse-subhead">
+                  Parranda läser in stadens rytm, kvarterspuls och ställesnivå innan du bygger dagen.
+                </p>
+              </div>
+              <div class="city-pulse-edition-meta">
+                <p class="city-pulse-meta-kicker">Edition</p>
+                <p id="cityPulseEditionDate" class="city-pulse-edition-date">
+                  Rom • i dag
+                </p>
+                <p id="cityPulseMeta" class="city-pulse-edition-count">
+                  Laddar signaler...
+                </p>
+              </div>
+            </div>
+            <div class="city-pulse-filter-row">
+              <span class="city-pulse-filter-label">Filtrera</span>
+              <div id="cityPulseFilters" class="city-pulse-filter-chips"></div>
+            </div>
+            <div id="cityPulseLevels" class="city-pulse-levels" aria-live="polite"></div>
+            <div class="city-pulse-footer">
+              <p id="cityPulseFooter" class="city-pulse-footer-note">
+                Den här sektionen sätter tonen för planeringen nedan.
+              </p>
+            </div>
+          </section>
+
           <section class="route-lab route-builder">
             <div class="section-heading compact-heading">
               <div>
-                <p class="eyebrow">PERSONLIG ROUTE BUILDER</p>
-                <h2>Välj datum, start/slut, km och vibe</h2>
+                <p class="eyebrow">PERSONLIG PLANERARE</p>
+                <h2>Bygg din dag i Rom</h2>
               </div>
               <p class="section-note">
-                Välj start och slut på tre sätt: från Parrandas egna platser,
-                från din nuvarande plats eller genom att skriva en adress i Rom.
-                Om du inte väljer något används Trastevere som trygg default.
+                Börja enkelt: låt Parranda välja en smart bas, eller sätt själv
+                start och mål om du redan vet var dagen ska börja eller sluta.
               </p>
             </div>
 
@@ -406,21 +430,22 @@
                 <article class="planner-panel">
                   <div class="planner-panel-head">
                     <p class="eyebrow">START</p>
-                    <span class="planner-default-note">Om du inte väljer: Trastevere</span>
+                    <span class="planner-default-note">Valfritt</span>
                   </div>
                   <label class="search-box route-lab-field">
                     <span>Hur vill du välja start?</span>
                     <select id="startModeSelect">
-                      <option value="preset">Välj från Parranda</option>
-                      <option value="current_location">Min plats nu</option>
-                      <option value="custom">Skriv själv</option>
+                      <option value="auto">Låt Parranda välja</option>
+                      <option value="preset">Jag väljer i appen</option>
+                      <option value="current_location">Använd min plats</option>
+                      <option value="custom">Jag skriver adress</option>
                     </select>
                   </label>
                   <p id="startModeHint" class="planner-mode-help">
-                    Välj bland områden, kvarter och stopp som redan finns i Parranda.
+                    Parranda väljer en smart startpunkt utifrån datum, vibe och resten av dagens upplägg.
                   </p>
                   <label class="search-box route-lab-field" data-mode-field="start-preset">
-                    <span>Välj område eller plats i appen</span>
+                    <span>Välj stadsdel eller plats</span>
                     <select id="startPresetSelect"></select>
                   </label>
                   <label class="search-box route-lab-field" data-mode-field="start-custom" hidden>
@@ -444,21 +469,22 @@
                 <article class="planner-panel">
                   <div class="planner-panel-head">
                     <p class="eyebrow">SLUT</p>
-                    <span class="planner-default-note">Om du inte väljer: Trastevere</span>
+                    <span class="planner-default-note">Valfritt</span>
                   </div>
                   <label class="search-box route-lab-field">
                     <span>Hur vill du avsluta dagen?</span>
                     <select id="endModeSelect">
-                      <option value="preset">Välj från Parranda</option>
-                      <option value="current_location">Min plats nu</option>
-                      <option value="custom">Skriv själv</option>
+                      <option value="auto">Låt Parranda välja</option>
+                      <option value="preset">Jag väljer i appen</option>
+                      <option value="current_location">Använd min plats</option>
+                      <option value="custom">Jag skriver adress</option>
                     </select>
                   </label>
                   <p id="endModeHint" class="planner-mode-help">
-                    Välj bland områden, kvarter och stopp som redan finns i Parranda.
+                    Parranda väljer en tydlig final om du inte själv vill låsa slutpunkten.
                   </p>
                   <label class="search-box route-lab-field" data-mode-field="end-preset">
-                    <span>Välj område eller plats i appen</span>
+                    <span>Välj stadsdel eller plats</span>
                     <select id="endPresetSelect"></select>
                   </label>
                   <label class="search-box route-lab-field" data-mode-field="end-custom" hidden>
@@ -588,7 +614,7 @@
                       Planera mina dagar
                     </button>
                     <button id="routeResetButton" class="ghost-button" type="button">
-                      Återställ till Trastevere-default
+                      Nollställ val
                     </button>
                   </div>
                 </article>
@@ -809,6 +835,6 @@
     </aside>
 
     <script src="vendor/leaflet/leaflet.js"></script>
-    <script src="script.js"></script>
+    <script src="script.js?v=9"></script>
   </body>
 </html>

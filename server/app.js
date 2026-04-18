@@ -6,6 +6,57 @@ const { generateRecommendations } = require("./route-engine");
 const { fetchLiveEventsForDates } = require("./live-events");
 const { getCityPulse, getRomeTodayIsoDate } = require("./editorial-calendar");
 
+const pulseVibeByTag = {
+  kultur: "curious",
+  kyrkor: "curious",
+  "hidden gems": "curious",
+  nattliv: "buzzy",
+  cocktail: "buzzy",
+  öl: "buzzy",
+  vin: "romantic",
+  utsikt: "romantic",
+  mat: "slow",
+};
+
+function buildOfficialPulseWhen(event, date) {
+  if (event.start_date && event.end_date && event.start_date === event.end_date) {
+    return event.start_date === date ? "I dag" : event.start_date;
+  }
+
+  if (event.start_date === date) {
+    return "Börjar i dag";
+  }
+
+  if (event.end_date === date) {
+    return "Pågår i dag";
+  }
+
+  return event.start_date || event.end_date || "Just nu";
+}
+
+function buildOfficialPulseItem(event, date) {
+  const where = [event.venue, event.address].filter(Boolean).join(" • ") || "Rom";
+  const matchesVibes = [...new Set((event.match_tags || []).map((tag) => pulseVibeByTag[tag]).filter(Boolean))];
+
+  return {
+    id: `official-${event.id}`,
+    level: "venue",
+    kind: "Officiellt live",
+    title: event.title,
+    where,
+    when: buildOfficialPulseWhen(event, date),
+    blurb:
+      event.summary ||
+      "Officiellt live-event i Rom som kan ge dagen ett mer tidsbundet lager.",
+    why_it_matters:
+      event.match_reason ||
+      "Bra som live-bonus när du vill väva in något som faktiskt bara händer just nu.",
+    matches_vibes: matchesVibes,
+    official_event_id: event.id,
+    priority: 6,
+  };
+}
+
 function buildApp() {
   const app = express();
 
@@ -125,10 +176,13 @@ function buildApp() {
       const date = String(request.query.date || "").trim() || getRomeTodayIsoDate();
       const pulse = getCityPulse(date);
       const liveEventsByDate = await fetchLiveEventsForDates([pulse.date], {});
+      const officialEvents = (liveEventsByDate[pulse.date] || []).slice(0, 2);
+      const officialPulseItems = officialEvents.slice(0, 1).map((event) => buildOfficialPulseItem(event, pulse.date));
 
       response.json({
         ...pulse,
-        official_events: (liveEventsByDate[pulse.date] || []).slice(0, 2),
+        items: [...(pulse.items || []), ...officialPulseItems],
+        official_events: officialEvents,
       });
     } catch (error) {
       response.status(500).json({

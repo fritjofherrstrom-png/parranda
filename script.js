@@ -1199,8 +1199,14 @@ const heroWildcardMeta = document.getElementById("heroWildcardMeta");
 const heroWildcardTags = document.getElementById("heroWildcardTags");
 const heroWildcardApplyButton = document.getElementById("heroWildcardApplyButton");
 const heroWildcardShuffleButton = document.getElementById("heroWildcardShuffleButton");
-const cityPulseNote = document.getElementById("cityPulseNote");
-const cityPulseGrid = document.getElementById("cityPulseGrid");
+const cityPulseEditionLabel = document.getElementById("cityPulseEditionLabel");
+const cityPulseHeadline = document.getElementById("cityPulseHeadline");
+const cityPulseSubhead = document.getElementById("cityPulseSubhead");
+const cityPulseEditionDate = document.getElementById("cityPulseEditionDate");
+const cityPulseMeta = document.getElementById("cityPulseMeta");
+const cityPulseFilters = document.getElementById("cityPulseFilters");
+const cityPulseLevels = document.getElementById("cityPulseLevels");
+const cityPulseFooter = document.getElementById("cityPulseFooter");
 const showFavoritesButton = document.getElementById("showFavoritesButton");
 const showAllButton = document.getElementById("showAllButton");
 const districtEyebrow = document.getElementById("districtEyebrow");
@@ -1287,6 +1293,7 @@ const favoritesStorageKey = "roma-radar-favorites";
 const savedRoutesStorageKey = "parranda-saved-routes";
 const routeApiBase = "/api";
 const plannerDefaultLabel = "Trastevere";
+const plannerAutoMode = "auto";
 
 let activeFilter = "all";
 let onlyFavorites = false;
@@ -1313,6 +1320,32 @@ let activeDrawerItem = null;
 let savedRoutes = loadSavedRoutes();
 let cityPulseState = null;
 let activeHeroWildcardId = null;
+let activePulseLevel = "all";
+
+const cityPulseLevelMeta = {
+  city: {
+    label: "Stadens rytm",
+    sub: "Det en lokal bär med sig utan att tänka på det",
+    mark: "I",
+  },
+  neighborhood: {
+    label: "Kvarterspuls",
+    sub: "Vad som faktiskt spelar bättre i olika delar av stan just nu",
+    mark: "II",
+  },
+  venue: {
+    label: "Ställesnivå",
+    sub: "Plats- och live-signaler som kan förändra dagen på riktigt",
+    mark: "III",
+  },
+};
+
+const cityPulseVibeLabels = {
+  slow: "långsam",
+  buzzy: "pulsig",
+  romantic: "romantisk",
+  curious: "nyfiken",
+};
 
 const optimizerModes = {
   "bar-hop": {
@@ -1377,6 +1410,41 @@ const routeModifierCopy = {
     "Mer low-key är aktivt. Motorn drar ned på showen och prioriterar bättre samtal, mjukare tempo och mindre brus.",
   party:
     "Mer party är aktivt. Kvällen väger nu upp mer puls, tätare glasstopp och senare energi.",
+};
+
+const remixModeCopy = {
+  "more-wine": {
+    summary: "Gör en ny version: mer vin, fortfarande samma dag som bas.",
+    variantLabel: "Mer vinig",
+  },
+  "shorter-walk": {
+    summary: "Gör en ny version: kortare gång, samma dag och känsla som utgångspunkt.",
+    variantLabel: "Kortare gång",
+  },
+  "hidden-gems": {
+    summary: "Gör en ny version: mer hidden gems, mindre uppenbar väg.",
+    variantLabel: "Mer hidden gems",
+  },
+  "more-evening": {
+    summary: "Gör en ny version: mer kväll, mer puls och senare stopp.",
+    variantLabel: "Mer kväll",
+  },
+  "more-culture": {
+    summary: "Gör en ny version: mer kultur, tydligare rum och mer innehåll mellan glasen.",
+    variantLabel: "Mer kultur",
+  },
+  "low-key": {
+    summary: "Gör en ny version: mjukare tempo, bättre samtalsstopp och mindre brus.",
+    variantLabel: "Mer low-key",
+  },
+  "more-party": {
+    summary: "Gör en ny version: mer party, senare energi och starkare nattdrag.",
+    variantLabel: "Mer party",
+  },
+  budget: {
+    summary: "Gör en ny version: billigare öl, mat och smartare budgetankare.",
+    variantLabel: "Billigare",
+  },
 };
 
 function createPulseSnapshot(snapshot, dateString) {
@@ -1456,53 +1524,146 @@ function buildFallbackWildcards(dateString = getTodayIsoDate()) {
   ];
 }
 
-function buildFallbackCityPulse(dateString = getTodayIsoDate()) {
+function formatPulseDatePart(dateString, options) {
+  const formatted = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Europe/Rome",
+    ...options,
+  }).format(new Date(`${dateString}T12:00:00+02:00`));
+
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+}
+
+function getFallbackPulseDateLabels(dateString = getTodayIsoDate()) {
+  return {
+    weekdayLabel: formatPulseDatePart(dateString, { weekday: "long" }),
+    dateLabel: formatPulseDatePart(dateString, {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    }),
+  };
+}
+
+function buildFallbackPulseItems(dateString = getTodayIsoDate()) {
   const date = dateString || getTodayIsoDate();
-  const weekday = new Date(`${date}T12:00:00`).getDay();
-  const moments = [];
+  const probe = new Date(`${date}T12:00:00+02:00`);
+  const weekday = probe.getDay();
+  const month = probe.getMonth() + 1;
+  const items = [];
 
   if (weekday === 5 || weekday === 6) {
-    moments.push({
-      id: "fallback-weekend",
-      kindLabel: "Lokal rytm",
-      title: "Helgen börjar sent i Rom",
-      note:
-        "Spara gärna de mest levande kvarteren till efter 18:30. Då känns Monti, Testaccio, Trastevere och Pigneto ofta bättre.",
-      areas: ["Monti", "Testaccio", "Pigneto"],
-      tags: ["Nattliv", "Öl", "Vin"],
+    items.push({
+      id: "fallback-city-weekend",
+      level: "city",
+      kind: "Stadens rytm",
+      title: "Helgkvällar i Rom blir starkast sent",
+      where: "Monti, Testaccio, Pigneto och Ostiense",
+      when: "Efter 19:00",
+      blurb:
+        "Spara gärna huvudenergin till sent. De kvarter som känns halvlugna vid aperitivo kan vara helt rätt först när kvällen hunnit sätta sig.",
+      why_it_matters:
+        "En bättre helgdag i Rom kommer ofta från färre kvarter och mer tålamod, inte från att försöka täcka allt före middagen.",
+      matches_vibes: ["buzzy"],
       linked_wildcard_id: "fallback-san-lorenzo-pigneto",
+      priority: 5,
     });
   } else {
-    moments.push({
-      id: "fallback-smart-evening",
-      kindLabel: "Stadspuls",
-      title: "Rom blir oftast bättre efter lunch än före",
-      note:
-        "Lägg tyngden på senare timmar om du vill att staden ska kännas mer levande och mindre avbockad.",
-      areas: ["Monti", "Ostiense", "Trastevere"],
-      tags: ["Kväll", "Vin", "Promenad"],
+    items.push({
+      id: "fallback-city-smart",
+      level: "city",
+      kind: "Stadens rytm",
+      title: "Rom blir oftast bättre när dagen får växa in i kvällen",
+      where: "Hela staden",
+      when: "Efter lunch till sent",
+      blurb:
+        "Det mesta känns mer levande efter att eftermiddagen landat. Det gäller särskilt om du vill att staden ska kännas mindre avbockad och mer upplevd.",
+      why_it_matters:
+        "Bygg inte dagen för tidigt. När tempot får växa blir även en enkel rutt mer trovärdig.",
+      matches_vibes: ["slow", "curious"],
       linked_wildcard_id: "fallback-monti-testaccio",
+      priority: 4,
     });
   }
 
-  moments.push({
-    id: "fallback-low-key",
-    kindLabel: "Lokal rytm",
-    title: "Två starka kvarter slår ofta en full checklista",
-    note:
-      "Håll dig gärna till ett tydligt spår och låt promenaden mellan stoppen vara en del av kvällen.",
-    areas: ["Garbatella", "Ostiense", "Aventino"],
-    tags: ["Low-key", "Kultur", "Lokal känsla"],
+  if (month >= 4 && month <= 5) {
+    items.push({
+      id: "fallback-city-spring",
+      level: "city",
+      kind: "Säsong",
+      title: "Våren gör Rom extra bra till fots",
+      where: "Hela Rom",
+      when: "Golden hour till sent",
+      blurb:
+        "Det är läge för längre promenader, snyggare skiften mellan kvarter och rutter som får vara lite bredare utan att kännas stressade.",
+      why_it_matters:
+        "Just den här säsongen vinner på att låta promenaden bli en del av upplevelsen, inte bara transporten.",
+      matches_vibes: ["romantic", "slow"],
+      linked_wildcard_id: "fallback-monti-testaccio",
+      priority: 3,
+    });
+  }
+
+  items.push({
+    id: "fallback-neighborhood",
+    level: "neighborhood",
+    kind: "Kvarterspuls",
+    title: "Två starka kvarter slår oftare en full checklista",
+    where: weekday === 5 || weekday === 6 ? "Monti + Testaccio eller Pigneto + San Lorenzo" : "Garbatella + Ostiense eller Monti + Testaccio",
+    when: "Hela dagen",
+    blurb:
+      "Håll dig gärna till ett tydligt spår och låt promenaden mellan stoppen vara en del av rytmen i stället för att jaga för många punkter.",
+    why_it_matters:
+      "Det är så dagen känns mer lokal och mindre som en lista du försöker vinna över.",
+    matches_vibes: ["curious"],
     linked_wildcard_id: "fallback-garbatella-ostiense",
+    priority: 4,
   });
+
+  items.push({
+    id: "fallback-venue-wine",
+    level: "venue",
+    kind: "Ställesnivå",
+    title: "Låt ett vin- eller ölankare bära kvällen",
+    where: "Monti, Testaccio, Garbatella eller Trastevere",
+    when: "Sen eftermiddag till kväll",
+    blurb:
+      "Ett riktigt glasstopp gör ofta större skillnad än ännu ett halvspontant ställe. Välj ett rum med tydlig känsla och bygg vidare därifrån.",
+    why_it_matters:
+      "När ett stopp verkligen bär stämningen blir resten av rutten enklare att lita på.",
+    matches_vibes: ["slow", "buzzy"],
+    linked_wildcard_id: "fallback-monti-testaccio",
+    priority: 3,
+  });
+
+  return items;
+}
+
+function buildFallbackCityPulse(dateString = getTodayIsoDate()) {
+  const date = dateString || getTodayIsoDate();
+  const dateLabels = getFallbackPulseDateLabels(date);
+  const items = buildFallbackPulseItems(date);
 
   return {
     date,
-    headline:
-      "Redaktionell fallback: enkla stadssignaler och wildcard-förslag ligger kvar även om live-lagret inte svarar.",
+    weekday_label: dateLabels.weekdayLabel,
+    date_label: dateLabels.dateLabel,
+    headline: "Just nu lönar det sig att läsa Rom som en lokal.",
+    subhead:
+      "När live-lagret inte svarar fullt ut håller Parranda kvar en redaktionell fallback med tydlig stadskänsla, kvarterspuls och platsnivå.",
     note:
       "Visar en lokal fallback med stadspuls och kvällsidéer medan live-lagret laddar eller om nätet inte spelar med.",
-    moments,
+    footer_note:
+      "Fallback-läge är aktivt, men pulsen är fortfarande tänkt att hjälpa dig bygga en bättre dag nedan.",
+    items,
+    moments: items.slice(0, 4).map((item) => ({
+      id: item.id,
+      kindLabel: item.kind,
+      title: item.title,
+      note: item.blurb,
+      areas: [item.where],
+      tags: item.matches_vibes || [],
+      linked_wildcard_id: item.linked_wildcard_id || null,
+    })),
     official_events: [],
     wildcards: buildFallbackWildcards(date),
   };
@@ -1623,65 +1784,184 @@ function shuffleHeroWildcard() {
   renderHeroWildcard();
 }
 
-function createCityMomentCard(moment) {
-  const card = document.createElement("article");
-  const kicker = document.createElement("p");
-  const title = document.createElement("h3");
-  const meta = document.createElement("p");
-  const copy = document.createElement("p");
+function buildLegacyPulseItems(moments = []) {
+  const levelOrder = ["city", "neighborhood", "venue", "venue"];
+
+  return moments.map((moment, index) => ({
+    id: moment.id || `legacy-pulse-${index}`,
+    level: levelOrder[index] || "venue",
+    kind: moment.kindLabel || "Stadspuls",
+    title: moment.title,
+    where: (moment.areas || []).join(" • ") || "Rom",
+    when: "I dag",
+    blurb: moment.note,
+    why_it_matters: "Använd signalen som ett litet styrmedel när du bygger dagen nedan.",
+    matches_vibes: moment.tags || [],
+    linked_wildcard_id: moment.linked_wildcard_id || null,
+    priority: 1,
+  }));
+}
+
+function getNormalizedCityPulseItems() {
+  if (Array.isArray(cityPulseState?.items) && cityPulseState.items.length) {
+    return cityPulseState.items.filter(Boolean);
+  }
+
+  return buildLegacyPulseItems(cityPulseState?.moments || []);
+}
+
+function getCityPulseEventById(eventId) {
+  return (
+    (cityPulseState?.official_events || []).find(
+      (event) => String(event.id) === String(eventId),
+    ) || null
+  );
+}
+
+function openCityPulseItem(item) {
+  if (!item) {
+    return;
+  }
+
+  if (item.official_event_id) {
+    const officialEvent = getCityPulseEventById(item.official_event_id);
+
+    if (officialEvent) {
+      openPlaceDrawer(buildEventDrawerItem(officialEvent));
+      return;
+    }
+  }
+
+  if (item.place_query) {
+    openPlaceDrawerByQuery(item.place_query);
+  }
+}
+
+function createPulseFilterButton(levelKey, label, count) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `city-pulse-filter-button${activePulseLevel === levelKey ? " active" : ""}`;
+  button.textContent = `${label} (${count})`;
+  button.addEventListener("click", () => {
+    activePulseLevel = levelKey;
+    renderCityPulse();
+  });
+  return button;
+}
+
+function createPulseEntry(item) {
+  const article = document.createElement("article");
+  const top = document.createElement("div");
+  const kind = document.createElement("span");
+  const when = document.createElement("span");
+  const where = document.createElement("p");
+  const blurb = document.createElement("p");
+  const reasonWrap = document.createElement("div");
+  const reasonLabel = document.createElement("p");
+  const reason = document.createElement("p");
   const tags = document.createElement("div");
   const actions = document.createElement("div");
+  const hasInternalTarget = Boolean(item.place_query || item.official_event_id);
+  let title;
 
-  card.className = "city-pulse-card";
-  kicker.className = "city-pulse-card-kicker";
-  meta.className = "city-pulse-card-meta";
-  copy.className = "city-pulse-card-copy";
-  tags.className = "tag-row city-pulse-card-tags";
-  actions.className = "city-pulse-card-actions";
+  article.className = "pulse-entry";
+  top.className = "pulse-entry-top";
+  kind.className = "pulse-entry-kind";
+  when.className = "pulse-entry-when";
+  where.className = "pulse-entry-where";
+  blurb.className = "pulse-entry-blurb";
+  reasonWrap.className = "pulse-entry-reason";
+  reasonLabel.className = "pulse-entry-reason-label";
+  reason.className = "pulse-entry-reason-copy";
+  tags.className = "pulse-entry-tags";
+  actions.className = "pulse-entry-actions";
 
-  kicker.textContent = moment.kindLabel || "Stadspuls";
-  title.textContent = moment.title;
-  meta.textContent = [formatCompactSwedishDate(cityPulseState?.date || getTodayIsoDate()), ...(moment.areas || []).slice(0, 2)]
-    .filter(Boolean)
-    .join(" • ");
-  copy.textContent = moment.note;
+  kind.textContent = item.kind || "Stadspuls";
+  when.textContent = item.when || "I dag";
 
-  (moment.tags || []).slice(0, 3).forEach((tagText) => {
+  if (hasInternalTarget) {
+    title = document.createElement("button");
+    title.type = "button";
+    title.className = "pulse-entry-title-button";
+    title.textContent = item.title;
+    title.addEventListener("click", () => {
+      openCityPulseItem(item);
+    });
+  } else {
+    title = document.createElement("h4");
+    title.className = "pulse-entry-title";
+    title.textContent = item.title;
+  }
+
+  where.textContent = item.where ? `◉ ${item.where}` : "◉ Rom";
+  blurb.textContent = item.blurb || item.note || "";
+  reasonLabel.textContent = "Varför det spelar roll";
+  reason.textContent =
+    item.why_it_matters ||
+    "Det här är tänkt som en liten lokal signal som hjälper dagens rutt kännas mer självklar.";
+
+  top.append(kind, when);
+  reasonWrap.append(reasonLabel, reason);
+  article.append(top, title, where, blurb, reasonWrap);
+
+  (item.matches_vibes || []).slice(0, 4).forEach((vibe) => {
     const chip = document.createElement("span");
-    chip.textContent = tagText;
+    chip.textContent = `passar • ${cityPulseVibeLabels[vibe] || vibe}`;
     tags.appendChild(chip);
   });
 
-  if (moment.linked_wildcard_id && getWildcardById(moment.linked_wildcard_id)) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "secondary-button";
-    button.textContent = "Planera utifrån detta";
-    button.addEventListener("click", async () => {
-      const wildcard = getWildcardById(moment.linked_wildcard_id);
+  if (tags.childNodes.length) {
+    article.appendChild(tags);
+  }
+
+  if (hasInternalTarget) {
+    const detailButton = document.createElement("button");
+    detailButton.type = "button";
+    detailButton.className = "ghost-button pulse-action-button";
+    detailButton.textContent = item.official_event_id ? "Öppna live-info" : "Öppna plats";
+    detailButton.addEventListener("click", () => {
+      openCityPulseItem(item);
+    });
+    actions.appendChild(detailButton);
+  }
+
+  if (item.linked_wildcard_id && getWildcardById(item.linked_wildcard_id)) {
+    const plannerButton = document.createElement("button");
+    plannerButton.type = "button";
+    plannerButton.className = "secondary-button pulse-action-button";
+    plannerButton.textContent = "Bygg dag av detta";
+    plannerButton.addEventListener("click", async () => {
+      const wildcard = getWildcardById(item.linked_wildcard_id);
+
       if (!wildcard) {
         return;
       }
 
       await applyWildcardToPlanner(wildcard, {
         autoPlan: true,
-        sourceLabel: moment.title,
+        sourceLabel: item.title,
       });
     });
-    actions.appendChild(button);
+    actions.appendChild(plannerButton);
   }
 
-  [kicker, title, meta, copy, tags, actions].forEach((element) => {
-    if (element.childNodes.length || element.textContent) {
-      card.appendChild(element);
-    }
-  });
+  if (actions.childNodes.length) {
+    article.appendChild(actions);
+  }
 
-  return card;
+  return article;
 }
 
 function renderCityPulse() {
-  if (!cityPulseNote || !cityPulseGrid) {
+  if (
+    !cityPulseHeadline ||
+    !cityPulseSubhead ||
+    !cityPulseEditionDate ||
+    !cityPulseMeta ||
+    !cityPulseFilters ||
+    !cityPulseLevels ||
+    !cityPulseFooter
+  ) {
     return;
   }
 
@@ -1689,51 +1969,121 @@ function renderCityPulse() {
     cityPulseState = buildFallbackCityPulse(getTodayIsoDate());
   }
 
-  cityPulseNote.textContent = `${formatSwedishDate(cityPulseState.date)} • ${
-    cityPulseState.headline || cityPulseState.note
-  }`;
-  cityPulseGrid.innerHTML = "";
-
-  const momentItems = (cityPulseState.moments || []).slice(
-    0,
-    cityPulseState.official_events?.length ? 3 : 4,
-  );
-  const officialItems = (cityPulseState.official_events || []).slice(
-    0,
-    Math.max(0, 4 - momentItems.length),
+  const items = getNormalizedCityPulseItems();
+  const availableLevels = Object.keys(cityPulseLevelMeta).filter((level) =>
+    items.some((item) => item.level === level),
   );
 
-  [...momentItems.map(createCityMomentCard)].forEach((card) => {
-    cityPulseGrid.appendChild(card);
-  });
+  if (activePulseLevel !== "all" && !availableLevels.includes(activePulseLevel)) {
+    activePulseLevel = "all";
+  }
 
-  officialItems.forEach((event) => {
-    cityPulseGrid.appendChild(
-      createLiveEventCard({
-        ...event,
-        date: cityPulseState.date,
-      }),
+  const weekdayLabel =
+    cityPulseState.weekday_label ||
+    getFallbackPulseDateLabels(cityPulseState.date || getTodayIsoDate()).weekdayLabel;
+  const dateLabel =
+    cityPulseState.date_label ||
+    getFallbackPulseDateLabels(cityPulseState.date || getTodayIsoDate()).dateLabel;
+
+  if (cityPulseEditionLabel) {
+    cityPulseEditionLabel.textContent = `Just nu i Rom · ${weekdayLabel} ${dateLabel}`;
+  }
+
+  cityPulseHeadline.textContent =
+    cityPulseState.headline || "Just nu lönar det sig att läsa Rom som en lokal.";
+  cityPulseSubhead.textContent =
+    cityPulseState.subhead ||
+    cityPulseState.note ||
+    "Kuraterad puls hjälper dig känna vad som är värt att göra just nu.";
+  cityPulseEditionDate.textContent = `${weekdayLabel}\n${dateLabel}`;
+  cityPulseMeta.textContent = `${items.length} signaler • ${availableLevels.length} nivåer`;
+  cityPulseFooter.textContent =
+    cityPulseState.footer_note ||
+    "Den här sektionen blandar säkra lokala rytmer med det som är värt att väga in just nu.";
+
+  cityPulseFilters.innerHTML = "";
+  cityPulseFilters.appendChild(createPulseFilterButton("all", "Allt", items.length));
+  availableLevels.forEach((level) => {
+    const count = items.filter((item) => item.level === level).length;
+    cityPulseFilters.appendChild(
+      createPulseFilterButton(level, cityPulseLevelMeta[level].label, count),
     );
   });
 
-  if (!momentItems.length && !officialItems.length) {
+  cityPulseLevels.innerHTML = "";
+
+  const visibleLevels =
+    activePulseLevel === "all"
+      ? Object.keys(cityPulseLevelMeta)
+      : [activePulseLevel];
+
+  visibleLevels.forEach((level) => {
+    const groupItems = items
+      .filter((item) => item.level === level)
+      .sort((left, right) => (right.priority || 0) - (left.priority || 0));
+
+    if (!groupItems.length) {
+      return;
+    }
+
+    const section = document.createElement("section");
+    const header = document.createElement("div");
+    const mark = document.createElement("span");
+    const copy = document.createElement("div");
+    const title = document.createElement("h3");
+    const sub = document.createElement("p");
+    const grid = document.createElement("div");
+
+    section.className = "pulse-group";
+    header.className = "pulse-group-header";
+    mark.className = "pulse-group-mark";
+    copy.className = "pulse-group-copy";
+    title.className = "pulse-group-title";
+    sub.className = "pulse-group-sub";
+    grid.className = "pulse-group-grid";
+
+    mark.textContent = cityPulseLevelMeta[level].mark;
+    title.textContent = cityPulseLevelMeta[level].label;
+    sub.textContent = cityPulseLevelMeta[level].sub;
+
+    copy.append(title, sub);
+    header.append(mark, copy);
+    section.appendChild(header);
+
+    groupItems.forEach((item) => {
+      grid.appendChild(createPulseEntry(item));
+    });
+
+    section.appendChild(grid);
+    cityPulseLevels.appendChild(section);
+  });
+
+  if (!cityPulseLevels.childNodes.length) {
     const emptyState = document.createElement("div");
-    emptyState.className = "empty-state";
+    emptyState.className = "empty-state pulse-empty-state";
     emptyState.innerHTML =
-      "<h3>Inga extra signaler just nu</h3><p>Parranda lyckades inte hitta några tydliga dagens-notiser, men wildcardet och planeringen fungerar fortfarande.</p>";
-    cityPulseGrid.appendChild(emptyState);
+      "<h3>Inga starka signaler just nu</h3><p>Parranda lyckades inte hämta några tydliga dagensnotiser, men route buildern och wildcardet fungerar fortfarande.</p>";
+    cityPulseLevels.appendChild(emptyState);
   }
 }
 
 async function loadCityPulse(dateString = getTodayIsoDate()) {
+  const fallbackPulse = buildFallbackCityPulse(dateString);
+
   try {
     const response = await fetchJson(
       `${routeApiBase}/city-pulse?date=${encodeURIComponent(dateString)}`,
     );
     cityPulseState = {
-      ...buildFallbackCityPulse(dateString),
+      ...fallbackPulse,
       ...response,
       date: response.date || dateString,
+      weekday_label: response.weekday_label || fallbackPulse.weekday_label,
+      date_label: response.date_label || fallbackPulse.date_label,
+      items:
+        Array.isArray(response.items) && response.items.length
+          ? response.items
+          : fallbackPulse.items,
       moments: Array.isArray(response.moments) ? response.moments : [],
       official_events: Array.isArray(response.official_events) ? response.official_events : [],
       wildcards:
@@ -1742,7 +2092,7 @@ async function loadCityPulse(dateString = getTodayIsoDate()) {
           : buildFallbackWildcards(dateString),
     };
   } catch (_error) {
-    cityPulseState = buildFallbackCityPulse(dateString);
+    cityPulseState = fallbackPulse;
   }
 
   if (
@@ -1914,12 +2264,40 @@ function buildPlannerSnapshot(payload, dates) {
   };
 }
 
+function buildPlanningResultSummary(response) {
+  const plannedCount = plannedDays.length;
+  const usedAutoStart = startModeSelect?.value === plannerAutoMode;
+  const usedAutoEnd = endModeSelect?.value === plannerAutoMode;
+  const resolvedStart = response.resolved_start?.label || plannerDefaultLabel;
+  const resolvedEnd = response.resolved_end?.label || plannerDefaultLabel;
+
+  if (usedAutoStart && usedAutoEnd) {
+    return `${plannedCount} dag(ar) planerade. Parranda valde en smart bas och visar först huvudrutten per dag, sedan alternativa upplägg.`;
+  }
+
+  if (!usedAutoStart && usedAutoEnd) {
+    return `${plannedCount} dag(ar) planerade från ${resolvedStart}. Parranda valde finalen och visar först huvudrutten per dag, sedan alternativa upplägg.`;
+  }
+
+  if (usedAutoStart && !usedAutoEnd) {
+    return `${plannedCount} dag(ar) planerade med ${resolvedEnd} som mål. Parranda valde en smart start och visar först huvudrutten per dag, sedan alternativa upplägg.`;
+  }
+
+  return `${plannedCount} dag(ar) planerade mellan ${resolvedStart} och ${resolvedEnd}. Först visas huvudrutten per dag, sedan alternativa upplägg.`;
+}
+
 function createGoogleInfoUrl(query) {
   return `https://www.google.com/search?q=${encodeURIComponent(`${query} Rome`)}`;
 }
 
 function getPlannerModeHint(pointKey, mode) {
   const isStart = pointKey === "start";
+
+  if (mode === plannerAutoMode) {
+    return isStart
+      ? "Parranda väljer en smart startpunkt utifrån datum, vibe och resten av dagens upplägg."
+      : "Parranda väljer en tydlig final om du inte själv vill låsa slutpunkten.";
+  }
 
   if (mode === "current_location") {
     return isStart
@@ -2227,8 +2605,8 @@ function applyRouteModifier(modifier) {
 function setPlannerDefaults() {
   const today = getTodayIsoDate();
 
-  startModeSelect.value = "preset";
-  endModeSelect.value = "preset";
+  startModeSelect.value = plannerAutoMode;
+  endModeSelect.value = plannerAutoMode;
   if (startPresetSelect.options.length) {
     setPresetSelectValue(startPresetSelect, plannerDefaultLabel);
     setPresetSelectValue(endPresetSelect, plannerDefaultLabel);
@@ -2362,6 +2740,8 @@ function serializeRouteView(routeView) {
     routeLink: routeView.routeLink,
     mapRoutePoints: [...(routeView.mapRoutePoints || [])],
     weatherNote: routeView.weatherNote || null,
+    pulseNote: routeView.pulseNote || null,
+    liveEventFitNote: routeView.liveEventFitNote || null,
     venueSpecials: [...(routeView.venueSpecials || [])],
     budgetNote: routeView.budgetNote || null,
     openingWarnings: [...(routeView.openingWarnings || [])],
@@ -2457,7 +2837,38 @@ function remixSnapshot(snapshot, remixMode) {
   return remixed;
 }
 
-async function runSavedRouteRemix(savedRoute, remixMode = null) {
+function saveCurrentPrimaryRouteVariant(savedRoute, remixMode) {
+  const remixMeta = remixModeCopy[remixMode];
+
+  if (!remixMeta || !plannedDays.length || !latestPlannerSnapshot) {
+    return null;
+  }
+
+  const day = plannedDays[0];
+  const savePayload = {
+    date: day.date,
+    routeId: day.primary_route.id,
+    routeLabel: `Variant • ${remixMeta.variantLabel}`,
+    title: `${day.primary_route.title} • ${remixMeta.variantLabel}`,
+    summary: day.primary_route.why_recommended || day.primary_route.summary,
+    snapshot: latestPlannerSnapshot,
+    variantLabel: remixMeta.variantLabel,
+    parentSavedRouteId: savedRoute.id,
+    parentTitle: savedRoute.title,
+  };
+  const routeView = createApiRouteView(
+    day.primary_route,
+    "Huvudrutt",
+    (day.live_events || []).filter((event) => event.best_route_id === day.primary_route.id),
+    savePayload,
+  );
+
+  savePlannedRoute(enrichSavePayload(savePayload, routeView));
+  return savePayload;
+}
+
+async function runSavedRouteRemix(savedRoute, remixMode = null, options = {}) {
+  const { saveAsVariant = false } = options;
   const snapshot = remixMode ? remixSnapshot(savedRoute.snapshot, remixMode) : savedRoute.snapshot;
   applyPlannerSnapshot(snapshot);
   switchTab("routes");
@@ -2465,23 +2876,23 @@ async function runSavedRouteRemix(savedRoute, remixMode = null) {
     .querySelector(".route-builder")
     ?.scrollIntoView({ behavior: "smooth", block: "start" });
 
-  const messageByMode = {
-    "more-wine": "Gör en ny version: mer vin, fortfarande samma dag som bas.",
-    "shorter-walk": "Gör en ny version: kortare gång, samma dag och känsla som utgångspunkt.",
-    "hidden-gems": "Gör en ny version: mer hidden gems, mindre uppenbar väg.",
-    "more-evening": "Gör en ny version: mer kväll, mer puls och senare stopp.",
-    "more-culture": "Gör en ny version: mer kultur, tydligare rum och mer innehåll mellan glasen.",
-    "low-key": "Gör en ny version: mjukare tempo, bättre samtalsstopp och mindre brus.",
-    "more-party": "Gör en ny version: mer party, senare energi och starkare nattdrag.",
-    budget: "Gör en ny version: billigare öl, mat och smartare budgetankare.",
-  };
-
   updateRouteMatchSummary(
-    messageByMode[remixMode] || `"${savedRoute.title}" laddas om som ny utgångspunkt.`,
+    remixModeCopy[remixMode]?.summary || `"${savedRoute.title}" laddas om som ny utgångspunkt.`,
   );
 
   try {
     await planRoutes();
+    if (saveAsVariant && remixMode) {
+      const savedVariant = saveCurrentPrimaryRouteVariant(savedRoute, remixMode);
+
+      if (savedVariant) {
+        savedRoutesSection?.scrollIntoView({ behavior: "smooth", block: "start" });
+        updateRouteMatchSummary(
+          `"${savedVariant.title}" är nu sparad som ny variant av "${savedRoute.title}". Du kan fortsätta bygga ett eget bibliotek av versioner härifrån.`,
+        );
+        return;
+      }
+    }
     routeResults?.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (_error) {
     routeRenderMode = "fallback";
@@ -2544,7 +2955,7 @@ function createSavedRouteCard(savedRoute) {
     savedRoute.summary || preview?.summary || "Sparad dagsbas för nya versioner i Parranda.";
   context.textContent =
     [startLabel, endLabel].filter(Boolean).join(" -> ") || "Sparad dagsbas för nya versioner.";
-  remixLabel.textContent = "Remixa direkt";
+  remixLabel.textContent = "Skapa och spara ny variant";
 
   [
     savedRoute.date ? formatSwedishDate(savedRoute.date) : null,
@@ -2553,6 +2964,8 @@ function createSavedRouteCard(savedRoute) {
     snapshot.optimizerMode ? optimizerLabel[snapshot.optimizerMode] || null : null,
     budgetTierLabel[snapshot.budgetTier || "standard"] || null,
     modifierLabel[snapshot.modifier || ""] || null,
+    savedRoute.variantLabel ? `Variant: ${savedRoute.variantLabel}` : null,
+    savedRoute.parentTitle ? `Från: ${savedRoute.parentTitle}` : null,
     savedRoute.savedAt ? `Sparad ${formatSavedTimestamp(savedRoute.savedAt)}` : null,
   ]
     .filter(Boolean)
@@ -2621,7 +3034,9 @@ function createSavedRouteCard(savedRoute) {
     button.className = "ghost-button";
     button.textContent = item.label;
     button.addEventListener("click", () => {
-      runSavedRouteRemix(savedRoute, item.id);
+      runSavedRouteRemix(savedRoute, item.id, {
+        saveAsVariant: true,
+      });
     });
     remix.appendChild(button);
   });
@@ -3006,6 +3421,8 @@ function createFallbackRouteView(route) {
     routeLink: createRouteDirectionsUrl(mapRoutePoints),
     mapRoutePoints,
     weatherNote: null,
+    pulseNote: null,
+    liveEventFitNote: null,
     venueSpecials: [],
     openingWarnings: [],
   };
@@ -3037,6 +3454,8 @@ function createApiRouteView(route, label = "Huvudrutt", liveEvents = [], savePay
     routeLink: createRouteDirectionsUrl(route.map_route_points),
     mapRoutePoints: route.map_route_points,
     weatherNote: route.weather_note,
+    pulseNote: route.pulse_note || null,
+    liveEventFitNote: route.live_event_fit_note || null,
     venueSpecials: route.venue_specials || [],
     budgetNote: route.budget_note || null,
     openingWarnings: route.opening_hours_warnings,
@@ -3079,6 +3498,13 @@ async function buildPlannerPoint(pointKey) {
   const presetSelect = isStart ? startPresetSelect : endPresetSelect;
   const customInput = isStart ? startCustomInput : endCustomInput;
   const mode = modeSelect.value;
+
+  if (mode === plannerAutoMode) {
+    return {
+      type: "preset",
+      label: plannerDefaultLabel,
+    };
+  }
 
   if (mode === "current_location") {
     try {
@@ -3150,7 +3576,26 @@ async function registerServiceWorker() {
     return;
   }
 
+  const isLocalDev =
+    window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+
   try {
+    if (isLocalDev) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+
+      if ("caches" in window) {
+        const cacheKeys = await caches.keys();
+        await Promise.all(
+          cacheKeys
+            .filter((key) => key.startsWith("parranda-"))
+            .map((key) => caches.delete(key)),
+        );
+      }
+
+      return;
+    }
+
     await navigator.serviceWorker.register("./sw.js");
   } catch (error) {
     console.error("Service worker registration failed", error);
@@ -3260,9 +3705,16 @@ function updateMapPanelForRoute(routeView) {
   mapPlaceName.textContent = routeView.title;
   mapPlaceMeta.textContent = `${routeView.anchor} • ${routeView.walk}`;
   mapPlaceDescription.textContent = routeView.summary;
-  mapPlaceNote.textContent = routeView.liveEvents?.length
-    ? `${routeView.why || "Kartfokus på dagens valda rutt."} ${routeView.liveEvents.length} live-event passar extra bra med just den här rutten.`
-    : routeView.why || "Kartfokus på dagens valda rutt.";
+  mapPlaceNote.textContent = [
+    routeView.pulseNote || null,
+    routeView.liveEventFitNote || null,
+    routeView.liveEvents?.length
+      ? `${routeView.liveEvents.length} live-event passar extra bra med just den här rutten.`
+      : null,
+    routeView.why || "Kartfokus på dagens valda rutt.",
+  ]
+    .filter(Boolean)
+    .join(" ");
   mapPlaceLink.href = routeView.routeLink;
   mapFavoriteButton.textContent = "Spara vald plats";
   mapFavoriteButton.dataset.place = "";
@@ -3785,8 +4237,25 @@ function createRouteCard(routeView, { routeKey, isSecondary = false, isRecommend
     weatherNote.textContent = routeView.weatherNote;
   }
 
-  specials.hidden = !routeView.venueSpecials.length;
+  specials.hidden = !(
+    routeView.pulseNote ||
+    routeView.liveEventFitNote ||
+    routeView.venueSpecials.length ||
+    routeView.budgetNote
+  );
   specials.innerHTML = "";
+  if (routeView.pulseNote) {
+    const pulseNote = document.createElement("p");
+    pulseNote.className = "route-special-note";
+    pulseNote.textContent = routeView.pulseNote;
+    specials.appendChild(pulseNote);
+  }
+  if (routeView.liveEventFitNote) {
+    const liveNote = document.createElement("p");
+    liveNote.className = "route-special-note";
+    liveNote.textContent = routeView.liveEventFitNote;
+    specials.appendChild(liveNote);
+  }
   routeView.venueSpecials.forEach((specialText) => {
     const note = document.createElement("p");
     note.className = "route-special-note";
@@ -4043,11 +4512,9 @@ async function planRoutes() {
     return;
   }
 
-  const plannedStart = response.resolved_start?.label || plannerDefaultLabel;
-  const plannedEnd = response.resolved_end?.label || plannerDefaultLabel;
   updateRouteMatchSummary(
     buildPlannerStyleSummary(
-      `${plannedDays.length} dag(ar) planerade mellan ${plannedStart} och ${plannedEnd}. Först visas huvudrutten per dag, sedan två alternativa upplägg.`,
+      buildPlanningResultSummary(response),
     ),
   );
 }
@@ -4152,11 +4619,11 @@ useGeolocationButton?.addEventListener("click", async () => {
   try {
     await ensureCurrentLocation();
     updateRouteMatchSummary(
-      "Min plats är nu vald som startpunkt. Om du nekar åtkomst faller appen tillbaka till vald kartplats eller Trastevere-default.",
+      "Min plats är nu vald som startpunkt. Om platsåtkomst inte fungerar väljer Parranda en smart start i stället.",
     );
   } catch (error) {
     updateRouteMatchSummary(
-      "Jag kunde inte läsa din plats just nu. Om du fortsätter används vald kartplats eller Trastevere-default som fallback.",
+      "Jag kunde inte läsa din plats just nu. Om du fortsätter väljer Parranda en smart start i stället.",
     );
   }
 });
@@ -4191,7 +4658,7 @@ routeResetButton?.addEventListener("click", () => {
   clearRouteOverlay();
   renderRouteResults();
   updateRouteMatchSummary(
-    "Planeraren är återställd till Trastevere -> Trastevere med standardnivå och utan extra bias. De kuraterade rutterna visas igen.",
+    "Planeraren är nollställd. Parranda får nu välja start och slut smart igen, och de kuraterade rutterna visas som backup.",
   );
 });
 

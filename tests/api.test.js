@@ -145,6 +145,10 @@ test("GET /api/city-pulse returnerar stadspuls, wildcard och officiella tips", a
     assert.equal(response.status, 200);
     assert.equal(response.body.date, "2026-04-21");
     assert.ok(response.body.moments.some((item) => item.title === "Natale di Roma"));
+    assert.ok(Array.isArray(response.body.items));
+    assert.ok(response.body.items.some((item) => item.level === "city"));
+    assert.ok(response.body.items.some((item) => item.level === "neighborhood"));
+    assert.ok(response.body.items.some((item) => item.level === "venue"));
     assert.ok(response.body.wildcards.length >= 1);
     assert.ok(Array.isArray(response.body.official_events));
   } finally {

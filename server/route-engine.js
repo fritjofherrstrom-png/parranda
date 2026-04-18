@@ -1,7 +1,7 @@
 const { routeTemplates, allItems, findItemByName } = require("./catalog");
 const { geocodeQuery } = require("./geocoding");
 const { fetchWeatherForDates, ROME_CENTER } = require("./weather");
-const { getDateSignals } = require("./editorial-calendar");
+const { getCityPulse, getDateSignals } = require("./editorial-calendar");
 const { fetchLiveEventsForDates } = require("./live-events");
 
 function haversineKm(a, b) {
@@ -253,6 +253,60 @@ function normalizeVibeProfile(template) {
         0,
         3,
       ),
+  };
+}
+
+const pulseVibeToRouteVibes = {
+  buzzy: ["party", "evening"],
+  romantic: ["low_key", "evening"],
+  slow: ["low_key", "culture"],
+  curious: ["culture", "low_key"],
+};
+
+const modifierEventTags = {
+  evening: ["nattliv", "vin", "cocktail", "utsikt"],
+  culture: ["kultur", "kyrkor", "utsikt"],
+  low_key: ["vin", "kultur", "mat"],
+  party: ["nattliv", "cocktail", "öl"],
+};
+
+const modifierLabel = {
+  evening: "mer kväll",
+  culture: "mer kultur",
+  low_key: "mer low-key",
+  party: "mer party",
+};
+
+function buildRouteTagSetFromData(template, route, routeStops = []) {
+  const routeTags = route ? buildRouteTagSet(route) : new Set();
+  const stopTags = routeStops.flatMap((stop) => (Array.isArray(stop.tags) ? stop.tags : []));
+  return new Set([...(template.preferenceTags || []), ...routeTags, ...stopTags]);
+}
+
+function routeVibeValue(profile, vibeKey) {
+  if (vibeKey === "low_key") {
+    return profile.lowKey || 0;
+  }
+
+  return profile[vibeKey] || 0;
+}
+
+function normalizePulseRouteHints(item) {
+  const routeHints = item.route_hints || {};
+  const derivedPreferredVibes = [...new Set(
+    (item.matches_vibes || []).flatMap((vibe) => pulseVibeToRouteVibes[vibe] || []),
+  )];
+
+  return {
+    preferredTags: new Set(routeHints.preferred_tags || []),
+    avoidTags: new Set(routeHints.avoid_tags || []),
+    preferredAreaTokens: new Set(routeHints.preferred_area_tokens || []),
+    avoidAreaTokens: new Set(routeHints.avoid_area_tokens || []),
+    preferredMacros: new Set(routeHints.preferred_macros || []),
+    avoidMacros: new Set(routeHints.avoid_macros || []),
+    preferredVibes: new Set([...(routeHints.preferred_vibes || []), ...derivedPreferredVibes]),
+    avoidVibes: new Set(routeHints.avoid_vibes || []),
+    modifierBias: routeHints.modifier_bias || {},
   };
 }
 
@@ -825,6 +879,199 @@ function buildRouteTagSet(route) {
   );
 }
 
+function pulseScore({
+  template,
+  route,
+  routeStops,
+  pulseItems = [],
+  preferences = [],
+  optimizerMode = null,
+  modifier = null,
+}) {
+  if (!Array.isArray(pulseItems) || !pulseItems.length) {
+    return { score: 0, note: null, anchor: null };
+  }
+
+  const activeModifier = normalizeModifier(modifier, optimizerMode);
+  const routeProfile = normalizeVibeProfile(template);
+  const routeArea = buildRouteAreaProfile(routeStops || []);
+  const routeTags = buildRouteTagSetFromData(template, route, routeStops);
+  const scoredItems = pulseItems.map((item) => {
+    const hints = normalizePulseRouteHints(item);
+    let score = 0;
+    const reasonParts = [];
+
+    const preferredTagHits = [...hints.preferredTags].filter((tag) => routeTags.has(tag));
+    const avoidTagHits = [...hints.avoidTags].filter((tag) => routeTags.has(tag));
+
+    if (preferredTagHits.length) {
+      score += Math.min(3.6, preferredTagHits.length * 1.35);
+      reasonParts.push("rutten bär rätt typ av stopp för dagens rytm");
+    }
+
+    if (avoidTagHits.length) {
+      score -= Math.min(3.4, avoidTagHits.length * 1.4);
+    }
+
+    if (routeArea.dominantToken && hints.preferredAreaTokens.has(routeArea.dominantToken)) {
+      score += 3.5;
+      reasonParts.push(`${tokenLabel(routeArea.dominantToken) || routeArea.dominantToken} spelar extra bra just nu`);
+    } else if ([...hints.preferredAreaTokens].some((token) => routeArea.tokens.has(token))) {
+      score += 1.9;
+    }
+
+    if (routeArea.dominantMacro && hints.preferredMacros.has(routeArea.dominantMacro)) {
+      score += 2.6;
+      if (!reasonParts.length) {
+        reasonParts.push(`${macroLabel(routeArea.dominantMacro)} bär den här typen av dag bättre just nu`);
+      }
+    } else if ([...hints.preferredMacros].some((macro) => routeArea.macros.has(macro))) {
+      score += 1.2;
+    }
+
+    if (routeArea.dominantToken && hints.avoidAreaTokens.has(routeArea.dominantToken)) {
+      score -= 3.6;
+    } else if ([...hints.avoidAreaTokens].some((token) => routeArea.tokens.has(token))) {
+      score -= 1.8;
+    }
+
+    if (routeArea.dominantMacro && hints.avoidMacros.has(routeArea.dominantMacro)) {
+      score -= 3;
+    } else if ([...hints.avoidMacros].some((macro) => routeArea.macros.has(macro))) {
+      score -= 1.4;
+    }
+
+    [...hints.preferredVibes].forEach((vibeKey) => {
+      const vibeStrength = routeVibeValue(routeProfile, vibeKey);
+      const modifierWeight = activeModifier === vibeKey ? 1.5 : 1.05;
+      score += vibeStrength * modifierWeight;
+
+      if (vibeStrength >= 2 && activeModifier === vibeKey) {
+        reasonParts.push(`rutten matchar tydligt att du valde ${modifierLabel[vibeKey] || vibeKey}`);
+      }
+    });
+
+    [...hints.avoidVibes].forEach((vibeKey) => {
+      const vibeStrength = routeVibeValue(routeProfile, vibeKey);
+      const modifierWeight = activeModifier === vibeKey ? 1.7 : 1.15;
+      score -= vibeStrength * modifierWeight;
+    });
+
+    if (activeModifier && hints.modifierBias[activeModifier]) {
+      score += hints.modifierBias[activeModifier];
+    }
+
+    const preferredPreferenceHits = preferences.filter((preference) => hints.preferredTags.has(preference));
+    if (preferredPreferenceHits.length) {
+      score += preferredPreferenceHits.length * 0.6;
+    }
+
+    return {
+      item,
+      score: Math.round(score * 10) / 10,
+      reasonParts,
+    };
+  });
+
+  const topPositive = scoredItems
+    .filter((entry) => entry.score > 0.6)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 2);
+  const topNegative = scoredItems
+    .filter((entry) => entry.score < -0.6)
+    .sort((left, right) => left.score - right.score)[0];
+  const totalScore = clamp(
+    topPositive.reduce((sum, entry) => sum + entry.score, 0) + (topNegative ? topNegative.score * 0.55 : 0),
+    -6,
+    10,
+  );
+  const lead = topPositive[0] || null;
+  const leadReason = lead?.reasonParts?.[0]
+    ? `${lead.reasonParts[0].charAt(0).toUpperCase()}${lead.reasonParts[0].slice(1)}.`
+    : "Den här rutten följer dagens rytm bättre än de mer generiska alternativen.";
+  const note = lead
+    ? `Just nu i Rom: ${lead.item.title}. ${
+        leadReason
+      }.`
+    : null;
+
+  return {
+    score: Math.round(totalScore * 10) / 10,
+    note,
+    anchor: lead?.item?.title || null,
+  };
+}
+
+function liveEventRouteScore({
+  route,
+  template,
+  liveEvents = [],
+  preferences = [],
+  optimizerMode = null,
+  modifier = null,
+  routeStops = [],
+}) {
+  if (!Array.isArray(liveEvents) || !liveEvents.length) {
+    return { score: 0, note: null };
+  }
+
+  const activeModifier = normalizeModifier(modifier, optimizerMode);
+  const routeTags = buildRouteTagSetFromData(template, route, routeStops);
+  const ranked = liveEvents
+    .map((event) => {
+      const eventTags = new Set(event.match_tags || []);
+      const tagHits = [...eventTags].filter((tag) => routeTags.has(tag)).length;
+      const preferenceHits = preferences.filter((tag) => eventTags.has(tag)).length;
+      const modifierHits = activeModifier
+        ? (modifierEventTags[activeModifier] || []).filter((tag) => eventTags.has(tag)).length
+        : 0;
+      const distanceKm = nearestRouteDistanceKm(route, event);
+      let proximityScore = 0;
+
+      if (distanceKm !== null && Number.isFinite(distanceKm)) {
+        if (distanceKm <= 0.45) {
+          proximityScore = 4;
+        } else if (distanceKm <= 1) {
+          proximityScore = 2.2;
+        } else if (distanceKm <= 2) {
+          proximityScore = 0.8;
+        } else {
+          proximityScore = -1;
+        }
+      }
+
+      return {
+        event,
+        score:
+          tagHits * 1.5 +
+          preferenceHits * 0.9 +
+          modifierHits * 1.25 +
+          proximityScore,
+      };
+    })
+    .sort((left, right) => right.score - left.score);
+
+  const best = ranked[0];
+  const second = ranked[1];
+  const totalScore = clamp(
+    (best?.score > 0 ? best.score : 0) + (second?.score > 1 ? second.score * 0.35 : 0),
+    0,
+    5,
+  );
+
+  if (!best || totalScore < 2.2) {
+    return {
+      score: Math.round(totalScore * 10) / 10,
+      note: null,
+    };
+  }
+
+  return {
+    score: Math.round(totalScore * 10) / 10,
+    note: `Live i dag: ${best.event.title} ligger ovanligt bra på eller nära den här rutten och gör upplägget mer tidsbundet på ett bra sätt.`,
+  };
+}
+
 function buildRouteFitNote(routeChoice, distanceKm) {
   if (distanceKm === null || !Number.isFinite(distanceKm)) {
     return `Passar bäst med ${routeChoice.label.toLowerCase()} sett till dagens helhet.`;
@@ -896,6 +1143,8 @@ function routeScore({
   template,
   weather,
   weekday,
+  pulseItems,
+  liveEvents,
   targetKm,
   preferences,
   reusedIds,
@@ -919,6 +1168,24 @@ function routeScore({
   const normalizedRouteStops = Array.isArray(routeStops) ? routeStops : [];
   const budgetFit = budgetScore(normalizedRouteStops, preferences, optimizerMode, budgetTier);
   const profileFit = profileScore(template, preferences, optimizerMode, modifier);
+  const pulseFit = pulseScore({
+    template,
+    route,
+    routeStops: normalizedRouteStops,
+    pulseItems,
+    preferences,
+    optimizerMode,
+    modifier,
+  });
+  const liveFit = liveEventRouteScore({
+    route,
+    template,
+    liveEvents,
+    preferences,
+    optimizerMode,
+    modifier,
+    routeStops: normalizedRouteStops,
+  });
   const areaFit = areaScore({
     routeStops: normalizedRouteStops,
     startPoint,
@@ -936,12 +1203,17 @@ function routeScore({
       optimizerScore +
       budgetFit.score +
       profileFit.score +
+      pulseFit.score +
+      liveFit.score +
       areaFit.score +
       startProximity +
       endProximity +
       reusedPenalty,
     weatherNote: weatherFit.note,
     budgetNote: budgetFit.note,
+    pulseNote: pulseFit.note,
+    pulseAnchor: pulseFit.anchor,
+    liveEventNote: liveFit.note,
     areaNote: areaFit.note,
     profile: profileFit.profile,
   };
@@ -956,6 +1228,8 @@ function whyRecommended(
   distanceMode,
   budgetTier,
   modifier,
+  pulseNote,
+  liveEventNote,
   areaNote,
 ) {
   const prefMatches = preferences.filter((pref) => template.preferenceTags.includes(pref));
@@ -1018,6 +1292,14 @@ function whyRecommended(
     reasonParts.push("Du bad om La Dolce Vita, så premiumglas, bokningsvärda stopp och en större kväll väger tyngre.");
   }
 
+  if (pulseNote) {
+    reasonParts.push("Dagens puls i Rom lutar också tydligt åt just den här riktningen.");
+  }
+
+  if (liveEventNote) {
+    reasonParts.push("Det finns dessutom ett live-lager som passar extra bra med den här rutten i dag.");
+  }
+
   if (areaNote) {
     reasonParts.push(areaNote);
   }
@@ -1045,6 +1327,9 @@ async function generateRecommendations({
   const normalizedDates = expandDateRange(dates);
   const resolvedStart = await resolvePoint(start, "Trastevere");
   const resolvedEnd = await resolvePoint(end, "Trastevere");
+  const pulseByDate = Object.fromEntries(
+    normalizedDates.map((date) => [date, getCityPulse(date)]),
+  );
   const [weatherByDate, liveEventsByDate] = await Promise.all([
     fetchWeatherForDates(normalizedDates, ROME_CENTER).catch(() => ({})),
     fetchLiveEventsForDates(normalizedDates, {
@@ -1059,7 +1344,9 @@ async function generateRecommendations({
   const days = normalizedDates.map((date) => {
     const weekday = weekdayFromDate(date);
     const weather = weatherByDate[date];
+    const pulse = pulseByDate[date] || getCityPulse(date);
     const dateSignals = getDateSignals(date);
+    const pulseItems = Array.isArray(pulse.items) ? pulse.items : [];
     const liveEvents = liveEventsByDate[date] || [];
 
     const ranked = routeTemplates
@@ -1083,6 +1370,8 @@ async function generateRecommendations({
           template,
           weather,
           weekday,
+          pulseItems,
+          liveEvents,
           targetKm: walkingKmTarget,
           preferences,
           reusedIds: usedTemplateIds,
@@ -1099,6 +1388,9 @@ async function generateRecommendations({
             ...route,
             weather_note: scoring.weatherNote,
             budget_note: scoring.budgetNote,
+            pulse_note: scoring.pulseNote,
+            live_event_fit_note: scoring.liveEventNote,
+            pulse_anchor: scoring.pulseAnchor,
             area_note: scoring.areaNote,
             opening_hours_warnings: openingWarnings,
             venue_specials: venueSpecials,
@@ -1111,6 +1403,8 @@ async function generateRecommendations({
               distanceMode,
               budgetTier,
               modifier,
+              scoring.pulseNote,
+              scoring.liveEventNote,
               scoring.areaNote,
             ),
           },
