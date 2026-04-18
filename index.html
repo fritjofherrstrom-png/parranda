@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="sv">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Parranda | Hidden Gems i Rom</title>
+    <meta name="theme-color" content="#af4d24" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta
+      name="description"
+      content="Parranda är en lokal och hip guide till Rom med stadsdelar, hidden gems, karta och personliga perfekta dagar till fots."
+    />
+    <meta name="apple-mobile-web-app-title" content="Parranda" />
+    <meta property="og:title" content="Parranda | Hidden Gems i Rom" />
+    <meta
+      property="og:description"
+      content="En lokal Rom-guide med stadsdelar, hidden gems, karta och personliga perfekta dagar till fots."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="sv_SE" />
+    <meta property="og:image" content="/assets/icons/icon-512.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Parranda | Hidden Gems i Rom" />
+    <meta
+      name="twitter:description"
+      content="Parranda bygger promenadvänliga Rom-dagar med vin, öl, kultur, hidden gems och nattliv."
+    />
+    <meta name="twitter:image" content="/assets/icons/icon-512.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
+    <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <nav class="topbar">
+          <div class="brand">
+            <span class="brand-mark">P</span>
+            <div>
+              <p>Parranda</p>
+              <span>Lokal, levande och långt bättre än en vanlig turistlista</span>
+            </div>
+          </div>
+          <a
+            class="ghost-button"
+            href="https://www.google.com/maps/search/hidden+gems+rome+italy/"
+            target="_blank"
+            rel="noreferrer"
+            >Öppna Rom-karta</a
+          >
+        </nav>
+
+        <section class="hero-content">
+          <div class="hero-copy">
+              <p class="eyebrow">ROM • LOCAL MODE</p>
+              <h1>Hitta Rom som en lokalbo, inte som en kölista.</h1>
+              <p class="lead">
+                Parranda bygger promenadvänliga dagar för dig som gillar öl, vin,
+                kultur, nattliv och en stark platskänsla mer än ännu en stel
+                sightseeinglista.
+              </p>
+
+            <div class="hero-actions">
+              <button class="primary-button" data-switch-tab="districts">
+                Utforska stadsdelar
+              </button>
+              <button class="secondary-button" data-switch-tab="routes">
+                Se perfekta dagar
+              </button>
+              <button class="ghost-button install-button" id="installButton" hidden>
+                Installera appen
+              </button>
+            </div>
+
+            <div class="hero-stats">
+              <article>
+                <strong>18</strong>
+                <span>utvalda platser</span>
+              </article>
+              <article>
+                <strong>4</strong>
+                <span>egna stadsdelssidor</span>
+              </article>
+              <article>
+                <strong>14</strong>
+                <span>optimizer-lägen och stilval</span>
+              </article>
+            </div>
+          </div>
+
+          <aside class="hero-panel">
+            <p class="panel-label">Kvällens dragning</p>
+            <h2>Monti till Testaccio, eller Pigneto hela vägen ut</h2>
+            <p>
+              Välj ett kvarter, bygg en tydlig kvällsrygg och låt appen avgöra
+              om dagen ska luta åt kultur, vin, budget, low-key eller full puls.
+            </p>
+            <div class="panel-tags">
+              <span>Vin</span>
+              <span>Öl</span>
+              <span>Stadsdelar + nattliv</span>
+            </div>
+          </aside>
+        </section>
+      </header>
+
+      <main>
+        <nav class="tab-nav" aria-label="Appsektioner">
+          <button class="tab-button active" data-tab="overview">Roma Guide</button>
+          <button class="tab-button" data-tab="districts">Stadsdelar</button>
+          <button class="tab-button" data-tab="routes">Perfekta dagar</button>
+        </nav>
+
+        <section class="tab-panel active" data-tab-panel="overview">
+          <section class="local-manifesto">
+            <article>
+              <p class="eyebrow">Tänk så här</p>
+              <h3>Välj kvarter före checklista</h3>
+              <p>
+                I Rom händer mycket av magin mellan sevärdheterna. Satsa på
+                områden med egen personlighet, inte bara monument.
+              </p>
+            </article>
+            <article>
+              <p class="eyebrow">Bästa timmarna</p>
+              <h3>Kom när stället känns rätt</h3>
+              <p>
+                Gryning, golden hour och sena kvällar gör större skillnad här än
+                att bara hinna se allt.
+              </p>
+            </article>
+            <article>
+              <p class="eyebrow">Lokal vibe</p>
+              <h3>Lite utanför centrum är ofta bättre</h3>
+              <p>
+                Pigneto, San Lorenzo, Tor Marancia och Parco degli Acquedotti ger
+                ofta mer känsla än ännu ett fullt torg i centrum.
+              </p>
+            </article>
+          </section>
+
+          <section class="spotlight-section">
+            <div class="section-heading compact-heading">
+              <div>
+                <p class="eyebrow">EDITOR'S PICKS</p>
+                <h2>Tre ställen som sätter tonen</h2>
+              </div>
+              <p class="section-note">
+                Det här är platserna jag hade skickat till en vän som vill känna
+                “rätt” Rom direkt.
+              </p>
+            </div>
+            <section id="spotlightGrid" class="spotlight-grid" aria-live="polite"></section>
+          </section>
+
+          <section class="favorites-hub">
+            <div class="favorites-copy">
+              <p class="eyebrow">SPARA DIN VIBE</p>
+              <h2>Bygg en personlig liten Rom-lista</h2>
+              <p>
+                Stjärnmarkera platser du gillar. Appen minns dem i webbläsaren,
+                så du kan samla en egen kväll, en lugn dag eller en lista med
+                bara hidden gems.
+              </p>
+            </div>
+            <div class="favorites-actions">
+              <button class="primary-button" id="showFavoritesButton">
+                Visa sparade
+              </button>
+              <button class="ghost-button" id="showAllButton">Visa alla igen</button>
+            </div>
+            <div id="favoritesStrip" class="favorites-strip" aria-live="polite"></div>
+          </section>
+
+          <section class="map-explorer">
+            <div class="section-heading compact-heading">
+              <div>
+                <p class="eyebrow">LIVE MAP</p>
+                <h2>Se ställena på kartan och hoppa mellan vibes</h2>
+              </div>
+              <p class="section-note">
+                Klicka på ett kort eller en markör för att fokusera platsen och
+                bygga din egen rutt smartare.
+              </p>
+            </div>
+            <div class="map-layout">
+              <div id="map" class="map-canvas" aria-label="Karta över platser i Rom"></div>
+              <aside class="map-panel">
+                <span id="favoriteCountChip" class="map-badge">0 sparade</span>
+                <h3 id="mapPlaceName">Välj en plats i listan eller på kartan</h3>
+                <p id="mapPlaceMeta" class="map-place-meta">
+                  Hidden gems, kvarter och smarta klassiker samlade på samma karta.
+                </p>
+                <p id="mapPlaceDescription" class="map-place-description">
+                  Kartan hjälper dig se hur olika områden hänger ihop, så att du
+                  enklare kan bygga en kväll med rätt tempo.
+                </p>
+                <p id="mapPlaceNote" class="map-place-note">
+                  Lokal notis: Börja med Garbatella, Ostiense eller Parco degli
+                  Acquedotti om du vill känna den nya riktningen i appen.
+                </p>
+                <div id="mapPlaceTags" class="tag-row"></div>
+                <div class="map-panel-actions">
+                  <button id="mapFavoriteButton" class="secondary-button">
+                    Spara vald plats
+                  </button>
+                  <a
+                    id="mapPlaceLink"
+                    class="map-panel-link"
+                    href="https://www.google.com/maps/search/Rome/"
+                    target="_blank"
+                    rel="noreferrer"
+                    >Öppna i Google Maps</a
+                  >
+                </div>
+              </aside>
+            </div>
+          </section>
+
+          <section class="filter-strip">
+            <button class="filter-chip active" data-filter="all">Alla</button>
+            <button class="filter-chip" data-filter="gömt">Hidden gems</button>
+            <button class="filter-chip" data-filter="kvarter">Kvarter</button>
+            <button class="filter-chip" data-filter="mat">Mat</button>
+            <button class="filter-chip" data-filter="utsikt">Utsikt</button>
+            <button class="filter-chip" data-filter="nattliv">Nattliv</button>
+            <button class="filter-chip" data-filter="klassiker">Klassiker rätt gjort</button>
+          </section>
+
+          <section class="section-heading" id="places">
+            <div>
+              <p class="eyebrow">HANDPLOCKAT</p>
+              <h2>Platser som känns mer insider än itinerary</h2>
+            </div>
+            <label class="search-box">
+              <span>Sök plats eller känsla</span>
+              <input
+                id="searchInput"
+                type="text"
+                placeholder="t.ex. street art, aperitivo, lugnt, morgon..."
+              />
+            </label>
+          </section>
+
+          <section id="cardsGrid" class="cards-grid" aria-live="polite"></section>
+        </section>
+
+        <section class="tab-panel" data-tab-panel="districts">
+          <section class="district-hero district-guide-hero">
+            <div class="district-copy">
+              <p id="districtEyebrow" class="eyebrow">STADSDELSMODE</p>
+              <h2 id="districtTitle">Monti som kulturstart, vinfinal och bättre senkväll</h2>
+              <p id="districtDescription">
+                Varje stadsdel får nu sin egen redaktionella sida. Välj kvarter
+                efter vilken energi du vill ha, inte bara efter vad som råkar
+                ligga närmast en sevärdhet.
+              </p>
+            </div>
+            <div id="districtStatsGrid" class="district-stats"></div>
+          </section>
+
+          <section class="section-heading compact-heading">
+            <div>
+              <p class="eyebrow">ROMS STADSKÄRNOR</p>
+              <h2>Fyra olika sidor av Rom, fyra egna guider</h2>
+            </div>
+            <p class="section-note">
+              Här väljer du om du vill ha Trastevere, Monti, Testaccio/Ostiense
+              eller Pigneto/San Lorenzo som redaktionell bas.
+            </p>
+          </section>
+          <section id="districtSelector" class="district-selector" aria-live="polite"></section>
+
+          <section class="section-heading compact-heading">
+            <div>
+              <p id="districtStopsEyebrow" class="eyebrow">STOPP DU INTE SKA MISSA</p>
+              <h2 id="districtStopsTitle">Barer, ankare och pärlor som bär kvarteret</h2>
+            </div>
+            <p id="districtStopsNote" class="section-note">
+              Välj hellre ett fåtal rätt stopp än att försöka täcka allt.
+            </p>
+          </section>
+          <section id="districtStopsGrid" class="trastevere-bars-grid" aria-live="polite"></section>
+
+          <section class="trastevere-day district-day">
+            <div class="section-heading compact-heading">
+              <div>
+                <p id="districtDayEyebrow" class="eyebrow">PERFEKTA DAGEN</p>
+                <h2 id="districtDayTitle">En dag som faktiskt känns rätt för kvarteret</h2>
+              </div>
+              <p id="districtDayNote" class="section-note">
+                Här får du ett redaktionellt dagsupplägg som funkar att gå till
+                fots utan att tempot blir stressigt.
+              </p>
+            </div>
+            <div id="districtTimeline" class="timeline" aria-live="polite"></div>
+          </section>
+
+          <section class="district-cta-strip">
+            <div class="district-cta-copy">
+              <p class="eyebrow">GÖR NÅGOT AV DET</p>
+              <h3 id="districtActionTitle">Lås kvarteret som start, mål eller kartfokus</h3>
+              <p id="districtActionCopy">
+                Du kan skicka in det här kvarteret direkt till route buildern
+                och låta hela dagen byggas runt den energin.
+              </p>
+            </div>
+            <div class="district-action-row">
+              <button id="districtSetStartButton" class="secondary-button" type="button">
+                Sätt som start
+              </button>
+              <button id="districtSetEndButton" class="ghost-button" type="button">
+                Sätt som mål
+              </button>
+              <button id="districtPlanButton" class="primary-button" type="button">
+                Planera dag härifrån
+              </button>
+              <button id="districtMapButton" class="ghost-button" type="button">
+                Visa kvarteret på karta
+              </button>
+            </div>
+          </section>
+        </section>
+
+        <section class="tab-panel" data-tab-panel="routes">
+          <section class="district-hero routes-hero">
+            <div class="district-copy">
+              <p class="eyebrow">PERFEKTA DAGAR I ROM</p>
+              <h2>Bygg din egen Rom-dag med hela staden som spelplan och välj egen start och mål</h2>
+              <p>
+                Plannern tar in datum, mjukt km-mål, start/slut och vad du
+                faktiskt gillar, och svarar med en tydlig huvudrutt per dag,
+                alternativa upplägg, hidden mentions och barer du inte ska
+                missa. Om live-delen inte svarar faller appen tillbaka till de
+                kuraterade Rom-rutterna.
+              </p>
+            </div>
+            <div class="district-stats">
+              <article>
+                <strong>1-5</strong>
+                <span>dagar i samma plan</span>
+              </article>
+              <article>
+                <strong>Flex</strong>
+                <span>start/slut eller trygg defaultbas</span>
+              </article>
+              <article>
+                <strong>Live</strong>
+                <span>väder + öppettider + events</span>
+              </article>
+            </div>
+          </section>
+
+          <section class="route-lab route-builder">
+            <div class="section-heading compact-heading">
+              <div>
+                <p class="eyebrow">PERSONLIG ROUTE BUILDER</p>
+                <h2>Välj datum, start/slut, km och vibe</h2>
+              </div>
+              <p class="section-note">
+                Trastevere till Trastevere är standard, men motorn tänker nu
+                hela Rom: du kan också använda din plats, vald kartplats eller
+                egen adress och låta den hitta starkaste dagen mellan olika
+                kvarter.
+              </p>
+            </div>
+
+            <form id="routePlannerForm" class="route-builder-form">
+              <div class="route-builder-grid">
+                <article class="planner-panel">
+                  <div class="planner-panel-head">
+                    <p class="eyebrow">START</p>
+                    <span class="planner-default-note">Default: Trastevere</span>
+                  </div>
+                  <label class="search-box route-lab-field">
+                    <span>Hur vill du välja start?</span>
+                    <select id="startModeSelect">
+                      <option value="preset">Kuraterad plats</option>
+                      <option value="current_location">Min plats</option>
+                      <option value="custom">Egen adress/plats</option>
+                    </select>
+                  </label>
+                  <label class="search-box route-lab-field" data-mode-field="start-preset">
+                    <span>Startpunkt</span>
+                    <select id="startPresetSelect"></select>
+                  </label>
+                  <label class="search-box route-lab-field" data-mode-field="start-custom" hidden>
+                    <span>Skriv adress eller plats i Rom</span>
+                    <input
+                      id="startCustomInput"
+                      type="text"
+                      placeholder="t.ex. Piazza Trilussa eller Termini"
+                    />
+                  </label>
+                  <div class="route-lab-actions">
+                    <button id="useCurrentPlaceButton" class="secondary-button" type="button">
+                      Använd vald plats från kartan
+                    </button>
+                    <button id="useGeolocationButton" class="ghost-button" type="button">
+                      Använd min plats
+                    </button>
+                  </div>
+                </article>
+
+                <article class="planner-panel">
+                  <div class="planner-panel-head">
+                    <p class="eyebrow">SLUT</p>
+                    <span class="planner-default-note">Default: Trastevere</span>
+                  </div>
+                  <label class="search-box route-lab-field">
+                    <span>Hur vill du avsluta dagen?</span>
+                    <select id="endModeSelect">
+                      <option value="preset">Kuraterad plats</option>
+                      <option value="current_location">Min plats</option>
+                      <option value="custom">Egen adress/plats</option>
+                    </select>
+                  </label>
+                  <label class="search-box route-lab-field" data-mode-field="end-preset">
+                    <span>Slutpunkt</span>
+                    <select id="endPresetSelect"></select>
+                  </label>
+                  <label class="search-box route-lab-field" data-mode-field="end-custom" hidden>
+                    <span>Skriv adress eller plats i Rom</span>
+                    <input
+                      id="endCustomInput"
+                      type="text"
+                      placeholder="t.ex. Piazza Navona eller Ostiense"
+                    />
+                  </label>
+                  <div class="route-lab-actions">
+                    <button id="useMapAsEndButton" class="secondary-button" type="button">
+                      Sätt vald kartplats som slut
+                    </button>
+                  </div>
+                </article>
+
+                <article class="planner-panel planner-panel-wide">
+                  <div class="planner-panel-head">
+                    <p class="eyebrow">NÄR + HUR LÅNGT</p>
+                    <span id="routePlannerModeChip" class="planner-default-note">
+                      Försöker ansluta till ruttmotorn
+                    </span>
+                  </div>
+                  <div class="planner-inline-grid">
+                    <label class="search-box route-lab-field">
+                      <span>Från datum</span>
+                      <input id="routeDateFrom" type="date" />
+                    </label>
+                    <label class="search-box route-lab-field">
+                      <span>Till datum</span>
+                      <input id="routeDateTo" type="date" />
+                    </label>
+                    <label class="search-box route-lab-field">
+                      <span>Avstånd</span>
+                      <select id="distanceModeSelect">
+                        <option value="soft_target">Mjukt km-mål</option>
+                        <option value="no_limit">Spelar ingen roll</option>
+                      </select>
+                    </label>
+                    <label class="search-box route-lab-field">
+                      <span>Mjukt gångmål i km</span>
+                      <input id="walkingKmTarget" type="range" min="4" max="18" step="1" value="9" />
+                    </label>
+                    <div class="planner-km-readout">
+                      <strong id="walkingKmValue">9 km</strong>
+                      <p>Motorn får avvika lite om dagen blir märkbart bättre.</p>
+                    </div>
+                  </div>
+                  <div class="planner-optimizer-modes">
+                    <p class="route-mentions-label">Välj vad dagen främst ska optimeras för</p>
+                    <div class="optimizer-mode-grid">
+                      <button class="optimizer-button" type="button" data-optimizer-mode="bar-hop">
+                        Bar hopping optimizer
+                      </button>
+                      <button class="optimizer-button" type="button" data-optimizer-mode="pizza-freak">
+                        Pizza freak
+                      </button>
+                      <button class="optimizer-button" type="button" data-optimizer-mode="wine-crawl">
+                        Wine crawl
+                      </button>
+                      <button class="optimizer-button" type="button" data-optimizer-mode="cocktail-night">
+                        Cocktail night
+                      </button>
+                      <button class="optimizer-button" type="button" data-optimizer-mode="church-crawl">
+                        Church crawl
+                      </button>
+                      <button class="optimizer-button" type="button" data-optimizer-mode="sunset-spots">
+                        Sunset spots
+                      </button>
+                    </div>
+                  </div>
+                  <div class="planner-style-layers">
+                    <div class="planner-style-row">
+                      <p class="route-mentions-label">Prisnivå</p>
+                      <div class="optimizer-mode-grid">
+                        <button class="optimizer-button is-active" type="button" data-budget-tier="standard">
+                          Standard
+                        </button>
+                        <button class="optimizer-button" type="button" data-budget-tier="budget">
+                          Rome on a budget
+                        </button>
+                        <button class="optimizer-button" type="button" data-budget-tier="dolce-vita">
+                          La Dolce Vita
+                        </button>
+                      </div>
+                    </div>
+                    <div class="planner-style-row">
+                      <p class="route-mentions-label">Finslipa tonen</p>
+                      <div class="optimizer-mode-grid">
+                        <button class="optimizer-button is-active" type="button" data-route-modifier="none">
+                          Ingen extra bias
+                        </button>
+                        <button class="optimizer-button" type="button" data-route-modifier="evening">
+                          Mer kväll
+                        </button>
+                        <button class="optimizer-button" type="button" data-route-modifier="culture">
+                          Mer kultur
+                        </button>
+                        <button class="optimizer-button" type="button" data-route-modifier="low_key">
+                          Mer low-key
+                        </button>
+                        <button class="optimizer-button" type="button" data-route-modifier="party">
+                          Mer party
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="planner-preferences">
+                    <p class="route-mentions-label">Vad vill du ha mer av?</p>
+                    <div class="preference-chip-grid">
+                      <label class="preference-chip"><input type="checkbox" value="öl" checked /> <span>Öl</span></label>
+                      <label class="preference-chip"><input type="checkbox" value="vin" checked /> <span>Vin</span></label>
+                      <label class="preference-chip"><input type="checkbox" value="cocktail" /> <span>Cocktail</span></label>
+                      <label class="preference-chip"><input type="checkbox" value="mat" checked /> <span>Mat</span></label>
+                      <label class="preference-chip"><input type="checkbox" value="kultur" checked /> <span>Kultur</span></label>
+                      <label class="preference-chip"><input type="checkbox" value="kyrkor" /> <span>Kyrkor</span></label>
+                      <label class="preference-chip"><input type="checkbox" value="hidden gems" checked /> <span>Hidden gems</span></label>
+                      <label class="preference-chip"><input type="checkbox" value="nattliv" checked /> <span>Nattliv</span></label>
+                      <label class="preference-chip"><input type="checkbox" value="kväll" /> <span>Mer kväll</span></label>
+                      <label class="preference-chip"><input type="checkbox" value="low-key" /> <span>Low-key</span></label>
+                      <label class="preference-chip"><input type="checkbox" value="party" /> <span>Party</span></label>
+                    </div>
+                  </div>
+                  <div class="route-builder-actions">
+                    <button id="routePlanButton" class="primary-button" type="submit">
+                      Planera mina dagar
+                    </button>
+                    <button id="routeResetButton" class="ghost-button" type="button">
+                      Återställ till Trastevere-default
+                    </button>
+                  </div>
+                </article>
+              </div>
+            </form>
+
+            <p id="routeMatchSummary" class="route-match-summary">
+              Välj ett eller flera datum och tryck på planera. Om API:t är nere visar appen sina redaktionella Rome-wide-rutter i stället.
+            </p>
+          </section>
+
+          <section id="savedRoutesSection" class="saved-routes-section" hidden>
+            <div class="section-heading compact-heading">
+              <div>
+                <p class="eyebrow">SPARADE DAGAR</p>
+                <h2>Spara en dag och gör en ny version direkt</h2>
+              </div>
+              <p class="section-note">
+                Bygg vidare på en stark dag med snabbremixar som mer vin, mindre gång, mer hidden gems, mer kväll eller billigare upplägg.
+              </p>
+            </div>
+            <div id="savedRoutesGrid" class="saved-routes-grid" aria-live="polite"></div>
+          </section>
+
+          <section class="section-heading compact-heading">
+            <div>
+              <p class="eyebrow">ROMA ROUTES</p>
+              <h2>Huvudrutt först, alternativ och bonuslager efteråt</h2>
+            </div>
+            <p class="section-note">
+              När ruttmotorn svarar får du en huvuddag per datum. Om live-läget
+              faller bort ligger de kuraterade Rom-dagarna kvar här som
+              trygg och användbar fallback.
+            </p>
+          </section>
+          <p id="routeFallbackNote" class="route-fallback-note" hidden>
+            Live-läget är inte tillgängligt just nu. Appen visar därför sina kuraterade Rom-baserade rutter.
+          </p>
+          <section id="routeResults" class="route-results" aria-live="polite"></section>
+        </section>
+      </main>
+    </div>
+
+    <template id="spotlightCardTemplate">
+      <article class="spotlight-card">
+        <p class="spotlight-kicker"></p>
+        <h3></h3>
+        <p class="spotlight-description"></p>
+        <div class="spotlight-meta">
+          <span class="spotlight-area"></span>
+          <span class="spotlight-crowd"></span>
+        </div>
+      </article>
+    </template>
+
+    <template id="placeCardTemplate">
+      <article class="place-card">
+        <div class="card-top">
+          <span class="category-pill"></span>
+          <span class="score-pill"></span>
+        </div>
+        <div class="card-subtop">
+          <span class="area-pill"></span>
+          <span class="crowd-pill"></span>
+        </div>
+        <h3></h3>
+        <p class="description"></p>
+        <div class="meta-row">
+          <span class="best-for"></span>
+          <span class="time-tag"></span>
+        </div>
+        <p class="local-note"></p>
+        <div class="tag-row"></div>
+        <div class="card-actions">
+          <button class="favorite-button" type="button"></button>
+          <a class="map-link" target="_blank" rel="noreferrer">Visa på karta</a>
+        </div>
+      </article>
+    </template>
+
+    <template id="trastevereBarTemplate">
+      <article class="bar-card">
+        <div class="card-top">
+          <span class="category-pill"></span>
+          <span class="score-pill"></span>
+        </div>
+        <h3></h3>
+        <p class="description"></p>
+        <div class="meta-stack">
+          <p class="bar-focus"></p>
+          <p class="bar-why"></p>
+          <p class="bar-time"></p>
+        </div>
+        <a class="map-link" target="_blank" rel="noreferrer">Visa på karta</a>
+      </article>
+    </template>
+
+    <template id="timelineStopTemplate">
+      <article class="timeline-stop">
+        <span class="timeline-time"></span>
+        <div class="timeline-card">
+          <p class="spotlight-kicker"></p>
+          <h3></h3>
+          <p class="description"></p>
+          <p class="timeline-note"></p>
+        </div>
+      </article>
+    </template>
+
+    <template id="romeRouteTemplate">
+      <article class="route-plan-card">
+        <div class="card-top">
+          <span class="category-pill route-vibe"></span>
+          <span class="score-pill route-length"></span>
+        </div>
+        <h3></h3>
+        <p class="route-summary"></p>
+        <p class="route-why"></p>
+        <p class="route-path"></p>
+        <div class="route-metadata">
+          <span class="area-pill route-anchor"></span>
+          <span class="crowd-pill route-walk"></span>
+        </div>
+        <div class="route-advice">
+          <p class="route-weather-note" hidden></p>
+          <div class="route-specials" hidden></div>
+          <div class="route-warnings" hidden></div>
+        </div>
+        <div class="route-stops"></div>
+        <div class="route-mentions">
+          <p class="route-mentions-label">Hidden mentions</p>
+          <div class="route-pills route-hidden-pills"></div>
+        </div>
+        <div class="route-mentions">
+          <p class="route-mentions-label">Barer du inte ska missa</p>
+          <div class="route-pills route-bar-pills"></div>
+        </div>
+        <div class="route-actions">
+          <button class="secondary-button route-select-button" type="button">
+            Visa på karta
+          </button>
+          <button class="ghost-button route-save-button" type="button">
+            Spara dag
+          </button>
+          <a class="map-link route-link" target="_blank" rel="noreferrer">Öppna dagens rutt</a>
+        </div>
+      </article>
+    </template>
+
+    <template id="plannerDayTemplate">
+      <article class="planner-day-card">
+        <div class="planner-day-top">
+          <div>
+            <p class="eyebrow planner-day-date"></p>
+            <h3 class="planner-day-title"></h3>
+          </div>
+          <span class="map-badge planner-day-badge">Huvudförslag</span>
+        </div>
+        <p class="planner-day-summary"></p>
+        <div class="planner-day-signals" hidden></div>
+        <div class="planner-day-events" hidden>
+          <p class="route-mentions-label">Live just de här datumen</p>
+          <div class="planner-events-grid"></div>
+        </div>
+        <div class="planner-primary-slot"></div>
+        <div class="planner-alt-section">
+          <p class="route-mentions-label">Alternativa upplägg samma dag</p>
+          <div class="planner-alt-grid"></div>
+        </div>
+      </article>
+    </template>
+
+    <div id="placeDrawerBackdrop" class="place-drawer-backdrop" hidden></div>
+    <aside id="placeDrawer" class="place-drawer" hidden aria-live="polite">
+      <button id="closePlaceDrawerButton" class="ghost-button place-drawer-close" type="button">
+        Stäng
+      </button>
+      <p id="placeDrawerType" class="eyebrow">PLATSINFO</p>
+      <h3 id="placeDrawerTitle"></h3>
+      <p id="placeDrawerSummary" class="place-drawer-summary"></p>
+      <p id="placeDrawerRouteFit" class="local-note place-drawer-route-fit" hidden></p>
+      <div id="placeDrawerMeta" class="tag-row place-drawer-meta"></div>
+      <p id="placeDrawerDescription" class="place-drawer-description"></p>
+      <div id="placeDrawerHighlights" class="route-pills place-drawer-highlights"></div>
+      <p id="placeDrawerHappyHour" class="local-note" hidden></p>
+      <div class="place-drawer-actions place-drawer-planner-actions">
+        <button id="placeDrawerMapButton" class="secondary-button" type="button">
+          Visa på kartan i appen
+        </button>
+        <button id="placeDrawerStartButton" class="ghost-button" type="button">
+          Sätt som start
+        </button>
+        <button id="placeDrawerEndButton" class="ghost-button" type="button">
+          Sätt som mål
+        </button>
+        <button id="placeDrawerPlanButton" class="ghost-button" type="button">
+          Planera härifrån
+        </button>
+      </div>
+      <p id="placeDrawerPlannerNote" class="place-drawer-planner-note" hidden></p>
+      <div class="place-drawer-actions">
+        <a id="placeDrawerMapsLink" class="map-panel-link" target="_blank" rel="noreferrer">
+          Google Maps
+        </a>
+        <a id="placeDrawerSearchLink" class="ghost-button" target="_blank" rel="noreferrer">
+          Google-info
+        </a>
+        <a
+          id="placeDrawerExtraLink"
+          class="ghost-button"
+          target="_blank"
+          rel="noreferrer"
+          hidden
+        >
+          Extra länk
+        </a>
+      </div>
+    </aside>
+
+    <script src="vendor/leaflet/leaflet.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>

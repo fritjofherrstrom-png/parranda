@@ -1,0 +1,33 @@
+{
+  "name": "Parranda",
+  "short_name": "Parranda",
+  "description": "Parranda är din lokala guide till Rom med hidden gems, Trastevere-barer, karta och perfekta dagar till fots.",
+  "lang": "sv",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f7f0e5",
+  "theme_color": "#af4d24",
+  "categories": ["travel", "food", "lifestyle"],
+  "icons": [
+    {
+      "src": "assets/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
