@@ -308,7 +308,14 @@ body::before {
 }
 
 .hero-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
   margin-top: 36px;
+}
+
+.hero-actions .primary-button {
+  min-width: 220px;
 }
 
 .hero-stats article,
@@ -412,7 +419,17 @@ body::before {
 }
 
 .tab-nav {
-  justify-content: center;
+  justify-content: flex-start;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tab-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.tab-button {
+  white-space: nowrap;
 }
 
 .tab-panel {
@@ -867,6 +884,32 @@ body::before {
 
 .route-builder-form {
   margin-top: 18px;
+}
+
+.planner-step-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.planner-step-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(77, 49, 32, 0.08);
+  color: rgba(36, 25, 20, 0.78);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.planner-global-note {
+  margin: 14px 0 0;
+  color: var(--accent-deep);
+  font-weight: 600;
+  line-height: 1.6;
 }
 
 .route-builder-grid {
@@ -2122,6 +2165,10 @@ body::before {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .hero-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .city-pulse-masthead {
     flex-direction: column;
     align-items: flex-start;
@@ -2174,8 +2221,21 @@ body::before {
     max-width: none;
   }
 
+  .hero-actions {
+    width: 100%;
+  }
+
+  .hero-actions .primary-button,
+  .hero-actions .ghost-button {
+    width: 100%;
+  }
+
   .hero-stats article {
     min-height: 0;
+  }
+
+  .hero-stats {
+    grid-template-columns: 1fr;
   }
 
   .hero-copy h1 {
@@ -2233,6 +2293,11 @@ body::before {
     transform: none;
   }
 
+  .tab-nav {
+    gap: 8px;
+    padding: 12px;
+  }
+
   .city-pulse-edition {
     padding: 20px;
     border-radius: 24px;
@@ -2275,6 +2340,12 @@ body::before {
 
   .planner-inline-grid {
     grid-template-columns: 1fr;
+  }
+
+  .planner-step-chip {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
   }
 
   .card-top,

@@ -1299,7 +1299,7 @@ let activeFilter = "all";
 let onlyFavorites = false;
 let selectedPlaceName = places[0].name;
 let favorites = loadFavorites();
-let activeTab = "overview";
+let activeTab = "routes";
 let activeRouteKey = null;
 let deferredInstallPrompt = null;
 let map;
@@ -1708,10 +1708,10 @@ function renderHeroWildcard() {
   const wildcard = getActiveHeroWildcard();
 
   if (!wildcard) {
-    heroWildcardLabel.textContent = "ÖVERRASKA MIG IKVÄLL";
+    heroWildcardLabel.textContent = "KVÄLLENS WILDCARD";
     heroWildcardTitle.textContent = "Inga wildcard tillgängliga just nu";
     heroWildcardSummary.textContent =
-      "Parranda försöker ladda kvällsidéer. Under tiden kan du gå direkt till Perfekta dagar och planera själv.";
+      "Parranda försöker ladda kvällsidéer. Under tiden kan du gå direkt till route plannern och bygga dagen själv.";
     heroWildcardMeta.textContent = "Route roulette återkommer så snart kvällslagret är laddat.";
     heroWildcardTags.innerHTML = "";
     heroWildcardApplyButton.disabled = true;
@@ -1719,7 +1719,7 @@ function renderHeroWildcard() {
     return;
   }
 
-  heroWildcardLabel.textContent = "ÖVERRASKA MIG IKVÄLL";
+  heroWildcardLabel.textContent = "KVÄLLENS WILDCARD";
   heroWildcardTitle.textContent = wildcard.title;
   heroWildcardSummary.textContent = wildcard.summary;
   heroWildcardMeta.textContent = wildcard.meta;
@@ -1743,7 +1743,7 @@ async function applyWildcardToPlanner(wildcard, { autoPlan = true, sourceLabel =
   renderHeroWildcard();
   switchTab("routes");
   document
-    .querySelector('[data-tab-panel="routes"]')
+    .querySelector("#routePlannerStart")
     ?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   updateRouteMatchSummary(
@@ -2268,8 +2268,8 @@ function buildPlanningResultSummary(response) {
   const plannedCount = plannedDays.length;
   const usedAutoStart = startModeSelect?.value === plannerAutoMode;
   const usedAutoEnd = endModeSelect?.value === plannerAutoMode;
-  const resolvedStart = response.resolved_start?.label || plannerDefaultLabel;
-  const resolvedEnd = response.resolved_end?.label || plannerDefaultLabel;
+  const resolvedStart = response.resolved_start?.label || "en smart start";
+  const resolvedEnd = response.resolved_end?.label || "en smart final";
 
   if (usedAutoStart && usedAutoEnd) {
     return `${plannedCount} dag(ar) planerade. Parranda valde en smart bas och visar först huvudrutten per dag, sedan alternativa upplägg.`;
@@ -4540,9 +4540,13 @@ tabButtons.forEach((button) => {
 switchTabButtons.forEach((button) => {
   button.addEventListener("click", () => {
     switchTab(button.dataset.switchTab);
-    document
-      .querySelector(`[data-tab-panel="${button.dataset.switchTab}"]`)
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const scrollTarget =
+      button.dataset.scrollTarget ||
+      `[data-tab-panel="${button.dataset.switchTab}"]`;
+    document.querySelector(scrollTarget)?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
   });
 });
 

@@ -36,7 +36,7 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
     <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
-    <link rel="stylesheet" href="styles.css?v=9" />
+    <link rel="stylesheet" href="styles.css?v=10" />
   </head>
   <body>
     <div class="page-shell">
@@ -60,23 +60,24 @@
 
         <section class="hero-content">
           <div class="hero-copy">
-              <p class="eyebrow">ROM • PERSONLIG CITY GUIDE</p>
-              <h1>Din personliga city guide för Rom.</h1>
-              <p class="lead">
-                Parranda är en hybrid mellan city guide, route planner och vibe-baserad
-                resekompis. Den bygger promenadvänliga, lokalt kuraterade dagar utifrån
-                var du startar, hur du vill röra dig och vilken stämning du vill åt.
-              </p>
-              <p class="hero-support">
-                Inte bara vad du borde se, utan hur du faktiskt borde uppleva staden.
-              </p>
+            <p class="eyebrow">ROM • PERSONLIG ROUTE PLANNER</p>
+            <h1>Planera en bättre dag i Rom.</h1>
+            <p class="lead">
+              Parranda gör för Rom vad en riktigt bra lokal vän gör: sätter ihop en dag som
+              känns självklar, personlig och mycket mer levande än vanliga turistguider.
+            </p>
+            <p class="hero-support">
+              En lokalt kuraterad route planner som bygger dagen utifrån plats, smak, tempo
+              och stämning.
+            </p>
 
             <div class="hero-actions">
-              <button class="primary-button" data-switch-tab="districts">
-                Utforska stadsdelar
-              </button>
-              <button class="secondary-button" data-switch-tab="routes">
-                Se perfekta dagar
+              <button
+                class="primary-button"
+                data-switch-tab="routes"
+                data-scroll-target="#routePlannerStart"
+              >
+                Börja planera
               </button>
               <button class="ghost-button install-button" id="installButton" hidden>
                 Installera appen
@@ -85,31 +86,31 @@
 
             <div class="hero-stats">
               <article>
-                <p class="hero-stat-kicker">VAD DET ÄR</p>
-                <strong>City guide, route planner och vibe-kompis i ett</strong>
-                <span>Parranda binder ihop kvarter, barer, hidden gems, datum och promenadvänliga rutter i samma flöde.</span>
+                <p class="hero-stat-kicker">USP</p>
+                <strong>En tydlig huvudrutt som känns personlig</strong>
+                <span>Start, slut, datum, smak och vibe vägs ihop till en dag som faktiskt känns trovärdig.</span>
               </article>
               <article>
                 <p class="hero-stat-kicker">ROME-WIDE</p>
-                <strong>Hela Rom, inte bara ett kvarter</strong>
-                <span>Monti, Trastevere, södra Rom, östra kvarter och smart tajmade klassiker samsas i samma motor.</span>
+                <strong>Hela Rom som spelplan</strong>
+                <span>Monti, Testaccio, Pigneto, centro, kyrkor, barer och dolda pärlor i samma motor.</span>
               </article>
               <article>
-                <p class="hero-stat-kicker">VARFÖR DET ÄR BÄTTRE</p>
-                <strong>Snabbare än bloggar, listor och splittrade sparningar</strong>
-                <span>Mer personligt än Google Maps-listor och tydligare än att pussla ihop TikTok, bloggar och screenshots själv.</span>
+                <p class="hero-stat-kicker">SAVE + REMIX</p>
+                <strong>Spara och gör en ny version direkt</strong>
+                <span>Behåll en basdag och tryck fram mer vin, kortare gång, mer kväll eller billigare tempo på sekunder.</span>
               </article>
             </div>
           </div>
 
           <aside class="hero-panel">
-            <p id="heroWildcardLabel" class="panel-label">ÖVERRASKA MIG IKVÄLL</p>
+            <p id="heroWildcardLabel" class="panel-label">KVÄLLENS WILDCARD</p>
             <h2 id="heroWildcardTitle">Laddar kvällens wildcard...</h2>
             <p id="heroWildcardSummary">
-              Parranda sätter ihop ett kvällsförslag som känns tydligt, spontant och rom-smart.
+              Parranda sätter ihop ett kvällsspår som känns spontant, levande och rom-smart.
             </p>
             <p id="heroWildcardMeta" class="hero-panel-meta">
-              Route roulette för kvällar som ska kännas levande, inte bara välplanerade.
+              Bra som snabbstart när du inte vill börja från noll. Route plannern är fortfarande huvudvägen in.
             </p>
             <div id="heroWildcardTags" class="panel-tags">
               <span>Rom</span>
@@ -118,7 +119,7 @@
             </div>
             <div class="hero-panel-actions">
               <button id="heroWildcardApplyButton" class="secondary-button" type="button">
-                Kör den här
+                Lägg i plannern
               </button>
               <button id="heroWildcardShuffleButton" class="ghost-button" type="button">
                 Ny wildcard
@@ -130,12 +131,12 @@
 
       <main>
         <nav class="tab-nav" aria-label="Appsektioner">
-          <button class="tab-button active" data-tab="overview">Roma Guide</button>
+          <button class="tab-button active" data-tab="routes">Route planner</button>
           <button class="tab-button" data-tab="districts">Stadsdelar</button>
-          <button class="tab-button" data-tab="routes">Perfekta dagar</button>
+          <button class="tab-button" data-tab="overview">Romkarta</button>
         </nav>
 
-        <section class="tab-panel active" data-tab-panel="overview">
+        <section class="tab-panel" data-tab-panel="overview">
           <section class="local-manifesto">
             <article>
               <p class="eyebrow">Tänk så här</p>
@@ -346,84 +347,52 @@
           </section>
         </section>
 
-        <section class="tab-panel" data-tab-panel="routes">
+        <section class="tab-panel active" data-tab-panel="routes">
           <section class="district-hero routes-hero">
             <div class="district-copy">
-              <p class="eyebrow">PERFEKTA DAGAR I ROM</p>
-              <h2>Bygg din egen Rom-dag med hela staden som spelplan och välj egen start och mål</h2>
+              <p class="eyebrow">ROUTE PLANNER</p>
+              <h2>Bygg en personlig dag i Rom utan att börja från noll</h2>
               <p>
-                Plannern tar in datum, mjukt km-mål, start/slut och vad du
-                faktiskt gillar, och svarar med en tydlig huvudrutt per dag,
-                alternativa upplägg, hidden mentions och barer du inte ska
-                missa. Om live-delen inte svarar faller appen tillbaka till de
-                kuraterade Rom-rutterna.
+                Börja med datum, smak och avstånd. Start och slut är valfria. Parranda väger
+                sedan in kvarter, live-puls, öppettider och tempo och ger dig en huvudrutt
+                plus alternativ som faktiskt går att använda till fots.
               </p>
             </div>
             <div class="district-stats">
               <article>
-                <strong>1-5</strong>
-                <span>dagar i samma plan</span>
+                <strong>3 steg</strong>
+                <span>datum, vibe och valfri start/slut</span>
               </article>
               <article>
-                <strong>Flex</strong>
-                <span>start/slut eller trygg defaultbas</span>
+                <strong>Rome-wide</strong>
+                <span>motorn väljer över hela staden, inte bara ett kvarter</span>
               </article>
               <article>
-                <strong>Live</strong>
-                <span>väder + öppettider + events</span>
+                <strong>Remix</strong>
+                <span>spara en dag och gör den vinigare, billigare eller kvälligare</span>
               </article>
             </div>
           </section>
 
-          <section class="city-pulse-edition">
-            <div class="city-pulse-edition-glow" aria-hidden="true"></div>
-            <div class="city-pulse-masthead">
-              <div class="city-pulse-intro">
-                <div class="city-pulse-live">
-                  <span class="city-pulse-live-dot" aria-hidden="true"></span>
-                  <p class="city-pulse-live-label">LIVE • UPPDATERAD JUST NU</p>
-                </div>
-                <p id="cityPulseEditionLabel" class="city-pulse-edition-label">
-                  Just nu i Rom
-                </p>
-                <h2 id="cityPulseHeadline">Laddar dagens Rom-puls...</h2>
-                <p id="cityPulseSubhead" class="city-pulse-subhead">
-                  Parranda läser in stadens rytm, kvarterspuls och ställesnivå innan du bygger dagen.
-                </p>
-              </div>
-              <div class="city-pulse-edition-meta">
-                <p class="city-pulse-meta-kicker">Edition</p>
-                <p id="cityPulseEditionDate" class="city-pulse-edition-date">
-                  Rom • i dag
-                </p>
-                <p id="cityPulseMeta" class="city-pulse-edition-count">
-                  Laddar signaler...
-                </p>
-              </div>
-            </div>
-            <div class="city-pulse-filter-row">
-              <span class="city-pulse-filter-label">Filtrera</span>
-              <div id="cityPulseFilters" class="city-pulse-filter-chips"></div>
-            </div>
-            <div id="cityPulseLevels" class="city-pulse-levels" aria-live="polite"></div>
-            <div class="city-pulse-footer">
-              <p id="cityPulseFooter" class="city-pulse-footer-note">
-                Den här sektionen sätter tonen för planeringen nedan.
-              </p>
-            </div>
-          </section>
-
-          <section class="route-lab route-builder">
+          <section id="routePlannerStart" class="route-lab route-builder">
             <div class="section-heading compact-heading">
               <div>
-                <p class="eyebrow">PERSONLIG PLANERARE</p>
-                <h2>Bygg din dag i Rom</h2>
+                <p class="eyebrow">BÖRJA HÄR</p>
+                <h2>Planera din dag</h2>
               </div>
               <p class="section-note">
-                Börja enkelt: låt Parranda välja en smart bas, eller sätt själv
-                start och mål om du redan vet var dagen ska börja eller sluta.
+                Datum först. Start och slut är valfria. Om du inte låser något själv hittar
+                motorn en stark båge genom staden åt dig.
               </p>
             </div>
+            <div class="planner-step-row" aria-hidden="true">
+              <span class="planner-step-chip">1. Välj datum</span>
+              <span class="planner-step-chip">2. Lägg till start/slut om du vill</span>
+              <span class="planner-step-chip">3. Sätt smak, tempo och avstånd</span>
+            </div>
+            <p class="planner-global-note">
+              Plannern arbetar över hela Rom även om du lämnar start och slut öppna.
+            </p>
 
             <form id="routePlannerForm" class="route-builder-form">
               <div class="route-builder-grid">
@@ -433,12 +402,12 @@
                     <span class="planner-default-note">Valfritt</span>
                   </div>
                   <label class="search-box route-lab-field">
-                    <span>Hur vill du välja start?</span>
+                    <span>Startpunkt</span>
                     <select id="startModeSelect">
-                      <option value="auto">Låt Parranda välja</option>
-                      <option value="preset">Jag väljer i appen</option>
+                      <option value="auto">Låt Parranda hitta bästa start</option>
+                      <option value="preset">Välj plats från appen</option>
                       <option value="current_location">Använd min plats</option>
-                      <option value="custom">Jag skriver adress</option>
+                      <option value="custom">Skriv adress i Rom</option>
                     </select>
                   </label>
                   <p id="startModeHint" class="planner-mode-help">
@@ -472,12 +441,12 @@
                     <span class="planner-default-note">Valfritt</span>
                   </div>
                   <label class="search-box route-lab-field">
-                    <span>Hur vill du avsluta dagen?</span>
+                    <span>Slutpunkt</span>
                     <select id="endModeSelect">
-                      <option value="auto">Låt Parranda välja</option>
-                      <option value="preset">Jag väljer i appen</option>
+                      <option value="auto">Låt Parranda hitta bästa final</option>
+                      <option value="preset">Välj plats från appen</option>
                       <option value="current_location">Använd min plats</option>
-                      <option value="custom">Jag skriver adress</option>
+                      <option value="custom">Skriv adress i Rom</option>
                     </select>
                   </label>
                   <p id="endModeHint" class="planner-mode-help">
@@ -654,6 +623,44 @@
             Live-läget är inte tillgängligt just nu. Appen visar därför sina kuraterade Rom-baserade rutter.
           </p>
           <section id="routeResults" class="route-results" aria-live="polite"></section>
+
+          <section class="city-pulse-edition">
+            <div class="city-pulse-edition-glow" aria-hidden="true"></div>
+            <div class="city-pulse-masthead">
+              <div class="city-pulse-intro">
+                <div class="city-pulse-live">
+                  <span class="city-pulse-live-dot" aria-hidden="true"></span>
+                  <p class="city-pulse-live-label">LIVE • UPPDATERAD JUST NU</p>
+                </div>
+                <p id="cityPulseEditionLabel" class="city-pulse-edition-label">
+                  Just nu i Rom
+                </p>
+                <h2 id="cityPulseHeadline">Laddar dagens Rom-puls...</h2>
+                <p id="cityPulseSubhead" class="city-pulse-subhead">
+                  Den här live-editionen förklarar varför vissa kvarter, kvällar och stopp känns extra rätt just nu.
+                </p>
+              </div>
+              <div class="city-pulse-edition-meta">
+                <p class="city-pulse-meta-kicker">Edition</p>
+                <p id="cityPulseEditionDate" class="city-pulse-edition-date">
+                  Rom • i dag
+                </p>
+                <p id="cityPulseMeta" class="city-pulse-edition-count">
+                  Laddar signaler...
+                </p>
+              </div>
+            </div>
+            <div class="city-pulse-filter-row">
+              <span class="city-pulse-filter-label">Filtrera</span>
+              <div id="cityPulseFilters" class="city-pulse-filter-chips"></div>
+            </div>
+            <div id="cityPulseLevels" class="city-pulse-levels" aria-live="polite"></div>
+            <div class="city-pulse-footer">
+              <p id="cityPulseFooter" class="city-pulse-footer-note">
+                Dagens puls påverkar route plannern redan. Här kan du se varför.
+              </p>
+            </div>
+          </section>
         </section>
       </main>
     </div>
@@ -754,7 +761,7 @@
         </div>
         <div class="route-actions">
           <button class="secondary-button route-select-button" type="button">
-            Visa på karta
+            Öppna gångrutt
           </button>
           <button class="ghost-button route-save-button" type="button">
             Spara för remix
@@ -835,6 +842,6 @@
     </aside>
 
     <script src="vendor/leaflet/leaflet.js"></script>
-    <script src="script.js?v=9"></script>
+    <script src="script.js?v=10"></script>
   </body>
 </html>
