@@ -3,6 +3,8 @@ const path = require("path");
 const { allItems, findItemByName } = require("./catalog");
 const { geocodeQuery } = require("./geocoding");
 const { generateRecommendations } = require("./route-engine");
+const { fetchLiveEventsForDates } = require("./live-events");
+const { getCityPulse, getRomeTodayIsoDate } = require("./editorial-calendar");
 
 function buildApp() {
   const app = express();
@@ -116,6 +118,24 @@ function buildApp() {
         )}`,
       },
     });
+  });
+
+  app.get("/api/city-pulse", async (request, response) => {
+    try {
+      const date = String(request.query.date || "").trim() || getRomeTodayIsoDate();
+      const pulse = getCityPulse(date);
+      const liveEventsByDate = await fetchLiveEventsForDates([pulse.date], {});
+
+      response.json({
+        ...pulse,
+        official_events: (liveEventsByDate[pulse.date] || []).slice(0, 2),
+      });
+    } catch (error) {
+      response.status(500).json({
+        error: "City pulse failed",
+        detail: error.message,
+      });
+    }
   });
 
   app.post("/api/geocode", async (request, response) => {

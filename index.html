@@ -3,28 +3,28 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Parranda | Hidden Gems i Rom</title>
+    <title>Parranda | Personlig City Guide för Rom</title>
     <meta name="theme-color" content="#af4d24" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta
       name="description"
-      content="Parranda är en lokal och hip guide till Rom med stadsdelar, hidden gems, karta och personliga perfekta dagar till fots."
+      content="Parranda är en personlig city guide för Rom som bygger promenadvänliga och lokalt kuraterade dagar utifrån plats, smak, tempo och stämning."
     />
     <meta name="apple-mobile-web-app-title" content="Parranda" />
-    <meta property="og:title" content="Parranda | Hidden Gems i Rom" />
+    <meta property="og:title" content="Parranda | Personlig City Guide för Rom" />
     <meta
       property="og:description"
-      content="En lokal Rom-guide med stadsdelar, hidden gems, karta och personliga perfekta dagar till fots."
+      content="En personlig city guide för Rom med planerare, stadsdelar, hidden gems och dagar som känns mer lokala än turistiga."
     />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="sv_SE" />
     <meta property="og:image" content="/assets/icons/icon-512.png" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Parranda | Hidden Gems i Rom" />
+    <meta name="twitter:title" content="Parranda | Personlig City Guide för Rom" />
     <meta
       name="twitter:description"
-      content="Parranda bygger promenadvänliga Rom-dagar med vin, öl, kultur, hidden gems och nattliv."
+      content="Parranda bygger promenadvänliga och lokalt kuraterade Rom-dagar utifrån plats, smak, tempo och stämning."
     />
     <meta name="twitter:image" content="/assets/icons/icon-512.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -46,7 +46,7 @@
             <span class="brand-mark">P</span>
             <div>
               <p>Parranda</p>
-              <span>Lokal, levande och långt bättre än en vanlig turistlista</span>
+              <span>Personlig city guide för promenadvänliga och lokalt kuraterade Rom-dagar</span>
             </div>
           </div>
           <a
@@ -60,12 +60,15 @@
 
         <section class="hero-content">
           <div class="hero-copy">
-              <p class="eyebrow">ROM • LOCAL MODE</p>
-              <h1>Hitta Rom som en lokalbo, inte som en kölista.</h1>
+              <p class="eyebrow">ROM • PERSONLIG CITY GUIDE</p>
+              <h1>Din personliga city guide för Rom.</h1>
               <p class="lead">
-                Parranda bygger promenadvänliga dagar för dig som gillar öl, vin,
-                kultur, nattliv och en stark platskänsla mer än ännu en stel
-                sightseeinglista.
+                Parranda är en hybrid mellan city guide, route planner och vibe-baserad
+                resekompis. Den bygger promenadvänliga, lokalt kuraterade dagar utifrån
+                var du startar, hur du vill röra dig och vilken stämning du vill åt.
+              </p>
+              <p class="hero-support">
+                Inte bara vad du borde se, utan hur du faktiskt borde uppleva staden.
               </p>
 
             <div class="hero-actions">
@@ -82,31 +85,44 @@
 
             <div class="hero-stats">
               <article>
-                <strong>18</strong>
-                <span>utvalda platser</span>
+                <p class="hero-stat-kicker">VAD DET ÄR</p>
+                <strong>City guide, route planner och vibe-kompis i ett</strong>
+                <span>Parranda binder ihop kvarter, barer, hidden gems, datum och promenadvänliga rutter i samma flöde.</span>
               </article>
               <article>
-                <strong>4</strong>
-                <span>egna stadsdelssidor</span>
+                <p class="hero-stat-kicker">ROME-WIDE</p>
+                <strong>Hela Rom, inte bara ett kvarter</strong>
+                <span>Monti, Trastevere, södra Rom, östra kvarter och smart tajmade klassiker samsas i samma motor.</span>
               </article>
               <article>
-                <strong>14</strong>
-                <span>optimizer-lägen och stilval</span>
+                <p class="hero-stat-kicker">VARFÖR DET ÄR BÄTTRE</p>
+                <strong>Snabbare än bloggar, listor och splittrade sparningar</strong>
+                <span>Mer personligt än Google Maps-listor och tydligare än att pussla ihop TikTok, bloggar och screenshots själv.</span>
               </article>
             </div>
           </div>
 
           <aside class="hero-panel">
-            <p class="panel-label">Kvällens dragning</p>
-            <h2>Monti till Testaccio, eller Pigneto hela vägen ut</h2>
-            <p>
-              Välj ett kvarter, bygg en tydlig kvällsrygg och låt appen avgöra
-              om dagen ska luta åt kultur, vin, budget, low-key eller full puls.
+            <p id="heroWildcardLabel" class="panel-label">ÖVERRASKA MIG IKVÄLL</p>
+            <h2 id="heroWildcardTitle">Laddar kvällens wildcard...</h2>
+            <p id="heroWildcardSummary">
+              Parranda sätter ihop ett kvällsförslag som känns tydligt, spontant och rom-smart.
             </p>
-            <div class="panel-tags">
-              <span>Vin</span>
-              <span>Öl</span>
-              <span>Stadsdelar + nattliv</span>
+            <p id="heroWildcardMeta" class="hero-panel-meta">
+              Route roulette för kvällar som ska kännas levande, inte bara välplanerade.
+            </p>
+            <div id="heroWildcardTags" class="panel-tags">
+              <span>Rom</span>
+              <span>Ikväll</span>
+              <span>Wildcard</span>
+            </div>
+            <div class="hero-panel-actions">
+              <button id="heroWildcardApplyButton" class="secondary-button" type="button">
+                Kör den här
+              </button>
+              <button id="heroWildcardShuffleButton" class="ghost-button" type="button">
+                Ny wildcard
+              </button>
             </div>
           </aside>
         </section>
@@ -145,6 +161,19 @@
                 ofta mer känsla än ännu ett fullt torg i centrum.
               </p>
             </article>
+          </section>
+
+          <section class="city-pulse-section">
+            <div class="city-pulse-header">
+              <div>
+                <p class="eyebrow">JUST NU I ROM</p>
+                <h2>Stadspuls som gör dagen smartare</h2>
+              </div>
+              <p id="cityPulseNote" class="section-note">
+                Visar dagens rytm, speciella datum och små officiella tips som kan förändra kvällen.
+              </p>
+            </div>
+            <div id="cityPulseGrid" class="city-pulse-grid" aria-live="polite"></div>
           </section>
 
           <section class="spotlight-section">
@@ -259,7 +288,7 @@
               <p id="districtEyebrow" class="eyebrow">STADSDELSMODE</p>
               <h2 id="districtTitle">Monti som kulturstart, vinfinal och bättre senkväll</h2>
               <p id="districtDescription">
-                Varje stadsdel får nu sin egen redaktionella sida. Välj kvarter
+                Varje utvald stadsdel har nu sitt eget guide-läge. Välj kvarter
                 efter vilken energi du vill ha, inte bara efter vad som råkar
                 ligga närmast en sevärdhet.
               </p>
@@ -270,10 +299,10 @@
           <section class="section-heading compact-heading">
             <div>
               <p class="eyebrow">ROMS STADSKÄRNOR</p>
-              <h2>Fyra olika sidor av Rom, fyra egna guider</h2>
+              <h2>Välj kvarteret som ska bära dagen</h2>
             </div>
             <p class="section-note">
-              Här väljer du om du vill ha Trastevere, Monti, Testaccio/Ostiense
+              Här väljer du om dagen ska vila på Trastevere, Monti, Testaccio/Ostiense
               eller Pigneto/San Lorenzo som redaktionell bas.
             </p>
           </section>
@@ -309,7 +338,7 @@
               <p class="eyebrow">GÖR NÅGOT AV DET</p>
               <h3 id="districtActionTitle">Lås kvarteret som start, mål eller kartfokus</h3>
               <p id="districtActionCopy">
-                Du kan skicka in det här kvarteret direkt till route buildern
+                Du kan skicka in det här kvarteret direkt till planeraren
                 och låta hela dagen byggas runt den energin.
               </p>
             </div>
@@ -366,10 +395,9 @@
                 <h2>Välj datum, start/slut, km och vibe</h2>
               </div>
               <p class="section-note">
-                Trastevere till Trastevere är standard, men motorn tänker nu
-                hela Rom: du kan också använda din plats, vald kartplats eller
-                egen adress och låta den hitta starkaste dagen mellan olika
-                kvarter.
+                Välj start och slut på tre sätt: från Parrandas egna platser,
+                från din nuvarande plats eller genom att skriva en adress i Rom.
+                Om du inte väljer något används Trastevere som trygg default.
               </p>
             </div>
 
@@ -378,18 +406,21 @@
                 <article class="planner-panel">
                   <div class="planner-panel-head">
                     <p class="eyebrow">START</p>
-                    <span class="planner-default-note">Default: Trastevere</span>
+                    <span class="planner-default-note">Om du inte väljer: Trastevere</span>
                   </div>
                   <label class="search-box route-lab-field">
                     <span>Hur vill du välja start?</span>
                     <select id="startModeSelect">
-                      <option value="preset">Kuraterad plats</option>
-                      <option value="current_location">Min plats</option>
-                      <option value="custom">Egen adress/plats</option>
+                      <option value="preset">Välj från Parranda</option>
+                      <option value="current_location">Min plats nu</option>
+                      <option value="custom">Skriv själv</option>
                     </select>
                   </label>
+                  <p id="startModeHint" class="planner-mode-help">
+                    Välj bland områden, kvarter och stopp som redan finns i Parranda.
+                  </p>
                   <label class="search-box route-lab-field" data-mode-field="start-preset">
-                    <span>Startpunkt</span>
+                    <span>Välj område eller plats i appen</span>
                     <select id="startPresetSelect"></select>
                   </label>
                   <label class="search-box route-lab-field" data-mode-field="start-custom" hidden>
@@ -413,18 +444,21 @@
                 <article class="planner-panel">
                   <div class="planner-panel-head">
                     <p class="eyebrow">SLUT</p>
-                    <span class="planner-default-note">Default: Trastevere</span>
+                    <span class="planner-default-note">Om du inte väljer: Trastevere</span>
                   </div>
                   <label class="search-box route-lab-field">
                     <span>Hur vill du avsluta dagen?</span>
                     <select id="endModeSelect">
-                      <option value="preset">Kuraterad plats</option>
-                      <option value="current_location">Min plats</option>
-                      <option value="custom">Egen adress/plats</option>
+                      <option value="preset">Välj från Parranda</option>
+                      <option value="current_location">Min plats nu</option>
+                      <option value="custom">Skriv själv</option>
                     </select>
                   </label>
+                  <p id="endModeHint" class="planner-mode-help">
+                    Välj bland områden, kvarter och stopp som redan finns i Parranda.
+                  </p>
                   <label class="search-box route-lab-field" data-mode-field="end-preset">
-                    <span>Slutpunkt</span>
+                    <span>Välj område eller plats i appen</span>
                     <select id="endPresetSelect"></select>
                   </label>
                   <label class="search-box route-lab-field" data-mode-field="end-custom" hidden>
@@ -573,7 +607,7 @@
                 <h2>Spara en dag och gör en ny version direkt</h2>
               </div>
               <p class="section-note">
-                Bygg vidare på en stark dag med snabbremixar som mer vin, mindre gång, mer hidden gems, mer kväll eller billigare upplägg.
+                Spara en dag som bas och bygg nya versioner direkt: mer vinig, kortare gång, mer hidden gems, mer kväll, mer kultur, mer party eller billigare upplägg.
               </p>
             </div>
             <div id="savedRoutesGrid" class="saved-routes-grid" aria-live="polite"></div>
@@ -697,7 +731,7 @@
             Visa på karta
           </button>
           <button class="ghost-button route-save-button" type="button">
-            Spara dag
+            Spara för remix
           </button>
           <a class="map-link route-link" target="_blank" rel="noreferrer">Öppna dagens rutt</a>
         </div>

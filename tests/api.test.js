@@ -89,6 +89,69 @@ test("GET /api/places/search returnerar kuraterade träffar", async () => {
   }
 });
 
+test("GET /api/city-pulse returnerar stadspuls, wildcard och officiella tips", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "www.turismoroma.it") {
+      return {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        async text() {
+          return `
+            <div class="views-row views-row-1">
+              <div class="news_info">
+                <div class="news_titolo_container">
+                  <div class="news_titolo">
+                    <div class="field-content">
+                      <a href="/en/events/roma-birthday-street-show">Roma Birthday Street Show</a>
+                    </div>
+                  </div>
+                </div>
+                <div class="news_date">
+                  <div class="field-content">
+                    <span class="date-display-start">from&nbsp;21-04-2026</span>
+                    <span class="date-display-end">&nbsp;to&nbsp;21-04-2026</span>
+                  </div>
+                </div>
+                <div class="news_tipo">
+                  <div class="field-content"><a href="/en/tipo-evento/events">Events</a></div>
+                </div>
+                <div class="news_sedi">
+                  <div class="field-content"><a href="/en/places/trastevere">Trastevere</a></div>
+                </div>
+                <div class="news_indirizzo">Piazza Trilussa</div>
+                <div class="news_text">
+                  <div class="field-content"><p>Small open-air music moment for the city birthday.</p></div>
+                </div>
+              </div>
+            </div>
+          `;
+        },
+      };
+    }
+
+    throw new Error(`Unexpected fetch during city-pulse test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      path: "/api/city-pulse?date=2026-04-21",
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.date, "2026-04-21");
+    assert.ok(response.body.moments.some((item) => item.title === "Natale di Roma"));
+    assert.ok(response.body.wildcards.length >= 1);
+    assert.ok(Array.isArray(response.body.official_events));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("POST /api/geocode använder lokal katalog när det går", async () => {
   global.fetch = async (url) => {
     throw new Error(`Unexpected remote geocode fetch: ${url}`);
