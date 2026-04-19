@@ -218,9 +218,11 @@ function buildApp() {
         : [];
       const payload = {
         dates: Array.isArray(request.body?.dates) ? request.body.dates : [],
+        homeBase: request.body?.home_base,
         start: request.body?.start,
         end: request.body?.end,
         walkingKmTarget: Number(request.body?.walking_km_target || 8),
+        legPacing: request.body?.leg_pacing || "balanced",
         preferences,
         optimizerMode: request.body?.optimizer_mode || null,
         distanceMode: request.body?.distance_mode || "soft_target",

@@ -32,6 +32,42 @@ function walkingKm(points) {
   return Number(total.toFixed(1));
 }
 
+const legPacingConfig = {
+  short: {
+    preferredMaxKm: 0.95,
+    overflowWeight: 4.1,
+    varianceWeight: 2.6,
+    lateralWeight: 1.35,
+    radiusBonusWeight: 1.3,
+  },
+  balanced: {
+    preferredMaxKm: 1.35,
+    overflowWeight: 2.7,
+    varianceWeight: 1.7,
+    lateralWeight: 1,
+    radiusBonusWeight: 1,
+  },
+  flexible: {
+    preferredMaxKm: 2.05,
+    overflowWeight: 1.35,
+    varianceWeight: 0.9,
+    lateralWeight: 0.8,
+    radiusBonusWeight: 0.72,
+  },
+};
+
+function normalizeLegPacing(value) {
+  return legPacingConfig[value] ? value : "balanced";
+}
+
+function estimatedWalkMinutes(distanceKm) {
+  if (!Number.isFinite(distanceKm)) {
+    return null;
+  }
+
+  return Math.max(2, Math.round(distanceKm * 12));
+}
+
 function weekdayFromDate(dateString) {
   return new Date(`${dateString}T12:00:00+02:00`).getDay();
 }
@@ -598,10 +634,50 @@ function getAutoAnchorSupportItems(candidate) {
   return supportItems;
 }
 
+function scoreHomeBaseFit(candidate, homeBase, role = "start") {
+  if (
+    !candidate ||
+    !homeBase ||
+    typeof homeBase.lat !== "number" ||
+    typeof homeBase.lng !== "number"
+  ) {
+    return 0;
+  }
+
+  const candidateProfile = buildItemAreaProfile(candidate);
+  const homeProfile = buildPointAreaProfile(homeBase);
+  const distanceKm = haversineKm(candidate, homeBase);
+  let score = 0;
+
+  if (distanceKm <= 0.75) {
+    score += role === "loop" ? 5.4 : role === "start" ? 4.2 : 3.2;
+  } else if (distanceKm <= 1.5) {
+    score += role === "loop" ? 4 : role === "start" ? 3 : 2.4;
+  } else if (distanceKm <= 2.8) {
+    score += role === "loop" ? 2.4 : role === "start" ? 1.9 : 1.5;
+  } else if (distanceKm <= 4.5) {
+    score += role === "start" ? 0.2 : 0.6;
+  } else {
+    score -= role === "start" ? 2.4 : 1.6;
+  }
+
+  if (candidateProfile.primaryToken && candidateProfile.primaryToken === homeProfile.primaryToken) {
+    score += 2.1;
+  } else if (
+    candidateProfile.primaryMacro &&
+    candidateProfile.primaryMacro === homeProfile.primaryMacro
+  ) {
+    score += 0.8;
+  }
+
+  return Number(score.toFixed(1));
+}
+
 function scoreAutoAnchorCandidate(
   candidate,
   {
     role = "start",
+    homeBase = null,
     preferences = [],
     optimizerMode = null,
     modifier = null,
@@ -622,6 +698,8 @@ function scoreAutoAnchorCandidate(
   let score =
     (candidate.anchorWeight || 1.5) * 2.4 +
     (role === "end" ? candidate.goodAsFinal || 1.5 : candidate.goodAsStart || 1.5);
+
+  score += scoreHomeBaseFit(candidate, homeBase, role);
 
   if (!pairedPoint) {
     score += candidate.kind === "district-group" ? 0.9 : 0.4;
@@ -769,6 +847,7 @@ function scoreAutoAnchorCandidate(
 
 function resolveAutoPoint({
   role = "start",
+  homeBase = null,
   pairedPoint = null,
   pulseByDate = {},
   liveEventsByDate = {},
@@ -789,6 +868,7 @@ function resolveAutoPoint({
       candidate,
       score: scoreAutoAnchorCandidate(candidate, {
         role,
+        homeBase,
         preferences,
         optimizerMode,
         modifier,
@@ -812,6 +892,7 @@ function resolveAutoPoint({
 
 function rankAutoAnchorCandidates({
   role = "start",
+  homeBase = null,
   pairedPoint = null,
   pulseByDate = {},
   liveEventsByDate = {},
@@ -833,6 +914,7 @@ function rankAutoAnchorCandidates({
       candidate,
       score: scoreAutoAnchorCandidate(candidate, {
         role,
+        homeBase,
         preferences,
         optimizerMode,
         modifier,
@@ -850,6 +932,7 @@ function scoreAutoAnchorPair(
   startCandidate,
   endCandidate,
   {
+    homeBase = null,
     preferences = [],
     optimizerMode = null,
     modifier = null,
@@ -871,6 +954,14 @@ function scoreAutoAnchorPair(
   score += (endCandidate.anchorWeight || 1.5) * 1.8;
   score += (startCandidate.goodAsStart || 1.5) * 1.5;
   score += (endCandidate.goodAsFinal || 1.5) * 1.9;
+  score += scoreHomeBaseFit(startCandidate, homeBase, "start");
+  score += scoreHomeBaseFit(
+    endCandidate,
+    homeBase,
+    preferences.includes("kväll") || preferences.includes("party") || preferences.includes("nattliv")
+      ? "end"
+      : "start",
+  ) * 0.7;
 
   if (slugifyText(startCandidate.name) === slugifyText(endCandidate.name)) {
     return -99;
@@ -924,6 +1015,7 @@ function scoreAutoLoopCandidate(
   candidate,
   {
     baseScore = 0,
+    homeBase = null,
     preferences = [],
     optimizerMode = null,
     modifier = null,
@@ -933,6 +1025,8 @@ function scoreAutoLoopCandidate(
 ) {
   const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
   let score = baseScore + (candidate.goodAsFinal || 1.5) * 1.1;
+
+  score += scoreHomeBaseFit(candidate, homeBase, "loop");
 
   if (candidate.kind === "district") {
     score += 1.2;
@@ -1669,10 +1763,12 @@ function scoreStopCandidate({
   strictTags = [],
   targetKm,
   distanceMode,
+  legPacing = "balanced",
 }) {
   const itemProfile = buildItemAreaProfile(item);
   const distanceToStart = haversineKm(start, item);
   const distanceToEnd = haversineKm(end, item);
+  const pacing = legPacingConfig[normalizeLegPacing(legPacing)];
   let score = (item.anchorWeight || 1) + Math.max(0, 1.2 - index * 0.08);
 
   score += preferenceBoostForStop(item, preferences, optimizerMode, modifier, strictTags);
@@ -1686,6 +1782,7 @@ function scoreStopCandidate({
     const anchorMacro = startProfile?.primaryMacro;
     const anchorToken = startProfile?.primaryToken;
     const radiusLimit = loopRadiusKm(targetKm, distanceMode);
+    const preferredRadius = pacing.preferredMaxKm * 2.1;
 
     if (anchorToken && itemProfile.primaryToken === anchorToken) {
       score += 4.4;
@@ -1698,12 +1795,18 @@ function scoreStopCandidate({
     if (distanceToStart > radiusLimit) {
       score -= (distanceToStart - radiusLimit) * 3.1;
     }
+
+    if (distanceToStart > preferredRadius) {
+      score -= (distanceToStart - preferredRadius) * pacing.radiusBonusWeight * 1.8;
+    }
   } else {
     const axisStats = projectPointToAxis(item, start, end);
     const startMacro = startProfile?.primaryMacro;
     const endMacro = endProfile?.primaryMacro;
+    const axisLengthKm = Math.max(axisStats.axisLengthKm || 0, 0.1);
+    const progressRatio = axisStats.progressKm / axisLengthKm;
 
-    score -= axisStats.lateralKm * 1.15;
+    score -= axisStats.lateralKm * 1.15 * pacing.lateralWeight;
 
     if (axisStats.progressKm < -0.35 || axisStats.progressKm > axisStats.axisLengthKm + 0.9) {
       score -= 5.5;
@@ -1726,6 +1829,22 @@ function scoreStopCandidate({
       ![startMacro, endMacro, "center"].includes(itemProfile.primaryMacro)
     ) {
       score -= 2.6;
+    }
+
+    if (normalizeLegPacing(legPacing) === "short") {
+      if (
+        axisLengthKm > 2.8 &&
+        progressRatio >= 0.18 &&
+        progressRatio <= 0.82 &&
+        axisStats.lateralKm <= 1.05
+      ) {
+        const bridgeBoost = 1 - Math.min(1, Math.abs(progressRatio - 0.5) / 0.5);
+        score += 1.8 + bridgeBoost * 1.9;
+      }
+
+      if (axisStats.lateralKm > 1.4) {
+        score -= (axisStats.lateralKm - 1.4) * 2.4;
+      }
     }
   }
 
@@ -1750,6 +1869,7 @@ function scoreSupplementalPoolItem({
   targetKm,
   distanceMode,
   liveEvents = [],
+  legPacing = "balanced",
 }) {
   if (!item || seedIds.has(item.id) || isAnchorDuplicateStop(item, start) || isAnchorDuplicateStop(item, end)) {
     return Number.NEGATIVE_INFINITY;
@@ -1760,6 +1880,7 @@ function scoreSupplementalPoolItem({
   }
 
   const itemProfile = buildItemAreaProfile(item);
+  const pacing = legPacingConfig[normalizeLegPacing(legPacing)];
   const distanceToStart = haversineKm(start, item);
   const distanceToEnd = haversineKm(end, item);
   let score = preferenceBoostForStop(item, preferences, optimizerMode, modifier, strictTags);
@@ -1782,6 +1903,7 @@ function scoreSupplementalPoolItem({
     const anchorToken = startProfile?.primaryToken;
     const anchorMacro = startProfile?.primaryMacro;
     const radiusLimit = loopRadiusKm(targetKm, distanceMode) + 0.7;
+    const preferredRadius = pacing.preferredMaxKm * 2.35;
 
     if (anchorToken && itemProfile.primaryToken === anchorToken) {
       score += 3.8;
@@ -1794,10 +1916,16 @@ function scoreSupplementalPoolItem({
     if (distanceToStart > radiusLimit) {
       score -= (distanceToStart - radiusLimit) * 2.6;
     }
+
+    if (distanceToStart > preferredRadius) {
+      score -= (distanceToStart - preferredRadius) * pacing.radiusBonusWeight * 1.3;
+    }
   } else {
     const axisStats = projectPointToAxis(item, start, end);
+    const axisLengthKm = Math.max(axisStats.axisLengthKm || 0, 0.1);
+    const progressRatio = axisStats.progressKm / axisLengthKm;
 
-    score -= axisStats.lateralKm * 0.9;
+    score -= axisStats.lateralKm * 0.9 * pacing.lateralWeight;
 
     if (axisStats.progressKm < -0.45 || axisStats.progressKm > axisStats.axisLengthKm + 1.1) {
       score -= 5;
@@ -1808,6 +1936,21 @@ function scoreSupplementalPoolItem({
     }
     if (endProfile?.primaryMacro && itemProfile.primaryMacro === endProfile.primaryMacro) {
       score += 1.4;
+    }
+
+    if (normalizeLegPacing(legPacing) === "short" && axisStats.lateralKm > 1.35) {
+      score -= (axisStats.lateralKm - 1.35) * 1.9;
+    }
+
+    if (
+      normalizeLegPacing(legPacing) === "short" &&
+      axisLengthKm > 2.8 &&
+      progressRatio >= 0.16 &&
+      progressRatio <= 0.84 &&
+      axisStats.lateralKm <= 1.1
+    ) {
+      const bridgeBoost = 1 - Math.min(1, Math.abs(progressRatio - 0.5) / 0.5);
+      score += 2 + bridgeBoost * 2.1;
     }
   }
 
@@ -1842,6 +1985,7 @@ function buildStopPool(
   options = {},
 ) {
   const shape = isLoopRoute(start, end) ? "loop" : "arc";
+  const legPacing = normalizeLegPacing(options.legPacing);
   const startProfile = buildPointAreaProfile(start);
   const endProfile = buildPointAreaProfile(end);
   const manualAnchorsLocked = Boolean(options.manualAnchorsLocked);
@@ -1910,6 +2054,10 @@ function buildStopPool(
         : targetKm <= 9
           ? 3
           : 4;
+  const effectiveSupplementalLimit =
+    manualAnchorsLocked && shape === "arc" && legPacing === "short"
+      ? supplementalLimit + 2
+      : supplementalLimit;
   const supplementalCandidates = [
     ...allItems,
     ...liveEventCandidates,
@@ -1935,6 +2083,7 @@ function buildStopPool(
         targetKm,
         distanceMode,
         liveEvents,
+        legPacing,
       }),
     }))
     .filter((entry) => Number.isFinite(entry.score))
@@ -1946,7 +2095,7 @@ function buildStopPool(
         ? 2.2
         : 3))
     .sort((left, right) => right.score - left.score)
-    .slice(0, supplementalLimit)
+    .slice(0, effectiveSupplementalLimit)
     .map((entry) => entry.item);
 
   return uniqueStops([...basePool, ...supplemental]);
@@ -1969,9 +2118,11 @@ function permuteStops(items) {
   return permutations;
 }
 
-function summarizeLoopGeometry(orderedStops, start, end, startProfile, targetKm, distanceMode) {
+function summarizeLoopGeometry(orderedStops, start, end, startProfile, targetKm, distanceMode, legPacing = "balanced") {
   const points = [start, ...orderedStops, end];
   const estimatedKm = walkingKm(points);
+  const legs = buildRouteLegs(points);
+  const legMetrics = buildLegMetrics(legs, legPacing, { shape: "loop" });
   const firstGap = orderedStops[0] ? haversineKm(start, orderedStops[0]) : 0;
   const lastGap = orderedStops.length ? haversineKm(end, orderedStops[orderedStops.length - 1]) : 0;
   const radiusLimit = loopRadiusKm(targetKm, distanceMode);
@@ -1991,22 +2142,31 @@ function summarizeLoopGeometry(orderedStops, start, end, startProfile, targetKm,
     distanceMode === "no_limit" || !targetKm
       ? 0
       : Math.max(0, Math.abs(estimatedKm - targetKm) - 1.6) * 0.9;
-  const objective = estimatedKm + edgePenalty + radiusPenalty + driftPenalty + kmPenalty;
+  const objective = estimatedKm + edgePenalty + radiusPenalty + driftPenalty + kmPenalty + legMetrics.penalty;
 
   return {
     estimatedKm,
     objective,
+    legs,
     firstGap,
     lastGap,
     maxRadius,
     macroDrift,
-    qualityScore: Math.max(0, 13 - edgePenalty - radiusPenalty - driftPenalty - kmPenalty),
+    longestLegKm: legMetrics.longestLegKm,
+    longestLegMinutes: legMetrics.longestLegMinutes,
+    averageLegKm: legMetrics.averageLegKm,
+    averageLegMinutes: legMetrics.averageLegMinutes,
+    legPenalty: legMetrics.penalty,
+    legFitNote: legMetrics.note,
+    qualityScore: Math.max(0, 13 - edgePenalty - radiusPenalty - driftPenalty - kmPenalty - legMetrics.penalty),
   };
 }
 
-function summarizeArcGeometry(orderedStops, start, end, startProfile, endProfile, targetKm, distanceMode) {
+function summarizeArcGeometry(orderedStops, start, end, startProfile, endProfile, targetKm, distanceMode, legPacing = "balanced") {
   const points = [start, ...orderedStops, end];
   const estimatedKm = walkingKm(points);
+  const legs = buildRouteLegs(points);
+  const legMetrics = buildLegMetrics(legs, legPacing, { shape: "arc" });
   const directKm = Math.max(0.4, haversineKm(start, end) * 1.22);
   const firstGap = orderedStops[0] ? haversineKm(start, orderedStops[0]) : 0;
   const lastGap = orderedStops.length ? haversineKm(end, orderedStops[orderedStops.length - 1]) : 0;
@@ -2040,29 +2200,36 @@ function summarizeArcGeometry(orderedStops, start, end, startProfile, endProfile
     distanceMode === "no_limit" || !targetKm
       ? 0
       : Math.max(0, Math.abs(estimatedKm - targetKm) - 1.8) * 0.75;
-  const objective = estimatedKm + edgePenalty + detourPenalty + progressionPenalty + kmPenalty;
+  const objective = estimatedKm + edgePenalty + detourPenalty + progressionPenalty + kmPenalty + legMetrics.penalty;
 
   return {
     estimatedKm,
     objective,
+    legs,
     firstGap,
     lastGap,
     directKm,
     reversals,
     lateralTotal,
     macroDrift,
+    longestLegKm: legMetrics.longestLegKm,
+    longestLegMinutes: legMetrics.longestLegMinutes,
+    averageLegKm: legMetrics.averageLegKm,
+    averageLegMinutes: legMetrics.averageLegMinutes,
+    legPenalty: legMetrics.penalty,
+    legFitNote: legMetrics.note,
     qualityScore: Math.max(
       0,
-      13 - edgePenalty - detourPenalty - progressionPenalty - kmPenalty,
+      13 - edgePenalty - detourPenalty - progressionPenalty - kmPenalty - legMetrics.penalty,
     ),
   };
 }
 
-function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endProfile, targetKm, distanceMode) {
+function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endProfile, targetKm, distanceMode, legPacing = "balanced") {
   if (selectedStops.length <= 1) {
     const summary =
       shape === "loop"
-        ? summarizeLoopGeometry(selectedStops, start, end, startProfile, targetKm, distanceMode)
+        ? summarizeLoopGeometry(selectedStops, start, end, startProfile, targetKm, distanceMode, legPacing)
         : summarizeArcGeometry(
             selectedStops,
             start,
@@ -2071,6 +2238,7 @@ function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endPr
             endProfile,
             targetKm,
             distanceMode,
+            legPacing,
           );
 
     return {
@@ -2085,7 +2253,7 @@ function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endPr
   permuteStops(selectedStops).forEach((candidate) => {
     const geometry =
       shape === "loop"
-        ? summarizeLoopGeometry(candidate, start, end, startProfile, targetKm, distanceMode)
+        ? summarizeLoopGeometry(candidate, start, end, startProfile, targetKm, distanceMode, legPacing)
         : summarizeArcGeometry(
             candidate,
             start,
@@ -2094,6 +2262,7 @@ function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endPr
             endProfile,
             targetKm,
             distanceMode,
+            legPacing,
           );
 
     if (!bestGeometry || geometry.objective < bestGeometry.objective) {
@@ -2112,14 +2281,89 @@ function buildRouteLegs(points) {
   const legs = [];
 
   for (let index = 1; index < points.length; index += 1) {
+    const distanceKm = Number((haversineKm(points[index - 1], points[index]) * 1.22).toFixed(1));
     legs.push({
       from_label: points[index - 1].label,
       to_label: points[index].label,
-      distance_km: Number((haversineKm(points[index - 1], points[index]) * 1.22).toFixed(1)),
+      distance_km: distanceKm,
+      estimated_walk_minutes: estimatedWalkMinutes(distanceKm),
     });
   }
 
   return legs;
+}
+
+function buildLegMetrics(legs = [], legPacing = "balanced", { shape = "loop" } = {}) {
+  const pacingKey = normalizeLegPacing(legPacing);
+  const pacing = legPacingConfig[pacingKey];
+  const validLegs = legs.filter((leg) => Number.isFinite(leg.distance_km));
+
+  if (!validLegs.length) {
+    return {
+      longestLegKm: 0,
+      longestLegMinutes: null,
+      averageLegKm: 0,
+      averageLegMinutes: null,
+      penalty: 0,
+      note: null,
+    };
+  }
+
+  const distances = validLegs.map((leg) => leg.distance_km);
+  const totalDistance = distances.reduce((sum, distance) => sum + distance, 0);
+  const longestLegKm = Math.max(...distances);
+  const averageLegKm = totalDistance / distances.length;
+  const longestLegMinutes = estimatedWalkMinutes(longestLegKm);
+  const averageLegMinutes = estimatedWalkMinutes(averageLegKm);
+  const sortedDistances = [...distances].sort((left, right) => right - left);
+  const secondLongestKm = sortedDistances[1] ?? averageLegKm;
+  const overflowPenalty = distances.reduce((sum, distance) => {
+    return sum + Math.max(0, distance - pacing.preferredMaxKm) * pacing.overflowWeight;
+  }, 0);
+  const variancePenalty = Math.max(0, longestLegKm - averageLegKm - 0.35) * pacing.varianceWeight;
+  const outlierGapKm =
+    validLegs.length >= 2
+      ? Math.max(
+          0,
+          longestLegKm -
+            Math.max(
+              averageLegKm + (shape === "arc" ? 0.42 : 0.52),
+              secondLongestKm + (shape === "arc" ? 0.28 : 0.36),
+            ),
+        )
+      : 0;
+  const outlierWeights = {
+    short: shape === "arc" ? 6.2 : 4.3,
+    balanced: shape === "arc" ? 2.9 : 1.9,
+    flexible: shape === "arc" ? 1.1 : 0.7,
+  };
+  const outlierPenalty = outlierGapKm * outlierWeights[pacingKey];
+  const penalty = overflowPenalty + variancePenalty + outlierPenalty;
+  let note = null;
+
+  if (penalty <= 0.8) {
+    note = "Etapperna håller sig jämna och lätta att följa till fots.";
+  } else if (outlierPenalty > overflowPenalty + variancePenalty && pacingKey === "short") {
+    note =
+      shape === "arc"
+        ? "Kort trycker ner långa hopp, men ett tydligt mellanben sticker fortfarande ut i bågen."
+        : "Kort försöker hålla rundan jämn, men ett enskilt ben drar fortfarande iväg lite.";
+  } else if (pacingKey === "short") {
+    note = "Rutten försöker hålla benen korta, men ett eller två hopp blir fortfarande lite längre än idealet.";
+  } else if (pacingKey === "flexible") {
+    note = "Rutten tillåter friare ben för att helheten ska bli starkare.";
+  } else {
+    note = "Benlängderna är överlag rimliga, men några etapper blir lite längre för att hålla dagen stark.";
+  }
+
+  return {
+    longestLegKm: Number(longestLegKm.toFixed(1)),
+    longestLegMinutes,
+    averageLegKm: Number(averageLegKm.toFixed(1)),
+    averageLegMinutes,
+    penalty: Number(penalty.toFixed(1)),
+    note,
+  };
 }
 
 function buildAnchorZone(shape, startProfile, endProfile, routeArea) {
@@ -2200,12 +2444,13 @@ function buildDynamicSummary({ start, end, shape, routeArea, estimatedKm, optimi
 
 function buildGeoFitNote({ shape, start, end, geometry, routeArea, startProfile, endProfile }) {
   const dominantZone = tokenLabel(routeArea.dominantToken) || macroLabel(routeArea.dominantMacro) || "Rom";
+  const legNote = geometry?.legFitNote ? ` ${geometry.legFitNote}` : "";
 
   if (shape === "loop") {
-    return `Loop runt ${startProfile?.primaryLabel || start.label}: stoppordningen minimerar returstrackor och haller sig huvudsakligen kring ${dominantZone}.`;
+    return `Loop runt ${startProfile?.primaryLabel || start.label}: stoppordningen minimerar returstrackor och haller sig huvudsakligen kring ${dominantZone}.${legNote}`;
   }
 
-  return `Bage fran ${start.label} mot ${end.label}: rutten ror sig framat genom ${dominantZone} utan stora geografiska reversaler.`;
+  return `Bage fran ${start.label} mot ${end.label}: rutten ror sig framat genom ${dominantZone} utan stora geografiska reversaler.${legNote}`;
 }
 
 function formatMainStop(stop) {
@@ -2415,6 +2660,7 @@ function buildRouteFromTemplate(
   options = {},
 ) {
   const shape = isLoopRoute(start, end) ? "loop" : "arc";
+  const legPacing = normalizeLegPacing(options.legPacing);
   const startProfile = buildPointAreaProfile(start);
   const endProfile = buildPointAreaProfile(end);
   const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
@@ -2447,6 +2693,7 @@ function buildRouteFromTemplate(
         strictTags,
         targetKm,
         distanceMode,
+        legPacing,
       }),
     }))
     .sort((left, right) => right.score - left.score);
@@ -2479,6 +2726,7 @@ function buildRouteFromTemplate(
     endProfile,
     targetKm,
     distanceMode,
+    legPacing,
   );
 
   const mainStops = orderedStops.map((stop) => formatMainStop(stop));
@@ -2494,6 +2742,7 @@ function buildRouteFromTemplate(
     { label: end.label, lat: end.lat, lng: end.lng, role: "end" },
   ];
   const estimatedKm = Number((geometry?.estimatedKm || walkingKm(mapRoutePoints)).toFixed(1));
+  const legs = geometry?.legs || buildRouteLegs(mapRoutePoints);
   const routeMentions = buildDynamicRouteMentions({
     orderedStops,
     mapRoutePoints,
@@ -2531,7 +2780,11 @@ function buildRouteFromTemplate(
     hidden_mentions: routeMentions.hiddenMentions,
     bar_mentions: routeMentions.barMentions,
     map_route_points: mapRoutePoints,
-    legs: buildRouteLegs(mapRoutePoints),
+    legs,
+    longest_leg_km: geometry?.longestLegKm ?? null,
+    longest_leg_minutes: geometry?.longestLegMinutes ?? null,
+    average_leg_minutes: geometry?.averageLegMinutes ?? null,
+    leg_fit_note: geometry?.legFitNote ?? null,
     geo_fit_note: buildGeoFitNote({
       shape,
       start,
@@ -3224,6 +3477,7 @@ function pickDistinctRoutes(rankedEntries, usedRoutes = [], maxRoutes = 3) {
 
 async function generateRecommendations({
   dates,
+  homeBase,
   start,
   end,
   walkingKmTarget,
@@ -3232,6 +3486,7 @@ async function generateRecommendations({
   budgetTier = "standard",
   modifier = null,
   distanceMode = "soft_target",
+  legPacing = "balanced",
 }) {
   const normalizedDates = expandDateRange(dates);
   const pulseByDate = Object.fromEntries(
@@ -3246,14 +3501,17 @@ async function generateRecommendations({
       modifier,
     }).catch(() => ({})),
   ]);
+  const homeBaseIsAuto = !homeBase || isAutoPointInput(homeBase);
   const startIsAuto = isAutoPointInput(start);
   const endIsAuto = isAutoPointInput(end);
+  const resolvedHomeBase = homeBaseIsAuto ? null : await resolvePoint(homeBase, neutralFallbackLabel);
   let resolvedStart = startIsAuto ? null : await resolvePoint(start, neutralFallbackLabel);
   let resolvedEnd = endIsAuto ? null : await resolvePoint(end, neutralFallbackLabel);
   let resolvedAutoShape = null;
 
   if (startIsAuto && endIsAuto) {
     const autoAnchors = resolveAutoAnchors({
+      homeBase: resolvedHomeBase,
       pulseByDate,
       liveEventsByDate,
       preferences,
@@ -3268,6 +3526,7 @@ async function generateRecommendations({
   } else if (startIsAuto) {
     resolvedStart = resolveAutoPoint({
       role: "start",
+      homeBase: resolvedHomeBase,
       pairedPoint: resolvedEnd,
       pulseByDate,
       liveEventsByDate,
@@ -3280,6 +3539,7 @@ async function generateRecommendations({
   } else if (endIsAuto) {
     resolvedEnd = resolveAutoPoint({
       role: "end",
+      homeBase: resolvedHomeBase,
       pairedPoint: resolvedStart,
       pulseByDate,
       liveEventsByDate,
@@ -3317,6 +3577,7 @@ async function generateRecommendations({
           {
             manualAnchorsLocked,
             resolvedAutoShape,
+            legPacing,
           },
         );
         const openingWarnings = buildOpeningWarnings(
@@ -3401,6 +3662,7 @@ async function generateRecommendations({
 
   return {
     days,
+    resolved_home_base: resolvedHomeBase,
     resolved_start: resolvedStart,
     resolved_end: resolvedEnd,
   };

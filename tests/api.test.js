@@ -349,6 +349,48 @@ test("POST /api/route-recommendations accepterar budget tier och modifier", asyn
   }
 });
 
+test("POST /api/route-recommendations accepterar home base i auto-läget", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-04-21"],
+          weathercode: [0],
+          temperature_2m_max: [22],
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during home-base route test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations",
+      body: {
+        dates: ["2026-04-21"],
+        home_base: { type: "preset", label: "Monti" },
+        start: { type: "auto" },
+        end: { type: "auto" },
+        walking_km_target: 7,
+        preferences: ["vin", "mat", "kultur", "hidden gems"],
+      },
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.resolved_home_base.label, "Monti");
+    assert.ok(Array.isArray(response.body.days));
+    assert.ok(response.body.days.length >= 1);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("POST /api/route-recommendations håller Monti -> Monti i rätt zon", async () => {
   global.fetch = async (url) => {
     const parsed = new URL(String(url));
@@ -542,6 +584,72 @@ test("POST /api/route-recommendations bygger en tydlig båge mellan Trastevere o
       ),
     );
     assert.ok(primaryRoute.geo_fit_note);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("POST /api/route-recommendations returnerar gångben och låter leg pacing påverka rutten", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-04-21"],
+          weathercode: [0],
+          temperature_2m_max: [22],
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during leg pacing test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const [shortResponse, flexibleResponse] = await Promise.all([
+      requestJson(server, {
+        method: "POST",
+        path: "/api/route-recommendations",
+        body: {
+          dates: ["2026-04-21"],
+          start: { type: "preset", label: "Trastevere" },
+          end: { type: "preset", label: "San Lorenzo" },
+          walking_km_target: 9,
+          leg_pacing: "short",
+          preferences: ["öl", "vin", "hidden gems", "nattliv", "kväll"],
+          optimizer_mode: "bar-hop",
+        },
+      }),
+      requestJson(server, {
+        method: "POST",
+        path: "/api/route-recommendations",
+        body: {
+          dates: ["2026-04-21"],
+          start: { type: "preset", label: "Trastevere" },
+          end: { type: "preset", label: "San Lorenzo" },
+          walking_km_target: 9,
+          leg_pacing: "flexible",
+          preferences: ["öl", "vin", "hidden gems", "nattliv", "kväll"],
+          optimizer_mode: "bar-hop",
+        },
+      }),
+    ]);
+
+    const shortRoute = shortResponse.body.days[0].primary_route;
+    const flexibleRoute = flexibleResponse.body.days[0].primary_route;
+
+    assert.equal(shortResponse.status, 200);
+    assert.equal(flexibleResponse.status, 200);
+    assert.ok(shortRoute.legs.length >= 1);
+    assert.ok(shortRoute.legs.every((leg) => Number.isFinite(leg.estimated_walk_minutes)));
+    assert.ok(Number.isFinite(shortRoute.longest_leg_km));
+    assert.ok(Number.isFinite(shortRoute.longest_leg_minutes));
+    assert.ok(typeof shortRoute.leg_fit_note === "string" || shortRoute.leg_fit_note === null);
+    assert.ok(Number.isFinite(flexibleRoute.longest_leg_km));
+    assert.ok(shortRoute.longest_leg_km <= flexibleRoute.longest_leg_km);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

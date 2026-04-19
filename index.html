@@ -36,7 +36,7 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
     <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
-    <link rel="stylesheet" href="styles.css?v=15" />
+    <link rel="stylesheet" href="styles.css?v=17" />
   </head>
   <body>
     <div class="page-shell">
@@ -68,18 +68,10 @@
             </p>
 
             <div class="hero-actions">
-              <button
-                class="primary-button"
-                data-switch-tab="routes"
-                data-scroll-target="#routePlannerStart"
-              >
-                Börja planera
+              <button id="heroPlannerButton" class="primary-button" type="button">
+                Planera din resa
               </button>
-              <button
-                class="hero-live-button"
-                data-switch-tab="routes"
-                data-scroll-target="#cityPulseStart"
-              >
+              <button id="heroLiveButton" class="hero-live-button" type="button">
                 <span class="hero-live-dot" aria-hidden="true"></span>
                 <span>LIVE</span>
               </button>
@@ -333,29 +325,81 @@
         </section>
 
         <section class="tab-panel active" data-tab-panel="routes">
-          <section class="district-hero routes-hero">
-            <div class="district-copy">
-              <p class="eyebrow">ROUTE PLANNER</p>
-              <h2>Bygg din dag i Rom utan onödigt fluff</h2>
-              <p>
-                Välj datum, smak och gångtempo. Start och slut är valfria. Om du lämnar dem
-                öppna väljer Parranda en naturlig runda själv.
-              </p>
-            </div>
-          </section>
-
-          <section id="routePlannerStart" class="route-lab route-builder">
-            <div class="section-heading compact-heading">
+          <section class="planner-launch-strip">
+            <div class="planner-launch-copy">
               <div>
                 <p class="eyebrow">PLANERA</p>
-                <h2>Bygg din dag</h2>
+                <h2>Planera din resa till Rom</h2>
               </div>
-              <p class="section-note">
-                Datum först. Smak och vibe sen. Lås bara start eller slut om du faktiskt vill
-                styra rutten mer exakt.
+              <p id="plannerLaunchSummary" class="planner-launch-note">
+                Datum, var du bor, hur långt du vill gå och vilken vibe du vill åt. Resten
+                anpassar Parranda.
               </p>
             </div>
+            <button id="routePlannerOpenButton" class="primary-button" type="button">
+              Planera min resa
+            </button>
+          </section>
 
+          <section id="cityPulseTeaser" class="city-pulse-teaser" aria-live="polite">
+            <div class="city-pulse-live">
+              <span class="city-pulse-live-dot" aria-hidden="true"></span>
+              <p class="city-pulse-live-label">LIVE • UPPDATERAD JUST NU</p>
+            </div>
+            <div class="city-pulse-teaser-copy">
+              <p id="cityPulseTeaserLabel" class="city-pulse-edition-label">Just nu i Rom</p>
+              <h2 id="cityPulseTeaserTitle">Laddar dagens LIVE-edition...</h2>
+              <p id="cityPulseTeaserSummary" class="city-pulse-teaser-summary">
+                Väder, klädråd och lokala signaler kopplade till de dagar du väljer.
+              </p>
+            </div>
+            <button id="cityPulseTeaserButton" class="ghost-button" type="button">
+              Öppna LIVE
+            </button>
+          </section>
+
+          <section
+            id="routePlannerStart"
+            class="route-lab route-builder planner-modal-shell"
+            hidden
+            aria-modal="true"
+            aria-labelledby="plannerModalTitle"
+          >
+            <div class="planner-modal-head">
+              <div>
+                <p class="eyebrow">§ PLANERARE</p>
+                <h2 id="plannerModalTitle">Din resa till Rom</h2>
+                <p class="planner-modal-lead">
+                  Datum, var du bor, hur långt du orkar gå och vilken känsla du vill åt. Resten
+                  anpassar Parranda.
+                </p>
+                <div class="planner-mode-switch" role="tablist" aria-label="Planeringsläge">
+                  <button
+                    id="plannerModeAutoButton"
+                    class="planner-mode-button is-active"
+                    type="button"
+                    data-planner-mode="auto"
+                    aria-selected="true"
+                  >
+                    Parranda planerar allt
+                  </button>
+                  <button
+                    id="plannerModeManualButton"
+                    class="planner-mode-button"
+                    type="button"
+                    data-planner-mode="manual"
+                    aria-selected="false"
+                  >
+                    Jag vill styra själv
+                  </button>
+                </div>
+                <p id="plannerModeLead" class="planner-mode-lead">
+                  Börja med datum, smak, gångmål och gärna var du bor. Exakta ankare kommer först
+                  när du faktiskt vill styra dagen själv.
+                </p>
+              </div>
+              <button id="closePlannerModalButton" class="ghost-button" type="button">Stäng</button>
+            </div>
             <form id="routePlannerForm" class="route-builder-form">
               <div class="route-builder-grid">
                 <article class="planner-panel planner-panel-wide planner-panel-priority planner-step-panel">
@@ -365,10 +409,7 @@
                       Försöker ansluta till ruttmotorn
                     </span>
                   </div>
-                  <p class="planner-panel-copy">
-                    Börja här. Parranda behöver egentligen bara datum, ungefärlig gång och vad
-                    dagen ska kännas som. Start, slut och finlir ligger direkt nedanför.
-                  </p>
+                  <p class="planner-panel-copy">Det här räcker nästan alltid för att bygga en stark dag.</p>
                   <div class="planner-inline-grid">
                     <label class="search-box route-lab-field">
                       <span>Från datum</span>
@@ -410,188 +451,211 @@
                       <label class="preference-chip"><input type="checkbox" value="party" /> <span>Party</span></label>
                     </div>
                   </div>
-                  <details class="planner-special-shell">
-                    <summary class="planner-special-summary">Specialläge</summary>
-                    <div class="planner-optimizer-modes planner-optimizer-modes-secondary">
-                      <p class="route-mentions-label">Vad ska dagen främst optimeras för?</p>
-                      <div class="optimizer-mode-grid">
-                        <button class="optimizer-button" type="button" data-optimizer-mode="bar-hop">
-                          Bar hopping optimizer
-                        </button>
-                        <button class="optimizer-button" type="button" data-optimizer-mode="pizza-freak">
-                          Pizza freak
-                        </button>
-                        <button class="optimizer-button" type="button" data-optimizer-mode="wine-crawl">
-                          Wine crawl
-                        </button>
-                        <button class="optimizer-button" type="button" data-optimizer-mode="cocktail-night">
-                          Cocktail night
-                        </button>
-                        <button class="optimizer-button" type="button" data-optimizer-mode="church-crawl">
-                          Church crawl
-                        </button>
-                        <button class="optimizer-button" type="button" data-optimizer-mode="sunset-spots">
-                          Sunset spots
-                        </button>
+                  <section id="plannerHomeBaseShell" class="planner-home-base-shell">
+                    <div class="planner-panel-head">
+                      <div>
+                        <p class="eyebrow">AUTO-LÄGE</p>
+                        <p class="planner-panel-copy">
+                          Välj gärna var du bor eller vilken bas du vill utgå från. Det blir en mjuk
+                          boendebas, inte en låst dagsstart.
+                        </p>
                       </div>
                     </div>
-                  </details>
+                    <label class="search-box route-lab-field">
+                      <span>Hur ska boendebasen väljas?</span>
+                      <select id="homeBaseModeSelect">
+                        <option value="auto">Låt Parranda välja</option>
+                        <option value="preset">Kvarter</option>
+                        <option value="current_location">Min plats</option>
+                        <option value="custom">Egen adress</option>
+                      </select>
+                    </label>
+                    <p id="homeBaseModeHint" class="planner-mode-help">
+                      Lämna öppet om du vill att Parranda ska hitta en naturlig boendebas själv.
+                    </p>
+                    <label class="search-box route-lab-field" data-mode-field="home-base-preset" hidden>
+                      <span>Välj bas</span>
+                      <select id="homeBasePresetSelect" hidden></select>
+                      <div
+                        id="homeBaseDistrictButtons"
+                        class="planner-district-grid"
+                        role="listbox"
+                        aria-label="Boendebas"
+                      ></div>
+                      <div id="homeBaseDistrictSubButtons" class="planner-district-subgrid" hidden></div>
+                    </label>
+                    <label class="search-box route-lab-field" data-mode-field="home-base-custom" hidden>
+                      <span>Skriv hotell, adress eller kvarter i Rom</span>
+                      <input
+                        id="homeBaseCustomInput"
+                        type="text"
+                        placeholder="t.ex. Piazza Trilussa eller Roma Termini"
+                      />
+                    </label>
+                    <div class="route-lab-actions">
+                      <button
+                        id="useCurrentPlaceAsHomeBaseButton"
+                        class="secondary-button"
+                        type="button"
+                      >
+                        Använd plats från kartan
+                      </button>
+                      <button
+                        id="useGeolocationAsHomeBaseButton"
+                        class="ghost-button"
+                        type="button"
+                      >
+                        Använd min plats
+                      </button>
+                    </div>
+                  </section>
                 </article>
 
-                <article class="planner-panel planner-panel-wide planner-step-panel planner-anchor-shell">
-                  <div class="planner-panel-head planner-step-head">
+                <details
+                  id="plannerFineTuneDetails"
+                  class="planner-panel planner-panel-wide planner-step-panel planner-fine-tune-details"
+                >
+                  <summary class="planner-fine-tune-summary">
                     <div>
-                      <p class="eyebrow">STEG 2 • START, SLUT OCH FINLIR</p>
+                      <p class="eyebrow">STEG 2 • STYR MER EXAKT</p>
                       <p class="planner-panel-copy">
-                        Lås bara start eller slut om du faktiskt vill styra rutten. Annars väljer
-                        Parranda en naturlig öppning eller final själv.
+                        Exakt start och slut används bara när du faktiskt vill styra rutten hårdare.
                       </p>
                     </div>
                     <p id="plannerAdvancedSummary" class="planner-advanced-meta">
-                      Just nu väljer Parranda både start och slut själv.
+                      Auto-läge är aktivt. Parranda väljer både öppning och final själv.
                     </p>
-                  </div>
+                  </summary>
 
-                  <div class="planner-anchor-grid">
-                    <article class="planner-panel planner-panel-subtle planner-anchor-card">
-                      <div class="planner-panel-head">
-                        <p class="eyebrow">STARTPUNKT</p>
-                        <span class="planner-default-note">Valfritt</span>
-                      </div>
-                      <label class="search-box route-lab-field">
-                        <span>Hur ska starten väljas?</span>
-                        <select id="startModeSelect">
-                          <option value="auto">Låt Parranda välja</option>
-                          <option value="preset">Kvarter</option>
-                          <option value="current_location">Min plats</option>
-                          <option value="custom">Egen adress</option>
-                        </select>
-                      </label>
-                      <p id="startModeHint" class="planner-mode-help">
-                        Parranda väljer en smart öppning om du inte låser den själv.
-                      </p>
-                      <label class="search-box route-lab-field" data-mode-field="start-preset">
-                        <span>Välj kvarter</span>
-                        <select id="startPresetSelect" hidden></select>
-                        <div id="startDistrictButtons" class="planner-district-grid" role="listbox" aria-label="Startkvarter"></div>
-                        <div id="startDistrictSubButtons" class="planner-district-subgrid" hidden></div>
-                      </label>
-                      <label class="search-box route-lab-field" data-mode-field="start-custom" hidden>
-                        <span>Skriv adress eller plats i Rom</span>
-                        <input
-                          id="startCustomInput"
-                          type="text"
-                          placeholder="t.ex. Piazza Trilussa eller Termini"
-                        />
-                      </label>
-                      <div class="route-lab-actions">
-                        <button id="useCurrentPlaceButton" class="secondary-button" type="button">
-                          Använd plats från kartan
-                        </button>
-                        <button id="useGeolocationButton" class="ghost-button" type="button">
-                          Använd min plats
-                        </button>
-                      </div>
-                    </article>
+                  <div class="planner-fine-tune-body">
+                    <div id="plannerManualShell" class="planner-anchor-grid" hidden>
+                      <article class="planner-panel planner-panel-subtle planner-anchor-card">
+                        <div class="planner-panel-head">
+                          <p class="eyebrow">EXAKT START</p>
+                          <span class="planner-default-note">Valfritt</span>
+                        </div>
+                        <label class="search-box route-lab-field">
+                          <span>Hur ska starten väljas?</span>
+                          <select id="startModeSelect">
+                            <option value="auto">Låt Parranda välja</option>
+                            <option value="preset">Kvarter</option>
+                            <option value="current_location">Min plats</option>
+                            <option value="custom">Egen adress</option>
+                          </select>
+                        </label>
+                        <p id="startModeHint" class="planner-mode-help">
+                          Parranda väljer en smart öppning om du inte låser den själv.
+                        </p>
+                        <label class="search-box route-lab-field" data-mode-field="start-preset" hidden>
+                          <span>Välj kvarter</span>
+                          <select id="startPresetSelect" hidden></select>
+                          <div
+                            id="startDistrictButtons"
+                            class="planner-district-grid"
+                            role="listbox"
+                            aria-label="Startkvarter"
+                          ></div>
+                          <div id="startDistrictSubButtons" class="planner-district-subgrid" hidden></div>
+                        </label>
+                        <label class="search-box route-lab-field" data-mode-field="start-custom" hidden>
+                          <span>Skriv adress eller plats i Rom</span>
+                          <input
+                            id="startCustomInput"
+                            type="text"
+                            placeholder="t.ex. Piazza Trilussa eller Termini"
+                          />
+                        </label>
+                        <div class="route-lab-actions">
+                          <button id="useCurrentPlaceButton" class="secondary-button" type="button">
+                            Använd plats från kartan
+                          </button>
+                          <button id="useGeolocationButton" class="ghost-button" type="button">
+                            Använd min plats
+                          </button>
+                        </div>
+                      </article>
 
-                    <article class="planner-panel planner-panel-subtle planner-anchor-card">
-                      <div class="planner-panel-head">
-                        <p class="eyebrow">SLUTPUNKT</p>
-                        <span class="planner-default-note">Valfritt</span>
-                      </div>
-                      <label class="search-box route-lab-field">
-                        <span>Hur ska slutet väljas?</span>
-                        <select id="endModeSelect">
-                          <option value="auto">Låt Parranda välja</option>
-                          <option value="preset">Kvarter</option>
-                          <option value="current_location">Min plats</option>
-                          <option value="custom">Egen adress</option>
-                        </select>
-                      </label>
-                      <p id="endModeHint" class="planner-mode-help">
-                        Parranda väljer en tydlig final om du inte låser slutpunkten.
-                      </p>
-                      <label class="search-box route-lab-field" data-mode-field="end-preset">
-                        <span>Välj kvarter</span>
-                        <select id="endPresetSelect" hidden></select>
-                        <div id="endDistrictButtons" class="planner-district-grid" role="listbox" aria-label="Slutkvarter"></div>
-                        <div id="endDistrictSubButtons" class="planner-district-subgrid" hidden></div>
-                      </label>
-                      <label class="search-box route-lab-field" data-mode-field="end-custom" hidden>
-                        <span>Skriv adress eller plats i Rom</span>
-                        <input
-                          id="endCustomInput"
-                          type="text"
-                          placeholder="t.ex. Piazza Navona eller Ostiense"
-                        />
-                      </label>
-                      <div class="route-lab-actions">
-                        <button id="useMapAsEndButton" class="secondary-button" type="button">
-                          Sätt kartplats som slut
-                        </button>
-                      </div>
-                    </article>
-                  </div>
+                      <article class="planner-panel planner-panel-subtle planner-anchor-card">
+                        <div class="planner-panel-head">
+                          <p class="eyebrow">EXAKT SLUT</p>
+                          <span class="planner-default-note">Valfritt</span>
+                        </div>
+                        <label class="search-box route-lab-field">
+                          <span>Hur ska slutet väljas?</span>
+                          <select id="endModeSelect">
+                            <option value="auto">Låt Parranda välja</option>
+                            <option value="preset">Kvarter</option>
+                            <option value="current_location">Min plats</option>
+                            <option value="custom">Egen adress</option>
+                          </select>
+                        </label>
+                        <p id="endModeHint" class="planner-mode-help">
+                          Parranda väljer en tydlig final om du inte låser slutpunkten.
+                        </p>
+                        <label class="search-box route-lab-field" data-mode-field="end-preset" hidden>
+                          <span>Välj kvarter</span>
+                          <select id="endPresetSelect" hidden></select>
+                          <div
+                            id="endDistrictButtons"
+                            class="planner-district-grid"
+                            role="listbox"
+                            aria-label="Slutkvarter"
+                          ></div>
+                          <div id="endDistrictSubButtons" class="planner-district-subgrid" hidden></div>
+                        </label>
+                        <label class="search-box route-lab-field" data-mode-field="end-custom" hidden>
+                          <span>Skriv adress eller plats i Rom</span>
+                          <input
+                            id="endCustomInput"
+                            type="text"
+                            placeholder="t.ex. Piazza Navona eller Ostiense"
+                          />
+                        </label>
+                        <div class="route-lab-actions">
+                          <button id="useMapAsEndButton" class="secondary-button" type="button">
+                            Sätt kartplats som slut
+                          </button>
+                        </div>
+                      </article>
+                    </div>
 
-                  <div class="planner-style-layers planner-style-layers-step">
-                    <div class="planner-style-row">
-                      <p class="route-mentions-label">Prisnivå</p>
-                      <div class="optimizer-mode-grid">
-                        <button class="optimizer-button is-active" type="button" data-budget-tier="standard">
-                          Standard
-                        </button>
-                        <button class="optimizer-button" type="button" data-budget-tier="budget">
-                          Rome on a budget
-                        </button>
-                        <button class="optimizer-button" type="button" data-budget-tier="dolce-vita">
-                          La Dolce Vita
-                        </button>
+                    <div class="planner-style-layers planner-style-layers-step">
+                      <div class="planner-style-row">
+                        <p class="route-mentions-label">Prisnivå</p>
+                        <div class="optimizer-mode-grid">
+                          <button class="optimizer-button is-active" type="button" data-budget-tier="standard">
+                            Standard
+                          </button>
+                          <button class="optimizer-button" type="button" data-budget-tier="budget">
+                            Rome on a budget
+                          </button>
+                          <button class="optimizer-button" type="button" data-budget-tier="dolce-vita">
+                            La Dolce Vita
+                          </button>
+                        </div>
+                      </div>
+
+                      <div class="planner-style-row">
+                        <label class="search-box route-lab-field">
+                          <span>Max promenad mellan stopp</span>
+                          <select id="legPacingSelect">
+                            <option value="short">Kort</option>
+                            <option value="balanced" selected>Balans</option>
+                            <option value="flexible">Spelar mindre roll</option>
+                          </select>
+                        </label>
+                        <p id="legPacingHint" class="planner-mode-help">
+                          Balans håller benen rimliga utan att bli onödigt strikt.
+                        </p>
                       </div>
                     </div>
-                    <div class="planner-style-row">
-                      <p class="route-mentions-label">Finslipa tonen</p>
-                      <div class="optimizer-mode-grid">
-                        <button class="optimizer-button is-active" type="button" data-route-modifier="none">
-                          Ingen extra bias
-                        </button>
-                        <button class="optimizer-button" type="button" data-route-modifier="evening">
-                          Mer kväll
-                        </button>
-                        <button class="optimizer-button" type="button" data-route-modifier="culture">
-                          Mer kultur
-                        </button>
-                        <button class="optimizer-button" type="button" data-route-modifier="low_key">
-                          Mer low-key
-                        </button>
-                        <button class="optimizer-button" type="button" data-route-modifier="party">
-                          Mer party
-                        </button>
-                      </div>
-                    </div>
                   </div>
-
-                  <details class="planner-special-shell planner-options-shell">
-                    <summary class="planner-special-summary">Options</summary>
-                    <div class="planner-optimizer-modes planner-optimizer-modes-secondary">
-                      <label class="search-box route-lab-field">
-                        <span>Max promenad mellan stopp</span>
-                        <select id="legPacingSelect">
-                          <option value="short">Kort</option>
-                          <option value="balanced" selected>Balans</option>
-                          <option value="flexible">Spelar mindre roll</option>
-                        </select>
-                      </label>
-                      <p id="legPacingHint" class="planner-mode-help">
-                        Balans håller benen rimliga utan att bli onödigt strikt.
-                      </p>
-                    </div>
-                  </details>
-                </article>
+                </details>
               </div>
 
               <div class="route-builder-actions route-builder-actions-final">
                 <button id="routePlanButton" class="primary-button" type="submit">
-                  Bygg min dag
+                  Planera min resa
                 </button>
                 <button id="routeResetButton" class="ghost-button" type="button">
                   Nollställ val
@@ -602,16 +666,17 @@
 
               <div class="planner-mobile-actions">
                 <button id="routePlanStickyButton" class="primary-button" type="button">
-                  Bygg min dag
+                  Planera min resa
                 </button>
               </div>
             </form>
-
-            <p id="routeMatchSummary" class="route-match-summary">
-              Välj datum och tryck på bygg min dag. Om live-läget inte svarar ligger de
-              kuraterade Rome-wide-rutterna kvar som backup.
-            </p>
           </section>
+          <div id="plannerModalBackdrop" class="planner-modal-backdrop" hidden></div>
+
+          <p id="routeMatchSummary" class="route-match-summary">
+            Välj datum och tryck på bygg min dag. Om live-läget inte svarar ligger de kuraterade
+            Rome-wide-rutterna kvar som backup.
+          </p>
 
           <section class="section-heading compact-heading">
             <div>
@@ -655,18 +720,25 @@
                 </p>
               </div>
             </div>
-            <div class="city-pulse-brief-row" aria-live="polite">
-              <p id="cityPulseWeatherBrief" class="city-pulse-brief">Väder laddas...</p>
-              <p id="cityPulseTimelineBrief" class="city-pulse-brief">Tidslinje laddas...</p>
+            <div class="city-pulse-edition-strip" aria-live="polite">
+              <article class="city-pulse-weather-card">
+                <p class="city-pulse-filter-label">Väder</p>
+                <p id="cityPulseWeatherValue" class="city-pulse-weather-value">--</p>
+                <p id="cityPulseWeatherBrief" class="city-pulse-weather-copy">Väder laddas...</p>
+              </article>
+              <article class="city-pulse-weather-card">
+                <p class="city-pulse-filter-label">Klädråd</p>
+                <p id="cityPulseClothingValue" class="city-pulse-weather-value">--</p>
+                <p id="cityPulseClothingAdvice" class="city-pulse-weather-copy">
+                  Parranda väger in temperatur och kvällsluft när editionen laddas.
+                </p>
+              </article>
             </div>
+            <div id="cityPulseDayChips" class="city-pulse-day-chips" aria-live="polite"></div>
             <div class="city-pulse-toolbar">
               <div class="city-pulse-filter-group">
                 <span class="city-pulse-filter-label">Var</span>
                 <div id="cityPulseScopeFilters" class="city-pulse-filter-chips"></div>
-              </div>
-              <div class="city-pulse-filter-group">
-                <span class="city-pulse-filter-label">Radie</span>
-                <div id="cityPulseRadiusFilters" class="city-pulse-filter-chips"></div>
               </div>
               <div class="city-pulse-filter-group">
                 <span class="city-pulse-filter-label">När</span>
@@ -676,6 +748,13 @@
                 <span class="city-pulse-filter-label">Nivå</span>
                 <div id="cityPulseFilters" class="city-pulse-filter-chips"></div>
               </div>
+            </div>
+            <div class="city-pulse-timeline-shell">
+              <div class="city-pulse-timeline-head">
+                <p class="city-pulse-filter-label">Dagens tidslinje</p>
+                <p id="cityPulseTimelineBrief" class="city-pulse-timeline-copy">Tidslinje laddas...</p>
+              </div>
+              <div id="cityPulseTimeline" class="city-pulse-timeline" aria-live="polite"></div>
             </div>
             <p id="cityPulseUtilityNote" class="city-pulse-utility-note">
               LIVE är ett smart lager ovanpå planner-flödet, inte en separat startpunkt.
@@ -814,9 +893,14 @@
           <div class="planner-events-grid"></div>
         </div>
         <div class="planner-primary-slot"></div>
-        <div class="planner-alt-section">
-          <p class="route-mentions-label">Alternativa upplägg samma dag</p>
-          <div class="planner-alt-grid"></div>
+        <div class="planner-alt-section" hidden>
+          <button class="ghost-button planner-alt-toggle" type="button" aria-expanded="false">
+            Visa alternativa upplägg
+          </button>
+          <div class="planner-alt-body" hidden>
+            <p class="route-mentions-label">Alternativa upplägg samma dag</p>
+            <div class="planner-alt-grid"></div>
+          </div>
         </div>
       </article>
     </template>
@@ -913,6 +997,6 @@
     </aside>
 
     <script src="vendor/leaflet/leaflet.js"></script>
-    <script src="script.js?v=15"></script>
+    <script src="script.js?v=17"></script>
   </body>
 </html>

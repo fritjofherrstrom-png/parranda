@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  buildRouteFromTemplate,
   budgetScore,
   generateRecommendations,
   kmScore,
@@ -230,6 +231,28 @@ test("auto-läget bygger en riktig auto-loop för kyrkor utan dold preset-injekt
   assert.ok(result.days[0].primary_route.main_stops.every((stop) => stop.tags.includes("kyrkor")));
 });
 
+test("auto-läget kan bära en mjuk boendebas utan att låsa exakt start", async () => {
+  global.fetch = createWeatherFetch({
+    "2026-04-18": 0,
+  });
+
+  const result = await generateRecommendations({
+    dates: ["2026-04-18"],
+    homeBase: { type: "preset", label: "Monti" },
+    start: { type: "auto" },
+    end: { type: "auto" },
+    walkingKmTarget: 7,
+    preferences: ["vin", "mat", "kultur", "hidden gems"],
+  });
+
+  assert.equal(result.resolved_home_base.label, "Monti");
+  assert.ok(
+    [result.resolved_start.label, result.resolved_end.label, result.days[0].primary_route.anchor_zone]
+      .filter(Boolean)
+      .some((value) => /Monti|Esquilino|Centro/i.test(value)),
+  );
+});
+
 test("auto-läget kan nu välja en riktig båge för öppna kvällar med no-limit", async () => {
   global.fetch = createWeatherFetch({
     "2026-04-19": 0,
@@ -359,6 +382,44 @@ test("alternativrutterna hålls tydligare isär än tidigare", async () => {
   result.days[0].alternatives.forEach((route) => {
     assert.ok(routeSimilarity(result.days[0].primary_route, route) < 8.4);
   });
+});
+
+test("leg pacing short ger tätare ben än flexible på samma låsta båge", () => {
+  const template = routeTemplates.find((entry) => entry.id === "monti-night-spine");
+  const start = { label: "Trastevere", lat: 41.8885, lng: 12.4678 };
+  const end = { label: "San Lorenzo", lat: 41.8992, lng: 12.5211 };
+
+  assert.ok(template);
+
+  const shortRoute = buildRouteFromTemplate(
+    template,
+    start,
+    end,
+    9,
+    ["öl", "vin", "hidden gems", "nattliv", "kväll"],
+    "bar-hop",
+    null,
+    "soft_target",
+    [],
+    { legPacing: "short", manualAnchorsLocked: true },
+  );
+
+  const flexibleRoute = buildRouteFromTemplate(
+    template,
+    start,
+    end,
+    9,
+    ["öl", "vin", "hidden gems", "nattliv", "kväll"],
+    "bar-hop",
+    null,
+    "soft_target",
+    [],
+    { legPacing: "flexible", manualAnchorsLocked: true },
+  );
+
+  assert.ok(shortRoute.legs.length >= 1);
+  assert.ok(shortRoute.legs.every((leg) => Number.isFinite(leg.estimated_walk_minutes)));
+  assert.ok(shortRoute.longest_leg_km <= flexibleRoute.longest_leg_km);
 });
 
 test("mentions följer faktiska stopp nära den genererade rutten", async () => {
