@@ -3,7 +3,9 @@ const assert = require("node:assert/strict");
 const http = require("node:http");
 
 const { buildApp } = require("../server/app");
+const { routeTemplates, allItems } = require("../server/catalog");
 const { resetLiveEventsCache } = require("../server/live-events");
+const { buildRouteFromTemplate, routeSimilarity } = require("../server/route-engine");
 
 const originalFetch = global.fetch;
 
@@ -70,6 +72,50 @@ test.afterEach(() => {
   resetLiveEventsCache();
 });
 
+test("katalogen har geo-bredd nog för flera olika Rom-dagar", () => {
+  assert.ok(routeTemplates.length >= 35);
+  assert.ok(allItems.length >= 100);
+});
+
+test("buildRouteFromTemplate skapar en riktig loop utan upprepade stopp", () => {
+  const template = routeTemplates.find((entry) => entry.id === "monti-market-aperitivo-loop");
+  const anchor = { label: "Monti", lat: 41.8946, lng: 12.4951 };
+  const route = buildRouteFromTemplate(
+    template,
+    anchor,
+    anchor,
+    7,
+    ["vin", "hidden gems", "nattliv"],
+    "wine-crawl",
+    "low_key",
+    "soft_target",
+  );
+
+  assert.equal(route.route_shape, "loop");
+  assert.equal(route.start_label, "Monti");
+  assert.equal(route.end_label, "Monti");
+  assert.equal(new Set(route.main_stops.map((stop) => stop.id)).size, route.main_stops.length);
+  assert.ok(route.legs.length >= 1);
+});
+
+test("buildRouteFromTemplate håller ett smalt kyrkoval tydligt kyrkoburet", () => {
+  const template = routeTemplates.find((entry) => entry.id === "centro-church-salon");
+  const anchor = { label: "Centro Storico", lat: 41.8984, lng: 12.4768 };
+  const route = buildRouteFromTemplate(
+    template,
+    anchor,
+    anchor,
+    6,
+    ["kyrkor"],
+    null,
+    null,
+    "soft_target",
+  );
+
+  assert.ok(route.main_stops.length >= 2);
+  assert.ok(route.main_stops.every((stop) => stop.tags.includes("kyrkor")));
+});
+
 test("GET /api/places/search returnerar kuraterade träffar", async () => {
   global.fetch = async (url) => {
     throw new Error(`Unexpected fetch during places/search test: ${url}`);
@@ -132,6 +178,28 @@ test("GET /api/city-pulse returnerar stadspuls, wildcard och officiella tips", a
       };
     }
 
+    if (parsed.hostname === "api.open-meteo.com") {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            daily: {
+              time: ["2026-04-21"],
+              weathercode: [1],
+              temperature_2m_max: [24],
+              temperature_2m_min: [14],
+            },
+            current: {
+              temperature_2m: 19.6,
+              weather_code: 1,
+              is_day: 1,
+            },
+          };
+        },
+      };
+    }
+
     throw new Error(`Unexpected fetch during city-pulse test: ${url}`);
   };
 
@@ -151,6 +219,8 @@ test("GET /api/city-pulse returnerar stadspuls, wildcard och officiella tips", a
     assert.ok(response.body.items.some((item) => item.level === "venue"));
     assert.ok(response.body.wildcards.length >= 1);
     assert.ok(Array.isArray(response.body.official_events));
+    assert.equal(response.body.weather?.maxTemp, 24);
+    assert.equal(response.body.weather?.currentTemp, 19.6);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -279,6 +349,98 @@ test("POST /api/route-recommendations accepterar budget tier och modifier", asyn
   }
 });
 
+test("POST /api/route-recommendations håller Monti -> Monti i rätt zon", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-04-20"],
+          weathercode: [0],
+          temperature_2m_max: [21],
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during Monti anchor test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations",
+      body: {
+        dates: ["2026-04-20"],
+        start: { type: "preset", label: "Monti" },
+        end: { type: "preset", label: "Monti" },
+        walking_km_target: 7,
+        preferences: ["vin", "cocktail", "hidden gems", "nattliv"],
+        optimizer_mode: "wine-crawl",
+        modifier: "low_key",
+        budget_tier: "dolce-vita",
+      },
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.days[0].primary_route.route_shape, "loop");
+    assert.match(response.body.days[0].primary_route.anchor_zone, /Monti/);
+    assert.ok(
+      !response.body.days[0].primary_route.main_stops.some((stop) =>
+        ["Prati", "Borgo"].includes(stop.area),
+      ),
+    );
+    assert.ok(response.body.days[0].primary_route.geo_fit_note);
+    assert.ok(response.body.days[0].primary_route.legs.length >= 1);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("POST /api/route-recommendations gör ett ensamt kyrkoval mycket striktare", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-04-20"],
+          weathercode: [0],
+          temperature_2m_max: [21],
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during strict church route test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations",
+      body: {
+        dates: ["2026-04-20"],
+        start: { type: "preset", label: "Centro Storico" },
+        end: { type: "preset", label: "Centro Storico" },
+        walking_km_target: 6,
+        preferences: ["kyrkor"],
+      },
+    });
+
+    const primaryStops = response.body.days[0].primary_route.main_stops;
+
+    assert.equal(response.status, 200);
+    assert.ok(primaryStops.length >= 2);
+    assert.ok(primaryStops.every((stop) => stop.tags.includes("kyrkor")));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("POST /api/route-recommendations prioriterar rätt sida av stan i södra Rom", async () => {
   global.fetch = async (url) => {
     const parsed = new URL(String(url));
@@ -328,6 +490,99 @@ test("POST /api/route-recommendations prioriterar rätt sida av stan i södra Ro
       ),
     );
     assert.ok(response.body.days[0].primary_route.area_note);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("POST /api/route-recommendations bygger en tydlig båge mellan Trastevere och Monti", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-04-21"],
+          weathercode: [0],
+          temperature_2m_max: [22],
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during arc routing test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations",
+      body: {
+        dates: ["2026-04-21"],
+        start: { type: "preset", label: "Trastevere" },
+        end: { type: "preset", label: "Monti" },
+        walking_km_target: 8,
+        preferences: ["öl", "vin", "nattliv", "hidden gems"],
+        optimizer_mode: "bar-hop",
+        modifier: "party",
+      },
+    });
+
+    const primaryRoute = response.body.days[0].primary_route;
+
+    assert.equal(response.status, 200);
+    assert.equal(primaryRoute.route_shape, "arc");
+    assert.equal(primaryRoute.start_label, "Trastevere");
+    assert.equal(primaryRoute.end_label, "Monti");
+    assert.ok(primaryRoute.anchor_zone.includes("Trastevere"));
+    assert.ok(
+      primaryRoute.main_stops.some(
+        (stop) => stop.area.includes("Monti") || stop.area.includes("Centro"),
+      ),
+    );
+    assert.ok(primaryRoute.geo_fit_note);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("POST /api/route-recommendations ger alternativ som skiljer sig tydligt från huvudrutten", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-04-20"],
+          weathercode: [0],
+          temperature_2m_max: [20],
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during dedupe test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations",
+      body: {
+        dates: ["2026-04-20"],
+        start: { type: "preset", label: "Trastevere" },
+        end: { type: "preset", label: "Trastevere" },
+        walking_km_target: 8,
+        preferences: ["vin", "mat", "hidden gems", "nattliv"],
+        optimizer_mode: "bar-hop",
+      },
+    });
+
+    assert.equal(response.status, 200);
+    assert.ok(response.body.days[0].alternatives.length >= 1);
+    assert.ok(routeSimilarity(response.body.days[0].primary_route, response.body.days[0].alternatives[0]) < 10);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -474,6 +729,108 @@ test("POST /api/route-recommendations returnerar officiella live-events när pro
     assert.equal(response.body.days[0].live_events[0].venue, "Teatro di Roma - Teatro India");
     assert.ok(typeof response.body.days[0].live_events[0].lat === "number");
     assert.ok(response.body.days[0].live_events[0].route_fit_note);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("POST /api/route-recommendations kan väva in ett live-event som faktiskt ruttstopp", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-04-16"],
+          weathercode: [0],
+          temperature_2m_max: [22],
+        },
+      });
+    }
+
+    if (parsed.hostname === "www.turismoroma.it") {
+      return {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        async text() {
+          return `
+            <div class="views-row views-row-1">
+              <div class="news_info">
+                <div class="news_titolo_container">
+                  <div class="news_titolo">
+                    <div class="field-content">
+                      <a href="/en/events/teatro-india-night">Teatro India Night</a>
+                    </div>
+                  </div>
+                </div>
+                <div class="news_date">
+                  <div class="field-content">
+                    <span class="date-display-start">from&nbsp;16-04-2026</span>
+                    <span class="date-display-end">&nbsp;to&nbsp;16-04-2026</span>
+                  </div>
+                </div>
+                <div class="news_tipo">
+                  <div class="field-content"><a href="/en/tipo-evento/events">Events</a></div>
+                </div>
+                <div class="news_sedi">
+                  <div class="field-content"><a href="/en/places/teatro-india">Teatro di Roma - Teatro India</a></div>
+                </div>
+                <div class="news_indirizzo">Lungotevere Vittorio Gassman</div>
+                <div class="news_text">
+                  <div class="field-content"><p>Guided show visits for a cultural evening in Rome.</p></div>
+                </div>
+                <a class="news_button_acquista" href="https://tickets.example.com/india" target="_blank">
+                  Buy
+                </a>
+              </div>
+            </div>
+          `;
+        },
+      };
+    }
+
+    if (parsed.hostname === "nominatim.openstreetmap.org") {
+      return mockJsonResponse([
+        {
+          display_name: "Teatro di Roma - Teatro India, Rome, Italy",
+          lat: "41.8704",
+          lon: "12.4674",
+          type: "theatre",
+        },
+      ]);
+    }
+
+    throw new Error(`Unexpected fetch during live route stop integration test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations",
+      body: {
+        dates: ["2026-04-16"],
+        start: { type: "preset", label: "Trastevere" },
+        end: { type: "preset", label: "Trastevere" },
+        walking_km_target: 8,
+        preferences: ["kultur", "nattliv"],
+        optimizer_mode: "bar-hop",
+        modifier: "evening",
+      },
+    });
+
+    assert.equal(response.status, 200);
+    assert.ok(
+      response.body.days[0].primary_route.main_stops.some(
+        (stop) => stop.is_live_event && stop.label === "Teatro India Night",
+      ),
+    );
+    assert.match(
+      response.body.days[0].primary_route.live_event_fit_note || "",
+      /ligger inne i själva rutten/i,
+    );
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

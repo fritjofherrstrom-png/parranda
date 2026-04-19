@@ -5,6 +5,7 @@ const { geocodeQuery } = require("./geocoding");
 const { generateRecommendations } = require("./route-engine");
 const { fetchLiveEventsForDates } = require("./live-events");
 const { getCityPulse, getRomeTodayIsoDate } = require("./editorial-calendar");
+const { fetchWeatherForDates, ROME_CENTER } = require("./weather");
 
 const pulseVibeByTag = {
   kultur: "curious",
@@ -53,6 +54,8 @@ function buildOfficialPulseItem(event, date) {
       "Bra som live-bonus när du vill väva in något som faktiskt bara händer just nu.",
     matches_vibes: matchesVibes,
     official_event_id: event.id,
+    lat: typeof event.lat === "number" ? event.lat : null,
+    lng: typeof event.lng === "number" ? event.lng : null,
     priority: 6,
   };
 }
@@ -175,7 +178,10 @@ function buildApp() {
     try {
       const date = String(request.query.date || "").trim() || getRomeTodayIsoDate();
       const pulse = getCityPulse(date);
-      const liveEventsByDate = await fetchLiveEventsForDates([pulse.date], {});
+      const [liveEventsByDate, weatherByDate] = await Promise.all([
+        fetchLiveEventsForDates([pulse.date], {}),
+        fetchWeatherForDates([pulse.date], ROME_CENTER).catch(() => ({})),
+      ]);
       const officialEvents = (liveEventsByDate[pulse.date] || []).slice(0, 2);
       const officialPulseItems = officialEvents.slice(0, 1).map((event) => buildOfficialPulseItem(event, pulse.date));
 
@@ -183,6 +189,7 @@ function buildApp() {
         ...pulse,
         items: [...(pulse.items || []), ...officialPulseItems],
         official_events: officialEvents,
+        weather: weatherByDate[pulse.date] || null,
       });
     } catch (error) {
       response.status(500).json({

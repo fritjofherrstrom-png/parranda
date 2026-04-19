@@ -26,7 +26,8 @@ async function fetchWeatherForDates(dates, anchor = ROME_CENTER) {
   const url = new URL("https://api.open-meteo.com/v1/forecast");
   url.searchParams.set("latitude", String(anchor.lat));
   url.searchParams.set("longitude", String(anchor.lng));
-  url.searchParams.set("daily", "weathercode,temperature_2m_max");
+  url.searchParams.set("daily", "weathercode,temperature_2m_max,temperature_2m_min");
+  url.searchParams.set("current", "temperature_2m,weather_code,is_day");
   url.searchParams.set("timezone", "Europe/Rome");
   url.searchParams.set("start_date", start);
   url.searchParams.set("end_date", end);
@@ -41,17 +42,24 @@ async function fetchWeatherForDates(dates, anchor = ROME_CENTER) {
   const times = payload.daily?.time || [];
   const codes = payload.daily?.weathercode || [];
   const maxTemps = payload.daily?.temperature_2m_max || [];
+  const minTemps = payload.daily?.temperature_2m_min || [];
+  const current = payload.current || {};
 
   times.forEach((date, index) => {
     const condition = summarizeWeather(codes[index]);
     const temp = maxTemps[index];
+    const minTemp = minTemps[index];
 
     result[date] = {
       condition,
       maxTemp: temp,
+      minTemp,
       hot: typeof temp === "number" && temp >= 30,
       pleasant: typeof temp === "number" && temp >= 18 && temp < 30,
       rawCode: codes[index],
+      currentTemp: typeof current.temperature_2m === "number" ? current.temperature_2m : null,
+      currentCode: typeof current.weather_code === "number" ? current.weather_code : null,
+      isDay: typeof current.is_day === "number" ? current.is_day === 1 : null,
     };
   });
 

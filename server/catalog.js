@@ -1414,8 +1414,109 @@ function inferVibe(item) {
   return "bra som ett tydligt ankare i en längre promenaddag";
 }
 
+function inferClusterToken(item) {
+  const source = `${item.area} ${item.id} ${item.name}`.toLowerCase();
+
+  if (source.includes("trastevere") || source.includes("gianicolo") || source.includes("monteverde")) {
+    return "west";
+  }
+  if (source.includes("testaccio") || source.includes("ostiense") || source.includes("garbatella") || source.includes("aventino") || source.includes("piramide")) {
+    return "south";
+  }
+  if (source.includes("pigneto") || source.includes("san lorenzo") || source.includes("san-lorenzo") || source.includes("esquilino") || source.includes("san giovanni") || source.includes("san-giovanni") || source.includes("laterano")) {
+    return "east";
+  }
+  return "center";
+}
+
+function inferAnchorWeight(item) {
+  let weight = 1;
+
+  if (item.kind === "district" || item.kind === "district-group") {
+    weight += 1.2;
+  }
+  if (item.tags.includes("nattliv")) {
+    weight += 0.7;
+  }
+  if (item.tags.includes("mat")) {
+    weight += 0.4;
+  }
+  if (item.tags.includes("kultur") || item.tags.includes("kyrkor")) {
+    weight += 0.5;
+  }
+
+  return Number(weight.toFixed(1));
+}
+
+function inferStartSuitability(item) {
+  if (item.kind === "district" || item.kind === "district-group" || item.kind === "market") {
+    return 3;
+  }
+  if (item.tags.includes("mat") || item.tags.includes("kultur") || item.tags.includes("kyrkor")) {
+    return 2;
+  }
+  if (item.tags.includes("nattliv") || item.tags.includes("cocktail")) {
+    return 1;
+  }
+  return 1.5;
+}
+
+function inferFinalSuitability(item) {
+  if (item.tags.includes("nattliv") || item.tags.includes("cocktail") || item.tags.includes("vin")) {
+    return 3;
+  }
+  if (item.kind === "district" || item.kind === "district-group") {
+    return 2.6;
+  }
+  if (item.tags.includes("utsikt")) {
+    return 2.2;
+  }
+  return 1.4;
+}
+
+function inferDwellType(item) {
+  if (item.kind === "district" || item.kind === "district-group" || item.kind === "square") {
+    return "wander";
+  }
+  if (item.kind === "bar" || item.kind.includes("bar") || item.kind.includes("cocktail")) {
+    return "drink-stop";
+  }
+  if (item.kind === "restaurant" || item.kind === "pizza" || item.kind === "bakery") {
+    return "meal-anchor";
+  }
+  if (item.kind === "church" || item.kind === "museum" || item.kind === "landmark") {
+    return "culture-anchor";
+  }
+  if (item.kind === "viewpoint" || item.kind === "bridge" || item.kind === "garden") {
+    return "pause";
+  }
+  return "stop";
+}
+
+function inferDuplicateFamily(item) {
+  if (item.tags.includes("cocktail")) {
+    return "cocktail";
+  }
+  if (item.tags.includes("vin")) {
+    return "wine";
+  }
+  if (item.tags.includes("öl")) {
+    return "beer";
+  }
+  if (item.tags.includes("pizza")) {
+    return "pizza";
+  }
+  if (item.tags.includes("kyrkor")) {
+    return "church";
+  }
+  if (item.tags.includes("kultur")) {
+    return "culture";
+  }
+  return item.kind;
+}
+
 function enrichItem(item) {
-  const meta = itemMetaById[item.id] || {};
+  const meta = allItemMetaById[item.id] || {};
 
   return {
     ...item,
@@ -1433,6 +1534,12 @@ function enrichItem(item) {
     perfectFor: meta.perfectFor || item.tags.slice(0, 3),
     featureNotes: meta.featureNotes || [],
     happyHourNote: meta.happyHourNote || null,
+    clusterToken: meta.clusterToken || inferClusterToken(item),
+    anchorWeight: meta.anchorWeight ?? inferAnchorWeight(item),
+    goodAsStart: meta.goodAsStart ?? inferStartSuitability(item),
+    goodAsFinal: meta.goodAsFinal ?? inferFinalSuitability(item),
+    dwellType: meta.dwellType || inferDwellType(item),
+    duplicateFamily: meta.duplicateFamily || inferDuplicateFamily(item),
   };
 }
 
@@ -2054,9 +2161,740 @@ const routeTemplates = [
   },
 ];
 
-const enrichedPlaces = places.map((item) => enrichItem(item));
-const enrichedBars = bars.map((item) => enrichItem(item));
-const specialtyItems = specialtyItemsRaw.map((item) => enrichItem(item));
+const extraPlaces = [
+  {
+    id: "centro-storico",
+    name: "Centro Storico",
+    kind: "district-group",
+    lat: 41.8984,
+    lng: 12.4768,
+    area: "Centro Storico",
+    tags: ["vin", "mat", "kultur", "hidden gems"],
+    weatherTags: ["all-weather", "evening"],
+    closedWeekdays: [],
+    searchTerms: ["centro storico", "centro", "historiska centrum"],
+  },
+  {
+    id: "ostiense-garbatella",
+    name: "Ostiense/Garbatella",
+    kind: "district-group",
+    lat: 41.8698,
+    lng: 12.4829,
+    area: "Ostiense/Garbatella",
+    tags: ["mat", "vin", "öl", "nattliv", "hidden gems", "low-key"],
+    weatherTags: ["all-weather", "evening"],
+    closedWeekdays: [],
+    searchTerms: ["ostiense/garbatella", "ostiense garbatella", "södra rom"],
+  },
+  {
+    id: "pigneto-san-lorenzo",
+    name: "Pigneto/San Lorenzo",
+    kind: "district-group",
+    lat: 41.8936,
+    lng: 12.5221,
+    area: "Pigneto/San Lorenzo",
+    tags: ["öl", "vin", "nattliv", "hidden gems", "party"],
+    weatherTags: ["all-weather", "evening"],
+    closedWeekdays: [],
+    searchTerms: ["pigneto/san lorenzo", "pigneto san lorenzo", "östra nattliv"],
+  },
+  {
+    id: "teatro-di-marcello",
+    name: "Teatro di Marcello",
+    kind: "landmark",
+    lat: 41.8931,
+    lng: 12.4791,
+    area: "Centro",
+    tags: ["kultur", "hidden gems", "klassiker"],
+    weatherTags: ["all-weather", "sun"],
+    closedWeekdays: [],
+    searchTerms: ["teatro di marcello", "marcello"],
+  },
+  {
+    id: "isola-tiberina",
+    name: "Isola Tiberina",
+    kind: "landmark",
+    lat: 41.8898,
+    lng: 12.4772,
+    area: "Centro/Trastevere",
+    tags: ["kultur", "hidden gems", "low-key"],
+    weatherTags: ["all-weather", "evening"],
+    closedWeekdays: [],
+    searchTerms: ["isola tiberina", "tiber island"],
+  },
+  {
+    id: "mercato-monti",
+    name: "Mercato Monti",
+    kind: "market",
+    lat: 41.8957,
+    lng: 12.4938,
+    area: "Monti",
+    tags: ["mat", "kultur", "hidden gems", "low-key"],
+    weatherTags: ["all-weather"],
+    closedWeekdays: [],
+    searchTerms: ["mercato monti", "via leonina market"],
+  },
+  {
+    id: "via-giulia",
+    name: "Via Giulia",
+    kind: "street",
+    lat: 41.8985,
+    lng: 12.4668,
+    area: "Centro",
+    tags: ["kultur", "hidden gems", "low-key"],
+    weatherTags: ["all-weather", "evening"],
+    closedWeekdays: [],
+    searchTerms: ["via giulia"],
+  },
+  {
+    id: "basilica-san-paolo-fuori-le-mura",
+    name: "San Paolo Fuori le Mura",
+    kind: "church",
+    lat: 41.8587,
+    lng: 12.4768,
+    area: "Ostiense",
+    tags: ["kyrkor", "kultur", "hidden gems"],
+    weatherTags: ["rain", "hot", "all-weather"],
+    closedWeekdays: [],
+    searchTerms: ["san paolo fuori le mura", "basilica san paolo"],
+  },
+  {
+    id: "palazzo-altemps",
+    name: "Palazzo Altemps",
+    kind: "museum",
+    lat: 41.8993,
+    lng: 12.4727,
+    area: "Centro",
+    tags: ["kultur", "hidden gems", "low-key"],
+    weatherTags: ["rain", "hot", "all-weather"],
+    closedWeekdays: [1],
+    searchTerms: ["palazzo altemps"],
+  },
+  {
+    id: "orto-botanico",
+    name: "Orto Botanico",
+    kind: "garden",
+    lat: 41.8929,
+    lng: 12.4636,
+    area: "Trastevere/Gianicolo",
+    tags: ["hidden gems", "kultur", "low-key"],
+    weatherTags: ["sun", "mild"],
+    closedWeekdays: [],
+    searchTerms: ["orto botanico", "botanical garden rome"],
+  },
+  {
+    id: "ponte-sisto",
+    name: "Ponte Sisto",
+    kind: "bridge",
+    lat: 41.894,
+    lng: 12.4701,
+    area: "Centro/Trastevere",
+    tags: ["kultur", "hidden gems", "kväll"],
+    weatherTags: ["sun", "evening"],
+    closedWeekdays: [],
+    searchTerms: ["ponte sisto"],
+  },
+  {
+    id: "villa-celimontana",
+    name: "Villa Celimontana",
+    kind: "park",
+    lat: 41.887,
+    lng: 12.4958,
+    area: "Celio",
+    tags: ["hidden gems", "kultur", "low-key"],
+    weatherTags: ["sun", "mild"],
+    closedWeekdays: [],
+    searchTerms: ["villa celimontana"],
+  },
+];
+
+const extraBars = [
+  {
+    id: "barnum-cafe",
+    name: "Barnum Cafe",
+    kind: "bar",
+    lat: 41.8968,
+    lng: 12.4732,
+    area: "Centro",
+    tags: ["vin", "cocktail", "low-key", "nattliv"],
+    weatherTags: ["all-weather", "evening"],
+    closedWeekdays: [],
+    searchTerms: ["barnum cafe", "barnum"],
+  },
+  {
+    id: "salotto-42",
+    name: "Salotto 42",
+    kind: "cocktail-bar",
+    lat: 41.9002,
+    lng: 12.4808,
+    area: "Centro",
+    tags: ["cocktail", "vin", "nattliv", "party"],
+    weatherTags: ["all-weather", "evening"],
+    closedWeekdays: [],
+    searchTerms: ["salotto 42"],
+  },
+  {
+    id: "bar-del-fico",
+    name: "Bar del Fico",
+    kind: "bar",
+    lat: 41.8998,
+    lng: 12.4704,
+    area: "Navona",
+    tags: ["vin", "aperitivo", "nattliv", "hidden gems"],
+    weatherTags: ["all-weather", "evening"],
+    closedWeekdays: [],
+    searchTerms: ["bar del fico", "del fico"],
+  },
+  {
+    id: "il-vinaietto",
+    name: "Il Vinaietto",
+    kind: "wine-bar",
+    lat: 41.9075,
+    lng: 12.4634,
+    area: "Prati",
+    tags: ["vin", "mat", "hidden gems", "low-key"],
+    weatherTags: ["all-weather", "evening"],
+    closedWeekdays: [0],
+    searchTerms: ["il vinaietto"],
+  },
+  {
+    id: "litro-roma",
+    name: "Litro",
+    kind: "wine-bar",
+    lat: 41.8829,
+    lng: 12.4566,
+    area: "Monteverde",
+    tags: ["vin", "hidden gems", "low-key", "mat"],
+    weatherTags: ["all-weather", "evening"],
+    closedWeekdays: [1],
+    searchTerms: ["litro", "litro roma"],
+  },
+  {
+    id: "porto-fluviale-bar",
+    name: "Porto Fluviale",
+    kind: "bar",
+    lat: 41.8738,
+    lng: 12.4765,
+    area: "Ostiense",
+    tags: ["öl", "vin", "mat", "nattliv"],
+    weatherTags: ["all-weather", "evening"],
+    closedWeekdays: [],
+    searchTerms: ["porto fluviale"],
+  },
+  {
+    id: "bar-bozza",
+    name: "Bar Bozza",
+    kind: "bar",
+    lat: 41.8897,
+    lng: 12.5287,
+    area: "Pigneto",
+    tags: ["öl", "vin", "hidden gems", "party", "nattliv"],
+    weatherTags: ["all-weather", "evening"],
+    closedWeekdays: [],
+    searchTerms: ["bar bozza", "bozza pigneto"],
+  },
+  {
+    id: "fanfulla-5a",
+    name: "Fanfulla 5/a",
+    kind: "bar",
+    lat: 41.8903,
+    lng: 12.5294,
+    area: "Pigneto",
+    tags: ["öl", "cocktail", "hidden gems", "party", "nattliv"],
+    weatherTags: ["all-weather", "evening"],
+    closedWeekdays: [],
+    searchTerms: ["fanfulla 5/a", "fanfulla"],
+  },
+  {
+    id: "bottiglieria-scalo",
+    name: "Bottiglieria Scalo",
+    kind: "wine-bar",
+    lat: 41.9002,
+    lng: 12.5161,
+    area: "San Lorenzo",
+    tags: ["vin", "öl", "hidden gems", "low-key", "nattliv"],
+    weatherTags: ["all-weather", "evening"],
+    closedWeekdays: [],
+    searchTerms: ["bottiglieria scalo", "scalo san lorenzo"],
+  },
+  {
+    id: "alcazar-live",
+    name: "Alcazar Live",
+    kind: "bar",
+    lat: 41.8897,
+    lng: 12.4726,
+    area: "Trastevere",
+    tags: ["cocktail", "kultur", "nattliv", "hidden gems"],
+    weatherTags: ["all-weather", "evening"],
+    closedWeekdays: [],
+    searchTerms: ["alcazar live", "alcazar trastevere"],
+  },
+  {
+    id: "open-baladin-roma",
+    name: "Open Baladin Roma",
+    kind: "bar",
+    lat: 41.8964,
+    lng: 12.4683,
+    area: "Centro",
+    tags: ["öl", "mat", "nattliv", "hidden gems"],
+    weatherTags: ["all-weather", "evening"],
+    closedWeekdays: [],
+    searchTerms: ["open baladin roma", "open baladin"],
+  },
+  {
+    id: "the-race-club",
+    name: "The Race Club",
+    kind: "cocktail-bar",
+    lat: 41.8977,
+    lng: 12.4918,
+    area: "Monti",
+    tags: ["cocktail", "nattliv", "hidden gems", "party"],
+    weatherTags: ["all-weather", "evening"],
+    closedWeekdays: [],
+    searchTerms: ["the race club", "race club rome"],
+  },
+];
+
+const extraSpecialtyItemsRaw = [
+  {
+    id: "forno-campo-de-fiori",
+    name: "Forno Campo de' Fiori",
+    kind: "bakery",
+    lat: 41.8962,
+    lng: 12.472,
+    area: "Centro",
+    tags: ["mat", "budget", "hidden gems", "lokalt"],
+    weatherTags: ["all-weather"],
+    closedWeekdays: [],
+    searchTerms: ["forno campo de fiori", "campo bakery"],
+  },
+  {
+    id: "trapizzino-testaccio",
+    name: "Trapizzino Testaccio",
+    kind: "street-food",
+    lat: 41.8792,
+    lng: 12.4769,
+    area: "Testaccio",
+    tags: ["mat", "budget", "lokalt", "hidden gems"],
+    weatherTags: ["all-weather"],
+    closedWeekdays: [],
+    searchTerms: ["trapizzino testaccio", "trapizzino"],
+  },
+  {
+    id: "roscioli-salumeria",
+    name: "Roscioli Salumeria con Cucina",
+    kind: "restaurant",
+    lat: 41.8957,
+    lng: 12.4729,
+    area: "Centro",
+    tags: ["mat", "vin", "kultur", "dolce-vita"],
+    weatherTags: ["all-weather", "evening"],
+    closedWeekdays: [],
+    searchTerms: ["roscioli", "roscioli salumeria"],
+  },
+  {
+    id: "retrobottega",
+    name: "Retrobottega",
+    kind: "restaurant",
+    lat: 41.8992,
+    lng: 12.4714,
+    area: "Centro",
+    tags: ["mat", "vin", "hidden gems", "dolce-vita"],
+    weatherTags: ["all-weather", "evening"],
+    closedWeekdays: [0],
+    searchTerms: ["retrobottega"],
+  },
+  {
+    id: "santa-maria-del-popolo",
+    name: "Santa Maria del Popolo",
+    kind: "church",
+    lat: 41.9102,
+    lng: 12.4764,
+    area: "Centro",
+    tags: ["kyrkor", "kultur", "klassiker"],
+    weatherTags: ["rain", "hot", "all-weather"],
+    closedWeekdays: [],
+    searchTerms: ["santa maria del popolo"],
+  },
+  {
+    id: "san-luigi-dei-francesi",
+    name: "San Luigi dei Francesi",
+    kind: "church",
+    lat: 41.8997,
+    lng: 12.4739,
+    area: "Centro",
+    tags: ["kyrkor", "kultur", "hidden gems"],
+    weatherTags: ["rain", "hot", "all-weather"],
+    closedWeekdays: [],
+    searchTerms: ["san luigi dei francesi"],
+  },
+  {
+    id: "domus-aurea",
+    name: "Domus Aurea",
+    kind: "museum",
+    lat: 41.8908,
+    lng: 12.4953,
+    area: "Monti/Celio",
+    tags: ["kultur", "hidden gems", "klassiker"],
+    weatherTags: ["rain", "hot", "all-weather"],
+    closedWeekdays: [1],
+    searchTerms: ["domus aurea"],
+  },
+  {
+    id: "mercati-di-traiano",
+    name: "Mercati di Traiano",
+    kind: "museum",
+    lat: 41.8958,
+    lng: 12.4865,
+    area: "Centro",
+    tags: ["kultur", "hidden gems", "low-key"],
+    weatherTags: ["rain", "hot", "all-weather"],
+    closedWeekdays: [1],
+    searchTerms: ["mercati di traiano", "markets of trajan"],
+  },
+  {
+    id: "basilica-san-crisogono",
+    name: "San Crisogono",
+    kind: "church",
+    lat: 41.8885,
+    lng: 12.4705,
+    area: "Trastevere",
+    tags: ["kyrkor", "kultur", "hidden gems", "low-key"],
+    weatherTags: ["rain", "hot"],
+    closedWeekdays: [],
+    searchTerms: ["san crisogono", "basilica san crisogono"],
+  },
+  {
+    id: "supplizio",
+    name: "Supplizio",
+    kind: "street-food",
+    lat: 41.8979,
+    lng: 12.4708,
+    area: "Centro",
+    tags: ["mat", "budget", "hidden gems", "lokalt"],
+    weatherTags: ["all-weather"],
+    closedWeekdays: [],
+    searchTerms: ["supplizio"],
+  },
+  {
+    id: "hotel-locarno-rooftop",
+    name: "Hotel Locarno Rooftop",
+    kind: "rooftop-bar",
+    lat: 41.9087,
+    lng: 12.4744,
+    area: "Popolo/Prati",
+    tags: ["vin", "cocktail", "utsikt", "dolce-vita", "kväll"],
+    weatherTags: ["sun", "evening"],
+    closedWeekdays: [],
+    searchTerms: ["hotel locarno rooftop", "locarno rooftop"],
+  },
+  {
+    id: "marigold-roma",
+    name: "Marigold Roma",
+    kind: "bakery",
+    lat: 41.8765,
+    lng: 12.4934,
+    area: "Ostiense",
+    tags: ["mat", "kultur", "hidden gems", "low-key"],
+    weatherTags: ["all-weather"],
+    closedWeekdays: [1, 2],
+    searchTerms: ["marigold roma", "marigold"],
+  },
+];
+
+const extraItemMetaById = {
+  "centro-storico": {
+    priceLevel: "$$",
+    bestTime: "fran sen formiddag till sen kvall",
+    vibe: "det klassiska centrumet smart gjort, men filtrerat genom ratt grander, rum och glas",
+    groupSize: "2-5 personer",
+    bookingRequired: false,
+    openingSummary: "alltid relevant, men bast nar du anvander det som stråk i stallet for slutmal",
+    longDescription:
+      "Centro Storico ar starkast nar det far vara ryggrad snarare an kuliss. Bra som bas om du vill kunna ga mellan kultur, mat och vin utan tunnelbana.",
+    perfectFor: ["forsta dag i Rom", "vin + kultur", "smart mittzon"],
+    featureNotes: ["bra som båge", "många starka avstickare", "fungerar i både dag och kväll"],
+    anchorWeight: 2.8,
+    goodAsStart: 2.4,
+    goodAsFinal: 2.2,
+  },
+  "ostiense-garbatella": {
+    vibe: "sodra Rom nar det ar som mest genuint, med mer kvarter an kuliss",
+    longDescription:
+      "Ostiense/Garbatella ar perfekt nar du vill ha en rutt som kanns levd, lokal och mindre overstylad.",
+    perfectFor: ["budgetsmart kväll", "södra Rom", "barer med mer lokal känsla"],
+    anchorWeight: 3,
+    goodAsStart: 2.6,
+    goodAsFinal: 2.8,
+  },
+  "pigneto-san-lorenzo": {
+    vibe: "yngre, ostligare och bättre när energin får vara lite råare",
+    longDescription:
+      "Pigneto/San Lorenzo ar starkast nar du vill prioritera billigare glas, yngre energi och mindre polerad natt.",
+    perfectFor: ["sen kväll", "billigare öl", "raw energy"],
+    anchorWeight: 3,
+    goodAsStart: 1.9,
+    goodAsFinal: 3.1,
+  },
+  "mercato-monti": {
+    priceLevel: "$$",
+    bestTime: "sen formiddag till eftermiddag",
+    openingSummary: "starkast dagtid och tidig kvall",
+  },
+  "litro-roma": {
+    priceLevel: "$$",
+    bestTime: "18:30 till sent",
+    bookingRequired: false,
+    happyHourNote: "extra starkt nar du vill luta kvallen mot naturvin och lugnare samtal.",
+  },
+  "porto-fluviale-bar": {
+    priceLevel: "$$",
+    bestTime: "18:00 till sent",
+    vibe: "stort men fortfarande lokalt anvandbart som socialt sydankare",
+  },
+  "bar-bozza": {
+    priceLevel: "$",
+    bestTime: "sen kvall till sent",
+    vibe: "billigare, stojigare och mer kvartersnara an destinationig",
+  },
+  "fanfulla-5a": {
+    priceLevel: "$$",
+    bookingRequired: false,
+    bestTime: "21:00 till sent",
+    vibe: "mer kultnatt än vanlig barrunda",
+  },
+  "hotel-locarno-rooftop": {
+    priceLevel: "$$$",
+    bookingRequired: false,
+    bestTime: "golden hour till sen kvall",
+    vibe: "klassisk la dolce vita-vinkel med verklig utsiktsbonus",
+    goodAsFinal: 3.2,
+  },
+  "roscioli-salumeria": {
+    priceLevel: "$$$",
+    bookingRequired: true,
+    bestTime: "lunch till middag",
+  },
+  "trapizzino-testaccio": {
+    priceLevel: "$",
+    bestTime: "lunch till sen kvall",
+  },
+  "marigold-roma": {
+    priceLevel: "$$",
+    bestTime: "frukost till tidig eftermiddag",
+  },
+};
+
+const extraRouteTemplates = [
+  {
+    id: "centro-storico-slow-loop",
+    title: "Centro Storico slow loop",
+    summary: "Centro med mer rhythm, mindre checklista och tydligare vin- eller matpauser.",
+    stops: ["centro-storico", "teatro-di-marcello", "via-giulia", "palazzo-altemps", "il-goccetto", "campo-de-fiori"],
+    defaultKm: 6,
+    preferenceTags: ["vin", "mat", "kultur", "hidden gems", "low-key"],
+    optimizerModes: ["wine-crawl", "culture-mode", "low-key-mode"],
+    weatherProfile: { sun: 1, rain: 2, hot: 1, evening: 1 },
+    weekdayBoost: { 2: 1, 3: 1, 4: 1, 5: 1 },
+    vibeProfile: { evening: 1, culture: 2, lowKey: 3, party: 0 },
+    hiddenMentions: ["Via dei Banchi Vecchi", "små gator runt Governo Vecchio", "Tibern i kvällsljus"],
+    barMentions: ["Il Goccetto", "Barnum Cafe", "ett sista glas nära Campo"],
+  },
+  {
+    id: "monti-market-aperitivo-loop",
+    title: "Monti market till aperitivo",
+    summary: "Monti som riktig loop med sidogator, marknadskansla och smart glasfinal.",
+    stops: ["monti", "mercato-monti", "piazza-madonna-dei-monti", "ai-tre-scalini", "the-race-club"],
+    defaultKm: 5,
+    preferenceTags: ["vin", "mat", "hidden gems", "nattliv", "kväll"],
+    optimizerModes: ["bar-hop", "wine-crawl", "evening-mode"],
+    weatherProfile: { sun: 1, rain: 2, hot: 0, evening: 2 },
+    weekdayBoost: { 3: 1, 4: 1, 5: 1, 6: 1 },
+    vibeProfile: { evening: 2, culture: 1, lowKey: 1, party: 1 },
+    hiddenMentions: ["små bakgator i Monti", "Mercato Monti dagtid", "Piazza Madonna dei Monti som pausyta"],
+    barMentions: ["Ai Tre Scalini", "The Race Club"],
+  },
+  {
+    id: "testaccio-food-loop",
+    title: "Testaccio food loop",
+    summary: "Testaccio pa riktigt med marknad, street food, pizza och ett tydligt kvartersflode.",
+    stops: ["testaccio", "testaccio-market", "trapizzino-testaccio", "da-remo", "oasi-della-birra", "mattatoio"],
+    defaultKm: 5,
+    preferenceTags: ["mat", "öl", "vin", "hidden gems", "budget"],
+    optimizerModes: ["pizza-freak", "budget-mode", "bar-hop"],
+    weatherProfile: { sun: 1, rain: 2, hot: 0, evening: 2 },
+    weekdayBoost: { 3: 1, 4: 1, 5: 2, 6: 2 },
+    vibeProfile: { evening: 2, culture: 1, lowKey: 1, party: 1 },
+    hiddenMentions: ["Piazza Testaccio", "små gator runt saluhallen", "Piramide som bonus längre bort"],
+    barMentions: ["L'Oasi della Birra", "ett enkelt ölstop nära marknaden"],
+  },
+  {
+    id: "prati-borgo-wine-loop",
+    title: "Prati och Borgo wine loop",
+    summary: "En lugnare vestsida med vettiga glas och mindre turiststoj.",
+    stops: ["prati", "il-vinaietto", "borgo", "castel-sant-angelo", "il-sorpasso"],
+    defaultKm: 5,
+    preferenceTags: ["vin", "kultur", "hidden gems", "low-key"],
+    optimizerModes: ["wine-crawl", "low-key-mode", "culture-mode"],
+    weatherProfile: { sun: 1, rain: 2, hot: 1, evening: 1 },
+    weekdayBoost: { 2: 1, 3: 1, 4: 1, 5: 1 },
+    vibeProfile: { evening: 1, culture: 1, lowKey: 3, party: 0 },
+    hiddenMentions: ["Borgos små gränder", "broarna mot centro", "lugna vinpauser i Prati"],
+    barMentions: ["Il Vinaietto", "Il Sorpasso"],
+  },
+  {
+    id: "west-bank-sunset-loop",
+    title: "Vastbank sunset loop",
+    summary: "En west-side loop med gront, utsikt och glas som final snarare an mittpunkt.",
+    stops: ["trastevere", "orto-botanico", "gianicolo", "ponte-sisto", "via-giulia", "litro-roma"],
+    defaultKm: 8,
+    preferenceTags: ["utsikt", "vin", "hidden gems", "low-key", "kväll"],
+    optimizerModes: ["sunset-spots", "low-key-mode", "evening-mode"],
+    weatherProfile: { sun: 3, rain: -1, hot: -1, evening: 2 },
+    weekdayBoost: { 5: 1, 6: 1, 0: 1 },
+    vibeProfile: { evening: 2, culture: 1, lowKey: 3, party: 0 },
+    hiddenMentions: ["Lungara", "små utsikter före Gianicolo", "bropassagen i kvällsljus"],
+    barMentions: ["Litro", "lugn vinfinal på västra sidan"],
+  },
+  {
+    id: "centro-apero-to-monti-arc",
+    title: "Centro apero till Monti",
+    summary: "En båge från mjuk aperitivo i centro till tydligare nattenergi i Monti.",
+    stops: ["campo-de-fiori", "barnum-cafe", "bar-del-fico", "jerry-thomas", "monti", "ai-tre-scalini"],
+    defaultKm: 6,
+    preferenceTags: ["vin", "cocktail", "nattliv", "hidden gems", "kväll"],
+    optimizerModes: ["bar-hop", "cocktail-night", "evening-mode"],
+    weatherProfile: { sun: 1, rain: 2, hot: 0, evening: 3 },
+    weekdayBoost: { 4: 1, 5: 2, 6: 2 },
+    vibeProfile: { evening: 3, culture: 0, lowKey: 1, party: 2 },
+    hiddenMentions: ["sidogator bakom Navona", "sent byte mot Monti", "glid genom centro utan att fastna"],
+    barMentions: ["Barnum Cafe", "Bar del Fico", "Ai Tre Scalini"],
+  },
+  {
+    id: "ostiense-garbatella-loop",
+    title: "Ostiense och Garbatella loop",
+    summary: "Sodra Rom i en tydlig loop med mer mat, mer lokal puls och mindre kuliss.",
+    stops: ["ostiense-garbatella", "basilica-san-paolo-fuori-le-mura", "garbatella", "latteria-garbatella", "ostiense", "porto-fluviale-bar"],
+    defaultKm: 7,
+    preferenceTags: ["mat", "vin", "öl", "hidden gems", "nattliv", "low-key"],
+    optimizerModes: ["bar-hop", "budget-mode", "low-key-mode", "evening-mode"],
+    weatherProfile: { sun: 1, rain: 1, hot: 0, evening: 2 },
+    weekdayBoost: { 3: 1, 4: 1, 5: 1, 6: 1 },
+    vibeProfile: { evening: 2, culture: 1, lowKey: 2, party: 1 },
+    hiddenMentions: ["små gårdar i Garbatella", "San Paolo som överraskning", "sidostråk i Ostiense"],
+    barMentions: ["Latteria Garbatella", "Porto Fluviale"],
+  },
+  {
+    id: "east-side-party-arc",
+    title: "San Lorenzo till Pigneto after dark",
+    summary: "Östlig båge för billigare glas, mer rå energi och senare natt.",
+    stops: ["san-lorenzo", "bottiglieria-scalo", "pigneto", "fanfulla-5a", "bar-bozza", "bottiglieria-pigneto"],
+    defaultKm: 6,
+    preferenceTags: ["öl", "vin", "nattliv", "hidden gems", "party", "kväll"],
+    optimizerModes: ["bar-hop", "party-mode", "evening-mode", "budget-mode"],
+    weatherProfile: { sun: 0, rain: 2, hot: 0, evening: 3 },
+    weekdayBoost: { 4: 1, 5: 2, 6: 2 },
+    vibeProfile: { evening: 3, culture: 0, lowKey: 0, party: 3 },
+    hiddenMentions: ["små ölhål runt San Lorenzo", "Pigneto bortom huvudgatan", "sen kvartärskänsla snarare än destination"],
+    barMentions: ["Bottiglieria Scalo", "Fanfulla 5/a", "Bar Bozza"],
+  },
+  {
+    id: "centro-church-salon",
+    title: "Centro church salon",
+    summary: "Centro för kulturfolk som vill ha riktiga rum och en middag eller vinbar som landning.",
+    stops: ["centro-storico", "santa-maria-del-popolo", "san-luigi-dei-francesi", "santa-maria-sopra-minerva", "roscioli-salumeria"],
+    defaultKm: 6,
+    preferenceTags: ["kyrkor", "kultur", "mat", "vin", "low-key"],
+    optimizerModes: ["church-crawl", "culture-mode", "dolce-vita", "low-key-mode"],
+    weatherProfile: { sun: 0, rain: 3, hot: 2, evening: 1 },
+    weekdayBoost: { 1: 1, 2: 1, 3: 1, 4: 1 },
+    vibeProfile: { evening: 1, culture: 3, lowKey: 2, party: 0 },
+    hiddenMentions: ["Caravaggio-rum", "piazzor mellan kyrkorna", "lugnt glas efter kulturtyngden"],
+    barMentions: ["Roscioli", "Il Goccetto som extra glas"],
+  },
+  {
+    id: "dolce-vita-locarno-arc",
+    title: "Dolce vita mot Popolo",
+    summary: "Mer utsikt, bättre glas och tydligare premiarkansla i finalen.",
+    stops: ["prati", "salotto-42", "piazza-navona", "hotel-locarno-rooftop", "il-goccetto", "trimani"],
+    defaultKm: 7,
+    preferenceTags: ["vin", "cocktail", "utsikt", "dolce-vita", "kväll"],
+    optimizerModes: ["dolce-vita", "wine-crawl", "cocktail-night", "evening-mode"],
+    weatherProfile: { sun: 2, rain: 1, hot: 0, evening: 3 },
+    weekdayBoost: { 4: 1, 5: 2, 6: 2 },
+    vibeProfile: { evening: 3, culture: 1, lowKey: 1, party: 1 },
+    hiddenMentions: ["broarna runt Popolo", "en stark golden hour-final", "stopp som känns mer stora kvällen"],
+    barMentions: ["Salotto 42", "Hotel Locarno Rooftop", "Trimani"],
+  },
+  {
+    id: "rome-wide-culture-arc",
+    title: "Syd till centro med kulturtyngd",
+    summary: "När dagen ska kännas bredare men ändå logisk, från södra ankare till centro och Monti.",
+    stops: ["testaccio", "cimitero-acattolico", "giardino-degli-aranci", "teatro-di-marcello", "monti", "domus-aurea"],
+    defaultKm: 9,
+    preferenceTags: ["kultur", "hidden gems", "kyrkor", "low-key"],
+    optimizerModes: ["culture", "church-crawl", "culture-mode"],
+    weatherProfile: { sun: 1, rain: 1, hot: 0, evening: 1 },
+    weekdayBoost: { 1: 1, 2: 1, 3: 1, 4: 1, 5: 1 },
+    vibeProfile: { evening: 1, culture: 3, lowKey: 2, party: 0 },
+    hiddenMentions: ["Aventinen före centro", "sidobyten över Tibern som faktiskt känns motiverade", "Monti som kulturfinal"],
+    barMentions: ["ett lugnt glas i Monti", "kaffepaus snarare än barrunda"],
+  },
+  {
+    id: "ghetto-navona-wine-loop",
+    title: "Ghetto och Navona wine loop",
+    summary: "Mat, vin och centro i ett tätare upplägg utan att det blir ren sevärdhetsparad.",
+    stops: ["ghetto", "forno-campo-de-fiori", "campo-de-fiori", "bar-del-fico", "il-goccetto", "piazza-navona"],
+    defaultKm: 5,
+    preferenceTags: ["vin", "mat", "kultur", "hidden gems"],
+    optimizerModes: ["wine-crawl", "budget-mode", "low-key-mode"],
+    weatherProfile: { sun: 1, rain: 2, hot: 1, evening: 1 },
+    weekdayBoost: { 2: 1, 3: 1, 4: 1, 5: 1 },
+    vibeProfile: { evening: 1, culture: 1, lowKey: 2, party: 0 },
+    hiddenMentions: ["bakgatorna bakom Campo", "kort matpaus i stället för lång middag", "ett långsamt sista glas i centro"],
+    barMentions: ["Bar del Fico", "Il Goccetto"],
+  },
+  {
+    id: "monti-to-testaccio-food-arc",
+    title: "Monti till Testaccio food arc",
+    summary: "En riktig matbåge som går ned mot söder i stället för att bara cirkla i mitten.",
+    stops: ["monti", "mercato-monti", "colosseum", "piramide", "testaccio-market", "trapizzino-testaccio", "da-remo"],
+    defaultKm: 8,
+    preferenceTags: ["mat", "pizza", "vin", "öl", "hidden gems"],
+    optimizerModes: ["pizza-freak", "budget-mode", "evening-mode"],
+    weatherProfile: { sun: 1, rain: 1, hot: 0, evening: 2 },
+    weekdayBoost: { 3: 1, 4: 1, 5: 1, 6: 2 },
+    vibeProfile: { evening: 2, culture: 1, lowKey: 0, party: 1 },
+    hiddenMentions: ["kort utsikt mot Colosseo", "Piramide som geografisk brygga", "Testaccio som riktig matfinal"],
+    barMentions: ["ett enkelt glas före Da Remo", "L'Oasi della Birra om kvällen ska fortsätta"],
+  },
+  {
+    id: "slow-river-loop",
+    title: "Lugn Tiber-loop",
+    summary: "En lugnare loop runt floden med mer promenadkänsla, broar och smarta småstopp.",
+    stops: ["trastevere", "isola-tiberina", "ponte-sisto", "via-giulia", "campo-de-fiori", "basilica-san-crisogono"],
+    defaultKm: 5,
+    preferenceTags: ["kultur", "hidden gems", "vin", "low-key"],
+    optimizerModes: ["low-key-mode", "culture-mode", "evening-mode"],
+    weatherProfile: { sun: 2, rain: 1, hot: 0, evening: 1 },
+    weekdayBoost: { 2: 1, 3: 1, 4: 1, 5: 1 },
+    vibeProfile: { evening: 1, culture: 2, lowKey: 3, party: 0 },
+    hiddenMentions: ["broliv snarare än checklista", "lugn Trastevere-baksida", "centrum utan att fastna i centrum"],
+    barMentions: ["ett glas nära Ponte Sisto", "Les Vignerons som mjuk final"],
+  },
+];
+
+const allItemMetaById = {
+  ...itemMetaById,
+  ...extraItemMetaById,
+};
+
+const catalogRouteTemplates = [...routeTemplates, ...extraRouteTemplates];
+const enrichedPlaces = [...places, ...extraPlaces].map((item) => enrichItem(item));
+const enrichedBars = [...bars, ...extraBars].map((item) => enrichItem(item));
+const specialtyItems = [...specialtyItemsRaw, ...extraSpecialtyItemsRaw].map((item) =>
+  enrichItem(item),
+);
 const allItems = [...enrichedPlaces, ...enrichedBars, ...specialtyItems];
 
 function findItemByName(value) {
@@ -2078,7 +2916,7 @@ module.exports = {
   places: enrichedPlaces,
   bars: enrichedBars,
   specialtyItems,
-  routeTemplates,
+  routeTemplates: catalogRouteTemplates,
   allItems,
   findItemByName,
 };

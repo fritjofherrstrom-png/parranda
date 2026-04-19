@@ -3,6 +3,7 @@ const { geocodeQuery } = require("./geocoding");
 const { fetchWeatherForDates, ROME_CENTER } = require("./weather");
 const { getCityPulse, getDateSignals } = require("./editorial-calendar");
 const { fetchLiveEventsForDates } = require("./live-events");
+const neutralFallbackLabel = "Centro Storico";
 
 function haversineKm(a, b) {
   const toRad = (value) => (value * Math.PI) / 180;
@@ -44,9 +45,17 @@ function expandDateRange(dates) {
   return unique;
 }
 
-async function resolvePoint(input, fallbackLabel = "Trastevere") {
+async function resolvePoint(input, fallbackLabel = neutralFallbackLabel) {
   if (!input || !input.type) {
     const fallback = findItemByName(fallbackLabel);
+    if (!fallback) {
+      return {
+        label: "Rom",
+        lat: ROME_CENTER.lat,
+        lng: ROME_CENTER.lng,
+        source: "default",
+      };
+    }
     return {
       label: fallback.name,
       lat: fallback.lat,
@@ -102,6 +111,14 @@ async function resolvePoint(input, fallbackLabel = "Trastevere") {
   }
 
   const fallback = findItemByName(fallbackLabel);
+  if (!fallback) {
+    return {
+      label: "Rom",
+      lat: ROME_CENTER.lat,
+      lng: ROME_CENTER.lng,
+      source: "default",
+    };
+  }
   return {
     label: fallback.name,
     lat: fallback.lat,
@@ -176,6 +193,32 @@ const modifierToOptimizerMode = {
   party: "party-mode",
 };
 
+const strictPreferenceFamilies = new Set([
+  "kyrkor",
+  "pizza",
+  "cocktail",
+  "öl",
+  "vin",
+  "mat",
+  "utsikt",
+]);
+
+const strictPreferenceSupportTags = new Set([
+  "hidden gems",
+  "kultur",
+  "kväll",
+  "low-key",
+  "party",
+  "budget",
+  "nattliv",
+]);
+
+const optimizerStrictPreferenceTags = {
+  "church-crawl": ["kyrkor"],
+  "pizza-freak": ["pizza"],
+  "sunset-spots": ["utsikt"],
+};
+
 function normalizeBudgetTier(preferences = [], optimizerMode = null, budgetTier = "standard") {
   if (budgetTier === "budget" || budgetTier === "dolce-vita") {
     return budgetTier;
@@ -201,6 +244,55 @@ function normalizeModifier(modifier = null, optimizerMode = null) {
   };
 
   return legacyModeMap[optimizerMode] || null;
+}
+
+function resolveStrictPreferenceTags(preferences = [], optimizerMode = null) {
+  if (optimizerStrictPreferenceTags[optimizerMode]) {
+    return optimizerStrictPreferenceTags[optimizerMode];
+  }
+
+  const directSelections = preferences.filter((preference) =>
+    strictPreferenceFamilies.has(preference),
+  );
+
+  if (directSelections.length !== 1) {
+    return [];
+  }
+
+  const [primaryTag] = directSelections;
+  const onlySupportiveSelections = preferences.every(
+    (preference) => preference === primaryTag || strictPreferenceSupportTags.has(preference),
+  );
+
+  return onlySupportiveSelections ? [primaryTag] : [];
+}
+
+function itemMatchesStrictPreference(item, strictTags = []) {
+  if (!item || !strictTags.length) {
+    return false;
+  }
+
+  return strictTags.some((tag) => item.tags.includes(tag));
+}
+
+function strictPreferenceCoverageScore(routeStops = [], strictTags = []) {
+  if (!strictTags.length || !routeStops.length) {
+    return 0;
+  }
+
+  const matchingStops = routeStops.filter((stop) => itemMatchesStrictPreference(stop, strictTags)).length;
+  const coverage = matchingStops / routeStops.length;
+  let score = coverage * 14 + matchingStops * 0.8;
+
+  if (coverage >= 0.85) {
+    score += 2.4;
+  } else if (coverage < 0.6) {
+    score -= 6;
+  } else if (coverage < 0.75) {
+    score -= 1.5;
+  }
+
+  return Math.round(score * 10) / 10;
 }
 
 function normalizeVibeProfile(template) {
@@ -276,6 +368,22 @@ const modifierLabel = {
   low_key: "mer low-key",
   party: "mer party",
 };
+
+const autoAnchorKinds = new Set(["district", "district-group"]);
+
+const autoAnchorOptimizerTags = {
+  "bar-hop": ["nattliv", "öl", "vin", "cocktail"],
+  "wine-crawl": ["vin", "mat", "kultur"],
+  "cocktail-night": ["cocktail", "nattliv"],
+  "church-crawl": ["kyrkor", "kultur"],
+  "pizza-freak": ["pizza", "mat"],
+  "sunset-spots": ["utsikt", "kultur"],
+  "budget-mode": ["mat", "öl", "hidden gems"],
+};
+
+const routeMentionHiddenTags = new Set(["hidden gems", "kultur", "kyrkor", "utsikt"]);
+const routeMentionBarTags = new Set(["vin", "öl", "cocktail", "nattliv"]);
+const autoAnchorSupportCache = new Map();
 
 function buildRouteTagSetFromData(template, route, routeStops = []) {
   const routeTags = route ? buildRouteTagSet(route) : new Set();
@@ -385,6 +493,10 @@ function primaryAreaToken(...values) {
   return null;
 }
 
+function isAutoPointInput(input) {
+  return input?.type === "auto";
+}
+
 function tokenLabel(token) {
   return areaDefinitions[token]?.label || null;
 }
@@ -425,7 +537,7 @@ function buildItemAreaProfile(item) {
 
   const tokens = extractAreaTokens(item.area, item.id, item.name, item.searchTerms || []);
   const primaryToken =
-    primaryAreaToken(item.area, item.id, item.name, item.searchTerms || []) ||
+    primaryAreaToken(item.id, item.name, item.area, item.searchTerms || []) ||
     [...tokens][0] ||
     null;
   const macros = new Set([...tokens].map((token) => areaDefinitions[token]?.macro).filter(Boolean));
@@ -456,6 +568,618 @@ function buildPointAreaProfile(point) {
     confidence:
       nearest.distanceKm <= 1.35 ? "high" : nearest.distanceKm <= 2.4 ? "medium" : "low",
   };
+}
+
+function getAutoAnchorCandidates() {
+  return allItems.filter((item) => autoAnchorKinds.has(item.kind));
+}
+
+function getAutoAnchorSupportItems(candidate) {
+  if (!candidate?.id) {
+    return [];
+  }
+
+  if (autoAnchorSupportCache.has(candidate.id)) {
+    return autoAnchorSupportCache.get(candidate.id);
+  }
+
+  const radiusKm = candidate.kind === "district-group" ? 2.4 : 1.8;
+  const supportItems = allItems
+    .filter((item) => item.id !== candidate.id && !autoAnchorKinds.has(item.kind))
+    .map((item) => ({
+      item,
+      distanceKm: haversineKm(candidate, item),
+    }))
+    .filter((entry) => entry.distanceKm <= radiusKm)
+    .sort((left, right) => left.distanceKm - right.distanceKm)
+    .slice(0, 28);
+
+  autoAnchorSupportCache.set(candidate.id, supportItems);
+  return supportItems;
+}
+
+function scoreAutoAnchorCandidate(
+  candidate,
+  {
+    role = "start",
+    preferences = [],
+    optimizerMode = null,
+    modifier = null,
+    pairedPoint = null,
+    pulseItems = [],
+    liveEvents = [],
+    targetKm = 8,
+    distanceMode = "soft_target",
+  } = {},
+) {
+  const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
+  const supportItems = getAutoAnchorSupportItems(candidate);
+  const candidateProfile = buildItemAreaProfile(candidate);
+  const pairedProfile = pairedPoint ? buildPointAreaProfile(pairedPoint) : null;
+  const activeModifier = normalizeModifier(modifier, optimizerMode);
+  const optimizerTags = autoAnchorOptimizerTags[optimizerMode] || [];
+  const modifierTags = modifierEventTags[activeModifier] || [];
+  let score =
+    (candidate.anchorWeight || 1.5) * 2.4 +
+    (role === "end" ? candidate.goodAsFinal || 1.5 : candidate.goodAsStart || 1.5);
+
+  if (!pairedPoint) {
+    score += candidate.kind === "district-group" ? 0.9 : 0.4;
+  }
+
+  preferences.forEach((preference) => {
+    if (candidate.tags.includes(preference)) {
+      score += 2.1;
+    }
+  });
+
+  optimizerTags.forEach((tag) => {
+    if (candidate.tags.includes(tag)) {
+      score += 1.4;
+    }
+  });
+
+  modifierTags.forEach((tag) => {
+    if (candidate.tags.includes(tag)) {
+      score += 0.75;
+    }
+  });
+
+  const strictSupportCount = supportItems.filter(({ item }) =>
+    itemMatchesStrictPreference(item, strictTags),
+  ).length;
+
+  if (strictTags.length === 1) {
+    if (candidate.tags.includes(strictTags[0])) {
+      score += 4;
+    }
+
+    if (strictSupportCount >= 4) {
+      score += 5.5;
+    } else if (strictSupportCount >= 2) {
+      score += 3.2;
+    } else if (strictSupportCount === 1) {
+      score += 1.2;
+    } else {
+      score -= 5.2;
+    }
+  }
+
+  const nearbyPreferenceSupport = supportItems.reduce((sum, { item, distanceKm }) => {
+    const closeness = clamp(1.9 - distanceKm, 0, 1.9);
+    const preferenceHits = item.tags.filter((tag) => preferences.includes(tag)).length;
+    const optimizerHits = optimizerTags.filter((tag) => item.tags.includes(tag)).length;
+    const modifierHits = modifierTags.filter((tag) => item.tags.includes(tag)).length;
+    const strictHit = itemMatchesStrictPreference(item, strictTags) ? 1 : 0;
+
+    return (
+      sum +
+      preferenceHits * (0.55 + closeness * 0.35) +
+      optimizerHits * 0.35 +
+      modifierHits * 0.22 +
+      strictHit * (1.2 + closeness * 0.4)
+    );
+  }, 0);
+
+  score += Math.min(12, nearbyPreferenceSupport);
+
+  if (pairedPoint) {
+    const distanceKm = haversineKm(candidate, pairedPoint);
+
+    if (distanceKm <= 1.1) {
+      score += 4;
+    } else if (distanceKm <= 2.6) {
+      score += 2.4;
+    } else if (distanceKm <= 4.4) {
+      score += 1.1;
+    } else if (distanceKm <= 6.2) {
+      score -= 0.6;
+    } else {
+      score -= 3.8;
+    }
+
+    if (
+      candidateProfile.primaryToken &&
+      pairedProfile?.primaryToken &&
+      candidateProfile.primaryToken === pairedProfile.primaryToken
+    ) {
+      score += 2.6;
+    } else if (
+      candidateProfile.primaryMacro &&
+      pairedProfile?.primaryMacro &&
+      candidateProfile.primaryMacro === pairedProfile.primaryMacro
+    ) {
+      score += 1.8;
+    } else if (
+      distanceMode !== "no_limit" &&
+      candidateProfile.primaryMacro &&
+      pairedProfile?.primaryMacro
+    ) {
+      score -= 1.4;
+    }
+
+    if (distanceMode !== "no_limit" && distanceKm > Math.max(5.4, (targetKm || 8) * 0.8)) {
+      score -= 2.4;
+    }
+  }
+
+  pulseItems.forEach((item) => {
+    const pulseTokens = extractAreaTokens(item.where, item.title, item.blurb);
+
+    if (candidateProfile.primaryToken && pulseTokens.has(candidateProfile.primaryToken)) {
+      score += 1.2;
+    } else if (
+      candidateProfile.primaryMacro &&
+      [...pulseTokens].some((token) => areaDefinitions[token]?.macro === candidateProfile.primaryMacro)
+    ) {
+      score += 0.5;
+    }
+  });
+
+  liveEvents.forEach((event) => {
+    const eventAreaTokens = extractAreaTokens(
+      event.where,
+      event.venue,
+      event.address,
+      event.geocode_label,
+      event.title,
+    );
+    const eventTags = event.match_tags || [];
+
+    if (candidateProfile.primaryToken && eventAreaTokens.has(candidateProfile.primaryToken)) {
+      score += 1.4;
+    }
+
+    if (typeof event.lat !== "number" || typeof event.lng !== "number") {
+      return;
+    }
+
+    const tagHits = preferences.filter((preference) => eventTags.includes(preference)).length;
+    const distanceKm = haversineKm(candidate, event);
+
+    if (distanceKm <= 0.8) {
+      score += 3 + tagHits * 0.7;
+    } else if (distanceKm <= 1.8) {
+      score += 1.5 + tagHits * 0.35;
+    }
+  });
+
+  return Number(score.toFixed(1));
+}
+
+function resolveAutoPoint({
+  role = "start",
+  pairedPoint = null,
+  pulseByDate = {},
+  liveEventsByDate = {},
+  preferences = [],
+  optimizerMode = null,
+  modifier = null,
+  targetKm = 8,
+  distanceMode = "soft_target",
+} = {}) {
+  const pulseItems = Object.values(pulseByDate).flatMap((pulse) =>
+    Array.isArray(pulse?.items) ? pulse.items : [],
+  );
+  const liveEvents = Object.values(liveEventsByDate).flatMap((items) =>
+    Array.isArray(items) ? items : [],
+  );
+  const ranked = getAutoAnchorCandidates()
+    .map((candidate) => ({
+      candidate,
+      score: scoreAutoAnchorCandidate(candidate, {
+        role,
+        preferences,
+        optimizerMode,
+        modifier,
+        pairedPoint,
+        pulseItems,
+        liveEvents,
+        targetKm,
+        distanceMode,
+      }),
+    }))
+    .sort((left, right) => right.score - left.score);
+  const best = ranked[0]?.candidate || findItemByName(neutralFallbackLabel);
+
+  return {
+    label: best.name,
+    lat: best.lat,
+    lng: best.lng,
+    source: "auto",
+  };
+}
+
+function rankAutoAnchorCandidates({
+  role = "start",
+  pairedPoint = null,
+  pulseByDate = {},
+  liveEventsByDate = {},
+  preferences = [],
+  optimizerMode = null,
+  modifier = null,
+  targetKm = 8,
+  distanceMode = "soft_target",
+} = {}) {
+  const pulseItems = Object.values(pulseByDate).flatMap((pulse) =>
+    Array.isArray(pulse?.items) ? pulse.items : [],
+  );
+  const liveEvents = Object.values(liveEventsByDate).flatMap((items) =>
+    Array.isArray(items) ? items : [],
+  );
+
+  return getAutoAnchorCandidates()
+    .map((candidate) => ({
+      candidate,
+      score: scoreAutoAnchorCandidate(candidate, {
+        role,
+        preferences,
+        optimizerMode,
+        modifier,
+        pairedPoint,
+        pulseItems,
+        liveEvents,
+        targetKm,
+        distanceMode,
+      }),
+    }))
+    .sort((left, right) => right.score - left.score);
+}
+
+function scoreAutoAnchorPair(
+  startCandidate,
+  endCandidate,
+  {
+    preferences = [],
+    optimizerMode = null,
+    modifier = null,
+    targetKm = 8,
+    distanceMode = "soft_target",
+  } = {},
+) {
+  if (!startCandidate || !endCandidate) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  const startProfile = buildItemAreaProfile(startCandidate);
+  const endProfile = buildItemAreaProfile(endCandidate);
+  const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
+  const distanceKm = haversineKm(startCandidate, endCandidate);
+  let score = 0;
+
+  score += (startCandidate.anchorWeight || 1.5) * 1.8;
+  score += (endCandidate.anchorWeight || 1.5) * 1.8;
+  score += (startCandidate.goodAsStart || 1.5) * 1.5;
+  score += (endCandidate.goodAsFinal || 1.5) * 1.9;
+
+  if (slugifyText(startCandidate.name) === slugifyText(endCandidate.name)) {
+    return -99;
+  }
+
+  if (distanceKm <= 1.1) {
+    score -= 8;
+  } else if (distanceKm <= 2.2) {
+    score += 1.5;
+  } else if (distanceKm <= 4.8) {
+    score += 5.2;
+  } else if (distanceKm <= 6.4) {
+    score += distanceMode === "no_limit" ? 4.5 : 2.2;
+  } else {
+    score -= distanceMode === "no_limit" ? 0.5 : 6.5;
+  }
+
+  if (startProfile.primaryToken && startProfile.primaryToken === endProfile.primaryToken) {
+    score -= 4.5;
+  } else if (startProfile.primaryMacro && startProfile.primaryMacro === endProfile.primaryMacro) {
+    score += 0.9;
+  } else {
+    score += 1.8;
+  }
+
+  if (strictTags.length === 1) {
+    score -= 2.8;
+  }
+
+  if (preferences.includes("kväll") || preferences.includes("party") || preferences.includes("nattliv")) {
+    score += 3.4;
+  }
+
+  if (modifier === "party" || modifier === "evening") {
+    score += 2.4;
+  }
+
+  if (distanceMode === "no_limit" && distanceKm >= 2.2 && distanceKm <= 6.8) {
+    score += 2.2;
+  }
+
+  const expectedMaxDistance = distanceMode === "no_limit" ? 7.2 : Math.max(4.5, targetKm * 0.75);
+  if (distanceKm > expectedMaxDistance) {
+    score -= (distanceKm - expectedMaxDistance) * 1.5;
+  }
+
+  return Number(score.toFixed(1));
+}
+
+function scoreAutoLoopCandidate(
+  candidate,
+  {
+    baseScore = 0,
+    preferences = [],
+    optimizerMode = null,
+    modifier = null,
+    targetKm = 8,
+    distanceMode = "soft_target",
+  } = {},
+) {
+  const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
+  let score = baseScore + (candidate.goodAsFinal || 1.5) * 1.1;
+
+  if (candidate.kind === "district") {
+    score += 1.2;
+  }
+
+  if (strictTags.length === 1) {
+    score += 2.2;
+  }
+
+  if (distanceMode !== "no_limit" && targetKm <= 7) {
+    score += 1.3;
+  }
+
+  if (preferences.includes("low-key") || modifier === "low_key") {
+    score += 1.2;
+  }
+
+  if (distanceMode === "no_limit") {
+    score -= 1.4;
+  }
+
+  if (
+    preferences.includes("party") ||
+    preferences.includes("nattliv") ||
+    preferences.includes("kväll") ||
+    modifier === "party" ||
+    modifier === "evening"
+  ) {
+    score -= 2.3;
+  }
+
+  return Number(score.toFixed(1));
+}
+
+function resolveAutoAnchors(options = {}) {
+  const strictTags = resolveStrictPreferenceTags(options.preferences || [], options.optimizerMode);
+  const arcFriendlyDay =
+    options.distanceMode === "no_limit" ||
+    options.preferences?.includes("kväll") ||
+    options.preferences?.includes("party") ||
+    options.preferences?.includes("nattliv") ||
+    options.modifier === "evening" ||
+    options.modifier === "party";
+  const rankedStart = rankAutoAnchorCandidates({
+    ...options,
+    role: "start",
+  }).slice(0, 6);
+  const rankedEnd = rankAutoAnchorCandidates({
+    ...options,
+    role: "end",
+  }).slice(0, 6);
+  const rankedLoop = rankedStart
+    .map(({ candidate, score }) => ({
+      candidate,
+      score: scoreAutoLoopCandidate(candidate, {
+        ...options,
+        baseScore: score,
+      }),
+    }))
+    .sort((left, right) => right.score - left.score);
+  const rankedArc = [];
+
+  rankedStart.forEach(({ candidate: startCandidate }) => {
+    rankedEnd.forEach(({ candidate: endCandidate }) => {
+      if (slugifyText(startCandidate.name) === slugifyText(endCandidate.name)) {
+        return;
+      }
+
+      rankedArc.push({
+        startCandidate,
+        endCandidate,
+        score: scoreAutoAnchorPair(startCandidate, endCandidate, options),
+      });
+    });
+  });
+
+  rankedStart.slice(0, 3).forEach(({ candidate: startCandidate }) => {
+    rankAutoAnchorCandidates({
+      ...options,
+      role: "end",
+      pairedPoint: {
+        label: startCandidate.name,
+        lat: startCandidate.lat,
+        lng: startCandidate.lng,
+      },
+    })
+      .slice(0, 5)
+      .forEach(({ candidate: endCandidate, score }) => {
+        if (slugifyText(startCandidate.name) === slugifyText(endCandidate.name)) {
+          return;
+        }
+
+        rankedArc.push({
+          startCandidate,
+          endCandidate,
+          score: Number(
+            (
+              score +
+              scoreAutoAnchorPair(startCandidate, endCandidate, options) +
+              (endCandidate.goodAsFinal || 1.5)
+            ).toFixed(1),
+          ),
+        });
+      });
+  });
+
+  rankedArc.sort((left, right) => right.score - left.score);
+
+  const bestLoop = rankedLoop[0];
+  const bestArc = rankedArc[0];
+  const shouldPreferArc =
+    bestArc &&
+    (
+      !bestLoop ||
+      bestArc.score >= bestLoop.score + 2.4 ||
+      (
+        arcFriendlyDay &&
+        bestArc.score >= bestLoop.score + 0.8
+      ) ||
+      (
+        arcFriendlyDay &&
+        strictTags.length === 0 &&
+        bestArc.score >= bestLoop.score - 2.6
+      )
+    );
+
+  if (shouldPreferArc) {
+    return {
+      start: {
+        label: bestArc.startCandidate.name,
+        lat: bestArc.startCandidate.lat,
+        lng: bestArc.startCandidate.lng,
+        source: "auto",
+      },
+      end: {
+        label: bestArc.endCandidate.name,
+        lat: bestArc.endCandidate.lat,
+        lng: bestArc.endCandidate.lng,
+        source: "auto",
+      },
+      shape: "arc",
+    };
+  }
+
+  const fallbackLoopCandidate =
+    bestLoop?.candidate || rankedStart[0]?.candidate || findItemByName(neutralFallbackLabel);
+
+  return {
+    start: {
+      label: fallbackLoopCandidate.name,
+      lat: fallbackLoopCandidate.lat,
+      lng: fallbackLoopCandidate.lng,
+      source: "auto",
+    },
+    end: {
+      label: fallbackLoopCandidate.name,
+      lat: fallbackLoopCandidate.lat,
+      lng: fallbackLoopCandidate.lng,
+      source: "auto",
+    },
+    shape: "loop",
+  };
+}
+
+function inferLiveEventBestTime(event) {
+  const corpus = `${event.title || ""} ${event.summary || ""} ${event.type || ""}`.toLowerCase();
+
+  if (/(22:|23:|night|dj|club|jazz|concert|aperitivo|sera|evening)/.test(corpus)) {
+    return "kväll";
+  }
+
+  if (/(lunch|middag|dinner|food|market|mercato|tasting|degustazione)/.test(corpus)) {
+    return "middagstid";
+  }
+
+  return "sen eftermiddag till kväll";
+}
+
+function buildLiveEventStopCandidates(liveEvents = [], preferences = [], optimizerMode = null, modifier = null) {
+  const activeModifier = normalizeModifier(modifier, optimizerMode);
+
+  return (liveEvents || [])
+    .filter(
+      (event) =>
+        typeof event.lat === "number" &&
+        typeof event.lng === "number" &&
+        Array.isArray(event.match_tags) &&
+        event.match_tags.length,
+    )
+    .map((event) => {
+      const tagHits = preferences.filter((preference) => event.match_tags.includes(preference)).length;
+      const modifierHits = activeModifier
+        ? (modifierEventTags[activeModifier] || []).filter((tag) => event.match_tags.includes(tag)).length
+        : 0;
+      const searchTerms = [
+        event.title,
+        event.venue,
+        event.address,
+        event.geocode_label,
+        ...(event.match_tags || []),
+      ].filter(Boolean);
+      const primaryToken =
+        primaryAreaToken(searchTerms) ||
+        primaryAreaToken(event.geocode_label, event.venue, event.address) ||
+        "centro";
+
+      return {
+        id: `live-event-${event.id}`,
+        name: event.title,
+        kind: "live-event",
+        lat: event.lat,
+        lng: event.lng,
+        area: event.venue || event.geocode_label || tokenLabel(primaryToken) || "Rom",
+        tags: [...new Set([...(event.match_tags || []), "live"])],
+        weatherTags: ["all-weather", "evening"],
+        closedWeekdays: [],
+        searchTerms,
+        priceLevel: event.buy_url ? "$$" : "$",
+        bestTime: inferLiveEventBestTime(event),
+        vibe: event.type ? `Live: ${event.type}` : "Tidsbundet stopp",
+        groupSize: "2-6 personer",
+        bookingRequired: Boolean(event.buy_url),
+        openingSummary: event.match_reason || event.summary || "Officiellt event som händer just nu i Rom.",
+        longDescription: event.summary || event.match_reason || "Tidsbundet live-event i dagens rutt.",
+        perfectFor: event.match_tags || [],
+        featureNotes: [
+          event.route_fit_note || null,
+          event.type || null,
+          event.source_label || null,
+        ].filter(Boolean),
+        happyHourNote: null,
+        clusterToken: primaryToken,
+        anchorWeight: 2.6 + Math.min(2.2, tagHits * 0.4 + modifierHits * 0.35),
+        goodAsStart: 0.8,
+        goodAsFinal: event.match_tags.includes("nattliv") || event.match_tags.includes("kultur") ? 2.9 : 2.1,
+        dwellType: "live-anchor",
+        duplicateFamily: `live-${primaryToken}`,
+        isLiveEvent: true,
+        eventId: event.id,
+        drawerQuery: event.venue || event.title,
+        eventTitle: event.title,
+        externalSearchUrl: event.url || null,
+        externalMapUrl: null,
+      };
+    })
+    .sort((left, right) => (right.anchorWeight || 0) - (left.anchorWeight || 0))
+    .slice(0, 3);
 }
 
 function buildRouteAreaProfile(routeStops) {
@@ -805,55 +1529,1021 @@ function budgetScore(routeStops, preferences, optimizerMode, budgetTier = "stand
   };
 }
 
-function buildRouteFromTemplate(template, start, end, targetKm) {
-  const rawStops = template.stops
-    .map((stopId) => findItemByName(stopId))
-    .filter(Boolean)
-    .map((stop) => ({
-      id: stop.id,
-      label: stop.name,
-      lat: stop.lat,
-      lng: stop.lng,
-      type: stop.kind,
-      area: stop.area,
-      tags: stop.tags,
-    }));
+function isLoopRoute(start, end) {
+  return slugifyText(start.label) === slugifyText(end.label) || haversineKm(start, end) <= 0.85;
+}
 
-  const mainStops = rawStops.filter((stop, index) => {
-    const isDuplicatedStart = index === 0 && stop.label === start.label;
-    const isDuplicatedEnd = index === rawStops.length - 1 && stop.label === end.label;
+function toRelativeKm(point, origin, referenceLat = (point.lat + origin.lat) / 2) {
+  const lngKm = 111.32 * Math.cos((referenceLat * Math.PI) / 180);
+  return {
+    x: (point.lng - origin.lng) * lngKm,
+    y: (point.lat - origin.lat) * 110.57,
+  };
+}
 
-    return !isDuplicatedStart && !isDuplicatedEnd;
+function projectPointToAxis(point, start, end) {
+  const axis = toRelativeKm(end, start, (start.lat + end.lat) / 2);
+  const vector = toRelativeKm(point, start, (start.lat + end.lat) / 2);
+  const axisLength = Math.max(0.15, Math.hypot(axis.x, axis.y));
+  const progressKm = (vector.x * axis.x + vector.y * axis.y) / axisLength;
+  const lateralKm = Math.abs(vector.x * axis.y - vector.y * axis.x) / axisLength;
+
+  return {
+    progressKm,
+    lateralKm,
+    axisLengthKm: axisLength,
+  };
+}
+
+function desiredStopCount(poolSize, targetKm, distanceMode) {
+  if (poolSize <= 3) {
+    return poolSize;
+  }
+
+  if (distanceMode === "no_limit") {
+    return Math.min(poolSize, 6);
+  }
+
+  if (targetKm <= 5) {
+    return Math.min(poolSize, 3);
+  }
+
+  if (targetKm <= 7) {
+    return Math.min(poolSize, 4);
+  }
+
+  if (targetKm <= 9) {
+    return Math.min(poolSize, 5);
+  }
+
+  return Math.min(poolSize, 6);
+}
+
+function loopRadiusKm(targetKm, distanceMode) {
+  if (distanceMode === "no_limit") {
+    return 4.6;
+  }
+
+  return clamp((targetKm || 8) * 0.42, 2.2, 4.4);
+}
+
+function isAnchorDuplicateStop(item, point) {
+  return (
+    slugifyText(item.name) === slugifyText(point.label) ||
+    (item.kind.startsWith("district") && haversineKm(item, point) <= 0.16)
+  );
+}
+
+function uniqueStops(items) {
+  return [...new Map(items.map((item) => [item.id, item])).values()];
+}
+
+function preferenceBoostForStop(
+  item,
+  preferences = [],
+  optimizerMode = null,
+  modifier = null,
+  strictTags = [],
+) {
+  const activeModifier = normalizeModifier(modifier, optimizerMode);
+  let score = item.tags.filter((tag) => preferences.includes(tag)).length * 0.8;
+
+  if (strictTags.length) {
+    score += itemMatchesStrictPreference(item, strictTags) ? 5.4 : -6.6;
+  }
+
+  if (optimizerMode === "bar-hop" && (item.tags.includes("nattliv") || item.tags.includes("öl") || item.tags.includes("vin"))) {
+    score += 1.2;
+  }
+
+  if (optimizerMode === "wine-crawl" && item.tags.includes("vin")) {
+    score += 1.8;
+  }
+
+  if (optimizerMode === "cocktail-night" && item.tags.includes("cocktail")) {
+    score += 1.8;
+  }
+
+  if (optimizerMode === "church-crawl" && item.tags.includes("kyrkor")) {
+    score += 1.8;
+  }
+
+  if (optimizerMode === "pizza-freak" && item.tags.includes("pizza")) {
+    score += 2;
+  }
+
+  if (optimizerMode === "sunset-spots" && (item.tags.includes("utsikt") || item.weatherTags?.includes("golden-hour"))) {
+    score += 1.6;
+  }
+
+  if (activeModifier === "evening" && (item.tags.includes("nattliv") || item.tags.includes("cocktail") || item.tags.includes("vin"))) {
+    score += 1.2;
+  }
+
+  if (activeModifier === "culture" && (item.tags.includes("kultur") || item.tags.includes("kyrkor"))) {
+    score += 1.2;
+  }
+
+  if (activeModifier === "low_key" && item.tags.includes("low-key")) {
+    score += 1.2;
+  }
+
+  if (activeModifier === "party" && item.tags.includes("party")) {
+    score += 1.4;
+  }
+
+  return score;
+}
+
+function scoreStopCandidate({
+  item,
+  index,
+  shape,
+  start,
+  end,
+  startProfile,
+  endProfile,
+  preferences,
+  optimizerMode,
+  modifier,
+  strictTags = [],
+  targetKm,
+  distanceMode,
+}) {
+  const itemProfile = buildItemAreaProfile(item);
+  const distanceToStart = haversineKm(start, item);
+  const distanceToEnd = haversineKm(end, item);
+  let score = (item.anchorWeight || 1) + Math.max(0, 1.2 - index * 0.08);
+
+  score += preferenceBoostForStop(item, preferences, optimizerMode, modifier, strictTags);
+  if (item.isLiveEvent) {
+    score += 3.4;
+  }
+  score += Math.max(0, 2.2 - distanceToStart) * ((item.goodAsStart || 1.5) * 0.6);
+  score += Math.max(0, 2.2 - distanceToEnd) * ((item.goodAsFinal || 1.5) * 0.45);
+
+  if (shape === "loop") {
+    const anchorMacro = startProfile?.primaryMacro;
+    const anchorToken = startProfile?.primaryToken;
+    const radiusLimit = loopRadiusKm(targetKm, distanceMode);
+
+    if (anchorToken && itemProfile.primaryToken === anchorToken) {
+      score += 4.4;
+    } else if (anchorMacro && itemProfile.primaryMacro === anchorMacro) {
+      score += 2.8;
+    } else if (anchorMacro && itemProfile.primaryMacro) {
+      score -= distanceMode === "no_limit" ? 1.2 : 5.4;
+    }
+
+    if (distanceToStart > radiusLimit) {
+      score -= (distanceToStart - radiusLimit) * 3.1;
+    }
+  } else {
+    const axisStats = projectPointToAxis(item, start, end);
+    const startMacro = startProfile?.primaryMacro;
+    const endMacro = endProfile?.primaryMacro;
+
+    score -= axisStats.lateralKm * 1.15;
+
+    if (axisStats.progressKm < -0.35 || axisStats.progressKm > axisStats.axisLengthKm + 0.9) {
+      score -= 5.5;
+    }
+
+    if (startProfile?.primaryToken && itemProfile.primaryToken === startProfile.primaryToken) {
+      score += 2.2;
+    }
+    if (endProfile?.primaryToken && itemProfile.primaryToken === endProfile.primaryToken) {
+      score += 2.2;
+    }
+    if (startMacro && itemProfile.primaryMacro === startMacro) {
+      score += 1.1;
+    }
+    if (endMacro && itemProfile.primaryMacro === endMacro) {
+      score += 1.1;
+    }
+    if (
+      itemProfile.primaryMacro &&
+      ![startMacro, endMacro, "center"].includes(itemProfile.primaryMacro)
+    ) {
+      score -= 2.6;
+    }
+  }
+
+  return Math.round(score * 10) / 10;
+}
+
+function scoreSupplementalPoolItem({
+  item,
+  template,
+  shape,
+  start,
+  end,
+  startProfile,
+  endProfile,
+  seedRouteArea,
+  seedIds,
+  seedDuplicateCounts,
+  preferences = [],
+  optimizerMode = null,
+  modifier = null,
+  strictTags = [],
+  targetKm,
+  distanceMode,
+  liveEvents = [],
+}) {
+  if (!item || seedIds.has(item.id) || isAnchorDuplicateStop(item, start) || isAnchorDuplicateStop(item, end)) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  if (item.kind === "district-group") {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  const itemProfile = buildItemAreaProfile(item);
+  const distanceToStart = haversineKm(start, item);
+  const distanceToEnd = haversineKm(end, item);
+  let score = preferenceBoostForStop(item, preferences, optimizerMode, modifier, strictTags);
+  score += item.anchorWeight || 1;
+  if (item.isLiveEvent) {
+    score += 4.2;
+  }
+  score += item.tags.filter((tag) => (template.preferenceTags || []).includes(tag)).length * 0.95;
+
+  if (seedRouteArea.tokens.has(itemProfile.primaryToken)) {
+    score += 3.3;
+  } else if (seedRouteArea.macros.has(itemProfile.primaryMacro)) {
+    score += 1.7;
+  }
+
+  const duplicatePenalty = seedDuplicateCounts.get(item.duplicateFamily) || 0;
+  score -= duplicatePenalty * 1.1;
+
+  if (shape === "loop") {
+    const anchorToken = startProfile?.primaryToken;
+    const anchorMacro = startProfile?.primaryMacro;
+    const radiusLimit = loopRadiusKm(targetKm, distanceMode) + 0.7;
+
+    if (anchorToken && itemProfile.primaryToken === anchorToken) {
+      score += 3.8;
+    } else if (anchorMacro && itemProfile.primaryMacro === anchorMacro) {
+      score += 2.1;
+    } else if (anchorMacro && itemProfile.primaryMacro) {
+      score -= distanceMode === "no_limit" ? 0.8 : 4.4;
+    }
+
+    if (distanceToStart > radiusLimit) {
+      score -= (distanceToStart - radiusLimit) * 2.6;
+    }
+  } else {
+    const axisStats = projectPointToAxis(item, start, end);
+
+    score -= axisStats.lateralKm * 0.9;
+
+    if (axisStats.progressKm < -0.45 || axisStats.progressKm > axisStats.axisLengthKm + 1.1) {
+      score -= 5;
+    }
+
+    if (startProfile?.primaryMacro && itemProfile.primaryMacro === startProfile.primaryMacro) {
+      score += 1.4;
+    }
+    if (endProfile?.primaryMacro && itemProfile.primaryMacro === endProfile.primaryMacro) {
+      score += 1.4;
+    }
+  }
+
+  liveEvents.forEach((event) => {
+    if (typeof event.lat !== "number" || typeof event.lng !== "number") {
+      return;
+    }
+
+    const distanceKm = haversineKm(item, event);
+    const tagHits = preferences.filter((preference) => (event.match_tags || []).includes(preference)).length;
+
+    if (distanceKm <= 0.45) {
+      score += 2.8 + tagHits * 0.6;
+    } else if (distanceKm <= 1.1) {
+      score += 1.2 + tagHits * 0.35;
+    }
   });
 
+  return Number(score.toFixed(1));
+}
+
+function buildStopPool(
+  template,
+  start,
+  end,
+  preferences = [],
+  optimizerMode = null,
+  modifier = null,
+  targetKm = 8,
+  distanceMode = "soft_target",
+  liveEvents = [],
+  options = {},
+) {
+  const shape = isLoopRoute(start, end) ? "loop" : "arc";
+  const startProfile = buildPointAreaProfile(start);
+  const endProfile = buildPointAreaProfile(end);
+  const manualAnchorsLocked = Boolean(options.manualAnchorsLocked);
+  const liveEventCandidates = buildLiveEventStopCandidates(
+    liveEvents,
+    preferences,
+    optimizerMode,
+    modifier,
+  );
+  const corridorLimitKm = clamp(Math.max(targetKm * 0.22, 1.2), 1.2, distanceMode === "no_limit" ? 3.6 : 2.8);
+  const candidateFitsLockedCorridor = (item) => {
+    if (!manualAnchorsLocked || shape !== "arc") {
+      return true;
+    }
+
+    const axis = projectPointToAxis(item, start, end);
+
+    if (axis.progressKm < -0.45 || axis.progressKm > axis.axisLengthKm + 0.85) {
+      return false;
+    }
+
+    if (axis.lateralKm > corridorLimitKm) {
+      return false;
+    }
+
+    return true;
+  };
+  const baseSeedStops = template.stops
+    .map((stopId) => findItemByName(stopId))
+    .filter(Boolean)
+    .filter((item) => !isAnchorDuplicateStop(item, start) && !isAnchorDuplicateStop(item, end));
+  const filteredSeedStops = baseSeedStops.filter(candidateFitsLockedCorridor);
+  const seededPool =
+    filteredSeedStops.length > 0
+      ? filteredSeedStops
+      : manualAnchorsLocked && shape === "arc"
+        ? []
+        : baseSeedStops;
+  const basePool = uniqueStops(seededPool);
+
+  if (!basePool.length && !manualAnchorsLocked) {
+    return [];
+  }
+
+  const seedRouteArea = buildRouteAreaProfile(basePool.length ? basePool : baseSeedStops);
+  const seedIds = new Set(basePool.map((item) => item.id));
+  const seedDuplicateCounts = (basePool.length ? basePool : baseSeedStops).reduce((counts, item) => {
+    if (item.duplicateFamily) {
+      counts.set(item.duplicateFamily, (counts.get(item.duplicateFamily) || 0) + 1);
+    }
+    return counts;
+  }, new Map());
+  const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
+  const supplementalLimit = manualAnchorsLocked && shape === "arc"
+    ? distanceMode === "no_limit"
+      ? 10
+      : targetKm <= 6
+        ? 6
+        : targetKm <= 9
+          ? 8
+          : 10
+    : distanceMode === "no_limit"
+      ? 4
+      : targetKm <= 6
+        ? 2
+        : targetKm <= 9
+          ? 3
+          : 4;
+  const supplementalCandidates = [
+    ...allItems,
+    ...liveEventCandidates,
+  ].filter((item) => candidateFitsLockedCorridor(item));
+  const supplemental = supplementalCandidates
+    .map((item) => ({
+      item,
+      score: scoreSupplementalPoolItem({
+        item,
+        template,
+        shape,
+        start,
+        end,
+        startProfile,
+        endProfile,
+        seedRouteArea,
+        seedIds,
+        seedDuplicateCounts,
+        preferences,
+        optimizerMode,
+        modifier,
+        strictTags,
+        targetKm,
+        distanceMode,
+        liveEvents,
+      }),
+    }))
+    .filter((entry) => Number.isFinite(entry.score))
+    .filter((entry) => entry.score > (manualAnchorsLocked && shape === "arc"
+      ? strictTags.length
+        ? 0.8
+        : 1.2
+      : strictTags.length
+        ? 2.2
+        : 3))
+    .sort((left, right) => right.score - left.score)
+    .slice(0, supplementalLimit)
+    .map((entry) => entry.item);
+
+  return uniqueStops([...basePool, ...supplemental]);
+}
+
+function permuteStops(items) {
+  if (items.length <= 1) {
+    return [items];
+  }
+
+  const permutations = [];
+
+  items.forEach((item, index) => {
+    const remaining = [...items.slice(0, index), ...items.slice(index + 1)];
+    permuteStops(remaining).forEach((tail) => {
+      permutations.push([item, ...tail]);
+    });
+  });
+
+  return permutations;
+}
+
+function summarizeLoopGeometry(orderedStops, start, end, startProfile, targetKm, distanceMode) {
+  const points = [start, ...orderedStops, end];
+  const estimatedKm = walkingKm(points);
+  const firstGap = orderedStops[0] ? haversineKm(start, orderedStops[0]) : 0;
+  const lastGap = orderedStops.length ? haversineKm(end, orderedStops[orderedStops.length - 1]) : 0;
+  const radiusLimit = loopRadiusKm(targetKm, distanceMode);
+  const maxRadius = orderedStops.reduce((max, stop) => Math.max(max, haversineKm(start, stop)), 0);
+  const macroDrift = orderedStops.reduce((sum, stop) => {
+    const macro = buildItemAreaProfile(stop).primaryMacro;
+    if (!macro || !startProfile?.primaryMacro || macro === startProfile.primaryMacro) {
+      return sum;
+    }
+    return sum + 1;
+  }, 0);
+  const edgePenalty =
+    Math.max(0, firstGap - 1.25) * 2.3 + Math.max(0, lastGap - 1.25) * 2.3;
+  const radiusPenalty = Math.max(0, maxRadius - radiusLimit) * 2.1;
+  const driftPenalty = macroDrift * (distanceMode === "no_limit" ? 0.7 : 1.8);
+  const kmPenalty =
+    distanceMode === "no_limit" || !targetKm
+      ? 0
+      : Math.max(0, Math.abs(estimatedKm - targetKm) - 1.6) * 0.9;
+  const objective = estimatedKm + edgePenalty + radiusPenalty + driftPenalty + kmPenalty;
+
+  return {
+    estimatedKm,
+    objective,
+    firstGap,
+    lastGap,
+    maxRadius,
+    macroDrift,
+    qualityScore: Math.max(0, 13 - edgePenalty - radiusPenalty - driftPenalty - kmPenalty),
+  };
+}
+
+function summarizeArcGeometry(orderedStops, start, end, startProfile, endProfile, targetKm, distanceMode) {
+  const points = [start, ...orderedStops, end];
+  const estimatedKm = walkingKm(points);
+  const directKm = Math.max(0.4, haversineKm(start, end) * 1.22);
+  const firstGap = orderedStops[0] ? haversineKm(start, orderedStops[0]) : 0;
+  const lastGap = orderedStops.length ? haversineKm(end, orderedStops[orderedStops.length - 1]) : 0;
+  let previousProgress = -0.4;
+  let reversals = 0;
+  let lateralTotal = 0;
+  let macroDrift = 0;
+
+  orderedStops.forEach((stop) => {
+    const axis = projectPointToAxis(stop, start, end);
+    const macro = buildItemAreaProfile(stop).primaryMacro;
+    lateralTotal += axis.lateralKm;
+    if (axis.progressKm + 0.15 < previousProgress) {
+      reversals += previousProgress - axis.progressKm;
+    }
+    previousProgress = Math.max(previousProgress, axis.progressKm);
+
+    if (
+      macro &&
+      ![startProfile?.primaryMacro, endProfile?.primaryMacro, "center"].includes(macro)
+    ) {
+      macroDrift += 1;
+    }
+  });
+
+  const edgePenalty =
+    Math.max(0, firstGap - 1.4) * 2.6 + Math.max(0, lastGap - 1.4) * 2.6;
+  const detourPenalty = Math.max(0, estimatedKm - directKm * 1.8) * 1.4;
+  const progressionPenalty = reversals * 3.6 + lateralTotal * 0.95 + macroDrift * 0.9;
+  const kmPenalty =
+    distanceMode === "no_limit" || !targetKm
+      ? 0
+      : Math.max(0, Math.abs(estimatedKm - targetKm) - 1.8) * 0.75;
+  const objective = estimatedKm + edgePenalty + detourPenalty + progressionPenalty + kmPenalty;
+
+  return {
+    estimatedKm,
+    objective,
+    firstGap,
+    lastGap,
+    directKm,
+    reversals,
+    lateralTotal,
+    macroDrift,
+    qualityScore: Math.max(
+      0,
+      13 - edgePenalty - detourPenalty - progressionPenalty - kmPenalty,
+    ),
+  };
+}
+
+function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endProfile, targetKm, distanceMode) {
+  if (selectedStops.length <= 1) {
+    const summary =
+      shape === "loop"
+        ? summarizeLoopGeometry(selectedStops, start, end, startProfile, targetKm, distanceMode)
+        : summarizeArcGeometry(
+            selectedStops,
+            start,
+            end,
+            startProfile,
+            endProfile,
+            targetKm,
+            distanceMode,
+          );
+
+    return {
+      orderedStops: selectedStops,
+      geometry: summary,
+    };
+  }
+
+  let bestOrder = selectedStops;
+  let bestGeometry = null;
+
+  permuteStops(selectedStops).forEach((candidate) => {
+    const geometry =
+      shape === "loop"
+        ? summarizeLoopGeometry(candidate, start, end, startProfile, targetKm, distanceMode)
+        : summarizeArcGeometry(
+            candidate,
+            start,
+            end,
+            startProfile,
+            endProfile,
+            targetKm,
+            distanceMode,
+          );
+
+    if (!bestGeometry || geometry.objective < bestGeometry.objective) {
+      bestGeometry = geometry;
+      bestOrder = candidate;
+    }
+  });
+
+  return {
+    orderedStops: bestOrder,
+    geometry: bestGeometry,
+  };
+}
+
+function buildRouteLegs(points) {
+  const legs = [];
+
+  for (let index = 1; index < points.length; index += 1) {
+    legs.push({
+      from_label: points[index - 1].label,
+      to_label: points[index].label,
+      distance_km: Number((haversineKm(points[index - 1], points[index]) * 1.22).toFixed(1)),
+    });
+  }
+
+  return legs;
+}
+
+function buildAnchorZone(shape, startProfile, endProfile, routeArea) {
+  if (shape === "loop") {
+    return startProfile?.primaryLabel || tokenLabel(routeArea.dominantToken) || "Rom";
+  }
+
+  if (startProfile?.primaryLabel && endProfile?.primaryLabel) {
+    return `${startProfile.primaryLabel} -> ${endProfile.primaryLabel}`;
+  }
+
+  return tokenLabel(routeArea.dominantToken) || "Rom";
+}
+
+function routeToneLabel(optimizerMode, modifier, preferences = []) {
+  const activeModifier = normalizeModifier(modifier, optimizerMode);
+
+  if (optimizerMode === "bar-hop") {
+    return "barhopping";
+  }
+  if (optimizerMode === "wine-crawl") {
+    return "vin och mat";
+  }
+  if (optimizerMode === "cocktail-night") {
+    return "cocktails och natt";
+  }
+  if (optimizerMode === "church-crawl") {
+    return "kyrkor och kultur";
+  }
+  if (optimizerMode === "pizza-freak") {
+    return "pizza och kvarter";
+  }
+  if (optimizerMode === "sunset-spots") {
+    return "ljus och utsikter";
+  }
+  if (activeModifier === "party") {
+    return "mer party";
+  }
+  if (activeModifier === "evening") {
+    return "mer kvall";
+  }
+  if (activeModifier === "culture") {
+    return "mer kultur";
+  }
+  if (activeModifier === "low_key") {
+    return "mer low-key";
+  }
+  if (preferences.includes("vin")) {
+    return "vin och stad";
+  }
+  if (preferences.includes("kultur")) {
+    return "kultur och promenad";
+  }
+  return "lokal rytm";
+}
+
+function buildDynamicTitle({ start, end, shape, routeArea, optimizerMode, modifier, preferences }) {
+  const dominantZone = tokenLabel(routeArea.dominantToken) || macroLabel(routeArea.dominantMacro) || "Rom";
+  const tone = routeToneLabel(optimizerMode, modifier, preferences);
+
+  if (shape === "loop") {
+    return `${start.label} loop • ${dominantZone} • ${tone}`;
+  }
+
+  return `${start.label} till ${end.label} • ${dominantZone} • ${tone}`;
+}
+
+function buildDynamicSummary({ start, end, shape, routeArea, estimatedKm, optimizerMode, modifier, preferences }) {
+  const dominantZone = tokenLabel(routeArea.dominantToken) || macroLabel(routeArea.dominantMacro) || "Rom";
+  const tone = routeToneLabel(optimizerMode, modifier, preferences);
+
+  if (shape === "loop") {
+    return `En sammanhangande runda pa cirka ${estimatedKm.toFixed(1)} km som utgar fran ${start.label}, haller sig runt ${dominantZone} och lutar mot ${tone}.`;
+  }
+
+  return `En tydlig bage pa cirka ${estimatedKm.toFixed(1)} km fran ${start.label} mot ${end.label}, med tyngd i ${dominantZone} och mer ${tone}.`;
+}
+
+function buildGeoFitNote({ shape, start, end, geometry, routeArea, startProfile, endProfile }) {
+  const dominantZone = tokenLabel(routeArea.dominantToken) || macroLabel(routeArea.dominantMacro) || "Rom";
+
+  if (shape === "loop") {
+    return `Loop runt ${startProfile?.primaryLabel || start.label}: stoppordningen minimerar returstrackor och haller sig huvudsakligen kring ${dominantZone}.`;
+  }
+
+  return `Bage fran ${start.label} mot ${end.label}: rutten ror sig framat genom ${dominantZone} utan stora geografiska reversaler.`;
+}
+
+function formatMainStop(stop) {
+  return {
+    id: stop.id,
+    label: stop.name,
+    lat: stop.lat,
+    lng: stop.lng,
+    type: stop.kind,
+    area: stop.area,
+    tags: stop.tags,
+    price_level: stop.priceLevel,
+    best_time: stop.bestTime,
+    vibe: stop.vibe,
+    summary: stop.openingSummary || stop.longDescription || null,
+    opening_summary: stop.openingSummary,
+    dwell_type: stop.dwellType,
+    cluster_token: stop.clusterToken,
+    duplicate_family: stop.duplicateFamily,
+    drawer_query: stop.drawerQuery || stop.name,
+    is_live_event: Boolean(stop.isLiveEvent),
+    event_id: stop.eventId || null,
+  };
+}
+
+function resolveRouteStopData(stop) {
+  const catalogItem = findItemByName(stop.id);
+
+  if (catalogItem) {
+    return catalogItem;
+  }
+
+  return {
+    id: stop.id,
+    name: stop.label,
+    lat: stop.lat,
+    lng: stop.lng,
+    kind: stop.type || "stop",
+    area: stop.area || "Rom",
+    tags: Array.isArray(stop.tags) ? stop.tags : [],
+    priceLevel: stop.price_level || null,
+    bestTime: stop.best_time || null,
+    vibe: stop.vibe || null,
+    openingSummary: stop.opening_summary || stop.summary || null,
+    closedWeekdays: [],
+    happyHourNote: null,
+    bookingRequired: Boolean(stop.is_live_event),
+    clusterToken: stop.cluster_token || null,
+    duplicateFamily: stop.duplicate_family || stop.type || "stop",
+    isLiveEvent: Boolean(stop.is_live_event),
+    eventId: stop.event_id || null,
+  };
+}
+
+function nearestPointDistanceKm(point, routePoints = []) {
+  if (!routePoints.length) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return routePoints.reduce((closest, routePoint) => {
+    const distanceKm = haversineKm(point, routePoint);
+    return Math.min(closest, distanceKm);
+  }, Number.POSITIVE_INFINITY);
+}
+
+function isBarRouteMentionCandidate(item) {
+  if (!item || autoAnchorKinds.has(item.kind) || item.isLiveEvent) {
+    return false;
+  }
+
+  return (
+    item.kind === "bar" ||
+    item.kind.includes("bar") ||
+    item.kind.includes("cocktail") ||
+    item.tags.some((tag) => routeMentionBarTags.has(tag))
+  );
+}
+
+function isHiddenRouteMentionCandidate(item) {
+  if (!item || autoAnchorKinds.has(item.kind) || item.isLiveEvent) {
+    return false;
+  }
+
+  return item.tags.some((tag) => routeMentionHiddenTags.has(tag));
+}
+
+function pickRouteMentions(candidates = [], limit = 4) {
+  const picked = [];
+  const seenNames = new Set();
+  const seenFamilies = new Set();
+
+  candidates
+    .sort((left, right) => right.score - left.score)
+    .forEach(({ item }) => {
+      if (!item || picked.length >= limit) {
+        return;
+      }
+
+      const nameKey = slugifyText(item.name);
+      const familyKey = item.duplicateFamily || null;
+
+      if (seenNames.has(nameKey)) {
+        return;
+      }
+
+      if (familyKey && seenFamilies.has(familyKey) && picked.length >= Math.max(2, limit - 1)) {
+        return;
+      }
+
+      picked.push(item.name);
+      seenNames.add(nameKey);
+
+      if (familyKey) {
+        seenFamilies.add(familyKey);
+      }
+    });
+
+  return picked;
+}
+
+function buildDynamicRouteMentions({
+  orderedStops = [],
+  mapRoutePoints = [],
+  preferences = [],
+  optimizerMode = null,
+  template = null,
+} = {}) {
+  const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
+  const stopIds = new Set(orderedStops.map((stop) => stop.id));
+  const nearbyItems = allItems
+    .filter((item) => !stopIds.has(item.id) && !autoAnchorKinds.has(item.kind))
+    .map((item) => ({
+      item,
+      distanceKm: nearestPointDistanceKm(item, mapRoutePoints),
+    }))
+    .filter((entry) => entry.distanceKm <= 0.55)
+    .sort((left, right) => left.distanceKm - right.distanceKm)
+    .slice(0, 20);
+
+  const barCandidates = [
+    ...orderedStops.map((item, index) => ({
+      item,
+      score:
+        (isBarRouteMentionCandidate(item) ? 4.6 : -10) +
+        item.tags.filter((tag) => preferences.includes(tag)).length * 0.8 +
+        (item.tags.includes("nattliv") ? 1.1 : 0) -
+        index * 0.25,
+    })),
+    ...nearbyItems.map(({ item, distanceKm }) => ({
+      item,
+      score:
+        (isBarRouteMentionCandidate(item) ? 3.6 : -10) +
+        item.tags.filter((tag) => preferences.includes(tag)).length * 0.75 +
+        clamp(0.7 - distanceKm, 0, 0.7) * 3,
+    })),
+  ].filter((entry) => entry.score > 0);
+
+  const hiddenCandidates = [
+    ...orderedStops.map((item, index) => ({
+      item,
+      score:
+        (isHiddenRouteMentionCandidate(item) ? 4.2 : -10) +
+        (item.tags.includes("hidden gems") ? 1.3 : 0) +
+        (item.tags.includes("kyrkor") ? 1.5 : 0) +
+        (item.tags.includes("utsikt") ? 1 : 0) +
+        (itemMatchesStrictPreference(item, strictTags) ? 1.8 : 0) -
+        (isBarRouteMentionCandidate(item) ? 1 : 0) -
+        index * 0.2,
+    })),
+    ...nearbyItems.map(({ item, distanceKm }) => ({
+      item,
+      score:
+        (isHiddenRouteMentionCandidate(item) ? 3.2 : -10) +
+        (item.tags.includes("hidden gems") ? 1.1 : 0) +
+        (item.tags.includes("kyrkor") ? 1.3 : 0) +
+        (itemMatchesStrictPreference(item, strictTags) ? 1.4 : 0) -
+        (isBarRouteMentionCandidate(item) ? 0.8 : 0) +
+        clamp(0.65 - distanceKm, 0, 0.65) * 3,
+    })),
+  ].filter((entry) => entry.score > 0);
+
+  const hiddenMentions = pickRouteMentions(hiddenCandidates, 4);
+  const barMentions = pickRouteMentions(barCandidates, 4);
+
+  return {
+    hiddenMentions:
+      hiddenMentions.length > 0
+        ? hiddenMentions
+        : (template?.hiddenMentions || []).filter((name) => Boolean(findItemByName(name))).slice(0, 4),
+    barMentions:
+      barMentions.length > 0
+        ? barMentions
+        : (template?.barMentions || []).filter((name) => Boolean(findItemByName(name))).slice(0, 4),
+  };
+}
+
+function buildRouteFromTemplate(
+  template,
+  start,
+  end,
+  targetKm,
+  preferences = [],
+  optimizerMode = null,
+  modifier = null,
+  distanceMode = "soft_target",
+  liveEvents = [],
+  options = {},
+) {
+  const shape = isLoopRoute(start, end) ? "loop" : "arc";
+  const startProfile = buildPointAreaProfile(start);
+  const endProfile = buildPointAreaProfile(end);
+  const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
+  const rawPool = buildStopPool(
+    template,
+    start,
+    end,
+    preferences,
+    optimizerMode,
+    modifier,
+    targetKm,
+    distanceMode,
+    liveEvents,
+    options,
+  );
+  const sortedPool = rawPool
+    .map((item, index) => ({
+      item,
+      score: scoreStopCandidate({
+        item,
+        index,
+        shape,
+        start,
+        end,
+        startProfile,
+        endProfile,
+        preferences,
+        optimizerMode,
+        modifier,
+        strictTags,
+        targetKm,
+        distanceMode,
+      }),
+    }))
+    .sort((left, right) => right.score - left.score);
+  const selectedCount = desiredStopCount(sortedPool.length, targetKm, distanceMode);
+  const strictPool = strictTags.length
+    ? sortedPool.filter((entry) => itemMatchesStrictPreference(entry.item, strictTags))
+    : [];
+  let selectedStops = strictTags.length
+    ? strictPool.slice(0, selectedCount).map((entry) => entry.item)
+    : sortedPool.slice(0, selectedCount).map((entry) => entry.item);
+
+  if (strictTags.length && !selectedStops.length) {
+    selectedStops = sortedPool.slice(0, Math.min(rawPool.length, 2)).map((entry) => entry.item);
+  }
+
+  if (!strictTags.length && selectedStops.length < Math.min(3, rawPool.length)) {
+    selectedStops = sortedPool.slice(0, Math.min(rawPool.length, 3)).map((entry) => entry.item);
+  }
+
+  if (!selectedStops.length) {
+    selectedStops = sortedPool.slice(0, Math.min(rawPool.length, 3)).map((entry) => entry.item);
+  }
+
+  const { orderedStops, geometry } = optimizeStopOrder(
+    selectedStops,
+    shape,
+    start,
+    end,
+    startProfile,
+    endProfile,
+    targetKm,
+    distanceMode,
+  );
+
+  const mainStops = orderedStops.map((stop) => formatMainStop(stop));
+  const routeArea = buildRouteAreaProfile(orderedStops);
   const mapRoutePoints = [
     { label: start.label, lat: start.lat, lng: start.lng, role: "start" },
-    ...mainStops.map((stop, index) => ({
-      label: stop.label,
+    ...orderedStops.map((stop, index) => ({
+      label: stop.name,
       lat: stop.lat,
       lng: stop.lng,
       role: index === 0 ? "first-stop" : "stop",
     })),
     { label: end.label, lat: end.lat, lng: end.lng, role: "end" },
   ];
-
-  const estimatedKm = Math.max(
-    template.defaultKm,
-    walkingKm(mapRoutePoints),
-    targetKm ? targetKm - 1 : 0,
-  );
+  const estimatedKm = Number((geometry?.estimatedKm || walkingKm(mapRoutePoints)).toFixed(1));
+  const routeMentions = buildDynamicRouteMentions({
+    orderedStops,
+    mapRoutePoints,
+    preferences,
+    optimizerMode,
+    template,
+  });
 
   return {
     id: template.id,
-    title: template.title,
-    summary: template.summary,
-    estimated_km: Number(estimatedKm.toFixed(1)),
+    title: buildDynamicTitle({
+      start,
+      end,
+      shape,
+      routeArea,
+      optimizerMode,
+      modifier,
+      preferences,
+    }),
+    summary: buildDynamicSummary({
+      start,
+      end,
+      shape,
+      routeArea,
+      estimatedKm,
+      optimizerMode,
+      modifier,
+      preferences,
+    }),
+    estimated_km: estimatedKm,
     start_label: start.label,
     end_label: end.label,
+    route_shape: shape,
     main_stops: mainStops,
-    hidden_mentions: template.hiddenMentions,
-    bar_mentions: template.barMentions,
+    hidden_mentions: routeMentions.hiddenMentions,
+    bar_mentions: routeMentions.barMentions,
     map_route_points: mapRoutePoints,
+    legs: buildRouteLegs(mapRoutePoints),
+    geo_fit_note: buildGeoFitNote({
+      shape,
+      start,
+      end,
+      geometry,
+      routeArea,
+      startProfile,
+      endProfile,
+    }),
+    anchor_zone: buildAnchorZone(shape, startProfile, endProfile, routeArea),
+    geo_quality_score: Number((geometry?.qualityScore || 0).toFixed(1)),
+    pool_fit_penalty: Math.max(0, rawPool.length - orderedStops.length - 1) * 0.9,
   };
 }
 
@@ -1017,6 +2707,7 @@ function liveEventRouteScore({
 
   const activeModifier = normalizeModifier(modifier, optimizerMode);
   const routeTags = buildRouteTagSetFromData(template, route, routeStops);
+  const embeddedEventStops = routeStops.filter((stop) => stop?.isLiveEvent && stop.eventId);
   const ranked = liveEvents
     .map((event) => {
       const eventTags = new Set(event.match_tags || []);
@@ -1042,6 +2733,7 @@ function liveEventRouteScore({
 
       return {
         event,
+        embedded: embeddedEventStops.some((stop) => String(stop.eventId) === String(event.id)),
         score:
           tagHits * 1.5 +
           preferenceHits * 0.9 +
@@ -1049,6 +2741,10 @@ function liveEventRouteScore({
           proximityScore,
       };
     })
+    .map((entry) => ({
+      ...entry,
+      score: entry.score + (entry.embedded ? 5.4 : 0),
+    }))
     .sort((left, right) => right.score - left.score);
 
   const best = ranked[0];
@@ -1068,7 +2764,9 @@ function liveEventRouteScore({
 
   return {
     score: Math.round(totalScore * 10) / 10,
-    note: `Live i dag: ${best.event.title} ligger ovanligt bra på eller nära den här rutten och gör upplägget mer tidsbundet på ett bra sätt.`,
+    note: best.embedded
+      ? `Live i dag: ${best.event.title} ligger inne i själva rutten och gör upplägget tydligt mer tidsbundet och trovärdigt.`
+      : `Live i dag: ${best.event.title} ligger ovanligt bra på eller nära den här rutten och gör upplägget mer tidsbundet på ett bra sätt.`,
   };
 }
 
@@ -1138,6 +2836,97 @@ function annotateLiveEventsForRoutes(liveEvents, routeChoices) {
   });
 }
 
+function lockedAnchorScore({
+  route,
+  routeStops = [],
+  startPoint,
+  endPoint,
+  distanceMode = "soft_target",
+}) {
+  if (!route || !routeStops.length || isLoopRoute(startPoint, endPoint)) {
+    return { score: 0, note: null };
+  }
+
+  const startProfile = buildPointAreaProfile(startPoint);
+  const endProfile = buildPointAreaProfile(endPoint);
+  const routeProfile = buildRouteAreaProfile(routeStops);
+  const firstStop = routeStops[0];
+  const lastStop = routeStops[routeStops.length - 1];
+  const startGap = haversineKm(startPoint, firstStop);
+  const endGap = haversineKm(endPoint, lastStop);
+  const progressionStats = routeStops.map((stop) => projectPointToAxis(stop, startPoint, endPoint));
+  const reversalCount = progressionStats.reduce((count, current, index) => {
+    if (index === 0) {
+      return count;
+    }
+
+    return current.progressKm + 0.35 < progressionStats[index - 1].progressKm ? count + 1 : count;
+  }, 0);
+  const offCorridorCount = progressionStats.filter((entry) => entry.lateralKm > 2.2).length;
+  let score = 0;
+  const notes = [];
+
+  if (startGap <= 0.8) {
+    score += 4.8;
+  } else if (startGap <= 1.5) {
+    score += 1.8;
+  } else {
+    score -= Math.min(6, startGap * 2.8);
+  }
+
+  if (endGap <= 0.8) {
+    score += 5;
+  } else if (endGap <= 1.5) {
+    score += 2;
+  } else {
+    score -= Math.min(6.5, endGap * 3);
+  }
+
+  if (
+    startProfile?.primaryMacro &&
+    endProfile?.primaryMacro &&
+    routeProfile.macros.has(startProfile.primaryMacro) &&
+    routeProfile.macros.has(endProfile.primaryMacro)
+  ) {
+    score += 3.5;
+  } else {
+    score -= 3.8;
+  }
+
+  if (
+    routeProfile.dominantMacro &&
+    ![startProfile?.primaryMacro, endProfile?.primaryMacro].includes(routeProfile.dominantMacro)
+  ) {
+    score -= 4.4;
+  }
+
+  score -= reversalCount * 3.1;
+  score -= offCorridorCount * 1.6;
+
+  if (distanceMode !== "no_limit" && progressionStats.some((entry) => entry.axisLengthKm > 0)) {
+    const progressSpread =
+      progressionStats[progressionStats.length - 1].progressKm - progressionStats[0].progressKm;
+    if (progressSpread <= 0.8) {
+      score -= 3.6;
+    }
+  }
+
+  if (score >= 2.5) {
+    notes.push(
+      `Rutten håller faktiskt korridoren mellan ${startPoint.label} och ${endPoint.label} i stället for att glida tillbaka till en generisk mitt-i-stan-dag.`,
+    );
+  } else if (score <= -2) {
+    notes.push(
+      `Flera stopp ligger for langt fran korridoren mellan ${startPoint.label} och ${endPoint.label}, sa den har dagen passar ankaren svagare.`,
+    );
+  }
+
+  return {
+    score: Math.round(score * 10) / 10,
+    note: notes[0] || null,
+  };
+}
+
 function routeScore({
   route,
   template,
@@ -1153,6 +2942,7 @@ function routeScore({
   modifier,
   distanceMode,
   routeStops,
+  manualAnchorsLocked = false,
 }) {
   const startPoint = route.map_route_points[0];
   const endPoint = route.map_route_points[route.map_route_points.length - 1];
@@ -1192,7 +2982,19 @@ function routeScore({
     endPoint,
     distanceMode,
   });
+  const anchorFit = manualAnchorsLocked
+    ? lockedAnchorScore({
+        route,
+        routeStops: normalizedRouteStops,
+        startPoint,
+        endPoint,
+        distanceMode,
+      })
+    : { score: 0, note: null };
+  const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
+  const strictFitScore = strictPreferenceCoverageScore(normalizedRouteStops, strictTags);
   const reusedPenalty = reusedIds.has(template.id) ? -6 : 0;
+  const geoFitScore = (route.geo_quality_score || 0) - (route.pool_fit_penalty || 0);
 
   return {
     score:
@@ -1206,6 +3008,9 @@ function routeScore({
       pulseFit.score +
       liveFit.score +
       areaFit.score +
+      anchorFit.score +
+      strictFitScore +
+      geoFitScore +
       startProximity +
       endProximity +
       reusedPenalty,
@@ -1214,7 +3019,7 @@ function routeScore({
     pulseNote: pulseFit.note,
     pulseAnchor: pulseFit.anchor,
     liveEventNote: liveFit.note,
-    areaNote: areaFit.note,
+    areaNote: anchorFit.note || areaFit.note,
     profile: profileFit.profile,
   };
 }
@@ -1237,6 +3042,13 @@ function whyRecommended(
   const profile = normalizeVibeProfile(template);
   const activeBudgetTier = normalizeBudgetTier(preferences, optimizerMode, budgetTier);
   const activeModifier = normalizeModifier(modifier, optimizerMode);
+  const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
+
+  if (strictTags.length === 1) {
+    reasonParts.push(
+      `Du valde i praktiken ${strictTags[0]}, så stoppmixen hålls tydligare runt just det temat än i de bredare rutterna.`,
+    );
+  }
 
   if (prefMatches.length) {
     reasonParts.push(`Den matchar särskilt bra för ${prefMatches.join(", ")}.`);
@@ -1274,12 +3086,18 @@ function whyRecommended(
     reasonParts.push("Du valde party, och den här rutten har tydligare nattenergi än de lugnare alternativen.");
   }
 
-  if (distanceMode === "no_limit") {
+  if (route.route_shape === "loop") {
     reasonParts.push(
-      `Du valde "spelar ingen roll" på avstånd, så rutten får vara friare mellan ${route.start_label} och ${route.end_label} än strikt km-styrd.`,
+      `Huvudrutten blir en riktig runda från ${route.start_label} tillbaka till ${route.end_label} pa cirka ${route.estimated_km} km i stallet for en ut-och-tillbaka-dag.`,
+    );
+  } else if (distanceMode === "no_limit") {
+    reasonParts.push(
+      `Du valde "spelar ingen roll" pa avstand, sa rutten far vara friare mellan ${route.start_label} och ${route.end_label} utan att tappa riktning.`,
     );
   } else {
-    reasonParts.push(`Rutten kopplar ${route.start_label} till ${route.end_label} på cirka ${route.estimated_km} km.`);
+    reasonParts.push(
+      `Rutten ror sig fran ${route.start_label} mot ${route.end_label} pa cirka ${route.estimated_km} km med tydligare geografisk progression.`,
+    );
   }
 
   if (optimizerMode && template.optimizerModes?.includes(optimizerMode)) {
@@ -1304,6 +3122,10 @@ function whyRecommended(
     reasonParts.push(areaNote);
   }
 
+  if (route.geo_fit_note) {
+    reasonParts.push(route.geo_fit_note);
+  }
+
   if (weather?.condition === "rain") {
     reasonParts.push("Dagens väder gör att den här mixen av inne- och kvartersstopp passar extra bra.");
   } else if (weather?.condition === "sun") {
@@ -1311,6 +3133,93 @@ function whyRecommended(
   }
 
   return reasonParts.join(" ");
+}
+
+function overlapRatio(setA, setB) {
+  if (!setA.size || !setB.size) {
+    return 0;
+  }
+
+  const intersection = [...setA].filter((value) => setB.has(value)).length;
+  return intersection / Math.min(setA.size, setB.size);
+}
+
+function routeSimilarity(routeA, routeB) {
+  if (!routeA || !routeB) {
+    return 0;
+  }
+
+  const stopIdsA = new Set((routeA.main_stops || []).map((stop) => stop.id));
+  const stopIdsB = new Set((routeB.main_stops || []).map((stop) => stop.id));
+  const areaTokensA = extractAreaTokens(
+    (routeA.main_stops || []).map((stop) => [stop.area, stop.cluster_token]).flat(),
+  );
+  const areaTokensB = extractAreaTokens(
+    (routeB.main_stops || []).map((stop) => [stop.area, stop.cluster_token]).flat(),
+  );
+  const stopOverlap = overlapRatio(stopIdsA, stopIdsB);
+  const areaOverlap = overlapRatio(areaTokensA, areaTokensB);
+  const sameShape = routeA.route_shape === routeB.route_shape ? 0.6 : 0;
+  const sameAnchor = routeA.anchor_zone === routeB.anchor_zone ? 0.8 : 0;
+
+  return stopOverlap * 8 + areaOverlap * 4.5 + sameShape + sameAnchor;
+}
+
+function pickDistinctRoutes(rankedEntries, usedRoutes = [], maxRoutes = 3) {
+  const remaining = [...rankedEntries];
+  const picked = [];
+  const distinctSimilarityCutoff = 8.4;
+  const crossDaySimilarityCutoff = 10.6;
+
+  while (remaining.length && picked.length < maxRoutes) {
+    let bestIndex = 0;
+    let bestScore = Number.NEGATIVE_INFINITY;
+
+    remaining.forEach((entry, index) => {
+      const maxIntraSimilarity = picked.reduce(
+        (max, chosen) => Math.max(max, routeSimilarity(entry.route, chosen.route)),
+        0,
+      );
+      const maxCrossDaySimilarity = usedRoutes.reduce(
+        (max, usedRoute) => Math.max(max, routeSimilarity(entry.route, usedRoute)),
+        0,
+      );
+
+      if (
+        (picked.length && maxIntraSimilarity >= distinctSimilarityCutoff) ||
+        (usedRoutes.length && maxCrossDaySimilarity >= crossDaySimilarityCutoff)
+      ) {
+        return;
+      }
+
+      const intraPenalty = picked.reduce(
+        (sum, chosen) => sum + routeSimilarity(entry.route, chosen.route),
+        0,
+      );
+      const crossDayPenalty = usedRoutes.reduce(
+        (sum, usedRoute) => sum + routeSimilarity(entry.route, usedRoute) * 0.75,
+        0,
+      );
+      const adjustedScore = entry.score - intraPenalty - crossDayPenalty;
+
+      if (adjustedScore > bestScore) {
+        bestScore = adjustedScore;
+        bestIndex = index;
+      }
+    });
+
+    if (!Number.isFinite(bestScore)) {
+      break;
+    }
+
+    const [next] = remaining.splice(bestIndex, 1);
+    picked.push({
+      ...next,
+      adjustedScore: Number(bestScore.toFixed(1)),
+    });
+  }
+
+  return picked;
 }
 
 async function generateRecommendations({
@@ -1325,8 +3234,6 @@ async function generateRecommendations({
   distanceMode = "soft_target",
 }) {
   const normalizedDates = expandDateRange(dates);
-  const resolvedStart = await resolvePoint(start, "Trastevere");
-  const resolvedEnd = await resolvePoint(end, "Trastevere");
   const pulseByDate = Object.fromEntries(
     normalizedDates.map((date) => [date, getCityPulse(date)]),
   );
@@ -1339,7 +3246,53 @@ async function generateRecommendations({
       modifier,
     }).catch(() => ({})),
   ]);
+  const startIsAuto = isAutoPointInput(start);
+  const endIsAuto = isAutoPointInput(end);
+  let resolvedStart = startIsAuto ? null : await resolvePoint(start, neutralFallbackLabel);
+  let resolvedEnd = endIsAuto ? null : await resolvePoint(end, neutralFallbackLabel);
+  let resolvedAutoShape = null;
+
+  if (startIsAuto && endIsAuto) {
+    const autoAnchors = resolveAutoAnchors({
+      pulseByDate,
+      liveEventsByDate,
+      preferences,
+      optimizerMode,
+      modifier,
+      targetKm: walkingKmTarget,
+      distanceMode,
+    });
+    resolvedStart = autoAnchors.start;
+    resolvedEnd = autoAnchors.end;
+    resolvedAutoShape = autoAnchors.shape;
+  } else if (startIsAuto) {
+    resolvedStart = resolveAutoPoint({
+      role: "start",
+      pairedPoint: resolvedEnd,
+      pulseByDate,
+      liveEventsByDate,
+      preferences,
+      optimizerMode,
+      modifier,
+      targetKm: walkingKmTarget,
+      distanceMode,
+    });
+  } else if (endIsAuto) {
+    resolvedEnd = resolveAutoPoint({
+      role: "end",
+      pairedPoint: resolvedStart,
+      pulseByDate,
+      liveEventsByDate,
+      preferences,
+      optimizerMode,
+      modifier,
+      targetKm: walkingKmTarget,
+      distanceMode,
+    });
+  }
+  const manualAnchorsLocked = !startIsAuto && !endIsAuto;
   const usedTemplateIds = new Set();
+  const usedPrimaryRoutes = [];
 
   const days = normalizedDates.map((date) => {
     const weekday = weekdayFromDate(date);
@@ -1356,13 +3309,22 @@ async function generateRecommendations({
           resolvedStart,
           resolvedEnd,
           walkingKmTarget,
+          preferences,
+          optimizerMode,
+          modifier,
+          distanceMode,
+          liveEvents,
+          {
+            manualAnchorsLocked,
+            resolvedAutoShape,
+          },
         );
         const openingWarnings = buildOpeningWarnings(
-          route.main_stops.map((stop) => findItemByName(stop.id)).filter(Boolean),
+          route.main_stops.map((stop) => resolveRouteStopData(stop)).filter(Boolean),
           weekday,
         );
         const routeStops = route.main_stops
-          .map((stop) => findItemByName(stop.id))
+          .map((stop) => resolveRouteStopData(stop))
           .filter(Boolean);
         const venueSpecials = buildVenueSpecials(routeStops, weekday);
         const scoring = routeScore({
@@ -1380,6 +3342,7 @@ async function generateRecommendations({
           modifier,
           distanceMode,
           routeStops,
+          manualAnchorsLocked,
         });
 
         return {
@@ -1413,8 +3376,7 @@ async function generateRecommendations({
       })
       .sort((a, b) => b.score - a.score);
 
-    const primary = ranked[0];
-    const alternatives = ranked.slice(1, 3);
+    const [primary, ...alternatives] = pickDistinctRoutes(ranked, usedPrimaryRoutes, 3);
     const annotatedLiveEvents = annotateLiveEventsForRoutes(liveEvents, [
       {
         label: "Huvudrutten",
@@ -1426,6 +3388,7 @@ async function generateRecommendations({
       })),
     ]);
     usedTemplateIds.add(primary.template.id);
+    usedPrimaryRoutes.push(primary.route);
 
     return {
       date,
@@ -1447,6 +3410,7 @@ module.exports = {
   generateRecommendations,
   resolvePoint,
   expandDateRange,
+  buildRouteFromTemplate,
   budgetScore,
   kmScore,
   normalizeBudgetTier,
@@ -1456,4 +3420,5 @@ module.exports = {
   priceLevelWeight,
   profileScore,
   routeScore,
+  routeSimilarity,
 };

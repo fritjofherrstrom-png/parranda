@@ -11,8 +11,9 @@ const {
   priceLevelWeight,
   profileScore,
   routeScore,
+  routeSimilarity,
 } = require("../server/route-engine");
-const { routeTemplates } = require("../server/catalog");
+const { findItemByName, routeTemplates } = require("../server/catalog");
 const { resetLiveEventsCache } = require("../server/live-events");
 
 const originalFetch = global.fetch;
@@ -73,6 +74,27 @@ function sampleRoute(template) {
       },
     ],
   };
+}
+
+function haversineKm(a, b) {
+  const toRad = (value) => (value * Math.PI) / 180;
+  const earthRadiusKm = 6371;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+
+  const hav =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+
+  return 2 * earthRadiusKm * Math.atan2(Math.sqrt(hav), Math.sqrt(1 - hav));
+}
+
+function nearestDistanceToRouteKm(route, item) {
+  return route.map_route_points.reduce((closest, point) => {
+    return Math.min(closest, haversineKm(point, item));
+  }, Number.POSITIVE_INFINITY);
 }
 
 test.after(() => {
@@ -187,6 +209,47 @@ test("modifier och budget tier normaliseras från nya UI-värden", () => {
   assert.equal(normalizeModifier(null, "culture-mode"), "culture");
 });
 
+test("auto-läget bygger en riktig auto-loop för kyrkor utan dold preset-injektion", async () => {
+  global.fetch = createWeatherFetch({
+    "2026-04-18": 0,
+  });
+
+  const result = await generateRecommendations({
+    dates: ["2026-04-18"],
+    start: { type: "auto" },
+    end: { type: "auto" },
+    walkingKmTarget: 6,
+    preferences: ["kyrkor"],
+    optimizerMode: "church-crawl",
+  });
+
+  assert.equal(result.resolved_start.source, "auto");
+  assert.equal(result.resolved_end.source, "auto");
+  assert.ok(result.resolved_start.label);
+  assert.ok(result.resolved_end.label);
+  assert.ok(result.days[0].primary_route.main_stops.every((stop) => stop.tags.includes("kyrkor")));
+});
+
+test("auto-läget kan nu välja en riktig båge för öppna kvällar med no-limit", async () => {
+  global.fetch = createWeatherFetch({
+    "2026-04-19": 0,
+  });
+
+  const result = await generateRecommendations({
+    dates: ["2026-04-19"],
+    start: { type: "auto" },
+    end: { type: "auto" },
+    walkingKmTarget: 14,
+    preferences: ["öl", "vin", "hidden gems", "nattliv", "kväll", "party"],
+    optimizerMode: "bar-hop",
+    modifier: "party",
+    distanceMode: "no_limit",
+  });
+
+  assert.equal(result.days[0].primary_route.route_shape, "arc");
+  assert.notEqual(result.resolved_start.label, result.resolved_end.label);
+});
+
 test("bar-hop mellan Trastevere och Monti ger nu flera stopp utanför Trastevere", async () => {
   global.fetch = createWeatherFetch({
     "2026-04-18": 0,
@@ -252,6 +315,76 @@ test("Garbatella -> Testaccio håller sig nu i södra Rom när tempot är low-ke
   assert.ok(route.main_stops.some((stop) => stop.area === "Testaccio" || stop.area === "Ostiense"));
   assert.ok(!route.main_stops.some((stop) => stop.area === "Trastevere"));
   assert.match(route.area_note || "", /(södra Rom|Garbatella)/i);
+});
+
+test("Trastevere -> San Lorenzo ger nu en riktig väst-till-öst-båge", async () => {
+  global.fetch = createWeatherFetch({
+    "2026-04-19": 0,
+  });
+
+  const result = await generateRecommendations({
+    dates: ["2026-04-19"],
+    start: { type: "preset", label: "Trastevere" },
+    end: { type: "preset", label: "San Lorenzo" },
+    walkingKmTarget: 9,
+    preferences: ["öl", "vin", "hidden gems", "nattliv", "kväll"],
+    optimizerMode: "bar-hop",
+  });
+
+  const route = result.days[0].primary_route;
+
+  assert.equal(route.route_shape, "arc");
+  assert.equal(result.resolved_start.label, "Trastevere");
+  assert.equal(result.resolved_end.label, "San Lorenzo");
+  assert.equal(route.main_stops[0].area, "Trastevere");
+  assert.ok(route.main_stops.some((stop) => stop.area === "San Lorenzo"));
+  assert.match(route.geo_fit_note || "", /(San Lorenzo|Trastevere)/i);
+});
+
+test("alternativrutterna hålls tydligare isär än tidigare", async () => {
+  global.fetch = createWeatherFetch({
+    "2026-04-19": 0,
+  });
+
+  const result = await generateRecommendations({
+    dates: ["2026-04-19"],
+    start: { type: "preset", label: "Garbatella" },
+    end: { type: "preset", label: "Testaccio" },
+    walkingKmTarget: 6,
+    preferences: ["öl", "vin", "mat", "hidden gems", "low-key"],
+    optimizerMode: "bar-hop",
+    modifier: "low_key",
+  });
+
+  result.days[0].alternatives.forEach((route) => {
+    assert.ok(routeSimilarity(result.days[0].primary_route, route) < 8.4);
+  });
+});
+
+test("mentions följer faktiska stopp nära den genererade rutten", async () => {
+  global.fetch = createWeatherFetch({
+    "2026-04-18": 0,
+  });
+
+  const result = await generateRecommendations({
+    dates: ["2026-04-18"],
+    start: { type: "preset", label: "Trastevere" },
+    end: { type: "preset", label: "Monti" },
+    walkingKmTarget: 8,
+    preferences: ["öl", "vin", "hidden gems", "nattliv", "kväll"],
+    optimizerMode: "bar-hop",
+  });
+
+  const route = result.days[0].primary_route;
+
+  assert.ok(route.bar_mentions.length > 0);
+  assert.ok(route.hidden_mentions.length > 0);
+
+  [...route.bar_mentions, ...route.hidden_mentions].forEach((mention) => {
+    const item = findItemByName(mention);
+    assert.ok(item, `expected mention "${mention}" to resolve to a catalog item`);
+    assert.ok(nearestDistanceToRouteKm(route, item) <= 0.7);
+  });
 });
 
 test("fler datum ger dedupe så att samma huvuddag inte återkommer direkt", async () => {
@@ -372,4 +505,95 @@ test("officiella live-events vävs in per dag när källan svarar", async () => 
   assert.ok(result.days[0].live_events[0].best_route_label);
   assert.ok(result.days[0].live_events[0].route_fit_note);
   assert.ok(typeof result.days[0].live_events[0].lat === "number");
+});
+
+test("live-event kan bli ett faktiskt stopp i huvudrutten när det passar kvällen", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return weatherResponse({
+        daily: {
+          time: ["2026-04-16"],
+          weathercode: [0],
+          temperature_2m_max: [23],
+        },
+      });
+    }
+
+    if (parsed.hostname === "www.turismoroma.it") {
+      return {
+        ok: true,
+        async text() {
+          return `
+            <div class="views-row views-row-1">
+              <div class="news_info">
+                <div class="news_titolo_container">
+                  <div class="news_titolo">
+                    <div class="field-content">
+                      <a href="/en/events/teatro-india-night">Teatro India Night</a>
+                    </div>
+                  </div>
+                </div>
+                <div class="news_date">
+                  <div class="field-content">
+                    <span class="date-display-start">from&nbsp;16-04-2026</span>
+                    <span class="date-display-end">&nbsp;to&nbsp;16-04-2026</span>
+                  </div>
+                </div>
+                <div class="news_tipo">
+                  <div class="field-content"><a href="/en/tipo-evento/events">Events</a></div>
+                </div>
+                <div class="news_sedi">
+                  <div class="field-content"><a href="/en/places/teatro-india">Teatro di Roma - Teatro India</a></div>
+                </div>
+                <div class="news_indirizzo">Lungotevere Vittorio Gassman</div>
+                <div class="news_text">
+                  <div class="field-content"><p>Guided show visits for a cultural evening in Rome.</p></div>
+                </div>
+                <a class="news_button_acquista" href="https://tickets.example.com/india" target="_blank">
+                  Buy
+                </a>
+              </div>
+            </div>
+          `;
+        },
+      };
+    }
+
+    if (parsed.hostname === "nominatim.openstreetmap.org") {
+      return {
+        ok: true,
+        async json() {
+          return [
+            {
+              display_name: "Teatro di Roma - Teatro India, Rome, Italy",
+              lat: "41.8704",
+              lon: "12.4674",
+              type: "theatre",
+            },
+          ];
+        },
+      };
+    }
+
+    throw new Error(`Unexpected fetch in live route stop test: ${url}`);
+  };
+
+  const result = await generateRecommendations({
+    dates: ["2026-04-16"],
+    start: { type: "preset", label: "Trastevere" },
+    end: { type: "preset", label: "Trastevere" },
+    walkingKmTarget: 8,
+    preferences: ["kultur", "nattliv"],
+    optimizerMode: "bar-hop",
+    modifier: "evening",
+  });
+
+  assert.ok(
+    result.days[0].primary_route.main_stops.some(
+      (stop) => stop.is_live_event && stop.label === "Teatro India Night",
+    ),
+  );
+  assert.match(result.days[0].primary_route.live_event_fit_note || "", /ligger inne i själva rutten/i);
 });
