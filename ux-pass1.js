@@ -713,7 +713,7 @@
     heroQuickPlannerShell.className = "hero-planner-inline";
     heroQuickPlannerShell.innerHTML = `
       <div class="hero-planner-inline-head">
-        <strong>Börja som i Lovable-flödet: välj bas och känsla direkt.</strong>
+        <strong>Välj bas och känsla direkt.</strong>
         <p>Hero-sektionen ska inte bara sälja in Parranda. Den ska sätta riktningen för dagen redan här.</p>
       </div>
       <div class="hero-signal-row">
