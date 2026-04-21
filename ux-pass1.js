@@ -29,6 +29,9 @@
   const plannerLaunchSummary = document.getElementById("plannerLaunchSummary");
   const routePlannerOpenButton = document.getElementById("routePlannerOpenButton");
 
+  const heroCopy = document.querySelector(".hero-copy");
+  const heroActions = document.querySelector(".hero-actions");
+  const heroPlannerButton = document.getElementById("heroPlannerButton");
   const heroPanel = document.querySelector(".hero-panel");
   const heroWildcardLabel = document.getElementById("heroWildcardLabel");
   const heroWildcardMeta = document.getElementById("heroWildcardMeta");
@@ -55,10 +58,45 @@
     },
   };
 
+  const quickBaseMeta = {
+    auto: { label: "Låt Parranda välja", plannerLabel: null },
+    trastevere: { label: "Trastevere", plannerLabel: "Trastevere" },
+    centro: { label: "Centro Storico", plannerLabel: "Centro Storico" },
+    monti: { label: "Monti", plannerLabel: "Monti" },
+    south: { label: "Ostiense/Garbatella", plannerLabel: "Ostiense/Garbatella" },
+    east: { label: "Pigneto/San Lorenzo", plannerLabel: "Pigneto/San Lorenzo" },
+  };
+
+  const quickVibeMeta = {
+    culture: {
+      label: "Kultur",
+      preferences: ["kultur", "kyrkor", "hidden gems"],
+    },
+    food: {
+      label: "Mat",
+      preferences: ["mat", "vin", "hidden gems"],
+    },
+    wine: {
+      label: "Vin",
+      preferences: ["vin", "mat", "low-key", "hidden gems"],
+    },
+    night: {
+      label: "Nattliv",
+      preferences: ["nattliv", "vin", "cocktail", "kväll"],
+    },
+    lowkey: {
+      label: "Low-key",
+      preferences: ["low-key", "vin", "kultur", "hidden gems"],
+    },
+  };
+
   let activeDayIntensity = window.__parrandaDayIntensity || "normal";
+  let activeQuickBase = window.__parrandaQuickBase || "auto";
+  let activeQuickVibe = window.__parrandaQuickVibe || "culture";
   let pendingResultFocus = false;
   let resultFocusTimer = null;
   let intensityShell = null;
+  let heroQuickPlannerShell = null;
 
   const style = document.createElement("style");
   style.textContent = `
@@ -154,6 +192,95 @@
 
     .planner-modal-shell.is-auto-mode .planner-home-base-shell .planner-panel-copy {
       max-width: 48ch;
+    }
+
+    .hero-planner-inline {
+      display: grid;
+      gap: 14px;
+      margin-top: 20px;
+      padding: 18px 18px 16px;
+      border-radius: 24px;
+      background: rgba(255, 252, 247, 0.84);
+      box-shadow: 0 16px 34px rgba(69, 35, 13, 0.08);
+      border: 1px solid rgba(108, 74, 46, 0.08);
+      max-width: 760px;
+    }
+
+    .hero-planner-inline-head {
+      display: grid;
+      gap: 4px;
+    }
+
+    .hero-planner-inline-head strong {
+      font-size: 1rem;
+      line-height: 1.1;
+      color: #3b2414;
+    }
+
+    .hero-planner-inline-head p {
+      margin: 0;
+      color: rgba(59, 36, 20, 0.74);
+      font-size: 0.95rem;
+      line-height: 1.5;
+      max-width: 48ch;
+    }
+
+    .hero-signal-row {
+      display: grid;
+      gap: 8px;
+    }
+
+    .hero-signal-label {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: rgba(59, 36, 20, 0.54);
+    }
+
+    .hero-signal-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .hero-signal-chip {
+      appearance: none;
+      border: 1px solid rgba(108, 74, 46, 0.12);
+      background: rgba(255, 255, 255, 0.88);
+      color: #3b2414;
+      border-radius: 999px;
+      padding: 10px 14px;
+      font: inherit;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+    }
+
+    .hero-signal-chip.is-active {
+      border-color: rgba(175, 77, 36, 0.4);
+      background: rgba(215, 160, 77, 0.14);
+      transform: translateY(-1px);
+      box-shadow: 0 10px 18px rgba(69, 35, 13, 0.06);
+    }
+
+    .hero-planner-inline-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding-top: 4px;
+    }
+
+    .hero-planner-inline-summary {
+      margin: 0;
+      font-size: 0.92rem;
+      line-height: 1.45;
+      color: rgba(59, 36, 20, 0.72);
+      max-width: 42ch;
+    }
+
+    .hero-planner-inline .primary-button {
+      white-space: nowrap;
     }
 
     .planner-intensity-shell {
@@ -274,6 +401,27 @@
       box-shadow: 0 14px 34px rgba(69, 35, 13, 0.08);
     }
 
+    .planner-launch-strip.is-quick-recap {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .planner-launch-strip.is-quick-recap .planner-launch-copy {
+      display: grid;
+      gap: 4px;
+    }
+
+    .planner-launch-strip.is-quick-recap .planner-launch-copy h2 {
+      font-size: clamp(1.25rem, 2vw, 1.5rem);
+      line-height: 1.02;
+    }
+
+    .planner-launch-strip.is-quick-recap .planner-launch-note {
+      max-width: 40ch;
+    }
+
     .planner-launch-copy h2 {
       font-size: clamp(1.6rem, 2.4vw, 2rem);
       line-height: 1;
@@ -335,8 +483,10 @@
         width: 100%;
       }
 
-      .planner-launch-strip {
+      .planner-launch-strip,
+      .planner-launch-strip.is-quick-recap {
         align-items: stretch;
+        flex-direction: column;
       }
 
       .planner-launch-strip .primary-button {
@@ -361,9 +511,27 @@
       .planner-intensity-button {
         min-height: 0;
       }
+
+      .hero-planner-inline-foot {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .hero-planner-inline .primary-button {
+        width: 100%;
+      }
     }
   `;
   document.head.appendChild(style);
+
+  function dispatchNativeChange(element) {
+    if (!element) {
+      return;
+    }
+
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  }
 
   function syncPointInput(modeSelect, presetField, customField) {
     const mode = modeSelect?.value || "auto";
@@ -395,21 +563,23 @@
 
   function applyLandingHierarchyPass() {
     if (plannerLaunchEyebrow) {
-      plannerLaunchEyebrow.textContent = "NÄSTA STEG";
+      plannerLaunchEyebrow.textContent = "FORTSÄTT";
     }
 
     if (plannerLaunchTitle) {
-      plannerLaunchTitle.textContent = "Öppna planner";
+      plannerLaunchTitle.textContent = "Finputsning i planner";
     }
 
     if (plannerLaunchSummary) {
       plannerLaunchSummary.textContent =
-        "När du vill gå från inspiration till en faktisk dag väljer du datum, bas och vibe här. Resultatet ska kännas som ett upplägg, inte som ännu en lista.";
+        "Hero-valen sätter riktningen. Här går du vidare om du vill finjustera datum, bas, tempo och exakta ankare.";
     }
 
     if (routePlannerOpenButton) {
-      routePlannerOpenButton.textContent = "Öppna planner";
+      routePlannerOpenButton.textContent = "Fortsätt i planner";
     }
+
+    plannerLaunchStrip?.classList.add("is-quick-recap");
 
     if (heroWildcardLabel) {
       heroWildcardLabel.textContent = "SNABB IDÉ";
@@ -427,6 +597,167 @@
     if (heroWildcardShuffleButton) {
       heroWildcardShuffleButton.textContent = "Ny idé";
     }
+  }
+
+  function quickBaseLabel() {
+    return quickBaseMeta[activeQuickBase]?.label || quickBaseMeta.auto.label;
+  }
+
+  function quickVibeLabel() {
+    return quickVibeMeta[activeQuickVibe]?.label || quickVibeMeta.culture.label;
+  }
+
+  function syncPlannerLaunchRecap() {
+    if (plannerLaunchSummary) {
+      plannerLaunchSummary.textContent = `Utgår från ${quickBaseLabel()} och lutar mot ${quickVibeLabel().toLowerCase()}. Öppna plannern om du vill justera resten.`;
+    }
+  }
+
+  function renderQuickPlannerState() {
+    if (heroQuickPlannerShell) {
+      heroQuickPlannerShell.querySelectorAll("[data-quick-base]").forEach((button) => {
+        button.classList.toggle("is-active", button.dataset.quickBase === activeQuickBase);
+      });
+      heroQuickPlannerShell.querySelectorAll("[data-quick-vibe]").forEach((button) => {
+        button.classList.toggle("is-active", button.dataset.quickVibe === activeQuickVibe);
+      });
+      const summary = heroQuickPlannerShell.querySelector(".hero-planner-inline-summary");
+      if (summary) {
+        summary.textContent = `Bas: ${quickBaseLabel()} • Fokus: ${quickVibeLabel()}. Det här skickas vidare in i plannern och blir första versionen av dagen.`;
+      }
+    }
+
+    syncPlannerLaunchRecap();
+  }
+
+  function setQuickBase(nextBase) {
+    activeQuickBase = quickBaseMeta[nextBase] ? nextBase : "auto";
+    window.__parrandaQuickBase = activeQuickBase;
+    renderQuickPlannerState();
+  }
+
+  function setQuickVibe(nextVibe) {
+    activeQuickVibe = quickVibeMeta[nextVibe] ? nextVibe : "culture";
+    window.__parrandaQuickVibe = activeQuickVibe;
+    renderQuickPlannerState();
+  }
+
+  function applyQuickVibeToPreferences(vibeKey) {
+    const suggested = new Set((quickVibeMeta[vibeKey] || quickVibeMeta.culture).preferences);
+    const checkboxes = routePlannerForm.querySelectorAll('.preference-chip input[type="checkbox"]');
+
+    checkboxes.forEach((checkbox) => {
+      const value = checkbox.value;
+      if (suggested.has(value)) {
+        checkbox.checked = true;
+      } else if (["party", "cocktail", "kyrkor", "low-key", "kväll", "nattliv"].includes(value)) {
+        checkbox.checked = suggested.has(value);
+      }
+    });
+  }
+
+  function selectDistrictButton(containerId, desiredLabel) {
+    if (!desiredLabel) {
+      return false;
+    }
+
+    const container = document.getElementById(containerId);
+    if (!container) {
+      return false;
+    }
+
+    const match = [...container.querySelectorAll("button")].find((button) =>
+      button.textContent?.trim().toLowerCase().includes(desiredLabel.trim().toLowerCase()),
+    );
+
+    if (!match) {
+      return false;
+    }
+
+    match.click();
+    return true;
+  }
+
+  function applyQuickSelectionsToPlanner() {
+    if (homeBaseModeSelect) {
+      if (activeQuickBase === "auto") {
+        homeBaseModeSelect.value = "auto";
+        dispatchNativeChange(homeBaseModeSelect);
+      } else {
+        homeBaseModeSelect.value = "preset";
+        dispatchNativeChange(homeBaseModeSelect);
+        window.setTimeout(() => {
+          selectDistrictButton("homeBaseDistrictButtons", quickBaseMeta[activeQuickBase]?.plannerLabel);
+        }, 60);
+      }
+    }
+
+    applyQuickVibeToPreferences(activeQuickVibe);
+
+    if (routeMatchSummary) {
+      routeMatchSummary.textContent = `Snabbval aktiva: ${quickBaseLabel()} • ${quickVibeLabel()} • ${intensityMeta[activeDayIntensity].label}. Du kan fortfarande finjustera allt i plannern.`;
+    }
+  }
+
+  function openPlannerFromHeroInline() {
+    applyQuickSelectionsToPlanner();
+    heroPlannerButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  }
+
+  function ensureHeroQuickPlanner() {
+    if (!heroCopy || !heroActions || heroQuickPlannerShell) {
+      return;
+    }
+
+    heroQuickPlannerShell = document.createElement("section");
+    heroQuickPlannerShell.className = "hero-planner-inline";
+    heroQuickPlannerShell.innerHTML = `
+      <div class="hero-planner-inline-head">
+        <strong>Börja som i Lovable-flödet: välj bas och känsla direkt.</strong>
+        <p>Hero-sektionen ska inte bara sälja in Parranda. Den ska sätta riktningen för dagen redan här.</p>
+      </div>
+      <div class="hero-signal-row">
+        <span class="hero-signal-label">01 • Var i Rom vill du utgå från?</span>
+        <div class="hero-signal-buttons hero-signal-buttons-base"></div>
+      </div>
+      <div class="hero-signal-row">
+        <span class="hero-signal-label">02 • Vad är du mest sugen på?</span>
+        <div class="hero-signal-buttons hero-signal-buttons-vibe"></div>
+      </div>
+      <div class="hero-planner-inline-foot">
+        <p class="hero-planner-inline-summary"></p>
+        <button type="button" class="primary-button hero-planner-inline-button">Öppna planner med dessa val</button>
+      </div>
+    `;
+
+    const baseRow = heroQuickPlannerShell.querySelector(".hero-signal-buttons-base");
+    Object.entries(quickBaseMeta).forEach(([key, meta]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "hero-signal-chip";
+      button.dataset.quickBase = key;
+      button.textContent = meta.label;
+      button.addEventListener("click", () => setQuickBase(key));
+      baseRow.appendChild(button);
+    });
+
+    const vibeRow = heroQuickPlannerShell.querySelector(".hero-signal-buttons-vibe");
+    Object.entries(quickVibeMeta).forEach(([key, meta]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "hero-signal-chip";
+      button.dataset.quickVibe = key;
+      button.textContent = meta.label;
+      button.addEventListener("click", () => setQuickVibe(key));
+      vibeRow.appendChild(button);
+    });
+
+    heroQuickPlannerShell
+      .querySelector(".hero-planner-inline-button")
+      ?.addEventListener("click", openPlannerFromHeroInline);
+
+    heroActions.insertAdjacentElement("afterend", heroQuickPlannerShell);
+    renderQuickPlannerState();
   }
 
   function routeIntensityMetrics(route) {
@@ -612,6 +943,7 @@
     activeDayIntensity = intensityMeta[nextIntensity] ? nextIntensity : "normal";
     window.__parrandaDayIntensity = activeDayIntensity;
     syncIntensityButtons();
+    renderQuickPlannerState();
 
     if (routeMatchSummary) {
       routeMatchSummary.textContent = `Dagstempo: ${intensityMeta[activeDayIntensity].label}. ${intensityMeta[activeDayIntensity].summary}`;
@@ -739,6 +1071,9 @@
     window.__parrandaIntensityFetchPatched = true;
   }
 
+  heroPlannerButton?.addEventListener("click", applyQuickSelectionsToPlanner, true);
+  routePlannerOpenButton?.addEventListener("click", applyQuickSelectionsToPlanner, true);
+
   plannerModeAutoButton?.addEventListener("click", () => {
     window.setTimeout(syncPlannerUxPass, 0);
   });
@@ -798,8 +1133,10 @@
 
   syncPlannerUxPass();
   applyLandingHierarchyPass();
+  ensureHeroQuickPlanner();
   ensureIntensityUi();
   patchFetchForIntensity();
   syncIntensityButtons();
+  renderQuickPlannerState();
   window.setTimeout(syncPlannerUxPass, 120);
 })();
