@@ -71,6 +71,9 @@
   let heroQuickPlannerShell = null;
   let resultRecapStrip = null;
   let dateRangeShell = null;
+  let heroBaseStatus = "Tryck på Min plats om du vill att Parranda ska be om platsåtkomst direkt.";
+  let heroBaseStatusTone = "info";
+  let isResolvingHeroLocation = false;
 
   const style = document.createElement("style");
   style.textContent = `
@@ -109,8 +112,30 @@
     .hero-signal-chip { appearance:none; border:1px solid rgba(108,74,46,0.12); background:rgba(255,255,255,0.88); color:#3b2414; border-radius:999px; padding:10px 14px; font:inherit; font-size:0.95rem; cursor:pointer; transition:border-color 120ms ease, background 120ms ease, transform 120ms ease; }
     .hero-signal-chip.is-active { border-color:rgba(175,77,36,0.4); background:rgba(215,160,77,0.14); transform:translateY(-1px); box-shadow:0 10px 18px rgba(69,35,13,0.06); }
     .hero-signal-chip[data-quick-base="current"] { font-weight: 700; }
+    .hero-signal-chip.is-loading {
+      opacity: 0.82;
+      pointer-events: none;
+      position: relative;
+    }
+    .hero-signal-chip.is-loading::after {
+      content: "";
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      border: 2px solid rgba(175,77,36,0.2);
+      border-top-color: rgba(175,77,36,0.8);
+      display: inline-block;
+      margin-left: 8px;
+      vertical-align: -2px;
+      animation: parranda-spin 0.8s linear infinite;
+    }
+    @keyframes parranda-spin {
+      to { transform: rotate(360deg); }
+    }
     .hero-planner-inline-foot { display:flex; align-items:center; justify-content:space-between; gap:12px; padding-top:4px; }
     .hero-planner-inline-summary { margin:0; font-size:0.92rem; line-height:1.45; color:rgba(59,36,20,0.72); max-width:46ch; }
+    .hero-planner-inline-summary[data-tone="success"] { color: #35592b; }
+    .hero-planner-inline-summary[data-tone="warning"] { color: #8a3f1f; }
     .planner-date-range-shell { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border-radius:16px; border:1px solid rgba(108,74,46,0.08); background:rgba(255,251,246,0.8); }
     .planner-date-range-shell strong { display:block; font-size:0.9rem; color:#3b2414; }
     .planner-date-range-shell p { margin:2px 0 0; font-size:0.88rem; color:rgba(59,36,20,0.7); }
@@ -186,6 +211,60 @@
     return quickVibeMeta[activeQuickVibe]?.label || quickVibeMeta.blend.label;
   }
 
+  function setHeroBaseStatus(message, tone = "info") {
+    heroBaseStatus = message;
+    heroBaseStatusTone = tone;
+    renderQuickPlannerState();
+  }
+
+  function setHeroLocationLoading(isLoading) {
+    isResolvingHeroLocation = isLoading;
+    if (!heroQuickPlannerShell) return;
+    const currentButton = heroQuickPlannerShell.querySelector('[data-quick-base="current"]');
+    if (!currentButton) return;
+    currentButton.classList.toggle("is-loading", isLoading);
+    currentButton.disabled = isLoading;
+  }
+
+  async function resolveHeroCurrentLocation() {
+    if (typeof window.ensureCurrentLocation !== "function") {
+      setHeroBaseStatus("Platsåtkomst är inte tillgänglig här just nu. Parranda kan fortfarande välja en smart bas åt dig.", "warning");
+      activeQuickBase = "auto";
+      window.__parrandaQuickBase = activeQuickBase;
+      renderQuickPlannerState();
+      return;
+    }
+
+    setHeroLocationLoading(true);
+    setHeroBaseStatus("Begär platsåtkomst…", "info");
+
+    try {
+      await window.ensureCurrentLocation();
+      setHeroBaseStatus("Platsåtkomst klar. Parranda använder nu din plats som bas om du fortsätter härifrån.", "success");
+      if (homeBaseModeSelect) {
+        homeBaseModeSelect.value = "current_location";
+        dispatchNativeChange(homeBaseModeSelect);
+      }
+      if (routeMatchSummary) {
+        routeMatchSummary.textContent = "Min plats är nu aktiv som boendebas. Fortsätt i plannern eller bygg direkt härifrån.";
+      }
+    } catch (_error) {
+      activeQuickBase = "auto";
+      window.__parrandaQuickBase = activeQuickBase;
+      setHeroBaseStatus("Platsåtkomst nekades eller misslyckades. Parranda faller tillbaka till att välja en smart bas själv.", "warning");
+      if (homeBaseModeSelect) {
+        homeBaseModeSelect.value = "auto";
+        dispatchNativeChange(homeBaseModeSelect);
+      }
+      if (routeMatchSummary) {
+        routeMatchSummary.textContent = "Platsåtkomst gick inte igenom. Parranda står kvar i auto-läge och väljer en smart bas själv.";
+      }
+    } finally {
+      setHeroLocationLoading(false);
+      renderQuickPlannerState();
+    }
+  }
+
   function applyQuickVibeToPreferences(vibeKey) {
     const suggested = new Set((quickVibeMeta[vibeKey] || quickVibeMeta.blend).preferences);
     const checkboxes = routePlannerForm.querySelectorAll('.preference-chip input[type="checkbox"]');
@@ -227,14 +306,27 @@
     });
     const summary = heroQuickPlannerShell.querySelector(".hero-planner-inline-summary");
     if (summary) {
-      summary.textContent = `Bas: ${quickBaseLabel()} • Fokus: ${quickVibeLabel()} • Tempo: ${intensityMeta[activeDayIntensity].label}.`;
+      summary.textContent = heroBaseStatus || `Bas: ${quickBaseLabel()} • Fokus: ${quickVibeLabel()} • Tempo: ${intensityMeta[activeDayIntensity].label}.`;
+      summary.dataset.tone = heroBaseStatusTone;
     }
     updateResultRecap();
   }
 
-  function setQuickBase(nextBase) {
+  async function setQuickBase(nextBase) {
     activeQuickBase = quickBaseMeta[nextBase] ? nextBase : "current";
     window.__parrandaQuickBase = activeQuickBase;
+    if (activeQuickBase === "current") {
+      heroBaseStatus = "Min plats vald. Jag ber om platsåtkomst direkt så att dagen kan utgå från där du faktiskt är.";
+      heroBaseStatusTone = "info";
+      renderQuickPlannerState();
+      await resolveHeroCurrentLocation();
+      return;
+    }
+    if (activeQuickBase === "auto") {
+      setHeroBaseStatus("Parranda väljer själv en smart bas för dagen. Du kan alltid byta till Min plats eller ett kvarter senare.", "info");
+    } else {
+      setHeroBaseStatus(`Bas låst till ${quickBaseLabel()}. Parranda använder nu kvarteret som utgångspunkt för dagen.`, "success");
+    }
     renderQuickPlannerState();
   }
 
@@ -278,7 +370,9 @@
       button.className = "hero-signal-chip";
       button.dataset.quickBase = key;
       button.textContent = meta.label;
-      button.addEventListener("click", () => setQuickBase(key));
+      button.addEventListener("click", async () => {
+        await setQuickBase(key);
+      });
       baseRow.appendChild(button);
     });
     const vibeRow = heroQuickPlannerShell.querySelector(".hero-signal-buttons-vibe");
@@ -380,6 +474,9 @@
     activeDayIntensity = intensityMeta[nextIntensity] ? nextIntensity : "normal";
     window.__parrandaDayIntensity = activeDayIntensity;
     syncIntensityButtons();
+    if (!heroBaseStatus || heroBaseStatusTone === "info") {
+      heroBaseStatus = `Bas: ${quickBaseLabel()} • Fokus: ${quickVibeLabel()} • Tempo: ${intensityMeta[activeDayIntensity].label}.`;
+    }
     renderQuickPlannerState();
   }
 
