@@ -23,6 +23,18 @@
   const routePlanStickyButton = document.getElementById("routePlanStickyButton");
   const routeMatchSummary = document.getElementById("routeMatchSummary");
 
+  const plannerLaunchStrip = document.querySelector(".planner-launch-strip");
+  const plannerLaunchEyebrow = plannerLaunchStrip?.querySelector(".eyebrow");
+  const plannerLaunchTitle = plannerLaunchStrip?.querySelector("h2");
+  const plannerLaunchSummary = document.getElementById("plannerLaunchSummary");
+  const routePlannerOpenButton = document.getElementById("routePlannerOpenButton");
+
+  const heroPanel = document.querySelector(".hero-panel");
+  const heroWildcardLabel = document.getElementById("heroWildcardLabel");
+  const heroWildcardMeta = document.getElementById("heroWildcardMeta");
+  const heroWildcardApplyButton = document.getElementById("heroWildcardApplyButton");
+  const heroWildcardShuffleButton = document.getElementById("heroWildcardShuffleButton");
+
   if (!plannerModalShell || !routePlannerForm || !routeResults) {
     return;
   }
@@ -123,10 +135,61 @@
       max-width: 48ch;
     }
 
+    .hero-panel {
+      width: min(320px, 100%);
+      padding: 18px;
+      border-radius: 24px;
+      transform: none;
+      background:
+        linear-gradient(180deg, rgba(37, 21, 14, 0.72), rgba(37, 21, 14, 0.82)),
+        linear-gradient(135deg, #c96a34, #8d3220 62%, #3f3028);
+    }
+
+    .hero-panel h2 {
+      font-size: clamp(2rem, 3vw, 2.5rem);
+      line-height: 0.98;
+    }
+
+    .hero-panel-meta {
+      font-size: 0.9rem;
+      line-height: 1.55;
+      color: rgba(255, 247, 239, 0.76);
+    }
+
+    .hero-panel-actions {
+      gap: 10px;
+    }
+
+    .hero-panel .secondary-button,
+    .hero-panel .ghost-button {
+      padding: 10px 14px;
+      min-width: 0;
+    }
+
+    .planner-launch-strip {
+      padding: 16px 18px;
+      border-radius: 22px;
+      background: rgba(255, 252, 247, 0.72);
+      box-shadow: 0 14px 34px rgba(69, 35, 13, 0.08);
+    }
+
+    .planner-launch-copy h2 {
+      font-size: clamp(1.6rem, 2.4vw, 2rem);
+      line-height: 1;
+    }
+
+    .planner-launch-note {
+      max-width: 44ch;
+    }
+
     @media (max-width: 860px) {
       .planner-modal-shell {
         padding-left: 16px;
         padding-right: 16px;
+      }
+
+      .hero-panel {
+        width: 100%;
       }
     }
 
@@ -170,6 +233,25 @@
       .planner-modal-shell .route-builder-actions-final .ghost-button {
         width: 100%;
       }
+
+      .planner-launch-strip {
+        align-items: stretch;
+      }
+
+      .planner-launch-strip .primary-button {
+        width: 100%;
+      }
+
+      .hero-panel-actions {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .hero-panel .secondary-button,
+      .hero-panel .ghost-button {
+        width: 100%;
+      }
     }
   `;
   document.head.appendChild(style);
@@ -203,6 +285,42 @@
     syncPointInput(homeBaseModeSelect, homeBasePresetField, homeBaseCustomField);
     syncPointInput(startModeSelect, startPresetField, startCustomField);
     syncPointInput(endModeSelect, endPresetField, endCustomField);
+  }
+
+  function applyLandingHierarchyPass() {
+    if (plannerLaunchEyebrow) {
+      plannerLaunchEyebrow.textContent = "NÄSTA STEG";
+    }
+
+    if (plannerLaunchTitle) {
+      plannerLaunchTitle.textContent = "Öppna planner";
+    }
+
+    if (plannerLaunchSummary) {
+      plannerLaunchSummary.textContent =
+        "När du vill gå från inspiration till en faktisk dag väljer du datum, bas och vibe här. Resultatet ska kännas som ett upplägg, inte som ännu en lista.";
+    }
+
+    if (routePlannerOpenButton) {
+      routePlannerOpenButton.textContent = "Öppna planner";
+    }
+
+    if (heroWildcardLabel) {
+      heroWildcardLabel.textContent = "SNABB IDÉ";
+    }
+
+    if (heroWildcardMeta) {
+      heroWildcardMeta.textContent =
+        "Ett snabbspår om du bara vill få en känsla för kvällen. Plannern är fortfarande huvudvägen till en riktig dag.";
+    }
+
+    if (heroWildcardApplyButton) {
+      heroWildcardApplyButton.textContent = "Lägg i planner";
+    }
+
+    if (heroWildcardShuffleButton) {
+      heroWildcardShuffleButton.textContent = "Ny idé";
+    }
   }
 
   function focusResults() {
@@ -304,5 +422,6 @@
   }
 
   syncPlannerUxPass();
+  applyLandingHierarchyPass();
   window.setTimeout(syncPlannerUxPass, 120);
 })();
