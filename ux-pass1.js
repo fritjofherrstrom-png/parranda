@@ -34,10 +34,31 @@
   const heroWildcardMeta = document.getElementById("heroWildcardMeta");
   const heroWildcardApplyButton = document.getElementById("heroWildcardApplyButton");
   const heroWildcardShuffleButton = document.getElementById("heroWildcardShuffleButton");
+  const plannerKmReadout = document.querySelector(".planner-km-readout");
 
   if (!plannerModalShell || !routePlannerForm || !routeResults) {
     return;
   }
+
+  const intensityMeta = {
+    light: {
+      label: "Lugn",
+      summary: "Färre tydliga stopp och mjukare rytm.",
+    },
+    normal: {
+      label: "Normal",
+      summary: "Balanserad dag med jämn rytm.",
+    },
+    dense: {
+      label: "Tät",
+      summary: "Fler stopp och högre innehållstäthet.",
+    },
+  };
+
+  let activeDayIntensity = window.__parrandaDayIntensity || "normal";
+  let pendingResultFocus = false;
+  let resultFocusTimer = null;
+  let intensityShell = null;
 
   const style = document.createElement("style");
   style.textContent = `
@@ -133,6 +154,70 @@
 
     .planner-modal-shell.is-auto-mode .planner-home-base-shell .planner-panel-copy {
       max-width: 48ch;
+    }
+
+    .planner-intensity-shell {
+      display: grid;
+      gap: 10px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: rgba(255, 251, 246, 0.72);
+      border: 1px solid rgba(108, 74, 46, 0.08);
+    }
+
+    .planner-intensity-head {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .planner-intensity-head strong {
+      font-size: 0.95rem;
+    }
+
+    .planner-intensity-head p {
+      margin: 0;
+      font-size: 0.9rem;
+      color: rgba(59, 36, 20, 0.72);
+      line-height: 1.45;
+    }
+
+    .planner-intensity-buttons {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .planner-intensity-button {
+      appearance: none;
+      border: 1px solid rgba(108, 74, 46, 0.12);
+      background: rgba(255, 255, 255, 0.84);
+      color: #3b2414;
+      border-radius: 14px;
+      padding: 12px 10px;
+      display: grid;
+      gap: 4px;
+      text-align: left;
+      cursor: pointer;
+      transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+    }
+
+    .planner-intensity-button strong {
+      font-size: 0.95rem;
+      line-height: 1;
+    }
+
+    .planner-intensity-button span {
+      font-size: 0.8rem;
+      line-height: 1.35;
+      color: rgba(59, 36, 20, 0.7);
+    }
+
+    .planner-intensity-button.is-active {
+      border-color: rgba(175, 77, 36, 0.38);
+      background: rgba(215, 160, 77, 0.14);
+      box-shadow: 0 10px 18px rgba(69, 35, 13, 0.08);
+      transform: translateY(-1px);
     }
 
     .hero-panel {
@@ -252,12 +337,13 @@
       .hero-panel .ghost-button {
         width: 100%;
       }
+
+      .planner-intensity-buttons {
+        grid-template-columns: 1fr;
+      }
     }
   `;
   document.head.appendChild(style);
-
-  let pendingResultFocus = false;
-  let resultFocusTimer = null;
 
   function syncPointInput(modeSelect, presetField, customField) {
     const mode = modeSelect?.value || "auto";
@@ -323,6 +409,227 @@
     }
   }
 
+  function routeIntensityMetrics(route) {
+    const stopCount = Array.isArray(route?.main_stops) ? route.main_stops.length : 0;
+    const estimatedKm = Number(route?.estimated_km || 0);
+    const longestLegKm = Number(route?.longest_leg_km || 0);
+    const averageLegMinutes = Number(route?.average_leg_minutes || 0);
+    const specialCount = Array.isArray(route?.venue_specials) ? route.venue_specials.length : 0;
+    const stopDensity = estimatedKm > 0 ? stopCount / estimatedKm : 0;
+
+    return {
+      stopCount,
+      estimatedKm,
+      longestLegKm,
+      averageLegMinutes,
+      specialCount,
+      stopDensity,
+      isLoop: route?.route_shape === "loop",
+    };
+  }
+
+  function scoreRouteForIntensity(route, intensity) {
+    const metrics = routeIntensityMetrics(route);
+
+    if (intensity === "light") {
+      return Number(
+        (
+          22 -
+          metrics.stopCount * 3.35 -
+          metrics.estimatedKm * 0.45 -
+          metrics.longestLegKm * 1.5 -
+          metrics.averageLegMinutes * 0.03 -
+          metrics.specialCount * 0.3 +
+          (metrics.isLoop ? 1.2 : 0) +
+          (metrics.estimatedKm <= 8 ? 1.4 : 0) +
+          (metrics.stopCount <= 4 ? 1.6 : 0)
+        ).toFixed(1),
+      );
+    }
+
+    if (intensity === "dense") {
+      return Number(
+        (
+          metrics.stopCount * 3.2 +
+          metrics.stopDensity * 7.2 +
+          metrics.specialCount * 0.45 -
+          metrics.longestLegKm * 1.05 -
+          Math.max(0, 5 - metrics.stopCount) * 1.9 +
+          (metrics.estimatedKm >= 5.5 && metrics.estimatedKm <= 10.5 ? 1.4 : 0)
+        ).toFixed(1),
+      );
+    }
+
+    return Number(
+      (
+        16 -
+        Math.abs(metrics.stopDensity - 0.56) * 6 -
+        Math.abs(metrics.stopCount - 4.8) * 1.4 -
+        metrics.longestLegKm * 0.95
+      ).toFixed(1),
+    );
+  }
+
+  function relabelLiveEvents(liveEvents = [], orderedRoutes = []) {
+    const labelById = new Map();
+
+    if (orderedRoutes[0]) {
+      labelById.set(orderedRoutes[0].id, {
+        label: "Huvudrutten",
+        title: orderedRoutes[0].title,
+      });
+    }
+
+    orderedRoutes.slice(1).forEach((route, index) => {
+      labelById.set(route.id, {
+        label: `Alternativ ${index + 1}`,
+        title: route.title,
+      });
+    });
+
+    return liveEvents.map((event) => {
+      const replacement = labelById.get(event.best_route_id);
+      if (!replacement) {
+        return event;
+      }
+      return {
+        ...event,
+        best_route_label: replacement.label,
+        best_route_title: replacement.title,
+      };
+    });
+  }
+
+  function buildIntensityNote(intensity, route) {
+    const metrics = routeIntensityMetrics(route);
+
+    if (intensity === "light") {
+      return `Intensitet: lugn. Den här versionen håller dagen mjukare med ${metrics.stopCount} tydliga stopp och mindre packat tempo.`;
+    }
+
+    if (intensity === "dense") {
+      return `Intensitet: tät. Den här versionen pressar upp innehållet till ${metrics.stopCount} stopp utan att låta benen dra iväg för mycket.`;
+    }
+
+    return `Intensitet: normal. Den här versionen håller en mer balanserad rytm mellan stopp, benlängd och kvällsenergi.`;
+  }
+
+  function annotatePrimaryRoute(route, intensity) {
+    if (!route) {
+      return route;
+    }
+
+    const note = buildIntensityNote(intensity, route);
+    const currentWhy = String(route.why_recommended || "").trim();
+
+    return {
+      ...route,
+      intensity_mode: intensity,
+      intensity_fit_note: note,
+      why_recommended: currentWhy ? `${currentWhy} ${note}` : note,
+    };
+  }
+
+  function applyIntensityToResult(result, intensity) {
+    if (!result || !Array.isArray(result.days) || !result.days.length || intensity === "normal") {
+      return result;
+    }
+
+    return {
+      ...result,
+      days: result.days.map((day) => {
+        if (!day?.primary_route) {
+          return day;
+        }
+
+        const candidates = [day.primary_route, ...(Array.isArray(day.alternatives) ? day.alternatives : [])];
+        const ordered = [...candidates].sort((left, right) => {
+          const leftScore = scoreRouteForIntensity(left, intensity);
+          const rightScore = scoreRouteForIntensity(right, intensity);
+          if (rightScore !== leftScore) {
+            return rightScore - leftScore;
+          }
+          return Number(right.estimated_km || 0) - Number(left.estimated_km || 0);
+        });
+        const currentPrimaryScore = scoreRouteForIntensity(day.primary_route, intensity);
+        const bestScore = scoreRouteForIntensity(ordered[0], intensity);
+        const shouldPromote = bestScore >= currentPrimaryScore + 0.75;
+        const primaryRoute = shouldPromote ? ordered[0] : day.primary_route;
+        const alternatives = shouldPromote
+          ? ordered.slice(1)
+          : [...candidates.filter((route) => route.id !== day.primary_route.id)].sort((left, right) => {
+              const leftScore = scoreRouteForIntensity(left, intensity);
+              const rightScore = scoreRouteForIntensity(right, intensity);
+              if (rightScore !== leftScore) {
+                return rightScore - leftScore;
+              }
+              return Number(right.estimated_km || 0) - Number(left.estimated_km || 0);
+            });
+        const orderedRoutes = [primaryRoute, ...alternatives];
+
+        return {
+          ...day,
+          primary_route: annotatePrimaryRoute(primaryRoute, intensity),
+          alternatives,
+          live_events: relabelLiveEvents(day.live_events || [], orderedRoutes),
+        };
+      }),
+    };
+  }
+
+  function syncIntensityButtons() {
+    if (!intensityShell) {
+      return;
+    }
+
+    intensityShell.querySelectorAll(".planner-intensity-button").forEach((button) => {
+      button.classList.toggle("is-active", button.dataset.dayIntensity === activeDayIntensity);
+      button.setAttribute("aria-pressed", String(button.dataset.dayIntensity === activeDayIntensity));
+    });
+  }
+
+  function setDayIntensity(nextIntensity) {
+    activeDayIntensity = intensityMeta[nextIntensity] ? nextIntensity : "normal";
+    window.__parrandaDayIntensity = activeDayIntensity;
+    syncIntensityButtons();
+
+    if (routeMatchSummary) {
+      routeMatchSummary.textContent = `Dagstempo: ${intensityMeta[activeDayIntensity].label}. ${intensityMeta[activeDayIntensity].summary}`;
+    }
+  }
+
+  function ensureIntensityUi() {
+    if (!plannerKmReadout || intensityShell) {
+      return;
+    }
+
+    intensityShell = document.createElement("section");
+    intensityShell.className = "planner-intensity-shell";
+    intensityShell.innerHTML = `
+      <div class="planner-intensity-head">
+        <strong>Dagstempo</strong>
+        <p>Välj hur packad varje dag ska kännas innan Parranda bygger rutten.</p>
+      </div>
+      <div class="planner-intensity-buttons" role="group" aria-label="Dagstempo"></div>
+    `;
+
+    const buttonRow = intensityShell.querySelector(".planner-intensity-buttons");
+    Object.entries(intensityMeta).forEach(([key, meta]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "planner-intensity-button";
+      button.dataset.dayIntensity = key;
+      button.innerHTML = `<strong>${meta.label}</strong><span>${meta.summary}</span>`;
+      button.addEventListener("click", () => {
+        setDayIntensity(key);
+      });
+      buttonRow.appendChild(button);
+    });
+
+    plannerKmReadout.insertAdjacentElement("afterend", intensityShell);
+    syncIntensityButtons();
+  }
+
   function focusResults() {
     if (resultFocusTimer) {
       clearTimeout(resultFocusTimer);
@@ -362,6 +669,54 @@
 
   function markPlanningIntent() {
     pendingResultFocus = true;
+  }
+
+  function patchFetchForIntensity() {
+    if (window.__parrandaIntensityFetchPatched) {
+      return;
+    }
+
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = async (input, init) => {
+      const url = typeof input === "string" ? input : input?.url || "";
+      let nextInit = init;
+
+      if (url.includes("/api/route-recommendations") && init?.body) {
+        try {
+          const parsedBody = JSON.parse(init.body);
+          parsedBody.day_intensity = activeDayIntensity;
+          nextInit = {
+            ...init,
+            body: JSON.stringify(parsedBody),
+          };
+        } catch (_error) {
+          nextInit = init;
+        }
+      }
+
+      const response = await originalFetch(input, nextInit);
+
+      if (!url.includes("/api/route-recommendations")) {
+        return response;
+      }
+
+      try {
+        const text = await response.text();
+        const parsed = JSON.parse(text);
+        const modified = applyIntensityToResult(parsed, activeDayIntensity);
+        const headers = new Headers(response.headers);
+        headers.set("content-type", "application/json");
+        return new Response(JSON.stringify(modified), {
+          status: response.status,
+          statusText: response.statusText,
+          headers,
+        });
+      } catch (_error) {
+        return response;
+      }
+    };
+
+    window.__parrandaIntensityFetchPatched = true;
   }
 
   plannerModeAutoButton?.addEventListener("click", () => {
@@ -423,5 +778,8 @@
 
   syncPlannerUxPass();
   applyLandingHierarchyPass();
+  ensureIntensityUi();
+  patchFetchForIntensity();
+  syncIntensityButtons();
   window.setTimeout(syncPlannerUxPass, 120);
 })();
