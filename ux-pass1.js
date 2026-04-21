@@ -63,11 +63,34 @@
       max-width: 100%;
     }
 
+    .planner-modal-shell .search-box,
+    .planner-modal-shell .route-lab-field {
+      overflow: hidden;
+    }
+
     .planner-modal-shell input,
     .planner-modal-shell select,
     .planner-modal-shell textarea,
     .planner-modal-shell button {
       max-width: 100%;
+    }
+
+    .planner-modal-shell input[type="date"] {
+      display: block;
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      appearance: none;
+      -webkit-appearance: none;
+      overflow: hidden;
+    }
+
+    .planner-modal-shell input[type="date"]::-webkit-date-and-time-value {
+      text-align: left;
+    }
+
+    .planner-modal-shell input[type="date"]::-webkit-calendar-picker-indicator {
+      flex-shrink: 0;
     }
 
     .route-builder-actions-final {
@@ -115,6 +138,10 @@
         padding-right: 14px;
       }
 
+      .planner-modal-shell .planner-inline-grid {
+        grid-template-columns: 1fr !important;
+      }
+
       .planner-modal-shell .route-builder-grid {
         gap: 12px;
       }
@@ -124,6 +151,11 @@
       .planner-modal-shell .planner-km-readout {
         padding-left: 14px;
         padding-right: 14px;
+      }
+
+      .planner-modal-shell input[type="date"],
+      .planner-modal-shell select {
+        font-size: 16px;
       }
 
       .planner-modal-shell .route-builder-actions-final {
