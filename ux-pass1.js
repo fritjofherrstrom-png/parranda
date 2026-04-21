@@ -15,7 +15,11 @@
   const plannerModeAutoButton = document.getElementById("plannerModeAutoButton");
   const plannerModeManualButton = document.getElementById("plannerModeManualButton");
   const plannerFineTuneDetails = document.getElementById("plannerFineTuneDetails");
+  const plannerAdvancedSummary = document.getElementById("plannerAdvancedSummary");
+  const plannerHomeBaseShell = document.getElementById("plannerHomeBaseShell");
   const homeBaseModeSelect = document.getElementById("homeBaseModeSelect");
+  const homeBasePresetSelect = document.getElementById("homeBasePresetSelect");
+  const homeBaseCustomInput = document.getElementById("homeBaseCustomInput");
   const homeBasePresetField = document.querySelector('[data-mode-field="home-base-preset"]');
   const homeBaseCustomField = document.querySelector('[data-mode-field="home-base-custom"]');
   const startModeSelect = document.getElementById("startModeSelect");
@@ -71,6 +75,11 @@
   let heroQuickPlannerShell = null;
   let resultRecapStrip = null;
   let dateRangeShell = null;
+  let homeBaseCompactShell = null;
+  let dateFromField = null;
+  let dateToField = null;
+  let homeBaseExpanded = false;
+  let showRangeEndField = false;
   let heroBaseStatus = "Tryck på Min plats om du vill att Parranda ska be om platsåtkomst direkt.";
   let heroBaseStatusTone = "info";
   let isResolvingHeroLocation = false;
@@ -81,12 +90,13 @@
     body.route-focus .tab-nav {
       display: inline-flex;
       width: auto;
-      padding: 8px;
-      margin-top: 10px;
-      margin-bottom: 20px;
-      border-radius: 20px;
-      background: rgba(255,252,247,0.62);
-      box-shadow: 0 10px 24px rgba(69,35,13,0.05);
+      padding: 6px;
+      margin-top: 8px;
+      margin-bottom: 16px;
+      border-radius: 18px;
+      background: rgba(255,252,247,0.48);
+      box-shadow: 0 8px 18px rgba(69,35,13,0.04);
+      opacity: 0.86;
     }
     body.has-live-results .planner-launch-strip,
     body.has-live-results .route-match-summary,
@@ -136,10 +146,49 @@
     .hero-planner-inline-summary { margin:0; font-size:0.92rem; line-height:1.45; color:rgba(59,36,20,0.72); max-width:46ch; }
     .hero-planner-inline-summary[data-tone="success"] { color: #35592b; }
     .hero-planner-inline-summary[data-tone="warning"] { color: #8a3f1f; }
-    .planner-date-range-shell { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border-radius:16px; border:1px solid rgba(108,74,46,0.08); background:rgba(255,251,246,0.8); }
+    .planner-base-compact {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(108,74,46,0.08);
+      background: rgba(255,251,246,0.72);
+    }
+    .planner-base-compact-copy {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+    .planner-base-compact-copy strong {
+      font-size: 0.9rem;
+      color: #3b2414;
+    }
+    .planner-base-compact-copy p {
+      margin: 0;
+      font-size: 0.9rem;
+      line-height: 1.45;
+      color: rgba(59,36,20,0.72);
+      max-width: 44ch;
+    }
+    .planner-date-range-shell {
+      grid-column:1 / -1;
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:12px;
+      padding:12px 14px;
+      border-radius:16px;
+      border:1px solid rgba(108,74,46,0.08);
+      background:rgba(255,251,246,0.8);
+    }
     .planner-date-range-shell strong { display:block; font-size:0.9rem; color:#3b2414; }
     .planner-date-range-shell p { margin:2px 0 0; font-size:0.88rem; color:rgba(59,36,20,0.7); }
+    .planner-date-range-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
     .planner-date-range-button { appearance:none; border:none; background:rgba(175,77,36,0.08); color:#af4d24; border-radius:999px; padding:10px 14px; font:inherit; cursor:pointer; }
+    .planner-date-range-clear { white-space: nowrap; }
     .planner-intensity-shell { grid-column:1 / -1; display:grid; gap:10px; padding:14px 16px; border-radius:18px; background:rgba(255,251,246,0.72); border:1px solid rgba(108,74,46,0.08); min-width:0; overflow:hidden; }
     .planner-intensity-head { display:flex; flex-direction:column; gap:4px; min-width:0; }
     .planner-intensity-head strong { font-size:0.95rem; }
@@ -166,7 +215,8 @@
       .planner-modal-shell input[type="date"], .planner-modal-shell select { font-size:16px; }
       .planner-modal-shell .route-builder-actions-final { display:flex; flex-direction:column; align-items:stretch; gap:10px; width:100%; }
       .planner-modal-shell .route-builder-actions-final .primary-button, .planner-modal-shell .route-builder-actions-final .ghost-button, .hero-planner-inline .primary-button, .results-recap-strip .primary-button { width:100%; }
-      .hero-planner-inline-foot, .results-recap-strip, .planner-date-range-shell { flex-direction:column; align-items:stretch; }
+      .hero-planner-inline-foot, .results-recap-strip, .planner-date-range-shell, .planner-base-compact { flex-direction:column; align-items:stretch; }
+      .planner-date-range-actions { justify-content:flex-start; }
     }
   `;
   document.head.appendChild(style);
@@ -183,6 +233,115 @@
     if (customField) customField.hidden = mode !== "custom";
   }
 
+  function requestDatePicker(input) {
+    if (!input) return;
+    if (typeof input.showPicker === "function") {
+      input.showPicker();
+      return;
+    }
+    input.focus();
+  }
+
+  function getPlannerDayCount() {
+    const from = routeDateFrom?.value;
+    const to = routeDateTo?.value || from;
+    if (!from || !to) return 0;
+    const start = new Date(`${from}T12:00:00`);
+    const end = new Date(`${to}T12:00:00`);
+    return Math.max(1, Math.round((end - start) / 86400000) + 1);
+  }
+
+  function getHomeBaseSummaryCopy() {
+    const mode = homeBaseModeSelect?.value || "auto";
+    if (mode === "current_location") {
+      return "Min plats används som mjuk boendebas för dagen.";
+    }
+    if (mode === "preset") {
+      return `${homeBasePresetSelect?.value || "Valt kvarter"} används som mjuk boendebas.`;
+    }
+    if (mode === "custom") {
+      return `${homeBaseCustomInput?.value?.trim() || "Egen adress"} används som mjuk boendebas.`;
+    }
+    return "Parranda väljer en smart boendebas om du inte lägger till en själv.";
+  }
+
+  function updateHomeBaseCompact() {
+    if (!homeBaseCompactShell) return;
+    const autoMode = plannerModeAutoButton?.classList.contains("is-active");
+    const summary = homeBaseCompactShell.querySelector(".planner-base-compact-summary");
+    const button = homeBaseCompactShell.querySelector(".planner-base-compact-button");
+    const collapsed = autoMode && !homeBaseExpanded;
+
+    homeBaseCompactShell.hidden = !autoMode;
+    if (plannerHomeBaseShell) {
+      plannerHomeBaseShell.hidden = !autoMode || collapsed;
+    }
+
+    if (summary) {
+      summary.textContent = getHomeBaseSummaryCopy();
+    }
+
+    if (button) {
+      button.textContent = collapsed
+        ? homeBaseModeSelect?.value === "auto"
+          ? "Lägg till bas"
+          : "Ändra bas"
+        : "Klar";
+    }
+  }
+
+  function ensureHomeBaseCompact() {
+    if (!plannerHomeBaseShell || homeBaseCompactShell) return;
+    homeBaseCompactShell = document.createElement("section");
+    homeBaseCompactShell.className = "planner-base-compact";
+    homeBaseCompactShell.innerHTML = `
+      <div class="planner-base-compact-copy">
+        <strong>Boendebas</strong>
+        <p class="planner-base-compact-summary"></p>
+      </div>
+      <button type="button" class="planner-date-range-button planner-base-compact-button">Lägg till bas</button>
+    `;
+    homeBaseCompactShell.querySelector(".planner-base-compact-button")?.addEventListener("click", () => {
+      homeBaseExpanded = !homeBaseExpanded;
+      updateHomeBaseCompact();
+      if (homeBaseExpanded) {
+        window.setTimeout(() => homeBaseModeSelect?.focus(), 40);
+      }
+    });
+    plannerHomeBaseShell.insertAdjacentElement("beforebegin", homeBaseCompactShell);
+    updateHomeBaseCompact();
+  }
+
+  function syncDateRangeFields({ focusEnd = false } = {}) {
+    if (!routeDateFrom || !routeDateTo) return;
+    const from = routeDateFrom.value;
+
+    if (from && (!routeDateTo.value || routeDateTo.value < from)) {
+      routeDateTo.value = from;
+    }
+
+    const hasRange = Boolean(routeDateTo.value && from && routeDateTo.value !== from);
+    if (!showRangeEndField && hasRange) {
+      showRangeEndField = true;
+    }
+
+    const shouldShowEnd = showRangeEndField || hasRange;
+
+    if (dateToField) {
+      dateToField.hidden = !shouldShowEnd;
+    }
+
+    if (!shouldShowEnd && from) {
+      routeDateTo.value = from;
+    }
+
+    updateDateRangeShell();
+
+    if (focusEnd && shouldShowEnd) {
+      window.setTimeout(() => requestDatePicker(routeDateTo), 50);
+    }
+  }
+
   function syncPlannerUxPass() {
     const autoMode = plannerModeAutoButton?.classList.contains("is-active");
     plannerModalShell.classList.toggle("is-auto-mode", Boolean(autoMode));
@@ -191,6 +350,12 @@
     syncPointInput(homeBaseModeSelect, homeBasePresetField, homeBaseCustomField);
     syncPointInput(startModeSelect, startPresetField, startCustomField);
     syncPointInput(endModeSelect, endPresetField, endCustomField);
+    updateHomeBaseCompact();
+    syncDateRangeFields();
+
+    if (plannerAdvancedSummary && autoMode) {
+      plannerAdvancedSummary.textContent = "Hoppa över detta om du inte behöver låsa start eller slut.";
+    }
   }
 
   function applyLandingHierarchyPass() {
@@ -293,6 +458,8 @@
       }
     }
     applyQuickVibeToPreferences(activeQuickVibe);
+    homeBaseExpanded = false;
+    updateHomeBaseCompact();
     if (routeMatchSummary) routeMatchSummary.textContent = `Snabbval aktiva: ${quickBaseLabel()} • ${quickVibeLabel()} • ${intensityMeta[activeDayIntensity].label}.`;
   }
 
@@ -513,39 +680,73 @@
   function updateDateRangeShell() {
     if (!dateRangeShell) return;
     const label = dateRangeShell.querySelector(".planner-date-range-label");
-    if (!label) return;
+    const addButton = dateRangeShell.querySelector(".planner-date-range-add");
+    const clearButton = dateRangeShell.querySelector(".planner-date-range-clear");
+    if (!label || !addButton || !clearButton) return;
     const from = routeDateFrom?.value;
     const to = routeDateTo?.value;
+    const dayCount = getPlannerDayCount();
+
     if (!from && !to) {
       label.textContent = "Välj datum";
+      addButton.textContent = "Välj datum";
+      clearButton.hidden = true;
       return;
     }
+
     if (!to || from === to) {
-      label.textContent = `${formatCompactSwedishDate(from || to)} • tryck igen för att lägga slutdatum`;
+      label.textContent = `${formatCompactSwedishDate(from || to)} • 1 dag`;
+      addButton.textContent = "Lägg slutdatum";
+      clearButton.hidden = true;
       return;
     }
-    label.textContent = `${formatCompactSwedishDate(from)} → ${formatCompactSwedishDate(to)} • välj start först, sedan slut`;
+
+    label.textContent = `${formatCompactSwedishDate(from)} → ${formatCompactSwedishDate(to)} • ${dayCount} dagar`;
+    addButton.textContent = "Ändra slutdatum";
+    clearButton.hidden = false;
   }
 
   function ensureDateRangeShell() {
     if (!routeDateFrom || !routeDateTo || dateRangeShell) return;
     const grid = routeDateFrom.closest(".planner-inline-grid");
     if (!grid) return;
-    const fromField = routeDateFrom.closest("label");
-    const toField = routeDateTo.closest("label");
-    const fromSpan = fromField?.querySelector("span");
-    const toSpan = toField?.querySelector("span");
+    dateFromField = routeDateFrom.closest("label");
+    dateToField = routeDateTo.closest("label");
+    const fromSpan = dateFromField?.querySelector("span");
+    const toSpan = dateToField?.querySelector("span");
     if (fromSpan) fromSpan.textContent = "Start";
     if (toSpan) toSpan.textContent = "Slut";
     dateRangeShell = document.createElement("section");
     dateRangeShell.className = "planner-date-range-shell";
-    dateRangeShell.innerHTML = `<div><strong>Resedatum</strong><p class="planner-date-range-label"></p></div><button type="button" class="planner-date-range-button">Ändra datum</button>`;
-    dateRangeShell.querySelector(".planner-date-range-button")?.addEventListener("click", () => {
-      if (typeof routeDateFrom.showPicker === "function") routeDateFrom.showPicker();
-      else routeDateFrom.focus();
+    dateRangeShell.innerHTML = `
+      <div>
+        <strong>Resedatum</strong>
+        <p class="planner-date-range-label"></p>
+      </div>
+      <div class="planner-date-range-actions">
+        <button type="button" class="planner-date-range-button planner-date-range-add">Välj datum</button>
+        <button type="button" class="ghost-button planner-date-range-clear" hidden>1 dag</button>
+      </div>
+    `;
+    const addButton = dateRangeShell.querySelector(".planner-date-range-add");
+    const clearButton = dateRangeShell.querySelector(".planner-date-range-clear");
+    addButton?.addEventListener("click", () => {
+      if (!routeDateFrom.value) {
+        requestDatePicker(routeDateFrom);
+        return;
+      }
+      showRangeEndField = true;
+      syncDateRangeFields({ focusEnd: true });
+    });
+    clearButton?.addEventListener("click", () => {
+      if (!routeDateFrom.value) return;
+      showRangeEndField = false;
+      routeDateTo.value = routeDateFrom.value;
+      dispatchNativeChange(routeDateTo);
+      syncDateRangeFields();
     });
     grid.insertBefore(dateRangeShell, grid.firstChild);
-    updateDateRangeShell();
+    syncDateRangeFields();
   }
 
   function ensureResultRecapStrip() {
@@ -639,11 +840,25 @@
   routePlannerOpenButton?.addEventListener("click", applyQuickSelectionsToPlanner, true);
   plannerModeAutoButton?.addEventListener("click", () => window.setTimeout(syncPlannerUxPass, 0));
   plannerModeManualButton?.addEventListener("click", () => window.setTimeout(syncPlannerUxPass, 0));
-  homeBaseModeSelect?.addEventListener("change", syncPlannerUxPass);
+  homeBaseModeSelect?.addEventListener("change", () => {
+    homeBaseExpanded = true;
+    syncPlannerUxPass();
+  });
   startModeSelect?.addEventListener("change", syncPlannerUxPass);
   endModeSelect?.addEventListener("change", syncPlannerUxPass);
-  routeDateFrom?.addEventListener("change", updateDateRangeShell);
-  routeDateTo?.addEventListener("change", updateDateRangeShell);
+  homeBasePresetSelect?.addEventListener("change", updateHomeBaseCompact);
+  homeBaseCustomInput?.addEventListener("input", updateHomeBaseCompact);
+  routeDateFrom?.addEventListener("change", () => {
+    if (!routeDateFrom.value) return;
+    if (!showRangeEndField) {
+      routeDateTo.value = routeDateFrom.value;
+    }
+    syncDateRangeFields({ focusEnd: showRangeEndField && routeDateTo.value === routeDateFrom.value });
+  });
+  routeDateTo?.addEventListener("change", () => {
+    showRangeEndField = Boolean(routeDateTo.value && routeDateFrom.value && routeDateTo.value !== routeDateFrom.value);
+    syncDateRangeFields();
+  });
   routePlanButton?.addEventListener("click", markPlanningIntent);
   routePlanStickyButton?.addEventListener("click", markPlanningIntent);
   routePlannerForm.addEventListener("submit", markPlanningIntent);
@@ -663,6 +878,7 @@
   ensureHeroQuickPlanner();
   ensureIntensityUi();
   ensureDateRangeShell();
+  ensureHomeBaseCompact();
   ensureResultRecapStrip();
   patchFetchForIntensity();
   syncPlannerUxPass();
