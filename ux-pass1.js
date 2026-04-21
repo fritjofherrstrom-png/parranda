@@ -163,12 +163,15 @@
       border-radius: 18px;
       background: rgba(255, 251, 246, 0.72);
       border: 1px solid rgba(108, 74, 46, 0.08);
+      min-width: 0;
+      overflow: hidden;
     }
 
     .planner-intensity-head {
       display: flex;
       flex-direction: column;
       gap: 4px;
+      min-width: 0;
     }
 
     .planner-intensity-head strong {
@@ -184,8 +187,10 @@
 
     .planner-intensity-buttons {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
       gap: 8px;
+      align-items: stretch;
+      min-width: 0;
     }
 
     .planner-intensity-button {
@@ -196,21 +201,32 @@
       border-radius: 14px;
       padding: 12px 10px;
       display: grid;
-      gap: 4px;
+      align-content: start;
+      gap: 6px;
       text-align: left;
       cursor: pointer;
       transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+      min-width: 0;
+      min-height: 116px;
+      overflow: hidden;
     }
 
     .planner-intensity-button strong {
+      display: block;
+      min-width: 0;
       font-size: 0.95rem;
-      line-height: 1;
+      line-height: 1.05;
+      overflow-wrap: anywhere;
     }
 
     .planner-intensity-button span {
+      display: block;
+      min-width: 0;
       font-size: 0.8rem;
       line-height: 1.35;
       color: rgba(59, 36, 20, 0.7);
+      overflow-wrap: anywhere;
+      hyphens: auto;
     }
 
     .planner-intensity-button.is-active {
@@ -340,6 +356,10 @@
 
       .planner-intensity-buttons {
         grid-template-columns: 1fr;
+      }
+
+      .planner-intensity-button {
+        min-height: 0;
       }
     }
   `;
