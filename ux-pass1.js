@@ -33,12 +33,51 @@
       overflow: hidden;
     }
 
+    .planner-modal-shell,
+    .planner-modal-shell *,
+    .planner-modal-backdrop,
+    .planner-modal-backdrop * {
+      box-sizing: border-box;
+    }
+
+    .planner-modal-shell {
+      overflow-x: hidden;
+      overscroll-behavior: contain;
+    }
+
+    .planner-modal-shell .route-builder-form,
+    .planner-modal-shell .route-builder-grid,
+    .planner-modal-shell .planner-panel,
+    .planner-modal-shell .planner-inline-grid,
+    .planner-modal-shell .planner-home-base-shell,
+    .planner-modal-shell .planner-fine-tune-body,
+    .planner-modal-shell .planner-anchor-grid,
+    .planner-modal-shell .planner-style-layers,
+    .planner-modal-shell .planner-style-row,
+    .planner-modal-shell .search-box,
+    .planner-modal-shell .route-lab-field,
+    .planner-modal-shell .planner-km-readout,
+    .planner-modal-shell .route-builder-actions-final,
+    .planner-modal-shell .planner-status-message {
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .planner-modal-shell input,
+    .planner-modal-shell select,
+    .planner-modal-shell textarea,
+    .planner-modal-shell button {
+      max-width: 100%;
+    }
+
     .route-builder-actions-final {
       position: sticky;
       bottom: 0;
       z-index: 12;
-      padding-top: 12px;
-      background: linear-gradient(180deg, rgba(250, 239, 223, 0), rgba(250, 239, 223, 0.94) 42%);
+      margin-top: 14px;
+      padding: 12px 0 calc(12px + env(safe-area-inset-bottom, 0px));
+      background: linear-gradient(180deg, rgba(250, 239, 223, 0), rgba(250, 239, 223, 0.96) 34%);
+      backdrop-filter: blur(10px);
     }
 
     .planner-mobile-actions {
@@ -61,15 +100,42 @@
       max-width: 48ch;
     }
 
+    @media (max-width: 860px) {
+      .planner-modal-shell {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+    }
+
     @media (max-width: 680px) {
-      .route-builder-actions-final {
+      .planner-modal-shell {
+        width: 100vw;
+        max-width: 100vw;
+        padding-left: 14px;
+        padding-right: 14px;
+      }
+
+      .planner-modal-shell .route-builder-grid {
+        gap: 12px;
+      }
+
+      .planner-modal-shell .planner-panel,
+      .planner-modal-shell .planner-home-base-shell,
+      .planner-modal-shell .planner-km-readout {
+        padding-left: 14px;
+        padding-right: 14px;
+      }
+
+      .planner-modal-shell .route-builder-actions-final {
         display: flex;
         flex-direction: column;
         align-items: stretch;
+        gap: 10px;
+        width: 100%;
       }
 
-      .route-builder-actions-final .primary-button,
-      .route-builder-actions-final .ghost-button {
+      .planner-modal-shell .route-builder-actions-final .primary-button,
+      .planner-modal-shell .route-builder-actions-final .ghost-button {
         width: 100%;
       }
     }
