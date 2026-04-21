@@ -3,6 +3,7 @@ const path = require("path");
 const { allItems, findItemByName } = require("./catalog");
 const { geocodeQuery } = require("./geocoding");
 const { generateRecommendations } = require("./route-engine");
+const { diversifyRecommendationDays } = require("./route-diversity");
 const { fetchLiveEventsForDates } = require("./live-events");
 const { getCityPulse, getRomeTodayIsoDate } = require("./editorial-calendar");
 const { fetchWeatherForDates, ROME_CENTER } = require("./weather");
@@ -230,7 +231,7 @@ function buildApp() {
         modifier: request.body?.modifier || null,
       };
 
-      const result = await generateRecommendations(payload);
+      const result = diversifyRecommendationDays(await generateRecommendations(payload));
       response.json(result);
     } catch (error) {
       response.status(500).json({
