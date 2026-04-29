@@ -54,17 +54,17 @@
             href="https://www.google.com/maps/search/hidden+gems+rome+italy/"
             target="_blank"
             rel="noreferrer"
-            >Öppna Rom-karta</a
+            >Romkarta</a
           >
         </nav>
 
         <section class="hero-content">
           <div class="hero-copy">
             <p class="eyebrow">ROM · KURERAD DAGPLANERING</p>
-            <h1>En bättre dag i Rom.</h1>
+            <h1>En bättre dag i Rom</h1>
             <p class="lead">
-              Parranda sätter riktning, kvarter och tempo så att du snabbare landar i en
-              promenadvänlig dag som känns levande, lokal och rätt för just dig.
+              Börja med bas, datum och vibe. Parranda sätter sedan ihop en
+              promenadvänlig Rom-dag som känns mer levande än ännu en lista av pins.
             </p>
 
             <div class="hero-actions">
@@ -79,34 +79,55 @@
                 Installera appen
               </button>
             </div>
-            <section class="hero-quickstart" aria-label="Snabb kvällsidé">
-              <div class="hero-quickstart-copy">
-                <p id="heroWildcardLabel" class="panel-label">KVÄLLSIDÉ</p>
-                <h2 id="heroWildcardTitle">Laddar kvällens idé...</h2>
-                <p id="heroWildcardSummary">
-                  Parranda laddar en snabb idé för ikväll om du vill börja med en riktning i
-                  stället för ett tomt blad.
-                </p>
-                <p id="heroWildcardMeta" class="hero-panel-meta">
-                  Tänkt som snabbstart. Route-plannern är fortfarande huvudvägen in.
-                </p>
-              </div>
-              <div class="hero-quickstart-side">
-                <div id="heroWildcardTags" class="panel-tags">
-                  <span>Rom</span>
-                  <span>Ikväll</span>
-                  <span>Snabbstart</span>
-                </div>
-                <div class="hero-panel-actions">
-                  <button id="heroWildcardApplyButton" class="secondary-button" type="button">
-                    Använd som bas
-                  </button>
-                  <button id="heroWildcardShuffleButton" class="ghost-button" type="button">
-                    Ny idé
-                  </button>
-                </div>
-              </div>
-            </section>
+          </div>
+        </section>
+
+        <section class="planner-launch-strip hero-planner-starter">
+          <div class="planner-launch-copy">
+            <div>
+              <p class="eyebrow">BÖRJA HÄR</p>
+              <h2>Välj bas och känsla direkt</h2>
+            </div>
+            <p id="plannerLaunchSummary" class="planner-launch-note">
+              Sätt datum, var du bor och vilken vibe du vill åt. Resten anpassar Parranda.
+            </p>
+            <div class="planner-launch-pills" aria-hidden="true">
+              <span>Bas</span>
+              <span>Datum</span>
+              <span>Vibe</span>
+              <span>Gångmål</span>
+            </div>
+          </div>
+          <button id="routePlannerOpenButton" class="primary-button" type="button">
+            Planera min resa
+          </button>
+        </section>
+
+        <section class="hero-quickstart hero-idea-strip" aria-label="Snabb kvällsidé">
+          <div class="hero-quickstart-copy">
+            <p id="heroWildcardLabel" class="panel-label">KVÄLLSIDÉ</p>
+            <h2 id="heroWildcardTitle">Laddar kvällens idé...</h2>
+            <p id="heroWildcardSummary">
+              En snabb riktning för ikväll om du vill börja med ett kvarter och en känsla.
+            </p>
+            <p id="heroWildcardMeta" class="hero-panel-meta">
+              Bra som snabbstart, men fortfarande sekundärt till planner-flödet.
+            </p>
+          </div>
+          <div class="hero-quickstart-side">
+            <div id="heroWildcardTags" class="panel-tags">
+              <span>Rom</span>
+              <span>Ikväll</span>
+              <span>Snabbstart</span>
+            </div>
+            <div class="hero-panel-actions">
+              <button id="heroWildcardApplyButton" class="secondary-button" type="button">
+                Använd
+              </button>
+              <button id="heroWildcardShuffleButton" class="ghost-button" type="button">
+                Byt
+              </button>
+            </div>
           </div>
         </section>
       </header>
@@ -329,22 +350,6 @@
         </section>
 
         <section class="tab-panel active" data-tab-panel="routes">
-          <section class="planner-launch-strip">
-            <div class="planner-launch-copy">
-              <div>
-                <p class="eyebrow">PLANERA</p>
-                <h2>Planera din resa till Rom</h2>
-              </div>
-              <p id="plannerLaunchSummary" class="planner-launch-note">
-                Datum, var du bor, hur långt du vill gå och vilken vibe du vill åt. Resten
-                anpassar Parranda.
-              </p>
-            </div>
-            <button id="routePlannerOpenButton" class="primary-button" type="button">
-              Planera min resa
-            </button>
-          </section>
-
           <section id="cityPulseTeaser" class="city-pulse-teaser" aria-live="polite">
             <div class="city-pulse-live">
               <span class="city-pulse-live-dot" aria-hidden="true"></span>

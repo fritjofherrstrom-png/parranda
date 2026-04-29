@@ -245,13 +245,20 @@ body::before {
 }
 
 .hero-content {
-  margin-top: 34px;
+  margin-top: 30px;
   align-items: flex-start;
 }
 
 .hero-copy {
   flex: 1;
-  width: min(820px, 100%);
+  width: min(760px, 100%);
+}
+
+.topbar .ghost-button {
+  padding: 10px 14px;
+  background: rgba(255, 252, 247, 0.42);
+  color: var(--muted);
+  font-size: 0.92rem;
 }
 
 .panel-label,
@@ -271,16 +278,16 @@ body::before {
 }
 
 .hero-copy h1 {
-  max-width: 8ch;
-  font-size: clamp(3.2rem, 7vw, 5.7rem);
-  line-height: 0.9;
+  max-width: 7ch;
+  font-size: clamp(2.85rem, 6vw, 4.9rem);
+  line-height: 0.92;
 }
 
 .lead {
-  max-width: 660px;
-  margin: 18px 0 0;
-  font-size: 1.04rem;
-  line-height: 1.68;
+  max-width: 560px;
+  margin: 16px 0 0;
+  font-size: 1rem;
+  line-height: 1.62;
 }
 
 .hero-support {
@@ -308,7 +315,7 @@ body::before {
 }
 
 .hero-actions {
-  margin-top: 28px;
+  margin-top: 24px;
   align-items: center;
 }
 
@@ -325,10 +332,10 @@ body::before {
   padding: 10px 15px;
   border-radius: 999px;
   border: 1px solid rgba(97, 50, 23, 0.12);
-  background: rgba(255, 252, 247, 0.62);
+  background: rgba(255, 252, 247, 0.5);
   color: var(--accent-deep);
   font: inherit;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -358,14 +365,14 @@ body::before {
 }
 
 .hero-quickstart {
-  margin-top: 22px;
+  margin-top: 18px;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: 18px 20px;
-  border-radius: 24px;
-  background: rgba(255, 252, 247, 0.76);
+  padding: 14px 18px;
+  border-radius: 22px;
+  background: rgba(255, 252, 247, 0.58);
   border: 1px solid rgba(70, 38, 18, 0.08);
 }
 
@@ -377,8 +384,8 @@ body::before {
 .hero-quickstart h2 {
   margin: 0;
   font-family: "Cormorant Garamond", serif;
-  font-size: clamp(1.7rem, 3vw, 2.5rem);
-  line-height: 0.98;
+  font-size: clamp(1.35rem, 2vw, 1.9rem);
+  line-height: 1;
 }
 
 .hero-quickstart-copy p {
@@ -386,21 +393,80 @@ body::before {
 }
 
 .hero-quickstart-copy #heroWildcardSummary {
-  margin-top: 8px;
-  color: var(--text);
-  line-height: 1.58;
+  margin-top: 6px;
+  color: var(--muted);
+  line-height: 1.5;
+  font-size: 0.95rem;
 }
 
 .hero-quickstart-side {
   display: grid;
-  gap: 14px;
+  gap: 10px;
   justify-items: flex-start;
 }
 
 .hero-quickstart .panel-tags span {
-  padding: 8px 12px;
-  background: rgba(175, 77, 36, 0.08);
+  padding: 7px 11px;
+  background: rgba(175, 77, 36, 0.06);
   color: var(--accent-deep);
+}
+
+.hero-planner-starter {
+  margin-top: 22px;
+  align-items: flex-end;
+  background:
+    radial-gradient(circle at 88% 0%, rgba(215, 160, 77, 0.16), transparent 26%),
+    linear-gradient(180deg, rgba(255, 252, 247, 0.96), rgba(248, 240, 228, 0.92));
+  box-shadow: 0 26px 60px rgba(70, 38, 18, 0.12);
+}
+
+.hero-planner-starter .planner-launch-copy {
+  gap: 12px;
+}
+
+.hero-planner-starter .planner-launch-copy h2 {
+  font-size: clamp(2.15rem, 3.4vw, 3.3rem);
+}
+
+.hero-planner-starter .planner-launch-note {
+  max-width: 50ch;
+  color: rgba(36, 25, 20, 0.82);
+}
+
+.planner-launch-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.planner-launch-pills span {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(175, 77, 36, 0.07);
+  border: 1px solid rgba(97, 50, 23, 0.08);
+  color: var(--accent-deep);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.hero-idea-strip .hero-panel-meta {
+  display: none;
+}
+
+.hero-idea-strip .panel-label {
+  margin-bottom: 6px;
+}
+
+.hero-idea-strip .panel-tags {
+  gap: 8px;
+}
+
+.hero-idea-strip .hero-panel-actions .secondary-button,
+.hero-idea-strip .hero-panel-actions .ghost-button {
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 
 .district-stats article {
@@ -3189,7 +3255,11 @@ body.is-printing-guide #routeGuideDrawer {
   }
 
   .hero-copy h1 {
-    max-width: 14ch;
+    max-width: 9ch;
+  }
+
+  .hero-planner-starter .primary-button {
+    width: 100%;
   }
 
   .timeline-stop {
@@ -3276,6 +3346,10 @@ body.is-printing-guide #routeGuideDrawer {
 
   .hero-quickstart {
     padding: 16px;
+  }
+
+  .hero-idea-strip .panel-tags {
+    display: none;
   }
 
   .tab-nav {

@@ -1968,7 +1968,7 @@ function renderHeroWildcard() {
     heroWildcardLabel.textContent = "KVÄLLSIDÉ";
     heroWildcardTitle.textContent = "Inga kvällsidéer tillgängliga just nu";
     heroWildcardSummary.textContent =
-      "Parranda försöker ladda en snabb idé för ikväll. Under tiden kan du gå direkt till plannern och bygga dagen själv.";
+      "En snabb riktning för ikväll dyker upp här så snart kvällslagret är laddat.";
     heroWildcardMeta.textContent = "En ny idé dyker upp så snart kvällslagret är laddat.";
     heroWildcardTags.innerHTML = "";
     heroWildcardApplyButton.disabled = true;
