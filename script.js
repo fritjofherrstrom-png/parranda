@@ -6522,7 +6522,10 @@ function focusLiveEventOnMap(item) {
   );
 }
 
-function createRouteCard(routeView, { routeKey, isSecondary = false, isRecommended = false }) {
+function createRouteCard(
+  routeView,
+  { routeKey, isSecondary = false, isRecommended = false, renderMode = "default" },
+) {
   const card = romeRouteTemplate.content.firstElementChild.cloneNode(true);
   const stopsContainer = card.querySelector(".route-stops");
   const hiddenContainer = card.querySelector(".route-hidden-pills");
@@ -6540,6 +6543,7 @@ function createRouteCard(routeView, { routeKey, isSecondary = false, isRecommend
 
   card.dataset.routeKey = routeKey;
   card.dataset.routeVariant = isRecommended ? "recommended" : isSecondary ? "alternative" : "default";
+  card.dataset.renderMode = renderMode;
   card.classList.toggle("is-recommended", isRecommended);
   card.classList.toggle("is-secondary", isSecondary);
   card.classList.toggle("is-selected", activeRouteKey === routeKey);
@@ -6765,6 +6769,8 @@ function renderPlannedDays() {
   );
   const primaryKey = `${activeDay.date}:${activeDay.primary_route.id}:primary`;
   const primarySlot = dayCard.querySelector(".planner-primary-slot");
+  const outline = dayCard.querySelector(".planner-day-outline");
+  const primaryRouteLine = dayCard.querySelector(".planner-primary-route-line");
   const altGrid = dayCard.querySelector(".planner-alt-grid");
   const altSection = dayCard.querySelector(".planner-alt-section");
   const altToggle = dayCard.querySelector(".planner-alt-toggle");
@@ -6777,8 +6783,25 @@ function renderPlannedDays() {
   dayCard.querySelector(".planner-day-date").textContent = formatSwedishDate(activeDay.date);
   dayCard.querySelector(".planner-day-title").textContent = activeDay.primary_route.title;
   dayCard.querySelector(".planner-day-summary").textContent =
-    activeDay.primary_route.why_recommended ||
+    primaryRouteView.visibleWhy ||
+    takeLeadSentences(activeDay.primary_route.why_recommended || "", 2, 220) ||
     "Motorn lyfter den här som tydligaste huvuddag utifrån datum, gångmål och preferenser.";
+  primaryRouteLine.textContent = buildRouteLine(primaryRouteView);
+
+  outline.innerHTML = "";
+  [
+    { label: "Start", value: primaryRouteView.startAnchorLabel },
+    { label: "Slut", value: primaryRouteView.endAnchorLabel },
+    { label: "Dagstyp", value: primaryRouteView.dayProfileLabel },
+    { label: "Tempo", value: primaryRouteView.pacingLabel },
+  ]
+    .filter((item) => item.value)
+    .forEach((item) => {
+      const chip = document.createElement("p");
+      chip.className = "planner-day-outline-item";
+      chip.innerHTML = `<span>${item.label}</span><strong>${item.value}</strong>`;
+      outline.appendChild(chip);
+    });
 
   signalsContainer.hidden = !activeDay.date_signals?.length;
   signalsContainer.innerHTML = "";
@@ -6804,6 +6827,7 @@ function renderPlannedDays() {
     createRouteCard(primaryRouteView, {
       routeKey: primaryKey,
       isRecommended: true,
+      renderMode: "primary",
     }),
   );
 
@@ -6820,6 +6844,7 @@ function renderPlannedDays() {
       createRouteCard(altView, {
         routeKey: altKey,
         isSecondary: true,
+        renderMode: "alternative",
       }),
     );
   });
@@ -6828,8 +6853,8 @@ function renderPlannedDays() {
 
   if (!altSection.hidden) {
     altToggle.textContent = alternativesExpanded
-      ? `Dölj alternativa upplägg (${activeDay.alternatives.length})`
-      : `Visa alternativa upplägg (${activeDay.alternatives.length})`;
+      ? `Dölj andra upplägg (${activeDay.alternatives.length})`
+      : `Visa andra upplägg (${activeDay.alternatives.length})`;
     altToggle.setAttribute("aria-expanded", String(alternativesExpanded));
     altBody.hidden = !alternativesExpanded;
     altToggle.addEventListener("click", () => {
