@@ -1,0 +1,131 @@
+{
+  "resolved_start": "Trastevere",
+  "resolved_end": "Monti",
+  "resolved_home_base": null,
+  "days": [
+    {
+      "date": "2026-04-18",
+      "primary": {
+        "id": "east-side-party-arc",
+        "start": "Trastevere",
+        "end": "Monti",
+        "shape": "arc",
+        "day_profile": "peak",
+        "anchor_zone": "Trastevere -> Monti",
+        "routing_source": "heuristic",
+        "estimated_km": 3.7,
+        "longest_leg_km": 2,
+        "longest_leg_minutes": 24,
+        "average_leg_minutes": 6,
+        "stops": [
+          {
+            "label": "Bar San Calisto",
+            "area": "Trastevere",
+            "live": false
+          },
+          {
+            "label": "Ma Che Siete Venuti a Fà",
+            "area": "Trastevere",
+            "live": false
+          },
+          {
+            "label": "Enoteca Ferrara",
+            "area": "Trastevere",
+            "live": false
+          },
+          {
+            "label": "Alcazar Live",
+            "area": "Trastevere",
+            "live": false
+          },
+          {
+            "label": "Piazza della Madonna dei Monti",
+            "area": "Monti",
+            "live": false
+          },
+          {
+            "label": "Blackmarket Hall",
+            "area": "Monti",
+            "live": false
+          }
+        ],
+        "legs": [
+          {
+            "from": "Trastevere",
+            "to": "Bar San Calisto",
+            "km": 0.2,
+            "minutes": 2
+          },
+          {
+            "from": "Bar San Calisto",
+            "to": "Ma Che Siete Venuti a Fà",
+            "km": 0.1,
+            "minutes": 2
+          },
+          {
+            "from": "Ma Che Siete Venuti a Fà",
+            "to": "Enoteca Ferrara",
+            "km": 0.2,
+            "minutes": 2
+          },
+          {
+            "from": "Enoteca Ferrara",
+            "to": "Alcazar Live",
+            "km": 0.5,
+            "minutes": 6
+          },
+          {
+            "from": "Alcazar Live",
+            "to": "Piazza della Madonna dei Monti",
+            "km": 2,
+            "minutes": 24
+          },
+          {
+            "from": "Piazza della Madonna dei Monti",
+            "to": "Blackmarket Hall",
+            "km": 0.4,
+            "minutes": 5
+          },
+          {
+            "from": "Blackmarket Hall",
+            "to": "Monti",
+            "km": 0.3,
+            "minutes": 4
+          }
+        ]
+      },
+      "alternative_count": 2,
+      "alternatives": [
+        {
+          "id": "trastevere-bar-hop-loop",
+          "start": "Trastevere",
+          "end": "Monti",
+          "shape": "arc",
+          "day_profile": "light",
+          "anchor_zone": "Trastevere -> Monti",
+          "stops": [
+            "L'Antidoto",
+            "Les Vignerons",
+            "Alcazar Live",
+            "Blackmarket Hall"
+          ]
+        },
+        {
+          "id": "classic-loop",
+          "start": "Trastevere",
+          "end": "Monti",
+          "shape": "arc",
+          "day_profile": "variation",
+          "anchor_zone": "Trastevere -> Monti",
+          "stops": [
+            "Ai Marmi",
+            "Open Baladin Roma",
+            "Campo de' Fiori",
+            "Jewish Ghetto",
+            "Piazza della Madonna dei Monti"
+          ]
+        }
+      ]
+    }
+  ]
+}
