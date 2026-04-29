@@ -2911,10 +2911,10 @@ function buildDynamicSummary({ start, end, shape, routeArea, estimatedKm, optimi
   const tone = routeToneLabel(optimizerMode, modifier, preferences);
 
   if (shape === "loop") {
-    return `En sammanhangande runda pa cirka ${estimatedKm.toFixed(1)} km som utgar fran ${start.label}, haller sig runt ${dominantZone} och lutar mot ${tone}.`;
+    return `En sammanhängande runda på cirka ${estimatedKm.toFixed(1)} km som utgår från ${start.label}, håller sig runt ${dominantZone} och lutar mot ${tone}.`;
   }
 
-  return `En tydlig bage pa cirka ${estimatedKm.toFixed(1)} km fran ${start.label} mot ${end.label}, med tyngd i ${dominantZone} och mer ${tone}.`;
+  return `En tydlig båge på cirka ${estimatedKm.toFixed(1)} km från ${start.label} mot ${end.label}, med tyngd i ${dominantZone} och mer ${tone}.`;
 }
 
 function buildGeoFitNote({ shape, start, end, geometry, routeArea, startProfile, endProfile }) {
@@ -2922,10 +2922,10 @@ function buildGeoFitNote({ shape, start, end, geometry, routeArea, startProfile,
   const legNote = geometry?.legFitNote ? ` ${geometry.legFitNote}` : "";
 
   if (shape === "loop") {
-    return `Loop runt ${startProfile?.primaryLabel || start.label}: stoppordningen minimerar returstrackor och haller sig huvudsakligen kring ${dominantZone}.${legNote}`;
+    return `Loop runt ${startProfile?.primaryLabel || start.label}: stoppordningen minimerar retursträckor och håller sig huvudsakligen kring ${dominantZone}.${legNote}`;
   }
 
-  return `Bage fran ${start.label} mot ${end.label}: rutten ror sig framat genom ${dominantZone} utan stora geografiska reversaler.${legNote}`;
+  return `Båge från ${start.label} mot ${end.label}: rutten rör sig framåt genom ${dominantZone} utan stora geografiska reversaler.${legNote}`;
 }
 
 function formatMainStop(stop) {
@@ -3533,6 +3533,23 @@ function buildRouteFitNote(routeChoice, distanceKm) {
 
 function annotateLiveEventsForRoutes(liveEvents, routeChoices) {
   return (liveEvents || []).map((event) => {
+    const hasRouteGeometry =
+      typeof event.lat === "number" &&
+      Number.isFinite(event.lat) &&
+      typeof event.lng === "number" &&
+      Number.isFinite(event.lng);
+
+    if (!hasRouteGeometry) {
+      return {
+        ...event,
+        best_route_id: null,
+        best_route_title: null,
+        best_route_label: null,
+        route_distance_km: null,
+        route_fit_note: null,
+      };
+    }
+
     const rankedRoutes = routeChoices
       .map((routeChoice) => {
         const distanceKm = nearestRouteDistanceKm(routeChoice.route, event);
@@ -3666,11 +3683,11 @@ function lockedAnchorScore({
 
   if (score >= 2.5) {
     notes.push(
-      `Rutten håller faktiskt korridoren mellan ${startPoint.label} och ${endPoint.label} i stället for att glida tillbaka till en generisk mitt-i-stan-dag.`,
+      `Rutten håller faktiskt korridoren mellan ${startPoint.label} och ${endPoint.label} i stället för att glida tillbaka till en generisk mitt-i-stan-dag.`,
     );
   } else if (score <= -2) {
     notes.push(
-      `Flera stopp ligger for langt fran korridoren mellan ${startPoint.label} och ${endPoint.label}, sa den har dagen passar ankaren svagare.`,
+      `Flera stopp ligger för långt från korridoren mellan ${startPoint.label} och ${endPoint.label}, så den här dagen passar ankaren svagare.`,
     );
   }
 
@@ -3841,15 +3858,15 @@ function whyRecommended(
 
   if (route.route_shape === "loop") {
     reasonParts.push(
-      `Huvudrutten blir en riktig runda från ${route.start_label} tillbaka till ${route.end_label} pa cirka ${route.estimated_km} km i stallet for en ut-och-tillbaka-dag.`,
+      `Huvudrutten blir en riktig runda från ${route.start_label} tillbaka till ${route.end_label} på cirka ${route.estimated_km} km i stället för en ut-och-tillbaka-dag.`,
     );
   } else if (distanceMode === "no_limit") {
     reasonParts.push(
-      `Du valde "spelar ingen roll" pa avstand, sa rutten far vara friare mellan ${route.start_label} och ${route.end_label} utan att tappa riktning.`,
+      `Du valde "spelar ingen roll" på avstånd, så rutten får vara friare mellan ${route.start_label} och ${route.end_label} utan att tappa riktning.`,
     );
   } else {
     reasonParts.push(
-      `Rutten ror sig fran ${route.start_label} mot ${route.end_label} pa cirka ${route.estimated_km} km med tydligare geografisk progression.`,
+      `Rutten rör sig från ${route.start_label} mot ${route.end_label} på cirka ${route.estimated_km} km med tydligare geografisk progression.`,
     );
   }
 
@@ -4350,6 +4367,7 @@ module.exports = {
   expandDateRange,
   buildRouteFromTemplate,
   buildLiveEventStopCandidates,
+  annotateLiveEventsForRoutes,
   budgetScore,
   kmScore,
   normalizeBudgetTier,

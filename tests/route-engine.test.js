@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  annotateLiveEventsForRoutes,
   buildRouteFromTemplate,
   buildLiveEventStopCandidates,
   budgetScore,
@@ -354,6 +355,41 @@ test("live-event-kandidater premierar stopp som faktiskt ligger i korridoren", (
 
   assert.equal(candidates[0].name, "Corridor Jazz Set");
   assert.ok(candidates[0].anchorWeight > candidates[1].anchorWeight);
+});
+
+test("live-events utan platskoppling får inte låtsas passa en specifik rutt", () => {
+  const annotated = annotateLiveEventsForRoutes(
+    [
+      {
+        id: "ungrounded",
+        title: "Mystery Event",
+        venue: "Rome",
+        match_tags: ["kultur", "vin"],
+      },
+    ],
+    [
+      {
+        label: "Huvudrutten",
+        route: {
+          id: "sample-route",
+          title: "Sample route",
+          main_stops: [
+            {
+              tags: ["kultur", "vin"],
+            },
+          ],
+          map_route_points: [
+            { lat: 41.89, lng: 12.48 },
+            { lat: 41.9, lng: 12.49 },
+          ],
+        },
+      },
+    ],
+  );
+
+  assert.equal(annotated[0].best_route_id, null);
+  assert.equal(annotated[0].best_route_label, null);
+  assert.equal(annotated[0].route_fit_note, null);
 });
 
 test("Prati -> Monti väljer nu en väst-till-centro-rutt utan Trastevere-bias", async () => {
