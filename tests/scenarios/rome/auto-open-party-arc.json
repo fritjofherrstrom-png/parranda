@@ -1,0 +1,146 @@
+{
+  "resolved_start": "Ostiense",
+  "resolved_end": "Pigneto/San Lorenzo",
+  "resolved_home_base": null,
+  "days": [
+    {
+      "date": "2026-04-19",
+      "primary": {
+        "id": "pigneto-after-dark",
+        "start": "Ostiense",
+        "end": "Pigneto/San Lorenzo",
+        "shape": "arc",
+        "day_profile": "peak",
+        "anchor_zone": "Ostiense -> Pigneto",
+        "routing_source": "heuristic",
+        "estimated_km": 9.1,
+        "longest_leg_km": 4.7,
+        "longest_leg_minutes": 56,
+        "average_leg_minutes": 14,
+        "stops": [
+          {
+            "label": "Testaccio",
+            "area": "Testaccio",
+            "live": false
+          },
+          {
+            "label": "San Lorenzo",
+            "area": "San Lorenzo",
+            "live": false
+          },
+          {
+            "label": "Piazza dei Sanniti",
+            "area": "San Lorenzo",
+            "live": false
+          },
+          {
+            "label": "Pigneto",
+            "area": "Pigneto",
+            "live": false
+          },
+          {
+            "label": "Bottiglieria Pigneto",
+            "area": "Pigneto",
+            "live": false
+          },
+          {
+            "label": "Bar Bozza",
+            "area": "Pigneto",
+            "live": false
+          },
+          {
+            "label": "Fanfulla 5/a",
+            "area": "Pigneto",
+            "live": false
+          }
+        ],
+        "legs": [
+          {
+            "from": "Ostiense",
+            "to": "Testaccio",
+            "km": 0.9,
+            "minutes": 11
+          },
+          {
+            "from": "Testaccio",
+            "to": "San Lorenzo",
+            "km": 4.7,
+            "minutes": 56
+          },
+          {
+            "from": "San Lorenzo",
+            "to": "Piazza dei Sanniti",
+            "km": 0.2,
+            "minutes": 2
+          },
+          {
+            "from": "Piazza dei Sanniti",
+            "to": "Pigneto",
+            "km": 1.8,
+            "minutes": 22
+          },
+          {
+            "from": "Pigneto",
+            "to": "Bottiglieria Pigneto",
+            "km": 0.2,
+            "minutes": 2
+          },
+          {
+            "from": "Bottiglieria Pigneto",
+            "to": "Bar Bozza",
+            "km": 0.3,
+            "minutes": 4
+          },
+          {
+            "from": "Bar Bozza",
+            "to": "Fanfulla 5/a",
+            "km": 0.1,
+            "minutes": 2
+          },
+          {
+            "from": "Fanfulla 5/a",
+            "to": "Pigneto/San Lorenzo",
+            "km": 0.9,
+            "minutes": 11
+          }
+        ]
+      },
+      "alternative_count": 2,
+      "alternatives": [
+        {
+          "id": "ostiense-garbatella-loop",
+          "start": "Ostiense",
+          "end": "Pigneto/San Lorenzo",
+          "shape": "arc",
+          "day_profile": "variation",
+          "anchor_zone": "Ostiense -> Pigneto",
+          "stops": [
+            "Porto Fluviale",
+            "Ostiense/Garbatella",
+            "San Lorenzo",
+            "Pigneto",
+            "Bar Bozza",
+            "Fanfulla 5/a"
+          ]
+        },
+        {
+          "id": "centro-apero-to-monti-arc",
+          "start": "Ostiense",
+          "end": "Pigneto/San Lorenzo",
+          "shape": "arc",
+          "day_profile": "peak",
+          "anchor_zone": "Ostiense -> Pigneto",
+          "stops": [
+            "Monti",
+            "San Lorenzo",
+            "Bottiglieria Scalo",
+            "Piazza dei Sanniti",
+            "Bar Bozza",
+            "Pigneto",
+            "Fanfulla 5/a"
+          ]
+        }
+      ]
+    }
+  ]
+}
