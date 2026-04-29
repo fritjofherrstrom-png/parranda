@@ -1965,18 +1965,18 @@ function renderHeroWildcard() {
   const wildcard = getActiveHeroWildcard();
 
   if (!wildcard) {
-    heroWildcardLabel.textContent = "IKVÄLL I ROM";
+    heroWildcardLabel.textContent = "KVÄLLSIDÉ";
     heroWildcardTitle.textContent = "Inga kvällsidéer tillgängliga just nu";
     heroWildcardSummary.textContent =
-      "Parranda försöker ladda kvällsidéer. Under tiden kan du gå direkt till route plannern och bygga dagen själv.";
-    heroWildcardMeta.textContent = "En ny kvällsidé dyker upp så snart kvällslagret är laddat.";
+      "Parranda försöker ladda en snabb idé för ikväll. Under tiden kan du gå direkt till plannern och bygga dagen själv.";
+    heroWildcardMeta.textContent = "En ny idé dyker upp så snart kvällslagret är laddat.";
     heroWildcardTags.innerHTML = "";
     heroWildcardApplyButton.disabled = true;
     heroWildcardShuffleButton.disabled = true;
     return;
   }
 
-  heroWildcardLabel.textContent = "IKVÄLL I ROM";
+  heroWildcardLabel.textContent = "KVÄLLSIDÉ";
   heroWildcardTitle.textContent = wildcard.title;
   heroWildcardSummary.textContent = wildcard.summary;
   heroWildcardMeta.textContent = wildcard.meta;
