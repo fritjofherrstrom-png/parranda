@@ -559,6 +559,46 @@ body::before {
   background: rgba(255, 255, 255, 0.72);
 }
 
+.city-pulse-teaser.is-day-handoff {
+  padding: 10px 12px;
+  border-radius: 18px;
+  gap: 10px;
+  background: rgba(255, 252, 247, 0.84);
+  border-color: rgba(70, 38, 18, 0.08);
+  box-shadow: none;
+}
+
+.city-pulse-teaser.is-day-handoff .city-pulse-live {
+  display: none;
+}
+
+.city-pulse-teaser.is-day-handoff .city-pulse-teaser-copy {
+  gap: 2px;
+  max-width: 42ch;
+}
+
+.city-pulse-teaser.is-day-handoff .city-pulse-edition-label {
+  color: rgba(36, 25, 20, 0.52);
+}
+
+.city-pulse-teaser.is-day-handoff .city-pulse-teaser-copy h2 {
+  font-family: "Manrope", sans-serif;
+  font-size: 0.98rem;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.city-pulse-teaser.is-day-handoff .city-pulse-teaser-summary {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.city-pulse-teaser.is-day-handoff .ghost-button {
+  padding: 7px 11px;
+  font-size: 0.82rem;
+}
+
 .district-stats article {
   display: inline-flex;
   align-items: center;
