@@ -1309,6 +1309,7 @@ const trastevereBarTemplate = document.getElementById("trastevereBarTemplate");
 const timelineStopTemplate = document.getElementById("timelineStopTemplate");
 const romeRouteTemplate = document.getElementById("romeRouteTemplate");
 const plannerDayTemplate = document.getElementById("plannerDayTemplate");
+const activeDayRouteTemplate = document.getElementById("activeDayRouteTemplate");
 const routeGuideBackdrop = document.getElementById("routeGuideBackdrop");
 const routeGuideDrawer = document.getElementById("routeGuideDrawer");
 const closeRouteGuideButton = document.getElementById("closeRouteGuideButton");
@@ -6549,6 +6550,204 @@ function focusLiveEventOnMap(item) {
   );
 }
 
+function appendRoutePillButtons(container, items = []) {
+  container.innerHTML = "";
+
+  items.slice(0, 5).forEach((item) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "route-chip-link";
+    chip.textContent = item;
+    chip.addEventListener("click", () => {
+      openPlaceDrawerByQuery(item);
+    });
+    container.appendChild(chip);
+  });
+}
+
+function appendRouteSpecialNotes(container, notes = []) {
+  container.hidden = !notes.length;
+  container.innerHTML = "";
+
+  notes.forEach((noteText) => {
+    const note = document.createElement("p");
+    note.className = "route-special-note";
+    note.textContent = noteText;
+    container.appendChild(note);
+  });
+}
+
+function appendRouteWarnings(container, warnings = []) {
+  container.hidden = !warnings.length;
+  container.innerHTML = "";
+
+  warnings.forEach((warningText) => {
+    const warning = document.createElement("p");
+    warning.className = "route-warning";
+    warning.textContent = warningText;
+    container.appendChild(warning);
+  });
+}
+
+function createItineraryStop(stopItem, onOpen) {
+  const stop = document.createElement("article");
+  stop.className = "route-stop-item is-itinerary";
+
+  if (stopItem.incomingLeg?.minutes || stopItem.incomingLeg?.distanceKm) {
+    const leg = document.createElement("p");
+    leg.className = "route-stop-leg";
+    leg.textContent = [
+      formatLegMinutes(Number(stopItem.incomingLeg.minutes)),
+      formatLegDistance(Number(stopItem.incomingLeg.distanceKm)),
+      stopItem.incomingLeg.fromLabel ? `från ${stopItem.incomingLeg.fromLabel}` : null,
+    ]
+      .filter(Boolean)
+      .join(" • ");
+    stop.appendChild(leg);
+  }
+
+  const main = document.createElement("div");
+  main.className = "route-stop-main";
+
+  const order = document.createElement("span");
+  order.className = "route-stop-order";
+  order.textContent = String(stopItem.order || 0);
+  main.appendChild(order);
+
+  const body = document.createElement("div");
+  body.className = "route-stop-body";
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "route-stop-link";
+  button.textContent = stopItem.label || stopItem.text;
+  button.addEventListener("click", onOpen);
+  body.appendChild(button);
+
+  const meta = document.createElement("p");
+  meta.className = "route-stop-meta";
+  meta.textContent = [stopItem.area, stopItem.tagSummary || stopItem.summary]
+    .filter(Boolean)
+    .join(" • ");
+  meta.hidden = !meta.textContent;
+  body.appendChild(meta);
+
+  const detail = document.createElement("div");
+  detail.className = "route-stop-detail";
+
+  const source = document.createElement("span");
+  source.className = `route-stop-source route-stop-source-${(stopItem.source || "curated").replace(/[^a-z-]/g, "")}`;
+  source.textContent = stopItem.sourceLabel || "Kuraterat";
+  detail.appendChild(source);
+
+  if (stopItem.isLiveEvent) {
+    const note = document.createElement("span");
+    note.className = "route-stop-note";
+    note.textContent = "Öppet just nu";
+    detail.appendChild(note);
+  }
+
+  body.appendChild(detail);
+  main.appendChild(body);
+  stop.appendChild(main);
+
+  return stop;
+}
+
+function createActiveDayView(routeView, { routeKey }) {
+  const view = activeDayRouteTemplate.content.firstElementChild.cloneNode(true);
+  const engineStrip = view.querySelector(".active-day-engine");
+  const enginePills = view.querySelector(".active-day-engine-pills");
+  const engineNote = view.querySelector(".active-day-engine-note");
+  const legSummary = view.querySelector(".active-day-leg-summary");
+  const weatherNote = view.querySelector(".active-day-weather-note");
+  const specials = view.querySelector(".active-day-specials");
+  const warnings = view.querySelector(".active-day-warnings");
+  const itinerary = view.querySelector(".active-day-itinerary");
+  const hiddenMentions = view.querySelector(".active-day-hidden-pills");
+  const hiddenBlock = view.querySelector('.active-day-mentions[data-kind="hidden"]');
+  const barMentions = view.querySelector(".active-day-bar-pills");
+  const barsBlock = view.querySelector('.active-day-mentions[data-kind="bars"]');
+  const selectButton = view.querySelector(".active-day-select-button");
+  const guideButton = view.querySelector(".active-day-guide-button");
+  const routeLink = view.querySelector(".active-day-route-link");
+
+  view.dataset.routeKey = routeKey;
+  view.classList.toggle("is-selected", activeRouteKey === routeKey);
+
+  view.querySelector(".active-day-shape").textContent = routeView.routeShapeLabel || "Dag";
+  view.querySelector(".active-day-length").textContent = routeView.length;
+  view.querySelector(".active-day-flow-note").textContent =
+    routeView.visibleWhy || routeView.geoFitNote || routeView.summary || "";
+
+  enginePills.innerHTML = "";
+  (routeView.engineBadges || []).forEach((label) => {
+    const pill = document.createElement("span");
+    pill.className = "route-engine-pill";
+    pill.textContent = label;
+    enginePills.appendChild(pill);
+  });
+  engineNote.hidden = !routeView.anchorExplanation;
+  engineNote.textContent = routeView.anchorExplanation || "";
+  engineStrip.hidden = !(routeView.engineBadges?.length || routeView.anchorExplanation);
+
+  legSummary.hidden = !routeView.legSummary;
+  if (routeView.legSummary) {
+    legSummary.textContent = routeView.legSummary;
+  }
+
+  weatherNote.hidden = !routeView.weatherNote;
+  if (routeView.weatherNote) {
+    weatherNote.textContent = routeView.weatherNote;
+  }
+
+  const specialNotes = [
+    routeView.pulseNote,
+    routeView.liveEventFitNote,
+    ...(routeView.venueSpecials || []),
+    routeView.budgetNote,
+  ].filter(Boolean);
+  appendRouteSpecialNotes(specials, specialNotes);
+  appendRouteWarnings(warnings, routeView.openingWarnings || []);
+
+  itinerary.innerHTML = "";
+  (routeView.stopItems || []).forEach((stopItem) => {
+    const openStop = () => {
+      if (stopItem.liveEvent) {
+        openPlaceDrawer(buildEventDrawerItem(stopItem.liveEvent));
+        return;
+      }
+      openPlaceDrawerByQuery(stopItem.query || stopItem.label || stopItem.text);
+    };
+
+    itinerary.appendChild(createItineraryStop(stopItem, openStop));
+  });
+
+  appendRoutePillButtons(hiddenMentions, routeView.hiddenMentions || []);
+  hiddenBlock.hidden = !(routeView.hiddenMentions || []).length;
+  appendRoutePillButtons(barMentions, routeView.barMentions || []);
+  barsBlock.hidden = !(routeView.barMentions || []).length;
+
+  routeLink.href = routeView.routeLink;
+  routeLink.textContent = "Öppna dagens rutt";
+
+  selectButton.classList.toggle("is-active", activeRouteKey === routeKey);
+  selectButton.textContent = activeRouteKey === routeKey ? "Kartfokus aktivt" : "Visa i appen";
+  selectButton.addEventListener("click", () => {
+    focusRouteCardOnMap(
+      routeView,
+      routeKey,
+      `"${routeView.title}" är nu kartfokuserad. Hoppa till Romkarta om du vill se stråket i detalj.`,
+    );
+  });
+
+  guideButton.addEventListener("click", () => {
+    openRouteGuide(routeView);
+  });
+
+  return view;
+}
+
 function createRouteCard(
   routeView,
   { routeKey, isSecondary = false, isRecommended = false, renderMode = "default" },
@@ -6656,9 +6855,6 @@ function createRouteCard(
   const stopItems = routeView.stopItems || routeView.stops.map((text) => ({ text }));
   const visibleStops = renderMode === "primary" ? stopItems : stopItems.slice(0, 4);
   visibleStops.forEach((stopItem) => {
-    const stop = document.createElement("article");
-    stop.className = "route-stop-item";
-
     const openStop = () => {
       if (stopItem.liveEvent) {
         openPlaceDrawer(buildEventDrawerItem(stopItem.liveEvent));
@@ -6668,66 +6864,12 @@ function createRouteCard(
     };
 
     if (renderMode === "primary") {
-      stop.classList.add("is-itinerary");
-
-      if (stopItem.incomingLeg?.minutes || stopItem.incomingLeg?.distanceKm) {
-        const leg = document.createElement("p");
-        leg.className = "route-stop-leg";
-        leg.textContent = [
-          formatLegMinutes(Number(stopItem.incomingLeg.minutes)),
-          formatLegDistance(Number(stopItem.incomingLeg.distanceKm)),
-          stopItem.incomingLeg.fromLabel ? `från ${stopItem.incomingLeg.fromLabel}` : null,
-        ]
-          .filter(Boolean)
-          .join(" • ");
-        stop.appendChild(leg);
-      }
-
-      const main = document.createElement("div");
-      main.className = "route-stop-main";
-
-      const order = document.createElement("span");
-      order.className = "route-stop-order";
-      order.textContent = String(stopItem.order || 0);
-      main.appendChild(order);
-
-      const body = document.createElement("div");
-      body.className = "route-stop-body";
-
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "route-stop-link";
-      button.textContent = stopItem.label || stopItem.text;
-      button.addEventListener("click", openStop);
-      body.appendChild(button);
-
-      const meta = document.createElement("p");
-      meta.className = "route-stop-meta";
-      meta.textContent = [stopItem.area, stopItem.tagSummary || stopItem.summary].filter(Boolean).join(" • ");
-      meta.hidden = !meta.textContent;
-      body.appendChild(meta);
-
-      const detail = document.createElement("div");
-      detail.className = "route-stop-detail";
-
-      const source = document.createElement("span");
-      source.className = `route-stop-source route-stop-source-${(stopItem.source || "curated").replace(/[^a-z-]/g, "")}`;
-      source.textContent = stopItem.sourceLabel || "Kuraterat";
-      detail.appendChild(source);
-
-      if (stopItem.isLiveEvent) {
-        const note = document.createElement("span");
-        note.className = "route-stop-note";
-        note.textContent = "Öppet just nu";
-        detail.appendChild(note);
-      }
-
-      body.appendChild(detail);
-      main.appendChild(body);
-      stop.appendChild(main);
-      stopsContainer.appendChild(stop);
+      stopsContainer.appendChild(createItineraryStop(stopItem, openStop));
       return;
     }
+
+    const stop = document.createElement("article");
+    stop.className = "route-stop-item";
 
     const source = document.createElement("span");
     source.className = `route-stop-source route-stop-source-${(stopItem.source || "curated").replace(/[^a-z-]/g, "")}`;
@@ -6751,30 +6893,13 @@ function createRouteCard(
     stopsContainer.appendChild(overflow);
   }
 
-  routeView.hiddenMentions.slice(0, 5).forEach((item) => {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "route-chip-link";
-    chip.textContent = item;
-    chip.addEventListener("click", () => {
-      openPlaceDrawerByQuery(item);
-    });
-    hiddenContainer.appendChild(chip);
-  });
+  const hiddenMentionsList = routeView.hiddenMentions || [];
+  const barMentionsList = routeView.barMentions || [];
+  appendRoutePillButtons(hiddenContainer, hiddenMentionsList);
+  appendRoutePillButtons(barsContainer, barMentionsList);
 
-  routeView.barMentions.slice(0, 5).forEach((item) => {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "route-chip-link";
-    chip.textContent = item;
-    chip.addEventListener("click", () => {
-      openPlaceDrawerByQuery(item);
-    });
-    barsContainer.appendChild(chip);
-  });
-
-  hiddenContainer.closest(".route-mentions").hidden = routeView.hiddenMentions.length === 0;
-  barsContainer.closest(".route-mentions").hidden = routeView.barMentions.length === 0;
+  hiddenContainer.closest(".route-mentions").hidden = hiddenMentionsList.length === 0;
+  barsContainer.closest(".route-mentions").hidden = barMentionsList.length === 0;
 
   selectButton.addEventListener("click", () => {
     focusRouteCardOnMap(
@@ -6915,10 +7040,8 @@ function renderPlannedDays() {
   });
 
   primarySlot.appendChild(
-    createRouteCard(primaryRouteView, {
+    createActiveDayView(primaryRouteView, {
       routeKey: primaryKey,
-      isRecommended: true,
-      renderMode: "primary",
     }),
   );
 
