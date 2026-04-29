@@ -484,6 +484,69 @@ test("leg pacing short ger tätare ben än flexible på samma låsta båge", () 
   assert.ok(shortRoute.longest_leg_km <= flexibleRoute.longest_leg_km);
 });
 
+test("day profile light bygger en lättare dag än peak med samma template", () => {
+  const template = routeTemplates.find((entry) => entry.id === "south-loop");
+  const start = { label: "Trastevere", lat: 41.8885, lng: 12.4678 };
+  const end = { label: "Trastevere", lat: 41.8885, lng: 12.4678 };
+
+  assert.ok(template);
+
+  const lightRoute = buildRouteFromTemplate(
+    template,
+    start,
+    end,
+    9,
+    ["öl", "vin", "mat", "hidden gems"],
+    "bar-hop",
+    null,
+    "soft_target",
+    [],
+    { dayProfile: "light" },
+  );
+
+  const peakRoute = buildRouteFromTemplate(
+    template,
+    start,
+    end,
+    9,
+    ["öl", "vin", "mat", "hidden gems"],
+    "bar-hop",
+    null,
+    "soft_target",
+    [],
+    { dayProfile: "peak" },
+  );
+
+  assert.equal(lightRoute.day_profile, "light");
+  assert.equal(peakRoute.day_profile, "peak");
+  assert.ok(lightRoute.main_stops.length < peakRoute.main_stops.length);
+});
+
+test("alternativrutterna får ofta annan day profile än huvudrutten", async () => {
+  global.fetch = createWeatherFetch({
+    "2026-04-19": 0,
+  });
+
+  const result = await generateRecommendations({
+    dates: ["2026-04-19"],
+    start: { type: "preset", label: "Trastevere" },
+    end: { type: "preset", label: "Trastevere" },
+    walkingKmTarget: 11,
+    preferences: ["öl", "vin", "mat", "hidden gems", "nattliv", "kväll", "party"],
+    optimizerMode: "bar-hop",
+    modifier: "party",
+    distanceMode: "no_limit",
+  });
+
+  const primary = result.days[0].primary_route;
+  const alternatives = result.days[0].alternatives;
+
+  assert.ok(alternatives.length > 0);
+  assert.equal(primary.day_profile, "peak");
+  assert.ok(alternatives.every((route) => route.day_profile));
+  assert.ok(alternatives.some((route) => route.day_profile !== primary.day_profile));
+});
+
 test("mentions följer faktiska stopp nära den genererade rutten", async () => {
   global.fetch = createWeatherFetch({
     "2026-04-18": 0,

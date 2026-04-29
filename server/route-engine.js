@@ -1769,28 +1769,98 @@ function projectPointToAxis(point, start, end) {
   };
 }
 
-function desiredStopCount(poolSize, targetKm, distanceMode) {
+function normalizeDayProfile(dayProfile = "peak") {
+  return ["light", "peak", "variation", "final"].includes(dayProfile) ? dayProfile : "peak";
+}
+
+function choosePrimaryDayProfile({
+  dateIndex = 0,
+  totalDates = 1,
+  targetKm = 8,
+  distanceMode = "soft_target",
+  preferences = [],
+  optimizerMode = null,
+} = {}) {
+  const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
+
+  if (totalDates > 1 && dateIndex === totalDates - 1) {
+    return "final";
+  }
+
+  if (strictTags.length === 1 || targetKm <= 6) {
+    return "light";
+  }
+
+  if (distanceMode === "no_limit" && (preferences.includes("nattliv") || preferences.includes("party"))) {
+    return "peak";
+  }
+
+  return "peak";
+}
+
+function buildAlternativeDayProfiles(primaryDayProfile = "peak") {
+  const primary = normalizeDayProfile(primaryDayProfile);
+
+  if (primary === "light") {
+    return ["variation", "peak"];
+  }
+
+  if (primary === "final") {
+    return ["variation", "light"];
+  }
+
+  if (primary === "variation") {
+    return ["light", "peak"];
+  }
+
+  return ["variation", "light"];
+}
+
+function desiredStopCount(poolSize, targetKm, distanceMode, dayProfile = "peak") {
   if (poolSize <= 3) {
     return poolSize;
   }
 
+  const normalizedProfile = normalizeDayProfile(dayProfile);
+
   if (distanceMode === "no_limit") {
-    return Math.min(poolSize, 6);
+    const noLimitBase = Math.min(poolSize, 6);
+
+    if (normalizedProfile === "light" || normalizedProfile === "final") {
+      return Math.max(3, noLimitBase - 1);
+    }
+
+    if (normalizedProfile === "peak") {
+      return Math.min(poolSize, noLimitBase + 1);
+    }
+
+    return noLimitBase;
   }
 
+  let baseCount;
   if (targetKm <= 5) {
-    return Math.min(poolSize, 3);
+    baseCount = Math.min(poolSize, 3);
+  } else if (targetKm <= 7) {
+    baseCount = Math.min(poolSize, 4);
+  } else if (targetKm <= 9) {
+    baseCount = Math.min(poolSize, 5);
+  } else {
+    baseCount = Math.min(poolSize, 6);
   }
 
-  if (targetKm <= 7) {
-    return Math.min(poolSize, 4);
+  if (normalizedProfile === "light") {
+    return Math.max(2, baseCount - 1);
   }
 
-  if (targetKm <= 9) {
-    return Math.min(poolSize, 5);
+  if (normalizedProfile === "final") {
+    return Math.max(2, Math.min(baseCount, 4) - 1);
   }
 
-  return Math.min(poolSize, 6);
+  if (normalizedProfile === "peak") {
+    return Math.min(poolSize, baseCount + (targetKm >= 8 ? 1 : 0));
+  }
+
+  return baseCount;
 }
 
 function loopRadiusKm(targetKm, distanceMode) {
@@ -1810,6 +1880,152 @@ function isAnchorDuplicateStop(item, point) {
 
 function uniqueStops(items) {
   return [...new Map(items.map((item) => [item.id, item])).values()];
+}
+
+function ensureLockedArcCoverage(selectedStops, sortedPool, start, end, desiredCount) {
+  const selected = uniqueStops(selectedStops);
+
+  if (selected.length < 2 || !Array.isArray(sortedPool) || !sortedPool.length) {
+    return selected;
+  }
+
+  const startProfile = buildPointAreaProfile(start);
+  const endProfile = buildPointAreaProfile(end);
+
+  const metaById = new Map(
+    sortedPool.map((entry) => {
+      const axis = projectPointToAxis(entry.item, start, end);
+      const distanceToStart = haversineKm(start, entry.item);
+      const distanceToEnd = haversineKm(end, entry.item);
+      const itemProfile = buildItemAreaProfile(entry.item);
+      const nearStart =
+        distanceToStart <= 1.15 ||
+        axis.progressKm <= Math.max(0.7, axis.axisLengthKm * 0.34);
+      const nearEnd =
+        distanceToEnd <= 1.15 ||
+        axis.progressKm >= axis.axisLengthKm * 0.56;
+
+      return [
+        entry.item.id,
+        {
+          axis,
+          distanceToStart,
+          distanceToEnd,
+          itemProfile,
+          nearStart,
+          nearEnd,
+        },
+      ];
+    }),
+  );
+
+  const selectedIds = new Set(selected.map((item) => item.id));
+  const hasNearStart = selected.some((item) => metaById.get(item.id)?.nearStart);
+  const candidates = sortedPool.map((entry) => entry.item);
+  const hasStartToken =
+    startProfile?.primaryToken &&
+    selected.some((item) => metaById.get(item.id)?.itemProfile.primaryToken === startProfile.primaryToken);
+  const hasEndToken =
+    endProfile?.primaryToken &&
+    selected.some((item) => metaById.get(item.id)?.itemProfile.primaryToken === endProfile.primaryToken);
+
+  const replaceForStart = (candidate) => {
+    const replaceIndex = selected.reduce((chosenIndex, item, index) => {
+      const meta = metaById.get(item.id);
+
+      if (!meta || meta.nearStart || meta.itemProfile.primaryToken === startProfile?.primaryToken) {
+        return chosenIndex;
+      }
+
+      if (chosenIndex < 0) {
+        return index;
+      }
+
+      const chosenMeta = metaById.get(selected[chosenIndex].id);
+      return (meta.axis.progressKm || 0) > (chosenMeta?.axis.progressKm || 0) ? index : chosenIndex;
+    }, -1);
+
+    if (replaceIndex >= 0) {
+      selected[replaceIndex] = candidate;
+      selectedIds.add(candidate.id);
+    }
+  };
+
+  const replaceForEnd = (candidate) => {
+    const replaceIndex = selected.reduce((chosenIndex, item, index) => {
+      const meta = metaById.get(item.id);
+
+      if (!meta || meta.nearEnd || meta.itemProfile.primaryToken === endProfile?.primaryToken) {
+        return chosenIndex;
+      }
+
+      if (chosenIndex < 0) {
+        return index;
+      }
+
+      const chosenMeta = metaById.get(selected[chosenIndex].id);
+      return (meta.axis.progressKm || 0) < (chosenMeta?.axis.progressKm || 0) ? index : chosenIndex;
+    }, -1);
+
+    if (replaceIndex >= 0) {
+      selected[replaceIndex] = candidate;
+      selectedIds.add(candidate.id);
+    }
+  };
+
+  if (!hasStartToken && startProfile?.primaryToken) {
+    const startTokenCandidate = candidates.find((item) => {
+      const meta = metaById.get(item.id);
+      return (
+        !selectedIds.has(item.id) &&
+        meta?.itemProfile.primaryToken === startProfile.primaryToken &&
+        (meta.nearStart || meta.distanceToStart <= 1.7)
+      );
+    });
+
+    if (startTokenCandidate) {
+      replaceForStart(startTokenCandidate);
+    }
+  }
+
+  if (!hasNearStart) {
+    const startCandidate = candidates.find((item) => {
+      const meta = metaById.get(item.id);
+      return !selectedIds.has(item.id) && meta?.nearStart;
+    });
+
+    if (startCandidate) {
+      replaceForStart(startCandidate);
+    }
+  }
+
+  if (!hasEndToken && endProfile?.primaryToken) {
+    const endTokenCandidate = candidates.find((item) => {
+      const meta = metaById.get(item.id);
+      return (
+        !selectedIds.has(item.id) &&
+        meta?.itemProfile.primaryToken === endProfile.primaryToken &&
+        (meta.nearEnd || meta.distanceToEnd <= 1.7)
+      );
+    });
+
+    if (endTokenCandidate) {
+      replaceForEnd(endTokenCandidate);
+    }
+  }
+
+  if (!selected.some((item) => metaById.get(item.id)?.nearEnd)) {
+    const endCandidate = candidates.find((item) => {
+      const meta = metaById.get(item.id);
+      return !selectedIds.has(item.id) && meta?.nearEnd;
+    });
+
+    if (endCandidate) {
+      replaceForEnd(endCandidate);
+    }
+  }
+
+  return uniqueStops(selected).slice(0, desiredCount);
 }
 
 function preferenceBoostForStop(
@@ -2120,6 +2336,7 @@ function buildStopPool(
 ) {
   const shape = isLoopRoute(start, end) ? "loop" : "arc";
   const legPacing = normalizeLegPacing(options.legPacing);
+  const dayProfile = normalizeDayProfile(options.dayProfile);
   const startProfile = buildPointAreaProfile(start);
   const endProfile = buildPointAreaProfile(end);
   const manualAnchorsLocked = Boolean(options.manualAnchorsLocked);
@@ -2919,6 +3136,7 @@ function buildRouteFromTemplate(
 ) {
   const shape = isLoopRoute(start, end) ? "loop" : "arc";
   const legPacing = normalizeLegPacing(options.legPacing);
+  const dayProfile = normalizeDayProfile(options.dayProfile);
   const startProfile = buildPointAreaProfile(start);
   const endProfile = buildPointAreaProfile(end);
   const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
@@ -2955,7 +3173,7 @@ function buildRouteFromTemplate(
       }),
     }))
     .sort((left, right) => right.score - left.score);
-  const selectedCount = desiredStopCount(sortedPool.length, targetKm, distanceMode);
+  const selectedCount = desiredStopCount(sortedPool.length, targetKm, distanceMode, dayProfile);
   const strictPool = strictTags.length
     ? sortedPool.filter((entry) => itemMatchesStrictPreference(entry.item, strictTags))
     : [];
@@ -2973,6 +3191,16 @@ function buildRouteFromTemplate(
 
   if (!selectedStops.length) {
     selectedStops = sortedPool.slice(0, Math.min(rawPool.length, 3)).map((entry) => entry.item);
+  }
+
+  if (options.manualAnchorsLocked && shape === "arc") {
+    selectedStops = ensureLockedArcCoverage(
+      selectedStops,
+      sortedPool,
+      start,
+      end,
+      selectedCount,
+    );
   }
 
   const { orderedStops, geometry } = optimizeStopOrder(
@@ -3058,6 +3286,7 @@ function buildRouteFromTemplate(
       endProfile,
     }),
     anchor_zone: buildAnchorZone(shape, startProfile, endProfile, routeArea),
+    day_profile: dayProfile,
     geo_quality_score: Number((geometry?.qualityScore || 0).toFixed(1)),
     pool_fit_penalty: Math.max(0, rawPool.length - orderedStops.length - 1) * 0.9,
   };
@@ -3791,6 +4020,85 @@ function pickDistinctRoutes(rankedEntries, usedRoutes = [], maxRoutes = 3) {
   return picked;
 }
 
+function pickAlternativeRoutes(
+  rankedEntries,
+  primaryEntry,
+  usedRoutes = [],
+  preferredProfiles = ["variation", "light"],
+  maxRoutes = 2,
+) {
+  const remaining = [...rankedEntries];
+  const picked = [];
+  const strongCutoff = 8.8;
+  const softCutoff = 10.2;
+  const preferredProfileOrder = new Map(preferredProfiles.map((profile, index) => [profile, index]));
+
+  while (remaining.length && picked.length < maxRoutes) {
+    let bestIndex = -1;
+    let bestScore = Number.NEGATIVE_INFINITY;
+
+    remaining.forEach((entry, index) => {
+      const similarityToPrimary = primaryEntry ? routeSimilarity(entry.route, primaryEntry.route) : 0;
+      const maxIntraSimilarity = picked.reduce(
+        (max, chosen) => Math.max(max, routeSimilarity(entry.route, chosen.route)),
+        0,
+      );
+      const maxCrossDaySimilarity = usedRoutes.reduce(
+        (max, usedRoute) => Math.max(max, routeSimilarity(entry.route, usedRoute)),
+        0,
+      );
+
+      if (
+        similarityToPrimary >= softCutoff ||
+        maxIntraSimilarity >= softCutoff ||
+        (usedRoutes.length && maxCrossDaySimilarity >= 10.6)
+      ) {
+        return;
+      }
+
+      const profileRank = preferredProfileOrder.has(entry.dayProfile)
+        ? preferredProfileOrder.get(entry.dayProfile)
+        : preferredProfiles.length;
+      const profileBonus = Math.max(0, 2.4 - profileRank * 0.9);
+      const primaryProfilePenalty =
+        primaryEntry && entry.dayProfile === primaryEntry.dayProfile ? 1.6 : 0;
+      const softSimilarityPenalty = Math.max(0, similarityToPrimary - strongCutoff) * 1.2;
+      const intraPenalty = picked.reduce(
+        (sum, chosen) => sum + routeSimilarity(entry.route, chosen.route),
+        0,
+      );
+      const crossDayPenalty = usedRoutes.reduce(
+        (sum, usedRoute) => sum + routeSimilarity(entry.route, usedRoute) * 0.75,
+        0,
+      );
+      const adjustedScore =
+        entry.score +
+        profileBonus -
+        primaryProfilePenalty -
+        softSimilarityPenalty -
+        intraPenalty -
+        crossDayPenalty;
+
+      if (adjustedScore > bestScore) {
+        bestScore = adjustedScore;
+        bestIndex = index;
+      }
+    });
+
+    if (bestIndex < 0 || !Number.isFinite(bestScore)) {
+      break;
+    }
+
+    const [next] = remaining.splice(bestIndex, 1);
+    picked.push({
+      ...next,
+      adjustedScore: Number(bestScore.toFixed(1)),
+    });
+  }
+
+  return picked;
+}
+
 async function generateRecommendations({
   city = "rome",
   dates,
@@ -3874,15 +4182,25 @@ async function generateRecommendations({
     const truthPassCount = Math.max(1, getWalkingConfig().truthPassTopCandidates || 5);
 
     const days = await Promise.all(
-      normalizedDates.map(async (date) => {
+      normalizedDates.map(async (date, dateIndex) => {
         const weekday = weekdayFromDate(date);
         const weather = weatherByDate[date];
         const pulse = pulseByDate[date] || getPulseForDate(date);
         const dateSignals = getDateSignalsForDate(date);
         const pulseItems = Array.isArray(pulse.items) ? pulse.items : [];
         const liveEvents = liveEventsByDate[date] || [];
+        const primaryDayProfile = choosePrimaryDayProfile({
+          dateIndex,
+          totalDates: normalizedDates.length,
+          targetKm: walkingKmTarget,
+          distanceMode,
+          preferences,
+          optimizerMode,
+        });
+        const alternativeDayProfiles = buildAlternativeDayProfiles(primaryDayProfile);
+        const candidateDayProfiles = [...new Set([primaryDayProfile, ...alternativeDayProfiles])];
 
-        const buildRankedEntry = async (template, baseRoute = null) => {
+        const buildRankedEntry = async (template, baseRoute = null, dayProfile = primaryDayProfile) => {
           const route =
             baseRoute ||
             buildRouteFromTemplate(
@@ -3899,6 +4217,7 @@ async function generateRecommendations({
                 manualAnchorsLocked,
                 resolvedAutoShape,
                 legPacing,
+                dayProfile,
               },
             );
           const routeStops = route.main_stops
@@ -3926,6 +4245,7 @@ async function generateRecommendations({
 
           return {
             template,
+            dayProfile,
             route: {
               ...route,
               weather_note: scoring.weatherNote,
@@ -3955,24 +4275,42 @@ async function generateRecommendations({
         };
 
         const initialRanked = await Promise.all(
-          getRouteTemplates().map((template) => buildRankedEntry(template)),
+          getRouteTemplates().flatMap((template) =>
+            candidateDayProfiles.map((dayProfile) => buildRankedEntry(template, null, dayProfile)),
+          ),
         );
         initialRanked.sort((a, b) => b.score - a.score);
 
         const truthEnhancedEntries = await Promise.all(
           initialRanked.slice(0, truthPassCount).map(async (entry) => {
             const truthRoute = await applyWalkingTruthToRoute(entry.route, { legPacing });
-            return buildRankedEntry(entry.template, truthRoute);
+            return buildRankedEntry(entry.template, truthRoute, entry.dayProfile);
           }),
         );
         const truthEnhancedById = new Map(
-          truthEnhancedEntries.map((entry) => [entry.template.id, entry]),
+          truthEnhancedEntries.map((entry) => [`${entry.template.id}::${entry.dayProfile}`, entry]),
         );
         const ranked = initialRanked
-          .map((entry) => truthEnhancedById.get(entry.template.id) || entry)
+          .map((entry) => truthEnhancedById.get(`${entry.template.id}::${entry.dayProfile}`) || entry)
           .sort((a, b) => b.score - a.score);
 
-        const [primary, ...alternatives] = pickDistinctRoutes(ranked, usedPrimaryRoutes, 3);
+        const primaryCandidates = ranked.filter((entry) => entry.dayProfile === primaryDayProfile);
+        const [primary] = pickDistinctRoutes(
+          primaryCandidates.length ? primaryCandidates : ranked,
+          usedPrimaryRoutes,
+          1,
+        );
+        const alternativeCandidates = ranked.filter(
+          (entry) =>
+            !(entry.template.id === primary.template.id && entry.dayProfile === primary.dayProfile),
+        );
+        const alternatives = pickAlternativeRoutes(
+          alternativeCandidates,
+          primary,
+          usedPrimaryRoutes,
+          alternativeDayProfiles,
+          2,
+        );
         const annotatedLiveEvents = annotateLiveEventsForRoutes(liveEvents, [
           {
             label: "Huvudrutten",
