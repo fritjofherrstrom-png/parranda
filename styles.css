@@ -2384,6 +2384,43 @@ body::before {
   font-size: 0.95rem;
 }
 
+.route-engine-strip {
+  display: grid;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.route-engine-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.route-engine-pill,
+.route-stop-source {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(70, 38, 18, 0.1);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--accent-deep);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.route-engine-note {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(70, 38, 18, 0.08);
+  background: rgba(255, 252, 247, 0.82);
+  color: var(--muted);
+  line-height: 1.6;
+}
+
 .route-advice {
   display: grid;
   gap: 10px;
@@ -2420,10 +2457,26 @@ body::before {
 }
 
 .route-stop-item {
+  display: grid;
+  gap: 10px;
   padding: 12px 14px;
   border-radius: 18px;
   background: rgba(255, 252, 247, 0.75);
   border: 1px solid rgba(70, 38, 18, 0.08);
+}
+
+.route-stop-source-live {
+  background: rgba(215, 160, 77, 0.18);
+  border-color: rgba(175, 77, 36, 0.18);
+}
+
+.route-stop-source-curated {
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.route-stop-source-swapped {
+  background: rgba(165, 178, 140, 0.2);
+  border-color: rgba(70, 83, 64, 0.16);
 }
 
 .route-stop-link,

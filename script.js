@@ -1487,6 +1487,7 @@ let routeRenderMode = "fallback";
 let plannedDays = [];
 let activePlannedDate = null;
 let latestPlannerSnapshot = null;
+let latestPlannerResolution = null;
 let activeDistrictId = "monti";
 let activeOptimizerMode = null;
 let activeDistanceMode = "soft_target";
@@ -1507,6 +1508,18 @@ let activePulseRadiusKey = "5";
 let activeLiveDate = getTodayIsoDate();
 let liveEditionExpanded = false;
 const expandedAlternativeDates = new Set();
+
+const dayProfileLabels = {
+  light: "Lätt dag",
+  peak: "Peak",
+  variation: "Variation",
+  final: "Mjuk final",
+};
+
+const routingSourceLabels = {
+  heuristic: "Heuristisk gånglogik",
+  osrm: "Verifierad gångväg",
+};
 
 const cityPulseScopeMeta = {
   all: {
@@ -4558,9 +4571,13 @@ function serializeRouteView(routeView) {
     length: routeView.length,
     summary: routeView.summary,
     why: routeView.why,
+    visibleWhy: routeView.visibleWhy || null,
     path: routeView.path,
     anchor: routeView.anchor,
     walk: routeView.walk,
+    startAnchorLabel: routeView.startAnchorLabel || null,
+    endAnchorLabel: routeView.endAnchorLabel || null,
+    routeShapeLabel: routeView.routeShapeLabel || null,
     legSummary: routeView.legSummary || null,
     stops: [...(routeView.stops || [])],
     stopItems: [...(routeView.stopItems || [])],
@@ -4577,6 +4594,8 @@ function serializeRouteView(routeView) {
     liveEvents: [...(routeView.liveEvents || [])],
     dateLabel: routeView.dateLabel || null,
     routeShape: routeView.routeShape || null,
+    dayProfile: routeView.dayProfile || null,
+    dayProfileLabel: routeView.dayProfileLabel || null,
     legs: [...(routeView.legs || [])],
     longestLegKm: routeView.longestLegKm || null,
     longestLegMinutes: routeView.longestLegMinutes || null,
@@ -4584,6 +4603,10 @@ function serializeRouteView(routeView) {
     legFitNote: routeView.legFitNote || null,
     geoFitNote: routeView.geoFitNote || null,
     anchorZone: routeView.anchorZone || null,
+    routingSourceLabel: routeView.routingSourceLabel || null,
+    pacingLabel: routeView.pacingLabel || null,
+    anchorExplanation: routeView.anchorExplanation || null,
+    engineBadges: [...(routeView.engineBadges || [])],
     guideStops: [...(routeView.guideStops || [])],
   };
 }
@@ -5380,6 +5403,67 @@ function buildLegSummary(route) {
   return parts.filter(Boolean).join(" • ");
 }
 
+function stopSourceLabel(stop) {
+  if (stop?.isLiveEvent) {
+    return "Live";
+  }
+
+  if (stop?.source === "swapped") {
+    return "Inbytt";
+  }
+
+  return "Kuraterat";
+}
+
+function getRouteLegPacingLabel() {
+  const pacingKey = latestPlannerSnapshot?.legPacing || "balanced";
+  return legPacingLabels[pacingKey] || legPacingLabels.balanced;
+}
+
+function getRouteDayProfileLabel(dayProfile) {
+  return dayProfileLabels[dayProfile] || "Komponerad dag";
+}
+
+function getRoutingSourceLabel(routingSource) {
+  return routingSourceLabels[routingSource] || routingSourceLabels.heuristic;
+}
+
+function buildAnchorExplanation(route) {
+  if (!latestPlannerResolution) {
+    return null;
+  }
+
+  const startSource = latestPlannerResolution.start?.source || null;
+  const endSource = latestPlannerResolution.end?.source || null;
+  const homeBase = latestPlannerResolution.homeBase?.label || null;
+
+  if (activePlannerMode === plannerAutoMode) {
+    if (homeBase) {
+      return `Parranda använder ${homeBase} som mjuk boendebas och lät dagen öppna där den här rytmen får bäst fäste.`;
+    }
+
+    return `Parranda valde själv bas, start och final för att dagen ska kännas mer naturlig än låst.`;
+  }
+
+  if (startSource === "auto" && endSource === "auto") {
+    return "Du lämnade ankare öppna, så Parranda valde själv var dagen ska börja och landa.";
+  }
+
+  if (startSource === "auto") {
+    return `Parranda valde start runt ${route.startAnchorLabel || route.anchorZone || route.routeShapeLabel} för att ge rutten en naturligare öppning mot din valda final.`;
+  }
+
+  if (endSource === "auto") {
+    return `Parranda valde final runt ${route.endAnchorLabel || route.anchorZone || route.routeShapeLabel} för att låta dagen landa starkare än en helt låst slutpunkt.`;
+  }
+
+  return null;
+}
+
+function buildVisibleWhy(route) {
+  return takeLeadSentences(route.why || route.summary, 2, 220);
+}
+
 function createApiRouteView(
   route,
   label = "Huvudrutt",
@@ -5401,9 +5485,13 @@ function createApiRouteView(
     length: `ca ${route.estimated_km} km`,
     summary: route.summary,
     why: route.why_recommended,
+    visibleWhy: buildVisibleWhy(route),
     path: `${route.start_label} -> ${stopLabels} -> ${route.end_label}`,
     anchor: `Start: ${route.start_label}`,
     walk: `${routeShapeLabel} • slut: ${route.end_label}`,
+    startAnchorLabel: route.start_label,
+    endAnchorLabel: route.end_label,
+    routeShapeLabel,
     legSummary: buildLegSummary(route),
     stops: route.main_stops.map(
       (stop, index) =>
@@ -5413,6 +5501,8 @@ function createApiRouteView(
       text: `${index + 1}. ${stop.label} • ${stop.area} • ${stop.tags.join(", ")}`,
       query: stop.drawer_query || stop.label,
       isLiveEvent: Boolean(stop.is_live_event),
+      source: stop.is_live_event ? "live" : "curated",
+      sourceLabel: stopSourceLabel({ isLiveEvent: Boolean(stop.is_live_event) }),
       eventId: stop.event_id || null,
       liveEvent: stop.event_id ? liveEventById.get(String(stop.event_id)) || null : null,
     })),
@@ -5432,6 +5522,8 @@ function createApiRouteView(
     savePayload,
     dateLabel: dayDate ? formatSwedishDate(dayDate) : null,
     routeShape: route.route_shape || null,
+    dayProfile: route.day_profile || "peak",
+    dayProfileLabel: getRouteDayProfileLabel(route.day_profile || "peak"),
     legs: route.legs || [],
     longestLegKm: route.longest_leg_km || null,
     longestLegMinutes: route.longest_leg_minutes || null,
@@ -5439,12 +5531,26 @@ function createApiRouteView(
     legFitNote: route.leg_fit_note || null,
     geoFitNote: route.geo_fit_note || null,
     anchorZone: route.anchor_zone || null,
+    routingSourceLabel: getRoutingSourceLabel(route.routing_source || "heuristic"),
+    pacingLabel: getRouteLegPacingLabel(),
+    anchorExplanation: buildAnchorExplanation({
+      startAnchorLabel: route.start_label,
+      endAnchorLabel: route.end_label,
+      anchorZone: route.anchor_zone || null,
+      routeShapeLabel,
+    }),
+    engineBadges: [
+      getRouteDayProfileLabel(route.day_profile || "peak"),
+      getRouteLegPacingLabel(),
+      getRoutingSourceLabel(route.routing_source || "heuristic"),
+    ].filter(Boolean),
     guideStops: route.main_stops.map((stop, index) => ({
       order: index + 1,
       label: stop.label,
       area: stop.area,
       summary: stop.summary || stop.vibe || stop.tags.join(", "),
       meta: [
+        stopSourceLabel({ isLiveEvent: Boolean(stop.is_live_event) }),
         stop.is_live_event ? "Live just nu" : null,
         stop.best_time ? `Bäst: ${stop.best_time}` : null,
         stop.price_level ? `Pris: ${stop.price_level}` : null,
@@ -5536,7 +5642,8 @@ function openRouteGuide(routeView) {
   routeGuideSummary.textContent = routeView.summary || "";
   routeGuideWhy.textContent =
     takeLeadSentences(
-      routeView.why ||
+      routeView.anchorExplanation ||
+        routeView.why ||
         routeView.geoFitNote ||
         "Parranda valde den här rutten som dagens tydligaste huvudspår.",
       3,
@@ -5549,6 +5656,8 @@ function openRouteGuide(routeView) {
     { label: "Start", value: routeView.anchor?.replace(/^Start:\s*/, "") || routeView.mapRoutePoints?.[0]?.label || "Rom" },
     { label: "Slut", value: routeView.walk?.replace(/^Båge • slut:\s*|^Loop • slut:\s*|^Slut:\s*/u, "") || routeView.mapRoutePoints?.[routeView.mapRoutePoints.length - 1]?.label || "Rom" },
     { label: "Zon", value: routeView.anchorZone || "Rome-wide" },
+    { label: "Dagstyp", value: routeView.dayProfileLabel || "Komponerad dag" },
+    { label: "Tempo", value: routeView.pacingLabel || "Balans" },
     { label: "Geo-fit", value: routeView.geoFitNote ? "Optimerad" : routeView.routeShape === "loop" ? "Loop" : "Båge" },
     {
       label: "Längsta ben",
@@ -6418,6 +6527,9 @@ function createRouteCard(routeView, { routeKey, isSecondary = false, isRecommend
   const stopsContainer = card.querySelector(".route-stops");
   const hiddenContainer = card.querySelector(".route-hidden-pills");
   const barsContainer = card.querySelector(".route-bar-pills");
+  const engineStrip = card.querySelector(".route-engine-strip");
+  const enginePills = card.querySelector(".route-engine-pills");
+  const engineNote = card.querySelector(".route-engine-note");
   const legSummary = card.querySelector(".route-leg-summary");
   const weatherNote = card.querySelector(".route-weather-note");
   const specials = card.querySelector(".route-specials");
@@ -6435,11 +6547,23 @@ function createRouteCard(routeView, { routeKey, isSecondary = false, isRecommend
   card.querySelector(".route-length").textContent = routeView.length;
   card.querySelector("h3").textContent = routeView.title;
   card.querySelector(".route-summary").textContent = routeView.summary;
-  why.textContent = takeLeadSentences(routeView.why, 2, 240);
-  why.hidden = !routeView.why;
+  why.textContent = routeView.visibleWhy || takeLeadSentences(routeView.why, 2, 240);
+  why.hidden = !why.textContent;
   card.querySelector(".route-path").textContent = routeView.path;
   card.querySelector(".route-anchor").textContent = routeView.anchor;
   card.querySelector(".route-walk").textContent = routeView.walk;
+
+  enginePills.innerHTML = "";
+  (routeView.engineBadges || []).forEach((label) => {
+    const pill = document.createElement("span");
+    pill.className = "route-engine-pill";
+    pill.textContent = label;
+    enginePills.appendChild(pill);
+  });
+  engineNote.hidden = !routeView.anchorExplanation;
+  engineNote.textContent = routeView.anchorExplanation || "";
+  engineStrip.hidden = !(routeView.engineBadges?.length || routeView.anchorExplanation);
+
   legSummary.hidden = !routeView.legSummary;
   if (routeView.legSummary) {
     legSummary.textContent = routeView.legSummary;
@@ -6503,6 +6627,11 @@ function createRouteCard(routeView, { routeKey, isSecondary = false, isRecommend
   visibleStops.forEach((stopItem) => {
     const stop = document.createElement("p");
     stop.className = "route-stop-item";
+
+    const source = document.createElement("span");
+    source.className = `route-stop-source route-stop-source-${(stopItem.source || "curated").replace(/[^a-z-]/g, "")}`;
+    source.textContent = stopItem.sourceLabel || "Kuraterat";
+    stop.appendChild(source);
 
     const button = document.createElement("button");
     button.type = "button";
@@ -6740,6 +6869,7 @@ async function planRoutes() {
     routeRenderMode = "fallback";
     plannedDays = [];
     activePlannedDate = null;
+    latestPlannerResolution = null;
     liveEditionExpanded = false;
     expandedAlternativeDates.clear();
     activeLiveDate = routeDateFrom.value || getTodayIsoDate();
@@ -6789,6 +6919,11 @@ async function planRoutes() {
   });
 
   plannedDays = response.days || [];
+  latestPlannerResolution = {
+    homeBase: response.resolved_home_base || null,
+    start: response.resolved_start || null,
+    end: response.resolved_end || null,
+  };
   routeRenderMode = plannedDays.length ? "api" : "fallback";
   activeRouteKey = null;
   activePlannedDate = plannedDays[0]?.date || null;
@@ -6806,6 +6941,7 @@ async function planRoutes() {
   renderRouteResults();
 
   if (!plannedDays.length) {
+    latestPlannerResolution = null;
     updateRouteMatchSummary(
       "Ruttmotorn gav inga tydliga träffar för de valen, så de kuraterade alternativen ligger kvar som backup.",
     );
@@ -7033,6 +7169,7 @@ routePlannerForm?.addEventListener("submit", async (event) => {
     routeRenderMode = "fallback";
     plannedDays = [];
     activePlannedDate = null;
+    latestPlannerResolution = null;
     liveEditionExpanded = false;
     expandedAlternativeDates.clear();
     renderRouteResults();
