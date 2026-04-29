@@ -882,21 +882,30 @@
             <p class="eyebrow planner-day-date"></p>
             <h3 class="planner-day-title"></h3>
           </div>
-          <span class="map-badge planner-day-badge">Huvudförslag</span>
+          <span class="map-badge planner-day-badge">Dagens huvudrutt</span>
         </div>
         <p class="planner-day-summary"></p>
+        <div class="planner-day-outline"></div>
         <div class="planner-day-signals" hidden></div>
         <div class="planner-day-events" hidden>
-          <p class="route-mentions-label">Live just de här datumen</p>
+          <p class="route-mentions-label">Passar din dag just nu</p>
           <div class="planner-events-grid"></div>
         </div>
-        <div class="planner-primary-slot"></div>
+        <section class="planner-primary-stage">
+          <div class="planner-primary-head">
+            <div>
+              <p class="route-mentions-label planner-primary-kicker">Rutt i ordning</p>
+              <p class="planner-primary-route-line"></p>
+            </div>
+          </div>
+          <div class="planner-primary-slot"></div>
+        </section>
         <div class="planner-alt-section" hidden>
           <button class="ghost-button planner-alt-toggle" type="button" aria-expanded="false">
             Visa alternativa upplägg
           </button>
           <div class="planner-alt-body" hidden>
-            <p class="route-mentions-label">Alternativa upplägg samma dag</p>
+            <p class="route-mentions-label">Andra sätt att lägga upp samma dag</p>
             <div class="planner-alt-grid"></div>
           </div>
         </div>
