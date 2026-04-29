@@ -1243,8 +1243,20 @@ function inferLiveEventBestTime(event) {
   return "sen eftermiddag till kväll";
 }
 
-function buildLiveEventStopCandidates(liveEvents = [], preferences = [], optimizerMode = null, modifier = null) {
+function buildLiveEventStopCandidates(
+  liveEvents = [],
+  preferences = [],
+  optimizerMode = null,
+  modifier = null,
+  options = {},
+) {
   const activeModifier = normalizeModifier(modifier, optimizerMode);
+  const shape = options.shape || "loop";
+  const start = options.start || null;
+  const end = options.end || null;
+  const startProfile = options.startProfile || buildPointAreaProfile(start);
+  const endProfile = options.endProfile || buildPointAreaProfile(end);
+  const liveEventTuning = getRoutingTuning().liveEventSeed || {};
 
   return (liveEvents || [])
     .filter(
@@ -1270,6 +1282,72 @@ function buildLiveEventStopCandidates(liveEvents = [], preferences = [], optimiz
         primaryAreaToken(searchTerms) ||
         primaryAreaToken(event.geocode_label, event.venue, event.address) ||
         "centro";
+      const primaryMacro = getAreaDefinitions()[primaryToken]?.macro || null;
+      let anchorWeight = 2.6 + Math.min(2.2, tagHits * 0.4 + modifierHits * 0.35);
+      let goodAsStart = 0.8;
+      let goodAsFinal =
+        event.match_tags.includes("nattliv") || event.match_tags.includes("kultur") ? 2.9 : 2.1;
+
+      if (start && end) {
+        if (shape === "loop") {
+          const distanceToStart = haversineKm(start, event);
+          if (distanceToStart <= (liveEventTuning.loopNearKm ?? 1.8)) {
+            anchorWeight += Math.max(
+              0,
+              (liveEventTuning.loopNearKm ?? 1.8) - distanceToStart,
+            ) * (liveEventTuning.loopStrongRadiusBoost ?? 2.8);
+          }
+
+          if (
+            startProfile?.primaryMacro &&
+            primaryMacro &&
+            primaryMacro !== startProfile.primaryMacro
+          ) {
+            anchorWeight -= liveEventTuning.loopMacroPenalty ?? 2.4;
+          } else if (
+            startProfile?.primaryToken &&
+            primaryToken === startProfile.primaryToken
+          ) {
+            anchorWeight += 1.6;
+            goodAsStart += 0.5;
+            goodAsFinal += 0.3;
+          }
+        } else {
+          const axis = projectPointToAxis(event, start, end);
+          const axisLengthKm = Math.max(axis.axisLengthKm || 0, 0.1);
+          const progressRatio = axis.progressKm / axisLengthKm;
+
+          if (
+            axis.progressKm < (liveEventTuning.arcProgressStartSlackKm ?? -0.35) ||
+            axis.progressKm > axis.axisLengthKm + (liveEventTuning.arcProgressEndSlackKm ?? 1)
+          ) {
+            anchorWeight -= 3.1;
+          }
+
+          if (axis.lateralKm <= (liveEventTuning.arcStrongLateralKm ?? 0.9)) {
+            anchorWeight += 2.3;
+          } else if (axis.lateralKm <= (liveEventTuning.arcMaxLateralKm ?? 2.4)) {
+            anchorWeight += 0.8;
+          } else {
+            anchorWeight -= (axis.lateralKm - (liveEventTuning.arcMaxLateralKm ?? 2.4)) * 1.3;
+          }
+
+          if (
+            progressRatio >= (liveEventTuning.arcBridgeProgressMin ?? 0.18) &&
+            progressRatio <= (liveEventTuning.arcBridgeProgressMax ?? 0.82)
+          ) {
+            anchorWeight += liveEventTuning.arcBridgeBoost ?? 2.6;
+          }
+
+          if (startProfile?.primaryToken && primaryToken === startProfile.primaryToken) {
+            goodAsStart += 1.2;
+          }
+
+          if (endProfile?.primaryToken && primaryToken === endProfile.primaryToken) {
+            goodAsFinal += 1.3;
+          }
+        }
+      }
 
       return {
         id: `live-event-${event.id}`,
@@ -1297,9 +1375,9 @@ function buildLiveEventStopCandidates(liveEvents = [], preferences = [], optimiz
         ].filter(Boolean),
         happyHourNote: null,
         clusterToken: primaryToken,
-        anchorWeight: 2.6 + Math.min(2.2, tagHits * 0.4 + modifierHits * 0.35),
-        goodAsStart: 0.8,
-        goodAsFinal: event.match_tags.includes("nattliv") || event.match_tags.includes("kultur") ? 2.9 : 2.1,
+        anchorWeight: Number(anchorWeight.toFixed(1)),
+        goodAsStart: Number(goodAsStart.toFixed(1)),
+        goodAsFinal: Number(goodAsFinal.toFixed(1)),
         dwellType: "live-anchor",
         duplicateFamily: `live-${primaryToken}`,
         isLiveEvent: true,
@@ -2050,6 +2128,13 @@ function buildStopPool(
     preferences,
     optimizerMode,
     modifier,
+    {
+      shape,
+      start,
+      end,
+      startProfile,
+      endProfile,
+    },
   );
   const lockedCorridorTuning = getRoutingTuning().lockedCorridor || {};
   const corridorLimitKm = clamp(
@@ -3926,6 +4011,7 @@ module.exports = {
   resolvePoint,
   expandDateRange,
   buildRouteFromTemplate,
+  buildLiveEventStopCandidates,
   budgetScore,
   kmScore,
   normalizeBudgetTier,

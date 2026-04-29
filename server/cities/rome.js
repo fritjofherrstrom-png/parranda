@@ -119,6 +119,18 @@ module.exports = {
         unanchoredDominantMacroPenalty: 2.5,
         unanchoredDominantMacro: "west",
       },
+      liveEventSeed: {
+        loopNearKm: 1.8,
+        loopStrongRadiusBoost: 2.8,
+        loopMacroPenalty: 2.4,
+        arcProgressStartSlackKm: -0.35,
+        arcProgressEndSlackKm: 1,
+        arcStrongLateralKm: 0.9,
+        arcMaxLateralKm: 2.4,
+        arcBridgeProgressMin: 0.18,
+        arcBridgeProgressMax: 0.82,
+        arcBridgeBoost: 2.6,
+      },
     },
   },
 };

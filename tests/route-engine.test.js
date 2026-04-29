@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const {
   buildRouteFromTemplate,
+  buildLiveEventStopCandidates,
   budgetScore,
   generateRecommendations,
   kmScore,
@@ -313,6 +314,46 @@ test("Trastevere -> Monti kan nu formas av katalogstopp utanför template-listan
   const nonTemplateStops = route.main_stops.filter((stop) => !template.stops.includes(stop.id));
 
   assert.ok(nonTemplateStops.length >= 2);
+});
+
+test("live-event-kandidater premierar stopp som faktiskt ligger i korridoren", () => {
+  const candidates = buildLiveEventStopCandidates(
+    [
+      {
+        id: "corridor",
+        title: "Corridor Jazz Set",
+        venue: "Piazza Navona",
+        address: "Piazza Navona",
+        geocode_label: "Piazza Navona, Rome, Italy",
+        lat: 41.8992,
+        lng: 12.4731,
+        match_tags: ["vin", "kultur", "nattliv"],
+        summary: "On-corridor evening event.",
+      },
+      {
+        id: "detour",
+        title: "Deep South Party",
+        venue: "Garbatella",
+        address: "Garbatella",
+        geocode_label: "Garbatella, Rome, Italy",
+        lat: 41.8613,
+        lng: 12.4819,
+        match_tags: ["vin", "kultur", "nattliv"],
+        summary: "Same tags but off the current arc.",
+      },
+    ],
+    ["vin", "kultur", "nattliv"],
+    "bar-hop",
+    "evening",
+    {
+      shape: "arc",
+      start: { label: "Trastevere", lat: 41.8885, lng: 12.4678 },
+      end: { label: "Monti", lat: 41.8946, lng: 12.4951 },
+    },
+  );
+
+  assert.equal(candidates[0].name, "Corridor Jazz Set");
+  assert.ok(candidates[0].anchorWeight > candidates[1].anchorWeight);
 });
 
 test("Prati -> Monti väljer nu en väst-till-centro-rutt utan Trastevere-bias", async () => {
