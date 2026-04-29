@@ -2668,6 +2668,15 @@ body::before {
   gap: 6px;
 }
 
+.route-stop-phase {
+  margin: 0;
+  color: rgba(36, 25, 20, 0.55);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 .route-stop-meta {
   margin: 0;
   color: var(--muted);
@@ -2920,6 +2929,16 @@ body::before {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
+}
+
+.planner-events-note {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 252, 247, 0.7);
+  border: 1px dashed rgba(70, 38, 18, 0.12);
+  color: var(--muted);
+  line-height: 1.6;
 }
 
 .planner-event-card {
