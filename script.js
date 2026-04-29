@@ -6589,7 +6589,32 @@ function appendRouteWarnings(container, warnings = []) {
   });
 }
 
-function createItineraryStop(stopItem, onOpen) {
+function getActiveDayPhaseLabel(index, totalStops) {
+  if (index === 0) {
+    return "Börja här";
+  }
+
+  if (index === totalStops - 1) {
+    return "Landa här";
+  }
+
+  return "Sedan";
+}
+
+function buildActiveDayFlowNote(routeView) {
+  const stopCount = Array.isArray(routeView.stopItems) ? routeView.stopItems.length : 0;
+  const stopLabel = stopCount === 1 ? "ett stopp" : `${stopCount} stopp`;
+  const start = routeView.startAnchorLabel || "dagen";
+  const end = routeView.endAnchorLabel || "slutet";
+
+  if (routeView.routeShape === "loop") {
+    return `Börja i ${start}, håll ihop tempot genom ${stopLabel} och landa tillbaka där dagen känns som starkast.`;
+  }
+
+  return `Börja i ${start}, rör dig framåt genom ${stopLabel} och landa i ${end} utan onödiga omvägar.`;
+}
+
+function createItineraryStop(stopItem, onOpen, phaseLabel = "") {
   const stop = document.createElement("article");
   stop.className = "route-stop-item is-itinerary";
 
@@ -6616,6 +6641,13 @@ function createItineraryStop(stopItem, onOpen) {
 
   const body = document.createElement("div");
   body.className = "route-stop-body";
+
+  if (phaseLabel) {
+    const phase = document.createElement("p");
+    phase.className = "route-stop-phase";
+    phase.textContent = phaseLabel;
+    body.appendChild(phase);
+  }
 
   const button = document.createElement("button");
   button.type = "button";
@@ -6677,8 +6709,7 @@ function createActiveDayView(routeView, { routeKey }) {
 
   view.querySelector(".active-day-shape").textContent = routeView.routeShapeLabel || "Dag";
   view.querySelector(".active-day-length").textContent = routeView.length;
-  view.querySelector(".active-day-flow-note").textContent =
-    routeView.visibleWhy || routeView.geoFitNote || routeView.summary || "";
+  view.querySelector(".active-day-flow-note").textContent = buildActiveDayFlowNote(routeView);
 
   enginePills.innerHTML = "";
   (routeView.engineBadges || []).forEach((label) => {
@@ -6711,7 +6742,8 @@ function createActiveDayView(routeView, { routeKey }) {
   appendRouteWarnings(warnings, routeView.openingWarnings || []);
 
   itinerary.innerHTML = "";
-  (routeView.stopItems || []).forEach((stopItem) => {
+  const stopItems = routeView.stopItems || [];
+  stopItems.forEach((stopItem, index) => {
     const openStop = () => {
       if (stopItem.liveEvent) {
         openPlaceDrawer(buildEventDrawerItem(stopItem.liveEvent));
@@ -6720,7 +6752,13 @@ function createActiveDayView(routeView, { routeKey }) {
       openPlaceDrawerByQuery(stopItem.query || stopItem.label || stopItem.text);
     };
 
-    itinerary.appendChild(createItineraryStop(stopItem, openStop));
+    itinerary.appendChild(
+      createItineraryStop(
+        stopItem,
+        openStop,
+        getActiveDayPhaseLabel(index, stopItems.length),
+      ),
+    );
   });
 
   appendRoutePillButtons(hiddenMentions, routeView.hiddenMentions || []);
@@ -7028,9 +7066,11 @@ function renderPlannedDays() {
     signalsContainer.appendChild(note);
   });
 
+  const dayEvents = activeDay.live_events || [];
+  const visibleDayEvents = dayEvents.slice(0, 2);
   eventsGrid.innerHTML = "";
-  eventsSection.hidden = !activeDay.live_events?.length;
-  (activeDay.live_events || []).forEach((event) => {
+  eventsSection.hidden = !dayEvents.length;
+  visibleDayEvents.forEach((event) => {
     eventsGrid.appendChild(
       createLiveEventCard({
         ...event,
@@ -7038,6 +7078,13 @@ function renderPlannedDays() {
       }),
     );
   });
+
+  if (dayEvents.length > visibleDayEvents.length) {
+    const overflow = document.createElement("p");
+    overflow.className = "planner-events-note";
+    overflow.textContent = `+${dayEvents.length - visibleDayEvents.length} fler live-spår finns i LIVE om du vill justera dagen ytterligare.`;
+    eventsGrid.appendChild(overflow);
+  }
 
   primarySlot.appendChild(
     createActiveDayView(primaryRouteView, {
