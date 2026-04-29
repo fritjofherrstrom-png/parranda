@@ -522,6 +522,43 @@ body::before {
   font-size: 0.88rem;
 }
 
+.city-pulse-teaser.is-route-context {
+  padding: 14px 16px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 88% 0%, rgba(215, 160, 77, 0.14), transparent 24%),
+    linear-gradient(180deg, rgba(255, 252, 247, 0.95), rgba(247, 237, 223, 0.92));
+  color: var(--text);
+  border-color: rgba(70, 38, 18, 0.08);
+}
+
+.city-pulse-teaser.is-route-context .city-pulse-live-label,
+.city-pulse-teaser.is-route-context .city-pulse-edition-label {
+  color: rgba(36, 25, 20, 0.62);
+}
+
+.city-pulse-teaser.is-route-context .city-pulse-teaser-copy {
+  gap: 3px;
+  max-width: 44ch;
+}
+
+.city-pulse-teaser.is-route-context .city-pulse-teaser-copy h2 {
+  font-family: "Manrope", sans-serif;
+  font-size: clamp(1.02rem, 1.55vw, 1.28rem);
+  line-height: 1.1;
+}
+
+.city-pulse-teaser.is-route-context .city-pulse-teaser-summary {
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.city-pulse-teaser.is-route-context .ghost-button {
+  padding: 8px 11px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
 .district-stats article {
   display: inline-flex;
   align-items: center;
@@ -2594,6 +2631,63 @@ body::before {
   border: 1px solid rgba(70, 38, 18, 0.08);
 }
 
+.route-stop-item.is-itinerary {
+  gap: 8px;
+  padding: 14px;
+}
+
+.route-stop-leg {
+  margin: 0;
+  color: rgba(36, 25, 20, 0.56);
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+}
+
+.route-stop-main {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.route-stop-order {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(175, 77, 36, 0.96), rgba(115, 46, 23, 0.92));
+  color: var(--paper);
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.route-stop-body {
+  display: grid;
+  gap: 6px;
+}
+
+.route-stop-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.route-stop-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.route-stop-note {
+  font-size: 0.84rem;
+  color: var(--accent-deep);
+  font-weight: 700;
+}
+
 .route-stop-source-live {
   background: rgba(215, 160, 77, 0.18);
   border-color: rgba(175, 77, 36, 0.18);
@@ -2942,14 +3036,19 @@ body::before {
 }
 
 .planner-primary-slot .route-plan-card > h3,
-.planner-primary-slot .route-plan-card > .route-summary {
+.planner-primary-slot .route-plan-card > .route-summary,
+.planner-primary-slot .route-plan-card > .route-path,
+.planner-primary-slot .route-plan-card > .route-metadata {
   display: none;
 }
 
 .planner-primary-slot .route-plan-card .route-engine-note,
-.planner-primary-slot .route-plan-card .route-leg-summary,
-.planner-primary-slot .route-plan-card .route-path {
+.planner-primary-slot .route-plan-card .route-leg-summary {
   margin-top: 0;
+}
+
+.planner-primary-slot .route-plan-card .route-stops {
+  gap: 12px;
 }
 
 .planner-alt-section {
@@ -2985,6 +3084,17 @@ body::before {
 }
 
 .planner-alt-grid .route-plan-card .route-stop-item:nth-of-type(n + 4) {
+  display: none;
+}
+
+.planner-alt-grid .route-plan-card .route-stop-item.is-itinerary {
+  display: grid;
+}
+
+.planner-alt-grid .route-plan-card .route-stop-leg,
+.planner-alt-grid .route-plan-card .route-stop-order,
+.planner-alt-grid .route-plan-card .route-stop-meta,
+.planner-alt-grid .route-plan-card .route-stop-detail {
   display: none;
 }
 
