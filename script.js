@@ -2720,6 +2720,12 @@ function buildPulseTeaserSummary() {
   const targetDate = availableDates[0] || cityPulseState?.date || getTodayIsoDate();
   const dayCount = plannedDays.length || availableDates.length;
   const weatherLine = buildPulseWeatherBrief(cityPulseState?.weather, targetDate);
+  const plannedContext = routeRenderMode === "api" && plannedDays.length;
+
+  if (plannedContext) {
+    const activeDate = activePlannedDate || targetDate;
+    return `${formatSwedishDate(activeDate)} • ${weatherLine}`;
+  }
 
   if (plannedDays.length) {
     return `Kopplad till ${dayCount} vald dag${dayCount > 1 ? "ar" : ""}. ${weatherLine}`;
@@ -2734,6 +2740,7 @@ function renderCityPulseTeaser() {
   }
 
   const targetDate = ensureActiveLiveDate();
+  const plannedContext = routeRenderMode === "api" && plannedDays.length;
   const weekdayLabel =
     cityPulseState?.weekday_label ||
     getFallbackPulseDateLabels(targetDate).weekdayLabel;
@@ -2741,12 +2748,19 @@ function renderCityPulseTeaser() {
     cityPulseState?.date_label ||
     getFallbackPulseDateLabels(targetDate).dateLabel;
 
-  cityPulseTeaserLabel.textContent = plannedDays.length
-    ? `LIVE • ${plannedDays.length} vald dag${plannedDays.length > 1 ? "ar" : ""}`
+  cityPulseTeaser.classList.toggle("is-route-context", plannedContext);
+  cityPulseTeaserLabel.textContent = plannedContext
+    ? "LIVE • TILL DIN DAG"
+    : plannedDays.length
+      ? `LIVE • ${plannedDays.length} vald dag${plannedDays.length > 1 ? "ar" : ""}`
     : `Just nu i Rom • ${weekdayLabel} ${dateLabel}`;
-  cityPulseTeaserTitle.textContent =
-    cityPulseState?.headline || "LIVE-edition för Rom";
+  cityPulseTeaserTitle.textContent = plannedContext
+    ? "Just nu runt din dag"
+    : cityPulseState?.headline || "LIVE-edition för Rom";
   cityPulseTeaserSummary.textContent = buildPulseTeaserSummary();
+  if (cityPulseTeaserButton) {
+    cityPulseTeaserButton.textContent = plannedContext ? "Se LIVE för dagen" : "Öppna LIVE";
+  }
 }
 
 function getLiveMatchSummaryForPulseItem(item) {
@@ -5498,6 +5512,11 @@ function createApiRouteView(
         `${index + 1}. ${stop.label} • ${stop.area} • ${stop.tags.join(", ")}`,
     ),
     stopItems: route.main_stops.map((stop, index) => ({
+      order: index + 1,
+      label: stop.label,
+      area: stop.area,
+      tagSummary: stop.tags.slice(0, 3).join(" • "),
+      summary: stop.summary || stop.vibe || stop.tags.join(", "),
       text: `${index + 1}. ${stop.label} • ${stop.area} • ${stop.tags.join(", ")}`,
       query: stop.drawer_query || stop.label,
       isLiveEvent: Boolean(stop.is_live_event),
@@ -5505,6 +5524,14 @@ function createApiRouteView(
       sourceLabel: stopSourceLabel({ isLiveEvent: Boolean(stop.is_live_event) }),
       eventId: stop.event_id || null,
       liveEvent: stop.event_id ? liveEventById.get(String(stop.event_id)) || null : null,
+      incomingLeg: route.legs?.[index]
+        ? {
+            fromLabel: route.legs[index].from_label,
+            toLabel: route.legs[index].to_label,
+            distanceKm: route.legs[index].distance_km,
+            minutes: route.legs[index].estimated_walk_minutes,
+          }
+        : null,
     })),
     hiddenMentions: route.hidden_mentions,
     barMentions: route.bar_mentions,
@@ -6627,10 +6654,80 @@ function createRouteCard(
   });
 
   const stopItems = routeView.stopItems || routeView.stops.map((text) => ({ text }));
-  const visibleStops = stopItems.slice(0, 4);
+  const visibleStops = renderMode === "primary" ? stopItems : stopItems.slice(0, 4);
   visibleStops.forEach((stopItem) => {
-    const stop = document.createElement("p");
+    const stop = document.createElement("article");
     stop.className = "route-stop-item";
+
+    const openStop = () => {
+      if (stopItem.liveEvent) {
+        openPlaceDrawer(buildEventDrawerItem(stopItem.liveEvent));
+        return;
+      }
+      openPlaceDrawerByQuery(stopItem.query || stopItem.label || stopItem.text);
+    };
+
+    if (renderMode === "primary") {
+      stop.classList.add("is-itinerary");
+
+      if (stopItem.incomingLeg?.minutes || stopItem.incomingLeg?.distanceKm) {
+        const leg = document.createElement("p");
+        leg.className = "route-stop-leg";
+        leg.textContent = [
+          formatLegMinutes(Number(stopItem.incomingLeg.minutes)),
+          formatLegDistance(Number(stopItem.incomingLeg.distanceKm)),
+          stopItem.incomingLeg.fromLabel ? `från ${stopItem.incomingLeg.fromLabel}` : null,
+        ]
+          .filter(Boolean)
+          .join(" • ");
+        stop.appendChild(leg);
+      }
+
+      const main = document.createElement("div");
+      main.className = "route-stop-main";
+
+      const order = document.createElement("span");
+      order.className = "route-stop-order";
+      order.textContent = String(stopItem.order || 0);
+      main.appendChild(order);
+
+      const body = document.createElement("div");
+      body.className = "route-stop-body";
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "route-stop-link";
+      button.textContent = stopItem.label || stopItem.text;
+      button.addEventListener("click", openStop);
+      body.appendChild(button);
+
+      const meta = document.createElement("p");
+      meta.className = "route-stop-meta";
+      meta.textContent = [stopItem.area, stopItem.tagSummary || stopItem.summary].filter(Boolean).join(" • ");
+      meta.hidden = !meta.textContent;
+      body.appendChild(meta);
+
+      const detail = document.createElement("div");
+      detail.className = "route-stop-detail";
+
+      const source = document.createElement("span");
+      source.className = `route-stop-source route-stop-source-${(stopItem.source || "curated").replace(/[^a-z-]/g, "")}`;
+      source.textContent = stopItem.sourceLabel || "Kuraterat";
+      detail.appendChild(source);
+
+      if (stopItem.isLiveEvent) {
+        const note = document.createElement("span");
+        note.className = "route-stop-note";
+        note.textContent = "Öppet just nu";
+        detail.appendChild(note);
+      }
+
+      body.appendChild(detail);
+      main.appendChild(body);
+      stop.appendChild(main);
+      stopsContainer.appendChild(stop);
+      return;
+    }
 
     const source = document.createElement("span");
     source.className = `route-stop-source route-stop-source-${(stopItem.source || "curated").replace(/[^a-z-]/g, "")}`;
@@ -6641,13 +6738,7 @@ function createRouteCard(
     button.type = "button";
     button.className = "route-stop-link";
     button.textContent = stopItem.text;
-    button.addEventListener("click", () => {
-      if (stopItem.liveEvent) {
-        openPlaceDrawer(buildEventDrawerItem(stopItem.liveEvent));
-        return;
-      }
-      openPlaceDrawerByQuery(stopItem.query || stopItem.text);
-    });
+    button.addEventListener("click", openStop);
     stop.appendChild(button);
 
     stopsContainer.appendChild(stop);
