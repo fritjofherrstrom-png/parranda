@@ -2733,12 +2733,14 @@ body::before {
 }
 
 .planner-day-card {
-  padding: 22px;
+  padding: 24px;
   border-radius: 28px;
   backdrop-filter: blur(18px);
   background: var(--surface);
   border: 1px solid rgba(255, 255, 255, 0.58);
   box-shadow: var(--shadow);
+  display: grid;
+  gap: 18px;
 }
 
 .planner-day-top {
@@ -2757,15 +2759,45 @@ body::before {
 
 .planner-day-summary {
   max-width: 720px;
-  margin: 14px 0 20px;
+  margin: -2px 0 0;
   color: var(--muted);
-  line-height: 1.7;
+  line-height: 1.65;
+  font-size: 1rem;
+}
+
+.planner-day-outline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.planner-day-outline-item {
+  margin: 0;
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(255, 252, 247, 0.82);
+  border: 1px solid rgba(70, 38, 18, 0.08);
+  min-width: 110px;
+}
+
+.planner-day-outline-item span {
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(36, 25, 20, 0.58);
+}
+
+.planner-day-outline-item strong {
+  font-size: 0.94rem;
+  line-height: 1.35;
 }
 
 .planner-day-signals {
   display: grid;
   gap: 10px;
-  margin-bottom: 18px;
+  margin-top: -2px;
 }
 
 .planner-day-signal {
@@ -2787,7 +2819,7 @@ body::before {
 }
 
 .planner-day-events {
-  margin-bottom: 18px;
+  margin-top: -2px;
 }
 
 .planner-events-grid {
@@ -2864,11 +2896,64 @@ body::before {
 }
 
 .planner-primary-slot {
-  margin-top: 4px;
+  margin-top: 0;
+}
+
+.planner-primary-stage {
+  display: grid;
+  gap: 12px;
+  padding: 18px 18px 16px;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top right, rgba(215, 160, 77, 0.14), transparent 28%),
+    linear-gradient(180deg, rgba(255, 252, 247, 0.94), rgba(246, 236, 222, 0.88));
+  border: 1px solid rgba(175, 77, 36, 0.14);
+}
+
+.planner-primary-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.planner-primary-kicker {
+  margin-bottom: 6px;
+}
+
+.planner-primary-route-line {
+  margin: 0;
+  color: var(--accent-deep);
+  line-height: 1.55;
+  font-size: 0.98rem;
+}
+
+.planner-primary-slot .route-plan-card {
+  padding: 0;
+  gap: 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.planner-primary-slot .route-plan-card::before {
+  display: none;
+}
+
+.planner-primary-slot .route-plan-card > h3,
+.planner-primary-slot .route-plan-card > .route-summary {
+  display: none;
+}
+
+.planner-primary-slot .route-plan-card .route-engine-note,
+.planner-primary-slot .route-plan-card .route-leg-summary,
+.planner-primary-slot .route-plan-card .route-path {
+  margin-top: 0;
 }
 
 .planner-alt-section {
-  margin-top: 20px;
+  margin-top: 4px;
 }
 
 .planner-alt-toggle {
@@ -2884,6 +2969,27 @@ body::before {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+}
+
+.planner-alt-grid .route-plan-card {
+  padding: 18px;
+  gap: 12px;
+  background: rgba(255, 252, 247, 0.76);
+  box-shadow: none;
+}
+
+.planner-alt-grid .route-plan-card .route-mentions,
+.planner-alt-grid .route-plan-card .route-advice,
+.planner-alt-grid .route-plan-card .route-engine-note {
+  display: none;
+}
+
+.planner-alt-grid .route-plan-card .route-stop-item:nth-of-type(n + 4) {
+  display: none;
+}
+
+.planner-alt-grid .route-plan-card .route-stop-overflow {
+  margin-top: -2px;
 }
 
 .planner-day-badge {
@@ -3539,6 +3645,28 @@ body.is-printing-guide #routeGuideDrawer {
     border-radius: 24px;
   }
 
+  .planner-primary-stage {
+    padding: 16px;
+    border-radius: 20px;
+  }
+
+  .planner-primary-head {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .planner-day-outline {
+    gap: 8px;
+  }
+
+  .planner-day-outline-item {
+    min-width: calc(50% - 4px);
+  }
+
+  .planner-alt-grid {
+    grid-template-columns: 1fr;
+  }
+
   .route-guide-drawer {
     inset: auto 12px 12px 12px;
     width: auto;
@@ -3559,6 +3687,10 @@ body.is-printing-guide #routeGuideDrawer {
 
   .planner-day-tabs {
     grid-template-columns: 1fr;
+  }
+
+  .planner-day-outline-item {
+    min-width: 100%;
   }
 }
 
