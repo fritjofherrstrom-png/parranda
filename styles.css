@@ -3022,33 +3022,92 @@ body::before {
   font-size: 0.98rem;
 }
 
-.planner-primary-slot .route-plan-card {
-  padding: 0;
+.planner-primary-slot {
+  display: grid;
+}
+
+.active-day-view {
+  display: grid;
+  gap: 16px;
+}
+
+.active-day-view.is-selected {
+  padding: 18px;
+  border-radius: 24px;
+  background: rgba(255, 252, 247, 0.56);
+  border: 1px solid rgba(175, 77, 36, 0.12);
+}
+
+.active-day-topline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.active-day-kicker {
+  margin-bottom: 0;
+}
+
+.active-day-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.active-day-flow-note {
+  margin: -4px 0 0;
+  color: var(--accent-deep);
+  line-height: 1.6;
+  font-size: 1rem;
+}
+
+.active-day-engine {
+  display: grid;
+  gap: 10px;
+}
+
+.active-day-advice {
+  gap: 8px;
+}
+
+.active-day-leg-summary {
+  margin: 0;
+}
+
+.active-day-itinerary {
+  display: grid;
+  gap: 12px;
+}
+
+.active-day-itinerary .route-stop-item.is-itinerary {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.active-day-itinerary .route-stop-main {
+  grid-template-columns: 42px minmax(0, 1fr);
   gap: 14px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
 }
 
-.planner-primary-slot .route-plan-card::before {
-  display: none;
+.active-day-itinerary .route-stop-order {
+  width: 42px;
+  height: 42px;
+  font-size: 0.95rem;
 }
 
-.planner-primary-slot .route-plan-card > h3,
-.planner-primary-slot .route-plan-card > .route-summary,
-.planner-primary-slot .route-plan-card > .route-path,
-.planner-primary-slot .route-plan-card > .route-metadata {
-  display: none;
+.active-day-mentions-grid {
+  display: grid;
+  gap: 12px;
 }
 
-.planner-primary-slot .route-plan-card .route-engine-note,
-.planner-primary-slot .route-plan-card .route-leg-summary {
+.active-day-mentions {
   margin-top: 0;
 }
 
-.planner-primary-slot .route-plan-card .route-stops {
-  gap: 12px;
+.active-day-actions {
+  margin-top: 0;
 }
 
 .planner-alt-section {
@@ -3442,6 +3501,15 @@ body.is-printing-guide #routeGuideDrawer {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .active-day-topline {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .active-day-meta {
+    justify-content: flex-start;
+  }
+
   .city-pulse-masthead {
     flex-direction: column;
     align-items: flex-start;
@@ -3728,6 +3796,20 @@ body.is-printing-guide #routeGuideDrawer {
 
   .planner-mobile-actions .primary-button {
     width: 100%;
+  }
+
+  .active-day-view.is-selected {
+    padding: 16px;
+  }
+
+  .active-day-itinerary .route-stop-main {
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .active-day-itinerary .route-stop-order {
+    width: 36px;
+    height: 36px;
   }
 
   .card-top,
