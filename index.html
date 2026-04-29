@@ -370,8 +370,7 @@
                 <p class="eyebrow">§ PLANERARE</p>
                 <h2 id="plannerModalTitle">Din resa till Rom</h2>
                 <p class="planner-modal-lead">
-                  Datum, var du bor, hur långt du orkar gå och vilken känsla du vill åt. Resten
-                  anpassar Parranda.
+                  Datum, vibe, gångmål och gärna var du bor. Resten sätter Parranda ihop.
                 </p>
                 <div class="planner-mode-switch" role="tablist" aria-label="Planeringsläge">
                   <button
@@ -394,8 +393,7 @@
                   </button>
                 </div>
                 <p id="plannerModeLead" class="planner-mode-lead">
-                  Börja med datum, smak, gångmål och gärna var du bor. Exakta ankare kommer först
-                  när du faktiskt vill styra dagen själv.
+                  Börja med kärnvalen. Exakta ankare kommer först när du själv vill styra mer.
                 </p>
               </div>
               <button id="closePlannerModalButton" class="ghost-button" type="button">Stäng</button>
@@ -492,7 +490,7 @@
                         placeholder="t.ex. Piazza Trilussa eller Roma Termini"
                       />
                     </label>
-                    <div class="route-lab-actions">
+                    <div class="route-lab-actions" hidden>
                       <button
                         id="useCurrentPlaceAsHomeBaseButton"
                         class="secondary-button"
@@ -565,7 +563,7 @@
                             placeholder="t.ex. Piazza Trilussa eller Termini"
                           />
                         </label>
-                        <div class="route-lab-actions">
+                        <div class="route-lab-actions" hidden>
                           <button id="useCurrentPlaceButton" class="secondary-button" type="button">
                             Använd plats från kartan
                           </button>
@@ -611,7 +609,7 @@
                             placeholder="t.ex. Piazza Navona eller Ostiense"
                           />
                         </label>
-                        <div class="route-lab-actions">
+                        <div class="route-lab-actions" hidden>
                           <button id="useMapAsEndButton" class="secondary-button" type="button">
                             Sätt kartplats som slut
                           </button>
@@ -674,7 +672,7 @@
           <div id="plannerModalBackdrop" class="planner-modal-backdrop" hidden></div>
 
           <p id="routeMatchSummary" class="route-match-summary">
-            Välj datum och tryck på bygg min dag. Om live-läget inte svarar ligger de kuraterade
+            Välj datum och tryck på Planera min resa. Om live-läget inte svarar ligger de kuraterade
             Rome-wide-rutterna kvar som backup.
           </p>
 

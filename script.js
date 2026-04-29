@@ -1270,6 +1270,7 @@ const homeBaseDistrictSubButtons = document.getElementById("homeBaseDistrictSubB
 const homeBaseCustomInput = document.getElementById("homeBaseCustomInput");
 const useCurrentPlaceAsHomeBaseButton = document.getElementById("useCurrentPlaceAsHomeBaseButton");
 const useGeolocationAsHomeBaseButton = document.getElementById("useGeolocationAsHomeBaseButton");
+const homeBaseActionRow = useCurrentPlaceAsHomeBaseButton?.closest(".route-lab-actions") || null;
 const startModeSelect = document.getElementById("startModeSelect");
 const endModeSelect = document.getElementById("endModeSelect");
 const startModeHint = document.getElementById("startModeHint");
@@ -1292,6 +1293,8 @@ const legPacingHint = document.getElementById("legPacingHint");
 const useCurrentPlaceButton = document.getElementById("useCurrentPlaceButton");
 const useGeolocationButton = document.getElementById("useGeolocationButton");
 const useMapAsEndButton = document.getElementById("useMapAsEndButton");
+const startActionRow = useCurrentPlaceButton?.closest(".route-lab-actions") || null;
+const endActionRow = useMapAsEndButton?.closest(".route-lab-actions") || null;
 const routePlanButton = document.getElementById("routePlanButton");
 const routeResetButton = document.getElementById("routeResetButton");
 const routePlanStickyButton = document.getElementById("routePlanStickyButton");
@@ -1321,6 +1324,7 @@ const routeGuideBarsBlock = document.getElementById("routeGuideBarsBlock");
 const routeGuideBars = document.getElementById("routeGuideBars");
 const routeGuideHiddenBlock = document.getElementById("routeGuideHiddenBlock");
 const routeGuideHidden = document.getElementById("routeGuideHidden");
+const plannerCityKey = "rome";
 const routeGuidePrintButton = document.getElementById("routeGuidePrintButton");
 const routeGuideShareButton = document.getElementById("routeGuideShareButton");
 const routeGuideDirectionsLink = document.getElementById("routeGuideDirectionsLink");
@@ -3303,7 +3307,7 @@ async function loadCityPulse(dateString = getTodayIsoDate()) {
 
   try {
     const response = await fetchJson(
-      `${routeApiBase}/city-pulse?date=${encodeURIComponent(targetDate)}`,
+      `${routeApiBase}/city-pulse?city=${encodeURIComponent(plannerCityKey)}&date=${encodeURIComponent(targetDate)}`,
     );
     cityPulseState = {
       ...fallbackPulse,
@@ -3537,6 +3541,15 @@ function setPlannerMode(mode = plannerAutoMode) {
     plannerFineTuneDetails.open = activePlannerMode === plannerManualMode;
   }
 
+  if (activePlannerMode === plannerAutoMode) {
+    activeBudgetTier = "standard";
+    updateBudgetTierButtons();
+    if (legPacingSelect) {
+      legPacingSelect.value = "balanced";
+    }
+    updateLegPacingUI();
+  }
+
   syncPlannerModeUI();
 }
 
@@ -3569,7 +3582,7 @@ function updatePlannerAdvancedSummary() {
     plannerModeLead.textContent =
       activePlannerMode === plannerManualMode
         ? "Du styr ankare själv. Lås bara det som verkligen behöver vara exakt och låt resten vara flexibelt."
-        : "Börja med datum, smak, gångmål och gärna var du bor. Exakta ankare kommer först när du faktiskt vill styra dagen själv.";
+        : "Börja med datum, vibe, gångmål och gärna var du bor. Resten sätter Parranda ihop.";
   }
 
   updatePlannerLaunchSummary();
@@ -3664,6 +3677,21 @@ function buildPlanningResultSummary(response) {
   }
 
   return `${plannedCount} dag(ar) klara mellan ${resolvedStart} och ${resolvedEnd}. Huvudrutten visas först, alternativ efteråt.`;
+}
+
+function focusPlannerResults() {
+  const target = routeResults || document.querySelector(".route-results");
+
+  if (!target) {
+    return;
+  }
+
+  window.requestAnimationFrame(() => {
+    target.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  });
 }
 
 function updatePlannerLaunchSummary(prefix = "") {
@@ -3862,11 +3890,11 @@ function normalizePlannerSelectionLabel(label) {
 
 function createRouteDirectionsUrl(points) {
   if (!Array.isArray(points) || !points.length) {
-    return createMapUrl("Trastevere Rome");
+    return createMapUrl("Rome city center");
   }
 
   if (points.length === 1) {
-    return createMapUrl(`${points[0].label || "Trastevere"} Rome`);
+    return createMapUrl(points[0].label ? `${points[0].label} Rome` : "Rome city center");
   }
 
   const origin = `${points[0].lat},${points[0].lng}`;
@@ -4184,6 +4212,12 @@ function updatePointModeUI(pointKey, mode) {
   const controls = getPointControlSet(pointKey);
   const presetField = document.querySelector(`[data-mode-field="${controls.fieldPrefix}-preset"]`);
   const customField = document.querySelector(`[data-mode-field="${controls.fieldPrefix}-custom"]`);
+  const actionRow =
+    pointKey === "home_base"
+      ? homeBaseActionRow
+      : pointKey === "start"
+        ? startActionRow
+        : endActionRow;
 
   if (presetField) {
     presetField.hidden = mode !== "preset";
@@ -4191,6 +4225,10 @@ function updatePointModeUI(pointKey, mode) {
 
   if (customField) {
     customField.hidden = mode !== "custom";
+  }
+
+  if (actionRow) {
+    actionRow.hidden = true;
   }
 }
 
@@ -4211,6 +4249,10 @@ function syncPlannerModeUI() {
 
   if (plannerHomeBaseShell) {
     plannerHomeBaseShell.hidden = activePlannerMode !== plannerAutoMode;
+  }
+
+  if (plannerFineTuneDetails) {
+    plannerFineTuneDetails.hidden = activePlannerMode !== plannerManualMode;
   }
 
   if (plannerManualShell) {
@@ -5000,7 +5042,7 @@ function openPlaceDrawer(item) {
 async function openPlaceDrawerByQuery(query) {
   try {
     const response = await fetchJson(
-      `${routeApiBase}/place-details?q=${encodeURIComponent(query)}`,
+      `${routeApiBase}/place-details?city=${encodeURIComponent(plannerCityKey)}&q=${encodeURIComponent(query)}`,
     );
     openPlaceDrawer(response.item);
   } catch (error) {
@@ -5143,6 +5185,7 @@ function getFallbackPointCatalog() {
       ["Prati", { label: "Prati", lat: 41.9072, lng: 12.4656 }],
       ["Villa Farnesina", { label: "Villa Farnesina", lat: 41.8918, lng: 12.4654 }],
       ["Trastevere", { label: "Trastevere", lat: 41.8885, lng: 12.4678 }],
+      ["Rome Center", { label: "Rome Center", lat: 41.8933, lng: 12.4964 }],
     ],
   );
 }
@@ -5183,8 +5226,8 @@ function buildFallbackRoutePoints(routeId) {
     ],
   };
 
-  return (routeSeeds[routeId] || ["Trastevere"]).map((label, index, all) => {
-    const point = pointCatalog.get(label) || pointCatalog.get("Trastevere");
+  return (routeSeeds[routeId] || ["Rome Center"]).map((label, index, all) => {
+    const point = pointCatalog.get(label) || pointCatalog.get("Rome Center");
     const role =
       index === 0 ? "start" : index === all.length - 1 ? "end" : "stop";
 
@@ -5347,6 +5390,9 @@ function createApiRouteView(
   const stopLabels = route.main_stops.map((stop) => stop.label).join(" • ");
   const routeShapeLabel = route.route_shape === "loop" ? "Loop" : "Båge";
   const liveEventById = new Map((liveEvents || []).map((event) => [String(event.id), event]));
+  const mapPathPoints = Array.isArray(route.map_path_points) && route.map_path_points.length
+    ? route.map_path_points
+    : route.map_route_points;
 
   return {
     id: route.id,
@@ -5374,6 +5420,8 @@ function createApiRouteView(
     barMentions: route.bar_mentions,
     routeLink: createRouteDirectionsUrl(route.map_route_points),
     mapRoutePoints: route.map_route_points,
+    mapPathPoints,
+    routingSource: route.routing_source || "heuristic",
     weatherNote: route.weather_note,
     pulseNote: route.pulse_note || null,
     liveEventFitNote: route.live_event_fit_note || null,
@@ -5703,7 +5751,7 @@ async function loadPlannerOptions() {
   populatePresetSelects();
 
   try {
-    await fetchJson(`${routeApiBase}/places/search`);
+    await fetchJson(`${routeApiBase}/places/search?city=${encodeURIComponent(plannerCityKey)}`);
     setRouteApiStatus(true);
   } catch (error) {
     setRouteApiStatus(false);
@@ -5903,7 +5951,11 @@ function drawRouteOnMap(routeView, highlightedEventId = null) {
 
   clearRouteOverlay();
 
-  const latLngs = routeView.mapRoutePoints.map((point) => [point.lat, point.lng]);
+  const polylinePoints =
+    Array.isArray(routeView.mapPathPoints) && routeView.mapPathPoints.length
+      ? routeView.mapPathPoints
+      : routeView.mapRoutePoints;
+  const latLngs = polylinePoints.map((point) => [point.lat, point.lng]);
   const bounds = [];
 
   L.polyline(latLngs, {
@@ -6704,6 +6756,7 @@ async function planRoutes() {
   }
 
   const payload = {
+    city: plannerCityKey,
     dates,
     home_base:
       activePlannerMode === plannerAutoMode
@@ -6975,6 +7028,7 @@ routePlannerForm?.addEventListener("submit", async (event) => {
   try {
     await planRoutes();
     closePlannerModal();
+    focusPlannerResults();
   } catch (error) {
     routeRenderMode = "fallback";
     plannedDays = [];
@@ -6983,6 +7037,8 @@ routePlannerForm?.addEventListener("submit", async (event) => {
     expandedAlternativeDates.clear();
     renderRouteResults();
     setRouteApiStatus(false);
+    closePlannerModal();
+    focusPlannerResults();
     updateRouteMatchSummary(
       "Något gick fel i live-läget, så appen föll tillbaka till de kuraterade Rom-rutterna.",
     );

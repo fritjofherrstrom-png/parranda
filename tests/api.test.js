@@ -211,6 +211,7 @@ test("GET /api/city-pulse returnerar stadspuls, wildcard och officiella tips", a
     });
 
     assert.equal(response.status, 200);
+    assert.equal(response.body.city, "rome");
     assert.equal(response.body.date, "2026-04-21");
     assert.ok(response.body.moments.some((item) => item.title === "Natale di Roma"));
     assert.ok(Array.isArray(response.body.items));
@@ -427,7 +428,9 @@ test("POST /api/route-recommendations håller Monti -> Monti i rätt zon", async
     });
 
     assert.equal(response.status, 200);
+    assert.equal(response.body.city, "rome");
     assert.equal(response.body.days[0].primary_route.route_shape, "loop");
+    assert.equal(response.body.days[0].primary_route.routing_source, "heuristic");
     assert.match(response.body.days[0].primary_route.anchor_zone, /Monti/);
     assert.ok(
       !response.body.days[0].primary_route.main_stops.some((stop) =>
@@ -709,9 +712,11 @@ test("GET /api/place-details returnerar rik metadata för känd plats", async ()
     });
 
     assert.equal(response.status, 200);
+    assert.equal(response.body.city, "rome");
     assert.equal(response.body.item.label, "Bar San Calisto");
     assert.ok(response.body.item.price_level);
     assert.ok(response.body.item.long_description);
+    assert.match(response.body.item.external_search_url, /Rome/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

@@ -1,9 +1,61 @@
-const { routeTemplates, allItems, findItemByName } = require("./catalog");
-const { geocodeQuery } = require("./geocoding");
-const { fetchWeatherForDates, ROME_CENTER } = require("./weather");
-const { getCityPulse, getDateSignals } = require("./editorial-calendar");
-const { fetchLiveEventsForDates } = require("./live-events");
-const neutralFallbackLabel = "Centro Storico";
+const { AsyncLocalStorage } = require("node:async_hooks");
+const { getCityConfig } = require("./cities");
+const { routeWalkingPath } = require("./walking-router");
+
+const defaultCityConfig = getCityConfig("rome");
+const cityContextStorage = new AsyncLocalStorage();
+
+function getActiveCityConfig() {
+  return cityContextStorage.getStore() || defaultCityConfig;
+}
+
+function getActiveCatalog() {
+  return getActiveCityConfig().catalog;
+}
+
+function getAllItems() {
+  return getActiveCatalog().allItems;
+}
+
+function findCatalogItemByName(name) {
+  return getActiveCatalog().findItemByName(name);
+}
+
+function getRouteTemplates() {
+  return getActiveCatalog().routeTemplates;
+}
+
+function getCityCenter() {
+  return getActiveCityConfig().center;
+}
+
+function getFallbackLabel() {
+  return getActiveCityConfig().fallbackLabel || "Centro Storico";
+}
+
+async function geocodeInActiveCity(query) {
+  return getActiveCityConfig().services.geocodeQuery(query);
+}
+
+function getPulseForDate(date) {
+  return getActiveCityConfig().services.getCityPulse(date);
+}
+
+function getDateSignalsForDate(date) {
+  return getActiveCityConfig().services.getDateSignals(date);
+}
+
+async function fetchWeatherForActiveCity(dates, anchor) {
+  return getActiveCityConfig().services.fetchWeatherForDates(dates, anchor);
+}
+
+async function fetchLiveEventsForActiveCity(dates, options) {
+  return getActiveCityConfig().services.fetchLiveEventsForDates(dates, options);
+}
+
+function getWalkingConfig() {
+  return getActiveCityConfig().walking || {};
+}
 
 function haversineKm(a, b) {
   const toRad = (value) => (value * Math.PI) / 180;
@@ -81,14 +133,15 @@ function expandDateRange(dates) {
   return unique;
 }
 
-async function resolvePoint(input, fallbackLabel = neutralFallbackLabel) {
+async function resolvePoint(input, fallbackLabel = getFallbackLabel()) {
   if (!input || !input.type) {
-    const fallback = findItemByName(fallbackLabel);
+    const fallback = findCatalogItemByName(fallbackLabel);
     if (!fallback) {
+      const center = getCityCenter();
       return {
         label: "Rom",
-        lat: ROME_CENTER.lat,
-        lng: ROME_CENTER.lng,
+        lat: center.lat,
+        lng: center.lng,
         source: "default",
       };
     }
@@ -114,7 +167,7 @@ async function resolvePoint(input, fallbackLabel = neutralFallbackLabel) {
   }
 
   if (input.type === "preset" && input.label) {
-    const found = findItemByName(input.label);
+    const found = findCatalogItemByName(input.label);
     if (found) {
       return {
         label: found.name,
@@ -135,7 +188,7 @@ async function resolvePoint(input, fallbackLabel = neutralFallbackLabel) {
       };
     }
 
-    const candidates = await geocodeQuery(input.query || input.label);
+    const candidates = await geocodeInActiveCity(input.query || input.label);
     if (candidates[0]) {
       return {
         label: candidates[0].label,
@@ -146,12 +199,13 @@ async function resolvePoint(input, fallbackLabel = neutralFallbackLabel) {
     }
   }
 
-  const fallback = findItemByName(fallbackLabel);
+  const fallback = findCatalogItemByName(fallbackLabel);
   if (!fallback) {
+    const center = getCityCenter();
     return {
       label: "Rom",
-      lat: ROME_CENTER.lat,
-      lng: ROME_CENTER.lng,
+      lat: center.lat,
+      lng: center.lng,
       source: "default",
     };
   }
@@ -546,7 +600,7 @@ function findNearestCatalogItem(point) {
     return null;
   }
 
-  return allItems.reduce((closest, item) => {
+  return getAllItems().reduce((closest, item) => {
     const distanceKm = haversineKm(point, item);
 
     if (!closest || distanceKm < closest.distanceKm) {
@@ -607,7 +661,7 @@ function buildPointAreaProfile(point) {
 }
 
 function getAutoAnchorCandidates() {
-  return allItems.filter((item) => autoAnchorKinds.has(item.kind));
+  return getAllItems().filter((item) => autoAnchorKinds.has(item.kind));
 }
 
 function getAutoAnchorSupportItems(candidate) {
@@ -620,7 +674,7 @@ function getAutoAnchorSupportItems(candidate) {
   }
 
   const radiusKm = candidate.kind === "district-group" ? 2.4 : 1.8;
-  const supportItems = allItems
+  const supportItems = getAllItems()
     .filter((item) => item.id !== candidate.id && !autoAnchorKinds.has(item.kind))
     .map((item) => ({
       item,
@@ -880,7 +934,7 @@ function resolveAutoPoint({
       }),
     }))
     .sort((left, right) => right.score - left.score);
-  const best = ranked[0]?.candidate || findItemByName(neutralFallbackLabel);
+  const best = ranked[0]?.candidate || findCatalogItemByName(getFallbackLabel());
 
   return {
     label: best.name,
@@ -1172,7 +1226,7 @@ function resolveAutoAnchors(options = {}) {
   }
 
   const fallbackLoopCandidate =
-    bestLoop?.candidate || rankedStart[0]?.candidate || findItemByName(neutralFallbackLabel);
+    bestLoop?.candidate || rankedStart[0]?.candidate || findCatalogItemByName(getFallbackLabel());
 
   return {
     start: {
@@ -2014,7 +2068,7 @@ function buildStopPool(
     return true;
   };
   const baseSeedStops = template.stops
-    .map((stopId) => findItemByName(stopId))
+    .map((stopId) => findCatalogItemByName(stopId))
     .filter(Boolean)
     .filter((item) => !isAnchorDuplicateStop(item, start) && !isAnchorDuplicateStop(item, end));
   const filteredSeedStops = baseSeedStops.filter(candidateFitsLockedCorridor);
@@ -2059,7 +2113,7 @@ function buildStopPool(
       ? supplementalLimit + 2
       : supplementalLimit;
   const supplementalCandidates = [
-    ...allItems,
+    ...getAllItems(),
     ...liveEventCandidates,
   ].filter((item) => candidateFitsLockedCorridor(item));
   const supplemental = supplementalCandidates
@@ -2366,6 +2420,40 @@ function buildLegMetrics(legs = [], legPacing = "balanced", { shape = "loop" } =
   };
 }
 
+async function applyWalkingTruthToRoute(route, { legPacing = "balanced" } = {}) {
+  if (!route || !Array.isArray(route.map_route_points) || route.map_route_points.length < 2) {
+    return route;
+  }
+
+  const truth = await routeWalkingPath(route.map_route_points, {
+    walkingConfig: getWalkingConfig(),
+  });
+  const metrics = buildLegMetrics(truth.legs || [], legPacing, {
+    shape: route.route_shape || "loop",
+  });
+  const providerNote =
+    truth.source === "osrm"
+      ? "Verifierad med riktig gångrouting."
+      : "Gångbenen bygger just nu på heuristisk routing.";
+  const existingGeoNote = route.geo_fit_note ? `${route.geo_fit_note} ` : "";
+
+  return {
+    ...route,
+    estimated_km: Number((truth.estimatedKm || route.estimated_km || 0).toFixed(1)),
+    legs: truth.legs || route.legs || [],
+    longest_leg_km: metrics.longestLegKm,
+    longest_leg_minutes: metrics.longestLegMinutes,
+    average_leg_minutes: metrics.averageLegMinutes,
+    leg_fit_note: metrics.note,
+    map_path_points:
+      Array.isArray(truth.pathPoints) && truth.pathPoints.length
+        ? truth.pathPoints
+        : route.map_path_points || route.map_route_points,
+    routing_source: truth.source || "heuristic",
+    geo_fit_note: `${existingGeoNote}${providerNote}`.trim(),
+  };
+}
+
 function buildAnchorZone(shape, startProfile, endProfile, routeArea) {
   if (shape === "loop") {
     return startProfile?.primaryLabel || tokenLabel(routeArea.dominantToken) || "Rom";
@@ -2477,7 +2565,7 @@ function formatMainStop(stop) {
 }
 
 function resolveRouteStopData(stop) {
-  const catalogItem = findItemByName(stop.id);
+  const catalogItem = findCatalogItemByName(stop.id);
 
   if (catalogItem) {
     return catalogItem;
@@ -2580,7 +2668,7 @@ function buildDynamicRouteMentions({
 } = {}) {
   const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
   const stopIds = new Set(orderedStops.map((stop) => stop.id));
-  const nearbyItems = allItems
+  const nearbyItems = getAllItems()
     .filter((item) => !stopIds.has(item.id) && !autoAnchorKinds.has(item.kind))
     .map((item) => ({
       item,
@@ -2639,11 +2727,11 @@ function buildDynamicRouteMentions({
     hiddenMentions:
       hiddenMentions.length > 0
         ? hiddenMentions
-        : (template?.hiddenMentions || []).filter((name) => Boolean(findItemByName(name))).slice(0, 4),
+        : (template?.hiddenMentions || []).filter((name) => Boolean(findCatalogItemByName(name))).slice(0, 4),
     barMentions:
       barMentions.length > 0
         ? barMentions
-        : (template?.barMentions || []).filter((name) => Boolean(findItemByName(name))).slice(0, 4),
+        : (template?.barMentions || []).filter((name) => Boolean(findCatalogItemByName(name))).slice(0, 4),
   };
 }
 
@@ -2780,7 +2868,12 @@ function buildRouteFromTemplate(
     hidden_mentions: routeMentions.hiddenMentions,
     bar_mentions: routeMentions.barMentions,
     map_route_points: mapRoutePoints,
+    map_path_points: mapRoutePoints.map((point) => ({
+      lat: point.lat,
+      lng: point.lng,
+    })),
     legs,
+    routing_source: "heuristic",
     longest_leg_km: geometry?.longestLegKm ?? null,
     longest_leg_minutes: geometry?.longestLegMinutes ?? null,
     average_leg_minutes: geometry?.averageLegMinutes ?? null,
@@ -3476,6 +3569,7 @@ function pickDistinctRoutes(rankedEntries, usedRoutes = [], maxRoutes = 3) {
 }
 
 async function generateRecommendations({
+  city = "rome",
   dates,
   homeBase,
   start,
@@ -3488,184 +3582,205 @@ async function generateRecommendations({
   distanceMode = "soft_target",
   legPacing = "balanced",
 }) {
-  const normalizedDates = expandDateRange(dates);
-  const pulseByDate = Object.fromEntries(
-    normalizedDates.map((date) => [date, getCityPulse(date)]),
-  );
-  const [weatherByDate, liveEventsByDate] = await Promise.all([
-    fetchWeatherForDates(normalizedDates, ROME_CENTER).catch(() => ({})),
-    fetchLiveEventsForDates(normalizedDates, {
-      preferences,
-      optimizerMode,
-      budgetTier,
-      modifier,
-    }).catch(() => ({})),
-  ]);
-  const homeBaseIsAuto = !homeBase || isAutoPointInput(homeBase);
-  const startIsAuto = isAutoPointInput(start);
-  const endIsAuto = isAutoPointInput(end);
-  const resolvedHomeBase = homeBaseIsAuto ? null : await resolvePoint(homeBase, neutralFallbackLabel);
-  let resolvedStart = startIsAuto ? null : await resolvePoint(start, neutralFallbackLabel);
-  let resolvedEnd = endIsAuto ? null : await resolvePoint(end, neutralFallbackLabel);
-  let resolvedAutoShape = null;
+  return cityContextStorage.run(getCityConfig(city), async () => {
+    const normalizedDates = expandDateRange(dates);
+    const pulseByDate = Object.fromEntries(
+      normalizedDates.map((date) => [date, getPulseForDate(date)]),
+    );
+    const [weatherByDate, liveEventsByDate] = await Promise.all([
+      fetchWeatherForActiveCity(normalizedDates, getCityCenter()).catch(() => ({})),
+      fetchLiveEventsForActiveCity(normalizedDates, {
+        preferences,
+        optimizerMode,
+        budgetTier,
+        modifier,
+      }).catch(() => ({})),
+    ]);
+    const homeBaseIsAuto = !homeBase || isAutoPointInput(homeBase);
+    const startIsAuto = isAutoPointInput(start);
+    const endIsAuto = isAutoPointInput(end);
+    const resolvedHomeBase = homeBaseIsAuto ? null : await resolvePoint(homeBase, getFallbackLabel());
+    let resolvedStart = startIsAuto ? null : await resolvePoint(start, getFallbackLabel());
+    let resolvedEnd = endIsAuto ? null : await resolvePoint(end, getFallbackLabel());
+    let resolvedAutoShape = null;
 
-  if (startIsAuto && endIsAuto) {
-    const autoAnchors = resolveAutoAnchors({
-      homeBase: resolvedHomeBase,
-      pulseByDate,
-      liveEventsByDate,
-      preferences,
-      optimizerMode,
-      modifier,
-      targetKm: walkingKmTarget,
-      distanceMode,
-    });
-    resolvedStart = autoAnchors.start;
-    resolvedEnd = autoAnchors.end;
-    resolvedAutoShape = autoAnchors.shape;
-  } else if (startIsAuto) {
-    resolvedStart = resolveAutoPoint({
-      role: "start",
-      homeBase: resolvedHomeBase,
-      pairedPoint: resolvedEnd,
-      pulseByDate,
-      liveEventsByDate,
-      preferences,
-      optimizerMode,
-      modifier,
-      targetKm: walkingKmTarget,
-      distanceMode,
-    });
-  } else if (endIsAuto) {
-    resolvedEnd = resolveAutoPoint({
-      role: "end",
-      homeBase: resolvedHomeBase,
-      pairedPoint: resolvedStart,
-      pulseByDate,
-      liveEventsByDate,
-      preferences,
-      optimizerMode,
-      modifier,
-      targetKm: walkingKmTarget,
-      distanceMode,
-    });
-  }
-  const manualAnchorsLocked = !startIsAuto && !endIsAuto;
-  const usedTemplateIds = new Set();
-  const usedPrimaryRoutes = [];
+    if (startIsAuto && endIsAuto) {
+      const autoAnchors = resolveAutoAnchors({
+        homeBase: resolvedHomeBase,
+        pulseByDate,
+        liveEventsByDate,
+        preferences,
+        optimizerMode,
+        modifier,
+        targetKm: walkingKmTarget,
+        distanceMode,
+      });
+      resolvedStart = autoAnchors.start;
+      resolvedEnd = autoAnchors.end;
+      resolvedAutoShape = autoAnchors.shape;
+    } else if (startIsAuto) {
+      resolvedStart = resolveAutoPoint({
+        role: "start",
+        homeBase: resolvedHomeBase,
+        pairedPoint: resolvedEnd,
+        pulseByDate,
+        liveEventsByDate,
+        preferences,
+        optimizerMode,
+        modifier,
+        targetKm: walkingKmTarget,
+        distanceMode,
+      });
+    } else if (endIsAuto) {
+      resolvedEnd = resolveAutoPoint({
+        role: "end",
+        homeBase: resolvedHomeBase,
+        pairedPoint: resolvedStart,
+        pulseByDate,
+        liveEventsByDate,
+        preferences,
+        optimizerMode,
+        modifier,
+        targetKm: walkingKmTarget,
+        distanceMode,
+      });
+    }
+    const manualAnchorsLocked = !startIsAuto && !endIsAuto;
+    const usedTemplateIds = new Set();
+    const usedPrimaryRoutes = [];
+    const truthPassCount = Math.max(1, getWalkingConfig().truthPassTopCandidates || 5);
 
-  const days = normalizedDates.map((date) => {
-    const weekday = weekdayFromDate(date);
-    const weather = weatherByDate[date];
-    const pulse = pulseByDate[date] || getCityPulse(date);
-    const dateSignals = getDateSignals(date);
-    const pulseItems = Array.isArray(pulse.items) ? pulse.items : [];
-    const liveEvents = liveEventsByDate[date] || [];
+    const days = await Promise.all(
+      normalizedDates.map(async (date) => {
+        const weekday = weekdayFromDate(date);
+        const weather = weatherByDate[date];
+        const pulse = pulseByDate[date] || getPulseForDate(date);
+        const dateSignals = getDateSignalsForDate(date);
+        const pulseItems = Array.isArray(pulse.items) ? pulse.items : [];
+        const liveEvents = liveEventsByDate[date] || [];
 
-    const ranked = routeTemplates
-      .map((template) => {
-        const route = buildRouteFromTemplate(
-          template,
-          resolvedStart,
-          resolvedEnd,
-          walkingKmTarget,
-          preferences,
-          optimizerMode,
-          modifier,
-          distanceMode,
-          liveEvents,
-          {
+        const buildRankedEntry = async (template, baseRoute = null) => {
+          const route =
+            baseRoute ||
+            buildRouteFromTemplate(
+              template,
+              resolvedStart,
+              resolvedEnd,
+              walkingKmTarget,
+              preferences,
+              optimizerMode,
+              modifier,
+              distanceMode,
+              liveEvents,
+              {
+                manualAnchorsLocked,
+                resolvedAutoShape,
+                legPacing,
+              },
+            );
+          const routeStops = route.main_stops
+            .map((stop) => resolveRouteStopData(stop))
+            .filter(Boolean);
+          const openingWarnings = buildOpeningWarnings(routeStops, weekday);
+          const venueSpecials = buildVenueSpecials(routeStops, weekday);
+          const scoring = routeScore({
+            route,
+            template,
+            weather,
+            weekday,
+            pulseItems,
+            liveEvents,
+            targetKm: walkingKmTarget,
+            preferences,
+            reusedIds: usedTemplateIds,
+            optimizerMode,
+            budgetTier,
+            modifier,
+            distanceMode,
+            routeStops,
             manualAnchorsLocked,
-            resolvedAutoShape,
-            legPacing,
+          });
+
+          return {
+            template,
+            route: {
+              ...route,
+              weather_note: scoring.weatherNote,
+              budget_note: scoring.budgetNote,
+              pulse_note: scoring.pulseNote,
+              live_event_fit_note: scoring.liveEventNote,
+              pulse_anchor: scoring.pulseAnchor,
+              area_note: scoring.areaNote,
+              opening_hours_warnings: openingWarnings,
+              venue_specials: venueSpecials,
+              why_recommended: whyRecommended(
+                template,
+                preferences,
+                route,
+                weather,
+                optimizerMode,
+                distanceMode,
+                budgetTier,
+                modifier,
+                scoring.pulseNote,
+                scoring.liveEventNote,
+                scoring.areaNote,
+              ),
+            },
+            score: scoring.score,
+          };
+        };
+
+        const initialRanked = await Promise.all(
+          getRouteTemplates().map((template) => buildRankedEntry(template)),
+        );
+        initialRanked.sort((a, b) => b.score - a.score);
+
+        const truthEnhancedEntries = await Promise.all(
+          initialRanked.slice(0, truthPassCount).map(async (entry) => {
+            const truthRoute = await applyWalkingTruthToRoute(entry.route, { legPacing });
+            return buildRankedEntry(entry.template, truthRoute);
+          }),
+        );
+        const truthEnhancedById = new Map(
+          truthEnhancedEntries.map((entry) => [entry.template.id, entry]),
+        );
+        const ranked = initialRanked
+          .map((entry) => truthEnhancedById.get(entry.template.id) || entry)
+          .sort((a, b) => b.score - a.score);
+
+        const [primary, ...alternatives] = pickDistinctRoutes(ranked, usedPrimaryRoutes, 3);
+        const annotatedLiveEvents = annotateLiveEventsForRoutes(liveEvents, [
+          {
+            label: "Huvudrutten",
+            route: primary.route,
           },
-        );
-        const openingWarnings = buildOpeningWarnings(
-          route.main_stops.map((stop) => resolveRouteStopData(stop)).filter(Boolean),
-          weekday,
-        );
-        const routeStops = route.main_stops
-          .map((stop) => resolveRouteStopData(stop))
-          .filter(Boolean);
-        const venueSpecials = buildVenueSpecials(routeStops, weekday);
-        const scoring = routeScore({
-          route,
-          template,
-          weather,
-          weekday,
-          pulseItems,
-          liveEvents,
-          targetKm: walkingKmTarget,
-          preferences,
-          reusedIds: usedTemplateIds,
-          optimizerMode,
-          budgetTier,
-          modifier,
-          distanceMode,
-          routeStops,
-          manualAnchorsLocked,
-        });
+          ...alternatives.map((entry, index) => ({
+            label: `Alternativ ${index + 1}`,
+            route: entry.route,
+          })),
+        ]);
+        usedTemplateIds.add(primary.template.id);
+        usedPrimaryRoutes.push(primary.route);
 
         return {
-          template,
-          route: {
-            ...route,
-            weather_note: scoring.weatherNote,
-            budget_note: scoring.budgetNote,
-            pulse_note: scoring.pulseNote,
-            live_event_fit_note: scoring.liveEventNote,
-            pulse_anchor: scoring.pulseAnchor,
-            area_note: scoring.areaNote,
-            opening_hours_warnings: openingWarnings,
-            venue_specials: venueSpecials,
-            why_recommended: whyRecommended(
-              template,
-              preferences,
-              route,
-              weather,
-              optimizerMode,
-              distanceMode,
-              budgetTier,
-              modifier,
-              scoring.pulseNote,
-              scoring.liveEventNote,
-              scoring.areaNote,
-            ),
-          },
-          score: scoring.score,
+          date,
+          date_signals: dateSignals,
+          live_events: annotatedLiveEvents,
+          primary_route: primary.route,
+          alternatives: alternatives.map((entry) => entry.route),
         };
-      })
-      .sort((a, b) => b.score - a.score);
-
-    const [primary, ...alternatives] = pickDistinctRoutes(ranked, usedPrimaryRoutes, 3);
-    const annotatedLiveEvents = annotateLiveEventsForRoutes(liveEvents, [
-      {
-        label: "Huvudrutten",
-        route: primary.route,
-      },
-      ...alternatives.map((entry, index) => ({
-        label: `Alternativ ${index + 1}`,
-        route: entry.route,
-      })),
-    ]);
-    usedTemplateIds.add(primary.template.id);
-    usedPrimaryRoutes.push(primary.route);
+      }),
+    );
 
     return {
-      date,
-      date_signals: dateSignals,
-      live_events: annotatedLiveEvents,
-      primary_route: primary.route,
-      alternatives: alternatives.map((entry) => entry.route),
+      city: getActiveCityConfig().key,
+      days,
+      resolved_home_base: resolvedHomeBase,
+      resolved_start: resolvedStart,
+      resolved_end: resolvedEnd,
     };
   });
-
-  return {
-    days,
-    resolved_home_base: resolvedHomeBase,
-    resolved_start: resolvedStart,
-    resolved_end: resolvedEnd,
-  };
 }
 
 module.exports = {

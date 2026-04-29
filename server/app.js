@@ -1,12 +1,8 @@
 const express = require("express");
 const path = require("path");
-const { allItems, findItemByName } = require("./catalog");
-const { geocodeQuery } = require("./geocoding");
+const { getCityConfig, normalizeCityKey } = require("./cities");
 const { generateRecommendations } = require("./route-engine");
 const { diversifyRecommendationDays } = require("./route-diversity");
-const { fetchLiveEventsForDates } = require("./live-events");
-const { getCityPulse, getRomeTodayIsoDate } = require("./editorial-calendar");
-const { fetchWeatherForDates, ROME_CENTER } = require("./weather");
 
 const pulseVibeByTag = {
   kultur: "curious",
@@ -19,6 +15,22 @@ const pulseVibeByTag = {
   utsikt: "romantic",
   mat: "slow",
 };
+
+function getCitySearchLabel(cityConfig) {
+  return cityConfig?.searchLabel || cityConfig?.label || "Rome";
+}
+
+function buildExternalSearchUrl(label, cityConfig) {
+  return `https://www.google.com/search?q=${encodeURIComponent(
+    `${label} ${getCitySearchLabel(cityConfig)}`,
+  )}`;
+}
+
+function buildExternalMapUrl(label, cityConfig) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    `${label} ${getCitySearchLabel(cityConfig)}`,
+  )}`;
+}
 
 function buildOfficialPulseWhen(event, date) {
   if (event.start_date && event.end_date && event.start_date === event.end_date) {
@@ -36,8 +48,12 @@ function buildOfficialPulseWhen(event, date) {
   return event.start_date || event.end_date || "Just nu";
 }
 
-function buildOfficialPulseItem(event, date) {
-  const where = [event.venue, event.address].filter(Boolean).join(" • ") || "Rom";
+function buildOfficialPulseItem(event, date, cityConfig) {
+  const where =
+    [event.venue, event.address].filter(Boolean).join(" • ") ||
+    cityConfig?.editorialAreaLabel ||
+    cityConfig?.label ||
+    "Rom";
   const matchesVibes = [...new Set((event.match_tags || []).map((tag) => pulseVibeByTag[tag]).filter(Boolean))];
 
   return {
@@ -49,7 +65,7 @@ function buildOfficialPulseItem(event, date) {
     when: buildOfficialPulseWhen(event, date),
     blurb:
       event.summary ||
-      "Officiellt live-event i Rom som kan ge dagen ett mer tidsbundet lager.",
+      `Officiellt live-event i ${cityConfig?.label || "Rom"} som kan ge dagen ett mer tidsbundet lager.`,
     why_it_matters:
       event.match_reason ||
       "Bra som live-bonus när du vill väva in något som faktiskt bara händer just nu.",
@@ -72,6 +88,8 @@ function buildApp() {
   });
 
   app.get("/api/places/search", (request, response) => {
+    const cityConfig = getCityConfig(request.query.city);
+    const { allItems } = cityConfig.catalog;
     const query = String(request.query.q || "").trim().toLowerCase();
     const items = allItems
       .filter((item) => {
@@ -98,10 +116,12 @@ function buildApp() {
         price_level: item.priceLevel,
       }));
 
-    response.json({ items });
+    response.json({ city: cityConfig.key, items });
   });
 
   app.get("/api/place-details", (request, response) => {
+    const cityConfig = getCityConfig(request.query.city);
+    const { allItems, findItemByName } = cityConfig.catalog;
     const query = String(request.query.q || request.query.id || "").trim();
 
     if (!query) {
@@ -115,11 +135,12 @@ function buildApp() {
 
     if (!found) {
       response.json({
+        city: cityConfig.key,
         item: {
           id: `editorial-${query.toLowerCase().replace(/\s+/g, "-")}`,
           label: query,
           type: "editorial mention",
-          area: "Rom",
+          area: cityConfig.editorialAreaLabel || cityConfig.label || "Rom",
           summary:
             "Det här är just nu en redaktionell mention i appen. Intern fullprofil saknas ännu, men du kan hoppa vidare till Google eller kartan.",
           vibe: "redaktionell bonusnotis",
@@ -134,18 +155,15 @@ function buildApp() {
           feature_notes: [],
           happy_hour_note: null,
           tags: [],
-          external_search_url: `https://www.google.com/search?q=${encodeURIComponent(
-            `${query} Rome`,
-          )}`,
-          external_map_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-            `${query} Rome`,
-          )}`,
+          external_search_url: buildExternalSearchUrl(query, cityConfig),
+          external_map_url: buildExternalMapUrl(query, cityConfig),
         },
       });
       return;
     }
 
     response.json({
+      city: cityConfig.key,
       item: {
         id: found.id,
         label: found.name,
@@ -165,28 +183,28 @@ function buildApp() {
         feature_notes: found.featureNotes,
         happy_hour_note: found.happyHourNote,
         tags: found.tags,
-        external_search_url: `https://www.google.com/search?q=${encodeURIComponent(
-          `${found.name} Rome`,
-        )}`,
-        external_map_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-          `${found.name} Rome`,
-        )}`,
+        external_search_url: buildExternalSearchUrl(found.name, cityConfig),
+        external_map_url: buildExternalMapUrl(found.name, cityConfig),
       },
     });
   });
 
   app.get("/api/city-pulse", async (request, response) => {
     try {
-      const date = String(request.query.date || "").trim() || getRomeTodayIsoDate();
-      const pulse = getCityPulse(date);
+      const cityConfig = getCityConfig(request.query.city);
+      const date = String(request.query.date || "").trim() || cityConfig.todayIsoDate();
+      const pulse = cityConfig.services.getCityPulse(date);
       const [liveEventsByDate, weatherByDate] = await Promise.all([
-        fetchLiveEventsForDates([pulse.date], {}),
-        fetchWeatherForDates([pulse.date], ROME_CENTER).catch(() => ({})),
+        cityConfig.services.fetchLiveEventsForDates([pulse.date], {}),
+        cityConfig.services.fetchWeatherForDates([pulse.date], cityConfig.center).catch(() => ({})),
       ]);
       const officialEvents = (liveEventsByDate[pulse.date] || []).slice(0, 2);
-      const officialPulseItems = officialEvents.slice(0, 1).map((event) => buildOfficialPulseItem(event, pulse.date));
+      const officialPulseItems = officialEvents
+        .slice(0, 1)
+        .map((event) => buildOfficialPulseItem(event, pulse.date, cityConfig));
 
       response.json({
+        city: cityConfig.key,
         ...pulse,
         items: [...(pulse.items || []), ...officialPulseItems],
         official_events: officialEvents,
@@ -202,8 +220,9 @@ function buildApp() {
 
   app.post("/api/geocode", async (request, response) => {
     try {
-      const candidates = await geocodeQuery(request.body?.query || "");
-      response.json({ candidates });
+      const cityConfig = getCityConfig(request.body?.city);
+      const candidates = await cityConfig.services.geocodeQuery(request.body?.query || "");
+      response.json({ city: cityConfig.key, candidates });
     } catch (error) {
       response.status(502).json({
         error: "Geocoding failed",
@@ -214,10 +233,12 @@ function buildApp() {
 
   app.post("/api/route-recommendations", async (request, response) => {
     try {
+      const city = normalizeCityKey(request.body?.city || "rome");
       const preferences = Array.isArray(request.body?.preferences)
         ? request.body.preferences
         : [];
       const payload = {
+        city,
         dates: Array.isArray(request.body?.dates) ? request.body.dates : [],
         homeBase: request.body?.home_base,
         start: request.body?.start,
