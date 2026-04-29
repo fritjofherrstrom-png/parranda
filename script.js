@@ -1325,7 +1325,27 @@ const routeGuideBarsBlock = document.getElementById("routeGuideBarsBlock");
 const routeGuideBars = document.getElementById("routeGuideBars");
 const routeGuideHiddenBlock = document.getElementById("routeGuideHiddenBlock");
 const routeGuideHidden = document.getElementById("routeGuideHidden");
-const plannerCityKey = "rome";
+function getFrontendCityConfig() {
+  const bodyKey = document.body?.dataset.cityKey?.trim() || "rome";
+  const bodyLabel = document.body?.dataset.cityLabel?.trim() || "Rom";
+  const params = new URLSearchParams(window.location.search);
+  const pathSegments = window.location.pathname.split("/").filter(Boolean);
+  const requestedKey = normalizeText(params.get("city") || pathSegments[0] || "");
+  const normalizedBodyKey = normalizeText(bodyKey) || "rome";
+  const key = requestedKey || normalizedBodyKey;
+  const labelByKey = {
+    [normalizedBodyKey]: bodyLabel,
+  };
+
+  return {
+    key,
+    label: labelByKey[key] || bodyLabel,
+  };
+}
+
+const plannerCity = getFrontendCityConfig();
+const plannerCityKey = plannerCity.key;
+const plannerCityLabel = plannerCity.label;
 const routeGuidePrintButton = document.getElementById("routeGuidePrintButton");
 const routeGuideShareButton = document.getElementById("routeGuideShareButton");
 const routeGuideDirectionsLink = document.getElementById("routeGuideDirectionsLink");
@@ -2735,6 +2755,23 @@ function buildPulseTeaserSummary() {
   return `${weatherLine} Öppna LIVE när du vill läsa dagens edition mer som en lokal utgåva.`;
 }
 
+function focusActiveDayLiveSection() {
+  const dayCard = routeResults?.querySelector(".planner-day-card");
+  const dayEvents = dayCard?.querySelector(".planner-day-events:not([hidden])");
+  const target = dayEvents || dayCard;
+
+  if (!target) {
+    return false;
+  }
+
+  target.scrollIntoView({
+    behavior: "smooth",
+    block: "start",
+  });
+
+  return true;
+}
+
 function renderCityPulseTeaser() {
   if (!cityPulseTeaser || !cityPulseTeaserTitle || !cityPulseTeaserSummary || !cityPulseTeaserLabel) {
     return;
@@ -2742,6 +2779,8 @@ function renderCityPulseTeaser() {
 
   const targetDate = ensureActiveLiveDate();
   const plannedContext = routeRenderMode === "api" && plannedDays.length;
+  const activeDay = getActivePlannedDay();
+  const activeDayEventCount = activeDay?.live_events?.length || 0;
   const weekdayLabel =
     cityPulseState?.weekday_label ||
     getFallbackPulseDateLabels(targetDate).weekdayLabel;
@@ -2750,17 +2789,30 @@ function renderCityPulseTeaser() {
     getFallbackPulseDateLabels(targetDate).dateLabel;
 
   cityPulseTeaser.classList.toggle("is-route-context", plannedContext);
-  cityPulseTeaserLabel.textContent = plannedContext
-    ? "LIVE • TILL DIN DAG"
-    : plannedDays.length
+  cityPulseTeaser.classList.toggle("is-day-handoff", plannedContext);
+
+  if (plannedContext) {
+    cityPulseTeaserLabel.textContent = "LIVE FÖR DIN DAG";
+    cityPulseTeaserTitle.textContent = activeDayEventCount
+      ? `${Math.min(activeDayEventCount, 2)} live-spår matchar planen`
+      : "LIVE finns längre ner om du vill justera dagen";
+    cityPulseTeaserSummary.textContent = activeDayEventCount
+      ? `De starkaste live-spåren ligger under huvudrutten för ${formatSwedishDate(activeDay?.date || targetDate)}.`
+      : `Öppna LIVE längre ner när du vill läsa ${plannerCityLabel} mer i realtid utan att lämna planen.`;
+  } else {
+    cityPulseTeaserLabel.textContent = plannedDays.length
       ? `LIVE • ${plannedDays.length} vald dag${plannedDays.length > 1 ? "ar" : ""}`
-    : `Just nu i Rom • ${weekdayLabel} ${dateLabel}`;
-  cityPulseTeaserTitle.textContent = plannedContext
-    ? "Just nu runt din dag"
-    : cityPulseState?.headline || "LIVE-edition för Rom";
-  cityPulseTeaserSummary.textContent = buildPulseTeaserSummary();
+      : `Just nu i ${plannerCityLabel} • ${weekdayLabel} ${dateLabel}`;
+    cityPulseTeaserTitle.textContent = cityPulseState?.headline || `LIVE-edition för ${plannerCityLabel}`;
+    cityPulseTeaserSummary.textContent = buildPulseTeaserSummary();
+  }
+
   if (cityPulseTeaserButton) {
-    cityPulseTeaserButton.textContent = plannedContext ? "Se LIVE för dagen" : "Öppna LIVE";
+    cityPulseTeaserButton.textContent = plannedContext
+      ? activeDayEventCount
+        ? "Hoppa till dagens live"
+        : "Öppna LIVE"
+      : "Öppna LIVE";
   }
 }
 
@@ -7563,6 +7615,10 @@ heroLiveButton?.addEventListener("click", async () => {
 });
 
 cityPulseTeaserButton?.addEventListener("click", async () => {
+  if (routeRenderMode === "api" && plannedDays.length && focusActiveDayLiveSection()) {
+    return;
+  }
+
   await openLiveEdition({ scroll: true });
 });
 
