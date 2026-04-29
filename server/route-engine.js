@@ -57,6 +57,22 @@ function getWalkingConfig() {
   return getActiveCityConfig().walking || {};
 }
 
+function getRoutingConfig() {
+  return getActiveCityConfig().routing || {};
+}
+
+function getAreaDefinitions() {
+  return getRoutingConfig().areaDefinitions || {};
+}
+
+function getMacroAreaLabels() {
+  return getRoutingConfig().macroAreaLabels || {};
+}
+
+function getRoutingTuning() {
+  return getRoutingConfig().tuning || {};
+}
+
 function haversineKm(a, b) {
   const toRad = (value) => (value * Math.PI) / 180;
   const earthRadiusKm = 6371;
@@ -508,43 +524,6 @@ function normalizePulseRouteHints(item) {
   };
 }
 
-const areaDefinitions = {
-  trastevere: { label: "Trastevere", macro: "west" },
-  gianicolo: { label: "Gianicolo", macro: "west" },
-  prati: { label: "Prati", macro: "west" },
-  borgo: { label: "Borgo", macro: "west" },
-  centro: { label: "Centro Storico", macro: "center" },
-  ghetto: { label: "Jewish Ghetto", macro: "center" },
-  monti: { label: "Monti", macro: "center" },
-  celio: { label: "Celio", macro: "center" },
-  colosseum: { label: "Colosseo", macro: "center" },
-  colosseo: { label: "Colosseo", macro: "center" },
-  navona: { label: "Navona", macro: "center" },
-  campo: { label: "Campo de' Fiori", macro: "center" },
-  sallustiano: { label: "Sallustiano", macro: "center" },
-  "villa-borghese": { label: "Villa Borghese", macro: "center" },
-  testaccio: { label: "Testaccio", macro: "south" },
-  ostiense: { label: "Ostiense", macro: "south" },
-  aventino: { label: "Aventino", macro: "south" },
-  garbatella: { label: "Garbatella", macro: "south" },
-  portuense: { label: "Portuense/Marconi", macro: "south" },
-  marconi: { label: "Portuense/Marconi", macro: "south" },
-  piramide: { label: "Piramide", macro: "south" },
-  pigneto: { label: "Pigneto", macro: "east" },
-  "san-lorenzo": { label: "San Lorenzo", macro: "east" },
-  esquilino: { label: "Esquilino", macro: "east" },
-  "san-giovanni": { label: "San Giovanni", macro: "east" },
-  laterano: { label: "Laterano", macro: "east" },
-  termini: { label: "Termini", macro: "east" },
-};
-
-const macroAreaLabels = {
-  west: "västra Rom",
-  center: "centrala Rom",
-  south: "södra Rom",
-  east: "östra Rom",
-};
-
 function slugifyText(value) {
   return String(value || "")
     .toLowerCase()
@@ -557,9 +536,11 @@ function slugifyText(value) {
 function extractAreaTokens(...values) {
   const flattenedValues = values.flat().filter(Boolean);
   const tokens = new Set();
+  const areaDefinitions = getAreaDefinitions();
+  const areaTokens = Object.keys(areaDefinitions);
 
   flattenedValues.map(slugifyText).forEach((text) => {
-    Object.keys(areaDefinitions).forEach((token) => {
+    areaTokens.forEach((token) => {
       if (text.includes(token)) {
         tokens.add(token);
       }
@@ -571,9 +552,10 @@ function extractAreaTokens(...values) {
 
 function primaryAreaToken(...values) {
   const flattenedValues = values.flat().filter(Boolean);
+  const areaTokens = Object.keys(getAreaDefinitions());
 
   for (const text of flattenedValues.map(slugifyText)) {
-    for (const token of Object.keys(areaDefinitions)) {
+    for (const token of areaTokens) {
       if (text.includes(token)) {
         return token;
       }
@@ -588,11 +570,11 @@ function isAutoPointInput(input) {
 }
 
 function tokenLabel(token) {
-  return areaDefinitions[token]?.label || null;
+  return getAreaDefinitions()[token]?.label || null;
 }
 
 function macroLabel(macro) {
-  return macroAreaLabels[macro] || "Rom";
+  return getMacroAreaLabels()[macro] || "Rom";
 }
 
 function findNearestCatalogItem(point) {
@@ -625,6 +607,7 @@ function buildItemAreaProfile(item) {
     };
   }
 
+  const areaDefinitions = getAreaDefinitions();
   const tokens = extractAreaTokens(item.area, item.id, item.name, item.searchTerms || []);
   const primaryToken =
     primaryAreaToken(item.id, item.name, item.area, item.searchTerms || []) ||
@@ -856,6 +839,7 @@ function scoreAutoAnchorCandidate(
   }
 
   pulseItems.forEach((item) => {
+    const areaDefinitions = getAreaDefinitions();
     const pulseTokens = extractAreaTokens(item.where, item.title, item.blurb);
 
     if (candidateProfile.primaryToken && pulseTokens.has(candidateProfile.primaryToken)) {
@@ -1373,6 +1357,7 @@ function areaScore({ routeStops, startPoint, endPoint, distanceMode }) {
   const routeProfile = buildRouteAreaProfile(routeStops);
   const startProfile = buildPointAreaProfile(startPoint);
   const endProfile = buildPointAreaProfile(endPoint);
+  const areaTuning = getRoutingTuning().areaScore || {};
   let score = 0;
   const notes = [];
 
@@ -1382,16 +1367,16 @@ function areaScore({ routeStops, startPoint, endPoint, distanceMode }) {
     }
 
     if (profile.primaryToken && routeProfile.tokens.has(profile.primaryToken)) {
-      score += 5.5;
+      score += areaTuning.anchorTokenHitScore ?? 5.5;
       return;
     }
 
     if (routeProfile.macros.has(profile.primaryMacro)) {
-      score += 2.5;
+      score += areaTuning.anchorMacroHitScore ?? 2.5;
       return;
     }
 
-    score -= 4;
+    score -= areaTuning.anchorMissPenalty ?? 4;
   };
 
   applyAnchorScore(startProfile);
@@ -1404,13 +1389,16 @@ function areaScore({ routeStops, startPoint, endPoint, distanceMode }) {
 
   if (sameMacro) {
     if (routeProfile.dominantMacro === startProfile.primaryMacro) {
-      score += 4.5;
+      score += areaTuning.sameMacroDominantHitScore ?? 4.5;
     } else if (routeProfile.macros.has(startProfile.primaryMacro)) {
-      score += 2;
+      score += areaTuning.sameMacroPresenceScore ?? 2;
     }
 
-    if (distanceMode !== "no_limit" && routeProfile.macros.size > 2) {
-      score -= 1.5;
+    if (
+      distanceMode !== "no_limit" &&
+      routeProfile.macros.size > (areaTuning.sameMacroSpreadPenaltyThreshold ?? 2)
+    ) {
+      score -= areaTuning.sameMacroSpreadPenalty ?? 1.5;
     }
 
     if (routeProfile.dominantMacro === startProfile.primaryMacro) {
@@ -1425,30 +1413,30 @@ function areaScore({ routeStops, startPoint, endPoint, distanceMode }) {
       routeProfile.macros.has(startProfile.primaryMacro) &&
       routeProfile.macros.has(endProfile.primaryMacro)
     ) {
-      score += 4.5;
+      score += areaTuning.crossMacroBridgeScore ?? 4.5;
       notes.push(
         `Rutten binder ihop ${macroLabel(startProfile.primaryMacro)} och ${macroLabel(
           endProfile.primaryMacro,
         )} på ett mer naturligt sätt än de mer generiska looparna.`,
       );
     } else {
-      score -= 2.5;
+      score -= areaTuning.crossMacroMissPenalty ?? 2.5;
     }
 
     if (
       routeProfile.dominantMacro &&
       ![startProfile.primaryMacro, endProfile.primaryMacro].includes(routeProfile.dominantMacro)
     ) {
-      score -= 1.5;
+      score -= areaTuning.crossMacroDominantDriftPenalty ?? 1.5;
     }
   }
 
   if (
-    routeProfile.dominantMacro === "west" &&
-    startProfile?.primaryMacro !== "west" &&
-    endProfile?.primaryMacro !== "west"
+    routeProfile.dominantMacro === (areaTuning.unanchoredDominantMacro || "west") &&
+    startProfile?.primaryMacro !== (areaTuning.unanchoredDominantMacro || "west") &&
+    endProfile?.primaryMacro !== (areaTuning.unanchoredDominantMacro || "west")
   ) {
-    score -= 2.5;
+    score -= areaTuning.unanchoredDominantMacroPenalty ?? 2.5;
   }
 
   if (!notes.length && startProfile?.primaryToken && routeProfile.tokens.has(startProfile.primaryToken)) {
@@ -1823,6 +1811,8 @@ function scoreStopCandidate({
   const distanceToStart = haversineKm(start, item);
   const distanceToEnd = haversineKm(end, item);
   const pacing = legPacingConfig[normalizeLegPacing(legPacing)];
+  const arcTuning = getRoutingTuning().arcStopScoring || {};
+  const neutralArcMacros = new Set(arcTuning.driftNeutralMacros || ["center"]);
   let score = (item.anchorWeight || 1) + Math.max(0, 1.2 - index * 0.08);
 
   score += preferenceBoostForStop(item, preferences, optimizerMode, modifier, strictTags);
@@ -1862,7 +1852,10 @@ function scoreStopCandidate({
 
     score -= axisStats.lateralKm * 1.15 * pacing.lateralWeight;
 
-    if (axisStats.progressKm < -0.35 || axisStats.progressKm > axisStats.axisLengthKm + 0.9) {
+    if (
+      axisStats.progressKm < (arcTuning.progressStartSlackKm ?? -0.35) ||
+      axisStats.progressKm > axisStats.axisLengthKm + (arcTuning.progressEndSlackKm ?? 0.9)
+    ) {
       score -= 5.5;
     }
 
@@ -1880,24 +1873,26 @@ function scoreStopCandidate({
     }
     if (
       itemProfile.primaryMacro &&
-      ![startMacro, endMacro, "center"].includes(itemProfile.primaryMacro)
+      ![startMacro, endMacro].includes(itemProfile.primaryMacro) &&
+      !neutralArcMacros.has(itemProfile.primaryMacro)
     ) {
       score -= 2.6;
     }
 
     if (normalizeLegPacing(legPacing) === "short") {
       if (
-        axisLengthKm > 2.8 &&
-        progressRatio >= 0.18 &&
-        progressRatio <= 0.82 &&
-        axisStats.lateralKm <= 1.05
+        axisLengthKm > (arcTuning.shortBridgeMinAxisKm ?? 2.8) &&
+        progressRatio >= (arcTuning.shortBridgeProgressMin ?? 0.18) &&
+        progressRatio <= (arcTuning.shortBridgeProgressMax ?? 0.82) &&
+        axisStats.lateralKm <= (arcTuning.shortBridgeMaxLateralKm ?? 1.05)
       ) {
         const bridgeBoost = 1 - Math.min(1, Math.abs(progressRatio - 0.5) / 0.5);
         score += 1.8 + bridgeBoost * 1.9;
       }
 
-      if (axisStats.lateralKm > 1.4) {
-        score -= (axisStats.lateralKm - 1.4) * 2.4;
+      const shortLateralPenaltyStartKm = arcTuning.shortLateralPenaltyStartKm ?? 1.4;
+      if (axisStats.lateralKm > shortLateralPenaltyStartKm) {
+        score -= (axisStats.lateralKm - shortLateralPenaltyStartKm) * 2.4;
       }
     }
   }
@@ -1935,6 +1930,7 @@ function scoreSupplementalPoolItem({
 
   const itemProfile = buildItemAreaProfile(item);
   const pacing = legPacingConfig[normalizeLegPacing(legPacing)];
+  const supplementalArcTuning = getRoutingTuning().supplementalArcScoring || {};
   const distanceToStart = haversineKm(start, item);
   const distanceToEnd = haversineKm(end, item);
   let score = preferenceBoostForStop(item, preferences, optimizerMode, modifier, strictTags);
@@ -1981,7 +1977,11 @@ function scoreSupplementalPoolItem({
 
     score -= axisStats.lateralKm * 0.9 * pacing.lateralWeight;
 
-    if (axisStats.progressKm < -0.45 || axisStats.progressKm > axisStats.axisLengthKm + 1.1) {
+    if (
+      axisStats.progressKm < (supplementalArcTuning.progressStartSlackKm ?? -0.45) ||
+      axisStats.progressKm >
+        axisStats.axisLengthKm + (supplementalArcTuning.progressEndSlackKm ?? 1.1)
+    ) {
       score -= 5;
     }
 
@@ -1992,16 +1992,18 @@ function scoreSupplementalPoolItem({
       score += 1.4;
     }
 
-    if (normalizeLegPacing(legPacing) === "short" && axisStats.lateralKm > 1.35) {
-      score -= (axisStats.lateralKm - 1.35) * 1.9;
+    const shortLateralPenaltyStartKm =
+      supplementalArcTuning.shortLateralPenaltyStartKm ?? 1.35;
+    if (normalizeLegPacing(legPacing) === "short" && axisStats.lateralKm > shortLateralPenaltyStartKm) {
+      score -= (axisStats.lateralKm - shortLateralPenaltyStartKm) * 1.9;
     }
 
     if (
       normalizeLegPacing(legPacing) === "short" &&
-      axisLengthKm > 2.8 &&
-      progressRatio >= 0.16 &&
-      progressRatio <= 0.84 &&
-      axisStats.lateralKm <= 1.1
+      axisLengthKm > (supplementalArcTuning.shortBridgeMinAxisKm ?? 2.8) &&
+      progressRatio >= (supplementalArcTuning.shortBridgeProgressMin ?? 0.16) &&
+      progressRatio <= (supplementalArcTuning.shortBridgeProgressMax ?? 0.84) &&
+      axisStats.lateralKm <= (supplementalArcTuning.shortBridgeMaxLateralKm ?? 1.1)
     ) {
       const bridgeBoost = 1 - Math.min(1, Math.abs(progressRatio - 0.5) / 0.5);
       score += 2 + bridgeBoost * 2.1;
@@ -2049,7 +2051,17 @@ function buildStopPool(
     optimizerMode,
     modifier,
   );
-  const corridorLimitKm = clamp(Math.max(targetKm * 0.22, 1.2), 1.2, distanceMode === "no_limit" ? 3.6 : 2.8);
+  const lockedCorridorTuning = getRoutingTuning().lockedCorridor || {};
+  const corridorLimitKm = clamp(
+    Math.max(
+      targetKm * (lockedCorridorTuning.targetFactor ?? 0.22),
+      lockedCorridorTuning.minLateralKm ?? 1.2,
+    ),
+    lockedCorridorTuning.minLateralKm ?? 1.2,
+    distanceMode === "no_limit"
+      ? lockedCorridorTuning.noLimitMaxLateralKm ?? 3.6
+      : lockedCorridorTuning.maxLateralKm ?? 2.8,
+  );
   const candidateFitsLockedCorridor = (item) => {
     if (!manualAnchorsLocked || shape !== "arc") {
       return true;
@@ -2057,7 +2069,10 @@ function buildStopPool(
 
     const axis = projectPointToAxis(item, start, end);
 
-    if (axis.progressKm < -0.45 || axis.progressKm > axis.axisLengthKm + 0.85) {
+    if (
+      axis.progressKm < (lockedCorridorTuning.progressStartSlackKm ?? -0.45) ||
+      axis.progressKm > axis.axisLengthKm + (lockedCorridorTuning.progressEndSlackKm ?? 0.85)
+    ) {
       return false;
     }
 
@@ -2080,19 +2095,89 @@ function buildStopPool(
         : baseSeedStops;
   const basePool = uniqueStops(seededPool);
 
-  if (!basePool.length && !manualAnchorsLocked) {
-    return [];
-  }
-
-  const seedRouteArea = buildRouteAreaProfile(basePool.length ? basePool : baseSeedStops);
-  const seedIds = new Set(basePool.map((item) => item.id));
-  const seedDuplicateCounts = (basePool.length ? basePool : baseSeedStops).reduce((counts, item) => {
+  const templateSeedStops = basePool.length ? basePool : baseSeedStops;
+  const templateSeedRouteArea = buildRouteAreaProfile(templateSeedStops);
+  const templateSeedIds = new Set(templateSeedStops.map((item) => item.id));
+  const templateSeedDuplicateCounts = templateSeedStops.reduce((counts, item) => {
     if (item.duplicateFamily) {
       counts.set(item.duplicateFamily, (counts.get(item.duplicateFamily) || 0) + 1);
     }
     return counts;
   }, new Map());
   const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
+  const catalogSeedLimit = manualAnchorsLocked && shape === "arc"
+    ? distanceMode === "no_limit"
+      ? 7
+      : targetKm <= 6
+        ? 4
+        : targetKm <= 9
+          ? 5
+          : 6
+    : distanceMode === "no_limit"
+      ? 4
+      : targetKm <= 6
+        ? 2
+        : targetKm <= 9
+          ? 3
+          : 4;
+  const effectiveCatalogSeedLimit =
+    manualAnchorsLocked && shape === "arc" && legPacing === "short"
+      ? catalogSeedLimit + 1
+      : catalogSeedLimit;
+  const catalogSeedThreshold =
+    manualAnchorsLocked && shape === "arc"
+      ? strictTags.length
+        ? 0.4
+        : 0.8
+      : strictTags.length
+        ? 1.6
+        : 2.1;
+  const catalogSeedCandidates = uniqueStops([...getAllItems(), ...liveEventCandidates])
+    .filter((item) => !isAnchorDuplicateStop(item, start) && !isAnchorDuplicateStop(item, end))
+    .filter((item) => !templateSeedIds.has(item.id))
+    .filter((item) => candidateFitsLockedCorridor(item))
+    .map((item) => ({
+      item,
+      score: scoreSupplementalPoolItem({
+        item,
+        template,
+        shape,
+        start,
+        end,
+        startProfile,
+        endProfile,
+        seedRouteArea: templateSeedRouteArea,
+        seedIds: templateSeedIds,
+        seedDuplicateCounts: templateSeedDuplicateCounts,
+        preferences,
+        optimizerMode,
+        modifier,
+        strictTags,
+        targetKm,
+        distanceMode,
+        liveEvents,
+        legPacing,
+      }),
+    }))
+    .filter((entry) => Number.isFinite(entry.score))
+    .filter((entry) => entry.score > catalogSeedThreshold)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, effectiveCatalogSeedLimit)
+    .map((entry) => entry.item);
+  const hybridBasePool = uniqueStops([...basePool, ...catalogSeedCandidates]);
+
+  if (!hybridBasePool.length && !manualAnchorsLocked) {
+    return [];
+  }
+
+  const seedRouteArea = buildRouteAreaProfile(hybridBasePool.length ? hybridBasePool : templateSeedStops);
+  const seedIds = new Set(hybridBasePool.map((item) => item.id));
+  const seedDuplicateCounts = (hybridBasePool.length ? hybridBasePool : templateSeedStops).reduce((counts, item) => {
+    if (item.duplicateFamily) {
+      counts.set(item.duplicateFamily, (counts.get(item.duplicateFamily) || 0) + 1);
+    }
+    return counts;
+  }, new Map());
   const supplementalLimit = manualAnchorsLocked && shape === "arc"
     ? distanceMode === "no_limit"
       ? 10
@@ -2152,7 +2237,7 @@ function buildStopPool(
     .slice(0, effectiveSupplementalLimit)
     .map((entry) => entry.item);
 
-  return uniqueStops([...basePool, ...supplemental]);
+  return uniqueStops([...hybridBasePool, ...supplemental]);
 }
 
 function permuteStops(items) {
@@ -3193,6 +3278,8 @@ function lockedAnchorScore({
     return { score: 0, note: null };
   }
 
+  const lockedAnchorTuning = getRoutingTuning().lockedAnchorScore || {};
+  const neutralLockedMacros = new Set(lockedAnchorTuning.driftNeutralMacros || ["center"]);
   const startProfile = buildPointAreaProfile(startPoint);
   const endProfile = buildPointAreaProfile(endPoint);
   const routeProfile = buildRouteAreaProfile(routeStops);
@@ -3206,9 +3293,14 @@ function lockedAnchorScore({
       return count;
     }
 
-    return current.progressKm + 0.35 < progressionStats[index - 1].progressKm ? count + 1 : count;
+    return current.progressKm + (lockedAnchorTuning.reversalToleranceKm ?? 0.35) <
+      progressionStats[index - 1].progressKm
+      ? count + 1
+      : count;
   }, 0);
-  const offCorridorCount = progressionStats.filter((entry) => entry.lateralKm > 2.2).length;
+  const offCorridorCount = progressionStats.filter(
+    (entry) => entry.lateralKm > (lockedAnchorTuning.offCorridorLateralKm ?? 2.2),
+  ).length;
   let score = 0;
   const notes = [];
 
@@ -3241,7 +3333,8 @@ function lockedAnchorScore({
 
   if (
     routeProfile.dominantMacro &&
-    ![startProfile?.primaryMacro, endProfile?.primaryMacro].includes(routeProfile.dominantMacro)
+    ![startProfile?.primaryMacro, endProfile?.primaryMacro].includes(routeProfile.dominantMacro) &&
+    !neutralLockedMacros.has(routeProfile.dominantMacro)
   ) {
     score -= 4.4;
   }
@@ -3252,7 +3345,7 @@ function lockedAnchorScore({
   if (distanceMode !== "no_limit" && progressionStats.some((entry) => entry.axisLengthKm > 0)) {
     const progressSpread =
       progressionStats[progressionStats.length - 1].progressKm - progressionStats[0].progressKm;
-    if (progressSpread <= 0.8) {
+    if (progressSpread <= (lockedAnchorTuning.progressSpreadFloorKm ?? 0.8)) {
       score -= 3.6;
     }
   }
@@ -3515,6 +3608,7 @@ function pickDistinctRoutes(rankedEntries, usedRoutes = [], maxRoutes = 3) {
   const remaining = [...rankedEntries];
   const picked = [];
   const distinctSimilarityCutoff = 8.4;
+  const fallbackSimilarityCutoff = 10;
   const crossDaySimilarityCutoff = 10.6;
 
   while (remaining.length && picked.length < maxRoutes) {
@@ -3563,6 +3657,50 @@ function pickDistinctRoutes(rankedEntries, usedRoutes = [], maxRoutes = 3) {
       ...next,
       adjustedScore: Number(bestScore.toFixed(1)),
     });
+  }
+
+  if (picked.length === 1 && remaining.length && maxRoutes > 1) {
+    let fallbackIndex = -1;
+    let fallbackScore = Number.NEGATIVE_INFINITY;
+
+    remaining.forEach((entry, index) => {
+      const maxIntraSimilarity = picked.reduce(
+        (max, chosen) => Math.max(max, routeSimilarity(entry.route, chosen.route)),
+        0,
+      );
+      const maxCrossDaySimilarity = usedRoutes.reduce(
+        (max, usedRoute) => Math.max(max, routeSimilarity(entry.route, usedRoute)),
+        0,
+      );
+
+      if (
+        maxIntraSimilarity >= fallbackSimilarityCutoff ||
+        (usedRoutes.length && maxCrossDaySimilarity >= crossDaySimilarityCutoff)
+      ) {
+        return;
+      }
+
+      const adjustedScore =
+        entry.score -
+        picked.reduce((sum, chosen) => sum + routeSimilarity(entry.route, chosen.route), 0) -
+        usedRoutes.reduce(
+          (sum, usedRoute) => sum + routeSimilarity(entry.route, usedRoute) * 0.75,
+          0,
+        );
+
+      if (adjustedScore > fallbackScore) {
+        fallbackScore = adjustedScore;
+        fallbackIndex = index;
+      }
+    });
+
+    if (fallbackIndex >= 0) {
+      const [next] = remaining.splice(fallbackIndex, 1);
+      picked.push({
+        ...next,
+        adjustedScore: Number(fallbackScore.toFixed(1)),
+      });
+    }
   }
 
   return picked;

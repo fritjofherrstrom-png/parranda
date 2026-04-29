@@ -294,6 +294,27 @@ test("bar-hop mellan Trastevere och Monti ger nu flera stopp utanför Trastevere
   assert.ok(nonTrastevereStops.length >= 2);
 });
 
+test("Trastevere -> Monti kan nu formas av katalogstopp utanför template-listan", async () => {
+  global.fetch = createWeatherFetch({
+    "2026-04-18": 0,
+  });
+
+  const result = await generateRecommendations({
+    dates: ["2026-04-18"],
+    start: { type: "preset", label: "Trastevere" },
+    end: { type: "preset", label: "Monti" },
+    walkingKmTarget: 8,
+    preferences: ["öl", "vin", "hidden gems", "nattliv", "kväll"],
+    optimizerMode: "bar-hop",
+  });
+
+  const route = result.days[0].primary_route;
+  const template = routeTemplates.find((entry) => entry.id === route.id);
+  const nonTemplateStops = route.main_stops.filter((stop) => !template.stops.includes(stop.id));
+
+  assert.ok(nonTemplateStops.length >= 2);
+});
+
 test("Prati -> Monti väljer nu en väst-till-centro-rutt utan Trastevere-bias", async () => {
   global.fetch = createWeatherFetch({
     "2026-04-18": 0,
