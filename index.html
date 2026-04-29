@@ -887,10 +887,6 @@
         <p class="planner-day-summary"></p>
         <div class="planner-day-outline"></div>
         <div class="planner-day-signals" hidden></div>
-        <div class="planner-day-events" hidden>
-          <p class="route-mentions-label">Passar din dag just nu</p>
-          <div class="planner-events-grid"></div>
-        </div>
         <section class="planner-primary-stage">
           <div class="planner-primary-head">
             <div>
@@ -900,6 +896,10 @@
           </div>
           <div class="planner-primary-slot"></div>
         </section>
+        <div class="planner-day-events" hidden>
+          <p class="route-mentions-label">Passar din dag just nu</p>
+          <div class="planner-events-grid"></div>
+        </div>
         <div class="planner-alt-section" hidden>
           <button class="ghost-button planner-alt-toggle" type="button" aria-expanded="false">
             Visa alternativa upplägg
@@ -908,6 +908,49 @@
             <p class="route-mentions-label">Andra sätt att lägga upp samma dag</p>
             <div class="planner-alt-grid"></div>
           </div>
+        </div>
+      </article>
+    </template>
+
+    <template id="activeDayRouteTemplate">
+      <article class="active-day-view">
+        <div class="active-day-topline">
+          <p class="route-mentions-label active-day-kicker">Dagens plan</p>
+          <div class="active-day-meta">
+            <span class="route-engine-pill active-day-shape"></span>
+            <span class="route-engine-pill active-day-length"></span>
+          </div>
+        </div>
+        <p class="active-day-flow-note"></p>
+        <div class="active-day-engine" hidden>
+          <div class="route-engine-pills active-day-engine-pills"></div>
+          <p class="route-engine-note active-day-engine-note" hidden></p>
+        </div>
+        <div class="route-advice active-day-advice">
+          <p class="route-leg-summary active-day-leg-summary" hidden></p>
+          <p class="route-weather-note active-day-weather-note" hidden></p>
+          <div class="route-specials active-day-specials" hidden></div>
+          <div class="route-warnings active-day-warnings" hidden></div>
+        </div>
+        <div class="active-day-itinerary"></div>
+        <div class="active-day-mentions-grid">
+          <div class="route-mentions active-day-mentions" data-kind="hidden" hidden>
+            <p class="route-mentions-label">Hidden mentions</p>
+            <div class="route-pills active-day-hidden-pills"></div>
+          </div>
+          <div class="route-mentions active-day-mentions" data-kind="bars" hidden>
+            <p class="route-mentions-label">Barer du inte ska missa</p>
+            <div class="route-pills active-day-bar-pills"></div>
+          </div>
+        </div>
+        <div class="route-actions active-day-actions">
+          <button class="secondary-button active-day-select-button" type="button">
+            Visa i appen
+          </button>
+          <button class="ghost-button active-day-guide-button" type="button">
+            Ren guide
+          </button>
+          <a class="map-link active-day-route-link" target="_blank" rel="noreferrer">Öppna dagens rutt</a>
         </div>
       </article>
     </template>
