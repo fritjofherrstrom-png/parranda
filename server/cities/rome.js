@@ -1,11 +1,19 @@
 const catalog = require("../catalog");
-const { geocodeQuery } = require("../geocoding");
+const { buildGeocodeQuery } = require("../geocoding");
 const { fetchWeatherForDates } = require("../weather");
 const { getCityPulse, getDateSignals, getRomeTodayIsoDate } = require("../editorial-calendar");
 const { fetchLiveEventsForDates } = require("../live-events");
 
 const ROME_TIMEZONE = "Europe/Rome";
 const ROME_CENTER = { lat: 41.8933, lng: 12.4964 };
+const geocodeQuery = buildGeocodeQuery({
+  items: catalog.allItems,
+  findByName: catalog.findItemByName,
+  searchLabel: "Rome",
+  countryLabel: "Italy",
+  defaultAreaLabel: "Rom",
+  userAgent: "Parranda Rome/1.0 (route-planner)",
+});
 
 function parsePositiveInteger(value, fallback) {
   const parsed = Number.parseInt(value, 10);

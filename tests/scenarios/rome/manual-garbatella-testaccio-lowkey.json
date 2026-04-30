@@ -72,8 +72,37 @@
           }
         ]
       },
-      "alternative_count": 0,
-      "alternatives": []
+      "alternative_count": 2,
+      "alternatives": [
+        {
+          "id": "sunset-spots-loop",
+          "start": "Garbatella",
+          "end": "Testaccio",
+          "shape": "arc",
+          "day_profile": "variation",
+          "anchor_zone": "Garbatella -> Testaccio",
+          "stops": [
+            "Latteria Garbatella",
+            "Ostiense",
+            "L'Oasi della Birra",
+            "Aventino"
+          ]
+        },
+        {
+          "id": "sunset-spots-loop",
+          "start": "Garbatella",
+          "end": "Testaccio",
+          "shape": "arc",
+          "day_profile": "peak",
+          "anchor_zone": "Garbatella -> Testaccio",
+          "stops": [
+            "Latteria Garbatella",
+            "Ostiense",
+            "L'Oasi della Birra",
+            "Aventino"
+          ]
+        }
+      ]
     }
   ]
 }

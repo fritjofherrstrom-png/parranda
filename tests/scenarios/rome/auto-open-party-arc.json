@@ -108,6 +108,22 @@
       "alternative_count": 2,
       "alternatives": [
         {
+          "id": "south-loop",
+          "start": "Ostiense",
+          "end": "Pigneto/San Lorenzo",
+          "shape": "arc",
+          "day_profile": "variation",
+          "anchor_zone": "Ostiense -> Pigneto",
+          "stops": [
+            "Porto Fluviale",
+            "San Lorenzo",
+            "Pigneto",
+            "Bottiglieria Pigneto",
+            "Bar Bozza",
+            "Fanfulla 5/a"
+          ]
+        },
+        {
           "id": "ostiense-garbatella-loop",
           "start": "Ostiense",
           "end": "Pigneto/San Lorenzo",
@@ -120,23 +136,6 @@
             "San Lorenzo",
             "Pigneto",
             "Bar Bozza",
-            "Fanfulla 5/a"
-          ]
-        },
-        {
-          "id": "centro-apero-to-monti-arc",
-          "start": "Ostiense",
-          "end": "Pigneto/San Lorenzo",
-          "shape": "arc",
-          "day_profile": "peak",
-          "anchor_zone": "Ostiense -> Pigneto",
-          "stops": [
-            "Monti",
-            "San Lorenzo",
-            "Bottiglieria Scalo",
-            "Piazza dei Sanniti",
-            "Bar Bozza",
-            "Pigneto",
             "Fanfulla 5/a"
           ]
         }

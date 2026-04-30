@@ -75,6 +75,20 @@
       "alternative_count": 2,
       "alternatives": [
         {
+          "id": "dolce-vita-centro-notte",
+          "start": "Monti",
+          "end": "Monti",
+          "shape": "loop",
+          "day_profile": "variation",
+          "anchor_zone": "Monti",
+          "stops": [
+            "Piazza della Madonna dei Monti",
+            "Ai Tre Scalini",
+            "Blackmarket Hall",
+            "Mercato Monti"
+          ]
+        },
+        {
           "id": "centro-storico-slow-loop",
           "start": "Monti",
           "end": "Monti",
@@ -86,20 +100,6 @@
             "Centro Storico",
             "Piazza della Madonna dei Monti",
             "Mercato Monti"
-          ]
-        },
-        {
-          "id": "ghetto-navona-wine-loop",
-          "start": "Monti",
-          "end": "Monti",
-          "shape": "loop",
-          "day_profile": "variation",
-          "anchor_zone": "Monti",
-          "stops": [
-            "Ai Tre Scalini",
-            "Jewish Ghetto",
-            "Mercato Monti",
-            "Santa Prassede"
           ]
         }
       ]

@@ -1326,26 +1326,30 @@ const routeGuideBars = document.getElementById("routeGuideBars");
 const routeGuideHiddenBlock = document.getElementById("routeGuideHiddenBlock");
 const routeGuideHidden = document.getElementById("routeGuideHidden");
 function getFrontendCityConfig() {
-  const bodyKey = document.body?.dataset.cityKey?.trim() || "rome";
-  const bodyLabel = document.body?.dataset.cityLabel?.trim() || "Rom";
-  const params = new URLSearchParams(window.location.search);
-  const pathSegments = window.location.pathname.split("/").filter(Boolean);
-  const requestedKey = normalizeText(params.get("city") || pathSegments[0] || "");
-  const normalizedBodyKey = normalizeText(bodyKey) || "rome";
-  const key = requestedKey || normalizedBodyKey;
-  const labelByKey = {
-    [normalizedBodyKey]: bodyLabel,
-  };
+  const bootstrap = window.__PARRANDA_CITY__ || {};
+  const bodyKey = normalizeText(document.body?.dataset.cityKey?.trim() || bootstrap.key || "rome") || "rome";
+  const bodyLabel = document.body?.dataset.cityLabel?.trim() || bootstrap.label || "Rom";
+  const key = normalizeText(bootstrap.key || bodyKey || "rome") || "rome";
+  const requestedKey = normalizeText(bootstrap.requestedKey || "");
 
   return {
     key,
-    label: labelByKey[key] || bodyLabel,
+    label: bodyLabel,
+    timezone: bootstrap.timezone || "UTC",
+    locale: bootstrap.locale || "sv-SE",
+    currency: bootstrap.currency || "EUR",
+    searchLabel: bootstrap.searchLabel || bodyLabel,
+    requestedKey,
+    fallbackUsed: Boolean(bootstrap.fallbackUsed),
   };
 }
 
 const plannerCity = getFrontendCityConfig();
 const plannerCityKey = plannerCity.key;
 const plannerCityLabel = plannerCity.label;
+const plannerCitySearchLabel = plannerCity.searchLabel || plannerCityLabel;
+const plannerTimeZone = plannerCity.timezone;
+const plannerLocale = plannerCity.locale;
 const routeGuidePrintButton = document.getElementById("routeGuidePrintButton");
 const routeGuideShareButton = document.getElementById("routeGuideShareButton");
 const routeGuideDirectionsLink = document.getElementById("routeGuideDirectionsLink");
@@ -1381,10 +1385,9 @@ const optimizerButtons = document.querySelectorAll("[data-optimizer-mode]");
 const budgetTierButtons = document.querySelectorAll("[data-budget-tier]");
 const routeModifierButtons = document.querySelectorAll("[data-route-modifier]");
 
-const favoritesStorageKey = "roma-radar-favorites";
-const savedRoutesStorageKey = "parranda-saved-routes";
+const favoritesStorageKey = `parranda:${plannerCityKey}:favorites`;
+const savedRoutesStorageKey = `parranda:${plannerCityKey}:saved-routes`;
 const routeApiBase = "/api";
-const romeTimeZone = "Europe/Rome";
 const plannerAutoMode = "auto";
 const plannerManualMode = "manual";
 const legPacingLabels = {
@@ -1803,10 +1806,16 @@ function buildFallbackWildcards(dateString = getTodayIsoDate()) {
 }
 
 function formatPulseDatePart(dateString, options) {
-  const formatted = new Intl.DateTimeFormat("sv-SE", {
-    timeZone: "Europe/Rome",
+  const date = parseIsoDateToUtcNoon(dateString);
+
+  if (!date) {
+    return "";
+  }
+
+  const formatted = new Intl.DateTimeFormat(plannerLocale, {
+    timeZone: "UTC",
     ...options,
-  }).format(new Date(`${dateString}T12:00:00+02:00`));
+  }).format(date);
 
   return formatted.charAt(0).toUpperCase() + formatted.slice(1);
 }
@@ -1824,9 +1833,9 @@ function getFallbackPulseDateLabels(dateString = getTodayIsoDate()) {
 
 function buildFallbackPulseItems(dateString = getTodayIsoDate()) {
   const date = dateString || getTodayIsoDate();
-  const probe = new Date(`${date}T12:00:00+02:00`);
-  const weekday = probe.getDay();
-  const month = probe.getMonth() + 1;
+  const probe = parseIsoDateToUtcNoon(date);
+  const weekday = probe?.getUTCDay() ?? 0;
+  const month = (probe?.getUTCMonth() ?? -1) + 1;
   const items = [];
 
   if (weekday === 5 || weekday === 6) {
@@ -2126,34 +2135,8 @@ function getActivePulseRadiusKm() {
   return cityPulseRadiusMeta[activePulseRadiusKey]?.km || 5;
 }
 
-function getRomeTimeSnapshot(referenceDate = new Date()) {
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: romeTimeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-  const parts = formatter.formatToParts(referenceDate);
-  const year = parts.find((part) => part.type === "year")?.value;
-  const month = parts.find((part) => part.type === "month")?.value;
-  const day = parts.find((part) => part.type === "day")?.value;
-  const hour = Number(parts.find((part) => part.type === "hour")?.value || 0);
-  const minute = Number(parts.find((part) => part.type === "minute")?.value || 0);
-
-  return {
-    date: `${year}-${month}-${day}`,
-    hour,
-    minute,
-    totalMinutes: hour * 60 + minute,
-    label: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
-  };
-}
-
 function getPulseReferenceTime(dateString, timeKey) {
-  const romeNow = getRomeTimeSnapshot();
+  const romeNow = getCityDateTimeSnapshot();
 
   if ((dateString || romeNow.date) === romeNow.date) {
     return {
@@ -2413,7 +2396,7 @@ function enrichPulseItemTiming(item, dateString, timeKey) {
 }
 
 function isWeekendLikeDate(dateString) {
-  const day = new Date(`${dateString || getTodayIsoDate()}T12:00:00`).getDay();
+  const day = parseIsoDateToUtcNoon(dateString || getTodayIsoDate())?.getUTCDay();
   return day === 5 || day === 6 || day === 0;
 }
 
@@ -2638,7 +2621,7 @@ function buildPulseWeatherBrief(weather, dateString) {
     return "Väder saknas just nu, så LIVE lutar sig bara på stadspuls och platsnivå.";
   }
 
-  const romeNow = getRomeTimeSnapshot();
+  const romeNow = getCityDateTimeSnapshot();
   const isToday = (dateString || romeNow.date) === romeNow.date;
   const currentTemp = Number.isFinite(weather.currentTemp) ? Math.round(weather.currentTemp) : null;
   const maxTemp = Number.isFinite(weather.maxTemp) ? Math.round(weather.maxTemp) : null;
@@ -2693,7 +2676,7 @@ function buildPulseWeatherValue(weather, dateString) {
     return "Väder saknas";
   }
 
-  const romeNow = getRomeTimeSnapshot();
+  const romeNow = getCityDateTimeSnapshot();
   const isToday = (dateString || romeNow.date) === romeNow.date;
   const currentTemp = Number.isFinite(weather.currentTemp) ? Math.round(weather.currentTemp) : null;
   const maxTemp = Number.isFinite(weather.maxTemp) ? Math.round(weather.maxTemp) : null;
@@ -3430,6 +3413,10 @@ function createMapUrl(query) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
+function withPlannerCitySearchLabel(query) {
+  return [query, plannerCitySearchLabel].filter(Boolean).join(" ");
+}
+
 function loadFavorites() {
   try {
     const stored = window.localStorage.getItem(favoritesStorageKey);
@@ -3867,7 +3854,9 @@ function shouldShowLiveEdition() {
 }
 
 function createGoogleInfoUrl(query) {
-  return `https://www.google.com/search?q=${encodeURIComponent(`${query} Rome`)}`;
+  return `https://www.google.com/search?q=${encodeURIComponent(
+    withPlannerCitySearchLabel(query),
+  )}`;
 }
 
 function getPlannerModeHint(pointKey, mode) {
@@ -3970,11 +3959,15 @@ function normalizePlannerSelectionLabel(label) {
 
 function createRouteDirectionsUrl(points) {
   if (!Array.isArray(points) || !points.length) {
-    return createMapUrl("Rome city center");
+    return createMapUrl(withPlannerCitySearchLabel("city center"));
   }
 
   if (points.length === 1) {
-    return createMapUrl(points[0].label ? `${points[0].label} Rome` : "Rome city center");
+    return createMapUrl(
+      points[0].label
+        ? withPlannerCitySearchLabel(points[0].label)
+        : withPlannerCitySearchLabel("city center"),
+    );
   }
 
   const origin = `${points[0].lat},${points[0].lng}`;
@@ -3996,19 +3989,60 @@ function createRouteDirectionsUrl(points) {
   return url.toString();
 }
 
+function parseIsoDateToUtcNoon(dateString) {
+  const match = String(dateString || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const [, year, month, day] = match;
+  return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), 12));
+}
+
+function getCityDateTimeSnapshot(referenceDate = new Date()) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: plannerTimeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(referenceDate);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  const hour = Number(parts.find((part) => part.type === "hour")?.value || 0);
+  const minute = Number(parts.find((part) => part.type === "minute")?.value || 0);
+
+  return {
+    date: `${year}-${month}-${day}`,
+    hour,
+    minute,
+    totalMinutes: hour * 60 + minute,
+    label: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+  };
+}
+
 function getTodayIsoDate() {
-  const now = new Date();
-  const offset = now.getTimezoneOffset();
-  const localDate = new Date(now.getTime() - offset * 60 * 1000);
-  return localDate.toISOString().slice(0, 10);
+  return getCityDateTimeSnapshot().date;
 }
 
 function formatSwedishDate(dateString) {
-  return new Intl.DateTimeFormat("sv-SE", {
+  const date = parseIsoDateToUtcNoon(dateString);
+
+  if (!date) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat(plannerLocale, {
+    timeZone: "UTC",
     weekday: "long",
     day: "numeric",
     month: "long",
-  }).format(new Date(`${dateString}T12:00:00`));
+  }).format(date);
 }
 
 function formatCompactSwedishDate(dateString) {
@@ -4016,10 +4050,17 @@ function formatCompactSwedishDate(dateString) {
     return "";
   }
 
-  return new Intl.DateTimeFormat("sv-SE", {
+  const date = parseIsoDateToUtcNoon(dateString);
+
+  if (!date) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat(plannerLocale, {
+    timeZone: "UTC",
     day: "numeric",
     month: "short",
-  }).format(new Date(`${dateString}T12:00:00`));
+  }).format(date);
 }
 
 function formatSavedTimestamp(dateString) {
@@ -4027,7 +4068,7 @@ function formatSavedTimestamp(dateString) {
     return "";
   }
 
-  return new Intl.DateTimeFormat("sv-SE", {
+  return new Intl.DateTimeFormat(plannerLocale, {
     day: "numeric",
     month: "short",
     hour: "2-digit",
@@ -4593,14 +4634,18 @@ function applyPlannerSnapshot(snapshot) {
 function expandDateRange(from, to) {
   const start = from || getTodayIsoDate();
   const end = !to || to < start ? start : to;
-  const startDate = new Date(`${start}T12:00:00`);
-  const endDate = new Date(`${end}T12:00:00`);
+  const startDate = parseIsoDateToUtcNoon(start);
+  const endDate = parseIsoDateToUtcNoon(end);
   const dates = [];
+
+  if (!startDate || !endDate) {
+    return [];
+  }
 
   for (
     let cursor = new Date(startDate);
     cursor <= endDate && dates.length < 5;
-    cursor.setDate(cursor.getDate() + 1)
+    cursor.setUTCDate(cursor.getUTCDate() + 1)
   ) {
     dates.push(cursor.toISOString().slice(0, 10));
   }
@@ -5064,7 +5109,8 @@ function openPlaceDrawer(item) {
   placeDrawerHappyHour.textContent = item.happy_hour_note
     ? `Bra att veta: ${item.happy_hour_note}`
     : "";
-  placeDrawerMapsLink.href = item.external_map_url || createMapUrl(`${item.label} Rome`);
+  placeDrawerMapsLink.href =
+    item.external_map_url || createMapUrl(withPlannerCitySearchLabel(item.label));
   placeDrawerSearchLink.href = item.external_search_url || createGoogleInfoUrl(item.label);
   placeDrawerMapsLink.textContent = item.external_maps_label || "Google Maps";
   placeDrawerSearchLink.textContent = item.external_search_label || "Google-info";
@@ -5144,7 +5190,7 @@ async function openPlaceDrawerByQuery(query) {
       long_description:
         "Du kan fortfarande hoppa vidare till Google eller Google Maps för att läsa mer om det här stoppet.",
       external_search_url: createGoogleInfoUrl(query),
-      external_map_url: createMapUrl(`${query} Rome`),
+      external_map_url: createMapUrl(withPlannerCitySearchLabel(query)),
       tags: [],
       perfect_for: [],
       feature_notes: [],
@@ -5202,7 +5248,7 @@ function buildEventDrawerItem(event) {
       ]
         .filter(Boolean)
         .join(" • ") || null,
-    external_map_url: createMapUrl(`${event.venue || event.title} Rome`),
+    external_map_url: createMapUrl(withPlannerCitySearchLabel(event.venue || event.title)),
     external_search_url: event.url || createGoogleInfoUrl(event.title),
     external_search_label: event.url ? "Officiell sida" : "Google-info",
     external_extra_url: event.buy_url || null,
@@ -6226,7 +6272,8 @@ function showLoosePointOnMap(item) {
   mapPlaceDescription.textContent = item.long_description || item.summary || item.vibe || "";
   mapPlaceNote.textContent =
     item.route_fit_note || item.opening_summary || "Utvald plats i Rom.";
-  mapPlaceLink.href = item.external_map_url || createMapUrl(`${item.label} Rome`);
+  mapPlaceLink.href =
+    item.external_map_url || createMapUrl(withPlannerCitySearchLabel(item.label));
   mapFavoriteButton.textContent = "Spara vald plats";
   mapFavoriteButton.dataset.place = "";
   mapFavoriteButton.disabled = true;

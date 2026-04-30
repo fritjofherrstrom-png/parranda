@@ -64,6 +64,38 @@ async function requestJson(server, { method = "GET", path = "/", body } = {}) {
   });
 }
 
+async function requestText(server, { method = "GET", path = "/" } = {}) {
+  const { port } = server.address();
+
+  return new Promise((resolve, reject) => {
+    const request = http.request(
+      {
+        hostname: "127.0.0.1",
+        port,
+        path,
+        method,
+      },
+      (response) => {
+        let data = "";
+
+        response.on("data", (chunk) => {
+          data += chunk;
+        });
+
+        response.on("end", () => {
+          resolve({
+            status: response.statusCode,
+            body: data,
+          });
+        });
+      },
+    );
+
+    request.on("error", reject);
+    request.end();
+  });
+}
+
 test.after(() => {
   global.fetch = originalFetch;
 });
@@ -152,6 +184,49 @@ test("GET /api/places/search markerar när en okänd city fallbackar till rome",
     assert.equal(response.body.city, "rome");
     assert.equal(response.body.requested_city, "unknown-city");
     assert.equal(response.body.city_fallback_used, true);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET / renderar en city-aware app shell med bootstrap", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during app shell test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestText(server, {
+      path: "/?city=rome",
+    });
+
+    assert.equal(response.status, 200);
+    assert.match(response.body, /<body data-city-key="rome" data-city-label="Rom">/);
+    assert.match(response.body, /window\.__PARRANDA_CITY__ = \{"key":"rome","label":"Rom"/);
+    assert.ok(!response.body.includes("__PARRANDA_CITY_BOOTSTRAP__"));
+    assert.ok(!response.body.includes("__PARRANDA_TITLE__"));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /barcelona avslöjar fallback i app shell bootstrap innan stad 2 finns", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during shell fallback test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestText(server, {
+      path: "/barcelona",
+    });
+
+    assert.equal(response.status, 200);
+    assert.match(response.body, /<body data-city-key="rome" data-city-label="Rom">/);
+    assert.match(response.body, /"requestedKey":"barcelona"/);
+    assert.match(response.body, /"fallbackUsed":true/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

@@ -12,61 +12,78 @@ function toCandidate(item, source = "catalog") {
   };
 }
 
-async function geocodeQuery(query) {
-  const trimmed = String(query || "").trim();
+function buildGeocodeQuery(options = {}) {
+  const {
+    items = allItems,
+    findByName = findItemByName,
+    searchLabel = "Rome",
+    countryLabel = "Italy",
+    defaultAreaLabel = searchLabel,
+    userAgent = "Parranda/1.0 (route-planner)",
+  } = options;
 
-  if (!trimmed) {
-    return [];
-  }
+  return async function geocodeQuery(query) {
+    const trimmed = String(query || "").trim();
 
-  const exact = findItemByName(trimmed);
-  if (exact) {
-    return [toCandidate(exact)];
-  }
+    if (!trimmed) {
+      return [];
+    }
 
-  const normalized = trimmed.toLowerCase();
-  const localMatches = allItems
-    .filter(
-      (item) =>
-        item.name.toLowerCase().includes(normalized) ||
-        item.searchTerms.some((term) => term.toLowerCase().includes(normalized)),
-    )
-    .slice(0, 5)
-    .map((item) => toCandidate(item));
+    const exact = findByName(trimmed);
+    if (exact) {
+      return [toCandidate(exact)];
+    }
 
-  if (localMatches.length) {
-    return localMatches;
-  }
+    const normalized = trimmed.toLowerCase();
+    const localMatches = items
+      .filter(
+        (item) =>
+          item.name.toLowerCase().includes(normalized) ||
+          item.searchTerms.some((term) => term.toLowerCase().includes(normalized)),
+      )
+      .slice(0, 5)
+      .map((item) => toCandidate(item));
 
-  const url = new URL("https://nominatim.openstreetmap.org/search");
-  url.searchParams.set("q", `${trimmed}, Rome, Italy`);
-  url.searchParams.set("format", "jsonv2");
-  url.searchParams.set("limit", "5");
+    if (localMatches.length) {
+      return localMatches;
+    }
 
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent": "RomaRadar/1.0 (route-planner)",
-      Accept: "application/json",
-    },
-  });
+    const url = new URL("https://nominatim.openstreetmap.org/search");
+    url.searchParams.set(
+      "q",
+      [trimmed, searchLabel, countryLabel].filter(Boolean).join(", "),
+    );
+    url.searchParams.set("format", "jsonv2");
+    url.searchParams.set("limit", "5");
 
-  if (!response.ok) {
-    throw new Error(`Geocoding failed with status ${response.status}`);
-  }
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": userAgent,
+        Accept: "application/json",
+      },
+    });
 
-  const results = await response.json();
+    if (!response.ok) {
+      throw new Error(`Geocoding failed with status ${response.status}`);
+    }
 
-  return results.map((result, index) => ({
-    id: `nominatim-${index}`,
-    label: result.display_name,
-    lat: Number(result.lat),
-    lng: Number(result.lon),
-    type: result.type || "place",
-    area: "Rome",
-    source: "nominatim",
-  }));
+    const results = await response.json();
+
+    return results.map((result, index) => ({
+      id: `nominatim-${index}`,
+      label: result.display_name,
+      lat: Number(result.lat),
+      lng: Number(result.lon),
+      type: result.type || "place",
+      area: defaultAreaLabel,
+      source: "nominatim",
+    }));
+  };
 }
 
+const geocodeQuery = buildGeocodeQuery();
+
 module.exports = {
+  buildGeocodeQuery,
   geocodeQuery,
 };

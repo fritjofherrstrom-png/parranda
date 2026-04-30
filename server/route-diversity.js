@@ -7,51 +7,6 @@ function slugifyText(value) {
     .replace(/^-+|-+$/g, "");
 }
 
-const areaMacroByToken = {
-  trastevere: "west",
-  gianicolo: "west",
-  prati: "west",
-  borgo: "west",
-  centro: "center",
-  ghetto: "center",
-  monti: "center",
-  celio: "center",
-  colosseum: "center",
-  colosseo: "center",
-  navona: "center",
-  campo: "center",
-  sallustiano: "center",
-  "villa-borghese": "center",
-  testaccio: "south",
-  ostiense: "south",
-  aventino: "south",
-  garbatella: "south",
-  portuense: "south",
-  marconi: "south",
-  piramide: "south",
-  pigneto: "east",
-  "san-lorenzo": "east",
-  esquilino: "east",
-  "san-giovanni": "east",
-  laterano: "east",
-  termini: "east",
-};
-
-function extractAreaTokens(...values) {
-  const flattenedValues = values.flat().filter(Boolean);
-  const tokens = new Set();
-
-  flattenedValues.map(slugifyText).forEach((text) => {
-    Object.keys(areaMacroByToken).forEach((token) => {
-      if (text.includes(token)) {
-        tokens.add(token);
-      }
-    });
-  });
-
-  return tokens;
-}
-
 function overlapRatio(setA, setB) {
   if (!setA.size || !setB.size) {
     return 0;
@@ -63,30 +18,17 @@ function overlapRatio(setA, setB) {
 
 function buildRouteProfile(route) {
   const stopIds = new Set((route.main_stops || []).map((stop) => stop.id).filter(Boolean));
-  const areaTokens = extractAreaTokens(
-    (route.main_stops || []).map((stop) => [stop.area, stop.cluster_token]).flat(),
-    route.anchor_zone,
-    route.start_label,
-    route.end_label,
+  const geoProfile = route?.geo_profile || {};
+  const areaTokens = new Set(
+    (geoProfile.area_tokens || []).map((token) => slugifyText(token)).filter(Boolean),
   );
   const mentionTokens = new Set(
     [...(route.hidden_mentions || []), ...(route.bar_mentions || [])]
       .map(slugifyText)
       .filter(Boolean),
   );
-  const macroCounts = new Map();
-
-  areaTokens.forEach((token) => {
-    const macro = areaMacroByToken[token];
-    if (!macro) {
-      return;
-    }
-    macroCounts.set(macro, (macroCounts.get(macro) || 0) + 1);
-  });
-
-  const macros = new Set([...macroCounts.keys()]);
-  const dominantMacro =
-    [...macroCounts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] || null;
+  const macros = new Set((geoProfile.macros || []).map((macro) => slugifyText(macro)).filter(Boolean));
+  const dominantMacro = slugifyText(geoProfile.dominant_macro);
 
   return {
     stopIds,
@@ -119,19 +61,18 @@ function routeSimilarity(routeA, routeB) {
   const sameDominantMacro =
     profileA.dominantMacro && profileA.dominantMacro === profileB.dominantMacro ? 1 : 0;
 
-  return Number(
-    (
-      stopOverlap * 10 +
-      areaOverlap * 8.2 +
-      macroOverlap * 4.8 +
-      mentionOverlap * 2.6 +
-      sameShape * 1.1 +
-      sameAnchor * 3.2 +
-      sameStart * 1.5 +
-      sameEnd * 1.5 +
-      sameDominantMacro * 1.8
-    ).toFixed(1),
-  );
+  const rawScore =
+    stopOverlap * 10 +
+    areaOverlap * 8.2 +
+    macroOverlap * 4.8 +
+    mentionOverlap * 2.6 +
+    sameShape * 1.1 +
+    sameAnchor * 3.2 +
+    sameStart * 1.5 +
+    sameEnd * 1.5 +
+    sameDominantMacro * 1.8;
+
+  return Number((rawScore * 0.27).toFixed(1));
 }
 
 function routeNoveltyScore(route, usedRoutes = []) {
@@ -332,7 +273,7 @@ function chooseBestPrimaryRoute(day, usedRoutes = []) {
 
   if (best && best.index !== 0) {
     const clearlyBetter = best.score >= currentPrimary.score + 0.6;
-    const currentTooSimilar = currentPrimary.maxSimilarity >= 11.5;
+    const currentTooSimilar = currentPrimary.maxSimilarity >= 9.2;
     const betterAnchorMix =
       currentPrimary.repeatedAnchorCount > 0 && best.repeatedAnchorCount < currentPrimary.repeatedAnchorCount;
     const betterMacroMix =

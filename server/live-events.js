@@ -1,4 +1,5 @@
 const { geocodeQuery } = require("./geocoding");
+const { diffIsoDatesInDays } = require("./lib/iso-date");
 
 const TURISMO_ROMA_BASE_URL = "https://www.turismoroma.it";
 const ROMA_LIVE_URL = `${TURISMO_ROMA_BASE_URL}/en/romalive`;
@@ -99,11 +100,9 @@ function durationDays(startDate, endDate) {
     return null;
   }
 
-  const start = new Date(`${startDate}T12:00:00+02:00`);
-  const end = new Date(`${endDate}T12:00:00+02:00`);
-  const diff = Math.round((end - start) / (24 * 60 * 60 * 1000));
+  const diff = diffIsoDatesInDays(startDate, endDate);
 
-  if (Number.isNaN(diff)) {
+  if (diff == null || Number.isNaN(diff)) {
     return null;
   }
 

@@ -1,8 +1,12 @@
+const fs = require("node:fs");
 const express = require("express");
 const path = require("path");
 const { resolveCityConfig } = require("./cities");
 const { generateRecommendations } = require("./route-engine");
 const { diversifyRecommendationDays } = require("./route-diversity");
+
+const appRoot = path.resolve(__dirname, "..");
+const appShellTemplate = fs.readFileSync(path.join(appRoot, "index.html"), "utf8");
 
 const pulseVibeByTag = {
   kultur: "curious",
@@ -87,11 +91,90 @@ function resolveRequestCity(city) {
   };
 }
 
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function serializeInlineJson(value) {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
+}
+
+function buildShellMeta(cityConfig) {
+  const cityLabel = cityConfig?.label || "Staden";
+  const citySearchLabel = getCitySearchLabel(cityConfig);
+  const eyebrow = `${cityLabel.toLocaleUpperCase("sv-SE")} · KURERAD DAGPLANERING`;
+
+  return {
+    title: `Parranda | Personlig City Guide för ${cityLabel}`,
+    metaDescription: `Parranda bygger promenadvänliga och lokalt kuraterade dagar i ${cityLabel} utifrån plats, smak, tempo och stämning.`,
+    ogTitle: `Parranda | Personlig City Guide för ${cityLabel}`,
+    ogDescription: `En personlig city guide för ${cityLabel} med planner, lokala stråk och dagar som känns mer genomtänkta än turistiga.`,
+    twitterTitle: `Parranda | Personlig City Guide för ${cityLabel}`,
+    twitterDescription: `Parranda bygger promenadvänliga och lokalt kuraterade dagar i ${cityLabel} utifrån plats, smak, tempo och stämning.`,
+    cityMapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+      `${citySearchLabel} hidden gems`,
+    )}`,
+    eyebrow,
+  };
+}
+
+function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed }) {
+  const meta = buildShellMeta(cityConfig);
+  const bootstrap = {
+    key: cityConfig.key,
+    label: cityConfig.label,
+    timezone: cityConfig.timezone,
+    locale: cityConfig.locale,
+    currency: cityConfig.currency,
+    searchLabel: getCitySearchLabel(cityConfig),
+    requestedKey: requestedCity,
+    fallbackUsed: cityFallbackUsed,
+  };
+
+  const replacements = {
+    "__PARRANDA_TITLE__": escapeHtml(meta.title),
+    "__PARRANDA_META_DESCRIPTION__": escapeHtml(meta.metaDescription),
+    "__PARRANDA_OG_TITLE__": escapeHtml(meta.ogTitle),
+    "__PARRANDA_OG_DESCRIPTION__": escapeHtml(meta.ogDescription),
+    "__PARRANDA_TWITTER_TITLE__": escapeHtml(meta.twitterTitle),
+    "__PARRANDA_TWITTER_DESCRIPTION__": escapeHtml(meta.twitterDescription),
+    "__PARRANDA_CITY_KEY__": escapeHtml(cityConfig.key),
+    "__PARRANDA_CITY_LABEL__": escapeHtml(cityConfig.label),
+    "__PARRANDA_CITY_MAP_URL__": escapeHtml(meta.cityMapUrl),
+    "__PARRANDA_CITY_EYEBROW__": escapeHtml(meta.eyebrow),
+    "__PARRANDA_CITY_BOOTSTRAP__": serializeInlineJson(bootstrap),
+  };
+
+  return Object.entries(replacements).reduce(
+    (html, [token, replacement]) => html.split(token).join(replacement),
+    appShellTemplate,
+  );
+}
+
+function inferShellCity(request) {
+  const pathSegments = String(request.path || "")
+    .split("/")
+    .filter(Boolean);
+  const pathKey = pathSegments[0] && !pathSegments[0].includes(".") ? pathSegments[0] : null;
+
+  return request.query?.city || pathKey || null;
+}
+
 function buildApp() {
   const app = express();
 
   app.use(express.json());
-  app.use(express.static(path.resolve(__dirname, "..")));
+  app.get(["/", "/index.html"], (request, response) => {
+    const cityResolution = resolveRequestCity(inferShellCity(request));
+    response.type("html").send(renderAppShell(cityResolution));
+  });
+
+  app.use(express.static(appRoot, { index: false }));
 
   app.get("/api/health", (_request, response) => {
     response.json({ ok: true });
@@ -299,7 +382,8 @@ function buildApp() {
       return;
     }
 
-    response.sendFile(path.resolve(__dirname, "..", "index.html"));
+    const cityResolution = resolveRequestCity(inferShellCity(request));
+    response.type("html").send(renderAppShell(cityResolution));
   });
 
   return app;

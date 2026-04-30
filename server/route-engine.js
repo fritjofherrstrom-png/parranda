@@ -1,5 +1,7 @@
 const { AsyncLocalStorage } = require("node:async_hooks");
 const { getCityConfig } = require("./cities");
+const { getIsoWeekday } = require("./lib/iso-date");
+const { routeSimilarity } = require("./route-diversity");
 const { routeWalkingPath } = require("./walking-router");
 
 const defaultCityConfig = getCityConfig("rome");
@@ -137,7 +139,7 @@ function estimatedWalkMinutes(distanceKm) {
 }
 
 function weekdayFromDate(dateString) {
-  return new Date(`${dateString}T12:00:00+02:00`).getDay();
+  return getIsoWeekday(dateString);
 }
 
 function expandDateRange(dates) {
@@ -154,8 +156,9 @@ async function resolvePoint(input, fallbackLabel = getFallbackLabel()) {
     const fallback = findCatalogItemByName(fallbackLabel);
     if (!fallback) {
       const center = getCityCenter();
+      const cityLabel = getActiveCityConfig().label || "Staden";
       return {
-        label: "Rom",
+        label: cityLabel,
         lat: center.lat,
         lng: center.lng,
         source: "default",
@@ -218,8 +221,9 @@ async function resolvePoint(input, fallbackLabel = getFallbackLabel()) {
   const fallback = findCatalogItemByName(fallbackLabel);
   if (!fallback) {
     const center = getCityCenter();
+    const cityLabel = getActiveCityConfig().label || "Staden";
     return {
-      label: "Rom",
+      label: cityLabel,
       lat: center.lat,
       lng: center.lng,
       source: "default",
@@ -1421,6 +1425,19 @@ function buildRouteAreaProfile(routeStops) {
       [...tokenCounts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] || null,
     dominantMacro:
       [...macroCounts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] || null,
+  };
+}
+
+function buildRouteGeoProfile(routeArea, startProfile, endProfile) {
+  return {
+    area_tokens: [...(routeArea?.tokens || [])],
+    macros: [...(routeArea?.macros || [])],
+    dominant_token: routeArea?.dominantToken || null,
+    dominant_macro: routeArea?.dominantMacro || null,
+    start_token: startProfile?.primaryToken || null,
+    start_macro: startProfile?.primaryMacro || null,
+    end_token: endProfile?.primaryToken || null,
+    end_macro: endProfile?.primaryMacro || null,
   };
 }
 
@@ -3272,6 +3289,7 @@ function buildRouteFromTemplate(
     })),
     legs,
     routing_source: "heuristic",
+    geo_profile: buildRouteGeoProfile(routeArea, startProfile, endProfile),
     longest_leg_km: geometry?.longestLegKm ?? null,
     longest_leg_minutes: geometry?.longestLegMinutes ?? null,
     average_leg_minutes: geometry?.averageLegMinutes ?? null,
@@ -3905,36 +3923,6 @@ function whyRecommended(
   return reasonParts.join(" ");
 }
 
-function overlapRatio(setA, setB) {
-  if (!setA.size || !setB.size) {
-    return 0;
-  }
-
-  const intersection = [...setA].filter((value) => setB.has(value)).length;
-  return intersection / Math.min(setA.size, setB.size);
-}
-
-function routeSimilarity(routeA, routeB) {
-  if (!routeA || !routeB) {
-    return 0;
-  }
-
-  const stopIdsA = new Set((routeA.main_stops || []).map((stop) => stop.id));
-  const stopIdsB = new Set((routeB.main_stops || []).map((stop) => stop.id));
-  const areaTokensA = extractAreaTokens(
-    (routeA.main_stops || []).map((stop) => [stop.area, stop.cluster_token]).flat(),
-  );
-  const areaTokensB = extractAreaTokens(
-    (routeB.main_stops || []).map((stop) => [stop.area, stop.cluster_token]).flat(),
-  );
-  const stopOverlap = overlapRatio(stopIdsA, stopIdsB);
-  const areaOverlap = overlapRatio(areaTokensA, areaTokensB);
-  const sameShape = routeA.route_shape === routeB.route_shape ? 0.6 : 0;
-  const sameAnchor = routeA.anchor_zone === routeB.anchor_zone ? 0.8 : 0;
-
-  return stopOverlap * 8 + areaOverlap * 4.5 + sameShape + sameAnchor;
-}
-
 function pickDistinctRoutes(rankedEntries, usedRoutes = [], maxRoutes = 3) {
   const remaining = [...rankedEntries];
   const picked = [];
@@ -4048,6 +4036,7 @@ function pickAlternativeRoutes(
   const picked = [];
   const strongCutoff = 8.8;
   const softCutoff = 10.2;
+  const maxPrimarySimilarityForAlternative = 8.6;
   const preferredProfileOrder = new Map(preferredProfiles.map((profile, index) => [profile, index]));
 
   while (remaining.length && picked.length < maxRoutes) {
@@ -4056,6 +4045,7 @@ function pickAlternativeRoutes(
 
     remaining.forEach((entry, index) => {
       const similarityToPrimary = primaryEntry ? routeSimilarity(entry.route, primaryEntry.route) : 0;
+      const sameTemplateAsPrimary = primaryEntry && entry.route?.id === primaryEntry.route?.id;
       const maxIntraSimilarity = picked.reduce(
         (max, chosen) => Math.max(max, routeSimilarity(entry.route, chosen.route)),
         0,
@@ -4066,6 +4056,8 @@ function pickAlternativeRoutes(
       );
 
       if (
+        similarityToPrimary >= maxPrimarySimilarityForAlternative ||
+        (sameTemplateAsPrimary && similarityToPrimary >= strongCutoff) ||
         similarityToPrimary >= softCutoff ||
         maxIntraSimilarity >= softCutoff ||
         (usedRoutes.length && maxCrossDaySimilarity >= 10.6)
@@ -4110,6 +4102,110 @@ function pickAlternativeRoutes(
     picked.push({
       ...next,
       adjustedScore: Number(bestScore.toFixed(1)),
+    });
+  }
+
+  if (picked.length < maxRoutes && remaining.length) {
+    const relaxedSoftCutoff = softCutoff + 1.8;
+    const relaxedCrossDayCutoff = 12.4;
+
+    while (remaining.length && picked.length < maxRoutes) {
+      let bestIndex = -1;
+      let bestScore = Number.NEGATIVE_INFINITY;
+
+      remaining.forEach((entry, index) => {
+        const similarityToPrimary = primaryEntry
+          ? routeSimilarity(entry.route, primaryEntry.route)
+          : 0;
+        const sameTemplateAsPrimary = primaryEntry && entry.route?.id === primaryEntry.route?.id;
+        const maxIntraSimilarity = picked.reduce(
+          (max, chosen) => Math.max(max, routeSimilarity(entry.route, chosen.route)),
+          0,
+        );
+        const maxCrossDaySimilarity = usedRoutes.reduce(
+          (max, usedRoute) => Math.max(max, routeSimilarity(entry.route, usedRoute)),
+          0,
+        );
+
+        if (
+          similarityToPrimary >= maxPrimarySimilarityForAlternative ||
+          (sameTemplateAsPrimary && similarityToPrimary >= strongCutoff) ||
+          similarityToPrimary >= relaxedSoftCutoff ||
+          maxIntraSimilarity >= relaxedSoftCutoff ||
+          (usedRoutes.length && maxCrossDaySimilarity >= relaxedCrossDayCutoff)
+        ) {
+          return;
+        }
+
+        const profileRank = preferredProfileOrder.has(entry.dayProfile)
+          ? preferredProfileOrder.get(entry.dayProfile)
+          : preferredProfiles.length;
+        const profileBonus = Math.max(0, 2 - profileRank * 0.7);
+        const primaryProfilePenalty =
+          primaryEntry && entry.dayProfile === primaryEntry.dayProfile ? 1.2 : 0;
+        const softSimilarityPenalty = Math.max(0, similarityToPrimary - strongCutoff) * 0.6;
+        const intraPenalty = picked.reduce(
+          (sum, chosen) => sum + routeSimilarity(entry.route, chosen.route) * 0.45,
+          0,
+        );
+        const crossDayPenalty = usedRoutes.reduce(
+          (sum, usedRoute) => sum + routeSimilarity(entry.route, usedRoute) * 0.4,
+          0,
+        );
+        const adjustedScore =
+          entry.score +
+          profileBonus -
+          primaryProfilePenalty -
+          softSimilarityPenalty -
+          intraPenalty -
+          crossDayPenalty;
+
+        if (adjustedScore > bestScore) {
+          bestScore = adjustedScore;
+          bestIndex = index;
+        }
+      });
+
+      if (bestIndex < 0 || !Number.isFinite(bestScore)) {
+        break;
+      }
+
+      const [next] = remaining.splice(bestIndex, 1);
+      picked.push({
+        ...next,
+        adjustedScore: Number(bestScore.toFixed(1)),
+      });
+    }
+  }
+
+  if (picked.length < maxRoutes && remaining.length) {
+    const fallbackEntries = [...remaining].sort((left, right) => right.score - left.score);
+
+    fallbackEntries.forEach((entry) => {
+      if (picked.length >= maxRoutes) {
+        return;
+      }
+
+      const similarityToPrimary = primaryEntry ? routeSimilarity(entry.route, primaryEntry.route) : 0;
+      const sameTemplateAsPrimary = primaryEntry && entry.route?.id === primaryEntry.route?.id;
+
+      const alreadyPicked = picked.some(
+        (chosen) =>
+          chosen.route?.id === entry.route?.id && chosen.dayProfile === entry.dayProfile,
+      );
+
+      if (
+        alreadyPicked ||
+        similarityToPrimary >= maxPrimarySimilarityForAlternative ||
+        (sameTemplateAsPrimary && similarityToPrimary >= strongCutoff)
+      ) {
+        return;
+      }
+
+      picked.push({
+        ...entry,
+        adjustedScore: Number(entry.score.toFixed(1)),
+      });
     });
   }
 
@@ -4312,13 +4408,16 @@ async function generateRecommendations({
           .sort((a, b) => b.score - a.score);
 
         const primaryCandidates = ranked.filter((entry) => entry.dayProfile === primaryDayProfile);
-        const [primary] = pickDistinctRoutes(
+        const [pickedPrimary] = pickDistinctRoutes(
           primaryCandidates.length ? primaryCandidates : ranked,
           usedPrimaryRoutes,
           1,
         );
+        const primary =
+          pickedPrimary || (primaryCandidates.length ? primaryCandidates[0] : ranked[0]) || null;
         const alternativeCandidates = ranked.filter(
           (entry) =>
+            !primary ||
             !(entry.template.id === primary.template.id && entry.dayProfile === primary.dayProfile),
         );
         const alternatives = pickAlternativeRoutes(

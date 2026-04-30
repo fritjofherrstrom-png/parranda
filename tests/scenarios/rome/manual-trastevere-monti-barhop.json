@@ -97,21 +97,22 @@
       "alternative_count": 2,
       "alternatives": [
         {
-          "id": "trastevere-bar-hop-loop",
+          "id": "pigneto-after-dark",
           "start": "Trastevere",
           "end": "Monti",
           "shape": "arc",
-          "day_profile": "light",
+          "day_profile": "variation",
           "anchor_zone": "Trastevere -> Monti",
           "stops": [
-            "L'Antidoto",
-            "Les Vignerons",
+            "Enoteca Ferrara",
             "Alcazar Live",
-            "Blackmarket Hall"
+            "Piazza della Madonna dei Monti",
+            "Blackmarket Hall",
+            "The Race Club"
           ]
         },
         {
-          "id": "classic-loop",
+          "id": "garbatella-ostiense-southline",
           "start": "Trastevere",
           "end": "Monti",
           "shape": "arc",
@@ -119,9 +120,9 @@
           "anchor_zone": "Trastevere -> Monti",
           "stops": [
             "Ai Marmi",
-            "Open Baladin Roma",
-            "Campo de' Fiori",
-            "Jewish Ghetto",
+            "Enoteca Ferrara",
+            "Alcazar Live",
+            "Ai Tre Scalini",
             "Piazza della Madonna dei Monti"
           ]
         }

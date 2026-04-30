@@ -3,29 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Parranda | Personlig City Guide för Rom</title>
+    <title>__PARRANDA_TITLE__</title>
     <meta name="theme-color" content="#af4d24" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta
       name="description"
-      content="Parranda är en personlig city guide för Rom som bygger promenadvänliga och lokalt kuraterade dagar utifrån plats, smak, tempo och stämning."
+      content="__PARRANDA_META_DESCRIPTION__"
     />
     <meta name="apple-mobile-web-app-title" content="Parranda" />
-    <meta property="og:title" content="Parranda | Personlig City Guide för Rom" />
-    <meta
-      property="og:description"
-      content="En personlig city guide för Rom med planerare, stadsdelar, hidden gems och dagar som känns mer lokala än turistiga."
-    />
+    <meta property="og:title" content="__PARRANDA_OG_TITLE__" />
+    <meta property="og:description" content="__PARRANDA_OG_DESCRIPTION__" />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="sv_SE" />
     <meta property="og:image" content="/assets/icons/icon-512.png" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Parranda | Personlig City Guide för Rom" />
-    <meta
-      name="twitter:description"
-      content="Parranda bygger promenadvänliga och lokalt kuraterade Rom-dagar utifrån plats, smak, tempo och stämning."
-    />
+    <meta name="twitter:title" content="__PARRANDA_TWITTER_TITLE__" />
+    <meta name="twitter:description" content="__PARRANDA_TWITTER_DESCRIPTION__" />
     <meta name="twitter:image" content="/assets/icons/icon-512.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -37,8 +31,11 @@
     <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
     <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
     <link rel="stylesheet" href="styles.css?v=18" />
+    <script>
+      window.__PARRANDA_CITY__ = __PARRANDA_CITY_BOOTSTRAP__;
+    </script>
   </head>
-  <body data-city-key="rome" data-city-label="Rom">
+  <body data-city-key="__PARRANDA_CITY_KEY__" data-city-label="__PARRANDA_CITY_LABEL__">
     <div class="page-shell">
       <header class="hero">
         <nav class="topbar">
@@ -46,22 +43,22 @@
             <span class="brand-mark">P</span>
             <div>
               <p>Parranda</p>
-              <span>Kuraterade Rom-dagar med mer känsla än kölista</span>
+              <span>Kuraterade stadsdagar med mer känsla än kölista</span>
             </div>
           </div>
           <a
             class="ghost-button"
-            href="https://www.google.com/maps/search/hidden+gems+rome+italy/"
+            href="__PARRANDA_CITY_MAP_URL__"
             target="_blank"
             rel="noreferrer"
-            >Romkarta</a
+            >Öppna karta</a
           >
         </nav>
 
         <section class="hero-content">
           <div class="hero-copy">
-            <p class="eyebrow">ROM · KURERAD DAGPLANERING</p>
-            <h1>Hitta rätt dag i Rom</h1>
+            <p class="eyebrow">__PARRANDA_CITY_EYEBROW__</p>
+            <h1>Hitta rätt dag i __PARRANDA_CITY_LABEL__</h1>
             <p class="lead">
               Välj bas, datum och känsla. Resten sätter Parranda ihop.
             </p>
