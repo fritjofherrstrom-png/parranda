@@ -129,7 +129,29 @@ test("GET /api/places/search returnerar kuraterade träffar", async () => {
     });
 
     assert.equal(response.status, 200);
+    assert.equal(response.body.city, "rome");
     assert.ok(response.body.items.some((item) => item.label === "Trastevere"));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /api/places/search markerar när en okänd city fallbackar till rome", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during city fallback test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      path: "/api/places/search?city=unknown-city&q=vin",
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.city, "rome");
+    assert.equal(response.body.requested_city, "unknown-city");
+    assert.equal(response.body.city_fallback_used, true);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
