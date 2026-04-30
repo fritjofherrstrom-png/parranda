@@ -1,5 +1,3 @@
-const { allItems, findItemByName } = require("./catalog");
-
 function toCandidate(item, source = "catalog") {
   return {
     id: item.id,
@@ -14,11 +12,11 @@ function toCandidate(item, source = "catalog") {
 
 function buildGeocodeQuery(options = {}) {
   const {
-    items = allItems,
-    findByName = findItemByName,
-    searchLabel = "Rome",
-    countryLabel = "Italy",
-    defaultAreaLabel = searchLabel,
+    items = [],
+    findByName = () => null,
+    searchLabel = "",
+    countryLabel = "",
+    defaultAreaLabel = searchLabel || "Unknown area",
     userAgent = "Parranda/1.0 (route-planner)",
   } = options;
 
@@ -39,7 +37,7 @@ function buildGeocodeQuery(options = {}) {
       .filter(
         (item) =>
           item.name.toLowerCase().includes(normalized) ||
-          item.searchTerms.some((term) => term.toLowerCase().includes(normalized)),
+          (item.searchTerms || []).some((term) => term.toLowerCase().includes(normalized)),
       )
       .slice(0, 5)
       .map((item) => toCandidate(item));
@@ -81,7 +79,27 @@ function buildGeocodeQuery(options = {}) {
   };
 }
 
-const geocodeQuery = buildGeocodeQuery();
+let legacyRomeGeocodeQuery = null;
+
+function getLegacyRomeGeocodeQuery() {
+  if (!legacyRomeGeocodeQuery) {
+    const { allItems, findItemByName } = require("./catalog");
+    legacyRomeGeocodeQuery = buildGeocodeQuery({
+      items: allItems,
+      findByName: findItemByName,
+      searchLabel: "Rome",
+      countryLabel: "Italy",
+      defaultAreaLabel: "Rom",
+      userAgent: "Parranda Rome/1.0 (legacy-route-planner)",
+    });
+  }
+
+  return legacyRomeGeocodeQuery;
+}
+
+async function geocodeQuery(query) {
+  return getLegacyRomeGeocodeQuery()(query);
+}
 
 module.exports = {
   buildGeocodeQuery,
