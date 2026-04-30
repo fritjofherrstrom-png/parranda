@@ -24,6 +24,11 @@ test("test-city uppfyller city-kontraktet utan fallback", () => {
   assert.equal(cityConfigs["test-city"].currency, "MXN");
 });
 
+test("test-city är markerad som intern arkitekturstub", () => {
+  assert.equal(testCity.visibility, "internal");
+  assert.equal(cityConfigs["test-city"].visibility, "internal");
+});
+
 test("city-kontraktet accepterar giltiga globala koordinater", () => {
   assert.doesNotThrow(() =>
     validateCityConfig({
