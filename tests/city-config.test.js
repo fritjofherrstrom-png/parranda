@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const rome = require("../server/cities/rome");
-const { cityConfigs, getCityConfig, normalizeCityKey } = require("../server/cities");
+const { cityConfigs, getCityConfig, normalizeCityKey, resolveCityConfig } = require("../server/cities");
 const { validateCityConfig } = require("../server/cities/contract");
 
 test("rome uppfyller city-kontraktet", () => {
@@ -13,10 +13,33 @@ test("rome uppfyller city-kontraktet", () => {
   assert.equal(cityConfigs.rome.currency, "EUR");
 });
 
-test("city-registret faller tillbaka till rome på okända nycklar", () => {
+test("city-kontraktet accepterar giltiga globala koordinater", () => {
+  assert.doesNotThrow(() =>
+    validateCityConfig({
+      ...rome,
+      key: "test-city",
+      label: "Test City",
+      center: { lat: -34.6037, lng: -58.3816 },
+    }),
+  );
+});
+
+test("city-registret kan avslöja unknown city även när publik fallback används", () => {
   assert.equal(normalizeCityKey("ROME"), "rome");
-  assert.equal(getCityConfig("unknown-city").key, "rome");
+  const resolution = resolveCityConfig("unknown-city");
+  assert.equal(resolution.cityConfig.key, "rome");
+  assert.equal(resolution.requestedKey, "unknown-city");
+  assert.equal(resolution.fallbackUsed, true);
+  assert.equal(resolution.found, false);
   assert.equal(getCityConfig().key, "rome");
+});
+
+test("city-registret kan köras utan fallback för interna kontroller", () => {
+  const resolution = resolveCityConfig("unknown-city", { allowFallback: false });
+  assert.equal(resolution.cityConfig, null);
+  assert.equal(resolution.resolvedKey, null);
+  assert.equal(resolution.found, false);
+  assert.equal(resolution.fallbackUsed, false);
 });
 
 test("city-kontraktet stoppar trasiga city packs tidigt", () => {
