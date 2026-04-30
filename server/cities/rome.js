@@ -12,6 +12,9 @@ function parsePositiveInteger(value, fallback) {
 module.exports = {
   key: "rome",
   label: "Rom",
+  timezone: "Europe/Rome",
+  locale: "sv-SE",
+  currency: "EUR",
   searchLabel: "Rome",
   editorialAreaLabel: "Rom",
   fallbackLabel: "Centro Storico",
@@ -24,7 +27,10 @@ module.exports = {
   },
   services: {
     geocodeQuery,
-    fetchWeatherForDates,
+    fetchWeatherForDates: (dates, anchor) =>
+      fetchWeatherForDates(dates, anchor, {
+        timezone: "Europe/Rome",
+      }),
     getCityPulse,
     getDateSignals,
     fetchLiveEventsForDates,
