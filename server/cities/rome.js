@@ -4,6 +4,7 @@ const { fetchWeatherForDates } = require("../weather");
 const { getCityPulse, getDateSignals, getRomeTodayIsoDate } = require("../editorial-calendar");
 const { fetchLiveEventsForDates } = require("../live-events");
 
+const ROME_TIMEZONE = "Europe/Rome";
 const ROME_CENTER = { lat: 41.8933, lng: 12.4964 };
 
 function parsePositiveInteger(value, fallback) {
@@ -14,7 +15,7 @@ function parsePositiveInteger(value, fallback) {
 module.exports = {
   key: "rome",
   label: "Rom",
-  timezone: "Europe/Rome",
+  timezone: ROME_TIMEZONE,
   locale: "sv-SE",
   currency: "EUR",
   searchLabel: "Rome",
@@ -31,7 +32,7 @@ module.exports = {
     geocodeQuery,
     fetchWeatherForDates: (dates, anchor = ROME_CENTER) =>
       fetchWeatherForDates(dates, anchor, {
-        timezone: "Europe/Rome",
+        timezone: ROME_TIMEZONE,
       }),
     getCityPulse,
     getDateSignals,
