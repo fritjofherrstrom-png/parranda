@@ -1,6 +1,6 @@
 const express = require("express");
 const path = require("path");
-const { getCityConfig, normalizeCityKey } = require("./cities");
+const { resolveCityConfig } = require("./cities");
 const { generateRecommendations } = require("./route-engine");
 const { diversifyRecommendationDays } = require("./route-diversity");
 
@@ -77,6 +77,16 @@ function buildOfficialPulseItem(event, date, cityConfig) {
   };
 }
 
+function resolveRequestCity(city) {
+  const resolution = resolveCityConfig(city);
+
+  return {
+    cityConfig: resolution.cityConfig,
+    requestedCity: resolution.requestedKey,
+    cityFallbackUsed: resolution.fallbackUsed,
+  };
+}
+
 function buildApp() {
   const app = express();
 
@@ -88,7 +98,7 @@ function buildApp() {
   });
 
   app.get("/api/places/search", (request, response) => {
-    const cityConfig = getCityConfig(request.query.city);
+    const { cityConfig, requestedCity, cityFallbackUsed } = resolveRequestCity(request.query.city);
     const { allItems } = cityConfig.catalog;
     const query = String(request.query.q || "").trim().toLowerCase();
     const items = allItems
@@ -116,11 +126,16 @@ function buildApp() {
         price_level: item.priceLevel,
       }));
 
-    response.json({ city: cityConfig.key, items });
+    response.json({
+      city: cityConfig.key,
+      requested_city: requestedCity,
+      city_fallback_used: cityFallbackUsed,
+      items,
+    });
   });
 
   app.get("/api/place-details", (request, response) => {
-    const cityConfig = getCityConfig(request.query.city);
+    const { cityConfig, requestedCity, cityFallbackUsed } = resolveRequestCity(request.query.city);
     const { allItems, findItemByName } = cityConfig.catalog;
     const query = String(request.query.q || request.query.id || "").trim();
 
@@ -136,6 +151,8 @@ function buildApp() {
     if (!found) {
       response.json({
         city: cityConfig.key,
+        requested_city: requestedCity,
+        city_fallback_used: cityFallbackUsed,
         item: {
           id: `editorial-${query.toLowerCase().replace(/\s+/g, "-")}`,
           label: query,
@@ -164,6 +181,8 @@ function buildApp() {
 
     response.json({
       city: cityConfig.key,
+      requested_city: requestedCity,
+      city_fallback_used: cityFallbackUsed,
       item: {
         id: found.id,
         label: found.name,
@@ -191,7 +210,7 @@ function buildApp() {
 
   app.get("/api/city-pulse", async (request, response) => {
     try {
-      const cityConfig = getCityConfig(request.query.city);
+      const { cityConfig, requestedCity, cityFallbackUsed } = resolveRequestCity(request.query.city);
       const date = String(request.query.date || "").trim() || cityConfig.todayIsoDate();
       const pulse = cityConfig.services.getCityPulse(date);
       const [liveEventsByDate, weatherByDate] = await Promise.all([
@@ -205,6 +224,8 @@ function buildApp() {
 
       response.json({
         city: cityConfig.key,
+        requested_city: requestedCity,
+        city_fallback_used: cityFallbackUsed,
         ...pulse,
         items: [...(pulse.items || []), ...officialPulseItems],
         official_events: officialEvents,
@@ -220,9 +241,14 @@ function buildApp() {
 
   app.post("/api/geocode", async (request, response) => {
     try {
-      const cityConfig = getCityConfig(request.body?.city);
+      const { cityConfig, requestedCity, cityFallbackUsed } = resolveRequestCity(request.body?.city);
       const candidates = await cityConfig.services.geocodeQuery(request.body?.query || "");
-      response.json({ city: cityConfig.key, candidates });
+      response.json({
+        city: cityConfig.key,
+        requested_city: requestedCity,
+        city_fallback_used: cityFallbackUsed,
+        candidates,
+      });
     } catch (error) {
       response.status(502).json({
         error: "Geocoding failed",
@@ -233,7 +259,8 @@ function buildApp() {
 
   app.post("/api/route-recommendations", async (request, response) => {
     try {
-      const city = normalizeCityKey(request.body?.city || "rome");
+      const { cityConfig, requestedCity, cityFallbackUsed } = resolveRequestCity(request.body?.city);
+      const city = cityConfig.key;
       const preferences = Array.isArray(request.body?.preferences)
         ? request.body.preferences
         : [];
@@ -253,7 +280,11 @@ function buildApp() {
       };
 
       const result = diversifyRecommendationDays(await generateRecommendations(payload));
-      response.json(result);
+      response.json({
+        ...result,
+        requested_city: requestedCity,
+        city_fallback_used: cityFallbackUsed,
+      });
     } catch (error) {
       response.status(500).json({
         error: "Route recommendation failed",
