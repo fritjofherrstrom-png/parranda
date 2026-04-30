@@ -1,8 +1,10 @@
 const catalog = require("../catalog");
 const { geocodeQuery } = require("../geocoding");
-const { fetchWeatherForDates, ROME_CENTER } = require("../weather");
+const { fetchWeatherForDates } = require("../weather");
 const { getCityPulse, getDateSignals, getRomeTodayIsoDate } = require("../editorial-calendar");
 const { fetchLiveEventsForDates } = require("../live-events");
+
+const ROME_CENTER = { lat: 41.8933, lng: 12.4964 };
 
 function parsePositiveInteger(value, fallback) {
   const parsed = Number.parseInt(value, 10);
@@ -27,7 +29,7 @@ module.exports = {
   },
   services: {
     geocodeQuery,
-    fetchWeatherForDates: (dates, anchor) =>
+    fetchWeatherForDates: (dates, anchor = ROME_CENTER) =>
       fetchWeatherForDates(dates, anchor, {
         timezone: "Europe/Rome",
       }),
