@@ -1,12 +1,12 @@
+const fs = require("node:fs");
 const express = require("express");
 const path = require("path");
-const { allItems, findItemByName } = require("./catalog");
-const { geocodeQuery } = require("./geocoding");
+const { resolveCityConfig } = require("./cities");
 const { generateRecommendations } = require("./route-engine");
 const { diversifyRecommendationDays } = require("./route-diversity");
-const { fetchLiveEventsForDates } = require("./live-events");
-const { getCityPulse, getRomeTodayIsoDate } = require("./editorial-calendar");
-const { fetchWeatherForDates, ROME_CENTER } = require("./weather");
+
+const appRoot = path.resolve(__dirname, "..");
+const appShellTemplate = fs.readFileSync(path.join(appRoot, "index.html"), "utf8");
 
 const pulseVibeByTag = {
   kultur: "curious",
@@ -19,6 +19,22 @@ const pulseVibeByTag = {
   utsikt: "romantic",
   mat: "slow",
 };
+
+function getCitySearchLabel(cityConfig) {
+  return cityConfig?.searchLabel || cityConfig?.label || "Rome";
+}
+
+function buildExternalSearchUrl(label, cityConfig) {
+  return `https://www.google.com/search?q=${encodeURIComponent(
+    `${label} ${getCitySearchLabel(cityConfig)}`,
+  )}`;
+}
+
+function buildExternalMapUrl(label, cityConfig) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    `${label} ${getCitySearchLabel(cityConfig)}`,
+  )}`;
+}
 
 function buildOfficialPulseWhen(event, date) {
   if (event.start_date && event.end_date && event.start_date === event.end_date) {
@@ -36,8 +52,12 @@ function buildOfficialPulseWhen(event, date) {
   return event.start_date || event.end_date || "Just nu";
 }
 
-function buildOfficialPulseItem(event, date) {
-  const where = [event.venue, event.address].filter(Boolean).join(" • ") || "Rom";
+function buildOfficialPulseItem(event, date, cityConfig) {
+  const where =
+    [event.venue, event.address].filter(Boolean).join(" • ") ||
+    cityConfig?.editorialAreaLabel ||
+    cityConfig?.label ||
+    "Rom";
   const matchesVibes = [...new Set((event.match_tags || []).map((tag) => pulseVibeByTag[tag]).filter(Boolean))];
 
   return {
@@ -49,7 +69,7 @@ function buildOfficialPulseItem(event, date) {
     when: buildOfficialPulseWhen(event, date),
     blurb:
       event.summary ||
-      "Officiellt live-event i Rom som kan ge dagen ett mer tidsbundet lager.",
+      `Officiellt live-event i ${cityConfig?.label || "Rom"} som kan ge dagen ett mer tidsbundet lager.`,
     why_it_matters:
       event.match_reason ||
       "Bra som live-bonus när du vill väva in något som faktiskt bara händer just nu.",
@@ -61,17 +81,108 @@ function buildOfficialPulseItem(event, date) {
   };
 }
 
+function resolveRequestCity(city) {
+  const resolution = resolveCityConfig(city);
+
+  return {
+    cityConfig: resolution.cityConfig,
+    requestedCity: resolution.requestedKey,
+    cityFallbackUsed: resolution.fallbackUsed,
+  };
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function serializeInlineJson(value) {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
+}
+
+function buildShellMeta(cityConfig) {
+  const cityLabel = cityConfig?.label || "Staden";
+  const citySearchLabel = getCitySearchLabel(cityConfig);
+  const eyebrow = `${cityLabel.toLocaleUpperCase("sv-SE")} · KURERAD DAGPLANERING`;
+
+  return {
+    title: `Parranda | Personlig City Guide för ${cityLabel}`,
+    metaDescription: `Parranda bygger promenadvänliga och lokalt kuraterade dagar i ${cityLabel} utifrån plats, smak, tempo och stämning.`,
+    ogTitle: `Parranda | Personlig City Guide för ${cityLabel}`,
+    ogDescription: `En personlig city guide för ${cityLabel} med planner, lokala stråk och dagar som känns mer genomtänkta än turistiga.`,
+    twitterTitle: `Parranda | Personlig City Guide för ${cityLabel}`,
+    twitterDescription: `Parranda bygger promenadvänliga och lokalt kuraterade dagar i ${cityLabel} utifrån plats, smak, tempo och stämning.`,
+    cityMapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+      `${citySearchLabel} hidden gems`,
+    )}`,
+    eyebrow,
+  };
+}
+
+function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed }) {
+  const meta = buildShellMeta(cityConfig);
+  const bootstrap = {
+    key: cityConfig.key,
+    label: cityConfig.label,
+    timezone: cityConfig.timezone,
+    locale: cityConfig.locale,
+    currency: cityConfig.currency,
+    searchLabel: getCitySearchLabel(cityConfig),
+    requestedKey: requestedCity,
+    fallbackUsed: cityFallbackUsed,
+  };
+
+  const replacements = {
+    "__PARRANDA_TITLE__": escapeHtml(meta.title),
+    "__PARRANDA_META_DESCRIPTION__": escapeHtml(meta.metaDescription),
+    "__PARRANDA_OG_TITLE__": escapeHtml(meta.ogTitle),
+    "__PARRANDA_OG_DESCRIPTION__": escapeHtml(meta.ogDescription),
+    "__PARRANDA_TWITTER_TITLE__": escapeHtml(meta.twitterTitle),
+    "__PARRANDA_TWITTER_DESCRIPTION__": escapeHtml(meta.twitterDescription),
+    "__PARRANDA_CITY_KEY__": escapeHtml(cityConfig.key),
+    "__PARRANDA_CITY_LABEL__": escapeHtml(cityConfig.label),
+    "__PARRANDA_CITY_MAP_URL__": escapeHtml(meta.cityMapUrl),
+    "__PARRANDA_CITY_EYEBROW__": escapeHtml(meta.eyebrow),
+    "__PARRANDA_CITY_BOOTSTRAP__": serializeInlineJson(bootstrap),
+  };
+
+  return Object.entries(replacements).reduce(
+    (html, [token, replacement]) => html.split(token).join(replacement),
+    appShellTemplate,
+  );
+}
+
+function inferShellCity(request) {
+  const pathSegments = String(request.path || "")
+    .split("/")
+    .filter(Boolean);
+  const pathKey = pathSegments[0] && !pathSegments[0].includes(".") ? pathSegments[0] : null;
+
+  return request.query?.city || pathKey || null;
+}
+
 function buildApp() {
   const app = express();
 
   app.use(express.json());
-  app.use(express.static(path.resolve(__dirname, "..")));
+  app.get(["/", "/index.html"], (request, response) => {
+    const cityResolution = resolveRequestCity(inferShellCity(request));
+    response.type("html").send(renderAppShell(cityResolution));
+  });
+
+  app.use(express.static(appRoot, { index: false }));
 
   app.get("/api/health", (_request, response) => {
     response.json({ ok: true });
   });
 
   app.get("/api/places/search", (request, response) => {
+    const { cityConfig, requestedCity, cityFallbackUsed } = resolveRequestCity(request.query.city);
+    const { allItems } = cityConfig.catalog;
     const query = String(request.query.q || "").trim().toLowerCase();
     const items = allItems
       .filter((item) => {
@@ -98,10 +209,17 @@ function buildApp() {
         price_level: item.priceLevel,
       }));
 
-    response.json({ items });
+    response.json({
+      city: cityConfig.key,
+      requested_city: requestedCity,
+      city_fallback_used: cityFallbackUsed,
+      items,
+    });
   });
 
   app.get("/api/place-details", (request, response) => {
+    const { cityConfig, requestedCity, cityFallbackUsed } = resolveRequestCity(request.query.city);
+    const { allItems, findItemByName } = cityConfig.catalog;
     const query = String(request.query.q || request.query.id || "").trim();
 
     if (!query) {
@@ -115,11 +233,14 @@ function buildApp() {
 
     if (!found) {
       response.json({
+        city: cityConfig.key,
+        requested_city: requestedCity,
+        city_fallback_used: cityFallbackUsed,
         item: {
           id: `editorial-${query.toLowerCase().replace(/\s+/g, "-")}`,
           label: query,
           type: "editorial mention",
-          area: "Rom",
+          area: cityConfig.editorialAreaLabel || cityConfig.label || "Rom",
           summary:
             "Det här är just nu en redaktionell mention i appen. Intern fullprofil saknas ännu, men du kan hoppa vidare till Google eller kartan.",
           vibe: "redaktionell bonusnotis",
@@ -134,18 +255,17 @@ function buildApp() {
           feature_notes: [],
           happy_hour_note: null,
           tags: [],
-          external_search_url: `https://www.google.com/search?q=${encodeURIComponent(
-            `${query} Rome`,
-          )}`,
-          external_map_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-            `${query} Rome`,
-          )}`,
+          external_search_url: buildExternalSearchUrl(query, cityConfig),
+          external_map_url: buildExternalMapUrl(query, cityConfig),
         },
       });
       return;
     }
 
     response.json({
+      city: cityConfig.key,
+      requested_city: requestedCity,
+      city_fallback_used: cityFallbackUsed,
       item: {
         id: found.id,
         label: found.name,
@@ -165,28 +285,30 @@ function buildApp() {
         feature_notes: found.featureNotes,
         happy_hour_note: found.happyHourNote,
         tags: found.tags,
-        external_search_url: `https://www.google.com/search?q=${encodeURIComponent(
-          `${found.name} Rome`,
-        )}`,
-        external_map_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-          `${found.name} Rome`,
-        )}`,
+        external_search_url: buildExternalSearchUrl(found.name, cityConfig),
+        external_map_url: buildExternalMapUrl(found.name, cityConfig),
       },
     });
   });
 
   app.get("/api/city-pulse", async (request, response) => {
     try {
-      const date = String(request.query.date || "").trim() || getRomeTodayIsoDate();
-      const pulse = getCityPulse(date);
+      const { cityConfig, requestedCity, cityFallbackUsed } = resolveRequestCity(request.query.city);
+      const date = String(request.query.date || "").trim() || cityConfig.todayIsoDate();
+      const pulse = cityConfig.services.getCityPulse(date);
       const [liveEventsByDate, weatherByDate] = await Promise.all([
-        fetchLiveEventsForDates([pulse.date], {}),
-        fetchWeatherForDates([pulse.date], ROME_CENTER).catch(() => ({})),
+        cityConfig.services.fetchLiveEventsForDates([pulse.date], {}),
+        cityConfig.services.fetchWeatherForDates([pulse.date], cityConfig.center).catch(() => ({})),
       ]);
       const officialEvents = (liveEventsByDate[pulse.date] || []).slice(0, 2);
-      const officialPulseItems = officialEvents.slice(0, 1).map((event) => buildOfficialPulseItem(event, pulse.date));
+      const officialPulseItems = officialEvents
+        .slice(0, 1)
+        .map((event) => buildOfficialPulseItem(event, pulse.date, cityConfig));
 
       response.json({
+        city: cityConfig.key,
+        requested_city: requestedCity,
+        city_fallback_used: cityFallbackUsed,
         ...pulse,
         items: [...(pulse.items || []), ...officialPulseItems],
         official_events: officialEvents,
@@ -202,8 +324,14 @@ function buildApp() {
 
   app.post("/api/geocode", async (request, response) => {
     try {
-      const candidates = await geocodeQuery(request.body?.query || "");
-      response.json({ candidates });
+      const { cityConfig, requestedCity, cityFallbackUsed } = resolveRequestCity(request.body?.city);
+      const candidates = await cityConfig.services.geocodeQuery(request.body?.query || "");
+      response.json({
+        city: cityConfig.key,
+        requested_city: requestedCity,
+        city_fallback_used: cityFallbackUsed,
+        candidates,
+      });
     } catch (error) {
       response.status(502).json({
         error: "Geocoding failed",
@@ -214,10 +342,13 @@ function buildApp() {
 
   app.post("/api/route-recommendations", async (request, response) => {
     try {
+      const { cityConfig, requestedCity, cityFallbackUsed } = resolveRequestCity(request.body?.city);
+      const city = cityConfig.key;
       const preferences = Array.isArray(request.body?.preferences)
         ? request.body.preferences
         : [];
       const payload = {
+        city,
         dates: Array.isArray(request.body?.dates) ? request.body.dates : [],
         homeBase: request.body?.home_base,
         start: request.body?.start,
@@ -232,7 +363,11 @@ function buildApp() {
       };
 
       const result = diversifyRecommendationDays(await generateRecommendations(payload));
-      response.json(result);
+      response.json({
+        ...result,
+        requested_city: requestedCity,
+        city_fallback_used: cityFallbackUsed,
+      });
     } catch (error) {
       response.status(500).json({
         error: "Route recommendation failed",
@@ -247,7 +382,8 @@ function buildApp() {
       return;
     }
 
-    response.sendFile(path.resolve(__dirname, "..", "index.html"));
+    const cityResolution = resolveRequestCity(inferShellCity(request));
+    response.type("html").send(renderAppShell(cityResolution));
   });
 
   return app;

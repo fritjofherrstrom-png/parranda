@@ -67,7 +67,7 @@
   };
 
   let activeDayIntensity = window.__parrandaDayIntensity || "normal";
-  let activeQuickBase = window.__parrandaQuickBase || "current";
+  let activeQuickBase = window.__parrandaQuickBase || "auto";
   let activeQuickVibe = window.__parrandaQuickVibe || "blend";
   let pendingResultFocus = false;
   let resultFocusTimer = null;
@@ -359,13 +359,8 @@
   }
 
   function applyLandingHierarchyPass() {
-    if (plannerLaunchStrip) plannerLaunchStrip.hidden = true;
     if (tabNav) document.body.classList.add("route-focus");
-    if (routePlannerOpenButton) routePlannerOpenButton.textContent = "Fortsätt i planner";
-    if (heroWildcardLabel) heroWildcardLabel.textContent = "SNABB IDÉ";
-    if (heroWildcardMeta) heroWildcardMeta.textContent = "Bra som snabbstart när du vill få en kvällsidé direkt. Plannern är fortfarande huvudvägen till en riktig dag.";
-    if (heroWildcardApplyButton) heroWildcardApplyButton.textContent = "Lägg i planner";
-    if (heroWildcardShuffleButton) heroWildcardShuffleButton.textContent = "Ny idé";
+    if (plannerLaunchStrip) plannerLaunchStrip.hidden = false;
   }
 
   function quickBaseLabel() {
@@ -447,6 +442,9 @@
   }
 
   function applyQuickSelectionsToPlanner() {
+    if (!heroQuickPlannerShell) {
+      return;
+    }
     if (homeBaseModeSelect) {
       const config = quickBaseMeta[activeQuickBase] || quickBaseMeta.current;
       homeBaseModeSelect.value = config.plannerMode || "current_location";
@@ -509,52 +507,7 @@
   }
 
   function ensureHeroQuickPlanner() {
-    if (heroQuickPlannerShell) return;
-    heroQuickPlannerShell = document.createElement("section");
-    heroQuickPlannerShell.className = "hero-planner-inline";
-    heroQuickPlannerShell.innerHTML = `
-      <div class="hero-planner-inline-head">
-        <strong>Välj bas och känsla direkt.</strong>
-        <p>Det här ska vara det snabbaste sättet att sätta riktningen för dagen, inte ännu ett formulär.</p>
-      </div>
-      <div class="hero-signal-row">
-        <span class="hero-signal-label">01 • Var i Rom vill du utgå från?</span>
-        <div class="hero-signal-buttons hero-signal-buttons-base"></div>
-      </div>
-      <div class="hero-signal-row">
-        <span class="hero-signal-label">02 • Vad är du mest sugen på?</span>
-        <div class="hero-signal-buttons hero-signal-buttons-vibe"></div>
-      </div>
-      <div class="hero-planner-inline-foot">
-        <p class="hero-planner-inline-summary"></p>
-        <button type="button" class="primary-button hero-planner-inline-button">Öppna planner med dessa val</button>
-      </div>
-    `;
-    const baseRow = heroQuickPlannerShell.querySelector(".hero-signal-buttons-base");
-    Object.entries(quickBaseMeta).forEach(([key, meta]) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "hero-signal-chip";
-      button.dataset.quickBase = key;
-      button.textContent = meta.label;
-      button.addEventListener("click", async () => {
-        await setQuickBase(key);
-      });
-      baseRow.appendChild(button);
-    });
-    const vibeRow = heroQuickPlannerShell.querySelector(".hero-signal-buttons-vibe");
-    Object.entries(quickVibeMeta).forEach(([key, meta]) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "hero-signal-chip";
-      button.dataset.quickVibe = key;
-      button.textContent = meta.label;
-      button.addEventListener("click", () => setQuickVibe(key));
-      vibeRow.appendChild(button);
-    });
-    heroQuickPlannerShell.querySelector(".hero-planner-inline-button")?.addEventListener("click", openPlannerFromHeroInline);
-    heroActions.insertAdjacentElement("afterend", heroQuickPlannerShell);
-    renderQuickPlannerState();
+    return;
   }
 
   function routeIntensityMetrics(route) {

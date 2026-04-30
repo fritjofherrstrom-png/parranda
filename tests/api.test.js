@@ -64,6 +64,38 @@ async function requestJson(server, { method = "GET", path = "/", body } = {}) {
   });
 }
 
+async function requestText(server, { method = "GET", path = "/" } = {}) {
+  const { port } = server.address();
+
+  return new Promise((resolve, reject) => {
+    const request = http.request(
+      {
+        hostname: "127.0.0.1",
+        port,
+        path,
+        method,
+      },
+      (response) => {
+        let data = "";
+
+        response.on("data", (chunk) => {
+          data += chunk;
+        });
+
+        response.on("end", () => {
+          resolve({
+            status: response.statusCode,
+            body: data,
+          });
+        });
+      },
+    );
+
+    request.on("error", reject);
+    request.end();
+  });
+}
+
 test.after(() => {
   global.fetch = originalFetch;
 });
@@ -129,7 +161,95 @@ test("GET /api/places/search returnerar kuraterade träffar", async () => {
     });
 
     assert.equal(response.status, 200);
+    assert.equal(response.body.city, "rome");
     assert.ok(response.body.items.some((item) => item.label === "Trastevere"));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /api/places/search markerar när en okänd city fallbackar till rome", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during city fallback test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      path: "/api/places/search?city=unknown-city&q=vin",
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.city, "rome");
+    assert.equal(response.body.requested_city, "unknown-city");
+    assert.equal(response.body.city_fallback_used, true);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET / renderar en city-aware app shell med bootstrap", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during app shell test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestText(server, {
+      path: "/?city=rome",
+    });
+
+    assert.equal(response.status, 200);
+    assert.match(response.body, /<body data-city-key="rome" data-city-label="Rom">/);
+    assert.match(response.body, /window\.__PARRANDA_CITY__ = \{"key":"rome","label":"Rom"/);
+    assert.ok(!response.body.includes("__PARRANDA_CITY_BOOTSTRAP__"));
+    assert.ok(!response.body.includes("__PARRANDA_TITLE__"));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /barcelona avslöjar fallback i app shell bootstrap innan stad 2 finns", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during shell fallback test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestText(server, {
+      path: "/barcelona",
+    });
+
+    assert.equal(response.status, 200);
+    assert.match(response.body, /<body data-city-key="rome" data-city-label="Rom">/);
+    assert.match(response.body, /"requestedKey":"barcelona"/);
+    assert.match(response.body, /"fallbackUsed":true/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /test-city renderar en egen city shell utan Rome-fallback", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during test-city shell test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestText(server, {
+      path: "/test-city",
+    });
+
+    assert.equal(response.status, 200);
+    assert.match(response.body, /<body data-city-key="test-city" data-city-label="Test City">/);
+    assert.match(response.body, /window\.__PARRANDA_CITY__ = \{"key":"test-city","label":"Test City"/);
+    assert.match(response.body, /"requestedKey":"test-city"/);
+    assert.match(response.body, /"fallbackUsed":false/);
+    assert.doesNotMatch(response.body, /data-city-label="Rom"/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -211,6 +331,7 @@ test("GET /api/city-pulse returnerar stadspuls, wildcard och officiella tips", a
     });
 
     assert.equal(response.status, 200);
+    assert.equal(response.body.city, "rome");
     assert.equal(response.body.date, "2026-04-21");
     assert.ok(response.body.moments.some((item) => item.title === "Natale di Roma"));
     assert.ok(Array.isArray(response.body.items));
@@ -221,6 +342,75 @@ test("GET /api/city-pulse returnerar stadspuls, wildcard och officiella tips", a
     assert.ok(Array.isArray(response.body.official_events));
     assert.equal(response.body.weather?.maxTemp, 24);
     assert.equal(response.body.weather?.currentTemp, 19.6);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /api/city-pulse kan köras för test-city med no-op services", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-05-01"],
+          weathercode: [1],
+          temperature_2m_max: [24],
+          temperature_2m_min: [14],
+        },
+        current: {
+          temperature_2m: 23,
+          weather_code: 1,
+          is_day: 1,
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during test-city pulse test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      path: "/api/city-pulse?city=test-city&date=2026-05-01",
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.city, "test-city");
+    assert.equal(response.body.requested_city, "test-city");
+    assert.equal(response.body.city_fallback_used, false);
+    assert.equal(response.body.headline, "Test City just nu");
+    assert.deepEqual(response.body.official_events, []);
+    assert.deepEqual(response.body.items, []);
+    assert.doesNotMatch(JSON.stringify(response.body), /Trastevere|Monti|Testaccio|Centro Storico|\bRom\b|\bRome\b/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /api/places/search kan söka i test-city utan Rome-träffar", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during test-city places/search test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      path: "/api/places/search?city=test-city&q=harbor",
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.city, "test-city");
+    assert.equal(response.body.requested_city, "test-city");
+    assert.equal(response.body.city_fallback_used, false);
+    assert.ok(response.body.items.some((item) => item.label === "Harbor Steps"));
+    assert.ok(!response.body.items.some((item) =>
+      ["Trastevere", "Monti", "Testaccio", "Centro Storico"].includes(item.label),
+    ));
+    assert.doesNotMatch(JSON.stringify(response.body.items), /\bRom\b|\bRome\b/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -302,6 +492,47 @@ test("POST /api/route-recommendations fungerar även när vädret saknas", async
     assert.equal(response.body.days.length, 1);
     assert.ok(response.body.days[0].primary_route.title);
     assert.ok(Array.isArray(response.body.days[0].date_signals));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("POST /api/route-recommendations markerar när en okänd city fallbackar till rome", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-04-20"],
+          weathercode: [0],
+          temperature_2m_max: [22],
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during route city fallback test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations",
+      body: {
+        city: "unknown-city",
+        dates: ["2026-04-20"],
+        walking_km_target: 8,
+        preferences: ["vin", "mat", "kultur"],
+      },
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.city, "rome");
+    assert.equal(response.body.requested_city, "unknown-city");
+    assert.equal(response.body.city_fallback_used, true);
+    assert.equal(response.body.days.length, 1);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -427,7 +658,9 @@ test("POST /api/route-recommendations håller Monti -> Monti i rätt zon", async
     });
 
     assert.equal(response.status, 200);
+    assert.equal(response.body.city, "rome");
     assert.equal(response.body.days[0].primary_route.route_shape, "loop");
+    assert.equal(response.body.days[0].primary_route.routing_source, "heuristic");
     assert.match(response.body.days[0].primary_route.anchor_zone, /Monti/);
     assert.ok(
       !response.body.days[0].primary_route.main_stops.some((stop) =>
@@ -709,9 +942,11 @@ test("GET /api/place-details returnerar rik metadata för känd plats", async ()
     });
 
     assert.equal(response.status, 200);
+    assert.equal(response.body.city, "rome");
     assert.equal(response.body.item.label, "Bar San Calisto");
     assert.ok(response.body.item.price_level);
     assert.ok(response.body.item.long_description);
+    assert.match(response.body.item.external_search_url, /Rome/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -741,6 +976,61 @@ test("POST /api/geocode returnerar 502 när extern geocoding fallerar", async ()
 
     assert.equal(response.status, 502);
     assert.equal(response.body.error, "Geocoding failed");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("POST /api/route-recommendations kan köras för test-city utan Rome-data", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-05-01"],
+          weathercode: [1],
+          temperature_2m_max: [24],
+          temperature_2m_min: [14],
+        },
+        current: {
+          temperature_2m: 23,
+          weather_code: 1,
+          is_day: 1,
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during test-city route test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations",
+      body: {
+        city: "test-city",
+        dates: ["2026-05-01"],
+        start: { type: "preset", label: "Old Town" },
+        end: { type: "preset", label: "Old Town" },
+        walking_km_target: 6,
+        preferences: ["kultur", "mat", "vin"],
+      },
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.city, "test-city");
+    assert.equal(response.body.requested_city, "test-city");
+    assert.equal(response.body.city_fallback_used, false);
+    assert.ok(response.body.days[0].primary_route);
+    assert.equal(response.body.days[0].primary_route.start_label, "Old Town");
+    assert.deepEqual(response.body.days[0].live_events, []);
+    assert.doesNotMatch(
+      JSON.stringify(response.body),
+      /Trastevere|Monti|Testaccio|Centro Storico|\bRom\b|\bRome\b/,
+    );
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

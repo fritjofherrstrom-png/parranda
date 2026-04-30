@@ -1,0 +1,108 @@
+{
+  "resolved_start": "Garbatella",
+  "resolved_end": "Testaccio",
+  "resolved_home_base": null,
+  "days": [
+    {
+      "date": "2026-04-19",
+      "primary": {
+        "id": "west-bank-sunset-loop",
+        "start": "Garbatella",
+        "end": "Testaccio",
+        "shape": "arc",
+        "day_profile": "peak",
+        "anchor_zone": "Garbatella -> Testaccio",
+        "routing_source": "heuristic",
+        "estimated_km": 2.8,
+        "longest_leg_km": 1.2,
+        "longest_leg_minutes": 14,
+        "average_leg_minutes": 7,
+        "stops": [
+          {
+            "label": "Latteria Garbatella",
+            "area": "Garbatella",
+            "live": false
+          },
+          {
+            "label": "Ostiense",
+            "area": "Ostiense",
+            "live": false
+          },
+          {
+            "label": "L'Oasi della Birra",
+            "area": "Testaccio",
+            "live": false
+          },
+          {
+            "label": "Trapizzino Testaccio",
+            "area": "Testaccio",
+            "live": false
+          }
+        ],
+        "legs": [
+          {
+            "from": "Garbatella",
+            "to": "Latteria Garbatella",
+            "km": 0.4,
+            "minutes": 5
+          },
+          {
+            "from": "Latteria Garbatella",
+            "to": "Ostiense",
+            "km": 1.2,
+            "minutes": 14
+          },
+          {
+            "from": "Ostiense",
+            "to": "L'Oasi della Birra",
+            "km": 1,
+            "minutes": 12
+          },
+          {
+            "from": "L'Oasi della Birra",
+            "to": "Trapizzino Testaccio",
+            "km": 0.1,
+            "minutes": 2
+          },
+          {
+            "from": "Trapizzino Testaccio",
+            "to": "Testaccio",
+            "km": 0.1,
+            "minutes": 2
+          }
+        ]
+      },
+      "alternative_count": 2,
+      "alternatives": [
+        {
+          "id": "sunset-spots-loop",
+          "start": "Garbatella",
+          "end": "Testaccio",
+          "shape": "arc",
+          "day_profile": "variation",
+          "anchor_zone": "Garbatella -> Testaccio",
+          "stops": [
+            "Latteria Garbatella",
+            "Ostiense",
+            "L'Oasi della Birra",
+            "Aventino"
+          ]
+        },
+        {
+          "id": "sunset-spots-loop",
+          "start": "Garbatella",
+          "end": "Testaccio",
+          "shape": "arc",
+          "day_profile": "peak",
+          "anchor_zone": "Garbatella -> Testaccio",
+          "stops": [
+            "Latteria Garbatella",
+            "Ostiense",
+            "L'Oasi della Birra",
+            "Aventino"
+          ]
+        }
+      ]
+    }
+  ]
+}

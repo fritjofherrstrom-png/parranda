@@ -2,7 +2,9 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  annotateLiveEventsForRoutes,
   buildRouteFromTemplate,
+  buildLiveEventStopCandidates,
   budgetScore,
   generateRecommendations,
   kmScore,
@@ -294,6 +296,102 @@ test("bar-hop mellan Trastevere och Monti ger nu flera stopp utanför Trastevere
   assert.ok(nonTrastevereStops.length >= 2);
 });
 
+test("Trastevere -> Monti kan nu formas av katalogstopp utanför template-listan", async () => {
+  global.fetch = createWeatherFetch({
+    "2026-04-18": 0,
+  });
+
+  const result = await generateRecommendations({
+    dates: ["2026-04-18"],
+    start: { type: "preset", label: "Trastevere" },
+    end: { type: "preset", label: "Monti" },
+    walkingKmTarget: 8,
+    preferences: ["öl", "vin", "hidden gems", "nattliv", "kväll"],
+    optimizerMode: "bar-hop",
+  });
+
+  const route = result.days[0].primary_route;
+  const template = routeTemplates.find((entry) => entry.id === route.id);
+  const nonTemplateStops = route.main_stops.filter((stop) => !template.stops.includes(stop.id));
+
+  assert.ok(nonTemplateStops.length >= 2);
+});
+
+test("live-event-kandidater premierar stopp som faktiskt ligger i korridoren", () => {
+  const candidates = buildLiveEventStopCandidates(
+    [
+      {
+        id: "corridor",
+        title: "Corridor Jazz Set",
+        venue: "Piazza Navona",
+        address: "Piazza Navona",
+        geocode_label: "Piazza Navona, Rome, Italy",
+        lat: 41.8992,
+        lng: 12.4731,
+        match_tags: ["vin", "kultur", "nattliv"],
+        summary: "On-corridor evening event.",
+      },
+      {
+        id: "detour",
+        title: "Deep South Party",
+        venue: "Garbatella",
+        address: "Garbatella",
+        geocode_label: "Garbatella, Rome, Italy",
+        lat: 41.8613,
+        lng: 12.4819,
+        match_tags: ["vin", "kultur", "nattliv"],
+        summary: "Same tags but off the current arc.",
+      },
+    ],
+    ["vin", "kultur", "nattliv"],
+    "bar-hop",
+    "evening",
+    {
+      shape: "arc",
+      start: { label: "Trastevere", lat: 41.8885, lng: 12.4678 },
+      end: { label: "Monti", lat: 41.8946, lng: 12.4951 },
+    },
+  );
+
+  assert.equal(candidates[0].name, "Corridor Jazz Set");
+  assert.ok(candidates[0].anchorWeight > candidates[1].anchorWeight);
+});
+
+test("live-events utan platskoppling får inte låtsas passa en specifik rutt", () => {
+  const annotated = annotateLiveEventsForRoutes(
+    [
+      {
+        id: "ungrounded",
+        title: "Mystery Event",
+        venue: "Rome",
+        match_tags: ["kultur", "vin"],
+      },
+    ],
+    [
+      {
+        label: "Huvudrutten",
+        route: {
+          id: "sample-route",
+          title: "Sample route",
+          main_stops: [
+            {
+              tags: ["kultur", "vin"],
+            },
+          ],
+          map_route_points: [
+            { lat: 41.89, lng: 12.48 },
+            { lat: 41.9, lng: 12.49 },
+          ],
+        },
+      },
+    ],
+  );
+
+  assert.equal(annotated[0].best_route_id, null);
+  assert.equal(annotated[0].best_route_label, null);
+  assert.equal(annotated[0].route_fit_note, null);
+});
+
 test("Prati -> Monti väljer nu en väst-till-centro-rutt utan Trastevere-bias", async () => {
   global.fetch = createWeatherFetch({
     "2026-04-18": 0,
@@ -420,6 +518,69 @@ test("leg pacing short ger tätare ben än flexible på samma låsta båge", () 
   assert.ok(shortRoute.legs.length >= 1);
   assert.ok(shortRoute.legs.every((leg) => Number.isFinite(leg.estimated_walk_minutes)));
   assert.ok(shortRoute.longest_leg_km <= flexibleRoute.longest_leg_km);
+});
+
+test("day profile light bygger en lättare dag än peak med samma template", () => {
+  const template = routeTemplates.find((entry) => entry.id === "south-loop");
+  const start = { label: "Trastevere", lat: 41.8885, lng: 12.4678 };
+  const end = { label: "Trastevere", lat: 41.8885, lng: 12.4678 };
+
+  assert.ok(template);
+
+  const lightRoute = buildRouteFromTemplate(
+    template,
+    start,
+    end,
+    9,
+    ["öl", "vin", "mat", "hidden gems"],
+    "bar-hop",
+    null,
+    "soft_target",
+    [],
+    { dayProfile: "light" },
+  );
+
+  const peakRoute = buildRouteFromTemplate(
+    template,
+    start,
+    end,
+    9,
+    ["öl", "vin", "mat", "hidden gems"],
+    "bar-hop",
+    null,
+    "soft_target",
+    [],
+    { dayProfile: "peak" },
+  );
+
+  assert.equal(lightRoute.day_profile, "light");
+  assert.equal(peakRoute.day_profile, "peak");
+  assert.ok(lightRoute.main_stops.length < peakRoute.main_stops.length);
+});
+
+test("alternativrutterna får ofta annan day profile än huvudrutten", async () => {
+  global.fetch = createWeatherFetch({
+    "2026-04-19": 0,
+  });
+
+  const result = await generateRecommendations({
+    dates: ["2026-04-19"],
+    start: { type: "preset", label: "Trastevere" },
+    end: { type: "preset", label: "Trastevere" },
+    walkingKmTarget: 11,
+    preferences: ["öl", "vin", "mat", "hidden gems", "nattliv", "kväll", "party"],
+    optimizerMode: "bar-hop",
+    modifier: "party",
+    distanceMode: "no_limit",
+  });
+
+  const primary = result.days[0].primary_route;
+  const alternatives = result.days[0].alternatives;
+
+  assert.ok(alternatives.length > 0);
+  assert.equal(primary.day_profile, "peak");
+  assert.ok(alternatives.every((route) => route.day_profile));
+  assert.ok(alternatives.some((route) => route.day_profile !== primary.day_profile));
 });
 
 test("mentions följer faktiska stopp nära den genererade rutten", async () => {

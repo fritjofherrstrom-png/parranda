@@ -1,3 +1,9 @@
+const {
+  diffIsoDatesInDays,
+  formatIsoDatePart,
+  getIsoMonthDay,
+} = require("./lib/iso-date");
+
 function getRomeTodayIsoDate() {
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Rome",
@@ -14,21 +20,11 @@ function getRomeTodayIsoDate() {
 }
 
 function getMonthDay(dateString = getRomeTodayIsoDate()) {
-  const date = new Date(`${dateString}T12:00:00+02:00`);
-  return {
-    month: date.getMonth() + 1,
-    day: date.getDate(),
-    weekday: date.getDay(),
-  };
+  return getIsoMonthDay(dateString);
 }
 
 function formatRomeDatePart(dateString, options) {
-  const formatter = new Intl.DateTimeFormat("sv-SE", {
-    timeZone: "Europe/Rome",
-    ...options,
-  });
-  const formatted = formatter.format(new Date(`${dateString}T12:00:00+02:00`));
-  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+  return formatIsoDatePart(dateString, "sv-SE", options);
 }
 
 function getPulseDateLabels(dateString = getRomeTodayIsoDate()) {
@@ -43,11 +39,12 @@ function getPulseDateLabels(dateString = getRomeTodayIsoDate()) {
 }
 
 function getDayDistanceToFixedDate(dateString, targetMonth, targetDay) {
-  const current = new Date(`${dateString}T12:00:00+02:00`);
-  const target = new Date(
-    `${current.getFullYear()}-${String(targetMonth).padStart(2, "0")}-${String(targetDay).padStart(2, "0")}T12:00:00+02:00`,
-  );
-  return Math.round((target - current) / (24 * 60 * 60 * 1000));
+  const yearMatch = String(dateString || "").match(/^(\d{4})-/);
+  const currentYear = yearMatch ? Number(yearMatch[1]) : new Date().getUTCFullYear();
+  const targetDate = `${currentYear}-${String(targetMonth).padStart(2, "0")}-${String(
+    targetDay,
+  ).padStart(2, "0")}`;
+  return diffIsoDatesInDays(dateString, targetDate);
 }
 
 function getDateSignals(dateString = getRomeTodayIsoDate()) {

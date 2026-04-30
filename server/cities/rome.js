@@ -1,0 +1,143 @@
+const catalog = require("./rome/catalog");
+const { getCityPulse, getDateSignals, getRomeTodayIsoDate } = require("./rome/editorial");
+const { fetchLiveEventsForDates } = require("./rome/live");
+const { geocodeQuery } = require("./rome/geocoding");
+const {
+  ROME_TIMEZONE,
+  ROME_CENTER,
+  fetchRomeWeatherForDates,
+} = require("./rome/weather");
+
+function parsePositiveInteger(value, fallback) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+module.exports = {
+  key: "rome",
+  label: "Rom",
+  timezone: ROME_TIMEZONE,
+  locale: "sv-SE",
+  currency: "EUR",
+  searchLabel: "Rome",
+  editorialAreaLabel: "Rom",
+  fallbackLabel: "Centro Storico",
+  center: ROME_CENTER,
+  todayIsoDate: getRomeTodayIsoDate,
+  catalog: {
+    routeTemplates: catalog.routeTemplates,
+    allItems: catalog.allItems,
+    findItemByName: catalog.findItemByName,
+  },
+  services: {
+    geocodeQuery,
+    fetchWeatherForDates: fetchRomeWeatherForDates,
+    getCityPulse,
+    getDateSignals,
+    fetchLiveEventsForDates,
+  },
+  walking: {
+    defaultProvider: process.env.PARRANDA_WALKING_PROVIDER || "heuristic",
+    osrmBaseUrl: process.env.PARRANDA_OSRM_URL || "https://router.project-osrm.org",
+    truthPassTopCandidates: parsePositiveInteger(process.env.PARRANDA_TRUTH_TOP_CANDIDATES, 5),
+    requestTimeoutMs: parsePositiveInteger(process.env.PARRANDA_WALKING_TIMEOUT_MS, 4500),
+  },
+  routing: {
+    areaDefinitions: {
+      trastevere: { label: "Trastevere", macro: "west" },
+      gianicolo: { label: "Gianicolo", macro: "west" },
+      prati: { label: "Prati", macro: "west" },
+      borgo: { label: "Borgo", macro: "west" },
+      centro: { label: "Centro Storico", macro: "center" },
+      ghetto: { label: "Jewish Ghetto", macro: "center" },
+      monti: { label: "Monti", macro: "center" },
+      celio: { label: "Celio", macro: "center" },
+      colosseum: { label: "Colosseo", macro: "center" },
+      colosseo: { label: "Colosseo", macro: "center" },
+      navona: { label: "Navona", macro: "center" },
+      campo: { label: "Campo de' Fiori", macro: "center" },
+      sallustiano: { label: "Sallustiano", macro: "center" },
+      "villa-borghese": { label: "Villa Borghese", macro: "center" },
+      testaccio: { label: "Testaccio", macro: "south" },
+      ostiense: { label: "Ostiense", macro: "south" },
+      aventino: { label: "Aventino", macro: "south" },
+      garbatella: { label: "Garbatella", macro: "south" },
+      portuense: { label: "Portuense/Marconi", macro: "south" },
+      marconi: { label: "Portuense/Marconi", macro: "south" },
+      piramide: { label: "Piramide", macro: "south" },
+      pigneto: { label: "Pigneto", macro: "east" },
+      "san-lorenzo": { label: "San Lorenzo", macro: "east" },
+      esquilino: { label: "Esquilino", macro: "east" },
+      "san-giovanni": { label: "San Giovanni", macro: "east" },
+      laterano: { label: "Laterano", macro: "east" },
+      termini: { label: "Termini", macro: "east" },
+    },
+    macroAreaLabels: {
+      west: "västra Rom",
+      center: "centrala Rom",
+      south: "södra Rom",
+      east: "östra Rom",
+    },
+    tuning: {
+      arcStopScoring: {
+        progressStartSlackKm: -0.35,
+        progressEndSlackKm: 0.9,
+        driftNeutralMacros: ["center"],
+        shortBridgeMinAxisKm: 2.8,
+        shortBridgeProgressMin: 0.18,
+        shortBridgeProgressMax: 0.82,
+        shortBridgeMaxLateralKm: 1.05,
+        shortLateralPenaltyStartKm: 1.4,
+      },
+      supplementalArcScoring: {
+        progressStartSlackKm: -0.45,
+        progressEndSlackKm: 1.1,
+        shortBridgeMinAxisKm: 2.8,
+        shortBridgeProgressMin: 0.16,
+        shortBridgeProgressMax: 0.84,
+        shortBridgeMaxLateralKm: 1.1,
+        shortLateralPenaltyStartKm: 1.35,
+      },
+      lockedCorridor: {
+        targetFactor: 0.22,
+        minLateralKm: 1.2,
+        maxLateralKm: 2.8,
+        noLimitMaxLateralKm: 3.6,
+        progressStartSlackKm: -0.45,
+        progressEndSlackKm: 0.85,
+      },
+      lockedAnchorScore: {
+        reversalToleranceKm: 0.35,
+        offCorridorLateralKm: 2.2,
+        driftNeutralMacros: ["center"],
+        progressSpreadFloorKm: 0.8,
+      },
+      areaScore: {
+        anchorTokenHitScore: 5.5,
+        anchorMacroHitScore: 2.5,
+        anchorMissPenalty: 4,
+        sameMacroDominantHitScore: 4.5,
+        sameMacroPresenceScore: 2,
+        sameMacroSpreadPenaltyThreshold: 2,
+        sameMacroSpreadPenalty: 1.5,
+        crossMacroBridgeScore: 4.5,
+        crossMacroMissPenalty: 2.5,
+        crossMacroDominantDriftPenalty: 1.5,
+        unanchoredDominantMacroPenalty: 2.5,
+        unanchoredDominantMacro: "west",
+      },
+      liveEventSeed: {
+        loopNearKm: 1.8,
+        loopStrongRadiusBoost: 2.8,
+        loopMacroPenalty: 2.4,
+        arcProgressStartSlackKm: -0.35,
+        arcProgressEndSlackKm: 1,
+        arcStrongLateralKm: 0.9,
+        arcMaxLateralKm: 2.4,
+        arcBridgeProgressMin: 0.18,
+        arcBridgeProgressMax: 0.82,
+        arcBridgeBoost: 2.6,
+      },
+    },
+  },
+};

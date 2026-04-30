@@ -1,0 +1,108 @@
+{
+  "resolved_start": "Monti",
+  "resolved_end": "Monti",
+  "resolved_home_base": null,
+  "days": [
+    {
+      "date": "2026-04-18",
+      "primary": {
+        "id": "wine-crawl-loop",
+        "start": "Monti",
+        "end": "Monti",
+        "shape": "loop",
+        "day_profile": "peak",
+        "anchor_zone": "Monti",
+        "routing_source": "heuristic",
+        "estimated_km": 4.4,
+        "longest_leg_km": 1.7,
+        "longest_leg_minutes": 20,
+        "average_leg_minutes": 11,
+        "stops": [
+          {
+            "label": "Mercato Monti",
+            "area": "Monti",
+            "live": false
+          },
+          {
+            "label": "Santa Prassede",
+            "area": "Monti",
+            "live": false
+          },
+          {
+            "label": "Trimani",
+            "area": "Sallustiano",
+            "live": false
+          },
+          {
+            "label": "Blackmarket Hall",
+            "area": "Monti",
+            "live": false
+          }
+        ],
+        "legs": [
+          {
+            "from": "Monti",
+            "to": "Mercato Monti",
+            "km": 0.2,
+            "minutes": 2
+          },
+          {
+            "from": "Mercato Monti",
+            "to": "Santa Prassede",
+            "km": 0.5,
+            "minutes": 6
+          },
+          {
+            "from": "Santa Prassede",
+            "to": "Trimani",
+            "km": 1.7,
+            "minutes": 20
+          },
+          {
+            "from": "Trimani",
+            "to": "Blackmarket Hall",
+            "km": 1.7,
+            "minutes": 20
+          },
+          {
+            "from": "Blackmarket Hall",
+            "to": "Monti",
+            "km": 0.3,
+            "minutes": 4
+          }
+        ]
+      },
+      "alternative_count": 2,
+      "alternatives": [
+        {
+          "id": "dolce-vita-centro-notte",
+          "start": "Monti",
+          "end": "Monti",
+          "shape": "loop",
+          "day_profile": "variation",
+          "anchor_zone": "Monti",
+          "stops": [
+            "Piazza della Madonna dei Monti",
+            "Ai Tre Scalini",
+            "Blackmarket Hall",
+            "Mercato Monti"
+          ]
+        },
+        {
+          "id": "centro-storico-slow-loop",
+          "start": "Monti",
+          "end": "Monti",
+          "shape": "loop",
+          "day_profile": "variation",
+          "anchor_zone": "Monti",
+          "stops": [
+            "Ai Tre Scalini",
+            "Centro Storico",
+            "Piazza della Madonna dei Monti",
+            "Mercato Monti"
+          ]
+        }
+      ]
+    }
+  ]
+}

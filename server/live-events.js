@@ -1,4 +1,4 @@
-const { geocodeQuery } = require("./geocoding");
+const { diffIsoDatesInDays } = require("./lib/iso-date");
 
 const TURISMO_ROMA_BASE_URL = "https://www.turismoroma.it";
 const ROMA_LIVE_URL = `${TURISMO_ROMA_BASE_URL}/en/romalive`;
@@ -14,6 +14,16 @@ let cache = {
 let inFlight = null;
 let geocodeCache = new Map();
 let geocodeInFlight = new Map();
+let legacyGeocodeQuery = null;
+
+function getLegacyGeocodeQuery() {
+  if (!legacyGeocodeQuery) {
+    const { geocodeQuery } = require("./geocoding");
+    legacyGeocodeQuery = geocodeQuery;
+  }
+
+  return legacyGeocodeQuery;
+}
 
 function decodeHtml(text) {
   const named = {
@@ -99,11 +109,9 @@ function durationDays(startDate, endDate) {
     return null;
   }
 
-  const start = new Date(`${startDate}T12:00:00+02:00`);
-  const end = new Date(`${endDate}T12:00:00+02:00`);
-  const diff = Math.round((end - start) / (24 * 60 * 60 * 1000));
+  const diff = diffIsoDatesInDays(startDate, endDate);
 
-  if (Number.isNaN(diff)) {
+  if (diff == null || Number.isNaN(diff)) {
     return null;
   }
 
@@ -352,7 +360,7 @@ function parseLiveEventBlocks(html) {
         start_date,
         end_date,
         type: type || "Event",
-        venue: venue || "Rom",
+        venue: venue || "Event venue",
         address: address || "",
         summary,
         buy_url,
@@ -393,7 +401,7 @@ function buildEventLocationQueries(event) {
   ]);
 }
 
-async function geocodeEventLocation(event) {
+async function geocodeEventLocation(event, geocodeQuery = getLegacyGeocodeQuery()) {
   const queries = buildEventLocationQueries(event);
   const cacheKey = queries.join(" | ").toLowerCase();
 
@@ -526,6 +534,7 @@ async function fetchLiveEventsForDates(dates, context = {}) {
   }
 
   try {
+    const geocodeQuery = context.geocodeQuery || getLegacyGeocodeQuery();
     const events = await loadAllLiveEvents();
     const usedEventIds = new Set();
     const byDate = {};
@@ -564,7 +573,7 @@ async function fetchLiveEventsForDates(dates, context = {}) {
 
       byDate[date] = await Promise.all(
         ranked.map(async (entry) => {
-          const location = await geocodeEventLocation(entry.event);
+          const location = await geocodeEventLocation(entry.event, geocodeQuery);
 
           return {
             ...entry.event,
@@ -593,6 +602,7 @@ function resetLiveEventsCache() {
   inFlight = null;
   geocodeCache = new Map();
   geocodeInFlight = new Map();
+  legacyGeocodeQuery = null;
 }
 
 module.exports = {
