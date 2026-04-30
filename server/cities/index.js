@@ -1,8 +1,17 @@
 const rome = require("./rome");
+const { validateCityConfig } = require("./contract");
 
-const cityConfigs = {
+function buildCityRegistry(configs) {
+  return Object.values(configs).reduce((registry, cityConfig) => {
+    const validated = validateCityConfig(cityConfig);
+    registry[validated.key] = validated;
+    return registry;
+  }, {});
+}
+
+const cityConfigs = buildCityRegistry({
   rome,
-};
+});
 
 function normalizeCityKey(city) {
   return String(city || "rome").trim().toLowerCase() || "rome";
@@ -16,4 +25,5 @@ function getCityConfig(city) {
 module.exports = {
   getCityConfig,
   normalizeCityKey,
+  cityConfigs,
 };
