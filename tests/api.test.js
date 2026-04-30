@@ -224,9 +224,13 @@ test("GET /barcelona avslöjar fallback i app shell bootstrap innan stad 2 finns
     });
 
     assert.equal(response.status, 200);
-    assert.match(response.body, /<body data-city-key="rome" data-city-label="Rom">/);
+    assert.match(response.body, /<body data-city-key="rome" data-city-label="Barcelona">/);
+    assert.match(response.body, /"displayLabel":"Barcelona"/);
     assert.match(response.body, /"requestedKey":"barcelona"/);
     assert.match(response.body, /"fallbackUsed":true/);
+    assert.doesNotMatch(response.body, /Din resa till Rom/);
+    assert.doesNotMatch(response.body, /Just nu i Rom/);
+    assert.doesNotMatch(response.body, /Monti som kulturstart/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -249,6 +253,7 @@ test("GET /test-city renderar en egen city shell utan Rome-fallback", async () =
     assert.match(response.body, /window\.__PARRANDA_CITY__ = \{"key":"test-city","label":"Test City"/);
     assert.match(response.body, /"requestedKey":"test-city"/);
     assert.match(response.body, /"fallbackUsed":false/);
+    assert.match(response.body, /"visibility":"internal"/);
     assert.doesNotMatch(response.body, /data-city-label="Rom"/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
@@ -842,34 +847,32 @@ test("POST /api/route-recommendations returnerar gångben och låter leg pacing 
   const server = buildApp().listen(0);
 
   try {
-    const [shortResponse, flexibleResponse] = await Promise.all([
-      requestJson(server, {
-        method: "POST",
-        path: "/api/route-recommendations",
-        body: {
-          dates: ["2026-04-21"],
-          start: { type: "preset", label: "Trastevere" },
-          end: { type: "preset", label: "San Lorenzo" },
-          walking_km_target: 9,
-          leg_pacing: "short",
-          preferences: ["öl", "vin", "hidden gems", "nattliv", "kväll"],
-          optimizer_mode: "bar-hop",
-        },
-      }),
-      requestJson(server, {
-        method: "POST",
-        path: "/api/route-recommendations",
-        body: {
-          dates: ["2026-04-21"],
-          start: { type: "preset", label: "Trastevere" },
-          end: { type: "preset", label: "San Lorenzo" },
-          walking_km_target: 9,
-          leg_pacing: "flexible",
-          preferences: ["öl", "vin", "hidden gems", "nattliv", "kväll"],
-          optimizer_mode: "bar-hop",
-        },
-      }),
-    ]);
+    const shortResponse = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations",
+      body: {
+        dates: ["2026-04-21"],
+        start: { type: "preset", label: "Trastevere" },
+        end: { type: "preset", label: "San Lorenzo" },
+        walking_km_target: 9,
+        leg_pacing: "short",
+        preferences: ["öl", "vin", "hidden gems", "nattliv", "kväll"],
+        optimizer_mode: "bar-hop",
+      },
+    });
+    const flexibleResponse = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations",
+      body: {
+        dates: ["2026-04-21"],
+        start: { type: "preset", label: "Trastevere" },
+        end: { type: "preset", label: "San Lorenzo" },
+        walking_km_target: 9,
+        leg_pacing: "flexible",
+        preferences: ["öl", "vin", "hidden gems", "nattliv", "kväll"],
+        optimizer_mode: "bar-hop",
+      },
+    });
 
     const shortRoute = shortResponse.body.days[0].primary_route;
     const flexibleRoute = flexibleResponse.body.days[0].primary_route;
