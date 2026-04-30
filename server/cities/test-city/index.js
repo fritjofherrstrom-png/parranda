@@ -42,6 +42,7 @@ function todayIsoDate() {
 module.exports = {
   key: TEST_CITY_KEY,
   label: TEST_CITY_LABEL,
+  visibility: "internal",
   timezone: TEST_CITY_TIMEZONE,
   locale: TEST_CITY_LOCALE,
   currency: TEST_CITY_CURRENCY,
