@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const rome = require("../server/cities/rome");
+const testCity = require("../server/cities/test-city");
 const { cityConfigs, getCityConfig, normalizeCityKey, resolveCityConfig } = require("../server/cities");
 const { validateCityConfig } = require("../server/cities/contract");
 
@@ -11,6 +12,16 @@ test("rome uppfyller city-kontraktet", () => {
   assert.equal(cityConfigs.rome.timezone, "Europe/Rome");
   assert.equal(cityConfigs.rome.locale, "sv-SE");
   assert.equal(cityConfigs.rome.currency, "EUR");
+});
+
+test("test-city uppfyller city-kontraktet utan fallback", () => {
+  assert.doesNotThrow(() => validateCityConfig(testCity));
+  const resolution = resolveCityConfig("test-city", { allowFallback: false });
+  assert.equal(resolution.cityConfig.key, "test-city");
+  assert.equal(resolution.fallbackUsed, false);
+  assert.equal(resolution.found, true);
+  assert.equal(getCityConfig("test-city").key, "test-city");
+  assert.equal(cityConfigs["test-city"].currency, "MXN");
 });
 
 test("city-kontraktet accepterar giltiga globala koordinater", () => {
