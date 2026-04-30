@@ -1,19 +1,12 @@
-const catalog = require("../catalog");
-const { buildGeocodeQuery } = require("../geocoding");
-const { fetchWeatherForDates } = require("../weather");
-const { getCityPulse, getDateSignals, getRomeTodayIsoDate } = require("../editorial-calendar");
-const { fetchLiveEventsForDates } = require("../live-events");
-
-const ROME_TIMEZONE = "Europe/Rome";
-const ROME_CENTER = { lat: 41.8933, lng: 12.4964 };
-const geocodeQuery = buildGeocodeQuery({
-  items: catalog.allItems,
-  findByName: catalog.findItemByName,
-  searchLabel: "Rome",
-  countryLabel: "Italy",
-  defaultAreaLabel: "Rom",
-  userAgent: "Parranda Rome/1.0 (route-planner)",
-});
+const catalog = require("./rome/catalog");
+const { getCityPulse, getDateSignals, getRomeTodayIsoDate } = require("./rome/editorial");
+const { fetchLiveEventsForDates } = require("./rome/live");
+const { geocodeQuery } = require("./rome/geocoding");
+const {
+  ROME_TIMEZONE,
+  ROME_CENTER,
+  fetchRomeWeatherForDates,
+} = require("./rome/weather");
 
 function parsePositiveInteger(value, fallback) {
   const parsed = Number.parseInt(value, 10);
@@ -38,10 +31,7 @@ module.exports = {
   },
   services: {
     geocodeQuery,
-    fetchWeatherForDates: (dates, anchor = ROME_CENTER) =>
-      fetchWeatherForDates(dates, anchor, {
-        timezone: ROME_TIMEZONE,
-      }),
+    fetchWeatherForDates: fetchRomeWeatherForDates,
     getCityPulse,
     getDateSignals,
     fetchLiveEventsForDates,

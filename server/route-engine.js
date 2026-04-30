@@ -578,7 +578,11 @@ function tokenLabel(token) {
 }
 
 function macroLabel(macro) {
-  return getMacroAreaLabels()[macro] || "Rom";
+  return getMacroAreaLabels()[macro] || getActiveCityConfig().label || "staden";
+}
+
+function currentCityLabel(fallback = "staden") {
+  return getActiveCityConfig().label || fallback;
 }
 
 function findNearestCatalogItem(point) {
@@ -656,8 +660,11 @@ function getAutoAnchorSupportItems(candidate) {
     return [];
   }
 
-  if (autoAnchorSupportCache.has(candidate.id)) {
-    return autoAnchorSupportCache.get(candidate.id);
+  const cityKey = getActiveCityConfig().key || "default-city";
+  const cacheKey = `${cityKey}:${candidate.id}`;
+
+  if (autoAnchorSupportCache.has(cacheKey)) {
+    return autoAnchorSupportCache.get(cacheKey);
   }
 
   const radiusKm = candidate.kind === "district-group" ? 2.4 : 1.8;
@@ -671,7 +678,7 @@ function getAutoAnchorSupportItems(candidate) {
     .sort((left, right) => left.distanceKm - right.distanceKm)
     .slice(0, 28);
 
-  autoAnchorSupportCache.set(candidate.id, supportItems);
+  autoAnchorSupportCache.set(cacheKey, supportItems);
   return supportItems;
 }
 
@@ -1359,7 +1366,7 @@ function buildLiveEventStopCandidates(
         kind: "live-event",
         lat: event.lat,
         lng: event.lng,
-        area: event.venue || event.geocode_label || tokenLabel(primaryToken) || "Rom",
+        area: event.venue || event.geocode_label || tokenLabel(primaryToken) || currentCityLabel(),
         tags: [...new Set([...(event.match_tags || []), "live"])],
         weatherTags: ["all-weather", "evening"],
         closedWeekdays: [],
@@ -1369,7 +1376,10 @@ function buildLiveEventStopCandidates(
         vibe: event.type ? `Live: ${event.type}` : "Tidsbundet stopp",
         groupSize: "2-6 personer",
         bookingRequired: Boolean(event.buy_url),
-        openingSummary: event.match_reason || event.summary || "Officiellt event som händer just nu i Rom.",
+        openingSummary:
+          event.match_reason ||
+          event.summary ||
+          `Officiellt event som händer just nu i ${currentCityLabel()}.`,
         longDescription: event.summary || event.match_reason || "Tidsbundet live-event i dagens rutt.",
         perfectFor: event.match_tags || [],
         featureNotes: [
@@ -2860,14 +2870,14 @@ async function applyWalkingTruthToRoute(route, { legPacing = "balanced" } = {}) 
 
 function buildAnchorZone(shape, startProfile, endProfile, routeArea) {
   if (shape === "loop") {
-    return startProfile?.primaryLabel || tokenLabel(routeArea.dominantToken) || "Rom";
+    return startProfile?.primaryLabel || tokenLabel(routeArea.dominantToken) || currentCityLabel();
   }
 
   if (startProfile?.primaryLabel && endProfile?.primaryLabel) {
     return `${startProfile.primaryLabel} -> ${endProfile.primaryLabel}`;
   }
 
-  return tokenLabel(routeArea.dominantToken) || "Rom";
+  return tokenLabel(routeArea.dominantToken) || currentCityLabel();
 }
 
 function routeToneLabel(optimizerMode, modifier, preferences = []) {
@@ -2913,7 +2923,8 @@ function routeToneLabel(optimizerMode, modifier, preferences = []) {
 }
 
 function buildDynamicTitle({ start, end, shape, routeArea, optimizerMode, modifier, preferences }) {
-  const dominantZone = tokenLabel(routeArea.dominantToken) || macroLabel(routeArea.dominantMacro) || "Rom";
+  const dominantZone =
+    tokenLabel(routeArea.dominantToken) || macroLabel(routeArea.dominantMacro) || currentCityLabel();
   const tone = routeToneLabel(optimizerMode, modifier, preferences);
 
   if (shape === "loop") {
@@ -2924,7 +2935,8 @@ function buildDynamicTitle({ start, end, shape, routeArea, optimizerMode, modifi
 }
 
 function buildDynamicSummary({ start, end, shape, routeArea, estimatedKm, optimizerMode, modifier, preferences }) {
-  const dominantZone = tokenLabel(routeArea.dominantToken) || macroLabel(routeArea.dominantMacro) || "Rom";
+  const dominantZone =
+    tokenLabel(routeArea.dominantToken) || macroLabel(routeArea.dominantMacro) || currentCityLabel();
   const tone = routeToneLabel(optimizerMode, modifier, preferences);
 
   if (shape === "loop") {
@@ -2935,7 +2947,8 @@ function buildDynamicSummary({ start, end, shape, routeArea, estimatedKm, optimi
 }
 
 function buildGeoFitNote({ shape, start, end, geometry, routeArea, startProfile, endProfile }) {
-  const dominantZone = tokenLabel(routeArea.dominantToken) || macroLabel(routeArea.dominantMacro) || "Rom";
+  const dominantZone =
+    tokenLabel(routeArea.dominantToken) || macroLabel(routeArea.dominantMacro) || currentCityLabel();
   const legNote = geometry?.legFitNote ? ` ${geometry.legFitNote}` : "";
 
   if (shape === "loop") {
@@ -2981,7 +2994,7 @@ function resolveRouteStopData(stop) {
     lat: stop.lat,
     lng: stop.lng,
     kind: stop.type || "stop",
-    area: stop.area || "Rom",
+    area: stop.area || currentCityLabel(),
     tags: Array.isArray(stop.tags) ? stop.tags : [],
     priceLevel: stop.price_level || null,
     bestTime: stop.best_time || null,
@@ -3443,7 +3456,7 @@ function pulseScore({
     ? `${lead.reasonParts[0].charAt(0).toUpperCase()}${lead.reasonParts[0].slice(1)}.`
     : "Den här rutten följer dagens rytm bättre än de mer generiska alternativen.";
   const note = lead
-    ? `Just nu i Rom: ${lead.item.title}. ${
+    ? `Just nu i ${currentCityLabel()}: ${lead.item.title}. ${
         leadReason
       }.`
     : null;
@@ -3899,7 +3912,7 @@ function whyRecommended(
   }
 
   if (pulseNote) {
-    reasonParts.push("Dagens puls i Rom lutar också tydligt åt just den här riktningen.");
+    reasonParts.push(`Dagens puls i ${currentCityLabel()} lutar också tydligt åt just den här riktningen.`);
   }
 
   if (liveEventNote) {
