@@ -1,5 +1,3 @@
-const ROME_CENTER = { lat: 41.8933, lng: 12.4964 };
-
 function summarizeWeather(code) {
   if ([0, 1].includes(code)) {
     return "sun";
@@ -16,20 +14,36 @@ function summarizeWeather(code) {
   return "mixed";
 }
 
-async function fetchWeatherForDates(dates, anchor = ROME_CENTER, options = {}) {
+function assertValidAnchor(anchor) {
+  const lat = Number(anchor?.lat);
+  const lng = Number(anchor?.lng);
+
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+    throw new Error("Weather anchor.lat måste vara mellan -90 och 90");
+  }
+
+  if (!Number.isFinite(lng) || lng < -180 || lng > 180) {
+    throw new Error("Weather anchor.lng måste vara mellan -180 och 180");
+  }
+
+  return { lat, lng };
+}
+
+async function fetchWeatherForDates(dates, anchor, options = {}) {
   if (!dates.length) {
     return {};
   }
 
+  const weatherAnchor = assertValidAnchor(anchor);
   const start = dates[0];
   const end = dates[dates.length - 1];
   const timezone =
     typeof options.timezone === "string" && options.timezone.trim()
       ? options.timezone.trim()
-      : "Europe/Rome";
+      : "UTC";
   const url = new URL("https://api.open-meteo.com/v1/forecast");
-  url.searchParams.set("latitude", String(anchor.lat));
-  url.searchParams.set("longitude", String(anchor.lng));
+  url.searchParams.set("latitude", String(weatherAnchor.lat));
+  url.searchParams.set("longitude", String(weatherAnchor.lng));
   url.searchParams.set("daily", "weathercode,temperature_2m_max,temperature_2m_min");
   url.searchParams.set("current", "temperature_2m,weather_code,is_day");
   url.searchParams.set("timezone", timezone);
@@ -72,5 +86,4 @@ async function fetchWeatherForDates(dates, anchor = ROME_CENTER, options = {}) {
 
 module.exports = {
   fetchWeatherForDates,
-  ROME_CENTER,
 };
