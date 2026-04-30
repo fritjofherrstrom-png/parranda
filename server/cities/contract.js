@@ -70,6 +70,12 @@ function assertPositiveNumber(value, label) {
   }
 }
 
+function assertCoordinateInRange(value, min, max, label) {
+  if (!Number.isFinite(value) || value < min || value > max) {
+    throw new Error(`${label} måste vara ett giltigt koordinatvärde mellan ${min} och ${max}`);
+  }
+}
+
 /**
  * @param {CityConfig} cityConfig
  * @returns {CityConfig}
@@ -84,8 +90,8 @@ function validateCityConfig(cityConfig) {
   assertFunction(cityConfig.todayIsoDate, `city(${cityConfig.key}).todayIsoDate`);
 
   assertObject(cityConfig.center, `city(${cityConfig.key}).center`);
-  assertPositiveNumber(cityConfig.center.lat, `city(${cityConfig.key}).center.lat`);
-  assertPositiveNumber(cityConfig.center.lng, `city(${cityConfig.key}).center.lng`);
+  assertCoordinateInRange(cityConfig.center.lat, -90, 90, `city(${cityConfig.key}).center.lat`);
+  assertCoordinateInRange(cityConfig.center.lng, -180, 180, `city(${cityConfig.key}).center.lng`);
 
   assertObject(cityConfig.catalog, `city(${cityConfig.key}).catalog`);
   if (!Array.isArray(cityConfig.catalog.routeTemplates)) {
