@@ -330,6 +330,47 @@ test("POST /api/route-recommendations fungerar även när vädret saknas", async
   }
 });
 
+test("POST /api/route-recommendations markerar när en okänd city fallbackar till rome", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-04-20"],
+          weathercode: [0],
+          temperature_2m_max: [22],
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during route city fallback test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations",
+      body: {
+        city: "unknown-city",
+        dates: ["2026-04-20"],
+        walking_km_target: 8,
+        preferences: ["vin", "mat", "kultur"],
+      },
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.city, "rome");
+    assert.equal(response.body.requested_city, "unknown-city");
+    assert.equal(response.body.city_fallback_used, true);
+    assert.equal(response.body.days.length, 1);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("POST /api/route-recommendations accepterar budget tier och modifier", async () => {
   global.fetch = async (url) => {
     const parsed = new URL(String(url));
