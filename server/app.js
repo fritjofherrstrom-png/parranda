@@ -24,6 +24,24 @@ function getCitySearchLabel(cityConfig) {
   return cityConfig?.searchLabel || cityConfig?.label || "Rome";
 }
 
+function humanizeCityKey(cityKey) {
+  const normalized = String(cityKey || "").trim();
+
+  if (!normalized) {
+    return "";
+  }
+
+  if (normalized.toLowerCase() === "rome") {
+    return "Rom";
+  }
+
+  return normalized
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 function buildExternalSearchUrl(label, cityConfig) {
   return `https://www.google.com/search?q=${encodeURIComponent(
     `${label} ${getCitySearchLabel(cityConfig)}`,
@@ -104,9 +122,9 @@ function serializeInlineJson(value) {
   return JSON.stringify(value).replace(/</g, "\\u003c");
 }
 
-function buildShellMeta(cityConfig) {
-  const cityLabel = cityConfig?.label || "Staden";
-  const citySearchLabel = getCitySearchLabel(cityConfig);
+function buildShellMeta(cityConfig, options = {}) {
+  const cityLabel = options.displayLabel || cityConfig?.label || "Staden";
+  const citySearchLabel = options.searchLabel || cityLabel || getCitySearchLabel(cityConfig);
   const eyebrow = `${cityLabel.toLocaleUpperCase("sv-SE")} · KURERAD DAGPLANERING`;
 
   return {
@@ -124,14 +142,22 @@ function buildShellMeta(cityConfig) {
 }
 
 function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed }) {
-  const meta = buildShellMeta(cityConfig);
+  const requestedLabel = cityFallbackUsed ? humanizeCityKey(requestedCity) : "";
+  const displayLabel = requestedLabel || cityConfig.label;
+  const searchLabel = requestedLabel || getCitySearchLabel(cityConfig);
+  const meta = buildShellMeta(cityConfig, {
+    displayLabel,
+    searchLabel,
+  });
   const bootstrap = {
     key: cityConfig.key,
     label: cityConfig.label,
+    displayLabel,
+    visibility: cityConfig.visibility || "public",
     timezone: cityConfig.timezone,
     locale: cityConfig.locale,
     currency: cityConfig.currency,
-    searchLabel: getCitySearchLabel(cityConfig),
+    searchLabel,
     requestedKey: requestedCity,
     fallbackUsed: cityFallbackUsed,
   };
@@ -144,7 +170,7 @@ function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed }) {
     "__PARRANDA_TWITTER_TITLE__": escapeHtml(meta.twitterTitle),
     "__PARRANDA_TWITTER_DESCRIPTION__": escapeHtml(meta.twitterDescription),
     "__PARRANDA_CITY_KEY__": escapeHtml(cityConfig.key),
-    "__PARRANDA_CITY_LABEL__": escapeHtml(cityConfig.label),
+    "__PARRANDA_CITY_LABEL__": escapeHtml(displayLabel),
     "__PARRANDA_CITY_MAP_URL__": escapeHtml(meta.cityMapUrl),
     "__PARRANDA_CITY_EYEBROW__": escapeHtml(meta.eyebrow),
     "__PARRANDA_CITY_BOOTSTRAP__": serializeInlineJson(bootstrap),
