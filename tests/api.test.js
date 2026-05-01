@@ -232,7 +232,7 @@ test("GET /barcelona avslöjar fallback i app shell bootstrap innan stad 2 finns
     assert.match(response.body, /"displayLabel":"Barcelona"/);
     assert.match(response.body, /"requestedKey":"barcelona"/);
     assert.match(response.body, /"fallbackUsed":true/);
-    assert.match(response.body, /Planera min resa/);
+    assert.match(response.body, /Planera min dag/);
     assert.match(response.body, /tydligt fallback-läge/);
     assert.doesNotMatch(response.body, /Din resa till Rom/);
     assert.doesNotMatch(response.body, /Just nu i Rom/);

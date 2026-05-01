@@ -47,29 +47,26 @@
             </div>
           </div>
           <a
-            class="ghost-button"
+            class="topbar-link"
             href="__PARRANDA_CITY_MAP_URL__"
             target="_blank"
             rel="noreferrer"
-            >Öppna karta</a
+            >Karta</a
           >
         </nav>
 
         <section class="hero-content">
           <div class="hero-copy">
-            <p class="eyebrow">__PARRANDA_CITY_EYEBROW__</p>
-            <h1>Hitta rätt dag i __PARRANDA_CITY_LABEL__</h1>
-            <p class="lead">
-              Välj bas, datum och känsla. Resten sätter Parranda ihop.
+            <p id="heroEyebrow" class="eyebrow">__PARRANDA_CITY_EYEBROW__</p>
+            <h1 id="heroHeadline">Planera din dag i __PARRANDA_CITY_LABEL__.</h1>
+            <p id="heroLead" class="lead">
+              Välj bas, tempo och känsla. Parranda bygger rutten.
             </p>
 
             <div class="hero-actions">
-              <button id="heroPlannerButton" class="primary-button" type="button">
-                Planera din resa
-              </button>
               <button id="heroLiveButton" class="hero-live-button" type="button">
                 <span class="hero-live-dot" aria-hidden="true"></span>
-                <span>Just nu</span>
+                <span>Se live-läget</span>
               </button>
               <button class="ghost-button install-button" id="installButton" hidden>
                 Installera appen
@@ -79,12 +76,23 @@
           <section class="planner-launch-strip hero-planner-starter">
             <div class="planner-launch-copy">
               <div>
-                <p class="eyebrow">BÖRJA HÄR</p>
-                <h2>Välj bas och känsla direkt</h2>
+                <p class="eyebrow">PLANERA</p>
+                <h2>Välj bas, tempo och känsla</h2>
               </div>
               <p id="plannerLaunchSummary" class="planner-launch-note">
-                Sätt datum, var du bor och vilken vibe du vill åt. Resten anpassar Parranda.
+                Börja med var du utgår från och hur dagen ska kännas. Parranda bygger huvudrutten.
               </p>
+            </div>
+            <div class="planner-launch-markers" aria-hidden="true">
+              <span>Bas</span>
+              <span>Tempo</span>
+              <span>Känsla</span>
+            </div>
+            <div class="planner-launch-actions">
+              <button id="routePlannerOpenButton" class="primary-button" type="button">
+                Planera min dag
+              </button>
+              <p class="planner-launch-micro">Din huvudrutt först. Alternativ efteråt.</p>
             </div>
           </section>
         </section>
@@ -94,7 +102,7 @@
             <p id="heroWildcardLabel" class="panel-label">KVÄLLSIDÉ</p>
             <h2 id="heroWildcardTitle">Laddar kvällens idé...</h2>
             <p id="heroWildcardSummary">
-              En snabb riktning för ikväll om du vill börja med ett kvarter och en känsla.
+              En snabb riktning om du vill börja med ett kvarter och en känsla.
             </p>
             <p id="heroWildcardMeta" class="hero-panel-meta">Sekundärt till plannern.</p>
           </div>
@@ -336,17 +344,17 @@
           <section id="cityPulseTeaser" class="city-pulse-teaser" aria-live="polite">
             <div class="city-pulse-live">
               <span class="city-pulse-live-dot" aria-hidden="true"></span>
-              <p class="city-pulse-live-label">LIVE • UPPDATERAD JUST NU</p>
+              <p class="city-pulse-live-label">JUST NU</p>
             </div>
             <div class="city-pulse-teaser-copy">
-              <p id="cityPulseTeaserLabel" class="city-pulse-edition-label">Just nu i staden</p>
-              <h2 id="cityPulseTeaserTitle">Laddar dagens LIVE-edition...</h2>
+              <p id="cityPulseTeaserLabel" class="city-pulse-edition-label">Passar din dag</p>
+              <h2 id="cityPulseTeaserTitle">Laddar dagens live-lager...</h2>
               <p id="cityPulseTeaserSummary" class="city-pulse-teaser-summary">
-                Väder och lokala signaler kopplade till dina dagar.
+                Aktuellt nära rutten och resten av staden.
               </p>
             </div>
             <button id="cityPulseTeaserButton" class="ghost-button" type="button">
-              Öppna LIVE
+              Se live-läget
             </button>
           </section>
 
@@ -645,7 +653,7 @@
 
               <div class="route-builder-actions route-builder-actions-final">
                 <button id="routePlanButton" class="primary-button" type="submit">
-                  Planera min resa
+                  Planera min dag
                 </button>
                 <button id="routeResetButton" class="ghost-button" type="button">
                   Nollställ val
@@ -656,7 +664,7 @@
 
               <div class="planner-mobile-actions">
                 <button id="routePlanStickyButton" class="primary-button" type="button">
-                  Planera min resa
+                  Planera min dag
                 </button>
               </div>
             </form>
@@ -664,18 +672,18 @@
           <div id="plannerModalBackdrop" class="planner-modal-backdrop" hidden></div>
 
           <p id="routeMatchSummary" class="route-match-summary">
-            Välj datum och tryck på Planera min resa. Parranda använder live-läget när det finns
-            och visar annars ett tydligt fallback-läge.
+            Välj datum och tryck på Planera min dag. Parranda bygger en huvuddag först och visar
+            annars ett tydligt fallback-läge.
           </p>
 
           <section class="section-heading compact-heading">
             <div>
               <p class="eyebrow">DINA RUTTER</p>
-              <h2>En tydlig huvudrutt först, alternativ efteråt</h2>
+              <h2>Här är din dag först</h2>
             </div>
             <p class="section-note">
-              För varje datum får du en huvuddag som känns användbar direkt. Alternativ ligger
-              kvar som bonus, inte som huvudgrej.
+              Huvudrutten ska kännas följbar direkt. Alternativ ligger kvar som extra upplägg, inte
+              som konkurrenter.
             </p>
           </section>
           <p id="routeFallbackNote" class="route-fallback-note" hidden>
@@ -689,15 +697,14 @@
               <div class="city-pulse-intro">
                 <div class="city-pulse-live">
                   <span class="city-pulse-live-dot" aria-hidden="true"></span>
-                  <p class="city-pulse-live-label">LIVE • UPPDATERAD JUST NU</p>
+                  <p class="city-pulse-live-label">JUST NU</p>
                 </div>
                 <p id="cityPulseEditionLabel" class="city-pulse-edition-label">
-                  Just nu i staden
+                  Aktuellt i staden
                 </p>
-                <h2 id="cityPulseHeadline">Laddar dagens puls...</h2>
+                <h2 id="cityPulseHeadline">Laddar dagens live-lager...</h2>
                 <p id="cityPulseSubhead" class="city-pulse-subhead">
-                  LIVE hjälper dig se vad som faktiskt är värt att bry sig om just nu, nära dig
-                  eller i resten av staden.
+                  Aktuellt nära rutten eller i resten av staden, utan att ta över planeringen.
                 </p>
               </div>
               <div class="city-pulse-edition-meta">
@@ -878,7 +885,7 @@
             <p class="eyebrow planner-day-date"></p>
             <h3 class="planner-day-title"></h3>
           </div>
-          <span class="map-badge planner-day-badge">Dagens huvudrutt</span>
+          <span class="map-badge planner-day-badge">Din huvudrutt</span>
         </div>
         <p class="planner-day-summary"></p>
         <div class="planner-day-outline"></div>
@@ -911,7 +918,7 @@
     <template id="activeDayRouteTemplate">
       <article class="active-day-view">
         <div class="active-day-topline">
-          <p class="route-mentions-label active-day-kicker">Dagens plan</p>
+          <p class="route-mentions-label active-day-kicker">Din dag</p>
           <div class="active-day-meta">
             <span class="route-engine-pill active-day-shape"></span>
             <span class="route-engine-pill active-day-length"></span>
