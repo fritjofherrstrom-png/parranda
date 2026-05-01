@@ -225,12 +225,21 @@ test("GET /barcelona avslöjar fallback i app shell bootstrap innan stad 2 finns
 
     assert.equal(response.status, 200);
     assert.match(response.body, /<body data-city-key="rome" data-city-label="Barcelona">/);
+    assert.match(
+      response.body,
+      /window\.__PARRANDA_CITY__ = \{"key":"rome","label":"Rom","displayLabel":"Barcelona"/,
+    );
     assert.match(response.body, /"displayLabel":"Barcelona"/);
     assert.match(response.body, /"requestedKey":"barcelona"/);
     assert.match(response.body, /"fallbackUsed":true/);
+    assert.match(response.body, /Planera min resa/);
+    assert.match(response.body, /tydligt fallback-läge/);
     assert.doesNotMatch(response.body, /Din resa till Rom/);
     assert.doesNotMatch(response.body, /Just nu i Rom/);
     assert.doesNotMatch(response.body, /Monti som kulturstart/);
+    assert.doesNotMatch(response.body, /Rome-wide/);
+    assert.doesNotMatch(response.body, /kuraterade Rom-baserade rutter/);
+    assert.doesNotMatch(response.body, /de kuraterade Rom-rutterna/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
