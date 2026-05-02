@@ -1192,6 +1192,9 @@ const mapPlaceTags = document.getElementById("mapPlaceTags");
 const mapPlaceLink = document.getElementById("mapPlaceLink");
 const mapFavoriteButton = document.getElementById("mapFavoriteButton");
 const installButton = document.getElementById("installButton");
+const heroEyebrow = document.getElementById("heroEyebrow");
+const heroHeadline = document.getElementById("heroHeadline");
+const heroLead = document.getElementById("heroLead");
 const heroPlannerButton = document.getElementById("heroPlannerButton");
 const heroLiveButton = document.getElementById("heroLiveButton");
 const tabNav = document.querySelector(".tab-nav");
@@ -1585,6 +1588,14 @@ function buildNonRomeFallbackNote() {
   return `${cityLabel} saknar ännu ett eget curated-lager. Fallback-rutter visas inte som ersättning.`;
 }
 
+function syncShellModeState() {
+  document.body?.classList.toggle("mode-rome-curated", isRomeCuratedMode);
+  document.body?.classList.toggle("mode-city-preview", !isRomeCuratedMode);
+  document.body?.classList.toggle("mode-city-fallback", isFallbackRequestedCity);
+  document.body?.classList.toggle("mode-city-internal", isInternalCityMode);
+  document.body?.classList.toggle("has-active-plan", routeRenderMode === "api" && plannedDays.length > 0);
+}
+
 function buildPreviewRouteEmptyState() {
   const cityLabel = buildUnavailableCityLabel();
 
@@ -1709,12 +1720,48 @@ function removePlannerModeOption(select, value) {
 }
 
 function applyCityModeToShell() {
+  syncShellModeState();
+
+  if (heroHeadline) {
+    heroHeadline.textContent = isRomeCuratedMode
+      ? `Planera din dag i ${plannerDisplayCityLabel}.`
+      : isInternalCityMode
+        ? `${buildUnavailableCityLabel()} kör i preview.`
+        : `${buildUnavailableCityLabel()} förbereds fortfarande.`;
+  }
+
+  if (heroLead) {
+    heroLead.textContent = isRomeCuratedMode
+      ? "Välj bas, tempo och känsla. Parranda bygger rutten."
+      : isInternalCityMode
+        ? "Planner, shell och city-core går att prova här utan Rome-curated lager."
+        : "Parranda visar ett ärligt preview-läge tills staden har ett eget kuraterat pack.";
+  }
+
+  if (heroEyebrow && !isRomeCuratedMode) {
+    heroEyebrow.textContent = isInternalCityMode
+      ? `${buildUnavailableCityLabel().toUpperCase()} · INTERN PREVIEW`
+      : `${buildUnavailableCityLabel().toUpperCase()} · PREVIEW`;
+  }
+
   if (plannerModalTitle) {
     plannerModalTitle.textContent = isRomeCuratedMode
       ? `Din resa till ${plannerDisplayCityLabel}`
       : isInternalCityMode
         ? `Planner-preview • ${buildUnavailableCityLabel()}`
         : `Planera när ${buildUnavailableCityLabel()} är redo`;
+  }
+
+  if (heroLiveButton) {
+    const heroLiveLabel = heroLiveButton.querySelector("span:last-child");
+
+    if (heroLiveLabel) {
+      heroLiveLabel.textContent = isRomeCuratedMode ? "Se live-läget" : "Se cityläget";
+    }
+  }
+
+  if (routePlannerOpenButton && !isRomeCuratedMode) {
+    routePlannerOpenButton.textContent = isInternalCityMode ? "Öppna preview" : "Se planner-preview";
   }
 
   if (!isRomeCuratedMode) {
@@ -1739,6 +1786,8 @@ function applyCityModeToShell() {
     if (routeMatchSummary) {
       routeMatchSummary.textContent = buildNonRomeRouteSummary();
     }
+  } else if (routePlannerOpenButton) {
+    routePlannerOpenButton.textContent = "Planera min dag";
   }
 }
 
@@ -3026,7 +3075,7 @@ function buildPulseTeaserSummary() {
     return `Kopplad till ${dayCount} vald dag${dayCount > 1 ? "ar" : ""}. ${weatherLine}`;
   }
 
-  return `${weatherLine} Öppna LIVE när du vill läsa dagens edition mer som en lokal utgåva.`;
+  return `${weatherLine} Öppna live-läget när du vill läsa dagens edition mer som en lokal utgåva.`;
 }
 
 function focusActiveDayLiveSection() {
@@ -3066,27 +3115,27 @@ function renderCityPulseTeaser() {
   cityPulseTeaser.classList.toggle("is-day-handoff", plannedContext);
 
   if (plannedContext) {
-    cityPulseTeaserLabel.textContent = "LIVE FÖR DIN DAG";
+    cityPulseTeaserLabel.textContent = "PASSAR DIN DAG";
     cityPulseTeaserTitle.textContent = activeDayEventCount
-      ? `${Math.min(activeDayEventCount, 2)} live-spår matchar planen`
-      : "LIVE finns längre ner om du vill justera dagen";
+      ? `${Math.min(activeDayEventCount, 2)} live-spår ligger nära rutten`
+      : "Live-lagret finns längre ner om du vill justera dagen";
     cityPulseTeaserSummary.textContent = activeDayEventCount
-      ? `De starkaste live-spåren ligger under huvudrutten för ${formatSwedishDate(activeDay?.date || targetDate)}.`
-      : `Öppna LIVE längre ner när du vill läsa ${buildUnavailableCityLabel()} mer i realtid utan att lämna planen.`;
+      ? `De starkaste spåren ligger direkt efter huvudrutten för ${formatSwedishDate(activeDay?.date || targetDate)}.`
+      : `Öppna live-läget längre ner när du vill väga in ${buildUnavailableCityLabel()} utan att lämna planen.`;
   } else {
     cityPulseTeaserLabel.textContent = plannedDays.length
-      ? `LIVE • ${plannedDays.length} vald dag${plannedDays.length > 1 ? "ar" : ""}`
+      ? `JUST NU • ${plannedDays.length} vald dag${plannedDays.length > 1 ? "ar" : ""}`
       : `Just nu i ${plannerCityLabel} • ${weekdayLabel} ${dateLabel}`;
-    cityPulseTeaserTitle.textContent = cityPulseState?.headline || `LIVE-edition för ${plannerCityLabel}`;
+    cityPulseTeaserTitle.textContent = cityPulseState?.headline || `Aktuellt i ${plannerCityLabel}`;
     cityPulseTeaserSummary.textContent = buildPulseTeaserSummary();
   }
 
   if (cityPulseTeaserButton) {
     cityPulseTeaserButton.textContent = plannedContext
       ? activeDayEventCount
-        ? "Hoppa till dagens live"
-        : "Öppna LIVE"
-      : "Öppna LIVE";
+        ? "Se dagens live"
+        : "Se live-läget"
+      : "Se live-läget";
   }
 }
 
@@ -3435,15 +3484,15 @@ function renderCityPulse() {
     getFallbackPulseDateLabels(cityPulseState.date || getTodayIsoDate()).dateLabel;
 
   if (cityPulseEditionLabel) {
-    cityPulseEditionLabel.textContent = `Just nu i ${buildUnavailableCityLabel()} · ${weekdayLabel} ${dateLabel}`;
+    cityPulseEditionLabel.textContent = `Aktuellt i ${buildUnavailableCityLabel()} · ${weekdayLabel} ${dateLabel}`;
   }
 
   cityPulseHeadline.textContent =
-    cityPulseState.headline || `Vad som faktiskt händer i ${buildUnavailableCityLabel()} just nu.`;
+    cityPulseState.headline || `Aktuellt i ${buildUnavailableCityLabel()} just nu.`;
   cityPulseSubhead.textContent =
     cityPulseState.subhead ||
     cityPulseState.note ||
-    "LIVE hjälper dig förstå vad som faktiskt är värt att bry sig om just nu.";
+    "Det här lagret hjälper dig väga in det som faktiskt är relevant just nu.";
   cityPulseEditionDate.textContent = `${weekdayLabel}\n${dateLabel}`;
   cityPulseMeta.textContent = `${filteredItems.length} signaler • ${availableLevels.length} nivåer`;
   cityPulseFooter.textContent =
@@ -4733,7 +4782,7 @@ function setPlannerStatusMessage(text = "", tone = "info") {
 
 function setPlannerLoadingState(isLoading, message = plannerLoadingMessages[0]) {
   const buttons = [routePlanButton, routePlanStickyButton].filter(Boolean);
-  const label = isLoading ? "Planerar din resa..." : "Planera min resa";
+  const label = isLoading ? "Planerar din dag..." : "Planera min dag";
 
   buttons.forEach((button) => {
     button.disabled = isLoading;
@@ -7568,6 +7617,8 @@ function renderPlannedDays() {
 }
 
 function renderRouteResults() {
+  syncShellModeState();
+
   if (isFallbackRequestedCity || isInternalCityMode) {
     routeFallbackNote.hidden = false;
     routeFallbackNote.textContent = buildNonRomeFallbackNote();
