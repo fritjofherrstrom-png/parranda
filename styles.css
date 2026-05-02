@@ -4092,3 +4092,208 @@ body.is-printing-guide #routeGuideDrawer {
     display: none !important;
   }
 }
+
+/* GPT stabilization pass, CSS-only. No DOM/JS changes. */
+
+.hero {
+  padding: 18px 22px 16px;
+  border-radius: 30px;
+}
+
+.hero-content {
+  grid-template-columns: minmax(280px, 0.82fr) minmax(360px, 1fr);
+  gap: 18px;
+  align-items: center;
+}
+
+.hero-copy h1 {
+  max-width: 8.5ch;
+  font-size: clamp(2.2rem, 4vw, 4.2rem);
+  line-height: 0.92;
+}
+
+.hero-planner-starter {
+  padding: 22px 24px;
+  border-radius: 26px;
+  min-height: auto;
+}
+
+.hero-planner-starter .planner-launch-copy h2 {
+  font-size: clamp(2rem, 3vw, 3.15rem);
+}
+
+.planner-launch-actions {
+  justify-content: flex-start;
+  gap: 16px;
+}
+
+.hero-idea-strip,
+.hero-quickstart {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 18px;
+  background: rgba(255, 252, 247, 0.54);
+  box-shadow: none;
+}
+
+.hero-idea-strip h2,
+.hero-quickstart h2 {
+  font-family: "Manrope", sans-serif;
+  font-size: 0.98rem;
+  line-height: 1.2;
+  font-weight: 800;
+}
+
+.hero-idea-strip #heroWildcardSummary,
+.hero-quickstart-copy #heroWildcardSummary {
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+/* LIVE teaser: dark editorial, but actually readable */
+.city-pulse-teaser,
+.city-pulse-teaser.is-route-context,
+.city-pulse-teaser.is-day-handoff {
+  margin-top: 20px;
+  min-height: 0;
+  padding: 18px 20px;
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 86% 0%, rgba(184, 97, 54, 0.22), transparent 28%),
+    linear-gradient(145deg, #2a1811 0%, #1d120d 58%, #120b08 100%);
+  color: #fff7ed;
+  border-color: rgba(255, 247, 237, 0.08);
+  box-shadow: 0 18px 44px rgba(40, 18, 8, 0.2);
+}
+
+.city-pulse-teaser-copy h2,
+.city-pulse-teaser.is-route-context .city-pulse-teaser-copy h2,
+.city-pulse-teaser.is-day-handoff .city-pulse-teaser-copy h2 {
+  color: #fff7ed;
+  opacity: 1;
+  text-shadow: none;
+}
+
+.city-pulse-teaser-copy h2 {
+  font-size: clamp(1.35rem, 2.4vw, 2.25rem);
+  line-height: 1.02;
+}
+
+.city-pulse-teaser-summary,
+.city-pulse-teaser.is-route-context .city-pulse-teaser-summary,
+.city-pulse-teaser.is-day-handoff .city-pulse-teaser-summary {
+  color: rgba(255, 247, 237, 0.78);
+}
+
+.city-pulse-live-label,
+.city-pulse-edition-label,
+.city-pulse-teaser.is-route-context .city-pulse-live-label,
+.city-pulse-teaser.is-route-context .city-pulse-edition-label {
+  color: rgba(255, 247, 237, 0.64);
+}
+
+.city-pulse-teaser .ghost-button,
+.city-pulse-teaser.is-route-context .ghost-button,
+.city-pulse-teaser.is-day-handoff .ghost-button {
+  background: rgba(255, 247, 237, 0.9);
+  color: #241914;
+  border-color: transparent;
+}
+
+/* Full LIVE view: restore contrast */
+.city-pulse-edition {
+  color: #fff7ed;
+  background:
+    radial-gradient(circle at 86% 0%, rgba(184, 97, 54, 0.22), transparent 28%),
+    linear-gradient(145deg, #2a1811 0%, #1d120d 58%, #120b08 100%);
+  border-color: rgba(255, 247, 237, 0.08);
+  box-shadow: 0 24px 70px rgba(40, 18, 8, 0.22);
+}
+
+.city-pulse-edition h1,
+.city-pulse-edition h2,
+.city-pulse-edition h3,
+.city-pulse-edition .city-pulse-title,
+.city-pulse-edition .pulse-group-title,
+.city-pulse-edition .pulse-entry-title {
+  color: #fff7ed;
+}
+
+.city-pulse-edition p,
+.city-pulse-edition .city-pulse-summary,
+.city-pulse-edition .pulse-entry-summary,
+.city-pulse-edition .pulse-entry-body {
+  color: rgba(255, 247, 237, 0.78);
+}
+
+.city-pulse-edition .city-pulse-live-label,
+.city-pulse-edition .city-pulse-edition-label,
+.city-pulse-edition .city-pulse-meta-kicker,
+.city-pulse-edition .city-pulse-filter-label,
+.city-pulse-edition .pulse-group-sub,
+.city-pulse-edition .pulse-entry-kind,
+.city-pulse-edition .pulse-entry-reason-label {
+  color: rgba(255, 247, 237, 0.55);
+}
+
+.city-pulse-edition .ghost-button,
+.city-pulse-edition .secondary-button {
+  background: rgba(255, 247, 237, 0.1);
+  color: #fff7ed;
+  border-color: rgba(255, 247, 237, 0.16);
+}
+
+/* Planner: lower visual noise without touching logic */
+.planner-fine-tune-details {
+  background: rgba(255, 252, 247, 0.68);
+  border-color: rgba(70, 38, 18, 0.08);
+}
+
+.planner-fine-tune-summary {
+  cursor: pointer;
+}
+
+.planner-fine-tune-details:not([open]) {
+  padding: 16px 18px;
+}
+
+.planner-fine-tune-details:not([open]) .planner-fine-tune-body {
+  display: none;
+}
+
+.planner-anchor-grid {
+  gap: 12px;
+}
+
+.planner-district-grid {
+  gap: 8px;
+}
+
+.planner-district-grid button,
+.planner-district-grid .planner-district-button {
+  min-height: 38px;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 860px) {
+  .hero-content {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-copy h1 {
+    max-width: 10ch;
+  }
+
+  .hero-planner-starter {
+    padding: 20px;
+  }
+
+  .planner-launch-actions {
+    align-items: flex-start;
+  }
+
+  .city-pulse-teaser {
+    display: grid;
+  }
+}
+
