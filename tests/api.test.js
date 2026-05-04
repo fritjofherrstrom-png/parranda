@@ -120,6 +120,23 @@ async function requestText(server, { method = "GET", path = "/" } = {}) {
   });
 }
 
+function assertPlannerIntentFirstPaint(html) {
+  assert.match(html, /value="food_drink"\s+checked\s*\/>\s*<span>Mat &amp; dryck<\/span>/);
+  assert.match(html, /value="culture"\s+checked\s*\/>\s*<span>Kultur<\/span>/);
+  assert.match(html, /value="second_hand"\s*\/>\s*<span>Second hand<\/span>/);
+  assert.match(html, /value="hidden_gems"\s+checked\s*\/>\s*<span>Hidden gems<\/span>/);
+  assert.match(html, /value="views"\s*\/>\s*<span>Utsikt<\/span>/);
+  assert.match(html, /value="nightlife"\s+checked\s*\/>\s*<span>Kvällsliv<\/span>/);
+  assert.match(html, /value="history"\s*\/>\s*<span>Historia<\/span>/);
+  assert.match(html, /value="green_walk"\s*\/>\s*<span>Grönt &amp; promenad<\/span>/);
+  assert.doesNotMatch(html, /value="öl"\s+checked/);
+  assert.doesNotMatch(html, /value="vin"\s+checked/);
+  assert.doesNotMatch(html, /value="cocktail"/);
+  assert.doesNotMatch(html, /value="kyrkor"/);
+  assert.doesNotMatch(html, /value="nattliv"\s+checked/);
+  assert.doesNotMatch(html, /value="party"/);
+}
+
 test.after(() => {
   global.fetch = originalFetch;
 });
@@ -232,6 +249,7 @@ test("GET / renderar en city-aware app shell med bootstrap", async () => {
     assert.match(response.body, /<p id="heroEyebrow" class="eyebrow">ROM · KURERAD DAGPLANERING<\/p>/);
     assert.match(response.body, /<h1 id="heroHeadline">Din dag börjar här\.<\/h1>/);
     assert.match(response.body, /<button id="routePlannerOpenButton" class="primary-button" type="button">\s*Planera min dag\s*<\/button>/);
+    assertPlannerIntentFirstPaint(response.body);
     assert.ok(!response.body.includes("__PARRANDA_CITY_BOOTSTRAP__"));
     assert.ok(!response.body.includes("__PARRANDA_TITLE__"));
   } finally {
@@ -309,6 +327,7 @@ test("GET /test-city renderar en egen city shell utan Rome-fallback", async () =
     assert.match(response.body, /data-budget-tier="budget">\s*Budgetsmart\s*<\/button>/);
     assert.match(response.body, /data-budget-tier="dolce-vita">\s*Premium\s*<\/button>/);
     assert.match(response.body, /<button id="heroWildcardApplyButton" class="secondary-button" type="button" hidden>/);
+    assertPlannerIntentFirstPaint(response.body);
     assert.doesNotMatch(response.body, /Rome on a budget/);
     assert.doesNotMatch(response.body, /La Dolce Vita/);
     assert.doesNotMatch(response.body, /data-city-label="Rom"/);

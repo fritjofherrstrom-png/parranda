@@ -1429,6 +1429,119 @@ const optimizerButtons = document.querySelectorAll("[data-optimizer-mode]");
 const budgetTierButtons = document.querySelectorAll("[data-budget-tier]");
 const routeModifierButtons = document.querySelectorAll("[data-route-modifier]");
 
+// `payloadSignals` are the active compatibility tags that this planner layer
+// actually sends to the route API today. `aliases` are taxonomy metadata for
+// broader multi-city language, not live recommendation logic on their own.
+const plannerIntentDefinitions = [
+  {
+    key: "food_drink",
+    label: "Mat & dryck",
+    payloadSignals: ["mat", "vin", "öl", "cocktail"],
+    aliases: ["food", "drink", "restaurant", "aperitivo", "wine", "beer", "cocktail", "mat", "vin", "öl"],
+    coverageTags: ["mat", "vin", "öl", "cocktail", "aperitivo", "pizza"],
+  },
+  {
+    key: "culture",
+    label: "Kultur",
+    payloadSignals: ["kultur", "kyrkor"],
+    aliases: ["culture", "museum", "gallery", "architecture", "church", "kultur", "kyrkor"],
+    coverageTags: ["kultur", "kyrkor"],
+  },
+  {
+    key: "second_hand",
+    label: "Second hand",
+    payloadSignals: ["second_hand"],
+    aliases: [
+      "second_hand",
+      "vintage",
+      "thrift",
+      "charity_shop",
+      "used_clothing",
+      "retro",
+      "flea_market",
+      "antique",
+      "market",
+      "shopping",
+      "preloved",
+      "resale",
+      "consignment",
+    ],
+    coverageTags: [
+      "second_hand",
+      "vintage",
+      "thrift",
+      "charity_shop",
+      "used_clothing",
+      "retro",
+      "flea_market",
+      "antique",
+      "market",
+      "shopping",
+      "preloved",
+      "resale",
+      "consignment",
+    ],
+  },
+  {
+    key: "hidden_gems",
+    label: "Hidden gems",
+    payloadSignals: ["hidden gems", "low-key"],
+    aliases: ["hidden_gems", "local", "unusual", "under_the_radar", "hidden gems", "lokalt", "ovanligt"],
+    coverageTags: ["hidden gems"],
+  },
+  {
+    key: "views",
+    label: "Utsikt",
+    payloadSignals: ["utsikt", "hidden gems"],
+    aliases: ["view", "panorama", "rooftop", "golden_hour", "utsikt"],
+    coverageTags: ["utsikt", "golden hour"],
+  },
+  {
+    key: "nightlife",
+    label: "Kvällsliv",
+    payloadSignals: ["nattliv", "kväll", "cocktail", "party"],
+    aliases: ["nightlife", "evening", "bar", "cocktail", "late", "party-light", "nattliv", "kväll"],
+    coverageTags: ["nattliv", "kväll", "cocktail", "öl", "vin", "party"],
+  },
+  {
+    key: "history",
+    label: "Historia",
+    payloadSignals: ["klassiker", "kyrkor", "kultur"],
+    aliases: ["history", "ancient", "ruins", "archaeology", "classic", "church", "museum", "historia", "antikt", "ruiner", "klassiker"],
+    coverageTags: ["kultur", "kyrkor", "klassiker"],
+  },
+  {
+    key: "green_walk",
+    label: "Grönt & promenad",
+    payloadSignals: ["low-key", "utsikt", "hidden gems"],
+    aliases: ["park", "garden", "walk", "waterfront", "green", "outdoor", "promenad", "trädgård", "vatten"],
+    coverageTags: ["utsikt", "hidden gems", "low-key"],
+  },
+];
+
+const plannerIntentByKey = new Map(
+  plannerIntentDefinitions.map((intent) => [intent.key, intent]),
+);
+const defaultPlannerIntentKeys = ["food_drink", "culture", "hidden_gems", "nightlife"];
+const plannerIntentCoverageTagSet = new Set([
+  "aperitivo",
+  "cocktail",
+  "golden hour",
+  "hidden gems",
+  "klassiker",
+  "kultur",
+  "kyrkor",
+  "kväll",
+  "low-key",
+  "mat",
+  "nattliv",
+  "party",
+  "pizza",
+  "utsikt",
+  "vin",
+  "öl",
+]);
+
 const favoritesStorageKey = `parranda:${plannerCityKey}:favorites`;
 const savedRoutesStorageKey = `parranda:${plannerCityKey}:saved-routes`;
 const routeApiBase = "/api";
@@ -1993,6 +2106,122 @@ const routeModifierLabels = {
   low_key: "Mer low-key",
   party: "Mer party",
 };
+
+function getPlannerIntentLabel(intentKey) {
+  return plannerIntentByKey.get(intentKey)?.label || intentKey;
+}
+
+function getSelectedIntentKeys() {
+  return [...preferenceInputs]
+    .filter((input) => input.checked)
+    .map((input) => input.value)
+    .filter((value) => plannerIntentByKey.has(value));
+}
+
+function setSelectedIntentKeys(intentKeys = []) {
+  const selectedKeys = new Set(intentKeys);
+  preferenceInputs.forEach((input) => {
+    input.checked = selectedKeys.has(input.value);
+  });
+}
+
+function expandIntentKeysToPreferenceSignals(intentKeys = []) {
+  return [...new Set(
+    intentKeys.flatMap((intentKey) => plannerIntentByKey.get(intentKey)?.payloadSignals || []),
+  )];
+}
+
+function inferIntentKeysFromPreferences(preferences = []) {
+  const selectedPreferences = new Set(preferences || []);
+  const inferredKeys = [];
+
+  if (["mat", "vin", "öl", "pizza"].some((tag) => selectedPreferences.has(tag))) {
+    inferredKeys.push("food_drink");
+  }
+
+  if (selectedPreferences.has("kultur")) {
+    inferredKeys.push("culture");
+  }
+
+  if (
+    [
+      "second_hand",
+      "vintage",
+      "thrift",
+      "charity_shop",
+      "used_clothing",
+      "retro",
+      "flea_market",
+      "antique",
+      "market",
+      "shopping",
+      "preloved",
+      "resale",
+      "consignment",
+    ].some((tag) => selectedPreferences.has(tag))
+  ) {
+    inferredKeys.push("second_hand");
+  }
+
+  if (selectedPreferences.has("hidden gems")) {
+    inferredKeys.push("hidden_gems");
+  }
+
+  if (
+    selectedPreferences.has("utsikt") ||
+    selectedPreferences.has("golden hour")
+  ) {
+    inferredKeys.push("views");
+  }
+
+  if (
+    selectedPreferences.has("nattliv") ||
+    selectedPreferences.has("kväll") ||
+    selectedPreferences.has("party")
+  ) {
+    inferredKeys.push("nightlife");
+  }
+
+  if (
+    selectedPreferences.has("klassiker") ||
+    selectedPreferences.has("historia") ||
+    selectedPreferences.has("antikt") ||
+    selectedPreferences.has("ruiner") ||
+    selectedPreferences.has("kyrkor")
+  ) {
+    inferredKeys.push("history");
+  }
+
+  if (
+    selectedPreferences.has("promenad") ||
+    selectedPreferences.has("trädgård") ||
+    selectedPreferences.has("vatten") ||
+    (selectedPreferences.has("utsikt") && selectedPreferences.has("low-key"))
+  ) {
+    inferredKeys.push("green_walk");
+  }
+
+  return inferredKeys;
+}
+
+function getIntentLabelsForSnapshot(snapshot = {}) {
+  const intentKeys =
+    Array.isArray(snapshot.intentKeys) && snapshot.intentKeys.length
+      ? snapshot.intentKeys.filter((intentKey) => plannerIntentByKey.has(intentKey))
+      : inferIntentKeysFromPreferences(snapshot.preferences || []);
+
+  return intentKeys.map(getPlannerIntentLabel);
+}
+
+function plannerIntentHasCoverage(intentKey) {
+  const intent = plannerIntentByKey.get(intentKey);
+
+  if (!intent) {
+    return false;
+  }
+
+  return (intent.coverageTags || []).some((tag) => plannerIntentCoverageTagSet.has(tag));
+}
 
 function getBudgetTierLabel(tier) {
   const labels = {
@@ -4042,16 +4271,7 @@ function updatePlannerAdvancedSummary() {
 function buildPlannerStyleSummary(prefix = "") {
   const leading = prefix ? [prefix.trim()] : [];
   const activeParts = [];
-  const selectedPreferences = getSelectedPreferences();
-  const strictFamilies = new Set(["kyrkor", "cocktail", "öl", "vin", "mat", "utsikt"]);
-  const strictSupport = new Set(["hidden gems", "kultur", "kväll", "low-key", "party", "nattliv"]);
-  const directSelections = selectedPreferences.filter((preference) => strictFamilies.has(preference));
-  const onlySupportiveSelections =
-    directSelections.length === 1 &&
-    selectedPreferences.every(
-      (preference) =>
-        preference === directSelections[0] || strictSupport.has(preference),
-    );
+  const selectedIntentKeys = getSelectedIntentKeys();
 
   if (activeOptimizerMode && optimizerModeLabels[activeOptimizerMode]) {
     activeParts.push(optimizerModeLabels[activeOptimizerMode]);
@@ -4070,12 +4290,21 @@ function buildPlannerStyleSummary(prefix = "") {
     activeParts.push(legPacingLabels[legPacingSelect.value] || legPacingSelect.value);
   }
 
-  if (onlySupportiveSelections) {
-    activeParts.push(`Tydligt tema: ${directSelections[0]}`);
+  if (selectedIntentKeys.length === 1) {
+    activeParts.push(`Tydligt tema: ${getPlannerIntentLabel(selectedIntentKeys[0])}`);
   }
 
   if (activeParts.length) {
     leading.push(`Aktivt nu: ${activeParts.join(" • ")}.`);
+  }
+
+  if (
+    selectedIntentKeys.includes("second_hand") &&
+    !plannerIntentHasCoverage("second_hand")
+  ) {
+    leading.push(
+      "Second hand är valt som intent, men staden har ännu inte stark second hand-data. Parranda behandlar det därför som en mjuk signal i stället för att låtsas full träffsäkerhet.",
+    );
   }
 
   return leading.join(" ");
@@ -4084,6 +4313,7 @@ function buildPlannerStyleSummary(prefix = "") {
 function buildPlannerSnapshot(payload, dates) {
   return {
     plannerMode: activePlannerMode,
+    intentKeys: getSelectedIntentKeys(),
     dates,
     dateFrom: routeDateFrom.value || dates[0] || getTodayIsoDate(),
     dateTo: routeDateTo.value || dates[dates.length - 1] || routeDateFrom.value || getTodayIsoDate(),
@@ -4897,9 +5127,7 @@ function applyOptimizerMode(mode) {
   }
 
   activeOptimizerMode = mode;
-  preferenceInputs.forEach((input) => {
-    input.checked = config.preferences.includes(input.value);
-  });
+  setSelectedIntentKeys(inferIntentKeysFromPreferences(config.preferences));
   walkingKmTarget.value = String(config.km);
   distanceModeSelect.value = config.distanceMode;
   updateDistanceModeUI();
@@ -4960,11 +5188,7 @@ function setPlannerDefaults() {
   updateBudgetTierButtons();
   updateRouteModifierButtons();
 
-  preferenceInputs.forEach((input) => {
-    input.checked = ["öl", "vin", "mat", "kultur", "hidden gems", "nattliv"].includes(
-      input.value,
-    );
-  });
+  setSelectedIntentKeys(defaultPlannerIntentKeys);
 
   if (plannerFineTuneDetails) {
     plannerFineTuneDetails.open = false;
@@ -5023,9 +5247,11 @@ function applyPlannerSnapshot(snapshot) {
   activeOptimizerMode = snapshot.optimizerMode || null;
   activeBudgetTier = snapshot.budgetTier || "standard";
   activeRouteModifier = snapshot.modifier || null;
-  preferenceInputs.forEach((input) => {
-    input.checked = (snapshot.preferences || []).includes(input.value);
-  });
+  setSelectedIntentKeys(
+    Array.isArray(snapshot.intentKeys) && snapshot.intentKeys.length
+      ? snapshot.intentKeys
+      : inferIntentKeysFromPreferences(snapshot.preferences || []),
+  );
   syncPlannerModeUI();
   updateDistanceModeUI();
   updateWalkingKmLabel();
@@ -5063,11 +5289,11 @@ function expandDateRange(from, to) {
 }
 
 function getSelectedPreferences() {
-  const selected = [...preferenceInputs]
-    .filter((input) => input.checked)
-    .map((input) => input.value);
+  const selected = expandIntentKeysToPreferenceSignals(getSelectedIntentKeys());
 
-  return selected.length ? selected : ["vin", "mat", "kultur", "hidden gems"];
+  return selected.length
+    ? selected
+    : expandIntentKeysToPreferenceSignals(defaultPlannerIntentKeys);
 }
 
 function buildSavedRouteId(savePayload) {
@@ -5164,6 +5390,9 @@ function remixSnapshot(snapshot, remixMode) {
   const remixed = {
     ...snapshot,
     preferences: [...new Set(snapshot.preferences || [])],
+    intentKeys: Array.isArray(snapshot.intentKeys)
+      ? [...snapshot.intentKeys]
+      : inferIntentKeysFromPreferences(snapshot.preferences || []),
     optimizerMode: snapshot.optimizerMode || null,
     walkingKmTarget: Number(snapshot.walkingKmTarget || 9),
     distanceMode: snapshot.distanceMode || "soft_target",
@@ -5216,6 +5445,8 @@ function remixSnapshot(snapshot, remixMode) {
     remixed.walkingKmTarget = Math.min(remixed.walkingKmTarget, 8);
     remixed.distanceMode = "soft_target";
   }
+
+  remixed.intentKeys = inferIntentKeysFromPreferences(remixed.preferences);
 
   return remixed;
 }
@@ -5363,7 +5594,7 @@ function createSavedRouteCard(savedRoute) {
       meta.appendChild(chip);
     });
 
-  [...(snapshot.preferences || [])]
+  getIntentLabelsForSnapshot(snapshot)
     .slice(0, 5)
     .forEach((text) => {
       const chip = document.createElement("span");
@@ -7914,6 +8145,7 @@ preferenceInputs.forEach((input) => {
     activeOptimizerMode = null;
     updateOptimizerButtons();
     updatePlannerLaunchSummary();
+    updateRouteMatchSummary(buildPlannerStyleSummary());
   });
 });
 
