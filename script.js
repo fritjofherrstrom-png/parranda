@@ -1775,7 +1775,7 @@ function applyCityModeToShell() {
     const heroLiveLabel = heroLiveButton.querySelector("span:last-child");
 
     if (heroLiveLabel) {
-      heroLiveLabel.textContent = isRomeCuratedMode ? "Se live-läget" : "Se cityläget";
+      heroLiveLabel.textContent = "Pulse";
     }
   }
 
@@ -3173,9 +3173,9 @@ function renderCityPulseTeaser() {
     cityPulseTeaserButton.textContent = plannedContext
       ? activeDayEventCount
         ? "Se dagens live"
-        : "Se live-läget"
+        : "Pulse"
       : isRomeCuratedMode
-        ? "Se live-läget"
+        ? "Pulse"
         : "Läs preview";
   }
 }
