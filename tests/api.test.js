@@ -204,6 +204,10 @@ test("GET / renderar en city-aware app shell med bootstrap", async () => {
     assert.equal(response.status, 200);
     assert.match(response.body, /<body data-city-key="rome" data-city-label="Rom">/);
     assert.match(response.body, /window\.__PARRANDA_CITY__ = \{"key":"rome","label":"Rom"/);
+    assert.match(response.body, /<title>Parranda \| Personlig City Guide för Rom<\/title>/);
+    assert.match(response.body, /<p id="heroEyebrow" class="eyebrow">ROM · KURERAD DAGPLANERING<\/p>/);
+    assert.match(response.body, /<h1 id="heroHeadline">Din dag börjar här\.<\/h1>/);
+    assert.match(response.body, /<button id="routePlannerOpenButton" class="primary-button" type="button">\s*Planera min dag\s*<\/button>/);
     assert.ok(!response.body.includes("__PARRANDA_CITY_BOOTSTRAP__"));
     assert.ok(!response.body.includes("__PARRANDA_TITLE__"));
   } finally {
@@ -232,7 +236,13 @@ test("GET /barcelona avslöjar fallback i app shell bootstrap innan stad 2 finns
     assert.match(response.body, /"displayLabel":"Barcelona"/);
     assert.match(response.body, /"requestedKey":"barcelona"/);
     assert.match(response.body, /"fallbackUsed":true/);
-    assert.match(response.body, /Planera min dag/);
+    assert.match(response.body, /<title>Parranda \| Barcelona preview<\/title>/);
+    assert.match(response.body, /<meta[\s\S]*name="description"[\s\S]*content="Barcelona visas i preview medan Parranda förbereder stadens eget curated-lager\. Shell och city-core är på plats, men lokalt innehåll kommer senare\."[\s\S]*\/>/);
+    assert.match(response.body, /<p id="heroEyebrow" class="eyebrow">BARCELONA · PREVIEW<\/p>/);
+    assert.match(response.body, /<h1 id="heroHeadline">Barcelona förbereds fortfarande\.<\/h1>/);
+    assert.match(response.body, /<p id="heroLead" class="lead">\s*Parranda visar ett ärligt preview-läge tills staden har ett eget kuraterat pack\.\s*<\/p>/);
+    assert.match(response.body, /<button id="routePlannerOpenButton" class="primary-button" type="button">\s*Se planner-preview\s*<\/button>/);
+    assert.match(response.body, /<button id="heroWildcardApplyButton" class="secondary-button" type="button" hidden>/);
     assert.match(response.body, /tydligt fallback-läge/);
     assert.doesNotMatch(response.body, /Din resa till Rom/);
     assert.doesNotMatch(response.body, /Just nu i Rom/);
@@ -263,6 +273,12 @@ test("GET /test-city renderar en egen city shell utan Rome-fallback", async () =
     assert.match(response.body, /"requestedKey":"test-city"/);
     assert.match(response.body, /"fallbackUsed":false/);
     assert.match(response.body, /"visibility":"internal"/);
+    assert.match(response.body, /<title>Parranda \| Test City internal preview<\/title>/);
+    assert.match(response.body, /<meta[\s\S]*name="description"[\s\S]*content="Test City är en intern city-core-preview för att verifiera shell, planner och fallback-beteenden utan Rome-innehåll\."[\s\S]*\/>/);
+    assert.match(response.body, /<p id="heroEyebrow" class="eyebrow">TEST CITY · INTERN PREVIEW<\/p>/);
+    assert.match(response.body, /<h1 id="heroHeadline">Test City kör i preview\.<\/h1>/);
+    assert.match(response.body, /<button id="routePlannerOpenButton" class="primary-button" type="button">\s*Öppna preview\s*<\/button>/);
+    assert.match(response.body, /<button id="heroWildcardApplyButton" class="secondary-button" type="button" hidden>/);
     assert.doesNotMatch(response.body, /data-city-label="Rom"/);
   } finally {
     await new Promise((resolve) => server.close(resolve));

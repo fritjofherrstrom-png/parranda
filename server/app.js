@@ -122,10 +122,119 @@ function serializeInlineJson(value) {
   return JSON.stringify(value).replace(/</g, "\\u003c");
 }
 
+function resolveShellMode(cityConfig, cityFallbackUsed) {
+  if (cityConfig?.visibility === "internal") {
+    return "internal-preview";
+  }
+
+  if (cityFallbackUsed) {
+    return "fallback-preview";
+  }
+
+  return "curated-public";
+}
+
+function buildShellCopy(shellMode, options = {}) {
+  const cityLabel = options.displayLabel || "Staden";
+
+  if (shellMode === "fallback-preview") {
+    return {
+      brandSubtitle: "City preview med ärlig fallback",
+      eyebrow: `${cityLabel.toLocaleUpperCase("sv-SE")} · PREVIEW`,
+      heroHeadline: `${cityLabel} förbereds fortfarande.`,
+      heroLead: "Parranda visar ett ärligt preview-läge tills staden har ett eget kuraterat pack.",
+      heroLiveLabel: "Se cityläget",
+      plannerTitle: "Planner-preview",
+      plannerSummary: `${cityLabel} har ännu inte ett eget planner-läge. Parranda visar därför en ärlig shell och väntar med kuraterat innehåll tills staden stöds på riktigt.`,
+      plannerCtaLabel: "Se planner-preview",
+      plannerMicrocopy: "Curated innehåll kommer senare.",
+      wildcardLabel: "CITY-STATUS",
+      wildcardTitle: `${cityLabel} förbereds fortfarande`,
+      wildcardSummary:
+        "Parranda visar shellen och city-core-grunden, men blandar inte in Rome-kvarter eller fallback-idéer som om staden redan vore kurerad.",
+      wildcardMeta: "Ingen publik city-lansering än.",
+      wildcardTag1: cityLabel,
+      wildcardTag2: "Förbereds",
+      wildcardTag3: "Neutral shell",
+      wildcardActionsHidden: "hidden",
+    };
+  }
+
+  if (shellMode === "internal-preview") {
+    return {
+      brandSubtitle: "Intern city-core-preview",
+      eyebrow: `${cityLabel.toLocaleUpperCase("sv-SE")} · INTERN PREVIEW`,
+      heroHeadline: `${cityLabel} kör i preview.`,
+      heroLead: "Planner, shell och city-core går att prova här utan Rome-curated lager.",
+      heroLiveLabel: "Se cityläget",
+      plannerTitle: "Intern planner-preview",
+      plannerSummary: `${cityLabel} är en intern preview. Planner och city-core går att testa, men kuraterade kvarter och wildcard-idéer är avsiktligt avstängda här.`,
+      plannerCtaLabel: "Öppna preview",
+      plannerMicrocopy: "Intern verifiering, inte publik stad.",
+      wildcardLabel: "INTERN STUB",
+      wildcardTitle: `${cityLabel} kör i preview`,
+      wildcardSummary:
+        "Det här läget finns för att bevisa att en andra stad kan leva ovanpå city-core utan att importera Rome-moduler eller Rome-fallback.",
+      wildcardMeta: "Intern verifiering • inte en produktstad.",
+      wildcardTag1: cityLabel,
+      wildcardTag2: "Intern",
+      wildcardTag3: "City-core",
+      wildcardActionsHidden: "hidden",
+    };
+  }
+
+  return {
+    brandSubtitle: "Kuraterade stadsdagar med mer känsla än kölista",
+    eyebrow: `${cityLabel.toLocaleUpperCase("sv-SE")} · KURERAD DAGPLANERING`,
+    heroHeadline: "Din dag börjar här.",
+    heroLead: `${cityLabel} är aktiv stad. Välj känsla och låt Parranda bygga huvuddagen.`,
+    heroLiveLabel: "Se live-läget",
+    plannerTitle: "Parranda planerar allt",
+    plannerSummary: "Du väljer datum, känsla, ungefär hur långt du vill gå och gärna en bas.",
+    plannerCtaLabel: "Planera min dag",
+    plannerMicrocopy: "Exakt start och slut är valfritt.",
+    wildcardLabel: "KVÄLLSIDÉ",
+    wildcardTitle: "Laddar kvällens idé...",
+    wildcardSummary: "En snabb riktning om du vill börja med ett kvarter och en känsla.",
+    wildcardMeta: "Sekundärt till plannern.",
+    wildcardTag1: "Staden",
+    wildcardTag2: "Ikväll",
+    wildcardTag3: "Snabbstart",
+    wildcardActionsHidden: "",
+  };
+}
+
 function buildShellMeta(cityConfig, options = {}) {
   const cityLabel = options.displayLabel || cityConfig?.label || "Staden";
   const citySearchLabel = options.searchLabel || cityLabel || getCitySearchLabel(cityConfig);
-  const eyebrow = `${cityLabel.toLocaleUpperCase("sv-SE")} · KURERAD DAGPLANERING`;
+
+  if (options.shellMode === "fallback-preview") {
+    return {
+      title: `Parranda | ${cityLabel} preview`,
+      metaDescription: `${cityLabel} visas i preview medan Parranda förbereder stadens eget curated-lager. Shell och city-core är på plats, men lokalt innehåll kommer senare.`,
+      ogTitle: `Parranda | ${cityLabel} preview`,
+      ogDescription: `${cityLabel} är ett preview-läge i Parranda. Shell och city-core är på plats, men curated innehåll kommer senare.`,
+      twitterTitle: `Parranda | ${cityLabel} preview`,
+      twitterDescription: `${cityLabel} visas i preview medan Parranda förbereder stadens eget curated-lager.`,
+      cityMapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+        `${citySearchLabel} hidden gems`,
+      )}`,
+    };
+  }
+
+  if (options.shellMode === "internal-preview") {
+    return {
+      title: `Parranda | ${cityLabel} internal preview`,
+      metaDescription: `${cityLabel} är en intern city-core-preview för att verifiera shell, planner och fallback-beteenden utan Rome-innehåll.`,
+      ogTitle: `Parranda | ${cityLabel} internal preview`,
+      ogDescription: `${cityLabel} är ett internt preview-läge i Parranda för att verifiera city-core och planner utan publik lansering.`,
+      twitterTitle: `Parranda | ${cityLabel} internal preview`,
+      twitterDescription: `${cityLabel} är en intern city-core-preview och inte en publik produktstad.`,
+      cityMapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+        `${citySearchLabel} hidden gems`,
+      )}`,
+    };
+  }
 
   return {
     title: `Parranda | Personlig City Guide för ${cityLabel}`,
@@ -137,7 +246,6 @@ function buildShellMeta(cityConfig, options = {}) {
     cityMapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
       `${citySearchLabel} hidden gems`,
     )}`,
-    eyebrow,
   };
 }
 
@@ -145,9 +253,14 @@ function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed }) {
   const requestedLabel = cityFallbackUsed ? humanizeCityKey(requestedCity) : "";
   const displayLabel = requestedLabel || cityConfig.label;
   const searchLabel = requestedLabel || getCitySearchLabel(cityConfig);
+  const shellMode = resolveShellMode(cityConfig, cityFallbackUsed);
+  const shellCopy = buildShellCopy(shellMode, {
+    displayLabel,
+  });
   const meta = buildShellMeta(cityConfig, {
     displayLabel,
     searchLabel,
+    shellMode,
   });
   const bootstrap = {
     key: cityConfig.key,
@@ -172,7 +285,23 @@ function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed }) {
     "__PARRANDA_CITY_KEY__": escapeHtml(cityConfig.key),
     "__PARRANDA_CITY_LABEL__": escapeHtml(displayLabel),
     "__PARRANDA_CITY_MAP_URL__": escapeHtml(meta.cityMapUrl),
-    "__PARRANDA_CITY_EYEBROW__": escapeHtml(meta.eyebrow),
+    "__PARRANDA_BRAND_SUBTITLE__": escapeHtml(shellCopy.brandSubtitle),
+    "__PARRANDA_CITY_EYEBROW__": escapeHtml(shellCopy.eyebrow),
+    "__PARRANDA_HERO_HEADLINE__": escapeHtml(shellCopy.heroHeadline),
+    "__PARRANDA_HERO_LEAD__": escapeHtml(shellCopy.heroLead),
+    "__PARRANDA_HERO_LIVE_LABEL__": escapeHtml(shellCopy.heroLiveLabel),
+    "__PARRANDA_PLANNER_TITLE__": escapeHtml(shellCopy.plannerTitle),
+    "__PARRANDA_PLANNER_SUMMARY__": escapeHtml(shellCopy.plannerSummary),
+    "__PARRANDA_PLANNER_CTA_LABEL__": escapeHtml(shellCopy.plannerCtaLabel),
+    "__PARRANDA_PLANNER_MICROCOPY__": escapeHtml(shellCopy.plannerMicrocopy),
+    "__PARRANDA_WILDCARD_LABEL__": escapeHtml(shellCopy.wildcardLabel),
+    "__PARRANDA_WILDCARD_TITLE__": escapeHtml(shellCopy.wildcardTitle),
+    "__PARRANDA_WILDCARD_SUMMARY__": escapeHtml(shellCopy.wildcardSummary),
+    "__PARRANDA_WILDCARD_META__": escapeHtml(shellCopy.wildcardMeta),
+    "__PARRANDA_WILDCARD_TAG_1__": escapeHtml(shellCopy.wildcardTag1),
+    "__PARRANDA_WILDCARD_TAG_2__": escapeHtml(shellCopy.wildcardTag2),
+    "__PARRANDA_WILDCARD_TAG_3__": escapeHtml(shellCopy.wildcardTag3),
+    "__PARRANDA_WILDCARD_ACTIONS_HIDDEN__": shellCopy.wildcardActionsHidden,
     "__PARRANDA_CITY_BOOTSTRAP__": serializeInlineJson(bootstrap),
   };
 
