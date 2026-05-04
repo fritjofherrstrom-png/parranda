@@ -4297,3 +4297,227 @@ body.is-printing-guide #routeGuideDrawer {
   }
 }
 
+/* Product hierarchy reduction pass */
+.hero-content {
+  grid-template-columns: minmax(260px, 0.72fr) minmax(380px, 1.14fr);
+  gap: 16px;
+  align-items: end;
+}
+
+.hero-copy {
+  padding-bottom: 6px;
+}
+
+.hero-copy h1 {
+  max-width: 7.2ch;
+  font-size: clamp(1.95rem, 3.6vw, 3.45rem);
+}
+
+.lead {
+  max-width: 26ch;
+  margin-top: 10px;
+  font-size: 0.94rem;
+  line-height: 1.5;
+}
+
+.hero-actions {
+  margin-top: 14px;
+}
+
+.hero-planner-starter {
+  gap: 12px;
+}
+
+.hero-planner-starter .planner-launch-copy h2 {
+  font-size: clamp(1.9rem, 2.6vw, 2.7rem);
+}
+
+.planner-launch-markers {
+  display: none;
+}
+
+.planner-launch-note {
+  max-width: 31ch;
+  line-height: 1.55;
+}
+
+.planner-launch-actions {
+  gap: 12px;
+}
+
+.planner-launch-micro {
+  margin: 0;
+  color: rgba(36, 25, 20, 0.56);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.hero-idea-strip,
+.hero-quickstart {
+  width: min(620px, 100%);
+  margin: 8px 0 0 auto;
+  padding: 8px 12px;
+  border-radius: 16px;
+  background: rgba(255, 252, 247, 0.38);
+}
+
+.hero-idea-strip .hero-quickstart-copy {
+  gap: 1px;
+}
+
+.hero-idea-strip #heroWildcardSummary,
+.hero-quickstart-copy #heroWildcardSummary {
+  display: none;
+}
+
+.hero-idea-strip .hero-quickstart-side {
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.hero-idea-strip .hero-panel-actions .secondary-button,
+.hero-idea-strip .hero-panel-actions .ghost-button {
+  padding: 7px 11px;
+  font-size: 0.82rem;
+}
+
+.hero-idea-strip .hero-panel-actions .ghost-button {
+  display: none;
+}
+
+.city-pulse-teaser.is-pre-plan {
+  margin-top: 16px;
+  min-height: 0;
+  padding: 12px 14px;
+  border-radius: 20px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 16px 36px rgba(40, 18, 8, 0.18);
+}
+
+.city-pulse-teaser.is-pre-plan .city-pulse-live {
+  margin-bottom: 0;
+}
+
+.city-pulse-teaser.is-pre-plan .city-pulse-teaser-copy {
+  gap: 2px;
+  max-width: 36ch;
+}
+
+.city-pulse-teaser.is-pre-plan .city-pulse-teaser-copy h2 {
+  font-family: "Manrope", sans-serif;
+  font-size: 1.02rem;
+  line-height: 1.24;
+  font-weight: 700;
+}
+
+.city-pulse-teaser.is-pre-plan .city-pulse-teaser-summary {
+  max-width: 38ch;
+  font-size: 0.81rem;
+  line-height: 1.35;
+  color: rgba(255, 247, 237, 0.68);
+}
+
+.city-pulse-teaser.is-pre-plan .city-pulse-edition-label,
+.city-pulse-teaser.is-pre-plan .city-pulse-live-label {
+  color: rgba(255, 247, 237, 0.58);
+}
+
+.city-pulse-teaser.is-pre-plan .ghost-button {
+  padding: 7px 11px;
+  font-size: 0.82rem;
+  background: rgba(255, 247, 237, 0.12);
+  color: #fff7ed;
+  border-color: rgba(255, 247, 237, 0.16);
+}
+
+.city-pulse-edition {
+  margin-top: 18px;
+  padding: 22px;
+}
+
+.planner-panel-copy {
+  max-width: 50ch;
+  font-size: 0.94rem;
+  line-height: 1.55;
+}
+
+.planner-panel-priority {
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.planner-home-base-shell {
+  gap: 10px;
+  padding: 14px 16px;
+  background: rgba(255, 252, 247, 0.72);
+  border-style: dashed;
+}
+
+.planner-home-base-shell .planner-panel-copy {
+  max-width: 42ch;
+  font-size: 0.9rem;
+}
+
+.planner-fine-tune-details:not([open]) .planner-panel-copy {
+  max-width: 36ch;
+}
+
+.planner-mode-button:not(.is-active) {
+  background: rgba(255, 252, 247, 0.72);
+  color: rgba(36, 25, 20, 0.82);
+}
+
+.route-match-summary {
+  max-width: 48ch;
+  margin-top: 16px;
+}
+
+@media (max-width: 860px) {
+  .hero-content {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .hero-copy h1 {
+    max-width: 8.5ch;
+    font-size: clamp(1.8rem, 7vw, 2.8rem);
+  }
+
+  .hero-planner-starter {
+    width: 100%;
+    padding: 18px;
+  }
+
+  .hero-idea-strip,
+  .hero-quickstart {
+    width: 100%;
+    margin-right: 0;
+  }
+
+  .hero-idea-strip .hero-quickstart-side {
+    width: 100%;
+    grid-auto-flow: row;
+    justify-items: flex-start;
+  }
+
+  .hero-idea-strip .hero-panel-actions {
+    width: 100%;
+  }
+
+  .hero-idea-strip .hero-panel-actions .secondary-button {
+    width: 100%;
+  }
+
+  .city-pulse-teaser.is-pre-plan {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+
+  .city-pulse-teaser.is-pre-plan .ghost-button {
+    width: 100%;
+  }
+}

@@ -1724,7 +1724,7 @@ function applyCityModeToShell() {
 
   if (heroHeadline) {
     heroHeadline.textContent = isRomeCuratedMode
-      ? `Planera din dag i ${plannerDisplayCityLabel}.`
+      ? `En smartare dag i ${plannerDisplayCityLabel}.`
       : isInternalCityMode
         ? `${buildUnavailableCityLabel()} kör i preview.`
         : `${buildUnavailableCityLabel()} förbereds fortfarande.`;
@@ -1732,7 +1732,7 @@ function applyCityModeToShell() {
 
   if (heroLead) {
     heroLead.textContent = isRomeCuratedMode
-      ? "Välj bas, tempo och känsla. Parranda bygger rutten."
+      ? "Parranda bygger en gångvänlig huvuddag först. LIVE och alternativ kommer efteråt."
       : isInternalCityMode
         ? "Planner, shell och city-core går att prova här utan Rome-curated lager."
         : "Parranda visar ett ärligt preview-läge tills staden har ett eget kuraterat pack.";
@@ -3102,6 +3102,7 @@ function renderCityPulseTeaser() {
 
   const targetDate = ensureActiveLiveDate();
   const plannedContext = routeRenderMode === "api" && plannedDays.length;
+  const prePlanContext = !plannedContext;
   const activeDay = getActivePlannedDay();
   const activeDayEventCount = activeDay?.live_events?.length || 0;
   const weekdayLabel =
@@ -3113,6 +3114,7 @@ function renderCityPulseTeaser() {
 
   cityPulseTeaser.classList.toggle("is-route-context", plannedContext);
   cityPulseTeaser.classList.toggle("is-day-handoff", plannedContext);
+  cityPulseTeaser.classList.toggle("is-pre-plan", prePlanContext);
 
   if (plannedContext) {
     cityPulseTeaserLabel.textContent = "PASSAR DIN DAG";
@@ -3123,11 +3125,20 @@ function renderCityPulseTeaser() {
       ? `De starkaste spåren ligger direkt efter huvudrutten för ${formatSwedishDate(activeDay?.date || targetDate)}.`
       : `Öppna live-läget längre ner när du vill väga in ${buildUnavailableCityLabel()} utan att lämna planen.`;
   } else {
-    cityPulseTeaserLabel.textContent = plannedDays.length
-      ? `JUST NU • ${plannedDays.length} vald dag${plannedDays.length > 1 ? "ar" : ""}`
-      : `Just nu i ${plannerCityLabel} • ${weekdayLabel} ${dateLabel}`;
-    cityPulseTeaserTitle.textContent = cityPulseState?.headline || `Aktuellt i ${plannerCityLabel}`;
-    cityPulseTeaserSummary.textContent = buildPulseTeaserSummary();
+    if (isRomeCuratedMode) {
+      cityPulseTeaserLabel.textContent = `Just nu i ${plannerDisplayCityLabel}`;
+      cityPulseTeaserTitle.textContent = "Se vad som händer just nu";
+      cityPulseTeaserSummary.textContent =
+        "Valfritt före planeringen. Starkast som lager ovanpå din dag.";
+    } else {
+      cityPulseTeaserLabel.textContent = isInternalCityMode
+        ? "INTERN PREVIEW"
+        : `Just nu i ${buildUnavailableCityLabel()} • ${weekdayLabel} ${dateLabel}`;
+      cityPulseTeaserTitle.textContent =
+        cityPulseState?.headline || `Aktuellt i ${buildUnavailableCityLabel()}`;
+      cityPulseTeaserSummary.textContent =
+        cityPulseState?.subhead || cityPulseState?.note || buildPulseTeaserSummary();
+    }
   }
 
   if (cityPulseTeaserButton) {
@@ -3135,7 +3146,9 @@ function renderCityPulseTeaser() {
       ? activeDayEventCount
         ? "Se dagens live"
         : "Se live-läget"
-      : "Se live-läget";
+      : isRomeCuratedMode
+        ? "Se live-läget"
+        : "Läs preview";
   }
 }
 
@@ -4121,11 +4134,11 @@ function updatePlannerLaunchSummary(prefix = "") {
   const anchorLabel =
     activePlannerMode === plannerManualMode
       ? startSummary === "Parranda väljer" && endSummary === "Parranda väljer"
-        ? "Manuell styrning är vald, men Parranda får fortfarande välja ankare själv"
-        : `Exakta ankare: start ${startSummary} • slut ${endSummary}`
+        ? "Manuell styrning är vald, men ankare är fortfarande valfria"
+        : `Exakta ankare: ${startSummary} → ${endSummary}`
       : baseSummary === "Parranda väljer"
-        ? "Auto-läge där Parranda väljer boendebas, start och final själv"
-        : `Auto-läge med ${baseSummary} som boendebas`;
+        ? "Parranda väljer bas, start och final själv"
+        : `Bas: ${baseSummary}. Start och final väljs fortfarande av Parranda`;
   const summary =
     prefix ||
     `${dateLabel} • ${kmLabel}. ${anchorLabel}.`;
