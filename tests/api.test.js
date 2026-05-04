@@ -243,7 +243,7 @@ test("GET /barcelona avslöjar fallback i app shell bootstrap innan stad 2 finns
     assert.match(response.body, /<p id="heroLead" class="lead">\s*Parranda visar ett ärligt preview-läge tills staden har ett eget kuraterat pack\.\s*<\/p>/);
     assert.match(response.body, /<button id="routePlannerOpenButton" class="primary-button" type="button">\s*Se planner-preview\s*<\/button>/);
     assert.match(response.body, /data-budget-tier="budget">\s*Budgetsmart\s*<\/button>/);
-    assert.match(response.body, /data-budget-tier="dolce-vita">\s*Mer premium\s*<\/button>/);
+    assert.match(response.body, /data-budget-tier="dolce-vita">\s*Premium\s*<\/button>/);
     assert.match(response.body, /<button id="heroWildcardApplyButton" class="secondary-button" type="button" hidden>/);
     assert.match(response.body, /tydligt fallback-läge/);
     assert.doesNotMatch(response.body, /Din resa till Rom/);
@@ -283,7 +283,7 @@ test("GET /test-city renderar en egen city shell utan Rome-fallback", async () =
     assert.match(response.body, /<h1 id="heroHeadline">Test City kör i preview\.<\/h1>/);
     assert.match(response.body, /<button id="routePlannerOpenButton" class="primary-button" type="button">\s*Öppna preview\s*<\/button>/);
     assert.match(response.body, /data-budget-tier="budget">\s*Budgetsmart\s*<\/button>/);
-    assert.match(response.body, /data-budget-tier="dolce-vita">\s*Mer premium\s*<\/button>/);
+    assert.match(response.body, /data-budget-tier="dolce-vita">\s*Premium\s*<\/button>/);
     assert.match(response.body, /<button id="heroWildcardApplyButton" class="secondary-button" type="button" hidden>/);
     assert.doesNotMatch(response.body, /Rome on a budget/);
     assert.doesNotMatch(response.body, /La Dolce Vita/);

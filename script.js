@@ -1997,8 +1997,8 @@ const routeModifierLabels = {
 function getBudgetTierLabel(tier) {
   const labels = {
     standard: "Standard",
-    budget: hasRomeFrontendContent ? "Rome on a budget" : "Budgetsmart",
-    "dolce-vita": hasRomeFrontendContent ? "La Dolce Vita" : "Mer premium",
+    budget: "Budgetsmart",
+    "dolce-vita": hasRomeFrontendContent ? "La Dolce Vita" : "Premium",
   };
 
   return labels[tier] || null;
@@ -2008,12 +2008,11 @@ function getBudgetTierCopy(tier) {
   const copy = {
     standard:
       "Standardnivå är aktiv. Parranda försöker nu hålla balansen mellan starka stopp, rimlig nota och tydlig personlighet.",
-    budget: hasRomeFrontendContent
-      ? "Rome on a budget är aktivt. Motorn väger nu upp billigare öl, prisvänlig mat och kvarter där notan kan hållas nere utan att känslan dör."
-      : "Budgetsmart läge är aktivt. Motorn väger nu upp billigare öl, prisvänlig mat och stopp där notan kan hållas nere utan att känslan dör.",
+    budget:
+      "Budgetsmart är aktivt. Motorn väger nu upp billigare öl, prisvänlig mat och stopp där notan kan hållas nere utan att känslan dör.",
     "dolce-vita": hasRomeFrontendContent
       ? "La Dolce Vita är aktivt. Motorn jagar nu mer premium, bokningsvärda glas och stopp som får kvällen att kännas större och lite lyxigare."
-      : "Mer premium är aktivt. Motorn jagar nu mer bokningsvärda glas och stopp som får kvällen att kännas större och lite lyxigare.",
+      : "Premium är aktivt. Motorn jagar nu mer bokningsvärda glas och stopp som får kvällen att kännas större och lite lyxigare.",
   };
 
   return copy[tier] || null;
