@@ -325,7 +325,7 @@ const romePlaces = [
   },
 ];
 
-const trastevereBars = [
+const romeTrastevereBars = [
   {
     name: "Bar San Calisto",
     type: "ikonisk bar",
@@ -394,7 +394,7 @@ const trastevereBars = [
   },
 ];
 
-const trastevereDay = [
+const romeTrastevereDay = [
   {
     time: "10:30",
     label: "Kulturstart",
@@ -657,8 +657,8 @@ const romeDistrictGuides = [
     actionTitle: "Trastevere är bäst när du vill ge en hel dag en trygg och livlig final",
     actionCopy:
       "Använd kvarteret som start, mål eller båda om du vill att rutten ska landa i ett område som klarar både vin, öl och sena svängar.",
-    stopCards: trastevereBars,
-    dayStops: trastevereDay,
+    stopCards: romeTrastevereBars,
+    dayStops: romeTrastevereDay,
   },
   {
     id: "testaccio-ostiense",
@@ -1998,7 +1998,7 @@ function getBudgetTierLabel(tier) {
   const labels = {
     standard: "Standard",
     budget: hasRomeFrontendContent ? "Rome on a budget" : "Budgetsmart",
-    "dolce-vita": "La Dolce Vita",
+    "dolce-vita": hasRomeFrontendContent ? "La Dolce Vita" : "Mer premium",
   };
 
   return labels[tier] || null;
@@ -2011,8 +2011,9 @@ function getBudgetTierCopy(tier) {
     budget: hasRomeFrontendContent
       ? "Rome on a budget är aktivt. Motorn väger nu upp billigare öl, prisvänlig mat och kvarter där notan kan hållas nere utan att känslan dör."
       : "Budgetsmart läge är aktivt. Motorn väger nu upp billigare öl, prisvänlig mat och stopp där notan kan hållas nere utan att känslan dör.",
-    "dolce-vita":
-      "La Dolce Vita är aktivt. Motorn jagar nu mer premium, bokningsvärda glas och stopp som får kvällen att kännas större och lite lyxigare.",
+    "dolce-vita": hasRomeFrontendContent
+      ? "La Dolce Vita är aktivt. Motorn jagar nu mer premium, bokningsvärda glas och stopp som får kvällen att kännas större och lite lyxigare."
+      : "Mer premium är aktivt. Motorn jagar nu mer bokningsvärda glas och stopp som får kvällen att kännas större och lite lyxigare.",
   };
 
   return copy[tier] || null;
@@ -2803,7 +2804,7 @@ function pulseItemMatchesTime(item, timeKey, dateString) {
 }
 
 function getPulseLookupCatalog() {
-  const catalog = new Map(getRomeFallbackPointCatalog());
+  const catalog = hasRomeFrontendContent ? new Map(getRomeFallbackPointCatalog()) : new Map();
 
   getPlannerDistrictGroups().forEach((item) => {
     catalog.set(item.label, {
@@ -5314,7 +5315,7 @@ function createSavedRouteCard(savedRoute) {
   const budgetTierLabel = {
     budget: "Budgetvänlig bas",
     standard: null,
-    "dolce-vita": "La Dolce Vita",
+    "dolce-vita": getBudgetTierLabel("dolce-vita"),
   };
   const modifierLabel = {
     evening: "Mer kväll",
