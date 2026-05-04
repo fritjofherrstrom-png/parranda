@@ -2,6 +2,7 @@ const catalog = require("./rome/catalog");
 const { getCityPulse, getDateSignals, getRomeTodayIsoDate } = require("./rome/editorial");
 const { fetchLiveEventsForDates } = require("./rome/live");
 const { geocodeQuery } = require("./rome/geocoding");
+const localTruth = require("./rome/local-truth");
 const {
   ROME_TIMEZONE,
   ROME_CENTER,
@@ -140,4 +141,5 @@ module.exports = {
       },
     },
   },
+  localTruth,
 };

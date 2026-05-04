@@ -9,6 +9,30 @@ const { buildRouteFromTemplate, routeSimilarity } = require("../server/route-eng
 
 const originalFetch = global.fetch;
 
+function assertLocalTruthShape(localTruth) {
+  assert.ok(localTruth && typeof localTruth === "object");
+  assert.ok(Array.isArray(localTruth.score_adjustments));
+  assert.ok(Array.isArray(localTruth.caution_notes));
+  assert.ok(Array.isArray(localTruth.verify_opening_hours));
+  assert.ok(Array.isArray(localTruth.route_context_notes));
+  assert.ok(Array.isArray(localTruth.live_context_notes));
+  assert.ok(Array.isArray(localTruth.prefer_tags));
+  assert.ok(Array.isArray(localTruth.avoid_tags));
+  assert.ok(Number.isFinite(localTruth.score_delta));
+}
+
+function assertNeutralLocalTruth(localTruth) {
+  assertLocalTruthShape(localTruth);
+  assert.deepEqual(localTruth.score_adjustments, []);
+  assert.deepEqual(localTruth.caution_notes, []);
+  assert.deepEqual(localTruth.verify_opening_hours, []);
+  assert.deepEqual(localTruth.route_context_notes, []);
+  assert.deepEqual(localTruth.live_context_notes, []);
+  assert.deepEqual(localTruth.prefer_tags, []);
+  assert.deepEqual(localTruth.avoid_tags, []);
+  assert.equal(localTruth.score_delta, 0);
+}
+
 function mockJsonResponse(payload) {
   return {
     ok: true,
@@ -530,6 +554,7 @@ test("POST /api/route-recommendations fungerar även när vädret saknas", async
     assert.equal(response.body.days.length, 1);
     assert.ok(response.body.days[0].primary_route.title);
     assert.ok(Array.isArray(response.body.days[0].date_signals));
+    assertLocalTruthShape(response.body.days[0].primary_route.local_truth);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -1063,10 +1088,58 @@ test("POST /api/route-recommendations kan köras för test-city utan Rome-data",
     assert.ok(response.body.days[0].primary_route);
     assert.equal(response.body.days[0].primary_route.start_label, "Old Town");
     assert.deepEqual(response.body.days[0].live_events, []);
+    assertNeutralLocalTruth(response.body.days[0].primary_route.local_truth);
     assert.doesNotMatch(
       JSON.stringify(response.body),
       /Trastevere|Monti|Testaccio|Centro Storico|\bRom\b|\bRome\b/,
     );
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("POST /api/route-recommendations bär ett normaliserat local_truth-block på varje route-objekt", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-08-15"],
+          weathercode: [0],
+          temperature_2m_max: [31],
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during local truth api test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations",
+      body: {
+        dates: ["2026-08-15"],
+        start: { type: "preset", label: "Trastevere" },
+        end: { type: "preset", label: "Trastevere" },
+        walking_km_target: 8,
+        preferences: ["vin", "mat", "kultur", "hidden gems"],
+      },
+    });
+
+    assert.equal(response.status, 200);
+    const day = response.body.days[0];
+    const routeObjects = [day.primary_route, ...day.alternatives];
+
+    routeObjects.forEach((route) => {
+      assertLocalTruthShape(route.local_truth);
+    });
+
+    assert.ok(day.primary_route.local_truth.verify_opening_hours.length >= 1);
+    assert.ok(day.primary_route.local_truth.caution_notes.length >= 1);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

@@ -1,6 +1,7 @@
 const { AsyncLocalStorage } = require("node:async_hooks");
 const { getCityConfig } = require("./cities");
 const { getIsoWeekday } = require("./lib/iso-date");
+const { evaluateLocalTruth } = require("./local-truth");
 const { routeSimilarity } = require("./route-diversity");
 const { routeWalkingPath } = require("./walking-router");
 
@@ -1815,6 +1816,24 @@ function buildOpeningWarnings(routeStops, weekday) {
   return routeStops
     .filter((stop) => stop.closedWeekdays.includes(weekday))
     .map((stop) => `${stop.name} är kuraterat som svagare eller stängt den här veckodagen.`);
+}
+
+function buildLocalTruthOpeningWarnings(localTruth = {}) {
+  const warnings = new Set();
+
+  (localTruth.verify_opening_hours || []).forEach((entry) => {
+    if (entry?.reason) {
+      warnings.add(entry.reason);
+    }
+  });
+
+  (localTruth.caution_notes || []).forEach((entry) => {
+    if (entry?.text) {
+      warnings.add(entry.text);
+    }
+  });
+
+  return [...warnings];
 }
 
 function buildVenueSpecials(routeStops, weekday) {
@@ -3881,6 +3900,7 @@ function routeScore({
   distanceMode,
   routeStops,
   manualAnchorsLocked = false,
+  localTruth = null,
 }) {
   const startPoint = route.map_route_points[0];
   const endPoint = route.map_route_points[route.map_route_points.length - 1];
@@ -3933,6 +3953,7 @@ function routeScore({
   const strictFitScore = strictPreferenceCoverageScore(normalizedRouteStops, strictTags);
   const reusedPenalty = reusedIds.has(template.id) ? -6 : 0;
   const geoFitScore = (route.geo_quality_score || 0) - (route.pool_fit_penalty || 0);
+  const localTruthScore = Number(localTruth?.score_delta || 0);
 
   return {
     score:
@@ -3951,7 +3972,8 @@ function routeScore({
       geoFitScore +
       startProximity +
       endProximity +
-      reusedPenalty,
+      reusedPenalty +
+      localTruthScore,
     weatherNote: weatherFit.note,
     budgetNote: budgetFit.note,
     pulseNote: pulseFit.note,
@@ -4503,7 +4525,22 @@ async function generateRecommendations({
           const routeStops = route.main_stops
             .map((stop) => resolveRouteStopData(stop))
             .filter(Boolean);
-          const openingWarnings = buildOpeningWarnings(routeStops, weekday);
+          const localTruth = evaluateLocalTruth(getActiveCityConfig(), {
+            date,
+            weekday,
+            route,
+            routeStops,
+            template,
+            preferences,
+            optimizerMode,
+            modifier: normalizeModifier(modifier, optimizerMode),
+            weather,
+            liveEvents,
+          });
+          const openingWarnings = [
+            ...buildOpeningWarnings(routeStops, weekday),
+            ...buildLocalTruthOpeningWarnings(localTruth),
+          ];
           const venueSpecials = buildVenueSpecials(routeStops, weekday);
           const scoring = routeScore({
             route,
@@ -4521,6 +4558,7 @@ async function generateRecommendations({
             distanceMode,
             routeStops,
             manualAnchorsLocked,
+            localTruth,
           });
 
           return {
@@ -4528,6 +4566,7 @@ async function generateRecommendations({
             dayProfile,
             route: {
               ...route,
+              local_truth: localTruth,
               weather_note: scoring.weatherNote,
               budget_note: scoring.budgetNote,
               pulse_note: scoring.pulseNote,

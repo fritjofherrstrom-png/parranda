@@ -86,4 +86,8 @@ module.exports = {
     },
     tuning: {},
   },
+  localTruth: {
+    calendar: [],
+    rules: [],
+  },
 };

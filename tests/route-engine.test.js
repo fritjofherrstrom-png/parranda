@@ -16,6 +16,8 @@ const {
   routeScore,
   routeSimilarity,
 } = require("../server/route-engine");
+const { getCityConfig } = require("../server/cities");
+const { createEmptyLocalTruthEffect, evaluateLocalTruth } = require("../server/local-truth");
 const { diversifyRecommendationDays } = require("../server/route-diversity");
 const { findItemByName, routeTemplates } = require("../server/catalog");
 const { resetLiveEventsCache } = require("../server/live-events");
@@ -211,6 +213,86 @@ test("modifier och budget tier normaliseras från nya UI-värden", () => {
   assert.equal(normalizeBudgetTier([], null, "dolce-vita"), "dolce-vita");
   assert.equal(normalizeModifier("party", null), "party");
   assert.equal(normalizeModifier(null, "culture-mode"), "culture");
+});
+
+test("routeScore konsumerar local truth score_delta generiskt utan city-specialfall", () => {
+  const template = routeTemplates.find((entry) => entry.id === "south-loop");
+  const route = sampleRoute(template);
+  const routeStops = template.stops.map((id) => findItemByName(id)).filter(Boolean);
+
+  const baseScore = routeScore({
+    route,
+    template,
+    weather: null,
+    weekday: 1,
+    targetKm: template.defaultKm,
+    preferences: ["mat", "vin", "kultur", "hidden gems"],
+    reusedIds: new Set(),
+    routeStops,
+    localTruth: createEmptyLocalTruthEffect(),
+  });
+  const adjustedScore = routeScore({
+    route,
+    template,
+    weather: null,
+    weekday: 1,
+    targetKm: template.defaultKm,
+    preferences: ["mat", "vin", "kultur", "hidden gems"],
+    reusedIds: new Set(),
+    routeStops,
+    localTruth: {
+      ...createEmptyLocalTruthEffect(),
+      score_adjustments: [
+        {
+          id: "synthetic-local-truth-penalty",
+          rule_id: "synthetic-local-truth",
+          reason: "Synthetic local truth penalty",
+          delta: -2,
+        },
+      ],
+      score_delta: -2,
+    },
+  });
+
+  assert.ok(adjustedScore.score < baseScore.score);
+});
+
+test("Rome local truth laddas från aktiv city config och markerar skörare måndagskultur", () => {
+  const rome = getCityConfig("rome");
+  const template = routeTemplates.find((entry) => entry.id === "south-loop");
+  const routeStops = template.stops.map((id) => findItemByName(id)).filter(Boolean);
+  const route = sampleRoute(template);
+
+  const effect = evaluateLocalTruth(rome, {
+    date: "2026-04-20",
+    route,
+    routeStops,
+    template,
+    preferences: ["mat", "vin", "kultur", "hidden gems"],
+    liveEvents: [],
+  });
+
+  assert.ok(effect.verify_opening_hours.length >= 1);
+  assert.ok(effect.caution_notes.length >= 1);
+  assert.ok(effect.score_delta < 0);
+});
+
+test("test-city local truth förblir neutral utan Rome-hardcoding i generisk logik", () => {
+  const testCity = getCityConfig("test-city");
+  const template = testCity.catalog.routeTemplates[0];
+  const routeStops = template.stops.map((id) => testCity.catalog.allItems.find((item) => item.id === id)).filter(Boolean);
+  const route = sampleRoute(template);
+
+  const effect = evaluateLocalTruth(testCity, {
+    date: "2026-05-01",
+    route,
+    routeStops,
+    template,
+    preferences: ["kultur", "mat"],
+    liveEvents: [],
+  });
+
+  assert.deepEqual(effect, createEmptyLocalTruthEffect());
 });
 
 test("auto-läget bygger en riktig auto-loop för kyrkor utan dold preset-injektion", async () => {
