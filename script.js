@@ -1724,7 +1724,7 @@ function applyCityModeToShell() {
 
   if (heroHeadline) {
     heroHeadline.textContent = isRomeCuratedMode
-      ? `En smartare dag i ${plannerDisplayCityLabel}.`
+      ? "Din dag börjar här."
       : isInternalCityMode
         ? `${buildUnavailableCityLabel()} kör i preview.`
         : `${buildUnavailableCityLabel()} förbereds fortfarande.`;
@@ -1732,7 +1732,7 @@ function applyCityModeToShell() {
 
   if (heroLead) {
     heroLead.textContent = isRomeCuratedMode
-      ? "Parranda bygger en gångvänlig huvuddag först. LIVE och alternativ kommer efteråt."
+      ? `${plannerDisplayCityLabel} är aktiv stad. Välj känsla och låt Parranda bygga huvuddagen.`
       : isInternalCityMode
         ? "Planner, shell och city-core går att prova här utan Rome-curated lager."
         : "Parranda visar ett ärligt preview-läge tills staden har ett eget kuraterat pack.";
