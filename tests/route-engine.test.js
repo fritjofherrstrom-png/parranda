@@ -16,6 +16,7 @@ const {
   routeScore,
   routeSimilarity,
 } = require("../server/route-engine");
+const { diversifyRecommendationDays } = require("../server/route-diversity");
 const { findItemByName, routeTemplates } = require("../server/catalog");
 const { resetLiveEventsCache } = require("../server/live-events");
 
@@ -625,6 +626,40 @@ test("fler datum ger dedupe så att samma huvuddag inte återkommer direkt", asy
 
   assert.equal(result.days.length, 2);
   assert.notEqual(result.days[0].primary_route.id, result.days[1].primary_route.id);
+});
+
+test("flera auto-dagar varierar huvudrutten över en vecka i stället för samma sydvästspår", async () => {
+  global.fetch = createWeatherFetch({
+    "2026-05-11": 0,
+    "2026-05-12": 1,
+    "2026-05-13": 61,
+    "2026-05-14": 2,
+    "2026-05-15": 0,
+  });
+
+  const raw = await generateRecommendations({
+    dates: ["2026-05-11", "2026-05-12", "2026-05-13", "2026-05-14", "2026-05-15"],
+    homeBase: { type: "auto" },
+    start: { type: "auto" },
+    end: { type: "auto" },
+    walkingKmTarget: 9,
+    preferences: ["öl", "vin", "mat", "kultur", "hidden gems", "nattliv"],
+    legPacing: "balanced",
+  });
+  const result = diversifyRecommendationDays(raw);
+  const primaryIds = result.days.map((day) => day.primary_route.id);
+  const anchorZones = result.days.map((day) => day.primary_route.anchor_zone);
+  const startLabels = result.days.map((day) => day.primary_route.start_label);
+
+  assert.equal(result.days.length, 5);
+  assert.ok(new Set(primaryIds).size >= 4);
+  assert.ok(new Set(anchorZones).size >= 4);
+  assert.ok(new Set(startLabels).size >= 3);
+
+  result.days.slice(1).forEach((day, index) => {
+    assert.notEqual(result.days[index].primary_route.id, day.primary_route.id);
+    assert.ok(routeSimilarity(result.days[index].primary_route, day.primary_route) < 8);
+  });
 });
 
 test("21 april ger datumssignal för Natale di Roma", async () => {

@@ -272,17 +272,23 @@ function chooseBestPrimaryRoute(day, usedRoutes = []) {
   let orderedRoutes = candidates;
 
   if (best && best.index !== 0) {
-    const clearlyBetter = best.score >= currentPrimary.score + 0.6;
+    const currentRouteAlreadyUsed =
+      currentPrimary.route?.id &&
+      usedRoutes.some((usedRoute) => usedRoute?.id === currentPrimary.route.id);
     const currentTooSimilar = currentPrimary.maxSimilarity >= 9.2;
+    const currentNeedsMoreMix = currentPrimary.maxSimilarity >= 8.4;
     const betterAnchorMix =
       currentPrimary.repeatedAnchorCount > 0 && best.repeatedAnchorCount < currentPrimary.repeatedAnchorCount;
     const betterMacroMix =
       currentPrimary.repeatedMacroCount > 0 && best.repeatedMacroCount < currentPrimary.repeatedMacroCount;
+    const currentNeedsReplacement =
+      currentRouteAlreadyUsed || currentTooSimilar || (currentNeedsMoreMix && (betterAnchorMix || betterMacroMix));
+    const clearlyBetter = currentNeedsReplacement && best.score >= currentPrimary.score + 0.6;
 
     if (
       clearlyBetter ||
       (currentTooSimilar && best.score >= currentPrimary.score - 1.5) ||
-      ((betterAnchorMix || betterMacroMix) && best.score >= currentPrimary.score - 1)
+      (currentNeedsMoreMix && (betterAnchorMix || betterMacroMix) && best.score >= currentPrimary.score - 1)
     ) {
       orderedRoutes = [best.route, ...candidates.filter((_, index) => index !== best.index)];
     }
