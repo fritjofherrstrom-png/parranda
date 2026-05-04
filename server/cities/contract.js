@@ -29,6 +29,26 @@
  * }} CityRoutingConfig
  *
  * @typedef {{
+ *   id: string,
+ *   title?: string,
+ *   month: number,
+ *   day: number
+ * }} CityLocalTruthCalendarEntry
+ *
+ * @typedef {{
+ *   id: string,
+ *   type: string,
+ *   match?: Record<string, unknown>,
+ *   effects?: Record<string, unknown>,
+ *   evaluate?: (context: Record<string, unknown>) => Record<string, unknown>
+ * }} CityLocalTruthRule
+ *
+ * @typedef {{
+ *   calendar: CityLocalTruthCalendarEntry[],
+ *   rules: CityLocalTruthRule[]
+ * }} CityLocalTruthConfig
+ *
+ * @typedef {{
  *   key: string,
  *   label: string,
  *   timezone: string,
@@ -40,9 +60,11 @@
  *   services: CityServices,
  *   walking: CityWalkingConfig,
  *   routing: CityRoutingConfig,
+ *   localTruth?: CityLocalTruthConfig,
  *   searchLabel?: string,
  *   editorialAreaLabel?: string,
- *   fallbackLabel?: string
+ *   fallbackLabel?: string,
+ *   visibility?: string
  * }} CityConfig
  */
 
@@ -74,6 +96,49 @@ function assertCoordinateInRange(value, min, max, label) {
   if (!Number.isFinite(value) || value < min || value > max) {
     throw new Error(`${label} måste vara ett giltigt koordinatvärde mellan ${min} och ${max}`);
   }
+}
+
+function assertIntegerInRange(value, min, max, label) {
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new Error(`${label} måste vara ett heltal mellan ${min} och ${max}`);
+  }
+}
+
+function validateLocalTruthConfig(cityKey, localTruth) {
+  assertObject(localTruth, `city(${cityKey}).localTruth`);
+
+  if (!Array.isArray(localTruth.calendar)) {
+    throw new Error(`city(${cityKey}).localTruth.calendar måste vara en array`);
+  }
+
+  if (!Array.isArray(localTruth.rules)) {
+    throw new Error(`city(${cityKey}).localTruth.rules måste vara en array`);
+  }
+
+  localTruth.calendar.forEach((entry, index) => {
+    assertObject(entry, `city(${cityKey}).localTruth.calendar[${index}]`);
+    assertNonEmptyString(entry.id, `city(${cityKey}).localTruth.calendar[${index}].id`);
+    assertIntegerInRange(entry.month, 1, 12, `city(${cityKey}).localTruth.calendar[${index}].month`);
+    assertIntegerInRange(entry.day, 1, 31, `city(${cityKey}).localTruth.calendar[${index}].day`);
+    if (entry.title !== undefined) {
+      assertNonEmptyString(entry.title, `city(${cityKey}).localTruth.calendar[${index}].title`);
+    }
+  });
+
+  localTruth.rules.forEach((rule, index) => {
+    assertObject(rule, `city(${cityKey}).localTruth.rules[${index}]`);
+    assertNonEmptyString(rule.id, `city(${cityKey}).localTruth.rules[${index}].id`);
+    assertNonEmptyString(rule.type, `city(${cityKey}).localTruth.rules[${index}].type`);
+    if (rule.match !== undefined) {
+      assertObject(rule.match, `city(${cityKey}).localTruth.rules[${index}].match`);
+    }
+    if (rule.effects !== undefined) {
+      assertObject(rule.effects, `city(${cityKey}).localTruth.rules[${index}].effects`);
+    }
+    if (rule.evaluate !== undefined) {
+      assertFunction(rule.evaluate, `city(${cityKey}).localTruth.rules[${index}].evaluate`);
+    }
+  });
 }
 
 /**
@@ -140,6 +205,10 @@ function validateCityConfig(cityConfig) {
     `city(${cityConfig.key}).routing.macroAreaLabels`,
   );
   assertObject(cityConfig.routing.tuning, `city(${cityConfig.key}).routing.tuning`);
+
+  if (cityConfig.localTruth !== undefined) {
+    validateLocalTruthConfig(cityConfig.key, cityConfig.localTruth);
+  }
 
   return cityConfig;
 }
