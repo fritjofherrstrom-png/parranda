@@ -242,11 +242,13 @@ test("GET /barcelona avslöjar fallback i app shell bootstrap innan stad 2 finns
     assert.match(response.body, /<h1 id="heroHeadline">Barcelona förbereds fortfarande\.<\/h1>/);
     assert.match(response.body, /<p id="heroLead" class="lead">\s*Parranda visar ett ärligt preview-läge tills staden har ett eget kuraterat pack\.\s*<\/p>/);
     assert.match(response.body, /<button id="routePlannerOpenButton" class="primary-button" type="button">\s*Se planner-preview\s*<\/button>/);
+    assert.match(response.body, /data-budget-tier="budget">\s*Budgetsmart\s*<\/button>/);
     assert.match(response.body, /<button id="heroWildcardApplyButton" class="secondary-button" type="button" hidden>/);
     assert.match(response.body, /tydligt fallback-läge/);
     assert.doesNotMatch(response.body, /Din resa till Rom/);
     assert.doesNotMatch(response.body, /Just nu i Rom/);
     assert.doesNotMatch(response.body, /Monti som kulturstart/);
+    assert.doesNotMatch(response.body, /Rome on a budget/);
     assert.doesNotMatch(response.body, /Rome-wide/);
     assert.doesNotMatch(response.body, /kuraterade Rom-baserade rutter/);
     assert.doesNotMatch(response.body, /de kuraterade Rom-rutterna/);
@@ -278,7 +280,9 @@ test("GET /test-city renderar en egen city shell utan Rome-fallback", async () =
     assert.match(response.body, /<p id="heroEyebrow" class="eyebrow">TEST CITY · INTERN PREVIEW<\/p>/);
     assert.match(response.body, /<h1 id="heroHeadline">Test City kör i preview\.<\/h1>/);
     assert.match(response.body, /<button id="routePlannerOpenButton" class="primary-button" type="button">\s*Öppna preview\s*<\/button>/);
+    assert.match(response.body, /data-budget-tier="budget">\s*Budgetsmart\s*<\/button>/);
     assert.match(response.body, /<button id="heroWildcardApplyButton" class="secondary-button" type="button" hidden>/);
+    assert.doesNotMatch(response.body, /Rome on a budget/);
     assert.doesNotMatch(response.body, /data-city-label="Rom"/);
   } finally {
     await new Promise((resolve) => server.close(resolve));

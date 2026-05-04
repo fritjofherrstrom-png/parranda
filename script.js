@@ -1,4 +1,4 @@
-const places = [
+const romePlaces = [
   {
     name: "Garbatella",
     category: "kvarter",
@@ -445,7 +445,7 @@ const trastevereDay = [
   },
 ];
 
-const districtGuides = [
+const romeDistrictGuides = [
   {
     id: "monti",
     label: "Monti",
@@ -1368,6 +1368,7 @@ function getFrontendCityConfig() {
     timezone: bootstrap.timezone || "UTC",
     locale: bootstrap.locale || "sv-SE",
     currency: bootstrap.currency || "EUR",
+    center: bootstrap.center || null,
     searchLabel: bootstrap.searchLabel || bodyLabel,
     requestedKey,
     fallbackUsed: Boolean(bootstrap.fallbackUsed),
@@ -1386,7 +1387,9 @@ const isFallbackRequestedCity =
   Boolean(plannerCity.fallbackUsed) &&
   Boolean(plannerRequestedCityKey) &&
   plannerRequestedCityKey !== plannerCityKey;
-const isRomeCuratedMode = plannerCityKey === "rome" && !plannerCity.fallbackUsed;
+const isCuratedPublicMode = !plannerCity.fallbackUsed && plannerCityVisibility !== "internal";
+const hasRomeFrontendContent = isCuratedPublicMode && plannerCityKey === "rome";
+const isRomeCuratedMode = hasRomeFrontendContent;
 const isInternalCityMode = plannerCityVisibility === "internal";
 const plannerDisplayCityLabel = plannerCityLabel || plannerRequestedCityLabel || plannerResolvedCityLabel || "Staden";
 const plannerTimeZone = plannerCity.timezone;
@@ -1447,7 +1450,7 @@ const plannerLoadingMessages = [
   "Ordnar stopp till en naturlig rutt...",
   "Finjusterar efter gånglogik och live-läge...",
 ];
-const plannerDistrictCatalog = [
+const romePlannerDistrictCatalog = [
   {
     id: "trastevere",
     label: "Trastevere",
@@ -1534,12 +1537,28 @@ const plannerDistrictCatalog = [
   },
 ];
 
+function getFrontendPlaces() {
+  return hasRomeFrontendContent ? romePlaces : [];
+}
+
+function getFrontendDistrictGuides() {
+  return hasRomeFrontendContent ? romeDistrictGuides : [];
+}
+
+function getFrontendPlannerDistrictCatalog() {
+  return hasRomeFrontendContent ? romePlannerDistrictCatalog : [];
+}
+
 function getPreviewCityLabel() {
   return plannerDisplayCityLabel || plannerRequestedCityLabel || plannerResolvedCityLabel || "Staden";
 }
 
 function buildUnavailableCityLabel() {
   return getPreviewCityLabel();
+}
+
+function getMapCityFallbackLabel() {
+  return plannerDisplayCityLabel || plannerResolvedCityLabel || buildUnavailableCityLabel();
 }
 
 function buildLiveScopeAllLabel() {
@@ -1803,7 +1822,7 @@ function applyPlannerModeRestrictions() {
 
 let activeFilter = "all";
 let onlyFavorites = false;
-let selectedPlaceName = places[0].name;
+let selectedPlaceName = getFrontendPlaces()[0]?.name || "";
 let favorites = loadFavorites();
 let activeTab = "routes";
 let activeRouteKey = null;
@@ -1968,12 +1987,6 @@ const optimizerModeLabels = {
   "sunset-spots": "Sunset spots",
 };
 
-const budgetTierLabels = {
-  standard: "Standard",
-  budget: "Rome on a budget",
-  "dolce-vita": "La Dolce Vita",
-};
-
 const routeModifierLabels = {
   evening: "Mer kväll",
   culture: "Mer kultur",
@@ -1981,14 +1994,29 @@ const routeModifierLabels = {
   party: "Mer party",
 };
 
-const budgetTierCopy = {
-  standard:
-    "Standardnivå är aktiv. Parranda försöker nu hålla balansen mellan starka stopp, rimlig nota och tydlig personlighet.",
-  budget:
-    "Rome on a budget är aktivt. Motorn väger nu upp billigare öl, prisvänlig mat och kvarter där notan kan hållas nere utan att känslan dör.",
-  "dolce-vita":
-    "La Dolce Vita är aktivt. Motorn jagar nu mer premium, bokningsvärda glas och stopp som får kvällen att kännas större och lite lyxigare.",
-};
+function getBudgetTierLabel(tier) {
+  const labels = {
+    standard: "Standard",
+    budget: hasRomeFrontendContent ? "Rome on a budget" : "Budgetsmart",
+    "dolce-vita": "La Dolce Vita",
+  };
+
+  return labels[tier] || null;
+}
+
+function getBudgetTierCopy(tier) {
+  const copy = {
+    standard:
+      "Standardnivå är aktiv. Parranda försöker nu hålla balansen mellan starka stopp, rimlig nota och tydlig personlighet.",
+    budget: hasRomeFrontendContent
+      ? "Rome on a budget är aktivt. Motorn väger nu upp billigare öl, prisvänlig mat och kvarter där notan kan hållas nere utan att känslan dör."
+      : "Budgetsmart läge är aktivt. Motorn väger nu upp billigare öl, prisvänlig mat och stopp där notan kan hållas nere utan att känslan dör.",
+    "dolce-vita":
+      "La Dolce Vita är aktivt. Motorn jagar nu mer premium, bokningsvärda glas och stopp som får kvällen att kännas större och lite lyxigare.",
+  };
+
+  return copy[tier] || null;
+}
 
 const routeModifierCopy = {
   evening:
@@ -2045,7 +2073,7 @@ function createPulseSnapshot(snapshot, dateString) {
   };
 }
 
-function buildFallbackWildcards(dateString = getTodayIsoDate()) {
+function buildRomeFallbackWildcards(dateString = getTodayIsoDate()) {
   if (!isRomeCuratedMode) {
     return [];
   }
@@ -2143,7 +2171,7 @@ function getFallbackPulseDateLabels(dateString = getTodayIsoDate()) {
   };
 }
 
-function buildFallbackPulseItems(dateString = getTodayIsoDate()) {
+function buildRomeFallbackPulseItems(dateString = getTodayIsoDate()) {
   const date = dateString || getTodayIsoDate();
   const probe = parseIsoDateToUtcNoon(date);
   const weekday = probe?.getUTCDay() ?? 0;
@@ -2237,14 +2265,14 @@ function buildFallbackPulseItems(dateString = getTodayIsoDate()) {
   return items;
 }
 
-function buildFallbackCityPulse(dateString = getTodayIsoDate()) {
+function buildRomeFallbackCityPulse(dateString = getTodayIsoDate()) {
   if (!isRomeCuratedMode) {
     return buildGenericFallbackPulse(dateString);
   }
 
   const date = dateString || getTodayIsoDate();
   const dateLabels = getFallbackPulseDateLabels(date);
-  const items = buildFallbackPulseItems(date);
+  const items = buildRomeFallbackPulseItems(date);
 
   return {
     date,
@@ -2268,7 +2296,7 @@ function buildFallbackCityPulse(dateString = getTodayIsoDate()) {
       linked_wildcard_id: item.linked_wildcard_id || null,
     })),
     official_events: [],
-    wildcards: buildFallbackWildcards(date),
+    wildcards: buildRomeFallbackWildcards(date),
   };
 }
 
@@ -2775,7 +2803,7 @@ function pulseItemMatchesTime(item, timeKey, dateString) {
 }
 
 function getPulseLookupCatalog() {
-  const catalog = new Map(getFallbackPointCatalog());
+  const catalog = new Map(getRomeFallbackPointCatalog());
 
   getPlannerDistrictGroups().forEach((item) => {
     catalog.set(item.label, {
@@ -3452,7 +3480,7 @@ function renderCityPulse() {
   }
 
   if (!cityPulseState) {
-    cityPulseState = buildFallbackCityPulse(ensureActiveLiveDate());
+    cityPulseState = buildRomeFallbackCityPulse(ensureActiveLiveDate());
   }
 
   ensureActiveLiveDate();
@@ -3721,7 +3749,7 @@ async function loadCityPulse(dateString = getTodayIsoDate()) {
     return;
   }
 
-  const fallbackPulse = buildFallbackCityPulse(targetDate);
+  const fallbackPulse = buildRomeFallbackCityPulse(targetDate);
 
   try {
     const response = await fetchJson(
@@ -3743,7 +3771,7 @@ async function loadCityPulse(dateString = getTodayIsoDate()) {
       wildcards:
         Array.isArray(response.wildcards) && response.wildcards.length
           ? response.wildcards
-          : buildFallbackWildcards(dateString),
+          : buildRomeFallbackWildcards(dateString),
     };
   } catch (_error) {
     cityPulseState = {
@@ -3816,7 +3844,7 @@ function toggleFavorite(name) {
 }
 
 function getPlaceByName(name) {
-  return places.find((place) => place.name === name);
+  return getFrontendPlaces().find((place) => place.name === name);
 }
 
 function matchesSearch(place, term) {
@@ -3839,7 +3867,7 @@ function matchesSearch(place, term) {
 function getVisiblePlaces() {
   const term = searchInput.value.trim();
 
-  return places.filter((place) => {
+  return getFrontendPlaces().filter((place) => {
     const matchesCategory =
       activeFilter === "all" ? true : place.category === activeFilter;
     const matchesTerm = term ? matchesSearch(place, term) : true;
@@ -3990,8 +4018,9 @@ function updatePlannerAdvancedSummary() {
     pieces.push(`Boendebas: ${getPlannerPointSummary("home_base")}`);
   }
 
-  if (activeBudgetTier && activeBudgetTier !== "standard" && budgetTierLabels[activeBudgetTier]) {
-    pieces.push(budgetTierLabels[activeBudgetTier]);
+  const activeBudgetLabel = getBudgetTierLabel(activeBudgetTier);
+  if (activeBudgetTier && activeBudgetTier !== "standard" && activeBudgetLabel) {
+    pieces.push(activeBudgetLabel);
   }
 
   if (legPacingSelect?.value && legPacingSelect.value !== "balanced") {
@@ -4028,8 +4057,9 @@ function buildPlannerStyleSummary(prefix = "") {
     activeParts.push(optimizerModeLabels[activeOptimizerMode]);
   }
 
-  if (activeBudgetTier && activeBudgetTier !== "standard" && budgetTierLabels[activeBudgetTier]) {
-    activeParts.push(budgetTierLabels[activeBudgetTier]);
+  const activeBudgetLabel = getBudgetTierLabel(activeBudgetTier);
+  if (activeBudgetTier && activeBudgetTier !== "standard" && activeBudgetLabel) {
+    activeParts.push(activeBudgetLabel);
   }
 
   if (activeRouteModifier && routeModifierLabels[activeRouteModifier]) {
@@ -4262,7 +4292,7 @@ function getPlannerDistrictGroups() {
     return [];
   }
 
-  return plannerDistrictCatalog.map((item) => ({
+  return getFrontendPlannerDistrictCatalog().map((item) => ({
     ...item,
     children: Array.isArray(item.children)
       ? item.children.map((child) => ({ ...child }))
@@ -4841,6 +4871,10 @@ function updateOptimizerButtons() {
 
 function updateBudgetTierButtons() {
   budgetTierButtons.forEach((button) => {
+    const label = getBudgetTierLabel(button.dataset.budgetTier);
+    if (label) {
+      button.textContent = label;
+    }
     button.classList.toggle("is-active", button.dataset.budgetTier === activeBudgetTier);
   });
 }
@@ -4878,7 +4912,7 @@ function applyOptimizerMode(mode) {
 }
 
 function applyBudgetTier(tier) {
-  activeBudgetTier = budgetTierCopy[tier] ? tier : "standard";
+  activeBudgetTier = getBudgetTierCopy(tier) ? tier : "standard";
   updateBudgetTierButtons();
   updatePlannerAdvancedSummary();
   updateRouteMatchSummary(buildPlannerStyleSummary());
@@ -5683,10 +5717,10 @@ function createLiveEventCard(event) {
   return button;
 }
 
-function getFallbackPointCatalog() {
+function getRomeFallbackPointCatalog() {
   return new Map(
     [
-      ...places.map((place) => [
+      ...romePlaces.map((place) => [
         place.name,
         { label: place.name, lat: place.lat, lng: place.lng },
       ]),
@@ -5707,8 +5741,8 @@ function getFallbackPointCatalog() {
   );
 }
 
-function buildFallbackRoutePoints(routeId) {
-  const pointCatalog = getFallbackPointCatalog();
+function buildRomeFallbackRoutePoints(routeId) {
+  const pointCatalog = getRomeFallbackPointCatalog();
   const routeSeeds = {
     "classic-loop": [
       "Trastevere",
@@ -5756,7 +5790,7 @@ function buildFallbackRoutePoints(routeId) {
 }
 
 function createFallbackRouteView(route) {
-  const mapRoutePoints = buildFallbackRoutePoints(route.id);
+  const mapRoutePoints = buildRomeFallbackRoutePoints(route.id);
 
   return {
     id: route.id,
@@ -5843,7 +5877,7 @@ function buildRouteLine(routeView) {
 
   const points = routeView?.mapRoutePoints || [];
   if (!points.length) {
-    return "Rom";
+    return getMapCityFallbackLabel();
   }
 
   const labels = [points[0]?.label, points[points.length - 1]?.label].filter(Boolean);
@@ -6614,7 +6648,7 @@ function drawRouteOnMap(routeView, highlightedEventId = null) {
       }).addTo(routeOverlay);
 
       marker.bindPopup(
-        `<strong>${event.title}</strong><br>${event.venue || "Rom"}<br>${event.route_fit_note || "Live-event på eller nära rutten."}`,
+        `<strong>${event.title}</strong><br>${event.venue || getMapCityFallbackLabel()}<br>${event.route_fit_note || "Live-event på eller nära rutten."}`,
       );
 
       if (isHighlighted) {
@@ -6650,14 +6684,14 @@ function showLoosePointOnMap(item) {
     fillOpacity: 0.95,
   }).addTo(routeOverlay);
 
-  marker.bindPopup(`<strong>${item.label}</strong><br>${item.area || "Rom"}`).openPopup();
+  marker.bindPopup(`<strong>${item.label}</strong><br>${item.area || getMapCityFallbackLabel()}`).openPopup();
   map.setView([item.lat, item.lng], 15, { animate: true });
 
   mapPlaceName.textContent = item.label;
-  mapPlaceMeta.textContent = `${item.type || "plats"} • ${item.area || "Rom"}`;
+  mapPlaceMeta.textContent = `${item.type || "plats"} • ${item.area || getMapCityFallbackLabel()}`;
   mapPlaceDescription.textContent = item.long_description || item.summary || item.vibe || "";
   mapPlaceNote.textContent =
-    item.route_fit_note || item.opening_summary || "Utvald plats i Rom.";
+    item.route_fit_note || item.opening_summary || `Utvald plats i ${getMapCityFallbackLabel()}.`;
   mapPlaceLink.href =
     item.external_map_url || createMapUrl(withPlannerCitySearchLabel(item.label));
   mapFavoriteButton.textContent = "Spara vald plats";
@@ -6695,10 +6729,12 @@ function initMap() {
     return;
   }
 
+  const mapCenter = plannerCity.center || { lat: 41.8933, lng: 12.4964 };
+
   map = L.map("map", {
     zoomControl: true,
     scrollWheelZoom: true,
-  }).setView([41.8933, 12.4964], 12);
+  }).setView([mapCenter.lat, mapCenter.lng], 12);
 
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution:
@@ -6708,7 +6744,7 @@ function initMap() {
 
   routeOverlay = L.layerGroup().addTo(map);
 
-  places.forEach((place) => {
+  getFrontendPlaces().forEach((place) => {
     const marker = L.marker([place.lat, place.lng], {
       icon: buildMarkerIcon(place),
       title: place.name,
@@ -6729,7 +6765,7 @@ function initMap() {
 }
 
 function renderSpotlights() {
-  const featuredPlaces = places.filter((place) => place.featured);
+  const featuredPlaces = getFrontendPlaces().filter((place) => place.featured);
 
   spotlightGrid.innerHTML = "";
 
@@ -6765,8 +6801,9 @@ function renderPlaces() {
   if (!filtered.length) {
     const emptyState = document.createElement("div");
     emptyState.className = "empty-state";
-    emptyState.innerHTML =
-      "<h3>Inga träffar just nu</h3><p>Testa ett annat sökord eller byt vibe, till exempel street art, lugn eller aperitivo.</p>";
+    emptyState.innerHTML = hasRomeFrontendContent
+      ? "<h3>Inga träffar just nu</h3><p>Testa ett annat sökord eller byt vibe, till exempel street art, lugn eller aperitivo.</p>"
+      : `<h3>${buildUnavailableCityLabel()} har inga kuraterade platskort ännu</h3><p>Frontend-lagret håller tillbaka Rome-platser tills staden har ett eget innehållspack.</p>`;
     cardsGrid.appendChild(emptyState);
     return;
   }
@@ -6827,7 +6864,8 @@ function renderPlaces() {
 }
 
 function getDistrictGuideById(guideId) {
-  return districtGuides.find((guide) => guide.id === guideId) || districtGuides[0];
+  const guides = getFrontendDistrictGuides();
+  return guides.find((guide) => guide.id === guideId) || guides[0] || null;
 }
 
 function getActiveDistrictGuide() {
@@ -6836,6 +6874,10 @@ function getActiveDistrictGuide() {
 
 function renderDistrictGuide() {
   const guide = getActiveDistrictGuide();
+
+  if (!guide) {
+    return;
+  }
 
   districtEyebrow.textContent = guide.eyebrow;
   districtTitle.textContent = guide.title;
@@ -6857,7 +6899,7 @@ function renderDistrictGuide() {
   });
 
   districtSelector.innerHTML = "";
-  districtGuides.forEach((item) => {
+  getFrontendDistrictGuides().forEach((item) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "district-selector-button";
