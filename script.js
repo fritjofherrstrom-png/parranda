@@ -1429,25 +1429,28 @@ const optimizerButtons = document.querySelectorAll("[data-optimizer-mode]");
 const budgetTierButtons = document.querySelectorAll("[data-budget-tier]");
 const routeModifierButtons = document.querySelectorAll("[data-route-modifier]");
 
+// `payloadSignals` are the active compatibility tags that this planner layer
+// actually sends to the route API today. `aliases` are taxonomy metadata for
+// broader multi-city language, not live recommendation logic on their own.
 const plannerIntentDefinitions = [
   {
     key: "food_drink",
     label: "Mat & dryck",
-    signals: ["mat", "vin", "öl"],
+    payloadSignals: ["mat", "vin", "öl", "cocktail"],
     aliases: ["food", "drink", "restaurant", "aperitivo", "wine", "beer", "cocktail", "mat", "vin", "öl"],
     coverageTags: ["mat", "vin", "öl", "cocktail", "aperitivo", "pizza"],
   },
   {
     key: "culture",
     label: "Kultur",
-    signals: ["kultur"],
+    payloadSignals: ["kultur", "kyrkor"],
     aliases: ["culture", "museum", "gallery", "architecture", "church", "kultur", "kyrkor"],
     coverageTags: ["kultur", "kyrkor"],
   },
   {
     key: "second_hand",
     label: "Second hand",
-    signals: ["second_hand"],
+    payloadSignals: ["second_hand"],
     aliases: [
       "second_hand",
       "vintage",
@@ -1482,35 +1485,35 @@ const plannerIntentDefinitions = [
   {
     key: "hidden_gems",
     label: "Hidden gems",
-    signals: ["hidden gems"],
+    payloadSignals: ["hidden gems", "low-key"],
     aliases: ["hidden_gems", "local", "unusual", "under_the_radar", "hidden gems", "lokalt", "ovanligt"],
     coverageTags: ["hidden gems"],
   },
   {
     key: "views",
     label: "Utsikt",
-    signals: ["utsikt"],
+    payloadSignals: ["utsikt", "hidden gems"],
     aliases: ["view", "panorama", "rooftop", "golden_hour", "utsikt"],
     coverageTags: ["utsikt", "golden hour"],
   },
   {
     key: "nightlife",
     label: "Kvällsliv",
-    signals: ["nattliv"],
+    payloadSignals: ["nattliv", "kväll", "cocktail", "party"],
     aliases: ["nightlife", "evening", "bar", "cocktail", "late", "party-light", "nattliv", "kväll"],
     coverageTags: ["nattliv", "kväll", "cocktail", "öl", "vin", "party"],
   },
   {
     key: "history",
     label: "Historia",
-    signals: ["kyrkor", "klassiker"],
+    payloadSignals: ["klassiker", "kyrkor", "kultur"],
     aliases: ["history", "ancient", "ruins", "archaeology", "classic", "church", "museum", "historia", "antikt", "ruiner", "klassiker"],
     coverageTags: ["kultur", "kyrkor", "klassiker"],
   },
   {
     key: "green_walk",
     label: "Grönt & promenad",
-    signals: ["utsikt", "hidden gems", "low-key"],
+    payloadSignals: ["low-key", "utsikt", "hidden gems"],
     aliases: ["park", "garden", "walk", "waterfront", "green", "outdoor", "promenad", "trädgård", "vatten"],
     coverageTags: ["utsikt", "hidden gems", "low-key"],
   },
@@ -2124,7 +2127,7 @@ function setSelectedIntentKeys(intentKeys = []) {
 
 function expandIntentKeysToPreferenceSignals(intentKeys = []) {
   return [...new Set(
-    intentKeys.flatMap((intentKey) => plannerIntentByKey.get(intentKey)?.signals || []),
+    intentKeys.flatMap((intentKey) => plannerIntentByKey.get(intentKey)?.payloadSignals || []),
   )];
 }
 
@@ -2132,11 +2135,11 @@ function inferIntentKeysFromPreferences(preferences = []) {
   const selectedPreferences = new Set(preferences || []);
   const inferredKeys = [];
 
-  if (["mat", "vin", "öl", "cocktail", "pizza"].some((tag) => selectedPreferences.has(tag))) {
+  if (["mat", "vin", "öl", "pizza"].some((tag) => selectedPreferences.has(tag))) {
     inferredKeys.push("food_drink");
   }
 
-  if (selectedPreferences.has("kultur") || selectedPreferences.has("kyrkor")) {
+  if (selectedPreferences.has("kultur")) {
     inferredKeys.push("culture");
   }
 
@@ -2164,7 +2167,10 @@ function inferIntentKeysFromPreferences(preferences = []) {
     inferredKeys.push("hidden_gems");
   }
 
-  if (selectedPreferences.has("utsikt")) {
+  if (
+    selectedPreferences.has("utsikt") ||
+    selectedPreferences.has("golden hour")
+  ) {
     inferredKeys.push("views");
   }
 
@@ -2181,7 +2187,7 @@ function inferIntentKeysFromPreferences(preferences = []) {
     selectedPreferences.has("historia") ||
     selectedPreferences.has("antikt") ||
     selectedPreferences.has("ruiner") ||
-    (selectedPreferences.has("kyrkor") && selectedPreferences.has("kultur"))
+    selectedPreferences.has("kyrkor")
   ) {
     inferredKeys.push("history");
   }
