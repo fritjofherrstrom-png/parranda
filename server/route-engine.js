@@ -651,6 +651,50 @@ function buildPointAreaProfile(point) {
   };
 }
 
+function incrementCount(map, key) {
+  if (!key) {
+    return;
+  }
+
+  map.set(key, (map.get(key) || 0) + 1);
+}
+
+function buildUsedRouteContext(usedRoutes = []) {
+  const context = {
+    startLabels: new Map(),
+    endLabels: new Map(),
+    startTokens: new Map(),
+    endTokens: new Map(),
+    startMacros: new Map(),
+    endMacros: new Map(),
+    labelPairs: new Map(),
+    tokenPairs: new Map(),
+    macroPairs: new Map(),
+  };
+
+  usedRoutes.forEach((route) => {
+    const geoProfile = route?.geo_profile || {};
+    const startLabel = slugifyText(route?.start_label);
+    const endLabel = slugifyText(route?.end_label);
+    const startToken = slugifyText(geoProfile.start_token);
+    const endToken = slugifyText(geoProfile.end_token);
+    const startMacro = slugifyText(geoProfile.start_macro);
+    const endMacro = slugifyText(geoProfile.end_macro);
+
+    incrementCount(context.startLabels, startLabel);
+    incrementCount(context.endLabels, endLabel);
+    incrementCount(context.startTokens, startToken);
+    incrementCount(context.endTokens, endToken);
+    incrementCount(context.startMacros, startMacro);
+    incrementCount(context.endMacros, endMacro);
+    incrementCount(context.labelPairs, startLabel && endLabel ? `${startLabel}|${endLabel}` : null);
+    incrementCount(context.tokenPairs, startToken && endToken ? `${startToken}|${endToken}` : null);
+    incrementCount(context.macroPairs, startMacro && endMacro ? `${startMacro}|${endMacro}` : null);
+  });
+
+  return context;
+}
+
 function getAutoAnchorCandidates() {
   return getAllItems().filter((item) => autoAnchorKinds.has(item.kind));
 }
@@ -734,12 +778,14 @@ function scoreAutoAnchorCandidate(
     liveEvents = [],
     targetKm = 8,
     distanceMode = "soft_target",
+    usedRoutes = [],
   } = {},
 ) {
   const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
   const supportItems = getAutoAnchorSupportItems(candidate);
   const candidateProfile = buildItemAreaProfile(candidate);
   const pairedProfile = pairedPoint ? buildPointAreaProfile(pairedPoint) : null;
+  const usedRouteContext = buildUsedRouteContext(usedRoutes);
   const activeModifier = normalizeModifier(modifier, optimizerMode);
   const optimizerTags = autoAnchorOptimizerTags[optimizerMode] || [];
   const modifierTags = modifierEventTags[activeModifier] || [];
@@ -891,6 +937,30 @@ function scoreAutoAnchorCandidate(
     }
   });
 
+  const candidateLabel = slugifyText(candidate.name);
+  const roleLabels = role === "end" ? usedRouteContext.endLabels : usedRouteContext.startLabels;
+  const roleTokens = role === "end" ? usedRouteContext.endTokens : usedRouteContext.startTokens;
+  const roleMacros = role === "end" ? usedRouteContext.endMacros : usedRouteContext.startMacros;
+  const repeatedLabelCount = candidateLabel ? roleLabels.get(candidateLabel) || 0 : 0;
+  const repeatedTokenCount = candidateProfile.primaryToken
+    ? roleTokens.get(candidateProfile.primaryToken) || 0
+    : 0;
+  const repeatedMacroCount = candidateProfile.primaryMacro
+    ? roleMacros.get(candidateProfile.primaryMacro) || 0
+    : 0;
+
+  if (repeatedLabelCount) {
+    score -= Math.min(7.2, repeatedLabelCount * 4.4);
+  }
+
+  if (repeatedTokenCount) {
+    score -= Math.min(4.8, repeatedTokenCount * 2.6);
+  }
+
+  if (repeatedMacroCount) {
+    score -= Math.min(3.6, repeatedMacroCount * 1.4);
+  }
+
   return Number(score.toFixed(1));
 }
 
@@ -987,6 +1057,7 @@ function scoreAutoAnchorPair(
     modifier = null,
     targetKm = 8,
     distanceMode = "soft_target",
+    usedRoutes = [],
   } = {},
 ) {
   if (!startCandidate || !endCandidate) {
@@ -995,8 +1066,20 @@ function scoreAutoAnchorPair(
 
   const startProfile = buildItemAreaProfile(startCandidate);
   const endProfile = buildItemAreaProfile(endCandidate);
+  const usedRouteContext = buildUsedRouteContext(usedRoutes);
   const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
   const distanceKm = haversineKm(startCandidate, endCandidate);
+  const startLabel = slugifyText(startCandidate.name);
+  const endLabel = slugifyText(endCandidate.name);
+  const labelPair = startLabel && endLabel ? `${startLabel}|${endLabel}` : null;
+  const tokenPair =
+    startProfile.primaryToken && endProfile.primaryToken
+      ? `${startProfile.primaryToken}|${endProfile.primaryToken}`
+      : null;
+  const macroPair =
+    startProfile.primaryMacro && endProfile.primaryMacro
+      ? `${startProfile.primaryMacro}|${endProfile.primaryMacro}`
+      : null;
   let score = 0;
 
   score += (startCandidate.anchorWeight || 1.5) * 1.8;
@@ -1055,6 +1138,60 @@ function scoreAutoAnchorPair(
   const expectedMaxDistance = distanceMode === "no_limit" ? 7.2 : Math.max(4.5, targetKm * 0.75);
   if (distanceKm > expectedMaxDistance) {
     score -= (distanceKm - expectedMaxDistance) * 1.5;
+  }
+
+  const repeatedStartLabelCount = startLabel ? usedRouteContext.startLabels.get(startLabel) || 0 : 0;
+  const repeatedEndLabelCount = endLabel ? usedRouteContext.endLabels.get(endLabel) || 0 : 0;
+  const repeatedLabelPairCount = labelPair ? usedRouteContext.labelPairs.get(labelPair) || 0 : 0;
+  const repeatedStartTokenCount = startProfile.primaryToken
+    ? usedRouteContext.startTokens.get(startProfile.primaryToken) || 0
+    : 0;
+  const repeatedEndTokenCount = endProfile.primaryToken
+    ? usedRouteContext.endTokens.get(endProfile.primaryToken) || 0
+    : 0;
+  const repeatedStartMacroCount = startProfile.primaryMacro
+    ? usedRouteContext.startMacros.get(startProfile.primaryMacro) || 0
+    : 0;
+  const repeatedEndMacroCount = endProfile.primaryMacro
+    ? usedRouteContext.endMacros.get(endProfile.primaryMacro) || 0
+    : 0;
+  const repeatedTokenPairCount = tokenPair ? usedRouteContext.tokenPairs.get(tokenPair) || 0 : 0;
+  const repeatedMacroPairCount = macroPair ? usedRouteContext.macroPairs.get(macroPair) || 0 : 0;
+
+  if (repeatedLabelPairCount) {
+    score -= Math.min(10.5, repeatedLabelPairCount * 6.2);
+  }
+
+  if (repeatedStartLabelCount) {
+    score -= Math.min(5.4, repeatedStartLabelCount * 2.7);
+  }
+
+  if (repeatedEndLabelCount) {
+    score -= Math.min(5.8, repeatedEndLabelCount * 3);
+  }
+
+  if (repeatedTokenPairCount) {
+    score -= Math.min(6.2, repeatedTokenPairCount * 3.4);
+  }
+
+  if (repeatedMacroPairCount) {
+    score -= Math.min(4.6, repeatedMacroPairCount * 2.2);
+  }
+
+  if (repeatedStartTokenCount) {
+    score -= Math.min(3.8, repeatedStartTokenCount * 1.7);
+  }
+
+  if (repeatedEndTokenCount) {
+    score -= Math.min(4.2, repeatedEndTokenCount * 1.9);
+  }
+
+  if (repeatedStartMacroCount) {
+    score -= Math.min(2.4, repeatedStartMacroCount * 0.9);
+  }
+
+  if (repeatedEndMacroCount) {
+    score -= Math.min(2.8, repeatedEndMacroCount * 1.1);
   }
 
   return Number(score.toFixed(1));
@@ -4259,62 +4396,79 @@ async function generateRecommendations({
     const resolvedHomeBase = homeBaseIsAuto ? null : await resolvePoint(homeBase, getFallbackLabel());
     let resolvedStart = startIsAuto ? null : await resolvePoint(start, getFallbackLabel());
     let resolvedEnd = endIsAuto ? null : await resolvePoint(end, getFallbackLabel());
-    let resolvedAutoShape = null;
-
-    if (startIsAuto && endIsAuto) {
-      const autoAnchors = resolveAutoAnchors({
-        homeBase: resolvedHomeBase,
-        pulseByDate,
-        liveEventsByDate,
-        preferences,
-        optimizerMode,
-        modifier,
-        targetKm: walkingKmTarget,
-        distanceMode,
-      });
-      resolvedStart = autoAnchors.start;
-      resolvedEnd = autoAnchors.end;
-      resolvedAutoShape = autoAnchors.shape;
-    } else if (startIsAuto) {
-      resolvedStart = resolveAutoPoint({
-        role: "start",
-        homeBase: resolvedHomeBase,
-        pairedPoint: resolvedEnd,
-        pulseByDate,
-        liveEventsByDate,
-        preferences,
-        optimizerMode,
-        modifier,
-        targetKm: walkingKmTarget,
-        distanceMode,
-      });
-    } else if (endIsAuto) {
-      resolvedEnd = resolveAutoPoint({
-        role: "end",
-        homeBase: resolvedHomeBase,
-        pairedPoint: resolvedStart,
-        pulseByDate,
-        liveEventsByDate,
-        preferences,
-        optimizerMode,
-        modifier,
-        targetKm: walkingKmTarget,
-        distanceMode,
-      });
-    }
     const manualAnchorsLocked = !startIsAuto && !endIsAuto;
     const usedTemplateIds = new Set();
     const usedPrimaryRoutes = [];
     const truthPassCount = Math.max(1, getWalkingConfig().truthPassTopCandidates || 5);
 
-    const days = await Promise.all(
-      normalizedDates.map(async (date, dateIndex) => {
+    const days = [];
+
+    for (const [dateIndex, date] of normalizedDates.entries()) {
         const weekday = weekdayFromDate(date);
         const weather = weatherByDate[date];
         const pulse = pulseByDate[date] || getPulseForDate(date);
         const dateSignals = getDateSignalsForDate(date);
         const pulseItems = Array.isArray(pulse.items) ? pulse.items : [];
         const liveEvents = liveEventsByDate[date] || [];
+        const dayPulseByDate = { [date]: pulse };
+        const dayLiveEventsByDate = { [date]: liveEvents };
+        let dayResolvedStart = resolvedStart;
+        let dayResolvedEnd = resolvedEnd;
+        let dayResolvedAutoShape = null;
+
+        if (startIsAuto && endIsAuto) {
+          const autoAnchors = resolveAutoAnchors({
+            homeBase: resolvedHomeBase,
+            pulseByDate: dayPulseByDate,
+            liveEventsByDate: dayLiveEventsByDate,
+            preferences,
+            optimizerMode,
+            modifier,
+            targetKm: walkingKmTarget,
+            distanceMode,
+            usedRoutes: usedPrimaryRoutes,
+          });
+          dayResolvedStart = autoAnchors.start;
+          dayResolvedEnd = autoAnchors.end;
+          dayResolvedAutoShape = autoAnchors.shape;
+        } else if (startIsAuto) {
+          dayResolvedStart = resolveAutoPoint({
+            role: "start",
+            homeBase: resolvedHomeBase,
+            pairedPoint: dayResolvedEnd,
+            pulseByDate: dayPulseByDate,
+            liveEventsByDate: dayLiveEventsByDate,
+            preferences,
+            optimizerMode,
+            modifier,
+            targetKm: walkingKmTarget,
+            distanceMode,
+            usedRoutes: usedPrimaryRoutes,
+          });
+        } else if (endIsAuto) {
+          dayResolvedEnd = resolveAutoPoint({
+            role: "end",
+            homeBase: resolvedHomeBase,
+            pairedPoint: dayResolvedStart,
+            pulseByDate: dayPulseByDate,
+            liveEventsByDate: dayLiveEventsByDate,
+            preferences,
+            optimizerMode,
+            modifier,
+            targetKm: walkingKmTarget,
+            distanceMode,
+            usedRoutes: usedPrimaryRoutes,
+          });
+        }
+
+        if (dateIndex === 0) {
+          if (startIsAuto) {
+            resolvedStart = dayResolvedStart;
+          }
+          if (endIsAuto) {
+            resolvedEnd = dayResolvedEnd;
+          }
+        }
         const primaryDayProfile = choosePrimaryDayProfile({
           dateIndex,
           totalDates: normalizedDates.length,
@@ -4331,8 +4485,8 @@ async function generateRecommendations({
             baseRoute ||
             buildRouteFromTemplate(
               template,
-              resolvedStart,
-              resolvedEnd,
+              dayResolvedStart,
+              dayResolvedEnd,
               walkingKmTarget,
               preferences,
               optimizerMode,
@@ -4341,7 +4495,7 @@ async function generateRecommendations({
               liveEvents,
               {
                 manualAnchorsLocked,
-                resolvedAutoShape,
+                resolvedAutoShape: dayResolvedAutoShape,
                 legPacing,
                 dayProfile,
               },
@@ -4453,15 +4607,14 @@ async function generateRecommendations({
         usedTemplateIds.add(primary.template.id);
         usedPrimaryRoutes.push(primary.route);
 
-        return {
+        days.push({
           date,
           date_signals: dateSignals,
           live_events: annotatedLiveEvents,
           primary_route: primary.route,
           alternatives: alternatives.map((entry) => entry.route),
-        };
-      }),
-    );
+        });
+    }
 
     return {
       city: getActiveCityConfig().key,
