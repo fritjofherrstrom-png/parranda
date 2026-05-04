@@ -295,6 +295,62 @@ test("test-city local truth förblir neutral utan Rome-hardcoding i generisk log
   assert.deepEqual(effect, createEmptyLocalTruthEffect());
 });
 
+test("Rome-packet har riktig second hand-coverage medan test-city förblir neutral", () => {
+  const rome = getCityConfig("rome");
+  const testCity = getCityConfig("test-city");
+  const romeSecondHandItems = rome.catalog.allItems.filter(
+    (item) => item.tags.includes("second_hand") || item.tags.includes("vintage"),
+  );
+  const romeSecondHandIds = new Set(romeSecondHandItems.map((item) => item.id));
+  const italianTerms = new Set(["seconda mano", "usato", "mercatino", "mercato dell'usato", "antiquariato"]);
+
+  assert.ok(romeSecondHandItems.length >= 6);
+  ["pifebo-vintage-shop", "humana-vintage-monti", "ciao-vintage", "porta-portese-market"].forEach((id) => {
+    assert.ok(romeSecondHandIds.has(id));
+  });
+
+  assert.equal(
+    testCity.catalog.allItems.some(
+      (item) =>
+        item.tags.includes("second_hand") ||
+        item.tags.includes("vintage") ||
+        item.tags.includes("market") ||
+        item.searchTerms.some((term) => italianTerms.has(term.toLowerCase())),
+    ),
+    false,
+  );
+});
+
+test("Rome-rutter kan yta riktiga second hand-stopp när intentet väljs", async () => {
+  global.fetch = createWeatherFetch({
+    "2026-05-08": 0,
+  });
+
+  const result = await generateRecommendations({
+    dates: ["2026-05-08"],
+    start: { type: "preset", label: "Monti" },
+    end: { type: "preset", label: "Monti" },
+    walkingKmTarget: 6,
+    preferences: ["second_hand", "vin", "low-key"],
+  });
+
+  const surfacedStopIds = new Set(result.days[0].primary_route.main_stops.map((stop) => stop.id));
+
+  assert.ok(result.days.length >= 1);
+  assert.ok(
+    [
+      "pifebo-vintage-shop",
+      "humana-vintage-monti",
+      "ciao-vintage",
+      "omero-e-cecilia",
+      "humana-vintage-trastevere",
+      "twice-vintage-shop",
+      "porta-portese-market",
+      "borghetto-flaminio-market",
+    ].some((id) => surfacedStopIds.has(id)),
+  );
+});
+
 test("auto-läget bygger en riktig auto-loop för kyrkor utan dold preset-injektion", async () => {
   global.fetch = createWeatherFetch({
     "2026-04-18": 0,
