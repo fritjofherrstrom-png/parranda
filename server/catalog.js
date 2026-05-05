@@ -2291,12 +2291,14 @@ const extraPlaces = [
     lat: 41.8983,
     lng: 12.4705,
     area: "Centro",
-    tags: ["second_hand", "vintage", "shopping"],
+    tags: ["second_hand", "vintage", "shopping", "antique"],
     weatherTags: ["all-weather"],
     closedWeekdays: [],
     searchTerms: [
       "ciao vintage",
       "governo vecchio",
+      "via del governo vecchio 71",
+      "antichita carnovale",
       "vintage",
       "abbigliamento vintage",
       "seconda mano",
@@ -2315,6 +2317,7 @@ const extraPlaces = [
     searchTerms: [
       "omero e cecilia",
       "governo vecchio",
+      "via del governo vecchio 110",
       "vintage",
       "second hand",
       "shopping vintage",
@@ -2429,6 +2432,7 @@ const extraPlaces = [
     closedWeekdays: [1, 2, 3, 4, 5, 6],
     searchTerms: [
       "porta portese",
+      "porta portese market",
       "mercato dell'usato",
       "mercatino",
       "flea market",
@@ -2448,6 +2452,7 @@ const extraPlaces = [
     closedWeekdays: [1, 2, 3, 4, 5, 6],
     searchTerms: [
       "borghetto flaminio",
+      "borghetto flaminio market",
       "vintage market",
       "antiquariato",
       "mercatino",

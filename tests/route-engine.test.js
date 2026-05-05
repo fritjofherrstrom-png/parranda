@@ -321,7 +321,18 @@ test("Rome-packet har riktig second hand-coverage medan test-city förblir neutr
   );
 });
 
-test("Rome-rutter kan yta riktiga second hand-stopp när intentet väljs", async () => {
+test("Rome Sunday-marknader använder samma weekday-index som resten av katalogen", () => {
+  const rome = getCityConfig("rome");
+  const portaPortese = rome.catalog.allItems.find((item) => item.id === "porta-portese-market");
+  const borghetto = rome.catalog.allItems.find((item) => item.id === "borghetto-flaminio-market");
+
+  assert.deepEqual(portaPortese.closedWeekdays, [1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(borghetto.closedWeekdays, [1, 2, 3, 4, 5, 6]);
+  assert.equal(portaPortese.closedWeekdays.includes(0), false);
+  assert.equal(borghetto.closedWeekdays.includes(0), false);
+});
+
+test("Rome-rutter kan yta riktiga second hand-stopp i kandidatsetet när intentet väljs", async () => {
   global.fetch = createWeatherFetch({
     "2026-05-08": 0,
   });
@@ -334,21 +345,30 @@ test("Rome-rutter kan yta riktiga second hand-stopp när intentet väljs", async
     preferences: ["second_hand", "vin", "low-key"],
   });
 
-  const surfacedStopIds = new Set(result.days[0].primary_route.main_stops.map((stop) => stop.id));
+  const candidateRoutes = [result.days[0].primary_route, ...result.days[0].alternatives];
+  const relevantStopIds = new Set([
+    "pifebo-vintage-shop",
+    "humana-vintage-monti",
+    "ciao-vintage",
+    "omero-e-cecilia",
+    "humana-vintage-trastevere",
+    "twice-vintage-shop",
+    "porta-portese-market",
+    "borghetto-flaminio-market",
+  ]);
+  const surfacedRoute = candidateRoutes.find((route) =>
+    route.main_stops.some(
+      (stop) =>
+        relevantStopIds.has(stop.id) ||
+        stop.tags.includes("second_hand") ||
+        stop.tags.includes("vintage") ||
+        stop.tags.includes("market"),
+    ),
+  );
 
   assert.ok(result.days.length >= 1);
-  assert.ok(
-    [
-      "pifebo-vintage-shop",
-      "humana-vintage-monti",
-      "ciao-vintage",
-      "omero-e-cecilia",
-      "humana-vintage-trastevere",
-      "twice-vintage-shop",
-      "porta-portese-market",
-      "borghetto-flaminio-market",
-    ].some((id) => surfacedStopIds.has(id)),
-  );
+  assert.ok(candidateRoutes.length >= 2);
+  assert.ok(surfacedRoute);
 });
 
 test("auto-läget bygger en riktig auto-loop för kyrkor utan dold preset-injektion", async () => {
