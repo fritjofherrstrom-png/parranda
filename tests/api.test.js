@@ -1227,6 +1227,123 @@ test("POST /api/route-recommendations bär ett normaliserat local_truth-block p�
   }
 });
 
+test("POST /api/route-recommendations kan yta ett day-sensitive market-spår på stark marknadsdag", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-05-10"],
+          weathercode: [0],
+          temperature_2m_max: [22],
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during strong market day api test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations",
+      body: {
+        dates: ["2026-05-10"],
+        start: { type: "preset", label: "Trastevere" },
+        end: { type: "preset", label: "Trastevere" },
+        walking_km_target: 7,
+        preferences: ["second_hand", "vin", "low-key"],
+      },
+    });
+
+    assert.equal(response.status, 200);
+    const candidates = [response.body.days[0].primary_route, ...response.body.days[0].alternatives];
+    const marketCandidate = candidates.find((route) =>
+      route.main_stops.some(
+        (stop) => stop.tags.includes("market") && (stop.tags.includes("second_hand") || stop.tags.includes("vintage")),
+      ),
+    );
+
+    assert.ok(marketCandidate);
+    assertLocalTruthShape(marketCandidate.local_truth);
+    assert.ok(
+      marketCandidate.local_truth.route_context_notes.some((entry) => /stark veckodag/i.test(entry.text)) ||
+        marketCandidate.local_truth.score_delta > 0,
+    );
+    assert.ok(
+      marketCandidate.opening_hours_warnings.every(
+        (warning) => !/är stängt|kommer vara stängt/i.test(warning),
+      ),
+    );
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("POST /api/route-recommendations håller shop-vintage-spåret levande på svag marknadsdag", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-05-13"],
+          weathercode: [0],
+          temperature_2m_max: [23],
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during weak market day api test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations",
+      body: {
+        dates: ["2026-05-13"],
+        start: { type: "preset", label: "Monti" },
+        end: { type: "preset", label: "Monti" },
+        walking_km_target: 6,
+        preferences: ["second_hand", "vin", "low-key"],
+      },
+    });
+
+    assert.equal(response.status, 200);
+    const candidates = [response.body.days[0].primary_route, ...response.body.days[0].alternatives];
+    const shopCandidate = candidates.find((route) =>
+      route.main_stops.some(
+        (stop) => stop.tags.includes("second_hand") && stop.tags.includes("vintage") && !stop.tags.includes("market"),
+      ),
+    );
+    const marketCandidate = candidates.find((route) =>
+      route.main_stops.some(
+        (stop) => stop.tags.includes("market") && (stop.tags.includes("second_hand") || stop.tags.includes("vintage")),
+      ),
+    );
+
+    assert.ok(shopCandidate);
+    assertLocalTruthShape(shopCandidate.local_truth);
+
+    if (marketCandidate) {
+      const weakDayText = [
+        ...marketCandidate.opening_hours_warnings,
+        ...marketCandidate.local_truth.caution_notes.map((entry) => entry.text),
+      ];
+
+      assert.ok(weakDayText.some((entry) => /dubbelkolla|marknadsdelen|veckodagen/i.test(entry)));
+    }
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("POST /api/route-recommendations returnerar officiella live-events när provider svarar", async () => {
   global.fetch = async (url) => {
     const parsed = new URL(String(url));

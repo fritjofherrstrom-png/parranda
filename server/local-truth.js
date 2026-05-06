@@ -1,3 +1,4 @@
+const { summarizeAvailability } = require("./availability");
 const { getIsoWeekday } = require("./lib/iso-date");
 
 function createEmptyLocalTruthEffect() {
@@ -167,18 +168,18 @@ function buildLocalTruthContext(cityConfig, input = {}) {
     input.date,
     cityConfig?.localTruth?.calendar || [],
   );
+  const weekday =
+    input.weekday === undefined || input.weekday === null ? getIsoWeekday(input.date) : input.weekday;
 
   return {
     ...input,
     cityConfig,
-    weekday:
-      input.weekday === undefined || input.weekday === null
-        ? getIsoWeekday(input.date)
-        : input.weekday,
+    weekday,
     activeCalendarEntries,
     activeCalendarIds: new Set(activeCalendarEntries.map((entry) => entry.id)),
     routeTags: buildRouteTagSet(input.route, input.routeStops),
     routeStopKinds: buildRouteStopKindSet(input.routeStops),
+    availabilitySummary: summarizeAvailability(input.routeStops, weekday),
   };
 }
 

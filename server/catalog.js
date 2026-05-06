@@ -2244,6 +2244,11 @@ const extraPlaces = [
     tags: ["second_hand", "vintage", "shopping"],
     weatherTags: ["all-weather"],
     closedWeekdays: [],
+    availability: {
+      kind: "shop",
+      daySensitivity: "low",
+      verifyRecommended: false,
+    },
     searchTerms: [
       "pifebo",
       "pifebo vintage",
@@ -2263,6 +2268,11 @@ const extraPlaces = [
     tags: ["second_hand", "vintage", "shopping", "local"],
     weatherTags: ["all-weather"],
     closedWeekdays: [],
+    availability: {
+      kind: "shop",
+      daySensitivity: "low",
+      verifyRecommended: false,
+    },
     searchTerms: [
       "humana vintage monti",
       "humana vintage",
@@ -2294,6 +2304,11 @@ const extraPlaces = [
     tags: ["second_hand", "vintage", "shopping", "antique"],
     weatherTags: ["all-weather"],
     closedWeekdays: [],
+    availability: {
+      kind: "shop",
+      daySensitivity: "low",
+      verifyRecommended: false,
+    },
     searchTerms: [
       "ciao vintage",
       "governo vecchio",
@@ -2314,6 +2329,11 @@ const extraPlaces = [
     tags: ["second_hand", "vintage", "shopping"],
     weatherTags: ["all-weather"],
     closedWeekdays: [],
+    availability: {
+      kind: "shop",
+      daySensitivity: "low",
+      verifyRecommended: false,
+    },
     searchTerms: [
       "omero e cecilia",
       "governo vecchio",
@@ -2369,6 +2389,11 @@ const extraPlaces = [
     tags: ["second_hand", "vintage", "shopping", "local"],
     weatherTags: ["all-weather"],
     closedWeekdays: [],
+    availability: {
+      kind: "shop",
+      daySensitivity: "low",
+      verifyRecommended: false,
+    },
     searchTerms: [
       "humana vintage trastevere",
       "humana vintage",
@@ -2388,6 +2413,11 @@ const extraPlaces = [
     tags: ["second_hand", "vintage", "shopping"],
     weatherTags: ["all-weather"],
     closedWeekdays: [],
+    availability: {
+      kind: "shop",
+      daySensitivity: "low",
+      verifyRecommended: false,
+    },
     searchTerms: [
       "twice vintage shop",
       "twice vintage",
@@ -2430,6 +2460,14 @@ const extraPlaces = [
     tags: ["second_hand", "market", "shopping", "vintage", "local"],
     weatherTags: ["sun", "mild"],
     closedWeekdays: [1, 2, 3, 4, 5, 6],
+    availability: {
+      kind: "event_market",
+      strongWeekdays: [0],
+      weakWeekdays: [1, 2, 3, 4, 5, 6],
+      daySensitivity: "high",
+      note: "Starkast på söndagar och klok att dubbelkolla dagsläge innan du låser dagen.",
+      verifyRecommended: true,
+    },
     searchTerms: [
       "porta portese",
       "porta portese market",
@@ -2450,6 +2488,14 @@ const extraPlaces = [
     tags: ["second_hand", "market", "shopping", "vintage", "antique"],
     weatherTags: ["sun", "mild"],
     closedWeekdays: [1, 2, 3, 4, 5, 6],
+    availability: {
+      kind: "event_market",
+      strongWeekdays: [0],
+      weakWeekdays: [1, 2, 3, 4, 5, 6],
+      daySensitivity: "high",
+      note: "Mest relevant på söndagar och bäst att dubbelkolla samma dag om marknadsspåret ska bära rutten.",
+      verifyRecommended: true,
+    },
     searchTerms: [
       "borghetto flaminio",
       "borghetto flaminio market",
@@ -2993,6 +3039,43 @@ const extraRouteTemplates = [
     vibeProfile: { evening: 2, culture: 1, lowKey: 3, party: 0 },
     hiddenMentions: ["Via della Scala", "Ponte Sisto i rätt ljus", "mjuk övergång mot centro"],
     barMentions: ["Les Vignerons"],
+  },
+  {
+    id: "porta-portese-market-loop",
+    title: "Porta Portese market loop",
+    summary:
+      "Ett riktigt marknadsspår för second hand-dagar där Trastevere och söndagsrytmen får bära upplevelsen.",
+    stops: ["trastevere", "porta-portese-market", "ponte-sisto", "campo-de-fiori", "les-vignerons"],
+    defaultKm: 6,
+    preferenceTags: ["second_hand", "market", "vintage", "shopping", "local"],
+    optimizerModes: ["evening-mode"],
+    weatherProfile: { sun: 2, rain: 0, hot: 0, evening: 1 },
+    weekdayBoost: { 0: 2 },
+    vibeProfile: { evening: 1, culture: 0, lowKey: 3, party: 0 },
+    hiddenMentions: [
+      "Porta Portese när marknadsspåret faktiskt lever",
+      "brostråket tillbaka via Sisto",
+      "Trastevere som mjuk vinlandning",
+    ],
+    barMentions: ["Les Vignerons"],
+  },
+  {
+    id: "borghetto-flaminio-market-loop",
+    title: "Borghetto Flaminio market loop",
+    summary:
+      "Ett luftigare vintage- och marknadsspår där Borghetto fungerar bäst när veckodagen verkligen bär det.",
+    stops: ["prati", "borghetto-flaminio-market", "santa-maria-del-popolo", "pincio-terrace", "castel-sant-angelo"],
+    defaultKm: 6,
+    preferenceTags: ["second_hand", "market", "vintage", "shopping", "antique"],
+    optimizerModes: ["culture-mode"],
+    weatherProfile: { sun: 2, rain: 0, hot: 0, evening: 0 },
+    weekdayBoost: { 0: 2 },
+    vibeProfile: { evening: 0, culture: 2, lowKey: 3, party: 0 },
+    hiddenMentions: [
+      "Borghetto Flaminio när söndagskänslan faktiskt finns där",
+      "Popolo som historiskt ankare",
+      "Pincio som luftig utsiktsfinal",
+    ],
   },
   {
     id: "centro-storico-slow-loop",

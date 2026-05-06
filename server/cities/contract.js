@@ -104,6 +104,50 @@ function assertIntegerInRange(value, min, max, label) {
   }
 }
 
+function validateAvailabilityMetadata(availability, label) {
+  assertObject(availability, label);
+
+  const validKinds = new Set(["shop", "market", "event_market", "seasonal"]);
+  const validSensitivity = new Set(["low", "medium", "high"]);
+
+  if (!validKinds.has(availability.kind)) {
+    throw new Error(`${label}.kind måste vara shop, market, event_market eller seasonal`);
+  }
+
+  if (availability.strongWeekdays !== undefined) {
+    if (!Array.isArray(availability.strongWeekdays)) {
+      throw new Error(`${label}.strongWeekdays måste vara en array`);
+    }
+    availability.strongWeekdays.forEach((weekday, index) => {
+      assertIntegerInRange(weekday, 0, 6, `${label}.strongWeekdays[${index}]`);
+    });
+  }
+
+  if (availability.weakWeekdays !== undefined) {
+    if (!Array.isArray(availability.weakWeekdays)) {
+      throw new Error(`${label}.weakWeekdays måste vara en array`);
+    }
+    availability.weakWeekdays.forEach((weekday, index) => {
+      assertIntegerInRange(weekday, 0, 6, `${label}.weakWeekdays[${index}]`);
+    });
+  }
+
+  if (availability.daySensitivity !== undefined && !validSensitivity.has(availability.daySensitivity)) {
+    throw new Error(`${label}.daySensitivity måste vara low, medium eller high`);
+  }
+
+  if (availability.note !== undefined) {
+    assertNonEmptyString(availability.note, `${label}.note`);
+  }
+
+  if (
+    availability.verifyRecommended !== undefined &&
+    typeof availability.verifyRecommended !== "boolean"
+  ) {
+    throw new Error(`${label}.verifyRecommended måste vara true eller false`);
+  }
+}
+
 function validateLocalTruthConfig(cityKey, localTruth) {
   assertObject(localTruth, `city(${cityKey}).localTruth`);
 
@@ -166,6 +210,14 @@ function validateCityConfig(cityConfig) {
     throw new Error(`city(${cityConfig.key}).catalog.allItems måste vara en array`);
   }
   assertFunction(cityConfig.catalog.findItemByName, `city(${cityConfig.key}).catalog.findItemByName`);
+  cityConfig.catalog.allItems.forEach((item, index) => {
+    if (item?.availability !== undefined) {
+      validateAvailabilityMetadata(
+        item.availability,
+        `city(${cityConfig.key}).catalog.allItems[${index}].availability`,
+      );
+    }
+  });
 
   assertObject(cityConfig.services, `city(${cityConfig.key}).services`);
   [
