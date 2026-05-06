@@ -308,6 +308,9 @@ test("GET / renderar en city-aware app shell med bootstrap", async () => {
     assert.match(response.body, /<title>Parranda \| Personlig City Guide för Rom<\/title>/);
     assert.match(response.body, /<p id="heroEyebrow" class="eyebrow">ROM · KURERAD DAGPLANERING<\/p>/);
     assert.match(response.body, /<h1 id="heroHeadline">Din dag börjar här\.<\/h1>/);
+    assert.match(response.body, /<p id="heroBlitzLabel" class="panel-label">BLITZ<\/p>/);
+    assert.match(response.body, /<h2 id="heroBlitzTitle">Laddar nästa drag\.\.\.<\/h2>/);
+    assert.match(response.body, /<button id="heroBlitzApplyButton" class="secondary-button" type="button"\s*>\s*Kör nu\s*<\/button>/);
     assert.match(response.body, /<button id="routePlannerOpenButton" class="primary-button" type="button">\s*Planera min dag\s*<\/button>/);
     assertPlannerIntentFirstPaint(response.body);
     assert.ok(!response.body.includes("__PARRANDA_CITY_BOOTSTRAP__"));
@@ -346,7 +349,7 @@ test("GET /barcelona avslöjar fallback i app shell bootstrap innan stad 2 finns
     assert.match(response.body, /<button id="routePlannerOpenButton" class="primary-button" type="button">\s*Se planner-preview\s*<\/button>/);
     assert.match(response.body, /data-budget-tier="budget">\s*Budgetsmart\s*<\/button>/);
     assert.match(response.body, /data-budget-tier="dolce-vita">\s*Premium\s*<\/button>/);
-    assert.match(response.body, /<button id="heroWildcardApplyButton" class="secondary-button" type="button" hidden>/);
+    assert.match(response.body, /<button id="heroBlitzApplyButton" class="secondary-button" type="button" hidden>/);
     assert.match(response.body, /tydligt fallback-läge/);
     assert.doesNotMatch(response.body, /Din resa till Rom/);
     assert.doesNotMatch(response.body, /Just nu i Rom/);
@@ -386,7 +389,7 @@ test("GET /test-city renderar en egen city shell utan Rome-fallback", async () =
     assert.match(response.body, /<button id="routePlannerOpenButton" class="primary-button" type="button">\s*Öppna preview\s*<\/button>/);
     assert.match(response.body, /data-budget-tier="budget">\s*Budgetsmart\s*<\/button>/);
     assert.match(response.body, /data-budget-tier="dolce-vita">\s*Premium\s*<\/button>/);
-    assert.match(response.body, /<button id="heroWildcardApplyButton" class="secondary-button" type="button" hidden>/);
+    assert.match(response.body, /<button id="heroBlitzApplyButton" class="secondary-button" type="button" hidden>/);
     assertPlannerIntentFirstPaint(response.body);
     assert.doesNotMatch(response.body, /Rome on a budget/);
     assert.doesNotMatch(response.body, /La Dolce Vita/);

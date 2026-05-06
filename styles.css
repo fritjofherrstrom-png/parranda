@@ -423,7 +423,7 @@ body::before {
   margin: 0;
 }
 
-.hero-quickstart-copy #heroWildcardSummary {
+.hero-quickstart-copy #heroBlitzSummary {
   margin-top: 6px;
   color: var(--muted);
   line-height: 1.5;
@@ -517,7 +517,11 @@ body::before {
 }
 
 .hero-idea-strip .hero-panel-meta {
-  display: none;
+  display: block;
+  margin-top: 2px;
+  color: rgba(36, 25, 20, 0.62);
+  font-size: 0.8rem;
+  line-height: 1.35;
 }
 
 .hero-idea-strip .panel-label {
@@ -548,14 +552,42 @@ body::before {
   line-height: 1.2;
 }
 
-.hero-idea-strip #heroWildcardSummary {
+.hero-idea-strip #heroBlitzSummary {
   font-size: 0.8rem;
   line-height: 1.34;
   color: rgba(36, 25, 20, 0.58);
 }
 
+.hero-blitz-followup {
+  margin: 2px 0 0;
+  color: rgba(36, 25, 20, 0.66);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
 .hero-idea-strip .panel-tags {
-  display: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hero-blitz-origin-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.hero-blitz-origin-button {
+  padding: 6px 10px;
+  font-size: 0.76rem;
+  border-radius: 999px;
+}
+
+.hero-blitz-origin-button.is-active {
+  background: rgba(175, 77, 36, 0.14);
+  border-color: rgba(97, 50, 23, 0.18);
+  color: var(--accent-deep);
 }
 
 .hero-idea-strip .hero-panel-actions .secondary-button,
@@ -4164,8 +4196,8 @@ body.is-printing-guide #routeGuideDrawer {
   font-weight: 800;
 }
 
-.hero-idea-strip #heroWildcardSummary,
-.hero-quickstart-copy #heroWildcardSummary {
+.hero-idea-strip #heroBlitzSummary,
+.hero-quickstart-copy #heroBlitzSummary {
   font-size: 0.79rem;
   line-height: 1.32;
 }
@@ -4385,9 +4417,9 @@ body.is-printing-guide #routeGuideDrawer {
   gap: 1px;
 }
 
-.hero-idea-strip #heroWildcardSummary,
-.hero-quickstart-copy #heroWildcardSummary {
-  display: none;
+.hero-idea-strip #heroBlitzSummary,
+.hero-quickstart-copy #heroBlitzSummary {
+  display: block;
 }
 
 .hero-idea-strip .hero-quickstart-side {
@@ -4403,7 +4435,7 @@ body.is-printing-guide #routeGuideDrawer {
 }
 
 .hero-idea-strip .hero-panel-actions .ghost-button {
-  display: none;
+  display: inline-flex;
 }
 
 .city-pulse-teaser.is-pre-plan {
