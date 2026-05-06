@@ -1203,7 +1203,6 @@ function buildStopCandidates(params) {
 
 function buildAllCandidates(params) {
   const stopCandidates = buildStopCandidates(params);
-  const pulseItems = Array.isArray(params.pulse?.items) ? params.pulse.items : [];
   const bestStopCandidates = stopCandidates.slice(0, 5);
   const miniRouteCandidates = bestStopCandidates
     .map((seedCandidate) =>
@@ -1220,19 +1219,7 @@ function buildAllCandidates(params) {
         coverageNote: params.coverageNote,
       }),
     )
-    .filter(Boolean)
-    .map((candidate) => ({
-      ...candidate,
-      pulse_context:
-        candidate.pulse_context ||
-        (pulseItems[0]
-          ? {
-              id: pulseItems[0].id,
-              title: pulseItems[0].title,
-              why_it_matters: pulseItems[0].why_it_matters,
-            }
-          : null),
-    }));
+    .filter(Boolean);
 
   return [...stopCandidates, ...miniRouteCandidates]
     .sort((left, right) => right.score - left.score)
