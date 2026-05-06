@@ -308,6 +308,16 @@ test("Rome-packet har riktig second hand-coverage medan test-city förblir neutr
   ["pifebo-vintage-shop", "humana-vintage-monti", "ciao-vintage", "porta-portese-market"].forEach((id) => {
     assert.ok(romeSecondHandIds.has(id));
   });
+  assert.ok(
+    romeSecondHandItems.some(
+      (item) => item.availability?.kind === "event_market" && item.availability.strongWeekdays?.includes(0),
+    ),
+  );
+  assert.ok(
+    romeSecondHandItems.some(
+      (item) => item.availability?.kind === "shop" && item.availability.daySensitivity === "low",
+    ),
+  );
 
   assert.equal(
     testCity.catalog.allItems.some(
@@ -328,6 +338,11 @@ test("Rome Sunday-marknader använder samma weekday-index som resten av kataloge
 
   assert.deepEqual(portaPortese.closedWeekdays, [1, 2, 3, 4, 5, 6]);
   assert.deepEqual(borghetto.closedWeekdays, [1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(portaPortese.availability.strongWeekdays, [0]);
+  assert.deepEqual(borghetto.availability.strongWeekdays, [0]);
+  assert.deepEqual(portaPortese.availability.weakWeekdays, [1, 2, 3, 4, 5, 6]);
+  assert.equal(portaPortese.availability.kind, "event_market");
+  assert.equal(borghetto.availability.kind, "event_market");
   assert.equal(portaPortese.closedWeekdays.includes(0), false);
   assert.equal(borghetto.closedWeekdays.includes(0), false);
 });
@@ -369,6 +384,76 @@ test("Rome-rutter kan yta riktiga second hand-stopp i kandidatsetet när intente
   assert.ok(result.days.length >= 1);
   assert.ok(candidateRoutes.length >= 2);
   assert.ok(surfacedRoute);
+});
+
+test("stark marknadsdag kan yta en market-relevant second hand-kandidat utan hårdkodat route-id", async () => {
+  global.fetch = createWeatherFetch({
+    "2026-05-10": 0,
+  });
+
+  const result = await generateRecommendations({
+    dates: ["2026-05-10"],
+    start: { type: "preset", label: "Trastevere" },
+    end: { type: "preset", label: "Trastevere" },
+    walkingKmTarget: 7,
+    preferences: ["second_hand", "vin", "low-key"],
+  });
+
+  const candidateRoutes = [result.days[0].primary_route, ...result.days[0].alternatives];
+  const marketCandidate = candidateRoutes.find((route) =>
+    route.main_stops.some(
+      (stop) => stop.tags.includes("market") && (stop.tags.includes("second_hand") || stop.tags.includes("vintage")),
+    ),
+  );
+
+  assert.ok(marketCandidate);
+  assert.ok(
+    marketCandidate.local_truth.score_delta > 0 ||
+      marketCandidate.local_truth.route_context_notes.some((entry) => /stark veckodag/i.test(entry.text)),
+  );
+  assert.ok(
+    marketCandidate.local_truth.verify_opening_hours.every(
+      (entry) => !/är stängt|kommer vara stängt/i.test(entry.reason),
+    ),
+  );
+});
+
+test("svag marknadsdag lämnar fortfarande plats för butiksvänliga second hand-kandidater", async () => {
+  global.fetch = createWeatherFetch({
+    "2026-05-13": 0,
+  });
+
+  const result = await generateRecommendations({
+    dates: ["2026-05-13"],
+    start: { type: "preset", label: "Monti" },
+    end: { type: "preset", label: "Monti" },
+    walkingKmTarget: 6,
+    preferences: ["second_hand", "vin", "low-key"],
+  });
+
+  const candidateRoutes = [result.days[0].primary_route, ...result.days[0].alternatives];
+  const shopCandidate = candidateRoutes.find((route) =>
+    route.main_stops.some(
+      (stop) => stop.tags.includes("second_hand") && stop.tags.includes("vintage") && !stop.tags.includes("market"),
+    ),
+  );
+  const marketCandidate = candidateRoutes.find((route) =>
+    route.main_stops.some(
+      (stop) => stop.tags.includes("market") && (stop.tags.includes("second_hand") || stop.tags.includes("vintage")),
+    ),
+  );
+
+  assert.ok(shopCandidate);
+  assert.ok(shopCandidate.local_truth.score_delta >= 0);
+
+  if (marketCandidate) {
+    const marketWarnings = [
+      ...marketCandidate.opening_hours_warnings,
+      ...marketCandidate.local_truth.caution_notes.map((entry) => entry.text),
+    ];
+
+    assert.ok(marketWarnings.some((entry) => /marknadsdelen|dubbelkolla|veckodag/i.test(entry)));
+  }
 });
 
 test("auto-läget bygger en riktig auto-loop för kyrkor utan dold preset-injektion", async () => {
