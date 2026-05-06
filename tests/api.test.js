@@ -1541,3 +1541,73 @@ test("POST /api/route-recommendations kan väva in ett live-event som faktiskt r
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test("POST /api/blitz returnerar ett kompakt nästa drag med reroll-minne", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during blitz API test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/blitz",
+      body: {
+        city: "rome",
+        now: "2026-05-10T10:30:00+02:00",
+        origin: { type: "preset", label: "Trastevere" },
+        intent_keys: ["second_hand"],
+      },
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.city, "rome");
+    assert.equal(response.body.best_move.kind, "mini_route_60");
+    assert.ok(Array.isArray(response.body.best_move.route.stops));
+    assert.ok(response.body.best_move.route.stops.some((stop) => stop.tags.includes("second_hand")));
+    assert.equal(response.body.reroll_supported, true);
+    assert.ok(Array.isArray(response.body.memory.recent_stop_ids));
+    assert.ok(response.body.backup_option);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("POST /api/blitz reroll använder minnet för att undvika direkt repetition", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during blitz reroll API test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const first = await requestJson(server, {
+      method: "POST",
+      path: "/api/blitz",
+      body: {
+        city: "rome",
+        now: "2026-05-12T19:10:00+02:00",
+        origin: { type: "preset", label: "Trastevere" },
+        intent_keys: ["food_drink", "nightlife"],
+      },
+    });
+    const second = await requestJson(server, {
+      method: "POST",
+      path: "/api/blitz",
+      body: {
+        city: "rome",
+        now: "2026-05-12T19:10:00+02:00",
+        origin: { type: "preset", label: "Trastevere" },
+        intent_keys: ["food_drink", "nightlife"],
+        memory: first.body.memory,
+      },
+    });
+
+    assert.equal(first.status, 200);
+    assert.equal(second.status, 200);
+    assert.notEqual(second.body.best_move.title, first.body.best_move.title);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
