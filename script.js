@@ -2809,6 +2809,18 @@ function formatHeroBlitzWalkMeta(value, { unknownLabel = "gångtid okänd" } = {
   return isSaneHeroBlitzWalkMinutes(value) ? `${value} min gång` : unknownLabel;
 }
 
+function getBlitzMoveTags(move) {
+  if (!move) {
+    return [];
+  }
+
+  if (move.kind === "mini_route_60") {
+    return uniqueNonEmpty((move.route?.stops || []).flatMap((stop) => stop.tags || []));
+  }
+
+  return uniqueNonEmpty(move.stop?.tags || []);
+}
+
 function compressHeroBlitzReason(text) {
   const normalized = String(text || "")
     .replace(/\s+/g, " ")
@@ -2822,17 +2834,96 @@ function compressHeroBlitzReason(text) {
   const tightened = firstSentence
     .replace(
       /ligger nära nog för att kännas som ett faktiskt nästa drag, inte som en omväg\.?/gi,
-      "ligger nära och känns som rätt nästa drag.",
+      "Låg friktion för ett snabbt nästa drag.",
     )
     .replace(
       /ligger tillräckligt nära för att vara ett snabbt och trovärdigt nästa steg från där du står\.?/gi,
-      "ligger nära nog för ett snabbt nästa steg.",
+      "Enkel att ta nu utan att planera om resten av dagen.",
     )
     .replace(/här och nu utan att du behöver blåsa upp det till en hel dagsplan\.?/gi, "här och nu.")
     .replace(/\s+/g, " ")
     .trim();
 
   return clipText(tightened, heroBlitzReasonMaxLength);
+}
+
+function buildSpecificHeroBlitzReason(result) {
+  const move = result?.best_move || null;
+
+  if (!move) {
+    return "";
+  }
+
+  const tags = new Set(getBlitzMoveTags(move));
+  const area = move.stop?.area || move.route?.stops?.[0]?.area || "";
+  const availability = move.availability || {};
+  const pulseTitle = move.pulse_context?.title || "";
+  const contextualReasons = Array.isArray(move.contextual_reasons) ? move.contextual_reasons : [];
+  const secondaryReason = contextualReasons[1] || contextualReasons[0] || "";
+  const pulseActive = Boolean(move.pulse_context?.title);
+  const hasCalmSignal = tags.has("low-key") || tags.has("hidden gems");
+  const hasDrinksSignal =
+    tags.has("vin") || tags.has("öl") || tags.has("cocktail") || tags.has("nattliv");
+  const hasFoodSignal = tags.has("mat");
+  const hasSecondHandSignal =
+    tags.has("second_hand") || tags.has("vintage") || tags.has("shopping") || tags.has("market");
+  const hasViewSignal = tags.has("utsikt");
+
+  if (hasSecondHandSignal && availability.kind === "shop" && availability.day_fit !== "strong") {
+    return "Butiksspåret är starkare än marknad idag.";
+  }
+
+  if (pulseActive && pulseTitle) {
+    if (hasViewSignal) {
+      return "Pulse pekar mot utsiktsspåret just nu.";
+    }
+
+    if (hasDrinksSignal) {
+      return "Pulse gör det här till ett starkt nästa glas just nu.";
+    }
+  }
+
+  if (hasDrinksSignal && hasCalmSignal) {
+    return `Bra nu för vin och lågmäld kväll${area ? ` i ${area}` : ""}.`;
+  }
+
+  if (hasDrinksSignal && !hasCalmSignal) {
+    return `Starkast i området om du vill hålla kvällen lokal${area ? ` i ${area}` : ""}.`;
+  }
+
+  if (hasFoodSignal && hasCalmSignal) {
+    return "Bra reset utan att blåsa upp kvällen.";
+  }
+
+  if (hasFoodSignal) {
+    return `Låg friktion och lätt att fortsätta${area ? ` mot ${area}` : ""}.`;
+  }
+
+  if (hasViewSignal) {
+    return "Bra nu om du vill få in utsikt utan att dra i gång en större runda.";
+  }
+
+  if (move.what_to_do_after) {
+    const followup = String(move.what_to_do_after || "").trim();
+
+    if (/ostiense/i.test(followup)) {
+      return "Låg friktion och lätt att fortsätta mot Ostiense.";
+    }
+
+    if (/\b(vin|glas|drink|bar)\b/i.test(followup)) {
+      return "Bra nu om du vill landa i ett glas utan att spräcka kvällen.";
+    }
+  }
+
+  if (availability.day_fit === "weak" && availability.note) {
+    return "Dubbelkolla läget, men det här spåret håller fortfarande ihop nu.";
+  }
+
+  if (secondaryReason) {
+    return compressHeroBlitzReason(secondaryReason);
+  }
+
+  return "";
 }
 
 function buildHeroBlitzLabel(move) {
@@ -2882,6 +2973,7 @@ function buildHeroBlitzSummary(result) {
   }
 
   return (
+    buildSpecificHeroBlitzReason(result) ||
     compressHeroBlitzReason(move.why_now) ||
     compressHeroBlitzReason(move.contextual_reasons?.[0]) ||
     "Blitz valde det här som det tydligaste nästa draget just nu."
@@ -3137,6 +3229,7 @@ function renderHeroBlitz() {
       heroBlitzTags.appendChild(chip);
     });
     heroBlitzApplyButton.textContent = "Kör nu";
+    heroBlitzShuffleButton.textContent = "↻ Nytt";
     heroBlitzApplyButton.disabled = true;
     heroBlitzShuffleButton.disabled = true;
     return;
@@ -3156,6 +3249,7 @@ function renderHeroBlitz() {
     heroBlitzFollowup.hidden = true;
     heroBlitzTags.innerHTML = "";
     heroBlitzApplyButton.textContent = "Kör nu";
+    heroBlitzShuffleButton.textContent = "↻ Nytt";
     heroBlitzApplyButton.disabled = blitzLoading;
     heroBlitzShuffleButton.disabled = true;
     return;
@@ -3180,6 +3274,7 @@ function renderHeroBlitz() {
   });
   heroBlitzApplyButton.textContent =
     move.kind === "mini_route_60" ? "Öppna mini-rutt" : "Öppna stopp";
+  heroBlitzShuffleButton.textContent = "↻ Nytt";
   heroBlitzApplyButton.disabled = blitzLoading;
   heroBlitzShuffleButton.disabled = blitzLoading;
 }

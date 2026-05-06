@@ -4681,20 +4681,35 @@ body.is-printing-guide #routeGuideDrawer {
 }
 
 .hero-idea-strip .hero-panel-actions {
-  display: grid;
-  grid-template-columns: repeat(2, auto);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: end;
-  gap: 8px;
-  width: 100%;
+  gap: 10px;
+  width: auto;
   opacity: 1;
 }
 
 .hero-idea-strip .hero-panel-actions .secondary-button,
 .hero-idea-strip .hero-panel-actions .ghost-button {
-  min-height: 42px;
+  min-height: 40px;
   padding: 9px 14px;
   font-size: 0.84rem;
   font-weight: 700;
+}
+
+.hero-idea-strip .hero-panel-actions .secondary-button {
+  min-width: 156px;
+  padding-inline: 18px;
+  box-shadow: 0 10px 24px rgba(126, 46, 24, 0.12);
+}
+
+.hero-idea-strip .hero-panel-actions .ghost-button {
+  min-width: 0;
+  padding-inline: 12px;
+  color: rgba(73, 44, 28, 0.82);
+  background: rgba(255, 255, 255, 0.42);
+  border-color: rgba(77, 49, 32, 0.07);
 }
 
 .hero-idea-strip[data-blitz-kind="mini_route_60"] .panel-label {
@@ -4744,13 +4759,22 @@ body.is-printing-guide #routeGuideDrawer {
   }
 
   .hero-idea-strip .hero-panel-actions {
-    grid-template-columns: 1fr 1fr;
-    justify-content: stretch;
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .hero-idea-strip .hero-panel-actions .secondary-button,
   .hero-idea-strip .hero-panel-actions .ghost-button {
-    width: 100%;
+    width: auto;
+  }
+
+  .hero-idea-strip .hero-panel-actions .secondary-button {
+    flex: 1 1 220px;
+    min-width: min(220px, 100%);
+  }
+
+  .hero-idea-strip .hero-panel-actions .ghost-button {
+    flex: 0 0 auto;
   }
 }
 
@@ -4774,6 +4798,33 @@ body.is-printing-guide #routeGuideDrawer {
   }
 
   .hero-idea-strip .hero-panel-actions {
-    grid-template-columns: 1fr;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: stretch;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .hero-idea-strip .hero-panel-actions .secondary-button {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .hero-idea-strip .hero-panel-actions .ghost-button {
+    min-height: 40px;
+    padding-inline: 11px;
+    justify-self: end;
+  }
+
+  .tab-nav {
+    margin-top: 16px;
+    padding: 10px;
+    gap: 6px;
+  }
+
+  .tab-button {
+    padding: 10px 13px;
+    font-size: 0.84rem;
+    color: rgba(73, 44, 28, 0.8);
   }
 }
