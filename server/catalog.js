@@ -3048,8 +3048,8 @@ const extraRouteTemplates = [
     stops: ["trastevere", "porta-portese-market", "ponte-sisto", "campo-de-fiori", "les-vignerons"],
     defaultKm: 6,
     preferenceTags: ["second_hand", "market", "vintage", "shopping", "local"],
-    optimizerModes: ["evening-mode"],
-    weatherProfile: { sun: 2, rain: 0, hot: 0, evening: 1 },
+    optimizerModes: ["low-key-mode"],
+    weatherProfile: { sun: 2, rain: 0, hot: 0, evening: 0 },
     weekdayBoost: { 0: 2 },
     vibeProfile: { evening: 1, culture: 0, lowKey: 3, party: 0 },
     hiddenMentions: [
