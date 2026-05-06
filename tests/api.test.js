@@ -33,6 +33,24 @@ function assertNeutralLocalTruth(localTruth) {
   assert.equal(localTruth.score_delta, 0);
 }
 
+const secondHandFamilyTags = new Set([
+  "second_hand",
+  "vintage",
+  "shopping",
+  "market",
+  "event_market",
+  "antique",
+  "antiques",
+]);
+
+function isSecondHandFamilyStop(stop) {
+  return (stop?.tags || []).some((tag) => secondHandFamilyTags.has(tag));
+}
+
+function secondHandFamilyStopCount(route) {
+  return (route?.main_stops || []).filter((stop) => isSecondHandFamilyStop(stop)).length;
+}
+
 function mockJsonResponse(payload) {
   return {
     ok: true,
@@ -1227,7 +1245,7 @@ test("POST /api/route-recommendations bär ett normaliserat local_truth-block p�
   }
 });
 
-test("POST /api/route-recommendations kan yta ett day-sensitive market-spår på stark marknadsdag", async () => {
+test("POST /api/route-recommendations ger market-led primary route för single second_hand på stark marknadsdag", async () => {
   global.fetch = async (url) => {
     const parsed = new URL(String(url));
 
@@ -1255,26 +1273,24 @@ test("POST /api/route-recommendations kan yta ett day-sensitive market-spår på
         start: { type: "preset", label: "Trastevere" },
         end: { type: "preset", label: "Trastevere" },
         walking_km_target: 7,
-        preferences: ["second_hand", "vin", "low-key"],
+        preferences: ["second_hand"],
       },
     });
 
     assert.equal(response.status, 200);
-    const candidates = [response.body.days[0].primary_route, ...response.body.days[0].alternatives];
-    const marketCandidate = candidates.find((route) =>
-      route.main_stops.some(
-        (stop) => stop.tags.includes("market") && (stop.tags.includes("second_hand") || stop.tags.includes("vintage")),
-      ),
-    );
+    const primary = response.body.days[0].primary_route;
 
-    assert.ok(marketCandidate);
-    assertLocalTruthShape(marketCandidate.local_truth);
+    assert.match(primary.title, /marknad och vintage/i);
+    assert.ok(primary.main_stops[0].tags.includes("market"));
+    assert.deepEqual(primary.bar_mentions, []);
+    assert.deepEqual(primary.hidden_mentions, []);
+    assertLocalTruthShape(primary.local_truth);
     assert.ok(
-      marketCandidate.local_truth.route_context_notes.some((entry) => /stark veckodag/i.test(entry.text)) ||
-        marketCandidate.local_truth.score_delta > 0,
+      primary.local_truth.route_context_notes.some((entry) => /stark veckodag/i.test(entry.text)) ||
+        primary.local_truth.score_delta > 0,
     );
     assert.ok(
-      marketCandidate.opening_hours_warnings.every(
+      primary.opening_hours_warnings.every(
         (warning) => !/är stängt|kommer vara stängt/i.test(warning),
       ),
     );
@@ -1283,7 +1299,7 @@ test("POST /api/route-recommendations kan yta ett day-sensitive market-spår på
   }
 });
 
-test("POST /api/route-recommendations håller shop-vintage-spåret levande på svag marknadsdag", async () => {
+test("POST /api/route-recommendations låter shop-vintage bära primary route på svag marknadsdag", async () => {
   global.fetch = async (url) => {
     const parsed = new URL(String(url));
 
@@ -1308,37 +1324,95 @@ test("POST /api/route-recommendations håller shop-vintage-spåret levande på s
       path: "/api/route-recommendations",
       body: {
         dates: ["2026-05-13"],
-        start: { type: "preset", label: "Monti" },
-        end: { type: "preset", label: "Monti" },
-        walking_km_target: 6,
-        preferences: ["second_hand", "vin", "low-key"],
+        start: { type: "preset", label: "Trastevere" },
+        end: { type: "preset", label: "Trastevere" },
+        walking_km_target: 7,
+        preferences: ["second_hand"],
       },
     });
 
     assert.equal(response.status, 200);
-    const candidates = [response.body.days[0].primary_route, ...response.body.days[0].alternatives];
-    const shopCandidate = candidates.find((route) =>
-      route.main_stops.some(
-        (stop) => stop.tags.includes("second_hand") && stop.tags.includes("vintage") && !stop.tags.includes("market"),
-      ),
-    );
-    const marketCandidate = candidates.find((route) =>
-      route.main_stops.some(
-        (stop) => stop.tags.includes("market") && (stop.tags.includes("second_hand") || stop.tags.includes("vintage")),
-      ),
-    );
+    const primary = response.body.days[0].primary_route;
+    const marketStopIndex = primary.main_stops.findIndex((stop) => stop.tags.includes("market"));
 
-    assert.ok(shopCandidate);
-    assertLocalTruthShape(shopCandidate.local_truth);
+    assert.match(primary.title, /second hand och vintage/i);
+    assert.equal(primary.main_stops[0].tags.includes("market"), false);
+    assert.ok(primary.main_stops[0].tags.includes("vintage"));
+    assert.ok(marketStopIndex >= 1);
+    assert.deepEqual(primary.bar_mentions, []);
+    assert.deepEqual(primary.hidden_mentions, []);
+    assertLocalTruthShape(primary.local_truth);
 
-    if (marketCandidate) {
-      const weakDayText = [
-        ...marketCandidate.opening_hours_warnings,
-        ...marketCandidate.local_truth.caution_notes.map((entry) => entry.text),
-      ];
+    const weakDayText = [
+      ...primary.opening_hours_warnings,
+      ...primary.local_truth.caution_notes.map((entry) => entry.text),
+    ];
 
-      assert.ok(weakDayText.some((entry) => /dubbelkolla|marknadsdelen|veckodagen/i.test(entry)));
+    assert.ok(weakDayText.some((entry) => /dubbelkolla|marknadsdelen|veckodagen/i.test(entry)));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("POST /api/route-recommendations kan blanda second_hand och vin utan att tappa second hand-identiteten", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-05-13"],
+          weathercode: [0],
+          temperature_2m_max: [23],
+        },
+      });
     }
+
+    throw new Error(`Unexpected fetch during second hand blend api test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations",
+      body: {
+        dates: ["2026-05-13"],
+        start: { type: "preset", label: "Monti" },
+        end: { type: "preset", label: "Monti" },
+        walking_km_target: 6,
+        preferences: ["second_hand", "vin"],
+      },
+    });
+
+    assert.equal(response.status, 200);
+    const primary = response.body.days[0].primary_route;
+
+    assert.match(primary.title, /second hand \+ vin/i);
+    assert.ok(secondHandFamilyStopCount(primary) >= 2);
+    assert.ok(primary.main_stops.some((stop) => stop.tags.includes("shopping")));
+    assert.match(primary.why_recommended, /Second hand-spåret/i);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /script.js renderar inte interna routingmått som user-facing labels", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during script asset test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestText(server, {
+      path: "/script.js",
+    });
+
+    assert.equal(response.status, 200);
+    assert.doesNotMatch(response.body, /Längsta ben/);
+    assert.doesNotMatch(response.body, /Typiskt ben/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

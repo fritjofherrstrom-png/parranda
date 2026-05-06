@@ -103,6 +103,24 @@ function nearestDistanceToRouteKm(route, item) {
   }, Number.POSITIVE_INFINITY);
 }
 
+const secondHandFamilyTags = new Set([
+  "second_hand",
+  "vintage",
+  "shopping",
+  "market",
+  "event_market",
+  "antique",
+  "antiques",
+]);
+
+function isSecondHandFamilyStop(stop) {
+  return (stop?.tags || []).some((tag) => secondHandFamilyTags.has(tag));
+}
+
+function secondHandFamilyStopCount(route) {
+  return (route?.main_stops || []).filter((stop) => isSecondHandFamilyStop(stop)).length;
+}
+
 test.after(() => {
   global.fetch = originalFetch;
 });
@@ -347,7 +365,7 @@ test("Rome Sunday-marknader använder samma weekday-index som resten av kataloge
   assert.equal(borghetto.closedWeekdays.includes(0), false);
 });
 
-test("Rome-rutter kan yta riktiga second hand-stopp i kandidatsetet när intentet väljs", async () => {
+test("single second_hand-intent ger en second hand-buren primary route utan irrelevanta mentions", async () => {
   global.fetch = createWeatherFetch({
     "2026-05-08": 0,
   });
@@ -357,36 +375,21 @@ test("Rome-rutter kan yta riktiga second hand-stopp i kandidatsetet när intente
     start: { type: "preset", label: "Monti" },
     end: { type: "preset", label: "Monti" },
     walkingKmTarget: 6,
-    preferences: ["second_hand", "vin", "low-key"],
+    preferences: ["second_hand"],
   });
 
-  const candidateRoutes = [result.days[0].primary_route, ...result.days[0].alternatives];
-  const relevantStopIds = new Set([
-    "pifebo-vintage-shop",
-    "humana-vintage-monti",
-    "ciao-vintage",
-    "omero-e-cecilia",
-    "humana-vintage-trastevere",
-    "twice-vintage-shop",
-    "porta-portese-market",
-    "borghetto-flaminio-market",
-  ]);
-  const surfacedRoute = candidateRoutes.find((route) =>
-    route.main_stops.some(
-      (stop) =>
-        relevantStopIds.has(stop.id) ||
-        stop.tags.includes("second_hand") ||
-        stop.tags.includes("vintage") ||
-        stop.tags.includes("market"),
-    ),
-  );
+  const primary = result.days[0].primary_route;
 
   assert.ok(result.days.length >= 1);
-  assert.ok(candidateRoutes.length >= 2);
-  assert.ok(surfacedRoute);
+  assert.match(primary.title, /second hand|marknad och vintage/i);
+  assert.ok(secondHandFamilyStopCount(primary) >= 2);
+  assert.ok(isSecondHandFamilyStop(primary.main_stops[0]));
+  assert.deepEqual(primary.bar_mentions, []);
+  assert.deepEqual(primary.hidden_mentions, []);
+  assert.match(primary.why_recommended, /Second hand-spåret/i);
 });
 
-test("stark marknadsdag kan yta en market-relevant second hand-kandidat utan hårdkodat route-id", async () => {
+test("single second_hand på stark marknadsdag kan ge market-led primary route", async () => {
   global.fetch = createWeatherFetch({
     "2026-05-10": 0,
   });
@@ -396,29 +399,59 @@ test("stark marknadsdag kan yta en market-relevant second hand-kandidat utan hå
     start: { type: "preset", label: "Trastevere" },
     end: { type: "preset", label: "Trastevere" },
     walkingKmTarget: 7,
-    preferences: ["second_hand", "vin", "low-key"],
+    preferences: ["second_hand"],
   });
 
-  const candidateRoutes = [result.days[0].primary_route, ...result.days[0].alternatives];
-  const marketCandidate = candidateRoutes.find((route) =>
-    route.main_stops.some(
-      (stop) => stop.tags.includes("market") && (stop.tags.includes("second_hand") || stop.tags.includes("vintage")),
-    ),
-  );
+  const primary = result.days[0].primary_route;
 
-  assert.ok(marketCandidate);
+  assert.match(primary.title, /marknad och vintage/i);
+  assert.ok(primary.main_stops[0].tags.includes("market"));
   assert.ok(
-    marketCandidate.local_truth.score_delta > 0 ||
-      marketCandidate.local_truth.route_context_notes.some((entry) => /stark veckodag/i.test(entry.text)),
+    primary.local_truth.score_delta > 0 ||
+      primary.local_truth.route_context_notes.some((entry) => /stark veckodag/i.test(entry.text)),
   );
   assert.ok(
-    marketCandidate.local_truth.verify_opening_hours.every(
+    primary.local_truth.verify_opening_hours.every(
       (entry) => !/är stängt|kommer vara stängt/i.test(entry.reason),
     ),
   );
+  assert.deepEqual(primary.bar_mentions, []);
+  assert.deepEqual(primary.hidden_mentions, []);
 });
 
-test("svag marknadsdag lämnar fortfarande plats för butiksvänliga second hand-kandidater", async () => {
+test("single second_hand på svag marknadsdag låter butiksvintage bära primary route före market", async () => {
+  global.fetch = createWeatherFetch({
+    "2026-05-13": 0,
+  });
+
+  const result = await generateRecommendations({
+    dates: ["2026-05-13"],
+    start: { type: "preset", label: "Trastevere" },
+    end: { type: "preset", label: "Trastevere" },
+    walkingKmTarget: 7,
+    preferences: ["second_hand"],
+  });
+
+  const primary = result.days[0].primary_route;
+  const marketStopIndex = primary.main_stops.findIndex((stop) => stop.tags.includes("market"));
+
+  assert.match(primary.title, /second hand och vintage/i);
+  assert.ok(secondHandFamilyStopCount(primary) >= 2);
+  assert.ok(primary.main_stops[0].tags.includes("vintage"));
+  assert.ok(!primary.main_stops[0].tags.includes("market"));
+  assert.ok(marketStopIndex >= 1);
+  assert.deepEqual(primary.bar_mentions, []);
+  assert.deepEqual(primary.hidden_mentions, []);
+
+  const marketWarnings = [
+    ...primary.opening_hours_warnings,
+    ...primary.local_truth.caution_notes.map((entry) => entry.text),
+  ];
+
+  assert.ok(marketWarnings.some((entry) => /marknadsdelen|dubbelkolla|veckodag/i.test(entry)));
+});
+
+test("second_hand kan blandas med vin utan att förlora second hand-identiteten", async () => {
   global.fetch = createWeatherFetch({
     "2026-05-13": 0,
   });
@@ -428,32 +461,15 @@ test("svag marknadsdag lämnar fortfarande plats för butiksvänliga second hand
     start: { type: "preset", label: "Monti" },
     end: { type: "preset", label: "Monti" },
     walkingKmTarget: 6,
-    preferences: ["second_hand", "vin", "low-key"],
+    preferences: ["second_hand", "vin"],
   });
 
-  const candidateRoutes = [result.days[0].primary_route, ...result.days[0].alternatives];
-  const shopCandidate = candidateRoutes.find((route) =>
-    route.main_stops.some(
-      (stop) => stop.tags.includes("second_hand") && stop.tags.includes("vintage") && !stop.tags.includes("market"),
-    ),
-  );
-  const marketCandidate = candidateRoutes.find((route) =>
-    route.main_stops.some(
-      (stop) => stop.tags.includes("market") && (stop.tags.includes("second_hand") || stop.tags.includes("vintage")),
-    ),
-  );
+  const primary = result.days[0].primary_route;
 
-  assert.ok(shopCandidate);
-  assert.ok(shopCandidate.local_truth.score_delta >= 0);
-
-  if (marketCandidate) {
-    const marketWarnings = [
-      ...marketCandidate.opening_hours_warnings,
-      ...marketCandidate.local_truth.caution_notes.map((entry) => entry.text),
-    ];
-
-    assert.ok(marketWarnings.some((entry) => /marknadsdelen|dubbelkolla|veckodag/i.test(entry)));
-  }
+  assert.match(primary.title, /second hand \+ vin/i);
+  assert.ok(secondHandFamilyStopCount(primary) >= 2);
+  assert.ok(primary.main_stops.some((stop) => stop.tags.includes("shopping")));
+  assert.match(primary.why_recommended, /Second hand-spåret/i);
 });
 
 test("auto-läget bygger en riktig auto-loop för kyrkor utan dold preset-injektion", async () => {

@@ -1523,6 +1523,7 @@ const plannerIntentByKey = new Map(
   plannerIntentDefinitions.map((intent) => [intent.key, intent]),
 );
 const defaultPlannerIntentKeys = ["food_drink", "culture", "hidden_gems", "nightlife"];
+const defaultPlannerIntentKeySet = new Set(defaultPlannerIntentKeys);
 const plannerIntentCoverageTagSet = new Set([
   "aperitivo",
   "cocktail",
@@ -1541,6 +1542,7 @@ const plannerIntentCoverageTagSet = new Set([
   "vin",
   "öl",
 ]);
+let plannerIntentSelectionMode = "default_seed";
 
 const favoritesStorageKey = `parranda:${plannerCityKey}:favorites`;
 const savedRoutesStorageKey = `parranda:${plannerCityKey}:saved-routes`;
@@ -2118,11 +2120,52 @@ function getSelectedIntentKeys() {
     .filter((value) => plannerIntentByKey.has(value));
 }
 
-function setSelectedIntentKeys(intentKeys = []) {
-  const selectedKeys = new Set(intentKeys);
+function matchesDefaultPlannerIntentKeys(intentKeys = []) {
+  if (intentKeys.length !== defaultPlannerIntentKeys.length) {
+    return false;
+  }
+
+  return intentKeys.every((intentKey) => defaultPlannerIntentKeySet.has(intentKey));
+}
+
+function setSelectedIntentKeys(intentKeys = [], options = {}) {
+  const selectedKeys = new Set(intentKeys.filter((intentKey) => plannerIntentByKey.has(intentKey)));
   preferenceInputs.forEach((input) => {
     input.checked = selectedKeys.has(input.value);
   });
+  plannerIntentSelectionMode =
+    options.allowDefaultSeed && matchesDefaultPlannerIntentKeys([...selectedKeys])
+      ? "default_seed"
+      : "explicit";
+}
+
+function applyPlannerIntentKeySelection(intentKeys = [], options = {}) {
+  setSelectedIntentKeys(intentKeys, options);
+  updatePlannerAdvancedSummary();
+  updatePlannerLaunchSummary();
+  updateRouteMatchSummary(buildPlannerStyleSummary());
+}
+
+function normalizePlannerIntentSelectionAfterChange(changedInput) {
+  if (
+    plannerIntentSelectionMode === "default_seed" &&
+    changedInput?.checked &&
+    !defaultPlannerIntentKeySet.has(changedInput.value)
+  ) {
+    setSelectedIntentKeys([changedInput.value]);
+    return;
+  }
+
+  const selectedKeys = getSelectedIntentKeys();
+
+  if (!selectedKeys.length) {
+    setSelectedIntentKeys(defaultPlannerIntentKeys, { allowDefaultSeed: true });
+    return;
+  }
+
+  plannerIntentSelectionMode = matchesDefaultPlannerIntentKeys(selectedKeys)
+    ? "default_seed"
+    : "explicit";
 }
 
 function expandIntentKeysToPreferenceSignals(intentKeys = []) {
@@ -5188,7 +5231,7 @@ function setPlannerDefaults() {
   updateBudgetTierButtons();
   updateRouteModifierButtons();
 
-  setSelectedIntentKeys(defaultPlannerIntentKeys);
+  setSelectedIntentKeys(defaultPlannerIntentKeys, { allowDefaultSeed: true });
 
   if (plannerFineTuneDetails) {
     plannerFineTuneDetails.open = false;
@@ -5251,6 +5294,11 @@ function applyPlannerSnapshot(snapshot) {
     Array.isArray(snapshot.intentKeys) && snapshot.intentKeys.length
       ? snapshot.intentKeys
       : inferIntentKeysFromPreferences(snapshot.preferences || []),
+    {
+      allowDefaultSeed:
+        Array.isArray(snapshot.intentKeys) &&
+        matchesDefaultPlannerIntentKeys(snapshot.intentKeys),
+    },
   );
   syncPlannerModeUI();
   updateDistanceModeUI();
@@ -5295,6 +5343,8 @@ function getSelectedPreferences() {
     ? selected
     : expandIntentKeysToPreferenceSignals(defaultPlannerIntentKeys);
 }
+
+window.__parrandaApplyPlannerIntentKeySelection = applyPlannerIntentKeySelection;
 
 function buildSavedRouteId(savePayload) {
   const normalizedPreferences = [...(savePayload.snapshot?.preferences || [])]
@@ -6138,28 +6188,7 @@ function buildLegSummary(route) {
     return null;
   }
 
-  const parts = [];
-
-  if (Number.isFinite(Number(route.longest_leg_minutes)) || Number.isFinite(Number(route.longest_leg_km))) {
-    parts.push(
-      `Längsta ben: ${[
-        formatLegMinutes(Number(route.longest_leg_minutes)),
-        formatLegDistance(Number(route.longest_leg_km)),
-      ]
-        .filter(Boolean)
-        .join(" • ")}`,
-    );
-  }
-
-  if (Number.isFinite(Number(route.average_leg_minutes))) {
-    parts.push(`Typiskt ben: ${formatLegMinutes(Number(route.average_leg_minutes))}`);
-  }
-
-  if (route.leg_fit_note) {
-    parts.push(route.leg_fit_note);
-  }
-
-  return parts.filter(Boolean).join(" • ");
+  return route?.leg_fit_note || null;
 }
 
 function stopSourceLabel(stop) {
@@ -6431,17 +6460,6 @@ function openRouteGuide(routeView) {
     { label: "Dagstyp", value: routeView.dayProfileLabel || "Komponerad dag" },
     { label: "Tempo", value: routeView.pacingLabel || "Balans" },
     { label: "Geo-fit", value: routeView.geoFitNote ? "Optimerad" : routeView.routeShape === "loop" ? "Loop" : "Båge" },
-    {
-      label: "Längsta ben",
-      value:
-        [formatLegMinutes(Number(routeView.longestLegMinutes)), formatLegDistance(Number(routeView.longestLegKm))]
-          .filter(Boolean)
-          .join(" • ") || "Ingår i rutten",
-    },
-    {
-      label: "Typiskt ben",
-      value: formatLegMinutes(Number(routeView.averageLegMinutes)) || "Varierar",
-    },
   ].forEach((stat) => {
     const card = document.createElement("article");
     const title = document.createElement("strong");
@@ -8142,8 +8160,10 @@ routeModifierButtons.forEach((button) => {
 });
 preferenceInputs.forEach((input) => {
   input.addEventListener("change", () => {
+    normalizePlannerIntentSelectionAfterChange(input);
     activeOptimizerMode = null;
     updateOptimizerButtons();
+    updatePlannerAdvancedSummary();
     updatePlannerLaunchSummary();
     updateRouteMatchSummary(buildPlannerStyleSummary());
   });
