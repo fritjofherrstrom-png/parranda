@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const express = require("express");
 const path = require("path");
 const { resolveCityConfig } = require("./cities");
+const { buildBlitzDecision } = require("./blitz-engine");
 const { generateRecommendations } = require("./route-engine");
 const { diversifyRecommendationDays } = require("./route-diversity");
 
@@ -526,6 +527,33 @@ function buildApp() {
     } catch (error) {
       response.status(500).json({
         error: "Route recommendation failed",
+        detail: error.message,
+      });
+    }
+  });
+
+  app.post("/api/blitz", async (request, response) => {
+    try {
+      const { cityConfig, requestedCity, cityFallbackUsed } = resolveRequestCity(request.body?.city);
+      const result = await buildBlitzDecision(cityConfig, {
+        date: request.body?.date,
+        now: request.body?.now,
+        origin: request.body?.origin || request.body?.selected_origin || request.body?.start || null,
+        mode: request.body?.mode || "auto",
+        intent_keys: Array.isArray(request.body?.intent_keys) ? request.body.intent_keys : [],
+        preferences: Array.isArray(request.body?.preferences) ? request.body.preferences : [],
+        memory: request.body?.memory,
+        previous_route: request.body?.previous_route,
+      });
+
+      response.json({
+        ...result,
+        requested_city: requestedCity,
+        city_fallback_used: cityFallbackUsed,
+      });
+    } catch (error) {
+      response.status(500).json({
+        error: "Blitz failed",
         detail: error.message,
       });
     }
