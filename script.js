@@ -1213,6 +1213,7 @@ const heroBlitzShuffleButton = document.getElementById("heroBlitzShuffleButton")
 const heroBlitzOriginSwitch = document.getElementById("heroBlitzOriginSwitch");
 const heroBlitzSelectedOriginButton = document.getElementById("heroBlitzSelectedOriginButton");
 const heroBlitzCurrentOriginButton = document.getElementById("heroBlitzCurrentOriginButton");
+const heroBlitzCard = document.querySelector(".hero-idea-strip");
 const cityPulseStart = document.getElementById("cityPulseStart");
 const cityPulseTeaser = document.getElementById("cityPulseTeaser");
 const cityPulseTeaserLabel = document.getElementById("cityPulseTeaserLabel");
@@ -1984,6 +1985,9 @@ let activePulseRadiusKey = "5";
 let activeLiveDate = getTodayIsoDate();
 let liveEditionExpanded = false;
 const expandedAlternativeDates = new Set();
+const heroBlitzMaxWalkMinutes = 180;
+const heroBlitzReasonMaxLength = 148;
+const heroBlitzFollowupMaxLength = 110;
 
 const dayProfileLabels = {
   light: "Lätt dag",
@@ -2797,36 +2801,117 @@ function getActiveRoutePayloadForBlitz() {
   return matchingDay.primary_route;
 }
 
-function buildBlitzMetaLine(result) {
-  const context = result?.context || {};
-  const move = result?.best_move || {};
-  const pieces = [
-    context.origin_label ? `Från ${context.origin_label}` : null,
-    Number.isFinite(move.walking_minutes) ? `${move.walking_minutes} min till fots` : null,
-    move.effort || null,
-  ].filter(Boolean);
+function isSaneHeroBlitzWalkMinutes(value) {
+  return Number.isFinite(value) && value >= 0 && value <= heroBlitzMaxWalkMinutes;
+}
 
-  return pieces.join(" • ") || "Situationsstyrt nästa drag";
+function formatHeroBlitzWalkMeta(value, { unknownLabel = "gångtid okänd" } = {}) {
+  return isSaneHeroBlitzWalkMinutes(value) ? `${value} min gång` : unknownLabel;
+}
+
+function compressHeroBlitzReason(text) {
+  const normalized = String(text || "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!normalized) {
+    return "";
+  }
+
+  const firstSentence = normalized.split(/(?<=[.!?])\s+/)[0] || normalized;
+  const tightened = firstSentence
+    .replace(
+      /ligger nära nog för att kännas som ett faktiskt nästa drag, inte som en omväg\.?/gi,
+      "ligger nära och känns som rätt nästa drag.",
+    )
+    .replace(
+      /ligger tillräckligt nära för att vara ett snabbt och trovärdigt nästa steg från där du står\.?/gi,
+      "ligger nära nog för ett snabbt nästa steg.",
+    )
+    .replace(/här och nu utan att du behöver blåsa upp det till en hel dagsplan\.?/gi, "här och nu.")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return clipText(tightened, heroBlitzReasonMaxLength);
+}
+
+function buildHeroBlitzLabel(move) {
+  if (!move) {
+    return "BLITZ";
+  }
+
+  return move.kind === "mini_route_60" ? "BLITZ · 60 MIN" : "BLITZ";
+}
+
+function buildHeroBlitzMeta(result) {
+  const move = result?.best_move || null;
+
+  if (!move) {
+    return "Plats, tid, Pulse och availability vägs in i samma beslut.";
+  }
+
+  if (move.kind === "mini_route_60") {
+    const stopCount = Array.isArray(move.route?.stops) ? move.route.stops.length : 0;
+    const km = Number.isFinite(move.route?.estimated_km) ? `${move.route.estimated_km} km` : null;
+    const startMinutes = move.route?.stops?.[0]?.walk_from_previous_minutes;
+
+    return [
+      "60 min",
+      stopCount ? `${stopCount} stopp` : null,
+      km,
+      formatHeroBlitzWalkMeta(startMinutes, { unknownLabel: "starttid okänd" }),
+    ]
+      .filter(Boolean)
+      .join(" • ");
+  }
+
+  return [
+    move.stop?.area || result?.context?.origin_label || null,
+    formatHeroBlitzWalkMeta(move.walking_minutes),
+    move.effort || null,
+  ]
+    .filter(Boolean)
+    .join(" • ");
+}
+
+function buildHeroBlitzSummary(result) {
+  const move = result?.best_move || null;
+
+  if (!move) {
+    return "När du redan är ute i staden väljer Blitz vad som känns starkast just nu.";
+  }
+
+  return (
+    compressHeroBlitzReason(move.why_now) ||
+    compressHeroBlitzReason(move.contextual_reasons?.[0]) ||
+    "Blitz valde det här som det tydligaste nästa draget just nu."
+  );
+}
+
+function buildHeroBlitzFollowup(result) {
+  const move = result?.best_move || null;
+
+  if (!move?.what_to_do_after) {
+    return "";
+  }
+
+  const followup = String(move.what_to_do_after || "").trim();
+
+  if (!followup) {
+    return "";
+  }
+
+  if (!/\b(stanna|låt|fortsätt|kör)\b/i.test(followup)) {
+    return "";
+  }
+
+  return clipText(followup, heroBlitzFollowupMaxLength);
 }
 
 function buildBlitzFollowupText(result) {
-  const move = result?.best_move || {};
-  const caution = Array.isArray(move.caution_notes) ? move.caution_notes[0] : null;
-  const backupTitle = result?.backup_option?.title || null;
+  const followup = buildHeroBlitzFollowup(result);
 
-  if (move.what_to_do_after && caution) {
-    return `Efteråt: ${move.what_to_do_after} Obs: ${caution}`;
-  }
-
-  if (move.what_to_do_after) {
-    return `Efteråt: ${move.what_to_do_after}`;
-  }
-
-  if (backupTitle) {
-    return `Backup: ${backupTitle}.`;
-  }
-
-  return "";
+  return followup ? `Sedan: ${followup}` : "";
 }
 
 function buildBlitzTagTexts(result) {
@@ -2836,18 +2921,14 @@ function buildBlitzTagTexts(result) {
   tags.push(move.kind === "mini_route_60" ? "60 min" : "Nästa stopp");
 
   if (move.pulse_context?.title) {
-    tags.push("Pulse påverkar");
-  } else if (move.availability?.day_fit === "strong") {
-    tags.push("Stark i dag");
+    tags.push("Pulse");
   }
 
-  if (move.availability?.verify_recommended) {
+  if (move.availability?.verify_recommended && tags.length < 2) {
     tags.push("Dubbelkolla läget");
-  } else if (result?.backup_option?.title) {
-    tags.push(`Backup: ${clipText(result.backup_option.title, 28)}`);
   }
 
-  return tags.slice(0, 3);
+  return tags.slice(0, 2);
 }
 
 function createBlitzGuideStop(stop, index, originLabel, previousLabel = null) {
@@ -3002,6 +3083,9 @@ function renderHeroBlitz() {
   if (!isRomeCuratedMode) {
     const previewCard = buildPreviewHeroCard();
 
+    if (heroBlitzCard) {
+      heroBlitzCard.dataset.blitzKind = "preview";
+    }
     heroBlitzLabel.textContent = previewCard.label;
     heroBlitzTitle.textContent = previewCard.title;
     heroBlitzSummary.textContent = previewCard.summary;
@@ -3034,17 +3118,20 @@ function renderHeroBlitz() {
   heroBlitzShuffleButton.hidden = false;
 
   if (blitzLoading && !blitzState?.best_move) {
+    if (heroBlitzCard) {
+      heroBlitzCard.dataset.blitzKind = "loading";
+    }
     heroBlitzLabel.textContent = "BLITZ";
     heroBlitzTitle.textContent = "Laddar nästa drag...";
     heroBlitzSummary.textContent =
-      "Blitz väger in plats, tid, Pulse och tillgänglighet för att hitta ett trovärdigt nästa steg.";
+      "Blitz väljer ett trovärdigt nästa drag utifrån plats, tid och stadspuls.";
     heroBlitzMeta.textContent =
       blitzOriginMode === "current_location"
-        ? "Utgår från min plats om tillgänglig."
-        : "Utgår från vald plats och dagens aktiva intent.";
+        ? "Utgår från min plats om den går att läsa."
+        : "Utgår från vald plats och dagens intent.";
     heroBlitzFollowup.hidden = true;
     heroBlitzTags.innerHTML = "";
-    ["Nu", "Plats", "Reroll"].forEach((tagText) => {
+    ["Nu", "Reroll"].forEach((tagText) => {
       const chip = document.createElement("span");
       chip.textContent = tagText;
       heroBlitzTags.appendChild(chip);
@@ -3058,6 +3145,9 @@ function renderHeroBlitz() {
   const move = blitzState?.best_move || null;
 
   if (!move) {
+    if (heroBlitzCard) {
+      heroBlitzCard.dataset.blitzKind = "empty";
+    }
     heroBlitzLabel.textContent = "BLITZ";
     heroBlitzTitle.textContent = "Kör Blitz när du vill veta nästa drag";
     heroBlitzSummary.textContent =
@@ -3071,10 +3161,13 @@ function renderHeroBlitz() {
     return;
   }
 
-  heroBlitzLabel.textContent = "BLITZ";
+  if (heroBlitzCard) {
+    heroBlitzCard.dataset.blitzKind = move.kind || "single_stop";
+  }
+  heroBlitzLabel.textContent = buildHeroBlitzLabel(move);
   heroBlitzTitle.textContent = move.title;
-  heroBlitzSummary.textContent = move.why_now;
-  heroBlitzMeta.textContent = buildBlitzMetaLine(blitzState);
+  heroBlitzMeta.textContent = buildHeroBlitzMeta(blitzState);
+  heroBlitzSummary.textContent = buildHeroBlitzSummary(blitzState);
 
   const followupText = buildBlitzFollowupText(blitzState);
   heroBlitzFollowup.hidden = !followupText;
