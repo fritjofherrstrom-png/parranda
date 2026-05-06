@@ -305,6 +305,7 @@ const modifierToOptimizerMode = {
 };
 
 const strictPreferenceFamilies = new Set([
+  "second_hand",
   "kyrkor",
   "pizza",
   "cocktail",
@@ -323,6 +324,28 @@ const strictPreferenceSupportTags = new Set([
   "budget",
   "nattliv",
 ]);
+
+const secondHandFamilyTags = new Set([
+  "second_hand",
+  "vintage",
+  "shopping",
+  "market",
+  "event_market",
+  "antique",
+  "antiques",
+]);
+
+const intentFamilyMatchers = new Map([
+  ["second_hand", secondHandFamilyTags],
+  ["food_drink", new Set(["mat", "vin", "öl", "cocktail", "pizza"])],
+  ["nightlife", new Set(["nattliv", "kväll", "party", "cocktail", "öl", "vin"])],
+  ["culture", new Set(["kultur", "kyrkor", "klassiker"])],
+  ["hidden_gems", new Set(["hidden gems", "low-key"])],
+  ["views", new Set(["utsikt"])],
+]);
+
+const barRelevantIntentFamilies = new Set(["food_drink", "nightlife"]);
+const hiddenRelevantIntentFamilies = new Set(["hidden_gems", "culture", "views"]);
 
 const optimizerStrictPreferenceTags = {
   "church-crawl": ["kyrkor"],
@@ -404,6 +427,220 @@ function strictPreferenceCoverageScore(routeStops = [], strictTags = []) {
   }
 
   return Math.round(score * 10) / 10;
+}
+
+function itemMatchesSecondHandIntentFamily(item) {
+  if (!item) {
+    return false;
+  }
+
+  return [...secondHandFamilyTags].some((tag) => (item.tags || []).includes(tag));
+}
+
+function getSelectedIntentFamilyKeys(preferences = []) {
+  const selected = new Set();
+
+  intentFamilyMatchers.forEach((tags, familyKey) => {
+    if (preferences.some((preference) => tags.has(preference))) {
+      selected.add(familyKey);
+    }
+  });
+
+  return [...selected];
+}
+
+function isSingleIntentSelection(preferences = [], familyKey) {
+  const families = getSelectedIntentFamilyKeys(preferences);
+  return families.length === 1 && families[0] === familyKey;
+}
+
+function getAvailabilityDayFit(item, weekday) {
+  const availability = item?.availability;
+
+  if (!availability || !Number.isFinite(Number(weekday))) {
+    return "stable";
+  }
+
+  if (Array.isArray(availability.strongWeekdays) && availability.strongWeekdays.includes(Number(weekday))) {
+    return "strong";
+  }
+
+  if (Array.isArray(availability.weakWeekdays) && availability.weakWeekdays.includes(Number(weekday))) {
+    return "weak";
+  }
+
+  return "stable";
+}
+
+function isMarketStyleSecondHandStop(item) {
+  if (!item) {
+    return false;
+  }
+
+  const kind = item.availability?.kind;
+  return (
+    kind === "market" ||
+    kind === "event_market" ||
+    (item.tags || []).includes("market") ||
+    (item.tags || []).includes("event_market")
+  );
+}
+
+function isShopStyleSecondHandStop(item) {
+  if (!item) {
+    return false;
+  }
+
+  if (item.availability?.kind === "shop") {
+    return true;
+  }
+
+  const tags = new Set(item.tags || []);
+  return (
+    itemMatchesSecondHandIntentFamily(item) &&
+    !tags.has("market") &&
+    !tags.has("event_market")
+  );
+}
+
+function buildSecondHandIntentFit(routeStops = [], preferences = [], weekday = null) {
+  if (!preferences.includes("second_hand")) {
+    return {
+      score: 0,
+      coverage: 0,
+      leadStop: null,
+      identity: "none",
+      note: null,
+    };
+  }
+
+  const familyStops = routeStops.filter((stop) => itemMatchesSecondHandIntentFamily(stop));
+  const coverage = routeStops.length ? familyStops.length / routeStops.length : 0;
+  const leadStopIndex = routeStops.findIndex((stop) => itemMatchesSecondHandIntentFamily(stop));
+  const leadStop = leadStopIndex >= 0 ? routeStops[leadStopIndex] : null;
+  const shopLikeCount = familyStops.filter((stop) => isShopStyleSecondHandStop(stop)).length;
+  const marketLikeCount = familyStops.filter((stop) => isMarketStyleSecondHandStop(stop)).length;
+  const leadDayFit = getAvailabilityDayFit(leadStop, weekday);
+  const singleIntent = isSingleIntentSelection(preferences, "second_hand");
+  let score = 0;
+  let note = null;
+
+  if (!familyStops.length) {
+    return {
+      score: singleIntent ? -28 : -12,
+      coverage,
+      leadStop: null,
+      identity: "missing",
+      note: singleIntent
+        ? "Second hand-spåret bär inte den här rutten tydligt nog."
+        : "Second hand finns för svagt här för att bära rutten själv.",
+    };
+  }
+
+  score += coverage * (singleIntent ? 18 : 8);
+  score += Math.min(familyStops.length, singleIntent ? 4 : 3);
+
+  if (leadStopIndex === 0) {
+    score += singleIntent ? 7 : 2.8;
+  } else if (leadStopIndex === 1) {
+    score += singleIntent ? 3.2 : 1.2;
+  } else {
+    score -= singleIntent ? 6.8 : 2.6;
+  }
+
+  if (coverage >= (singleIntent ? 0.66 : 0.45)) {
+    score += singleIntent ? 4.2 : 2.2;
+  } else if (coverage < (singleIntent ? 0.5 : 0.34)) {
+    score -= singleIntent ? 8.4 : 4.6;
+  }
+
+  if (leadStop && isShopStyleSecondHandStop(leadStop)) {
+    score += singleIntent ? 4.6 : 2.4;
+  }
+
+  if (leadStop && isMarketStyleSecondHandStop(leadStop)) {
+    if (leadDayFit === "strong") {
+      score += singleIntent ? 4.4 : 2.2;
+      note = "Marknadsspåret är faktiskt starkt nog att bära dagen på den här veckodagen.";
+    } else if (leadDayFit === "weak") {
+      score -= shopLikeCount > 0 ? (singleIntent ? 9.2 : 5.4) : singleIntent ? 5.4 : 3.2;
+      note =
+        shopLikeCount > 0
+          ? "Marknadsspåret är svagare i dag än butiksspåret."
+          : "Marknadsspåret är skörare i dag och bör inte bära hela löftet själv.";
+    }
+  }
+
+  if (!note && singleIntent && leadStop && isShopStyleSecondHandStop(leadStop)) {
+    note = "Rutten bärs tydligt av butiker och vintage snarare än av sidospår.";
+  } else if (!note && !singleIntent && coverage >= 0.45) {
+    note = "Second hand-spåret syns tydligt i huvudstoppen även när dagen blandar fler lager.";
+  }
+
+  return {
+    score: Math.round(score * 10) / 10,
+    coverage,
+    leadStop,
+    identity:
+      leadStop && isMarketStyleSecondHandStop(leadStop)
+        ? leadDayFit === "strong"
+          ? "market-strong"
+          : "market-weak"
+        : leadStop
+          ? "shop"
+          : "missing",
+    note,
+    shopLikeCount,
+    marketLikeCount,
+    singleIntent,
+  };
+}
+
+function rebalanceWeakMarketLead(orderedStops = [], preferences = [], weekday = null) {
+  if (!preferences.includes("second_hand") || !orderedStops.length) {
+    return orderedStops;
+  }
+
+  const leadSecondHandIndex = orderedStops.findIndex((stop) => itemMatchesSecondHandIntentFamily(stop));
+
+  if (leadSecondHandIndex < 0) {
+    return orderedStops;
+  }
+
+  const leadStop = orderedStops[leadSecondHandIndex];
+  const leadDayFit = getAvailabilityDayFit(leadStop, weekday);
+
+  if (!isMarketStyleSecondHandStop(leadStop) || leadDayFit !== "weak") {
+    return orderedStops;
+  }
+
+  const replacementIndex = orderedStops.findIndex(
+    (stop, index) =>
+      index > leadSecondHandIndex &&
+      itemMatchesSecondHandIntentFamily(stop) &&
+      isShopStyleSecondHandStop(stop),
+  );
+
+  if (replacementIndex < 0) {
+    return orderedStops;
+  }
+
+  const nextStops = [...orderedStops];
+  const [replacement] = nextStops.splice(replacementIndex, 1);
+  nextStops.splice(leadSecondHandIndex, 0, replacement);
+  return nextStops;
+}
+
+function areBarMentionsRelevant(preferences = []) {
+  return getSelectedIntentFamilyKeys(preferences).some((family) =>
+    barRelevantIntentFamilies.has(family),
+  );
+}
+
+function areHiddenMentionsRelevant(preferences = []) {
+  return getSelectedIntentFamilyKeys(preferences).some((family) =>
+    hiddenRelevantIntentFamilies.has(family),
+  );
 }
 
 function normalizeVibeProfile(template) {
@@ -3036,8 +3273,25 @@ function buildAnchorZone(shape, startProfile, endProfile, routeArea) {
   return tokenLabel(routeArea.dominantToken) || currentCityLabel();
 }
 
-function routeToneLabel(optimizerMode, modifier, preferences = []) {
+function routeToneLabel(optimizerMode, modifier, preferences = [], routeStops = [], weekday = null) {
   const activeModifier = normalizeModifier(modifier, optimizerMode);
+  const secondHandFit = buildSecondHandIntentFit(routeStops, preferences, weekday);
+
+  if (preferences.includes("second_hand") && secondHandFit.coverage >= 0.34) {
+    if (preferences.includes("vin") || preferences.includes("mat")) {
+      return "second hand + vin";
+    }
+    if (preferences.includes("nattliv") || preferences.includes("cocktail") || preferences.includes("kväll")) {
+      return "second hand + kväll";
+    }
+    if (preferences.includes("kultur") || preferences.includes("kyrkor") || preferences.includes("klassiker")) {
+      return "second hand + kultur";
+    }
+
+    return secondHandFit.identity === "market-strong"
+      ? "marknad och vintage"
+      : "second hand och vintage";
+  }
 
   if (optimizerMode === "bar-hop") {
     return "barhopping";
@@ -3078,10 +3332,20 @@ function routeToneLabel(optimizerMode, modifier, preferences = []) {
   return "lokal rytm";
 }
 
-function buildDynamicTitle({ start, end, shape, routeArea, optimizerMode, modifier, preferences }) {
+function buildDynamicTitle({
+  start,
+  end,
+  shape,
+  routeArea,
+  optimizerMode,
+  modifier,
+  preferences,
+  routeStops = [],
+  weekday = null,
+}) {
   const dominantZone =
     tokenLabel(routeArea.dominantToken) || macroLabel(routeArea.dominantMacro) || currentCityLabel();
-  const tone = routeToneLabel(optimizerMode, modifier, preferences);
+  const tone = routeToneLabel(optimizerMode, modifier, preferences, routeStops, weekday);
 
   if (shape === "loop") {
     return `${start.label} loop • ${dominantZone} • ${tone}`;
@@ -3090,10 +3354,35 @@ function buildDynamicTitle({ start, end, shape, routeArea, optimizerMode, modifi
   return `${start.label} till ${end.label} • ${dominantZone} • ${tone}`;
 }
 
-function buildDynamicSummary({ start, end, shape, routeArea, estimatedKm, optimizerMode, modifier, preferences }) {
+function buildDynamicSummary({
+  start,
+  end,
+  shape,
+  routeArea,
+  estimatedKm,
+  optimizerMode,
+  modifier,
+  preferences,
+  routeStops = [],
+  weekday = null,
+}) {
   const dominantZone =
     tokenLabel(routeArea.dominantToken) || macroLabel(routeArea.dominantMacro) || currentCityLabel();
-  const tone = routeToneLabel(optimizerMode, modifier, preferences);
+  const tone = routeToneLabel(optimizerMode, modifier, preferences, routeStops, weekday);
+  const secondHandFit = buildSecondHandIntentFit(routeStops, preferences, weekday);
+
+  if (preferences.includes("second_hand") && secondHandFit.coverage >= 0.34) {
+    const carryText =
+      secondHandFit.identity === "market-strong"
+        ? "där marknadsspåret faktiskt får bära dagen"
+        : "där vintage- och butiksspåret faktiskt får bära dagen";
+
+    if (shape === "loop") {
+      return `En sammanhängande runda på cirka ${estimatedKm.toFixed(1)} km runt ${dominantZone} ${carryText} i stället för att bara dyka upp som bonus.`;
+    }
+
+    return `En tydlig båge på cirka ${estimatedKm.toFixed(1)} km från ${start.label} mot ${end.label}, med tyngd i ${dominantZone} där second hand-spåret fortfarande märks tydligt.`;
+  }
 
   if (shape === "loop") {
     return `En sammanhängande runda på cirka ${estimatedKm.toFixed(1)} km som utgår från ${start.label}, håller sig runt ${dominantZone} och lutar mot ${tone}.`;
@@ -3293,18 +3582,30 @@ function buildDynamicRouteMentions({
     })),
   ].filter((entry) => entry.score > 0);
 
-  const hiddenMentions = pickRouteMentions(hiddenCandidates, 4);
-  const barMentions = pickRouteMentions(barCandidates, 4);
+  const hiddenMentions = areHiddenMentionsRelevant(preferences)
+    ? pickRouteMentions(hiddenCandidates, 4)
+    : [];
+  const barMentions = areBarMentionsRelevant(preferences)
+    ? pickRouteMentions(barCandidates, 4)
+    : [];
 
   return {
     hiddenMentions:
       hiddenMentions.length > 0
         ? hiddenMentions
-        : (template?.hiddenMentions || []).filter((name) => Boolean(findCatalogItemByName(name))).slice(0, 4),
+        : areHiddenMentionsRelevant(preferences)
+          ? (template?.hiddenMentions || [])
+              .filter((name) => Boolean(findCatalogItemByName(name)))
+              .slice(0, 4)
+          : [],
     barMentions:
       barMentions.length > 0
         ? barMentions
-        : (template?.barMentions || []).filter((name) => Boolean(findCatalogItemByName(name))).slice(0, 4),
+        : areBarMentionsRelevant(preferences)
+          ? (template?.barMentions || [])
+              .filter((name) => Boolean(findCatalogItemByName(name)))
+              .slice(0, 4)
+          : [],
   };
 }
 
@@ -3400,12 +3701,40 @@ function buildRouteFromTemplate(
     distanceMode,
     legPacing,
   );
+  const finalOrderedStops = rebalanceWeakMarketLead(
+    orderedStops,
+    preferences,
+    options.weekday || null,
+  );
+  const finalGeometry =
+    finalOrderedStops === orderedStops
+      ? geometry
+      : shape === "loop"
+        ? summarizeLoopGeometry(
+            finalOrderedStops,
+            start,
+            end,
+            startProfile,
+            targetKm,
+            distanceMode,
+            legPacing,
+          )
+        : summarizeArcGeometry(
+            finalOrderedStops,
+            start,
+            end,
+            startProfile,
+            endProfile,
+            targetKm,
+            distanceMode,
+            legPacing,
+          );
 
-  const mainStops = orderedStops.map((stop) => formatMainStop(stop));
-  const routeArea = buildRouteAreaProfile(orderedStops);
+  const mainStops = finalOrderedStops.map((stop) => formatMainStop(stop));
+  const routeArea = buildRouteAreaProfile(finalOrderedStops);
   const mapRoutePoints = [
     { label: start.label, lat: start.lat, lng: start.lng, role: "start" },
-    ...orderedStops.map((stop, index) => ({
+    ...finalOrderedStops.map((stop, index) => ({
       label: stop.name,
       lat: stop.lat,
       lng: stop.lng,
@@ -3413,10 +3742,10 @@ function buildRouteFromTemplate(
     })),
     { label: end.label, lat: end.lat, lng: end.lng, role: "end" },
   ];
-  const estimatedKm = Number((geometry?.estimatedKm || walkingKm(mapRoutePoints)).toFixed(1));
-  const legs = geometry?.legs || buildRouteLegs(mapRoutePoints);
+  const estimatedKm = Number((finalGeometry?.estimatedKm || walkingKm(mapRoutePoints)).toFixed(1));
+  const legs = finalGeometry?.legs || buildRouteLegs(mapRoutePoints);
   const routeMentions = buildDynamicRouteMentions({
-    orderedStops,
+    orderedStops: finalOrderedStops,
     mapRoutePoints,
     preferences,
     optimizerMode,
@@ -3433,6 +3762,8 @@ function buildRouteFromTemplate(
       optimizerMode,
       modifier,
       preferences,
+      routeStops: finalOrderedStops,
+      weekday: options.weekday || null,
     }),
     summary: buildDynamicSummary({
       start,
@@ -3443,6 +3774,8 @@ function buildRouteFromTemplate(
       optimizerMode,
       modifier,
       preferences,
+      routeStops: finalOrderedStops,
+      weekday: options.weekday || null,
     }),
     estimated_km: estimatedKm,
     start_label: start.label,
@@ -3459,15 +3792,15 @@ function buildRouteFromTemplate(
     legs,
     routing_source: "heuristic",
     geo_profile: buildRouteGeoProfile(routeArea, startProfile, endProfile),
-    longest_leg_km: geometry?.longestLegKm ?? null,
-    longest_leg_minutes: geometry?.longestLegMinutes ?? null,
-    average_leg_minutes: geometry?.averageLegMinutes ?? null,
-    leg_fit_note: geometry?.legFitNote ?? null,
+    longest_leg_km: finalGeometry?.longestLegKm ?? null,
+    longest_leg_minutes: finalGeometry?.longestLegMinutes ?? null,
+    average_leg_minutes: finalGeometry?.averageLegMinutes ?? null,
+    leg_fit_note: finalGeometry?.legFitNote ?? null,
     geo_fit_note: buildGeoFitNote({
       shape,
       start,
       end,
-      geometry,
+      geometry: finalGeometry,
       routeArea,
       startProfile,
       endProfile,
@@ -3951,6 +4284,7 @@ function routeScore({
     : { score: 0, note: null };
   const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
   const strictFitScore = strictPreferenceCoverageScore(normalizedRouteStops, strictTags);
+  const secondHandFit = buildSecondHandIntentFit(normalizedRouteStops, preferences, weekday);
   const reusedPenalty = reusedIds.has(template.id) ? -6 : 0;
   const geoFitScore = (route.geo_quality_score || 0) - (route.pool_fit_penalty || 0);
   const localTruthScore = Number(localTruth?.score_delta || 0);
@@ -3969,6 +4303,7 @@ function routeScore({
       areaFit.score +
       anchorFit.score +
       strictFitScore +
+      secondHandFit.score +
       geoFitScore +
       startProximity +
       endProximity +
@@ -3980,6 +4315,7 @@ function routeScore({
     pulseAnchor: pulseFit.anchor,
     liveEventNote: liveFit.note,
     areaNote: anchorFit.note || areaFit.note,
+    intentNote: secondHandFit.note,
     profile: profileFit.profile,
   };
 }
@@ -3988,6 +4324,8 @@ function whyRecommended(
   template,
   preferences,
   route,
+  routeStops,
+  weekday,
   weather,
   optimizerMode,
   distanceMode,
@@ -3996,6 +4334,7 @@ function whyRecommended(
   pulseNote,
   liveEventNote,
   areaNote,
+  intentNote,
 ) {
   const prefMatches = preferences.filter((pref) => template.preferenceTags.includes(pref));
   const reasonParts = [];
@@ -4003,11 +4342,28 @@ function whyRecommended(
   const activeBudgetTier = normalizeBudgetTier(preferences, optimizerMode, budgetTier);
   const activeModifier = normalizeModifier(modifier, optimizerMode);
   const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
+  const secondHandFit = buildSecondHandIntentFit(routeStops, preferences, weekday);
 
   if (strictTags.length === 1) {
     reasonParts.push(
       `Du valde i praktiken ${strictTags[0]}, så stoppmixen hålls tydligare runt just det temat än i de bredare rutterna.`,
     );
+  }
+
+  if (preferences.includes("second_hand")) {
+    if (secondHandFit.coverage >= 0.5 && secondHandFit.leadStop) {
+      if (secondHandFit.identity === "market-strong") {
+        reasonParts.push(
+          "Second hand-spåret bärs här faktiskt av marknad och vintage på en veckodag som stöder det.",
+        );
+      } else {
+        reasonParts.push(
+          "Second hand-spåret bärs här tydligt av butiker, vintage och shopping snarare än av ett enstaka bonusstopp.",
+        );
+      }
+    } else if (intentNote) {
+      reasonParts.push(intentNote);
+    }
   }
 
   if (prefMatches.length) {
@@ -4520,6 +4876,7 @@ async function generateRecommendations({
                 resolvedAutoShape: dayResolvedAutoShape,
                 legPacing,
                 dayProfile,
+                weekday,
               },
             );
           const routeStops = route.main_stops
@@ -4579,6 +4936,8 @@ async function generateRecommendations({
                 template,
                 preferences,
                 route,
+                routeStops,
+                weekday,
                 weather,
                 optimizerMode,
                 distanceMode,
@@ -4587,6 +4946,7 @@ async function generateRecommendations({
                 scoring.pulseNote,
                 scoring.liveEventNote,
                 scoring.areaNote,
+                scoring.intentNote,
               ),
             },
             score: scoring.score,

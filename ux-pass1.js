@@ -714,7 +714,7 @@
       </div>
       <button type="button" class="primary-button">Ändra val</button>
     `;
-    resultRecapStrip.querySelector("button")?.addEventListener("click", () => heroPlannerButton?.click());
+    resultRecapStrip.querySelector("button")?.addEventListener("click", openPlannerFromHeroInline);
     routeResults.parentNode.insertBefore(resultRecapStrip, routeResults);
   }
 

@@ -6138,28 +6138,7 @@ function buildLegSummary(route) {
     return null;
   }
 
-  const parts = [];
-
-  if (Number.isFinite(Number(route.longest_leg_minutes)) || Number.isFinite(Number(route.longest_leg_km))) {
-    parts.push(
-      `Längsta ben: ${[
-        formatLegMinutes(Number(route.longest_leg_minutes)),
-        formatLegDistance(Number(route.longest_leg_km)),
-      ]
-        .filter(Boolean)
-        .join(" • ")}`,
-    );
-  }
-
-  if (Number.isFinite(Number(route.average_leg_minutes))) {
-    parts.push(`Typiskt ben: ${formatLegMinutes(Number(route.average_leg_minutes))}`);
-  }
-
-  if (route.leg_fit_note) {
-    parts.push(route.leg_fit_note);
-  }
-
-  return parts.filter(Boolean).join(" • ");
+  return route?.leg_fit_note || null;
 }
 
 function stopSourceLabel(stop) {
@@ -6431,17 +6410,6 @@ function openRouteGuide(routeView) {
     { label: "Dagstyp", value: routeView.dayProfileLabel || "Komponerad dag" },
     { label: "Tempo", value: routeView.pacingLabel || "Balans" },
     { label: "Geo-fit", value: routeView.geoFitNote ? "Optimerad" : routeView.routeShape === "loop" ? "Loop" : "Båge" },
-    {
-      label: "Längsta ben",
-      value:
-        [formatLegMinutes(Number(routeView.longestLegMinutes)), formatLegDistance(Number(routeView.longestLegKm))]
-          .filter(Boolean)
-          .join(" • ") || "Ingår i rutten",
-    },
-    {
-      label: "Typiskt ben",
-      value: formatLegMinutes(Number(routeView.averageLegMinutes)) || "Varierar",
-    },
   ].forEach((stat) => {
     const card = document.createElement("article");
     const title = document.createElement("strong");
