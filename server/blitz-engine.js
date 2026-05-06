@@ -73,6 +73,14 @@ function uniqueNonEmpty(values = []) {
   return [...new Set((values || []).map((value) => String(value || "").trim()).filter(Boolean))];
 }
 
+function normalizeStringArray(values = [], limit = 10) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  return uniqueNonEmpty(values).slice(-limit);
+}
+
 function slugifyToken(value) {
   return String(value || "")
     .normalize("NFD")
@@ -355,17 +363,31 @@ function buildAdditionalMemoryFromPreviousRoute(previousRoute) {
 }
 
 function normalizeBlitzMemory(memory, previousRoute = null) {
+  const memoryObject =
+    memory && typeof memory === "object" && !Array.isArray(memory) ? memory : {};
   const base = {
     ...DEFAULT_MEMORY,
-    ...(memory && typeof memory === "object" ? memory : {}),
+    ...memoryObject,
   };
   const previousRouteMemory = buildAdditionalMemoryFromPreviousRoute(previousRoute);
 
   return {
-    recent_stop_ids: uniqueNonEmpty([...base.recent_stop_ids, ...previousRouteMemory.recent_stop_ids]).slice(-10),
-    recent_move_kinds: uniqueNonEmpty([...base.recent_move_kinds, ...previousRouteMemory.recent_move_kinds]).slice(-8),
-    recent_area_tokens: uniqueNonEmpty([...base.recent_area_tokens, ...previousRouteMemory.recent_area_tokens]).slice(-8),
-    recent_template_ids: uniqueNonEmpty([...base.recent_template_ids, ...previousRouteMemory.recent_template_ids]).slice(-6),
+    recent_stop_ids: normalizeStringArray(
+      [...normalizeStringArray(base.recent_stop_ids, 10), ...previousRouteMemory.recent_stop_ids],
+      10,
+    ),
+    recent_move_kinds: normalizeStringArray(
+      [...normalizeStringArray(base.recent_move_kinds, 8), ...previousRouteMemory.recent_move_kinds],
+      8,
+    ),
+    recent_area_tokens: normalizeStringArray(
+      [...normalizeStringArray(base.recent_area_tokens, 8), ...previousRouteMemory.recent_area_tokens],
+      8,
+    ),
+    recent_template_ids: normalizeStringArray(
+      [...normalizeStringArray(base.recent_template_ids, 6), ...previousRouteMemory.recent_template_ids],
+      6,
+    ),
     last_blitz_at: typeof base.last_blitz_at === "string" && base.last_blitz_at.trim() ? base.last_blitz_at : null,
   };
 }
@@ -478,6 +500,30 @@ function buildAvailabilityContext(stops = [], weekday = null) {
     note: dominant.availability.note || null,
     verify_recommended: dominant.availability.verifyRecommended,
   };
+}
+
+function isMarketStyleAvailability(availability) {
+  return Boolean(availability && ["market", "event_market"].includes(availability.kind));
+}
+
+function isWeakMarketAvailability(availability, weekday) {
+  return Boolean(isMarketStyleAvailability(availability) && availability.weakWeekdays.includes(weekday));
+}
+
+function isStrongMarketAvailability(availability, weekday) {
+  return Boolean(isMarketStyleAvailability(availability) && availability.strongWeekdays.includes(weekday));
+}
+
+function scoreLeadAvailabilityFit(availability, weekday) {
+  if (isWeakMarketAvailability(availability, weekday)) {
+    return -1.8;
+  }
+
+  if (isStrongMarketAvailability(availability, weekday)) {
+    return 0.55;
+  }
+
+  return 0;
 }
 
 function scoreTimeBandForItem(item, timeBand) {
@@ -607,7 +653,10 @@ function scorePulseForItem(item, pulseItems = [], cityConfig) {
     return { score: 0, item: null };
   }
 
-  return ranked[0];
+  return {
+    score: ranked[0].score,
+    item: ranked[0].pulseItem,
+  };
 }
 
 function scoreMemoryPenalty(item, memory, moveKind, areaTokens = []) {
@@ -687,9 +736,12 @@ function computeRouteDurationMinutes(origin, stops = []) {
   };
 }
 
-function pickRouteStops(seedCandidate, stopCandidates, origin, timeBand) {
+function pickRouteStops(seedCandidate, stopCandidates, origin, timeBand, options = {}) {
+  const weekday = options.weekday ?? null;
   const picked = [seedCandidate.item];
   const usedIds = new Set([seedCandidate.item.id]);
+  const seedAvailability = normalizeAvailability(seedCandidate.item.availability);
+  const seedIsMarket = isMarketStyleAvailability(seedAvailability);
   const sortedSupports = stopCandidates
     .filter((candidate) => candidate.item.id !== seedCandidate.item.id)
     .map((candidate) => ({
@@ -700,6 +752,11 @@ function pickRouteStops(seedCandidate, stopCandidates, origin, timeBand) {
         (candidate.areaTokens.some((token) => seedCandidate.areaTokens.includes(token)) ? 0.8 : 0),
     }))
     .sort((left, right) => right.supportScore - left.supportScore);
+  const nearbyStableSupportExists = sortedSupports.some((candidate) => {
+    const availability = normalizeAvailability(candidate.item.availability);
+    const distanceToSeed = haversineKm(seedCandidate.item, candidate.item);
+    return !isMarketStyleAvailability(availability) && Number.isFinite(distanceToSeed) && distanceToSeed <= 1.2;
+  });
 
   for (const candidate of sortedSupports) {
     if (picked.length >= 3) {
@@ -712,6 +769,15 @@ function pickRouteStops(seedCandidate, stopCandidates, origin, timeBand) {
 
     const distanceToSeed = haversineKm(seedCandidate.item, candidate.item);
     if (!Number.isFinite(distanceToSeed) || distanceToSeed > 1.2) {
+      continue;
+    }
+
+    const candidateAvailability = normalizeAvailability(candidate.item.availability);
+    if (
+      !seedIsMarket &&
+      nearbyStableSupportExists &&
+      isWeakMarketAvailability(candidateAvailability, weekday)
+    ) {
       continue;
     }
 
@@ -921,6 +987,7 @@ function buildSingleStopCandidate({
     optimizerMode: null,
     modifier: null,
   });
+  const leadAvailability = normalizeAvailability(item.availability);
   const availabilityContext = buildAvailabilityContext([item], weekday);
   const memoryPenalty = scoreMemoryPenalty(item, memory, moveKind, areaTokens);
   const distanceScore =
@@ -945,6 +1012,7 @@ function buildSingleStopCandidate({
       preferenceCoverageScore +
       secondHandBonus +
       timeScore +
+      scoreLeadAvailabilityFit(leadAvailability, weekday) +
       pulseResult.score +
       truthEffect.score_delta +
       memoryPenalty
@@ -1000,7 +1068,8 @@ function buildMiniRouteCandidate({
   memory,
   coverageNote,
 }) {
-  const pickedRoute = pickRouteStops(seedCandidate, stopCandidates, origin, timeBand);
+  const seedAvailability = normalizeAvailability(seedCandidate.item.availability);
+  const pickedRoute = pickRouteStops(seedCandidate, stopCandidates, origin, timeBand, { weekday });
   const routeStops = pickedRoute.stops;
 
   if (routeStops.length < 2) {
@@ -1025,6 +1094,11 @@ function buildMiniRouteCandidate({
     return null;
   }
 
+  const weakMarketTailPenalty = routeStops.slice(1).reduce((penalty, stop) => {
+    const availability = normalizeAvailability(stop.availability);
+    return penalty + (isWeakMarketAvailability(availability, weekday) ? -1.1 : 0);
+  }, 0);
+  const leadAvailabilityScore = scoreLeadAvailabilityFit(seedAvailability, weekday);
   const routeScore =
     routeStops.reduce((sum, stop) => {
       const stopCandidate = stopCandidates.find((candidate) => candidate.item.id === stop.id);
@@ -1032,7 +1106,9 @@ function buildMiniRouteCandidate({
     }, 0) /
       routeStops.length +
     (routeStops.length >= 3 ? 1.2 : 0.65) +
-    truthEffect.score_delta;
+    truthEffect.score_delta +
+    weakMarketTailPenalty +
+    leadAvailabilityScore;
   const routeAreaTokens = uniqueNonEmpty(routeStops.flatMap((stop) => buildAreaTokens(stop, cityConfig)));
   const memoryPenalty = routeStops.reduce((penalty, stop) => {
     return penalty + scoreMemoryPenalty(stop, memory, "mini_route_60", routeAreaTokens);
@@ -1204,10 +1280,10 @@ function buildUpdatedMemory(memory, candidate, nowIso) {
   const areaTokens = candidate.areaTokens || [];
 
   return {
-    recent_stop_ids: uniqueNonEmpty([...memory.recent_stop_ids, ...routeStops]).slice(-10),
-    recent_move_kinds: uniqueNonEmpty([...memory.recent_move_kinds, candidate.move_kind]).slice(-8),
-    recent_area_tokens: uniqueNonEmpty([...memory.recent_area_tokens, ...areaTokens]).slice(-8),
-    recent_template_ids: uniqueNonEmpty(memory.recent_template_ids).slice(-6),
+    recent_stop_ids: normalizeStringArray([...memory.recent_stop_ids, ...routeStops], 10),
+    recent_move_kinds: normalizeStringArray([...memory.recent_move_kinds, candidate.move_kind], 8),
+    recent_area_tokens: normalizeStringArray([...memory.recent_area_tokens, ...areaTokens], 8),
+    recent_template_ids: normalizeStringArray(memory.recent_template_ids, 6),
     last_blitz_at: nowIso,
   };
 }
