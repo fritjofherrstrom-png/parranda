@@ -209,6 +209,48 @@ test("GET /api/places/search returnerar kuraterade träffar", async () => {
   }
 });
 
+test("GET /api/places/search hittar Rome second hand-träffar via Rome-specifika söktermer", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during second hand search test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      path: "/api/places/search?q=seconda%20mano",
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.city, "rome");
+    assert.ok(response.body.items.some((item) => item.id === "humana-vintage-monti"));
+    assert.ok(response.body.items.some((item) => item.id === "ciao-vintage"));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /api/places/search hittar Rome-marknader via mercatino utan global alias-läcka", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during market search test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      path: "/api/places/search?q=mercatino",
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.city, "rome");
+    assert.ok(response.body.items.some((item) => item.id === "porta-portese-market"));
+    assert.ok(response.body.items.some((item) => item.id === "borghetto-flaminio-market"));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("GET /api/places/search markerar när en okänd city fallbackar till rome", async () => {
   global.fetch = async (url) => {
     throw new Error(`Unexpected fetch during city fallback test: ${url}`);
@@ -492,6 +534,27 @@ test("GET /api/places/search kan söka i test-city utan Rome-träffar", async ()
       ["Trastevere", "Monti", "Testaccio", "Centro Storico"].includes(item.label),
     ));
     assert.doesNotMatch(JSON.stringify(response.body.items), /\bRom\b|\bRome\b/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /api/places/search för test-city ärver inte Rome second hand-termer eller träffar", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during test-city second hand search test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      path: "/api/places/search?city=test-city&q=seconda%20mano",
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.city, "test-city");
+    assert.equal(response.body.requested_city, "test-city");
+    assert.deepEqual(response.body.items, []);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
