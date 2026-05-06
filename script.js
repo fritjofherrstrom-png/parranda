@@ -1974,6 +1974,7 @@ let blitzMemory = null;
 let blitzLoading = false;
 let blitzLoadRequestId = 0;
 let blitzOriginMode = "selected_place";
+let blitzContextKey = "";
 let activePulseScope = "all";
 let activePulseTime = "now";
 let activePulseLevel = "all";
@@ -2617,19 +2618,6 @@ function getActiveHeroWildcard() {
 }
 
 function getSelectedBlitzOriginSource() {
-  if (
-    activeDrawerItem &&
-    typeof activeDrawerItem.lat === "number" &&
-    typeof activeDrawerItem.lng === "number"
-  ) {
-    return {
-      label: activeDrawerItem.label || activeDrawerItem.name || "Vald plats",
-      lat: activeDrawerItem.lat,
-      lng: activeDrawerItem.lng,
-      source: "drawer",
-    };
-  }
-
   const selectedPlace = getPlaceByName(selectedPlaceName);
 
   if (selectedPlace) {
@@ -2647,6 +2635,76 @@ function getSelectedBlitzOriginSource() {
     lng: plannerCity.center?.lng,
     source: "fallback",
   };
+}
+
+function getBlitzDateValue() {
+  return activeLiveDate || routeDateFrom?.value || getTodayIsoDate();
+}
+
+function getBlitzRouteContextKey() {
+  if (activeRouteKey) {
+    return String(activeRouteKey);
+  }
+
+  const activeRoute = getActiveRoutePayloadForBlitz();
+
+  if (!activeRoute) {
+    return "none";
+  }
+
+  return [activeRoute.date || getBlitzDateValue(), activeRoute.id || activeRoute.title || "route"]
+    .filter(Boolean)
+    .join(":");
+}
+
+function buildBlitzContextKey(origin = null) {
+  const intentKeys = getBlitzIntentKeys();
+  const normalizedOrigin =
+    origin ||
+    (blitzOriginMode === "current_location"
+      ? {
+          type: "current_location",
+          label: "Min plats",
+          lat: currentLocationCoords?.lat,
+          lng: currentLocationCoords?.lng,
+        }
+      : {
+          type: "selected_place",
+          ...getSelectedBlitzOriginSource(),
+        });
+
+  const originType = normalizedOrigin?.type || blitzOriginMode || "selected_place";
+  const originLabel = normalizedOrigin?.label || buildUnavailableCityLabel();
+  const originLat =
+    typeof normalizedOrigin?.lat === "number" ? normalizedOrigin.lat.toFixed(5) : "na";
+  const originLng =
+    typeof normalizedOrigin?.lng === "number" ? normalizedOrigin.lng.toFixed(5) : "na";
+
+  return [
+    plannerCityKey,
+    getBlitzDateValue(),
+    originType,
+    originLabel,
+    originLat,
+    originLng,
+    intentKeys.join("|"),
+    getBlitzRouteContextKey(),
+  ].join("::");
+}
+
+function syncBlitzContextState(nextContextKey, { clearState = true } = {}) {
+  if (!nextContextKey || nextContextKey === blitzContextKey) {
+    return false;
+  }
+
+  blitzContextKey = nextContextKey;
+  blitzMemory = null;
+
+  if (clearState) {
+    blitzState = null;
+  }
+
+  return true;
 }
 
 async function resolveBlitzOriginPayload() {
@@ -3077,12 +3135,18 @@ async function loadHeroBlitz({ openAfter = false } = {}) {
     return null;
   }
 
-  const requestId = ++blitzLoadRequestId;
+  let requestId = blitzLoadRequestId;
   blitzLoading = true;
   renderHeroBlitz();
 
   try {
     const origin = await resolveBlitzOriginPayload();
+    const contextChanged = syncBlitzContextState(buildBlitzContextKey(origin));
+    requestId = ++blitzLoadRequestId;
+
+    if (contextChanged) {
+      renderHeroBlitz();
+    }
     const response = await fetch("/api/blitz", {
       method: "POST",
       headers: {
@@ -3090,7 +3154,7 @@ async function loadHeroBlitz({ openAfter = false } = {}) {
       },
       body: JSON.stringify({
         city: plannerCityKey,
-        date: activeLiveDate || routeDateFrom?.value || getTodayIsoDate(),
+        date: getBlitzDateValue(),
         now: new Date().toISOString(),
         origin,
         intent_keys: getBlitzIntentKeys(),
@@ -6170,9 +6234,6 @@ function closePlaceDrawer() {
   placeDrawer.hidden = true;
   placeDrawerBackdrop.hidden = true;
   activeDrawerItem = null;
-  if (isRomeCuratedMode) {
-    loadHeroBlitz().catch(() => {});
-  }
 }
 
 function drawerItemCanBeUsedInPlanner(item) {
@@ -6300,11 +6361,6 @@ function openPlaceDrawer(item) {
 
   placeDrawer.hidden = false;
   placeDrawerBackdrop.hidden = false;
-
-  if (isRomeCuratedMode) {
-    renderHeroBlitz();
-    loadHeroBlitz().catch(() => {});
-  }
 }
 
 async function openPlaceDrawerByQuery(query) {
@@ -7245,6 +7301,10 @@ function updateMapPanel(place) {
   });
 
   renderHeroBlitz();
+
+  if (isRomeCuratedMode && blitzOriginMode === "selected_place" && blitzContextKey) {
+    loadHeroBlitz().catch(() => {});
+  }
 }
 
 function updateMapPanelForRoute(routeView) {
@@ -7693,6 +7753,10 @@ function focusRouteCardOnMap(routeView, routeKey, message) {
   }, 80);
 
   updateRouteMatchSummary(message);
+
+  if (isRomeCuratedMode) {
+    loadHeroBlitz().catch(() => {});
+  }
 }
 
 function getRouteViewForLiveEvent(item) {
@@ -7760,6 +7824,10 @@ function focusLiveEventOnMap(item) {
     item.route_fit_note ||
       `${item.label} matchar bäst med ${item.best_route_label || "dagens starkaste rutt"}.`,
   );
+
+  if (isRomeCuratedMode) {
+    loadHeroBlitz().catch(() => {});
+  }
 }
 
 function appendRoutePillButtons(container, items = []) {
@@ -8990,7 +9058,6 @@ updateFavoritesUI();
 if (isRomeCuratedMode) {
   initMap();
   refreshMarkerStyles();
-  loadHeroBlitz().catch(() => {});
 }
 updateInstallButtonVisibility();
 registerServiceWorker();
