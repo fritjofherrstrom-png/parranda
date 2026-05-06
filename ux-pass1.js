@@ -426,7 +426,13 @@
   }
 
   function applyQuickVibeToPreferences(vibeKey) {
-    const suggested = new Set((quickVibeMeta[vibeKey] || quickVibeMeta.blend).intentKeys);
+    const intentKeys = (quickVibeMeta[vibeKey] || quickVibeMeta.blend).intentKeys || [];
+    if (typeof window.__parrandaApplyPlannerIntentKeySelection === "function") {
+      window.__parrandaApplyPlannerIntentKeySelection(intentKeys);
+      return;
+    }
+
+    const suggested = new Set(intentKeys);
     const checkboxes = routePlannerForm.querySelectorAll('.preference-chip input[type="checkbox"]');
     checkboxes.forEach((checkbox) => {
       checkbox.checked = suggested.has(checkbox.value);

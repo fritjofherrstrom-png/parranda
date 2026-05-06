@@ -2139,6 +2139,13 @@ function setSelectedIntentKeys(intentKeys = [], options = {}) {
       : "explicit";
 }
 
+function applyPlannerIntentKeySelection(intentKeys = [], options = {}) {
+  setSelectedIntentKeys(intentKeys, options);
+  updatePlannerAdvancedSummary();
+  updatePlannerLaunchSummary();
+  updateRouteMatchSummary(buildPlannerStyleSummary());
+}
+
 function normalizePlannerIntentSelectionAfterChange(changedInput) {
   if (
     plannerIntentSelectionMode === "default_seed" &&
@@ -5336,6 +5343,8 @@ function getSelectedPreferences() {
     ? selected
     : expandIntentKeysToPreferenceSignals(defaultPlannerIntentKeys);
 }
+
+window.__parrandaApplyPlannerIntentKeySelection = applyPlannerIntentKeySelection;
 
 function buildSavedRouteId(savePayload) {
   const normalizedPreferences = [...(savePayload.snapshot?.preferences || [])]
