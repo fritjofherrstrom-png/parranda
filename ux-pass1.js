@@ -58,12 +58,12 @@
   };
 
   const quickVibeMeta = {
-    blend: { label: "Blanda", preferences: ["vin", "mat", "kultur", "hidden gems", "nattliv"] },
-    culture: { label: "Kultur", preferences: ["kultur", "kyrkor", "hidden gems"] },
-    food: { label: "Mat", preferences: ["mat", "vin", "hidden gems"] },
-    wine: { label: "Vin", preferences: ["vin", "mat", "low-key", "hidden gems"] },
-    night: { label: "Nattliv", preferences: ["nattliv", "vin", "cocktail", "kväll"] },
-    lowkey: { label: "Low-key", preferences: ["low-key", "vin", "kultur", "hidden gems"] },
+    blend: { label: "Blanda", intentKeys: ["food_drink", "culture", "hidden_gems", "nightlife"] },
+    culture: { label: "Kultur", intentKeys: ["culture", "hidden_gems", "history"] },
+    food: { label: "Mat", intentKeys: ["food_drink", "hidden_gems"] },
+    wine: { label: "Vin", intentKeys: ["food_drink", "hidden_gems", "nightlife"] },
+    night: { label: "Nattliv", intentKeys: ["nightlife", "food_drink"] },
+    lowkey: { label: "Low-key", intentKeys: ["culture", "hidden_gems", "green_walk"] },
   };
 
   let activeDayIntensity = window.__parrandaDayIntensity || "normal";
@@ -426,7 +426,7 @@
   }
 
   function applyQuickVibeToPreferences(vibeKey) {
-    const suggested = new Set((quickVibeMeta[vibeKey] || quickVibeMeta.blend).preferences);
+    const suggested = new Set((quickVibeMeta[vibeKey] || quickVibeMeta.blend).intentKeys);
     const checkboxes = routePlannerForm.querySelectorAll('.preference-chip input[type="checkbox"]');
     checkboxes.forEach((checkbox) => {
       checkbox.checked = suggested.has(checkbox.value);
