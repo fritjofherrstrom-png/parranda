@@ -5041,7 +5041,7 @@ function restoreLatestPlannerPlan() {
   switchTab("routes");
   renderRouteResults();
   updatePlannerLaunchSummary(buildPlanningResultSummary(record.plannerResponse));
-  updateRouteMatchSummary(buildPlannerStyleSummary(buildPlanningResultSummary(record.plannerResponse)));
+  updateRouteMatchSummary("");
   setPlannerStatusMessage("Senaste plan återställd.", "info");
   hideLatestPlannerRestoreNotice();
   focusPlannerResults();
@@ -9191,11 +9191,7 @@ async function planRoutes() {
   persistLatestPlannerPlan(response);
   setPlannerStatusMessage("");
   updatePlannerLaunchSummary(buildPlanningResultSummary(response));
-  updateRouteMatchSummary(
-    buildPlannerStyleSummary(
-      buildPlanningResultSummary(response),
-    ),
-  );
+  updateRouteMatchSummary("");
 }
 
 filterButtons.forEach((button) => {
