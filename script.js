@@ -1262,6 +1262,7 @@ const districtPlanButton = document.getElementById("districtPlanButton");
 const districtMapButton = document.getElementById("districtMapButton");
 const routePlannerStart = document.getElementById("routePlannerStart");
 const routePlannerOpenButton = document.getElementById("routePlannerOpenButton");
+const routePlannerManualButton = document.getElementById("routePlannerManualButton");
 const closePlannerModalButton = document.getElementById("closePlannerModalButton");
 const plannerModalBackdrop = document.getElementById("plannerModalBackdrop");
 const plannerModalTitle = document.getElementById("plannerModalTitle");
@@ -1565,10 +1566,10 @@ const legPacingHints = {
   flexible: "Spelar mindre roll låter motorn ta större hopp om helheten blir bättre.",
 };
 const plannerLoadingMessages = [
-  "Läser datum och preferenser...",
-  "Väljer smart bas, start och slut...",
-  "Ordnar stopp till en naturlig rutt...",
-  "Finjusterar efter gånglogik och live-läge...",
+  `Bygger din dag i ${plannerDisplayCityLabel}...`,
+  "Väljer en smart bas och rätt tempo...",
+  "Sätter ihop stopp som hänger ihop till fots...",
+  "Finjusterar med väder, live-läge och dagens rytm...",
 ];
 const romePlannerDistrictCatalog = [
   {
@@ -1902,6 +1903,9 @@ function applyCityModeToShell() {
   if (routePlannerOpenButton && !isRomeCuratedMode) {
     routePlannerOpenButton.textContent = isInternalCityMode ? "Öppna preview" : "Se planner-preview";
   }
+  if (routePlannerManualButton && !isRomeCuratedMode) {
+    routePlannerManualButton.hidden = true;
+  }
 
   if (!isRomeCuratedMode) {
     if (tabNav) {
@@ -1926,7 +1930,11 @@ function applyCityModeToShell() {
       routeMatchSummary.textContent = buildNonRomeRouteSummary();
     }
   } else if (routePlannerOpenButton) {
-    routePlannerOpenButton.textContent = "Planera min dag";
+    routePlannerOpenButton.textContent = "Låt Parranda planera";
+    if (routePlannerManualButton) {
+      routePlannerManualButton.hidden = false;
+      routePlannerManualButton.textContent = "Jag vill styra själv";
+    }
   }
 }
 
@@ -4984,8 +4992,8 @@ function updatePlannerAdvancedSummary() {
   if (plannerModeLead) {
     plannerModeLead.textContent =
       activePlannerMode === plannerManualMode
-        ? "Du styr ankare själv. Lås bara det som verkligen behöver vara exakt och låt resten vara flexibelt."
-        : "Börja med datum, vibe, gångmål och gärna var du bor. Resten sätter Parranda ihop.";
+        ? "Du styr själv var dagen ska öppna eller landa. Lås bara det som verkligen behöver vara exakt."
+        : "Håll det lätt: datum, känsla, gångmål och gärna en bas räcker för att Parranda ska bygga dagen.";
   }
 
   updatePlannerLaunchSummary();
@@ -5117,11 +5125,11 @@ function updatePlannerLaunchSummary(prefix = "") {
   const anchorLabel =
     activePlannerMode === plannerManualMode
       ? startSummary === "Parranda väljer" && endSummary === "Parranda väljer"
-        ? "Manuell styrning är vald, men ankare är fortfarande valfria"
-        : `Exakta ankare: ${startSummary} → ${endSummary}`
+        ? "Du styr själv, men ankare är fortfarande valfria"
+        : `Du har låst: ${startSummary} → ${endSummary}`
       : baseSummary === "Parranda väljer"
         ? "Parranda väljer bas, start och final själv"
-        : `Bas: ${baseSummary}. Start och final väljs fortfarande av Parranda`;
+        : `Bas: ${baseSummary}. Parranda väljer fortfarande start och final`;
   const summary =
     prefix ||
     `${dateLabel} • ${kmLabel}. ${anchorLabel}.`;
@@ -5146,6 +5154,16 @@ function openPlannerModal() {
   window.setTimeout(() => {
     routeDateFrom?.focus();
   }, 40);
+}
+
+function openPlannerModalForMode(mode = plannerAutoMode) {
+  setPlannerMode(mode);
+
+  if (mode === plannerManualMode && plannerFineTuneDetails) {
+    plannerFineTuneDetails.open = true;
+  }
+
+  openPlannerModal();
 }
 
 function closePlannerModal() {
@@ -5458,12 +5476,12 @@ function setRouteApiStatus(isAvailable) {
   }
 
   if (isAvailable) {
-    routePlannerModeChip.textContent = "Live route engine aktiv";
+    routePlannerModeChip.textContent = "Smart planerare på";
     routeFallbackNote.hidden = true;
     return;
   }
 
-  routePlannerModeChip.textContent = "Fallback-läge aktivt";
+  routePlannerModeChip.textContent = "Fallback-läge på";
   routeFallbackNote.hidden = false;
 }
 
@@ -5778,7 +5796,7 @@ function setPlannerStatusMessage(text = "", tone = "info") {
 
 function setPlannerLoadingState(isLoading, message = plannerLoadingMessages[0]) {
   const buttons = [routePlanButton, routePlanStickyButton].filter(Boolean);
-  const label = isLoading ? "Planerar din dag..." : "Planera min dag";
+  const label = isLoading ? "Bygger din dag..." : "Planera min dag";
 
   buttons.forEach((button) => {
     button.disabled = isLoading;
@@ -8951,7 +8969,7 @@ routePlannerForm?.addEventListener("submit", async (event) => {
   startPlannerLoadingCycle();
   updateRouteMatchSummary(
     buildPlannerStyleSummary(
-      "Planerar dagar utifrån datum, gångmål, väder, live-events och dina preferenser...",
+      `Bygger din dag i ${plannerDisplayCityLabel} utifrån datum, gångmål, live-läge och dina val...`,
     ),
   );
 
@@ -9060,11 +9078,15 @@ heroBlitzCurrentOriginButton?.addEventListener("click", () => {
 });
 
 heroPlannerButton?.addEventListener("click", () => {
-  openPlannerModal();
+  openPlannerModalForMode(plannerAutoMode);
 });
 
 routePlannerOpenButton?.addEventListener("click", () => {
-  openPlannerModal();
+  openPlannerModalForMode(plannerAutoMode);
+});
+
+routePlannerManualButton?.addEventListener("click", () => {
+  openPlannerModalForMode(plannerManualMode);
 });
 
 closePlannerModalButton?.addEventListener("click", () => {

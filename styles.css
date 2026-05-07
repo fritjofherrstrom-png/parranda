@@ -86,6 +86,7 @@ body::before {
 }
 
 .topbar,
+.topbar-actions,
 .hero-content,
 .section-heading,
 .favorites-hub,
@@ -126,16 +127,21 @@ body::before {
 .hero-quickstart h2,
 .section-heading h2,
 .district-copy h2,
+.favorites-copy h2,
+.local-manifesto h3 {
+  margin: 0;
+  font-family: "Cormorant Garamond", serif;
+}
+
 .place-card h3,
 .spotlight-card h3,
 .bar-card h3,
 .timeline-card h3,
 .route-plan-card h3,
-.favorites-copy h2,
-.map-panel h3,
-.local-manifesto h3 {
+.map-panel h3 {
   margin: 0;
-  font-family: "Cormorant Garamond", serif;
+  font-family: "Manrope", sans-serif;
+  font-weight: 700;
 }
 
 .brand p {
@@ -262,17 +268,29 @@ body::before {
   width: 100%;
   display: grid;
   align-content: start;
-  gap: 10px;
-  padding-top: 8px;
+  gap: 12px;
+  padding-top: 6px;
 }
 
 .topbar-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255, 252, 247, 0.72);
+  border: 1px solid rgba(109, 63, 31, 0.12);
+  box-shadow: 0 10px 28px rgba(88, 49, 22, 0.06);
   color: rgba(36, 25, 20, 0.62);
   text-decoration: none;
-  font-size: 0.92rem;
+  font-size: 0.84rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   transition:
+    background 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease,
     color 180ms ease,
     transform 180ms ease;
 }
@@ -281,6 +299,9 @@ body::before {
 .topbar-link:focus-visible {
   color: var(--accent-deep);
   transform: translateY(-1px);
+  background: rgba(255, 252, 247, 0.94);
+  border-color: rgba(109, 63, 31, 0.18);
+  box-shadow: 0 14px 34px rgba(88, 49, 22, 0.1);
 }
 
 .panel-label,
@@ -293,6 +314,15 @@ body::before {
   color: rgba(36, 25, 20, 0.7);
 }
 
+.hero-kicker {
+  margin: 0;
+  color: rgba(36, 25, 20, 0.52);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
 .hero-panel-meta {
   margin: 6px 0 0;
   font-size: 0.94rem;
@@ -300,19 +330,19 @@ body::before {
 }
 
 .hero-copy h1 {
-  max-width: 7ch;
-  font-size: clamp(1.8rem, 3vw, 2.7rem);
-  line-height: 0.98;
+  max-width: 11ch;
+  font-size: clamp(2.15rem, 3.5vw, 3.35rem);
+  line-height: 0.92;
   text-wrap: balance;
   letter-spacing: -0.02em;
 }
 
 .lead {
-  max-width: 30ch;
-  margin: 2px 0 0;
-  font-size: 0.93rem;
-  line-height: 1.5;
-  color: rgba(36, 25, 20, 0.7);
+  max-width: 34ch;
+  margin: 0;
+  font-size: 0.98rem;
+  line-height: 1.58;
+  color: rgba(36, 25, 20, 0.74);
 }
 
 .hero-support {
@@ -340,14 +370,20 @@ body::before {
 }
 
 .hero-actions {
-  margin-top: 8px;
+  margin-top: 0;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .hero-actions .primary-button,
 .hero-actions .secondary-button {
   min-width: 0;
+}
+
+.topbar-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .hero-live-button {
@@ -382,6 +418,13 @@ body::before {
   border-color: rgba(109, 63, 31, 0.2);
   box-shadow: 0 14px 34px rgba(88, 49, 22, 0.12);
   color: var(--accent);
+}
+
+.topbar-utility-button {
+  min-height: 40px;
+  padding: 10px 14px;
+  font-size: 0.84rem;
+  box-shadow: 0 10px 28px rgba(88, 49, 22, 0.06);
 }
 
 .hero-live-dot {
@@ -447,13 +490,13 @@ body::before {
   align-self: stretch;
   display: grid;
   align-content: start;
-  gap: 14px;
+  gap: 16px;
   background:
     radial-gradient(circle at 92% 0%, rgba(215, 160, 77, 0.14), transparent 24%),
     linear-gradient(180deg, rgba(255, 252, 247, 0.99), rgba(247, 239, 227, 0.96));
   box-shadow: var(--shadow-soft);
   border-color: rgba(97, 50, 23, 0.16);
-  padding: 26px;
+  padding: 28px;
 }
 
 .hero-planner-starter .planner-launch-copy {
@@ -466,8 +509,8 @@ body::before {
 }
 
 .hero-planner-starter .planner-launch-note {
-  max-width: 34ch;
-  color: rgba(36, 25, 20, 0.84);
+  max-width: 36ch;
+  color: rgba(36, 25, 20, 0.8);
   line-height: 1.55;
   font-size: 0.98rem;
 }
@@ -491,16 +534,25 @@ body::before {
 }
 
 .planner-launch-actions {
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
+  row-gap: 10px;
 }
 
 .planner-launch-actions .primary-button {
   padding-inline: 22px;
 }
 
+.planner-launch-actions .secondary-button {
+  min-height: 48px;
+  background: transparent;
+  border: 1.5px solid rgba(127, 45, 26, 0.26);
+  color: var(--accent-deep);
+}
+
 .planner-launch-micro {
   margin: 0;
+  width: 100%;
   color: rgba(36, 25, 20, 0.58);
   font-size: 0.88rem;
   line-height: 1.45;
@@ -602,31 +654,33 @@ body::before {
 }
 
 .city-pulse-teaser {
-  padding: 14px 16px;
+  padding: 13px 15px;
   border-radius: 24px;
   gap: 14px;
   align-items: center;
   background:
-    linear-gradient(180deg, rgba(255, 252, 247, 0.9), rgba(247, 239, 227, 0.84));
-  border-color: rgba(70, 38, 18, 0.08);
-  box-shadow: var(--shadow-soft);
+    linear-gradient(180deg, rgba(255, 252, 247, 0.82), rgba(247, 239, 227, 0.74));
+  border-color: rgba(70, 38, 18, 0.06);
+  box-shadow: 0 14px 30px rgba(60, 29, 12, 0.06);
 }
 
 .city-pulse-teaser-copy {
   gap: 4px;
-  max-width: 44ch;
+  max-width: 40ch;
 }
 
 .city-pulse-teaser-copy h2 {
-  font-size: clamp(1.02rem, 1.55vw, 1.3rem);
-  line-height: 1.12;
+  font-family: "Manrope", sans-serif;
+  font-size: clamp(1.05rem, 1.8vw, 1.3rem);
+  line-height: 1.18;
+  font-weight: 700;
   color: var(--ink);
 }
 
 .city-pulse-teaser-summary {
-  font-size: 0.86rem;
+  font-size: 0.9rem;
   line-height: 1.45;
-  color: var(--muted);
+  color: rgba(36, 25, 20, 0.64);
 }
 
 .city-pulse-teaser .ghost-button {
@@ -814,6 +868,11 @@ body::before {
 
 .tab-nav {
   justify-content: flex-start;
+  padding: 12px 14px;
+  gap: 8px;
+  background: rgba(255, 252, 247, 0.52);
+  border-color: rgba(70, 38, 18, 0.06);
+  box-shadow: 0 12px 28px rgba(60, 29, 12, 0.06);
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -824,6 +883,9 @@ body::before {
 
 .tab-button {
   white-space: nowrap;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.44);
+  color: rgba(36, 25, 20, 0.72);
 }
 
 .tab-panel {
@@ -999,11 +1061,18 @@ body::before {
   border-color: rgba(115, 46, 23, 0.9);
 }
 
+.planner-mode-button:not(.is-active) {
+  background: transparent;
+  border-width: 1.5px;
+  border-color: rgba(127, 45, 26, 0.2);
+  color: rgba(36, 25, 20, 0.82);
+}
+
 .planner-mode-lead {
   margin: 12px 0 0;
-  max-width: 58ch;
+  max-width: 48ch;
   color: var(--muted);
-  line-height: 1.65;
+  line-height: 1.55;
 }
 
 .planner-modal-shell .route-builder-form {
@@ -4539,6 +4608,11 @@ body.is-printing-guide #routeGuideDrawer {
     font-size: clamp(1.8rem, 7vw, 2.8rem);
   }
 
+  .topbar-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
   .hero-planner-starter {
     width: 100%;
     padding: 18px;
@@ -4570,6 +4644,11 @@ body.is-printing-guide #routeGuideDrawer {
   }
 
   .city-pulse-teaser.is-pre-plan .ghost-button {
+    width: 100%;
+  }
+
+  .planner-launch-actions .primary-button,
+  .planner-launch-actions .secondary-button {
     width: 100%;
   }
 }
