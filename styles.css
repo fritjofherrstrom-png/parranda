@@ -603,6 +603,15 @@ body::before {
   border: 1px solid rgba(97, 50, 23, 0.08);
 }
 
+.planner-restore-label {
+  margin: 0;
+  color: rgba(97, 50, 23, 0.72);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
 .planner-restore-copy {
   margin: 0;
   color: rgba(36, 25, 20, 0.72);
@@ -617,9 +626,14 @@ body::before {
   gap: 10px;
 }
 
+.planner-restore-actions .primary-button,
 .planner-restore-actions .secondary-button,
 .planner-restore-actions .ghost-button {
   min-height: 42px;
+}
+
+.planner-restore-actions .primary-button {
+  flex: 1 1 220px;
 }
 
 .mode-city-preview .hero-idea-strip {

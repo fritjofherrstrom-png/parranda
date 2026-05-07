@@ -4924,6 +4924,10 @@ function hideLatestPlannerRestoreNotice() {
   if (plannerRestoreNotice) {
     plannerRestoreNotice.hidden = true;
   }
+
+  if (plannerRestoreSummary) {
+    plannerRestoreSummary.textContent = "";
+  }
 }
 
 function formatPlannerIntentLabelList(labels = []) {
@@ -4991,6 +4995,7 @@ function updateLatestPlannerRestoreNotice() {
   }
 
   plannerRestoreSummary.textContent = buildLatestPlannerRestoreSummary(record);
+  plannerRestoreButton?.setAttribute("aria-label", "Fortsätt med senaste plan");
   plannerRestoreNotice.hidden = false;
 }
 
@@ -9505,6 +9510,7 @@ plannerRestoreButton?.addEventListener("click", () => {
 });
 
 plannerRestoreDismissButton?.addEventListener("click", () => {
+  plannerRestoreDismissButton.blur();
   const record = readLatestPlannerPlanRecord();
 
   if (!record) {
