@@ -46,35 +46,9 @@
               <span>__PARRANDA_BRAND_SUBTITLE__</span>
             </div>
           </div>
-          <div class="topbar-actions">
-            <button id="heroLiveButton" class="hero-live-button topbar-utility-button" type="button">
-              <span class="hero-live-dot" aria-hidden="true"></span>
-              <span>__PARRANDA_HERO_LIVE_LABEL__</span>
-            </button>
-            <a
-              class="topbar-link"
-              href="__PARRANDA_CITY_MAP_URL__"
-              target="_blank"
-              rel="noreferrer"
-              >Karta</a
-            >
-          </div>
         </nav>
 
         <section class="hero-content">
-          <div class="hero-copy">
-            <p id="heroEyebrow" class="hero-kicker">__PARRANDA_CITY_EYEBROW__</p>
-            <h1 id="heroHeadline">__PARRANDA_HERO_HEADLINE__</h1>
-            <p id="heroLead" class="lead">
-              __PARRANDA_HERO_LEAD__
-            </p>
-
-            <div class="hero-actions">
-              <button class="ghost-button install-button" id="installButton" hidden>
-                Installera appen
-              </button>
-            </div>
-          </div>
           <section class="planner-launch-strip hero-planner-starter">
             <div class="planner-launch-copy">
               <div>
@@ -150,6 +124,23 @@
             </div>
           </div>
         </section>
+
+        <div class="hero-support-actions topbar-actions">
+          <button id="heroLiveButton" class="hero-live-button topbar-utility-button" type="button">
+            <span class="hero-live-dot" aria-hidden="true"></span>
+            <span>__PARRANDA_HERO_LIVE_LABEL__</span>
+          </button>
+          <a
+            class="topbar-link"
+            href="__PARRANDA_CITY_MAP_URL__"
+            target="_blank"
+            rel="noreferrer"
+            >Karta</a
+          >
+          <button class="ghost-button install-button" id="installButton" hidden>
+            Installera appen
+          </button>
+        </div>
       </header>
 
       <main>
@@ -211,7 +202,7 @@
               </p>
             </div>
             <div class="favorites-actions">
-              <button class="primary-button" id="showFavoritesButton">
+              <button class="primary-button pa-secondary" id="showFavoritesButton">
                 Visa sparade
               </button>
               <button class="ghost-button" id="showAllButton">Visa alla igen</button>
@@ -688,7 +679,7 @@
               <p id="plannerStatusMessage" class="planner-status-message" hidden aria-live="polite"></p>
 
               <div class="planner-mobile-actions">
-                <button id="routePlanStickyButton" class="primary-button" type="button">
+                <button id="routePlanStickyButton" class="primary-button pa-secondary" type="button">
                   Planera min dag
                 </button>
               </div>
@@ -793,7 +784,7 @@
     <template id="spotlightCardTemplate">
       <article class="spotlight-card">
         <p class="spotlight-kicker"></p>
-        <h3></h3>
+        <h3 class="pa-stop-name"></h3>
         <p class="spotlight-description"></p>
         <div class="spotlight-meta">
           <span class="spotlight-area"></span>
@@ -812,7 +803,7 @@
           <span class="area-pill"></span>
           <span class="crowd-pill"></span>
         </div>
-        <h3></h3>
+        <h3 class="pa-stop-name"></h3>
         <p class="description"></p>
         <div class="meta-row">
           <span class="best-for"></span>
@@ -833,7 +824,7 @@
           <span class="category-pill"></span>
           <span class="score-pill"></span>
         </div>
-        <h3></h3>
+        <h3 class="pa-stop-name"></h3>
         <p class="description"></p>
         <div class="meta-stack">
           <p class="bar-focus"></p>
@@ -849,7 +840,7 @@
         <span class="timeline-time"></span>
         <div class="timeline-card">
           <p class="spotlight-kicker"></p>
-          <h3></h3>
+          <h3 class="pa-stop-name"></h3>
           <p class="description"></p>
           <p class="timeline-note"></p>
         </div>
@@ -862,7 +853,7 @@
           <span class="category-pill route-vibe"></span>
           <span class="score-pill route-length"></span>
         </div>
-        <h3></h3>
+        <h3 class="pa-stop-name"></h3>
         <p class="route-summary"></p>
         <p class="route-why"></p>
         <p class="route-path"></p>
@@ -906,7 +897,7 @@
         <div class="planner-day-top">
           <div>
             <p class="eyebrow planner-day-date"></p>
-            <h3 class="planner-day-title"></h3>
+            <h3 class="planner-day-title pa-stop-name"></h3>
           </div>
           <span class="map-badge planner-day-badge">Din huvudrutt</span>
         </div>

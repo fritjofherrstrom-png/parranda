@@ -1988,6 +1988,8 @@ let activePulseScope = "all";
 let activePulseTime = "now";
 let activePulseLevel = "all";
 let plannerLoadingTimer = null;
+let plannerLoadingStops = [];
+let plannerLoadingSkeletonClear = null;
 let cityPulseScopeStatus = "";
 let activePulseRadiusKey = "5";
 let activeLiveDate = getTodayIsoDate();
@@ -5795,14 +5797,121 @@ function setPlannerStatusMessage(text = "", tone = "info") {
   plannerStatusMessage.dataset.tone = tone;
 }
 
+function paLoading(button, label) {
+  if (!button) {
+    return () => {};
+  }
+
+  const previousLabel = button.dataset.paPrevLabel || button.textContent || "";
+  button.dataset.paPrevLabel = previousLabel;
+  button.classList.add("pa-loading");
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  if (label) {
+    button.textContent = label;
+  }
+
+  return () => {
+    button.classList.remove("pa-loading");
+    button.disabled = false;
+    button.removeAttribute("aria-busy");
+    if (button.dataset.paPrevLabel) {
+      button.textContent = button.dataset.paPrevLabel;
+      delete button.dataset.paPrevLabel;
+    }
+  };
+}
+
+function paSkeleton(container, lines = 3) {
+  if (!container) {
+    return () => {};
+  }
+
+  const count = Math.max(1, lines | 0 || 3);
+  const nodes = [];
+
+  for (let index = 0; index < count; index += 1) {
+    const row = document.createElement("span");
+    row.className = "pa-skeleton";
+    row.style.width = `${68 + ((index * 11) % 24)}%`;
+    container.appendChild(row);
+    nodes.push(row);
+  }
+
+  return () => {
+    nodes.forEach((node) => {
+      if (node.parentNode) {
+        node.parentNode.removeChild(node);
+      }
+    });
+  };
+}
+
+function ensurePlannerLoadingSlot() {
+  if (!routeResults || !plannerDayTemplate) {
+    return null;
+  }
+
+  routeResults.innerHTML = "";
+
+  const shell = document.createElement("section");
+  shell.className = "planner-results-shell is-loading";
+
+  const dayCard = plannerDayTemplate.content.firstElementChild.cloneNode(true);
+  dayCard.classList.add("is-loading");
+  dayCard.querySelector(".planner-day-date").textContent = "Planerar dagen";
+  dayCard.querySelector(".planner-day-title").textContent = "Parranda bygger ditt första upplägg";
+  dayCard.querySelector(".planner-day-summary").textContent =
+    "Resultatet landar här så fort rutten är klar.";
+  dayCard.querySelector(".planner-day-outline").innerHTML = "";
+  dayCard.querySelector(".planner-day-signals").hidden = true;
+  dayCard.querySelector(".planner-day-events").hidden = true;
+  dayCard.querySelector(".planner-alt-section").hidden = true;
+  dayCard.querySelector(".planner-primary-route-line").textContent = "Laddar rutt och stopp...";
+
+  const primarySlot = dayCard.querySelector(".planner-primary-slot");
+  shell.appendChild(dayCard);
+  routeResults.appendChild(shell);
+  return primarySlot;
+}
+
+function syncPlannerLoadingSkeleton(isLoading) {
+  if (isLoading) {
+    if (plannerLoadingSkeletonClear) {
+      return;
+    }
+
+    const slot = ensurePlannerLoadingSlot();
+    if (slot) {
+      plannerLoadingSkeletonClear = paSkeleton(slot, 4);
+    }
+    return;
+  }
+
+  if (plannerLoadingSkeletonClear) {
+    plannerLoadingSkeletonClear();
+    plannerLoadingSkeletonClear = null;
+  }
+
+  const loadingShell = routeResults?.querySelector(".planner-results-shell.is-loading");
+  if (loadingShell) {
+    loadingShell.remove();
+  }
+}
+
 function setPlannerLoadingState(isLoading, message = plannerLoadingMessages[0]) {
   const buttons = [routePlanButton, routePlanStickyButton].filter(Boolean);
-  const label = isLoading ? "Bygger din dag..." : "Planera min dag";
+  const label = "Bygger din dag...";
+
+  if (isLoading) {
+    plannerLoadingStops = buttons.map((button) => paLoading(button, label));
+  } else {
+    plannerLoadingStops.forEach((stop) => stop());
+    plannerLoadingStops = [];
+  }
 
   buttons.forEach((button) => {
-    button.disabled = isLoading;
     button.classList.toggle("is-loading", isLoading);
-    button.textContent = label;
   });
 
   if (routeResetButton) {
@@ -5810,6 +5919,7 @@ function setPlannerLoadingState(isLoading, message = plannerLoadingMessages[0]) 
   }
 
   if (isLoading) {
+    syncPlannerLoadingSkeleton(true);
     setPlannerStatusMessage(message, "loading");
     return;
   }
@@ -5818,6 +5928,8 @@ function setPlannerLoadingState(isLoading, message = plannerLoadingMessages[0]) 
     clearInterval(plannerLoadingTimer);
     plannerLoadingTimer = null;
   }
+
+  syncPlannerLoadingSkeleton(false);
 }
 
 function startPlannerLoadingCycle() {

@@ -4939,3 +4939,135 @@ body.is-printing-guide #routeGuideDrawer {
     color: rgba(73, 44, 28, 0.8);
   }
 }
+
+/* Remove hero intro block: first viewport starts with Planner, then Blitz, then support */
+.hero-content {
+  display: block;
+  margin-top: 12px;
+}
+
+.hero-planner-starter {
+  width: min(960px, 100%);
+}
+
+.hero-idea-strip {
+  width: min(960px, 100%);
+  margin: 14px 0 0;
+}
+
+.hero-support-actions {
+  margin-top: 12px;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.hero-support-actions .topbar-link,
+.hero-support-actions .topbar-utility-button,
+.hero-support-actions .install-button {
+  min-height: 38px;
+  padding: 8px 14px;
+  box-shadow: 0 8px 18px rgba(88, 49, 22, 0.06);
+}
+
+.primary-button.pa-secondary {
+  background: transparent;
+  color: rgba(36, 25, 20, 0.9);
+  border: 1px solid rgba(77, 49, 32, 0.16);
+  box-shadow: none;
+  font-weight: 500;
+}
+
+.primary-button.pa-secondary:hover,
+.primary-button.pa-secondary:focus-visible {
+  background: rgba(36, 25, 20, 0.04);
+  border-color: rgba(77, 49, 32, 0.28);
+}
+
+.pa-stop-name {
+  font-family: "Manrope", sans-serif !important;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.pa-skeleton {
+  display: block;
+  height: 1em;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(36, 25, 20, 0.06) 0%,
+    rgba(36, 25, 20, 0.1) 50%,
+    rgba(36, 25, 20, 0.06) 100%
+  );
+  background-size: 200% 100%;
+  animation: pa-shimmer 1.2s ease-in-out infinite;
+}
+
+.pa-skeleton + .pa-skeleton {
+  margin-top: 8px;
+}
+
+.pa-loading {
+  position: relative;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+.pa-loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+@keyframes pa-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pa-skeleton {
+    animation: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .hero {
+    padding-top: 28px;
+  }
+
+  .topbar {
+    gap: 12px;
+  }
+
+  .brand {
+    gap: 10px;
+  }
+
+  .brand span {
+    display: none;
+  }
+
+  .brand-mark {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+  }
+
+  .hero-planner-starter {
+    padding: 16px 18px;
+  }
+
+  .hero-idea-strip {
+    margin-top: 12px;
+  }
+
+  .hero-support-actions {
+    margin-top: 10px;
+  }
+}
