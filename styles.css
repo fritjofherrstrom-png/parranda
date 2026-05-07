@@ -323,6 +323,10 @@ body::before {
   text-transform: uppercase;
 }
 
+#heroEyebrow:empty {
+  display: none;
+}
+
 .hero-panel-meta {
   margin: 6px 0 0;
   font-size: 0.94rem;
@@ -4510,13 +4514,13 @@ body.is-printing-guide #routeGuideDrawer {
 .city-pulse-teaser.is-pre-plan {
   margin-top: 16px;
   min-height: 0;
-  padding: 12px 14px;
+  padding: 11px 13px;
   border-radius: 20px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  box-shadow: 0 16px 36px rgba(40, 18, 8, 0.18);
+  box-shadow: 0 10px 24px rgba(40, 18, 8, 0.13);
 }
 
 .city-pulse-teaser.is-pre-plan .city-pulse-live {
@@ -4530,16 +4534,16 @@ body.is-printing-guide #routeGuideDrawer {
 
 .city-pulse-teaser.is-pre-plan .city-pulse-teaser-copy h2 {
   font-family: "Manrope", sans-serif;
-  font-size: 1.02rem;
+  font-size: 0.96rem;
   line-height: 1.24;
   font-weight: 700;
 }
 
 .city-pulse-teaser.is-pre-plan .city-pulse-teaser-summary {
   max-width: 38ch;
-  font-size: 0.81rem;
-  line-height: 1.35;
-  color: rgba(255, 247, 237, 0.68);
+  font-size: 0.76rem;
+  line-height: 1.3;
+  color: rgba(255, 247, 237, 0.62);
 }
 
 .city-pulse-teaser.is-pre-plan .city-pulse-edition-label,
@@ -4548,8 +4552,8 @@ body.is-printing-guide #routeGuideDrawer {
 }
 
 .city-pulse-teaser.is-pre-plan .ghost-button {
-  padding: 7px 11px;
-  font-size: 0.82rem;
+  padding: 6px 10px;
+  font-size: 0.78rem;
   background: rgba(255, 247, 237, 0.12);
   color: #fff7ed;
   border-color: rgba(255, 247, 237, 0.16);
@@ -4599,13 +4603,37 @@ body.is-printing-guide #routeGuideDrawer {
 @media (max-width: 860px) {
   .hero-content {
     grid-template-columns: 1fr;
-    gap: 12px;
+    gap: 8px;
     align-items: flex-start;
   }
 
+  .topbar {
+    gap: 12px;
+  }
+
+  .brand {
+    gap: 10px;
+  }
+
+  .brand-mark {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+  }
+
+  .brand span {
+    display: none;
+  }
+
+  .hero-copy {
+    order: 2;
+    gap: 8px;
+    padding-top: 0;
+  }
+
   .hero-copy h1 {
-    max-width: 8.5ch;
-    font-size: clamp(1.8rem, 7vw, 2.8rem);
+    max-width: 7.6ch;
+    font-size: clamp(1.62rem, 6.5vw, 2.35rem);
   }
 
   .topbar-actions {
@@ -4614,8 +4642,9 @@ body.is-printing-guide #routeGuideDrawer {
   }
 
   .hero-planner-starter {
+    order: 1;
     width: 100%;
-    padding: 18px;
+    padding: 16px 18px;
   }
 
   .hero-idea-strip,
@@ -4641,10 +4670,13 @@ body.is-printing-guide #routeGuideDrawer {
   .city-pulse-teaser.is-pre-plan {
     grid-template-columns: 1fr;
     align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
   }
 
   .city-pulse-teaser.is-pre-plan .ghost-button {
     width: 100%;
+    justify-content: center;
   }
 
   .planner-launch-actions .primary-button,

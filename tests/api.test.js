@@ -306,8 +306,8 @@ test("GET / renderar en city-aware app shell med bootstrap", async () => {
     assert.match(response.body, /<body data-city-key="rome" data-city-label="Rom">/);
     assert.match(response.body, /window\.__PARRANDA_CITY__ = \{"key":"rome","label":"Rom"/);
     assert.match(response.body, /<title>Parranda \| Personlig City Guide för Rom<\/title>/);
-    assert.match(response.body, /<p id="heroEyebrow" class="hero-kicker">ROM<\/p>/);
-    assert.match(response.body, /<h1 id="heroHeadline">Planera dagen eller ta nästa drag\.<\/h1>/);
+    assert.match(response.body, /<p id="heroEyebrow" class="hero-kicker"><\/p>/);
+    assert.match(response.body, /<h1 id="heroHeadline">Planera dagen\.<\/h1>/);
     assert.match(response.body, /<p id="heroBlitzLabel" class="panel-label">BLITZ<\/p>/);
     assert.match(response.body, /<h2 id="heroBlitzTitle">Laddar nästa drag\.\.\.<\/h2>/);
     assert.match(response.body, /<button id="heroBlitzApplyButton" class="secondary-button" type="button"\s*>\s*Kör nu\s*<\/button>/);

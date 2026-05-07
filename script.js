@@ -1002,7 +1002,7 @@ const romeRoutes = [
   {
     id: "classic-loop",
     title: "Trastevere -> Ghetto -> Monti -> Colosseum -> Trastevere",
-    vibe: "klassiker smart gjort",
+    vibe: "Klassiker utan stress",
     length: "ca 10 km",
     anchor: "Ankare: Colosseum by night + San Clemente",
     walk: "Start/slut i Trastevere, lugn heldag",
@@ -3250,16 +3250,17 @@ function renderHeroBlitz() {
       heroBlitzCard.dataset.blitzKind = "empty";
     }
     heroBlitzLabel.textContent = "BLITZ";
-    heroBlitzTitle.textContent = "Kör Blitz när du vill veta nästa drag";
+    heroBlitzTitle.textContent = "Blitz väljer nästa drag";
     heroBlitzSummary.textContent =
-      "När du redan är ute i staden väljer Blitz vad som känns starkast just nu.";
-    heroBlitzMeta.textContent = "Plats, tid, Pulse och availability vägs in i samma beslut.";
+      "Utgå från plats och tid när du bara vill veta vad som känns starkast nu.";
+    heroBlitzMeta.textContent = "Plats, tid och dagens signaler vägs in i samma beslut.";
     heroBlitzFollowup.hidden = true;
     heroBlitzTags.innerHTML = "";
-    heroBlitzApplyButton.textContent = "Kör nu";
+    heroBlitzApplyButton.textContent = "Kör Blitz";
     heroBlitzShuffleButton.textContent = "↻ Nytt";
     heroBlitzApplyButton.disabled = blitzLoading;
     heroBlitzShuffleButton.disabled = true;
+    heroBlitzShuffleButton.hidden = true;
     return;
   }
 
@@ -3386,7 +3387,7 @@ async function loadHeroBlitz({ openAfter = false } = {}) {
     blitzState = null;
     renderHeroBlitz();
     updateRouteMatchSummary(
-      "Blitz kunde inte laddas just nu. Planner och Pulse fungerar fortfarande medan nästa drag återhämtar sig.",
+      "Blitz hämtar nytt läge just nu. Under tiden kan du planera dagen eller öppna Pulse.",
     );
     throw error;
   } finally {
@@ -4113,9 +4114,9 @@ function renderCityPulseTeaser() {
   } else {
     if (isRomeCuratedMode) {
       cityPulseTeaserLabel.textContent = `Just nu i ${plannerDisplayCityLabel}`;
-      cityPulseTeaserTitle.textContent = "Se vad som händer just nu";
+      cityPulseTeaserTitle.textContent = "Öppna Pulse när du vill väga in läget";
       cityPulseTeaserSummary.textContent =
-        "Valfritt före planeringen. Starkast som lager ovanpå din dag.";
+        "Helt valfritt före planeringen. Tänk det som ett lager ovanpå dagen, inte en tredje huvudväg.";
     } else {
       cityPulseTeaserLabel.textContent = isInternalCityMode
         ? "INTERN PREVIEW"

@@ -186,9 +186,9 @@ function buildShellCopy(shellMode, options = {}) {
 
   return {
     brandSubtitle: "Kuraterade stadsdagar med mer känsla än kölista",
-    eyebrow: cityLabel.toLocaleUpperCase("sv-SE"),
-    heroHeadline: "Planera dagen eller ta nästa drag.",
-    heroLead: `Planner bygger dagen i ${cityLabel}. Blitz hjälper dig vidare när du redan är ute i staden.`,
+    eyebrow: "",
+    heroHeadline: "Planera dagen.",
+    heroLead: "Blitz finns när du redan är ute och bara vill veta nästa drag.",
     heroLiveLabel: "Pulse",
     plannerTitle: "Låt Parranda planera",
     plannerSummary: "Välj datum, känsla, gångmål och gärna en bas. Resten bygger Parranda runt dig.",
