@@ -30,7 +30,7 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
     <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
-    <link rel="stylesheet" href="styles.css?v=18" />
+    <link rel="stylesheet" href="styles.css?v=19" />
     <script>
       window.__PARRANDA_CITY__ = __PARRANDA_CITY_BOOTSTRAP__;
     </script>
@@ -97,27 +97,50 @@
           </section>
         </section>
 
-        <section class="hero-quickstart hero-idea-strip" aria-label="Snabb kvällsidé">
+        <section class="hero-quickstart hero-idea-strip" aria-label="Blitz nästa drag">
           <div class="hero-quickstart-copy">
-            <p id="heroWildcardLabel" class="panel-label">__PARRANDA_WILDCARD_LABEL__</p>
-            <h2 id="heroWildcardTitle">__PARRANDA_WILDCARD_TITLE__</h2>
-            <p id="heroWildcardSummary">
+            <p id="heroBlitzLabel" class="panel-label">__PARRANDA_WILDCARD_LABEL__</p>
+            <h2 id="heroBlitzTitle">__PARRANDA_WILDCARD_TITLE__</h2>
+            <p id="heroBlitzSummary">
               __PARRANDA_WILDCARD_SUMMARY__
             </p>
-            <p id="heroWildcardMeta" class="hero-panel-meta">__PARRANDA_WILDCARD_META__</p>
+            <p id="heroBlitzMeta" class="hero-panel-meta">__PARRANDA_WILDCARD_META__</p>
+            <p id="heroBlitzFollowup" class="hero-blitz-followup" hidden></p>
           </div>
           <div class="hero-quickstart-side">
-            <div id="heroWildcardTags" class="panel-tags">
+            <div id="heroBlitzOriginSwitch" class="hero-blitz-origin-switch">
+              <button
+                id="heroBlitzSelectedOriginButton"
+                class="ghost-button hero-blitz-origin-button is-active"
+                type="button"
+              >
+                Vald plats
+              </button>
+              <button
+                id="heroBlitzCurrentOriginButton"
+                class="ghost-button hero-blitz-origin-button"
+                type="button"
+              >
+                Min plats
+              </button>
+            </div>
+            <div id="heroBlitzTags" class="panel-tags">
               <span>__PARRANDA_WILDCARD_TAG_1__</span>
               <span>__PARRANDA_WILDCARD_TAG_2__</span>
               <span>__PARRANDA_WILDCARD_TAG_3__</span>
             </div>
             <div class="hero-panel-actions">
-              <button id="heroWildcardApplyButton" class="secondary-button" type="button" __PARRANDA_WILDCARD_ACTIONS_HIDDEN__>
-                Använd
+              <button id="heroBlitzApplyButton" class="secondary-button" type="button" __PARRANDA_WILDCARD_ACTIONS_HIDDEN__>
+                Kör nu
               </button>
-              <button id="heroWildcardShuffleButton" class="ghost-button" type="button" __PARRANDA_WILDCARD_ACTIONS_HIDDEN__>
-                Byt
+              <button
+                id="heroBlitzShuffleButton"
+                class="ghost-button"
+                type="button"
+                aria-label="Nytt förslag"
+                __PARRANDA_WILDCARD_ACTIONS_HIDDEN__
+              >
+                Nytt förslag
               </button>
             </div>
           </div>
@@ -1046,7 +1069,7 @@
     </aside>
 
     <script src="vendor/leaflet/leaflet.js"></script>
-    <script src="script.js?v=18"></script>
+    <script src="script.js?v=19"></script>
     <script src="ux-pass1.js?v=10"></script>
   </body>
 </html>

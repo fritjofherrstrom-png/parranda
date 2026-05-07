@@ -1202,13 +1202,18 @@ const overviewTabButton = document.querySelector('[data-tab="overview"]');
 const districtsTabButton = document.querySelector('[data-tab="districts"]');
 const overviewPanel = document.querySelector('[data-tab-panel="overview"]');
 const districtsPanel = document.querySelector('[data-tab-panel="districts"]');
-const heroWildcardLabel = document.getElementById("heroWildcardLabel");
-const heroWildcardTitle = document.getElementById("heroWildcardTitle");
-const heroWildcardSummary = document.getElementById("heroWildcardSummary");
-const heroWildcardMeta = document.getElementById("heroWildcardMeta");
-const heroWildcardTags = document.getElementById("heroWildcardTags");
-const heroWildcardApplyButton = document.getElementById("heroWildcardApplyButton");
-const heroWildcardShuffleButton = document.getElementById("heroWildcardShuffleButton");
+const heroBlitzLabel = document.getElementById("heroBlitzLabel");
+const heroBlitzTitle = document.getElementById("heroBlitzTitle");
+const heroBlitzSummary = document.getElementById("heroBlitzSummary");
+const heroBlitzMeta = document.getElementById("heroBlitzMeta");
+const heroBlitzFollowup = document.getElementById("heroBlitzFollowup");
+const heroBlitzTags = document.getElementById("heroBlitzTags");
+const heroBlitzApplyButton = document.getElementById("heroBlitzApplyButton");
+const heroBlitzShuffleButton = document.getElementById("heroBlitzShuffleButton");
+const heroBlitzOriginSwitch = document.getElementById("heroBlitzOriginSwitch");
+const heroBlitzSelectedOriginButton = document.getElementById("heroBlitzSelectedOriginButton");
+const heroBlitzCurrentOriginButton = document.getElementById("heroBlitzCurrentOriginButton");
+const heroBlitzCard = document.querySelector(".hero-idea-strip");
 const cityPulseStart = document.getElementById("cityPulseStart");
 const cityPulseTeaser = document.getElementById("cityPulseTeaser");
 const cityPulseTeaserLabel = document.getElementById("cityPulseTeaserLabel");
@@ -1965,6 +1970,12 @@ let savedRoutes = loadSavedRoutes();
 let cityPulseState = null;
 let cityPulseCache = new Map();
 let activeHeroWildcardId = null;
+let blitzState = null;
+let blitzMemory = null;
+let blitzLoading = false;
+let blitzLoadRequestId = 0;
+let blitzOriginMode = "selected_place";
+let blitzContextKey = "";
 let activePulseScope = "all";
 let activePulseTime = "now";
 let activePulseLevel = "all";
@@ -1974,6 +1985,9 @@ let activePulseRadiusKey = "5";
 let activeLiveDate = getTodayIsoDate();
 let liveEditionExpanded = false;
 const expandedAlternativeDates = new Set();
+const heroBlitzMaxWalkMinutes = 180;
+const heroBlitzReasonMaxLength = 148;
+const heroBlitzFollowupMaxLength = 110;
 
 const dayProfileLabels = {
   light: "Lätt dag",
@@ -2607,55 +2621,662 @@ function getActiveHeroWildcard() {
   return getWildcardById(activeHeroWildcardId) || getCityPulseWildcardsByContext()[0] || null;
 }
 
-function renderHeroWildcard() {
+function getSelectedBlitzOriginSource() {
+  const selectedPlace = getPlaceByName(selectedPlaceName);
+
+  if (selectedPlace) {
+    return {
+      label: selectedPlace.name,
+      lat: selectedPlace.lat,
+      lng: selectedPlace.lng,
+      source: "selected_place",
+    };
+  }
+
+  return {
+    label: buildUnavailableCityLabel(),
+    lat: plannerCity.center?.lat,
+    lng: plannerCity.center?.lng,
+    source: "fallback",
+  };
+}
+
+function getBlitzDateValue() {
+  return activeLiveDate || routeDateFrom?.value || getTodayIsoDate();
+}
+
+function getBlitzRouteContextKey() {
+  if (activeRouteKey) {
+    return String(activeRouteKey);
+  }
+
+  const activeRoute = getActiveRoutePayloadForBlitz();
+
+  if (!activeRoute) {
+    return "none";
+  }
+
+  return [activeRoute.date || getBlitzDateValue(), activeRoute.id || activeRoute.title || "route"]
+    .filter(Boolean)
+    .join(":");
+}
+
+function buildBlitzContextKey(origin = null) {
+  const intentKeys = getBlitzIntentKeys();
+  const normalizedOrigin =
+    origin ||
+    (blitzOriginMode === "current_location"
+      ? {
+          type: "current_location",
+          label: "Min plats",
+          lat: currentLocationCoords?.lat,
+          lng: currentLocationCoords?.lng,
+        }
+      : {
+          type: "selected_place",
+          ...getSelectedBlitzOriginSource(),
+        });
+
+  const originType = normalizedOrigin?.type || blitzOriginMode || "selected_place";
+  const originLabel = normalizedOrigin?.label || buildUnavailableCityLabel();
+  const originLat =
+    typeof normalizedOrigin?.lat === "number" ? normalizedOrigin.lat.toFixed(5) : "na";
+  const originLng =
+    typeof normalizedOrigin?.lng === "number" ? normalizedOrigin.lng.toFixed(5) : "na";
+
+  return [
+    plannerCityKey,
+    getBlitzDateValue(),
+    originType,
+    originLabel,
+    originLat,
+    originLng,
+    intentKeys.join("|"),
+    getBlitzRouteContextKey(),
+  ].join("::");
+}
+
+function syncBlitzContextState(nextContextKey, { clearState = true } = {}) {
+  if (!nextContextKey || nextContextKey === blitzContextKey) {
+    return false;
+  }
+
+  blitzContextKey = nextContextKey;
+  blitzMemory = null;
+
+  if (clearState) {
+    blitzState = null;
+  }
+
+  return true;
+}
+
+async function resolveBlitzOriginPayload() {
+  if (blitzOriginMode === "current_location") {
+    try {
+      const coords = await ensureCurrentLocation();
+      return {
+        type: "current_location",
+        label: "Min plats",
+        lat: coords.lat,
+        lng: coords.lng,
+      };
+    } catch (_error) {
+      blitzOriginMode = "selected_place";
+      updateRouteMatchSummary(
+        "Blitz kunde inte läsa din plats just nu och använder därför vald plats i stället.",
+      );
+      renderHeroBlitz();
+    }
+  }
+
+  const selectedOrigin = getSelectedBlitzOriginSource();
+
+  if (
+    selectedOrigin &&
+    typeof selectedOrigin.lat === "number" &&
+    typeof selectedOrigin.lng === "number"
+  ) {
+    return {
+      type: "selected_place",
+      label: selectedOrigin.label,
+      lat: selectedOrigin.lat,
+      lng: selectedOrigin.lng,
+    };
+  }
+
+  return {
+    type: "preset",
+    label: buildUnavailableCityLabel(),
+  };
+}
+
+function getBlitzIntentKeys() {
+  const selectedIntentKeys = getSelectedIntentKeys();
+
+  if (selectedIntentKeys.length) {
+    return selectedIntentKeys;
+  }
+
+  if (Array.isArray(latestPlannerSnapshot?.intentKeys) && latestPlannerSnapshot.intentKeys.length) {
+    return latestPlannerSnapshot.intentKeys.filter((intentKey) => plannerIntentByKey.has(intentKey));
+  }
+
+  return [...defaultPlannerIntentKeys];
+}
+
+function getActiveRoutePayloadForBlitz() {
+  if (routeRenderMode !== "api" || !plannedDays.length) {
+    return null;
+  }
+
+  const activeDay = getActivePlannedDay();
+
+  if (!activeDay?.primary_route) {
+    return null;
+  }
+
+  if (!activeRouteKey) {
+    return activeDay.primary_route;
+  }
+
+  const [routeDate, routeId, variant] = String(activeRouteKey).split(":");
+  const matchingDay = plannedDays.find((day) => day.date === routeDate) || activeDay;
+
+  if (!matchingDay?.primary_route) {
+    return null;
+  }
+
+  if (variant === "primary") {
+    return matchingDay.primary_route;
+  }
+
+  if (variant?.startsWith("alt-")) {
+    return (
+      (matchingDay.alternatives || []).find((route) => route.id === routeId) ||
+      matchingDay.primary_route
+    );
+  }
+
+  return matchingDay.primary_route;
+}
+
+function isSaneHeroBlitzWalkMinutes(value) {
+  return Number.isFinite(value) && value >= 0 && value <= heroBlitzMaxWalkMinutes;
+}
+
+function formatHeroBlitzWalkMeta(value, { unknownLabel = "gångtid okänd" } = {}) {
+  return isSaneHeroBlitzWalkMinutes(value) ? `${value} min gång` : unknownLabel;
+}
+
+function getBlitzMoveTags(move) {
+  if (!move) {
+    return [];
+  }
+
+  if (move.kind === "mini_route_60") {
+    return uniqueNonEmpty((move.route?.stops || []).flatMap((stop) => stop.tags || []));
+  }
+
+  return uniqueNonEmpty(move.stop?.tags || []);
+}
+
+function compressHeroBlitzReason(text) {
+  const normalized = String(text || "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!normalized) {
+    return "";
+  }
+
+  const firstSentence = normalized.split(/(?<=[.!?])\s+/)[0] || normalized;
+  const tightened = firstSentence
+    .replace(
+      /ligger nära nog för att kännas som ett faktiskt nästa drag, inte som en omväg\.?/gi,
+      "Låg friktion för ett snabbt nästa drag.",
+    )
+    .replace(
+      /ligger tillräckligt nära för att vara ett snabbt och trovärdigt nästa steg från där du står\.?/gi,
+      "Enkel att ta nu utan att planera om resten av dagen.",
+    )
+    .replace(/här och nu utan att du behöver blåsa upp det till en hel dagsplan\.?/gi, "här och nu.")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return clipText(tightened, heroBlitzReasonMaxLength);
+}
+
+function buildSpecificHeroBlitzReason(result) {
+  const move = result?.best_move || null;
+
+  if (!move) {
+    return "";
+  }
+
+  const tags = new Set(getBlitzMoveTags(move));
+  const area = move.stop?.area || move.route?.stops?.[0]?.area || "";
+  const availability = move.availability || {};
+  const pulseTitle = move.pulse_context?.title || "";
+  const contextualReasons = Array.isArray(move.contextual_reasons) ? move.contextual_reasons : [];
+  const secondaryReason = contextualReasons[1] || contextualReasons[0] || "";
+  const pulseActive = Boolean(move.pulse_context?.title);
+  const hasCalmSignal = tags.has("low-key") || tags.has("hidden gems");
+  const hasDrinksSignal =
+    tags.has("vin") || tags.has("öl") || tags.has("cocktail") || tags.has("nattliv");
+  const hasFoodSignal = tags.has("mat");
+  const hasSecondHandSignal =
+    tags.has("second_hand") || tags.has("vintage") || tags.has("shopping") || tags.has("market");
+  const hasViewSignal = tags.has("utsikt");
+
+  if (hasSecondHandSignal && availability.kind === "shop" && availability.day_fit !== "strong") {
+    return "Butiksspåret är starkare än marknad idag.";
+  }
+
+  if (pulseActive && pulseTitle) {
+    if (hasViewSignal) {
+      return "Pulse pekar mot utsiktsspåret just nu.";
+    }
+
+    if (hasDrinksSignal) {
+      return "Pulse gör det här till ett starkt nästa glas just nu.";
+    }
+  }
+
+  if (hasDrinksSignal && hasCalmSignal) {
+    return `Bra nu för vin och lågmäld kväll${area ? ` i ${area}` : ""}.`;
+  }
+
+  if (hasDrinksSignal && !hasCalmSignal) {
+    return `Starkast i området om du vill hålla kvällen lokal${area ? ` i ${area}` : ""}.`;
+  }
+
+  if (hasFoodSignal && hasCalmSignal) {
+    return "Bra reset utan att blåsa upp kvällen.";
+  }
+
+  if (hasFoodSignal) {
+    return `Låg friktion och lätt att fortsätta${area ? ` mot ${area}` : ""}.`;
+  }
+
+  if (hasViewSignal) {
+    return "Bra nu om du vill få in utsikt utan att dra i gång en större runda.";
+  }
+
+  if (move.what_to_do_after) {
+    const followup = String(move.what_to_do_after || "").trim();
+
+    if (/ostiense/i.test(followup)) {
+      return "Låg friktion och lätt att fortsätta mot Ostiense.";
+    }
+
+    if (/\b(vin|glas|drink|bar)\b/i.test(followup)) {
+      return "Bra nu om du vill landa i ett glas utan att spräcka kvällen.";
+    }
+  }
+
+  if (availability.day_fit === "weak" && availability.note) {
+    return "Dubbelkolla läget, men det här spåret håller fortfarande ihop nu.";
+  }
+
+  if (secondaryReason) {
+    return compressHeroBlitzReason(secondaryReason);
+  }
+
+  return "";
+}
+
+function buildHeroBlitzLabel(move) {
+  if (!move) {
+    return "BLITZ";
+  }
+
+  return move.kind === "mini_route_60" ? "BLITZ · 60 MIN" : "BLITZ";
+}
+
+function buildHeroBlitzMeta(result) {
+  const move = result?.best_move || null;
+
+  if (!move) {
+    return "Plats, tid, Pulse och availability vägs in i samma beslut.";
+  }
+
+  if (move.kind === "mini_route_60") {
+    const stopCount = Array.isArray(move.route?.stops) ? move.route.stops.length : 0;
+    const km = Number.isFinite(move.route?.estimated_km) ? `${move.route.estimated_km} km` : null;
+    const startMinutes = move.route?.stops?.[0]?.walk_from_previous_minutes;
+
+    return [
+      "60 min",
+      stopCount ? `${stopCount} stopp` : null,
+      km,
+      formatHeroBlitzWalkMeta(startMinutes, { unknownLabel: "starttid okänd" }),
+    ]
+      .filter(Boolean)
+      .join(" • ");
+  }
+
+  return [
+    move.stop?.area || result?.context?.origin_label || null,
+    formatHeroBlitzWalkMeta(move.walking_minutes),
+    move.effort || null,
+  ]
+    .filter(Boolean)
+    .join(" • ");
+}
+
+function buildHeroBlitzSummary(result) {
+  const move = result?.best_move || null;
+
+  if (!move) {
+    return "När du redan är ute i staden väljer Blitz vad som känns starkast just nu.";
+  }
+
+  return (
+    buildSpecificHeroBlitzReason(result) ||
+    compressHeroBlitzReason(move.why_now) ||
+    compressHeroBlitzReason(move.contextual_reasons?.[0]) ||
+    "Blitz valde det här som det tydligaste nästa draget just nu."
+  );
+}
+
+function buildHeroBlitzFollowup(result) {
+  const move = result?.best_move || null;
+
+  if (!move?.what_to_do_after) {
+    return "";
+  }
+
+  const followup = String(move.what_to_do_after || "").trim();
+
+  if (!followup) {
+    return "";
+  }
+
+  if (!/\b(stanna|låt|fortsätt|kör)\b/i.test(followup)) {
+    return "";
+  }
+
+  return clipText(followup, heroBlitzFollowupMaxLength);
+}
+
+function buildBlitzFollowupText(result) {
+  const followup = buildHeroBlitzFollowup(result);
+
+  return followup ? `Sedan: ${followup}` : "";
+}
+
+function buildBlitzTagTexts(result) {
+  const move = result?.best_move || {};
+  const tags = [];
+
+  tags.push(move.kind === "mini_route_60" ? "60 min" : "Nästa stopp");
+
+  if (move.pulse_context?.title) {
+    tags.push("Pulse");
+  }
+
+  if (move.availability?.verify_recommended && tags.length < 2) {
+    tags.push("Dubbelkolla läget");
+  }
+
+  return tags.slice(0, 2);
+}
+
+function createBlitzGuideStop(stop, index, originLabel, previousLabel = null) {
+  return {
+    order: index + 1,
+    label: stop.label,
+    area: stop.area,
+    summary: stop.tags?.length
+      ? `Blitz valde stoppet för ${stop.tags.slice(0, 3).join(", ")}.`
+      : "Kompakt Blitz-stopp för nästa timme.",
+    meta: [
+      index === 0 ? `Från ${originLabel}` : null,
+      Number.isFinite(stop.walk_from_previous_minutes)
+        ? `${stop.walk_from_previous_minutes} min gång`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" • "),
+    incomingLeg:
+      index === 0
+        ? null
+        : {
+            fromLabel: previousLabel || originLabel,
+            toLabel: stop.label,
+            distanceKm: null,
+            minutes: stop.walk_from_previous_minutes || null,
+          },
+  };
+}
+
+function buildBlitzRouteGuideView(result) {
+  const move = result?.best_move;
+  const context = result?.context || {};
+
+  if (!move || move.kind !== "mini_route_60" || !move.route) {
+    return null;
+  }
+
+  const routeStops = Array.isArray(move.route.stops) ? move.route.stops : [];
+  const lastStop = routeStops[routeStops.length - 1] || null;
+  const routePoints = [
+    {
+      label: context.origin_label || "Start",
+      lat: context.origin?.lat,
+      lng: context.origin?.lng,
+    },
+    ...routeStops.map((stop) => ({
+      label: stop.label,
+      lat: stop.lat,
+      lng: stop.lng,
+    })),
+  ].filter((point) => typeof point.lat === "number" && typeof point.lng === "number");
+
+  return {
+    title: move.title,
+    vibe: "Blitz",
+    length: `ca ${move.route.estimated_km} km`,
+    summary: move.why_now,
+    why: [...(move.contextual_reasons || []), move.what_to_do_after].filter(Boolean).join(" "),
+    path:
+      routeStops.length > 1
+        ? `${context.origin_label} -> ${routeStops.map((stop) => stop.label).join(" -> ")}`
+        : `${context.origin_label} -> ${routeStops[0]?.label || "nästa stopp"}`,
+    anchor: `Start: ${context.origin_label || "Din plats"}`,
+    walk: `Mini-rutt • slut: ${lastStop?.area || lastStop?.label || "öppet"}`,
+    startAnchorLabel: context.origin_label || "Din plats",
+    endAnchorLabel: lastStop?.label || context.origin_label || "Din plats",
+    routeShapeLabel: "Blitz",
+    routeShape: "arc",
+    routeLink: createRouteDirectionsUrl(routePoints),
+    mapRoutePoints: routePoints,
+    mapPathPoints: routePoints,
+    openingWarnings: move.caution_notes || [],
+    pulseNote: move.pulse_context?.why_it_matters || null,
+    liveEventFitNote: null,
+    venueSpecials: move.local_truth?.route_context_notes?.map((note) => note.text) || [],
+    budgetNote: null,
+    hiddenMentions: [],
+    barMentions: [],
+    dateLabel: context.date ? formatSwedishDate(context.date) : "Blitz just nu",
+    dayProfileLabel: "Nästa timmen",
+    pacingLabel: move.effort || "Kompakt",
+    anchorZone: lastStop?.area || buildUnavailableCityLabel(),
+    geoFitNote: null,
+    longestLegMinutes: Math.max(...routeStops.map((stop) => Number(stop.walk_from_previous_minutes) || 0), 0),
+    longestLegKm: null,
+    averageLegMinutes: routeStops.length
+      ? Math.round(
+          routeStops.reduce((sum, stop) => sum + (Number(stop.walk_from_previous_minutes) || 0), 0) /
+            routeStops.length,
+        )
+      : 0,
+    legSummary: Number.isFinite(move.walking_minutes)
+      ? `${move.walking_minutes} min gång fördelat över nästa timme.`
+      : null,
+    engineBadges: ["Blitz", move.availability?.kind || null].filter(Boolean),
+    anchorExplanation:
+      move.availability?.day_fit === "strong"
+        ? "Blitz trycker upp det här spåret eftersom dagen faktiskt passar den här typen av stopp just nu."
+        : "Blitz håller rutten kompakt och väljer stopp som fungerar här och nu utan att bli en halv dagsplan.",
+    guideStops: routeStops.map((stop, index) =>
+      createBlitzGuideStop(
+        stop,
+        index,
+        context.origin_label || "Din plats",
+        index === 1 ? context.origin_label || "Din plats" : routeStops[index - 1]?.label || null,
+      ),
+    ),
+    stopItems: routeStops.map((stop, index) => ({
+      order: index + 1,
+      label: stop.label,
+      area: stop.area,
+      tagSummary: (stop.tags || []).slice(0, 3).join(" • "),
+      summary: stop.tags?.length ? stop.tags.join(", ") : "Blitz-stopp",
+      text: `${index + 1}. ${stop.label}`,
+      query: stop.label,
+      source: "curated",
+      sourceLabel: "Blitz",
+      incomingLeg:
+        index === 0
+          ? null
+          : {
+              fromLabel: routeStops[index - 1]?.label || context.origin_label || "Start",
+              toLabel: stop.label,
+              distanceKm: null,
+              minutes: stop.walk_from_previous_minutes || null,
+            },
+    })),
+  };
+}
+
+function openHeroBlitzMove() {
+  if (!blitzState?.best_move) {
+    loadHeroBlitz({ openAfter: true }).catch(() => {});
+    return;
+  }
+
+  if (blitzState.best_move.kind === "mini_route_60") {
+    const guideView = buildBlitzRouteGuideView(blitzState);
+
+    if (guideView) {
+      openRouteGuide(guideView);
+    }
+
+    return;
+  }
+
+  openPlaceDrawerByQuery(blitzState.best_move.stop?.label || blitzState.best_move.title);
+}
+
+function renderHeroBlitz() {
   if (!isRomeCuratedMode) {
     const previewCard = buildPreviewHeroCard();
 
-    heroWildcardLabel.textContent = previewCard.label;
-    heroWildcardTitle.textContent = previewCard.title;
-    heroWildcardSummary.textContent = previewCard.summary;
-    heroWildcardMeta.textContent = previewCard.meta;
-    heroWildcardTags.innerHTML = "";
+    if (heroBlitzCard) {
+      heroBlitzCard.dataset.blitzKind = "preview";
+    }
+    heroBlitzLabel.textContent = previewCard.label;
+    heroBlitzTitle.textContent = previewCard.title;
+    heroBlitzSummary.textContent = previewCard.summary;
+    heroBlitzMeta.textContent = previewCard.meta;
+    heroBlitzFollowup.hidden = true;
+    heroBlitzTags.innerHTML = "";
     previewCard.tags.forEach((tagText) => {
       const chip = document.createElement("span");
       chip.textContent = tagText;
-      heroWildcardTags.appendChild(chip);
+      heroBlitzTags.appendChild(chip);
     });
-    heroWildcardApplyButton.hidden = true;
-    heroWildcardShuffleButton.hidden = true;
-    heroWildcardApplyButton.disabled = true;
-    heroWildcardShuffleButton.disabled = true;
+    heroBlitzOriginSwitch.hidden = true;
+    heroBlitzApplyButton.hidden = true;
+    heroBlitzShuffleButton.hidden = true;
+    heroBlitzApplyButton.disabled = true;
+    heroBlitzShuffleButton.disabled = true;
     return;
   }
 
-  const wildcard = getActiveHeroWildcard();
+  heroBlitzOriginSwitch.hidden = false;
+  heroBlitzSelectedOriginButton?.classList.toggle(
+    "is-active",
+    blitzOriginMode === "selected_place",
+  );
+  heroBlitzCurrentOriginButton?.classList.toggle(
+    "is-active",
+    blitzOriginMode === "current_location",
+  );
+  heroBlitzApplyButton.hidden = false;
+  heroBlitzShuffleButton.hidden = false;
 
-  if (!wildcard) {
-    heroWildcardLabel.textContent = "KVÄLLSIDÉ";
-    heroWildcardTitle.textContent = "Inga kvällsidéer tillgängliga just nu";
-    heroWildcardSummary.textContent =
-      "En snabb riktning för ikväll dyker upp här så snart kvällslagret är laddat.";
-    heroWildcardMeta.textContent = "En ny idé dyker upp så snart kvällslagret är laddat.";
-    heroWildcardTags.innerHTML = "";
-    heroWildcardApplyButton.disabled = true;
-    heroWildcardShuffleButton.disabled = true;
+  if (blitzLoading && !blitzState?.best_move) {
+    if (heroBlitzCard) {
+      heroBlitzCard.dataset.blitzKind = "loading";
+    }
+    heroBlitzLabel.textContent = "BLITZ";
+    heroBlitzTitle.textContent = "Laddar nästa drag...";
+    heroBlitzSummary.textContent =
+      "Blitz väljer ett trovärdigt nästa drag utifrån plats, tid och stadspuls.";
+    heroBlitzMeta.textContent =
+      blitzOriginMode === "current_location"
+        ? "Utgår från min plats om den går att läsa."
+        : "Utgår från vald plats och dagens intent.";
+    heroBlitzFollowup.hidden = true;
+    heroBlitzTags.innerHTML = "";
+    ["Nu", "Reroll"].forEach((tagText) => {
+      const chip = document.createElement("span");
+      chip.textContent = tagText;
+      heroBlitzTags.appendChild(chip);
+    });
+    heroBlitzApplyButton.textContent = "Kör nu";
+    heroBlitzShuffleButton.textContent = "↻ Nytt";
+    heroBlitzApplyButton.disabled = true;
+    heroBlitzShuffleButton.disabled = true;
     return;
   }
 
-  heroWildcardLabel.textContent = "KVÄLLSIDÉ";
-  heroWildcardTitle.textContent = wildcard.title;
-  heroWildcardSummary.textContent = wildcard.summary;
-  heroWildcardMeta.textContent = wildcard.meta;
-  heroWildcardTags.innerHTML = "";
-  (wildcard.tags || []).slice(0, 3).forEach((tagText) => {
+  const move = blitzState?.best_move || null;
+
+  if (!move) {
+    if (heroBlitzCard) {
+      heroBlitzCard.dataset.blitzKind = "empty";
+    }
+    heroBlitzLabel.textContent = "BLITZ";
+    heroBlitzTitle.textContent = "Kör Blitz när du vill veta nästa drag";
+    heroBlitzSummary.textContent =
+      "När du redan är ute i staden väljer Blitz vad som känns starkast just nu.";
+    heroBlitzMeta.textContent = "Plats, tid, Pulse och availability vägs in i samma beslut.";
+    heroBlitzFollowup.hidden = true;
+    heroBlitzTags.innerHTML = "";
+    heroBlitzApplyButton.textContent = "Kör nu";
+    heroBlitzShuffleButton.textContent = "↻ Nytt";
+    heroBlitzApplyButton.disabled = blitzLoading;
+    heroBlitzShuffleButton.disabled = true;
+    return;
+  }
+
+  if (heroBlitzCard) {
+    heroBlitzCard.dataset.blitzKind = move.kind || "single_stop";
+  }
+  heroBlitzLabel.textContent = buildHeroBlitzLabel(move);
+  heroBlitzTitle.textContent = move.title;
+  heroBlitzMeta.textContent = buildHeroBlitzMeta(blitzState);
+  heroBlitzSummary.textContent = buildHeroBlitzSummary(blitzState);
+
+  const followupText = buildBlitzFollowupText(blitzState);
+  heroBlitzFollowup.hidden = !followupText;
+  heroBlitzFollowup.textContent = followupText;
+  heroBlitzTags.innerHTML = "";
+  buildBlitzTagTexts(blitzState).forEach((tagText) => {
     const chip = document.createElement("span");
     chip.textContent = tagText;
-    heroWildcardTags.appendChild(chip);
+    heroBlitzTags.appendChild(chip);
   });
-  heroWildcardApplyButton.hidden = false;
-  heroWildcardShuffleButton.hidden = false;
-  heroWildcardApplyButton.disabled = false;
-  heroWildcardShuffleButton.disabled = (cityPulseState?.wildcards || []).length < 2;
+  heroBlitzApplyButton.textContent =
+    move.kind === "mini_route_60" ? "Öppna mini-rutt" : "Öppna stopp";
+  heroBlitzShuffleButton.textContent = "↻ Nytt";
+  heroBlitzApplyButton.disabled = blitzLoading;
+  heroBlitzShuffleButton.disabled = blitzLoading;
 }
 
 async function applyWildcardToPlanner(wildcard, { autoPlan = true, sourceLabel = null } = {}) {
@@ -2665,7 +3286,7 @@ async function applyWildcardToPlanner(wildcard, { autoPlan = true, sourceLabel =
 
   activeHeroWildcardId = wildcard.id;
   applyPlannerSnapshot(wildcard.snapshot);
-  renderHeroWildcard();
+  renderHeroBlitz();
   switchTab("routes");
 
   updateRouteMatchSummary(
@@ -2696,19 +3317,76 @@ async function applyWildcardToPlanner(wildcard, { autoPlan = true, sourceLabel =
   }
 }
 
-function shuffleHeroWildcard() {
-  const pool = getCityPulseWildcardsByContext();
-
-  if (!pool.length) {
-    return;
+async function loadHeroBlitz({ openAfter = false } = {}) {
+  if (!isRomeCuratedMode) {
+    renderHeroBlitz();
+    return null;
   }
 
-  const alternatives = pool.filter((item) => item.id !== activeHeroWildcardId);
-  const nextPool = alternatives.length ? alternatives : pool;
-  const nextWildcard = nextPool[Math.floor(Math.random() * nextPool.length)];
+  let requestId = blitzLoadRequestId;
+  blitzLoading = true;
+  renderHeroBlitz();
 
-  activeHeroWildcardId = nextWildcard.id;
-  renderHeroWildcard();
+  try {
+    const origin = await resolveBlitzOriginPayload();
+    const contextChanged = syncBlitzContextState(buildBlitzContextKey(origin));
+    requestId = ++blitzLoadRequestId;
+
+    if (contextChanged) {
+      renderHeroBlitz();
+    }
+    const response = await fetch("/api/blitz", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        city: plannerCityKey,
+        date: getBlitzDateValue(),
+        now: new Date().toISOString(),
+        origin,
+        intent_keys: getBlitzIntentKeys(),
+        memory: blitzMemory,
+        previous_route: getActiveRoutePayloadForBlitz(),
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Blitz failed: ${response.status}`);
+    }
+
+    const payload = await response.json();
+
+    if (requestId !== blitzLoadRequestId) {
+      return payload;
+    }
+
+    blitzState = payload;
+    blitzMemory = payload.memory || blitzMemory;
+    renderHeroBlitz();
+
+    if (openAfter) {
+      openHeroBlitzMove();
+    }
+
+    return payload;
+  } catch (error) {
+    if (requestId !== blitzLoadRequestId) {
+      return null;
+    }
+
+    blitzState = null;
+    renderHeroBlitz();
+    updateRouteMatchSummary(
+      "Blitz kunde inte laddas just nu. Planner och Pulse fungerar fortfarande medan nästa drag återhämtar sig.",
+    );
+    throw error;
+  } finally {
+    if (requestId === blitzLoadRequestId) {
+      blitzLoading = false;
+      renderHeroBlitz();
+    }
+  }
 }
 
 function buildLegacyPulseItems(moments = []) {
@@ -4016,8 +4694,9 @@ async function loadCityPulse(dateString = getTodayIsoDate()) {
 
   if (cityPulseCache.has(targetDate)) {
     cityPulseState = cityPulseCache.get(targetDate);
-    renderHeroWildcard();
+    renderHeroBlitz();
     renderCityPulse();
+    loadHeroBlitz().catch(() => {});
     return;
   }
 
@@ -4060,8 +4739,9 @@ async function loadCityPulse(dateString = getTodayIsoDate()) {
   }
 
   cityPulseCache.set(targetDate, cityPulseState);
-  renderHeroWildcard();
+  renderHeroBlitz();
   renderCityPulse();
+  loadHeroBlitz().catch(() => {});
 }
 
 function createMapUrl(query) {
@@ -6808,7 +7488,11 @@ function updateMapPanel(place) {
     mapPlaceTags.appendChild(chip);
   });
 
-  renderHeroWildcard();
+  renderHeroBlitz();
+
+  if (isRomeCuratedMode && blitzOriginMode === "selected_place" && blitzContextKey) {
+    loadHeroBlitz().catch(() => {});
+  }
 }
 
 function updateMapPanelForRoute(routeView) {
@@ -7257,6 +7941,10 @@ function focusRouteCardOnMap(routeView, routeKey, message) {
   }, 80);
 
   updateRouteMatchSummary(message);
+
+  if (isRomeCuratedMode) {
+    loadHeroBlitz().catch(() => {});
+  }
 }
 
 function getRouteViewForLiveEvent(item) {
@@ -7324,6 +8012,10 @@ function focusLiveEventOnMap(item) {
     item.route_fit_note ||
       `${item.label} matchar bäst med ${item.best_route_label || "dagens starkaste rutt"}.`,
   );
+
+  if (isRomeCuratedMode) {
+    loadHeroBlitz().catch(() => {});
+  }
 }
 
 function appendRoutePillButtons(container, items = []) {
@@ -8166,6 +8858,9 @@ preferenceInputs.forEach((input) => {
     updatePlannerAdvancedSummary();
     updatePlannerLaunchSummary();
     updateRouteMatchSummary(buildPlannerStyleSummary());
+    if (isRomeCuratedMode) {
+      loadHeroBlitz().catch(() => {});
+    }
   });
 });
 
@@ -8344,20 +9039,24 @@ districtMapButton?.addEventListener("click", () => {
   focusDistrictGuideOnMap();
 });
 
-heroWildcardApplyButton?.addEventListener("click", async () => {
-  const wildcard = getActiveHeroWildcard();
-
-  if (!wildcard) {
-    return;
-  }
-
-  await applyWildcardToPlanner(wildcard, {
-    autoPlan: true,
-  });
+heroBlitzApplyButton?.addEventListener("click", async () => {
+  openHeroBlitzMove();
 });
 
-heroWildcardShuffleButton?.addEventListener("click", () => {
-  shuffleHeroWildcard();
+heroBlitzShuffleButton?.addEventListener("click", () => {
+  loadHeroBlitz().catch(() => {});
+});
+
+heroBlitzSelectedOriginButton?.addEventListener("click", () => {
+  blitzOriginMode = "selected_place";
+  renderHeroBlitz();
+  loadHeroBlitz().catch(() => {});
+});
+
+heroBlitzCurrentOriginButton?.addEventListener("click", () => {
+  blitzOriginMode = "current_location";
+  renderHeroBlitz();
+  loadHeroBlitz().catch(() => {});
 });
 
 heroPlannerButton?.addEventListener("click", () => {
@@ -8533,6 +9232,7 @@ installButton?.addEventListener("click", async () => {
 
 applyCityModeToShell();
 applyPlannerModeRestrictions();
+renderHeroBlitz();
 if (isRomeCuratedMode) {
   renderSpotlights();
   renderPlaces();
