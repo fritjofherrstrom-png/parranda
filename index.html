@@ -72,6 +72,18 @@
                 Jag vill styra själv
               </button>
               <p id="plannerLaunchMicrocopy" class="planner-launch-micro">__PARRANDA_PLANNER_MICROCOPY__</p>
+              <div id="plannerRestoreNotice" class="planner-restore-notice" hidden>
+                <p class="planner-restore-label">Senaste plan</p>
+                <p id="plannerRestoreSummary" class="planner-restore-copy"></p>
+                <div class="planner-restore-actions">
+                  <button id="plannerRestoreButton" class="primary-button" type="button">
+                    Fortsätt med senaste plan
+                  </button>
+                  <button id="plannerRestoreDismissButton" class="ghost-button" type="button">
+                    Inte nu
+                  </button>
+                </div>
+              </div>
             </div>
           </section>
         </section>
@@ -678,19 +690,7 @@
           </section>
           <div id="plannerModalBackdrop" class="planner-modal-backdrop" hidden></div>
 
-          <p id="routeMatchSummary" class="route-match-summary">
-            Välj datum och tryck på Planera min dag. Parranda bygger huvuddagen först.
-          </p>
-
-          <section class="section-heading compact-heading">
-            <div>
-              <p class="eyebrow">DINA RUTTER</p>
-              <h2>Börja här</h2>
-            </div>
-            <p class="section-note">
-              Det här är rutten Parranda hade valt först. Alternativen ligger kvar om du vill byta rytm.
-            </p>
-          </section>
+          <p id="routeMatchSummary" class="route-match-summary" hidden></p>
           <p id="routeFallbackNote" class="route-fallback-note" hidden>
             Live-läget är inte tillgängligt just nu. Appen visar därför ett tydligt fallback-läge.
           </p>
@@ -1055,6 +1055,7 @@
     </aside>
 
     <script src="vendor/leaflet/leaflet.js"></script>
+    <script src="planner-trust.js?v=1"></script>
     <script src="script.js?v=19"></script>
     <script src="ux-pass1.js?v=10"></script>
   </body>

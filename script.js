@@ -1263,6 +1263,10 @@ const districtMapButton = document.getElementById("districtMapButton");
 const routePlannerStart = document.getElementById("routePlannerStart");
 const routePlannerOpenButton = document.getElementById("routePlannerOpenButton");
 const routePlannerManualButton = document.getElementById("routePlannerManualButton");
+const plannerRestoreNotice = document.getElementById("plannerRestoreNotice");
+const plannerRestoreSummary = document.getElementById("plannerRestoreSummary");
+const plannerRestoreButton = document.getElementById("plannerRestoreButton");
+const plannerRestoreDismissButton = document.getElementById("plannerRestoreDismissButton");
 const closePlannerModalButton = document.getElementById("closePlannerModalButton");
 const plannerModalBackdrop = document.getElementById("plannerModalBackdrop");
 const plannerModalTitle = document.getElementById("plannerModalTitle");
@@ -1549,9 +1553,43 @@ const plannerIntentCoverageTagSet = new Set([
   "öl",
 ]);
 let plannerIntentSelectionMode = "default_seed";
+const plannerTrust = window.ParrandaPlannerTrust || {};
+const latestPlannerPlanSchemaVersion =
+  plannerTrust.LATEST_PLANNER_PLAN_SCHEMA_VERSION || 1;
+const latestPlannerPlanMaxAgeMs =
+  plannerTrust.DEFAULT_LATEST_PLANNER_PLAN_MAX_AGE_MS || 7 * 24 * 60 * 60 * 1000;
+const plannerTrustBuildLoadingMessages =
+  plannerTrust.buildPlannerLoadingMessages ||
+  ((dayCount = 1) =>
+    dayCount > 1
+      ? [
+          `Bygger ${dayCount} dagar...`,
+          "Sätter ihop första dagen...",
+          "Väger in nästa dag...",
+          "Sätter ihop rutten...",
+        ]
+      : [
+          "Bygger dagen...",
+          "Sätter ihop rutten...",
+          "Väger in dagens signaler...",
+          "Finjusterar flödet...",
+        ]);
+const plannerTrustCreateLatestPlannerPlanRecord =
+  plannerTrust.createLatestPlannerPlanRecord ||
+  ((record) => ({ schemaVersion: latestPlannerPlanSchemaVersion, ...record }));
+const plannerTrustNormalizeLatestPlannerPlanRecord =
+  plannerTrust.normalizeLatestPlannerPlanRecord || ((record) => record);
+const plannerTrustBuildLatestPlannerPlanDismissSignature =
+  plannerTrust.buildLatestPlannerPlanDismissSignature ||
+  ((record) => `${record?.cityKey || ""}:${record?.timestamp || ""}`);
+const plannerTrustCollectSelectedIntentVisibility =
+  plannerTrust.collectSelectedIntentVisibility ||
+  (() => ({ perDay: [], firstDayIndexByKey: {}, missingIntentKeys: [], laterIntentKeys: [] }));
 
 const favoritesStorageKey = `parranda:${plannerCityKey}:favorites`;
 const savedRoutesStorageKey = `parranda:${plannerCityKey}:saved-routes`;
+const latestPlannerPlanStorageKey = "parranda:latest-planner-plan";
+const latestPlannerPlanDismissStorageKey = `parranda:${plannerCityKey}:latest-planner-plan-dismissed`;
 const routeApiBase = "/api";
 const plannerAutoMode = "auto";
 const plannerManualMode = "manual";
@@ -1565,12 +1603,7 @@ const legPacingHints = {
   balanced: "Balans håller benen rimliga utan att bli onödigt strikt.",
   flexible: "Spelar mindre roll låter motorn ta större hopp om helheten blir bättre.",
 };
-const plannerLoadingMessages = [
-  `Bygger din dag i ${plannerDisplayCityLabel}...`,
-  "Väljer en smart bas och rätt tempo...",
-  "Sätter ihop stopp som hänger ihop till fots...",
-  "Finjusterar med väder, live-läge och dagens rytm...",
-];
+let plannerLoadingMessages = plannerTrustBuildLoadingMessages(1);
 const romePlannerDistrictCatalog = [
   {
     id: "trastevere",
@@ -2143,6 +2176,10 @@ function getSelectedIntentKeys() {
     .filter((input) => input.checked)
     .map((input) => input.value)
     .filter((value) => plannerIntentByKey.has(value));
+}
+
+function getExplicitSelectedIntentKeys() {
+  return plannerIntentSelectionMode === "explicit" ? getSelectedIntentKeys() : [];
 }
 
 function matchesDefaultPlannerIntentKeys(intentKeys = []) {
@@ -4792,6 +4829,225 @@ function saveSavedRoutes() {
   window.localStorage.setItem(savedRoutesStorageKey, JSON.stringify(savedRoutes));
 }
 
+function getLatestPlannerPlanDismissSignature() {
+  try {
+    return window.sessionStorage.getItem(latestPlannerPlanDismissStorageKey) || "";
+  } catch (_error) {
+    return "";
+  }
+}
+
+function setLatestPlannerPlanDismissSignature(signature = "") {
+  try {
+    if (!signature) {
+      window.sessionStorage.removeItem(latestPlannerPlanDismissStorageKey);
+      return;
+    }
+
+    window.sessionStorage.setItem(latestPlannerPlanDismissStorageKey, signature);
+  } catch (_error) {
+    // Ignore session storage failures and keep the restore affordance available.
+  }
+}
+
+function buildLatestPlannerPlanRecord(response) {
+  if (!latestPlannerSnapshot || !Array.isArray(response?.days) || !response.days.length) {
+    return null;
+  }
+
+  return plannerTrustCreateLatestPlannerPlanRecord({
+    cityKey: plannerCityKey,
+    cityLabel: plannerDisplayCityLabel,
+    timestamp: Date.now(),
+    plannerSnapshot: latestPlannerSnapshot,
+    intentKeys: getSelectedIntentKeys(),
+    preferences: [...(latestPlannerSnapshot.preferences || [])],
+    plannerResponse: {
+      days: response.days,
+      resolved_home_base: response.resolved_home_base || null,
+      resolved_start: response.resolved_start || null,
+      resolved_end: response.resolved_end || null,
+    },
+    activePlannedDate: activePlannedDate || response.days[0]?.date || null,
+  });
+}
+
+function readLatestPlannerPlanRecord() {
+  try {
+    const stored = window.localStorage.getItem(latestPlannerPlanStorageKey);
+
+    if (!stored) {
+      return null;
+    }
+
+    const parsed = JSON.parse(stored);
+    const record = plannerTrustNormalizeLatestPlannerPlanRecord(parsed, {
+      cityKey: plannerCityKey,
+      schemaVersion: latestPlannerPlanSchemaVersion,
+      maxAgeMs: latestPlannerPlanMaxAgeMs,
+      now: Date.now(),
+    });
+
+    if (record) {
+      return record;
+    }
+  } catch (_error) {
+    // Fall through and clear the invalid payload below.
+  }
+
+  try {
+    window.localStorage.removeItem(latestPlannerPlanStorageKey);
+  } catch (_error) {
+    // Ignore local storage failures and continue without restore data.
+  }
+
+  return null;
+}
+
+function persistLatestPlannerPlan(response) {
+  const record = buildLatestPlannerPlanRecord(response);
+
+  if (!record) {
+    return null;
+  }
+
+  try {
+    window.localStorage.setItem(latestPlannerPlanStorageKey, JSON.stringify(record));
+    setLatestPlannerPlanDismissSignature("");
+    return record;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function hideLatestPlannerRestoreNotice() {
+  if (plannerRestoreNotice) {
+    plannerRestoreNotice.hidden = true;
+  }
+
+  if (plannerRestoreSummary) {
+    plannerRestoreSummary.textContent = "";
+  }
+}
+
+function formatPlannerIntentLabelList(labels = []) {
+  if (!labels.length) {
+    return "";
+  }
+
+  if (labels.length === 1) {
+    return labels[0];
+  }
+
+  if (labels.length === 2) {
+    return `${labels[0]} och ${labels[1]}`;
+  }
+
+  return `${labels.slice(0, -1).join(", ")} och ${labels[labels.length - 1]}`;
+}
+
+function buildLatestPlannerRestoreSummary(record) {
+  if (!record?.plannerSnapshot) {
+    return "Senaste plan finns kvar om du vill fortsätta där du slutade.";
+  }
+
+  const dates = Array.isArray(record.plannerSnapshot.dates) ? record.plannerSnapshot.dates : [];
+  const dateLabel =
+    dates.length > 1
+      ? `${formatCompactSwedishDate(dates[0])} → ${formatCompactSwedishDate(dates[dates.length - 1])}`
+      : formatCompactSwedishDate(dates[0] || record.plannerSnapshot.dateFrom || getTodayIsoDate());
+  const explicitIntentLabels =
+    Array.isArray(record.intentKeys) && record.intentKeys.length && !matchesDefaultPlannerIntentKeys(record.intentKeys)
+      ? record.intentKeys
+          .filter((intentKey) => plannerIntentByKey.has(intentKey))
+          .map(getPlannerIntentLabel)
+          .slice(0, 2)
+      : [];
+  const countLabel = `${record.plannerResponse?.days?.length || 1} dag${record.plannerResponse?.days?.length === 1 ? "" : "ar"}`;
+
+  return [dateLabel, countLabel, explicitIntentLabels.join(" • ")]
+    .filter(Boolean)
+    .join(" • ");
+}
+
+function updateLatestPlannerRestoreNotice() {
+  if (!plannerRestoreNotice || !plannerRestoreSummary) {
+    return;
+  }
+
+  if (plannedDays.length) {
+    hideLatestPlannerRestoreNotice();
+    return;
+  }
+
+  const record = readLatestPlannerPlanRecord();
+
+  if (!record) {
+    hideLatestPlannerRestoreNotice();
+    return;
+  }
+
+  const dismissSignature = plannerTrustBuildLatestPlannerPlanDismissSignature(record);
+
+  if (dismissSignature && dismissSignature === getLatestPlannerPlanDismissSignature()) {
+    hideLatestPlannerRestoreNotice();
+    return;
+  }
+
+  plannerRestoreSummary.textContent = buildLatestPlannerRestoreSummary(record);
+  plannerRestoreButton?.setAttribute("aria-label", "Fortsätt med senaste plan");
+  plannerRestoreNotice.hidden = false;
+}
+
+function applyPlannerResponseState(response, options = {}) {
+  plannedDays = Array.isArray(response?.days) ? response.days : [];
+  const resolvedState = {
+    homeBase: response?.resolved_home_base || null,
+    start: response?.resolved_start || null,
+    end: response?.resolved_end || null,
+  };
+
+  latestPlannerResolution =
+    resolvedState.homeBase || resolvedState.start || resolvedState.end ? resolvedState : null;
+  routeRenderMode = plannedDays.length ? "api" : "fallback";
+  activeRouteKey = null;
+  liveEditionExpanded = plannedDays.length > 0;
+  expandedAlternativeDates.clear();
+
+  const nextActiveDate = options.activePlannedDate || plannedDays[0]?.date || null;
+
+  activePlannedDate = plannedDays.some((day) => day.date === nextActiveDate)
+    ? nextActiveDate
+    : plannedDays[0]?.date || null;
+  activeLiveDate = plannedDays.length
+    ? activePlannedDate || plannedDays[0].date
+    : options.fallbackDate || routeDateFrom.value || getTodayIsoDate();
+}
+
+function restoreLatestPlannerPlan() {
+  const record = readLatestPlannerPlanRecord();
+
+  if (!record) {
+    hideLatestPlannerRestoreNotice();
+    return;
+  }
+
+  latestPlannerSnapshot = record.plannerSnapshot;
+  applyPlannerSnapshot(record.plannerSnapshot);
+  applyPlannerResponseState(record.plannerResponse, {
+    activePlannedDate: record.activePlannedDate,
+    fallbackDate: record.plannerSnapshot.dateFrom,
+  });
+  switchTab("routes");
+  renderRouteResults();
+  updatePlannerLaunchSummary(buildPlanningResultSummary(record.plannerResponse));
+  updateRouteMatchSummary("");
+  setPlannerStatusMessage("Senaste plan återställd.", "info");
+  hideLatestPlannerRestoreNotice();
+  focusPlannerResults();
+  loadCityPulse(activeLiveDate).catch(() => {});
+}
+
 function isFavorite(name) {
   return favorites.includes(name);
 }
@@ -4882,7 +5138,9 @@ function getCategoryTone(category) {
 
 function updateRouteMatchSummary(text) {
   if (routeMatchSummary) {
-    routeMatchSummary.textContent = text;
+    const nextText = typeof text === "string" ? text.trim() : "";
+    routeMatchSummary.textContent = nextText;
+    routeMatchSummary.hidden = !nextText;
   }
 }
 
@@ -5893,7 +6151,7 @@ function syncPlannerLoadingSkeleton(isLoading) {
 
 function setPlannerLoadingState(isLoading, message = plannerLoadingMessages[0]) {
   const buttons = [routePlanButton, routePlanStickyButton].filter(Boolean);
-  const label = "Bygger din dag...";
+  const label = "Planerar...";
 
   if (isLoading) {
     plannerLoadingStops = buttons.map((button) => paLoading(button, label));
@@ -5925,6 +6183,7 @@ function setPlannerLoadingState(isLoading, message = plannerLoadingMessages[0]) 
 }
 
 function startPlannerLoadingCycle() {
+  const dayCount = expandDateRange(routeDateFrom?.value, routeDateTo?.value).length;
   let messageIndex = 0;
 
   if (plannerLoadingTimer) {
@@ -5932,6 +6191,7 @@ function startPlannerLoadingCycle() {
     plannerLoadingTimer = null;
   }
 
+  plannerLoadingMessages = plannerTrustBuildLoadingMessages(dayCount);
   setPlannerLoadingState(true, plannerLoadingMessages[0]);
   plannerLoadingTimer = window.setInterval(() => {
     messageIndex = (messageIndex + 1) % plannerLoadingMessages.length;
@@ -8589,10 +8849,60 @@ function ensureActivePlannedDate() {
   return activePlannedDate;
 }
 
+function buildPlannerIntentVisibilityState() {
+  const selectedIntentKeys = getExplicitSelectedIntentKeys();
+
+  if (!selectedIntentKeys.length || !plannedDays.length) {
+    return null;
+  }
+
+  return plannerTrustCollectSelectedIntentVisibility({
+    selectedIntentKeys,
+    days: plannedDays,
+    intentDefinitions: plannerIntentDefinitions,
+  });
+}
+
+function buildPlannerIntentNotes(visibilityState) {
+  if (!visibilityState) {
+    return [];
+  }
+
+  const notes = [];
+  const firstLaterIntentKey = visibilityState.laterIntentKeys[0];
+
+  if (firstLaterIntentKey) {
+    const dayIndex = visibilityState.firstDayIndexByKey[firstLaterIntentKey];
+    const dayVisibility = Number.isInteger(dayIndex) ? visibilityState.perDay[dayIndex] || null : null;
+    const laterIntentLabel = getPlannerIntentLabel(firstLaterIntentKey);
+    const laterIntentAlreadyVisible = Boolean(
+      dayVisibility?.labels?.some((label) => label === laterIntentLabel),
+    );
+
+    if (Number.isInteger(dayIndex) && dayIndex > 0 && !laterIntentAlreadyVisible) {
+      notes.push(`${laterIntentLabel} syns tydligast på Dag ${dayIndex + 1}.`);
+    }
+  }
+
+  if (visibilityState.missingIntentKeys.length) {
+    const missingLabels = visibilityState.missingIntentKeys
+      .filter((intentKey) => plannerIntentByKey.has(intentKey))
+      .map(getPlannerIntentLabel)
+      .slice(0, 2);
+
+    if (missingLabels.length) {
+      notes.push(`${formatPlannerIntentLabelList(missingLabels)} syns inte tydligt i huvudrutterna just nu.`);
+    }
+  }
+
+  return notes;
+}
+
 function renderPlannedDays() {
   routeResults.innerHTML = "";
   const activeDate = ensureActivePlannedDate();
   const activeDay = plannedDays.find((day) => day.date === activeDate) || plannedDays[0];
+  const intentVisibilityState = buildPlannerIntentVisibilityState();
 
   if (!activeDay) {
     return;
@@ -8605,10 +8915,22 @@ function renderPlannedDays() {
   dayTabs.className = "planner-day-tabs";
 
   plannedDays.forEach((day, index) => {
+    const dayIntentVisibility = intentVisibilityState?.perDay[index] || null;
     const button = document.createElement("button");
     button.type = "button";
     button.className = `planner-day-tab${day.date === activeDay.date ? " is-active" : ""}`;
-    button.textContent = `Dag ${index + 1} • ${formatCompactSwedishDate(day.date)}`;
+    const title = document.createElement("span");
+    title.className = "planner-day-tab-title";
+    title.textContent = `Dag ${index + 1} • ${formatCompactSwedishDate(day.date)}`;
+    button.appendChild(title);
+
+    if (dayIntentVisibility?.labels?.length) {
+      const cue = document.createElement("span");
+      cue.className = "planner-day-tab-cue";
+      cue.textContent = dayIntentVisibility.labels.join(" • ");
+      button.appendChild(cue);
+    }
+
     button.addEventListener("click", () => {
       activePlannedDate = day.date;
       activeLiveDate = day.date;
@@ -8617,6 +8939,22 @@ function renderPlannedDays() {
     });
     dayTabs.appendChild(button);
   });
+
+  const intentNotes = buildPlannerIntentNotes(intentVisibilityState);
+
+  if (intentNotes.length) {
+    const noteList = document.createElement("div");
+    noteList.className = "planner-results-intent-notes";
+
+    intentNotes.forEach((text) => {
+      const note = document.createElement("p");
+      note.className = "planner-results-intent-note";
+      note.textContent = text;
+      noteList.appendChild(note);
+    });
+
+    shell.appendChild(noteList);
+  }
 
   const dayCard = plannerDayTemplate.content.firstElementChild.cloneNode(true);
   const primaryRouteView = createApiRouteView(
@@ -8739,6 +9077,7 @@ function renderPlannedDays() {
 
 function renderRouteResults() {
   syncShellModeState();
+  updateLatestPlannerRestoreNotice();
 
   if (isFallbackRequestedCity || isInternalCityMode) {
     routeFallbackNote.hidden = false;
@@ -8826,27 +9165,11 @@ async function planRoutes() {
     body: JSON.stringify(payload),
   });
 
-  plannedDays = response.days || [];
-  latestPlannerResolution = {
-    homeBase: response.resolved_home_base || null,
-    start: response.resolved_start || null,
-    end: response.resolved_end || null,
-  };
-  routeRenderMode = plannedDays.length ? "api" : "fallback";
-  activeRouteKey = null;
-  activePlannedDate = plannedDays[0]?.date || null;
-  liveEditionExpanded = plannedDays.length > 0;
-  expandedAlternativeDates.clear();
-
-  if (plannedDays.length) {
-    activeLiveDate = plannedDays[0].date;
-    await loadCityPulse(activeLiveDate);
-  } else {
-    activeLiveDate = routeDateFrom.value || getTodayIsoDate();
-    await loadCityPulse(activeLiveDate);
-  }
-
+  applyPlannerResponseState(response, {
+    fallbackDate: routeDateFrom.value || getTodayIsoDate(),
+  });
   renderRouteResults();
+  loadCityPulse(activeLiveDate).catch(() => {});
 
   if (!plannedDays.length) {
     latestPlannerResolution = null;
@@ -8865,13 +9188,10 @@ async function planRoutes() {
     return;
   }
 
+  persistLatestPlannerPlan(response);
   setPlannerStatusMessage("");
   updatePlannerLaunchSummary(buildPlanningResultSummary(response));
-  updateRouteMatchSummary(
-    buildPlannerStyleSummary(
-      buildPlanningResultSummary(response),
-    ),
-  );
+  updateRouteMatchSummary("");
 }
 
 filterButtons.forEach((button) => {
@@ -9076,7 +9396,7 @@ routePlannerForm?.addEventListener("submit", async (event) => {
   startPlannerLoadingCycle();
   updateRouteMatchSummary(
     buildPlannerStyleSummary(
-      `Bygger din dag i ${plannerDisplayCityLabel} utifrån datum, känsla och dina val...`,
+      "Bygger upplägget utifrån datum, känsla och dina val...",
     ),
   );
 
@@ -9186,6 +9506,25 @@ heroBlitzCurrentOriginButton?.addEventListener("click", () => {
 
 heroPlannerButton?.addEventListener("click", () => {
   openPlannerModalForMode(plannerAutoMode);
+});
+
+plannerRestoreButton?.addEventListener("click", () => {
+  restoreLatestPlannerPlan();
+});
+
+plannerRestoreDismissButton?.addEventListener("click", () => {
+  plannerRestoreDismissButton.blur();
+  const record = readLatestPlannerPlanRecord();
+
+  if (!record) {
+    hideLatestPlannerRestoreNotice();
+    return;
+  }
+
+  setLatestPlannerPlanDismissSignature(
+    plannerTrustBuildLatestPlannerPlanDismissSignature(record),
+  );
+  hideLatestPlannerRestoreNotice();
 });
 
 routePlannerOpenButton?.addEventListener("click", () => {
