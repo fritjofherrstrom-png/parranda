@@ -310,6 +310,8 @@ test("GET / renderar en city-aware app shell med bootstrap", async () => {
     assert.ok(!response.body.includes('id="heroHeadline"'));
     assert.ok(!response.body.includes('id="heroLead"'));
     assert.ok(!response.body.includes("Din dag börjar här"));
+    assert.ok(!response.body.includes("Just nu i Rom"));
+    assert.ok(!response.body.includes("Mjukt km-mål"));
     assert.match(response.body, /<p id="heroBlitzLabel" class="panel-label">BLITZ<\/p>/);
     assert.match(response.body, /<h2 id="heroBlitzTitle">Laddar nästa drag\.\.\.<\/h2>/);
     assert.match(response.body, /<button id="heroBlitzApplyButton" class="secondary-button" type="button"\s*>\s*Kör nu\s*<\/button>/);
@@ -348,6 +350,7 @@ test("GET /barcelona avslöjar fallback i app shell bootstrap innan stad 2 finns
     assert.ok(!response.body.includes('id="heroEyebrow"'));
     assert.ok(!response.body.includes('id="heroHeadline"'));
     assert.ok(!response.body.includes('id="heroLead"'));
+    assert.ok(!response.body.includes("Mjukt km-mål"));
     assert.match(response.body, /<button id="routePlannerOpenButton" class="primary-button" type="button">\s*Se planner-preview\s*<\/button>/);
     assert.match(response.body, /data-budget-tier="budget">\s*Budgetsmart\s*<\/button>/);
     assert.match(response.body, /data-budget-tier="dolce-vita">\s*Premium\s*<\/button>/);
@@ -389,6 +392,7 @@ test("GET /test-city renderar en egen city shell utan Rome-fallback", async () =
     assert.ok(!response.body.includes('id="heroEyebrow"'));
     assert.ok(!response.body.includes('id="heroHeadline"'));
     assert.ok(!response.body.includes('id="heroLead"'));
+    assert.ok(!response.body.includes("Mjukt km-mål"));
     assert.match(response.body, /<button id="routePlannerOpenButton" class="primary-button" type="button">\s*Öppna preview\s*<\/button>/);
     assert.match(response.body, /data-budget-tier="budget">\s*Budgetsmart\s*<\/button>/);
     assert.match(response.body, /data-budget-tier="dolce-vita">\s*Premium\s*<\/button>/);

@@ -125,26 +125,17 @@
           </div>
         </section>
 
-        <div class="hero-support-actions topbar-actions">
-          <button id="heroLiveButton" class="hero-live-button topbar-utility-button" type="button">
-            <span class="hero-live-dot" aria-hidden="true"></span>
-            <span>__PARRANDA_HERO_LIVE_LABEL__</span>
-          </button>
-          <a
-            class="topbar-link"
-            href="__PARRANDA_CITY_MAP_URL__"
-            target="_blank"
-            rel="noreferrer"
-            >Karta</a
-          >
-          <button class="ghost-button install-button" id="installButton" hidden>
-            Installera appen
-          </button>
-        </div>
+        <button class="ghost-button install-button" id="installButton" hidden>
+          Installera appen
+        </button>
       </header>
 
       <main>
         <nav class="tab-nav" aria-label="Appsektioner">
+          <button id="heroLiveButton" class="tab-button utility-tab-button hero-live-button" type="button">
+            <span class="hero-live-dot" aria-hidden="true"></span>
+            <span>Pulse</span>
+          </button>
           <button class="tab-button" data-tab="districts">Stadsdelar</button>
           <button class="tab-button" data-tab="overview">Karta</button>
         </nav>
@@ -389,7 +380,7 @@
                 <p class="eyebrow">§ PLANERARE</p>
                 <h2 id="plannerModalTitle">Planera dagen</h2>
                 <p class="planner-modal-lead">
-                  Datum, vibe, gångmål och gärna var du bor. Resten sätter Parranda ihop.
+                  Välj datum och känsla. Parranda sätter ihop dagen runt det som passar bäst.
                 </p>
                 <div class="planner-mode-switch" role="tablist" aria-label="Planeringsläge">
                   <button
@@ -412,7 +403,7 @@
                   </button>
                 </div>
                 <p id="plannerModeLead" class="planner-mode-lead">
-                  Börja lätt. Datum, känsla, gångmål och gärna en bas räcker för att Parranda ska bygga dagen.
+                  Börja lätt. Datum och känsla räcker för att Parranda ska komma igång.
                 </p>
               </div>
               <button id="closePlannerModalButton" class="ghost-button" type="button">Stäng</button>
@@ -426,7 +417,7 @@
                       Startar smart planerare
                     </span>
                   </div>
-                  <p class="planner-panel-copy">Välj datum, gångmål och känsla. Basen är valfri om du vill hålla auto-läget lätt.</p>
+                  <p class="planner-panel-copy">Välj datum och känsla först. Du kan justera längd och detaljer längre ner om du vill.</p>
                   <div class="planner-inline-grid">
                     <label class="search-box route-lab-field">
                       <span>Från datum</span>
@@ -439,17 +430,17 @@
                     <label class="search-box route-lab-field">
                       <span>Avstånd</span>
                       <select id="distanceModeSelect">
-                        <option value="soft_target">Mjukt km-mål</option>
+                        <option value="soft_target">Ungefärlig längd</option>
                         <option value="no_limit">Spelar ingen roll</option>
                       </select>
                     </label>
                     <label class="search-box route-lab-field">
-                      <span>Mjukt gångmål i km</span>
+                      <span>Gånglängd i km</span>
                       <input id="walkingKmTarget" type="range" min="4" max="18" step="1" value="9" />
                     </label>
                     <div class="planner-km-readout">
                       <strong id="walkingKmValue">9 km</strong>
-                      <p>Motorn får avvika lite om dagen blir märkbart bättre.</p>
+                      <p>Ungefärlig gånglängd. Parranda kan justera om dagen blir tydligt bättre.</p>
                     </div>
                   </div>
                   <div class="planner-preferences">
@@ -470,8 +461,8 @@
                       <div>
                         <p class="eyebrow">AUTO-LÄGE</p>
                         <p class="planner-panel-copy">
-                          Lägg till var du bor om du vill. Parranda använder det som mjuk bas,
-                          inte som låst dagsstart.
+                          Lägg till var du bor om du vill. Parranda använder det som en mjuk
+                          utgångspunkt, inte som en låst dagsstart.
                         </p>
                       </div>
                     </div>
@@ -485,7 +476,7 @@
                       </select>
                     </label>
                     <p id="homeBaseModeHint" class="planner-mode-help">
-                      Lämna öppet om du vill att Parranda ska hitta en naturlig boendebas själv.
+                      Lämna öppet om du vill att Parranda ska hitta ett naturligt hemkvarter själv.
                     </p>
                     <label class="search-box route-lab-field" data-mode-field="home-base-preset" hidden>
                       <span>Välj bas</span>
@@ -537,7 +528,7 @@
                       </p>
                     </div>
                     <p id="plannerAdvancedSummary" class="planner-advanced-meta">
-                      Auto-läge är aktivt. Parranda väljer både öppning och final själv.
+                      Auto-läge är aktivt. Parranda väljer både öppning och avslut själv.
                     </p>
                   </summary>
 
@@ -604,7 +595,7 @@
                           </select>
                         </label>
                         <p id="endModeHint" class="planner-mode-help">
-                          Parranda väljer en tydlig final om du inte låser slutpunkten.
+                          Parranda väljer ett tydligt avslut om du inte låser slutpunkten.
                         </p>
                         <label class="search-box route-lab-field" data-mode-field="end-preset" hidden>
                           <span>Välj kvarter</span>
@@ -679,7 +670,7 @@
               <p id="plannerStatusMessage" class="planner-status-message" hidden aria-live="polite"></p>
 
               <div class="planner-mobile-actions">
-                <button id="routePlanStickyButton" class="primary-button pa-secondary" type="button">
+                <button id="routePlanStickyButton" class="primary-button" type="button">
                   Planera min dag
                 </button>
               </div>
