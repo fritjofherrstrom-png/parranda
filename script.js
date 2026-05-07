@@ -3239,7 +3239,7 @@ function renderHeroBlitz() {
       chip.textContent = tagText;
       heroBlitzTags.appendChild(chip);
     });
-    heroBlitzApplyButton.textContent = "Kör nu";
+    heroBlitzApplyButton.textContent = "Kör Blitz";
     heroBlitzShuffleButton.textContent = "↻ Nytt";
     heroBlitzApplyButton.disabled = true;
     heroBlitzShuffleButton.disabled = true;
