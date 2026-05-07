@@ -313,9 +313,9 @@ test("GET / renderar en city-aware app shell med bootstrap", async () => {
     assert.ok(!response.body.includes("Just nu i Rom"));
     assert.ok(!response.body.includes("Mjukt km-mål"));
     assert.match(response.body, /<p id="heroBlitzLabel" class="panel-label">BLITZ<\/p>/);
-    assert.match(response.body, /<h2 id="heroBlitzTitle">Laddar nästa drag\.\.\.<\/h2>/);
+    assert.match(response.body, /<h2 id="heroBlitzTitle">Nästa drag, just nu<\/h2>/);
     assert.match(response.body, /<button id="heroBlitzApplyButton" class="secondary-button" type="button"\s*>\s*Kör nu\s*<\/button>/);
-    assert.match(response.body, /<button id="routePlannerOpenButton" class="primary-button" type="button">\s*Låt Parranda planera\s*<\/button>/);
+    assert.match(response.body, /<button id="routePlannerOpenButton" class="primary-button" type="button">\s*Planera dagen\s*<\/button>/);
     assertPlannerIntentFirstPaint(response.body);
     assert.ok(!response.body.includes("__PARRANDA_CITY_BOOTSTRAP__"));
     assert.ok(!response.body.includes("__PARRANDA_TITLE__"));

@@ -1930,7 +1930,7 @@ function applyCityModeToShell() {
       routeMatchSummary.textContent = buildNonRomeRouteSummary();
     }
   } else if (routePlannerOpenButton) {
-    routePlannerOpenButton.textContent = "Låt Parranda planera";
+    routePlannerOpenButton.textContent = "Planera dagen";
     if (routePlannerManualButton) {
       routePlannerManualButton.hidden = false;
       routePlannerManualButton.textContent = "Jag vill styra själv";
@@ -3253,11 +3253,11 @@ function renderHeroBlitz() {
       heroBlitzCard.dataset.blitzKind = "empty";
     }
     heroBlitzLabel.textContent = "BLITZ";
-    heroBlitzTitle.textContent = blitzInlineStatus ? "Blitz hämtar nytt läge" : "Blitz väljer nästa drag";
+    heroBlitzTitle.textContent = blitzInlineStatus ? "Blitz hämtar nytt läge" : "Nästa drag, just nu";
     heroBlitzSummary.textContent = blitzInlineStatus
       ? "Planner och Pulse fungerar fortfarande medan nästa drag laddar om i bakgrunden."
-      : "Utgå från plats och tid när du bara vill veta vad som känns starkast nu.";
-    heroBlitzMeta.textContent = "Plats, tid och dagens signaler vägs in i samma beslut.";
+      : "Plats, tid och dagens signaler vägs in.";
+    heroBlitzMeta.textContent = "Utgå från plats och tid när du bara vill veta vad som känns starkast nu.";
     heroBlitzFollowup.hidden = !blitzInlineStatus;
     heroBlitzFollowup.textContent = blitzInlineStatus;
     heroBlitzTags.innerHTML = "";
@@ -5127,7 +5127,7 @@ function updatePlannerLaunchSummary(prefix = "") {
     prefix ||
     (activePlannerMode === plannerManualMode
       ? `${dateLabel} • Planera en dag i staden. Du kan styra mer i nästa steg.`
-      : `${dateLabel} • Välj datum och känsla. Parranda sätter ihop dagen.`);
+      : `${dateLabel} • Välj datum och känsla. Parranda sätter ihop rutten.`);
 
   plannerLaunchSummary.textContent = summary;
 }
