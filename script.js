@@ -5138,7 +5138,9 @@ function getCategoryTone(category) {
 
 function updateRouteMatchSummary(text) {
   if (routeMatchSummary) {
-    routeMatchSummary.textContent = text;
+    const nextText = typeof text === "string" ? text.trim() : "";
+    routeMatchSummary.textContent = nextText;
+    routeMatchSummary.hidden = !nextText;
   }
 }
 
