@@ -72,6 +72,17 @@
                 Jag vill styra själv
               </button>
               <p id="plannerLaunchMicrocopy" class="planner-launch-micro">__PARRANDA_PLANNER_MICROCOPY__</p>
+              <div id="plannerRestoreNotice" class="planner-restore-notice" hidden>
+                <p id="plannerRestoreSummary" class="planner-restore-copy"></p>
+                <div class="planner-restore-actions">
+                  <button id="plannerRestoreButton" class="secondary-button" type="button">
+                    Fortsätt med senaste plan
+                  </button>
+                  <button id="plannerRestoreDismissButton" class="ghost-button" type="button">
+                    Inte nu
+                  </button>
+                </div>
+              </div>
             </div>
           </section>
         </section>
@@ -1055,6 +1066,7 @@
     </aside>
 
     <script src="vendor/leaflet/leaflet.js"></script>
+    <script src="planner-trust.js?v=1"></script>
     <script src="script.js?v=19"></script>
     <script src="ux-pass1.js?v=10"></script>
   </body>
