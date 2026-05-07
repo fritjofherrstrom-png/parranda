@@ -1002,7 +1002,7 @@ const romeRoutes = [
   {
     id: "classic-loop",
     title: "Trastevere -> Ghetto -> Monti -> Colosseum -> Trastevere",
-    vibe: "klassiker smart gjort",
+    vibe: "Klassiker utan stress",
     length: "ca 10 km",
     anchor: "Ankare: Colosseum by night + San Clemente",
     walk: "Start/slut i Trastevere, lugn heldag",
@@ -1262,6 +1262,7 @@ const districtPlanButton = document.getElementById("districtPlanButton");
 const districtMapButton = document.getElementById("districtMapButton");
 const routePlannerStart = document.getElementById("routePlannerStart");
 const routePlannerOpenButton = document.getElementById("routePlannerOpenButton");
+const routePlannerManualButton = document.getElementById("routePlannerManualButton");
 const closePlannerModalButton = document.getElementById("closePlannerModalButton");
 const plannerModalBackdrop = document.getElementById("plannerModalBackdrop");
 const plannerModalTitle = document.getElementById("plannerModalTitle");
@@ -1565,10 +1566,10 @@ const legPacingHints = {
   flexible: "Spelar mindre roll låter motorn ta större hopp om helheten blir bättre.",
 };
 const plannerLoadingMessages = [
-  "Läser datum och preferenser...",
-  "Väljer smart bas, start och slut...",
-  "Ordnar stopp till en naturlig rutt...",
-  "Finjusterar efter gånglogik och live-läge...",
+  `Bygger din dag i ${plannerDisplayCityLabel}...`,
+  "Väljer en smart bas och rätt tempo...",
+  "Sätter ihop stopp som hänger ihop till fots...",
+  "Finjusterar med väder, live-läge och dagens rytm...",
 ];
 const romePlannerDistrictCatalog = [
   {
@@ -1902,6 +1903,9 @@ function applyCityModeToShell() {
   if (routePlannerOpenButton && !isRomeCuratedMode) {
     routePlannerOpenButton.textContent = isInternalCityMode ? "Öppna preview" : "Se planner-preview";
   }
+  if (routePlannerManualButton && !isRomeCuratedMode) {
+    routePlannerManualButton.hidden = true;
+  }
 
   if (!isRomeCuratedMode) {
     if (tabNav) {
@@ -1926,7 +1930,11 @@ function applyCityModeToShell() {
       routeMatchSummary.textContent = buildNonRomeRouteSummary();
     }
   } else if (routePlannerOpenButton) {
-    routePlannerOpenButton.textContent = "Planera min dag";
+    routePlannerOpenButton.textContent = "Planera dagen";
+    if (routePlannerManualButton) {
+      routePlannerManualButton.hidden = false;
+      routePlannerManualButton.textContent = "Jag vill styra själv";
+    }
   }
 }
 
@@ -1973,6 +1981,7 @@ let activeHeroWildcardId = null;
 let blitzState = null;
 let blitzMemory = null;
 let blitzLoading = false;
+let blitzInlineStatus = "";
 let blitzLoadRequestId = 0;
 let blitzOriginMode = "selected_place";
 let blitzContextKey = "";
@@ -1980,6 +1989,8 @@ let activePulseScope = "all";
 let activePulseTime = "now";
 let activePulseLevel = "all";
 let plannerLoadingTimer = null;
+let plannerLoadingStops = [];
+let plannerLoadingSkeletonClear = null;
 let cityPulseScopeStatus = "";
 let activePulseRadiusKey = "5";
 let activeLiveDate = getTodayIsoDate();
@@ -2703,6 +2714,7 @@ function syncBlitzContextState(nextContextKey, { clearState = true } = {}) {
 
   blitzContextKey = nextContextKey;
   blitzMemory = null;
+  blitzInlineStatus = "";
 
   if (clearState) {
     blitzState = null;
@@ -2723,9 +2735,7 @@ async function resolveBlitzOriginPayload() {
       };
     } catch (_error) {
       blitzOriginMode = "selected_place";
-      updateRouteMatchSummary(
-        "Blitz kunde inte läsa din plats just nu och använder därför vald plats i stället.",
-      );
+      blitzInlineStatus = "Min plats gick inte att läsa just nu, så Blitz använder vald plats i stället.";
       renderHeroBlitz();
     }
   }
@@ -3221,14 +3231,15 @@ function renderHeroBlitz() {
       blitzOriginMode === "current_location"
         ? "Utgår från min plats om den går att läsa."
         : "Utgår från vald plats och dagens intent.";
-    heroBlitzFollowup.hidden = true;
+    heroBlitzFollowup.hidden = !blitzInlineStatus;
+    heroBlitzFollowup.textContent = blitzInlineStatus;
     heroBlitzTags.innerHTML = "";
     ["Nu", "Reroll"].forEach((tagText) => {
       const chip = document.createElement("span");
       chip.textContent = tagText;
       heroBlitzTags.appendChild(chip);
     });
-    heroBlitzApplyButton.textContent = "Kör nu";
+    heroBlitzApplyButton.textContent = "Kör Blitz";
     heroBlitzShuffleButton.textContent = "↻ Nytt";
     heroBlitzApplyButton.disabled = true;
     heroBlitzShuffleButton.disabled = true;
@@ -3242,22 +3253,26 @@ function renderHeroBlitz() {
       heroBlitzCard.dataset.blitzKind = "empty";
     }
     heroBlitzLabel.textContent = "BLITZ";
-    heroBlitzTitle.textContent = "Kör Blitz när du vill veta nästa drag";
-    heroBlitzSummary.textContent =
-      "När du redan är ute i staden väljer Blitz vad som känns starkast just nu.";
-    heroBlitzMeta.textContent = "Plats, tid, Pulse och availability vägs in i samma beslut.";
-    heroBlitzFollowup.hidden = true;
+    heroBlitzTitle.textContent = blitzInlineStatus ? "Blitz hämtar nytt läge" : "Nästa drag, just nu";
+    heroBlitzSummary.textContent = blitzInlineStatus
+      ? "Planner och Pulse fungerar fortfarande medan nästa drag laddar om i bakgrunden."
+      : "Plats, tid och dagens signaler vägs in.";
+    heroBlitzMeta.textContent = "Utgå från plats och tid när du bara vill veta vad som känns starkast nu.";
+    heroBlitzFollowup.hidden = !blitzInlineStatus;
+    heroBlitzFollowup.textContent = blitzInlineStatus;
     heroBlitzTags.innerHTML = "";
-    heroBlitzApplyButton.textContent = "Kör nu";
+    heroBlitzApplyButton.textContent = "Kör Blitz";
     heroBlitzShuffleButton.textContent = "↻ Nytt";
     heroBlitzApplyButton.disabled = blitzLoading;
     heroBlitzShuffleButton.disabled = true;
+    heroBlitzShuffleButton.hidden = true;
     return;
   }
 
   if (heroBlitzCard) {
     heroBlitzCard.dataset.blitzKind = move.kind || "single_stop";
   }
+  blitzInlineStatus = "";
   heroBlitzLabel.textContent = buildHeroBlitzLabel(move);
   heroBlitzTitle.textContent = move.title;
   heroBlitzMeta.textContent = buildHeroBlitzMeta(blitzState);
@@ -3363,6 +3378,7 @@ async function loadHeroBlitz({ openAfter = false } = {}) {
 
     blitzState = payload;
     blitzMemory = payload.memory || blitzMemory;
+    blitzInlineStatus = "";
     renderHeroBlitz();
 
     if (openAfter) {
@@ -3376,10 +3392,8 @@ async function loadHeroBlitz({ openAfter = false } = {}) {
     }
 
     blitzState = null;
+    blitzInlineStatus = "Blitz hämtar nytt läge just nu. Försök igen om en liten stund.";
     renderHeroBlitz();
-    updateRouteMatchSummary(
-      "Blitz kunde inte laddas just nu. Planner och Pulse fungerar fortfarande medan nästa drag återhämtar sig.",
-    );
     throw error;
   } finally {
     if (requestId === blitzLoadRequestId) {
@@ -4104,10 +4118,10 @@ function renderCityPulseTeaser() {
       : `Öppna live-läget längre ner när du vill väga in ${buildUnavailableCityLabel()} utan att lämna planen.`;
   } else {
     if (isRomeCuratedMode) {
-      cityPulseTeaserLabel.textContent = `Just nu i ${plannerDisplayCityLabel}`;
-      cityPulseTeaserTitle.textContent = "Se vad som händer just nu";
+      cityPulseTeaserLabel.textContent = "Dagens signaler";
+      cityPulseTeaserTitle.textContent = "Öppna Pulse när du vill väga in läget";
       cityPulseTeaserSummary.textContent =
-        "Valfritt före planeringen. Starkast som lager ovanpå din dag.";
+        "Helt valfritt före planeringen. Tänk det som ett extra lager ovanpå dagen.";
     } else {
       cityPulseTeaserLabel.textContent = isInternalCityMode
         ? "INTERN PREVIEW"
@@ -4984,8 +4998,8 @@ function updatePlannerAdvancedSummary() {
   if (plannerModeLead) {
     plannerModeLead.textContent =
       activePlannerMode === plannerManualMode
-        ? "Du styr ankare själv. Lås bara det som verkligen behöver vara exakt och låt resten vara flexibelt."
-        : "Börja med datum, vibe, gångmål och gärna var du bor. Resten sätter Parranda ihop.";
+        ? "Du styr själv var dagen ska öppna eller landa. Lås bara det som verkligen behöver vara exakt."
+        : "Håll det lätt. Datum och känsla räcker för att Parranda ska bygga dagen.";
   }
 
   updatePlannerLaunchSummary();
@@ -5058,27 +5072,27 @@ function buildPlanningResultSummary(response) {
   const usedAutoStart = activePlannerMode === plannerAutoMode || startModeSelect?.value === plannerAutoMode;
   const usedAutoEnd = activePlannerMode === plannerAutoMode || endModeSelect?.value === plannerAutoMode;
   const resolvedStart = response.resolved_start?.label || "en smart start";
-  const resolvedEnd = response.resolved_end?.label || "en smart final";
+  const resolvedEnd = response.resolved_end?.label || "en tydlig slutpunkt";
   const resolvedHomeBase = response.resolved_home_base?.label || null;
 
   if (activePlannerMode === plannerAutoMode) {
     if (resolvedHomeBase) {
-      return `${plannedCount} dag(ar) klara med ${resolvedHomeBase} som mjuk boendebas. Dag 1 öppnas först, resten ligger direkt bredvid.`;
+      return `${plannedCount} dag(ar) klara. ${resolvedHomeBase} sätter tonen och Dag 1 visas först.`;
     }
 
-    return `${plannedCount} dag(ar) klara. Parranda valde själv en smart bas, start och final och visar Dag 1 först.`;
+    return `${plannedCount} dag(ar) klara. Parranda satte ihop upplägget och visar Dag 1 först.`;
   }
 
   if (usedAutoStart && usedAutoEnd) {
-    return `${plannedCount} dag(ar) klara. Parranda valde själv en smart start och final och visar huvudrutten först.`;
+    return `${plannedCount} dag(ar) klara. Parranda valde öppning och avslut och visar huvudrutten först.`;
   }
 
   if (!usedAutoStart && usedAutoEnd) {
-    return `${plannedCount} dag(ar) klara från ${resolvedStart}. Parranda valde finalen och visar huvudrutten först.`;
+    return `${plannedCount} dag(ar) klara från ${resolvedStart}. Parranda satte avslutet och visar huvudrutten först.`;
   }
 
   if (usedAutoStart && !usedAutoEnd) {
-    return `${plannedCount} dag(ar) klara med ${resolvedEnd} som mål. Parranda valde en smart start och visar huvudrutten först.`;
+    return `${plannedCount} dag(ar) klara med ${resolvedEnd} som slutpunkt. Parranda valde öppningen och visar huvudrutten först.`;
   }
 
   return `${plannedCount} dag(ar) klara mellan ${resolvedStart} och ${resolvedEnd}. Huvudrutten visas först, alternativ efteråt.`;
@@ -5105,26 +5119,15 @@ function updatePlannerLaunchSummary(prefix = "") {
   }
 
   const dates = expandDateRange(routeDateFrom?.value, routeDateTo?.value);
-  const baseSummary = getPlannerPointSummary("home_base");
-  const startSummary = getPlannerPointSummary("start");
-  const endSummary = getPlannerPointSummary("end");
-  const kmLabel =
-    activeDistanceMode === "no_limit" ? "gången får vara friare" : `${walkingKmTarget?.value || 9} km som mjukt mål`;
   const dateLabel =
     dates.length > 1
       ? `${formatCompactSwedishDate(dates[0])} → ${formatCompactSwedishDate(dates[dates.length - 1])}`
       : formatCompactSwedishDate(dates[0] || getTodayIsoDate());
-  const anchorLabel =
-    activePlannerMode === plannerManualMode
-      ? startSummary === "Parranda väljer" && endSummary === "Parranda väljer"
-        ? "Manuell styrning är vald, men ankare är fortfarande valfria"
-        : `Exakta ankare: ${startSummary} → ${endSummary}`
-      : baseSummary === "Parranda väljer"
-        ? "Parranda väljer bas, start och final själv"
-        : `Bas: ${baseSummary}. Start och final väljs fortfarande av Parranda`;
   const summary =
     prefix ||
-    `${dateLabel} • ${kmLabel}. ${anchorLabel}.`;
+    (activePlannerMode === plannerManualMode
+      ? `${dateLabel} • Planera en dag i staden. Du kan styra mer i nästa steg.`
+      : `${dateLabel} • Välj datum och känsla. Parranda sätter ihop rutten.`);
 
   plannerLaunchSummary.textContent = summary;
 }
@@ -5146,6 +5149,16 @@ function openPlannerModal() {
   window.setTimeout(() => {
     routeDateFrom?.focus();
   }, 40);
+}
+
+function openPlannerModalForMode(mode = plannerAutoMode) {
+  setPlannerMode(mode);
+
+  if (mode === plannerManualMode && plannerFineTuneDetails) {
+    plannerFineTuneDetails.open = true;
+  }
+
+  openPlannerModal();
 }
 
 function closePlannerModal() {
@@ -5203,12 +5216,12 @@ function getPlannerModeHint(pointKey, mode) {
 
   if (mode === plannerAutoMode) {
     if (isHomeBase) {
-      return "Lämna öppet om du vill att Parranda ska hitta en naturlig boendebas själv.";
+      return "Lämna öppet om du vill att Parranda ska hitta ett naturligt hemkvarter själv.";
     }
 
     return isStart
       ? "Lämna öppet om du vill att Parranda ska hitta en naturlig öppning själv."
-      : "Lämna öppet om du vill att Parranda ska hitta en naturlig final själv.";
+      : "Lämna öppet om du vill att Parranda ska hitta ett naturligt avslut själv.";
   }
 
   if (mode === "current_location") {
@@ -5223,7 +5236,7 @@ function getPlannerModeHint(pointKey, mode) {
 
   if (mode === "custom") {
     if (isHomeBase) {
-      return "Skriv hotell, adress eller stadsdel så använder Parranda det som mjuk bas.";
+      return "Skriv hotell, adress eller stadsdel så använder Parranda det som mjuk utgångspunkt.";
     }
 
     return isStart
@@ -5458,12 +5471,12 @@ function setRouteApiStatus(isAvailable) {
   }
 
   if (isAvailable) {
-    routePlannerModeChip.textContent = "Live route engine aktiv";
+    routePlannerModeChip.textContent = "Smart planerare på";
     routeFallbackNote.hidden = true;
     return;
   }
 
-  routePlannerModeChip.textContent = "Fallback-läge aktivt";
+  routePlannerModeChip.textContent = "Fallback-läge på";
   routeFallbackNote.hidden = false;
 }
 
@@ -5776,14 +5789,121 @@ function setPlannerStatusMessage(text = "", tone = "info") {
   plannerStatusMessage.dataset.tone = tone;
 }
 
+function paLoading(button, label) {
+  if (!button) {
+    return () => {};
+  }
+
+  const previousLabel = button.dataset.paPrevLabel || button.textContent || "";
+  button.dataset.paPrevLabel = previousLabel;
+  button.classList.add("pa-loading");
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  if (label) {
+    button.textContent = label;
+  }
+
+  return () => {
+    button.classList.remove("pa-loading");
+    button.disabled = false;
+    button.removeAttribute("aria-busy");
+    if (button.dataset.paPrevLabel) {
+      button.textContent = button.dataset.paPrevLabel;
+      delete button.dataset.paPrevLabel;
+    }
+  };
+}
+
+function paSkeleton(container, lines = 3) {
+  if (!container) {
+    return () => {};
+  }
+
+  const count = Math.max(1, lines | 0 || 3);
+  const nodes = [];
+
+  for (let index = 0; index < count; index += 1) {
+    const row = document.createElement("span");
+    row.className = "pa-skeleton";
+    row.style.width = `${68 + ((index * 11) % 24)}%`;
+    container.appendChild(row);
+    nodes.push(row);
+  }
+
+  return () => {
+    nodes.forEach((node) => {
+      if (node.parentNode) {
+        node.parentNode.removeChild(node);
+      }
+    });
+  };
+}
+
+function ensurePlannerLoadingSlot() {
+  if (!routeResults || !plannerDayTemplate) {
+    return null;
+  }
+
+  routeResults.innerHTML = "";
+
+  const shell = document.createElement("section");
+  shell.className = "planner-results-shell is-loading";
+
+  const dayCard = plannerDayTemplate.content.firstElementChild.cloneNode(true);
+  dayCard.classList.add("is-loading");
+  dayCard.querySelector(".planner-day-date").textContent = "Planerar dagen";
+  dayCard.querySelector(".planner-day-title").textContent = "Parranda bygger ditt första upplägg";
+  dayCard.querySelector(".planner-day-summary").textContent =
+    "Resultatet landar här så fort rutten är klar.";
+  dayCard.querySelector(".planner-day-outline").innerHTML = "";
+  dayCard.querySelector(".planner-day-signals").hidden = true;
+  dayCard.querySelector(".planner-day-events").hidden = true;
+  dayCard.querySelector(".planner-alt-section").hidden = true;
+  dayCard.querySelector(".planner-primary-route-line").textContent = "Laddar rutt och stopp...";
+
+  const primarySlot = dayCard.querySelector(".planner-primary-slot");
+  shell.appendChild(dayCard);
+  routeResults.appendChild(shell);
+  return primarySlot;
+}
+
+function syncPlannerLoadingSkeleton(isLoading) {
+  if (isLoading) {
+    if (plannerLoadingSkeletonClear) {
+      return;
+    }
+
+    const slot = ensurePlannerLoadingSlot();
+    if (slot) {
+      plannerLoadingSkeletonClear = paSkeleton(slot, 4);
+    }
+    return;
+  }
+
+  if (plannerLoadingSkeletonClear) {
+    plannerLoadingSkeletonClear();
+    plannerLoadingSkeletonClear = null;
+  }
+
+  const loadingShell = routeResults?.querySelector(".planner-results-shell.is-loading");
+  if (loadingShell) {
+    loadingShell.remove();
+  }
+}
+
 function setPlannerLoadingState(isLoading, message = plannerLoadingMessages[0]) {
   const buttons = [routePlanButton, routePlanStickyButton].filter(Boolean);
-  const label = isLoading ? "Planerar din dag..." : "Planera min dag";
+  const label = "Bygger din dag...";
+
+  if (isLoading) {
+    plannerLoadingStops = buttons.map((button) => paLoading(button, label));
+  } else {
+    plannerLoadingStops.forEach((stop) => stop());
+    plannerLoadingStops = [];
+  }
 
   buttons.forEach((button) => {
-    button.disabled = isLoading;
     button.classList.toggle("is-loading", isLoading);
-    button.textContent = label;
   });
 
   if (routeResetButton) {
@@ -5791,6 +5911,7 @@ function setPlannerLoadingState(isLoading, message = plannerLoadingMessages[0]) 
   }
 
   if (isLoading) {
+    syncPlannerLoadingSkeleton(true);
     setPlannerStatusMessage(message, "loading");
     return;
   }
@@ -5799,6 +5920,8 @@ function setPlannerLoadingState(isLoading, message = plannerLoadingMessages[0]) 
     clearInterval(plannerLoadingTimer);
     plannerLoadingTimer = null;
   }
+
+  syncPlannerLoadingSkeleton(false);
 }
 
 function startPlannerLoadingCycle() {
@@ -5859,7 +5982,9 @@ function applyOptimizerMode(mode) {
   updateRouteMatchSummary(
     buildPlannerStyleSummary(`${optimizerModeLabels[mode] || "Optimizer-läget"} är aktivt.`),
   );
-  updatePlannerLaunchSummary(`${optimizerModeLabels[mode] || "Specialläge"} • ${walkingKmTarget.value} km.`);
+  updatePlannerLaunchSummary(
+    `${optimizerModeLabels[mode] || "Specialläge"} • Parranda anpassar dagen efter läget.`,
+  );
 }
 
 function applyBudgetTier(tier) {
@@ -8951,7 +9076,7 @@ routePlannerForm?.addEventListener("submit", async (event) => {
   startPlannerLoadingCycle();
   updateRouteMatchSummary(
     buildPlannerStyleSummary(
-      "Planerar dagar utifrån datum, gångmål, väder, live-events och dina preferenser...",
+      `Bygger din dag i ${plannerDisplayCityLabel} utifrån datum, känsla och dina val...`,
     ),
   );
 
@@ -9060,11 +9185,15 @@ heroBlitzCurrentOriginButton?.addEventListener("click", () => {
 });
 
 heroPlannerButton?.addEventListener("click", () => {
-  openPlannerModal();
+  openPlannerModalForMode(plannerAutoMode);
 });
 
 routePlannerOpenButton?.addEventListener("click", () => {
-  openPlannerModal();
+  openPlannerModalForMode(plannerAutoMode);
+});
+
+routePlannerManualButton?.addEventListener("click", () => {
+  openPlannerModalForMode(plannerManualMode);
 });
 
 closePlannerModalButton?.addEventListener("click", () => {

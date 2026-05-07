@@ -46,33 +46,9 @@
               <span>__PARRANDA_BRAND_SUBTITLE__</span>
             </div>
           </div>
-          <a
-            class="topbar-link"
-            href="__PARRANDA_CITY_MAP_URL__"
-            target="_blank"
-            rel="noreferrer"
-            >Karta</a
-          >
         </nav>
 
         <section class="hero-content">
-          <div class="hero-copy">
-            <p id="heroEyebrow" class="eyebrow">__PARRANDA_CITY_EYEBROW__</p>
-            <h1 id="heroHeadline">__PARRANDA_HERO_HEADLINE__</h1>
-            <p id="heroLead" class="lead">
-              __PARRANDA_HERO_LEAD__
-            </p>
-
-            <div class="hero-actions">
-              <button id="heroLiveButton" class="hero-live-button" type="button">
-                <span class="hero-live-dot" aria-hidden="true"></span>
-                <span>__PARRANDA_HERO_LIVE_LABEL__</span>
-              </button>
-              <button class="ghost-button install-button" id="installButton" hidden>
-                Installera appen
-              </button>
-            </div>
-          </div>
           <section class="planner-launch-strip hero-planner-starter">
             <div class="planner-launch-copy">
               <div>
@@ -91,6 +67,9 @@
             <div class="planner-launch-actions">
               <button id="routePlannerOpenButton" class="primary-button" type="button">
                 __PARRANDA_PLANNER_CTA_LABEL__
+              </button>
+              <button id="routePlannerManualButton" class="secondary-button" type="button" hidden>
+                Jag vill styra själv
               </button>
               <p id="plannerLaunchMicrocopy" class="planner-launch-micro">__PARRANDA_PLANNER_MICROCOPY__</p>
             </div>
@@ -131,7 +110,7 @@
             </div>
             <div class="hero-panel-actions">
               <button id="heroBlitzApplyButton" class="secondary-button" type="button" __PARRANDA_WILDCARD_ACTIONS_HIDDEN__>
-                Kör nu
+                Kör Blitz
               </button>
               <button
                 id="heroBlitzShuffleButton"
@@ -145,10 +124,18 @@
             </div>
           </div>
         </section>
+
+        <button class="ghost-button install-button" id="installButton" hidden>
+          Installera appen
+        </button>
       </header>
 
       <main>
         <nav class="tab-nav" aria-label="Appsektioner">
+          <button id="heroLiveButton" class="tab-button utility-tab-button hero-live-button" type="button">
+            <span class="hero-live-dot" aria-hidden="true"></span>
+            <span>Pulse</span>
+          </button>
           <button class="tab-button" data-tab="districts">Stadsdelar</button>
           <button class="tab-button" data-tab="overview">Karta</button>
         </nav>
@@ -206,7 +193,7 @@
               </p>
             </div>
             <div class="favorites-actions">
-              <button class="primary-button" id="showFavoritesButton">
+              <button class="primary-button pa-secondary" id="showFavoritesButton">
                 Visa sparade
               </button>
               <button class="ghost-button" id="showAllButton">Visa alla igen</button>
@@ -367,7 +354,7 @@
           <section id="cityPulseTeaser" class="city-pulse-teaser" aria-live="polite">
             <div class="city-pulse-live">
               <span class="city-pulse-live-dot" aria-hidden="true"></span>
-              <p class="city-pulse-live-label">JUST NU</p>
+              <p class="city-pulse-live-label">PULSE</p>
             </div>
             <div class="city-pulse-teaser-copy">
               <p id="cityPulseTeaserLabel" class="city-pulse-edition-label">Passar din dag</p>
@@ -393,7 +380,7 @@
                 <p class="eyebrow">§ PLANERARE</p>
                 <h2 id="plannerModalTitle">Planera dagen</h2>
                 <p class="planner-modal-lead">
-                  Datum, vibe, gångmål och gärna var du bor. Resten sätter Parranda ihop.
+                  Välj datum och känsla. Parranda sätter ihop dagen runt det som passar bäst.
                 </p>
                 <div class="planner-mode-switch" role="tablist" aria-label="Planeringsläge">
                   <button
@@ -403,7 +390,7 @@
                     data-planner-mode="auto"
                     aria-selected="true"
                   >
-                    Parranda planerar allt
+                    Låt Parranda planera
                   </button>
                   <button
                     id="plannerModeManualButton"
@@ -416,7 +403,7 @@
                   </button>
                 </div>
                 <p id="plannerModeLead" class="planner-mode-lead">
-                  Börja med kärnvalen. Exakta ankare kommer först när du själv vill styra mer.
+                  Börja lätt. Datum och känsla räcker för att Parranda ska komma igång.
                 </p>
               </div>
               <button id="closePlannerModalButton" class="ghost-button" type="button">Stäng</button>
@@ -425,12 +412,12 @@
               <div class="route-builder-grid">
                 <article class="planner-panel planner-panel-wide planner-panel-priority planner-step-panel">
                   <div class="planner-panel-head">
-                    <p class="eyebrow">STEG 1 • KÄRNVAL</p>
+                    <p class="eyebrow">DET VIKTIGASTE</p>
                     <span id="routePlannerModeChip" class="planner-default-note">
-                      Försöker ansluta till ruttmotorn
+                      Startar smart planerare
                     </span>
                   </div>
-                  <p class="planner-panel-copy">Välj datum, gångmål och känsla. Basen är valfri.</p>
+                  <p class="planner-panel-copy">Välj datum och känsla först. Du kan justera längd och detaljer längre ner om du vill.</p>
                   <div class="planner-inline-grid">
                     <label class="search-box route-lab-field">
                       <span>Från datum</span>
@@ -443,17 +430,17 @@
                     <label class="search-box route-lab-field">
                       <span>Avstånd</span>
                       <select id="distanceModeSelect">
-                        <option value="soft_target">Mjukt km-mål</option>
+                        <option value="soft_target">Ungefärlig längd</option>
                         <option value="no_limit">Spelar ingen roll</option>
                       </select>
                     </label>
                     <label class="search-box route-lab-field">
-                      <span>Mjukt gångmål i km</span>
+                      <span>Gånglängd i km</span>
                       <input id="walkingKmTarget" type="range" min="4" max="18" step="1" value="9" />
                     </label>
                     <div class="planner-km-readout">
                       <strong id="walkingKmValue">9 km</strong>
-                      <p>Motorn får avvika lite om dagen blir märkbart bättre.</p>
+                      <p>Ungefärlig gånglängd. Parranda kan justera om dagen blir tydligt bättre.</p>
                     </div>
                   </div>
                   <div class="planner-preferences">
@@ -474,8 +461,8 @@
                       <div>
                         <p class="eyebrow">AUTO-LÄGE</p>
                         <p class="planner-panel-copy">
-                          Lägg till var du bor om du vill. Parranda använder det som mjuk bas,
-                          inte som låst dagsstart.
+                          Lägg till var du bor om du vill. Parranda använder det som en mjuk
+                          utgångspunkt, inte som en låst dagsstart.
                         </p>
                       </div>
                     </div>
@@ -489,7 +476,7 @@
                       </select>
                     </label>
                     <p id="homeBaseModeHint" class="planner-mode-help">
-                      Lämna öppet om du vill att Parranda ska hitta en naturlig boendebas själv.
+                      Lämna öppet om du vill att Parranda ska hitta ett naturligt hemkvarter själv.
                     </p>
                     <label class="search-box route-lab-field" data-mode-field="home-base-preset" hidden>
                       <span>Välj bas</span>
@@ -535,13 +522,13 @@
                 >
                   <summary class="planner-fine-tune-summary">
                     <div>
-                      <p class="eyebrow">STEG 2 • STYR MER EXAKT</p>
+                      <p class="eyebrow">STYR MER EXAKT</p>
                       <p class="planner-panel-copy">
                         Exakt start och slut är bara för dig som vill styra rutten hårdare.
                       </p>
                     </div>
                     <p id="plannerAdvancedSummary" class="planner-advanced-meta">
-                      Auto-läge är aktivt. Parranda väljer både öppning och final själv.
+                      Auto-läge är aktivt. Parranda väljer både öppning och avslut själv.
                     </p>
                   </summary>
 
@@ -608,7 +595,7 @@
                           </select>
                         </label>
                         <p id="endModeHint" class="planner-mode-help">
-                          Parranda väljer en tydlig final om du inte låser slutpunkten.
+                          Parranda väljer ett tydligt avslut om du inte låser slutpunkten.
                         </p>
                         <label class="search-box route-lab-field" data-mode-field="end-preset" hidden>
                           <span>Välj kvarter</span>
@@ -698,11 +685,10 @@
           <section class="section-heading compact-heading">
             <div>
               <p class="eyebrow">DINA RUTTER</p>
-              <h2>Här är din dag först</h2>
+              <h2>Börja här</h2>
             </div>
             <p class="section-note">
-              Huvudrutten ska kännas följbar direkt. Alternativ ligger kvar som extra upplägg, inte
-              som konkurrenter.
+              Det här är rutten Parranda hade valt först. Alternativen ligger kvar om du vill byta rytm.
             </p>
           </section>
           <p id="routeFallbackNote" class="route-fallback-note" hidden>
@@ -789,7 +775,7 @@
     <template id="spotlightCardTemplate">
       <article class="spotlight-card">
         <p class="spotlight-kicker"></p>
-        <h3></h3>
+        <h3 class="pa-stop-name"></h3>
         <p class="spotlight-description"></p>
         <div class="spotlight-meta">
           <span class="spotlight-area"></span>
@@ -808,7 +794,7 @@
           <span class="area-pill"></span>
           <span class="crowd-pill"></span>
         </div>
-        <h3></h3>
+        <h3 class="pa-stop-name"></h3>
         <p class="description"></p>
         <div class="meta-row">
           <span class="best-for"></span>
@@ -829,7 +815,7 @@
           <span class="category-pill"></span>
           <span class="score-pill"></span>
         </div>
-        <h3></h3>
+        <h3 class="pa-stop-name"></h3>
         <p class="description"></p>
         <div class="meta-stack">
           <p class="bar-focus"></p>
@@ -845,7 +831,7 @@
         <span class="timeline-time"></span>
         <div class="timeline-card">
           <p class="spotlight-kicker"></p>
-          <h3></h3>
+          <h3 class="pa-stop-name"></h3>
           <p class="description"></p>
           <p class="timeline-note"></p>
         </div>
@@ -858,7 +844,7 @@
           <span class="category-pill route-vibe"></span>
           <span class="score-pill route-length"></span>
         </div>
-        <h3></h3>
+        <h3 class="pa-stop-name"></h3>
         <p class="route-summary"></p>
         <p class="route-why"></p>
         <p class="route-path"></p>
@@ -902,7 +888,7 @@
         <div class="planner-day-top">
           <div>
             <p class="eyebrow planner-day-date"></p>
-            <h3 class="planner-day-title"></h3>
+            <h3 class="planner-day-title pa-stop-name"></h3>
           </div>
           <span class="map-badge planner-day-badge">Din huvudrutt</span>
         </div>
