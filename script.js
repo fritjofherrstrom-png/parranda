@@ -8871,9 +8871,14 @@ function buildPlannerIntentNotes(visibilityState) {
 
   if (firstLaterIntentKey) {
     const dayIndex = visibilityState.firstDayIndexByKey[firstLaterIntentKey];
+    const dayVisibility = Number.isInteger(dayIndex) ? visibilityState.perDay[dayIndex] || null : null;
+    const laterIntentLabel = getPlannerIntentLabel(firstLaterIntentKey);
+    const laterIntentAlreadyVisible = Boolean(
+      dayVisibility?.labels?.some((label) => label === laterIntentLabel),
+    );
 
-    if (Number.isInteger(dayIndex) && dayIndex > 0) {
-      notes.push(`${getPlannerIntentLabel(firstLaterIntentKey)} syns tydligast på Dag ${dayIndex + 1}.`);
+    if (Number.isInteger(dayIndex) && dayIndex > 0 && !laterIntentAlreadyVisible) {
+      notes.push(`${laterIntentLabel} syns tydligast på Dag ${dayIndex + 1}.`);
     }
   }
 
