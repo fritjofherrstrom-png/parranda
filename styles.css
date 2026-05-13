@@ -38,6 +38,10 @@ body.is-planner-open {
   overflow: hidden;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body::before {
   content: "";
   position: fixed;
