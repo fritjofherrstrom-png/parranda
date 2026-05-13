@@ -7258,7 +7258,11 @@ function normalizeRouteResultCopy(text = "") {
 
   return String(text)
     .replace(/^En tydlig båge/iu, "En tydlig rutt")
-    .replace(/\bi bågen\b/giu, "i rutten");
+    .replace(/\bi bågen\b/giu, "i rutten")
+    .split(/(?<=[.!?])\s+/u)
+    .filter((sentence) => !/\bbåge\b|benläng|gångben|heuristisk routing/iu.test(sentence))
+    .join(" ")
+    .trim();
 }
 
 const usefulRouteSignalLabels = {

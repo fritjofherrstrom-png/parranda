@@ -21,6 +21,7 @@ test("route result cleanup removes the old internal result labels", () => {
   assert.doesNotMatch(routeResultSlice, /Benlängderna är överlag rimliga/);
   assert.match(routeResultSlice, /normalizeRouteResultCopy/);
   assert.match(routeResultSlice, /En tydlig rutt/);
+  assert.match(routeResultSlice, /benläng\|gångben\|heuristisk routing/);
 });
 
 test("route result cleanup keeps only compact human-facing route signals", () => {
