@@ -1434,6 +1434,10 @@ function tf(key, replacements = {}, fallback = "") {
   );
 }
 
+function formatApproxKm(distanceKm) {
+  return isEnglishUi ? `about ${distanceKm} km` : `ca ${distanceKm} km`;
+}
+
 const routeGuidePrintButton = document.getElementById("routeGuidePrintButton");
 const routeGuideShareButton = document.getElementById("routeGuideShareButton");
 const routeGuideDirectionsLink = document.getElementById("routeGuideDirectionsLink");
@@ -3198,7 +3202,7 @@ function buildBlitzRouteGuideView(result) {
   return {
     title: move.title,
     vibe: "Blitz",
-    length: `ca ${move.route.estimated_km} km`,
+    length: formatApproxKm(move.route.estimated_km),
     summary: move.why_now,
     why: [...(move.contextual_reasons || []), move.what_to_do_after].filter(Boolean).join(" "),
     path:
@@ -7552,7 +7556,7 @@ function createApiRouteView(
     id: route.id,
     title: route.title,
     vibe: label,
-    length: `ca ${route.estimated_km} km`,
+    length: formatApproxKm(route.estimated_km),
     summary: normalizeRouteResultCopy(route.summary),
     why: normalizeRouteResultCopy(route.why_recommended),
     visibleWhy: buildVisibleWhy(route),
