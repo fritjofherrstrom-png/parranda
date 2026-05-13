@@ -5214,11 +5214,22 @@ function updatePlannerAdvancedSummary() {
   const pieces = [];
 
   if (activePlannerMode === plannerManualMode) {
-    pieces.push(`Start: ${getPlannerPointSummary("start")}`);
-    pieces.push(`Slut: ${getPlannerPointSummary("end")}`);
+    const startSummary = getPlannerPointSummary("start");
+    const endSummary = getPlannerPointSummary("end");
+
+    if (startSummary === "Parranda väljer" && endSummary === "Parranda väljer") {
+      pieces.push("Start och slut väljs automatiskt");
+    } else {
+      pieces.push(`Start: ${startSummary}`);
+      pieces.push(`Slut: ${endSummary}`);
+    }
   } else {
-    pieces.push("Parranda väljer");
-    pieces.push(`Där du bor: ${getPlannerPointSummary("home_base")}`);
+    const homeBaseSummary = getPlannerPointSummary("home_base");
+    pieces.push(
+      homeBaseSummary === "Parranda väljer"
+        ? "Start och slut väljs automatiskt"
+        : `Där du bor: ${homeBaseSummary}`,
+    );
   }
 
   const activeBudgetLabel = getBudgetTierLabel(activeBudgetTier);
