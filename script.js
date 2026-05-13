@@ -5319,29 +5319,26 @@ function buildPlanningResultSummary(response) {
   const usedAutoEnd = activePlannerMode === plannerAutoMode || endModeSelect?.value === plannerAutoMode;
   const resolvedStart = response.resolved_start?.label || "en smart start";
   const resolvedEnd = response.resolved_end?.label || "en tydlig slutpunkt";
-  const resolvedHomeBase = response.resolved_home_base?.label || null;
 
   if (activePlannerMode === plannerAutoMode) {
-    if (resolvedHomeBase) {
-      return `${plannedCount} dag(ar) klara. ${resolvedHomeBase} sätter tonen och Dag 1 visas först.`;
-    }
-
-    return `${plannedCount} dag(ar) klara. Parranda satte ihop upplägget och visar Dag 1 först.`;
+    return plannedCount > 1 ? `${plannedCount} dagar planerade.` : "Din plan är klar.";
   }
 
   if (usedAutoStart && usedAutoEnd) {
-    return `${plannedCount} dag(ar) klara. Parranda valde öppning och avslut och visar huvudrutten först.`;
+    return plannedCount > 1 ? `${plannedCount} dagar planerade.` : "Din plan är klar.";
   }
 
   if (!usedAutoStart && usedAutoEnd) {
-    return `${plannedCount} dag(ar) klara från ${resolvedStart}. Parranda satte avslutet och visar huvudrutten först.`;
+    return plannedCount > 1 ? `${plannedCount} dagar planerade från ${resolvedStart}.` : "Din plan är klar.";
   }
 
   if (usedAutoStart && !usedAutoEnd) {
-    return `${plannedCount} dag(ar) klara med ${resolvedEnd} som slutpunkt. Parranda valde öppningen och visar huvudrutten först.`;
+    return plannedCount > 1 ? `${plannedCount} dagar planerade med ${resolvedEnd} som slutpunkt.` : "Din plan är klar.";
   }
 
-  return `${plannedCount} dag(ar) klara mellan ${resolvedStart} och ${resolvedEnd}. Huvudrutten visas först, alternativ efteråt.`;
+  return plannedCount > 1
+    ? `${plannedCount} dagar planerade mellan ${resolvedStart} och ${resolvedEnd}.`
+    : "Din plan är klar.";
 }
 
 function focusPlannerResults() {
@@ -7235,13 +7232,7 @@ function formatLegMinutes(minutes) {
 }
 
 function buildLegSummary(route) {
-  const legs = Array.isArray(route?.legs) ? route.legs : [];
-
-  if (!legs.length) {
-    return null;
-  }
-
-  return route?.leg_fit_note || null;
+  return null;
 }
 
 function stopSourceLabel(stop) {
@@ -7258,6 +7249,16 @@ function stopSourceLabel(stop) {
 
 function buildAnchorExplanation(route) {
   return null;
+}
+
+function normalizeRouteResultCopy(text = "") {
+  if (!text) {
+    return "";
+  }
+
+  return String(text)
+    .replace(/^En tydlig båge/iu, "En tydlig rutt")
+    .replace(/\bi bågen\b/giu, "i rutten");
 }
 
 const usefulRouteSignalLabels = {
@@ -7364,7 +7365,7 @@ function buildUsefulRouteSignals(route = {}) {
 }
 
 function buildVisibleWhy(route) {
-  return takeLeadSentences(route.why || route.summary, 2, 220);
+  return takeLeadSentences(normalizeRouteResultCopy(route.why || route.summary), 2, 220);
 }
 
 function createApiRouteView(
@@ -7384,8 +7385,8 @@ function createApiRouteView(
     title: route.title,
     vibe: label,
     length: `ca ${route.estimated_km} km`,
-    summary: route.summary,
-    why: route.why_recommended,
+    summary: normalizeRouteResultCopy(route.summary),
+    why: normalizeRouteResultCopy(route.why_recommended),
     visibleWhy: buildVisibleWhy(route),
     path: `${route.start_label} -> ${stopLabels} -> ${route.end_label}`,
     anchor: route.start_label ? `Start: ${route.start_label}` : null,
@@ -7403,7 +7404,7 @@ function createApiRouteView(
       label: stop.label,
       area: stop.area,
       tagSummary: stop.tags.slice(0, 3).join(" • "),
-      summary: stop.summary || stop.vibe || stop.tags.join(", "),
+      summary: normalizeRouteResultCopy(stop.summary || stop.vibe || stop.tags.join(", ")),
       text: `${index + 1}. ${stop.label} • ${stop.area} • ${stop.tags.join(", ")}`,
       query: stop.drawer_query || stop.label,
       isLiveEvent: Boolean(stop.is_live_event),
@@ -7450,7 +7451,7 @@ function createApiRouteView(
       order: index + 1,
       label: stop.label,
       area: stop.area,
-      summary: stop.summary || stop.vibe || stop.tags.join(", "),
+      summary: normalizeRouteResultCopy(stop.summary || stop.vibe || stop.tags.join(", ")),
       meta: [
         stop.is_live_event ? "Live just nu" : null,
         stop.best_time ? `Bäst: ${stop.best_time}` : null,

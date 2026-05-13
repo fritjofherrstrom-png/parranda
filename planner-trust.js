@@ -8,7 +8,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function plannerTrustFactory() {
   "use strict";
 
-  const LATEST_PLANNER_PLAN_SCHEMA_VERSION = 1;
+  const LATEST_PLANNER_PLAN_SCHEMA_VERSION = 2;
   const DEFAULT_LATEST_PLANNER_PLAN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
   function isPlainObject(value) {

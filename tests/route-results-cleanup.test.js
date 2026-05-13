@@ -5,14 +5,22 @@ const path = require("node:path");
 
 const scriptPath = path.join(__dirname, "..", "script.js");
 const scriptSource = fs.readFileSync(scriptPath, "utf8");
+const routeResultSlice = scriptSource.slice(
+  scriptSource.indexOf("function buildLegSummary"),
+  scriptSource.indexOf("function fillGuidePills"),
+);
 
 test("route result cleanup removes the old internal result labels", () => {
-  assert.doesNotMatch(scriptSource, /Kuraterat stopp i din dag\./);
-  assert.doesNotMatch(scriptSource, /Kuraterat stopp i din rutt\./);
-  assert.doesNotMatch(scriptSource, /Kuraterat stopp i fallback-läget\./);
-  assert.doesNotMatch(scriptSource, /Heuristisk gånglogik/);
-  assert.doesNotMatch(scriptSource, /Geo-fit/);
+  assert.doesNotMatch(routeResultSlice, /Kuraterat stopp i din dag\./);
+  assert.doesNotMatch(routeResultSlice, /Kuraterat stopp i din rutt\./);
+  assert.doesNotMatch(routeResultSlice, /Kuraterat stopp i fallback-läget\./);
+  assert.doesNotMatch(routeResultSlice, /Heuristisk gånglogik/);
+  assert.doesNotMatch(routeResultSlice, /Geo-fit/);
   assert.doesNotMatch(scriptSource, /return "Sedan";/);
+  assert.doesNotMatch(scriptSource, /2 dag\(ar\) klara/);
+  assert.doesNotMatch(routeResultSlice, /Benlängderna är överlag rimliga/);
+  assert.match(routeResultSlice, /normalizeRouteResultCopy/);
+  assert.match(routeResultSlice, /En tydlig rutt/);
 });
 
 test("route result cleanup keeps only compact human-facing route signals", () => {
