@@ -2196,16 +2196,7 @@ function applyPlannerIntentKeySelection(intentKeys = [], options = {}) {
   updateRouteMatchSummary(buildPlannerStyleSummary());
 }
 
-function normalizePlannerIntentSelectionAfterChange(changedInput) {
-  if (
-    plannerIntentSelectionMode === "default_seed" &&
-    changedInput?.checked &&
-    !defaultPlannerIntentKeySet.has(changedInput.value)
-  ) {
-    setSelectedIntentKeys([changedInput.value]);
-    return;
-  }
-
+function normalizePlannerIntentSelectionAfterChange() {
   const selectedKeys = getSelectedIntentKeys();
 
   if (!selectedKeys.length) {
