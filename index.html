@@ -392,7 +392,7 @@
                 <p class="eyebrow">§ PLANERARE</p>
                 <h2 id="plannerModalTitle">Planera dagen</h2>
                 <p class="planner-modal-lead">
-                  Välj datum och känsla. Parranda sätter ihop dagen runt det som passar bäst.
+                  Välj datum och känsla. Parranda kan välja start och slut åt dig, eller så styr du själv.
                 </p>
                 <div class="planner-mode-switch" role="tablist" aria-label="Planeringsläge">
                   <button
@@ -402,7 +402,7 @@
                     data-planner-mode="auto"
                     aria-selected="true"
                   >
-                    Låt Parranda planera
+                    Låt Parranda välja
                   </button>
                   <button
                     id="plannerModeManualButton"
@@ -415,7 +415,7 @@
                   </button>
                 </div>
                 <p id="plannerModeLead" class="planner-mode-lead">
-                  Börja lätt. Datum och känsla räcker för att Parranda ska komma igång.
+                  Snabbast: välj datum, känsla och eventuell plats där du bor.
                 </p>
               </div>
               <button id="closePlannerModalButton" class="ghost-button" type="button">Stäng</button>
@@ -426,10 +426,10 @@
                   <div class="planner-panel-head">
                     <p class="eyebrow">DET VIKTIGASTE</p>
                     <span id="routePlannerModeChip" class="planner-default-note">
-                      Startar smart planerare
+                      Parranda väljer start och slut
                     </span>
                   </div>
-                  <p class="planner-panel-copy">Välj datum och känsla först. Du kan justera längd och detaljer längre ner om du vill.</p>
+                  <p class="planner-panel-copy">Datum, känsla och gånglängd räcker. Lägg till hotell eller område bara om det hjälper.</p>
                   <div class="planner-inline-grid">
                     <label class="search-box route-lab-field">
                       <span>Från datum</span>
@@ -471,42 +471,43 @@
                   <section id="plannerHomeBaseShell" class="planner-home-base-shell">
                     <div class="planner-panel-head">
                       <div>
-                        <p class="eyebrow">AUTO-LÄGE</p>
+                        <p class="eyebrow">DÄR DU BOR</p>
                         <p class="planner-panel-copy">
-                          Lägg till var du bor om du vill. Parranda använder det som en mjuk
-                          utgångspunkt, inte som en låst dagsstart.
+                          Hotell eller område är valfritt. Parranda använder det som mjuk kontext,
+                          inte som exakt startpunkt.
                         </p>
                       </div>
+                      <span class="planner-default-note">Valfritt</span>
                     </div>
                     <label class="search-box route-lab-field">
-                      <span>Hur ska boendebasen väljas?</span>
+                      <span>Hotell eller område</span>
                       <select id="homeBaseModeSelect">
-                        <option value="auto">Låt Parranda välja</option>
-                        <option value="preset">Kvarter</option>
+                        <option value="auto">Parranda väljer</option>
+                        <option value="preset">Välj område</option>
                         <option value="current_location">Min plats</option>
-                        <option value="custom">Egen adress</option>
+                        <option value="custom">Hotell/adress</option>
                       </select>
                     </label>
                     <p id="homeBaseModeHint" class="planner-mode-help">
-                      Lämna öppet om du vill att Parranda ska hitta ett naturligt hemkvarter själv.
+                      Lämna öppet om du vill att Parranda väljer en naturlig utgångspunkt själv.
                     </p>
                     <label class="search-box route-lab-field" data-mode-field="home-base-preset" hidden>
-                      <span>Välj bas</span>
+                      <span>Välj område</span>
                       <select id="homeBasePresetSelect" hidden></select>
                       <div
                         id="homeBaseDistrictButtons"
                         class="planner-district-grid"
                         role="listbox"
-                        aria-label="Boendebas"
+                        aria-label="Hotell eller område"
                       ></div>
                       <div id="homeBaseDistrictSubButtons" class="planner-district-subgrid" hidden></div>
                     </label>
                     <label class="search-box route-lab-field" data-mode-field="home-base-custom" hidden>
-                      <span>Skriv hotell, adress eller kvarter</span>
+                      <span>Skriv hotell, adress eller område</span>
                       <input
                         id="homeBaseCustomInput"
                         type="text"
-                        placeholder="t.ex. stationen, ett torg eller hotellet"
+                        placeholder="t.ex. hotellet, Trastevere eller nära Termini"
                       />
                     </label>
                     <div class="route-lab-actions" hidden>
@@ -534,13 +535,13 @@
                 >
                   <summary class="planner-fine-tune-summary">
                     <div>
-                      <p class="eyebrow">STYR MER EXAKT</p>
+                      <p class="eyebrow">MANUELL START OCH SLUT</p>
                       <p class="planner-panel-copy">
-                        Exakt start och slut är bara för dig som vill styra rutten hårdare.
+                        Använd bara om du vill låsa var dagen börjar eller slutar.
                       </p>
                     </div>
                     <p id="plannerAdvancedSummary" class="planner-advanced-meta">
-                      Auto-läge är aktivt. Parranda väljer både öppning och avslut själv.
+                      Parranda väljer start och slut om du lämnar detta öppet.
                     </p>
                   </summary>
 
@@ -548,23 +549,23 @@
                     <div id="plannerManualShell" class="planner-anchor-grid" hidden>
                       <article class="planner-panel planner-panel-subtle planner-anchor-card">
                         <div class="planner-panel-head">
-                          <p class="eyebrow">EXAKT START</p>
+                          <p class="eyebrow">STARTA HÄR</p>
                           <span class="planner-default-note">Valfritt</span>
                         </div>
                         <label class="search-box route-lab-field">
-                          <span>Hur ska starten väljas?</span>
+                          <span>Startpunkt</span>
                           <select id="startModeSelect">
-                            <option value="auto">Låt Parranda välja</option>
-                            <option value="preset">Kvarter</option>
+                            <option value="auto">Parranda väljer</option>
+                            <option value="preset">Välj område</option>
                             <option value="current_location">Min plats</option>
-                            <option value="custom">Egen adress</option>
+                            <option value="custom">Egen plats</option>
                           </select>
                         </label>
                         <p id="startModeHint" class="planner-mode-help">
                           Parranda väljer en smart öppning om du inte låser den själv.
                         </p>
                         <label class="search-box route-lab-field" data-mode-field="start-preset" hidden>
-                          <span>Välj kvarter</span>
+                          <span>Välj startområde</span>
                           <select id="startPresetSelect" hidden></select>
                           <div
                             id="startDistrictButtons"
@@ -575,7 +576,7 @@
                           <div id="startDistrictSubButtons" class="planner-district-subgrid" hidden></div>
                         </label>
                         <label class="search-box route-lab-field" data-mode-field="start-custom" hidden>
-                          <span>Skriv adress eller plats</span>
+                          <span>Skriv startplats</span>
                           <input
                             id="startCustomInput"
                             type="text"
@@ -594,23 +595,23 @@
 
                       <article class="planner-panel planner-panel-subtle planner-anchor-card">
                         <div class="planner-panel-head">
-                          <p class="eyebrow">EXAKT SLUT</p>
+                          <p class="eyebrow">SLUTA HÄR</p>
                           <span class="planner-default-note">Valfritt</span>
                         </div>
                         <label class="search-box route-lab-field">
-                          <span>Hur ska slutet väljas?</span>
+                          <span>Slutpunkt</span>
                           <select id="endModeSelect">
-                            <option value="auto">Låt Parranda välja</option>
-                            <option value="preset">Kvarter</option>
+                            <option value="auto">Parranda väljer</option>
+                            <option value="preset">Välj område</option>
                             <option value="current_location">Min plats</option>
-                            <option value="custom">Egen adress</option>
+                            <option value="custom">Egen plats</option>
                           </select>
                         </label>
                         <p id="endModeHint" class="planner-mode-help">
                           Parranda väljer ett tydligt avslut om du inte låser slutpunkten.
                         </p>
                         <label class="search-box route-lab-field" data-mode-field="end-preset" hidden>
-                          <span>Välj kvarter</span>
+                          <span>Välj slutområde</span>
                           <select id="endPresetSelect" hidden></select>
                           <div
                             id="endDistrictButtons"
@@ -621,7 +622,7 @@
                           <div id="endDistrictSubButtons" class="planner-district-subgrid" hidden></div>
                         </label>
                         <label class="search-box route-lab-field" data-mode-field="end-custom" hidden>
-                          <span>Skriv adress eller plats</span>
+                          <span>Skriv slutplats</span>
                           <input
                             id="endCustomInput"
                             type="text"
