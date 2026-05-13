@@ -2193,6 +2193,17 @@ function normalizeDayProfile(dayProfile = "peak") {
   return ["light", "peak", "variation", "final"].includes(dayProfile) ? dayProfile : "peak";
 }
 
+const noLimitStopBudgetByProfile = {
+  peak: 6,
+  variation: 5,
+  light: 4,
+  final: 4,
+};
+
+function noLimitStopBudget(dayProfile = "peak") {
+  return noLimitStopBudgetByProfile[normalizeDayProfile(dayProfile)] || noLimitStopBudgetByProfile.peak;
+}
+
 function choosePrimaryDayProfile({
   dateIndex = 0,
   totalDates = 1,
@@ -2244,17 +2255,7 @@ function desiredStopCount(poolSize, targetKm, distanceMode, dayProfile = "peak")
   const normalizedProfile = normalizeDayProfile(dayProfile);
 
   if (distanceMode === "no_limit") {
-    const noLimitBase = Math.min(poolSize, 6);
-
-    if (normalizedProfile === "light" || normalizedProfile === "final") {
-      return Math.max(3, noLimitBase - 1);
-    }
-
-    if (normalizedProfile === "peak") {
-      return Math.min(poolSize, noLimitBase + 1);
-    }
-
-    return noLimitBase;
+    return Math.min(poolSize, noLimitStopBudget(normalizedProfile));
   }
 
   let baseCount;

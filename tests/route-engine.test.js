@@ -818,6 +818,44 @@ test("day profile light bygger en lättare dag än peak med samma template", () 
   assert.ok(lightRoute.main_stops.length < peakRoute.main_stops.length);
 });
 
+test("no-limit använder en dold stoppbudget så flexibelt avstånd inte blir obegränsat", () => {
+  const template = routeTemplates.find((entry) => entry.id === "south-loop");
+  const start = { label: "Trastevere", lat: 41.8885, lng: 12.4678 };
+  const end = { label: "Trastevere", lat: 41.8885, lng: 12.4678 };
+
+  assert.ok(template);
+
+  const peakRoute = buildRouteFromTemplate(
+    template,
+    start,
+    end,
+    14,
+    ["öl", "vin", "mat", "hidden gems", "nattliv", "kväll"],
+    "bar-hop",
+    "party",
+    "no_limit",
+    [],
+    { dayProfile: "peak" },
+  );
+
+  const finalRoute = buildRouteFromTemplate(
+    template,
+    start,
+    end,
+    14,
+    ["öl", "vin", "mat", "hidden gems", "nattliv", "kväll"],
+    "bar-hop",
+    "party",
+    "no_limit",
+    [],
+    { dayProfile: "final" },
+  );
+
+  assert.ok(peakRoute.main_stops.length <= 6);
+  assert.ok(finalRoute.main_stops.length <= 4);
+  assert.ok(finalRoute.main_stops.length < peakRoute.main_stops.length);
+});
+
 test("alternativrutterna får ofta annan day profile än huvudrutten", async () => {
   global.fetch = createWeatherFetch({
     "2026-04-19": 0,
