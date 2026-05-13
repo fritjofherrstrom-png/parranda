@@ -303,7 +303,7 @@ test("GET / renderar en city-aware app shell med bootstrap", async () => {
     });
 
     assert.equal(response.status, 200);
-    assert.match(response.body, /<body data-city-key="rome" data-city-label="Rom">/);
+    assert.match(response.body, /<body data-city-key="rome" data-city-label="Rom" data-lang="sv">/);
     assert.match(response.body, /window\.__PARRANDA_CITY__ = \{"key":"rome","label":"Rom"/);
     assert.match(response.body, /<title>Parranda \| Personlig City Guide för Rom<\/title>/);
     assert.ok(!response.body.includes('id="heroEyebrow"'));
@@ -343,7 +343,7 @@ test("GET /barcelona avslöjar fallback i app shell bootstrap innan stad 2 finns
     });
 
     assert.equal(response.status, 200);
-    assert.match(response.body, /<body data-city-key="rome" data-city-label="Barcelona">/);
+    assert.match(response.body, /<body data-city-key="rome" data-city-label="Barcelona" data-lang="sv">/);
     assert.match(
       response.body,
       /window\.__PARRANDA_CITY__ = \{"key":"rome","label":"Rom","displayLabel":"Barcelona"/,
@@ -388,7 +388,7 @@ test("GET /test-city renderar en egen city shell utan Rome-fallback", async () =
     });
 
     assert.equal(response.status, 200);
-    assert.match(response.body, /<body data-city-key="test-city" data-city-label="Test City">/);
+    assert.match(response.body, /<body data-city-key="test-city" data-city-label="Test City" data-lang="sv">/);
     assert.match(response.body, /window\.__PARRANDA_CITY__ = \{"key":"test-city","label":"Test City"/);
     assert.match(response.body, /"requestedKey":"test-city"/);
     assert.match(response.body, /"fallbackUsed":false/);
@@ -406,6 +406,118 @@ test("GET /test-city renderar en egen city shell utan Rome-fallback", async () =
     assertPlannerIntentFirstPaint(response.body);
     assert.doesNotMatch(response.body, /Rome on a budget/);
     assert.doesNotMatch(response.body, /La Dolce Vita/);
+    assert.doesNotMatch(response.body, /data-city-label="Rom"/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /rome?lang=en renderar engelsk shell och planner utan att byta interna keys", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during English shell test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestText(server, {
+      path: "/rome?lang=en",
+    });
+
+    assert.equal(response.status, 200);
+    assert.match(response.body, /<html lang="en">/);
+    assert.match(response.body, /<body data-city-key="rome" data-city-label="Rom" data-lang="en">/);
+    assert.match(response.body, /window\.__PARRANDA_LANGUAGE__ = "en"/);
+    assert.match(response.body, /"lang":"en"/);
+    assert.match(response.body, /<title>Parranda \| Personal City Guide for Rom<\/title>/);
+    assert.ok(response.body.includes("Build a day in the city"));
+    assert.ok(response.body.includes("Choose a date and mood. Parranda builds the route."));
+    assert.ok(response.body.includes("Plan the day"));
+    assert.ok(response.body.includes("Let Parranda choose"));
+    assert.ok(response.body.includes("Manual controls"));
+    assert.ok(response.body.includes("WHERE YOU’RE STAYING"));
+    assert.ok(response.body.includes("Hotel or area"));
+    assert.ok(response.body.includes("Optional"));
+    assert.ok(response.body.includes("Plan my day"));
+    assert.match(response.body, /value="food_drink"\s+checked\s*\/>\s*<span>Food &amp; drink<\/span>/);
+    assert.match(response.body, /value="nightlife"\s+checked\s*\/>\s*<span>Nightlife<\/span>/);
+    assert.match(response.body, /value="second_hand"\s*\/>\s*<span>Second hand<\/span>/);
+    assert.match(response.body, /<span class="map-badge planner-day-badge">Main route<\/span>/);
+    assert.doesNotMatch(response.body, /Planera min dag/);
+    assert.doesNotMatch(response.body, /DÄR DU BOR/);
+    assert.doesNotMatch(response.body, /value="food_drink"\s+checked\s*\/>\s*<span>Mat &amp; dryck<\/span>/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /rome?lang=unknown faller säkert tillbaka till svenska", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during language fallback shell test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestText(server, {
+      path: "/rome?lang=zz",
+    });
+
+    assert.equal(response.status, 200);
+    assert.match(response.body, /<html lang="sv">/);
+    assert.match(response.body, /data-lang="sv"/);
+    assert.ok(response.body.includes("Planera dagen"));
+    assert.ok(response.body.includes("Låt Parranda välja"));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /barcelona?lang=en är fortsatt en ärlig engelsk preview", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during English fallback shell test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestText(server, {
+      path: "/barcelona?lang=en",
+    });
+
+    assert.equal(response.status, 200);
+    assert.match(response.body, /<body data-city-key="rome" data-city-label="Barcelona" data-lang="en">/);
+    assert.match(response.body, /<title>Parranda \| Barcelona preview<\/title>/);
+    assert.ok(response.body.includes("Barcelona is still being prepared"));
+    assert.ok(response.body.includes("Planner preview"));
+    assert.ok(response.body.includes("See planner preview"));
+    assert.doesNotMatch(response.body, /Din resa till Rom/);
+    assert.doesNotMatch(response.body, /launched curated Barcelona/i);
+    assert.doesNotMatch(response.body, /Rome-wide/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /test-city?lang=en är fortsatt intern preview på engelska", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during English internal shell test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestText(server, {
+      path: "/test-city?lang=en",
+    });
+
+    assert.equal(response.status, 200);
+    assert.match(response.body, /<body data-city-key="test-city" data-city-label="Test City" data-lang="en">/);
+    assert.match(response.body, /<title>Parranda \| Test City internal preview<\/title>/);
+    assert.ok(response.body.includes("Test City is running in preview"));
+    assert.ok(response.body.includes("Internal planner preview"));
+    assert.ok(response.body.includes("Open preview"));
+    assert.doesNotMatch(response.body, /Din resa till Rom/);
     assert.doesNotMatch(response.body, /data-city-label="Rom"/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
