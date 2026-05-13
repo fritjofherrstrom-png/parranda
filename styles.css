@@ -38,6 +38,10 @@ body.is-planner-open {
   overflow: hidden;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body::before {
   content: "";
   position: fixed;
@@ -4708,6 +4712,16 @@ body.is-printing-guide #routeGuideDrawer {
 .planner-home-base-shell .planner-panel-copy {
   max-width: 42ch;
   font-size: 0.9rem;
+}
+
+.planner-home-base-shell .planner-district-button {
+  min-height: 40px;
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.planner-home-base-shell .planner-district-subgrid {
+  margin-top: 8px;
 }
 
 .planner-fine-tune-details:not([open]) .planner-panel-copy {

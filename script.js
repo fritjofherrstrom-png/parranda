@@ -5214,11 +5214,22 @@ function updatePlannerAdvancedSummary() {
   const pieces = [];
 
   if (activePlannerMode === plannerManualMode) {
-    pieces.push(`Start: ${getPlannerPointSummary("start")}`);
-    pieces.push(`Slut: ${getPlannerPointSummary("end")}`);
+    const startSummary = getPlannerPointSummary("start");
+    const endSummary = getPlannerPointSummary("end");
+
+    if (startSummary === "Parranda väljer" && endSummary === "Parranda väljer") {
+      pieces.push("Start och slut väljs automatiskt");
+    } else {
+      pieces.push(`Start: ${startSummary}`);
+      pieces.push(`Slut: ${endSummary}`);
+    }
   } else {
-    pieces.push("Auto-läge");
-    pieces.push(`Boendebas: ${getPlannerPointSummary("home_base")}`);
+    const homeBaseSummary = getPlannerPointSummary("home_base");
+    pieces.push(
+      homeBaseSummary === "Parranda väljer"
+        ? "Start och slut väljs automatiskt"
+        : `Där du bor: ${homeBaseSummary}`,
+    );
   }
 
   const activeBudgetLabel = getBudgetTierLabel(activeBudgetTier);
@@ -5235,8 +5246,17 @@ function updatePlannerAdvancedSummary() {
   if (plannerModeLead) {
     plannerModeLead.textContent =
       activePlannerMode === plannerManualMode
-        ? "Du styr själv var dagen ska öppna eller landa. Lås bara det som verkligen behöver vara exakt."
-        : "Håll det lätt. Datum och känsla räcker för att Parranda ska bygga dagen.";
+        ? "Du styr själv var dagen ska börja eller sluta. Lås bara det som verkligen behöver vara exakt."
+        : "Håll det lätt. Datum, känsla och eventuell plats där du bor räcker.";
+  }
+
+  if (routePlannerModeChip && !isFallbackRequestedCity && !isInternalCityMode) {
+    routePlannerModeChip.textContent =
+      activePlannerMode === plannerManualMode
+        ? "Manuell start/slut"
+        : routeApiAvailable
+          ? "Parranda väljer start och slut"
+          : "Fallback-läge på";
   }
 
   updatePlannerLaunchSummary();
@@ -5360,8 +5380,8 @@ function updatePlannerLaunchSummary(prefix = "") {
   const summary =
     prefix ||
     (activePlannerMode === plannerManualMode
-      ? `${dateLabel} • Planera en dag i staden. Du kan styra mer i nästa steg.`
-      : `${dateLabel} • Välj datum och känsla. Parranda sätter ihop rutten.`);
+      ? `${dateLabel} • Du styr start och slut. Parranda fyller dagen.`
+      : `${dateLabel} • Parranda väljer start, slut och tempo utifrån din känsla.`);
 
   plannerLaunchSummary.textContent = summary;
 }
@@ -5450,17 +5470,17 @@ function getPlannerModeHint(pointKey, mode) {
 
   if (mode === plannerAutoMode) {
     if (isHomeBase) {
-      return "Lämna öppet om du vill att Parranda ska hitta ett naturligt hemkvarter själv.";
+      return "Hoppa över om platsen inte spelar roll. Parranda väljer en naturlig utgångspunkt.";
     }
 
     return isStart
-      ? "Lämna öppet om du vill att Parranda ska hitta en naturlig öppning själv."
-      : "Lämna öppet om du vill att Parranda ska hitta ett naturligt avslut själv.";
+      ? "Lämna öppet om Parranda får välja bästa öppning."
+      : "Lämna öppet om Parranda får välja bästa avslut.";
   }
 
   if (mode === "current_location") {
     if (isHomeBase) {
-      return "Bra när du vill att dagens logik ska utgå från där du faktiskt bor eller står.";
+      return "Använd om du vill att området där du bor eller står ska väga in mjukt.";
     }
 
     return isStart
@@ -5470,21 +5490,21 @@ function getPlannerModeHint(pointKey, mode) {
 
   if (mode === "custom") {
     if (isHomeBase) {
-      return "Skriv hotell, adress eller stadsdel så använder Parranda det som mjuk utgångspunkt.";
+      return "Skriv hotell, adress eller område. Det styr riktningen men låser inte exakt start.";
     }
 
     return isStart
-      ? `Skriv hotell, station, torg eller annan exakt adress i ${buildUnavailableCityLabel()}.`
-      : "Skriv platsen där du vill landa.";
+      ? "Skriv platsen där dagen ska börja."
+      : "Skriv platsen där dagen ska sluta.";
   }
 
   if (isHomeBase) {
-    return "Välj ett kvarter om du vill att Parranda ska väga in var du bor utan att låsa dagsstarten exakt.";
+    return "Välj område om du vill ge Parranda en mjuk plats att utgå från.";
   }
 
   return isStart
-    ? "Välj ett kvarter om du vill styra öppningen tydligare."
-    : "Välj ett kvarter om du vill styra finalen tydligare.";
+    ? "Välj område om du vill låsa öppningen lite tydligare."
+    : "Välj område om du vill styra var dagen landar.";
 }
 
 function getPlannerDistrictGroups() {
@@ -5705,7 +5725,10 @@ function setRouteApiStatus(isAvailable) {
   }
 
   if (isAvailable) {
-    routePlannerModeChip.textContent = "Smart planerare på";
+    routePlannerModeChip.textContent =
+      activePlannerMode === plannerManualMode
+        ? "Manuell start/slut"
+        : "Parranda väljer start och slut";
     routeFallbackNote.hidden = true;
     return;
   }
@@ -5734,7 +5757,7 @@ function populatePresetSelects() {
     select.innerHTML = "";
     const emptyOption = document.createElement("option");
     emptyOption.value = "";
-    emptyOption.textContent = "Låt Parranda välja";
+    emptyOption.textContent = "Parranda väljer";
     select.appendChild(emptyOption);
 
     plannerOptions.forEach((item) => {
@@ -7706,14 +7729,14 @@ async function buildPlannerPoint(pointKey) {
       const coords = await ensureCurrentLocation();
       return {
         type: "current_location",
-        label: pointKey === "home_base" ? "Min bas" : "Min plats",
+        label: pointKey === "home_base" ? "Där jag bor" : "Min plats",
         lat: coords.lat,
         lng: coords.lng,
       };
     } catch (error) {
       updateRouteMatchSummary(
         pointKey === "home_base"
-          ? "Platsåtkomst nekades eller saknades, så Parranda väljer en smart boendebas i stället."
+          ? "Platsåtkomst nekades eller saknades, så Parranda väljer ett område själv."
           : `Platsåtkomst nekades eller saknades, så Parranda väljer en smart ${pointKey === "start" ? "start" : "final"} i stället.`,
       );
       return { type: plannerAutoMode, label: "Parranda väljer" };
@@ -8328,7 +8351,7 @@ function planFromCurrentDistrictGuide() {
   openPlannerModal();
   updateRouteMatchSummary(
     buildPlannerStyleSummary(
-      `${guide.startLabel} ligger nu som mjuk boendebas. Justera datum, km och smak innan du planerar.`,
+      `${guide.startLabel} vägs in som område där du bor. Justera datum, km och smak innan du planerar.`,
     ),
   );
 }
@@ -9364,7 +9387,7 @@ useCurrentPlaceAsHomeBaseButton?.addEventListener("click", () => {
   setPlannerFieldFromLabel("home_base", selectedPlaceName);
   switchTab("routes");
   updateRouteMatchSummary(
-    `${selectedPlaceName} ligger nu som mjuk boendebas. Parranda bygger dagen runt den energin utan att låsa exakt start.`,
+    `${selectedPlaceName} vägs in som plats där du bor. Det låser inte exakt start.`,
   );
 });
 
@@ -9391,11 +9414,11 @@ useGeolocationAsHomeBaseButton?.addEventListener("click", async () => {
   try {
     await ensureCurrentLocation();
     updateRouteMatchSummary(
-      "Min plats används nu som mjuk boendebas. Om platsåtkomst inte fungerar väljer Parranda en smart bas i stället.",
+      "Min plats vägs in som område där du bor. Om platsåtkomst inte fungerar väljer Parranda själv.",
     );
   } catch (error) {
     updateRouteMatchSummary(
-      "Jag kunde inte läsa din plats just nu. Om du fortsätter väljer Parranda en smart boendebas i stället.",
+      "Jag kunde inte läsa din plats just nu. Om du fortsätter väljer Parranda ett område själv.",
     );
   }
 });
