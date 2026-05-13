@@ -2033,18 +2033,6 @@ const heroBlitzMaxWalkMinutes = 180;
 const heroBlitzReasonMaxLength = 148;
 const heroBlitzFollowupMaxLength = 110;
 
-const dayProfileLabels = {
-  light: "Lätt dag",
-  peak: "Peak",
-  variation: "Variation",
-  final: "Mjuk final",
-};
-
-const routingSourceLabels = {
-  heuristic: "Heuristisk gånglogik",
-  osrm: "Verifierad gångväg",
-};
-
 const cityPulseScopeMeta = {
   all: {
     label: "Hela staden",
@@ -2208,16 +2196,7 @@ function applyPlannerIntentKeySelection(intentKeys = [], options = {}) {
   updateRouteMatchSummary(buildPlannerStyleSummary());
 }
 
-function normalizePlannerIntentSelectionAfterChange(changedInput) {
-  if (
-    plannerIntentSelectionMode === "default_seed" &&
-    changedInput?.checked &&
-    !defaultPlannerIntentKeySet.has(changedInput.value)
-  ) {
-    setSelectedIntentKeys([changedInput.value]);
-    return;
-  }
-
+function normalizePlannerIntentSelectionAfterChange() {
   const selectedKeys = getSelectedIntentKeys();
 
   if (!selectedKeys.length) {
@@ -5331,29 +5310,26 @@ function buildPlanningResultSummary(response) {
   const usedAutoEnd = activePlannerMode === plannerAutoMode || endModeSelect?.value === plannerAutoMode;
   const resolvedStart = response.resolved_start?.label || "en smart start";
   const resolvedEnd = response.resolved_end?.label || "en tydlig slutpunkt";
-  const resolvedHomeBase = response.resolved_home_base?.label || null;
 
   if (activePlannerMode === plannerAutoMode) {
-    if (resolvedHomeBase) {
-      return `${plannedCount} dag(ar) klara. ${resolvedHomeBase} sätter tonen och Dag 1 visas först.`;
-    }
-
-    return `${plannedCount} dag(ar) klara. Parranda satte ihop upplägget och visar Dag 1 först.`;
+    return plannedCount > 1 ? `${plannedCount} dagar planerade.` : "Din plan är klar.";
   }
 
   if (usedAutoStart && usedAutoEnd) {
-    return `${plannedCount} dag(ar) klara. Parranda valde öppning och avslut och visar huvudrutten först.`;
+    return plannedCount > 1 ? `${plannedCount} dagar planerade.` : "Din plan är klar.";
   }
 
   if (!usedAutoStart && usedAutoEnd) {
-    return `${plannedCount} dag(ar) klara från ${resolvedStart}. Parranda satte avslutet och visar huvudrutten först.`;
+    return plannedCount > 1 ? `${plannedCount} dagar planerade från ${resolvedStart}.` : "Din plan är klar.";
   }
 
   if (usedAutoStart && !usedAutoEnd) {
-    return `${plannedCount} dag(ar) klara med ${resolvedEnd} som slutpunkt. Parranda valde öppningen och visar huvudrutten först.`;
+    return plannedCount > 1 ? `${plannedCount} dagar planerade med ${resolvedEnd} som slutpunkt.` : "Din plan är klar.";
   }
 
-  return `${plannedCount} dag(ar) klara mellan ${resolvedStart} och ${resolvedEnd}. Huvudrutten visas först, alternativ efteråt.`;
+  return plannedCount > 1
+    ? `${plannedCount} dagar planerade mellan ${resolvedStart} och ${resolvedEnd}.`
+    : "Din plan är klar.";
 }
 
 function focusPlannerResults() {
@@ -6457,7 +6433,6 @@ function serializeRouteView(routeView) {
     dateLabel: routeView.dateLabel || null,
     routeShape: routeView.routeShape || null,
     dayProfile: routeView.dayProfile || null,
-    dayProfileLabel: routeView.dayProfileLabel || null,
     legs: [...(routeView.legs || [])],
     longestLegKm: routeView.longestLegKm || null,
     longestLegMinutes: routeView.longestLegMinutes || null,
@@ -6465,10 +6440,9 @@ function serializeRouteView(routeView) {
     legFitNote: routeView.legFitNote || null,
     geoFitNote: routeView.geoFitNote || null,
     anchorZone: routeView.anchorZone || null,
-    routingSourceLabel: routeView.routingSourceLabel || null,
-    pacingLabel: routeView.pacingLabel || null,
     anchorExplanation: routeView.anchorExplanation || null,
     engineBadges: [...(routeView.engineBadges || [])],
+    usefulSignals: [...(routeView.usefulSignals || [])],
     guideStops: [...(routeView.guideStops || [])],
   };
 }
@@ -7137,8 +7111,7 @@ function buildRomeFallbackRoutePoints(routeId) {
 
 function createFallbackRouteView(route) {
   const mapRoutePoints = buildRomeFallbackRoutePoints(route.id);
-
-  return {
+  const routeView = {
     id: route.id,
     title: route.title,
     vibe: route.vibe,
@@ -7183,7 +7156,7 @@ function createFallbackRouteView(route) {
       order: index + 1,
       label: text.replace(/^\d{1,2}:\d{2}\s*/, ""),
       area: "Rom",
-      summary: "Kuraterat stopp i fallback-läget.",
+      summary: null,
       meta: null,
       incomingLeg:
         index < mapRoutePoints.length - 1
@@ -7196,6 +7169,9 @@ function createFallbackRouteView(route) {
           : null,
     })),
   };
+
+  routeView.usefulSignals = buildUsefulRouteSignals(routeView);
+  return routeView;
 }
 
 function clipText(text, maxLength = 240) {
@@ -7247,13 +7223,7 @@ function formatLegMinutes(minutes) {
 }
 
 function buildLegSummary(route) {
-  const legs = Array.isArray(route?.legs) ? route.legs : [];
-
-  if (!legs.length) {
-    return null;
-  }
-
-  return route?.leg_fit_note || null;
+  return null;
 }
 
 function stopSourceLabel(stop) {
@@ -7265,56 +7235,132 @@ function stopSourceLabel(stop) {
     return "Inbytt";
   }
 
-  return "Kuraterat";
-}
-
-function getRouteLegPacingLabel() {
-  const pacingKey = latestPlannerSnapshot?.legPacing || "balanced";
-  return legPacingLabels[pacingKey] || legPacingLabels.balanced;
-}
-
-function getRouteDayProfileLabel(dayProfile) {
-  return dayProfileLabels[dayProfile] || "Komponerad dag";
-}
-
-function getRoutingSourceLabel(routingSource) {
-  return routingSourceLabels[routingSource] || routingSourceLabels.heuristic;
-}
-
-function buildAnchorExplanation(route) {
-  if (!latestPlannerResolution) {
-    return null;
-  }
-
-  const startSource = latestPlannerResolution.start?.source || null;
-  const endSource = latestPlannerResolution.end?.source || null;
-  const homeBase = latestPlannerResolution.homeBase?.label || null;
-
-  if (activePlannerMode === plannerAutoMode) {
-    if (homeBase) {
-      return `Parranda använder ${homeBase} som mjuk boendebas och lät dagen öppna där den här rytmen får bäst fäste.`;
-    }
-
-    return `Parranda valde själv bas, start och final för att dagen ska kännas mer naturlig än låst.`;
-  }
-
-  if (startSource === "auto" && endSource === "auto") {
-    return "Du lämnade ankare öppna, så Parranda valde själv var dagen ska börja och landa.";
-  }
-
-  if (startSource === "auto") {
-    return `Parranda valde start runt ${route.startAnchorLabel || route.anchorZone || route.routeShapeLabel} för att ge rutten en naturligare öppning mot din valda final.`;
-  }
-
-  if (endSource === "auto") {
-    return `Parranda valde final runt ${route.endAnchorLabel || route.anchorZone || route.routeShapeLabel} för att låta dagen landa starkare än en helt låst slutpunkt.`;
-  }
-
   return null;
 }
 
+function buildAnchorExplanation(route) {
+  return null;
+}
+
+function normalizeRouteResultCopy(text = "") {
+  if (!text) {
+    return "";
+  }
+
+  return String(text)
+    .replace(/^En tydlig båge/iu, "En tydlig rutt")
+    .replace(/\bi bågen\b/giu, "i rutten")
+    .split(/(?<=[.!?])\s+/u)
+    .filter((sentence) => !/\bbåge\b|benläng|gångben|heuristisk routing/iu.test(sentence))
+    .join(" ")
+    .trim();
+}
+
+const usefulRouteSignalLabels = {
+  rain: "Bra vid regn",
+  live: "Bra just nu",
+  easyWalk: "Lätt att gå",
+  roundTrip: "Rundtur",
+  evening: "Kvällsvänlig",
+  indoor: "Inomhusvänlig",
+};
+
+function normalizeRouteSignalText(value = "") {
+  return String(value || "").trim().toLowerCase();
+}
+
+function routeSignalLooksConcrete(note = "") {
+  const text = normalizeRouteSignalText(note);
+  return /just nu|ikväll|i kväll|torsdag|fredag|lördag|söndag|marknad|konsert|spelning|bar|barer|klubb|scen|live/u.test(
+    text,
+  );
+}
+
+function routeSignalIsRainSafe(note = "") {
+  return /regn|inomhus|under tak|vädersäker|regnsäker/u.test(normalizeRouteSignalText(note));
+}
+
+function routeSignalIsIndoor(note = "") {
+  return /inomhus|under tak|vädersäker|regnsäker/u.test(normalizeRouteSignalText(note));
+}
+
+function routeSignalFeelsEvening(route = {}) {
+  const text = normalizeRouteSignalText(
+    [route.liveEventFitNote, route.pulseNote, route.summary, route.visibleWhy].filter(Boolean).join(" "),
+  );
+  return /kväll|senare|aperitivo|natt|middag|cocktail|vinbar|barhäng/u.test(text);
+}
+
+function routeSignalIsRoundTrip(route = {}) {
+  const start = normalizeRouteSignalText(route.startAnchorLabel || "");
+  const end = normalizeRouteSignalText(route.endAnchorLabel || "");
+  return route.routeShape === "loop" && Boolean(start) && start === end;
+}
+
+function buildUsefulRouteSignals(route = {}) {
+  const candidates = [];
+
+  if (route.weatherNote && routeSignalIsRainSafe(route.weatherNote)) {
+    candidates.push({
+      key: routeSignalIsIndoor(route.weatherNote) ? "indoor" : "rain",
+      label: routeSignalIsIndoor(route.weatherNote)
+        ? usefulRouteSignalLabels.indoor
+        : usefulRouteSignalLabels.rain,
+    });
+  }
+
+  if (
+    Number.isFinite(route.longestLegMinutes) &&
+    Number.isFinite(route.averageLegMinutes) &&
+    route.longestLegMinutes <= 15 &&
+    route.averageLegMinutes <= 10
+  ) {
+    candidates.push({
+      key: "easyWalk",
+      label: usefulRouteSignalLabels.easyWalk,
+    });
+  }
+
+  if (route.liveEventFitNote && routeSignalLooksConcrete(route.liveEventFitNote)) {
+    candidates.push({
+      key: "live",
+      label: usefulRouteSignalLabels.live,
+    });
+  } else if (route.pulseNote && routeSignalLooksConcrete(route.pulseNote)) {
+    candidates.push({
+      key: "live",
+      label: usefulRouteSignalLabels.live,
+    });
+  }
+
+  if (routeSignalFeelsEvening(route)) {
+    candidates.push({
+      key: "evening",
+      label: usefulRouteSignalLabels.evening,
+    });
+  }
+
+  if (routeSignalIsRoundTrip(route)) {
+    candidates.push({
+      key: "roundTrip",
+      label: usefulRouteSignalLabels.roundTrip,
+    });
+  }
+
+  const seenKeys = new Set();
+  return candidates
+    .filter((candidate) => {
+      if (!candidate?.label || seenKeys.has(candidate.key)) {
+        return false;
+      }
+      seenKeys.add(candidate.key);
+      return true;
+    })
+    .slice(0, 2);
+}
+
 function buildVisibleWhy(route) {
-  return takeLeadSentences(route.why || route.summary, 2, 220);
+  return takeLeadSentences(normalizeRouteResultCopy(route.why || route.summary), 2, 220);
 }
 
 function createApiRouteView(
@@ -7325,26 +7371,24 @@ function createApiRouteView(
   dayDate = null,
 ) {
   const stopLabels = route.main_stops.map((stop) => stop.label).join(" • ");
-  const routeShapeLabel = route.route_shape === "loop" ? "Loop" : "Båge";
   const liveEventById = new Map((liveEvents || []).map((event) => [String(event.id), event]));
   const mapPathPoints = Array.isArray(route.map_path_points) && route.map_path_points.length
     ? route.map_path_points
     : route.map_route_points;
-
-  return {
+  const routeView = {
     id: route.id,
     title: route.title,
     vibe: label,
     length: `ca ${route.estimated_km} km`,
-    summary: route.summary,
-    why: route.why_recommended,
+    summary: normalizeRouteResultCopy(route.summary),
+    why: normalizeRouteResultCopy(route.why_recommended),
     visibleWhy: buildVisibleWhy(route),
     path: `${route.start_label} -> ${stopLabels} -> ${route.end_label}`,
-    anchor: `Start: ${route.start_label}`,
-    walk: `${routeShapeLabel} • slut: ${route.end_label}`,
+    anchor: route.start_label ? `Start: ${route.start_label}` : null,
+    walk: route.end_label ? `Slut: ${route.end_label}` : null,
     startAnchorLabel: route.start_label,
     endAnchorLabel: route.end_label,
-    routeShapeLabel,
+    routeShapeLabel: null,
     legSummary: buildLegSummary(route),
     stops: route.main_stops.map(
       (stop, index) =>
@@ -7355,7 +7399,7 @@ function createApiRouteView(
       label: stop.label,
       area: stop.area,
       tagSummary: stop.tags.slice(0, 3).join(" • "),
-      summary: stop.summary || stop.vibe || stop.tags.join(", "),
+      summary: normalizeRouteResultCopy(stop.summary || stop.vibe || stop.tags.join(", ")),
       text: `${index + 1}. ${stop.label} • ${stop.area} • ${stop.tags.join(", ")}`,
       query: stop.drawer_query || stop.label,
       isLiveEvent: Boolean(stop.is_live_event),
@@ -7389,7 +7433,6 @@ function createApiRouteView(
     dateLabel: dayDate ? formatSwedishDate(dayDate) : null,
     routeShape: route.route_shape || null,
     dayProfile: route.day_profile || "peak",
-    dayProfileLabel: getRouteDayProfileLabel(route.day_profile || "peak"),
     legs: route.legs || [],
     longestLegKm: route.longest_leg_km || null,
     longestLegMinutes: route.longest_leg_minutes || null,
@@ -7397,26 +7440,14 @@ function createApiRouteView(
     legFitNote: route.leg_fit_note || null,
     geoFitNote: route.geo_fit_note || null,
     anchorZone: route.anchor_zone || null,
-    routingSourceLabel: getRoutingSourceLabel(route.routing_source || "heuristic"),
-    pacingLabel: getRouteLegPacingLabel(),
-    anchorExplanation: buildAnchorExplanation({
-      startAnchorLabel: route.start_label,
-      endAnchorLabel: route.end_label,
-      anchorZone: route.anchor_zone || null,
-      routeShapeLabel,
-    }),
-    engineBadges: [
-      getRouteDayProfileLabel(route.day_profile || "peak"),
-      getRouteLegPacingLabel(),
-      getRoutingSourceLabel(route.routing_source || "heuristic"),
-    ].filter(Boolean),
+    anchorExplanation: null,
+    engineBadges: [],
     guideStops: route.main_stops.map((stop, index) => ({
       order: index + 1,
       label: stop.label,
       area: stop.area,
-      summary: stop.summary || stop.vibe || stop.tags.join(", "),
+      summary: normalizeRouteResultCopy(stop.summary || stop.vibe || stop.tags.join(", ")),
       meta: [
-        stopSourceLabel({ isLiveEvent: Boolean(stop.is_live_event) }),
         stop.is_live_event ? "Live just nu" : null,
         stop.best_time ? `Bäst: ${stop.best_time}` : null,
         stop.price_level ? `Pris: ${stop.price_level}` : null,
@@ -7433,6 +7464,9 @@ function createApiRouteView(
         : null,
     })),
   };
+
+  routeView.usefulSignals = buildUsefulRouteSignals(routeView);
+  return routeView;
 }
 
 function fillGuidePills(container, items = []) {
@@ -7465,7 +7499,7 @@ function buildGuideShareText(routeView) {
     routeView.title,
     routeView.dateLabel || `Parranda-guide i ${buildUnavailableCityLabel()}`,
     buildRouteLine(routeView),
-    `${routeView.length} • ${routeView.anchorZone || routeView.routeShape || buildUnavailableCityLabel()}`,
+    `${routeView.length} • ${routeView.anchorZone || routeView.startAnchorLabel || buildUnavailableCityLabel()}`,
     clipText(routeView.summary, 180),
     "",
     "Huvudstopp:",
@@ -7488,7 +7522,7 @@ function openRouteGuide(routeView) {
         order: index + 1,
         label: stop.query || stop.text,
         area: null,
-        summary: "Kuraterat stopp i din rutt.",
+        summary: stop.summary || null,
         meta: null,
       }));
 
@@ -7499,7 +7533,6 @@ function openRouteGuide(routeView) {
   routeGuideTitle.textContent = routeView.title;
   routeGuideMeta.textContent = [
     routeView.dateLabel || "Planerad dag",
-    routeView.routeShape === "loop" ? "Loop" : routeView.routeShape === "arc" ? "Båge" : null,
     routeView.length,
   ]
     .filter(Boolean)
@@ -7508,8 +7541,7 @@ function openRouteGuide(routeView) {
   routeGuideSummary.textContent = routeView.summary || "";
   routeGuideWhy.textContent =
     takeLeadSentences(
-      routeView.anchorExplanation ||
-        routeView.why ||
+      routeView.why ||
         routeView.geoFitNote ||
         "Parranda valde den här rutten som dagens tydligaste huvudspår.",
       3,
@@ -7519,13 +7551,12 @@ function openRouteGuide(routeView) {
 
   routeGuideStats.innerHTML = "";
   [
-    { label: "Start", value: routeView.anchor?.replace(/^Start:\s*/, "") || routeView.mapRoutePoints?.[0]?.label || buildUnavailableCityLabel() },
-    { label: "Slut", value: routeView.walk?.replace(/^Båge • slut:\s*|^Loop • slut:\s*|^Slut:\s*/u, "") || routeView.mapRoutePoints?.[routeView.mapRoutePoints.length - 1]?.label || buildUnavailableCityLabel() },
-    { label: "Zon", value: routeView.anchorZone || buildUnavailableCityLabel() },
-    { label: "Dagstyp", value: routeView.dayProfileLabel || "Komponerad dag" },
-    { label: "Tempo", value: routeView.pacingLabel || "Balans" },
-    { label: "Geo-fit", value: routeView.geoFitNote ? "Optimerad" : routeView.routeShape === "loop" ? "Loop" : "Båge" },
-  ].forEach((stat) => {
+    { label: "Start", value: routeView.startAnchorLabel || routeView.mapRoutePoints?.[0]?.label || buildUnavailableCityLabel() },
+    { label: "Slut", value: routeView.endAnchorLabel || routeView.mapRoutePoints?.[routeView.mapRoutePoints.length - 1]?.label || buildUnavailableCityLabel() },
+    { label: "Zon", value: routeView.anchorZone || null },
+  ]
+    .filter((stat) => stat.value)
+    .forEach((stat) => {
     const card = document.createElement("article");
     const title = document.createElement("strong");
     const value = document.createElement("p");
@@ -7545,7 +7576,8 @@ function openRouteGuide(routeView) {
     item.className = "route-guide-stop";
     title.textContent = `${stop.order}. ${stop.label}`;
     summary.className = "route-guide-stop-copy";
-    summary.textContent = stop.summary || "Kuraterat stopp i din dag.";
+    summary.textContent = stop.summary || "";
+    summary.hidden = !summary.textContent;
     item.appendChild(title);
 
     if (stop.area || stop.meta) {
@@ -8451,7 +8483,7 @@ function getActiveDayPhaseLabel(index, totalStops) {
     return "Landa här";
   }
 
-  return "Sedan";
+  return "";
 }
 
 function buildActiveDayFlowNote(routeView) {
@@ -8520,11 +8552,6 @@ function createItineraryStop(stopItem, onOpen, phaseLabel = "") {
   const detail = document.createElement("div");
   detail.className = "route-stop-detail";
 
-  const source = document.createElement("span");
-  source.className = `route-stop-source route-stop-source-${(stopItem.source || "curated").replace(/[^a-z-]/g, "")}`;
-  source.textContent = stopItem.sourceLabel || "Kuraterat";
-  detail.appendChild(source);
-
   if (stopItem.isLiveEvent) {
     const note = document.createElement("span");
     note.className = "route-stop-note";
@@ -8532,6 +8559,7 @@ function createItineraryStop(stopItem, onOpen, phaseLabel = "") {
     detail.appendChild(note);
   }
 
+  detail.hidden = detail.childElementCount === 0;
   body.appendChild(detail);
   main.appendChild(body);
   stop.appendChild(main);
@@ -8556,24 +8584,28 @@ function createActiveDayView(routeView, { routeKey }) {
   const selectButton = view.querySelector(".active-day-select-button");
   const guideButton = view.querySelector(".active-day-guide-button");
   const routeLink = view.querySelector(".active-day-route-link");
+  const shapePill = view.querySelector(".active-day-shape");
+  const lengthPill = view.querySelector(".active-day-length");
+  const usefulSignals = routeView.usefulSignals || [];
 
   view.dataset.routeKey = routeKey;
   view.classList.toggle("is-selected", activeRouteKey === routeKey);
 
-  view.querySelector(".active-day-shape").textContent = routeView.routeShapeLabel || "Dag";
-  view.querySelector(".active-day-length").textContent = routeView.length;
+  shapePill.hidden = !usefulSignals.length;
+  shapePill.textContent = usefulSignals[0]?.label || "";
+  lengthPill.textContent = routeView.length;
   view.querySelector(".active-day-flow-note").textContent = buildActiveDayFlowNote(routeView);
 
   enginePills.innerHTML = "";
-  (routeView.engineBadges || []).forEach((label) => {
+  usefulSignals.slice(shapePill.hidden ? 0 : 1).forEach((signal) => {
     const pill = document.createElement("span");
     pill.className = "route-engine-pill";
-    pill.textContent = label;
+    pill.textContent = signal.label;
     enginePills.appendChild(pill);
   });
-  engineNote.hidden = !routeView.anchorExplanation;
-  engineNote.textContent = routeView.anchorExplanation || "";
-  engineStrip.hidden = !(routeView.engineBadges?.length || routeView.anchorExplanation);
+  engineNote.hidden = true;
+  engineNote.textContent = "";
+  engineStrip.hidden = enginePills.children.length === 0;
 
   legSummary.hidden = !routeView.legSummary;
   if (routeView.legSummary) {
@@ -8658,6 +8690,7 @@ function createRouteCard(
   const why = card.querySelector(".route-why");
   const selectButton = card.querySelector(".route-select-button");
   const guideButton = card.querySelector(".route-guide-button");
+  const usefulSignals = routeView.usefulSignals || [];
 
   card.dataset.routeKey = routeKey;
   card.dataset.routeVariant = isRecommended ? "recommended" : isSecondary ? "alternative" : "default";
@@ -8671,20 +8704,19 @@ function createRouteCard(
   card.querySelector(".route-summary").textContent = routeView.summary;
   why.textContent = routeView.visibleWhy || takeLeadSentences(routeView.why, 2, 240);
   why.hidden = !why.textContent;
-  card.querySelector(".route-path").textContent = routeView.path;
-  card.querySelector(".route-anchor").textContent = routeView.anchor;
-  card.querySelector(".route-walk").textContent = routeView.walk;
+  card.querySelector(".route-path").hidden = true;
+  card.querySelector(".route-metadata").hidden = true;
 
   enginePills.innerHTML = "";
-  (routeView.engineBadges || []).forEach((label) => {
+  usefulSignals.forEach((signal) => {
     const pill = document.createElement("span");
     pill.className = "route-engine-pill";
-    pill.textContent = label;
+    pill.textContent = signal.label;
     enginePills.appendChild(pill);
   });
-  engineNote.hidden = !routeView.anchorExplanation;
-  engineNote.textContent = routeView.anchorExplanation || "";
-  engineStrip.hidden = !(routeView.engineBadges?.length || routeView.anchorExplanation);
+  engineNote.hidden = true;
+  engineNote.textContent = "";
+  engineStrip.hidden = enginePills.children.length === 0;
 
   legSummary.hidden = !routeView.legSummary;
   if (routeView.legSummary) {
@@ -8763,11 +8795,6 @@ function createRouteCard(
 
     const stop = document.createElement("article");
     stop.className = "route-stop-item";
-
-    const source = document.createElement("span");
-    source.className = `route-stop-source route-stop-source-${(stopItem.source || "curated").replace(/[^a-z-]/g, "")}`;
-    source.textContent = stopItem.sourceLabel || "Kuraterat";
-    stop.appendChild(source);
 
     const button = document.createElement("button");
     button.type = "button";
@@ -8982,15 +9009,14 @@ function renderPlannedDays() {
   dayCard.querySelector(".planner-day-summary").textContent =
     primaryRouteView.visibleWhy ||
     takeLeadSentences(activeDay.primary_route.why_recommended || "", 2, 220) ||
-    "Motorn lyfter den här som tydligaste huvuddag utifrån datum, gångmål och preferenser.";
+    "Parranda lyfter den här som dagens tydligaste huvudspår.";
   primaryRouteLine.textContent = buildRouteLine(primaryRouteView);
 
   outline.innerHTML = "";
   [
     { label: "Start", value: primaryRouteView.startAnchorLabel },
     { label: "Slut", value: primaryRouteView.endAnchorLabel },
-    { label: "Dagstyp", value: primaryRouteView.dayProfileLabel },
-    { label: "Tempo", value: primaryRouteView.pacingLabel },
+    { label: "Zon", value: primaryRouteView.anchorZone },
   ]
     .filter((item) => item.value)
     .forEach((item) => {
