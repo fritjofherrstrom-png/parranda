@@ -1404,144 +1404,27 @@ const isInternalCityMode = plannerCityVisibility === "internal";
 const plannerDisplayCityLabel = plannerCityLabel || plannerRequestedCityLabel || plannerResolvedCityLabel || "Staden";
 const plannerTimeZone = plannerCity.timezone;
 const plannerLocale = plannerCity.locale;
-const supportedUiLanguages = new Set(["sv", "en"]);
-const activeUiLanguage = supportedUiLanguages.has(String(window.__PARRANDA_LANGUAGE__ || "").toLowerCase())
-  ? String(window.__PARRANDA_LANGUAGE__).toLowerCase()
-  : "sv";
+const uiI18nBootstrap =
+  window.__PARRANDA_I18N__ && typeof window.__PARRANDA_I18N__ === "object"
+    ? window.__PARRANDA_I18N__
+    : { fallbackLanguage: "sv", supportedLanguages: ["sv", "en"], translations: { sv: {}, en: {} } };
+const fallbackUiLanguage = String(uiI18nBootstrap.fallbackLanguage || "sv").toLowerCase();
+const supportedUiLanguages = new Set(
+  Array.isArray(uiI18nBootstrap.supportedLanguages) && uiI18nBootstrap.supportedLanguages.length
+    ? uiI18nBootstrap.supportedLanguages.map((lang) => String(lang).toLowerCase())
+    : [fallbackUiLanguage],
+);
+const requestedUiLanguage = String(window.__PARRANDA_LANGUAGE__ || document.body?.dataset.lang || "").toLowerCase();
+const activeUiLanguage = supportedUiLanguages.has(requestedUiLanguage) ? requestedUiLanguage : fallbackUiLanguage;
 const isEnglishUi = activeUiLanguage === "en";
-const uiText = {
-  sv: {},
-  en: {
-    "planner.intent.food_drink": "Food & drink",
-    "planner.intent.culture": "Culture",
-    "planner.intent.second_hand": "Second hand",
-    "planner.intent.hidden_gems": "Hidden gems",
-    "planner.intent.views": "Views",
-    "planner.intent.nightlife": "Nightlife",
-    "planner.intent.history": "History",
-    "planner.intent.green_walk": "Green walks",
-    "planner.choose": "Parranda chooses",
-    "planner.autoStartEnd": "Start and end are chosen automatically",
-    "planner.manualChip": "Manual start/end",
-    "planner.autoChip": "Parranda chooses start and end",
-    "planner.fallbackChip": "Fallback mode on",
-    "planner.modeManualLead": "You control where the day starts or ends. Lock only what truly needs to be exact.",
-    "planner.modeAutoLead": "Keep it light. Dates, mood, and optionally where you’re staying are enough.",
-    "planner.whereStaying": "Where you’re staying",
-    "planner.activeNow": "Active now",
-    "planner.clearTheme": "Clear theme",
-    "planner.secondHandSoft": "Second hand is selected, but this city does not yet have strong second-hand data. Parranda treats it as a soft signal instead of pretending full certainty.",
-    "planner.smartStart": "a smart start",
-    "planner.clearEnd": "a clear end point",
-    "planner.daysPlanned": "days planned",
-    "planner.planReady": "Your day is ready.",
-    "planner.from": "from",
-    "planner.withEnd": "ending at",
-    "planner.between": "between",
-    "planner.launchManual": "You choose start and end. Parranda fills the day.",
-    "planner.launchAuto": "Parranda chooses start, end, and pace from your mood.",
-    "planner.loadingButton": "Planning...",
-    "planner.loadingDay": "Planning the day",
-    "planner.loadingTitle": "Parranda is building your first plan",
-    "planner.loadingSummary": "Results land here as soon as the route is ready.",
-    "planner.loadingRoute": "Loading route and stops...",
-    "planner.loadingMultiBuild": "Building {count} days...",
-    "planner.loadingFirst": "Putting the first day together...",
-    "planner.loadingNext": "Weighing the next day...",
-    "planner.loadingRouteFinal": "Putting the route together...",
-    "planner.loadingSingleBuild": "Building the day...",
-    "planner.loadingSignals": "Weighing today’s signals...",
-    "planner.loadingFineTune": "Fine-tuning the flow...",
-    "planner.homeBaseAutoHint": "Skip this if place does not matter. Parranda chooses a natural starting area.",
-    "planner.startAutoHint": "Leave it open if Parranda may choose the best opening.",
-    "planner.endAutoHint": "Leave it open if Parranda may choose the best ending.",
-    "planner.homeCurrentHint": "Use this if you want where you are staying or standing to count as soft context.",
-    "planner.startCurrentHint": "Start near where you are right now.",
-    "planner.endCurrentHint": "Let the day land near where you actually are.",
-    "planner.homeCustomHint": "Enter a hotel, address, or area. It guides the direction but does not lock the exact start.",
-    "planner.startCustomHint": "Enter where the day should start.",
-    "planner.endCustomHint": "Enter where the day should end.",
-    "planner.homePresetHint": "Choose an area if you want to give Parranda soft place context.",
-    "planner.startPresetHint": "Choose an area if you want to lock the opening a bit more clearly.",
-    "planner.endPresetHint": "Choose an area if you want to guide where the day lands.",
-    "planner.previewFallback": "{city} does not have its own curated Parranda mode yet. The shell is in place, but district guides, fallback routes, and LIVE ideas stay hidden until the city has a real city pack.",
-    "planner.previewInternal": "{city} is running as an internal architecture stub. Planner and city-core can be verified here, while Rome-based fallback routes and district guides are intentionally hidden.",
-    "planner.previewNeutral": "{city} is using a neutral city mode. Curated content appears once the city has its own pack.",
-    "planner.nonRomeFallback": "{city} does not yet have its own planner mode. Parranda shows an honest shell and waits for curated content until the city is truly supported.",
-    "planner.nonRomeInternal": "{city} is an internal preview. Planner and city-core can be tested, while curated districts and wildcard ideas are intentionally off here.",
-    "planner.nonRomeNeutral": "{city} is running in neutral city mode. Curated fallback ideas appear once the city has its own pack.",
-    "planner.fallbackNote": "{city} does not yet have its own curated layer. Parranda does not show Rome fallback as if {city} had already launched.",
-    "planner.internalNote": "{city} is an internal architecture mode. Rome-based fallback routes are not shown here.",
-    "planner.noCuratedYet": "{city} does not yet have its own curated layer. Fallback routes are not shown as a substitute.",
-    "route.main": "Main route",
-    "route.alternative": "Alternative {count}",
-    "route.openToday": "Open today’s route",
-    "route.openWalking": "Open walking route",
-    "route.showInApp": "Show in app",
-    "route.mapActive": "Map focus active",
-    "route.cleanGuide": "Clean guide",
-    "route.start": "Start",
-    "route.end": "End",
-    "route.zone": "Zone",
-    "route.plannedDay": "Planned day",
-    "route.guide": "Parranda guide",
-    "route.mainStopHeading": "Main stops",
-    "route.whyFallback": "Parranda chose this route as today’s clearest main thread.",
-    "route.moreStops": "+{count} more stops in Clean guide",
-    "route.hideAlternatives": "Hide other plans ({count})",
-    "route.showAlternatives": "Show other plans ({count})",
-    "route.moreLive": "+{count} more live signals are in LIVE if you want to adjust the day further.",
-    "route.primaryFallback": "Parranda highlights this as today’s clearest main thread.",
-    "route.focusMap": "\"{title}\" is now focused on the map. Jump to the map view if you want to see the route in detail.",
-    "route.focusGuide": "\"{title}\" is now focused on the map. Jump to guide view if you want to see the route in detail.",
-    "signal.rain": "Good in rain",
-    "signal.live": "Good right now",
-    "signal.easyWalk": "Easy walk",
-    "signal.roundTrip": "Round trip",
-    "signal.evening": "Evening-friendly",
-    "signal.indoor": "Indoor-friendly",
-    "pulse.allCity": "All {city}",
-    "pulse.allRome": "All Rome",
-    "pulse.nearMe": "Near me",
-    "pulse.now": "Right now",
-    "pulse.tonight": "Tonight",
-    "pulse.weekend": "This weekend",
-    "pulse.cityRhythm": "City rhythm",
-    "pulse.cityRhythmSub": "What a local carries without thinking about it",
-    "pulse.neighborhood": "Neighborhood pulse",
-    "pulse.neighborhoodSub": "What plays better in different parts of town right now",
-    "pulse.venue": "Venue level",
-    "pulse.venueSub": "Place and live signals that can actually change the day",
-    "pulse.currentIn": "Current in {city}",
-    "pulse.currentInNow": "Current in {city} right now.",
-    "pulse.meta": "{signals} signals • {levels} levels",
-    "pulse.footer": "This section mixes reliable local rhythms with what is worth weighing in right now.",
-    "pulse.clothing": "Clothing",
-    "pulse.clothingPending": "Parranda adds clothing advice as soon as weather is loaded.",
-    "pulse.all": "All",
-    "pulse.reason": "Why it matters",
-    "pulse.reasonFallback": "This is meant as a small local signal that helps today’s route feel clearer.",
-    "pulse.fits": "fits",
-    "pulse.openLive": "Open live info",
-    "pulse.openPlace": "Open place",
-    "pulse.buildDay": "Build a day from this",
-    "pulse.emptyNearbyTitle": "No strong live layer near you right now",
-    "pulse.emptyNearbyBody": "Switch to {scope} or a wider time mode to see more signals.",
-    "pulse.emptyTitle": "No strong signals right now",
-    "pulse.emptyBody": "Parranda could not fetch any clear notes for today, but the route builder and wildcard still work.",
-    "blitz.loadingTitle": "Loading the next move...",
-    "blitz.loadingSummary": "Blitz chooses a credible next move from place, time, and city pulse.",
-    "blitz.defaultSummary": "When you are already out in the city, Blitz chooses what feels strongest right now.",
-    "blitz.defaultFallback": "Blitz chose this as the clearest next move right now.",
-    "blitz.apply": "Run Blitz",
-    "blitz.shuffle": "New idea",
-    "blitz.nextStop": "Next stop",
-    "blitz.check": "Double-check",
-  },
-};
+const uiDateLocale = activeUiLanguage === "en" ? "en-US" : plannerLocale || "sv-SE";
+const uiText =
+  uiI18nBootstrap.translations && typeof uiI18nBootstrap.translations === "object"
+    ? uiI18nBootstrap.translations
+    : { sv: {}, en: {} };
 
 function t(key, fallback = "") {
-  return uiText[activeUiLanguage]?.[key] || uiText.sv[key] || fallback || key;
+  return uiText[activeUiLanguage]?.[key] || uiText[fallbackUiLanguage]?.[key] || fallback || key;
 }
 
 function tf(key, replacements = {}, fallback = "") {
@@ -1760,9 +1643,9 @@ const routeApiBase = "/api";
 const plannerAutoMode = "auto";
 const plannerManualMode = "manual";
 const legPacingLabels = {
-  short: "Kort ben",
-  balanced: "Balans",
-  flexible: "Friare ben",
+  short: t("planner.legShortSummary", "Kort ben"),
+  balanced: t("planner.legBalancedSummary", "Balans"),
+  flexible: t("planner.legFlexibleSummary", "Friare ben"),
 };
 const legPacingHints = {
   short: "Kort försöker hålla varje enskilt ben tätare och mer sammanhängande.",
@@ -1946,21 +1829,31 @@ function buildPreviewRouteEmptyState() {
 
   if (isFallbackRequestedCity) {
     return {
-      title: `${cityLabel} förbereds fortfarande`,
-      body: `City-core-grunden finns nu i appen, men ${cityLabel} har ännu inget eget kuraterat innehåll. Därför visas inga Rome-baserade fallback-rutter här.`,
+      title: tf("preview.preparingTitle", { city: cityLabel }, `${cityLabel} förbereds fortfarande`),
+      body: tf(
+        "planner.previewFallback",
+        { city: cityLabel },
+        `City-core-grunden finns nu i appen, men ${cityLabel} har ännu inget eget kuraterat innehåll. Därför visas inga Rome-baserade fallback-rutter här.`,
+      ),
     };
   }
 
   if (isInternalCityMode) {
     return {
-      title: `${cityLabel} kör i intern preview`,
-      body: "Det här läget används för att verifiera city-core, shell och planner utan att blanda in Rome-specifikt fallback-innehåll.",
+      title: tf("preview.internalTitle", { city: cityLabel }, `${cityLabel} kör i intern preview`),
+      body: t(
+        "planner.previewInternal",
+        "Det här läget används för att verifiera city-core, shell och planner utan att blanda in Rome-specifikt fallback-innehåll.",
+      ),
     };
   }
 
   return {
-    title: `${cityLabel} saknar curated-läge ännu`,
-    body: "Parranda visar ett neutralt grundläge tills staden har ett eget city pack och ett riktigt innehållslager.",
+    title: tf("preview.neutralTitle", { city: cityLabel }, `${cityLabel} saknar curated-läge ännu`),
+    body: t(
+      "planner.previewNeutral",
+      "Parranda visar ett neutralt grundläge tills staden har ett eget city pack och ett riktigt innehållslager.",
+    ),
   };
 }
 
@@ -1969,33 +1862,39 @@ function buildPreviewHeroCard() {
 
   if (isFallbackRequestedCity) {
     return {
-      label: "CITY-STATUS",
-      title: `${cityLabel} förbereds fortfarande`,
-      summary:
+      label: t("preview.cityStatus", "CITY-STATUS"),
+      title: tf("preview.preparingTitle", { city: cityLabel }, `${cityLabel} förbereds fortfarande`),
+      summary: t(
+        "preview.preparingSummary",
         "Parranda visar shellen och city-core-grunden, men blandar inte in Rome-kvarter eller fallback-idéer som om staden redan vore kurerad.",
-      meta: "Ingen publik city-lansering ännu.",
-      tags: [cityLabel, "Förbereds", "Neutral shell"],
+      ),
+      meta: t("preview.preparingMeta", "Ingen publik city-lansering ännu."),
+      tags: [cityLabel, t("preview.preparingTag", "Förbereds"), t("preview.neutralShellTag", "Neutral shell")],
     };
   }
 
   if (isInternalCityMode) {
     return {
-      label: "INTERN STUB",
-      title: `${cityLabel} kör i preview`,
-      summary:
+      label: t("preview.internalStub", "INTERN STUB"),
+      title: tf("preview.internalTitle", { city: cityLabel }, `${cityLabel} kör i preview`),
+      summary: t(
+        "preview.internalSummary",
         "Det här läget finns för att bevisa att en andra stad kan leva ovanpå city-core utan att importera Rome-moduler eller Rome-fallback.",
-      meta: "Intern verifiering • inte en produktstad.",
-      tags: [cityLabel, "Intern", "City-core"],
+      ),
+      meta: t("preview.internalMeta", "Intern verifiering • inte en produktstad."),
+      tags: [cityLabel, t("preview.internalTag", "Intern"), t("preview.cityCoreTag", "City-core")],
     };
   }
 
   return {
-    label: "CITY-STATUS",
-    title: `${cityLabel} använder neutral city-mode`,
-    summary:
+    label: t("preview.cityStatus", "CITY-STATUS"),
+    title: tf("preview.neutralTitle", { city: cityLabel }, `${cityLabel} använder neutral city-mode`),
+    summary: t(
+      "preview.neutralSummary",
       "Plannern kan använda city-identiteten, men kuraterat innehåll och fallback-idéer kommer först när staden har ett eget pack.",
-    meta: "Groundwork först, content senare.",
-    tags: [cityLabel, "Preview"],
+    ),
+    meta: t("preview.neutralMeta", "Groundwork först, content senare."),
+    tags: [cityLabel, t("preview.previewTag", "Preview")],
   };
 }
 
@@ -2006,17 +1905,25 @@ function buildGenericFallbackPulse(dateString = getTodayIsoDate()) {
   const item = {
     id: "preview-city-status",
     level: "city",
-    kind: isInternalCityMode ? "Intern preview" : "City-status",
+    kind: isInternalCityMode ? t("preview.internalStub", "INTERN STUB") : t("preview.cityStatus", "CITY-STATUS"),
     title: isFallbackRequestedCity
-      ? `${cityLabel} har ännu inget eget LIVE-lager`
-      : `${cityLabel} använder neutral LIVE-grund`,
+      ? tf("preview.preparingTitle", { city: cityLabel }, `${cityLabel} har ännu inget eget LIVE-lager`)
+      : tf("preview.neutralTitle", { city: cityLabel }, `${cityLabel} använder neutral LIVE-grund`),
     where: cityLabel,
-    when: "Just nu",
+    when: t("pulse.now", "Just nu"),
     blurb: isFallbackRequestedCity
-      ? "Sidan visar shell och bootstrap på rätt stad, men väntar med curated LIVE och fallback-idéer tills city-packet finns."
-      : "Det här läget använder no-op eller neutral city-puls tills staden får ett riktigt editorial-lager.",
-    why_it_matters:
+      ? t(
+          "planner.previewFallback",
+          "Sidan visar shell och bootstrap på rätt stad, men väntar med curated LIVE och fallback-idéer tills city-packet finns.",
+        )
+      : t(
+          "planner.previewNeutral",
+          "Det här läget använder no-op eller neutral city-puls tills staden får ett riktigt editorial-lager.",
+        ),
+    why_it_matters: t(
+      "pulse.reasonFallback",
       "Det gör city-core ärlig: inga Rome-idéer visas här om staden inte faktiskt är kurerad.",
+    ),
     matches_vibes: [],
     priority: 1,
   };
@@ -2027,12 +1934,12 @@ function buildGenericFallbackPulse(dateString = getTodayIsoDate()) {
     date_label: dateLabels.dateLabel,
     headline: `${cityLabel} just nu`,
     subhead: isFallbackRequestedCity
-      ? "Det här är en ärlig city-fallback utan lånat Rome-innehåll."
-      : "Neutral puls tills staden får ett riktigt lokalt lager.",
+      ? t("planner.fallbackNote", "Det här är en ärlig city-fallback utan lånat Rome-innehåll.")
+      : t("planner.previewNeutral", "Neutral puls tills staden får ett riktigt lokalt lager."),
     note: isFallbackRequestedCity
-      ? "Curated LIVE och wildcard-idéer hålls tillbaka tills staden stöds på riktigt."
-      : "No-op- eller neutral city-puls används medvetet här.",
-    footer_note: "City-core är aktivt. Editorial och curated-lager kommer senare.",
+      ? t("planner.previewFallback", "Curated LIVE och wildcard-idéer hålls tillbaka tills staden stöds på riktigt.")
+      : t("planner.previewNeutral", "No-op- eller neutral city-puls används medvetet här."),
+    footer_note: t("preview.neutralMeta", "City-core är aktivt. Editorial och curated-lager kommer senare."),
     items: [item],
     moments: [
       {
@@ -2485,9 +2392,9 @@ function plannerIntentHasCoverage(intentKey) {
 
 function getBudgetTierLabel(tier) {
   const labels = {
-    standard: "Standard",
-    budget: "Budgetsmart",
-    "dolce-vita": hasRomeFrontendContent ? "La Dolce Vita" : "Premium",
+    standard: t("planner.budgetStandard", "Standard"),
+    budget: t("planner.budgetSmart", "Budgetsmart"),
+    "dolce-vita": hasRomeFrontendContent ? "La Dolce Vita" : t("planner.budgetPremium", "Premium"),
   };
 
   return labels[tier] || null;
@@ -2495,13 +2402,23 @@ function getBudgetTierLabel(tier) {
 
 function getBudgetTierCopy(tier) {
   const copy = {
-    standard:
+    standard: t(
+      "planner.budgetStandardCopy",
       "Standardnivå är aktiv. Parranda försöker nu hålla balansen mellan starka stopp, rimlig nota och tydlig personlighet.",
-    budget:
+    ),
+    budget: t(
+      "planner.budgetSmartCopy",
       "Budgetsmart är aktivt. Motorn väger nu upp billigare öl, prisvänlig mat och stopp där notan kan hållas nere utan att känslan dör.",
+    ),
     "dolce-vita": hasRomeFrontendContent
-      ? "La Dolce Vita är aktivt. Motorn jagar nu mer premium, bokningsvärda glas och stopp som får kvällen att kännas större och lite lyxigare."
-      : "Premium är aktivt. Motorn jagar nu mer bokningsvärda glas och stopp som får kvällen att kännas större och lite lyxigare.",
+      ? t(
+          "planner.budgetDolceCopy",
+          "La Dolce Vita är aktivt. Motorn jagar nu mer premium, bokningsvärda glas och stopp som får kvällen att kännas större och lite lyxigare.",
+        )
+      : t(
+          "planner.budgetPremiumCopy",
+          "Premium är aktivt. Motorn jagar nu mer bokningsvärda glas och stopp som får kvällen att kännas större och lite lyxigare.",
+        ),
   };
 
   return copy[tier] || null;
@@ -2641,7 +2558,7 @@ function formatPulseDatePart(dateString, options) {
     return "";
   }
 
-  const formatted = new Intl.DateTimeFormat(plannerLocale, {
+  const formatted = new Intl.DateTimeFormat(uiDateLocale, {
     timeZone: "UTC",
     ...options,
   }).format(date);
@@ -3448,14 +3365,15 @@ function renderHeroBlitz() {
     }
     heroBlitzLabel.textContent = "BLITZ";
     heroBlitzTitle.textContent = blitzInlineStatus
-      ? (isEnglishUi ? "Blitz is getting a new read" : "Blitz hämtar nytt läge")
-      : (isEnglishUi ? "Next move, right now" : "Nästa drag, just nu");
+      ? t("blitz.reloadTitle", "Blitz hämtar nytt läge")
+      : t("shell.curated.wildcardTitle", "Nästa drag, just nu");
     heroBlitzSummary.textContent = blitzInlineStatus
-      ? (isEnglishUi ? "Planner and Pulse still work while the next move reloads in the background." : "Planner och Pulse fungerar fortfarande medan nästa drag laddar om i bakgrunden.")
-      : (isEnglishUi ? "Place, time, and today’s signals are weighed together." : "Plats, tid och dagens signaler vägs in.");
-    heroBlitzMeta.textContent = isEnglishUi
-      ? "Start from place and time when you just want to know what feels strongest now."
-      : "Utgå från plats och tid när du bara vill veta vad som känns starkast nu.";
+      ? t("blitz.reloadSummary", "Planner och Pulse fungerar fortfarande medan nästa drag laddar om i bakgrunden.")
+      : t("shell.curated.wildcardSummary", "Plats, tid och dagens signaler vägs in.");
+    heroBlitzMeta.textContent = t(
+      "blitz.defaultMeta",
+      "Utgå från plats och tid när du bara vill veta vad som känns starkast nu.",
+    );
     heroBlitzFollowup.hidden = !blitzInlineStatus;
     heroBlitzFollowup.textContent = blitzInlineStatus;
     heroBlitzTags.innerHTML = "";
@@ -3487,8 +3405,8 @@ function renderHeroBlitz() {
   });
   heroBlitzApplyButton.textContent =
     move.kind === "mini_route_60"
-      ? (isEnglishUi ? "Open mini-route" : "Öppna mini-rutt")
-      : (isEnglishUi ? "Open stop" : "Öppna stopp");
+      ? t("blitz.openMiniRoute", "Öppna mini-rutt")
+      : t("blitz.openStop", "Öppna stopp");
   heroBlitzShuffleButton.textContent = `↻ ${isEnglishUi ? "New" : "Nytt"}`;
   heroBlitzApplyButton.disabled = blitzLoading;
   heroBlitzShuffleButton.disabled = blitzLoading;
@@ -3592,7 +3510,7 @@ async function loadHeroBlitz({ openAfter = false } = {}) {
     }
 
     blitzState = null;
-    blitzInlineStatus = "Blitz hämtar nytt läge just nu. Försök igen om en liten stund.";
+    blitzInlineStatus = t("blitz.inlineBusy", "Blitz hämtar nytt läge just nu. Försök igen om en liten stund.");
     renderHeroBlitz();
     throw error;
   } finally {
@@ -4309,23 +4227,41 @@ function renderCityPulseTeaser() {
   cityPulseTeaser.classList.toggle("is-pre-plan", prePlanContext);
 
   if (plannedContext) {
-    cityPulseTeaserLabel.textContent = "PASSAR DIN DAG";
+    cityPulseTeaserLabel.textContent = t("pulse.teaserPlannedLabel", "PASSAR DIN DAG");
     cityPulseTeaserTitle.textContent = activeDayEventCount
-      ? `${Math.min(activeDayEventCount, 2)} live-spår ligger nära rutten`
-      : "Live-lagret finns längre ner om du vill justera dagen";
+      ? tf(
+          "pulse.teaserPlannedTitle",
+          { count: Math.min(activeDayEventCount, 2) },
+          `${Math.min(activeDayEventCount, 2)} live-spår ligger nära rutten`,
+        )
+      : t("pulse.teaserPlannedTitleEmpty", "Live-lagret finns längre ner om du vill justera dagen");
     cityPulseTeaserSummary.textContent = activeDayEventCount
-      ? `De starkaste spåren ligger direkt efter huvudrutten för ${formatSwedishDate(activeDay?.date || targetDate)}.`
-      : `Öppna live-läget längre ner när du vill väga in ${buildUnavailableCityLabel()} utan att lämna planen.`;
+      ? tf(
+          "pulse.teaserPlannedSummary",
+          { date: formatSwedishDate(activeDay?.date || targetDate) },
+          `De starkaste spåren ligger direkt efter huvudrutten för ${formatSwedishDate(activeDay?.date || targetDate)}.`,
+        )
+      : tf(
+          "pulse.teaserPlannedSummaryEmpty",
+          { city: buildUnavailableCityLabel() },
+          `Öppna live-läget längre ner när du vill väga in ${buildUnavailableCityLabel()} utan att lämna planen.`,
+        );
   } else {
     if (isRomeCuratedMode) {
-      cityPulseTeaserLabel.textContent = "Dagens signaler";
-      cityPulseTeaserTitle.textContent = "Öppna Pulse när du vill väga in läget";
-      cityPulseTeaserSummary.textContent =
-        "Helt valfritt före planeringen. Tänk det som ett extra lager ovanpå dagen.";
+      cityPulseTeaserLabel.textContent = t("pulse.teaserPrePlanLabel", "Dagens signaler");
+      cityPulseTeaserTitle.textContent = t("pulse.teaserPrePlanTitle", "Öppna Pulse när du vill väga in läget");
+      cityPulseTeaserSummary.textContent = t(
+        "pulse.teaserPrePlanSummary",
+        "Helt valfritt före planeringen. Tänk det som ett extra lager ovanpå dagen.",
+      );
     } else {
       cityPulseTeaserLabel.textContent = isInternalCityMode
-        ? "INTERN PREVIEW"
-        : `Just nu i ${buildUnavailableCityLabel()} • ${weekdayLabel} ${dateLabel}`;
+        ? t("preview.internalStub", "INTERN STUB")
+        : tf(
+            "pulse.previewTimeMeta",
+            { city: buildUnavailableCityLabel(), weekday: weekdayLabel, date: dateLabel },
+            `Just nu i ${buildUnavailableCityLabel()} • ${weekdayLabel} ${dateLabel}`,
+          );
       cityPulseTeaserTitle.textContent =
         cityPulseState?.headline || `Aktuellt i ${buildUnavailableCityLabel()}`;
       cityPulseTeaserSummary.textContent =
@@ -4336,11 +4272,11 @@ function renderCityPulseTeaser() {
   if (cityPulseTeaserButton) {
     cityPulseTeaserButton.textContent = plannedContext
       ? activeDayEventCount
-        ? "Se dagens live"
+        ? t("pulse.teaserButtonLive", "Se dagens live")
         : "Pulse"
       : isRomeCuratedMode
         ? "Pulse"
-        : "Läs preview";
+        : t("pulse.teaserButtonPreview", "Läs preview");
   }
 }
 
@@ -4361,7 +4297,7 @@ function getLiveMatchSummaryForPulseItem(item) {
     return "";
   }
 
-  return `Passar bäst med ${formatSwedishDate(day.date)}${event.best_route_label ? ` • ${event.best_route_label}` : ""}`;
+  return `${tf("place.bestWithRoute", { label: formatSwedishDate(day.date) }, `Passar bäst med ${formatSwedishDate(day.date)}`)}${event.best_route_label ? ` • ${event.best_route_label}` : ""}`;
 }
 
 function renderCityPulseDayChips() {
@@ -4442,7 +4378,7 @@ function renderCityPulseTimeline(items, dateString) {
       marker.type = "button";
       marker.className = `city-pulse-timeline-marker is-${status}`;
       marker.style.left = `${left}%`;
-      marker.title = `${item.title} • ${item.timing?.label || item.when || "I dag"}`;
+      marker.title = `${item.title} • ${item.timing?.label || item.when || t("pulse.today", "I dag")}`;
       marker.addEventListener("click", () => {
         openCityPulseItem(item);
       });
@@ -4452,7 +4388,9 @@ function renderCityPulseTimeline(items, dateString) {
   const nowMarker = document.createElement("span");
   nowMarker.className = "city-pulse-timeline-now";
   nowMarker.style.left = `${pulseTimelineOffset(reference.totalMinutes)}%`;
-  nowMarker.textContent = reference.isPreview ? `Preview • ${reference.label}` : `Nu • ${reference.label}`;
+  nowMarker.textContent = reference.isPreview
+    ? tf("pulse.timelinePreview", { label: reference.label }, `Preview • ${reference.label}`)
+    : tf("pulse.timelineNow", { label: reference.label }, `Nu • ${reference.label}`);
   track.appendChild(nowMarker);
 
   cityPulseTimeline.append(track, labels);
@@ -4484,10 +4422,23 @@ function buildPulseUtilityCopy(visibleItems, totalItems) {
   }
 
   if (activePulseScope === "nearby") {
-    return `${scopeLabel} visar ${visibleItems.length} signaler inom cirka ${radiusLabel}. ${timeLabel} håller fokus på det som faktiskt spelar roll nu.`;
+    return tf(
+      "pulse.utilityNearby",
+      { scope: scopeLabel, visible: visibleItems.length, radius: radiusLabel, time: timeLabel },
+      `${scopeLabel} visar ${visibleItems.length} signaler inom cirka ${radiusLabel}. ${timeLabel} håller fokus på det som faktiskt spelar roll nu.`,
+    );
   }
 
-  return `${scopeLabel} visar ${totalItems.length} signaler. Växla till Nära mig för ett närmare lager inom cirka ${radiusLabel}, eller låt ${timeLabel.toLowerCase()} rensa bort det som inte är aktuellt.`;
+  return tf(
+    "pulse.utilityAll",
+    {
+      scope: scopeLabel,
+      total: totalItems.length,
+      radius: radiusLabel,
+      timeLower: timeLabel.toLowerCase(),
+    },
+    `${scopeLabel} visar ${totalItems.length} signaler. Växla till Nära mig för ett närmare lager inom cirka ${radiusLabel}, eller låt ${timeLabel.toLowerCase()} rensa bort det som inte är aktuellt.`,
+  );
 }
 
 function createPulseModeButton({ key, label, active, onClick }) {
@@ -5830,7 +5781,7 @@ function formatSwedishDate(dateString) {
     return "";
   }
 
-  return new Intl.DateTimeFormat(plannerLocale, {
+  return new Intl.DateTimeFormat(uiDateLocale, {
     timeZone: "UTC",
     weekday: "long",
     day: "numeric",
@@ -5849,7 +5800,7 @@ function formatCompactSwedishDate(dateString) {
     return "";
   }
 
-  return new Intl.DateTimeFormat(plannerLocale, {
+  return new Intl.DateTimeFormat(uiDateLocale, {
     timeZone: "UTC",
     day: "numeric",
     month: "short",
@@ -5861,7 +5812,7 @@ function formatSavedTimestamp(dateString) {
     return "";
   }
 
-  return new Intl.DateTimeFormat(plannerLocale, {
+  return new Intl.DateTimeFormat(uiDateLocale, {
     day: "numeric",
     month: "short",
     hour: "2-digit",
@@ -5893,9 +5844,11 @@ function setRouteApiStatus(isAvailable) {
   }
 
   if (isFallbackRequestedCity) {
-    routePlannerModeChip.textContent = isEnglishUi
-      ? `${buildUnavailableCityLabel()} is preparing`
-      : `${buildUnavailableCityLabel()} förbereds`;
+    routePlannerModeChip.textContent = tf(
+      "planner.fallbackPreparing",
+      { city: buildUnavailableCityLabel() },
+      `${buildUnavailableCityLabel()} förbereds`,
+    );
     routeFallbackNote.hidden = false;
     routeFallbackNote.textContent = buildNonRomeFallbackNote();
     return;
@@ -5903,8 +5856,8 @@ function setRouteApiStatus(isAvailable) {
 
   if (isInternalCityMode) {
     routePlannerModeChip.textContent = isAvailable
-      ? (isEnglishUi ? "Internal city preview active" : "Intern city-preview aktiv")
-      : (isEnglishUi ? "Internal preview • fallback" : "Intern preview • fallback");
+      ? t("planner.internalPreviewActive", "Intern city-preview aktiv")
+      : t("planner.internalPreviewFallback", "Intern preview • fallback");
     routeFallbackNote.hidden = false;
     routeFallbackNote.textContent = buildNonRomeFallbackNote();
     return;
@@ -7041,25 +6994,27 @@ async function planFromDrawerItem() {
 
 function openPlaceDrawer(item) {
   activeDrawerItem = item;
-  placeDrawerType.textContent = `${item.type || "plats"} • ${item.area || buildUnavailableCityLabel()}`;
+  placeDrawerType.textContent = `${item.type || t("place.typeFallback", "plats")} • ${item.area || buildUnavailableCityLabel()}`;
   placeDrawerTitle.textContent = item.label;
   placeDrawerSummary.textContent =
-    item.summary || item.vibe || `Kuraterat stopp i ${buildUnavailableCityLabel()}.`;
+    item.summary ||
+    item.vibe ||
+    tf("place.curatedStopFallback", { city: buildUnavailableCityLabel() }, `Kuraterat stopp i ${buildUnavailableCityLabel()}.`);
   placeDrawerRouteFit.hidden = !item.route_fit_note;
   placeDrawerRouteFit.textContent = item.route_fit_note || "";
   placeDrawerDescription.textContent = item.long_description || item.summary || "";
   placeDrawerHappyHour.hidden = !item.happy_hour_note;
   placeDrawerHappyHour.textContent = item.happy_hour_note
-    ? `Bra att veta: ${item.happy_hour_note}`
+    ? tf("place.goodToKnow", { note: item.happy_hour_note }, `Bra att veta: ${item.happy_hour_note}`)
     : "";
   placeDrawerMapsLink.href =
     item.external_map_url || createMapUrl(withPlannerCitySearchLabel(item.label));
   placeDrawerSearchLink.href = item.external_search_url || createGoogleInfoUrl(item.label);
   placeDrawerMapsLink.textContent = item.external_maps_label || "Google Maps";
-  placeDrawerSearchLink.textContent = item.external_search_label || "Google-info";
+  placeDrawerSearchLink.textContent = item.external_search_label || t("place.googleInfo", "Google-info");
   placeDrawerExtraLink.hidden = !item.external_extra_url;
   placeDrawerExtraLink.href = item.external_extra_url || "#";
-  placeDrawerExtraLink.textContent = item.external_extra_label || "Extra länk";
+  placeDrawerExtraLink.textContent = item.external_extra_label || t("place.extraLink", "Extra länk");
 
   const plannerReady = drawerItemCanBeUsedInPlanner(item);
   placeDrawerStartButton.hidden = !plannerReady;
@@ -7067,20 +7022,24 @@ function openPlaceDrawer(item) {
   placeDrawerPlanButton.hidden = !plannerReady;
   placeDrawerPlannerNote.hidden = !plannerReady;
   placeDrawerPlannerNote.textContent = plannerReady
-    ? `${item.label} kan nu användas direkt som startpunkt, slutpunkt eller ny grund i planeringen.`
+    ? tf(
+        "place.drawerPlannerNote",
+        { label: item.label },
+        `${item.label} kan nu användas direkt som startpunkt, slutpunkt eller ny grund i planeringen.`,
+      )
     : "";
 
   placeDrawerMeta.innerHTML = "";
   [
-    item.price_level ? `Pris: ${item.price_level}` : null,
-    item.best_time ? `Bäst: ${item.best_time}` : null,
-    item.opening_summary ? `När: ${item.opening_summary}` : null,
-    item.group_size ? `Grupp: ${item.group_size}` : null,
+    item.price_level ? tf("place.metaPrice", { value: item.price_level }, `Pris: ${item.price_level}`) : null,
+    item.best_time ? tf("place.metaBest", { value: item.best_time }, `Bäst: ${item.best_time}`) : null,
+    item.opening_summary ? tf("place.metaWhen", { value: item.opening_summary }, `När: ${item.opening_summary}`) : null,
+    item.group_size ? tf("place.metaGroup", { value: item.group_size }, `Grupp: ${item.group_size}`) : null,
     item.booking_required === true
-      ? "Bokning smart"
+      ? t("place.metaBooking", "Bokning smart")
       : item.hide_dropin_note
         ? null
-        : "Drop-in går ofta bra",
+        : t("place.metaDropIn", "Drop-in går ofta bra"),
   ]
     .filter(Boolean)
     .forEach((text) => {
@@ -7112,8 +7071,8 @@ function openPlaceDrawer(item) {
   placeDrawerMapButton.disabled = !canFocusOnMap;
   placeDrawerMapButton.textContent =
     item.best_route_id && item.best_route_date
-      ? "Visa matchande dag på kartan"
-      : "Visa på kartan i appen";
+      ? t("place.mapMatchedDay", "Visa matchande dag på kartan")
+      : t("place.mapInApp", "Visa på kartan i appen");
 
   placeDrawer.hidden = false;
   placeDrawerBackdrop.hidden = false;
@@ -7128,11 +7087,14 @@ async function openPlaceDrawerByQuery(query) {
   } catch (error) {
     openPlaceDrawer({
       label: query,
-      type: "redaktionell mention",
+      type: t("place.editorialMention", "redaktionell mention"),
       area: buildUnavailableCityLabel(),
-      summary: "Kunde inte hämta full intern info just nu.",
+      summary: t("place.fetchFallbackSummary", "Kunde inte hämta full intern info just nu."),
       long_description:
-        "Du kan fortfarande hoppa vidare till Google eller Google Maps för att läsa mer om det här stoppet.",
+        t(
+          "place.fetchFallbackDescription",
+          "Du kan fortfarande hoppa vidare till Google eller Google Maps för att läsa mer om det här stoppet.",
+        ),
       external_search_url: createGoogleInfoUrl(query),
       external_map_url: createMapUrl(withPlannerCitySearchLabel(query)),
       tags: [],
@@ -7164,7 +7126,7 @@ function buildEventDrawerItem(event) {
       event.route_fit_note ||
       event.match_reason ||
       event.summary ||
-      `Officiellt event i ${buildUnavailableCityLabel()}.`,
+      tf("place.officialEvent", { city: buildUnavailableCityLabel() }, `Officiellt event i ${buildUnavailableCityLabel()}.`),
     long_description: [
       timing ? `Pågår: ${timing}.` : null,
       venueLine,
@@ -7174,7 +7136,7 @@ function buildEventDrawerItem(event) {
       .filter(Boolean)
       .join(" "),
     opening_summary: timing || null,
-    group_size: event.buy_url ? "Bäst om ni vill kunna boka" : null,
+    group_size: event.buy_url ? t("place.bookable", "Bäst om ni vill kunna boka") : null,
     booking_required: Boolean(event.buy_url),
     hide_dropin_note: !event.buy_url,
     lat: typeof event.lat === "number" ? event.lat : null,
@@ -7186,7 +7148,9 @@ function buildEventDrawerItem(event) {
     best_route_date: event.date || null,
     route_fit_note:
       [
-        event.best_route_label ? `Passar bäst med ${event.best_route_label}` : null,
+        event.best_route_label
+          ? tf("place.bestWithRoute", { label: event.best_route_label }, `Passar bäst med ${event.best_route_label}`)
+          : null,
         event.date ? formatSwedishDate(event.date) : null,
         event.route_fit_note || null,
       ]
@@ -7194,9 +7158,9 @@ function buildEventDrawerItem(event) {
         .join(" • ") || null,
     external_map_url: createMapUrl(withPlannerCitySearchLabel(event.venue || event.title)),
     external_search_url: event.url || createGoogleInfoUrl(event.title),
-    external_search_label: event.url ? "Officiell sida" : "Google-info",
+    external_search_label: event.url ? t("place.officialSite", "Officiell sida") : t("place.googleInfo", "Google-info"),
     external_extra_url: event.buy_url || null,
-    external_extra_label: event.buy_url ? "Köp biljett" : null,
+    external_extra_label: event.buy_url ? t("place.ticket", "Köp biljett") : null,
   };
 }
 

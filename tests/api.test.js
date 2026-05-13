@@ -1,6 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const http = require("node:http");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const { buildApp } = require("../server/app");
 const { routeTemplates, allItems } = require("../server/catalog");
@@ -154,6 +156,15 @@ function assertPlannerIntentFirstPaint(html) {
   assert.doesNotMatch(html, /value="nattliv"\s+checked/);
   assert.doesNotMatch(html, /value="party"/);
 }
+
+test("server/app.js uses keyed shell i18n instead of post-render replacement", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "server", "app.js"), "utf8");
+
+  assert.doesNotMatch(source, /shellHtmlTranslations/);
+  assert.doesNotMatch(source, /applyShellHtmlTranslations/);
+  assert.match(source, /buildStaticShellI18nReplacements/);
+  assert.match(source, /__PARRANDA_I18N_BOOTSTRAP__/);
+});
 
 test.after(() => {
   global.fetch = originalFetch;
@@ -365,11 +376,9 @@ test("GET /barcelona avslöjar fallback i app shell bootstrap innan stad 2 finns
     assert.doesNotMatch(response.body, /Din resa till Rom/);
     assert.doesNotMatch(response.body, /Just nu i Rom/);
     assert.doesNotMatch(response.body, /Monti som kulturstart/);
-    assert.doesNotMatch(response.body, /Rome on a budget/);
-    assert.doesNotMatch(response.body, /La Dolce Vita/);
-    assert.doesNotMatch(response.body, /Rome-wide/);
     assert.doesNotMatch(response.body, /kuraterade Rom-baserade rutter/);
     assert.doesNotMatch(response.body, /de kuraterade Rom-rutterna/);
+    assert.doesNotMatch(response.body, /__PARRANDA_I18N_[A-Z0-9_]+__/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -404,9 +413,8 @@ test("GET /test-city renderar en egen city shell utan Rome-fallback", async () =
     assert.match(response.body, /data-budget-tier="dolce-vita">\s*Premium\s*<\/button>/);
     assert.match(response.body, /<button id="heroBlitzApplyButton" class="secondary-button" type="button" hidden>/);
     assertPlannerIntentFirstPaint(response.body);
-    assert.doesNotMatch(response.body, /Rome on a budget/);
-    assert.doesNotMatch(response.body, /La Dolce Vita/);
     assert.doesNotMatch(response.body, /data-city-label="Rom"/);
+    assert.doesNotMatch(response.body, /__PARRANDA_I18N_[A-Z0-9_]+__/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -443,9 +451,10 @@ test("GET /rome?lang=en renderar engelsk shell och planner utan att byta interna
     assert.match(response.body, /value="nightlife"\s+checked\s*\/>\s*<span>Nightlife<\/span>/);
     assert.match(response.body, /value="second_hand"\s*\/>\s*<span>Second hand<\/span>/);
     assert.match(response.body, /<span class="map-badge planner-day-badge">Main route<\/span>/);
-    assert.doesNotMatch(response.body, /Planera min dag/);
-    assert.doesNotMatch(response.body, /DÄR DU BOR/);
+    assert.doesNotMatch(response.body, /<button[^>]*id="routePlanButton"[^>]*>\s*Planera min dag\s*<\/button>/);
+    assert.doesNotMatch(response.body, /<p class="eyebrow">DÄR DU BOR<\/p>/);
     assert.doesNotMatch(response.body, /value="food_drink"\s+checked\s*\/>\s*<span>Mat &amp; dryck<\/span>/);
+    assert.doesNotMatch(response.body, /__PARRANDA_I18N_[A-Z0-9_]+__/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
