@@ -13,10 +13,10 @@
         "day_profile": "peak",
         "anchor_zone": "Ostiense -> Pigneto",
         "routing_source": "heuristic",
-        "estimated_km": 9.1,
+        "estimated_km": 9,
         "longest_leg_km": 4.7,
         "longest_leg_minutes": 56,
-        "average_leg_minutes": 14,
+        "average_leg_minutes": 15,
         "stops": [
           {
             "label": "Testaccio",
@@ -29,17 +29,12 @@
             "live": false
           },
           {
-            "label": "Piazza dei Sanniti",
-            "area": "San Lorenzo",
-            "live": false
-          },
-          {
-            "label": "Pigneto",
+            "label": "Bottiglieria Pigneto",
             "area": "Pigneto",
             "live": false
           },
           {
-            "label": "Bottiglieria Pigneto",
+            "label": "Pigneto",
             "area": "Pigneto",
             "live": false
           },
@@ -69,27 +64,21 @@
           },
           {
             "from": "San Lorenzo",
-            "to": "Piazza dei Sanniti",
-            "km": 0.2,
-            "minutes": 2
-          },
-          {
-            "from": "Piazza dei Sanniti",
-            "to": "Pigneto",
-            "km": 1.8,
-            "minutes": 22
-          },
-          {
-            "from": "Pigneto",
             "to": "Bottiglieria Pigneto",
-            "km": 0.2,
-            "minutes": 2
+            "km": 2,
+            "minutes": 24
           },
           {
             "from": "Bottiglieria Pigneto",
+            "to": "Pigneto",
+            "km": 0.2,
+            "minutes": 2
+          },
+          {
+            "from": "Pigneto",
             "to": "Bar Bozza",
-            "km": 0.3,
-            "minutes": 4
+            "km": 0.2,
+            "minutes": 2
           },
           {
             "from": "Bar Bozza",
@@ -112,7 +101,7 @@
           "start": "Ostiense",
           "end": "Pigneto/San Lorenzo",
           "shape": "arc",
-          "day_profile": "variation",
+          "day_profile": "peak",
           "anchor_zone": "Ostiense -> Pigneto",
           "stops": [
             "Porto Fluviale",
@@ -131,7 +120,6 @@
           "day_profile": "variation",
           "anchor_zone": "Ostiense -> Pigneto",
           "stops": [
-            "Porto Fluviale",
             "Ostiense/Garbatella",
             "San Lorenzo",
             "Pigneto",
