@@ -159,9 +159,14 @@ function assertPlannerIntentFirstPaint(html) {
 
 test("server/app.js uses keyed shell i18n instead of post-render replacement", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "server", "app.js"), "utf8");
+  const removedSymbols = [
+    ["shell", "Html", "Translations"].join(""),
+    ["apply", "Shell", "Html", "Translations"].join(""),
+  ];
 
-  assert.doesNotMatch(source, /shellHtmlTranslations/);
-  assert.doesNotMatch(source, /applyShellHtmlTranslations/);
+  removedSymbols.forEach((symbolName) => {
+    assert.equal(source.includes(symbolName), false);
+  });
   assert.match(source, /buildStaticShellI18nReplacements/);
   assert.match(source, /__PARRANDA_I18N_BOOTSTRAP__/);
 });
