@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="sv">
+<html lang="__PARRANDA_LANG__">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -15,7 +15,7 @@
     <meta property="og:title" content="__PARRANDA_OG_TITLE__" />
     <meta property="og:description" content="__PARRANDA_OG_DESCRIPTION__" />
     <meta property="og:type" content="website" />
-    <meta property="og:locale" content="sv_SE" />
+    <meta property="og:locale" content="__PARRANDA_OG_LOCALE__" />
     <meta property="og:image" content="/assets/icons/icon-512.png" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="__PARRANDA_TWITTER_TITLE__" />
@@ -33,9 +33,11 @@
     <link rel="stylesheet" href="styles.css?v=19" />
     <script>
       window.__PARRANDA_CITY__ = __PARRANDA_CITY_BOOTSTRAP__;
+      window.__PARRANDA_I18N__ = __PARRANDA_I18N_BOOTSTRAP__;
+      window.__PARRANDA_LANGUAGE__ = "__PARRANDA_UI_LANG__";
     </script>
   </head>
-  <body data-city-key="__PARRANDA_CITY_KEY__" data-city-label="__PARRANDA_CITY_LABEL__">
+  <body data-city-key="__PARRANDA_CITY_KEY__" data-city-label="__PARRANDA_CITY_LABEL__" data-lang="__PARRANDA_LANG__">
     <div class="page-shell">
       <header class="hero">
         <nav class="topbar">
@@ -52,7 +54,7 @@
           <section class="planner-launch-strip hero-planner-starter">
             <div class="planner-launch-copy">
               <div>
-                <p class="eyebrow">PLANERA</p>
+                <p class="eyebrow">__PARRANDA_I18N_PLANNER_EYEBROW__</p>
                 <h2 id="plannerLaunchTitle">__PARRANDA_PLANNER_TITLE__</h2>
               </div>
               <p id="plannerLaunchSummary" class="planner-launch-note">
@@ -60,27 +62,27 @@
               </p>
             </div>
             <div class="planner-launch-markers" aria-hidden="true">
-              <span>Bas</span>
-              <span>Tempo</span>
-              <span>Känsla</span>
+              <span>__PARRANDA_I18N_MARKER_BASE__</span>
+              <span>__PARRANDA_I18N_MARKER_TEMPO__</span>
+              <span>__PARRANDA_I18N_MARKER_MOOD__</span>
             </div>
             <div class="planner-launch-actions">
               <button id="routePlannerOpenButton" class="primary-button" type="button">
                 __PARRANDA_PLANNER_CTA_LABEL__
               </button>
               <button id="routePlannerManualButton" class="secondary-button" type="button" hidden>
-                Jag vill styra själv
+                __PARRANDA_I18N_MANUAL_BUTTON__
               </button>
               <p id="plannerLaunchMicrocopy" class="planner-launch-micro">__PARRANDA_PLANNER_MICROCOPY__</p>
               <div id="plannerRestoreNotice" class="planner-restore-notice" hidden>
-                <p class="planner-restore-label">Senaste plan</p>
+                <p class="planner-restore-label">__PARRANDA_I18N_RESTORE_LABEL__</p>
                 <p id="plannerRestoreSummary" class="planner-restore-copy"></p>
                 <div class="planner-restore-actions">
                   <button id="plannerRestoreButton" class="primary-button" type="button">
-                    Fortsätt med senaste plan
+                    __PARRANDA_I18N_RESTORE_BUTTON__
                   </button>
                   <button id="plannerRestoreDismissButton" class="ghost-button" type="button">
-                    Inte nu
+                    __PARRANDA_I18N_RESTORE_DISMISS__
                   </button>
                 </div>
               </div>
@@ -88,7 +90,7 @@
           </section>
         </section>
 
-        <section class="hero-quickstart hero-idea-strip" aria-label="Blitz nästa drag">
+        <section class="hero-quickstart hero-idea-strip" aria-label="__PARRANDA_I18N_BLITZ_ARIA__">
           <div class="hero-quickstart-copy">
             <p id="heroBlitzLabel" class="panel-label">__PARRANDA_WILDCARD_LABEL__</p>
             <h2 id="heroBlitzTitle">__PARRANDA_WILDCARD_TITLE__</h2>
@@ -105,14 +107,14 @@
                 class="ghost-button hero-blitz-origin-button is-active"
                 type="button"
               >
-                Vald plats
+                __PARRANDA_I18N_SELECTED_PLACE__
               </button>
               <button
                 id="heroBlitzCurrentOriginButton"
                 class="ghost-button hero-blitz-origin-button"
                 type="button"
               >
-                Min plats
+                __PARRANDA_I18N_MY_LOCATION__
               </button>
             </div>
             <div id="heroBlitzTags" class="panel-tags">
@@ -122,34 +124,34 @@
             </div>
             <div class="hero-panel-actions">
               <button id="heroBlitzApplyButton" class="secondary-button" type="button" __PARRANDA_WILDCARD_ACTIONS_HIDDEN__>
-                Kör Blitz
+                __PARRANDA_I18N_BLITZ_APPLY__
               </button>
               <button
                 id="heroBlitzShuffleButton"
                 class="ghost-button"
                 type="button"
-                aria-label="Nytt förslag"
+                aria-label="__PARRANDA_I18N_BLITZ_SHUFFLE__"
                 __PARRANDA_WILDCARD_ACTIONS_HIDDEN__
               >
-                Nytt förslag
+                __PARRANDA_I18N_BLITZ_SHUFFLE__
               </button>
             </div>
           </div>
         </section>
 
         <button class="ghost-button install-button" id="installButton" hidden>
-          Installera appen
+          __PARRANDA_I18N_INSTALL_APP__
         </button>
       </header>
 
       <main>
-        <nav class="tab-nav" aria-label="Appsektioner">
+        <nav class="tab-nav" aria-label="__PARRANDA_I18N_TAB_NAV_ARIA__">
           <button id="heroLiveButton" class="tab-button utility-tab-button hero-live-button" type="button">
             <span class="hero-live-dot" aria-hidden="true"></span>
             <span>Pulse</span>
           </button>
-          <button class="tab-button" data-tab="districts">Stadsdelar</button>
-          <button class="tab-button" data-tab="overview">Karta</button>
+          <button class="tab-button" data-tab="districts">__PARRANDA_I18N_TAB_DISTRICTS__</button>
+          <button class="tab-button" data-tab="overview">__PARRANDA_I18N_TAB_MAP__</button>
         </nav>
 
         <section class="tab-panel" data-tab-panel="overview">
@@ -366,17 +368,17 @@
           <section id="cityPulseTeaser" class="city-pulse-teaser" aria-live="polite">
             <div class="city-pulse-live">
               <span class="city-pulse-live-dot" aria-hidden="true"></span>
-              <p class="city-pulse-live-label">PULSE</p>
+              <p class="city-pulse-live-label">__PARRANDA_I18N_PULSE_TEASER_LIVE__</p>
             </div>
             <div class="city-pulse-teaser-copy">
-              <p id="cityPulseTeaserLabel" class="city-pulse-edition-label">Passar din dag</p>
-              <h2 id="cityPulseTeaserTitle">Laddar dagens live-lager...</h2>
+              <p id="cityPulseTeaserLabel" class="city-pulse-edition-label">__PARRANDA_I18N_PULSE_TEASER_LABEL__</p>
+              <h2 id="cityPulseTeaserTitle">__PARRANDA_I18N_PULSE_TEASER_TITLE__</h2>
               <p id="cityPulseTeaserSummary" class="city-pulse-teaser-summary">
-                Aktuellt nära rutten och resten av staden.
+                __PARRANDA_I18N_PULSE_TEASER_SUMMARY__
               </p>
             </div>
             <button id="cityPulseTeaserButton" class="ghost-button" type="button">
-              Se live-läget
+              __PARRANDA_I18N_PULSE_TEASER_BUTTON__
             </button>
           </section>
 
@@ -389,12 +391,12 @@
           >
             <div class="planner-modal-head">
               <div>
-                <p class="eyebrow">§ PLANERARE</p>
-                <h2 id="plannerModalTitle">Planera dagen</h2>
+                <p class="eyebrow">__PARRANDA_I18N_PLANNER_MODAL_EYEBROW__</p>
+                <h2 id="plannerModalTitle">__PARRANDA_I18N_PLANNER_MODAL_TITLE__</h2>
                 <p class="planner-modal-lead">
-                  Välj datum och känsla. Parranda kan välja start och slut åt dig, eller så styr du själv.
+                  __PARRANDA_I18N_PLANNER_MODAL_LEAD__
                 </p>
-                <div class="planner-mode-switch" role="tablist" aria-label="Planeringsläge">
+                <div class="planner-mode-switch" role="tablist" aria-label="__PARRANDA_I18N_PLANNER_MODE_ARIA__">
                   <button
                     id="plannerModeAutoButton"
                     class="planner-mode-button is-active"
@@ -402,7 +404,7 @@
                     data-planner-mode="auto"
                     aria-selected="true"
                   >
-                    Låt Parranda välja
+                    __PARRANDA_I18N_PLANNER_MODE_AUTO__
                   </button>
                   <button
                     id="plannerModeManualButton"
@@ -411,88 +413,87 @@
                     data-planner-mode="manual"
                     aria-selected="false"
                   >
-                    Jag vill styra själv
+                    __PARRANDA_I18N_PLANNER_MODE_MANUAL__
                   </button>
                 </div>
                 <p id="plannerModeLead" class="planner-mode-lead">
-                  Snabbast: välj datum, känsla och eventuell plats där du bor.
+                  __PARRANDA_I18N_PLANNER_MODE_LEAD__
                 </p>
               </div>
-              <button id="closePlannerModalButton" class="ghost-button" type="button">Stäng</button>
+              <button id="closePlannerModalButton" class="ghost-button" type="button">__PARRANDA_I18N_CLOSE__</button>
             </div>
             <form id="routePlannerForm" class="route-builder-form">
               <div class="route-builder-grid">
                 <article class="planner-panel planner-panel-wide planner-panel-priority planner-step-panel">
                   <div class="planner-panel-head">
-                    <p class="eyebrow">DET VIKTIGASTE</p>
+                    <p class="eyebrow">__PARRANDA_I18N_ESSENTIALS_EYEBROW__</p>
                     <span id="routePlannerModeChip" class="planner-default-note">
-                      Parranda väljer start och slut
+                      __PARRANDA_I18N_AUTO_CHIP__
                     </span>
                   </div>
-                  <p class="planner-panel-copy">Datum, känsla och gånglängd räcker. Lägg till hotell eller område bara om det hjälper.</p>
+                  <p class="planner-panel-copy">__PARRANDA_I18N_ESSENTIALS_COPY__</p>
                   <div class="planner-inline-grid">
                     <label class="search-box route-lab-field">
-                      <span>Från datum</span>
+                      <span>__PARRANDA_I18N_FROM_DATE__</span>
                       <input id="routeDateFrom" type="date" />
                     </label>
                     <label class="search-box route-lab-field">
-                      <span>Till datum</span>
+                      <span>__PARRANDA_I18N_TO_DATE__</span>
                       <input id="routeDateTo" type="date" />
                     </label>
                     <label class="search-box route-lab-field">
-                      <span>Avstånd</span>
+                      <span>__PARRANDA_I18N_DISTANCE__</span>
                       <select id="distanceModeSelect">
-                        <option value="soft_target">Ungefärlig längd</option>
-                        <option value="no_limit">Spelar ingen roll</option>
+                        <option value="soft_target">__PARRANDA_I18N_DISTANCE_APPROX__</option>
+                        <option value="no_limit">__PARRANDA_I18N_DISTANCE_FLEXIBLE__</option>
                       </select>
                     </label>
                     <label class="search-box route-lab-field">
-                      <span>Gånglängd i km</span>
+                      <span>__PARRANDA_I18N_WALKING_KM__</span>
                       <input id="walkingKmTarget" type="range" min="4" max="18" step="1" value="9" />
                     </label>
                     <div class="planner-km-readout">
                       <strong id="walkingKmValue">9 km</strong>
-                      <p>Ungefärlig gånglängd. Parranda kan justera om dagen blir tydligt bättre.</p>
+                      <p>__PARRANDA_I18N_WALKING_KM_HELP__</p>
                     </div>
                   </div>
                   <div class="planner-preferences">
-                    <p class="route-mentions-label">Vad vill du ha mer av längs vägen?</p>
+                    <p class="route-mentions-label">__PARRANDA_I18N_PREFERENCES_LABEL__</p>
                     <div class="preference-chip-grid">
-                      <label class="preference-chip"><input type="checkbox" value="food_drink" checked /> <span>Mat &amp; dryck</span></label>
-                      <label class="preference-chip"><input type="checkbox" value="culture" checked /> <span>Kultur</span></label>
-                      <label class="preference-chip"><input type="checkbox" value="second_hand" /> <span>Second hand</span></label>
-                      <label class="preference-chip"><input type="checkbox" value="hidden_gems" checked /> <span>Hidden gems</span></label>
-                      <label class="preference-chip"><input type="checkbox" value="views" /> <span>Utsikt</span></label>
-                      <label class="preference-chip"><input type="checkbox" value="nightlife" checked /> <span>Kvällsliv</span></label>
-                      <label class="preference-chip"><input type="checkbox" value="history" /> <span>Historia</span></label>
-                      <label class="preference-chip"><input type="checkbox" value="green_walk" /> <span>Grönt &amp; promenad</span></label>
+                      <label class="preference-chip"><input type="checkbox" value="food_drink" checked /> <span>__PARRANDA_I18N_INTENT_FOOD_DRINK__</span></label>
+                      <label class="preference-chip"><input type="checkbox" value="culture" checked /> <span>__PARRANDA_I18N_INTENT_CULTURE__</span></label>
+                      <label class="preference-chip"><input type="checkbox" value="second_hand" /> <span>__PARRANDA_I18N_INTENT_SECOND_HAND__</span></label>
+                      <label class="preference-chip"><input type="checkbox" value="hidden_gems" checked /> <span>__PARRANDA_I18N_INTENT_HIDDEN_GEMS__</span></label>
+                      <label class="preference-chip"><input type="checkbox" value="views" /> <span>__PARRANDA_I18N_INTENT_VIEWS__</span></label>
+                      <label class="preference-chip"><input type="checkbox" value="nightlife" checked /> <span>__PARRANDA_I18N_INTENT_NIGHTLIFE__</span></label>
+                      <label class="preference-chip"><input type="checkbox" value="history" /> <span>__PARRANDA_I18N_INTENT_HISTORY__</span></label>
+                      <label class="preference-chip"><input type="checkbox" value="green_walk" /> <span>__PARRANDA_I18N_INTENT_GREEN_WALK__</span></label>
                     </div>
                   </div>
                   <section id="plannerHomeBaseShell" class="planner-home-base-shell">
                     <div class="planner-panel-head">
                       <div>
-                        <p class="eyebrow">DÄR DU BOR</p>
+                        <p class="eyebrow">__PARRANDA_I18N_WHERE_STAYING_EYEBROW__</p>
                         <p class="planner-panel-copy">
-                          Hotell eller område är valfritt. Parranda använder det som mjuk kontext,
-                          inte som exakt startpunkt.
+                          __PARRANDA_I18N_WHERE_STAYING_COPY__
                         </p>
                       </div>
-                      <span class="planner-default-note">Valfritt</span>
+                      <span class="planner-default-note">__PARRANDA_I18N_OPTIONAL__</span>
                     </div>
                     <label class="search-box route-lab-field">
-                      <span>Hotell eller område</span>
+                      <span>__PARRANDA_I18N_HOTEL_OR_AREA__</span>
                       <select id="homeBaseModeSelect">
-                        <option value="auto">Parranda väljer</option>
-                        <option value="preset">Välj område</option>
-                        <option value="current_location">Min plats</option>
-                        <option value="custom">Hotell/adress</option>
+                        <option value="auto">__PARRANDA_I18N_CHOOSE__</option>
+                        <option value="preset">__PARRANDA_I18N_CHOOSE_AREA__</option>
+                        <option value="current_location">__PARRANDA_I18N_MY_LOCATION__</option>
+                        <option value="custom">__PARRANDA_I18N_HOTEL_ADDRESS__</option>
                       </select>
                     </label>
                     <p id="homeBaseModeHint" class="planner-mode-help">
-                      Lämna öppet om du vill att Parranda väljer en naturlig utgångspunkt själv.
+                      __PARRANDA_I18N_HOME_BASE_AUTO_HINT__
                     </p>
                     <label class="search-box route-lab-field" data-mode-field="home-base-preset" hidden>
-                      <span>Välj område</span>
+                      <span>__PARRANDA_I18N_CHOOSE_AREA__</span>
                       <select id="homeBasePresetSelect" hidden></select>
                       <div
                         id="homeBaseDistrictButtons"
@@ -503,11 +504,11 @@
                       <div id="homeBaseDistrictSubButtons" class="planner-district-subgrid" hidden></div>
                     </label>
                     <label class="search-box route-lab-field" data-mode-field="home-base-custom" hidden>
-                      <span>Skriv hotell, adress eller område</span>
+                      <span>__PARRANDA_I18N_ENTER_HOTEL_ADDRESS_AREA__</span>
                       <input
                         id="homeBaseCustomInput"
                         type="text"
-                        placeholder="t.ex. hotellet, Trastevere eller nära Termini"
+                        placeholder="__PARRANDA_I18N_HOME_CUSTOM_PLACEHOLDER__"
                       />
                     </label>
                     <div class="route-lab-actions" hidden>
@@ -516,14 +517,14 @@
                         class="secondary-button"
                         type="button"
                       >
-                        Använd plats från kartan
+                        __PARRANDA_I18N_USE_MAP_PLACE__
                       </button>
                       <button
                         id="useGeolocationAsHomeBaseButton"
                         class="ghost-button"
                         type="button"
                       >
-                        Använd min plats
+                        __PARRANDA_I18N_USE_MY_LOCATION__
                       </button>
                     </div>
                   </section>
@@ -536,13 +537,13 @@
                 >
                   <summary class="planner-fine-tune-summary">
                     <div>
-                      <p class="eyebrow">MANUELL START OCH SLUT</p>
+                      <p class="eyebrow">__PARRANDA_I18N_MANUAL_SECTION_EYEBROW__</p>
                       <p class="planner-panel-copy">
-                        Använd bara om du vill låsa var dagen börjar eller slutar.
+                        __PARRANDA_I18N_MANUAL_SECTION_COPY__
                       </p>
                     </div>
                     <p id="plannerAdvancedSummary" class="planner-advanced-meta">
-                      Parranda väljer start och slut om du lämnar detta öppet.
+                      __PARRANDA_I18N_ADVANCED_SUMMARY_AUTO__
                     </p>
                   </summary>
 
@@ -550,23 +551,23 @@
                     <div id="plannerManualShell" class="planner-anchor-grid" hidden>
                       <article class="planner-panel planner-panel-subtle planner-anchor-card">
                         <div class="planner-panel-head">
-                          <p class="eyebrow">STARTA HÄR</p>
-                          <span class="planner-default-note">Valfritt</span>
+                          <p class="eyebrow">__PARRANDA_I18N_START_HERE__</p>
+                          <span class="planner-default-note">__PARRANDA_I18N_OPTIONAL__</span>
                         </div>
                         <label class="search-box route-lab-field">
-                          <span>Startpunkt</span>
+                          <span>__PARRANDA_I18N_START_POINT__</span>
                           <select id="startModeSelect">
-                            <option value="auto">Parranda väljer</option>
-                            <option value="preset">Välj område</option>
-                            <option value="current_location">Min plats</option>
-                            <option value="custom">Egen plats</option>
+                            <option value="auto">__PARRANDA_I18N_CHOOSE__</option>
+                            <option value="preset">__PARRANDA_I18N_CHOOSE_AREA__</option>
+                            <option value="current_location">__PARRANDA_I18N_MY_LOCATION__</option>
+                            <option value="custom">__PARRANDA_I18N_CUSTOM_PLACE__</option>
                           </select>
                         </label>
                         <p id="startModeHint" class="planner-mode-help">
-                          Parranda väljer en smart öppning om du inte låser den själv.
+                          __PARRANDA_I18N_START_AUTO_HINT__
                         </p>
                         <label class="search-box route-lab-field" data-mode-field="start-preset" hidden>
-                          <span>Välj startområde</span>
+                          <span>__PARRANDA_I18N_CHOOSE_START_AREA__</span>
                           <select id="startPresetSelect" hidden></select>
                           <div
                             id="startDistrictButtons"
@@ -577,42 +578,42 @@
                           <div id="startDistrictSubButtons" class="planner-district-subgrid" hidden></div>
                         </label>
                         <label class="search-box route-lab-field" data-mode-field="start-custom" hidden>
-                          <span>Skriv startplats</span>
+                          <span>__PARRANDA_I18N_ENTER_START_PLACE__</span>
                           <input
                             id="startCustomInput"
                             type="text"
-                            placeholder="t.ex. Piazza Trilussa eller Termini"
+                            placeholder="__PARRANDA_I18N_START_PLACEHOLDER__"
                           />
                         </label>
                         <div class="route-lab-actions" hidden>
                           <button id="useCurrentPlaceButton" class="secondary-button" type="button">
-                            Använd plats från kartan
+                            __PARRANDA_I18N_USE_MAP_PLACE__
                           </button>
                           <button id="useGeolocationButton" class="ghost-button" type="button">
-                            Använd min plats
+                            __PARRANDA_I18N_USE_MY_LOCATION__
                           </button>
                         </div>
                       </article>
 
                       <article class="planner-panel planner-panel-subtle planner-anchor-card">
                         <div class="planner-panel-head">
-                          <p class="eyebrow">SLUTA HÄR</p>
-                          <span class="planner-default-note">Valfritt</span>
+                          <p class="eyebrow">__PARRANDA_I18N_END_HERE__</p>
+                          <span class="planner-default-note">__PARRANDA_I18N_OPTIONAL__</span>
                         </div>
                         <label class="search-box route-lab-field">
-                          <span>Slutpunkt</span>
+                          <span>__PARRANDA_I18N_END_POINT__</span>
                           <select id="endModeSelect">
-                            <option value="auto">Parranda väljer</option>
-                            <option value="preset">Välj område</option>
-                            <option value="current_location">Min plats</option>
-                            <option value="custom">Egen plats</option>
+                            <option value="auto">__PARRANDA_I18N_CHOOSE__</option>
+                            <option value="preset">__PARRANDA_I18N_CHOOSE_AREA__</option>
+                            <option value="current_location">__PARRANDA_I18N_MY_LOCATION__</option>
+                            <option value="custom">__PARRANDA_I18N_CUSTOM_PLACE__</option>
                           </select>
                         </label>
                         <p id="endModeHint" class="planner-mode-help">
-                          Parranda väljer ett tydligt avslut om du inte låser slutpunkten.
+                          __PARRANDA_I18N_END_AUTO_HINT__
                         </p>
                         <label class="search-box route-lab-field" data-mode-field="end-preset" hidden>
-                          <span>Välj slutområde</span>
+                          <span>__PARRANDA_I18N_CHOOSE_END_AREA__</span>
                           <select id="endPresetSelect" hidden></select>
                           <div
                             id="endDistrictButtons"
@@ -623,16 +624,16 @@
                           <div id="endDistrictSubButtons" class="planner-district-subgrid" hidden></div>
                         </label>
                         <label class="search-box route-lab-field" data-mode-field="end-custom" hidden>
-                          <span>Skriv slutplats</span>
+                          <span>__PARRANDA_I18N_ENTER_END_PLACE__</span>
                           <input
                             id="endCustomInput"
                             type="text"
-                            placeholder="t.ex. Piazza Navona eller Ostiense"
+                            placeholder="__PARRANDA_I18N_END_PLACEHOLDER__"
                           />
                         </label>
                         <div class="route-lab-actions" hidden>
                           <button id="useMapAsEndButton" class="secondary-button" type="button">
-                            Sätt kartplats som slut
+                            __PARRANDA_I18N_SET_MAP_PLACE_AS_END__
                           </button>
                         </div>
                       </article>
@@ -640,31 +641,31 @@
 
                     <div class="planner-style-layers planner-style-layers-step">
                       <div class="planner-style-row">
-                        <p class="route-mentions-label">Prisnivå</p>
+                        <p class="route-mentions-label">__PARRANDA_I18N_PRICE_LEVEL__</p>
                         <div class="optimizer-mode-grid">
                           <button class="optimizer-button is-active" type="button" data-budget-tier="standard">
-                            Standard
+                            __PARRANDA_I18N_BUDGET_STANDARD__
                           </button>
                           <button class="optimizer-button" type="button" data-budget-tier="budget">
-                            Budgetsmart
+                            __PARRANDA_I18N_BUDGET_SMART__
                           </button>
                           <button class="optimizer-button" type="button" data-budget-tier="dolce-vita">
-                            Premium
+                            __PARRANDA_I18N_BUDGET_PREMIUM__
                           </button>
                         </div>
                       </div>
 
                       <div class="planner-style-row">
                         <label class="search-box route-lab-field">
-                          <span>Max promenad mellan stopp</span>
+                          <span>__PARRANDA_I18N_MAX_WALK__</span>
                           <select id="legPacingSelect">
-                            <option value="short">Kort</option>
-                            <option value="balanced" selected>Balans</option>
-                            <option value="flexible">Spelar mindre roll</option>
+                            <option value="short">__PARRANDA_I18N_LEG_SHORT__</option>
+                            <option value="balanced" selected>__PARRANDA_I18N_LEG_BALANCED__</option>
+                            <option value="flexible">__PARRANDA_I18N_LEG_FLEXIBLE__</option>
                           </select>
                         </label>
                         <p id="legPacingHint" class="planner-mode-help">
-                          Balans håller benen rimliga utan att bli onödigt strikt.
+                          __PARRANDA_I18N_LEG_BALANCED_HINT__
                         </p>
                       </div>
                     </div>
@@ -674,10 +675,10 @@
 
               <div class="route-builder-actions route-builder-actions-final">
                 <button id="routePlanButton" class="primary-button" type="submit">
-                  Planera min dag
+                  __PARRANDA_I18N_PLAN_MY_DAY__
                 </button>
                 <button id="routeResetButton" class="ghost-button" type="button">
-                  Nollställ val
+                  __PARRANDA_I18N_RESET_CHOICES__
                 </button>
               </div>
 
@@ -685,7 +686,7 @@
 
               <div class="planner-mobile-actions">
                 <button id="routePlanStickyButton" class="primary-button" type="button">
-                  Planera min dag
+                  __PARRANDA_I18N_PLAN_MY_DAY__
                 </button>
               </div>
             </form>
@@ -694,7 +695,7 @@
 
           <p id="routeMatchSummary" class="route-match-summary" hidden></p>
           <p id="routeFallbackNote" class="route-fallback-note" hidden>
-            Live-läget är inte tillgängligt just nu. Appen visar därför ett tydligt fallback-läge.
+            __PARRANDA_I18N_FALLBACK_NOTE__
           </p>
           <section id="routeResults" class="route-results" aria-live="polite"></section>
 
@@ -704,69 +705,69 @@
               <div class="city-pulse-intro">
                 <div class="city-pulse-live">
                   <span class="city-pulse-live-dot" aria-hidden="true"></span>
-                  <p class="city-pulse-live-label">JUST NU</p>
+                  <p class="city-pulse-live-label">__PARRANDA_I18N_PULSE_NOW__</p>
                 </div>
                 <p id="cityPulseEditionLabel" class="city-pulse-edition-label">
-                  Aktuellt i staden
+                  __PARRANDA_I18N_PULSE_CURRENT__
                 </p>
-                <h2 id="cityPulseHeadline">Laddar dagens live-lager...</h2>
+                <h2 id="cityPulseHeadline">__PARRANDA_I18N_PULSE_TITLE__</h2>
                 <p id="cityPulseSubhead" class="city-pulse-subhead">
-                  Aktuellt nära rutten eller i resten av staden, utan att ta över planeringen.
+                  __PARRANDA_I18N_PULSE_SUMMARY__
                 </p>
               </div>
               <div class="city-pulse-edition-meta">
-                <p class="city-pulse-meta-kicker">Edition</p>
+                <p class="city-pulse-meta-kicker">__PARRANDA_I18N_PULSE_EDITION__</p>
                 <p id="cityPulseEditionDate" class="city-pulse-edition-date">
-                  Staden • i dag
+                  __PARRANDA_I18N_PULSE_DATE__
                 </p>
                 <p id="cityPulseMeta" class="city-pulse-edition-count">
-                  Laddar signaler...
+                  __PARRANDA_I18N_PULSE_SIGNALS__
                 </p>
               </div>
             </div>
             <div class="city-pulse-edition-strip" aria-live="polite">
               <article class="city-pulse-weather-card">
-                <p class="city-pulse-filter-label">Väder</p>
+                <p class="city-pulse-filter-label">__PARRANDA_I18N_PULSE_WEATHER__</p>
                 <p id="cityPulseWeatherValue" class="city-pulse-weather-value">--</p>
-                <p id="cityPulseWeatherBrief" class="city-pulse-weather-copy">Väder laddas...</p>
+                <p id="cityPulseWeatherBrief" class="city-pulse-weather-copy">__PARRANDA_I18N_PULSE_WEATHER_LOADING__</p>
               </article>
               <article class="city-pulse-weather-card">
-                <p class="city-pulse-filter-label">Klädråd</p>
+                <p class="city-pulse-filter-label">__PARRANDA_I18N_PULSE_CLOTHING__</p>
                 <p id="cityPulseClothingValue" class="city-pulse-weather-value">--</p>
                 <p id="cityPulseClothingAdvice" class="city-pulse-weather-copy">
-                  Parranda väger in temperatur och kvällsluft när editionen laddas.
+                  __PARRANDA_I18N_PULSE_CLOTHING_COPY__
                 </p>
               </article>
             </div>
             <div id="cityPulseDayChips" class="city-pulse-day-chips" aria-live="polite"></div>
             <div class="city-pulse-toolbar">
               <div class="city-pulse-filter-group">
-                <span class="city-pulse-filter-label">Var</span>
+                <span class="city-pulse-filter-label">__PARRANDA_I18N_PULSE_WHERE__</span>
                 <div id="cityPulseScopeFilters" class="city-pulse-filter-chips"></div>
               </div>
               <div class="city-pulse-filter-group">
-                <span class="city-pulse-filter-label">När</span>
+                <span class="city-pulse-filter-label">__PARRANDA_I18N_PULSE_WHEN__</span>
                 <div id="cityPulseTimeFilters" class="city-pulse-filter-chips"></div>
               </div>
               <div class="city-pulse-filter-group city-pulse-filter-group-wide">
-                <span class="city-pulse-filter-label">Nivå</span>
+                <span class="city-pulse-filter-label">__PARRANDA_I18N_PULSE_LEVEL__</span>
                 <div id="cityPulseFilters" class="city-pulse-filter-chips"></div>
               </div>
             </div>
             <div class="city-pulse-timeline-shell">
               <div class="city-pulse-timeline-head">
-                <p class="city-pulse-filter-label">Dagens tidslinje</p>
-                <p id="cityPulseTimelineBrief" class="city-pulse-timeline-copy">Tidslinje laddas...</p>
+                <p class="city-pulse-filter-label">__PARRANDA_I18N_PULSE_TIMELINE__</p>
+                <p id="cityPulseTimelineBrief" class="city-pulse-timeline-copy">__PARRANDA_I18N_PULSE_TIMELINE_LOADING__</p>
               </div>
               <div id="cityPulseTimeline" class="city-pulse-timeline" aria-live="polite"></div>
             </div>
             <p id="cityPulseUtilityNote" class="city-pulse-utility-note">
-              LIVE är ett smart lager ovanpå planner-flödet, inte en separat startpunkt.
+              __PARRANDA_I18N_PULSE_UTILITY__
             </p>
             <div id="cityPulseLevels" class="city-pulse-levels" aria-live="polite"></div>
             <div class="city-pulse-footer">
               <p id="cityPulseFooter" class="city-pulse-footer-note">
-                Dagens puls påverkar route plannern redan. Här kan du se varför.
+                __PARRANDA_I18N_PULSE_UTILITY__
               </p>
             </div>
           </section>
@@ -866,21 +867,21 @@
         </div>
         <div class="route-stops"></div>
         <div class="route-mentions">
-          <p class="route-mentions-label">Hidden mentions</p>
+          <p class="route-mentions-label">__PARRANDA_I18N_ROUTE_HIDDEN_MENTIONS__</p>
           <div class="route-pills route-hidden-pills"></div>
         </div>
         <div class="route-mentions">
-          <p class="route-mentions-label">Barer du inte ska missa</p>
+          <p class="route-mentions-label">__PARRANDA_I18N_ROUTE_BAR_MENTIONS__</p>
           <div class="route-pills route-bar-pills"></div>
         </div>
         <div class="route-actions">
           <button class="secondary-button route-select-button" type="button">
-            Visa i appen
+            __PARRANDA_I18N_ROUTE_SHOW_IN_APP__
           </button>
           <button class="ghost-button route-guide-button" type="button">
-            Ren guide
+            __PARRANDA_I18N_ROUTE_CLEAN_GUIDE__
           </button>
-          <a class="map-link route-link" target="_blank" rel="noreferrer">Öppna dagens rutt</a>
+          <a class="map-link route-link" target="_blank" rel="noreferrer">__PARRANDA_I18N_ROUTE_OPEN_TODAY__</a>
         </div>
       </article>
     </template>
@@ -892,7 +893,7 @@
             <p class="eyebrow planner-day-date"></p>
             <h3 class="planner-day-title pa-stop-name"></h3>
           </div>
-          <span class="map-badge planner-day-badge">Din huvudrutt</span>
+          <span class="map-badge planner-day-badge">__PARRANDA_I18N_ROUTE_MAIN_BADGE__</span>
         </div>
         <p class="planner-day-summary"></p>
         <div class="planner-day-outline"></div>
@@ -900,22 +901,22 @@
         <section class="planner-primary-stage">
           <div class="planner-primary-head">
             <div>
-              <p class="route-mentions-label planner-primary-kicker">Rutt i ordning</p>
+              <p class="route-mentions-label planner-primary-kicker">__PARRANDA_I18N_ROUTE_ORDER__</p>
               <p class="planner-primary-route-line"></p>
             </div>
           </div>
           <div class="planner-primary-slot"></div>
         </section>
         <div class="planner-day-events" hidden>
-          <p class="route-mentions-label">Live som passar dagen</p>
+          <p class="route-mentions-label">__PARRANDA_I18N_ROUTE_LIVE_THAT_FITS__</p>
           <div class="planner-events-grid"></div>
         </div>
         <div class="planner-alt-section" hidden>
           <button class="ghost-button planner-alt-toggle" type="button" aria-expanded="false">
-            Visa alternativa upplägg
+            __PARRANDA_I18N_ROUTE_SHOW_ALTERNATIVES__
           </button>
           <div class="planner-alt-body" hidden>
-            <p class="route-mentions-label">Andra sätt att lägga upp samma dag</p>
+            <p class="route-mentions-label">__PARRANDA_I18N_ROUTE_OTHER_WAYS__</p>
             <div class="planner-alt-grid"></div>
           </div>
         </div>
@@ -925,7 +926,7 @@
     <template id="activeDayRouteTemplate">
       <article class="active-day-view">
         <div class="active-day-topline">
-          <p class="route-mentions-label active-day-kicker">Din dag</p>
+          <p class="route-mentions-label active-day-kicker">__PARRANDA_I18N_ROUTE_YOUR_DAY__</p>
           <div class="active-day-meta">
             <span class="route-engine-pill active-day-shape"></span>
             <span class="route-engine-pill active-day-length"></span>
@@ -945,22 +946,22 @@
         <div class="active-day-itinerary"></div>
         <div class="active-day-mentions-grid">
           <div class="route-mentions active-day-mentions" data-kind="hidden" hidden>
-            <p class="route-mentions-label">Hidden mentions</p>
+            <p class="route-mentions-label">__PARRANDA_I18N_ROUTE_HIDDEN_MENTIONS__</p>
             <div class="route-pills active-day-hidden-pills"></div>
           </div>
           <div class="route-mentions active-day-mentions" data-kind="bars" hidden>
-            <p class="route-mentions-label">Barer du inte ska missa</p>
+            <p class="route-mentions-label">__PARRANDA_I18N_ROUTE_BAR_MENTIONS__</p>
             <div class="route-pills active-day-bar-pills"></div>
           </div>
         </div>
         <div class="route-actions active-day-actions">
           <button class="secondary-button active-day-select-button" type="button">
-            Visa i appen
+            __PARRANDA_I18N_ROUTE_SHOW_IN_APP__
           </button>
           <button class="ghost-button active-day-guide-button" type="button">
-            Ren guide
+            __PARRANDA_I18N_ROUTE_CLEAN_GUIDE__
           </button>
-          <a class="map-link active-day-route-link" target="_blank" rel="noreferrer">Öppna dagens rutt</a>
+          <a class="map-link active-day-route-link" target="_blank" rel="noreferrer">__PARRANDA_I18N_ROUTE_OPEN_TODAY__</a>
         </div>
       </article>
     </template>
@@ -970,10 +971,10 @@
       <div class="route-guide-sheet-head">
         <div class="route-guide-top">
           <div>
-            <p id="routeGuideKicker" class="eyebrow">PARRANDA GUIDE</p>
+            <p id="routeGuideKicker" class="eyebrow">__PARRANDA_I18N_ROUTE_GUIDE__</p>
             <h3 id="routeGuideTitle"></h3>
           </div>
-          <button id="closeRouteGuideButton" class="ghost-button" type="button">Stäng</button>
+          <button id="closeRouteGuideButton" class="ghost-button" type="button">__PARRANDA_I18N_CLOSE__</button>
         </div>
         <p id="routeGuideMeta" class="route-guide-meta"></p>
         <p id="routeGuideRouteLine" class="route-guide-route-line"></p>
@@ -981,30 +982,30 @@
         <div id="routeGuideStats" class="route-guide-stats"></div>
       </div>
       <div class="route-guide-block">
-        <p class="route-mentions-label">Varför den här rutten valdes</p>
+        <p class="route-mentions-label">__PARRANDA_I18N_ROUTE_WHY_CHOSEN__</p>
         <p id="routeGuideWhy" class="route-guide-copy"></p>
       </div>
       <div class="route-guide-block">
-        <p class="route-mentions-label">Huvudrutt</p>
+        <p class="route-mentions-label">__PARRANDA_I18N_ROUTE_MAIN__</p>
         <ol id="routeGuideStops" class="route-guide-stops"></ol>
       </div>
       <div id="routeGuideBarsBlock" class="route-guide-block" hidden>
-        <p class="route-mentions-label">Barer du inte ska missa</p>
+        <p class="route-mentions-label">__PARRANDA_I18N_ROUTE_BAR_MENTIONS__</p>
         <div id="routeGuideBars" class="route-pills"></div>
       </div>
       <div id="routeGuideHiddenBlock" class="route-guide-block" hidden>
-        <p class="route-mentions-label">Hidden mentions</p>
+        <p class="route-mentions-label">__PARRANDA_I18N_ROUTE_HIDDEN_MENTIONS__</p>
         <div id="routeGuideHidden" class="route-pills"></div>
       </div>
       <div class="route-guide-actions">
         <button id="routeGuidePrintButton" class="secondary-button" type="button">
-          Spara som PDF
+          __PARRANDA_I18N_ROUTE_SAVE_PDF__
         </button>
         <button id="routeGuideShareButton" class="ghost-button" type="button">
-          Dela guide
+          __PARRANDA_I18N_ROUTE_SHARE_GUIDE__
         </button>
         <a id="routeGuideDirectionsLink" class="map-panel-link" target="_blank" rel="noreferrer">
-          Öppna gångrutt
+          __PARRANDA_I18N_ROUTE_OPEN_WALKING__
         </a>
       </div>
     </aside>
@@ -1012,9 +1013,9 @@
     <div id="placeDrawerBackdrop" class="place-drawer-backdrop" hidden></div>
     <aside id="placeDrawer" class="place-drawer" hidden aria-live="polite">
       <button id="closePlaceDrawerButton" class="ghost-button place-drawer-close" type="button">
-        Stäng
+        __PARRANDA_I18N_CLOSE__
       </button>
-      <p id="placeDrawerType" class="eyebrow">PLATSINFO</p>
+      <p id="placeDrawerType" class="eyebrow">__PARRANDA_I18N_PLACE_INFO__</p>
       <h3 id="placeDrawerTitle"></h3>
       <p id="placeDrawerSummary" class="place-drawer-summary"></p>
       <p id="placeDrawerRouteFit" class="local-note place-drawer-route-fit" hidden></p>
@@ -1024,16 +1025,16 @@
       <p id="placeDrawerHappyHour" class="local-note" hidden></p>
       <div class="place-drawer-actions place-drawer-planner-actions">
         <button id="placeDrawerMapButton" class="secondary-button" type="button">
-          Visa på kartan i appen
+          __PARRANDA_I18N_PLACE_SHOW_ON_MAP__
         </button>
         <button id="placeDrawerStartButton" class="ghost-button" type="button">
-          Sätt som start
+          __PARRANDA_I18N_PLACE_SET_START__
         </button>
         <button id="placeDrawerEndButton" class="ghost-button" type="button">
-          Sätt som mål
+          __PARRANDA_I18N_PLACE_SET_END__
         </button>
         <button id="placeDrawerPlanButton" class="ghost-button" type="button">
-          Planera härifrån
+          __PARRANDA_I18N_PLACE_PLAN_FROM_HERE__
         </button>
       </div>
       <p id="placeDrawerPlannerNote" class="place-drawer-planner-note" hidden></p>
@@ -1042,7 +1043,7 @@
           Google Maps
         </a>
         <a id="placeDrawerSearchLink" class="ghost-button" target="_blank" rel="noreferrer">
-          Google-info
+          __PARRANDA_I18N_PLACE_GOOGLE_INFO__
         </a>
         <a
           id="placeDrawerExtraLink"
@@ -1051,7 +1052,7 @@
           rel="noreferrer"
           hidden
         >
-          Extra länk
+          __PARRANDA_I18N_PLACE_EXTRA_LINK__
         </a>
       </div>
     </aside>

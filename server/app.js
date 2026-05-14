@@ -5,6 +5,7 @@ const { resolveCityConfig } = require("./cities");
 const { buildBlitzDecision } = require("./blitz-engine");
 const { generateRecommendations } = require("./route-engine");
 const { diversifyRecommendationDays } = require("./route-diversity");
+const { buildClientI18nPayload, normalizeLanguage, translate } = require("./ui-i18n");
 
 const appRoot = path.resolve(__dirname, "..");
 const appShellTemplate = fs.readFileSync(path.join(appRoot, "index.html"), "utf8");
@@ -123,6 +124,7 @@ function serializeInlineJson(value) {
   return JSON.stringify(value).replace(/</g, "\\u003c");
 }
 
+
 function resolveShellMode(cityConfig, cityFallbackUsed) {
   if (cityConfig?.visibility === "internal") {
     return "internal-preview";
@@ -137,131 +139,229 @@ function resolveShellMode(cityConfig, cityFallbackUsed) {
 
 function buildShellCopy(shellMode, options = {}) {
   const cityLabel = options.displayLabel || "Staden";
-
-  if (shellMode === "fallback-preview") {
-    return {
-      brandSubtitle: "City preview med ärlig fallback",
-      eyebrow: `${cityLabel.toLocaleUpperCase("sv-SE")} · PREVIEW`,
-      heroHeadline: `${cityLabel} förbereds fortfarande.`,
-      heroLead: "Parranda visar ett ärligt preview-läge tills staden har ett eget kuraterat pack.",
-      heroLiveLabel: "Pulse",
-      plannerTitle: "Planner-preview",
-      plannerSummary: `${cityLabel} har ännu inte ett eget planner-läge. Parranda visar därför en ärlig shell och väntar med kuraterat innehåll tills staden stöds på riktigt.`,
-      plannerCtaLabel: "Se planner-preview",
-      plannerMicrocopy: "Curated innehåll kommer senare.",
-      wildcardLabel: "CITY-STATUS",
-      wildcardTitle: `${cityLabel} förbereds fortfarande`,
-      wildcardSummary:
-        "Parranda visar shellen och city-core-grunden, men blandar inte in Rome-kvarter eller fallback-idéer som om staden redan vore kurerad.",
-      wildcardMeta: "Ingen publik city-lansering än.",
-      wildcardTag1: cityLabel,
-      wildcardTag2: "Förbereds",
-      wildcardTag3: "Neutral shell",
-      wildcardActionsHidden: "hidden",
-    };
-  }
-
-  if (shellMode === "internal-preview") {
-    return {
-      brandSubtitle: "Intern city-core-preview",
-      eyebrow: `${cityLabel.toLocaleUpperCase("sv-SE")} · INTERN PREVIEW`,
-      heroHeadline: `${cityLabel} kör i preview.`,
-      heroLead: "Planner, shell och city-core går att prova här utan Rome-curated lager.",
-      heroLiveLabel: "Pulse",
-      plannerTitle: "Intern planner-preview",
-      plannerSummary: `${cityLabel} är en intern preview. Planner och city-core går att testa, men kuraterade kvarter och wildcard-idéer är avsiktligt avstängda här.`,
-      plannerCtaLabel: "Öppna preview",
-      plannerMicrocopy: "Intern verifiering, inte publik stad.",
-      wildcardLabel: "INTERN STUB",
-      wildcardTitle: `${cityLabel} kör i preview`,
-      wildcardSummary:
-        "Det här läget finns för att bevisa att en andra stad kan leva ovanpå city-core utan att importera Rome-moduler eller Rome-fallback.",
-      wildcardMeta: "Intern verifiering • inte en produktstad.",
-      wildcardTag1: cityLabel,
-      wildcardTag2: "Intern",
-      wildcardTag3: "City-core",
-      wildcardActionsHidden: "hidden",
-    };
-  }
+  const lang = normalizeLanguage(options.lang);
+  const cityUpper = cityLabel.toLocaleUpperCase(lang === "en" ? "en-US" : "sv-SE");
+  const scope =
+    shellMode === "fallback-preview"
+      ? "shell.fallback"
+      : shellMode === "internal-preview"
+        ? "shell.internal"
+        : "shell.curated";
+  const replacements = { city: cityLabel, cityUpper };
+  const tr = (key, fallback = "") => translate(lang, `${scope}.${key}`, replacements, fallback);
 
   return {
-    brandSubtitle: "Kuraterade stadsdagar med mer känsla än kölista",
-    eyebrow: "",
-    heroHeadline: "Planera dagen.",
-    heroLead: "Blitz finns när du redan är ute och bara vill veta nästa drag.",
-    heroLiveLabel: "Pulse",
-    plannerTitle: "Bygg en dag i staden",
-    plannerSummary: "Välj datum och känsla. Parranda sätter ihop rutten.",
-    plannerCtaLabel: "Planera dagen",
-    plannerMicrocopy: "Håll det lätt eller styr mer i nästa steg.",
-    wildcardLabel: "BLITZ",
-    wildcardTitle: "Nästa drag, just nu",
-    wildcardSummary: "Plats, tid och dagens signaler vägs in.",
-    wildcardMeta: "Plats • tid • dagens signaler.",
-    wildcardTag1: "Nu",
-    wildcardTag2: "Plats",
-    wildcardTag3: "Reroll",
-    wildcardActionsHidden: "",
+    brandSubtitle: tr("brandSubtitle"),
+    eyebrow: scope === "shell.curated" ? "" : tr("eyebrow"),
+    heroHeadline: tr("heroHeadline"),
+    heroLead: tr("heroLead"),
+    heroLiveLabel: tr("heroLiveLabel"),
+    plannerTitle: tr("plannerTitle"),
+    plannerSummary: tr("plannerSummary"),
+    plannerCtaLabel: tr("plannerCtaLabel"),
+    plannerMicrocopy: tr("plannerMicrocopy"),
+    wildcardLabel: tr("wildcardLabel"),
+    wildcardTitle: tr("wildcardTitle"),
+    wildcardSummary: tr("wildcardSummary"),
+    wildcardMeta: tr("wildcardMeta"),
+    wildcardTag1: tr("wildcardTag1"),
+    wildcardTag2: tr("wildcardTag2"),
+    wildcardTag3: tr("wildcardTag3"),
+    wildcardActionsHidden: scope === "shell.curated" ? "" : "hidden",
   };
 }
 
 function buildShellMeta(cityConfig, options = {}) {
   const cityLabel = options.displayLabel || cityConfig?.label || "Staden";
   const citySearchLabel = options.searchLabel || cityLabel || getCitySearchLabel(cityConfig);
-
-  if (options.shellMode === "fallback-preview") {
-    return {
-      title: `Parranda | ${cityLabel} preview`,
-      metaDescription: `${cityLabel} visas i preview medan Parranda förbereder stadens eget curated-lager. Shell och city-core är på plats, men lokalt innehåll kommer senare.`,
-      ogTitle: `Parranda | ${cityLabel} preview`,
-      ogDescription: `${cityLabel} är ett preview-läge i Parranda. Shell och city-core är på plats, men curated innehåll kommer senare.`,
-      twitterTitle: `Parranda | ${cityLabel} preview`,
-      twitterDescription: `${cityLabel} visas i preview medan Parranda förbereder stadens eget curated-lager.`,
-      cityMapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-        `${citySearchLabel} hidden gems`,
-      )}`,
-    };
-  }
-
-  if (options.shellMode === "internal-preview") {
-    return {
-      title: `Parranda | ${cityLabel} internal preview`,
-      metaDescription: `${cityLabel} är en intern city-core-preview för att verifiera shell, planner och fallback-beteenden utan Rome-innehåll.`,
-      ogTitle: `Parranda | ${cityLabel} internal preview`,
-      ogDescription: `${cityLabel} är ett internt preview-läge i Parranda för att verifiera city-core och planner utan publik lansering.`,
-      twitterTitle: `Parranda | ${cityLabel} internal preview`,
-      twitterDescription: `${cityLabel} är en intern city-core-preview och inte en publik produktstad.`,
-      cityMapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-        `${citySearchLabel} hidden gems`,
-      )}`,
-    };
-  }
+  const lang = normalizeLanguage(options.lang);
+  const scope =
+    options.shellMode === "fallback-preview"
+      ? "meta.fallback"
+      : options.shellMode === "internal-preview"
+        ? "meta.internal"
+        : "meta.curated";
+  const replacements = { city: cityLabel };
+  const tr = (key, fallback = "") => translate(lang, `${scope}.${key}`, replacements, fallback);
 
   return {
-    title: `Parranda | Personlig City Guide för ${cityLabel}`,
-    metaDescription: `Parranda bygger promenadvänliga och lokalt kuraterade dagar i ${cityLabel} utifrån plats, smak, tempo och stämning.`,
-    ogTitle: `Parranda | Personlig City Guide för ${cityLabel}`,
-    ogDescription: `En personlig city guide för ${cityLabel} med planner, lokala stråk och dagar som känns mer genomtänkta än turistiga.`,
-    twitterTitle: `Parranda | Personlig City Guide för ${cityLabel}`,
-    twitterDescription: `Parranda bygger promenadvänliga och lokalt kuraterade dagar i ${cityLabel} utifrån plats, smak, tempo och stämning.`,
+    title: tr("title"),
+    metaDescription: tr("description"),
+    ogTitle: tr("title"),
+    ogDescription: tr("ogDescription"),
+    twitterTitle: tr("title"),
+    twitterDescription: tr("twitterDescription", tr("description")),
     cityMapUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
       `${citySearchLabel} hidden gems`,
     )}`,
   };
 }
 
-function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed }) {
+function resolveDisplayLabel(cityConfig, requestedLabel, lang) {
+  if (requestedLabel) {
+    return requestedLabel;
+  }
+
+  if (normalizeLanguage(lang) === "en") {
+    return getCitySearchLabel(cityConfig);
+  }
+
+  return cityConfig?.label || "Staden";
+}
+
+function buildStaticShellI18nReplacements(lang) {
+  const tr = (key, fallback = "") => escapeHtml(translate(lang, key, {}, fallback));
+
+  return {
+    "__PARRANDA_I18N_PLANNER_EYEBROW__": tr("shell.plannerEyebrow"),
+    "__PARRANDA_I18N_MARKER_BASE__": tr("shell.markerBase"),
+    "__PARRANDA_I18N_MARKER_TEMPO__": tr("shell.markerTempo"),
+    "__PARRANDA_I18N_MARKER_MOOD__": tr("shell.markerMood"),
+    "__PARRANDA_I18N_MANUAL_BUTTON__": tr("shell.manualButton"),
+    "__PARRANDA_I18N_RESTORE_LABEL__": tr("shell.restoreLabel"),
+    "__PARRANDA_I18N_RESTORE_BUTTON__": tr("shell.restoreButton"),
+    "__PARRANDA_I18N_RESTORE_DISMISS__": tr("shell.restoreDismiss"),
+    "__PARRANDA_I18N_BLITZ_ARIA__": tr("shell.blitzAria"),
+    "__PARRANDA_I18N_SELECTED_PLACE__": tr("shell.originSelected"),
+    "__PARRANDA_I18N_MY_LOCATION__": tr("shell.originCurrent"),
+    "__PARRANDA_I18N_BLITZ_APPLY__": tr("shell.blitzApply"),
+    "__PARRANDA_I18N_BLITZ_SHUFFLE__": tr("shell.blitzShuffle"),
+    "__PARRANDA_I18N_INSTALL_APP__": tr("shell.installApp"),
+    "__PARRANDA_I18N_TAB_NAV_ARIA__": tr("shell.tabNavAria"),
+    "__PARRANDA_I18N_TAB_DISTRICTS__": tr("shell.tabDistricts"),
+    "__PARRANDA_I18N_TAB_MAP__": tr("shell.tabMap"),
+    "__PARRANDA_I18N_PULSE_TEASER_LIVE__": tr("shell.pulseTeaserLive"),
+    "__PARRANDA_I18N_PULSE_TEASER_LABEL__": tr("shell.pulseTeaserLabel"),
+    "__PARRANDA_I18N_PULSE_TEASER_TITLE__": tr("shell.pulseTeaserTitle"),
+    "__PARRANDA_I18N_PULSE_TEASER_SUMMARY__": tr("shell.pulseTeaserSummary"),
+    "__PARRANDA_I18N_PULSE_TEASER_BUTTON__": tr("shell.pulseTeaserButton"),
+    "__PARRANDA_I18N_PLANNER_MODAL_EYEBROW__": tr("planner.modalEyebrow"),
+    "__PARRANDA_I18N_PLANNER_MODAL_TITLE__": tr("planner.modalTitle"),
+    "__PARRANDA_I18N_PLANNER_MODAL_LEAD__": tr("planner.modalLead"),
+    "__PARRANDA_I18N_PLANNER_MODE_ARIA__": tr("planner.modeAria"),
+    "__PARRANDA_I18N_PLANNER_MODE_AUTO__": tr("planner.modeAutoButton"),
+    "__PARRANDA_I18N_PLANNER_MODE_MANUAL__": tr("planner.modeManualButton"),
+    "__PARRANDA_I18N_PLANNER_MODE_LEAD__": tr("planner.modeAutoLead"),
+    "__PARRANDA_I18N_CLOSE__": tr("planner.close"),
+    "__PARRANDA_I18N_ESSENTIALS_EYEBROW__": tr("planner.essentialsEyebrow"),
+    "__PARRANDA_I18N_AUTO_CHIP__": tr("planner.autoChip"),
+    "__PARRANDA_I18N_ESSENTIALS_COPY__": tr("planner.essentialsCopy"),
+    "__PARRANDA_I18N_FROM_DATE__": tr("planner.fromDate"),
+    "__PARRANDA_I18N_TO_DATE__": tr("planner.toDate"),
+    "__PARRANDA_I18N_DISTANCE__": tr("planner.distance"),
+    "__PARRANDA_I18N_DISTANCE_APPROX__": tr("planner.distanceApprox"),
+    "__PARRANDA_I18N_DISTANCE_FLEXIBLE__": tr("planner.distanceFlexible"),
+    "__PARRANDA_I18N_WALKING_KM__": tr("planner.walkingKm"),
+    "__PARRANDA_I18N_WALKING_KM_HELP__": tr("planner.walkingKmHelp"),
+    "__PARRANDA_I18N_PREFERENCES_LABEL__": tr("planner.preferencesLabel"),
+    "__PARRANDA_I18N_INTENT_FOOD_DRINK__": tr("planner.intent.food_drink"),
+    "__PARRANDA_I18N_INTENT_CULTURE__": tr("planner.intent.culture"),
+    "__PARRANDA_I18N_INTENT_SECOND_HAND__": tr("planner.intent.second_hand"),
+    "__PARRANDA_I18N_INTENT_HIDDEN_GEMS__": tr("planner.intent.hidden_gems"),
+    "__PARRANDA_I18N_INTENT_VIEWS__": tr("planner.intent.views"),
+    "__PARRANDA_I18N_INTENT_NIGHTLIFE__": tr("planner.intent.nightlife"),
+    "__PARRANDA_I18N_INTENT_HISTORY__": tr("planner.intent.history"),
+    "__PARRANDA_I18N_INTENT_GREEN_WALK__": tr("planner.intent.green_walk"),
+    "__PARRANDA_I18N_WHERE_STAYING_EYEBROW__": tr("planner.whereStayingEyebrow"),
+    "__PARRANDA_I18N_WHERE_STAYING_COPY__": tr("planner.whereStayingCopy"),
+    "__PARRANDA_I18N_OPTIONAL__": tr("planner.optional"),
+    "__PARRANDA_I18N_HOTEL_OR_AREA__": tr("planner.hotelOrArea"),
+    "__PARRANDA_I18N_CHOOSE__": tr("planner.choose"),
+    "__PARRANDA_I18N_CHOOSE_AREA__": tr("planner.chooseArea"),
+    "__PARRANDA_I18N_HOTEL_ADDRESS__": tr("planner.hotelAddress"),
+    "__PARRANDA_I18N_HOME_BASE_AUTO_HINT__": tr("planner.homeBaseAutoHint"),
+    "__PARRANDA_I18N_ENTER_HOTEL_ADDRESS_AREA__": tr("planner.enterHotelAddressArea"),
+    "__PARRANDA_I18N_HOME_CUSTOM_PLACEHOLDER__": tr("planner.homeCustomPlaceholder"),
+    "__PARRANDA_I18N_USE_MAP_PLACE__": tr("planner.useMapPlace"),
+    "__PARRANDA_I18N_USE_MY_LOCATION__": tr("planner.useMyLocation"),
+    "__PARRANDA_I18N_MANUAL_SECTION_EYEBROW__": tr("planner.manualSectionEyebrow"),
+    "__PARRANDA_I18N_MANUAL_SECTION_COPY__": tr("planner.manualSectionCopy"),
+    "__PARRANDA_I18N_ADVANCED_SUMMARY_AUTO__": tr("planner.advancedSummaryAuto"),
+    "__PARRANDA_I18N_START_HERE__": tr("planner.startHere"),
+    "__PARRANDA_I18N_END_HERE__": tr("planner.endHere"),
+    "__PARRANDA_I18N_START_POINT__": tr("planner.startPoint"),
+    "__PARRANDA_I18N_END_POINT__": tr("planner.endPoint"),
+    "__PARRANDA_I18N_CUSTOM_PLACE__": tr("planner.customPlace"),
+    "__PARRANDA_I18N_START_AUTO_HINT__": tr("planner.startAutoHint"),
+    "__PARRANDA_I18N_END_AUTO_HINT__": tr("planner.endAutoHint"),
+    "__PARRANDA_I18N_CHOOSE_START_AREA__": tr("planner.chooseStartArea"),
+    "__PARRANDA_I18N_CHOOSE_END_AREA__": tr("planner.chooseEndArea"),
+    "__PARRANDA_I18N_ENTER_START_PLACE__": tr("planner.enterStartPlace"),
+    "__PARRANDA_I18N_ENTER_END_PLACE__": tr("planner.enterEndPlace"),
+    "__PARRANDA_I18N_START_PLACEHOLDER__": tr("planner.startPlaceholder"),
+    "__PARRANDA_I18N_END_PLACEHOLDER__": tr("planner.endPlaceholder"),
+    "__PARRANDA_I18N_SET_MAP_PLACE_AS_END__": tr("planner.setMapPlaceAsEnd"),
+    "__PARRANDA_I18N_PRICE_LEVEL__": tr("planner.priceLevel"),
+    "__PARRANDA_I18N_BUDGET_STANDARD__": tr("planner.budgetStandard"),
+    "__PARRANDA_I18N_BUDGET_SMART__": tr("planner.budgetSmart"),
+    "__PARRANDA_I18N_BUDGET_PREMIUM__": tr("planner.budgetPremium"),
+    "__PARRANDA_I18N_MAX_WALK__": tr("planner.maxWalkBetweenStops"),
+    "__PARRANDA_I18N_LEG_SHORT__": tr("planner.legShort"),
+    "__PARRANDA_I18N_LEG_BALANCED__": tr("planner.legBalanced"),
+    "__PARRANDA_I18N_LEG_FLEXIBLE__": tr("planner.legFlexible"),
+    "__PARRANDA_I18N_LEG_BALANCED_HINT__": tr("planner.legBalancedHint"),
+    "__PARRANDA_I18N_PLAN_MY_DAY__": tr("planner.planMyDay"),
+    "__PARRANDA_I18N_RESET_CHOICES__": tr("planner.resetChoices"),
+    "__PARRANDA_I18N_FALLBACK_NOTE__": tr("shell.routeFallbackNote"),
+    "__PARRANDA_I18N_PULSE_NOW__": tr("pulse.firstPaintNow"),
+    "__PARRANDA_I18N_PULSE_CURRENT__": tr("pulse.firstPaintCurrent"),
+    "__PARRANDA_I18N_PULSE_TITLE__": tr("pulse.firstPaintTitle"),
+    "__PARRANDA_I18N_PULSE_SUMMARY__": tr("pulse.firstPaintSummary"),
+    "__PARRANDA_I18N_PULSE_EDITION__": tr("pulse.firstPaintEdition"),
+    "__PARRANDA_I18N_PULSE_DATE__": tr("pulse.firstPaintDate"),
+    "__PARRANDA_I18N_PULSE_SIGNALS__": tr("pulse.firstPaintSignals"),
+    "__PARRANDA_I18N_PULSE_WEATHER__": tr("pulse.firstPaintWeather"),
+    "__PARRANDA_I18N_PULSE_WEATHER_LOADING__": tr("pulse.firstPaintWeatherLoading"),
+    "__PARRANDA_I18N_PULSE_CLOTHING__": tr("pulse.firstPaintClothing"),
+    "__PARRANDA_I18N_PULSE_CLOTHING_COPY__": tr("pulse.firstPaintClothingCopy"),
+    "__PARRANDA_I18N_PULSE_WHERE__": tr("pulse.firstPaintWhere"),
+    "__PARRANDA_I18N_PULSE_WHEN__": tr("pulse.firstPaintWhen"),
+    "__PARRANDA_I18N_PULSE_LEVEL__": tr("pulse.firstPaintLevel"),
+    "__PARRANDA_I18N_PULSE_TIMELINE__": tr("pulse.firstPaintTimeline"),
+    "__PARRANDA_I18N_PULSE_TIMELINE_LOADING__": tr("pulse.firstPaintTimelineLoading"),
+    "__PARRANDA_I18N_PULSE_UTILITY__": tr("pulse.firstPaintUtility"),
+    "__PARRANDA_I18N_ROUTE_MAIN_BADGE__": tr("route.mainBadge"),
+    "__PARRANDA_I18N_ROUTE_ORDER__": tr("route.routeOrder"),
+    "__PARRANDA_I18N_ROUTE_LIVE_THAT_FITS__": tr("route.liveThatFits"),
+    "__PARRANDA_I18N_ROUTE_SHOW_ALTERNATIVES__": tr("route.showAlternatives"),
+    "__PARRANDA_I18N_ROUTE_OTHER_WAYS__": tr("route.otherWays"),
+    "__PARRANDA_I18N_ROUTE_YOUR_DAY__": tr("route.yourDay"),
+    "__PARRANDA_I18N_ROUTE_HIDDEN_MENTIONS__": tr("route.hiddenMentions"),
+    "__PARRANDA_I18N_ROUTE_BAR_MENTIONS__": tr("route.barMentions"),
+    "__PARRANDA_I18N_ROUTE_SHOW_IN_APP__": tr("route.showInApp"),
+    "__PARRANDA_I18N_ROUTE_CLEAN_GUIDE__": tr("route.cleanGuide"),
+    "__PARRANDA_I18N_ROUTE_OPEN_TODAY__": tr("route.openToday"),
+    "__PARRANDA_I18N_ROUTE_GUIDE__": tr("route.guide"),
+    "__PARRANDA_I18N_ROUTE_WHY_CHOSEN__": tr("route.whyChosen"),
+    "__PARRANDA_I18N_ROUTE_MAIN__": tr("route.main"),
+    "__PARRANDA_I18N_ROUTE_SAVE_PDF__": tr("route.savePdf"),
+    "__PARRANDA_I18N_ROUTE_SHARE_GUIDE__": tr("route.shareGuide"),
+    "__PARRANDA_I18N_ROUTE_OPEN_WALKING__": tr("route.openWalking"),
+    "__PARRANDA_I18N_PLACE_INFO__": tr("place.info"),
+    "__PARRANDA_I18N_PLACE_SHOW_ON_MAP__": tr("place.showOnMap"),
+    "__PARRANDA_I18N_PLACE_SET_START__": tr("place.setStart"),
+    "__PARRANDA_I18N_PLACE_SET_END__": tr("place.setEnd"),
+    "__PARRANDA_I18N_PLACE_PLAN_FROM_HERE__": tr("place.planFromHere"),
+    "__PARRANDA_I18N_PLACE_GOOGLE_INFO__": tr("place.googleInfo"),
+    "__PARRANDA_I18N_PLACE_EXTRA_LINK__": tr("place.extraLink"),
+  };
+}
+
+function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed, lang = "sv" }) {
+  const uiLang = normalizeLanguage(lang);
   const requestedLabel = cityFallbackUsed ? humanizeCityKey(requestedCity) : "";
-  const displayLabel = requestedLabel || cityConfig.label;
+  const displayLabel = resolveDisplayLabel(cityConfig, requestedLabel, uiLang);
   const searchLabel = requestedLabel || getCitySearchLabel(cityConfig);
   const shellMode = resolveShellMode(cityConfig, cityFallbackUsed);
   const shellCopy = buildShellCopy(shellMode, {
     displayLabel,
+    lang: uiLang,
   });
   const meta = buildShellMeta(cityConfig, {
     displayLabel,
     searchLabel,
     shellMode,
+    lang: uiLang,
   });
   const bootstrap = {
     key: cityConfig.key,
@@ -274,9 +374,15 @@ function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed }) {
     searchLabel,
     requestedKey: requestedCity,
     fallbackUsed: cityFallbackUsed,
+    lang: uiLang,
   };
+  const i18nBootstrap = buildClientI18nPayload();
 
   const replacements = {
+    "__PARRANDA_LANG__": escapeHtml(uiLang),
+    "__PARRANDA_UI_LANG__": escapeHtml(uiLang),
+    "__PARRANDA_I18N_BOOTSTRAP__": serializeInlineJson(i18nBootstrap),
+    "__PARRANDA_OG_LOCALE__": uiLang === "en" ? "en_US" : "sv_SE",
     "__PARRANDA_TITLE__": escapeHtml(meta.title),
     "__PARRANDA_META_DESCRIPTION__": escapeHtml(meta.metaDescription),
     "__PARRANDA_OG_TITLE__": escapeHtml(meta.ogTitle),
@@ -304,12 +410,15 @@ function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed }) {
     "__PARRANDA_WILDCARD_TAG_3__": escapeHtml(shellCopy.wildcardTag3),
     "__PARRANDA_WILDCARD_ACTIONS_HIDDEN__": shellCopy.wildcardActionsHidden,
     "__PARRANDA_CITY_BOOTSTRAP__": serializeInlineJson(bootstrap),
+    ...buildStaticShellI18nReplacements(uiLang),
   };
 
-  return Object.entries(replacements).reduce(
+  const renderedShell = Object.entries(replacements).reduce(
     (html, [token, replacement]) => html.split(token).join(replacement),
     appShellTemplate,
   );
+
+  return renderedShell;
 }
 
 function inferShellCity(request) {
@@ -326,7 +435,10 @@ function buildApp() {
 
   app.use(express.json());
   app.get(["/", "/index.html"], (request, response) => {
-    const cityResolution = resolveRequestCity(inferShellCity(request));
+    const cityResolution = {
+      ...resolveRequestCity(inferShellCity(request)),
+      lang: normalizeLanguage(request.query?.lang),
+    };
     response.type("html").send(renderAppShell(cityResolution));
   });
 
@@ -565,7 +677,10 @@ function buildApp() {
       return;
     }
 
-    const cityResolution = resolveRequestCity(inferShellCity(request));
+    const cityResolution = {
+      ...resolveRequestCity(inferShellCity(request)),
+      lang: normalizeLanguage(request.query?.lang),
+    };
     response.type("html").send(renderAppShell(cityResolution));
   });
 
