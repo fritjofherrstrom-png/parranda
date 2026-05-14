@@ -5081,7 +5081,8 @@ function buildLatestPlannerRestoreSummary(record) {
           .map(getPlannerIntentLabel)
           .slice(0, 2)
       : [];
-  const countLabel = `${record.plannerResponse?.days?.length || 1} dag${record.plannerResponse?.days?.length === 1 ? "" : "ar"}`;
+  const dayCount = record.plannerResponse?.days?.length || 1;
+  const countLabel = `${dayCount} ${dayCount === 1 ? (isEnglishUi ? "day" : "dag") : (isEnglishUi ? "days" : "dagar")}`;
 
   return [dateLabel, countLabel, explicitIntentLabels.join(" • ")]
     .filter(Boolean)

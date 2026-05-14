@@ -439,12 +439,12 @@ test("GET /rome?lang=en renderar engelsk shell och planner utan att byta interna
 
     assert.equal(response.status, 200);
     assert.match(response.body, /<html lang="en">/);
-    assert.match(response.body, /<body data-city-key="rome" data-city-label="Rom" data-lang="en">/);
+    assert.match(response.body, /<body data-city-key="rome" data-city-label="Rome" data-lang="en">/);
     assert.match(response.body, /window\.__PARRANDA_LANGUAGE__ = "en"/);
     assert.match(response.body, /"lang":"en"/);
-    assert.match(response.body, /<title>Parranda \| Personal City Guide for Rom<\/title>/);
+    assert.match(response.body, /<title>Parranda \| Personal City Guide for Rome<\/title>/);
     assert.ok(response.body.includes("Curated city days with more feeling than a checklist"));
-    assert.ok(response.body.includes("Build your day in Rom"));
+    assert.ok(response.body.includes("Build your day in Rome"));
     assert.ok(response.body.includes("Choose a date and mood. Parranda builds the route."));
     assert.ok(response.body.includes("Plan the day"));
     assert.ok(response.body.includes("Let Parranda choose"));

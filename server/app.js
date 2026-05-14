@@ -197,6 +197,18 @@ function buildShellMeta(cityConfig, options = {}) {
   };
 }
 
+function resolveDisplayLabel(cityConfig, requestedLabel, lang) {
+  if (requestedLabel) {
+    return requestedLabel;
+  }
+
+  if (normalizeLanguage(lang) === "en") {
+    return getCitySearchLabel(cityConfig);
+  }
+
+  return cityConfig?.label || "Staden";
+}
+
 function buildStaticShellI18nReplacements(lang) {
   const tr = (key, fallback = "") => escapeHtml(translate(lang, key, {}, fallback));
 
@@ -338,7 +350,7 @@ function buildStaticShellI18nReplacements(lang) {
 function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed, lang = "sv" }) {
   const uiLang = normalizeLanguage(lang);
   const requestedLabel = cityFallbackUsed ? humanizeCityKey(requestedCity) : "";
-  const displayLabel = requestedLabel || cityConfig.label;
+  const displayLabel = resolveDisplayLabel(cityConfig, requestedLabel, uiLang);
   const searchLabel = requestedLabel || getCitySearchLabel(cityConfig);
   const shellMode = resolveShellMode(cityConfig, cityFallbackUsed);
   const shellCopy = buildShellCopy(shellMode, {
