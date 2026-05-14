@@ -633,6 +633,149 @@ test("GET /api/city-pulse returnerar stadspuls, wildcard och officiella tips", a
   }
 });
 
+test("GET /api/city-pulse använder lang bara för Pulse-prosa och behåller metadata", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "www.turismoroma.it") {
+      return {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        async text() {
+          return `
+            <div class="views-row views-row-1">
+              <div class="news_info">
+                <div class="news_titolo_container">
+                  <div class="news_titolo">
+                    <div class="field-content">
+                      <a href="/en/events/roma-birthday-street-show">Roma Birthday Street Show</a>
+                    </div>
+                  </div>
+                </div>
+                <div class="news_date">
+                  <div class="field-content">
+                    <span class="date-display-start">from&nbsp;14-05-2026</span>
+                    <span class="date-display-end">&nbsp;to&nbsp;14-05-2026</span>
+                  </div>
+                </div>
+                <div class="news_tipo">
+                  <div class="field-content"><a href="/en/tipo-evento/events">Events</a></div>
+                </div>
+                <div class="news_sedi">
+                  <div class="field-content"><a href="/en/places/trastevere">Trastevere</a></div>
+                </div>
+                <div class="news_indirizzo">Piazza Trilussa</div>
+                <div class="news_text">
+                  <div class="field-content"><p>Pågår nu provider summary that should remain source-owned.</p></div>
+                </div>
+              </div>
+            </div>
+          `;
+        },
+      };
+    }
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-05-14"],
+          weathercode: [1],
+          temperature_2m_max: [24],
+          temperature_2m_min: [14],
+        },
+        current: {
+          temperature_2m: 19,
+          weather_code: 1,
+          is_day: 1,
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during city-pulse lang test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const sv = await requestJson(server, {
+      path: "/api/city-pulse?date=2026-05-14&lang=sv",
+    });
+    const en = await requestJson(server, {
+      path: "/api/city-pulse?date=2026-05-14&lang=en",
+    });
+
+    assert.equal(sv.status, 200);
+    assert.equal(en.status, 200);
+    assert.equal(sv.body.city, en.body.city);
+    assert.equal(sv.body.requested_city, en.body.requested_city);
+    assert.equal(sv.body.city_fallback_used, en.body.city_fallback_used);
+    assert.equal(sv.body.date, en.body.date);
+    assert.deepEqual(
+      (sv.body.items || []).map((item) => item.id),
+      (en.body.items || []).map((item) => item.id),
+    );
+    assert.deepEqual(
+      (sv.body.items || []).map((item) => item.tags || []),
+      (en.body.items || []).map((item) => item.tags || []),
+    );
+    assert.deepEqual(
+      (sv.body.items || []).map((item) => item.route_hints || null),
+      (en.body.items || []).map((item) => item.route_hints || null),
+    );
+    assert.deepEqual(
+      (sv.body.items || []).map((item) => item.official_event_id || null),
+      (en.body.items || []).map((item) => item.official_event_id || null),
+    );
+    assert.deepEqual(
+      (sv.body.official_events || []).map((event) => event.id),
+      (en.body.official_events || []).map((event) => event.id),
+    );
+
+    assert.match(sv.body.headline, /kväll|Rom|puls/i);
+    assert.match(en.body.headline, /strong night|tonight|neighborhood|pulse|Rome/i);
+    assert.notEqual(sv.body.headline, en.body.headline);
+    assert.ok((en.body.items || []).some((item) => item.title === "Thursday is gnocchi day"));
+    assert.ok((en.body.items || []).some((item) => item.kind === "Venue level"));
+
+    const parrandaOwnedEnFields = {
+      headline: en.body.headline,
+      subhead: en.body.subhead,
+      note: en.body.note,
+      footer_note: en.body.footer_note,
+      moments: (en.body.moments || []).map((item) => ({
+        kind: item.kind,
+        kindLabel: item.kindLabel,
+        title: item.title,
+        note: item.note,
+      })),
+      items: (en.body.items || [])
+        .filter((item) => !String(item.id || "").startsWith("official-"))
+        .map((item) => ({
+          kind: item.kind,
+          kindLabel: item.kindLabel,
+          title: item.title,
+          where: item.where,
+          when: item.when,
+          blurb: item.blurb,
+          why_it_matters: item.why_it_matters,
+          note: item.note,
+        })),
+    };
+
+    assert.doesNotMatch(
+      JSON.stringify(parrandaOwnedEnFields),
+      /Pågår nu|Hela Rom|Ställesnivå|Torsdag är|April och maj|Stadens rytm|Kvarterspuls/i,
+    );
+    assert.match(
+      JSON.stringify(en.body.official_events || []),
+      /Det här är ett kort livefönster/,
+    );
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("GET /api/city-pulse kan köras för test-city med no-op services", async () => {
   global.fetch = async (url) => {
     const parsed = new URL(String(url));
