@@ -1130,6 +1130,105 @@ test("POST /api/route-recommendations bygger en tydlig båge mellan Trastevere o
   }
 });
 
+test("POST /api/route-recommendations använder lang en bara för route-result prose", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-05-15"],
+          weathercode: [61],
+          temperature_2m_max: [19],
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during route prose language test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+  const body = {
+    dates: ["2026-05-15"],
+    start: { type: "preset", label: "Trastevere" },
+    end: { type: "preset", label: "Ostiense/Garbatella" },
+    walking_km_target: 9,
+    preferences: ["vin", "mat", "nattliv"],
+    distance_mode: "no_limit",
+    modifier: "evening",
+  };
+  const userFacingRouteText = (responseBody) => {
+    const day = responseBody.days[0];
+    const route = day.primary_route;
+    return [
+      route.title,
+      route.summary,
+      route.why_recommended,
+      route.weather_note,
+      route.pulse_note,
+      route.live_event_fit_note,
+      route.area_note,
+      route.geo_fit_note,
+      route.leg_fit_note,
+      route.budget_note,
+      ...(day.date_signals || []).flatMap((signal) => [signal.title, signal.note]),
+    ]
+      .filter(Boolean)
+      .join(" ");
+  };
+
+  try {
+    const [svResponse, enResponse] = await Promise.all([
+      requestJson(server, {
+        method: "POST",
+        path: "/api/route-recommendations?lang=sv",
+        body,
+      }),
+      requestJson(server, {
+        method: "POST",
+        path: "/api/route-recommendations?lang=en",
+        body,
+      }),
+    ]);
+
+    assert.equal(svResponse.status, 200);
+    assert.equal(enResponse.status, 200);
+
+    const svDay = svResponse.body.days[0];
+    const enDay = enResponse.body.days[0];
+    const svPrimary = svDay.primary_route;
+    const enPrimary = enDay.primary_route;
+
+    assert.equal(enResponse.body.days.length, svResponse.body.days.length);
+    assert.equal(enDay.alternatives.length, svDay.alternatives.length);
+    assert.equal(enPrimary.main_stops.length, svPrimary.main_stops.length);
+    assert.deepEqual(
+      enPrimary.main_stops.map((stop) => stop.id),
+      svPrimary.main_stops.map((stop) => stop.id),
+    );
+    assert.deepEqual(
+      enPrimary.main_stops.map((stop) => stop.label),
+      svPrimary.main_stops.map((stop) => stop.label),
+    );
+    assert.deepEqual(
+      enPrimary.main_stops.map((stop) => stop.tags),
+      svPrimary.main_stops.map((stop) => stop.tags),
+    );
+
+    const svText = userFacingRouteText(svResponse.body);
+    const enText = userFacingRouteText(enResponse.body);
+
+    assert.notEqual(enText, svText);
+    assert.match(svText, /vin och stad|Helgpuls|En tydlig båge|Regn väntas/i);
+    assert.doesNotMatch(enText, /Börja i|vin och stad|En tydlig rutt|En tydlig båge|Helgpuls|Regn väntas|Just nu i|Live i dag|Huvudrutten/i);
+    assert.match(enText, /wine and city|Weekend pulse|A clear route|Rain is expected/i);
+  } finally {
+    server.close();
+    global.fetch = originalFetch;
+    resetLiveEventsCache();
+  }
+});
+
 test("POST /api/route-recommendations returnerar gångben och låter leg pacing påverka rutten", async () => {
   global.fetch = async (url) => {
     const parsed = new URL(String(url));
