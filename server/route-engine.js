@@ -44,8 +44,8 @@ function getPulseForDate(date) {
   return getActiveCityConfig().services.getCityPulse(date);
 }
 
-function getDateSignalsForDate(date) {
-  return getActiveCityConfig().services.getDateSignals(date);
+function getDateSignalsForDate(date, lang = "sv") {
+  return getActiveCityConfig().services.getDateSignals(date, lang);
 }
 
 async function fetchWeatherForActiveCity(dates, anchor) {
@@ -716,6 +716,66 @@ const modifierLabel = {
   low_key: "mer low-key",
   party: "mer party",
 };
+
+const modifierLabelEn = {
+  evening: "more evening",
+  culture: "more culture",
+  low_key: "more low-key",
+  party: "more party",
+};
+
+const preferenceLabelEn = {
+  mat: "food",
+  vin: "wine",
+  nattliv: "nightlife",
+  cocktail: "cocktails",
+  "öl": "beer",
+  kultur: "culture",
+  kyrkor: "churches",
+  klassiker: "classics",
+  utsikt: "views",
+  "hidden gems": "hidden gems",
+  second_hand: "second hand",
+  secondhand: "second hand",
+  "grönt": "green walks",
+  "promenad": "walking",
+  low_key: "low-key",
+  party: "party",
+  kväll: "evening",
+};
+
+function normalizeRouteResultLanguage(lang = "sv") {
+  return lang === "en" ? "en" : "sv";
+}
+
+function isEnglishRouteResult(lang) {
+  return normalizeRouteResultLanguage(lang) === "en";
+}
+
+function routeText(lang, sv, en) {
+  return isEnglishRouteResult(lang) ? en : sv;
+}
+
+function routePreferenceLabel(preference, lang = "sv") {
+  if (!isEnglishRouteResult(lang)) {
+    return preference;
+  }
+
+  return preferenceLabelEn[preference] || preference;
+}
+
+function routeModifierLabel(modifier, lang = "sv") {
+  if (!isEnglishRouteResult(lang)) {
+    return modifierLabel[modifier] || modifier;
+  }
+
+  return modifierLabelEn[modifier] || modifier;
+}
+
+function formatApproxKm(km, lang = "sv") {
+  const value = Number(km).toFixed(1);
+  return routeText(lang, `cirka ${value} km`, `about ${value} km`);
+}
 
 const autoAnchorKinds = new Set(["district", "district-group"]);
 
@@ -1826,7 +1886,7 @@ function buildRouteGeoProfile(routeArea, startProfile, endProfile) {
   };
 }
 
-function areaScore({ routeStops, startPoint, endPoint, distanceMode }) {
+function areaScore({ routeStops, startPoint, endPoint, distanceMode, lang = "sv" }) {
   if (!Array.isArray(routeStops) || !routeStops.length) {
     return {
       score: 0,
@@ -1883,9 +1943,15 @@ function areaScore({ routeStops, startPoint, endPoint, distanceMode }) {
 
     if (routeProfile.dominantMacro === startProfile.primaryMacro) {
       notes.push(
-        `Rutten håller sig främst i ${macroLabel(startProfile.primaryMacro)} runt ${
-          tokenLabel(routeProfile.dominantToken) || startProfile.primaryLabel
-        } i stället för att dra tvärs över stan i onödan.`,
+        routeText(
+          lang,
+          `Rutten håller sig främst i ${macroLabel(startProfile.primaryMacro)} runt ${
+            tokenLabel(routeProfile.dominantToken) || startProfile.primaryLabel
+          } i stället för att dra tvärs över stan i onödan.`,
+          `The route stays mostly in ${macroLabel(startProfile.primaryMacro)} around ${
+            tokenLabel(routeProfile.dominantToken) || startProfile.primaryLabel
+          } instead of pulling across town unnecessarily.`,
+        ),
       );
     }
   } else if (startProfile?.primaryMacro && endProfile?.primaryMacro) {
@@ -1895,9 +1961,15 @@ function areaScore({ routeStops, startPoint, endPoint, distanceMode }) {
     ) {
       score += areaTuning.crossMacroBridgeScore ?? 4.5;
       notes.push(
-        `Rutten binder ihop ${macroLabel(startProfile.primaryMacro)} och ${macroLabel(
-          endProfile.primaryMacro,
-        )} på ett mer naturligt sätt än de mer generiska looparna.`,
+        routeText(
+          lang,
+          `Rutten binder ihop ${macroLabel(startProfile.primaryMacro)} och ${macroLabel(
+            endProfile.primaryMacro,
+          )} på ett mer naturligt sätt än de mer generiska looparna.`,
+          `The route connects ${macroLabel(startProfile.primaryMacro)} and ${macroLabel(
+            endProfile.primaryMacro,
+          )} more naturally than the more generic loops.`,
+        ),
       );
     } else {
       score -= areaTuning.crossMacroMissPenalty ?? 2.5;
@@ -1921,7 +1993,11 @@ function areaScore({ routeStops, startPoint, endPoint, distanceMode }) {
 
   if (!notes.length && startProfile?.primaryToken && routeProfile.tokens.has(startProfile.primaryToken)) {
     notes.push(
-      `Rutten tar faktiskt avstamp i ${startProfile.primaryLabel} i stället för att direkt hoppa till fel sida av stan.`,
+      routeText(
+        lang,
+        `Rutten tar faktiskt avstamp i ${startProfile.primaryLabel} i stället för att direkt hoppa till fel sida av stan.`,
+        `The route actually starts from ${startProfile.primaryLabel} instead of immediately jumping to the wrong side of town.`,
+      ),
     );
   }
 
@@ -1990,7 +2066,7 @@ function pointAdjacencyScore(anchorPoint, stopPoint) {
   return -4;
 }
 
-function weatherScore(route, weather) {
+function weatherScore(route, weather, lang = "sv") {
   if (!weather) {
     return { score: 0, note: null };
   }
@@ -2000,17 +2076,35 @@ function weatherScore(route, weather) {
 
   if (weather.condition === "rain") {
     score += route.weatherProfile.rain || 0;
-    notes.push("Regn väntas, så inomhus- och kvartersstopp väger lite tyngre.");
+    notes.push(
+      routeText(
+        lang,
+        "Regn väntas, så inomhus- och kvartersstopp väger lite tyngre.",
+        "Rain is expected, so indoor and neighborhood stops carry a little more weight.",
+      ),
+    );
   } else if (weather.condition === "sun") {
     score += route.weatherProfile.sun || 0;
-    notes.push("Soligt väder gör utevyer och längre promenadpartier extra starka.");
+    notes.push(
+      routeText(
+        lang,
+        "Soligt väder gör utevyer och längre promenadpartier extra starka.",
+        "Sunny weather makes viewpoints and longer outdoor stretches stronger.",
+      ),
+    );
   } else {
     score += 1;
   }
 
   if (weather.hot) {
     score += route.weatherProfile.hot || 0;
-    notes.push("Hög värme gör att pauser och skuggigare partier prioriteras.");
+    notes.push(
+      routeText(
+        lang,
+        "Hög värme gör att pauser och skuggigare partier prioriteras.",
+        "Higher heat makes breaks and shadier stretches more important.",
+      ),
+    );
   }
 
   return {
@@ -2073,27 +2167,33 @@ function buildLocalTruthOpeningWarnings(localTruth = {}) {
   return [...warnings];
 }
 
-function buildVenueSpecials(routeStops, weekday) {
+function buildVenueSpecials(routeStops, weekday, lang = "sv") {
   return routeStops
     .filter((stop) => stop.happyHourNote || stop.bookingRequired)
     .map((stop) => {
-      const weekdayLabel = ["söndag", "måndag", "tisdag", "onsdag", "torsdag", "fredag", "lördag"][
-        weekday
-      ];
+      const weekdayLabel = isEnglishRouteResult(lang)
+        ? ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][weekday]
+        : ["söndag", "måndag", "tisdag", "onsdag", "torsdag", "fredag", "lördag"][weekday];
 
       if (stop.happyHourNote && stop.bookingRequired) {
-        return `${stop.name}: ${stop.happyHourNote} Boka gärna om ${weekdayLabel} är en kväll du verkligen vill låsa.`;
+        return isEnglishRouteResult(lang)
+          ? `${stop.name}: ${stop.happyHourNote} Book ahead if ${weekdayLabel} is an evening you really want to lock in.`
+          : `${stop.name}: ${stop.happyHourNote} Boka gärna om ${weekdayLabel} är en kväll du verkligen vill låsa.`;
       }
 
       if (stop.happyHourNote) {
         return `${stop.name}: ${stop.happyHourNote}`;
       }
 
-      return `${stop.name}: boka smart om det här är ett viktigt kvällsankare.`;
+      return routeText(
+        lang,
+        `${stop.name}: boka smart om det här är ett viktigt kvällsankare.`,
+        `${stop.name}: book smart if this is an important evening anchor.`,
+      );
     });
 }
 
-function buildBudgetNote(routeStops, preferences, optimizerMode, budgetTier) {
+function buildBudgetNote(routeStops, preferences, optimizerMode, budgetTier, lang = "sv") {
   const activeBudgetTier = normalizeBudgetTier(preferences, optimizerMode, budgetTier);
 
   if (activeBudgetTier === "standard" || !routeStops.length) {
@@ -2110,28 +2210,52 @@ function buildBudgetNote(routeStops, preferences, optimizerMode, budgetTier) {
 
   if (activeBudgetTier === "budget") {
     if (averagePrice <= 1.05) {
-      return `Budgetläge: den här dagen lutar tydligt mot billig öl, prisvärd mat och stopp som håller nere notan.`;
+      return routeText(
+        lang,
+        "Budgetläge: den här dagen lutar tydligt mot billig öl, prisvärd mat och stopp som håller nere notan.",
+        "Budget-smart: this day leans clearly toward cheaper beer, good-value food, and stops that keep the bill down.",
+      );
     }
 
     if (averagePrice <= 1.65) {
-      return `Budgetläge: dagen håller en ganska snäll prisnivå med ${cheaperStops} tydligt prisvänliga stopp inbakade.`;
+      return routeText(
+        lang,
+        `Budgetläge: dagen håller en ganska snäll prisnivå med ${cheaperStops} tydligt prisvänliga stopp inbakade.`,
+        `Budget-smart: the day stays fairly gentle on price, with ${cheaperStops} clearly budget-friendly stops built in.`,
+      );
     }
 
-    return `Budgetläge: det här är fortfarande ett starkt upplägg, men det finns dyrare stopp längs vägen än i de mest prisvänliga alternativen.`;
+    return routeText(
+      lang,
+      "Budgetläge: det här är fortfarande ett starkt upplägg, men det finns dyrare stopp längs vägen än i de mest prisvänliga alternativen.",
+      "Budget-smart: this is still a strong plan, but there are pricier stops along the way than in the most budget-friendly alternatives.",
+    );
   }
 
   if (premiumStops >= 2 && averagePrice >= 2.3) {
-    return `La Dolce Vita: rutten lutar tydligt mot premiumglas, bokningsvärda stopp och en större kvällskänsla.`;
+    return routeText(
+      lang,
+      "La Dolce Vita: rutten lutar tydligt mot premiumglas, bokningsvärda stopp och en större kvällskänsla.",
+      "La Dolce Vita: the route leans clearly toward premium glasses, bookable stops, and a bigger evening feel.",
+    );
   }
 
   if (averagePrice >= 1.9) {
-    return `La Dolce Vita: den här dagen håller en tydligt högre nivå i glas, middag eller kvällsrum utan att bli stel.`;
+    return routeText(
+      lang,
+      "La Dolce Vita: den här dagen håller en tydligt högre nivå i glas, middag eller kvällsrum utan att bli stel.",
+      "La Dolce Vita: this day keeps a higher level in drinks, dinner, or evening rooms without becoming stiff.",
+    );
   }
 
-  return `La Dolce Vita: dagen har fortfarande några mjukare ankare, men den viktas upp mot mer premium och mer extravagant final.`;
+  return routeText(
+    lang,
+    "La Dolce Vita: dagen har fortfarande några mjukare ankare, men den viktas upp mot mer premium och mer extravagant final.",
+    "La Dolce Vita: the day still has softer anchors, but it is weighted toward more premium and a more extravagant finish.",
+  );
 }
 
-function budgetScore(routeStops, preferences, optimizerMode, budgetTier = "standard") {
+function budgetScore(routeStops, preferences, optimizerMode, budgetTier = "standard", lang = "sv") {
   const activeBudgetTier = normalizeBudgetTier(preferences, optimizerMode, budgetTier);
 
   if (activeBudgetTier === "standard" || !routeStops.length) {
@@ -2153,13 +2277,13 @@ function budgetScore(routeStops, preferences, optimizerMode, budgetTier = "stand
   if (activeBudgetTier === "budget") {
     return {
       score: Math.round((7.5 - averagePrice * 2.4 + cheaperStops * 0.9) * 10) / 10,
-      note: buildBudgetNote(routeStops, preferences, optimizerMode, budgetTier),
+      note: buildBudgetNote(routeStops, preferences, optimizerMode, budgetTier, lang),
     };
   }
 
   return {
     score: Math.round((averagePrice * 2.5 + premiumStops * 1.4 + bookedStops * 0.8 - cheaperStops * 0.3) * 10) / 10,
-    note: buildBudgetNote(routeStops, preferences, optimizerMode, budgetTier),
+    note: buildBudgetNote(routeStops, preferences, optimizerMode, budgetTier, lang),
   };
 }
 
@@ -2980,11 +3104,11 @@ function permuteStops(items) {
   return permutations;
 }
 
-function summarizeLoopGeometry(orderedStops, start, end, startProfile, targetKm, distanceMode, legPacing = "balanced") {
+function summarizeLoopGeometry(orderedStops, start, end, startProfile, targetKm, distanceMode, legPacing = "balanced", lang = "sv") {
   const points = [start, ...orderedStops, end];
   const estimatedKm = walkingKm(points);
   const legs = buildRouteLegs(points);
-  const legMetrics = buildLegMetrics(legs, legPacing, { shape: "loop" });
+  const legMetrics = buildLegMetrics(legs, legPacing, { shape: "loop", lang });
   const firstGap = orderedStops[0] ? haversineKm(start, orderedStops[0]) : 0;
   const lastGap = orderedStops.length ? haversineKm(end, orderedStops[orderedStops.length - 1]) : 0;
   const radiusLimit = loopRadiusKm(targetKm, distanceMode);
@@ -3024,11 +3148,11 @@ function summarizeLoopGeometry(orderedStops, start, end, startProfile, targetKm,
   };
 }
 
-function summarizeArcGeometry(orderedStops, start, end, startProfile, endProfile, targetKm, distanceMode, legPacing = "balanced") {
+function summarizeArcGeometry(orderedStops, start, end, startProfile, endProfile, targetKm, distanceMode, legPacing = "balanced", lang = "sv") {
   const points = [start, ...orderedStops, end];
   const estimatedKm = walkingKm(points);
   const legs = buildRouteLegs(points);
-  const legMetrics = buildLegMetrics(legs, legPacing, { shape: "arc" });
+  const legMetrics = buildLegMetrics(legs, legPacing, { shape: "arc", lang });
   const directKm = Math.max(0.4, haversineKm(start, end) * 1.22);
   const firstGap = orderedStops[0] ? haversineKm(start, orderedStops[0]) : 0;
   const lastGap = orderedStops.length ? haversineKm(end, orderedStops[orderedStops.length - 1]) : 0;
@@ -3087,11 +3211,11 @@ function summarizeArcGeometry(orderedStops, start, end, startProfile, endProfile
   };
 }
 
-function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endProfile, targetKm, distanceMode, legPacing = "balanced") {
+function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endProfile, targetKm, distanceMode, legPacing = "balanced", lang = "sv") {
   if (selectedStops.length <= 1) {
     const summary =
       shape === "loop"
-        ? summarizeLoopGeometry(selectedStops, start, end, startProfile, targetKm, distanceMode, legPacing)
+        ? summarizeLoopGeometry(selectedStops, start, end, startProfile, targetKm, distanceMode, legPacing, lang)
         : summarizeArcGeometry(
             selectedStops,
             start,
@@ -3101,6 +3225,7 @@ function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endPr
             targetKm,
             distanceMode,
             legPacing,
+            lang,
           );
 
     return {
@@ -3115,7 +3240,7 @@ function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endPr
   permuteStops(selectedStops).forEach((candidate) => {
     const geometry =
       shape === "loop"
-        ? summarizeLoopGeometry(candidate, start, end, startProfile, targetKm, distanceMode, legPacing)
+        ? summarizeLoopGeometry(candidate, start, end, startProfile, targetKm, distanceMode, legPacing, lang)
         : summarizeArcGeometry(
             candidate,
             start,
@@ -3125,6 +3250,7 @@ function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endPr
             targetKm,
             distanceMode,
             legPacing,
+            lang,
           );
 
     if (!bestGeometry || geometry.objective < bestGeometry.objective) {
@@ -3155,7 +3281,7 @@ function buildRouteLegs(points) {
   return legs;
 }
 
-function buildLegMetrics(legs = [], legPacing = "balanced", { shape = "loop" } = {}) {
+function buildLegMetrics(legs = [], legPacing = "balanced", { shape = "loop", lang = "sv" } = {}) {
   const pacingKey = normalizeLegPacing(legPacing);
   const pacing = legPacingConfig[pacingKey];
   const validLegs = legs.filter((leg) => Number.isFinite(leg.distance_km));
@@ -3204,18 +3330,42 @@ function buildLegMetrics(legs = [], legPacing = "balanced", { shape = "loop" } =
   let note = null;
 
   if (penalty <= 0.8) {
-    note = "Etapperna håller sig jämna och lätta att följa till fots.";
+    note = routeText(
+      lang,
+      "Etapperna håller sig jämna och lätta att följa till fots.",
+      "The walking legs stay even and easy to follow on foot.",
+    );
   } else if (outlierPenalty > overflowPenalty + variancePenalty && pacingKey === "short") {
     note =
       shape === "arc"
-        ? "Kort trycker ner långa hopp, men ett tydligt mellanben sticker fortfarande ut i bågen."
-        : "Kort försöker hålla rundan jämn, men ett enskilt ben drar fortfarande iväg lite.";
+        ? routeText(
+            lang,
+            "Kort trycker ner långa hopp, men ett tydligt mellanben sticker fortfarande ut i bågen.",
+            "Short-leg mode keeps long jumps down, but one middle leg still stands out in the route.",
+          )
+        : routeText(
+            lang,
+            "Kort försöker hålla rundan jämn, men ett enskilt ben drar fortfarande iväg lite.",
+            "Short-leg mode keeps the loop even, but one leg still stretches a little.",
+          );
   } else if (pacingKey === "short") {
-    note = "Rutten försöker hålla benen korta, men ett eller två hopp blir fortfarande lite längre än idealet.";
+    note = routeText(
+      lang,
+      "Rutten försöker hålla benen korta, men ett eller två hopp blir fortfarande lite längre än idealet.",
+      "The route tries to keep walking legs short, but one or two hops are still a little longer than ideal.",
+    );
   } else if (pacingKey === "flexible") {
-    note = "Rutten tillåter friare ben för att helheten ska bli starkare.";
+    note = routeText(
+      lang,
+      "Rutten tillåter friare ben för att helheten ska bli starkare.",
+      "The route allows freer walking legs so the overall day can be stronger.",
+    );
   } else {
-    note = "Benlängderna är överlag rimliga, men några etapper blir lite längre för att hålla dagen stark.";
+    note = routeText(
+      lang,
+      "Benlängderna är överlag rimliga, men några etapper blir lite längre för att hålla dagen stark.",
+      "The walking legs are mostly reasonable, with a few slightly longer stretches to keep the day strong.",
+    );
   }
 
   return {
@@ -3228,7 +3378,7 @@ function buildLegMetrics(legs = [], legPacing = "balanced", { shape = "loop" } =
   };
 }
 
-async function applyWalkingTruthToRoute(route, { legPacing = "balanced" } = {}) {
+async function applyWalkingTruthToRoute(route, { legPacing = "balanced", lang = "sv" } = {}) {
   if (!route || !Array.isArray(route.map_route_points) || route.map_route_points.length < 2) {
     return route;
   }
@@ -3238,11 +3388,16 @@ async function applyWalkingTruthToRoute(route, { legPacing = "balanced" } = {}) 
   });
   const metrics = buildLegMetrics(truth.legs || [], legPacing, {
     shape: route.route_shape || "loop",
+    lang,
   });
   const providerNote =
     truth.source === "osrm"
-      ? "Verifierad med riktig gångrouting."
-      : "Gångbenen bygger just nu på heuristisk routing.";
+      ? routeText(lang, "Verifierad med riktig gångrouting.", "Verified with real walking routing.")
+      : routeText(
+          lang,
+          "Gångbenen bygger just nu på heuristisk routing.",
+          "Walking legs currently use heuristic routing.",
+        );
   const existingGeoNote = route.geo_fit_note ? `${route.geo_fit_note} ` : "";
 
   return {
@@ -3274,63 +3429,64 @@ function buildAnchorZone(shape, startProfile, endProfile, routeArea) {
   return tokenLabel(routeArea.dominantToken) || currentCityLabel();
 }
 
-function routeToneLabel(optimizerMode, modifier, preferences = [], routeStops = [], weekday = null) {
+function routeToneLabel(optimizerMode, modifier, preferences = [], routeStops = [], weekday = null, lang = "sv") {
   const activeModifier = normalizeModifier(modifier, optimizerMode);
   const secondHandFit = buildSecondHandIntentFit(routeStops, preferences, weekday);
+  const en = isEnglishRouteResult(lang);
 
   if (preferences.includes("second_hand") && secondHandFit.coverage >= 0.34) {
     if (preferences.includes("vin") || preferences.includes("mat")) {
-      return "second hand + vin";
+      return en ? "second hand + wine" : "second hand + vin";
     }
     if (preferences.includes("nattliv") || preferences.includes("cocktail") || preferences.includes("kväll")) {
-      return "second hand + kväll";
+      return en ? "second hand + evening" : "second hand + kväll";
     }
     if (preferences.includes("kultur") || preferences.includes("kyrkor") || preferences.includes("klassiker")) {
       return "second hand + kultur";
     }
 
     return secondHandFit.identity === "market-strong"
-      ? "marknad och vintage"
-      : "second hand och vintage";
+      ? routeText(lang, "marknad och vintage", "market and vintage")
+      : routeText(lang, "second hand och vintage", "second hand and vintage");
   }
 
   if (optimizerMode === "bar-hop") {
     return "barhopping";
   }
   if (optimizerMode === "wine-crawl") {
-    return "vin och mat";
+    return en ? "wine and food" : "vin och mat";
   }
   if (optimizerMode === "cocktail-night") {
-    return "cocktails och natt";
+    return en ? "cocktails and late night" : "cocktails och natt";
   }
   if (optimizerMode === "church-crawl") {
-    return "kyrkor och kultur";
+    return en ? "churches and culture" : "kyrkor och kultur";
   }
   if (optimizerMode === "pizza-freak") {
-    return "pizza och kvarter";
+    return en ? "pizza and neighborhoods" : "pizza och kvarter";
   }
   if (optimizerMode === "sunset-spots") {
-    return "ljus och utsikter";
+    return en ? "light and views" : "ljus och utsikter";
   }
   if (activeModifier === "party") {
-    return "mer party";
+    return routeModifierLabel(activeModifier, lang);
   }
   if (activeModifier === "evening") {
-    return "mer kvall";
+    return routeModifierLabel(activeModifier, lang);
   }
   if (activeModifier === "culture") {
-    return "mer kultur";
+    return routeModifierLabel(activeModifier, lang);
   }
   if (activeModifier === "low_key") {
-    return "mer low-key";
+    return routeModifierLabel(activeModifier, lang);
   }
   if (preferences.includes("vin")) {
-    return "vin och stad";
+    return en ? "wine and city" : "vin och stad";
   }
   if (preferences.includes("kultur")) {
-    return "kultur och promenad";
+    return en ? "culture and walking" : "kultur och promenad";
   }
-  return "lokal rytm";
+  return en ? "local rhythm" : "lokal rytm";
 }
 
 function buildDynamicTitle({
@@ -3343,16 +3499,21 @@ function buildDynamicTitle({
   preferences,
   routeStops = [],
   weekday = null,
+  lang = "sv",
 }) {
   const dominantZone =
     tokenLabel(routeArea.dominantToken) || macroLabel(routeArea.dominantMacro) || currentCityLabel();
-  const tone = routeToneLabel(optimizerMode, modifier, preferences, routeStops, weekday);
+  const tone = routeToneLabel(optimizerMode, modifier, preferences, routeStops, weekday, lang);
 
   if (shape === "loop") {
     return `${start.label} loop • ${dominantZone} • ${tone}`;
   }
 
-  return `${start.label} till ${end.label} • ${dominantZone} • ${tone}`;
+  return routeText(
+    lang,
+    `${start.label} till ${end.label} • ${dominantZone} • ${tone}`,
+    `${start.label} to ${end.label} • ${dominantZone} • ${tone}`,
+  );
 }
 
 function buildDynamicSummary({
@@ -3366,42 +3527,75 @@ function buildDynamicSummary({
   preferences,
   routeStops = [],
   weekday = null,
+  lang = "sv",
 }) {
   const dominantZone =
     tokenLabel(routeArea.dominantToken) || macroLabel(routeArea.dominantMacro) || currentCityLabel();
-  const tone = routeToneLabel(optimizerMode, modifier, preferences, routeStops, weekday);
+  const tone = routeToneLabel(optimizerMode, modifier, preferences, routeStops, weekday, lang);
   const secondHandFit = buildSecondHandIntentFit(routeStops, preferences, weekday);
 
   if (preferences.includes("second_hand") && secondHandFit.coverage >= 0.34) {
     const carryText =
       secondHandFit.identity === "market-strong"
-        ? "där marknadsspåret faktiskt får bära dagen"
-        : "där vintage- och butiksspåret faktiskt får bära dagen";
+        ? routeText(
+            lang,
+            "där marknadsspåret faktiskt får bära dagen",
+            "where the market thread can actually carry the day",
+          )
+        : routeText(
+            lang,
+            "där vintage- och butiksspåret faktiskt får bära dagen",
+            "where the vintage and shop thread can actually carry the day",
+          );
 
     if (shape === "loop") {
-      return `En sammanhängande runda på cirka ${estimatedKm.toFixed(1)} km runt ${dominantZone} ${carryText} i stället för att bara dyka upp som bonus.`;
+      return routeText(
+        lang,
+        `En sammanhängande runda på cirka ${estimatedKm.toFixed(1)} km runt ${dominantZone} ${carryText} i stället för att bara dyka upp som bonus.`,
+        `A coherent loop of ${formatApproxKm(estimatedKm, lang)} around ${dominantZone}, ${carryText} instead of showing up as a bonus.`,
+      );
     }
 
-    return `En tydlig båge på cirka ${estimatedKm.toFixed(1)} km från ${start.label} mot ${end.label}, med tyngd i ${dominantZone} där second hand-spåret fortfarande märks tydligt.`;
+    return routeText(
+      lang,
+      `En tydlig båge på cirka ${estimatedKm.toFixed(1)} km från ${start.label} mot ${end.label}, med tyngd i ${dominantZone} där second hand-spåret fortfarande märks tydligt.`,
+      `A clear route of ${formatApproxKm(estimatedKm, lang)} from ${start.label} toward ${end.label}, with weight in ${dominantZone} where the second-hand thread still comes through.`,
+    );
   }
 
   if (shape === "loop") {
-    return `En sammanhängande runda på cirka ${estimatedKm.toFixed(1)} km som utgår från ${start.label}, håller sig runt ${dominantZone} och lutar mot ${tone}.`;
+    return routeText(
+      lang,
+      `En sammanhängande runda på cirka ${estimatedKm.toFixed(1)} km som utgår från ${start.label}, håller sig runt ${dominantZone} och lutar mot ${tone}.`,
+      `A coherent loop of ${formatApproxKm(estimatedKm, lang)} starting from ${start.label}, staying around ${dominantZone}, and leaning toward ${tone}.`,
+    );
   }
 
-  return `En tydlig båge på cirka ${estimatedKm.toFixed(1)} km från ${start.label} mot ${end.label}, med tyngd i ${dominantZone} och mer ${tone}.`;
+  return routeText(
+    lang,
+    `En tydlig båge på cirka ${estimatedKm.toFixed(1)} km från ${start.label} mot ${end.label}, med tyngd i ${dominantZone} och mer ${tone}.`,
+    `A clear route of ${formatApproxKm(estimatedKm, lang)} from ${start.label} toward ${end.label}, with weight in ${dominantZone} and more ${tone}.`,
+  );
 }
 
-function buildGeoFitNote({ shape, start, end, geometry, routeArea, startProfile, endProfile }) {
+function buildGeoFitNote({ shape, start, end, geometry, routeArea, startProfile, endProfile, lang = "sv" }) {
   const dominantZone =
     tokenLabel(routeArea.dominantToken) || macroLabel(routeArea.dominantMacro) || currentCityLabel();
   const legNote = geometry?.legFitNote ? ` ${geometry.legFitNote}` : "";
 
   if (shape === "loop") {
-    return `Loop runt ${startProfile?.primaryLabel || start.label}: stoppordningen minimerar retursträckor och håller sig huvudsakligen kring ${dominantZone}.${legNote}`;
+    return routeText(
+      lang,
+      `Loop runt ${startProfile?.primaryLabel || start.label}: stoppordningen minimerar retursträckor och håller sig huvudsakligen kring ${dominantZone}.${legNote}`,
+      `Loop around ${startProfile?.primaryLabel || start.label}: the stop order minimizes backtracking and stays mainly around ${dominantZone}.${legNote}`,
+    );
   }
 
-  return `Båge från ${start.label} mot ${end.label}: rutten rör sig framåt genom ${dominantZone} utan stora geografiska reversaler.${legNote}`;
+  return routeText(
+    lang,
+    `Båge från ${start.label} mot ${end.label}: rutten rör sig framåt genom ${dominantZone} utan stora geografiska reversaler.${legNote}`,
+    `Route from ${start.label} toward ${end.label}: the day keeps moving forward through ${dominantZone} without major geographic reversals.${legNote}`,
+  );
 }
 
 function formatMainStop(stop) {
@@ -3623,6 +3817,7 @@ function buildRouteFromTemplate(
   options = {},
 ) {
   const shape = isLoopRoute(start, end) ? "loop" : "arc";
+  const lang = normalizeRouteResultLanguage(options.lang);
   const legPacing = normalizeLegPacing(options.legPacing);
   const dayProfile = normalizeDayProfile(options.dayProfile);
   const startProfile = buildPointAreaProfile(start);
@@ -3701,6 +3896,7 @@ function buildRouteFromTemplate(
     targetKm,
     distanceMode,
     legPacing,
+    lang,
   );
   const finalOrderedStops = rebalanceWeakMarketLead(
     orderedStops,
@@ -3719,6 +3915,7 @@ function buildRouteFromTemplate(
             targetKm,
             distanceMode,
             legPacing,
+            lang,
           )
         : summarizeArcGeometry(
             finalOrderedStops,
@@ -3729,6 +3926,7 @@ function buildRouteFromTemplate(
             targetKm,
             distanceMode,
             legPacing,
+            lang,
           );
 
   const mainStops = finalOrderedStops.map((stop) => formatMainStop(stop));
@@ -3765,6 +3963,7 @@ function buildRouteFromTemplate(
       preferences,
       routeStops: finalOrderedStops,
       weekday: options.weekday || null,
+      lang,
     }),
     summary: buildDynamicSummary({
       start,
@@ -3777,6 +3976,7 @@ function buildRouteFromTemplate(
       preferences,
       routeStops: finalOrderedStops,
       weekday: options.weekday || null,
+      lang,
     }),
     estimated_km: estimatedKm,
     start_label: start.label,
@@ -3805,6 +4005,7 @@ function buildRouteFromTemplate(
       routeArea,
       startProfile,
       endProfile,
+      lang,
     }),
     anchor_zone: buildAnchorZone(shape, startProfile, endProfile, routeArea),
     day_profile: dayProfile,
@@ -3843,6 +4044,7 @@ function pulseScore({
   preferences = [],
   optimizerMode = null,
   modifier = null,
+  lang = "sv",
 }) {
   if (!Array.isArray(pulseItems) || !pulseItems.length) {
     return { score: 0, note: null, anchor: null };
@@ -3862,7 +4064,13 @@ function pulseScore({
 
     if (preferredTagHits.length) {
       score += Math.min(3.6, preferredTagHits.length * 1.35);
-      reasonParts.push("rutten bär rätt typ av stopp för dagens rytm");
+      reasonParts.push(
+        routeText(
+          lang,
+          "rutten bär rätt typ av stopp för dagens rytm",
+          "the route carries the right kind of stops for today's rhythm",
+        ),
+      );
     }
 
     if (avoidTagHits.length) {
@@ -3871,7 +4079,13 @@ function pulseScore({
 
     if (routeArea.dominantToken && hints.preferredAreaTokens.has(routeArea.dominantToken)) {
       score += 3.5;
-      reasonParts.push(`${tokenLabel(routeArea.dominantToken) || routeArea.dominantToken} spelar extra bra just nu`);
+      reasonParts.push(
+        routeText(
+          lang,
+          `${tokenLabel(routeArea.dominantToken) || routeArea.dominantToken} spelar extra bra just nu`,
+          `${tokenLabel(routeArea.dominantToken) || routeArea.dominantToken} fits especially well right now`,
+        ),
+      );
     } else if ([...hints.preferredAreaTokens].some((token) => routeArea.tokens.has(token))) {
       score += 1.9;
     }
@@ -3879,7 +4093,13 @@ function pulseScore({
     if (routeArea.dominantMacro && hints.preferredMacros.has(routeArea.dominantMacro)) {
       score += 2.6;
       if (!reasonParts.length) {
-        reasonParts.push(`${macroLabel(routeArea.dominantMacro)} bär den här typen av dag bättre just nu`);
+        reasonParts.push(
+          routeText(
+            lang,
+            `${macroLabel(routeArea.dominantMacro)} bär den här typen av dag bättre just nu`,
+            `${macroLabel(routeArea.dominantMacro)} carries this kind of day better right now`,
+          ),
+        );
       }
     } else if ([...hints.preferredMacros].some((macro) => routeArea.macros.has(macro))) {
       score += 1.2;
@@ -3903,7 +4123,13 @@ function pulseScore({
       score += vibeStrength * modifierWeight;
 
       if (vibeStrength >= 2 && activeModifier === vibeKey) {
-        reasonParts.push(`rutten matchar tydligt att du valde ${modifierLabel[vibeKey] || vibeKey}`);
+        reasonParts.push(
+          routeText(
+            lang,
+            `rutten matchar tydligt att du valde ${modifierLabel[vibeKey] || vibeKey}`,
+            `the route clearly matches your ${routeModifierLabel(vibeKey, lang)} choice`,
+          ),
+        );
       }
     });
 
@@ -3944,11 +4170,17 @@ function pulseScore({
   const lead = topPositive[0] || null;
   const leadReason = lead?.reasonParts?.[0]
     ? `${lead.reasonParts[0].charAt(0).toUpperCase()}${lead.reasonParts[0].slice(1)}.`
-    : "Den här rutten följer dagens rytm bättre än de mer generiska alternativen.";
+    : routeText(
+        lang,
+        "Den här rutten följer dagens rytm bättre än de mer generiska alternativen.",
+        "This route follows today's rhythm better than the more generic alternatives.",
+      );
   const note = lead
-    ? `Just nu i ${currentCityLabel()}: ${lead.item.title}. ${
-        leadReason
-      }.`
+    ? routeText(
+        lang,
+        `Just nu i ${currentCityLabel()}: ${lead.item.title}. ${leadReason}.`,
+        `Right now in ${currentCityLabel()}, today's Pulse fits this route better than the more generic alternatives. ${leadReason}.`,
+      )
     : null;
 
   return {
@@ -3966,6 +4198,7 @@ function liveEventRouteScore({
   optimizerMode = null,
   modifier = null,
   routeStops = [],
+  lang = "sv",
 }) {
   if (!Array.isArray(liveEvents) || !liveEvents.length) {
     return { score: 0, note: null };
@@ -4031,28 +4264,52 @@ function liveEventRouteScore({
   return {
     score: Math.round(totalScore * 10) / 10,
     note: best.embedded
-      ? `Live i dag: ${best.event.title} ligger inne i själva rutten och gör upplägget tydligt mer tidsbundet och trovärdigt.`
-      : `Live i dag: ${best.event.title} ligger ovanligt bra på eller nära den här rutten och gör upplägget mer tidsbundet på ett bra sätt.`,
+      ? routeText(
+          lang,
+          `Live i dag: ${best.event.title} ligger inne i själva rutten och gör upplägget tydligt mer tidsbundet och trovärdigt.`,
+          `Live today: ${best.event.title} sits inside the route itself and makes the plan more time-bound and credible.`,
+        )
+      : routeText(
+          lang,
+          `Live i dag: ${best.event.title} ligger ovanligt bra på eller nära den här rutten och gör upplägget mer tidsbundet på ett bra sätt.`,
+          `Live today: ${best.event.title} fits unusually well on or near this route and gives the plan a useful time-bound layer.`,
+        ),
   };
 }
 
-function buildRouteFitNote(routeChoice, distanceKm) {
+function buildRouteFitNote(routeChoice, distanceKm, lang = "sv") {
   if (distanceKm === null || !Number.isFinite(distanceKm)) {
-    return `Passar bäst med ${routeChoice.label.toLowerCase()} sett till dagens helhet.`;
+    return routeText(
+      lang,
+      `Passar bäst med ${routeChoice.label.toLowerCase()} sett till dagens helhet.`,
+      `Best fit with ${routeChoice.label.toLowerCase()} in the context of the day.`,
+    );
   }
 
   if (distanceKm <= 0.35) {
-    return `Passar bäst med ${routeChoice.label.toLowerCase()} och ligger nästan direkt på sträckningen.`;
+    return routeText(
+      lang,
+      `Passar bäst med ${routeChoice.label.toLowerCase()} och ligger nästan direkt på sträckningen.`,
+      `Best fit with ${routeChoice.label.toLowerCase()} and sits almost directly on the route.`,
+    );
   }
 
   if (distanceKm <= 1) {
-    return `Passar bäst med ${routeChoice.label.toLowerCase()} och kräver bara en kort avstickare.`;
+    return routeText(
+      lang,
+      `Passar bäst med ${routeChoice.label.toLowerCase()} och kräver bara en kort avstickare.`,
+      `Best fit with ${routeChoice.label.toLowerCase()} and only needs a short detour.`,
+    );
   }
 
-  return `Passar bäst med ${routeChoice.label.toLowerCase()}, men räkna med en tydligare avstickare.`;
+  return routeText(
+    lang,
+    `Passar bäst med ${routeChoice.label.toLowerCase()}, men räkna med en tydligare avstickare.`,
+    `Best fit with ${routeChoice.label.toLowerCase()}, but expect a more noticeable detour.`,
+  );
 }
 
-function annotateLiveEventsForRoutes(liveEvents, routeChoices) {
+function annotateLiveEventsForRoutes(liveEvents, routeChoices, lang = "sv") {
   return (liveEvents || []).map((event) => {
     const hasRouteGeometry =
       typeof event.lat === "number" &&
@@ -4114,7 +4371,7 @@ function annotateLiveEventsForRoutes(liveEvents, routeChoices) {
         distanceKm === null || !Number.isFinite(distanceKm)
           ? null
           : Number(distanceKm.toFixed(2)),
-      route_fit_note: buildRouteFitNote(bestRoute, distanceKm),
+      route_fit_note: buildRouteFitNote(bestRoute, distanceKm, lang),
     };
   });
 }
@@ -4125,6 +4382,7 @@ function lockedAnchorScore({
   startPoint,
   endPoint,
   distanceMode = "soft_target",
+  lang = "sv",
 }) {
   if (!route || !routeStops.length || isLoopRoute(startPoint, endPoint)) {
     return { score: 0, note: null };
@@ -4204,11 +4462,19 @@ function lockedAnchorScore({
 
   if (score >= 2.5) {
     notes.push(
-      `Rutten håller faktiskt korridoren mellan ${startPoint.label} och ${endPoint.label} i stället för att glida tillbaka till en generisk mitt-i-stan-dag.`,
+      routeText(
+        lang,
+        `Rutten håller faktiskt korridoren mellan ${startPoint.label} och ${endPoint.label} i stället för att glida tillbaka till en generisk mitt-i-stan-dag.`,
+        `The route actually holds the corridor between ${startPoint.label} and ${endPoint.label} instead of drifting back into a generic central day.`,
+      ),
     );
   } else if (score <= -2) {
     notes.push(
-      `Flera stopp ligger för långt från korridoren mellan ${startPoint.label} och ${endPoint.label}, så den här dagen passar ankaren svagare.`,
+      routeText(
+        lang,
+        `Flera stopp ligger för långt från korridoren mellan ${startPoint.label} och ${endPoint.label}, så den här dagen passar ankaren svagare.`,
+        `Several stops sit too far from the corridor between ${startPoint.label} and ${endPoint.label}, so this day fits the anchors less strongly.`,
+      ),
     );
   }
 
@@ -4235,6 +4501,7 @@ function routeScore({
   routeStops,
   manualAnchorsLocked = false,
   localTruth = null,
+  lang = "sv",
 }) {
   const startPoint = route.map_route_points[0];
   const endPoint = route.map_route_points[route.map_route_points.length - 1];
@@ -4245,10 +4512,10 @@ function routeScore({
   const prefScore = preferenceScore(template, preferences);
   const dayScore = weekdayScore(template, weekday);
   const kmFitScore = kmScore(route.estimated_km, targetKm, distanceMode);
-  const weatherFit = weatherScore(template, weather);
+  const weatherFit = weatherScore(template, weather, lang);
   const optimizerScore = optimizerModeScore(template, optimizerMode, budgetTier, modifier);
   const normalizedRouteStops = Array.isArray(routeStops) ? routeStops : [];
-  const budgetFit = budgetScore(normalizedRouteStops, preferences, optimizerMode, budgetTier);
+  const budgetFit = budgetScore(normalizedRouteStops, preferences, optimizerMode, budgetTier, lang);
   const profileFit = profileScore(template, preferences, optimizerMode, modifier);
   const pulseFit = pulseScore({
     template,
@@ -4258,6 +4525,7 @@ function routeScore({
     preferences,
     optimizerMode,
     modifier,
+    lang,
   });
   const liveFit = liveEventRouteScore({
     route,
@@ -4267,12 +4535,14 @@ function routeScore({
     optimizerMode,
     modifier,
     routeStops: normalizedRouteStops,
+    lang,
   });
   const areaFit = areaScore({
     routeStops: normalizedRouteStops,
     startPoint,
     endPoint,
     distanceMode,
+    lang,
   });
   const anchorFit = manualAnchorsLocked
     ? lockedAnchorScore({
@@ -4281,6 +4551,7 @@ function routeScore({
         startPoint,
         endPoint,
         distanceMode,
+        lang,
       })
     : { score: 0, note: null };
   const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
@@ -4336,6 +4607,7 @@ function whyRecommended(
   liveEventNote,
   areaNote,
   intentNote,
+  lang = "sv",
 ) {
   const prefMatches = preferences.filter((pref) => template.preferenceTags.includes(pref));
   const reasonParts = [];
@@ -4347,7 +4619,11 @@ function whyRecommended(
 
   if (strictTags.length === 1) {
     reasonParts.push(
-      `Du valde i praktiken ${strictTags[0]}, så stoppmixen hålls tydligare runt just det temat än i de bredare rutterna.`,
+      routeText(
+        lang,
+        `Du valde i praktiken ${strictTags[0]}, så stoppmixen hålls tydligare runt just det temat än i de bredare rutterna.`,
+        `You effectively chose ${routePreferenceLabel(strictTags[0], lang)}, so the stop mix stays closer to that theme than the broader routes.`,
+      ),
     );
   }
 
@@ -4355,84 +4631,194 @@ function whyRecommended(
     if (secondHandFit.coverage >= 0.5 && secondHandFit.leadStop) {
       if (secondHandFit.identity === "market-strong") {
         reasonParts.push(
-          "Second hand-spåret bärs här faktiskt av marknad och vintage på en veckodag som stöder det.",
+          routeText(
+            lang,
+            "Second hand-spåret bärs här faktiskt av marknad och vintage på en veckodag som stöder det.",
+            "The second-hand thread is actually carried by market and vintage on a weekday that supports it.",
+          ),
         );
       } else {
         reasonParts.push(
-          "Second hand-spåret bärs här tydligt av butiker, vintage och shopping snarare än av ett enstaka bonusstopp.",
+          routeText(
+            lang,
+            "Second hand-spåret bärs här tydligt av butiker, vintage och shopping snarare än av ett enstaka bonusstopp.",
+            "The second-hand thread is clearly carried by shops, vintage, and browsing rather than a single bonus stop.",
+          ),
         );
       }
     } else if (intentNote) {
-      reasonParts.push(intentNote);
+      reasonParts.push(
+        routeText(
+          lang,
+          intentNote,
+          "The second-hand thread is present, but this route keeps it as a supporting layer rather than overclaiming it.",
+        ),
+      );
     }
   }
 
   if (prefMatches.length) {
-    reasonParts.push(`Den matchar särskilt bra för ${prefMatches.join(", ")}.`);
+    reasonParts.push(
+      routeText(
+        lang,
+        `Den matchar särskilt bra för ${prefMatches.join(", ")}.`,
+        `It is an especially good match for ${prefMatches.map((pref) => routePreferenceLabel(pref, lang)).join(", ")}.`,
+      ),
+    );
   }
 
   if (preferences.includes("kväll") && profile.evening >= 2) {
-    reasonParts.push("Rutten är byggd för att bli starkare ju senare dagen blir, inte för att pika för tidigt.");
+    reasonParts.push(
+      routeText(
+        lang,
+        "Rutten är byggd för att bli starkare ju senare dagen blir, inte för att pika för tidigt.",
+        "The route is built to get stronger later in the day, not to peak too early.",
+      ),
+    );
   }
 
   if (preferences.includes("kultur") && profile.culture >= 2) {
-    reasonParts.push("Kulturdelen är här ett riktigt bärande lager med stopp som känns värda i sig.");
+    reasonParts.push(
+      routeText(
+        lang,
+        "Kulturdelen är här ett riktigt bärande lager med stopp som känns värda i sig.",
+        "The culture layer is a real backbone here, with stops that feel worthwhile on their own.",
+      ),
+    );
   }
 
   if (preferences.includes("low-key") && profile.lowKey >= 2) {
-    reasonParts.push("Tempot hålls mer low-key med bättre samtalsstopp och mindre showig energi.");
+    reasonParts.push(
+      routeText(
+        lang,
+        "Tempot hålls mer low-key med bättre samtalsstopp och mindre showig energi.",
+        "The pace stays more low-key, with better conversation stops and less showy energy.",
+      ),
+    );
   }
 
   if (preferences.includes("party") && profile.party >= 2) {
-    reasonParts.push("Kvällen lutar tydligt mot mer puls, tätare glasstopp och senare energi.");
+    reasonParts.push(
+      routeText(
+        lang,
+        "Kvällen lutar tydligt mot mer puls, tätare glasstopp och senare energi.",
+        "The evening leans clearly toward more pulse, tighter drink stops, and later energy.",
+      ),
+    );
   }
 
   if (activeModifier === "evening" && profile.evening >= 2) {
-    reasonParts.push("Du valde mer kväll, och den här rutten blir faktiskt bättre ju senare dagen går.");
+    reasonParts.push(
+      routeText(
+        lang,
+        "Du valde mer kväll, och den här rutten blir faktiskt bättre ju senare dagen går.",
+        "You chose more evening, and this route actually gets better as the day moves later.",
+      ),
+    );
   }
 
   if (activeModifier === "culture" && profile.culture >= 2) {
-    reasonParts.push("Du bad om mer kultur, och här bär riktiga rum, kyrkor eller kulturlager större del av dagen.");
+    reasonParts.push(
+      routeText(
+        lang,
+        "Du bad om mer kultur, och här bär riktiga rum, kyrkor eller kulturlager större del av dagen.",
+        "You asked for more culture, and here real rooms, churches, or cultural layers carry more of the day.",
+      ),
+    );
   }
 
   if (activeModifier === "low_key" && profile.lowKey >= 2) {
-    reasonParts.push("Du valde low-key, så tempot hålls mjukare med bättre samtalsstopp och mindre show.");
+    reasonParts.push(
+      routeText(
+        lang,
+        "Du valde low-key, så tempot hålls mjukare med bättre samtalsstopp och mindre show.",
+        "You chose low-key, so the pace stays softer, with better conversation stops and less show.",
+      ),
+    );
   }
 
   if (activeModifier === "party" && profile.party >= 2) {
-    reasonParts.push("Du valde party, och den här rutten har tydligare nattenergi än de lugnare alternativen.");
+    reasonParts.push(
+      routeText(
+        lang,
+        "Du valde party, och den här rutten har tydligare nattenergi än de lugnare alternativen.",
+        "You chose party, and this route has clearer late-night energy than the calmer alternatives.",
+      ),
+    );
   }
 
   if (route.route_shape === "loop") {
     reasonParts.push(
-      `Huvudrutten blir en riktig runda från ${route.start_label} tillbaka till ${route.end_label} på cirka ${route.estimated_km} km i stället för en ut-och-tillbaka-dag.`,
+      routeText(
+        lang,
+        `Huvudrutten blir en riktig runda från ${route.start_label} tillbaka till ${route.end_label} på cirka ${route.estimated_km} km i stället för en ut-och-tillbaka-dag.`,
+        `The main route becomes a real loop from ${route.start_label} back to ${route.end_label}, ${formatApproxKm(route.estimated_km, lang)}, instead of an out-and-back day.`,
+      ),
     );
   } else if (distanceMode === "no_limit") {
     reasonParts.push(
-      `Du valde "spelar ingen roll" på avstånd, så rutten får vara friare mellan ${route.start_label} och ${route.end_label} utan att tappa riktning.`,
+      routeText(
+        lang,
+        `Du valde "spelar ingen roll" på avstånd, så rutten får vara friare mellan ${route.start_label} och ${route.end_label} utan att tappa riktning.`,
+        `You chose flexible distance, so the route can move more freely between ${route.start_label} and ${route.end_label} without losing direction.`,
+      ),
     );
   } else {
     reasonParts.push(
-      `Rutten rör sig från ${route.start_label} mot ${route.end_label} på cirka ${route.estimated_km} km med tydligare geografisk progression.`,
+      routeText(
+        lang,
+        `Rutten rör sig från ${route.start_label} mot ${route.end_label} på cirka ${route.estimated_km} km med tydligare geografisk progression.`,
+        `The route moves from ${route.start_label} toward ${route.end_label}, ${formatApproxKm(route.estimated_km, lang)}, with clearer geographic progression.`,
+      ),
     );
   }
 
   if (optimizerMode && template.optimizerModes?.includes(optimizerMode)) {
-    reasonParts.push("Den här rutten matchar det valda optimizer-läget extra tydligt.");
+    reasonParts.push(
+      routeText(
+        lang,
+        "Den här rutten matchar det valda optimizer-läget extra tydligt.",
+        "This route matches the selected optimizer mode especially clearly.",
+      ),
+    );
   }
 
   if (activeBudgetTier === "budget") {
-    reasonParts.push("Du bad om ett mer budgetvänligt upplägg, så prisnivå och billiga ankare väger tyngre.");
+    reasonParts.push(
+      routeText(
+        lang,
+        "Du bad om ett mer budgetvänligt upplägg, så prisnivå och billiga ankare väger tyngre.",
+        "You asked for a more budget-friendly plan, so price level and cheaper anchors carry more weight.",
+      ),
+    );
   } else if (activeBudgetTier === "dolce-vita") {
-    reasonParts.push("Du bad om La Dolce Vita, så premiumglas, bokningsvärda stopp och en större kväll väger tyngre.");
+    reasonParts.push(
+      routeText(
+        lang,
+        "Du bad om La Dolce Vita, så premiumglas, bokningsvärda stopp och en större kväll väger tyngre.",
+        "You asked for La Dolce Vita, so premium drinks, bookable stops, and a bigger evening carry more weight.",
+      ),
+    );
   }
 
   if (pulseNote) {
-    reasonParts.push(`Dagens puls i ${currentCityLabel()} lutar också tydligt åt just den här riktningen.`);
+    reasonParts.push(
+      routeText(
+        lang,
+        `Dagens puls i ${currentCityLabel()} lutar också tydligt åt just den här riktningen.`,
+        `Today's Pulse in ${currentCityLabel()} also points clearly in this direction.`,
+      ),
+    );
   }
 
   if (liveEventNote) {
-    reasonParts.push("Det finns dessutom ett live-lager som passar extra bra med den här rutten i dag.");
+    reasonParts.push(
+      routeText(
+        lang,
+        "Det finns dessutom ett live-lager som passar extra bra med den här rutten i dag.",
+        "There is also a live layer that fits this route especially well today.",
+      ),
+    );
   }
 
   if (areaNote) {
@@ -4444,9 +4830,21 @@ function whyRecommended(
   }
 
   if (weather?.condition === "rain") {
-    reasonParts.push("Dagens väder gör att den här mixen av inne- och kvartersstopp passar extra bra.");
+    reasonParts.push(
+      routeText(
+        lang,
+        "Dagens väder gör att den här mixen av inne- och kvartersstopp passar extra bra.",
+        "Today's weather makes this mix of indoor and neighborhood stops fit especially well.",
+      ),
+    );
   } else if (weather?.condition === "sun") {
-    reasonParts.push("Dagens väder gynnar utsikter, kvällspromenad och längre utepartier.");
+    reasonParts.push(
+      routeText(
+        lang,
+        "Dagens väder gynnar utsikter, kvällspromenad och längre utepartier.",
+        "Today's weather favors viewpoints, evening walking, and longer outdoor stretches.",
+      ),
+    );
   }
 
   return reasonParts.join(" ");
@@ -4754,7 +5152,9 @@ async function generateRecommendations({
   modifier = null,
   distanceMode = "soft_target",
   legPacing = "balanced",
+  lang = "sv",
 }) {
+  const routeResultLang = normalizeRouteResultLanguage(lang);
   return cityContextStorage.run(getCityConfig(city), async () => {
     const normalizedDates = expandDateRange(dates);
     const pulseByDate = Object.fromEntries(
@@ -4786,7 +5186,7 @@ async function generateRecommendations({
         const weekday = weekdayFromDate(date);
         const weather = weatherByDate[date];
         const pulse = pulseByDate[date] || getPulseForDate(date);
-        const dateSignals = getDateSignalsForDate(date);
+        const dateSignals = getDateSignalsForDate(date, routeResultLang);
         const pulseItems = Array.isArray(pulse.items) ? pulse.items : [];
         const liveEvents = liveEventsByDate[date] || [];
         const dayPulseByDate = { [date]: pulse };
@@ -4878,6 +5278,7 @@ async function generateRecommendations({
                 legPacing,
                 dayProfile,
                 weekday,
+                lang: routeResultLang,
               },
             );
           const routeStops = route.main_stops
@@ -4899,7 +5300,7 @@ async function generateRecommendations({
             ...buildOpeningWarnings(routeStops, weekday),
             ...buildLocalTruthOpeningWarnings(localTruth),
           ];
-          const venueSpecials = buildVenueSpecials(routeStops, weekday);
+          const venueSpecials = buildVenueSpecials(routeStops, weekday, routeResultLang);
           const scoring = routeScore({
             route,
             template,
@@ -4917,6 +5318,7 @@ async function generateRecommendations({
             routeStops,
             manualAnchorsLocked,
             localTruth,
+            lang: routeResultLang,
           });
 
           return {
@@ -4948,6 +5350,7 @@ async function generateRecommendations({
                 scoring.liveEventNote,
                 scoring.areaNote,
                 scoring.intentNote,
+                routeResultLang,
               ),
             },
             score: scoring.score,
@@ -4963,7 +5366,10 @@ async function generateRecommendations({
 
         const truthEnhancedEntries = await Promise.all(
           initialRanked.slice(0, truthPassCount).map(async (entry) => {
-            const truthRoute = await applyWalkingTruthToRoute(entry.route, { legPacing });
+            const truthRoute = await applyWalkingTruthToRoute(entry.route, {
+              legPacing,
+              lang: routeResultLang,
+            });
             return buildRankedEntry(entry.template, truthRoute, entry.dayProfile);
           }),
         );
@@ -4996,14 +5402,14 @@ async function generateRecommendations({
         );
         const annotatedLiveEvents = annotateLiveEventsForRoutes(liveEvents, [
           {
-            label: "Huvudrutten",
+            label: routeText(routeResultLang, "Huvudrutten", "Main route"),
             route: primary.route,
           },
           ...alternatives.map((entry, index) => ({
-            label: `Alternativ ${index + 1}`,
+            label: routeText(routeResultLang, `Alternativ ${index + 1}`, `Alternative ${index + 1}`),
             route: entry.route,
           })),
-        ]);
+        ], routeResultLang);
         usedTemplateIds.add(primary.template.id);
         usedPrimaryRoutes.push(primary.route);
 

@@ -8208,7 +8208,10 @@ function formatLegDistance(distanceKm) {
     return null;
   }
 
-  return `${String(distanceKm).replace(".", ",")} km`;
+  const formattedDistance = isEnglishUi
+    ? String(distanceKm)
+    : String(distanceKm).replace(".", ",");
+  return `${formattedDistance} km`;
 }
 
 function formatLegMinutes(minutes) {
@@ -8245,8 +8248,8 @@ function normalizeRouteResultCopy(text = "") {
   }
 
   return String(text)
-    .replace(/^En tydlig båge/iu, "En tydlig rutt")
-    .replace(/\bi bågen\b/giu, "i rutten")
+    .replace(/^En tydlig båge/iu, isEnglishUi ? "A clear route" : "En tydlig rutt")
+    .replace(/\bi bågen\b/giu, isEnglishUi ? "in the route" : "i rutten")
     .split(/(?<=[.!?])\s+/u)
     .filter((sentence) => !/\bbåge\b|benläng|gångben|heuristisk routing/iu.test(sentence))
     .join(" ")
@@ -8382,7 +8385,7 @@ function createApiRouteView(
     visibleWhy: buildVisibleWhy(route),
     path: `${route.start_label} -> ${stopLabels} -> ${route.end_label}`,
     anchor: route.start_label ? `Start: ${route.start_label}` : null,
-    walk: route.end_label ? `Slut: ${route.end_label}` : null,
+    walk: route.end_label ? `${isEnglishUi ? "End" : "Slut"}: ${route.end_label}` : null,
     startAnchorLabel: route.start_label,
     endAnchorLabel: route.end_label,
     routeShapeLabel: null,
@@ -8445,9 +8448,9 @@ function createApiRouteView(
       area: stop.area,
       summary: normalizeRouteResultCopy(stop.summary || stop.vibe || stop.tags.join(", ")),
       meta: [
-        stop.is_live_event ? "Live just nu" : null,
-        stop.best_time ? `Bäst: ${stop.best_time}` : null,
-        stop.price_level ? `Pris: ${stop.price_level}` : null,
+        stop.is_live_event ? (isEnglishUi ? "Live right now" : "Live just nu") : null,
+        stop.best_time ? `${isEnglishUi ? "Best" : "Bäst"}: ${stop.best_time}` : null,
+        stop.price_level ? `${isEnglishUi ? "Price" : "Pris"}: ${stop.price_level}` : null,
       ]
         .filter(Boolean)
         .join(" • "),
@@ -9509,11 +9512,11 @@ function appendRouteWarnings(container, warnings = []) {
 
 function getActiveDayPhaseLabel(index, totalStops) {
   if (index === 0) {
-    return "Börja här";
+    return isEnglishUi ? "Start here" : "Börja här";
   }
 
   if (index === totalStops - 1) {
-    return "Landa här";
+    return isEnglishUi ? "Land here" : "Landa här";
   }
 
   return "";
@@ -9521,15 +9524,25 @@ function getActiveDayPhaseLabel(index, totalStops) {
 
 function buildActiveDayFlowNote(routeView) {
   const stopCount = Array.isArray(routeView.stopItems) ? routeView.stopItems.length : 0;
-  const stopLabel = stopCount === 1 ? "ett stopp" : `${stopCount} stopp`;
-  const start = routeView.startAnchorLabel || "dagen";
-  const end = routeView.endAnchorLabel || "slutet";
+  const stopLabel = isEnglishUi
+    ? stopCount === 1
+      ? "one stop"
+      : `${stopCount} stops`
+    : stopCount === 1
+      ? "ett stopp"
+      : `${stopCount} stopp`;
+  const start = routeView.startAnchorLabel || (isEnglishUi ? "the day" : "dagen");
+  const end = routeView.endAnchorLabel || (isEnglishUi ? "the finish" : "slutet");
 
   if (routeView.routeShape === "loop") {
-    return `Börja i ${start}, håll ihop tempot genom ${stopLabel} och landa tillbaka där dagen känns som starkast.`;
+    return isEnglishUi
+      ? `Start in ${start}, keep the pace together through ${stopLabel}, and land back where the day feels strongest.`
+      : `Börja i ${start}, håll ihop tempot genom ${stopLabel} och landa tillbaka där dagen känns som starkast.`;
   }
 
-  return `Börja i ${start}, rör dig framåt genom ${stopLabel} och landa i ${end} utan onödiga omvägar.`;
+  return isEnglishUi
+    ? `Start in ${start}, move forward through ${stopLabel}, and land in ${end} without unnecessary detours.`
+    : `Börja i ${start}, rör dig framåt genom ${stopLabel} och landa i ${end} utan onödiga omvägar.`;
 }
 
 function createItineraryStop(stopItem, onOpen, phaseLabel = "") {
@@ -9542,7 +9555,9 @@ function createItineraryStop(stopItem, onOpen, phaseLabel = "") {
     leg.textContent = [
       formatLegMinutes(Number(stopItem.incomingLeg.minutes)),
       formatLegDistance(Number(stopItem.incomingLeg.distanceKm)),
-      stopItem.incomingLeg.fromLabel ? `från ${stopItem.incomingLeg.fromLabel}` : null,
+      stopItem.incomingLeg.fromLabel
+        ? `${isEnglishUi ? "from" : "från"} ${stopItem.incomingLeg.fromLabel}`
+        : null,
     ]
       .filter(Boolean)
       .join(" • ");
@@ -10226,7 +10241,7 @@ async function planRoutes() {
   };
   latestPlannerSnapshot = buildPlannerSnapshot(payload, dates);
 
-  const response = await fetchJson(`${routeApiBase}/route-recommendations`, {
+  const response = await fetchJson(`${routeApiBase}/route-recommendations?lang=${encodeURIComponent(activeUiLanguage)}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

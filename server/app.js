@@ -621,6 +621,7 @@ function buildApp() {
     try {
       const { cityConfig, requestedCity, cityFallbackUsed } = resolveRequestCity(request.body?.city);
       const city = cityConfig.key;
+      const lang = normalizeLanguage(request.query?.lang);
       const preferences = Array.isArray(request.body?.preferences)
         ? request.body.preferences
         : [];
@@ -637,6 +638,7 @@ function buildApp() {
         distanceMode: request.body?.distance_mode || "soft_target",
         budgetTier: request.body?.budget_tier || "standard",
         modifier: request.body?.modifier || null,
+        lang,
       };
 
       const result = diversifyRecommendationDays(await generateRecommendations(payload));
