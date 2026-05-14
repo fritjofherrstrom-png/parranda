@@ -998,6 +998,495 @@ const romeDistrictGuides = [
   },
 ];
 
+const romeDistrictGuideLocalizedContent = {
+  monti: {
+    eyebrow: { en: "MONTI MODE" },
+    title: {
+      en: "Monti for a cultural start, a wine-led finish, and a better late night",
+    },
+    description: {
+      en: "Monti works best when you use it as a smart stage for churches, long glasses, and an evening that can stay low-key or stretch late without losing direction.",
+    },
+    selectorNote: {
+      en: "Central, culture-friendly, and better than its reputation if you choose carefully.",
+    },
+    mapFocus: {
+      summary: {
+        en: "A central district for wine, culture, and a stronger evening shape.",
+      },
+      long_description: {
+        en: "Monti works best when you pick the right side streets, let churches and piazzas give the day its rhythm, and save the showier stops for later.",
+      },
+    },
+    stats: [
+      { label: { en: "smart stops" } },
+      { label: { en: "compact full day" } },
+      { label: { en: "culture + wine + night" } },
+    ],
+    stopsTitle: {
+      en: "Monti when it should feel smart, not just central",
+    },
+    stopsNote: {
+      en: "Build Monti around real anchors and better glasses, not the most over-photographed corners.",
+    },
+    dayTitle: {
+      en: "A Monti day with mosaics, piazza aperitivo, and a late cocktail finish",
+    },
+    dayNote: {
+      en: "A quiet room in the morning, the piazza later in the day, and an evening choice depending on whether you want to keep it wine-led or go bigger.",
+    },
+    actionTitle: {
+      en: "Monti works perfectly as both start and finish when you want to keep the day tight",
+    },
+    actionCopy: {
+      en: "Set Monti as your planner base if you want the day to feel central while still staying curated, evening-friendly, and clear.",
+    },
+    stopCards: [
+      {
+        description: {
+          en: "One of the best cultural stops in the area if you want to begin with something quiet, golden, and genuinely memorable.",
+        },
+        focus: { en: "Go here: as your first cultural anchor" },
+        why: {
+          en: "It gives the day depth straight away without needing half a day in a museum.",
+        },
+        time: { en: "Best: morning" },
+      },
+      {
+        description: {
+          en: "A smart stop when you want to give Monti a little more historical weight while still keeping the day walkable.",
+        },
+        focus: { en: "Go here: before lunch or on a rainy day" },
+        why: {
+          en: "A good counterweight if the rest of the day is going to lean more toward wine and evening energy.",
+        },
+        time: { en: "Best: daytime" },
+      },
+      {
+        description: {
+          en: "Not to stay all night, but to give the area a natural middle ground between culture and the first glass.",
+        },
+        focus: { en: "Go here: around your first aperitivo" },
+        why: {
+          en: "A smart meeting ground where you can feel whether the evening should grow or stay soft.",
+        },
+        time: { en: "Best: late afternoon" },
+      },
+      {
+        description: {
+          en: "Perhaps Monti’s safest wine anchor if you want the glass to set the pace without the evening turning stiff.",
+        },
+        focus: { en: "Order: wine and small plates" },
+        why: {
+          en: "Perfect if you want Monti to feel more low-key, grown-up, and conversation-friendly.",
+        },
+        time: { en: "Best: early evening" },
+      },
+      {
+        description: {
+          en: "A clear evening move when Monti should shift from wine-led district to more of a destination and more of a night out.",
+        },
+        focus: { en: "Order: a cocktail or something darker late" },
+        why: {
+          en: "A good choice when you want the evening to feel more like a program than just a walk.",
+        },
+        time: { en: "Best: evening to late" },
+      },
+      {
+        description: {
+          en: "For when you really do want to let Monti pull you into something more intense and cocktail-driven.",
+        },
+        focus: { en: "Order: a signature drink and book smart" },
+        why: {
+          en: "Right when you want to end on something bigger than a normal last glass.",
+        },
+        time: { en: "Best: late" },
+      },
+    ],
+    dayStops: [
+      {
+        label: { en: "Culture start" },
+        title: { en: "Santa Prassede first, Monti after" },
+        description: {
+          en: "Start the day with mosaics and calm before Monti wakes up as a district.",
+        },
+        note: {
+          en: "It makes the rest of the day feel smarter, not just more central.",
+        },
+      },
+      {
+        label: { en: "Soft continuation" },
+        title: { en: "San Pietro in Vincoli and the side streets back down" },
+        description: {
+          en: "Add a second cultural stop if you want the weight, otherwise let the walk itself carry the rhythm between church and lunch.",
+        },
+        note: { en: "The point is rhythm, not maximum box-ticking." },
+      },
+      {
+        label: { en: "Lunch" },
+        title: { en: "A long lunch in Monti" },
+        description: {
+          en: "Take lunch on a side street and let the area feel lived in rather than staged.",
+        },
+        note: { en: "Save the showier stops for later." },
+      },
+      {
+        label: { en: "Aperitivo" },
+        title: { en: "Piazza della Madonna dei Monti" },
+        description: {
+          en: "Let the piazza set the tone for the evening before you decide whether the day should turn more wine-led or more night-driven.",
+        },
+        note: { en: "A good moment to read the group’s energy." },
+      },
+      {
+        label: { en: "Wine anchor" },
+        title: { en: "Ai Tre Scalini" },
+        description: {
+          en: "This is how you do Monti right if you want to keep it warm, local, and glass-led.",
+        },
+        note: { en: "A strong main stop before any cocktail finale." },
+      },
+      {
+        label: { en: "Final scene" },
+        title: { en: "Blackmarket Hall or Drink Kong" },
+        description: {
+          en: "End depending on whether the night should feel darker and more lounge-like or more like a straight cocktail mission.",
+        },
+        note: { en: "Monti works best when you do not force every mood at once." },
+      },
+    ],
+  },
+  trastevere: {
+    eyebrow: { en: "TRASTEVERE MODE" },
+    title: {
+      en: "Genuine bars, a long evening, and the right Trastevere day",
+    },
+    description: {
+      en: "Trastevere is still strong, but now as one of several district guides. The focus here is beer, wine, culture, and nightlife without the district feeling performative.",
+    },
+    selectorNote: {
+      en: "Genuine bars, a classic late-night finish, and the easiest path to noisy energy.",
+    },
+    mapFocus: {
+      summary: { en: "An evening hub for wine, beer, side streets, and a safe finish." },
+      long_description: {
+        en: "Trastevere works best as an evening district, a return point, and a safe card when you want the day to end with a real bar finish.",
+      },
+    },
+    stats: [
+      { label: { en: "strong bar pulls" } },
+      { label: { en: "full day on foot" } },
+      { label: { en: "evening pulse" } },
+    ],
+    stopsTitle: {
+      en: "High, low, and above all genuinely local",
+    },
+    stopsNote: {
+      en: "The focus is on stops that work for beer, wine, and nightlife without feeling like pure tourist scenery.",
+    },
+    dayTitle: {
+      en: "A full Trastevere day for beer, wine, culture, and night",
+    },
+    dayNote: {
+      en: "A later start, lots of walking, no stressful transfers, and a curve that gets better as it gets darker.",
+    },
+    actionTitle: {
+      en: "Trastevere is best when you want to give the whole day a safe but lively finish",
+    },
+    actionCopy: {
+      en: "Use the district as your start, your finish, or both if you want the route to land in an area that can carry wine, beer, and late turns.",
+    },
+  },
+  "testaccio-ostiense": {
+    eyebrow: { en: "SOUTH ROME MODE" },
+    title: {
+      en: "Food anchors, industrial culture, and glasses that feel more local than central",
+    },
+    description: {
+      en: "Testaccio and Ostiense are the southern track when the day should be driven by food, industrial culture, and better beer and wine stops than postcard Rome.",
+    },
+    selectorNote: {
+      en: "Food-led, lively, and best when you want to leave the central scenery behind.",
+    },
+    mapFocus: {
+      summary: {
+        en: "South Rome for food, beer, industrial culture, and a better local rhythm.",
+      },
+      long_description: {
+        en: "Start in Testaccio if you want the day to build around real food and move toward Ostiense when the evening should become more beer- or wine-focused.",
+      },
+    },
+    stats: [
+      { label: { en: "safe southern stops" } },
+      { label: { en: "natural south loop" } },
+      { label: { en: "best stretch" } },
+    ],
+    stopsTitle: {
+      en: "South Rome when food and local rhythm should carry the day",
+    },
+    stopsNote: {
+      en: "This day plays best if you accept that market food, industrial atmosphere, and good glasses are stronger than classic sightseeing obligations.",
+    },
+    dayTitle: { en: "Testaccio to Ostiense done right" },
+    dayNote: {
+      en: "Let lunch carry real weight, the afternoon turn cultural, and the evening lean on good beer, natural wine, or pizza without rushing.",
+    },
+    actionTitle: {
+      en: "This is the move for anyone who wants Rome to feel more everyday and less postcard",
+    },
+    actionCopy: {
+      en: "Send Testaccio and Ostiense into the planner if you want a day that is strong on food, evening energy, and local feel rather than classic photo points.",
+    },
+    stopCards: [
+      {
+        description: {
+          en: "Start here if you want the day to get a real Roman food base without tourist theatre.",
+        },
+        focus: { en: "Order: lunch or smart small stops" },
+        why: {
+          en: "One of the best ways to make South Rome legible from the first hour.",
+        },
+        time: { en: "Best: lunch" },
+      },
+      {
+        description: {
+          en: "It gives the area a rougher cultural anchor that makes the day feel contemporary and less predictable.",
+        },
+        focus: { en: "Go here: after lunch or in the rain" },
+        why: {
+          en: "A good choice when you want culture to feel smarter than yet another classic museum.",
+        },
+        time: { en: "Best: daytime" },
+      },
+      {
+        description: {
+          en: "One of the city’s most surprising cultural collisions, with sculpture and power-station aesthetics in the same room.",
+        },
+        focus: { en: "Go here: as an extra culture track" },
+        why: {
+          en: "Perfect if the day needs a real wow without becoming touristy.",
+        },
+        time: { en: "Best: afternoon" },
+      },
+      {
+        description: {
+          en: "Comfortably unpolished and a very strong stop when you want to shift from food focus to glass focus without losing local feel.",
+        },
+        focus: { en: "Order: beer or wine depending on mood" },
+        why: { en: "A good midpoint between Testaccio and Ostiense." },
+        time: { en: "Best: early evening" },
+      },
+      {
+        description: {
+          en: "A smarter beer stop in Ostiense when the evening should become more specialized without losing warmth.",
+        },
+        focus: { en: "Order: draft beer and stay longer than planned" },
+        why: {
+          en: "Perfect if beer is genuinely part of why you are here.",
+        },
+        time: { en: "Best: evening" },
+      },
+      {
+        description: {
+          en: "When a southern day deserves a real food anchor people actually go out of their way for.",
+        },
+        focus: { en: "Order: pizza and book smart if you can" },
+        why: { en: "Strong when the evening should be both food-led and social." },
+        time: { en: "Best: dinner time" },
+      },
+    ],
+    dayStops: [
+      {
+        label: { en: "Start" },
+        title: { en: "Testaccio Market" },
+        description: {
+          en: "Start with lunch or smart small stops in the market so the day gets a real base straight away.",
+        },
+        note: {
+          en: "South Rome works best when food is allowed to be the first headline.",
+        },
+      },
+      {
+        label: { en: "Culture" },
+        title: { en: "Mattatoio or Centrale Montemartini" },
+        description: {
+          en: "Choose rough industrial culture or a power-station museum depending on how much depth you want to add.",
+        },
+        note: {
+          en: "Both make the day far more memorable than a simple lunch-to-bar loop.",
+        },
+      },
+      {
+        label: { en: "Middle rhythm" },
+        title: { en: "Walk via Piramide toward Ostiense" },
+        description: {
+          en: "Let the walk carry you between the southern districts instead of jumping straight to evening mode.",
+        },
+        note: { en: "The transition is what keeps the evening from feeling pasted on." },
+      },
+      {
+        label: { en: "First glass" },
+        title: { en: "L'Oasi della Birra" },
+        description: {
+          en: "A perfect first evening stop if the group is split between beer, wine, and simply good atmosphere.",
+        },
+        note: {
+          en: "A good place to decide whether to stay south the whole night.",
+        },
+      },
+      {
+        label: { en: "Evening" },
+        title: { en: "Latta or Da Remo" },
+        description: {
+          en: "Now you choose whether the evening should become more beer-centered or more pizza-heavy with steady local energy.",
+        },
+        note: { en: "The beauty here is that both choices feel right." },
+      },
+      {
+        label: { en: "Final" },
+        title: { en: "Stay in Ostiense or drift back slowly" },
+        description: {
+          en: "End where the energy feels strongest, not where the map says it is most central.",
+        },
+        note: { en: "South Rome rewards anyone who is not rushing back." },
+      },
+    ],
+  },
+  "pigneto-san-lorenzo": {
+    eyebrow: { en: "EAST SIDE MODE" },
+    title: {
+      en: "A creative evening loop, cheaper glasses, and more social energy",
+    },
+    description: {
+      en: "Pigneto and San Lorenzo are right when you want younger energy, bars with less filter, and an eastern Rome that feels lived rather than served.",
+    },
+    selectorNote: {
+      en: "Less polished and best when you want more people than finish.",
+    },
+    mapFocus: {
+      summary: {
+        en: "East Rome for creative pulse, late glasses, and less polished districts.",
+      },
+      long_description: {
+        en: "San Lorenzo works as the rougher warm-up and Pigneto as the more creative finish when the evening should feel social and locally grounded.",
+      },
+    },
+    stats: [
+      { label: { en: "strong evening stops" } },
+      { label: { en: "east-side evening setup" } },
+      { label: { en: "friendlier budget" } },
+    ],
+    stopsTitle: {
+      en: "East Rome when you want creative pulse rather than scenery",
+    },
+    stopsNote: {
+      en: "This area works best when you accept a little more noise, a little less polish, and much more actual evening energy.",
+    },
+    dayTitle: { en: "San Lorenzo to Pigneto without losing the thread" },
+    dayNote: {
+      en: "Start in a rougher tempo, build in one or two real glass stops, and let Pigneto take over when the evening properly begins.",
+    },
+    actionTitle: {
+      en: "This move is strong for party, budget-smart beer, and social flow",
+    },
+    actionCopy: {
+      en: "Choose San Lorenzo to Pigneto in the planner if you want the app to give you a clearer eastern evening than the standard central tracks.",
+    },
+    stopCards: [
+      {
+        description: {
+          en: "Rougher, more student-heavy, and better than its first impression if you want cheaper glasses and more actual locals.",
+        },
+        focus: { en: "Go here: for the warm-up and first beer" },
+        why: { en: "A good start when the group wants to feel like the evening is already underway." },
+        time: { en: "Best: early evening" },
+      },
+      {
+        description: {
+          en: "Not the prettiest square in the city, but very useful as an easy meeting point before you split up or drift onward.",
+        },
+        focus: { en: "Go here: as a natural meeting point" },
+        why: { en: "Useful with a group when the evening needs a simple first floor." },
+        time: { en: "Best: evening" },
+      },
+      {
+        description: {
+          en: "One of the clearest districts when you want to leave postcard Rome behind and let the evening turn freer.",
+        },
+        focus: { en: "Go here: when the main evening should begin" },
+        why: { en: "Pigneto carries several kinds of evenings without losing its personality." },
+        time: { en: "Best: late afternoon to late" },
+      },
+      {
+        description: {
+          en: "One of the best stops when you want to give Pigneto some shape without making it feel too polished.",
+        },
+        focus: { en: "Order: wine or a lighter drink" },
+        why: { en: "A good bridge between a softer start and a later bar run." },
+        time: { en: "Best: late afternoon" },
+      },
+      {
+        description: {
+          en: "Wine-led, creative, and perfect if you want the night to keep a slightly more curated line in the middle of all the social energy.",
+        },
+        focus: { en: "Order: by the glass and stay a while" },
+        why: { en: "A very good stop if the group wants to keep the quality level high." },
+        time: { en: "Best: evening" },
+      },
+    ],
+    dayStops: [
+      {
+        label: { en: "Warm-up" },
+        title: { en: "San Lorenzo first" },
+        description: {
+          en: "Start in the rougher district with the first beer or a simple glass where evening energy already exists.",
+        },
+        note: { en: "A good way to keep Pigneto from feeling spent too early." },
+      },
+      {
+        label: { en: "Meeting ground" },
+        title: { en: "Piazza dei Sanniti" },
+        description: {
+          en: "Gather the group, read the mood, and decide whether the evening should get more budget-smart or more wine-led.",
+        },
+        note: { en: "It does not have to be beautiful to be functional." },
+      },
+      {
+        label: { en: "Transition" },
+        title: { en: "Walk or short hop toward Pigneto" },
+        description: {
+          en: "Move east when the evening actually needs to begin, not before.",
+        },
+        note: { en: "The rhythm between the districts is half the point." },
+      },
+      {
+        label: { en: "First proper stop" },
+        title: { en: "Necci dal 1924" },
+        description: {
+          en: "Let Necci give the evening some shape before it turns fully fluid.",
+        },
+        note: { en: "Perfect if you want to ease into Pigneto." },
+      },
+      {
+        label: { en: "Wine curve" },
+        title: { en: "Bottiglieria Pigneto" },
+        description: {
+          en: "Take a more curated turn before deciding whether the night should stay there or drift onward.",
+        },
+        note: { en: "A strong counterweight to pure party energy." },
+      },
+      {
+        label: { en: "Late scene" },
+        title: { en: "Pigneto side streets" },
+        description: {
+          en: "Finish where the energy feels strongest. In this area the district itself can be the last stop.",
+        },
+        note: { en: "East Rome is best when you stop chasing the perfect backdrop." },
+      },
+    ],
+  },
+};
+
 const romeRoutes = [
   {
     id: "classic-loop",
@@ -1179,6 +1668,151 @@ const romeRoutes = [
       "Det här är bästa dagen när du vill att staden ska kännas stor och vacker, men ändå landa i Trastevere igen före nattens sista glas.",
   },
 ];
+
+const romeRouteLocalizedContent = {
+  "classic-loop": {
+    vibe: { en: "classic without the stress" },
+    length: { en: "about 10 km" },
+    anchor: { en: "Anchor: Colosseum by night + San Clemente" },
+    walk: { en: "Start/end in Trastevere, calm full day" },
+    summary: {
+      en: "For anyone who wants one big Rome anchor while the rest of the day still feels human, bar-friendly, and much more local than touristic.",
+    },
+    path: {
+      en: "Start: coffee in Trastevere • End: wine or beer back in Trastevere",
+    },
+    stops: [
+      { en: "10:30 Start in Trastevere with a calm coffee and your first turn through the side streets." },
+      { en: "11:30 Cross the river via Isola Tiberina and take the smart path through the Ghetto instead of walking straight into the tourist current." },
+      { en: "13:00 Put lunch and side streets in Monti, where the day still feels light and open." },
+      { en: "15:00 Step into San Pietro in Vincoli or, even better, San Clemente if you want to give the day a real church anchor." },
+      { en: "17:30 Take a first glass around Monti before the evening pulse really starts to rise." },
+      { en: "20:30 See the Colosseum only after the light has softened, then walk home slowly toward Trastevere again." },
+    ],
+    hiddenMentions: [
+      { en: "Isola Tiberina" },
+      { en: "Teatro di Marcello" },
+      { en: "San Clemente" },
+      { en: "Monti backstreets" },
+    ],
+    barMentions: [
+      { en: "aperitivo around Via del Boschetto" },
+      { en: "Freni e Frizioni on the way home" },
+      { en: "Les Vignerons as a calm final stop" },
+    ],
+    matcherPitch: {
+      en: "This day works best when you want a classic Rome moment but still land back in Trastevere with the right evening feeling.",
+    },
+  },
+  "south-loop": {
+    vibe: { en: "food + local energy" },
+    length: { en: "about 9 km" },
+    anchor: { en: "Anchor: Giardino degli Aranci + Testaccio" },
+    walk: { en: "Southern loop with many natural pauses" },
+    summary: {
+      en: "This is the day for anyone who wants viewpoints, market food, South Rome, and an evening that feels more district than set design.",
+    },
+    path: {
+      en: "Start: early Trastevere walk • End: wine bar or beer back across the river",
+    },
+    stops: [
+      { en: "10:30 Start in Trastevere and walk south toward the Aventine before the city gets too warm and dense." },
+      { en: "11:15 Take in Giardino degli Aranci and let the view set the day’s first tone." },
+      { en: "12:30 Head down toward Testaccio and make lunch a real food anchor in or around the market." },
+      { en: "15:00 Continue via Piramide and the Non-Catholic Cemetery or go straight toward Ostiense depending on mood." },
+      { en: "17:00 Put aperitivo or an early glass in Ostiense as the district starts to pick up evening energy." },
+      { en: "20:00 Walk slowly back to Trastevere for dinner and then choose the bar by how much night you still want left." },
+    ],
+    hiddenMentions: [
+      { en: "Santa Sabina" },
+      { en: "Non-Catholic Cemetery" },
+      { en: "Piramide" },
+      { en: "Centrale Montemartini" },
+    ],
+    barMentions: [
+      { en: "L'Antidoto after you get back" },
+      { en: "Bar San Calisto if you want more noise" },
+      { en: "one last glass in Ostiense before turning home" },
+    ],
+    matcherPitch: {
+      en: "Choose this when you want food, southern districts, and a day that already feels local by lunch.",
+    },
+  },
+  "centro-wine-loop": {
+    vibe: { en: "wine, churches, and centro done right" },
+    length: { en: "about 8 km" },
+    anchor: { en: "Anchor: Navona late + a church loop in the center" },
+    walk: { en: "Central day without stress or detours" },
+    summary: {
+      en: "Perfect if you want something more central while still building the day around beautiful rooms, smart churches, slow food, and bars only when the time is right.",
+    },
+    path: {
+      en: "Start: Trastevere before the noise • End: back across Ponte Sisto to the bars",
+    },
+    stops: [
+      { en: "10:45 Start in Trastevere and cross the river over Ponte Sisto before Campo de' Fiori gets at its loudest." },
+      { en: "12:00 Add the first church of the day, ideally Sant'Agostino or Santa Maria sopra Minerva depending on how far you want to walk." },
+      { en: "13:30 Have lunch in the Parione or Navona area, but on side streets rather than right on the square." },
+      { en: "16:00 Continue with a second cultural pause or a first glass of wine in the center as the pace settles." },
+      { en: "19:30 See Piazza Navona only in the evening and use it as a mood anchor, not the whole activity." },
+      { en: "22:00 Walk back to Trastevere for the real bar finale once the center begins to feel done." },
+    ],
+    hiddenMentions: [
+      { en: "Ponte Sisto in the right light" },
+      { en: "Sant'Agostino" },
+      { en: "Santa Maria sopra Minerva" },
+      { en: "the side streets around Parione" },
+    ],
+    barMentions: [
+      { en: "Freni e Frizioni when you are back" },
+      { en: "Enoteca Ferrara if dinner should slide into wine" },
+      { en: "Bar San Calisto if you want a livelier ending" },
+    ],
+    matcherPitch: {
+      en: "This is the right day when you want the center without feeling like you simply followed the main current all the way through.",
+    },
+  },
+  "gianicolo-borgo-loop": {
+    vibe: { en: "scenic and slow" },
+    length: { en: "about 9 km" },
+    anchor: { en: "Anchor: Gianicolo + Castel Sant'Angelo" },
+    walk: { en: "A lot of walking, but low stress" },
+    summary: {
+      en: "For anyone who wants views, culture, and a slow day that feels almost cinematic, while still ending in Trastevere with the right kind of nightlife.",
+    },
+    path: {
+      en: "Start: Trastevere’s quiet morning • End: Bar San Calisto, Ma Che, or Les Vignerons",
+    },
+    stops: [
+      { en: "10:30 Start in Trastevere and add Villa Farnesina or the Museum of Rome in Trastevere if you want to begin with real culture." },
+      { en: "12:00 Climb toward Gianicolo and Fontanone while the light is still working for you." },
+      { en: "14:00 Head down toward Borgo or Prati for lunch and a pause from the denser parts of the center." },
+      { en: "16:30 Let Castel Sant'Angelo become the day’s big scenic anchor, ideally without getting stuck there too long." },
+      { en: "18:30 Start walking home over the bridge and choose whether the evening should slow down or gather speed." },
+      { en: "21:00 Back in Trastevere, choose your bar depending on whether the night should mean wine, beer, or just more noise." },
+    ],
+    hiddenMentions: [
+      { en: "Villa Farnesina" },
+      { en: "Fontanone" },
+      { en: "quiet streets in Borgo" },
+      { en: "Ponte Vittorio on the way home" },
+    ],
+    barMentions: [
+      { en: "Ma Che Siete Venuti a Fà for beer" },
+      { en: "Les Vignerons for a calmer wine ending" },
+      { en: "Bar San Calisto for the last burst of energy" },
+    ],
+    matcherPitch: {
+      en: "This is the best day when you want the city to feel large and beautiful while still landing back in Trastevere before the last glass of the night.",
+    },
+  },
+};
+
+function getFrontendFallbackRoutes() {
+  return hasRomeFrontendContent
+    ? localizeContentCollection(romeRoutes, romeRouteLocalizedContent)
+    : [];
+}
 
 const cardsGrid = document.getElementById("cardsGrid");
 const spotlightGrid = document.getElementById("spotlightGrid");
@@ -1431,6 +2065,86 @@ function tf(key, replacements = {}, fallback = "") {
   return Object.entries(replacements).reduce(
     (text, [token, value]) => text.split(`{${token}}`).join(String(value)),
     t(key, fallback),
+  );
+}
+
+function createLocalizedContent(sv, en) {
+  return { sv, en };
+}
+
+function isLocalizedContentValue(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const keys = Object.keys(value);
+  return keys.length > 0 && keys.every((key) => key === "sv" || key === "en");
+}
+
+function readLocalizedContent(value, lang = activeUiLanguage) {
+  if (!isLocalizedContentValue(value)) {
+    return value;
+  }
+
+  return value[lang] ?? value[fallbackUiLanguage] ?? value.sv ?? value.en ?? "";
+}
+
+function mergeLocalizedContentOverlay(baseValue, overlayValue) {
+  if (overlayValue === undefined) {
+    return baseValue;
+  }
+
+  if (isLocalizedContentValue(overlayValue)) {
+    return overlayValue;
+  }
+
+  if (Array.isArray(baseValue) && Array.isArray(overlayValue)) {
+    return baseValue.map((item, index) =>
+      mergeLocalizedContentOverlay(item, overlayValue[index]),
+    );
+  }
+
+  if (
+    baseValue &&
+    typeof baseValue === "object" &&
+    !Array.isArray(baseValue) &&
+    overlayValue &&
+    typeof overlayValue === "object" &&
+    !Array.isArray(overlayValue)
+  ) {
+    const merged = { ...baseValue };
+    Object.entries(overlayValue).forEach(([key, value]) => {
+      merged[key] = mergeLocalizedContentOverlay(baseValue[key], value);
+    });
+    return merged;
+  }
+
+  return overlayValue;
+}
+
+function resolveLocalizedContentTree(value, lang = activeUiLanguage) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => resolveLocalizedContentTree(entry, lang));
+  }
+
+  if (isLocalizedContentValue(value)) {
+    return readLocalizedContent(value, lang);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, resolveLocalizedContentTree(entry, lang)]),
+    );
+  }
+
+  return value;
+}
+
+function localizeContentCollection(items = [], overlayById = {}) {
+  return items.map((item) =>
+    resolveLocalizedContentTree(
+      mergeLocalizedContentOverlay(item, overlayById[item.id] || {}),
+    ),
   );
 }
 
@@ -1749,7 +2463,9 @@ function getFrontendPlaces() {
 }
 
 function getFrontendDistrictGuides() {
-  return hasRomeFrontendContent ? romeDistrictGuides : [];
+  return hasRomeFrontendContent
+    ? localizeContentCollection(romeDistrictGuides, romeDistrictGuideLocalizedContent)
+    : [];
 }
 
 function getFrontendPlannerDistrictCatalog() {
@@ -1767,6 +2483,25 @@ function buildUnavailableCityLabel() {
 function getMapCityFallbackLabel() {
   return plannerDisplayCityLabel || plannerResolvedCityLabel || buildUnavailableCityLabel();
 }
+
+const districtUiCopy = {
+  selectorEyebrow: createLocalizedContent("UTVALDA KVARTER", "SELECTED DISTRICTS"),
+  selectorTitle: createLocalizedContent(
+    "Välj kvarteret som ska bära dagen",
+    "Choose the district that should carry the day",
+  ),
+  selectorNote: createLocalizedContent(
+    "Här väljer du vilket kvarter som ska fungera som redaktionell bas för dagen.",
+    "Choose the district that should act as the editorial base for the day.",
+  ),
+  dayEyebrow: createLocalizedContent("PERFEKTA DAGEN", "PERFECT DAY"),
+  actionEyebrow: createLocalizedContent("GÖR NÅGOT AV DET", "MAKE IT USEFUL"),
+  actionSetStart: createLocalizedContent("Sätt som start", "Set as start"),
+  actionSetEnd: createLocalizedContent("Sätt som mål", "Set as end"),
+  actionPlan: createLocalizedContent("Planera dag härifrån", "Plan from here"),
+  actionMap: createLocalizedContent("Visa kvarteret på karta", "Show district on map"),
+  showOnMap: createLocalizedContent("Visa på karta", "Show on map"),
+};
 
 function buildLiveScopeAllLabel() {
   if (isEnglishUi) {
@@ -2592,14 +3327,20 @@ function buildRomeFallbackPulseItems(dateString = getTodayIsoDate()) {
     items.push({
       id: "fallback-city-weekend",
       level: "city",
-      kind: "Stadens rytm",
-      title: "Helgkvällar i Rom blir starkast sent",
-      where: "Monti, Testaccio, Pigneto och Ostiense",
-      when: "Efter 19:00",
-      blurb:
-        "Spara gärna huvudenergin till sent. De kvarter som känns halvlugna vid aperitivo kan vara helt rätt först när kvällen hunnit sätta sig.",
-      why_it_matters:
-        "En bättre helgdag i Rom kommer ofta från färre kvarter och mer tålamod, inte från att försöka täcka allt före middagen.",
+      kind: isEnglishUi ? "City rhythm" : "Stadens rytm",
+      title: isEnglishUi
+        ? "Weekend evenings in Rome hit hardest late"
+        : "Helgkvällar i Rom blir starkast sent",
+      where: isEnglishUi
+        ? "Monti, Testaccio, Pigneto, and Ostiense"
+        : "Monti, Testaccio, Pigneto och Ostiense",
+      when: isEnglishUi ? "After 19:00" : "Efter 19:00",
+      blurb: isEnglishUi
+        ? "Save your main energy for later. Neighborhoods that feel half-calm at aperitivo can be exactly right once the evening has properly settled."
+        : "Spara gärna huvudenergin till sent. De kvarter som känns halvlugna vid aperitivo kan vara helt rätt först när kvällen hunnit sätta sig.",
+      why_it_matters: isEnglishUi
+        ? "A better weekend day in Rome usually comes from fewer neighborhoods and more patience, not from trying to cover everything before dinner."
+        : "En bättre helgdag i Rom kommer ofta från färre kvarter och mer tålamod, inte från att försöka täcka allt före middagen.",
       matches_vibes: ["buzzy"],
       linked_wildcard_id: "fallback-san-lorenzo-pigneto",
       priority: 5,
@@ -2608,14 +3349,18 @@ function buildRomeFallbackPulseItems(dateString = getTodayIsoDate()) {
     items.push({
       id: "fallback-city-smart",
       level: "city",
-      kind: "Stadens rytm",
-      title: "Rom blir oftast bättre när dagen får växa in i kvällen",
-      where: "Hela staden",
-      when: "Efter lunch till sent",
-      blurb:
-        "Det mesta känns mer levande efter att eftermiddagen landat. Det gäller särskilt om du vill att staden ska kännas mindre avbockad och mer upplevd.",
-      why_it_matters:
-        "Bygg inte dagen för tidigt. När tempot får växa blir även en enkel rutt mer trovärdig.",
+      kind: isEnglishUi ? "City rhythm" : "Stadens rytm",
+      title: isEnglishUi
+        ? "Rome usually gets better when the day grows into the evening"
+        : "Rom blir oftast bättre när dagen får växa in i kvällen",
+      where: isEnglishUi ? "Across the city" : "Hela staden",
+      when: isEnglishUi ? "After lunch into late evening" : "Efter lunch till sent",
+      blurb: isEnglishUi
+        ? "Most things feel more alive after the afternoon has landed. That is especially true if you want the city to feel less ticked off and more genuinely lived."
+        : "Det mesta känns mer levande efter att eftermiddagen landat. Det gäller särskilt om du vill att staden ska kännas mindre avbockad och mer upplevd.",
+      why_it_matters: isEnglishUi
+        ? "Do not build the day too early. When the tempo is allowed to grow, even a simple route feels more convincing."
+        : "Bygg inte dagen för tidigt. När tempot får växa blir även en enkel rutt mer trovärdig.",
       matches_vibes: ["slow", "curious"],
       linked_wildcard_id: "fallback-monti-testaccio",
       priority: 4,
@@ -2626,14 +3371,16 @@ function buildRomeFallbackPulseItems(dateString = getTodayIsoDate()) {
     items.push({
       id: "fallback-city-spring",
       level: "city",
-      kind: "Säsong",
-      title: "Våren gör Rom extra bra till fots",
-      where: "Hela Rom",
-      when: "Golden hour till sent",
-      blurb:
-        "Det är läge för längre promenader, snyggare skiften mellan kvarter och rutter som får vara lite bredare utan att kännas stressade.",
-      why_it_matters:
-        "Just den här säsongen vinner på att låta promenaden bli en del av upplevelsen, inte bara transporten.",
+      kind: isEnglishUi ? "Season" : "Säsong",
+      title: isEnglishUi ? "Spring makes Rome especially strong on foot" : "Våren gör Rom extra bra till fots",
+      where: isEnglishUi ? "All of Rome" : "Hela Rom",
+      when: isEnglishUi ? "Golden hour into late evening" : "Golden hour till sent",
+      blurb: isEnglishUi
+        ? "This is the moment for longer walks, cleaner shifts between neighborhoods, and routes that can be a little broader without feeling stressed."
+        : "Det är läge för längre promenader, snyggare skiften mellan kvarter och rutter som får vara lite bredare utan att kännas stressade.",
+      why_it_matters: isEnglishUi
+        ? "This season rewards treating the walk as part of the experience, not just as transport."
+        : "Just den här säsongen vinner på att låta promenaden bli en del av upplevelsen, inte bara transporten.",
       matches_vibes: ["romantic", "slow"],
       linked_wildcard_id: "fallback-monti-testaccio",
       priority: 3,
@@ -2643,14 +3390,25 @@ function buildRomeFallbackPulseItems(dateString = getTodayIsoDate()) {
   items.push({
     id: "fallback-neighborhood",
     level: "neighborhood",
-    kind: "Kvarterspuls",
-    title: "Två starka kvarter slår oftare en full checklista",
-    where: weekday === 5 || weekday === 6 ? "Monti + Testaccio eller Pigneto + San Lorenzo" : "Garbatella + Ostiense eller Monti + Testaccio",
-    when: "Hela dagen",
-    blurb:
-      "Håll dig gärna till ett tydligt spår och låt promenaden mellan stoppen vara en del av rytmen i stället för att jaga för många punkter.",
-    why_it_matters:
-      "Det är så dagen känns mer lokal och mindre som en lista du försöker vinna över.",
+    kind: isEnglishUi ? "Neighborhood pulse" : "Kvarterspuls",
+    title: isEnglishUi
+      ? "Two strong neighborhoods usually beat a full checklist"
+      : "Två starka kvarter slår oftare en full checklista",
+    where:
+      weekday === 5 || weekday === 6
+        ? isEnglishUi
+          ? "Monti + Testaccio or Pigneto + San Lorenzo"
+          : "Monti + Testaccio eller Pigneto + San Lorenzo"
+        : isEnglishUi
+          ? "Garbatella + Ostiense or Monti + Testaccio"
+          : "Garbatella + Ostiense eller Monti + Testaccio",
+    when: isEnglishUi ? "All day" : "Hela dagen",
+    blurb: isEnglishUi
+      ? "Stick to one clear track and let the walk between stops become part of the rhythm instead of chasing too many points."
+      : "Håll dig gärna till ett tydligt spår och låt promenaden mellan stoppen vara en del av rytmen i stället för att jaga för många punkter.",
+    why_it_matters: isEnglishUi
+      ? "That is how the day feels more local and less like a list you are trying to beat."
+      : "Det är så dagen känns mer lokal och mindre som en lista du försöker vinna över.",
     matches_vibes: ["curious"],
     linked_wildcard_id: "fallback-garbatella-ostiense",
     priority: 4,
@@ -2659,14 +3417,20 @@ function buildRomeFallbackPulseItems(dateString = getTodayIsoDate()) {
   items.push({
     id: "fallback-venue-wine",
     level: "venue",
-    kind: "Ställesnivå",
-    title: "Låt ett vin- eller ölankare bära kvällen",
-    where: "Monti, Testaccio, Garbatella eller Trastevere",
-    when: "Sen eftermiddag till kväll",
-    blurb:
-      "Ett riktigt glasstopp gör ofta större skillnad än ännu ett halvspontant ställe. Välj ett rum med tydlig känsla och bygg vidare därifrån.",
-    why_it_matters:
-      "När ett stopp verkligen bär stämningen blir resten av rutten enklare att lita på.",
+    kind: isEnglishUi ? "Venue level" : "Ställesnivå",
+    title: isEnglishUi
+      ? "Let a wine or beer anchor carry the evening"
+      : "Låt ett vin- eller ölankare bära kvällen",
+    where: isEnglishUi
+      ? "Monti, Testaccio, Garbatella, or Trastevere"
+      : "Monti, Testaccio, Garbatella eller Trastevere",
+    when: isEnglishUi ? "Late afternoon into evening" : "Sen eftermiddag till kväll",
+    blurb: isEnglishUi
+      ? "A proper glass stop often matters more than one more half-spontaneous place. Choose a room with a clear feeling and build from there."
+      : "Ett riktigt glasstopp gör ofta större skillnad än ännu ett halvspontant ställe. Välj ett rum med tydlig känsla och bygg vidare därifrån.",
+    why_it_matters: isEnglishUi
+      ? "When one stop really carries the mood, the rest of the route becomes easier to trust."
+      : "När ett stopp verkligen bär stämningen blir resten av rutten enklare att lita på.",
     matches_vibes: ["slow", "buzzy"],
     linked_wildcard_id: "fallback-monti-testaccio",
     priority: 3,
@@ -2688,13 +3452,18 @@ function buildRomeFallbackCityPulse(dateString = getTodayIsoDate()) {
     date,
     weekday_label: dateLabels.weekdayLabel,
     date_label: dateLabels.dateLabel,
-    headline: "Vad som faktiskt händer i Rom just nu.",
-    subhead:
-      "Fallback-läget håller kvar stadens rytm, kvarterspuls och platsnivå så att LIVE fortfarande går att använda smart.",
-    note:
-      "Visar en lokal fallback med stadspuls och kvällsidéer medan live-lagret laddar eller om nätet inte spelar med.",
-    footer_note:
-      "Fallback-läge är aktivt. LIVE ska fortfarande hjälpa dig avgöra vad som är värt att väga in i planner-flödet.",
+    headline: isEnglishUi
+      ? "What is actually happening in Rome right now."
+      : "Vad som faktiskt händer i Rom just nu.",
+    subhead: isEnglishUi
+      ? "Fallback mode keeps city rhythm, neighborhood pulse, and venue-level signals alive so Pulse still helps you read the day smartly."
+      : "Fallback-läget håller kvar stadens rytm, kvarterspuls och platsnivå så att LIVE fortfarande går att använda smart.",
+    note: isEnglishUi
+      ? "Showing a local fallback with city pulse and evening ideas while the live layer loads or the network is acting up."
+      : "Visar en lokal fallback med stadspuls och kvällsidéer medan live-lagret laddar eller om nätet inte spelar med.",
+    footer_note: isEnglishUi
+      ? "Fallback mode is active. Pulse should still help you decide what is worth weighing into the planner flow."
+      : "Fallback-läge är aktivt. LIVE ska fortfarande hjälpa dig avgöra vad som är värt att väga in i planner-flödet.",
     items,
     moments: items.slice(0, 4).map((item) => ({
       id: item.id,
@@ -3531,12 +4300,14 @@ function buildLegacyPulseItems(moments = []) {
   return moments.map((moment, index) => ({
     id: moment.id || `legacy-pulse-${index}`,
     level: levelOrder[index] || "venue",
-    kind: moment.kindLabel || "Stadspuls",
+    kind: moment.kindLabel || (isEnglishUi ? "City pulse" : "Stadspuls"),
     title: moment.title,
     where: (moment.areas || []).join(" • ") || buildUnavailableCityLabel(),
-    when: "I dag",
+    when: isEnglishUi ? "Today" : "I dag",
     blurb: moment.note,
-    why_it_matters: "Använd signalen som ett litet styrmedel när du bygger dagen nedan.",
+    why_it_matters: isEnglishUi
+      ? "Use the signal as a small steering hint while you build the day below."
+      : "Använd signalen som ett litet styrmedel när du bygger dagen nedan.",
     matches_vibes: moment.tags || [],
     linked_wildcard_id: moment.linked_wildcard_id || null,
     priority: 1,
@@ -4028,18 +4799,20 @@ function getPulseConditionLabel(weather) {
   }
 
   if (weather.condition === "rain") {
-    return "risk för regn";
+    return isEnglishUi ? "risk of rain" : "risk för regn";
   }
 
   if (weather.condition === "sun") {
-    return weather.isDay === false ? "klar kväll" : "klart och öppet";
+    return weather.isDay === false
+      ? (isEnglishUi ? "clear evening" : "klar kväll")
+      : (isEnglishUi ? "clear and open" : "klart och öppet");
   }
 
   if (weather.condition === "clouds") {
-    return "molnigt men gångbart";
+    return isEnglishUi ? "cloudy but walkable" : "molnigt men gångbart";
   }
 
-  return "blandat väder";
+  return isEnglishUi ? "mixed weather" : "blandat väder";
 }
 
 function getPulseClothingAdvice(weather) {
@@ -4049,30 +4822,44 @@ function getPulseClothingAdvice(weather) {
 
   const maxTemp = Number(weather.maxTemp);
   const minTemp = Number(weather.minTemp);
-  const rainNote = weather.condition === "rain" ? ", gärna paraply" : "";
+  const rainNote = weather.condition === "rain"
+    ? (isEnglishUi ? ", umbrella helps" : ", gärna paraply")
+    : "";
 
   if (Number.isFinite(maxTemp) && maxTemp >= 30) {
-    return `så lätt som möjligt mitt på dagen${rainNote}`;
+    return isEnglishUi
+      ? `as light as possible in the middle of the day${rainNote}`
+      : `så lätt som möjligt mitt på dagen${rainNote}`;
   }
 
   if (Number.isFinite(maxTemp) && maxTemp >= 24 && Number.isFinite(minTemp) && minTemp >= 17) {
-    return `t-shirt eller skjorta räcker, tunt lager sent${rainNote}`;
+    return isEnglishUi
+      ? `a t-shirt or shirt is enough, add a light layer later${rainNote}`
+      : `t-shirt eller skjorta räcker, tunt lager sent${rainNote}`;
   }
 
   if (Number.isFinite(maxTemp) && maxTemp >= 20) {
-    return `lätt lager funkar dagtid, tunn jacka gör kvällen bättre${rainNote}`;
+    return isEnglishUi
+      ? `a light layer works by day, a thin jacket makes the evening better${rainNote}`
+      : `lätt lager funkar dagtid, tunn jacka gör kvällen bättre${rainNote}`;
   }
 
   if (Number.isFinite(maxTemp) && maxTemp >= 15) {
-    return `tunn jacka eller stickat känns smart${rainNote}`;
+    return isEnglishUi
+      ? `a thin jacket or knit layer feels smart${rainNote}`
+      : `tunn jacka eller stickat känns smart${rainNote}`;
   }
 
-  return `jacka rekommenderas även dagtid${rainNote}`;
+  return isEnglishUi
+    ? `a jacket is recommended even during the day${rainNote}`
+    : `jacka rekommenderas även dagtid${rainNote}`;
 }
 
 function buildPulseWeatherBrief(weather, dateString) {
   if (!weather) {
-    return "Väder saknas just nu, så LIVE lutar sig bara på stadspuls och platsnivå.";
+    return isEnglishUi
+      ? "Weather is missing right now, so Pulse is leaning only on city rhythm and venue-level signals."
+      : "Väder saknas just nu, så LIVE lutar sig bara på stadspuls och platsnivå.";
   }
 
   const cityNow = getCityDateTimeSnapshot();
@@ -4083,7 +4870,17 @@ function buildPulseWeatherBrief(weather, dateString) {
   const rangeLabel =
     Number.isFinite(minTemp) && Number.isFinite(maxTemp) ? `${minTemp}–${maxTemp}°` : null;
   const lead =
-    isToday && currentTemp !== null ? `${currentTemp}° nu` : rangeLabel ? `${rangeLabel} väntat` : "Väder klart";
+    isToday && currentTemp !== null
+      ? isEnglishUi
+        ? `${currentTemp}° now`
+        : `${currentTemp}° nu`
+      : rangeLabel
+        ? isEnglishUi
+          ? `${rangeLabel} expected`
+          : `${rangeLabel} väntat`
+        : isEnglishUi
+          ? "Weather set"
+          : "Väder klart";
   const condition = getPulseConditionLabel(weather);
   const clothing = getPulseClothingAdvice(weather);
 
@@ -4099,35 +4896,53 @@ function buildPulseTimelineBrief(items, dateString, timeKey) {
     items.find((item) => item.timing?.status === "timeless") ||
     null;
   const prefix = reference.isPreview
-    ? `Vald dag • ${formatCompactSwedishDate(dateString)}`
-    : `Nu ${reference.label} i ${buildUnavailableCityLabel()}`;
+    ? isEnglishUi
+      ? `Selected day • ${formatCompactSwedishDate(dateString)}`
+      : `Vald dag • ${formatCompactSwedishDate(dateString)}`
+    : isEnglishUi
+      ? `Now ${reference.label} in ${buildUnavailableCityLabel()}`
+      : `Nu ${reference.label} i ${buildUnavailableCityLabel()}`;
 
   if (liveItems.length && nextItem && nextItem !== liveItems[0]) {
     const nextTime = Number.isFinite(nextItem.timing?.startMinutes)
       ? formatPulseClock(nextItem.timing.startMinutes)
-      : "senare";
-    return `${prefix} • ${liveItems.length} pågår • nästa ${nextTime} ${truncatePulseLabel(nextItem.title, 34)}`;
+      : isEnglishUi
+        ? "later"
+        : "senare";
+    return isEnglishUi
+      ? `${prefix} • ${liveItems.length} live • next ${nextTime} ${truncatePulseLabel(nextItem.title, 34)}`
+      : `${prefix} • ${liveItems.length} pågår • nästa ${nextTime} ${truncatePulseLabel(nextItem.title, 34)}`;
   }
 
   if (liveItems.length) {
-    return `${prefix} • ${liveItems.length} signal${liveItems.length > 1 ? "er" : ""} pågår nu`;
+    return isEnglishUi
+      ? `${prefix} • ${liveItems.length} signal${liveItems.length > 1 ? "s" : ""} live now`
+      : `${prefix} • ${liveItems.length} signal${liveItems.length > 1 ? "er" : ""} pågår nu`;
   }
 
   if (nextItem) {
     const nextTime = Number.isFinite(nextItem.timing?.startMinutes)
       ? formatPulseClock(nextItem.timing.startMinutes)
-      : "snart";
-    return `${prefix} • nästa ${nextTime} ${truncatePulseLabel(nextItem.title, 34)}`;
+      : isEnglishUi
+        ? "soon"
+        : "snart";
+    return isEnglishUi
+      ? `${prefix} • next ${nextTime} ${truncatePulseLabel(nextItem.title, 34)}`
+      : `${prefix} • nästa ${nextTime} ${truncatePulseLabel(nextItem.title, 34)}`;
   }
 
   return reference.isPreview
-    ? `Vald dag • ${formatCompactSwedishDate(dateString)} • inga starka signaler ännu`
-    : `Nu ${reference.label} i ${buildUnavailableCityLabel()} • inga starka signaler just nu`;
+    ? isEnglishUi
+      ? `Selected day • ${formatCompactSwedishDate(dateString)} • no strong signals yet`
+      : `Vald dag • ${formatCompactSwedishDate(dateString)} • inga starka signaler ännu`
+    : isEnglishUi
+      ? `Now ${reference.label} in ${buildUnavailableCityLabel()} • no strong signals right now`
+      : `Nu ${reference.label} i ${buildUnavailableCityLabel()} • inga starka signaler just nu`;
 }
 
 function buildPulseWeatherValue(weather, dateString) {
   if (!weather) {
-    return "Väder saknas";
+    return isEnglishUi ? "Weather missing" : "Väder saknas";
   }
 
   const romeNow = getCityDateTimeSnapshot();
@@ -4137,40 +4952,40 @@ function buildPulseWeatherValue(weather, dateString) {
   const minTemp = Number.isFinite(weather.minTemp) ? Math.round(weather.minTemp) : null;
 
   if (isToday && currentTemp !== null) {
-    return `${currentTemp}° nu`;
+    return isEnglishUi ? `${currentTemp}° now` : `${currentTemp}° nu`;
   }
 
   if (maxTemp !== null && minTemp !== null) {
-    return `${maxTemp}° / ${minTemp}° kväll`;
+    return isEnglishUi ? `${maxTemp}° / ${minTemp}° evening` : `${maxTemp}° / ${minTemp}° kväll`;
   }
 
   if (maxTemp !== null) {
-    return `${maxTemp}° väntat`;
+    return isEnglishUi ? `${maxTemp}° expected` : `${maxTemp}° väntat`;
   }
 
-  return "Väder klart";
+  return isEnglishUi ? "Weather set" : "Väder klart";
 }
 
 function getPulseClothingHeadline(weather) {
   if (!weather) {
-    return "Lokalt lager";
+    return isEnglishUi ? "Local layer" : "Lokalt lager";
   }
 
   const maxTemp = Number(weather.maxTemp);
 
   if (Number.isFinite(maxTemp) && maxTemp >= 28) {
-    return "Svalt och lätt";
+    return isEnglishUi ? "Cool and light" : "Svalt och lätt";
   }
 
   if (Number.isFinite(maxTemp) && maxTemp >= 22) {
-    return "T-shirt + lätt lager";
+    return isEnglishUi ? "T-shirt + light layer" : "T-shirt + lätt lager";
   }
 
   if (Number.isFinite(maxTemp) && maxTemp >= 17) {
-    return "Skjorta + tunn jacka";
+    return isEnglishUi ? "Shirt + thin jacket" : "Skjorta + tunn jacka";
   }
 
-  return "Jacka rekommenderas";
+  return isEnglishUi ? "Jacket recommended" : "Jacka rekommenderas";
 }
 
 function buildPulseTeaserSummary() {
@@ -4652,7 +5467,9 @@ function renderCityPulse() {
   cityPulseSubhead.textContent =
     cityPulseState.subhead ||
     cityPulseState.note ||
-    "Det här lagret hjälper dig väga in det som faktiskt är relevant just nu.";
+    (isEnglishUi
+      ? "This layer helps you weigh what is actually relevant right now."
+      : "Det här lagret hjälper dig väga in det som faktiskt är relevant just nu.");
   cityPulseEditionDate.textContent = `${weekdayLabel}\n${dateLabel}`;
   cityPulseMeta.textContent = tf("pulse.meta", { signals: filteredItems.length, levels: availableLevels.length }, `${filteredItems.length} signaler • ${availableLevels.length} nivåer`);
   cityPulseFooter.textContent =
@@ -4782,7 +5599,9 @@ function renderCityPulse() {
 
   if (cityPulseUtilityNote) {
     cityPulseUtilityNote.textContent = activePlannedDay
-      ? `Editionen är kopplad till ${formatSwedishDate(activePlannedDay.date)}. LIVE hjälper dig nu läsa vad som passar med just den dagens huvudrutt och alternativ.`
+      ? isEnglishUi
+        ? `This edition is tied to ${formatSwedishDate(activePlannedDay.date)}. Pulse now helps you read what fits that day's main route and alternatives.`
+        : `Editionen är kopplad till ${formatSwedishDate(activePlannedDay.date)}. LIVE hjälper dig nu läsa vad som passar med just den dagens huvudrutt och alternativ.`
       : buildPulseUtilityCopy(filteredItems, items);
   }
 
@@ -8407,17 +9226,52 @@ function renderDistrictGuide() {
     return;
   }
 
+  const districtHeadingSections = districtsPanel
+    ? [...districtsPanel.querySelectorAll(".section-heading.compact-heading")]
+    : [];
+  const selectorHeadingSection = districtHeadingSections[0] || null;
+  const actionEyebrow = document.querySelector(".district-cta-copy .eyebrow");
+
   districtEyebrow.textContent = guide.eyebrow;
   districtTitle.textContent = guide.title;
   districtDescription.textContent = guide.description;
+  if (selectorHeadingSection) {
+    const selectorEyebrow = selectorHeadingSection.querySelector(".eyebrow");
+    const selectorTitle = selectorHeadingSection.querySelector("h2");
+    const selectorNote = selectorHeadingSection.querySelector(".section-note");
+    if (selectorEyebrow) {
+      selectorEyebrow.textContent = readLocalizedContent(districtUiCopy.selectorEyebrow);
+    }
+    if (selectorTitle) {
+      selectorTitle.textContent = readLocalizedContent(districtUiCopy.selectorTitle);
+    }
+    if (selectorNote) {
+      selectorNote.textContent = readLocalizedContent(districtUiCopy.selectorNote);
+    }
+  }
   districtStopsEyebrow.textContent = guide.eyebrow;
   districtStopsTitle.textContent = guide.stopsTitle;
   districtStopsNote.textContent = guide.stopsNote;
-  districtDayEyebrow.textContent = "PERFEKTA DAGEN";
+  districtDayEyebrow.textContent = readLocalizedContent(districtUiCopy.dayEyebrow);
   districtDayTitle.textContent = guide.dayTitle;
   districtDayNote.textContent = guide.dayNote;
+  if (actionEyebrow) {
+    actionEyebrow.textContent = readLocalizedContent(districtUiCopy.actionEyebrow);
+  }
   districtActionTitle.textContent = guide.actionTitle;
   districtActionCopy.textContent = guide.actionCopy;
+  if (districtSetStartButton) {
+    districtSetStartButton.textContent = readLocalizedContent(districtUiCopy.actionSetStart);
+  }
+  if (districtSetEndButton) {
+    districtSetEndButton.textContent = readLocalizedContent(districtUiCopy.actionSetEnd);
+  }
+  if (districtPlanButton) {
+    districtPlanButton.textContent = readLocalizedContent(districtUiCopy.actionPlan);
+  }
+  if (districtMapButton) {
+    districtMapButton.textContent = readLocalizedContent(districtUiCopy.actionMap);
+  }
 
   districtStatsGrid.innerHTML = "";
   guide.stats.forEach((item) => {
@@ -8456,6 +9310,7 @@ function renderDistrictGuide() {
 
     const mapLink = card.querySelector(".map-link");
     mapLink.href = createMapUrl(stop.mapQuery);
+    mapLink.textContent = readLocalizedContent(districtUiCopy.showOnMap);
     mapLink.addEventListener("click", (event) => {
       event.stopPropagation();
     });
@@ -9019,7 +9874,7 @@ function createRouteCard(
 function renderFallbackRoutes() {
   routeResults.innerHTML = "";
 
-  romeRoutes.forEach((route, index) => {
+  getFrontendFallbackRoutes().forEach((route, index) => {
     const routeView = createFallbackRouteView(route);
     const routeKey = `fallback:${route.id}`;
     const card = createRouteCard(routeView, {
