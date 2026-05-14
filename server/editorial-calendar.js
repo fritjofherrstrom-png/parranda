@@ -3,6 +3,7 @@ const {
   formatIsoDatePart,
   getIsoMonthDay,
 } = require("./lib/iso-date");
+const { normalizeLanguage } = require("./ui-i18n");
 
 function getRomeTodayIsoDate() {
   const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -23,18 +24,89 @@ function getMonthDay(dateString = getRomeTodayIsoDate()) {
   return getIsoMonthDay(dateString);
 }
 
-function formatRomeDatePart(dateString, options) {
-  return formatIsoDatePart(dateString, "sv-SE", options);
+function createLocalizedContent(sv, en) {
+  return { sv, en };
 }
 
-function getPulseDateLabels(dateString = getRomeTodayIsoDate()) {
+function isLocalizedContentValue(value) {
+  return (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    (Object.prototype.hasOwnProperty.call(value, "sv") ||
+      Object.prototype.hasOwnProperty.call(value, "en"))
+  );
+}
+
+function readLocalizedContent(value, lang = "sv") {
+  if (!isLocalizedContentValue(value)) {
+    return value;
+  }
+
+  const resolvedLang = normalizeLanguage(lang);
+  return value[resolvedLang] || value.sv || value.en || "";
+}
+
+function localizePulseKind(value, lang = "sv") {
+  const resolvedLang = normalizeLanguage(lang);
+
+  if (resolvedLang !== "en") {
+    return value;
+  }
+
+  const englishBySwedish = {
+    "Stadspuls": "City pulse",
+    stadspuls: "city pulse",
+    "Lokal rytm": "Local rhythm",
+    "lokal rytm": "local rhythm",
+    Säsong: "Season",
+    säsong: "season",
+    Tradition: "Tradition",
+    tradition: "tradition",
+    "Stadens rytm": "City rhythm",
+    Kvarterspuls: "Neighborhood pulse",
+    Ställesnivå: "Venue level",
+    "speciell dag": "special day",
+    "Speciell dag": "Special day",
+  };
+
+  return englishBySwedish[value] || value;
+}
+
+function localizePulseContentItem(item, lang = "sv") {
   return {
-    weekdayLabel: formatRomeDatePart(dateString, { weekday: "long" }),
+    ...item,
+    kind: localizePulseKind(readLocalizedContent(item.kind, lang), lang),
+    kindLabel: localizePulseKind(readLocalizedContent(item.kindLabel, lang), lang),
+    title: readLocalizedContent(item.title, lang),
+    where: readLocalizedContent(item.where, lang),
+    when: readLocalizedContent(item.when, lang),
+    blurb: readLocalizedContent(item.blurb, lang),
+    why_it_matters: readLocalizedContent(item.why_it_matters, lang),
+    note: readLocalizedContent(item.note, lang),
+  };
+}
+
+function localizePulseContentCollection(items = [], lang = "sv") {
+  return items.map((item) => localizePulseContentItem(item, lang));
+}
+
+function getPulseLocale(lang = "sv") {
+  return normalizeLanguage(lang) === "en" ? "en-US" : "sv-SE";
+}
+
+function formatRomeDatePart(dateString, options, lang = "sv") {
+  return formatIsoDatePart(dateString, getPulseLocale(lang), options);
+}
+
+function getPulseDateLabels(dateString = getRomeTodayIsoDate(), lang = "sv") {
+  return {
+    weekdayLabel: formatRomeDatePart(dateString, { weekday: "long" }, lang),
     dateLabel: formatRomeDatePart(dateString, {
       day: "numeric",
       month: "long",
       year: "numeric",
-    }),
+    }, lang),
   };
 }
 
@@ -47,16 +119,21 @@ function getDayDistanceToFixedDate(dateString, targetMonth, targetDay) {
   return diffIsoDatesInDays(dateString, targetDate);
 }
 
-function getDateSignals(dateString = getRomeTodayIsoDate()) {
+function getDateSignals(dateString = getRomeTodayIsoDate(), lang = "sv") {
   const { month, day, weekday } = getMonthDay(dateString);
   const signals = [];
 
   if (month === 4 && day === 21) {
     signals.push({
       id: "natale-di-roma",
-      title: "Natale di Roma",
-      note:
-        "21 april: Rom firar sin födelsedag. Välj gärna en rutt med kultur, historisk tyngd eller kvällspuls runt Centro, Aventinen och Trastevere.",
+      title: readLocalizedContent(createLocalizedContent("Natale di Roma", "Natale di Roma"), lang),
+      note: readLocalizedContent(
+        createLocalizedContent(
+          "21 april: Rom firar sin födelsedag. Välj gärna en rutt med kultur, historisk tyngd eller kvällspuls runt Centro, Aventinen och Trastevere.",
+          "April 21: Rome celebrates its birthday. Lean toward a route with culture, historical weight, or evening pulse around Centro, Aventino, and Trastevere.",
+        ),
+        lang,
+      ),
       vibeTags: ["kultur", "klassiker", "kväll"],
     });
   }
@@ -64,9 +141,17 @@ function getDateSignals(dateString = getRomeTodayIsoDate()) {
   if (month >= 6 && month <= 9) {
     signals.push({
       id: "estate-romana",
-      title: "Sommarkväll i Rom",
-      note:
-        "Sommarsäsongen gör kvällar starkare än mitt på dagen. Utsikter, aperitivo och sena stopp väger därför lite tyngre.",
+      title: readLocalizedContent(
+        createLocalizedContent("Sommarkväll i Rom", "Summer evening in Rome"),
+        lang,
+      ),
+      note: readLocalizedContent(
+        createLocalizedContent(
+          "Sommarsäsongen gör kvällar starkare än mitt på dagen. Utsikter, aperitivo och sena stopp väger därför lite tyngre.",
+          "Summer makes the evenings stronger than the middle of the day. Views, aperitivo, and later stops deserve a little more weight.",
+        ),
+        lang,
+      ),
       vibeTags: ["sommar", "aperitivo", "kväll"],
     });
   }
@@ -74,9 +159,14 @@ function getDateSignals(dateString = getRomeTodayIsoDate()) {
   if (weekday === 5 || weekday === 6) {
     signals.push({
       id: "weekend-pulse",
-      title: "Helgpuls",
-      note:
-        "Fredag och lördag ger mer drag i barer och torg. Boka populära cocktail- och pizzastopp i god tid om de är kvällsankare.",
+      title: readLocalizedContent(createLocalizedContent("Helgpuls", "Weekend pulse"), lang),
+      note: readLocalizedContent(
+        createLocalizedContent(
+          "Fredag och lördag ger mer drag i barer och torg. Boka populära cocktail- och pizzastopp i god tid om de är kvällsankare.",
+          "Friday and Saturday bring more energy to bars and piazzas. Book popular cocktail and pizza stops early if they anchor the evening.",
+        ),
+        lang,
+      ),
       vibeTags: ["nattliv", "bokning", "barer"],
     });
   }
@@ -84,9 +174,14 @@ function getDateSignals(dateString = getRomeTodayIsoDate()) {
   if (weekday === 1) {
     signals.push({
       id: "monday-reset",
-      title: "Mjuk måndag",
-      note:
-        "Tidiga veckokvällar fungerar ofta bättre som kultur, vin och lång middag än som ren maxad barrunda.",
+      title: readLocalizedContent(createLocalizedContent("Mjuk måndag", "Soft Monday"), lang),
+      note: readLocalizedContent(
+        createLocalizedContent(
+          "Tidiga veckokvällar fungerar ofta bättre som kultur, vin och lång middag än som ren maxad barrunda.",
+          "Early-week evenings usually work better as culture, wine, and a long dinner than as a full-throttle bar crawl.",
+        ),
+        lang,
+      ),
       vibeTags: ["kultur", "vin", "low-key"],
     });
   }
@@ -174,6 +269,69 @@ const recurringPulseMoments = [
     priority: 2,
   },
 ];
+
+const recurringPulseLocalizedContent = {
+  "thursday-aperitivo": {
+    title: createLocalizedContent(
+      "Torsdag är bäst som lång aperitivo, inte som stressig barrunda",
+      "Thursday works best as a long aperitivo, not a rushed bar crawl",
+    ),
+    note: createLocalizedContent(
+      "Bra kväll för två till tre smarta stopp i Monti, Testaccio eller Trastevere i stället för att försöka täcka hela stan.",
+      "A strong night for two or three smart stops in Monti, Testaccio, or Trastevere instead of trying to cover the whole city.",
+    ),
+  },
+  "weekend-street-pulse": {
+    title: createLocalizedContent(
+      "Fredag och lördag spiller kvällen ut på gator och piazzor",
+      "On Friday and Saturday, the evening spills into the streets and piazzas",
+    ),
+    note: createLocalizedContent(
+      "Monti, Trastevere, Ostiense och Pigneto känns oftast starkast efter 18:30. Spara gärna huvudenergin till sent.",
+      "Monti, Trastevere, Ostiense, and Pigneto usually feel strongest after 18:30. Save your main energy for later.",
+    ),
+  },
+  "sunday-soft-rome": {
+    title: createLocalizedContent(
+      "Söndag i Rom är bättre långsam än maxad",
+      "Sunday in Rome works better slow than overpacked",
+    ),
+    note: createLocalizedContent(
+      "Tänk mer utsikt, kyrkor, lång lunch och vin än aggressiv barrunda. Aventino, Prati, Borgo och Garbatella spelar ofta bättre då.",
+      "Think more views, churches, long lunch, and wine than an aggressive bar crawl. Aventino, Prati, Borgo, and Garbatella often play better then.",
+    ),
+  },
+  "monday-wine-culture": {
+    title: createLocalizedContent(
+      "Måndag vinner på kultur, vin och tydlig middag",
+      "Monday wins with culture, wine, and a proper dinner",
+    ),
+    note: createLocalizedContent(
+      "Tidiga veckan funkar smartare med kyrkor, rum och ett vinankare än med ren partyenergi från start.",
+      "Early in the week, Rome works better with churches, rooms, and a wine anchor than with pure party energy from the first stop.",
+    ),
+  },
+  "summer-open-air": {
+    title: createLocalizedContent(
+      "Sommarkvällar gör piazzor och uteserveringar extra starka",
+      "Summer evenings make piazzas and terraces especially strong",
+    ),
+    note: createLocalizedContent(
+      "Under varmare månader blir det smartare att dra ned på mitt-på-dagen-planer och lägga tyngden efter solnedgång.",
+      "In warmer months it is smarter to ease off the middle of the day and put more weight after sunset.",
+    ),
+  },
+  "spring-and-autumn-walks": {
+    title: createLocalizedContent(
+      "Vår och tidig höst är gjorda för långa kvällspromenader",
+      "Spring and early autumn are made for long evening walks",
+    ),
+    note: createLocalizedContent(
+      "Bra läge för att binda ihop två kvarter till fots i stället för att stanna på samma plats hela kvällen.",
+      "A great moment to connect two neighborhoods on foot instead of staying in the same place all evening.",
+    ),
+  },
+};
 
 const editorialPulseItems = [
   {
@@ -513,6 +671,247 @@ const editorialPulseItems = [
   },
 ];
 
+const editorialPulseLocalizedContent = {
+  "city-thursday-gnocchi": {
+    title: createLocalizedContent("Torsdag är gnocchi-dag", "Thursday is gnocchi day"),
+    where: createLocalizedContent("Romerska trattorior över hela stan", "Roman trattorias across the city"),
+    when: createLocalizedContent("Lunch och middag", "Lunch and dinner"),
+    blurb: createLocalizedContent(
+      "Giovedi gnocchi, venerdi pesce, sabato trippa. På de riktiga ställena lever den rytmen fortfarande, och torsdag är dagen då köken redan vet vad de vill att du ska beställa.",
+      "Giovedi gnocchi, venerdi pesce, sabato trippa. In the real places that rhythm still lives on, and Thursday is the day when kitchens already know what they want you to order.",
+    ),
+    why_it_matters: createLocalizedContent(
+      "Låt maten följa dagen. En smart torsdag i Rom känns mer lokal när du beställer det köket faktiskt lagat för just i dag.",
+      "Let the food follow the day. A smart Thursday in Rome feels more local when you order what the kitchen has actually cooked for today.",
+    ),
+  },
+  "city-weekend-streets": {
+    kind: createLocalizedContent("Stadens rytm", "City rhythm"),
+    title: createLocalizedContent(
+      "Helgkvällar spiller ut på gator och piazzor",
+      "Weekend evenings spill into the streets and piazzas",
+    ),
+    where: createLocalizedContent("Monti, Testaccio, Ostiense och Pigneto", "Monti, Testaccio, Ostiense, and Pigneto"),
+    when: createLocalizedContent("Efter 19:00", "After 19:00"),
+    blurb: createLocalizedContent(
+      "Fredag och lördag blir Rom mindre rumsbundet och mer kvartersdrivet. Kvällen bygger fart sent, och piazzor, småbarer och mellanrummen gör mer än en perfekt bokningslista.",
+      "On Friday and Saturday, Rome is less room-bound and more neighborhood-led. The evening gathers speed late, and piazzas, small bars, and the spaces between do more than a perfect booking list.",
+    ),
+    why_it_matters: createLocalizedContent(
+      "Spara huvudenergin till sent. Två rätt kvarter slår nästan alltid en överlastad kväll där du försöker hinna för mycket.",
+      "Save your main energy for later. Two well-chosen neighborhoods almost always beat an overloaded evening where you try to cram in too much.",
+    ),
+  },
+  "city-monday-soft": {
+    title: createLocalizedContent(
+      "Måndag vinner på kultur, vin och tydlig middag",
+      "Monday wins with culture, wine, and a proper dinner",
+    ),
+    where: createLocalizedContent("Centro, Prati och lugnare vinstråk", "Centro, Prati, and calmer wine stretches"),
+    when: createLocalizedContent("Från eftermiddag till kväll", "From afternoon into evening"),
+    blurb: createLocalizedContent(
+      "Tidiga veckan är sällan rätt läge för maxad barrunda från start. Rom blir smartare när du låter ett kulturstopp, ett vinankare och en bra middag bära dagen.",
+      "Early in the week is rarely the right moment for a full-throttle bar crawl from the start. Rome gets smarter when a cultural stop, a wine anchor, and a good dinner carry the day.",
+    ),
+    why_it_matters: createLocalizedContent(
+      "Du får en mer självklar dag om du spelar med veckans tempo i stället för att tvinga fram helgkänsla.",
+      "You get a more natural day if you play with the week's tempo instead of forcing weekend energy into it.",
+    ),
+  },
+  "city-spring-walks": {
+    title: createLocalizedContent(
+      "April och maj är gjorda för längre kvällspromenader",
+      "April and May are made for longer evening walks",
+    ),
+    where: createLocalizedContent("Hela Rom", "All of Rome"),
+    when: createLocalizedContent("Golden hour till sent", "Golden hour into late evening"),
+    blurb: createLocalizedContent(
+      "Ljuset håller längre, värmen är fortfarande vänlig och två starka kvarter i samma dag känns plötsligt självklara till fots.",
+      "The light lasts longer, the temperature is still kind, and two strong neighborhoods in the same day suddenly feel natural on foot.",
+    ),
+    why_it_matters: createLocalizedContent(
+      "Det här är säsongen då rutten gärna får vara snygg, lite bredare och mer komponerad än bara effektiv.",
+      "This is the season when the route can afford to be beautiful, a little broader, and more composed than merely efficient.",
+    ),
+  },
+  "city-summer-open-air": {
+    title: createLocalizedContent(
+      "Sommarkvällar gör piazzor, tak och uteserveringar extra starka",
+      "Summer evenings make piazzas, rooftops, and terraces especially strong",
+    ),
+    where: createLocalizedContent("Centro, Trastevere och västliga kvällsstråk", "Centro, Trastevere, and western evening stretches"),
+    when: createLocalizedContent("Efter 18:30", "After 18:30"),
+    blurb: createLocalizedContent(
+      "När värmen sitter kvar sent vill Rom hellre spelas i skymning än mitt på dagen. Utomhusstopp och lång aperitivo bär mer än täta dagsprogram.",
+      "When the heat lingers late, Rome wants to be played at dusk rather than in the middle of the day. Outdoor stops and a long aperitivo carry more than a tightly packed daytime plan.",
+    ),
+    why_it_matters: createLocalizedContent(
+      "Låt kvällen ta vikt. Du får en bättre dag om du avsiktligt lämnar luft åt de sena timmarna.",
+      "Let the evening take on more weight. You get a better day if you deliberately leave room for the later hours.",
+    ),
+  },
+  "city-general-rhythm": {
+    title: createLocalizedContent(
+      "Rom känns bäst när dagen byggs i kvarter, inte i checklistor",
+      "Rome feels best when the day is built in neighborhoods, not checklists",
+    ),
+    where: createLocalizedContent("Hela staden", "The whole city"),
+    when: createLocalizedContent("Hela dagen", "All day"),
+    blurb: createLocalizedContent(
+      "Det lokala spelet sitter sällan i att hinna flest platser, utan i att låta två eller tre tydliga områden bära rytmen och promenaden mellan dem göra jobbet.",
+      "The local game is rarely about seeing the most places. It is about letting two or three clear areas carry the rhythm and letting the walk between them do the work.",
+    ),
+    why_it_matters: createLocalizedContent(
+      "Det är så en dag går från transportsträcka till upplevelse. Parranda ska hjälpa dig läsa det tempot snabbare.",
+      "That is how a day turns from transit into experience. Parranda should help you read that tempo faster.",
+    ),
+  },
+  "hood-trastevere-crowded": {
+    title: createLocalizedContent(
+      "Trastevere är sällan smartast som första stopp på helgkvällar",
+      "Trastevere is rarely smartest as the first stop on weekend evenings",
+    ),
+    where: createLocalizedContent("Piazza Santa Maria och de tätaste stråken", "Piazza Santa Maria and the most crowded streets"),
+    when: createLocalizedContent("Från 20:00", "From 20:00"),
+    blurb: createLocalizedContent(
+      "Fortfarande vackert, men ofta mer kökänsla än lokal rytm om du börjar där när alla andra gör samma sak. Det spelar oftast bättre som senare drift än som hela planen.",
+      "Still beautiful, but often more queue energy than local rhythm if you begin there when everyone else does the same. It usually plays better as a later drift than as the whole plan.",
+    ),
+    why_it_matters: createLocalizedContent(
+      "Börja hellre i Monti, Testaccio eller Pigneto och låt Trastevere bli final, omväg eller ett sent glas när kvällen redan satt sig.",
+      "Start instead in Monti, Testaccio, or Pigneto and let Trastevere become the final stop, a detour, or a late glass once the evening has already settled.",
+    ),
+  },
+  "hood-east-rome-energy": {
+    title: createLocalizedContent(
+      "Pigneto och San Lorenzo bär en yngre och råare kväll än centro",
+      "Pigneto and San Lorenzo carry a younger, rougher evening than the center",
+    ),
+    where: createLocalizedContent("Östra Rom", "East Rome"),
+    when: createLocalizedContent("Efter 19:30", "After 19:30"),
+    blurb: createLocalizedContent(
+      "Billigare glas, mindre finish och mer direkt energi. Det är kvarter för kvällar som ska kännas ute på riktigt, inte bara snyggt planerade i förväg.",
+      "Cheaper glasses, less polish, and more direct energy. These are neighborhoods for evenings that should feel actually out, not just neatly planned in advance.",
+    ),
+    why_it_matters: createLocalizedContent(
+      "När du väljer mer party, öl eller bara vill ha mindre polish är östra Rom ofta en bättre huvudscen än de mest uppenbara centrala dragen.",
+      "When you want more party, more beer, or just less polish, East Rome is often a better main stage than the most obvious central stretches.",
+    ),
+  },
+  "hood-south-rome-low-key": {
+    title: createLocalizedContent(
+      "Garbatella och Ostiense ger ofta en bättre vardagskväll än centrum",
+      "Garbatella and Ostiense often make a better weekday evening than the center",
+    ),
+    where: createLocalizedContent("Södra Rom", "South Rome"),
+    when: createLocalizedContent("Tidiga kvällar", "Early evenings"),
+    blurb: createLocalizedContent(
+      "Mindre show, bättre samtal och fler stopp som känns levda snarare än serverade. Södra Rom är starkt när du vill ha personlighet utan helgbrus.",
+      "Less show, better conversation, and more stops that feel lived-in rather than served up. South Rome is strong when you want personality without weekend noise.",
+    ),
+    why_it_matters: createLocalizedContent(
+      "Perfekt när du valt mer low-key, mer vin eller bara vill att dagen ska kännas lokalt självklar i stället för turistiskt självsäker.",
+      "Perfect when you want something more low-key, more wine-led, or simply more locally natural than tourist-confident.",
+    ),
+  },
+  "hood-sunday-soft": {
+    title: createLocalizedContent(
+      "Aventino och Prati spelar bättre långsamt på söndagar",
+      "Aventino and Prati play better slowly on Sundays",
+    ),
+    where: createLocalizedContent("Västra och södra kanten av centro", "The western and southern edge of the center"),
+    when: createLocalizedContent("Dag till tidig kväll", "Daytime into early evening"),
+    blurb: createLocalizedContent(
+      "Mer promenad, kyrkor, utsikt och vin än ren barserie. Ett bättre val när du vill få ihop platskänsla utan att dagen känns pressad.",
+      "More walking, churches, views, and wine than a straight bar sequence. A better choice when you want a sense of place without making the day feel pressured.",
+    ),
+    why_it_matters: createLocalizedContent(
+      "Söndag i Rom blir ofta starkare när du låter tempot sjunka och låter ett par eleganta stopp bära helheten.",
+      "Sunday in Rome often gets stronger when you let the tempo slow down and allow a couple of elegant stops to carry the whole day.",
+    ),
+  },
+  "hood-monti-start": {
+    title: createLocalizedContent(
+      "Monti är ofta bättre som smart start än som hela svaret",
+      "Monti is often better as a smart start than as the whole answer",
+    ),
+    where: createLocalizedContent("Monti", "Monti"),
+    when: createLocalizedContent("Eftermiddag till första glaset", "Afternoon to the first glass"),
+    blurb: createLocalizedContent(
+      "Bra läge för kulturstart, smågator och ett första glas, men ännu bättre när du sedan låter kvällen glida vidare till ett andra kvarter med tydligare egen puls.",
+      "A good place for a cultural start, small streets, and a first glass, but even better when you then let the evening glide toward a second neighborhood with a stronger pulse of its own.",
+    ),
+    why_it_matters: createLocalizedContent(
+      "Monti fungerar bäst när du använder det som öppning, inte som ursäkt att stanna still hela dagen.",
+      "Monti works best when you use it as an opening, not as an excuse to stay put all day.",
+    ),
+  },
+  "venue-wine-axis": {
+    title: createLocalizedContent(
+      "Litro, L'Antidoto eller Les Vignerons om du vill låta vinet styra kvällen",
+      "Litro, L'Antidoto, or Les Vignerons if you want wine to steer the evening",
+    ),
+    where: createLocalizedContent("Monteverde och Trastevere", "Monteverde and Trastevere"),
+    when: createLocalizedContent("Sen eftermiddag till sent", "Late afternoon into late evening"),
+    blurb: createLocalizedContent(
+      "Mer samtal, mindre brus och bättre chans att låta middagen glida ihop med dagens första riktiga glas. Den här typen av stopp bär en vinig kväll bättre än ännu en generisk aperitivo.",
+      "More conversation, less noise, and a better chance to let dinner melt into the day’s first proper glass. This kind of stop carries a wine-led evening better than yet another generic aperitivo.",
+    ),
+    why_it_matters: createLocalizedContent(
+      "När du vill ha mer vin, mer stämning och mindre pose är det här ofta rätt riktning att luta dagen åt.",
+      "When you want more wine, more atmosphere, and less pose, this is often the right direction to tilt the day toward.",
+    ),
+  },
+  "venue-beer-axis": {
+    title: createLocalizedContent(
+      "Ma Che Siete Venuti a Fà, L'Oasi della Birra eller Bar San Calisto bär ett genuint ölspår",
+      "Ma Che Siete Venuti a Fà, L'Oasi della Birra, or Bar San Calisto carry a genuine beer track",
+    ),
+    where: createLocalizedContent("Trastevere och Testaccio", "Trastevere and Testaccio"),
+    when: createLocalizedContent("Kväll", "Evening"),
+    blurb: createLocalizedContent(
+      "Olika stilnivåer, samma idé: stopp där ölen faktiskt är viktig och där rummet gör jobbet utan att kännas som en kuliss för besökare.",
+      "Different levels of polish, same idea: stops where the beer actually matters and the room does the work without feeling staged for visitors.",
+    ),
+    why_it_matters: createLocalizedContent(
+      "Bra när du valt mer öl, bar hopping eller bara vill att kvällen ska kännas mindre generisk och mer förankrad i riktiga ställen.",
+      "Great when you want more beer, more bar hopping, or simply want the evening to feel less generic and more grounded in real places.",
+    ),
+  },
+  "venue-culture-axis": {
+    title: createLocalizedContent(
+      "Centrale Montemartini eller Santa Prassede när du vill ge dagen ett rum med tyngd",
+      "Centrale Montemartini or Santa Prassede when you want to give the day a room with weight",
+    ),
+    where: createLocalizedContent("Ostiense och Esquilino", "Ostiense and Esquilino"),
+    when: createLocalizedContent("Dagtid till tidig kväll", "Daytime into early evening"),
+    blurb: createLocalizedContent(
+      "Smart kultur, stark atmosfär och noll behov av de mest slitna köerna. Den sortens stopp får ofta hela rutten att kännas mer genomtänkt.",
+      "Smart culture, strong atmosphere, and no need for the most overworked queues. That kind of stop often makes the whole route feel more thoughtful.",
+    ),
+    why_it_matters: createLocalizedContent(
+      "En enda välvald kulturpunkt gör ofta mer för dagen än tre halvdana klassiker på rad.",
+      "A single well-chosen cultural stop often does more for the day than three half-hearted classics in a row.",
+    ),
+  },
+  "venue-sunset-axis": {
+    title: createLocalizedContent(
+      "Giardino degli Aranci eller Gianicolo när du behöver ett snyggt kvällsskifte",
+      "Giardino degli Aranci or the Gianicolo when you need a graceful evening transition",
+    ),
+    where: createLocalizedContent("Aventino och ovanför Trastevere", "Aventino and above Trastevere"),
+    when: createLocalizedContent("Golden hour", "Golden hour"),
+    blurb: createLocalizedContent(
+      "Det handlar mindre om att jaga den största vyn och mer om att ge dagen ett andningshål innan kvällen skiftar tempo.",
+      "It is less about chasing the biggest view and more about giving the day a breathing space before the evening changes tempo.",
+    ),
+    why_it_matters: createLocalizedContent(
+      "Perfekt när du vill att rutten ska kännas komponerad och självklar, inte bara effektiv.",
+      "Perfect when you want the route to feel composed and natural, not just efficient.",
+    ),
+  },
+};
+
 const wildcardSuggestions = [
   {
     id: "monti-testaccio-evening",
@@ -712,7 +1111,7 @@ function matchesEditorialItem(item, { month, day, weekday }) {
   return true;
 }
 
-function buildNatalePulseItem(dateString = getRomeTodayIsoDate()) {
+function buildNatalePulseItem(dateString = getRomeTodayIsoDate(), lang = "sv") {
   const dayDistance = getDayDistanceToFixedDate(dateString, 4, 21);
 
   if (dayDistance < 0 || dayDistance > 3) {
@@ -722,19 +1121,47 @@ function buildNatalePulseItem(dateString = getRomeTodayIsoDate()) {
   return {
     id: dayDistance === 0 ? "natale-di-roma-today" : "natale-di-roma-soon",
     level: "city",
-    kind: "Stadens rytm",
-    title: dayDistance === 0 ? "Natale di Roma är här" : "Upptakt till Natale di Roma",
-    where: "Centro, Aventino och kring Fori Imperiali",
-    when:
-      dayDistance === 0 ? "I dag" : dayDistance === 1 ? "I morgon" : `Om ${dayDistance} dagar`,
-    blurb:
-      dayDistance === 0
-        ? "Rom firar sin födelsedag på riktigt. Historisk tyngd, större folkliv och mer laddning nära den gamla stadskärnan gör dagen ovanligt speciell."
-        : "Roms födelsedag infaller 21 april, och dagarna före känns staden lite mer självmedveten. Förväntan syns tydligast nära de historiska kärnorna.",
-    why_it_matters:
-      dayDistance === 0
-        ? "Om du är här i dag är det värt att låta historisk tyngd och kvällsljus bära större del av rutten än vanligt."
-        : "Om du kan styra dagarna är det här ett av de få tillfällen då Rom firar sig själv snarare än bara visas upp.",
+    kind: localizePulseKind("Stadens rytm", lang),
+    title: readLocalizedContent(
+      createLocalizedContent(
+        dayDistance === 0 ? "Natale di Roma är här" : "Upptakt till Natale di Roma",
+        dayDistance === 0 ? "Natale di Roma is here" : "Natale di Roma is coming up",
+      ),
+      lang,
+    ),
+    where: readLocalizedContent(
+      createLocalizedContent("Centro, Aventino och kring Fori Imperiali", "Centro, Aventino, and around the Fori Imperiali"),
+      lang,
+    ),
+    when: readLocalizedContent(
+      createLocalizedContent(
+        dayDistance === 0 ? "I dag" : dayDistance === 1 ? "I morgon" : `Om ${dayDistance} dagar`,
+        dayDistance === 0 ? "Today" : dayDistance === 1 ? "Tomorrow" : `In ${dayDistance} days`,
+      ),
+      lang,
+    ),
+    blurb: readLocalizedContent(
+      createLocalizedContent(
+        dayDistance === 0
+          ? "Rom firar sin födelsedag på riktigt. Historisk tyngd, större folkliv och mer laddning nära den gamla stadskärnan gör dagen ovanligt speciell."
+          : "Roms födelsedag infaller 21 april, och dagarna före känns staden lite mer självmedveten. Förväntan syns tydligast nära de historiska kärnorna.",
+        dayDistance === 0
+          ? "Rome really celebrates its birthday today. Historical weight, bigger street life, and more energy near the old core make the day unusually special."
+          : "Rome's birthday lands on April 21, and the days before it make the city feel a little more self-aware. You feel the anticipation most clearly near the historical core.",
+      ),
+      lang,
+    ),
+    why_it_matters: readLocalizedContent(
+      createLocalizedContent(
+        dayDistance === 0
+          ? "Om du är här i dag är det värt att låta historisk tyngd och kvällsljus bära större del av rutten än vanligt."
+          : "Om du kan styra dagarna är det här ett av de få tillfällen då Rom firar sig själv snarare än bara visas upp.",
+        dayDistance === 0
+          ? "If you are here today, it is worth letting historical weight and evening light carry more of the route than usual."
+          : "If you can choose your dates, this is one of the rare moments when Rome is celebrating itself rather than simply being shown off.",
+      ),
+      lang,
+    ),
     matches_vibes: ["curious", "slow"],
     route_hints: {
       preferred_tags: ["kultur", "kyrkor", "utsikt"],
@@ -748,12 +1175,18 @@ function buildNatalePulseItem(dateString = getRomeTodayIsoDate()) {
   };
 }
 
-function buildEditionItems(dateString = getRomeTodayIsoDate()) {
+function buildEditionItems(dateString = getRomeTodayIsoDate(), lang = "sv") {
   const dateInfo = getMonthDay(dateString);
-  const editorial = editorialPulseItems
+  const editorial = localizePulseContentCollection(
+    editorialPulseItems.map((item) => ({
+      ...item,
+      ...(editorialPulseLocalizedContent[item.id] || {}),
+    })),
+    lang,
+  )
     .filter((item) => matchesEditorialItem(item, dateInfo))
     .sort((left, right) => (right.priority || 0) - (left.priority || 0));
-  const specialItems = [buildNatalePulseItem(dateString)].filter(Boolean);
+  const specialItems = [buildNatalePulseItem(dateString, lang)].filter(Boolean);
   const allItems = [...specialItems, ...editorial];
 
   const byLevel = {
@@ -779,74 +1212,150 @@ function getWildcardSuggestions(dateString = getRomeTodayIsoDate()) {
     .map(({ score, ...wildcard }) => wildcard);
 }
 
-function buildCityPulseHeadline(dateString, moments) {
+function buildCityPulseHeadline(dateString, moments, lang = "sv") {
   const { month, day, weekday } = getMonthDay(dateString);
 
   if (month === 4 && day === 21) {
-    return "I dag får Rom extra historisk puls och mer folk nära den gamla stadskärnan.";
+    return readLocalizedContent(
+      createLocalizedContent(
+        "I dag får Rom extra historisk puls och mer folk nära den gamla stadskärnan.",
+        "Today Rome gets extra historical pulse and more people near the old city core.",
+      ),
+      lang,
+    );
   }
 
   if (weekday === 5 || weekday === 6) {
-    return "I kväll lönar det sig att tänka sent, kvartersdrivet och mindre uppstyrt.";
+    return readLocalizedContent(
+      createLocalizedContent(
+        "I kväll lönar det sig att tänka sent, kvartersdrivet och mindre uppstyrt.",
+        "Tonight it pays to think late, neighborhood-led, and a little less over-managed.",
+      ),
+      lang,
+    );
   }
 
   if (weekday === 0) {
-    return "I dag spelar Rom bättre långsamt än maxat.";
+    return readLocalizedContent(
+      createLocalizedContent(
+        "I dag spelar Rom bättre långsamt än maxat.",
+        "Today Rome plays better slow than overpacked.",
+      ),
+      lang,
+    );
   }
 
   if (weekday === 1) {
-    return "Tidiga veckan är smartare med kultur, vin och ett tydligt middagsankare.";
+    return readLocalizedContent(
+      createLocalizedContent(
+        "Tidiga veckan är smartare med kultur, vin och ett tydligt middagsankare.",
+        "Early in the week is smarter with culture, wine, and a clear dinner anchor.",
+      ),
+      lang,
+    );
   }
 
   if (moments[0]?.note) {
     return moments[0].note;
   }
 
-  return "Små datumgrejer, stadspuls och officiella tips kan göra stor skillnad för hur dagen faktiskt känns.";
+  return readLocalizedContent(
+    createLocalizedContent(
+      "Små datumgrejer, stadspuls och officiella tips kan göra stor skillnad för hur dagen faktiskt känns.",
+      "Small date signals, city pulse, and official live tips can make a real difference to how the day actually feels.",
+    ),
+    lang,
+  );
 }
 
-function buildCityPulseSubhead(dateString) {
+function buildCityPulseSubhead(dateString, lang = "sv") {
   const dayDistanceToNatale = getDayDistanceToFixedDate(dateString, 4, 21);
   const { month, weekday } = getMonthDay(dateString);
 
   if (dayDistanceToNatale >= 0 && dayDistanceToNatale <= 3) {
-    return dayDistanceToNatale === 0
-      ? "I dag känns Rom lite mer romerskt än vanligt. Låt rutten spela med den extra historiska pulsen."
-      : "Stadens födelsedag närmar sig. Små rytmer, kvällsljus och rätt kvarter väger extra tungt just nu.";
+    return readLocalizedContent(
+      createLocalizedContent(
+        dayDistanceToNatale === 0
+          ? "I dag känns Rom lite mer romerskt än vanligt. Låt rutten spela med den extra historiska pulsen."
+          : "Stadens födelsedag närmar sig. Små rytmer, kvällsljus och rätt kvarter väger extra tungt just nu.",
+        dayDistanceToNatale === 0
+          ? "Today Rome feels a little more Roman than usual. Let the route play with that extra historical pulse."
+          : "The city's birthday is getting close. Small rhythms, evening light, and the right neighborhoods carry extra weight just now.",
+      ),
+      lang,
+    );
   }
 
   if (weekday === 5 || weekday === 6) {
-    return "Helgen bär bäst när du låter kvällen få tid, väljer färre kvarter och lägger större vikt på sen energi än på tidig effektivitet.";
+    return readLocalizedContent(
+      createLocalizedContent(
+        "Helgen bär bäst när du låter kvällen få tid, väljer färre kvarter och lägger större vikt på sen energi än på tidig effektivitet.",
+        "The weekend works best when you give the evening time, choose fewer neighborhoods, and put more weight on late energy than early efficiency.",
+      ),
+      lang,
+    );
   }
 
   if (weekday === 1) {
-    return "Tidiga veckan blir smartare när du väljer ett tydligt kultur- eller vinspår i stället för att försöka forcera fram lördagsläge.";
+    return readLocalizedContent(
+      createLocalizedContent(
+        "Tidiga veckan blir smartare när du väljer ett tydligt kultur- eller vinspår i stället för att försöka forcera fram lördagsläge.",
+        "Early in the week gets smarter when you choose a clear culture or wine track instead of forcing Saturday energy into the day.",
+      ),
+      lang,
+    );
   }
 
   if (month >= 4 && month <= 5) {
-    return "Vårkvällarna gör Rom extra promenadvänligt. Två starka kvarter till fots slår nästan alltid ännu en splittrad checklista.";
+    return readLocalizedContent(
+      createLocalizedContent(
+        "Vårkvällarna gör Rom extra promenadvänligt. Två starka kvarter till fots slår nästan alltid ännu en splittrad checklista.",
+        "Spring evenings make Rome especially walkable. Two strong neighborhoods on foot almost always beat another split checklist.",
+      ),
+      lang,
+    );
   }
 
-  return "Det här är lagret mellan statisk city guide och riktig lokal känsla: små signaler som gör att dagen sitter bättre innan du ens börjar gå.";
+  return readLocalizedContent(
+    createLocalizedContent(
+      "Det här är lagret mellan statisk city guide och riktig lokal känsla: små signaler som gör att dagen sitter bättre innan du ens börjar gå.",
+      "This is the layer between a static city guide and real local feeling: small signals that help the day land better before you even start walking.",
+    ),
+    lang,
+  );
 }
 
-function getCityPulse(dateString = getRomeTodayIsoDate()) {
+function getCityPulse(dateString = getRomeTodayIsoDate(), options = {}) {
+  const lang = normalizeLanguage(options.lang);
   const normalizedDate = dateString || getRomeTodayIsoDate();
-  const dateLabels = getPulseDateLabels(normalizedDate);
-  const dateSignals = getDateSignals(normalizedDate);
-  const recurring = recurringPulseMoments
+  const dateLabels = getPulseDateLabels(normalizedDate, lang);
+  const dateSignals = getDateSignals(normalizedDate, lang);
+  const recurring = localizePulseContentCollection(
+    recurringPulseMoments.map((moment) => ({
+      ...moment,
+      ...(recurringPulseLocalizedContent[moment.id] || {}),
+    })),
+    lang,
+  )
     .filter((moment) => matchesRecurringMoment(moment, getMonthDay(normalizedDate)))
     .sort((left, right) => (right.priority || 0) - (left.priority || 0));
-  const editionItems = buildEditionItems(normalizedDate);
+  const editionItems = buildEditionItems(normalizedDate, lang);
 
   const momentCards = [
     ...dateSignals.map((signal) => ({
       id: signal.id,
-      kind: "speciell dag",
-      kindLabel: "Speciell dag",
+      kind: localizePulseKind("speciell dag", lang),
+      kindLabel: localizePulseKind("Speciell dag", lang),
       title: signal.title,
       note: signal.note,
-      areas: ["Centro", "Trastevere", "Aventino"],
+      areas: [
+        readLocalizedContent(
+          createLocalizedContent("Centro", "Centro"),
+          lang,
+        ),
+        readLocalizedContent(createLocalizedContent("Trastevere", "Trastevere"), lang),
+        readLocalizedContent(createLocalizedContent("Aventino", "Aventino"), lang),
+      ],
       tags: signal.vibeTags || [],
       linked_wildcard_id: signal.id === "natale-di-roma" ? "natale-di-roma-loop" : null,
       priority: 5,
@@ -858,12 +1367,22 @@ function getCityPulse(dateString = getRomeTodayIsoDate()) {
     date: normalizedDate,
     weekday_label: dateLabels.weekdayLabel,
     date_label: dateLabels.dateLabel,
-    headline: buildCityPulseHeadline(normalizedDate, momentCards),
-    subhead: buildCityPulseSubhead(normalizedDate),
-    note:
-      "Kuraterad temporal intelligence för Rom: stadens rytm, kvarterspuls och ställesnivå i samma utgåva.",
-    footer_note:
-      "En lokal hade burit med sig mycket av det här utan att tänka på det. Det är den känslan Parranda försöker ge dig snabbare.",
+    headline: buildCityPulseHeadline(normalizedDate, momentCards, lang),
+    subhead: buildCityPulseSubhead(normalizedDate, lang),
+    note: readLocalizedContent(
+      createLocalizedContent(
+        "Kuraterad temporal intelligence för Rom: stadens rytm, kvarterspuls och ställesnivå i samma utgåva.",
+        "Curated temporal intelligence for Rome: city rhythm, neighborhood pulse, and venue-level signals in one edition.",
+      ),
+      lang,
+    ),
+    footer_note: readLocalizedContent(
+      createLocalizedContent(
+        "En lokal hade burit med sig mycket av det här utan att tänka på det. Det är den känslan Parranda försöker ge dig snabbare.",
+        "A local would carry a lot of this instinctively. Parranda is trying to give you that feeling faster.",
+      ),
+      lang,
+    ),
     items: editionItems,
     moments: momentCards,
     wildcards: getWildcardSuggestions(normalizedDate),

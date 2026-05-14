@@ -56,43 +56,51 @@ function buildExternalMapUrl(label, cityConfig) {
   )}`;
 }
 
-function buildOfficialPulseWhen(event, date) {
+function buildOfficialPulseWhen(event, date, lang = "sv") {
+  const isEnglish = normalizeLanguage(lang) === "en";
+
   if (event.start_date && event.end_date && event.start_date === event.end_date) {
-    return event.start_date === date ? "I dag" : event.start_date;
+    return event.start_date === date ? (isEnglish ? "Today" : "I dag") : event.start_date;
   }
 
   if (event.start_date === date) {
-    return "Börjar i dag";
+    return isEnglish ? "Starts today" : "Börjar i dag";
   }
 
   if (event.end_date === date) {
-    return "Pågår i dag";
+    return isEnglish ? "Running today" : "Pågår i dag";
   }
 
-  return event.start_date || event.end_date || "Just nu";
+  return event.start_date || event.end_date || (isEnglish ? "Right now" : "Just nu");
 }
 
-function buildOfficialPulseItem(event, date, cityConfig) {
+function buildOfficialPulseItem(event, date, cityConfig, lang = "sv") {
+  const isEnglish = normalizeLanguage(lang) === "en";
+  const cityLabel = resolveDisplayLabel(cityConfig, null, lang);
   const where =
     [event.venue, event.address].filter(Boolean).join(" • ") ||
     cityConfig?.editorialAreaLabel ||
-    cityConfig?.label ||
+    cityLabel ||
     "Rom";
   const matchesVibes = [...new Set((event.match_tags || []).map((tag) => pulseVibeByTag[tag]).filter(Boolean))];
 
   return {
     id: `official-${event.id}`,
     level: "venue",
-    kind: "Officiellt live",
+    kind: isEnglish ? "Official live" : "Officiellt live",
     title: event.title,
     where,
-    when: buildOfficialPulseWhen(event, date),
+    when: buildOfficialPulseWhen(event, date, lang),
     blurb:
       event.summary ||
-      `Officiellt live-event i ${cityConfig?.label || "Rom"} som kan ge dagen ett mer tidsbundet lager.`,
+      (isEnglish
+        ? `Official live event in ${cityLabel || "Rome"} that can give the day a more time-bound layer.`
+        : `Officiellt live-event i ${cityLabel || "Rom"} som kan ge dagen ett mer tidsbundet lager.`),
     why_it_matters:
       event.match_reason ||
-      "Bra som live-bonus när du vill väva in något som faktiskt bara händer just nu.",
+      (isEnglish
+        ? "Useful as a live bonus when you want to weave in something that is actually happening right now."
+        : "Bra som live-bonus när du vill väva in något som faktiskt bara händer just nu."),
     matches_vibes: matchesVibes,
     official_event_id: event.id,
     lat: typeof event.lat === "number" ? event.lat : null,
@@ -562,8 +570,9 @@ function buildApp() {
   app.get("/api/city-pulse", async (request, response) => {
     try {
       const { cityConfig, requestedCity, cityFallbackUsed } = resolveRequestCity(request.query.city);
+      const uiLang = normalizeLanguage(request.query?.lang);
       const date = String(request.query.date || "").trim() || cityConfig.todayIsoDate();
-      const pulse = cityConfig.services.getCityPulse(date);
+      const pulse = cityConfig.services.getCityPulse(date, { lang: uiLang });
       const [liveEventsByDate, weatherByDate] = await Promise.all([
         cityConfig.services.fetchLiveEventsForDates([pulse.date], {}),
         cityConfig.services.fetchWeatherForDates([pulse.date], cityConfig.center).catch(() => ({})),
@@ -571,7 +580,7 @@ function buildApp() {
       const officialEvents = (liveEventsByDate[pulse.date] || []).slice(0, 2);
       const officialPulseItems = officialEvents
         .slice(0, 1)
-        .map((event) => buildOfficialPulseItem(event, pulse.date, cityConfig));
+        .map((event) => buildOfficialPulseItem(event, pulse.date, cityConfig, uiLang));
 
       response.json({
         city: cityConfig.key,
