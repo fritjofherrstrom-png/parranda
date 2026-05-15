@@ -2733,7 +2733,7 @@ function applyCityModeToShell() {
 
   if (plannerModalTitle) {
     plannerModalTitle.textContent = isRomeCuratedMode
-      ? (isEnglishUi ? `Your trip to ${plannerDisplayCityLabel}` : `Din resa till ${plannerDisplayCityLabel}`)
+      ? (isEnglishUi ? `Plan your time in ${plannerDisplayCityLabel}` : `Planera din tid i ${plannerDisplayCityLabel}`)
       : isInternalCityMode
         ? (isEnglishUi ? `Planner preview • ${buildUnavailableCityLabel()}` : `Planner-preview • ${buildUnavailableCityLabel()}`)
         : (isEnglishUi ? `Plan when ${buildUnavailableCityLabel()} is ready` : `Planera när ${buildUnavailableCityLabel()} är redo`);
