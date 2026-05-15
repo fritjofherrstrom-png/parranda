@@ -856,6 +856,51 @@ test("no-limit använder en dold stoppbudget så flexibelt avstånd inte blir ob
   assert.ok(finalRoute.main_stops.length < peakRoute.main_stops.length);
 });
 
+test("finaldagar behåller fyra stopp när användaren inte valt en kort dag", async () => {
+  global.fetch = createWeatherFetch({
+    "2026-05-14": 0,
+    "2026-05-15": 0,
+  });
+
+  const template = routeTemplates.find((entry) => entry.id === "south-loop");
+  const start = { label: "Trastevere", lat: 41.8885, lng: 12.4678 };
+  const end = { label: "Ostiense/Garbatella", lat: 41.8659, lng: 12.4857 };
+
+  assert.ok(template);
+
+  const constructedFinal = buildRouteFromTemplate(
+    template,
+    start,
+    end,
+    9,
+    ["vin", "mat", "nattliv"],
+    "bar-hop",
+    "evening",
+    "soft_target",
+    [],
+    { dayProfile: "final" },
+  );
+
+  assert.equal(constructedFinal.main_stops.length, 4);
+  assert.equal(constructedFinal.day_profile, "final");
+
+  const result = await generateRecommendations({
+    dates: ["2026-05-14", "2026-05-15"],
+    start: { type: "auto" },
+    end: { type: "auto" },
+    walkingKmTarget: 9,
+    preferences: ["vin", "mat", "nattliv"],
+    optimizerMode: "bar-hop",
+    modifier: "evening",
+    distanceMode: "soft_target",
+  });
+
+  const finalDay = result.days.at(-1);
+
+  assert.equal(finalDay.primary_route.day_profile, "final");
+  assert.equal(finalDay.primary_route.main_stops.length, 4);
+});
+
 test("alternativrutterna får ofta annan day profile än huvudrutten", async () => {
   global.fetch = createWeatherFetch({
     "2026-04-19": 0,
