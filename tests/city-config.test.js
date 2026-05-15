@@ -37,6 +37,44 @@ test("barcelona uppfyller city-kontraktet som registrerad preview-stad", () => {
   assert.equal(cityConfigs.barcelona.catalog.routeTemplates.length, 0);
 });
 
+test("barcelona har en strukturell neighborhood-modell utan kuraterat innehåll", () => {
+  const areaDefinitions = cityConfigs.barcelona.routing.areaDefinitions;
+  const macroAreaLabels = cityConfigs.barcelona.routing.macroAreaLabels;
+  const expectedAreas = [
+    "gracia",
+    "born-sant-pere-santa-caterina",
+    "gothic",
+    "eixample",
+    "sant-antoni",
+    "poble-sec",
+    "poblenou",
+    "barceloneta",
+    "raval",
+    "montjuic",
+    "sants-les-corts",
+  ];
+
+  for (const area of expectedAreas) {
+    assert.ok(areaDefinitions[area], `missing Barcelona area ${area}`);
+  }
+
+  assert.deepEqual(Object.keys(macroAreaLabels).sort(), [
+    "central-grid",
+    "coast-east",
+    "montjuic-southwest",
+    "northwest-local",
+    "old-town",
+  ]);
+  assert.equal(areaDefinitions["sant-antoni"].macro, "central-grid");
+  assert.equal(areaDefinitions.eixample.macro, "central-grid");
+  assert.equal(areaDefinitions.gracia.label, "Gràcia");
+  assert.equal(areaDefinitions.montjuic.label, "Montjuïc");
+  assert.equal(areaDefinitions["barri-gotic"].macro, areaDefinitions.gothic.macro);
+  assert.equal(areaDefinitions["el-born"].macro, areaDefinitions["born-sant-pere-santa-caterina"].macro);
+  assert.equal(cityConfigs.barcelona.catalog.allItems.length, 0);
+  assert.equal(cityConfigs.barcelona.catalog.routeTemplates.length, 0);
+});
+
 test("test-city är markerad som intern arkitekturstub", () => {
   assert.equal(testCity.visibility, "internal");
   assert.equal(cityConfigs["test-city"].visibility, "internal");
