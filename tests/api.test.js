@@ -171,6 +171,15 @@ test("server/app.js uses keyed shell i18n instead of post-render replacement", (
   assert.match(source, /__PARRANDA_I18N_BOOTSTRAP__/);
 });
 
+test("planner modal title uses city-time framing instead of trip framing", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
+
+  assert.match(source, /Plan your time in \$\{plannerDisplayCityLabel\}/);
+  assert.match(source, /Planera din tid i \$\{plannerDisplayCityLabel\}/);
+  assert.doesNotMatch(source, /Your trip to \$\{plannerDisplayCityLabel\}/);
+  assert.doesNotMatch(source, /Din resa till \$\{plannerDisplayCityLabel\}/);
+});
+
 test.after(() => {
   global.fetch = originalFetch;
 });
@@ -485,6 +494,7 @@ test("GET /rome?lang=unknown faller säkert tillbaka till svenska", async () => 
     assert.match(response.body, /data-lang="sv"/);
     assert.ok(response.body.includes("Planera dagen"));
     assert.ok(response.body.includes("Låt Parranda välja"));
+    assert.doesNotMatch(response.body, /Din resa till Rom/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
