@@ -2398,7 +2398,7 @@ function desiredStopCount(poolSize, targetKm, distanceMode, dayProfile = "peak")
   }
 
   if (normalizedProfile === "final") {
-    return Math.max(2, Math.min(baseCount, 4) - 1);
+    return targetKm <= 7 ? Math.max(2, baseCount - 1) : Math.min(poolSize, 4);
   }
 
   if (normalizedProfile === "peak") {
