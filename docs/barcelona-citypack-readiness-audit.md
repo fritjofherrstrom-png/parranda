@@ -150,6 +150,10 @@ Acceptance:
 - `/barcelona?lang=sv` and `/barcelona?lang=en` resolve to city key `barcelona`, not Rome fallback.
 - Barcelona shell says city-core is active and curated content is not ready.
 - Planner, Blitz, and Pulse do not show Rome districts, Rome fallback routes, Rome Pulse, or fake Barcelona curated content.
+- Empty/noop states are user-facing and explicit, not silent blanks:
+  - if curated districts are not ready, the shell says curated Barcelona districts are not ready yet
+  - if Pulse has no city-owned editorial layer, it shows an honest preview/noop state
+  - if route/fallback cards are unavailable, the UI clearly says curated Barcelona routes are not ready yet
 - `/api/places/search?city=barcelona...` does not return Rome curated places unless explicitly marked as global fallback behavior.
 - `/api/route-recommendations` for Barcelona does not use Rome fallback routes/cards as if they were Barcelona content.
 - Any fallback/noop response is clearly marked as fallback, noop, preview, or not-curated.
