@@ -1,4 +1,5 @@
 const rome = require("./rome");
+const barcelona = require("./barcelona");
 const testCity = require("./test-city");
 const { validateCityConfig } = require("./contract");
 const DEFAULT_CITY_KEY = "rome";
@@ -13,6 +14,7 @@ function buildCityRegistry(configs) {
 
 const cityConfigs = buildCityRegistry({
   rome,
+  [barcelona.key]: barcelona,
   [testCity.key]: testCity,
 });
 

@@ -2027,11 +2027,13 @@ const plannerCitySearchLabel = plannerCity.searchLabel || plannerCityLabel;
 const plannerCityVisibility = plannerCity.visibility || "public";
 const plannerRequestedCityKey = plannerCity.requestedKey || "";
 const plannerRequestedCityLabel = humanizeCityKey(plannerRequestedCityKey);
+const isPreviewCityMode = plannerCityVisibility === "preview";
 const isFallbackRequestedCity =
   Boolean(plannerCity.fallbackUsed) &&
   Boolean(plannerRequestedCityKey) &&
   plannerRequestedCityKey !== plannerCityKey;
-const isCuratedPublicMode = !plannerCity.fallbackUsed && plannerCityVisibility !== "internal";
+const isCuratedPublicMode =
+  !plannerCity.fallbackUsed && plannerCityVisibility !== "internal" && !isPreviewCityMode;
 const hasRomeFrontendContent = isCuratedPublicMode && plannerCityKey === "rome";
 const isRomeCuratedMode = hasRomeFrontendContent;
 const isInternalCityMode = plannerCityVisibility === "internal";
@@ -2518,6 +2520,10 @@ function buildNonRomeRouteSummary() {
     return tf("planner.previewInternal", { city: cityLabel }, `${cityLabel} kör som intern arkitekturstub. Planner och city-core går att verifiera här, men Rome-baserade fallback-rutter och stadsdelsguider är avsiktligt dolda.`);
   }
 
+  if (isPreviewCityMode) {
+    return tf("preview.routesNotReadyBody", { city: cityLabel }, `${cityLabel} är registrerad i Parranda, men kuraterade ${cityLabel}-rutter är inte redo än. Därför visas inga Rome-rutter eller fake citypack-idéer här.`);
+  }
+
   return tf("planner.previewNeutral", { city: cityLabel }, `${cityLabel} använder ett neutralt city-läge. Kuraterat innehåll visas först när staden har ett eget pack.`);
 }
 
@@ -2530,6 +2536,10 @@ function buildNonRomePlannerLaunchSummary() {
 
   if (isInternalCityMode) {
     return tf("planner.nonRomeInternal", { city: cityLabel }, `${cityLabel} är en intern preview. Planner och city-core går att testa, men kuraterade kvarter och wildcard-idéer är avsiktligt avstängda här.`);
+  }
+
+  if (isPreviewCityMode) {
+    return tf("planner.nonRomePreview", { city: cityLabel }, `${cityLabel} är aktiv som city-core preview. Kuraterade kvarter, rutter och Pulse kommer först när citypacket är redo.`);
   }
 
   return tf("planner.nonRomeNeutral", { city: cityLabel }, `${cityLabel} kör i neutralt city-läge. Kuraterade fallback-idéer visas först när staden har ett eget pack.`);
@@ -2546,6 +2556,10 @@ function buildNonRomeFallbackNote() {
     return tf("planner.internalNote", { city: cityLabel }, `${cityLabel} är ett internt arkitekturläge. Rome-baserade fallback-rutter visas inte här.`);
   }
 
+  if (isPreviewCityMode) {
+    return tf("planner.previewNote", { city: cityLabel }, `${cityLabel} är registrerad men inte curated ännu. Parranda visar inga Rome-rutter som ersättning.`);
+  }
+
   return tf("planner.noCuratedYet", { city: cityLabel }, `${cityLabel} saknar ännu ett eget curated-lager. Fallback-rutter visas inte som ersättning.`);
 }
 
@@ -2554,6 +2568,7 @@ function syncShellModeState() {
   document.body?.classList.toggle("mode-city-preview", !isRomeCuratedMode);
   document.body?.classList.toggle("mode-city-fallback", isFallbackRequestedCity);
   document.body?.classList.toggle("mode-city-internal", isInternalCityMode);
+  document.body?.classList.toggle("mode-city-registered-preview", isPreviewCityMode);
   document.body?.classList.toggle("has-active-plan", routeRenderMode === "api" && plannedDays.length > 0);
 }
 
@@ -2577,6 +2592,17 @@ function buildPreviewRouteEmptyState() {
       body: t(
         "planner.previewInternal",
         "Det här läget används för att verifiera city-core, shell och planner utan att blanda in Rome-specifikt fallback-innehåll.",
+      ),
+    };
+  }
+
+  if (isPreviewCityMode) {
+    return {
+      title: tf("preview.routesNotReadyTitle", { city: cityLabel }, `Kuraterade ${cityLabel}-rutter är inte redo än`),
+      body: tf(
+        "preview.routesNotReadyBody",
+        { city: cityLabel },
+        `${cityLabel} är registrerad i Parranda, men route cards och fallback-rutter kommer först när citypacket har riktiga platser och rutter.`,
       ),
     };
   }
@@ -2619,6 +2645,20 @@ function buildPreviewHeroCard() {
     };
   }
 
+  if (isPreviewCityMode) {
+    return {
+      label: t("preview.cityStatus", "CITY-STATUS"),
+      title: tf("preview.cityCoreTitle", { city: cityLabel }, `${cityLabel} har city-core aktivt`),
+      summary: tf(
+        "preview.cityCoreSummary",
+        { city: cityLabel },
+        `${cityLabel} är en riktig registrerad stad i Parranda nu, men kuraterade kvarter, rutter och Pulse hålls tillbaka tills de finns på riktigt.`,
+      ),
+      meta: t("preview.cityCoreMeta", "Registrerad stad • inte curated ännu."),
+      tags: [cityLabel, t("preview.previewTag", "Preview"), t("preview.cityCoreTag", "City-core")],
+    };
+  }
+
   return {
     label: t("preview.cityStatus", "CITY-STATUS"),
     title: tf("preview.neutralTitle", { city: cityLabel }, `${cityLabel} använder neutral city-mode`),
@@ -2641,7 +2681,9 @@ function buildGenericFallbackPulse(dateString = getTodayIsoDate()) {
     kind: isInternalCityMode ? t("preview.internalStub", "INTERN STUB") : t("preview.cityStatus", "CITY-STATUS"),
     title: isFallbackRequestedCity
       ? tf("preview.preparingTitle", { city: cityLabel }, `${cityLabel} har ännu inget eget LIVE-lager`)
-      : tf("preview.neutralTitle", { city: cityLabel }, `${cityLabel} använder neutral LIVE-grund`),
+      : isPreviewCityMode
+        ? tf("preview.pulseNotReadyTitle", { city: cityLabel }, `Kuraterad Pulse för ${cityLabel} är inte redo än`)
+        : tf("preview.neutralTitle", { city: cityLabel }, `${cityLabel} använder neutral LIVE-grund`),
     where: cityLabel,
     when: t("pulse.now", "Just nu"),
     blurb: isFallbackRequestedCity
@@ -2649,6 +2691,12 @@ function buildGenericFallbackPulse(dateString = getTodayIsoDate()) {
           "planner.previewFallback",
           "Sidan visar shell och bootstrap på rätt stad, men väntar med curated LIVE och fallback-idéer tills city-packet finns.",
         )
+      : isPreviewCityMode
+        ? tf(
+            "preview.pulseNotReadyBody",
+            { city: cityLabel },
+            `${cityLabel} har city-core aktivt, men ingen egen Pulse/editorial-layer ännu. Parranda visar därför inte Rome Pulse här.`,
+          )
       : t(
           "planner.previewNeutral",
           "Det här läget använder no-op eller neutral city-puls tills staden får ett riktigt editorial-lager.",
@@ -2665,12 +2713,16 @@ function buildGenericFallbackPulse(dateString = getTodayIsoDate()) {
     date,
     weekday_label: dateLabels.weekdayLabel,
     date_label: dateLabels.dateLabel,
-    headline: `${cityLabel} just nu`,
+    headline: isEnglishUi ? `${cityLabel} city-core is active` : `${cityLabel} city-core är aktivt`,
     subhead: isFallbackRequestedCity
       ? t("planner.fallbackNote", "Det här är en ärlig city-fallback utan lånat Rome-innehåll.")
+      : isPreviewCityMode
+        ? tf("preview.pulseNotReadyTitle", { city: cityLabel }, `Kuraterad Pulse för ${cityLabel} är inte redo än`)
       : t("planner.previewNeutral", "Neutral puls tills staden får ett riktigt lokalt lager."),
     note: isFallbackRequestedCity
       ? t("planner.previewFallback", "Curated LIVE och wildcard-idéer hålls tillbaka tills staden stöds på riktigt.")
+      : isPreviewCityMode
+        ? tf("preview.pulseNotReadyBody", { city: cityLabel }, `${cityLabel} har ingen egen Pulse/editorial-layer ännu.`)
       : t("planner.previewNeutral", "No-op- eller neutral city-puls används medvetet här."),
     footer_note: t("preview.neutralMeta", "City-core är aktivt. Editorial och curated-lager kommer senare."),
     items: [item],
@@ -2712,6 +2764,8 @@ function applyCityModeToShell() {
       ? (isEnglishUi ? "Your day starts here." : "Din dag börjar här.")
       : isInternalCityMode
         ? (isEnglishUi ? `${buildUnavailableCityLabel()} is running in preview.` : `${buildUnavailableCityLabel()} kör i preview.`)
+        : isPreviewCityMode
+          ? (isEnglishUi ? `${buildUnavailableCityLabel()} city-core is active.` : `${buildUnavailableCityLabel()} city-core är aktivt.`)
         : (isEnglishUi ? `${buildUnavailableCityLabel()} is still being prepared.` : `${buildUnavailableCityLabel()} förbereds fortfarande.`);
   }
 
@@ -2722,6 +2776,8 @@ function applyCityModeToShell() {
         : `${plannerDisplayCityLabel} är aktiv stad. Välj känsla och låt Parranda bygga huvuddagen.`)
       : isInternalCityMode
         ? (isEnglishUi ? "Planner, shell, and city-core can be tested here without Rome-curated layers." : "Planner, shell och city-core går att prova här utan Rome-curated lager.")
+        : isPreviewCityMode
+          ? (isEnglishUi ? "Curated districts, routes, and Pulse are not ready yet, so Parranda shows no borrowed Rome content." : "Kuraterade kvarter, rutter och Pulse är inte redo än, så Parranda visar inget lånat Rome-innehåll.")
         : (isEnglishUi ? "Parranda shows an honest preview until this city has its own curated pack." : "Parranda visar ett ärligt preview-läge tills staden har ett eget kuraterat pack.");
   }
 
@@ -2736,6 +2792,8 @@ function applyCityModeToShell() {
       ? (isEnglishUi ? `Plan your time in ${plannerDisplayCityLabel}` : `Planera din tid i ${plannerDisplayCityLabel}`)
       : isInternalCityMode
         ? (isEnglishUi ? `Planner preview • ${buildUnavailableCityLabel()}` : `Planner-preview • ${buildUnavailableCityLabel()}`)
+        : isPreviewCityMode
+          ? (isEnglishUi ? `${buildUnavailableCityLabel()} city-core preview` : `${buildUnavailableCityLabel()} city-core-preview`)
         : (isEnglishUi ? `Plan when ${buildUnavailableCityLabel()} is ready` : `Planera när ${buildUnavailableCityLabel()} är redo`);
   }
 
@@ -5429,7 +5487,9 @@ function renderCityPulse() {
   }
 
   if (!cityPulseState) {
-    cityPulseState = buildRomeFallbackCityPulse(ensureActiveLiveDate());
+    cityPulseState = hasRomeFrontendContent
+      ? buildRomeFallbackCityPulse(ensureActiveLiveDate())
+      : buildGenericFallbackPulse(ensureActiveLiveDate());
   }
 
   ensureActiveLiveDate();
@@ -5706,7 +5766,9 @@ async function loadCityPulse(dateString = getTodayIsoDate()) {
     return;
   }
 
-  const fallbackPulse = buildRomeFallbackCityPulse(targetDate);
+  const fallbackPulse = hasRomeFrontendContent
+    ? buildRomeFallbackCityPulse(targetDate)
+    : buildGenericFallbackPulse(targetDate);
 
   try {
     const response = await fetchJson(
@@ -5728,7 +5790,9 @@ async function loadCityPulse(dateString = getTodayIsoDate()) {
       wildcards:
         Array.isArray(response.wildcards) && response.wildcards.length
           ? response.wildcards
-          : buildRomeFallbackWildcards(dateString),
+          : hasRomeFrontendContent
+            ? buildRomeFallbackWildcards(dateString)
+            : fallbackPulse.wildcards || [],
     };
   } catch (_error) {
     cityPulseState = {
@@ -6227,7 +6291,7 @@ function updatePlannerAdvancedSummary() {
         : t("planner.modeAutoLead", "Håll det lätt. Datum, känsla och eventuell plats där du bor räcker.");
   }
 
-  if (routePlannerModeChip && !isFallbackRequestedCity && !isInternalCityMode) {
+  if (routePlannerModeChip && !isFallbackRequestedCity && !isInternalCityMode && !isPreviewCityMode) {
     routePlannerModeChip.textContent =
       activePlannerMode === plannerManualMode
         ? t("planner.manualChip", "Manuell start/slut")
@@ -6685,7 +6749,7 @@ function setRouteApiStatus(isAvailable) {
     return;
   }
 
-  if (isFallbackRequestedCity) {
+  if (isFallbackRequestedCity || isPreviewCityMode) {
     routePlannerModeChip.textContent = tf(
       "planner.fallbackPreparing",
       { city: buildUnavailableCityLabel() },
@@ -10181,7 +10245,7 @@ function renderRouteResults() {
   syncShellModeState();
   updateLatestPlannerRestoreNotice();
 
-  if (isFallbackRequestedCity || isInternalCityMode) {
+  if (isFallbackRequestedCity || isInternalCityMode || isPreviewCityMode) {
     routeFallbackNote.hidden = false;
     routeFallbackNote.textContent = buildNonRomeFallbackNote();
   } else {

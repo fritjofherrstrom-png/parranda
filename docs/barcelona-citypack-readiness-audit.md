@@ -175,6 +175,12 @@ Implementation notes:
 - Nightlife nuance by area: casual bars, late bars, clubs, live music, and when to avoid over-programming.
 - English and Swedish content tone that avoids tourist-package language.
 
+## Deferred Barcelona Pulse/Live Source Discovery
+
+The skeleton should keep Barcelona Pulse honest/noop until real sources are evaluated. A later Pulse/live audit should identify sources that can surface genuinely useful city rhythm for locals and repeat visitors, not just broad event listings.
+
+Evaluate official/open sources for small local events, markets, gallery nights, music/live sessions, popups, neighborhood festivals, vintage/second hand markets, food/bar happenings, beach/coast seasonal moments, and local cultural programming. For each source, check API/RSS/HTML feasibility, event quality, update frequency, language availability, locality, and how provider/source data stays separate from Parranda editorial Pulse.
+
 ## Risks And Blockers
 
 - Empty Barcelona catalog may expose assumptions that a real city always has route templates or places.

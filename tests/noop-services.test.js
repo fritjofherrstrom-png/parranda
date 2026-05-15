@@ -19,9 +19,13 @@ test("noop live service returnerar tomma eventlistor per datum", async () => {
 test("noop editorial service returnerar neutral och stabil city pulse", () => {
   const editorial = createNoopEditorialService({ cityLabel: "Teststad" });
   const pulse = editorial.getCityPulse("2026-05-01");
+  const englishPulse = editorial.getCityPulse("2026-05-01", { lang: "en" });
 
   assert.equal(pulse.date, "2026-05-01");
-  assert.equal(pulse.headline, "Teststad just nu");
+  assert.equal(pulse.headline, "Teststad city-core är aktivt");
+  assert.match(pulse.subhead, /Kuraterad Pulse för Teststad är inte redo än/);
+  assert.equal(englishPulse.headline, "Teststad city-core is active");
+  assert.match(englishPulse.subhead, /Curated Teststad Pulse is not ready yet/);
   assert.deepStrictEqual(pulse.items, []);
   assert.deepStrictEqual(editorial.getDateSignals("2026-05-01"), []);
 });

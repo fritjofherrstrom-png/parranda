@@ -141,7 +141,22 @@ function resolveShellMode(cityConfig, cityFallbackUsed) {
     return "fallback-preview";
   }
 
+  if (cityConfig?.visibility === "preview") {
+    return "city-preview";
+  }
+
   return "curated-public";
+}
+
+function isPreviewCityConfig(cityConfig) {
+  return cityConfig?.visibility === "preview";
+}
+
+function shouldReturnPreviewRouteNoop(cityConfig) {
+  return (
+    isPreviewCityConfig(cityConfig) &&
+    (!cityConfig.catalog?.routeTemplates?.length || !cityConfig.catalog?.allItems?.length)
+  );
 }
 
 function buildShellCopy(shellMode, options = {}) {
@@ -151,6 +166,8 @@ function buildShellCopy(shellMode, options = {}) {
   const scope =
     shellMode === "fallback-preview"
       ? "shell.fallback"
+      : shellMode === "city-preview"
+        ? "shell.preview"
       : shellMode === "internal-preview"
         ? "shell.internal"
         : "shell.curated";
@@ -185,6 +202,8 @@ function buildShellMeta(cityConfig, options = {}) {
   const scope =
     options.shellMode === "fallback-preview"
       ? "meta.fallback"
+      : options.shellMode === "city-preview"
+        ? "meta.preview"
       : options.shellMode === "internal-preview"
         ? "meta.internal"
         : "meta.curated";
@@ -639,6 +658,19 @@ function buildApp() {
         modifier: request.body?.modifier || null,
         lang,
       };
+
+      if (shouldReturnPreviewRouteNoop(cityConfig)) {
+        response.json({
+          city,
+          days: [],
+          resolved_home_base: null,
+          resolved_start: null,
+          resolved_end: null,
+          requested_city: requestedCity,
+          city_fallback_used: cityFallbackUsed,
+        });
+        return;
+      }
 
       const result = diversifyRecommendationDays(await generateRecommendations(payload));
       response.json({

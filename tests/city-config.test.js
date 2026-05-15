@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const rome = require("../server/cities/rome");
+const barcelona = require("../server/cities/barcelona");
 const testCity = require("../server/cities/test-city");
 const { cityConfigs, getCityConfig, normalizeCityKey, resolveCityConfig } = require("../server/cities");
 const { validateCityConfig } = require("../server/cities/contract");
@@ -22,6 +23,18 @@ test("test-city uppfyller city-kontraktet utan fallback", () => {
   assert.equal(resolution.found, true);
   assert.equal(getCityConfig("test-city").key, "test-city");
   assert.equal(cityConfigs["test-city"].currency, "MXN");
+});
+
+test("barcelona uppfyller city-kontraktet som registrerad preview-stad", () => {
+  assert.doesNotThrow(() => validateCityConfig(barcelona));
+  const resolution = resolveCityConfig("barcelona", { allowFallback: false });
+  assert.equal(resolution.cityConfig.key, "barcelona");
+  assert.equal(resolution.fallbackUsed, false);
+  assert.equal(resolution.found, true);
+  assert.equal(getCityConfig("barcelona").key, "barcelona");
+  assert.equal(cityConfigs.barcelona.visibility, "preview");
+  assert.equal(cityConfigs.barcelona.catalog.allItems.length, 0);
+  assert.equal(cityConfigs.barcelona.catalog.routeTemplates.length, 0);
 });
 
 test("test-city är markerad som intern arkitekturstub", () => {
