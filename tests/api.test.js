@@ -767,9 +767,18 @@ test("GET /api/city-pulse använder lang bara för Pulse-prosa och behåller met
       JSON.stringify(parrandaOwnedEnFields),
       /Pågår nu|Hela Rom|Ställesnivå|Torsdag är|April och maj|Stadens rytm|Kvarterspuls/i,
     );
-    assert.match(
-      JSON.stringify(en.body.official_events || []),
-      /Det här är ett kort livefönster/,
+
+    const visibleOfficialPulseFields = (en.body.items || [])
+      .filter((item) => String(item.id || "").startsWith("official-"))
+      .map((item) => ({
+        kind: item.kind,
+        when: item.when,
+        why_it_matters: item.why_it_matters,
+      }));
+
+    assert.doesNotMatch(
+      JSON.stringify(visibleOfficialPulseFields),
+      /Officiellt live|Pågår i dag|Just nu|Det här är ett kort livefönster/i,
     );
   } finally {
     await new Promise((resolve) => server.close(resolve));
