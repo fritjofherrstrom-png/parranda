@@ -338,6 +338,32 @@ test("GET /api/places/search för barcelona lånar inte Rome-platser", async () 
   }
 });
 
+test("GET /api/places/search hittar Bandini's i Barcelona pilotkatalog", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during Barcelona Bandini search test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      path: "/api/places/search?city=barcelona&q=bandini",
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.city, "barcelona");
+    assert.equal(response.body.requested_city, "barcelona");
+    assert.equal(response.body.city_fallback_used, false);
+    assert.equal(response.body.items.length, 1);
+    assert.equal(response.body.items[0].id, "bandinis-barcelona");
+    assert.equal(response.body.items[0].label, "Bandini's");
+    assert.equal(response.body.items[0].area, "sant-antoni");
+    assert.doesNotMatch(JSON.stringify(response.body), /Trastevere|Monti|Testaccio|Centro Storico/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("GET / renderar en city-aware app shell med bootstrap", async () => {
   global.fetch = async (url) => {
     throw new Error(`Unexpected fetch during app shell test: ${url}`);
