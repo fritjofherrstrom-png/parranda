@@ -96,11 +96,10 @@ function buildOfficialPulseItem(event, date, cityConfig, lang = "sv") {
       (isEnglish
         ? `Official live event in ${cityLabel || "Rome"} that can give the day a more time-bound layer.`
         : `Officiellt live-event i ${cityLabel || "Rom"} som kan ge dagen ett mer tidsbundet lager.`),
-    why_it_matters:
-      event.match_reason ||
-      (isEnglish
-        ? "Useful as a live bonus when you want to weave in something that is actually happening right now."
-        : "Bra som live-bonus när du vill väva in något som faktiskt bara händer just nu."),
+    why_it_matters: isEnglish
+      ? "Useful as a live bonus when you want to weave in something that is actually happening right now."
+      : event.match_reason ||
+        "Bra som live-bonus när du vill väva in något som faktiskt bara händer just nu.",
     matches_vibes: matchesVibes,
     official_event_id: event.id,
     lat: typeof event.lat === "number" ? event.lat : null,

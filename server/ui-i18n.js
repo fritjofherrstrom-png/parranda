@@ -239,7 +239,7 @@ const translations = {
     "route.barMentions": "Barer du inte ska missa",
     "route.whyChosen": "Varför den här rutten valdes",
     "route.mainBadge": "Din huvudrutt",
-    "pulse.allCity": "Alla {city}",
+    "pulse.allCity": "Hela {city}",
     "pulse.allRome": "Alla Rom",
     "pulse.nearMe": "Nära mig",
     "pulse.now": "Just nu",

@@ -2504,13 +2504,7 @@ const districtUiCopy = {
 };
 
 function buildLiveScopeAllLabel() {
-  if (isEnglishUi) {
-    return isRomeCuratedMode
-      ? t("pulse.allRome")
-      : tf("pulse.allCity", { city: buildUnavailableCityLabel() });
-  }
-
-  return isRomeCuratedMode ? "Hela Rom" : `Hela ${buildUnavailableCityLabel()}`;
+  return tf("pulse.allCity", { city: buildUnavailableCityLabel() }, `Hela ${buildUnavailableCityLabel()}`);
 }
 
 function buildNonRomeRouteSummary() {
@@ -2857,7 +2851,7 @@ const heroBlitzFollowupMaxLength = 110;
 
 const cityPulseScopeMeta = {
   all: {
-    label: isEnglishUi ? "All city" : "Hela staden",
+    label: buildLiveScopeAllLabel(),
   },
   nearby: {
     label: t("pulse.nearMe", "Nära mig"),
@@ -2910,10 +2904,10 @@ const cityPulseLevelMeta = {
 };
 
 const cityPulseVibeLabels = {
-  slow: "långsam",
-  buzzy: "pulsig",
-  romantic: "romantisk",
-  curious: "nyfiken",
+  slow: isEnglishUi ? "slow" : "långsam",
+  buzzy: isEnglishUi ? "buzzy" : "pulsig",
+  romantic: isEnglishUi ? "romantic" : "romantisk",
+  curious: isEnglishUi ? "curious" : "nyfiken",
 };
 
 const optimizerModes = {
@@ -4585,24 +4579,38 @@ function enrichPulseItemTiming(item, dateString, timeKey) {
     (Number.isFinite(startMinutes) ? startMinutes : 0) <= eveningEnd &&
     (Number.isFinite(endMinutes) ? endMinutes : eveningEnd) >= eveningStart;
 
-  let label = item.when || "I dag";
+  let label = item.when || (isEnglishUi ? "Today" : "I dag");
 
   if (status === "live") {
     label = Number.isFinite(endMinutes)
-      ? `Pågår nu • till ${formatPulseClock(endMinutes)}`
-      : "Pågår nu";
+      ? isEnglishUi
+        ? `Live now • until ${formatPulseClock(endMinutes)}`
+        : `Pågår nu • till ${formatPulseClock(endMinutes)}`
+      : isEnglishUi
+        ? "Live now"
+        : "Pågår nu";
   } else if (status === "upcoming") {
     label = Number.isFinite(startMinutes)
-      ? `Snart • ${formatPulseClock(startMinutes)}`
-      : "Snart";
+      ? isEnglishUi
+        ? `Soon • ${formatPulseClock(startMinutes)}`
+        : `Snart • ${formatPulseClock(startMinutes)}`
+      : isEnglishUi
+        ? "Soon"
+        : "Snart";
   } else if (status === "later") {
     label = Number.isFinite(startMinutes)
-      ? `Senare • ${formatPulseClock(startMinutes)}`
-      : item.when || "Senare i dag";
+      ? isEnglishUi
+        ? `Later • ${formatPulseClock(startMinutes)}`
+        : `Senare • ${formatPulseClock(startMinutes)}`
+      : item.when || (isEnglishUi ? "Later today" : "Senare i dag");
   } else if (status === "past") {
     label = Number.isFinite(endMinutes)
-      ? `Passerade • ${formatPulseClock(endMinutes)}`
-      : "Passerade";
+      ? isEnglishUi
+        ? `Passed • ${formatPulseClock(endMinutes)}`
+        : `Passerade • ${formatPulseClock(endMinutes)}`
+      : isEnglishUi
+        ? "Passed"
+        : "Passerade";
   }
 
   return {
@@ -5001,10 +5009,14 @@ function buildPulseTeaserSummary() {
   }
 
   if (plannedDays.length) {
-    return `Kopplad till ${dayCount} vald dag${dayCount > 1 ? "ar" : ""}. ${weatherLine}`;
+    return isEnglishUi
+      ? `Tied to ${dayCount} selected day${dayCount > 1 ? "s" : ""}. ${weatherLine}`
+      : `Kopplad till ${dayCount} vald dag${dayCount > 1 ? "ar" : ""}. ${weatherLine}`;
   }
 
-  return `${weatherLine} Öppna live-läget när du vill läsa dagens edition mer som en lokal utgåva.`;
+  return isEnglishUi
+    ? `${weatherLine} Open Pulse when you want to read today’s edition more like a local layer.`
+    : `${weatherLine} Öppna live-läget när du vill läsa dagens edition mer som en lokal utgåva.`;
 }
 
 function focusActiveDayLiveSection() {
@@ -5082,7 +5094,10 @@ function renderCityPulseTeaser() {
             `Just nu i ${buildUnavailableCityLabel()} • ${weekdayLabel} ${dateLabel}`,
           );
       cityPulseTeaserTitle.textContent =
-        cityPulseState?.headline || `Aktuellt i ${buildUnavailableCityLabel()}`;
+        cityPulseState?.headline ||
+        (isEnglishUi
+          ? `Current in ${buildUnavailableCityLabel()}`
+          : `Aktuellt i ${buildUnavailableCityLabel()}`);
       cityPulseTeaserSummary.textContent =
         cityPulseState?.subhead || cityPulseState?.note || buildPulseTeaserSummary();
     }
@@ -5134,7 +5149,7 @@ function renderCityPulseDayChips() {
     button.type = "button";
     button.className = `city-pulse-day-chip${date === activeLiveDate ? " active" : ""}`;
     button.textContent = plannedDays.length
-      ? `Dag ${index + 1} • ${formatCompactSwedishDate(date)}`
+      ? `${isEnglishUi ? "Day" : "Dag"} ${index + 1} • ${formatCompactSwedishDate(date)}`
       : formatCompactSwedishDate(date);
     button.addEventListener("click", async () => {
       activeLiveDate = date;
@@ -5542,7 +5557,9 @@ function renderCityPulse() {
             cityPulseScopeStatus = "";
           } catch (_error) {
             activePulseScope = "all";
-            cityPulseScopeStatus = `Platsåtkomst saknas just nu, så LIVE visar ${buildLiveScopeAllLabel().toLowerCase()} i stället för nära dig.`;
+            cityPulseScopeStatus = isEnglishUi
+              ? `Location access is unavailable right now, so Pulse shows ${buildLiveScopeAllLabel().toLowerCase()} instead of nearby signals.`
+              : `Platsåtkomst saknas just nu, så LIVE visar ${buildLiveScopeAllLabel().toLowerCase()} i stället för nära dig.`;
           }
 
           renderCityPulse();
@@ -5568,8 +5585,9 @@ function renderCityPulse() {
                 cityPulseScopeStatus = "";
               } catch (_error) {
                 activePulseScope = "all";
-                cityPulseScopeStatus =
-                  `Platsåtkomst saknas just nu, så LIVE visar ${buildLiveScopeAllLabel().toLowerCase()} tills Nära mig kan användas.`;
+                cityPulseScopeStatus = isEnglishUi
+                  ? `Location access is unavailable right now, so Pulse shows ${buildLiveScopeAllLabel().toLowerCase()} until Near me can be used.`
+                  : `Platsåtkomst saknas just nu, så LIVE visar ${buildLiveScopeAllLabel().toLowerCase()} tills Nära mig kan användas.`;
               }
             }
 
@@ -5692,7 +5710,7 @@ async function loadCityPulse(dateString = getTodayIsoDate()) {
 
   try {
     const response = await fetchJson(
-      `${routeApiBase}/city-pulse?city=${encodeURIComponent(plannerCityKey)}&date=${encodeURIComponent(targetDate)}`,
+      `${routeApiBase}/city-pulse?city=${encodeURIComponent(plannerCityKey)}&date=${encodeURIComponent(targetDate)}&lang=${encodeURIComponent(activeUiLanguage)}`,
     );
     cityPulseState = {
       ...fallbackPulse,
