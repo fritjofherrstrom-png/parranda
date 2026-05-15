@@ -11,6 +11,37 @@ const BARCELONA_CURRENCY = "EUR";
 const BARCELONA_CENTER = { lat: 41.3874, lng: 2.1686 };
 const BARCELONA_COUNTRY = "Spain";
 
+const areaDefinitions = {
+  gracia: { label: "Gràcia", macro: "northwest-local" },
+  "born-sant-pere-santa-caterina": {
+    label: "El Born / Sant Pere / Santa Caterina",
+    macro: "old-town",
+  },
+  gothic: { label: "Gothic Quarter", macro: "old-town" },
+  eixample: { label: "Eixample", macro: "central-grid" },
+  "sant-antoni": { label: "Sant Antoni", macro: "central-grid" },
+  "poble-sec": { label: "Poble-sec", macro: "montjuic-southwest" },
+  poblenou: { label: "Poblenou", macro: "coast-east" },
+  barceloneta: { label: "Barceloneta", macro: "coast-east" },
+  raval: { label: "Raval", macro: "old-town" },
+  montjuic: { label: "Montjuïc", macro: "montjuic-southwest" },
+  "sants-les-corts": { label: "Sants / Les Corts", macro: "montjuic-southwest" },
+  "barri-gotic": { label: "Gothic Quarter", macro: "old-town" },
+  "el-born": { label: "El Born / Sant Pere / Santa Caterina", macro: "old-town" },
+  "sant-pere": { label: "El Born / Sant Pere / Santa Caterina", macro: "old-town" },
+  "santa-caterina": { label: "El Born / Sant Pere / Santa Caterina", macro: "old-town" },
+  "les-corts": { label: "Sants / Les Corts", macro: "montjuic-southwest" },
+  sants: { label: "Sants / Les Corts", macro: "montjuic-southwest" },
+};
+
+const macroAreaLabels = {
+  "old-town": "Old Town",
+  "central-grid": "Central Grid",
+  "northwest-local": "Northwest Local",
+  "coast-east": "Coast / East",
+  "montjuic-southwest": "Montjuïc / Southwest",
+};
+
 const barcelonaEditorial = createNoopEditorialService({
   cityLabel: BARCELONA_LABEL,
 });
@@ -70,12 +101,8 @@ module.exports = {
     requestTimeoutMs: 3500,
   },
   routing: {
-    areaDefinitions: {
-      barcelona: { label: BARCELONA_LABEL, macro: "city" },
-    },
-    macroAreaLabels: {
-      city: BARCELONA_LABEL,
-    },
+    areaDefinitions,
+    macroAreaLabels,
     tuning: {},
   },
   localTruth: {
