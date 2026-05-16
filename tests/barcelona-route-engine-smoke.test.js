@@ -61,3 +61,24 @@ test("direct Barcelona route-engine probe can build a Barcelona route from the p
     /Trastevere|Monti|Testaccio|Centro Storico|Garbatella|Pigneto|\bRom\b|\bRome\b/,
   );
 });
+
+test("direct Barcelona route-engine probe falls back to city-center anchors when auto districts are missing", async () => {
+  global.fetch = createWeatherFetch();
+
+  const result = await generateRecommendations({
+    city: "barcelona",
+    dates: ["2026-05-16"],
+    walkingKmTarget: 9,
+    preferences: [],
+    legPacing: "balanced",
+    distanceMode: "soft_target",
+    budgetTier: "standard",
+    lang: "en",
+  });
+
+  assert.equal(result.city, "barcelona");
+  assert.equal(result.days.length, 1);
+  assert.ok(result.days[0].primary_route);
+  assert.equal(result.resolved_start.label, "Barcelona");
+  assert.equal(result.resolved_end.label, "Barcelona");
+});

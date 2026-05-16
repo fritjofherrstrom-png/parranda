@@ -32,6 +32,18 @@ function getCityCenter() {
   return getActiveCityConfig().center;
 }
 
+function buildCityCenterPoint(source = "default") {
+  const center = getCityCenter();
+  const cityLabel = getActiveCityConfig().label || "Staden";
+
+  return {
+    label: cityLabel,
+    lat: center.lat,
+    lng: center.lng,
+    source,
+  };
+}
+
 function getFallbackLabel() {
   return getActiveCityConfig().fallbackLabel || "Centro Storico";
 }
@@ -156,14 +168,7 @@ async function resolvePoint(input, fallbackLabel = getFallbackLabel()) {
   if (!input || !input.type) {
     const fallback = findCatalogItemByName(fallbackLabel);
     if (!fallback) {
-      const center = getCityCenter();
-      const cityLabel = getActiveCityConfig().label || "Staden";
-      return {
-        label: cityLabel,
-        lat: center.lat,
-        lng: center.lng,
-        source: "default",
-      };
+      return buildCityCenterPoint("default");
     }
     return {
       label: fallback.name,
@@ -221,14 +226,7 @@ async function resolvePoint(input, fallbackLabel = getFallbackLabel()) {
 
   const fallback = findCatalogItemByName(fallbackLabel);
   if (!fallback) {
-    const center = getCityCenter();
-    const cityLabel = getActiveCityConfig().label || "Staden";
-    return {
-      label: cityLabel,
-      lat: center.lat,
-      lng: center.lng,
-      source: "default",
-    };
+    return buildCityCenterPoint("default");
   }
   return {
     label: fallback.name,
@@ -1299,6 +1297,10 @@ function resolveAutoPoint({
     .sort((left, right) => right.score - left.score);
   const best = ranked[0]?.candidate || findCatalogItemByName(getFallbackLabel());
 
+  if (!best) {
+    return buildCityCenterPoint("auto");
+  }
+
   return {
     label: best.name,
     lat: best.lat,
@@ -1657,6 +1659,16 @@ function resolveAutoAnchors(options = {}) {
 
   const fallbackLoopCandidate =
     bestLoop?.candidate || rankedStart[0]?.candidate || findCatalogItemByName(getFallbackLabel());
+
+  if (!fallbackLoopCandidate) {
+    const cityCenterPoint = buildCityCenterPoint("auto");
+
+    return {
+      start: cityCenterPoint,
+      end: { ...cityCenterPoint },
+      shape: "loop",
+    };
+  }
 
   return {
     start: {
