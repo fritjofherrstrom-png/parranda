@@ -35,7 +35,7 @@ test("barcelona uppfyller city-kontraktet som registrerad preview-stad", () => {
   assert.equal(cityConfigs.barcelona.visibility, "preview");
   assert.equal(
     cityConfigs.barcelona.catalog.allItems.filter((item) => !["district", "district-group"].includes(item.kind)).length,
-    26,
+    56,
   );
   assert.equal(cityConfigs.barcelona.catalog.routeTemplates.length, 6);
 });
@@ -85,19 +85,26 @@ test("barcelona pilotkatalog använder giltiga area tokens, provenance och route
     "bandinis-barcelona",
     "mercat-sant-antoni",
     "casa-vicens",
+    "mercat-poblenou",
+    "mercat-barceloneta",
+    "mercat-llibertat",
+    "castell-montjuic",
+    "museu-tapies",
+    "filmoteca-catalunya",
     "mercat-santa-caterina",
     "cccb",
     "quimet-quimet",
-    "museu-can-framis",
   ]);
 
   const placeItems = allItems.filter((item) => !["district", "district-group"].includes(item.kind));
   const routeAnchors = allItems.filter((item) => item.kind === "district-group");
 
-  assert.equal(placeItems.length, 26);
+  assert.equal(placeItems.length, 56);
   assert.equal(routeAnchors.length, 5);
   assert.equal(barcelonaCatalog.routeTemplates.length, 6);
   assert.equal(findItemByName("bandini").id, "bandinis-barcelona");
+  assert.equal(findItemByName("moritz").id, "fabrica-moritz-barcelona");
+  assert.equal(findItemByName("mar bella").id, "platja-mar-bella");
 
   for (const item of allItems) {
     assert.ok(areaDefinitions[item.area], `missing Barcelona area token for ${item.id}: ${item.area}`);
@@ -116,8 +123,32 @@ test("barcelona pilotkatalog använder giltiga area tokens, provenance och route
     assert.equal(typeof provenance.needs_human_verification, "boolean");
   }
 
+  const byArea = placeItems.reduce((counts, item) => {
+    counts[item.area] = (counts[item.area] || 0) + 1;
+    return counts;
+  }, {});
+
+  for (const item of placeItems) {
+    assert.notEqual(item.structuralRouteAnchor, true, `real Barcelona place should not be a structural route anchor: ${item.id}`);
+  }
+
+  assert.ok((byArea.poblenou || 0) + (byArea.barceloneta || 0) >= 8);
+  assert.ok((byArea.gracia || 0) >= 7);
+  assert.ok((byArea["poble-sec"] || 0) + (byArea.montjuic || 0) >= 7);
+  assert.ok((byArea["sant-antoni"] || 0) + (byArea.eixample || 0) >= 7);
+
   for (const id of expectedIds) {
     assert.ok(allItems.some((item) => item.id === id), `missing expected Barcelona pilot place ${id}`);
+  }
+
+  for (const [id, provenance] of Object.entries(barcelonaCatalog.provenanceById)) {
+    if (provenance.source_type === "osm_structured_data") {
+      assert.equal(
+        provenance.needs_human_verification,
+        true,
+        `osm_structured_data should remain explicitly human-verification-gated for ${id}`,
+      );
+    }
   }
 
   const itemIds = new Set(allItems.map((item) => item.id));
