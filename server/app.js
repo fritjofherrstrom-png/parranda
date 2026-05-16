@@ -479,6 +479,7 @@ function buildApp() {
     const { allItems } = cityConfig.catalog;
     const query = String(request.query.q || "").trim().toLowerCase();
     const items = allItems
+      .filter((item) => !item.structuralRouteAnchor)
       .filter((item) => {
         if (!query) {
           return true;

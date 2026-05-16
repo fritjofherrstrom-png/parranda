@@ -25,7 +25,7 @@ Confirmed:
 - Route output no longer crashes into the preview empty state for the default planner submission.
 - Preview copy still clearly says Barcelona is registered but not curated yet.
 
-## API scenarios
+## API scenarios before seed tuning
 
 ### 1-day food + culture
 
@@ -109,7 +109,7 @@ Assessment:
 - The route is coherent and compact.
 - It still slides toward the same old-town/Raval gravity.
 
-## Quality findings
+## Quality findings before seed tuning
 
 ### What looks good
 
@@ -157,7 +157,7 @@ Current status:
 - Good for manual beta conversation.
 - Not yet strong enough for “this already feels like Barcelona Parranda” confidence.
 
-## Recommended next PR
+## Recommended next PR from the original pass
 
 Recommended next PR: `seed tuning`
 
@@ -173,3 +173,26 @@ Keep separate after that:
 - fallback route cards
 - issue #52 diagnostics / no-crash / catalog-first route generation
 - Pulse/live source audit
+
+## API scenarios after seed tuning v1
+
+This seed-tuning PR adds structural Barcelona route anchors and tunes the existing six route seeds.
+
+The route anchors are neighborhood/area anchors, not new venues. They let auto planner flows start from Barcelona-specific route geography instead of always falling back to the city center.
+
+- `food + culture`: now uses a Born/Santa Caterina to Poble-sec/Montjuic arc, with Born/Santa Caterina, Poble-sec, and Montjuic stops instead of an old-town-only loop.
+- `food + nightlife`: now uses a Gracia to Poble-sec/Montjuic arc, with Gracia, Sant Antoni, Poble-sec, and Montjuic stops.
+- `culture + food + coast`: now reaches existing Poblenou/coast stops such as Platja del Bogatell and Museu Can Framis.
+- Gracia and Sant Antoni start hints remain locally meaningful.
+- default preview routes now use Barcelona-specific structural route anchors instead of generic city-center fallback.
+
+Quality improvements:
+
+- `food + culture` and `food + nightlife` no longer return identical stop mixes.
+- coast/east scenarios now reach existing Poblenou/coast stops.
+- Gracia and Sant Antoni hints stay locally meaningful.
+- default preview routes are less old-town-heavy.
+
+Remaining caveat:
+
+- this is still a preview catalog; broader beta quality likely needs a small catalog expansion after seed tuning.

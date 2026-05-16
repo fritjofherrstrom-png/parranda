@@ -33,7 +33,10 @@ test("barcelona uppfyller city-kontraktet som registrerad preview-stad", () => {
   assert.equal(resolution.found, true);
   assert.equal(getCityConfig("barcelona").key, "barcelona");
   assert.equal(cityConfigs.barcelona.visibility, "preview");
-  assert.equal(cityConfigs.barcelona.catalog.allItems.length, 26);
+  assert.equal(
+    cityConfigs.barcelona.catalog.allItems.filter((item) => !["district", "district-group"].includes(item.kind)).length,
+    26,
+  );
   assert.equal(cityConfigs.barcelona.catalog.routeTemplates.length, 6);
 });
 
@@ -88,7 +91,11 @@ test("barcelona pilotkatalog använder giltiga area tokens, provenance och route
     "museu-can-framis",
   ]);
 
-  assert.equal(allItems.length, 26);
+  const placeItems = allItems.filter((item) => !["district", "district-group"].includes(item.kind));
+  const routeAnchors = allItems.filter((item) => item.kind === "district-group");
+
+  assert.equal(placeItems.length, 26);
+  assert.equal(routeAnchors.length, 5);
   assert.equal(barcelonaCatalog.routeTemplates.length, 6);
   assert.equal(findItemByName("bandini").id, "bandinis-barcelona");
 
