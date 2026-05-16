@@ -623,9 +623,14 @@ test("GET /barcelona?lang=en är registrerad engelsk city-core preview", async (
     assert.ok(response.body.includes("Barcelona is registered as a city, but does not have a curated citypack yet"));
     assert.ok(response.body.includes("Planner preview"));
     assert.ok(response.body.includes("See planner preview"));
+    assert.match(
+      response.body,
+      /id="mapPlaceLink"[\s\S]*href="https:\/\/www\.google\.com\/maps\/search\/\?api=1&amp;query=Barcelona%20hidden%20gems"/,
+    );
     assert.doesNotMatch(response.body, /Din resa till Rom/);
     assert.doesNotMatch(response.body, /launched curated Barcelona/i);
     assert.doesNotMatch(response.body, /google\.com\/maps\/search\/Rome/i);
+    assert.doesNotMatch(response.body, /__PARRANDA_CITY_MAP_URL__/);
     assert.doesNotMatch(response.body, /Rome-wide/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
