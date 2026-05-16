@@ -29,6 +29,13 @@ function createWeatherFetch() {
   };
 }
 
+function assertNoStructuralAnchorsAsStops(route) {
+  assert.ok(
+    route.main_stops.every((stop) => stop.kind !== "district" && stop.kind !== "district-group"),
+    "structural route anchors should not render as ordinary route stops",
+  );
+}
+
 test.afterEach(() => {
   global.fetch = originalFetch;
 });
@@ -60,6 +67,7 @@ test("direct Barcelona route-engine probe can build a Barcelona route from the p
   assert.equal(result.days.length, 1);
   assert.ok(result.days[0].primary_route, "expected a primary Barcelona route");
   assert.ok(result.days[0].primary_route.main_stops.length >= 3);
+  assertNoStructuralAnchorsAsStops(result.days[0].primary_route);
   assert.doesNotMatch(
     JSON.stringify(result.days[0].primary_route),
     /Trastevere|Monti|Testaccio|Centro Storico|Garbatella|Pigneto|\bRom\b|\bRome\b/,
@@ -85,6 +93,7 @@ test("direct Barcelona route-engine probe uses structural route anchors for auto
   assert.equal(result.city, "barcelona");
   assert.equal(result.days.length, 1);
   assert.ok(result.days[0].primary_route);
+  assertNoStructuralAnchorsAsStops(result.days[0].primary_route);
   assert.notEqual(result.resolved_start.label, "Barcelona");
   assert.notEqual(result.resolved_end.label, "Barcelona");
 });
@@ -116,6 +125,8 @@ test("direct Barcelona route-engine probe separates food-culture from food-night
   const nightlifeStops = nightlife.days[0].primary_route.main_stops.map((stop) => stop.label);
   const nightlifeAreas = new Set(nightlife.days[0].primary_route.main_stops.map((stop) => stop.area));
 
+  assertNoStructuralAnchorsAsStops(culture.days[0].primary_route);
+  assertNoStructuralAnchorsAsStops(nightlife.days[0].primary_route);
   assert.notDeepEqual(cultureStops, nightlifeStops);
   assert.ok(nightlifeAreas.has("poble-sec") || nightlifeAreas.has("montjuic"));
   assert.doesNotMatch(
@@ -146,6 +157,7 @@ test("direct Barcelona route-engine probe reaches coast-east stops for coast int
   });
   const areas = new Set(result.days[0].primary_route.main_stops.map((stop) => stop.area));
 
+  assertNoStructuralAnchorsAsStops(result.days[0].primary_route);
   assert.ok(areas.has("poblenou") || areas.has("barceloneta"));
 });
 
@@ -176,6 +188,8 @@ test("direct Barcelona route-engine probe keeps Gracia and Sant Antoni hints loc
   const graciaAreas = gracia.days[0].primary_route.main_stops.map((stop) => stop.area);
   const santAntoniAreas = santAntoni.days[0].primary_route.main_stops.map((stop) => stop.area);
 
+  assertNoStructuralAnchorsAsStops(gracia.days[0].primary_route);
+  assertNoStructuralAnchorsAsStops(santAntoni.days[0].primary_route);
   assert.ok(graciaAreas.includes("gracia"));
   assert.ok(santAntoniAreas.includes("sant-antoni"));
 });

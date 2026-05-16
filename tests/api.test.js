@@ -364,6 +364,32 @@ test("GET /api/places/search hittar Bandini's i Barcelona pilotkatalog", async (
   }
 });
 
+test("GET /api/places/search för barcelona visar inte strukturella route anchors som platser", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during Barcelona route-anchor search test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      path: "/api/places/search?city=barcelona&q=gracia",
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.city, "barcelona");
+    assert.equal(response.body.city_fallback_used, false);
+    assert.ok(response.body.items.length > 0);
+    assert.ok(
+      response.body.items.every((item) => item.type !== "district" && item.type !== "district-group"),
+      "structural Barcelona route anchors should not appear as ordinary place search results",
+    );
+    assert.ok(!response.body.items.some((item) => item.id === "gracia-route-anchor"));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("GET / renderar en city-aware app shell med bootstrap", async () => {
   global.fetch = async (url) => {
     throw new Error(`Unexpected fetch during app shell test: ${url}`);
