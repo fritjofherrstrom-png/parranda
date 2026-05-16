@@ -33,35 +33,31 @@ test.afterEach(() => {
   global.fetch = originalFetch;
 });
 
-test("Barcelona pilot catalog has places but no route templates yet", () => {
+test("Barcelona pilot catalog now has route templates backed by real places", () => {
   assert.equal(barcelona.visibility, "preview");
   assert.equal(barcelona.catalog.allItems.length, 26);
-  assert.equal(barcelona.catalog.routeTemplates.length, 0);
+  assert.equal(barcelona.catalog.routeTemplates.length, 6);
 });
 
-test("direct Barcelona route-engine probe is blocked by missing route templates", async () => {
+test("direct Barcelona route-engine probe can build a Barcelona route from the pilot catalog", async () => {
   global.fetch = createWeatherFetch();
+  const result = await generateRecommendations({
+    city: "barcelona",
+    dates: ["2026-05-14"],
+    walkingKmTarget: 8,
+    preferences: ["mat", "kultur"],
+    legPacing: "balanced",
+    distanceMode: "soft_target",
+    budgetTier: "standard",
+    lang: "en",
+  });
 
-  // This test documents the current failure mode only.
-  // Long-term, issue #52 should replace this rejection path with
-  // route-readiness diagnostics plus a generic no-crash guard.
-  let error = null;
-
-  try {
-    await generateRecommendations({
-      city: "barcelona",
-      dates: ["2026-05-14"],
-      walkingKmTarget: 8,
-      preferences: ["mat", "kultur"],
-      legPacing: "balanced",
-      distanceMode: "soft_target",
-      budgetTier: "standard",
-      lang: "en",
-    });
-  } catch (caught) {
-    error = caught;
-  }
-
-  assert.ok(error, "expected direct Barcelona generation to reject without route templates");
-  assert.match(error.message, /route|null/i);
+  assert.equal(result.city, "barcelona");
+  assert.equal(result.days.length, 1);
+  assert.ok(result.days[0].primary_route, "expected a primary Barcelona route");
+  assert.ok(result.days[0].primary_route.main_stops.length >= 3);
+  assert.doesNotMatch(
+    JSON.stringify(result.days[0].primary_route),
+    /Trastevere|Monti|Testaccio|Centro Storico|Garbatella|Pigneto|\bRom\b|\bRome\b/,
+  );
 });

@@ -34,10 +34,10 @@ test("barcelona uppfyller city-kontraktet som registrerad preview-stad", () => {
   assert.equal(getCityConfig("barcelona").key, "barcelona");
   assert.equal(cityConfigs.barcelona.visibility, "preview");
   assert.equal(cityConfigs.barcelona.catalog.allItems.length, 26);
-  assert.equal(cityConfigs.barcelona.catalog.routeTemplates.length, 0);
+  assert.equal(cityConfigs.barcelona.catalog.routeTemplates.length, 6);
 });
 
-test("barcelona har en strukturell neighborhood-modell utan route seeds", () => {
+test("barcelona har en strukturell neighborhood-modell med första route seeds", () => {
   const areaDefinitions = cityConfigs.barcelona.routing.areaDefinitions;
   const macroAreaLabels = cityConfigs.barcelona.routing.macroAreaLabels;
   const expectedAreas = [
@@ -71,12 +71,12 @@ test("barcelona har en strukturell neighborhood-modell utan route seeds", () => 
   assert.equal(areaDefinitions.montjuic.label, "Montjuïc");
   assert.equal(areaDefinitions["barri-gotic"].macro, areaDefinitions.gothic.macro);
   assert.equal(areaDefinitions["el-born"].macro, areaDefinitions["born-sant-pere-santa-caterina"].macro);
-  assert.equal(cityConfigs.barcelona.catalog.routeTemplates.length, 0);
+  assert.equal(cityConfigs.barcelona.catalog.routeTemplates.length, 6);
 });
 
-test("barcelona pilotkatalog använder giltiga area tokens och provenance", () => {
+test("barcelona pilotkatalog använder giltiga area tokens, provenance och route templates", () => {
   const areaDefinitions = cityConfigs.barcelona.routing.areaDefinitions;
-  const { allItems, findItemByName } = cityConfigs.barcelona.catalog;
+  const { allItems, findItemByName, routeTemplates } = cityConfigs.barcelona.catalog;
   const barcelonaCatalog = require("../server/cities/barcelona/catalog");
   const expectedIds = new Set([
     "bandinis-barcelona",
@@ -89,7 +89,7 @@ test("barcelona pilotkatalog använder giltiga area tokens och provenance", () =
   ]);
 
   assert.equal(allItems.length, 26);
-  assert.equal(barcelonaCatalog.routeTemplates.length, 0);
+  assert.equal(barcelonaCatalog.routeTemplates.length, 6);
   assert.equal(findItemByName("bandini").id, "bandinis-barcelona");
 
   for (const item of allItems) {
@@ -111,6 +111,21 @@ test("barcelona pilotkatalog använder giltiga area tokens och provenance", () =
 
   for (const id of expectedIds) {
     assert.ok(allItems.some((item) => item.id === id), `missing expected Barcelona pilot place ${id}`);
+  }
+
+  const itemIds = new Set(allItems.map((item) => item.id));
+
+  for (const template of routeTemplates) {
+    assert.ok(template.id, "route template is missing id");
+    assert.ok(Array.isArray(template.stops) && template.stops.length >= 4, `route template ${template.id} is too thin`);
+    assert.ok(
+      Array.isArray(template.preferenceTags) && template.preferenceTags.length > 0,
+      `route template ${template.id} is missing preferenceTags`,
+    );
+
+    for (const stopId of template.stops) {
+      assert.ok(itemIds.has(stopId), `route template ${template.id} references unknown Barcelona stop ${stopId}`);
+    }
   }
 });
 
