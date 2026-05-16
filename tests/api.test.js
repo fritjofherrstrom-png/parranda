@@ -467,6 +467,7 @@ test("GET /barcelona renderar registrerad city-core preview utan Rome-fallback",
     assert.doesNotMatch(response.body, /"key":"rome","label":"Rom","displayLabel":"Barcelona"/);
     assert.doesNotMatch(response.body, /Din resa till Rom/);
     assert.doesNotMatch(response.body, /Just nu i Rom/);
+    assert.doesNotMatch(response.body, /google\.com\/maps\/search\/Rome/i);
     assert.doesNotMatch(response.body, /Monti som kulturstart/);
     assert.doesNotMatch(response.body, /kuraterade Rom-baserade rutter/);
     assert.doesNotMatch(response.body, /de kuraterade Rom-rutterna/);
@@ -622,8 +623,14 @@ test("GET /barcelona?lang=en är registrerad engelsk city-core preview", async (
     assert.ok(response.body.includes("Barcelona is registered as a city, but does not have a curated citypack yet"));
     assert.ok(response.body.includes("Planner preview"));
     assert.ok(response.body.includes("See planner preview"));
+    assert.match(
+      response.body,
+      /id="mapPlaceLink"[\s\S]*href="https:\/\/www\.google\.com\/maps\/search\/\?api=1&amp;query=Barcelona%20hidden%20gems"/,
+    );
     assert.doesNotMatch(response.body, /Din resa till Rom/);
     assert.doesNotMatch(response.body, /launched curated Barcelona/i);
+    assert.doesNotMatch(response.body, /google\.com\/maps\/search\/Rome/i);
+    assert.doesNotMatch(response.body, /__PARRANDA_CITY_MAP_URL__/);
     assert.doesNotMatch(response.body, /Rome-wide/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
@@ -1938,6 +1945,71 @@ test("POST /api/route-recommendations för barcelona kraschar inte när preview-
   }
 });
 
+test("POST /api/route-recommendations för barcelona håller map/export-punkter city-scopade", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-05-16"],
+          weathercode: [0],
+          temperature_2m_max: [24],
+          temperature_2m_min: [16],
+        },
+        current: {
+          temperature_2m: 23,
+          weather_code: 0,
+          is_day: 1,
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during Barcelona route export test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations?lang=en",
+      body: {
+        city: "barcelona",
+        dates: ["2026-05-16"],
+        walking_km_target: 8,
+        preferences: ["food_drink", "culture", "views"],
+      },
+    });
+    const route = response.body.days[0].primary_route;
+    const structuralAnchorLabels = new Set([
+      "Gràcia",
+      "Sant Antoni",
+      "El Born / Santa Caterina",
+      "Poble-sec / Montjuïc",
+      "Poblenou / Coast",
+    ]);
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.city, "barcelona");
+    assert.ok(Array.isArray(route.map_route_points));
+    assert.ok(route.map_route_points.length >= route.main_stops.length);
+    assert.ok(
+      route.main_stops.every((stop) => stop.label && !structuralAnchorLabels.has(stop.label)),
+      "visible Barcelona main stops should be real catalog places, not structural route anchors",
+    );
+    assert.doesNotMatch(
+      JSON.stringify({
+        points: route.map_route_points,
+        stops: route.main_stops,
+      }),
+      /Trastevere|Monti|Testaccio|Centro Storico|Garbatella|Pigneto|\bRom\b|\bRome\b/,
+    );
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("POST /api/route-recommendations bär ett normaliserat local_truth-block på varje route-objekt", async () => {
   global.fetch = async (url) => {
     const parsed = new URL(String(url));
@@ -2421,6 +2493,46 @@ test("POST /api/blitz reroll använder minnet för att undvika direkt repetition
     assert.equal(first.status, 200);
     assert.equal(second.status, 200);
     assert.notEqual(second.body.best_move.title, first.body.best_move.title);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("POST /api/blitz kan köras för barcelona utan Rome-läckage eller strukturella anchors", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during Barcelona blitz API test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/blitz",
+      body: {
+        city: "barcelona",
+        now: "2026-05-16T19:00:00+02:00",
+        origin: { type: "preset", label: "Gràcia" },
+        intent_keys: ["food_drink", "nightlife"],
+      },
+    });
+    const move = response.body.best_move;
+    const routeStops = move?.route?.stops || [];
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.city, "barcelona");
+    assert.equal(response.body.requested_city, "barcelona");
+    assert.equal(response.body.city_fallback_used, false);
+    assert.ok(move, "expected Blitz to return a Barcelona move");
+    assert.ok(["single_stop", "mini_route_60"].includes(move.kind));
+    assert.ok(
+      routeStops.every((stop) => stop.type !== "district" && stop.type !== "district-group"),
+      "Barcelona Blitz route stops should be real places, not structural route anchors",
+    );
+    assert.doesNotMatch(
+      JSON.stringify(response.body),
+      /Trastevere|Monti|Testaccio|Centro Storico|Garbatella|Pigneto|\bRom\b|\bRome\b/,
+    );
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

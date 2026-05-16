@@ -8267,7 +8267,11 @@ function takeLeadSentences(text, maxSentences = 2, maxLength = 260) {
   }
 
   const sentences = text.match(/[^.!?]+[.!?]?/gu) || [text];
-  const picked = sentences.slice(0, maxSentences).join(" ").trim();
+  const picked = sentences
+    .slice(0, maxSentences)
+    .join(" ")
+    .replace(/(\d)\.\s+(\d)/gu, "$1.$2")
+    .trim();
   return clipText(picked, maxLength);
 }
 
@@ -8332,6 +8336,7 @@ function normalizeRouteResultCopy(text = "") {
   return String(text)
     .replace(/^En tydlig båge/iu, isEnglishUi ? "A clear route" : "En tydlig rutt")
     .replace(/\bi bågen\b/giu, isEnglishUi ? "in the route" : "i rutten")
+    .replace(/(\d)\.\s+(\d)/gu, "$1.$2")
     .split(/(?<=[.!?])\s+/u)
     .filter((sentence) => !/\bbåge\b|benläng|gångben|heuristisk routing/iu.test(sentence))
     .join(" ")
