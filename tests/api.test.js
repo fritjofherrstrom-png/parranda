@@ -1785,6 +1785,126 @@ test("POST /api/route-recommendations för barcelona kan nu bygga preview-rutter
     );
     assert.doesNotMatch(
       JSON.stringify(response.body),
+      /Gràcia med kultur|Sant Antoni som tät mat- och bardag|Ett gammalstadsspår som undviker topplistan/,
+    );
+    assert.doesNotMatch(
+      JSON.stringify(response.body),
+      /Trastevere|Monti|Testaccio|Centro Storico|Garbatella|Pigneto|\bRom\b|\bRome\b/,
+    );
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("POST /api/route-recommendations för barcelona fungerar även med preview-defaults utan valda intents", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-05-16"],
+          weathercode: [0],
+          temperature_2m_max: [24],
+          temperature_2m_min: [16],
+        },
+        current: {
+          temperature_2m: 23,
+          weather_code: 0,
+          is_day: 1,
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during Barcelona default route test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations?lang=en",
+      body: {
+        city: "barcelona",
+        dates: ["2026-05-16"],
+        home_base: { type: "auto", label: "Parranda chooses" },
+        start: { type: "auto", label: "Parranda chooses" },
+        end: { type: "auto", label: "Parranda chooses" },
+        walking_km_target: 9,
+        leg_pacing: "balanced",
+        preferences: [],
+        distance_mode: "soft_target",
+        budget_tier: "standard",
+        modifier: null,
+      },
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.city, "barcelona");
+    assert.equal(response.body.days.length, 1);
+    assert.equal(response.body.resolved_start.label, "Barcelona");
+    assert.equal(response.body.resolved_end.label, "Barcelona");
+    assert.ok(response.body.days[0].primary_route);
+    assert.ok(
+      response.body.days[0].primary_route.main_stops.every((stop) => stop.label !== "Bandini's"),
+      "default Barcelona preview route should not force Bandini's into unrelated runs",
+    );
+    assert.doesNotMatch(
+      JSON.stringify(response.body),
+      /Trastevere|Monti|Testaccio|Centro Storico|Garbatella|Pigneto|\bRom\b|\bRome\b/,
+    );
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("POST /api/route-recommendations för barcelona kraschar inte när preview-areas används som start hints", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-05-16"],
+          weathercode: [0],
+          temperature_2m_max: [24],
+          temperature_2m_min: [16],
+        },
+        current: {
+          temperature_2m: 23,
+          weather_code: 0,
+          is_day: 1,
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during Barcelona preset fallback test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations?lang=en",
+      body: {
+        city: "barcelona",
+        dates: ["2026-05-16"],
+        start: { type: "preset", label: "Gràcia" },
+        end: { type: "auto", label: "Parranda chooses" },
+        walking_km_target: 7,
+        preferences: ["culture", "nightlife"],
+      },
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.city, "barcelona");
+    assert.equal(response.body.days.length, 1);
+    assert.ok(response.body.days[0].primary_route);
+    assert.ok(response.body.resolved_start?.label);
+    assert.doesNotMatch(
+      JSON.stringify(response.body),
       /Trastevere|Monti|Testaccio|Centro Storico|Garbatella|Pigneto|\bRom\b|\bRome\b/,
     );
   } finally {
