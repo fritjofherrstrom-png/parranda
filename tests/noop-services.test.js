@@ -16,6 +16,14 @@ test("noop live service returnerar tomma eventlistor per datum", async () => {
   });
 });
 
+test("noop live service är tolerant mot saknade eller ogiltiga datumlistor", async () => {
+  const fetchLiveEventsForDates = createNoopLiveEventsService();
+
+  assert.deepStrictEqual(await fetchLiveEventsForDates(), {});
+  assert.deepStrictEqual(await fetchLiveEventsForDates(null), {});
+  assert.deepStrictEqual(await fetchLiveEventsForDates("2026-05-01"), {});
+});
+
 test("noop editorial service returnerar neutral och stabil city pulse", () => {
   const editorial = createNoopEditorialService({ cityLabel: "Teststad" });
   const pulse = editorial.getCityPulse("2026-05-01");
