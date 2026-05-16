@@ -38,6 +38,8 @@ That probe currently fails before producing a route because `getRouteTemplates()
 
 So the route engine is not yet ready to generate useful Barcelona days from catalog-only data.
 
+This is the current failure mode, not the desired long-term behavior. Follow-up issue `#52` should add route-readiness diagnostics, a generic no-crash guard, and a catalog-first route generation path that does not rely on this internal rejection shape.
+
 ## Scenario Findings
 
 The requested smoke scenarios are all blocked by the same route-template gap:
@@ -108,3 +110,9 @@ Suggested first seeds:
 - Poblenou / coast drift
 
 Do not unlock preview-city route generation globally before Barcelona has route templates. The current app-layer noop is doing useful product safety work.
+
+In parallel, issue `#52` is the right longer-term engine follow-up:
+
+- route-readiness diagnostics
+- a generic no-crash guard
+- catalog-first route generation for future citypacks

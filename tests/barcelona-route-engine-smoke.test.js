@@ -42,18 +42,26 @@ test("Barcelona pilot catalog has places but no route templates yet", () => {
 test("direct Barcelona route-engine probe is blocked by missing route templates", async () => {
   global.fetch = createWeatherFetch();
 
-  await assert.rejects(
-    () =>
-      generateRecommendations({
-        city: "barcelona",
-        dates: ["2026-05-14"],
-        walkingKmTarget: 8,
-        preferences: ["mat", "kultur"],
-        legPacing: "balanced",
-        distanceMode: "soft_target",
-        budgetTier: "standard",
-        lang: "en",
-      }),
-    /Cannot read properties of null \(reading 'route'\)/,
-  );
+  // This test documents the current failure mode only.
+  // Long-term, issue #52 should replace this rejection path with
+  // route-readiness diagnostics plus a generic no-crash guard.
+  let error = null;
+
+  try {
+    await generateRecommendations({
+      city: "barcelona",
+      dates: ["2026-05-14"],
+      walkingKmTarget: 8,
+      preferences: ["mat", "kultur"],
+      legPacing: "balanced",
+      distanceMode: "soft_target",
+      budgetTier: "standard",
+      lang: "en",
+    });
+  } catch (caught) {
+    error = caught;
+  }
+
+  assert.ok(error, "expected direct Barcelona generation to reject without route templates");
+  assert.match(error.message, /route|null/i);
 });
