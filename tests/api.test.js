@@ -1735,9 +1735,27 @@ test("POST /api/route-recommendations kan köras för test-city utan Rome-data",
   }
 });
 
-test("POST /api/route-recommendations för barcelona returnerar preview-noop utan Rome-rutter", async () => {
+test("POST /api/route-recommendations för barcelona kan nu bygga preview-rutter utan Rome-läckage", async () => {
   global.fetch = async (url) => {
-    throw new Error(`Unexpected fetch during Barcelona route noop test: ${url}`);
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-05-14"],
+          weathercode: [0],
+          temperature_2m_max: [24],
+          temperature_2m_min: [16],
+        },
+        current: {
+          temperature_2m: 23,
+          weather_code: 0,
+          is_day: 1,
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during Barcelona route test: ${url}`);
   };
 
   const server = buildApp().listen(0);
@@ -1758,10 +1776,13 @@ test("POST /api/route-recommendations för barcelona returnerar preview-noop uta
     assert.equal(response.body.city, "barcelona");
     assert.equal(response.body.requested_city, "barcelona");
     assert.equal(response.body.city_fallback_used, false);
-    assert.deepEqual(response.body.days, []);
-    assert.equal(response.body.resolved_home_base, null);
-    assert.equal(response.body.resolved_start, null);
-    assert.equal(response.body.resolved_end, null);
+    assert.equal(response.body.days.length, 1);
+    assert.ok(response.body.days[0].primary_route);
+    assert.ok(response.body.days[0].primary_route.main_stops.length >= 3);
+    assert.ok(
+      response.body.days[0].primary_route.main_stops.every((stop) => stop.place_id !== null),
+      "expected Barcelona route stops to resolve to catalog place ids",
+    );
     assert.doesNotMatch(
       JSON.stringify(response.body),
       /Trastevere|Monti|Testaccio|Centro Storico|Garbatella|Pigneto|\bRom\b|\bRome\b/,
