@@ -1,6 +1,8 @@
 function createNoopLiveEventsService() {
   return async function fetchLiveEventsForDates(dates = []) {
-    return (dates || []).reduce((accumulator, date) => {
+    const safeDates = Array.isArray(dates) ? dates : [];
+
+    return safeDates.reduce((accumulator, date) => {
       accumulator[date] = [];
       return accumulator;
     }, {});

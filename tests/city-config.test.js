@@ -40,6 +40,25 @@ test("barcelona uppfyller city-kontraktet som registrerad preview-stad", () => {
   assert.equal(cityConfigs.barcelona.catalog.routeTemplates.length, 6);
 });
 
+test("barcelona preview använder city-scopade noop Pulse/Live-tjänster", async () => {
+  const pulse = cityConfigs.barcelona.services.getCityPulse("2026-05-14", { lang: "en" });
+  const liveEvents = await cityConfigs.barcelona.services.fetchLiveEventsForDates([
+    "2026-05-14",
+    "2026-05-15",
+  ]);
+
+  assert.equal(cityConfigs.barcelona.visibility, "preview");
+  assert.equal(pulse.headline, "Barcelona city-core is active");
+  assert.match(pulse.subhead, /Curated Barcelona Pulse is not ready yet/);
+  assert.deepEqual(pulse.items, []);
+  assert.deepEqual(pulse.official_events, []);
+  assert.deepEqual(pulse.wildcards, []);
+  assert.deepEqual(liveEvents, {
+    "2026-05-14": [],
+    "2026-05-15": [],
+  });
+});
+
 test("barcelona har en strukturell neighborhood-modell med första route seeds", () => {
   const areaDefinitions = cityConfigs.barcelona.routing.areaDefinitions;
   const macroAreaLabels = cityConfigs.barcelona.routing.macroAreaLabels;
