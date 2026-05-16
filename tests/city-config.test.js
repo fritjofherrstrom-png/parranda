@@ -33,11 +33,11 @@ test("barcelona uppfyller city-kontraktet som registrerad preview-stad", () => {
   assert.equal(resolution.found, true);
   assert.equal(getCityConfig("barcelona").key, "barcelona");
   assert.equal(cityConfigs.barcelona.visibility, "preview");
-  assert.equal(cityConfigs.barcelona.catalog.allItems.length, 0);
+  assert.equal(cityConfigs.barcelona.catalog.allItems.length, 26);
   assert.equal(cityConfigs.barcelona.catalog.routeTemplates.length, 0);
 });
 
-test("barcelona har en strukturell neighborhood-modell utan kuraterat innehåll", () => {
+test("barcelona har en strukturell neighborhood-modell utan route seeds", () => {
   const areaDefinitions = cityConfigs.barcelona.routing.areaDefinitions;
   const macroAreaLabels = cityConfigs.barcelona.routing.macroAreaLabels;
   const expectedAreas = [
@@ -71,8 +71,47 @@ test("barcelona har en strukturell neighborhood-modell utan kuraterat innehåll"
   assert.equal(areaDefinitions.montjuic.label, "Montjuïc");
   assert.equal(areaDefinitions["barri-gotic"].macro, areaDefinitions.gothic.macro);
   assert.equal(areaDefinitions["el-born"].macro, areaDefinitions["born-sant-pere-santa-caterina"].macro);
-  assert.equal(cityConfigs.barcelona.catalog.allItems.length, 0);
   assert.equal(cityConfigs.barcelona.catalog.routeTemplates.length, 0);
+});
+
+test("barcelona pilotkatalog använder giltiga area tokens och provenance", () => {
+  const areaDefinitions = cityConfigs.barcelona.routing.areaDefinitions;
+  const { allItems, findItemByName } = cityConfigs.barcelona.catalog;
+  const barcelonaCatalog = require("../server/cities/barcelona/catalog");
+  const expectedIds = new Set([
+    "bandinis-barcelona",
+    "mercat-sant-antoni",
+    "casa-vicens",
+    "mercat-santa-caterina",
+    "cccb",
+    "quimet-quimet",
+    "museu-can-framis",
+  ]);
+
+  assert.equal(allItems.length, 26);
+  assert.equal(barcelonaCatalog.routeTemplates.length, 0);
+  assert.equal(findItemByName("bandini").id, "bandinis-barcelona");
+
+  for (const item of allItems) {
+    assert.ok(areaDefinitions[item.area], `missing Barcelona area token for ${item.id}: ${item.area}`);
+    assert.ok(Array.isArray(item.tags) && item.tags.length > 0, `missing tags for ${item.id}`);
+    assert.ok(Array.isArray(item.searchTerms) && item.searchTerms.length > 0, `missing searchTerms for ${item.id}`);
+    assert.ok(Number.isFinite(item.lat), `missing lat for ${item.id}`);
+    assert.ok(Number.isFinite(item.lng), `missing lng for ${item.id}`);
+
+    const provenance = barcelonaCatalog.provenanceById[item.id];
+    assert.ok(provenance, `missing provenance for ${item.id}`);
+    assert.ok(provenance.source_url || provenance.source_note, `missing source for ${item.id}`);
+    assert.match(provenance.confidence, /^(high|medium|needs_review)$/);
+    assert.equal(provenance.area, item.area);
+    assert.equal(provenance.macro, areaDefinitions[item.area].macro);
+    assert.equal(typeof provenance.why_included, "string");
+    assert.equal(typeof provenance.needs_human_verification, "boolean");
+  }
+
+  for (const id of expectedIds) {
+    assert.ok(allItems.some((item) => item.id === id), `missing expected Barcelona pilot place ${id}`);
+  }
 });
 
 test("test-city är markerad som intern arkitekturstub", () => {
