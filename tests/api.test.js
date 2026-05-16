@@ -1843,8 +1843,8 @@ test("POST /api/route-recommendations för barcelona fungerar även med preview-
     assert.equal(response.status, 200);
     assert.equal(response.body.city, "barcelona");
     assert.equal(response.body.days.length, 1);
-    assert.equal(response.body.resolved_start.label, "Barcelona");
-    assert.equal(response.body.resolved_end.label, "Barcelona");
+    assert.notEqual(response.body.resolved_start.label, "Barcelona");
+    assert.notEqual(response.body.resolved_end.label, "Barcelona");
     assert.ok(response.body.days[0].primary_route);
     assert.ok(
       response.body.days[0].primary_route.main_stops.every((stop) => stop.label !== "Bandini's"),

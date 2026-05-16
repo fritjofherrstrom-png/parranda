@@ -173,3 +173,20 @@ Keep separate after that:
 - fallback route cards
 - issue #52 diagnostics / no-crash / catalog-first route generation
 - Pulse/live source audit
+
+## After seed tuning v1
+
+This seed-tuning PR adds structural Barcelona route anchors and tunes the existing six route seeds.
+
+The route anchors are neighborhood/area anchors, not new venues. They let auto planner flows start from Barcelona-specific route geography instead of always falling back to the city center.
+
+Expected improvements:
+
+- `food + culture` and `food + nightlife` no longer return identical stop mixes.
+- coast/east scenarios now reach existing Poblenou/coast stops.
+- Gracia and Sant Antoni hints stay locally meaningful.
+- default preview routes are less old-town-heavy.
+
+Remaining caveat:
+
+- this is still a preview catalog; broader beta quality likely needs a small catalog expansion after seed tuning.
