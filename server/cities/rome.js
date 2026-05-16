@@ -1,4 +1,5 @@
 const catalog = require("./rome/catalog");
+const sources = require("./rome/sources");
 const { getCityPulse, getDateSignals, getRomeTodayIsoDate } = require("./rome/editorial");
 const { fetchLiveEventsForDates } = require("./rome/live");
 const { geocodeQuery } = require("./rome/geocoding");
@@ -142,4 +143,5 @@ module.exports = {
     },
   },
   localTruth,
+  sources,
 };

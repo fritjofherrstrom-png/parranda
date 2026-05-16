@@ -6,6 +6,7 @@ const barcelona = require("../server/cities/barcelona");
 const testCity = require("../server/cities/test-city");
 const { cityConfigs, getCityConfig, normalizeCityKey, resolveCityConfig } = require("../server/cities");
 const { validateCityConfig } = require("../server/cities/contract");
+const { validateCitySourceConfig } = require("../server/cities/source-contract");
 
 test("rome uppfyller city-kontraktet", () => {
   assert.doesNotThrow(() => validateCityConfig(rome));
@@ -57,6 +58,52 @@ test("barcelona preview använder city-scopade noop Pulse/Live-tjänster", async
     "2026-05-14": [],
     "2026-05-15": [],
   });
+});
+
+test("pulse/live source descriptors validerar city-scopade källor", () => {
+  const barcelonaSources = cityConfigs.barcelona.sources;
+  const romeSources = cityConfigs.rome.sources;
+
+  assert.doesNotThrow(() => validateCitySourceConfig(barcelonaSources));
+  assert.doesNotThrow(() => validateCitySourceConfig(romeSources));
+  assert.ok(barcelonaSources.liveSources.length >= 1);
+  assert.ok(barcelonaSources.pulseSources.length >= 1);
+  assert.ok(
+    [...barcelonaSources.liveSources, ...barcelonaSources.pulseSources].every(
+      (source) => source.status !== "active",
+    ),
+    "Barcelona source descriptors should remain candidate/review-only until an adapter is wired",
+  );
+  assert.ok(
+    romeSources.liveSources.some(
+      (source) => source.id === "turismo-roma-live" && source.status === "active",
+    ),
+  );
+});
+
+test("pulse/live source descriptors stoppar otydliga källkontrakt", () => {
+  assert.throws(
+    () =>
+      validateCitySourceConfig({
+        liveSources: [
+          {
+            id: "broken-source",
+            sourceType: "official_open_data",
+            sourceUrl: "not-a-url",
+            status: "maybe",
+            supportedLanguages: [],
+            updateCadence: "daily",
+            sourceOwnedFields: ["title"],
+            parrandaOwnedFields: ["match_reason"],
+            qualityFlags: [],
+            parsingRisk: "medium",
+            intendedUse: "live",
+          },
+        ],
+        pulseSources: [],
+      }),
+    /sourceUrl|status|supportedLanguages/,
+  );
 });
 
 test("barcelona har en strukturell neighborhood-modell med första route seeds", () => {
