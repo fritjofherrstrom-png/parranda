@@ -2860,6 +2860,76 @@ test("POST /api/blitz?lang=en returns English Blitz copy for barcelona", async (
   }
 });
 
+test("POST /api/blitz?lang=en suppresses Swedish local-truth prose for Rome", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during Blitz local-truth leak test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    // Rome second_hand on Sunday is a strong trigger for the SV-only
+    // local-truth market-rhythm prose in server/cities/rome/local-truth.js.
+    // The Blitz EN response must not surface that text until route-engine
+    // i18n lands in a follow-up PR.
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/blitz?lang=en",
+      body: {
+        city: "rome",
+        now: "2026-05-17T13:00:00+02:00",
+        intent_keys: ["second_hand"],
+      },
+    });
+
+    assert.equal(response.status, 200);
+    const body = JSON.stringify(response.body);
+
+    // Specific SV phrases known to come from Rome local-truth notes and
+    // Rome Pulse editorial. None may surface in the EN response.
+    const swedishLocalTruthMarkers = [
+      "Marknadsspåret ligger på en stark veckodag",
+      "vintage- och second hand-butiker även när marknadsspåret",
+      "bärs främst av butiker och vintage-stopp",
+      "Klassiska ankare i Rom känns ofta lättare tidigt eller sent",
+      "Ferragosto kan ge helgrytm",
+      "live-lagret bli extra värdefullt",
+      "fungerar bäst när du använder det",
+      "ofta bättre som smart start",
+      "är ofta bättre som",
+    ];
+    swedishLocalTruthMarkers.forEach((sw) => {
+      assert.equal(
+        body.includes(sw),
+        false,
+        `Blitz EN must not surface Swedish local-truth/Pulse: "${sw}"`,
+      );
+    });
+
+    // Best-move caution_notes is the surface path that maps note.text
+    // directly. Until local-truth supports i18n, this must be empty for
+    // non-SV languages (scoring effects elsewhere remain unaffected).
+    assert.deepEqual(
+      response.body.best_move?.caution_notes || [],
+      [],
+      "Blitz EN must omit local-truth caution prose entirely",
+    );
+    if (response.body.backup_option) {
+      assert.deepEqual(
+        response.body.backup_option.caution_notes || [],
+        [],
+        "Blitz EN backup must also omit local-truth caution prose",
+      );
+    }
+
+    // Broad sanity: no åäö in the full response. Catches both
+    // local-truth and Pulse leaks even if they bypass the markers above.
+    assert.doesNotMatch(body, /[åäöÅÄÖ]/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("POST /api/blitz?lang=sv preserves Swedish Blitz copy", async () => {
   global.fetch = async (url) => {
     throw new Error(`Unexpected fetch during Blitz SV test: ${url}`);

@@ -678,6 +678,35 @@ function scoreMemoryPenalty(item, memory, moveKind, areaTokens = []) {
   return Number(penalty.toFixed(2));
 }
 
+/**
+ * Local-truth notes (route_context_notes, caution_notes, score_adjustments)
+ * are currently authored in Swedish only (see server/cities/rome/local-truth.js).
+ * For non-SV Blitz responses we expose the same shape but strip the prose
+ * fields, so the engine can still report *that* a rule fired while never
+ * surfacing Swedish text to English users. Numeric scoring data (score_delta,
+ * delta values) is preserved unchanged. Full route-engine/local-truth i18n
+ * lands in a follow-up PR.
+ */
+function localTruthForLang(truthEffect, lang) {
+  if (lang === "sv" || !truthEffect || typeof truthEffect !== "object") {
+    return truthEffect;
+  }
+
+  const blankProse = (notes = []) =>
+    notes.map((note) => ({ ...note, text: "" }));
+  const blankReason = (adjustments = []) =>
+    adjustments.map((adj) => ({ ...adj, reason: "" }));
+
+  return {
+    ...truthEffect,
+    score_adjustments: blankReason(truthEffect.score_adjustments),
+    caution_notes: blankProse(truthEffect.caution_notes),
+    verify_opening_hours: blankProse(truthEffect.verify_opening_hours),
+    route_context_notes: blankProse(truthEffect.route_context_notes),
+    live_context_notes: blankProse(truthEffect.live_context_notes),
+  };
+}
+
 function buildPseudoRouteForStops(stops, origin) {
   return {
     id: `blitz-${stops.map((stop) => stop.id).join("-")}`,
@@ -839,14 +868,26 @@ function buildWhatToDoAfter(stops = [], lang = "sv") {
   return translate(lang, "blitz.afterDefault", { name: lastStop.name });
 }
 
-function buildWhyNow({ timeReason, pulseResult, truthEffect, availabilityContext, strongReason }) {
+function buildWhyNow({
+  timeReason,
+  pulseResult,
+  truthEffect,
+  availabilityContext,
+  strongReason,
+  lang = "sv",
+}) {
   const reasons = [];
 
   if (strongReason) {
     reasons.push(strongReason);
   }
 
-  if (truthEffect.route_context_notes[0]?.text) {
+  // Local-truth prose is currently authored only in Swedish (see
+  // server/cities/rome/local-truth.js). Until route-engine/local-truth
+  // i18n lands in a follow-up PR, suppress the note text for non-SV
+  // languages to avoid surfacing Swedish in /api/blitz?lang=en.
+  // Scoring effects (truthEffect.score_delta) remain unchanged.
+  if (lang === "sv" && truthEffect.route_context_notes[0]?.text) {
     reasons.push(truthEffect.route_context_notes[0].text);
   }
 
@@ -937,6 +978,11 @@ function buildCandidateSummary(
   const timeReason = buildTimeReason(item, timeBand, lang);
   const strongReason = buildStrongReason(item, walkMinutes, preferences, lang);
 
+  // See note in buildWhyNow: local-truth prose is SV-only until follow-up
+  // i18n PR. Omit it from contextual_reasons for non-SV languages.
+  const truthRouteContextNote =
+    lang === "sv" ? truthEffect.route_context_notes[0]?.text || null : null;
+
   return {
     why_now: buildWhyNow({
       timeReason,
@@ -944,11 +990,12 @@ function buildCandidateSummary(
       truthEffect,
       availabilityContext,
       strongReason,
+      lang,
     }) || coverageNote || strongReason,
     contextual_reasons: uniqueNonEmpty([
       coverageNote,
       strongReason,
-      truthEffect.route_context_notes[0]?.text,
+      truthRouteContextNote,
       pulseResult?.item?.title
         ? translate(lang, "blitz.pulseRightNow", { title: pulseResult.item.title })
         : null,
@@ -1047,8 +1094,9 @@ function buildSingleStopCandidate({
     effort: resolveEffortLabel(walkMinutes, lang),
     why_now: summary.why_now,
     contextual_reasons: summary.contextual_reasons,
-    caution_notes: truthEffect.caution_notes.map((note) => note.text),
-    local_truth: truthEffect,
+    caution_notes:
+      lang === "sv" ? truthEffect.caution_notes.map((note) => note.text) : [],
+    local_truth: localTruthForLang(truthEffect, lang),
     pulse_context: pulseResult.item
       ? {
           id: pulseResult.item.id,
@@ -1120,7 +1168,7 @@ function buildMiniRouteCandidate({
   const memoryPenalty = routeStops.reduce((penalty, stop) => {
     return penalty + scoreMemoryPenalty(stop, memory, "mini_route_60", routeAreaTokens);
   }, 0);
-  const pulseResult = scorePulseForItem(routeStops[0], cityConfig.services.getCityPulse(date)?.items || [], cityConfig);
+  const pulseResult = scorePulseForItem(routeStops[0], cityConfig.services.getCityPulse(date, { lang })?.items || [], cityConfig);
   const summary = buildCandidateSummary(
     routeStops[0],
     truthEffect,
@@ -1148,8 +1196,9 @@ function buildMiniRouteCandidate({
     effort: resolveEffortLabel(walkMinutes, lang),
     why_now: summary.why_now,
     contextual_reasons: summary.contextual_reasons,
-    caution_notes: truthEffect.caution_notes.map((note) => note.text),
-    local_truth: truthEffect,
+    caution_notes:
+      lang === "sv" ? truthEffect.caution_notes.map((note) => note.text) : [],
+    local_truth: localTruthForLang(truthEffect, lang),
     pulse_context: pulseResult.item
       ? {
           id: pulseResult.item.id,
@@ -1329,7 +1378,7 @@ async function buildBlitzDecision(cityConfig, payload = {}) {
   const memory = normalizeBlitzMemory(payload.memory, payload.previous_route);
   const weekday = getIsoWeekday(nowContext.date);
   const timeBand = resolveTimeBand(nowContext.hour);
-  const pulse = cityConfig.services.getCityPulse(nowContext.date);
+  const pulse = cityConfig.services.getCityPulse(nowContext.date, { lang });
   const hasSecondHandCoverage = cityConfig.catalog.allItems.some((item) =>
     ["second_hand", "vintage", "antique"].some((tag) => (item.tags || []).includes(tag)),
   );
