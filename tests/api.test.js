@@ -1004,7 +1004,7 @@ test("GET /api/city-pulse för barcelona visar noop-preview utan Rome Pulse", as
   }
 });
 
-test("GET /api/city-pulse för barcelona kan visa Open Data BCN official events utan editorial Pulse", async () => {
+test("GET /api/city-pulse för barcelona presenterar official events utan editorial Pulse", async () => {
   global.fetch = async (url) => {
     const parsed = new URL(String(url));
 
@@ -1016,7 +1016,7 @@ test("GET /api/city-pulse för barcelona kan visa Open Data BCN official events 
           status: "published",
           core_type: "event",
           core_type_name: "Agenda",
-          body: "<p>Concert gratuït amb food trucks i activitats de barri.</p>",
+          body: "<p>Concert gratuït amb food trucks i activitats de barri. Segona mening med extra providertext som ska hållas läsbar i kortet.</p>",
           start_date: "2026-05-14T18:00:00+02:00",
           end_date: "2026-05-14T20:00:00+02:00",
           type_name: "Puntual",
@@ -1071,29 +1071,47 @@ test("GET /api/city-pulse för barcelona kan visa Open Data BCN official events 
   const server = buildApp().listen(0);
 
   try {
-    const response = await requestJson(server, {
+    const en = await requestJson(server, {
       path: "/api/city-pulse?city=barcelona&date=2026-05-14&lang=en",
     });
+    resetBarcelonaLiveEventsCache();
+    const sv = await requestJson(server, {
+      path: "/api/city-pulse?city=barcelona&date=2026-05-14&lang=sv",
+    });
 
-    assert.equal(response.status, 200);
-    assert.equal(response.body.city, "barcelona");
-    assert.equal(response.body.city_fallback_used, false);
-    assert.equal(response.body.headline, "Barcelona city-core is active");
-    assert.equal(response.body.official_events.length, 1);
-    assert.equal(response.body.official_events[0].source_label, "Open Data BCN");
-    assert.equal(response.body.official_events[0].source_id, "barcelona-open-data-agenda");
-    assert.equal(response.body.official_events[0].title, "Concert de barri a Barcelona");
-    assert.equal(response.body.official_events[0].lat, 41.402);
-    assert.equal(response.body.official_events[0].lng, 2.203);
-    assert.ok(response.body.official_events[0].match_tags.includes("music"));
-    assert.ok(response.body.official_events[0].match_tags.includes("kultur"));
-    assert.deepEqual(response.body.moments, []);
-    assert.deepEqual(response.body.wildcards, []);
-    assert.equal(response.body.items.length, 1);
-    assert.equal(response.body.items[0].kind, "Official live");
-    assert.equal(response.body.items[0].title, "Concert de barri a Barcelona");
-    assert.equal(response.body.items[0].why_it_matters, "Useful as a live bonus when you want to weave in something that is actually happening right now.");
-    assert.doesNotMatch(JSON.stringify(response.body), /Turismo Roma|Natale di Roma|Trastevere|Monti|Testaccio/);
+    assert.equal(en.status, 200);
+    assert.equal(sv.status, 200);
+    assert.equal(en.body.city, "barcelona");
+    assert.equal(en.body.city_fallback_used, false);
+    assert.equal(en.body.headline, "Barcelona city-core is active");
+    assert.equal(en.body.official_events.length, 1);
+    assert.equal(en.body.official_events[0].source_label, "Open Data BCN");
+    assert.equal(en.body.official_events[0].source_id, "barcelona-open-data-agenda");
+    assert.equal(en.body.official_events[0].title, "Concert de barri a Barcelona");
+    assert.equal(en.body.official_events[0].provider_category, "Concerts");
+    assert.equal(en.body.official_events[0].lat, 41.402);
+    assert.equal(en.body.official_events[0].lng, 2.203);
+    assert.ok(en.body.official_events[0].match_tags.includes("music"));
+    assert.ok(en.body.official_events[0].match_tags.includes("kultur"));
+    assert.deepEqual(en.body.moments, []);
+    assert.deepEqual(en.body.wildcards, []);
+    assert.equal(en.body.items.length, 1);
+    assert.equal(en.body.items[0].kind, "Official live · Open Data BCN");
+    assert.equal(en.body.items[0].title, "Concert de barri a Barcelona");
+    assert.equal(en.body.items[0].where, "Centre Cívic Example • C Example, 12");
+    assert.equal(en.body.items[0].when, "Today");
+    assert.match(en.body.items[0].blurb, /Concert gratuït/);
+    assert.match(en.body.items[0].why_it_matters, /Official source signal from Open Data BCN/);
+
+    assert.equal(sv.body.items.length, 1);
+    assert.equal(sv.body.items[0].kind, "Officiellt live · Open Data BCN");
+    assert.equal(sv.body.items[0].when, "I dag");
+    assert.match(sv.body.items[0].why_it_matters, /Officiell källsignal från Open Data BCN/);
+    assert.equal(sv.body.official_events[0].title, "Concert de barri a Barcelona");
+    assert.equal(sv.body.official_events[0].provider_category, "Concerts");
+
+    assert.doesNotMatch(JSON.stringify(en.body), /Turismo Roma|Natale di Roma|Trastevere|Monti|Testaccio/);
+    assert.doesNotMatch(JSON.stringify(sv.body), /Turismo Roma|Natale di Roma|Trastevere|Monti|Testaccio/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
