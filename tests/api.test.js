@@ -172,6 +172,138 @@ test("server/app.js uses keyed shell i18n instead of post-render replacement", (
   assert.match(source, /__PARRANDA_I18N_BOOTSTRAP__/);
 });
 
+test("shell has full i18n coverage for English mode without Swedish leakage", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during shell i18n coverage test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const enResponse = await requestText(server, {
+      path: "/barcelona?lang=en",
+    });
+
+    assert.equal(enResponse.status, 200);
+    assert.match(enResponse.body, /<body data-city-key="barcelona"[^>]+data-lang="en">/);
+
+    // The client-side i18n bootstrap legitimately contains every language for
+    // runtime language switching. Strip it so leakage checks only inspect what
+    // the user actually sees rendered.
+    const visibleHtml = enResponse.body.replace(
+      /window\.__PARRANDA_I18N__\s*=\s*\{[\s\S]*?\};/,
+      "window.__PARRANDA_I18N__ = {};",
+    );
+
+    // No previously-hardcoded Swedish strings may leak into the English shell.
+    const swedishSentinels = [
+      "Välj kvarter före checklista",
+      "Bästa timmarna",
+      "Bygg en personlig liten lista",
+      "Visa sparade",
+      "Visa alla igen",
+      "Se ställena på kartan",
+      "Karta över platser i staden",
+      "0 sparade",
+      "Välj en plats i listan eller på kartan",
+      "Spara vald plats",
+      "Öppna i Google Maps",
+      "Klassiker rätt gjort",
+      "Sök plats eller känsla",
+      "STADSDELSMODE",
+      "STOPP DU INTE SKA MISSA",
+      "PERFEKTA DAGEN",
+      "GÖR NÅGOT AV DET",
+      "Sätt som start",
+      "Sätt som mål",
+      "Planera dag härifrån",
+      "Visa kvarteret på karta",
+      "Hotell eller område",
+      "Startkvarter",
+      "Slutkvarter",
+      "Visa på karta",
+    ];
+    swedishSentinels.forEach((swedish) => {
+      assert.equal(
+        visibleHtml.includes(swedish),
+        false,
+        `English shell must not contain Swedish string: "${swedish}"`,
+      );
+    });
+
+    // No unresolved __PARRANDA_I18N_*__ tokens may remain.
+    assert.doesNotMatch(visibleHtml, /__PARRANDA_I18N_[A-Z0-9_]+__/);
+
+    // English equivalents should be present.
+    const englishExpected = [
+      "Choose a neighborhood before a checklist",
+      "Build a personal little list",
+      "Show saved",
+      "See the places on the map",
+      "Map of places in the city",
+      "0 saved",
+      "Choose a place from the list",
+      "Save selected place",
+      "Open in Google Maps",
+      "Classics done right",
+      "NEIGHBORHOOD MODE",
+      "STOPS NOT TO MISS",
+      "THE PERFECT DAY",
+      "Set as start",
+      "Set as end",
+    ];
+    englishExpected.forEach((english) => {
+      assert.equal(
+        visibleHtml.includes(english),
+        true,
+        `English shell must contain: "${english}"`,
+      );
+    });
+
+    // Swedish shell still works.
+    const svResponse = await requestText(server, {
+      path: "/barcelona?lang=sv",
+    });
+    assert.equal(svResponse.status, 200);
+    const visibleSvHtml = svResponse.body.replace(
+      /window\.__PARRANDA_I18N__\s*=\s*\{[\s\S]*?\};/,
+      "window.__PARRANDA_I18N__ = {};",
+    );
+    assert.ok(visibleSvHtml.includes("Välj kvarteret som ska bära dagen"));
+    assert.ok(visibleSvHtml.includes("Klassiker rätt gjort"));
+    assert.doesNotMatch(visibleSvHtml, /__PARRANDA_I18N_[A-Z0-9_]+__/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("shared shell template carries no Rome-specific DOM identifiers", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  // Issue #58: classes/template ids previously hard-coded Rome content into the
+  // shared shell. They are now city-neutral.
+  assert.doesNotMatch(html, /class="[^"]*trastevere-bars-grid/);
+  assert.doesNotMatch(html, /class="[^"]*trastevere-day/);
+  assert.doesNotMatch(html, /id="trastevereBarTemplate"/);
+  assert.doesNotMatch(html, /id="romeRouteTemplate"/);
+});
+
+test("place card JS render uses i18n for map link instead of hardcoded Swedish", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
+  // PR #65 audit (Q5): the template tokenization of `.map-link` in
+  // placeCardTemplate is undone if JS rebinds `.textContent` to a hardcoded
+  // Swedish string when cloning. The place-card path must go through the i18n
+  // helper so EN users see "Show on map".
+  assert.match(
+    source,
+    /mapLink\.textContent\s*=\s*t\("template\.placeCard\.mapLink"/,
+  );
+  // The exact regression sentinel that was present before the fix.
+  assert.doesNotMatch(
+    source,
+    /mapLink\.textContent\s*=\s*"Visa på karta";/,
+  );
+});
+
 test("planner modal title uses city-time framing instead of trip framing", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
 
