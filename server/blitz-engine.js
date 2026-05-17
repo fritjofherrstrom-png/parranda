@@ -1,5 +1,5 @@
 const { getIsoWeekday } = require("./lib/iso-date");
-const { evaluateLocalTruth } = require("./local-truth");
+const { evaluateLocalTruth, localTruthForLang } = require("./local-truth");
 const { normalizeAvailability } = require("./availability");
 const { translate, normalizeLanguage } = require("./ui-i18n");
 
@@ -676,48 +676,6 @@ function scoreMemoryPenalty(item, memory, moveKind, areaTokens = []) {
   }
 
   return Number(penalty.toFixed(2));
-}
-
-/**
- * Local-truth notes (route_context_notes, caution_notes, verify_opening_hours,
- * live_context_notes, score_adjustments) are currently authored in Swedish only
- * (see server/cities/rome/local-truth.js). For non-SV Blitz responses we expose
- * the same shape but strip the prose fields, so the engine can still report
- * *that* a rule fired while never surfacing Swedish text to English users.
- * Numeric scoring data (score_delta, delta values) is preserved unchanged.
- * Full route-engine/local-truth i18n lands in a follow-up PR.
- *
- * The note schemas differ: caution_notes/route_context_notes/live_context_notes
- * carry prose in `.text`, while verify_opening_hours and score_adjustments
- * carry it in `.reason`. The helper below defensively blanks both fields on
- * every entry, so future schema additions in either shape are covered.
- */
-function blankProseFields(entries = []) {
-  return (entries || []).map((entry) => {
-    const next = { ...entry };
-    if (typeof next.text === "string") {
-      next.text = "";
-    }
-    if (typeof next.reason === "string") {
-      next.reason = "";
-    }
-    return next;
-  });
-}
-
-function localTruthForLang(truthEffect, lang) {
-  if (lang === "sv" || !truthEffect || typeof truthEffect !== "object") {
-    return truthEffect;
-  }
-
-  return {
-    ...truthEffect,
-    score_adjustments: blankProseFields(truthEffect.score_adjustments),
-    caution_notes: blankProseFields(truthEffect.caution_notes),
-    verify_opening_hours: blankProseFields(truthEffect.verify_opening_hours),
-    route_context_notes: blankProseFields(truthEffect.route_context_notes),
-    live_context_notes: blankProseFields(truthEffect.live_context_notes),
-  };
 }
 
 function buildPseudoRouteForStops(stops, origin) {

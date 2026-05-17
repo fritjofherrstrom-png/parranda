@@ -303,8 +303,54 @@ function evaluateLocalTruth(cityConfig, input = {}) {
   return finalizeLocalTruthEffect(combinedEffect, context);
 }
 
+/**
+ * Local-truth notes (route_context_notes, caution_notes, verify_opening_hours,
+ * live_context_notes, score_adjustments) are currently authored in Swedish only
+ * (see server/cities/rome/local-truth.js). When surfaced through APIs to a
+ * non-SV UI, the prose fields must be blanked so we never leak Swedish into
+ * an English response. Numeric scoring fields (score_delta, delta) are kept
+ * untouched — engine behavior must not change between languages.
+ *
+ * The note schemas differ across arrays: caution_notes / route_context_notes /
+ * live_context_notes carry prose in `.text`, while verify_opening_hours and
+ * score_adjustments carry it in `.reason`. The helper defensively blanks both
+ * fields on every entry so future schema additions in either shape are covered.
+ *
+ * Full local-truth i18n (translating the authoring in city local-truth files)
+ * is the eventual fix. This helper is the bridge until then.
+ */
+function blankLocalTruthProseFields(entries = []) {
+  return (entries || []).map((entry) => {
+    const next = { ...entry };
+    if (typeof next.text === "string") {
+      next.text = "";
+    }
+    if (typeof next.reason === "string") {
+      next.reason = "";
+    }
+    return next;
+  });
+}
+
+function localTruthForLang(truthEffect, lang) {
+  if (lang === "sv" || !truthEffect || typeof truthEffect !== "object") {
+    return truthEffect;
+  }
+
+  return {
+    ...truthEffect,
+    score_adjustments: blankLocalTruthProseFields(truthEffect.score_adjustments),
+    caution_notes: blankLocalTruthProseFields(truthEffect.caution_notes),
+    verify_opening_hours: blankLocalTruthProseFields(truthEffect.verify_opening_hours),
+    route_context_notes: blankLocalTruthProseFields(truthEffect.route_context_notes),
+    live_context_notes: blankLocalTruthProseFields(truthEffect.live_context_notes),
+  };
+}
+
 module.exports = {
   createEmptyLocalTruthEffect,
   evaluateLocalTruth,
   resolveActiveCalendarEntries,
+  localTruthForLang,
+  blankLocalTruthProseFields,
 };
