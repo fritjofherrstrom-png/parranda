@@ -1,6 +1,7 @@
 const barcelonaCatalog = require("./catalog");
+const { fetchLiveEventsForDates } = require("./live");
 const barcelonaSources = require("./sources");
-const { createNoopEditorialService, createNoopLiveEventsService } = require("../noop-services");
+const { createNoopEditorialService } = require("../noop-services");
 const { buildGeocodeQuery } = require("../../geocoding");
 const { fetchWeatherForDates } = require("../../weather");
 
@@ -94,7 +95,7 @@ module.exports = {
     },
     getCityPulse: barcelonaEditorial.getCityPulse,
     getDateSignals: barcelonaEditorial.getDateSignals,
-    fetchLiveEventsForDates: createNoopLiveEventsService(),
+    fetchLiveEventsForDates,
   },
   walking: {
     defaultProvider: "heuristic",

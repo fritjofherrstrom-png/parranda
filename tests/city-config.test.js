@@ -41,12 +41,14 @@ test("barcelona uppfyller city-kontraktet som registrerad preview-stad", () => {
   assert.equal(cityConfigs.barcelona.catalog.routeTemplates.length, 6);
 });
 
-test("barcelona preview använder city-scopade noop Pulse/Live-tjänster", async () => {
+test("barcelona preview håller Pulse noop när Live-källan är tom", async () => {
   const pulse = cityConfigs.barcelona.services.getCityPulse("2026-05-14", { lang: "en" });
   const liveEvents = await cityConfigs.barcelona.services.fetchLiveEventsForDates([
     "2026-05-14",
     "2026-05-15",
-  ]);
+  ], {
+    fetchOpenDataAgendaEvents: async () => [],
+  });
 
   assert.equal(cityConfigs.barcelona.visibility, "preview");
   assert.equal(pulse.headline, "Barcelona city-core is active");
@@ -69,10 +71,14 @@ test("pulse/live source descriptors validerar city-scopade källor", () => {
   assert.ok(barcelonaSources.liveSources.length >= 1);
   assert.ok(barcelonaSources.pulseSources.length >= 1);
   assert.ok(
-    [...barcelonaSources.liveSources, ...barcelonaSources.pulseSources].every(
-      (source) => source.status !== "active",
+    barcelonaSources.liveSources.some(
+      (source) => source.id === "barcelona-open-data-agenda" && source.status === "active",
     ),
-    "Barcelona source descriptors should remain candidate/review-only until an adapter is wired",
+    "Barcelona should expose the active Open Data BCN agenda live source descriptor",
+  );
+  assert.ok(
+    barcelonaSources.pulseSources.every((source) => source.status !== "active"),
+    "Barcelona Pulse source descriptors should remain candidate/review-only until editorial wiring exists",
   );
   assert.ok(
     romeSources.liveSources.some(
