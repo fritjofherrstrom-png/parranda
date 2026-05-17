@@ -2922,6 +2922,35 @@ test("POST /api/blitz?lang=en suppresses Swedish local-truth prose for Rome", as
       );
     }
 
+    // local_truth note schemas differ: caution_notes/route_context_notes/
+    // live_context_notes carry prose in .text; verify_opening_hours and
+    // score_adjustments carry prose in .reason. Both must be blanked when
+    // surfaced under non-SV.
+    const checkBlankedProse = (moveLabel, move) => {
+      if (!move || !move.local_truth) return;
+      const lt = move.local_truth;
+      const proseArrays = [
+        ["score_adjustments", "reason"],
+        ["caution_notes", "text"],
+        ["verify_opening_hours", "reason"],
+        ["route_context_notes", "text"],
+        ["live_context_notes", "text"],
+      ];
+      for (const [arrayKey, field] of proseArrays) {
+        (lt[arrayKey] || []).forEach((entry, index) => {
+          if (typeof entry[field] === "string") {
+            assert.equal(
+              entry[field],
+              "",
+              `${moveLabel}.local_truth.${arrayKey}[${index}].${field} must be blanked under lang=en`,
+            );
+          }
+        });
+      }
+    };
+    checkBlankedProse("best_move", response.body.best_move);
+    checkBlankedProse("backup_option", response.body.backup_option);
+
     // Broad sanity: no åäö in the full response. Catches both
     // local-truth and Pulse leaks even if they bypass the markers above.
     assert.doesNotMatch(body, /[åäöÅÄÖ]/);

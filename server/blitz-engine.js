@@ -679,31 +679,44 @@ function scoreMemoryPenalty(item, memory, moveKind, areaTokens = []) {
 }
 
 /**
- * Local-truth notes (route_context_notes, caution_notes, score_adjustments)
- * are currently authored in Swedish only (see server/cities/rome/local-truth.js).
- * For non-SV Blitz responses we expose the same shape but strip the prose
- * fields, so the engine can still report *that* a rule fired while never
- * surfacing Swedish text to English users. Numeric scoring data (score_delta,
- * delta values) is preserved unchanged. Full route-engine/local-truth i18n
- * lands in a follow-up PR.
+ * Local-truth notes (route_context_notes, caution_notes, verify_opening_hours,
+ * live_context_notes, score_adjustments) are currently authored in Swedish only
+ * (see server/cities/rome/local-truth.js). For non-SV Blitz responses we expose
+ * the same shape but strip the prose fields, so the engine can still report
+ * *that* a rule fired while never surfacing Swedish text to English users.
+ * Numeric scoring data (score_delta, delta values) is preserved unchanged.
+ * Full route-engine/local-truth i18n lands in a follow-up PR.
+ *
+ * The note schemas differ: caution_notes/route_context_notes/live_context_notes
+ * carry prose in `.text`, while verify_opening_hours and score_adjustments
+ * carry it in `.reason`. The helper below defensively blanks both fields on
+ * every entry, so future schema additions in either shape are covered.
  */
+function blankProseFields(entries = []) {
+  return (entries || []).map((entry) => {
+    const next = { ...entry };
+    if (typeof next.text === "string") {
+      next.text = "";
+    }
+    if (typeof next.reason === "string") {
+      next.reason = "";
+    }
+    return next;
+  });
+}
+
 function localTruthForLang(truthEffect, lang) {
   if (lang === "sv" || !truthEffect || typeof truthEffect !== "object") {
     return truthEffect;
   }
 
-  const blankProse = (notes = []) =>
-    notes.map((note) => ({ ...note, text: "" }));
-  const blankReason = (adjustments = []) =>
-    adjustments.map((adj) => ({ ...adj, reason: "" }));
-
   return {
     ...truthEffect,
-    score_adjustments: blankReason(truthEffect.score_adjustments),
-    caution_notes: blankProse(truthEffect.caution_notes),
-    verify_opening_hours: blankProse(truthEffect.verify_opening_hours),
-    route_context_notes: blankProse(truthEffect.route_context_notes),
-    live_context_notes: blankProse(truthEffect.live_context_notes),
+    score_adjustments: blankProseFields(truthEffect.score_adjustments),
+    caution_notes: blankProseFields(truthEffect.caution_notes),
+    verify_opening_hours: blankProseFields(truthEffect.verify_opening_hours),
+    route_context_notes: blankProseFields(truthEffect.route_context_notes),
+    live_context_notes: blankProseFields(truthEffect.live_context_notes),
   };
 }
 
