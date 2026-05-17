@@ -24,7 +24,7 @@ const liveSources = [
     id: "barcelona-open-data-agenda",
     sourceType: "official_open_data",
     sourceUrl: "https://opendata-ajuntament.barcelona.cat/data/en/dataset/agenda-diaria",
-    status: "review-needed",
+    status: "active",
     supportedLanguages: ["ca", "es", "en"],
     updateCadence: "daily",
     sourceOwnedFields,

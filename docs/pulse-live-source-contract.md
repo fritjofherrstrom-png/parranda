@@ -87,7 +87,7 @@ Expected behavior:
 
 Rome currently owns the active `turismo-roma-live` source. The root `server/live-events.js` implementation remains Rome/Turismo Roma-specific until a later adapter extraction.
 
-Barcelona has candidate/review-only descriptors. It must not call the Turismo Roma provider or emit fake Pulse/Live content.
+Barcelona owns its active Open Data BCN agenda source and keeps other Pulse/civic/venue descriptors candidate/review-only until those sources are wired. It must not call the Turismo Roma provider or emit fake Pulse/Live content.
 
 Future citypacks should provide their own source descriptors and adapters using this shared contract.
 
