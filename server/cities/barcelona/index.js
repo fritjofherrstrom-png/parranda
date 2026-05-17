@@ -1,4 +1,5 @@
 const barcelonaCatalog = require("./catalog");
+const barcelonaSources = require("./sources");
 const { createNoopEditorialService, createNoopLiveEventsService } = require("../noop-services");
 const { buildGeocodeQuery } = require("../../geocoding");
 const { fetchWeatherForDates } = require("../../weather");
@@ -109,4 +110,5 @@ module.exports = {
     calendar: [],
     rules: [],
   },
+  sources: barcelonaSources,
 };

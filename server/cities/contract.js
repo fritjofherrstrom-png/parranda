@@ -1,3 +1,5 @@
+const { validateCitySourceConfig } = require("./source-contract");
+
 /**
  * @typedef {{ lat: number, lng: number }} CityPoint
  *
@@ -64,7 +66,8 @@
  *   searchLabel?: string,
  *   editorialAreaLabel?: string,
  *   fallbackLabel?: string,
- *   visibility?: string
+ *   visibility?: string,
+ *   sources?: Record<string, unknown>
  * }} CityConfig
  */
 
@@ -260,6 +263,10 @@ function validateCityConfig(cityConfig) {
 
   if (cityConfig.localTruth !== undefined) {
     validateLocalTruthConfig(cityConfig.key, cityConfig.localTruth);
+  }
+
+  if (cityConfig.sources !== undefined) {
+    validateCitySourceConfig(cityConfig.sources, `city(${cityConfig.key}).sources`);
   }
 
   return cityConfig;
