@@ -981,8 +981,8 @@ body::before {
 .local-manifesto,
 .spotlight-grid,
 .cards-grid,
-.trastevere-bars-grid,
-.rome-routes-grid {
+.district-stops-grid,
+.route-cards-grid {
   margin-top: 22px;
   display: grid;
   grid-template-columns: repeat(12, 1fr);

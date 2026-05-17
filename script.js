@@ -1958,9 +1958,9 @@ const routeMatchSummary = document.getElementById("routeMatchSummary");
 const plannerAdvancedSummary = document.getElementById("plannerAdvancedSummary");
 const placeTemplate = document.getElementById("placeCardTemplate");
 const spotlightTemplate = document.getElementById("spotlightCardTemplate");
-const trastevereBarTemplate = document.getElementById("trastevereBarTemplate");
+const districtStopTemplate = document.getElementById("districtStopTemplate");
 const timelineStopTemplate = document.getElementById("timelineStopTemplate");
-const romeRouteTemplate = document.getElementById("romeRouteTemplate");
+const routeCardTemplate = document.getElementById("routeCardTemplate");
 const plannerDayTemplate = document.getElementById("plannerDayTemplate");
 const activeDayRouteTemplate = document.getElementById("activeDayRouteTemplate");
 const routeGuideBackdrop = document.getElementById("routeGuideBackdrop");
@@ -9386,7 +9386,7 @@ function renderDistrictGuide() {
 
   districtStopsGrid.innerHTML = "";
   guide.stopCards.forEach((stop, index) => {
-    const card = trastevereBarTemplate.content.firstElementChild.cloneNode(true);
+    const card = districtStopTemplate.content.firstElementChild.cloneNode(true);
 
     card.style.animationDelay = `${index * 70}ms`;
     card.dataset.stopTone = normalizeText(stop.type || "");
@@ -9813,7 +9813,7 @@ function createRouteCard(
   routeView,
   { routeKey, isSecondary = false, isRecommended = false, renderMode = "default" },
 ) {
-  const card = romeRouteTemplate.content.firstElementChild.cloneNode(true);
+  const card = routeCardTemplate.content.firstElementChild.cloneNode(true);
   const stopsContainer = card.querySelector(".route-stops");
   const hiddenContainer = card.querySelector(".route-hidden-pills");
   const barsContainer = card.querySelector(".route-bar-pills");
