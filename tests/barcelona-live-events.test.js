@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
+  evaluateOpenDataAgendaRecord,
   fetchLiveEventsForDates,
   normalizeOpenDataAgendaEvents,
   normalizeOpenDataAgendaRecord,
@@ -48,7 +49,7 @@ function buildFixtureRecord(overrides = {}) {
       },
     ],
     classifications_data: [{ name: "Concerts" }],
-    secondary_filters_data: [{ name: "Música" }],
+    secondary_filters_data: [{ name: "Música" }, { name: "Gastronomia" }],
     image_data: { url: "https://example.com/event.jpg" },
     ...overrides,
   };
@@ -71,7 +72,27 @@ test("Barcelona Open Data agenda adapter normaliserar fixture-event", () => {
   assert.equal(event.provider_category, "Concerts");
   assert.ok(event.match_tags.includes("kultur"));
   assert.ok(event.match_tags.includes("mat"));
+  assert.ok(event.match_tags.includes("music"));
   assert.equal(event.match_reason, undefined);
+});
+
+test("Barcelona Open Data agenda adapter markerar användbara och brusiga fixture-events", () => {
+  const useful = evaluateOpenDataAgendaRecord(buildFixtureRecord());
+  assert.equal(useful.accepted, true);
+  assert.ok(useful.score >= 8);
+  assert.ok(useful.tags.includes("music"));
+
+  const noisySchoolyard = buildFixtureRecord({
+    register_id: 777,
+    name: "Patis oberts a les escoles",
+    body: "<p>Espai familiar recurrent.</p>",
+    classifications_data: [{ name: "Patis oberts a les escoles" }],
+    secondary_filters_data: [{ name: "Actes per nens i nenes" }],
+  });
+  const noise = evaluateOpenDataAgendaRecord(noisySchoolyard);
+  assert.equal(noise.accepted, false);
+  assert.ok(noise.reasons.includes("family-infrastructure-noise"));
+  assert.deepEqual(normalizeOpenDataAgendaEvents([noisySchoolyard]), []);
 });
 
 test("Barcelona Open Data agenda adapter hanterar provider-koordinater i verklig ordning", () => {
@@ -117,6 +138,60 @@ test("Barcelona Open Data agenda adapter returnerar date-keyed events", async ()
   assert.equal(result["2026-05-17"][0].title, "Concert de barri a Barcelona");
   assert.equal(result["2026-05-18"].length, 1);
   assert.equal(result["2026-05-18"][0].title, "Taller familiar");
+});
+
+test("Barcelona Open Data agenda adapter bucketar fler-dagarsevent utan konstig duplicering", async () => {
+  const result = await fetchLiveEventsForDates(["2026-05-17", "2026-05-18", "2026-05-19"], {
+    fetchOpenDataAgendaEvents: async () => [
+      buildFixtureRecord({
+        register_id: 24680,
+        name: "Festival de barri",
+        start_date: "2026-05-17T10:00:00+02:00",
+        end_date: "2026-05-19T22:00:00+02:00",
+        body: "<p>Festival amb música, mercat i activitats de barri.</p>",
+      }),
+    ],
+  });
+
+  assert.equal(result["2026-05-17"].length, 1);
+  assert.equal(result["2026-05-18"].length, 0);
+  assert.equal(result["2026-05-19"].length, 0);
+});
+
+test("Barcelona Open Data agenda adapter tål saknade koordinater", () => {
+  const event = normalizeOpenDataAgendaRecord(
+    buildFixtureRecord({
+      addresses: [
+        {
+          place: "Centre Cívic Sense Coordenades",
+          address_name: "C Sense Coordenades",
+        },
+      ],
+    }),
+  );
+
+  assert.equal(event.venue, "Centre Cívic Sense Coordenades");
+  assert.equal(event.address, "C Sense Coordenades");
+  assert.equal(event.lat, null);
+  assert.equal(event.lng, null);
+});
+
+test("Barcelona Open Data agenda adapter härleder bredare men säkra kategori-taggar", () => {
+  const event = normalizeOpenDataAgendaRecord(
+    buildFixtureRecord({
+      name: "Fira vintage i mercat de segona mà al litoral del barri amb vi i música",
+      body: "<p>Market, food, wine, beach and community music session.</p>",
+      classifications_data: [{ name: "Fires" }],
+      secondary_filters_data: [{ name: "Mercats" }],
+    }),
+  );
+
+  assert.ok(event.match_tags.includes("market"));
+  assert.ok(event.match_tags.includes("mat"));
+  assert.ok(event.match_tags.includes("vin"));
+  assert.ok(event.match_tags.includes("coast"));
+  assert.ok(event.match_tags.includes("community"));
+  assert.ok(event.match_tags.includes("music"));
 });
 
 test("Barcelona Open Data agenda adapter hanterar tomma och trasiga provider-svar säkert", async () => {

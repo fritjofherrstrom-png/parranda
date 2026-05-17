@@ -34,6 +34,11 @@ function toIsoDate(value) {
   return match ? match[1] : null;
 }
 
+function toDateValue(value) {
+  const date = toIsoDate(value);
+  return date ? Date.parse(`${date}T00:00:00Z`) : null;
+}
+
 function overlapsDate(event, date) {
   const startDate = event.start_date || event.end_date;
   const endDate = event.end_date || event.start_date;
@@ -114,38 +119,144 @@ function normalizeCategory(record) {
   );
 }
 
-function inferBarcelonaTags(record) {
-  const corpus = normalizeWhitespace(
+function buildSearchCorpus(record) {
+  return normalizeWhitespace(
     [
       record.name,
       record.body,
       normalizeCategory(record),
       ...(record.classifications_data || []).map((entry) => entry.name),
       ...(record.secondary_filters_data || []).map((entry) => entry.name),
+      firstArrayItem(record.addresses)?.place,
+      firstArrayItem(record.addresses)?.district_name,
+      firstArrayItem(record.addresses)?.neighborhood_name,
     ].join(" "),
   ).toLowerCase();
+}
+
+function buildTagCorpus(record) {
+  return normalizeWhitespace(
+    [
+      record.name,
+      normalizeCategory(record),
+      ...(record.classifications_data || []).map((entry) => entry.name),
+      ...(record.secondary_filters_data || []).map((entry) => entry.name),
+      firstArrayItem(record.addresses)?.place,
+      firstArrayItem(record.addresses)?.district_name,
+      firstArrayItem(record.addresses)?.neighborhood_name,
+    ].join(" "),
+  ).toLowerCase();
+}
+
+function inferBarcelonaTags(record) {
+  const corpus = buildTagCorpus(record);
   const tags = new Set();
 
-  if (/(concert|música|music|òpera|opera|teatre|theatre|exposici|exhibit|museu|museum|cinema|cultura|festival)/i.test(corpus)) {
+  if (/(concert|música|music|òpera|opera|teatre|theatre|exposici|exhibit|museu|museum|cinema|cultura|festival|espectacle|balls)/i.test(corpus)) {
     tags.add("kultur");
   }
-  if (/(mercat|market|gastronom|food|cuina|tast|degustaci|vi\b|wine|beer|cervesa)/i.test(corpus)) {
+  if (/(concert|música|music|òpera|opera|jazz|flamenc|havaner|dj|rock)/i.test(corpus)) {
+    tags.add("music");
+  }
+  if (/(exposici|exhibit|gallery|galeria|museu|museum)/i.test(corpus)) {
+    tags.add("exhibition");
+  }
+  if (/(^|\b)(taller|tallers|workshop|curs|cursos|curso|classe|laboratori)(\b|$)/i.test(corpus)) {
+    tags.add("workshop");
+  }
+  if (/(mercat|market|gastronom|food|cuina|tast|degustaci|wine|beer|cervesa|bravas|menjar|menjars)/i.test(corpus)) {
     tags.add("mat");
   }
-  if (/(vi\b|wine|celler|vin)/i.test(corpus)) {
+  if (/(mercat|market|fira|mostra de comerç|vintage|segona mà|second.hand|encants)/i.test(corpus)) {
+    tags.add("market");
+  }
+  if (/(^|\b)(vi|wine|celler|vin)(\b|$)/i.test(corpus)) {
     tags.add("vin");
   }
-  if (/(nit|night|dj|club|party|festa|concert|live)/i.test(corpus)) {
+  if (/(nit|night|dj|club|party|festa|concert|live|rock)/i.test(corpus)) {
     tags.add("nattliv");
   }
-  if (/(platja|beach|mar|litoral|coast)/i.test(corpus)) {
+  if (/(platja|beach|litoral|coast|moll|marítim|maritima)/i.test(corpus)) {
     tags.add("coast");
   }
-  if (/(infant|family|familiar|children|kids)/i.test(corpus)) {
+  if (/(infant|family|familiar|children|kids|nens|nenes)/i.test(corpus)) {
     tags.add("family");
+  }
+  if (/(barri|community|comunit|centre cívic|centres civics|festa major|popular|veïnal|veinal|mostra de comerç)/i.test(corpus)) {
+    tags.add("community");
+  }
+  if (/(xerrada|col.loqui|col·loqui|conferència|conferencia|presentaci|lectura|debat)/i.test(corpus)) {
+    tags.add("civic");
   }
 
   return [...tags];
+}
+
+function evaluateOpenDataAgendaRecord(record) {
+  if (!record || typeof record !== "object") {
+    return { accepted: false, score: 0, reasons: ["invalid-record"], tags: [] };
+  }
+
+  const title = normalizeWhitespace(record?.name);
+  const startMs = toDateValue(record?.start_date);
+  const endMs = toDateValue(record?.end_date) || startMs;
+  const category = normalizeCategory(record);
+  const corpus = buildSearchCorpus(record);
+  const tags = inferBarcelonaTags(record);
+  const reasons = [];
+
+  if (record.status && record.status !== "published") {
+    return { accepted: false, score: 0, reasons: ["not-published"], tags };
+  }
+  if (record.core_type && record.core_type !== "event") {
+    return { accepted: false, score: 0, reasons: ["not-event"], tags };
+  }
+  if (!title || !startMs) {
+    return { accepted: false, score: 0, reasons: ["missing-title-or-date"], tags };
+  }
+
+  const durationDays = Math.max(1, Math.round((endMs - startMs) / 86400000) + 1);
+  let score = 10;
+
+  if (durationDays <= 2) {
+    score += 6;
+    reasons.push("short-window");
+  } else if (durationDays <= 14) {
+    score += 3;
+    reasons.push("fresh-window");
+  } else if (durationDays > 60) {
+    score -= 5;
+    reasons.push("long-running");
+  }
+
+  const routeUsefulTags = tags.filter((tag) =>
+    ["kultur", "music", "exhibition", "market", "mat", "vin", "nattliv", "coast", "community"].includes(tag),
+  );
+  score += routeUsefulTags.length * 2;
+
+  if (/(concert|espectacle|festival|festa major|mercat|fira|projecci|itinerari|recorregut|degustaci|exposici)/i.test(corpus)) {
+    score += 4;
+    reasons.push("city-rhythm");
+  }
+  if (/(patis oberts|patis bressol|casal infantil|actes per nens|actes per nenes|ludoteca)/i.test(corpus)) {
+    score -= 18;
+    reasons.push("family-infrastructure-noise");
+  }
+  if (/(concursos, premis|convocatòria|subvenci|tràmit|licitaci|inscripcions?)/i.test(corpus)) {
+    score -= 18;
+    reasons.push("admin-or-listing-noise");
+  }
+  if (category === "Agenda" || category === "Puntual") {
+    score -= 2;
+    reasons.push("generic-category");
+  }
+
+  return {
+    accepted: score >= 8,
+    score,
+    reasons,
+    tags,
+  };
 }
 
 function buildSourceUrl(record) {
@@ -173,6 +284,7 @@ function normalizeOpenDataAgendaRecord(record) {
   const summary = stripTags(record.body).slice(0, 320);
   const category = normalizeCategory(record);
   const source = liveSources.find((entry) => entry.id === OPEN_DATA_AGENDA_SOURCE_ID);
+  const quality = evaluateOpenDataAgendaRecord(record);
 
   return {
     id: `barcelona-open-data-${record.register_id || title}`
@@ -199,7 +311,7 @@ function normalizeOpenDataAgendaRecord(record) {
     lng: address.lng,
     geocode_label: address.venue,
     geocode_source: "provider",
-    match_tags: inferBarcelonaTags(record),
+    match_tags: quality.tags,
   };
 }
 
@@ -208,7 +320,16 @@ function normalizeOpenDataAgendaEvents(records = []) {
     return [];
   }
 
-  return records.map(normalizeOpenDataAgendaRecord).filter(Boolean);
+  return records
+    .map((record, index) => ({
+      index,
+      record,
+      quality: evaluateOpenDataAgendaRecord(record),
+    }))
+    .filter((entry) => entry.quality.accepted)
+    .sort((a, b) => b.quality.score - a.quality.score || a.index - b.index)
+    .map((entry) => normalizeOpenDataAgendaRecord(entry.record))
+    .filter(Boolean);
 }
 
 async function fetchJson(url = OPEN_DATA_AGENDA_JSON_URL) {
@@ -302,6 +423,7 @@ function resetBarcelonaLiveEventsCache() {
 }
 
 module.exports = {
+  evaluateOpenDataAgendaRecord,
   fetchLiveEventsForDates,
   normalizeOpenDataAgendaRecord,
   normalizeOpenDataAgendaEvents,

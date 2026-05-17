@@ -1085,6 +1085,8 @@ test("GET /api/city-pulse för barcelona kan visa Open Data BCN official events 
     assert.equal(response.body.official_events[0].title, "Concert de barri a Barcelona");
     assert.equal(response.body.official_events[0].lat, 41.402);
     assert.equal(response.body.official_events[0].lng, 2.203);
+    assert.ok(response.body.official_events[0].match_tags.includes("music"));
+    assert.ok(response.body.official_events[0].match_tags.includes("kultur"));
     assert.deepEqual(response.body.moments, []);
     assert.deepEqual(response.body.wildcards, []);
     assert.equal(response.body.items.length, 1);
