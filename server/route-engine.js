@@ -1,7 +1,7 @@
 const { AsyncLocalStorage } = require("node:async_hooks");
 const { getCityConfig } = require("./cities");
 const { getIsoWeekday } = require("./lib/iso-date");
-const { evaluateLocalTruth } = require("./local-truth");
+const { evaluateLocalTruth, localTruthForLang } = require("./local-truth");
 const { routeSimilarity } = require("./route-diversity");
 const { routeWalkingPath } = require("./walking-router");
 
@@ -52,8 +52,8 @@ async function geocodeInActiveCity(query) {
   return getActiveCityConfig().services.geocodeQuery(query);
 }
 
-function getPulseForDate(date) {
-  return getActiveCityConfig().services.getCityPulse(date);
+function getPulseForDate(date, lang) {
+  return getActiveCityConfig().services.getCityPulse(date, { lang });
 }
 
 function getDateSignalsForDate(date, lang = "sv") {
@@ -5170,7 +5170,7 @@ async function generateRecommendations({
   return cityContextStorage.run(getCityConfig(city), async () => {
     const normalizedDates = expandDateRange(dates);
     const pulseByDate = Object.fromEntries(
-      normalizedDates.map((date) => [date, getPulseForDate(date)]),
+      normalizedDates.map((date) => [date, getPulseForDate(date, routeResultLang)]),
     );
     const [weatherByDate, liveEventsByDate] = await Promise.all([
       fetchWeatherForActiveCity(normalizedDates, getCityCenter()).catch(() => ({})),
@@ -5197,7 +5197,7 @@ async function generateRecommendations({
     for (const [dateIndex, date] of normalizedDates.entries()) {
         const weekday = weekdayFromDate(date);
         const weather = weatherByDate[date];
-        const pulse = pulseByDate[date] || getPulseForDate(date);
+        const pulse = pulseByDate[date] || getPulseForDate(date, routeResultLang);
         const dateSignals = getDateSignalsForDate(date, routeResultLang);
         const pulseItems = Array.isArray(pulse.items) ? pulse.items : [];
         const liveEvents = liveEventsByDate[date] || [];
@@ -5338,7 +5338,7 @@ async function generateRecommendations({
             dayProfile,
             route: {
               ...route,
-              local_truth: localTruth,
+              local_truth: localTruthForLang(localTruth, routeResultLang),
               weather_note: scoring.weatherNote,
               budget_note: scoring.budgetNote,
               pulse_note: scoring.pulseNote,

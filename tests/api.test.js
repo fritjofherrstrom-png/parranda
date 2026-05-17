@@ -1703,6 +1703,99 @@ test("POST /api/route-recommendations bygger en tydlig båge mellan Trastevere o
   }
 });
 
+test("POST /api/route-recommendations?lang=en suppresses Swedish local-truth prose on route output", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-05-18"],
+          weathercode: [1],
+          temperature_2m_max: [20],
+        },
+      });
+    }
+    throw new Error(`Unexpected fetch during route local-truth leak test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    // Rome with second_hand on a weekday is a strong trigger for SV-only
+    // local-truth market-rhythm and shop-fallback notes. The route engine
+    // must surface the same local_truth structure but with prose fields
+    // blanked under lang=en, mirroring the Blitz pattern (PR #67).
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations?lang=en",
+      body: {
+        city: "rome",
+        dates: ["2026-05-18"],
+        preferences: ["mat", "kultur", "second_hand"],
+        walking_km_target: 8,
+      },
+    });
+
+    assert.equal(response.status, 200);
+
+    const day = response.body.days?.[0];
+    assert.ok(day, "expected at least one route day");
+    const routes = [day.primary_route, ...(day.alternatives || [])].filter(Boolean);
+
+    // Specific SV authoring known to come from server/cities/rome/local-truth.js.
+    const swedishLocalTruthMarkers = [
+      "Marknadsspåret ligger på en stark veckodag",
+      "vintage- och second hand-butiker även när marknadsspåret",
+      "bärs främst av butiker och vintage-stopp",
+      "Klassiska ankare i Rom känns ofta lättare tidigt eller sent",
+      "Second hand-spåret bärs av mer vardagsvänliga butiker",
+      "Ferragosto kan ge helgrytm",
+      "live-lagret bli extra värdefullt",
+    ];
+
+    // Walk every route's local_truth array shapes and assert every
+    // .text/.reason prose field is blanked under lang=en.
+    const proseArrayKeys = [
+      ["score_adjustments", "reason"],
+      ["caution_notes", "text"],
+      ["verify_opening_hours", "reason"],
+      ["route_context_notes", "text"],
+      ["live_context_notes", "text"],
+    ];
+
+    routes.forEach((route, routeIndex) => {
+      const lt = route.local_truth;
+      if (!lt) return;
+      proseArrayKeys.forEach(([arrayKey, field]) => {
+        (lt[arrayKey] || []).forEach((entry, entryIndex) => {
+          if (typeof entry[field] === "string") {
+            assert.equal(
+              entry[field],
+              "",
+              `routes[${routeIndex}].local_truth.${arrayKey}[${entryIndex}].${field} must be blanked under lang=en`,
+            );
+          }
+        });
+      });
+
+      // Direct text-search inside each route's local_truth to catch leaks
+      // even if a future schema adds a new prose field.
+      const localTruthJson = JSON.stringify(lt);
+      swedishLocalTruthMarkers.forEach((sw) => {
+        assert.equal(
+          localTruthJson.includes(sw),
+          false,
+          `route local_truth must not leak Swedish prose: "${sw}"`,
+        );
+      });
+    });
+  } finally {
+    server.close();
+    global.fetch = originalFetch;
+    resetLiveEventsCache();
+  }
+});
+
 test("POST /api/route-recommendations använder lang en bara för route-result prose", async () => {
   global.fetch = async (url) => {
     const parsed = new URL(String(url));
