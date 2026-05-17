@@ -14,7 +14,7 @@ Everything in the product is judged against this single bar.
 
 > *Does this make the user more likely to say: "holy shit, this actually gets cities"?*
 
-If not, it is not worth shipping.
+If not, it is not worth shipping — **with one exception**. Work that *protects* this direction is still worth shipping even if it does not produce the feeling directly: maintenance, reliability, tests, i18n, security, debt reduction, and refactors that unblock future product work. The acceptance test applies to user-facing product decisions; supporting work is judged by whether it keeps the user-facing path clear.
 
 ## USP framing
 
@@ -39,7 +39,7 @@ The same engine powers three tiers of city support. The tier a city sits in dete
 
 | Tier | Examples | What it delivers | What it tells the user |
 |---|---|---|---|
-| **Curated** | Rome, Barcelona, future top cities | Handcrafted route seeds, editorial Pulse, local-truth rules, photo curation | "A local with good taste built this." |
+| **Curated** | Rome; Barcelona moving toward curated; future top cities | Handcrafted route seeds, editorial Pulse, local-truth rules, photo curation | "A local with good taste built this." |
 | **Assisted** | Cities with auto-built catalogs that have been partially reviewed | Auto-catalog + human/LLM-reviewed overlays | "Strong baseline with local improvements." |
 | **Auto** | Cities served purely from open data + LLM-inferred metadata | Generic catalog-first routing, no fake local flavor | "Baseline route from open data. No false confidence." |
 
@@ -66,6 +66,8 @@ The engine is **city-agnostic**. Cities differ in *data*, not *behavior*.
 City  = data     (catalog, areas, local-truth rules, weather/pulse providers)
 Engine = behavior (routing, scoring, intent mapping, area flow, blitz logic)
 ```
+
+Nuance: there *is* such a thing as city-specific behavior — markets close on Mondays in some cities and not others, beach rhythm matters in coastal cities, etc. The rule is not "no city-specific behavior anywhere." The rule is that city-specific behavior is expressed as **data, config, or pluggable providers** (e.g. `local-truth.js` rules, `routing.tuning` weights, `services.fetchLiveEventsForDates` provider) — **never** as `if (city === "rome")` branches inside shared engine code.
 
 The engine **never** consumes raw provider data directly. The pipeline is:
 
@@ -94,7 +96,9 @@ trust: {
 }
 ```
 
-A recommendation that lacks trust metadata is not shippable to users at curated- or assisted-tier. At auto-tier the metadata determines how strongly the recommendation is presented (`high + humanVerified` reads differently than `low + llm_inferred`).
+**Target state.** Trust metadata is a *required field for all new auto- and assisted-tier records* once the auto-city pipeline lands. Existing curated catalogs (Rome, Barcelona) ship without it today and migrate over time — they are implicitly treated as `{ sourceTier: "curated", humanVerified: true, confidence: "high", freshness: "fresh" }` until explicit fields are added.
+
+At auto-tier the metadata determines how strongly the recommendation is presented (`high + humanVerified` reads differently than `low + llm_inferred`). At curated-tier the user expects "a local built this"; auto-tier without trust metadata cannot make that claim.
 
 ---
 
@@ -131,12 +135,12 @@ These are not "never." They are "not before the product feels magical."
 | # | PR / area | State |
 |---|---|---|
 | 1 | Shell i18n + Rome DOM cleanup | ✅ merged — PR #65 |
-| 2 | Blitz engine i18n (`fix/blitz-engine-i18n`) | In progress |
-| 3 | Quick credibility pass — provenance fields + photos + localStorage memory | Specced, not started |
-| 4 | Blitz UX surface — extract `blitz-panel.js`, signature presentation | Specced, not started |
-| 5 | Live walking mode (companion experience) | Spec needed |
-| 6 | Route readiness diagnostics (Issue #52 step 1) | Spec written in issue |
-| 7 | Canonical intent mapping | Spec written in issue |
+| 2 | Blitz engine i18n (`fix/blitz-engine-i18n`) | Next |
+| 3 | Quick credibility pass — provenance fields + photos + localStorage memory | Planned — spec pending |
+| 4 | Blitz UX surface — extract `blitz-panel.js`, signature presentation | Planned — spec pending |
+| 5 | Live walking mode (companion experience) | Planned — spec pending |
+| 6 | Route readiness diagnostics (Issue #52 step 1) | Spec in Issue #52 |
+| 7 | Canonical intent mapping | Spec in Issue #52 |
 | 8 | Generic catalog-first route builder | Blocked by #6 + #7 |
 | 9 | Per-city editorial overrides (manifesto / map placeholders) | Backlog |
 | 10 | Auto-city infrastructure (Overpass + dedupe + LLM vibe layer) | Long-term — requires trust model first |
