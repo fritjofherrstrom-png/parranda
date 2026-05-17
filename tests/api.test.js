@@ -287,6 +287,23 @@ test("shared shell template carries no Rome-specific DOM identifiers", () => {
   assert.doesNotMatch(html, /id="romeRouteTemplate"/);
 });
 
+test("place card JS render uses i18n for map link instead of hardcoded Swedish", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
+  // PR #65 audit (Q5): the template tokenization of `.map-link` in
+  // placeCardTemplate is undone if JS rebinds `.textContent` to a hardcoded
+  // Swedish string when cloning. The place-card path must go through the i18n
+  // helper so EN users see "Show on map".
+  assert.match(
+    source,
+    /mapLink\.textContent\s*=\s*t\("template\.placeCard\.mapLink"/,
+  );
+  // The exact regression sentinel that was present before the fix.
+  assert.doesNotMatch(
+    source,
+    /mapLink\.textContent\s*=\s*"Visa på karta";/,
+  );
+});
+
 test("planner modal title uses city-time framing instead of trip framing", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
 

@@ -9279,7 +9279,7 @@ function renderPlaces() {
 
     const mapLink = card.querySelector(".map-link");
     mapLink.href = createMapUrl(place.mapQuery);
-    mapLink.textContent = "Visa på karta";
+    mapLink.textContent = t("template.placeCard.mapLink", "Visa på karta");
 
     card.addEventListener("click", (event) => {
       const interactiveTarget = event.target.closest("a, button");
