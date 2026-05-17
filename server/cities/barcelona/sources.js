@@ -29,7 +29,7 @@ const liveSources = [
     updateCadence: "daily",
     sourceOwnedFields,
     parrandaOwnedFields,
-    qualityFlags: ["official_city_source", "broad_feed", "needs_quality_filter"],
+    qualityFlags: ["official_city_source", "broad_feed", "quality_filter_v1"],
     parsingRisk: "medium",
     intendedUse: "live",
   },
