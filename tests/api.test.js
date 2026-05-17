@@ -2784,3 +2784,117 @@ test("POST /api/blitz kan köras för barcelona utan Rome-läckage eller struktu
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test("POST /api/blitz?lang=en returns English Blitz copy for barcelona", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during Barcelona Blitz EN test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/blitz?lang=en",
+      body: {
+        city: "barcelona",
+        now: "2026-05-18T13:00:00+02:00",
+        origin: { type: "preset", label: "Sant Antoni" },
+        intent_keys: ["food_drink"],
+      },
+    });
+
+    assert.equal(response.status, 200);
+    const move = response.body.best_move;
+    assert.ok(move, "expected Blitz move");
+
+    const swedishMarkers = [
+      "okänd",
+      "låg",
+      "låg till medium",
+      "Det är kväll nu",
+      "Eftermiddagen passar bra",
+      "Mitt på dagen",
+      "Tidigare på dagen",
+      "Senare på kvällen",
+      "och vidare på nästa timme",
+      "på nästa timme med second hand först",
+      "på 60 minuter med vin som landning",
+      "Kör Blitz igen",
+      "Stanna på ett glas",
+      "Låt det glida vidare",
+      "ligger nära nog",
+      "ligger tillräckligt nära",
+      "det tydligaste nästa steget",
+      "ger ett faktiskt second hand-spår",
+      "Pulse just nu:",
+      "har ännu inte ett fullt second hand-pack",
+    ];
+    const body = JSON.stringify(response.body);
+    swedishMarkers.forEach((sw) => {
+      assert.equal(
+        body.includes(sw),
+        false,
+        `Blitz EN must not contain Swedish: "${sw}"`,
+      );
+    });
+
+    assert.doesNotMatch(body, /\{(?:area|name|first|city|title)\}/);
+
+    const englishExpected = [
+      "low",
+      "medium",
+      "for the next hour",
+      "Run Blitz again",
+      "from where you are",
+      "clearest next step",
+      "Mid-day",
+      "evening",
+    ];
+    assert.ok(
+      englishExpected.some((en) => body.includes(en)),
+      "Blitz EN must include at least one expected English phrase",
+    );
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("POST /api/blitz?lang=sv preserves Swedish Blitz copy", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during Blitz SV test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/blitz?lang=sv",
+      body: {
+        city: "rome",
+        now: "2026-05-18T13:00:00+02:00",
+        intent_keys: ["food_drink"],
+      },
+    });
+
+    assert.equal(response.status, 200);
+    const body = JSON.stringify(response.body);
+    const swedishExpected = [
+      "på nästa timme",
+      "Kör Blitz igen",
+      "ligger nära nog",
+      "ligger tillräckligt nära",
+      "tydligaste nästa steget",
+      "låg",
+      "medium",
+    ];
+    assert.ok(
+      swedishExpected.some((sv) => body.includes(sv)),
+      "Blitz SV must include at least one Swedish marker",
+    );
+    assert.doesNotMatch(body, /\{(?:area|name|first|city|title)\}/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
