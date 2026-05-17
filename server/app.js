@@ -74,8 +74,52 @@ function buildOfficialPulseWhen(event, date, lang = "sv") {
   return event.start_date || event.end_date || (isEnglish ? "Right now" : "Just nu");
 }
 
-function buildOfficialPulseItem(event, date, cityConfig, lang = "sv") {
+function compactOfficialPulseText(text, maxLength = 220) {
+  const normalized = String(text || "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  const clipped = normalized.slice(0, maxLength);
+  const sentenceEnd = Math.max(clipped.lastIndexOf("."), clipped.lastIndexOf("!"), clipped.lastIndexOf("?"));
+  const boundary = sentenceEnd >= 80 ? sentenceEnd + 1 : clipped.lastIndexOf(" ");
+  return `${clipped.slice(0, boundary > 80 ? boundary : maxLength).trim()}...`;
+}
+
+function buildOfficialPulseKind(event, lang = "sv") {
   const isEnglish = normalizeLanguage(lang) === "en";
+  const sourceLabel = event.source_label || event.provider || "";
+  return [isEnglish ? "Official live" : "Officiellt live", sourceLabel].filter(Boolean).join(" · ");
+}
+
+function buildOfficialPulseBlurb(event, cityLabel, lang = "sv") {
+  const isEnglish = normalizeLanguage(lang) === "en";
+  const summary = compactOfficialPulseText(event.summary || event.raw_summary);
+
+  if (summary) {
+    return summary;
+  }
+
+  const sourceLabel = event.source_label || (isEnglish ? "an official source" : "en officiell källa");
+  const category = event.provider_category ? `${event.provider_category} · ` : "";
+  return isEnglish
+    ? `${category}Official event from ${sourceLabel} in ${cityLabel || "the city"}.`
+    : `${category}Officiellt event från ${sourceLabel} i ${cityLabel || "staden"}.`;
+}
+
+function buildOfficialPulseWhy(event, lang = "sv") {
+  const isEnglish = normalizeLanguage(lang) === "en";
+  const sourceLabel = event.source_label || (isEnglish ? "an official source" : "en officiell källa");
+
+  return isEnglish
+    ? `Official source signal from ${sourceLabel}. Useful when you want today’s plan to include something actually happening now.`
+    : `Officiell källsignal från ${sourceLabel}. Bra när du vill att dagens plan ska kunna fånga något som faktiskt händer nu.`;
+}
+
+function buildOfficialPulseItem(event, date, cityConfig, lang = "sv") {
   const cityLabel = resolveDisplayLabel(cityConfig, null, lang);
   const where =
     [event.venue, event.address].filter(Boolean).join(" • ") ||
@@ -87,19 +131,12 @@ function buildOfficialPulseItem(event, date, cityConfig, lang = "sv") {
   return {
     id: `official-${event.id}`,
     level: "venue",
-    kind: isEnglish ? "Official live" : "Officiellt live",
+    kind: buildOfficialPulseKind(event, lang),
     title: event.title,
     where,
     when: buildOfficialPulseWhen(event, date, lang),
-    blurb:
-      event.summary ||
-      (isEnglish
-        ? `Official live event in ${cityLabel || "Rome"} that can give the day a more time-bound layer.`
-        : `Officiellt live-event i ${cityLabel || "Rom"} som kan ge dagen ett mer tidsbundet lager.`),
-    why_it_matters: isEnglish
-      ? "Useful as a live bonus when you want to weave in something that is actually happening right now."
-      : event.match_reason ||
-        "Bra som live-bonus när du vill väva in något som faktiskt bara händer just nu.",
+    blurb: buildOfficialPulseBlurb(event, cityLabel, lang),
+    why_it_matters: buildOfficialPulseWhy(event, lang),
     matches_vibes: matchesVibes,
     official_event_id: event.id,
     lat: typeof event.lat === "number" ? event.lat : null,
