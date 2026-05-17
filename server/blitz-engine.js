@@ -1,6 +1,7 @@
 const { getIsoWeekday } = require("./lib/iso-date");
 const { evaluateLocalTruth } = require("./local-truth");
 const { normalizeAvailability } = require("./availability");
+const { translate, normalizeLanguage } = require("./ui-i18n");
 
 const DEFAULT_BLITZ_MODE = "auto";
 const DEFAULT_MEMORY = {
@@ -137,20 +138,20 @@ function walkMinutesForKm(distanceKm) {
   return Math.max(2, Math.round(distanceKm * 12));
 }
 
-function resolveEffortLabel(walkingMinutes) {
+function resolveEffortLabel(walkingMinutes, lang = "sv") {
   if (!Number.isFinite(walkingMinutes)) {
-    return "okänd";
+    return translate(lang, "blitz.effort.unknown");
   }
 
   if (walkingMinutes <= 12) {
-    return "låg";
+    return translate(lang, "blitz.effort.low");
   }
 
   if (walkingMinutes <= 24) {
-    return "låg till medium";
+    return translate(lang, "blitz.effort.lowMedium");
   }
 
-  return "medium";
+  return translate(lang, "blitz.effort.medium");
 }
 
 function buildTimeZoneParts(date, timeZone) {
@@ -556,27 +557,27 @@ function scoreTimeBandForItem(item, timeBand) {
   return Number(score.toFixed(2));
 }
 
-function buildTimeReason(item, timeBand) {
+function buildTimeReason(item, timeBand, lang = "sv") {
   const tags = new Set(item.tags || []);
 
   if (timeBand === "evening" && (tags.has("nattliv") || tags.has("vin") || tags.has("cocktail"))) {
-    return "Det är kväll nu, så stopp med vin, kvällsenergi eller barrytm spelar starkare än mitt på dagen.";
+    return translate(lang, "blitz.timeReason.evening");
   }
 
   if (timeBand === "afternoon" && (tags.has("second_hand") || tags.has("shopping") || tags.has("market"))) {
-    return "Eftermiddagen passar bra för ett tydligt shopping- eller second hand-spår utan att dagen känns överplanerad.";
+    return translate(lang, "blitz.timeReason.afternoon");
   }
 
   if (timeBand === "midday" && (tags.has("mat") || tags.has("kultur"))) {
-    return "Mitt på dagen fungerar den här typen av stopp bättre som tydligt nästa steg än som sen kvällsidé.";
+    return translate(lang, "blitz.timeReason.midday");
   }
 
   if (timeBand === "morning" && (tags.has("kultur") || tags.has("utsikt") || tags.has("hidden gems"))) {
-    return "Tidigare på dagen känns kultur, utsikt och lugnare upptäckarstopp ofta renare än kvällsdrivna val.";
+    return translate(lang, "blitz.timeReason.morning");
   }
 
   if (timeBand === "late" && (tags.has("nattliv") || tags.has("cocktail"))) {
-    return "Senare på kvällen är det här en mer naturlig fortsättning än ett dagskänsligt stopp.";
+    return translate(lang, "blitz.timeReason.late");
   }
 
   return null;
@@ -675,6 +676,48 @@ function scoreMemoryPenalty(item, memory, moveKind, areaTokens = []) {
   }
 
   return Number(penalty.toFixed(2));
+}
+
+/**
+ * Local-truth notes (route_context_notes, caution_notes, verify_opening_hours,
+ * live_context_notes, score_adjustments) are currently authored in Swedish only
+ * (see server/cities/rome/local-truth.js). For non-SV Blitz responses we expose
+ * the same shape but strip the prose fields, so the engine can still report
+ * *that* a rule fired while never surfacing Swedish text to English users.
+ * Numeric scoring data (score_delta, delta values) is preserved unchanged.
+ * Full route-engine/local-truth i18n lands in a follow-up PR.
+ *
+ * The note schemas differ: caution_notes/route_context_notes/live_context_notes
+ * carry prose in `.text`, while verify_opening_hours and score_adjustments
+ * carry it in `.reason`. The helper below defensively blanks both fields on
+ * every entry, so future schema additions in either shape are covered.
+ */
+function blankProseFields(entries = []) {
+  return (entries || []).map((entry) => {
+    const next = { ...entry };
+    if (typeof next.text === "string") {
+      next.text = "";
+    }
+    if (typeof next.reason === "string") {
+      next.reason = "";
+    }
+    return next;
+  });
+}
+
+function localTruthForLang(truthEffect, lang) {
+  if (lang === "sv" || !truthEffect || typeof truthEffect !== "object") {
+    return truthEffect;
+  }
+
+  return {
+    ...truthEffect,
+    score_adjustments: blankProseFields(truthEffect.score_adjustments),
+    caution_notes: blankProseFields(truthEffect.caution_notes),
+    verify_opening_hours: blankProseFields(truthEffect.verify_opening_hours),
+    route_context_notes: blankProseFields(truthEffect.route_context_notes),
+    live_context_notes: blankProseFields(truthEffect.live_context_notes),
+  };
 }
 
 function buildPseudoRouteForStops(stops, origin) {
@@ -803,49 +846,61 @@ function pickRouteStops(seedCandidate, stopCandidates, origin, timeBand, options
   };
 }
 
-function buildRouteTitle(routeStops, preferences, timeBand) {
+function buildRouteTitle(routeStops, preferences, timeBand, lang = "sv") {
   const stopNames = routeStops.map((stop) => stop.name);
   const lastStop = routeStops[routeStops.length - 1];
 
   if (preferences.includes("second_hand") && routeStops.some((stop) => (stop.tags || []).includes("second_hand"))) {
-    return `${lastStop.area} på nästa timme med second hand först`;
+    return translate(lang, "blitz.routeTitle.secondHand", { area: lastStop.area });
   }
 
   if (timeBand === "evening" && routeStops.some((stop) => (stop.tags || []).includes("vin"))) {
-    return `${lastStop.area} på 60 minuter med vin som landning`;
+    return translate(lang, "blitz.routeTitle.eveningWine", { area: lastStop.area });
   }
 
-  return `${stopNames[0]} och vidare på nästa timme`;
+  return translate(lang, "blitz.routeTitle.default", { first: stopNames[0] });
 }
 
-function buildWhatToDoAfter(stops = []) {
+function buildWhatToDoAfter(stops = [], lang = "sv") {
   const lastStop = stops[stops.length - 1];
 
   if (!lastStop) {
-    return "Kör Blitz igen när du vill ha nästa tydliga steg.";
+    return translate(lang, "blitz.afterEmpty");
   }
 
   const tags = new Set(lastStop.tags || []);
 
   if (tags.has("vin") || tags.has("öl") || tags.has("cocktail") || tags.has("nattliv")) {
-    return `Stanna på ett glas nära ${lastStop.area} eller kör Blitz igen när du vill byta kvarter.`;
+    return translate(lang, "blitz.afterBar", { area: lastStop.area });
   }
 
   if (tags.has("mat")) {
-    return `Låt det glida vidare till mat i ${lastStop.area} eller kör Blitz igen därifrån.`;
+    return translate(lang, "blitz.afterFood", { area: lastStop.area });
   }
 
-  return `Kör Blitz igen från ${lastStop.name} om du vill att Parranda väljer nästa steg därifrån.`;
+  return translate(lang, "blitz.afterDefault", { name: lastStop.name });
 }
 
-function buildWhyNow({ timeReason, pulseResult, truthEffect, availabilityContext, strongReason }) {
+function buildWhyNow({
+  timeReason,
+  pulseResult,
+  truthEffect,
+  availabilityContext,
+  strongReason,
+  lang = "sv",
+}) {
   const reasons = [];
 
   if (strongReason) {
     reasons.push(strongReason);
   }
 
-  if (truthEffect.route_context_notes[0]?.text) {
+  // Local-truth prose is currently authored only in Swedish (see
+  // server/cities/rome/local-truth.js). Until route-engine/local-truth
+  // i18n lands in a follow-up PR, suppress the note text for non-SV
+  // languages to avoid surfacing Swedish in /api/blitz?lang=en.
+  // Scoring effects (truthEffect.score_delta) remain unchanged.
+  if (lang === "sv" && truthEffect.route_context_notes[0]?.text) {
     reasons.push(truthEffect.route_context_notes[0].text);
   }
 
@@ -864,25 +919,25 @@ function buildWhyNow({ timeReason, pulseResult, truthEffect, availabilityContext
   return reasons.slice(0, 2).join(" ");
 }
 
-function buildStrongReason(item, walkMinutes, preferences) {
+function buildStrongReason(item, walkMinutes, preferences, lang = "sv") {
   const tags = new Set(item.tags || []);
 
   if (
     preferences.includes("second_hand") &&
     [...secondHandCanonicalTags].some((tag) => tags.has(tag))
   ) {
-    return `${item.name} ger ett faktiskt second hand-spår här och nu utan att du behöver blåsa upp det till en hel dagsplan.`;
+    return translate(lang, "blitz.strongReason.secondHand", { name: item.name });
   }
 
   if (tags.has("nattliv") || tags.has("vin")) {
-    return `${item.name} ligger nära nog för att kännas som ett faktiskt nästa drag, inte som en omväg.`;
+    return translate(lang, "blitz.strongReason.nightlife", { name: item.name });
   }
 
   if (Number.isFinite(walkMinutes) && walkMinutes <= 12) {
-    return `${item.name} ligger tillräckligt nära för att vara ett snabbt och trovärdigt nästa steg från där du står.`;
+    return translate(lang, "blitz.strongReason.close", { name: item.name });
   }
 
-  return `${item.name} är det tydligaste nästa steget utifrån läge, tid och det du verkar vilja åt.`;
+  return translate(lang, "blitz.strongReason.default", { name: item.name });
 }
 
 function scorePreferenceCoverage(item, preferences, options = {}) {
@@ -931,9 +986,15 @@ function buildCandidateSummary(
   preferences,
   walkMinutes,
   coverageNote = null,
+  lang = "sv",
 ) {
-  const timeReason = buildTimeReason(item, timeBand);
-  const strongReason = buildStrongReason(item, walkMinutes, preferences);
+  const timeReason = buildTimeReason(item, timeBand, lang);
+  const strongReason = buildStrongReason(item, walkMinutes, preferences, lang);
+
+  // See note in buildWhyNow: local-truth prose is SV-only until follow-up
+  // i18n PR. Omit it from contextual_reasons for non-SV languages.
+  const truthRouteContextNote =
+    lang === "sv" ? truthEffect.route_context_notes[0]?.text || null : null;
 
   return {
     why_now: buildWhyNow({
@@ -942,12 +1003,15 @@ function buildCandidateSummary(
       truthEffect,
       availabilityContext,
       strongReason,
+      lang,
     }) || coverageNote || strongReason,
     contextual_reasons: uniqueNonEmpty([
       coverageNote,
       strongReason,
-      truthEffect.route_context_notes[0]?.text,
-      pulseResult?.item?.title ? `Pulse just nu: ${pulseResult.item.title}.` : null,
+      truthRouteContextNote,
+      pulseResult?.item?.title
+        ? translate(lang, "blitz.pulseRightNow", { title: pulseResult.item.title })
+        : null,
       timeReason,
     ]),
   };
@@ -965,6 +1029,7 @@ function buildSingleStopCandidate({
   memory,
   hasSecondHandCoverage,
   coverageNote,
+  lang = "sv",
 }) {
   const areaTokens = buildAreaTokens(item, cityConfig);
   const moveKind = deriveMoveKind(item);
@@ -1027,6 +1092,7 @@ function buildSingleStopCandidate({
     preferences,
     walkMinutes,
     coverageNote,
+    lang,
   );
 
   return {
@@ -1038,11 +1104,12 @@ function buildSingleStopCandidate({
     areaTokens,
     score: totalScore,
     walk_minutes: walkMinutes,
-    effort: resolveEffortLabel(walkMinutes),
+    effort: resolveEffortLabel(walkMinutes, lang),
     why_now: summary.why_now,
     contextual_reasons: summary.contextual_reasons,
-    caution_notes: truthEffect.caution_notes.map((note) => note.text),
-    local_truth: truthEffect,
+    caution_notes:
+      lang === "sv" ? truthEffect.caution_notes.map((note) => note.text) : [],
+    local_truth: localTruthForLang(truthEffect, lang),
     pulse_context: pulseResult.item
       ? {
           id: pulseResult.item.id,
@@ -1052,7 +1119,7 @@ function buildSingleStopCandidate({
       : null,
     availability: availabilityContext,
     stop: formatCompactStop(item),
-    what_to_do_after: buildWhatToDoAfter([item]),
+    what_to_do_after: buildWhatToDoAfter([item], lang),
   };
 }
 
@@ -1067,6 +1134,7 @@ function buildMiniRouteCandidate({
   weekday,
   memory,
   coverageNote,
+  lang = "sv",
 }) {
   const seedAvailability = normalizeAvailability(seedCandidate.item.availability);
   const pickedRoute = pickRouteStops(seedCandidate, stopCandidates, origin, timeBand, { weekday });
@@ -1113,7 +1181,7 @@ function buildMiniRouteCandidate({
   const memoryPenalty = routeStops.reduce((penalty, stop) => {
     return penalty + scoreMemoryPenalty(stop, memory, "mini_route_60", routeAreaTokens);
   }, 0);
-  const pulseResult = scorePulseForItem(routeStops[0], cityConfig.services.getCityPulse(date)?.items || [], cityConfig);
+  const pulseResult = scorePulseForItem(routeStops[0], cityConfig.services.getCityPulse(date, { lang })?.items || [], cityConfig);
   const summary = buildCandidateSummary(
     routeStops[0],
     truthEffect,
@@ -1123,6 +1191,7 @@ function buildMiniRouteCandidate({
     preferences,
     walkMinutes,
     coverageNote,
+    lang,
   );
   const orderedStops = routeStops.map((stop, index) =>
     formatCompactStop(stop, index === 0 ? origin : routeStops[index - 1]),
@@ -1137,11 +1206,12 @@ function buildMiniRouteCandidate({
     areaTokens: routeAreaTokens,
     score: Number((routeScore + memoryPenalty).toFixed(2)),
     walk_minutes: walkMinutes,
-    effort: resolveEffortLabel(walkMinutes),
+    effort: resolveEffortLabel(walkMinutes, lang),
     why_now: summary.why_now,
     contextual_reasons: summary.contextual_reasons,
-    caution_notes: truthEffect.caution_notes.map((note) => note.text),
-    local_truth: truthEffect,
+    caution_notes:
+      lang === "sv" ? truthEffect.caution_notes.map((note) => note.text) : [],
+    local_truth: localTruthForLang(truthEffect, lang),
     pulse_context: pulseResult.item
       ? {
           id: pulseResult.item.id,
@@ -1151,12 +1221,12 @@ function buildMiniRouteCandidate({
       : null,
     availability: availabilityContext,
     route: {
-      title: buildRouteTitle(routeStops, preferences, timeBand),
+      title: buildRouteTitle(routeStops, preferences, timeBand, lang),
       duration_minutes: totalDuration,
       estimated_km: pickedRoute.duration.estimated_km,
       stops: orderedStops,
     },
-    what_to_do_after: buildWhatToDoAfter(routeStops),
+    what_to_do_after: buildWhatToDoAfter(routeStops, lang),
   };
 }
 
@@ -1178,6 +1248,7 @@ function buildStopCandidates(params) {
     memory,
     hasSecondHandCoverage,
     coverageNote,
+    lang = "sv",
   } = params;
 
   return filterCandidateItems(cityConfig)
@@ -1194,6 +1265,7 @@ function buildStopCandidates(params) {
         memory,
         hasSecondHandCoverage,
         coverageNote,
+        lang,
       }),
     )
     .filter((candidate) => Number.isFinite(candidate.score))
@@ -1217,6 +1289,7 @@ function buildAllCandidates(params) {
         weekday: params.weekday,
         memory: params.memory,
         coverageNote: params.coverageNote,
+        lang: params.lang,
       }),
     )
     .filter(Boolean);
@@ -1311,19 +1384,20 @@ function formatMoveOutput(candidate) {
 }
 
 async function buildBlitzDecision(cityConfig, payload = {}) {
+  const lang = normalizeLanguage(payload.lang);
   const nowContext = resolveNowContext(cityConfig, payload);
   const origin = await resolveOriginPoint(cityConfig, payload.origin || payload.start || null);
   const { intent_keys, preferences } = resolveBlitzPreferences(payload);
   const memory = normalizeBlitzMemory(payload.memory, payload.previous_route);
   const weekday = getIsoWeekday(nowContext.date);
   const timeBand = resolveTimeBand(nowContext.hour);
-  const pulse = cityConfig.services.getCityPulse(nowContext.date);
+  const pulse = cityConfig.services.getCityPulse(nowContext.date, { lang });
   const hasSecondHandCoverage = cityConfig.catalog.allItems.some((item) =>
     ["second_hand", "vintage", "antique"].some((tag) => (item.tags || []).includes(tag)),
   );
   const coverageNote =
     preferences.includes("second_hand") && !hasSecondHandCoverage
-      ? `${cityConfig.label} har ännu inte ett fullt second hand-pack, så Blitz väljer ett trovärdigt nästa drag utan att låtsas att det är vintage-drivet.`
+      ? translate(lang, "blitz.coverageNoteNoSecondHand", { city: cityConfig.label })
       : null;
   const candidates = buildAllCandidates({
     cityConfig,
@@ -1337,6 +1411,7 @@ async function buildBlitzDecision(cityConfig, payload = {}) {
     memory,
     hasSecondHandCoverage,
     coverageNote,
+    lang,
   });
   const { primary, backup } = choosePrimaryAndBackup(candidates, payload.mode || DEFAULT_BLITZ_MODE);
   const updatedMemory = buildUpdatedMemory(memory, primary, nowContext.now_iso);

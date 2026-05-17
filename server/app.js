@@ -789,6 +789,7 @@ function buildApp() {
   app.post("/api/blitz", async (request, response) => {
     try {
       const { cityConfig, requestedCity, cityFallbackUsed } = resolveRequestCity(request.body?.city);
+      const lang = normalizeLanguage(request.query?.lang || request.body?.lang);
       const result = await buildBlitzDecision(cityConfig, {
         date: request.body?.date,
         now: request.body?.now,
@@ -798,6 +799,7 @@ function buildApp() {
         preferences: Array.isArray(request.body?.preferences) ? request.body.preferences : [],
         memory: request.body?.memory,
         previous_route: request.body?.previous_route,
+        lang,
       });
 
       response.json({
