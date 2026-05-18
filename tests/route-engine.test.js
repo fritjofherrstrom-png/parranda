@@ -1307,6 +1307,53 @@ test("default route generation keeps live events out of main_stops on Rome but t
 });
 
 test("default route generation keeps live events out of main_stops on Barcelona even when events would seed the route", async () => {
+  // Realistic Open Data BCN fixture for 2026-05-20: two evening concerts
+  // tagged music/kultur/nattliv near Gràcia, scored highly enough by
+  // buildLiveEventStopCandidates that — without the include_live_events
+  // gate — they would push catalog stops out of primary_route.main_stops
+  // (the bug we reproduced via curl). The gate must keep them out by
+  // default; we assert that here.
+  const openDataFixture = [
+    {
+      register_id: 91001,
+      name: "Concert Gràcia 1",
+      status: "published",
+      core_type: "event",
+      body: "<p>Live music night in Gràcia.</p>",
+      start_date: "2026-05-20T20:00:00+02:00",
+      end_date: "2026-05-20T23:00:00+02:00",
+      addresses: [
+        {
+          place: "Plaça del Sol",
+          address_name: "Plaça del Sol",
+          location_4326: { geometries: [{ type: "Point", coordinates: [41.4019, 2.1567] }] },
+          location_4326_latlon: { geometries: [{ type: "Point", coordinates: [2.1567, 41.4019] }] },
+        },
+      ],
+      classifications_data: [{ name: "Concerts" }],
+      secondary_filters_data: [{ name: "Música" }],
+    },
+    {
+      register_id: 91002,
+      name: "Concert Gràcia 2",
+      status: "published",
+      core_type: "event",
+      body: "<p>Second live night in Gràcia.</p>",
+      start_date: "2026-05-20T21:00:00+02:00",
+      end_date: "2026-05-20T23:30:00+02:00",
+      addresses: [
+        {
+          place: "Casa Vicens vicinity",
+          address_name: "Carrer de les Carolines",
+          location_4326: { geometries: [{ type: "Point", coordinates: [41.4032, 2.1495] }] },
+          location_4326_latlon: { geometries: [{ type: "Point", coordinates: [2.1495, 41.4032] }] },
+        },
+      ],
+      classifications_data: [{ name: "Concerts" }],
+      secondary_filters_data: [{ name: "Música" }],
+    },
+  ];
+
   global.fetch = async (url) => {
     const parsed = new URL(String(url));
 
@@ -1320,13 +1367,18 @@ test("default route generation keeps live events out of main_stops on Barcelona 
       });
     }
 
+    if (parsed.hostname === "opendata-ajuntament.barcelona.cat") {
+      return {
+        ok: true,
+        async json() {
+          return openDataFixture;
+        },
+      };
+    }
+
     throw new Error(`Unexpected fetch in default Barcelona live-event separation test: ${url}`);
   };
 
-  // Barcelona resolves live events from Open Data BCN via its own service;
-  // by default the fixture path returns whatever the cached service yields.
-  // What this test pins is the engine-level invariant: regardless of what
-  // events come in, none of them become primary_route.main_stops by default.
   resetBarcelonaLiveEventsCache();
 
   const result = await generateRecommendations({
@@ -1341,15 +1393,35 @@ test("default route generation keeps live events out of main_stops on Barcelona 
     lang: "en",
   });
 
-  if (!result.days?.length || !result.days[0].primary_route) {
-    return; // city not in active routing mode in this harness — nothing to assert
-  }
-  const mainStops = result.days[0].primary_route.main_stops || [];
+  // The regression coverage matters precisely when Barcelona DOES produce a
+  // route here — that's the path the screenshot bug reproduced on. Assert
+  // loudly so the test cannot pass vacuously if some future change starts
+  // returning days: [] for Barcelona at the engine level.
+  assert.ok(
+    result.days?.length,
+    "Expected generateRecommendations to produce at least one day for Barcelona in this fixture; if Barcelona stops generating routes via the engine, this regression cannot protect against the live-event-in-main_stops bug.",
+  );
+  const primaryRoute = result.days[0].primary_route;
+  assert.ok(
+    primaryRoute,
+    "Expected day[0].primary_route to exist; without a primary_route there is nothing to assert against.",
+  );
+
+  const mainStops = primaryRoute.main_stops || [];
+  assert.ok(mainStops.length > 0, "Primary route should contain at least one main stop");
   assert.ok(
     mainStops.every((stop) => !stop.is_live_event),
     `Default Barcelona route should contain no live-event main_stops; got: ${mainStops
       .filter((s) => s.is_live_event)
       .map((s) => s.label)
       .join(", ")}`,
+  );
+
+  // The events should still be available on the sidecar (the layer is
+  // populated regardless of the gate).
+  const sidecar = result.days[0].live_events || [];
+  assert.ok(
+    sidecar.length >= 1,
+    "Sidecar live_events should still be populated even when main_stops excludes them",
   );
 });
