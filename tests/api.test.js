@@ -1228,16 +1228,29 @@ test("GET /api/city-pulse för barcelona presenterar official events utan editor
     assert.deepEqual(en.body.moments, []);
     assert.deepEqual(en.body.wildcards, []);
     assert.equal(en.body.items.length, 1);
-    assert.equal(en.body.items[0].kind, "Official live · Open Data BCN");
+    // Kind chip is derived from match_tags (music → Concert) so the card no
+    // longer needs the Catalan title to communicate the event type.
+    assert.equal(en.body.items[0].kind, "Concert · Open Data BCN");
+    // Native title is preserved on the item (we don't translate provider
+    // titles or local place names) AND mirrored on native_title for clarity.
     assert.equal(en.body.items[0].title, "Concert de barri a Barcelona");
+    assert.equal(en.body.items[0].native_title, "Concert de barri a Barcelona");
+    assert.equal(en.body.items[0].source_language, "ca");
     assert.equal(en.body.items[0].where, "Centre Cívic Example • C Example, 12");
     assert.equal(en.body.items[0].when, "Today");
-    assert.match(en.body.items[0].blurb, /Concert gratuït/);
+    // Body is EN-framed ("Concert at {venue}.") rather than the raw Catalan
+    // summary, so EN cards no longer feel like an untranslated feed dump.
+    assert.equal(en.body.items[0].blurb, "Concert at Centre Cívic Example.");
+    assert.doesNotMatch(en.body.items[0].blurb, /gratuït|barri|activitats/i);
     assert.match(en.body.items[0].why_it_matters, /Official source signal from Open Data BCN/);
 
     assert.equal(sv.body.items.length, 1);
-    assert.equal(sv.body.items[0].kind, "Officiellt live · Open Data BCN");
+    assert.equal(sv.body.items[0].kind, "Konsert · Open Data BCN");
     assert.equal(sv.body.items[0].when, "I dag");
+    assert.equal(sv.body.items[0].native_title, "Concert de barri a Barcelona");
+    assert.equal(sv.body.items[0].source_language, "ca");
+    // SV body is also framed in Swedish instead of the Catalan summary leak.
+    assert.equal(sv.body.items[0].blurb, "Konsert på Centre Cívic Example.");
     assert.match(sv.body.items[0].why_it_matters, /Officiell källsignal från Open Data BCN/);
     assert.equal(sv.body.official_events[0].title, "Concert de barri a Barcelona");
     assert.equal(sv.body.official_events[0].provider_category, "Concerts");

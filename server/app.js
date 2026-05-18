@@ -89,25 +89,84 @@ function compactOfficialPulseText(text, maxLength = 220) {
   return `${clipped.slice(0, boundary > 80 ? boundary : maxLength).trim()}...`;
 }
 
+/*
+ * Event-kind taxonomy. Live-event feeds (e.g. Open Data BCN) publish titles in
+ * the local language (Catalan). We don't translate provider titles — but we do
+ * derive an EN/SV kind label from the existing match_tags so the user always
+ * has app-owned framing around the native title, never a feed-dump-only card.
+ *
+ * Ordered by specificity: music wins over kultur, market wins over kultur,
+ * etc. "generic" is the catch-all so every live-event card has a kind label.
+ */
+const EVENT_KIND_TAXONOMY = [
+  ["music", { sv: "Konsert", en: "Concert" }],
+  ["exhibition", { sv: "Utställning", en: "Exhibition" }],
+  ["market", { sv: "Marknad", en: "Market" }],
+  ["nattliv", { sv: "Nattliv", en: "Nightlife" }],
+  ["mat", { sv: "Matevent", en: "Food event" }],
+  ["civic", { sv: "Föreläsning", en: "Talk" }],
+  ["family", { sv: "Familjeevent", en: "Family event" }],
+  ["community", { sv: "Lokalt event", en: "Local event" }],
+  ["kultur", { sv: "Kulturevent", en: "Cultural event" }],
+];
+const EVENT_KIND_GENERIC = { sv: "Liveevent", en: "Live event" };
+
+function deriveEventKindLabel(event, lang = "sv") {
+  const isEnglish = normalizeLanguage(lang) === "en";
+  const tags = event?.match_tags || [];
+  for (const [tag, labels] of EVENT_KIND_TAXONOMY) {
+    if (tags.includes(tag)) {
+      return isEnglish ? labels.en : labels.sv;
+    }
+  }
+  return isEnglish ? EVENT_KIND_GENERIC.en : EVENT_KIND_GENERIC.sv;
+}
+
+function isEventSourceLanguageForeign(event, lang) {
+  const sourceLang = (event?.source_language || "").toLowerCase();
+  if (!sourceLang) {
+    return false;
+  }
+  return sourceLang !== normalizeLanguage(lang);
+}
+
 function buildOfficialPulseKind(event, lang = "sv") {
   const isEnglish = normalizeLanguage(lang) === "en";
   const sourceLabel = event.source_label || event.provider || "";
-  return [isEnglish ? "Official live" : "Officiellt live", sourceLabel].filter(Boolean).join(" · ");
+  const kindLabel = deriveEventKindLabel(event, lang);
+  // Use the derived kind first so the chip reads as "Concert · Open Data BCN"
+  // rather than the generic "Official live · Open Data BCN", which made the
+  // card depend on the (Catalan) title to communicate what kind of thing it is.
+  const primary = kindLabel || (isEnglish ? "Official live" : "Officiellt live");
+  return [primary, sourceLabel].filter(Boolean).join(" · ");
 }
 
 function buildOfficialPulseBlurb(event, cityLabel, lang = "sv") {
   const isEnglish = normalizeLanguage(lang) === "en";
   const summary = compactOfficialPulseText(event.summary || event.raw_summary);
+  const venue = event.venue || event.address || "";
 
-  if (summary) {
+  // When the provider summary is in a different language than the UI, don't
+  // dump it as the explanatory body — the user is left interpreting a feed
+  // string. The native title can still surface (set elsewhere). Synthesise
+  // an EN/SV framing line from the derived kind + venue instead. The
+  // original native blurb is preserved on event.summary/raw_summary for
+  // callers that want to expose it via a "show original" affordance.
+  if (summary && !isEventSourceLanguageForeign(event, lang)) {
     return summary;
   }
 
+  const kindLabel = deriveEventKindLabel(event, lang);
+  if (venue) {
+    return isEnglish
+      ? `${kindLabel} at ${venue}.`
+      : `${kindLabel} på ${venue}.`;
+  }
+
   const sourceLabel = event.source_label || (isEnglish ? "an official source" : "en officiell källa");
-  const category = event.provider_category ? `${event.provider_category} · ` : "";
   return isEnglish
-    ? `${category}Official event from ${sourceLabel} in ${cityLabel || "the city"}.`
-    : `${category}Officiellt event från ${sourceLabel} i ${cityLabel || "staden"}.`;
+    ? `${kindLabel} from ${sourceLabel} in ${cityLabel || "the city"}.`
+    : `${kindLabel} från ${sourceLabel} i ${cityLabel || "staden"}.`;
 }
 
 function buildOfficialPulseWhy(event, lang = "sv") {
@@ -133,6 +192,11 @@ function buildOfficialPulseItem(event, date, cityConfig, lang = "sv") {
     level: "venue",
     kind: buildOfficialPulseKind(event, lang),
     title: event.title,
+    // Mirror the native title so the UI can label or hint "Catalan title"
+    // when needed. The title stays native intentionally — we don't translate
+    // provider titles or local place names.
+    native_title: event.title,
+    source_language: event.source_language || null,
     where,
     when: buildOfficialPulseWhen(event, date, lang),
     blurb: buildOfficialPulseBlurb(event, cityLabel, lang),
