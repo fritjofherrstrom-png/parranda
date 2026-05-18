@@ -9,6 +9,7 @@ const { buildClientI18nPayload, normalizeLanguage, translate } = require("./ui-i
 
 const appRoot = path.resolve(__dirname, "..");
 const appShellTemplate = fs.readFileSync(path.join(appRoot, "index.html"), "utf8");
+const landingShellTemplate = fs.readFileSync(path.join(appRoot, "landing.html"), "utf8");
 
 const pulseVibeByTag = {
   kultur: "curious",
@@ -536,6 +537,20 @@ function buildStaticShellI18nReplacements(lang) {
   };
 }
 
+function renderLandingShell({ lang = "sv" } = {}) {
+  const uiLang = normalizeLanguage(lang);
+  const ogLocale = uiLang === "en" ? "en_US" : "sv_SE";
+  const replacements = {
+    "__PARRANDA_LANG__": escapeHtml(uiLang),
+    "__PARRANDA_UI_LANG__": escapeHtml(uiLang),
+    "__PARRANDA_OG_LOCALE__": ogLocale,
+  };
+  return Object.entries(replacements).reduce(
+    (html, [token, value]) => html.split(token).join(value),
+    landingShellTemplate,
+  );
+}
+
 function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed, lang = "sv" }) {
   const uiLang = normalizeLanguage(lang);
   const requestedLabel = cityFallbackUsed ? humanizeCityKey(requestedCity) : "";
@@ -624,11 +639,9 @@ function buildApp() {
 
   app.use(express.json());
   app.get(["/", "/index.html"], (request, response) => {
-    const cityResolution = {
-      ...resolveRequestCity(inferShellCity(request)),
-      lang: normalizeLanguage(request.query?.lang),
-    };
-    response.type("html").send(renderAppShell(cityResolution));
+    response.type("html").send(
+      renderLandingShell({ lang: normalizeLanguage(request.query?.lang) })
+    );
   });
 
   app.use(express.static(appRoot, { index: false }));
