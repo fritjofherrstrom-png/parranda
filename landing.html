@@ -14,7 +14,7 @@
     <meta property="og:locale" content="__PARRANDA_OG_LOCALE__" />
     <meta property="og:image" content="/assets/icons/icon-512.png" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Parranda — Din kväll. Din stad. Curated." />
+    <meta name="twitter:title" content="Parranda — Din stad. Din dag. Curated." />
     <meta name="twitter:description" content="Handplockade rutter i Barcelona och Rom." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -30,6 +30,8 @@
     </script>
   </head>
   <body data-lang="__PARRANDA_LANG__">
+    <a href="#planner" class="lp-skip-link">Hoppa till planering</a>
+    <main id="main">
 
     <!-- ═══════════════════════════════════════ HERO ═══════════════════════ -->
     <section class="lp-hero" id="hero">
@@ -37,7 +39,7 @@
         <img
           class="lp-hero__bg"
           src="/assets/hero-worldwide.jpg"
-          alt="Söder om Medelhavet, golden hour"
+          alt=""
           loading="eager"
           fetchpriority="high"
         />
@@ -89,18 +91,7 @@
     <section class="lp-section lp-section--cream" id="planner">
       <div class="lp-inner">
         <h2 class="lp-planner__title">Planera din perfekta dag</h2>
-        <form class="lp-planner__form" id="lpPlannerForm" novalidate>
-          <label class="lp-field" for="lpDate">
-            <span class="lp-field__label">Datum</span>
-            <div class="lp-field__input">
-              <svg class="lp-field__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <rect x="3" y="4" width="18" height="18" rx="2"/>
-                <path d="M16 2v4M8 2v4M3 10h18"/>
-              </svg>
-              <input id="lpDate" type="text" value="15 juni" autocomplete="off" />
-            </div>
-          </label>
-
+        <form class="lp-planner__form lp-planner__form--simple" id="lpPlannerForm" novalidate>
           <label class="lp-field" for="lpCity">
             <span class="lp-field__label">Stad</span>
             <div class="lp-field__input">
@@ -112,7 +103,6 @@
                 id="lpCity"
                 type="search"
                 placeholder="Sök stad"
-                aria-label="Sök stad"
                 autocomplete="off"
                 list="lpCityList"
               />
@@ -122,32 +112,6 @@
               </datalist>
             </div>
           </label>
-
-          <fieldset class="lp-field lp-field--fieldset">
-            <legend class="lp-field__label">Vibe &amp; tempo</legend>
-            <div class="lp-toggle" role="radiogroup" aria-label="Vibe och tempo">
-              <button
-                type="button"
-                class="lp-toggle__btn is-active"
-                data-mood="mellow"
-                role="radio"
-                aria-checked="true"
-              >
-                <span class="lp-toggle__dot" aria-hidden="true"></span>
-                Lågmält
-              </button>
-              <button
-                type="button"
-                class="lp-toggle__btn"
-                data-mood="energetic"
-                role="radio"
-                aria-checked="false"
-              >
-                <span class="lp-toggle__dot" aria-hidden="true"></span>
-                Energiskt
-              </button>
-            </div>
-          </fieldset>
 
           <button
             type="submit"
@@ -164,7 +128,7 @@
           </button>
         </form>
         <p class="lp-planner__note">
-          Planeraren låses upp när du valt stad. Barcelona och Rom är live. Fler städer är på väg.
+          Barcelona och Rom är live. Datum och stil väljer du inne i staden.
         </p>
       </div>
     </section>
@@ -175,7 +139,7 @@
         <div class="lp-blitz__head">
           <div class="lp-blitz__head-text">
             <p class="lp-eyebrow">BLITZ · SLUMPA</p>
-            <h3 class="lp-blitz__title">Tre sätt att börja</h3>
+            <h2 class="lp-blitz__title">Tre sätt att börja</h2>
           </div>
           <button class="lp-btn lp-btn--secondary" type="button" id="lpBlitzShuffle">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -206,7 +170,7 @@
               </span>
               Slumpat · 4 stopp · 15:30
             </p>
-            <h4 class="lp-blitz-card__title">Den vinige eftermiddagen</h4>
+            <h3 class="lp-blitz-card__title">Den vinige eftermiddagen</h3>
             <p class="lp-blitz-card__desc">Mjuk lunch på en bakgata, vin när ljuset blir orange, sen utsikt över taken.</p>
             <div class="lp-tags">
               <span class="lp-tag">lugnt</span>
@@ -231,7 +195,7 @@
               </span>
               Slumpat · 5 stopp · 09:00
             </p>
-            <h4 class="lp-blitz-card__title">Stilla morgon med rörelse</h4>
+            <h3 class="lp-blitz-card__title">Stilla morgon med rörelse</h3>
             <p class="lp-blitz-card__desc">Bageri, marknad, en park och en lång lunch — innan staden tar fart.</p>
             <div class="lp-tags">
               <span class="lp-tag">promenad</span>
@@ -256,7 +220,7 @@
               </span>
               Slumpat · 3 stopp · 21:00
             </p>
-            <h4 class="lp-blitz-card__title">Sen kväll, mörka rum</h4>
+            <h3 class="lp-blitz-card__title">Sen kväll, mörka rum</h3>
             <p class="lp-blitz-card__desc">Cocktailbar, sen tallrik, vinyl och få ord. Hem efter midnatt.</p>
             <div class="lp-tags">
               <span class="lp-tag">nattliv</span>
@@ -289,7 +253,7 @@
           <h2 class="lp-pulse__headline">
             <em>Live Pulse:</em> städer just nu
           </h2>
-          <button class="lp-btn lp-btn--ghost-dark" type="button">
+          <button class="lp-btn lp-btn--ghost-dark" type="button" disabled aria-disabled="true">
             Visa alla uppdateringar
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <line x1="5" y1="12" x2="19" y2="12"/>
@@ -407,6 +371,7 @@
       </div>
     </section>
 
+    </main>
     <script src="/landing.js"></script>
   </body>
 </html>

@@ -1,7 +1,6 @@
 (function () {
   "use strict";
 
-  /* ── Planner: enable CTA when city has input ── */
   var cityInput = document.getElementById("lpCity");
   var plannerCta = document.getElementById("lpPlannerCta");
   var plannerForm = document.getElementById("lpPlannerForm");
@@ -61,16 +60,14 @@
     });
   }
 
-  /* ── Mood toggle ── */
-  var toggleBtns = document.querySelectorAll(".lp-toggle__btn");
-  toggleBtns.forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      toggleBtns.forEach(function (b) {
-        b.classList.remove("is-active");
-        b.setAttribute("aria-checked", "false");
-      });
-      btn.classList.add("is-active");
-      btn.setAttribute("aria-checked", "true");
+  /* ── CTA-länkar → scroll till planerare + fokusera stadsökfältet ── */
+  var ctaLinks = document.querySelectorAll('a[href="#planner"]');
+  ctaLinks.forEach(function (link) {
+    link.addEventListener("click", function (e) {
+      e.preventDefault();
+      var planner = document.getElementById("planner");
+      if (planner) planner.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (cityInput) setTimeout(function () { cityInput.focus(); }, 400);
     });
   });
 
@@ -91,7 +88,7 @@
   if (shuffleBtn) shuffleBtn.addEventListener("click", shuffleBlitz);
   if (shuffleAllBtn) shuffleAllBtn.addEventListener("click", shuffleBlitz);
 
-  /* ── "Använd en av dem" → scroll to planner ── */
+  /* ── "Använd en av dem" → scroll till planerare + fokus ── */
   var useBtn = document.getElementById("lpBlitzUse");
   if (useBtn) {
     useBtn.addEventListener("click", function () {

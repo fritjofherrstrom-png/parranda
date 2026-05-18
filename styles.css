@@ -5376,6 +5376,32 @@ body.is-printing-guide #routeGuideDrawer {
    GLOBAL LANDING PAGE  (landing.html / lp-* namespace)
    ================================================================ */
 
+/* ── Skip link ── */
+.lp-skip-link {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.lp-skip-link:focus-visible {
+  left: 16px;
+  top: 16px;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  z-index: 9999;
+  padding: 12px 20px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 999px;
+  font: 700 0.9rem/1 "Manrope", sans-serif;
+  text-decoration: none;
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
 /* ── Section scaffolding ── */
 .lp-section {
   width: 100%;
@@ -5424,6 +5450,11 @@ body.is-printing-guide #routeGuideDrawer {
   transition: transform 180ms ease, background 180ms ease, opacity 180ms ease, box-shadow 180ms ease;
 }
 .lp-btn:hover { transform: translateY(-1px); }
+.lp-btn:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+.lp-btn--primary:focus-visible { outline-color: #fff7ef; }
 .lp-btn--sm { padding: 10px 18px; font-size: 0.9rem; }
 .lp-btn--lg { padding: 16px 28px; font-size: 1.02rem; }
 .lp-btn--primary {
@@ -5570,6 +5601,11 @@ body.is-printing-guide #routeGuideDrawer {
   transition: color 180ms ease;
 }
 .lp-nav__link:hover { color: #fff7ef; }
+.lp-nav__link:focus-visible {
+  outline: 2px solid #fff7ef;
+  outline-offset: 4px;
+  border-radius: 3px;
+}
 .lp-nav__actions { display: flex; gap: 12px; align-items: center; }
 
 /* ── Hero headline + copy ── */
@@ -5657,14 +5693,14 @@ body.is-printing-guide #routeGuideDrawer {
   padding: 14px 18px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.62);
-  border: 1px solid rgba(77, 49, 32, 0.12);
+  border: 1px solid rgba(77, 49, 32, 0.28);
   font: 500 0.96rem/1 "Manrope", sans-serif;
   color: var(--ink);
   transition: border-color 180ms ease, box-shadow 180ms ease;
 }
 .lp-field__input:focus-within {
   border-color: rgba(175, 77, 36, 0.45);
-  box-shadow: 0 0 0 3px rgba(175, 77, 36, 0.1);
+  box-shadow: 0 0 0 3px rgba(175, 77, 36, 0.35);
   outline: none;
 }
 .lp-field__icon {
@@ -5691,7 +5727,7 @@ body.is-printing-guide #routeGuideDrawer {
   padding: 4px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.62);
-  border: 1px solid rgba(77, 49, 32, 0.12);
+  border: 1px solid rgba(77, 49, 32, 0.28);
 }
 .lp-toggle__btn {
   flex: 1;
@@ -5732,7 +5768,7 @@ body.is-printing-guide #routeGuideDrawer {
   text-align: center;
   margin: 14px 0 0;
   font-size: 0.84rem;
-  color: rgba(36, 25, 20, 0.6);
+  color: rgba(36, 25, 20, 0.72);
 }
 
 /* ──────────────── BLITZ ──────────────── */
@@ -5756,10 +5792,7 @@ body.is-printing-guide #routeGuideDrawer {
   flex-direction: column;
   gap: 12px;
   color: var(--ink);
-  cursor: pointer;
-  transition: transform 220ms ease;
 }
-.lp-blitz-card:hover { transform: translateY(-4px); }
 .lp-blitz-card__photo {
   position: relative;
   width: 100%;
@@ -5862,10 +5895,7 @@ body.is-printing-guide #routeGuideDrawer {
   flex-direction: column;
   gap: 14px;
   color: #fff7ef;
-  cursor: pointer;
-  transition: transform 220ms ease;
 }
-.lp-pulse-card:hover { transform: translateY(-4px); }
 .lp-pulse-card__photo {
   position: relative;
   width: 100%;
@@ -6067,7 +6097,13 @@ body.is-printing-guide #routeGuideDrawer {
   transition: color 180ms ease;
 }
 .lp-footer__links a:hover { color: #fff7ef; }
-.lp-footer__copy { color: rgba(255, 247, 239, 0.44); }
+.lp-footer__copy { color: rgba(255, 247, 239, 0.58); }
+
+/* ── Simplified planner (city-only, v1) ── */
+.lp-planner__form--simple {
+  grid-template-columns: 1fr auto;
+  max-width: 580px;
+}
 
 /* ──────────────── MOBILE  ──────────────── */
 @media (max-width: 760px) {
