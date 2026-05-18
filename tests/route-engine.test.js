@@ -21,6 +21,7 @@ const { createEmptyLocalTruthEffect, evaluateLocalTruth } = require("../server/l
 const { diversifyRecommendationDays } = require("../server/route-diversity");
 const { findItemByName, routeTemplates } = require("../server/catalog");
 const { resetLiveEventsCache } = require("../server/live-events");
+const { resetBarcelonaLiveEventsCache } = require("../server/cities/barcelona/live");
 
 const originalFetch = global.fetch;
 
@@ -610,6 +611,10 @@ test("live-event-kandidater premierar stopp som faktiskt ligger i korridoren", (
       shape: "arc",
       start: { label: "Trastevere", lat: 41.8885, lng: 12.4678 },
       end: { label: "Monti", lat: 41.8946, lng: 12.4951 },
+      // The candidate-builder gates on includeLiveEvents now (default is the
+      // separate Pulse/sidecar layer). The corridor-scoring behaviour this
+      // test pins is still valid behind the opt-in.
+      includeLiveEvents: true,
     },
   );
 
@@ -1187,6 +1192,9 @@ test("live-event kan bli ett faktiskt stopp i huvudrutten när det passar kväll
     preferences: ["kultur", "nattliv"],
     optimizerMode: "bar-hop",
     modifier: "evening",
+    // Default routes use catalog stops only; opt into the live-event-as-stop
+    // capability so this regression coverage keeps exercising the wiring.
+    includeLiveEvents: true,
   });
 
   assert.ok(
@@ -1195,4 +1203,225 @@ test("live-event kan bli ett faktiskt stopp i huvudrutten när det passar kväll
     ),
   );
   assert.match(result.days[0].primary_route.live_event_fit_note || "", /ligger inne i själva rutten/i);
+});
+
+test("default route generation keeps live events out of main_stops on Rome but the sidecar still annotates them", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return weatherResponse({
+        daily: {
+          time: ["2026-04-16"],
+          weathercode: [0],
+          temperature_2m_max: [23],
+        },
+      });
+    }
+
+    if (parsed.hostname === "www.turismoroma.it") {
+      return {
+        ok: true,
+        async text() {
+          return `
+            <div class="views-row views-row-1">
+              <div class="news_info">
+                <div class="news_titolo_container">
+                  <div class="news_titolo">
+                    <div class="field-content">
+                      <a href="/en/events/teatro-india-night">Teatro India Night</a>
+                    </div>
+                  </div>
+                </div>
+                <div class="news_date">
+                  <div class="field-content">
+                    <span class="date-display-start">from&nbsp;16-04-2026</span>
+                    <span class="date-display-end">&nbsp;to&nbsp;16-04-2026</span>
+                  </div>
+                </div>
+                <div class="news_tipo">
+                  <div class="field-content"><a href="/en/tipo-evento/events">Events</a></div>
+                </div>
+                <div class="news_sedi">
+                  <div class="field-content"><a href="/en/places/teatro-india">Teatro di Roma - Teatro India</a></div>
+                </div>
+                <div class="news_indirizzo">Lungotevere Vittorio Gassman</div>
+                <div class="news_text">
+                  <div class="field-content"><p>Guided show visits for a cultural evening in Rome.</p></div>
+                </div>
+              </div>
+            </div>
+          `;
+        },
+      };
+    }
+
+    if (parsed.hostname === "nominatim.openstreetmap.org") {
+      return {
+        ok: true,
+        async json() {
+          return [
+            {
+              display_name: "Teatro di Roma - Teatro India, Rome, Italy",
+              lat: "41.8704",
+              lon: "12.4674",
+              type: "theatre",
+            },
+          ];
+        },
+      };
+    }
+
+    throw new Error(`Unexpected fetch in default-route live-event separation test: ${url}`);
+  };
+
+  const result = await generateRecommendations({
+    dates: ["2026-04-16"],
+    start: { type: "preset", label: "Trastevere" },
+    end: { type: "preset", label: "Trastevere" },
+    walkingKmTarget: 8,
+    preferences: ["kultur", "nattliv"],
+    optimizerMode: "bar-hop",
+    modifier: "evening",
+    // No includeLiveEvents — verify the default path keeps live events
+    // off main_stops entirely, while the sidecar continues to expose them.
+  });
+
+  const mainStops = result.days[0].primary_route.main_stops;
+  assert.ok(
+    mainStops.every((stop) => !stop.is_live_event),
+    `Default route should contain no live-event main_stops; got: ${mainStops
+      .filter((s) => s.is_live_event)
+      .map((s) => s.label)
+      .join(", ")}`,
+  );
+
+  const sidecar = result.days[0].live_events;
+  assert.ok(Array.isArray(sidecar) && sidecar.length >= 1, "Sidecar should still expose live events");
+  const indiaSidecar = sidecar.find((event) => event.title === "Teatro India Night");
+  assert.ok(indiaSidecar, "Teatro India Night should still appear on the sidecar");
+  assert.ok(
+    indiaSidecar.best_route_id,
+    "Sidecar live event should still carry best_route_id annotation so the UI can show 'near this route today'",
+  );
+});
+
+test("default route generation keeps live events out of main_stops on Barcelona even when events would seed the route", async () => {
+  // Realistic Open Data BCN fixture for 2026-05-20: two evening concerts
+  // tagged music/kultur/nattliv near Gràcia, scored highly enough by
+  // buildLiveEventStopCandidates that — without the include_live_events
+  // gate — they would push catalog stops out of primary_route.main_stops
+  // (the bug we reproduced via curl). The gate must keep them out by
+  // default; we assert that here.
+  const openDataFixture = [
+    {
+      register_id: 91001,
+      name: "Concert Gràcia 1",
+      status: "published",
+      core_type: "event",
+      body: "<p>Live music night in Gràcia.</p>",
+      start_date: "2026-05-20T20:00:00+02:00",
+      end_date: "2026-05-20T23:00:00+02:00",
+      addresses: [
+        {
+          place: "Plaça del Sol",
+          address_name: "Plaça del Sol",
+          location_4326: { geometries: [{ type: "Point", coordinates: [41.4019, 2.1567] }] },
+          location_4326_latlon: { geometries: [{ type: "Point", coordinates: [2.1567, 41.4019] }] },
+        },
+      ],
+      classifications_data: [{ name: "Concerts" }],
+      secondary_filters_data: [{ name: "Música" }],
+    },
+    {
+      register_id: 91002,
+      name: "Concert Gràcia 2",
+      status: "published",
+      core_type: "event",
+      body: "<p>Second live night in Gràcia.</p>",
+      start_date: "2026-05-20T21:00:00+02:00",
+      end_date: "2026-05-20T23:30:00+02:00",
+      addresses: [
+        {
+          place: "Casa Vicens vicinity",
+          address_name: "Carrer de les Carolines",
+          location_4326: { geometries: [{ type: "Point", coordinates: [41.4032, 2.1495] }] },
+          location_4326_latlon: { geometries: [{ type: "Point", coordinates: [2.1495, 41.4032] }] },
+        },
+      ],
+      classifications_data: [{ name: "Concerts" }],
+      secondary_filters_data: [{ name: "Música" }],
+    },
+  ];
+
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return weatherResponse({
+        daily: {
+          time: ["2026-05-20"],
+          weathercode: [0],
+          temperature_2m_max: [22],
+        },
+      });
+    }
+
+    if (parsed.hostname === "opendata-ajuntament.barcelona.cat") {
+      return {
+        ok: true,
+        async json() {
+          return openDataFixture;
+        },
+      };
+    }
+
+    throw new Error(`Unexpected fetch in default Barcelona live-event separation test: ${url}`);
+  };
+
+  resetBarcelonaLiveEventsCache();
+
+  const result = await generateRecommendations({
+    city: "barcelona",
+    dates: ["2026-05-20"],
+    start: { type: "preset", label: "Gràcia" },
+    end: { type: "preset", label: "Gràcia" },
+    walkingKmTarget: 6,
+    preferences: ["mat", "kultur", "nattliv"],
+    optimizerMode: "evening-mode",
+    modifier: "evening",
+    lang: "en",
+  });
+
+  // The regression coverage matters precisely when Barcelona DOES produce a
+  // route here — that's the path the screenshot bug reproduced on. Assert
+  // loudly so the test cannot pass vacuously if some future change starts
+  // returning days: [] for Barcelona at the engine level.
+  assert.ok(
+    result.days?.length,
+    "Expected generateRecommendations to produce at least one day for Barcelona in this fixture; if Barcelona stops generating routes via the engine, this regression cannot protect against the live-event-in-main_stops bug.",
+  );
+  const primaryRoute = result.days[0].primary_route;
+  assert.ok(
+    primaryRoute,
+    "Expected day[0].primary_route to exist; without a primary_route there is nothing to assert against.",
+  );
+
+  const mainStops = primaryRoute.main_stops || [];
+  assert.ok(mainStops.length > 0, "Primary route should contain at least one main stop");
+  assert.ok(
+    mainStops.every((stop) => !stop.is_live_event),
+    `Default Barcelona route should contain no live-event main_stops; got: ${mainStops
+      .filter((s) => s.is_live_event)
+      .map((s) => s.label)
+      .join(", ")}`,
+  );
+
+  // The events should still be available on the sidecar (the layer is
+  // populated regardless of the gate).
+  const sidecar = result.days[0].live_events || [];
+  assert.ok(
+    sidecar.length >= 1,
+    "Sidecar live_events should still be populated even when main_stops excludes them",
+  );
 });

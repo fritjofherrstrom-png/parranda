@@ -2763,6 +2763,10 @@ test("POST /api/route-recommendations kan väva in ett live-event som faktiskt r
         preferences: ["kultur", "nattliv"],
         optimizer_mode: "bar-hop",
         modifier: "evening",
+        // Live events are now a separate layer by default. Opt in to the
+        // legacy "live event can become a real route stop" capability
+        // explicitly so this regression coverage stays meaningful.
+        include_live_events: true,
       },
     });
 
