@@ -678,6 +678,14 @@ body::before {
   color: rgba(36, 25, 20, 0.82);
 }
 
+.mode-city-preview .city-pulse-edition .pulse-entry-reason-label {
+  color: rgba(36, 25, 20, 0.55);
+}
+
+.mode-city-preview .city-pulse-edition .pulse-entry-reason-copy {
+  color: rgba(36, 25, 20, 0.75);
+}
+
 .hero-idea-strip .hero-panel-meta {
   display: block;
   margin-top: 2px;
