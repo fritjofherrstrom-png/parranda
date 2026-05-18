@@ -480,6 +480,10 @@ const translations = {
     "credibility.anchor": "Områdets fixpunkt",
     "credibility.liveEvent": "Liveevent idag",
     "credibility.whyThisRoute": "Varför just den här rutten",
+    "curator.whyArea": "Varför detta område",
+    "curator.whyOrder": "Varför den här ordningen",
+    "curator.whyNow": "Varför just nu",
+    "curator.whoFits": "Passar för",
   },
   en: {
     "shell.plannerEyebrow": "PLAN",
@@ -959,6 +963,10 @@ const translations = {
     "credibility.anchor": "Neighborhood anchor",
     "credibility.liveEvent": "Live event today",
     "credibility.whyThisRoute": "Why this route",
+    "curator.whyArea": "Why this area",
+    "curator.whyOrder": "Why this order",
+    "curator.whyNow": "Why now",
+    "curator.whoFits": "Who it fits",
   },
 };
 

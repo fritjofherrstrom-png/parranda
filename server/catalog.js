@@ -1574,6 +1574,24 @@ const routeTemplates = [
       "Freni e Frizioni på vägen hem",
       "Les Vignerons som lugn final",
     ],
+    curatorVoice: {
+      whyArea: {
+        sv: "Det här är klassiska Rom utan att bli kö-Rom. Trastevere ger dig en lugn morgon, Ghetto en stilla övergång, Monti känns som ett kvarter i stället för ett vykort, och Colosseum får bli det stora ankaret en gång — innan dagen landar tillbaka där den började.",
+        en: "This is classic Rome without becoming queue-Rome. Trastevere gives you a calm morning, the Ghetto a quiet crossing, Monti feels like a neighborhood instead of a postcard, and the Colosseum gets to be the one big anchor — before the day lands back where it started.",
+      },
+      whyOrder: {
+        sv: "Bygg dagen mot ankaret, inte runt det. Trastevere först eftersom morgonen hör hemma där, Ghetto medan det fortfarande är vilsamt, Monti till lunch när stadsdelen är som bäst, Colosseum när dagen tål en stor sak, och Trastevere igen för en kväll som faktiskt känns som din.",
+        en: "Build the day toward the anchor, not around it. Trastevere first because the morning belongs there, the Ghetto while it is still calm, Monti for lunch when the district peaks, the Colosseum once the day can hold a big thing, and Trastevere again for an evening that actually feels yours.",
+      },
+      whyNow: {
+        sv: "Funkar i stort sett året runt, men sitter särskilt bra när du har en eftermiddag som tål en lång sak — alltså inte söndag förmiddag, inte måndag morgon, helst inte runt en bigevent-helg.",
+        en: "Works most of the year, but lands especially well when you have an afternoon that can hold one long thing — so not Sunday morning, not Monday morning, ideally not a big-event weekend.",
+      },
+      whoFits: {
+        sv: "För den som vill ha klassiska Rom som faktiskt händer, men landa kvällen i ett kvarter och inte i en restaurang som översätter sin meny till sex språk.",
+        en: "For the traveler who wants classic Rome that actually happens, but lands the evening in a neighborhood rather than a restaurant translating its menu into six languages.",
+      },
+    },
   },
   {
     id: "south-loop",
@@ -1606,6 +1624,24 @@ const routeTemplates = [
       "Bar San Calisto om du vill ha mer brus",
       "ett sista glas i Ostiense innan du vänder hem",
     ],
+    curatorVoice: {
+      whyArea: {
+        sv: "Södra Rom är där vardagen syns. Aventinen ger dig utsikten utan turistflocken, Testaccio är fortfarande en kvartersmarknad i stället för en foodcourt, Ostiense bär kvällen utan att förställa sig, och Trastevere stänger dagen där du redan känner dig hemma.",
+        en: "South Rome is where the everyday shows up. The Aventine gives you the view without the tourist crowd, Testaccio is still a neighborhood market instead of a food court, Ostiense carries the evening without putting on a show, and Trastevere closes the day where you already feel at home.",
+      },
+      whyOrder: {
+        sv: "Vi börjar högt och rör oss nedåt. Aventinen tidigt eftersom värmen och köerna inte är där än, Testaccio till lunch när marknaden bär dagen, Ostiense på eftermiddagen för att området vaknar då, och Trastevere sist för att slutet av dagen ska kännas mjukt.",
+        en: "We start high and move down. The Aventine early because the heat and the queues aren't there yet, Testaccio at lunch when the market carries the day, Ostiense in the afternoon since the area only wakes up then, and Trastevere last so the end of the day stays soft.",
+      },
+      whyNow: {
+        sv: "Bäst tors–lör när Testaccio är riktigt levande. Söndag funkar fortfarande men marknaden är då mer av en söndagspromenad än en marknad.",
+        en: "Best Thu–Sat when Testaccio is at full volume. Sunday still works but the market is more of a Sunday stroll than a real market then.",
+      },
+      whoFits: {
+        sv: "För den som vill ha utsikt, mat, sydlig Rom-känsla och en dag som redan känns lokal vid lunch — inte en checklista som ska bockas av före lunch.",
+        en: "For the traveler who wants viewpoints, food, southern Rome energy, and a day that already feels local by lunch — not a checklist to be ticked before lunch.",
+      },
+    },
   },
   {
     id: "centro-wine-loop",
@@ -1637,6 +1673,24 @@ const routeTemplates = [
       "Enoteca Ferrara om middagen ska glida över i vin",
       "Bar San Calisto om du vill avsluta mer stimmigt",
     ],
+    curatorVoice: {
+      whyArea: {
+        sv: "Centro gjort rätt är inte Navona-kö och dyr aperitivo. Det är de tysta kyrkorna mellan Campo och Navona, det är ett glas i en bar som faktiskt har 35 viner från Lazio, och det är vägen tillbaka till Trastevere innan stadsdelen vänder mot fullt kvällsläge.",
+        en: "Centro done right isn't the Navona queue and overpriced aperitivo. It's the quiet churches between Campo and Navona, a glass at a bar that actually carries 35 wines from Lazio, and the walk back to Trastevere before the district flips into full evening mode.",
+      },
+      whyOrder: {
+        sv: "Vi tar Campo före det blir middagsmarknad, kyrkorna när ljuset inifrån är som bäst (sen morgon till tidig eftermiddag), Navona i kortform — som rum, inte som scen — och vinen sist eftersom det är då Trastevere börjar leverera på riktigt.",
+        en: "We hit Campo before it turns into a lunch market, the churches when the light inside is at its best (late morning to early afternoon), Navona briefly — as a room, not a stage — and the wine last because that's when Trastevere actually starts delivering.",
+      },
+      whyNow: {
+        sv: "Sitter särskilt bra ons–fre när Centro är levande men inte söndags-tätt. Regnig dag fungerar förvånansvärt fint eftersom kyrkorna helt enkelt blir bättre då.",
+        en: "Lands especially well Wed–Fri when Centro is alive but not Sunday-dense. A rainy day works surprisingly well because the churches simply become better then.",
+      },
+      whoFits: {
+        sv: "För den som vill ha vacker arkitektur, små kyrkorum, ett genuint vinglas och en kväll som rör sig framåt utan att låta som en bar-runda — och för den som hellre tar en lång lunch än en lång lista.",
+        en: "For the traveler who wants beautiful architecture, small church rooms, a real glass of wine, and an evening that moves forward without sounding like a bar crawl — and who'd rather take a long lunch than a long list.",
+      },
+    },
   },
   {
     id: "gianicolo-borgo-loop",

@@ -1451,6 +1451,10 @@ test("ui-i18n.js har credibility-nycklar i både sv och en", () => {
     "credibility.anchor",
     "credibility.liveEvent",
     "credibility.whyThisRoute",
+    "curator.whyArea",
+    "curator.whyOrder",
+    "curator.whyNow",
+    "curator.whoFits",
   ];
 
   for (const key of requiredKeys) {
@@ -1467,6 +1471,131 @@ test("ui-i18n.js har credibility-nycklar i både sv och en", () => {
       translations.en[key],
       `sv and en for ${key} are identical — likely untranslated`,
     );
+  }
+});
+
+test("POST /api/route-recommendations exponerar curator_voice när templaten har det", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-05-20"],
+          weathercode: [0],
+          temperature_2m_max: [22],
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during curator_voice test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    // Run multiple intents to maximize chance of hitting an authored template
+    const intents = [
+      ["vin", "kultur", "kyrkor", "mat", "nattliv"],
+      ["mat", "vin", "öl", "hidden gems", "kultur"],
+      ["vin", "kultur", "kyrkor", "mat", "low-key"],
+    ];
+
+    let foundVoice = null;
+    let observedShape = null;
+    for (const preferences of intents) {
+      const response = await requestJson(server, {
+        method: "POST",
+        path: "/api/route-recommendations",
+        body: {
+          city: "rome",
+          dates: ["2026-05-20"],
+          walking_km_target: 9,
+          preferences,
+        },
+      });
+
+      assert.equal(response.status, 200);
+      const route = response.body.days[0].primary_route;
+      assert.ok("curator_voice" in route, "curator_voice key must exist on primary_route");
+
+      if (route.curator_voice) {
+        observedShape = route.curator_voice;
+        foundVoice = { templateId: route.id, voice: route.curator_voice };
+        break;
+      }
+    }
+
+    assert.ok(
+      foundVoice,
+      "Expected at least one authored Rome template (classic-loop / south-loop / centro-wine-loop) to surface curator_voice across the 3 intents tested",
+    );
+
+    for (const key of ["why_area", "why_order", "why_now", "who_fits"]) {
+      assert.ok(
+        key in observedShape,
+        `curator_voice missing field ${key}`,
+      );
+    }
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("POST /api/route-recommendations väljer EN curator_voice när lang=en", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-05-20"],
+          weathercode: [0],
+          temperature_2m_max: [22],
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during curator_voice EN test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const intents = [
+      ["vin", "kultur", "kyrkor", "mat", "nattliv"],
+      ["mat", "vin", "öl", "hidden gems", "kultur"],
+      ["vin", "kultur", "kyrkor", "mat", "low-key"],
+    ];
+
+    let voiceEn = null;
+    for (const preferences of intents) {
+      const response = await requestJson(server, {
+        method: "POST",
+        path: "/api/route-recommendations?lang=en",
+        body: {
+          city: "rome",
+          dates: ["2026-05-20"],
+          walking_km_target: 9,
+          preferences,
+        },
+      });
+
+      const route = response.body.days[0].primary_route;
+      if (route.curator_voice) {
+        voiceEn = route.curator_voice;
+        break;
+      }
+    }
+
+    assert.ok(voiceEn, "Expected at least one EN curator_voice across the 3 intents tested");
+    assert.ok(/[A-Za-z]/.test(voiceEn.why_area || ""), "EN why_area should contain Latin letters");
+    assert.ok(
+      !/[åäö]/i.test(voiceEn.why_area || ""),
+      `EN why_area should not contain Swedish diacritics: got "${voiceEn.why_area}"`,
+    );
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
   }
 });
 

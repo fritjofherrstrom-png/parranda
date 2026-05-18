@@ -12,6 +12,24 @@ const routeTemplates = [
     weatherProfile: { sun: 1, rain: 2, hot: 0, evening: 2 },
     weekdayBoost: { 3: 1, 4: 1, 5: 1, 6: 1 },
     vibeProfile: { evening: 2, culture: 2, lowKey: 3, party: 0 },
+    curatorVoice: {
+      whyArea: {
+        sv: "Gràcia är Barcelona som vill vara ett kvarter, inte ett centrum. Casa Vicens ger dagen ett ankare utan att kräva en hel museikväll, Cines Verdi håller den lokala kulturen vid liv, Plaça del Sol är en plats där folk faktiskt sitter på riktigt, och Bodega Quimet är ett glas där folk har gjort exakt det här i decennier.",
+        en: "Gràcia is the Barcelona that wants to be a neighborhood, not a city center. Casa Vicens gives the day an anchor without demanding a full museum evening, Cines Verdi keeps the local culture alive, Plaça del Sol is a square where people actually sit for real, and Bodega Quimet is a glass where people have been doing exactly this for decades.",
+      },
+      whyOrder: {
+        sv: "Vi tar Casa Vicens medan det fortfarande är dagsljus, biograf eller kvartersrum tidig kväll, torget i den lugnaste timmen och vinbaren när Gràcia har bytt skift från eftermiddag till kväll.",
+        en: "We hit Casa Vicens while there's still daylight, cinema or neighborhood room in the early evening, the square in its calmest hour, and the bodega when Gràcia has switched shifts from afternoon to evening.",
+      },
+      whyNow: {
+        sv: "Bäst ons–lör kväll. Söndag är fortfarande lokalt men många mindre ställen är stängda — Bodega Quimet är ofta tillgänglig men dubbelkolla.",
+        en: "Best Wed–Sat evening. Sunday is still local but many smaller places are closed — Bodega Quimet is often open but worth a double-check.",
+      },
+      whoFits: {
+        sv: "För den som inte vill stå i kö för Sagrada Família igen och hellre känner att Barcelona faktiskt är en stad där folk bor — och för den som vill att kvällen ska gå långsamt utan att låsa sig till en exakt klockslag.",
+        en: "For the traveler who isn't queuing for Sagrada Família again and would rather feel that Barcelona is a city where people actually live — and who wants the evening to move slowly without locking down to a specific hour.",
+      },
+    },
   },
   {
     id: "sant-antoni-food-bar-flow",

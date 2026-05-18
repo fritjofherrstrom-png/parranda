@@ -8469,6 +8469,7 @@ function createApiRouteView(
     length: formatApproxKm(route.estimated_km),
     summary: normalizeRouteResultCopy(route.summary),
     why: normalizeRouteResultCopy(route.why_recommended),
+    curatorVoice: route.curator_voice || null,
     visibleWhy: buildVisibleWhy(route),
     path: `${route.start_label} -> ${stopLabels} -> ${route.end_label}`,
     anchor: route.start_label ? `Start: ${route.start_label}` : null,
@@ -9745,6 +9746,50 @@ function appendActiveDayWhy(anchorElement, routeView) {
   anchorElement.insertAdjacentElement("afterend", block);
 }
 
+const CURATOR_VOICE_FIELDS = [
+  { key: "why_area", labelKey: "curator.whyArea", labelFallback: "Varför detta område" },
+  { key: "why_order", labelKey: "curator.whyOrder", labelFallback: "Varför den här ordningen" },
+  { key: "why_now", labelKey: "curator.whyNow", labelFallback: "Varför just nu" },
+  { key: "who_fits", labelKey: "curator.whoFits", labelFallback: "Passar för" },
+];
+
+function appendActiveDayCuratorVoice(anchorElement, routeView) {
+  const voice = routeView.curatorVoice;
+  if (!voice || typeof voice !== "object" || !anchorElement || !anchorElement.parentNode) {
+    return;
+  }
+
+  const entries = CURATOR_VOICE_FIELDS
+    .map((field) => ({ field, text: (voice[field.key] || "").trim() }))
+    .filter((entry) => entry.text);
+
+  if (!entries.length) {
+    return;
+  }
+
+  const block = document.createElement("section");
+  block.className = "active-day-curator";
+
+  entries.forEach(({ field, text }) => {
+    const row = document.createElement("div");
+    row.className = "active-day-curator-row";
+
+    const label = document.createElement("p");
+    label.className = "active-day-curator-label";
+    label.textContent = t(field.labelKey, field.labelFallback);
+    row.appendChild(label);
+
+    const body = document.createElement("p");
+    body.className = "active-day-curator-text";
+    body.textContent = text;
+    row.appendChild(body);
+
+    block.appendChild(row);
+  });
+
+  anchorElement.insertAdjacentElement("afterend", block);
+}
+
 function createActiveDayView(routeView, { routeKey }) {
   const view = activeDayRouteTemplate.content.firstElementChild.cloneNode(true);
   const engineStrip = view.querySelector(".active-day-engine");
@@ -9775,6 +9820,8 @@ function createActiveDayView(routeView, { routeKey }) {
   const flowNote = view.querySelector(".active-day-flow-note");
   flowNote.textContent = buildActiveDayFlowNote(routeView);
   appendActiveDayWhy(flowNote, routeView);
+  const whyAnchor = view.querySelector(".active-day-why") || flowNote;
+  appendActiveDayCuratorVoice(whyAnchor, routeView);
 
   enginePills.innerHTML = "";
   usefulSignals.slice(shapePill.hidden ? 0 : 1).forEach((signal) => {
