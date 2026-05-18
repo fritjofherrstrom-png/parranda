@@ -1451,6 +1451,11 @@ test("ui-i18n.js har credibility-nycklar i både sv och en", () => {
     "credibility.anchor",
     "credibility.liveEvent",
     "credibility.whyThisRoute",
+    "curator.whyArea",
+    "curator.whyOrder",
+    "curator.whyNow",
+    "curator.whoFits",
+    "curator.readMore",
   ];
 
   for (const key of requiredKeys) {
@@ -1468,6 +1473,151 @@ test("ui-i18n.js har credibility-nycklar i både sv och en", () => {
       `sv and en for ${key} are identical — likely untranslated`,
     );
   }
+});
+
+test("POST /api/route-recommendations exponerar curator_voice när templaten har det", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-05-20"],
+          weathercode: [0],
+          temperature_2m_max: [22],
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during curator_voice test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    // Run multiple intents to maximize chance of hitting an authored template
+    const intents = [
+      ["vin", "kultur", "kyrkor", "mat", "nattliv"],
+      ["mat", "vin", "öl", "hidden gems", "kultur"],
+      ["vin", "kultur", "kyrkor", "mat", "low-key"],
+    ];
+
+    let foundVoice = null;
+    let observedShape = null;
+    for (const preferences of intents) {
+      const response = await requestJson(server, {
+        method: "POST",
+        path: "/api/route-recommendations",
+        body: {
+          city: "rome",
+          dates: ["2026-05-20"],
+          walking_km_target: 9,
+          preferences,
+        },
+      });
+
+      assert.equal(response.status, 200);
+      const route = response.body.days[0].primary_route;
+      assert.ok("curator_voice" in route, "curator_voice key must exist on primary_route");
+
+      if (route.curator_voice) {
+        observedShape = route.curator_voice;
+        foundVoice = { templateId: route.id, voice: route.curator_voice };
+        break;
+      }
+    }
+
+    assert.ok(
+      foundVoice,
+      "Expected at least one authored Rome template (classic-loop / south-loop / centro-wine-loop) to surface curator_voice across the 3 intents tested",
+    );
+
+    for (const key of ["why_area", "why_order", "why_now", "who_fits"]) {
+      assert.ok(
+        key in observedShape,
+        `curator_voice missing field ${key}`,
+      );
+    }
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("POST /api/route-recommendations väljer EN curator_voice när lang=en", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-05-20"],
+          weathercode: [0],
+          temperature_2m_max: [22],
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during curator_voice EN test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const intents = [
+      ["vin", "kultur", "kyrkor", "mat", "nattliv"],
+      ["mat", "vin", "öl", "hidden gems", "kultur"],
+      ["vin", "kultur", "kyrkor", "mat", "low-key"],
+    ];
+
+    let voiceEn = null;
+    for (const preferences of intents) {
+      const response = await requestJson(server, {
+        method: "POST",
+        path: "/api/route-recommendations?lang=en",
+        body: {
+          city: "rome",
+          dates: ["2026-05-20"],
+          walking_km_target: 9,
+          preferences,
+        },
+      });
+
+      const route = response.body.days[0].primary_route;
+      if (route.curator_voice) {
+        voiceEn = route.curator_voice;
+        break;
+      }
+    }
+
+    assert.ok(voiceEn, "Expected at least one EN curator_voice across the 3 intents tested");
+    assert.ok(/[A-Za-z]/.test(voiceEn.why_area || ""), "EN why_area should contain Latin letters");
+    assert.ok(
+      !/[åäö]/i.test(voiceEn.why_area || ""),
+      `EN why_area should not contain Swedish diacritics: got "${voiceEn.why_area}"`,
+    );
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("appendActiveDayCuratorVoice renders compact default (why_area visible, rest in details)", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const script = fs.readFileSync(path.resolve(__dirname, "..", "script.js"), "utf8");
+
+  const fnMatch = script.match(/function appendActiveDayCuratorVoice\([^)]*\)\s*\{[\s\S]*?\n\}/);
+  assert.ok(fnMatch, "Could not locate appendActiveDayCuratorVoice in script.js");
+  const fnBody = fnMatch[0];
+
+  // why_area must be shown as the visible summary — not gated behind a details element
+  assert.ok(/voice\.why_area/.test(fnBody), "why_area must be used as the visible summary");
+
+  // The other fields must be inside a <details> element
+  assert.ok(/createElement\(['"']details['"']\)/.test(fnBody), "details element must be created for collapsed fields");
+  assert.ok(/createElement\(['"']summary['"']\)/.test(fnBody), "summary toggle element must be created");
+
+  // The toggle must use the curator.readMore i18n key
+  assert.ok(/curator\.readMore/.test(fnBody), "toggle must use curator.readMore i18n key");
 });
 
 test("script.js använder t() för credibility-badges istället för hårdkodad svenska", () => {
@@ -1525,6 +1675,7 @@ test("appendCredibilityBadges gates anchor badge on !isLiveEvent so a live event
     "appendCredibilityBadges must still emit the live-event badge",
   );
 });
+
 
 test("POST /api/route-recommendations markerar när en okänd city fallbackar till rome", async () => {
   global.fetch = async (url) => {

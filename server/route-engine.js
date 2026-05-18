@@ -754,6 +754,26 @@ function routeText(lang, sv, en) {
   return isEnglishRouteResult(lang) ? en : sv;
 }
 
+function resolveCuratorVoice(template, lang) {
+  const voice = template?.curatorVoice;
+  if (!voice || typeof voice !== "object") {
+    return null;
+  }
+  const pickField = (field) => {
+    if (!field || typeof field !== "object") return null;
+    const text = routeText(lang, field.sv || "", field.en || "");
+    return text && text.trim() ? text.trim() : null;
+  };
+  const resolved = {
+    why_area: pickField(voice.whyArea),
+    why_order: pickField(voice.whyOrder),
+    why_now: pickField(voice.whyNow),
+    who_fits: pickField(voice.whoFits),
+  };
+  const hasAny = Object.values(resolved).some((value) => typeof value === "string" && value.length > 0);
+  return hasAny ? resolved : null;
+}
+
 function routePreferenceLabel(preference, lang = "sv") {
   if (!isEnglishRouteResult(lang)) {
     return preference;
@@ -5378,6 +5398,7 @@ async function generateRecommendations({
                 scoring.intentNote,
                 routeResultLang,
               ),
+              curator_voice: resolveCuratorVoice(template, routeResultLang),
             },
             score: scoring.score,
           };
