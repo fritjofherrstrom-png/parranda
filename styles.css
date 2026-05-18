@@ -650,6 +650,34 @@ body::before {
     linear-gradient(180deg, rgba(255, 252, 247, 0.96), rgba(246, 238, 226, 0.9));
 }
 
+/*
+ * Pulse entry text colours were authored for the dark Pulse panel
+ * (var(--paper) cream, plus rgba(247, 239, 229, ...) variants). On
+ * `.mode-city-preview` the background flips to a light cream, leaving
+ * those cream tones unreadable on Barcelona and any other preview city.
+ * Override only the affected text selectors with the dark-on-light
+ * palette used elsewhere in the preview shell. Selectors below mirror
+ * `.city-pulse-edition .pulse-entry-*` so they beat the later cream rule
+ * at equal specificity.
+ */
+.mode-city-preview .city-pulse-edition .pulse-entry-title,
+.mode-city-preview .city-pulse-edition .pulse-entry-title-button,
+.mode-city-preview .city-pulse-edition .pulse-group-title,
+.mode-city-preview .city-pulse-edition .city-pulse-title,
+.mode-city-preview .city-pulse-edition h1,
+.mode-city-preview .city-pulse-edition h2,
+.mode-city-preview .city-pulse-edition h3 {
+  color: var(--accent-deep);
+}
+
+.mode-city-preview .city-pulse-edition .pulse-entry-where {
+  color: rgba(36, 25, 20, 0.66);
+}
+
+.mode-city-preview .city-pulse-edition .pulse-entry-blurb {
+  color: rgba(36, 25, 20, 0.82);
+}
+
 .hero-idea-strip .hero-panel-meta {
   display: block;
   margin-top: 2px;
