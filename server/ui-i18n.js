@@ -484,6 +484,7 @@ const translations = {
     "curator.whyOrder": "Varför den här ordningen",
     "curator.whyNow": "Varför just nu",
     "curator.whoFits": "Passar för",
+    "curator.readMore": "Visa mer",
   },
   en: {
     "shell.plannerEyebrow": "PLAN",
@@ -967,6 +968,7 @@ const translations = {
     "curator.whyOrder": "Why this order",
     "curator.whyNow": "Why now",
     "curator.whoFits": "Who it fits",
+    "curator.readMore": "Read more",
   },
 };
 

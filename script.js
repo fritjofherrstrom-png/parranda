@@ -9759,33 +9759,60 @@ function appendActiveDayCuratorVoice(anchorElement, routeView) {
     return;
   }
 
-  const entries = CURATOR_VOICE_FIELDS
-    .map((field) => ({ field, text: (voice[field.key] || "").trim() }))
-    .filter((entry) => entry.text);
-
-  if (!entries.length) {
+  const summaryText = (voice.why_area || "").trim();
+  if (!summaryText) {
     return;
   }
+
+  const detailFields = CURATOR_VOICE_FIELDS.filter(f => f.key !== "why_area");
+  const detailEntries = detailFields
+    .map(field => ({ field, text: (voice[field.key] || "").trim() }))
+    .filter(entry => entry.text);
 
   const block = document.createElement("section");
   block.className = "active-day-curator";
 
-  entries.forEach(({ field, text }) => {
-    const row = document.createElement("div");
-    row.className = "active-day-curator-row";
+  const summaryRow = document.createElement("div");
+  summaryRow.className = "active-day-curator-summary";
 
-    const label = document.createElement("p");
-    label.className = "active-day-curator-label";
-    label.textContent = t(field.labelKey, field.labelFallback);
-    row.appendChild(label);
+  const summaryLabel = document.createElement("p");
+  summaryLabel.className = "active-day-curator-label";
+  summaryLabel.textContent = t("curator.whyArea", "Varför detta område");
 
-    const body = document.createElement("p");
-    body.className = "active-day-curator-text";
-    body.textContent = text;
-    row.appendChild(body);
+  const summaryBody = document.createElement("p");
+  summaryBody.className = "active-day-curator-text";
+  summaryBody.textContent = summaryText;
 
-    block.appendChild(row);
-  });
+  summaryRow.append(summaryLabel, summaryBody);
+  block.appendChild(summaryRow);
+
+  if (detailEntries.length) {
+    const details = document.createElement("details");
+    details.className = "active-day-curator-details";
+
+    const summary = document.createElement("summary");
+    summary.className = "active-day-curator-toggle";
+    summary.textContent = t("curator.readMore", "Read more");
+    details.appendChild(summary);
+
+    detailEntries.forEach(({ field, text }) => {
+      const row = document.createElement("div");
+      row.className = "active-day-curator-row";
+
+      const label = document.createElement("p");
+      label.className = "active-day-curator-label";
+      label.textContent = t(field.labelKey, field.labelFallback);
+
+      const body = document.createElement("p");
+      body.className = "active-day-curator-text";
+      body.textContent = text;
+
+      row.append(label, body);
+      details.appendChild(row);
+    });
+
+    block.appendChild(details);
+  }
 
   anchorElement.insertAdjacentElement("afterend", block);
 }

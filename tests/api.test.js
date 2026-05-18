@@ -1455,6 +1455,7 @@ test("ui-i18n.js har credibility-nycklar i både sv och en", () => {
     "curator.whyOrder",
     "curator.whyNow",
     "curator.whoFits",
+    "curator.readMore",
   ];
 
   for (const key of requiredKeys) {
@@ -1597,6 +1598,26 @@ test("POST /api/route-recommendations väljer EN curator_voice när lang=en", as
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
+});
+
+test("appendActiveDayCuratorVoice renders compact default (why_area visible, rest in details)", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const script = fs.readFileSync(path.resolve(__dirname, "..", "script.js"), "utf8");
+
+  const fnMatch = script.match(/function appendActiveDayCuratorVoice\([^)]*\)\s*\{[\s\S]*?\n\}/);
+  assert.ok(fnMatch, "Could not locate appendActiveDayCuratorVoice in script.js");
+  const fnBody = fnMatch[0];
+
+  // why_area must be shown as the visible summary — not gated behind a details element
+  assert.ok(/voice\.why_area/.test(fnBody), "why_area must be used as the visible summary");
+
+  // The other fields must be inside a <details> element
+  assert.ok(/createElement\(['"']details['"']\)/.test(fnBody), "details element must be created for collapsed fields");
+  assert.ok(/createElement\(['"']summary['"']\)/.test(fnBody), "summary toggle element must be created");
+
+  // The toggle must use the curator.readMore i18n key
+  assert.ok(/curator\.readMore/.test(fnBody), "toggle must use curator.readMore i18n key");
 });
 
 test("script.js använder t() för credibility-badges istället för hårdkodad svenska", () => {
