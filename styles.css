@@ -3064,6 +3064,41 @@ body::before {
   border-color: rgba(70, 83, 64, 0.16);
 }
 
+.credibility-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.credibility-badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+.credibility-badge--anchor {
+  color: rgba(70, 47, 33, 0.92);
+  background: rgba(255, 245, 226, 0.9);
+  border-color: rgba(175, 77, 36, 0.22);
+}
+
+.credibility-badge--live {
+  color: rgba(140, 50, 20, 0.95);
+  background: rgba(215, 160, 77, 0.22);
+  border-color: rgba(175, 77, 36, 0.3);
+}
+
 .route-stop-link,
 .route-chip-link {
   color: inherit;
@@ -3472,6 +3507,32 @@ body::before {
   color: var(--accent-deep);
   line-height: 1.55;
   font-size: 0.96rem;
+}
+
+.active-day-why {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(175, 77, 36, 0.16);
+}
+
+.active-day-why-label {
+  margin: 0;
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: rgba(70, 47, 33, 0.78);
+}
+
+.active-day-why-text {
+  margin: 0;
+  font-size: 0.93rem;
+  line-height: 1.5;
+  color: var(--accent-deep);
 }
 
 .active-day-engine {
