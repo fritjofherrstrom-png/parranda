@@ -3630,6 +3630,7 @@ function formatMainStop(stop) {
     drawer_query: stop.drawerQuery || stop.name,
     is_live_event: Boolean(stop.isLiveEvent),
     event_id: stop.eventId || null,
+    anchor_weight: typeof stop.anchorWeight === "number" ? stop.anchorWeight : null,
   };
 }
 

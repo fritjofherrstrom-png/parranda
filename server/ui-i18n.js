@@ -477,6 +477,9 @@ const translations = {
     "blitz.strongReason.default": "{name} är det tydligaste nästa steget utifrån läge, tid och det du verkar vilja åt.",
     "blitz.coverageNoteNoSecondHand": "{city} har ännu inte ett fullt second hand-pack, så Blitz väljer ett trovärdigt nästa drag utan att låtsas att det är vintage-drivet.",
     "blitz.pulseRightNow": "Pulse just nu: {title}.",
+    "credibility.anchor": "Områdets fixpunkt",
+    "credibility.liveEvent": "Liveevent idag",
+    "credibility.whyThisRoute": "Varför just den här rutten",
   },
   en: {
     "shell.plannerEyebrow": "PLAN",
@@ -953,6 +956,9 @@ const translations = {
     "blitz.strongReason.default": "{name} is the clearest next step given place, time, and what you seem to be after.",
     "blitz.coverageNoteNoSecondHand": "{city} does not have a full second-hand pack yet, so Blitz picks a credible next move without pretending it is vintage-driven.",
     "blitz.pulseRightNow": "Pulse right now: {title}.",
+    "credibility.anchor": "Neighborhood anchor",
+    "credibility.liveEvent": "Live event today",
+    "credibility.whyThisRoute": "Why this route",
   },
 };
 

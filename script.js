@@ -8492,6 +8492,7 @@ function createApiRouteView(
       isLiveEvent: Boolean(stop.is_live_event),
       source: stop.is_live_event ? "live" : "curated",
       sourceLabel: stopSourceLabel({ isLiveEvent: Boolean(stop.is_live_event) }),
+      anchorWeight: typeof stop.anchor_weight === "number" ? stop.anchor_weight : null,
       eventId: stop.event_id || null,
       liveEvent: stop.event_id ? liveEventById.get(String(stop.event_id)) || null : null,
       incomingLeg: route.legs?.[index]
@@ -9687,12 +9688,7 @@ function createItineraryStop(stopItem, onOpen, phaseLabel = "") {
   const detail = document.createElement("div");
   detail.className = "route-stop-detail";
 
-  if (stopItem.isLiveEvent) {
-    const note = document.createElement("span");
-    note.className = "route-stop-note";
-    note.textContent = "Öppet just nu";
-    detail.appendChild(note);
-  }
+  appendCredibilityBadges(detail, stopItem);
 
   detail.hidden = detail.childElementCount === 0;
   body.appendChild(detail);
@@ -9700,6 +9696,46 @@ function createItineraryStop(stopItem, onOpen, phaseLabel = "") {
   stop.appendChild(main);
 
   return stop;
+}
+
+const ANCHOR_BADGE_THRESHOLD = 2.5;
+
+function appendCredibilityBadges(parent, stopItem) {
+  if (typeof stopItem.anchorWeight === "number" && stopItem.anchorWeight >= ANCHOR_BADGE_THRESHOLD) {
+    const badge = document.createElement("span");
+    badge.className = "credibility-badge credibility-badge--anchor";
+    badge.textContent = t("credibility.anchor", "Områdets fixpunkt");
+    parent.appendChild(badge);
+  }
+
+  if (stopItem.isLiveEvent) {
+    const badge = document.createElement("span");
+    badge.className = "credibility-badge credibility-badge--live";
+    badge.textContent = t("credibility.liveEvent", "Liveevent idag");
+    parent.appendChild(badge);
+  }
+}
+
+function appendActiveDayWhy(anchorElement, routeView) {
+  const whyText = (routeView.why || "").trim();
+  if (!whyText || !anchorElement || !anchorElement.parentNode) {
+    return;
+  }
+
+  const block = document.createElement("section");
+  block.className = "active-day-why";
+
+  const label = document.createElement("p");
+  label.className = "active-day-why-label";
+  label.textContent = t("credibility.whyThisRoute", "Varför just den här rutten");
+  block.appendChild(label);
+
+  const body = document.createElement("p");
+  body.className = "active-day-why-text";
+  body.textContent = takeLeadSentences(whyText, 2, 260);
+  block.appendChild(body);
+
+  anchorElement.insertAdjacentElement("afterend", block);
 }
 
 function createActiveDayView(routeView, { routeKey }) {
@@ -9729,7 +9765,9 @@ function createActiveDayView(routeView, { routeKey }) {
   shapePill.hidden = !usefulSignals.length;
   shapePill.textContent = usefulSignals[0]?.label || "";
   lengthPill.textContent = routeView.length;
-  view.querySelector(".active-day-flow-note").textContent = buildActiveDayFlowNote(routeView);
+  const flowNote = view.querySelector(".active-day-flow-note");
+  flowNote.textContent = buildActiveDayFlowNote(routeView);
+  appendActiveDayWhy(flowNote, routeView);
 
   enginePills.innerHTML = "";
   usefulSignals.slice(shapePill.hidden ? 0 : 1).forEach((signal) => {

@@ -1378,6 +1378,111 @@ test("POST /api/route-recommendations fungerar även när vädret saknas", async
   }
 });
 
+test("POST /api/route-recommendations exponerar anchor_weight på main_stops för credibility-badges", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-04-20"],
+          weathercode: [0],
+          temperature_2m_max: [22],
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during anchor_weight test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations",
+      body: {
+        city: "rome",
+        dates: ["2026-04-20"],
+        walking_km_target: 9,
+        preferences: ["vin", "mat", "kultur"],
+      },
+    });
+
+    assert.equal(response.status, 200);
+    const stops = response.body.days[0].primary_route.main_stops;
+    assert.ok(stops.length > 0, "expected at least one main stop");
+
+    for (const stop of stops) {
+      assert.ok(
+        stop.anchor_weight === null || typeof stop.anchor_weight === "number",
+        `anchor_weight must be number-or-null on every stop (got ${typeof stop.anchor_weight} for ${stop.id})`,
+      );
+    }
+
+    const numericAnchors = stops
+      .map((stop) => stop.anchor_weight)
+      .filter((value) => typeof value === "number");
+    assert.ok(
+      numericAnchors.length > 0,
+      "expected at least one Rome stop to carry a numeric anchor_weight from the catalog",
+    );
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("ui-i18n.js har credibility-nycklar i både sv och en", () => {
+  const { translations } = require("../server/ui-i18n");
+  const requiredKeys = [
+    "credibility.anchor",
+    "credibility.liveEvent",
+    "credibility.whyThisRoute",
+  ];
+
+  for (const key of requiredKeys) {
+    assert.ok(
+      typeof translations.sv?.[key] === "string" && translations.sv[key].trim(),
+      `Missing or empty sv translation for ${key}`,
+    );
+    assert.ok(
+      typeof translations.en?.[key] === "string" && translations.en[key].trim(),
+      `Missing or empty en translation for ${key}`,
+    );
+    assert.notEqual(
+      translations.sv[key],
+      translations.en[key],
+      `sv and en for ${key} are identical — likely untranslated`,
+    );
+  }
+});
+
+test("script.js använder t() för credibility-badges istället för hårdkodad svenska", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const script = fs.readFileSync(
+    path.resolve(__dirname, "..", "script.js"),
+    "utf8",
+  );
+
+  assert.ok(
+    !script.includes('note.textContent = "Öppet just nu"'),
+    "Stale hardcoded 'Öppet just nu' string still present — should go through t(credibility.liveEvent)",
+  );
+  assert.ok(
+    script.includes('t("credibility.anchor"'),
+    "Anchor badge must use t(credibility.anchor)",
+  );
+  assert.ok(
+    script.includes('t("credibility.liveEvent"'),
+    "Live event badge must use t(credibility.liveEvent)",
+  );
+  assert.ok(
+    script.includes('t("credibility.whyThisRoute"'),
+    "Why-this-route block must use t(credibility.whyThisRoute)",
+  );
+});
+
 test("POST /api/route-recommendations markerar när en okänd city fallbackar till rome", async () => {
   global.fetch = async (url) => {
     const parsed = new URL(String(url));
