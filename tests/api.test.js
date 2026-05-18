@@ -1526,6 +1526,7 @@ test("appendCredibilityBadges gates anchor badge on !isLiveEvent so a live event
   );
 });
 
+
 test("POST /api/route-recommendations markerar när en okänd city fallbackar till rome", async () => {
   global.fetch = async (url) => {
     const parsed = new URL(String(url));
