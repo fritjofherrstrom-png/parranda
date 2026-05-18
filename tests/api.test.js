@@ -541,7 +541,7 @@ test("GET / renderar global landing page (inte city-shell)", async () => {
     assert.ok(!response.body.includes('data-city-key="rome"'));
     assert.ok(!response.body.includes('window.__PARRANDA_CITY__'));
     // Landing-specific copy and structure
-    assert.match(response.body, /Din kväll\. Din stad\. Curated\./);
+    assert.match(response.body, /Din stad\. Din dag\. Curated\./);
     assert.match(response.body, /Hitta din stad/);
     assert.match(response.body, /Planera din perfekta dag/);
     assert.match(response.body, /Sök stad/);
