@@ -1483,6 +1483,36 @@ test("script.js använder t() för credibility-badges istället för hårdkodad 
   );
 });
 
+test("appendCredibilityBadges gates anchor badge on !isLiveEvent so a live event never reads as a neighborhood anchor", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const script = fs.readFileSync(
+    path.resolve(__dirname, "..", "script.js"),
+    "utf8",
+  );
+
+  const fnMatch = script.match(/function appendCredibilityBadges\([^)]*\)\s*\{[\s\S]*?\n\}\n/);
+  assert.ok(fnMatch, "Could not locate appendCredibilityBadges in script.js");
+  const fnBody = fnMatch[0];
+
+  // The anchor branch must be guarded by !stopItem.isLiveEvent so that even when
+  // a live-event candidate carries a high anchor_weight from the route engine,
+  // the anchor badge stays suppressed. "A live event is never a neighborhood anchor."
+  const anchorChunkEnd = fnBody.indexOf("credibility-badge--anchor");
+  assert.ok(anchorChunkEnd > 0, "Could not locate anchor branch inside appendCredibilityBadges");
+  const anchorGuardArea = fnBody.slice(0, anchorChunkEnd);
+  assert.ok(
+    /!stopItem\.isLiveEvent/.test(anchorGuardArea),
+    "Anchor branch must include a !stopItem.isLiveEvent guard before rendering the anchor badge",
+  );
+
+  // The live-event badge must still be allowed to fire on isLiveEvent stops.
+  assert.ok(
+    /credibility-badge--live/.test(fnBody),
+    "appendCredibilityBadges must still emit the live-event badge",
+  );
+});
+
 test("POST /api/route-recommendations markerar när en okänd city fallbackar till rome", async () => {
   global.fetch = async (url) => {
     const parsed = new URL(String(url));

@@ -9701,7 +9701,14 @@ function createItineraryStop(stopItem, onOpen, phaseLabel = "") {
 const ANCHOR_BADGE_THRESHOLD = 2.5;
 
 function appendCredibilityBadges(parent, stopItem) {
-  if (typeof stopItem.anchorWeight === "number" && stopItem.anchorWeight >= ANCHOR_BADGE_THRESHOLD) {
+  // A live event is never a neighborhood anchor — keep the anchor badge
+  // mutually exclusive with isLiveEvent regardless of upstream anchor_weight
+  // (live-event candidates can score quite high in the route engine).
+  if (
+    !stopItem.isLiveEvent &&
+    typeof stopItem.anchorWeight === "number" &&
+    stopItem.anchorWeight >= ANCHOR_BADGE_THRESHOLD
+  ) {
     const badge = document.createElement("span");
     badge.className = "credibility-badge credibility-badge--anchor";
     badge.textContent = t("credibility.anchor", "Områdets fixpunkt");
