@@ -1708,6 +1708,16 @@ function buildLiveEventStopCandidates(
   modifier = null,
   options = {},
 ) {
+  // Live events are a separate contextual layer (Pulse, map overlay,
+  // days[].live_events). They never become primary_route.main_stops unless the
+  // caller explicitly opts in via options.includeLiveEvents. The flag preserves
+  // the existing Rome capability (e.g. "Teatro India Night" as a bar-hop
+  // evening stop) behind an opt-in, while default routes stay built from
+  // stable catalog places only.
+  if (!options.includeLiveEvents) {
+    return [];
+  }
+
   const activeModifier = normalizeModifier(modifier, optimizerMode);
   const shape = options.shape || "loop";
   const start = options.start || null;
@@ -2908,6 +2918,7 @@ function buildStopPool(
       end,
       startProfile,
       endProfile,
+      includeLiveEvents: Boolean(options.includeLiveEvents),
     },
   );
   const lockedCorridorTuning = getRoutingTuning().lockedCorridor || {};
@@ -5165,6 +5176,7 @@ async function generateRecommendations({
   distanceMode = "soft_target",
   legPacing = "balanced",
   lang = "sv",
+  includeLiveEvents = false,
 }) {
   const routeResultLang = normalizeRouteResultLanguage(lang);
   return cityContextStorage.run(getCityConfig(city), async () => {
@@ -5291,6 +5303,7 @@ async function generateRecommendations({
                 dayProfile,
                 weekday,
                 lang: routeResultLang,
+                includeLiveEvents,
               },
             );
           const routeStops = route.main_stops

@@ -757,6 +757,7 @@ function buildApp() {
         budgetTier: request.body?.budget_tier || "standard",
         modifier: request.body?.modifier || null,
         lang,
+        includeLiveEvents: Boolean(request.body?.include_live_events),
       };
 
       if (shouldReturnPreviewRouteNoop(cityConfig)) {
