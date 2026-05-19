@@ -610,7 +610,7 @@ function renderLandingShell({ lang = "sv" } = {}) {
     "__PARRANDA_LANDING_BLITZ_GEO_FALLBACK__": escapeHtml(tr("landing.blitz.geoFallback")),
     "__PARRANDA_LANDING_BLITZ_NO_CITY__": escapeHtml(tr("landing.blitz.noCity")),
     "__PARRANDA_LANDING_BLITZ_ERROR__": escapeHtml(tr("landing.blitz.error")),
-    "__PARRANDA_LANDING_BLITZ_STREET_VIEW__": escapeHtml(tr("landing.blitz.streetView")),
+    "__PARRANDA_LANDING_BLITZ_INFO__": escapeHtml(tr("landing.blitz.info")),
   };
   return Object.entries(replacements).reduce(
     (html, [token, value]) => html.split(token).join(value),

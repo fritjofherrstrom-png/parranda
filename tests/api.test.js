@@ -552,6 +552,10 @@ test("GET / renderar global landing page (inte city-shell)", async () => {
     assert.match(response.body, /window\.__PARRANDA_CITIES__/);
     assert.match(response.body, /"roma"\s*:/);
     assert.match(response.body, /"rome"\s*:/);
+    // Registry must include Barcelona with its key so resolveEntry("Barcelona") works
+    assert.match(response.body, /"barcelona"\s*:\s*\{[^}]*"key"\s*:\s*"barcelona"/);
+    // Registry must not be an empty object — that would silently break city resolution
+    assert.doesNotMatch(response.body, /window\.__PARRANDA_CITIES__\s*=\s*\{\s*\}/);
     // Internal-visibility cities must never leak
     assert.ok(!response.body.toLowerCase().includes("test city"));
     assert.ok(!response.body.includes('"key":"test-city"'));

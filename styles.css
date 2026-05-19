@@ -6374,7 +6374,7 @@ body.is-printing-guide #routeGuideDrawer {
   margin: 6px 0 0;
   letter-spacing: .01em;
 }
-.lp-blitz-result__street-view {
+.lp-blitz-result__info {
   display: inline-block;
   margin-top: 10px;
   font-size: 0.88rem;
@@ -6382,7 +6382,7 @@ body.is-printing-guide #routeGuideDrawer {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
-.lp-blitz-result__street-view:hover { opacity: 0.8; }
+.lp-blitz-result__info:hover { opacity: 0.8; }
 .lp-blitz-result__loading,
 .lp-blitz-result__error,
 .lp-blitz-result__no-city {
@@ -6426,3 +6426,4 @@ body.is-printing-guide #routeGuideDrawer {
     flex: 1 1 auto;
   }
 }
+
