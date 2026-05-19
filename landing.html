@@ -24,7 +24,7 @@
     />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=22" />
+    <link rel="stylesheet" href="styles.css?v=23" />
     <script>
       window.__PARRANDA_LANGUAGE__ = "__PARRANDA_UI_LANG__";
       window.__PARRANDA_CITIES__ = __PARRANDA_LANDING_CITY_REGISTRY__;
@@ -70,7 +70,11 @@
             <li><a href="#blitz" class="lp-nav__link">Upplägg</a></li>
           </ul>
           <div class="lp-nav__actions">
-            <a href="#planner" class="lp-btn lp-btn--secondary lp-btn--sm">Starta planering</a>
+            <div class="lp-lang-toggle" id="lpLangToggle" role="group" aria-label="Language">
+              <button class="lp-lang-toggle__btn" id="lpLangSv" lang="sv">SV</button>
+              <span class="lp-lang-toggle__sep" aria-hidden="true">|</span>
+              <button class="lp-lang-toggle__btn" id="lpLangEn" lang="en">EN</button>
+            </div>
           </div>
         </nav>
 

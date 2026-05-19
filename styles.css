@@ -5608,6 +5608,38 @@ body.is-printing-guide #routeGuideDrawer {
 }
 .lp-nav__actions { display: flex; gap: 12px; align-items: center; }
 
+/* ── Language toggle ── */
+.lp-lang-toggle {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.lp-lang-toggle__sep {
+  color: rgba(255, 247, 239, 0.25);
+  font-size: 0.75rem;
+  line-height: 1;
+  pointer-events: none;
+  padding: 0 1px;
+}
+.lp-lang-toggle__btn {
+  background: none;
+  border: none;
+  color: rgba(255, 247, 239, 0.5);
+  font: 600 0.75rem/1 "Manrope", sans-serif;
+  letter-spacing: .05em;
+  padding: 6px 7px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease;
+}
+.lp-lang-toggle__btn:hover {
+  color: rgba(255, 247, 239, 0.85);
+}
+.lp-lang-toggle__btn--active {
+  color: rgba(255, 247, 239, 0.95);
+  background: rgba(255, 247, 239, 0.12);
+}
+
 /* ── Hero headline + copy ── */
 .lp-hero__headline {
   margin: 64px 0 0;

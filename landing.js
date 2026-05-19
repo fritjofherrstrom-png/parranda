@@ -9,6 +9,36 @@
   var REGISTRY = window.__PARRANDA_CITIES__ || {};
   var COPY = window.__PARRANDA_LANDING_COPY__ || {};
 
+  /* ── Language toggle ── */
+  (function () {
+    var currentLang = window.__PARRANDA_LANGUAGE__ || "sv";
+    var svBtn = document.getElementById("lpLangSv");
+    var enBtn = document.getElementById("lpLangEn");
+    if (!svBtn || !enBtn) return;
+
+    function markActive() {
+      svBtn.classList.toggle("lp-lang-toggle__btn--active", currentLang === "sv");
+      enBtn.classList.toggle("lp-lang-toggle__btn--active", currentLang === "en");
+      svBtn.setAttribute("aria-pressed", currentLang === "sv" ? "true" : "false");
+      enBtn.setAttribute("aria-pressed", currentLang === "en" ? "true" : "false");
+    }
+
+    function switchLang(lang) {
+      var params = new URLSearchParams(window.location.search);
+      if (lang === "sv") {
+        params.delete("lang");
+      } else {
+        params.set("lang", lang);
+      }
+      var qs = params.toString();
+      window.location.href = window.location.pathname + (qs ? "?" + qs : "");
+    }
+
+    markActive();
+    svBtn.addEventListener("click", function () { switchLang("sv"); });
+    enBtn.addEventListener("click", function () { switchLang("en"); });
+  }());
+
   function resolveCity(raw) {
     var entry = REGISTRY[String(raw || "").trim().toLowerCase()];
     return entry ? "/" + entry.key : null;
