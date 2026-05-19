@@ -524,41 +524,37 @@ test("GET /api/places/search för barcelona visar inte strukturella route anchor
   }
 });
 
-test("GET / renderar en city-aware app shell med bootstrap", async () => {
+test("GET / renderar global landing page (inte city-shell)", async () => {
   global.fetch = async (url) => {
-    throw new Error(`Unexpected fetch during app shell test: ${url}`);
+    throw new Error(`Unexpected fetch during landing page test: ${url}`);
   };
 
   const server = buildApp().listen(0);
 
   try {
-    const response = await requestText(server, {
-      path: "/?city=rome",
-    });
+    const response = await requestText(server, { path: "/" });
 
     assert.equal(response.status, 200);
-    assert.match(response.body, /<body data-city-key="rome" data-city-label="Rom" data-lang="sv">/);
-    assert.match(response.body, /window\.__PARRANDA_CITY__ = \{"key":"rome","label":"Rom"/);
-    assert.match(response.body, /<title>Parranda \| Personlig City Guide för Rom<\/title>/);
-    assert.ok(!response.body.includes('id="heroEyebrow"'));
-    assert.ok(!response.body.includes('id="heroHeadline"'));
-    assert.ok(!response.body.includes('id="heroLead"'));
-    assert.ok(response.body.includes("Bygg en dag i staden"));
-    assert.ok(response.body.includes("Välj datum och känsla. Parranda sätter ihop rutten."));
-    assert.ok(response.body.includes("Planera dagen"));
-    assert.ok(response.body.includes("Nästa drag, just nu"));
-    assert.ok(response.body.includes("Kör Blitz"));
-    assert.ok(!response.body.includes("Din dag börjar här"));
-    assert.ok(!response.body.includes("Rom är aktiv stad"));
-    assert.ok(!response.body.includes("Just nu i Rom"));
-    assert.ok(!response.body.includes("Mjukt km-mål"));
-    assert.match(response.body, /<p id="heroBlitzLabel" class="panel-label">BLITZ<\/p>/);
-    assert.match(response.body, /<h2 id="heroBlitzTitle">Nästa drag, just nu<\/h2>/);
-    assert.match(response.body, /<button id="heroBlitzApplyButton" class="secondary-button" type="button"\s*>\s*Kör Blitz\s*<\/button>/);
-    assert.match(response.body, /<button id="routePlannerOpenButton" class="primary-button" type="button">\s*Planera dagen\s*<\/button>/);
-    assertPlannerIntentFirstPaint(response.body);
+    // Landing page — no city bootstrap or city-specific tokens
     assert.ok(!response.body.includes("__PARRANDA_CITY_BOOTSTRAP__"));
     assert.ok(!response.body.includes("__PARRANDA_TITLE__"));
+    assert.ok(!response.body.includes('data-city-key="rome"'));
+    assert.ok(!response.body.includes('window.__PARRANDA_CITY__'));
+    // Landing-specific copy and structure
+    assert.match(response.body, /Din stad\. Din dag\. Curated\./);
+    assert.match(response.body, /Hitta din stad/);
+    assert.match(response.body, /Börja med en stad/);
+    assert.match(response.body, /Sök stad/);
+    assert.ok(response.body.includes("Live Pulse:") && response.body.includes("städer just nu"));
+    assert.match(response.body, /lp-hero/);
+    assert.match(response.body, /<html lang="sv">/);
+    // Trust badges are present
+    assert.ok(response.body.includes("Curated"));
+    assert.ok(response.body.includes("Editorial"));
+    // Supported cities only in pulse
+    assert.ok(response.body.includes("Barcelona"));
+    assert.ok(response.body.includes("Rom"));
+    // ?lang=en not tested here — covered by city-shell lang tests
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

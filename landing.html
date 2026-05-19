@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="__PARRANDA_LANG__">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Parranda — Din stad. Din dag. Curated.</title>
+    <meta name="theme-color" content="#af4d24" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="description" content="Handplockade rutter, kvarter för kvarter. Två städer live just nu — Barcelona och Rom. Välj stad, bygg din dag." />
+    <meta property="og:title" content="Parranda — Din stad. Din dag. Curated." />
+    <meta property="og:description" content="Handplockade rutter i Barcelona och Rom. Välj stad, bygg din dag på 30 sekunder." />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="__PARRANDA_OG_LOCALE__" />
+    <meta property="og:image" content="/assets/icons/icon-512.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Parranda — Din stad. Din dag. Curated." />
+    <meta name="twitter:description" content="Handplockade rutter i Barcelona och Rom." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
+    <link rel="stylesheet" href="styles.css?v=20" />
+    <script>
+      window.__PARRANDA_LANGUAGE__ = "__PARRANDA_UI_LANG__";
+    </script>
+  </head>
+  <body data-lang="__PARRANDA_LANG__">
+    <a href="#planner" class="lp-skip-link">Hoppa till planering</a>
+    <main id="main">
+
+    <!-- ═══════════════════════════════════════ HERO ═══════════════════════ -->
+    <section class="lp-hero" id="hero">
+      <div class="lp-hero__photo-layer">
+        <img
+          class="lp-hero__bg"
+          src="/assets/hero-worldwide.jpg"
+          alt=""
+          loading="eager"
+          fetchpriority="high"
+        />
+      </div>
+
+      <div class="lp-hero__content">
+        <!-- NAV -->
+        <nav class="lp-nav" aria-label="Parranda">
+          <div class="lp-nav__brand">
+            <span class="lp-nav__mark" aria-hidden="true">P</span>
+            <span class="lp-nav__name">Parranda</span>
+          </div>
+          <ul class="lp-nav__links" role="list">
+            <li><a href="/barcelona" class="lp-nav__link">Barcelona</a></li>
+            <li><a href="/rome" class="lp-nav__link">Rom</a></li>
+            <li><a href="#pulse" class="lp-nav__link">Pulse</a></li>
+            <li><a href="#blitz" class="lp-nav__link">Upplägg</a></li>
+          </ul>
+          <div class="lp-nav__actions">
+            <a href="#planner" class="lp-btn lp-btn--secondary lp-btn--sm">Starta planering</a>
+          </div>
+        </nav>
+
+        <!-- HEADLINE -->
+        <h1 class="lp-hero__headline">
+          Din stad.<br />
+          Din dag.<br />
+          Curated.
+        </h1>
+        <p class="lp-hero__lead">
+          Välj stad. Få en handplockad rutt som känns rätt — kvarter för kvarter.
+          Två städer live just nu, fler på väg.
+        </p>
+        <p class="lp-hero__kicker" aria-label="Handplockade rutter · Noll stress · Ren upptäckt">
+          <span>Handplockade rutter</span>
+          <span class="lp-hero__dot" aria-hidden="true">·</span>
+          <span>Noll stress</span>
+          <span class="lp-hero__dot" aria-hidden="true">·</span>
+          <span>Ren upptäckt</span>
+        </p>
+        <div class="lp-hero__cta-row">
+          <a href="#planner" class="lp-btn lp-btn--primary lp-btn--lg">Hitta din stad</a>
+        </div>
+        <p class="lp-hero__cta-note">Tar 30 sekunder. Vi sköter resten.</p>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════ PLANNER ═══════════════════════ -->
+    <section class="lp-section lp-section--cream" id="planner">
+      <div class="lp-inner">
+        <h2 class="lp-planner__title">Börja med en stad</h2>
+        <form class="lp-planner__form lp-planner__form--simple" id="lpPlannerForm" novalidate>
+          <label class="lp-field" for="lpCity">
+            <span class="lp-field__label">Stad</span>
+            <div class="lp-field__input">
+              <svg class="lp-field__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="7"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input
+                id="lpCity"
+                type="search"
+                placeholder="Sök stad"
+                autocomplete="off"
+                list="lpCityList"
+              />
+              <datalist id="lpCityList">
+                <option value="Barcelona">Barcelona</option>
+                <option value="Rom">Rom</option>
+              </datalist>
+            </div>
+          </label>
+
+          <button
+            type="submit"
+            class="lp-btn lp-btn--primary"
+            id="lpPlannerCta"
+            disabled
+            aria-disabled="true"
+          >
+            Välj stad först
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="5" y1="12" x2="19" y2="12"/>
+              <polyline points="12 5 19 12 12 19"/>
+            </svg>
+          </button>
+        </form>
+        <p class="lp-planner__note">
+          Barcelona och Rom är live. Datum och stil väljer du inne i staden.
+        </p>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════════ BLITZ ═══════════════════════ -->
+    <section class="lp-section lp-section--cream" id="blitz">
+      <div class="lp-inner">
+        <div class="lp-blitz__head">
+          <div class="lp-blitz__head-text">
+            <p class="lp-eyebrow">BLITZ · SLUMPA</p>
+            <h2 class="lp-blitz__title">Tre sätt att börja</h2>
+          </div>
+          <button class="lp-btn lp-btn--secondary" type="button" id="lpBlitzShuffle">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="16 3 21 3 21 8"/>
+              <line x1="4" y1="20" x2="21" y2="3"/>
+              <polyline points="21 16 21 21 16 21"/>
+              <line x1="15" y1="15" x2="21" y2="21"/>
+              <line x1="4" y1="4" x2="9" y2="9"/>
+            </svg>
+            Shufflea om
+          </button>
+        </div>
+
+        <div class="lp-card-grid" id="lpBlitzGrid">
+          <article class="lp-blitz-card">
+            <div class="lp-blitz-card__photo">
+              <span class="lp-blitz-card__corner-time">SLUMPAT · 15:30</span>
+            </div>
+            <p class="lp-blitz-card__meta">
+              <span class="lp-blitz-card__shuffle-dot" aria-hidden="true">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="16 3 21 3 21 8"/>
+                  <line x1="4" y1="20" x2="21" y2="3"/>
+                  <polyline points="21 16 21 21 16 21"/>
+                  <line x1="15" y1="15" x2="21" y2="21"/>
+                  <line x1="4" y1="4" x2="9" y2="9"/>
+                </svg>
+              </span>
+              Slumpat · 4 stopp · 15:30
+            </p>
+            <h3 class="lp-blitz-card__title">Den vinige eftermiddagen</h3>
+            <p class="lp-blitz-card__desc">Mjuk lunch på en bakgata, vin när ljuset blir orange, sen utsikt över taken.</p>
+            <div class="lp-tags">
+              <span class="lp-tag">lugnt</span>
+              <span class="lp-tag">vin</span>
+              <span class="lp-tag">utsikt</span>
+            </div>
+          </article>
+
+          <article class="lp-blitz-card">
+            <div class="lp-blitz-card__photo lp-blitz-card__photo--morning">
+              <span class="lp-blitz-card__corner-time">SLUMPAT · 09:00</span>
+            </div>
+            <p class="lp-blitz-card__meta">
+              <span class="lp-blitz-card__shuffle-dot" aria-hidden="true">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="16 3 21 3 21 8"/>
+                  <line x1="4" y1="20" x2="21" y2="3"/>
+                  <polyline points="21 16 21 21 16 21"/>
+                  <line x1="15" y1="15" x2="21" y2="21"/>
+                  <line x1="4" y1="4" x2="9" y2="9"/>
+                </svg>
+              </span>
+              Slumpat · 5 stopp · 09:00
+            </p>
+            <h3 class="lp-blitz-card__title">Stilla morgon med rörelse</h3>
+            <p class="lp-blitz-card__desc">Bageri, marknad, en park och en lång lunch — innan staden tar fart.</p>
+            <div class="lp-tags">
+              <span class="lp-tag">promenad</span>
+              <span class="lp-tag">marknad</span>
+              <span class="lp-tag">café</span>
+            </div>
+          </article>
+
+          <article class="lp-blitz-card">
+            <div class="lp-blitz-card__photo lp-blitz-card__photo--night">
+              <span class="lp-blitz-card__corner-time">SLUMPAT · 21:00</span>
+            </div>
+            <p class="lp-blitz-card__meta">
+              <span class="lp-blitz-card__shuffle-dot" aria-hidden="true">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="16 3 21 3 21 8"/>
+                  <line x1="4" y1="20" x2="21" y2="3"/>
+                  <polyline points="21 16 21 21 16 21"/>
+                  <line x1="15" y1="15" x2="21" y2="21"/>
+                  <line x1="4" y1="4" x2="9" y2="9"/>
+                </svg>
+              </span>
+              Slumpat · 3 stopp · 21:00
+            </p>
+            <h3 class="lp-blitz-card__title">Sen kväll, mörka rum</h3>
+            <p class="lp-blitz-card__desc">Cocktailbar, sen tallrik, vinyl och få ord. Hem efter midnatt.</p>
+            <div class="lp-tags">
+              <span class="lp-tag">nattliv</span>
+              <span class="lp-tag">cocktails</span>
+              <span class="lp-tag">sent</span>
+            </div>
+          </article>
+        </div>
+
+        <div class="lp-blitz__footer">
+          <button class="lp-btn lp-btn--primary" type="button" id="lpBlitzUse">Använd en av dem</button>
+          <button class="lp-btn lp-btn--ghost" type="button" id="lpBlitzShuffleAll">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="16 3 21 3 21 8"/>
+              <line x1="4" y1="20" x2="21" y2="3"/>
+              <polyline points="21 16 21 21 16 21"/>
+              <line x1="15" y1="15" x2="21" y2="21"/>
+              <line x1="4" y1="4" x2="9" y2="9"/>
+            </svg>
+            Shufflea alla
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════════════════════════ LIVE PULSE ═══════════════════════ -->
+    <section class="lp-section lp-section--dark" id="pulse">
+      <div class="lp-inner">
+        <div class="lp-pulse__head">
+          <h2 class="lp-pulse__headline">
+            <em>Live Pulse:</em> städer just nu
+          </h2>
+          <button class="lp-btn lp-btn--ghost-dark" type="button" disabled aria-disabled="true">
+            Visa alla uppdateringar
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="5" y1="12" x2="19" y2="12"/>
+              <polyline points="12 5 19 12 12 19"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="lp-card-grid">
+          <!-- Barcelona · El Born -->
+          <article class="lp-pulse-card">
+            <div class="lp-pulse-card__photo lp-pulse-card__photo--bcn-elborn">
+              <span class="lp-trust-badge">
+                <span class="lp-trust-badge__dot" aria-hidden="true"></span>
+                Curated
+              </span>
+            </div>
+            <div class="lp-pulse-card__body">
+              <p class="lp-pulse-card__meta">
+                <span class="lp-live-dot" aria-hidden="true"></span>
+                Live
+              </p>
+              <h3 class="lp-pulse-card__city">
+                Barcelona
+                <span class="lp-pulse-card__area">El Born</span>
+              </h3>
+              <p class="lp-pulse-card__copy">Tapas-tiden börjar mjukt. Livligt men autentiskt.</p>
+            </div>
+          </article>
+
+          <!-- Rome · Monti -->
+          <article class="lp-pulse-card">
+            <div class="lp-pulse-card__photo lp-pulse-card__photo--rom-monti">
+              <span class="lp-trust-badge">
+                <span class="lp-trust-badge__dot" aria-hidden="true"></span>
+                Editorial
+              </span>
+            </div>
+            <div class="lp-pulse-card__body">
+              <p class="lp-pulse-card__meta">
+                <span class="lp-live-dot" aria-hidden="true"></span>
+                Live
+              </p>
+              <h3 class="lp-pulse-card__city">
+                Rom
+                <span class="lp-pulse-card__area">Monti</span>
+              </h3>
+              <p class="lp-pulse-card__copy">Aperitivo-pulsen stiger på Piazza della Madonna.</p>
+            </div>
+          </article>
+
+          <!-- Barcelona · Barceloneta -->
+          <article class="lp-pulse-card">
+            <div class="lp-pulse-card__photo lp-pulse-card__photo--bcn-barceloneta">
+              <span class="lp-trust-badge lp-trust-badge--golden">
+                <span class="lp-trust-badge__dot" aria-hidden="true"></span>
+                Curated
+              </span>
+            </div>
+            <div class="lp-pulse-card__body">
+              <p class="lp-pulse-card__meta lp-pulse-card__meta--golden">
+                Golden hour
+              </p>
+              <h3 class="lp-pulse-card__city">
+                Barcelona
+                <span class="lp-pulse-card__area">Barceloneta</span>
+              </h3>
+              <p class="lp-pulse-card__copy">Havsbris och gyllene sand. Promenadtempo mot solnedgång.</p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════ JOURNEYS ═══════════════════════ -->
+    <section class="lp-section lp-section--cream">
+      <div class="lp-inner lp-journeys__inner">
+        <p class="lp-eyebrow" style="color: var(--accent-deep);">UTVALDA UPPLÄGG</p>
+        <h2 class="lp-journeys__title">Inga upplägg ännu</h2>
+        <p class="lp-journeys__desc">
+          De första uppläggen läggs in när en lokal kurator är klar med staden.
+        </p>
+        <div class="lp-city-cards">
+          <a href="/barcelona" class="lp-city-card">
+            <p class="lp-eyebrow" style="color: var(--accent-deep);">PREVIEW</p>
+            <strong>Barcelona</strong>
+            <span>Preview live</span>
+          </a>
+          <a href="/rome" class="lp-city-card">
+            <p class="lp-eyebrow" style="color: var(--accent-deep);">LIVE NU</p>
+            <strong>Rom</strong>
+            <span>Utvalda upplägg</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════ FOOTER ═══════════════════════ -->
+    <section class="lp-section lp-section--dark lp-section--footer">
+      <div class="lp-inner">
+        <footer class="lp-footer">
+          <div class="lp-footer__brand">
+            <span class="lp-nav__mark lp-nav__mark--sm" aria-hidden="true">P</span>
+            <strong class="lp-footer__name">Parranda</strong>
+            <em class="lp-footer__tagline">din rutt, din stad</em>
+          </div>
+          <nav class="lp-footer__links" aria-label="Footer">
+            <a href="#">Filosofi</a>
+            <a href="#">Pulse</a>
+            <a href="#">Press</a>
+            <a href="#">Kontakt</a>
+          </nav>
+          <span class="lp-footer__copy">© 2026 Parranda</span>
+        </footer>
+      </div>
+    </section>
+
+    </main>
+    <script src="/landing.js"></script>
+  </body>
+</html>
