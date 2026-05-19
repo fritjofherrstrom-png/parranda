@@ -196,14 +196,21 @@
     setBlitzFooterEnabled(false);
   }
 
+  function getBlitzPrimaryStop(state) {
+    var move = state && state.best_move;
+    if (!move) return null;
+    return move.stop ||
+           (move.route && move.route.stops && move.route.stops[0]) ||
+           null;
+  }
+
   function renderBlitzResult(state) {
     if (!blitzBody) return;
     var move = state && state.best_move;
     if (!move) { blitzBody.textContent = ""; return; }
     var title    = move.title || "";
     var why      = move.why_now || "";
-    var stop     = move.stop ||
-                   (move.route && move.route.stops && move.route.stops[0]) || null;
+    var stop     = getBlitzPrimaryStop(state);
     var area     = stop ? (stop.area || "") : "";
     var walkMins = move.walking_minutes
       ? move.walking_minutes + " min" : "";
@@ -336,14 +343,24 @@
   if (blitzUseBtn) {
     blitzUseBtn.addEventListener("click", function () {
       var city = landingBlitzState && landingBlitzState.city;
-      if (city) window.location.href = "/" + city;
+      if (!city) return;
+      var lang = new URLSearchParams(window.location.search).get("lang");
+      window.location.href = "/" + city + (lang ? "?lang=" + encodeURIComponent(lang) : "");
     });
   }
 
   if (blitzPlanBtn) {
     blitzPlanBtn.addEventListener("click", function () {
       var city = landingBlitzState && landingBlitzState.city;
-      if (city) window.location.href = "/" + city;
+      if (!city) return;
+      var stop = getBlitzPrimaryStop(landingBlitzState);
+      var label = stop && (stop.name || stop.label);
+      var params = new URLSearchParams(window.location.search);
+      params.set("planner", "open");
+      params.delete("seed_label");
+      params.delete("seed");
+      if (label) params.set("seed_label", label);
+      window.location.href = "/" + city + "?" + params.toString();
     });
   }
 
