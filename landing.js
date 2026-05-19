@@ -3,18 +3,15 @@
 
   var cityInput = document.getElementById("lpCity");
   var plannerCta = document.getElementById("lpPlannerCta");
+  var plannerCtaLabel = document.getElementById("lpPlannerCtaLabel");
   var plannerForm = document.getElementById("lpPlannerForm");
 
-  var CITY_MAP = {
-    barcelona: "/barcelona",
-    "barcelone": "/barcelona",
-    rom: "/rome",
-    rome: "/rome",
-    roma: "/rome",
-  };
+  var REGISTRY = window.__PARRANDA_CITIES__ || {};
+  var COPY = window.__PARRANDA_LANDING_COPY__ || {};
 
   function resolveCity(raw) {
-    return CITY_MAP[raw.trim().toLowerCase()] || null;
+    var entry = REGISTRY[String(raw || "").trim().toLowerCase()];
+    return entry ? "/" + entry.key : null;
   }
 
   function updateCtaState() {
@@ -23,21 +20,11 @@
     if (plannerCta) {
       plannerCta.disabled = !enabled;
       plannerCta.setAttribute("aria-disabled", enabled ? "false" : "true");
-      plannerCta.textContent = "";
-      var label = document.createTextNode(enabled ? "Bygg min dag" : "Välj stad först");
-      plannerCta.appendChild(label);
-      var arrow = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      arrow.setAttribute("width", "16");
-      arrow.setAttribute("height", "16");
-      arrow.setAttribute("viewBox", "0 0 24 24");
-      arrow.setAttribute("fill", "none");
-      arrow.setAttribute("stroke", "currentColor");
-      arrow.setAttribute("stroke-width", "1.75");
-      arrow.setAttribute("stroke-linecap", "round");
-      arrow.setAttribute("stroke-linejoin", "round");
-      arrow.setAttribute("aria-hidden", "true");
-      arrow.innerHTML = '<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>';
-      plannerCta.appendChild(arrow);
+    }
+    if (plannerCtaLabel) {
+      plannerCtaLabel.textContent = enabled
+        ? (COPY.submit || "Bygg min dag")
+        : (COPY.submitDisabled || "Välj stad först");
     }
   }
 
@@ -53,14 +40,15 @@
       if (cityPath) {
         window.location.href = cityPath;
       } else if (val.trim()) {
-        cityInput.setCustomValidity("Vi är live i Barcelona och Rom just nu. Prova en av dem!");
+        var msg = COPY.unsupported || "Vi är live i Barcelona och Rom just nu. Prova en av dem!";
+        cityInput.setCustomValidity(msg);
         cityInput.reportValidity();
         setTimeout(function () { cityInput.setCustomValidity(""); }, 3000);
       }
     });
   }
 
-  /* ── CTA-länkar → scroll till planerare + fokusera stadsökfältet ── */
+  /* ── Hash-länkar (skip-link, nav-CTA) → scrolla till hero-sök + fokus ── */
   var ctaLinks = document.querySelectorAll('a[href="#planner"]');
   ctaLinks.forEach(function (link) {
     link.addEventListener("click", function (e) {
@@ -88,7 +76,7 @@
   if (shuffleBtn) shuffleBtn.addEventListener("click", shuffleBlitz);
   if (shuffleAllBtn) shuffleAllBtn.addEventListener("click", shuffleBlitz);
 
-  /* ── "Använd en av dem" → scroll till planerare + fokus ── */
+  /* ── "Använd en av dem" → scroll till hero-sök + fokus ── */
   var useBtn = document.getElementById("lpBlitzUse");
   if (useBtn) {
     useBtn.addEventListener("click", function () {

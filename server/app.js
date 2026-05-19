@@ -1,7 +1,7 @@
 const fs = require("node:fs");
 const express = require("express");
 const path = require("path");
-const { resolveCityConfig } = require("./cities");
+const { resolveCityConfig, cityConfigs } = require("./cities");
 const { buildBlitzDecision } = require("./blitz-engine");
 const { generateRecommendations } = require("./route-engine");
 const { diversifyRecommendationDays } = require("./route-diversity");
@@ -537,13 +537,67 @@ function buildStaticShellI18nReplacements(lang) {
   };
 }
 
+const LANDING_PUBLIC_VISIBILITIES = ["public", "preview"];
+
+function getLandingSearchCities() {
+  return Object.values(cityConfigs).filter((cityConfig) => {
+    const visibility = cityConfig.visibility || "public";
+    return LANDING_PUBLIC_VISIBILITIES.includes(visibility);
+  });
+}
+
+function buildLandingCityOptions(lang) {
+  const tr = (key) => translate(lang, key);
+  return getLandingSearchCities()
+    .map((cityConfig) => {
+      const label = escapeHtml(cityConfig.label);
+      const isPreview = cityConfig.visibility === "preview";
+      const previewLabel = escapeHtml(tr("shell.preview.eyebrow") || "Preview");
+      const suffix = isPreview ? ` — ${previewLabel}` : "";
+      return `<option value="${label}">${label}${suffix}</option>`;
+    })
+    .join("");
+}
+
+function buildLandingCityRegistry() {
+  const entries = {};
+  getLandingSearchCities().forEach((cityConfig) => {
+    const entry = {
+      key: cityConfig.key,
+      label: cityConfig.label,
+      status: cityConfig.visibility || "public",
+    };
+    entries[cityConfig.key] = entry;
+    entries[cityConfig.label.toLowerCase()] = entry;
+    if (cityConfig.key === "rome") {
+      entries["rome"] = entry;
+      entries["roma"] = entry;
+    }
+    if (cityConfig.key === "barcelona") {
+      entries["barcelone"] = entry;
+    }
+  });
+  return entries;
+}
+
 function renderLandingShell({ lang = "sv" } = {}) {
   const uiLang = normalizeLanguage(lang);
   const ogLocale = uiLang === "en" ? "en_US" : "sv_SE";
+  const tr = (key) => translate(uiLang, key);
   const replacements = {
     "__PARRANDA_LANG__": escapeHtml(uiLang),
     "__PARRANDA_UI_LANG__": escapeHtml(uiLang),
     "__PARRANDA_OG_LOCALE__": ogLocale,
+    "__PARRANDA_LANDING_HEADLINE__": escapeHtml(tr("landing.hero.headline")),
+    "__PARRANDA_LANDING_SUBCOPY__": escapeHtml(tr("landing.hero.subcopy")),
+    "__PARRANDA_LANDING_SEARCH_PLACEHOLDER__": escapeHtml(tr("landing.search.placeholder")),
+    "__PARRANDA_LANDING_SEARCH_SUBMIT__": escapeHtml(tr("landing.search.submit")),
+    "__PARRANDA_LANDING_SEARCH_SUBMIT_DISABLED__": escapeHtml(tr("landing.search.submitDisabled")),
+    "__PARRANDA_LANDING_SEARCH_UNSUPPORTED__": escapeHtml(tr("landing.search.unsupported")),
+    "__PARRANDA_LANDING_SEARCH_LABEL__": escapeHtml(tr("landing.search.label")),
+    "__PARRANDA_LANDING_SKIP_LINK__": escapeHtml(tr("landing.search.skipLink")),
+    "__PARRANDA_LANDING_CITY_OPTIONS__": buildLandingCityOptions(uiLang),
+    "__PARRANDA_LANDING_CITY_REGISTRY__": serializeInlineJson(buildLandingCityRegistry()),
   };
   return Object.entries(replacements).reduce(
     (html, [token, value]) => html.split(token).join(value),
