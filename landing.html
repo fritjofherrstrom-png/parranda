@@ -3,19 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Parranda — Din stad. Din dag. Curated.</title>
+    <title>Parranda — Nästa stopp?</title>
     <meta name="theme-color" content="#af4d24" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="description" content="Handplockade rutter, kvarter för kvarter. Två städer live just nu — Barcelona och Rom. Välj stad, bygg din dag." />
-    <meta property="og:title" content="Parranda — Din stad. Din dag. Curated." />
-    <meta property="og:description" content="Handplockade rutter i Barcelona och Rom. Välj stad, bygg din dag på 30 sekunder." />
+    <meta name="description" content="Välj en stad. Parranda bygger en dag med rätt rytm, rätt kvarter och rätt timing. Live i Barcelona och Rom." />
+    <meta property="og:title" content="Parranda — Nästa stopp?" />
+    <meta property="og:description" content="Välj en stad. Parranda bygger en dag med rätt rytm, rätt kvarter och rätt timing." />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="__PARRANDA_OG_LOCALE__" />
     <meta property="og:image" content="/assets/icons/icon-512.png" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Parranda — Din stad. Din dag. Curated." />
-    <meta name="twitter:description" content="Handplockade rutter i Barcelona och Rom." />
+    <meta name="twitter:title" content="Parranda — Nästa stopp?" />
+    <meta name="twitter:description" content="Välj en stad. Parranda bygger en dag." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -24,13 +24,19 @@
     />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=20" />
+    <link rel="stylesheet" href="styles.css?v=21" />
     <script>
       window.__PARRANDA_LANGUAGE__ = "__PARRANDA_UI_LANG__";
+      window.__PARRANDA_CITIES__ = __PARRANDA_LANDING_CITY_REGISTRY__;
+      window.__PARRANDA_LANDING_COPY__ = {
+        unsupported: "__PARRANDA_LANDING_SEARCH_UNSUPPORTED__",
+        submit: "__PARRANDA_LANDING_SEARCH_SUBMIT__",
+        submitDisabled: "__PARRANDA_LANDING_SEARCH_SUBMIT_DISABLED__"
+      };
     </script>
   </head>
   <body data-lang="__PARRANDA_LANG__">
-    <a href="#planner" class="lp-skip-link">Hoppa till planering</a>
+    <a href="#planner" class="lp-skip-link">__PARRANDA_LANDING_SKIP_LINK__</a>
     <main id="main">
 
     <!-- ═══════════════════════════════════════ HERO ═══════════════════════ -->
@@ -64,72 +70,46 @@
         </nav>
 
         <!-- HEADLINE -->
-        <h1 class="lp-hero__headline">
-          Din stad.<br />
-          Din dag.<br />
-          Curated.
-        </h1>
-        <p class="lp-hero__lead">
-          Välj stad. Få en handplockad rutt som känns rätt — kvarter för kvarter.
-          Två städer live just nu, fler på väg.
-        </p>
-        <p class="lp-hero__kicker" aria-label="Handplockade rutter · Noll stress · Ren upptäckt">
-          <span>Handplockade rutter</span>
-          <span class="lp-hero__dot" aria-hidden="true">·</span>
-          <span>Noll stress</span>
-          <span class="lp-hero__dot" aria-hidden="true">·</span>
-          <span>Ren upptäckt</span>
-        </p>
-        <div class="lp-hero__cta-row">
-          <a href="#planner" class="lp-btn lp-btn--primary lp-btn--lg">Hitta din stad</a>
-        </div>
-        <p class="lp-hero__cta-note">Tar 30 sekunder. Vi sköter resten.</p>
-      </div>
-    </section>
+        <h1 class="lp-hero__headline">__PARRANDA_LANDING_HEADLINE__</h1>
+        <p class="lp-hero__sub">__PARRANDA_LANDING_SUBCOPY__</p>
 
-    <!-- ═══════════════════════════════════ PLANNER ═══════════════════════ -->
-    <section class="lp-section lp-section--cream" id="planner">
-      <div class="lp-inner">
-        <h2 class="lp-planner__title">Börja med en stad</h2>
-        <form class="lp-planner__form lp-planner__form--simple" id="lpPlannerForm" novalidate>
-          <label class="lp-field" for="lpCity">
-            <span class="lp-field__label">Stad</span>
-            <div class="lp-field__input">
-              <svg class="lp-field__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <circle cx="11" cy="11" r="7"/>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        <!-- HERO SEARCH (primary interaction, above the fold) -->
+        <div class="lp-hero__search" id="planner">
+          <form class="lp-hero__search-form" id="lpPlannerForm" novalidate>
+            <label class="lp-field lp-field--hero" for="lpCity">
+              <span class="lp-field__label lp-visually-hidden">__PARRANDA_LANDING_SEARCH_LABEL__</span>
+              <div class="lp-field__input">
+                <svg class="lp-field__icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7"/>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <input
+                  id="lpCity"
+                  type="search"
+                  placeholder="__PARRANDA_LANDING_SEARCH_PLACEHOLDER__"
+                  autocomplete="off"
+                  list="lpCityList"
+                  aria-label="__PARRANDA_LANDING_SEARCH_LABEL__"
+                />
+                <datalist id="lpCityList">__PARRANDA_LANDING_CITY_OPTIONS__</datalist>
+              </div>
+            </label>
+
+            <button
+              type="submit"
+              class="lp-btn lp-btn--primary lp-btn--lg"
+              id="lpPlannerCta"
+              disabled
+              aria-disabled="true"
+            >
+              <span class="lp-btn__label" id="lpPlannerCtaLabel">__PARRANDA_LANDING_SEARCH_SUBMIT_DISABLED__</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="5" y1="12" x2="19" y2="12"/>
+                <polyline points="12 5 19 12 12 19"/>
               </svg>
-              <input
-                id="lpCity"
-                type="search"
-                placeholder="Sök stad"
-                autocomplete="off"
-                list="lpCityList"
-              />
-              <datalist id="lpCityList">
-                <option value="Barcelona">Barcelona</option>
-                <option value="Rom">Rom</option>
-              </datalist>
-            </div>
-          </label>
-
-          <button
-            type="submit"
-            class="lp-btn lp-btn--primary"
-            id="lpPlannerCta"
-            disabled
-            aria-disabled="true"
-          >
-            Välj stad först
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <line x1="5" y1="12" x2="19" y2="12"/>
-              <polyline points="12 5 19 12 12 19"/>
-            </svg>
-          </button>
-        </form>
-        <p class="lp-planner__note">
-          Barcelona och Rom är live. Datum och stil väljer du inne i staden.
-        </p>
+            </button>
+          </form>
+        </div>
       </div>
     </section>
 

@@ -540,21 +540,54 @@ test("GET / renderar global landing page (inte city-shell)", async () => {
     assert.ok(!response.body.includes("__PARRANDA_TITLE__"));
     assert.ok(!response.body.includes('data-city-key="rome"'));
     assert.ok(!response.body.includes('window.__PARRANDA_CITY__'));
-    // Landing-specific copy and structure
-    assert.match(response.body, /Din stad\. Din dag\. Curated\./);
-    assert.match(response.body, /Hitta din stad/);
-    assert.match(response.body, /Börja med en stad/);
+    // Landing v2: locked hero headline + subcopy (SV)
+    assert.match(response.body, /Nästa stopp\?/);
+    assert.match(response.body, /Välj en stad\. Parranda bygger en dag/);
     assert.match(response.body, /Sök stad/);
-    assert.ok(response.body.includes("Live Pulse:") && response.body.includes("städer just nu"));
     assert.match(response.body, /lp-hero/);
     assert.match(response.body, /<html lang="sv">/);
-    // Trust badges are present
-    assert.ok(response.body.includes("Curated"));
-    assert.ok(response.body.includes("Editorial"));
-    // Supported cities only in pulse
-    assert.ok(response.body.includes("Barcelona"));
-    assert.ok(response.body.includes("Rom"));
-    // ?lang=en not tested here — covered by city-shell lang tests
+    // City registry server-rendered into datalist (Barcelona + Rom; aliases via JS registry)
+    assert.ok(response.body.includes('value="Barcelona"'));
+    assert.ok(response.body.includes('value="Rom"'));
+    assert.match(response.body, /window\.__PARRANDA_CITIES__/);
+    assert.match(response.body, /"roma"\s*:/);
+    assert.match(response.body, /"rome"\s*:/);
+    // Internal-visibility cities must never leak
+    assert.ok(!response.body.toLowerCase().includes("test city"));
+    assert.ok(!response.body.includes('"key":"test-city"'));
+    // Stale v1 copy is gone
+    assert.ok(!response.body.includes("Din stad. Din dag. Curated."));
+    assert.ok(!response.body.includes("Hitta din stad"));
+    assert.ok(!response.body.includes("Börja med en stad"));
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /?lang=en renderar landing v2 med engelsk copy", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during EN landing test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestText(server, { path: "/?lang=en" });
+
+    assert.equal(response.status, 200);
+    // EN hero copy
+    assert.match(response.body, /Next stop\?/);
+    assert.match(response.body, /Choose a city\. Parranda builds a day/);
+    assert.match(response.body, /Search city/);
+    assert.match(response.body, /<html lang="en">/);
+    // Registry still rendered, internal city still filtered
+    assert.match(response.body, /window\.__PARRANDA_CITIES__/);
+    assert.ok(response.body.includes('value="Barcelona"'));
+    assert.ok(response.body.includes('value="Rom"'));
+    assert.ok(!response.body.toLowerCase().includes("test city"));
+    // Hero <h1> resolves to EN, not the SV token
+    assert.match(response.body, /<h1 class="lp-hero__headline">Next stop\?<\/h1>/);
+    assert.ok(!/<h1 class="lp-hero__headline">Nästa stopp\?<\/h1>/.test(response.body));
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
