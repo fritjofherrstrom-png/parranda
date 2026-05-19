@@ -8,7 +8,6 @@ const CHIPPED_SIGNAL_TYPES = new Set([
   "live_event_nearby",
   "evening_window",
   "crowd_warning",
-  "market_timing",
 ]);
 
 function labelSignalType(type, lang) {
