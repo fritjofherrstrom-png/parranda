@@ -566,6 +566,7 @@ function buildLandingCityRegistry() {
       key: cityConfig.key,
       label: cityConfig.label,
       status: cityConfig.visibility || "public",
+      center: { lat: cityConfig.center.lat, lng: cityConfig.center.lng },
     };
     entries[cityConfig.key] = entry;
     entries[cityConfig.label.toLowerCase()] = entry;
@@ -598,6 +599,17 @@ function renderLandingShell({ lang = "sv" } = {}) {
     "__PARRANDA_LANDING_SKIP_LINK__": escapeHtml(tr("landing.search.skipLink")),
     "__PARRANDA_LANDING_CITY_OPTIONS__": buildLandingCityOptions(uiLang),
     "__PARRANDA_LANDING_CITY_REGISTRY__": serializeInlineJson(buildLandingCityRegistry()),
+    "__PARRANDA_LANDING_BLITZ_BUTTON__": escapeHtml(tr("landing.blitz.button")),
+    "__PARRANDA_LANDING_BLITZ_SUBTITLE__": escapeHtml(tr("landing.blitz.subtitle")),
+    "__PARRANDA_LANDING_BLITZ_USE__": escapeHtml(tr("landing.blitz.use")),
+    "__PARRANDA_LANDING_BLITZ_REBLITZ__": escapeHtml(tr("landing.blitz.reblitz")),
+    "__PARRANDA_LANDING_BLITZ_PLAN__": escapeHtml(tr("landing.blitz.plan")),
+    "__PARRANDA_LANDING_BLITZ_CLOSE__": escapeHtml(tr("landing.blitz.close")),
+    "__PARRANDA_LANDING_BLITZ_LOADING__": escapeHtml(tr("landing.blitz.loading")),
+    "__PARRANDA_LANDING_BLITZ_GEO_FALLBACK__": escapeHtml(tr("landing.blitz.geoFallback")),
+    "__PARRANDA_LANDING_BLITZ_NO_CITY__": escapeHtml(tr("landing.blitz.noCity")),
+    "__PARRANDA_LANDING_BLITZ_ERROR__": escapeHtml(tr("landing.blitz.error")),
+    "__PARRANDA_LANDING_BLITZ_STREET_VIEW__": escapeHtml(tr("landing.blitz.streetView")),
   };
   return Object.entries(replacements).reduce(
     (html, [token, value]) => html.split(token).join(value),

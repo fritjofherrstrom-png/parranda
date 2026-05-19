@@ -559,6 +559,14 @@ test("GET / renderar global landing page (inte city-shell)", async () => {
     assert.ok(!response.body.includes("Din stad. Din dag. Curated."));
     assert.ok(!response.body.includes("Hitta din stad"));
     assert.ok(!response.body.includes("Börja med en stad"));
+    // Blitz entry — button and sheet present
+    assert.ok(response.body.includes('id="lpBlitzCta"'), "Blitz button present");
+    assert.ok(response.body.includes('id="lpBlitzSheet"'), "Blitz sheet present");
+    assert.ok(response.body.includes('id="lpBlitzReblitz"'), "Reblitz button present");
+    // Registry includes center coordinates for geo detection
+    assert.match(response.body, /"center"\s*:\s*\{/);
+    // Blitz i18n tokens resolved (not raw token strings left behind)
+    assert.ok(!response.body.includes("__PARRANDA_LANDING_BLITZ_"), "No unresolved Blitz tokens");
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -588,6 +596,8 @@ test("GET /?lang=en renderar landing v2 med engelsk copy", async () => {
     // Hero <h1> resolves to EN, not the SV token
     assert.match(response.body, /<h1 class="lp-hero__headline">Next stop\?<\/h1>/);
     assert.ok(!/<h1 class="lp-hero__headline">Nästa stopp\?<\/h1>/.test(response.body));
+    // Blitz sheet subtitle in EN
+    assert.ok(response.body.includes("Next move, right now."), "Blitz subtitle in EN");
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
