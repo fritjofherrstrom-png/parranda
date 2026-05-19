@@ -191,6 +191,7 @@ function buildOfficialPulseItem(event, date, cityConfig, lang = "sv") {
   return {
     id: `official-${event.id}`,
     level: "venue",
+    signal_type: "live_event_nearby",
     kind: buildOfficialPulseKind(event, lang),
     title: event.title,
     // Mirror the native title so the UI can label or hint "Catalan title"

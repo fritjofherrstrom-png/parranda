@@ -126,6 +126,7 @@ function getDateSignals(dateString = getRomeTodayIsoDate(), lang = "sv") {
   if (month === 4 && day === 21) {
     signals.push({
       id: "natale-di-roma",
+      signal_type: "local_timing_advice",
       title: readLocalizedContent(createLocalizedContent("Natale di Roma", "Natale di Roma"), lang),
       note: readLocalizedContent(
         createLocalizedContent(
@@ -141,6 +142,7 @@ function getDateSignals(dateString = getRomeTodayIsoDate(), lang = "sv") {
   if (month >= 6 && month <= 9) {
     signals.push({
       id: "estate-romana",
+      signal_type: "evening_window",
       title: readLocalizedContent(
         createLocalizedContent("Sommarkväll i Rom", "Summer evening in Rome"),
         lang,
@@ -159,6 +161,7 @@ function getDateSignals(dateString = getRomeTodayIsoDate(), lang = "sv") {
   if (weekday === 5 || weekday === 6) {
     signals.push({
       id: "weekend-pulse",
+      signal_type: "evening_window",
       title: readLocalizedContent(createLocalizedContent("Helgpuls", "Weekend pulse"), lang),
       note: readLocalizedContent(
         createLocalizedContent(
@@ -174,6 +177,7 @@ function getDateSignals(dateString = getRomeTodayIsoDate(), lang = "sv") {
   if (weekday === 1) {
     signals.push({
       id: "monday-reset",
+      signal_type: "local_timing_advice",
       title: readLocalizedContent(createLocalizedContent("Mjuk måndag", "Soft Monday"), lang),
       note: readLocalizedContent(
         createLocalizedContent(
@@ -192,6 +196,7 @@ function getDateSignals(dateString = getRomeTodayIsoDate(), lang = "sv") {
 const recurringPulseMoments = [
   {
     id: "thursday-aperitivo",
+    signal_type: "evening_window",
     kind: "stadspuls",
     kindLabel: "Stadspuls",
     title: "Torsdag är bäst som lång aperitivo, inte som stressig barrunda",
@@ -205,6 +210,7 @@ const recurringPulseMoments = [
   },
   {
     id: "weekend-street-pulse",
+    signal_type: "evening_window",
     kind: "lokal rytm",
     kindLabel: "Lokal rytm",
     title: "Fredag och lördag spiller kvällen ut på gator och piazzor",
@@ -218,6 +224,7 @@ const recurringPulseMoments = [
   },
   {
     id: "sunday-soft-rome",
+    signal_type: "local_timing_advice",
     kind: "lokal rytm",
     kindLabel: "Lokal rytm",
     title: "Söndag i Rom är bättre långsam än maxad",
@@ -231,6 +238,7 @@ const recurringPulseMoments = [
   },
   {
     id: "monday-wine-culture",
+    signal_type: "local_timing_advice",
     kind: "stadspuls",
     kindLabel: "Stadspuls",
     title: "Måndag vinner på kultur, vin och tydlig middag",
@@ -244,6 +252,7 @@ const recurringPulseMoments = [
   },
   {
     id: "summer-open-air",
+    signal_type: "evening_window",
     kind: "säsong",
     kindLabel: "Säsong",
     title: "Sommarkvällar gör piazzor och uteserveringar extra starka",
@@ -257,6 +266,7 @@ const recurringPulseMoments = [
   },
   {
     id: "spring-and-autumn-walks",
+    signal_type: "local_timing_advice",
     kind: "säsong",
     kindLabel: "Säsong",
     title: "Vår och tidig höst är gjorda för långa kvällspromenader",
@@ -336,6 +346,7 @@ const recurringPulseLocalizedContent = {
 const editorialPulseItems = [
   {
     id: "city-thursday-gnocchi",
+    signal_type: "local_timing_advice",
     level: "city",
     kind: "Tradition",
     title: "Torsdag är gnocchi-dag",
@@ -358,6 +369,7 @@ const editorialPulseItems = [
   },
   {
     id: "city-weekend-streets",
+    signal_type: "evening_window",
     level: "city",
     kind: "Stadens rytm",
     title: "Helgkvällar spiller ut på gator och piazzor",
@@ -382,6 +394,7 @@ const editorialPulseItems = [
   },
   {
     id: "city-monday-soft",
+    signal_type: "local_timing_advice",
     level: "city",
     kind: "Stadens rytm",
     title: "Måndag vinner på kultur, vin och tydlig middag",
@@ -404,6 +417,7 @@ const editorialPulseItems = [
   },
   {
     id: "city-spring-walks",
+    signal_type: "evening_window",
     level: "city",
     kind: "Säsong",
     title: "April och maj är gjorda för längre kvällspromenader",
@@ -425,6 +439,7 @@ const editorialPulseItems = [
   },
   {
     id: "city-summer-open-air",
+    signal_type: "evening_window",
     level: "city",
     kind: "Säsong",
     title: "Sommarkvällar gör piazzor, tak och uteserveringar extra starka",
@@ -446,6 +461,7 @@ const editorialPulseItems = [
   },
   {
     id: "city-general-rhythm",
+    signal_type: "local_timing_advice",
     level: "city",
     kind: "Stadens rytm",
     title: "Rom känns bäst när dagen byggs i kvarter, inte i checklistor",
@@ -465,6 +481,7 @@ const editorialPulseItems = [
   },
   {
     id: "hood-trastevere-crowded",
+    signal_type: "crowd_warning",
     level: "neighborhood",
     kind: "Kvarterspuls",
     title: "Trastevere är sällan smartast som första stopp på helgkvällar",
@@ -488,6 +505,7 @@ const editorialPulseItems = [
   },
   {
     id: "hood-east-rome-energy",
+    signal_type: "evening_window",
     level: "neighborhood",
     kind: "Kvarterspuls",
     title: "Pigneto och San Lorenzo bär en yngre och råare kväll än centro",
@@ -511,6 +529,7 @@ const editorialPulseItems = [
   },
   {
     id: "hood-south-rome-low-key",
+    signal_type: "evening_window",
     level: "neighborhood",
     kind: "Kvarterspuls",
     title: "Garbatella och Ostiense ger ofta en bättre vardagskväll än centrum",
@@ -535,6 +554,7 @@ const editorialPulseItems = [
   },
   {
     id: "hood-sunday-soft",
+    signal_type: "local_timing_advice",
     level: "neighborhood",
     kind: "Kvarterspuls",
     title: "Aventino och Prati spelar bättre långsamt på söndagar",
@@ -559,6 +579,7 @@ const editorialPulseItems = [
   },
   {
     id: "hood-monti-start",
+    signal_type: "local_timing_advice",
     level: "neighborhood",
     kind: "Kvarterspuls",
     title: "Monti är ofta bättre som smart start än som hela svaret",
@@ -581,6 +602,7 @@ const editorialPulseItems = [
   },
   {
     id: "venue-wine-axis",
+    signal_type: "evening_window",
     level: "venue",
     kind: "Ställesnivå",
     title: "Litro, L'Antidoto eller Les Vignerons om du vill låta vinet styra kvällen",
@@ -603,6 +625,7 @@ const editorialPulseItems = [
   },
   {
     id: "venue-beer-axis",
+    signal_type: "evening_window",
     level: "venue",
     kind: "Ställesnivå",
     title: "Ma Che Siete Venuti a Fà, L'Oasi della Birra eller Bar San Calisto bär ett genuint ölspår",
@@ -626,6 +649,7 @@ const editorialPulseItems = [
   },
   {
     id: "venue-culture-axis",
+    signal_type: "local_timing_advice",
     level: "venue",
     kind: "Ställesnivå",
     title: "Centrale Montemartini eller Santa Prassede när du vill ge dagen ett rum med tyngd",
@@ -648,6 +672,7 @@ const editorialPulseItems = [
   },
   {
     id: "venue-sunset-axis",
+    signal_type: "golden_hour",
     level: "venue",
     kind: "Ställesnivå",
     title: "Giardino degli Aranci eller Gianicolo när du behöver ett snyggt kvällsskifte",
