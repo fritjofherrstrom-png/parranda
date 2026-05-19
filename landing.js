@@ -101,6 +101,7 @@
 
   var landingBlitzState  = null;
   var landingBlitzMemory = null;
+  var landingBlitzCity   = null;
 
   function haversineKm(a, b) {
     var R = 6371;
@@ -192,6 +193,10 @@
   }
 
   function runBlitzForCity(cityKey) {
+    if (landingBlitzCity && landingBlitzCity !== cityKey) {
+      landingBlitzMemory = null;
+    }
+    landingBlitzCity = cityKey;
     setBlitzLoading();
     openBlitzSheet();
     var lang = window.__PARRANDA_LANGUAGE__ || "sv";
@@ -202,13 +207,20 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     })
-      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        if (!r.ok) throw new Error("Blitz failed");
+        return r.json();
+      })
       .then(function (data) {
+        if (!data || !data.best_move) throw new Error("No Blitz result");
         landingBlitzState  = data;
         landingBlitzMemory = data.memory || null;
         renderBlitzResult(data);
       })
       .catch(function () {
+        landingBlitzState  = null;
+        landingBlitzMemory = null;
+        setBlitzFooterEnabled(false);
         if (blitzBody) blitzBody.innerHTML =
           "<p class='lp-blitz-result__error'>" +
           escapeForDOM(COPY.blitzError || "Något gick fel. Försök igen.") + "</p>";
