@@ -11011,4 +11011,7 @@ loadPlannerOptions().then(() => {
   syncPlannerModeUI();
   updateWalkingKmLabel();
   renderRouteResults();
+  if (new URLSearchParams(location.search).get("planner") === "open") {
+    openPlannerModal();
+  }
 });

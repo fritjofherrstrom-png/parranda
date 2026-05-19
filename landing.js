@@ -68,7 +68,7 @@
       var val = cityInput ? cityInput.value : "";
       var cityPath = resolveCity(val);
       if (cityPath) {
-        window.location.href = cityPath;
+        window.location.href = cityPath + "?planner=open";
       } else if (val.trim()) {
         var msg = COPY.unsupported || "Vi är live i Barcelona och Rom just nu. Prova en av dem!";
         cityInput.setCustomValidity(msg);
