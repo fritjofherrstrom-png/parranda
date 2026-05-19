@@ -179,7 +179,7 @@
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
-      .replace(/\"/g, "&quot;");
+      .replace(/"/g, "&quot;");
   }
 
   function openBlitzSheet() {
@@ -356,6 +356,7 @@
 
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape" && blitzSheet && !blitzSheet.hasAttribute("hidden")) {
+      if (mapModal && !mapModal.hasAttribute("hidden")) return;
       closeBlitzSheet();
     }
   });

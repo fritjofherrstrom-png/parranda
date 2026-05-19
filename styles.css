@@ -6381,6 +6381,12 @@ body.is-printing-guide #routeGuideDrawer {
   color: var(--accent, #af4d24);
   text-decoration: underline;
   text-underline-offset: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
 }
 .lp-blitz-result__street-view:hover { opacity: 0.8; }
 .lp-blitz-result__loading,
