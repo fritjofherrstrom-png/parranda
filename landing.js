@@ -68,7 +68,12 @@
       var val = cityInput ? cityInput.value : "";
       var cityPath = resolveCity(val);
       if (cityPath) {
-        window.location.href = cityPath;
+        var params = new URLSearchParams();
+        params.set("planner", "open");
+        if ((window.__PARRANDA_LANGUAGE__ || "sv") === "en") {
+          params.set("lang", "en");
+        }
+        window.location.href = cityPath + "?" + params.toString();
       } else if (val.trim()) {
         var msg = COPY.unsupported || "Vi är live i Barcelona och Rom just nu. Prova en av dem!";
         cityInput.setCustomValidity(msg);
@@ -161,7 +166,7 @@
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
+      .replace(/\"/g, "&quot;");
   }
 
   function openBlitzSheet() {
