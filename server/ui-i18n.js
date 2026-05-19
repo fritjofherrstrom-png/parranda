@@ -499,7 +499,7 @@ const translations = {
     "landing.search.skipLink": "Hoppa till sök",
     "landing.blitz.button": "Blitz",
     "landing.blitz.subtitle": "Nästa drag, just nu.",
-    "landing.blitz.use": "Använd detta",
+    "landing.blitz.use": "Jag är på",
     "landing.blitz.reblitz": "Reblitz",
     "landing.blitz.plan": "Bygg dag runt detta",
     "landing.blitz.close": "Stäng",
@@ -508,6 +508,7 @@ const translations = {
     "landing.blitz.noCity": "Ingen stad nära dig just nu. Prova Barcelona eller Rom.",
     "landing.blitz.error": "Något gick fel. Försök igen.",
     "landing.blitz.streetView": "Se gatan",
+    "landing.blitz.openInMaps": "Öppna i Google Maps",
   },
   en: {
     "shell.plannerEyebrow": "PLAN",
@@ -1006,7 +1007,7 @@ const translations = {
     "landing.search.skipLink": "Skip to search",
     "landing.blitz.button": "Blitz",
     "landing.blitz.subtitle": "Next move, right now.",
-    "landing.blitz.use": "Use this",
+    "landing.blitz.use": "I'm in",
     "landing.blitz.reblitz": "Reblitz",
     "landing.blitz.plan": "Build day around this",
     "landing.blitz.close": "Close",
@@ -1015,6 +1016,7 @@ const translations = {
     "landing.blitz.noCity": "No supported city near you yet. Try Barcelona or Rome.",
     "landing.blitz.error": "Something went wrong. Try again.",
     "landing.blitz.streetView": "Street view",
+    "landing.blitz.openInMaps": "Open in Google Maps",
   },
 };
 
