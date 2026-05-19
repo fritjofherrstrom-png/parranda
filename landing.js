@@ -412,7 +412,7 @@
   function closeMapModal() {
     if (!mapModal) return;
     mapModal.setAttribute("hidden", "");
-    if (mapFrame) mapFrame.src = "";
+    if (mapFrame) mapFrame.src = "about:blank";
   }
 
   if (blitzBody) {
