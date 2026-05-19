@@ -3,6 +3,18 @@ const { evaluateLocalTruth, localTruthForLang } = require("./local-truth");
 const { normalizeAvailability } = require("./availability");
 const { translate, normalizeLanguage } = require("./ui-i18n");
 
+const CHIPPED_SIGNAL_TYPES = new Set([
+  "golden_hour",
+  "live_event_nearby",
+  "evening_window",
+  "crowd_warning",
+]);
+
+function labelSignalType(type, lang) {
+  if (!type || !CHIPPED_SIGNAL_TYPES.has(type)) return null;
+  return translate(lang, `pulse.signal_type.${type}`);
+}
+
 const DEFAULT_BLITZ_MODE = "auto";
 const DEFAULT_MEMORY = {
   recent_stop_ids: [],
@@ -1073,6 +1085,8 @@ function buildSingleStopCandidate({
           id: pulseResult.item.id,
           title: pulseResult.item.title,
           why_it_matters: pulseResult.item.why_it_matters,
+          signal_type: pulseResult.item.signal_type || null,
+          signal_label: labelSignalType(pulseResult.item.signal_type, lang),
         }
       : null,
     availability: availabilityContext,
@@ -1175,6 +1189,8 @@ function buildMiniRouteCandidate({
           id: pulseResult.item.id,
           title: pulseResult.item.title,
           why_it_matters: pulseResult.item.why_it_matters,
+          signal_type: pulseResult.item.signal_type || null,
+          signal_label: labelSignalType(pulseResult.item.signal_type, lang),
         }
       : null,
     availability: availabilityContext,

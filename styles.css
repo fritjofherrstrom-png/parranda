@@ -6350,6 +6350,18 @@ body.is-printing-guide #routeGuideDrawer {
   color: var(--ink, #140a04);
   margin: 0;
 }
+.lp-blitz-result__signal-chip {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(175, 77, 36, 0.10);
+  color: rgba(175, 77, 36, 0.95);
+  font: 600 0.70rem/1.5 "Manrope", sans-serif;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
 .lp-blitz-result__why {
   font-size: 0.95rem;
   line-height: 1.55;

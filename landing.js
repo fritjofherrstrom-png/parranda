@@ -226,8 +226,13 @@
         escapeForDOM(COPY.blitzStreetView || "Se gatan") + "</a>";
     }
 
+    var signalLabel = move.pulse_context && move.pulse_context.signal_label;
+    var chipHtml = signalLabel
+      ? "<span class='lp-blitz-result__signal-chip'>" + escapeForDOM(signalLabel) + "</span>"
+      : "";
+
     blitzBody.innerHTML =
-      "<p class='lp-blitz-result__title'>" + escapeForDOM(title) + "</p>" +
+      "<p class='lp-blitz-result__title'>" + escapeForDOM(title) + chipHtml + "</p>" +
       (why  ? "<p class='lp-blitz-result__why'>"  + escapeForDOM(why)  + "</p>" : "") +
       (meta ? "<p class='lp-blitz-result__meta'>" + escapeForDOM(meta) + "</p>" : "") +
       streetViewHtml;
