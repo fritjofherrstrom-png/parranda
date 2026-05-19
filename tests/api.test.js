@@ -571,11 +571,6 @@ test("GET / renderar global landing page (inte city-shell)", async () => {
     assert.match(response.body, /"center"\s*:\s*\{/);
     // Blitz i18n tokens resolved (not raw token strings left behind)
     assert.ok(!response.body.includes("__PARRANDA_LANDING_BLITZ_"), "No unresolved Blitz tokens");
-    // Maps embed key: token replaced and no JS syntax error from self-substitution
-    assert.ok(!response.body.includes("__PARRANDA_MAPS_KEY_VALUE__"), "Maps embed key token resolved");
-    assert.doesNotMatch(response.body, /window\.__PARRANDA_MAPS_EMBED_KEY__\s*=\s*;/, "Maps key assignment valid JS");
-    // Maps key value is empty string (no env var in test), not undefined or missing
-    assert.match(response.body, /window\.__PARRANDA_MAPS_EMBED_KEY__\s*=\s*""/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

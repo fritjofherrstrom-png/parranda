@@ -128,14 +128,10 @@
   var blitzBackdrop = document.getElementById("lpBlitzBackdrop");
   var blitzUseBtn = document.getElementById("lpBlitzUse");
   var blitzReblitzBtn = document.getElementById("lpBlitzReblitz");
-  var blitzPlanBtn = document.getElementById("lpBlitzPlan");
-  var blitzCtaBtn = document.getElementById("lpBlitzCta");
-  var mapModal = document.getElementById("lpMapModal");
-  var mapFrame = document.getElementById("lpMapFrame");
-  var mapClose = document.getElementById("lpMapClose");
-  var mapBackdrop = document.getElementById("lpMapBackdrop");
-  var mapExternal = document.getElementById("lpMapExternal");
-  var landingBlitzState = null;
+  var blitzPlanBtn  = document.getElementById("lpBlitzPlan");
+  var blitzCtaBtn   = document.getElementById("lpBlitzCta");
+
+  var landingBlitzState  = null;
   var landingBlitzMemory = null;
   var landingBlitzCity = null;
 
@@ -200,28 +196,49 @@
       encodeURIComponent(String(lat) + "," + String(lng));
   }
 
+  var STOP_TYPE_LABELS = {
+    sv: { bar: "Bar", restaurant: "Restaurang", cafe: "Kafé", market: "Marknad",
+          museum: "Museum", bookstore: "Bokhandel", cinema: "Bio", church: "Kyrka",
+          square: "Torg", viewpoint: "Utsiktspunkt", shop: "Butik" },
+    en: { bar: "Bar", restaurant: "Restaurant", cafe: "Café", market: "Market",
+          museum: "Museum", bookstore: "Bookstore", cinema: "Cinema", church: "Church",
+          square: "Square", viewpoint: "Viewpoint", shop: "Shop" }
+  };
+
+  function formatStopType(type, lang) {
+    if (!type) return "";
+    var map = STOP_TYPE_LABELS[lang] || STOP_TYPE_LABELS.sv;
+    var key = String(type).toLowerCase();
+    return map[key] || (key.charAt(0).toUpperCase() + key.slice(1));
+  }
+
   function renderBlitzResult(state) {
     if (!blitzBody) return;
     var move = state && state.best_move;
     if (!move) { blitzBody.textContent = ""; return; }
-    var title = move.title || "";
-    var why = move.why_now || "";
-    var stop = getBlitzPrimaryStop(state);
-    var area = stop ? (stop.area || "") : "";
+    var lang     = window.__PARRANDA_LANGUAGE__ || "sv";
+    var title    = move.title || "";
+    var why      = move.why_now || "";
+    var stop     = getBlitzPrimaryStop(state);
+    var area     = stop ? (stop.area || "") : "";
     var walkMins = move.walking_minutes ? move.walking_minutes + " min" : "";
-    var meta = [area, walkMins].filter(Boolean).join(" · ");
-    var streetViewHtml = "";
-    if (stop && stop.lat && stop.lng) {
-      var streetViewUrl = buildStreetViewUrl(stop.lat, stop.lng);
-      if (window.__PARRANDA_MAPS_EMBED_KEY__) {
-        streetViewHtml = "<button class='lp-blitz-result__street-view' type='button'" +
-          " data-lat='" + escapeForDOM(String(stop.lat)) + "'" +
-          " data-lng='" + escapeForDOM(String(stop.lng)) + "'" +
-          " data-maps-url='" + escapeForDOM(streetViewUrl) + "'>" +
-          escapeForDOM(COPY.blitzStreetView || "Se gatan") + "</button>";
-      } else {
-        streetViewHtml = "<a class='lp-blitz-result__street-view' href='" + escapeForDOM(streetViewUrl) +
-          "' target='_blank' rel='noopener'>" + escapeForDOM(COPY.blitzStreetView || "Se gatan") + "</a>";
+    var typeLabel = stop ? formatStopType(stop.type, lang) : "";
+    var meta = [typeLabel, area, walkMins].filter(Boolean).join(" · ");
+
+    var infoHtml = "";
+    if (stop) {
+      var queryParts = [];
+      var stopName = stop.name || stop.label;
+      if (stopName) queryParts.push(stopName);
+      if (area) queryParts.push(area);
+      var cityKey = (landingBlitzState && landingBlitzState.city) || "";
+      if (cityKey) queryParts.push(cityKey);
+      if (queryParts.length) {
+        var infoUrl = "https://www.google.com/maps/search/?api=1&query=" +
+          encodeURIComponent(queryParts.join(", "));
+        infoHtml = "<a class='lp-blitz-result__info' href='" + escapeForDOM(infoUrl) +
+          "' target='_blank' rel='noopener'>" +
+          escapeForDOM(COPY.blitzInfo || "Info") + "</a>";
       }
     }
     var signalLabel = move.pulse_context && move.pulse_context.signal_label;
@@ -232,7 +249,7 @@
       "<p class='lp-blitz-result__title'>" + escapeForDOM(title) + chipHtml + "</p>" +
       (why ? "<p class='lp-blitz-result__why'>" + escapeForDOM(why) + "</p>" : "") +
       (meta ? "<p class='lp-blitz-result__meta'>" + escapeForDOM(meta) + "</p>" : "") +
-      streetViewHtml;
+      infoHtml;
     setBlitzFooterEnabled(true);
   }
 
@@ -307,17 +324,13 @@
     }, { timeout: 8000 });
   }
 
-  function openMapModal(lat, lng, mapsUrl) {
-    var key = window.__PARRANDA_MAPS_EMBED_KEY__;
-    if (!key || !mapModal || !mapFrame) return;
-    var embedUrl = "https://www.google.com/maps/embed/v1/streetview" +
-      "?key=" + encodeURIComponent(key) +
-      "&location=" + encodeURIComponent(lat) + "," + encodeURIComponent(lng) +
-      "&fov=90";
-    mapFrame.src = embedUrl;
-    if (mapExternal) {
-      mapExternal.href = mapsUrl || buildStreetViewUrl(lat, lng);
-      mapExternal.textContent = COPY.blitzOpenInMaps || "Open in Google Maps";
+  if (blitzCtaBtn)   blitzCtaBtn.addEventListener("click", handleBlitzTap);
+  if (blitzClose)    blitzClose.addEventListener("click", closeBlitzSheet);
+  if (blitzBackdrop) blitzBackdrop.addEventListener("click", closeBlitzSheet);
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && blitzSheet && !blitzSheet.hasAttribute("hidden")) {
+      closeBlitzSheet();
     }
     mapModal.removeAttribute("hidden");
     if (mapClose) mapClose.focus();
@@ -340,10 +353,19 @@
   }
   if (blitzUseBtn) {
     blitzUseBtn.addEventListener("click", function () {
-      var city = landingBlitzState && landingBlitzState.city;
-      if (!city) return;
-      var lang = new URLSearchParams(window.location.search).get("lang");
-      window.location.href = "/" + city + (lang ? "?lang=" + encodeURIComponent(lang) : "");
+      var stop = getBlitzPrimaryStop(landingBlitzState);
+      var dest;
+      if (stop && stop.lat && stop.lng) {
+        dest = stop.lat + "," + stop.lng;
+      } else {
+        dest = (stop && (stop.name || stop.label)) || "";
+      }
+      if (!dest) return;
+      window.open(
+        "https://www.google.com/maps/dir/?api=1&destination=" +
+        encodeURIComponent(dest) + "&travelmode=walking",
+        "_blank", "noopener"
+      );
     });
   }
   if (blitzPlanBtn) {
@@ -360,18 +382,5 @@
       window.location.href = "/" + city + "?" + params.toString();
     });
   }
-  if (blitzBody) {
-    blitzBody.addEventListener("click", function (e) {
-      var btn = e.target && e.target.closest && e.target.closest(".lp-blitz-result__street-view[data-lat]");
-      if (!btn) return;
-      openMapModal(btn.getAttribute("data-lat"), btn.getAttribute("data-lng"), btn.getAttribute("data-maps-url"));
-    });
-  }
-  if (mapClose) mapClose.addEventListener("click", closeMapModal);
-  if (mapBackdrop) mapBackdrop.addEventListener("click", closeMapModal);
-  document.addEventListener("keydown", function (e) {
-    if (e.key !== "Escape") return;
-    if (mapModal && !mapModal.hasAttribute("hidden")) { closeMapModal(); return; }
-    if (blitzSheet && !blitzSheet.hasAttribute("hidden")) closeBlitzSheet();
-  });
+
 })();

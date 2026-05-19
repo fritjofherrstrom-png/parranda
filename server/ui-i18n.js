@@ -507,8 +507,7 @@ const translations = {
     "landing.blitz.geoFallback": "Skriv en stad eller välj Barcelona/Rom.",
     "landing.blitz.noCity": "Ingen stad nära dig just nu. Prova Barcelona eller Rom.",
     "landing.blitz.error": "Något gick fel. Försök igen.",
-    "landing.blitz.streetView": "Se gatan",
-    "landing.blitz.openInMaps": "Öppna i Google Maps",
+    "landing.blitz.info": "Info",
   },
   en: {
     "shell.plannerEyebrow": "PLAN",
@@ -1015,8 +1014,7 @@ const translations = {
     "landing.blitz.geoFallback": "Type a city or pick Barcelona/Rome.",
     "landing.blitz.noCity": "No supported city near you yet. Try Barcelona or Rome.",
     "landing.blitz.error": "Something went wrong. Try again.",
-    "landing.blitz.streetView": "Street view",
-    "landing.blitz.openInMaps": "Open in Google Maps",
+    "landing.blitz.info": "Info",
   },
 };
 

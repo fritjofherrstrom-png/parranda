@@ -6374,21 +6374,15 @@ body.is-printing-guide #routeGuideDrawer {
   margin: 6px 0 0;
   letter-spacing: .01em;
 }
-.lp-blitz-result__street-view {
+.lp-blitz-result__info {
   display: inline-block;
   margin-top: 10px;
   font-size: 0.88rem;
   color: var(--accent, #af4d24);
   text-decoration: underline;
   text-underline-offset: 2px;
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  font-size: 0.88rem;
-  cursor: pointer;
 }
-.lp-blitz-result__street-view:hover { opacity: 0.8; }
+.lp-blitz-result__info:hover { opacity: 0.8; }
 .lp-blitz-result__loading,
 .lp-blitz-result__error,
 .lp-blitz-result__no-city {
@@ -6433,66 +6427,3 @@ body.is-printing-guide #routeGuideDrawer {
   }
 }
 
-/* ── Map modal (Street View embed) ── */
-.lp-map-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: flex;
-  align-items: flex-end;
-}
-.lp-map-modal[hidden] { display: none; }
-.lp-map-modal__backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  cursor: pointer;
-}
-.lp-map-modal__panel {
-  position: relative;
-  width: 100%;
-  height: 72vh;
-  background: #fff;
-  border-radius: 16px 16px 0 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-.lp-map-modal__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 16px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-  flex-shrink: 0;
-}
-.lp-map-modal__close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px;
-  color: #555;
-  display: flex;
-  align-items: center;
-}
-.lp-map-modal__external {
-  font: 500 0.80rem/1 "Manrope", sans-serif;
-  color: rgba(175, 77, 36, 0.95);
-  text-decoration: none;
-}
-.lp-map-modal__external:hover { text-decoration: underline; }
-.lp-map-modal__body { flex: 1; min-height: 0; }
-.lp-map-modal__iframe { width: 100%; height: 100%; border: none; display: block; }
-
-@media (min-width: 640px) {
-  .lp-map-modal {
-    align-items: center;
-    justify-content: center;
-  }
-  .lp-map-modal__panel {
-    width: 90%;
-    max-width: 720px;
-    height: 62vh;
-    border-radius: 16px;
-  }
-}
