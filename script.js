@@ -11011,7 +11011,13 @@ loadPlannerOptions().then(() => {
   syncPlannerModeUI();
   updateWalkingKmLabel();
   renderRouteResults();
-  if (new URLSearchParams(location.search).get("planner") === "open") {
+  const params = new URLSearchParams(location.search);
+  if (params.get("planner") === "open") {
+    const seedLabel = params.get("seed_label");
+    if (seedLabel) {
+      try { setPlannerFieldFromLabel("home_base", seedLabel); }
+      catch (_e) { /* silent fallback */ }
+    }
     openPlannerModal();
   }
 });
