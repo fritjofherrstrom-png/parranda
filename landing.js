@@ -134,6 +134,12 @@
   var blitzPlanBtn  = document.getElementById("lpBlitzPlan");
   var blitzCtaBtn   = document.getElementById("lpBlitzCta");
 
+  var mapModal    = document.getElementById("lpMapModal");
+  var mapFrame    = document.getElementById("lpMapFrame");
+  var mapClose    = document.getElementById("lpMapClose");
+  var mapBackdrop = document.getElementById("lpMapBackdrop");
+  var mapExternal = document.getElementById("lpMapExternal");
+
   var landingBlitzState  = null;
   var landingBlitzMemory = null;
   var landingBlitzCity   = null;
@@ -220,10 +226,19 @@
     if (stop && stop.lat && stop.lng) {
       var mapsUrl = "https://www.google.com/maps?q=" +
         encodeURIComponent(stop.lat) + "," + encodeURIComponent(stop.lng) + "&layer=c";
-      streetViewHtml =
-        "<a class='lp-blitz-result__street-view' href='" + escapeForDOM(mapsUrl) +
-        "' target='_blank' rel='noopener'>" +
-        escapeForDOM(COPY.blitzStreetView || "Se gatan") + "</a>";
+      if (window.__PARRANDA_MAPS_EMBED_KEY__) {
+        streetViewHtml =
+          "<button class='lp-blitz-result__street-view' type='button'" +
+          " data-lat='" + escapeForDOM(String(stop.lat)) + "'" +
+          " data-lng='" + escapeForDOM(String(stop.lng)) + "'" +
+          " data-maps-url='" + escapeForDOM(mapsUrl) + "'>" +
+          escapeForDOM(COPY.blitzStreetView || "Se gatan") + "</button>";
+      } else {
+        streetViewHtml =
+          "<a class='lp-blitz-result__street-view' href='" + escapeForDOM(mapsUrl) +
+          "' target='_blank' rel='noopener'>" +
+          escapeForDOM(COPY.blitzStreetView || "Se gatan") + "</a>";
+      }
     }
 
     var signalLabel = move.pulse_context && move.pulse_context.signal_label;
@@ -368,5 +383,51 @@
       window.location.href = "/" + city + "?" + params.toString();
     });
   }
+
+  /* ── Map modal (Street View embed — only active when GOOGLE_MAPS_EMBED_KEY is set) ── */
+
+  function openMapModal(lat, lng, mapsUrl) {
+    var key = window.__PARRANDA_MAPS_EMBED_KEY__;
+    if (!key || !mapModal || !mapFrame) return;
+    var embedUrl = "https://www.google.com/maps/embed/v1/streetview" +
+      "?key=" + encodeURIComponent(key) +
+      "&location=" + encodeURIComponent(lat) + "," + encodeURIComponent(lng) +
+      "&fov=90";
+    mapFrame.src = embedUrl;
+    if (mapExternal) {
+      mapExternal.href = mapsUrl || "";
+      mapExternal.textContent = COPY.blitzOpenInMaps || "Open in Google Maps";
+    }
+    mapModal.removeAttribute("hidden");
+    if (mapClose) mapClose.focus();
+  }
+
+  function closeMapModal() {
+    if (!mapModal) return;
+    mapModal.setAttribute("hidden", "");
+    if (mapFrame) mapFrame.src = "";
+  }
+
+  if (blitzBody) {
+    blitzBody.addEventListener("click", function (e) {
+      var btn = e.target && e.target.closest &&
+        e.target.closest(".lp-blitz-result__street-view[data-lat]");
+      if (!btn) return;
+      openMapModal(
+        btn.getAttribute("data-lat"),
+        btn.getAttribute("data-lng"),
+        btn.getAttribute("data-maps-url")
+      );
+    });
+  }
+
+  if (mapClose)    mapClose.addEventListener("click", closeMapModal);
+  if (mapBackdrop) mapBackdrop.addEventListener("click", closeMapModal);
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && mapModal && !mapModal.hasAttribute("hidden")) {
+      closeMapModal();
+    }
+  });
 
 })();

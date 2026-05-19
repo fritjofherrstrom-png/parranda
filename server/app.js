@@ -611,6 +611,8 @@ function renderLandingShell({ lang = "sv" } = {}) {
     "__PARRANDA_LANDING_BLITZ_NO_CITY__": escapeHtml(tr("landing.blitz.noCity")),
     "__PARRANDA_LANDING_BLITZ_ERROR__": escapeHtml(tr("landing.blitz.error")),
     "__PARRANDA_LANDING_BLITZ_STREET_VIEW__": escapeHtml(tr("landing.blitz.streetView")),
+    "__PARRANDA_LANDING_BLITZ_OPEN_IN_MAPS__": escapeHtml(tr("landing.blitz.openInMaps")),
+    "__PARRANDA_MAPS_EMBED_KEY__": process.env.GOOGLE_MAPS_EMBED_KEY || "",
   };
   return Object.entries(replacements).reduce(
     (html, [token, value]) => html.split(token).join(value),

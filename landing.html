@@ -24,7 +24,7 @@
     />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
-    <link rel="stylesheet" href="styles.css?v=24" />
+    <link rel="stylesheet" href="styles.css?v=25" />
     <script>
       window.__PARRANDA_LANGUAGE__ = "__PARRANDA_UI_LANG__";
       window.__PARRANDA_CITIES__ = __PARRANDA_LANDING_CITY_REGISTRY__;
@@ -36,8 +36,10 @@
         blitzGeoFallback: "__PARRANDA_LANDING_BLITZ_GEO_FALLBACK__",
         blitzNoCity: "__PARRANDA_LANDING_BLITZ_NO_CITY__",
         blitzError: "__PARRANDA_LANDING_BLITZ_ERROR__",
-        blitzStreetView: "__PARRANDA_LANDING_BLITZ_STREET_VIEW__"
+        blitzStreetView: "__PARRANDA_LANDING_BLITZ_STREET_VIEW__",
+        blitzOpenInMaps: "__PARRANDA_LANDING_BLITZ_OPEN_IN_MAPS__"
       };
+      window.__PARRANDA_MAPS_EMBED_KEY__ = "__PARRANDA_MAPS_EMBED_KEY__";
     </script>
   </head>
   <body data-lang="__PARRANDA_LANG__">
@@ -394,6 +396,31 @@
           <button class="lp-btn lp-btn--ghost" id="lpBlitzUse" disabled>__PARRANDA_LANDING_BLITZ_USE__</button>
           <button class="lp-btn lp-btn--ghost" id="lpBlitzReblitz" disabled>__PARRANDA_LANDING_BLITZ_REBLITZ__</button>
           <button class="lp-btn lp-btn--ghost" id="lpBlitzPlan" disabled>__PARRANDA_LANDING_BLITZ_PLAN__</button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      class="lp-map-modal"
+      id="lpMapModal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="__PARRANDA_LANDING_BLITZ_STREET_VIEW__"
+      hidden
+    >
+      <div class="lp-map-modal__backdrop" id="lpMapBackdrop"></div>
+      <div class="lp-map-modal__panel">
+        <div class="lp-map-modal__header">
+          <button class="lp-map-modal__close" id="lpMapClose" aria-label="__PARRANDA_LANDING_BLITZ_CLOSE__">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+          <a class="lp-map-modal__external" id="lpMapExternal" target="_blank" rel="noopener"></a>
+        </div>
+        <div class="lp-map-modal__body">
+          <iframe id="lpMapFrame" class="lp-map-modal__iframe" loading="lazy" allowfullscreen title="Street view"></iframe>
         </div>
       </div>
     </div>
