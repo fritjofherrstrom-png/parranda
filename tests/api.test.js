@@ -543,7 +543,7 @@ test("GET / renderar global landing page (inte city-shell)", async () => {
     // Landing-specific copy and structure
     assert.match(response.body, /Din stad\. Din dag\. Curated\./);
     assert.match(response.body, /Hitta din stad/);
-    assert.match(response.body, /Planera din perfekta dag/);
+    assert.match(response.body, /Börja med en stad/);
     assert.match(response.body, /Sök stad/);
     assert.ok(response.body.includes("Live Pulse:") && response.body.includes("städer just nu"));
     assert.match(response.body, /lp-hero/);
