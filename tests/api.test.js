@@ -552,6 +552,10 @@ test("GET / renderar global landing page (inte city-shell)", async () => {
     assert.match(response.body, /window\.__PARRANDA_CITIES__/);
     assert.match(response.body, /"roma"\s*:/);
     assert.match(response.body, /"rome"\s*:/);
+    // Registry must include Barcelona with its key so resolveEntry("Barcelona") works
+    assert.match(response.body, /"barcelona"\s*:\s*\{[^}]*"key"\s*:\s*"barcelona"/);
+    // Registry must not be an empty object — that would silently break city resolution
+    assert.doesNotMatch(response.body, /window\.__PARRANDA_CITIES__\s*=\s*\{\s*\}/);
     // Internal-visibility cities must never leak
     assert.ok(!response.body.toLowerCase().includes("test city"));
     assert.ok(!response.body.includes('"key":"test-city"'));
@@ -567,8 +571,11 @@ test("GET / renderar global landing page (inte city-shell)", async () => {
     assert.match(response.body, /"center"\s*:\s*\{/);
     // Blitz i18n tokens resolved (not raw token strings left behind)
     assert.ok(!response.body.includes("__PARRANDA_LANDING_BLITZ_"), "No unresolved Blitz tokens");
-    // Maps embed key token resolved (empty string when no env var set)
+    // Maps embed key: token replaced and no JS syntax error from self-substitution
     assert.ok(!response.body.includes("__PARRANDA_MAPS_KEY_VALUE__"), "Maps embed key token resolved");
+    assert.doesNotMatch(response.body, /window\.__PARRANDA_MAPS_EMBED_KEY__\s*=\s*;/, "Maps key assignment valid JS");
+    // Maps key value is empty string (no env var in test), not undefined or missing
+    assert.match(response.body, /window\.__PARRANDA_MAPS_EMBED_KEY__\s*=\s*""/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

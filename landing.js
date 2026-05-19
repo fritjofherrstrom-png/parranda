@@ -39,8 +39,12 @@
     enBtn.addEventListener("click", function () { switchLang("en"); });
   }());
 
+  function resolveEntry(raw) {
+    return REGISTRY[String(raw || "").trim().toLowerCase()] || null;
+  }
+
   function resolveCity(raw) {
-    var entry = REGISTRY[String(raw || "").trim().toLowerCase()];
+    var entry = resolveEntry(raw);
     return entry ? "/" + entry.key : null;
   }
 
@@ -59,7 +63,10 @@
   }
 
   if (cityInput) {
-    cityInput.addEventListener("input", updateCtaState);
+    cityInput.addEventListener("input", function () {
+      cityInput.setCustomValidity("");
+      updateCtaState();
+    });
   }
 
   if (plannerForm) {
@@ -291,7 +298,7 @@
 
   function handleBlitzTap() {
     var val = cityInput ? cityInput.value.trim() : "";
-    var entry = val ? REGISTRY[val.toLowerCase()] : null;
+    var entry = val ? resolveEntry(val) : null;
 
     if (entry) {
       runBlitzForCity(entry.key);
