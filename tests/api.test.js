@@ -568,7 +568,7 @@ test("GET / renderar global landing page (inte city-shell)", async () => {
     // Blitz i18n tokens resolved (not raw token strings left behind)
     assert.ok(!response.body.includes("__PARRANDA_LANDING_BLITZ_"), "No unresolved Blitz tokens");
     // Maps embed key token resolved (empty string when no env var set)
-    assert.ok(!response.body.includes("__PARRANDA_MAPS_EMBED_KEY__"), "Maps embed key token resolved");
+    assert.ok(!response.body.includes("__PARRANDA_MAPS_KEY_VALUE__"), "Maps embed key token resolved");
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
