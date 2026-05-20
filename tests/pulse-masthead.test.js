@@ -59,6 +59,40 @@ test("masthead falls back to first signal when no preferred type present", () =>
   assert.equal(result.subhead, "Generic reason");
 });
 
+test("masthead skips unrenderable preferred signals and picks the next renderable signal", () => {
+  const result = buildMasthead({
+    signals: [
+      signal({ type: "live_event_nearby", title: "   ", reason: "Should not render" }),
+      signal({ type: "golden_hour", title: "Golden hour pågår just nu", reason: "Use this one" }),
+    ],
+    fallback: FALLBACK,
+  });
+
+  assert.equal(result.source, "signal");
+  assert.equal(result.signal_type, "golden_hour");
+  assert.equal(result.headline, "Golden hour pågår just nu");
+  assert.equal(result.subhead, "Use this one");
+});
+
+test("masthead trims signal and fallback text", () => {
+  const result = buildMasthead({
+    signals: [signal({ type: "evening_window", title: "  Kvällsläge  ", reason: "  Senare tempo  " })],
+    fallback: { headline: "  Fallback headline  ", subhead: "  Fallback subhead  " },
+  });
+
+  assert.equal(result.headline, "Kvällsläge");
+  assert.equal(result.subhead, "Senare tempo");
+
+  const fallbackOnly = buildMasthead({
+    signals: [signal({ type: "evening_window", title: "", reason: "No headline" })],
+    fallback: { headline: "  Fallback headline  ", subhead: "  Fallback subhead  " },
+  });
+
+  assert.equal(fallbackOnly.source, "fallback");
+  assert.equal(fallbackOnly.headline, "Fallback headline");
+  assert.equal(fallbackOnly.subhead, "Fallback subhead");
+});
+
 test("masthead falls back honestly when signals[] is empty", () => {
   const result = buildMasthead({ signals: [], fallback: FALLBACK });
   assert.equal(result.source, "fallback");
