@@ -165,3 +165,43 @@ collect candidates for a city and return a diagnostic summary with:
 
 This registry is intentionally internal. Planner, Blitz, route scoring, UI, and
 public API responses still use their existing paths until later migration PRs.
+
+## Candidate Readiness Diagnostics
+
+`server/place-candidates/readiness.js` adds an internal diagnostic layer:
+
+```text
+CityConfig -> CandidateProviderRegistry -> assessCityCandidateReadiness()
+```
+
+It answers whether the current candidate pool looks safe enough for future
+engine consumption. V1 is deliberately conservative and uses only the current
+curated catalog provider.
+
+The readiness result includes:
+
+- city key
+- total candidates
+- real place count
+- structural candidate count
+- coordinate-ready real place count
+- coordinate coverage
+- counts by candidate kind
+- counts by trust tier
+- counts by provider
+- `has_minimum_real_places`
+- `has_coordinates_coverage`
+- `can_support_blitz`
+- `can_support_planner`
+- `warnings`
+
+Default v1 thresholds:
+
+- Blitz needs at least 10 real, coordinate-ready-enough place candidates.
+- Planner needs at least 25 real, coordinate-ready-enough place candidates.
+- Structural anchors and area presets do not count as real places.
+- Coordinate coverage must be at least 80 percent of real places.
+
+These diagnostics do not change Planner, Blitz, routing, UI, or public API
+behavior. They exist so later PRs can decide when it is safe to consume
+candidate providers.
