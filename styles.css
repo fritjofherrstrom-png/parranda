@@ -644,46 +644,23 @@ body::before {
   background: rgba(255, 252, 247, 0.52);
 }
 
-.mode-city-preview .city-pulse-teaser,
-.mode-city-preview .city-pulse-edition {
+/*
+ * `.city-pulse-teaser` is a separate pre-plan surface and stays in its
+ * cream preview gradient for now — out of scope for this hotfix. The
+ * `.city-pulse-edition` full Pulse view used to share the same gradient
+ * which forced ~30 lines of dark-text overrides downstream to keep cream
+ * text legible on the flipped background. That created a divergent
+ * visual language between Rome (dark Pulse) and Barcelona (light cream
+ * Pulse with patched text colours) for the same core surface.
+ *
+ * Cross-city rule: same surfaces, different signal density. Removed the
+ * edition from the gradient selector and dropped every downstream text
+ * override so Barcelona inherits Rome's dark Pulse base. A follow-up
+ * audit should bring the teaser into parity too.
+ */
+.mode-city-preview .city-pulse-teaser {
   background:
     linear-gradient(180deg, rgba(255, 252, 247, 0.96), rgba(246, 238, 226, 0.9));
-}
-
-/*
- * Pulse entry text colours were authored for the dark Pulse panel
- * (var(--paper) cream, plus rgba(247, 239, 229, ...) variants). On
- * `.mode-city-preview` the background flips to a light cream, leaving
- * those cream tones unreadable on Barcelona and any other preview city.
- * Override only the affected text selectors with the dark-on-light
- * palette used elsewhere in the preview shell. Selectors below mirror
- * `.city-pulse-edition .pulse-entry-*` so they beat the later cream rule
- * at equal specificity.
- */
-.mode-city-preview .city-pulse-edition .pulse-entry-title,
-.mode-city-preview .city-pulse-edition .pulse-entry-title-button,
-.mode-city-preview .city-pulse-edition .pulse-group-title,
-.mode-city-preview .city-pulse-edition .city-pulse-title,
-.mode-city-preview .city-pulse-edition h1,
-.mode-city-preview .city-pulse-edition h2,
-.mode-city-preview .city-pulse-edition h3 {
-  color: var(--accent-deep);
-}
-
-.mode-city-preview .city-pulse-edition .pulse-entry-where {
-  color: rgba(36, 25, 20, 0.66);
-}
-
-.mode-city-preview .city-pulse-edition .pulse-entry-blurb {
-  color: rgba(36, 25, 20, 0.82);
-}
-
-.mode-city-preview .city-pulse-edition .pulse-entry-reason-label {
-  color: rgba(36, 25, 20, 0.55);
-}
-
-.mode-city-preview .city-pulse-edition .pulse-entry-reason-copy {
-  color: rgba(36, 25, 20, 0.75);
 }
 
 .hero-idea-strip .hero-panel-meta {
