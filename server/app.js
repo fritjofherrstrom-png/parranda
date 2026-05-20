@@ -7,6 +7,7 @@ const { generateRecommendations } = require("./route-engine");
 const { diversifyRecommendationDays } = require("./route-diversity");
 const { buildClientI18nPayload, normalizeLanguage, translate } = require("./ui-i18n");
 const { buildCityPulse } = require("./pulse-engine");
+const { buildMasthead } = require("./pulse-engine/masthead");
 
 const appRoot = path.resolve(__dirname, "..");
 const appShellTemplate = fs.readFileSync(path.join(appRoot, "index.html"), "utf8");
@@ -860,6 +861,15 @@ function buildApp() {
         .slice(0, 1)
         .map((event) => buildOfficialPulseItem(event, date, cityConfig, uiLang));
 
+      const masthead = buildMasthead({
+        signals: engineResult.signals,
+        fallback: {
+          headline: legacyPulse?.headline || "",
+          subhead: legacyPulse?.subhead || "",
+        },
+        lang: uiLang,
+      });
+
       response.json({
         city: cityConfig.key,
         requested_city: requestedCity,
@@ -869,6 +879,7 @@ function buildApp() {
         requested_at: engineResult.requested_at,
         timezone: engineResult.timezone,
         signals: engineResult.signals,
+        masthead,
         items: [...legacyItems, ...officialCompatItems],
         official_events: officialEvents,
         weather: engineResult.weather || null,
