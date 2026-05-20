@@ -13,6 +13,14 @@ Det här repot är alpha-versionen för att snabbt kunna visa produkten, få ska
 - PWA-stöd med manifest och service worker
 - Live-lager för väder och eventmatchning
 
+## Produktprinciper
+
+- Parranda ska byggas runt en generaliserbar city intelligence engine, inte runt hårdkodade städer.
+- City packs ska vara ett valfritt förbättrings- och accelerationslager, inte ett krav för att appen ska fungera.
+- Appen ska på sikt kunna skapa meningsfulla, platsmedvetna upplevelser även utan dedikerat city pack, oavsett om användaren är i Simrishamn, Bologna eller Rio de Janeiro.
+
+Se `docs/CITY_ENGINE_PRINCIPLES.md` för den permanenta principen bakom city packs och city-packless Parranda.
+
 ## Stack
 
 - Frontend: `index.html`, `script.js`, `styles.css`
