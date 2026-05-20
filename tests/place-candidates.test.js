@@ -22,7 +22,7 @@ test("normalizes a curated catalog stop into the PlaceCandidate contract", () =>
     timeFit: ["morning", "afternoon"],
     routeRoles: ["anchor", "culture"],
     source: {
-      kind: "catalog",
+      kind: "city_catalog",
       id: "barcelona-pilot-catalog",
       url: "https://example.com/casa-vicens",
     },
@@ -43,7 +43,7 @@ test("normalizes a curated catalog stop into the PlaceCandidate contract", () =>
     candidate_kind: "real_place",
     is_structural: false,
     source: {
-      kind: "catalog",
+      kind: "city_catalog",
       id: "barcelona-pilot-catalog",
       url: "https://example.com/casa-vicens",
     },
@@ -82,7 +82,7 @@ test("normalizes official live event venues without making them city-pack owned"
     tags: ["kultur", "music"],
     route_roles: ["optional_detour"],
     source: {
-      kind: "live_feed",
+      kind: "live_event_feed",
       id: "barcelona-open-data-agenda",
       label: "Open Data BCN",
     },
@@ -95,6 +95,7 @@ test("normalizes official live event venues without making them city-pack owned"
   });
 
   assert.equal(candidate.candidate_kind, "event_venue");
+  assert.equal(candidate.source.kind, "live_event_feed");
   assert.equal(candidate.city_pack_owned, false);
   assert.equal(candidate.trust.source_tier, "official");
   assert.equal(candidate.freshness, "live");
@@ -154,7 +155,7 @@ test("rejects missing identity, invalid coordinate pairs, and weak trust objects
     city: "rome",
     label: "Rome Test",
     type: "bar",
-    source: { kind: "catalog" },
+    source: { kind: "city_catalog" },
     trust: {
       source_tier: "curated",
       confidence: "high",

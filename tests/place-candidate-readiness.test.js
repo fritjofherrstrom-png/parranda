@@ -3,6 +3,7 @@ const test = require("node:test");
 
 const rome = require("../server/cities/rome");
 const barcelona = require("../server/cities/barcelona");
+const testCity = require("../server/cities/test-city");
 const {
   assessCityCandidateReadiness,
 } = require("../server/place-candidates/readiness");
@@ -105,6 +106,42 @@ test("assessCityCandidateReadiness can use stricter thresholds without changing 
   assert.equal(readiness.has_minimum_real_places, true);
   assert.equal(readiness.can_support_blitz, true);
   assert.equal(readiness.can_support_planner, false);
+  assert.ok(readiness.warnings.includes("insufficient_real_places_for_planner"));
+});
+
+test("assessCityCandidateReadiness reports test-city honestly without crashing", () => {
+  const readiness = assessCityCandidateReadiness(testCity);
+
+  assert.equal(readiness.city, "test-city");
+  assert.equal(readiness.total_candidates, testCity.catalog.allItems.length);
+  assert.equal(readiness.real_place_count, 4);
+  assert.equal(readiness.structural_count, 1);
+  assert.equal(readiness.has_coordinates_coverage, true);
+  assert.equal(readiness.can_support_blitz, false);
+  assert.equal(readiness.can_support_planner, false);
+  assert.ok(readiness.warnings.includes("insufficient_real_places_for_blitz"));
+  assert.ok(readiness.warnings.includes("insufficient_real_places_for_planner"));
+});
+
+test("assessCityCandidateReadiness handles an empty city catalog without crashing", () => {
+  const emptyCity = buildSyntheticCity({
+    key: "empty-city",
+    realPlaces: 0,
+    structuralAnchors: 0,
+  });
+  const readiness = assessCityCandidateReadiness(emptyCity);
+
+  assert.equal(readiness.city, "empty-city");
+  assert.equal(readiness.total_candidates, 0);
+  assert.equal(readiness.real_place_count, 0);
+  assert.equal(readiness.structural_count, 0);
+  assert.equal(readiness.coordinate_ready_real_place_count, 0);
+  assert.equal(readiness.has_minimum_real_places, false);
+  assert.equal(readiness.has_coordinates_coverage, false);
+  assert.equal(readiness.can_support_blitz, false);
+  assert.equal(readiness.can_support_planner, false);
+  assert.ok(readiness.warnings.includes("no_real_place_candidates"));
+  assert.ok(readiness.warnings.includes("insufficient_real_places_for_blitz"));
   assert.ok(readiness.warnings.includes("insufficient_real_places_for_planner"));
 });
 

@@ -40,7 +40,7 @@ Normalized candidates include:
   area: "gracia",
   macro: "northwest-local",
   source: {
-    kind: "catalog",
+    kind: "city_catalog",
     id: "barcelona-pilot-catalog",
     url: "https://..."
   },
@@ -100,13 +100,26 @@ or citypack provenance without mixing it with Parranda-owned judgment.
 
 Examples:
 
-- `{ kind: "catalog", id: "rome-catalog" }`
-- `{ kind: "live_feed", id: "barcelona-open-data-agenda" }`
+- `{ kind: "city_catalog", id: "rome-catalog" }`
+- `{ kind: "live_event_feed", id: "barcelona-open-data-agenda" }`
 - `{ kind: "map_search", label: "future provider" }`
+- `{ kind: "generated", id: "draft-citypack-generator" }`
 - `{ kind: "routing_config", id: "barcelona-area-model" }`
 
 Provider-owned text remains provider-owned. Parranda-owned fields include
 `tags`, `vibes`, `time_fit`, `route_roles`, `confidence`, and trust decisions.
+
+Preferred v1 `source.kind` vocabulary:
+
+- `city_catalog`: curated/manual city catalog entries.
+- `live_event_feed`: already-fetched official/live event records.
+- `map_search`: future external map/search results.
+- `generated`: future inferred or semi-automatic draft candidates.
+- `routing_config`: structural anchors and area presets from city routing config.
+
+The contract currently documents and tests this vocabulary but does not reject
+other `source.kind` strings. Strict validation should wait until the provider
+set is larger and real consumers prove the boundary.
 
 ## Migration Path
 
@@ -114,9 +127,10 @@ Recommended next steps:
 
 1. Wrap existing city catalog items as `PlaceCandidate[]`.
 2. Add a `CuratedCatalogProvider` compatibility layer.
-3. Let Blitz consume candidates behind its current catalog behavior.
-4. Let Planner consume candidates behind its current route-template behavior.
-5. Add live-event and generated/search providers only after diagnostics prove
+3. Pin provider async/context strategy before adding live-event candidates.
+4. Let Blitz consume candidates behind its current catalog behavior.
+5. Let Planner consume candidates behind its current route-template behavior.
+6. Add live-event and generated/search providers only after diagnostics prove
    the engine can handle them safely.
 
 The contract exists so the future route engine can become provider-first
@@ -165,6 +179,27 @@ collect candidates for a city and return a diagnostic summary with:
 
 This registry is intentionally internal. Planner, Blitz, route scoring, UI, and
 public API responses still use their existing paths until later migration PRs.
+
+## Provider Async Strategy
+
+The registry stays synchronous for now.
+
+Future providers may need async data, but `CandidateProviderRegistry` should not
+fetch inside provider calls until there is a real engine consumer that needs an
+async boundary. The next live-event provider should be context-based:
+
+```text
+higher-level engine fetches live events -> context.events -> LiveEventVenueProvider -> PlaceCandidate[]
+```
+
+That means `LiveEventVenueProvider` should convert already-fetched
+`context.events` into `event_venue` candidates. It should not call Open Data
+BCN, Turismo Roma, or any other provider directly. This keeps readiness checks
+cheap, deterministic, and safe while the candidate system is still internal.
+
+If a later Planner or Blitz migration needs providers to fetch their own data,
+the registry can become async in that PR with a real consumer and tests. Until
+then, readiness and collection remain sync by design.
 
 ## Candidate Readiness Diagnostics
 

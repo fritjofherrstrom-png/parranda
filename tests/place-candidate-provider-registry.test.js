@@ -111,6 +111,61 @@ test("registry validates provider specs and provider output", () => {
   assert.throws(() => registry.collectCandidates(rome), /broken-provider\.candidates\[0\]\.id/);
 });
 
+test("Rome and Barcelona candidates expose the same required shape", () => {
+  // Cross-city consistency guard. Every candidate from any city pack must
+  // carry the same required PlaceCandidate keys so downstream consumers
+  // (Blitz, Planner, future engine code) can treat candidates uniformly
+  // regardless of city. Optional keys (`lat`, `lng`, `area`, `macro`,
+  // `neighborhood`) are intentionally excluded — they depend on data, not
+  // on contract shape.
+  const REQUIRED_KEYS = [
+    "id",
+    "city",
+    "label",
+    "type",
+    "candidate_kind",
+    "is_structural",
+    "source",
+    "trust",
+    "freshness",
+    "tags",
+    "vibes",
+    "time_fit",
+    "route_roles",
+    "confidence",
+    "city_pack_owned",
+  ].sort();
+
+  const romeCandidates = collectPlaceCandidatesForCity(rome).candidates;
+  const barcelonaCandidates = collectPlaceCandidatesForCity(barcelona).candidates;
+
+  assert.ok(romeCandidates.length > 0, "Rome must produce at least one candidate");
+  assert.ok(barcelonaCandidates.length > 0, "Barcelona must produce at least one candidate");
+
+  // The first candidate from each city must carry every required key, and
+  // both cities must share the same required-key set (no city-specific drift).
+  const romeRequired = REQUIRED_KEYS.filter((key) => key in romeCandidates[0]).sort();
+  const barcelonaRequired = REQUIRED_KEYS.filter((key) => key in barcelonaCandidates[0]).sort();
+  assert.deepEqual(romeRequired, REQUIRED_KEYS);
+  assert.deepEqual(barcelonaRequired, REQUIRED_KEYS);
+
+  // Every candidate in either city must carry every required key. Catches
+  // drift where one item type or provider drops a required field.
+  for (const [cityKey, candidates] of [
+    ["rome", romeCandidates],
+    ["barcelona", barcelonaCandidates],
+  ]) {
+    for (const [index, candidate] of candidates.entries()) {
+      for (const key of REQUIRED_KEYS) {
+        assert.ok(
+          key in candidate,
+          `${cityKey}.candidates[${index}] missing required key "${key}"`,
+        );
+      }
+    }
+  }
+});
+
 test("summarizeCandidateCollection can summarize an explicit candidate list", () => {
   const candidates = collectPlaceCandidatesForCity(barcelona, {
     includeStructural: false,
