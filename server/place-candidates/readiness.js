@@ -13,11 +13,11 @@ function assessCityCandidateReadiness(cityConfig, options = {}) {
     : 0;
 
   const minRealPlacesForBlitz =
-    options.minRealPlacesForBlitz || DEFAULT_MIN_REAL_PLACES_FOR_BLITZ;
+    options.minRealPlacesForBlitz ?? DEFAULT_MIN_REAL_PLACES_FOR_BLITZ;
   const minRealPlacesForPlanner =
-    options.minRealPlacesForPlanner || DEFAULT_MIN_REAL_PLACES_FOR_PLANNER;
+    options.minRealPlacesForPlanner ?? DEFAULT_MIN_REAL_PLACES_FOR_PLANNER;
   const minCoordinateCoverage =
-    options.minCoordinateCoverage || DEFAULT_MIN_COORDINATE_COVERAGE;
+    options.minCoordinateCoverage ?? DEFAULT_MIN_COORDINATE_COVERAGE;
 
   const hasMinimumRealPlaces = realCandidates.length >= minRealPlacesForBlitz;
   const hasPlannerRealPlaces = realCandidates.length >= minRealPlacesForPlanner;
