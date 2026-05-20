@@ -143,3 +143,25 @@ helpers:
 
 This provider is a compatibility layer only. It does not change Planner, Blitz,
 route scoring, UI, public API responses, or data sources.
+
+## Candidate Provider Registry
+
+`server/place-candidates/provider-registry.js` adds the internal collection
+layer:
+
+```text
+CityConfig -> CandidateProviderRegistry -> PlaceCandidate[]
+```
+
+The default registry currently enables only `CuratedCatalogProvider`. It can
+collect candidates for a city and return a diagnostic summary with:
+
+- total candidates
+- real place count
+- structural candidate count
+- counts by `candidate_kind`
+- counts by trust tier
+- counts by provider
+
+This registry is intentionally internal. Planner, Blitz, route scoring, UI, and
+public API responses still use their existing paths until later migration PRs.
