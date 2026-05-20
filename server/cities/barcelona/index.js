@@ -96,6 +96,7 @@ module.exports = {
     getCityPulse: barcelonaEditorial.getCityPulse,
     getDateSignals: barcelonaEditorial.getDateSignals,
     fetchLiveEventsForDates,
+    signalGenerators: [],
   },
   walking: {
     defaultProvider: "heuristic",

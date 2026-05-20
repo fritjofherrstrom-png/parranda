@@ -4367,6 +4367,13 @@ function buildLegacyPulseItems(moments = []) {
 }
 
 function getNormalizedCityPulseItems() {
+  // Prefer the new engine signals[] when present. Falls back to the
+  // legacy items[] shape during the one-release compat window, and to
+  // buildLegacyPulseItems() if neither is populated.
+  if (Array.isArray(cityPulseState?.signals) && cityPulseState.signals.length) {
+    return cityPulseState.signals.filter(Boolean);
+  }
+
   if (Array.isArray(cityPulseState?.items) && cityPulseState.items.length) {
     return cityPulseState.items.filter(Boolean);
   }
@@ -5354,13 +5361,30 @@ function createPulseFilterButton(levelKey, label, count) {
   return button;
 }
 
+function buildPulseSourceLabel(item) {
+  const source = item?.source;
+  if (!source || !source.kind) return "";
+  if (source.kind === "editorial") return "";
+
+  const label = String(source.label || "").trim();
+  if (!label) return "";
+
+  if (source.kind === "live_feed") {
+    return isEnglishUi ? `via ${label}` : `via ${label}`;
+  }
+  // computed | weather — show short tag only when it adds clarity
+  return label;
+}
+
 function createPulseEntry(item) {
   const article = document.createElement("article");
   const top = document.createElement("div");
+  const signalChip = document.createElement("span");
   const kind = document.createElement("span");
   const when = document.createElement("span");
   const where = document.createElement("p");
   const blurb = document.createElement("p");
+  const sourceLabel = document.createElement("p");
   const matchNote = document.createElement("p");
   const reasonWrap = document.createElement("div");
   const reasonLabel = document.createElement("p");
@@ -5373,10 +5397,12 @@ function createPulseEntry(item) {
 
   article.className = `pulse-entry pulse-entry-${status}`;
   top.className = "pulse-entry-top";
+  signalChip.className = `pulse-entry-signal pulse-entry-signal-${item.type || item.signal_type || "default"}`;
   kind.className = "pulse-entry-kind";
   when.className = `pulse-entry-when pulse-entry-when-${status}`;
   where.className = "pulse-entry-where";
   blurb.className = "pulse-entry-blurb";
+  sourceLabel.className = "pulse-entry-source";
   matchNote.className = "pulse-entry-match";
   reasonWrap.className = "pulse-entry-reason";
   reasonLabel.className = "pulse-entry-reason-label";
@@ -5384,12 +5410,24 @@ function createPulseEntry(item) {
   tags.className = "pulse-entry-tags";
   actions.className = "pulse-entry-actions";
 
+  // Primary chip: signal_label (when chippable). Falls back to kind so
+  // older items without a signal_label keep rendering.
+  const primaryLabel = item.signal_label || null;
+  signalChip.textContent = primaryLabel || "";
+  signalChip.hidden = !primaryLabel;
+
   kind.textContent = item.kind || (isEnglishUi ? "City pulse" : "Stadspuls");
   when.textContent = item.timing?.label || item.when || (isEnglishUi ? "Today" : "I dag");
 
   if (item.when && item.timing?.label && item.timing.label !== item.when) {
     when.title = item.when;
   }
+
+  // Selective source label: shown only when it adds clarity to the user.
+  // Live feeds get "via {label}", computed sources show a short tag like
+  // "sunset". Editorial sources never show a badge in v1.
+  sourceLabel.textContent = buildPulseSourceLabel(item);
+  sourceLabel.hidden = !sourceLabel.textContent;
 
   if (hasInternalTarget) {
     title = document.createElement("button");
@@ -5414,9 +5452,15 @@ function createPulseEntry(item) {
     item.why_it_matters ||
     t("pulse.reasonFallback", "Det här är tänkt som en liten lokal signal som hjälper dagens rutt kännas mer självklar.");
 
+  if (primaryLabel) {
+    top.appendChild(signalChip);
+  }
   top.append(kind, when);
   reasonWrap.append(reasonLabel, reason);
   article.append(top, title, where, blurb);
+  if (sourceLabel.textContent) {
+    article.appendChild(sourceLabel);
+  }
   if (matchNote.textContent) {
     article.appendChild(matchNote);
   }
@@ -5784,6 +5828,7 @@ async function loadCityPulse(dateString = getTodayIsoDate()) {
         Array.isArray(response.items) && response.items.length
           ? response.items
           : fallbackPulse.items,
+      signals: Array.isArray(response.signals) ? response.signals : [],
       moments: Array.isArray(response.moments) ? response.moments : [],
       official_events: Array.isArray(response.official_events) ? response.official_events : [],
       weather: response.weather || null,

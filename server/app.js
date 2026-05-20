@@ -6,6 +6,7 @@ const { buildBlitzDecision } = require("./blitz-engine");
 const { generateRecommendations } = require("./route-engine");
 const { diversifyRecommendationDays } = require("./route-diversity");
 const { buildClientI18nPayload, normalizeLanguage, translate } = require("./ui-i18n");
+const { buildCityPulse } = require("./pulse-engine");
 
 const appRoot = path.resolve(__dirname, "..");
 const appShellTemplate = fs.readFileSync(path.join(appRoot, "index.html"), "utf8");
@@ -834,24 +835,43 @@ function buildApp() {
       const { cityConfig, requestedCity, cityFallbackUsed } = resolveRequestCity(request.query.city);
       const uiLang = normalizeLanguage(request.query?.lang);
       const date = String(request.query.date || "").trim() || cityConfig.todayIsoDate();
-      const pulse = cityConfig.services.getCityPulse(date, { lang: uiLang });
-      const [liveEventsByDate, weatherByDate] = await Promise.all([
-        cityConfig.services.fetchLiveEventsForDates([pulse.date], {}),
-        cityConfig.services.fetchWeatherForDates([pulse.date], cityConfig.center).catch(() => ({})),
+
+      // The engine produces the normalized signals[] stream + fetches
+      // weather/events itself. We still call the city's legacy
+      // getCityPulse to assemble the surface shell (headline, subhead,
+      // moments, wildcards, items[]) so the existing UI keeps working
+      // unchanged through one release. Frontend will prefer signals[]
+      // when present and fall back to items[] otherwise.
+      const [engineResult, legacyPulse] = await Promise.all([
+        buildCityPulse(cityConfig, { date, lang: uiLang }),
+        Promise.resolve()
+          .then(() => cityConfig.services.getCityPulse(date, { lang: uiLang }))
+          .catch(() => null),
       ]);
-      const officialEvents = (liveEventsByDate[pulse.date] || []).slice(0, 2);
-      const officialPulseItems = officialEvents
+
+      const events = Array.isArray(engineResult.events) ? engineResult.events : [];
+      const officialEvents = events.slice(0, 2);
+      const legacyItems = Array.isArray(legacyPulse?.items) ? legacyPulse.items : [];
+
+      // Append live-event items into the legacy items[] for compat: old
+      // frontends read items[]; new frontends read signals[]. Both paths
+      // stay populated for this release.
+      const officialCompatItems = officialEvents
         .slice(0, 1)
-        .map((event) => buildOfficialPulseItem(event, pulse.date, cityConfig, uiLang));
+        .map((event) => buildOfficialPulseItem(event, date, cityConfig, uiLang));
 
       response.json({
         city: cityConfig.key,
         requested_city: requestedCity,
         city_fallback_used: cityFallbackUsed,
-        ...pulse,
-        items: [...(pulse.items || []), ...officialPulseItems],
+        ...(legacyPulse || {}),
+        date,
+        requested_at: engineResult.requested_at,
+        timezone: engineResult.timezone,
+        signals: engineResult.signals,
+        items: [...legacyItems, ...officialCompatItems],
         official_events: officialEvents,
-        weather: weatherByDate[pulse.date] || null,
+        weather: engineResult.weather || null,
       });
     } catch (error) {
       response.status(500).json({

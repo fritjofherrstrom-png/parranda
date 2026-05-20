@@ -4,6 +4,7 @@ const { getCityPulse, getDateSignals, getRomeTodayIsoDate } = require("./rome/ed
 const { fetchLiveEventsForDates } = require("./rome/live");
 const { geocodeQuery } = require("./rome/geocoding");
 const localTruth = require("./rome/local-truth");
+const romeEditorialGenerator = require("./rome/generators/editorial");
 const {
   ROME_TIMEZONE,
   ROME_CENTER,
@@ -37,6 +38,7 @@ module.exports = {
     getCityPulse,
     getDateSignals,
     fetchLiveEventsForDates,
+    signalGenerators: [romeEditorialGenerator],
   },
   walking: {
     defaultProvider: process.env.PARRANDA_WALKING_PROVIDER || "heuristic",
