@@ -201,6 +201,36 @@ If a later Planner or Blitz migration needs providers to fetch their own data,
 the registry can become async in that PR with a real consumer and tests. Until
 then, readiness and collection remain sync by design.
 
+## Live Event Venue Provider
+
+`server/place-candidates/live-event-venue-provider.js` prepares official/live
+event venues as future candidate inputs:
+
+```text
+already-fetched context.events -> LiveEventVenueProvider -> event_venue PlaceCandidate[]
+```
+
+The provider is synchronous and does not fetch from any provider. It accepts
+already-normalized live events as either an array or a date-keyed object, then
+converts usable event venues into `candidate_kind: "event_venue"` candidates.
+It returns `[]` when no `context.events` are supplied.
+
+Live-event venue candidates use:
+
+- `source.kind: "live_event_feed"`
+- `trust.source_tier: "official"` for official sources such as Open Data BCN
+  or Turismo Roma
+- `city_pack_owned: false`
+
+Missing venue labels are skipped rather than invented. Missing coordinates do
+not crash the provider; the candidate remains coordinate-less and should be
+treated as `needs_review` unless upstream context supplies stronger trust.
+
+The provider is available for future engine work but is not default-enabled in
+`CandidateProviderRegistry` yet. The default registry still contains only the
+curated catalog provider, so this PR does not change Planner, Blitz, routing,
+UI, public API responses, or readiness behavior.
+
 ## Candidate Readiness Diagnostics
 
 `server/place-candidates/readiness.js` adds an internal diagnostic layer:
