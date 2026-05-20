@@ -4366,6 +4366,31 @@ function buildLegacyPulseItems(moments = []) {
   }));
 }
 
+function buildPulseMetaLabel(filteredItems) {
+  // Replaces the old "N signaler • M nivåer" string with a label that
+  // uses real user-facing vocabulary. Live count is derived from the
+  // engine signals[] when present; otherwise we just show the total.
+  const total = filteredItems.length;
+  const signals = Array.isArray(cityPulseState?.signals) ? cityPulseState.signals : [];
+  const liveCount = signals.filter((signal) => signal?.type === "live_event_nearby").length;
+
+  if (liveCount > 0) {
+    return tf(
+      "pulse.metaSignalsWithLive",
+      { signals: total, live: liveCount },
+      isEnglishUi
+        ? `${total} signals · ${liveCount} live`
+        : `${total} signaler · ${liveCount} live`,
+    );
+  }
+
+  return tf(
+    "pulse.metaSignals",
+    { signals: total },
+    isEnglishUi ? `${total} signals today` : `${total} signaler idag`,
+  );
+}
+
 function getNormalizedCityPulseItems() {
   // Prefer the new engine signals[] when present. Falls back to the
   // legacy items[] shape during the one-release compat window, and to
@@ -5581,16 +5606,22 @@ function renderCityPulse() {
     cityPulseEditionLabel.textContent = `${tf("pulse.currentIn", { city: buildUnavailableCityLabel() }, `Aktuellt i ${buildUnavailableCityLabel()}`)} · ${weekdayLabel} ${dateLabel}`;
   }
 
+  // Prefer the server-built masthead (engine-driven) over the legacy
+  // shell headline/subhead. Falls back gracefully when an older server
+  // response doesn't include a masthead object.
   cityPulseHeadline.textContent =
-    cityPulseState.headline || tf("pulse.currentInNow", { city: buildUnavailableCityLabel() }, `Aktuellt i ${buildUnavailableCityLabel()} just nu.`);
+    cityPulseState.masthead?.headline ||
+    cityPulseState.headline ||
+    tf("pulse.currentInNow", { city: buildUnavailableCityLabel() }, `Aktuellt i ${buildUnavailableCityLabel()} just nu.`);
   cityPulseSubhead.textContent =
+    cityPulseState.masthead?.subhead ||
     cityPulseState.subhead ||
     cityPulseState.note ||
     (isEnglishUi
       ? "This layer helps you weigh what is actually relevant right now."
       : "Det här lagret hjälper dig väga in det som faktiskt är relevant just nu.");
   cityPulseEditionDate.textContent = `${weekdayLabel}\n${dateLabel}`;
-  cityPulseMeta.textContent = tf("pulse.meta", { signals: filteredItems.length, levels: availableLevels.length }, `${filteredItems.length} signaler • ${availableLevels.length} nivåer`);
+  cityPulseMeta.textContent = buildPulseMetaLabel(filteredItems);
   cityPulseFooter.textContent =
     cityPulseState.footer_note ||
     t("pulse.footer", "Den här sektionen blandar säkra lokala rytmer med det som är värt att väga in just nu.");
