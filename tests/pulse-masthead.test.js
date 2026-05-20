@@ -33,6 +33,44 @@ test("masthead prefers live_event_nearby over local_timing_advice", () => {
   assert.equal(result.signal_label, "Live event");
 });
 
+test("masthead keeps foreign provider titles out of the page headline", () => {
+  const result = buildMasthead({
+    lang: "en",
+    signals: [
+      signal({
+        type: "live_event_nearby",
+        title:
+          "Trobada 'Comadreo Decidida por la VIHDA – El comadreig de les que lluiten per viure'",
+        source_language: "ca",
+        kind: "Cultural event · Open Data BCN",
+        signal_label: "Live event",
+      }),
+    ],
+    fallback: FALLBACK,
+  });
+
+  assert.equal(result.source, "signal");
+  assert.equal(result.signal_type, "live_event_nearby");
+  assert.equal(result.headline, "Cultural event · Open Data BCN");
+  assert.doesNotMatch(result.headline, /Comadreo|VIHDA|lluiten/);
+});
+
+test("masthead compacts long signal headlines when no safer label exists", () => {
+  const result = buildMasthead({
+    signals: [
+      signal({
+        type: "golden_hour",
+        title:
+          "Golden hour is lining up with a long waterfront drift that should not overwhelm the masthead layout on narrow screens",
+      }),
+    ],
+    fallback: FALLBACK,
+  });
+
+  assert.match(result.headline, /\.\.\.$/);
+  assert.ok(result.headline.length <= 89);
+});
+
 test("masthead prefers golden_hour when no live event is present", () => {
   const result = buildMasthead({
     signals: [

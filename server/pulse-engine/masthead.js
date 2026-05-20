@@ -29,6 +29,8 @@ const PREFERRED_TYPES_FOR_HEADLINE = new Set([
   "crowd_warning",
 ]);
 
+const MAX_MASTHEAD_HEADLINE_LENGTH = 86;
+
 /**
  * @param {Object} input
  * @param {import("./types").PulseSignal[]} [input.signals]
@@ -43,14 +45,14 @@ const PREFERRED_TYPES_FOR_HEADLINE = new Set([
  *   signal_label: string|null,
  * }}
  */
-function buildMasthead({ signals, fallback, lang: _lang } = {}) {
+function buildMasthead({ signals, fallback, lang = "sv" } = {}) {
   const list = Array.isArray(signals) ? signals : [];
   const fallbackHeadline = normalizeMastheadText(fallback?.headline);
   const fallbackSubhead = normalizeMastheadText(fallback?.subhead);
   const selected = pickMastheadSignal(list);
 
   if (selected) {
-    const headline = normalizeMastheadText(selected.title);
+    const headline = buildMastheadHeadline(selected, lang);
     const subhead =
       normalizeMastheadText(selected.reason) ||
       normalizeMastheadText(selected.why_it_matters) ||
@@ -92,14 +94,64 @@ function pickMastheadSignal(signals) {
 }
 
 function hasMastheadHeadline(signal) {
-  return Boolean(normalizeMastheadText(signal?.title));
+  return Boolean(
+    normalizeMastheadText(signal?.title) ||
+      normalizeMastheadText(signal?.kind) ||
+      normalizeMastheadText(signal?.kindLabel) ||
+      normalizeMastheadText(signal?.signal_label),
+  );
 }
 
 function normalizeMastheadText(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function buildMastheadHeadline(signal, lang) {
+  if (signal?.type === "live_event_nearby") {
+    const providerTitle = normalizeMastheadText(signal.title);
+    const saferEventLabel =
+      normalizeMastheadText(signal.kind) ||
+      normalizeMastheadText(signal.kindLabel) ||
+      normalizeMastheadText(signal.signal_label);
+
+    if (
+      saferEventLabel &&
+      (isForeignSourceTitle(signal, lang) ||
+        providerTitle.length > MAX_MASTHEAD_HEADLINE_LENGTH)
+    ) {
+      return saferEventLabel;
+    }
+  }
+
+  return compactMastheadText(normalizeMastheadText(signal?.title));
+}
+
+function isForeignSourceTitle(signal, lang) {
+  const sourceLanguage = normalizeLanguageCode(signal?.source_language);
+  const uiLanguage = normalizeLanguageCode(lang);
+  return Boolean(sourceLanguage && uiLanguage && sourceLanguage !== uiLanguage);
+}
+
+function normalizeLanguageCode(lang) {
+  const code = String(lang || "").trim().toLowerCase().slice(0, 2);
+  return code || "";
+}
+
+function compactMastheadText(value) {
+  if (value.length <= MAX_MASTHEAD_HEADLINE_LENGTH) {
+    return value;
+  }
+  const clipped = value.slice(0, MAX_MASTHEAD_HEADLINE_LENGTH);
+  const boundary = Math.max(
+    clipped.lastIndexOf(" "),
+    clipped.lastIndexOf("–"),
+    clipped.lastIndexOf("-"),
+  );
+  return `${clipped.slice(0, boundary >= 48 ? boundary : MAX_MASTHEAD_HEADLINE_LENGTH).trim()}...`;
+}
+
 module.exports = {
   buildMasthead,
   PREFERRED_TYPES_FOR_HEADLINE,
+  MAX_MASTHEAD_HEADLINE_LENGTH,
 };
