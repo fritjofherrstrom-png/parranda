@@ -13,7 +13,7 @@
  *   1. Prefer the first ranked signal whose type belongs to the
  *      "useful as headline" set (live, golden hour, evening window,
  *      crowd warning). These types carry "right now" weight.
- *   2. Otherwise the highest-ranked signal regardless of type.
+ *   2. Otherwise the highest-ranked renderable signal regardless of type.
  *   3. Otherwise fall back to the legacy headline/subhead (which is now
  *      the season-aware copy from #102).
  *
@@ -45,16 +45,17 @@ const PREFERRED_TYPES_FOR_HEADLINE = new Set([
  */
 function buildMasthead({ signals, fallback, lang: _lang } = {}) {
   const list = Array.isArray(signals) ? signals : [];
+  const fallbackHeadline = normalizeMastheadText(fallback?.headline);
+  const fallbackSubhead = normalizeMastheadText(fallback?.subhead);
   const selected = pickMastheadSignal(list);
 
   if (selected) {
-    const headline = selected.title;
+    const headline = normalizeMastheadText(selected.title);
     const subhead =
-      selected.reason ||
-      selected.why_it_matters ||
-      selected.blurb ||
-      fallback?.subhead ||
-      "";
+      normalizeMastheadText(selected.reason) ||
+      normalizeMastheadText(selected.why_it_matters) ||
+      normalizeMastheadText(selected.blurb) ||
+      fallbackSubhead;
 
     return {
       headline,
@@ -67,8 +68,8 @@ function buildMasthead({ signals, fallback, lang: _lang } = {}) {
   }
 
   return {
-    headline: fallback?.headline || "",
-    subhead: fallback?.subhead || "",
+    headline: fallbackHeadline,
+    subhead: fallbackSubhead,
     source: "fallback",
     signal_id: null,
     signal_type: null,
@@ -79,11 +80,23 @@ function buildMasthead({ signals, fallback, lang: _lang } = {}) {
 function pickMastheadSignal(signals) {
   if (signals.length === 0) return null;
 
-  const preferred = signals.find(
+  const renderableSignals = signals.filter(hasMastheadHeadline);
+
+  if (renderableSignals.length === 0) return null;
+
+  const preferred = renderableSignals.find(
     (signal) => signal && PREFERRED_TYPES_FOR_HEADLINE.has(signal.type),
   );
 
-  return preferred || signals[0] || null;
+  return preferred || renderableSignals[0] || null;
+}
+
+function hasMastheadHeadline(signal) {
+  return Boolean(normalizeMastheadText(signal?.title));
+}
+
+function normalizeMastheadText(value) {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 module.exports = {
