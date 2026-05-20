@@ -121,3 +121,25 @@ Recommended next steps:
 
 The contract exists so the future route engine can become provider-first
 without losing the safety and taste already present in curated city packs.
+
+## Current Compatibility Provider
+
+`server/place-candidates/curated-catalog-provider.js` is the first bridge from
+today's city catalogs into the candidate system:
+
+```text
+existing city catalog -> CuratedCatalogProvider -> PlaceCandidate[]
+```
+
+The provider reads `cityConfig.catalog.allItems`, normalizes each item through
+the `PlaceCandidate` contract, and marks all records as city-pack-owned curated
+catalog candidates. It also distinguishes normal places from structural routing
+helpers:
+
+- real venue/place items become `candidate_kind: "real_place"`;
+- `district-group` and `structuralRouteAnchor` items become
+  `candidate_kind: "structural_anchor"`;
+- `district` items become `candidate_kind: "area_preset"`.
+
+This provider is a compatibility layer only. It does not change Planner, Blitz,
+route scoring, UI, public API responses, or data sources.
