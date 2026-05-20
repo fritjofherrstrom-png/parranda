@@ -48,6 +48,30 @@ Hälsocheck:
 http://localhost:8000/api/health
 ```
 
+## Förhandsgranska på mobilen
+
+Starta appen på datorn:
+
+```bash
+npm start
+```
+
+Servern binder mot `0.0.0.0` och skriver ut både lokal adress och LAN-adresser, ungefär:
+
+```text
+Parranda listening on http://localhost:8000
+Open on a phone on the same Wi-Fi:
+  http://192.168.1.23:8000
+```
+
+Öppna LAN-adressen på mobilen. Datorn och mobilen måste vara på samma Wi-Fi.
+
+Om mobilen inte når adressen:
+
+- kontrollera att Macens brandvägg tillåter inkommande anslutningar till Node/Terminal
+- kontrollera att mobilen inte ligger på mobilnät eller gäst-Wi-Fi
+- testa `HOST=0.0.0.0 PORT=8000 npm start`
+
 ## Testa innan du delar
 
 ```bash
