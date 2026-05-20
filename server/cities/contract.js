@@ -14,7 +14,8 @@ const { validateCitySourceConfig } = require("./source-contract");
  *   fetchWeatherForDates: (dates: string[], anchor?: CityPoint) => Promise<Record<string, unknown>>,
  *   getCityPulse: (...args: unknown[]) => Promise<unknown>,
  *   getDateSignals: (...args: unknown[]) => Promise<unknown>,
- *   fetchLiveEventsForDates: (...args: unknown[]) => Promise<unknown>
+ *   fetchLiveEventsForDates: (...args: unknown[]) => Promise<unknown>,
+ *   signalGenerators?: Function[]
  * }} CityServices
  *
  * @typedef {{
@@ -235,6 +236,20 @@ function validateCityConfig(cityConfig) {
       `city(${cityConfig.key}).services.${serviceKey}`,
     );
   });
+
+  if (cityConfig.services.signalGenerators !== undefined) {
+    if (!Array.isArray(cityConfig.services.signalGenerators)) {
+      throw new Error(
+        `city(${cityConfig.key}).services.signalGenerators måste vara en array`,
+      );
+    }
+    cityConfig.services.signalGenerators.forEach((generator, index) => {
+      assertFunction(
+        generator,
+        `city(${cityConfig.key}).services.signalGenerators[${index}]`,
+      );
+    });
+  }
 
   assertObject(cityConfig.walking, `city(${cityConfig.key}).walking`);
   assertNonEmptyString(

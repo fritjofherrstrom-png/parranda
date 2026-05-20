@@ -460,26 +460,6 @@ const editorialPulseItems = [
     linked_wildcard_id: "aventino-trastevere-sunset",
   },
   {
-    id: "city-general-rhythm",
-    signal_type: "local_timing_advice",
-    level: "city",
-    kind: "Stadens rytm",
-    title: "Rom känns bäst när dagen byggs i kvarter, inte i checklistor",
-    where: "Hela staden",
-    when: "Hela dagen",
-    blurb:
-      "Det lokala spelet sitter sällan i att hinna flest platser, utan i att låta två eller tre tydliga områden bära rytmen och promenaden mellan dem göra jobbet.",
-    why_it_matters:
-      "Det är så en dag går från transportsträcka till upplevelse. Parranda ska hjälpa dig läsa det tempot snabbare.",
-    matches_vibes: ["slow", "curious"],
-    route_hints: {
-      preferred_vibes: ["culture", "low_key"],
-      avoid_vibes: ["party"],
-    },
-    priority: 1,
-    linked_wildcard_id: "monti-testaccio-evening",
-  },
-  {
     id: "hood-trastevere-crowded",
     signal_type: "crowd_warning",
     level: "neighborhood",
@@ -773,22 +753,6 @@ const editorialPulseLocalizedContent = {
     why_it_matters: createLocalizedContent(
       "Låt kvällen ta vikt. Du får en bättre dag om du avsiktligt lämnar luft åt de sena timmarna.",
       "Let the evening take on more weight. You get a better day if you deliberately leave room for the later hours.",
-    ),
-  },
-  "city-general-rhythm": {
-    title: createLocalizedContent(
-      "Rom känns bäst när dagen byggs i kvarter, inte i checklistor",
-      "Rome feels best when the day is built in neighborhoods, not checklists",
-    ),
-    where: createLocalizedContent("Hela staden", "The whole city"),
-    when: createLocalizedContent("Hela dagen", "All day"),
-    blurb: createLocalizedContent(
-      "Det lokala spelet sitter sällan i att hinna flest platser, utan i att låta två eller tre tydliga områden bära rytmen och promenaden mellan dem göra jobbet.",
-      "The local game is rarely about seeing the most places. It is about letting two or three clear areas carry the rhythm and letting the walk between them do the work.",
-    ),
-    why_it_matters: createLocalizedContent(
-      "Det är så en dag går från transportsträcka till upplevelse. Parranda ska hjälpa dig läsa det tempot snabbare.",
-      "That is how a day turns from transit into experience. Parranda should help you read that tempo faster.",
     ),
   },
   "hood-trastevere-crowded": {
