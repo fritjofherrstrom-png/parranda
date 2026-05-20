@@ -231,7 +231,8 @@ These contracts are not implemented yet. They are the intended next direction.
 ### PlaceCandidate
 
 `PlaceCandidate` should become the universal place-like record consumed by
-Blitz and Planner.
+Blitz and Planner. The first implementation contract lives in
+`docs/PLACE_CANDIDATES.md` and `server/place-candidates/contract.js`.
 
 It should represent:
 
