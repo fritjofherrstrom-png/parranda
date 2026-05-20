@@ -1237,7 +1237,7 @@ function getWildcardSuggestions(dateString = getRomeTodayIsoDate()) {
     .map(({ score, ...wildcard }) => wildcard);
 }
 
-function buildCityPulseHeadline(dateString, moments, lang = "sv") {
+function buildCityPulseHeadline(dateString, _moments, lang = "sv") {
   const { month, day, weekday } = getMonthDay(dateString);
 
   if (month === 4 && day === 21) {
@@ -1280,8 +1280,40 @@ function buildCityPulseHeadline(dateString, moments, lang = "sv") {
     );
   }
 
-  if (moments[0]?.note) {
-    return moments[0].note;
+  // Season-specific fallback for non-special weekdays. The previous fallback
+  // bound the headline to `moments[0].note` from recurringPulseMoments —
+  // which surfaced an evergreen "bind two neighborhoods together" line in
+  // the JUST NU slot. That broke the live-now promise. Use season instead:
+  // it is still time-relevant, doesn't pretend to be a real-time signal,
+  // and lets the subhead carry the day's specific spring/summer detail.
+  if (month >= 4 && month <= 5) {
+    return readLocalizedContent(
+      createLocalizedContent(
+        "Maj sätter Rom i kvällsläge — låt eftermiddagen bygga upp en sen kväll.",
+        "May tilts Rome toward the evening — let the afternoon set up a late night.",
+      ),
+      lang,
+    );
+  }
+
+  if (month >= 6 && month <= 9) {
+    return readLocalizedContent(
+      createLocalizedContent(
+        "Sommaren skiftar Rom till sent — låt dagen vänta tills skuggan lägger sig.",
+        "Summer shifts Rome late — let the day wait until the shadow settles.",
+      ),
+      lang,
+    );
+  }
+
+  if (month === 10 || month === 11) {
+    return readLocalizedContent(
+      createLocalizedContent(
+        "Höstljuset gör eftermiddagen längre — låt promenaden bära dagens tyngd.",
+        "Autumn light stretches the afternoon — let the walk carry the day's weight.",
+      ),
+      lang,
+    );
   }
 
   return readLocalizedContent(
