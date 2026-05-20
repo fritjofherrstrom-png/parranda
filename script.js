@@ -1873,6 +1873,7 @@ const cityPulseFilters = document.getElementById("cityPulseFilters");
 const cityPulseLevels = document.getElementById("cityPulseLevels");
 const cityPulseUtilityNote = document.getElementById("cityPulseUtilityNote");
 const cityPulseFooter = document.getElementById("cityPulseFooter");
+const cityPulseLiveChip = cityPulseStart?.querySelector(".city-pulse-live") || null;
 const showFavoritesButton = document.getElementById("showFavoritesButton");
 const showAllButton = document.getElementById("showAllButton");
 const districtEyebrow = document.getElementById("districtEyebrow");
@@ -4371,6 +4372,15 @@ function buildPulseMetaLabel(filteredItems) {
   // uses real user-facing vocabulary. Live count is derived from the
   // engine signals[] when present; otherwise we just show the total.
   const total = filteredItems.length;
+
+  if (total === 0) {
+    return tf(
+      "pulse.metaSignalsZero",
+      {},
+      isEnglishUi ? "No signals today" : "Inga signaler idag",
+    );
+  }
+
   const signals = Array.isArray(cityPulseState?.signals) ? cityPulseState.signals : [];
   const liveCount = signals.filter((signal) => signal?.type === "live_event_nearby").length;
 
@@ -5622,6 +5632,14 @@ function renderCityPulse() {
       : "Det här lagret hjälper dig väga in det som faktiskt är relevant just nu.");
   cityPulseEditionDate.textContent = `${weekdayLabel}\n${dateLabel}`;
   cityPulseMeta.textContent = buildPulseMetaLabel(filteredItems);
+
+  // Hide the JUST NU / RIGHT NOW live chip when no signals are present.
+  // The chip implies active live coverage — showing it on an empty edition
+  // creates a false sense of activity.
+  if (cityPulseLiveChip) {
+    const hasSignals = Array.isArray(cityPulseState?.signals) && cityPulseState.signals.length > 0;
+    cityPulseLiveChip.hidden = !hasSignals;
+  }
   cityPulseFooter.textContent =
     cityPulseState.footer_note ||
     t("pulse.footer", "Den här sektionen blandar säkra lokala rytmer med det som är värt att väga in just nu.");

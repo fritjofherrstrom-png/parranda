@@ -1117,8 +1117,8 @@ test("GET /api/city-pulse kan köras för test-city med no-op services", async (
     assert.equal(response.body.city, "test-city");
     assert.equal(response.body.requested_city, "test-city");
     assert.equal(response.body.city_fallback_used, false);
-    assert.equal(response.body.headline, "Test City city-core är aktivt");
-    assert.match(response.body.subhead, /Kuraterad Pulse för Test City är inte redo än/);
+    assert.match(response.body.headline, /Vi har inte Test City på riktigt än/);
+    assert.match(response.body.subhead, /Vi har inget lokalt lager för Test City/);
     assert.deepEqual(response.body.official_events, []);
     assert.deepEqual(response.body.items, []);
     assert.doesNotMatch(JSON.stringify(response.body), /Trastevere|Monti|Testaccio|Centro Storico|\bRom\b|\bRome\b/);
@@ -1165,14 +1165,14 @@ test("GET /api/city-pulse för barcelona visar noop-preview utan Rome Pulse", as
     assert.equal(en.body.city, "barcelona");
     assert.equal(en.body.requested_city, "barcelona");
     assert.equal(en.body.city_fallback_used, false);
-    assert.equal(en.body.headline, "Barcelona city-core is active");
-    assert.match(en.body.subhead, /Curated Barcelona Pulse is not ready yet/);
+    assert.match(en.body.headline, /We don't have Barcelona for real yet/);
+    assert.match(en.body.subhead, /There is no local layer for Barcelona yet/);
     assert.equal(en.body.items.length, 0);
     assert.equal(en.body.official_events.length, 0);
     assert.equal(en.body.wildcards.length, 0);
     assert.equal(en.body.weather?.maxTemp, 23);
-    assert.equal(sv.body.headline, "Barcelona city-core är aktivt");
-    assert.match(sv.body.subhead, /Kuraterad Pulse för Barcelona är inte redo än/);
+    assert.match(sv.body.headline, /Vi har inte Barcelona på riktigt än/);
+    assert.match(sv.body.subhead, /Vi har inget lokalt lager för Barcelona/);
     assert.doesNotMatch(JSON.stringify(en.body), /Natale di Roma|Trastevere|Monti|Testaccio/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
@@ -1258,7 +1258,7 @@ test("GET /api/city-pulse för barcelona presenterar official events utan editor
     assert.equal(sv.status, 200);
     assert.equal(en.body.city, "barcelona");
     assert.equal(en.body.city_fallback_used, false);
-    assert.equal(en.body.headline, "Barcelona city-core is active");
+    assert.match(en.body.headline, /We don't have Barcelona for real yet/);
     assert.equal(en.body.official_events.length, 1);
     assert.equal(en.body.official_events[0].source_label, "Open Data BCN");
     assert.equal(en.body.official_events[0].source_id, "barcelona-open-data-agenda");
