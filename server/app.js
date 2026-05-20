@@ -861,12 +861,28 @@ function buildApp() {
         .slice(0, 1)
         .map((event) => buildOfficialPulseItem(event, date, cityConfig, uiLang));
 
+      // When the engine returns 0 signals, choose the right empty-state copy:
+      // - Hard empty (noop city, no local layer): use the headline/subhead from
+      //   the noop getCityPulse, which already carries the correct hard-empty copy.
+      // - Soft empty (city has sources but nothing stood out today): inject
+      //   the soft-empty copy so users see "Nothing standing out right now"
+      //   rather than the noop jargon.
+      const isNoop = legacyPulse?._noop === true;
+      const hasNoSignals = engineResult.signals.length === 0;
+      const emptyFallback =
+        hasNoSignals && !isNoop
+          ? {
+              headline: translate(uiLang, "pulse.emptySoftHeadline", { city: cityConfig.label }, cityConfig.label),
+              subhead: translate(uiLang, "pulse.emptySoftSubhead", { city: cityConfig.label }, ""),
+            }
+          : {
+              headline: legacyPulse?.headline || "",
+              subhead: legacyPulse?.subhead || "",
+            };
+
       const masthead = buildMasthead({
         signals: engineResult.signals,
-        fallback: {
-          headline: legacyPulse?.headline || "",
-          subhead: legacyPulse?.subhead || "",
-        },
+        fallback: emptyFallback,
         lang: uiLang,
       });
 

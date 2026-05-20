@@ -24,16 +24,40 @@ test("noop live service är tolerant mot saknade eller ogiltiga datumlistor", as
   assert.deepStrictEqual(await fetchLiveEventsForDates("2026-05-01"), {});
 });
 
-test("noop editorial service returnerar neutral och stabil city pulse", () => {
+test("noop editorial service returnerar hard-empty copy på svenska", () => {
   const editorial = createNoopEditorialService({ cityLabel: "Teststad" });
   const pulse = editorial.getCityPulse("2026-05-01");
-  const englishPulse = editorial.getCityPulse("2026-05-01", { lang: "en" });
 
   assert.equal(pulse.date, "2026-05-01");
-  assert.equal(pulse.headline, "Teststad city-core är aktivt");
-  assert.match(pulse.subhead, /Kuraterad Pulse för Teststad är inte redo än/);
-  assert.equal(englishPulse.headline, "Teststad city-core is active");
-  assert.match(englishPulse.subhead, /Curated Teststad Pulse is not ready yet/);
+  assert.match(pulse.headline, /Vi har inte Teststad på riktigt än/);
+  assert.match(pulse.subhead, /Vi har inget lokalt lager för Teststad/);
+  assert.equal(pulse._noop, true);
   assert.deepStrictEqual(pulse.items, []);
   assert.deepStrictEqual(editorial.getDateSignals("2026-05-01"), []);
+});
+
+test("noop editorial service returnerar hard-empty copy på engelska", () => {
+  const editorial = createNoopEditorialService({ cityLabel: "Teststad" });
+  const pulse = editorial.getCityPulse("2026-05-01", { lang: "en" });
+
+  assert.match(pulse.headline, /We don't have Teststad for real yet/);
+  assert.match(pulse.subhead, /There is no local layer for Teststad yet/);
+  assert.equal(pulse._noop, true);
+});
+
+test("noop editorial service innehåller inte intern jargong", () => {
+  const editorial = createNoopEditorialService({ cityLabel: "Teststad" });
+  const sv = editorial.getCityPulse("2026-05-01");
+  const en = editorial.getCityPulse("2026-05-01", { lang: "en" });
+
+  // These strings should never appear in user-facing copy.
+  for (const pulse of [sv, en]) {
+    assert.doesNotMatch(pulse.headline || "", /city-core/i);
+    assert.doesNotMatch(pulse.headline || "", /curated/i);
+    assert.doesNotMatch(pulse.headline || "", /citypack/i);
+    assert.doesNotMatch(pulse.headline || "", /noop/i);
+    assert.doesNotMatch(pulse.subhead || "", /city-core/i);
+    assert.doesNotMatch(pulse.subhead || "", /kuraterad/i);
+    assert.doesNotMatch(pulse.subhead || "", /editorial-lager/i);
+  }
 });

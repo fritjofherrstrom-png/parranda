@@ -51,8 +51,8 @@ test("barcelona preview håller Pulse noop när Live-källan är tom", async () 
   });
 
   assert.equal(cityConfigs.barcelona.visibility, "preview");
-  assert.equal(pulse.headline, "Barcelona city-core is active");
-  assert.match(pulse.subhead, /Curated Barcelona Pulse is not ready yet/);
+  assert.match(pulse.headline, /We don't have Barcelona for real yet/);
+  assert.match(pulse.subhead, /There is no local layer for Barcelona yet/);
   assert.deepEqual(pulse.items, []);
   assert.deepEqual(pulse.official_events, []);
   assert.deepEqual(pulse.wildcards, []);
