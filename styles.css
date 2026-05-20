@@ -645,23 +645,17 @@ body::before {
 }
 
 /*
- * `.city-pulse-teaser` is a separate pre-plan surface and stays in its
- * cream preview gradient for now — out of scope for this hotfix. The
- * `.city-pulse-edition` full Pulse view used to share the same gradient
- * which forced ~30 lines of dark-text overrides downstream to keep cream
- * text legible on the flipped background. That created a divergent
- * visual language between Rome (dark Pulse) and Barcelona (light cream
- * Pulse with patched text colours) for the same core surface.
- *
- * Cross-city rule: same surfaces, different signal density. Removed the
- * edition from the gradient selector and dropped every downstream text
- * override so Barcelona inherits Rome's dark Pulse base. A follow-up
- * audit should bring the teaser into parity too.
+ * Cross-city rule: same surfaces, different signal density. Preview cities
+ * may have fewer signals, lower trust, or honest empty states, but the
+ * Pulse surfaces themselves must share one visual language across every
+ * city. PR #109 brought `.city-pulse-edition` (full Pulse view) into
+ * parity by removing a `.mode-city-preview` background flip and ~30 lines
+ * of downstream text overrides. This follow-up does the same for
+ * `.city-pulse-teaser` (pre-plan Pulse surface): the base `.city-pulse-
+ * teaser` cream gradient applies equally to Rome and Barcelona. No
+ * `.mode-city-preview` override is needed and adding one back would
+ * reintroduce cross-city visual drift.
  */
-.mode-city-preview .city-pulse-teaser {
-  background:
-    linear-gradient(180deg, rgba(255, 252, 247, 0.96), rgba(246, 238, 226, 0.9));
-}
 
 .hero-idea-strip .hero-panel-meta {
   display: block;
