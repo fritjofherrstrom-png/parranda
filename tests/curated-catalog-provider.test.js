@@ -50,6 +50,7 @@ test("CuratedCatalogProvider wraps Barcelona catalog items and preserves structu
 
   assert.equal(anchors.length, 5);
   assert.equal(realPlaces.length, 56);
+  assert.ok(candidates.every((candidate) => candidate.source.kind === "city_catalog"));
   assert.ok(anchors.every((candidate) => candidate.is_structural));
   assert.ok(realPlaces.every((candidate) => !candidate.is_structural));
   assert.ok(anchors.every((candidate) => candidate.route_roles.includes("structural_anchor")));
