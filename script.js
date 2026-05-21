@@ -4387,6 +4387,21 @@ function buildPulseMetaLabel(filteredItems) {
   const liveCount = signals.filter((signal) => signal?.type === "live_event_nearby").length;
 
   if (liveCount > 0) {
+    // When every signal is a live event, "2 signaler · 2 live" is redundant.
+    // Collapse to "2 live-signaler idag" / "2 live signals today".
+    if (liveCount === total) {
+      if (total === 1) {
+        return t(
+          "pulse.metaSignalsAllLiveOne",
+          isEnglishUi ? "1 live signal today" : "1 live-signal idag",
+        );
+      }
+      return tf(
+        "pulse.metaSignalsAllLive",
+        { signals: total },
+        isEnglishUi ? `${total} live signals today` : `${total} live-signaler idag`,
+      );
+    }
     return tf(
       "pulse.metaSignalsWithLive",
       { signals: total, live: liveCount },

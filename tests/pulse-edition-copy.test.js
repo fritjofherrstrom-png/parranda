@@ -37,6 +37,16 @@ test("meta signals-with-live key exists and replaces {signals} and {live}", () =
   );
 });
 
+test("metaSignalsAllLive collapses redundant 'N signaler · N live' when all signals are live", () => {
+  assert.equal(translate("sv", "pulse.metaSignalsAllLive", { signals: 2 }), "2 live-signaler idag");
+  assert.equal(translate("en", "pulse.metaSignalsAllLive", { signals: 2 }), "2 live signals today");
+  assert.equal(translate("sv", "pulse.metaSignalsAllLiveOne"), "1 live-signal idag");
+  assert.equal(translate("en", "pulse.metaSignalsAllLiveOne"), "1 live signal today");
+  // Confirm these do NOT contain the redundant "· N live" suffix
+  assert.doesNotMatch(translate("sv", "pulse.metaSignalsAllLive", { signals: 2 }), /signaler · \d+ live/);
+  assert.doesNotMatch(translate("en", "pulse.metaSignalsAllLive", { signals: 2 }), /signals · \d+ live/);
+});
+
 test("metaSignalsZero returns 'Inga signaler idag' / 'No signals today'", () => {
   assert.equal(translate("sv", "pulse.metaSignalsZero"), "Inga signaler idag");
   assert.equal(translate("en", "pulse.metaSignalsZero"), "No signals today");
