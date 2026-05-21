@@ -5808,9 +5808,12 @@ function renderCityPulse() {
 
   // Level filter intentionally removed (see comment above buildPulseSourceLabel).
   // The container is cleared and hidden; section headings carry the level
-  // structure on their own.
-  cityPulseFilters.innerHTML = "";
-  cityPulseFilters.hidden = true;
+  // structure on their own. Guarded for absence to match the defensive
+  // pattern used for radius/scope/time filter containers.
+  if (cityPulseFilters) {
+    cityPulseFilters.innerHTML = "";
+    cityPulseFilters.hidden = true;
+  }
 
   cityPulseLevels.innerHTML = "";
 
