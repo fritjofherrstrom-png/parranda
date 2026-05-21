@@ -5043,9 +5043,13 @@ function buildPulseTimelineBrief(items, dateString, timeKey) {
       : isEnglishUi
         ? "later"
         : "senare";
+    // Use safe_headline (UI-language framing) → kindLabel (category) → title
+    // (raw native, last resort) so foreign-language event names don't appear
+    // verbatim in the timeline status brief.
+    const nextLabel = truncatePulseLabel(nextItem.safe_headline || nextItem.kindLabel || nextItem.title, 34);
     return isEnglishUi
-      ? `${prefix} • ${liveItems.length} live • next ${nextTime} ${truncatePulseLabel(nextItem.title, 34)}`
-      : `${prefix} • ${liveItems.length} pågår • nästa ${nextTime} ${truncatePulseLabel(nextItem.title, 34)}`;
+      ? `${prefix} • ${liveItems.length} live • next ${nextTime} ${nextLabel}`
+      : `${prefix} • ${liveItems.length} pågår • nästa ${nextTime} ${nextLabel}`;
   }
 
   if (liveItems.length) {
@@ -5060,9 +5064,10 @@ function buildPulseTimelineBrief(items, dateString, timeKey) {
       : isEnglishUi
         ? "soon"
         : "snart";
+    const nextLabelOnly = truncatePulseLabel(nextItem.safe_headline || nextItem.kindLabel || nextItem.title, 34);
     return isEnglishUi
-      ? `${prefix} • next ${nextTime} ${truncatePulseLabel(nextItem.title, 34)}`
-      : `${prefix} • nästa ${nextTime} ${truncatePulseLabel(nextItem.title, 34)}`;
+      ? `${prefix} • next ${nextTime} ${nextLabelOnly}`
+      : `${prefix} • nästa ${nextTime} ${nextLabelOnly}`;
   }
 
   return reference.isPreview
@@ -5433,9 +5438,12 @@ function buildPulseSourceLabel(item) {
   if (!label) return "";
 
   if (source.kind === "live_feed") {
-    return isEnglishUi ? `via ${label}` : `via ${label}`;
+    // The kind chip ("KONSERT · OPEN DATA BCN") already credits the source.
+    // A second "via Open Data BCN" line on the card body is redundant.
+    return "";
   }
-  // computed | weather — show short tag only when it adds clarity
+  // computed (e.g. "sunset") — show short tag when it adds clarity not
+  // already conveyed by the chip. Editorial never shows (handled above).
   return label;
 }
 
@@ -5531,7 +5539,9 @@ function createPulseEntry(item) {
 
   (item.matches_vibes || []).slice(0, 4).forEach((vibe) => {
     const chip = document.createElement("span");
-    chip.textContent = `${t("pulse.fits", "passar")} • ${cityPulseVibeLabels[vibe] || vibe}`;
+    // Show vibe label only — the "passar •" prefix was repeated on every
+    // chip, creating noise. The chip border already signals "category tag".
+    chip.textContent = cityPulseVibeLabels[vibe] || vibe;
     tags.appendChild(chip);
   });
 
@@ -5800,7 +5810,7 @@ function renderCityPulse() {
     cityPulseUtilityNote.textContent = activePlannedDay
       ? isEnglishUi
         ? `This edition is tied to ${formatSwedishDate(activePlannedDay.date)}. Pulse now helps you read what fits that day's main route and alternatives.`
-        : `Editionen är kopplad till ${formatSwedishDate(activePlannedDay.date)}. LIVE hjälper dig nu läsa vad som passar med just den dagens huvudrutt och alternativ.`
+        : `Editionen är kopplad till ${formatSwedishDate(activePlannedDay.date)}. Live-läget hjälper dig nu läsa vad som passar med just den dagens huvudrutt och alternativ.`
       : buildPulseUtilityCopy(filteredItems, items);
   }
 

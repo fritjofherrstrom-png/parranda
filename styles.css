@@ -1770,7 +1770,8 @@ body::before {
   color: rgba(247, 239, 229, 0.58);
   font-size: 0.92rem;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  /* No text-transform: venue names are proper nouns; mixed case is more
+     readable. Reduced opacity already signals secondary hierarchy. */
 }
 
 .pulse-entry-blurb {
