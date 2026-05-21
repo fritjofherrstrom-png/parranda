@@ -97,6 +97,7 @@ function buildLiveEventSignal(event, date, cityLabel, lang) {
     title: event.title,
     native_title: event.title,
     source_language: event.source_language || null,
+    safe_headline: buildLiveEventSafeHeadline(event, cityLabel, lang),
     area: where,
     where,
     when: buildLiveEventWhen(event, date, lang),
@@ -119,6 +120,25 @@ function buildLiveEventSignal(event, date, cityLabel, lang) {
     trust_level: "official",
     freshness: "today",
   };
+}
+
+function buildLiveEventSafeHeadline(event, cityLabel, lang) {
+  // A human, UI-language headline composed from kindLabel + venue/city.
+  // Used by the masthead when the raw provider title is foreign-language
+  // or too long to be a clean H1. Never includes the provider/source name
+  // — that belongs in chip metadata, not in the page headline.
+  const isEnglish = normalizeLanguage(lang) === "en";
+  const kindLabel = deriveEventKindLabel(event, lang);
+  const venue = (event?.venue || "").trim();
+  const city = (cityLabel || "").trim();
+
+  if (venue) {
+    return isEnglish ? `${kindLabel} at ${venue}` : `${kindLabel} på ${venue}`;
+  }
+  if (city) {
+    return isEnglish ? `${kindLabel} in ${city}` : `${kindLabel} i ${city}`;
+  }
+  return kindLabel;
 }
 
 function buildLiveEventWhen(event, date, lang) {

@@ -4970,29 +4970,31 @@ function buildPulseWeatherBrief(weather, dateString) {
       : "Väder saknas just nu, så LIVE lutar sig bara på stadspuls och platsnivå.";
   }
 
+  // The weather card headline already carries the temperature lead
+  // (e.g. "20° nu"). The clothing card already carries the clothing
+  // advice. Repeating either here would create the "20° nu • molnigt
+  // men gångbart • lätt lager…" cascade where every line says the same
+  // thing twice. Keep the brief to a single piece of honest signal:
+  // the condition label. If we have no condition for today, fall back
+  // to a tomorrow/range hint so the line is never empty when weather
+  // is present.
   const cityNow = getCityDateTimeSnapshot();
   const isToday = (dateString || cityNow.date) === cityNow.date;
-  const currentTemp = Number.isFinite(weather.currentTemp) ? Math.round(weather.currentTemp) : null;
   const maxTemp = Number.isFinite(weather.maxTemp) ? Math.round(weather.maxTemp) : null;
   const minTemp = Number.isFinite(weather.minTemp) ? Math.round(weather.minTemp) : null;
   const rangeLabel =
     Number.isFinite(minTemp) && Number.isFinite(maxTemp) ? `${minTemp}–${maxTemp}°` : null;
-  const lead =
-    isToday && currentTemp !== null
-      ? isEnglishUi
-        ? `${currentTemp}° now`
-        : `${currentTemp}° nu`
-      : rangeLabel
-        ? isEnglishUi
-          ? `${rangeLabel} expected`
-          : `${rangeLabel} väntat`
-        : isEnglishUi
-          ? "Weather set"
-          : "Väder klart";
-  const condition = getPulseConditionLabel(weather);
-  const clothing = getPulseClothingAdvice(weather);
 
-  return [lead, condition, clothing].filter(Boolean).join(" • ");
+  const condition = getPulseConditionLabel(weather);
+  if (condition) {
+    return condition;
+  }
+
+  if (!isToday && rangeLabel) {
+    return isEnglishUi ? `${rangeLabel} expected` : `${rangeLabel} väntat`;
+  }
+
+  return isEnglishUi ? "Weather set" : "Väder klart";
 }
 
 function buildPulseTimelineBrief(items, dateString, timeKey) {

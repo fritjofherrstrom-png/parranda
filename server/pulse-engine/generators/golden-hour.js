@@ -91,19 +91,24 @@ function buildGoldenHourSignal({ window, distance, sunsetMinutes, context }) {
 }
 
 function buildTitle(window, isEnglish, sunsetLabel) {
+  // Headlines stay human and useful — they always include the time. The
+  // signal type chip ("Solnedgång" / "Sunset") carries the categorical
+  // label separately, so the headline does not need to repeat "Golden
+  // hour" as a label. Swedish prefers the natural "Kvällsljuset" framing
+  // rather than the English loanword.
   if (window === "active") {
     return isEnglish
       ? `Golden hour is happening now — sunset around ${sunsetLabel}`
-      : `Golden hour pågår just nu – solnedgång ca ${sunsetLabel}`;
+      : `Kvällsljuset är här nu – solnedgång ca ${sunsetLabel}`;
   }
   if (window === "upcoming") {
     return isEnglish
       ? `Golden hour is coming up at ${sunsetLabel}`
-      : `Golden hour närmar sig kl ${sunsetLabel}`;
+      : `Kvällsljuset närmar sig kl ${sunsetLabel}`;
   }
   return isEnglish
     ? `Tonight's golden hour lands around ${sunsetLabel}`
-    : `Kvällens golden hour landar runt ${sunsetLabel}`;
+    : `Kvällsljuset landar runt ${sunsetLabel}`;
 }
 
 function buildBlurb(window, isEnglish, sunsetLabel, distance) {

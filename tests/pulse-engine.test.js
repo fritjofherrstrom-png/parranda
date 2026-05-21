@@ -143,7 +143,89 @@ test("golden-hour generator emittar ACTIVE när nu ligger nära sunset", () => {
   const ctx = fakeContext({ now: new Date("2026-05-20T19:15:00Z") }); // 21:15 Madrid
   const out = goldenHourGenerator(ctx);
   assert.equal(out.length, 1);
-  assert.ok(/golden hour/i.test(out[0].title));
+  // SV title uses the natural "Kvällsljuset" framing, not the English
+  // "Golden hour" loanword. The chip label ("Solnedgång") still carries
+  // the categorical tag separately.
+  assert.ok(/kvällsljuset/i.test(out[0].title));
+  assert.doesNotMatch(out[0].title, /golden hour/i);
+});
+
+test("golden-hour generator använder Kvällsljuset på SV och Golden hour på EN", () => {
+  // Active window, both languages.
+  const ctxSv = fakeContext({ now: new Date("2026-05-20T19:15:00Z"), lang: "sv" });
+  const ctxEn = fakeContext({ now: new Date("2026-05-20T19:15:00Z"), lang: "en" });
+  assert.match(goldenHourGenerator(ctxSv)[0].title, /Kvällsljuset är här nu/);
+  assert.match(goldenHourGenerator(ctxEn)[0].title, /Golden hour is happening now/);
+
+  // Upcoming window.
+  const ctxUpcomingSv = fakeContext({ now: new Date("2026-05-20T18:00:00Z"), lang: "sv" });
+  const ctxUpcomingEn = fakeContext({ now: new Date("2026-05-20T18:00:00Z"), lang: "en" });
+  assert.match(goldenHourGenerator(ctxUpcomingSv)[0].title, /Kvällsljuset närmar sig kl/);
+  assert.match(goldenHourGenerator(ctxUpcomingEn)[0].title, /Golden hour is coming up at/);
+
+  // Tonight window (afternoon).
+  const ctxTonightSv = fakeContext({ now: new Date("2026-05-20T12:00:00Z"), lang: "sv" });
+  const ctxTonightEn = fakeContext({ now: new Date("2026-05-20T12:00:00Z"), lang: "en" });
+  assert.match(goldenHourGenerator(ctxTonightSv)[0].title, /Kvällsljuset landar runt/);
+  assert.match(goldenHourGenerator(ctxTonightEn)[0].title, /Tonight's golden hour lands around/);
+});
+
+test("live-events generator emittar safe_headline med kindLabel + venue/city, aldrig source-label", () => {
+  // With a venue: prefer "{KindLabel} på {venue}".
+  const ctxWithVenue = fakeContext({
+    events: [
+      {
+        id: "evt-venue",
+        title: "Concert al barri de Sant Antoni amb cor i orquestra",
+        start_date: "2026-05-20",
+        end_date: "2026-05-20",
+        source_language: "ca",
+        source_label: "Open Data BCN",
+        venue: "Centre Cívic Cotxeres de Sants",
+        match_tags: ["music"],
+      },
+    ],
+  });
+  const withVenue = liveEventsGenerator(ctxWithVenue)[0];
+  assert.equal(withVenue.safe_headline, "Konsert på Centre Cívic Cotxeres de Sants");
+  assert.doesNotMatch(withVenue.safe_headline, /Open Data BCN/);
+
+  // Without a venue: fall back to "{KindLabel} i {cityLabel}".
+  const ctxNoVenue = fakeContext({
+    events: [
+      {
+        id: "evt-novenue",
+        title: "Concert sense local fix",
+        start_date: "2026-05-20",
+        end_date: "2026-05-20",
+        source_language: "ca",
+        source_label: "Open Data BCN",
+        match_tags: ["music"],
+      },
+    ],
+  });
+  const noVenue = liveEventsGenerator(ctxNoVenue)[0];
+  assert.equal(noVenue.safe_headline, "Konsert i Teststad");
+  assert.doesNotMatch(noVenue.safe_headline, /Open Data BCN/);
+
+  // English UI: "{KindLabel} at {venue}".
+  const ctxEnglish = fakeContext({
+    lang: "en",
+    events: [
+      {
+        id: "evt-en",
+        title: "Concert al barri de Sant Antoni",
+        start_date: "2026-05-20",
+        end_date: "2026-05-20",
+        source_language: "ca",
+        source_label: "Open Data BCN",
+        venue: "Centre Cívic Cotxeres de Sants",
+        match_tags: ["music"],
+      },
+    ],
+  });
+  const english = liveEventsGenerator(ctxEnglish)[0];
+  assert.equal(english.safe_headline, "Concert at Centre Cívic Cotxeres de Sants");
 });
 
 test("live-events generator droppar events som redan slutat", () => {
