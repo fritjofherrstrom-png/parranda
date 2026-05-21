@@ -1285,7 +1285,9 @@ test("GET /api/city-pulse för barcelona presenterar official events utan editor
     // summary, so EN cards no longer feel like an untranslated feed dump.
     assert.equal(en.body.items[0].blurb, "Concert at Centre Cívic Example.");
     assert.doesNotMatch(en.body.items[0].blurb, /gratuït|barri|activitats/i);
-    assert.match(en.body.items[0].why_it_matters, /Official source signal from Open Data BCN/);
+    // reason/why_it_matters is action-oriented and never exposes the source label
+    assert.match(en.body.items[0].why_it_matters, /Worth adding to the plan if the timing works/);
+    assert.doesNotMatch(en.body.items[0].why_it_matters, /Open Data BCN/);
 
     assert.equal(sv.body.items.length, 1);
     assert.equal(sv.body.items[0].kind, "Konsert · Open Data BCN");
@@ -1294,7 +1296,8 @@ test("GET /api/city-pulse för barcelona presenterar official events utan editor
     assert.equal(sv.body.items[0].source_language, "ca");
     // SV body is also framed in Swedish instead of the Catalan summary leak.
     assert.equal(sv.body.items[0].blurb, "Konsert på Centre Cívic Example.");
-    assert.match(sv.body.items[0].why_it_matters, /Officiell källsignal från Open Data BCN/);
+    assert.match(sv.body.items[0].why_it_matters, /Lägg in på planen om timingen passar/);
+    assert.doesNotMatch(sv.body.items[0].why_it_matters, /Open Data BCN/);
     assert.equal(sv.body.official_events[0].title, "Concert de barri a Barcelona");
     assert.equal(sv.body.official_events[0].provider_category, "Concerts");
 

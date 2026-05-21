@@ -166,19 +166,20 @@ function buildOfficialPulseBlurb(event, cityLabel, lang = "sv") {
       : `${kindLabel} på ${venue}.`;
   }
 
-  const sourceLabel = event.source_label || (isEnglish ? "an official source" : "en officiell källa");
+  // No venue — fall back to city label. Source label stays off user-facing copy.
   return isEnglish
-    ? `${kindLabel} from ${sourceLabel} in ${cityLabel || "the city"}.`
-    : `${kindLabel} från ${sourceLabel} i ${cityLabel || "staden"}.`;
+    ? `${kindLabel} in ${cityLabel || "the city"}.`
+    : `${kindLabel} i ${cityLabel || "staden"}.`;
 }
 
-function buildOfficialPulseWhy(event, lang = "sv") {
+function buildOfficialPulseWhy(event, cityLabel, lang = "sv") {
+  // Action-oriented subhead — never exposes source labels.
   const isEnglish = normalizeLanguage(lang) === "en";
-  const sourceLabel = event.source_label || (isEnglish ? "an official source" : "en officiell källa");
-
+  const kindLabel = deriveEventKindLabel(event, lang);
+  const city = (cityLabel || "").trim() || (isEnglish ? "the city" : "staden");
   return isEnglish
-    ? `Official source signal from ${sourceLabel}. Useful when you want today’s plan to include something actually happening now.`
-    : `Officiell källsignal från ${sourceLabel}. Bra när du vill att dagens plan ska kunna fånga något som faktiskt händer nu.`;
+    ? `${kindLabel} on today in ${city}. Worth adding to the plan if the timing works.`
+    : `${kindLabel} idag i ${city}. Lägg in på planen om timingen passar.`;
 }
 
 function buildOfficialPulseItem(event, date, cityConfig, lang = "sv") {
@@ -204,7 +205,7 @@ function buildOfficialPulseItem(event, date, cityConfig, lang = "sv") {
     where,
     when: buildOfficialPulseWhen(event, date, lang),
     blurb: buildOfficialPulseBlurb(event, cityLabel, lang),
-    why_it_matters: buildOfficialPulseWhy(event, lang),
+    why_it_matters: buildOfficialPulseWhy(event, cityLabel, lang),
     matches_vibes: matchesVibes,
     official_event_id: event.id,
     lat: typeof event.lat === "number" ? event.lat : null,

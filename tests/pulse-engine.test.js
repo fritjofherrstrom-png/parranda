@@ -228,6 +228,45 @@ test("live-events generator emittar safe_headline med kindLabel + venue/city, al
   assert.equal(english.safe_headline, "Concert at Centre Cívic Cotxeres de Sants");
 });
 
+test("live-events generator reason är action-orienterad och innehåller aldrig source-label", () => {
+  const ctxSv = fakeContext({
+    events: [
+      {
+        id: "evt-reason",
+        title: "Concert al barri",
+        start_date: "2026-05-20",
+        end_date: "2026-05-20",
+        source_label: "Open Data BCN",
+        match_tags: ["music"],
+      },
+    ],
+  });
+  const sv = liveEventsGenerator(ctxSv)[0];
+  assert.match(sv.reason, /Konsert idag i Teststad/);
+  assert.match(sv.reason, /Lägg in på planen om timingen passar/);
+  assert.doesNotMatch(sv.reason, /Open Data BCN/);
+  assert.doesNotMatch(sv.reason, /källsignal|officiell/i);
+
+  const ctxEn = fakeContext({
+    lang: "en",
+    events: [
+      {
+        id: "evt-reason-en",
+        title: "Concert al barri",
+        start_date: "2026-05-20",
+        end_date: "2026-05-20",
+        source_label: "Open Data BCN",
+        match_tags: ["music"],
+      },
+    ],
+  });
+  const en = liveEventsGenerator(ctxEn)[0];
+  assert.match(en.reason, /Concert on today in Teststad/);
+  assert.match(en.reason, /Worth adding to the plan if the timing works/);
+  assert.doesNotMatch(en.reason, /Open Data BCN/);
+  assert.doesNotMatch(en.reason, /official source/i);
+});
+
 test("live-events generator droppar events som redan slutat", () => {
   const ctx = fakeContext({
     now: new Date("2026-05-20T15:00:00Z"),
