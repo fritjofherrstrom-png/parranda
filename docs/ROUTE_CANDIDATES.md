@@ -236,6 +236,8 @@ reports:
 
 - selected route id and matching RouteCandidate id
 - Planner stop count versus RouteCandidate user-facing/structural stop counts
+- exact stop id differences: missing from Planner, extra in Planner, or order-only
+  differences
 - unresolved template stops
 - RouteCandidate warnings and limitations
 - selected-route readiness and mismatch reasons

@@ -40,10 +40,20 @@ function comparePlannerRouteToRouteCandidate(plannerRoute, routeCandidateById) {
   const routeCandidateUserFacingStopIds = normalizeIdList(
     userFacingStops.map((stop) => stop.candidate_id),
   );
+  const plannerStopIdSet = new Set(plannerStopIds);
+  const routeCandidateUserFacingStopIdSet = new Set(routeCandidateUserFacingStopIds);
+  const missingFromPlanner = routeCandidateUserFacingStopIds.filter(
+    (stopId) => !plannerStopIdSet.has(stopId),
+  );
+  const extraInPlanner = plannerStopIds.filter(
+    (stopId) => !routeCandidateUserFacingStopIdSet.has(stopId),
+  );
   const unresolvedStops = extractUnresolvedStops(routeCandidate);
   const stopCountParity = Boolean(routeCandidate) && plannerStops.length === userFacingStops.length;
   const userFacingStopIdsMatch =
     Boolean(routeCandidate) && orderedListsEqual(plannerStopIds, routeCandidateUserFacingStopIds);
+  const userFacingStopIdSetMatch =
+    Boolean(routeCandidate) && missingFromPlanner.length === 0 && extraInPlanner.length === 0;
   const mismatchReasons = buildMismatchReasons({
     selectedRouteId,
     routeCandidate,
@@ -51,6 +61,9 @@ function comparePlannerRouteToRouteCandidate(plannerRoute, routeCandidateById) {
     routeCandidateUserFacingStopCount: userFacingStops.length,
     stopCountParity,
     userFacingStopIdsMatch,
+    userFacingStopIdSetMatch,
+    missingFromPlanner,
+    extraInPlanner,
     unresolvedStops,
   });
   const warnings = routeCandidate?.warnings || [];
@@ -74,7 +87,10 @@ function comparePlannerRouteToRouteCandidate(plannerRoute, routeCandidateById) {
     stop_count_parity: stopCountParity,
     planner_stop_ids: plannerStopIds,
     route_candidate_user_facing_stop_ids: routeCandidateUserFacingStopIds,
+    missing_from_planner: missingFromPlanner,
+    extra_in_planner: extraInPlanner,
     user_facing_stop_ids_match: userFacingStopIdsMatch,
+    user_facing_stop_id_set_match: userFacingStopIdSetMatch,
     unresolved_stops: unresolvedStops,
     warnings,
     limitations,
@@ -111,6 +127,9 @@ function buildMismatchReasons({
   routeCandidateUserFacingStopCount,
   stopCountParity,
   userFacingStopIdsMatch,
+  userFacingStopIdSetMatch,
+  missingFromPlanner,
+  extraInPlanner,
   unresolvedStops,
 }) {
   const reasons = [];
@@ -126,7 +145,18 @@ function buildMismatchReasons({
       `stop_count_mismatch:planner=${plannerStopCount}:route_candidate_user_facing=${routeCandidateUserFacingStopCount}`,
     );
   }
-  if (routeCandidate && stopCountParity && !userFacingStopIdsMatch) {
+  if (routeCandidate && missingFromPlanner.length) {
+    reasons.push(`missing_from_planner:${missingFromPlanner.join(",")}`);
+  }
+  if (routeCandidate && extraInPlanner.length) {
+    reasons.push(`extra_in_planner:${extraInPlanner.join(",")}`);
+  }
+  if (
+    routeCandidate &&
+    stopCountParity &&
+    userFacingStopIdSetMatch &&
+    !userFacingStopIdsMatch
+  ) {
     reasons.push("user_facing_stop_ids_differ");
   }
   unresolvedStops.forEach((stopId) => {
