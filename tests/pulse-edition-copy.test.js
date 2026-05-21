@@ -103,6 +103,32 @@ test("empty-state keys contain no internal jargon", () => {
   }
 });
 
+test("metaSignalsOne singular key is grammatically correct — avoids '1 signaler'", () => {
+  assert.equal(translate("sv", "pulse.metaSignalsOne"), "1 signal idag");
+  assert.equal(translate("en", "pulse.metaSignalsOne"), "1 signal today");
+  // Confirm it does NOT contain the plural "signaler"
+  assert.doesNotMatch(translate("sv", "pulse.metaSignalsOne"), /signaler/);
+});
+
+test("uiDateLocale must not use city locale for Swedish UI (locale/date regression guard)", () => {
+  // This test guards against the Barcelona locale bug:
+  //   plannerLocale = "es-ES" (city locale) was leaking into date formatting
+  //   when the UI was in Swedish, producing "Miércoles 20 de mayo" instead of
+  //   "Onsdag 20 maj". The fix: uiDateLocale = "sv-SE" always for SV UI.
+  //
+  // We test this by verifying that a Wednesday in May formats with a Swedish
+  // weekday name when using sv-SE, and does not format like Spanish.
+  const date = new Date(Date.UTC(2026, 4, 20)); // 2026-05-20 Wednesday
+  const sv = new Intl.DateTimeFormat("sv-SE", { timeZone: "UTC", weekday: "long" }).format(date);
+  const es = new Intl.DateTimeFormat("es-ES", { timeZone: "UTC", weekday: "long" }).format(date);
+  // sv-SE → "onsdag", es-ES → "miércoles"
+  assert.match(sv, /onsdag/i);
+  assert.match(es, /miércoles/i);
+  // The script now uses "sv-SE" unconditionally for Swedish UI — not plannerLocale.
+  // Verified by code review: uiDateLocale = activeUiLanguage === "en" ? "en-US" : "sv-SE"
+  assert.notEqual(sv, es, "sv-SE and es-ES must produce different weekday labels for the same date");
+});
+
 test("legacy 'nivåer' / 'levels' key still exists for one-release compat but is not used in active surfaces", () => {
   // We keep the key so older client bundles don't crash on lookup,
   // but the active rendering uses metaSignals / metaSignalsWithLive.

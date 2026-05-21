@@ -2054,7 +2054,9 @@ const supportedUiLanguages = new Set(
 const requestedUiLanguage = String(window.__PARRANDA_LANGUAGE__ || document.body?.dataset.lang || "").toLowerCase();
 const activeUiLanguage = supportedUiLanguages.has(requestedUiLanguage) ? requestedUiLanguage : fallbackUiLanguage;
 const isEnglishUi = activeUiLanguage === "en";
-const uiDateLocale = activeUiLanguage === "en" ? "en-US" : plannerLocale || "sv-SE";
+// Date formatting locale follows the UI language, never the city locale.
+// A Swedish-UI visitor to Barcelona must see "Onsdag 21 maj" not "Miércoles 21 de mayo".
+const uiDateLocale = activeUiLanguage === "en" ? "en-US" : "sv-SE";
 const uiText =
   uiI18nBootstrap.translations && typeof uiI18nBootstrap.translations === "object"
     ? uiI18nBootstrap.translations
@@ -4391,6 +4393,13 @@ function buildPulseMetaLabel(filteredItems) {
       isEnglishUi
         ? `${total} signals · ${liveCount} live`
         : `${total} signaler · ${liveCount} live`,
+    );
+  }
+
+  if (total === 1) {
+    return t(
+      "pulse.metaSignalsOne",
+      isEnglishUi ? "1 signal today" : "1 signal idag",
     );
   }
 
