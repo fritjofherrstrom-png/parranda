@@ -5090,7 +5090,9 @@ function buildPulseWeatherValue(weather, dateString) {
   }
 
   if (maxTemp !== null && minTemp !== null) {
-    return isEnglishUi ? `${maxTemp}° / ${minTemp}° evening` : `${maxTemp}° / ${minTemp}° kväll`;
+    // "Max 23° · 16° kväll" — middot separates day-high from evening-low;
+    // the slash read as a fraction and the unlabelled first number was ambiguous.
+    return isEnglishUi ? `Max ${maxTemp}° · ${minTemp}° evening` : `Max ${maxTemp}° · ${minTemp}° kväll`;
   }
 
   if (maxTemp !== null) {
@@ -5690,7 +5692,7 @@ function renderCityPulse() {
 
   if (cityPulseClothingAdvice) {
     cityPulseClothingAdvice.textContent = getPulseClothingAdvice(cityPulseState.weather)
-      ? `${t("pulse.clothing", "Klädsel")}: ${getPulseClothingAdvice(cityPulseState.weather)}.`
+      ? `${getPulseClothingAdvice(cityPulseState.weather)}.`
       : t("pulse.clothingPending", "Parranda lägger till klädråd så snart vädret är laddat.");
   }
 
