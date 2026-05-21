@@ -6442,3 +6442,41 @@ body.is-printing-guide #routeGuideDrawer {
   }
 }
 
+
+/* --- parranda-cleanup-pass: planner polish ------------------------------- */
+.planner-km-inline {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 0.95rem;
+  color: var(--text);
+  opacity: 0.85;
+}
+.route-lab-field select {
+  width: 100%;
+  padding: 14px 40px 14px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background-color: rgba(255, 255, 255, 0.72);
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+                    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 20px) 50%, calc(100% - 14px) 50%;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  font: inherit;
+  color: var(--text);
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+.preference-chip input[type="checkbox"] {
+  position: absolute;
+  width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0);
+  white-space: nowrap; border: 0;
+}
+.preference-chip:focus-within {
+  outline: 2px solid rgba(177, 78, 43, 0.45);
+  outline-offset: 3px;
+}
+/* --- end parranda-cleanup-pass ------------------------------------------ */
