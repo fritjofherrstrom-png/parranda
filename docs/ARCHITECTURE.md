@@ -224,26 +224,26 @@ A `PulseSignal` includes:
 Pulse signals never automatically become route stops. They can suggest route
 hints and contextual nudges.
 
-## Future Contracts
+## Place Candidate System
 
-These contracts are not implemented yet. They are the intended next direction.
+`PlaceCandidate` is the engine foundation contract that follows `PulseSignal`.
+It is the shared shape for place-like records consumed by future Blitz and
+Planner work, regardless of where they came from. The full shape, vocabulary,
+and provider strategy live in `docs/PLACE_CANDIDATES.md` and
+`server/place-candidates/contract.js`.
 
 ### PlaceCandidate
 
-`PlaceCandidate` should become the universal place-like record consumed by
-Blitz and Planner. The first implementation contract lives in
-`docs/PLACE_CANDIDATES.md` and `server/place-candidates/contract.js`.
+A `PlaceCandidate` represents:
 
-It should represent:
+- a curated Rome or Barcelona catalog stop
+- an official/live event venue
+- a generated or inferred place
+- a future map/search result
+- a future semi-automatic city pack draft candidate
+- a structural routing anchor or area preset
 
-- curated Rome catalog stops
-- Barcelona catalog stops
-- official/live event venues
-- generated or inferred places
-- future map/search results
-- future semi-automatic city pack draft candidates
-
-Likely shape:
+Shape:
 
 ```js
 {
@@ -251,12 +251,14 @@ Likely shape:
   city: "barcelona",
   label: "Casa Vicens",
   type: "museum",
+  candidate_kind: "real_place",
+  is_structural: false,
   lat: 41.4036,
   lng: 2.1507,
   area: "gracia",
   macro: "northwest-local",
   source: {
-    kind: "catalog",
+    kind: "city_catalog",
     id: "barcelona-pilot-catalog",
     url: "https://..."
   },
@@ -274,13 +276,58 @@ Likely shape:
 }
 ```
 
-Required direction:
+Design rules:
 
 - keep provider/source text separate from Parranda-owned judgment fields
 - carry trust and freshness with the candidate
 - allow coordinates to be unknown only when the downstream engine can handle it
 - distinguish real venues from structural anchors and area presets
 - avoid city-specific tag dialects that shared engines cannot understand
+
+### Provider Registry
+
+`server/place-candidates/provider-registry.js` is the internal collection layer:
+
+```text
+CityConfig -> CandidateProviderRegistry -> PlaceCandidate[]
+```
+
+The registry is synchronous by design. Providers do not fetch external data
+directly; when they need fresh inputs they read them from a context already
+filled by a higher-level engine. This keeps readiness checks cheap,
+deterministic, and safe while the candidate system is still internal. Async
+becomes an option only when a real Blitz or Planner consumer needs it, with
+that consumer's tests behind the switch.
+
+The default registry enables only `CuratedCatalogProvider`. Other providers are
+opt-in via custom `providerSpecs`.
+
+### Shipped Providers
+
+- `CuratedCatalogProvider` — default-enabled. Wraps `cityConfig.catalog.allItems`
+  into city-pack-owned `PlaceCandidate[]` with `source.kind: "city_catalog"`.
+  Distinguishes real places, structural anchors, and area presets via
+  `candidate_kind`.
+- `LiveEventVenueProvider` — opt-in. Converts already-fetched
+  `context.events` / `context.live_events` / `context.official_events` into
+  `event_venue` candidates with `source.kind: "live_event_feed"` and
+  `trust.source_tier: "official"`. It does not fetch from Open Data BCN,
+  Turismo Roma, or any other external source — it consumes whatever the
+  engine already gathered.
+
+### Readiness Diagnostics
+
+`server/place-candidates/readiness.js` provides
+`assessCityCandidateReadiness()` — a sync, conservative check that summarizes
+the current candidate pool: totals, candidate kinds, trust tiers, coordinate
+coverage, and `can_support_blitz` / `can_support_planner` flags. It exists so
+later PRs can decide when it is safe to consume candidate providers; it does
+not currently change Planner, Blitz, routing, UI, or public API behavior.
+
+## Future Contracts
+
+These contracts describe intended next direction. Some pieces are partially
+shipped — see each subsection for status.
 
 ### RouteCandidate
 
@@ -304,21 +351,24 @@ This separates "how the engine reasons" from "how the UI explains the route."
 
 ### CandidateProvider
 
-`CandidateProvider` should be the abstraction that supplies candidates to
-Blitz and Planner.
+`CandidateProvider` is the abstraction that supplies candidates to future
+Blitz and Planner. The registry interface is shipped (see Place Candidate
+System above). The provider roster below mixes shipped and future entries.
 
-Possible providers:
+Provider roster:
 
-- `CuratedCatalogProvider`
-- `RouteTemplateProvider`
-- `LiveEventVenueProvider`
-- `GeneratedCityPackProvider`
-- `MapSearchProvider`
-- `NearbyGenericProvider`
+- `CuratedCatalogProvider` — shipped, default-enabled.
+- `LiveEventVenueProvider` — shipped, opt-in, context-based.
+- `RouteTemplateProvider` — shipped on the RouteCandidate side, not as a
+  PlaceCandidate provider. It converts current route templates into
+  `RouteCandidate[]` for diagnostics and shadow comparison.
+- `GeneratedCityPackProvider` — future.
+- `MapSearchProvider` — future.
+- `NearbyGenericProvider` — future.
 
-Providers should emit normalized candidates with trust metadata. The engine can
-then score and combine candidates without knowing whether the source was a city
-pack, official live feed, generated draft, or generic fallback.
+Providers emit normalized candidates with trust metadata. The engine can score
+and combine candidates without knowing whether the source was a city pack,
+official live feed, generated draft, or generic fallback.
 
 ## Engine Ownership
 
@@ -378,12 +428,19 @@ inputs.
 
 ## Migration Path
 
-The recommended sequence is:
+Shipped:
 
-1. Define `PlaceCandidate`.
-2. Wrap current catalog items as `PlaceCandidate[]`.
-3. Introduce candidate providers while keeping existing catalog behavior behind
-   a compatibility layer.
+1. ✅ Define `PlaceCandidate` — contract lives in
+   `server/place-candidates/contract.js`.
+2. ✅ Wrap current catalog items as `PlaceCandidate[]` — done via
+   `CuratedCatalogProvider`.
+3. ✅ Introduce candidate providers while keeping existing catalog behavior
+   behind a compatibility layer — synchronous provider registry with
+   `CuratedCatalogProvider` default-enabled, `LiveEventVenueProvider` opt-in,
+   and readiness diagnostics.
+
+Still ahead:
+
 4. Move the route engine from catalog-first to candidate-provider-first.
 5. Let Pulse route hints nudge Planner scoring without becoming forced stops.
 6. Add route-readiness diagnostics so each city can say what it can safely
@@ -410,6 +467,6 @@ real city skeleton, neighborhood model, catalog, route templates, and Open Data
 BCN live source, but it should still speak honestly about incomplete curated
 coverage.
 
-The system now has enough citypack structure to support more cities, and enough
-Pulse architecture to show what a shared engine contract can look like. The next
-concrete engine contract should be `PlaceCandidate`.
+The system now has enough citypack structure to support more cities, enough
+Pulse architecture to show what a shared engine contract can look like, and a
+shipped `PlaceCandidate` system ready for future Blitz and Planner consumers.
