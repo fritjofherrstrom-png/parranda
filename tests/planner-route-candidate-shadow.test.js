@@ -90,6 +90,9 @@ test("shadow diagnostics match a Planner route/template with a RouteCandidate", 
   assert.equal(primary.route_candidate_structural_stop_count, 0);
   assert.equal(primary.stop_count_parity, true);
   assert.equal(primary.user_facing_stop_ids_match, true);
+  assert.equal(primary.user_facing_stop_id_set_match, true);
+  assert.deepEqual(primary.missing_from_planner, []);
+  assert.deepEqual(primary.extra_in_planner, []);
   assert.deepEqual(primary.unresolved_stops, []);
   assert.deepEqual(primary.mismatch_reasons, []);
   assert.equal(primary.readiness, "ready");
@@ -119,9 +122,99 @@ test("shadow diagnostics keep structural route-template stops non-user-facing", 
   assert.equal(primary.route_candidate_user_facing_stop_count, 2);
   assert.equal(primary.route_candidate_structural_stop_count, 4);
   assert.deepEqual(primary.route_candidate_user_facing_stop_ids, ["san-clemente", "colosseum"]);
+  assert.deepEqual(primary.missing_from_planner, []);
+  assert.deepEqual(primary.extra_in_planner, []);
   assert.equal(primary.stop_count_parity, true);
   assert.equal(primary.user_facing_stop_ids_match, true);
+  assert.equal(primary.user_facing_stop_id_set_match, true);
   assert.equal(primary.readiness, "ready");
+});
+
+test("shadow diagnostics name RouteCandidate stops missing from Planner output", () => {
+  const routeCandidateById = new Map(
+    buildRouteTemplateCandidates(barcelona).map((candidate) => [candidate.id, candidate]),
+  );
+
+  const diagnostics = comparePlannerRouteToRouteCandidate(
+    {
+      id: "gracia-local-evening-loop",
+      main_stops: [
+        { id: "casa-vicens", label: "Casa Vicens" },
+        { id: "cines-verdi", label: "Cines Verdi" },
+        { id: "placa-del-sol", label: "Placa del Sol" },
+      ],
+    },
+    routeCandidateById,
+  );
+
+  assert.equal(diagnostics.stop_count_parity, false);
+  assert.equal(diagnostics.user_facing_stop_ids_match, false);
+  assert.equal(diagnostics.user_facing_stop_id_set_match, false);
+  assert.deepEqual(diagnostics.missing_from_planner, ["bodega-quimet"]);
+  assert.deepEqual(diagnostics.extra_in_planner, []);
+  assert.deepEqual(diagnostics.mismatch_reasons, [
+    "stop_count_mismatch:planner=3:route_candidate_user_facing=4",
+    "missing_from_planner:bodega-quimet",
+  ]);
+  assert.equal(diagnostics.readiness, "needs_review");
+});
+
+test("shadow diagnostics name extra Planner stops", () => {
+  const routeCandidateById = new Map(
+    buildRouteTemplateCandidates(barcelona).map((candidate) => [candidate.id, candidate]),
+  );
+
+  const diagnostics = comparePlannerRouteToRouteCandidate(
+    {
+      id: "gracia-local-evening-loop",
+      main_stops: [
+        { id: "casa-vicens", label: "Casa Vicens" },
+        { id: "cines-verdi", label: "Cines Verdi" },
+        { id: "placa-del-sol", label: "Placa del Sol" },
+        { id: "bodega-quimet", label: "Bodega Quimet" },
+        { id: "bar-calders", label: "Bar Calders" },
+      ],
+    },
+    routeCandidateById,
+  );
+
+  assert.equal(diagnostics.stop_count_parity, false);
+  assert.equal(diagnostics.user_facing_stop_ids_match, false);
+  assert.equal(diagnostics.user_facing_stop_id_set_match, false);
+  assert.deepEqual(diagnostics.missing_from_planner, []);
+  assert.deepEqual(diagnostics.extra_in_planner, ["bar-calders"]);
+  assert.deepEqual(diagnostics.mismatch_reasons, [
+    "stop_count_mismatch:planner=5:route_candidate_user_facing=4",
+    "extra_in_planner:bar-calders",
+  ]);
+  assert.equal(diagnostics.readiness, "needs_review");
+});
+
+test("shadow diagnostics distinguish order differences from missing stops", () => {
+  const routeCandidateById = new Map(
+    buildRouteTemplateCandidates(barcelona).map((candidate) => [candidate.id, candidate]),
+  );
+
+  const diagnostics = comparePlannerRouteToRouteCandidate(
+    {
+      id: "gracia-local-evening-loop",
+      main_stops: [
+        { id: "cines-verdi", label: "Cines Verdi" },
+        { id: "casa-vicens", label: "Casa Vicens" },
+        { id: "placa-del-sol", label: "Placa del Sol" },
+        { id: "bodega-quimet", label: "Bodega Quimet" },
+      ],
+    },
+    routeCandidateById,
+  );
+
+  assert.equal(diagnostics.stop_count_parity, true);
+  assert.equal(diagnostics.user_facing_stop_ids_match, false);
+  assert.equal(diagnostics.user_facing_stop_id_set_match, true);
+  assert.deepEqual(diagnostics.missing_from_planner, []);
+  assert.deepEqual(diagnostics.extra_in_planner, []);
+  assert.deepEqual(diagnostics.mismatch_reasons, ["user_facing_stop_ids_differ"]);
+  assert.equal(diagnostics.readiness, "ready_with_warnings");
 });
 
 test("shadow diagnostics report mismatches without throwing", () => {
@@ -142,6 +235,8 @@ test("shadow diagnostics report mismatches without throwing", () => {
   assert.equal(diagnostics.planner_stop_count, 1);
   assert.equal(diagnostics.route_candidate_stop_count, 0);
   assert.equal(diagnostics.stop_count_parity, false);
+  assert.deepEqual(diagnostics.missing_from_planner, []);
+  assert.deepEqual(diagnostics.extra_in_planner, ["casa-vicens"]);
   assert.deepEqual(diagnostics.mismatch_reasons, ["no_matching_route_candidate"]);
   assert.equal(diagnostics.readiness, "needs_review");
 });
@@ -181,6 +276,8 @@ test("shadow diagnostics can inspect real Planner output without mutating it", a
       diagnostics.days[0].primary_route.readiness,
     ),
   );
+  assert.ok(Array.isArray(diagnostics.days[0].primary_route.missing_from_planner));
+  assert.ok(Array.isArray(diagnostics.days[0].primary_route.extra_in_planner));
   assert.equal(
     "route_candidate_shadow" in plannerResult.days[0].primary_route,
     false,
