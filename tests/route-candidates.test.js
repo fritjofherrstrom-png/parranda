@@ -171,4 +171,34 @@ test("structural candidates are not normal user-facing stops unless marked as ro
       }),
     /structural candidates must be marked as route_structure/,
   );
+
+  assert.throws(
+    () =>
+      validateRouteCandidate({
+        ...normalized,
+        stops: [
+          {
+            ...normalized.stops[0],
+            stop_kind: "user_stop",
+            is_user_facing: false,
+          },
+        ],
+      }),
+    /structural candidates must be marked as route_structure/,
+  );
+
+  assert.throws(
+    () =>
+      validateRouteCandidate({
+        ...normalized,
+        stops: [
+          {
+            ...normalized.stops[0],
+            stop_kind: "route_structure",
+            is_user_facing: true,
+          },
+        ],
+      }),
+    /is_user_facing must be false for structural candidates/,
+  );
 });

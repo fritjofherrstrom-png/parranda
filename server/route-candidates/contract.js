@@ -279,8 +279,11 @@ function validateRouteStop(stop, label) {
   if (stop.macro !== undefined) assertNonEmptyString(stop.macro, `${label}.macro`);
 
   const isStructuralCandidate = ["structural_anchor", "area_preset"].includes(stop.candidate_kind);
-  if (isStructuralCandidate && stop.is_user_facing) {
+  if (isStructuralCandidate && stop.stop_kind !== "route_structure") {
     throw new Error(`${label} structural candidates must be marked as route_structure`);
+  }
+  if (isStructuralCandidate && stop.is_user_facing) {
+    throw new Error(`${label}.is_user_facing must be false for structural candidates`);
   }
   if (stop.stop_kind === "route_structure" && stop.is_user_facing) {
     throw new Error(`${label}.is_user_facing must be false for route_structure stops`);
