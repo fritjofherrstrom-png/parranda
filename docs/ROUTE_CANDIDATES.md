@@ -226,3 +226,21 @@ The gate fails if route templates and RouteCandidates drift apart, including:
 This gate must stay green before RouteCandidates are wired into Planner or
 Blitz. It is still diagnostics-only: it does not change routing behavior,
 Planner behavior, Blitz behavior, UI, or public API responses.
+
+## Shadow Planner Comparison
+
+`server/planner/route-candidate-shadow.js` is the first Planner integration
+bridge, but it is still diagnostics-only. It compares an existing Planner
+result against the RouteCandidate view by selected route/template id and
+reports:
+
+- selected route id and matching RouteCandidate id
+- Planner stop count versus RouteCandidate user-facing/structural stop counts
+- unresolved template stops
+- RouteCandidate warnings and limitations
+- selected-route readiness and mismatch reasons
+
+The helper must not mutate Planner output or add fields to the public Planner
+API response. Its job is to reveal whether current Planner routes can be
+represented by RouteCandidates before Planner or Blitz consume RouteCandidates
+directly.
