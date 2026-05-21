@@ -1610,13 +1610,9 @@ body::before {
   align-items: baseline;
 }
 
-.pulse-group-mark {
-  color: rgba(215, 160, 77, 0.92);
-  font-family: "Cormorant Garamond", serif;
-  font-style: italic;
-  font-size: 3rem;
-  line-height: 1;
-}
+/* .pulse-group-mark was removed per the Pulse design revisions — the
+   Roman numeral marks (I/II/III) were replaced by the eyebrow + serif
+   title + italic subtitle pattern. */
 
 .pulse-group-copy {
   flex: 1;

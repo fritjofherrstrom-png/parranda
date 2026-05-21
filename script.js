@@ -2704,10 +2704,11 @@ function buildGenericFallbackPulse(dateString = getTodayIsoDate()) {
           "planner.previewNeutral",
           "Det här läget använder no-op eller neutral city-puls tills staden får ett riktigt editorial-lager.",
         ),
-    why_it_matters: t(
-      "pulse.reasonFallback",
-      "Det gör city-core ärlig: inga Rome-idéer visas här om staden inte faktiskt är kurerad.",
-    ),
+    // Design rule: never inject auto-generated "why it matters" boilerplate
+    // on a card. The preview-state title + blurb + tags already explain why
+    // the card is honest; the why-block stays hidden when curated copy is
+    // absent.
+    why_it_matters: "",
     matches_vibes: [],
     priority: 1,
   };
@@ -2897,7 +2898,8 @@ let blitzOriginMode = "selected_place";
 let blitzContextKey = "";
 let activePulseScope = "all";
 let activePulseTime = "now";
-let activePulseLevel = "all";
+// activePulseLevel removed — the level filter was retired per the Pulse
+// design revisions; section headings carry the level structure on their own.
 let plannerLoadingTimer = null;
 let plannerLoadingStops = [];
 let plannerLoadingSkeletonClear = null;
@@ -2946,21 +2948,22 @@ const cityPulseTimeMeta = {
   },
 };
 
+// Section headings use the Parranda eyebrow + serif title + italic subtitle
+// pattern. Roman numeral marks (I/II/III) were removed per the Pulse design
+// revisions — section levels are still meaningful, but the magazine-style
+// numerals fought the "what's happening right now" tone of the view.
 const cityPulseLevelMeta = {
   city: {
     label: t("pulse.cityRhythm", "Stadens rytm"),
     sub: t("pulse.cityRhythmSub", "Det en lokal bär med sig utan att tänka på det"),
-    mark: "I",
   },
   neighborhood: {
     label: t("pulse.neighborhood", "Kvarterspuls"),
     sub: t("pulse.neighborhoodSub", "Vad som faktiskt spelar bättre i olika delar av stan just nu"),
-    mark: "II",
   },
   venue: {
     label: t("pulse.venue", "Ställesnivå"),
     sub: t("pulse.venueSub", "Plats- och live-signaler som kan förändra dagen på riktigt"),
-    mark: "III",
   },
 };
 
@@ -5417,17 +5420,10 @@ function createPulseModeButton({ key, label, active, onClick }) {
   return button;
 }
 
-function createPulseFilterButton(levelKey, label, count) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = `city-pulse-filter-button${activePulseLevel === levelKey ? " active" : ""}`;
-  button.textContent = `${label} (${count})`;
-  button.addEventListener("click", () => {
-    activePulseLevel = levelKey;
-    renderCityPulse();
-  });
-  return button;
-}
+// The level filter (Allt / Stadens rytm / Kvarterspuls / Ställesnivå) was
+// removed per the Pulse design revisions — section headings below already
+// split the view by level, so a separate filter strip was redundant. The
+// createPulseFilterButton helper is intentionally removed.
 
 function buildPulseSourceLabel(item) {
   const source = item?.source;
@@ -5518,10 +5514,12 @@ function createPulseEntry(item) {
   blurb.textContent = item.blurb || item.note || "";
   matchNote.textContent = getLiveMatchSummaryForPulseItem(item);
   matchNote.hidden = !matchNote.textContent;
+  // Design rule (Pulse revisions): the "why it matters" block is only
+  // rendered when curated editorial copy exists. A bare card with title +
+  // venue + tags is honest; a card with auto-generated boilerplate is not.
+  // The pulse.reasonFallback i18n key is intentionally no longer read here.
   reasonLabel.textContent = t("pulse.reason", "Varför det spelar roll");
-  reason.textContent =
-    item.why_it_matters ||
-    t("pulse.reasonFallback", "Det här är tänkt som en liten lokal signal som hjälper dagens rutt kännas mer självklar.");
+  reason.textContent = item.why_it_matters || "";
 
   if (primaryLabel) {
     top.appendChild(signalChip);
@@ -5535,7 +5533,9 @@ function createPulseEntry(item) {
   if (matchNote.textContent) {
     article.appendChild(matchNote);
   }
-  article.appendChild(reasonWrap);
+  if (reason.textContent) {
+    article.appendChild(reasonWrap);
+  }
 
   (item.matches_vibes || []).slice(0, 4).forEach((vibe) => {
     const chip = document.createElement("span");
@@ -5635,14 +5635,6 @@ function renderCityPulse() {
   );
   const filteredItems = scopeItems.length ? scopeItems : activePulseScope === "nearby" ? [] : timeScopedItems;
   const activePlannedDay = getActivePlannedDay();
-  const availableLevels = Object.keys(cityPulseLevelMeta).filter((level) =>
-    filteredItems.some((item) => item.level === level),
-  );
-
-  if (activePulseLevel !== "all" && !availableLevels.includes(activePulseLevel)) {
-    activePulseLevel = "all";
-  }
-
   const weekdayLabel =
     cityPulseState.weekday_label ||
     getFallbackPulseDateLabels(cityPulseState.date || getTodayIsoDate()).weekdayLabel;
@@ -5814,23 +5806,15 @@ function renderCityPulse() {
       : buildPulseUtilityCopy(filteredItems, items);
   }
 
+  // Level filter intentionally removed (see comment above buildPulseSourceLabel).
+  // The container is cleared and hidden; section headings carry the level
+  // structure on their own.
   cityPulseFilters.innerHTML = "";
-  cityPulseFilters.appendChild(
-    createPulseFilterButton("all", t("pulse.all", "Allt"), filteredItems.length),
-  );
-  availableLevels.forEach((level) => {
-    const count = filteredItems.filter((item) => item.level === level).length;
-    cityPulseFilters.appendChild(
-      createPulseFilterButton(level, cityPulseLevelMeta[level].label, count),
-    );
-  });
+  cityPulseFilters.hidden = true;
 
   cityPulseLevels.innerHTML = "";
 
-  const visibleLevels =
-    activePulseLevel === "all"
-      ? Object.keys(cityPulseLevelMeta)
-      : [activePulseLevel];
+  const visibleLevels = Object.keys(cityPulseLevelMeta);
 
   visibleLevels.forEach((level) => {
     const groupItems = filteredItems
@@ -5843,7 +5827,6 @@ function renderCityPulse() {
 
     const section = document.createElement("section");
     const header = document.createElement("div");
-    const mark = document.createElement("span");
     const copy = document.createElement("div");
     const title = document.createElement("h3");
     const sub = document.createElement("p");
@@ -5851,18 +5834,16 @@ function renderCityPulse() {
 
     section.className = "pulse-group";
     header.className = "pulse-group-header";
-    mark.className = "pulse-group-mark";
     copy.className = "pulse-group-copy";
     title.className = "pulse-group-title";
     sub.className = "pulse-group-sub";
     grid.className = "pulse-group-grid";
 
-    mark.textContent = cityPulseLevelMeta[level].mark;
     title.textContent = cityPulseLevelMeta[level].label;
     sub.textContent = cityPulseLevelMeta[level].sub;
 
     copy.append(title, sub);
-    header.append(mark, copy);
+    header.append(copy);
     section.appendChild(header);
 
     groupItems.forEach((item) => {
