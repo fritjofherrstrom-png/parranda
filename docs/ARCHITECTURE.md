@@ -285,7 +285,8 @@ Required direction:
 ### RouteCandidate
 
 `RouteCandidate` should describe a possible route before final user-facing
-formatting.
+formatting. The first implementation contract lives in
+`docs/ROUTE_CANDIDATES.md` and `server/route-candidates/contract.js`.
 
 It should include:
 
