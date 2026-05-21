@@ -123,15 +123,23 @@ set is larger and real consumers prove the boundary.
 
 ## Migration Path
 
-Recommended next steps:
+Shipped:
 
-1. Wrap existing city catalog items as `PlaceCandidate[]`.
-2. Add a `CuratedCatalogProvider` compatibility layer.
-3. Pin provider async/context strategy before adding live-event candidates.
+1. ✅ Wrap existing city catalog items as `PlaceCandidate[]` — done via
+   `CuratedCatalogProvider`.
+2. ✅ Add a `CuratedCatalogProvider` compatibility layer — shipped and
+   default-enabled in the registry.
+3. ✅ Pin provider async/context strategy before adding live-event candidates
+   — registry is synchronous; `LiveEventVenueProvider` consumes already-fetched
+   events from context and does not fetch external sources.
+
+Still ahead:
+
 4. Let Blitz consume candidates behind its current catalog behavior.
 5. Let Planner consume candidates behind its current route-template behavior.
-6. Add live-event and generated/search providers only after diagnostics prove
-   the engine can handle them safely.
+6. Enable `LiveEventVenueProvider` as a real engine consumer and add
+   generated/search providers, only after diagnostics prove the engine can
+   handle them safely.
 
 The contract exists so the future route engine can become provider-first
 without losing the safety and taste already present in curated city packs.
