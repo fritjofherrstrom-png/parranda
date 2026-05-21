@@ -33,7 +33,7 @@ test("masthead prefers live_event_nearby over local_timing_advice", () => {
   assert.equal(result.signal_label, "Live event");
 });
 
-test("masthead keeps foreign provider titles out of the page headline", () => {
+test("masthead keeps foreign provider titles out of the page headline (uses safe_headline, drops kind-with-source chip)", () => {
   const result = buildMasthead({
     lang: "en",
     signals: [
@@ -42,7 +42,10 @@ test("masthead keeps foreign provider titles out of the page headline", () => {
         title:
           "Trobada 'Comadreo Decidida por la VIHDA – El comadreig de les que lluiten per viure'",
         source_language: "ca",
+        safe_headline: "Cultural event at Centre Civic Example",
+        // Chip-shape value — should NEVER be promoted into the H1.
         kind: "Cultural event · Open Data BCN",
+        kindLabel: "Cultural event",
         signal_label: "Live event",
       }),
     ],
@@ -51,8 +54,37 @@ test("masthead keeps foreign provider titles out of the page headline", () => {
 
   assert.equal(result.source, "signal");
   assert.equal(result.signal_type, "live_event_nearby");
-  assert.equal(result.headline, "Cultural event · Open Data BCN");
+  assert.equal(result.headline, "Cultural event at Centre Civic Example");
   assert.doesNotMatch(result.headline, /Comadreo|VIHDA|lluiten/);
+  assert.doesNotMatch(
+    result.headline,
+    /Open Data BCN/,
+    "the source label must not leak into the page H1",
+  );
+});
+
+test("masthead falls back to kindLabel when foreign title has no safe_headline", () => {
+  // Defensive: an older/imperfect generator that emits a foreign title
+  // but no safe_headline must still produce a clean headline. kindLabel
+  // is the next safest field (no source label, no chip shape).
+  const result = buildMasthead({
+    lang: "sv",
+    signals: [
+      signal({
+        type: "live_event_nearby",
+        title: "Concert al barri de Sant Antoni",
+        source_language: "ca",
+        kindLabel: "Konsert",
+        kind: "Konsert · Open Data BCN",
+        signal_label: "Live event",
+      }),
+    ],
+    fallback: FALLBACK,
+  });
+
+  assert.equal(result.source, "signal");
+  assert.equal(result.headline, "Konsert");
+  assert.doesNotMatch(result.headline, /Open Data BCN/);
 });
 
 test("masthead compacts long signal headlines when no safer label exists", () => {

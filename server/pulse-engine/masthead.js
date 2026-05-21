@@ -96,7 +96,7 @@ function pickMastheadSignal(signals) {
 function hasMastheadHeadline(signal) {
   return Boolean(
     normalizeMastheadText(signal?.title) ||
-      normalizeMastheadText(signal?.kind) ||
+      normalizeMastheadText(signal?.safe_headline) ||
       normalizeMastheadText(signal?.kindLabel) ||
       normalizeMastheadText(signal?.signal_label),
   );
@@ -109,8 +109,15 @@ function normalizeMastheadText(value) {
 function buildMastheadHeadline(signal, lang) {
   if (signal?.type === "live_event_nearby") {
     const providerTitle = normalizeMastheadText(signal.title);
+    // Prefer the generator-built `safe_headline` ("Konsert på Centre
+    // Civic Example" / "Concert in Barcelona") — a real human sentence
+    // in the UI language. Fall back to `kindLabel` or `signal_label` if
+    // the safe headline is missing. Never use `signal.kind` here: that
+    // is a chip-shape "{kind} · {source}" string and promoting it into
+    // the page H1 leaks the source label ("Open Data BCN") into the
+    // headline, which it should never own.
     const saferEventLabel =
-      normalizeMastheadText(signal.kind) ||
+      normalizeMastheadText(signal.safe_headline) ||
       normalizeMastheadText(signal.kindLabel) ||
       normalizeMastheadText(signal.signal_label);
 
