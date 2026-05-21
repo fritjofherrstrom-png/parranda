@@ -82,7 +82,8 @@ Each candidate is a markdown block. Required fields:
   source_notes:              Well-known Barcelona flea market. Address, current
                              open days, and hours must be verified against the
                              official Ajuntament page before promotion.
-  promotion_recommendation:  promote_first
+  verification_priority:     high
+  promotion_recommendation:  needs_research
 ```
 
 Field meanings:
@@ -119,9 +120,23 @@ Field meanings:
   exceptions, regardless of how well-known the place feels.
 - `source_notes`: URL, direct-observation note, or explicit "unverified —
   needs research". Memory alone is not a source.
+- `verification_priority`: `high`, `medium`, or `low`. This is the **order
+  a future promotion pass should verify candidates in**, independent of
+  whether they are yet promotable.
+  - `high` — verify this first in a future promotion pass.
+  - `medium` — useful but not first wave.
+  - `low` — keep as backlog unless stronger evidence appears.
 - `promotion_recommendation`: `promote_first`, `keep_as_optional`,
-  `needs_research`, or `reject_for_now`. `promote_first` should only be used
-  when the candidate also meets the pack's `promotion_criteria`.
+  `needs_research`, or `reject_for_now`. This is the **promotion intent**,
+  *not* a verification ordering. Specifically:
+  - `promote_first` — reserved for candidates that **already satisfy** the
+    pack's `promotion_criteria`. A candidate that is `confidence:
+    needs_review` must not use `promote_first`; use `needs_research` and a
+    high `verification_priority` instead.
+  - `keep_as_optional` — useful future candidate, but not a first-wave
+    promotion target.
+  - `needs_research` — needs verification before any promotion decision.
+  - `reject_for_now` — does not fit the pack's quality bar or theme.
 
 ## Intake-only vocabulary
 
@@ -176,6 +191,13 @@ catalog vocabulary natively — that's the promoter's job.
 - **Do not invent facts.** Anything you cannot verify (address, hours,
   current existence, category) must be `confidence: needs_review` with a
   clear note about what specifically needs to be verified.
+- **Do not confuse verification priority with promotion readiness.** A
+  candidate that is `confidence: needs_review` cannot have
+  `promotion_recommendation: promote_first` — that combination would tell a
+  future promotion PR the candidate is ready to ship when it is not. Use
+  `verification_priority: high` for "verify this first" and keep
+  `promotion_recommendation` honest about whether the candidate has yet
+  cleared the pack's `promotion_criteria`.
 - **Memory alone is not a source.** A `source_notes` of "I recall this
   exists" is not acceptable. Either cite a URL / observation or mark
   `needs_research`.

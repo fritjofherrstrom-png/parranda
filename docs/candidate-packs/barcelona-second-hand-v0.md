@@ -88,7 +88,8 @@ source_notes:              Landmark recognized in Barcelona second-hand
                            hours, and current operator must be verified
                            against the official Ajuntament de Barcelona or
                            market operator page before promotion.
-promotion_recommendation:  promote_first
+verification_priority:     high
+promotion_recommendation:  needs_research
 ```
 
 #### barcelona-mercat-sant-antoni-dominical
@@ -118,7 +119,8 @@ source_notes:              Weekly Sunday market is well-known in Barcelona
                            Ajuntament event or operator-run must be verified
                            before promotion. Cross-ref:
                            docs/barcelona-citypack-readiness-audit.md:94.
-promotion_recommendation:  promote_first
+verification_priority:     high
+promotion_recommendation:  needs_research
 ```
 
 #### barcelona-riera-baixa-cluster
@@ -149,7 +151,8 @@ source_notes:              Street-as-cluster reputation is widely held. Which
                                candidates per verified shop, or
                            (b) keep it as a structural area_preset linked to
                                existing El Raval neighborhood routes.
-promotion_recommendation:  promote_first
+verification_priority:     high
+promotion_recommendation:  needs_research
 ```
 
 ### Neighborhood clusters
@@ -177,6 +180,7 @@ source_notes:              Area's vintage/design reputation is general
                            knowledge but not specific to verifiable shops.
                            Promotion requires identifying named shops with
                            verified addresses and current operating status.
+verification_priority:     medium
 promotion_recommendation:  keep_as_optional
 ```
 
@@ -204,6 +208,7 @@ source_notes:              Reputation is general; specific shop density and
                            decomposes this into a small set of real_place
                            candidates along Travessera / Verdi / Plaça del
                            Diamant axes.
+verification_priority:     medium
 promotion_recommendation:  keep_as_optional
 ```
 
@@ -229,6 +234,7 @@ source_notes:              Cross-ref: barcelona-citypack-readiness-audit.md:94
                            ("Sant Antoni: food, market, bars, book/vintage
                            edges"). Specific shops and density must be
                            verified before promotion.
+verification_priority:     medium
 promotion_recommendation:  keep_as_optional
 ```
 
@@ -254,6 +260,7 @@ source_notes:              Poblenou's design/industrial-reuse reputation is
                            real but specific design-resale shop density is
                            not verified. Promotion requires identifying
                            named shops and confirming current operation.
+verification_priority:     low
 promotion_recommendation:  needs_research
 ```
 
@@ -278,6 +285,7 @@ confidence:                needs_review
 source_notes:              Specific shops and density are not verified.
                            Promotion requires identifying named bookshops
                            with verified current addresses.
+verification_priority:     low
 promotion_recommendation:  needs_research
 ```
 
@@ -301,6 +309,7 @@ confidence:                needs_review
 source_notes:              Record-shop density in Gràcia is plausible but
                            specific shops and current operation are not
                            verified.
+verification_priority:     low
 promotion_recommendation:  needs_research
 ```
 
@@ -326,6 +335,7 @@ source_notes:              Reputation is general; specific shops and density
                            are not verified. May overlap with the broader
                            El Born vintage+design cluster — promotion should
                            decide whether to merge or keep separate.
+verification_priority:     low
 promotion_recommendation:  needs_research
 ```
 
@@ -360,6 +370,7 @@ source_notes:              Listed in docs/barcelona-pulse-live-source-audit.md:7
                            website, recurrence cadence, and address must be
                            verified before promotion. Whether it is truly
                            second-hand vs. craft-design must also be confirmed.
+verification_priority:     low
 promotion_recommendation:  needs_research
 ```
 
@@ -384,6 +395,7 @@ source_notes:              Listed in docs/barcelona-pulse-live-source-audit.md:7
                            Recurrence, current organizer, and venue rotation
                            must be verified before promotion. Likely too
                            fragile for runtime without a stable source feed.
+verification_priority:     low
 promotion_recommendation:  needs_research
 ```
 
@@ -406,6 +418,7 @@ confidence:                needs_review
 source_notes:              Listed in docs/barcelona-pulse-live-source-audit.md:72
                            with the same fragility warning. Current organizer
                            page, recurrence, and venues must be verified.
+verification_priority:     low
 promotion_recommendation:  needs_research
 ```
 
@@ -428,6 +441,7 @@ confidence:                needs_review
 source_notes:              Listed in docs/barcelona-pulse-live-source-audit.md:72.
                            Same fragility warning applies. Promotion blocked
                            until a reliable organizer feed is confirmed.
+verification_priority:     low
 promotion_recommendation:  needs_research
 ```
 
@@ -464,6 +478,7 @@ source_notes:              Composite of barcelona-mercat-sant-antoni-dominical
                            pilot catalog. Not promotable as a place — only as
                            a future route template once underlying pieces
                            are verified.
+verification_priority:     low
 promotion_recommendation:  keep_as_optional
 ```
 
@@ -490,6 +505,7 @@ source_notes:              Composite of barcelona-encants-vells and
                            barcelona-poblenou-design-salvage. Not promotable
                            as a place — only as a future route template once
                            underlying pieces are verified.
+verification_priority:     low
 promotion_recommendation:  keep_as_optional
 ```
 
@@ -515,6 +531,7 @@ confidence:                needs_review
 source_notes:              Composite of barcelona-riera-baixa-cluster and
                            barcelona-raval-second-hand-books. Not promotable
                            as a place — only as a future route template.
+verification_priority:     low
 promotion_recommendation:  keep_as_optional
 ```
 
@@ -539,38 +556,49 @@ confidence:                needs_review
 source_notes:              Composite of barcelona-gracia-vintage-drift and
                            barcelona-gracia-record-shops. Not promotable as a
                            place — only as a future route template.
+verification_priority:     low
 promotion_recommendation:  keep_as_optional
 ```
 
 ---
 
-## Top promote_first list
+## Top verification priority list
 
-The candidates below are the highest-value entries for a future promotion PR
-to verify and convert first. They are still `confidence: needs_review` — the
-recommendation is about *priority order for verification*, not about
-fast-tracking past verification.
+The candidates below are the entries a future promotion PR should verify
+first. **This is verification ordering, not promotion readiness.** Every
+candidate in this list is still `confidence: needs_review` and carries
+`promotion_recommendation: needs_research` or `keep_as_optional` — none of
+them are yet promotable. The ordering reflects where verification effort is
+most likely to unlock a strong promotion.
 
-1. `barcelona-encants-vells` — strongest single anchor; verify and promote
-   into the catalog as a flea market.
-2. `barcelona-mercat-sant-antoni-dominical` — strongest event anchor;
-   verify recurring schedule and either add as a recurring event_venue or
-   wire into Pulse live-event signals.
-3. `barcelona-riera-baixa-cluster` — strongest area cluster; verify shop
-   density and either decompose into real_place candidates or keep as
-   structural area_preset.
+The three `verification_priority: high` anchors come first:
+
+1. `barcelona-encants-vells` — strongest single anchor. Verifying address,
+   open days, and current operator could unlock a flea-market catalog
+   entry in one step.
+2. `barcelona-mercat-sant-antoni-dominical` — strongest event anchor.
+   Verifying the recurring Sunday schedule could either land it as a
+   recurring `event_venue` or wire it into Pulse live-event signals.
+3. `barcelona-riera-baixa-cluster` — strongest area cluster. Verification
+   would either decompose it into named `real_place` candidates or confirm
+   it as a structural `area_preset` linked to existing Raval routes.
+
+Then the three `verification_priority: medium` neighborhood clusters that
+add depth to areas already in the catalog:
+
 4. `barcelona-el-born-vintage-design-cluster` — adds depth to an area
-   already in the catalog; second priority for shop verification.
-5. `barcelona-gracia-vintage-drift` — same reasoning as Born; ties to the
-   independent-shop character Gràcia already carries.
+   already present in the pilot catalog.
+5. `barcelona-gracia-vintage-drift` — ties to the independent-shop
+   character Gràcia already carries.
 6. `barcelona-sant-antoni-vintage-drift` — pairs with #2 to make Sant
    Antoni a full Sunday route.
 
 The four periodic markets (Palo Alto, Lost & Found, Flea Market BCN,
-Fleadonia) are explicitly **not** in the promote_first list. The audit at
+Fleadonia) are explicitly **not** in the high-priority list. They are
+`verification_priority: low` because the audit at
 `docs/barcelona-pulse-live-source-audit.md:72` already flagged them as
-fragile; they belong in a separate live-source feasibility pass before
-promotion.
+fragile sources; they belong in a separate live-source feasibility pass
+before promotion.
 
 ---
 
