@@ -102,8 +102,8 @@ function buildLiveEventSignal(event, date, cityLabel, lang) {
     where,
     when: buildLiveEventWhen(event, date, lang),
     blurb: buildLiveEventBlurb(event, cityLabel, lang),
-    reason: buildLiveEventReason(event, lang),
-    why_it_matters: buildLiveEventReason(event, lang),
+    reason: buildLiveEventReason(event, cityLabel, lang),
+    why_it_matters: buildLiveEventReason(event, cityLabel, lang),
     kind: buildLiveEventKind(event, lang),
     kindLabel: deriveEventKindLabel(event, lang),
     matches_vibes: matchesVibes,
@@ -170,20 +170,22 @@ function buildLiveEventBlurb(event, cityLabel, lang) {
       ? `${kindLabel} at ${venue}.`
       : `${kindLabel} på ${venue}.`;
   }
-  const sourceLabel =
-    event.source_label || (isEnglish ? "an official source" : "en officiell källa");
+  // No venue available — fall back to city label. Source label stays off
+  // user-facing copy; it lives on the chip, not in blurbs.
   return isEnglish
-    ? `${kindLabel} from ${sourceLabel} in ${cityLabel || "the city"}.`
-    : `${kindLabel} från ${sourceLabel} i ${cityLabel || "staden"}.`;
+    ? `${kindLabel} in ${cityLabel || "the city"}.`
+    : `${kindLabel} i ${cityLabel || "staden"}.`;
 }
 
-function buildLiveEventReason(event, lang) {
+function buildLiveEventReason(event, cityLabel, lang) {
+  // Action-oriented subhead shown on signal cards and as masthead subhead when
+  // this event drives the headline. Source labels stay on chips — never here.
   const isEnglish = normalizeLanguage(lang) === "en";
-  const sourceLabel =
-    event.source_label || (isEnglish ? "an official source" : "en officiell källa");
+  const kindLabel = deriveEventKindLabel(event, lang);
+  const city = (cityLabel || "").trim() || (isEnglish ? "the city" : "staden");
   return isEnglish
-    ? `Official source signal from ${sourceLabel}. Useful when you want today’s plan to include something actually happening now.`
-    : `Officiell källsignal från ${sourceLabel}. Bra när du vill att dagens plan ska kunna fånga något som faktiskt händer nu.`;
+    ? `${kindLabel} on today in ${city}. Worth adding to the plan if the timing works.`
+    : `${kindLabel} idag i ${city}. Lägg in på planen om timingen passar.`;
 }
 
 function buildLiveEventKind(event, lang) {
