@@ -159,10 +159,10 @@ embedding English or Swedish prose in the engine layer.
 Recommended next steps:
 
 1. Keep the existing route engine behavior unchanged.
-2. Add adapters that can describe current route templates as `RouteCandidate`
-   records for diagnostics.
-3. Add an internal `inspect-route-candidates` tool once route candidate
-   providers exist.
+2. Describe current route templates as `RouteCandidate` records for
+   diagnostics.
+3. Use the internal `inspect-route-candidates` tool to inspect current route
+   coverage before Planner or Blitz consume route candidates.
 4. Let Blitz consume route candidates behind its current behavior.
 5. Let Planner consume route candidates behind its current route-template
    behavior.
@@ -172,3 +172,29 @@ Recommended next steps:
 The contract exists so future routing can become provider-first without losing
 the safety, trust metadata, and city-specific taste already present in curated
 city packs.
+
+## Current Route Template Adapter
+
+`server/route-candidates/route-template-provider.js` is the first shadow bridge
+from today's route templates into the RouteCandidate architecture:
+
+```text
+cityConfig.catalog.routeTemplates -> RouteTemplateProvider -> RouteCandidate[]
+```
+
+It uses existing city catalog data only. Template stops are resolved through the
+curated catalog candidate layer so real places remain `user_stop` records and
+structural anchors or area presets become `route_structure` records. Unresolved
+template stops are kept visible in diagnostics with a warning instead of
+crashing.
+
+`scripts/inspect-route-candidates.js` exposes this internal view for current
+cities:
+
+```bash
+node scripts/inspect-route-candidates.js barcelona
+node scripts/inspect-route-candidates.js rome
+```
+
+This adapter and script do not change Planner, Blitz, route scoring, UI, public
+API responses, or product behavior.
