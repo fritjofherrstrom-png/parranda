@@ -1279,7 +1279,8 @@ test("GET /api/city-pulse för barcelona presenterar official events utan editor
     assert.equal(en.body.items[0].title, "Concert de barri a Barcelona");
     assert.equal(en.body.items[0].native_title, "Concert de barri a Barcelona");
     assert.equal(en.body.items[0].source_language, "ca");
-    assert.equal(en.body.items[0].where, "Centre Cívic Example • C Example, 12");
+    // where is venue only — street address belongs in the detail view, not the card header
+    assert.equal(en.body.items[0].where, "Centre Cívic Example");
     assert.equal(en.body.items[0].when, "Today");
     // Body is EN-framed ("Concert at {venue}.") rather than the raw Catalan
     // summary, so EN cards no longer feel like an untranslated feed dump.

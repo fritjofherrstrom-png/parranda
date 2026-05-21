@@ -184,11 +184,10 @@ function buildOfficialPulseWhy(event, cityLabel, lang = "sv") {
 
 function buildOfficialPulseItem(event, date, cityConfig, lang = "sv") {
   const cityLabel = resolveDisplayLabel(cityConfig, null, lang);
-  const where =
-    [event.venue, event.address].filter(Boolean).join(" • ") ||
-    cityConfig?.editorialAreaLabel ||
-    cityLabel ||
-    "Rom";
+  // Venue name only — full postal address belongs in the detail view.
+  // "Rom" hardcoded fallback removed: cityLabel is always set for a
+  // configured city, so the city-specific string is dead code.
+  const where = event.venue || cityConfig?.editorialAreaLabel || cityLabel || "";
   const matchesVibes = [...new Set((event.match_tags || []).map((tag) => pulseVibeByTag[tag]).filter(Boolean))];
 
   return {

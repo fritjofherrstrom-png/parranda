@@ -80,10 +80,9 @@ function eventStartsAfterToday(event, todayIso) {
 }
 
 function buildLiveEventSignal(event, date, cityLabel, lang) {
-  const where =
-    [event.venue, event.address].filter(Boolean).join(" • ") ||
-    cityLabel ||
-    "";
+  // Venue name only — full street address belongs in the detail view,
+  // not the card header. Falls back to city label if no venue is set.
+  const where = event.venue || cityLabel || "";
   const matchesVibes = [
     ...new Set(
       (event.match_tags || []).map((tag) => VIBE_BY_TAG[tag]).filter(Boolean),
