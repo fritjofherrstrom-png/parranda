@@ -359,7 +359,9 @@ Provider roster:
 
 - `CuratedCatalogProvider` — shipped, default-enabled.
 - `LiveEventVenueProvider` — shipped, opt-in, context-based.
-- `RouteTemplateProvider` — future.
+- `RouteTemplateProvider` — shipped on the RouteCandidate side, not as a
+  PlaceCandidate provider. It converts current route templates into
+  `RouteCandidate[]` for diagnostics and shadow comparison.
 - `GeneratedCityPackProvider` — future.
 - `MapSearchProvider` — future.
 - `NearbyGenericProvider` — future.
