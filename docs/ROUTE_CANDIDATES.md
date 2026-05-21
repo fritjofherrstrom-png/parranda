@@ -198,3 +198,31 @@ node scripts/inspect-route-candidates.js rome
 
 This adapter and script do not change Planner, Blitz, route scoring, UI, public
 API responses, or product behavior.
+
+## Readiness Gate
+
+`scripts/check-route-candidate-readiness.js` is the CI-friendly safety gate for
+the current route-template-to-RouteCandidate shadow view:
+
+```bash
+node scripts/check-route-candidate-readiness.js
+```
+
+It reuses the `compareRouteCandidates` logic and requires the current baseline
+cities to stay `ready`:
+
+- Barcelona: `ready`
+- Rome: `ready`
+- Test City: `ready`
+
+The gate fails if route templates and RouteCandidates drift apart, including:
+
+- route template ids missing from RouteCandidate output
+- RouteCandidate ids missing from current route templates
+- unresolved template stops
+- stop count mismatches
+- warnings or limitations that downgrade readiness
+
+This gate must stay green before RouteCandidates are wired into Planner or
+Blitz. It is still diagnostics-only: it does not change routing behavior,
+Planner behavior, Blitz behavior, UI, or public API responses.
