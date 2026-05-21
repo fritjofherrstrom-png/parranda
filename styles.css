@@ -1240,8 +1240,13 @@ body::before {
 .pulse-entry-reason-label {
   margin: 0;
   font-size: 0.72rem;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
+  /* Small-caps instead of text-transform: uppercase. all-small-caps applies to
+     both lower and uppercase source text so i18n values need no change. The
+     reduced letter-spacing (0.22em → 0.1em) corrects the over-tracking that
+     wide uppercase tracking introduces — small-caps glyphs already carry their
+     own optical spacing. */
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.1em;
 }
 
 .city-pulse-live-label,
