@@ -1282,6 +1282,7 @@ test("GET /api/city-pulse för barcelona presenterar official events utan editor
     // where is venue only — street address belongs in the detail view, not the card header
     assert.equal(en.body.items[0].where, "Centre Cívic Example");
     assert.equal(en.body.items[0].when, "Today");
+    assert.equal(en.body.items[0].editorial_pitch, "Let the evening hinge on a real room, not another landmark.");
     // Body is EN-framed ("Concert at {venue}.") rather than the raw Catalan
     // summary, so EN cards no longer feel like an untranslated feed dump.
     assert.equal(en.body.items[0].blurb, "Concert at Centre Cívic Example.");
@@ -1295,6 +1296,8 @@ test("GET /api/city-pulse för barcelona presenterar official events utan editor
     assert.equal(sv.body.items[0].when, "I dag");
     assert.equal(sv.body.items[0].native_title, "Concert de barri a Barcelona");
     assert.equal(sv.body.items[0].source_language, "ca");
+    assert.equal(sv.body.items[0].editorial_pitch, "Låt kvällen vila på ett riktigt rum, inte ännu ett landmärke.");
+    assert.doesNotMatch(sv.body.items[0].editorial_pitch, /Open Data BCN|Concert de barri a Barcelona/);
     // SV body is also framed in Swedish instead of the Catalan summary leak.
     assert.equal(sv.body.items[0].blurb, "Konsert på Centre Cívic Example.");
     assert.match(sv.body.items[0].why_it_matters, /Lägg in på planen om timingen passar/);

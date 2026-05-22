@@ -34,6 +34,7 @@ function normalizeSignal(raw, context) {
   }
 
   const reason = raw.reason || raw.why_it_matters || "";
+  const editorialPitch = normalizeEditorialPitch(raw);
   const trustLevel = raw.trust_level || inferTrustLevel(raw);
   const freshness = raw.freshness || inferFreshness(raw);
   const source = raw.source || inferSource(raw);
@@ -55,6 +56,7 @@ function normalizeSignal(raw, context) {
     area: raw.area || raw.where || undefined,
     area_tokens: Array.isArray(raw.area_tokens) ? raw.area_tokens : undefined,
     reason,
+    editorial_pitch: editorialPitch,
     blurb: raw.blurb || undefined,
     time_window: raw.time_window || undefined,
     source,
@@ -78,6 +80,60 @@ function normalizeSignal(raw, context) {
     official_event_id: raw.official_event_id || undefined,
     place_query: raw.place_query || undefined,
   };
+}
+
+const BANNED_EDITORIAL_PITCH_PATTERNS = [
+  /worth checking/i,
+  /don't miss/i,
+  /do not miss/i,
+  /must-see/i,
+  /must see/i,
+  /discover(?:\s+the)?/i,
+  /explore(?:\s+the)?/i,
+  /unforgettable/i,
+  /\bhidden gem\b/i,
+];
+
+function normalizeEditorialPitch(raw) {
+  const pitch = compactInlineText(raw?.editorial_pitch);
+  if (!pitch) return undefined;
+
+  const lowerPitch = pitch.toLowerCase();
+  const forbiddenDuplicates = [
+    raw?.title,
+    raw?.native_title,
+    raw?.blurb,
+    raw?.source?.label,
+    raw?.source_label,
+    raw?.provider,
+  ]
+    .map((value) => compactInlineText(value).toLowerCase())
+    .filter(Boolean);
+
+  for (const value of forbiddenDuplicates) {
+    if (lowerPitch === value || lowerPitch.startsWith(`${value} `)) {
+      return undefined;
+    }
+  }
+
+  const sourceLabels = [raw?.source?.label, raw?.source_label, raw?.provider]
+    .map((value) => compactInlineText(value))
+    .filter(Boolean);
+  for (const label of sourceLabels) {
+    if (label && lowerPitch.includes(label.toLowerCase())) {
+      return undefined;
+    }
+  }
+
+  if (BANNED_EDITORIAL_PITCH_PATTERNS.some((pattern) => pattern.test(pitch))) {
+    return undefined;
+  }
+
+  return /[.!?]$/.test(pitch) ? pitch : `${pitch}.`;
+}
+
+function compactInlineText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
 }
 
 function buildSignalLabel(type, lang) {
@@ -138,6 +194,8 @@ function slugify(value) {
 
 module.exports = {
   normalizeSignal,
+  normalizeEditorialPitch,
+  BANNED_EDITORIAL_PITCH_PATTERNS,
   buildSignalLabel,
   CHIPPABLE_SIGNAL_TYPES,
 };

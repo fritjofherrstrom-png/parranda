@@ -8,6 +8,9 @@ const { diversifyRecommendationDays } = require("./route-diversity");
 const { buildClientI18nPayload, normalizeLanguage, translate } = require("./ui-i18n");
 const { buildCityPulse } = require("./pulse-engine");
 const { buildMasthead } = require("./pulse-engine/masthead");
+const {
+  buildLiveEventEditorialPitch,
+} = require("./pulse-engine/generators/live-events");
 
 const appRoot = path.resolve(__dirname, "..");
 const appShellTemplate = fs.readFileSync(path.join(appRoot, "index.html"), "utf8");
@@ -204,6 +207,7 @@ function buildOfficialPulseItem(event, date, cityConfig, lang = "sv") {
     where,
     when: buildOfficialPulseWhen(event, date, lang),
     blurb: buildOfficialPulseBlurb(event, cityLabel, lang),
+    editorial_pitch: buildLiveEventEditorialPitch(event, lang),
     why_it_matters: buildOfficialPulseWhy(event, cityLabel, lang),
     matches_vibes: matchesVibes,
     official_event_id: event.id,

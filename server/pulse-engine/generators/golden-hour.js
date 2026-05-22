@@ -59,6 +59,7 @@ function buildGoldenHourSignal({ window, distance, sunsetMinutes, context }) {
 
   const title = buildTitle(window, isEnglish, sunsetLabel);
   const blurb = buildBlurb(window, isEnglish, sunsetLabel, distance);
+  const editorialPitch = buildEditorialPitch(window, isEnglish);
   const reason = isEnglish
     ? "Sunset reshapes the city. When the window lines up, lean evening views and warm-light stops into the plan."
     : "Solnedgången förändrar staden. När fönstret stämmer vinner kvällsutsikter och varmt ljus över att forcera planen.";
@@ -72,6 +73,7 @@ function buildGoldenHourSignal({ window, distance, sunsetMinutes, context }) {
     where: cityLabel,
     when: sunsetLabel,
     blurb,
+    editorial_pitch: editorialPitch,
     reason,
     why_it_matters: reason,
     kind: isEnglish ? "Sunset window" : "Solnedgångsfönster",
@@ -88,6 +90,22 @@ function buildGoldenHourSignal({ window, distance, sunsetMinutes, context }) {
     trust_level: "verified",
     freshness: window === "tonight" ? "today" : "live",
   };
+}
+
+function buildEditorialPitch(window, isEnglish) {
+  if (window === "active") {
+    return isEnglish
+      ? "This is the window where view stops earn their place."
+      : "Det här är fönstret där utsiktsstopp faktiskt förtjänar sin plats.";
+  }
+  if (window === "upcoming") {
+    return isEnglish
+      ? "A view stop now will matter more than another packed block."
+      : "Ett utsiktsstopp nu bär mer än ännu ett tätt kvarter.";
+  }
+  return isEnglish
+    ? "Let one open-air stop shape the evening before dinner."
+    : "Låt ett utomhusstopp forma kvällen före middagen.";
 }
 
 function buildTitle(window, isEnglish, sunsetLabel) {
