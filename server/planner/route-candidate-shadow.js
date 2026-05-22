@@ -1,4 +1,5 @@
 const { buildRouteTemplateCandidates } = require("../route-candidates/route-template-provider");
+const { getRouteLineage } = require("../route-engine");
 
 function buildPlannerRouteCandidateShadowDiagnostics({
   cityConfig,
@@ -30,8 +31,10 @@ function buildPlannerRouteCandidateShadowDiagnostics({
 }
 
 function comparePlannerRouteToRouteCandidate(plannerRoute, routeCandidateById) {
+  const routeLineage = getRouteLineage(plannerRoute) || plannerRoute || {};
   const selectedRouteId = normalizeString(plannerRoute?.id);
-  const routeCandidate = selectedRouteId ? routeCandidateById.get(selectedRouteId) || null : null;
+  const sourceTemplateId = normalizeString(routeLineage.source_template_id) || selectedRouteId;
+  const routeCandidate = sourceTemplateId ? routeCandidateById.get(sourceTemplateId) || null : null;
   const plannerStops = Array.isArray(plannerRoute?.main_stops) ? plannerRoute.main_stops : [];
   const plannerStopIds = normalizeIdList(plannerStops.map((stop) => stop?.id));
   const candidateStops = Array.isArray(routeCandidate?.stops) ? routeCandidate.stops : [];
@@ -40,37 +43,58 @@ function comparePlannerRouteToRouteCandidate(plannerRoute, routeCandidateById) {
   const routeCandidateUserFacingStopIds = normalizeIdList(
     userFacingStops.map((stop) => stop.candidate_id),
   );
-  const plannerStopIdSet = new Set(plannerStopIds);
-  const routeCandidateUserFacingStopIdSet = new Set(routeCandidateUserFacingStopIds);
-  const missingFromPlanner = routeCandidateUserFacingStopIds.filter(
-    (stopId) => !plannerStopIdSet.has(stopId),
+  const templateStopIds =
+    normalizeIdList(routeLineage.template_stop_ids).length
+      ? normalizeIdList(routeLineage.template_stop_ids)
+      : routeCandidateUserFacingStopIds;
+  const realizedStopIds =
+    normalizeIdList(routeLineage.realized_stop_ids).length
+      ? normalizeIdList(routeLineage.realized_stop_ids)
+      : plannerStopIds;
+  const realizedRouteId = normalizeString(routeLineage.realized_route_id) || null;
+  const realizationKind = normalizeString(routeLineage.realization_kind) || null;
+  const templateStopIdSet = new Set(templateStopIds);
+  const realizedStopIdSet = new Set(realizedStopIds);
+  const missingTemplateStops = templateStopIds.filter(
+    (stopId) => !realizedStopIdSet.has(stopId),
   );
-  const extraInPlanner = plannerStopIds.filter(
-    (stopId) => !routeCandidateUserFacingStopIdSet.has(stopId),
+  const extraRealizedStops = realizedStopIds.filter(
+    (stopId) => !templateStopIdSet.has(stopId),
   );
   const unresolvedStops = extractUnresolvedStops(routeCandidate);
   const stopCountParity = Boolean(routeCandidate) && plannerStops.length === userFacingStops.length;
   const userFacingStopIdsMatch =
     Boolean(routeCandidate) && orderedListsEqual(plannerStopIds, routeCandidateUserFacingStopIds);
   const userFacingStopIdSetMatch =
-    Boolean(routeCandidate) && missingFromPlanner.length === 0 && extraInPlanner.length === 0;
+    Boolean(routeCandidate) && missingTemplateStops.length === 0 && extraRealizedStops.length === 0;
+  const templateMatchStatus =
+    normalizeString(routeLineage.template_match_status) ||
+    inferTemplateMatchStatus({
+      sourceTemplateId,
+      routeCandidate,
+      templateStopIds,
+      realizedStopIds,
+      missingTemplateStops,
+      extraRealizedStops,
+    });
   const mismatchReasons = buildMismatchReasons({
     selectedRouteId,
+    sourceTemplateId,
     routeCandidate,
     plannerStopCount: plannerStops.length,
     routeCandidateUserFacingStopCount: userFacingStops.length,
     stopCountParity,
     userFacingStopIdsMatch,
     userFacingStopIdSetMatch,
-    missingFromPlanner,
-    extraInPlanner,
+    missingTemplateStops,
+    extraRealizedStops,
     unresolvedStops,
   });
   const warnings = routeCandidate?.warnings || [];
   const limitations = routeCandidate?.limitations || [];
   const readiness = resolveSelectedRouteReadiness({
     routeCandidate,
-    stopCountParity,
+    templateMatchStatus,
     unresolvedStops,
     warnings,
     limitations,
@@ -79,6 +103,10 @@ function comparePlannerRouteToRouteCandidate(plannerRoute, routeCandidateById) {
 
   return {
     selected_route_id: selectedRouteId || null,
+    source_template_id: sourceTemplateId || null,
+    realized_route_id: realizedRouteId,
+    realization_kind: realizationKind,
+    template_match_status: templateMatchStatus,
     matching_route_candidate_id: routeCandidate?.id || null,
     planner_stop_count: plannerStops.length,
     route_candidate_stop_count: candidateStops.length,
@@ -87,8 +115,12 @@ function comparePlannerRouteToRouteCandidate(plannerRoute, routeCandidateById) {
     stop_count_parity: stopCountParity,
     planner_stop_ids: plannerStopIds,
     route_candidate_user_facing_stop_ids: routeCandidateUserFacingStopIds,
-    missing_from_planner: missingFromPlanner,
-    extra_in_planner: extraInPlanner,
+    template_stop_ids: templateStopIds,
+    realized_stop_ids: realizedStopIds,
+    missing_template_stops: missingTemplateStops,
+    extra_realized_stops: extraRealizedStops,
+    missing_from_planner: missingTemplateStops,
+    extra_in_planner: extraRealizedStops,
     user_facing_stop_ids_match: userFacingStopIdsMatch,
     user_facing_stop_id_set_match: userFacingStopIdSetMatch,
     unresolved_stops: unresolvedStops,
@@ -101,17 +133,17 @@ function comparePlannerRouteToRouteCandidate(plannerRoute, routeCandidateById) {
 
 function resolveSelectedRouteReadiness({
   routeCandidate,
-  stopCountParity,
+  templateMatchStatus,
   unresolvedStops,
   warnings,
   limitations,
   mismatchReasons,
 }) {
-  if (!routeCandidate || !stopCountParity || unresolvedStops.length) {
+  if (!routeCandidate || unresolvedStops.length || templateMatchStatus === "generated_or_unknown") {
     return "needs_review";
   }
   const hardMismatchReasons = mismatchReasons.filter((reason) => reason !== "user_facing_stop_ids_differ");
-  if (hardMismatchReasons.length) {
+  if (hardMismatchReasons.length && !["reordered", "realized_variant"].includes(templateMatchStatus)) {
     return "needs_review";
   }
   if (warnings.length || limitations.length || mismatchReasons.length) {
@@ -122,14 +154,15 @@ function resolveSelectedRouteReadiness({
 
 function buildMismatchReasons({
   selectedRouteId,
+  sourceTemplateId,
   routeCandidate,
   plannerStopCount,
   routeCandidateUserFacingStopCount,
   stopCountParity,
   userFacingStopIdsMatch,
   userFacingStopIdSetMatch,
-  missingFromPlanner,
-  extraInPlanner,
+  missingTemplateStops,
+  extraRealizedStops,
   unresolvedStops,
 }) {
   const reasons = [];
@@ -137,7 +170,10 @@ function buildMismatchReasons({
   if (!selectedRouteId) {
     reasons.push("missing_selected_route_id");
   }
-  if (selectedRouteId && !routeCandidate) {
+  if (!sourceTemplateId) {
+    reasons.push("missing_source_template_id");
+  }
+  if (sourceTemplateId && !routeCandidate) {
     reasons.push("no_matching_route_candidate");
   }
   if (routeCandidate && !stopCountParity) {
@@ -145,11 +181,11 @@ function buildMismatchReasons({
       `stop_count_mismatch:planner=${plannerStopCount}:route_candidate_user_facing=${routeCandidateUserFacingStopCount}`,
     );
   }
-  if (routeCandidate && missingFromPlanner.length) {
-    reasons.push(`missing_from_planner:${missingFromPlanner.join(",")}`);
+  if (routeCandidate && missingTemplateStops.length) {
+    reasons.push(`missing_template_stops:${missingTemplateStops.join(",")}`);
   }
-  if (routeCandidate && extraInPlanner.length) {
-    reasons.push(`extra_in_planner:${extraInPlanner.join(",")}`);
+  if (routeCandidate && extraRealizedStops.length) {
+    reasons.push(`extra_realized_stops:${extraRealizedStops.join(",")}`);
   }
   if (
     routeCandidate &&
@@ -164,6 +200,25 @@ function buildMismatchReasons({
   });
 
   return reasons;
+}
+
+function inferTemplateMatchStatus({
+  sourceTemplateId,
+  routeCandidate,
+  templateStopIds,
+  realizedStopIds,
+  missingTemplateStops,
+  extraRealizedStops,
+}) {
+  if (!sourceTemplateId || !routeCandidate) {
+    return "generated_or_unknown";
+  }
+
+  if (missingTemplateStops.length || extraRealizedStops.length) {
+    return "realized_variant";
+  }
+
+  return orderedListsEqual(templateStopIds, realizedStopIds) ? "exact" : "reordered";
 }
 
 function extractUnresolvedStops(routeCandidate) {

@@ -4,9 +4,11 @@ const assert = require("node:assert/strict");
 const {
   annotateLiveEventsForRoutes,
   buildRouteFromTemplate,
+  buildRouteIdentity,
   buildLiveEventStopCandidates,
   budgetScore,
   generateRecommendations,
+  getRouteLineage,
   kmScore,
   normalizeBudgetTier,
   normalizeModifier,
@@ -574,8 +576,98 @@ test("Trastevere -> Monti kan nu formas av katalogstopp utanför template-listan
   const route = result.days[0].primary_route;
   const template = routeTemplates.find((entry) => entry.id === route.id);
   const nonTemplateStops = route.main_stops.filter((stop) => !template.stops.includes(stop.id));
+  const lineage = getRouteLineage(route);
 
   assert.ok(nonTemplateStops.length >= 2);
+  assert.ok(lineage, "route lineage should be available internally");
+  assert.equal(lineage.source_template_id, route.id);
+  assert.ok(lineage.realized_route_id.startsWith(`${route.id}--realized--`));
+  assert.equal(lineage.template_match_status, "realized_variant");
+  assert.equal(route.source_template_id, undefined);
+  assert.equal(Object.keys(route).includes("source_template_id"), false);
+  assert.equal(JSON.stringify(route).includes("source_template_id"), false);
+  assert.deepEqual(
+    lineage.extra_realized_stops,
+    route.main_stops
+      .map((stop) => stop.id)
+      .filter((stopId) => !lineage.template_stop_ids.includes(stopId)),
+  );
+});
+
+test("route identity marks exact template realizations", () => {
+  const template = routeTemplates.find((entry) => entry.id === "centro-church-salon");
+  const realizedStops = template.stops
+    .map((stopId) => findItemByName(stopId))
+    .filter((item) => item && item.kind !== "district" && item.kind !== "district-group");
+
+  const identity = buildRouteIdentity(template, realizedStops);
+
+  assert.equal(identity.source_template_id, "centro-church-salon");
+  assert.equal(identity.realized_route_id, "centro-church-salon");
+  assert.equal(identity.realization_kind, "template_exact");
+  assert.equal(identity.template_match_status, "exact");
+  assert.deepEqual(identity.template_stop_ids, [
+    "santa-maria-del-popolo",
+    "san-luigi-dei-francesi",
+    "santa-maria-sopra-minerva",
+    "roscioli-salumeria",
+  ]);
+  assert.deepEqual(identity.realized_stop_ids, identity.template_stop_ids);
+  assert.deepEqual(identity.missing_template_stops, []);
+  assert.deepEqual(identity.extra_realized_stops, []);
+});
+
+test("route identity marks reordered template realizations", () => {
+  const template = routeTemplates.find((entry) => entry.id === "centro-church-salon");
+  const realizedStops = template.stops
+    .map((stopId) => findItemByName(stopId))
+    .filter((item) => item && item.kind !== "district" && item.kind !== "district-group")
+    .reverse();
+
+  const identity = buildRouteIdentity(template, realizedStops);
+
+  assert.equal(identity.source_template_id, "centro-church-salon");
+  assert.notEqual(identity.realized_route_id, "centro-church-salon");
+  assert.equal(identity.realization_kind, "template_reordered");
+  assert.equal(identity.template_match_status, "reordered");
+  assert.deepEqual(identity.missing_template_stops, []);
+  assert.deepEqual(identity.extra_realized_stops, []);
+});
+
+test("route identity marks dropped template stops as realized variants", () => {
+  const template = routeTemplates.find((entry) => entry.id === "centro-church-salon");
+  const realizedStops = template.stops
+    .map((stopId) => findItemByName(stopId))
+    .filter((item) => item && item.kind !== "district" && item.kind !== "district-group")
+    .slice(0, 3);
+
+  const identity = buildRouteIdentity(template, realizedStops);
+
+  assert.equal(identity.source_template_id, "centro-church-salon");
+  assert.ok(identity.realized_route_id.startsWith("centro-church-salon--realized--"));
+  assert.equal(identity.realization_kind, "template_realized_variant");
+  assert.equal(identity.template_match_status, "realized_variant");
+  assert.deepEqual(identity.missing_template_stops, ["roscioli-salumeria"]);
+  assert.deepEqual(identity.extra_realized_stops, []);
+});
+
+test("route identity marks added realized stops as realized variants", () => {
+  const template = routeTemplates.find((entry) => entry.id === "centro-church-salon");
+  const realizedStops = [
+    ...template.stops
+      .map((stopId) => findItemByName(stopId))
+      .filter((item) => item && item.kind !== "district" && item.kind !== "district-group"),
+    findItemByName("colosseum"),
+  ];
+
+  const identity = buildRouteIdentity(template, realizedStops);
+
+  assert.equal(identity.source_template_id, "centro-church-salon");
+  assert.ok(identity.realized_route_id.endsWith("--colosseum"));
+  assert.equal(identity.realization_kind, "template_realized_variant");
+  assert.equal(identity.template_match_status, "realized_variant");
+  assert.deepEqual(identity.missing_template_stops, []);
+  assert.deepEqual(identity.extra_realized_stops, ["colosseum"]);
 });
 
 test("live-event-kandidater premierar stopp som faktiskt ligger i korridoren", () => {

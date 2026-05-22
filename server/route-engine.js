@@ -28,6 +28,18 @@ function getRouteTemplates() {
   return getActiveCatalog().routeTemplates;
 }
 
+function findCatalogItemByIdOrName(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  return (
+    getAllItems().find((item) => String(item.id || "").toLowerCase() === normalized) ||
+    findCatalogItemByName(value)
+  );
+}
+
 function getCityCenter() {
   return getActiveCityConfig().center;
 }
@@ -810,6 +822,7 @@ const autoAnchorOptimizerTags = {
 const routeMentionHiddenTags = new Set(["hidden gems", "kultur", "kyrkor", "utsikt"]);
 const routeMentionBarTags = new Set(["vin", "öl", "cocktail", "nattliv"]);
 const autoAnchorSupportCache = new Map();
+const routeLineageSymbol = Symbol.for("parranda.routeLineage");
 
 function buildRouteTagSetFromData(template, route, routeStops = []) {
   const routeTags = route ? buildRouteTagSet(route) : new Set();
@@ -851,6 +864,114 @@ function slugifyText(value) {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function orderedIdsEqual(left = [], right = []) {
+  if (left.length !== right.length) {
+    return false;
+  }
+  return left.every((value, index) => value === right[index]);
+}
+
+function differenceById(left = [], right = []) {
+  const rightSet = new Set(right);
+  return left.filter((value) => !rightSet.has(value));
+}
+
+function buildTemplateUserFacingStopIds(template = {}) {
+  return (Array.isArray(template.stops) ? template.stops : [])
+    .map((stopId) => findCatalogItemByIdOrName(stopId))
+    .filter((item) => item && !autoAnchorKinds.has(item.kind))
+    .map((item) => item.id);
+}
+
+function buildRealizedRouteId(sourceTemplateId, realizedStopIds = [], templateMatchStatus) {
+  if (sourceTemplateId && templateMatchStatus === "exact") {
+    return sourceTemplateId;
+  }
+
+  const base = sourceTemplateId || "generated-route";
+  const stopSlug = realizedStopIds.length ? realizedStopIds.join("--") : "empty";
+  return `${base}--realized--${stopSlug}`;
+}
+
+function buildRouteIdentity(template = {}, realizedStops = []) {
+  const sourceTemplateId = typeof template.id === "string" && template.id.trim()
+    ? template.id.trim()
+    : null;
+  const templateStopIds = buildTemplateUserFacingStopIds(template);
+  const realizedStopIds = realizedStops
+    .map((stop) => (typeof stop?.id === "string" ? stop.id.trim() : ""))
+    .filter(Boolean);
+  const missingTemplateStops = differenceById(templateStopIds, realizedStopIds);
+  const extraRealizedStops = differenceById(realizedStopIds, templateStopIds);
+  const sameStopSet = missingTemplateStops.length === 0 && extraRealizedStops.length === 0;
+
+  let templateMatchStatus = "generated_or_unknown";
+  if (sourceTemplateId && sameStopSet && orderedIdsEqual(templateStopIds, realizedStopIds)) {
+    templateMatchStatus = "exact";
+  } else if (sourceTemplateId && sameStopSet) {
+    templateMatchStatus = "reordered";
+  } else if (sourceTemplateId) {
+    templateMatchStatus = "realized_variant";
+  }
+
+  const realizationKind = {
+    exact: "template_exact",
+    reordered: "template_reordered",
+    realized_variant: "template_realized_variant",
+    generated_or_unknown: "generated_or_unknown",
+  }[templateMatchStatus];
+
+  return {
+    source_template_id: sourceTemplateId,
+    realized_route_id: buildRealizedRouteId(
+      sourceTemplateId,
+      realizedStopIds,
+      templateMatchStatus,
+    ),
+    realization_kind: realizationKind,
+    template_match_status: templateMatchStatus,
+    template_stop_ids: templateStopIds,
+    realized_stop_ids: realizedStopIds,
+    missing_template_stops: missingTemplateStops,
+    extra_realized_stops: extraRealizedStops,
+  };
+}
+
+function cloneRouteLineage(lineage = {}) {
+  return {
+    ...lineage,
+    template_stop_ids: [...(lineage.template_stop_ids || [])],
+    realized_stop_ids: [...(lineage.realized_stop_ids || [])],
+    missing_template_stops: [...(lineage.missing_template_stops || [])],
+    extra_realized_stops: [...(lineage.extra_realized_stops || [])],
+  };
+}
+
+function attachRouteLineage(route, lineage = {}) {
+  if (!route || typeof route !== "object") {
+    return route;
+  }
+
+  Object.defineProperty(route, routeLineageSymbol, {
+    value: cloneRouteLineage(lineage),
+    enumerable: false,
+    configurable: true,
+    writable: false,
+  });
+
+  return route;
+}
+
+function getRouteLineage(route) {
+  const lineage = route?.[routeLineageSymbol];
+  return lineage && typeof lineage === "object" ? lineage : null;
+}
+
+function copyRouteLineage(sourceRoute, targetRoute) {
+  const lineage = getRouteLineage(sourceRoute);
+  return lineage ? attachRouteLineage(targetRoute, lineage) : targetRoute;
 }
 
 function extractAreaTokens(...values) {
@@ -3443,21 +3564,28 @@ async function applyWalkingTruthToRoute(route, { legPacing = "balanced", lang = 
         );
   const existingGeoNote = route.geo_fit_note ? `${route.geo_fit_note} ` : "";
 
-  return {
-    ...route,
-    estimated_km: Number((truth.estimatedKm || route.estimated_km || 0).toFixed(1)),
-    legs: truth.legs || route.legs || [],
-    longest_leg_km: metrics.longestLegKm,
-    longest_leg_minutes: metrics.longestLegMinutes,
-    average_leg_minutes: metrics.averageLegMinutes,
-    leg_fit_note: metrics.note,
-    map_path_points:
-      Array.isArray(truth.pathPoints) && truth.pathPoints.length
-        ? truth.pathPoints
-        : route.map_path_points || route.map_route_points,
-    routing_source: truth.source || "heuristic",
-    geo_fit_note: `${existingGeoNote}${providerNote}`.trim(),
-  };
+  return copyRouteLineage(
+    route,
+    {
+      ...route,
+      estimated_km: Number((truth.estimatedKm || route.estimated_km || 0).toFixed(1)),
+      legs: truth.legs || route.legs || [],
+      longest_leg_km: metrics.longestLegKm,
+      longest_leg_minutes: metrics.longestLegMinutes,
+      average_leg_minutes: metrics.averageLegMinutes,
+      leg_fit_note: metrics.note,
+      map_path_points:
+        Array.isArray(truth.pathPoints) && truth.pathPoints.length
+          ? truth.pathPoints
+          : route.map_path_points || route.map_route_points,
+      routing_source: truth.source || "heuristic",
+      geo_fit_note: `${existingGeoNote}${providerNote}`.trim(),
+    },
+  );
+}
+
+function withRouteLineage(route, updates = {}) {
+  return copyRouteLineage(route, { ...route, ...updates });
 }
 
 function buildAnchorZone(shape, startProfile, endProfile, routeArea) {
@@ -3994,8 +4122,9 @@ function buildRouteFromTemplate(
     optimizerMode,
     template,
   });
+  const routeIdentity = buildRouteIdentity(template, finalOrderedStops);
 
-  return {
+  const route = {
     id: template.id,
     title: buildDynamicTitle({
       start,
@@ -4056,6 +4185,8 @@ function buildRouteFromTemplate(
     geo_quality_score: Number((geometry?.qualityScore || 0).toFixed(1)),
     pool_fit_penalty: Math.max(0, rawPool.length - orderedStops.length - 1) * 0.9,
   };
+
+  return attachRouteLineage(route, routeIdentity);
 }
 
 function nearestRouteDistanceKm(route, point) {
@@ -5370,8 +5501,7 @@ async function generateRecommendations({
           return {
             template,
             dayProfile,
-            route: {
-              ...route,
+            route: withRouteLineage(route, {
               local_truth: localTruthForLang(localTruth, routeResultLang),
               weather_note: scoring.weatherNote,
               budget_note: scoring.budgetNote,
@@ -5399,7 +5529,7 @@ async function generateRecommendations({
                 routeResultLang,
               ),
               curator_voice: resolveCuratorVoice(template, routeResultLang),
-            },
+            }),
             score: scoring.score,
           };
         };
@@ -5484,6 +5614,9 @@ module.exports = {
   resolvePoint,
   expandDateRange,
   buildRouteFromTemplate,
+  buildRouteIdentity,
+  attachRouteLineage,
+  getRouteLineage,
   buildLiveEventStopCandidates,
   annotateLiveEventsForRoutes,
   budgetScore,

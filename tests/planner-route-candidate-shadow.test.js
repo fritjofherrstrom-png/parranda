@@ -3,7 +3,7 @@ const test = require("node:test");
 
 const barcelona = require("../server/cities/barcelona");
 const rome = require("../server/cities/rome");
-const { generateRecommendations } = require("../server/route-engine");
+const { generateRecommendations, getRouteLineage } = require("../server/route-engine");
 const {
   buildPlannerRouteCandidateShadowDiagnostics,
   comparePlannerRouteToRouteCandidate,
@@ -84,6 +84,9 @@ test("shadow diagnostics match a Planner route/template with a RouteCandidate", 
 
   const primary = diagnostics.days[0].primary_route;
   assert.equal(primary.selected_route_id, "gracia-local-evening-loop");
+  assert.equal(primary.source_template_id, "gracia-local-evening-loop");
+  assert.equal(primary.realized_route_id, null);
+  assert.equal(primary.template_match_status, "exact");
   assert.equal(primary.matching_route_candidate_id, "gracia-local-evening-loop");
   assert.equal(primary.planner_stop_count, 4);
   assert.equal(primary.route_candidate_user_facing_stop_count, 4);
@@ -93,6 +96,8 @@ test("shadow diagnostics match a Planner route/template with a RouteCandidate", 
   assert.equal(primary.user_facing_stop_id_set_match, true);
   assert.deepEqual(primary.missing_from_planner, []);
   assert.deepEqual(primary.extra_in_planner, []);
+  assert.deepEqual(primary.missing_template_stops, []);
+  assert.deepEqual(primary.extra_realized_stops, []);
   assert.deepEqual(primary.unresolved_stops, []);
   assert.deepEqual(primary.mismatch_reasons, []);
   assert.equal(primary.readiness, "ready");
@@ -116,6 +121,8 @@ test("shadow diagnostics keep structural route-template stops non-user-facing", 
   const primary = diagnostics.days[0].primary_route;
 
   assert.equal(primary.selected_route_id, "classic-loop");
+  assert.equal(primary.source_template_id, "classic-loop");
+  assert.equal(primary.template_match_status, "exact");
   assert.equal(primary.matching_route_candidate_id, "classic-loop");
   assert.equal(primary.planner_stop_count, 2);
   assert.equal(primary.route_candidate_stop_count, 6);
@@ -151,12 +158,15 @@ test("shadow diagnostics name RouteCandidate stops missing from Planner output",
   assert.equal(diagnostics.user_facing_stop_ids_match, false);
   assert.equal(diagnostics.user_facing_stop_id_set_match, false);
   assert.deepEqual(diagnostics.missing_from_planner, ["bodega-quimet"]);
+  assert.deepEqual(diagnostics.missing_template_stops, ["bodega-quimet"]);
   assert.deepEqual(diagnostics.extra_in_planner, []);
+  assert.deepEqual(diagnostics.extra_realized_stops, []);
+  assert.equal(diagnostics.template_match_status, "realized_variant");
   assert.deepEqual(diagnostics.mismatch_reasons, [
     "stop_count_mismatch:planner=3:route_candidate_user_facing=4",
-    "missing_from_planner:bodega-quimet",
+    "missing_template_stops:bodega-quimet",
   ]);
-  assert.equal(diagnostics.readiness, "needs_review");
+  assert.equal(diagnostics.readiness, "ready_with_warnings");
 });
 
 test("shadow diagnostics name extra Planner stops", () => {
@@ -182,12 +192,15 @@ test("shadow diagnostics name extra Planner stops", () => {
   assert.equal(diagnostics.user_facing_stop_ids_match, false);
   assert.equal(diagnostics.user_facing_stop_id_set_match, false);
   assert.deepEqual(diagnostics.missing_from_planner, []);
+  assert.deepEqual(diagnostics.missing_template_stops, []);
   assert.deepEqual(diagnostics.extra_in_planner, ["bar-calders"]);
+  assert.deepEqual(diagnostics.extra_realized_stops, ["bar-calders"]);
+  assert.equal(diagnostics.template_match_status, "realized_variant");
   assert.deepEqual(diagnostics.mismatch_reasons, [
     "stop_count_mismatch:planner=5:route_candidate_user_facing=4",
-    "extra_in_planner:bar-calders",
+    "extra_realized_stops:bar-calders",
   ]);
-  assert.equal(diagnostics.readiness, "needs_review");
+  assert.equal(diagnostics.readiness, "ready_with_warnings");
 });
 
 test("shadow diagnostics distinguish order differences from missing stops", () => {
@@ -213,6 +226,9 @@ test("shadow diagnostics distinguish order differences from missing stops", () =
   assert.equal(diagnostics.user_facing_stop_id_set_match, true);
   assert.deepEqual(diagnostics.missing_from_planner, []);
   assert.deepEqual(diagnostics.extra_in_planner, []);
+  assert.deepEqual(diagnostics.missing_template_stops, []);
+  assert.deepEqual(diagnostics.extra_realized_stops, []);
+  assert.equal(diagnostics.template_match_status, "reordered");
   assert.deepEqual(diagnostics.mismatch_reasons, ["user_facing_stop_ids_differ"]);
   assert.equal(diagnostics.readiness, "ready_with_warnings");
 });
@@ -231,12 +247,16 @@ test("shadow diagnostics report mismatches without throwing", () => {
   );
 
   assert.equal(diagnostics.selected_route_id, "unknown-template");
+  assert.equal(diagnostics.source_template_id, "unknown-template");
+  assert.equal(diagnostics.template_match_status, "generated_or_unknown");
   assert.equal(diagnostics.matching_route_candidate_id, null);
   assert.equal(diagnostics.planner_stop_count, 1);
   assert.equal(diagnostics.route_candidate_stop_count, 0);
   assert.equal(diagnostics.stop_count_parity, false);
   assert.deepEqual(diagnostics.missing_from_planner, []);
   assert.deepEqual(diagnostics.extra_in_planner, ["casa-vicens"]);
+  assert.deepEqual(diagnostics.missing_template_stops, []);
+  assert.deepEqual(diagnostics.extra_realized_stops, ["casa-vicens"]);
   assert.deepEqual(diagnostics.mismatch_reasons, ["no_matching_route_candidate"]);
   assert.equal(diagnostics.readiness, "needs_review");
 });
@@ -261,23 +281,82 @@ test("shadow diagnostics can inspect real Planner output without mutating it", a
     plannerResult,
     includeAlternatives: true,
   });
+  const primaryDiagnostics = diagnostics.days[0].primary_route;
+  const primaryRoute = plannerResult.days[0].primary_route;
+  const routeLineage = getRouteLineage(primaryRoute);
 
   assert.deepEqual(plannerResult, before, "shadow diagnostics must not mutate Planner output");
   assert.equal(plannerResult.city, "barcelona");
-  assert.ok(plannerResult.days[0].primary_route);
+  assert.ok(primaryRoute);
+  assert.ok(routeLineage, "real Planner route should carry internal route lineage");
+  assert.equal(primaryRoute.source_template_id, undefined);
+  assert.equal(Object.keys(primaryRoute).includes("source_template_id"), false);
+  assert.equal(JSON.stringify(plannerResult).includes("source_template_id"), false);
+  assert.equal(routeLineage.source_template_id, "encants-to-coast-drift");
+  assert.equal(routeLineage.template_match_status, "realized_variant");
+  assert.ok(
+    routeLineage.realized_route_id.startsWith(
+      "encants-to-coast-drift--realized--mercat-ninot--fabrica-moritz-barcelona",
+    ),
+  );
+  assert.deepEqual(routeLineage.template_stop_ids, [
+    "platja-bogatell",
+    "palo-alto-market",
+    "museu-can-framis",
+    "la-cova-fumada",
+    "mercat-encants",
+  ]);
+  assert.deepEqual(routeLineage.realized_stop_ids, [
+    "mercat-ninot",
+    "fabrica-moritz-barcelona",
+    "federal-parlament",
+    "mercat-sant-antoni",
+  ]);
+  assert.deepEqual(routeLineage.missing_template_stops, [
+    "platja-bogatell",
+    "palo-alto-market",
+    "museu-can-framis",
+    "la-cova-fumada",
+    "mercat-encants",
+  ]);
+  assert.deepEqual(routeLineage.extra_realized_stops, [
+    "mercat-ninot",
+    "fabrica-moritz-barcelona",
+    "federal-parlament",
+    "mercat-sant-antoni",
+  ]);
   assert.equal(diagnostics.city, "barcelona");
   assert.equal(diagnostics.days.length, plannerResult.days.length);
   assert.equal(
-    diagnostics.days[0].primary_route.selected_route_id,
+    primaryDiagnostics.selected_route_id,
     plannerResult.days[0].primary_route.id,
   );
+  assert.equal(primaryDiagnostics.source_template_id, "encants-to-coast-drift");
+  assert.equal(primaryDiagnostics.template_match_status, "realized_variant");
+  assert.deepEqual(
+    primaryDiagnostics.missing_template_stops,
+    routeLineage.missing_template_stops,
+  );
+  assert.deepEqual(
+    primaryDiagnostics.extra_realized_stops,
+    routeLineage.extra_realized_stops,
+  );
+  assert.deepEqual(primaryDiagnostics.mismatch_reasons, [
+    "stop_count_mismatch:planner=4:route_candidate_user_facing=5",
+    "missing_template_stops:platja-bogatell,palo-alto-market,museu-can-framis,la-cova-fumada,mercat-encants",
+    "extra_realized_stops:mercat-ninot,fabrica-moritz-barcelona,federal-parlament,mercat-sant-antoni",
+  ]);
   assert.ok(
     ["ready", "ready_with_warnings", "needs_review"].includes(
-      diagnostics.days[0].primary_route.readiness,
+      primaryDiagnostics.readiness,
     ),
   );
-  assert.ok(Array.isArray(diagnostics.days[0].primary_route.missing_from_planner));
-  assert.ok(Array.isArray(diagnostics.days[0].primary_route.extra_in_planner));
+  assert.equal(primaryDiagnostics.readiness, "ready_with_warnings");
+  assert.ok(Array.isArray(primaryDiagnostics.missing_from_planner));
+  assert.ok(Array.isArray(primaryDiagnostics.extra_in_planner));
+  assert.ok(primaryDiagnostics.source_template_id);
+  assert.ok(primaryDiagnostics.realized_route_id);
+  assert.ok(primaryDiagnostics.template_match_status);
   assert.equal(
     "route_candidate_shadow" in plannerResult.days[0].primary_route,
     false,
