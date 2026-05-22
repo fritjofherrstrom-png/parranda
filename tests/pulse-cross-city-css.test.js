@@ -5,6 +5,10 @@ const test = require("node:test");
 
 const css = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
 
+function stripCssComments(source) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "");
+}
+
 // Cross-city consistency regression guard.
 //
 // The Pulse edition surface must match Rome (dark theme) across all
@@ -48,4 +52,31 @@ test("mode-city-preview body class still exists for other surfaces", () => {
   // non-Pulse shell surfaces (e.g. hero-idea-strip) may still legitimately
   // use it.
   assert.match(css, /\.mode-city-preview\s/);
+});
+
+test("mode-city-preview must not override the shared Pulse visual system", () => {
+  const activeCss = stripCssComments(css);
+  const sharedPulseSelectors = [
+    "city-pulse-hero",
+    "city-pulse-ambient",
+    "city-pulse-today",
+    "city-pulse-toolbar",
+    "city-pulse-segmented",
+    "pulse-entry",
+    "pulse-group",
+  ];
+
+  for (const selector of sharedPulseSelectors) {
+    assert.doesNotMatch(
+      activeCss,
+      new RegExp(`\\.mode-city-preview\\s+\\.${selector}`),
+      `Preview cities must not get a city-specific Pulse visual override for .${selector}; Rome, Barcelona, and future cities share the same Pulse surface.`,
+    );
+  }
+
+  assert.doesNotMatch(
+    activeCss,
+    /\.pulse-group-mark\b/,
+    "The old group-marker rail must stay removed from active Pulse CSS.",
+  );
 });
