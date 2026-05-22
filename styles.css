@@ -6482,3 +6482,524 @@ body.is-printing-guide #routeGuideDrawer {
   outline-offset: 3px;
 }
 /* --- end parranda-cleanup-pass ------------------------------------------ */
+
+
+/* ============================================================================
+ * PULSE DESIGN REVISIONS — visual restructure (PR-B)
+ * Source: parranda-pulse-revisions.html design bundle.
+ * City-agnostic: applies to every Parranda city (Rome, Barcelona, future)
+ * and every surface (web + PWA).
+ *
+ * What's redesigned here:
+ *   • dark warm editorial theme on .city-pulse-edition
+ *   • single-column hero with eyebrow (live-dot + city + day) + smaller H1
+ *   • inline ambient row replaces the two-card weather/clothing strip
+ *   • unified Today panel merges stats + timeline + summary
+ *   • segmented controls replace the chip-grid filters
+ *   • card anatomy: italic pitch between title and blurb,
+ *     loud LIVE chip with gold dot + glow, locked CTA hierarchy
+ *
+ * The older `.city-pulse-masthead`, `.city-pulse-intro`, `.city-pulse-edition-meta`,
+ * `.city-pulse-edition-strip`, and `.city-pulse-brief-row` rules above still
+ * exist; their classes are no longer used by index.html for the Pulse view.
+ * They are kept untouched to preserve any other consumers (preview, teaser).
+ * ============================================================================ */
+
+/* Dark warm theme tokens scoped to the Pulse view. Kept under :root so any
+ * future surface that opts into the same theme can reuse them. */
+:root {
+  --pulse-bg-1: #1f110c;
+  --pulse-bg-2: #2a1813;
+  --pulse-surface: rgba(255, 247, 239, 0.045);
+  --pulse-surface-strong: rgba(255, 247, 239, 0.07);
+  --pulse-border: rgba(255, 247, 239, 0.10);
+  --pulse-border-strong: rgba(255, 247, 239, 0.18);
+  --pulse-text: #fff7ef;
+  --pulse-muted: rgba(255, 247, 239, 0.7);
+  --pulse-faint: rgba(255, 247, 239, 0.38);
+}
+
+/* --- container reskin ---------------------------------------------------- */
+.city-pulse-edition {
+  /* Override the cream/paper background with the dark warm editorial bg. */
+  background:
+    radial-gradient(ellipse 60% 50% at 75% 0%, rgba(175, 77, 36, 0.18), transparent 70%),
+    radial-gradient(ellipse 50% 40% at 90% 10%, rgba(215, 160, 77, 0.10), transparent 70%),
+    linear-gradient(180deg, var(--pulse-bg-2) 0%, var(--pulse-bg-1) 100%);
+  color: var(--pulse-text);
+  border-color: var(--pulse-border);
+  padding: 36px 28px 40px;
+}
+
+/* The decorative gold glow blurs into the dark bg, keep its intent. */
+.city-pulse-edition .city-pulse-edition-glow {
+  background: rgba(215, 160, 77, 0.14);
+}
+
+/* --- HERO ---------------------------------------------------------------- */
+.city-pulse-hero {
+  position: relative;
+  z-index: 1;
+  padding: 8px 0 24px;
+  display: block;
+}
+
+.city-pulse-hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  font: 700 0.72rem/1 var(--font-sans, "Manrope", sans-serif);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--pulse-muted);
+}
+
+.city-pulse-hero-eyebrow .city-pulse-live-dot {
+  /* Reuse the existing pulseDot animation. */
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+}
+
+.city-pulse-hero-title {
+  margin: 0;
+  font-family: "Cormorant Garamond", serif;
+  font-weight: 700;
+  font-size: clamp(2.2rem, 3.4vw, 3rem);
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+  max-width: 18ch;
+  text-wrap: balance;
+  color: var(--pulse-text);
+}
+
+.city-pulse-hero-lede {
+  margin: 16px 0 0;
+  max-width: 52ch;
+  font-size: 1.06rem;
+  line-height: 1.5;
+  color: rgba(255, 247, 239, 0.78);
+}
+
+/* --- AMBIENT ROW --------------------------------------------------------- */
+.city-pulse-ambient-row {
+  position: relative;
+  z-index: 1;
+  margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 22px;
+}
+
+.city-pulse-ambient-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.city-pulse-ambient-icon {
+  width: 22px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  color: var(--gold);
+  flex-shrink: 0;
+}
+
+.city-pulse-ambient-text {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.city-pulse-ambient-value {
+  font: 600 0.88rem/1.2 var(--font-sans, "Manrope", sans-serif);
+  color: var(--pulse-text);
+  white-space: nowrap;
+}
+
+.city-pulse-ambient-meta {
+  font: 500 0.8rem/1.2 var(--font-sans, "Manrope", sans-serif);
+  color: var(--pulse-muted);
+  white-space: nowrap;
+}
+
+/* --- TODAY PANEL --------------------------------------------------------- */
+.city-pulse-today-panel {
+  position: relative;
+  z-index: 1;
+  margin-top: 28px;
+  border-radius: var(--radius-lg, 28px);
+  background: rgba(255, 247, 239, 0.025);
+  border: 1px solid var(--pulse-border);
+  padding: 22px 26px 24px;
+}
+
+.city-pulse-today-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.city-pulse-today-eyebrow {
+  margin: 0;
+  font: 700 0.72rem/1 var(--font-sans, "Manrope", sans-serif);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.city-pulse-today-clock {
+  margin: 0;
+  font: 500 0.92rem/1 "Cormorant Garamond", serif;
+  font-style: italic;
+  color: var(--pulse-muted);
+  /* The clock value is a plain HH:MM — no pre-line wrapping. */
+  white-space: nowrap;
+}
+
+.city-pulse-today-stats {
+  display: flex;
+  align-items: baseline;
+  gap: 14px 32px;
+  flex-wrap: wrap;
+  padding-bottom: 18px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--pulse-border);
+}
+
+.city-pulse-today-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.city-pulse-today-stat-num {
+  font: 500 2.2rem/0.9 "Cormorant Garamond", serif;
+  color: var(--pulse-text);
+  letter-spacing: -0.02em;
+}
+
+.city-pulse-today-stat.is-live .city-pulse-today-stat-num {
+  color: var(--gold);
+}
+
+.city-pulse-today-stat-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: 700 0.7rem/1 var(--font-sans, "Manrope", sans-serif);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--pulse-muted);
+  white-space: nowrap;
+}
+
+.city-pulse-today-stat.is-live .city-pulse-today-stat-label {
+  color: var(--gold);
+}
+
+.city-pulse-today-stat-label .city-pulse-live-dot {
+  width: 8px;
+  height: 8px;
+}
+
+.city-pulse-today-summary {
+  flex: 1 1 240px;
+  margin: 0;
+  font: 500 italic 0.96rem/1.4 "Cormorant Garamond", serif;
+  color: rgba(255, 247, 239, 0.74);
+  text-wrap: balance;
+}
+
+.city-pulse-today-timeline {
+  /* The existing .city-pulse-timeline rendering is reused. */
+  min-height: 44px;
+}
+
+/* --- SEGMENTED FILTERS --------------------------------------------------- */
+.city-pulse-edition .city-pulse-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  grid-template-columns: none;
+  border-top: 0;
+  border-bottom: 0;
+  margin: 20px 0 12px;
+  padding: 0;
+}
+
+.city-pulse-segmented {
+  display: inline-flex;
+  align-items: stretch;
+  background: rgba(255, 247, 239, 0.03);
+  border: 1px solid var(--pulse-border);
+  border-radius: 999px;
+  padding: 3px;
+}
+
+/* Mode buttons inside segmented controls — flatter, no individual border. */
+.city-pulse-segmented .city-pulse-mode-button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font: 600 0.82rem/1 var(--font-sans, "Manrope", sans-serif);
+  letter-spacing: 0;
+  text-transform: none;
+  color: rgba(255, 247, 239, 0.55);
+  cursor: pointer;
+  transition: color 180ms ease, background 180ms ease;
+  white-space: nowrap;
+}
+
+.city-pulse-segmented .city-pulse-mode-button:hover {
+  background: transparent;
+  color: var(--pulse-text);
+  transform: none;
+  border-color: transparent;
+}
+
+.city-pulse-segmented .city-pulse-mode-button.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 4px 12px rgba(175, 77, 36, 0.32);
+}
+
+.city-pulse-segmented .city-pulse-mode-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--pulse-bg-1), 0 0 0 4px rgba(215, 160, 77, 0.7);
+}
+
+/* --- UTILITY NOTE + FOOTER ON DARK --------------------------------------- */
+.city-pulse-edition .city-pulse-utility-note,
+.city-pulse-edition .city-pulse-footer-note {
+  color: rgba(255, 247, 239, 0.72);
+}
+
+/* Eyebrows / kickers / level subs that previously used dark ink need to
+ * read on the dark bg. The .city-pulse-edition scope avoids leaking into
+ * other surfaces (teaser etc) that still use the cream background. */
+.city-pulse-edition .city-pulse-edition-label,
+.city-pulse-edition .city-pulse-edition-count,
+.city-pulse-edition .city-pulse-filter-label,
+.city-pulse-edition .pulse-group-sub,
+.city-pulse-edition .pulse-entry-reason-label {
+  color: var(--pulse-muted);
+}
+
+.city-pulse-edition .pulse-entry-kind {
+  color: var(--gold);
+}
+
+/* Section headings (Neighborhood pulse, Venue level) on dark bg. */
+.city-pulse-edition .pulse-group-title {
+  color: var(--pulse-text);
+}
+
+.city-pulse-edition .pulse-group-sub {
+  color: rgba(255, 247, 239, 0.7);
+  text-transform: none;
+  font-variant-caps: normal;
+  letter-spacing: 0;
+  font-family: "Cormorant Garamond", serif;
+  font-style: italic;
+  font-size: 1.04rem;
+}
+
+/* --- CARD ANATOMY -------------------------------------------------------- */
+.city-pulse-edition .pulse-entry {
+  background: rgba(255, 247, 239, 0.035);
+  border-color: var(--pulse-border);
+}
+
+.city-pulse-edition .pulse-entry:hover {
+  border-color: var(--pulse-border-strong);
+}
+
+.city-pulse-edition .pulse-entry-title,
+.city-pulse-edition .pulse-entry-title-button {
+  color: var(--pulse-text);
+  font-family: "Cormorant Garamond", serif;
+  font-size: 1.45rem;
+  line-height: 1.12;
+  font-weight: 600;
+}
+
+.pulse-entry-pitch {
+  margin: 0;
+  font-family: "Cormorant Garamond", serif;
+  font-style: italic;
+  font-size: 1.06rem;
+  line-height: 1.4;
+  color: rgba(255, 247, 239, 0.82);
+  text-wrap: pretty;
+}
+
+.city-pulse-edition .pulse-entry-blurb {
+  color: rgba(255, 247, 239, 0.7);
+  font-size: 0.93rem;
+  line-height: 1.55;
+}
+
+.city-pulse-edition .pulse-entry-where {
+  color: var(--gold);
+}
+
+/* LIVE NOW timing chip — gold dot + glow. */
+.city-pulse-edition .pulse-entry-when-live,
+.pulse-entry-when.is-live {
+  color: var(--gold);
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.city-pulse-edition .pulse-entry-when-live::before,
+.pulse-entry-when.is-live::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--gold);
+  box-shadow: 0 0 0 3px rgba(215, 160, 77, 0.18), 0 0 10px rgba(215, 160, 77, 0.6);
+  animation: pulseDot 2.4s ease-in-out infinite;
+}
+
+/* Live-card border treatment within the Pulse view. */
+.city-pulse-edition .pulse-entry-live {
+  border-color: rgba(215, 160, 77, 0.32);
+  box-shadow:
+    0 0 0 1px rgba(215, 160, 77, 0.18) inset,
+    0 20px 50px rgba(0, 0, 0, 0.25);
+}
+
+/* Locked CTA hierarchy: Build-a-day primary, ghost/secondary stays ghost.
+ * Override the global .primary-button glow so it sits well on the dark bg. */
+.city-pulse-edition .pulse-action-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+  color: #fff;
+  box-shadow: 0 10px 24px rgba(127, 45, 26, 0.36);
+}
+
+.city-pulse-edition .ghost-button.pulse-action-button {
+  background: transparent;
+  border-color: var(--pulse-border-strong);
+  color: rgba(255, 247, 239, 0.86);
+}
+
+.city-pulse-edition .ghost-button.pulse-action-button:hover {
+  background: rgba(255, 247, 239, 0.05);
+  border-color: rgba(255, 247, 239, 0.32);
+  color: var(--pulse-text);
+}
+
+/* Tags on dark. */
+.city-pulse-edition .pulse-entry-tags span {
+  background: rgba(255, 247, 239, 0.05);
+  border: 1px solid var(--pulse-border);
+  color: var(--pulse-muted);
+}
+
+/* Why-it-matters border on dark. */
+.city-pulse-edition .pulse-entry-reason {
+  border-top-color: var(--pulse-border);
+}
+
+.city-pulse-edition .pulse-entry-reason-copy {
+  color: rgba(255, 247, 239, 0.78);
+  font-family: "Cormorant Garamond", serif;
+  font-style: italic;
+}
+
+/* --- RESPONSIVE ---------------------------------------------------------- */
+@media (max-width: 900px) {
+  .city-pulse-edition {
+    padding: 22px 18px 28px;
+  }
+  .city-pulse-hero {
+    padding: 4px 0 18px;
+  }
+  .city-pulse-hero-title {
+    font-size: clamp(2.1rem, 8vw, 2.6rem);
+    max-width: none;
+  }
+  .city-pulse-hero-lede {
+    font-size: 1rem;
+    max-width: none;
+  }
+  .city-pulse-ambient-row {
+    gap: 8px 18px;
+  }
+  .city-pulse-today-panel {
+    padding: 18px 18px 20px;
+    margin-top: 22px;
+  }
+  .city-pulse-today-top {
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .city-pulse-today-clock {
+    font-size: 0.84rem;
+  }
+  .city-pulse-today-stats {
+    gap: 14px 24px;
+    padding-bottom: 16px;
+    margin-bottom: 16px;
+  }
+  .city-pulse-today-stat-num {
+    font-size: 2rem;
+  }
+  .city-pulse-today-stat-label {
+    font-size: 0.66rem;
+  }
+  .city-pulse-today-summary {
+    flex-basis: 100%;
+    font-size: 0.9rem;
+  }
+  .city-pulse-edition .city-pulse-toolbar {
+    margin-top: 16px;
+    gap: 8px;
+  }
+  .city-pulse-segmented .city-pulse-mode-button {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .city-pulse-hero-title {
+    font-size: 2rem;
+    line-height: 1.02;
+  }
+  .city-pulse-today-stats {
+    gap: 12px 24px;
+  }
+  .city-pulse-edition .city-pulse-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .city-pulse-segmented {
+    width: 100%;
+  }
+  .city-pulse-segmented .city-pulse-mode-button {
+    flex: 1 1 0;
+    justify-content: center;
+    padding: 9px 8px;
+    font-size: 0.78rem;
+  }
+}
+/* ============================================================================
+ * /PULSE DESIGN REVISIONS
+ * ============================================================================ */

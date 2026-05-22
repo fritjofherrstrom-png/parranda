@@ -678,66 +678,93 @@
 
           <section id="cityPulseStart" class="city-pulse-edition">
             <div class="city-pulse-edition-glow" aria-hidden="true"></div>
-            <div class="city-pulse-masthead">
-              <div class="city-pulse-intro">
-                <div class="city-pulse-live">
-                  <span class="city-pulse-live-dot" aria-hidden="true"></span>
-                  <p class="city-pulse-live-label">__PARRANDA_I18N_PULSE_NOW__</p>
+
+            <!-- HERO — single column, eyebrow carries city + day + clock,
+                 H1 stays driven by safe_headline (script.js populates).
+                 Subhead is the editorial lede paragraph. -->
+            <header class="city-pulse-hero">
+              <p id="cityPulseEditionLabel" class="city-pulse-hero-eyebrow">
+                <span class="city-pulse-live-dot" aria-hidden="true"></span>
+                <span class="city-pulse-hero-eyebrow-text">__PARRANDA_I18N_PULSE_CURRENT__</span>
+              </p>
+              <h2 id="cityPulseHeadline" class="city-pulse-hero-title">__PARRANDA_I18N_PULSE_TITLE__</h2>
+              <p id="cityPulseSubhead" class="city-pulse-hero-lede">
+                __PARRANDA_I18N_PULSE_SUMMARY__
+              </p>
+            </header>
+
+            <!-- AMBIENT ROW — three inline items a local would carry.
+                 Weather + golden hour + clothing. Icons only, no
+                 compartments. IDs for weather/clothing preserved from the
+                 old edition-strip for backwards compat with script.js
+                 setters. The middle item is bound to the engine's
+                 golden_hour signal, which can be a window rather than
+                 exact sunset — labelled "Gyllene timmen" / "Golden hour"
+                 accordingly. -->
+            <div class="city-pulse-ambient-row" aria-live="polite">
+              <div class="city-pulse-ambient-item">
+                <span class="city-pulse-ambient-icon" aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 1 0-1.4-8.78 6 6 0 0 0-11.6 2.28A4 4 0 0 0 6.5 20Z"/></svg>
+                </span>
+                <div class="city-pulse-ambient-text">
+                  <span id="cityPulseWeatherValue" class="city-pulse-ambient-value">--</span>
+                  <span id="cityPulseWeatherBrief" class="city-pulse-ambient-meta">__PARRANDA_I18N_PULSE_WEATHER_LOADING__</span>
                 </div>
-                <p id="cityPulseEditionLabel" class="city-pulse-edition-label">
-                  __PARRANDA_I18N_PULSE_CURRENT__
-                </p>
-                <h2 id="cityPulseHeadline">__PARRANDA_I18N_PULSE_TITLE__</h2>
-                <p id="cityPulseSubhead" class="city-pulse-subhead">
-                  __PARRANDA_I18N_PULSE_SUMMARY__
-                </p>
               </div>
-              <div class="city-pulse-edition-meta">
-                <p class="city-pulse-meta-kicker">__PARRANDA_I18N_PULSE_EDITION__</p>
-                <p id="cityPulseEditionDate" class="city-pulse-edition-date">
-                  __PARRANDA_I18N_PULSE_DATE__
-                </p>
-                <p id="cityPulseMeta" class="city-pulse-edition-count">
-                  __PARRANDA_I18N_PULSE_SIGNALS__
-                </p>
+              <div class="city-pulse-ambient-item" id="cityPulseGoldenHourItem" hidden>
+                <span class="city-pulse-ambient-icon" aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 10V2"/><path d="m4.93 10.93 1.41 1.41"/><path d="M2 18h2"/><path d="M20 18h2"/><path d="m19.07 10.93-1.41 1.41"/><path d="M22 22H2"/><path d="m16 6-4 4-4-4"/><path d="M16 18a4 4 0 0 0-8 0"/></svg>
+                </span>
+                <div class="city-pulse-ambient-text">
+                  <span id="cityPulseGoldenHourValue" class="city-pulse-ambient-value">--</span>
+                  <span id="cityPulseGoldenHourMeta" class="city-pulse-ambient-meta"></span>
+                </div>
+              </div>
+              <div class="city-pulse-ambient-item">
+                <span class="city-pulse-ambient-icon" aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></svg>
+                </span>
+                <div class="city-pulse-ambient-text">
+                  <span id="cityPulseClothingValue" class="city-pulse-ambient-value">--</span>
+                  <span id="cityPulseClothingAdvice" class="city-pulse-ambient-meta">__PARRANDA_I18N_PULSE_CLOTHING_COPY__</span>
+                </div>
               </div>
             </div>
-            <div class="city-pulse-edition-strip" aria-live="polite">
-              <article class="city-pulse-weather-card">
-                <p class="city-pulse-filter-label">__PARRANDA_I18N_PULSE_WEATHER__</p>
-                <p id="cityPulseWeatherValue" class="city-pulse-weather-value">--</p>
-                <p id="cityPulseWeatherBrief" class="city-pulse-weather-copy">__PARRANDA_I18N_PULSE_WEATHER_LOADING__</p>
-              </article>
-              <article class="city-pulse-weather-card">
-                <p class="city-pulse-filter-label">__PARRANDA_I18N_PULSE_CLOTHING__</p>
-                <p id="cityPulseClothingValue" class="city-pulse-weather-value">--</p>
-                <p id="cityPulseClothingAdvice" class="city-pulse-weather-copy">
-                  __PARRANDA_I18N_PULSE_CLOTHING_COPY__
-                </p>
-              </article>
+
+            <!-- TODAY PANEL — merges at-a-glance stats + timeline into one
+                 card. Sits BEFORE filters: users want the day summary first,
+                 then narrow scope. -->
+            <div class="city-pulse-today-panel">
+              <div class="city-pulse-today-top">
+                <p id="cityPulseTodayEyebrow" class="city-pulse-today-eyebrow">__PARRANDA_I18N_PULSE_EDITION__</p>
+                <p id="cityPulseEditionDate" class="city-pulse-today-clock">__PARRANDA_I18N_PULSE_DATE__</p>
+              </div>
+              <div class="city-pulse-today-stats">
+                <div id="cityPulseLiveStat" class="city-pulse-today-stat is-live" hidden>
+                  <span id="cityPulseLiveStatNum" class="city-pulse-today-stat-num">0</span>
+                  <span class="city-pulse-today-stat-label"><span class="city-pulse-live-dot" aria-hidden="true"></span><span id="cityPulseLiveStatLabel">__PARRANDA_I18N_PULSE_NOW__</span></span>
+                </div>
+                <div class="city-pulse-today-stat">
+                  <span id="cityPulseMeta" class="city-pulse-today-stat-num">0</span>
+                  <span id="cityPulseSignalsStatLabel" class="city-pulse-today-stat-label">__PARRANDA_I18N_PULSE_SIGNALS__</span>
+                </div>
+                <p id="cityPulseTimelineBrief" class="city-pulse-today-summary">__PARRANDA_I18N_PULSE_TIMELINE_LOADING__</p>
+              </div>
+              <div id="cityPulseTimeline" class="city-pulse-today-timeline" aria-live="polite"></div>
             </div>
+
             <div id="cityPulseDayChips" class="city-pulse-day-chips" aria-live="polite"></div>
+
+            <!-- FILTERS — segmented controls. Where (All/Near me) and When
+                 (Right now/Tonight/Weekend) stay visible at all times. The
+                 level filter container is retained (hidden) so script.js
+                 can defensively address it. -->
             <div class="city-pulse-toolbar">
-              <div class="city-pulse-filter-group">
-                <span class="city-pulse-filter-label">__PARRANDA_I18N_PULSE_WHERE__</span>
-                <div id="cityPulseScopeFilters" class="city-pulse-filter-chips"></div>
-              </div>
-              <div class="city-pulse-filter-group">
-                <span class="city-pulse-filter-label">__PARRANDA_I18N_PULSE_WHEN__</span>
-                <div id="cityPulseTimeFilters" class="city-pulse-filter-chips"></div>
-              </div>
-              <div class="city-pulse-filter-group city-pulse-filter-group-wide">
-                <span class="city-pulse-filter-label">__PARRANDA_I18N_PULSE_LEVEL__</span>
-                <div id="cityPulseFilters" class="city-pulse-filter-chips"></div>
-              </div>
+              <div id="cityPulseScopeFilters" class="city-pulse-segmented" role="radiogroup" aria-label="__PARRANDA_I18N_PULSE_WHERE__"></div>
+              <div id="cityPulseTimeFilters" class="city-pulse-segmented" role="radiogroup" aria-label="__PARRANDA_I18N_PULSE_WHEN__"></div>
+              <div id="cityPulseFilters" class="city-pulse-filter-chips" hidden></div>
             </div>
-            <div class="city-pulse-timeline-shell">
-              <div class="city-pulse-timeline-head">
-                <p class="city-pulse-filter-label">__PARRANDA_I18N_PULSE_TIMELINE__</p>
-                <p id="cityPulseTimelineBrief" class="city-pulse-timeline-copy">__PARRANDA_I18N_PULSE_TIMELINE_LOADING__</p>
-              </div>
-              <div id="cityPulseTimeline" class="city-pulse-timeline" aria-live="polite"></div>
-            </div>
+
             <p id="cityPulseUtilityNote" class="city-pulse-utility-note">
               __PARRANDA_I18N_PULSE_UTILITY__
             </p>

@@ -1873,7 +1873,19 @@ const cityPulseFilters = document.getElementById("cityPulseFilters");
 const cityPulseLevels = document.getElementById("cityPulseLevels");
 const cityPulseUtilityNote = document.getElementById("cityPulseUtilityNote");
 const cityPulseFooter = document.getElementById("cityPulseFooter");
-const cityPulseLiveChip = cityPulseStart?.querySelector(".city-pulse-live") || null;
+// The standalone .city-pulse-live wrapper was retired in the design
+// revisions — the live-dot now lives inline inside the hero eyebrow.
+// We address the dot directly via its sibling in #cityPulseEditionLabel.
+const cityPulseLiveChip = cityPulseEditionLabel?.querySelector(".city-pulse-live-dot") || null;
+const cityPulseEyebrowText = cityPulseEditionLabel?.querySelector(".city-pulse-hero-eyebrow-text") || null;
+const cityPulseTodayEyebrow = document.getElementById("cityPulseTodayEyebrow");
+const cityPulseLiveStat = document.getElementById("cityPulseLiveStat");
+const cityPulseLiveStatNum = document.getElementById("cityPulseLiveStatNum");
+const cityPulseLiveStatLabel = document.getElementById("cityPulseLiveStatLabel");
+const cityPulseSignalsStatLabel = document.getElementById("cityPulseSignalsStatLabel");
+const cityPulseGoldenHourItem = document.getElementById("cityPulseGoldenHourItem");
+const cityPulseGoldenHourValue = document.getElementById("cityPulseGoldenHourValue");
+const cityPulseGoldenHourMeta = document.getElementById("cityPulseGoldenHourMeta");
 const showFavoritesButton = document.getElementById("showFavoritesButton");
 const showAllButton = document.getElementById("showAllButton");
 const districtEyebrow = document.getElementById("districtEyebrow");
@@ -4527,6 +4539,26 @@ function formatPulseClock(minutes) {
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
+// Used by the Today panel clock. Prefers the city's timezone when the
+// pulse state surfaces one; otherwise falls back to the browser's local
+// time. For most users these align — the panel is meant as a contextual
+// glance, not as an authoritative city clock.
+function getCurrentCityClockLabel(pulseState) {
+  const timezone = pulseState?.timezone || pulseState?.tz || null;
+  try {
+    const formatter = new Intl.DateTimeFormat(isEnglishUi ? "en-GB" : "sv-SE", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      ...(timezone ? { timeZone: timezone } : {}),
+    });
+    return formatter.format(new Date());
+  } catch (_error) {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  }
+}
+
 function truncatePulseLabel(text = "", maxLength = 44) {
   const normalized = String(text || "").trim();
 
@@ -5450,6 +5482,7 @@ function createPulseEntry(item) {
   const kind = document.createElement("span");
   const when = document.createElement("span");
   const where = document.createElement("p");
+  const pitch = document.createElement("p");
   const blurb = document.createElement("p");
   const sourceLabel = document.createElement("p");
   const matchNote = document.createElement("p");
@@ -5468,6 +5501,7 @@ function createPulseEntry(item) {
   kind.className = "pulse-entry-kind";
   when.className = `pulse-entry-when pulse-entry-when-${status}`;
   where.className = "pulse-entry-where";
+  pitch.className = "pulse-entry-pitch";
   blurb.className = "pulse-entry-blurb";
   sourceLabel.className = "pulse-entry-source";
   matchNote.className = "pulse-entry-match";
@@ -5511,7 +5545,16 @@ function createPulseEntry(item) {
   }
 
   where.textContent = item.where ? `◉ ${item.where}` : `◉ ${buildUnavailableCityLabel()}`;
-  blurb.textContent = item.blurb || item.note || "";
+  // Pitch is the italic editorial sentence between title and blurb.
+  // Source order per user choice (PR-B card-title mapping): a dedicated
+  // editorial_pitch field first (currently absent server-side; deferred),
+  // then the action-oriented reason, then nothing. We intentionally do
+  // NOT fall back to blurb here — that would produce duplicate prose
+  // immediately above the body copy.
+  const pitchSource = (item.editorial_pitch || item.reason || "").trim();
+  const blurbText = String(item.blurb || item.note || "").trim();
+  pitch.textContent = pitchSource && pitchSource !== blurbText ? pitchSource : "";
+  blurb.textContent = blurbText;
   matchNote.textContent = getLiveMatchSummaryForPulseItem(item);
   matchNote.hidden = !matchNote.textContent;
   // Design rule (Pulse revisions): the "why it matters" block is only
@@ -5526,7 +5569,13 @@ function createPulseEntry(item) {
   }
   top.append(kind, when);
   reasonWrap.append(reasonLabel, reason);
-  article.append(top, title, where, blurb);
+  article.append(top, title, where);
+  if (pitch.textContent) {
+    article.appendChild(pitch);
+  }
+  if (blurb.textContent) {
+    article.appendChild(blurb);
+  }
   if (sourceLabel.textContent) {
     article.appendChild(sourceLabel);
   }
@@ -5563,7 +5612,10 @@ function createPulseEntry(item) {
   if (item.linked_wildcard_id && getWildcardById(item.linked_wildcard_id)) {
     const plannerButton = document.createElement("button");
     plannerButton.type = "button";
-    plannerButton.className = "secondary-button pulse-action-button";
+    // Design rule (Pulse revisions, locked): "Build a day from this" is the
+    // PRIMARY action on every card; "Open place" / "Event info" is the
+    // ghost. Never swap their visual weight.
+    plannerButton.className = "primary-button pulse-action-button pulse-action-primary";
     plannerButton.textContent = t("pulse.buildDay", "Bygg dag av detta");
     plannerButton.addEventListener("click", async () => {
       const wildcard = getWildcardById(item.linked_wildcard_id);
@@ -5642,8 +5694,15 @@ function renderCityPulse() {
     cityPulseState.date_label ||
     getFallbackPulseDateLabels(cityPulseState.date || getTodayIsoDate()).dateLabel;
 
-  if (cityPulseEditionLabel) {
-    cityPulseEditionLabel.textContent = `${tf("pulse.currentIn", { city: buildUnavailableCityLabel() }, `Aktuellt i ${buildUnavailableCityLabel()}`)} · ${weekdayLabel} ${dateLabel}`;
+  const cityLabel = buildUnavailableCityLabel();
+  const eyebrowCopy = `${tf("pulse.currentIn", { city: cityLabel }, `Aktuellt i ${cityLabel}`)} · ${weekdayLabel} ${dateLabel}`;
+  if (cityPulseEyebrowText) {
+    cityPulseEyebrowText.textContent = eyebrowCopy;
+  } else if (cityPulseEditionLabel) {
+    // Defensive: older HTML without the inner span — set the label
+    // directly. The live-dot may be lost in this path, but the copy
+    // remains correct.
+    cityPulseEditionLabel.textContent = eyebrowCopy;
   }
 
   // Prefer the server-built masthead (engine-driven) over the legacy
@@ -5652,7 +5711,7 @@ function renderCityPulse() {
   cityPulseHeadline.textContent =
     cityPulseState.masthead?.headline ||
     cityPulseState.headline ||
-    tf("pulse.currentInNow", { city: buildUnavailableCityLabel() }, `Aktuellt i ${buildUnavailableCityLabel()} just nu.`);
+    tf("pulse.currentInNow", { city: cityLabel }, `Aktuellt i ${cityLabel} just nu.`);
   cityPulseSubhead.textContent =
     cityPulseState.masthead?.subhead ||
     cityPulseState.subhead ||
@@ -5660,15 +5719,63 @@ function renderCityPulse() {
     (isEnglishUi
       ? "This layer helps you weigh what is actually relevant right now."
       : "Det här lagret hjälper dig väga in det som faktiskt är relevant just nu.");
-  cityPulseEditionDate.textContent = `${weekdayLabel}\n${dateLabel}`;
-  cityPulseMeta.textContent = buildPulseMetaLabel(filteredItems);
 
-  // Hide the JUST NU / RIGHT NOW live chip when no signals are present.
-  // The chip implies active live coverage — showing it on an empty edition
-  // creates a false sense of activity.
+  // Today panel: eyebrow ("Today in [City]") + clock (current time) + stats.
+  // The hero eyebrow above already carries the weekday + date; the panel's
+  // right-side clock just shows the current city-local time.
+  if (cityPulseTodayEyebrow) {
+    cityPulseTodayEyebrow.textContent = tf(
+      "pulse.todayInCity",
+      { city: cityLabel },
+      `Idag i ${cityLabel}`,
+    );
+  }
+  const liveCount = filteredItems.filter((item) => {
+    const status = enrichPulseItemTiming(item, cityPulseState.date, activePulseTime)?.timing?.status;
+    return status === "live";
+  }).length;
+  cityPulseEditionDate.textContent = getCurrentCityClockLabel(cityPulseState);
+  cityPulseMeta.textContent = String(filteredItems.length);
+  if (cityPulseLiveStat && cityPulseLiveStatNum) {
+    cityPulseLiveStatNum.textContent = String(liveCount);
+    cityPulseLiveStat.hidden = liveCount === 0;
+  }
+  // Stat labels are inlined rather than reusing the first-paint i18n keys
+  // because those keys resolve to loading-state placeholders (e.g.
+  // pulse.firstPaintSignals → "Laddar signaler...") that would replace
+  // the correct runtime label after data loads.
+  if (cityPulseLiveStatLabel) {
+    cityPulseLiveStatLabel.textContent = isEnglishUi ? "Live now" : "Just nu";
+  }
+  if (cityPulseSignalsStatLabel) {
+    cityPulseSignalsStatLabel.textContent = isEnglishUi ? "Signals today" : "Signaler idag";
+  }
+
+  // Hide the eyebrow live-dot when no signals are present. The dot implies
+  // active live coverage — showing it on an empty edition creates a false
+  // sense of activity.
   if (cityPulseLiveChip) {
     const hasSignals = Array.isArray(cityPulseState?.signals) && cityPulseState.signals.length > 0;
     cityPulseLiveChip.hidden = !hasSignals;
+  }
+
+  // Ambient row: surface the golden_hour window when the pulse engine
+  // has emitted one. The signal can describe a window (active / upcoming
+  // / tonight) rather than exact sunset, so it is labelled "Gyllene
+  // timmen" / "Golden hour" — semantically honest. Outside the relevant
+  // windows (deep night) the signal is absent and the ambient item
+  // stays hidden.
+  if (cityPulseGoldenHourItem && cityPulseGoldenHourValue) {
+    const goldenHourSignal = (cityPulseState?.signals || []).find(
+      (signal) => signal?.type === "golden_hour" && signal?.when,
+    );
+    if (goldenHourSignal?.when) {
+      cityPulseGoldenHourValue.textContent = `${t("pulse.goldenHour", "Gyllene timmen")} ${goldenHourSignal.when}`;
+      if (cityPulseGoldenHourMeta) cityPulseGoldenHourMeta.textContent = "";
+      cityPulseGoldenHourItem.hidden = false;
+    } else {
+      cityPulseGoldenHourItem.hidden = true;
+    }
   }
   cityPulseFooter.textContent =
     cityPulseState.footer_note ||
