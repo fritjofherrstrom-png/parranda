@@ -5740,11 +5740,15 @@ function renderCityPulse() {
     cityPulseLiveStatNum.textContent = String(liveCount);
     cityPulseLiveStat.hidden = liveCount === 0;
   }
+  // Stat labels are inlined rather than reusing the first-paint i18n keys
+  // because those keys resolve to loading-state placeholders (e.g.
+  // pulse.firstPaintSignals → "Laddar signaler...") that would replace
+  // the correct runtime label after data loads.
   if (cityPulseLiveStatLabel) {
-    cityPulseLiveStatLabel.textContent = t("pulse.firstPaintNow", "JUST NU");
+    cityPulseLiveStatLabel.textContent = isEnglishUi ? "Live now" : "Just nu";
   }
   if (cityPulseSignalsStatLabel) {
-    cityPulseSignalsStatLabel.textContent = t("pulse.firstPaintSignals", "Signaler idag");
+    cityPulseSignalsStatLabel.textContent = isEnglishUi ? "Signals today" : "Signaler idag";
   }
 
   // Hide the eyebrow live-dot when no signals are present. The dot implies
