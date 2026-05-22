@@ -171,6 +171,25 @@ The intent is that **drafting in intake vocabulary stays human-friendly** and
 **promotion makes the mapping explicit**. Packs should not try to "speak"
 catalog vocabulary natively — that's the promoter's job.
 
+## Validating a pack
+
+Before opening a pack PR, run the validator against the file:
+
+```bash
+node scripts/inspect-candidate-pack.js docs/candidate-packs/<name>.md
+```
+
+The CLI enforces the rules in this document — required metadata,
+canonical vocabularies (`candidate_kind`, `source_kind`, vibes,
+`confidence`, `verification_priority`, `promotion_recommendation`),
+and the hard pairings (e.g. `confidence: needs_review` +
+`promotion_recommendation: promote_first` is rejected). It prints
+counts, errors, and warnings, and exits non-zero when the pack is
+`blocked`. `intake_only` and `promotion_safe` exit `0`.
+
+The validator lives in `server/candidate-packs/validate.js`. It is
+intake-only — it never promotes candidates into the runtime catalog.
+
 ## Promotion workflow
 
 1. Pack is drafted under `docs/candidate-packs/<name>.md`, version `v0`.
