@@ -58,6 +58,7 @@ test("mode-city-preview must not override the shared Pulse visual system", () =>
   const activeCss = stripCssComments(css);
   const sharedPulseSelectors = [
     "city-pulse-hero",
+    "city-pulse-edition",
     "city-pulse-ambient",
     "city-pulse-today",
     "city-pulse-toolbar",
@@ -69,7 +70,7 @@ test("mode-city-preview must not override the shared Pulse visual system", () =>
   for (const selector of sharedPulseSelectors) {
     assert.doesNotMatch(
       activeCss,
-      new RegExp(`\\.mode-city-preview\\s+\\.${selector}`),
+      new RegExp(`\\.mode-city-preview[^,{]*\\.${selector}(?:\\s|[,{:#.])`),
       `Preview cities must not get a city-specific Pulse visual override for .${selector}; Rome, Barcelona, and future cities share the same Pulse surface.`,
     );
   }
