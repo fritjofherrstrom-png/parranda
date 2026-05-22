@@ -1883,9 +1883,9 @@ const cityPulseLiveStat = document.getElementById("cityPulseLiveStat");
 const cityPulseLiveStatNum = document.getElementById("cityPulseLiveStatNum");
 const cityPulseLiveStatLabel = document.getElementById("cityPulseLiveStatLabel");
 const cityPulseSignalsStatLabel = document.getElementById("cityPulseSignalsStatLabel");
-const cityPulseSunsetItem = document.getElementById("cityPulseSunsetItem");
-const cityPulseSunsetValue = document.getElementById("cityPulseSunsetValue");
-const cityPulseSunsetMeta = document.getElementById("cityPulseSunsetMeta");
+const cityPulseGoldenHourItem = document.getElementById("cityPulseGoldenHourItem");
+const cityPulseGoldenHourValue = document.getElementById("cityPulseGoldenHourValue");
+const cityPulseGoldenHourMeta = document.getElementById("cityPulseGoldenHourMeta");
 const showFavoritesButton = document.getElementById("showFavoritesButton");
 const showAllButton = document.getElementById("showAllButton");
 const districtEyebrow = document.getElementById("districtEyebrow");
@@ -5755,19 +5755,22 @@ function renderCityPulse() {
     cityPulseLiveChip.hidden = !hasSignals;
   }
 
-  // Ambient row: surface sunset time from the golden_hour signal when the
-  // pulse engine has emitted one. Outside the relevant windows (deep
-  // night) the signal is absent and the ambient item stays hidden.
-  if (cityPulseSunsetItem && cityPulseSunsetValue) {
-    const sunsetSignal = (cityPulseState?.signals || []).find(
+  // Ambient row: surface the golden_hour window when the pulse engine
+  // has emitted one. The signal can describe a window (active / upcoming
+  // / tonight) rather than exact sunset, so it is labelled "Gyllene
+  // timmen" / "Golden hour" — semantically honest. Outside the relevant
+  // windows (deep night) the signal is absent and the ambient item
+  // stays hidden.
+  if (cityPulseGoldenHourItem && cityPulseGoldenHourValue) {
+    const goldenHourSignal = (cityPulseState?.signals || []).find(
       (signal) => signal?.type === "golden_hour" && signal?.when,
     );
-    if (sunsetSignal?.when) {
-      cityPulseSunsetValue.textContent = `${t("pulse.sunset", "Solnedgång")} ${sunsetSignal.when}`;
-      if (cityPulseSunsetMeta) cityPulseSunsetMeta.textContent = "";
-      cityPulseSunsetItem.hidden = false;
+    if (goldenHourSignal?.when) {
+      cityPulseGoldenHourValue.textContent = `${t("pulse.goldenHour", "Gyllene timmen")} ${goldenHourSignal.when}`;
+      if (cityPulseGoldenHourMeta) cityPulseGoldenHourMeta.textContent = "";
+      cityPulseGoldenHourItem.hidden = false;
     } else {
-      cityPulseSunsetItem.hidden = true;
+      cityPulseGoldenHourItem.hidden = true;
     }
   }
   cityPulseFooter.textContent =
