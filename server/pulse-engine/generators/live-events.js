@@ -101,6 +101,7 @@ function buildLiveEventSignal(event, date, cityLabel, lang) {
     where,
     when: buildLiveEventWhen(event, date, lang),
     blurb: buildLiveEventBlurb(event, cityLabel, lang),
+    editorial_pitch: buildLiveEventEditorialPitch(event, lang),
     reason: buildLiveEventReason(event, cityLabel, lang),
     why_it_matters: buildLiveEventReason(event, cityLabel, lang),
     kind: buildLiveEventKind(event, lang),
@@ -187,6 +188,39 @@ function buildLiveEventReason(event, cityLabel, lang) {
     : `${kindLabel} idag i ${city}. Lägg in på planen om timingen passar.`;
 }
 
+function buildLiveEventEditorialPitch(event, lang) {
+  const isEnglish = normalizeLanguage(lang) === "en";
+  const tags = event?.match_tags || [];
+
+  if (tags.includes("music")) {
+    return isEnglish
+      ? "Let the evening hinge on a real room, not another landmark."
+      : "Låt kvällen vila på ett riktigt rum, inte ännu ett landmärke.";
+  }
+  if (tags.includes("market")) {
+    return isEnglish
+      ? "Start where the daily rhythm is already moving."
+      : "Börja där vardagsrytmen redan är i rörelse.";
+  }
+  if (tags.includes("nattliv")) {
+    return isEnglish
+      ? "Use this as the night's anchor, not an afterthought."
+      : "Låt det här bära kvällen, inte bli ett tillägg.";
+  }
+  if (tags.includes("mat")) {
+    return isEnglish
+      ? "Let food set the route before the evening fills up."
+      : "Låt maten styra rutten innan kvällen fylls på.";
+  }
+  if (tags.includes("exhibition") || tags.includes("kultur")) {
+    return isEnglish
+      ? "Let the cultural stop set the pace before dinner."
+      : "Låt kulturstoppet sätta tempot före middagen.";
+  }
+
+  return "";
+}
+
 function buildLiveEventKind(event, lang) {
   const isEnglish = normalizeLanguage(lang) === "en";
   const sourceLabel = event.source_label || event.provider || "";
@@ -227,4 +261,5 @@ function compactText(text, maxLength = 220) {
 
 module.exports = liveEventsGenerator;
 module.exports.deriveEventKindLabel = deriveEventKindLabel;
+module.exports.buildLiveEventEditorialPitch = buildLiveEventEditorialPitch;
 module.exports.VIBE_BY_TAG = VIBE_BY_TAG;

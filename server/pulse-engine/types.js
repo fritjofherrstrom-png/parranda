@@ -91,6 +91,7 @@
  * @property {string}      [area]
  * @property {string[]}    [area_tokens]
  * @property {string}      reason
+ * @property {string}      [editorial_pitch] Short Parranda-authored card pitch; empty/missing means no pitch
  * @property {string}      [blurb]
  * @property {SignalTimeWindow} [time_window]
  * @property {SignalSource} source
