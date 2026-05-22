@@ -4,6 +4,13 @@
 Pulse design revisions. This document defines `editorial_pitch` before
 a future implementation PR adds it. **Docs only — no runtime change.***
 
+> **Coordination note.** This document is separate from candidate-pack
+> intake work such as `docs/candidate-packs/*` (see #130). Candidate
+> packs describe how places/themes enter review; this spec only defines
+> the Pulse card `editorial_pitch` field and its copy rules. The two
+> tracks do not supersede each other and can be implemented
+> independently.
+
 ## 1. Purpose
 
 `editorial_pitch` is a short Parranda-authored sentence that sits between
