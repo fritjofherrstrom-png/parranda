@@ -246,3 +246,25 @@ The helper must not mutate Planner output or add fields to the public Planner
 API response. Its job is to reveal whether current Planner routes can be
 represented by RouteCandidates before Planner or Blitz consume RouteCandidates
 directly.
+
+## Route Identity And Lineage
+
+Planner routes keep the existing `id` for compatibility, but route generation
+also records explicit internal lineage. The lineage is attached as
+non-enumerable route metadata so shadow diagnostics can read it without changing
+the public Planner/API JSON shape:
+
+- `source_template_id`: the route template that seeded the Planner route.
+- `realized_route_id`: deterministic id for the actual returned stop sequence.
+- `realization_kind`: machine-readable lineage category.
+- `template_match_status`: `exact`, `reordered`, `realized_variant`, or
+  `generated_or_unknown`.
+- `template_stop_ids`: user-facing stops from the source template.
+- `realized_stop_ids`: user-facing stops actually returned by Planner.
+- `missing_template_stops`: template stops absent from the realized route.
+- `extra_realized_stops`: realized stops that were not in the source template.
+
+This separates "template route" from "route realized from a template" without
+changing route selection or user-facing responses. A route can keep its source
+template id while internally reporting that the selected stops are a realized
+variant.
