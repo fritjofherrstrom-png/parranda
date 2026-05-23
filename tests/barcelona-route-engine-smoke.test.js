@@ -50,6 +50,33 @@ test("Barcelona pilot catalog now has route templates backed by real places", ()
   assert.equal(barcelona.catalog.routeTemplates.length, 6);
 });
 
+test("Barcelona multi-day shopping route generation does not crash on entries with omitted closedWeekdays", async () => {
+  // Regression for a crash where buildOpeningWarnings in route-engine.js
+  // assumed `stop.closedWeekdays` was always defined. Several #141
+  // clothing-anchor entries intentionally omit the field when the weekly
+  // schedule is unverified (the catalog convention is "omit rather than
+  // pretend it is open every day"). Multi-day route generation must
+  // survive that.
+  global.fetch = createWeatherFetch();
+
+  const result = await generateRecommendations({
+    city: "barcelona",
+    dates: ["2026-05-14", "2026-05-15"],
+    walkingKmTarget: 6,
+    preferences: ["vintage", "shopping", "lokalt"],
+    legPacing: "balanced",
+    distanceMode: "soft_target",
+    budgetTier: "standard",
+    lang: "en",
+  });
+
+  assert.equal(result.city, "barcelona");
+  assert.equal(result.days.length, 2);
+  for (const day of result.days) {
+    assert.ok(day.primary_route, `expected a primary route for ${day.date}`);
+  }
+});
+
 test("direct Barcelona route-engine probe can build a Barcelona route from the pilot catalog", async () => {
   global.fetch = createWeatherFetch();
   const result = await generateRecommendations({
