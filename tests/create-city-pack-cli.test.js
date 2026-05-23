@@ -24,6 +24,16 @@ test("create-city-pack CLI fails clearly when required args are missing", () => 
   assert.match(result.stderr, /Usage: node scripts\/create-city-pack.js <city-key>/);
 });
 
+test("create-city-pack CLI prints help without requiring city metadata", () => {
+  const result = runCreate(["--help"]);
+
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Usage: node scripts\/create-city-pack.js <city-key>/);
+  assert.match(result.stdout, /--output-root <server\/cities path>/);
+  assert.match(result.stdout, /--dry-run/);
+  assert.equal(result.stderr, "");
+});
+
 test("create-city-pack CLI rejects unsafe city keys", () => {
   const result = runCreate([
     "New York",

@@ -4,10 +4,15 @@ const { cityConfigs, resolveCityConfig } = require("../server/cities");
 const { inspectCityPack } = require("../server/city-readiness/inspect-city-pack");
 
 function main(argv = process.argv.slice(2), output = process.stdout, errorOutput = process.stderr) {
+  if (argv.includes("--help") || argv.includes("-h")) {
+    output.write(`${usage()}\n`);
+    return 0;
+  }
+
   const cityKey = String(argv[0] || "").trim().toLowerCase();
 
   if (!cityKey) {
-    errorOutput.write("Usage: node scripts/inspect-city-pack.js <city-key>\n");
+    errorOutput.write(`${usage()}\n`);
     return 1;
   }
 
@@ -123,3 +128,7 @@ module.exports = {
   formatCityPackInspection,
   main,
 };
+
+function usage() {
+  return "Usage: node scripts/inspect-city-pack.js <city-key>";
+}

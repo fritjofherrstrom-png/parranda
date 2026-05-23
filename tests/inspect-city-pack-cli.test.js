@@ -26,6 +26,14 @@ test("inspect-city-pack prints Rome installability diagnostics", () => {
   assert.equal(result.stderr, "");
 });
 
+test("inspect-city-pack prints help without requiring a city key", () => {
+  const result = runInspect("--help");
+
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout, "Usage: node scripts/inspect-city-pack.js <city-key>\n");
+  assert.equal(result.stderr, "");
+});
+
 test("inspect-city-pack prints Barcelona diagnostics without exact count assumptions", () => {
   const result = runInspect("barcelona");
 

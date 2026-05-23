@@ -3,6 +3,11 @@
 const { createCityPackSkeleton } = require("../server/city-pack-generator/create-city-pack");
 
 function main(argv = process.argv.slice(2), output = process.stdout, errorOutput = process.stderr) {
+  if (argv.includes("--help") || argv.includes("-h")) {
+    output.write(`${usage()}\n`);
+    return 0;
+  }
+
   let result;
   try {
     result = createCityPackSkeleton(parseArgs(argv));
