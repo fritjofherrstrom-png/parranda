@@ -200,7 +200,7 @@ const allItems = [
     tags: ["market", "mat", "lokalt", "vintage", "second_hand"],
     weatherTags: ["all-weather"],
     closedWeekdays: [0],
-    searchTerms: ["mercat de sant antoni", "sant antoni market", "mercat sant antoni"],
+    searchTerms: ["mercat de sant antoni", "sant antoni market", "mercat sant antoni", "second hand"],
     availability: {
       kind: "market",
       strongWeekdays: [1, 2, 3, 4, 5, 6],
@@ -243,7 +243,7 @@ const allItems = [
     tags: ["market", "second_hand", "vintage", "shopping", "antique", "lokalt"],
     weatherTags: ["all-weather"],
     closedWeekdays: [0],
-    searchTerms: ["mercat dels encants", "els encants", "encants", "fira de bellcaire"],
+    searchTerms: ["mercat dels encants", "els encants", "encants", "fira de bellcaire", "second hand"],
     availability: {
       kind: "market",
       strongWeekdays: [1, 3, 5, 6],
@@ -921,7 +921,7 @@ const allItems = [
     tags: ["vintage", "second_hand", "shopping", "lokalt"],
     weatherTags: ["all-weather"],
     closedWeekdays: [0],
-    searchTerms: ["lullaby", "lullaby vintage", "riera baixa", "raval vintage", "vintage", "segunda mano", "moda vintage"],
+    searchTerms: ["lullaby", "lullaby vintage", "riera baixa", "raval vintage", "vintage", "segunda mano", "moda vintage", "second hand"],
   },
   {
     id: "loisaida",
@@ -932,7 +932,7 @@ const allItems = [
     area: "born-sant-pere-santa-caterina",
     tags: ["vintage", "second_hand", "design", "shopping", "lokalt"],
     weatherTags: ["all-weather"],
-    searchTerms: ["loisaida", "loisaida bcn", "flassaders", "born vintage", "vintage", "segunda mano"],
+    searchTerms: ["loisaida", "loisaida bcn", "flassaders", "born vintage", "vintage", "segunda mano", "second hand"],
   },
   {
     id: "holala-plaza",
@@ -944,7 +944,7 @@ const allItems = [
     tags: ["vintage", "second_hand", "shopping", "lokalt", "klassiker"],
     weatherTags: ["all-weather"],
     closedWeekdays: [0],
-    searchTerms: ["holala", "holala plaza", "valldonzella", "raval vintage", "vintage", "segunda mano", "moda vintage"],
+    searchTerms: ["holala", "holala plaza", "valldonzella", "raval vintage", "vintage", "segunda mano", "moda vintage", "second hand"],
   },
   {
     id: "humana-vintage-portaferrissa",
@@ -955,7 +955,7 @@ const allItems = [
     area: "gothic",
     tags: ["vintage", "second_hand", "shopping", "lokalt"],
     weatherTags: ["all-weather"],
-    searchTerms: ["humana", "humana vintage", "portaferrissa", "gothic vintage", "vintage", "segunda mano", "ropa segunda mano"],
+    searchTerms: ["humana", "humana vintage", "portaferrissa", "gothic vintage", "vintage", "segunda mano", "ropa segunda mano", "second hand"],
   },
   {
     id: "cotton-vintage",
@@ -967,7 +967,7 @@ const allItems = [
     tags: ["vintage", "second_hand", "design", "shopping", "lokalt"],
     weatherTags: ["all-weather"],
     closedWeekdays: [0],
-    searchTerms: ["cotton vintage", "enric granados", "luxury vintage", "consignment", "vintage", "segunda mano", "moda circular"],
+    searchTerms: ["cotton vintage", "enric granados", "luxury vintage", "consignment", "vintage", "segunda mano", "moda circular", "second hand"],
   },
   {
     id: "humana-vintage-asturies",
@@ -978,7 +978,7 @@ const allItems = [
     area: "gracia",
     tags: ["vintage", "second_hand", "shopping", "lokalt"],
     weatherTags: ["all-weather"],
-    searchTerms: ["humana", "humana vintage", "asturies", "gracia vintage", "vintage", "segunda mano", "ropa segunda mano"],
+    searchTerms: ["humana", "humana vintage", "asturies", "gracia vintage", "vintage", "segunda mano", "ropa segunda mano", "second hand"],
   },
   {
     id: "humana-vintage-francesc-cambo",
@@ -989,7 +989,7 @@ const allItems = [
     area: "born-sant-pere-santa-caterina",
     tags: ["vintage", "second_hand", "shopping", "lokalt"],
     weatherTags: ["all-weather"],
-    searchTerms: ["humana", "humana vintage", "francesc cambo", "santa caterina", "born vintage", "vintage", "segunda mano"],
+    searchTerms: ["humana", "humana vintage", "francesc cambo", "santa caterina", "born vintage", "vintage", "segunda mano", "second hand"],
   },
   {
     id: "humana-ronda-sant-antoni",
@@ -1000,7 +1000,7 @@ const allItems = [
     area: "sant-antoni",
     tags: ["second_hand", "shopping", "lokalt"],
     weatherTags: ["all-weather"],
-    searchTerms: ["humana", "ronda sant antoni", "sant antoni segunda mano", "segunda mano", "ropa segunda mano", "roba de segona ma"],
+    searchTerms: ["humana", "ronda sant antoni", "sant antoni segunda mano", "segunda mano", "ropa segunda mano", "roba de segona ma", "second hand"],
   },
   {
     id: "humana-sants",
@@ -1011,7 +1011,7 @@ const allItems = [
     area: "sants",
     tags: ["second_hand", "shopping", "lokalt"],
     weatherTags: ["all-weather"],
-    searchTerms: ["humana", "carrer de sants", "sants segunda mano", "segunda mano", "ropa segunda mano", "roba de segona ma"],
+    searchTerms: ["humana", "carrer de sants", "sants segunda mano", "segunda mano", "ropa segunda mano", "roba de segona ma", "second hand"],
   },
   {
     id: "larca-vintage",
@@ -1023,7 +1023,7 @@ const allItems = [
     tags: ["vintage", "second_hand", "shopping", "lokalt", "klassiker"],
     weatherTags: ["all-weather"],
     closedWeekdays: [0],
-    searchTerms: ["l'arca", "larca", "banys nous", "vintage bridal", "gothic vintage", "vintage", "moda vintage"],
+    searchTerms: ["l'arca", "larca", "banys nous", "vintage bridal", "gothic vintage", "vintage", "moda vintage", "second hand"],
   },
   {
     id: "revolution-vintage",
@@ -1035,7 +1035,7 @@ const allItems = [
     tags: ["vintage", "second_hand", "shopping", "lokalt"],
     weatherTags: ["all-weather"],
     closedWeekdays: [0],
-    searchTerms: ["revolution", "revolution vintage", "verdi", "gracia vintage", "vintage", "segunda mano"],
+    searchTerms: ["revolution", "revolution vintage", "verdi", "gracia vintage", "vintage", "segunda mano", "second hand"],
   },
   {
     id: "flamingos-vintage-kilo-tallers",
@@ -1047,7 +1047,7 @@ const allItems = [
     tags: ["vintage", "second_hand", "shopping", "lokalt"],
     weatherTags: ["all-weather"],
     closedWeekdays: [0],
-    searchTerms: ["flamingos", "vintage kilo", "kilo shop", "tallers", "raval vintage", "vintage", "outlet vintage"],
+    searchTerms: ["flamingos", "flamingos vintage", "vintage kilo", "kilo shop", "kilo", "tallers", "raval vintage", "vintage", "outlet vintage", "second hand"],
   },
   {
     id: "neko-vintage",
@@ -1058,7 +1058,7 @@ const allItems = [
     area: "sants",
     tags: ["vintage", "second_hand", "shopping", "lokalt"],
     weatherTags: ["all-weather"],
-    searchTerms: ["neko", "neko vintage", "sant medir", "sants vintage", "vintage", "segunda mano"],
+    searchTerms: ["neko", "neko vintage", "sant medir", "sants vintage", "vintage", "segunda mano", "second hand"],
   },
   {
     id: "vintage-poblenou",
@@ -1069,7 +1069,7 @@ const allItems = [
     area: "poblenou",
     tags: ["vintage", "second_hand", "shopping", "lokalt"],
     weatherTags: ["all-weather"],
-    searchTerms: ["vintage poblenou", "two market", "poblenou vintage", "avila poblenou", "vintage", "moda circular", "outlet vintage"],
+    searchTerms: ["vintage poblenou", "two market", "poblenou vintage", "avila poblenou", "vintage", "moda circular", "outlet vintage", "second hand"],
   },
   {
     id: "bormuth",
