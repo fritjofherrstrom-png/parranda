@@ -7,8 +7,12 @@ const { generateRecommendations } = require("../server/route-engine");
 const { resetLiveEventsCache } = require("../server/live-events");
 
 const originalFetch = global.fetch;
-const snapshotDir = path.join(__dirname, "scenarios", "rome");
+const scenariosRoot = path.join(__dirname, "scenarios");
 const shouldUpdateSnapshots = process.env.PARRANDA_UPDATE_SCENARIOS === "1";
+
+function snapshotDirForCity(city) {
+  return path.join(scenariosRoot, city);
+}
 
 function mockJsonResponse(payload) {
   return {
@@ -59,13 +63,16 @@ function createStableScenarioFetch(weatherCodeByDate = {}) {
       });
     }
 
-    if (parsed.hostname === "www.turismoroma.it") {
+    if (parsed.hostname === "www.turismoroma.it" || parsed.hostname === "opendata-ajuntament.barcelona.cat" || parsed.hostname === "agenda.cultura.gencat.cat") {
       return {
         ok: true,
         status: 200,
         statusText: "OK",
         async text() {
           return "<div></div>";
+        },
+        async json() {
+          return { result: { records: [] }, items: [] };
         },
       };
     }
@@ -145,31 +152,33 @@ function normalizeScenarioResult(result = {}) {
   };
 }
 
-function readSnapshot(name) {
-  const filePath = path.join(snapshotDir, `${name}.json`);
+function readSnapshot(city, name) {
+  const filePath = path.join(snapshotDirForCity(city), `${name}.json`);
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
 
-function writeSnapshot(name, value) {
-  fs.mkdirSync(snapshotDir, { recursive: true });
-  fs.writeFileSync(path.join(snapshotDir, `${name}.json`), `${JSON.stringify(value, null, 2)}\n`);
+function writeSnapshot(city, name, value) {
+  const dir = snapshotDirForCity(city);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, `${name}.json`), `${JSON.stringify(value, null, 2)}\n`);
 }
 
-async function assertScenarioSnapshot(name, payload, weatherCodes = {}) {
+async function assertScenarioSnapshot(city, name, payload, weatherCodes = {}) {
   global.fetch = createStableScenarioFetch(weatherCodes);
   const actual = normalizeScenarioResult(await generateRecommendations(payload));
 
   if (shouldUpdateSnapshots) {
-    writeSnapshot(name, actual);
+    writeSnapshot(city, name, actual);
     return;
   }
 
-  const expected = readSnapshot(name);
+  const expected = readSnapshot(city, name);
   assert.deepStrictEqual(actual, expected);
 }
 
 const scenarioMatrix = [
   {
+    city: "rome",
     name: "auto-open-party-arc",
     payload: {
       dates: ["2026-04-19"],
@@ -183,6 +192,7 @@ const scenarioMatrix = [
     },
   },
   {
+    city: "rome",
     name: "manual-garbatella-testaccio-lowkey",
     payload: {
       dates: ["2026-04-19"],
@@ -194,6 +204,7 @@ const scenarioMatrix = [
     },
   },
   {
+    city: "rome",
     name: "manual-monti-loop-wine",
     payload: {
       dates: ["2026-04-18"],
@@ -208,6 +219,7 @@ const scenarioMatrix = [
     },
   },
   {
+    city: "rome",
     name: "manual-trastevere-monti-barhop",
     payload: {
       dates: ["2026-04-18"],
@@ -221,6 +233,85 @@ const scenarioMatrix = [
       "2026-04-18": 0,
     },
   },
+  // Barcelona scenarios — locked here so the next route-diversity /
+  // template-rotation PR shows up as a snapshot change instead of a
+  // silent Planner behavior shift. The five-day-stress scenario
+  // captures the diversity gap: templates rotate across days but
+  // stop selection collapses to the same Raval-density set, and the
+  // `manual-raval-vintage-loop` scenario captures a related finding
+  // — even with vintage preferences and a short walking target, the
+  // Planner does not naturally produce a Raval-bound loop because no
+  // route template owns Raval alone.
+  {
+    city: "barcelona",
+    name: "auto-second-hand-multi-day",
+    payload: {
+      city: "barcelona",
+      dates: ["2026-05-23", "2026-05-24", "2026-05-25"],
+      start: { type: "auto" },
+      end: { type: "auto" },
+      walkingKmTarget: 6,
+      preferences: ["vintage", "shopping", "lokalt"],
+      legPacing: "balanced",
+      distanceMode: "soft_target",
+      budgetTier: "standard",
+      lang: "en",
+    },
+  },
+  {
+    city: "barcelona",
+    name: "auto-second-hand-five-day-stress",
+    payload: {
+      city: "barcelona",
+      dates: [
+        "2026-05-23",
+        "2026-05-24",
+        "2026-05-25",
+        "2026-05-26",
+        "2026-05-27",
+      ],
+      start: { type: "auto" },
+      end: { type: "auto" },
+      walkingKmTarget: 6,
+      preferences: ["vintage", "shopping", "lokalt"],
+      legPacing: "balanced",
+      distanceMode: "soft_target",
+      budgetTier: "standard",
+      lang: "en",
+    },
+  },
+  {
+    city: "barcelona",
+    name: "manual-raval-vintage-loop",
+    payload: {
+      city: "barcelona",
+      dates: ["2026-05-26"],
+      start: { type: "auto" },
+      end: { type: "auto" },
+      walkingKmTarget: 5,
+      preferences: ["vintage", "second_hand", "shopping"],
+      legPacing: "balanced",
+      distanceMode: "soft_target",
+      budgetTier: "standard",
+      lang: "en",
+    },
+  },
+  {
+    city: "barcelona",
+    name: "manual-gracia-sant-antoni-arc",
+    payload: {
+      city: "barcelona",
+      dates: ["2026-05-27"],
+      start: { type: "preset", label: "Gràcia" },
+      end: { type: "preset", label: "Sant Antoni" },
+      walkingKmTarget: 7,
+      preferences: ["mat", "vin", "aperitivo", "lokalt"],
+      legPacing: "balanced",
+      distanceMode: "soft_target",
+      budgetTier: "standard",
+      lang: "en",
+    },
+  },
 ];
 
 test.after(() => {
@@ -231,8 +322,8 @@ test.afterEach(() => {
   resetLiveEventsCache();
 });
 
-scenarioMatrix.forEach(({ name, payload, weatherCodes }) => {
-  test(`scenario snapshot: ${name}`, async () => {
-    await assertScenarioSnapshot(name, payload, weatherCodes);
+scenarioMatrix.forEach(({ city, name, payload, weatherCodes }) => {
+  test(`scenario snapshot: ${city}/${name}`, async () => {
+    await assertScenarioSnapshot(city, name, payload, weatherCodes);
   });
 });

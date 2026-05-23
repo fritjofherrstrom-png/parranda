@@ -1,0 +1,108 @@
+{
+  "resolved_start": "Plaça del Diamant",
+  "resolved_end": "Fàbrica Moritz Barcelona",
+  "resolved_home_base": null,
+  "days": [
+    {
+      "date": "2026-05-27",
+      "primary": {
+        "id": "gracia-local-evening-loop",
+        "start": "Plaça del Diamant",
+        "end": "Fàbrica Moritz Barcelona",
+        "shape": "arc",
+        "day_profile": "peak",
+        "anchor_zone": "Gràcia -> Sant Antoni",
+        "routing_source": "heuristic",
+        "estimated_km": 4.9,
+        "longest_leg_km": 3.2,
+        "longest_leg_minutes": 38,
+        "average_leg_minutes": 12,
+        "stops": [
+          {
+            "label": "Vermuteria Lou",
+            "area": "gracia",
+            "live": false
+          },
+          {
+            "label": "Plaça del Sol",
+            "area": "gracia",
+            "live": false
+          },
+          {
+            "label": "Bodega Quimet",
+            "area": "gracia",
+            "live": false
+          },
+          {
+            "label": "Bar Calders",
+            "area": "sant-antoni",
+            "live": false
+          }
+        ],
+        "legs": [
+          {
+            "from": "Plaça del Diamant",
+            "to": "Vermuteria Lou",
+            "km": 0.1,
+            "minutes": 2
+          },
+          {
+            "from": "Vermuteria Lou",
+            "to": "Plaça del Sol",
+            "km": 0.4,
+            "minutes": 5
+          },
+          {
+            "from": "Plaça del Sol",
+            "to": "Bodega Quimet",
+            "km": 0.4,
+            "minutes": 5
+          },
+          {
+            "from": "Bodega Quimet",
+            "to": "Bar Calders",
+            "km": 3.2,
+            "minutes": 38
+          },
+          {
+            "from": "Bar Calders",
+            "to": "Fàbrica Moritz Barcelona",
+            "km": 0.8,
+            "minutes": 10
+          }
+        ]
+      },
+      "alternative_count": 2,
+      "alternatives": [
+        {
+          "id": "poble-sec-montjuic-evening-arc",
+          "start": "Plaça del Diamant",
+          "end": "Fàbrica Moritz Barcelona",
+          "shape": "arc",
+          "day_profile": "variation",
+          "anchor_zone": "Gràcia -> Sant Antoni",
+          "stops": [
+            "Vermuteria Lou",
+            "Bodega Quimet",
+            "Bandini's",
+            "Bar Calders"
+          ]
+        },
+        {
+          "id": "encants-to-coast-drift",
+          "start": "Plaça del Diamant",
+          "end": "Fàbrica Moritz Barcelona",
+          "shape": "arc",
+          "day_profile": "variation",
+          "anchor_zone": "Gràcia -> Sant Antoni",
+          "stops": [
+            "Vermuteria Lou",
+            "Mercat de la Llibertat",
+            "Bodega Quimet",
+            "Mercat de Sant Antoni"
+          ]
+        }
+      ]
+    }
+  ]
+}
