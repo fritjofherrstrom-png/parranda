@@ -159,7 +159,9 @@ unknown schedule
 
 **Observation**
 
-Barcelona expanded from a thin preview catalog to 100 total items, but route behavior still needed inspection. Scenario snapshots show that 3-day vintage diversity is good, while 5-day trips still reuse templates and reveal missing Raval-density behavior.
+Barcelona expanded from a thin preview catalog to 100 total items, but route behavior still needed inspection. Scenario snapshots show that 3-day vintage diversity is good, while 5-day trips still reuse templates.
+
+**Update (PR #152):** The Raval-density gap was closed tactically at the citypack/template layer by adding a `raval-vintage-shopping-loop` template and a `raval-gothic-route-anchor`. The 5-day vintage stress snapshot now picks up the new template on day 3 and routes through the Raval/Gothic anchor on days 2 and 5. The broader multi-day template-reuse lesson below still applies.
 
 **Generic rule**
 
@@ -229,7 +231,7 @@ repeated_macro_area_count
 
 **Observation**
 
-Barcelona has strong Raval second-hand/vintage density, but the Planner does not naturally produce a Raval-bound vintage loop for the relevant scenario. It chooses other arcs instead.
+Barcelona has strong Raval second-hand/vintage density. Before PR #152, the Planner did not naturally produce a Raval-bound vintage loop for the relevant scenario — it chose other arcs instead because no template owned Raval as a vintage area and no structural anchor existed there. PR #152 closed the gap tactically at the citypack layer by adding `raval-vintage-shopping-loop` and `raval-gothic-route-anchor`. The generic engine-level lesson below still stands for citypackless mode and other unmodelled intent clusters.
 
 **Generic rule**
 
@@ -243,7 +245,8 @@ This matters especially for citypackless mode, where curated templates may not e
 
 **Current anchor**
 
-- PR #149: `manual-raval-vintage-loop` snapshot.
+- PR #149: `manual-raval-vintage-loop` snapshot (initial gap).
+- PR #152: tactical citypack-layer fix (template + anchor).
 - Barcelona Raval second-hand entries from PR #141.
 
 **Applies to**
@@ -261,7 +264,7 @@ This matters especially for citypackless mode, where curated templates may not e
 
 **Observation**
 
-The `manual-raval-vintage-loop` scenario name reflects the user/product intent, but the locked output shows the Planner does not currently deliver that Raval loop. This mismatch is useful.
+The `manual-raval-vintage-loop` scenario name reflects the user/product intent, and the initial locked output (PR #149) showed the Planner did not deliver that Raval loop — it chose Eixample/Sant Antoni arcs instead. PR #152 closed that gap; the regenerated snapshot now matches the scenario's name. The mismatch was useful precisely because it was testable: the snapshot diff in #152 is the proof.
 
 **Generic rule**
 
@@ -402,9 +405,10 @@ Agnostic mode needs:
 
 These are not commitments; they are suggested next moves when a related workstream is active.
 
-1. `fix(route-engine): improve Barcelona long-trip diversity and Raval-vintage coverage`
-   - Use PR #149 snapshots as before/after anchors.
-   - Prefer generic scoring/composer rules over Barcelona-only hacks.
+1. `fix(route-engine): improve Barcelona long-trip diversity`
+   - Raval-vintage coverage was closed tactically by PR #152 (citypack-layer template + anchor).
+   - Multi-day template/stop reuse remains; use PR #149/#152 snapshots as before/after anchors.
+   - Prefer generic scoring/composer rules over per-city hacks.
 
 2. `test(route-quality): add route diversity metrics helper`
    - Compute template, stop, and area diversity metrics for scenario results.
