@@ -45,7 +45,7 @@ test("Barcelona pilot catalog now has route templates backed by real places", ()
   const routeAnchors = barcelona.catalog.allItems.filter((item) => item.kind === "district-group");
 
   assert.equal(barcelona.visibility, "preview");
-  assert.equal(placeItems.length, 70);
+  assert.equal(placeItems.length, 95);
   assert.equal(routeAnchors.length, 5);
   assert.equal(barcelona.catalog.routeTemplates.length, 6);
 });
