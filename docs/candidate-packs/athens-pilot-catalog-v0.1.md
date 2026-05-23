@@ -48,13 +48,13 @@ against real source URLs, plus 2 medium-priority candidates whose
 classification noticeably shifted under verification (Klimataria,
 Romantso).
 
-Outcomes:
+Outcomes (validator authoritative):
 
 | Outcome | Count |
 | --- | --- |
 | `promote_first` (verified, fits, ready for runtime PR) | 11 |
-| `keep_as_optional` (verified but with caveat) | 4 |
-| `reject_for_now` (verification surfaced a blocker) | 2 |
+| `keep_as_optional` (verified but with caveat) | 5 |
+| `reject_for_now` (verification surfaced a blocker) | 1 |
 | `needs_research` (still unresolved) | 1 |
 
 The medium- and low-priority v0 candidates **carry over from v0
@@ -78,10 +78,18 @@ respect:
   café-bar. v0 mis-described it. Re-classified as a seasonal
   (May–October) cinema candidate; the Exarchia café-anchor slot
   remains *open* and should be filled in v0.2.
-- **Odeon of Herodes Atticus closes for multi-year restoration**
-  after the June 2026 Farewell Celebrations. The venue is not a
-  durable v1 Live source. Re-classified `reject_for_now` (for v1) —
-  re-evaluate after restoration completes.
+- **Odeon of Herodes Atticus enters a multi-year restoration**
+  after the June 2026 Farewell Celebrations. The official Athens
+  Epidaurus Festival "Farewell Celebrations" page
+  (https://aefestival.gr/odeon-of-herodes-atticus-farewell-celebrations/?lang=en)
+  states the Odeon "opens, for only one month – this special June –
+  its gates" before being "sealed and retreats into silence for a
+  few years (so that, through an inspired and necessary work of
+  restoration, renovation, and exposure, it passes into the next
+  century)". The page does not state a specific reopening date.
+  The venue is not a durable v1 Live source. Re-classified
+  `reject_for_now` (for v1) — re-evaluate when restoration
+  completion has a confirmed date.
 - **Oikonomou Taverna changed operators in 2023.** Filippos Tsagridis
   replaced the long-running Kostas Diamantis family operator. The
   taverna still exists at the same address but with operator
@@ -126,9 +134,13 @@ source_notes:              Address: Dionysiou Areopagitou 15, Athens
                            Mon–Thu 09:00–17:00; Fri 09:00–22:00; Sat–Sun
                            09:00–20:00. Closed 1 Jan, Orthodox Easter
                            Sunday, 1 May, 25–26 Dec. Last admission 30
-                           minutes before closing. Source: official
-                           operator site theacropolismuseum.gr and
-                           thisisathens.org.
+                           minutes before closing. Sources (exact URLs):
+                           https://www.theacropolismuseum.gr/en
+                           (operator home),
+                           https://www.theacropolismuseum.gr/en/contact-us
+                           (operator address/contact),
+                           https://www.thisisathens.org/museums/acropolis-museum
+                           (Official Athens Guide profile).
 verification_priority:     high
 promotion_recommendation:  promote_first
 ```
@@ -154,13 +166,19 @@ why_it_fits_parranda:      Multi-room courtyard club/bar/café/garden in
 confidence:                high
 source_notes:              Address: Avramiotou 6-8, Monastiraki/Psyrri.
                            Operator confirmed running club + bar + café
-                           + restaurant + garden as one venue. Sources:
-                           thisisathens.org (Six d.o.g.s nightlife
-                           profile), ra.co/clubs/25287, songkick.com
-                           (venue page with active programming).
-                           Programming-feed structure for a future Live
-                           source still needs verification (likely RA +
-                           own site rather than a clean iCal).
+                           + restaurant + garden as one venue. Sources
+                           (exact URLs):
+                           https://www.thisisathens.org/nightlife/six-dogs
+                           (Official Athens Guide nightlife profile),
+                           https://ra.co/clubs/25287 (Resident Advisor
+                           venue page with active programming),
+                           https://www.songkick.com/venues/829656-six-dogs
+                           (Songkick venue page),
+                           https://www.facebook.com/sixdogsathens/
+                           (operator social channel). Programming-feed
+                           structure for a future Live source still
+                           needs verification (likely RA + own site
+                           rather than a clean iCal).
 verification_priority:     high
 promotion_recommendation:  promote_first
 ```
@@ -188,15 +206,18 @@ why_it_fits_parranda:      Interwar municipal market building reopened
 confidence:                high
 source_notes:              Address: 42 Fokionos Negri, Kypseli, 113 61.
                            Hours: Mon–Sat 09:00–20:00; Sun 11:00–18:00.
-                           Reopening 2023 by Municipality of Athens
-                           confirmed via news.gtp.gr and
-                           cultureisathens.gr. Programming-feed
-                           structure still needs verification before
-                           Live wiring. Sources: thisisathens.org
-                           (Kypseli Municipal Market attractions
-                           profile), cultureisathens.gr (Dimotiki Agora
-                           Kipselis venue profile), news.gtp.gr
-                           ("New Era for the Kypseli Central Market").
+                           Reopened 2023 by Municipality of Athens.
+                           Programming-feed structure still needs
+                           verification before Live wiring. Sources
+                           (exact URLs):
+                           https://www.thisisathens.org/attractions/kypseli-municipal-market
+                           (Official Athens Guide attractions profile),
+                           https://cultureisathens.gr/en/venue/dimotiki-agora-kipselis/
+                           (Culture Is Athens venue profile),
+                           https://news.gtp.gr/2023/07/05/new-era-for-the-kypseli-central-market-in-athens/
+                           (GTP News, July 2023, reopening coverage),
+                           https://www.currentathens.gr/spaces/space/716-kypseli-municipal-market
+                           (Current Athens venue page).
 verification_priority:     high
 promotion_recommendation:  promote_first
 ```
@@ -224,12 +245,15 @@ source_notes:              Address: Athinas Street, between Athinas,
                            Sofokleous, Euripidou, and Aiolou. Hours:
                            Mon–Sat 07:00–18:00; closed Sundays. Note
                            that meat and fish halls may close earlier
-                           than the produce halls. Sources:
-                           thisisathens.org (Athens Central Food Market
-                           shopping profile), eatingeurope.com,
-                           untoldathens.com, discovergreece.com.
-                           Multiple corroborating sources on hours and
-                           layout.
+                           than the produce halls. Sources (exact URLs):
+                           https://www.thisisathens.org/shopping/athens-central-food-market
+                           (Official Athens Guide shopping profile),
+                           https://www.eatingeurope.com/blog/food-markets-athens-greece/
+                           (Eating Europe food-market guide),
+                           https://www.discovergreece.com/travel-ideas/cover-story/taste-central-market-athens
+                           (Discover Greece travel idea),
+                           https://untoldathens.com/varvakios-agora-athens-central-market/
+                           (Untold Athens local guide).
 verification_priority:     high
 promotion_recommendation:  promote_first
 ```
@@ -253,8 +277,7 @@ why_it_fits_parranda:      Long-running flea market on Plateia
                            antique shops on the square provide
                            secondary density.
 confidence:                high
-source_notes:              Sunday primary market: 08:00–14:00 per
-                           athens-tourist-information.com; another
+source_notes:              Sunday primary market: 08:00–14:00; another
                            source notes 09:00 setup with vendors active
                            until early afternoon. Best-time-to-visit
                            advice corroborated across multiple sources.
@@ -262,10 +285,13 @@ source_notes:              Sunday primary market: 08:00–14:00 per
                            Promotion should pick a single canonical
                            Sunday window; the 08:00–14:00 / 09:00–15:00
                            range is consistent across sources.
-                           Sources: athens-tourist-information.com
-                           (Monastiraki Flea Market guide),
-                           tripadvisor.com (Avysinias Square),
-                           greeka.com (Athens Flea Market).
+                           Sources (exact URLs):
+                           https://athens-tourist-information.com/shopping/markets/monastiraki-flea-market
+                           (Athens Tourist Information),
+                           https://www.tripadvisor.com/Attraction_Review-g189400-d198948-Reviews-Avysinias_Square-Athens_Attica.html
+                           (Tripadvisor — Avysinias Square),
+                           https://www.greeka.com/attica/athens/sightseeing/flea-market/
+                           (Greeka — Athens Flea Market).
 verification_priority:     high
 promotion_recommendation:  promote_first
 ```
@@ -293,13 +319,18 @@ confidence:                high
 source_notes:              Address: Pireos 84, Athens. Operator confirms
                            six distinct hireable spaces in the building;
                            main concert/exhibition/theatre spaces total
-                           ~1,000 capacity. Programming runs on the
-                           operator's own site (pireos84.bios.gr) and
-                           ra.co/clubs/10598. Rooftop bar described as
-                           seasonal (summer-primary). Sources:
-                           pireos84.bios.gr (operator), therooftopguide.com,
-                           thisisathens.org (Bios nightlife profile),
-                           ra.co (Bios club profile with active events).
+                           ~1,000 capacity. Rooftop bar described as
+                           seasonal (summer-primary). Sources (exact
+                           URLs):
+                           https://pireos84.bios.gr/ (operator home),
+                           https://www.pireos84.bios.gr/building.php?Lang=En
+                           (operator building/spaces page),
+                           https://www.thisisathens.org/nightlife/bios
+                           (Official Athens Guide nightlife profile),
+                           https://ra.co/clubs/10598 (Resident Advisor
+                           venue page with active events),
+                           https://www.therooftopguide.com/rooftop-bars-in-athens/bios.html
+                           (rooftop bar corroborating profile).
 verification_priority:     high
 promotion_recommendation:  promote_first
 ```
@@ -329,12 +360,17 @@ source_notes:              Address: Pireos str. 100, 11854 Gazi.
                            213-0109300. Athens Technopolis Jazz
                            Festival 2026 is the 25th edition with
                            free admission. Reported >1,000,000 visitors
-                           per year. Operator publishes an events feed
-                           at athens-technopolis.gr. Sources:
-                           athens-technopolis.gr (operator),
-                           thisisathens.org (Technopolis attractions
-                           profile), eurotravelo.com (Jazz Festival
-                           2026), athensfilmoffice.com.
+                           per year. Sources (exact URLs):
+                           https://athens-technopolis.gr/index.php/en/component/djevents/events
+                           (operator events page),
+                           https://athens-technopolis.gr/index.php/en/central-courtyard
+                           (operator venue page),
+                           https://www.thisisathens.org/attractions/technopolis
+                           (Official Athens Guide attractions profile),
+                           https://athensfilmoffice.com/tehnopolis-gazi/
+                           (Athens Film Office / City of Athens),
+                           https://eurotravelo.com/explore/athens-technopolis-jazz-festival-greece/
+                           (Jazz Festival 2026 coverage).
 verification_priority:     high
 promotion_recommendation:  promote_first
 ```
@@ -358,15 +394,21 @@ why_it_fits_parranda:      Old-school Pangrati taverna repeatedly
                            non-tourist Pangrati evening route.
 confidence:                high
 source_notes:              Address: Pafsaniou 4, Athens 116 35. Phone:
-                           +30 210 7215155. Sources: thisisathens.org
-                           (Karavitis restaurant profile),
-                           athens24.com, xo.gr, insightsgreece.com
-                           ("authentic old tavernas miniguide"). Hours
-                           per third-party listings need direct
-                           confirmation against the taverna's own
-                           channels before runtime — the only listing
-                           in search results was ambiguous. Treat hours
-                           as "evening primary, confirm at promotion".
+                           +30 210 7215155. Sources (exact URLs):
+                           https://www.thisisathens.org/restaurants/karavitis
+                           (Official Athens Guide restaurant profile),
+                           https://www.athens24.com/directory/karavitis-tavern-athens.html
+                           (Athens24 directory listing),
+                           https://www.xo.gr/profile/profile-906901521/en/
+                           (xo.gr business registry — phone/address),
+                           https://insightsgreece.com/a-z-miniguide-athens-authentic-old-tavernas/
+                           (Insights Greece "authentic old tavernas
+                           miniguide"). Hours per third-party listings
+                           need direct confirmation against the
+                           taverna's own channels before runtime — the
+                           only hours listing in search results was
+                           ambiguous. Treat hours as "evening primary,
+                           confirm at promotion".
 verification_priority:     high
 promotion_recommendation:  promote_first
 ```
@@ -398,11 +440,20 @@ source_notes:              Address: Corner of Sokratous and Theatrou
                            closed Sundays. Phone: +30 210 3211463.
                            Continuity confirmed through 2024–2025 (a
                            July 2024 vacation closure was noted as
-                           temporary, not permanent). Sources: Atlas
-                           Obscura (Diporto), thisisathens.org (Diporto
-                           restaurant profile), Greek Gastronomy Guide,
-                           airmail.news (Arts Intel Report), xo.gr,
-                           Tripadvisor (open status corroborated).
+                           temporary, not permanent). Sources (exact
+                           URLs):
+                           https://www.atlasobscura.com/places/diporto-athens
+                           (Atlas Obscura entry),
+                           https://www.thisisathens.org/restaurants/diporto
+                           (Official Athens Guide restaurant profile),
+                           https://www.greekgastronomyguide.gr/en/item/taverna-to-diporto-athens/
+                           (Greek Gastronomy Guide),
+                           https://airmail.news/arts-intel/venues/diporto
+                           (Airmail Arts Intel Report),
+                           https://www.xo.gr/profile/profile-911202017/en/
+                           (xo.gr business registry — phone),
+                           https://www.tripadvisor.com/Restaurant_Review-g189400-d1198294-Reviews-Diporto-Athens_Attica.html
+                           (Tripadvisor — open status corroborated).
 verification_priority:     high
 promotion_recommendation:  promote_first
 ```
@@ -431,56 +482,21 @@ source_notes:              Address: 1 Koumbari St. & Vasilissis Sofias
                            Ave., 106 74 Athens. Hours (2026):
                            Mon/Wed/Fri/Sat 10:00–18:00; Thu
                            10:00–00:00 (until midnight); Sun
-                           10:00–16:00; **Tue closed**. Sources:
-                           benaki.org (operator), thisisathens.org
-                           (Benaki Museum of Greek Culture profile),
-                           introducingathens.com, whichmuseum.com.
-                           Promotion explicitly refers to the main
-                           Koumbari/Vas. Sofias site, NOT the Pireos
-                           Benaki branch (Pireos 138).
-verification_priority:     high
-promotion_recommendation:  promote_first
-```
-
-### athens-strefi-hill
-
-```text
-proposed_id:               athens-strefi-hill
-name:                      Strefi Hill
-city:                      athens
-neighborhood:              exarchia
-category:                  viewpoint_park
-candidate_kind:            real_place
-source_kind:               city_catalog
-route_role:                [main_stop, neighborhood_anchor]
-vibes:                     [slow, curious]
-tags:                      [utsikt, lokalt, sun, hidden gems]
-why_it_fits_parranda:      Limestone hill / urban park on the border of
-                           Neapoli and Exarchia, northwest of
-                           Lycabettus. Views back toward the Acropolis,
-                           winding paths, a small open-air theatre,
-                           basketball court, playground, and a
-                           cafeteria. Gives Exarchia routes a non-bar
-                           daytime anchor that pairs with the area's
-                           bookshop and café layer.
-confidence:                high
-source_notes:              Hill is accessible to the public. The
-                           government-led regeneration plan
-                           (Prodea Investments) was ordered halted by
-                           the Council of State in December 2023;
-                           reconstruction workers left the hill in
-                           February 2024. The cafeteria, playground,
-                           basketball court, and open-air theatre are
-                           on the hill. Sources: Wikipedia (Strefi Hill
-                           — including post-2024 status),
-                           myguideathens.com, anarchistfederation.net
-                           ("Prodea withdrawing from Lofos Strefi"),
-                           Tripadvisor (active reviews 2025).
-                           Promotion should ship with a route note
-                           that the hill carries documented Exarchia
-                           social-context debate; Parranda routes
-                           should not treat it as a default late-night
-                           anchor.
+                           10:00–16:00; **Tue closed**. Sources (exact
+                           URLs):
+                           https://www.benaki.org/index.php?option=com_buildings&view=visiting&Itemid=886&lang=en
+                           (operator visit/hours page),
+                           https://www.benaki.org/index.php?option=com_buildings&view=building&id=11&lang=en
+                           (operator Museum of Greek Culture building
+                           page),
+                           https://www.thisisathens.org/museums/benaki-museum-greek-culture
+                           (Official Athens Guide Benaki Museum of
+                           Greek Culture profile),
+                           https://whichmuseum.com/museum/benaki-museum-athens-7156/opening-hours
+                           (corroborating hours listing). Promotion
+                           explicitly refers to the main Koumbari/Vas.
+                           Sofias site, NOT the Pireos Benaki branch
+                           (Pireos 138).
 verification_priority:     high
 promotion_recommendation:  promote_first
 ```
@@ -512,11 +528,17 @@ source_notes:              Address: Pl. Theatrou 2, Athens 105 52,
                            for live-music nights. Reservation
                            recommended for Fri/Sat. **Area correction
                            vs v0**: classified as monastiraki-psyrri,
-                           NOT syntagma-plaka. Sources: klimataria.gr
-                           (operator), e-restaurants.gr,
-                           thisisathens.org (Klimataria restaurant
-                           profile), Fodor's, curiousspoon.app,
-                           freeathens.gr.
+                           NOT syntagma-plaka. Sources (exact URLs):
+                           https://klimataria.gr/en/ (operator home),
+                           https://www.e-restaurants.gr/en/estiatorio/i-klimataria-psirri
+                           (e-restaurants.gr reservation registry),
+                           https://www.thisisathens.org/restaurants/klimataria
+                           (Official Athens Guide restaurant profile),
+                           https://www.fodors.com/world/europe/greece/athens/things-to-do/nightlife/reviews/klimataria-93136
+                           (Fodor's nightlife review),
+                           https://www.tripadvisor.com/Restaurant_Review-g189400-d951245-Reviews-Klimataria-Athens_Attica.html
+                           (Tripadvisor — Psyrri/Monastiraki area
+                           classification corroborated).
 verification_priority:     medium
 promotion_recommendation:  promote_first
 ```
@@ -547,10 +569,19 @@ source_notes:              **v0 description correction**: Vox is the
                            historic open-air cinema, NOT a café-bar as
                            v0 said. Address: 82 Themistokleous Street,
                            Exarchia. Phone: 210 3810727. Seasonal
-                           operation: May–October only. Sources:
-                           thisisathens.org (Vox arts & entertainment
-                           profile), greeka.com (Vox cinema Exarchia),
-                           vrisko.gr, xo.gr, Tripadvisor (Cine Vox).
+                           operation: May–October only. Sources (exact
+                           URLs):
+                           https://www.thisisathens.org/arts-entertainment/vox-cinema
+                           (Official Athens Guide arts & entertainment
+                           profile),
+                           https://www.greeka.com/attica/athens/other-businesses/cinema/exarchia/vox/
+                           (Greeka — Vox cinema Exarchia profile),
+                           https://www.vrisko.gr/en/details/cbdgb016750dag0k_ab4365e1452bgbe
+                           (Vrisko business directory),
+                           https://www.xo.gr/profile/profile-907476929/en/
+                           (xo.gr business registry),
+                           https://www.tripadvisor.com/Attraction_Review-g189400-d7063283-Reviews-Cine_Vox-Athens_Attica.html
+                           (Tripadvisor — Cine Vox active reviews).
                            **Held to keep_as_optional**: the Exarchia
                            café-anchor slot that v0 thought Vox would
                            fill is now genuinely open. v0.2 should find
@@ -590,16 +621,79 @@ source_notes:              Address: 41 Troon, corner of Kithantidon
                            presents itself as a continuation, but the
                            original family operator is gone, which is
                            why this is `klassiker`-with-caveat rather
-                           than `klassiker` outright. Sources:
-                           tavernaoikonomou.gr (operator),
-                           thisisathens.org (Oikonomou restaurant
-                           profile), Greek Gastronomy Guide,
-                           greekcitytimes.com (Nov 2024 profile),
-                           culinarybackstreets.com (Oct 2019 visit),
-                           e-table.gr. **Held to keep_as_optional**
+                           than `klassiker` outright. Sources (exact
+                           URLs):
+                           https://www.tavernaoikonomou.gr/ (operator),
+                           https://www.thisisathens.org/restaurants/oikonomou
+                           (Official Athens Guide restaurant profile),
+                           https://www.greekgastronomyguide.gr/en/item/taverna-tou-oikonomou-ano-petralona-attiki/
+                           (Greek Gastronomy Guide),
+                           https://greekcitytimes.com/2024/11/30/taverna-tou-oikonomou/
+                           (Greek City Times — Nov 2024 profile, the
+                           operator-change source),
+                           https://culinarybackstreets.com/cities-category/athens/2019/taverna-tou-oikonomou-2/
+                           (Culinary Backstreets — Oct 2019, pre-change
+                           reference). **Held to keep_as_optional**
                            until v0.2 / a follow-up pass confirms the
                            new operators have maintained the original
                            kitchen's character.
+verification_priority:     high
+promotion_recommendation:  keep_as_optional
+```
+
+### athens-strefi-hill
+
+```text
+proposed_id:               athens-strefi-hill
+name:                      Strefi Hill
+city:                      athens
+neighborhood:              exarchia
+category:                  viewpoint_park
+candidate_kind:            real_place
+source_kind:               city_catalog
+route_role:                [main_stop, neighborhood_anchor]
+vibes:                     [slow, curious]
+tags:                      [utsikt, lokalt, sun, hidden gems]
+why_it_fits_parranda:      Limestone hill / urban park on the border of
+                           Neapoli and Exarchia, northwest of
+                           Lycabettus. Views back toward the Acropolis,
+                           winding paths, a small open-air theatre,
+                           basketball court, playground, and a
+                           cafeteria. Gives Exarchia routes a non-bar
+                           daytime anchor that pairs with the area's
+                           bookshop and café layer.
+confidence:                medium
+source_notes:              Hill exists and is municipal-park-classified.
+                           Verified sources (exact URLs):
+                           https://www.thisisathens.org/arts-entertainment/strefi-hill
+                           (Official Athens Guide — minimal entry,
+                           confirms existence; address 134 Emmanouil
+                           Benaki, Exarchia, 114 73),
+                           https://en.wikipedia.org/wiki/Strefi_Hill
+                           (history, donation to City of Athens 1963,
+                           48-acre municipal park status),
+                           https://www.tripadvisor.com/Attraction_Review-g189400-d20379086-Reviews-Strefi_Hill-Athens_Attica.html
+                           (active reviews 2025–2026 confirming the
+                           hill is accessible). Regeneration cancellation
+                           context (Council of State halt Dec 2023;
+                           reconstruction workers left Feb 2024) is
+                           cited via
+                           https://www.anarchistfederation.net/athens-exclusive-prodea-is-withdrawing-from-lofos-strefi-hill-in-exarchia-area/
+                           and
+                           https://unicornriot.ninja/2024/altering-exarcheia-from-the-square-to-strefi-hill-a-timeline-and-film/
+                           — both partisan sources, used here only as
+                           corroboration of the documented dispute, not
+                           as the quality proof for promotion.
+                           **Held to keep_as_optional** rather than
+                           promote_first: thisisathens.org has only a
+                           minimal entry; the strongest existence
+                           sources are Wikipedia + tourist aggregators;
+                           the Exarchia social-context debate documented
+                           by the partisan sources is real and the
+                           runtime PR should ship a route note. A
+                           stronger municipal/destination source
+                           (cityofathens.gr park profile) would lift
+                           this to promote_first in v0.2.
 verification_priority:     high
 promotion_recommendation:  keep_as_optional
 ```
@@ -695,27 +789,33 @@ why_it_fits_parranda:      v0 framing: ancient theatre below the
                            source candidate.
 confidence:                high
 source_notes:              **Blocker discovered**: The Athens Epidaurus
-                           Festival 2026 programme announces a series
-                           of "Farewell Celebrations" in June 2026
-                           before the Odeon is sealed and **retreats
-                           into silence for restoration and
-                           renovation**. The venue goes offline after
-                           summer 2026. Sources: aefestival.gr ("Athens
-                           Epidaurus Festival 2026: Artistic Programme
-                           for the Odeon of Herodes Atticus" — 2026
-                           announcement), aefestival.gr ("Odeon of
-                           Herodes Atticus — Farewell Celebrations"),
-                           greekcitytimes.com ("Herod's Odeon: A Grand
-                           Farewell Before Restoration", April 2026).
+                           Festival "Farewell Celebrations" page states
+                           the Odeon "opens, for only one month – this
+                           special June – its gates" (June 2026) before
+                           being "sealed and retreats into silence for
+                           a few years (so that, through an inspired
+                           and necessary work of restoration,
+                           renovation, and exposure, it passes into
+                           the next century)". The page does NOT state
+                           a specific closure-start or reopening date —
+                           only "a few years". Sources (exact URLs):
+                           https://aefestival.gr/odeon-of-herodes-atticus-farewell-celebrations/?lang=en
+                           (official Farewell Celebrations page),
+                           https://aefestival.gr/festival-athinon-epidayroy-2026-anakoinothike-to-kallitechniko-programma-toy-odeioy-irodoy-attikoy/?lang=en
+                           (2026 artistic programme announcement),
+                           https://aefestival.gr/venues/odeon-of-herodes-atticus/?lang=en
+                           (venue page),
+                           https://greekcitytimes.com/2026/04/13/herods-odeon-farewell-june-2026-program-restoration/
+                           (Greek City Times, April 2026, covering the
+                           Farewell programme and restoration).
                            **Held to reject_for_now for v1 runtime**:
-                           wiring a Live source for a venue that goes
-                           dark immediately after the runtime PR ships
-                           would mislead users. The Athens Epidaurus
-                           Festival itself remains a strong source
-                           family for *other* festival venues; the
-                           Odeon-specific candidate can be revisited
-                           when restoration completion has a confirmed
-                           date.
+                           wiring a Live source for a venue entering a
+                           multi-year restoration window would mislead
+                           users. The Athens Epidaurus Festival itself
+                           remains a strong source family for *other*
+                           festival venues; the Odeon-specific
+                           candidate can be revisited when restoration
+                           completion has a confirmed date.
 verification_priority:     high
 promotion_recommendation:  reject_for_now
 ```
@@ -746,10 +846,17 @@ source_notes:              **Area-model blocker**: Address is
                            Monastiraki/Psyrri as v0 placed it.
                            Metaxourgeio is NOT in the Athens area model
                            in `ATHENS_CONTENT_SOURCE_STRATEGY.md`
-                           §Area Model Draft. Sources: romantso.gr
-                           (operator — note: URL is bios.romantso.gr,
-                           Romantso is operated by Bios), currentathens.gr,
-                           thediscreetgentleman.com, xo.gr.
+                           §Area Model Draft. Sources (exact URLs):
+                           https://www.romantso.gr/ (operator — note
+                           that pireos84.bios.gr lists Romantso among
+                           Bios spaces, indicating common operator),
+                           https://www.currentathens.gr/spaces/space/108-romantso
+                           (Current Athens venue profile),
+                           https://thediscreetgentleman.com/countries/greece/athens/metaxourgeio/romantso
+                           (Discreet Gentleman — explicit Metaxourgeio
+                           area classification),
+                           https://www.xo.gr/profile/profile-911326301/en/
+                           (xo.gr business registry).
                            **Held to needs_research** pending an
                            area-model decision: (a) add `metaxourgeio`
                            as a separate area, or (b) fold Romantso
@@ -774,23 +881,27 @@ and Romantso whose classification shifted under verification).
 
 | Recommendation | Count |
 | --- | --- |
-| `promote_first` | 12 |
-| `keep_as_optional` | 4 |
+| `promote_first` | 11 |
+| `keep_as_optional` | 5 |
 | `reject_for_now` | 1 |
 | `needs_research` | 1 |
 | **Total** | **18** |
 
-**promote_first (12):** acropolis-museum, six-dogs,
+**promote_first (11):** acropolis-museum, six-dogs,
 kypseli-municipal-market, varvakeios-central-market,
 avissinias-flea-market, bios, technopolis, karavitis-taverna,
-diporto, benaki-museum-main, strefi-hill, klimataria.
+diporto, benaki-museum-main, klimataria.
 
-**keep_as_optional (4):** vox-exarchia (cinema, seasonal),
-oikonomou-taverna (operator change), exarchia-culture-evening-cluster
-(café-bar gap), gazi-kerameikos-evening-cluster (decompose preferred).
+**keep_as_optional (5):** vox-exarchia (cinema, seasonal),
+oikonomou-taverna (operator change), strefi-hill (source mix too
+weak for promote_first; needs municipal/destination source),
+exarchia-culture-evening-cluster (café-bar gap),
+gazi-kerameikos-evening-cluster (decompose preferred).
 
-**reject_for_now (1):** odeon-of-herodes-atticus (multi-year closure
-starting July 2026 after Farewell Celebrations).
+**reject_for_now (1):** odeon-of-herodes-atticus (multi-year
+restoration after June 2026 Farewell Celebrations; official page
+states "sealed and retreats into silence for a few years" with no
+specific reopening date).
 
 **needs_research (1):** romantso (Metaxourgeio area-model decision
 blocked).
@@ -799,20 +910,23 @@ blocked).
 
 | Area | Verified candidates |
 | --- | --- |
-| monastiraki-psyrri | 5 (six-dogs, varvakeios, avissinias-flea, diporto, klimataria) |
+| monastiraki-psyrri | 5 promote (six-dogs, varvakeios, avissinias-flea, diporto, klimataria) |
 | koukaki-makrygianni | 1 promote + 1 reject (acropolis-museum; odeon-of-herodes-atticus) |
-| kolonaki-lycabettus | 1 (benaki-museum-main) |
-| kypseli | 1 (kypseli-municipal-market) |
-| exarchia | 2 promote + 1 keep + 1 cluster keep (strefi-hill; vox-exarchia; cluster) |
-| gazi-kerameikos | 2 promote + 1 cluster keep (bios; technopolis; cluster) |
-| pangrati-mets | 1 (karavitis-taverna) |
-| petralona-thisseio | 1 keep (oikonomou) |
+| kolonaki-lycabettus | 1 promote (benaki-museum-main) |
+| kypseli | 1 promote (kypseli-municipal-market) |
+| exarchia | 2 keep + 1 cluster keep (strefi-hill, vox-exarchia; cluster) |
+| gazi-kerameikos | 2 promote + 1 cluster keep (bios, technopolis; cluster) |
+| pangrati-mets | 1 promote (karavitis-taverna) |
+| petralona-thisseio | 1 keep (oikonomou-taverna) |
 | UNRESOLVED | 1 needs_research (romantso → Metaxourgeio) |
 
-Kypseli is now anchored (1 verified). Sant-antoni-analogue areas in
-Athens (Petralona, Pangrati) each have one verified evening anchor.
-The old-center evening shape (Psyrri) has 5 verified candidates and
-is the strongest cluster going into v1.
+Kypseli is now anchored (1 verified). Pangrati has one verified
+evening anchor (Karavitis). The old-center evening shape (Psyrri) has
+5 verified candidates and is the strongest cluster going into v1.
+**Exarchia has no `promote_first` candidate at v0.1** — Strefi is
+held to `keep_as_optional` pending stronger sources, and Vox is a
+seasonal cinema, not a year-round anchor. Closing this gap is a v0.2
+priority.
 
 ---
 
@@ -820,19 +934,19 @@ is the strongest cluster going into v1.
 
 The first Athens runtime PR — `feat(city-pack): add Athens pilot
 catalog v1`, per the Athens Strategy doc — should pick up the
-**12 `promote_first` candidates** above. That gives Athens v1:
+**11 `promote_first` candidates** above. That gives Athens v1:
 
 - **3 markets** (Kypseli, Varvakeios, Avissinias)
 - **2 major museums** (Acropolis Museum, Benaki Greek Culture)
 - **2 cultural-venue bars / Live sources** (Six d.o.g.s, Bios)
 - **1 cultural campus / Live source** (Technopolis)
 - **3 tavernas** (Karavitis, Diporto, Klimataria)
-- **1 viewpoint / park** (Strefi Hill)
+- **0 viewpoints / parks** (Strefi held to keep_as_optional pending
+  stronger sources)
 
-That hits the strategy doc's pilot-catalog shape target
-(`25–35 verified real places`) at the low end (12) — but combined
-with the v0 medium- and low-priority queue (which v0.2 should resolve
-next), the v1 target is achievable in one more verification pass.
+The 11 `promote_first` candidates form a verified seed, but remain
+**below the 25–35 runtime pilot target** set in the Athens Strategy
+doc. v0.2 should close the gap before the runtime promotion PR.
 
 ## Outstanding work after v0.1
 
