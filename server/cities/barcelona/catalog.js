@@ -1931,7 +1931,7 @@ const provenanceById = {
   },
   "lullaby-vintage": {
     source_url: "https://www.barcelona-metropolitan.com/locations/lullaby-vintage/",
-    source_type: "osm_structured_data",
+    source_type: "independent_local_magazine",
     confidence: "medium",
     last_checked: LAST_CHECKED,
     why_included: "Verified Raval-side vintage clothing shop on Carrer de la Riera Baixa; gives the catalog a named second-hand anchor for Raval shopping drift.",
@@ -1961,7 +1961,7 @@ const provenanceById = {
   },
   "holala-plaza": {
     source_url: "https://www.barcelona-metropolitan.com/locations/holala-plaza/",
-    source_type: "official_site",
+    source_type: "independent_local_magazine",
     confidence: "high",
     last_checked: LAST_CHECKED,
     why_included: "Established Raval vintage clothing shop operating since 1972; one of the largest single named vintage stops in Barcelona for shopping-drift days.",
