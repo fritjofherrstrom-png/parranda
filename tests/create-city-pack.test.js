@@ -79,6 +79,25 @@ test("generator refuses to overwrite existing city folders unless force is passe
   assert.equal(forced.written, true);
 });
 
+test("generator force overwrites only planned skeleton files and preserves unrelated files", () => {
+  const outputRoot = makeOutputRoot();
+  const targetDir = path.join(outputRoot, "athens");
+
+  createCityPackSkeleton({ ...buildAthensOptions(), outputRoot });
+  fs.writeFileSync(path.join(targetDir, "catalog.js"), "module.exports = { stale: true };\n");
+  fs.writeFileSync(path.join(targetDir, "index.js"), "module.exports = { stale: true };\n");
+  fs.writeFileSync(path.join(targetDir, "sources.js"), "module.exports = { keep: true };\n");
+
+  createCityPackSkeleton({ ...buildAthensOptions(), outputRoot, force: true });
+
+  assert.match(readGenerated(outputRoot, "catalog.js"), /const routeTemplates = \[\];/);
+  assert.match(readGenerated(outputRoot, "index.js"), /key: ATHENS_KEY/);
+  assert.equal(
+    fs.readFileSync(path.join(targetDir, "sources.js"), "utf8"),
+    "module.exports = { keep: true };\n",
+  );
+});
+
 test("generated city config passes validateCityConfig and inspectCityPack", () => {
   const outputRoot = makeOutputRoot();
   createCityPackSkeleton({ ...buildAthensOptions(), outputRoot });

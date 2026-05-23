@@ -25,10 +25,9 @@ function createCityPackSkeleton(options = {}) {
   if (fs.existsSync(targetDir)) {
     if (!normalized.force) {
       throw new Error(
-        `City folder already exists: ${targetDir}. Pass --force to overwrite generated files.`,
+        `City folder already exists: ${targetDir}. Pass --force to overwrite generated skeleton files.`,
       );
     }
-    fs.rmSync(targetDir, { recursive: true, force: true });
   }
 
   fs.mkdirSync(targetDir, { recursive: true });
