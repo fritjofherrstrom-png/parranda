@@ -456,21 +456,130 @@ governs runtime. They are a writing-aid for the next scout passes.
 ### What the next expansion scout should do
 
 A future, separately-scoped expansion scout (NOT this PR, NOT the first
-runtime PR) should deliberately search for **8–15 additional named
-`real_place` candidates** across Barcelona, deliberately mixing the
-roles above:
+runtime PR) should deliberately search for clothing-oriented
+second-hand candidates across Barcelona, organized by the role
+vocabulary above.
 
-- Independent vintage / second-hand shops beyond Raval and Born (e.g.
-  Gràcia, Sant Antoni, Sants, Poblenou, Sant Pere).
-- Chain or charity second-hand shops — Humana-style — where the
-  organization itself is verifiable and address / category / operator
-  are stable.
-- Second-hand book and record shops (`book_resale`, `record_resale`),
-  including used-bookshops outside Sant Antoni.
-- Vintage and design resale (furniture, ceramics, decor) where the shop
-  is named and the address is stable.
-- Utility anchors near transit that make a second-hand day routeable
-  for users who are not already on a Raval / Born loop.
+**The second-hand user choice in Parranda means primarily
+clothing / fashion / vintage / resale.** Books, records, antiques,
+coins, collectibles, furniture, ceramics, decor, and general
+flea-market miscellany are **not** deliberate target categories for
+this expansion wave. They can appear as secondary features inside a
+clothing/vintage/resale stop or a market context (e.g. a vintage
+clothing shop that also stocks records on a back wall), but they do
+not seed their own `real_place` candidates here. Books, records, and
+design resale belong in their own future scouts with their own
+quality bars and source rules.
+
+Target categories for the expansion scout:
+
+- Independent vintage / second-hand **clothing** shops across
+  Barcelona, beyond Raval and Born (e.g. Gràcia, Sant Antoni, Sants,
+  Poblenou, Sant Pere).
+- Charity / chain second-hand **clothing** shops — Humana-style —
+  where the organization itself is verifiable and address / category
+  / operator are stable across sources.
+- Humana-like utility anchors more generally: stable, multi-location
+  second-hand clothing operators with predictable hours and transit
+  access.
+- Fashion resale, curated resale, and consignment-style shops.
+- Design / fashion resale **only** where the clothing-or-fashion
+  relevance is clear from the shop's own positioning (a
+  designer-clothing resale shop counts; a ceramics resale shop does
+  not).
+- Clothing-relevant markets **only** when the schedule can be modeled
+  honestly. The Sant Antoni dominical hold rule applies: no always-on
+  fakery for a market that runs one day a week.
+- Structural area context for streets / clusters / drift
+  neighborhoods — diagnostic / routing context, **never** shown as a
+  fake shop.
+
+**Density target.** "Two" is not the desired catalog shape; it is
+just the safe first PR. The expansion scout should aim for:
+
+- **First pass (raw, before dedupe and source checks):** identify
+  **25–40 clothing-oriented second-hand / vintage / resale
+  candidates** across Barcelona.
+- **After dedupe, source checks, and duplicate-of-existing-catalog
+  filtering:** aim for **15–25 plausible named `real_place`
+  candidates** ready for promotion review.
+- Runtime promotion can happen in **batches** — there is no
+  requirement that one PR ships all of them. But the catalog target
+  is to support **multiple distinct second-hand route days**, not a
+  single demo route.
+
+**Use case driving the target.** A group visiting Barcelona for a
+weekend or 4–5 days should be able to choose second-hand routes on
+**multiple days** without the route engine being starved for places.
+The catalog target follows from that: enough verified
+clothing-oriented anchors across enough neighborhoods that the route
+engine has real material to filter on per user, day, weather, and
+vibe — not just one route's worth.
+
+### Local-language intent vocabulary (general Parranda principle)
+
+Future scouts must **not** rely only on literal English or Swedish
+keyword searches. Local retail categories carry different names in
+different cities; literal Google-style searches miss the category
+even when the category is well-represented locally.
+
+This is a general Parranda principle, not a Barcelona hack. Each
+canonical intent should expand into a small per-city intent map of
+the shape:
+
+```
+canonical intent
+  → local-language terms
+  → known local utility brands
+  → accepted subtypes
+  → excluded false friends
+```
+
+Worked example for `second_hand_clothing` in Barcelona / Catalonia:
+
+- **Local-language terms:** *ropa de segunda mano*, *moda vintage*,
+  *roba de segona mà*, *botiga vintage*, *tienda vintage*,
+  *ropa usada*, *moda circular*, *outlet vintage*.
+- **Known local utility brands:** Humana-like local brands, regional
+  charity / resale operators.
+- **Accepted subtypes:** curated resale, consignment, kilo-shops,
+  fashion thrift.
+- **Excluded false friends:** tourist-coded "vintage" boutiques that
+  are actually new-stock retro, general antique dealers without a
+  clothing drift, used-furniture or used-book shops trying to ride
+  the *vintage* label.
+
+Other cities will have their own term sets — not enumerated here.
+Future expansion scouts for other Parranda cities are expected to
+build their own city-local term sets before searching.
+
+**This applies across categories, not only second-hand.** The same
+canonical-intent → local-language → utility-brand → subtypes →
+excluded-false-friends shape applies to many Parranda categories,
+including:
+
+- **beer** (cervecería artesanal vs cervecería tradicional vs
+  taproom; local craft brands vs tourist beer halls)
+- **markets** (mercat municipal vs mercat dominical vs mercadillo
+  vs feria; recurring vs always-on)
+- **viewpoints** (mirador, terraza con vistas, *bunkers*-style
+  unofficial viewpoints)
+- **bakeries** (forn de pa, panadería, pastisseria, granja)
+- **live music** (sala de conciertos, bar musical, jam session,
+  vermut musical)
+- **aperitivo / tapas / vermouth** (vermutería, fer el vermut,
+  tapeo, pintxos, cañas)
+
+The goal is for Parranda to find what users struggle to find with
+literal Google searches because local categories carry different
+names in different cities.
+
+This subsection is a **writing principle** for future scouts. It does
+**not** ship a vocabulary layer. No new contract, no new config
+file, no new validator rule — the implementation question (where
+this intent map should live in the codebase, how providers consume
+it, how the route engine ranks against it) is deferred to a later,
+separately-scoped PR.
 
 ### Calibration adjustments for the expansion pass
 
