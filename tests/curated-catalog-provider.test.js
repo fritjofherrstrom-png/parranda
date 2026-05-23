@@ -49,7 +49,7 @@ test("CuratedCatalogProvider wraps Barcelona catalog items and preserves structu
   const realPlaces = candidates.filter((candidate) => candidate.candidate_kind === "real_place");
 
   assert.equal(anchors.length, 5);
-  assert.equal(realPlaces.length, 56);
+  assert.equal(realPlaces.length, 70);
   assert.ok(candidates.every((candidate) => candidate.source.kind === "city_catalog"));
   assert.ok(anchors.every((candidate) => candidate.is_structural));
   assert.ok(realPlaces.every((candidate) => !candidate.is_structural));
@@ -76,7 +76,7 @@ test("CuratedCatalogProvider can exclude structural candidates for user-facing p
     includeStructural: false,
   });
 
-  assert.equal(visibleCandidates.length, 56);
+  assert.equal(visibleCandidates.length, 70);
   assert.ok(visibleCandidates.every((candidate) => candidate.candidate_kind === "real_place"));
   assert.ok(visibleCandidates.every((candidate) => !candidate.is_structural));
   assert.equal(

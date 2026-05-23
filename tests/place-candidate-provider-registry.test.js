@@ -37,26 +37,26 @@ test("default registry collects Barcelona candidates and keeps structural anchor
 
   assert.equal(result.city, "barcelona");
   assert.equal(result.candidates.length, barcelona.catalog.allItems.length);
-  assert.equal(result.summary.total, 61);
-  assert.equal(result.summary.real_place_count, 56);
+  assert.equal(result.summary.total, 75);
+  assert.equal(result.summary.real_place_count, 70);
   assert.equal(result.summary.structural_count, 5);
   assert.deepEqual(result.summary.by_candidate_kind, {
     structural_anchor: 5,
-    real_place: 56,
+    real_place: 70,
   });
   assert.deepEqual(result.summary.by_trust_tier, {
-    curated: 61,
+    curated: 75,
   });
   assert.deepEqual(result.summary.by_provider["curated-catalog"].by_candidate_kind, {
     structural_anchor: 5,
-    real_place: 56,
+    real_place: 70,
   });
 
   const structural = result.candidates.filter((candidate) => candidate.is_structural);
   const realPlaces = result.candidates.filter((candidate) => !candidate.is_structural);
 
   assert.equal(structural.length, 5);
-  assert.equal(realPlaces.length, 56);
+  assert.equal(realPlaces.length, 70);
   assert.ok(structural.every((candidate) => candidate.candidate_kind === "structural_anchor"));
   assert.ok(realPlaces.every((candidate) => candidate.candidate_kind === "real_place"));
 });
@@ -66,11 +66,11 @@ test("registry passes provider options such as includeStructural", () => {
     includeStructural: false,
   });
 
-  assert.equal(result.summary.total, 56);
-  assert.equal(result.summary.real_place_count, 56);
+  assert.equal(result.summary.total, 70);
+  assert.equal(result.summary.real_place_count, 70);
   assert.equal(result.summary.structural_count, 0);
   assert.deepEqual(result.summary.by_candidate_kind, {
-    real_place: 56,
+    real_place: 70,
   });
 });
 
