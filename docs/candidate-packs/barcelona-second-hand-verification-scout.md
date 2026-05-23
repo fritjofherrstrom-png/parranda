@@ -408,6 +408,115 @@ adds none):**
 - Barcelona stays `visibility: "preview"`.
 - No structural cluster ID becomes searchable as a place.
 
+## Catalog density note: Parranda needs both character anchors and utility anchors
+
+This scout recommends exactly two promotions (Lullaby Vintage and
+Loisaida). That number reflects the **smallest safe first runtime PR**
+— what survives a strict multi-source pass in one sitting. It is not the
+desired final shape of Barcelona's second-hand catalog.
+
+Parranda is not only a hidden-gem app. The longer goal is a broad **local
+intelligence layer**: many usable places, intelligently filtered and
+ranked for the individual user, the moment, the route, the weather, the
+opening pattern, and the vibe. Filtering only works when there is enough
+material to filter. A catalog with two vintage shops cannot produce a
+believable second-hand day for anyone whose constraints rule one of them
+out.
+
+For second hand specifically, future expansion should deliberately
+include more than indie / one-of-a-kind shops. Stable, verifiable
+chain-or-multi-location stores — `Humana`-type charity / resale outlets
+are the canonical example, if address and operator can be verified —
+are valuable **utility anchors**. They should not be framed as hidden
+gems, but they make a second-hand day actually routeable for a user
+who is not in central Raval or Born on the right weekday.
+
+### Future runtime roles (descriptive, not a new contract)
+
+These are intake-side labels for thinking about *why* a candidate
+belongs in the catalog. They are not new `candidate_kind` values — the
+canonical vocabulary in `server/place-candidates/contract.js` still
+governs runtime. They are a writing-aid for the next scout passes.
+
+- **character_anchor** — unique, high-flavor, editorial-fit place.
+  Examples in this pass: Lullaby Vintage, Loisaida, Revolution Vintage.
+- **utility_anchor** — practical, stable, useful stop that adds route
+  density even if it has no editorial sparkle. Examples worth searching
+  for in a future pass: verified Humana locations, large multi-location
+  second-hand chains with a Barcelona presence, predictable shop hours
+  near transit.
+- **market_anchor** — market or recurring / scheduled second-hand
+  source. Examples in this pass: `mercat-encants` (already runtime), the
+  Sant Antoni dominical (held pending recurring-event runtime path).
+- **structural_area_context** — street / cluster / neighborhood context
+  used by routing or diagnostics, **never shown to users as a place.**
+  Examples in this pass: the Riera Baixa cluster, the Born vintage /
+  design cluster, the Gràcia drift, the Sant Antoni drift.
+
+### What the next expansion scout should do
+
+A future, separately-scoped expansion scout (NOT this PR, NOT the first
+runtime PR) should deliberately search for **8–15 additional named
+`real_place` candidates** across Barcelona, deliberately mixing the
+roles above:
+
+- Independent vintage / second-hand shops beyond Raval and Born (e.g.
+  Gràcia, Sant Antoni, Sants, Poblenou, Sant Pere).
+- Chain or charity second-hand shops — Humana-style — where the
+  organization itself is verifiable and address / category / operator
+  are stable.
+- Second-hand book and record shops (`book_resale`, `record_resale`),
+  including used-bookshops outside Sant Antoni.
+- Vintage and design resale (furniture, ceramics, decor) where the shop
+  is named and the address is stable.
+- Utility anchors near transit that make a second-hand day routeable
+  for users who are not already on a Raval / Born loop.
+
+### Calibration adjustments for the expansion pass
+
+The bar for *first* promotion has to be strict because the first wave
+defines how Parranda treats second-hand at all. The bar for *expansion*
+candidates can be looser without lying to users, provided:
+
+- **In-person verification is not required** for every candidate before
+  catalog inclusion. The catalog already supports
+  `needs_human_verification: true` plus `confidence: medium`. That
+  combination is acceptable when address, category, and provenance are
+  stable across independent sources.
+- **Perfect opening hours are not required** if the runtime can honestly
+  omit hours and the user can click through to the operator / source URL
+  to verify current status. Avoid asserting hours the catalog does not
+  actually know.
+- `confidence: high` should still be reserved for entries whose
+  existence, address, and category are confirmed by either an official
+  operator page or a municipal source.
+
+### What the expansion scout must still reject
+
+The calibration loosening above does not relax the pack's hard rules.
+The expansion scout must still reject:
+
+- Invented addresses or invented operators.
+- Duplicates of existing Barcelona catalog entries (always grep
+  `server/cities/barcelona/catalog.js` first).
+- Fake clusters dressed up as shops — `area_preset` candidates do not
+  become `real_place` runtime entries unless they decompose cleanly
+  into named, address-verified shops.
+- Recurring markets modeled as always-on places. The Sant Antoni
+  dominical waits for the recurring-event runtime path. So does any
+  other "Sunday-only" or "first-Saturday-of-the-month" candidate.
+- `confidence: needs_review` candidates entering runtime. The pack /
+  validator hard rule still holds.
+
+### Reading this scout in context
+
+The Lullaby + Loisaida proposal is the **first one or two stones**, not
+the path. Treat it as the first runtime PR that proves Parranda can
+ship second-hand entries safely. The next scout (expansion) should plan
+for an order of magnitude more candidates, organized by the role
+vocabulary above, and the runtime promotion PRs that follow it can
+batch entries that pass the looser-but-still-honest bar.
+
 ## Unresolved risks
 
 - Hours sources for Sant Antoni dominical disagree (08:30–14:00 vs
