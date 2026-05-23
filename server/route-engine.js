@@ -2307,8 +2307,12 @@ function optimizerModeScore(template, optimizerMode, budgetTier, modifier) {
 }
 
 function buildOpeningWarnings(routeStops, weekday) {
+  // closedWeekdays is intentionally optional on catalog entries — when an
+  // entry's weekly schedule has not been verified to source, the field is
+  // omitted rather than encoded as `[]` (which would imply "open every
+  // day"). Treat a missing field as "schedule unknown, do not warn".
   return routeStops
-    .filter((stop) => stop.closedWeekdays.includes(weekday))
+    .filter((stop) => Array.isArray(stop.closedWeekdays) && stop.closedWeekdays.includes(weekday))
     .map((stop) => `${stop.name} är kuraterat som svagare eller stängt den här veckodagen.`);
 }
 
