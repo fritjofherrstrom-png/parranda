@@ -1,0 +1,456 @@
+{
+  "resolved_start": "Sant Antoni",
+  "resolved_end": "Poblenou / Coast",
+  "resolved_home_base": null,
+  "days": [
+    {
+      "date": "2026-05-23",
+      "primary": {
+        "id": "sant-antoni-food-bar-flow",
+        "start": "Sant Antoni",
+        "end": "Poblenou / Coast",
+        "shape": "arc",
+        "day_profile": "light",
+        "anchor_zone": "Sant Antoni -> Poblenou",
+        "routing_source": "heuristic",
+        "estimated_km": 6.1,
+        "longest_leg_km": 5.3,
+        "longest_leg_minutes": 64,
+        "average_leg_minutes": 18,
+        "stops": [
+          {
+            "label": "Bandini's",
+            "area": "sant-antoni",
+            "live": false
+          },
+          {
+            "label": "Mercat de Sant Antoni",
+            "area": "sant-antoni",
+            "live": false
+          },
+          {
+            "label": "Mercat de Poblenou",
+            "area": "poblenou",
+            "live": false
+          }
+        ],
+        "legs": [
+          {
+            "from": "Sant Antoni",
+            "to": "Bandini's",
+            "km": 0.2,
+            "minutes": 2
+          },
+          {
+            "from": "Bandini's",
+            "to": "Mercat de Sant Antoni",
+            "km": 0.3,
+            "minutes": 4
+          },
+          {
+            "from": "Mercat de Sant Antoni",
+            "to": "Mercat de Poblenou",
+            "km": 5.3,
+            "minutes": 64
+          },
+          {
+            "from": "Mercat de Poblenou",
+            "to": "Poblenou / Coast",
+            "km": 0.3,
+            "minutes": 4
+          }
+        ]
+      },
+      "alternative_count": 2,
+      "alternatives": [
+        {
+          "id": "born-santa-caterina-culture-wine-loop",
+          "start": "Sant Antoni",
+          "end": "Poblenou / Coast",
+          "shape": "arc",
+          "day_profile": "variation",
+          "anchor_zone": "Sant Antoni -> Poblenou",
+          "stops": [
+            "Llibreria Finestres",
+            "Mercat dels Encants",
+            "Mercat de Poblenou",
+            "Palo Alto Market"
+          ]
+        },
+        {
+          "id": "born-santa-caterina-culture-wine-loop",
+          "start": "Sant Antoni",
+          "end": "Poblenou / Coast",
+          "shape": "arc",
+          "day_profile": "peak",
+          "anchor_zone": "Sant Antoni -> Poblenou",
+          "stops": [
+            "Llibreria Finestres",
+            "Mercat dels Encants",
+            "Mercat de Poblenou",
+            "Palo Alto Market"
+          ]
+        }
+      ]
+    },
+    {
+      "date": "2026-05-24",
+      "primary": {
+        "id": "encants-to-coast-drift",
+        "start": "Poblenou / Coast",
+        "end": "Sant Antoni",
+        "shape": "arc",
+        "day_profile": "light",
+        "anchor_zone": "Poblenou -> Sant Antoni",
+        "routing_source": "heuristic",
+        "estimated_km": 5.9,
+        "longest_leg_km": 4.2,
+        "longest_leg_minutes": 50,
+        "average_leg_minutes": 18,
+        "stops": [
+          {
+            "label": "Mercat de Poblenou",
+            "area": "poblenou",
+            "live": false
+          },
+          {
+            "label": "Vintage Poblenou",
+            "area": "poblenou",
+            "live": false
+          },
+          {
+            "label": "Mercat de Sant Antoni",
+            "area": "sant-antoni",
+            "live": false
+          }
+        ],
+        "legs": [
+          {
+            "from": "Poblenou / Coast",
+            "to": "Mercat de Poblenou",
+            "km": 0.3,
+            "minutes": 4
+          },
+          {
+            "from": "Mercat de Poblenou",
+            "to": "Vintage Poblenou",
+            "km": 1.2,
+            "minutes": 14
+          },
+          {
+            "from": "Vintage Poblenou",
+            "to": "Mercat de Sant Antoni",
+            "km": 4.2,
+            "minutes": 50
+          },
+          {
+            "from": "Mercat de Sant Antoni",
+            "to": "Sant Antoni",
+            "km": 0.2,
+            "minutes": 2
+          }
+        ]
+      },
+      "alternative_count": 2,
+      "alternatives": [
+        {
+          "id": "sant-antoni-food-bar-flow",
+          "start": "Poblenou / Coast",
+          "end": "Sant Antoni",
+          "shape": "arc",
+          "day_profile": "variation",
+          "anchor_zone": "Poblenou -> Sant Antoni",
+          "stops": [
+            "Mercat de Poblenou",
+            "Mercat de Sant Antoni",
+            "Bandini's",
+            "Bar Calders"
+          ]
+        },
+        {
+          "id": "sant-antoni-food-bar-flow",
+          "start": "Poblenou / Coast",
+          "end": "Sant Antoni",
+          "shape": "arc",
+          "day_profile": "peak",
+          "anchor_zone": "Poblenou -> Sant Antoni",
+          "stops": [
+            "Mercat de Poblenou",
+            "Mercat de Sant Antoni",
+            "Bandini's",
+            "Bar Calders"
+          ]
+        }
+      ]
+    },
+    {
+      "date": "2026-05-25",
+      "primary": {
+        "id": "encants-to-coast-drift",
+        "start": "Gràcia",
+        "end": "Poble-sec / Montjuïc",
+        "shape": "arc",
+        "day_profile": "light",
+        "anchor_zone": "Gràcia -> Poble-sec",
+        "routing_source": "heuristic",
+        "estimated_km": 5,
+        "longest_leg_km": 3.9,
+        "longest_leg_minutes": 47,
+        "average_leg_minutes": 15,
+        "stops": [
+          {
+            "label": "Humana Vintage — Astúries",
+            "area": "gracia",
+            "live": false
+          },
+          {
+            "label": "Plaça del Diamant",
+            "area": "gracia",
+            "live": false
+          },
+          {
+            "label": "Mercat de la Llibertat",
+            "area": "gracia",
+            "live": false
+          }
+        ],
+        "legs": [
+          {
+            "from": "Gràcia",
+            "to": null,
+            "km": 0.3,
+            "minutes": 4
+          },
+          {
+            "from": null,
+            "to": null,
+            "km": 0.1,
+            "minutes": 2
+          },
+          {
+            "from": null,
+            "to": null,
+            "km": 0.6,
+            "minutes": 7
+          },
+          {
+            "from": null,
+            "to": "Poble-sec / Montjuïc",
+            "km": 3.9,
+            "minutes": 47
+          }
+        ]
+      },
+      "alternative_count": 2,
+      "alternatives": [
+        {
+          "id": "sant-antoni-food-bar-flow",
+          "start": "Gràcia",
+          "end": "Poble-sec / Montjuïc",
+          "shape": "arc",
+          "day_profile": "variation",
+          "anchor_zone": "Gràcia -> Poble-sec",
+          "stops": [
+            "Vermuteria Lou",
+            "Mercat de la Llibertat",
+            "Bodega Quimet",
+            "La Federica"
+          ]
+        },
+        {
+          "id": "sant-antoni-food-bar-flow",
+          "start": "Gràcia",
+          "end": "Poble-sec / Montjuïc",
+          "shape": "arc",
+          "day_profile": "peak",
+          "anchor_zone": "Gràcia -> Poble-sec",
+          "stops": [
+            "Vermuteria Lou",
+            "Mercat de la Llibertat",
+            "Bodega Quimet",
+            "La Federica"
+          ]
+        }
+      ]
+    },
+    {
+      "date": "2026-05-26",
+      "primary": {
+        "id": "sant-antoni-food-bar-flow",
+        "start": "Sant Antoni",
+        "end": "Gràcia",
+        "shape": "arc",
+        "day_profile": "light",
+        "anchor_zone": "Sant Antoni -> Gràcia",
+        "routing_source": "heuristic",
+        "estimated_km": 4.5,
+        "longest_leg_km": 3.6,
+        "longest_leg_minutes": 43,
+        "average_leg_minutes": 14,
+        "stops": [
+          {
+            "label": "Bandini's",
+            "area": "sant-antoni",
+            "live": false
+          },
+          {
+            "label": "Mercat de Sant Antoni",
+            "area": "sant-antoni",
+            "live": false
+          },
+          {
+            "label": "Vermuteria Lou",
+            "area": "gracia",
+            "live": false
+          }
+        ],
+        "legs": [
+          {
+            "from": "Sant Antoni",
+            "to": "Bandini's",
+            "km": 0.2,
+            "minutes": 2
+          },
+          {
+            "from": "Bandini's",
+            "to": "Mercat de Sant Antoni",
+            "km": 0.3,
+            "minutes": 4
+          },
+          {
+            "from": "Mercat de Sant Antoni",
+            "to": "Vermuteria Lou",
+            "km": 3.6,
+            "minutes": 43
+          },
+          {
+            "from": "Vermuteria Lou",
+            "to": "Gràcia",
+            "km": 0.4,
+            "minutes": 5
+          }
+        ]
+      },
+      "alternative_count": 2,
+      "alternatives": [
+        {
+          "id": "encants-to-coast-drift",
+          "start": "Sant Antoni",
+          "end": "Gràcia",
+          "shape": "arc",
+          "day_profile": "variation",
+          "anchor_zone": "Sant Antoni -> Gràcia",
+          "stops": [
+            "Mercat de Sant Antoni",
+            "Mercat del Ninot",
+            "Cotton Vintage",
+            "La Central"
+          ]
+        },
+        {
+          "id": "gothic-raval-cultural-connector",
+          "start": "Sant Antoni",
+          "end": "Gràcia",
+          "shape": "arc",
+          "day_profile": "variation",
+          "anchor_zone": "Sant Antoni -> Gràcia",
+          "stops": [
+            "Lullaby Vintage",
+            "Flamingos Vintage Kilo — Tallers",
+            "Holala! Plaza",
+            "La Central"
+          ]
+        }
+      ]
+    },
+    {
+      "date": "2026-05-27",
+      "primary": {
+        "id": "poble-sec-montjuic-evening-arc",
+        "start": "Gràcia",
+        "end": "Poblenou / Coast",
+        "shape": "arc",
+        "day_profile": "final",
+        "anchor_zone": "Gràcia -> Poblenou",
+        "routing_source": "heuristic",
+        "estimated_km": 6.2,
+        "longest_leg_km": 4.8,
+        "longest_leg_minutes": 58,
+        "average_leg_minutes": 19,
+        "stops": [
+          {
+            "label": "Bodega Quimet",
+            "area": "gracia",
+            "live": false
+          },
+          {
+            "label": "Teatreneu",
+            "area": "gracia",
+            "live": false
+          },
+          {
+            "label": "Mercat de Poblenou",
+            "area": "poblenou",
+            "live": false
+          }
+        ],
+        "legs": [
+          {
+            "from": "Gràcia",
+            "to": "Bodega Quimet",
+            "km": 0.4,
+            "minutes": 5
+          },
+          {
+            "from": "Bodega Quimet",
+            "to": "Teatreneu",
+            "km": 0.7,
+            "minutes": 8
+          },
+          {
+            "from": "Teatreneu",
+            "to": "Mercat de Poblenou",
+            "km": 4.8,
+            "minutes": 58
+          },
+          {
+            "from": "Mercat de Poblenou",
+            "to": "Poblenou / Coast",
+            "km": 0.3,
+            "minutes": 4
+          }
+        ]
+      },
+      "alternative_count": 2,
+      "alternatives": [
+        {
+          "id": "encants-to-coast-drift",
+          "start": "Gràcia",
+          "end": "Poblenou / Coast",
+          "shape": "arc",
+          "day_profile": "light",
+          "anchor_zone": "Gràcia -> Poblenou",
+          "stops": [
+            "Mercat de la Llibertat",
+            "Humana Vintage — Astúries",
+            "Mercat de Poblenou"
+          ]
+        },
+        {
+          "id": "sant-antoni-food-bar-flow",
+          "start": "Gràcia",
+          "end": "Poblenou / Coast",
+          "shape": "arc",
+          "day_profile": "variation",
+          "anchor_zone": "Gràcia -> Poblenou",
+          "stops": [
+            "Mercat de la Llibertat",
+            "Bodega Quimet",
+            "Vermuteria Lou",
+            "Mercat de Poblenou"
+          ]
+        }
+      ]
+    }
+  ]
+}
