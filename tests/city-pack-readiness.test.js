@@ -3,6 +3,7 @@ const test = require("node:test");
 
 const rome = require("../server/cities/rome");
 const barcelona = require("../server/cities/barcelona");
+const athens = require("../server/cities/athens");
 const testCity = require("../server/cities/test-city");
 const { inspectCityPack } = require("../server/city-readiness/inspect-city-pack");
 
@@ -34,6 +35,25 @@ test("inspectCityPack reports Barcelona without brittle catalog count assumption
   assert.ok(report.catalog.real_place_count > 0);
   assert.ok(report.catalog.area_token_count > 0);
   assert.ok(report.place_candidate_readiness);
+});
+
+test("inspectCityPack reports Athens preview skeleton as honest non-blocked starter city", () => {
+  const report = inspectCityPack(athens);
+
+  assert.equal(report.city, "athens");
+  assert.equal(report.label, "Athens");
+  assert.equal(report.visibility, "preview");
+  assert.notEqual(report.status, "blocked");
+  assert.equal(report.catalog.item_count, 0);
+  assert.equal(report.catalog.real_place_count, 0);
+  assert.equal(report.catalog.route_template_count, 0);
+  assert.equal(report.support.city_page, true);
+  assert.equal(report.support.pulse_baseline, true);
+  assert.equal(report.support.blitz_baseline, false);
+  assert.equal(report.support.planner_baseline, false);
+  assert.ok(report.place_candidate_readiness);
+  assert.equal(report.place_candidate_readiness.can_support_blitz, false);
+  assert.equal(report.place_candidate_readiness.can_support_planner, false);
 });
 
 test("inspectCityPack reports test-city honestly without crashing", () => {

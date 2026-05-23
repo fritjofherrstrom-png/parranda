@@ -47,6 +47,20 @@ test("inspect-city-pack prints Barcelona diagnostics without exact count assumpt
   assert.equal(result.stderr, "");
 });
 
+test("inspect-city-pack supports registered Athens preview skeleton", () => {
+  const result = runInspect("athens");
+
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /City pack inspection: athens \(Athens\)/);
+  assert.match(result.stdout, /Visibility: preview/);
+  assert.match(result.stdout, /- items: 0/);
+  assert.match(result.stdout, /- route templates: 0/);
+  assert.match(result.stdout, /- Blitz baseline: no/);
+  assert.match(result.stdout, /- Planner baseline: no/);
+  assert.match(result.stdout, /Final status: (preview_ready|partial)/);
+  assert.equal(result.stderr, "");
+});
+
 test("inspect-city-pack supports registered test-city", () => {
   const result = runInspect("test-city");
 
