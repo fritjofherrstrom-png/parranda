@@ -296,7 +296,7 @@ test("shadow diagnostics can inspect real Planner output without mutating it", a
   assert.equal(routeLineage.template_match_status, "realized_variant");
   assert.ok(
     routeLineage.realized_route_id.startsWith(
-      "encants-to-coast-drift--realized--bar-brutal--mercat-santa-caterina",
+      "encants-to-coast-drift--realized--granja-m-viader--bormuth",
     ),
   );
   assert.deepEqual(routeLineage.template_stop_ids, [
@@ -307,10 +307,10 @@ test("shadow diagnostics can inspect real Planner output without mutating it", a
     "mercat-encants",
   ]);
   assert.deepEqual(routeLineage.realized_stop_ids, [
-    "bar-brutal",
+    "granja-m-viader",
+    "bormuth",
+    "mercat-de-la-boqueria",
     "mercat-santa-caterina",
-    "la-plata",
-    "mercat-sant-antoni",
   ]);
   assert.deepEqual(routeLineage.missing_template_stops, [
     "platja-bogatell",
@@ -320,10 +320,10 @@ test("shadow diagnostics can inspect real Planner output without mutating it", a
     "mercat-encants",
   ]);
   assert.deepEqual(routeLineage.extra_realized_stops, [
-    "bar-brutal",
+    "granja-m-viader",
+    "bormuth",
+    "mercat-de-la-boqueria",
     "mercat-santa-caterina",
-    "la-plata",
-    "mercat-sant-antoni",
   ]);
   assert.equal(diagnostics.city, "barcelona");
   assert.equal(diagnostics.days.length, plannerResult.days.length);
@@ -344,7 +344,7 @@ test("shadow diagnostics can inspect real Planner output without mutating it", a
   assert.deepEqual(primaryDiagnostics.mismatch_reasons, [
     "stop_count_mismatch:planner=4:route_candidate_user_facing=5",
     "missing_template_stops:platja-bogatell,palo-alto-market,museu-can-framis,la-cova-fumada,mercat-encants",
-    "extra_realized_stops:bar-brutal,mercat-santa-caterina,la-plata,mercat-sant-antoni",
+    "extra_realized_stops:granja-m-viader,bormuth,mercat-de-la-boqueria,mercat-santa-caterina",
   ]);
   assert.ok(
     ["ready", "ready_with_warnings", "needs_review"].includes(

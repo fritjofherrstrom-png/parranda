@@ -28,17 +28,17 @@ test("assessCityCandidateReadiness reports Barcelona candidate coverage without 
   const readiness = assessCityCandidateReadiness(barcelona);
 
   assert.equal(readiness.city, "barcelona");
-  assert.equal(readiness.total_candidates, 75);
-  assert.equal(readiness.real_place_count, 70);
+  assert.equal(readiness.total_candidates, 100);
+  assert.equal(readiness.real_place_count, 95);
   assert.equal(readiness.structural_count, 5);
-  assert.equal(readiness.coordinate_ready_real_place_count, 70);
+  assert.equal(readiness.coordinate_ready_real_place_count, 95);
   assert.equal(readiness.coordinate_coverage, 1);
   assert.deepEqual(readiness.by_candidate_kind, {
     structural_anchor: 5,
-    real_place: 70,
+    real_place: 95,
   });
   assert.deepEqual(readiness.by_trust_tier, {
-    curated: 75,
+    curated: 100,
   });
   assert.equal(readiness.can_support_blitz, true);
   assert.equal(readiness.can_support_planner, true);
@@ -50,11 +50,11 @@ test("assessCityCandidateReadiness can evaluate only user-facing real-place cand
     includeStructural: false,
   });
 
-  assert.equal(readiness.total_candidates, 70);
-  assert.equal(readiness.real_place_count, 70);
+  assert.equal(readiness.total_candidates, 95);
+  assert.equal(readiness.real_place_count, 95);
   assert.equal(readiness.structural_count, 0);
   assert.deepEqual(readiness.by_candidate_kind, {
-    real_place: 70,
+    real_place: 95,
   });
   assert.equal(readiness.can_support_blitz, true);
   assert.equal(readiness.can_support_planner, true);
@@ -100,7 +100,7 @@ test("assessCityCandidateReadiness warns for low coordinate coverage and structu
 
 test("assessCityCandidateReadiness can use stricter thresholds without changing providers", () => {
   const readiness = assessCityCandidateReadiness(barcelona, {
-    minRealPlacesForPlanner: 80,
+    minRealPlacesForPlanner: 120,
   });
 
   assert.equal(readiness.has_minimum_real_places, true);
