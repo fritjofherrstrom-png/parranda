@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const rome = require("../server/cities/rome");
 const barcelona = require("../server/cities/barcelona");
+const athens = require("../server/cities/athens");
 const testCity = require("../server/cities/test-city");
 const { cityConfigs, getCityConfig, normalizeCityKey, resolveCityConfig } = require("../server/cities");
 const { validateCityConfig } = require("../server/cities/contract");
@@ -39,6 +40,20 @@ test("barcelona uppfyller city-kontraktet som registrerad preview-stad", () => {
     95,
   );
   assert.equal(cityConfigs.barcelona.catalog.routeTemplates.length, 6);
+});
+
+test("athens uppfyller city-kontraktet som registrerad preview-skelettstad", () => {
+  assert.doesNotThrow(() => validateCityConfig(athens));
+  const resolution = resolveCityConfig("athens", { allowFallback: false });
+  assert.equal(resolution.cityConfig.key, "athens");
+  assert.equal(resolution.fallbackUsed, false);
+  assert.equal(resolution.found, true);
+  assert.equal(getCityConfig("athens").key, "athens");
+  assert.equal(cityConfigs.athens.visibility, "preview");
+  assert.equal(cityConfigs.athens.locale, "el-GR");
+  assert.equal(cityConfigs.athens.currency, "EUR");
+  assert.equal(cityConfigs.athens.catalog.allItems.length, 0);
+  assert.equal(cityConfigs.athens.catalog.routeTemplates.length, 0);
 });
 
 test("barcelona preview håller Pulse noop när Live-källan är tom", async () => {
