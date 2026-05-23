@@ -18,14 +18,14 @@ test("inspect-route-candidates prints Barcelona route diagnostics", () => {
 
   assert.equal(result.status, 0);
   assert.match(result.stdout, /RouteCandidate inspection: barcelona \(Barcelona\)/);
-  assert.match(result.stdout, /Route count: 6/);
+  assert.match(result.stdout, /Route count: 7/);
   assert.match(result.stdout, /- gracia-local-evening-loop/);
   assert.match(result.stdout, /- encants-to-coast-drift/);
-  assert.match(result.stdout, /- route shapes:\n  - arc: 6/);
-  assert.match(result.stdout, /- source mix:\n  - curated_template: 6/);
-  assert.match(result.stdout, /- confidence:\n  - high: 6/);
-  assert.match(result.stdout, /- trust tiers:\n  - curated: 6/);
-  assert.match(result.stdout, /Sample RouteCandidates \(5 of 6\):/);
+  assert.match(result.stdout, /- route shapes:\n  - arc: 7/);
+  assert.match(result.stdout, /- source mix:\n  - curated_template: 7/);
+  assert.match(result.stdout, /- confidence:\n  - high: 7/);
+  assert.match(result.stdout, /- trust tiers:\n  - curated: 7/);
+  assert.match(result.stdout, /Sample RouteCandidates \(5 of 7\):/);
   assert.equal(result.stderr, "");
 });
 

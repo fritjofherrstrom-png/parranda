@@ -48,7 +48,7 @@ test("CuratedCatalogProvider wraps Barcelona catalog items and preserves structu
   const anchors = candidates.filter((candidate) => candidate.candidate_kind === "structural_anchor");
   const realPlaces = candidates.filter((candidate) => candidate.candidate_kind === "real_place");
 
-  assert.equal(anchors.length, 5);
+  assert.equal(anchors.length, 6);
   assert.equal(realPlaces.length, 95);
   assert.ok(candidates.every((candidate) => candidate.source.kind === "city_catalog"));
   assert.ok(anchors.every((candidate) => candidate.is_structural));
