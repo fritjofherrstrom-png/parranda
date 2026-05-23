@@ -64,31 +64,31 @@
       "alternative_count": 2,
       "alternatives": [
         {
-          "id": "born-santa-caterina-culture-wine-loop",
+          "id": "raval-vintage-shopping-loop",
           "start": "Sant Antoni",
           "end": "Poblenou / Coast",
           "shape": "arc",
           "day_profile": "variation",
           "anchor_zone": "Sant Antoni -> Poblenou",
           "stops": [
+            "Cotton Vintage",
             "Llibreria Finestres",
             "Mercat dels Encants",
-            "Mercat de Poblenou",
-            "Palo Alto Market"
+            "Vintage Poblenou"
           ]
         },
         {
-          "id": "born-santa-caterina-culture-wine-loop",
+          "id": "raval-vintage-shopping-loop",
           "start": "Sant Antoni",
           "end": "Poblenou / Coast",
           "shape": "arc",
           "day_profile": "peak",
           "anchor_zone": "Sant Antoni -> Poblenou",
           "stops": [
+            "Cotton Vintage",
             "Llibreria Finestres",
             "Mercat dels Encants",
-            "Mercat de Poblenou",
-            "Palo Alto Market"
+            "Vintage Poblenou"
           ]
         }
       ]
@@ -98,15 +98,15 @@
       "primary": {
         "id": "encants-to-coast-drift",
         "start": "Poblenou / Coast",
-        "end": "Sant Antoni",
+        "end": "Raval / Gothic",
         "shape": "arc",
         "day_profile": "light",
-        "anchor_zone": "Poblenou -> Sant Antoni",
+        "anchor_zone": "Poblenou -> Gothic Quarter",
         "routing_source": "heuristic",
-        "estimated_km": 5.9,
-        "longest_leg_km": 4.2,
-        "longest_leg_minutes": 50,
-        "average_leg_minutes": 18,
+        "estimated_km": 5,
+        "longest_leg_km": 2.9,
+        "longest_leg_minutes": 35,
+        "average_leg_minutes": 15,
         "stops": [
           {
             "label": "Mercat de Poblenou",
@@ -119,8 +119,8 @@
             "live": false
           },
           {
-            "label": "Mercat de Sant Antoni",
-            "area": "sant-antoni",
+            "label": "Humana Vintage — Portaferrissa",
+            "area": "gothic",
             "live": false
           }
         ],
@@ -139,46 +139,46 @@
           },
           {
             "from": "Vintage Poblenou",
-            "to": "Mercat de Sant Antoni",
-            "km": 4.2,
-            "minutes": 50
+            "to": "Humana Vintage — Portaferrissa",
+            "km": 2.9,
+            "minutes": 35
           },
           {
-            "from": "Mercat de Sant Antoni",
-            "to": "Sant Antoni",
-            "km": 0.2,
-            "minutes": 2
+            "from": "Humana Vintage — Portaferrissa",
+            "to": "Raval / Gothic",
+            "km": 0.6,
+            "minutes": 7
           }
         ]
       },
       "alternative_count": 2,
       "alternatives": [
         {
-          "id": "sant-antoni-food-bar-flow",
+          "id": "born-santa-caterina-culture-wine-loop",
           "start": "Poblenou / Coast",
-          "end": "Sant Antoni",
+          "end": "Raval / Gothic",
           "shape": "arc",
           "day_profile": "variation",
-          "anchor_zone": "Poblenou -> Sant Antoni",
+          "anchor_zone": "Poblenou -> Gothic Quarter",
           "stops": [
             "Mercat de Poblenou",
-            "Mercat de Sant Antoni",
-            "Bandini's",
-            "Bar Calders"
+            "Parc de la Ciutadella",
+            "Mercat de Santa Caterina",
+            "Humana Vintage — Francesc Cambó"
           ]
         },
         {
-          "id": "sant-antoni-food-bar-flow",
+          "id": "born-santa-caterina-culture-wine-loop",
           "start": "Poblenou / Coast",
-          "end": "Sant Antoni",
+          "end": "Raval / Gothic",
           "shape": "arc",
           "day_profile": "peak",
-          "anchor_zone": "Poblenou -> Sant Antoni",
+          "anchor_zone": "Poblenou -> Gothic Quarter",
           "stops": [
             "Mercat de Poblenou",
-            "Mercat de Sant Antoni",
-            "Bandini's",
-            "Bar Calders"
+            "Parc de la Ciutadella",
+            "Mercat de Santa Caterina",
+            "Humana Vintage — Francesc Cambó"
           ]
         }
       ]
@@ -186,89 +186,89 @@
     {
       "date": "2026-05-25",
       "primary": {
-        "id": "gracia-local-evening-loop",
-        "start": "Gràcia",
-        "end": "Poble-sec / Montjuïc",
+        "id": "raval-vintage-shopping-loop",
+        "start": "Raval / Gothic",
+        "end": "Gràcia",
         "shape": "arc",
         "day_profile": "final",
-        "anchor_zone": "Gràcia -> Poble-sec",
+        "anchor_zone": "Gothic Quarter -> Gràcia",
         "routing_source": "heuristic",
-        "estimated_km": 4.9,
-        "longest_leg_km": 4.1,
-        "longest_leg_minutes": 49,
-        "average_leg_minutes": 15,
+        "estimated_km": 4,
+        "longest_leg_km": 2.8,
+        "longest_leg_minutes": 34,
+        "average_leg_minutes": 12,
         "stops": [
           {
-            "label": "Plaça del Diamant",
+            "label": "Holala! Plaza",
+            "area": "raval",
+            "live": false
+          },
+          {
+            "label": "Humana Vintage — Astúries",
             "area": "gracia",
             "live": false
           },
           {
-            "label": "Vermuteria Lou",
-            "area": "gracia",
-            "live": false
-          },
-          {
-            "label": "Plaça del Sol",
+            "label": "Revolution Vintage",
             "area": "gracia",
             "live": false
           }
         ],
         "legs": [
           {
-            "from": "Gràcia",
-            "to": null,
-            "km": 0.3,
-            "minutes": 4
-          },
-          {
-            "from": null,
-            "to": null,
-            "km": 0.1,
-            "minutes": 2
-          },
-          {
-            "from": null,
-            "to": null,
+            "from": "Raval / Gothic",
+            "to": "Holala! Plaza",
             "km": 0.4,
             "minutes": 5
           },
           {
-            "from": null,
-            "to": "Poble-sec / Montjuïc",
-            "km": 4.1,
-            "minutes": 49
+            "from": "Holala! Plaza",
+            "to": "Humana Vintage — Astúries",
+            "km": 2.8,
+            "minutes": 34
+          },
+          {
+            "from": "Humana Vintage — Astúries",
+            "to": "Revolution Vintage",
+            "km": 0.3,
+            "minutes": 4
+          },
+          {
+            "from": "Revolution Vintage",
+            "to": "Gràcia",
+            "km": 0.5,
+            "minutes": 6
           }
         ]
       },
       "alternative_count": 2,
       "alternatives": [
         {
-          "id": "sant-antoni-food-bar-flow",
-          "start": "Gràcia",
-          "end": "Poble-sec / Montjuïc",
+          "id": "raval-vintage-shopping-loop",
+          "start": "Raval / Gothic",
+          "end": "Gràcia",
           "shape": "arc",
           "day_profile": "variation",
-          "anchor_zone": "Gràcia -> Poble-sec",
+          "anchor_zone": "Gothic Quarter -> Gràcia",
           "stops": [
-            "Vermuteria Lou",
-            "Mercat de la Llibertat",
-            "Bodega Quimet",
-            "La Federica"
+            "Lullaby Vintage",
+            "Holala! Plaza",
+            "Humana Vintage — Astúries",
+            "Revolution Vintage"
           ]
         },
         {
-          "id": "encants-to-coast-drift",
-          "start": "Gràcia",
-          "end": "Poble-sec / Montjuïc",
+          "id": "gracia-local-evening-loop",
+          "start": "Raval / Gothic",
+          "end": "Gràcia",
           "shape": "arc",
           "day_profile": "variation",
-          "anchor_zone": "Gràcia -> Poble-sec",
+          "anchor_zone": "Gothic Quarter -> Gràcia",
           "stops": [
+            "Bodega Quimet",
+            "Plaça del Sol",
             "Plaça del Diamant",
-            "Revolution Vintage",
-            "Humana Vintage — Astúries",
-            "Mercat de la Llibertat"
+            "Vermuteria Lou"
           ]
         }
       ]

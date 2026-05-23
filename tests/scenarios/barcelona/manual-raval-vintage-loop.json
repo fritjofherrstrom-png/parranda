@@ -1,61 +1,61 @@
 {
   "resolved_start": "Gràcia",
-  "resolved_end": "Sant Antoni",
+  "resolved_end": "Raval / Gothic",
   "resolved_home_base": null,
   "days": [
     {
       "date": "2026-05-26",
       "primary": {
-        "id": "encants-to-coast-drift",
+        "id": "raval-vintage-shopping-loop",
         "start": "Gràcia",
-        "end": "Sant Antoni",
+        "end": "Raval / Gothic",
         "shape": "arc",
         "day_profile": "light",
-        "anchor_zone": "Gràcia -> Sant Antoni",
+        "anchor_zone": "Gràcia -> Gothic Quarter",
         "routing_source": "heuristic",
-        "estimated_km": 3.5,
-        "longest_leg_km": 1.6,
-        "longest_leg_minutes": 19,
-        "average_leg_minutes": 11,
+        "estimated_km": 3.9,
+        "longest_leg_km": 2.8,
+        "longest_leg_minutes": 34,
+        "average_leg_minutes": 12,
         "stops": [
           {
-            "label": "Cotton Vintage",
-            "area": "eixample",
+            "label": "Humana Vintage — Astúries",
+            "area": "gracia",
             "live": false
           },
           {
-            "label": "Humana — Ronda de Sant Antoni",
-            "area": "sant-antoni",
+            "label": "Holala! Plaza",
+            "area": "raval",
             "live": false
           },
           {
-            "label": "Mercat de Sant Antoni",
-            "area": "sant-antoni",
+            "label": "Lullaby Vintage",
+            "area": "raval",
             "live": false
           }
         ],
         "legs": [
           {
             "from": "Gràcia",
-            "to": "Cotton Vintage",
-            "km": 1.6,
-            "minutes": 19
+            "to": "Humana Vintage — Astúries",
+            "km": 0.3,
+            "minutes": 4
           },
           {
-            "from": "Cotton Vintage",
-            "to": "Humana — Ronda de Sant Antoni",
-            "km": 1.1,
-            "minutes": 13
+            "from": "Humana Vintage — Astúries",
+            "to": "Holala! Plaza",
+            "km": 2.8,
+            "minutes": 34
           },
           {
-            "from": "Humana — Ronda de Sant Antoni",
-            "to": "Mercat de Sant Antoni",
+            "from": "Holala! Plaza",
+            "to": "Lullaby Vintage",
             "km": 0.6,
             "minutes": 7
           },
           {
-            "from": "Mercat de Sant Antoni",
-            "to": "Sant Antoni",
+            "from": "Lullaby Vintage",
+            "to": "Raval / Gothic",
             "km": 0.2,
             "minutes": 2
           }
@@ -64,29 +64,29 @@
       "alternative_count": 2,
       "alternatives": [
         {
-          "id": "born-santa-caterina-culture-wine-loop",
+          "id": "encants-to-coast-drift",
           "start": "Gràcia",
-          "end": "Sant Antoni",
+          "end": "Raval / Gothic",
           "shape": "arc",
           "day_profile": "variation",
-          "anchor_zone": "Gràcia -> Sant Antoni",
+          "anchor_zone": "Gràcia -> Gothic Quarter",
           "stops": [
-            "La Central",
-            "Cotton Vintage",
-            "Mercat de Sant Antoni"
+            "Holala! Plaza",
+            "Humana Vintage — Portaferrissa",
+            "Lullaby Vintage"
           ]
         },
         {
-          "id": "born-santa-caterina-culture-wine-loop",
+          "id": "encants-to-coast-drift",
           "start": "Gràcia",
-          "end": "Sant Antoni",
+          "end": "Raval / Gothic",
           "shape": "arc",
           "day_profile": "peak",
-          "anchor_zone": "Gràcia -> Sant Antoni",
+          "anchor_zone": "Gràcia -> Gothic Quarter",
           "stops": [
-            "La Central",
-            "Cotton Vintage",
-            "Mercat de Sant Antoni"
+            "Holala! Plaza",
+            "Humana Vintage — Portaferrissa",
+            "Lullaby Vintage"
           ]
         }
       ]

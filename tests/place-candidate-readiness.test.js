@@ -28,17 +28,17 @@ test("assessCityCandidateReadiness reports Barcelona candidate coverage without 
   const readiness = assessCityCandidateReadiness(barcelona);
 
   assert.equal(readiness.city, "barcelona");
-  assert.equal(readiness.total_candidates, 100);
+  assert.equal(readiness.total_candidates, 101);
   assert.equal(readiness.real_place_count, 95);
-  assert.equal(readiness.structural_count, 5);
+  assert.equal(readiness.structural_count, 6);
   assert.equal(readiness.coordinate_ready_real_place_count, 95);
   assert.equal(readiness.coordinate_coverage, 1);
   assert.deepEqual(readiness.by_candidate_kind, {
-    structural_anchor: 5,
+    structural_anchor: 6,
     real_place: 95,
   });
   assert.deepEqual(readiness.by_trust_tier, {
-    curated: 100,
+    curated: 101,
   });
   assert.equal(readiness.can_support_blitz, true);
   assert.equal(readiness.can_support_planner, true);

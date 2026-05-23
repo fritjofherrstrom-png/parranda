@@ -91,6 +91,36 @@ const routeTemplates = [
     weekdayBoost: { 0: 1, 5: 1, 6: 2 },
     vibeProfile: { evening: 1, culture: 2, lowKey: 3, party: 0 },
   },
+  {
+    id: "raval-vintage-shopping-loop",
+    title: "Raval vintage shopping loop",
+    summary: "Ravals tätaste vintage-kluster — Lullaby, Holala! Plaza och Flamingos på under en kilometer, med Granja M. Viader som mjuk landning efteråt.",
+    stops: ["lullaby-vintage", "holala-plaza", "flamingos-vintage-kilo-tallers", "granja-m-viader"],
+    defaultKm: 3,
+    preferenceTags: ["vintage", "second_hand", "shopping", "lokalt", "hidden gems", "low-key"],
+    optimizerModes: ["low-key-mode"],
+    weatherProfile: { sun: 1, rain: 3, hot: 1, evening: 0 },
+    weekdayBoost: { 2: 1, 3: 1, 4: 1, 5: 1, 6: 1 },
+    vibeProfile: { evening: 0, culture: 1, lowKey: 3, party: 0 },
+    curatorVoice: {
+      whyArea: {
+        sv: "Raval har Barcelonas tätaste vintage-kluster. Lullaby, Holala! Plaza och Flamingos Vintage Kilo ligger på under en kilometer längs Carrer de la Riera Baixa och Carrer dels Tallers — tre butiker med olika karaktär som faktiskt fungerar ihop som en halv dag.",
+        en: "Raval has Barcelona's densest vintage cluster. Lullaby, Holala! Plaza, and Flamingos Vintage Kilo sit within a kilometre along Carrer de la Riera Baixa and Carrer dels Tallers — three shops with different characters that actually work together as a half-day.",
+      },
+      whyOrder: {
+        sv: "Vi börjar söderut vid Lullaby, tar kvartersskiftet upp mot Holala! Plaza, svänger in på Flamingos Kilo (lättast att missa om man inte vet om det), och landar på Granja M. Viader för kaffe och något att äta utan att behöva lämna Raval.",
+        en: "We start south at Lullaby, take the neighborhood shift up to Holala! Plaza, turn into Flamingos Kilo (easiest to miss if you don't know), and land at Granja M. Viader for coffee and something to eat without leaving Raval.",
+      },
+      whyNow: {
+        sv: "Bäst tis–lör dagtid. Holala! Plaza och Lullaby stänger söndagar; Flamingos håller öppet dagligen men kilo-formatet är roligast när man har lite tid.",
+        en: "Best Tue–Sat daytime. Holala! Plaza and Lullaby close Sundays; Flamingos stays open daily but the kilo format is most fun when you have a little time.",
+      },
+      whoFits: {
+        sv: "För den som faktiskt vill hitta något — inte bara titta. Tre butiker med tre olika ingångar till second hand, och en kvarterscafé i slutet som inte försöker vara något annat.",
+        en: "For the person who actually wants to find something — not just browse. Three shops with three different approaches to second hand, and a neighborhood café at the end that isn't trying to be anything else.",
+      },
+    },
+  },
 ];
 
 const routeAnchorItems = [
@@ -173,6 +203,22 @@ const routeAnchorItems = [
     goodAsFinal: 3.2,
     closedWeekdays: [],
     searchTerms: ["poblenou", "bogatell", "barceloneta", "coast", "beach"],
+  },
+  {
+    id: "raval-gothic-route-anchor",
+    name: "Raval / Gothic",
+    kind: "district-group",
+    structuralRouteAnchor: true,
+    lat: 41.3820,
+    lng: 2.1680,
+    area: "raval",
+    tags: ["vintage", "second_hand", "shopping", "kultur", "hidden gems", "low-key", "lokalt"],
+    weatherTags: ["all-weather"],
+    anchorWeight: 2.8,
+    goodAsStart: 2.8,
+    goodAsFinal: 2.6,
+    closedWeekdays: [],
+    searchTerms: ["raval", "el raval", "gothic", "gòtic", "riera baixa", "tallers", "boqueria", "second hand", "vintage"],
   },
 ];
 
@@ -1447,6 +1493,20 @@ const provenanceById = {
     classification: "route_anchor",
     needs_human_verification: false,
     source_note: "Derived from the Barcelona neighborhood model added in PR #47.",
+  },
+  "raval-gothic-route-anchor": {
+    source_type: "citypack_structural_model",
+    confidence: "high",
+    last_checked: LAST_CHECKED,
+    why_included: "Structural route anchor for Raval and Gothic vintage/shopping flows; not a venue or curated place.",
+    area: "raval",
+    macro: "old-town",
+    tags_intents: ["second_hand", "shopping", "culture", "low_key"],
+    time_fit: ["morning", "afternoon"],
+    route_role: ["start", "final", "neighborhood_anchor"],
+    classification: "route_anchor",
+    needs_human_verification: false,
+    source_note: "Added with raval-vintage-shopping-loop template to give the Raval vintage cluster a navigable start/end zone.",
   },
   "bandinis-barcelona": {
     source_url: "https://www.bandinisbarcelona.com/",

@@ -61,7 +61,7 @@ test("check-route-candidate-readiness passes for the current baseline cities", (
   );
   assert.match(
     result.stdout,
-    /- barcelona: ready \| templates=6 \| route_candidates=6 \| user_facing=25 \| structural=0 \| warnings=0 \| limitations=0/,
+    /- barcelona: ready \| templates=7 \| route_candidates=7 \| user_facing=29 \| structural=0 \| warnings=0 \| limitations=0/,
   );
   assert.match(
     result.stdout,

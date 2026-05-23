@@ -39,7 +39,7 @@ test("barcelona uppfyller city-kontraktet som registrerad preview-stad", () => {
     cityConfigs.barcelona.catalog.allItems.filter((item) => !["district", "district-group"].includes(item.kind)).length,
     95,
   );
-  assert.equal(cityConfigs.barcelona.catalog.routeTemplates.length, 6);
+  assert.equal(cityConfigs.barcelona.catalog.routeTemplates.length, 7);
 });
 
 test("athens uppfyller city-kontraktet som registrerad preview-skelettstad", () => {
@@ -161,7 +161,7 @@ test("barcelona har en strukturell neighborhood-modell med första route seeds",
   assert.equal(areaDefinitions.montjuic.label, "Montjuïc");
   assert.equal(areaDefinitions["barri-gotic"].macro, areaDefinitions.gothic.macro);
   assert.equal(areaDefinitions["el-born"].macro, areaDefinitions["born-sant-pere-santa-caterina"].macro);
-  assert.equal(cityConfigs.barcelona.catalog.routeTemplates.length, 6);
+  assert.equal(cityConfigs.barcelona.catalog.routeTemplates.length, 7);
 });
 
 test("barcelona pilotkatalog använder giltiga area tokens, provenance och route templates", () => {
@@ -187,8 +187,8 @@ test("barcelona pilotkatalog använder giltiga area tokens, provenance och route
   const routeAnchors = allItems.filter((item) => item.kind === "district-group");
 
   assert.equal(placeItems.length, 95);
-  assert.equal(routeAnchors.length, 5);
-  assert.equal(barcelonaCatalog.routeTemplates.length, 6);
+  assert.equal(routeAnchors.length, 6);
+  assert.equal(barcelonaCatalog.routeTemplates.length, 7);
   assert.equal(findItemByName("bandini").id, "bandinis-barcelona");
   assert.equal(findItemByName("moritz").id, "fabrica-moritz-barcelona");
   assert.equal(findItemByName("mar bella").id, "platja-mar-bella");

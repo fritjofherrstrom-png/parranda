@@ -22,14 +22,14 @@ test("compare-route-candidates reports Barcelona as ready", () => {
 
   assert.equal(result.status, 0);
   assert.match(result.stdout, /RouteCandidate comparison: barcelona \(Barcelona\)/);
-  assert.match(result.stdout, /Route templates: 6/);
-  assert.match(result.stdout, /RouteCandidates: 6/);
+  assert.match(result.stdout, /Route templates: 7/);
+  assert.match(result.stdout, /RouteCandidates: 7/);
   assert.match(result.stdout, /Template ids missing from RouteCandidates:\n- none/);
   assert.match(result.stdout, /RouteCandidate ids missing from templates:\n- none/);
   assert.match(result.stdout, /Unresolved template stops:\n- none/);
-  assert.match(result.stdout, /Stop visibility:\n- user-facing: 25\n- structural: 0/);
-  assert.match(result.stdout, /Route shape distribution:\n- arc: 6/);
-  assert.match(result.stdout, /Confidence distribution:\n- high: 6/);
+  assert.match(result.stdout, /Stop visibility:\n- user-facing: 29\n- structural: 0/);
+  assert.match(result.stdout, /Route shape distribution:\n- arc: 7/);
+  assert.match(result.stdout, /Confidence distribution:\n- high: 7/);
   assert.match(result.stdout, /Warnings:\n- none/);
   assert.match(result.stdout, /Limitations:\n- none/);
   assert.match(result.stdout, /Readiness verdict: ready/);
