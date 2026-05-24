@@ -852,44 +852,66 @@ body::before {
   background: rgba(255, 255, 255, 0.72);
 }
 
+/* Planned-route context: compact pill (replaces the large teaser card) */
 .city-pulse-teaser.is-day-handoff {
-  padding: 12px 14px;
-  border-radius: 22px;
-  gap: 10px;
-  background: rgba(255, 252, 247, 0.92);
+  border-radius: 999px;
+  padding: 12px 16px 12px 20px;
+  gap: 14px;
+  background:
+    radial-gradient(circle at 90% 0%, rgba(215, 160, 77, 0.14), transparent 26%),
+    linear-gradient(180deg, rgba(255, 252, 247, 0.96), rgba(247, 239, 227, 0.9));
   border-color: rgba(70, 38, 18, 0.08);
   box-shadow: none;
+  color: var(--text);
 }
 
 .city-pulse-teaser.is-day-handoff .city-pulse-live {
+  display: flex;
+}
+
+.city-pulse-teaser.is-day-handoff .city-pulse-live-label {
   display: none;
 }
 
 .city-pulse-teaser.is-day-handoff .city-pulse-teaser-copy {
-  gap: 2px;
-  max-width: 42ch;
+  flex-direction: row;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 10px;
+  max-width: none;
+  flex: 1 1 auto;
 }
 
 .city-pulse-teaser.is-day-handoff .city-pulse-edition-label {
-  color: rgba(36, 25, 20, 0.52);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+  white-space: nowrap;
 }
 
 .city-pulse-teaser.is-day-handoff .city-pulse-teaser-copy h2 {
   font-family: "Manrope", sans-serif;
-  font-size: 1rem;
-  line-height: 1.22;
-  font-weight: 700;
+  font-size: 0.96rem;
+  line-height: 1.4;
+  font-weight: 600;
+  color: var(--text);
 }
 
 .city-pulse-teaser.is-day-handoff .city-pulse-teaser-summary {
-  color: var(--muted);
-  font-size: 0.82rem;
-  line-height: 1.4;
+  display: none;
 }
 
 .city-pulse-teaser.is-day-handoff .ghost-button {
-  padding: 7px 11px;
-  font-size: 0.82rem;
+  border: 0;
+  background: transparent;
+  color: var(--accent-deep);
+  font-weight: 700;
+  font-size: 0.86rem;
+  padding: 8px 4px 8px 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .district-stats article {
@@ -3256,54 +3278,60 @@ body::before {
   line-height: 1.55;
 }
 
+/* Day-tab pill track */
 .planner-day-tabs {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 252, 247, 0.65);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(12px);
 }
 
 .planner-day-tab {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
-  padding: 11px 15px;
-  border-radius: 18px;
-  border: 1px solid rgba(70, 38, 18, 0.08);
-  background: rgba(255, 252, 247, 0.76);
+  gap: 3px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
   color: var(--text);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
   transition:
     transform 180ms ease,
-    border-color 180ms ease,
-    box-shadow 180ms ease,
-    background 180ms ease;
+    background 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease;
 }
 
 .planner-day-tab:hover,
 .planner-day-tab:focus-visible {
   transform: translateY(-1px);
-  border-color: rgba(175, 77, 36, 0.26);
-  box-shadow: 0 12px 24px rgba(70, 38, 18, 0.08);
+  background: rgba(255, 252, 247, 0.7);
 }
 
 .planner-day-tab.is-active {
-  background: linear-gradient(135deg, rgba(175, 77, 36, 0.92), rgba(115, 46, 23, 0.92));
-  color: var(--paper);
-  border-color: rgba(115, 46, 23, 0.88);
+  background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(127, 45, 26, 0.26);
 }
 
 .planner-day-tab-title {
   font-weight: 700;
+  font-size: 0.86rem;
 }
 
 .planner-day-tab-cue {
   color: rgba(36, 25, 20, 0.62);
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  line-height: 1.35;
+  line-height: 1.2;
 }
 
 .planner-day-tab.is-active .planner-day-tab-cue {
@@ -4672,8 +4700,9 @@ body.is-printing-guide #routeGuideDrawer {
   }
 
   .planner-day-tabs {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: inline-flex;
+    flex-wrap: wrap;
+    border-radius: 22px;
   }
 
   .planner-mobile-actions {
@@ -4777,7 +4806,7 @@ body.is-printing-guide #routeGuideDrawer {
   }
 
   .planner-day-tabs {
-    grid-template-columns: 1fr;
+    border-radius: 18px;
   }
 
   .planner-day-outline-item {
@@ -4880,8 +4909,9 @@ body.is-printing-guide #routeGuideDrawer {
 
 /* LIVE teaser: dark editorial, but actually readable */
 .city-pulse-teaser,
-.city-pulse-teaser.is-route-context,
-.city-pulse-teaser.is-day-handoff {
+/* is-route-context (pre-plan dark card) keeps the dark treatment at all
+   viewport widths. is-day-handoff stays a light pill — do not override it. */
+.city-pulse-teaser.is-route-context {
   margin-top: 20px;
   min-height: 0;
   padding: 18px 20px;
@@ -4894,9 +4924,12 @@ body.is-printing-guide #routeGuideDrawer {
   box-shadow: 0 18px 44px rgba(40, 18, 8, 0.2);
 }
 
+.city-pulse-teaser.is-day-handoff {
+  margin-top: 20px;
+}
+
 .city-pulse-teaser-copy h2,
-.city-pulse-teaser.is-route-context .city-pulse-teaser-copy h2,
-.city-pulse-teaser.is-day-handoff .city-pulse-teaser-copy h2 {
+.city-pulse-teaser.is-route-context .city-pulse-teaser-copy h2 {
   color: #fff7ed;
   opacity: 1;
   text-shadow: none;
@@ -4908,8 +4941,7 @@ body.is-printing-guide #routeGuideDrawer {
 }
 
 .city-pulse-teaser-summary,
-.city-pulse-teaser.is-route-context .city-pulse-teaser-summary,
-.city-pulse-teaser.is-day-handoff .city-pulse-teaser-summary {
+.city-pulse-teaser.is-route-context .city-pulse-teaser-summary {
   color: rgba(255, 247, 237, 0.78);
 }
 
