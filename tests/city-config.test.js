@@ -254,6 +254,26 @@ test("barcelona pilotkatalog använder giltiga area tokens, provenance och route
   }
 });
 
+test("osm_structured_data provenance must remain human-verification-gated across all city packs", () => {
+  const cityCatalogs = {
+    barcelona: require("../server/cities/barcelona/catalog"),
+    athens: require("../server/cities/athens/catalog"),
+  };
+
+  for (const [cityKey, catalog] of Object.entries(cityCatalogs)) {
+    const provenanceById = catalog.provenanceById || {};
+    for (const [id, provenance] of Object.entries(provenanceById)) {
+      if (provenance.source_type === "osm_structured_data") {
+        assert.equal(
+          provenance.needs_human_verification,
+          true,
+          `${cityKey} provenance ${id}: osm_structured_data must keep needs_human_verification: true`,
+        );
+      }
+    }
+  }
+});
+
 test("test-city är markerad som intern arkitekturstub", () => {
   assert.equal(testCity.visibility, "internal");
   assert.equal(cityConfigs["test-city"].visibility, "internal");

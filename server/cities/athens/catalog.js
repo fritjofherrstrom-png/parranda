@@ -302,7 +302,7 @@ const provenanceById = {
   },
   "athens-avissinias-flea-market": {
     source_url: "https://athens-tourist-information.com/shopping/markets/monastiraki-flea-market",
-    source_type: "osm_structured_data",
+    source_type: "destination_guide",
     confidence: "high",
     last_checked: LAST_CHECKED,
     why_included: "Sunday flea market anchoring Monastiraki weekend routes; vintage/shopping discovery.",
@@ -312,8 +312,8 @@ const provenanceById = {
     time_fit: ["morning", "afternoon"],
     route_role: ["main_stop", "weekend_anchor"],
     classification: "classic",
-    needs_human_verification: false,
-    source_note: "Nominatim confirmed Plateia Avissinias coordinates. Corroborated: tripadvisor + greeka.com.",
+    needs_human_verification: true,
+    source_note: "Nominatim confirmed Plateia Avissinias coordinates. Cited sources are destination guides (athens-tourist-information.com, greeka.com) and Tripadvisor — no operator/municipal page surfaced. Human-verify schedule and continuity before any future Live wiring.",
   },
   "athens-bios": {
     source_url: "https://pireos84.bios.gr/",
