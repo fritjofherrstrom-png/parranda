@@ -100,7 +100,10 @@ function normalizeLeg(leg = {}) {
   };
 }
 
-function normalizePrimaryRoute(route = {}) {
+function normalizePrimaryRoute(route) {
+  if (!route) {
+    return null;
+  }
   return {
     id: route.id || null,
     start: route.start_label || null,
@@ -290,6 +293,27 @@ const scenarioMatrix = [
       end: { type: "auto" },
       walkingKmTarget: 5,
       preferences: ["vintage", "second_hand", "shopping"],
+      legPacing: "balanced",
+      distanceMode: "soft_target",
+      budgetTier: "standard",
+      lang: "en",
+    },
+  },
+  // Athens preview-skeleton zero-state — Athens is a registered preview
+  // city with 0 catalog items and 0 route templates. This snapshot locks
+  // the honest empty shape (primary_route: null, alternatives: []) so
+  // the first runtime catalog promotion surfaces as a clear diff
+  // instead of a silent behavior shift.
+  {
+    city: "athens",
+    name: "preview-zero-state",
+    payload: {
+      city: "athens",
+      dates: ["2026-05-25"],
+      start: { type: "auto" },
+      end: { type: "auto" },
+      walkingKmTarget: 7,
+      preferences: ["kultur", "mat", "kväll"],
       legPacing: "balanced",
       distanceMode: "soft_target",
       budgetTier: "standard",
