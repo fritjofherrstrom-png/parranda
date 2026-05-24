@@ -3320,67 +3320,308 @@ body::before {
   line-height: 1.62;
 }
 
+/* ============================================================
+   Day card — revised editorial layout (Slice 1)
+   ============================================================
+   Cleaner top-down shape: eyebrow → H1 → italic-mood subtitle →
+   single meta row → why-this-route paragraph (with optional
+   inline live-near pill) → numbered stops list → worth-knowing
+   pill clouds (bars + hidden mentions) → footer with single
+   primary CTA + ghost.
+   See parranda-design preview/parranda-full-flow.html.
+   ============================================================ */
+
 .planner-day-card {
-  padding: 26px;
-  border-radius: 30px;
-  backdrop-filter: blur(18px);
+  position: relative;
+  padding: 28px 32px 0;
+  border-radius: var(--radius-lg, 28px);
   background:
-    linear-gradient(180deg, rgba(255, 252, 247, 0.98), rgba(247, 239, 227, 0.9));
-  border: 1px solid rgba(255, 255, 255, 0.58);
+    linear-gradient(180deg, rgba(255, 253, 249, 0.98), rgba(248, 240, 229, 0.94));
+  border: 1px solid rgba(70, 38, 18, 0.08);
   box-shadow: var(--shadow);
-  display: grid;
-  gap: 20px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
 }
 
-.planner-day-top {
+.planner-day-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 5px;
+  background: linear-gradient(90deg, var(--accent-deep), var(--accent) 50%, var(--gold));
+}
+
+.planner-day-head {
   display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: 18px;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.planner-day-date {
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(36, 25, 20, 0.7);
+  white-space: nowrap;
 }
 
 .planner-day-title {
-  margin: 6px 0 0;
+  margin: 0;
   font-family: "Cormorant Garamond", serif;
-  font-size: 2.15rem;
-  line-height: 0.94;
+  font-weight: 600;
+  font-size: clamp(2rem, 3vw, 2.8rem);
+  line-height: 1.02;
+  letter-spacing: -0.012em;
+  color: var(--text);
+  text-wrap: balance;
+  max-width: 22ch;
 }
 
 .planner-day-summary {
-  max-width: 58ch;
-  margin: -2px 0 0;
+  margin: 0;
+  font-size: 1.02rem;
+  line-height: 1.5;
   color: var(--muted);
-  line-height: 1.58;
-  font-size: 0.98rem;
+  max-width: 56ch;
+  text-wrap: balance;
 }
 
-.planner-day-outline {
+.planner-day-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 16px;
+  font-weight: 600;
+  font-size: 0.92rem;
+  line-height: 1.3;
+  color: var(--text);
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--line);
+}
+
+.planner-day-meta-row > span:not(.planner-day-meta-dot) {
+  white-space: nowrap;
+}
+
+.planner-day-meta-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(36, 25, 20, 0.3);
+  align-self: center;
+}
+
+/* Why this route */
+.planner-day-why {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
   gap: 10px;
 }
 
-.planner-day-outline-item {
+.planner-day-why-eyebrow {
   margin: 0;
-  display: grid;
-  gap: 3px;
-  padding: 11px 12px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.62);
-  border: 1px solid rgba(70, 38, 18, 0.08);
-  min-width: 0;
-}
-
-.planner-day-outline-item span {
-  font-size: 0.72rem;
-  letter-spacing: 0.12em;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: rgba(36, 25, 20, 0.58);
+  color: rgba(36, 25, 20, 0.7);
 }
 
-.planner-day-outline-item strong {
-  font-size: 0.94rem;
+.planner-day-why-text {
+  margin: 0;
+  font-weight: 500;
+  font-size: 0.98rem;
+  line-height: 1.58;
+  color: var(--text);
+  max-width: 60ch;
+  text-wrap: pretty;
+}
+
+.planner-day-pulse-line {
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: rgba(215, 160, 77, 0.10);
+  border: 1px solid rgba(215, 160, 77, 0.32);
+  width: fit-content;
+  max-width: 100%;
+}
+
+.planner-day-pulse-line[hidden] {
+  display: none;
+}
+
+.planner-day-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--terracotta);
+  box-shadow: 0 0 0 3px rgba(184, 97, 54, 0.18), 0 0 10px rgba(184, 97, 54, 0.55);
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+.planner-day-pulse-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.planner-day-pulse-eyebrow {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(36, 25, 20, 0.6);
+}
+
+.planner-day-pulse-event {
+  font-weight: 700;
+  font-size: 0.95rem;
   line-height: 1.35;
+  color: var(--text);
+}
+
+.planner-day-pulse-venue {
+  font-weight: 500;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+/* Stops block */
+.planner-day-stops-block {
+  display: grid;
+  gap: 14px;
+}
+
+.planner-day-stops-eyebrow {
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(36, 25, 20, 0.7);
+}
+
+/* Worth knowing */
+.planner-day-worth {
+  display: grid;
+  gap: 10px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+}
+
+.planner-day-worth[hidden] {
+  display: none;
+}
+
+.planner-day-worth-row {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 16px 24px;
+  align-items: baseline;
+}
+
+.planner-day-worth-row[hidden] {
+  display: none;
+}
+
+.planner-day-worth-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(36, 25, 20, 0.55);
+  white-space: nowrap;
+}
+
+.planner-day-worth-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.planner-day-worth-pills .planner-day-worth-pill {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 252, 247, 0.7);
+  border: 1px solid var(--line);
+  font-weight: 600;
+  font-size: 0.8rem;
+  line-height: 1;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    transform 180ms ease,
+    background 180ms ease,
+    border-color 180ms ease;
+}
+
+.planner-day-worth-pills .planner-day-worth-pill:hover {
+  transform: translateY(-1px);
+  background: #fff;
+  border-color: rgba(109, 63, 31, 0.18);
+}
+
+.planner-day-worth-bars-pills .planner-day-worth-pill {
+  background: rgba(175, 77, 36, 0.06);
+  border-color: rgba(175, 77, 36, 0.22);
+  color: var(--accent-deep);
+}
+
+/* Footer */
+.planner-day-foot {
+  margin: 0 -32px;
+  padding: 22px 32px 26px;
+  border-top: 1px solid var(--line);
+  background: rgba(255, 252, 247, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.planner-day-foot-meta {
+  font-weight: 500;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--muted);
+  flex: 1 1 240px;
+}
+
+.planner-day-foot-meta:empty {
+  display: none;
+}
+
+.planner-day-foot-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* When the existing active-day-view renders inside the new day card,
+   keep only the itinerary — everything else (topline, flow-note, engine
+   strip, specials, curator-voice blocks inserted as dynamic siblings,
+   mentions-grid, and CTA row) is consolidated into the day card chrome.
+   Using > * :not() rather than a per-selector list so dynamically
+   injected siblings (.active-day-why, .active-day-curator, etc.) are
+   caught automatically. The template is left unchanged so standalone
+   uses of active-day-view (e.g. selected-route view) keep their output. */
+.planner-day-card .active-day-view > *:not(.active-day-itinerary) {
+  display: none;
 }
 
 .planner-day-signals {
@@ -4235,7 +4476,6 @@ body.is-printing-guide #routeGuideDrawer {
     grid-template-columns: 1fr;
   }
 
-  .planner-day-top,
   .planner-panel-head,
   .route-guide-top,
   .planner-modal-head,
@@ -4244,6 +4484,29 @@ body.is-printing-guide #routeGuideDrawer {
   .planner-fine-tune-summary {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  /* Day card mobile — reduce horizontal padding, allow stops to span */
+  .planner-day-card {
+    padding: 22px 22px 0;
+  }
+  .planner-day-title {
+    font-size: 1.7rem;
+  }
+  .planner-day-summary {
+    font-size: 0.98rem;
+  }
+  .planner-day-meta-row {
+    font-size: 0.86rem;
+    padding-bottom: 18px;
+  }
+  .planner-day-worth-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .planner-day-foot {
+    margin: 0 -22px;
+    padding: 18px 22px 20px;
   }
 
   .planner-advanced-summary::after {

@@ -892,29 +892,46 @@
 
     <template id="plannerDayTemplate">
       <article class="planner-day-card">
-        <div class="planner-day-top">
-          <div>
-            <p class="eyebrow planner-day-date"></p>
-            <h3 class="planner-day-title pa-stop-name"></h3>
-          </div>
-          <span class="map-badge planner-day-badge">__PARRANDA_I18N_ROUTE_MAIN_BADGE__</span>
-        </div>
+        <header class="planner-day-head">
+          <p class="planner-day-date eyebrow"></p>
+        </header>
+        <h1 class="planner-day-title pa-stop-name"></h1>
         <p class="planner-day-summary"></p>
-        <div class="planner-day-outline"></div>
-        <div class="planner-day-signals" hidden></div>
-        <section class="planner-primary-stage">
-          <div class="planner-primary-head">
-            <div>
-              <p class="route-mentions-label planner-primary-kicker">__PARRANDA_I18N_ROUTE_ORDER__</p>
-              <p class="planner-primary-route-line"></p>
-            </div>
-          </div>
-          <div class="planner-primary-slot"></div>
-        </section>
-        <div class="planner-day-events" hidden>
-          <p class="route-mentions-label">__PARRANDA_I18N_ROUTE_LIVE_THAT_FITS__</p>
-          <div class="planner-events-grid"></div>
+        <div class="planner-day-meta-row"></div>
+        <div class="planner-day-why">
+          <p class="planner-day-why-eyebrow eyebrow">__PARRANDA_I18N_ROUTE_WHY_CHOSEN__</p>
+          <p class="planner-day-why-text"></p>
+          <span class="planner-day-pulse-line" hidden>
+            <span class="planner-day-pulse-dot"></span>
+            <span class="planner-day-pulse-text">
+              <span class="planner-day-pulse-eyebrow eyebrow">__PARRANDA_I18N_ROUTE_LIVE_THAT_FITS__</span>
+              <span class="planner-day-pulse-event"></span>
+              <span class="planner-day-pulse-venue"></span>
+            </span>
+          </span>
         </div>
+        <div class="planner-day-stops-block">
+          <p class="planner-day-stops-eyebrow eyebrow">__PARRANDA_I18N_ROUTE_ORDER__</p>
+          <div class="planner-primary-slot"></div>
+        </div>
+        <div class="planner-day-worth" hidden>
+          <div class="planner-day-worth-row planner-day-worth-bars" hidden>
+            <span class="planner-day-worth-label eyebrow">__PARRANDA_I18N_ROUTE_BAR_MENTIONS__</span>
+            <div class="planner-day-worth-pills planner-day-worth-bars-pills"></div>
+          </div>
+          <div class="planner-day-worth-row planner-day-worth-hidden" hidden>
+            <span class="planner-day-worth-label eyebrow">__PARRANDA_I18N_ROUTE_HIDDEN_MENTIONS__</span>
+            <div class="planner-day-worth-pills planner-day-worth-hidden-pills"></div>
+          </div>
+        </div>
+        <div class="planner-day-signals" hidden></div>
+        <footer class="planner-day-foot">
+          <span class="planner-day-foot-meta"></span>
+          <div class="planner-day-foot-actions">
+            <button class="ghost-button planner-day-secondary-cta" type="button">__PARRANDA_I18N_ROUTE_SHOW_IN_APP__</button>
+            <button class="primary-button planner-day-primary-cta" type="button">__PARRANDA_I18N_ROUTE_OPEN_TODAY__</button>
+          </div>
+        </footer>
         <div class="planner-alt-section" hidden>
           <button class="ghost-button planner-alt-toggle" type="button" aria-expanded="false">
             __PARRANDA_I18N_ROUTE_SHOW_ALTERNATIVES__
