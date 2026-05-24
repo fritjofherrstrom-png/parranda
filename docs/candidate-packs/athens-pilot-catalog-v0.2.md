@@ -40,9 +40,10 @@ author:              claude (draft)
 ## What changed vs v0.1
 
 v0.1 verified 18 candidates (16 high-priority + Klimataria + Romantso)
-and produced 11 promote_first entries. v0.2 verifies **13 candidates**
-from the v0 medium-priority queue, adds 1 new candidate (Alexandrino)
-to fill the Exarchia cafe-bar gap, and resolves two v0.1 blockers:
+and produced 11 promote_first entries. v0.2 covers **13 candidates
+total**: 12 from the v0 medium-priority queue plus 1 new candidate,
+Alexandrino, to fill the Exarchia cafe-bar gap. It also resolves two
+v0.1 blockers:
 
 1. **Romantso area-model resolved**: folded into `gazi-kerameikos`
    for v1 (see area-model recommendation below). Upgraded from
@@ -67,8 +68,8 @@ Outcomes (validator authoritative):
 
 | Outcome | Count |
 | --- | --- |
-| `promote_first` (verified, fits, ready for runtime PR) | 10 |
-| `keep_as_optional` (verified but with caveat) | 3 |
+| `promote_first` (verified, fits, ready for runtime PR) | 9 |
+| `keep_as_optional` (verified but with caveat) | 4 |
 
 ## Metaxourgeio area-model recommendation
 
@@ -333,46 +334,6 @@ verification_priority:     medium
 promotion_recommendation:  promote_first
 ```
 
-### athens-filopappou-hill
-
-```text
-proposed_id:               athens-filopappou-hill
-name:                      Filopappou Hill (Hill of the Muses)
-city:                      athens
-neighborhood:              koukaki-makrygianni
-category:                  viewpoint
-candidate_kind:            real_place
-source_kind:               city_catalog
-route_role:                [main_stop, neighborhood_anchor]
-vibes:                     [slow, romantic]
-tags:                      [utsikt, kultur, klassiker, sun, golden-hour]
-why_it_fits_parranda:      Hill park with the best direct Acropolis views
-                           in Athens and a network of walking paths. Gives
-                           Koukaki/Thisseio routes a strong sunset shape.
-                           Free, open all day, no gates or curfews.
-                           Walking time to summit: 15-25 minutes.
-confidence:                high
-source_notes:              Main entry at the junction of Apostolou Pavlou,
-                           Dionysiou Areopagitou, Robert Galli, and
-                           Theorias streets. 700m south of Thissio Metro,
-                           500m west of Acropolis Metro. No entrance fee,
-                           no time restrictions. Paths are a mix of
-                           marble-paved and dirt tracks — sensible shoes
-                           recommended. Limited lighting at night, best
-                           visited during daylight or for sunset. Sources
-                           (exact URLs):
-                           https://www.tripadvisor.com/Attraction_Review-g189400-d523835-Reviews-Philopappos_Hill-Athens_Attica.html
-                           (Tripadvisor — active 2026 reviews),
-                           https://athens-tourist-information.com/things-to-do/hills/filopappou
-                           (Athens Tourist Information guide — access
-                           directions and practical info),
-                           https://thirdeyetraveller.com/filopappou-hill-philopappos-athens/
-                           (Third Eye Traveller — "The Best View Of The
-                           Acropolis In Athens 2026").
-verification_priority:     medium
-promotion_recommendation:  promote_first
-```
-
 ### athens-alexandrino
 
 ```text
@@ -507,6 +468,50 @@ promotion_recommendation:  promote_first
 
 ## Candidates — keep_as_optional (verified with caveat)
 
+### athens-filopappou-hill
+
+```text
+proposed_id:               athens-filopappou-hill
+name:                      Filopappou Hill (Hill of the Muses)
+city:                      athens
+neighborhood:              koukaki-makrygianni
+category:                  viewpoint
+candidate_kind:            real_place
+source_kind:               city_catalog
+route_role:                [main_stop, neighborhood_anchor]
+vibes:                     [slow, romantic]
+tags:                      [utsikt, kultur, klassiker, sun, golden-hour]
+why_it_fits_parranda:      Hill park with the best direct Acropolis views
+                           in Athens and a network of walking paths. Gives
+                           Koukaki/Thisseio routes a strong sunset shape.
+                           Free, open all day, no gates or curfews.
+                           Walking time to summit: 15-25 minutes.
+confidence:                medium
+source_notes:              Main entry at the junction of Apostolou Pavlou,
+                           Dionysiou Areopagitou, Robert Galli, and
+                           Theorias streets. 700m south of Thissio Metro,
+                           500m west of Acropolis Metro. No entrance fee,
+                           no time restrictions. Paths are a mix of
+                           marble-paved and dirt tracks — sensible shoes
+                           recommended. Limited lighting at night, best
+                           visited during daylight or for sunset. Sources
+                           (exact URLs):
+                           https://www.tripadvisor.com/Attraction_Review-g189400-d523835-Reviews-Philopappos_Hill-Athens_Attica.html
+                           (Tripadvisor — active 2026 reviews),
+                           https://athens-tourist-information.com/things-to-do/hills/filopappou
+                           (Athens Tourist Information guide — access
+                           directions and practical info),
+                           https://thirdeyetraveller.com/filopappou-hill-philopappos-athens/
+                           (Third Eye Traveller — "The Best View Of The
+                           Acropolis In Athens 2026").
+                           Note: no official cityofathens.gr or
+                           thisisathens.org profile found. Downgraded
+                           from high to medium confidence until an
+                           official/destination-authority source is added.
+verification_priority:     medium
+promotion_recommendation:  keep_as_optional
+```
+
 ### athens-bartesera
 
 ```text
@@ -638,8 +643,8 @@ Pack verified with **13 candidates** (validator output, authoritative).
 
 | Recommendation | Count |
 | --- | --- |
-| `promote_first` | 10 |
-| `keep_as_optional` | 3 |
+| `promote_first` | 9 |
+| `keep_as_optional` | 4 |
 
 ### By area
 
@@ -647,7 +652,7 @@ Pack verified with **13 candidates** (validator output, authoritative).
 | --- | --- | --- |
 | `kolonaki-lycabettus` | 3 (Cycladic, Lycabettus, Politeia) | 0 |
 | `monastiraki-psyrri` | 1 (TAF) | 1 (Clumsies) |
-| `koukaki-makrygianni` | 2 (Little Tree, Filopappou) | 0 |
+| `koukaki-makrygianni` | 1 (Little Tree) | 1 (Filopappou) |
 | `exarchia` | 2 (Ama Lachei, Alexandrino) | 0 |
 | `pangrati-mets` | 1 (Mavro Provato) | 0 |
 | `gazi-kerameikos` | 1 (Romantso) | 0 |
@@ -658,17 +663,17 @@ Pack verified with **13 candidates** (validator output, authoritative).
 | Source | promote_first |
 | --- | --- |
 | v0.1 | 11 |
-| v0.2 | 10 |
-| **Total** | **21** |
+| v0.2 | 9 |
+| **Total** | **20** |
 
-**21 verified promote_first candidates** across 8 of 9 Athens areas.
+**20 verified promote_first candidates** across 8 of 9 Athens areas.
 Below the 25-35 runtime target, but 21 is a strong verified seed. The
 remaining gap is mostly in:
 
 - **petralona-thisseio**: 0 promote_first. Oikonomou Taverna
   (keep_as_optional in v0.1) has operator-continuity risk. Area
-  depends on the Apostolou Pavlou walking connector and Filopappou
-  for route shape.
+  depends on the Apostolou Pavlou walking connector and adjacent
+  Filopappou Hill (keep_as_optional) for route shape.
 - **syntagma-plaka**: 0 promote_first. Adjacent monastiraki-psyrri
   candidates (Diporto, Klimataria, Varvakeios) provide coverage.
 - **kypseli**: 1 promote_first (Municipal Market). Thin but
@@ -679,15 +684,15 @@ These gaps are honest. Padding the pack with weak candidates to reach
 
 ### Athens v1 runtime readiness assessment
 
-**Ready for a first runtime catalog PR with 21 promote_first
+**Ready for a first runtime catalog PR with 20 promote_first
 candidates.** The count is below the 25-35 target but:
 
-1. All 21 candidates have verified source URLs and pass the
+1. All 20 candidates have verified source URLs and pass the
    promote_first quality bar.
 2. 8 of 9 areas have at least one promote_first candidate.
 3. The category mix covers: 3 markets, 2 museums, 1 bookshop, 2
    cafe/culture, 2 mezedopoleia, 3 tavernas, 2 cultural-venue bars,
-   1 cultural campus, 2 viewpoints, 1 cafe-bar, 1 cafe/bookshop,
+   1 cultural campus, 1 viewpoint, 1 cafe-bar, 1 cafe/bookshop,
    1 cultural-venue/bar (Romantso).
 4. Live source candidates: Six d.o.g.s, Bios, Technopolis, Kypseli
    Market, Avissinias, Romantso — all event_venue kind.
@@ -720,5 +725,5 @@ scope (low-priority or structural/cluster types):
 - athens-koukaki-makrygianni-museum-walking-cluster (area_preset)
 - athens-pangrati-mets-residential-evening-cluster (area_preset)
 
-These can be addressed in v0.3 if needed, but 21 promote_first is
+These can be addressed in v0.3 if needed, but 20 promote_first is
 sufficient for v1 without them.
