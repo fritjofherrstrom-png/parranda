@@ -3613,15 +3613,14 @@ body::before {
 }
 
 /* When the existing active-day-view renders inside the new day card,
-   hide the surfaces the new chrome consolidates (mentions move to the
-   day card's worth-knowing footer; primary CTA moves to day-card foot).
-   The active-day-view template remains unchanged so other surfaces
-   that use it (e.g. selected-route view) keep their original output. */
-.planner-day-card .active-day-mentions,
-.planner-day-card .active-day-route-link,
-.planner-day-card .active-day-topline,
-.planner-day-card .active-day-flow-note,
-.planner-day-card .route-actions {
+   keep only the itinerary — everything else (topline, flow-note, engine
+   strip, specials, curator-voice blocks inserted as dynamic siblings,
+   mentions-grid, and CTA row) is consolidated into the day card chrome.
+   Using > * :not() rather than a per-selector list so dynamically
+   injected siblings (.active-day-why, .active-day-curator, etc.) are
+   caught automatically. The template is left unchanged so standalone
+   uses of active-day-view (e.g. selected-route view) keep their output. */
+.planner-day-card .active-day-view > *:not(.active-day-itinerary) {
   display: none;
 }
 
