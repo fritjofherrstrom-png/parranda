@@ -5223,7 +5223,7 @@ function renderCityPulseTeaser() {
     cityPulseState?.date_label ||
     getFallbackPulseDateLabels(targetDate).dateLabel;
 
-  cityPulseTeaser.classList.toggle("is-route-context", plannedContext);
+  cityPulseTeaser.classList.toggle("is-route-context", !plannedContext);
   cityPulseTeaser.classList.toggle("is-day-handoff", plannedContext);
   cityPulseTeaser.classList.toggle("is-pre-plan", prePlanContext);
 
@@ -5233,9 +5233,9 @@ function renderCityPulseTeaser() {
       ? tf(
           "pulse.teaserPlannedTitle",
           { count: Math.min(activeDayEventCount, 2) },
-          `${Math.min(activeDayEventCount, 2)} live-spår ligger nära rutten`,
+          `${Math.min(activeDayEventCount, 2)} live-spår nära din rutt idag.`,
         )
-      : t("pulse.teaserPlannedTitleEmpty", "Live-lagret finns längre ner om du vill justera dagen");
+      : t("pulse.teaserPlannedTitleEmpty", "Live-lagret finns om du vill väga in läget.");
     cityPulseTeaserSummary.textContent = activeDayEventCount
       ? tf(
           "pulse.teaserPlannedSummary",
@@ -10365,6 +10365,47 @@ function ensureActivePlannedDate() {
   return activePlannedDate;
 }
 
+// Tag → compact descriptor label (Swedish/English). Used only for the
+// day-tab cue — independent of plannerIntentDefinitions scoring.
+const ROUTE_TAG_DESCRIPTOR_SV = {
+  nattliv: "Kvällsliv",    kväll: "Kvällsliv",      party: "Kvällsliv",
+  mat: "Mat & dryck",      vin: "Mat & dryck",       öl: "Mat & dryck",
+  cocktail: "Mat & dryck", aperitivo: "Mat & dryck", pizza: "Mat & dryck",
+  kultur: "Kultur",        kyrkor: "Kultur",         museum: "Kultur",    arkitektur: "Kultur",
+  klassiker: "Klassiker",  historia: "Klassiker",
+  second_hand: "Second hand", vintage: "Vintage",    shopping: "Shopping",
+  market: "Marknad",       event_market: "Marknad",
+  utsikt: "Utsikt",        "golden hour": "Utsikt",
+  lokalt: "Lokalt",        "hidden gems": "Lokalt",  "low-key": "Low-key",
+  music: "Musik",          coast: "Strandliv",       design: "Design",
+};
+const ROUTE_TAG_DESCRIPTOR_EN = {
+  nattliv: "Nightlife",    kväll: "Nightlife",       party: "Nightlife",
+  mat: "Food & drink",     vin: "Food & drink",      öl: "Food & drink",
+  cocktail: "Food & drink", aperitivo: "Food & drink", pizza: "Food & drink",
+  kultur: "Culture",       kyrkor: "Culture",        museum: "Culture",   arkitektur: "Culture",
+  klassiker: "Classics",   historia: "Classics",
+  second_hand: "Vintage",  vintage: "Vintage",       shopping: "Shopping",
+  market: "Market",        event_market: "Market",
+  utsikt: "Views",         "golden hour": "Golden hour",
+  lokalt: "Local",         "hidden gems": "Local",   "low-key": "Low-key",
+  music: "Music",          coast: "Coastal",         design: "Design",
+};
+
+function buildRouteDescriptorLabels(route) {
+  const map = isEnglishUi ? ROUTE_TAG_DESCRIPTOR_EN : ROUTE_TAG_DESCRIPTOR_SV;
+  const stopTags = (route?.main_stops || []).flatMap((stop) => stop.tags || []);
+  const scores = new Map();
+  for (const tag of stopTags) {
+    const label = map[tag];
+    if (label) scores.set(label, (scores.get(label) || 0) + 1);
+  }
+  return [...scores.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2)
+    .map(([label]) => label);
+}
+
 function buildPlannerIntentVisibilityState() {
   const selectedIntentKeys = getExplicitSelectedIntentKeys();
 
@@ -10448,10 +10489,16 @@ function renderPlannedDays() {
     title.textContent = `${isEnglishUi ? "Day" : "Dag"} ${index + 1} • ${formatCompactSwedishDate(day.date)}`;
     button.appendChild(title);
 
-    if (dayIntentVisibility?.labels?.length) {
+    // Cue: intent-selection labels take priority; fall back to route-derived
+    // descriptor so every tab gets a compact summary regardless of whether
+    // the user explicitly selected intents.
+    const cueLabels = dayIntentVisibility?.labels?.length
+      ? dayIntentVisibility.labels
+      : buildRouteDescriptorLabels(day.primary_route);
+    if (cueLabels.length) {
       const cue = document.createElement("span");
       cue.className = "planner-day-tab-cue";
-      cue.textContent = dayIntentVisibility.labels.join(" • ");
+      cue.textContent = cueLabels.join(" • ");
       button.appendChild(cue);
     }
 
