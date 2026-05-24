@@ -5569,6 +5569,22 @@ async function generateRecommendations({
         );
         const primary =
           pickedPrimary || (primaryCandidates.length ? primaryCandidates[0] : ranked[0]) || null;
+
+        // Honest empty-city / empty-day shape: when no route templates are
+        // available for the active city (e.g. Athens preview skeleton with
+        // zero templates), surface a day record with no route rather than
+        // crashing on primary.route below.
+        if (!primary) {
+          days.push({
+            date,
+            date_signals: dateSignals,
+            live_events: [],
+            primary_route: null,
+            alternatives: [],
+          });
+          continue;
+        }
+
         const alternativeCandidates = ranked.filter(
           (entry) =>
             !primary ||
