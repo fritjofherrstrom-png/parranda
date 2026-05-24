@@ -5189,8 +5189,10 @@ function buildPulseTeaserSummary() {
 
 function focusActiveDayLiveSection() {
   const dayCard = routeResults?.querySelector(".planner-day-card");
-  const dayEvents = dayCard?.querySelector(".planner-day-events:not([hidden])");
-  const target = dayEvents || dayCard;
+  // The old .planner-day-events grid was collapsed into a single inline
+  // pulse-line inside the new why-block. Scroll to whichever is visible.
+  const pulseLine = dayCard?.querySelector(".planner-day-pulse-line:not([hidden])");
+  const target = pulseLine || dayCard;
 
   if (!target) {
     return false;
@@ -7380,11 +7382,19 @@ function ensurePlannerLoadingSlot() {
   dayCard.querySelector(".planner-day-title").textContent = t("planner.loadingTitle", "Parranda bygger ditt första upplägg");
   dayCard.querySelector(".planner-day-summary").textContent =
     t("planner.loadingSummary", "Resultatet landar här så fort rutten är klar.");
-  dayCard.querySelector(".planner-day-outline").innerHTML = "";
-  dayCard.querySelector(".planner-day-signals").hidden = true;
-  dayCard.querySelector(".planner-day-events").hidden = true;
-  dayCard.querySelector(".planner-alt-section").hidden = true;
-  dayCard.querySelector(".planner-primary-route-line").textContent = t("planner.loadingRoute", "Laddar rutt och stopp...");
+  // Hide all optional sections in the skeleton state.
+  const skeletonMetaRow = dayCard.querySelector(".planner-day-meta-row");
+  if (skeletonMetaRow) skeletonMetaRow.innerHTML = "";
+  const skeletonWhy = dayCard.querySelector(".planner-day-why");
+  if (skeletonWhy) skeletonWhy.hidden = true;
+  const skeletonWorth = dayCard.querySelector(".planner-day-worth");
+  if (skeletonWorth) skeletonWorth.hidden = true;
+  const skeletonSignals = dayCard.querySelector(".planner-day-signals");
+  if (skeletonSignals) skeletonSignals.hidden = true;
+  const skeletonFoot = dayCard.querySelector(".planner-day-foot");
+  if (skeletonFoot) skeletonFoot.hidden = true;
+  const skeletonAlt = dayCard.querySelector(".planner-alt-section");
+  if (skeletonAlt) skeletonAlt.hidden = true;
 
   const primarySlot = dayCard.querySelector(".planner-primary-slot");
   shell.appendChild(dayCard);
@@ -10480,39 +10490,110 @@ function renderPlannedDays() {
   );
   const primaryKey = `${activeDay.date}:${activeDay.primary_route.id}:primary`;
   const primarySlot = dayCard.querySelector(".planner-primary-slot");
-  const outline = dayCard.querySelector(".planner-day-outline");
-  const primaryRouteLine = dayCard.querySelector(".planner-primary-route-line");
   const altGrid = dayCard.querySelector(".planner-alt-grid");
   const altSection = dayCard.querySelector(".planner-alt-section");
   const altToggle = dayCard.querySelector(".planner-alt-toggle");
   const altBody = dayCard.querySelector(".planner-alt-body");
   const signalsContainer = dayCard.querySelector(".planner-day-signals");
-  const eventsSection = dayCard.querySelector(".planner-day-events");
-  const eventsGrid = dayCard.querySelector(".planner-events-grid");
   const alternativesExpanded = expandedAlternativeDates.has(activeDay.date);
 
-  dayCard.querySelector(".planner-day-date").textContent = formatSwedishDate(activeDay.date);
+  // Eyebrow — date + city
+  const cityLabel = document.body?.dataset?.cityLabel || null;
+  const dateLabel = formatSwedishDate(activeDay.date);
+  const eyebrowEl = dayCard.querySelector(".planner-day-date");
+  eyebrowEl.textContent = cityLabel
+    ? `${dateLabel} · ${cityLabel}`
+    : dateLabel;
+
+  // Title — clean editorial line, just the route title
   dayCard.querySelector(".planner-day-title").textContent = activeDay.primary_route.title;
+
+  // Subtitle — italic-mood line
   dayCard.querySelector(".planner-day-summary").textContent =
     primaryRouteView.visibleWhy ||
-    takeLeadSentences(activeDay.primary_route.why_recommended || "", 2, 220) ||
+    takeLeadSentences(activeDay.primary_route.why_recommended || "", 1, 180) ||
     t("route.primaryFallback", "Parranda lyfter den här som dagens tydligaste huvudspår.");
-  primaryRouteLine.textContent = buildRouteLine(primaryRouteView);
 
-  outline.innerHTML = "";
-  [
-    { label: t("route.start", "Start"), value: primaryRouteView.startAnchorLabel },
-    { label: t("route.end", "Slut"), value: primaryRouteView.endAnchorLabel },
-    { label: t("route.zone", "Zon"), value: primaryRouteView.anchorZone },
-  ]
-    .filter((item) => item.value)
-    .forEach((item) => {
-      const chip = document.createElement("p");
-      chip.className = "planner-day-outline-item";
-      chip.innerHTML = `<span>${item.label}</span><strong>${item.value}</strong>`;
-      outline.appendChild(chip);
-    });
+  // Meta row — stops · km · time · lands [end]
+  const metaRow = dayCard.querySelector(".planner-day-meta-row");
+  metaRow.innerHTML = "";
+  const stopCount = Array.isArray(activeDay.primary_route.main_stops)
+    ? activeDay.primary_route.main_stops.length
+    : 0;
+  const totalLegMinutes = Array.isArray(activeDay.primary_route.legs)
+    ? activeDay.primary_route.legs.reduce(
+        (sum, leg) => sum + (Number.isFinite(Number(leg.estimated_walk_minutes)) ? Number(leg.estimated_walk_minutes) : 0),
+        0,
+      )
+    : 0;
+  const formatMinutes = (mins) => {
+    if (!mins || mins < 1) return null;
+    if (mins < 60) return `~${Math.round(mins)} min`;
+    const h = Math.floor(mins / 60);
+    const m = Math.round(mins % 60);
+    return m > 0 ? `~${h} h ${m} min` : `~${h} h`;
+  };
+  const metaParts = [
+    stopCount > 0
+      ? tf("route.stopCount", { count: stopCount }, `${stopCount} stopp`)
+      : null,
+    primaryRouteView.length ? `${primaryRouteView.length} ${isEnglishUi ? "walking" : "promenad"}` : null,
+    formatMinutes(totalLegMinutes),
+    primaryRouteView.endAnchorLabel
+      ? `${isEnglishUi ? "lands at" : "landar"} ${primaryRouteView.endAnchorLabel}`
+      : null,
+  ].filter(Boolean);
+  metaParts.forEach((part, index) => {
+    if (index > 0) {
+      const dot = document.createElement("span");
+      dot.className = "planner-day-meta-dot";
+      metaRow.appendChild(dot);
+    }
+    const span = document.createElement("span");
+    span.textContent = part;
+    metaRow.appendChild(span);
+  });
+  if (metaParts.length === 0) {
+    metaRow.hidden = true;
+  }
 
+  // Why this route — paragraph (full why) + optional single live pulse-line
+  const whyBlock = dayCard.querySelector(".planner-day-why");
+  const whyText = dayCard.querySelector(".planner-day-why-text");
+  const whyParagraph =
+    takeLeadSentences(activeDay.primary_route.why_recommended || "", 3, 360) ||
+    primaryRouteView.visibleWhy ||
+    "";
+  if (whyParagraph) {
+    whyText.textContent = whyParagraph;
+    whyBlock.hidden = false;
+  } else {
+    whyText.textContent = "";
+  }
+
+  // Single live event near the route (replaces old events grid)
+  const dayEvents = activeDay.live_events || [];
+  const firstLiveEvent = dayEvents[0] || null;
+  const pulseLine = dayCard.querySelector(".planner-day-pulse-line");
+  if (firstLiveEvent && pulseLine) {
+    const eventEl = pulseLine.querySelector(".planner-day-pulse-event");
+    const venueEl = pulseLine.querySelector(".planner-day-pulse-venue");
+    const eventTitle = firstLiveEvent.title || firstLiveEvent.event_title || firstLiveEvent.name || "";
+    const venueParts = [
+      firstLiveEvent.venue || firstLiveEvent.venue_label || firstLiveEvent.location || null,
+      firstLiveEvent.start_time || firstLiveEvent.time || null,
+    ].filter(Boolean);
+    if (eventEl) eventEl.textContent = eventTitle;
+    if (venueEl) venueEl.textContent = venueParts.join(" · ");
+    pulseLine.hidden = !eventTitle;
+    if (eventTitle) {
+      whyBlock.hidden = false;
+    }
+  } else if (pulseLine) {
+    pulseLine.hidden = true;
+  }
+
+  // Date signals — kept as fallback (typically empty in route results)
   signalsContainer.hidden = !activeDay.date_signals?.length;
   signalsContainer.innerHTML = "";
   (activeDay.date_signals || []).forEach((signal) => {
@@ -10522,31 +10603,73 @@ function renderPlannedDays() {
     signalsContainer.appendChild(note);
   });
 
-  const dayEvents = activeDay.live_events || [];
-  const visibleDayEvents = dayEvents.slice(0, 2);
-  eventsGrid.innerHTML = "";
-  eventsSection.hidden = !dayEvents.length;
-  visibleDayEvents.forEach((event) => {
-    eventsGrid.appendChild(
-      createLiveEventCard({
-        ...event,
-        date: activeDay.date,
-      }),
-    );
-  });
-
-  if (dayEvents.length > visibleDayEvents.length) {
-    const overflow = document.createElement("p");
-    overflow.className = "planner-events-note";
-    overflow.textContent = tf("route.moreLive", { count: dayEvents.length - visibleDayEvents.length }, `+${dayEvents.length - visibleDayEvents.length} fler live-spår finns i LIVE om du vill justera dagen ytterligare.`);
-    eventsGrid.appendChild(overflow);
-  }
-
+  // Stops — keep existing createActiveDayView render inside the new shell
   primarySlot.appendChild(
     createActiveDayView(primaryRouteView, {
       routeKey: primaryKey,
     }),
   );
+
+  // Worth knowing — bar mentions + hidden mentions as pill clouds in the footer
+  const worthBlock = dayCard.querySelector(".planner-day-worth");
+  const worthBars = dayCard.querySelector(".planner-day-worth-bars");
+  const worthHidden = dayCard.querySelector(".planner-day-worth-hidden");
+  const worthBarsPills = dayCard.querySelector(".planner-day-worth-bars-pills");
+  const worthHiddenPills = dayCard.querySelector(".planner-day-worth-hidden-pills");
+  const fillWorthPills = (container, items) => {
+    if (!container) return;
+    container.innerHTML = "";
+    (items || []).forEach((item) => {
+      const label = typeof item === "string" ? item : item?.label || item?.name || "";
+      if (!label) return;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "planner-day-worth-pill";
+      btn.textContent = label;
+      container.appendChild(btn);
+    });
+  };
+  const barMentions = activeDay.primary_route.bar_mentions || [];
+  const hiddenMentions = activeDay.primary_route.hidden_mentions || [];
+  fillWorthPills(worthBarsPills, barMentions);
+  fillWorthPills(worthHiddenPills, hiddenMentions);
+  if (worthBars) worthBars.hidden = !(barMentions || []).length;
+  if (worthHidden) worthHidden.hidden = !(hiddenMentions || []).length;
+  if (worthBlock) worthBlock.hidden = !((barMentions || []).length || (hiddenMentions || []).length);
+
+  // Foot meta — one-line route character summary (use existing pulse_note / leg_fit_note / geo_fit_note)
+  const footMeta = dayCard.querySelector(".planner-day-foot-meta");
+  if (footMeta) {
+    const candidate =
+      activeDay.primary_route.pulse_note ||
+      activeDay.primary_route.leg_fit_note ||
+      activeDay.primary_route.geo_fit_note ||
+      "";
+    footMeta.textContent = candidate ? takeLeadSentences(candidate, 1, 160) : "";
+  }
+
+  // Foot CTAs — primary opens the route (delegates to the active-day select
+  // action that already exists inside createActiveDayView); secondary is a
+  // soft "show in app" placeholder that scrolls into the stops list. Both
+  // CTAs are deliberate consolidations of what used to be inline buttons
+  // inside createActiveDayView — see CSS for the duplicate-hide rules.
+  const primaryCta = dayCard.querySelector(".planner-day-primary-cta");
+  const secondaryCta = dayCard.querySelector(".planner-day-secondary-cta");
+  if (primaryCta) {
+    primaryCta.addEventListener("click", () => {
+      const selectBtn = dayCard.querySelector(".active-day-select-button");
+      if (selectBtn) {
+        selectBtn.click();
+      } else {
+        primarySlot?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    });
+  }
+  if (secondaryCta) {
+    secondaryCta.addEventListener("click", () => {
+      primarySlot?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
 
   activeDay.alternatives.forEach((alternative, index) => {
     const altView = createApiRouteView(

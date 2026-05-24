@@ -747,7 +747,12 @@ test("GET /rome?lang=en renderar engelsk shell och planner utan att byta interna
     assert.match(response.body, /value="food_drink"\s+checked\s*\/>\s*<span>Food &amp; drink<\/span>/);
     assert.match(response.body, /value="nightlife"\s+checked\s*\/>\s*<span>Nightlife<\/span>/);
     assert.match(response.body, /value="second_hand"\s*\/>\s*<span>Second hand<\/span>/);
-    assert.match(response.body, /<span class="map-badge planner-day-badge">Main route<\/span>/);
+    // The "Main route" badge was removed in the day-card revision (Slice 1):
+    // the editorial-title day card no longer needs a "main route" tag because
+    // alternatives are surfaced via the alternative-section toggle, not as
+    // peer cards. The Main route i18n string remains in ui-i18n.js for any
+    // future reuse but is no longer rendered in the day-card chrome.
+    assert.doesNotMatch(response.body, /class="[^"]*planner-day-badge[^"]*"/);
     assert.doesNotMatch(response.body, /<button[^>]*id="routePlanButton"[^>]*>\s*Planera min dag\s*<\/button>/);
     assert.doesNotMatch(response.body, /<p class="eyebrow">DÄR DU BOR<\/p>/);
     assert.doesNotMatch(response.body, /value="food_drink"\s+checked\s*\/>\s*<span>Mat &amp; dryck<\/span>/);
