@@ -10508,11 +10508,12 @@ function renderPlannedDays() {
   // Title — clean editorial line, just the route title
   dayCard.querySelector(".planner-day-title").textContent = activeDay.primary_route.title;
 
-  // Subtitle — italic-mood line
-  dayCard.querySelector(".planner-day-summary").textContent =
-    primaryRouteView.visibleWhy ||
-    takeLeadSentences(activeDay.primary_route.why_recommended || "", 1, 180) ||
-    t("route.primaryFallback", "Parranda lyfter den här som dagens tydligaste huvudspår.");
+  // Subtitle — short tagline separate from the why-block below. Use the
+  // route's summary field (a distinct mood line); fall back to visibleWhy
+  // only when summary is absent so the why-block below doesn't duplicate it.
+  const summaryEl = dayCard.querySelector(".planner-day-summary");
+  summaryEl.textContent = primaryRouteView.summary || primaryRouteView.visibleWhy || "";
+  summaryEl.hidden = !summaryEl.textContent;
 
   // Meta row — stops · km · time · lands [end]
   const metaRow = dayCard.querySelector(".planner-day-meta-row");

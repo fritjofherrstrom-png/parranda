@@ -3620,7 +3620,8 @@ body::before {
 .planner-day-card .active-day-mentions,
 .planner-day-card .active-day-route-link,
 .planner-day-card .active-day-topline,
-.planner-day-card .active-day-flow-note {
+.planner-day-card .active-day-flow-note,
+.planner-day-card .route-actions {
   display: none;
 }
 
