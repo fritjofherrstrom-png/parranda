@@ -52,7 +52,7 @@ test("athens uppfyller city-kontraktet som registrerad preview-skelettstad", () 
   assert.equal(cityConfigs.athens.visibility, "preview");
   assert.equal(cityConfigs.athens.locale, "el-GR");
   assert.equal(cityConfigs.athens.currency, "EUR");
-  assert.equal(cityConfigs.athens.catalog.allItems.length, 0);
+  assert.equal(cityConfigs.athens.catalog.allItems.length, 20);
   assert.equal(cityConfigs.athens.catalog.routeTemplates.length, 0);
 });
 
@@ -250,6 +250,26 @@ test("barcelona pilotkatalog använder giltiga area tokens, provenance och route
 
     for (const stopId of template.stops) {
       assert.ok(itemIds.has(stopId), `route template ${template.id} references unknown Barcelona stop ${stopId}`);
+    }
+  }
+});
+
+test("osm_structured_data provenance must remain human-verification-gated across all city packs", () => {
+  const cityCatalogs = {
+    barcelona: require("../server/cities/barcelona/catalog"),
+    athens: require("../server/cities/athens/catalog"),
+  };
+
+  for (const [cityKey, catalog] of Object.entries(cityCatalogs)) {
+    const provenanceById = catalog.provenanceById || {};
+    for (const [id, provenance] of Object.entries(provenanceById)) {
+      if (provenance.source_type === "osm_structured_data") {
+        assert.equal(
+          provenance.needs_human_verification,
+          true,
+          `${cityKey} provenance ${id}: osm_structured_data must keep needs_human_verification: true`,
+        );
+      }
     }
   }
 });
