@@ -123,6 +123,7 @@ module.exports = {
   catalog: {
     routeTemplates: cityCatalog.routeTemplates,
     allItems: cityCatalog.allItems,
+    provenanceById: cityCatalog.provenanceById,
     findItemByName: cityCatalog.findItemByName,
   },
   services: {
@@ -140,10 +141,22 @@ module.exports = {
   },
   routing: {
     areaDefinitions: {
-      center: { label: "Center", macro: "center" },
+      "monastiraki-psyrri": { label: "Monastiraki & Psyrri", macro: "central" },
+      "kolonaki-lycabettus": { label: "Kolonaki & Lycabettus", macro: "northeast" },
+      "gazi-kerameikos": { label: "Gazi & Kerameikos", macro: "west" },
+      "koukaki-makrygianni": { label: "Koukaki & Makrygianni", macro: "south" },
+      "exarchia": { label: "Exarchia", macro: "central-north" },
+      "pangrati-mets": { label: "Pangrati & Mets", macro: "east" },
+      "kypseli": { label: "Kypseli", macro: "north" },
     },
     macroAreaLabels: {
-      center: "Center",
+      central: "Central Athens",
+      northeast: "Northeast Athens",
+      west: "West Athens",
+      south: "South Athens",
+      "central-north": "Central-North Athens",
+      east: "East Athens",
+      north: "North Athens",
     },
     tuning: {},
   },

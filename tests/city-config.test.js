@@ -52,7 +52,7 @@ test("athens uppfyller city-kontraktet som registrerad preview-skelettstad", () 
   assert.equal(cityConfigs.athens.visibility, "preview");
   assert.equal(cityConfigs.athens.locale, "el-GR");
   assert.equal(cityConfigs.athens.currency, "EUR");
-  assert.equal(cityConfigs.athens.catalog.allItems.length, 0);
+  assert.equal(cityConfigs.athens.catalog.allItems.length, 20);
   assert.equal(cityConfigs.athens.catalog.routeTemplates.length, 0);
 });
 

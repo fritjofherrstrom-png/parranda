@@ -44,15 +44,15 @@ test("inspectCityPack reports Athens preview skeleton as honest non-blocked star
   assert.equal(report.label, "Athens");
   assert.equal(report.visibility, "preview");
   assert.notEqual(report.status, "blocked");
-  assert.equal(report.catalog.item_count, 0);
-  assert.equal(report.catalog.real_place_count, 0);
+  assert.equal(report.catalog.item_count, 20);
+  assert.equal(report.catalog.real_place_count, 20);
   assert.equal(report.catalog.route_template_count, 0);
   assert.equal(report.support.city_page, true);
   assert.equal(report.support.pulse_baseline, true);
-  assert.equal(report.support.blitz_baseline, false);
+  assert.equal(report.support.blitz_baseline, true);
   assert.equal(report.support.planner_baseline, false);
   assert.ok(report.place_candidate_readiness);
-  assert.equal(report.place_candidate_readiness.can_support_blitz, false);
+  assert.equal(report.place_candidate_readiness.can_support_blitz, true);
   assert.equal(report.place_candidate_readiness.can_support_planner, false);
 });
 
