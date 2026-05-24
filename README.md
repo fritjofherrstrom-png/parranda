@@ -18,6 +18,7 @@ Det här repot är alpha-versionen för att snabbt kunna visa produkten, få ska
 - Parranda ska byggas runt en generaliserbar city intelligence engine, inte runt hårdkodade städer.
 - City packs ska vara ett valfritt förbättrings- och accelerationslager, inte ett krav för att appen ska fungera.
 - Appen ska på sikt kunna skapa meningsfulla, platsmedvetna upplevelser även utan dedikerat city pack, oavsett om användaren är i Simrishamn, Bologna eller Rio de Janeiro.
+- Parrandas kärn-UI ska vara foto-oberoende: platsrepresentation ska fungera genom text, typografi, ikoner, kart-/ruttstruktur och lokal copy. Foton kan senare användas som redaktionell förstärkning, men ska inte vara ett krav för att upplevelsen ska fungera.
 
 Se `docs/CITY_ENGINE_PRINCIPLES.md` för den permanenta principen bakom city packs och city-packless Parranda.
 
