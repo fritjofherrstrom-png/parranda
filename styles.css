@@ -7253,6 +7253,87 @@ body.is-printing-guide #routeGuideDrawer {
   font-style: italic;
 }
 
+/* --- COMPACT CARDS — blurb and reason hidden by default, revealed on
+ * .is-expanded toggle. The expand button sits after pitch, before blurb.
+ * Scoped to .city-pulse-edition so standalone pulse entries are unaffected. */
+.city-pulse-edition .pulse-entry-blurb,
+.city-pulse-edition .pulse-entry-reason {
+  display: none;
+}
+
+.city-pulse-edition .pulse-entry.is-expanded .pulse-entry-blurb,
+.city-pulse-edition .pulse-entry.is-expanded .pulse-entry-reason {
+  display: block;
+}
+
+.pulse-entry-expand-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: 600 0.74rem/1 var(--font-sans, "Manrope", sans-serif);
+  letter-spacing: 0.08em;
+  color: rgba(255, 247, 239, 0.36);
+  cursor: pointer;
+  transition: color 180ms ease;
+  white-space: nowrap;
+}
+
+.pulse-entry-expand-toggle::after {
+  content: "↓";
+  font-size: 0.7em;
+  transition: transform 180ms ease;
+}
+
+.pulse-entry-expand-toggle:hover {
+  color: var(--gold, #d7a04d);
+}
+
+.pulse-entry.is-expanded .pulse-entry-expand-toggle {
+  color: rgba(255, 247, 239, 0.5);
+}
+
+.pulse-entry.is-expanded .pulse-entry-expand-toggle::after {
+  transform: rotate(180deg);
+}
+
+/* --- NEIGHBORHOOD AREA HEADERS inside venue group ----------------------- */
+.pulse-area-header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0 4px;
+}
+
+.pulse-area-header:first-child {
+  margin-top: 2px;
+}
+
+.pulse-area-name {
+  margin: 0;
+  font: 700 0.68rem/1 var(--font-sans, "Manrope", sans-serif);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--gold, #d7a04d);
+  white-space: nowrap;
+}
+
+.pulse-area-count {
+  font: 500 0.68rem/1 var(--font-sans, "Manrope", sans-serif);
+  color: var(--pulse-muted, rgba(255, 247, 239, 0.44));
+  white-space: nowrap;
+}
+
+.pulse-area-divider {
+  flex: 1;
+  height: 1px;
+  background: var(--pulse-border, rgba(255, 247, 239, 0.1));
+}
+
 /* --- RESPONSIVE ---------------------------------------------------------- */
 @media (max-width: 900px) {
   .city-pulse-edition {

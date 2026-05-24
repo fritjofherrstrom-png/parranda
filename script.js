@@ -5575,6 +5575,26 @@ function createPulseEntry(item) {
   if (pitch.textContent) {
     article.appendChild(pitch);
   }
+
+  // Expand toggle — shown when blurb or reason copy exists. Sits between
+  // pitch and blurb so the compact-card context is clear before expanding.
+  const hasExpandable = blurb.textContent || reason.textContent;
+  if (hasExpandable) {
+    const expandToggle = document.createElement("button");
+    expandToggle.type = "button";
+    expandToggle.className = "pulse-entry-expand-toggle";
+    expandToggle.setAttribute("aria-expanded", "false");
+    expandToggle.textContent = t("pulse.readMore", "Läs mer");
+    expandToggle.addEventListener("click", () => {
+      const expanded = article.classList.toggle("is-expanded");
+      expandToggle.setAttribute("aria-expanded", String(expanded));
+      expandToggle.textContent = expanded
+        ? t("pulse.showLess", "Visa mindre")
+        : t("pulse.readMore", "Läs mer");
+    });
+    article.appendChild(expandToggle);
+  }
+
   if (blurb.textContent) {
     article.appendChild(blurb);
   }
@@ -5958,9 +5978,47 @@ function renderCityPulse() {
     header.append(copy);
     section.appendChild(header);
 
-    groupItems.forEach((item) => {
-      grid.appendChild(createPulseEntry(item));
-    });
+    if (level === "venue") {
+      // Group venue items by area when the API provides an area token.
+      // Fallback items (no area field) skip grouping and render flat.
+      const byArea = new Map(); // area_key → { label, items }
+      const noArea = [];
+      groupItems.forEach((item) => {
+        const key = item.area || item.area_label;
+        if (key) {
+          if (!byArea.has(key)) {
+            byArea.set(key, { label: item.area_label || item.area, items: [] });
+          }
+          byArea.get(key).items.push(item);
+        } else {
+          noArea.push(item);
+        }
+      });
+
+      if (byArea.size > 0) {
+        byArea.forEach(({ label, items: areaItems }) => {
+          const areaHeader = document.createElement("div");
+          const areaName = document.createElement("span");
+          const areaDivider = document.createElement("span");
+          const areaCount = document.createElement("span");
+          areaHeader.className = "pulse-area-header";
+          areaName.className = "pulse-area-name";
+          areaDivider.className = "pulse-area-divider";
+          areaCount.className = "pulse-area-count";
+          areaName.textContent = label;
+          areaCount.textContent = String(areaItems.length);
+          areaHeader.append(areaName, areaDivider, areaCount);
+          grid.appendChild(areaHeader);
+          areaItems.forEach((item) => grid.appendChild(createPulseEntry(item)));
+        });
+        noArea.forEach((item) => grid.appendChild(createPulseEntry(item)));
+      } else {
+        // No area data — flat list.
+        groupItems.forEach((item) => grid.appendChild(createPulseEntry(item)));
+      }
+    } else {
+      groupItems.forEach((item) => grid.appendChild(createPulseEntry(item)));
+    }
 
     section.appendChild(grid);
     cityPulseLevels.appendChild(section);
