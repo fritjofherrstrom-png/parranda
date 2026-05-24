@@ -3,16 +3,51 @@
   --surface-strong: rgba(255, 252, 247, 0.95);
   --text: #241914;
   --muted: #6b564c;
+  /* --accent and --accent-deep are CITY-OVERRIDABLE.
+     They drive CTAs, active states, ghost-button text, links.
+     City-specific overrides live in `body[data-city-key="..."]`
+     blocks at the bottom of this file. The default value here
+     is Rome's terracotta; cities without an override inherit it. */
   --accent: #af4d24;
   --accent-deep: #7f2d1a;
+  /* --brand-accent is BRAND-LOCKED — never overridden per city.
+     Used only by the Parranda logo / brand mark gradient so the
+     Parranda identity stays consistent regardless of which city
+     is being browsed. */
+  --brand-accent: #af4d24;
+  --brand-accent-deep: #7f2d1a;
   --gold: #d7a04d;
   --olive: #61715a;
   --ink: #1d120d;
   --paper: #f7efe5;
+  /* --terracotta is BRAND-LOCKED — used only by the live Pulse dot
+     so the live-now signal reads identically across every city. */
   --terracotta: #b86136;
   --line: rgba(63, 35, 21, 0.1);
   --shadow: 0 24px 70px rgba(69, 35, 13, 0.12);
   --shadow-soft: 0 18px 44px rgba(69, 35, 13, 0.08);
+}
+
+/* ============================================================
+   City-specific accent overrides
+   ============================================================
+   Only --accent and --accent-deep may differ across cities.
+   Brand tokens (--brand-accent, --brand-accent-deep, --gold,
+   --terracotta) and structural tokens (--paper, --text, --muted,
+   --olive, --shadow*, --surface*) stay shared across every city
+   per the "same surfaces, different signal density" rule.
+   See tests/cross-city-accent-tokens.test.js for the contract. */
+
+body[data-city-key="barcelona"] {
+  /* Mediterranean cobalt — gothic stone meets sea. */
+  --accent: #2c5282;
+  --accent-deep: #1e3a5f;
+}
+
+body[data-city-key="athens"] {
+  /* Aegean indigo — deeper than Barcelona, marble shadow. */
+  --accent: #1a5276;
+  --accent-deep: #0e3a52;
 }
 
 * {
@@ -120,7 +155,8 @@ body::before {
   display: grid;
   place-items: center;
   border-radius: 18px;
-  background: linear-gradient(135deg, var(--accent), var(--gold));
+  /* Brand-locked: Parranda logo stays terracotta+gold across every city. */
+  background: linear-gradient(135deg, var(--brand-accent), var(--gold));
   color: white;
   font-weight: 800;
   letter-spacing: 0.08em;
