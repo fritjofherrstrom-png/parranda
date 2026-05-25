@@ -10755,26 +10755,16 @@ function renderPlannedDays() {
     footMeta.textContent = candidate ? takeLeadSentences(candidate, 1, 160) : "";
   }
 
-  // Foot CTAs — primary opens the route (delegates to the active-day select
-  // action that already exists inside createActiveDayView); secondary is a
-  // soft "show in app" placeholder that scrolls into the stops list. Both
-  // CTAs are deliberate consolidations of what used to be inline buttons
-  // inside createActiveDayView — see CSS for the duplicate-hide rules.
-  const primaryCta = dayCard.querySelector(".planner-day-primary-cta");
-  const secondaryCta = dayCard.querySelector(".planner-day-secondary-cta");
-  if (primaryCta) {
-    primaryCta.addEventListener("click", () => {
-      const selectBtn = dayCard.querySelector(".active-day-select-button");
-      if (selectBtn) {
-        selectBtn.click();
-      } else {
-        primarySlot?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    });
+  const walkingCta = dayCard.querySelector(".planner-day-walking-cta");
+  const guideCta = dayCard.querySelector(".planner-day-guide-cta");
+  if (walkingCta) {
+    const routeUrl = primaryRouteView.routeLink;
+    walkingCta.href = routeUrl || "#";
+    walkingCta.hidden = !routeUrl;
   }
-  if (secondaryCta) {
-    secondaryCta.addEventListener("click", () => {
-      primarySlot?.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (guideCta) {
+    guideCta.addEventListener("click", () => {
+      openRouteGuide(primaryRouteView);
     });
   }
 

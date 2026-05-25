@@ -854,8 +854,8 @@ body::before {
 
 /* Planned-route context: compact pill (replaces the large teaser card) */
 .city-pulse-teaser.is-day-handoff {
-  border-radius: 999px;
-  padding: 12px 16px 12px 20px;
+  border-radius: 18px;
+  padding: 14px 18px;
   gap: 14px;
   background:
     radial-gradient(circle at 90% 0%, rgba(215, 160, 77, 0.14), transparent 26%),
@@ -4711,7 +4711,6 @@ body.is-printing-guide #routeGuideDrawer {
     margin-top: 20px;
     padding-top: 14px;
     border-top: 1px solid rgba(70, 38, 18, 0.08);
-    background: rgba(250, 239, 223, 0.96);
   }
 
   .planner-mobile-actions .primary-button {
