@@ -3,7 +3,34 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const { isNightlifeExplicit } = require("../server/route-engine");
+const { isNightlifeExplicit, generateRecommendations } = require("../server/route-engine");
+
+const originalFetch = global.fetch;
+
+function createWeatherFetch() {
+  return async (url) => {
+    const parsed = new URL(String(url));
+    if (parsed.hostname !== "api.open-meteo.com") {
+      throw new Error(`Unexpected fetch in nightlife guard test: ${parsed.hostname}`);
+    }
+    return {
+      ok: true,
+      async json() {
+        return {
+          daily: {
+            time: ["2026-06-01"],
+            weathercode: [0],
+            temperature_2m_max: [24],
+          },
+        };
+      },
+    };
+  };
+}
+
+test.afterEach(() => {
+  global.fetch = originalFetch;
+});
 
 test("isNightlifeExplicit returns false for food/drink + culture + hidden gems", () => {
   assert.equal(
@@ -38,6 +65,51 @@ test("isNightlifeExplicit returns false for culture-mode optimizer", () => {
 
 test("isNightlifeExplicit returns false with empty preferences", () => {
   assert.equal(isNightlifeExplicit([]), false);
+});
+
+test("isNightlifeExplicit returns true when nightlife is in preferences", () => {
+  assert.equal(isNightlifeExplicit(["nightlife"]), true);
+});
+
+test("isNightlifeExplicit returns true when evening is in preferences", () => {
+  assert.equal(isNightlifeExplicit(["evening"]), true);
+});
+
+test("Barcelona default-preference route has no nightlife framing in title/summary/why", async () => {
+  global.fetch = createWeatherFetch();
+  const result = await generateRecommendations({
+    city: "barcelona",
+    dates: ["2026-06-01"],
+    walkingKmTarget: 6,
+    preferences: ["mat", "vin", "öl", "cocktail", "kultur", "kyrkor", "hidden gems", "low-key"],
+    legPacing: "balanced",
+    distanceMode: "soft_target",
+    budgetTier: "standard",
+    lang: "en",
+  });
+
+  assert.ok(result.days.length >= 1, "should produce at least one day");
+  const route = result.days[0].primary_route;
+  assert.ok(route, "expected a primary route");
+
+  const nightlifePatterns = /\b(nightlife|nattliv|party|late[- ]night|clubbing|nattklubb)\b/i;
+
+  const title = route.title || "";
+  const summary = route.summary || "";
+  const why = route.why_this_route || "";
+
+  assert.ok(
+    !nightlifePatterns.test(title),
+    `route title should not contain nightlife framing, got: "${title}"`,
+  );
+  assert.ok(
+    !nightlifePatterns.test(summary),
+    `route summary should not contain nightlife framing, got: "${summary}"`,
+  );
+  assert.ok(
+    !nightlifePatterns.test(why),
+    `why_this_route should not contain nightlife framing, got: "${why}"`,
+  );
 });
 
 test("default planner markup does not have nightlife checked", () => {

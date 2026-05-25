@@ -357,7 +357,7 @@ const intentFamilyMatchers = new Map([
 const barRelevantIntentFamilies = new Set(["food_drink", "nightlife"]);
 const hiddenRelevantIntentFamilies = new Set(["hidden_gems", "culture", "views"]);
 
-const nightlifeExplicitPreferences = new Set(["nattliv", "kväll", "party"]);
+const nightlifeExplicitPreferences = new Set(["nattliv", "kväll", "party", "nightlife", "evening"]);
 const nightlifeExplicitOptimizers = new Set(["bar-hop", "cocktail-night", "evening-mode", "party-mode"]);
 const nightlifeExplicitModifiers = new Set(["evening", "party"]);
 
@@ -2810,9 +2810,12 @@ function preferenceBoostForStop(
   if (!isNightlifeExplicit(preferences, optimizerMode, modifier)) {
     const nightlifeDominantCount = item.tags.filter((t) => nightlifeDominantTags.has(t)).length;
     if (nightlifeDominantCount > 0) {
-      const hasFoodDrinkSupport = item.tags.some((t) =>
-        t === "mat" || t === "vin" || t === "vermut" || t === "tapas" || t === "cocktail" || t === "öl" || t === "aperitivo");
-      score -= hasFoodDrinkSupport ? 1.4 : 3.2;
+      const matchesExplicitFoodDrinkPref = item.tags.some((t) =>
+        (t === "mat" || t === "vin" || t === "öl" || t === "cocktail" || t === "vermut" || t === "tapas" || t === "aperitivo")
+        && preferences.includes(t));
+      if (!matchesExplicitFoodDrinkPref) {
+        score -= 3.2;
+      }
     }
   }
 

@@ -463,7 +463,7 @@ Separate three layers:
 
 **Current anchor**
 
-- PR #177: nightlife intent guard.
+- PR #178: nightlife intent guard.
 - `isNightlifeExplicit()` in `server/route-engine.js`.
 - `tests/nightlife-intent-guard.test.js`.
 

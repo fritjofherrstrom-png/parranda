@@ -14,8 +14,8 @@
         "anchor_zone": "Gràcia -> Sant Antoni",
         "routing_source": "heuristic",
         "estimated_km": 4.9,
-        "longest_leg_km": 3,
-        "longest_leg_minutes": 36,
+        "longest_leg_km": 3.1,
+        "longest_leg_minutes": 37,
         "average_leg_minutes": 12,
         "stops": [
           {
@@ -29,12 +29,12 @@
             "live": false
           },
           {
-            "label": "BCN Beer Company",
+            "label": "Federal Cafe Parlament",
             "area": "sant-antoni",
             "live": false
           },
           {
-            "label": "Federal Cafe Parlament",
+            "label": "Bar Calders",
             "area": "sant-antoni",
             "live": false
           }
@@ -54,18 +54,18 @@
           },
           {
             "from": "Bodega Quimet",
-            "to": "BCN Beer Company",
-            "km": 3,
-            "minutes": 36
-          },
-          {
-            "from": "BCN Beer Company",
             "to": "Federal Cafe Parlament",
-            "km": 0.2,
-            "minutes": 2
+            "km": 3.1,
+            "minutes": 37
           },
           {
             "from": "Federal Cafe Parlament",
+            "to": "Bar Calders",
+            "km": 0.1,
+            "minutes": 2
+          },
+          {
+            "from": "Bar Calders",
             "to": "Fàbrica Moritz Barcelona",
             "km": 0.8,
             "minutes": 10
@@ -85,20 +85,21 @@
             "Vermuteria Lou",
             "Mercat de la Llibertat",
             "Bodega Quimet",
-            "Federal Cafe Parlament"
+            "Bar Calders"
           ]
         },
         {
-          "id": "sant-antoni-food-bar-flow",
+          "id": "poble-sec-montjuic-evening-arc",
           "start": "Plaça del Diamant",
           "end": "Fàbrica Moritz Barcelona",
           "shape": "arc",
-          "day_profile": "light",
+          "day_profile": "variation",
           "anchor_zone": "Gràcia -> Sant Antoni",
           "stops": [
+            "Vermuteria Lou",
             "Mercat de la Llibertat",
             "Bodega Quimet",
-            "Federal Cafe Parlament"
+            "Bar Calders"
           ]
         }
       ]

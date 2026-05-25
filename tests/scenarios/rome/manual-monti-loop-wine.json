@@ -6,17 +6,17 @@
     {
       "date": "2026-04-18",
       "primary": {
-        "id": "garbatella-ostiense-southline",
+        "id": "centro-storico-slow-loop",
         "start": "Monti",
         "end": "Monti",
         "shape": "loop",
         "day_profile": "peak",
         "anchor_zone": "Monti",
         "routing_source": "heuristic",
-        "estimated_km": 5.1,
-        "longest_leg_km": 2,
-        "longest_leg_minutes": 24,
-        "average_leg_minutes": 12,
+        "estimated_km": 3.9,
+        "longest_leg_km": 1.5,
+        "longest_leg_minutes": 18,
+        "average_leg_minutes": 9,
         "stops": [
           {
             "label": "Ai Tre Scalini",
@@ -24,17 +24,17 @@
             "live": false
           },
           {
-            "label": "Jewish Ghetto",
-            "area": "Centro",
+            "label": "Centro Storico",
+            "area": "Centro Storico",
             "live": false
           },
           {
-            "label": "Mercato Monti",
+            "label": "Piazza della Madonna dei Monti",
             "area": "Monti",
             "live": false
           },
           {
-            "label": "Santa Prassede",
+            "label": "Mercato Monti",
             "area": "Monti",
             "live": false
           }
@@ -48,48 +48,48 @@
           },
           {
             "from": "Ai Tre Scalini",
-            "to": "Jewish Ghetto",
-            "km": 1.7,
-            "minutes": 20
+            "to": "Centro Storico",
+            "km": 1.4,
+            "minutes": 17
           },
           {
-            "from": "Jewish Ghetto",
+            "from": "Centro Storico",
+            "to": "Piazza della Madonna dei Monti",
+            "km": 1.5,
+            "minutes": 18
+          },
+          {
+            "from": "Piazza della Madonna dei Monti",
             "to": "Mercato Monti",
-            "km": 2,
-            "minutes": 24
+            "km": 0.3,
+            "minutes": 4
           },
           {
             "from": "Mercato Monti",
-            "to": "Santa Prassede",
-            "km": 0.5,
-            "minutes": 6
-          },
-          {
-            "from": "Santa Prassede",
             "to": "Monti",
-            "km": 0.4,
-            "minutes": 5
+            "km": 0.2,
+            "minutes": 2
           }
         ]
       },
       "alternative_count": 2,
       "alternatives": [
         {
-          "id": "centro-storico-slow-loop",
+          "id": "centro-wine-loop",
           "start": "Monti",
           "end": "Monti",
           "shape": "loop",
           "day_profile": "variation",
           "anchor_zone": "Monti",
           "stops": [
-            "Ai Tre Scalini",
-            "Centro Storico",
             "Mercato Monti",
-            "Santa Prassede"
+            "Ai Tre Scalini",
+            "Campo de' Fiori",
+            "Piazza della Madonna dei Monti"
           ]
         },
         {
-          "id": "monti-market-aperitivo-loop",
+          "id": "ghetto-navona-wine-loop",
           "start": "Monti",
           "end": "Monti",
           "shape": "loop",
@@ -97,9 +97,9 @@
           "anchor_zone": "Monti",
           "stops": [
             "Ai Tre Scalini",
-            "Pifebo Vintage Shop",
-            "Piazza della Madonna dei Monti",
-            "Mercato Monti"
+            "Jewish Ghetto",
+            "Mercato Monti",
+            "Santa Prassede"
           ]
         }
       ]

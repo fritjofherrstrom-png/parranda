@@ -428,12 +428,11 @@
           "start": "Raval / Gothic",
           "end": "Poble-sec / Montjuïc",
           "shape": "arc",
-          "day_profile": "variation",
+          "day_profile": "light",
           "anchor_zone": "Gothic Quarter -> Poble-sec",
           "stops": [
             "Humana Vintage — Portaferrissa",
-            "Satan's Coffee Corner",
-            "La Federica",
+            "L'Arca",
             "Quimet & Quimet"
           ]
         },
@@ -442,10 +441,11 @@
           "start": "Raval / Gothic",
           "end": "Poble-sec / Montjuïc",
           "shape": "arc",
-          "day_profile": "light",
+          "day_profile": "variation",
           "anchor_zone": "Gothic Quarter -> Poble-sec",
           "stops": [
             "Humana Vintage — Portaferrissa",
+            "L'Arca",
             "Satan's Coffee Corner",
             "Quimet & Quimet"
           ]
