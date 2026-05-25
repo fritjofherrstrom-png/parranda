@@ -465,6 +465,7 @@ function buildStaticShellI18nReplacements(lang) {
     "__PARRANDA_I18N_ROUTE_BAR_MENTIONS__": tr("route.barMentions"),
     "__PARRANDA_I18N_ROUTE_SHOW_IN_APP__": tr("route.showInApp"),
     "__PARRANDA_I18N_ROUTE_CLEAN_GUIDE__": tr("route.cleanGuide"),
+    "__PARRANDA_I18N_ROUTE_OPEN_ROUTE__": tr("route.openRoute"),
     "__PARRANDA_I18N_ROUTE_OPEN_TODAY__": tr("route.openToday"),
     "__PARRANDA_I18N_ROUTE_GUIDE__": tr("route.guide"),
     "__PARRANDA_I18N_ROUTE_WHY_CHOSEN__": tr("route.whyChosen"),

@@ -10761,20 +10761,9 @@ function renderPlannedDays() {
   // CTAs are deliberate consolidations of what used to be inline buttons
   // inside createActiveDayView — see CSS for the duplicate-hide rules.
   const primaryCta = dayCard.querySelector(".planner-day-primary-cta");
-  const secondaryCta = dayCard.querySelector(".planner-day-secondary-cta");
   if (primaryCta) {
     primaryCta.addEventListener("click", () => {
-      const selectBtn = dayCard.querySelector(".active-day-select-button");
-      if (selectBtn) {
-        selectBtn.click();
-      } else {
-        primarySlot?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    });
-  }
-  if (secondaryCta) {
-    secondaryCta.addEventListener("click", () => {
-      primarySlot?.scrollIntoView({ behavior: "smooth", block: "start" });
+      openRouteGuide(primaryRouteView);
     });
   }
 
