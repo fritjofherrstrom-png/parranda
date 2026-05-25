@@ -2047,7 +2047,8 @@ const isFallbackRequestedCity =
   plannerRequestedCityKey !== plannerCityKey;
 const isCuratedPublicMode =
   !plannerCity.fallbackUsed && plannerCityVisibility !== "internal" && !isPreviewCityMode;
-const hasRomeFrontendContent = isCuratedPublicMode && plannerCityKey === "rome";
+const isCuratedMode = isCuratedPublicMode;
+const hasRomeFrontendContent = isCuratedMode && plannerCityKey === "rome";
 const isRomeCuratedMode = hasRomeFrontendContent;
 const isInternalCityMode = plannerCityVisibility === "internal";
 const plannerDisplayCityLabel = plannerCityLabel || plannerRequestedCityLabel || plannerResolvedCityLabel || "Staden";
@@ -2383,9 +2384,9 @@ const legPacingLabels = {
   flexible: t("planner.legFlexibleSummary", "Friare ben"),
 };
 const legPacingHints = {
-  short: "Kort försöker hålla varje enskilt ben tätare och mer sammanhängande.",
-  balanced: "Balans håller benen rimliga utan att bli onödigt strikt.",
-  flexible: "Spelar mindre roll låter motorn ta större hopp om helheten blir bättre.",
+  short: t("planner.legShortHint", "Kort försöker hålla varje enskilt ben tätare och mer sammanhängande."),
+  balanced: t("planner.legBalancedHint", "Balans håller benen rimliga utan att bli onödigt strikt."),
+  flexible: t("planner.legFlexibleHint", "Spelar mindre roll låter motorn ta större hopp om helheten blir bättre."),
 };
 let plannerLoadingMessages = buildPlannerLoadingMessagesForUi(1);
 const romePlannerDistrictCatalog = [
@@ -2580,7 +2581,8 @@ function buildNonRomeFallbackNote() {
 
 function syncShellModeState() {
   document.body?.classList.toggle("mode-rome-curated", isRomeCuratedMode);
-  document.body?.classList.toggle("mode-city-preview", !isRomeCuratedMode);
+  document.body?.classList.toggle("mode-curated", isCuratedMode);
+  document.body?.classList.toggle("mode-city-preview", !isCuratedMode);
   document.body?.classList.toggle("mode-city-fallback", isFallbackRequestedCity);
   document.body?.classList.toggle("mode-city-internal", isInternalCityMode);
   document.body?.classList.toggle("mode-city-registered-preview", isPreviewCityMode);
@@ -2776,7 +2778,7 @@ function applyCityModeToShell() {
   syncShellModeState();
 
   if (heroHeadline) {
-    heroHeadline.textContent = isRomeCuratedMode
+    heroHeadline.textContent = isCuratedMode
       ? (isEnglishUi ? "Your day starts here." : "Din dag börjar här.")
       : isInternalCityMode
         ? (isEnglishUi ? `${buildUnavailableCityLabel()} is running in preview.` : `${buildUnavailableCityLabel()} kör i preview.`)
@@ -2786,7 +2788,7 @@ function applyCityModeToShell() {
   }
 
   if (heroLead) {
-    heroLead.textContent = isRomeCuratedMode
+    heroLead.textContent = isCuratedMode
       ? (isEnglishUi
         ? `${plannerDisplayCityLabel} is the active city. Choose a mood and let Parranda build the main day.`
         : `${plannerDisplayCityLabel} är aktiv stad. Välj känsla och låt Parranda bygga huvuddagen.`)
@@ -2797,14 +2799,14 @@ function applyCityModeToShell() {
         : (isEnglishUi ? "Parranda shows an honest preview until this city has its own curated pack." : "Parranda visar ett ärligt preview-läge tills staden har ett eget kuraterat pack.");
   }
 
-  if (heroEyebrow && !isRomeCuratedMode) {
+  if (heroEyebrow && !isCuratedMode) {
     heroEyebrow.textContent = isInternalCityMode
       ? `${buildUnavailableCityLabel().toUpperCase()} · INTERN PREVIEW`
       : `${buildUnavailableCityLabel().toUpperCase()} · PREVIEW`;
   }
 
   if (plannerModalTitle) {
-    plannerModalTitle.textContent = isRomeCuratedMode
+    plannerModalTitle.textContent = isCuratedMode
       ? (isEnglishUi ? `Plan your time in ${plannerDisplayCityLabel}` : `Planera din tid i ${plannerDisplayCityLabel}`)
       : isInternalCityMode
         ? (isEnglishUi ? `Planner preview • ${buildUnavailableCityLabel()}` : `Planner-preview • ${buildUnavailableCityLabel()}`)
@@ -2821,16 +2823,16 @@ function applyCityModeToShell() {
     }
   }
 
-  if (routePlannerOpenButton && !isRomeCuratedMode) {
+  if (routePlannerOpenButton && !isCuratedMode) {
     routePlannerOpenButton.textContent = isInternalCityMode
       ? (isEnglishUi ? "Open preview" : "Öppna preview")
       : (isEnglishUi ? "See planner preview" : "Se planner-preview");
   }
-  if (routePlannerManualButton && !isRomeCuratedMode) {
+  if (routePlannerManualButton && !isCuratedMode) {
     routePlannerManualButton.hidden = true;
   }
 
-  if (!isRomeCuratedMode) {
+  if (!isCuratedMode) {
     if (tabNav) {
       tabNav.hidden = true;
     }
@@ -2862,7 +2864,7 @@ function applyCityModeToShell() {
 }
 
 function applyPlannerModeRestrictions() {
-  if (isRomeCuratedMode) {
+  if (isCuratedMode) {
     return;
   }
 
@@ -3631,7 +3633,7 @@ function buildBlitzContextKey(origin = null) {
     (blitzOriginMode === "current_location"
       ? {
           type: "current_location",
-          label: "Min plats",
+          label: t("planner.myLocation", "Min plats"),
           lat: currentLocationCoords?.lat,
           lng: currentLocationCoords?.lng,
         }
@@ -3681,13 +3683,13 @@ async function resolveBlitzOriginPayload() {
       const coords = await ensureCurrentLocation();
       return {
         type: "current_location",
-        label: "Min plats",
+        label: t("planner.myLocation", "Min plats"),
         lat: coords.lat,
         lng: coords.lng,
       };
     } catch (_error) {
       blitzOriginMode = "selected_place";
-      blitzInlineStatus = "Min plats gick inte att läsa just nu, så Blitz använder vald plats i stället.";
+      blitzInlineStatus = t("planner.myLocationFallback", "Min plats gick inte att läsa just nu, så Blitz använder vald plats i stället.");
       renderHeroBlitz();
     }
   }
@@ -4136,7 +4138,7 @@ function openHeroBlitzMove() {
 }
 
 function renderHeroBlitz() {
-  if (!isRomeCuratedMode) {
+  if (!isCuratedMode) {
     const previewCard = buildPreviewHeroCard();
 
     if (heroBlitzCard) {
@@ -4286,15 +4288,15 @@ async function applyWildcardToPlanner(wildcard, { autoPlan = true, sourceLabel =
     renderRouteResults();
     setRouteApiStatus(false);
     updateRouteMatchSummary(
-      !isRomeCuratedMode
+      !isCuratedMode
         ? buildNonRomeRouteSummary()
-        : "Kvällsidén laddades, men live-planeringen svarade inte just nu. De kuraterade Rom-rutterna ligger kvar som fallback.",
+        : "Kvällsidén laddades, men live-planeringen svarade inte just nu. De kuraterade rutterna ligger kvar som fallback.",
     );
   }
 }
 
 async function loadHeroBlitz({ openAfter = false } = {}) {
-  if (!isRomeCuratedMode) {
+  if (!isCuratedMode) {
     renderHeroBlitz();
     return null;
   }
@@ -5248,7 +5250,7 @@ function renderCityPulseTeaser() {
           `Öppna live-läget längre ner när du vill väga in ${buildUnavailableCityLabel()} utan att lämna planen.`,
         );
   } else {
-    if (isRomeCuratedMode) {
+    if (isCuratedMode) {
       cityPulseTeaserLabel.textContent = t("pulse.teaserPrePlanLabel", "Dagens signaler");
       cityPulseTeaserTitle.textContent = t("pulse.teaserPrePlanTitle", "Öppna Pulse när du vill väga in läget");
       cityPulseTeaserSummary.textContent = t(
@@ -5278,7 +5280,7 @@ function renderCityPulseTeaser() {
       ? activeDayEventCount
         ? t("pulse.teaserButtonLive", "Se dagens live")
         : "Pulse"
-      : isRomeCuratedMode
+      : isCuratedMode
         ? "Pulse"
         : t("pulse.teaserButtonPreview", "Läs preview");
   }
@@ -6298,7 +6300,7 @@ function updateLatestPlannerRestoreNotice() {
   }
 
   plannerRestoreSummary.textContent = buildLatestPlannerRestoreSummary(record);
-  plannerRestoreButton?.setAttribute("aria-label", "Fortsätt med senaste plan");
+  plannerRestoreButton?.setAttribute("aria-label", isEnglishUi ? "Continue latest plan" : "Fortsätt med senaste plan");
   plannerRestoreNotice.hidden = false;
 }
 
@@ -7964,7 +7966,7 @@ async function runSavedRouteRemix(savedRoute, remixMode = null, options = {}) {
     expandedAlternativeDates.clear();
     renderRouteResults();
     updateRouteMatchSummary(
-      !isRomeCuratedMode
+      !isCuratedMode
         ? buildNonRomeRouteSummary()
         : "Remixen gick inte att köra i live-läget just nu, så Parranda föll tillbaka till sina kuraterade rutter.",
     );
@@ -8019,10 +8021,10 @@ function createSavedRouteCard(savedRoute) {
 
   title.textContent = savedRoute.title;
   summary.textContent =
-    savedRoute.summary || preview?.summary || "Sparad dagsbas för nya versioner i Parranda.";
+    savedRoute.summary || preview?.summary || t("saved.fallbackSummary", "Sparad dagsbas för nya versioner i Parranda.");
   context.textContent =
-    [startLabel, endLabel].filter(Boolean).join(" -> ") || "Sparad dagsbas för nya versioner.";
-  remixLabel.textContent = "Skapa och spara ny variant";
+    [startLabel, endLabel].filter(Boolean).join(" -> ") || t("saved.fallbackTitle", "Sparad dagsbas för nya versioner.");
+  remixLabel.textContent = t("saved.remixLabel", "Skapa och spara ny variant");
 
   [
     savedRoute.date ? formatSwedishDate(savedRoute.date) : null,
@@ -8031,9 +8033,9 @@ function createSavedRouteCard(savedRoute) {
     snapshot.optimizerMode ? optimizerLabel[snapshot.optimizerMode] || null : null,
     budgetTierLabel[snapshot.budgetTier || "standard"] || null,
     modifierLabel[snapshot.modifier || ""] || null,
-    savedRoute.variantLabel ? `Variant: ${savedRoute.variantLabel}` : null,
-    savedRoute.parentTitle ? `Från: ${savedRoute.parentTitle}` : null,
-    savedRoute.savedAt ? `Sparad ${formatSavedTimestamp(savedRoute.savedAt)}` : null,
+    savedRoute.variantLabel ? `${isEnglishUi ? "Variant" : "Variant"}: ${savedRoute.variantLabel}` : null,
+    savedRoute.parentTitle ? `${isEnglishUi ? "From" : "Från"}: ${savedRoute.parentTitle}` : null,
+    savedRoute.savedAt ? tf("saved.timestamp", { time: formatSavedTimestamp(savedRoute.savedAt) }, `Sparad ${formatSavedTimestamp(savedRoute.savedAt)}`) : null,
   ]
     .filter(Boolean)
     .forEach((text) => {
@@ -8053,7 +8055,7 @@ function createSavedRouteCard(savedRoute) {
   const openButton = document.createElement("button");
   openButton.type = "button";
   openButton.className = "primary-button";
-  openButton.textContent = "Kör originalet";
+  openButton.textContent = t("saved.runOriginal", "Kör originalet");
   openButton.addEventListener("click", () => {
     runSavedRouteRemix(savedRoute);
   });
@@ -8064,7 +8066,7 @@ function createSavedRouteCard(savedRoute) {
     const guideButton = document.createElement("button");
     mapButton.type = "button";
     mapButton.className = "secondary-button";
-    mapButton.textContent = "Visa på karta";
+    mapButton.textContent = t("saved.showOnMapButton", "Visa på karta");
     mapButton.addEventListener("click", () => {
       switchTab("overview");
       window.setTimeout(() => {
@@ -8073,11 +8075,11 @@ function createSavedRouteCard(savedRoute) {
           .querySelector(".map-explorer")
           ?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 80);
-      updateRouteMatchSummary(`"${savedRoute.title}" visas nu direkt på kartan från dina sparade dagar.`);
+      updateRouteMatchSummary(tf("saved.showOnMap", { title: savedRoute.title }, `"${savedRoute.title}" visas nu direkt på kartan från dina sparade dagar.`));
     });
     guideButton.type = "button";
     guideButton.className = "ghost-button";
-    guideButton.textContent = "Ren guide";
+    guideButton.textContent = t("saved.guideButton", "Ren guide");
     guideButton.addEventListener("click", () => {
       openRouteGuide(preview);
     });
@@ -8088,7 +8090,7 @@ function createSavedRouteCard(savedRoute) {
   const deleteButton = document.createElement("button");
   deleteButton.type = "button";
   deleteButton.className = "ghost-button";
-  deleteButton.textContent = "Ta bort";
+  deleteButton.textContent = t("saved.delete", "Ta bort");
   deleteButton.addEventListener("click", () => {
     removeSavedRoute(savedRoute.id);
   });
@@ -8182,7 +8184,7 @@ async function planFromDrawerItem() {
     renderRouteResults();
     setRouteApiStatus(false);
     updateRouteMatchSummary(
-      !isRomeCuratedMode
+      !isCuratedMode
         ? buildNonRomeRouteSummary()
         : "Planeringen från den valda platsen gick inte att köra live just nu, så fallback-rutterna ligger kvar.",
     );
@@ -8260,7 +8262,7 @@ function openPlaceDrawer(item) {
     });
 
   const canFocusOnMap =
-    isRomeCuratedMode &&
+    isCuratedMode &&
     (Boolean(item.best_route_id && item.best_route_date) ||
       markers.has(item.label) ||
       (typeof item.lat === "number" && typeof item.lng === "number"));
@@ -9086,7 +9088,7 @@ async function buildPlannerPoint(pointKey) {
       const coords = await ensureCurrentLocation();
       return {
         type: "current_location",
-        label: pointKey === "home_base" ? "Där jag bor" : "Min plats",
+        label: pointKey === "home_base" ? t("planner.homeBase", "Där jag bor") : t("planner.myLocation", "Min plats"),
         lat: coords.lat,
         lng: coords.lng,
       };
@@ -9208,12 +9210,12 @@ function switchTab(tabName) {
 }
 
 function updateFavoritesUI() {
-  favoriteCountChip.textContent = `${favorites.length} sparade`;
+  favoriteCountChip.textContent = `${favorites.length} ${t("favorites.countSuffix", "sparade")}`;
   favoritesStrip.innerHTML = "";
 
   if (!favorites.length) {
     favoritesStrip.innerHTML =
-      '<p class="favorites-empty">Inga sparade ännu. Tryck på Spara i ett kort eller från kartpanelen.</p>';
+      `<p class="favorites-empty">${t("favorites.empty", "Inga sparade ännu. Tryck på Spara i ett kort eller från kartpanelen.")}</p>`;
     showAllButton.classList.remove("is-active");
     showFavoritesButton.classList.toggle("is-active", onlyFavorites);
     return;
@@ -9270,11 +9272,11 @@ function updateMapPanel(place) {
   mapPlaceName.textContent = place.name;
   mapPlaceMeta.textContent = `${place.category} • ${place.area} • ${place.crowd}`;
   mapPlaceDescription.textContent = place.description;
-  mapPlaceNote.textContent = `Lokal notis: ${place.localNote}`;
+  mapPlaceNote.textContent = `${t("map.localNote", "Lokal notis")}: ${place.localNote}`;
   mapPlaceLink.href = createMapUrl(place.mapQuery);
   mapFavoriteButton.textContent = isFavorite(place.name)
-    ? "Ta bort från sparade"
-    : "Spara vald plats";
+    ? t("favorites.remove", "Ta bort från sparade")
+    : t("favorites.savePlace", "Spara vald plats");
   mapFavoriteButton.dataset.place = place.name;
   mapFavoriteButton.disabled = false;
 
@@ -9287,7 +9289,7 @@ function updateMapPanel(place) {
 
   renderHeroBlitz();
 
-  if (isRomeCuratedMode && blitzOriginMode === "selected_place" && blitzContextKey) {
+  if (isCuratedMode && blitzOriginMode === "selected_place" && blitzContextKey) {
     loadHeroBlitz().catch(() => {});
   }
 }
@@ -9307,7 +9309,7 @@ function updateMapPanelForRoute(routeView) {
     .filter(Boolean)
     .join(" ");
   mapPlaceLink.href = routeView.routeLink;
-  mapFavoriteButton.textContent = "Spara vald plats";
+  mapFavoriteButton.textContent = t("favorites.savePlace", "Spara vald plats");
   mapFavoriteButton.dataset.place = "";
   mapFavoriteButton.disabled = true;
 
@@ -9424,7 +9426,7 @@ function showLoosePointOnMap(item) {
     item.route_fit_note || item.opening_summary || `Utvald plats i ${getMapCityFallbackLabel()}.`;
   mapPlaceLink.href =
     item.external_map_url || createMapUrl(withPlannerCitySearchLabel(item.label));
-  mapFavoriteButton.textContent = "Spara vald plats";
+  mapFavoriteButton.textContent = t("favorites.savePlace", "Spara vald plats");
   mapFavoriteButton.dataset.place = "";
   mapFavoriteButton.disabled = true;
   mapPlaceTags.innerHTML = "";
@@ -9552,7 +9554,7 @@ function renderPlaces() {
     card.querySelector(".description").textContent = place.description;
     card.querySelector(".best-for").textContent = place.bestFor;
     card.querySelector(".time-tag").textContent = place.time;
-    card.querySelector(".local-note").textContent = `Lokal notis: ${place.localNote}`;
+    card.querySelector(".local-note").textContent = `${t("map.localNote", "Lokal notis")}: ${place.localNote}`;
 
     const tagRow = card.querySelector(".tag-row");
     place.tags.forEach((tag) => {
@@ -9562,7 +9564,7 @@ function renderPlaces() {
     });
 
     const favoriteButton = card.querySelector(".favorite-button");
-    favoriteButton.textContent = isFavorite(place.name) ? "Sparad" : "Spara";
+    favoriteButton.textContent = isFavorite(place.name) ? t("favorites.saved", "Sparad") : t("favorites.save", "Spara");
     favoriteButton.classList.toggle("is-active", isFavorite(place.name));
     favoriteButton.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -9775,7 +9777,7 @@ function focusRouteCardOnMap(routeView, routeKey, message) {
 
   updateRouteMatchSummary(message);
 
-  if (isRomeCuratedMode) {
+  if (isCuratedMode) {
     loadHeroBlitz().catch(() => {});
   }
 }
@@ -9846,7 +9848,7 @@ function focusLiveEventOnMap(item) {
       `${item.label} matchar bäst med ${item.best_route_label || "dagens starkaste rutt"}.`,
   );
 
-  if (isRomeCuratedMode) {
+  if (isCuratedMode) {
     loadHeroBlitz().catch(() => {});
   }
 }
@@ -10199,7 +10201,7 @@ function createActiveDayView(routeView, { routeKey }) {
   routeLink.href = routeView.routeLink;
   routeLink.textContent = t("route.openToday", "Öppna dagens rutt");
 
-  selectButton.hidden = !isRomeCuratedMode;
+  selectButton.hidden = !isCuratedMode;
   selectButton.classList.toggle("is-active", activeRouteKey === routeKey);
   selectButton.textContent = activeRouteKey === routeKey
     ? t("route.mapActive", "Kartfokus aktivt")
@@ -10271,7 +10273,7 @@ function createRouteCard(
   }
   card.querySelector(".route-link").href = routeView.routeLink;
   card.querySelector(".route-link").textContent = t("route.openWalking", "Öppna gångrutt");
-  selectButton.hidden = !isRomeCuratedMode;
+  selectButton.hidden = !isCuratedMode;
   selectButton.classList.toggle("is-active", activeRouteKey === routeKey);
   selectButton.textContent =
     activeRouteKey === routeKey ? t("route.mapActive", "Kartfokus aktivt") : t("route.showInApp", "Visa i appen");
@@ -10824,7 +10826,7 @@ function renderRouteResults() {
     return;
   }
 
-  if (!isRomeCuratedMode) {
+  if (!isCuratedMode) {
     renderCityPreviewState();
     return;
   }
@@ -10850,15 +10852,15 @@ async function planRoutes() {
     activeLiveDate = routeDateFrom.value || getTodayIsoDate();
     await loadCityPulse(activeLiveDate);
     renderRouteResults();
-    if (!isRomeCuratedMode) {
+    if (!isCuratedMode) {
       updateRouteMatchSummary(buildNonRomeRouteSummary());
       setPlannerStatusMessage(buildNonRomePlannerLaunchSummary(), "warning");
     } else {
       updateRouteMatchSummary(
-        "Live-ruttmotorn svarar inte just nu, så appen visar de kuraterade Rom-baserade rutterna i stället.",
+        "Live-ruttmotorn svarar inte just nu, så appen visar de kuraterade rutterna i stället.",
       );
       setPlannerStatusMessage(
-        "Live-läget svarar inte just nu, så Parranda visar sina kuraterade Rome-wide-rutter i stället.",
+        "Live-läget svarar inte just nu, så Parranda visar sina kuraterade rutter i stället.",
         "warning",
       );
     }
@@ -10906,7 +10908,7 @@ async function planRoutes() {
 
   if (!plannedDays.length) {
     latestPlannerResolution = null;
-    if (!isRomeCuratedMode) {
+    if (!isCuratedMode) {
       updateRouteMatchSummary(buildNonRomeRouteSummary());
       setPlannerStatusMessage(buildNonRomePlannerLaunchSummary(), "warning");
     } else {
@@ -11036,7 +11038,7 @@ preferenceInputs.forEach((input) => {
     updatePlannerAdvancedSummary();
     updatePlannerLaunchSummary();
     updateRouteMatchSummary(buildPlannerStyleSummary());
-    if (isRomeCuratedMode) {
+    if (isCuratedMode) {
       loadHeroBlitz().catch(() => {});
     }
   });
@@ -11098,11 +11100,11 @@ useGeolocationAsHomeBaseButton?.addEventListener("click", async () => {
   try {
     await ensureCurrentLocation();
     updateRouteMatchSummary(
-      "Min plats vägs in som område där du bor. Om platsåtkomst inte fungerar väljer Parranda själv.",
+      t("planner.locationHomeHint", "Min plats vägs in som område där du bor. Om platsåtkomst inte fungerar väljer Parranda själv."),
     );
   } catch (error) {
     updateRouteMatchSummary(
-      "Jag kunde inte läsa din plats just nu. Om du fortsätter väljer Parranda ett område själv.",
+      t("planner.locationFailed", "Jag kunde inte läsa din plats just nu. Om du fortsätter väljer Parranda en smart start i stället."),
     );
   }
 });
@@ -11115,11 +11117,11 @@ useGeolocationButton?.addEventListener("click", async () => {
   try {
     await ensureCurrentLocation();
     updateRouteMatchSummary(
-      "Min plats är nu vald som startpunkt. Om platsåtkomst inte fungerar väljer Parranda en smart start i stället.",
+      t("planner.locationChosen", "Min plats är nu vald som startpunkt. Om platsåtkomst inte fungerar väljer Parranda en smart start i stället."),
     );
   } catch (error) {
     updateRouteMatchSummary(
-      "Jag kunde inte läsa din plats just nu. Om du fortsätter väljer Parranda en smart start i stället.",
+      t("planner.locationFailed", "Jag kunde inte läsa din plats just nu. Om du fortsätter väljer Parranda en smart start i stället."),
     );
   }
 });
@@ -11129,7 +11131,7 @@ routePlannerForm?.addEventListener("submit", async (event) => {
   startPlannerLoadingCycle();
   updateRouteMatchSummary(
     buildPlannerStyleSummary(
-      "Bygger upplägget utifrån datum, känsla och dina val...",
+      t("planner.buildSummary", "Bygger upplägget utifrån datum, känsla och dina val..."),
     ),
   );
 
@@ -11148,12 +11150,12 @@ routePlannerForm?.addEventListener("submit", async (event) => {
     setRouteApiStatus(false);
     closePlannerModal();
     focusPlannerResults();
-    if (!isRomeCuratedMode) {
+    if (!isCuratedMode) {
       updateRouteMatchSummary(buildNonRomeRouteSummary());
       setPlannerStatusMessage(buildNonRomePlannerLaunchSummary(), "error");
     } else {
       updateRouteMatchSummary(
-        "Något gick fel i live-läget, så appen föll tillbaka till de kuraterade Rom-rutterna.",
+        "Något gick fel i live-läget, så appen föll tillbaka till de kuraterade rutterna.",
       );
       setPlannerStatusMessage(
         "Något gick fel medan dagen räknades ut, så Parranda föll tillbaka till curated-läget.",
@@ -11183,7 +11185,7 @@ routeResetButton?.addEventListener("click", () => {
   clearRouteOverlay();
   renderRouteResults();
   updateRouteMatchSummary(
-    !isRomeCuratedMode
+    !isCuratedMode
       ? buildNonRomePlannerLaunchSummary()
       : "Planeraren är nollställd. Parranda får nu välja start och slut smart igen, och de kuraterade rutterna visas som backup.",
   );
@@ -11440,11 +11442,15 @@ if (isRomeCuratedMode) {
   renderDistrictGuide();
 }
 setPlannerDefaults();
+if (isCuratedMode && !cityPulseState) {
+  cityPulseState = buildGenericFallbackPulse(routeDateFrom?.value || getTodayIsoDate());
+  renderCityPulseTeaser();
+}
 loadCityPulse(routeDateFrom.value || getTodayIsoDate());
 renderSavedRoutes();
 renderRouteResults();
 updateFavoritesUI();
-if (isRomeCuratedMode) {
+if (isCuratedMode) {
   initMap();
   refreshMarkerStyles();
 }

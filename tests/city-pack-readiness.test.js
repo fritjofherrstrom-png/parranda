@@ -27,7 +27,7 @@ test("inspectCityPack reports Barcelona without brittle catalog count assumption
 
   assert.equal(report.city, "barcelona");
   assert.equal(report.label, "Barcelona");
-  assert.equal(report.visibility, "preview");
+  assert.equal(report.visibility, "beta");
   assert.notEqual(report.status, "blocked");
   assert.equal(report.support.city_page, true);
   assert.equal(report.support.pulse_baseline, true);

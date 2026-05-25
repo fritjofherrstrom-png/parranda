@@ -607,7 +607,7 @@ test("GET /?lang=en renderar landing v2 med engelsk copy", async () => {
   }
 });
 
-test("GET /barcelona renderar registrerad city-core preview utan Rome-fallback", async () => {
+test("GET /barcelona renderar curated beta shell utan Rome-fallback", async () => {
   global.fetch = async (url) => {
     throw new Error(`Unexpected fetch during shell fallback test: ${url}`);
   };
@@ -628,26 +628,16 @@ test("GET /barcelona renderar registrerad city-core preview utan Rome-fallback",
     assert.match(response.body, /"displayLabel":"Barcelona"/);
     assert.match(response.body, /"requestedKey":"barcelona"/);
     assert.match(response.body, /"fallbackUsed":false/);
-    assert.match(response.body, /"visibility":"preview"/);
-    assert.match(response.body, /<title>Parranda \| Barcelona city-core preview<\/title>/);
-    assert.match(response.body, /<meta[\s\S]*name="description"[\s\S]*content="Barcelona är registrerad i Parranda, men det kuraterade citypacket är inte redo ännu\. City-core är aktivt utan lånat Rome-innehåll\."[\s\S]*\/>/);
-    assert.match(response.body, /Barcelona är registrerad som stad, men har ännu inget kuraterat citypack/);
-    assert.ok(!response.body.includes('id="heroEyebrow"'));
-    assert.ok(!response.body.includes('id="heroHeadline"'));
-    assert.ok(!response.body.includes('id="heroLead"'));
-    assert.ok(!response.body.includes("Mjukt km-mål"));
-    assert.match(response.body, /<button id="routePlannerOpenButton" class="primary-button" type="button">\s*Se planner-preview\s*<\/button>/);
-    assert.match(response.body, /data-budget-tier="budget">\s*Budgetsmart\s*<\/button>/);
-    assert.match(response.body, /data-budget-tier="dolce-vita">\s*Premium\s*<\/button>/);
-    assert.match(response.body, /<button id="heroBlitzApplyButton" class="secondary-button" type="button" hidden>/);
-    assert.match(response.body, /tydligt fallback-läge/);
+    assert.match(response.body, /"visibility":"beta"/);
+    assert.match(response.body, /<title>Parranda \| Personlig City Guide för Barcelona<\/title>/);
+    assert.match(response.body, /Planera dagen\./);
+    assert.match(response.body, /Bygg en dag i staden/);
+    assert.doesNotMatch(response.body, /<title>.*city-core preview.*<\/title>/);
     assert.doesNotMatch(response.body, /"key":"rome","label":"Rom","displayLabel":"Barcelona"/);
     assert.doesNotMatch(response.body, /Din resa till Rom/);
     assert.doesNotMatch(response.body, /Just nu i Rom/);
     assert.doesNotMatch(response.body, /google\.com\/maps\/search\/Rome/i);
     assert.doesNotMatch(response.body, /Monti som kulturstart/);
-    assert.doesNotMatch(response.body, /kuraterade Rom-baserade rutter/);
-    assert.doesNotMatch(response.body, /de kuraterade Rom-rutterna/);
     assert.doesNotMatch(response.body, /__PARRANDA_I18N_[A-Z0-9_]+__/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
@@ -785,7 +775,7 @@ test("GET /rome?lang=unknown faller säkert tillbaka till svenska", async () => 
   }
 });
 
-test("GET /barcelona?lang=en är registrerad engelsk city-core preview", async () => {
+test("GET /barcelona?lang=en renderar curated beta shell på engelska", async () => {
   global.fetch = async (url) => {
     throw new Error(`Unexpected fetch during English fallback shell test: ${url}`);
   };
@@ -799,18 +789,17 @@ test("GET /barcelona?lang=en är registrerad engelsk city-core preview", async (
 
     assert.equal(response.status, 200);
     assert.match(response.body, /<body data-city-key="barcelona" data-city-label="Barcelona" data-lang="en">/);
-    assert.match(response.body, /<title>Parranda \| Barcelona city-core preview<\/title>/);
+    assert.match(response.body, /<title>Parranda \| Personal City Guide for Barcelona<\/title>/);
     assert.match(response.body, /"fallbackUsed":false/);
-    assert.match(response.body, /"visibility":"preview"/);
-    assert.ok(response.body.includes("Barcelona is registered as a city, but does not have a curated citypack yet"));
-    assert.ok(response.body.includes("Planner preview"));
-    assert.ok(response.body.includes("See planner preview"));
+    assert.match(response.body, /"visibility":"beta"/);
+    assert.ok(response.body.includes("Plan the day."));
+    assert.ok(response.body.includes("Build your day in Barcelona"));
+    assert.doesNotMatch(response.body, /<title>.*city-core preview.*<\/title>/);
     assert.match(
       response.body,
       /id="mapPlaceLink"[\s\S]*href="https:\/\/www\.google\.com\/maps\/search\/\?api=1&amp;query=Barcelona%20hidden%20gems"/,
     );
     assert.doesNotMatch(response.body, /Din resa till Rom/);
-    assert.doesNotMatch(response.body, /launched curated Barcelona/i);
     assert.doesNotMatch(response.body, /google\.com\/maps\/search\/Rome/i);
     assert.doesNotMatch(response.body, /__PARRANDA_CITY_MAP_URL__/);
     assert.doesNotMatch(response.body, /Rome-wide/);
@@ -1170,14 +1159,14 @@ test("GET /api/city-pulse för barcelona visar noop-preview utan Rome Pulse", as
     assert.equal(en.body.city, "barcelona");
     assert.equal(en.body.requested_city, "barcelona");
     assert.equal(en.body.city_fallback_used, false);
-    assert.match(en.body.headline, /We don't have Barcelona for real yet/);
-    assert.match(en.body.subhead, /There is no local layer for Barcelona yet/);
+    assert.doesNotMatch(en.body.headline, /We don't have Barcelona for real yet/);
+    assert.doesNotMatch(en.body.subhead, /There is no local layer for Barcelona yet/);
     assert.equal(en.body.items.length, 0);
     assert.equal(en.body.official_events.length, 0);
     assert.equal(en.body.wildcards.length, 0);
     assert.equal(en.body.weather?.maxTemp, 23);
-    assert.match(sv.body.headline, /Vi har inte Barcelona på riktigt än/);
-    assert.match(sv.body.subhead, /Vi har inget lokalt lager för Barcelona/);
+    assert.doesNotMatch(sv.body.headline, /Vi har inte Barcelona på riktigt än/);
+    assert.doesNotMatch(sv.body.subhead, /Vi har inget lokalt lager för Barcelona/);
     assert.doesNotMatch(JSON.stringify(en.body), /Natale di Roma|Trastevere|Monti|Testaccio/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
@@ -1263,7 +1252,7 @@ test("GET /api/city-pulse för barcelona presenterar official events utan editor
     assert.equal(sv.status, 200);
     assert.equal(en.body.city, "barcelona");
     assert.equal(en.body.city_fallback_used, false);
-    assert.match(en.body.headline, /We don't have Barcelona for real yet/);
+    assert.doesNotMatch(en.body.headline, /We don't have Barcelona for real yet/);
     assert.equal(en.body.official_events.length, 1);
     assert.equal(en.body.official_events[0].source_label, "Open Data BCN");
     assert.equal(en.body.official_events[0].source_id, "barcelona-open-data-agenda");

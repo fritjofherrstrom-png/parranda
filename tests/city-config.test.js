@@ -34,7 +34,7 @@ test("barcelona uppfyller city-kontraktet som registrerad preview-stad", () => {
   assert.equal(resolution.fallbackUsed, false);
   assert.equal(resolution.found, true);
   assert.equal(getCityConfig("barcelona").key, "barcelona");
-  assert.equal(cityConfigs.barcelona.visibility, "preview");
+  assert.equal(cityConfigs.barcelona.visibility, "beta");
   assert.equal(
     cityConfigs.barcelona.catalog.allItems.filter((item) => !["district", "district-group"].includes(item.kind)).length,
     95,
@@ -56,7 +56,7 @@ test("athens uppfyller city-kontraktet som registrerad preview-skelettstad", () 
   assert.equal(cityConfigs.athens.catalog.routeTemplates.length, 0);
 });
 
-test("barcelona preview håller Pulse noop när Live-källan är tom", async () => {
+test("barcelona beta håller Pulse noop när Live-källan är tom", async () => {
   const pulse = cityConfigs.barcelona.services.getCityPulse("2026-05-14", { lang: "en" });
   const liveEvents = await cityConfigs.barcelona.services.fetchLiveEventsForDates([
     "2026-05-14",
@@ -65,7 +65,7 @@ test("barcelona preview håller Pulse noop när Live-källan är tom", async () 
     fetchOpenDataAgendaEvents: async () => [],
   });
 
-  assert.equal(cityConfigs.barcelona.visibility, "preview");
+  assert.equal(cityConfigs.barcelona.visibility, "beta");
   assert.match(pulse.headline, /We don't have Barcelona for real yet/);
   assert.match(pulse.subhead, /There is no local layer for Barcelona yet/);
   assert.deepEqual(pulse.items, []);
