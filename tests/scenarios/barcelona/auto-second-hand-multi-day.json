@@ -258,17 +258,17 @@
           ]
         },
         {
-          "id": "gracia-local-evening-loop",
+          "id": "eixample-born-vintage-drift",
           "start": "Raval / Gothic",
           "end": "Gràcia",
           "shape": "arc",
           "day_profile": "variation",
           "anchor_zone": "Gothic Quarter -> Gràcia",
           "stops": [
-            "Bodega Quimet",
-            "Plaça del Sol",
-            "Plaça del Diamant",
-            "Vermuteria Lou"
+            "Lullaby Vintage",
+            "Humana Vintage — Francesc Cambó",
+            "Flamingos Vintage Kilo — Tallers",
+            "Holala! Plaza"
           ]
         }
       ]

@@ -13,7 +13,7 @@ test("RouteTemplateProvider converts Barcelona route templates into RouteCandida
   const candidates = buildRouteTemplateCandidates(barcelona);
 
   assert.equal(candidates.length, barcelona.catalog.routeTemplates.length);
-  assert.equal(candidates.length, 7);
+  assert.equal(candidates.length, 8);
 
   for (const candidate of candidates) {
     assert.doesNotThrow(() => validateRouteCandidate(candidate));

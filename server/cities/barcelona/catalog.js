@@ -121,6 +121,36 @@ const routeTemplates = [
       },
     },
   },
+  {
+    id: "eixample-born-vintage-drift",
+    title: "Eixample to Born vintage drift",
+    summary: "Från Eixamples designvintage till Borns smala gränder — Cotton Vintage, Loisaida och Humana med vermut på Bormuth som landning.",
+    stops: ["cotton-vintage", "loisaida", "humana-vintage-francesc-cambo", "bormuth"],
+    defaultKm: 5,
+    preferenceTags: ["vintage", "second_hand", "shopping", "design", "vermut", "lokalt", "low-key"],
+    optimizerModes: ["low-key-mode"],
+    weatherProfile: { sun: 1, rain: 2, hot: 1, evening: 0 },
+    weekdayBoost: { 2: 1, 3: 1, 4: 1, 5: 1, 6: 1 },
+    vibeProfile: { evening: 0, culture: 1, lowKey: 3, party: 0 },
+    curatorVoice: {
+      whyArea: {
+        sv: "Den här rutten kopplar ihop Eixamples och Borns second hand-karaktärer. Cotton Vintage är resale med designkänsla, Loisaida blandar vintage och lokalt hantverk, och Humana Francesc Cambó är den pålitliga utility-butiken. Bormuth i slutet ger en vermut vid Plaça Comercial utan att det blir en annan rutt.",
+        en: "This route connects Eixample's and Born's second-hand characters. Cotton Vintage is resale with a design sensibility, Loisaida mixes vintage and local craft, and Humana Francesc Cambó is the reliable utility shop. Bormuth at the end gives a vermut at Plaça Comercial without it becoming a different route.",
+      },
+      whyOrder: {
+        sv: "Cotton Vintage först, medan man fortfarande orkar sortera igenom ställ med högre priser. Loisaida som skift till smalare gränder. Humana som snabbt utility-stopp. Bormuth som landning — vermut och tapas utan att behöva gå vidare.",
+        en: "Cotton Vintage first, while you still have the patience to sort through higher-priced racks. Loisaida as the shift into narrower lanes. Humana as a quick utility stop. Bormuth as the landing — vermut and tapas without needing to go anywhere else.",
+      },
+      whyNow: {
+        sv: "Bäst tis–lör dagtid. Cotton Vintage och Loisaida stänger söndagar. Humana har bredare öppettider men är bäst på vardagar när det inte är trångt.",
+        en: "Best Tue–Sat daytime. Cotton Vintage and Loisaida close Sundays. Humana has wider hours but is best on weekdays when it's not crowded.",
+      },
+      whoFits: {
+        sv: "För den som vill att second hand ska vara en promenad, inte ett ärende — och som gillar att en vintage-dag landar i vermut i stället för i butiksutmattning.",
+        en: "For the person who wants second hand to be a walk, not an errand — and who likes a vintage day to land in vermut instead of shopping fatigue.",
+      },
+    },
+  },
 ];
 
 const routeAnchorItems = [

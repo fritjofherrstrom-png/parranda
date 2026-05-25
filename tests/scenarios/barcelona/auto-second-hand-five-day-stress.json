@@ -438,17 +438,17 @@
           ]
         },
         {
-          "id": "gracia-local-evening-loop",
+          "id": "eixample-born-vintage-drift",
           "start": "Raval / Gothic",
           "end": "Poble-sec / Montjuïc",
           "shape": "arc",
           "day_profile": "variation",
           "anchor_zone": "Gothic Quarter -> Poble-sec",
           "stops": [
-            "La Federica",
-            "El Rouge",
-            "Quimet & Quimet",
-            "Teatre Lliure"
+            "Holala! Plaza",
+            "Flamingos Vintage Kilo — Tallers",
+            "Humana Vintage — Portaferrissa",
+            "Lullaby Vintage"
           ]
         }
       ]

@@ -79,7 +79,7 @@ test("shadow diagnostics match a Planner route/template with a RouteCandidate", 
   });
 
   assert.equal(diagnostics.city, "barcelona");
-  assert.equal(diagnostics.route_candidate_count, 7);
+  assert.equal(diagnostics.route_candidate_count, 8);
   assert.equal(diagnostics.days.length, 1);
 
   const primary = diagnostics.days[0].primary_route;

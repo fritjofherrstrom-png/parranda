@@ -47,7 +47,7 @@ test("Barcelona pilot catalog now has route templates backed by real places", ()
   assert.equal(barcelona.visibility, "preview");
   assert.equal(placeItems.length, 95);
   assert.equal(routeAnchors.length, 6);
-  assert.equal(barcelona.catalog.routeTemplates.length, 7);
+  assert.equal(barcelona.catalog.routeTemplates.length, 8);
 });
 
 test("Barcelona multi-day shopping route generation does not crash on entries with omitted closedWeekdays", async () => {
