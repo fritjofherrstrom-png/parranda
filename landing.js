@@ -13,7 +13,7 @@
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
+      .replace(/\"/g, "&quot;");
   }
 
   function currentLang() {
@@ -80,9 +80,9 @@
       var cityPath = resolveCity(val);
       if (cityPath) {
         var params = new URLSearchParams();
-        params.set("planner", "open");
         if (currentLang() === "en") params.set("lang", "en");
-        window.location.href = cityPath + "?" + params.toString();
+        var qs = params.toString();
+        window.location.href = cityPath + (qs ? "?" + qs : "");
         return;
       }
       if (val.trim()) {
