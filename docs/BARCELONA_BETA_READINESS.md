@@ -1,14 +1,15 @@
 # Barcelona Beta Readiness
 
 **Audit date:** 2026-05-25
-**Branch:** `audit/barcelona-beta-readiness` (from main after #167)
-**Verdict: Almost ready. Can be beta-tested now with one known caveat.**
+**Last updated:** 2026-05-25 (post #169, #170 investigation)
+**Branch:** `docs/barcelona-beta-final` (from main after #169)
+**Verdict: Ready for friend beta. One known caveat on 5-day second-hand trips.**
 
 ---
 
 ## Quick summary
 
-Barcelona has a solid catalog (101 items, 7 route templates), passes all 534 tests, and works well for 1–3 day trips. Two data gaps need fixing before an honest public beta: missing `tapas`/`vermut`/`café` intent tags and route template repetition on 5-day+ second-hand routes. Neither is a runtime crash. Both are fixable in two focused PRs: one catalog tag PR, one route-template PR.
+Barcelona has a solid catalog (101 items, 7 route templates), passes all tests, and works well for 1–3 day trips. B2 (missing `tapas`/`vermut`/`café` intent tags) was fixed by PR #169. B1 (5-day second-hand template repetition) remains a known caveat — investigation in PR #170 showed this is an engine-level scoring issue (`areaScore` corridor dominance), not fixable by template additions alone. Documented in `ENGINE_LEARNINGS.md`. B1 is not a blocker for 1–3 day friend beta.
 
 ---
 
@@ -47,41 +48,21 @@ Duplicate IDs:     0
 
 ## 2. Top beta blockers
 
-### B1 — Template repetition on 5-day second-hand routes (medium)
+### B1 — Template repetition on 5-day second-hand routes (known caveat, not a beta blocker)
 
-Only 2 of 7 route templates have `second_hand` or `vintage` in their `preferenceTags`:
-- `raval-vintage-shopping-loop`
-- `encants-to-coast-drift`
+**Status: open, engine-level. Not fixable by template/catalog changes.**
 
-A third template (`sant-antoni-food-bar-flow`) has `mat`/`nattliv` and gets picked up via fallback scoring when no second-hand template fits the day.
+Only 2 of 7 route templates have `second_hand` or `vintage` in their `preferenceTags`. The 5-day stress test repeats `encants-to-coast-drift` and `sant-antoni-food-bar-flow` on days 4 and 5.
 
-The 5-day second-hand stress test (`auto-second-hand-five-day-stress.json`) produces:
+PR #170 attempted to fix this by adding a `born-eixample-vintage-drift` template. Investigation showed the template never becomes primary because `areaScore` (±13–16 points from auto-anchor corridor matching) dominates `preferenceScore` (+3 per tag) and the reuse penalty (−6). The auto-anchor corridor stabilizes around Raval/Gothic → Poblenou, locking the engine to the same two templates. Dynamic stop realization (`buildStopPool`) further erases template geographic identity.
 
-| Day | Template |
-|-----|----------|
-| 1 | sant-Antoni-food-bar-flow |
-| 2 | encants-to-coast-drift |
-| 3 | raval-vintage-shopping-loop |
-| 4 | **encants-to-coast-drift** ← repeated |
-| 5 | **sant-Antoni-food-bar-flow** ← repeated |
+**Conclusion:** This is an engine-level issue. Future fix should address `routeScore` reuse-penalty scaling, corridor diversity, or `areaScore` decay. See `docs/ENGINE_LEARNINGS.md` §3.
 
-Days 2/4 and Days 1/5 use the same template. On a real 5-day trip this produces nearly identical stops twice.
+**Impact on beta:** 1–3 day trips are not affected. Only 5-day pure second-hand/vintage trips show repetition. Acceptable for friend beta.
 
-**Fix**: Add 1 more second_hand-tagged template (e.g., a Born/Eixample vintage loop anchored at `cotton-vintage`, `loisaida`, `revolution-vintage`). One template addition breaks the repetition.
+### ~~B2 — Missing intent tags: `tapas`, `vermut`, `café`~~ (fixed)
 
-### B2 — Missing intent tags: `tapas`, `vermut`, `café` (medium)
-
-These tags appear 0 times in the catalog. Places that are tapas bars, vermut spots, or cafés are only discoverable if the user queries their proper name or searches "second hand" / "vintage" — the intent-based path is broken for:
-
-| Intent | Tagged items | Name/searchTerms mentions |
-|--------|-------------|--------------------------|
-| `tapas` | 0 | 4 items mention it |
-| `vermut` | 0 | 4 items mention it |
-| `café` / `coffee` | 0 | 2 items mention it |
-
-38 items have the `mat` tag but `mat` is too broad for intent matching.
-
-**Fix**: Add `tapas`, `vermut`, and `café` tags to the ~10 items that warrant them. This is a catalog-only change, no runtime code.
+**Status: fixed by PR #169.** Added `vermut`, `tapas`, and `café` tags to 12 catalog items. Intent queries now return hits.
 
 ---
 
@@ -159,47 +140,51 @@ Data honesty is acceptable for beta. The `intake_only` pack status accurately re
 
 ---
 
-## 8. Recommended PR sequence (max 3)
+## 8. Recommended next PRs (post-beta)
 
-### PR 1 — `fix(barcelona): add tapas/vermut/café intent tags`
-**Scope**: Catalog-only. Add `tapas`, `vermut`, `café` to the ~10 items that warrant them.
-**Why first**: Fixes silent intent failure. Zero runtime risk. Tests stay green.
-**Files**: `server/cities/barcelona/catalog.js` only.
+### PR 1 — `fix(route-engine): improve multi-day diversity scoring`
+**Scope**: Engine-level. Increase reuse penalty, add corridor diversity, or decay `areaScore` when reuse is active.
+**Why**: Fixes B1 (5-day repetition). This is the real fix — template additions alone do not work.
+**When**: After friend beta feedback confirms it matters for real users.
 
-### PR 2 — `feat(barcelona): add second-hand template for Born/Eixample arc`
-**Scope**: Add 1 route template that covers the Eixample/Born second-hand cluster. Anchor stops: `cotton-vintage`, `loisaida`, one supporting stop (e.g., `museu-picasso` or `holala-plaza`). Add a matching scenario snapshot.
-**Why second**: Breaks 5-day repetition. Required before Barcelona is honest as a multi-day second-hand destination.
-**Files**: `server/cities/barcelona/catalog.js`, new snapshot, test count update.
+### PR 2 — `feat(barcelona): second-hand clothing anchors wave 2` *(optional)*
+Next batch of ~10 catalog entries from the shortlist in #140.
+**When**: After beta feedback. Not urgent.
 
-### PR 3 — `feat(barcelona): second-hand clothing anchors wave 2` *(optional, can wait)*
-Next batch of ~10 catalog entries from the shortlist in #140: Le Swing, Los Féliz, Arepa Queer, Vilde, Manifesto, Holala Tallers, Kilostore, etc. Can wait until after beta feedback.
+### PR 3 — `feat(barcelona): additional route templates` *(optional)*
+Rainy-day/museum, beach/coast morning, café/breakfast loops.
+**When**: After beta feedback identifies which gaps matter most.
 
 ---
 
 ## 9. What NOT to do before beta
 
-- **No route engine refactor** — engine works, all smoke tests pass
+- **No route engine scoring changes** — B1 is real but not a beta blocker; collect feedback first
 - **No new citypack architecture** — registry, readiness, and provider patterns are stable
-- **No full catalog expansion** — 101 items is sufficient; more items don't fix B1 or B2
+- **No full catalog expansion** — 101 items is sufficient
 - **No design system rewrite** — UI is functional post-#167
 - **No Athens work** — Athens is not in scope for this beta
 - **No Planner/Blitz structural changes** — planner works for 1–3 day trips
 - **No new snapshot mass-additions** — 4 snapshots cover the key paths
+- **No template additions to fix B1** — PR #170 proved this does not work (areaScore dominates)
 
 ---
 
 ## 10. Can Fritjof beta-test Barcelona now?
 
-**Yes, with one known caveat.**
+**Yes. Ready for friend beta.**
 
 Works well:
-- 1-day and 2–3-day trips: no repetition, correct stops, correct CTA behavior
-- Any thematic route (culture, evening, vintage, coast): route engine picks appropriate templates
-- Walking directions open correctly
+- 1–3 day trips: no repetition, correct stops, correct CTA behavior
+- Thematic routes: culture, evening, vintage, coast, mat & dryck, second hand
+- Intent queries: tapas, vermut, café, second hand, vintage, kilo, market (all return hits after #169)
+- Walking directions open correctly via Google Maps
 - Route guide drawer opens correctly
-- Intent queries via tag filtering (shopping, lokalt, low-key, kultur, etc.)
+- Mobile layout functional
 
-Known issue:
-- 5-day second-hand/vintage trips repeat encants-to-coast-drift and sant-Antoni-food-bar-flow on days 4 and 5. Not a crash, just stale content. Fix is in PR 2 above.
+Known caveats (3):
+1. **5-day second-hand/vintage trips repeat templates on days 4–5.** Engine-level issue, not a crash. Most friend-beta trips will be 1–3 days.
+2. **Sants area is thin** (3 items). Routes touching Sants may feel sparse. Not a blocker.
+3. **No rainy-day/museum-only template.** Engine falls back to culture-tagged templates, which works but is not purpose-built.
 
-**Start testing now. File PR 1 this week. File PR 2 before sharing with others.**
+**Do not do route-engine work before this beta.** Collect real feedback first.
