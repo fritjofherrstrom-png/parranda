@@ -96,7 +96,7 @@ test("Barcelona default-preference route has no nightlife framing in title/summa
 
   const title = route.title || "";
   const summary = route.summary || "";
-  const why = route.why_this_route || "";
+  const why = route.why_recommended || "";
 
   assert.ok(
     !nightlifePatterns.test(title),
@@ -108,7 +108,7 @@ test("Barcelona default-preference route has no nightlife framing in title/summa
   );
   assert.ok(
     !nightlifePatterns.test(why),
-    `why_this_route should not contain nightlife framing, got: "${why}"`,
+    `why_recommended should not contain nightlife framing, got: "${why}"`,
   );
 });
 
