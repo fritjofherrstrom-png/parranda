@@ -8,19 +8,21 @@
 
 ## Quick summary
 
-Barcelona has a solid catalog (101 items, 7 route templates), passes all 534 tests, and works well for 1–3 day trips. Two data gaps need a PR before an honest public beta: missing `tapas`/`vermut`/`café` intent tags and route template repetition on 5-day+ second-hand routes. Neither is a runtime crash. Both are fixable in one focused catalog PR.
+Barcelona has a solid catalog (101 items, 7 route templates), passes all 534 tests, and works well for 1–3 day trips. Two data gaps need fixing before an honest public beta: missing `tapas`/`vermut`/`café` intent tags and route template repetition on 5-day+ second-hand routes. Neither is a runtime crash. Both are fixable in two focused PRs: one catalog tag PR, one route-template PR.
 
 ---
 
 ## 1. City data state
 
 ```
-Items:          101 (all real places, no structural stubs)
-Route templates: 7
+Total items:     101
+Real places:      95
+Structural anchors: 6
+Route templates:   7
 Tests:         534/534 pass
-Missing coords:  0
+Missing coords:    0
 Missing searchTerms: 0
-Duplicate IDs:   0
+Duplicate IDs:     0
 ```
 
 **Area distribution (real places):**
