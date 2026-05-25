@@ -2203,12 +2203,15 @@ body::before {
 .route-lab-field input[type="date"],
 .route-lab-field input[type="range"] {
   width: 100%;
+  max-width: 100%;
   padding: 14px 16px;
   border-radius: 18px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.72);
   font: inherit;
   color: var(--text);
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .route-lab-field input:disabled,
