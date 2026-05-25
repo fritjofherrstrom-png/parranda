@@ -9896,7 +9896,7 @@ function getActiveDayPhaseLabel(index, totalStops) {
   }
 
   if (index === totalStops - 1) {
-    return isEnglishUi ? "Land here" : "Landa här";
+    return isEnglishUi ? "Finish here" : "Avsluta här";
   }
 
   return "";
@@ -10732,6 +10732,7 @@ function renderPlannedDays() {
       btn.type = "button";
       btn.className = "planner-day-worth-pill";
       btn.textContent = label;
+      btn.addEventListener("click", () => openPlaceDrawerByQuery(label));
       container.appendChild(btn);
     });
   };
