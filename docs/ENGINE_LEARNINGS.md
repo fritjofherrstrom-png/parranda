@@ -191,6 +191,43 @@ Planner quality depends on more than catalog size. Multi-day trips need explicit
 - Multi-day itinerary composer.
 - Scenario snapshot metrics.
 
+### Lesson: template additions alone do not guarantee multi-day diversity
+
+**Observation**
+
+PR #170 attempted to fix 5-day second-hand repetition by adding a `born-eixample-vintage-drift` template. Investigation showed the new template never became a primary route. The engine's `areaScore` function dominates template selection: auto-anchor start/end points create a corridor (Raval/Gothic → Poblenou for the 5-day scenario), and templates whose stops fall inside that corridor score 13–16 points higher than templates outside it. The existing `-6` reuse penalty cannot overcome this gap.
+
+`buildStopPool` further erodes template identity by replacing template stops with higher-scoring catalog items from the full pool. A template named "Born/Eixample drift" may end up with Raval/Gothic stops if those score better on area proximity.
+
+**Generic rule**
+
+Adding templates is not sufficient to fix multi-day diversity when scoring is corridor-dominated. Effective fixes must address one or more of:
+
+- stronger multi-day reuse penalty (current `-6` is too weak against a `+13–16` area gap)
+- corridor diversity (auto-anchor should vary across days, not stabilize)
+- reduced `areaScore` dominance when reuse is active (e.g., decay area weight on reused templates)
+- stop-pool fidelity (template stops should carry identity weight so dynamic realization does not erase geographic intent)
+
+**Current anchor**
+
+- PR #170 investigation (closed, not merged).
+- `routeScore` at `server/route-engine.js:4666`.
+- `areaScore` at `server/route-engine.js:2052`.
+- `buildStopPool` at `server/route-engine.js:3037`.
+- `tests/scenarios/barcelona/auto-second-hand-five-day-stress.json`.
+
+**Applies to**
+
+- All citypacks.
+- Agnostic mode.
+
+**Future hook**
+
+- `routeScore` reuse-penalty scaling.
+- Auto-anchor corridor diversity per day.
+- `areaScore` decay when `reusedIds` is active.
+- Stop-pool template-identity weight.
+
 ### Lesson: template rotation and stop rotation are different problems
 
 **Observation**
