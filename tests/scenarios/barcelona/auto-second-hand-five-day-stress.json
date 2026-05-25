@@ -266,7 +266,7 @@
           "anchor_zone": "Gothic Quarter -> Gràcia",
           "stops": [
             "Bormuth",
-            "Plaça del Sol",
+            "Bodega Quimet",
             "Vermuteria Lou",
             "Plaça del Diamant"
           ]
@@ -373,23 +373,23 @@
         "day_profile": "final",
         "anchor_zone": "Gothic Quarter -> Poble-sec",
         "routing_source": "heuristic",
-        "estimated_km": 2.6,
-        "longest_leg_km": 1,
-        "longest_leg_minutes": 12,
-        "average_leg_minutes": 8,
+        "estimated_km": 2.4,
+        "longest_leg_km": 0.9,
+        "longest_leg_minutes": 11,
+        "average_leg_minutes": 7,
         "stops": [
           {
-            "label": "La Federica",
-            "area": "poble-sec",
+            "label": "Flamingos Vintage Kilo — Tallers",
+            "area": "raval",
+            "live": false
+          },
+          {
+            "label": "Lullaby Vintage",
+            "area": "raval",
             "live": false
           },
           {
             "label": "Quimet & Quimet",
-            "area": "poble-sec",
-            "live": false
-          },
-          {
-            "label": "Teatre Lliure",
             "area": "poble-sec",
             "live": false
           }
@@ -397,24 +397,24 @@
         "legs": [
           {
             "from": "Raval / Gothic",
-            "to": "La Federica",
-            "km": 1,
-            "minutes": 12
+            "to": "Flamingos Vintage Kilo — Tallers",
+            "km": 0.4,
+            "minutes": 5
           },
           {
-            "from": "La Federica",
+            "from": "Flamingos Vintage Kilo — Tallers",
+            "to": "Lullaby Vintage",
+            "km": 0.6,
+            "minutes": 7
+          },
+          {
+            "from": "Lullaby Vintage",
             "to": "Quimet & Quimet",
-            "km": 0.1,
-            "minutes": 2
+            "km": 0.9,
+            "minutes": 11
           },
           {
             "from": "Quimet & Quimet",
-            "to": "Teatre Lliure",
-            "km": 1,
-            "minutes": 12
-          },
-          {
-            "from": "Teatre Lliure",
             "to": "Poble-sec / Montjuïc",
             "km": 0.5,
             "minutes": 6
@@ -424,30 +424,30 @@
       "alternative_count": 2,
       "alternatives": [
         {
-          "id": "poble-sec-montjuic-evening-arc",
-          "start": "Raval / Gothic",
-          "end": "Poble-sec / Montjuïc",
-          "shape": "arc",
-          "day_profile": "variation",
-          "anchor_zone": "Gothic Quarter -> Poble-sec",
-          "stops": [
-            "Sala Apolo",
-            "La Federica",
-            "Quimet & Quimet",
-            "Fundació Joan Miró"
-          ]
-        },
-        {
-          "id": "raval-vintage-shopping-loop",
+          "id": "sant-antoni-food-bar-flow",
           "start": "Raval / Gothic",
           "end": "Poble-sec / Montjuïc",
           "shape": "arc",
           "day_profile": "light",
           "anchor_zone": "Gothic Quarter -> Poble-sec",
           "stops": [
-            "Flamingos Vintage Kilo — Tallers",
             "Humana Vintage — Portaferrissa",
-            "Lullaby Vintage"
+            "L'Arca",
+            "Quimet & Quimet"
+          ]
+        },
+        {
+          "id": "sant-antoni-food-bar-flow",
+          "start": "Raval / Gothic",
+          "end": "Poble-sec / Montjuïc",
+          "shape": "arc",
+          "day_profile": "variation",
+          "anchor_zone": "Gothic Quarter -> Poble-sec",
+          "stops": [
+            "Humana Vintage — Portaferrissa",
+            "L'Arca",
+            "Satan's Coffee Corner",
+            "Quimet & Quimet"
           ]
         }
       ]

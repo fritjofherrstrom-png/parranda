@@ -14,8 +14,8 @@
         "anchor_zone": "Gràcia -> Sant Antoni",
         "routing_source": "heuristic",
         "estimated_km": 4.9,
-        "longest_leg_km": 3.2,
-        "longest_leg_minutes": 38,
+        "longest_leg_km": 3.1,
+        "longest_leg_minutes": 37,
         "average_leg_minutes": 12,
         "stops": [
           {
@@ -24,13 +24,13 @@
             "live": false
           },
           {
-            "label": "Plaça del Sol",
+            "label": "Bodega Quimet",
             "area": "gracia",
             "live": false
           },
           {
-            "label": "Bodega Quimet",
-            "area": "gracia",
+            "label": "Federal Cafe Parlament",
+            "area": "sant-antoni",
             "live": false
           },
           {
@@ -48,21 +48,21 @@
           },
           {
             "from": "Vermuteria Lou",
-            "to": "Plaça del Sol",
-            "km": 0.4,
-            "minutes": 5
-          },
-          {
-            "from": "Plaça del Sol",
             "to": "Bodega Quimet",
-            "km": 0.4,
-            "minutes": 5
+            "km": 0.8,
+            "minutes": 10
           },
           {
             "from": "Bodega Quimet",
+            "to": "Federal Cafe Parlament",
+            "km": 3.1,
+            "minutes": 37
+          },
+          {
+            "from": "Federal Cafe Parlament",
             "to": "Bar Calders",
-            "km": 3.2,
-            "minutes": 38
+            "km": 0.1,
+            "minutes": 2
           },
           {
             "from": "Bar Calders",
@@ -75,7 +75,7 @@
       "alternative_count": 2,
       "alternatives": [
         {
-          "id": "encants-to-coast-drift",
+          "id": "sant-antoni-food-bar-flow",
           "start": "Plaça del Diamant",
           "end": "Fàbrica Moritz Barcelona",
           "shape": "arc",
@@ -85,21 +85,21 @@
             "Vermuteria Lou",
             "Mercat de la Llibertat",
             "Bodega Quimet",
-            "Mercat de Sant Antoni"
+            "Bar Calders"
           ]
         },
         {
-          "id": "raval-vintage-shopping-loop",
+          "id": "poble-sec-montjuic-evening-arc",
           "start": "Plaça del Diamant",
           "end": "Fàbrica Moritz Barcelona",
           "shape": "arc",
           "day_profile": "variation",
           "anchor_zone": "Gràcia -> Sant Antoni",
           "stops": [
-            "Humana Vintage — Astúries",
             "Vermuteria Lou",
+            "Mercat de la Llibertat",
             "Bodega Quimet",
-            "Morro Fi"
+            "Bar Calders"
           ]
         }
       ]
