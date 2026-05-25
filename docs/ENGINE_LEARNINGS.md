@@ -438,6 +438,49 @@ Agnostic mode needs:
 
 ---
 
+## 7. Intent vs presentation identity
+
+### Lesson: explicit intent must dominate presentation labels; support tags must not become route identity
+
+**Observation**
+
+The planner default-checked `nightlife`, which sent `nattliv`, `kväll`, `cocktail`, `party` to the engine as if the user explicitly chose them. Routes for a user who selected only food/drink + culture + hidden gems would still present themselves with nightlife/party/late-night framing because `nattliv` was in the preferences array. The engine also had no stop-level penalty for nightlife-dominant stops when nightlife was not explicit.
+
+A route may include a wine bar or cocktail stop as a supporting food/drink layer. But the route title, summary, and why-text must not claim nightlife/party/late-night as the route's core identity unless the user explicitly opted into nightlife/evening/party.
+
+**Generic rule**
+
+```txt
+support tags ≠ route identity
+explicit user intent → route identity
+support tags → allowed stops, not framing
+```
+
+Separate three layers:
+- **Explicit intent**: what the user checked. This drives presentation labels, route framing, and route identity.
+- **Support tags**: tags that are acceptable as supporting stops but should not be promoted to route identity. Wine, beer, cocktail are food/drink support — they should not promote a route to "nightlife" without explicit nightlife intent.
+- **Scoring tags**: internal tags used for stop-level scoring. These may include nightlife tags on items, but must be penalized when nightlife is not explicit.
+
+**Current anchor**
+
+- PR #177: nightlife intent guard.
+- `isNightlifeExplicit()` in `server/route-engine.js`.
+- `tests/nightlife-intent-guard.test.js`.
+
+**Applies to**
+
+- All citypacks.
+- Agnostic mode.
+- Any future intent category that has overlap with default-checked categories.
+
+**Future hook**
+
+- Extend the pattern to other potentially leaked identities (e.g., if "history" overlaps with "culture" defaults).
+- Intent-to-presentation label mapping layer.
+- Stop-level identity vs support tagging in catalog.
+
+---
+
 ## Candidate next PRs from these learnings
 
 These are not commitments; they are suggested next moves when a related workstream is active.

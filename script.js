@@ -2298,7 +2298,7 @@ const plannerIntentDefinitions = [
 const plannerIntentByKey = new Map(
   plannerIntentDefinitions.map((intent) => [intent.key, intent]),
 );
-const defaultPlannerIntentKeys = ["food_drink", "culture", "hidden_gems", "nightlife"];
+const defaultPlannerIntentKeys = ["food_drink", "culture", "hidden_gems"];
 const defaultPlannerIntentKeySet = new Set(defaultPlannerIntentKeys);
 const plannerIntentCoverageTagSet = new Set([
   "aperitivo",

@@ -357,6 +357,19 @@ const intentFamilyMatchers = new Map([
 const barRelevantIntentFamilies = new Set(["food_drink", "nightlife"]);
 const hiddenRelevantIntentFamilies = new Set(["hidden_gems", "culture", "views"]);
 
+const nightlifeExplicitPreferences = new Set(["nattliv", "kväll", "party"]);
+const nightlifeExplicitOptimizers = new Set(["bar-hop", "cocktail-night", "evening-mode", "party-mode"]);
+const nightlifeExplicitModifiers = new Set(["evening", "party"]);
+
+function isNightlifeExplicit(preferences = [], optimizerMode = null, modifier = null) {
+  if (preferences.some((p) => nightlifeExplicitPreferences.has(p))) return true;
+  if (nightlifeExplicitOptimizers.has(optimizerMode)) return true;
+  if (nightlifeExplicitModifiers.has(normalizeModifier(modifier, optimizerMode))) return true;
+  return false;
+}
+
+const nightlifeDominantTags = new Set(["nattliv", "party"]);
+
 const optimizerStrictPreferenceTags = {
   "church-crawl": ["kyrkor"],
   "pizza-freak": ["pizza"],
@@ -2794,6 +2807,15 @@ function preferenceBoostForStop(
     score += 1.4;
   }
 
+  if (!isNightlifeExplicit(preferences, optimizerMode, modifier)) {
+    const nightlifeDominantCount = item.tags.filter((t) => nightlifeDominantTags.has(t)).length;
+    if (nightlifeDominantCount > 0) {
+      const hasFoodDrinkSupport = item.tags.some((t) =>
+        t === "mat" || t === "vin" || t === "vermut" || t === "tapas" || t === "cocktail" || t === "öl" || t === "aperitivo");
+      score -= hasFoodDrinkSupport ? 1.4 : 3.2;
+    }
+  }
+
   return score;
 }
 
@@ -4788,7 +4810,11 @@ function whyRecommended(
   intentNote,
   lang = "sv",
 ) {
-  const prefMatches = preferences.filter((pref) => template.preferenceTags.includes(pref));
+  const nightlifeActive = isNightlifeExplicit(preferences, optimizerMode, modifier);
+  const nightlifePresentationTags = new Set(["nattliv", "kväll", "party"]);
+  const prefMatches = preferences
+    .filter((pref) => template.preferenceTags.includes(pref))
+    .filter((pref) => nightlifeActive || !nightlifePresentationTags.has(pref));
   const reasonParts = [];
   const profile = normalizeVibeProfile(template);
   const activeBudgetTier = normalizeBudgetTier(preferences, optimizerMode, budgetTier);
@@ -5649,4 +5675,5 @@ module.exports = {
   profileScore,
   routeScore,
   routeSimilarity,
+  isNightlifeExplicit,
 };

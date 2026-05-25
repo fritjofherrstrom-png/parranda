@@ -147,9 +147,10 @@ function assertPlannerIntentFirstPaint(html) {
   assert.match(html, /value="second_hand"\s*\/>\s*<span>Second hand<\/span>/);
   assert.match(html, /value="hidden_gems"\s+checked\s*\/>\s*<span>Hidden gems<\/span>/);
   assert.match(html, /value="views"\s*\/>\s*<span>Utsikt<\/span>/);
-  assert.match(html, /value="nightlife"\s+checked\s*\/>\s*<span>Kvällsliv<\/span>/);
+  assert.match(html, /value="nightlife"\s*\/>\s*<span>Kvällsliv<\/span>/);
   assert.match(html, /value="history"\s*\/>\s*<span>Historia<\/span>/);
   assert.match(html, /value="green_walk"\s*\/>\s*<span>Grönt &amp; promenad<\/span>/);
+  assert.doesNotMatch(html, /value="nightlife"\s+checked/);
   assert.doesNotMatch(html, /value="öl"\s+checked/);
   assert.doesNotMatch(html, /value="vin"\s+checked/);
   assert.doesNotMatch(html, /value="cocktail"/);
@@ -735,7 +736,7 @@ test("GET /rome?lang=en renderar engelsk shell och planner utan att byta interna
     assert.ok(response.body.includes("Optional"));
     assert.ok(response.body.includes("Plan my day"));
     assert.match(response.body, /value="food_drink"\s+checked\s*\/>\s*<span>Food &amp; drink<\/span>/);
-    assert.match(response.body, /value="nightlife"\s+checked\s*\/>\s*<span>Nightlife<\/span>/);
+    assert.match(response.body, /value="nightlife"\s*\/>\s*<span>Nightlife<\/span>/);
     assert.match(response.body, /value="second_hand"\s*\/>\s*<span>Second hand<\/span>/);
     // The "Main route" badge was removed in the day-card revision (Slice 1):
     // the editorial-title day card no longer needs a "main route" tag because
