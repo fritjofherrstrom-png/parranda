@@ -39,7 +39,7 @@ test("inspect-city-pack prints Barcelona diagnostics without exact count assumpt
 
   assert.equal(result.status, 0);
   assert.match(result.stdout, /City pack inspection: barcelona \(Barcelona\)/);
-  assert.match(result.stdout, /Visibility: preview/);
+  assert.match(result.stdout, /Visibility: beta/);
   assert.match(result.stdout, /- real places: \d+/);
   assert.match(result.stdout, /- structural anchors: \d+/);
   assert.match(result.stdout, /- route templates: \d+/);

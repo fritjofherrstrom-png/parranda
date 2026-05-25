@@ -74,7 +74,7 @@ function todayIsoDate() {
 module.exports = {
   key: BARCELONA_KEY,
   label: BARCELONA_LABEL,
-  visibility: "preview",
+  visibility: "beta",
   timezone: BARCELONA_TIMEZONE,
   locale: BARCELONA_LOCALE,
   currency: BARCELONA_CURRENCY,

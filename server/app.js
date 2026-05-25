@@ -254,6 +254,10 @@ function resolveShellMode(cityConfig, cityFallbackUsed) {
     return "city-preview";
   }
 
+  if (cityConfig?.visibility === "beta") {
+    return "curated-public";
+  }
+
   return "curated-public";
 }
 
@@ -545,7 +549,7 @@ function buildStaticShellI18nReplacements(lang) {
   };
 }
 
-const LANDING_PUBLIC_VISIBILITIES = ["public", "preview"];
+const LANDING_PUBLIC_VISIBILITIES = ["public", "preview", "beta"];
 
 function getLandingSearchCities() {
   return Object.values(cityConfigs).filter((cityConfig) => {
@@ -650,6 +654,7 @@ function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed, lang = "s
     locale: cityConfig.locale,
     currency: cityConfig.currency,
     searchLabel,
+    center: cityConfig.center || null,
     requestedKey: requestedCity,
     fallbackUsed: cityFallbackUsed,
     lang: uiLang,
@@ -876,8 +881,8 @@ function buildApp() {
       //   editorial copy, not because they lack infrastructure.
       const isNoop = legacyPulse?._noop === true;
       const hasNoSignals = engineResult.signals.length === 0;
-      const isPreviewCity = cityConfig?.visibility === "preview";
-      const isHardEmpty = hasNoSignals && isNoop && !isPreviewCity;
+      const hasLocalInfrastructure = ["preview", "beta", "public"].includes(cityConfig?.visibility);
+      const isHardEmpty = hasNoSignals && isNoop && !hasLocalInfrastructure;
 
       const emptyFallback =
         hasNoSignals && !isHardEmpty
@@ -896,11 +901,19 @@ function buildApp() {
         lang: uiLang,
       });
 
+      const softCopy = isNoop && hasLocalInfrastructure
+        ? {
+            headline: masthead.headline || translate(uiLang, "pulse.emptySoftHeadline", { city: cityConfig.label }, cityConfig.label),
+            subhead: masthead.subhead || translate(uiLang, "pulse.emptySoftSubhead", { city: cityConfig.label }, ""),
+          }
+        : {};
+
       response.json({
         city: cityConfig.key,
         requested_city: requestedCity,
         city_fallback_used: cityFallbackUsed,
         ...(legacyPulse || {}),
+        ...softCopy,
         date,
         requested_at: engineResult.requested_at,
         timezone: engineResult.timezone,

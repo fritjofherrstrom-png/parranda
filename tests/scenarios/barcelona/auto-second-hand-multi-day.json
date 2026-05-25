@@ -6,30 +6,30 @@
     {
       "date": "2026-05-23",
       "primary": {
-        "id": "sant-antoni-food-bar-flow",
+        "id": "raval-vintage-shopping-loop",
         "start": "Sant Antoni",
         "end": "Poblenou / Coast",
         "shape": "arc",
         "day_profile": "light",
         "anchor_zone": "Sant Antoni -> Poblenou",
         "routing_source": "heuristic",
-        "estimated_km": 6.1,
-        "longest_leg_km": 5.3,
-        "longest_leg_minutes": 64,
-        "average_leg_minutes": 18,
+        "estimated_km": 6.8,
+        "longest_leg_km": 3.1,
+        "longest_leg_minutes": 37,
+        "average_leg_minutes": 20,
         "stops": [
           {
-            "label": "Bandini's",
-            "area": "sant-antoni",
+            "label": "Cotton Vintage",
+            "area": "eixample",
             "live": false
           },
           {
-            "label": "Mercat de Sant Antoni",
-            "area": "sant-antoni",
+            "label": "Mercat dels Encants",
+            "area": "eixample",
             "live": false
           },
           {
-            "label": "Mercat de Poblenou",
+            "label": "Vintage Poblenou",
             "area": "poblenou",
             "live": false
           }
@@ -37,58 +37,58 @@
         "legs": [
           {
             "from": "Sant Antoni",
-            "to": "Bandini's",
-            "km": 0.2,
-            "minutes": 2
+            "to": "Cotton Vintage",
+            "km": 1.8,
+            "minutes": 22
           },
           {
-            "from": "Bandini's",
-            "to": "Mercat de Sant Antoni",
-            "km": 0.3,
-            "minutes": 4
+            "from": "Cotton Vintage",
+            "to": "Mercat dels Encants",
+            "km": 3.1,
+            "minutes": 37
           },
           {
-            "from": "Mercat de Sant Antoni",
-            "to": "Mercat de Poblenou",
-            "km": 5.3,
-            "minutes": 64
+            "from": "Mercat dels Encants",
+            "to": "Vintage Poblenou",
+            "km": 1,
+            "minutes": 12
           },
           {
-            "from": "Mercat de Poblenou",
+            "from": "Vintage Poblenou",
             "to": "Poblenou / Coast",
-            "km": 0.3,
-            "minutes": 4
+            "km": 0.9,
+            "minutes": 11
           }
         ]
       },
       "alternative_count": 2,
       "alternatives": [
         {
-          "id": "raval-vintage-shopping-loop",
+          "id": "born-santa-caterina-culture-wine-loop",
           "start": "Sant Antoni",
           "end": "Poblenou / Coast",
           "shape": "arc",
           "day_profile": "variation",
           "anchor_zone": "Sant Antoni -> Poblenou",
           "stops": [
-            "Cotton Vintage",
             "Llibreria Finestres",
             "Mercat dels Encants",
-            "Vintage Poblenou"
+            "Mercat de Poblenou",
+            "Palo Alto Market"
           ]
         },
         {
-          "id": "raval-vintage-shopping-loop",
+          "id": "born-santa-caterina-culture-wine-loop",
           "start": "Sant Antoni",
           "end": "Poblenou / Coast",
           "shape": "arc",
           "day_profile": "peak",
           "anchor_zone": "Sant Antoni -> Poblenou",
           "stops": [
-            "Cotton Vintage",
             "Llibreria Finestres",
             "Mercat dels Encants",
-            "Vintage Poblenou"
+            "Mercat de Poblenou",
+            "Palo Alto Market"
           ]
         }
       ]
@@ -154,7 +154,7 @@
       "alternative_count": 2,
       "alternatives": [
         {
-          "id": "born-santa-caterina-culture-wine-loop",
+          "id": "sant-antoni-food-bar-flow",
           "start": "Poblenou / Coast",
           "end": "Raval / Gothic",
           "shape": "arc",
@@ -162,13 +162,13 @@
           "anchor_zone": "Poblenou -> Gothic Quarter",
           "stops": [
             "Mercat de Poblenou",
-            "Parc de la Ciutadella",
-            "Mercat de Santa Caterina",
-            "Humana Vintage — Francesc Cambó"
+            "Bormuth",
+            "El Xampanyet",
+            "Nomad Coffee Lab — Passatge Sert"
           ]
         },
         {
-          "id": "born-santa-caterina-culture-wine-loop",
+          "id": "sant-antoni-food-bar-flow",
           "start": "Poblenou / Coast",
           "end": "Raval / Gothic",
           "shape": "arc",
@@ -176,9 +176,9 @@
           "anchor_zone": "Poblenou -> Gothic Quarter",
           "stops": [
             "Mercat de Poblenou",
-            "Parc de la Ciutadella",
-            "Mercat de Santa Caterina",
-            "Humana Vintage — Francesc Cambó"
+            "Bormuth",
+            "El Xampanyet",
+            "Nomad Coffee Lab — Passatge Sert"
           ]
         }
       ]
@@ -265,10 +265,10 @@
           "day_profile": "variation",
           "anchor_zone": "Gothic Quarter -> Gràcia",
           "stops": [
-            "Bodega Quimet",
+            "Bormuth",
             "Plaça del Sol",
-            "Plaça del Diamant",
-            "Vermuteria Lou"
+            "Vermuteria Lou",
+            "Plaça del Diamant"
           ]
         }
       ]

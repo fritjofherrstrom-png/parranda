@@ -75,20 +75,6 @@
       "alternative_count": 2,
       "alternatives": [
         {
-          "id": "poble-sec-montjuic-evening-arc",
-          "start": "Plaça del Diamant",
-          "end": "Fàbrica Moritz Barcelona",
-          "shape": "arc",
-          "day_profile": "variation",
-          "anchor_zone": "Gràcia -> Sant Antoni",
-          "stops": [
-            "Vermuteria Lou",
-            "Bodega Quimet",
-            "Bandini's",
-            "Bar Calders"
-          ]
-        },
-        {
           "id": "encants-to-coast-drift",
           "start": "Plaça del Diamant",
           "end": "Fàbrica Moritz Barcelona",
@@ -100,6 +86,20 @@
             "Mercat de la Llibertat",
             "Bodega Quimet",
             "Mercat de Sant Antoni"
+          ]
+        },
+        {
+          "id": "raval-vintage-shopping-loop",
+          "start": "Plaça del Diamant",
+          "end": "Fàbrica Moritz Barcelona",
+          "shape": "arc",
+          "day_profile": "variation",
+          "anchor_zone": "Gràcia -> Sant Antoni",
+          "stops": [
+            "Humana Vintage — Astúries",
+            "Vermuteria Lou",
+            "Bodega Quimet",
+            "Morro Fi"
           ]
         }
       ]
