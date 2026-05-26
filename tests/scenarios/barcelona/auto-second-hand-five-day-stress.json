@@ -13,13 +13,13 @@
         "day_profile": "light",
         "anchor_zone": "Sant Antoni -> Poblenou",
         "routing_source": "heuristic",
-        "estimated_km": 6.8,
-        "longest_leg_km": 3.1,
-        "longest_leg_minutes": 37,
-        "average_leg_minutes": 20,
+        "estimated_km": 6.1,
+        "longest_leg_km": 2.8,
+        "longest_leg_minutes": 34,
+        "average_leg_minutes": 18,
         "stops": [
           {
-            "label": "Cotton Vintage",
+            "label": "Humana Vintage — Ronda de la Universitat",
             "area": "eixample",
             "live": false
           },
@@ -37,15 +37,15 @@
         "legs": [
           {
             "from": "Sant Antoni",
-            "to": "Cotton Vintage",
-            "km": 1.8,
-            "minutes": 22
+            "to": "Humana Vintage — Ronda de la Universitat",
+            "km": 1.4,
+            "minutes": 17
           },
           {
-            "from": "Cotton Vintage",
+            "from": "Humana Vintage — Ronda de la Universitat",
             "to": "Mercat dels Encants",
-            "km": 3.1,
-            "minutes": 37
+            "km": 2.8,
+            "minutes": 34
           },
           {
             "from": "Mercat dels Encants",
@@ -193,7 +193,7 @@
         "day_profile": "light",
         "anchor_zone": "Gothic Quarter -> Gràcia",
         "routing_source": "heuristic",
-        "estimated_km": 4,
+        "estimated_km": 3.9,
         "longest_leg_km": 2.8,
         "longest_leg_minutes": 34,
         "average_leg_minutes": 12,
@@ -204,7 +204,7 @@
             "live": false
           },
           {
-            "label": "Humana Vintage — Astúries",
+            "label": "Mahalo Vintage — Plaça del Diamant",
             "area": "gracia",
             "live": false
           },
@@ -223,15 +223,15 @@
           },
           {
             "from": "Holala! Plaza",
-            "to": "Humana Vintage — Astúries",
+            "to": "Mahalo Vintage — Plaça del Diamant",
             "km": 2.8,
             "minutes": 34
           },
           {
-            "from": "Humana Vintage — Astúries",
+            "from": "Mahalo Vintage — Plaça del Diamant",
             "to": "Revolution Vintage",
-            "km": 0.3,
-            "minutes": 4
+            "km": 0.2,
+            "minutes": 2
           },
           {
             "from": "Revolution Vintage",
@@ -251,9 +251,9 @@
           "day_profile": "variation",
           "anchor_zone": "Gothic Quarter -> Gràcia",
           "stops": [
-            "Lullaby Vintage",
+            "Vilde Vintage",
             "Holala! Plaza",
-            "Humana Vintage — Astúries",
+            "Mahalo Vintage — Plaça del Diamant",
             "Revolution Vintage"
           ]
         },
@@ -338,13 +338,12 @@
           "start": "Poblenou / Coast",
           "end": "Sant Antoni",
           "shape": "arc",
-          "day_profile": "variation",
+          "day_profile": "light",
           "anchor_zone": "Poblenou -> Sant Antoni",
           "stops": [
             "Vintage Poblenou",
             "Mercat dels Encants",
-            "Llibreria Finestres",
-            "Cotton Vintage"
+            "Humana Vintage — Ronda de la Universitat"
           ]
         },
         {
@@ -352,12 +351,12 @@
           "start": "Poblenou / Coast",
           "end": "Sant Antoni",
           "shape": "arc",
-          "day_profile": "peak",
+          "day_profile": "variation",
           "anchor_zone": "Poblenou -> Sant Antoni",
           "stops": [
             "Vintage Poblenou",
             "Mercat dels Encants",
-            "Llibreria Finestres",
+            "Humana Vintage — Ronda de la Universitat",
             "Cotton Vintage"
           ]
         }
@@ -366,88 +365,89 @@
     {
       "date": "2026-05-27",
       "primary": {
-        "id": "gracia-local-evening-loop",
+        "id": "poble-sec-montjuic-evening-arc",
         "start": "Raval / Gothic",
         "end": "Poble-sec / Montjuïc",
         "shape": "arc",
         "day_profile": "final",
         "anchor_zone": "Gothic Quarter -> Poble-sec",
         "routing_source": "heuristic",
-        "estimated_km": 2.4,
-        "longest_leg_km": 0.9,
-        "longest_leg_minutes": 11,
-        "average_leg_minutes": 7,
+        "estimated_km": 3.1,
+        "longest_leg_km": 1.1,
+        "longest_leg_minutes": 13,
+        "average_leg_minutes": 9,
         "stops": [
-          {
-            "label": "Flamingos Vintage Kilo — Tallers",
-            "area": "raval",
-            "live": false
-          },
-          {
-            "label": "Lullaby Vintage",
-            "area": "raval",
-            "live": false
-          },
           {
             "label": "Quimet & Quimet",
             "area": "poble-sec",
+            "live": false
+          },
+          {
+            "label": "Fundació Joan Miró",
+            "area": "montjuic",
+            "live": false
+          },
+          {
+            "label": "Jardins de Laribal",
+            "area": "montjuic",
             "live": false
           }
         ],
         "legs": [
           {
             "from": "Raval / Gothic",
-            "to": "Flamingos Vintage Kilo — Tallers",
-            "km": 0.4,
-            "minutes": 5
-          },
-          {
-            "from": "Flamingos Vintage Kilo — Tallers",
-            "to": "Lullaby Vintage",
-            "km": 0.6,
-            "minutes": 7
-          },
-          {
-            "from": "Lullaby Vintage",
             "to": "Quimet & Quimet",
-            "km": 0.9,
-            "minutes": 11
+            "km": 1.1,
+            "minutes": 13
           },
           {
             "from": "Quimet & Quimet",
+            "to": "Fundació Joan Miró",
+            "km": 1,
+            "minutes": 12
+          },
+          {
+            "from": "Fundació Joan Miró",
+            "to": "Jardins de Laribal",
+            "km": 0.3,
+            "minutes": 4
+          },
+          {
+            "from": "Jardins de Laribal",
             "to": "Poble-sec / Montjuïc",
-            "km": 0.5,
-            "minutes": 6
+            "km": 0.7,
+            "minutes": 8
           }
         ]
       },
       "alternative_count": 2,
       "alternatives": [
         {
-          "id": "sant-antoni-food-bar-flow",
-          "start": "Raval / Gothic",
-          "end": "Poble-sec / Montjuïc",
-          "shape": "arc",
-          "day_profile": "light",
-          "anchor_zone": "Gothic Quarter -> Poble-sec",
-          "stops": [
-            "Humana Vintage — Portaferrissa",
-            "L'Arca",
-            "Quimet & Quimet"
-          ]
-        },
-        {
-          "id": "sant-antoni-food-bar-flow",
+          "id": "born-santa-caterina-culture-wine-loop",
           "start": "Raval / Gothic",
           "end": "Poble-sec / Montjuïc",
           "shape": "arc",
           "day_profile": "variation",
           "anchor_zone": "Gothic Quarter -> Poble-sec",
           "stops": [
-            "Humana Vintage — Portaferrissa",
-            "L'Arca",
-            "Satan's Coffee Corner",
+            "Arepa Queer",
+            "Lullaby Vintage",
+            "Vilde Vintage",
             "Quimet & Quimet"
+          ]
+        },
+        {
+          "id": "gothic-raval-cultural-connector",
+          "start": "Raval / Gothic",
+          "end": "Poble-sec / Montjuïc",
+          "shape": "arc",
+          "day_profile": "variation",
+          "anchor_zone": "Gothic Quarter -> Poble-sec",
+          "stops": [
+            "Flamingos Vintage Kilo — Tallers",
+            "Lullaby Vintage",
+            "Arepa Queer",
+            "Vilde Vintage"
           ]
         }
       ]

@@ -19,7 +19,7 @@
         "average_leg_minutes": 12,
         "stops": [
           {
-            "label": "Humana Vintage — Astúries",
+            "label": "Mahalo Vintage — Plaça del Diamant",
             "area": "gracia",
             "live": false
           },
@@ -29,7 +29,7 @@
             "live": false
           },
           {
-            "label": "Lullaby Vintage",
+            "label": "Vilde Vintage",
             "area": "raval",
             "live": false
           }
@@ -37,24 +37,24 @@
         "legs": [
           {
             "from": "Gràcia",
-            "to": "Humana Vintage — Astúries",
+            "to": "Mahalo Vintage — Plaça del Diamant",
             "km": 0.3,
             "minutes": 4
           },
           {
-            "from": "Humana Vintage — Astúries",
+            "from": "Mahalo Vintage — Plaça del Diamant",
             "to": "Holala! Plaza",
             "km": 2.8,
             "minutes": 34
           },
           {
             "from": "Holala! Plaza",
-            "to": "Lullaby Vintage",
+            "to": "Vilde Vintage",
             "km": 0.6,
             "minutes": 7
           },
           {
-            "from": "Lullaby Vintage",
+            "from": "Vilde Vintage",
             "to": "Raval / Gothic",
             "km": 0.2,
             "minutes": 2
@@ -72,8 +72,8 @@
           "anchor_zone": "Gràcia -> Gothic Quarter",
           "stops": [
             "Holala! Plaza",
-            "Humana Vintage — Portaferrissa",
-            "Lullaby Vintage"
+            "Lullaby Vintage",
+            "Arepa Queer"
           ]
         },
         {
@@ -85,8 +85,8 @@
           "anchor_zone": "Gràcia -> Gothic Quarter",
           "stops": [
             "Holala! Plaza",
-            "Humana Vintage — Portaferrissa",
-            "Lullaby Vintage"
+            "Lullaby Vintage",
+            "Arepa Queer"
           ]
         }
       ]

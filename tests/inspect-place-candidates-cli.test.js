@@ -19,16 +19,16 @@ test("inspect-place-candidates prints Barcelona candidate diagnostics", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /PlaceCandidate inspection: barcelona \(Barcelona\)/);
   assert.match(result.stdout, /Enabled providers:\n- curated-catalog/);
-  assert.match(result.stdout, /Provider summary:\n- curated-catalog: 101 candidates/);
-  assert.match(result.stdout, /- total: 101/);
-  assert.match(result.stdout, /- real places: 95/);
+  assert.match(result.stdout, /Provider summary:\n- curated-catalog: 109 candidates/);
+  assert.match(result.stdout, /- total: 109/);
+  assert.match(result.stdout, /- real places: 103/);
   assert.match(result.stdout, /- structural: 6/);
-  assert.match(result.stdout, /  - real_place: 95/);
+  assert.match(result.stdout, /  - real_place: 103/);
   assert.match(result.stdout, /  - structural_anchor: 6/);
-  assert.match(result.stdout, /  - curated: 101/);
+  assert.match(result.stdout, /  - curated: 109/);
   assert.match(result.stdout, /- can support Blitz: yes/);
   assert.match(result.stdout, /- can support Planner: yes/);
-  assert.match(result.stdout, /Sample candidates \(8 of 101\):/);
+  assert.match(result.stdout, /Sample candidates \(8 of 109\):/);
   assert.equal(result.stderr, "");
 });
 

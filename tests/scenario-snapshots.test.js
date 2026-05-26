@@ -236,15 +236,13 @@ const scenarioMatrix = [
       "2026-04-18": 0,
     },
   },
-  // Barcelona scenarios — locked here so the next route-diversity /
-  // template-rotation PR shows up as a snapshot change instead of a
-  // silent Planner behavior shift. The five-day-stress scenario
-  // captures the diversity gap: templates rotate across days but
-  // stop selection collapses to the same Raval-density set, and the
-  // `manual-raval-vintage-loop` scenario captures a related finding
-  // — even with vintage preferences and a short walking target, the
-  // Planner does not naturally produce a Raval-bound loop because no
-  // route template owns Raval alone.
+  // Barcelona scenarios — locked here so catalog-depth and route-diversity
+  // changes show up as explicit snapshot diffs instead of silent Planner
+  // behavior shifts. The second-hand snapshots now prove new vintage density
+  // is reachable through the existing shared route path, while the five-day
+  // stress case still captures a known limitation: long repeated vintage
+  // requests can eventually drift into a non-vintage template once the current
+  // route-template set runs out of strong second-hand variants.
   {
     city: "barcelona",
     name: "auto-second-hand-multi-day",

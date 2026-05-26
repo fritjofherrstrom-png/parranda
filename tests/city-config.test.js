@@ -37,7 +37,7 @@ test("barcelona uppfyller city-kontraktet som registrerad preview-stad", () => {
   assert.equal(cityConfigs.barcelona.visibility, "beta");
   assert.equal(
     cityConfigs.barcelona.catalog.allItems.filter((item) => !["district", "district-group"].includes(item.kind)).length,
-    95,
+    103,
   );
   assert.equal(cityConfigs.barcelona.catalog.routeTemplates.length, 7);
 });
@@ -186,7 +186,7 @@ test("barcelona pilotkatalog använder giltiga area tokens, provenance och route
   const placeItems = allItems.filter((item) => !["district", "district-group"].includes(item.kind));
   const routeAnchors = allItems.filter((item) => item.kind === "district-group");
 
-  assert.equal(placeItems.length, 95);
+  assert.equal(placeItems.length, 103);
   assert.equal(routeAnchors.length, 6);
   assert.equal(barcelonaCatalog.routeTemplates.length, 7);
   assert.equal(findItemByName("bandini").id, "bandinis-barcelona");
