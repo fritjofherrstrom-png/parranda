@@ -27,7 +27,7 @@ test("compare-route-candidates reports Barcelona as ready", () => {
   assert.match(result.stdout, /Template ids missing from RouteCandidates:\n- none/);
   assert.match(result.stdout, /RouteCandidate ids missing from templates:\n- none/);
   assert.match(result.stdout, /Unresolved template stops:\n- none/);
-  assert.match(result.stdout, /Stop visibility:\n- user-facing: 29\n- structural: 0/);
+  assert.match(result.stdout, /Stop visibility:\n- user-facing: 31\n- structural: 0/);
   assert.match(result.stdout, /Route shape distribution:\n- arc: 7/);
   assert.match(result.stdout, /Confidence distribution:\n- high: 7/);
   assert.match(result.stdout, /Warnings:\n- none/);

@@ -329,10 +329,17 @@ const strictPreferenceSupportTags = new Set([
   "hidden gems",
   "kultur",
   "kväll",
+  "lokalt",
   "low-key",
   "party",
   "budget",
   "nattliv",
+  "vintage",
+  "shopping",
+  "market",
+  "event_market",
+  "antique",
+  "antiques",
 ]);
 
 const secondHandFamilyTags = new Set([
@@ -406,6 +413,17 @@ function normalizeModifier(modifier = null, optimizerMode = null) {
 function resolveStrictPreferenceTags(preferences = [], optimizerMode = null) {
   if (optimizerStrictPreferenceTags[optimizerMode]) {
     return optimizerStrictPreferenceTags[optimizerMode];
+  }
+
+  const hasSecondHandIntent =
+    preferences.includes("second_hand") || preferences.includes("vintage");
+  const onlySecondHandFamilySelections = preferences.every(
+    (preference) =>
+      secondHandFamilyTags.has(preference) || strictPreferenceSupportTags.has(preference),
+  );
+
+  if (hasSecondHandIntent && onlySecondHandFamilySelections) {
+    return ["second_hand"];
   }
 
   const directSelections = preferences.filter((preference) =>
@@ -1574,6 +1592,13 @@ function scoreAutoAnchorPair(
   }
 
   if (strictTags.length === 1) {
+    if (strictTags[0] === "second_hand") {
+      const startMatchesStrict = itemMatchesStrictPreference(startCandidate, strictTags);
+      const endMatchesStrict = itemMatchesStrictPreference(endCandidate, strictTags);
+      score += startMatchesStrict ? 2.4 : -4.2;
+      score += endMatchesStrict ? 2.4 : -4.2;
+    }
+
     score -= 2.8;
   }
 
@@ -2791,6 +2816,13 @@ function preferenceBoostForStop(
     score += 1.6;
   }
 
+  if (
+    (preferences.includes("cafe") || preferences.includes("café")) &&
+    (item.kind === "cafe" || item.tags.includes("cafe") || item.tags.includes("café"))
+  ) {
+    score += 3.4;
+  }
+
   if (activeModifier === "evening" && (item.tags.includes("nattliv") || item.tags.includes("cocktail") || item.tags.includes("vin"))) {
     score += 1.2;
   }
@@ -3464,8 +3496,8 @@ function buildRouteLegs(points) {
   for (let index = 1; index < points.length; index += 1) {
     const distanceKm = Number((haversineKm(points[index - 1], points[index]) * 1.22).toFixed(1));
     legs.push({
-      from_label: points[index - 1].label,
-      to_label: points[index].label,
+      from_label: points[index - 1].label || points[index - 1].name || null,
+      to_label: points[index].label || points[index].name || null,
       distance_km: distanceKm,
       estimated_walk_minutes: estimatedWalkMinutes(distanceKm),
     });
@@ -4061,8 +4093,11 @@ function buildRouteFromTemplate(
   const strictPool = strictTags.length
     ? sortedPool.filter((entry) => itemMatchesStrictPreference(entry.item, strictTags))
     : [];
+  const strictSelectedCount = strictTags.length
+    ? Math.max(selectedCount, Math.min(3, strictPool.length))
+    : selectedCount;
   let selectedStops = strictTags.length
-    ? strictPool.slice(0, selectedCount).map((entry) => entry.item)
+    ? strictPool.slice(0, strictSelectedCount).map((entry) => entry.item)
     : sortedPool.slice(0, selectedCount).map((entry) => entry.item);
 
   if (strictTags.length && !selectedStops.length) {
@@ -4759,6 +4794,11 @@ function routeScore({
       })
     : { score: 0, note: null };
   const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
+  const templateStrictFitScore = strictTags.length
+    ? strictTags.every((tag) => template.preferenceTags.includes(tag))
+      ? 4.2
+      : -10.5
+    : 0;
   const strictFitScore = strictPreferenceCoverageScore(normalizedRouteStops, strictTags);
   const secondHandFit = buildSecondHandIntentFit(normalizedRouteStops, preferences, weekday);
   const reusedPenalty = reusedIds.has(template.id) ? -6 : 0;
@@ -4778,6 +4818,7 @@ function routeScore({
       liveFit.score +
       areaFit.score +
       anchorFit.score +
+      templateStrictFitScore +
       strictFitScore +
       secondHandFit.score +
       geoFitScore +

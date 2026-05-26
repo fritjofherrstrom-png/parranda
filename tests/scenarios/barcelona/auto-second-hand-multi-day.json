@@ -1,196 +1,16 @@
 {
-  "resolved_start": "Sant Antoni",
-  "resolved_end": "Poblenou / Coast",
+  "resolved_start": "Raval / Gothic",
+  "resolved_end": "Gràcia",
   "resolved_home_base": null,
   "days": [
     {
       "date": "2026-05-23",
       "primary": {
         "id": "raval-vintage-shopping-loop",
-        "start": "Sant Antoni",
-        "end": "Poblenou / Coast",
-        "shape": "arc",
-        "day_profile": "light",
-        "anchor_zone": "Sant Antoni -> Poblenou",
-        "routing_source": "heuristic",
-        "estimated_km": 6.1,
-        "longest_leg_km": 2.8,
-        "longest_leg_minutes": 34,
-        "average_leg_minutes": 18,
-        "stops": [
-          {
-            "label": "Humana Vintage — Ronda de la Universitat",
-            "area": "eixample",
-            "live": false
-          },
-          {
-            "label": "Mercat dels Encants",
-            "area": "eixample",
-            "live": false
-          },
-          {
-            "label": "Vintage Poblenou",
-            "area": "poblenou",
-            "live": false
-          }
-        ],
-        "legs": [
-          {
-            "from": "Sant Antoni",
-            "to": "Humana Vintage — Ronda de la Universitat",
-            "km": 1.4,
-            "minutes": 17
-          },
-          {
-            "from": "Humana Vintage — Ronda de la Universitat",
-            "to": "Mercat dels Encants",
-            "km": 2.8,
-            "minutes": 34
-          },
-          {
-            "from": "Mercat dels Encants",
-            "to": "Vintage Poblenou",
-            "km": 1,
-            "minutes": 12
-          },
-          {
-            "from": "Vintage Poblenou",
-            "to": "Poblenou / Coast",
-            "km": 0.9,
-            "minutes": 11
-          }
-        ]
-      },
-      "alternative_count": 2,
-      "alternatives": [
-        {
-          "id": "born-santa-caterina-culture-wine-loop",
-          "start": "Sant Antoni",
-          "end": "Poblenou / Coast",
-          "shape": "arc",
-          "day_profile": "variation",
-          "anchor_zone": "Sant Antoni -> Poblenou",
-          "stops": [
-            "Llibreria Finestres",
-            "Mercat dels Encants",
-            "Mercat de Poblenou",
-            "Palo Alto Market"
-          ]
-        },
-        {
-          "id": "born-santa-caterina-culture-wine-loop",
-          "start": "Sant Antoni",
-          "end": "Poblenou / Coast",
-          "shape": "arc",
-          "day_profile": "peak",
-          "anchor_zone": "Sant Antoni -> Poblenou",
-          "stops": [
-            "Llibreria Finestres",
-            "Mercat dels Encants",
-            "Mercat de Poblenou",
-            "Palo Alto Market"
-          ]
-        }
-      ]
-    },
-    {
-      "date": "2026-05-24",
-      "primary": {
-        "id": "encants-to-coast-drift",
-        "start": "Poblenou / Coast",
-        "end": "Raval / Gothic",
-        "shape": "arc",
-        "day_profile": "light",
-        "anchor_zone": "Poblenou -> Gothic Quarter",
-        "routing_source": "heuristic",
-        "estimated_km": 5,
-        "longest_leg_km": 2.9,
-        "longest_leg_minutes": 35,
-        "average_leg_minutes": 15,
-        "stops": [
-          {
-            "label": "Mercat de Poblenou",
-            "area": "poblenou",
-            "live": false
-          },
-          {
-            "label": "Vintage Poblenou",
-            "area": "poblenou",
-            "live": false
-          },
-          {
-            "label": "Humana Vintage — Portaferrissa",
-            "area": "gothic",
-            "live": false
-          }
-        ],
-        "legs": [
-          {
-            "from": "Poblenou / Coast",
-            "to": "Mercat de Poblenou",
-            "km": 0.3,
-            "minutes": 4
-          },
-          {
-            "from": "Mercat de Poblenou",
-            "to": "Vintage Poblenou",
-            "km": 1.2,
-            "minutes": 14
-          },
-          {
-            "from": "Vintage Poblenou",
-            "to": "Humana Vintage — Portaferrissa",
-            "km": 2.9,
-            "minutes": 35
-          },
-          {
-            "from": "Humana Vintage — Portaferrissa",
-            "to": "Raval / Gothic",
-            "km": 0.6,
-            "minutes": 7
-          }
-        ]
-      },
-      "alternative_count": 2,
-      "alternatives": [
-        {
-          "id": "sant-antoni-food-bar-flow",
-          "start": "Poblenou / Coast",
-          "end": "Raval / Gothic",
-          "shape": "arc",
-          "day_profile": "variation",
-          "anchor_zone": "Poblenou -> Gothic Quarter",
-          "stops": [
-            "Mercat de Poblenou",
-            "Bormuth",
-            "El Xampanyet",
-            "Nomad Coffee Lab — Passatge Sert"
-          ]
-        },
-        {
-          "id": "sant-antoni-food-bar-flow",
-          "start": "Poblenou / Coast",
-          "end": "Raval / Gothic",
-          "shape": "arc",
-          "day_profile": "peak",
-          "anchor_zone": "Poblenou -> Gothic Quarter",
-          "stops": [
-            "Mercat de Poblenou",
-            "Bormuth",
-            "El Xampanyet",
-            "Nomad Coffee Lab — Passatge Sert"
-          ]
-        }
-      ]
-    },
-    {
-      "date": "2026-05-25",
-      "primary": {
-        "id": "raval-vintage-shopping-loop",
         "start": "Raval / Gothic",
         "end": "Gràcia",
         "shape": "arc",
-        "day_profile": "final",
+        "day_profile": "light",
         "anchor_zone": "Gothic Quarter -> Gràcia",
         "routing_source": "heuristic",
         "estimated_km": 3.9,
@@ -258,17 +78,196 @@
           ]
         },
         {
-          "id": "gracia-local-evening-loop",
+          "id": "raval-vintage-shopping-loop",
           "start": "Raval / Gothic",
           "end": "Gràcia",
           "shape": "arc",
-          "day_profile": "variation",
+          "day_profile": "peak",
           "anchor_zone": "Gothic Quarter -> Gràcia",
           "stops": [
-            "Bormuth",
-            "Bodega Quimet",
-            "Vermuteria Lou",
-            "Plaça del Diamant"
+            "Vilde Vintage",
+            "Holala! Plaza",
+            "Mahalo Vintage — Plaça del Diamant",
+            "Revolution Vintage"
+          ]
+        }
+      ]
+    },
+    {
+      "date": "2026-05-24",
+      "primary": {
+        "id": "raval-vintage-shopping-loop",
+        "start": "Gràcia",
+        "end": "Raval / Gothic",
+        "shape": "arc",
+        "day_profile": "light",
+        "anchor_zone": "Gràcia -> Gothic Quarter",
+        "routing_source": "heuristic",
+        "estimated_km": 3.9,
+        "longest_leg_km": 2.8,
+        "longest_leg_minutes": 34,
+        "average_leg_minutes": 12,
+        "stops": [
+          {
+            "label": "Mahalo Vintage — Plaça del Diamant",
+            "area": "gracia",
+            "live": false
+          },
+          {
+            "label": "Holala! Plaza",
+            "area": "raval",
+            "live": false
+          },
+          {
+            "label": "Vilde Vintage",
+            "area": "raval",
+            "live": false
+          }
+        ],
+        "legs": [
+          {
+            "from": "Gràcia",
+            "to": "Mahalo Vintage — Plaça del Diamant",
+            "km": 0.3,
+            "minutes": 4
+          },
+          {
+            "from": "Mahalo Vintage — Plaça del Diamant",
+            "to": "Holala! Plaza",
+            "km": 2.8,
+            "minutes": 34
+          },
+          {
+            "from": "Holala! Plaza",
+            "to": "Vilde Vintage",
+            "km": 0.6,
+            "minutes": 7
+          },
+          {
+            "from": "Vilde Vintage",
+            "to": "Raval / Gothic",
+            "km": 0.2,
+            "minutes": 2
+          }
+        ]
+      },
+      "alternative_count": 2,
+      "alternatives": [
+        {
+          "id": "raval-vintage-shopping-loop",
+          "start": "Gràcia",
+          "end": "Raval / Gothic",
+          "shape": "arc",
+          "day_profile": "variation",
+          "anchor_zone": "Gràcia -> Gothic Quarter",
+          "stops": [
+            "Revolution Vintage",
+            "Mahalo Vintage — Plaça del Diamant",
+            "Holala! Plaza",
+            "Vilde Vintage"
+          ]
+        },
+        {
+          "id": "raval-vintage-shopping-loop",
+          "start": "Gràcia",
+          "end": "Raval / Gothic",
+          "shape": "arc",
+          "day_profile": "peak",
+          "anchor_zone": "Gràcia -> Gothic Quarter",
+          "stops": [
+            "Revolution Vintage",
+            "Mahalo Vintage — Plaça del Diamant",
+            "Holala! Plaza",
+            "Vilde Vintage"
+          ]
+        }
+      ]
+    },
+    {
+      "date": "2026-05-25",
+      "primary": {
+        "id": "encants-to-coast-drift",
+        "start": "Sant Antoni",
+        "end": "Gràcia",
+        "shape": "arc",
+        "day_profile": "final",
+        "anchor_zone": "Sant Antoni -> Gràcia",
+        "routing_source": "heuristic",
+        "estimated_km": 3.5,
+        "longest_leg_km": 1.6,
+        "longest_leg_minutes": 19,
+        "average_leg_minutes": 11,
+        "stops": [
+          {
+            "label": "Mercat de Sant Antoni",
+            "area": "sant-antoni",
+            "live": false
+          },
+          {
+            "label": "Humana — Ronda de Sant Antoni",
+            "area": "sant-antoni",
+            "live": false
+          },
+          {
+            "label": "Cotton Vintage",
+            "area": "eixample",
+            "live": false
+          }
+        ],
+        "legs": [
+          {
+            "from": "Sant Antoni",
+            "to": "Mercat de Sant Antoni",
+            "km": 0.2,
+            "minutes": 2
+          },
+          {
+            "from": "Mercat de Sant Antoni",
+            "to": "Humana — Ronda de Sant Antoni",
+            "km": 0.6,
+            "minutes": 7
+          },
+          {
+            "from": "Humana — Ronda de Sant Antoni",
+            "to": "Cotton Vintage",
+            "km": 1.1,
+            "minutes": 13
+          },
+          {
+            "from": "Cotton Vintage",
+            "to": "Gràcia",
+            "km": 1.6,
+            "minutes": 19
+          }
+        ]
+      },
+      "alternative_count": 2,
+      "alternatives": [
+        {
+          "id": "raval-vintage-shopping-loop",
+          "start": "Sant Antoni",
+          "end": "Gràcia",
+          "shape": "arc",
+          "day_profile": "variation",
+          "anchor_zone": "Sant Antoni -> Gràcia",
+          "stops": [
+            "Cotton Vintage",
+            "Humana Vintage — Astúries",
+            "Mahalo Vintage — Plaça del Diamant",
+            "Revolution Vintage"
+          ]
+        },
+        {
+          "id": "raval-vintage-shopping-loop",
+          "start": "Sant Antoni",
+          "end": "Gràcia",
+          "shape": "arc",
+          "day_profile": "light",
+          "anchor_zone": "Sant Antoni -> Gràcia",
+          "stops": [
+            "Humana Vintage — Astúries",
+            "Mahalo Vintage — Plaça del Diamant",
+            "Revolution Vintage"
           ]
         }
       ]
