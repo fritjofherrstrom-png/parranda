@@ -186,89 +186,100 @@
     {
       "date": "2026-05-25",
       "primary": {
-        "id": "encants-to-coast-drift",
+        "id": "raval-vintage-shopping-loop",
         "start": "Sant Antoni",
         "end": "Gràcia",
         "shape": "arc",
         "day_profile": "light",
         "anchor_zone": "Sant Antoni -> Gràcia",
         "routing_source": "heuristic",
-        "estimated_km": 3.5,
-        "longest_leg_km": 1.6,
-        "longest_leg_minutes": 19,
+        "estimated_km": 4.5,
+        "longest_leg_km": 1.9,
+        "longest_leg_minutes": 23,
         "average_leg_minutes": 11,
         "stops": [
           {
-            "label": "Mercat de Sant Antoni",
-            "area": "sant-antoni",
-            "live": false
-          },
-          {
-            "label": "Humana — Ronda de Sant Antoni",
-            "area": "sant-antoni",
-            "live": false
-          },
-          {
             "label": "Cotton Vintage",
             "area": "eixample",
+            "live": false
+          },
+          {
+            "label": "Humana Vintage — Astúries",
+            "area": "gracia",
+            "live": false
+          },
+          {
+            "label": "Mahalo Vintage — Plaça del Diamant",
+            "area": "gracia",
+            "live": false
+          },
+          {
+            "label": "Revolution Vintage",
+            "area": "gracia",
             "live": false
           }
         ],
         "legs": [
           {
             "from": "Sant Antoni",
-            "to": "Mercat de Sant Antoni",
+            "to": "Cotton Vintage",
+            "km": 1.8,
+            "minutes": 22
+          },
+          {
+            "from": "Cotton Vintage",
+            "to": "Humana Vintage — Astúries",
+            "km": 1.9,
+            "minutes": 23
+          },
+          {
+            "from": "Humana Vintage — Astúries",
+            "to": "Mahalo Vintage — Plaça del Diamant",
+            "km": 0.1,
+            "minutes": 2
+          },
+          {
+            "from": "Mahalo Vintage — Plaça del Diamant",
+            "to": "Revolution Vintage",
             "km": 0.2,
             "minutes": 2
           },
           {
-            "from": "Mercat de Sant Antoni",
-            "to": "Humana — Ronda de Sant Antoni",
-            "km": 0.6,
-            "minutes": 7
-          },
-          {
-            "from": "Humana — Ronda de Sant Antoni",
-            "to": "Cotton Vintage",
-            "km": 1.1,
-            "minutes": 13
-          },
-          {
-            "from": "Cotton Vintage",
+            "from": "Revolution Vintage",
             "to": "Gràcia",
-            "km": 1.6,
-            "minutes": 19
+            "km": 0.5,
+            "minutes": 6
           }
         ]
       },
       "alternative_count": 2,
       "alternatives": [
         {
-          "id": "raval-vintage-shopping-loop",
+          "id": "encants-to-coast-drift",
           "start": "Sant Antoni",
           "end": "Gràcia",
           "shape": "arc",
           "day_profile": "variation",
           "anchor_zone": "Sant Antoni -> Gràcia",
           "stops": [
-            "Cotton Vintage",
-            "Humana Vintage — Astúries",
-            "Mahalo Vintage — Plaça del Diamant",
-            "Revolution Vintage"
+            "Mercat de Sant Antoni",
+            "Humana — Ronda de Sant Antoni",
+            "Humana Vintage — Ronda de la Universitat",
+            "Cotton Vintage"
           ]
         },
         {
-          "id": "raval-vintage-shopping-loop",
+          "id": "encants-to-coast-drift",
           "start": "Sant Antoni",
           "end": "Gràcia",
           "shape": "arc",
           "day_profile": "peak",
           "anchor_zone": "Sant Antoni -> Gràcia",
           "stops": [
-            "Cotton Vintage",
-            "Humana Vintage — Astúries",
-            "Mahalo Vintage — Plaça del Diamant",
-            "Revolution Vintage"
+            "Mercat de Sant Antoni",
+            "Humana — Ronda de Sant Antoni",
+            "Humana Vintage — Ronda de la Universitat",
+            "Cotton Vintage"
           ]
         }
       ]
@@ -334,7 +345,7 @@
       "alternative_count": 2,
       "alternatives": [
         {
-          "id": "sant-antoni-food-bar-flow",
+          "id": "encants-to-coast-drift",
           "start": "Gràcia",
           "end": "Sant Antoni",
           "shape": "arc",
@@ -348,7 +359,7 @@
           ]
         },
         {
-          "id": "sant-antoni-food-bar-flow",
+          "id": "encants-to-coast-drift",
           "start": "Gràcia",
           "end": "Sant Antoni",
           "shape": "arc",

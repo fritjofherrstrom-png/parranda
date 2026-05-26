@@ -151,8 +151,33 @@ const legPacingConfig = {
   },
 };
 
+const routeContinuityConfig = {
+  short: {
+    reportMaxKm: 1.8,
+    bridgeMaxKm: 1.9,
+    deadWalkWeight: 3.8,
+    severeLegKm: 2.7,
+  },
+  balanced: {
+    reportMaxKm: 3.1,
+    bridgeMaxKm: 3.1,
+    deadWalkWeight: 2.9,
+    severeLegKm: 4.2,
+  },
+  flexible: {
+    reportMaxKm: 3.8,
+    bridgeMaxKm: Number.POSITIVE_INFINITY,
+    deadWalkWeight: 0.7,
+    severeLegKm: 5.6,
+  },
+};
+
 function normalizeLegPacing(value) {
   return legPacingConfig[value] ? value : "balanced";
+}
+
+function getRouteContinuityConfig(legPacing = "balanced") {
+  return routeContinuityConfig[normalizeLegPacing(legPacing)];
 }
 
 function estimatedWalkMinutes(distanceKm) {
@@ -2613,6 +2638,10 @@ function desiredStopCount(poolSize, targetKm, distanceMode, dayProfile = "peak")
   return baseCount;
 }
 
+function directLegDistanceKm(fromPoint, toPoint) {
+  return Number((haversineKm(fromPoint, toPoint) * 1.22).toFixed(1));
+}
+
 function loopRadiusKm(targetKm, distanceMode) {
   if (distanceMode === "no_limit") {
     return 4.6;
@@ -2630,6 +2659,179 @@ function isAnchorDuplicateStop(item, point) {
 
 function uniqueStops(items) {
   return [...new Map(items.map((item) => [item.id, item])).values()];
+}
+
+function isBridgeCandidateStop(item) {
+  return (
+    item &&
+    !autoAnchorKinds.has(item.kind) &&
+    !item.isLiveEvent &&
+    Number.isFinite(item.lat) &&
+    Number.isFinite(item.lng)
+  );
+}
+
+function scoreBridgeStopCandidate({
+  item,
+  fromPoint,
+  toPoint,
+  routeStops = [],
+  existingIds = new Set(),
+  strictTags = [],
+  preferences = [],
+  optimizerMode = null,
+  modifier = null,
+  legPacing = "balanced",
+}) {
+  if (
+    !isBridgeCandidateStop(item) ||
+    existingIds.has(item.id) ||
+    isAnchorDuplicateStop(item, fromPoint) ||
+    isAnchorDuplicateStop(item, toPoint)
+  ) {
+    return null;
+  }
+
+  const originalLegKm = directLegDistanceKm(fromPoint, toPoint);
+  const continuity = getRouteContinuityConfig(legPacing);
+  const axisStats = projectPointToAxis(item, fromPoint, toPoint);
+  const axisLengthKm = Math.max(axisStats.axisLengthKm || 0.1, 0.1);
+  const progressRatio = axisStats.progressKm / axisLengthKm;
+  const maxLateralKm = clamp(originalLegKm * 0.24, 0.45, 1.35);
+  const fromLegKm = directLegDistanceKm(fromPoint, item);
+  const toLegKm = directLegDistanceKm(item, toPoint);
+  const splitLongestKm = Math.max(fromLegKm, toLegKm);
+  const detourKm = Number((fromLegKm + toLegKm - originalLegKm).toFixed(1));
+
+  if (progressRatio <= 0.14 || progressRatio >= 0.86) {
+    return null;
+  }
+
+  if (axisStats.lateralKm > maxLateralKm) {
+    return null;
+  }
+
+  if (splitLongestKm >= originalLegKm - 0.5) {
+    return null;
+  }
+
+  if (splitLongestKm > Math.max(continuity.bridgeMaxKm, originalLegKm * 0.78)) {
+    return null;
+  }
+
+  if (detourKm > clamp(originalLegKm * 0.3, 0.45, 1.15)) {
+    return null;
+  }
+
+  const routeArea = buildRouteAreaProfile(routeStops);
+  const itemProfile = buildItemAreaProfile(item);
+  const fromProfile = buildPointAreaProfile(fromPoint);
+  const toProfile = buildPointAreaProfile(toPoint);
+  const midpointBoost = 1 - Math.min(1, Math.abs(progressRatio - 0.5) / 0.5);
+  const improvementKm = Math.max(0, originalLegKm - splitLongestKm);
+  let score = preferenceBoostForStop(item, preferences, optimizerMode, modifier, strictTags);
+
+  score += improvementKm * 3.2;
+  score += Math.max(0, 2.4 - detourKm * 2.2);
+  score += midpointBoost * 2.2;
+  score -= axisStats.lateralKm * 1.9;
+
+  if (strictTags.length && itemMatchesStrictPreference(item, strictTags)) {
+    score += 2.8;
+  }
+
+  if (
+    itemProfile.primaryMacro &&
+    (itemProfile.primaryMacro === fromProfile?.primaryMacro ||
+      itemProfile.primaryMacro === toProfile?.primaryMacro)
+  ) {
+    score += 1.3;
+  } else if (routeArea.macros.has(itemProfile.primaryMacro)) {
+    score += 0.8;
+  }
+
+  if (
+    itemProfile.primaryToken &&
+    (itemProfile.primaryToken === fromProfile?.primaryToken ||
+      itemProfile.primaryToken === toProfile?.primaryToken)
+  ) {
+    score += 0.9;
+  }
+
+  return {
+    item,
+    score: Number(score.toFixed(1)),
+    splitLongestKm,
+  };
+}
+
+function insertBridgeStopsForLongLegs(
+  orderedStops,
+  {
+    start,
+    end,
+    preferences = [],
+    optimizerMode = null,
+    modifier = null,
+    legPacing = "balanced",
+    distanceMode = "soft_target",
+  } = {},
+) {
+  const pacingKey = normalizeLegPacing(legPacing);
+  const continuity = getRouteContinuityConfig(pacingKey);
+
+  if (distanceMode === "no_limit" || pacingKey === "flexible") {
+    return orderedStops;
+  }
+
+  let currentStops = [...orderedStops];
+  const maxInsertions = currentStops.length >= 5 ? 2 : 1;
+
+  for (let insertionCount = 0; insertionCount < maxInsertions; insertionCount += 1) {
+    const points = [start, ...currentStops, end];
+    const legs = buildRouteLegs(points);
+    const longLegIndex = legs.findIndex((leg) => leg.distance_km > continuity.bridgeMaxKm);
+
+    if (longLegIndex < 0) {
+      break;
+    }
+
+    const fromPoint = points[longLegIndex];
+    const toPoint = points[longLegIndex + 1];
+    const existingIds = new Set(currentStops.map((stop) => stop.id));
+    const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
+    const bridgeCandidate = uniqueStops(getAllItems())
+      .map((item) =>
+        scoreBridgeStopCandidate({
+          item,
+          fromPoint,
+          toPoint,
+          routeStops: currentStops,
+          existingIds,
+          strictTags,
+          preferences,
+          optimizerMode,
+          modifier,
+          legPacing,
+        }),
+      )
+      .filter(Boolean)
+      .sort((left, right) => {
+        if (right.score !== left.score) {
+          return right.score - left.score;
+        }
+
+        return left.splitLongestKm - right.splitLongestKm;
+      })[0];
+
+    if (!bridgeCandidate) {
+      break;
+    }
+
+    currentStops.splice(longLegIndex, 0, bridgeCandidate.item);
+  }
+
+  return currentStops;
 }
 
 function ensureLockedArcCoverage(selectedStops, sortedPool, start, end, desiredCount) {
@@ -3509,6 +3711,7 @@ function buildRouteLegs(points) {
 function buildLegMetrics(legs = [], legPacing = "balanced", { shape = "loop", lang = "sv" } = {}) {
   const pacingKey = normalizeLegPacing(legPacing);
   const pacing = legPacingConfig[pacingKey];
+  const continuity = getRouteContinuityConfig(pacingKey);
   const validLegs = legs.filter((leg) => Number.isFinite(leg.distance_km));
 
   if (!validLegs.length) {
@@ -3517,8 +3720,12 @@ function buildLegMetrics(legs = [], legPacing = "balanced", { shape = "loop", la
       longestLegMinutes: null,
       averageLegKm: 0,
       averageLegMinutes: null,
+      longLegCount: 0,
+      routeContinuityScore: 10,
+      deadWalkPenalty: 0,
       penalty: 0,
       note: null,
+      warnings: [],
     };
   }
 
@@ -3551,14 +3758,55 @@ function buildLegMetrics(legs = [], legPacing = "balanced", { shape = "loop", la
     flexible: shape === "arc" ? 1.1 : 0.7,
   };
   const outlierPenalty = outlierGapKm * outlierWeights[pacingKey];
-  const penalty = overflowPenalty + variancePenalty + outlierPenalty;
+  const longLegs = validLegs.filter((leg) => leg.distance_km > continuity.reportMaxKm);
+  const severeLongLegCount = longLegs.filter((leg) => leg.distance_km >= continuity.severeLegKm).length;
+  const deadWalkPenalty =
+    longLegs.reduce(
+      (sum, leg) => sum + Math.max(0, leg.distance_km - continuity.reportMaxKm) * continuity.deadWalkWeight,
+      0,
+    ) +
+    severeLongLegCount * (pacingKey === "short" ? 1.8 : pacingKey === "balanced" ? 1.2 : 0.5) +
+    Math.max(0, longLegs.length - 1) * (pacingKey === "short" ? 0.9 : pacingKey === "balanced" ? 0.6 : 0.25);
+  const penalty = overflowPenalty + variancePenalty + outlierPenalty + deadWalkPenalty;
+  const routeContinuityScore = clamp(
+    10 - deadWalkPenalty - Math.max(0, longestLegKm - continuity.reportMaxKm) * 0.4,
+    0,
+    10,
+  );
   let note = null;
+  const warnings = [];
 
-  if (penalty <= 0.8) {
+  if (!longLegs.length && penalty <= 0.8) {
     note = routeText(
       lang,
       "Etapperna håller sig jämna och lätta att följa till fots.",
       "The walking legs stay even and easy to follow on foot.",
+    );
+  } else if (longLegs.length && pacingKey === "flexible") {
+    note = routeText(
+      lang,
+      "Rutten tillater lite längre ben i utbyte mot starkare helhet, men ett tydligt transportben finns kvar.",
+      "The route allows a longer walking transfer in exchange for a stronger overall day, but one clear transfer leg still remains.",
+    );
+    warnings.push(
+      routeText(
+        lang,
+        "Rutten innehåller ett längre gångben mellan två kluster. Kör den om du vill ha tätare flöde.",
+        "This route includes a longer walking leg between clusters. Reroll it if you want a tighter flow.",
+      ),
+    );
+  } else if (longLegs.length) {
+    note = routeText(
+      lang,
+      "Rutten håller ihop stora delar av dagen, men ett längre gångben mellan kluster drar ner flödet.",
+      "The route holds together for most of the day, but one longer walking transfer between clusters still drags on the flow.",
+    );
+    warnings.push(
+      routeText(
+        lang,
+        "Rutten innehåller fortfarande ett längre gångben mellan kluster.",
+        "The route still contains a longer walking leg between clusters.",
+      ),
     );
   } else if (outlierPenalty > overflowPenalty + variancePenalty && pacingKey === "short") {
     note =
@@ -3598,8 +3846,12 @@ function buildLegMetrics(legs = [], legPacing = "balanced", { shape = "loop", la
     longestLegMinutes,
     averageLegKm: Number(averageLegKm.toFixed(1)),
     averageLegMinutes,
+    longLegCount: longLegs.length,
+    routeContinuityScore: Number(routeContinuityScore.toFixed(1)),
+    deadWalkPenalty: Number(deadWalkPenalty.toFixed(1)),
     penalty: Number(penalty.toFixed(1)),
     note,
+    warnings,
   };
 }
 
@@ -3634,7 +3886,11 @@ async function applyWalkingTruthToRoute(route, { legPacing = "balanced", lang = 
       longest_leg_km: metrics.longestLegKm,
       longest_leg_minutes: metrics.longestLegMinutes,
       average_leg_minutes: metrics.averageLegMinutes,
+      long_leg_count: metrics.longLegCount,
+      route_continuity_score: metrics.routeContinuityScore,
+      dead_walk_penalty: metrics.deadWalkPenalty,
       leg_fit_note: metrics.note,
+      route_quality_warnings: metrics.warnings,
       map_path_points:
         Array.isArray(truth.pathPoints) && truth.pathPoints.length
           ? truth.pathPoints
@@ -4134,11 +4390,21 @@ function buildRouteFromTemplate(
     legPacing,
     lang,
   );
-  const finalOrderedStops = rebalanceWeakMarketLead(
-    orderedStops,
+  const bridgedStops = insertBridgeStopsForLongLegs(orderedStops, {
+    start,
+    end,
+    preferences,
+    optimizerMode,
+    modifier,
+    legPacing,
+    distanceMode,
+  });
+  const rebalancedStops = rebalanceWeakMarketLead(
+    bridgedStops,
     preferences,
     options.weekday || null,
   );
+  const finalOrderedStops = rebalancedStops;
   const finalGeometry =
     finalOrderedStops === orderedStops
       ? geometry
@@ -4233,7 +4499,11 @@ function buildRouteFromTemplate(
     longest_leg_km: finalGeometry?.longestLegKm ?? null,
     longest_leg_minutes: finalGeometry?.longestLegMinutes ?? null,
     average_leg_minutes: finalGeometry?.averageLegMinutes ?? null,
+    long_leg_count: finalGeometry?.longLegCount ?? 0,
+    route_continuity_score: finalGeometry?.routeContinuityScore ?? null,
+    dead_walk_penalty: finalGeometry?.deadWalkPenalty ?? null,
     leg_fit_note: finalGeometry?.legFitNote ?? null,
+    route_quality_warnings: finalGeometry?.warnings || [],
     geo_fit_note: buildGeoFitNote({
       shape,
       start,
@@ -4246,8 +4516,8 @@ function buildRouteFromTemplate(
     }),
     anchor_zone: buildAnchorZone(shape, startProfile, endProfile, routeArea),
     day_profile: dayProfile,
-    geo_quality_score: Number((geometry?.qualityScore || 0).toFixed(1)),
-    pool_fit_penalty: Math.max(0, rawPool.length - orderedStops.length - 1) * 0.9,
+    geo_quality_score: Number((finalGeometry?.qualityScore || 0).toFixed(1)),
+    pool_fit_penalty: Math.max(0, rawPool.length - finalOrderedStops.length - 1) * 0.9,
   };
 
   return attachRouteLineage(route, routeIdentity);
