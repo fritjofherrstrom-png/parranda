@@ -151,19 +151,25 @@ test("provider failure returns safe null buckets without cached data", async () 
   assert.deepEqual(result, { "2027-06-14": null });
 });
 
-test("provider failure can return stale cached weather", async () => {
+test("fresh cached weather returns without provider refetch", async () => {
+  let calls = 0;
   await fetchWeatherForDates(["2027-06-14"], ANCHOR, {
     timezone: "Europe/Madrid",
-    fetchWeatherJson: async () => weatherPayload("2027-06-14", { maxTemp: 28 }),
+    fetchWeatherJson: async () => {
+      calls += 1;
+      return weatherPayload("2027-06-14", { maxTemp: 28 });
+    },
   });
 
   const result = await fetchWeatherForDates(["2027-06-14"], ANCHOR, {
     timezone: "Europe/Madrid",
     fetchWeatherJson: async () => {
+      calls += 1;
       throw new Error("provider down");
     },
   });
 
+  assert.equal(calls, 1);
   assert.equal(result["2027-06-14"].maxTemp, 28);
-  assert.equal(result["2027-06-14"].stale, false, "fresh cache should not be stale while TTL is valid");
+  assert.equal(result["2027-06-14"].stale, false);
 });
