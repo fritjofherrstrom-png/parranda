@@ -1118,7 +1118,7 @@ test("GET /api/city-pulse använder lang bara för Pulse-prosa och behåller met
     if (parsed.hostname === "api.open-meteo.com") {
       return mockJsonResponse({
         daily: {
-          time: ["2026-05-14"],
+          time: ["2027-05-13"],
           weathercode: [1],
           temperature_2m_max: [24],
           temperature_2m_min: [14],
@@ -1138,10 +1138,10 @@ test("GET /api/city-pulse använder lang bara för Pulse-prosa och behåller met
 
   try {
     const sv = await requestJson(server, {
-      path: "/api/city-pulse?date=2026-05-14&lang=sv",
+      path: "/api/city-pulse?date=2027-05-13&lang=sv",
     });
     const en = await requestJson(server, {
-      path: "/api/city-pulse?date=2026-05-14&lang=en",
+      path: "/api/city-pulse?date=2027-05-13&lang=en",
     });
 
     assert.equal(sv.status, 200);
@@ -1275,7 +1275,7 @@ test("GET /api/city-pulse för barcelona visar noop-preview utan Rome Pulse", as
     if (parsed.hostname === "api.open-meteo.com") {
       return mockJsonResponse({
         daily: {
-          time: ["2026-05-14"],
+          time: ["2027-06-14"],
           weathercode: [1],
           temperature_2m_max: [23],
           temperature_2m_min: [15],
@@ -1295,10 +1295,10 @@ test("GET /api/city-pulse för barcelona visar noop-preview utan Rome Pulse", as
 
   try {
     const en = await requestJson(server, {
-      path: "/api/city-pulse?city=barcelona&date=2026-05-14&lang=en",
+      path: "/api/city-pulse?city=barcelona&date=2027-06-14&lang=en",
     });
     const sv = await requestJson(server, {
-      path: "/api/city-pulse?city=barcelona&date=2026-05-14&lang=sv",
+      path: "/api/city-pulse?city=barcelona&date=2027-06-14&lang=sv",
     });
 
     assert.equal(en.status, 200);
@@ -1325,7 +1325,7 @@ test("GET /api/city-pulse för barcelona presenterar official events utan editor
     const parsed = new URL(String(url));
 
     if (parsed.hostname === "opendata-ajuntament.barcelona.cat") {
-      return mockJsonResponse([
+      return mockJsonResponse({ success: true, result: { records: [
         {
           register_id: 12345,
           name: "Concert de barri a Barcelona",
@@ -1333,8 +1333,8 @@ test("GET /api/city-pulse för barcelona presenterar official events utan editor
           core_type: "event",
           core_type_name: "Agenda",
           body: "<p>Concert gratuït amb food trucks i activitats de barri. Segona mening med extra providertext som ska hållas läsbar i kortet.</p>",
-          start_date: "2026-05-14T18:00:00+02:00",
-          end_date: "2026-05-14T20:00:00+02:00",
+          start_date: "2027-06-14T18:00:00+02:00",
+          end_date: "2027-06-14T20:00:00+02:00",
           type_name: "Puntual",
           addresses: [
             {
@@ -1362,13 +1362,13 @@ test("GET /api/city-pulse för barcelona presenterar official events utan editor
           classifications_data: [{ name: "Concerts" }],
           secondary_filters_data: [{ name: "Música" }],
         },
-      ]);
+      ] } });
     }
 
     if (parsed.hostname === "api.open-meteo.com") {
       return mockJsonResponse({
         daily: {
-          time: ["2026-05-14"],
+          time: ["2027-06-14"],
           weathercode: [1],
           temperature_2m_max: [23],
           temperature_2m_min: [15],
@@ -1388,11 +1388,11 @@ test("GET /api/city-pulse för barcelona presenterar official events utan editor
 
   try {
     const en = await requestJson(server, {
-      path: "/api/city-pulse?city=barcelona&date=2026-05-14&lang=en",
+      path: "/api/city-pulse?city=barcelona&date=2027-06-14&lang=en",
     });
     resetBarcelonaLiveEventsCache();
     const sv = await requestJson(server, {
-      path: "/api/city-pulse?city=barcelona&date=2026-05-14&lang=sv",
+      path: "/api/city-pulse?city=barcelona&date=2027-06-14&lang=sv",
     });
 
     assert.equal(en.status, 200);
@@ -2605,7 +2605,7 @@ test("POST /api/route-recommendations för barcelona kan nu bygga preview-rutter
     if (parsed.hostname === "api.open-meteo.com") {
       return mockJsonResponse({
         daily: {
-          time: ["2026-05-14"],
+          time: ["2027-06-14"],
           weathercode: [0],
           temperature_2m_max: [24],
           temperature_2m_min: [16],
@@ -2629,7 +2629,7 @@ test("POST /api/route-recommendations för barcelona kan nu bygga preview-rutter
       path: "/api/route-recommendations?lang=en",
       body: {
         city: "barcelona",
-        dates: ["2026-05-14"],
+        dates: ["2027-06-14"],
         walking_km_target: 8,
         preferences: ["food_drink", "culture"],
       },
