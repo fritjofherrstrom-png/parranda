@@ -481,6 +481,61 @@ Separate three layers:
 
 ---
 
+## 8. Discovery quality and the anti-SEO layer
+
+### Lesson: local relevance should beat online loudness
+
+**Observation**
+
+A core Parranda promise is not merely to find "good places". It is to help users get past the Google/Tripadvisor/SEO layer: the places that dominate search results, top-10 lists, sponsored visibility, or generic tourist coverage are not automatically the best stops for a real day flow.
+
+Barcelona beta catalog work made this visible. Source-backed local anchors such as second-hand/vintage shops, bodegas, vermut bars, beer stops, and neighborhood connectors can improve the route even when they are not the most obvious SEO winners. The value is not fake obscurity; the value is credible local fit.
+
+**Generic rule**
+
+Parranda should rank for **fit**, not for who shouts loudest online:
+
+```txt
+route fit + neighborhood fit + intent fit + rhythm fit + provenance > SEO dominance
+```
+
+Do not invent "hidden gem" status. Do not call a place hidden unless there is a real reason. Prefer under-surfaced but credible places when they are source-backed and fit the user's route, area, timing, and intent better than a generic top-list stop.
+
+The engine should eventually distinguish:
+
+- local signal
+- route fit
+- neighborhood fit
+- intent fit
+- rhythm fit
+- provenance/source confidence
+- tourist gravity
+- SEO/top-list overexposure
+- paid/sponsored visibility if known
+
+A famous or SEO-dominant place can still win when it truly fits. But popularity should not be allowed to override weak route fit or local mismatch.
+
+**Current anchor**
+
+- PR #184: Barcelona beta catalog/source depth added real source-backed anchors beyond generic top-list coverage.
+- Barcelona route-quality audit after PR #184: better second-hand/vintage and evening flows came from more local catalog depth, while route tuning still needs to protect coherence and intent fit.
+- User product principle recorded 2026-05-26: Parranda should help users find places that do not necessarily rank highest on Google or win SEO visibility.
+
+**Applies to**
+
+- All citypacks.
+- Agnostic mode.
+- Search, Planner, Blitz, Pulse, and future candidate providers.
+
+**Future hook**
+
+- PlaceCandidate ranking features such as `local_signal`, `tourist_gravity`, `seo_overexposure`, and `under_surfaced_score`.
+- RouteCandidate scoring that rewards source-backed local fit over generic popularity.
+- Copy guardrails: avoid fake "hidden gem" language; use honest language like "locally relevant", "source-backed", "route-fitting", or "less generic".
+- Candidate source mix: blend official/operator, local guide, map/search-derived, and curator sources without letting SEO-heavy listicles dominate.
+
+---
+
 ## Candidate next PRs from these learnings
 
 These are not commitments; they are suggested next moves when a related workstream is active.
@@ -504,3 +559,7 @@ These are not commitments; they are suggested next moves when a related workstre
 
 6. `feat(agnostic): define citypackless readiness model`
    - Mirror citypack readiness for inferred cities without curated packs.
+
+7. `feat(discovery): add anti-SEO discovery ranking signals`
+   - Add conservative ranking metadata for local signal, tourist gravity, SEO overexposure, and under-surfaced source-backed places.
+   - Start as diagnostics/score explanation, not as a hard ranking override.
