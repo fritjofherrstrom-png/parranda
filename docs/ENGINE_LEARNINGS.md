@@ -483,23 +483,27 @@ Separate three layers:
 
 ## 8. Discovery quality and the anti-SEO layer
 
-### Lesson: local relevance should beat online loudness
+### Lesson: local relevance should beat online loudness, but strong SEO is not a penalty by itself
 
 **Observation**
 
 A core Parranda promise is not merely to find "good places". It is to help users get past the Google/Tripadvisor/SEO layer: the places that dominate search results, top-10 lists, sponsored visibility, or generic tourist coverage are not automatically the best stops for a real day flow.
 
-Barcelona beta catalog work made this visible. Source-backed local anchors such as second-hand/vintage shops, bodegas, vermut bars, beer stops, and neighborhood connectors can improve the route even when they are not the most obvious SEO winners. The value is not fake obscurity; the value is credible local fit.
+This does **not** mean Parranda should prefer obscure or SEO-weak places by default. Strong SEO, high visibility, fame, or top-list presence can reflect genuine quality, strong reputation, good operations, or a place that simply fits the moment well. The problem is not popularity. The problem is treating popularity, SEO presence, or online loudness as a substitute for route fit, local fit, timing fit, and source-backed relevance.
+
+Barcelona beta catalog work made this visible. Source-backed local anchors such as second-hand/vintage shops, bodegas, vermut bars, beer stops, and neighborhood connectors can improve the route even when they are not the most obvious SEO winners. The value is not fake obscurity; the value is credible local fit. A well-known place should absolutely be included when it is the best fit for the route and signal.
 
 **Generic rule**
 
 Parranda should rank for **fit**, not for who shouts loudest online:
 
 ```txt
-route fit + neighborhood fit + intent fit + rhythm fit + provenance > SEO dominance
+route fit + neighborhood fit + intent fit + rhythm fit + provenance > SEO dominance alone
 ```
 
-Do not invent "hidden gem" status. Do not call a place hidden unless there is a real reason. Prefer under-surfaced but credible places when they are source-backed and fit the user's route, area, timing, and intent better than a generic top-list stop.
+SEO strength should be treated as a neutral or supporting signal, not as either automatic proof of quality or automatic proof of genericness. Under-surfaced status can be useful as a tie-breaker when a place is credible and route-fitting, but it should never become a requirement.
+
+Do not invent "hidden gem" status. Do not call a place hidden unless there is a real reason. Prefer under-surfaced but credible places when they are source-backed and fit the user's route, area, timing, and intent better than a generic top-list stop. Prefer famous or SEO-dominant places when they genuinely fit the route, area, timing, and intent better than the alternatives.
 
 The engine should eventually distinguish:
 
@@ -513,13 +517,13 @@ The engine should eventually distinguish:
 - SEO/top-list overexposure
 - paid/sponsored visibility if known
 
-A famous or SEO-dominant place can still win when it truly fits. But popularity should not be allowed to override weak route fit or local mismatch.
+A famous or SEO-dominant place can still win when it truly fits. But popularity should not be allowed to override weak route fit or local mismatch, and obscurity should not be allowed to override strong route fit either.
 
 **Current anchor**
 
 - PR #184: Barcelona beta catalog/source depth added real source-backed anchors beyond generic top-list coverage.
 - Barcelona route-quality audit after PR #184: better second-hand/vintage and evening flows came from more local catalog depth, while route tuning still needs to protect coherence and intent fit.
-- User product principle recorded 2026-05-26: Parranda should help users find places that do not necessarily rank highest on Google or win SEO visibility.
+- User product principle recorded 2026-05-26: Parranda should help users find places that do not necessarily rank highest on Google or win SEO visibility, without treating strong SEO as a negative signal when the place fits well.
 
 **Applies to**
 
@@ -530,9 +534,9 @@ A famous or SEO-dominant place can still win when it truly fits. But popularity 
 **Future hook**
 
 - PlaceCandidate ranking features such as `local_signal`, `tourist_gravity`, `seo_overexposure`, and `under_surfaced_score`.
-- RouteCandidate scoring that rewards source-backed local fit over generic popularity.
+- RouteCandidate scoring that rewards source-backed local fit over generic popularity, while allowing famous/high-visibility places to win when fit is strong.
 - Copy guardrails: avoid fake "hidden gem" language; use honest language like "locally relevant", "source-backed", "route-fitting", or "less generic".
-- Candidate source mix: blend official/operator, local guide, map/search-derived, and curator sources without letting SEO-heavy listicles dominate.
+- Candidate source mix: blend official/operator, local guide, map/search-derived, and curator sources without letting SEO-heavy listicles dominate or excluding well-known places that genuinely fit.
 
 ---
 
@@ -563,3 +567,4 @@ These are not commitments; they are suggested next moves when a related workstre
 7. `feat(discovery): add anti-SEO discovery ranking signals`
    - Add conservative ranking metadata for local signal, tourist gravity, SEO overexposure, and under-surfaced source-backed places.
    - Start as diagnostics/score explanation, not as a hard ranking override.
+   - Treat strong SEO as neutral/supporting context, not an automatic penalty.
