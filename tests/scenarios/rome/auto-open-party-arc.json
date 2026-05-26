@@ -13,7 +13,7 @@
         "day_profile": "peak",
         "anchor_zone": "Ostiense -> Pigneto",
         "routing_source": "heuristic",
-        "estimated_km": 9,
+        "estimated_km": 8.9,
         "longest_leg_km": 4.7,
         "longest_leg_minutes": 56,
         "average_leg_minutes": 15,
@@ -29,12 +29,12 @@
             "live": false
           },
           {
-            "label": "Bottiglieria Pigneto",
+            "label": "Pigneto",
             "area": "Pigneto",
             "live": false
           },
           {
-            "label": "Pigneto",
+            "label": "Bottiglieria Pigneto",
             "area": "Pigneto",
             "live": false
           },
@@ -64,21 +64,21 @@
           },
           {
             "from": "San Lorenzo",
-            "to": "Bottiglieria Pigneto",
-            "km": 2,
-            "minutes": 24
-          },
-          {
-            "from": "Bottiglieria Pigneto",
             "to": "Pigneto",
-            "km": 0.2,
-            "minutes": 2
+            "km": 1.8,
+            "minutes": 22
           },
           {
             "from": "Pigneto",
-            "to": "Bar Bozza",
+            "to": "Bottiglieria Pigneto",
             "km": 0.2,
             "minutes": 2
+          },
+          {
+            "from": "Bottiglieria Pigneto",
+            "to": "Bar Bozza",
+            "km": 0.3,
+            "minutes": 4
           },
           {
             "from": "Bar Bozza",

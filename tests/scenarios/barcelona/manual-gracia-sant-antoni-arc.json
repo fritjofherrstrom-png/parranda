@@ -6,7 +6,7 @@
     {
       "date": "2026-05-27",
       "primary": {
-        "id": "gracia-local-evening-loop",
+        "id": "poble-sec-montjuic-evening-arc",
         "start": "Plaça del Diamant",
         "end": "Fàbrica Moritz Barcelona",
         "shape": "arc",
@@ -14,12 +14,17 @@
         "anchor_zone": "Gràcia -> Sant Antoni",
         "routing_source": "heuristic",
         "estimated_km": 4.9,
-        "longest_leg_km": 3.1,
-        "longest_leg_minutes": 37,
-        "average_leg_minutes": 12,
+        "longest_leg_km": 1.8,
+        "longest_leg_minutes": 22,
+        "average_leg_minutes": 10,
         "stops": [
           {
             "label": "Vermuteria Lou",
+            "area": "gracia",
+            "live": false
+          },
+          {
+            "label": "Mercat de la Llibertat",
             "area": "gracia",
             "live": false
           },
@@ -29,8 +34,8 @@
             "live": false
           },
           {
-            "label": "Federal Cafe Parlament",
-            "area": "sant-antoni",
+            "label": "NaparBCN",
+            "area": "eixample",
             "live": false
           },
           {
@@ -48,21 +53,27 @@
           },
           {
             "from": "Vermuteria Lou",
+            "to": "Mercat de la Llibertat",
+            "km": 0.7,
+            "minutes": 8
+          },
+          {
+            "from": "Mercat de la Llibertat",
             "to": "Bodega Quimet",
-            "km": 0.8,
-            "minutes": 10
+            "km": 0.1,
+            "minutes": 2
           },
           {
             "from": "Bodega Quimet",
-            "to": "Federal Cafe Parlament",
-            "km": 3.1,
-            "minutes": 37
+            "to": "NaparBCN",
+            "km": 1.8,
+            "minutes": 22
           },
           {
-            "from": "Federal Cafe Parlament",
+            "from": "NaparBCN",
             "to": "Bar Calders",
-            "km": 0.1,
-            "minutes": 2
+            "km": 1.4,
+            "minutes": 17
           },
           {
             "from": "Bar Calders",
@@ -75,7 +86,7 @@
       "alternative_count": 2,
       "alternatives": [
         {
-          "id": "poble-sec-montjuic-evening-arc",
+          "id": "gracia-local-evening-loop",
           "start": "Plaça del Diamant",
           "end": "Fàbrica Moritz Barcelona",
           "shape": "arc",
@@ -83,13 +94,13 @@
           "anchor_zone": "Gràcia -> Sant Antoni",
           "stops": [
             "Vermuteria Lou",
-            "Mercat de la Llibertat",
             "Bodega Quimet",
+            "Federal Cafe Parlament",
             "Bar Calders"
           ]
         },
         {
-          "id": "encants-to-coast-drift",
+          "id": "sant-antoni-food-bar-flow",
           "start": "Plaça del Diamant",
           "end": "Fàbrica Moritz Barcelona",
           "shape": "arc",
@@ -97,9 +108,9 @@
           "anchor_zone": "Gràcia -> Sant Antoni",
           "stops": [
             "Vermuteria Lou",
-            "Mercat de la Llibertat",
             "Bodega Quimet",
-            "Mercat de Sant Antoni"
+            "Federal Cafe Parlament",
+            "Bar Calders"
           ]
         }
       ]

@@ -2441,8 +2441,16 @@ test("POST /api/route-recommendations returnerar gångben och låter leg pacing 
     assert.ok(shortRoute.legs.every((leg) => Number.isFinite(leg.estimated_walk_minutes)));
     assert.ok(Number.isFinite(shortRoute.longest_leg_km));
     assert.ok(Number.isFinite(shortRoute.longest_leg_minutes));
+    assert.ok(Number.isFinite(shortRoute.long_leg_count));
+    assert.ok(Number.isFinite(shortRoute.route_continuity_score));
+    assert.ok(Number.isFinite(shortRoute.dead_walk_penalty));
+    assert.ok(Array.isArray(shortRoute.route_quality_warnings));
     assert.ok(typeof shortRoute.leg_fit_note === "string" || shortRoute.leg_fit_note === null);
     assert.ok(Number.isFinite(flexibleRoute.longest_leg_km));
+    assert.ok(Number.isFinite(flexibleRoute.long_leg_count));
+    assert.ok(Number.isFinite(flexibleRoute.route_continuity_score));
+    assert.ok(Number.isFinite(flexibleRoute.dead_walk_penalty));
+    assert.ok(Array.isArray(flexibleRoute.route_quality_warnings));
     assert.ok(shortRoute.longest_leg_km <= flexibleRoute.longest_leg_km);
   } finally {
     await new Promise((resolve) => server.close(resolve));

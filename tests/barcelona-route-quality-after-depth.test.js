@@ -172,3 +172,61 @@ test("Barcelona short walking food/wine day remains compact", async () => {
   assert.ok(route.estimated_km <= 3.5);
   assert.ok(Math.max(...(route.legs || []).map((leg) => Number(leg.distance_km) || 0)) <= 1.2);
 });
+
+test("Barcelona Gracia to Poblenou second-hand route inserts a real bridge instead of a dead long leg", async () => {
+  const route = await runBarcelonaScenario({
+    start: { type: "preset", label: "Gràcia" },
+    end: { type: "preset", label: "Poblenou" },
+    walkingKmTarget: 8,
+    preferences: ["second_hand", "vintage", "shopping", "cafe"],
+  });
+  const stops = stopItems(route);
+
+  assertRouteLegLabels(route);
+  assert.ok(route.longest_leg_km < 3.2);
+  assert.equal(route.long_leg_count, 0);
+  assert.ok(route.route_continuity_score >= 7);
+  assert.ok(route.estimated_km <= 9.1);
+  assert.ok(
+    stops.some((item) => !["gracia", "poblenou"].includes(item.area)),
+    "expected a real bridge stop between Gracia and Poblenou clusters",
+  );
+});
+
+test("Barcelona Gracia to Barceloneta nightlife route no longer keeps a 4km dead walking leg in balanced mode", async () => {
+  const route = await runBarcelonaScenario({
+    start: { type: "preset", label: "Gràcia" },
+    end: { type: "preset", label: "Barceloneta" },
+    walkingKmTarget: 9,
+    preferences: ["öl", "vin", "nattliv", "mat", "kväll"],
+    optimizerMode: "bar-hop",
+  });
+  const stops = stopItems(route);
+
+  assertRouteLegLabels(route);
+  assert.ok(route.longest_leg_km < 3.2);
+  assert.equal(route.long_leg_count, 0);
+  assert.ok(route.route_continuity_score >= 7);
+  assert.ok(
+    stops.some((item) => !["gracia", "barceloneta"].includes(item.area)),
+    "expected an intermediate real stop between Gracia and the coast cluster",
+  );
+});
+
+test("Barcelona flexible no-limit routes may keep a long transfer but must report it honestly", async () => {
+  const route = await runBarcelonaScenario({
+    start: { type: "preset", label: "Gràcia" },
+    end: { type: "preset", label: "Poblenou" },
+    walkingKmTarget: 12,
+    preferences: ["second_hand", "vintage", "shopping", "cafe"],
+    legPacing: "flexible",
+    distanceMode: "no_limit",
+  });
+
+  assertRouteLegLabels(route);
+  assert.ok(route.long_leg_count >= 1);
+  assert.ok(route.dead_walk_penalty > 0);
+  assert.ok(route.route_continuity_score < 10);
+  assert.ok(Array.isArray(route.route_quality_warnings));
+  assert.ok(route.route_quality_warnings.length >= 1);
+});
