@@ -66,12 +66,12 @@ function buildCacheKey({ anchor, timezone, startDate, endDate }) {
 }
 
 function buildWeatherUrl(dates, anchor, options = {}) {
-  const weatherAnchor = assertValidAnchor(anchor);
   const dateWindow = normalizeDateWindow(dates);
   if (!dateWindow.dates.length) {
     return null;
   }
 
+  const weatherAnchor = assertValidAnchor(anchor);
   const timezone = normalizeTimezone(options.timezone);
   const url = new URL("https://api.open-meteo.com/v1/forecast");
   url.searchParams.set("latitude", String(weatherAnchor.lat));
