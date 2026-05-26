@@ -2487,6 +2487,32 @@ function getFrontendDistrictGuides() {
 }
 
 function getFrontendPlannerDistrictCatalog() {
+  const bootstrapPlannerAreas = Array.isArray(window.__PARRANDA_CITY__?.plannerAreas)
+    ? window.__PARRANDA_CITY__.plannerAreas
+        .filter(
+          (item) =>
+            item &&
+            typeof item === "object" &&
+            item.label &&
+            Number.isFinite(item.lat) &&
+            Number.isFinite(item.lng),
+        )
+        .map((item) => ({
+          id: item.id,
+          label: item.label,
+          type: item.type || "district",
+          area: item.area || item.label,
+          lat: item.lat,
+          lng: item.lng,
+          macro: item.macro || "",
+          children: [],
+        }))
+    : [];
+
+  if (bootstrapPlannerAreas.length) {
+    return bootstrapPlannerAreas;
+  }
+
   return hasRomeFrontendContent ? romePlannerDistrictCatalog : [];
 }
 
@@ -6834,11 +6860,13 @@ function getPlannerModeHint(pointKey, mode) {
 }
 
 function getPlannerDistrictGroups() {
-  if (!isRomeCuratedMode) {
+  const districtCatalog = getFrontendPlannerDistrictCatalog();
+
+  if (!districtCatalog.length) {
     return [];
   }
 
-  return getFrontendPlannerDistrictCatalog().map((item) => ({
+  return districtCatalog.map((item) => ({
     ...item,
     children: Array.isArray(item.children)
       ? item.children.map((child) => ({ ...child }))

@@ -48,6 +48,100 @@ function getCitySearchLabel(cityConfig) {
   return cityConfig?.searchLabel || cityConfig?.label || "Rome";
 }
 
+function isRealPlannerAreaItem(item) {
+  if (!item || typeof item !== "object") {
+    return false;
+  }
+
+  if (item.structuralRouteAnchor === true) {
+    return false;
+  }
+
+  if (["district", "district-group", "area_preset"].includes(item.kind)) {
+    return false;
+  }
+
+  return Number.isFinite(item.lat) && Number.isFinite(item.lng);
+}
+
+function normalizePlannerAreaValue(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function buildPlannerAreas(cityConfig) {
+  const areaDefinitions = cityConfig?.routing?.areaDefinitions;
+
+  if (!areaDefinitions || typeof areaDefinitions !== "object") {
+    return [];
+  }
+
+  const catalogItems = Array.isArray(cityConfig?.catalog?.allItems)
+    ? cityConfig.catalog.allItems.filter(isRealPlannerAreaItem)
+    : [];
+  const candidates = Object.entries(areaDefinitions).map(([id, definition], index) => {
+    const label = String(definition?.label || "").trim() || humanizeCityKey(id);
+    const macro = String(definition?.macro || "").trim() || "";
+    const areaIdKey = normalizePlannerAreaValue(id);
+    const areaLabelKey = normalizePlannerAreaValue(label);
+    const matches = catalogItems.filter((item) => {
+      const itemAreaKey = normalizePlannerAreaValue(item.area);
+
+      if (!itemAreaKey) {
+        return false;
+      }
+
+      return (
+        itemAreaKey === areaIdKey ||
+        itemAreaKey === areaLabelKey ||
+        itemAreaKey.includes(areaIdKey) ||
+        itemAreaKey.includes(areaLabelKey)
+      );
+    });
+    const centroid = matches.length
+      ? {
+          lat: matches.reduce((sum, item) => sum + item.lat, 0) / matches.length,
+          lng: matches.reduce((sum, item) => sum + item.lng, 0) / matches.length,
+        }
+      : null;
+
+    return {
+      id,
+      label,
+      macro,
+      type: String(definition?.type || "district"),
+      area: label,
+      lat: centroid?.lat ?? null,
+      lng: centroid?.lng ?? null,
+      matchCount: matches.length,
+      index,
+    };
+  });
+
+  const dedupedByIdentity = new Map();
+  for (const candidate of candidates) {
+    const identity = `${candidate.label}::${candidate.macro}`;
+    const existing = dedupedByIdentity.get(identity);
+
+    if (
+      !existing ||
+      candidate.matchCount > existing.matchCount ||
+      (candidate.matchCount === existing.matchCount && candidate.index < existing.index)
+    ) {
+      dedupedByIdentity.set(identity, candidate);
+    }
+  }
+
+  return [...dedupedByIdentity.values()]
+    .sort((left, right) => left.index - right.index)
+    .filter((candidate) => Number.isFinite(candidate.lat) && Number.isFinite(candidate.lng))
+    .map(({ matchCount, index, ...plannerArea }) => plannerArea);
+}
+
 function humanizeCityKey(cityKey) {
   const normalized = String(cityKey || "").trim();
 
@@ -717,6 +811,7 @@ function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed, lang = "s
     currency: cityConfig.currency,
     searchLabel,
     center: cityConfig.center || null,
+    plannerAreas: buildPlannerAreas(cityConfig),
     requestedKey: requestedCity,
     fallbackUsed: cityFallbackUsed,
     lang: uiLang,
@@ -1137,4 +1232,5 @@ function buildApp() {
 
 module.exports = {
   buildApp,
+  buildPlannerAreas,
 };
