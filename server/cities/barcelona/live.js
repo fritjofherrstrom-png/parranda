@@ -22,7 +22,7 @@ let cache = {
   dateKey: "",
   items: [],
 };
-let inFlight = null;
+let inFlight = new Map();
 
 function buildCkanDateWindowUrl(startDate, endDate) {
   const sql = `SELECT * FROM "${OPEN_DATA_AGENDA_CKAN_RESOURCE_ID}" WHERE end_date >= '${startDate}' AND start_date <= '${endDate}' LIMIT ${CKAN_QUERY_LIMIT}`;
@@ -473,22 +473,23 @@ async function fetchCkanDateWindow(startDate, endDate) {
 }
 
 async function loadOpenDataAgendaEvents(dates, context = {}) {
-  const startDate = dates[0];
-  const endDate = dates[dates.length - 1];
+  const sorted = [...dates].sort();
+  const startDate = sorted[0];
+  const endDate = sorted[sorted.length - 1];
   const dateKey = `${startDate}..${endDate}`;
 
   if (cache.fetchedAt && cache.dateKey === dateKey && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
     return cache.items;
   }
 
-  if (inFlight) {
-    return inFlight;
+  if (inFlight.has(dateKey)) {
+    return inFlight.get(dateKey);
   }
 
   const fetcher = context.fetchOpenDataAgendaEvents
     || (() => fetchCkanDateWindow(startDate, endDate));
 
-  inFlight = (async () => {
+  const promise = (async () => {
     try {
       const records = await fetcher();
       const items = normalizeOpenDataAgendaEvents(
@@ -505,11 +506,12 @@ async function loadOpenDataAgendaEvents(dates, context = {}) {
 
       return items;
     } finally {
-      inFlight = null;
+      inFlight.delete(dateKey);
     }
   })();
 
-  return inFlight;
+  inFlight.set(dateKey, promise);
+  return promise;
 }
 
 async function fetchLiveEventsForDates(dates, context = {}) {
@@ -547,7 +549,7 @@ function resetBarcelonaLiveEventsCache() {
     dateKey: "",
     items: [],
   };
-  inFlight = null;
+  inFlight.clear();
 }
 
 module.exports = {

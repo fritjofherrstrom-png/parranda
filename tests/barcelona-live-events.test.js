@@ -349,3 +349,38 @@ test("different date windows produce separate cache entries", async () => {
   await fetchLiveEventsForDates(["2027-06-20", "2027-06-21"], context);
   assert.equal(calls, 2, "different date windows trigger separate fetches");
 });
+
+test("concurrent requests for different date windows fetch independently", async () => {
+  let calls = 0;
+  const eventA = buildFixtureRecord({
+    register_id: 50001,
+    name: "Event Window A",
+    start_date: "2027-07-01T18:00:00+02:00",
+    end_date: "2027-07-01T20:00:00+02:00",
+  });
+  const eventB = buildFixtureRecord({
+    register_id: 50002,
+    name: "Event Window B",
+    start_date: "2027-07-10T18:00:00+02:00",
+    end_date: "2027-07-10T20:00:00+02:00",
+  });
+
+  const context = {
+    fetchOpenDataAgendaEvents: async () => {
+      calls += 1;
+      // Return whichever event set matches the current call order.
+      return calls === 1 ? [eventA] : [eventB];
+    },
+  };
+
+  const [resultA, resultB] = await Promise.all([
+    fetchLiveEventsForDates(["2027-07-01"], context),
+    fetchLiveEventsForDates(["2027-07-10"], context),
+  ]);
+
+  assert.equal(calls, 2, "two different date windows must trigger two fetches");
+  assert.equal(resultA["2027-07-01"].length, 1);
+  assert.equal(resultA["2027-07-01"][0].title, "Event Window A");
+  assert.equal(resultB["2027-07-10"].length, 1);
+  assert.equal(resultB["2027-07-10"][0].title, "Event Window B");
+});
