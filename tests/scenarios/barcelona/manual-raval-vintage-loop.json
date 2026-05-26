@@ -1,17 +1,17 @@
 {
-  "resolved_start": "Gràcia",
-  "resolved_end": "Raval / Gothic",
+  "resolved_start": "Raval / Gothic",
+  "resolved_end": "Gràcia",
   "resolved_home_base": null,
   "days": [
     {
       "date": "2026-05-26",
       "primary": {
         "id": "raval-vintage-shopping-loop",
-        "start": "Gràcia",
-        "end": "Raval / Gothic",
+        "start": "Raval / Gothic",
+        "end": "Gràcia",
         "shape": "arc",
         "day_profile": "light",
-        "anchor_zone": "Gràcia -> Gothic Quarter",
+        "anchor_zone": "Gothic Quarter -> Gràcia",
         "routing_source": "heuristic",
         "estimated_km": 3.9,
         "longest_leg_km": 2.8,
@@ -19,74 +19,74 @@
         "average_leg_minutes": 12,
         "stops": [
           {
-            "label": "Mahalo Vintage — Plaça del Diamant",
-            "area": "gracia",
-            "live": false
-          },
-          {
             "label": "Holala! Plaza",
             "area": "raval",
             "live": false
           },
           {
-            "label": "Vilde Vintage",
-            "area": "raval",
+            "label": "Mahalo Vintage — Plaça del Diamant",
+            "area": "gracia",
+            "live": false
+          },
+          {
+            "label": "Revolution Vintage",
+            "area": "gracia",
             "live": false
           }
         ],
         "legs": [
           {
-            "from": "Gràcia",
-            "to": "Mahalo Vintage — Plaça del Diamant",
-            "km": 0.3,
-            "minutes": 4
+            "from": "Raval / Gothic",
+            "to": "Holala! Plaza",
+            "km": 0.4,
+            "minutes": 5
           },
           {
-            "from": "Mahalo Vintage — Plaça del Diamant",
-            "to": "Holala! Plaza",
+            "from": "Holala! Plaza",
+            "to": "Mahalo Vintage — Plaça del Diamant",
             "km": 2.8,
             "minutes": 34
           },
           {
-            "from": "Holala! Plaza",
-            "to": "Vilde Vintage",
-            "km": 0.6,
-            "minutes": 7
-          },
-          {
-            "from": "Vilde Vintage",
-            "to": "Raval / Gothic",
+            "from": "Mahalo Vintage — Plaça del Diamant",
+            "to": "Revolution Vintage",
             "km": 0.2,
             "minutes": 2
+          },
+          {
+            "from": "Revolution Vintage",
+            "to": "Gràcia",
+            "km": 0.5,
+            "minutes": 6
           }
         ]
       },
       "alternative_count": 2,
       "alternatives": [
         {
-          "id": "encants-to-coast-drift",
-          "start": "Gràcia",
-          "end": "Raval / Gothic",
+          "id": "gothic-raval-cultural-connector",
+          "start": "Raval / Gothic",
+          "end": "Gràcia",
           "shape": "arc",
           "day_profile": "variation",
-          "anchor_zone": "Gràcia -> Gothic Quarter",
+          "anchor_zone": "Gothic Quarter -> Gràcia",
           "stops": [
-            "Holala! Plaza",
             "Lullaby Vintage",
-            "Arepa Queer"
+            "Arepa Queer",
+            "Holala! Plaza"
           ]
         },
         {
-          "id": "encants-to-coast-drift",
-          "start": "Gràcia",
-          "end": "Raval / Gothic",
+          "id": "gothic-raval-cultural-connector",
+          "start": "Raval / Gothic",
+          "end": "Gràcia",
           "shape": "arc",
           "day_profile": "peak",
-          "anchor_zone": "Gràcia -> Gothic Quarter",
+          "anchor_zone": "Gothic Quarter -> Gràcia",
           "stops": [
-            "Holala! Plaza",
             "Lullaby Vintage",
-            "Arepa Queer"
+            "Arepa Queer",
+            "Holala! Plaza"
           ]
         }
       ]

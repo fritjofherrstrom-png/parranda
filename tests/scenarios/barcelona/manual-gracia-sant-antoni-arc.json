@@ -75,7 +75,7 @@
       "alternative_count": 2,
       "alternatives": [
         {
-          "id": "sant-antoni-food-bar-flow",
+          "id": "poble-sec-montjuic-evening-arc",
           "start": "Plaça del Diamant",
           "end": "Fàbrica Moritz Barcelona",
           "shape": "arc",
@@ -89,7 +89,7 @@
           ]
         },
         {
-          "id": "poble-sec-montjuic-evening-arc",
+          "id": "encants-to-coast-drift",
           "start": "Plaça del Diamant",
           "end": "Fàbrica Moritz Barcelona",
           "shape": "arc",
@@ -99,7 +99,7 @@
             "Vermuteria Lou",
             "Mercat de la Llibertat",
             "Bodega Quimet",
-            "Bar Calders"
+            "Mercat de Sant Antoni"
           ]
         }
       ]
