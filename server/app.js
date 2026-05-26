@@ -15,6 +15,22 @@ const {
 const appRoot = path.resolve(__dirname, "..");
 const appShellTemplate = fs.readFileSync(path.join(appRoot, "index.html"), "utf8");
 const landingShellTemplate = fs.readFileSync(path.join(appRoot, "landing.html"), "utf8");
+const publicRootFiles = new Set([
+  "styles.css",
+  "script.js",
+  "ux-pass1.js",
+  "planner-trust.js",
+  "landing.js",
+  "manifest.webmanifest",
+  "sw.js",
+]);
+const blockedPublicPrefixes = ["/server/", "/tests/", "/docs/"];
+const blockedPublicRootFiles = new Set([
+  "/package.json",
+  "/package-lock.json",
+  "/render.yaml",
+  "/README.md",
+]);
 
 const pulseVibeByTag = {
   kultur: "curious",
@@ -759,6 +775,29 @@ function inferShellCity(request) {
   return request.query?.city || pathKey || null;
 }
 
+function servePublicRootAsset(request, response, next) {
+  const assetName = path.basename(request.path);
+
+  if (!publicRootFiles.has(assetName) || request.path !== `/${assetName}`) {
+    next();
+    return;
+  }
+
+  response.sendFile(path.join(appRoot, assetName));
+}
+
+function blockPrivateRepoPaths(request, response, next) {
+  if (
+    blockedPublicRootFiles.has(request.path) ||
+    blockedPublicPrefixes.some((prefix) => request.path.startsWith(prefix))
+  ) {
+    response.status(404).send("Not found");
+    return;
+  }
+
+  next();
+}
+
 function buildApp() {
   const app = express();
 
@@ -769,7 +808,9 @@ function buildApp() {
     );
   });
 
-  app.use(express.static(appRoot, { index: false }));
+  app.get([...publicRootFiles].map((assetName) => `/${assetName}`), servePublicRootAsset);
+  app.use("/assets", express.static(path.join(appRoot, "assets"), { index: false, dotfiles: "ignore" }));
+  app.use("/vendor", express.static(path.join(appRoot, "vendor"), { index: false, dotfiles: "ignore" }));
 
   app.get("/api/health", (_request, response) => {
     response.json({ ok: true });
@@ -1075,6 +1116,8 @@ function buildApp() {
       });
     }
   });
+
+  app.use(blockPrivateRepoPaths);
 
   app.use((request, response) => {
     if (request.path.startsWith("/api/")) {
