@@ -4,7 +4,7 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const { buildApp } = require("../server/app");
+const { buildApp, buildPlannerAreas } = require("../server/app");
 const { routeTemplates, allItems } = require("../server/catalog");
 const { resetBarcelonaLiveEventsCache } = require("../server/cities/barcelona/live");
 const { resetLiveEventsCache } = require("../server/live-events");
@@ -139,6 +139,12 @@ async function requestText(server, { method = "GET", path = "/" } = {}) {
     request.on("error", reject);
     request.end();
   });
+}
+
+function extractCityBootstrap(body) {
+  const match = body.match(/window\.__PARRANDA_CITY__ = (\{.*?\});/s);
+  assert.ok(match, "expected city bootstrap in rendered shell");
+  return JSON.parse(match[1]);
 }
 
 function assertPlannerIntentFirstPaint(html) {
@@ -702,6 +708,69 @@ test("GET /barcelona renderar curated beta shell utan Rome-fallback", async () =
   }
 });
 
+test("buildPlannerAreas deduplicerar alias och hoppar over omraden utan koordinatstod", () => {
+  const plannerAreas = buildPlannerAreas({
+    key: "fixture-city",
+    center: { lat: 0, lng: 0 },
+    catalog: {
+      allItems: [
+        {
+          id: "gracia-cafe",
+          area: "gracia",
+          kind: "cafe",
+          lat: 41.4,
+          lng: 2.15,
+        },
+        {
+          id: "gracia-bar",
+          area: "gracia",
+          kind: "bar",
+          lat: 41.41,
+          lng: 2.16,
+        },
+        {
+          id: "gothic-anchor",
+          area: "barri-gotic",
+          kind: "district-group",
+          structuralRouteAnchor: true,
+          lat: 41.38,
+          lng: 2.17,
+        },
+      ],
+    },
+    routing: {
+      areaDefinitions: {
+        gracia: { label: "Gracia", macro: "north" },
+        "gracia-alias": { label: "Gracia", macro: "north" },
+        "barri-gotic": { label: "Gothic", macro: "old-town" },
+        empty: { label: "Empty", macro: "nowhere" },
+      },
+    },
+  });
+
+  assert.deepEqual(
+    plannerAreas.map((area) => area.id),
+    ["gracia"],
+  );
+  assert.equal(plannerAreas[0].label, "Gracia");
+  assert.equal(plannerAreas[0].macro, "north");
+  assert.equal(plannerAreas[0].type, "district");
+  assert.equal(plannerAreas[0].area, "Gracia");
+  assert.equal(plannerAreas[0].lat, 41.405);
+  assert.equal(plannerAreas[0].lng, 2.1550000000000002);
+});
+
+test("buildPlannerAreas returnerar tom lista om en stad saknar area definitions", () => {
+  assert.deepEqual(
+    buildPlannerAreas({
+      key: "sparse-city",
+      catalog: { allItems: [] },
+      routing: { areaDefinitions: {} },
+    }),
+    [],
+  );
+});
+
 test("GET /test-city renderar en egen city shell utan Rome-fallback", async () => {
   global.fetch = async (url) => {
     throw new Error(`Unexpected fetch during test-city shell test: ${url}`);
@@ -775,6 +844,7 @@ test("GET /rome?lang=en renderar engelsk shell och planner utan att byta interna
     });
 
     assert.equal(response.status, 200);
+    const bootstrap = extractCityBootstrap(response.body);
     assert.match(response.body, /<html lang="en">/);
     assert.match(response.body, /<body data-city-key="rome" data-city-label="Rome" data-lang="en">/);
     assert.match(response.body, /window\.__PARRANDA_LANGUAGE__ = "en"/);
@@ -805,6 +875,15 @@ test("GET /rome?lang=en renderar engelsk shell och planner utan att byta interna
     assert.doesNotMatch(response.body, /<p class="eyebrow">DÄR DU BOR<\/p>/);
     assert.doesNotMatch(response.body, /value="food_drink"\s+checked\s*\/>\s*<span>Mat &amp; dryck<\/span>/);
     assert.doesNotMatch(response.body, /__PARRANDA_I18N_[A-Z0-9_]+__/);
+    assert.ok(Array.isArray(bootstrap.plannerAreas));
+    assert.ok(bootstrap.plannerAreas.length > 0);
+    assert.ok(bootstrap.plannerAreas.some((area) => area.id === "trastevere"));
+    const trastevere = bootstrap.plannerAreas.find((area) => area.id === "trastevere");
+    assert.equal(trastevere.label, "Trastevere");
+    assert.equal(trastevere.macro, "west");
+    assert.equal(trastevere.type, "district");
+    assert.ok(Number.isFinite(trastevere.lat));
+    assert.ok(Number.isFinite(trastevere.lng));
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -846,6 +925,7 @@ test("GET /barcelona?lang=en renderar curated beta shell på engelska", async ()
     });
 
     assert.equal(response.status, 200);
+    const bootstrap = extractCityBootstrap(response.body);
     assert.match(response.body, /<body data-city-key="barcelona" data-city-label="Barcelona" data-lang="en">/);
     assert.match(response.body, /<title>Parranda \| Personal City Guide for Barcelona<\/title>/);
     assert.match(response.body, /"fallbackUsed":false/);
@@ -861,6 +941,15 @@ test("GET /barcelona?lang=en renderar curated beta shell på engelska", async ()
     assert.doesNotMatch(response.body, /google\.com\/maps\/search\/Rome/i);
     assert.doesNotMatch(response.body, /__PARRANDA_CITY_MAP_URL__/);
     assert.doesNotMatch(response.body, /Rome-wide/);
+    assert.ok(Array.isArray(bootstrap.plannerAreas));
+    assert.ok(bootstrap.plannerAreas.length > 0);
+    assert.ok(bootstrap.plannerAreas.some((area) => area.id === "gracia" && area.label === "Gràcia"));
+    assert.ok(bootstrap.plannerAreas.some((area) => area.id === "poblenou" && area.label === "Poblenou"));
+    const gracia = bootstrap.plannerAreas.find((area) => area.id === "gracia");
+    assert.equal(gracia.macro, "northwest-local");
+    assert.equal(gracia.type, "district");
+    assert.ok(Number.isFinite(gracia.lat));
+    assert.ok(Number.isFinite(gracia.lng));
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
