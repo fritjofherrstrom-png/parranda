@@ -173,6 +173,63 @@ test("server/app.js uses keyed shell i18n instead of post-render replacement", (
   assert.match(source, /__PARRANDA_I18N_BOOTSTRAP__/);
 });
 
+test("public browser assets are served from the explicit allowlist", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during public asset allowlist test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+  const allowedPaths = [
+    "/styles.css",
+    "/script.js",
+    "/ux-pass1.js",
+    "/planner-trust.js",
+    "/landing.js",
+    "/manifest.webmanifest",
+    "/sw.js",
+    "/assets/icons/icon-192.png",
+    "/vendor/leaflet/leaflet.js",
+  ];
+
+  try {
+    for (const assetPath of allowedPaths) {
+      const response = await requestText(server, { path: assetPath });
+      assert.equal(response.status, 200, `${assetPath} should be publicly served`);
+      assert.ok(response.body.length > 0, `${assetPath} should not be empty`);
+    }
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("repo internals are not served as static files or city shells", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during static surface denylist test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+  const blockedPaths = [
+    "/server/app.js",
+    "/server/route-engine.js",
+    "/package.json",
+    "/tests/api.test.js",
+    "/docs/ARCHITECTURE.md",
+    "/render.yaml",
+  ];
+
+  try {
+    for (const blockedPath of blockedPaths) {
+      const response = await requestText(server, { path: blockedPath });
+      assert.equal(response.status, 404, `${blockedPath} should not be publicly served`);
+      assert.doesNotMatch(response.body, /window\.__PARRANDA_CITY__/);
+      assert.doesNotMatch(response.body, /lp-hero/);
+      assert.doesNotMatch(response.body, /buildApp|generateRecommendations|Parranda builds a day/);
+    }
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("shell has full i18n coverage for English mode without Swedish leakage", async () => {
   global.fetch = async (url) => {
     throw new Error(`Unexpected fetch during shell i18n coverage test: ${url}`);
