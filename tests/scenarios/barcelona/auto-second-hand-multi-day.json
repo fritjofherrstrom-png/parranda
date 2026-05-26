@@ -13,13 +13,13 @@
         "day_profile": "light",
         "anchor_zone": "Sant Antoni -> Poblenou",
         "routing_source": "heuristic",
-        "estimated_km": 6.8,
-        "longest_leg_km": 3.1,
-        "longest_leg_minutes": 37,
-        "average_leg_minutes": 20,
+        "estimated_km": 6.1,
+        "longest_leg_km": 2.8,
+        "longest_leg_minutes": 34,
+        "average_leg_minutes": 18,
         "stops": [
           {
-            "label": "Cotton Vintage",
+            "label": "Humana Vintage — Ronda de la Universitat",
             "area": "eixample",
             "live": false
           },
@@ -37,15 +37,15 @@
         "legs": [
           {
             "from": "Sant Antoni",
-            "to": "Cotton Vintage",
-            "km": 1.8,
-            "minutes": 22
+            "to": "Humana Vintage — Ronda de la Universitat",
+            "km": 1.4,
+            "minutes": 17
           },
           {
-            "from": "Cotton Vintage",
+            "from": "Humana Vintage — Ronda de la Universitat",
             "to": "Mercat dels Encants",
-            "km": 3.1,
-            "minutes": 37
+            "km": 2.8,
+            "minutes": 34
           },
           {
             "from": "Mercat dels Encants",
@@ -193,7 +193,7 @@
         "day_profile": "final",
         "anchor_zone": "Gothic Quarter -> Gràcia",
         "routing_source": "heuristic",
-        "estimated_km": 4,
+        "estimated_km": 3.9,
         "longest_leg_km": 2.8,
         "longest_leg_minutes": 34,
         "average_leg_minutes": 12,
@@ -204,7 +204,7 @@
             "live": false
           },
           {
-            "label": "Humana Vintage — Astúries",
+            "label": "Mahalo Vintage — Plaça del Diamant",
             "area": "gracia",
             "live": false
           },
@@ -223,15 +223,15 @@
           },
           {
             "from": "Holala! Plaza",
-            "to": "Humana Vintage — Astúries",
+            "to": "Mahalo Vintage — Plaça del Diamant",
             "km": 2.8,
             "minutes": 34
           },
           {
-            "from": "Humana Vintage — Astúries",
+            "from": "Mahalo Vintage — Plaça del Diamant",
             "to": "Revolution Vintage",
-            "km": 0.3,
-            "minutes": 4
+            "km": 0.2,
+            "minutes": 2
           },
           {
             "from": "Revolution Vintage",
@@ -251,9 +251,9 @@
           "day_profile": "variation",
           "anchor_zone": "Gothic Quarter -> Gràcia",
           "stops": [
-            "Lullaby Vintage",
+            "Vilde Vintage",
             "Holala! Plaza",
-            "Humana Vintage — Astúries",
+            "Mahalo Vintage — Plaça del Diamant",
             "Revolution Vintage"
           ]
         },

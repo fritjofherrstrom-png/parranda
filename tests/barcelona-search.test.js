@@ -45,6 +45,25 @@ test("Barcelona catalog resolves bare 'kilo' to a pay-by-weight vintage shop", (
   assert.equal(hit.id, "flamingos-vintage-kilo-tallers");
 });
 
+test("Barcelona beta-depth anchors are searchable by local area and intent terms", () => {
+  const expectedHits = {
+    "arepa queer": "arepa-queer",
+    "vilde vintage": "vilde-vintage",
+    "ronda universitat": "humana-vintage-ronda-universitat",
+    "los feliz": "los-feliz-vintage",
+    "mahalo vintage": "mahalo-vintage-diamant",
+    "la mundana": "la-mundana",
+    "bodega montferry": "bodega-montferry",
+    "abirradero": "abirradero",
+  };
+
+  for (const [query, expectedId] of Object.entries(expectedHits)) {
+    const hit = findItemByName(query);
+    assert.ok(hit, `"${query}" returned no Barcelona beta-depth match`);
+    assert.equal(hit.id, expectedId);
+  }
+});
+
 test("Barcelona catalog does not leak Rome IDs via second-hand search terms", () => {
   // Counter-test: confirm none of the new second-hand search terms
   // accidentally collide with a Rome entry's name/alias.
