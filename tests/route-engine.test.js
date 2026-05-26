@@ -1412,8 +1412,8 @@ test("default route generation keeps live events out of main_stops on Barcelona 
       status: "published",
       core_type: "event",
       body: "<p>Live music night in Gràcia.</p>",
-      start_date: "2026-05-20T20:00:00+02:00",
-      end_date: "2026-05-20T23:00:00+02:00",
+      start_date: "2027-06-20T20:00:00+02:00",
+      end_date: "2027-06-20T23:00:00+02:00",
       addresses: [
         {
           place: "Plaça del Sol",
@@ -1431,8 +1431,8 @@ test("default route generation keeps live events out of main_stops on Barcelona 
       status: "published",
       core_type: "event",
       body: "<p>Second live night in Gràcia.</p>",
-      start_date: "2026-05-20T21:00:00+02:00",
-      end_date: "2026-05-20T23:30:00+02:00",
+      start_date: "2027-06-20T21:00:00+02:00",
+      end_date: "2027-06-20T23:30:00+02:00",
       addresses: [
         {
           place: "Casa Vicens vicinity",
@@ -1452,7 +1452,7 @@ test("default route generation keeps live events out of main_stops on Barcelona 
     if (parsed.hostname === "api.open-meteo.com") {
       return weatherResponse({
         daily: {
-          time: ["2026-05-20"],
+          time: ["2027-06-20"],
           weathercode: [0],
           temperature_2m_max: [22],
         },
@@ -1463,7 +1463,7 @@ test("default route generation keeps live events out of main_stops on Barcelona 
       return {
         ok: true,
         async json() {
-          return openDataFixture;
+          return { success: true, result: { records: openDataFixture } };
         },
       };
     }
@@ -1475,7 +1475,7 @@ test("default route generation keeps live events out of main_stops on Barcelona 
 
   const result = await generateRecommendations({
     city: "barcelona",
-    dates: ["2026-05-20"],
+    dates: ["2027-06-20"],
     start: { type: "preset", label: "Gràcia" },
     end: { type: "preset", label: "Gràcia" },
     walkingKmTarget: 6,

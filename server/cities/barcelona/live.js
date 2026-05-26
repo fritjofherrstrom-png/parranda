@@ -1,21 +1,37 @@
 const { liveSources } = require("./sources");
 
 const OPEN_DATA_AGENDA_SOURCE_ID = "barcelona-open-data-agenda";
+
+// Full-dump URL kept only as the source descriptor reference and for the
+// existing `source_url` field on normalized events.  Normal runtime fetches
+// use the CKAN datastore SQL endpoint below.
 const OPEN_DATA_AGENDA_JSON_URL =
   "https://opendata-ajuntament.barcelona.cat/data/dataset/a25e60cd-3083-4252-9fce-81f733871cb1/resource/da9e71de-0f8e-417d-928a-56380bfd0231/download";
+
+const OPEN_DATA_AGENDA_CKAN_RESOURCE_ID = "877ccf66-9106-4ae2-be51-95a9f6469e4c";
+const OPEN_DATA_AGENDA_CKAN_BASE =
+  "https://opendata-ajuntament.barcelona.cat/data/api/action/datastore_search_sql";
+
 const OPEN_DATA_AGENDA_EVENT_URL = "https://guia.barcelona.cat/ca/detall";
 const FETCH_TIMEOUT_MS = 12000;
 const CACHE_TTL_MS = 30 * 60 * 1000;
+const CKAN_QUERY_LIMIT = 300;
 
 let cache = {
   fetchedAt: 0,
+  dateKey: "",
   items: [],
 };
-let inFlight = null;
+let inFlight = new Map();
+
+function buildCkanDateWindowUrl(startDate, endDate) {
+  const sql = `SELECT * FROM "${OPEN_DATA_AGENDA_CKAN_RESOURCE_ID}" WHERE end_date >= '${startDate}' AND start_date <= '${endDate}' LIMIT ${CKAN_QUERY_LIMIT}`;
+  return `${OPEN_DATA_AGENDA_CKAN_BASE}?sql=${encodeURIComponent(sql)}`;
+}
 
 function normalizeWhitespace(text) {
   return String(text || "")
-    .replace(/\u00a0/g, " ")
+    .replace(/ /g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -82,6 +98,9 @@ function readProviderCoordinates(address) {
   };
 }
 
+/**
+ * Normalizes an address from the full JSON dump format (nested objects).
+ */
 function normalizeAddress(address) {
   if (!address || typeof address !== "object") {
     return {};
@@ -104,6 +123,81 @@ function normalizeAddress(address) {
     address: normalizeWhitespace(addressParts.join(", ")),
     lat: coordinates.lat,
     lng: coordinates.lng,
+  };
+}
+
+/**
+ * Normalizes an address from the CKAN datastore flat CSV format.
+ * Fields are top-level: addresses_road_name, addresses_start_street_number,
+ * geo_epgs_4326_lat, geo_epgs_4326_lon, addresses_neighborhood_name, etc.
+ */
+function normalizeFlatAddress(record) {
+  if (!record || typeof record !== "object") {
+    return {};
+  }
+
+  const roadName = record.addresses_road_name || "";
+  const streetNumber = record.addresses_start_street_number || "";
+  const addressParts = [roadName, streetNumber].filter(Boolean);
+
+  const lat = parseFloat(record.geo_epgs_4326_lat);
+  const lng = parseFloat(record.geo_epgs_4326_lon);
+
+  return {
+    venue: roadName || "Barcelona venue",
+    address: normalizeWhitespace(addressParts.join(", ")),
+    lat: Number.isFinite(lat) ? lat : null,
+    lng: Number.isFinite(lng) ? lng : null,
+  };
+}
+
+/**
+ * Converts a flat CKAN datastore record into the nested JSON-dump shape
+ * expected by the existing normalizer pipeline (normalizeCategory,
+ * buildSearchCorpus, inferBarcelonaTags, evaluateOpenDataAgendaRecord,
+ * normalizeOpenDataAgendaRecord).
+ */
+function shimFlatRecord(flat) {
+  if (!flat || typeof flat !== "object") {
+    return flat;
+  }
+
+  // Already in nested format (has addresses array) — pass through.
+  if (Array.isArray(flat.addresses)) {
+    return flat;
+  }
+
+  const addr = normalizeFlatAddress(flat);
+
+  return {
+    register_id: String(flat.register_id || "").replace(/^﻿/, ""),
+    name: flat.name || "",
+    status: "published", // CKAN query returns only published records
+    core_type: "event",
+    start_date: flat.start_date || "",
+    end_date: flat.end_date || "",
+    body: "", // Not available in CSV resource
+    type_name: flat.values_category || flat.values_attribute_name || "",
+    core_type_name: "Agenda",
+    addresses: [
+      {
+        place: addr.venue,
+        address_name: flat.addresses_road_name || "",
+        start_street_number: flat.addresses_start_street_number || "",
+        neighborhood_name: flat.addresses_neighborhood_name || "",
+        district_name: flat.addresses_district_name || "",
+        location_4326: addr.lat != null
+          ? { geometries: [{ type: "Point", coordinates: [addr.lat, addr.lng] }] }
+          : undefined,
+      },
+    ],
+    classifications_data: [],
+    secondary_filters_data: flat.secondary_filters_name
+      ? [{ name: flat.secondary_filters_name }]
+      : [],
+    image_data: null,
+    timetable: flat.timetable || "",
+    estimated_dates: flat.estimated_dates || "",
   };
 }
 
@@ -215,6 +309,11 @@ function evaluateOpenDataAgendaRecord(record) {
     return { accepted: false, score: 0, reasons: ["missing-title-or-date"], tags };
   }
 
+  // Past-event guard: reject events that ended more than 1 day ago.
+  if (endMs && endMs < Date.now() - 86400000) {
+    return { accepted: false, score: 0, reasons: ["past-event"], tags };
+  }
+
   const durationDays = Math.max(1, Math.round((endMs - startMs) / 86400000) + 1);
   let score = 10;
 
@@ -323,8 +422,11 @@ function normalizeOpenDataAgendaEvents(records = []) {
   return records
     .map((record, index) => ({
       index,
-      record,
-      quality: evaluateOpenDataAgendaRecord(record),
+      record: shimFlatRecord(record),
+    }))
+    .map((entry) => ({
+      ...entry,
+      quality: evaluateOpenDataAgendaRecord(entry.record),
     }))
     .filter((entry) => entry.quality.accepted)
     .sort((a, b) => b.quality.score - a.quality.score || a.index - b.index)
@@ -355,34 +457,61 @@ async function fetchJson(url = OPEN_DATA_AGENDA_JSON_URL) {
   }
 }
 
-async function loadOpenDataAgendaEvents(fetcher = fetchJson) {
-  if (cache.fetchedAt && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
+/**
+ * Fetches agenda records from the CKAN datastore using a date-window SQL
+ * query.  Returns the `records` array from the CKAN response, or throws.
+ */
+async function fetchCkanDateWindow(startDate, endDate) {
+  const url = buildCkanDateWindowUrl(startDate, endDate);
+  const body = await fetchJson(url);
+
+  if (!body?.success || !body?.result?.records) {
+    throw new Error("CKAN datastore response missing expected shape");
+  }
+
+  return body.result.records;
+}
+
+async function loadOpenDataAgendaEvents(dates, context = {}) {
+  const sorted = [...dates].sort();
+  const startDate = sorted[0];
+  const endDate = sorted[sorted.length - 1];
+  const dateKey = `${startDate}..${endDate}`;
+
+  if (cache.fetchedAt && cache.dateKey === dateKey && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
     return cache.items;
   }
 
-  if (inFlight) {
-    return inFlight;
+  if (inFlight.has(dateKey)) {
+    return inFlight.get(dateKey);
   }
 
-  inFlight = (async () => {
+  const fetcher = context.fetchOpenDataAgendaEvents
+    || (() => fetchCkanDateWindow(startDate, endDate));
+
+  const promise = (async () => {
     try {
       const records = await fetcher();
-      const items = normalizeOpenDataAgendaEvents(records);
+      const items = normalizeOpenDataAgendaEvents(
+        Array.isArray(records) ? records : [],
+      );
 
       if (Array.isArray(records)) {
         cache = {
           fetchedAt: Date.now(),
+          dateKey,
           items,
         };
       }
 
       return items;
     } finally {
-      inFlight = null;
+      inFlight.delete(dateKey);
     }
   })();
 
-  return inFlight;
+  inFlight.set(dateKey, promise);
+  return promise;
 }
 
 async function fetchLiveEventsForDates(dates, context = {}) {
@@ -391,7 +520,7 @@ async function fetchLiveEventsForDates(dates, context = {}) {
   }
 
   try {
-    const events = await loadOpenDataAgendaEvents(context.fetchOpenDataAgendaEvents);
+    const events = await loadOpenDataAgendaEvents(dates, context);
     const usedEventIds = new Set();
     const byDate = {};
 
@@ -417,15 +546,18 @@ async function fetchLiveEventsForDates(dates, context = {}) {
 function resetBarcelonaLiveEventsCache() {
   cache = {
     fetchedAt: 0,
+    dateKey: "",
     items: [],
   };
-  inFlight = null;
+  inFlight.clear();
 }
 
 module.exports = {
+  buildCkanDateWindowUrl,
   evaluateOpenDataAgendaRecord,
   fetchLiveEventsForDates,
   normalizeOpenDataAgendaRecord,
   normalizeOpenDataAgendaEvents,
   resetBarcelonaLiveEventsCache,
+  shimFlatRecord,
 };
