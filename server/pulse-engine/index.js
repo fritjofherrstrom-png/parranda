@@ -2,6 +2,7 @@ const { buildEngineContext } = require("./context");
 const { normalizeSignal } = require("./normalize");
 const { scoreSignals } = require("./rank");
 const liveEventsGenerator = require("./generators/live-events");
+const cityRhythmGenerator = require("./generators/city-rhythm");
 const goldenHourGenerator = require("./generators/golden-hour");
 
 /**
@@ -10,7 +11,11 @@ const goldenHourGenerator = require("./generators/golden-hour");
  * inputs (live events, weather, lat/lng + date). The list is short on
  * purpose — new generators must be backed by real sources or rules.
  */
-const CITY_AGNOSTIC_GENERATORS = [liveEventsGenerator, goldenHourGenerator];
+const CITY_AGNOSTIC_GENERATORS = [
+  liveEventsGenerator,
+  cityRhythmGenerator,
+  goldenHourGenerator,
+];
 
 /**
  * Build a city's Pulse for a given moment.

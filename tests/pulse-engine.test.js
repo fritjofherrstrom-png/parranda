@@ -11,6 +11,10 @@ const {
 const { scoreSignals } = require("../server/pulse-engine/rank");
 const goldenHourGenerator = require("../server/pulse-engine/generators/golden-hour");
 const liveEventsGenerator = require("../server/pulse-engine/generators/live-events");
+const cityRhythmGenerator = require("../server/pulse-engine/generators/city-rhythm");
+const romeCity = require("../server/cities/rome");
+const barcelonaCity = require("../server/cities/barcelona");
+const athensCity = require("../server/cities/athens");
 
 const fakeCity = {
   key: "test-city",
@@ -27,6 +31,19 @@ function fakeContext(overrides = {}) {
     lang: "sv",
     ...overrides,
   });
+}
+
+function quietCityServices(city) {
+  return {
+    ...city,
+    services: {
+      ...city.services,
+      fetchWeatherForDates: async (dates = []) =>
+        Object.fromEntries(dates.map((date) => [date, null])),
+      fetchLiveEventsForDates: async (dates = []) =>
+        Object.fromEntries(dates.map((date) => [date, []])),
+    },
+  };
 }
 
 test("buildCityNow returnerar city-lokal tid via Intl", () => {
@@ -107,6 +124,74 @@ test("scoreSignals rankar live event före editorial fallback", () => {
   );
   const ranked = scoreSignals([a, b], ctx);
   assert.equal(ranked[0].title, "Real event");
+});
+
+test("city-rhythm generator emits normalized computed signals for Rome, Barcelona and Athens", () => {
+  const cities = [romeCity, barcelonaCity, athensCity];
+
+  for (const city of cities) {
+    const ctx = buildEngineContext({
+      cityConfig: city,
+      date: "2026-05-20",
+      now: new Date("2026-05-20T16:30:00Z"),
+      lang: "en",
+    });
+    const raw = cityRhythmGenerator(ctx);
+    assert.equal(raw.length, 1, `${city.key} should receive a rhythm signal`);
+
+    const signal = normalizeSignal(raw[0], ctx);
+    assert.equal(signal.city, city.key);
+    assert.equal(signal.source.kind, "computed");
+    assert.equal(signal.trust_level, "verified");
+    assert.equal(signal.freshness, "live");
+    assert.ok(["evening_window", "local_timing_advice"].includes(signal.type));
+    assert.ok(signal.editorial_pitch);
+  }
+});
+
+test("city-rhythm output follows city-local time rather than server time", () => {
+  const now = new Date("2026-05-20T19:30:00Z");
+  const barcelonaCtx = buildEngineContext({
+    cityConfig: barcelonaCity,
+    date: "2026-05-20",
+    now,
+    lang: "en",
+  });
+  const athensCtx = buildEngineContext({
+    cityConfig: athensCity,
+    date: "2026-05-20",
+    now,
+    lang: "en",
+  });
+
+  const barcelona = cityRhythmGenerator(barcelonaCtx)[0];
+  const athens = cityRhythmGenerator(athensCtx)[0];
+
+  assert.equal(barcelonaCtx.cityNow.hour, 21);
+  assert.equal(athensCtx.cityNow.hour, 22);
+  assert.match(barcelona.id, /evening-settle/);
+  assert.match(athens.id, /late-soft-landing/);
+  assert.notEqual(barcelona.title, athens.title);
+});
+
+test("city-rhythm generator does not emit fake venues, events or provider sources", () => {
+  const ctx = buildEngineContext({
+    cityConfig: barcelonaCity,
+    date: "2026-05-20",
+    now: new Date("2026-05-20T16:30:00Z"),
+    lang: "en",
+  });
+  const signal = cityRhythmGenerator(ctx)[0];
+
+  assert.equal(signal.level, "city");
+  assert.equal(signal.source.kind, "computed");
+  assert.equal(signal.source.id, undefined);
+  assert.equal(signal.source.url, undefined);
+  assert.equal(signal.official_event_id, undefined);
+  assert.equal(signal.place_query, undefined);
+  assert.equal(signal.related_stop_id, undefined);
+  assert.equal(signal.area, undefined);
+  assert.equal(signal.where, undefined);
 });
 
 test("golden-hour generator emittar EJ utanför eligible månader", () => {
@@ -387,4 +472,42 @@ test("buildCityPulse wakes a noop city up via city-agnostic live events", async 
   assert.equal(liveSignals.length, 1);
   assert.equal(liveSignals[0].source.label, "Open Data BCN");
   assert.equal(liveSignals[0].signal_label, "Live event");
+});
+
+test("Rome keeps curated Pulse while also receiving shared computed rhythm", async () => {
+  const result = await buildCityPulse(quietCityServices(romeCity), {
+    date: "2026-05-20",
+    now: new Date("2026-05-20T16:30:00Z"),
+    lang: "en",
+  });
+
+  assert.ok(
+    result.signals.some((signal) => signal.source.kind === "editorial"),
+    "Rome curated overlay should remain compatible",
+  );
+  assert.ok(
+    result.signals.some((signal) => signal.id.startsWith("city-rhythm-")),
+    "Rome should also receive the shared city rhythm floor",
+  );
+});
+
+test("Barcelona and Athens can use computed rhythm without city editorial Pulse", async () => {
+  for (const city of [barcelonaCity, athensCity]) {
+    const result = await buildCityPulse(quietCityServices(city), {
+      date: "2026-05-20",
+      now: new Date("2026-05-20T16:30:00Z"),
+      lang: "en",
+    });
+
+    assert.equal(city.services.signalGenerators.length, 0);
+    assert.ok(
+      result.signals.some((signal) => signal.id.startsWith("city-rhythm-")),
+      `${city.key} should receive shared computed rhythm`,
+    );
+    assert.equal(
+      result.signals.some((signal) => signal.source.kind === "editorial"),
+      false,
+      `${city.key} should not need city-specific editorial Pulse`,
+    );
+  }
 });
