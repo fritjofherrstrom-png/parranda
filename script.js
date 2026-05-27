@@ -11500,9 +11500,14 @@ loadPlannerOptions().then(() => {
 
   if (isPlannerEntryRoute) {
     // Planner-entry-route: show planner inline as primary page content.
-    // Hide the hero exploration sections — the planner IS the above-the-fold.
+    // Hide the hero exploration sections and city-context elements that would
+    // otherwise appear above the planner (tab nav, Pulse teaser).  These load
+    // normally on the standard /:city page but must not precede the planner on
+    // the /:city/plan planning-first route.
     document.querySelector(".hero-content")?.classList.add("planner-entry-hidden");
     document.querySelector(".hero-quickstart")?.classList.add("planner-entry-hidden");
+    document.querySelector(".tab-nav")?.classList.add("planner-entry-hidden");
+    document.getElementById("cityPulseTeaser")?.classList.add("planner-entry-hidden");
 
     if (routePlannerStart) {
       routePlannerStart.hidden = false;
