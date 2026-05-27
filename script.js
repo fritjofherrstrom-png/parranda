@@ -2032,6 +2032,7 @@ function getFrontendCityConfig() {
   };
 }
 
+const isPlannerEntryRoute = window.__PARRANDA_CITY__?.plannerEntryRoute === true;
 const plannerCity = getFrontendCityConfig();
 const plannerCityKey = plannerCity.key;
 const plannerCityLabel = plannerCity.label;
@@ -6739,6 +6740,10 @@ function updatePlannerLaunchSummary(prefix = "") {
 }
 
 function openPlannerModal() {
+  // In planner-entry-route mode the planner is already inline-visible —
+  // skip modal overlay logic so it is never treated as a dismissible dialog.
+  if (isPlannerEntryRoute) return;
+
   switchTab("routes");
 
   if (routePlannerStart) {
@@ -6768,6 +6773,10 @@ function openPlannerModalForMode(mode = plannerAutoMode) {
 }
 
 function closePlannerModal() {
+  // In planner-entry-route mode the planner cannot be dismissed —
+  // it is the primary page content, not a dialog.
+  if (isPlannerEntryRoute) return;
+
   if (routePlannerStart) {
     routePlannerStart.hidden = true;
   }
@@ -11488,13 +11497,44 @@ loadPlannerOptions().then(() => {
   syncPlannerModeUI();
   updateWalkingKmLabel();
   renderRouteResults();
-  const params = new URLSearchParams(location.search);
-  if (params.get("planner") === "open") {
-    const seedLabel = params.get("seed_label");
-    if (seedLabel) {
-      try { setPlannerFieldFromLabel("home_base", seedLabel); }
-      catch (_e) { /* silent fallback */ }
+
+  if (isPlannerEntryRoute) {
+    // Planner-entry-route: show planner inline as primary page content.
+    // Hide the hero exploration sections and city-context elements that would
+    // otherwise appear above the planner (tab nav, Pulse teaser).  These load
+    // normally on the standard /:city page but must not precede the planner on
+    // the /:city/plan planning-first route.
+    document.querySelector(".hero-content")?.classList.add("planner-entry-hidden");
+    document.querySelector(".hero-quickstart")?.classList.add("planner-entry-hidden");
+    document.querySelector(".tab-nav")?.classList.add("planner-entry-hidden");
+    document.getElementById("cityPulseTeaser")?.classList.add("planner-entry-hidden");
+
+    if (routePlannerStart) {
+      routePlannerStart.hidden = false;
+      routePlannerStart.removeAttribute("aria-modal");
+      routePlannerStart.classList.add("planner-entry-inline");
     }
-    openPlannerModal();
+    if (closePlannerModalButton) {
+      closePlannerModalButton.hidden = true;
+    }
+    document.body.classList.add("is-planner-entry");
+
+    // Support ?mode=manual on the plan route.
+    const params = new URLSearchParams(location.search);
+    if (params.get("mode") === "manual") {
+      setPlannerMode(plannerManualMode);
+      if (plannerFineTuneDetails) plannerFineTuneDetails.open = true;
+    }
+  } else {
+    // Legacy ?planner=open compat on the normal city page.
+    const params = new URLSearchParams(location.search);
+    if (params.get("planner") === "open") {
+      const seedLabel = params.get("seed_label");
+      if (seedLabel) {
+        try { setPlannerFieldFromLabel("home_base", seedLabel); }
+        catch (_e) { /* silent fallback */ }
+      }
+      openPlannerModal();
+    }
   }
 });

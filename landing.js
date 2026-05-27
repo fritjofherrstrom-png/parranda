@@ -79,10 +79,8 @@
       var val = cityInput ? cityInput.value : "";
       var cityPath = resolveCity(val);
       if (cityPath) {
-        var params = new URLSearchParams();
-        params.set("planner", "open");
-        if (currentLang() === "en") params.set("lang", "en");
-        window.location.href = cityPath + "?" + params.toString();
+        var langParam = currentLang() === "en" ? "?lang=en" : "";
+        window.location.href = cityPath + "/plan" + langParam;
         return;
       }
       if (val.trim()) {
