@@ -329,6 +329,8 @@ function diversifyRecommendationDays(result) {
 }
 
 module.exports = {
+  buildRepeatPressure,
   diversifyRecommendationDays,
+  routeNoveltyScore,
   routeSimilarity,
 };

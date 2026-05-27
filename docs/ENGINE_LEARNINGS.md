@@ -260,6 +260,42 @@ repeated_macro_area_count
 - `tests/helpers/route-quality-metrics.js` or equivalent.
 - Scenario snapshot assertions beyond raw JSON snapshots.
 
+### Lesson: long trips need diversity pressure without breaking topology
+
+**Observation**
+
+After the topology/envelope improvements, Barcelona's late-day behavior improved in one important way: the engine stopped repeating the exact same compact Gràcia loop at the end of a 5-day vintage trip. But that exposed the next generic balancing problem: diversity pressure can push the engine toward new anchors and stop families, and that pressure has to stay inside a coherent route envelope instead of simply maximizing novelty at any cost.
+
+**Generic rule**
+
+Multi-day diversity should work on at least three layers at once:
+
+```txt
+anchor rotation
+stop rotation
+topology preservation
+```
+
+Good long-trip behavior is not "same perfect local loop every day", but it is also not "any new corridor is good enough". Diversity pressure should help later days escape exact route repetition while still respecting the route's local radius, corridor fit, continuity, and intent identity.
+
+**Current anchor**
+
+- PR #194: long-trip diversity + topology balance.
+- `tests/scenarios/barcelona/auto-second-hand-five-day-stress.json`.
+- `tests/barcelona-route-quality-after-depth.test.js`.
+
+**Applies to**
+
+- All multi-day planning.
+- All citypacks.
+- Agnostic mode.
+
+**Future hook**
+
+- A named multi-day diversity layer inside route scoring.
+- Distinct metrics for anchor, stop, and area reuse.
+- Guardrails that cap novelty pressure when it would break the active topology envelope.
+
 ---
 
 ## 4. Intent density and area-loop behavior

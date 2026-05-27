@@ -75,6 +75,23 @@ async function runBarcelonaScenario(payload, weatherByDate = {}) {
   return result.days[0].primary_route;
 }
 
+async function runBarcelonaMultiDayScenario(payload, weatherByDate = {}) {
+  global.fetch = createScenarioFetch(weatherByDate);
+  const result = await generateRecommendations({
+    city: "barcelona",
+    legPacing: "balanced",
+    distanceMode: "soft_target",
+    budgetTier: "standard",
+    lang: "en",
+    ...payload,
+  });
+
+  assert.equal(result.city, "barcelona");
+  assert.ok(result.days.length >= 2);
+
+  return result.days.map((day) => day.primary_route).filter(Boolean);
+}
+
 function stopIds(route) {
   return (route.main_stops || []).map((stop) => stop.id);
 }
@@ -349,4 +366,33 @@ test("Barcelona Poblenou weekday route surfaces the Palo Alto Market closed-day 
     (route.opening_hours_warnings || []).some((warning) => warning.includes("Palo Alto Market")),
     "Palo Alto Market is closed on weekdays and must trigger an opening-hours warning",
   );
+});
+
+test("Barcelona long second-hand trips vary later anchor zones and stop sets", async () => {
+  const routes = await runBarcelonaMultiDayScenario({
+    dates: ["2026-05-23", "2026-05-24", "2026-05-25", "2026-05-26", "2026-05-27"],
+    start: { type: "auto" },
+    end: { type: "auto" },
+    walkingKmTarget: 6,
+    preferences: ["vintage", "shopping", "lokalt"],
+  });
+
+  assert.equal(routes.length, 5);
+
+  const anchorZones = new Set(routes.map((route) => route.anchor_zone).filter(Boolean));
+  assert.ok(anchorZones.size >= 4);
+
+  assert.notDeepEqual(stopIds(routes[3]), stopIds(routes[4]));
+
+  routes.forEach((route) => {
+    const stops = stopItems(route);
+    assert.ok(
+      stops.some((item) =>
+        item.tags.includes("second_hand") ||
+        item.tags.includes("vintage") ||
+        item.tags.includes("shopping"),
+      ),
+      "long second-hand trip should keep at least one second-hand-adjacent stop per day",
+    );
+  });
 });

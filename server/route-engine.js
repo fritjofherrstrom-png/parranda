@@ -2,7 +2,11 @@ const { AsyncLocalStorage } = require("node:async_hooks");
 const { getCityConfig } = require("./cities");
 const { getIsoWeekday } = require("./lib/iso-date");
 const { evaluateLocalTruth, localTruthForLang } = require("./local-truth");
-const { routeSimilarity } = require("./route-diversity");
+const {
+  buildRepeatPressure,
+  routeNoveltyScore,
+  routeSimilarity,
+} = require("./route-diversity");
 const { routeWalkingPath } = require("./walking-router");
 
 const defaultCityConfig = getCityConfig("rome");
@@ -1188,6 +1192,35 @@ function buildUsedRouteContext(usedRoutes = []) {
   return context;
 }
 
+function repeatDepthMultiplier(usedRoutes = []) {
+  if (!Array.isArray(usedRoutes) || !usedRoutes.length) {
+    return 1;
+  }
+
+  return Math.min(2, 1 + Math.max(0, usedRoutes.length - 1) * 0.25);
+}
+
+function buildUsedStopContext(usedRoutes = []) {
+  const context = {
+    stopIds: new Map(),
+    duplicateFamilies: new Map(),
+  };
+
+  usedRoutes.forEach((route) => {
+    (route?.main_stops || []).forEach((stop) => {
+      if (!stop?.id) {
+        return;
+      }
+
+      incrementCount(context.stopIds, stop.id);
+      const catalogItem = findCatalogItemByIdOrName(stop.id);
+      incrementCount(context.duplicateFamilies, catalogItem?.duplicateFamily);
+    });
+  });
+
+  return context;
+}
+
 function getAutoAnchorCandidates() {
   return getAllItems().filter((item) => autoAnchorKinds.has(item.kind));
 }
@@ -1441,17 +1474,18 @@ function scoreAutoAnchorCandidate(
   const repeatedMacroCount = candidateProfile.primaryMacro
     ? roleMacros.get(candidateProfile.primaryMacro) || 0
     : 0;
+  const repeatMultiplier = repeatDepthMultiplier(usedRoutes);
 
   if (repeatedLabelCount) {
-    score -= Math.min(7.2, repeatedLabelCount * 4.4);
+    score -= Math.min(9.2, repeatedLabelCount * 4.4 * repeatMultiplier);
   }
 
   if (repeatedTokenCount) {
-    score -= Math.min(4.8, repeatedTokenCount * 2.6);
+    score -= Math.min(6.4, repeatedTokenCount * 2.6 * repeatMultiplier);
   }
 
   if (repeatedMacroCount) {
-    score -= Math.min(3.6, repeatedMacroCount * 1.4);
+    score -= Math.min(5.2, repeatedMacroCount * 1.4 * repeatMultiplier);
   }
 
   return Number(score.toFixed(1));
@@ -1687,41 +1721,42 @@ function scoreAutoAnchorPair(
     : 0;
   const repeatedTokenPairCount = tokenPair ? usedRouteContext.tokenPairs.get(tokenPair) || 0 : 0;
   const repeatedMacroPairCount = macroPair ? usedRouteContext.macroPairs.get(macroPair) || 0 : 0;
+  const repeatMultiplier = repeatDepthMultiplier(usedRoutes);
 
   if (repeatedLabelPairCount) {
-    score -= Math.min(10.5, repeatedLabelPairCount * 6.2);
+    score -= Math.min(14.5, repeatedLabelPairCount * 6.2 * repeatMultiplier);
   }
 
   if (repeatedStartLabelCount) {
-    score -= Math.min(5.4, repeatedStartLabelCount * 2.7);
+    score -= Math.min(7.2, repeatedStartLabelCount * 2.7 * repeatMultiplier);
   }
 
   if (repeatedEndLabelCount) {
-    score -= Math.min(5.8, repeatedEndLabelCount * 3);
+    score -= Math.min(7.6, repeatedEndLabelCount * 3 * repeatMultiplier);
   }
 
   if (repeatedTokenPairCount) {
-    score -= Math.min(6.2, repeatedTokenPairCount * 3.4);
+    score -= Math.min(8.4, repeatedTokenPairCount * 3.4 * repeatMultiplier);
   }
 
   if (repeatedMacroPairCount) {
-    score -= Math.min(4.6, repeatedMacroPairCount * 2.2);
+    score -= Math.min(6.4, repeatedMacroPairCount * 2.2 * repeatMultiplier);
   }
 
   if (repeatedStartTokenCount) {
-    score -= Math.min(3.8, repeatedStartTokenCount * 1.7);
+    score -= Math.min(5.4, repeatedStartTokenCount * 1.7 * repeatMultiplier);
   }
 
   if (repeatedEndTokenCount) {
-    score -= Math.min(4.2, repeatedEndTokenCount * 1.9);
+    score -= Math.min(5.8, repeatedEndTokenCount * 1.9 * repeatMultiplier);
   }
 
   if (repeatedStartMacroCount) {
-    score -= Math.min(2.4, repeatedStartMacroCount * 0.9);
+    score -= Math.min(3.6, repeatedStartMacroCount * 0.9 * repeatMultiplier);
   }
 
   if (repeatedEndMacroCount) {
-    score -= Math.min(2.8, repeatedEndMacroCount * 1.1);
+    score -= Math.min(4, repeatedEndMacroCount * 1.1 * repeatMultiplier);
   }
 
   return Number(score.toFixed(1));
@@ -1739,9 +1774,13 @@ function scoreAutoLoopCandidate(
     distanceMode = "soft_target",
     legPacing = "balanced",
     weather = null,
+    usedRoutes = [],
   } = {},
 ) {
   const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
+  const candidateProfile = buildItemAreaProfile(candidate);
+  const usedRouteContext = buildUsedRouteContext(usedRoutes);
+  const repeatMultiplier = repeatDepthMultiplier(usedRoutes);
   let score = baseScore + (candidate.goodAsFinal || 1.5) * 1.1;
 
   score += scoreHomeBaseFit(candidate, homeBase, "loop");
@@ -1787,6 +1826,27 @@ function scoreAutoLoopCandidate(
     modifier === "evening"
   ) {
     score -= 2.3;
+  }
+
+  const candidateLabel = slugifyText(candidate.name);
+  const repeatedLabelCount = candidateLabel ? usedRouteContext.startLabels.get(candidateLabel) || 0 : 0;
+  const repeatedTokenCount = candidateProfile.primaryToken
+    ? usedRouteContext.startTokens.get(candidateProfile.primaryToken) || 0
+    : 0;
+  const repeatedMacroCount = candidateProfile.primaryMacro
+    ? usedRouteContext.startMacros.get(candidateProfile.primaryMacro) || 0
+    : 0;
+
+  if (repeatedLabelCount) {
+    score -= Math.min(10.2, repeatedLabelCount * 4.8 * repeatMultiplier);
+  }
+
+  if (repeatedTokenCount) {
+    score -= Math.min(6.4, repeatedTokenCount * 2.9 * repeatMultiplier);
+  }
+
+  if (repeatedMacroCount) {
+    score -= Math.min(5.4, repeatedMacroCount * 1.8 * repeatMultiplier);
   }
 
   return Number(score.toFixed(1));
@@ -3333,6 +3393,8 @@ function scoreStopCandidate({
   targetKm,
   distanceMode,
   legPacing = "balanced",
+  usedRoutes = [],
+  manualAnchorsLocked = false,
 }) {
   const itemProfile = buildItemAreaProfile(item);
   const distanceToStart = haversineKm(start, item);
@@ -3340,6 +3402,8 @@ function scoreStopCandidate({
   const pacing = legPacingConfig[normalizeLegPacing(legPacing)];
   const arcTuning = getRoutingTuning().arcStopScoring || {};
   const neutralArcMacros = new Set(arcTuning.driftNeutralMacros || ["center"]);
+  const usedStopContext = buildUsedStopContext(usedRoutes);
+  const repeatMultiplier = repeatDepthMultiplier(usedRoutes) * (manualAnchorsLocked ? 0.35 : 1);
   let score = (item.anchorWeight || 1) + Math.max(0, 1.2 - index * 0.08);
 
   score += preferenceBoostForStop(item, preferences, optimizerMode, modifier, strictTags);
@@ -3424,6 +3488,17 @@ function scoreStopCandidate({
     }
   }
 
+  const repeatedStopCount = item.id ? usedStopContext.stopIds.get(item.id) || 0 : 0;
+  const repeatedDuplicateFamilyCount = item.duplicateFamily
+    ? usedStopContext.duplicateFamilies.get(item.duplicateFamily) || 0
+    : 0;
+
+  if (repeatedStopCount) {
+    score -= Math.min(9.5, repeatedStopCount * 4.8 * repeatMultiplier);
+  } else if (repeatedDuplicateFamilyCount) {
+    score -= Math.min(4.6, repeatedDuplicateFamilyCount * 1.8 * repeatMultiplier);
+  }
+
   return Math.round(score * 10) / 10;
 }
 
@@ -3446,6 +3521,8 @@ function scoreSupplementalPoolItem({
   distanceMode,
   liveEvents = [],
   legPacing = "balanced",
+  usedRoutes = [],
+  manualAnchorsLocked = false,
 }) {
   if (!item || seedIds.has(item.id) || isAnchorDuplicateStop(item, start) || isAnchorDuplicateStop(item, end)) {
     return Number.NEGATIVE_INFINITY;
@@ -3458,6 +3535,8 @@ function scoreSupplementalPoolItem({
   const itemProfile = buildItemAreaProfile(item);
   const pacing = legPacingConfig[normalizeLegPacing(legPacing)];
   const supplementalArcTuning = getRoutingTuning().supplementalArcScoring || {};
+  const usedStopContext = buildUsedStopContext(usedRoutes);
+  const repeatMultiplier = repeatDepthMultiplier(usedRoutes) * (manualAnchorsLocked ? 0.35 : 1);
   const distanceToStart = haversineKm(start, item);
   const distanceToEnd = haversineKm(end, item);
   let score = preferenceBoostForStop(item, preferences, optimizerMode, modifier, strictTags);
@@ -3475,6 +3554,16 @@ function scoreSupplementalPoolItem({
 
   const duplicatePenalty = seedDuplicateCounts.get(item.duplicateFamily) || 0;
   score -= duplicatePenalty * 1.1;
+  const repeatedStopCount = item.id ? usedStopContext.stopIds.get(item.id) || 0 : 0;
+  const repeatedDuplicateFamilyCount = item.duplicateFamily
+    ? usedStopContext.duplicateFamilies.get(item.duplicateFamily) || 0
+    : 0;
+
+  if (repeatedStopCount) {
+    score -= Math.min(8.4, repeatedStopCount * 4.1 * repeatMultiplier);
+  } else if (repeatedDuplicateFamilyCount) {
+    score -= Math.min(3.8, repeatedDuplicateFamilyCount * 1.5 * repeatMultiplier);
+  }
 
   if (shape === "loop") {
     const anchorToken = startProfile?.primaryToken;
@@ -3674,10 +3763,10 @@ function buildStopPool(
     .filter((item) => candidateFitsLockedCorridor(item))
     .map((item) => ({
       item,
-      score: scoreSupplementalPoolItem({
-        item,
-        template,
-        shape,
+        score: scoreSupplementalPoolItem({
+          item,
+          template,
+          shape,
         start,
         end,
         startProfile,
@@ -3689,11 +3778,13 @@ function buildStopPool(
         optimizerMode,
         modifier,
         strictTags,
-        targetKm,
-        distanceMode,
-        liveEvents,
-        legPacing,
-      }),
+          targetKm,
+          distanceMode,
+          liveEvents,
+          legPacing,
+          usedRoutes: options.usedRoutes || [],
+          manualAnchorsLocked,
+        }),
     }))
     .filter((entry) => Number.isFinite(entry.score))
     .filter((entry) => entry.score > catalogSeedThreshold)
@@ -3759,6 +3850,8 @@ function buildStopPool(
         distanceMode,
         liveEvents,
         legPacing,
+        usedRoutes: options.usedRoutes || [],
+        manualAnchorsLocked,
       }),
     }))
     .filter((entry) => Number.isFinite(entry.score))
@@ -4654,6 +4747,8 @@ function buildRouteFromTemplate(
         targetKm,
         distanceMode,
         legPacing,
+        usedRoutes: options.usedRoutes || [],
+        manualAnchorsLocked: Boolean(options.manualAnchorsLocked),
       }),
     }))
     .sort((left, right) => right.score - left.score);
@@ -5338,6 +5433,7 @@ function routeScore({
   modifier,
   distanceMode,
   routeStops,
+  usedRoutes = [],
   manualAnchorsLocked = false,
   localTruth = null,
   lang = "sv",
@@ -5404,6 +5500,22 @@ function routeScore({
   const reusedPenalty = reusedIds.has(template.id) ? -6 : 0;
   const geoFitScore = (route.geo_quality_score || 0) - (route.pool_fit_penalty || 0);
   const localTruthScore = Number(localTruth?.score_delta || 0);
+  const repeatPressure = buildRepeatPressure(route, usedRoutes);
+  const noveltyBoost = routeNoveltyScore(route, usedRoutes);
+  const crossDayDepth = usedRoutes.length;
+  const diversityMultiplier = manualAnchorsLocked
+    ? 0.25
+    : Math.min(1.35, 0.55 + crossDayDepth * 0.18);
+  const diversityScore =
+    !crossDayDepth
+      ? 0
+      : noveltyBoost * diversityMultiplier -
+        repeatPressure.maxSimilarity * (0.24 * diversityMultiplier) -
+        repeatPressure.averageSimilarity * (0.12 * diversityMultiplier) -
+        repeatPressure.repeatedAnchorCount * (1.55 * diversityMultiplier) -
+        repeatPressure.repeatedMacroCount * (1.1 * diversityMultiplier) -
+        repeatPressure.repeatedStartCount * (0.4 * diversityMultiplier) -
+        repeatPressure.repeatedEndCount * (0.4 * diversityMultiplier);
 
   return {
     score:
@@ -5424,6 +5536,7 @@ function routeScore({
       geoFitScore +
       startProximity +
       endProximity +
+      diversityScore +
       reusedPenalty +
       localTruthScore,
     weatherNote: weatherFit.note,
@@ -6132,6 +6245,7 @@ async function generateRecommendations({
                 weekday,
                 lang: routeResultLang,
                 includeLiveEvents,
+                usedRoutes: usedPrimaryRoutes,
               },
             );
           const routeStops = route.main_stops
@@ -6169,6 +6283,7 @@ async function generateRecommendations({
             modifier,
             distanceMode,
             routeStops,
+            usedRoutes: usedPrimaryRoutes,
             manualAnchorsLocked,
             localTruth,
             lang: routeResultLang,
