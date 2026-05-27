@@ -144,6 +144,51 @@ test("Barcelona low-key evening stays local to Gracia", async () => {
   assert.ok(route.estimated_km <= 2);
 });
 
+test("Barcelona explicit Gracia loop remains topology-bound even with no-limit distance", async () => {
+  const route = await runBarcelonaScenario({
+    start: { type: "preset", label: "Gràcia" },
+    end: { type: "preset", label: "Gràcia" },
+    walkingKmTarget: 10,
+    preferences: ["lokalt"],
+    legPacing: "flexible",
+    distanceMode: "no_limit",
+  });
+
+  assert.ok(stopItems(route).every((item) => item.area === "gracia"));
+  assert.ok(route.longest_leg_km <= 2.2);
+  assert.ok(route.estimated_km <= 6.5);
+});
+
+test("Barcelona Sant Antoni loop stays compact instead of drifting across the city", async () => {
+  const route = await runBarcelonaScenario({
+    start: { type: "preset", label: "Sant Antoni" },
+    end: { type: "preset", label: "Sant Antoni" },
+    walkingKmTarget: 4,
+    preferences: ["mat", "vin", "bar"],
+    legPacing: "short",
+  });
+  const allowedAreas = new Set(["sant-antoni", "eixample", "raval"]);
+
+  assert.ok(stopItems(route).every((item) => allowedAreas.has(item.area)));
+  assert.ok(route.longest_leg_km <= 1.2);
+  assert.ok(route.estimated_km <= 3.8);
+});
+
+test("Barcelona Gothic/Born loop stays inside the central neighborhood envelope", async () => {
+  const route = await runBarcelonaScenario({
+    start: { type: "preset", label: "Gothic" },
+    end: { type: "preset", label: "Born" },
+    walkingKmTarget: 4,
+    preferences: ["kultur", "cafe"],
+    legPacing: "short",
+  });
+  const allowedAreas = new Set(["gothic", "born-sant-pere-santa-caterina", "raval"]);
+
+  assert.ok(stopItems(route).every((item) => allowedAreas.has(item.area)));
+  assert.ok(route.longest_leg_km <= 1.2);
+  assert.ok(route.estimated_km <= 3.2);
+});
+
 test("Barcelona beer/bar night can use Poble-sec evening density without structural stops", async () => {
   const route = await runBarcelonaScenario({
     start: { type: "preset", label: "Poble-sec" },
@@ -171,6 +216,22 @@ test("Barcelona short walking food/wine day remains compact", async () => {
 
   assert.ok(route.estimated_km <= 3.5);
   assert.ok(Math.max(...(route.legs || []).map((leg) => Number(leg.distance_km) || 0)) <= 1.2);
+});
+
+test("Barcelona Born to Gracia arc progresses through real connector stops", async () => {
+  const route = await runBarcelonaScenario({
+    start: { type: "preset", label: "Born" },
+    end: { type: "preset", label: "Gràcia" },
+    walkingKmTarget: 7,
+    preferences: ["kultur", "cafe", "lokalt"],
+  });
+  const stops = stopItems(route);
+
+  assertRouteLegLabels(route);
+  assert.ok(route.longest_leg_km <= 2.1);
+  assert.equal(route.long_leg_count, 0);
+  assert.ok(stops.some((item) => item.area === "eixample" || item.area === "raval"));
+  assert.ok(stops.some((item) => item.area === "gracia"));
 });
 
 test("Barcelona Gracia to Poblenou second-hand route inserts a real bridge instead of a dead long leg", async () => {
@@ -229,4 +290,36 @@ test("Barcelona flexible no-limit routes may keep a long transfer but must repor
   assert.ok(route.route_continuity_score < 10);
   assert.ok(Array.isArray(route.route_quality_warnings));
   assert.ok(route.route_quality_warnings.length >= 1);
+});
+
+test("Barcelona rainy low-walking auto-flow chooses a compact route envelope", async () => {
+  const route = await runBarcelonaScenario(
+    {
+      start: { type: "auto", label: "Parranda chooses" },
+      end: { type: "auto", label: "Parranda chooses" },
+      walkingKmTarget: 4,
+      preferences: ["kultur", "cafe"],
+      legPacing: "short",
+      modifier: "rainy",
+    },
+    { "2026-05-26": { condition: "rain", temperature: 18 } },
+  );
+
+  assert.ok(route.estimated_km <= 4.2);
+  assert.ok(route.longest_leg_km <= 1.6);
+  assert.equal(route.long_leg_count, 0);
+});
+
+test("Barcelona home-base in Gracia biases auto-flow into a local soft loop", async () => {
+  const route = await runBarcelonaScenario({
+    homeBase: { type: "preset", label: "Gràcia" },
+    start: { type: "auto", label: "Parranda chooses" },
+    end: { type: "auto", label: "Parranda chooses" },
+    walkingKmTarget: 5,
+    preferences: ["mat", "vin", "lokalt"],
+  });
+
+  assert.ok(stopItems(route).every((item) => item.area === "gracia"));
+  assert.ok(route.longest_leg_km <= 1.2);
+  assert.ok(route.estimated_km <= 3);
 });

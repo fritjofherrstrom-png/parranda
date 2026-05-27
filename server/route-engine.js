@@ -1554,6 +1554,8 @@ function scoreAutoAnchorPair(
     modifier = null,
     targetKm = 8,
     distanceMode = "soft_target",
+    legPacing = "balanced",
+    weather = null,
     usedRoutes = [],
   } = {},
 ) {
@@ -1639,6 +1641,30 @@ function scoreAutoAnchorPair(
     score += 2.2;
   }
 
+  if (!isBroadExplorationRoute({ preferences, optimizerMode, modifier, distanceMode, targetKm })) {
+    const pacingKey = normalizeLegPacing(legPacing);
+    const cautiousFlow =
+      pacingKey === "short" ||
+      Number(targetKm || 8) <= 6 ||
+      preferences.includes("low-key") ||
+      normalizeModifier(modifier, optimizerMode) === "low_key" ||
+      weather?.condition === "rain";
+    const comfortableArcKm = cautiousFlow ? Math.max(3.2, (targetKm || 8) * 0.58) : Math.max(4.2, (targetKm || 8) * 0.72);
+
+    if (distanceKm > comfortableArcKm) {
+      score -= (distanceKm - comfortableArcKm) * (cautiousFlow ? 2.8 : 1.6);
+    }
+
+    if (homeBase && typeof homeBase.lat === "number" && typeof homeBase.lng === "number") {
+      const startHomeKm = haversineKm(startCandidate, homeBase);
+      const endHomeKm = haversineKm(endCandidate, homeBase);
+      const farthestHomeKm = Math.max(startHomeKm, endHomeKm);
+      if (farthestHomeKm > Math.max(2.4, (targetKm || 8) * 0.38)) {
+        score -= (farthestHomeKm - Math.max(2.4, (targetKm || 8) * 0.38)) * 2.4;
+      }
+    }
+  }
+
   const expectedMaxDistance = distanceMode === "no_limit" ? 7.2 : Math.max(4.5, targetKm * 0.75);
   if (distanceKm > expectedMaxDistance) {
     score -= (distanceKm - expectedMaxDistance) * 1.5;
@@ -1711,6 +1737,8 @@ function scoreAutoLoopCandidate(
     modifier = null,
     targetKm = 8,
     distanceMode = "soft_target",
+    legPacing = "balanced",
+    weather = null,
   } = {},
 ) {
   const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
@@ -1734,7 +1762,20 @@ function scoreAutoLoopCandidate(
     score += 1.2;
   }
 
-  if (distanceMode === "no_limit") {
+  if (normalizeLegPacing(legPacing) === "short" || Number(targetKm || 8) <= 6) {
+    score += 2.8;
+  }
+
+  if (weather?.condition === "rain") {
+    score += 1.8;
+  }
+
+  if (homeBase && typeof homeBase.lat === "number" && typeof homeBase.lng === "number") {
+    const homeKm = haversineKm(candidate, homeBase);
+    score += Math.max(0, 4.2 - homeKm * 1.6);
+  }
+
+  if (distanceMode === "no_limit" && !isBroadExplorationRoute({ preferences, optimizerMode, modifier, distanceMode, targetKm })) {
     score -= 1.4;
   }
 
@@ -1753,8 +1794,10 @@ function scoreAutoLoopCandidate(
 
 function resolveAutoAnchors(options = {}) {
   const strictTags = resolveStrictPreferenceTags(options.preferences || [], options.optimizerMode);
+  const broadExploration = isBroadExplorationRoute(options);
+  const localEnvelopeBias = localAutoEnvelopeBias(options);
   const arcFriendlyDay =
-    options.distanceMode === "no_limit" ||
+    broadExploration ||
     options.preferences?.includes("kväll") ||
     options.preferences?.includes("party") ||
     options.preferences?.includes("nattliv") ||
@@ -1827,19 +1870,21 @@ function resolveAutoAnchors(options = {}) {
 
   const bestLoop = rankedLoop[0];
   const bestArc = rankedArc[0];
+  const adjustedLoopScore = bestLoop ? bestLoop.score + localEnvelopeBias : Number.NEGATIVE_INFINITY;
+  const adjustedArcScore = bestArc ? bestArc.score - localEnvelopeBias * 0.75 : Number.NEGATIVE_INFINITY;
   const shouldPreferArc =
     bestArc &&
     (
       !bestLoop ||
-      bestArc.score >= bestLoop.score + 2.4 ||
+      adjustedArcScore >= adjustedLoopScore + 2.4 ||
       (
         arcFriendlyDay &&
-        bestArc.score >= bestLoop.score + 0.8
+        adjustedArcScore >= adjustedLoopScore + 0.8
       ) ||
       (
         arcFriendlyDay &&
         strictTags.length === 0 &&
-        bestArc.score >= bestLoop.score - 2.6
+        adjustedArcScore >= adjustedLoopScore - 2.6
       )
     );
 
@@ -2650,6 +2695,65 @@ function loopRadiusKm(targetKm, distanceMode) {
   return clamp((targetKm || 8) * 0.42, 2.2, 4.4);
 }
 
+function isBroadExplorationRoute({
+  preferences = [],
+  optimizerMode = null,
+  modifier = null,
+  distanceMode = "soft_target",
+  targetKm = 8,
+} = {}) {
+  if (distanceMode !== "no_limit") {
+    return false;
+  }
+
+  const activeModifier = normalizeModifier(modifier, optimizerMode);
+  return (
+    Number(targetKm || 0) >= 10 &&
+    (
+      isNightlifeExplicit(preferences, optimizerMode, modifier) ||
+      activeModifier === "party" ||
+      activeModifier === "evening"
+    )
+  );
+}
+
+function localAutoEnvelopeBias({
+  homeBase = null,
+  preferences = [],
+  optimizerMode = null,
+  modifier = null,
+  targetKm = 8,
+  distanceMode = "soft_target",
+  legPacing = "balanced",
+  weather = null,
+} = {}) {
+  if (isBroadExplorationRoute({ preferences, optimizerMode, modifier, distanceMode, targetKm })) {
+    return 0;
+  }
+
+  const activeModifier = normalizeModifier(modifier, optimizerMode);
+  const pacingKey = normalizeLegPacing(legPacing);
+  let bias = 0;
+
+  if (homeBase && typeof homeBase.lat === "number" && typeof homeBase.lng === "number") {
+    bias += 8.4;
+  }
+
+  if (pacingKey === "short") {
+    bias += 4.4;
+  }
+
+  if (preferences.includes("low-key") || activeModifier === "low_key") {
+    bias += 2.4;
+  }
+
+  if (weather?.condition === "rain") {
+    bias += 2.2;
+  }
+
+  return Number(bias.toFixed(1));
+}
+
 function isAnchorDuplicateStop(item, point) {
   return (
     slugifyText(item.name) === slugifyText(point.label) ||
@@ -2775,6 +2879,7 @@ function insertBridgeStopsForLongLegs(
     modifier = null,
     legPacing = "balanced",
     distanceMode = "soft_target",
+    shape = "loop",
   } = {},
 ) {
   const pacingKey = normalizeLegPacing(legPacing);
@@ -2790,7 +2895,23 @@ function insertBridgeStopsForLongLegs(
   for (let insertionCount = 0; insertionCount < maxInsertions; insertionCount += 1) {
     const points = [start, ...currentStops, end];
     const legs = buildRouteLegs(points);
-    const longLegIndex = legs.findIndex((leg) => leg.distance_km > continuity.bridgeMaxKm);
+    const lateHopMetrics = shape === "arc" ? buildArcLateHopMetrics(legs, legPacing) : { count: 0 };
+    const bridgeThreshold =
+      shape === "arc" && lateHopMetrics.count
+        ? Math.max(0.8, continuity.bridgeMaxKm - 0.15)
+        : continuity.bridgeMaxKm;
+    const longLegIndex = legs.findIndex((leg, index) => {
+      const distance = Number(leg.distance_km);
+      if (!Number.isFinite(distance)) {
+        return false;
+      }
+
+      if (distance > bridgeThreshold) {
+        return true;
+      }
+
+      return shape === "arc" && lateHopMetrics.count && index >= 2 && distance >= bridgeThreshold - 0.05;
+    });
 
     if (longLegIndex < 0) {
       break;
@@ -2978,6 +3099,147 @@ function ensureLockedArcCoverage(selectedStops, sortedPool, start, end, desiredC
   }
 
   return uniqueStops(selected).slice(0, desiredCount);
+}
+
+function ensureArcProgressionCoverage(
+  selectedStops,
+  sortedPool,
+  start,
+  end,
+  {
+    desiredCount,
+    preferences = [],
+    optimizerMode = null,
+    targetKm = 8,
+    distanceMode = "soft_target",
+    legPacing = "balanced",
+  } = {},
+) {
+  const selected = uniqueStops(selectedStops);
+
+  if (selected.length < 3 || !Array.isArray(sortedPool) || !sortedPool.length) {
+    return selected;
+  }
+
+  const axisLengthKm = Math.max(haversineKm(start, end), 0.1);
+  if (axisLengthKm < 3.2) {
+    return selected;
+  }
+
+  const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
+  const shouldPreserveSecondHandFamily =
+    preferences.includes("second_hand") || preferences.includes("vintage");
+  const selectedIds = new Set(selected.map((item) => item.id));
+  const pacingKey = normalizeLegPacing(legPacing);
+  const corridorWidthKm = clamp(
+    Math.max((targetKm || 8) * (pacingKey === "short" ? 0.15 : 0.2), pacingKey === "short" ? 0.75 : 0.95),
+    pacingKey === "short" ? 0.75 : 0.95,
+    distanceMode === "no_limit" ? 2.1 : pacingKey === "short" ? 1.25 : 1.65,
+  );
+  const windows =
+    axisLengthKm >= 4.4
+      ? [
+          { min: 0.18, max: 0.46 },
+          { min: 0.46, max: 0.78 },
+        ]
+      : [{ min: 0.26, max: 0.74 }];
+
+  const metaFor = (item) => {
+    const axis = projectPointToAxis(item, start, end);
+    const progressRatio = axis.progressKm / Math.max(axis.axisLengthKm || 0.1, 0.1);
+    return { axis, progressRatio };
+  };
+
+  const replaceWeakClusterStop = (candidate, window) => {
+    const candidateMatchesStrict = !strictTags.length || itemMatchesStrictPreference(candidate, strictTags);
+    if (!candidateMatchesStrict) {
+      return false;
+    }
+
+    if (shouldPreserveSecondHandFamily && !itemMatchesSecondHandIntentFamily(candidate)) {
+      return false;
+    }
+
+    const replaceIndex = selected.reduce((chosenIndex, item, index) => {
+      const meta = metaFor(item);
+      const outsideWindow = meta.progressRatio < window.min || meta.progressRatio > window.max;
+      const strictProtected = strictTags.length && itemMatchesStrictPreference(item, strictTags);
+
+      if (!outsideWindow || (strictProtected && !itemMatchesStrictPreference(candidate, strictTags))) {
+        return chosenIndex;
+      }
+
+      if (chosenIndex < 0) {
+        return index;
+      }
+
+      const chosenMeta = metaFor(selected[chosenIndex]);
+      const currentEdgeDistance = Math.max(
+        Math.abs(meta.progressRatio - window.min),
+        Math.abs(meta.progressRatio - window.max),
+      );
+      const chosenEdgeDistance = Math.max(
+        Math.abs(chosenMeta.progressRatio - window.min),
+        Math.abs(chosenMeta.progressRatio - window.max),
+      );
+      return currentEdgeDistance > chosenEdgeDistance ? index : chosenIndex;
+    }, -1);
+
+    if (replaceIndex < 0) {
+      return false;
+    }
+
+    selectedIds.delete(selected[replaceIndex].id);
+    selected[replaceIndex] = candidate;
+    selectedIds.add(candidate.id);
+    return true;
+  };
+
+  windows.forEach((window) => {
+    const hasWindowStop = selected.some((item) => {
+      const meta = metaFor(item);
+      return (
+        meta.progressRatio >= window.min &&
+        meta.progressRatio <= window.max &&
+        meta.axis.lateralKm <= corridorWidthKm
+      );
+    });
+
+    if (hasWindowStop) {
+      return;
+    }
+
+    const candidate = sortedPool
+      .map((entry) => entry.item)
+      .find((item) => {
+        if (!item || selectedIds.has(item.id) || !isBridgeCandidateStop(item)) {
+          return false;
+        }
+
+        const meta = metaFor(item);
+        return (
+          meta.progressRatio >= window.min &&
+          meta.progressRatio <= window.max &&
+          meta.axis.lateralKm <= corridorWidthKm &&
+          (!shouldPreserveSecondHandFamily || itemMatchesSecondHandIntentFamily(item)) &&
+          (!strictTags.length || itemMatchesStrictPreference(item, strictTags))
+        );
+      });
+
+    if (!candidate) {
+      return;
+    }
+
+    if (selected.length < Math.max(3, desiredCount || selected.length)) {
+      selected.push(candidate);
+      selectedIds.add(candidate.id);
+      return;
+    }
+
+    replaceWeakClusterStop(candidate, window);
+  });
+
+  return uniqueStops(selected).slice(0, desiredCount || selected.length);
 }
 
 function preferenceBoostForStop(
@@ -3580,6 +3842,7 @@ function summarizeArcGeometry(orderedStops, start, end, startProfile, endProfile
   const estimatedKm = walkingKm(points);
   const legs = buildRouteLegs(points);
   const legMetrics = buildLegMetrics(legs, legPacing, { shape: "arc", lang });
+  const lateHopMetrics = buildArcLateHopMetrics(legs, legPacing);
   const directKm = Math.max(0.4, haversineKm(start, end) * 1.22);
   const firstGap = orderedStops[0] ? haversineKm(start, orderedStops[0]) : 0;
   const lastGap = orderedStops.length ? haversineKm(end, orderedStops[orderedStops.length - 1]) : 0;
@@ -3608,7 +3871,8 @@ function summarizeArcGeometry(orderedStops, start, end, startProfile, endProfile
   const edgePenalty =
     Math.max(0, firstGap - 1.4) * 2.6 + Math.max(0, lastGap - 1.4) * 2.6;
   const detourPenalty = Math.max(0, estimatedKm - directKm * 1.8) * 1.4;
-  const progressionPenalty = reversals * 3.6 + lateralTotal * 0.95 + macroDrift * 0.9;
+  const progressionPenalty =
+    reversals * 3.6 + lateralTotal * 0.95 + macroDrift * 0.9 + lateHopMetrics.penalty;
   const kmPenalty =
     distanceMode === "no_limit" || !targetKm
       ? 0
@@ -3625,6 +3889,8 @@ function summarizeArcGeometry(orderedStops, start, end, startProfile, endProfile
     reversals,
     lateralTotal,
     macroDrift,
+    lateHopCount: lateHopMetrics.count,
+    lateHopPenalty: lateHopMetrics.penalty,
     longestLegKm: legMetrics.longestLegKm,
     longestLegMinutes: legMetrics.longestLegMinutes,
     averageLegKm: legMetrics.averageLegKm,
@@ -3708,6 +3974,48 @@ function buildRouteLegs(points) {
   return legs;
 }
 
+function buildArcLateHopMetrics(legs = [], legPacing = "balanced") {
+  const pacingKey = normalizeLegPacing(legPacing);
+  const pacing = legPacingConfig[pacingKey];
+  const continuity = getRouteContinuityConfig(pacingKey);
+  const distances = legs
+    .map((leg) => Number(leg.distance_km))
+    .filter((distance) => Number.isFinite(distance));
+
+  if (distances.length < 4) {
+    return { count: 0, penalty: 0 };
+  }
+
+  const lateHopThreshold = Math.max(
+    pacing.preferredMaxKm * (pacingKey === "short" ? 1.55 : pacingKey === "balanced" ? 1.75 : 2.1),
+    continuity.reportMaxKm * (pacingKey === "short" ? 0.72 : 0.82),
+  );
+  let count = 0;
+  let penalty = 0;
+
+  distances.forEach((distance, index) => {
+    if (index < 2 || distance <= lateHopThreshold) {
+      return;
+    }
+
+    const previous = distances.slice(0, index);
+    const previousAverage = previous.reduce((sum, value) => sum + value, 0) / previous.length;
+    const previousClustered = previousAverage <= pacing.preferredMaxKm * 0.92;
+
+    if (!previousClustered) {
+      return;
+    }
+
+    count += 1;
+    penalty += (distance - lateHopThreshold) * (pacingKey === "short" ? 5.2 : pacingKey === "balanced" ? 3.4 : 1.4);
+  });
+
+  return {
+    count,
+    penalty: Number(penalty.toFixed(1)),
+  };
+}
+
 function buildLegMetrics(legs = [], legPacing = "balanced", { shape = "loop", lang = "sv" } = {}) {
   const pacingKey = normalizeLegPacing(legPacing);
   const pacing = legPacingConfig[pacingKey];
@@ -3758,18 +4066,22 @@ function buildLegMetrics(legs = [], legPacing = "balanced", { shape = "loop", la
     flexible: shape === "arc" ? 1.1 : 0.7,
   };
   const outlierPenalty = outlierGapKm * outlierWeights[pacingKey];
-  const longLegs = validLegs.filter((leg) => leg.distance_km > continuity.reportMaxKm);
+  const reportMaxKm =
+    shape === "arc" && pacingKey === "flexible"
+      ? Math.min(continuity.reportMaxKm, routeContinuityConfig.balanced.reportMaxKm)
+      : continuity.reportMaxKm;
+  const longLegs = validLegs.filter((leg) => leg.distance_km > reportMaxKm);
   const severeLongLegCount = longLegs.filter((leg) => leg.distance_km >= continuity.severeLegKm).length;
   const deadWalkPenalty =
     longLegs.reduce(
-      (sum, leg) => sum + Math.max(0, leg.distance_km - continuity.reportMaxKm) * continuity.deadWalkWeight,
+      (sum, leg) => sum + Math.max(0, leg.distance_km - reportMaxKm) * continuity.deadWalkWeight,
       0,
     ) +
     severeLongLegCount * (pacingKey === "short" ? 1.8 : pacingKey === "balanced" ? 1.2 : 0.5) +
     Math.max(0, longLegs.length - 1) * (pacingKey === "short" ? 0.9 : pacingKey === "balanced" ? 0.6 : 0.25);
   const penalty = overflowPenalty + variancePenalty + outlierPenalty + deadWalkPenalty;
   const routeContinuityScore = clamp(
-    10 - deadWalkPenalty - Math.max(0, longestLegKm - continuity.reportMaxKm) * 0.4,
+    10 - deadWalkPenalty - Math.max(0, longestLegKm - reportMaxKm) * 0.4,
     0,
     10,
   );
@@ -4378,6 +4690,23 @@ function buildRouteFromTemplate(
     );
   }
 
+  if (shape === "arc") {
+    selectedStops = ensureArcProgressionCoverage(
+      selectedStops,
+      sortedPool,
+      start,
+      end,
+      {
+        desiredCount: selectedStops.length,
+        preferences,
+        optimizerMode,
+        targetKm,
+        distanceMode,
+        legPacing,
+      },
+    );
+  }
+
   const { orderedStops, geometry } = optimizeStopOrder(
     selectedStops,
     shape,
@@ -4398,6 +4727,7 @@ function buildRouteFromTemplate(
     modifier,
     legPacing,
     distanceMode,
+    shape,
   });
   const rebalancedStops = rebalanceWeakMarketLead(
     bridgedStops,
@@ -5725,6 +6055,8 @@ async function generateRecommendations({
             modifier,
             targetKm: walkingKmTarget,
             distanceMode,
+            legPacing,
+            weather,
             usedRoutes: usedPrimaryRoutes,
           });
           dayResolvedStart = autoAnchors.start;
