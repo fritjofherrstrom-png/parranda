@@ -1148,6 +1148,26 @@ body::before {
     linear-gradient(180deg, rgba(255, 252, 247, 0.98), rgba(247, 236, 220, 0.96));
 }
 
+/* ── Planner entry route: inline instead of modal ── */
+.planner-entry-hidden {
+  display: none !important;
+}
+
+body.is-planner-entry .planner-modal-shell.planner-entry-inline {
+  position: static;
+  inset: auto;
+  z-index: auto;
+  max-height: none;
+  overflow: visible;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 24px max(18px, calc((100vw - 1100px) / 2));
+}
+
+body.is-planner-entry .planner-modal-backdrop {
+  display: none;
+}
+
 .planner-modal-head {
   display: flex;
   align-items: flex-start;

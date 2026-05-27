@@ -708,6 +708,165 @@ test("GET /barcelona renderar curated beta shell utan Rome-fallback", async () =
   }
 });
 
+test("GET /barcelona/plan renderar planner-entry-route shell med plannerEntryRoute: true", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during planner-entry-route test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestText(server, {
+      path: "/barcelona/plan",
+    });
+
+    assert.equal(response.status, 200);
+    assert.match(response.body, /<body data-city-key="barcelona"/);
+    assert.match(response.body, /"plannerEntryRoute":true/);
+    assert.match(response.body, /"key":"barcelona"/);
+    assert.match(response.body, /"fallbackUsed":false/);
+    assert.doesNotMatch(response.body, /__PARRANDA_I18N_[A-Z0-9_]+__/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /rome/plan renderar planner-entry-route shell för Rom", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during rome planner-entry-route test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestText(server, {
+      path: "/rome/plan",
+    });
+
+    assert.equal(response.status, 200);
+    assert.match(response.body, /<body data-city-key="rome"/);
+    assert.match(response.body, /"plannerEntryRoute":true/);
+    assert.match(response.body, /"key":"rome"/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /athens/plan renderar planner-entry-route shell för Athens", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during athens planner-entry-route test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestText(server, {
+      path: "/athens/plan",
+    });
+
+    assert.equal(response.status, 200);
+    assert.match(response.body, /<body data-city-key="athens"/);
+    assert.match(response.body, /"plannerEntryRoute":true/);
+    assert.match(response.body, /"key":"athens"/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /unknown-city/plan använder ärlig fallback med plannerEntryRoute", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during unknown-city planner-entry-route test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestText(server, {
+      path: "/unknown-city/plan",
+    });
+
+    assert.equal(response.status, 200);
+    assert.match(response.body, /"plannerEntryRoute":true/);
+    assert.match(response.body, /"fallbackUsed":true/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /barcelona (utan /plan) har plannerEntryRoute: false", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during normal barcelona shell test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestText(server, {
+      path: "/barcelona",
+    });
+
+    assert.equal(response.status, 200);
+    assert.match(response.body, /"plannerEntryRoute":false/);
+    assert.match(response.body, /"key":"barcelona"/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /barcelona/plan?lang=en renderar engelsk planner-entry-route shell", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during english planner-entry-route test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestText(server, {
+      path: "/barcelona/plan?lang=en",
+    });
+
+    assert.equal(response.status, 200);
+    assert.match(response.body, /"plannerEntryRoute":true/);
+    assert.match(response.body, /"lang":"en"/);
+    assert.match(response.body, /data-lang="en"/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /barcelona/plan bootstrap innehåller samma stadsdata som GET /barcelona förutom plannerEntryRoute", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during bootstrap comparison test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const normalResponse = await requestText(server, { path: "/barcelona" });
+    const planResponse = await requestText(server, { path: "/barcelona/plan" });
+
+    // Extract bootstrap JSON from both
+    const normalMatch = normalResponse.body.match(/window\.__PARRANDA_CITY__ = ({.*?});/);
+    const planMatch = planResponse.body.match(/window\.__PARRANDA_CITY__ = ({.*?});/);
+    assert.ok(normalMatch, "expected city bootstrap in normal shell");
+    assert.ok(planMatch, "expected city bootstrap in planner shell");
+
+    const normalBootstrap = JSON.parse(normalMatch[1]);
+    const planBootstrap = JSON.parse(planMatch[1]);
+
+    // plannerEntryRoute differs
+    assert.equal(normalBootstrap.plannerEntryRoute, false);
+    assert.equal(planBootstrap.plannerEntryRoute, true);
+
+    // Everything else is the same
+    delete normalBootstrap.plannerEntryRoute;
+    delete planBootstrap.plannerEntryRoute;
+    assert.deepEqual(normalBootstrap, planBootstrap);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("buildPlannerAreas deduplicerar alias och hoppar over omraden utan koordinatstod", () => {
   const plannerAreas = buildPlannerAreas({
     key: "fixture-city",

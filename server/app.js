@@ -785,7 +785,7 @@ function renderLandingShell({ lang = "sv" } = {}) {
   );
 }
 
-function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed, lang = "sv" }) {
+function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed, lang = "sv", plannerEntryRoute = false }) {
   const uiLang = normalizeLanguage(lang);
   const requestedLabel = cityFallbackUsed ? humanizeCityKey(requestedCity) : "";
   const displayLabel = resolveDisplayLabel(cityConfig, requestedLabel, uiLang);
@@ -814,6 +814,7 @@ function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed, lang = "s
     plannerAreas: buildPlannerAreas(cityConfig),
     requestedKey: requestedCity,
     fallbackUsed: cityFallbackUsed,
+    plannerEntryRoute,
     lang: uiLang,
   };
   const i18nBootstrap = buildClientI18nPayload();
@@ -1220,9 +1221,12 @@ function buildApp() {
       return;
     }
 
+    const pathSegments = String(request.path || "").split("/").filter(Boolean);
+    const isPlannerEntry = pathSegments[1] === "plan";
     const cityResolution = {
       ...resolveRequestCity(inferShellCity(request)),
       lang: normalizeLanguage(request.query?.lang),
+      plannerEntryRoute: isPlannerEntry,
     };
     response.type("html").send(renderAppShell(cityResolution));
   });
