@@ -955,6 +955,45 @@ test("GET /barcelona?lang=en renderar curated beta shell på engelska", async ()
   }
 });
 
+test("landing and city shells use root-absolute asset urls for deep routes", async () => {
+  const cityShell = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const landingShell = fs.readFileSync(path.join(__dirname, "..", "landing.html"), "utf8");
+
+  assert.match(cityShell, /href="\/manifest\.webmanifest"/);
+  assert.match(cityShell, /href="\/assets\/icons\/icon-192\.png"/);
+  assert.match(cityShell, /href="\/vendor\/leaflet\/leaflet\.css"/);
+  assert.match(cityShell, /href="\/styles\.css\?v=19"/);
+  assert.match(cityShell, /src="\/vendor\/leaflet\/leaflet\.js"/);
+  assert.match(cityShell, /src="\/planner-trust\.js\?v=1"/);
+  assert.match(cityShell, /src="\/script\.js\?v=24"/);
+  assert.match(cityShell, /src="\/ux-pass1\.js\?v=10"/);
+  assert.match(landingShell, /href="\/manifest\.webmanifest"/);
+  assert.match(landingShell, /href="\/assets\/icons\/icon-192\.png"/);
+  assert.match(landingShell, /href="\/styles\.css\?v=26"/);
+  assert.doesNotMatch(cityShell, /href="styles\.css\?v=19"/);
+  assert.doesNotMatch(cityShell, /src="script\.js\?v=24"/);
+  assert.doesNotMatch(landingShell, /href="styles\.css\?v=26"/);
+
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during deep-route shell asset test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestText(server, {
+      path: "/barcelona?lang=en",
+    });
+
+    assert.equal(response.status, 200);
+    assert.match(response.body, /<link rel="stylesheet" href="\/styles\.css\?v=19" \/>/);
+    assert.match(response.body, /<script src="\/script\.js\?v=24"><\/script>/);
+    assert.match(response.body, /<script src="\/planner-trust\.js\?v=1"><\/script>/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("GET /test-city?lang=en är fortsatt intern preview på engelska", async () => {
   global.fetch = async (url) => {
     throw new Error(`Unexpected fetch during English internal shell test: ${url}`);
