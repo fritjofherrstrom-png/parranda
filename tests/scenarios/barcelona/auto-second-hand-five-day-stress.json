@@ -378,57 +378,57 @@
       "date": "2026-05-27",
       "primary": {
         "id": "raval-vintage-shopping-loop",
-        "start": "Raval / Gothic",
-        "end": "Poble-sec / Montjuïc",
-        "shape": "arc",
+        "start": "Gràcia",
+        "end": "Gràcia",
+        "shape": "loop",
         "day_profile": "final",
-        "anchor_zone": "Gothic Quarter -> Poble-sec",
+        "anchor_zone": "Gràcia",
         "routing_source": "heuristic",
-        "estimated_km": 1.6,
-        "longest_leg_km": 1.3,
-        "longest_leg_minutes": 16,
-        "average_leg_minutes": 5,
+        "estimated_km": 1.1,
+        "longest_leg_km": 0.5,
+        "longest_leg_minutes": 6,
+        "average_leg_minutes": 3,
         "stops": [
           {
-            "label": "Arepa Queer",
-            "area": "raval",
+            "label": "Humana Vintage — Astúries",
+            "area": "gracia",
             "live": false
           },
           {
-            "label": "Vilde Vintage",
-            "area": "raval",
+            "label": "Mahalo Vintage — Plaça del Diamant",
+            "area": "gracia",
             "live": false
           },
           {
-            "label": "Lullaby Vintage",
-            "area": "raval",
+            "label": "Revolution Vintage",
+            "area": "gracia",
             "live": false
           }
         ],
         "legs": [
           {
-            "from": "Raval / Gothic",
-            "to": "Arepa Queer",
-            "km": 0.2,
-            "minutes": 2
+            "from": "Gràcia",
+            "to": "Humana Vintage — Astúries",
+            "km": 0.3,
+            "minutes": 4
           },
           {
-            "from": "Arepa Queer",
-            "to": "Vilde Vintage",
+            "from": "Humana Vintage — Astúries",
+            "to": "Mahalo Vintage — Plaça del Diamant",
             "km": 0.1,
             "minutes": 2
           },
           {
-            "from": "Vilde Vintage",
-            "to": "Lullaby Vintage",
-            "km": 0,
+            "from": "Mahalo Vintage — Plaça del Diamant",
+            "to": "Revolution Vintage",
+            "km": 0.2,
             "minutes": 2
           },
           {
-            "from": "Lullaby Vintage",
-            "to": "Poble-sec / Montjuïc",
-            "km": 1.3,
-            "minutes": 16
+            "from": "Revolution Vintage",
+            "to": "Gràcia",
+            "km": 0.5,
+            "minutes": 6
           }
         ]
       },

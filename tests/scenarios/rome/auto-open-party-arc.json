@@ -113,18 +113,18 @@
           ]
         },
         {
-          "id": "ostiense-garbatella-loop",
+          "id": "monti-night-spine",
           "start": "Ostiense",
           "end": "Pigneto/San Lorenzo",
           "shape": "arc",
           "day_profile": "variation",
           "anchor_zone": "Ostiense -> Pigneto",
           "stops": [
-            "Ostiense/Garbatella",
+            "Blackmarket Hall",
             "San Lorenzo",
-            "Pigneto",
             "Bar Bozza",
-            "Fanfulla 5/a"
+            "Bottiglieria Pigneto",
+            "Pigneto"
           ]
         }
       ]

@@ -540,6 +540,92 @@ A famous or SEO-dominant place can still win when it truly fits. But popularity 
 
 ---
 
+## 9. Route topology and internal envelopes
+
+### Lesson: walking length is a user-facing input, not the whole route shape
+
+**Observation**
+
+Barcelona beta had enough catalog density to reveal a generic route-shape problem: some routes matched intent tags but still felt wrong because they clustered the first few stops tightly and then made one late cross-city jump. The opposite pattern is also true: dense clustering can be excellent when the intended route is a one-neighborhood day.
+
+The fix is not "penalize clustering". The engine needs to distinguish route topology:
+
+```txt
+single_area_loop -> compact local radius
+area_to_area_arc -> corridor progress between anchors
+auto_flow -> choose loop vs arc from intent density and constraints
+home_base_soft_loop -> bias toward the user's base unless a broad arc is clearly justified
+broad_exploration -> explicit wider movement, not every no_limit route
+```
+
+**Generic rule**
+
+Keep walking length as the user's simple control, but derive an internal route envelope from:
+
+- topology
+- start/end/home-base anchors
+- leg pacing
+- walking target
+- distance mode
+- weather/day profile
+- intent density
+- connector availability
+
+For loops, a local radius around the anchor is the right mental model. For arcs, a corridor envelope between anchors is the right mental model. `no_limit` should relax the total walking budget; it should not automatically remove route-topology constraints unless the route is explicitly broad exploration.
+
+**Current anchor**
+
+- Route topology/envelope PR: Barcelona regression scenarios for Gràcia loops, Sant Antoni loops, Gothic/Born loops, Gràcia -> Poblenou arcs, Born -> Gràcia arcs, rainy low-walking auto-flow, home-base Gràcia, and no-limit Gràcia.
+- `tests/barcelona-route-quality-after-depth.test.js`.
+- `loopRadiusKm()`, `localAutoEnvelopeBias()`, route bridge insertion, and arc late-hop scoring in `server/route-engine.js`.
+
+**Applies to**
+
+- All citypacks.
+- Agnostic mode.
+- Future Planner and Blitz route generation.
+
+**Future hook**
+
+- Promote the implicit envelope into a named internal `route_envelope` object with:
+  - `topology`
+  - `anchor`
+  - `target_walking_km`
+  - `max_radius_km`
+  - `corridor_width_km`
+  - `late_hop_tolerance`
+  - `connector_policy`
+- Expose envelope diagnostics in shadow/debug tools before making it public.
+- Add a future planner option for "return near where I'm staying"; current home-base input can bias a local soft loop, but it does not explicitly mean "circle back home".
+- Balance topology with multi-day diversity: long trips should reduce bad late jumps without collapsing too many later days into the same compact neighborhood loop once corridor and intent density are both available.
+
+### Lesson: budget/premium pressure is not testable without price metadata
+
+**Observation**
+
+Barcelona route audits can send `budget` or `premium` preferences, but the current Barcelona runtime catalog does not yet carry enough `priceLevel` metadata to prove those preferences are shaping route identity honestly.
+
+**Generic rule**
+
+Do not fake budget/premium intelligence from vibe tags alone. If a city lacks price metadata, classify budget/premium behavior as a metadata issue and keep route output honest.
+
+**Current anchor**
+
+- Barcelona topology audit: budget/premium scenarios produced the same route because price metadata was missing.
+
+**Applies to**
+
+- All citypacks.
+- Agnostic mode.
+
+**Future hook**
+
+- City-pack readiness diagnostics for price coverage.
+- `PlaceCandidate` price/trust metadata.
+- Budget/premium route scoring only when source-backed price metadata exists.
+
+---
+
 ## Candidate next PRs from these learnings
 
 These are not commitments; they are suggested next moves when a related workstream is active.
