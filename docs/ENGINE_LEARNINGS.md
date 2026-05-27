@@ -519,6 +519,25 @@ The engine should eventually distinguish:
 
 A famous or SEO-dominant place can still win when it truly fits. But popularity should not be allowed to override weak route fit or local mismatch, and obscurity should not be allowed to override strong route fit either.
 
+**Current anchor**
+
+- PR #184: Barcelona beta catalog/source depth added real source-backed anchors beyond generic top-list coverage.
+- Barcelona route-quality audit after PR #184: better second-hand/vintage and evening flows came from more local catalog depth, while route tuning still needs to protect coherence and intent fit.
+- User product principle recorded 2026-05-26: Parranda should help users find places that do not necessarily rank highest on Google or win SEO visibility, without treating strong SEO as a negative signal when the place fits well.
+
+**Applies to**
+
+- All citypacks.
+- Agnostic mode.
+- Search, Planner, Blitz, Pulse, and future candidate providers.
+
+**Future hook**
+
+- PlaceCandidate ranking features such as `local_signal`, `tourist_gravity`, `seo_overexposure`, and `under_surfaced_score`.
+- RouteCandidate scoring that rewards source-backed local fit over generic popularity, while allowing famous/high-visibility places to win when fit is strong.
+- Copy guardrails: avoid fake "hidden gem" language; use honest language like "locally relevant", "source-backed", "route-fitting", or "less generic".
+- Candidate source mix: blend official/operator, local guide, map/search-derived, and curator sources without letting SEO-heavy listicles dominate or excluding well-known places that genuinely fit.
+
 ---
 
 ## 9. Route topology and internal envelopes
@@ -578,6 +597,7 @@ For loops, a local radius around the anchor is the right mental model. For arcs,
   - `connector_policy`
 - Expose envelope diagnostics in shadow/debug tools before making it public.
 - Add a future planner option for "return near where I'm staying"; current home-base input can bias a local soft loop, but it does not explicitly mean "circle back home".
+- Balance topology with multi-day diversity: long trips should reduce bad late jumps without collapsing too many later days into the same compact neighborhood loop once corridor and intent density are both available.
 
 ### Lesson: budget/premium pressure is not testable without price metadata
 
@@ -603,25 +623,6 @@ Do not fake budget/premium intelligence from vibe tags alone. If a city lacks pr
 - City-pack readiness diagnostics for price coverage.
 - `PlaceCandidate` price/trust metadata.
 - Budget/premium route scoring only when source-backed price metadata exists.
-
-**Current anchor**
-
-- PR #184: Barcelona beta catalog/source depth added real source-backed anchors beyond generic top-list coverage.
-- Barcelona route-quality audit after PR #184: better second-hand/vintage and evening flows came from more local catalog depth, while route tuning still needs to protect coherence and intent fit.
-- User product principle recorded 2026-05-26: Parranda should help users find places that do not necessarily rank highest on Google or win SEO visibility, without treating strong SEO as a negative signal when the place fits well.
-
-**Applies to**
-
-- All citypacks.
-- Agnostic mode.
-- Search, Planner, Blitz, Pulse, and future candidate providers.
-
-**Future hook**
-
-- PlaceCandidate ranking features such as `local_signal`, `tourist_gravity`, `seo_overexposure`, and `under_surfaced_score`.
-- RouteCandidate scoring that rewards source-backed local fit over generic popularity, while allowing famous/high-visibility places to win when fit is strong.
-- Copy guardrails: avoid fake "hidden gem" language; use honest language like "locally relevant", "source-backed", "route-fitting", or "less generic".
-- Candidate source mix: blend official/operator, local guide, map/search-derived, and curator sources without letting SEO-heavy listicles dominate or excluding well-known places that genuinely fit.
 
 ---
 
