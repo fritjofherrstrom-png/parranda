@@ -1954,6 +1954,15 @@ const routeDateTo = document.getElementById("routeDateTo");
 const distanceModeSelect = document.getElementById("distanceModeSelect");
 const walkingKmTarget = document.getElementById("walkingKmTarget");
 const walkingKmValue = document.getElementById("walkingKmValue");
+const walkingKmDoesntMatter = document.getElementById("walkingKmDoesntMatter");
+const homeBaseToggle = document.getElementById("homeBaseToggle");
+const homeBaseToggleLabel = document.getElementById("homeBaseToggleLabel");
+const homeBaseBody = document.getElementById("homeBaseBody");
+const plannerContextStrip = document.getElementById("plannerContextStrip");
+const plannerContextWeather = document.getElementById("plannerContextWeather");
+const plannerContextSignal = document.getElementById("plannerContextSignal");
+const plannerContextEvents = document.getElementById("plannerContextEvents");
+const plannerContextLoading = document.getElementById("plannerContextLoading");
 const legPacingSelect = document.getElementById("legPacingSelect");
 const legPacingHint = document.getElementById("legPacingHint");
 const useCurrentPlaceButton = document.getElementById("useCurrentPlaceButton");
@@ -6123,6 +6132,7 @@ async function loadCityPulse(dateString = getTodayIsoDate()) {
   cityPulseCache.set(targetDate, cityPulseState);
   renderHeroBlitz();
   renderCityPulse();
+  updatePlannerContextStrip();
   loadHeroBlitz().catch(() => {});
 }
 
@@ -7381,7 +7391,7 @@ function syncPlannerModeUI() {
 
 function updateWalkingKmLabel() {
   if (activeDistanceMode === "no_limit") {
-    walkingKmValue.textContent = "Spelar ingen roll";
+    walkingKmValue.textContent = t("planner.doesntMatter", "Spelar ingen roll");
     updatePlannerLaunchSummary();
     return;
   }
@@ -7392,8 +7402,82 @@ function updateWalkingKmLabel() {
 
 function updateDistanceModeUI() {
   activeDistanceMode = distanceModeSelect.value;
-  walkingKmTarget.disabled = activeDistanceMode === "no_limit";
+  const isNoLimit = activeDistanceMode === "no_limit";
+  walkingKmTarget.disabled = isNoLimit;
+  if (walkingKmDoesntMatter) walkingKmDoesntMatter.checked = isNoLimit;
   updateWalkingKmLabel();
+}
+
+function toggleDoesntMatter() {
+  if (!walkingKmDoesntMatter) return;
+  const checked = walkingKmDoesntMatter.checked;
+  if (distanceModeSelect) distanceModeSelect.value = checked ? "no_limit" : "soft_target";
+  activeDistanceMode = checked ? "no_limit" : "soft_target";
+  walkingKmTarget.disabled = checked;
+  updateWalkingKmLabel();
+}
+
+// ── Home-base toggle ──
+function setupHomeBaseToggle() {
+  if (!homeBaseToggle || !homeBaseBody) return;
+  let homeBaseExpanded = false;
+  homeBaseToggle.addEventListener("click", () => {
+    homeBaseExpanded = !homeBaseExpanded;
+    homeBaseBody.hidden = !homeBaseExpanded;
+    if (homeBaseToggleLabel) {
+      homeBaseToggleLabel.textContent = homeBaseExpanded
+        ? t("planner.hideHomeBase", "Dölj")
+        : t("planner.addHomeBase", "+ Lägg till hotell eller område");
+    }
+    if (homeBaseExpanded && homeBaseModeSelect) homeBaseModeSelect.focus();
+  });
+}
+setupHomeBaseToggle();
+
+// ── Compact context strip (planner-entry-route only) ──
+function updatePlannerContextStrip() {
+  if (!plannerContextStrip || !isPlannerEntryRoute) return;
+  const pulse = typeof cityPulseState !== "undefined" ? cityPulseState : null;
+  let hasAnyChip = false;
+
+  // Weather chip
+  if (plannerContextWeather && pulse?.weather) {
+    const w = pulse.weather;
+    const summary = w.description || w.summary || w.label || "";
+    const temp = w.temp_max != null ? `${Math.round(w.temp_max)}°` : "";
+    const text = [temp, summary].filter(Boolean).join(" ");
+    if (text) {
+      plannerContextWeather.textContent = text;
+      plannerContextWeather.hidden = false;
+      hasAnyChip = true;
+    }
+  }
+
+  // Signal chip (headline from Pulse)
+  if (plannerContextSignal && pulse?.headline) {
+    plannerContextSignal.textContent = pulse.headline;
+    plannerContextSignal.hidden = false;
+    hasAnyChip = true;
+  }
+
+  // Events chip
+  if (plannerContextEvents) {
+    const events = pulse?.official_events || [];
+    if (events.length > 0) {
+      plannerContextEvents.textContent = events.length === 1
+        ? t("planner.contextEventsOne", "1 händelse idag")
+        : tf("planner.contextEvents", { count: events.length }, `${events.length} händelser idag`);
+      plannerContextEvents.hidden = false;
+      hasAnyChip = true;
+    }
+  }
+
+  // Hide loading once we have data or on error
+  if (plannerContextLoading && (hasAnyChip || pulse)) {
+    plannerContextLoading.hidden = true;
+  }
+
+  plannerContextStrip.hidden = !hasAnyChip && !plannerContextLoading?.hidden === false;
 }
 
 function updateLegPacingUI() {
@@ -11043,6 +11127,11 @@ homeBaseCustomInput?.addEventListener("input", updatePlannerAdvancedSummary);
 startCustomInput?.addEventListener("input", updatePlannerAdvancedSummary);
 endCustomInput?.addEventListener("input", updatePlannerAdvancedSummary);
 walkingKmTarget?.addEventListener("input", updateWalkingKmLabel);
+walkingKmDoesntMatter?.addEventListener("change", () => {
+  activeOptimizerMode = null;
+  updateOptimizerButtons();
+  toggleDoesntMatter();
+});
 distanceModeSelect?.addEventListener("change", () => {
   activeOptimizerMode = null;
   updateOptimizerButtons();
@@ -11518,6 +11607,12 @@ loadPlannerOptions().then(() => {
       closePlannerModalButton.hidden = true;
     }
     document.body.classList.add("is-planner-entry");
+
+    // Show compact context strip on planner-entry route.
+    if (plannerContextStrip) {
+      plannerContextStrip.hidden = false;
+      updatePlannerContextStrip();
+    }
 
     // Support ?mode=manual on the plan route.
     const params = new URLSearchParams(location.search);

@@ -1168,6 +1168,81 @@ body.is-planner-entry .planner-modal-backdrop {
   display: none;
 }
 
+/* ── Compact context strip ── */
+.planner-context-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 max(18px, calc((100vw - 1100px) / 2));
+  margin: -8px 0 8px;
+}
+
+.planner-context-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(70, 38, 18, 0.06);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.planner-context-chip--loading {
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+/* ── "Doesn't matter" checkbox inline with slider ── */
+.planner-doesnt-matter-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 0.84rem;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.planner-doesnt-matter-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-deep);
+  cursor: pointer;
+}
+
+.planner-walking-field {
+  grid-column: span 2;
+}
+
+/* ── Home-base toggle ── */
+.planner-home-base-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+  background: none;
+  border: none;
+  color: var(--accent-deep);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.planner-home-base-toggle:hover {
+  text-decoration: underline;
+}
+
+.planner-home-base-body {
+  display: grid;
+  gap: 12px;
+}
+
 .planner-modal-head {
   display: flex;
   align-items: flex-start;

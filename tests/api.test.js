@@ -867,6 +867,84 @@ test("GET /barcelona/plan bootstrap innehåller samma stadsdata som GET /barcelo
   }
 });
 
+test("GET /barcelona/plan shell innehåller compact context strip och doesnt-matter checkbox", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during C2 element check: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestText(server, { path: "/barcelona/plan" });
+    assert.equal(response.status, 200);
+
+    // Compact context strip
+    assert.match(response.body, /id="plannerContextStrip"/);
+    assert.match(response.body, /id="plannerContextLoading"/);
+
+    // "Doesn't matter" checkbox
+    assert.match(response.body, /id="walkingKmDoesntMatter"/);
+
+    // Distance mode select is hidden
+    assert.match(response.body, /id="distanceModeSelect" hidden/);
+
+    // Home-base toggle
+    assert.match(response.body, /id="homeBaseToggle"/);
+    assert.match(response.body, /id="homeBaseBody"/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /barcelona/plan?lang=en renderar engelska C2-strängar", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during english C2 check: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestText(server, { path: "/barcelona/plan?lang=en" });
+    assert.equal(response.status, 200);
+
+    // English "doesn't matter" label is in i18n bootstrap JSON
+    assert.match(response.body, /Doesn.t matter/);
+
+    // English home-base toggle
+    assert.match(response.body, /Add hotel or area/);
+
+    // English context strip loading text
+    assert.match(response.body, /Reading city signals/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /barcelona (normal) shell innehåller samma C2 DOM-element men context strip är hidden", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during normal C2 check: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestText(server, { path: "/barcelona" });
+    assert.equal(response.status, 200);
+
+    // C2 elements present in DOM (shared template)
+    assert.match(response.body, /id="walkingKmDoesntMatter"/);
+    assert.match(response.body, /id="homeBaseToggle"/);
+
+    // Context strip present but hidden by default
+    assert.match(response.body, /id="plannerContextStrip"[^>]*hidden/);
+
+    // Normal page is NOT planner-entry
+    assert.match(response.body, /"plannerEntryRoute":false/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("buildPlannerAreas deduplicerar alias och hoppar over omraden utan koordinatstod", () => {
   const plannerAreas = buildPlannerAreas({
     key: "fixture-city",
