@@ -323,3 +323,30 @@ test("Barcelona home-base in Gracia biases auto-flow into a local soft loop", as
   assert.ok(route.longest_leg_km <= 1.2);
   assert.ok(route.estimated_km <= 3);
 });
+
+test("Barcelona Poblenou weekday route surfaces the Palo Alto Market closed-day warning", async () => {
+  // 2026-05-26 is a Tuesday (weekday 2). Palo Alto Market is an event_market
+  // with closedWeekdays [1,2,3,4,5], so a route that lands on it on a weekday
+  // must emit an opening-hours warning. Regression guard: resolveRouteStopData
+  // previously looked the stop up by catalog id via findItemByName (name-only
+  // index), always missed, fell back to a stub with closedWeekdays: [], and
+  // silently suppressed the warning.
+  const route = await runBarcelonaScenario({
+    start: { type: "preset", label: "Poblenou" },
+    end: { type: "preset", label: "Poblenou" },
+    walkingKmTarget: 8,
+    preferences: ["market", "kultur", "coast", "hidden gems", "mat", "lokalt"],
+    optimizerMode: "culture-mode",
+    legPacing: "flexible",
+    distanceMode: "no_limit",
+  });
+
+  assert.ok(
+    stopIds(route).includes("palo-alto-market"),
+    "regression premise: this Poblenou weekday route should realize Palo Alto Market",
+  );
+  assert.ok(
+    (route.opening_hours_warnings || []).some((warning) => warning.includes("Palo Alto Market")),
+    "Palo Alto Market is closed on weekdays and must trigger an opening-hours warning",
+  );
+});
