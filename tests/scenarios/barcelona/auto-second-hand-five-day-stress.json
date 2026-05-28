@@ -96,30 +96,35 @@
     {
       "date": "2026-05-24",
       "primary": {
-        "id": "raval-vintage-shopping-loop",
+        "id": "encants-to-coast-drift",
         "start": "Gràcia",
         "end": "Raval / Gothic",
         "shape": "arc",
         "day_profile": "light",
         "anchor_zone": "Gràcia -> Gothic Quarter",
         "routing_source": "heuristic",
-        "estimated_km": 3.9,
-        "longest_leg_km": 2.8,
-        "longest_leg_minutes": 34,
-        "average_leg_minutes": 12,
+        "estimated_km": 4,
+        "longest_leg_km": 1.9,
+        "longest_leg_minutes": 23,
+        "average_leg_minutes": 10,
         "stops": [
           {
-            "label": "Mahalo Vintage — Plaça del Diamant",
+            "label": "Humana Vintage — Astúries",
             "area": "gracia",
             "live": false
           },
           {
-            "label": "Holala! Plaza",
+            "label": "Cotton Vintage",
+            "area": "eixample",
+            "live": false
+          },
+          {
+            "label": "Lullaby Vintage",
             "area": "raval",
             "live": false
           },
           {
-            "label": "Vilde Vintage",
+            "label": "Arepa Queer",
             "area": "raval",
             "live": false
           }
@@ -127,24 +132,30 @@
         "legs": [
           {
             "from": "Gràcia",
-            "to": "Mahalo Vintage — Plaça del Diamant",
+            "to": "Humana Vintage — Astúries",
             "km": 0.3,
             "minutes": 4
           },
           {
-            "from": "Mahalo Vintage — Plaça del Diamant",
-            "to": "Holala! Plaza",
-            "km": 2.8,
-            "minutes": 34
+            "from": "Humana Vintage — Astúries",
+            "to": "Cotton Vintage",
+            "km": 1.9,
+            "minutes": 23
           },
           {
-            "from": "Holala! Plaza",
-            "to": "Vilde Vintage",
-            "km": 0.6,
-            "minutes": 7
+            "from": "Cotton Vintage",
+            "to": "Lullaby Vintage",
+            "km": 1.6,
+            "minutes": 19
           },
           {
-            "from": "Vilde Vintage",
+            "from": "Lullaby Vintage",
+            "to": "Arepa Queer",
+            "km": 0,
+            "minutes": 2
+          },
+          {
+            "from": "Arepa Queer",
             "to": "Raval / Gothic",
             "km": 0.2,
             "minutes": 2
@@ -161,10 +172,10 @@
           "day_profile": "variation",
           "anchor_zone": "Gràcia -> Gothic Quarter",
           "stops": [
-            "Revolution Vintage",
-            "Mahalo Vintage — Plaça del Diamant",
-            "Holala! Plaza",
-            "Vilde Vintage"
+            "Flamingos Vintage Kilo — Tallers",
+            "Vilde Vintage",
+            "Arepa Queer",
+            "Lullaby Vintage"
           ]
         },
         {
@@ -175,10 +186,10 @@
           "day_profile": "peak",
           "anchor_zone": "Gràcia -> Gothic Quarter",
           "stops": [
-            "Revolution Vintage",
-            "Mahalo Vintage — Plaça del Diamant",
-            "Holala! Plaza",
-            "Vilde Vintage"
+            "Flamingos Vintage Kilo — Tallers",
+            "Vilde Vintage",
+            "Arepa Queer",
+            "Lullaby Vintage"
           ]
         }
       ]
@@ -193,93 +204,82 @@
         "day_profile": "light",
         "anchor_zone": "Sant Antoni -> Gràcia",
         "routing_source": "heuristic",
-        "estimated_km": 4.5,
-        "longest_leg_km": 1.9,
-        "longest_leg_minutes": 23,
+        "estimated_km": 3.7,
+        "longest_leg_km": 2.3,
+        "longest_leg_minutes": 28,
         "average_leg_minutes": 11,
         "stops": [
           {
-            "label": "Cotton Vintage",
+            "label": "Mercat de Sant Antoni",
+            "area": "sant-antoni",
+            "live": false
+          },
+          {
+            "label": "Humana — Ronda de Sant Antoni",
+            "area": "sant-antoni",
+            "live": false
+          },
+          {
+            "label": "Humana Vintage — Ronda de la Universitat",
             "area": "eixample",
-            "live": false
-          },
-          {
-            "label": "Humana Vintage — Astúries",
-            "area": "gracia",
-            "live": false
-          },
-          {
-            "label": "Mahalo Vintage — Plaça del Diamant",
-            "area": "gracia",
-            "live": false
-          },
-          {
-            "label": "Revolution Vintage",
-            "area": "gracia",
             "live": false
           }
         ],
         "legs": [
           {
             "from": "Sant Antoni",
-            "to": "Cotton Vintage",
-            "km": 1.8,
-            "minutes": 22
-          },
-          {
-            "from": "Cotton Vintage",
-            "to": "Humana Vintage — Astúries",
-            "km": 1.9,
-            "minutes": 23
-          },
-          {
-            "from": "Humana Vintage — Astúries",
-            "to": "Mahalo Vintage — Plaça del Diamant",
-            "km": 0.1,
-            "minutes": 2
-          },
-          {
-            "from": "Mahalo Vintage — Plaça del Diamant",
-            "to": "Revolution Vintage",
+            "to": "Mercat de Sant Antoni",
             "km": 0.2,
             "minutes": 2
           },
           {
-            "from": "Revolution Vintage",
+            "from": "Mercat de Sant Antoni",
+            "to": "Humana — Ronda de Sant Antoni",
+            "km": 0.6,
+            "minutes": 7
+          },
+          {
+            "from": "Humana — Ronda de Sant Antoni",
+            "to": "Humana Vintage — Ronda de la Universitat",
+            "km": 0.6,
+            "minutes": 7
+          },
+          {
+            "from": "Humana Vintage — Ronda de la Universitat",
             "to": "Gràcia",
-            "km": 0.5,
-            "minutes": 6
+            "km": 2.3,
+            "minutes": 28
           }
         ]
       },
       "alternative_count": 2,
       "alternatives": [
         {
-          "id": "encants-to-coast-drift",
+          "id": "gothic-raval-cultural-connector",
           "start": "Sant Antoni",
           "end": "Gràcia",
           "shape": "arc",
           "day_profile": "variation",
           "anchor_zone": "Sant Antoni -> Gràcia",
           "stops": [
-            "Mercat de Sant Antoni",
-            "Humana — Ronda de Sant Antoni",
-            "Humana Vintage — Ronda de la Universitat",
-            "Cotton Vintage"
+            "Vilde Vintage",
+            "Humana Vintage — Portaferrissa",
+            "Flamingos Vintage Kilo — Tallers",
+            "Humana Vintage — Ronda de la Universitat"
           ]
         },
         {
-          "id": "encants-to-coast-drift",
+          "id": "gothic-raval-cultural-connector",
           "start": "Sant Antoni",
           "end": "Gràcia",
           "shape": "arc",
           "day_profile": "peak",
           "anchor_zone": "Sant Antoni -> Gràcia",
           "stops": [
-            "Mercat de Sant Antoni",
-            "Humana — Ronda de Sant Antoni",
-            "Humana Vintage — Ronda de la Universitat",
-            "Cotton Vintage"
+            "Vilde Vintage",
+            "Humana Vintage — Portaferrissa",
+            "Flamingos Vintage Kilo — Tallers",
+            "Humana Vintage — Ronda de la Universitat"
           ]
         }
       ]
@@ -294,82 +294,80 @@
         "day_profile": "light",
         "anchor_zone": "Gràcia -> Sant Antoni",
         "routing_source": "heuristic",
-        "estimated_km": 4.1,
-        "longest_leg_km": 1.9,
-        "longest_leg_minutes": 23,
-        "average_leg_minutes": 12,
+        "estimated_km": 4.5,
+        "longest_leg_km": 2.6,
+        "longest_leg_minutes": 31,
+        "average_leg_minutes": 14,
         "stops": [
           {
-            "label": "Mahalo Vintage — Plaça del Diamant",
-            "area": "gracia",
+            "label": "Flamingos Vintage Kilo — Tallers",
+            "area": "raval",
             "live": false
           },
           {
-            "label": "Humana Vintage — Astúries",
-            "area": "gracia",
+            "label": "Humana Vintage — Portaferrissa",
+            "area": "gothic",
             "live": false
           },
           {
-            "label": "Cotton Vintage",
-            "area": "eixample",
+            "label": "Vilde Vintage",
+            "area": "raval",
             "live": false
           }
         ],
         "legs": [
           {
             "from": "Gràcia",
-            "to": "Mahalo Vintage — Plaça del Diamant",
-            "km": 0.3,
-            "minutes": 4
+            "to": "Flamingos Vintage Kilo — Tallers",
+            "km": 2.6,
+            "minutes": 31
           },
           {
-            "from": "Mahalo Vintage — Plaça del Diamant",
-            "to": "Humana Vintage — Astúries",
-            "km": 0.1,
-            "minutes": 2
+            "from": "Flamingos Vintage Kilo — Tallers",
+            "to": "Humana Vintage — Portaferrissa",
+            "km": 0.5,
+            "minutes": 6
           },
           {
-            "from": "Humana Vintage — Astúries",
-            "to": "Cotton Vintage",
-            "km": 1.9,
-            "minutes": 23
+            "from": "Humana Vintage — Portaferrissa",
+            "to": "Vilde Vintage",
+            "km": 0.7,
+            "minutes": 8
           },
           {
-            "from": "Cotton Vintage",
+            "from": "Vilde Vintage",
             "to": "Sant Antoni",
-            "km": 1.8,
-            "minutes": 22
+            "km": 0.7,
+            "minutes": 8
           }
         ]
       },
       "alternative_count": 2,
       "alternatives": [
         {
-          "id": "encants-to-coast-drift",
+          "id": "sant-antoni-food-bar-flow",
           "start": "Gràcia",
           "end": "Sant Antoni",
           "shape": "arc",
-          "day_profile": "variation",
+          "day_profile": "light",
           "anchor_zone": "Gràcia -> Sant Antoni",
           "stops": [
-            "Cotton Vintage",
-            "Humana Vintage — Ronda de la Universitat",
-            "Humana — Ronda de Sant Antoni",
-            "Mercat de Sant Antoni"
+            "Mercat dels Encants",
+            "Flamingos Vintage Kilo — Tallers",
+            "Vilde Vintage"
           ]
         },
         {
-          "id": "encants-to-coast-drift",
+          "id": "born-santa-caterina-culture-wine-loop",
           "start": "Gràcia",
           "end": "Sant Antoni",
           "shape": "arc",
-          "day_profile": "peak",
+          "day_profile": "light",
           "anchor_zone": "Gràcia -> Sant Antoni",
           "stops": [
-            "Cotton Vintage",
-            "Humana Vintage — Ronda de la Universitat",
-            "Humana — Ronda de Sant Antoni",
-            "Mercat de Sant Antoni"
+            "Mercat dels Encants",
+            "Flamingos Vintage Kilo — Tallers",
+            "Vilde Vintage"
           ]
         }
       ]
@@ -377,58 +375,47 @@
     {
       "date": "2026-05-27",
       "primary": {
-        "id": "raval-vintage-shopping-loop",
-        "start": "Gràcia",
-        "end": "Gràcia",
+        "id": "gracia-local-evening-loop",
+        "start": "Poble-sec / Montjuïc",
+        "end": "Poble-sec / Montjuïc",
         "shape": "loop",
         "day_profile": "final",
-        "anchor_zone": "Gràcia",
+        "anchor_zone": "Poble-sec",
         "routing_source": "heuristic",
-        "estimated_km": 1.1,
-        "longest_leg_km": 0.5,
-        "longest_leg_minutes": 6,
-        "average_leg_minutes": 3,
+        "estimated_km": 6,
+        "longest_leg_km": 3,
+        "longest_leg_minutes": 36,
+        "average_leg_minutes": 24,
         "stops": [
           {
-            "label": "Humana Vintage — Astúries",
-            "area": "gracia",
+            "label": "Neko Vintage",
+            "area": "sants",
             "live": false
           },
           {
-            "label": "Mahalo Vintage — Plaça del Diamant",
-            "area": "gracia",
-            "live": false
-          },
-          {
-            "label": "Revolution Vintage",
-            "area": "gracia",
+            "label": "Humana — Sants",
+            "area": "sants",
             "live": false
           }
         ],
         "legs": [
           {
-            "from": "Gràcia",
-            "to": "Humana Vintage — Astúries",
-            "km": 0.3,
-            "minutes": 4
+            "from": "Poble-sec / Montjuïc",
+            "to": "Neko Vintage",
+            "km": 3,
+            "minutes": 36
           },
           {
-            "from": "Humana Vintage — Astúries",
-            "to": "Mahalo Vintage — Plaça del Diamant",
-            "km": 0.1,
-            "minutes": 2
+            "from": "Neko Vintage",
+            "to": "Humana — Sants",
+            "km": 0.6,
+            "minutes": 7
           },
           {
-            "from": "Mahalo Vintage — Plaça del Diamant",
-            "to": "Revolution Vintage",
-            "km": 0.2,
-            "minutes": 2
-          },
-          {
-            "from": "Revolution Vintage",
-            "to": "Gràcia",
-            "km": 0.5,
-            "minutes": 6
+            "from": "Humana — Sants",
+            "to": "Poble-sec / Montjuïc",
+            "km": 2.4,
+            "minutes": 29
           }
         ]
       },
