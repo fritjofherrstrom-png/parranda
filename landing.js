@@ -445,12 +445,15 @@
       if (!city) return;
       var stop = getBlitzPrimaryStop(landingBlitzState);
       var label = stop && (stop.name || stop.label);
+      // Navigate to the planner-entry route (not the legacy ?planner=open modal),
+      // preserving lang and carrying the Blitz stop as the home-base seed.
       var params = new URLSearchParams(window.location.search);
-      params.set("planner", "open");
-      params.delete("seed_label");
+      params.delete("planner");
       params.delete("seed");
+      params.delete("seed_label");
       if (label) params.set("seed_label", label);
-      window.location.href = "/" + city + "?" + params.toString();
+      var qs = params.toString();
+      window.location.href = "/" + city + "/plan" + (qs ? "?" + qs : "");
     });
   }
   document.addEventListener("keydown", function (e) {

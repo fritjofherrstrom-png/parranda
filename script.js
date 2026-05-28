@@ -11538,6 +11538,13 @@ loadPlannerOptions().then(() => {
       setPlannerMode(plannerManualMode);
       if (plannerFineTuneDetails) plannerFineTuneDetails.open = true;
     }
+
+    // Seed the home base from ?seed_label (e.g. the landing Blitz → Plan handoff).
+    const plannerSeedLabel = params.get("seed_label");
+    if (plannerSeedLabel) {
+      try { setPlannerFieldFromLabel("home_base", plannerSeedLabel); }
+      catch (_e) { /* silent fallback */ }
+    }
   } else {
     // Legacy ?planner=open compat on the normal city page.
     const params = new URLSearchParams(location.search);
