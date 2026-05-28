@@ -1963,6 +1963,7 @@ const plannerContextWeather = document.getElementById("plannerContextWeather");
 const plannerContextSignal = document.getElementById("plannerContextSignal");
 const plannerContextEvents = document.getElementById("plannerContextEvents");
 const plannerContextLoading = document.getElementById("plannerContextLoading");
+const plannerCityContext = document.getElementById("plannerCityContext");
 const legPacingSelect = document.getElementById("legPacingSelect");
 const legPacingHint = document.getElementById("legPacingHint");
 const useCurrentPlaceButton = document.getElementById("useCurrentPlaceButton");
@@ -7201,6 +7202,7 @@ function setPlannerFieldFromLabel(pointKey, label) {
   if (pointKey === "home_base") {
     activePlannerMode = plannerAutoMode;
     updatePlannerModeButtons();
+    expandHomeBase();
   } else {
     activePlannerMode = plannerManualMode;
     updatePlannerModeButtons();
@@ -7418,18 +7420,28 @@ function toggleDoesntMatter() {
 }
 
 // ── Home-base toggle ──
+let homeBaseExpanded = false;
+function expandHomeBase() {
+  if (!homeBaseBody || homeBaseExpanded) return;
+  homeBaseExpanded = true;
+  homeBaseBody.hidden = false;
+  if (homeBaseToggleLabel) {
+    homeBaseToggleLabel.textContent = t("planner.hideHomeBase", "Dölj");
+  }
+}
+function collapseHomeBase() {
+  if (!homeBaseBody) return;
+  homeBaseExpanded = false;
+  homeBaseBody.hidden = true;
+  if (homeBaseToggleLabel) {
+    homeBaseToggleLabel.textContent = t("planner.addHomeBase", "+ Lägg till hotell eller område");
+  }
+}
 function setupHomeBaseToggle() {
   if (!homeBaseToggle || !homeBaseBody) return;
-  let homeBaseExpanded = false;
   homeBaseToggle.addEventListener("click", () => {
-    homeBaseExpanded = !homeBaseExpanded;
-    homeBaseBody.hidden = !homeBaseExpanded;
-    if (homeBaseToggleLabel) {
-      homeBaseToggleLabel.textContent = homeBaseExpanded
-        ? t("planner.hideHomeBase", "Dölj")
-        : t("planner.addHomeBase", "+ Lägg till hotell eller område");
-    }
-    if (homeBaseExpanded && homeBaseModeSelect) homeBaseModeSelect.focus();
+    if (homeBaseExpanded) collapseHomeBase();
+    else { expandHomeBase(); if (homeBaseModeSelect) homeBaseModeSelect.focus(); }
   });
 }
 setupHomeBaseToggle();
@@ -7725,6 +7737,7 @@ function setPlannerDefaults() {
   activePlannerMode = plannerAutoMode;
   updatePlannerModeButtons();
   homeBaseModeSelect.value = plannerAutoMode;
+  collapseHomeBase();
   startModeSelect.value = plannerAutoMode;
   endModeSelect.value = plannerAutoMode;
   if (homeBasePresetSelect.options.length) {
@@ -11612,6 +11625,30 @@ loadPlannerOptions().then(() => {
     if (plannerContextStrip) {
       plannerContextStrip.hidden = false;
       updatePlannerContextStrip();
+    }
+
+    // Show post-planner city-context nav.
+    if (plannerCityContext) {
+      plannerCityContext.hidden = false;
+      plannerCityContext.querySelectorAll("[data-city-context]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const target = btn.dataset.cityContext;
+          // Unhide the tab-nav and tab panels that were hidden for planner-first.
+          document.querySelector(".tab-nav")?.classList.remove("planner-entry-hidden");
+          document.querySelectorAll("[data-tab-panel]").forEach((p) => p.classList.remove("planner-entry-hidden"));
+          document.getElementById("cityPulseTeaser")?.classList.remove("planner-entry-hidden");
+          // Switch to the requested tab.
+          if (target === "routes") {
+            // "Pulse" button — scroll to the Pulse teaser / routes panel.
+            const teaser = document.getElementById("cityPulseTeaser");
+            if (teaser) teaser.scrollIntoView({ behavior: "smooth", block: "start" });
+          } else {
+            switchTab(target);
+            const panel = document.querySelector(`[data-tab-panel="${target}"]`);
+            if (panel) panel.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+        });
+      });
     }
 
     // Support ?mode=manual on the plan route.

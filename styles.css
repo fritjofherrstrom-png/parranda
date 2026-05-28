@@ -1243,6 +1243,52 @@ body.is-planner-entry .planner-modal-backdrop {
   gap: 12px;
 }
 
+/* ── Post-planner city-context nav ── */
+.planner-city-context {
+  margin-top: 24px;
+  padding: 18px;
+  border-radius: 24px;
+  background: rgba(255, 252, 247, 0.7);
+  border: 1px solid rgba(70, 38, 18, 0.06);
+  text-align: center;
+}
+
+.planner-city-context__label {
+  margin: 0 0 12px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.planner-city-context__buttons {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.planner-city-context__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(70, 38, 18, 0.12);
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--accent-deep);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.planner-city-context__button:hover {
+  background: rgba(255, 255, 255, 1);
+  border-color: rgba(70, 38, 18, 0.2);
+}
+
 .planner-modal-head {
   display: flex;
   align-items: flex-start;
@@ -6132,6 +6178,35 @@ body.is-printing-guide #routeGuideDrawer {
 }
 
 /* ──────────────── PLANNER ──────────────── */
+/* ── Landing autosuggest ── */
+.lp-autosuggest {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  margin: 4px 0 0;
+  padding: 6px 0;
+  list-style: none;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(70, 38, 18, 0.12);
+  border: 1px solid rgba(70, 38, 18, 0.08);
+  overflow: hidden;
+}
+
+.lp-autosuggest__item {
+  padding: 10px 16px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.lp-autosuggest__item:hover,
+.lp-autosuggest__item--active {
+  background: rgba(70, 38, 18, 0.06);
+}
+
 .lp-planner__title {
   margin: 0 0 28px;
   font-family: "Cormorant Garamond", serif;

@@ -458,7 +458,7 @@ function resolveDisplayLabel(cityConfig, requestedLabel, lang) {
   return cityConfig?.label || "Staden";
 }
 
-function buildStaticShellI18nReplacements(lang) {
+function buildStaticShellI18nReplacements(lang, displayLabel) {
   const tr = (key, fallback = "") => escapeHtml(translate(lang, key, {}, fallback));
 
   return {
@@ -505,6 +505,7 @@ function buildStaticShellI18nReplacements(lang) {
     "__PARRANDA_I18N_DOESNT_MATTER__": tr("planner.doesntMatter"),
     "__PARRANDA_I18N_ADD_HOME_BASE__": tr("planner.addHomeBase"),
     "__PARRANDA_I18N_CONTEXT_STRIP_LOADING__": tr("planner.contextStripLoading"),
+    "__PARRANDA_I18N_EXPLORE_CITY_TOO__": tr("planner.exploreCityToo").replace("{city}", displayLabel || ""),
     "__PARRANDA_I18N_PREFERENCES_LABEL__": tr("planner.preferencesLabel"),
     "__PARRANDA_I18N_INTENT_FOOD_DRINK__": tr("planner.intent.food_drink"),
     "__PARRANDA_I18N_INTENT_CULTURE__": tr("planner.intent.culture"),
@@ -854,7 +855,7 @@ function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed, lang = "s
     "__PARRANDA_WILDCARD_TAG_3__": escapeHtml(shellCopy.wildcardTag3),
     "__PARRANDA_WILDCARD_ACTIONS_HIDDEN__": shellCopy.wildcardActionsHidden,
     "__PARRANDA_CITY_BOOTSTRAP__": serializeInlineJson(bootstrap),
-    ...buildStaticShellI18nReplacements(uiLang),
+    ...buildStaticShellI18nReplacements(uiLang, displayLabel),
   };
 
   const renderedShell = Object.entries(replacements).reduce(

@@ -66,10 +66,116 @@
     enBtn.addEventListener("click", function () { switchLang("en"); });
   }());
 
+  // ── Autosuggest ──
+  function getUniqueCities() {
+    var seen = {};
+    var cities = [];
+    Object.keys(REGISTRY).forEach(function (alias) {
+      var entry = REGISTRY[alias];
+      if (!entry || seen[entry.key]) return;
+      seen[entry.key] = true;
+      cities.push(entry);
+    });
+    return cities;
+  }
+
+  function matchCities(query) {
+    if (!query) return [];
+    var q = query.toLowerCase();
+    return getUniqueCities().filter(function (c) {
+      return c.key.indexOf(q) === 0 || c.label.toLowerCase().indexOf(q) === 0;
+    });
+  }
+
+  var suggestList = null;
+  var activeSuggestIndex = -1;
+
+  function createSuggestList() {
+    if (suggestList) return suggestList;
+    suggestList = document.createElement("ul");
+    suggestList.className = "lp-autosuggest";
+    suggestList.setAttribute("role", "listbox");
+    suggestList.id = "lpCitySuggestions";
+    cityInput.setAttribute("role", "combobox");
+    cityInput.setAttribute("aria-autocomplete", "list");
+    cityInput.setAttribute("aria-controls", "lpCitySuggestions");
+    cityInput.parentNode.style.position = "relative";
+    cityInput.parentNode.appendChild(suggestList);
+    return suggestList;
+  }
+
+  function hideSuggest() {
+    if (suggestList) { suggestList.hidden = true; suggestList.innerHTML = ""; }
+    activeSuggestIndex = -1;
+    if (cityInput) cityInput.removeAttribute("aria-activedescendant");
+  }
+
+  function showSuggestions(matches) {
+    var list = createSuggestList();
+    list.innerHTML = "";
+    activeSuggestIndex = -1;
+    if (!matches.length) { list.hidden = true; return; }
+    matches.forEach(function (entry, i) {
+      var li = document.createElement("li");
+      li.className = "lp-autosuggest__item";
+      li.setAttribute("role", "option");
+      li.id = "lpSuggest" + i;
+      li.textContent = entry.label;
+      li.addEventListener("mousedown", function (e) {
+        e.preventDefault(); // prevent blur
+        var langParam = currentLang() === "en" ? "?lang=en" : "";
+        window.location.href = "/" + entry.key + langParam;
+      });
+      list.appendChild(li);
+    });
+    list.hidden = false;
+  }
+
+  function updateSuggestHighlight(matches) {
+    if (!suggestList) return;
+    var items = suggestList.querySelectorAll(".lp-autosuggest__item");
+    items.forEach(function (item, i) {
+      item.classList.toggle("lp-autosuggest__item--active", i === activeSuggestIndex);
+    });
+    if (activeSuggestIndex >= 0 && items[activeSuggestIndex]) {
+      cityInput.setAttribute("aria-activedescendant", items[activeSuggestIndex].id);
+    } else {
+      cityInput.removeAttribute("aria-activedescendant");
+    }
+  }
+
   if (cityInput) {
     cityInput.addEventListener("input", function () {
       cityInput.setCustomValidity("");
       updateCtaState();
+      var val = cityInput.value.trim();
+      var matches = matchCities(val);
+      showSuggestions(matches);
+    });
+    cityInput.addEventListener("blur", function () {
+      setTimeout(hideSuggest, 150);
+    });
+    cityInput.addEventListener("keydown", function (e) {
+      if (!suggestList || suggestList.hidden) return;
+      var items = suggestList.querySelectorAll(".lp-autosuggest__item");
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        activeSuggestIndex = Math.min(activeSuggestIndex + 1, items.length - 1);
+        updateSuggestHighlight();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        activeSuggestIndex = Math.max(activeSuggestIndex - 1, -1);
+        updateSuggestHighlight();
+      } else if (e.key === "Enter" && activeSuggestIndex >= 0) {
+        e.preventDefault();
+        items[activeSuggestIndex].dispatchEvent(new MouseEvent("mousedown"));
+      } else if (e.key === "Escape") {
+        hideSuggest();
+      }
+    });
+    cityInput.addEventListener("focus", function () {
+      var val = cityInput.value.trim();
+      if (val) showSuggestions(matchCities(val));
     });
   }
 
