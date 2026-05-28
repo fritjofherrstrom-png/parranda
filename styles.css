@@ -1168,21 +1168,7 @@ body.is-planner-entry .planner-modal-backdrop {
   display: none;
 }
 
-/* Planner-entry only: keep the city-context tabs reachable once the user has
-   scrolled down into Pulse/Districts/Map. Sticky below the embedded planner,
-   with an opaque blurred backdrop so scrolling content stays readable behind
-   it. z-index sits above the panel content but well below drawers (900) and
-   modals (9999). */
-body.is-planner-entry .tab-nav {
-  position: sticky;
-  top: 8px;
-  z-index: 5;
-  background: rgba(253, 248, 241, 0.94);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-
-/* Accessible touch targets for the sticky tabs. */
+/* Accessible touch targets for planner-entry tabs. */
 body.is-planner-entry .tab-nav .tab-button {
   min-height: 44px;
   display: inline-flex;
