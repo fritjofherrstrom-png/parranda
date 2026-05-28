@@ -1923,6 +1923,8 @@ const plannerModeManualButton = document.getElementById("plannerModeManualButton
 const plannerModeLead = document.getElementById("plannerModeLead");
 const plannerFineTuneDetails = document.getElementById("plannerFineTuneDetails");
 const plannerHomeBaseShell = document.getElementById("plannerHomeBaseShell");
+const homeBaseToggle = document.getElementById("homeBaseToggle");
+const homeBaseBody = document.getElementById("homeBaseBody");
 const plannerManualShell = document.getElementById("plannerManualShell");
 const routeResults = document.getElementById("routeResults");
 const savedRoutesSection = document.getElementById("savedRoutesSection");
@@ -7181,6 +7183,29 @@ function setPresetSelectValue(select, label) {
   updatePlannerAdvancedSummary();
 }
 
+function expandHomeBase() {
+  if (!homeBaseBody) return;
+  homeBaseBody.hidden = false;
+  if (homeBaseToggle) {
+    homeBaseToggle.setAttribute("aria-expanded", "true");
+    homeBaseToggle.hidden = true;
+  }
+}
+
+// Auto-expand the collapsed home-base section when it already carries intent:
+// a non-auto mode (preset / current location / custom) or a filled custom value.
+function maybeAutoExpandHomeBase() {
+  if (!homeBaseBody || !homeBaseBody.hidden) return;
+  const modeNonAuto =
+    homeBaseModeSelect && homeBaseModeSelect.value && homeBaseModeSelect.value !== "auto";
+  const hasCustom = homeBaseCustomInput && homeBaseCustomInput.value.trim().length > 0;
+  if (modeNonAuto || hasCustom) expandHomeBase();
+}
+
+if (homeBaseToggle) {
+  homeBaseToggle.addEventListener("click", expandHomeBase);
+}
+
 function setPlannerFieldFromLabel(pointKey, label) {
   const controls = getPointControlSet(pointKey);
   const modeSelect = controls.modeSelect;
@@ -7191,6 +7216,7 @@ function setPlannerFieldFromLabel(pointKey, label) {
   if (pointKey === "home_base") {
     activePlannerMode = plannerAutoMode;
     updatePlannerModeButtons();
+    expandHomeBase();
   } else {
     activePlannerMode = plannerManualMode;
     updatePlannerModeButtons();
@@ -11557,4 +11583,8 @@ loadPlannerOptions().then(() => {
       openPlannerModal();
     }
   }
+
+  // Reveal the home-base section if it already carries intent (mode != auto,
+  // prefilled custom value, or a seed applied above).
+  maybeAutoExpandHomeBase();
 });

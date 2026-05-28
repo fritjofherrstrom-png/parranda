@@ -511,6 +511,7 @@ function buildStaticShellI18nReplacements(lang) {
     "__PARRANDA_I18N_INTENT_NIGHTLIFE__": tr("planner.intent.nightlife"),
     "__PARRANDA_I18N_INTENT_HISTORY__": tr("planner.intent.history"),
     "__PARRANDA_I18N_INTENT_GREEN_WALK__": tr("planner.intent.green_walk"),
+    "__PARRANDA_I18N_ADD_HOME_BASE__": tr("planner.addHomeBase"),
     "__PARRANDA_I18N_WHERE_STAYING_EYEBROW__": tr("planner.whereStayingEyebrow"),
     "__PARRANDA_I18N_WHERE_STAYING_COPY__": tr("planner.whereStayingCopy"),
     "__PARRANDA_I18N_OPTIONAL__": tr("planner.optional"),
