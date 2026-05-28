@@ -11499,25 +11499,38 @@ loadPlannerOptions().then(() => {
   renderRouteResults();
 
   if (isPlannerEntryRoute) {
-    // Planner-entry-route: show planner inline as primary page content.
-    // Hide the hero exploration sections and city-context elements that would
-    // otherwise appear above the planner (tab nav, Pulse teaser).  These load
-    // normally on the standard /:city page but must not precede the planner on
-    // the /:city/plan planning-first route.
+    // Planner-entry route (/:city/plan): the planner is the primary, embedded
+    // page content, with the city's existing context (Pulse / Districts / Map)
+    // kept directly below it via the normal tab-nav and panels.  We hide only
+    // the framing that would precede the planner or duplicate context: the hero
+    // exploration copy, the landing Blitz strip, and the large Pulse teaser card
+    // (the full Pulse edition renders below as the default tab).  The tab-nav is
+    // intentionally left visible.
     document.querySelector(".hero-content")?.classList.add("planner-entry-hidden");
     document.querySelector(".hero-quickstart")?.classList.add("planner-entry-hidden");
-    document.querySelector(".tab-nav")?.classList.add("planner-entry-hidden");
     document.getElementById("cityPulseTeaser")?.classList.add("planner-entry-hidden");
 
     if (routePlannerStart) {
       routePlannerStart.hidden = false;
       routePlannerStart.removeAttribute("aria-modal");
       routePlannerStart.classList.add("planner-entry-inline");
+
+      // Lift the planner above the tab-nav so the page reads:
+      // header → embedded planner → tab-nav → active panel (Pulse default).
+      const tabNav = document.querySelector(".tab-nav");
+      if (tabNav?.parentElement) {
+        tabNav.parentElement.insertBefore(routePlannerStart, tabNav);
+      }
     }
     if (closePlannerModalButton) {
       closePlannerModalButton.hidden = true;
     }
     document.body.classList.add("is-planner-entry");
+
+    // Pulse is the default city-context tab shown under the planner.
+    heroLiveButton?.classList.add("active");
+    switchTab("routes");
+    openLiveEdition({ scroll: false });
 
     // Support ?mode=manual on the plan route.
     const params = new URLSearchParams(location.search);

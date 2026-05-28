@@ -668,19 +668,6 @@ function getLandingSearchCities() {
   });
 }
 
-function buildLandingCityOptions(lang) {
-  const tr = (key) => translate(lang, key);
-  return getLandingSearchCities()
-    .map((cityConfig) => {
-      const label = escapeHtml(cityConfig.label);
-      const isPreview = cityConfig.visibility === "preview";
-      const previewLabel = escapeHtml(tr("shell.preview.eyebrow") || "Preview");
-      const suffix = isPreview ? ` — ${previewLabel}` : "";
-      return `<option value="${label}">${label}${suffix}</option>`;
-    })
-    .join("");
-}
-
 function buildLandingCityRegistry() {
   const entries = {};
   getLandingSearchCities().forEach((cityConfig) => {
@@ -724,7 +711,6 @@ function renderLandingShell({ lang = "sv" } = {}) {
     "__PARRANDA_LANDING_SEARCH_UNSUPPORTED__": escapeHtml(tr("landing.search.unsupported")),
     "__PARRANDA_LANDING_SEARCH_LABEL__": escapeHtml(tr("landing.search.label")),
     "__PARRANDA_LANDING_SKIP_LINK__": escapeHtml(tr("landing.search.skipLink")),
-    "__PARRANDA_LANDING_CITY_OPTIONS__": buildLandingCityOptions(uiLang),
     "__PARRANDA_LANDING_CITY_REGISTRY__": serializeInlineJson(buildLandingCityRegistry()),
     "__PARRANDA_LANDING_NAV_ROME__": escapeHtml(tr("landing.nav.rome")),
     "__PARRANDA_LANDING_NAV_LAYOUTS__": escapeHtml(tr("landing.nav.layouts")),

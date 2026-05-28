@@ -24,8 +24,36 @@
     return REGISTRY[String(raw || "").trim().toLowerCase()] || null;
   }
 
+  // Registry-driven prefix match: returns the best city whose alias key starts
+  // with the typed text.  Used for inline completion and for resolving partial
+  // input ("Barc" -> Barcelona) in both the planner and Blitz flows, so a user
+  // never has to type the full city name.
+  var STATUS_RANK = { public: 0, beta: 1, preview: 2 };
+  function bestPrefixMatch(raw) {
+    var q = String(raw || "").trim().toLowerCase();
+    if (!q) return null;
+    var best = null;
+    var bestScore = Infinity;
+    Object.keys(REGISTRY).forEach(function (aliasKey) {
+      if (aliasKey.indexOf(q) !== 0) return;
+      var entry = REGISTRY[aliasKey];
+      if (!entry) return;
+      var labelLc = String(entry.label || "").toLowerCase();
+      var labelIsPrefix = labelLc.indexOf(q) === 0 ? 0 : 1;
+      var rank = STATUS_RANK[entry.status] != null ? STATUS_RANK[entry.status] : 3;
+      var score = labelIsPrefix * 1000 + rank * 100 + labelLc.length;
+      if (score < bestScore) { bestScore = score; best = entry; }
+    });
+    return best;
+  }
+
+  // Exact alias match first, then prefix fallback.
+  function resolveEntryLoose(raw) {
+    return resolveEntry(raw) || bestPrefixMatch(raw);
+  }
+
   function resolveCity(raw) {
-    var entry = resolveEntry(raw);
+    var entry = resolveEntryLoose(raw);
     return entry ? "/" + entry.key : null;
   }
 
@@ -66,9 +94,32 @@
     enBtn.addEventListener("click", function () { switchLang("en"); });
   }());
 
+  // Inline auto-completion: as the user types a city prefix we complete the
+  // value in-place and select the appended portion (e.g. "Barc" -> "Barc[elona]").
+  // The suggestion lives entirely inside the field, so it can never cover or
+  // push the Blitz / planner CTAs.  Pressing Enter, Tab or → accepts it; typing
+  // or deleting over the selection just continues editing.
+  function applyInlineCompletion(isInserting) {
+    if (!isInserting || !cityInput) return;
+    var typed = cityInput.value;
+    if (!typed) return;
+    // Only complete when the caret sits at the very end of the input.
+    if (cityInput.selectionStart !== typed.length || cityInput.selectionEnd !== typed.length) return;
+    var match = bestPrefixMatch(typed);
+    if (!match) return;
+    var label = String(match.label || "");
+    if (label.length <= typed.length) return;
+    if (label.toLowerCase().indexOf(typed.toLowerCase()) !== 0) return;
+    var completed = typed + label.slice(typed.length);
+    cityInput.value = completed;
+    try { cityInput.setSelectionRange(typed.length, completed.length); } catch (_e) { /* unsupported */ }
+  }
+
   if (cityInput) {
-    cityInput.addEventListener("input", function () {
+    cityInput.addEventListener("input", function (e) {
       cityInput.setCustomValidity("");
+      var inserting = !e.inputType || e.inputType.indexOf("insert") === 0;
+      applyInlineCompletion(inserting);
       updateCtaState();
     });
   }
@@ -337,7 +388,7 @@
 
   function handleBlitzTap() {
     var val = cityInput ? cityInput.value.trim() : "";
-    var entry = val ? resolveEntry(val) : null;
+    var entry = val ? resolveEntryLoose(val) : null;
     if (entry) { runBlitzForCity(entry.key); return; }
     if (val) {
       if (cityInput) {
