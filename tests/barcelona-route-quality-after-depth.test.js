@@ -383,6 +383,18 @@ test("Barcelona long second-hand trips vary later anchor zones and stop sets", a
   assert.ok(anchorZones.size >= 4);
 
   assert.notDeepEqual(stopIds(routes[3]), stopIds(routes[4]));
+  assert.ok(
+    routes.every((route) => Number(route.estimated_km) <= 6.5),
+    "late-day novelty should not broaden the route far beyond the 6 km target",
+  );
+  assert.ok(
+    routes.every((route) => Number(route.longest_leg_km) <= 3),
+    "long-trip diversity should stay inside a reasonable leg envelope",
+  );
+  assert.ok(
+    routes.every((route) => Number(route.route_continuity_score || 0) >= 8),
+    "long-trip diversity should preserve route continuity",
+  );
 
   routes.forEach((route) => {
     const stops = stopItems(route);

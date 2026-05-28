@@ -2786,6 +2786,7 @@ function localAutoEnvelopeBias({
   distanceMode = "soft_target",
   legPacing = "balanced",
   weather = null,
+  usedRoutes = [],
 } = {}) {
   if (isBroadExplorationRoute({ preferences, optimizerMode, modifier, distanceMode, targetKm })) {
     return 0;
@@ -2809,6 +2810,16 @@ function localAutoEnvelopeBias({
 
   if (weather?.condition === "rain") {
     bias += 2.2;
+  }
+
+  if (
+    Array.isArray(usedRoutes) &&
+    usedRoutes.length >= 3 &&
+    distanceMode !== "no_limit" &&
+    Number(targetKm || 8) <= 6.5 &&
+    (pacingKey === "short" || pacingKey === "balanced")
+  ) {
+    bias += Math.min(3.2, usedRoutes.length * 0.9);
   }
 
   return Number(bias.toFixed(1));
@@ -5432,6 +5443,7 @@ function routeScore({
   budgetTier,
   modifier,
   distanceMode,
+  legPacing = "balanced",
   routeStops,
   usedRoutes = [],
   manualAnchorsLocked = false,
@@ -5506,7 +5518,7 @@ function routeScore({
   const diversityMultiplier = manualAnchorsLocked
     ? 0.25
     : Math.min(1.35, 0.55 + crossDayDepth * 0.18);
-  const diversityScore =
+  const rawDiversityScore =
     !crossDayDepth
       ? 0
       : noveltyBoost * diversityMultiplier -
@@ -5516,6 +5528,49 @@ function routeScore({
         repeatPressure.repeatedMacroCount * (1.1 * diversityMultiplier) -
         repeatPressure.repeatedStartCount * (0.4 * diversityMultiplier) -
         repeatPressure.repeatedEndCount * (0.4 * diversityMultiplier);
+  const continuityConfig = getRouteContinuityConfig(legPacing);
+  const estimatedKm = Number(route?.estimated_km) || 0;
+  const longestLegKm = Number(route?.longest_leg_km) || 0;
+  const routeContinuityScore = Number(route?.route_continuity_score);
+  const deadWalkPenalty = Number(route?.dead_walk_penalty) || 0;
+  let diversityEnvelopeAllowance = 1;
+
+  if (!manualAnchorsLocked && rawDiversityScore > 0) {
+    const kmTolerance = distanceMode === "no_limit" ? 1.8 : 0.9;
+    const kmPenaltyWeight = distanceMode === "no_limit" ? 0.1 : 0.18;
+    const overTargetKm = Math.max(0, estimatedKm - ((targetKm || 0) + kmTolerance));
+    const longestLegTolerance =
+      continuityConfig.reportMaxKm + (distanceMode === "no_limit" ? 0.35 : 0);
+    const longestLegOverflow = Math.max(0, longestLegKm - longestLegTolerance);
+
+    diversityEnvelopeAllowance -= Math.min(0.62, overTargetKm * kmPenaltyWeight);
+    diversityEnvelopeAllowance -= Math.min(0.42, longestLegOverflow * 0.28);
+
+    if (Number.isFinite(routeContinuityScore) && routeContinuityScore < 7.8) {
+      diversityEnvelopeAllowance -= Math.min(0.46, (7.8 - routeContinuityScore) * 0.18);
+    }
+
+    if (deadWalkPenalty > 0) {
+      diversityEnvelopeAllowance -= Math.min(0.34, deadWalkPenalty * 0.18);
+    }
+
+    if (
+      route?.route_shape === "arc" &&
+      distanceMode !== "no_limit" &&
+      estimatedKm > Math.max((targetKm || 0) * 1.2, (targetKm || 0) + 1.1)
+    ) {
+      diversityEnvelopeAllowance -= Math.min(
+        0.28,
+        (estimatedKm - Math.max((targetKm || 0) * 1.2, (targetKm || 0) + 1.1)) * 0.12,
+      );
+    }
+  }
+
+  const normalizedDiversityAllowance = clamp(diversityEnvelopeAllowance, 0.08, 1);
+  const diversityScore =
+    rawDiversityScore > 0
+      ? rawDiversityScore * normalizedDiversityAllowance * normalizedDiversityAllowance
+      : rawDiversityScore;
 
   return {
     score:
@@ -6282,6 +6337,7 @@ async function generateRecommendations({
             budgetTier,
             modifier,
             distanceMode,
+            legPacing,
             routeStops,
             usedRoutes: usedPrimaryRoutes,
             manualAnchorsLocked,

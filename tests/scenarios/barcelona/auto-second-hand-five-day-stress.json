@@ -375,69 +375,47 @@
     {
       "date": "2026-05-27",
       "primary": {
-        "id": "raval-vintage-shopping-loop",
-        "start": "Raval / Gothic",
+        "id": "gracia-local-evening-loop",
+        "start": "Poble-sec / Montjuïc",
         "end": "Poble-sec / Montjuïc",
-        "shape": "arc",
+        "shape": "loop",
         "day_profile": "final",
-        "anchor_zone": "Gothic Quarter -> Poble-sec",
+        "anchor_zone": "Poble-sec",
         "routing_source": "heuristic",
-        "estimated_km": 8.8,
+        "estimated_km": 6,
         "longest_leg_km": 3,
         "longest_leg_minutes": 36,
-        "average_leg_minutes": 21,
+        "average_leg_minutes": 24,
         "stops": [
           {
-            "label": "Los Féliz",
-            "area": "gothic",
-            "live": false
-          },
-          {
-            "label": "L'Arca",
-            "area": "gothic",
-            "live": false
-          },
-          {
-            "label": "Mercat de Sant Antoni",
-            "area": "sant-antoni",
-            "live": false
-          },
-          {
             "label": "Neko Vintage",
+            "area": "sants",
+            "live": false
+          },
+          {
+            "label": "Humana — Sants",
             "area": "sants",
             "live": false
           }
         ],
         "legs": [
           {
-            "from": "Raval / Gothic",
-            "to": "Los Féliz",
-            "km": 1,
-            "minutes": 12
-          },
-          {
-            "from": "Los Féliz",
-            "to": "L'Arca",
-            "km": 0.4,
-            "minutes": 5
-          },
-          {
-            "from": "L'Arca",
-            "to": "Mercat de Sant Antoni",
-            "km": 1.4,
-            "minutes": 17
-          },
-          {
-            "from": "Mercat de Sant Antoni",
+            "from": "Poble-sec / Montjuïc",
             "to": "Neko Vintage",
             "km": 3,
             "minutes": 36
           },
           {
             "from": "Neko Vintage",
+            "to": "Humana — Sants",
+            "km": 0.6,
+            "minutes": 7
+          },
+          {
+            "from": "Humana — Sants",
             "to": "Poble-sec / Montjuïc",
-            "km": 3,
-            "minutes": 36
+            "km": 2.4,
+            "minutes": 29
           }
         ]
       },
