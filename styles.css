@@ -1168,6 +1168,43 @@ body.is-planner-entry .planner-modal-backdrop {
   display: none;
 }
 
+/* Accessible touch targets for planner-entry tabs. */
+body.is-planner-entry .tab-nav .tab-button {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Demote the auto/manual switch to a quiet segmented control on the plan
+   route so the final "Planera min dag" submit is the sole filled primary. */
+body.is-planner-entry .planner-mode-button.is-active {
+  background: rgba(175, 77, 36, 0.1);
+  color: rgba(115, 46, 23, 0.95);
+  border-color: rgba(115, 46, 23, 0.4);
+}
+
+/* Collapsed home-base affordance: a light optional link before the Plan CTA. */
+.planner-home-base-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 0;
+  min-height: 44px;
+  background: none;
+  border: none;
+  color: rgba(115, 46, 23, 0.95);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+
+.planner-home-base-toggle:hover,
+.planner-home-base-toggle:focus-visible {
+  color: rgba(175, 77, 36, 1);
+  text-decoration: underline;
+}
+
 .planner-modal-head {
   display: flex;
   align-items: flex-start;

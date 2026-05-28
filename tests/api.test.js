@@ -610,9 +610,9 @@ test("GET / renderar global landing page (inte city-shell)", async () => {
     assert.match(response.body, /Sök stad/);
     assert.match(response.body, /lp-hero/);
     assert.match(response.body, /<html lang="sv">/);
-    // City registry server-rendered into datalist (Barcelona + Rom; aliases via JS registry)
-    assert.ok(response.body.includes('value="Barcelona"'));
-    assert.ok(response.body.includes('value="Rom"'));
+    // City registry server-rendered for JS-driven inline completion (Barcelona + Rom; aliases included)
+    assert.match(response.body, /"label"\s*:\s*"Barcelona"/);
+    assert.match(response.body, /"label"\s*:\s*"Rom"/);
     assert.match(response.body, /window\.__PARRANDA_CITIES__/);
     assert.match(response.body, /"roma"\s*:/);
     assert.match(response.body, /"rome"\s*:/);
@@ -631,7 +631,11 @@ test("GET / renderar global landing page (inte city-shell)", async () => {
     assert.ok(response.body.includes('id="lpBlitzCta"'), "Blitz button present");
     assert.ok(response.body.includes('id="lpBlitzSheet"'), "Blitz sheet present");
     assert.ok(response.body.includes('id="lpBlitzReblitz"'), "Reblitz button present");
-    // Registry includes center coordinates for geo detection
+    // Autosuggest is JS-driven inline completion inside the field, not a native
+    // datalist popup (which floated over the Blitz / planner CTAs).
+    assert.match(response.body, /id="lpCity"[^>]*aria-autocomplete="inline"/s);
+    assert.ok(!response.body.includes("<datalist"), "No datalist popup over the CTA row");
+    // Registry includes center coordinates for geo detection (Blitz current-location)
     assert.match(response.body, /"center"\s*:\s*\{/);
     // Blitz i18n tokens resolved (not raw token strings left behind)
     assert.ok(!response.body.includes("__PARRANDA_LANDING_BLITZ_"), "No unresolved Blitz tokens");
@@ -658,8 +662,8 @@ test("GET /?lang=en renderar landing v2 med engelsk copy", async () => {
     assert.match(response.body, /<html lang="en">/);
     // Registry still rendered, internal city still filtered
     assert.match(response.body, /window\.__PARRANDA_CITIES__/);
-    assert.ok(response.body.includes('value="Barcelona"'));
-    assert.ok(response.body.includes('value="Rom"'));
+    assert.match(response.body, /"label"\s*:\s*"Barcelona"/);
+    assert.match(response.body, /"key"\s*:\s*"rome"/);
     assert.ok(!response.body.toLowerCase().includes("test city"));
     // Hero <h1> resolves to EN, not the SV token
     assert.match(response.body, /<h1 class="lp-hero__headline">Next stop\?<\/h1>/);

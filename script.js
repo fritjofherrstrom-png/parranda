@@ -1923,6 +1923,8 @@ const plannerModeManualButton = document.getElementById("plannerModeManualButton
 const plannerModeLead = document.getElementById("plannerModeLead");
 const plannerFineTuneDetails = document.getElementById("plannerFineTuneDetails");
 const plannerHomeBaseShell = document.getElementById("plannerHomeBaseShell");
+const homeBaseToggle = document.getElementById("homeBaseToggle");
+const homeBaseBody = document.getElementById("homeBaseBody");
 const plannerManualShell = document.getElementById("plannerManualShell");
 const routeResults = document.getElementById("routeResults");
 const savedRoutesSection = document.getElementById("savedRoutesSection");
@@ -7181,6 +7183,29 @@ function setPresetSelectValue(select, label) {
   updatePlannerAdvancedSummary();
 }
 
+function expandHomeBase() {
+  if (!homeBaseBody) return;
+  homeBaseBody.hidden = false;
+  if (homeBaseToggle) {
+    homeBaseToggle.setAttribute("aria-expanded", "true");
+    homeBaseToggle.hidden = true;
+  }
+}
+
+// Auto-expand the collapsed home-base section when it already carries intent:
+// a non-auto mode (preset / current location / custom) or a filled custom value.
+function maybeAutoExpandHomeBase() {
+  if (!homeBaseBody || !homeBaseBody.hidden) return;
+  const modeNonAuto =
+    homeBaseModeSelect && homeBaseModeSelect.value && homeBaseModeSelect.value !== "auto";
+  const hasCustom = homeBaseCustomInput && homeBaseCustomInput.value.trim().length > 0;
+  if (modeNonAuto || hasCustom) expandHomeBase();
+}
+
+if (homeBaseToggle) {
+  homeBaseToggle.addEventListener("click", expandHomeBase);
+}
+
 function setPlannerFieldFromLabel(pointKey, label) {
   const controls = getPointControlSet(pointKey);
   const modeSelect = controls.modeSelect;
@@ -7191,6 +7216,7 @@ function setPlannerFieldFromLabel(pointKey, label) {
   if (pointKey === "home_base") {
     activePlannerMode = plannerAutoMode;
     updatePlannerModeButtons();
+    expandHomeBase();
   } else {
     activePlannerMode = plannerManualMode;
     updatePlannerModeButtons();
@@ -11499,31 +11525,51 @@ loadPlannerOptions().then(() => {
   renderRouteResults();
 
   if (isPlannerEntryRoute) {
-    // Planner-entry-route: show planner inline as primary page content.
-    // Hide the hero exploration sections and city-context elements that would
-    // otherwise appear above the planner (tab nav, Pulse teaser).  These load
-    // normally on the standard /:city page but must not precede the planner on
-    // the /:city/plan planning-first route.
+    // Planner-entry route (/:city/plan): the planner is the primary, embedded
+    // page content, with the city's existing context (Pulse / Districts / Map)
+    // kept directly below it via the normal tab-nav and panels.  We hide only
+    // the framing that would precede the planner or duplicate context: the hero
+    // exploration copy, the landing Blitz strip, and the large Pulse teaser card
+    // (the full Pulse edition renders below as the default tab).  The tab-nav is
+    // intentionally left visible.
     document.querySelector(".hero-content")?.classList.add("planner-entry-hidden");
     document.querySelector(".hero-quickstart")?.classList.add("planner-entry-hidden");
-    document.querySelector(".tab-nav")?.classList.add("planner-entry-hidden");
     document.getElementById("cityPulseTeaser")?.classList.add("planner-entry-hidden");
 
     if (routePlannerStart) {
       routePlannerStart.hidden = false;
       routePlannerStart.removeAttribute("aria-modal");
       routePlannerStart.classList.add("planner-entry-inline");
+
+      // Lift the planner above the tab-nav so the page reads:
+      // header → embedded planner → tab-nav → active panel (Pulse default).
+      const tabNav = document.querySelector(".tab-nav");
+      if (tabNav?.parentElement) {
+        tabNav.parentElement.insertBefore(routePlannerStart, tabNav);
+      }
     }
     if (closePlannerModalButton) {
       closePlannerModalButton.hidden = true;
     }
     document.body.classList.add("is-planner-entry");
 
+    // Pulse is the default city-context tab shown under the planner.
+    heroLiveButton?.classList.add("active");
+    switchTab("routes");
+    openLiveEdition({ scroll: false });
+
     // Support ?mode=manual on the plan route.
     const params = new URLSearchParams(location.search);
     if (params.get("mode") === "manual") {
       setPlannerMode(plannerManualMode);
       if (plannerFineTuneDetails) plannerFineTuneDetails.open = true;
+    }
+
+    // Seed the home base from ?seed_label (e.g. the landing Blitz → Plan handoff).
+    const plannerSeedLabel = params.get("seed_label");
+    if (plannerSeedLabel) {
+      try { setPlannerFieldFromLabel("home_base", plannerSeedLabel); }
+      catch (_e) { /* silent fallback */ }
     }
   } else {
     // Legacy ?planner=open compat on the normal city page.
@@ -11537,4 +11583,8 @@ loadPlannerOptions().then(() => {
       openPlannerModal();
     }
   }
+
+  // Reveal the home-base section if it already carries intent (mode != auto,
+  // prefilled custom value, or a seed applied above).
+  maybeAutoExpandHomeBase();
 });
