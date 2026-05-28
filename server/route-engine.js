@@ -4423,7 +4423,7 @@ function formatMainStop(stop) {
 }
 
 function resolveRouteStopData(stop) {
-  const catalogItem = findCatalogItemByName(stop.id);
+  const catalogItem = findCatalogItemByIdOrName(stop.id);
 
   if (catalogItem) {
     return catalogItem;
