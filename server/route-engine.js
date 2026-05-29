@@ -4656,9 +4656,13 @@ function formatMainStop(stop) {
   // Honest provenance for provisional source candidates: a stop that did not
   // come from the verified catalog carries its source/provenance so the UI can
   // mark it clearly instead of presenting it as full citypack confidence.
-  // Gated on stop.provisional (set by buildProvisionalComposeStops) rather than
-  // trust.human_verified — live event stops are also human_verified:false but
-  // are real today-events, not source candidates.
+  //
+  // The marker is gated on the explicit stop.provisional flag (set by
+  // buildProvisionalComposeStops), NOT on trust.human_verified. human_verified
+  // is a broader signal: an official-but-unreviewed source (e.g. a live event)
+  // can legitimately be human_verified:false without being a provisional
+  // source-candidate placeholder. Gating on the explicit flag keeps the
+  // "provisional place" badge tied to source candidates only.
   if (stop.provisional === true) {
     formatted.provisional = true;
     formatted.source = stop.source || null;
@@ -6677,6 +6681,7 @@ module.exports = {
   getRouteLineage,
   buildLiveEventStopCandidates,
   annotateLiveEventsForRoutes,
+  formatMainStop,
   budgetScore,
   kmScore,
   normalizeBudgetTier,

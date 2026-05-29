@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { generateRecommendations } = require("../server/route-engine");
+const { generateRecommendations, formatMainStop } = require("../server/route-engine");
 const { resetLiveEventsCache } = require("../server/live-events");
 const {
   VALID_TRUST_TIERS,
@@ -127,7 +127,7 @@ test("verified citypack stops carry canonical curated trust and are never provis
   });
 });
 
-test("provisional stops carry low canonical trust; provisional is derived from it", async () => {
+test("provisional source-candidate stops carry low canonical trust without making trust.human_verified the badge gate", async () => {
   const result = await generateRecommendations({
     ...basePayload,
     city: "athens",
@@ -188,4 +188,61 @@ test("mature citypack route never surfaces unverified trust", async () => {
     );
     assert.notEqual(stop.provisional, true, `mature city stop ${stop.id} must not be provisional`);
   });
+});
+
+// Regression: trust.human_verified === false must NEVER imply the provisional
+// badge on its own. Only the explicit stop.provisional flag (source candidates)
+// drives the marker. An official-but-unreviewed stop such as a live event is
+// human_verified:false yet is a real today-event, not a provisional placeholder.
+test("unverified trust alone does not produce a provisional marker; only stop.provisional does", () => {
+  const baseStop = {
+    id: "regression-stop",
+    name: "Regression Stop",
+    lat: 41.0,
+    lng: 2.0,
+    kind: "venue",
+    area: "test-area",
+    tags: [],
+  };
+
+  // Live-event-like stop: unverified trust, but NOT a source candidate.
+  const liveEventLike = formatMainStop({
+    ...baseStop,
+    isLiveEvent: true,
+    trust: {
+      source_tier: "official",
+      confidence: "medium",
+      human_verified: false,
+      freshness: "live",
+    },
+  });
+  assert.equal(liveEventLike.trust.human_verified, false, "live-event trust stays unverified");
+  assert.equal(
+    liveEventLike.provisional,
+    undefined,
+    "unverified trust must not produce a provisional marker without stop.provisional",
+  );
+
+  // Explicit provisional source candidate: marker present, low trust normalized.
+  const provisional = formatMainStop({
+    ...baseStop,
+    provisional: true,
+    source: { kind: "open_geo_source", label: "OpenStreetMap" },
+    provenance: { source_note: "provisional fill" },
+    trust: {
+      source_tier: "inferred",
+      confidence: "needs_review",
+      human_verified: false,
+      freshness: "unknown",
+    },
+  });
+  assert.equal(provisional.provisional, true, "explicit provisional flag drives the marker");
+  assert.equal(provisional.trust.source_tier, "inferred");
+  assert.equal(provisional.trust.human_verified, false);
+
+  // Verified catalog stop: no trust input → implicit curated trust, no marker.
+  const verified = formatMainStop({ ...baseStop });
+  assert.equal(verified.trust.source_tier, "curated");
+  assert.equal(verified.trust.human_verified, true);
+  assert.equal(verified.provisional, undefined, "verified stops are never provisional");
 });
