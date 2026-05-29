@@ -36,6 +36,39 @@ function getRouteTemplates() {
   return getActiveCatalog().routeTemplates;
 }
 
+// Provisional source candidates live on the city config OUTSIDE `catalog` so
+// they can never be mistaken for verified items. Each is mapped to a
+// catalog-item-shaped stop that carries a `provisional: true` marker plus its
+// source/trust/provenance, which ride through buildStopPool ordering into
+// formatMainStop so the honesty signal survives to the API response.
+function getSourceCandidates() {
+  const candidates = getActiveCityConfig().sourceCandidates;
+  return Array.isArray(candidates) ? candidates : [];
+}
+
+function buildProvisionalComposeStops() {
+  return getSourceCandidates()
+    .filter((candidate) => candidate && Number.isFinite(candidate.lat) && Number.isFinite(candidate.lng))
+    .map((candidate) => ({
+      id: candidate.id,
+      name: candidate.label,
+      kind: candidate.type,
+      lat: candidate.lat,
+      lng: candidate.lng,
+      area: candidate.area,
+      tags: Array.isArray(candidate.tags) ? candidate.tags : [],
+      weatherTags: Array.isArray(candidate.provenance?.weatherTags)
+        ? candidate.provenance.weatherTags
+        : [],
+      searchTerms: [],
+      anchorWeight: 1,
+      provisional: true,
+      source: candidate.source || null,
+      trust: candidate.trust || null,
+      provenance: candidate.provenance || null,
+    }));
+}
+
 const AGNOSTIC_COMPOSE_TEMPLATE_ID = "__agnostic_compose__";
 
 // When a registered city has zero curated route templates (a "thin" citypack
@@ -3881,45 +3914,64 @@ function buildStopPool(
     manualAnchorsLocked && shape === "arc" && legPacing === "short"
       ? supplementalLimit + 2
       : supplementalLimit;
-  const supplementalCandidates = [
-    ...getAllItems(),
-    ...liveEventCandidates,
-  ].filter((item) => candidateFitsLockedCorridor(item));
-  const supplemental = supplementalCandidates
-    .map((item) => ({
-      item,
-      score: scoreSupplementalPoolItem({
-        item,
-        template,
-        shape,
-        start,
-        end,
-        startProfile,
-        endProfile,
-        seedRouteArea,
-        seedIds,
-        seedDuplicateCounts,
-        preferences,
-        optimizerMode,
-        modifier,
-        strictTags,
-        targetKm,
-        distanceMode,
-        liveEvents,
-        legPacing,
-        usedRoutes: options.usedRoutes || [],
-        manualAnchorsLocked,
-      }),
-    }))
-    .filter((entry) => Number.isFinite(entry.score))
-    .filter((entry) => entry.score > (manualAnchorsLocked && shape === "arc"
+  const supplementalThreshold =
+    manualAnchorsLocked && shape === "arc"
       ? strictTags.length
         ? 0.8
         : 1.2
       : strictTags.length
         ? 2.2
-        : 3))
-    .sort((left, right) => right.score - left.score)
+        : 3;
+  const scoreSupplementalCandidate = (item) => ({
+    item,
+    score: scoreSupplementalPoolItem({
+      item,
+      template,
+      shape,
+      start,
+      end,
+      startProfile,
+      endProfile,
+      seedRouteArea,
+      seedIds,
+      seedDuplicateCounts,
+      preferences,
+      optimizerMode,
+      modifier,
+      strictTags,
+      targetKm,
+      distanceMode,
+      liveEvents,
+      legPacing,
+      usedRoutes: options.usedRoutes || [],
+      manualAnchorsLocked,
+    }),
+  });
+  const passesSupplementalThreshold = (entry) =>
+    Number.isFinite(entry.score) && entry.score > supplementalThreshold;
+
+  const verifiedSupplemental = [...getAllItems(), ...liveEventCandidates]
+    .filter((item) => candidateFitsLockedCorridor(item))
+    .map(scoreSupplementalCandidate)
+    .filter(passesSupplementalThreshold)
+    .sort((left, right) => right.score - left.score);
+
+  // Provisional source candidates only ever enter the agnostic-compose path,
+  // and only AFTER every qualifying verified item — verified entries are
+  // concatenated first, so provisional candidates can fill nothing but the
+  // slots verified items left empty once we slice to effectiveSupplementalLimit.
+  // This keeps the route spine + verified-dense neighborhoods byte-identical
+  // while thin neighborhoods gain honest, clearly-marked fill.
+  const provisionalSupplemental =
+    template.id === AGNOSTIC_COMPOSE_TEMPLATE_ID
+      ? buildProvisionalComposeStops()
+          .filter((item) => candidateFitsLockedCorridor(item))
+          .map(scoreSupplementalCandidate)
+          .filter(passesSupplementalThreshold)
+          .sort((left, right) => right.score - left.score)
+      : [];
+
+  const supplemental = [...verifiedSupplemental, ...provisionalSupplemental]
     .slice(0, effectiveSupplementalLimit)
     .map((entry) => entry.item);
 
@@ -4549,7 +4601,7 @@ function buildGeoFitNote({ shape, start, end, geometry, routeArea, startProfile,
 }
 
 function formatMainStop(stop) {
-  return {
+  const formatted = {
     id: stop.id,
     label: stop.name,
     lat: stop.lat,
@@ -4570,6 +4622,18 @@ function formatMainStop(stop) {
     event_id: stop.eventId || null,
     anchor_weight: typeof stop.anchorWeight === "number" ? stop.anchorWeight : null,
   };
+
+  // Honest provenance for provisional source candidates: a stop that did not
+  // come from the verified catalog carries its source/trust so the UI and API
+  // can mark it clearly instead of presenting it as full citypack confidence.
+  if (stop.provisional === true) {
+    formatted.provisional = true;
+    formatted.source = stop.source || null;
+    formatted.trust = stop.trust || null;
+    formatted.provenance = stop.provenance || null;
+  }
+
+  return formatted;
 }
 
 function resolveRouteStopData(stop) {
@@ -4997,6 +5061,7 @@ function buildRouteFromTemplate(
     start_label: start.label,
     end_label: end.label,
     route_shape: shape,
+    uses_provisional_sources: mainStops.some((stop) => stop.provisional === true),
     main_stops: mainStops,
     hidden_mentions: routeMentions.hiddenMentions,
     bar_mentions: routeMentions.barMentions,

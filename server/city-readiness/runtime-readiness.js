@@ -28,6 +28,7 @@ function classifyRuntimeReadiness(cityConfig, resolution = {}, options = {}) {
   const report = getCachedReport(cityConfig);
   const templateCount = report?.catalog?.route_template_count ?? 0;
   const itemCount = report?.catalog?.item_count ?? 0;
+  const provisionalSourceCount = report?.catalog?.provisional_source_count ?? 0;
   const routedDayCount = Number.isFinite(options.routedDayCount) ? options.routedDayCount : null;
 
   let signal;
@@ -48,6 +49,7 @@ function classifyRuntimeReadiness(cityConfig, resolution = {}, options = {}) {
     catalog: {
       item_count: itemCount,
       route_template_count: templateCount,
+      provisional_source_count: provisionalSourceCount,
     },
   };
 }
@@ -66,6 +68,7 @@ function buildUnsupportedCityReadiness(resolution = {}) {
     catalog: {
       item_count: 0,
       route_template_count: 0,
+      provisional_source_count: 0,
     },
   };
 }

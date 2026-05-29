@@ -112,6 +112,8 @@ function normalizePrimaryRoute(route) {
     day_profile: route.day_profile || null,
     anchor_zone: route.anchor_zone || null,
     routing_source: route.routing_source || null,
+    // Surfaced only when truthy so verified-only snapshots stay byte-identical.
+    ...(route.uses_provisional_sources ? { uses_provisional_sources: true } : {}),
     estimated_km: roundMetric(route.estimated_km),
     longest_leg_km: roundMetric(route.longest_leg_km),
     longest_leg_minutes: Number.isFinite(Number(route.longest_leg_minutes))
@@ -120,11 +122,19 @@ function normalizePrimaryRoute(route) {
     average_leg_minutes: Number.isFinite(Number(route.average_leg_minutes))
       ? Number(route.average_leg_minutes)
       : null,
-    stops: (route.main_stops || []).map((stop) => ({
-      label: stop.label,
-      area: stop.area,
-      live: Boolean(stop.is_live_event),
-    })),
+    stops: (route.main_stops || []).map((stop) => {
+      const normalized = {
+        label: stop.label,
+        area: stop.area,
+        live: Boolean(stop.is_live_event),
+      };
+      if (stop.provisional === true) {
+        normalized.provisional = true;
+        normalized.source_tier = stop.trust?.source_tier || null;
+        normalized.confidence = stop.trust?.confidence || null;
+      }
+      return normalized;
+    }),
     legs: (route.legs || []).map(normalizeLeg),
   };
 }
@@ -313,6 +323,29 @@ const scenarioMatrix = [
       end: { type: "auto" },
       walkingKmTarget: 7,
       preferences: ["kultur", "mat", "kväll"],
+      legPacing: "balanced",
+      distanceMode: "soft_target",
+      budgetTier: "standard",
+      lang: "en",
+    },
+  },
+  // Athens provisional source-candidate compose — same thin Athens citypack as
+  // preview-zero-state, but anchored in the thin Koukaki-Makrygianni south where
+  // the verified pool runs out. This snapshot locks the provisional layer:
+  // verified Athens items are still preferred (verified-first), and only the
+  // leftover slots are filled by clearly-marked provisional source candidates
+  // (provisional: true, source_tier "inferred", confidence "needs_review").
+  // The route stays low-confidence agnostic_compose and every stop is athens-*.
+  {
+    city: "athens",
+    name: "provisional-source-compose",
+    payload: {
+      city: "athens",
+      dates: ["2026-05-25"],
+      start: { type: "custom", label: "Makrygianni", lat: 37.9688, lng: 23.7289 },
+      end: { type: "custom", label: "Makrygianni", lat: 37.9688, lng: 23.7289 },
+      walkingKmTarget: 7,
+      preferences: ["kultur", "utsikt", "klassiker"],
       legPacing: "balanced",
       distanceMode: "soft_target",
       budgetTier: "standard",

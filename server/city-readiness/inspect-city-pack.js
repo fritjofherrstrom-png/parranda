@@ -63,6 +63,9 @@ function inspectCatalog(cityConfig = {}) {
   const routeTemplates = Array.isArray(cityConfig.catalog?.routeTemplates)
     ? cityConfig.catalog.routeTemplates
     : [];
+  const sourceCandidates = Array.isArray(cityConfig.sourceCandidates)
+    ? cityConfig.sourceCandidates
+    : [];
   const areaDefinitions = cityConfig.routing?.areaDefinitions || {};
   const provenanceById = cityConfig.catalog?.provenanceById;
   const hasProvenanceMap =
@@ -88,6 +91,10 @@ function inspectCatalog(cityConfig = {}) {
     real_place_count: allItems.filter(isRealPlaceItem).length,
     structural_anchor_count: allItems.filter(isStructuralAnchorItem).length,
     area_preset_count: allItems.filter(isAreaPresetItem).length,
+    // Provisional source candidates are counted separately and never folded
+    // into item_count / real_place_count — they are unverified fill, not
+    // verified citypack places, so they must not inflate readiness.
+    provisional_source_count: sourceCandidates.length,
     route_template_count: routeTemplates.length,
     area_token_count: Object.keys(areaDefinitions).length,
     has_provenance_map: Boolean(hasProvenanceMap),
