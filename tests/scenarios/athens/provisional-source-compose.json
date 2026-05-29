@@ -1,0 +1,86 @@
+{
+  "resolved_start": "Makrygianni",
+  "resolved_end": "Makrygianni",
+  "resolved_home_base": null,
+  "days": [
+    {
+      "date": "2026-05-25",
+      "primary": {
+        "id": "__agnostic_compose__",
+        "start": "Makrygianni",
+        "end": "Makrygianni",
+        "shape": "loop",
+        "day_profile": "peak",
+        "anchor_zone": "Koukaki & Makrygianni",
+        "routing_source": "agnostic_compose",
+        "uses_provisional_sources": true,
+        "estimated_km": 2.9,
+        "longest_leg_km": 1,
+        "longest_leg_minutes": 12,
+        "average_leg_minutes": 7,
+        "stops": [
+          {
+            "label": "Acropolis Museum",
+            "area": "koukaki-makrygianni",
+            "live": false
+          },
+          {
+            "label": "Pnyx",
+            "area": "koukaki-makrygianni",
+            "live": false,
+            "provisional": true,
+            "source_tier": "inferred",
+            "confidence": "needs_review"
+          },
+          {
+            "label": "Filopappou Hill",
+            "area": "koukaki-makrygianni",
+            "live": false,
+            "provisional": true,
+            "source_tier": "inferred",
+            "confidence": "needs_review"
+          },
+          {
+            "label": "Little Tree Books & Coffee",
+            "area": "koukaki-makrygianni",
+            "live": false
+          }
+        ],
+        "legs": [
+          {
+            "from": "Makrygianni",
+            "to": "Acropolis Museum",
+            "km": 0.1,
+            "minutes": 2
+          },
+          {
+            "from": "Acropolis Museum",
+            "to": "Pnyx",
+            "km": 1,
+            "minutes": 12
+          },
+          {
+            "from": "Pnyx",
+            "to": "Filopappou Hill",
+            "km": 0.7,
+            "minutes": 8
+          },
+          {
+            "from": "Filopappou Hill",
+            "to": "Little Tree Books & Coffee",
+            "km": 0.9,
+            "minutes": 11
+          },
+          {
+            "from": "Little Tree Books & Coffee",
+            "to": "Makrygianni",
+            "km": 0.2,
+            "minutes": 2
+          }
+        ]
+      },
+      "alternative_count": 0,
+      "alternatives": []
+    }
+  ]
+}

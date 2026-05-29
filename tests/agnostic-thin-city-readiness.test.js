@@ -3,6 +3,12 @@ const assert = require("node:assert/strict");
 
 const { generateRecommendations } = require("../server/route-engine");
 const { resetLiveEventsCache } = require("../server/live-events");
+const { sourceCandidates: athensSourceCandidates } = require("../server/cities/athens/source-candidates");
+const { allItems: athensCatalogItems } = require("../server/cities/athens/catalog");
+const {
+  normalizePlaceCandidate,
+  validatePlaceCandidate,
+} = require("../server/place-candidates/contract");
 
 const originalFetch = global.fetch;
 
@@ -133,6 +139,100 @@ test("thin registered city (Athens, zero templates) composes a low-confidence ro
       `stop ${stop.id || stop.name} is not an Athens catalog item`,
     );
   });
+});
+
+test("Athens provisional source candidates conform to the place-candidate contract", () => {
+  assert.ok(athensSourceCandidates.length > 0, "expected at least one provisional candidate");
+  athensSourceCandidates.forEach((candidate) => {
+    // Validate the shape we actually ship, and the normalized shape, so the
+    // fixture cannot drift away from the shared contract vocabulary.
+    validatePlaceCandidate(candidate, `athens-source-candidate:${candidate.id}`);
+    const normalized = normalizePlaceCandidate(candidate);
+    assert.equal(normalized.candidate_kind, "draft_place");
+    assert.equal(normalized.city_pack_owned, false, "provisional candidates must not be city-pack owned");
+    assert.equal(normalized.trust.human_verified, false, "provisional candidates must be unverified");
+    assert.equal(normalized.trust.confidence, "needs_review");
+    assert.ok(
+      ["inferred", "fallback"].includes(normalized.trust.source_tier),
+      "provisional source_tier must be inferred/fallback",
+    );
+    assert.ok(String(candidate.id).startsWith("athens-"), "provisional ids must be namespaced to athens");
+  });
+});
+
+test("thin city compose supplements with clearly-marked provisional candidates, verified-first", async () => {
+  // Anchor in the thin Koukaki-Makrygianni south where the verified pool runs
+  // out, so provisional candidates can fill the leftover slots.
+  const result = await generateRecommendations({
+    ...basePayload,
+    city: "athens",
+    dates: ["2026-05-25"],
+    start: { type: "custom", label: "Makrygianni", lat: 37.9688, lng: 23.7289 },
+    end: { type: "custom", label: "Makrygianni", lat: 37.9688, lng: 23.7289 },
+    preferences: ["kultur", "utsikt", "klassiker"],
+  });
+
+  // Readiness stays honest: provisional fill does NOT promote the city. The
+  // verified item count is untouched; provisional sources are counted apart.
+  assert.equal(result.readiness.signal, "source_enrichment_needed");
+  assert.equal(result.readiness.catalog.route_template_count, 0);
+  assert.equal(
+    result.readiness.catalog.item_count,
+    athensCatalogItems.length,
+    "verified item count must not be inflated",
+  );
+  assert.equal(
+    result.readiness.catalog.provisional_source_count,
+    athensSourceCandidates.length,
+    "provisional sources must be counted separately",
+  );
+
+  const route = result.days[0].primary_route;
+  assert.ok(route, "expected a composed route");
+  assert.equal(route.routing_source, "agnostic_compose");
+  assert.equal(route.confidence, "low", "provisional fill must stay low confidence, not full citypack");
+  assert.equal(route.uses_provisional_sources, true);
+
+  const stops = route.main_stops || [];
+  const provisionalStops = stops.filter((stop) => stop.provisional === true);
+  const verifiedStops = stops.filter((stop) => stop.provisional !== true);
+
+  // Provisional supplements, but verified items are still preferred and present.
+  assert.ok(provisionalStops.length >= 1, "expected at least one provisional stop in a thin area");
+  assert.ok(verifiedStops.length >= 1, "verified catalog items must remain in the route");
+
+  // No place leak and full provenance on every provisional stop.
+  stops.forEach((stop) => {
+    assert.ok(String(stop.id || "").startsWith("athens-"), `stop ${stop.id} is not an Athens place`);
+  });
+  provisionalStops.forEach((stop) => {
+    assert.ok(stop.source && stop.source.kind, "provisional stop must carry its source");
+    assert.equal(stop.trust.confidence, "needs_review");
+    assert.equal(stop.trust.human_verified, false);
+    assert.ok(stop.provenance && stop.provenance.source_note, "provisional stop must carry provenance");
+  });
+
+  // Verified stops never get the provisional marker — honesty is per-stop.
+  verifiedStops.forEach((stop) => {
+    assert.equal(stop.provisional, undefined, `verified stop ${stop.id} must not be marked provisional`);
+  });
+});
+
+test("mature citypack never pulls provisional candidates (no source-candidate layer)", async () => {
+  const result = await generateRecommendations({
+    ...basePayload,
+    city: "barcelona",
+    preferences: ["vintage", "shopping", "lokalt"],
+  });
+
+  const route = result.days[0].primary_route;
+  assert.ok(route);
+  assert.notEqual(route.routing_source, "agnostic_compose");
+  assert.ok(!route.uses_provisional_sources, "mature city route must not use provisional sources");
+  (route.main_stops || []).forEach((stop) => {
+    assert.notEqual(stop.provisional, true, "no provisional stops in a mature citypack route");
+  });
+  assert.equal(result.readiness.catalog.provisional_source_count, 0);
 });
 
 test("thin internal city (test-city) is routable and flagged generically, not leaked", async () => {

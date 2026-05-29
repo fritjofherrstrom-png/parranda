@@ -1,4 +1,5 @@
 const cityCatalog = require("./catalog");
+const { sourceCandidates } = require("./source-candidates");
 
 const ATHENS_KEY = "athens";
 const ATHENS_LABEL = "Athens";
@@ -126,6 +127,11 @@ module.exports = {
     provenanceById: cityCatalog.provenanceById,
     findItemByName: cityCatalog.findItemByName,
   },
+  // Provisional source candidates: REAL, unverified places the agnostic-compose
+  // path may use as honest low-confidence fill when a thin neighborhood's
+  // verified pool runs out. Kept OUT of `catalog` so they never count as
+  // verified items, never seed the route spine, and never inflate readiness.
+  sourceCandidates,
   services: {
     geocodeQuery,
     fetchWeatherForDates,
