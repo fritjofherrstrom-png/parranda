@@ -3782,3 +3782,101 @@ test("POST /api/blitz?lang=sv preserves Swedish Blitz copy", async () => {
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+// Thin-city compose reaches the engine through the HTTP API. The preview-noop
+// gate used to short-circuit any preview city with zero route templates BEFORE
+// generateRecommendations ran — which silently hid the agnostic compose path in
+// the real app even after the engine learned to build it. These tests lock the
+// end-to-end behavior: Athens (preview, real catalog items, 0 templates) gets a
+// low-confidence composed route; Malmö (unregistered) stays honestly empty.
+function mockStableWeatherFetch() {
+  return async (url) => {
+    const parsed = new URL(String(url));
+    if (parsed.hostname === "api.open-meteo.com") {
+      const start = new Date(`${parsed.searchParams.get("start_date")}T12:00:00`);
+      const end = new Date(`${parsed.searchParams.get("end_date")}T12:00:00`);
+      const time = [];
+      const weathercode = [];
+      const temperature_2m_max = [];
+      const temperature_2m_min = [];
+      for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+        time.push(cursor.toISOString().slice(0, 10));
+        weathercode.push(0);
+        temperature_2m_max.push(24);
+        temperature_2m_min.push(14);
+      }
+      return mockJsonResponse({
+        daily: { time, weathercode, temperature_2m_max, temperature_2m_min },
+        current: { temperature_2m: 19.2, weather_code: 1, is_day: 1 },
+      });
+    }
+    throw new Error(`Unexpected fetch during route-recommendations test: ${url}`);
+  };
+}
+
+test("POST /api/route-recommendations composes a low-confidence route for thin preview city Athens", async () => {
+  global.fetch = mockStableWeatherFetch();
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations?lang=en",
+      body: {
+        city: "athens",
+        dates: ["2026-05-25"],
+        start: { type: "auto" },
+        end: { type: "auto" },
+        walking_km_target: 7,
+        preferences: ["kultur", "mat", "kväll"],
+        distance_mode: "soft_target",
+        budget_tier: "standard",
+      },
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.readiness?.signal, "source_enrichment_needed");
+
+    const route = response.body.days?.[0]?.primary_route;
+    assert.ok(route, "Athens should now return a composed primary route through the API");
+    assert.equal(route.routing_source, "agnostic_compose");
+    assert.equal(route.confidence, "low");
+    assert.ok(
+      (route.main_stops || []).length >= 2,
+      "composed route should have at least two stops",
+    );
+    assert.ok(
+      (route.main_stops || []).every((stop) => String(stop.id || "").startsWith("athens-")),
+      "composed route must only use Athens catalog items, never a fallback city",
+    );
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("POST /api/route-recommendations stays honestly empty for an unregistered city", async () => {
+  global.fetch = mockStableWeatherFetch();
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations?lang=en",
+      body: {
+        city: "malmo",
+        dates: ["2026-05-25"],
+        start: { type: "auto" },
+        end: { type: "auto" },
+        walking_km_target: 6,
+        preferences: ["mat"],
+      },
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.readiness?.signal, "unsupported_city");
+    assert.equal(response.body.readiness?.requested_city, "malmo");
+    assert.equal(response.body.days?.[0]?.primary_route ?? null, null);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
