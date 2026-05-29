@@ -113,10 +113,14 @@ function normalizePrimaryRoute(route) {
     anchor_zone: route.anchor_zone || null,
     routing_source: route.routing_source || null,
     // Surfaced only when truthy so verified-only snapshots stay byte-identical.
+    // credibility_tier rides inside this conditional too: capturing it only for
+    // provisional routes locks the thin-city credibility signal in the snapshot
+    // while keeping mature Rome/Barcelona snapshots untouched.
     ...(route.uses_provisional_sources
       ? {
           uses_provisional_sources: true,
           provisional_stop_count: Number(route.provisional_stop_count) || 0,
+          credibility_tier: route.credibility_tier || null,
         }
       : {}),
     estimated_km: roundMetric(route.estimated_km),

@@ -332,5 +332,6 @@ module.exports = {
   VALID_TRUST_TIERS,
   VALID_STOP_KINDS,
   normalizeRouteCandidate,
+  normalizeTrustSummary,
   validateRouteCandidate,
 };

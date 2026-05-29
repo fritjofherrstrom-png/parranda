@@ -15,6 +15,7 @@
         "routing_source": "agnostic_compose",
         "uses_provisional_sources": true,
         "provisional_stop_count": 2,
+        "credibility_tier": "low",
         "estimated_km": 2.9,
         "longest_leg_km": 1,
         "longest_leg_minutes": 12,

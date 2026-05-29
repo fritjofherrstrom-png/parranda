@@ -10696,38 +10696,69 @@ function renderPlannedDays() {
   const titleEl = dayCard.querySelector(".planner-day-title");
   titleEl.textContent = activeDay.primary_route.title;
 
-  // Low-confidence signal — when the route was composed from a thin citypack
-  // (real local places, but no curated route templates yet) we say so honestly:
-  // a discreet chip + one plain-language line. Not an error, not hidden.
-  if (activeDay.primary_route.confidence === "low") {
+  // Route credibility signal — derived from the per-stop trust mix
+  // (route.credibility_tier), SEPARATE from route.confidence (the thin-city
+  // composition signal). The tone scales with how much honesty matters:
+  //   high   → a subtle positive chip ("Curated route · verified local picks"),
+  //            no explanation panel. A strong route should earn trust emotion,
+  //            not just the absence of a warning.
+  //   medium → chip + a short note (verified core, a few unreviewed extras).
+  //   low    → the stronger "Simple route" honest-preview explanation, with the
+  //            existing some/mostly/thin sub-distinction preserved.
+  const credibilityTier =
+    activeDay.primary_route.credibility_tier ||
+    (activeDay.primary_route.confidence === "low" ? "low" : null);
+  if (credibilityTier) {
     const confidence = document.createElement("div");
-    confidence.className = "planner-day-confidence";
+    confidence.className = `planner-day-confidence planner-day-confidence--${credibilityTier}`;
     const chip = document.createElement("span");
     chip.className = "planner-day-confidence-chip";
-    chip.textContent = isEnglishUi ? "Simple route" : "Enkel rutt";
-    const note = document.createElement("span");
-    note.className = "planner-day-confidence-note";
-    // Why it's simple — honest about provisional sources when the thin compose
-    // had to lean on unverified places to fill the walk.
-    const provisionalStops = Number(activeDay.primary_route.provisional_stop_count) || 0;
-    const totalStops = Array.isArray(activeDay.primary_route.main_stops)
-      ? activeDay.primary_route.main_stops.length
-      : 0;
-    const mostlyProvisional = provisionalStops > 0 && provisionalStops * 2 >= totalStops;
-    if (activeDay.primary_route.uses_provisional_sources && mostlyProvisional) {
-      note.textContent = isEnglishUi
-        ? "Mostly preliminary places Parranda hasn't verified here yet — a real starting walk, not a full citypack."
-        : "Mest preliminära platser Parranda ännu inte verifierat här — en riktig startpromenad, inte ett fullt citypack.";
-    } else if (activeDay.primary_route.uses_provisional_sources) {
-      note.textContent = isEnglishUi
-        ? "Built from the local places Parranda knows here, topped up with a few preliminary ones we haven't verified yet."
-        : "Byggd av de lokala platser Parranda känner till här, påfylld med några preliminära som vi ännu inte verifierat.";
+
+    if (credibilityTier === "high") {
+      chip.classList.add("planner-day-confidence-chip--curated");
+      chip.textContent = t("credibility.routeCurated", "Kurerad rutt");
+      const note = document.createElement("span");
+      note.className = "planner-day-confidence-note";
+      note.textContent = t("credibility.routeCuratedNote", "Verifierade lokala val.");
+      confidence.append(chip, note);
+    } else if (credibilityTier === "medium") {
+      chip.textContent = t("credibility.routeMixed", "Mestadels verifierad");
+      const note = document.createElement("span");
+      note.className = "planner-day-confidence-note";
+      note.textContent = t(
+        "credibility.routeMixedNote",
+        "Byggd av verifierade lokala val, påfylld med några vi ännu inte hunnit granska.",
+      );
+      confidence.append(chip, note);
     } else {
-      note.textContent = isEnglishUi
-        ? "Built from the few local places Parranda knows here — not a full citypack yet."
-        : "Byggd av de få lokala platser Parranda känner till här — ännu inte ett fullt citypack.";
+      chip.textContent = t("credibility.routeSimple", "Enkel rutt");
+      const note = document.createElement("span");
+      note.className = "planner-day-confidence-note";
+      // Why it's simple — honest about provisional sources when the thin compose
+      // had to lean on unverified places to fill the walk.
+      const provisionalStops = Number(activeDay.primary_route.provisional_stop_count) || 0;
+      const totalStops = Array.isArray(activeDay.primary_route.main_stops)
+        ? activeDay.primary_route.main_stops.length
+        : 0;
+      const mostlyProvisional = provisionalStops > 0 && provisionalStops * 2 >= totalStops;
+      if (activeDay.primary_route.uses_provisional_sources && mostlyProvisional) {
+        note.textContent = t(
+          "credibility.routeSimpleMostly",
+          "Mest preliminära platser Parranda ännu inte verifierat här — en riktig startpromenad, inte ett fullt citypack.",
+        );
+      } else if (activeDay.primary_route.uses_provisional_sources) {
+        note.textContent = t(
+          "credibility.routeSimpleSome",
+          "Byggd av de lokala platser Parranda känner till här, påfylld med några preliminära som vi ännu inte verifierat.",
+        );
+      } else {
+        note.textContent = t(
+          "credibility.routeSimpleThin",
+          "Byggd av de få lokala platser Parranda känner till här — ännu inte ett fullt citypack.",
+        );
+      }
+      confidence.append(chip, note);
     }
-    confidence.append(chip, note);
     titleEl.insertAdjacentElement("afterend", confidence);
   }
 
