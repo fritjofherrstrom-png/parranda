@@ -13,6 +13,7 @@ const {
 } = require("./route-diversity");
 const { routeWalkingPath } = require("./walking-router");
 const { normalizeTrust } = require("./place-candidates/contract");
+const { normalizeTrustSummary } = require("./route-candidates/contract");
 
 const defaultCityConfig = getCityConfig("rome");
 
@@ -39,6 +40,61 @@ function resolveStopTrust(stop) {
   }
   return { ...VERIFIED_CATALOG_STOP_TRUST };
 }
+
+// Worst-to-best ordering for route freshness rollup: a route is only as fresh
+// as its least-fresh stop, so we report the lowest rank present.
+const FRESHNESS_RANK = { unknown: 0, stale: 1, fresh: 2, live: 3 };
+
+// Derives a user-facing route credibility layer from the per-stop trust mix.
+// This is SEPARATE from route.confidence (the thin-city composition signal):
+// route.confidence stays owned by markAgnosticComposeRoute, while this layer
+// answers "why should I trust this route?" for every route.
+//
+// Reuses the canonical trust_summary shape via normalizeTrustSummary
+// (route-candidates/contract.js) rather than inventing a parallel vocabulary.
+// Returns { trust_summary, credibility_tier } where credibility_tier is:
+//   "high"   — zero provisional stops AND every stop human_verified. "High"
+//              must mean a human stood behind every stop; an official-but-
+//              unreviewed stop (e.g. a live event, human_verified:false) does
+//              NOT qualify and pushes the route to medium.
+//   "low"    — provisional stops dominate (provisional*2 >= total), i.e. the
+//              existing "mostly provisional" thin-city condition.
+//   "medium" — everything else: a minority of provisional stops, and/or
+//              unverified live/official stops alongside curated ones.
+function buildRouteTrustSummary(mainStops = []) {
+  const stops = Array.isArray(mainStops) ? mainStops : [];
+  const total = stops.length;
+  const trusts = stops.map((stop) => resolveStopTrust(stop));
+  const provisionalCount = stops.filter((stop) => stop.provisional === true).length;
+  const allHumanVerified = total > 0 && trusts.every((trust) => trust.human_verified === true);
+
+  let credibilityTier;
+  if (provisionalCount > 0 && provisionalCount * 2 >= total) {
+    credibilityTier = "low";
+  } else if (provisionalCount === 0 && allHumanVerified) {
+    credibilityTier = "high";
+  } else {
+    credibilityTier = "medium";
+  }
+
+  const sourceTiers = [
+    ...new Set(trusts.map((trust) => trust.source_tier).filter(Boolean)),
+  ].sort();
+  const freshness = trusts.reduce((lowest, trust) => {
+    const rank = FRESHNESS_RANK[trust.freshness] ?? 0;
+    return rank < FRESHNESS_RANK[lowest] ? trust.freshness : lowest;
+  }, "live");
+
+  const trustSummary = normalizeTrustSummary({
+    source_tiers: sourceTiers,
+    confidence: credibilityTier,
+    human_verified: allHumanVerified,
+    freshness: total > 0 ? freshness : "unknown",
+  });
+
+  return { trust_summary: trustSummary, credibility_tier: credibilityTier };
+}
+
 const cityContextStorage = new AsyncLocalStorage();
 
 function getActiveCityConfig() {
@@ -5084,6 +5140,7 @@ function buildRouteFromTemplate(
     route_shape: shape,
     uses_provisional_sources: mainStops.some((stop) => stop.provisional === true),
     provisional_stop_count: mainStops.filter((stop) => stop.provisional === true).length,
+    ...buildRouteTrustSummary(mainStops),
     main_stops: mainStops,
     hidden_mentions: routeMentions.hiddenMentions,
     bar_mentions: routeMentions.barMentions,
@@ -6681,6 +6738,7 @@ module.exports = {
   getRouteLineage,
   buildLiveEventStopCandidates,
   annotateLiveEventsForRoutes,
+  buildRouteTrustSummary,
   formatMainStop,
   budgetScore,
   kmScore,

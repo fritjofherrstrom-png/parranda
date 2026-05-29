@@ -3505,6 +3505,15 @@ body.is-planner-entry .planner-mode-button.is-active {
   border: 1px solid var(--line);
 }
 
+/* Curated (high-credibility) chip: warm and confident, distinct from the
+   neutral simple-route chip and the muted/dashed provisional badge. This is a
+   positive trust signal for fully verified routes — quiet, not loud. */
+.planner-day-confidence-chip--curated {
+  background: rgba(255, 245, 226, 0.9);
+  color: rgba(70, 47, 33, 0.92);
+  border-color: rgba(175, 77, 36, 0.22);
+}
+
 .planner-day-confidence-note {
   font-size: 0.86rem;
   line-height: 1.4;
