@@ -5047,6 +5047,7 @@ function buildRouteFromTemplate(
     end_label: end.label,
     route_shape: shape,
     uses_provisional_sources: mainStops.some((stop) => stop.provisional === true),
+    provisional_stop_count: mainStops.filter((stop) => stop.provisional === true).length,
     main_stops: mainStops,
     hidden_mentions: routeMentions.hiddenMentions,
     bar_mentions: routeMentions.barMentions,

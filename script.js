@@ -8847,7 +8847,9 @@ function createApiRouteView(
       text: `${index + 1}. ${stop.label} • ${stop.area} • ${stop.tags.join(", ")}`,
       query: stop.drawer_query || stop.label,
       isLiveEvent: Boolean(stop.is_live_event),
-      source: stop.is_live_event ? "live" : "curated",
+      provisional: stop.provisional === true,
+      provisionalHint: stop.provenance?.source_note || stop.provenance?.why_included || null,
+      source: stop.provisional === true ? "provisional" : stop.is_live_event ? "live" : "curated",
       sourceLabel: stopSourceLabel({ isLiveEvent: Boolean(stop.is_live_event) }),
       anchorWeight: typeof stop.anchor_weight === "number" ? stop.anchor_weight : null,
       eventId: stop.event_id || null,
@@ -10078,6 +10080,21 @@ function appendCredibilityBadges(parent, stopItem) {
     badge.textContent = t("credibility.liveEvent", "Liveevent idag");
     parent.appendChild(badge);
   }
+
+  // Provisional source honesty: this stop did not come from the verified
+  // catalog. Mark it plainly so it never reads as full citypack confidence;
+  // the hint carries the source provenance on hover.
+  if (stopItem.provisional) {
+    const badge = document.createElement("span");
+    badge.className = "credibility-badge credibility-badge--provisional";
+    badge.textContent = t("credibility.provisional", "Preliminär plats");
+    const hint = stopItem.provisionalHint
+      || t("credibility.provisionalHint", "Inte verifierad av Parranda än – tas med för att fylla ut ett tunt område.");
+    if (hint) {
+      badge.title = hint;
+    }
+    parent.appendChild(badge);
+  }
 }
 
 function appendActiveDayWhy(anchorElement, routeView) {
@@ -10690,9 +10707,26 @@ function renderPlannedDays() {
     chip.textContent = isEnglishUi ? "Simple route" : "Enkel rutt";
     const note = document.createElement("span");
     note.className = "planner-day-confidence-note";
-    note.textContent = isEnglishUi
-      ? "Built from the few local places Parranda knows here — not a full citypack yet."
-      : "Byggd av de få lokala platser Parranda känner till här — ännu inte ett fullt citypack.";
+    // Why it's simple — honest about provisional sources when the thin compose
+    // had to lean on unverified places to fill the walk.
+    const provisionalStops = Number(activeDay.primary_route.provisional_stop_count) || 0;
+    const totalStops = Array.isArray(activeDay.primary_route.main_stops)
+      ? activeDay.primary_route.main_stops.length
+      : 0;
+    const mostlyProvisional = provisionalStops > 0 && provisionalStops * 2 >= totalStops;
+    if (activeDay.primary_route.uses_provisional_sources && mostlyProvisional) {
+      note.textContent = isEnglishUi
+        ? "Mostly preliminary places Parranda hasn't verified here yet — a real starting walk, not a full citypack."
+        : "Mest preliminära platser Parranda ännu inte verifierat här — en riktig startpromenad, inte ett fullt citypack.";
+    } else if (activeDay.primary_route.uses_provisional_sources) {
+      note.textContent = isEnglishUi
+        ? "Built from the local places Parranda knows here, topped up with a few preliminary ones we haven't verified yet."
+        : "Byggd av de lokala platser Parranda känner till här, påfylld med några preliminära som vi ännu inte verifierat.";
+    } else {
+      note.textContent = isEnglishUi
+        ? "Built from the few local places Parranda knows here — not a full citypack yet."
+        : "Byggd av de få lokala platser Parranda känner till här — ännu inte ett fullt citypack.";
+    }
     confidence.append(chip, note);
     titleEl.insertAdjacentElement("afterend", confidence);
   }
