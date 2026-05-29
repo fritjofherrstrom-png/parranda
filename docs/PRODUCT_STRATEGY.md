@@ -53,7 +53,7 @@ The same engine powers three tiers of city support. The tier a city sits in dete
 |---|---|---|---|
 | **Signature — Blitz** | "Next move, right now" — the in-the-moment differentiator no other travel app has | Engine works (server/blitz-engine.js). UX surface is thin. Localization missing. | Stand-alone module `blitz-panel.js` (to extract) |
 | **Companion — Live walking mode** | Keep user in Parranda *after* they leave home. Replace the "plan → switch to Google Maps" funnel drop. | Not built. | New module + Pulse integration |
-| **Credibility — Provenance, photos, memory** | Direct answer to *"why should I trust this?"* | Not built. | Catalog fields + render layer + localStorage |
+| **Credibility — Provenance, photos, memory** | Direct answer to *"why should I trust this?"* | Route credibility surface shipped (#206). Per-stop trust foundation in place (#205). Photos + localStorage memory still pending. | Catalog fields + render layer + localStorage |
 | **Foundation — Catalog-first engine** | Multi-city scaling without per-city hacks | Preview routing works for Barcelona. Generic catalog-only builder pending (Issue #52). | server/route-engine.js + new diagnostics + canonical intents |
 
 ---
@@ -85,20 +85,22 @@ Runtime catalog (CityConfig-compatible)
 Planner / Blitz / Pulse / Live
 ```
 
-Trust metadata travels with every record:
+Trust metadata travels with every record (canonical field names from `server/place-candidates/contract.js`):
 
 ```
 trust: {
-  sourceTier,     // "curated" | "official" | "osm" | "commercial_api" | "llm_inferred"
-  confidence,     // "high" | "medium" | "low"
-  humanVerified,  // boolean
-  freshness,      // "fresh" | "stale" | "unknown"
+  source_tier,    // "official" | "verified" | "computed" | "curated" | "editorial" | "inferred" | "fallback"
+  confidence,     // "high" | "medium" | "low" | "needs_review"
+  human_verified, // boolean
+  freshness,      // "live" | "fresh" | "stale" | "unknown"
 }
 ```
 
-**Target state.** Trust metadata is a *required field for all new auto- and assisted-tier records* once the auto-city pipeline lands. Existing curated catalogs (Rome, Barcelona) ship without it today and migrate over time — they are implicitly treated as `{ sourceTier: "curated", humanVerified: true, confidence: "high", freshness: "fresh" }` until explicit fields are added.
+Every route stop carries canonical `trust` metadata (shipped in #205). The engine resolves trust automatically: verified catalog stops default to `{ source_tier: "curated", confidence: "high", human_verified: true, freshness: "fresh" }`; provisional source candidates carry `{ source_tier: "inferred", confidence: "needs_review", human_verified: false, freshness: "unknown" }`.
 
-At auto-tier the metadata determines how strongly the recommendation is presented (`high + humanVerified` reads differently than `low + llm_inferred`). At curated-tier the user expects "a local built this"; auto-tier without trust metadata cannot make that claim.
+Routes carry a derived `trust_summary` + `credibility_tier` (high / medium / low) computed from the stop trust mix (#206). This is a **separate layer** from `route.confidence` (the thin-city composition signal).
+
+At auto-tier the metadata determines how strongly the recommendation is presented (`high + human_verified` reads differently than `low + inferred`). At curated-tier the user expects "a local built this"; auto-tier without trust metadata cannot make that claim.
 
 ---
 
@@ -135,17 +137,20 @@ These are not "never." They are "not before the product feels magical."
 | # | PR / area | State |
 |---|---|---|
 | 1 | Shell i18n + Rome DOM cleanup | ✅ merged — PR #65 |
-| 2 | Blitz engine i18n (`fix/blitz-engine-i18n`) | Next |
-| 3 | Quick credibility pass — provenance fields + photos + localStorage memory | Planned — spec pending |
-| 4 | Blitz UX surface — extract `blitz-panel.js`, signature presentation | Planned — spec pending |
-| 5 | Live walking mode (companion experience) | Planned — spec pending |
-| 6 | Route readiness diagnostics (Issue #52 step 1) | Spec in Issue #52 |
-| 7 | Canonical intent mapping | Spec in Issue #52 |
-| 8 | Generic catalog-first route builder | Blocked by #6 + #7 |
-| 9 | Per-city editorial overrides (manifesto / map placeholders) | Backlog |
-| 10 | Auto-city infrastructure (Overpass + dedupe + LLM vibe layer) | Long-term — requires trust model first |
+| 2 | GitHub Actions CI | ✅ merged — PR #204 |
+| 3 | Thin-city provisional-source honesty | ✅ merged — PR #203 |
+| 4 | Canonical stop trust foundation | ✅ merged — PR #205 |
+| 5 | Route credibility surface (trust summary + UI) | ✅ merged — PR #206 |
+| 6 | Blitz engine i18n (`fix/blitz-engine-i18n`) | Next |
+| 7 | Blitz UX surface — extract `blitz-panel.js`, signature presentation | Planned — spec pending |
+| 8 | Live walking mode (companion experience) | Planned — spec pending |
+| 9 | Route readiness diagnostics (Issue #52 step 1) | Spec in Issue #52 |
+| 10 | Canonical intent mapping | Spec in Issue #52 |
+| 11 | Generic catalog-first route builder | Blocked by #9 + #10 |
+| 12 | Per-city editorial overrides (manifesto / map placeholders) | Backlog |
+| 13 | Auto-city infrastructure (Overpass + dedupe + LLM vibe layer) | Long-term — trust model now in place |
 
-The sprint order is *not* a contract. Quick credibility (#3) may compress with Blitz UX (#4) once provenance fields exist. Live mode (#5) may move earlier if the credibility pass exposes a clear bridge.
+The sprint order is *not* a contract. Blitz i18n (#6) may compress with Blitz UX (#7) if the i18n pass exposes the right extraction seam. Live mode (#8) may move earlier if a clear bridge emerges.
 
 ---
 
