@@ -102,19 +102,36 @@ test("unknown city (Malmö) is not silently planned as the fallback city", async
   assert.equal(result.resolved_end, null);
 });
 
-test("thin registered city (Athens, zero templates) returns honest enrichment signal", async () => {
+test("thin registered city (Athens, zero templates) composes a low-confidence route from its own catalog", async () => {
   const result = await generateRecommendations({ ...basePayload, city: "athens" });
 
   assert.equal(result.city, "athens");
   assert.equal(result.readiness.resolved_city, "athens");
   assert.equal(result.readiness.fallback_used, false);
   assert.equal(result.readiness.catalog.route_template_count, 0);
+  // Readiness stays honest: the city still needs source enrichment even though
+  // we can now compose a usable walk from the thin catalog.
   assert.equal(result.readiness.signal, "source_enrichment_needed");
   assert.notEqual(result.readiness.status, "unsupported_city");
 
-  // Honest empty — no crash, no hallucinated route from a template-less catalog.
-  result.days.forEach((day) => {
-    assert.equal(day.primary_route, null);
+  const day = result.days[0];
+  const route = day.primary_route;
+
+  // Agnostic compose: a real, minimally coherent walk — never honest-empty here.
+  assert.ok(route, "expected an agnostic-composed primary route for Athens");
+  assert.equal(route.routing_source, "agnostic_compose");
+  assert.equal(route.confidence, "low");
+
+  const stops = route.main_stops || [];
+  assert.ok(stops.length >= 2, "agnostic compose must produce at least 2 real stops");
+
+  // No place leak: every stop is a genuine Athens catalog item — no fake POIs,
+  // no Barcelona/Rome geography bleeding in.
+  stops.forEach((stop) => {
+    assert.ok(
+      String(stop.id || "").startsWith("athens-"),
+      `stop ${stop.id || stop.name} is not an Athens catalog item`,
+    );
   });
 });
 
@@ -141,9 +158,12 @@ test("mature citypack (Barcelona) is ready and still produces real routes", asyn
   assert.ok(result.readiness.catalog.route_template_count > 0);
   assert.equal(result.readiness.signal, "ready");
 
-  // Regression guard: readiness metadata did not break real planning.
+  // Regression guard: readiness metadata did not break real planning, and a
+  // mature citypack still routes via its curated templates — never the
+  // agnostic-compose fallback.
   assert.ok(result.days[0].primary_route);
   assert.ok((result.days[0].primary_route.main_stops || []).length > 0);
+  assert.notEqual(result.days[0].primary_route.routing_source, "agnostic_compose");
 });
 
 test("omitted city keeps the default-city plan (no false unsupported)", async () => {

@@ -297,11 +297,12 @@ const scenarioMatrix = [
       lang: "en",
     },
   },
-  // Athens preview-skeleton zero-state — Athens is a registered preview
-  // city with 0 catalog items and 0 route templates. This snapshot locks
-  // the honest empty shape (primary_route: null, alternatives: []) so
-  // the first runtime catalog promotion surfaces as a clear diff
-  // instead of a silent behavior shift.
+  // Athens thin-citypack compose — Athens is a registered preview city with
+  // real catalog items but 0 curated route templates. This snapshot locks the
+  // agnostic-compose shape: a low-confidence loop built ENTIRELY from Athens
+  // catalog items (routing_source "agnostic_compose"), never a fallback city's
+  // geography. The first time real route templates are added it should flip to
+  // template-driven routing and surface here as a clear diff.
   {
     city: "athens",
     name: "preview-zero-state",
