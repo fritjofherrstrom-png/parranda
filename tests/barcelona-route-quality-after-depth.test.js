@@ -408,3 +408,43 @@ test("Barcelona long second-hand trips vary later anchor zones and stop sets", a
     );
   });
 });
+
+test("Barcelona long second-hand trip ends on a relaxed, coherent final day", async () => {
+  const routes = await runBarcelonaMultiDayScenario({
+    dates: ["2026-05-23", "2026-05-24", "2026-05-25", "2026-05-26", "2026-05-27"],
+    start: { type: "auto" },
+    end: { type: "auto" },
+    walkingKmTarget: 6,
+    preferences: ["vintage", "shopping", "lokalt"],
+  });
+
+  assert.equal(routes.length, 5);
+
+  const finalRoute = routes[4];
+  const finalStops = stopItems(finalRoute);
+
+  assert.equal(finalStops.length, 3, "final day should reach a relaxed 3-stop count, not collapse to 2");
+
+  assert.ok(
+    Number(finalRoute.estimated_km) <= 4.5,
+    `final day should walk a softer envelope (got ${finalRoute.estimated_km} km)`,
+  );
+  assert.ok(
+    Number(finalRoute.longest_leg_km) <= 2.3,
+    `final day should avoid a long march leg (got ${finalRoute.longest_leg_km} km)`,
+  );
+
+  const secondHandCount = finalStops.filter((item) =>
+    item.tags.includes("second_hand") || item.tags.includes("vintage"),
+  ).length;
+  assert.ok(
+    secondHandCount / finalStops.length >= 0.6,
+    `final day should keep a genuine vintage identity (coverage ${secondHandCount}/${finalStops.length})`,
+  );
+
+  assert.notDeepEqual(
+    stopIds(finalRoute),
+    stopIds(routes[3]),
+    "final day should not repeat the previous day's exact stop set",
+  );
+});
