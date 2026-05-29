@@ -10715,12 +10715,11 @@ function renderPlannedDays() {
     chip.className = "planner-day-confidence-chip";
 
     if (credibilityTier === "high") {
+      // Subtle one-line positive signal — a single chip, no explanation note,
+      // so a strong route reads as confident, not as a panel.
       chip.classList.add("planner-day-confidence-chip--curated");
-      chip.textContent = t("credibility.routeCurated", "Kurerad rutt");
-      const note = document.createElement("span");
-      note.className = "planner-day-confidence-note";
-      note.textContent = t("credibility.routeCuratedNote", "Verifierade lokala val.");
-      confidence.append(chip, note);
+      chip.textContent = t("credibility.routeCurated", "Kurerad rutt · verifierade lokala val");
+      confidence.append(chip);
     } else if (credibilityTier === "medium") {
       chip.textContent = t("credibility.routeMixed", "Mestadels verifierad");
       const note = document.createElement("span");
