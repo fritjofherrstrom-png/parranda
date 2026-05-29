@@ -12,8 +12,33 @@ const {
   routeSimilarity,
 } = require("./route-diversity");
 const { routeWalkingPath } = require("./walking-router");
+const { normalizeTrust } = require("./place-candidates/contract");
 
 const defaultCityConfig = getCityConfig("rome");
+
+// Canonical trust for a verified catalog route stop. Curated catalogs (Rome,
+// Barcelona, …) ship without explicit trust fields today; per the product
+// strategy they are implicitly curated + human-verified + fresh, matching what
+// the curated-catalog place-candidate provider already emits. This is the route
+// path's single source of that implicit truth.
+const VERIFIED_CATALOG_STOP_TRUST = Object.freeze({
+  source_tier: "curated",
+  confidence: "high",
+  human_verified: true,
+  freshness: "fresh",
+});
+
+// Resolve the canonical trust shape for any route stop, reusing the shared
+// place-candidate trust contract instead of inventing a parallel vocabulary.
+// Provisional source candidates carry their own (low) trust from the city's
+// sourceCandidates and are normalized through the contract; everything else is
+// a verified catalog item and gets the implicit curated trust above.
+function resolveStopTrust(stop) {
+  if (stop && (stop.provisional === true || stop.trust)) {
+    return normalizeTrust(stop);
+  }
+  return { ...VERIFIED_CATALOG_STOP_TRUST };
+}
 const cityContextStorage = new AsyncLocalStorage();
 
 function getActiveCityConfig() {
@@ -4623,13 +4648,24 @@ function formatMainStop(stop) {
     anchor_weight: typeof stop.anchorWeight === "number" ? stop.anchorWeight : null,
   };
 
+  // Every stop carries canonical trust metadata so the UI and API can present
+  // graded confidence consistently — a verified catalog item reads differently
+  // than a provisional source candidate.
+  formatted.trust = resolveStopTrust(stop);
+
   // Honest provenance for provisional source candidates: a stop that did not
-  // come from the verified catalog carries its source/trust so the UI and API
-  // can mark it clearly instead of presenting it as full citypack confidence.
+  // come from the verified catalog carries its source/provenance so the UI can
+  // mark it clearly instead of presenting it as full citypack confidence.
+  //
+  // The marker is gated on the explicit stop.provisional flag (set by
+  // buildProvisionalComposeStops), NOT on trust.human_verified. human_verified
+  // is a broader signal: an official-but-unreviewed source (e.g. a live event)
+  // can legitimately be human_verified:false without being a provisional
+  // source-candidate placeholder. Gating on the explicit flag keeps the
+  // "provisional place" badge tied to source candidates only.
   if (stop.provisional === true) {
     formatted.provisional = true;
     formatted.source = stop.source || null;
-    formatted.trust = stop.trust || null;
     formatted.provenance = stop.provenance || null;
   }
 
@@ -6645,6 +6681,7 @@ module.exports = {
   getRouteLineage,
   buildLiveEventStopCandidates,
   annotateLiveEventsForRoutes,
+  formatMainStop,
   budgetScore,
   kmScore,
   normalizeBudgetTier,

@@ -238,6 +238,7 @@ module.exports = {
   VALID_TRUST_TIERS,
   VALID_CONFIDENCE_LEVELS,
   VALID_FRESHNESS_LEVELS,
+  normalizeTrust,
   normalizePlaceCandidate,
   validatePlaceCandidate,
   validateCandidateSource,
