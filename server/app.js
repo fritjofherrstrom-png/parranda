@@ -380,10 +380,11 @@ function isPreviewCityConfig(cityConfig) {
 }
 
 function shouldReturnPreviewRouteNoop(cityConfig) {
-  return (
-    isPreviewCityConfig(cityConfig) &&
-    (!cityConfig.catalog?.routeTemplates?.length || !cityConfig.catalog?.allItems?.length)
-  );
+  // A preview city with real catalog items can now be routed by the engine's
+  // agnostic compose path even with zero curated route templates (see
+  // route-engine buildAgnosticComposeTemplate). Only short-circuit to the
+  // honest empty noop when there is genuinely nothing to compose from.
+  return isPreviewCityConfig(cityConfig) && !cityConfig.catalog?.allItems?.length;
 }
 
 function buildShellCopy(shellMode, options = {}) {

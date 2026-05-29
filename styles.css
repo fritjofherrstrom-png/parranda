@@ -3471,6 +3471,34 @@ body.is-planner-entry .planner-mode-button.is-active {
   max-width: 22ch;
 }
 
+.planner-day-confidence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  margin: 2px 0 -2px;
+}
+
+.planner-day-confidence-chip {
+  flex: 0 0 auto;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(36, 25, 20, 0.06);
+  color: rgba(36, 25, 20, 0.72);
+  border: 1px solid var(--line);
+}
+
+.planner-day-confidence-note {
+  font-size: 0.86rem;
+  line-height: 1.4;
+  color: var(--muted);
+  max-width: 52ch;
+}
+
 .planner-day-summary {
   margin: 0;
   font-size: 1.02rem;

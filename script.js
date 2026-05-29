@@ -10676,7 +10676,26 @@ function renderPlannedDays() {
     : dateLabel;
 
   // Title — clean editorial line, just the route title
-  dayCard.querySelector(".planner-day-title").textContent = activeDay.primary_route.title;
+  const titleEl = dayCard.querySelector(".planner-day-title");
+  titleEl.textContent = activeDay.primary_route.title;
+
+  // Low-confidence signal — when the route was composed from a thin citypack
+  // (real local places, but no curated route templates yet) we say so honestly:
+  // a discreet chip + one plain-language line. Not an error, not hidden.
+  if (activeDay.primary_route.confidence === "low") {
+    const confidence = document.createElement("div");
+    confidence.className = "planner-day-confidence";
+    const chip = document.createElement("span");
+    chip.className = "planner-day-confidence-chip";
+    chip.textContent = isEnglishUi ? "Simple route" : "Enkel rutt";
+    const note = document.createElement("span");
+    note.className = "planner-day-confidence-note";
+    note.textContent = isEnglishUi
+      ? "Built from the few local places Parranda knows here — not a full citypack yet."
+      : "Byggd av de få lokala platser Parranda känner till här — ännu inte ett fullt citypack.";
+    confidence.append(chip, note);
+    titleEl.insertAdjacentElement("afterend", confidence);
+  }
 
   // Subtitle — short tagline separate from the why-block below. Use the
   // route's summary field (a distinct mood line); fall back to visibleWhy
