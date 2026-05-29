@@ -75,7 +75,7 @@
       "alternative_count": 2,
       "alternatives": [
         {
-          "id": "sunset-spots-loop",
+          "id": "wine-crawl-loop",
           "start": "Garbatella",
           "end": "Testaccio",
           "shape": "arc",
@@ -84,22 +84,22 @@
           "stops": [
             "Latteria Garbatella",
             "Ostiense",
-            "L'Oasi della Birra",
-            "Aventino"
+            "Testaccio Market",
+            "L'Oasi della Birra"
           ]
         },
         {
-          "id": "sunset-spots-loop",
+          "id": "prati-centro-low-key",
           "start": "Garbatella",
           "end": "Testaccio",
           "shape": "arc",
-          "day_profile": "peak",
+          "day_profile": "variation",
           "anchor_zone": "Garbatella -> Testaccio",
           "stops": [
             "Latteria Garbatella",
             "Ostiense",
-            "L'Oasi della Birra",
-            "Aventino"
+            "Testaccio Market",
+            "L'Oasi della Birra"
           ]
         }
       ]

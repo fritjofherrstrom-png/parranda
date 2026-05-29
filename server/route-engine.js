@@ -4740,6 +4740,10 @@ function buildDynamicRouteMentions({
 } = {}) {
   const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
   const stopIds = new Set(orderedStops.map((stop) => stop.id));
+  // Route stops are already shown in the day card's ROUTE ORDER; mentions are
+  // for additional places NOT on the route, so we never echo a stop here.
+  const stopNameKeys = new Set(orderedStops.map((stop) => slugifyText(stop.name)));
+  const isNotARouteStop = (name) => !stopNameKeys.has(slugifyText(name));
   const nearbyItems = getAllItems()
     .filter((item) => !stopIds.has(item.id) && !autoAnchorKinds.has(item.kind))
     .map((item) => ({
@@ -4750,37 +4754,18 @@ function buildDynamicRouteMentions({
     .sort((left, right) => left.distanceKm - right.distanceKm)
     .slice(0, 20);
 
-  const barCandidates = [
-    ...orderedStops.map((item, index) => ({
-      item,
-      score:
-        (isBarRouteMentionCandidate(item) ? 4.6 : -10) +
-        item.tags.filter((tag) => preferences.includes(tag)).length * 0.8 +
-        (item.tags.includes("nattliv") ? 1.1 : 0) -
-        index * 0.25,
-    })),
-    ...nearbyItems.map(({ item, distanceKm }) => ({
+  const barCandidates = nearbyItems
+    .map(({ item, distanceKm }) => ({
       item,
       score:
         (isBarRouteMentionCandidate(item) ? 3.6 : -10) +
         item.tags.filter((tag) => preferences.includes(tag)).length * 0.75 +
         clamp(0.7 - distanceKm, 0, 0.7) * 3,
-    })),
-  ].filter((entry) => entry.score > 0);
+    }))
+    .filter((entry) => entry.score > 0);
 
-  const hiddenCandidates = [
-    ...orderedStops.map((item, index) => ({
-      item,
-      score:
-        (isHiddenRouteMentionCandidate(item) ? 4.2 : -10) +
-        (item.tags.includes("hidden gems") ? 1.3 : 0) +
-        (item.tags.includes("kyrkor") ? 1.5 : 0) +
-        (item.tags.includes("utsikt") ? 1 : 0) +
-        (itemMatchesStrictPreference(item, strictTags) ? 1.8 : 0) -
-        (isBarRouteMentionCandidate(item) ? 1 : 0) -
-        index * 0.2,
-    })),
-    ...nearbyItems.map(({ item, distanceKm }) => ({
+  const hiddenCandidates = nearbyItems
+    .map(({ item, distanceKm }) => ({
       item,
       score:
         (isHiddenRouteMentionCandidate(item) ? 3.2 : -10) +
@@ -4789,8 +4774,8 @@ function buildDynamicRouteMentions({
         (itemMatchesStrictPreference(item, strictTags) ? 1.4 : 0) -
         (isBarRouteMentionCandidate(item) ? 0.8 : 0) +
         clamp(0.65 - distanceKm, 0, 0.65) * 3,
-    })),
-  ].filter((entry) => entry.score > 0);
+    }))
+    .filter((entry) => entry.score > 0);
 
   const hiddenMentions = areHiddenMentionsRelevant(preferences)
     ? pickRouteMentions(hiddenCandidates, 4)
@@ -4805,7 +4790,7 @@ function buildDynamicRouteMentions({
         ? hiddenMentions
         : areHiddenMentionsRelevant(preferences)
           ? (template?.hiddenMentions || [])
-              .filter((name) => Boolean(findCatalogItemByName(name)))
+              .filter((name) => Boolean(findCatalogItemByName(name)) && isNotARouteStop(name))
               .slice(0, 4)
           : [],
     barMentions:
@@ -4813,7 +4798,7 @@ function buildDynamicRouteMentions({
         ? barMentions
         : areBarMentionsRelevant(preferences)
           ? (template?.barMentions || [])
-              .filter((name) => Boolean(findCatalogItemByName(name)))
+              .filter((name) => Boolean(findCatalogItemByName(name)) && isNotARouteStop(name))
               .slice(0, 4)
           : [],
   };
