@@ -3242,6 +3242,19 @@ body.is-planner-entry .planner-mode-button.is-active {
   border-color: rgba(175, 77, 36, 0.3);
 }
 
+/* Provisional source: muted, dashed, deliberately quieter than verified
+   badges so it reads as "honest placeholder" rather than a warning. */
+.credibility-badge--provisional {
+  color: rgba(76, 84, 92, 0.92);
+  background: rgba(120, 132, 144, 0.12);
+  border-style: dashed;
+  border-color: rgba(96, 108, 120, 0.4);
+}
+
+.credibility-badge--provisional::before {
+  opacity: 0.4;
+}
+
 .route-stop-link,
 .route-chip-link {
   color: inherit;

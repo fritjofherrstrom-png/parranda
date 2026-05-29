@@ -201,6 +201,14 @@ test("thin city compose supplements with clearly-marked provisional candidates, 
   assert.ok(provisionalStops.length >= 1, "expected at least one provisional stop in a thin area");
   assert.ok(verifiedStops.length >= 1, "verified catalog items must remain in the route");
 
+  // Route-level honesty count drives the "mostly provisional" UI signal and
+  // must match the per-stop reality exactly.
+  assert.equal(
+    route.provisional_stop_count,
+    provisionalStops.length,
+    "provisional_stop_count must equal the number of provisional stops",
+  );
+
   // No place leak and full provenance on every provisional stop.
   stops.forEach((stop) => {
     assert.ok(String(stop.id || "").startsWith("athens-"), `stop ${stop.id} is not an Athens place`);
@@ -229,6 +237,7 @@ test("mature citypack never pulls provisional candidates (no source-candidate la
   assert.ok(route);
   assert.notEqual(route.routing_source, "agnostic_compose");
   assert.ok(!route.uses_provisional_sources, "mature city route must not use provisional sources");
+  assert.equal(route.provisional_stop_count, 0, "mature city route must have zero provisional stops");
   (route.main_stops || []).forEach((stop) => {
     assert.notEqual(stop.provisional, true, "no provisional stops in a mature citypack route");
   });

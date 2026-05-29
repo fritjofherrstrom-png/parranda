@@ -113,7 +113,12 @@ function normalizePrimaryRoute(route) {
     anchor_zone: route.anchor_zone || null,
     routing_source: route.routing_source || null,
     // Surfaced only when truthy so verified-only snapshots stay byte-identical.
-    ...(route.uses_provisional_sources ? { uses_provisional_sources: true } : {}),
+    ...(route.uses_provisional_sources
+      ? {
+          uses_provisional_sources: true,
+          provisional_stop_count: Number(route.provisional_stop_count) || 0,
+        }
+      : {}),
     estimated_km: roundMetric(route.estimated_km),
     longest_leg_km: roundMetric(route.longest_leg_km),
     longest_leg_minutes: Number.isFinite(Number(route.longest_leg_minutes))
