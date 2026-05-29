@@ -36,6 +36,41 @@ function getRouteTemplates() {
   return getActiveCatalog().routeTemplates;
 }
 
+const AGNOSTIC_COMPOSE_TEMPLATE_ID = "__agnostic_compose__";
+
+// When a registered city has zero curated route templates (a "thin" citypack
+// such as the Athens preview skeleton) we still want an honest, low-confidence
+// walk built ENTIRELY from that city's own real catalog items — never a
+// fallback city's geography, never invented places. buildStopPool already
+// seeds its candidate pool from getAllItems() + geometry, so a neutral,
+// place-less template is enough to drive the existing pipeline generically.
+// The template carries no stops of its own; every real stop comes from the
+// active catalog.
+function buildAgnosticComposeTemplate(targetKm) {
+  return {
+    id: AGNOSTIC_COMPOSE_TEMPLATE_ID,
+    title: "",
+    summary: "",
+    stops: [],
+    defaultKm: Number.isFinite(targetKm) ? targetKm : 6,
+    preferenceTags: [],
+    optimizerModes: [],
+    weatherProfile: {},
+    weekdayBoost: {},
+    vibeProfile: {},
+    hiddenMentions: [],
+    barMentions: [],
+  };
+}
+
+function markAgnosticComposeRoute(route) {
+  if (route && typeof route === "object") {
+    route.routing_source = "agnostic_compose";
+    route.confidence = "low";
+  }
+  return route;
+}
+
 function findCatalogItemByIdOrName(value) {
   const normalized = String(value || "").trim().toLowerCase();
   if (!normalized) {
@@ -6441,8 +6476,14 @@ async function generateRecommendations({
           };
         };
 
+        const cityRouteTemplates = getRouteTemplates();
+        const usingAgnosticCompose = cityRouteTemplates.length === 0;
+        const effectiveTemplates = usingAgnosticCompose
+          ? [buildAgnosticComposeTemplate(walkingKmTarget)]
+          : cityRouteTemplates;
+
         const initialRanked = await Promise.all(
-          getRouteTemplates().flatMap((template) =>
+          effectiveTemplates.flatMap((template) =>
             candidateDayProfiles.map((dayProfile) => buildRankedEntry(template, null, dayProfile)),
           ),
         );
@@ -6473,11 +6514,14 @@ async function generateRecommendations({
         const primary =
           pickedPrimary || (primaryCandidates.length ? primaryCandidates[0] : ranked[0]) || null;
 
-        // Honest empty-city / empty-day shape: when no route templates are
-        // available for the active city (e.g. Athens preview skeleton with
-        // zero templates), surface a day record with no route rather than
-        // crashing on primary.route below.
-        if (!primary) {
+        // Honest empty-day shape. Two cases collapse here:
+        //  - a city with templates produced no rankable route, or
+        //  - agnostic compose (thin citypack) could not assemble a minimally
+        //    coherent walk (< 2 real catalog stops). In both we surface a null
+        //    route rather than forcing a one-stop or hallucinated route.
+        const agnosticTooThin =
+          usingAgnosticCompose && (primary?.route?.main_stops || []).length < 2;
+        if (!primary || agnosticTooThin) {
           days.push({
             date,
             date_signals: dateSignals,
@@ -6512,6 +6556,11 @@ async function generateRecommendations({
         ], routeResultLang);
         usedTemplateIds.add(primary.template.id);
         usedPrimaryRoutes.push(primary.route);
+
+        if (usingAgnosticCompose) {
+          markAgnosticComposeRoute(primary.route);
+          alternatives.forEach((entry) => markAgnosticComposeRoute(entry.route));
+        }
 
         days.push({
           date,
