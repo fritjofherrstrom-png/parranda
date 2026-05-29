@@ -1,5 +1,9 @@
 const { AsyncLocalStorage } = require("node:async_hooks");
-const { getCityConfig } = require("./cities");
+const { getCityConfig, resolveCityConfig } = require("./cities");
+const {
+  classifyRuntimeReadiness,
+  buildUnsupportedCityResult,
+} = require("./city-readiness/runtime-readiness");
 const { getIsoWeekday } = require("./lib/iso-date");
 const { evaluateLocalTruth, localTruthForLang } = require("./local-truth");
 const {
@@ -6217,7 +6221,16 @@ async function generateRecommendations({
   includeLiveEvents = false,
 }) {
   const routeResultLang = normalizeRouteResultLanguage(lang);
-  return cityContextStorage.run(getCityConfig(city), async () => {
+  const cityResolution = resolveCityConfig(city);
+
+  // A city that was explicitly requested but is not registered must not be
+  // silently planned as the fallback city — that would leak the fallback
+  // city's geography and present fake confidence. Return an honest shell.
+  if (cityResolution.requestedKey && !cityResolution.found) {
+    return buildUnsupportedCityResult(cityResolution, expandDateRange(dates));
+  }
+
+  return cityContextStorage.run(cityResolution.cityConfig, async () => {
     const normalizedDates = expandDateRange(dates);
     const pulseByDate = Object.fromEntries(
       normalizedDates.map((date) => [date, getPulseForDate(date, routeResultLang)]),
@@ -6515,6 +6528,9 @@ async function generateRecommendations({
       resolved_home_base: resolvedHomeBase,
       resolved_start: resolvedStart,
       resolved_end: resolvedEnd,
+      readiness: classifyRuntimeReadiness(cityResolution.cityConfig, cityResolution, {
+        routedDayCount: days.filter((day) => day.primary_route).length,
+      }),
     };
   });
 }

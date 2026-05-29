@@ -4,6 +4,10 @@ const path = require("path");
 const { resolveCityConfig, cityConfigs } = require("./cities");
 const { buildBlitzDecision } = require("./blitz-engine");
 const { generateRecommendations } = require("./route-engine");
+const {
+  classifyRuntimeReadiness,
+  buildUnsupportedCityReadiness,
+} = require("./city-readiness/runtime-readiness");
 const { diversifyRecommendationDays } = require("./route-diversity");
 const { buildClientI18nPayload, normalizeLanguage, translate } = require("./ui-i18n");
 const { buildCityPulse } = require("./pulse-engine");
@@ -1144,6 +1148,20 @@ function buildApp() {
         includeLiveEvents: Boolean(request.body?.include_live_events),
       };
 
+      if (cityFallbackUsed) {
+        response.json({
+          city: requestedCity,
+          days: [],
+          resolved_home_base: null,
+          resolved_start: null,
+          resolved_end: null,
+          requested_city: requestedCity,
+          city_fallback_used: true,
+          readiness: buildUnsupportedCityReadiness(requestedCity),
+        });
+        return;
+      }
+
       if (shouldReturnPreviewRouteNoop(cityConfig)) {
         response.json({
           city,
@@ -1153,6 +1171,10 @@ function buildApp() {
           resolved_end: null,
           requested_city: requestedCity,
           city_fallback_used: cityFallbackUsed,
+          readiness: classifyRuntimeReadiness(cityConfig, {
+            requestedKey: requestedCity || city,
+            fallbackUsed: cityFallbackUsed,
+          }, { routedDayCount: 0 }),
         });
         return;
       }

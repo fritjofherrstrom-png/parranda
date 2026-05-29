@@ -2070,23 +2070,7 @@ test("appendCredibilityBadges gates anchor badge on !isLiveEvent so a live event
 });
 
 
-test("POST /api/route-recommendations markerar när en okänd city fallbackar till rome", async () => {
-  global.fetch = async (url) => {
-    const parsed = new URL(String(url));
-
-    if (parsed.hostname === "api.open-meteo.com") {
-      return mockJsonResponse({
-        daily: {
-          time: ["2026-04-20"],
-          weathercode: [0],
-          temperature_2m_max: [22],
-        },
-      });
-    }
-
-    throw new Error(`Unexpected fetch during route city fallback test: ${url}`);
-  };
-
+test("POST /api/route-recommendations returnerar en ärlig unsupported-shape för okänd city istället för att läcka fallback-staden", async () => {
   const server = buildApp().listen(0);
 
   try {
@@ -2102,10 +2086,14 @@ test("POST /api/route-recommendations markerar när en okänd city fallbackar ti
     });
 
     assert.equal(response.status, 200);
-    assert.equal(response.body.city, "rome");
+    // The unknown city must NOT be silently planned as the fallback city.
+    assert.equal(response.body.city, "unknown-city");
     assert.equal(response.body.requested_city, "unknown-city");
     assert.equal(response.body.city_fallback_used, true);
-    assert.equal(response.body.days.length, 1);
+    assert.deepEqual(response.body.days, []);
+    assert.equal(response.body.readiness.status, "unsupported_city");
+    assert.equal(response.body.readiness.signal, "unsupported_city");
+    assert.equal(response.body.readiness.resolved_city, null);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
