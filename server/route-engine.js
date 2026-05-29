@@ -4650,17 +4650,16 @@ function formatMainStop(stop) {
 
   // Every stop carries canonical trust metadata so the UI and API can present
   // graded confidence consistently — a verified catalog item reads differently
-  // than a provisional source candidate. Provisional is now a *derived* view of
-  // trust (unverified sources), not a free-standing flag, so the two can never
-  // disagree.
-  const trust = resolveStopTrust(stop);
-  formatted.trust = trust;
+  // than a provisional source candidate.
+  formatted.trust = resolveStopTrust(stop);
 
   // Honest provenance for provisional source candidates: a stop that did not
-  // come from the verified catalog (human_verified === false) carries its
-  // source/provenance so the UI can mark it clearly instead of presenting it as
-  // full citypack confidence.
-  if (trust.human_verified === false) {
+  // come from the verified catalog carries its source/provenance so the UI can
+  // mark it clearly instead of presenting it as full citypack confidence.
+  // Gated on stop.provisional (set by buildProvisionalComposeStops) rather than
+  // trust.human_verified — live event stops are also human_verified:false but
+  // are real today-events, not source candidates.
+  if (stop.provisional === true) {
     formatted.provisional = true;
     formatted.source = stop.source || null;
     formatted.provenance = stop.provenance || null;

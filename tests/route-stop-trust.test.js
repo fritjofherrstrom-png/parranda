@@ -167,16 +167,7 @@ test("provisional stops carry low canonical trust; provisional is derived from i
     const label = `verified athens stop ${stop.id}`;
     assert.equal(stop.trust.human_verified, true, `${label} must be human-verified`);
     assert.equal(stop.trust.source_tier, "curated", `${label} must be curated`);
-  });
-
-  // The core invariant: provisional is exactly "unverified trust", never a
-  // free-standing flag that can drift from the trust signal.
-  stops.forEach((stop) => {
-    assert.equal(
-      stop.provisional === true,
-      stop.trust.human_verified === false,
-      `provisional marker for ${stop.id} must agree with trust.human_verified`,
-    );
+    assert.equal(stop.provisional, undefined, `${label} must not be marked provisional`);
   });
 });
 
