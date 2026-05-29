@@ -1591,6 +1591,7 @@ function scoreAutoAnchorPair(
     legPacing = "balanced",
     weather = null,
     usedRoutes = [],
+    isFinalDay = false,
   } = {},
 ) {
   if (!startCandidate || !endCandidate) {
@@ -1721,7 +1722,7 @@ function scoreAutoAnchorPair(
     : 0;
   const repeatedTokenPairCount = tokenPair ? usedRouteContext.tokenPairs.get(tokenPair) || 0 : 0;
   const repeatedMacroPairCount = macroPair ? usedRouteContext.macroPairs.get(macroPair) || 0 : 0;
-  const repeatMultiplier = repeatDepthMultiplier(usedRoutes);
+  const repeatMultiplier = isFinalDay ? 0.5 : repeatDepthMultiplier(usedRoutes);
 
   if (repeatedLabelPairCount) {
     score -= Math.min(14.5, repeatedLabelPairCount * 6.2 * repeatMultiplier);
@@ -1775,12 +1776,13 @@ function scoreAutoLoopCandidate(
     legPacing = "balanced",
     weather = null,
     usedRoutes = [],
+    isFinalDay = false,
   } = {},
 ) {
   const strictTags = resolveStrictPreferenceTags(preferences, optimizerMode);
   const candidateProfile = buildItemAreaProfile(candidate);
   const usedRouteContext = buildUsedRouteContext(usedRoutes);
-  const repeatMultiplier = repeatDepthMultiplier(usedRoutes);
+  const repeatMultiplier = isFinalDay ? 0.5 : repeatDepthMultiplier(usedRoutes);
   let score = baseScore + (candidate.goodAsFinal || 1.5) * 1.1;
 
   score += scoreHomeBaseFit(candidate, homeBase, "loop");
@@ -1930,7 +1932,12 @@ function resolveAutoAnchors(options = {}) {
 
   const bestLoop = rankedLoop[0];
   const bestArc = rankedArc[0];
-  const adjustedLoopScore = bestLoop ? bestLoop.score + localEnvelopeBias : Number.NEGATIVE_INFINITY;
+  // Final days favor a compact loop: a relaxed, coherent finish should not jump
+  // to a fresh-but-distant arc anchor just to chase cross-day novelty.
+  const finalDayLoopBias = options.isFinalDay ? 10 : 0;
+  const adjustedLoopScore = bestLoop
+    ? bestLoop.score + localEnvelopeBias + finalDayLoopBias
+    : Number.NEGATIVE_INFINITY;
   const adjustedArcScore = bestArc ? bestArc.score - localEnvelopeBias * 0.75 : Number.NEGATIVE_INFINITY;
   const shouldPreferArc =
     bestArc &&
@@ -4786,6 +4793,36 @@ function buildRouteFromTemplate(
     selectedStops = sortedPool.slice(0, Math.min(rawPool.length, 3)).map((entry) => entry.item);
   }
 
+  if (
+    dayProfile === "final" &&
+    strictTags.length &&
+    selectedStops.length > 0 &&
+    selectedStops.length < selectedCount
+  ) {
+    const selectedAreas = new Set(selectedStops.map((stop) => stop.area).filter(Boolean));
+    const selectedIds = new Set(selectedStops.map((stop) => stop.id));
+    const strictCount = selectedStops.filter((stop) =>
+      itemMatchesStrictPreference(stop, strictTags),
+    ).length;
+    const maxTotalForCoverage =
+      strictCount > 0 ? Math.floor(strictCount / 0.6) : selectedStops.length;
+    const targetTotal = Math.min(selectedCount, maxTotalForCoverage, rawPool.length);
+
+    if (targetTotal > selectedStops.length) {
+      const connectors = sortedPool
+        .filter(
+          (entry) =>
+            !selectedIds.has(entry.item.id) &&
+            !itemMatchesStrictPreference(entry.item, strictTags) &&
+            entry.item.area &&
+            selectedAreas.has(entry.item.area),
+        )
+        .slice(0, targetTotal - selectedStops.length)
+        .map((entry) => entry.item);
+      selectedStops = [...selectedStops, ...connectors];
+    }
+  }
+
   if (options.manualAnchorsLocked && shape === "arc") {
     selectedStops = ensureLockedArcCoverage(
       selectedStops,
@@ -5509,7 +5546,12 @@ function routeScore({
     : 0;
   const strictFitScore = strictPreferenceCoverageScore(normalizedRouteStops, strictTags);
   const secondHandFit = buildSecondHandIntentFit(normalizedRouteStops, preferences, weekday);
-  const reusedPenalty = reusedIds.has(template.id) ? -6 : 0;
+  const isFinalDay = normalizeDayProfile(route.day_profile) === "final";
+  const reusedPenalty = reusedIds.has(template.id)
+    ? isFinalDay && templateStrictFitScore > 0
+      ? -2
+      : -6
+    : 0;
   const geoFitScore = (route.geo_quality_score || 0) - (route.pool_fit_penalty || 0);
   const localTruthScore = Number(localTruth?.score_delta || 0);
   const repeatPressure = buildRepeatPressure(route, usedRoutes);
@@ -5517,7 +5559,7 @@ function routeScore({
   const crossDayDepth = usedRoutes.length;
   const diversityMultiplier = manualAnchorsLocked
     ? 0.25
-    : Math.min(1.35, 0.55 + crossDayDepth * 0.18);
+    : Math.min(1.35, 0.55 + crossDayDepth * 0.18) * (isFinalDay ? 0.7 : 1);
   const rawDiversityScore =
     !crossDayDepth
       ? 0
@@ -5536,11 +5578,13 @@ function routeScore({
   let diversityEnvelopeAllowance = 1;
 
   if (!manualAnchorsLocked && rawDiversityScore > 0) {
-    const kmTolerance = distanceMode === "no_limit" ? 1.8 : 0.9;
+    const kmTolerance =
+      distanceMode === "no_limit" ? 1.8 : isFinalDay ? 0.3 : 0.9;
     const kmPenaltyWeight = distanceMode === "no_limit" ? 0.1 : 0.18;
     const overTargetKm = Math.max(0, estimatedKm - ((targetKm || 0) + kmTolerance));
     const longestLegTolerance =
-      continuityConfig.reportMaxKm + (distanceMode === "no_limit" ? 0.35 : 0);
+      continuityConfig.reportMaxKm * (isFinalDay ? 0.8 : 1) +
+      (distanceMode === "no_limit" ? 0.35 : 0);
     const longestLegOverflow = Math.max(0, longestLegKm - longestLegTolerance);
 
     diversityEnvelopeAllowance -= Math.min(0.62, overTargetKm * kmPenaltyWeight);
@@ -6213,6 +6257,8 @@ async function generateRecommendations({
         let dayResolvedEnd = resolvedEnd;
         let dayResolvedAutoShape = null;
 
+        const isFinalDay = normalizedDates.length > 1 && dateIndex === normalizedDates.length - 1;
+
         if (startIsAuto && endIsAuto) {
           const autoAnchors = resolveAutoAnchors({
             homeBase: resolvedHomeBase,
@@ -6226,6 +6272,7 @@ async function generateRecommendations({
             legPacing,
             weather,
             usedRoutes: usedPrimaryRoutes,
+            isFinalDay,
           });
           dayResolvedStart = autoAnchors.start;
           dayResolvedEnd = autoAnchors.end;

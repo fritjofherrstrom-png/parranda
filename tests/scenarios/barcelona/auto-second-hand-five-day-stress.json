@@ -375,47 +375,58 @@
     {
       "date": "2026-05-27",
       "primary": {
-        "id": "gracia-local-evening-loop",
-        "start": "Poble-sec / Montjuïc",
-        "end": "Poble-sec / Montjuïc",
+        "id": "raval-vintage-shopping-loop",
+        "start": "Raval / Gothic",
+        "end": "Raval / Gothic",
         "shape": "loop",
         "day_profile": "final",
-        "anchor_zone": "Poble-sec",
+        "anchor_zone": "Gothic Quarter",
         "routing_source": "heuristic",
-        "estimated_km": 6,
-        "longest_leg_km": 3,
-        "longest_leg_minutes": 36,
-        "average_leg_minutes": 24,
+        "estimated_km": 3.2,
+        "longest_leg_km": 1,
+        "longest_leg_minutes": 12,
+        "average_leg_minutes": 10,
         "stops": [
           {
-            "label": "Neko Vintage",
-            "area": "sants",
+            "label": "L'Arca",
+            "area": "gothic",
             "live": false
           },
           {
-            "label": "Humana — Sants",
-            "area": "sants",
+            "label": "Humana Vintage — Francesc Cambó",
+            "area": "born-sant-pere-santa-caterina",
+            "live": false
+          },
+          {
+            "label": "Los Féliz",
+            "area": "gothic",
             "live": false
           }
         ],
         "legs": [
           {
-            "from": "Poble-sec / Montjuïc",
-            "to": "Neko Vintage",
-            "km": 3,
-            "minutes": 36
+            "from": "Raval / Gothic",
+            "to": "L'Arca",
+            "km": 0.7,
+            "minutes": 8
           },
           {
-            "from": "Neko Vintage",
-            "to": "Humana — Sants",
-            "km": 0.6,
-            "minutes": 7
+            "from": "L'Arca",
+            "to": "Humana Vintage — Francesc Cambó",
+            "km": 0.7,
+            "minutes": 8
           },
           {
-            "from": "Humana — Sants",
-            "to": "Poble-sec / Montjuïc",
-            "km": 2.4,
-            "minutes": 29
+            "from": "Humana Vintage — Francesc Cambó",
+            "to": "Los Féliz",
+            "km": 0.8,
+            "minutes": 10
+          },
+          {
+            "from": "Los Féliz",
+            "to": "Raval / Gothic",
+            "km": 1,
+            "minutes": 12
           }
         ]
       },

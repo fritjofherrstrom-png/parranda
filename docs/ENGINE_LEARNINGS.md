@@ -296,6 +296,45 @@ Good long-trip behavior is not "same perfect local loop every day", but it is al
 - Distinct metrics for anchor, stop, and area reuse.
 - Guardrails that cap novelty pressure when it would break the active topology envelope.
 
+### Lesson: final days in long trips need a relaxed envelope, not peak novelty
+
+**Observation**
+
+5-day Barcelona vintage trip Day 5 exhibited two failure modes simultaneously: the engine jumped to a fresh-but-distant anchor (Poble-sec) to maximize cross-day novelty, then crammed 2 vintage stops from an unrelated district (Sants) into a non-vintage template shell. The result was the longest-walking and thinnest day — 6.0 km, 3.0 km longest leg, 2 stops, template/anchor id mismatch.
+
+Root cause: novelty pressure peaks on the final day (highest depth multiplier), the walking envelope never tightened for the "final" profile, and strict-fit template reuse penalties were too harsh to let a coherent vintage template re-anchor on a compact fresh cluster.
+
+**Generic rule**
+
+A `day_profile === "final"` route should be a relaxed coherent finish, not the trip's most novelty-hungry day:
+
+```txt
+softer walking envelope (tighter km + leg tolerance)
+damped novelty pressure (anchor + route scoring)
+compact loop bias over fresh-but-distant arcs
+softer reuse penalty for strict-fit templates (prefer coherent reuse over incoherent novelty)
+connector top-up when strict pool is thin (topology-coherent, coverage ≥ 0.6)
+```
+
+This is generic route-engine behavior: gate on `day_profile`, not city or intent.
+
+**Current anchor**
+
+- PR #197: final-day relaxed routing.
+- `tests/barcelona-route-quality-after-depth.test.js`: final-day regression test.
+- `tests/scenarios/barcelona/auto-second-hand-five-day-stress.json`: Day 5 snapshot.
+
+**Applies to**
+
+- All multi-day planning.
+- All citypacks.
+- Agnostic mode.
+
+**Future hook**
+
+- Extend the pattern to `light` or `variation` late-trip days if similar failures surface beyond `final`.
+- Consider a gradual wind-down curve instead of a binary final-day gate.
+
 ---
 
 ## 4. Intent density and area-loop behavior
