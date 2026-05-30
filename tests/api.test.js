@@ -377,6 +377,41 @@ test("planner modal title uses city-time framing instead of trip framing", () =>
   assert.doesNotMatch(source, /Din resa till \$\{plannerDisplayCityLabel\}/);
 });
 
+test("landing city submit opens the city-shell embedded planner, not /plan", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "landing.js"), "utf8");
+
+  assert.match(source, /params\.set\("planner", "open"\)/);
+  assert.match(source, /window\.location\.href = cityPath \+ "\?" \+ params\.toString\(\)/);
+  assert.doesNotMatch(source, /cityPath \+ "\/plan"/);
+  assert.doesNotMatch(source, /"\/" \+ city \+ "\/plan"/);
+});
+
+test("planner-open city shell uses inline planner mount instead of modal path", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const source = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
+  const styles = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
+
+  assert.match(html, /id="plannerInlineMount"/);
+  assert.match(source, /function showPlannerInline/);
+  assert.match(source, /params\.get\("planner"\) === "open"/);
+  assert.match(source, /showPlannerInline\(params\.get\("mode"\) === "manual"/);
+  assert.match(source, /document\.body\.classList\.add\("is-planner-entry", "is-planner-inline-open"\)/);
+  assert.match(styles, /body\.is-planner-inline-open \.planner-modal-backdrop\s*\{\s*display: none;/);
+  assert.match(styles, /body\.is-planner-inline-open \.planner-modal-shell\.planner-entry-inline/);
+  assert.match(styles, /body\.is-planner-inline-open \.hero-quickstart\s*\{\s*display: none;/);
+  assert.match(styles, /body\.is-planner-inline-open \.city-pulse-teaser\s*\{\s*display: none;/);
+});
+
+test("service worker registration is root-scoped for nested city routes", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
+  const sw = fs.readFileSync(path.join(__dirname, "..", "sw.js"), "utf8");
+
+  assert.match(source, /navigator\.serviceWorker\.register\("\/sw\.js", \{ scope: "\/" \}\)/);
+  assert.doesNotMatch(source, /navigator\.serviceWorker\.register\("\.\/sw\.js"\)/);
+  assert.match(sw, /"\.\/script\.js\?v=26"/);
+  assert.doesNotMatch(sw, /"\.\/script\.js\?v=24"/);
+});
+
 test.after(() => {
   global.fetch = originalFetch;
 });

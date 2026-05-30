@@ -3,7 +3,7 @@ const supportedLanguages = ["sv", "en"];
 
 const translations = {
   sv: {
-    "shell.plannerEyebrow": "PLANERA",
+    "shell.plannerEyebrow": "PLANERARE",
     "shell.markerBase": "Bas",
     "shell.markerTempo": "Tempo",
     "shell.markerMood": "Känsla",
@@ -32,7 +32,7 @@ const translations = {
     "shell.curated.heroLiveLabel": "Pulse",
     "shell.curated.plannerTitle": "Bygg en dag i staden",
     "shell.curated.plannerSummary": "Välj datum och känsla. Parranda sätter ihop rutten.",
-    "shell.curated.plannerCtaLabel": "Planera dagen",
+    "shell.curated.plannerCtaLabel": "Bygg min dag",
     "shell.curated.plannerMicrocopy": "Håll det lätt eller styr mer i nästa steg.",
     "shell.curated.wildcardLabel": "BLITZ",
     "shell.curated.wildcardTitle": "Nästa drag, just nu",
@@ -637,7 +637,7 @@ const translations = {
     "landing.footer.contact": "Kontakt",
   },
   en: {
-    "shell.plannerEyebrow": "PLAN",
+    "shell.plannerEyebrow": "PLANNER",
     "shell.markerBase": "Base",
     "shell.markerTempo": "Pace",
     "shell.markerMood": "Mood",
@@ -666,7 +666,7 @@ const translations = {
     "shell.curated.heroLiveLabel": "Pulse",
     "shell.curated.plannerTitle": "Build your day in {city}",
     "shell.curated.plannerSummary": "Choose a date and mood. Parranda builds the route.",
-    "shell.curated.plannerCtaLabel": "Plan the day",
+    "shell.curated.plannerCtaLabel": "Build my day",
     "shell.curated.plannerMicrocopy": "Keep it light or add more control in the next step.",
     "shell.curated.wildcardLabel": "BLITZ",
     "shell.curated.wildcardTitle": "Next move, right now",

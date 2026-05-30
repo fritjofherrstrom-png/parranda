@@ -1168,6 +1168,62 @@ body.is-planner-entry .planner-modal-backdrop {
   display: none;
 }
 
+/* City-shell planner-open state: the existing planner becomes the top card
+   body, not a modal and not a separate /plan app surface. */
+.planner-inline-mount {
+  width: 100%;
+}
+
+body.is-planner-inline-open .planner-launch-markers,
+body.is-planner-inline-open .planner-launch-actions {
+  display: none;
+}
+
+body.is-planner-inline-open .planner-launch-strip {
+  display: block;
+}
+
+body.is-planner-inline-open .planner-inline-mount {
+  display: block;
+  margin-top: 20px;
+}
+
+body.is-planner-inline-open .hero-quickstart {
+  display: none;
+}
+
+body.is-planner-inline-open .city-pulse-teaser {
+  display: none;
+}
+
+body.is-planner-inline-open .planner-modal-shell.planner-entry-inline {
+  position: static;
+  inset: auto;
+  z-index: auto;
+  width: 100%;
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+body.is-planner-inline-open .planner-modal-backdrop {
+  display: none;
+}
+
+body.is-planner-inline-open .planner-modal-head .eyebrow,
+body.is-planner-inline-open #plannerModalTitle,
+body.is-planner-inline-open #plannerModeLead {
+  display: none;
+}
+
+body.is-planner-inline-open .planner-modal-head {
+  margin-bottom: 16px;
+}
+
 /* Accessible touch targets for planner-entry tabs. */
 body.is-planner-entry .tab-nav .tab-button {
   min-height: 44px;

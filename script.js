@@ -1910,6 +1910,7 @@ const districtMapButton = document.getElementById("districtMapButton");
 const routePlannerStart = document.getElementById("routePlannerStart");
 const routePlannerOpenButton = document.getElementById("routePlannerOpenButton");
 const routePlannerManualButton = document.getElementById("routePlannerManualButton");
+const plannerInlineMount = document.getElementById("plannerInlineMount");
 const plannerRestoreNotice = document.getElementById("plannerRestoreNotice");
 const plannerRestoreSummary = document.getElementById("plannerRestoreSummary");
 const plannerRestoreButton = document.getElementById("plannerRestoreButton");
@@ -2035,6 +2036,7 @@ function getFrontendCityConfig() {
 }
 
 const isPlannerEntryRoute = window.__PARRANDA_CITY__?.plannerEntryRoute === true;
+let isPlannerInlineOpen = false;
 const plannerCity = getFrontendCityConfig();
 const plannerCityKey = plannerCity.key;
 const plannerCityLabel = plannerCity.label;
@@ -2884,7 +2886,7 @@ function applyCityModeToShell() {
       routeMatchSummary.textContent = buildNonRomeRouteSummary();
     }
   } else if (routePlannerOpenButton) {
-    routePlannerOpenButton.textContent = isEnglishUi ? "Plan the day" : "Planera dagen";
+    routePlannerOpenButton.textContent = t("shell.curated.plannerCtaLabel", isEnglishUi ? "Build my day" : "Bygg min dag");
     if (routePlannerManualButton) {
       routePlannerManualButton.hidden = false;
       routePlannerManualButton.textContent = isEnglishUi ? "Manual controls" : "Jag vill styra själv";
@@ -6747,10 +6749,69 @@ function updatePlannerLaunchSummary(prefix = "") {
   plannerLaunchSummary.textContent = summary;
 }
 
+function buildPlannerOpenUrl(mode = plannerAutoMode) {
+  const params = new URLSearchParams(window.location.search);
+  params.set("planner", "open");
+  if (mode === plannerManualMode) {
+    params.set("mode", "manual");
+  } else {
+    params.delete("mode");
+  }
+  const qs = params.toString();
+  return `${window.location.pathname}${qs ? `?${qs}` : ""}`;
+}
+
+function showPlannerInline(mode = plannerAutoMode, options = {}) {
+  setPlannerMode(mode);
+  if (mode === plannerManualMode && plannerFineTuneDetails) {
+    plannerFineTuneDetails.open = true;
+  }
+
+  if (routePlannerStart) {
+    routePlannerStart.hidden = false;
+    routePlannerStart.removeAttribute("aria-modal");
+    routePlannerStart.classList.add("planner-entry-inline");
+    if (plannerInlineMount && routePlannerStart.parentElement !== plannerInlineMount) {
+      plannerInlineMount.hidden = false;
+      plannerInlineMount.appendChild(routePlannerStart);
+    }
+  }
+
+  if (plannerInlineMount) {
+    plannerInlineMount.hidden = false;
+  }
+  if (plannerModalBackdrop) {
+    plannerModalBackdrop.hidden = true;
+  }
+  if (closePlannerModalButton) {
+    closePlannerModalButton.hidden = true;
+  }
+
+  document.body.classList.add("is-planner-entry", "is-planner-inline-open");
+  document.body.classList.remove("is-planner-open");
+  isPlannerInlineOpen = true;
+
+  const seedLabel = options.seedLabel;
+  if (seedLabel) {
+    try { setPlannerFieldFromLabel("home_base", seedLabel); }
+    catch (_e) { /* silent fallback */ }
+  }
+
+  switchTab("routes");
+  openLiveEdition({ scroll: false });
+  maybeAutoExpandHomeBase();
+
+  if (options.focus !== false) {
+    window.setTimeout(() => {
+      routeDateFrom?.focus();
+    }, 40);
+  }
+}
+
 function openPlannerModal() {
   // In planner-entry-route mode the planner is already inline-visible —
   // skip modal overlay logic so it is never treated as a dismissible dialog.
-  if (isPlannerEntryRoute) return;
+  if (isPlannerEntryRoute || isPlannerInlineOpen) return;
 
   switchTab("routes");
 
@@ -6783,7 +6844,7 @@ function openPlannerModalForMode(mode = plannerAutoMode) {
 function closePlannerModal() {
   // In planner-entry-route mode the planner cannot be dismissed —
   // it is the primary page content, not a dialog.
-  if (isPlannerEntryRoute) return;
+  if (isPlannerEntryRoute || isPlannerInlineOpen) return;
 
   if (routePlannerStart) {
     routePlannerStart.hidden = true;
@@ -9252,14 +9313,14 @@ async function registerServiceWorker() {
       return;
     }
 
-    await navigator.serviceWorker.register("./sw.js");
+    await navigator.serviceWorker.register("/sw.js", { scope: "/" });
   } catch (error) {
     console.error("Service worker registration failed", error);
   }
 }
 
 function switchTab(tabName) {
-  if (tabName !== "routes" && routePlannerStart && !routePlannerStart.hidden) {
+  if (tabName !== "routes" && routePlannerStart && !routePlannerStart.hidden && !isPlannerInlineOpen) {
     closePlannerModal();
   }
 
@@ -11392,11 +11453,19 @@ plannerRestoreDismissButton?.addEventListener("click", () => {
 });
 
 routePlannerOpenButton?.addEventListener("click", () => {
-  openPlannerModalForMode(plannerAutoMode);
+  if (isPlannerInlineOpen) {
+    showPlannerInline(plannerAutoMode);
+    return;
+  }
+  window.location.href = buildPlannerOpenUrl(plannerAutoMode);
 });
 
 routePlannerManualButton?.addEventListener("click", () => {
-  openPlannerModalForMode(plannerManualMode);
+  if (isPlannerInlineOpen) {
+    showPlannerInline(plannerManualMode);
+    return;
+  }
+  window.location.href = buildPlannerOpenUrl(plannerManualMode);
 });
 
 closePlannerModalButton?.addEventListener("click", () => {
@@ -11590,64 +11659,13 @@ loadPlannerOptions().then(() => {
   updateWalkingKmLabel();
   renderRouteResults();
 
-  if (isPlannerEntryRoute) {
-    // Planner-entry route (/:city/plan): the planner is the primary, embedded
-    // page content, with the city's existing context (Pulse / Districts / Map)
-    // kept directly below it via the normal tab-nav and panels.  We hide only
-    // the framing that would precede the planner or duplicate context: the hero
-    // exploration copy, the landing Blitz strip, and the large Pulse teaser card
-    // (the full Pulse edition renders below as the default tab).  The tab-nav is
-    // intentionally left visible.
-    document.querySelector(".hero-content")?.classList.add("planner-entry-hidden");
-    document.querySelector(".hero-quickstart")?.classList.add("planner-entry-hidden");
-    document.getElementById("cityPulseTeaser")?.classList.add("planner-entry-hidden");
-
-    if (routePlannerStart) {
-      routePlannerStart.hidden = false;
-      routePlannerStart.removeAttribute("aria-modal");
-      routePlannerStart.classList.add("planner-entry-inline");
-
-      // Lift the planner above the tab-nav so the page reads:
-      // header → embedded planner → tab-nav → active panel (Pulse default).
-      const tabNav = document.querySelector(".tab-nav");
-      if (tabNav?.parentElement) {
-        tabNav.parentElement.insertBefore(routePlannerStart, tabNav);
-      }
-    }
-    if (closePlannerModalButton) {
-      closePlannerModalButton.hidden = true;
-    }
-    document.body.classList.add("is-planner-entry");
-
-    // Pulse is the default city-context tab shown under the planner.
-    heroLiveButton?.classList.add("active");
-    switchTab("routes");
-    openLiveEdition({ scroll: false });
-
-    // Support ?mode=manual on the plan route.
-    const params = new URLSearchParams(location.search);
-    if (params.get("mode") === "manual") {
-      setPlannerMode(plannerManualMode);
-      if (plannerFineTuneDetails) plannerFineTuneDetails.open = true;
-    }
-
-    // Seed the home base from ?seed_label (e.g. the landing Blitz → Plan handoff).
-    const plannerSeedLabel = params.get("seed_label");
-    if (plannerSeedLabel) {
-      try { setPlannerFieldFromLabel("home_base", plannerSeedLabel); }
-      catch (_e) { /* silent fallback */ }
-    }
-  } else {
-    // Legacy ?planner=open compat on the normal city page.
-    const params = new URLSearchParams(location.search);
-    if (params.get("planner") === "open") {
-      const seedLabel = params.get("seed_label");
-      if (seedLabel) {
-        try { setPlannerFieldFromLabel("home_base", seedLabel); }
-        catch (_e) { /* silent fallback */ }
-      }
-      openPlannerModal();
-    }
+  const params = new URLSearchParams(location.search);
+  const shouldOpenInlinePlanner = isPlannerEntryRoute || params.get("planner") === "open";
+  if (shouldOpenInlinePlanner) {
+    showPlannerInline(params.get("mode") === "manual" ? plannerManualMode : plannerAutoMode, {
+      seedLabel: params.get("seed_label"),
+      focus: false,
+    });
   }
 
   // Reveal the home-base section if it already carries intent (mode != auto,
