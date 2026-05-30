@@ -778,6 +778,135 @@ body::before {
   opacity: 0.9;
 }
 
+/* ---- Blitz signature presentation ----------------------------------------
+ * Blitz is Parranda's "next move, right now" differentiator. These rules give
+ * the single move a stronger one-glance hierarchy, surface the live Pulse
+ * signal as a typed chip, make the apply action the dominant CTA, and let the
+ * card read differently for a single stop vs a 60-min mini-route. Presentation
+ * only — no engine, scoring, or trust logic here.
+ */
+
+/* The one move reads as the hero: title carries, summary supports. */
+.hero-idea-strip.is-filled {
+  padding: 12px 14px;
+  background: rgba(255, 252, 247, 0.5);
+  border-color: rgba(70, 38, 18, 0.1);
+  box-shadow: 0 10px 26px rgba(126, 46, 24, 0.08);
+}
+
+.hero-idea-strip.is-filled h2 {
+  font-size: 1.04rem;
+  line-height: 1.18;
+  letter-spacing: -0.01em;
+}
+
+.hero-idea-strip.is-filled #heroBlitzSummary {
+  color: rgba(36, 25, 20, 0.66);
+}
+
+/* Left accent rail distinguishes the move kind at a glance. */
+.hero-idea-strip[data-blitz-kind="single_stop"],
+.hero-idea-strip[data-blitz-kind="mini_route_60"] {
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-idea-strip[data-blitz-kind="single_stop"]::before,
+.hero-idea-strip[data-blitz-kind="mini_route_60"]::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  border-radius: 18px 0 0 18px;
+}
+
+/* Single stop: one solid anchor mark. */
+.hero-idea-strip[data-blitz-kind="single_stop"]::before {
+  background: var(--accent);
+}
+
+/* Mini-route: a segmented rail that reads as "a short sequence of stops". */
+.hero-idea-strip[data-blitz-kind="mini_route_60"]::before {
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--accent) 0,
+    var(--accent) 7px,
+    transparent 7px,
+    transparent 12px
+  );
+}
+
+.hero-idea-strip[data-blitz-kind="mini_route_60"] .panel-label {
+  color: var(--accent-deep);
+}
+
+/* Typed live Pulse signal chip — the "right now" hook. Shares the Pulse
+ * surface's visual language (see .pulse-entry-signal) in a narrow Blitz variant
+ * scoped to the hero card so it sits cleanly among the panel tags. */
+.hero-idea-strip .panel-tags .hero-blitz-signal {
+  padding: 4px 10px;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  background: rgba(215, 160, 77, 0.2);
+  color: var(--accent-deep, #b87a2e);
+  border: 1px solid rgba(215, 160, 77, 0.46);
+}
+
+.hero-idea-strip .panel-tags .hero-blitz-signal--golden_hour {
+  background: rgba(243, 168, 78, 0.2);
+  color: #b06d1c;
+  border-color: rgba(243, 168, 78, 0.5);
+}
+
+.hero-idea-strip .panel-tags .hero-blitz-signal--evening_window {
+  background: rgba(151, 110, 196, 0.16);
+  color: #6f4ea0;
+  border-color: rgba(151, 110, 196, 0.42);
+}
+
+.hero-idea-strip .panel-tags .hero-blitz-signal--crowd_warning {
+  background: rgba(214, 102, 80, 0.18);
+  color: #b8482f;
+  border-color: rgba(214, 102, 80, 0.46);
+}
+
+.hero-idea-strip .panel-tags .hero-blitz-signal--live_event_nearby {
+  background: rgba(200, 150, 60, 0.22);
+  color: #9a6b15;
+  border-color: rgba(200, 150, 60, 0.5);
+}
+
+/* Dominant primary CTA: the apply action carries the system accent gradient;
+ * shuffle stays a quiet secondary so "here is the move" reads first. */
+.hero-idea-strip.is-filled .hero-panel-actions {
+  opacity: 1;
+  align-items: center;
+}
+
+.hero-idea-strip.is-filled .hero-panel-actions .secondary-button {
+  background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+  color: #fff;
+  border: 0;
+  font-weight: 600;
+  box-shadow: 0 10px 22px rgba(126, 46, 24, 0.24);
+}
+
+.hero-idea-strip.is-filled .hero-panel-actions .secondary-button:hover {
+  color: #fff;
+  box-shadow: 0 12px 26px rgba(126, 46, 24, 0.3);
+}
+
+.hero-idea-strip.is-filled .hero-panel-actions .ghost-button {
+  background: transparent;
+  opacity: 0.72;
+}
+
+.hero-idea-strip.is-filled .hero-panel-actions .ghost-button:hover {
+  opacity: 1;
+}
+
 .city-pulse-teaser {
   padding: 13px 15px;
   border-radius: 24px;
@@ -4791,6 +4920,16 @@ body.is-printing-guide #routeGuideDrawer {
     display: none;
   }
 
+  /* The live signal chip is the Blitz signature — keep it visible on mobile
+   * even though the secondary tag row is decluttered away. */
+  .hero-idea-strip.has-signal .panel-tags {
+    display: flex;
+  }
+
+  .hero-idea-strip.has-signal .panel-tags span:not(.hero-blitz-signal) {
+    display: none;
+  }
+
   .hero-idea-strip .hero-panel-actions .ghost-button {
     display: none;
   }
@@ -5709,6 +5848,14 @@ body.is-printing-guide #routeGuideDrawer {
   }
 
   .hero-idea-strip .panel-tags {
+    display: none;
+  }
+
+  .hero-idea-strip.has-signal .panel-tags {
+    display: flex;
+  }
+
+  .hero-idea-strip.has-signal .panel-tags span:not(.hero-blitz-signal) {
     display: none;
   }
 
