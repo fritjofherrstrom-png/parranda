@@ -1128,13 +1128,13 @@ test("landing and city shells use root-absolute asset urls for deep routes", asy
   assert.match(cityShell, /href="\/styles\.css\?v=19"/);
   assert.match(cityShell, /src="\/vendor\/leaflet\/leaflet\.js"/);
   assert.match(cityShell, /src="\/planner-trust\.js\?v=2"/);
-  assert.match(cityShell, /src="\/script\.js\?v=25"/);
+  assert.match(cityShell, /src="\/script\.js\?v=26"/);
   assert.match(cityShell, /src="\/ux-pass1\.js\?v=10"/);
   assert.match(landingShell, /href="\/manifest\.webmanifest"/);
   assert.match(landingShell, /href="\/assets\/icons\/icon-192\.png"/);
   assert.match(landingShell, /href="\/styles\.css\?v=26"/);
   assert.doesNotMatch(cityShell, /href="styles\.css\?v=19"/);
-  assert.doesNotMatch(cityShell, /src="script\.js\?v=25"/);
+  assert.doesNotMatch(cityShell, /src="script\.js\?v=26"/);
   assert.doesNotMatch(landingShell, /href="styles\.css\?v=26"/);
 
   global.fetch = async (url) => {
@@ -1150,7 +1150,7 @@ test("landing and city shells use root-absolute asset urls for deep routes", asy
 
     assert.equal(response.status, 200);
     assert.match(response.body, /<link rel="stylesheet" href="\/styles\.css\?v=19" \/>/);
-    assert.match(response.body, /<script src="\/script\.js\?v=25"><\/script>/);
+    assert.match(response.body, /<script src="\/script\.js\?v=26"><\/script>/);
     assert.match(response.body, /<script src="\/planner-trust\.js\?v=2"><\/script>/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
@@ -2069,6 +2069,87 @@ test("appendCredibilityBadges gates anchor badge on !isLiveEvent so a live event
   );
 });
 
+test("script.js Blitz render functions use t()/tf() for all Swedish-leaking strings", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const script = fs.readFileSync(path.resolve(__dirname, "..", "script.js"), "utf8");
+
+  // Extract the Blitz render function region so "must not contain" checks are
+  // scoped to those functions, not the whole 10k-line file.
+  const regionStart = script.indexOf("function formatHeroBlitzWalkMeta(");
+  const regionEnd = script.indexOf("function openHeroBlitzMove(");
+  assert.ok(regionStart !== -1, "could not find formatHeroBlitzWalkMeta in script.js");
+  assert.ok(regionEnd !== -1, "could not find openHeroBlitzMove in script.js");
+  const blitzRegion = script.slice(regionStart, regionEnd);
+
+  // ---- Positive key-usage assertions (full-file) ----
+  // These confirm each function is wired to the correct i18n key.
+  assert.ok(script.includes('t("blitz.walkMetaUnknown"'), 'must use blitz.walkMetaUnknown key');
+  assert.ok(script.includes('tf("blitz.walkMeta"'), 'must use blitz.walkMeta key');
+  assert.ok(script.includes('t("blitz.startTimeUnknown"'), 'must use blitz.startTimeUnknown key');
+  assert.ok(script.includes('tf("blitz.stops"'), 'must use blitz.stops key');
+  assert.ok(script.includes('t("blitz.emptyStateMeta"'), 'must use blitz.emptyStateMeta key');
+  assert.ok(script.includes('t("blitz.thenPrefix"'), 'must use blitz.thenPrefix key');
+  assert.ok(script.includes('t("blitz.guideStopSummaryDefault"'), 'must use blitz.guideStopSummaryDefault key');
+  assert.ok(script.includes('tf("blitz.guideStopSummaryTags"'), 'must use blitz.guideStopSummaryTags key');
+  assert.ok(script.includes('tf("blitz.guideStopFrom"'), 'must use blitz.guideStopFrom key');
+  assert.ok(script.includes('t("blitz.guideDateNow"'), 'must use blitz.guideDateNow key');
+  assert.ok(script.includes('t("blitz.guideDayProfile"'), 'must use blitz.guideDayProfile key');
+  assert.ok(script.includes('t("blitz.guidePacingDefault"'), 'must use blitz.guidePacingDefault key');
+  assert.ok(script.includes('tf("blitz.guideLegSummary"'), 'must use blitz.guideLegSummary key');
+  assert.ok(script.includes('t("blitz.guideAnchorStrong"'), 'must use blitz.guideAnchorStrong key');
+  assert.ok(script.includes('t("blitz.guideAnchorDefault"'), 'must use blitz.guideAnchorDefault key');
+  assert.ok(script.includes('t("blitz.specificSecondHandShop"'), 'must use blitz.specificSecondHandShop key');
+  assert.ok(script.includes('t("blitz.specificPulseView"'), 'must use blitz.specificPulseView key');
+  assert.ok(script.includes('t("blitz.specificWeakFit"'), 'must use blitz.specificWeakFit key');
+
+  // ---- EN verb regex (buildHeroBlitzFollowup) ----
+  assert.ok(blitzRegion.includes("stay|let|run"), "buildHeroBlitzFollowup must include EN verb alternatives in regex");
+
+  // ---- Negative raw-string checks scoped to the Blitz region only ----
+  // Strings that must be gone from the Blitz render functions; other parts of
+  // script.js (Rome catalog data, route templates, etc.) may still contain
+  // Swedish copy legitimately.
+  assert.ok(!blitzRegion.includes('"gångtid okänd"'), 'formatHeroBlitzWalkMeta: "gångtid okänd" must go through t()');
+  assert.ok(!blitzRegion.includes('"starttid okänd"'), 'buildHeroBlitzMeta: "starttid okänd" must go through t()');
+  assert.ok(!blitzRegion.includes('"Sedan: "'), 'buildBlitzFollowupText: "Sedan: " must go through t()');
+  assert.ok(!blitzRegion.includes('"Kompakt Blitz-stopp för nästa timme."'), 'createBlitzGuideStop: summary must go through t()');
+  assert.ok(!blitzRegion.includes('"Blitz just nu"'), 'buildBlitzRouteGuideView: "Blitz just nu" must go through t()');
+  assert.ok(!blitzRegion.includes('"Nästa timmen"'), 'buildBlitzRouteGuideView: "Nästa timmen" must go through t()');
+  assert.ok(!blitzRegion.includes('" min gång"'), 'Blitz region: " min gång" literal must go through tf(blitz.walkMeta)');
+  assert.ok(!blitzRegion.includes('"Butiksspåret är starkare än marknad idag."'), 'buildSpecificHeroBlitzReason: must use t() for shop string');
+  assert.ok(!blitzRegion.includes('"Bra reset utan att blåsa upp kvällen."'), 'buildSpecificHeroBlitzReason: must use t() for food-calm string');
+});
+
+test("blitz.* i18n keys have parity between sv and en in ui-i18n.js", () => {
+  const { buildClientI18nPayload } = require("../server/ui-i18n");
+  const sv = buildClientI18nPayload("sv").translations.sv;
+  const en = buildClientI18nPayload("en").translations.en;
+  const newBlitzKeys = [
+    "blitz.walkMeta", "blitz.walkMetaUnknown", "blitz.emptyStateMeta",
+    "blitz.stops", "blitz.startTimeUnknown", "blitz.thenPrefix",
+    "blitz.guideStopSummaryTags", "blitz.guideStopSummaryDefault", "blitz.guideStopFrom",
+    "blitz.guideOriginFallback", "blitz.guideNextStopFallback", "blitz.guideDateNow",
+    "blitz.guideDayProfile", "blitz.guidePacingDefault", "blitz.guideLegSummary",
+    "blitz.guideAnchorStrong", "blitz.guideAnchorDefault",
+    "blitz.guideWalk", "blitz.guideAnchor", "blitz.guideStopItemDefault",
+    "blitz.specificSecondHandShop", "blitz.specificPulseView", "blitz.specificPulseDrinks",
+    "blitz.specificDrinksCalmArea", "blitz.specificDrinksCalm",
+    "blitz.specificDrinksEnergyArea", "blitz.specificDrinksEnergy",
+    "blitz.specificFoodCalm", "blitz.specificFoodArea", "blitz.specificFood",
+    "blitz.specificView", "blitz.specificOstiense", "blitz.specificAfterDrinks",
+    "blitz.specificWeakFit",
+  ];
+  // Keys that are intentionally identical in SV and EN (brand terms, universal notation)
+  const sameInBoth = new Set(["blitz.guideAnchor"]);
+  for (const key of newBlitzKeys) {
+    assert.ok(typeof sv[key] === "string" && sv[key].length > 0, `sv missing blitz key: ${key}`);
+    assert.ok(typeof en[key] === "string" && en[key].length > 0, `en missing blitz key: ${key}`);
+    if (!sameInBoth.has(key)) {
+      assert.notEqual(sv[key], en[key], `sv and en should differ for key: ${key}`);
+    }
+  }
+});
 
 test("POST /api/route-recommendations returnerar en ärlig unsupported-shape för okänd city istället för att läcka fallback-staden", async () => {
   const server = buildApp().listen(0);
