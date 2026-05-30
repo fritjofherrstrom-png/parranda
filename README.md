@@ -1,39 +1,48 @@
 # Parranda
 
-Parranda ar en promenadvänlig Rom-guide med PWA-front, karta och en personlig ruttmotor som väger in start/slut, gångdistans, preferenser, datum, live-events och stadsdelskänsla.
+Parranda är en city-intelligence PWA med planner, Pulse och Blitz. Den ska förstå stadens rytm, inte bara lista platser. Produkten väger in område, tid på dagen, väder, live- och Pulse-signaler, intent, gångbarhet, trovärdighet och lokal täthet för att bygga bättre dagsflöden och nästa-drag-förslag.
 
-Det här repot är alpha-versionen för att snabbt kunna visa produkten, få skarp feedback och iterera på route engine, curation och upplevelse.
+Rome var första referensstaden. Barcelona är aktiv för beta- och produktarbete. Athens är ett preview-/thin-city-test där vi provar hur långt den agnostiska motorn kan komma med verified catalog items och ärliga provisional source candidates. Målet är att city packs ska förbättra och accelerera upplevelsen, inte vara ett hårt krav för att Parranda ska fungera.
+
+Det här repot är alpha-versionen för att snabbt kunna visa produkten, få skarp feedback och iterera på route engine, Pulse, Blitz, trust/credibility och multi-city-arkitekturen.
 
 ## Nuvarande alpha
 
-- Personlig route builder med startpunkt, slutpunkt, datum, gångmål och preferenser
-- Optimizer-lägen och stilval som `mer kväll`, `mer kultur`, `low-key` och `party`
-- Rom-breddad kuratering med bland annat Prati, Borgo, Garbatella, Ostiense, Esquilino, Monti och San Giovanni
-- Intern place-details-API för stopp, plus externa länkar till sök och karta
-- PWA-stöd med manifest och service worker
-- Live-lager för väder och eventmatchning
+- Route-first planner på `/:city/plan` med start/slut, datum, gångmål, preferenser och manuell eller automatisk start/slut-logik
+- Multi-city shell med Rome, Barcelona och Athens preview i stället för en Rom-låst app
+- Pulse-lager för stadens dagsläge: väder, live-events, timingfönster och generiska/city-owned signaler
+- Blitz: nästa drag, just nu, baserat på plats, tid, city context och dagsläge
+- Route credibility: varje ruttstopp bär canonical trust metadata, och rutten får `trust_summary` / `credibility_tier`
+- Honest preview för thin cities: unknown/thin cities får inte tyst Rome-fallback; lågt confidence visas som enkelt/ärligt route-läge
+- PWA-stöd med manifest, service worker och mobil preview via LAN
+- GitHub Actions CI kör `npm ci` + `npm test` på pull requests och pushes till `main`
 
 ## Produktprinciper
 
 - Parranda ska byggas runt en generaliserbar city intelligence engine, inte runt hårdkodade städer.
+- Appen ska förstå stadens rytm, inte bara visa topplistor.
 - City packs ska vara ett valfritt förbättrings- och accelerationslager, inte ett krav för att appen ska fungera.
-- Appen ska på sikt kunna skapa meningsfulla, platsmedvetna upplevelser även utan dedikerat city pack, oavsett om användaren är i Simrishamn, Bologna eller Rio de Janeiro.
-- Parrandas kärn-UI ska vara foto-oberoende: platsrepresentation ska fungera genom text, typografi, ikoner, kart-/ruttstruktur och lokal copy. Foton kan senare användas som redaktionell förstärkning, men ska inte vara ett krav för att upplevelsen ska fungera.
+- Appen ska på sikt kunna skapa meningsfulla, platsmedvetna upplevelser även utan dedikerat city pack, oavsett om användaren är i Simrishamn, Bologna, Athens, Barcelona eller Rio.
+- När Parranda saknar tillräcklig stadstäckning ska den vara ärlig: hellre låg-confidence/simple route eller noop än låtsad lokal säkerhet.
+- Parrandas kärn-UI ska vara foto-oberoende: platsrepresentation ska fungera genom text, typografi, ikoner, kart-/ruttstruktur och lokal copy.
 
-Se `docs/CITY_ENGINE_PRINCIPLES.md` för den permanenta principen bakom city packs och city-packless Parranda.
+Se `docs/CITY_ENGINE_PRINCIPLES.md`, `docs/ARCHITECTURE.md` och `docs/PRODUCT_STRATEGY.md` för principerna bakom city packs och city-packless Parranda.
 
 ## Stack
 
-- Frontend: `index.html`, `script.js`, `styles.css`
+- Frontend: `index.html`, `landing.html`, `script.js`, `landing.js`, `planner-trust.js`, `styles.css`
 - Backend: `Node.js` + `Express`
+- City data: `server/cities/<city>/`
+- Engine: `server/route-engine.js`, `server/blitz-engine.js`, `server/pulse-engine/`
 - Karta: `Leaflet`
 - Tester: `node --test`
+- CI: GitHub Actions i `.github/workflows/ci.yml`
 
 ## Kom igång lokalt
 
 ```bash
 nvm use
-npm install
+npm ci
 npm start
 ```
 
@@ -47,6 +56,22 @@ Hälsocheck:
 
 ```text
 http://localhost:8000/api/health
+```
+
+## Vanliga lokala länkar
+
+```text
+http://localhost:8000/
+http://localhost:8000/rome
+http://localhost:8000/barcelona
+http://localhost:8000/athens
+http://localhost:8000/barcelona/plan
+```
+
+Lägg till `?lang=en` för engelsk UI-copy:
+
+```text
+http://localhost:8000/barcelona?lang=en
 ```
 
 ## Förhandsgranska på mobilen
@@ -79,28 +104,18 @@ Om mobilen inte når adressen:
 npm test
 ```
 
+CI kör samma grundsvit på GitHub för pull requests och pushes till `main`.
+
 ## Dela med andra utvecklare
 
 Det enklaste alpha-flödet är:
 
-1. Lägg upp repot på GitHub.
-2. Koppla repot till en staging-host.
-3. Dela både repo-länk och staging-länk.
+1. Pusha arbetet till GitHub på en reviewbar branch.
+2. Öppna en PR med tydlig scope, testresultat och eventuell preview-QA.
+3. Låt GitHub Actions köra `npm test`.
+4. Dela både repo-länk och staging-/preview-länk när PR:n är granskad.
 
 Det ger både kodgranskning och riktig produktfeedback.
-
-## GitHub-flöde
-
-Om du redan har skapat ett tomt repo på GitHub:
-
-```bash
-git remote add origin <DIN_GITHUB_URL>
-git add .
-git commit -m "chore: prepare Parranda alpha"
-git push -u origin main
-```
-
-Om du vill hålla det privat i början rekommenderas ett privat repo.
 
 ## Staging med Render
 
@@ -119,22 +134,27 @@ Render-dokumentation:
 - Blueprint-spec: https://render.com/docs/blueprint-spec
 - Health checks: https://render.com/docs/health-checks
 
-## Vad jag vill att alpha-testare ska titta på
+## Vad alpha-testare ska titta på
 
-- Känns huvudrutten självklar och personlig?
-- Blir det för mycket Trastevere i fel scenarier?
-- Är place drawer och route copy trovärdiga?
-- Känns kartan som stöd eller brus?
-- Skulle du faktiskt använda appen inför en Rom-resa?
+- Förstår testaren direkt att Parranda bygger dagsflöden och nästa drag, inte bara listar platser?
+- Känns huvudrutten självklar, personlig och gångbar?
+- Visar appen rätt nivå av confidence för staden: curated, preview, simple route eller provisional?
+- Känns Pulse som ett användbart lager ovanpå planeringen, inte en lös eventlista?
+- Känns Blitz som ett faktiskt nästa drag just nu?
+- Är place drawer, route copy och credibility-signaler trovärdiga?
+- Skulle testaren använda appen på plats i Rome, Barcelona eller en preview-stad som Athens?
 
 Mer strukturerad feedbackmall finns i `ALPHA_FEEDBACK.md`.
 
 ## När vi är redo för nästa fas
 
-Naturliga nästa större steg:
+Naturliga större steg:
 
-- Save + remix på riktigt
-- Bättre intern place drawer och platskort
-- Mer live-events med bättre geokoppling
-- Konto eller lätt sparfunktion för flera dagar
+- Source/signal implementation audit: karta vad som faktiskt finns mellan provider, Pulse, Planner och Blitz
+- Fler signaltyper: official live baseline, environmental/day-flow signals, market/local rhythm och computed daily signals
+- AMB beach/coast-signal för Barcelona som första riktiga environmental day-flow source
+- Blitz UX surface och eventuell extraktion till `blitz-panel.js`
+- Live walking mode / companion experience
+- Bättre catalog-first routing för thin/auto cities
+- Lokal minnesfunktion innan konton
 - iOS-wrapper via Capacitor när webbkärnan sitter
