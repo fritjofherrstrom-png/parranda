@@ -399,6 +399,7 @@ test("planner-open city shell uses inline planner mount instead of modal path", 
   assert.match(styles, /body\.is-planner-inline-open \.planner-modal-backdrop\s*\{\s*display: none;/);
   assert.match(styles, /body\.is-planner-inline-open \.planner-modal-shell\.planner-entry-inline/);
   assert.match(styles, /body\.is-planner-inline-open \.hero-quickstart\s*\{\s*display: none;/);
+  assert.match(styles, /body\.is-planner-inline-open \.city-pulse-teaser\s*\{\s*display: none;/);
 });
 
 test("service worker registration is root-scoped for nested city routes", () => {
