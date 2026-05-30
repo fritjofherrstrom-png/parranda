@@ -1128,13 +1128,13 @@ test("landing and city shells use root-absolute asset urls for deep routes", asy
   assert.match(cityShell, /href="\/styles\.css\?v=19"/);
   assert.match(cityShell, /src="\/vendor\/leaflet\/leaflet\.js"/);
   assert.match(cityShell, /src="\/planner-trust\.js\?v=2"/);
-  assert.match(cityShell, /src="\/script\.js\?v=26"/);
+  assert.match(cityShell, /src="\/script\.js\?v=27"/);
   assert.match(cityShell, /src="\/ux-pass1\.js\?v=10"/);
   assert.match(landingShell, /href="\/manifest\.webmanifest"/);
   assert.match(landingShell, /href="\/assets\/icons\/icon-192\.png"/);
   assert.match(landingShell, /href="\/styles\.css\?v=26"/);
   assert.doesNotMatch(cityShell, /href="styles\.css\?v=19"/);
-  assert.doesNotMatch(cityShell, /src="script\.js\?v=26"/);
+  assert.doesNotMatch(cityShell, /src="script\.js\?v=27"/);
   assert.doesNotMatch(landingShell, /href="styles\.css\?v=26"/);
 
   global.fetch = async (url) => {
@@ -1150,7 +1150,7 @@ test("landing and city shells use root-absolute asset urls for deep routes", asy
 
     assert.equal(response.status, 200);
     assert.match(response.body, /<link rel="stylesheet" href="\/styles\.css\?v=19" \/>/);
-    assert.match(response.body, /<script src="\/script\.js\?v=26"><\/script>/);
+    assert.match(response.body, /<script src="\/script\.js\?v=27"><\/script>/);
     assert.match(response.body, /<script src="\/planner-trust\.js\?v=2"><\/script>/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
@@ -2119,6 +2119,53 @@ test("script.js Blitz render functions use t()/tf() for all Swedish-leaking stri
   assert.ok(!blitzRegion.includes('" min gång"'), 'Blitz region: " min gång" literal must go through tf(blitz.walkMeta)');
   assert.ok(!blitzRegion.includes('"Butiksspåret är starkare än marknad idag."'), 'buildSpecificHeroBlitzReason: must use t() for shop string');
   assert.ok(!blitzRegion.includes('"Bra reset utan att blåsa upp kvällen."'), 'buildSpecificHeroBlitzReason: must use t() for food-calm string');
+});
+
+test("Blitz signature: signal chip surfaces pulse signal_label and falls back to generic Pulse tag", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const script = fs.readFileSync(path.resolve(__dirname, "..", "script.js"), "utf8");
+
+  // buildBlitzSignalChip exists and keys off the server-provided signal data.
+  const chipFn = script.match(/function buildBlitzSignalChip\([^)]*\)\s*\{[\s\S]*?\n\}/);
+  assert.ok(chipFn, "buildBlitzSignalChip must exist");
+  const chipBody = chipFn[0];
+  assert.ok(chipBody.includes("signal_label"), "signal chip must read pulse_context.signal_label");
+  assert.ok(chipBody.includes("signal_type"), "signal chip must carry signal_type for typing");
+  assert.ok(/if\s*\(!label\)\s*\{[\s\S]*?return null/.test(chipBody), "signal chip returns null when signal_label is absent");
+
+  // Generic "Pulse" tag is now a fallback gated on the absence of signal_label,
+  // so the typed signal chip and the generic tag never both render.
+  const tagFn = script.match(/function buildBlitzTagTexts\([^)]*\)\s*\{[\s\S]*?\n\}/);
+  assert.ok(tagFn, "buildBlitzTagTexts must exist");
+  assert.ok(
+    /move\.pulse_context\?\.title\s*&&\s*!move\.pulse_context\?\.signal_label/.test(tagFn[0]),
+    "generic Pulse tag must be gated on missing signal_label (fallback only)",
+  );
+
+  // Render path emits a typed signal chip class for the live signal.
+  assert.ok(script.includes("hero-blitz-signal--"), "render must apply hero-blitz-signal--<type> class");
+  assert.ok(script.includes("buildBlitzSignalChip(blitzState)"), "renderHeroBlitz must call buildBlitzSignalChip");
+});
+
+test("Blitz signature: filled card toggles is-filled and data-blitz-kind for hierarchy + kind distinction", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const script = fs.readFileSync(path.resolve(__dirname, "..", "script.js"), "utf8");
+  const styles = fs.readFileSync(path.resolve(__dirname, "..", "styles.css"), "utf8");
+
+  // is-filled is added only for a real move and removed in the non-filled states.
+  assert.ok(script.includes('classList.add("is-filled")'), "filled branch must add is-filled");
+  assert.ok(script.includes('classList.remove("is-filled")'), "non-filled states must remove is-filled");
+
+  // data-blitz-kind drives the single-vs-mini visual distinction.
+  assert.ok(script.includes('heroBlitzCard.dataset.blitzKind = move.kind'), "filled branch must set blitzKind from move.kind");
+  assert.ok(styles.includes('[data-blitz-kind="single_stop"]'), "CSS must style single_stop");
+  assert.ok(styles.includes('[data-blitz-kind="mini_route_60"]'), "CSS must style mini_route_60");
+
+  // Signal chip styling + dominant CTA exist in CSS.
+  assert.ok(styles.includes(".hero-blitz-signal"), "CSS must define the Blitz signal chip");
+  assert.ok(/\.hero-idea-strip\.is-filled .hero-panel-actions \.secondary-button/.test(styles), "CSS must elevate the apply CTA in the filled card");
 });
 
 test("blitz.* i18n keys have parity between sv and en in ui-i18n.js", () => {

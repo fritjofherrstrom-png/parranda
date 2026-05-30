@@ -4007,13 +4007,30 @@ function buildBlitzFollowupText(result) {
   return followup ? t("blitz.thenPrefix") + followup : "";
 }
 
+// The "right now" signature: surface the actual live Pulse signal as a typed
+// chip (e.g. EVENING WINDOW, GOLDEN HOUR) instead of a generic "Pulse" tag.
+// signal_label is server-localized and only present for chippable signal types
+// (see CHIPPED_SIGNAL_TYPES in blitz-engine.js); when it is absent the card
+// falls back to the generic Pulse tag in buildBlitzTagTexts.
+function buildBlitzSignalChip(result) {
+  const pulse = (result?.best_move || {}).pulse_context;
+  const label = pulse?.signal_label;
+  if (!label) {
+    return null;
+  }
+  return { label, signalType: pulse.signal_type || "default" };
+}
+
 function buildBlitzTagTexts(result) {
   const move = result?.best_move || {};
   const tags = [];
 
   tags.push(move.kind === "mini_route_60" ? "60 min" : t("blitz.nextStop", "Nästa stopp"));
 
-  if (move.pulse_context?.title) {
+  // Generic Pulse tag only when there is pulse context but no typed signal chip
+  // — the signal chip (buildBlitzSignalChip) takes precedence when available so
+  // the two never both render for the same move.
+  if (move.pulse_context?.title && !move.pulse_context?.signal_label) {
     tags.push("Pulse");
   }
 
@@ -4178,6 +4195,8 @@ function renderHeroBlitz() {
 
     if (heroBlitzCard) {
       heroBlitzCard.dataset.blitzKind = "preview";
+      heroBlitzCard.classList.remove("is-filled");
+      heroBlitzCard.classList.remove("has-signal");
     }
     heroBlitzLabel.textContent = previewCard.label;
     heroBlitzTitle.textContent = previewCard.title;
@@ -4213,6 +4232,8 @@ function renderHeroBlitz() {
   if (blitzLoading && !blitzState?.best_move) {
     if (heroBlitzCard) {
       heroBlitzCard.dataset.blitzKind = "loading";
+      heroBlitzCard.classList.remove("is-filled");
+      heroBlitzCard.classList.remove("has-signal");
     }
     heroBlitzLabel.textContent = "BLITZ";
     heroBlitzTitle.textContent = t("blitz.loadingTitle", "Laddar nästa drag...");
@@ -4242,6 +4263,8 @@ function renderHeroBlitz() {
   if (!move) {
     if (heroBlitzCard) {
       heroBlitzCard.dataset.blitzKind = "empty";
+      heroBlitzCard.classList.remove("is-filled");
+      heroBlitzCard.classList.remove("has-signal");
     }
     heroBlitzLabel.textContent = "BLITZ";
     heroBlitzTitle.textContent = blitzInlineStatus
@@ -4267,6 +4290,7 @@ function renderHeroBlitz() {
 
   if (heroBlitzCard) {
     heroBlitzCard.dataset.blitzKind = move.kind || "single_stop";
+    heroBlitzCard.classList.add("is-filled");
   }
   blitzInlineStatus = "";
   heroBlitzLabel.textContent = buildHeroBlitzLabel(move);
@@ -4278,6 +4302,18 @@ function renderHeroBlitz() {
   heroBlitzFollowup.hidden = !followupText;
   heroBlitzFollowup.textContent = followupText;
   heroBlitzTags.innerHTML = "";
+  const signalChip = buildBlitzSignalChip(blitzState);
+  if (heroBlitzCard) {
+    // has-signal keeps the live signal chip visible even where the secondary
+    // tag row is decluttered away on narrow viewports (Blitz is phone-first).
+    heroBlitzCard.classList.toggle("has-signal", Boolean(signalChip));
+  }
+  if (signalChip) {
+    const chip = document.createElement("span");
+    chip.className = `hero-blitz-signal hero-blitz-signal--${signalChip.signalType}`;
+    chip.textContent = signalChip.label;
+    heroBlitzTags.appendChild(chip);
+  }
   buildBlitzTagTexts(blitzState).forEach((tagText) => {
     const chip = document.createElement("span");
     chip.textContent = tagText;
