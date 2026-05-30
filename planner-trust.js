@@ -207,6 +207,105 @@
     };
   }
 
+  // --- Route credibility display arbitration ---------------------------------
+  //
+  // A thin presentation helper, NOT a second source of truth. It reads the two
+  // engine signals that already exist and decides how the route should read:
+  //
+  //   - route.credibility_tier (#206): "are these stops trustworthy?"
+  //     (high / medium / low, derived from the per-stop trust mix).
+  //   - route.confidence: "is this a full/mature route composition?"
+  //     ("low" marks a thin-city / simple-compose route).
+  //
+  // These can disagree: a thin city like Athens can land a route on curated,
+  // verified stops (credibility_tier "high") while still being a thin-city
+  // route (confidence "low"). Showing "Curated route · verified local picks"
+  // there over-claims maturity the coverage does not have. The view below keeps
+  // the chip honest while letting a genuinely mature high route stay subtle.
+
+  // Per-stop trust: curated stops must NOT get a badge; only provisional
+  // (unverified, honest-fill) stops are marked.
+  function buildStopTrustView(stop = {}) {
+    const showProvisionalBadge = Boolean(stop) && stop.provisional === true;
+    return {
+      showProvisionalBadge,
+      badgeKey: showProvisionalBadge ? "credibility.provisional" : null,
+      hint: showProvisionalBadge
+        ? stop.provisional_hint || stop.provisionalHint || null
+        : null,
+    };
+  }
+
+  function resolveSimpleNoteKey(route) {
+    // Preserve the low-credibility honesty sub-distinction: how much the thin
+    // compose had to lean on provisional (unverified) sources.
+    const provisionalStops = Number(route.provisional_stop_count) || 0;
+    const totalStops = Array.isArray(route.main_stops) ? route.main_stops.length : 0;
+    const mostlyProvisional = provisionalStops > 0 && provisionalStops * 2 >= totalStops;
+    if (route.uses_provisional_sources && mostlyProvisional) {
+      return "credibility.routeSimpleMostly";
+    }
+    if (route.uses_provisional_sources) {
+      return "credibility.routeSimpleSome";
+    }
+    return "credibility.routeSimpleThin";
+  }
+
+  function buildRouteCredibilityView(route = {}) {
+    // credibility_tier owns the decision; the legacy confidence === "low"
+    // fallback keeps routes that predate the trust layer rendering a signal.
+    const tier = route.credibility_tier || (route.confidence === "low" ? "low" : null);
+    if (!tier) {
+      return { mode: "none", chipKey: null, curatedChip: false, showNote: false, noteKey: null };
+    }
+
+    // A thin-city / simple-compose route. Curated/verified stops do not erase
+    // the fact that coverage here is not a full citypack.
+    const isThinRoute = route.confidence === "low";
+
+    if (tier === "high") {
+      if (!isThinRoute) {
+        // Mature high route — one subtle positive chip, no explanation note.
+        return {
+          mode: "curated",
+          chipKey: "credibility.routeCurated",
+          curatedChip: true,
+          showNote: false,
+          noteKey: null,
+        };
+      }
+      // Thin-but-verified (the Athens case): the stops are verified, but the
+      // route is a simple thin-city walk. Be honest about coverage; do NOT
+      // claim "Curated route".
+      return {
+        mode: "verifiedSimple",
+        chipKey: "credibility.routeVerifiedSimple",
+        curatedChip: false,
+        showNote: true,
+        noteKey: "credibility.routeVerifiedSimpleNote",
+      };
+    }
+
+    if (tier === "medium") {
+      return {
+        mode: "mixed",
+        chipKey: "credibility.routeMixed",
+        curatedChip: false,
+        showNote: true,
+        noteKey: "credibility.routeMixedNote",
+      };
+    }
+
+    // tier === "low": the existing Simple route honest-preview explanation.
+    return {
+      mode: "simple",
+      chipKey: "credibility.routeSimple",
+      curatedChip: false,
+      showNote: true,
+      noteKey: resolveSimpleNoteKey(route),
+    };
+  }
+
   return {
     LATEST_PLANNER_PLAN_SCHEMA_VERSION,
     DEFAULT_LATEST_PLANNER_PLAN_MAX_AGE_MS,
@@ -215,5 +314,7 @@
     normalizeLatestPlannerPlanRecord,
     buildLatestPlannerPlanDismissSignature,
     collectSelectedIntentVisibility,
+    buildStopTrustView,
+    buildRouteCredibilityView,
   };
 });

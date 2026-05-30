@@ -9,6 +9,8 @@ const {
   normalizeLatestPlannerPlanRecord,
   buildLatestPlannerPlanDismissSignature,
   collectSelectedIntentVisibility,
+  buildRouteCredibilityView,
+  buildStopTrustView,
 } = require("../planner-trust");
 
 test("buildPlannerLoadingMessages blir dag-aware utan att lova completion", () => {
@@ -147,4 +149,99 @@ test("collectSelectedIntentVisibility gör mixed second_hand synligt på senare 
   assert.deepEqual(visibility.perDay[1].intentKeys, ["second_hand"]);
   assert.deepEqual(visibility.laterIntentKeys, ["second_hand"]);
   assert.deepEqual(visibility.missingIntentKeys, ["views"]);
+});
+
+// ---- Route credibility display arbitration ---------------------------------
+
+test("mature high route (high tier, not thin) → subtle curated chip, no note", () => {
+  const view = buildRouteCredibilityView({
+    credibility_tier: "high",
+    main_stops: [{ provisional: false }, { provisional: false }],
+  });
+  assert.equal(view.mode, "curated");
+  assert.equal(view.chipKey, "credibility.routeCurated");
+  assert.equal(view.curatedChip, true);
+  assert.equal(view.showNote, false);
+});
+
+test("Athens case: high stop credibility + low route confidence → verified simple, NOT curated", () => {
+  // Athens can land a route on curated, verified stops (credibility_tier high)
+  // while still being a thin-city route (confidence low). The chip must stay
+  // honest about coverage and must NOT claim "Curated route".
+  const view = buildRouteCredibilityView({
+    credibility_tier: "high",
+    confidence: "low",
+    main_stops: [{ provisional: false }, { provisional: false }, { provisional: false }],
+  });
+  assert.equal(view.mode, "verifiedSimple");
+  assert.equal(view.chipKey, "credibility.routeVerifiedSimple");
+  assert.notEqual(view.chipKey, "credibility.routeCurated");
+  assert.equal(view.curatedChip, false);
+  assert.equal(view.showNote, true);
+  assert.equal(view.noteKey, "credibility.routeVerifiedSimpleNote");
+});
+
+test("medium tier → mixed chip with note", () => {
+  const view = buildRouteCredibilityView({
+    credibility_tier: "medium",
+    main_stops: [{ provisional: false }, { provisional: true }],
+  });
+  assert.equal(view.mode, "mixed");
+  assert.equal(view.chipKey, "credibility.routeMixed");
+  assert.equal(view.curatedChip, false);
+  assert.equal(view.showNote, true);
+  assert.equal(view.noteKey, "credibility.routeMixedNote");
+});
+
+test("low tier with provisional-dominant compose → simple route, mostly-provisional note", () => {
+  const view = buildRouteCredibilityView({
+    credibility_tier: "low",
+    confidence: "low",
+    uses_provisional_sources: true,
+    provisional_stop_count: 2,
+    main_stops: [{ provisional: false }, { provisional: true }, { provisional: true }],
+  });
+  assert.equal(view.mode, "simple");
+  assert.equal(view.chipKey, "credibility.routeSimple");
+  assert.equal(view.noteKey, "credibility.routeSimpleMostly");
+});
+
+test("low tier with no provisional sources → simple route, thin-catalog note", () => {
+  const view = buildRouteCredibilityView({
+    credibility_tier: "low",
+    confidence: "low",
+    uses_provisional_sources: false,
+    provisional_stop_count: 0,
+    main_stops: [{ provisional: false }, { provisional: false }],
+  });
+  assert.equal(view.mode, "simple");
+  assert.equal(view.noteKey, "credibility.routeSimpleThin");
+});
+
+test("no credibility signal at all → no chip rendered", () => {
+  const view = buildRouteCredibilityView({ main_stops: [{ provisional: false }] });
+  assert.equal(view.mode, "none");
+  assert.equal(view.chipKey, null);
+});
+
+test("legacy thin route without credibility_tier still falls back to simple", () => {
+  const view = buildRouteCredibilityView({ confidence: "low", main_stops: [] });
+  assert.equal(view.mode, "simple");
+  assert.equal(view.chipKey, "credibility.routeSimple");
+});
+
+test("buildStopTrustView: curated stop gets no per-stop badge", () => {
+  const view = buildStopTrustView({ provisional: false, name: "Humana Vintage" });
+  assert.equal(view.showProvisionalBadge, false);
+  assert.equal(view.badgeKey, null);
+});
+
+test("buildStopTrustView: provisional stop is badged with its hint", () => {
+  const view = buildStopTrustView({
+    provisional: true,
+    provisional_hint: "Open geodata, not verified yet.",
+  });
+  assert.equal(view.showProvisionalBadge, true);
+  assert.equal(view.badgeKey, "credibility.provisional");
+  assert.equal(view.hint, "Open geodata, not verified yet.");
 });
