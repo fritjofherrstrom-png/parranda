@@ -1,7 +1,7 @@
 {
   "name": "parranda",
   "version": "1.0.0",
-  "description": "Parranda är en PWA och personlig ruttmotor för Rom med curated stadsdelar, hidden gems och kvällsflöden.",
+  "description": "Parranda är en city-intelligence PWA med planner, Pulse och Blitz för promenadvänliga dagsflöden över flera städer.",
   "main": "server.js",
   "private": true,
   "scripts": {
@@ -11,10 +11,15 @@
   },
   "keywords": [
     "parranda",
+    "city-intelligence",
     "rome",
+    "barcelona",
+    "athens",
     "travel",
     "pwa",
-    "route-planner"
+    "route-planner",
+    "pulse",
+    "blitz"
   ],
   "author": "",
   "license": "ISC",
