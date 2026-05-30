@@ -3798,8 +3798,9 @@ function isSaneHeroBlitzWalkMinutes(value) {
   return Number.isFinite(value) && value >= 0 && value <= heroBlitzMaxWalkMinutes;
 }
 
-function formatHeroBlitzWalkMeta(value, { unknownLabel = "gångtid okänd" } = {}) {
-  return isSaneHeroBlitzWalkMinutes(value) ? `${value} min gång` : unknownLabel;
+function formatHeroBlitzWalkMeta(value, { unknownLabel } = {}) {
+  const label = unknownLabel !== undefined ? unknownLabel : t("blitz.walkMetaUnknown");
+  return isSaneHeroBlitzWalkMinutes(value) ? tf("blitz.walkMeta", { minutes: value }) : label;
 }
 
 function getBlitzMoveTags(move) {
@@ -3863,53 +3864,59 @@ function buildSpecificHeroBlitzReason(result) {
   const hasViewSignal = tags.has("utsikt");
 
   if (hasSecondHandSignal && availability.kind === "shop" && availability.day_fit !== "strong") {
-    return "Butiksspåret är starkare än marknad idag.";
+    return t("blitz.specificSecondHandShop");
   }
 
   if (pulseActive && pulseTitle) {
     if (hasViewSignal) {
-      return "Pulse pekar mot utsiktsspåret just nu.";
+      return t("blitz.specificPulseView");
     }
 
     if (hasDrinksSignal) {
-      return "Pulse gör det här till ett starkt nästa glas just nu.";
+      return t("blitz.specificPulseDrinks");
     }
   }
 
   if (hasDrinksSignal && hasCalmSignal) {
-    return `Bra nu för vin och lågmäld kväll${area ? ` i ${area}` : ""}.`;
+    return area
+      ? tf("blitz.specificDrinksCalmArea", { area })
+      : t("blitz.specificDrinksCalm");
   }
 
   if (hasDrinksSignal && !hasCalmSignal) {
-    return `Starkast i området om du vill hålla kvällen lokal${area ? ` i ${area}` : ""}.`;
+    return area
+      ? tf("blitz.specificDrinksEnergyArea", { area })
+      : t("blitz.specificDrinksEnergy");
   }
 
   if (hasFoodSignal && hasCalmSignal) {
-    return "Bra reset utan att blåsa upp kvällen.";
+    return t("blitz.specificFoodCalm");
   }
 
   if (hasFoodSignal) {
-    return `Låg friktion och lätt att fortsätta${area ? ` mot ${area}` : ""}.`;
+    return area
+      ? tf("blitz.specificFoodArea", { area })
+      : t("blitz.specificFood");
   }
 
   if (hasViewSignal) {
-    return "Bra nu om du vill få in utsikt utan att dra i gång en större runda.";
+    return t("blitz.specificView");
   }
 
   if (move.what_to_do_after) {
     const followup = String(move.what_to_do_after || "").trim();
 
     if (/ostiense/i.test(followup)) {
-      return "Låg friktion och lätt att fortsätta mot Ostiense.";
+      return t("blitz.specificOstiense");
     }
 
-    if (/\b(vin|glas|drink|bar)\b/i.test(followup)) {
-      return "Bra nu om du vill landa i ett glas utan att spräcka kvällen.";
+    if (/\b(vin|glas|drink|bar|wine|glass)\b/i.test(followup)) {
+      return t("blitz.specificAfterDrinks");
     }
   }
 
   if (availability.day_fit === "weak" && availability.note) {
-    return "Dubbelkolla läget, men det här spåret håller fortfarande ihop nu.";
+    return t("blitz.specificWeakFit");
   }
 
   if (secondaryReason) {
@@ -3931,9 +3938,7 @@ function buildHeroBlitzMeta(result) {
   const move = result?.best_move || null;
 
   if (!move) {
-    return isEnglishUi
-      ? "Place, time, Pulse, and availability are weighed in the same decision."
-      : "Plats, tid, Pulse och availability vägs in i samma beslut.";
+    return t("blitz.emptyStateMeta");
   }
 
   if (move.kind === "mini_route_60") {
@@ -3943,9 +3948,9 @@ function buildHeroBlitzMeta(result) {
 
     return [
       "60 min",
-      stopCount ? `${stopCount} stopp` : null,
+      stopCount ? tf("blitz.stops", { count: stopCount }) : null,
       km,
-      formatHeroBlitzWalkMeta(startMinutes, { unknownLabel: "starttid okänd" }),
+      formatHeroBlitzWalkMeta(startMinutes, { unknownLabel: t("blitz.startTimeUnknown") }),
     ]
       .filter(Boolean)
       .join(" • ");
@@ -3988,7 +3993,8 @@ function buildHeroBlitzFollowup(result) {
     return "";
   }
 
-  if (!/\b(stanna|låt|fortsätt|kör)\b/i.test(followup)) {
+  // SV verbs: stanna, låt, fortsätt, kör — EN verbs: stay, let, run (server blitz.after* strings)
+  if (!/\b(stanna|låt|fortsätt|kör|stay|let|run)\b/i.test(followup)) {
     return "";
   }
 
@@ -3998,7 +4004,7 @@ function buildHeroBlitzFollowup(result) {
 function buildBlitzFollowupText(result) {
   const followup = buildHeroBlitzFollowup(result);
 
-  return followup ? `Sedan: ${followup}` : "";
+  return followup ? t("blitz.thenPrefix") + followup : "";
 }
 
 function buildBlitzTagTexts(result) {
@@ -4024,12 +4030,12 @@ function createBlitzGuideStop(stop, index, originLabel, previousLabel = null) {
     label: stop.label,
     area: stop.area,
     summary: stop.tags?.length
-      ? `Blitz valde stoppet för ${stop.tags.slice(0, 3).join(", ")}.`
-      : "Kompakt Blitz-stopp för nästa timme.",
+      ? tf("blitz.guideStopSummaryTags", { tags: stop.tags.slice(0, 3).join(", ") })
+      : t("blitz.guideStopSummaryDefault"),
     meta: [
-      index === 0 ? `Från ${originLabel}` : null,
+      index === 0 ? tf("blitz.guideStopFrom", { label: originLabel }) : null,
       Number.isFinite(stop.walk_from_previous_minutes)
-        ? `${stop.walk_from_previous_minutes} min gång`
+        ? tf("blitz.walkMeta", { minutes: stop.walk_from_previous_minutes })
         : null,
     ]
       .filter(Boolean)
@@ -4078,11 +4084,11 @@ function buildBlitzRouteGuideView(result) {
     path:
       routeStops.length > 1
         ? `${context.origin_label} -> ${routeStops.map((stop) => stop.label).join(" -> ")}`
-        : `${context.origin_label} -> ${routeStops[0]?.label || "nästa stopp"}`,
-    anchor: `Start: ${context.origin_label || "Din plats"}`,
-    walk: `Mini-rutt • slut: ${lastStop?.area || lastStop?.label || "öppet"}`,
-    startAnchorLabel: context.origin_label || "Din plats",
-    endAnchorLabel: lastStop?.label || context.origin_label || "Din plats",
+        : `${context.origin_label} -> ${routeStops[0]?.label || t("blitz.guideNextStopFallback")}`,
+    anchor: tf("blitz.guideAnchor", { origin: context.origin_label || t("blitz.guideOriginFallback") }),
+    walk: tf("blitz.guideWalk", { area: lastStop?.area || lastStop?.label || t("blitz.guideNextStopFallback") }),
+    startAnchorLabel: context.origin_label || t("blitz.guideOriginFallback"),
+    endAnchorLabel: lastStop?.label || context.origin_label || t("blitz.guideOriginFallback"),
     routeShapeLabel: "Blitz",
     routeShape: "arc",
     routeLink: createRouteDirectionsUrl(routePoints),
@@ -4095,9 +4101,9 @@ function buildBlitzRouteGuideView(result) {
     budgetNote: null,
     hiddenMentions: [],
     barMentions: [],
-    dateLabel: context.date ? formatSwedishDate(context.date) : "Blitz just nu",
-    dayProfileLabel: "Nästa timmen",
-    pacingLabel: move.effort || "Kompakt",
+    dateLabel: context.date ? formatSwedishDate(context.date) : t("blitz.guideDateNow"),
+    dayProfileLabel: t("blitz.guideDayProfile"),
+    pacingLabel: move.effort || t("blitz.guidePacingDefault"),
     anchorZone: lastStop?.area || buildUnavailableCityLabel(),
     geoFitNote: null,
     longestLegMinutes: Math.max(...routeStops.map((stop) => Number(stop.walk_from_previous_minutes) || 0), 0),
@@ -4109,19 +4115,19 @@ function buildBlitzRouteGuideView(result) {
         )
       : 0,
     legSummary: Number.isFinite(move.walking_minutes)
-      ? `${move.walking_minutes} min gång fördelat över nästa timme.`
+      ? tf("blitz.guideLegSummary", { minutes: move.walking_minutes })
       : null,
     engineBadges: ["Blitz", move.availability?.kind || null].filter(Boolean),
     anchorExplanation:
       move.availability?.day_fit === "strong"
-        ? "Blitz trycker upp det här spåret eftersom dagen faktiskt passar den här typen av stopp just nu."
-        : "Blitz håller rutten kompakt och väljer stopp som fungerar här och nu utan att bli en halv dagsplan.",
+        ? t("blitz.guideAnchorStrong")
+        : t("blitz.guideAnchorDefault"),
     guideStops: routeStops.map((stop, index) =>
       createBlitzGuideStop(
         stop,
         index,
-        context.origin_label || "Din plats",
-        index === 1 ? context.origin_label || "Din plats" : routeStops[index - 1]?.label || null,
+        context.origin_label || t("blitz.guideOriginFallback"),
+        index === 1 ? context.origin_label || t("blitz.guideOriginFallback") : routeStops[index - 1]?.label || null,
       ),
     ),
     stopItems: routeStops.map((stop, index) => ({
@@ -4129,7 +4135,7 @@ function buildBlitzRouteGuideView(result) {
       label: stop.label,
       area: stop.area,
       tagSummary: (stop.tags || []).slice(0, 3).join(" • "),
-      summary: stop.tags?.length ? stop.tags.join(", ") : "Blitz-stopp",
+      summary: stop.tags?.length ? stop.tags.join(", ") : t("blitz.guideStopItemDefault"),
       text: `${index + 1}. ${stop.label}`,
       query: stop.label,
       source: "curated",

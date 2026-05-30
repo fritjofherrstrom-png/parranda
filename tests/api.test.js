@@ -2069,6 +2069,85 @@ test("appendCredibilityBadges gates anchor badge on !isLiveEvent so a live event
   );
 });
 
+test("script.js Blitz render functions use t()/tf() for all Swedish-leaking strings", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const script = fs.readFileSync(path.resolve(__dirname, "..", "script.js"), "utf8");
+
+  // formatHeroBlitzWalkMeta — no raw Swedish walk strings
+  assert.ok(!script.includes('"gångtid okänd"'), 'formatHeroBlitzWalkMeta: "gångtid okänd" must go through t()');
+  assert.ok(!script.includes('" min gång"'), 'formatHeroBlitzWalkMeta: " min gång" literal must go through tf()');
+  assert.ok(script.includes('t("blitz.walkMetaUnknown"'), 'must use blitz.walkMetaUnknown key');
+  assert.ok(script.includes('tf("blitz.walkMeta"'), 'must use blitz.walkMeta key');
+
+  // buildHeroBlitzMeta — no raw Swedish meta strings
+  assert.ok(!script.includes('"starttid okänd"'), 'buildHeroBlitzMeta: "starttid okänd" must go through t()');
+  assert.ok(script.includes('t("blitz.startTimeUnknown"'), 'must use blitz.startTimeUnknown key');
+  assert.ok(script.includes('tf("blitz.stops"'), 'must use blitz.stops key');
+  assert.ok(script.includes('t("blitz.emptyStateMeta"'), 'empty state must use blitz.emptyStateMeta key');
+
+  // buildHeroBlitzFollowup — EN verb guard added
+  assert.ok(script.includes("stay|let|run"), "buildHeroBlitzFollowup must include EN verb alternatives in regex");
+
+  // buildBlitzFollowupText — no raw "Sedan: "
+  assert.ok(!script.includes('"Sedan: "'), 'buildBlitzFollowupText: "Sedan: " must go through t()');
+  assert.ok(script.includes('t("blitz.thenPrefix"'), 'must use blitz.thenPrefix key');
+
+  // createBlitzGuideStop — no raw Swedish guide-stop strings
+  assert.ok(!script.includes('"Kompakt Blitz-stopp för nästa timme."'), 'createBlitzGuideStop: default summary must go through t()');
+  assert.ok(script.includes('t("blitz.guideStopSummaryDefault"'), 'must use blitz.guideStopSummaryDefault key');
+  assert.ok(script.includes('tf("blitz.guideStopSummaryTags"'), 'must use blitz.guideStopSummaryTags key');
+  assert.ok(script.includes('tf("blitz.guideStopFrom"'), 'must use blitz.guideStopFrom key');
+
+  // buildBlitzRouteGuideView — no raw Swedish guide-view strings
+  assert.ok(!script.includes('"Blitz just nu"'), 'buildBlitzRouteGuideView: "Blitz just nu" must go through t()');
+  assert.ok(!script.includes('"Nästa timmen"'), 'buildBlitzRouteGuideView: "Nästa timmen" must go through t()');
+  assert.ok(!script.includes('"Kompakt"'), 'buildBlitzRouteGuideView: "Kompakt" must go through t()');
+  assert.ok(script.includes('t("blitz.guideDateNow"'), 'must use blitz.guideDateNow key');
+  assert.ok(script.includes('t("blitz.guideDayProfile"'), 'must use blitz.guideDayProfile key');
+  assert.ok(script.includes('t("blitz.guidePacingDefault"'), 'must use blitz.guidePacingDefault key');
+  assert.ok(script.includes('tf("blitz.guideLegSummary"'), 'must use blitz.guideLegSummary key');
+  assert.ok(script.includes('t("blitz.guideAnchorStrong"'), 'must use blitz.guideAnchorStrong key');
+  assert.ok(script.includes('t("blitz.guideAnchorDefault"'), 'must use blitz.guideAnchorDefault key');
+
+  // buildSpecificHeroBlitzReason — no raw Swedish hero-summary strings
+  assert.ok(!script.includes('"Butiksspåret är starkare än marknad idag."'), 'buildSpecificHeroBlitzReason: must use t() for shop string');
+  assert.ok(!script.includes('"Pulse pekar mot utsiktsspåret just nu."'), 'must use t() for pulse-view string');
+  assert.ok(!script.includes('"Bra reset utan att blåsa upp kvällen."'), 'must use t() for food-calm string');
+  assert.ok(script.includes('t("blitz.specificSecondHandShop"'), 'must use blitz.specificSecondHandShop key');
+  assert.ok(script.includes('t("blitz.specificPulseView"'), 'must use blitz.specificPulseView key');
+  assert.ok(script.includes('t("blitz.specificWeakFit"'), 'must use blitz.specificWeakFit key');
+});
+
+test("blitz.* i18n keys have parity between sv and en in ui-i18n.js", () => {
+  const { buildClientI18nPayload } = require("../server/ui-i18n");
+  const sv = buildClientI18nPayload("sv").translations.sv;
+  const en = buildClientI18nPayload("en").translations.en;
+  const newBlitzKeys = [
+    "blitz.walkMeta", "blitz.walkMetaUnknown", "blitz.emptyStateMeta",
+    "blitz.stops", "blitz.startTimeUnknown", "blitz.thenPrefix",
+    "blitz.guideStopSummaryTags", "blitz.guideStopSummaryDefault", "blitz.guideStopFrom",
+    "blitz.guideOriginFallback", "blitz.guideNextStopFallback", "blitz.guideDateNow",
+    "blitz.guideDayProfile", "blitz.guidePacingDefault", "blitz.guideLegSummary",
+    "blitz.guideAnchorStrong", "blitz.guideAnchorDefault",
+    "blitz.guideWalk", "blitz.guideAnchor", "blitz.guideStopItemDefault",
+    "blitz.specificSecondHandShop", "blitz.specificPulseView", "blitz.specificPulseDrinks",
+    "blitz.specificDrinksCalmArea", "blitz.specificDrinksCalm",
+    "blitz.specificDrinksEnergyArea", "blitz.specificDrinksEnergy",
+    "blitz.specificFoodCalm", "blitz.specificFoodArea", "blitz.specificFood",
+    "blitz.specificView", "blitz.specificOstiense", "blitz.specificAfterDrinks",
+    "blitz.specificWeakFit",
+  ];
+  // Keys that are intentionally identical in SV and EN (brand terms, universal notation)
+  const sameInBoth = new Set(["blitz.guideAnchor"]);
+  for (const key of newBlitzKeys) {
+    assert.ok(typeof sv[key] === "string" && sv[key].length > 0, `sv missing blitz key: ${key}`);
+    assert.ok(typeof en[key] === "string" && en[key].length > 0, `en missing blitz key: ${key}`);
+    if (!sameInBoth.has(key)) {
+      assert.notEqual(sv[key], en[key], `sv and en should differ for key: ${key}`);
+    }
+  }
+});
 
 test("POST /api/route-recommendations returnerar en ärlig unsupported-shape för okänd city istället för att läcka fallback-staden", async () => {
   const server = buildApp().listen(0);
