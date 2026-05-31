@@ -9,6 +9,7 @@ Review this workspace against [`../docs/FRONTEND_MIGRATION_CONTRACT.md`](../docs
 From the repository root:
 
 ```bash
+npm run check:frontend
 npm run build:frontend
 npm run dev:frontend
 ```
@@ -16,6 +17,7 @@ npm run dev:frontend
 Or from this workspace:
 
 ```bash
+npm --prefix frontend run check
 npm --prefix frontend run build
 npm --prefix frontend run dev
 ```
