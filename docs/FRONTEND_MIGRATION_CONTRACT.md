@@ -1,0 +1,57 @@
+# Frontend Migration Contract
+
+This contract keeps the Astro/frontend migration from drifting into a product rewrite. It defines the production behavior that must remain stable while new frontend infrastructure is introduced.
+
+## Current production contract
+
+- The current Node/Express app remains the production source of truth until a later PR explicitly migrates a surface.
+- English is the default public UI language.
+- Swedish UI is explicit via `?lang=sv`.
+- `?lang=en` remains valid, but it is not required for English UI.
+- The canonical planner entry is `/:city?planner=open`.
+- `/:city/plan` is preserved as a deep link to the same inline city-shell planner state.
+- City shell, Planner, Pulse and Blitz behavior must not change during frontend foundation work.
+- Existing bootstrap contracts such as `window.__PARRANDA_CITY__`, `window.__PARRANDA_BOOTSTRAP__`, `window.__PARRANDA_LANGUAGE__`, and `window.__PARRANDA_I18N__` remain owned by the current app until a dedicated migration PR proves parity.
+
+## Astro foundation scope
+
+Allowed in the foundation PR:
+
+- Add an isolated frontend workspace such as `/frontend`.
+- Add Astro dependencies, config and build scripts.
+- Add a minimal static demo/proof page.
+- Document the boundary between the current production app and the future frontend stack.
+- Keep existing `npm test` green.
+
+Not allowed in the foundation PR:
+
+- No production route takeover.
+- No routing rewrite.
+- No i18n rewrite.
+- No Planner, Pulse or Blitz rewrite.
+- No full Tailwind migration.
+- No Preact islands unless separately approved before the PR starts.
+- No CSS-system rewrite.
+- No planner-entry polish bundled into the foundation work.
+- No changes to current app behavior.
+
+## Surface migration rule
+
+Every later migrated surface must prove parity before takeover:
+
+- URL contract stays stable, including `/:city?planner=open` and `/:city/plan` semantics.
+- Language contract stays stable: English default, Swedish via `?lang=sv`.
+- Bootstrap data contract is either preserved or replaced with documented compatibility.
+- Existing behavior is covered by current tests or new equivalent tests.
+- Production route ownership changes are explicit in the PR title/body.
+- Rollback path is clear: the current Express surface can remain active if the migrated surface is not ready.
+
+## Planner polish boundary
+
+Planner polish ideas from older stale/conflicting work are intentionally outside Astro foundation scope. If still desired, reintroduce them later as focused product PRs, for example:
+
+- “Doesn’t matter” walking option.
+- Compact context strip.
+- Lightweight home-base input.
+
+These must not be smuggled into frontend foundation work.
