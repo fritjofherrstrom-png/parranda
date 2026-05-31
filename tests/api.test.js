@@ -179,6 +179,20 @@ test("server/app.js uses keyed shell i18n instead of post-render replacement", (
   assert.match(source, /__PARRANDA_I18N_BOOTSTRAP__/);
 });
 
+test("Near me start context stays collapsed and does not take over Pulse", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
+  const applyStartContextMode = source.match(
+    /function applyStartContextMode\(mode\) \{(?<body>[\s\S]*?)\n\}/,
+  );
+
+  assert.ok(applyStartContextMode, "expected synchronous applyStartContextMode in script.js");
+  assert.match(applyStartContextMode.groups.body, /mode === "custom" \|\| mode === "preset"/);
+  assert.match(applyStartContextMode.groups.body, /expandHomeBase\(\)/);
+  assert.match(applyStartContextMode.groups.body, /collapseHomeBase\(\)/);
+  assert.equal(source.includes("primePulseNearbyFromCurrentLocation"), false);
+  assert.equal(source.includes("pulseNearbyIntentPending"), false);
+});
+
 test("public browser assets are served from the explicit allowlist", async () => {
   global.fetch = async (url) => {
     throw new Error(`Unexpected fetch during public asset allowlist test: ${url}`);
@@ -1113,13 +1127,21 @@ test("GET /rome?lang=en renderar engelsk shell och planner utan att byta interna
     assert.ok(response.body.includes("Choose a date and mood. Parranda builds the route."));
     assert.ok(response.body.includes("Plan the day"));
     assert.ok(response.body.includes("Let Parranda choose"));
-    assert.ok(response.body.includes("Manual controls"));
+    assert.ok(response.body.includes("Customize start/end"));
+    assert.ok(response.body.includes("Start from"));
+    assert.ok(response.body.includes("Near me now"));
+    assert.ok(response.body.includes("Where I’m staying"));
+    assert.ok(response.body.includes("Let Parranda choose the best start"));
+    assert.match(response.body, /id="homeBaseToggle"[\s\S]*?aria-expanded="false"/);
+    assert.match(response.body, /<div id="homeBaseBody" hidden>/);
+    assert.ok(response.body.includes("Plan from here"));
+    assert.doesNotMatch(response.body, /Manual controls/);
     assert.ok(response.body.includes("Loading today’s Pulse..."));
     assert.ok(response.body.includes("Open Pulse"));
     assert.ok(response.body.includes("WHERE YOU’RE STAYING"));
     assert.ok(response.body.includes("Hotel or area"));
     assert.ok(response.body.includes("Optional"));
-    assert.ok(response.body.includes("Plan my day"));
+    assert.ok(response.body.includes("Plan from here"));
     assert.match(response.body, /value="food_drink"\s+checked\s*\/>\s*<span>Food &amp; drink<\/span>/);
     assert.match(response.body, /value="nightlife"\s*\/>\s*<span>Nightlife<\/span>/);
     assert.match(response.body, /value="second_hand"\s*\/>\s*<span>Second hand<\/span>/);
