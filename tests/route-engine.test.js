@@ -1517,3 +1517,96 @@ test("default route generation keeps live events out of main_stops on Barcelona 
     "Sidecar live_events should still be populated even when main_stops excludes them",
   );
 });
+
+// ---- Mention-bucket cross-dedupe regression -----------------------------------
+// A catalog item that qualifies for both barMentions and hiddenMentions must
+// appear in barMentions only (bars win). hiddenMentions must backfill from the
+// next best hidden candidate rather than losing a slot.
+
+test("mention buckets are mutually exclusive: an item may not appear in both barMentions and hiddenMentions", async () => {
+  // Preferences that activate both bar and hidden-gem mention buckets.
+  // Rome bar-hop with hidden gems forces both scoring paths in buildDynamicRouteMentions.
+  global.fetch = createWeatherFetch({ "2026-04-18": 0 });
+
+  const result = await generateRecommendations({
+    dates: ["2026-04-18"],
+    start: { type: "preset", label: "Trastevere" },
+    end: { type: "preset", label: "Monti" },
+    walkingKmTarget: 8,
+    preferences: ["öl", "vin", "hidden gems", "nattliv", "kväll"],
+    optimizerMode: "bar-hop",
+    city: "rome",
+  });
+
+  const route = result.days[0].primary_route;
+  assert.ok(route, "Expected a route for this fixture");
+
+  const barMentions = route.bar_mentions || [];
+  const hiddenMentions = route.hidden_mentions || [];
+
+  // No name may appear in both buckets.
+  const barSet = new Set(barMentions.map((n) => n.toLowerCase().trim()));
+  const crossDupes = hiddenMentions.filter((n) => barSet.has(n.toLowerCase().trim()));
+  assert.deepEqual(
+    crossDupes,
+    [],
+    `These items appeared in both mention buckets (bars should win): ${crossDupes.join(", ")}`,
+  );
+});
+
+test("mention buckets are mutually exclusive for Barcelona with nattliv + hidden gems preferences", async () => {
+  // Barcelona has 28 catalog items that qualify for both buckets (confirmed by
+  // audit). This route should surface the bug before the fix and stay green after.
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+    if (parsed.hostname === "api.open-meteo.com") {
+      return weatherResponse({
+        daily: { time: ["2026-06-14"], weathercode: [0], temperature_2m_max: [24] },
+      });
+    }
+    if (parsed.hostname === "opendata-ajuntament.barcelona.cat") {
+      return { ok: true, async json() { return { success: true, result: { records: [] } }; } };
+    }
+    throw new Error(`Unexpected fetch in Barcelona cross-bucket test: ${url}`);
+  };
+
+  resetBarcelonaLiveEventsCache();
+
+  const result = await generateRecommendations({
+    city: "barcelona",
+    dates: ["2026-06-14"],
+    start: { type: "preset", label: "Gràcia" },
+    end: { type: "preset", label: "Gràcia" },
+    walkingKmTarget: 7,
+    preferences: ["nattliv", "vin", "hidden gems", "low-key"],
+    lang: "en",
+  });
+
+  const route = result.days?.[0]?.primary_route;
+  assert.ok(route, "Expected a Barcelona route for this fixture");
+
+  const barMentions = route.bar_mentions || [];
+  const hiddenMentions = route.hidden_mentions || [];
+
+  // No name may appear in both buckets.
+  const barSet = new Set(barMentions.map((n) => n.toLowerCase().trim()));
+  const crossDupes = hiddenMentions.filter((n) => barSet.has(n.toLowerCase().trim()));
+  assert.deepEqual(
+    crossDupes,
+    [],
+    `Barcelona cross-bucket dupes (bars must win): ${crossDupes.join(", ")}`,
+  );
+
+  // Route stops must remain excluded from both mention buckets.
+  const mainStopNames = new Set(
+    (route.main_stops || []).map((s) => (s.name || s.label || "").toLowerCase().trim()),
+  );
+  const mentionsInRoute = [...barMentions, ...hiddenMentions].filter((n) =>
+    mainStopNames.has(n.toLowerCase().trim()),
+  );
+  assert.deepEqual(
+    mentionsInRoute,
+    [],
+    `These route stops leaked into mention buckets: ${mentionsInRoute.join(", ")}`,
+  );
+});
