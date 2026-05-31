@@ -1,0 +1,215 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .landing-proof-shell {
+    min-height: 100vh;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at top left, rgb(var(--p-color-accent) / 0.22), transparent 34rem),
+      linear-gradient(135deg, rgb(var(--p-color-paper)) 0%, #120f0d 48%, #2a1812 100%);
+    color: rgb(var(--p-color-ink));
+    font-family: var(--p-font-body), system-ui, sans-serif;
+  }
+
+  .landing-proof-hero {
+    margin: 0 auto;
+    max-width: 72rem;
+    padding: 1.25rem clamp(1rem, 5vw, 3rem) 3rem;
+  }
+
+  .landing-proof-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 0 2.5rem;
+  }
+
+  .landing-proof-brand {
+    color: rgb(var(--p-color-ink));
+    font-family: var(--p-font-display), serif;
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    text-decoration: none;
+  }
+
+  .landing-proof-nav__links {
+    display: flex;
+    gap: 0.6rem;
+  }
+
+  .landing-proof-nav__links a {
+    border: 1px solid rgb(var(--p-color-ink) / 0.18);
+    border-radius: 999px;
+    color: rgb(var(--p-color-ink) / 0.82);
+    font-size: 0.78rem;
+    font-weight: 800;
+    padding: 0.55rem 0.75rem;
+    text-decoration: none;
+  }
+
+  .landing-proof-hero__grid {
+    display: grid;
+    gap: 2rem;
+  }
+
+  .landing-proof-hero__copy h1 {
+    font-family: var(--p-font-display), serif;
+    font-size: clamp(3.25rem, 18vw, 7.6rem);
+    letter-spacing: -0.09em;
+    line-height: 0.88;
+    margin: 0;
+    max-width: 11ch;
+  }
+
+  .landing-proof-eyebrow {
+    color: rgb(var(--p-color-glow));
+    font-size: 0.75rem;
+    font-weight: 900;
+    letter-spacing: 0.18em;
+    margin: 0 0 1rem;
+    text-transform: uppercase;
+  }
+
+  .landing-proof-lede {
+    color: rgb(var(--p-color-ink) / 0.76);
+    font-size: clamp(1.05rem, 4vw, 1.35rem);
+    line-height: 1.45;
+    margin-top: 1.15rem;
+    max-width: 34rem;
+  }
+
+  .landing-proof-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+  }
+
+  .landing-proof-button {
+    align-items: center;
+    border-radius: 999px;
+    display: inline-flex;
+    font-weight: 900;
+    justify-content: center;
+    min-height: 3.25rem;
+    padding: 0.9rem 1.2rem;
+    text-decoration: none;
+  }
+
+  .landing-proof-button--primary {
+    background: rgb(var(--p-color-accent));
+    color: #180f0c;
+  }
+
+  .landing-proof-button--secondary {
+    border: 1px solid rgb(var(--p-color-ink) / 0.22);
+    color: rgb(var(--p-color-ink));
+  }
+
+  .landing-proof-phone {
+    border: 1px solid rgb(var(--p-color-ink) / 0.16);
+    border-radius: 2.2rem;
+    box-shadow: 0 2rem 5rem rgb(0 0 0 / 0.34);
+    display: grid;
+    gap: 0.9rem;
+    justify-self: center;
+    max-width: 22rem;
+    padding: 0.9rem;
+    width: min(100%, 22rem);
+  }
+
+  .landing-proof-phone__bar,
+  .landing-proof-phone__card {
+    border-radius: 1.45rem;
+    padding: 1rem;
+  }
+
+  .landing-proof-phone__bar {
+    background: rgb(var(--p-color-ink) / 0.1);
+    color: rgb(var(--p-color-ink) / 0.7);
+    font-size: 0.82rem;
+    font-weight: 900;
+  }
+
+  .landing-proof-phone__card {
+    background: rgb(var(--p-color-ink) / 0.92);
+    color: #1d1410;
+  }
+
+  .landing-proof-phone__card--warm {
+    background: rgb(var(--p-color-glow));
+  }
+
+  .landing-proof-phone__card span,
+  .landing-proof-card p {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    margin: 0 0 0.55rem;
+    text-transform: uppercase;
+  }
+
+  .landing-proof-phone__card strong {
+    display: block;
+    font-family: var(--p-font-display), serif;
+    font-size: 1.8rem;
+    letter-spacing: -0.05em;
+    line-height: 0.95;
+  }
+
+  .landing-proof-phone__card p {
+    margin: 0.8rem 0 0;
+  }
+
+  .landing-proof-cards {
+    display: grid;
+    gap: 0.9rem;
+    margin: 0 auto;
+    max-width: 72rem;
+    padding: 0 clamp(1rem, 5vw, 3rem) 3rem;
+  }
+
+  .landing-proof-card {
+    background: rgb(var(--p-color-ink) / 0.08);
+    border: 1px solid rgb(var(--p-color-ink) / 0.14);
+    border-radius: var(--p-radius-card);
+    padding: 1.15rem;
+  }
+
+  .landing-proof-card h2 {
+    font-family: var(--p-font-display), serif;
+    font-size: 1.7rem;
+    letter-spacing: -0.05em;
+    line-height: 1;
+    margin: 0 0 0.7rem;
+  }
+
+  .landing-proof-card span {
+    color: rgb(var(--p-color-ink) / 0.7);
+    line-height: 1.5;
+  }
+
+  @media (min-width: 760px) {
+    .landing-proof-hero {
+      padding-top: 2rem;
+    }
+
+    .landing-proof-hero__grid {
+      align-items: end;
+      grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.85fr);
+    }
+
+    .landing-proof-actions {
+      flex-direction: row;
+    }
+
+    .landing-proof-cards {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+}
