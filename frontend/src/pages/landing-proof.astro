@@ -30,12 +30,20 @@ import '../styles/landing-proof.css';
             <h1 id="landing-proof-title">{landingHero.title}</h1>
             <p class="landing-proof-lede">{landingHero.body}</p>
             <div class="landing-proof-actions">
-              <a class="landing-proof-button landing-proof-button--primary" href="/barcelona?planner=open">
+              <a class="landing-proof-button landing-proof-button--primary" href={routeProofs[0].href}>
                 {landingHero.primaryCta}
               </a>
-              <a class="landing-proof-button landing-proof-button--secondary" href="/rome?planner=open">
+              <a class="landing-proof-button landing-proof-button--secondary" href={routeProofs[1].href}>
                 {landingHero.secondaryCta}
               </a>
+            </div>
+            <div class="landing-proof-city-strip" aria-label="Supported landing proof cities">
+              {routeProofs.map((route) => (
+                <a class="landing-proof-city-pill" href={route.href}>
+                  <span>{route.status}</span>
+                  <strong>{route.label}</strong>
+                </a>
+              ))}
             </div>
           </div>
 
