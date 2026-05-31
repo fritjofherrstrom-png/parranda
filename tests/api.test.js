@@ -341,6 +341,66 @@ test("shell has full i18n coverage for English mode without Swedish leakage", as
   }
 });
 
+test("public pages default to English while explicit Swedish stays available", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during default-English locale test: ${url}`);
+  };
+
+  const stripI18nBootstrap = (html) => html.replace(
+    /window\.__PARRANDA_I18N__\s*=\s*\{[\s\S]*?\};/,
+    "window.__PARRANDA_I18N__ = {};",
+  );
+
+  const server = buildApp().listen(0);
+
+  try {
+    const landing = await requestText(server, { path: "/" });
+    assert.equal(landing.status, 200);
+    assert.match(landing.body, /<html lang="en">/);
+    assert.match(landing.body, /window\.__PARRANDA_LANGUAGE__ = "en";/);
+    assert.ok(stripI18nBootstrap(landing.body).includes("Next stop?"));
+    assert.equal(stripI18nBootstrap(landing.body).includes("Nästa stopp"), false);
+
+    const swedishLanding = await requestText(server, { path: "/?lang=sv" });
+    assert.equal(swedishLanding.status, 200);
+    assert.match(swedishLanding.body, /<html lang="sv">/);
+    assert.match(swedishLanding.body, /window\.__PARRANDA_LANGUAGE__ = "sv";/);
+    assert.ok(stripI18nBootstrap(swedishLanding.body).includes("Nästa stopp"));
+
+    for (const pathName of ["/barcelona", "/rome", "/athens", "/barcelona/plan"]) {
+      const response = await requestText(server, { path: pathName });
+      assert.equal(response.status, 200, `${pathName} should render`);
+      assert.match(response.body, /<html lang="en">/, `${pathName} should default to English html lang`);
+      assert.match(response.body, /<body[^>]+data-lang="en"/, `${pathName} should default body data-lang to English`);
+      assert.equal(
+        stripI18nBootstrap(response.body).includes("Planera dagen."),
+        false,
+        `${pathName} should not default to Swedish shell copy`,
+      );
+    }
+
+    const swedishCity = await requestText(server, { path: "/barcelona?lang=sv" });
+    assert.equal(swedishCity.status, 200);
+    assert.match(swedishCity.body, /<html lang="sv">/);
+    assert.match(swedishCity.body, /<body[^>]+data-lang="sv"/);
+    assert.ok(stripI18nBootstrap(swedishCity.body).includes("Bygg en dag i staden"));
+
+    const invalidLangCity = await requestText(server, { path: "/rome?lang=unknown" });
+    assert.equal(invalidLangCity.status, 200);
+    assert.match(invalidLangCity.body, /<html lang="en">/);
+    assert.match(invalidLangCity.body, /<body[^>]+data-lang="en"/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("landing handoff always preserves the active language explicitly", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "landing.js"), "utf8");
+
+  assert.match(source, /params\.set\("lang", currentLang\(\)\)/);
+  assert.doesNotMatch(source, /if \(currentLang\(\) === "en"\) params\.set\("lang", "en"\)/);
+});
+
 test("shared shell template carries no Rome-specific DOM identifiers", () => {
   const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
   // Issue #58: classes/template ids previously hard-coded Rome content into the
@@ -639,12 +699,12 @@ test("GET / renderar global landing page (inte city-shell)", async () => {
     assert.ok(!response.body.includes("__PARRANDA_TITLE__"));
     assert.ok(!response.body.includes('data-city-key="rome"'));
     assert.ok(!response.body.includes('window.__PARRANDA_CITY__'));
-    // Landing v2: locked hero headline + subcopy (SV)
-    assert.match(response.body, /Nästa stopp\?/);
-    assert.match(response.body, /Välj en stad\. Parranda bygger en dag/);
-    assert.match(response.body, /Sök stad/);
+    // Landing v2: locked hero headline + subcopy (default EN)
+    assert.match(response.body, /Next stop\?/);
+    assert.match(response.body, /Choose a city\. Parranda builds a day/);
+    assert.match(response.body, /Search city/);
     assert.match(response.body, /lp-hero/);
-    assert.match(response.body, /<html lang="sv">/);
+    assert.match(response.body, /<html lang="en">/);
     // City registry server-rendered for JS-driven inline completion (Barcelona + Rom; aliases included)
     assert.match(response.body, /"label"\s*:\s*"Barcelona"/);
     assert.match(response.body, /"label"\s*:\s*"Rom"/);
@@ -723,7 +783,7 @@ test("GET /barcelona renderar curated beta shell utan Rome-fallback", async () =
     });
 
     assert.equal(response.status, 200);
-    assert.match(response.body, /<body data-city-key="barcelona" data-city-label="Barcelona" data-lang="sv">/);
+    assert.match(response.body, /<body data-city-key="barcelona" data-city-label="Barcelona" data-lang="en">/);
     assert.match(
       response.body,
       /window\.__PARRANDA_CITY__ = \{"key":"barcelona","label":"Barcelona","displayLabel":"Barcelona"/,
@@ -732,9 +792,9 @@ test("GET /barcelona renderar curated beta shell utan Rome-fallback", async () =
     assert.match(response.body, /"requestedKey":"barcelona"/);
     assert.match(response.body, /"fallbackUsed":false/);
     assert.match(response.body, /"visibility":"beta"/);
-    assert.match(response.body, /<title>Parranda \| Personlig City Guide för Barcelona<\/title>/);
-    assert.match(response.body, /Planera dagen\./);
-    assert.match(response.body, /Bygg en dag i staden/);
+    assert.match(response.body, /<title>Parranda \| Personal City Guide for Barcelona<\/title>/);
+    assert.match(response.body, /Plan the day\./);
+    assert.match(response.body, /Build your day in Barcelona/);
     assert.doesNotMatch(response.body, /<title>.*city-core preview.*<\/title>/);
     assert.doesNotMatch(response.body, /"key":"rome","label":"Rom","displayLabel":"Barcelona"/);
     assert.doesNotMatch(response.body, /Din resa till Rom/);
@@ -978,7 +1038,7 @@ test("GET /test-city renderar en egen city shell utan Rome-fallback", async () =
 
   try {
     const response = await requestText(server, {
-      path: "/test-city",
+      path: "/test-city?lang=sv",
     });
 
     assert.equal(response.status, 200);
@@ -1087,7 +1147,7 @@ test("GET /rome?lang=en renderar engelsk shell och planner utan att byta interna
   }
 });
 
-test("GET /rome?lang=unknown faller säkert tillbaka till svenska", async () => {
+test("GET /rome?lang=unknown falls safely back to English", async () => {
   global.fetch = async (url) => {
     throw new Error(`Unexpected fetch during language fallback shell test: ${url}`);
   };
@@ -1100,10 +1160,10 @@ test("GET /rome?lang=unknown faller säkert tillbaka till svenska", async () => 
     });
 
     assert.equal(response.status, 200);
-    assert.match(response.body, /<html lang="sv">/);
-    assert.match(response.body, /data-lang="sv"/);
-    assert.ok(response.body.includes("Planera dagen"));
-    assert.ok(response.body.includes("Låt Parranda välja"));
+    assert.match(response.body, /<html lang="en">/);
+    assert.match(response.body, /data-lang="en"/);
+    assert.ok(response.body.includes("Plan the day"));
+    assert.ok(response.body.includes("Let Parranda choose"));
     assert.doesNotMatch(response.body, /Din resa till Rom/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
@@ -1488,7 +1548,7 @@ test("GET /api/city-pulse kan köras för test-city med no-op services", async (
 
   try {
     const response = await requestJson(server, {
-      path: "/api/city-pulse?city=test-city&date=2026-05-01",
+      path: "/api/city-pulse?city=test-city&date=2026-05-01&lang=sv",
     });
 
     assert.equal(response.status, 200);
@@ -3270,7 +3330,7 @@ test("POST /api/route-recommendations ger market-led primary route för single s
   try {
     const response = await requestJson(server, {
       method: "POST",
-      path: "/api/route-recommendations",
+      path: "/api/route-recommendations?lang=sv",
       body: {
         dates: ["2026-05-10"],
         start: { type: "preset", label: "Trastevere" },
@@ -3324,7 +3384,7 @@ test("POST /api/route-recommendations låter shop-vintage bära primary route p�
   try {
     const response = await requestJson(server, {
       method: "POST",
-      path: "/api/route-recommendations",
+      path: "/api/route-recommendations?lang=sv",
       body: {
         dates: ["2026-05-13"],
         start: { type: "preset", label: "Trastevere" },
@@ -3379,7 +3439,7 @@ test("POST /api/route-recommendations kan blanda second_hand och vin utan att ta
   try {
     const response = await requestJson(server, {
       method: "POST",
-      path: "/api/route-recommendations",
+      path: "/api/route-recommendations?lang=sv",
       body: {
         dates: ["2026-05-13"],
         start: { type: "preset", label: "Monti" },
@@ -3592,7 +3652,7 @@ test("POST /api/route-recommendations kan väva in ett live-event som faktiskt r
   try {
     const response = await requestJson(server, {
       method: "POST",
-      path: "/api/route-recommendations",
+      path: "/api/route-recommendations?lang=sv",
       body: {
         dates: ["2026-04-16"],
         start: { type: "preset", label: "Trastevere" },

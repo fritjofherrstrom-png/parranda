@@ -107,6 +107,7 @@ test("Blitz normaliserar trasig klient-memory utan char-level spill eller fel", 
 test("Blitz håller test-city neutral och ärlig när second hand-täckning saknas", async () => {
   const cityConfig = getCityConfig("test-city");
   const result = await buildBlitzDecision(cityConfig, {
+    lang: "sv",
     date: "2026-05-11",
     origin: { type: "preset", label: "Old Town" },
     intent_keys: ["second_hand"],
