@@ -30,6 +30,8 @@ Included:
 - TypeScript strict config.
 - Tailwind config/design-token stub.
 - Minimal static proof page.
+- Static Astro landing proof at `/landing-proof/` with Tailwind compiled through PostCSS.
+- Frontend-only contract test for the landing proof route links and no-island boundary.
 
 Explicitly not included:
 

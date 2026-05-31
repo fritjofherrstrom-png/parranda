@@ -10,6 +10,7 @@
     "test": "node --test",
     "build:frontend": "npm --prefix frontend run build",
     "check:frontend": "npm --prefix frontend run check",
+    "test:frontend": "npm --prefix frontend run test",
     "dev:frontend": "npm --prefix frontend run dev"
   },
   "keywords": [
