@@ -696,11 +696,11 @@ function buildLandingCityRegistry() {
   return entries;
 }
 
-function renderLandingShell({ lang = "sv" } = {}) {
+function renderLandingShell({ lang = "en" } = {}) {
   const uiLang = normalizeLanguage(lang);
   const ogLocale = uiLang === "en" ? "en_US" : "sv_SE";
   const tr = (key) => translate(uiLang, key);
-  const langSuffix = uiLang !== "sv" ? `?lang=${uiLang}` : "";
+  const langSuffix = `?lang=${uiLang}`;
   const tagsHtml = (key) =>
     tr(key).split(",").map((t) => `<span class="lp-tag">${escapeHtml(t.trim())}</span>`).join("\n              ");
   const replacements = {
@@ -777,7 +777,7 @@ function renderLandingShell({ lang = "sv" } = {}) {
   );
 }
 
-function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed, lang = "sv", plannerEntryRoute = false }) {
+function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed, lang = "en", plannerEntryRoute = false }) {
   const uiLang = normalizeLanguage(lang);
   const requestedLabel = cityFallbackUsed ? humanizeCityKey(requestedCity) : "";
   const displayLabel = resolveDisplayLabel(cityConfig, requestedLabel, uiLang);

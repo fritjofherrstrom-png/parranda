@@ -1,4 +1,4 @@
-const fallbackLanguage = "sv";
+const fallbackLanguage = "en";
 const supportedLanguages = ["sv", "en"];
 
 const translations = {
