@@ -918,7 +918,7 @@ const translations = {
     "route.yourDay": "Your day",
     "route.savePdf": "Save as PDF",
     "route.shareGuide": "Share guide",
-    "route.hiddenMentions": "Hidden mentions",
+    "route.hiddenMentions": "Hidden gems",
     "route.barMentions": "Bars not to miss",
     "route.whyChosen": "Why this route was chosen",
     "route.mainBadge": "Main route",
