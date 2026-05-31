@@ -341,6 +341,66 @@ test("shell has full i18n coverage for English mode without Swedish leakage", as
   }
 });
 
+test("public pages default to English while explicit Swedish stays available", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during default-English locale test: ${url}`);
+  };
+
+  const stripI18nBootstrap = (html) => html.replace(
+    /window\.__PARRANDA_I18N__\s*=\s*\{[\s\S]*?\};/,
+    "window.__PARRANDA_I18N__ = {};",
+  );
+
+  const server = buildApp().listen(0);
+
+  try {
+    const landing = await requestText(server, { path: "/" });
+    assert.equal(landing.status, 200);
+    assert.match(landing.body, /<html lang="en">/);
+    assert.match(landing.body, /window\.__PARRANDA_LANGUAGE__ = "en";/);
+    assert.ok(stripI18nBootstrap(landing.body).includes("Next stop?"));
+    assert.equal(stripI18nBootstrap(landing.body).includes("Nästa stopp"), false);
+
+    const swedishLanding = await requestText(server, { path: "/?lang=sv" });
+    assert.equal(swedishLanding.status, 200);
+    assert.match(swedishLanding.body, /<html lang="sv">/);
+    assert.match(swedishLanding.body, /window\.__PARRANDA_LANGUAGE__ = "sv";/);
+    assert.ok(stripI18nBootstrap(swedishLanding.body).includes("Nästa stopp"));
+
+    for (const pathName of ["/barcelona", "/rome", "/athens", "/barcelona/plan"]) {
+      const response = await requestText(server, { path: pathName });
+      assert.equal(response.status, 200, `${pathName} should render`);
+      assert.match(response.body, /<html lang="en">/, `${pathName} should default to English html lang`);
+      assert.match(response.body, /<body[^>]+data-lang="en"/, `${pathName} should default body data-lang to English`);
+      assert.equal(
+        stripI18nBootstrap(response.body).includes("Planera dagen."),
+        false,
+        `${pathName} should not default to Swedish shell copy`,
+      );
+    }
+
+    const swedishCity = await requestText(server, { path: "/barcelona?lang=sv" });
+    assert.equal(swedishCity.status, 200);
+    assert.match(swedishCity.body, /<html lang="sv">/);
+    assert.match(swedishCity.body, /<body[^>]+data-lang="sv"/);
+    assert.ok(stripI18nBootstrap(swedishCity.body).includes("Bygg en dag i staden"));
+
+    const invalidLangCity = await requestText(server, { path: "/rome?lang=unknown" });
+    assert.equal(invalidLangCity.status, 200);
+    assert.match(invalidLangCity.body, /<html lang="en">/);
+    assert.match(invalidLangCity.body, /<body[^>]+data-lang="en"/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("landing handoff always preserves the active language explicitly", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "landing.js"), "utf8");
+
+  assert.match(source, /params\.set\("lang", currentLang\(\)\)/);
+  assert.doesNotMatch(source, /if \(currentLang\(\) === "en"\) params\.set\("lang", "en"\)/);
+});
+
 test("shared shell template carries no Rome-specific DOM identifiers", () => {
   const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
   // Issue #58: classes/template ids previously hard-coded Rome content into the
@@ -375,6 +435,41 @@ test("planner modal title uses city-time framing instead of trip framing", () =>
   assert.match(source, /Planera din tid i \$\{plannerDisplayCityLabel\}/);
   assert.doesNotMatch(source, /Your trip to \$\{plannerDisplayCityLabel\}/);
   assert.doesNotMatch(source, /Din resa till \$\{plannerDisplayCityLabel\}/);
+});
+
+test("landing city submit opens the city-shell embedded planner, not /plan", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "landing.js"), "utf8");
+
+  assert.match(source, /params\.set\("planner", "open"\)/);
+  assert.match(source, /window\.location\.href = cityPath \+ "\?" \+ params\.toString\(\)/);
+  assert.doesNotMatch(source, /cityPath \+ "\/plan"/);
+  assert.doesNotMatch(source, /"\/" \+ city \+ "\/plan"/);
+});
+
+test("planner-open city shell uses inline planner mount instead of modal path", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const source = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
+  const styles = fs.readFileSync(path.join(__dirname, "..", "styles.css"), "utf8");
+
+  assert.match(html, /id="plannerInlineMount"/);
+  assert.match(source, /function showPlannerInline/);
+  assert.match(source, /params\.get\("planner"\) === "open"/);
+  assert.match(source, /showPlannerInline\(params\.get\("mode"\) === "manual"/);
+  assert.match(source, /document\.body\.classList\.add\("is-planner-entry", "is-planner-inline-open"\)/);
+  assert.match(styles, /body\.is-planner-inline-open \.planner-modal-backdrop\s*\{\s*display: none;/);
+  assert.match(styles, /body\.is-planner-inline-open \.planner-modal-shell\.planner-entry-inline/);
+  assert.match(styles, /body\.is-planner-inline-open \.hero-quickstart\s*\{\s*display: none;/);
+  assert.match(styles, /body\.is-planner-inline-open \.city-pulse-teaser\s*\{\s*display: none;/);
+});
+
+test("service worker registration is root-scoped for nested city routes", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
+  const sw = fs.readFileSync(path.join(__dirname, "..", "sw.js"), "utf8");
+
+  assert.match(source, /navigator\.serviceWorker\.register\("\/sw\.js", \{ scope: "\/" \}\)/);
+  assert.doesNotMatch(source, /navigator\.serviceWorker\.register\("\.\/sw\.js"\)/);
+  assert.match(sw, /"\.\/script\.js\?v=26"/);
+  assert.doesNotMatch(sw, /"\.\/script\.js\?v=24"/);
 });
 
 test.after(() => {
@@ -604,12 +699,12 @@ test("GET / renderar global landing page (inte city-shell)", async () => {
     assert.ok(!response.body.includes("__PARRANDA_TITLE__"));
     assert.ok(!response.body.includes('data-city-key="rome"'));
     assert.ok(!response.body.includes('window.__PARRANDA_CITY__'));
-    // Landing v2: locked hero headline + subcopy (SV)
-    assert.match(response.body, /Nästa stopp\?/);
-    assert.match(response.body, /Välj en stad\. Parranda bygger en dag/);
-    assert.match(response.body, /Sök stad/);
+    // Landing v2: locked hero headline + subcopy (default EN)
+    assert.match(response.body, /Next stop\?/);
+    assert.match(response.body, /Choose a city\. Parranda builds a day/);
+    assert.match(response.body, /Search city/);
     assert.match(response.body, /lp-hero/);
-    assert.match(response.body, /<html lang="sv">/);
+    assert.match(response.body, /<html lang="en">/);
     // City registry server-rendered for JS-driven inline completion (Barcelona + Rom; aliases included)
     assert.match(response.body, /"label"\s*:\s*"Barcelona"/);
     assert.match(response.body, /"label"\s*:\s*"Rom"/);
@@ -688,7 +783,7 @@ test("GET /barcelona renderar curated beta shell utan Rome-fallback", async () =
     });
 
     assert.equal(response.status, 200);
-    assert.match(response.body, /<body data-city-key="barcelona" data-city-label="Barcelona" data-lang="sv">/);
+    assert.match(response.body, /<body data-city-key="barcelona" data-city-label="Barcelona" data-lang="en">/);
     assert.match(
       response.body,
       /window\.__PARRANDA_CITY__ = \{"key":"barcelona","label":"Barcelona","displayLabel":"Barcelona"/,
@@ -697,9 +792,9 @@ test("GET /barcelona renderar curated beta shell utan Rome-fallback", async () =
     assert.match(response.body, /"requestedKey":"barcelona"/);
     assert.match(response.body, /"fallbackUsed":false/);
     assert.match(response.body, /"visibility":"beta"/);
-    assert.match(response.body, /<title>Parranda \| Personlig City Guide för Barcelona<\/title>/);
-    assert.match(response.body, /Planera dagen\./);
-    assert.match(response.body, /Bygg en dag i staden/);
+    assert.match(response.body, /<title>Parranda \| Personal City Guide for Barcelona<\/title>/);
+    assert.match(response.body, /Plan the day\./);
+    assert.match(response.body, /Build your day in Barcelona/);
     assert.doesNotMatch(response.body, /<title>.*city-core preview.*<\/title>/);
     assert.doesNotMatch(response.body, /"key":"rome","label":"Rom","displayLabel":"Barcelona"/);
     assert.doesNotMatch(response.body, /Din resa till Rom/);
@@ -943,7 +1038,7 @@ test("GET /test-city renderar en egen city shell utan Rome-fallback", async () =
 
   try {
     const response = await requestText(server, {
-      path: "/test-city",
+      path: "/test-city?lang=sv",
     });
 
     assert.equal(response.status, 200);
@@ -1052,7 +1147,7 @@ test("GET /rome?lang=en renderar engelsk shell och planner utan att byta interna
   }
 });
 
-test("GET /rome?lang=unknown faller säkert tillbaka till svenska", async () => {
+test("GET /rome?lang=unknown falls safely back to English", async () => {
   global.fetch = async (url) => {
     throw new Error(`Unexpected fetch during language fallback shell test: ${url}`);
   };
@@ -1065,10 +1160,10 @@ test("GET /rome?lang=unknown faller säkert tillbaka till svenska", async () => 
     });
 
     assert.equal(response.status, 200);
-    assert.match(response.body, /<html lang="sv">/);
-    assert.match(response.body, /data-lang="sv"/);
-    assert.ok(response.body.includes("Planera dagen"));
-    assert.ok(response.body.includes("Låt Parranda välja"));
+    assert.match(response.body, /<html lang="en">/);
+    assert.match(response.body, /data-lang="en"/);
+    assert.ok(response.body.includes("Plan the day"));
+    assert.ok(response.body.includes("Let Parranda choose"));
     assert.doesNotMatch(response.body, /Din resa till Rom/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
@@ -1128,13 +1223,13 @@ test("landing and city shells use root-absolute asset urls for deep routes", asy
   assert.match(cityShell, /href="\/styles\.css\?v=19"/);
   assert.match(cityShell, /src="\/vendor\/leaflet\/leaflet\.js"/);
   assert.match(cityShell, /src="\/planner-trust\.js\?v=2"/);
-  assert.match(cityShell, /src="\/script\.js\?v=25"/);
+  assert.match(cityShell, /src="\/script\.js\?v=27"/);
   assert.match(cityShell, /src="\/ux-pass1\.js\?v=10"/);
   assert.match(landingShell, /href="\/manifest\.webmanifest"/);
   assert.match(landingShell, /href="\/assets\/icons\/icon-192\.png"/);
   assert.match(landingShell, /href="\/styles\.css\?v=26"/);
   assert.doesNotMatch(cityShell, /href="styles\.css\?v=19"/);
-  assert.doesNotMatch(cityShell, /src="script\.js\?v=25"/);
+  assert.doesNotMatch(cityShell, /src="script\.js\?v=27"/);
   assert.doesNotMatch(landingShell, /href="styles\.css\?v=26"/);
 
   global.fetch = async (url) => {
@@ -1150,7 +1245,7 @@ test("landing and city shells use root-absolute asset urls for deep routes", asy
 
     assert.equal(response.status, 200);
     assert.match(response.body, /<link rel="stylesheet" href="\/styles\.css\?v=19" \/>/);
-    assert.match(response.body, /<script src="\/script\.js\?v=25"><\/script>/);
+    assert.match(response.body, /<script src="\/script\.js\?v=27"><\/script>/);
     assert.match(response.body, /<script src="\/planner-trust\.js\?v=2"><\/script>/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
@@ -1453,7 +1548,7 @@ test("GET /api/city-pulse kan köras för test-city med no-op services", async (
 
   try {
     const response = await requestJson(server, {
-      path: "/api/city-pulse?city=test-city&date=2026-05-01",
+      path: "/api/city-pulse?city=test-city&date=2026-05-01&lang=sv",
     });
 
     assert.equal(response.status, 200);
@@ -2069,6 +2164,134 @@ test("appendCredibilityBadges gates anchor badge on !isLiveEvent so a live event
   );
 });
 
+test("script.js Blitz render functions use t()/tf() for all Swedish-leaking strings", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const script = fs.readFileSync(path.resolve(__dirname, "..", "script.js"), "utf8");
+
+  // Extract the Blitz render function region so "must not contain" checks are
+  // scoped to those functions, not the whole 10k-line file.
+  const regionStart = script.indexOf("function formatHeroBlitzWalkMeta(");
+  const regionEnd = script.indexOf("function openHeroBlitzMove(");
+  assert.ok(regionStart !== -1, "could not find formatHeroBlitzWalkMeta in script.js");
+  assert.ok(regionEnd !== -1, "could not find openHeroBlitzMove in script.js");
+  const blitzRegion = script.slice(regionStart, regionEnd);
+
+  // ---- Positive key-usage assertions (full-file) ----
+  // These confirm each function is wired to the correct i18n key.
+  assert.ok(script.includes('t("blitz.walkMetaUnknown"'), 'must use blitz.walkMetaUnknown key');
+  assert.ok(script.includes('tf("blitz.walkMeta"'), 'must use blitz.walkMeta key');
+  assert.ok(script.includes('t("blitz.startTimeUnknown"'), 'must use blitz.startTimeUnknown key');
+  assert.ok(script.includes('tf("blitz.stops"'), 'must use blitz.stops key');
+  assert.ok(script.includes('t("blitz.emptyStateMeta"'), 'must use blitz.emptyStateMeta key');
+  assert.ok(script.includes('t("blitz.thenPrefix"'), 'must use blitz.thenPrefix key');
+  assert.ok(script.includes('t("blitz.guideStopSummaryDefault"'), 'must use blitz.guideStopSummaryDefault key');
+  assert.ok(script.includes('tf("blitz.guideStopSummaryTags"'), 'must use blitz.guideStopSummaryTags key');
+  assert.ok(script.includes('tf("blitz.guideStopFrom"'), 'must use blitz.guideStopFrom key');
+  assert.ok(script.includes('t("blitz.guideDateNow"'), 'must use blitz.guideDateNow key');
+  assert.ok(script.includes('t("blitz.guideDayProfile"'), 'must use blitz.guideDayProfile key');
+  assert.ok(script.includes('t("blitz.guidePacingDefault"'), 'must use blitz.guidePacingDefault key');
+  assert.ok(script.includes('tf("blitz.guideLegSummary"'), 'must use blitz.guideLegSummary key');
+  assert.ok(script.includes('t("blitz.guideAnchorStrong"'), 'must use blitz.guideAnchorStrong key');
+  assert.ok(script.includes('t("blitz.guideAnchorDefault"'), 'must use blitz.guideAnchorDefault key');
+  assert.ok(script.includes('t("blitz.specificSecondHandShop"'), 'must use blitz.specificSecondHandShop key');
+  assert.ok(script.includes('t("blitz.specificPulseView"'), 'must use blitz.specificPulseView key');
+  assert.ok(script.includes('t("blitz.specificWeakFit"'), 'must use blitz.specificWeakFit key');
+
+  // ---- EN verb regex (buildHeroBlitzFollowup) ----
+  assert.ok(blitzRegion.includes("stay|let|run"), "buildHeroBlitzFollowup must include EN verb alternatives in regex");
+
+  // ---- Negative raw-string checks scoped to the Blitz region only ----
+  // Strings that must be gone from the Blitz render functions; other parts of
+  // script.js (Rome catalog data, route templates, etc.) may still contain
+  // Swedish copy legitimately.
+  assert.ok(!blitzRegion.includes('"gångtid okänd"'), 'formatHeroBlitzWalkMeta: "gångtid okänd" must go through t()');
+  assert.ok(!blitzRegion.includes('"starttid okänd"'), 'buildHeroBlitzMeta: "starttid okänd" must go through t()');
+  assert.ok(!blitzRegion.includes('"Sedan: "'), 'buildBlitzFollowupText: "Sedan: " must go through t()');
+  assert.ok(!blitzRegion.includes('"Kompakt Blitz-stopp för nästa timme."'), 'createBlitzGuideStop: summary must go through t()');
+  assert.ok(!blitzRegion.includes('"Blitz just nu"'), 'buildBlitzRouteGuideView: "Blitz just nu" must go through t()');
+  assert.ok(!blitzRegion.includes('"Nästa timmen"'), 'buildBlitzRouteGuideView: "Nästa timmen" must go through t()');
+  assert.ok(!blitzRegion.includes('" min gång"'), 'Blitz region: " min gång" literal must go through tf(blitz.walkMeta)');
+  assert.ok(!blitzRegion.includes('"Butiksspåret är starkare än marknad idag."'), 'buildSpecificHeroBlitzReason: must use t() for shop string');
+  assert.ok(!blitzRegion.includes('"Bra reset utan att blåsa upp kvällen."'), 'buildSpecificHeroBlitzReason: must use t() for food-calm string');
+});
+
+test("Blitz signature: signal chip surfaces pulse signal_label and falls back to generic Pulse tag", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const script = fs.readFileSync(path.resolve(__dirname, "..", "script.js"), "utf8");
+
+  // buildBlitzSignalChip exists and keys off the server-provided signal data.
+  const chipFn = script.match(/function buildBlitzSignalChip\([^)]*\)\s*\{[\s\S]*?\n\}/);
+  assert.ok(chipFn, "buildBlitzSignalChip must exist");
+  const chipBody = chipFn[0];
+  assert.ok(chipBody.includes("signal_label"), "signal chip must read pulse_context.signal_label");
+  assert.ok(chipBody.includes("signal_type"), "signal chip must carry signal_type for typing");
+  assert.ok(/if\s*\(!label\)\s*\{[\s\S]*?return null/.test(chipBody), "signal chip returns null when signal_label is absent");
+
+  // Generic "Pulse" tag is now a fallback gated on the absence of signal_label,
+  // so the typed signal chip and the generic tag never both render.
+  const tagFn = script.match(/function buildBlitzTagTexts\([^)]*\)\s*\{[\s\S]*?\n\}/);
+  assert.ok(tagFn, "buildBlitzTagTexts must exist");
+  assert.ok(
+    /move\.pulse_context\?\.title\s*&&\s*!move\.pulse_context\?\.signal_label/.test(tagFn[0]),
+    "generic Pulse tag must be gated on missing signal_label (fallback only)",
+  );
+
+  // Render path emits a typed signal chip class for the live signal.
+  assert.ok(script.includes("hero-blitz-signal--"), "render must apply hero-blitz-signal--<type> class");
+  assert.ok(script.includes("buildBlitzSignalChip(blitzState)"), "renderHeroBlitz must call buildBlitzSignalChip");
+});
+
+test("Blitz signature: filled card toggles is-filled and data-blitz-kind for hierarchy + kind distinction", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const script = fs.readFileSync(path.resolve(__dirname, "..", "script.js"), "utf8");
+  const styles = fs.readFileSync(path.resolve(__dirname, "..", "styles.css"), "utf8");
+
+  // is-filled is added only for a real move and removed in the non-filled states.
+  assert.ok(script.includes('classList.add("is-filled")'), "filled branch must add is-filled");
+  assert.ok(script.includes('classList.remove("is-filled")'), "non-filled states must remove is-filled");
+
+  // data-blitz-kind drives the single-vs-mini visual distinction.
+  assert.ok(script.includes('heroBlitzCard.dataset.blitzKind = move.kind'), "filled branch must set blitzKind from move.kind");
+  assert.ok(styles.includes('[data-blitz-kind="single_stop"]'), "CSS must style single_stop");
+  assert.ok(styles.includes('[data-blitz-kind="mini_route_60"]'), "CSS must style mini_route_60");
+
+  // Signal chip styling + dominant CTA exist in CSS.
+  assert.ok(styles.includes(".hero-blitz-signal"), "CSS must define the Blitz signal chip");
+  assert.ok(/\.hero-idea-strip\.is-filled .hero-panel-actions \.secondary-button/.test(styles), "CSS must elevate the apply CTA in the filled card");
+});
+
+test("blitz.* i18n keys have parity between sv and en in ui-i18n.js", () => {
+  const { buildClientI18nPayload } = require("../server/ui-i18n");
+  const sv = buildClientI18nPayload("sv").translations.sv;
+  const en = buildClientI18nPayload("en").translations.en;
+  const newBlitzKeys = [
+    "blitz.walkMeta", "blitz.walkMetaUnknown", "blitz.emptyStateMeta",
+    "blitz.stops", "blitz.startTimeUnknown", "blitz.thenPrefix",
+    "blitz.guideStopSummaryTags", "blitz.guideStopSummaryDefault", "blitz.guideStopFrom",
+    "blitz.guideOriginFallback", "blitz.guideNextStopFallback", "blitz.guideDateNow",
+    "blitz.guideDayProfile", "blitz.guidePacingDefault", "blitz.guideLegSummary",
+    "blitz.guideAnchorStrong", "blitz.guideAnchorDefault",
+    "blitz.guideWalk", "blitz.guideAnchor", "blitz.guideStopItemDefault",
+    "blitz.specificSecondHandShop", "blitz.specificPulseView", "blitz.specificPulseDrinks",
+    "blitz.specificDrinksCalmArea", "blitz.specificDrinksCalm",
+    "blitz.specificDrinksEnergyArea", "blitz.specificDrinksEnergy",
+    "blitz.specificFoodCalm", "blitz.specificFoodArea", "blitz.specificFood",
+    "blitz.specificView", "blitz.specificOstiense", "blitz.specificAfterDrinks",
+    "blitz.specificWeakFit",
+  ];
+  // Keys that are intentionally identical in SV and EN (brand terms, universal notation)
+  const sameInBoth = new Set(["blitz.guideAnchor"]);
+  for (const key of newBlitzKeys) {
+    assert.ok(typeof sv[key] === "string" && sv[key].length > 0, `sv missing blitz key: ${key}`);
+    assert.ok(typeof en[key] === "string" && en[key].length > 0, `en missing blitz key: ${key}`);
+    if (!sameInBoth.has(key)) {
+      assert.notEqual(sv[key], en[key], `sv and en should differ for key: ${key}`);
+    }
+  }
+});
 
 test("POST /api/route-recommendations returnerar en ärlig unsupported-shape för okänd city istället för att läcka fallback-staden", async () => {
   const server = buildApp().listen(0);
@@ -3107,7 +3330,7 @@ test("POST /api/route-recommendations ger market-led primary route för single s
   try {
     const response = await requestJson(server, {
       method: "POST",
-      path: "/api/route-recommendations",
+      path: "/api/route-recommendations?lang=sv",
       body: {
         dates: ["2026-05-10"],
         start: { type: "preset", label: "Trastevere" },
@@ -3161,7 +3384,7 @@ test("POST /api/route-recommendations låter shop-vintage bära primary route p�
   try {
     const response = await requestJson(server, {
       method: "POST",
-      path: "/api/route-recommendations",
+      path: "/api/route-recommendations?lang=sv",
       body: {
         dates: ["2026-05-13"],
         start: { type: "preset", label: "Trastevere" },
@@ -3216,7 +3439,7 @@ test("POST /api/route-recommendations kan blanda second_hand och vin utan att ta
   try {
     const response = await requestJson(server, {
       method: "POST",
-      path: "/api/route-recommendations",
+      path: "/api/route-recommendations?lang=sv",
       body: {
         dates: ["2026-05-13"],
         start: { type: "preset", label: "Monti" },
@@ -3429,7 +3652,7 @@ test("POST /api/route-recommendations kan väva in ett live-event som faktiskt r
   try {
     const response = await requestJson(server, {
       method: "POST",
-      path: "/api/route-recommendations",
+      path: "/api/route-recommendations?lang=sv",
       body: {
         dates: ["2026-04-16"],
         start: { type: "preset", label: "Trastevere" },

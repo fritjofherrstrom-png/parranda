@@ -1910,6 +1910,7 @@ const districtMapButton = document.getElementById("districtMapButton");
 const routePlannerStart = document.getElementById("routePlannerStart");
 const routePlannerOpenButton = document.getElementById("routePlannerOpenButton");
 const routePlannerManualButton = document.getElementById("routePlannerManualButton");
+const plannerInlineMount = document.getElementById("plannerInlineMount");
 const plannerRestoreNotice = document.getElementById("plannerRestoreNotice");
 const plannerRestoreSummary = document.getElementById("plannerRestoreSummary");
 const plannerRestoreButton = document.getElementById("plannerRestoreButton");
@@ -2035,6 +2036,7 @@ function getFrontendCityConfig() {
 }
 
 const isPlannerEntryRoute = window.__PARRANDA_CITY__?.plannerEntryRoute === true;
+let isPlannerInlineOpen = false;
 const plannerCity = getFrontendCityConfig();
 const plannerCityKey = plannerCity.key;
 const plannerCityLabel = plannerCity.label;
@@ -2884,7 +2886,7 @@ function applyCityModeToShell() {
       routeMatchSummary.textContent = buildNonRomeRouteSummary();
     }
   } else if (routePlannerOpenButton) {
-    routePlannerOpenButton.textContent = isEnglishUi ? "Plan the day" : "Planera dagen";
+    routePlannerOpenButton.textContent = t("shell.curated.plannerCtaLabel", isEnglishUi ? "Build my day" : "Bygg min dag");
     if (routePlannerManualButton) {
       routePlannerManualButton.hidden = false;
       routePlannerManualButton.textContent = isEnglishUi ? "Manual controls" : "Jag vill styra själv";
@@ -3798,8 +3800,9 @@ function isSaneHeroBlitzWalkMinutes(value) {
   return Number.isFinite(value) && value >= 0 && value <= heroBlitzMaxWalkMinutes;
 }
 
-function formatHeroBlitzWalkMeta(value, { unknownLabel = "gångtid okänd" } = {}) {
-  return isSaneHeroBlitzWalkMinutes(value) ? `${value} min gång` : unknownLabel;
+function formatHeroBlitzWalkMeta(value, { unknownLabel } = {}) {
+  const label = unknownLabel !== undefined ? unknownLabel : t("blitz.walkMetaUnknown");
+  return isSaneHeroBlitzWalkMinutes(value) ? tf("blitz.walkMeta", { minutes: value }) : label;
 }
 
 function getBlitzMoveTags(move) {
@@ -3863,53 +3866,59 @@ function buildSpecificHeroBlitzReason(result) {
   const hasViewSignal = tags.has("utsikt");
 
   if (hasSecondHandSignal && availability.kind === "shop" && availability.day_fit !== "strong") {
-    return "Butiksspåret är starkare än marknad idag.";
+    return t("blitz.specificSecondHandShop");
   }
 
   if (pulseActive && pulseTitle) {
     if (hasViewSignal) {
-      return "Pulse pekar mot utsiktsspåret just nu.";
+      return t("blitz.specificPulseView");
     }
 
     if (hasDrinksSignal) {
-      return "Pulse gör det här till ett starkt nästa glas just nu.";
+      return t("blitz.specificPulseDrinks");
     }
   }
 
   if (hasDrinksSignal && hasCalmSignal) {
-    return `Bra nu för vin och lågmäld kväll${area ? ` i ${area}` : ""}.`;
+    return area
+      ? tf("blitz.specificDrinksCalmArea", { area })
+      : t("blitz.specificDrinksCalm");
   }
 
   if (hasDrinksSignal && !hasCalmSignal) {
-    return `Starkast i området om du vill hålla kvällen lokal${area ? ` i ${area}` : ""}.`;
+    return area
+      ? tf("blitz.specificDrinksEnergyArea", { area })
+      : t("blitz.specificDrinksEnergy");
   }
 
   if (hasFoodSignal && hasCalmSignal) {
-    return "Bra reset utan att blåsa upp kvällen.";
+    return t("blitz.specificFoodCalm");
   }
 
   if (hasFoodSignal) {
-    return `Låg friktion och lätt att fortsätta${area ? ` mot ${area}` : ""}.`;
+    return area
+      ? tf("blitz.specificFoodArea", { area })
+      : t("blitz.specificFood");
   }
 
   if (hasViewSignal) {
-    return "Bra nu om du vill få in utsikt utan att dra i gång en större runda.";
+    return t("blitz.specificView");
   }
 
   if (move.what_to_do_after) {
     const followup = String(move.what_to_do_after || "").trim();
 
     if (/ostiense/i.test(followup)) {
-      return "Låg friktion och lätt att fortsätta mot Ostiense.";
+      return t("blitz.specificOstiense");
     }
 
-    if (/\b(vin|glas|drink|bar)\b/i.test(followup)) {
-      return "Bra nu om du vill landa i ett glas utan att spräcka kvällen.";
+    if (/\b(vin|glas|drink|bar|wine|glass)\b/i.test(followup)) {
+      return t("blitz.specificAfterDrinks");
     }
   }
 
   if (availability.day_fit === "weak" && availability.note) {
-    return "Dubbelkolla läget, men det här spåret håller fortfarande ihop nu.";
+    return t("blitz.specificWeakFit");
   }
 
   if (secondaryReason) {
@@ -3931,9 +3940,7 @@ function buildHeroBlitzMeta(result) {
   const move = result?.best_move || null;
 
   if (!move) {
-    return isEnglishUi
-      ? "Place, time, Pulse, and availability are weighed in the same decision."
-      : "Plats, tid, Pulse och availability vägs in i samma beslut.";
+    return t("blitz.emptyStateMeta");
   }
 
   if (move.kind === "mini_route_60") {
@@ -3943,9 +3950,9 @@ function buildHeroBlitzMeta(result) {
 
     return [
       "60 min",
-      stopCount ? `${stopCount} stopp` : null,
+      stopCount ? tf("blitz.stops", { count: stopCount }) : null,
       km,
-      formatHeroBlitzWalkMeta(startMinutes, { unknownLabel: "starttid okänd" }),
+      formatHeroBlitzWalkMeta(startMinutes, { unknownLabel: t("blitz.startTimeUnknown") }),
     ]
       .filter(Boolean)
       .join(" • ");
@@ -3988,7 +3995,8 @@ function buildHeroBlitzFollowup(result) {
     return "";
   }
 
-  if (!/\b(stanna|låt|fortsätt|kör)\b/i.test(followup)) {
+  // SV verbs: stanna, låt, fortsätt, kör — EN verbs: stay, let, run (server blitz.after* strings)
+  if (!/\b(stanna|låt|fortsätt|kör|stay|let|run)\b/i.test(followup)) {
     return "";
   }
 
@@ -3998,7 +4006,21 @@ function buildHeroBlitzFollowup(result) {
 function buildBlitzFollowupText(result) {
   const followup = buildHeroBlitzFollowup(result);
 
-  return followup ? `Sedan: ${followup}` : "";
+  return followup ? t("blitz.thenPrefix") + followup : "";
+}
+
+// The "right now" signature: surface the actual live Pulse signal as a typed
+// chip (e.g. EVENING WINDOW, GOLDEN HOUR) instead of a generic "Pulse" tag.
+// signal_label is server-localized and only present for chippable signal types
+// (see CHIPPED_SIGNAL_TYPES in blitz-engine.js); when it is absent the card
+// falls back to the generic Pulse tag in buildBlitzTagTexts.
+function buildBlitzSignalChip(result) {
+  const pulse = (result?.best_move || {}).pulse_context;
+  const label = pulse?.signal_label;
+  if (!label) {
+    return null;
+  }
+  return { label, signalType: pulse.signal_type || "default" };
 }
 
 function buildBlitzTagTexts(result) {
@@ -4007,7 +4029,10 @@ function buildBlitzTagTexts(result) {
 
   tags.push(move.kind === "mini_route_60" ? "60 min" : t("blitz.nextStop", "Nästa stopp"));
 
-  if (move.pulse_context?.title) {
+  // Generic Pulse tag only when there is pulse context but no typed signal chip
+  // — the signal chip (buildBlitzSignalChip) takes precedence when available so
+  // the two never both render for the same move.
+  if (move.pulse_context?.title && !move.pulse_context?.signal_label) {
     tags.push("Pulse");
   }
 
@@ -4024,12 +4049,12 @@ function createBlitzGuideStop(stop, index, originLabel, previousLabel = null) {
     label: stop.label,
     area: stop.area,
     summary: stop.tags?.length
-      ? `Blitz valde stoppet för ${stop.tags.slice(0, 3).join(", ")}.`
-      : "Kompakt Blitz-stopp för nästa timme.",
+      ? tf("blitz.guideStopSummaryTags", { tags: stop.tags.slice(0, 3).join(", ") })
+      : t("blitz.guideStopSummaryDefault"),
     meta: [
-      index === 0 ? `Från ${originLabel}` : null,
+      index === 0 ? tf("blitz.guideStopFrom", { label: originLabel }) : null,
       Number.isFinite(stop.walk_from_previous_minutes)
-        ? `${stop.walk_from_previous_minutes} min gång`
+        ? tf("blitz.walkMeta", { minutes: stop.walk_from_previous_minutes })
         : null,
     ]
       .filter(Boolean)
@@ -4078,11 +4103,11 @@ function buildBlitzRouteGuideView(result) {
     path:
       routeStops.length > 1
         ? `${context.origin_label} -> ${routeStops.map((stop) => stop.label).join(" -> ")}`
-        : `${context.origin_label} -> ${routeStops[0]?.label || "nästa stopp"}`,
-    anchor: `Start: ${context.origin_label || "Din plats"}`,
-    walk: `Mini-rutt • slut: ${lastStop?.area || lastStop?.label || "öppet"}`,
-    startAnchorLabel: context.origin_label || "Din plats",
-    endAnchorLabel: lastStop?.label || context.origin_label || "Din plats",
+        : `${context.origin_label} -> ${routeStops[0]?.label || t("blitz.guideNextStopFallback")}`,
+    anchor: tf("blitz.guideAnchor", { origin: context.origin_label || t("blitz.guideOriginFallback") }),
+    walk: tf("blitz.guideWalk", { area: lastStop?.area || lastStop?.label || t("blitz.guideNextStopFallback") }),
+    startAnchorLabel: context.origin_label || t("blitz.guideOriginFallback"),
+    endAnchorLabel: lastStop?.label || context.origin_label || t("blitz.guideOriginFallback"),
     routeShapeLabel: "Blitz",
     routeShape: "arc",
     routeLink: createRouteDirectionsUrl(routePoints),
@@ -4095,9 +4120,9 @@ function buildBlitzRouteGuideView(result) {
     budgetNote: null,
     hiddenMentions: [],
     barMentions: [],
-    dateLabel: context.date ? formatSwedishDate(context.date) : "Blitz just nu",
-    dayProfileLabel: "Nästa timmen",
-    pacingLabel: move.effort || "Kompakt",
+    dateLabel: context.date ? formatSwedishDate(context.date) : t("blitz.guideDateNow"),
+    dayProfileLabel: t("blitz.guideDayProfile"),
+    pacingLabel: move.effort || t("blitz.guidePacingDefault"),
     anchorZone: lastStop?.area || buildUnavailableCityLabel(),
     geoFitNote: null,
     longestLegMinutes: Math.max(...routeStops.map((stop) => Number(stop.walk_from_previous_minutes) || 0), 0),
@@ -4109,19 +4134,19 @@ function buildBlitzRouteGuideView(result) {
         )
       : 0,
     legSummary: Number.isFinite(move.walking_minutes)
-      ? `${move.walking_minutes} min gång fördelat över nästa timme.`
+      ? tf("blitz.guideLegSummary", { minutes: move.walking_minutes })
       : null,
     engineBadges: ["Blitz", move.availability?.kind || null].filter(Boolean),
     anchorExplanation:
       move.availability?.day_fit === "strong"
-        ? "Blitz trycker upp det här spåret eftersom dagen faktiskt passar den här typen av stopp just nu."
-        : "Blitz håller rutten kompakt och väljer stopp som fungerar här och nu utan att bli en halv dagsplan.",
+        ? t("blitz.guideAnchorStrong")
+        : t("blitz.guideAnchorDefault"),
     guideStops: routeStops.map((stop, index) =>
       createBlitzGuideStop(
         stop,
         index,
-        context.origin_label || "Din plats",
-        index === 1 ? context.origin_label || "Din plats" : routeStops[index - 1]?.label || null,
+        context.origin_label || t("blitz.guideOriginFallback"),
+        index === 1 ? context.origin_label || t("blitz.guideOriginFallback") : routeStops[index - 1]?.label || null,
       ),
     ),
     stopItems: routeStops.map((stop, index) => ({
@@ -4129,7 +4154,7 @@ function buildBlitzRouteGuideView(result) {
       label: stop.label,
       area: stop.area,
       tagSummary: (stop.tags || []).slice(0, 3).join(" • "),
-      summary: stop.tags?.length ? stop.tags.join(", ") : "Blitz-stopp",
+      summary: stop.tags?.length ? stop.tags.join(", ") : t("blitz.guideStopItemDefault"),
       text: `${index + 1}. ${stop.label}`,
       query: stop.label,
       source: "curated",
@@ -4172,6 +4197,8 @@ function renderHeroBlitz() {
 
     if (heroBlitzCard) {
       heroBlitzCard.dataset.blitzKind = "preview";
+      heroBlitzCard.classList.remove("is-filled");
+      heroBlitzCard.classList.remove("has-signal");
     }
     heroBlitzLabel.textContent = previewCard.label;
     heroBlitzTitle.textContent = previewCard.title;
@@ -4207,6 +4234,8 @@ function renderHeroBlitz() {
   if (blitzLoading && !blitzState?.best_move) {
     if (heroBlitzCard) {
       heroBlitzCard.dataset.blitzKind = "loading";
+      heroBlitzCard.classList.remove("is-filled");
+      heroBlitzCard.classList.remove("has-signal");
     }
     heroBlitzLabel.textContent = "BLITZ";
     heroBlitzTitle.textContent = t("blitz.loadingTitle", "Laddar nästa drag...");
@@ -4236,6 +4265,8 @@ function renderHeroBlitz() {
   if (!move) {
     if (heroBlitzCard) {
       heroBlitzCard.dataset.blitzKind = "empty";
+      heroBlitzCard.classList.remove("is-filled");
+      heroBlitzCard.classList.remove("has-signal");
     }
     heroBlitzLabel.textContent = "BLITZ";
     heroBlitzTitle.textContent = blitzInlineStatus
@@ -4261,6 +4292,7 @@ function renderHeroBlitz() {
 
   if (heroBlitzCard) {
     heroBlitzCard.dataset.blitzKind = move.kind || "single_stop";
+    heroBlitzCard.classList.add("is-filled");
   }
   blitzInlineStatus = "";
   heroBlitzLabel.textContent = buildHeroBlitzLabel(move);
@@ -4272,6 +4304,18 @@ function renderHeroBlitz() {
   heroBlitzFollowup.hidden = !followupText;
   heroBlitzFollowup.textContent = followupText;
   heroBlitzTags.innerHTML = "";
+  const signalChip = buildBlitzSignalChip(blitzState);
+  if (heroBlitzCard) {
+    // has-signal keeps the live signal chip visible even where the secondary
+    // tag row is decluttered away on narrow viewports (Blitz is phone-first).
+    heroBlitzCard.classList.toggle("has-signal", Boolean(signalChip));
+  }
+  if (signalChip) {
+    const chip = document.createElement("span");
+    chip.className = `hero-blitz-signal hero-blitz-signal--${signalChip.signalType}`;
+    chip.textContent = signalChip.label;
+    heroBlitzTags.appendChild(chip);
+  }
   buildBlitzTagTexts(blitzState).forEach((tagText) => {
     const chip = document.createElement("span");
     chip.textContent = tagText;
@@ -6741,10 +6785,69 @@ function updatePlannerLaunchSummary(prefix = "") {
   plannerLaunchSummary.textContent = summary;
 }
 
+function buildPlannerOpenUrl(mode = plannerAutoMode) {
+  const params = new URLSearchParams(window.location.search);
+  params.set("planner", "open");
+  if (mode === plannerManualMode) {
+    params.set("mode", "manual");
+  } else {
+    params.delete("mode");
+  }
+  const qs = params.toString();
+  return `${window.location.pathname}${qs ? `?${qs}` : ""}`;
+}
+
+function showPlannerInline(mode = plannerAutoMode, options = {}) {
+  setPlannerMode(mode);
+  if (mode === plannerManualMode && plannerFineTuneDetails) {
+    plannerFineTuneDetails.open = true;
+  }
+
+  if (routePlannerStart) {
+    routePlannerStart.hidden = false;
+    routePlannerStart.removeAttribute("aria-modal");
+    routePlannerStart.classList.add("planner-entry-inline");
+    if (plannerInlineMount && routePlannerStart.parentElement !== plannerInlineMount) {
+      plannerInlineMount.hidden = false;
+      plannerInlineMount.appendChild(routePlannerStart);
+    }
+  }
+
+  if (plannerInlineMount) {
+    plannerInlineMount.hidden = false;
+  }
+  if (plannerModalBackdrop) {
+    plannerModalBackdrop.hidden = true;
+  }
+  if (closePlannerModalButton) {
+    closePlannerModalButton.hidden = true;
+  }
+
+  document.body.classList.add("is-planner-entry", "is-planner-inline-open");
+  document.body.classList.remove("is-planner-open");
+  isPlannerInlineOpen = true;
+
+  const seedLabel = options.seedLabel;
+  if (seedLabel) {
+    try { setPlannerFieldFromLabel("home_base", seedLabel); }
+    catch (_e) { /* silent fallback */ }
+  }
+
+  switchTab("routes");
+  openLiveEdition({ scroll: false });
+  maybeAutoExpandHomeBase();
+
+  if (options.focus !== false) {
+    window.setTimeout(() => {
+      routeDateFrom?.focus();
+    }, 40);
+  }
+}
+
 function openPlannerModal() {
   // In planner-entry-route mode the planner is already inline-visible —
   // skip modal overlay logic so it is never treated as a dismissible dialog.
-  if (isPlannerEntryRoute) return;
+  if (isPlannerEntryRoute || isPlannerInlineOpen) return;
 
   switchTab("routes");
 
@@ -6777,7 +6880,7 @@ function openPlannerModalForMode(mode = plannerAutoMode) {
 function closePlannerModal() {
   // In planner-entry-route mode the planner cannot be dismissed —
   // it is the primary page content, not a dialog.
-  if (isPlannerEntryRoute) return;
+  if (isPlannerEntryRoute || isPlannerInlineOpen) return;
 
   if (routePlannerStart) {
     routePlannerStart.hidden = true;
@@ -9246,14 +9349,14 @@ async function registerServiceWorker() {
       return;
     }
 
-    await navigator.serviceWorker.register("./sw.js");
+    await navigator.serviceWorker.register("/sw.js", { scope: "/" });
   } catch (error) {
     console.error("Service worker registration failed", error);
   }
 }
 
 function switchTab(tabName) {
-  if (tabName !== "routes" && routePlannerStart && !routePlannerStart.hidden) {
+  if (tabName !== "routes" && routePlannerStart && !routePlannerStart.hidden && !isPlannerInlineOpen) {
     closePlannerModal();
   }
 
@@ -11386,11 +11489,19 @@ plannerRestoreDismissButton?.addEventListener("click", () => {
 });
 
 routePlannerOpenButton?.addEventListener("click", () => {
-  openPlannerModalForMode(plannerAutoMode);
+  if (isPlannerInlineOpen) {
+    showPlannerInline(plannerAutoMode);
+    return;
+  }
+  window.location.href = buildPlannerOpenUrl(plannerAutoMode);
 });
 
 routePlannerManualButton?.addEventListener("click", () => {
-  openPlannerModalForMode(plannerManualMode);
+  if (isPlannerInlineOpen) {
+    showPlannerInline(plannerManualMode);
+    return;
+  }
+  window.location.href = buildPlannerOpenUrl(plannerManualMode);
 });
 
 closePlannerModalButton?.addEventListener("click", () => {
@@ -11584,64 +11695,13 @@ loadPlannerOptions().then(() => {
   updateWalkingKmLabel();
   renderRouteResults();
 
-  if (isPlannerEntryRoute) {
-    // Planner-entry route (/:city/plan): the planner is the primary, embedded
-    // page content, with the city's existing context (Pulse / Districts / Map)
-    // kept directly below it via the normal tab-nav and panels.  We hide only
-    // the framing that would precede the planner or duplicate context: the hero
-    // exploration copy, the landing Blitz strip, and the large Pulse teaser card
-    // (the full Pulse edition renders below as the default tab).  The tab-nav is
-    // intentionally left visible.
-    document.querySelector(".hero-content")?.classList.add("planner-entry-hidden");
-    document.querySelector(".hero-quickstart")?.classList.add("planner-entry-hidden");
-    document.getElementById("cityPulseTeaser")?.classList.add("planner-entry-hidden");
-
-    if (routePlannerStart) {
-      routePlannerStart.hidden = false;
-      routePlannerStart.removeAttribute("aria-modal");
-      routePlannerStart.classList.add("planner-entry-inline");
-
-      // Lift the planner above the tab-nav so the page reads:
-      // header → embedded planner → tab-nav → active panel (Pulse default).
-      const tabNav = document.querySelector(".tab-nav");
-      if (tabNav?.parentElement) {
-        tabNav.parentElement.insertBefore(routePlannerStart, tabNav);
-      }
-    }
-    if (closePlannerModalButton) {
-      closePlannerModalButton.hidden = true;
-    }
-    document.body.classList.add("is-planner-entry");
-
-    // Pulse is the default city-context tab shown under the planner.
-    heroLiveButton?.classList.add("active");
-    switchTab("routes");
-    openLiveEdition({ scroll: false });
-
-    // Support ?mode=manual on the plan route.
-    const params = new URLSearchParams(location.search);
-    if (params.get("mode") === "manual") {
-      setPlannerMode(plannerManualMode);
-      if (plannerFineTuneDetails) plannerFineTuneDetails.open = true;
-    }
-
-    // Seed the home base from ?seed_label (e.g. the landing Blitz → Plan handoff).
-    const plannerSeedLabel = params.get("seed_label");
-    if (plannerSeedLabel) {
-      try { setPlannerFieldFromLabel("home_base", plannerSeedLabel); }
-      catch (_e) { /* silent fallback */ }
-    }
-  } else {
-    // Legacy ?planner=open compat on the normal city page.
-    const params = new URLSearchParams(location.search);
-    if (params.get("planner") === "open") {
-      const seedLabel = params.get("seed_label");
-      if (seedLabel) {
-        try { setPlannerFieldFromLabel("home_base", seedLabel); }
-        catch (_e) { /* silent fallback */ }
-      }
-      openPlannerModal();
-    }
+  const params = new URLSearchParams(location.search);
+  const shouldOpenInlinePlanner = isPlannerEntryRoute || params.get("planner") === "open";
+  if (shouldOpenInlinePlanner) {
+    showPlannerInline(params.get("mode") === "manual" ? plannerManualMode : plannerAutoMode, {
+      seedLabel: params.get("seed_label"),
+      focus: false,
+    });
   }
 
   // Reveal the home-base section if it already carries intent (mode != auto,

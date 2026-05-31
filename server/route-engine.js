@@ -4869,30 +4869,50 @@ function buildDynamicRouteMentions({
     }))
     .filter((entry) => entry.score > 0);
 
-  const hiddenMentions = areHiddenMentionsRelevant(preferences)
-    ? pickRouteMentions(hiddenCandidates, 4)
-    : [];
+  // Bars win: pick bar mentions first, then exclude those names from the
+  // hidden-gem candidates so the two buckets are mutually exclusive. Hidden
+  // mentions backfill from the next best hidden candidate rather than losing
+  // a slot, because pickRouteMentions simply consumes the filtered list.
   const barMentions = areBarMentionsRelevant(preferences)
     ? pickRouteMentions(barCandidates, 4)
     : [];
+  const barNameKeys = new Set(barMentions.map(slugifyText));
+  const hiddenCandidatesFiltered = hiddenCandidates.filter(
+    ({ item }) => !barNameKeys.has(slugifyText(item.name)),
+  );
+  const hiddenMentions = areHiddenMentionsRelevant(preferences)
+    ? pickRouteMentions(hiddenCandidatesFiltered, 4)
+    : [];
+
+  // Template fallback path applies the same cross-bucket exclusion.
+  const resolvedBarMentions =
+    barMentions.length > 0
+      ? barMentions
+      : areBarMentionsRelevant(preferences)
+        ? (template?.barMentions || [])
+            .filter((name) => Boolean(findCatalogItemByName(name)) && isNotARouteStop(name))
+            .slice(0, 4)
+        : [];
+
+  const resolvedBarNameKeys = new Set(resolvedBarMentions.map(slugifyText));
+
+  const resolvedHiddenMentions =
+    hiddenMentions.length > 0
+      ? hiddenMentions
+      : areHiddenMentionsRelevant(preferences)
+        ? (template?.hiddenMentions || [])
+            .filter(
+              (name) =>
+                Boolean(findCatalogItemByName(name)) &&
+                isNotARouteStop(name) &&
+                !resolvedBarNameKeys.has(slugifyText(name)),
+            )
+            .slice(0, 4)
+        : [];
 
   return {
-    hiddenMentions:
-      hiddenMentions.length > 0
-        ? hiddenMentions
-        : areHiddenMentionsRelevant(preferences)
-          ? (template?.hiddenMentions || [])
-              .filter((name) => Boolean(findCatalogItemByName(name)) && isNotARouteStop(name))
-              .slice(0, 4)
-          : [],
-    barMentions:
-      barMentions.length > 0
-        ? barMentions
-        : areBarMentionsRelevant(preferences)
-          ? (template?.barMentions || [])
-              .filter((name) => Boolean(findCatalogItemByName(name)) && isNotARouteStop(name))
-              .slice(0, 4)
-          : [],
+    hiddenMentions: resolvedHiddenMentions,
+    barMentions: resolvedBarMentions,
   };
 }
 

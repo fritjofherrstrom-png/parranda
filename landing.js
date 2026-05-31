@@ -17,7 +17,7 @@
   }
 
   function currentLang() {
-    return window.__PARRANDA_LANGUAGE__ || "sv";
+    return window.__PARRANDA_LANGUAGE__ || "en";
   }
 
   function resolveEntry(raw) {
@@ -84,8 +84,7 @@
     }
     function switchLang(nextLang) {
       var params = new URLSearchParams(window.location.search);
-      if (nextLang === "sv") params.delete("lang");
-      else params.set("lang", nextLang);
+      params.set("lang", nextLang);
       var qs = params.toString();
       window.location.href = window.location.pathname + (qs ? "?" + qs : "");
     }
@@ -130,8 +129,10 @@
       var val = cityInput ? cityInput.value : "";
       var cityPath = resolveCity(val);
       if (cityPath) {
-        var langParam = currentLang() === "en" ? "?lang=en" : "";
-        window.location.href = cityPath + "/plan" + langParam;
+        var params = new URLSearchParams();
+        params.set("planner", "open");
+        params.set("lang", currentLang());
+        window.location.href = cityPath + "?" + params.toString();
         return;
       }
       if (val.trim()) {
@@ -445,15 +446,15 @@
       if (!city) return;
       var stop = getBlitzPrimaryStop(landingBlitzState);
       var label = stop && (stop.name || stop.label);
-      // Navigate to the planner-entry route (not the legacy ?planner=open modal),
-      // preserving lang and carrying the Blitz stop as the home-base seed.
+      // Navigate into the city shell with the planner opened inline, preserving
+      // lang and carrying the Blitz stop as the home-base seed.
       var params = new URLSearchParams(window.location.search);
-      params.delete("planner");
+      params.set("planner", "open");
       params.delete("seed");
       params.delete("seed_label");
       if (label) params.set("seed_label", label);
       var qs = params.toString();
-      window.location.href = "/" + city + "/plan" + (qs ? "?" + qs : "");
+      window.location.href = "/" + city + (qs ? "?" + qs : "");
     });
   }
   document.addEventListener("keydown", function (e) {
