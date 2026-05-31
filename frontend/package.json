@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "astro dev --host 127.0.0.1",
     "build": "astro build",
+    "check": "tsc --noEmit",
     "preview": "astro preview --host 127.0.0.1"
   },
   "devDependencies": {

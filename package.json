@@ -9,6 +9,7 @@
     "start": "node server.js",
     "test": "node --test",
     "build:frontend": "npm --prefix frontend run build",
+    "check:frontend": "npm --prefix frontend run check",
     "dev:frontend": "npm --prefix frontend run dev"
   },
   "keywords": [

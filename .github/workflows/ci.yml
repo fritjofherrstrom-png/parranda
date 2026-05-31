@@ -26,3 +26,12 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
+
+      - name: Typecheck frontend foundation
+        run: npm run check:frontend
+
+      - name: Build frontend foundation
+        run: npm run build:frontend
