@@ -15,9 +15,9 @@ Parranda ska inte bedömas som en vanlig reseguide eller POI-lista. Det viktiga 
 
 Be testaren köra minst tre scenarier, gärna i olika städer:
 
-1. `Barcelona -> plan` med `second hand + kultur + low-key`
-2. `Rome -> plan` med `vin + historia + mer kväll`
-3. `Athens -> plan` med ett tunt/preview-område och kontrollera om appen är ärlig med confidence
+1. `Barcelona -> planner open` (`/barcelona?planner=open`) med `second hand + kultur + low-key`
+2. `Rome -> planner open` (`/rome?planner=open`) med `vin + historia + mer kväll`
+3. `Athens -> planner open` (`/athens?planner=open`) med ett tunt/preview-område och kontrollera om appen är ärlig med confidence
 
 Frågor:
 

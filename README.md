@@ -8,7 +8,7 @@ Det här repot är alpha-versionen för att snabbt kunna visa produkten, få ska
 
 ## Nuvarande alpha
 
-- Route-first planner på `/:city/plan` med start/slut, datum, gångmål, preferenser och manuell eller automatisk start/slut-logik
+- Inline planner via `/:city?planner=open`, med `/:city/plan` bevarad som deep link till samma city-shell/planner-state
 - Multi-city shell med Rome, Barcelona och Athens preview i stället för en Rom-låst app
 - Pulse-lager för stadens dagsläge: väder, live-events, timingfönster och generiska/city-owned signaler
 - Blitz: nästa drag, just nu, baserat på plats, tid, city context och dagsläge
@@ -65,13 +65,14 @@ http://localhost:8000/
 http://localhost:8000/rome
 http://localhost:8000/barcelona
 http://localhost:8000/athens
+http://localhost:8000/barcelona?planner=open
 http://localhost:8000/barcelona/plan
 ```
 
-Lägg till `?lang=en` för engelsk UI-copy:
+English är default. Lägg till `?lang=sv` för svensk UI-copy:
 
 ```text
-http://localhost:8000/barcelona?lang=en
+http://localhost:8000/barcelona?lang=sv
 ```
 
 ## Förhandsgranska på mobilen
