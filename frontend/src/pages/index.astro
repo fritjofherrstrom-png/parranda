@@ -1,0 +1,36 @@
+---
+import { contractChecks } from '../foundation-contract';
+import '../styles/tokens.css';
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Parranda frontend foundation</title>
+    <meta
+      name="description"
+      content="Static Astro proof page for Parranda frontend foundation. This page does not take over any production route."
+    />
+  </head>
+  <body>
+    <main class="foundation-shell" aria-labelledby="foundation-title">
+      <p class="eyebrow">Astro foundation proof</p>
+      <h1 id="foundation-title">Parranda frontend workspace</h1>
+      <p class="lede">
+        This isolated static page proves that Astro, TypeScript and Parranda design tokens can build without changing the current Express production app.
+      </p>
+
+      <section class="contract-card" aria-labelledby="contract-title">
+        <h2 id="contract-title">Migration contract guardrails</h2>
+        <ul>
+          {contractChecks.map((item) => <li>{item}</li>)}
+        </ul>
+      </section>
+
+      <p class="footnote">
+        Foundation only: no routing rewrite, no i18n rewrite, no Planner/Pulse/Blitz rewrite, no production takeover.
+      </p>
+    </main>
+  </body>
+</html>
