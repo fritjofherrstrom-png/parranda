@@ -1304,7 +1304,8 @@ body.is-planner-entry .planner-modal-backdrop {
 }
 
 body.is-planner-inline-open .planner-launch-markers,
-body.is-planner-inline-open .planner-launch-actions {
+body.is-planner-inline-open .planner-launch-actions,
+body.is-planner-inline-open .planner-launch-copy {
   display: none;
 }
 
@@ -1345,12 +1346,13 @@ body.is-planner-inline-open .planner-modal-backdrop {
 
 body.is-planner-inline-open .planner-modal-head .eyebrow,
 body.is-planner-inline-open #plannerModalTitle,
-body.is-planner-inline-open #plannerModeLead {
+body.is-planner-inline-open #plannerModeLead,
+body.is-planner-inline-open .planner-mode-switch {
   display: none;
 }
 
 body.is-planner-inline-open .planner-modal-head {
-  margin-bottom: 16px;
+  margin-bottom: 0;
 }
 
 /* Accessible touch targets for planner-entry tabs. */
@@ -2400,6 +2402,70 @@ body.is-planner-entry .planner-mode-button.is-active {
   border-radius: 24px;
   background: rgba(255, 252, 247, 0.82);
   border: 1px solid rgba(70, 38, 18, 0.08);
+}
+
+.planner-start-context-shell {
+  margin-bottom: 18px;
+  background: linear-gradient(135deg, rgba(255, 252, 247, 0.94), rgba(247, 231, 205, 0.58));
+  border-color: rgba(175, 77, 36, 0.16);
+}
+
+.planner-start-context-head h3 {
+  margin: 0.2rem 0 0.35rem;
+  font-size: clamp(1.18rem, 2vw, 1.46rem);
+}
+
+.planner-start-context-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.planner-start-context-option {
+  display: grid;
+  gap: 6px;
+  min-height: 118px;
+  padding: 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(70, 38, 18, 0.1);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(70, 38, 18, 0.05);
+}
+
+.planner-start-context-option strong {
+  color: var(--accent-deep);
+  font-size: 0.98rem;
+}
+
+.planner-start-context-option span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.planner-start-context-option:hover,
+.planner-start-context-option:focus-visible,
+.planner-start-context-option.is-active {
+  border-color: rgba(175, 77, 36, 0.42);
+  background: linear-gradient(135deg, rgba(181, 93, 53, 0.14), rgba(226, 201, 157, 0.24));
+  outline: none;
+}
+
+.planner-start-context-fallback {
+  margin: 0;
+}
+
+.planner-start-context-secondary {
+  justify-self: start;
+  width: auto;
+  padding-inline: 16px;
+}
+
+.planner-native-mode-field {
+  display: none;
 }
 
 .planner-fine-tune-details {
@@ -4804,6 +4870,14 @@ body.is-printing-guide #routeGuideDrawer {
   .planner-modal-head,
   .city-pulse-timeline-head,
   .planner-advanced-summary,
+  .planner-start-context-options {
+    grid-template-columns: 1fr;
+  }
+
+  .planner-start-context-option {
+    min-height: auto;
+  }
+
   .planner-fine-tune-summary {
     flex-direction: column;
     align-items: flex-start;
@@ -4876,6 +4950,145 @@ body.is-printing-guide #routeGuideDrawer {
 }
 
 @media (max-width: 680px) {
+  body.is-planner-inline-open {
+    background: var(--bg);
+  }
+
+  body.is-planner-inline-open .page-shell {
+    width: 100%;
+    margin: 0;
+  }
+
+  body.is-planner-inline-open .hero {
+    padding: 12px 10px 18px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  body.is-planner-inline-open .topbar {
+    margin: 0 6px 10px;
+  }
+
+  body.is-planner-inline-open .planner-launch-strip {
+    padding: 12px;
+    border: 1px solid rgba(77, 49, 32, 0.08);
+    border-radius: 24px;
+    box-shadow: 0 16px 36px rgba(70, 38, 18, 0.08);
+    background: rgba(255, 252, 247, 0.94);
+  }
+
+  body.is-planner-inline-open .planner-inline-mount {
+    margin-top: 0;
+  }
+
+  body.is-planner-inline-open .route-builder-form {
+    margin-top: 0;
+  }
+
+  body.is-planner-inline-open .planner-panel,
+  body.is-planner-inline-open .planner-panel-priority,
+  body.is-planner-inline-open .planner-home-base-shell,
+  body.is-planner-inline-open .planner-start-context-shell {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  body.is-planner-inline-open .planner-panel {
+    gap: 10px;
+  }
+
+  body.is-planner-inline-open .planner-panel-priority > .planner-panel-head {
+    display: none;
+  }
+
+  body.is-planner-inline-open .planner-start-context-shell {
+    margin-bottom: 10px;
+  }
+
+  body.is-planner-inline-open .planner-start-context-head {
+    display: block;
+  }
+
+  body.is-planner-inline-open .planner-start-context-head .planner-default-note,
+  body.is-planner-inline-open .planner-start-context-head .planner-panel-copy,
+  body.is-planner-inline-open .planner-start-context-fallback {
+    display: none;
+  }
+
+  body.is-planner-inline-open .planner-start-context-head h3 {
+    margin: 0.1rem 0 0.25rem;
+    font-size: 1.35rem;
+    line-height: 1.08;
+  }
+
+  body.is-planner-inline-open .planner-start-context-head .planner-panel-copy {
+    font-size: 0.96rem;
+    line-height: 1.4;
+  }
+
+  body.is-planner-inline-open .planner-start-context-options {
+    gap: 8px;
+  }
+
+  body.is-planner-inline-open .planner-start-context-option {
+    min-height: auto;
+    padding: 11px 12px;
+    border-radius: 16px;
+    gap: 2px;
+  }
+
+  body.is-planner-inline-open .planner-start-context-option strong {
+    font-size: 1rem;
+    line-height: 1.2;
+  }
+
+  body.is-planner-inline-open .planner-start-context-option span,
+  body.is-planner-inline-open .planner-start-context-fallback,
+  body.is-planner-inline-open .planner-mode-help {
+    font-size: 0.88rem;
+    line-height: 1.35;
+  }
+
+  body.is-planner-inline-open .planner-start-context-secondary {
+    min-height: 36px;
+    padding: 4px 0;
+    font-size: 0.92rem;
+    color: rgba(115, 46, 23, 0.82);
+  }
+
+  body.is-planner-inline-open .planner-inline-grid,
+  body.is-planner-inline-open .planner-preferences,
+  body.is-planner-inline-open .planner-fine-tune-details {
+    margin-top: 10px;
+  }
+
+  body.is-planner-inline-open .preference-chip-grid {
+    gap: 8px;
+  }
+
+  body.is-planner-inline-open .preference-chip {
+    padding: 8px 11px;
+    font-size: 0.88rem;
+  }
+
+  body.is-planner-inline-open .route-mentions-label {
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+  }
+
+  body.is-planner-inline-open .planner-fine-tune-summary {
+    padding: 12px;
+  }
+
+  body.is-planner-inline-open .planner-mobile-actions {
+    margin-top: 12px;
+  }
+
   .page-shell {
     width: min(100% - 18px, 100%);
   }

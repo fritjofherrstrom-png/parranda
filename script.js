@@ -1926,6 +1926,9 @@ const plannerFineTuneDetails = document.getElementById("plannerFineTuneDetails")
 const plannerHomeBaseShell = document.getElementById("plannerHomeBaseShell");
 const homeBaseToggle = document.getElementById("homeBaseToggle");
 const homeBaseBody = document.getElementById("homeBaseBody");
+const startContextOptionButtons = Array.from(
+  document.querySelectorAll("[data-home-base-mode]"),
+);
 const plannerManualShell = document.getElementById("plannerManualShell");
 const routeResults = document.getElementById("routeResults");
 const savedRoutesSection = document.getElementById("savedRoutesSection");
@@ -2889,7 +2892,7 @@ function applyCityModeToShell() {
     routePlannerOpenButton.textContent = t("shell.curated.plannerCtaLabel", isEnglishUi ? "Build my day" : "Bygg min dag");
     if (routePlannerManualButton) {
       routePlannerManualButton.hidden = false;
-      routePlannerManualButton.textContent = isEnglishUi ? "Manual controls" : "Jag vill styra själv";
+      routePlannerManualButton.textContent = isEnglishUi ? "Customize start/end" : "Anpassa start/slut";
     }
   }
 }
@@ -7287,26 +7290,69 @@ function setPresetSelectValue(select, label) {
 }
 
 function expandHomeBase() {
-  if (!homeBaseBody) return;
-  homeBaseBody.hidden = false;
+  if (homeBaseBody) {
+    homeBaseBody.hidden = false;
+  }
   if (homeBaseToggle) {
     homeBaseToggle.setAttribute("aria-expanded", "true");
-    homeBaseToggle.hidden = true;
   }
 }
 
-// Auto-expand the collapsed home-base section when it already carries intent:
-// a non-auto mode (preset / current location / custom) or a filled custom value.
-function maybeAutoExpandHomeBase() {
-  if (!homeBaseBody || !homeBaseBody.hidden) return;
-  const modeNonAuto =
-    homeBaseModeSelect && homeBaseModeSelect.value && homeBaseModeSelect.value !== "auto";
-  const hasCustom = homeBaseCustomInput && homeBaseCustomInput.value.trim().length > 0;
-  if (modeNonAuto || hasCustom) expandHomeBase();
+function collapseHomeBase() {
+  if (homeBaseBody) {
+    homeBaseBody.hidden = true;
+  }
+  if (homeBaseToggle) {
+    homeBaseToggle.setAttribute("aria-expanded", "false");
+  }
 }
 
+// Auto-expand the collapsed home-base section only when it needs extra input:
+// custom base entry, preset selection, or a filled custom value.
+function maybeAutoExpandHomeBase() {
+  if (!homeBaseBody || !homeBaseBody.hidden) return;
+  const modeNeedsInput =
+    homeBaseModeSelect && ["custom", "preset"].includes(homeBaseModeSelect.value);
+  const hasCustom = homeBaseCustomInput && homeBaseCustomInput.value.trim().length > 0;
+  if (modeNeedsInput || hasCustom) expandHomeBase();
+}
+
+function syncStartContextOptionButtons() {
+  const activeMode = homeBaseModeSelect?.value || plannerAutoMode;
+  startContextOptionButtons.forEach((button) => {
+    const isActive = button.dataset.homeBaseMode === activeMode;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
+}
+
+function applyStartContextMode(mode) {
+  if (!homeBaseModeSelect || !mode) return;
+  homeBaseModeSelect.value = mode;
+  if (mode === "custom" || mode === "preset") {
+    expandHomeBase();
+  } else {
+    collapseHomeBase();
+  }
+  setPlannerMode(plannerAutoMode);
+  syncPlannerModeUI();
+  homeBaseModeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+startContextOptionButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    applyStartContextMode(button.dataset.homeBaseMode);
+  });
+});
+
 if (homeBaseToggle) {
-  homeBaseToggle.addEventListener("click", expandHomeBase);
+  homeBaseToggle.addEventListener("click", () => {
+    if (homeBaseBody?.hidden) {
+      expandHomeBase();
+    } else {
+      collapseHomeBase();
+    }
+  });
 }
 
 function setPlannerFieldFromLabel(pointKey, label) {
@@ -7481,6 +7527,7 @@ function syncPlannerModeUI() {
   updatePointModeUI("home_base", homeBaseModeSelect?.value || plannerAutoMode);
   updatePointModeUI("start", startModeSelect?.value || plannerAutoMode);
   updatePointModeUI("end", endModeSelect?.value || plannerAutoMode);
+  syncStartContextOptionButtons();
 
   if (homeBaseModeHint) {
     homeBaseModeHint.textContent = getPlannerModeHint("home_base", homeBaseModeSelect?.value);
@@ -7497,7 +7544,7 @@ function syncPlannerModeUI() {
   }
 
   if (plannerFineTuneDetails) {
-    plannerFineTuneDetails.hidden = activePlannerMode !== plannerManualMode;
+    plannerFineTuneDetails.hidden = false;
   }
 
   if (plannerManualShell) {
@@ -11199,6 +11246,12 @@ plannerModeButtons.forEach((button) => {
   button.addEventListener("click", () => {
     setPlannerMode(button.dataset.plannerMode);
   });
+});
+
+plannerFineTuneDetails?.addEventListener("toggle", () => {
+  if (plannerFineTuneDetails.open && activePlannerMode !== plannerManualMode) {
+    setPlannerMode(plannerManualMode);
+  }
 });
 
 homeBaseModeSelect?.addEventListener("change", () => {

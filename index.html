@@ -416,6 +416,103 @@
                       __PARRANDA_I18N_AUTO_CHIP__
                     </span>
                   </div>
+                  <section id="plannerHomeBaseShell" class="planner-home-base-shell planner-start-context-shell">
+                    <div class="planner-panel-head planner-start-context-head">
+                      <div>
+                        <p class="eyebrow">__PARRANDA_I18N_START_CONTEXT_EYEBROW__</p>
+                        <h3>__PARRANDA_I18N_START_CONTEXT_TITLE__</h3>
+                        <p class="planner-panel-copy">__PARRANDA_I18N_START_CONTEXT_COPY__</p>
+                      </div>
+                      <span class="planner-default-note">__PARRANDA_I18N_START_CONTEXT_NOTE__</span>
+                    </div>
+                    <div class="planner-start-context-options" role="group" aria-label="__PARRANDA_I18N_START_CONTEXT_ARIA__">
+                      <button
+                        type="button"
+                        class="planner-start-context-option"
+                        data-home-base-mode="current_location"
+                      >
+                        <strong>__PARRANDA_I18N_START_CONTEXT_NEAR_ME__</strong>
+                        <span>__PARRANDA_I18N_START_CONTEXT_NEAR_ME_COPY__</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="planner-start-context-option"
+                        data-home-base-mode="custom"
+                      >
+                        <strong>__PARRANDA_I18N_START_CONTEXT_STAYING__</strong>
+                        <span>__PARRANDA_I18N_START_CONTEXT_STAYING_COPY__</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="planner-start-context-option"
+                        data-home-base-mode="auto"
+                      >
+                        <strong>__PARRANDA_I18N_START_CONTEXT_AUTO__</strong>
+                        <span>__PARRANDA_I18N_START_CONTEXT_AUTO_COPY__</span>
+                      </button>
+                    </div>
+                    <p class="planner-mode-help planner-start-context-fallback">
+                      __PARRANDA_I18N_START_CONTEXT_FALLBACK__
+                    </p>
+                    <button
+                      type="button"
+                      id="homeBaseToggle"
+                      class="planner-home-base-toggle planner-start-context-secondary"
+                      aria-expanded="false"
+                      aria-controls="homeBaseBody"
+                    >
+                      __PARRANDA_I18N_START_CONTEXT_MORE__
+                    </button>
+                    <div id="homeBaseBody" hidden>
+                      <label class="search-box route-lab-field planner-native-mode-field">
+                        <span>__PARRANDA_I18N_HOTEL_OR_AREA__</span>
+                        <select id="homeBaseModeSelect">
+                          <option value="auto">__PARRANDA_I18N_CHOOSE__</option>
+                          <option value="preset">__PARRANDA_I18N_CHOOSE_AREA__</option>
+                          <option value="current_location">__PARRANDA_I18N_MY_LOCATION__</option>
+                          <option value="custom">__PARRANDA_I18N_HOTEL_ADDRESS__</option>
+                        </select>
+                      </label>
+                      <p id="homeBaseModeHint" class="planner-mode-help">
+                        __PARRANDA_I18N_HOME_BASE_AUTO_HINT__
+                      </p>
+                      <label class="search-box route-lab-field" data-mode-field="home-base-preset" hidden>
+                        <span>__PARRANDA_I18N_CHOOSE_AREA__</span>
+                        <select id="homeBasePresetSelect" hidden></select>
+                        <div
+                          id="homeBaseDistrictButtons"
+                          class="planner-district-grid"
+                          role="listbox"
+                          aria-label="__PARRANDA_I18N_PLANNER_ARIA_HOTEL_OR_AREA__"
+                        ></div>
+                        <div id="homeBaseDistrictSubButtons" class="planner-district-subgrid" hidden></div>
+                      </label>
+                      <label class="search-box route-lab-field" data-mode-field="home-base-custom" hidden>
+                        <span>__PARRANDA_I18N_ENTER_HOTEL_ADDRESS_AREA__</span>
+                        <input
+                          id="homeBaseCustomInput"
+                          type="text"
+                          placeholder="__PARRANDA_I18N_HOME_CUSTOM_PLACEHOLDER__"
+                        />
+                      </label>
+                      <div class="route-lab-actions" hidden>
+                        <button
+                          id="useCurrentPlaceAsHomeBaseButton"
+                          class="secondary-button"
+                          type="button"
+                        >
+                          __PARRANDA_I18N_USE_MAP_PLACE__
+                        </button>
+                        <button
+                          id="useGeolocationAsHomeBaseButton"
+                          class="ghost-button"
+                          type="button"
+                        >
+                          __PARRANDA_I18N_USE_MY_LOCATION__
+                        </button>
+                      </div>
+                    </div>
+                  </section>
                   <div class="planner-inline-grid">
                     <label class="search-box route-lab-field">
                       <span>__PARRANDA_I18N_FROM_DATE__</span>
@@ -451,72 +548,7 @@
                       <label class="preference-chip"><input type="checkbox" value="green_walk" /> <span>__PARRANDA_I18N_INTENT_GREEN_WALK__</span></label>
                     </div>
                   </div>
-                  <section id="plannerHomeBaseShell" class="planner-home-base-shell">
-                    <button
-                      type="button"
-                      id="homeBaseToggle"
-                      class="planner-home-base-toggle"
-                      aria-expanded="false"
-                      aria-controls="homeBaseBody"
-                    >
-                      __PARRANDA_I18N_ADD_HOME_BASE__
-                    </button>
-                    <div id="homeBaseBody" hidden>
-                    <div class="planner-panel-head">
-                      <div>
-                        <p class="eyebrow">__PARRANDA_I18N_WHERE_STAYING_EYEBROW__</p>
-                      </div>
-                      <span class="planner-default-note">__PARRANDA_I18N_OPTIONAL__</span>
-                    </div>
-                    <label class="search-box route-lab-field">
-                      <span>__PARRANDA_I18N_HOTEL_OR_AREA__</span>
-                      <select id="homeBaseModeSelect">
-                        <option value="auto">__PARRANDA_I18N_CHOOSE__</option>
-                        <option value="preset">__PARRANDA_I18N_CHOOSE_AREA__</option>
-                        <option value="current_location">__PARRANDA_I18N_MY_LOCATION__</option>
-                        <option value="custom">__PARRANDA_I18N_HOTEL_ADDRESS__</option>
-                      </select>
-                    </label>
-                    <p id="homeBaseModeHint" class="planner-mode-help">
-                      __PARRANDA_I18N_HOME_BASE_AUTO_HINT__
-                    </p>
-                    <label class="search-box route-lab-field" data-mode-field="home-base-preset" hidden>
-                      <span>__PARRANDA_I18N_CHOOSE_AREA__</span>
-                      <select id="homeBasePresetSelect" hidden></select>
-                      <div
-                        id="homeBaseDistrictButtons"
-                        class="planner-district-grid"
-                        role="listbox"
-                        aria-label="__PARRANDA_I18N_PLANNER_ARIA_HOTEL_OR_AREA__"
-                      ></div>
-                      <div id="homeBaseDistrictSubButtons" class="planner-district-subgrid" hidden></div>
-                    </label>
-                    <label class="search-box route-lab-field" data-mode-field="home-base-custom" hidden>
-                      <span>__PARRANDA_I18N_ENTER_HOTEL_ADDRESS_AREA__</span>
-                      <input
-                        id="homeBaseCustomInput"
-                        type="text"
-                        placeholder="__PARRANDA_I18N_HOME_CUSTOM_PLACEHOLDER__"
-                      />
-                    </label>
-                    <div class="route-lab-actions" hidden>
-                      <button
-                        id="useCurrentPlaceAsHomeBaseButton"
-                        class="secondary-button"
-                        type="button"
-                      >
-                        __PARRANDA_I18N_USE_MAP_PLACE__
-                      </button>
-                      <button
-                        id="useGeolocationAsHomeBaseButton"
-                        class="ghost-button"
-                        type="button"
-                      >
-                        __PARRANDA_I18N_USE_MY_LOCATION__
-                      </button>
-                    </div>
-                    </div>
-                  </section>
+
                 </article>
 
                 <details
