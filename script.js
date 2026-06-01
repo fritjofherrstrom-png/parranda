@@ -5011,6 +5011,67 @@ function pulseItemMatchesScope(item, scopeKey) {
   return distanceKm !== null && distanceKm <= getActivePulseRadiusKm();
 }
 
+function getNearestPlannerAreaFromCurrentLocation() {
+  if (!currentLocationCoords) {
+    return null;
+  }
+
+  return getPlannerExactDistrictOptions()
+    .map((item) => ({
+      ...item,
+      distanceKm: pulseDistanceKm(currentLocationCoords, item),
+    }))
+    .filter((item) => Number.isFinite(item.distanceKm))
+    .sort((left, right) => left.distanceKm - right.distanceKm)[0] || null;
+}
+
+function formatNearbyAreaLabel(label) {
+  return String(label || "")
+    .split("/")[0]
+    .trim();
+}
+
+function buildNearbyPulseScopeLabel() {
+  const nearestArea = getNearestPlannerAreaFromCurrentLocation();
+  const areaLabel = formatNearbyAreaLabel(nearestArea?.label);
+  if (areaLabel) {
+    return isEnglishUi
+      ? `Near you · ${areaLabel}`
+      : `Nära dig · ${areaLabel}`;
+  }
+  return cityPulseScopeMeta.nearby.label;
+}
+
+function primePulseNearbyIntent() {
+  activePulseScope = "nearby";
+  activePulseRadiusKey = "2";
+  activePulseTime = "now";
+  cityPulseScopeStatus = isEnglishUi
+    ? "Finding your nearby signals..."
+    : "Hämtar signaler nära dig...";
+  renderCityPulse();
+}
+
+async function scopePulseNearbyFromCurrentLocation() {
+  if (!isCuratedMode) {
+    return;
+  }
+
+  primePulseNearbyIntent();
+  try {
+    await ensureCurrentLocation();
+    cityPulseScopeStatus = "";
+    await openLiveEdition({ date: activeLiveDate, scroll: false });
+  } catch (_error) {
+    activePulseScope = "all";
+    activePulseRadiusKey = "5";
+    cityPulseScopeStatus = isEnglishUi
+      ? `Location access is unavailable right now, so Pulse shows ${buildLiveScopeAllLabel().toLowerCase()} instead. You can still switch back to Near me when permission works.`
+      : `Platsåtkomst saknas just nu, så Pulse visar ${buildLiveScopeAllLabel().toLowerCase()} i stället. Du kan växla tillbaka till Nära dig när platsåtkomst fungerar.`;
+    renderCityPulse();
+  }
+}
+
 function comparePulseItems(left, right) {
   const statusOrder = {
     live: 0,
@@ -5527,7 +5588,7 @@ function createPulseModeButton({ key, label, active, onClick }) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = `city-pulse-mode-button${active ? " active" : ""}`;
-  button.textContent = label;
+  button.textContent = key === "nearby" && active ? buildNearbyPulseScopeLabel() : label;
   button.addEventListener("click", onClick);
   return button;
 }
@@ -5795,7 +5856,10 @@ function renderCityPulse() {
     getFallbackPulseDateLabels(cityPulseState.date || getTodayIsoDate()).dateLabel;
 
   const cityLabel = buildUnavailableCityLabel();
-  const eyebrowCopy = `${tf("pulse.currentIn", { city: cityLabel }, `Aktuellt i ${cityLabel}`)} · ${weekdayLabel} ${dateLabel}`;
+  const liveScopeLabel = activePulseScope === "nearby" && currentLocationCoords
+    ? buildNearbyPulseScopeLabel()
+    : cityLabel;
+  const eyebrowCopy = `${tf("pulse.currentIn", { city: liveScopeLabel }, `Aktuellt i ${liveScopeLabel}`)} · ${weekdayLabel} ${dateLabel}`;
   if (cityPulseEyebrowText) {
     cityPulseEyebrowText.textContent = eyebrowCopy;
   } else if (cityPulseEditionLabel) {
@@ -5941,18 +6005,7 @@ function renderCityPulse() {
         label: cityPulseScopeMeta.nearby.label,
         active: activePulseScope === "nearby",
         onClick: async () => {
-          try {
-            await ensureCurrentLocation();
-            activePulseScope = "nearby";
-            cityPulseScopeStatus = "";
-          } catch (_error) {
-            activePulseScope = "all";
-            cityPulseScopeStatus = isEnglishUi
-              ? `Location access is unavailable right now, so Pulse shows ${buildLiveScopeAllLabel().toLowerCase()} instead of nearby signals.`
-              : `Platsåtkomst saknas just nu, så LIVE visar ${buildLiveScopeAllLabel().toLowerCase()} i stället för nära dig.`;
-          }
-
-          renderCityPulse();
+          await scopePulseNearbyFromCurrentLocation();
         },
       }),
     );
@@ -7326,7 +7379,7 @@ function syncStartContextOptionButtons() {
   });
 }
 
-function applyStartContextMode(mode) {
+async function applyStartContextMode(mode) {
   if (!homeBaseModeSelect || !mode) return;
   homeBaseModeSelect.value = mode;
   if (mode === "custom" || mode === "preset") {
@@ -7337,11 +7390,20 @@ function applyStartContextMode(mode) {
   setPlannerMode(plannerAutoMode);
   syncPlannerModeUI();
   homeBaseModeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+
+  if (mode === "current_location") {
+    await scopePulseNearbyFromCurrentLocation();
+  }
+}
+
+function defaultPlannerEntryToNearMe() {
+  if (homeBaseModeSelect?.value === "current_location") return;
+  return applyStartContextMode("current_location");
 }
 
 startContextOptionButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    applyStartContextMode(button.dataset.homeBaseMode);
+  button.addEventListener("click", async () => {
+    await applyStartContextMode(button.dataset.homeBaseMode);
   });
 });
 
@@ -9368,7 +9430,8 @@ function updateInstallButtonVisibility() {
     return;
   }
 
-  installButton.hidden = !deferredInstallPrompt || isStandaloneApp();
+  const shouldHideFromPrimaryPlannerFlow = isPlannerEntryRoute || isPlannerInlineOpen;
+  installButton.hidden = shouldHideFromPrimaryPlannerFlow || !deferredInstallPrompt || isStandaloneApp();
 }
 
 async function registerServiceWorker() {
@@ -11755,6 +11818,9 @@ loadPlannerOptions().then(() => {
       seedLabel: params.get("seed_label"),
       focus: false,
     });
+    if (params.get("mode") !== "manual" && !params.get("seed_label")) {
+      defaultPlannerEntryToNearMe();
+    }
   }
 
   // Reveal the home-base section if it already carries intent (mode != auto,
