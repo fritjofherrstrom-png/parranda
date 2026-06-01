@@ -7746,7 +7746,8 @@ function ensurePlannerLoadingSlot() {
   const dayCard = plannerDayTemplate.content.firstElementChild.cloneNode(true);
   dayCard.classList.add("is-loading");
   dayCard.querySelector(".planner-day-date").textContent = t("planner.loadingDay", "Planerar dagen");
-  dayCard.querySelector(".planner-day-title").textContent = t("planner.loadingTitle", "Parranda bygger ditt första upplägg");
+  dayCard.querySelector(".planner-day-heading").textContent = t("planner.loadingTitle", "Parranda bygger ditt första upplägg");
+  dayCard.querySelector(".planner-day-title").textContent = "";
   dayCard.querySelector(".planner-day-summary").textContent =
     t("planner.loadingSummary", "Resultatet landar här så fort rutten är klar.");
   // Hide all optional sections in the skeleton state.
@@ -9143,6 +9144,13 @@ function buildVisibleWhy(route) {
   return takeLeadSentences(normalizeRouteResultCopy(route.why || route.summary), 2, 220);
 }
 
+function formatRouteStopTagSummary(tags = []) {
+  const map = isEnglishUi ? ROUTE_TAG_DESCRIPTOR_EN : ROUTE_TAG_DESCRIPTOR_SV;
+  return [...new Set(tags.map((tag) => map[tag] || tag).filter(Boolean))]
+    .slice(0, 3)
+    .join(" • ");
+}
+
 function createApiRouteView(
   route,
   label = "Huvudrutt",
@@ -9179,7 +9187,7 @@ function createApiRouteView(
       order: index + 1,
       label: stop.label,
       area: stop.area,
-      tagSummary: stop.tags.slice(0, 3).join(" • "),
+      tagSummary: formatRouteStopTagSummary(stop.tags),
       summary: normalizeRouteResultCopy(stop.summary || stop.vibe || stop.tags.join(", ")),
       text: `${index + 1}. ${stop.label} • ${stop.area} • ${stop.tags.join(", ")}`,
       query: stop.drawer_query || stop.label,
@@ -10861,7 +10869,7 @@ const ROUTE_TAG_DESCRIPTOR_SV = {
   market: "Marknad",       event_market: "Marknad",
   utsikt: "Utsikt",        "golden hour": "Utsikt",
   lokalt: "Lokalt",        "hidden gems": "Lokalt",  "low-key": "Low-key",
-  music: "Musik",          coast: "Strandliv",       design: "Design",
+  music: "Musik",          musik: "Musik",           coast: "Strandliv",       design: "Design",
 };
 const ROUTE_TAG_DESCRIPTOR_EN = {
   nattliv: "Nightlife",    kväll: "Nightlife",       party: "Nightlife",
@@ -10873,7 +10881,7 @@ const ROUTE_TAG_DESCRIPTOR_EN = {
   market: "Market",        event_market: "Market",
   utsikt: "Views",         "golden hour": "Golden hour",
   lokalt: "Local",         "hidden gems": "Local",   "low-key": "Low-key",
-  music: "Music",          coast: "Coastal",         design: "Design",
+  music: "Music",          musik: "Music",           coast: "Coastal",         design: "Design",
 };
 
 function buildRouteDescriptorLabels(route) {
@@ -10945,6 +10953,36 @@ function buildPlannerIntentNotes(visibilityState) {
   }
 
   return notes;
+}
+
+function buildRouteResultHeading(cityLabel) {
+  if (cityLabel) {
+    return isEnglishUi ? `Your day in ${cityLabel}` : `Din dag i ${cityLabel}`;
+  }
+
+  return isEnglishUi ? "Your day" : "Din dag";
+}
+
+function buildRouteStartContextPill(snapshot = latestPlannerSnapshot) {
+  const contextPoint = snapshot?.homeBase || snapshot?.start || null;
+  const contextType = contextPoint?.type || plannerAutoMode;
+
+  if (contextType === "current_location") {
+    return isEnglishUi ? "Near me" : "Nära mig";
+  }
+
+  if (["preset", "custom"].includes(contextType)) {
+    const placeLabel = contextPoint?.label || contextPoint?.query || "";
+    const prefix = isEnglishUi ? "Where I’m staying" : "Där jag bor";
+    return placeLabel ? `${prefix}: ${placeLabel}` : prefix;
+  }
+
+  return isEnglishUi ? "Parranda chose" : "Parranda valde";
+}
+
+function formatPlannerResultDate(isoDate) {
+  const dateLabel = formatSwedishDate(isoDate);
+  return dateLabel ? `${t("planner.oneDayBadge", "One day")} · ${dateLabel}` : t("planner.oneDayBadge", "One day");
 }
 
 function renderPlannedDays() {
@@ -11028,15 +11066,25 @@ function renderPlannedDays() {
   const signalsContainer = dayCard.querySelector(".planner-day-signals");
   const alternativesExpanded = expandedAlternativeDates.has(activeDay.date);
 
-  // Eyebrow — date + city
+  // Header — "Your day" promise plus selected context and date.
   const cityLabel = document.body?.dataset?.cityLabel || null;
-  const dateLabel = formatSwedishDate(activeDay.date);
+  const dateLabel = formatPlannerResultDate(activeDay.date);
   const eyebrowEl = dayCard.querySelector(".planner-day-date");
-  eyebrowEl.textContent = cityLabel
-    ? `${dateLabel} · ${cityLabel}`
-    : dateLabel;
+  const contextPill = dayCard.querySelector(".planner-day-context-pill");
+  const dateReadout = dayCard.querySelector(".planner-day-date-readout");
+  const headingEl = dayCard.querySelector(".planner-day-heading");
+  eyebrowEl.textContent = t("route.yourDay", "Your day");
+  if (contextPill) {
+    contextPill.textContent = buildRouteStartContextPill();
+  }
+  if (dateReadout) {
+    dateReadout.textContent = dateLabel;
+  }
+  if (headingEl) {
+    headingEl.textContent = buildRouteResultHeading(cityLabel);
+  }
 
-  // Title — clean editorial line, just the route title
+  // Route title — editorial promise for the generated order.
   const titleEl = dayCard.querySelector(".planner-day-title");
   titleEl.textContent = activeDay.primary_route.title;
 

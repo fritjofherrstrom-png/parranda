@@ -3756,8 +3756,9 @@ body.is-planner-entry .planner-mode-button.is-active {
 
 .planner-day-head {
   display: flex;
-  align-items: baseline;
-  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
 }
 
 .planner-day-date {
@@ -3770,16 +3771,59 @@ body.is-planner-entry .planner-mode-button.is-active {
   white-space: nowrap;
 }
 
-.planner-day-title {
+.planner-day-context-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.planner-day-context-pill,
+.planner-day-date-readout {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.planner-day-context-pill {
+  background: rgba(175, 77, 36, 0.1);
+  color: rgba(92, 45, 22, 0.92);
+  border: 1px solid rgba(175, 77, 36, 0.16);
+}
+
+.planner-day-date-readout {
+  background: rgba(255, 252, 247, 0.74);
+  color: rgba(36, 25, 20, 0.72);
+  border: 1px solid var(--line);
+}
+
+.planner-day-heading {
   margin: 0;
   font-family: "Cormorant Garamond", serif;
-  font-weight: 600;
-  font-size: clamp(2rem, 3vw, 2.8rem);
-  line-height: 1.02;
-  letter-spacing: -0.012em;
+  font-weight: 650;
+  font-size: clamp(2.1rem, 3.2vw, 3rem);
+  line-height: 1.01;
+  letter-spacing: -0.018em;
   color: var(--text);
   text-wrap: balance;
   max-width: 22ch;
+}
+
+.planner-day-title {
+  margin: -4px 0 0;
+  font-size: clamp(1.05rem, 1.6vw, 1.32rem);
+  line-height: 1.35;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  color: rgba(36, 25, 20, 0.82);
+  text-wrap: balance;
+  max-width: 48ch;
 }
 
 .planner-day-confidence {
@@ -4934,8 +4978,11 @@ body.is-printing-guide #routeGuideDrawer {
   .planner-day-card {
     padding: 22px 22px 0;
   }
+  .planner-day-heading {
+    font-size: 1.8rem;
+  }
   .planner-day-title {
-    font-size: 1.7rem;
+    font-size: 1.05rem;
   }
   .planner-day-summary {
     font-size: 0.98rem;
