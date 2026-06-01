@@ -10827,15 +10827,15 @@ function renderFallbackRoutes() {
 
   const eyebrow = document.createElement("p");
   eyebrow.className = "eyebrow";
-  eyebrow.textContent = t("route.legacyEyebrow", "Legacy route examples");
+  eyebrow.textContent = t("route.legacyEyebrow", "Route examples");
 
   const title = document.createElement("h3");
-  title.textContent = t("route.legacyTitle", "Generated planner routes are the primary route path");
+  title.textContent = t("route.legacyTitle", "Build today’s route with Planner");
 
   const body = document.createElement("p");
   body.textContent = t(
     "route.legacyBody",
-    "These older Rome route examples are kept as fallback/reference material only. Build a day with Planner for the current Your Day route grammar.",
+    "These older Rome examples are kept as references. For Parranda’s current route experience, build a Your Day route with Planner.",
   );
 
   surface.append(eyebrow, title, body);
@@ -10846,7 +10846,7 @@ function renderFallbackRoutes() {
     details.dataset.primaryRouteSurface = "false";
 
     const summary = document.createElement("summary");
-    summary.textContent = t("route.legacySummary", "Show legacy Rome examples");
+    summary.textContent = t("route.legacySummary", "Show older Rome examples");
 
     const grid = document.createElement("div");
     grid.className = "legacy-route-grid";

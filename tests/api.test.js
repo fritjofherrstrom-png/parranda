@@ -536,8 +536,9 @@ test("service worker registration is root-scoped for nested city routes", () => 
 
   assert.match(source, /navigator\.serviceWorker\.register\("\/sw\.js", \{ scope: "\/" \}\)/);
   assert.doesNotMatch(source, /navigator\.serviceWorker\.register\("\.\/sw\.js"\)/);
-  assert.match(sw, /"\.\/script\.js\?v=26"/);
-  assert.doesNotMatch(sw, /"\.\/script\.js\?v=24"/);
+  assert.match(sw, /const CACHE_NAME = "parranda-v25"/);
+  assert.match(sw, /"\.\/script\.js\?v=28"/);
+  assert.doesNotMatch(sw, /"\.\/script\.js\?v=26"/);
 });
 
 test.after(() => {

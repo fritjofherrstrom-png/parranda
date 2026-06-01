@@ -47,8 +47,9 @@ test("static route surface guardrail documents default-not-absolute product rule
 test("legacy route labels are localized in both product languages", () => {
   const i18nSource = readFileSync(path.join(repoRoot, "server/ui-i18n.js"), "utf8");
 
-  assert.match(i18nSource, /"route\.legacyTitle": "Genererade planner-rutter är den primära ruttvägen"/);
-  assert.match(i18nSource, /"route\.legacyTitle": "Generated planner routes are the primary route path"/);
+  assert.match(i18nSource, /"route\.legacyTitle": "Bygg dagens rutt med Plannern"/);
+  assert.match(i18nSource, /"route\.legacyTitle": "Build today’s route with Planner"/);
   assert.match(i18nSource, /"route\.legacySummary": "Visa äldre Rome-exempel"/);
-  assert.match(i18nSource, /"route\.legacySummary": "Show legacy Rome examples"/);
+  assert.match(i18nSource, /"route\.legacySummary": "Show older Rome examples"/);
+  assert.doesNotMatch(i18nSource, /Generated planner routes are the primary route path|Show legacy Rome examples|Legacy route examples/);
 });
