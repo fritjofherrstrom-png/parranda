@@ -7184,7 +7184,7 @@ function formatSwedishDate(dateString) {
   }).format(date);
 }
 
-function formatCompactSwedishDate(dateString) {
+function formatCompactDateForLocale(dateString, locale = uiDateLocale) {
   if (!dateString) {
     return "";
   }
@@ -7195,11 +7195,19 @@ function formatCompactSwedishDate(dateString) {
     return "";
   }
 
-  return new Intl.DateTimeFormat(uiDateLocale, {
+  return new Intl.DateTimeFormat(locale, {
     timeZone: "UTC",
     day: "numeric",
     month: "short",
   }).format(date);
+}
+
+function formatCompactSwedishDate(dateString) {
+  return formatCompactDateForLocale(dateString, uiDateLocale);
+}
+
+function formatPlannerCompactDate(isoDate) {
+  return formatCompactDateForLocale(isoDate, uiDateLocale);
 }
 
 function formatSavedTimestamp(dateString) {
@@ -8091,8 +8099,8 @@ function syncPlannerDayUi() {
 
   if (plannerDateReadout) {
     plannerDateReadout.textContent = dates.length > 1
-      ? `${formatCompactSwedishDate(dates[0])} → ${formatCompactSwedishDate(dates[dates.length - 1])}`
-      : `${t("planner.oneDayBadge", "One day")} · ${formatCompactSwedishDate(routeDateFrom.value)}`;
+      ? `${formatPlannerCompactDate(dates[0])} → ${formatPlannerCompactDate(dates[dates.length - 1])}`
+      : `${t("planner.oneDayBadge", "One day")} · ${formatPlannerCompactDate(routeDateFrom.value)}`;
   }
 
   const today = getTodayIsoDate();

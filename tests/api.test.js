@@ -500,10 +500,16 @@ test("planner first paint is one-day first and keeps date range secondary", () =
   assert.match(html, /id="plannerSingleDayButton"/);
   assert.match(html, /class="search-box route-lab-field planner-date-end-field" hidden/);
 
-  assert.match(source, /function syncPlannerDayUi/);
+  const syncPlannerDayUi = source.match(
+    /function syncPlannerDayUi\(\) \{(?<body>[\s\S]*?)\n\}\n\nfunction applyPlannerDayPreset/,
+  );
+  assert.ok(syncPlannerDayUi, "expected syncPlannerDayUi in script.js");
   assert.match(source, /let isPlannerDateRangeOpen = false/);
   assert.match(source, /routeDateTo\.value = routeDateFrom\.value/);
-  assert.match(source, /t\("planner\.oneDayBadge", "One day"\)\} · \$\{formatCompactSwedishDate\(routeDateFrom\.value\)\}/);
+  assert.match(source, /function formatPlannerCompactDate\(isoDate\)/);
+  assert.match(source, /function formatPlannerCompactDate\(isoDate\) \{\s*return formatCompactDateForLocale\(isoDate, uiDateLocale\);\s*\}/);
+  assert.match(syncPlannerDayUi.groups.body, /t\("planner\.oneDayBadge", "One day"\)\} · \$\{formatPlannerCompactDate\(routeDateFrom\.value\)\}/);
+  assert.doesNotMatch(syncPlannerDayUi.groups.body, /formatCompactSwedishDate/);
   assert.match(source, /nextDate\.setUTCDate\(nextDate\.getUTCDate\(\) \+ 1\)/);
 });
 
