@@ -1299,13 +1299,13 @@ test("landing and city shells use root-absolute asset urls for deep routes", asy
   assert.match(cityShell, /href="\/styles\.css\?v=19"/);
   assert.match(cityShell, /src="\/vendor\/leaflet\/leaflet\.js"/);
   assert.match(cityShell, /src="\/planner-trust\.js\?v=2"/);
-  assert.match(cityShell, /src="\/script\.js\?v=27"/);
+  assert.match(cityShell, /src="\/script\.js\?v=28"/);
   assert.match(cityShell, /src="\/ux-pass1\.js\?v=10"/);
   assert.match(landingShell, /href="\/manifest\.webmanifest"/);
   assert.match(landingShell, /href="\/assets\/icons\/icon-192\.png"/);
   assert.match(landingShell, /href="\/styles\.css\?v=26"/);
   assert.doesNotMatch(cityShell, /href="styles\.css\?v=19"/);
-  assert.doesNotMatch(cityShell, /src="script\.js\?v=27"/);
+  assert.doesNotMatch(cityShell, /src="script\.js\?v=28"/);
   assert.doesNotMatch(landingShell, /href="styles\.css\?v=26"/);
 
   global.fetch = async (url) => {
@@ -1321,7 +1321,7 @@ test("landing and city shells use root-absolute asset urls for deep routes", asy
 
     assert.equal(response.status, 200);
     assert.match(response.body, /<link rel="stylesheet" href="\/styles\.css\?v=19" \/>/);
-    assert.match(response.body, /<script src="\/script\.js\?v=27"><\/script>/);
+    assert.match(response.body, /<script src="\/script\.js\?v=28"><\/script>/);
     assert.match(response.body, /<script src="\/planner-trust\.js\?v=2"><\/script>/);
   } finally {
     await new Promise((resolve) => server.close(resolve));

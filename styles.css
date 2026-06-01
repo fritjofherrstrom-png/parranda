@@ -3627,6 +3627,59 @@ body.is-planner-entry .planner-mode-button.is-active {
   gap: 20px;
 }
 
+.legacy-route-surface {
+  display: grid;
+  gap: 10px;
+  padding: 22px;
+  border-radius: 24px;
+  background: rgba(255, 252, 247, 0.76);
+  border: 1px dashed rgba(70, 38, 18, 0.18);
+  box-shadow: 0 16px 36px rgba(44, 28, 18, 0.08);
+}
+
+.legacy-route-surface h3,
+.legacy-route-surface p {
+  margin: 0;
+}
+
+.legacy-route-surface h3 {
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 2vw, 1.7rem);
+}
+
+.legacy-route-surface > p:not(.eyebrow) {
+  color: var(--muted);
+  max-width: 68ch;
+  line-height: 1.55;
+}
+
+.legacy-route-examples {
+  margin-top: 8px;
+}
+
+.legacy-route-examples summary {
+  cursor: pointer;
+  color: var(--accent-deep);
+  font-weight: 800;
+}
+
+.legacy-route-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.legacy-route-grid .route-plan-card {
+  grid-column: auto;
+  opacity: 0.88;
+}
+
+.legacy-route-grid .route-plan-card::before {
+  background: linear-gradient(90deg, rgba(97, 113, 90, 0.36), rgba(126, 184, 201, 0.28));
+}
+
 .planner-results-shell {
   display: grid;
   gap: 14px;
