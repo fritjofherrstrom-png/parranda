@@ -8760,6 +8760,37 @@ async function openPlaceDrawerByQuery(query) {
   }
 }
 
+function hasRouteLiveEventActionTarget(event) {
+  if (!event) {
+    return false;
+  }
+
+  const title = String(event.title || event.event_title || event.name || "").trim();
+  const placeTarget = String(
+    event.place_query ||
+      event.venue ||
+      event.venue_label ||
+      event.location ||
+      event.place ||
+      "",
+  ).trim();
+
+  return Boolean(title && placeTarget && !isPlaceholderPulseLabel(placeTarget));
+}
+
+function openRouteLiveEventSnippet(event) {
+  if (!hasRouteLiveEventActionTarget(event)) {
+    return;
+  }
+
+  if (event.place_query) {
+    openPlaceDrawerByQuery(event.place_query);
+    return;
+  }
+
+  openPlaceDrawer(buildEventDrawerItem(event));
+}
+
 function buildEventDrawerItem(event) {
   const venueLine = [event.venue, event.address].filter(Boolean).join(" • ");
   const timing = formatLiveEventRange(event.start_date, event.end_date);
@@ -11297,14 +11328,14 @@ function renderPlannedDays() {
       firstLiveEvent.venue || firstLiveEvent.venue_label || firstLiveEvent.location || null,
       firstLiveEvent.start_time || firstLiveEvent.time || null,
     ].filter(Boolean);
-    const hasActionableEvent = Boolean(eventTitle && (firstLiveEvent.id || firstLiveEvent.buy_url || firstLiveEvent.source_url || firstLiveEvent.venue));
+    const hasActionableEvent = hasRouteLiveEventActionTarget(firstLiveEvent);
     if (eventEl) eventEl.textContent = eventTitle;
     if (venueEl) venueEl.textContent = venueParts.join(" · ");
     pulseLine.hidden = !hasActionableEvent;
     pulseLine.disabled = !hasActionableEvent;
     if (hasActionableEvent) {
       pulseLine.setAttribute("aria-label", `${t("pulse.openLive", "Öppna live-info")}: ${eventTitle}`);
-      pulseLine.addEventListener("click", () => openPlaceDrawer(buildEventDrawerItem(firstLiveEvent)));
+      pulseLine.addEventListener("click", () => openRouteLiveEventSnippet(firstLiveEvent));
       whyBlock.hidden = false;
     }
   } else if (pulseLine) {

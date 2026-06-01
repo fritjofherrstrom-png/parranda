@@ -44,14 +44,24 @@ test("planner result keeps Why this route compact before stops", () => {
   assert.doesNotMatch(renderPlannedDays, /takeLeadSentences\(activeDay\.primary_route\.why_recommended \|\| "", 3, 360\)/);
 });
 
-test("route live snippets render as actionable buttons only when backed by detail data", () => {
+test("route live snippets align actionability with the click behavior", () => {
   const markup = plannerDayTemplateMarkup();
   const renderPlannedDays = stripJsComments(functionSource("renderPlannedDays", "function renderRouteResults"));
+  const actionTarget = stripJsComments(functionSource("hasRouteLiveEventActionTarget", "function openRouteLiveEventSnippet"));
+  const openSnippet = stripJsComments(functionSource("openRouteLiveEventSnippet", "function buildEventDrawerItem"));
 
   assert.match(markup, /<button class="planner-day-pulse-line" type="button" hidden>/);
-  assert.match(renderPlannedDays, /const hasActionableEvent = Boolean/);
-  assert.match(renderPlannedDays, /pulseLine\.addEventListener\("click", \(\) => openPlaceDrawer\(buildEventDrawerItem\(firstLiveEvent\)\)\)/);
+  assert.match(renderPlannedDays, /const hasActionableEvent = hasRouteLiveEventActionTarget\(firstLiveEvent\);/);
+  assert.match(renderPlannedDays, /pulseLine\.addEventListener\("click", \(\) => openRouteLiveEventSnippet\(firstLiveEvent\)\)/);
   assert.match(renderPlannedDays, /pulseLine\.disabled = !hasActionableEvent/);
+
+  assert.match(actionTarget, /event\.place_query/);
+  assert.match(actionTarget, /event\.venue/);
+  assert.doesNotMatch(actionTarget, /source_url|buy_url/);
+  assert.match(openSnippet, /hasRouteLiveEventActionTarget\(event\)/);
+  assert.match(openSnippet, /openPlaceDrawerByQuery\(event\.place_query\)/);
+  assert.match(openSnippet, /openPlaceDrawer\(buildEventDrawerItem\(event\)\)/);
+  assert.notEqual(scriptSource.indexOf("function buildEventDrawerItem("), -1, "event drawer helper must exist before route snippets call it");
 });
 
 test("generic walking-leg boilerplate is not promoted in route result cleanup", () => {
