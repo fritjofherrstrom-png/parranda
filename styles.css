@@ -2152,14 +2152,45 @@ body.is-planner-entry .planner-mode-button.is-active {
 .pulse-empty-state {
   background: rgba(247, 239, 229, 0.04);
   border-color: rgba(247, 239, 229, 0.18);
+  padding: 14px 16px;
+  display: grid;
+  gap: 8px;
 }
 
 .pulse-empty-state h3 {
   color: var(--paper);
+  font-size: 1rem;
+  line-height: 1.2;
+  margin: 0;
 }
 
 .pulse-empty-state p {
   color: rgba(247, 239, 229, 0.72);
+  margin: 0;
+  max-width: 58ch;
+}
+
+.pulse-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pulse-empty-action {
+  border: 1px solid rgba(247, 239, 229, 0.24);
+  border-radius: 999px;
+  background: rgba(247, 239, 229, 0.08);
+  color: var(--paper);
+  font: inherit;
+  font-weight: 700;
+  padding: 7px 11px;
+  cursor: pointer;
+}
+
+.pulse-empty-action:hover,
+.pulse-empty-action:focus-visible {
+  border-color: rgba(247, 239, 229, 0.45);
+  background: rgba(247, 239, 229, 0.14);
 }
 
 .local-manifesto h3,
@@ -3953,7 +3984,35 @@ body.is-planner-entry .planner-mode-button.is-active {
 /* Why this route */
 .planner-day-why {
   display: grid;
-  gap: 10px;
+  gap: 0;
+  border: 1px solid rgba(70, 38, 18, 0.1);
+  border-radius: 18px;
+  background: rgba(255, 252, 247, 0.7);
+  overflow: hidden;
+}
+
+.planner-day-why-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 14px;
+  align-items: center;
+  padding: 13px 16px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.planner-day-why-summary::-webkit-details-marker {
+  display: none;
+}
+
+.planner-day-why-summary::after {
+  content: "+";
+  font-weight: 800;
+  color: rgba(36, 25, 20, 0.55);
+}
+
+.planner-day-why[open] .planner-day-why-summary::after {
+  content: "–";
 }
 
 .planner-day-why-eyebrow {
@@ -3963,6 +4022,19 @@ body.is-planner-entry .planner-mode-button.is-active {
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: rgba(36, 25, 20, 0.7);
+}
+
+.planner-day-why-preview {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.planner-day-why-body {
+  display: grid;
+  gap: 10px;
+  padding: 0 16px 16px;
 }
 
 .planner-day-why-text {
@@ -3986,6 +4058,15 @@ body.is-planner-entry .planner-mode-button.is-active {
   border: 1px solid rgba(215, 160, 77, 0.32);
   width: fit-content;
   max-width: 100%;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.planner-day-pulse-line:hover,
+.planner-day-pulse-line:focus-visible {
+  background: rgba(215, 160, 77, 0.16);
+  border-color: rgba(215, 160, 77, 0.5);
 }
 
 .planner-day-pulse-line[hidden] {

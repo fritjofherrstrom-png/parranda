@@ -49,6 +49,7 @@ function buildMasthead({ signals, fallback, lang = "sv" } = {}) {
   const list = Array.isArray(signals) ? signals : [];
   const fallbackHeadline = normalizeMastheadText(fallback?.headline);
   const fallbackSubhead = normalizeMastheadText(fallback?.subhead);
+  const cleanFallback = sanitizeMastheadFallback(fallbackHeadline, fallbackSubhead, lang);
   const selected = pickMastheadSignal(list);
 
   if (selected) {
@@ -57,7 +58,7 @@ function buildMasthead({ signals, fallback, lang = "sv" } = {}) {
       normalizeMastheadText(selected.reason) ||
       normalizeMastheadText(selected.why_it_matters) ||
       normalizeMastheadText(selected.blurb) ||
-      fallbackSubhead;
+      cleanFallback.subhead;
 
     return {
       headline,
@@ -70,12 +71,26 @@ function buildMasthead({ signals, fallback, lang = "sv" } = {}) {
   }
 
   return {
-    headline: fallbackHeadline,
-    subhead: fallbackSubhead,
+    headline: cleanFallback.headline,
+    subhead: cleanFallback.subhead,
     source: "fallback",
     signal_id: null,
     signal_type: null,
     signal_label: null,
+  };
+}
+
+function sanitizeMastheadFallback(headline, subhead, lang) {
+  if (!isPlaceholderLiveText(headline)) {
+    return { headline, subhead };
+  }
+
+  const isEnglish = normalizeLanguageCode(lang) === "en";
+  return {
+    headline: isEnglish ? "No strong signals right now" : "Inga starka signaler just nu",
+    subhead: isEnglish
+      ? "Parranda only shows live signals that are clear enough to be useful."
+      : "Parranda visar bara livesignaler som är tydliga nog att vara användbara.",
   };
 }
 
@@ -94,11 +109,40 @@ function pickMastheadSignal(signals) {
 }
 
 function hasMastheadHeadline(signal) {
+  if (isWeakLivePlaceholderSignal(signal)) {
+    return false;
+  }
+
   return Boolean(
     normalizeMastheadText(signal?.title) ||
       normalizeMastheadText(signal?.safe_headline) ||
       normalizeMastheadText(signal?.kindLabel) ||
       normalizeMastheadText(signal?.signal_label),
+  );
+}
+
+function isWeakLivePlaceholderSignal(signal) {
+  if (signal?.type !== "live_event_nearby") {
+    return false;
+  }
+
+  const safeHeadline = normalizeMastheadText(signal.safe_headline);
+  const venue = normalizeMastheadText(signal.venue || signal.venue_label || signal.location || signal.place || signal.area || signal.where);
+
+  return Boolean(
+    (safeHeadline && isPlaceholderLiveText(safeHeadline)) ||
+      (venue && isPlaceholderLiveText(venue)),
+  );
+}
+
+function isPlaceholderLiveText(value) {
+  const text = normalizeMastheadText(value).toLowerCase();
+  if (!text) return true;
+
+  return (
+    /^venue$/.test(text) ||
+    /^[a-zåäöéèíìóòúùüñç' -]+ venue$/.test(text) ||
+    /^(concert|event|cultural event|live event) (at|in|near) [a-zåäöéèíìóòúùüñç' -]+ venue$/.test(text)
   );
 }
 

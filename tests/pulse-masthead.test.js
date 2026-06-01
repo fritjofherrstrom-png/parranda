@@ -144,6 +144,27 @@ test("masthead skips unrenderable preferred signals and picks the next renderabl
   assert.equal(result.subhead, "Use this one");
 });
 
+test("masthead does not promote weak placeholder live signals", () => {
+  const fallback = { headline: "Barcelona has useful Pulse later", subhead: "Only strong signals get hero treatment." };
+  const result = buildMasthead({
+    lang: "en",
+    signals: [
+      signal({
+        type: "live_event_nearby",
+        title: "Concert at Barcelona venue",
+        safe_headline: "Concert at Barcelona venue",
+        venue: "Barcelona venue",
+        reason: "Concert on today in Barcelona. Worth adding to the plan if the timing works.",
+      }),
+    ],
+    fallback,
+  });
+
+  assert.equal(result.source, "fallback");
+  assert.equal(result.headline, fallback.headline);
+  assert.doesNotMatch(result.headline, /Barcelona venue/i);
+});
+
 test("masthead trims signal and fallback text", () => {
   const result = buildMasthead({
     signals: [signal({ type: "evening_window", title: "  Kvällsläge  ", reason: "  Senare tempo  " })],
