@@ -10820,16 +10820,53 @@ function createRouteCard(
 function renderFallbackRoutes() {
   routeResults.innerHTML = "";
 
-  getFrontendFallbackRoutes().forEach((route, index) => {
-    const routeView = createFallbackRouteView(route);
-    const routeKey = `fallback:${route.id}`;
-    const card = createRouteCard(routeView, {
-      routeKey,
-      isRecommended: index === 0,
+  const legacyRoutes = getFrontendFallbackRoutes();
+  const surface = document.createElement("article");
+  surface.className = "legacy-route-surface";
+  surface.dataset.surfaceRole = "non-primary-legacy-route-examples";
+
+  const eyebrow = document.createElement("p");
+  eyebrow.className = "eyebrow";
+  eyebrow.textContent = t("route.legacyEyebrow", "Route examples");
+
+  const title = document.createElement("h3");
+  title.textContent = t("route.legacyTitle", "Build today’s route with Planner");
+
+  const body = document.createElement("p");
+  body.textContent = t(
+    "route.legacyBody",
+    "These older Rome examples are kept as references. For Parranda’s current route experience, build a Your Day route with Planner.",
+  );
+
+  surface.append(eyebrow, title, body);
+
+  if (legacyRoutes.length) {
+    const details = document.createElement("details");
+    details.className = "legacy-route-examples";
+    details.dataset.primaryRouteSurface = "false";
+
+    const summary = document.createElement("summary");
+    summary.textContent = t("route.legacySummary", "Show older Rome examples");
+
+    const grid = document.createElement("div");
+    grid.className = "legacy-route-grid";
+
+    legacyRoutes.forEach((route, index) => {
+      const routeView = createFallbackRouteView(route);
+      const routeKey = `fallback:${route.id}`;
+      const card = createRouteCard(routeView, {
+        routeKey,
+        isRecommended: index === 0,
+      });
+      card.dataset.surfaceRole = "non-primary-legacy-route-example";
+      grid.appendChild(card);
     });
 
-    routeResults.appendChild(card);
-  });
+    details.append(summary, grid);
+    surface.appendChild(details);
+  }
+
+  routeResults.appendChild(surface);
 }
 
 function renderCityPreviewState() {
