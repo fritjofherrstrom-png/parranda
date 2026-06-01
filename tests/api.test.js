@@ -488,6 +488,48 @@ test("planner-open city shell uses inline planner mount instead of modal path", 
   assert.match(styles, /body\.is-planner-inline-open \.city-pulse-teaser\s*\{\s*display: none;/);
 });
 
+test("planner first paint is one-day first and keeps date range secondary", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  const source = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
+
+  assert.match(html, /class="planner-day-choice-shell"/);
+  assert.match(html, /id="plannerDateReadout"/);
+  assert.match(html, /data-planner-day-preset="today"/);
+  assert.match(html, /data-planner-day-preset="tomorrow"/);
+  assert.match(html, /id="plannerAddAnotherDayButton"/);
+  assert.match(html, /id="plannerSingleDayButton"/);
+  assert.match(html, /class="search-box route-lab-field planner-date-end-field" hidden/);
+
+  const syncPlannerDayUi = source.match(
+    /function syncPlannerDayUi\(\) \{(?<body>[\s\S]*?)\n\}\n\nfunction applyPlannerDayPreset/,
+  );
+  assert.ok(syncPlannerDayUi, "expected syncPlannerDayUi in script.js");
+  assert.match(source, /let isPlannerDateRangeOpen = false/);
+  assert.match(source, /routeDateTo\.value = routeDateFrom\.value/);
+  assert.match(source, /function formatPlannerCompactDate\(isoDate\)/);
+  assert.match(source, /function formatPlannerCompactDate\(isoDate\) \{\s*return formatCompactDateForLocale\(isoDate, uiDateLocale\);\s*\}/);
+  assert.match(syncPlannerDayUi.groups.body, /t\("planner\.oneDayBadge", "One day"\)\} · \$\{formatPlannerCompactDate\(routeDateFrom\.value\)\}/);
+  assert.doesNotMatch(syncPlannerDayUi.groups.body, /formatCompactSwedishDate/);
+  assert.match(source, /nextDate\.setUTCDate\(nextDate\.getUTCDate\(\) \+ 1\)/);
+});
+
+test("planner one-day labels are localized in Swedish and English", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "server", "ui-i18n.js"), "utf8");
+
+  [
+    "planner.dayChoiceEyebrow",
+    "planner.dayChoiceTitle",
+    "planner.dayPresetToday",
+    "planner.dayPresetTomorrow",
+    "planner.dayPickDate",
+    "planner.addAnotherDay",
+    "planner.backToOneDay",
+    "planner.oneDayBadge",
+  ].forEach((key) => {
+    assert.match(source, new RegExp(`"${key}":`), `${key} should exist in ui-i18n.js`);
+  });
+});
+
 test("service worker registration is root-scoped for nested city routes", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
   const sw = fs.readFileSync(path.join(__dirname, "..", "sw.js"), "utf8");

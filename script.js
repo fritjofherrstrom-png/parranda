@@ -1957,6 +1957,11 @@ const startCustomInput = document.getElementById("startCustomInput");
 const endCustomInput = document.getElementById("endCustomInput");
 const routeDateFrom = document.getElementById("routeDateFrom");
 const routeDateTo = document.getElementById("routeDateTo");
+const plannerDateReadout = document.getElementById("plannerDateReadout");
+const plannerDayPresetButtons = document.querySelectorAll("[data-planner-day-preset]");
+const plannerAddAnotherDayButton = document.getElementById("plannerAddAnotherDayButton");
+const plannerSingleDayButton = document.getElementById("plannerSingleDayButton");
+const plannerDateEndField = document.querySelector(".planner-date-end-field");
 const distanceModeSelect = document.getElementById("distanceModeSelect");
 const walkingKmTarget = document.getElementById("walkingKmTarget");
 const walkingKmValue = document.getElementById("walkingKmValue");
@@ -2931,6 +2936,7 @@ let activeOptimizerMode = null;
 let activeDistanceMode = "soft_target";
 let activeBudgetTier = "standard";
 let activeRouteModifier = null;
+let isPlannerDateRangeOpen = false;
 let activeDrawerItem = null;
 let activeGuideRouteView = null;
 let savedRoutes = loadSavedRoutes();
@@ -7178,7 +7184,7 @@ function formatSwedishDate(dateString) {
   }).format(date);
 }
 
-function formatCompactSwedishDate(dateString) {
+function formatCompactDateForLocale(dateString, locale = uiDateLocale) {
   if (!dateString) {
     return "";
   }
@@ -7189,11 +7195,19 @@ function formatCompactSwedishDate(dateString) {
     return "";
   }
 
-  return new Intl.DateTimeFormat(uiDateLocale, {
+  return new Intl.DateTimeFormat(locale, {
     timeZone: "UTC",
     day: "numeric",
     month: "short",
   }).format(date);
+}
+
+function formatCompactSwedishDate(dateString) {
+  return formatCompactDateForLocale(dateString, uiDateLocale);
+}
+
+function formatPlannerCompactDate(isoDate) {
+  return formatCompactDateForLocale(isoDate, uiDateLocale);
 }
 
 function formatSavedTimestamp(dateString) {
@@ -7932,6 +7946,7 @@ function setPlannerDefaults() {
     plannerFineTuneDetails.open = false;
   }
 
+  setPlannerDateRangeOpen(false);
   updatePlannerAdvancedSummary();
   updatePlannerLaunchSummary();
 }
@@ -7977,6 +7992,7 @@ function applyPlannerSnapshot(snapshot) {
   routeDateFrom.value = snapshot.dateFrom || snapshot.dates?.[0] || getTodayIsoDate();
   routeDateTo.value =
     snapshot.dateTo || snapshot.dates?.[snapshot.dates.length - 1] || routeDateFrom.value;
+  setPlannerDateRangeOpen(routeDateTo.value !== routeDateFrom.value);
   distanceModeSelect.value = snapshot.distanceMode || "soft_target";
   walkingKmTarget.value = String(snapshot.walkingKmTarget || 9);
   if (legPacingSelect) {
@@ -8029,6 +8045,97 @@ function expandDateRange(from, to) {
   }
 
   return dates;
+}
+
+function setPlannerDateRangeOpen(isOpen) {
+  isPlannerDateRangeOpen = Boolean(isOpen);
+
+  if (plannerDateEndField) {
+    plannerDateEndField.hidden = !isPlannerDateRangeOpen;
+  }
+
+  if (plannerAddAnotherDayButton) {
+    plannerAddAnotherDayButton.hidden = isPlannerDateRangeOpen;
+  }
+
+  if (plannerSingleDayButton) {
+    plannerSingleDayButton.hidden = !isPlannerDateRangeOpen;
+  }
+
+  if (!routeDateFrom || !routeDateTo) {
+    syncPlannerDayUi();
+    return;
+  }
+
+  if (!isPlannerDateRangeOpen) {
+    routeDateTo.value = routeDateFrom.value;
+  } else if (routeDateFrom.value === routeDateTo.value) {
+    const nextDate = parseIsoDateToUtcNoon(routeDateFrom.value || getTodayIsoDate());
+    if (nextDate) {
+      nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+      routeDateTo.value = nextDate.toISOString().slice(0, 10);
+    }
+  }
+
+  syncPlannerDayUi();
+}
+
+function syncPlannerDayUi() {
+  if (!routeDateFrom || !routeDateTo) {
+    return;
+  }
+
+  if (!routeDateFrom.value) {
+    routeDateFrom.value = getTodayIsoDate();
+  }
+
+  if (!isPlannerDateRangeOpen) {
+    routeDateTo.value = routeDateFrom.value;
+  } else if (!routeDateTo.value || routeDateTo.value < routeDateFrom.value) {
+    routeDateTo.value = routeDateFrom.value;
+  }
+
+  const dates = expandDateRange(routeDateFrom.value, routeDateTo.value);
+
+  if (plannerDateReadout) {
+    plannerDateReadout.textContent = dates.length > 1
+      ? `${formatPlannerCompactDate(dates[0])} → ${formatPlannerCompactDate(dates[dates.length - 1])}`
+      : `${t("planner.oneDayBadge", "One day")} · ${formatPlannerCompactDate(routeDateFrom.value)}`;
+  }
+
+  const today = getTodayIsoDate();
+  const tomorrowDate = parseIsoDateToUtcNoon(today);
+  if (tomorrowDate) {
+    tomorrowDate.setUTCDate(tomorrowDate.getUTCDate() + 1);
+  }
+  const tomorrow = tomorrowDate?.toISOString().slice(0, 10);
+
+  plannerDayPresetButtons.forEach((button) => {
+    const preset = button.dataset.plannerDayPreset;
+    const expectedDate = preset === "tomorrow" ? tomorrow : today;
+    const isActive = Boolean(expectedDate && routeDateFrom.value === expectedDate && routeDateTo.value === expectedDate);
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+}
+
+function applyPlannerDayPreset(preset) {
+  const today = getTodayIsoDate();
+  const targetDate = parseIsoDateToUtcNoon(today);
+
+  if (preset === "tomorrow" && targetDate) {
+    targetDate.setUTCDate(targetDate.getUTCDate() + 1);
+  }
+
+  const isoDate = targetDate?.toISOString().slice(0, 10) || today;
+  routeDateFrom.value = isoDate;
+  routeDateTo.value = isoDate;
+  setPlannerDateRangeOpen(false);
+  activeLiveDate = isoDate;
+  if (!plannedDays.length) {
+    loadCityPulse(activeLiveDate).catch(() => {});
+  }
+  updatePlannerLaunchSummary();
 }
 
 function getSelectedPreferences() {
@@ -11409,6 +11516,8 @@ routeDateFrom?.addEventListener("change", () => {
     routeDateTo.value = routeDateFrom.value;
   }
 
+  syncPlannerDayUi();
+
   if (!plannedDays.length) {
     activeLiveDate = routeDateFrom.value || getTodayIsoDate();
     loadCityPulse(activeLiveDate);
@@ -11422,10 +11531,28 @@ routeDateTo?.addEventListener("change", () => {
     routeDateTo.value = routeDateFrom.value;
   }
 
+  syncPlannerDayUi();
+
   if (!plannedDays.length) {
     renderCityPulse();
   }
 
+  updatePlannerLaunchSummary();
+});
+
+plannerDayPresetButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    applyPlannerDayPreset(button.dataset.plannerDayPreset);
+  });
+});
+
+plannerAddAnotherDayButton?.addEventListener("click", () => {
+  setPlannerDateRangeOpen(true);
+  routeDateTo?.focus();
+});
+
+plannerSingleDayButton?.addEventListener("click", () => {
+  setPlannerDateRangeOpen(false);
   updatePlannerLaunchSummary();
 });
 
