@@ -179,17 +179,29 @@ test("server/app.js uses keyed shell i18n instead of post-render replacement", (
   assert.match(source, /__PARRANDA_I18N_BOOTSTRAP__/);
 });
 
-test("Near me start context stays collapsed and does not take over Pulse", () => {
+test("Near me start context defaults collapsed and scopes Pulse nearby", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
   const applyStartContextMode = source.match(
-    /function applyStartContextMode\(mode\) \{(?<body>[\s\S]*?)\n\}/,
+    /async function applyStartContextMode\(mode, \{ requestLocation = true \} = \{\}\) \{(?<body>[\s\S]*?)\n\}/,
   );
 
-  assert.ok(applyStartContextMode, "expected synchronous applyStartContextMode in script.js");
+  assert.ok(applyStartContextMode, "expected async applyStartContextMode in script.js");
   assert.match(applyStartContextMode.groups.body, /mode === "custom" \|\| mode === "preset"/);
   assert.match(applyStartContextMode.groups.body, /expandHomeBase\(\)/);
   assert.match(applyStartContextMode.groups.body, /collapseHomeBase\(\)/);
-  assert.equal(source.includes("primePulseNearbyFromCurrentLocation"), false);
+  assert.match(applyStartContextMode.groups.body, /mode === "current_location"[\s\S]*requestLocation[\s\S]*scopePulseNearbyFromCurrentLocation\(\)/);
+  assert.match(source, /async function canUseCurrentLocationWithoutPrompt\(\) \{[\s\S]*navigator\.permissions\?\.query\(\{ name: "geolocation" \}\)[\s\S]*state === "granted"/);
+  assert.match(source, /async function defaultPlannerEntryToNearMe\(\) \{[\s\S]*applyStartContextMode\("current_location", \{ requestLocation: false \}\)/);
+  assert.match(source, /async function defaultPlannerEntryToNearMe\(\) \{[\s\S]*canUseCurrentLocationWithoutPrompt\(\)[\s\S]*scopePulseNearbyFromCurrentLocation\(\)/);
+  assert.match(source, /if \(shouldOpenInlinePlanner\) \{[\s\S]*defaultPlannerEntryToNearMe\(\)/);
+  assert.match(source, /function primePulseNearbyIntent\(\) \{[\s\S]*activePulseScope = "nearby"/);
+  assert.match(source, /function primePulseNearbyIntent\(\) \{[\s\S]*activePulseRadiusKey = "2"/);
+  assert.match(source, /function primePulseNearbyIntent\(\) \{[\s\S]*activePulseTime = "now"/);
+  assert.match(source, /async function scopePulseNearbyFromCurrentLocation\(\) \{[\s\S]*primePulseNearbyIntent\(\)/);
+  assert.match(source, /async function scopePulseNearbyFromCurrentLocation\(\) \{[\s\S]*ensureCurrentLocation\(\)/);
+  assert.match(source, /async function scopePulseNearbyFromCurrentLocation\(\) \{[\s\S]*openLiveEdition\(\{ date: activeLiveDate, scroll: false \}\)/);
+  assert.match(source, /function buildNearbyPulseScopeLabel\(\) \{[\s\S]*Near you ·/);
+  assert.match(source, /function updateInstallButtonVisibility\(\) \{[\s\S]*shouldHideFromPrimaryPlannerFlow = isPlannerEntryRoute \|\| isPlannerInlineOpen[\s\S]*installButton.hidden = shouldHideFromPrimaryPlannerFlow \|\| !deferredInstallPrompt \|\| isStandaloneApp\(\)/);
   assert.equal(source.includes("pulseNearbyIntentPending"), false);
 });
 
