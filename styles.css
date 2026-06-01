@@ -2285,9 +2285,56 @@ body.is-planner-entry .planner-mode-button.is-active {
   font-weight: 700;
 }
 
+.planner-day-choice-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+  padding: 18px;
+  border-radius: 28px;
+  background: rgba(255, 252, 247, 0.84);
+  border: 1px solid rgba(70, 38, 18, 0.08);
+}
+
+.planner-day-choice-copy h3 {
+  margin: 0;
+  font-size: clamp(1.25rem, 2vw, 1.65rem);
+}
+
+.planner-day-choice-readout {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.planner-day-presets,
+.planner-day-range-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.planner-day-preset-button {
+  border: 1px solid rgba(70, 38, 18, 0.12);
+  border-radius: 999px;
+  padding: 11px 16px;
+  background: rgba(255, 255, 255, 0.76);
+  color: var(--text);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.planner-day-preset-button.is-active {
+  border-color: rgba(175, 77, 36, 0.48);
+  background: rgba(175, 77, 36, 0.12);
+  color: var(--clay);
+}
+
 .planner-inline-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
 

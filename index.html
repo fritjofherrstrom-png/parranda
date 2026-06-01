@@ -513,12 +513,36 @@
                       </div>
                     </div>
                   </section>
+                  <section class="planner-day-choice-shell" aria-labelledby="plannerDayChoiceTitle">
+                    <div class="planner-day-choice-copy">
+                      <p class="eyebrow">__PARRANDA_I18N_DAY_CHOICE_EYEBROW__</p>
+                      <h3 id="plannerDayChoiceTitle">__PARRANDA_I18N_DAY_CHOICE_TITLE__</h3>
+                      <p id="plannerDateReadout" class="planner-day-choice-readout" aria-live="polite"></p>
+                    </div>
+                    <div class="planner-day-presets" aria-label="__PARRANDA_I18N_DAY_CHOICE_ARIA__">
+                      <button type="button" class="planner-day-preset-button" data-planner-day-preset="today">
+                        __PARRANDA_I18N_DAY_PRESET_TODAY__
+                      </button>
+                      <button type="button" class="planner-day-preset-button" data-planner-day-preset="tomorrow">
+                        __PARRANDA_I18N_DAY_PRESET_TOMORROW__
+                      </button>
+                    </div>
+                    <div class="planner-day-range-actions">
+                      <button id="plannerAddAnotherDayButton" type="button" class="ghost-button planner-day-range-button">
+                        __PARRANDA_I18N_ADD_ANOTHER_DAY__
+                      </button>
+                      <button id="plannerSingleDayButton" type="button" class="ghost-button planner-day-range-button" hidden>
+                        __PARRANDA_I18N_BACK_TO_ONE_DAY__
+                      </button>
+                    </div>
+                  </section>
+
                   <div class="planner-inline-grid">
-                    <label class="search-box route-lab-field">
-                      <span>__PARRANDA_I18N_FROM_DATE__</span>
+                    <label class="search-box route-lab-field planner-date-start-field">
+                      <span>__PARRANDA_I18N_DAY_PICK_DATE__</span>
                       <input id="routeDateFrom" type="date" lang="__PARRANDA_LANG__" />
                     </label>
-                    <label class="search-box route-lab-field">
+                    <label class="search-box route-lab-field planner-date-end-field" hidden>
                       <span>__PARRANDA_I18N_TO_DATE__</span>
                       <input id="routeDateTo" type="date" lang="__PARRANDA_LANG__" />
                     </label>
