@@ -78,11 +78,37 @@ test("Pulse card anatomy keeps pitch and action hierarchy stable", () => {
     .find((line) => line.includes("const pitchSource ="));
   assert.ok(pitchSourceLine);
   assert.doesNotMatch(pitchSourceLine, /item\.blurb|item\.note/);
+  assert.match(createEntry, /const hasInternalTarget = hasPulseActionTarget\(item\);/);
   assert.match(createEntry, /detailButton\.className = "ghost-button pulse-action-button"/);
   assert.match(
     createEntry,
     /plannerButton\.className = "primary-button pulse-action-button pulse-action-primary"/,
   );
+});
+
+test("Pulse display gates weak placeholders and keeps non-action cards non-clickable", () => {
+  const helperSource = stripJsComments(functionSource("hasPulseActionTarget", "function normalizePulseText"));
+  const renderPulse = stripJsComments(functionSource("renderCityPulse", "async function loadCityPulse"));
+
+  assert.match(helperSource, /function isPromotablePulseItem/);
+  assert.match(helperSource, /isPlaceholderPulseLabel\(title\)/);
+  assert.match(helperSource, /live_event_nearby/);
+  assert.match(helperSource, /hasUsefulPlace && hasTiming && hasSource/);
+  assert.match(helperSource, /item\.official_event_id && getCityPulseEventById\(item\.official_event_id\)/);
+  assert.match(renderPulse, /\.filter\(isPromotablePulseItem\)/);
+  assert.doesNotMatch(helperSource, /plannerCityKey\s*={2,3}\s*["'](?:rome|barcelona|athens)["']/i);
+});
+
+test("Pulse empty state is compact and action-oriented", () => {
+  const renderPulse = stripJsComments(functionSource("renderCityPulse", "async function loadCityPulse"));
+
+  assert.match(renderPulse, /pulse-empty-actions/);
+  assert.match(renderPulse, /data-pulse-empty-action="all"/);
+  assert.match(renderPulse, /data-pulse-empty-action="tonight"/);
+  assert.match(renderPulse, /activePulseScope = "all"/);
+  assert.match(renderPulse, /activePulseTime = "tonight"/);
+  assert.equal(translate("en", "pulse.emptyBody"), "Parranda only shows signals that are clear enough to be useful.");
+  assert.equal(translate("sv", "pulse.tryTonight"), "Testa ikväll");
 });
 
 test("Pulse rendering path avoids hard-coded city-key branches", () => {

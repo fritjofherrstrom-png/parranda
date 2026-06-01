@@ -971,17 +971,22 @@
         <p class="planner-day-title"></p>
         <p class="planner-day-summary"></p>
         <div class="planner-day-meta-row"></div>
-        <div class="planner-day-why">
-          <p class="planner-day-why-eyebrow eyebrow">__PARRANDA_I18N_ROUTE_WHY_CHOSEN__</p>
-          <p class="planner-day-why-text"></p>
-          <span class="planner-day-pulse-line" hidden>
-            <span class="planner-day-pulse-dot"></span>
-            <span class="planner-day-pulse-text">
-              <span class="planner-day-pulse-event"></span>
-              <span class="planner-day-pulse-venue"></span>
-            </span>
-          </span>
-        </div>
+        <details class="planner-day-why">
+          <summary class="planner-day-why-summary">
+            <span class="planner-day-why-eyebrow eyebrow">__PARRANDA_I18N_ROUTE_WHY_CHOSEN__</span>
+            <span class="planner-day-why-preview"></span>
+          </summary>
+          <div class="planner-day-why-body">
+            <p class="planner-day-why-text"></p>
+            <button class="planner-day-pulse-line" type="button" hidden>
+              <span class="planner-day-pulse-dot"></span>
+              <span class="planner-day-pulse-text">
+                <span class="planner-day-pulse-event"></span>
+                <span class="planner-day-pulse-venue"></span>
+              </span>
+            </button>
+          </div>
+        </details>
         <div class="planner-day-stops-block">
           <p class="planner-day-stops-eyebrow eyebrow">__PARRANDA_I18N_ROUTE_ORDER__</p>
           <div class="planner-primary-slot"></div>
@@ -1152,7 +1157,7 @@
 
     <script src="/vendor/leaflet/leaflet.js"></script>
     <script src="/planner-trust.js?v=2"></script>
-    <script src="/script.js?v=28"></script>
+    <script src="/script.js?v=29"></script>
     <script src="/ux-pass1.js?v=10"></script>
   </body>
 </html>

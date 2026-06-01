@@ -4566,6 +4566,51 @@ function openCityPulseItem(item) {
   }
 }
 
+function hasPulseActionTarget(item) {
+  if (!item) {
+    return false;
+  }
+
+  return Boolean(item.place_query || (item.official_event_id && getCityPulseEventById(item.official_event_id)));
+}
+
+function isPlaceholderPulseLabel(value = "") {
+  const normalized = normalizePulseText(value)
+    .replace(/[^a-z0-9åäö\s]/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return (
+    /^(concert|event|show|gig) at [a-zåäö]+ venue$/.test(normalized) ||
+    /^[a-zåäö]+ venue$/.test(normalized) ||
+    /^(venue|plats|event venue)$/.test(normalized)
+  );
+}
+
+function isPromotablePulseItem(item) {
+  if (!item) {
+    return false;
+  }
+
+  const title = String(item.title || "").trim();
+  const where = String(item.where || item.venue || "").trim();
+  const hasMeaningfulTitle = title.length >= 4 && !isPlaceholderPulseLabel(title);
+  const hasUsefulPlace = where && !isPlaceholderPulseLabel(where);
+  const hasTiming = Boolean(item.when || item.starts_at_local || item.ends_at_local || item.timing?.hasWindow);
+  const hasSource = Boolean(item.source_label || item.source || item.source_url || item.official_event_id);
+  const hasRouteContext = Boolean(item.reason || item.editorial_pitch || item.why_it_matters || item.route_fit_note || item.match_reason);
+
+  if (!hasMeaningfulTitle) {
+    return false;
+  }
+
+  if (item.type === "live_event_nearby" || item.official_event_id) {
+    return Boolean(hasUsefulPlace && hasTiming && hasSource);
+  }
+
+  return Boolean(hasUsefulPlace || hasTiming || hasSource || hasRouteContext);
+}
+
 function normalizePulseText(text = "") {
   return String(text)
     .toLowerCase()
@@ -5638,7 +5683,7 @@ function createPulseEntry(item) {
   const reason = document.createElement("p");
   const tags = document.createElement("div");
   const actions = document.createElement("div");
-  const hasInternalTarget = Boolean(item.place_query || item.official_event_id);
+  const hasInternalTarget = hasPulseActionTarget(item);
   const status = item.timing?.status || "timeless";
   let title;
 
@@ -5842,9 +5887,9 @@ function renderCityPulse() {
     cityPulseStart.hidden = false;
   }
 
-  const items = getNormalizedCityPulseItems().map((item) =>
-    enrichPulseItemTiming(item, cityPulseState.date, activePulseTime),
-  );
+  const items = getNormalizedCityPulseItems()
+    .map((item) => enrichPulseItemTiming(item, cityPulseState.date, activePulseTime))
+    .filter(isPromotablePulseItem);
   const allTimelineItems = [...items].sort(comparePulseItems);
   const timeScopedItems = items.filter((item) =>
     pulseItemMatchesTime(item, activePulseTime, cityPulseState.date),
@@ -6164,10 +6209,21 @@ function renderCityPulse() {
   if (!cityPulseLevels.childNodes.length) {
     const emptyState = document.createElement("div");
     emptyState.className = "empty-state pulse-empty-state";
+    const emptyAction = activePulseScope === "nearby"
+      ? `<button class="pulse-empty-action" type="button" data-pulse-empty-action="all">${tf("pulse.showAllCity", { city: buildLiveScopeAllLabel() }, buildLiveScopeAllLabel())}</button>`
+      : `<button class="pulse-empty-action" type="button" data-pulse-empty-action="tonight">${t("pulse.tryTonight", "Testa ikväll")}</button>`;
     emptyState.innerHTML =
       activePulseScope === "nearby"
-        ? `<h3>${t("pulse.emptyNearbyTitle", "Inget starkt live-lager nära dig just nu")}</h3><p>${tf("pulse.emptyNearbyBody", { scope: buildLiveScopeAllLabel() }, `Byt till ${buildLiveScopeAllLabel()} eller ett bredare tidsläge för att se fler signaler.`)}</p>`
-        : `<h3>${t("pulse.emptyTitle", "Inga starka signaler just nu")}</h3><p>${t("pulse.emptyBody", "Parranda lyckades inte hämta några tydliga dagensnotiser, men route buildern och wildcardet fungerar fortfarande.")}</p>`;
+        ? `<h3>${t("pulse.emptyNearbyTitle", "Inget starkt live-lager nära dig just nu")}</h3><p>${tf("pulse.emptyNearbyBody", { scope: buildLiveScopeAllLabel() }, `Byt till ${buildLiveScopeAllLabel()} eller ett bredare tidsläge för att se fler signaler.`)}</p><div class="pulse-empty-actions">${emptyAction}</div>`
+        : `<h3>${t("pulse.emptyTitle", "Inga starka signaler just nu")}</h3><p>${t("pulse.emptyBody", "Parranda visar bara signaler som är tydliga nog att vara användbara.")}</p><div class="pulse-empty-actions">${emptyAction}</div>`;
+    emptyState.querySelector("[data-pulse-empty-action]")?.addEventListener("click", (event) => {
+      if (event.currentTarget.dataset.pulseEmptyAction === "all") {
+        activePulseScope = "all";
+      } else {
+        activePulseTime = "tonight";
+      }
+      renderCityPulse();
+    });
     cityPulseLevels.appendChild(emptyState);
   }
 }
@@ -8704,6 +8760,37 @@ async function openPlaceDrawerByQuery(query) {
   }
 }
 
+function hasRouteLiveEventActionTarget(event) {
+  if (!event) {
+    return false;
+  }
+
+  const title = String(event.title || event.event_title || event.name || "").trim();
+  const placeTarget = String(
+    event.place_query ||
+      event.venue ||
+      event.venue_label ||
+      event.location ||
+      event.place ||
+      "",
+  ).trim();
+
+  return Boolean(title && placeTarget && !isPlaceholderPulseLabel(placeTarget));
+}
+
+function openRouteLiveEventSnippet(event) {
+  if (!hasRouteLiveEventActionTarget(event)) {
+    return;
+  }
+
+  if (event.place_query) {
+    openPlaceDrawerByQuery(event.place_query);
+    return;
+  }
+
+  openPlaceDrawer(buildEventDrawerItem(event));
+}
+
 function buildEventDrawerItem(event) {
   const venueLine = [event.venue, event.address].filter(Boolean).join(" • ");
   const timing = formatLiveEventRange(event.start_date, event.end_date);
@@ -11214,15 +11301,19 @@ function renderPlannedDays() {
   // Why this route — paragraph (full why) + optional single live pulse-line
   const whyBlock = dayCard.querySelector(".planner-day-why");
   const whyText = dayCard.querySelector(".planner-day-why-text");
+  const whyPreview = dayCard.querySelector(".planner-day-why-preview");
   const whyParagraph =
-    takeLeadSentences(activeDay.primary_route.why_recommended || "", 3, 360) ||
+    takeLeadSentences(activeDay.primary_route.why_recommended || "", 3, 300) ||
     primaryRouteView.visibleWhy ||
     "";
+  const whyPreviewText = takeLeadSentences(whyParagraph, 1, 118);
   if (whyParagraph) {
     whyText.textContent = whyParagraph;
+    if (whyPreview) whyPreview.textContent = whyPreviewText;
     whyBlock.hidden = false;
   } else {
     whyText.textContent = "";
+    if (whyPreview) whyPreview.textContent = "";
   }
 
   // Single live event near the route (replaces old events grid)
@@ -11237,14 +11328,19 @@ function renderPlannedDays() {
       firstLiveEvent.venue || firstLiveEvent.venue_label || firstLiveEvent.location || null,
       firstLiveEvent.start_time || firstLiveEvent.time || null,
     ].filter(Boolean);
+    const hasActionableEvent = hasRouteLiveEventActionTarget(firstLiveEvent);
     if (eventEl) eventEl.textContent = eventTitle;
     if (venueEl) venueEl.textContent = venueParts.join(" · ");
-    pulseLine.hidden = !eventTitle;
-    if (eventTitle) {
+    pulseLine.hidden = !hasActionableEvent;
+    pulseLine.disabled = !hasActionableEvent;
+    if (hasActionableEvent) {
+      pulseLine.setAttribute("aria-label", `${t("pulse.openLive", "Öppna live-info")}: ${eventTitle}`);
+      pulseLine.addEventListener("click", () => openRouteLiveEventSnippet(firstLiveEvent));
       whyBlock.hidden = false;
     }
   } else if (pulseLine) {
     pulseLine.hidden = true;
+    pulseLine.disabled = true;
   }
 
   // Date signals — kept as fallback (typically empty in route results)
