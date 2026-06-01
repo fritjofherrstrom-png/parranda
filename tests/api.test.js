@@ -182,15 +182,17 @@ test("server/app.js uses keyed shell i18n instead of post-render replacement", (
 test("Near me start context defaults collapsed and scopes Pulse nearby", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
   const applyStartContextMode = source.match(
-    /async function applyStartContextMode\(mode\) \{(?<body>[\s\S]*?)\n\}/,
+    /async function applyStartContextMode\(mode, \{ requestLocation = true \} = \{\}\) \{(?<body>[\s\S]*?)\n\}/,
   );
 
   assert.ok(applyStartContextMode, "expected async applyStartContextMode in script.js");
   assert.match(applyStartContextMode.groups.body, /mode === "custom" \|\| mode === "preset"/);
   assert.match(applyStartContextMode.groups.body, /expandHomeBase\(\)/);
   assert.match(applyStartContextMode.groups.body, /collapseHomeBase\(\)/);
-  assert.match(applyStartContextMode.groups.body, /mode === "current_location"[\s\S]*scopePulseNearbyFromCurrentLocation\(\)/);
-  assert.match(source, /function defaultPlannerEntryToNearMe\(\) \{[\s\S]*applyStartContextMode\("current_location"\)/);
+  assert.match(applyStartContextMode.groups.body, /mode === "current_location"[\s\S]*requestLocation[\s\S]*scopePulseNearbyFromCurrentLocation\(\)/);
+  assert.match(source, /async function canUseCurrentLocationWithoutPrompt\(\) \{[\s\S]*navigator\.permissions\?\.query\(\{ name: "geolocation" \}\)[\s\S]*state === "granted"/);
+  assert.match(source, /async function defaultPlannerEntryToNearMe\(\) \{[\s\S]*applyStartContextMode\("current_location", \{ requestLocation: false \}\)/);
+  assert.match(source, /async function defaultPlannerEntryToNearMe\(\) \{[\s\S]*canUseCurrentLocationWithoutPrompt\(\)[\s\S]*scopePulseNearbyFromCurrentLocation\(\)/);
   assert.match(source, /if \(shouldOpenInlinePlanner\) \{[\s\S]*defaultPlannerEntryToNearMe\(\)/);
   assert.match(source, /function primePulseNearbyIntent\(\) \{[\s\S]*activePulseScope = "nearby"/);
   assert.match(source, /function primePulseNearbyIntent\(\) \{[\s\S]*activePulseRadiusKey = "2"/);

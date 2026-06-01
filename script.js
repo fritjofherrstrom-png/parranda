@@ -7379,7 +7379,20 @@ function syncStartContextOptionButtons() {
   });
 }
 
-async function applyStartContextMode(mode) {
+async function canUseCurrentLocationWithoutPrompt() {
+  if (currentLocationCoords) {
+    return true;
+  }
+
+  try {
+    const permissionStatus = await navigator.permissions?.query({ name: "geolocation" });
+    return permissionStatus?.state === "granted";
+  } catch (_error) {
+    return false;
+  }
+}
+
+async function applyStartContextMode(mode, { requestLocation = true } = {}) {
   if (!homeBaseModeSelect || !mode) return;
   homeBaseModeSelect.value = mode;
   if (mode === "custom" || mode === "preset") {
@@ -7391,14 +7404,19 @@ async function applyStartContextMode(mode) {
   syncPlannerModeUI();
   homeBaseModeSelect.dispatchEvent(new Event("change", { bubbles: true }));
 
-  if (mode === "current_location") {
+  if (mode === "current_location" && requestLocation) {
     await scopePulseNearbyFromCurrentLocation();
   }
 }
 
-function defaultPlannerEntryToNearMe() {
-  if (homeBaseModeSelect?.value === "current_location") return;
-  return applyStartContextMode("current_location");
+async function defaultPlannerEntryToNearMe() {
+  if (homeBaseModeSelect?.value !== "current_location") {
+    await applyStartContextMode("current_location", { requestLocation: false });
+  }
+
+  if (await canUseCurrentLocationWithoutPrompt()) {
+    await scopePulseNearbyFromCurrentLocation();
+  }
 }
 
 startContextOptionButtons.forEach((button) => {
