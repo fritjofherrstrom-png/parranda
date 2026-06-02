@@ -60,6 +60,65 @@ Every externally sourced candidate should carry provenance and confidence. For e
 }
 ```
 
+## Time-sensitive now/next intelligence
+
+Agnostic Parranda must be time-sensitive, especially for Blitz and spontaneous use.
+
+A user opening Parranda at 11:00, 18:00, 21:30, or after finishing dinner is not asking for the same product. They are often asking:
+
+```txt
+Where should we go now?
+What is still open?
+What fits this exact part of the day?
+What are the next good moves nearby?
+What should we do after dinner, before things close, or if the night is just starting?
+```
+
+The engine should understand **now/next windows**, not only whole-day plans.
+
+Examples:
+
+- late morning: coffee, markets, museums opening soon, short walks, first anchor of the day
+- afternoon: views, neighborhoods, shopping, weather windows, pre-dinner drift
+- early evening: aperitivo, dinner candidates, sunset, live events starting soon
+- post-dinner: bars, music, late-open places, night walks, safe low-friction moves
+- late night: only high-confidence open/live options, avoid pretending normal daytime places are viable
+
+The key product moment is often not “plan my perfect full day”. It is:
+
+```txt
+We are here now. What is the smart move from here?
+```
+
+This requires time-aware scoring across:
+
+- current local time and timezone
+- opening-hours confidence
+- soon-closing risk
+- starts-soon live events
+- after-dinner / late-night category fit
+- user energy and walking tolerance
+- weather windows that may change later
+- distance from current location or current route end
+- whether the candidate is a good immediate move, later move, or fallback
+
+Time should bias, not dictate. A great nearby classic may still be worth a short outside look even if it is closed inside. A late-open place should not win just because it is open if it has weak fit. But the engine must not recommend a route that feels blind to the hour.
+
+Future candidate scoring should distinguish:
+
+```txt
+good_now
+opening_soon
+closing_soon
+better_later
+late_open
+post_dinner_fit
+starts_soon
+too_late_for_this
+```
+
+This is central to making Parranda feel alive rather than static.
+
 ## Context should bias, not dictate
 
 Weather, time, live context, and user intent should bias candidate scoring. They should not become brittle hard rules.
@@ -205,6 +264,7 @@ A future candidate shape may include:
   distance_from_route,
   weather_fit,
   time_fit,
+  now_next_fit,
   intent_fit,
   tourist_local_fit,
   classicness,
