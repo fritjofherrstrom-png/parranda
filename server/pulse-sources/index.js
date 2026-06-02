@@ -12,6 +12,10 @@ const {
   normalizedEventToLiveEvent,
 } = require("./normalize-event");
 const { buildDisplayGate } = require("./display-gates");
+const {
+  SOURCE_PROVIDER_INSPECT_EVENT_LIMIT,
+  buildSourceProviderInspect,
+} = require("./inspect");
 const { dedupeNormalizedEvents } = require("./dedupe");
 
 module.exports = {
@@ -23,5 +27,7 @@ module.exports = {
   normalizeSourceSignal,
   normalizedEventToLiveEvent,
   buildDisplayGate,
+  SOURCE_PROVIDER_INSPECT_EVENT_LIMIT,
+  buildSourceProviderInspect,
   dedupeNormalizedEvents,
 };

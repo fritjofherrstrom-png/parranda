@@ -8,6 +8,7 @@ const { buildApp, buildPlannerAreas } = require("../server/app");
 const { routeTemplates, allItems } = require("../server/catalog");
 const { resetBarcelonaLiveEventsCache } = require("../server/cities/barcelona/live");
 const { resetLiveEventsCache } = require("../server/live-events");
+const { SOURCE_PROVIDER_INSPECT_EVENT_LIMIT } = require("../server/pulse-sources");
 const { buildRouteFromTemplate, routeSimilarity } = require("../server/route-engine");
 
 const originalFetch = global.fetch;
@@ -1784,6 +1785,7 @@ test("GET /api/city-pulse för barcelona presenterar official events utan editor
     assert.equal(en.body.source_status[0].id, "barcelona-open-data-agenda");
     assert.equal(en.body.source_status[0].status, "ok");
     assert.equal(en.body.source_status[0].events, 1);
+    assert.equal(en.body.source_provider_inspect, undefined);
     assert.ok(en.body.official_events[0].match_tags.includes("music"));
     assert.ok(en.body.official_events[0].match_tags.includes("kultur"));
     assert.deepEqual(en.body.moments, []);
@@ -1825,6 +1827,161 @@ test("GET /api/city-pulse för barcelona presenterar official events utan editor
 
     assert.doesNotMatch(JSON.stringify(en.body), /Turismo Roma|Natale di Roma|Trastevere|Monti|Testaccio/);
     assert.doesNotMatch(JSON.stringify(sv.body), /Turismo Roma|Natale di Roma|Trastevere|Monti|Testaccio/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /api/city-pulse?inspect=sources returns provider rows with gate summaries", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "opendata-ajuntament.barcelona.cat") {
+      return mockJsonResponse({
+        success: true,
+        result: {
+          records: Array.from({ length: SOURCE_PROVIDER_INSPECT_EVENT_LIMIT + 2 }, (_value, index) => ({
+            register_id: 9000 + index,
+            name: `Event ${index + 1}`,
+            status: "published",
+            core_type: "event",
+            core_type_name: "Agenda",
+            body: `<p>Long provider body ${index + 1}</p>`,
+            start_date: "2027-06-14T18:00:00+02:00",
+            end_date: "2027-06-14T20:00:00+02:00",
+            type_name: "Puntual",
+            addresses: [
+              {
+                place: `Venue ${index + 1}`,
+                address_name: "C Example",
+                start_street_number: 12,
+                location_4326: {
+                  geometries: [
+                    {
+                      type: "Point",
+                      coordinates: [41.402 + (index * 0.001), 2.203 + (index * 0.001)],
+                    },
+                  ],
+                },
+                location_4326_latlon: {
+                  geometries: [
+                    {
+                      type: "Point",
+                      coordinates: [2.203 + (index * 0.001), 41.402 + (index * 0.001)],
+                    },
+                  ],
+                },
+              },
+            ],
+            classifications_data: [{ name: "Concerts" }],
+            secondary_filters_data: [{ name: "Música" }],
+          })),
+        },
+      });
+    }
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2027-06-14"],
+          weathercode: [1],
+          temperature_2m_max: [23],
+          temperature_2m_min: [15],
+        },
+        current: {
+          temperature_2m: 20,
+          weather_code: 1,
+          is_day: 1,
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during source inspect test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      path: "/api/city-pulse?city=barcelona&date=2027-06-14&lang=en&inspect=sources",
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.city, "barcelona");
+    assert.deepEqual(response.body.source_provider_inspect.provider_ids, ["barcelona-open-data-agenda"]);
+    assert.ok(response.body.source_provider_inspect.normalized_event_count >= 1);
+    assert.ok(response.body.source_provider_inspect.event_rows.length >= 1);
+    assert.ok(response.body.source_provider_inspect.event_rows.length <= SOURCE_PROVIDER_INSPECT_EVENT_LIMIT);
+
+    const firstRow = response.body.source_provider_inspect.event_rows[0];
+    assert.equal(firstRow.source.id, "barcelona-open-data-agenda");
+    assert.equal(firstRow.display_gate.may_show_in_pulse, true);
+    assert.equal(firstRow.display_gate.may_show_in_live_list, true);
+    assert.equal(firstRow.display_gate.may_create_place_candidate, true);
+    assert.equal(firstRow.display_gate.may_show_as_nearby, true);
+    assert.equal(firstRow.display_gate.may_influence_routes, true);
+    assert.equal(firstRow.converted_to_live_event, true);
+    assert.match(firstRow.compat_live_event_id, /^barcelona-open-data-/);
+    assert.equal(firstRow.source_owned.raw_summary, undefined);
+    assert.equal(firstRow.body, undefined);
+  } finally {
+    global.fetch = originalFetch;
+    resetBarcelonaLiveEventsCache();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /api/city-pulse?inspect=sources reports provider failure without crashing", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "opendata-ajuntament.barcelona.cat") {
+      throw new Error("provider down");
+    }
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: { time: ["2027-06-14"], weathercode: [1], temperature_2m_max: [23], temperature_2m_min: [15] },
+        current: { temperature_2m: 20, weather_code: 1, is_day: 1 },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during source inspect failure test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      path: "/api/city-pulse?city=barcelona&date=2027-06-14&lang=en&inspect=sources",
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.source_status[0].status, "failed");
+    assert.equal(response.body.source_provider_inspect.source_status[0].status, "failed");
+    assert.equal(response.body.source_provider_inspect.normalized_event_count, 0);
+    assert.deepEqual(response.body.source_provider_inspect.event_rows, []);
+  } finally {
+    global.fetch = originalFetch;
+    resetBarcelonaLiveEventsCache();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("GET /api/city-pulse?inspect=sources returns empty inspect shape for cities without providers", async () => {
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      path: "/api/city-pulse?city=test-city&date=2026-05-01&lang=en&inspect=sources",
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.city, "test-city");
+    assert.deepEqual(response.body.source_status, []);
+    assert.deepEqual(response.body.source_provider_inspect.provider_ids, []);
+    assert.equal(response.body.source_provider_inspect.normalized_event_count, 0);
+    assert.deepEqual(response.body.source_provider_inspect.event_rows, []);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

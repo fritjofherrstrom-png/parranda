@@ -6,6 +6,8 @@ const test = require("node:test");
 const {
   SourceProviderRegistry,
   collectPulseSourcesForCity,
+  buildSourceProviderInspect,
+  SOURCE_PROVIDER_INSPECT_EVENT_LIMIT,
   normalizeSourceDescriptor,
   normalizeSourceEvent,
   normalizeSourceSignal,
@@ -414,6 +416,45 @@ test("registry collects and dedupes normalized source events", async () => {
   assert.equal(result.events[0].source.id, "test-official-agenda");
   assert.equal(result.events[0].source_owned.title, "Official neighbourhood concert");
   assert.equal(result.events[0].display_gate.may_create_place_candidate, true);
+});
+
+test("source provider inspect mode caps event rows without exposing raw payloads", () => {
+  const normalizedEvents = Array.from({ length: SOURCE_PROVIDER_INSPECT_EVENT_LIMIT + 2 }, (_value, index) =>
+    normalizeSourceEvent(
+      {
+        id: `event-${index + 1}`,
+        title: `Event ${index + 1}`,
+        venue: `Venue ${index + 1}`,
+        address: "Street 1",
+        start_date: "2026-06-02",
+        source_url: `https://example.test/event-${index + 1}`,
+        lat: 41.4 + index,
+        lng: 2.1 + index,
+        raw_summary: `Raw provider body ${index + 1}`,
+      },
+      descriptor(),
+      { index },
+    ),
+  );
+  const compatEvents = normalizedEvents.map((event) => ({
+    id: `compat-${event.id}`,
+    source_event_id: event.id,
+  }));
+
+  const inspect = buildSourceProviderInspect({
+    city: city.key,
+    date: "2026-06-02",
+    providerSpecs: [providerSpec()],
+    source_status: [{ id: "test-official-agenda", status: "ok", events: normalizedEvents.length, signals: 0 }],
+    normalized_events: normalizedEvents,
+    compat_events: compatEvents,
+  });
+
+  assert.equal(inspect.normalized_event_count, SOURCE_PROVIDER_INSPECT_EVENT_LIMIT + 2);
+  assert.equal(inspect.event_rows.length, SOURCE_PROVIDER_INSPECT_EVENT_LIMIT);
+  assert.equal(inspect.truncated_event_count, 2);
+  assert.equal(inspect.event_rows[0].converted_to_live_event, true);
+  assert.equal(inspect.event_rows[0].source_owned.raw_summary, undefined);
 });
 
 test("pulse source registry core has no city-specific branches", () => {
