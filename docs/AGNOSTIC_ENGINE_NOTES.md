@@ -127,6 +127,38 @@ Example copy directions:
 - "Rediscover your city with fresh eyes."
 - "For first-timers, locals, and locals who want to feel like first-timers."
 
+## Parranda Pick as future trust badge
+
+A future **Parranda Pick** should not mean "the algorithm recommended this" or "this place is popular". It should mean Parranda has genuinely vouched for the place as useful in a real day.
+
+Working principle:
+
+```txt
+Parranda Pick is earned by route quality, not popularity.
+```
+
+A Parranda Pick should be rare and should signal taste, curation, and dayflow usefulness. It can apply to a famous landmark, a small cafe, a market, a beach, a bar, a bookstore, or a route anchor if it genuinely improves the day.
+
+The badge should represent:
+
+- verified or strongly vouched-for quality
+- strong fit inside an actual day or route
+- useful route role, not just standalone reputation
+- credible local or experiential value
+- confidence beyond raw external consensus
+
+External consensus, source candidates, and map/search-derived candidates can help discover potential future picks, but they should not automatically receive the badge.
+
+Possible future trust layers:
+
+- **Parranda Pick** — vouched-for, route-quality earned, rare.
+- **Source-backed** — enough public/source evidence to consider, not fully Parranda-vouched.
+- **Local signal** — credible local/community/editorial signal, confidence may vary.
+- **Live fit** — temporarily relevant today/near this route, not a permanent badge.
+- **Route anchor** — a place capable of carrying a route or day shape.
+
+The long-term premium idea is that venues may want to earn "Parranda Pick" the way restaurants care about Michelin/White Guide recognition, but the meaning is different: this is about how beautifully a place works in a real day, not only how good it is in isolation.
+
 ## Why this matters for agnostic Parranda
 
 Parranda cannot manually curate every city, neighborhood, village, island, or rural destination before the product becomes useful.
