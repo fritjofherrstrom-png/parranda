@@ -12,6 +12,7 @@ const { diversifyRecommendationDays } = require("./route-diversity");
 const { buildClientI18nPayload, normalizeLanguage, translate } = require("./ui-i18n");
 const { buildCityPulse } = require("./pulse-engine");
 const { buildMasthead } = require("./pulse-engine/masthead");
+const { classifySignalQuality } = require("./pulse-engine/signal-quality");
 const {
   buildLiveEventEditorialPitch,
 } = require("./pulse-engine/generators/live-events");
@@ -307,7 +308,7 @@ function buildOfficialPulseItem(event, date, cityConfig, lang = "sv") {
   const where = event.venue || cityConfig?.editorialAreaLabel || cityLabel || "";
   const matchesVibes = [...new Set((event.match_tags || []).map((tag) => pulseVibeByTag[tag]).filter(Boolean))];
 
-  return {
+  const item = {
     id: `official-${event.id}`,
     level: "venue",
     signal_type: "live_event_nearby",
@@ -327,7 +328,21 @@ function buildOfficialPulseItem(event, date, cityConfig, lang = "sv") {
     official_event_id: event.id,
     lat: typeof event.lat === "number" ? event.lat : null,
     lng: typeof event.lng === "number" ? event.lng : null,
+    source: {
+      kind: "live_feed",
+      label: event.source_label || event.provider || null,
+      url: event.source_url || event.url || undefined,
+      id: event.source_id || event.provider || undefined,
+    },
     priority: 6,
+  };
+
+  return {
+    ...item,
+    signal_quality: classifySignalQuality({
+      ...item,
+      type: item.signal_type,
+    }),
   };
 }
 
@@ -1065,7 +1080,8 @@ function buildApp() {
       // stay populated for this release.
       const officialCompatItems = officialEvents
         .slice(0, 1)
-        .map((event) => buildOfficialPulseItem(event, date, cityConfig, uiLang));
+        .map((event) => buildOfficialPulseItem(event, date, cityConfig, uiLang))
+        .filter((item) => item.signal_quality?.displayable === true);
 
       // When the engine returns 0 signals, choose the right empty-state copy:
       // - Hard empty: noop city that is NOT a registered preview/active city.

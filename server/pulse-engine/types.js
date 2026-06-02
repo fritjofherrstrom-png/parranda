@@ -41,6 +41,10 @@
  */
 
 /**
+ * @typedef {("strong" | "medium" | "weak" | "fallback")} SignalConfidence
+ */
+
+/**
  * @typedef {Object} SignalSource
  * @property {SignalSourceKind} kind
  * @property {string} [id]    Provider id, e.g. "opendata-bcn"
@@ -61,6 +65,19 @@
  * @property {"open_place" | "open_event" | "build_day" | "external"} kind
  * @property {string} target  place_query | event_id | wildcard_id | url
  * @property {string} label   Localized button text
+ */
+
+/**
+ * A generic, city-agnostic display-quality assessment for a signal. City packs
+ * improve these scores by providing better source/place/timing metadata; the
+ * classifier itself must never branch on city.
+ *
+ * @typedef {Object} SignalQuality
+ * @property {boolean} displayable  Safe to show as a normal Pulse card.
+ * @property {boolean} promotable   Safe to use as masthead/hero source.
+ * @property {boolean} actionable   User can open, add, or otherwise act on it.
+ * @property {SignalConfidence} confidence
+ * @property {string[]} reasons     Machine-readable audit trail.
  */
 
 /**
@@ -101,6 +118,7 @@
  * @property {string}      [related_route_id]
  * @property {string}      [linked_wildcard_id]
  * @property {SignalAction} [action]
+ * @property {SignalQuality} [signal_quality]
  * @property {RouteHints}  [route_hints]
  * @property {number}      score
  * @property {string[]}    [matches_vibes]

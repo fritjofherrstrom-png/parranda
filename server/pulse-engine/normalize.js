@@ -15,6 +15,7 @@
  */
 
 const { translate } = require("../ui-i18n");
+const { classifySignalQuality } = require("./signal-quality");
 
 const CHIPPABLE_SIGNAL_TYPES = new Set([
   "evening_window",
@@ -46,7 +47,7 @@ function normalizeSignal(raw, context) {
       ? raw.signal_label
       : buildSignalLabel(raw.type, context.lang);
 
-  return {
+  const normalized = {
     ...raw,
     id,
     city: raw.city || context.city.key,
@@ -79,6 +80,11 @@ function normalizeSignal(raw, context) {
     signal_label: signalLabel,
     official_event_id: raw.official_event_id || undefined,
     place_query: raw.place_query || undefined,
+  };
+
+  return {
+    ...normalized,
+    signal_quality: classifySignalQuality(normalized),
   };
 }
 

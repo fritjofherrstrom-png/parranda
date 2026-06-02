@@ -22,6 +22,12 @@
  * recurring-moment notes as a live signal.
  */
 
+const {
+  isPromotableSignal,
+  isWeakLivePlaceholderSignal,
+  isPlaceholderSignalText,
+} = require("./signal-quality");
+
 const PREFERRED_TYPES_FOR_HEADLINE = new Set([
   "live_event_nearby",
   "golden_hour",
@@ -81,7 +87,7 @@ function buildMasthead({ signals, fallback, lang = "sv" } = {}) {
 }
 
 function sanitizeMastheadFallback(headline, subhead, lang) {
-  if (!isPlaceholderLiveText(headline)) {
+  if (!isPlaceholderSignalText(headline)) {
     return { headline, subhead };
   }
 
@@ -109,7 +115,7 @@ function pickMastheadSignal(signals) {
 }
 
 function hasMastheadHeadline(signal) {
-  if (isWeakLivePlaceholderSignal(signal)) {
+  if (isWeakLivePlaceholderSignal(signal) || !isPromotableSignal(signal)) {
     return false;
   }
 
@@ -118,31 +124,6 @@ function hasMastheadHeadline(signal) {
       normalizeMastheadText(signal?.safe_headline) ||
       normalizeMastheadText(signal?.kindLabel) ||
       normalizeMastheadText(signal?.signal_label),
-  );
-}
-
-function isWeakLivePlaceholderSignal(signal) {
-  if (signal?.type !== "live_event_nearby") {
-    return false;
-  }
-
-  const safeHeadline = normalizeMastheadText(signal.safe_headline);
-  const venue = normalizeMastheadText(signal.venue || signal.venue_label || signal.location || signal.place || signal.area || signal.where);
-
-  return Boolean(
-    (safeHeadline && isPlaceholderLiveText(safeHeadline)) ||
-      (venue && isPlaceholderLiveText(venue)),
-  );
-}
-
-function isPlaceholderLiveText(value) {
-  const text = normalizeMastheadText(value).toLowerCase();
-  if (!text) return true;
-
-  return (
-    /^venue$/.test(text) ||
-    /^[a-zåäöéèíìóòúùüñç' -]+ venue$/.test(text) ||
-    /^(concert|event|cultural event|live event) (at|in|near) [a-zåäöéèíìóòúùüñç' -]+ venue$/.test(text)
   );
 }
 
