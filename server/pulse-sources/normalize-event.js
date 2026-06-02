@@ -5,11 +5,18 @@ function normalizeSourceEvent(rawEvent, descriptor, options = {}) {
     return null;
   }
 
-  const sourceOwned = pickOwnedFields(rawEvent, descriptor.sourceOwnedFields);
+  const sourceOwned = normalizeCoordinateFields(pickOwnedFields(rawEvent, descriptor.sourceOwnedFields));
   const parrandaOwned = {
     ...pickOwnedFields(rawEvent, descriptor.parrandaOwnedFields || []),
     ...(rawEvent.parranda_owned && typeof rawEvent.parranda_owned === "object" ? rawEvent.parranda_owned : {}),
   };
+  if (parrandaOwned.geocode && typeof parrandaOwned.geocode === "object" && !Array.isArray(parrandaOwned.geocode)) {
+    parrandaOwned.geocode = normalizeCoordinateFields(parrandaOwned.geocode);
+  }
+  const topLevelCoordinates = normalizeCoordinateFields({
+    lat: rawEvent.lat,
+    lng: rawEvent.lng,
+  });
   const source = {
     id: descriptor.id,
     city: descriptor.city,
@@ -35,6 +42,8 @@ function normalizeSourceEvent(rawEvent, descriptor, options = {}) {
     },
     parranda_owned: parrandaOwned,
     confidence,
+    lat: topLevelCoordinates.lat,
+    lng: topLevelCoordinates.lng,
   };
 
   return {
@@ -103,10 +112,10 @@ function normalizeEventConfidence(rawEvent, descriptor, sourceOwned, parrandaOwn
   );
   if (explicit) return normalizeConfidence(explicit);
 
-  if (Number.isFinite(sourceOwned.lat) && Number.isFinite(sourceOwned.lng)) {
+  if (hasFiniteCoordinates(sourceOwned) || hasFiniteCoordinates(parrandaOwned)) {
     return "medium";
   }
-  if (parrandaOwned.known_place_id || Number.isFinite(parrandaOwned.geocode?.lat)) {
+  if (parrandaOwned.known_place_id || hasFiniteCoordinates(parrandaOwned.geocode || {})) {
     return "medium";
   }
   if (descriptor.trust?.confidence === "high") {
@@ -141,6 +150,37 @@ function stripSourcePrefix(id, sourceId) {
   const rawId = String(id || "").trim();
   const prefix = `${sourceId || ""}:`;
   return sourceId && rawId.startsWith(prefix) ? rawId.slice(prefix.length) : rawId;
+}
+
+function normalizeCoordinateFields(value = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+  const normalized = { ...value };
+  if ("lat" in normalized) {
+    normalized.lat = normalizeCoordinateValue(normalized.lat);
+  }
+  if ("lng" in normalized) {
+    normalized.lng = normalizeCoordinateValue(normalized.lng);
+  }
+  return normalized;
+}
+
+function normalizeCoordinateValue(value) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return value == null ? null : value;
+}
+
+function hasFiniteCoordinates(value = {}) {
+  return Number.isFinite(value?.lat) && Number.isFinite(value?.lng);
 }
 
 module.exports = {
