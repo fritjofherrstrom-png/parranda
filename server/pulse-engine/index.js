@@ -1,6 +1,7 @@
 const { buildEngineContext } = require("./context");
 const { normalizeSignal } = require("./normalize");
 const { scoreSignals } = require("./rank");
+const { isDisplayableSignal } = require("./signal-quality");
 const liveEventsGenerator = require("./generators/live-events");
 const cityRhythmGenerator = require("./generators/city-rhythm");
 const goldenHourGenerator = require("./generators/golden-hour");
@@ -74,7 +75,8 @@ async function buildCityPulse(cityConfig, options = {}) {
 
   const normalized = rawSignals
     .map((raw) => normalizeSignal(raw, context))
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter(isDisplayableSignal);
 
   const ranked = scoreSignals(normalized, context);
 

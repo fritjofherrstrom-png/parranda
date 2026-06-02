@@ -9,12 +9,25 @@ const FALLBACK = {
 };
 
 function signal(overrides) {
+  const type = overrides.type;
+  const isLive = type === "live_event_nearby";
+  const isComputed = ["golden_hour", "evening_window", "crowd_warning", "local_timing_advice"].includes(type);
+
   return {
-    id: overrides.id || `id-${overrides.type}`,
-    type: overrides.type,
-    title: overrides.title || `Title for ${overrides.type}`,
-    reason: overrides.reason || `Reason for ${overrides.type}`,
+    id: overrides.id || `id-${type}`,
+    type,
+    title: overrides.title || `Title for ${type}`,
+    reason: overrides.reason || `Reason for ${type}`,
     signal_label: overrides.signal_label || null,
+    when: overrides.when || "Today",
+    source: overrides.source || (isLive
+      ? { kind: "live_feed", label: "Official Agenda", url: "https://example.test/event" }
+      : isComputed
+        ? { kind: "computed", label: "city local time" }
+        : { kind: "editorial" }),
+    trust_level: overrides.trust_level || (isLive ? "official" : isComputed ? "verified" : "editorial"),
+    official_event_id: isLive ? (overrides.official_event_id || "evt-test") : overrides.official_event_id,
+    venue: isLive ? (overrides.venue || "Centre Civic Example") : overrides.venue,
     ...overrides,
   };
 }
