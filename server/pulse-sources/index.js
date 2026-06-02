@@ -9,6 +9,7 @@ const {
 const {
   normalizeSourceEvent,
   normalizeSourceSignal,
+  normalizedEventToLiveEvent,
 } = require("./normalize-event");
 const { buildDisplayGate } = require("./display-gates");
 const { dedupeNormalizedEvents } = require("./dedupe");
@@ -20,6 +21,7 @@ module.exports = {
   validateSourceDescriptor,
   normalizeSourceEvent,
   normalizeSourceSignal,
+  normalizedEventToLiveEvent,
   buildDisplayGate,
   dedupeNormalizedEvents,
 };

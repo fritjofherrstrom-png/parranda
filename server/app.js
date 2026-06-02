@@ -1134,6 +1134,7 @@ function buildApp() {
         items: [...legacyItems, ...officialCompatItems],
         official_events: officialEvents,
         weather: engineResult.weather || null,
+        source_status: engineResult.source_status || [],
       });
     } catch (error) {
       response.status(500).json({

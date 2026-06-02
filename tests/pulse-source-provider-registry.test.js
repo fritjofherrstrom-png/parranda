@@ -10,7 +10,7 @@ const {
   normalizeSourceEvent,
   normalizeSourceSignal,
 } = require("../server/pulse-sources");
-const { buildDisplayGate } = require("../server/pulse-sources/display-gates");
+const { buildDisplayGate, normalizeConfidence } = require("../server/pulse-sources/display-gates");
 
 const root = path.join(__dirname, "..");
 const city = { key: "test-source-city", label: "Test Source City" };
@@ -18,6 +18,7 @@ const city = { key: "test-source-city", label: "Test Source City" };
 function descriptor(overrides = {}) {
   return {
     id: "test-official-agenda",
+    label: "Test Official Agenda",
     city: city.key,
     role: "official_live_baseline",
     sourceType: "official_open_data",
@@ -77,6 +78,7 @@ test("source descriptor validates role, trust and cache policy", () => {
   const normalized = normalizeSourceDescriptor(descriptor());
 
   assert.equal(normalized.role, "official_live_baseline");
+  assert.equal(normalized.label, "Test Official Agenda");
   assert.equal(normalized.trust.source_tier, "official");
   assert.equal(normalized.trust.confidence, "high");
   assert.equal(normalized.cachePolicy.kind, "memory");
@@ -211,6 +213,24 @@ test("weak or no-geo event cannot show as nearby", () => {
   assert.equal(event.display_gate.may_create_place_candidate, false);
 });
 
+test("confidence normalization stays canonical and unknown values fall back to needs_review", () => {
+  assert.equal(normalizeConfidence("strong"), "strong");
+  assert.equal(normalizeConfidence("medium"), "medium");
+  assert.equal(normalizeConfidence("low"), "low");
+  assert.equal(normalizeConfidence("needs_review"), "needs_review");
+  assert.equal(normalizeConfidence("high"), "strong");
+  assert.equal(normalizeConfidence("weak"), "low");
+  assert.equal(normalizeConfidence("certain"), "needs_review");
+
+  const gate = buildDisplayGate({
+    confidence: "certain",
+    source: { url: "https://example.test/event" },
+    source_owned: { title: "Mystery event", start_date: "2026-06-02" },
+  });
+  assert.ok(gate.reasons.includes("confidence_needs_review"));
+  assert.ok(!gate.reasons.includes("confidence_certain"));
+});
+
 test("source-url-only event cannot create a place candidate", () => {
   const event = normalizeSourceEvent(
     {
@@ -224,6 +244,24 @@ test("source-url-only event cannot create a place candidate", () => {
   );
 
   assert.equal(event.display_gate.may_show_in_live_list, true);
+  assert.equal(event.display_gate.may_create_place_candidate, false);
+  assert.equal(event.display_gate.may_show_as_nearby, false);
+});
+
+test("no-time source-url-only event is not eligible for live or route promotion", () => {
+  const event = normalizeSourceEvent(
+    {
+      id: "no-time",
+      title: "Official listing without date",
+      source_url: "https://example.test/event",
+      confidence: "medium",
+    },
+    descriptor(),
+  );
+
+  assert.equal(event.display_gate.may_show_in_pulse, true);
+  assert.equal(event.display_gate.may_show_in_live_list, false);
+  assert.equal(event.display_gate.may_influence_routes, false);
   assert.equal(event.display_gate.may_create_place_candidate, false);
   assert.equal(event.display_gate.may_show_as_nearby, false);
 });
@@ -251,6 +289,65 @@ test("provider coordinates or known place can create a place candidate", () => {
   assert.equal(withCoords.display_gate.may_show_as_nearby, true);
   assert.equal(knownPlaceGate.may_create_place_candidate, true);
   assert.equal(knownPlaceGate.may_show_as_nearby, true);
+});
+
+test("numeric string coordinates are canonicalized and pass coordinate gates", () => {
+  const event = normalizeSourceEvent(
+    {
+      id: "string-coords",
+      title: "Official listing",
+      venue: "Centre Example",
+      address: "Street 1",
+      start_date: "2026-06-02",
+      lat: "41.4",
+      lng: "2.1",
+      parranda_owned: {
+        geocode: {
+          lat: "41.41",
+          lng: "2.11",
+        },
+      },
+    },
+    descriptor(),
+  );
+
+  assert.equal(event.source_owned.lat, 41.4);
+  assert.equal(event.source_owned.lng, 2.1);
+  assert.equal(event.lat, 41.4);
+  assert.equal(event.lng, 2.1);
+  assert.equal(event.parranda_owned.geocode.lat, 41.41);
+  assert.equal(event.parranda_owned.geocode.lng, 2.11);
+  assert.equal(event.display_gate.may_create_place_candidate, true);
+  assert.equal(event.display_gate.may_show_as_nearby, true);
+});
+
+test("invalid string coordinates do not pass coordinate gates", () => {
+  const event = normalizeSourceEvent(
+    {
+      id: "bad-string-coords",
+      title: "Official listing",
+      start_date: "2026-06-02",
+      source_url: "https://example.test/event",
+      lat: "north",
+      lng: "",
+      parranda_owned: {
+        geocode: {
+          lat: "Infinity",
+          lng: "NaN",
+        },
+      },
+    },
+    descriptor(),
+  );
+
+  assert.equal(event.source_owned.lat, null);
+  assert.equal(event.source_owned.lng, null);
+  assert.equal(event.lat, null);
+  assert.equal(event.lng, null);
+  assert.equal(event.parranda_owned.geocode.lat, null);
+  assert.equal(event.parranda_owned.geocode.lng, null);
+  assert.equal(event.display_gate.may_create_place_candidate, false);
+  assert.equal(event.display_gate.may_show_as_nearby, false);
 });
 
 test("normalizeSourceSignal supports future non-event context signals", () => {

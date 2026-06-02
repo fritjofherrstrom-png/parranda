@@ -1,10 +1,8 @@
 const CONFIDENCE_RANK = {
   needs_review: 0,
   low: 1,
-  weak: 1,
   medium: 2,
   strong: 3,
-  high: 3,
 };
 
 function buildDisplayGate(event = {}) {
@@ -27,7 +25,7 @@ function buildDisplayGate(event = {}) {
 
   return {
     may_show_in_pulse: hasTitle && confidenceAtLeast(confidence, "low"),
-    may_show_in_live_list: hasTitle && (hasTiming || hasSourceUrl) && confidenceAtLeast(confidence, "low"),
+    may_show_in_live_list: hasTitle && hasTiming && confidenceAtLeast(confidence, "low"),
     may_influence_routes: hasReliablePlaceTarget && confidenceAtLeast(confidence, "medium"),
     may_create_place_candidate: hasReliablePlaceTarget && confidenceAtLeast(confidence, "medium"),
     may_show_as_nearby: hasReliablePlaceTarget && confidenceAtLeast(confidence, "medium"),
@@ -64,8 +62,11 @@ function buildReasons(facts) {
 function normalizeConfidence(value) {
   const confidence = String(value || "").trim();
   if (confidence === "high") return "strong";
-  if (confidence === "needs_review") return "needs_review";
-  return confidence || "needs_review";
+  if (confidence === "weak") return "low";
+  if (confidence === "strong" || confidence === "medium" || confidence === "low" || confidence === "needs_review") {
+    return confidence;
+  }
+  return "needs_review";
 }
 
 function confidenceAtLeast(value, minimum) {

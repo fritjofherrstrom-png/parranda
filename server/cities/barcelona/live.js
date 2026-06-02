@@ -514,30 +514,42 @@ async function loadOpenDataAgendaEvents(dates, context = {}) {
   return promise;
 }
 
+function bucketOpenDataEventsForDates(dates, events) {
+  const usedEventIds = new Set();
+  const byDate = {};
+
+  for (const date of dates) {
+    byDate[date] = events
+      .filter((event) => overlapsDate(event, date))
+      .filter((event) => {
+        if (usedEventIds.has(event.id)) {
+          return false;
+        }
+        usedEventIds.add(event.id);
+        return true;
+      })
+      .slice(0, 3);
+  }
+
+  return byDate;
+}
+
+async function collectOpenDataAgendaEventsForDates(dates, context = {}) {
+  if (!Array.isArray(dates) || !dates.length) {
+    return {};
+  }
+
+  const events = await loadOpenDataAgendaEvents(dates, context);
+  return bucketOpenDataEventsForDates(dates, events);
+}
+
 async function fetchLiveEventsForDates(dates, context = {}) {
   if (!Array.isArray(dates) || !dates.length) {
     return {};
   }
 
   try {
-    const events = await loadOpenDataAgendaEvents(dates, context);
-    const usedEventIds = new Set();
-    const byDate = {};
-
-    for (const date of dates) {
-      byDate[date] = events
-        .filter((event) => overlapsDate(event, date))
-        .filter((event) => {
-          if (usedEventIds.has(event.id)) {
-            return false;
-          }
-          usedEventIds.add(event.id);
-          return true;
-        })
-        .slice(0, 3);
-    }
-
-    return byDate;
+    return await collectOpenDataAgendaEventsForDates(dates, context);
   } catch (_error) {
     return Object.fromEntries(dates.map((date) => [date, []]));
   }
@@ -554,6 +566,7 @@ function resetBarcelonaLiveEventsCache() {
 
 module.exports = {
   buildCkanDateWindowUrl,
+  collectOpenDataAgendaEventsForDates,
   evaluateOpenDataAgendaRecord,
   fetchLiveEventsForDates,
   normalizeOpenDataAgendaRecord,
