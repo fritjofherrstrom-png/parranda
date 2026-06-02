@@ -43,6 +43,7 @@ async function buildCityPulse(cityConfig, options = {}) {
     safeFetchWeather(cityConfig, date),
     safeFetchPulseSources(cityConfig, date, {
       ...(options.sourceContext || {}),
+      lang,
       collectOpenDataAgendaEventsForDates: options.collectOpenDataAgendaEventsForDates,
     }),
   ]);
@@ -62,7 +63,15 @@ async function buildCityPulse(cityConfig, options = {}) {
     ...readCitySignalGenerators(cityConfig),
   ];
 
+  // Source-backed signals (e.g. the generic weather-context provider) enter the
+  // same pipeline as generator output. They are already normalized source
+  // signals; we strip them back to raw signal shape so normalizeSignal() applies
+  // the same trust/freshness/source defaults a generator would receive.
   const rawSignals = [];
+  for (const sourceSignal of sourceResult.signals || []) {
+    const raw = sourceSignalToRawSignal(sourceSignal);
+    if (raw) rawSignals.push(raw);
+  }
   for (const generator of generators) {
     try {
       const result = await Promise.resolve(generator(context));
@@ -107,6 +116,7 @@ async function buildCityPulse(cityConfig, options = {}) {
           source_status: sourceResult.source_status || [],
           normalized_events: sourceResult.normalized_events || [],
           compat_events: sourceResult.compat_events || [],
+          normalized_signals: sourceResult.normalized_signals || [],
         })
       : null,
   };
@@ -154,6 +164,8 @@ async function safeFetchPulseSources(cityConfig, date, sourceContext = {}) {
       events: await safeFetchLiveEvents(cityConfig, date),
       compat_events: [],
       normalized_events: [],
+      signals: [],
+      normalized_signals: [],
       source_status: [],
     };
   }
@@ -168,10 +180,13 @@ async function safeFetchPulseSources(cityConfig, date, sourceContext = {}) {
       },
     });
     const compatEvents = (result.events || []).map(normalizedEventToLiveEvent).filter(Boolean);
+    const normalizedSignals = result.signals || [];
     return {
       events: compatEvents,
       compat_events: compatEvents,
       normalized_events: result.events || [],
+      signals: normalizedSignals,
+      normalized_signals: normalizedSignals,
       source_status: result.source_status || [],
     };
   } catch (_error) {
@@ -179,6 +194,8 @@ async function safeFetchPulseSources(cityConfig, date, sourceContext = {}) {
       events: [],
       compat_events: [],
       normalized_events: [],
+      signals: [],
+      normalized_signals: [],
       source_status: providerSpecs.map((spec) => ({
         id: spec?.descriptor?.id || spec?.id || "unknown-source-provider",
         city: cityConfig?.key || null,
@@ -189,6 +206,59 @@ async function safeFetchPulseSources(cityConfig, date, sourceContext = {}) {
       })),
     };
   }
+}
+
+/**
+ * Convert a normalized source signal (from the registry) back into the raw
+ * signal shape that normalizeSignal() expects from a generator. The source
+ * layer wraps fields under source_owned/parranda_owned; the generator pipeline
+ * reads a flatter shape. We keep compact provider provenance alongside the raw
+ * signal so ranked signals can still be traced back without exposing full raw
+ * provider payloads.
+ */
+function sourceSignalToRawSignal(sourceSignal) {
+  if (!sourceSignal || typeof sourceSignal !== "object") {
+    return null;
+  }
+  const sourceOwned = sourceSignal.source_owned || {};
+  const parrandaOwned = sourceSignal.parranda_owned || {};
+  const title = sourceSignal.title || sourceOwned.title;
+  const type = sourceSignal.signal_type || sourceSignal.type;
+  if (!title || !type) {
+    return null;
+  }
+  const source = sourceSignal.source || {};
+  return {
+    id: sourceSignal.id,
+    type,
+    title,
+    blurb: sourceSignal.blurb || sourceOwned.blurb || undefined,
+    reason: sourceSignal.reason || parrandaOwned.dayflow_reason || undefined,
+    why_it_matters: sourceSignal.why_it_matters || parrandaOwned.dayflow_reason || undefined,
+    editorial_pitch: sourceSignal.editorial_pitch || undefined,
+    kindLabel: sourceSignal.kindLabel || undefined,
+    // Mark provenance so normalizeSignal infers a weather/computed source.
+    source: {
+      ...source,
+      kind: source.kind || "weather",
+      label: source.label || "weather",
+    },
+    confidence: sourceSignal.confidence || undefined,
+    source_signal: true,
+    source_provider_signal: {
+      id: sourceSignal.id || null,
+      provider_id: source.id || null,
+      role: source.role || sourceSignal.role || null,
+      city: source.city || sourceSignal.city || null,
+      confidence: sourceSignal.confidence || null,
+      signal_type: sourceSignal.signal_type || sourceSignal.type || null,
+      signal_kind: parrandaOwned.signal_kind || null,
+      dayflow_reason: parrandaOwned.dayflow_reason || null,
+      source_owned: sourceOwned,
+      parranda_owned: parrandaOwned,
+      display_gate: sourceSignal.display_gate || null,
+    },
+  };
 }
 
 module.exports = {

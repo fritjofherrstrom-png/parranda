@@ -10,6 +10,7 @@ const {
   ROME_CENTER,
   fetchRomeWeatherForDates,
 } = require("./rome/weather");
+const { createWeatherContextProvider } = require("../pulse-sources/weather-context-provider");
 
 function parsePositiveInteger(value, fallback) {
   const parsed = Number.parseInt(value, 10);
@@ -38,6 +39,7 @@ module.exports = {
     getCityPulse,
     getDateSignals,
     fetchLiveEventsForDates,
+    pulseSourceProviders: [createWeatherContextProvider()],
     signalGenerators: [romeEditorialGenerator],
   },
   walking: {

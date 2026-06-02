@@ -4,6 +4,12 @@ const { dedupeNormalizedEvents } = require("./dedupe");
 
 const DEFAULT_ENABLED_STATUSES = new Set(["active"]);
 
+// A provider whose descriptor.city is this sentinel is city-AGNOSTIC: it binds
+// to whatever city it is collected for, instead of being skipped on city
+// mismatch. The provider's create(cityConfig) is responsible for stamping the
+// real city onto the descriptor it returns, which is what normalization uses.
+const GENERIC_PROVIDER_CITY = "__generic__";
+
 class SourceProviderRegistry {
   constructor(providerSpecs = []) {
     this.providerSpecs = [];
@@ -48,25 +54,34 @@ async function collectPulseSourcesForCity(cityConfig, options = {}) {
   const signals = [];
 
   for (const spec of providerSpecs) {
-    const descriptor = spec.descriptor;
+    const specDescriptor = spec.descriptor;
+    const isGeneric = specDescriptor.city === GENERIC_PROVIDER_CITY;
 
-    if (descriptor.city !== cityConfig.key) {
-      sourceStatuses.push(statusFor(descriptor, "skipped", "city_mismatch"));
+    if (!isGeneric && specDescriptor.city !== cityConfig.key) {
+      sourceStatuses.push(statusFor(specDescriptor, "skipped", "city_mismatch"));
       continue;
     }
-    if (roles && !roles.has(descriptor.role)) {
-      sourceStatuses.push(statusFor(descriptor, "skipped", "role_filtered"));
+    if (roles && !roles.has(specDescriptor.role)) {
+      sourceStatuses.push(statusFor(specDescriptor, "skipped", "role_filtered"));
       continue;
     }
-    if (!enabledStatuses.has(descriptor.status)) {
-      sourceStatuses.push(statusFor(descriptor, "skipped", `status_${descriptor.status}`));
+    if (!enabledStatuses.has(specDescriptor.status)) {
+      sourceStatuses.push(statusFor(specDescriptor, "skipped", `status_${specDescriptor.status}`));
       continue;
     }
 
+    // A generic provider's create() returns a city-bound descriptor; normalize
+    // against it so the sentinel city never leaks into normalized output.
+    let descriptor = specDescriptor;
     try {
       const provider = typeof spec.create === "function" ? spec.create(cityConfig, options.context || {}) : spec.provider;
       if (!provider || typeof provider.collect !== "function") {
-        throw new Error(`Pulse source provider ${descriptor.id} must expose collect()`);
+        throw new Error(`Pulse source provider ${specDescriptor.id} must expose collect()`);
+      }
+      if (provider.descriptor && typeof provider.descriptor === "object") {
+        descriptor = normalizeSourceDescriptor(provider.descriptor, "provider.descriptor");
+      } else if (isGeneric) {
+        descriptor = { ...specDescriptor, city: cityConfig.key };
       }
 
       const result = await Promise.resolve(provider.collect(options.context || {}));
@@ -148,6 +163,7 @@ function toFilterSet(values) {
 
 module.exports = {
   DEFAULT_ENABLED_STATUSES,
+  GENERIC_PROVIDER_CITY,
   SourceProviderRegistry,
   collectPulseSourcesForCity,
   normalizeProviderSpec,

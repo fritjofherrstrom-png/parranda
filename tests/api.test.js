@@ -1908,7 +1908,12 @@ test("GET /api/city-pulse?inspect=sources returns provider rows with gate summar
 
     assert.equal(response.status, 200);
     assert.equal(response.body.city, "barcelona");
-    assert.deepEqual(response.body.source_provider_inspect.provider_ids, ["barcelona-open-data-agenda"]);
+    // Barcelona now wires both the city-specific agenda provider and the
+    // generic weather-context provider through the same registry path.
+    assert.deepEqual(response.body.source_provider_inspect.provider_ids, [
+      "barcelona-open-data-agenda",
+      "generic-open-meteo-weather",
+    ]);
     assert.ok(response.body.source_provider_inspect.normalized_event_count >= 1);
     assert.ok(response.body.source_provider_inspect.event_rows.length >= 1);
     assert.ok(response.body.source_provider_inspect.event_rows.length <= SOURCE_PROVIDER_INSPECT_EVENT_LIMIT);

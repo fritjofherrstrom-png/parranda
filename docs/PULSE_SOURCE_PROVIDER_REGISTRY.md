@@ -82,6 +82,39 @@ The provider must not create a place candidate or nearby claim from a source URL
 alone. Nearby/place eligibility requires provider coordinates, a known place,
 geocode, or a venue+address above the confidence threshold.
 
+## Generic weather-context provider (Open-Meteo)
+
+The first city-AGNOSTIC source provider. Where the Open Data BCN provider is one
+city + one official feed, `createWeatherContextProvider()` works for any city
+that exposes a `center` and a `fetchWeatherForDates` service. It is wired for
+Rome, Barcelona, and Athens through the same `services.pulseSourceProviders`
+path, proving the registry can back agnostic intelligence, not only per-city
+feeds.
+
+It produces source-backed **signals, never events**. A weather signal carries no
+coordinates and no place, so the display-gate layer structurally keeps it as
+Pulse context only — it can never become a live event, place candidate, nearby
+claim, or route stop.
+
+Product rule: Parranda is not a weather app. The interpreter stays silent on
+normal weather and emits at most one signal — the single most dayflow-relevant
+shift — only when weather actually changes the plan (rain → indoor-leaning
+route, strong heat/cold → comfort/timing, high wind → exposed coast/views, or an
+unusually good outdoor window). Boring weather produces no Pulse signal.
+
+Data reuse: the provider calls the city's existing `fetchWeatherForDates`
+(server/weather.js, Open-Meteo) and shares its 30-minute cache, so a single
+`/api/city-pulse` request makes no duplicate weather network calls.
+
+### Source honesty — Open-Meteo licensing
+
+Open-Meteo's free API is licensed for **non-commercial use** under CC BY 4.0 with
+fair-use rate limits (no API key, ~10k calls/day guidance). This provider is
+wired `status: "active"` for product development. A commercial deployment would
+require an Open-Meteo paid plan (or an equivalent licensed weather source) — it
+is **not** production-commercial cleared as-is. This note is the honest record;
+it does not block development use.
+
 ## Inspect mode v1
 
 `GET /api/city-pulse?...&inspect=sources` exposes a compact runtime inspect view
@@ -96,6 +129,14 @@ It is additive and off by default. When requested, it reports:
 - per-event `display_gate`
 - source identity and compact source-owned facts
 - whether the event converted into the legacy live-event compatibility shape
+
+For signal-producing providers (e.g. the weather-context provider) it also
+reports a capped signal summary:
+
+- `normalized_signal_count`
+- capped `signal_rows`
+- per-signal `signal_type`, `signal_kind`, `confidence`, and `dayflow_reason`
+- per-signal `display_gate` (proving weather stays Pulse-only)
 
 It does not dump raw provider payloads by default. The inspect shape is meant to
 speed up provider review and failure diagnosis without turning `/api/city-pulse`
