@@ -50,6 +50,10 @@ function normalizeSourceDescriptor(descriptor, label = "sourceDescriptor") {
     }),
   };
 
+  if (descriptor.label !== undefined) {
+    normalized.label = nonEmptyString(descriptor.label, `${label}.label`);
+  }
+
   if (descriptor.sourceUrl !== undefined) {
     normalized.sourceUrl = httpUrl(descriptor.sourceUrl, `${label}.sourceUrl`);
   }

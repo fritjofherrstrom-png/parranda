@@ -18,6 +18,7 @@ const city = { key: "test-source-city", label: "Test Source City" };
 function descriptor(overrides = {}) {
   return {
     id: "test-official-agenda",
+    label: "Test Official Agenda",
     city: city.key,
     role: "official_live_baseline",
     sourceType: "official_open_data",
@@ -77,6 +78,7 @@ test("source descriptor validates role, trust and cache policy", () => {
   const normalized = normalizeSourceDescriptor(descriptor());
 
   assert.equal(normalized.role, "official_live_baseline");
+  assert.equal(normalized.label, "Test Official Agenda");
   assert.equal(normalized.trust.source_tier, "official");
   assert.equal(normalized.trust.confidence, "high");
   assert.equal(normalized.cachePolicy.kind, "memory");

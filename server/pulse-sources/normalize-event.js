@@ -52,6 +52,48 @@ function normalizeSourceSignal(rawSignal, descriptor, options = {}) {
   };
 }
 
+function normalizedEventToLiveEvent(event) {
+  if (!event || typeof event !== "object") {
+    return null;
+  }
+  const sourceOwned = event.source_owned || {};
+  const parrandaOwned = event.parranda_owned || {};
+  const tags = Array.isArray(parrandaOwned.tags_intents)
+    ? parrandaOwned.tags_intents
+    : Array.isArray(sourceOwned.match_tags)
+      ? sourceOwned.match_tags
+      : [];
+
+  return {
+    id: stripSourcePrefix(event.id, event.source?.id),
+    source_id: event.source?.id || null,
+    source_label: event.source?.label || null,
+    source_url: sourceOwned.source_url || event.source?.url || null,
+    url: sourceOwned.url || sourceOwned.source_url || event.source?.url || null,
+    source_language: sourceOwned.source_language || null,
+    title: sourceOwned.title || "",
+    start_date: sourceOwned.start_date || null,
+    end_date: sourceOwned.end_date || sourceOwned.start_date || null,
+    type: sourceOwned.provider_category || null,
+    provider_category: sourceOwned.provider_category || null,
+    venue: sourceOwned.venue || "",
+    address: sourceOwned.address || "",
+    summary: sourceOwned.summary || sourceOwned.raw_summary || "",
+    raw_summary: sourceOwned.raw_summary || sourceOwned.summary || "",
+    image_url: sourceOwned.image_url || null,
+    buy_url: sourceOwned.buy_url || null,
+    lat: Number.isFinite(sourceOwned.lat) ? sourceOwned.lat : null,
+    lng: Number.isFinite(sourceOwned.lng) ? sourceOwned.lng : null,
+    geocode_label: sourceOwned.geocode_label || sourceOwned.venue || "",
+    geocode_source: sourceOwned.geocode_source || null,
+    match_tags: tags,
+    match_reason: parrandaOwned.match_reason || null,
+    source_event_id: event.id,
+    source_confidence: event.confidence,
+    display_gate: event.display_gate,
+  };
+}
+
 function normalizeEventConfidence(rawEvent, descriptor, sourceOwned, parrandaOwned) {
   const explicit = firstString(
     rawEvent.confidence,
@@ -95,8 +137,15 @@ function firstString(...values) {
   return values.map((value) => String(value || "").trim()).find(Boolean) || "";
 }
 
+function stripSourcePrefix(id, sourceId) {
+  const rawId = String(id || "").trim();
+  const prefix = `${sourceId || ""}:`;
+  return sourceId && rawId.startsWith(prefix) ? rawId.slice(prefix.length) : rawId;
+}
+
 module.exports = {
   normalizeSourceEvent,
   normalizeSourceSignal,
   normalizeEventConfidence,
+  normalizedEventToLiveEvent,
 };

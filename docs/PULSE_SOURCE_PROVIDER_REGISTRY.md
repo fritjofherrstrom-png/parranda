@@ -9,6 +9,7 @@ display gates, dedupe, and route/Pulse eligibility.
 `SourceDescriptor` describes a source before it runs:
 
 - `id`
+- optional `label`
 - `city`
 - `role`
 - `sourceType`
@@ -63,10 +64,20 @@ city does not match the requested city. No cross-city fallback is allowed.
 
 ## Non-goals for v1
 
-- No city-specific feed is activated in this PR.
 - No full source registry UI.
 - No Planner, Blitz, route-engine, or citypack behavior changes.
-- No Barcelona/Rome/Athens special cases.
+- No Barcelona/Rome/Athens special cases in the registry core.
+- No full cross-source merge layer. Dedupe is v1-lite and should not be treated
+  as canonical event identity across unrelated providers.
 
-The next PR can wire a concrete source such as Open Data BCN through this generic
-registry.
+## Active v1 wiring
+
+Barcelona's Open Data BCN agenda provider is the first source wired through this
+registry path. The adapter still owns the raw CKAN/Open Data shape and its
+city-specific quality filtering. The registry owns descriptor validation,
+failure-safe collection, source status reporting, dedupe, normalized ownership
+boundaries, and display/place/nearby gates.
+
+The provider must not create a place candidate or nearby claim from a source URL
+alone. Nearby/place eligibility requires provider coordinates, a known place,
+geocode, or a venue+address above the confidence threshold.

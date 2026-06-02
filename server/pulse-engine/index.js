@@ -2,6 +2,10 @@ const { buildEngineContext } = require("./context");
 const { normalizeSignal } = require("./normalize");
 const { scoreSignals } = require("./rank");
 const { isDisplayableSignal } = require("./signal-quality");
+const {
+  collectPulseSourcesForCity,
+  normalizedEventToLiveEvent,
+} = require("../pulse-sources");
 const liveEventsGenerator = require("./generators/live-events");
 const cityRhythmGenerator = require("./generators/city-rhythm");
 const goldenHourGenerator = require("./generators/golden-hour");
@@ -34,10 +38,14 @@ const CITY_AGNOSTIC_GENERATORS = [
 async function buildCityPulse(cityConfig, options = {}) {
   const { date, now, lang } = options;
 
-  const [weather, events] = await Promise.all([
+  const [weather, sourceResult] = await Promise.all([
     safeFetchWeather(cityConfig, date),
-    safeFetchLiveEvents(cityConfig, date),
+    safeFetchPulseSources(cityConfig, date, {
+      ...(options.sourceContext || {}),
+      collectOpenDataAgendaEventsForDates: options.collectOpenDataAgendaEventsForDates,
+    }),
   ]);
+  const events = sourceResult.events || [];
 
   const context = buildEngineContext({
     cityConfig,
@@ -89,6 +97,7 @@ async function buildCityPulse(cityConfig, options = {}) {
     signals: ranked,
     weather: context.weather,
     events: context.events,
+    source_status: sourceResult.source_status || [],
   };
 }
 
@@ -124,6 +133,43 @@ async function safeFetchLiveEvents(cityConfig, date) {
     return [];
   } catch (_error) {
     return [];
+  }
+}
+
+async function safeFetchPulseSources(cityConfig, date, sourceContext = {}) {
+  const providerSpecs = cityConfig?.services?.pulseSourceProviders;
+  if (!Array.isArray(providerSpecs) || providerSpecs.length === 0) {
+    return {
+      events: await safeFetchLiveEvents(cityConfig, date),
+      source_status: [],
+    };
+  }
+
+  try {
+    const result = await collectPulseSourcesForCity(cityConfig, {
+      providerSpecs,
+      context: {
+        ...sourceContext,
+        date,
+        dates: date ? [date] : [],
+      },
+    });
+    return {
+      events: (result.events || []).map(normalizedEventToLiveEvent).filter(Boolean),
+      source_status: result.source_status || [],
+    };
+  } catch (_error) {
+    return {
+      events: [],
+      source_status: providerSpecs.map((spec) => ({
+        id: spec?.descriptor?.id || spec?.id || "unknown-source-provider",
+        city: cityConfig?.key || null,
+        status: "failed",
+        reason: "source_registry_failed",
+        events: 0,
+        signals: 0,
+      })),
+    };
   }
 }
 

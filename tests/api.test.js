@@ -1781,6 +1781,9 @@ test("GET /api/city-pulse för barcelona presenterar official events utan editor
     assert.equal(en.body.official_events[0].provider_category, "Concerts");
     assert.equal(en.body.official_events[0].lat, 41.402);
     assert.equal(en.body.official_events[0].lng, 2.203);
+    assert.equal(en.body.source_status[0].id, "barcelona-open-data-agenda");
+    assert.equal(en.body.source_status[0].status, "ok");
+    assert.equal(en.body.source_status[0].events, 1);
     assert.ok(en.body.official_events[0].match_tags.includes("music"));
     assert.ok(en.body.official_events[0].match_tags.includes("kultur"));
     assert.deepEqual(en.body.moments, []);
