@@ -5,6 +5,7 @@ const { isDisplayableSignal } = require("./signal-quality");
 const {
   collectPulseSourcesForCity,
   normalizedEventToLiveEvent,
+  buildSourceProviderInspect,
 } = require("../pulse-sources");
 const liveEventsGenerator = require("./generators/live-events");
 const cityRhythmGenerator = require("./generators/city-rhythm");
@@ -98,6 +99,16 @@ async function buildCityPulse(cityConfig, options = {}) {
     weather: context.weather,
     events: context.events,
     source_status: sourceResult.source_status || [],
+    source_provider_inspect: options.inspectSources
+      ? buildSourceProviderInspect({
+          city: context.city.key,
+          date: context.date,
+          providerSpecs: cityConfig?.services?.pulseSourceProviders || [],
+          source_status: sourceResult.source_status || [],
+          normalized_events: sourceResult.normalized_events || [],
+          compat_events: sourceResult.compat_events || [],
+        })
+      : null,
   };
 }
 
@@ -141,6 +152,8 @@ async function safeFetchPulseSources(cityConfig, date, sourceContext = {}) {
   if (!Array.isArray(providerSpecs) || providerSpecs.length === 0) {
     return {
       events: await safeFetchLiveEvents(cityConfig, date),
+      compat_events: [],
+      normalized_events: [],
       source_status: [],
     };
   }
@@ -154,13 +167,18 @@ async function safeFetchPulseSources(cityConfig, date, sourceContext = {}) {
         dates: date ? [date] : [],
       },
     });
+    const compatEvents = (result.events || []).map(normalizedEventToLiveEvent).filter(Boolean);
     return {
-      events: (result.events || []).map(normalizedEventToLiveEvent).filter(Boolean),
+      events: compatEvents,
+      compat_events: compatEvents,
+      normalized_events: result.events || [],
       source_status: result.source_status || [],
     };
   } catch (_error) {
     return {
       events: [],
+      compat_events: [],
+      normalized_events: [],
       source_status: providerSpecs.map((spec) => ({
         id: spec?.descriptor?.id || spec?.id || "unknown-source-provider",
         city: cityConfig?.key || null,

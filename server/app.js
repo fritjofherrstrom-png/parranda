@@ -1057,6 +1057,7 @@ function buildApp() {
       const { cityConfig, requestedCity, cityFallbackUsed } = resolveRequestCity(request.query.city);
       const uiLang = normalizeLanguage(request.query?.lang);
       const date = String(request.query.date || "").trim() || cityConfig.todayIsoDate();
+      const inspectSources = String(request.query.inspect || "").trim() === "sources";
 
       // The engine produces the normalized signals[] stream + fetches
       // weather/events itself. We still call the city's legacy
@@ -1065,7 +1066,7 @@ function buildApp() {
       // unchanged through one release. Frontend will prefer signals[]
       // when present and fall back to items[] otherwise.
       const [engineResult, legacyPulse] = await Promise.all([
-        buildCityPulse(cityConfig, { date, lang: uiLang }),
+        buildCityPulse(cityConfig, { date, lang: uiLang, inspectSources }),
         Promise.resolve()
           .then(() => cityConfig.services.getCityPulse(date, { lang: uiLang }))
           .catch(() => null),
@@ -1135,6 +1136,7 @@ function buildApp() {
         official_events: officialEvents,
         weather: engineResult.weather || null,
         source_status: engineResult.source_status || [],
+        ...(inspectSources ? { source_provider_inspect: engineResult.source_provider_inspect || null } : {}),
       });
     } catch (error) {
       response.status(500).json({

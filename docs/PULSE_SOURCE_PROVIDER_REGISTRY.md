@@ -81,3 +81,22 @@ boundaries, and display/place/nearby gates.
 The provider must not create a place candidate or nearby claim from a source URL
 alone. Nearby/place eligibility requires provider coordinates, a known place,
 geocode, or a venue+address above the confidence threshold.
+
+## Inspect mode v1
+
+`GET /api/city-pulse?...&inspect=sources` exposes a compact runtime inspect view
+for source providers.
+
+It is additive and off by default. When requested, it reports:
+
+- `provider_ids`
+- `source_status`
+- `normalized_event_count`
+- capped `event_rows`
+- per-event `display_gate`
+- source identity and compact source-owned facts
+- whether the event converted into the legacy live-event compatibility shape
+
+It does not dump raw provider payloads by default. The inspect shape is meant to
+speed up provider review and failure diagnosis without turning `/api/city-pulse`
+into a raw source debugger.
