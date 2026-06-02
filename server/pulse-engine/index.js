@@ -212,8 +212,9 @@ async function safeFetchPulseSources(cityConfig, date, sourceContext = {}) {
  * Convert a normalized source signal (from the registry) back into the raw
  * signal shape that normalizeSignal() expects from a generator. The source
  * layer wraps fields under source_owned/parranda_owned; the generator pipeline
- * reads a flatter shape. We keep the source descriptor's kind so trust/source
- * inference treats it as a weather/computed signal.
+ * reads a flatter shape. We keep compact provider provenance alongside the raw
+ * signal so ranked signals can still be traced back without exposing full raw
+ * provider payloads.
  */
 function sourceSignalToRawSignal(sourceSignal) {
   if (!sourceSignal || typeof sourceSignal !== "object") {
@@ -226,6 +227,7 @@ function sourceSignalToRawSignal(sourceSignal) {
   if (!title || !type) {
     return null;
   }
+  const source = sourceSignal.source || {};
   return {
     id: sourceSignal.id,
     type,
@@ -236,9 +238,26 @@ function sourceSignalToRawSignal(sourceSignal) {
     editorial_pitch: sourceSignal.editorial_pitch || undefined,
     kindLabel: sourceSignal.kindLabel || undefined,
     // Mark provenance so normalizeSignal infers a weather/computed source.
-    source: { kind: "weather", label: sourceSignal.source?.label || "weather" },
+    source: {
+      ...source,
+      kind: source.kind || "weather",
+      label: source.label || "weather",
+    },
     confidence: sourceSignal.confidence || undefined,
     source_signal: true,
+    source_provider_signal: {
+      id: sourceSignal.id || null,
+      provider_id: source.id || null,
+      role: source.role || sourceSignal.role || null,
+      city: source.city || sourceSignal.city || null,
+      confidence: sourceSignal.confidence || null,
+      signal_type: sourceSignal.signal_type || sourceSignal.type || null,
+      signal_kind: parrandaOwned.signal_kind || null,
+      dayflow_reason: parrandaOwned.dayflow_reason || null,
+      source_owned: sourceOwned,
+      parranda_owned: parrandaOwned,
+      display_gate: sourceSignal.display_gate || null,
+    },
   };
 }
 
