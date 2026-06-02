@@ -11,6 +11,7 @@ const ATHENS_CENTER = { lat: 37.9838, lng: 23.7275 };
 const noopServices = optionalRequire("../noop-services");
 const geocoding = optionalRequire("../../geocoding");
 const weather = optionalRequire("../../weather");
+const weatherContextProvider = optionalRequire("../../pulse-sources/weather-context-provider");
 
 const athensEditorial = createEditorialService(ATHENS_LABEL);
 const geocodeQuery = createGeocodeQuery();
@@ -138,6 +139,9 @@ module.exports = {
     getCityPulse: athensEditorial.getCityPulse,
     getDateSignals: athensEditorial.getDateSignals,
     fetchLiveEventsForDates,
+    pulseSourceProviders: weatherContextProvider
+      ? [weatherContextProvider.createWeatherContextProvider()]
+      : [],
     signalGenerators: [],
   },
   walking: {

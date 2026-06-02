@@ -1,6 +1,7 @@
 const barcelonaCatalog = require("./catalog");
 const { fetchLiveEventsForDates } = require("./live");
 const { createOpenDataBcnAgendaProvider } = require("./open-data-source-provider");
+const { createWeatherContextProvider } = require("../../pulse-sources/weather-context-provider");
 const barcelonaSources = require("./sources");
 const { createNoopEditorialService } = require("../noop-services");
 const { buildGeocodeQuery } = require("../../geocoding");
@@ -97,7 +98,10 @@ module.exports = {
     getCityPulse: barcelonaEditorial.getCityPulse,
     getDateSignals: barcelonaEditorial.getDateSignals,
     fetchLiveEventsForDates,
-    pulseSourceProviders: [createOpenDataBcnAgendaProvider()],
+    pulseSourceProviders: [
+      createOpenDataBcnAgendaProvider(),
+      createWeatherContextProvider(),
+    ],
     signalGenerators: [],
   },
   walking: {

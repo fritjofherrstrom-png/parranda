@@ -153,7 +153,7 @@ function buildSignalLabel(type, lang) {
 function inferTrustLevel(raw) {
   if (raw.type === "live_event_nearby") return "official";
   if (raw.source?.kind === "live_feed") return "official";
-  if (raw.source?.kind === "computed") return "verified";
+  if (raw.source?.kind === "computed" || raw.source?.kind === "weather") return "verified";
   if (raw.source?.kind === "editorial") return "editorial";
   return "editorial";
 }

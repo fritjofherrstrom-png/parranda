@@ -1,4 +1,5 @@
 const SOURCE_PROVIDER_INSPECT_EVENT_LIMIT = 10;
+const SOURCE_PROVIDER_INSPECT_SIGNAL_LIMIT = 10;
 
 function buildSourceProviderInspect({
   city,
@@ -7,6 +8,7 @@ function buildSourceProviderInspect({
   source_status = [],
   normalized_events = [],
   compat_events = [],
+  normalized_signals = [],
 } = {}) {
   const compatBySourceEventId = new Map(
     (Array.isArray(compat_events) ? compat_events : [])
@@ -17,6 +19,11 @@ function buildSourceProviderInspect({
   const eventRows = events
     .slice(0, SOURCE_PROVIDER_INSPECT_EVENT_LIMIT)
     .map((event) => compactInspectEvent(event, compatBySourceEventId.get(event.id)));
+
+  const signals = Array.isArray(normalized_signals) ? normalized_signals : [];
+  const signalRows = signals
+    .slice(0, SOURCE_PROVIDER_INSPECT_SIGNAL_LIMIT)
+    .map((signal) => compactInspectSignal(signal));
 
   return {
     city: String(city || "").trim() || null,
@@ -29,6 +36,42 @@ function buildSourceProviderInspect({
     returned_event_rows: eventRows.length,
     truncated_event_count: Math.max(0, events.length - eventRows.length),
     event_rows: eventRows,
+    normalized_signal_count: signals.length,
+    returned_signal_rows: signalRows.length,
+    truncated_signal_count: Math.max(0, signals.length - signalRows.length),
+    signal_rows: signalRows,
+  };
+}
+
+/**
+ * Compact a normalized source signal for inspect output. Surfaces why the
+ * signal exists and how it is gated — never the raw provider payload.
+ */
+function compactInspectSignal(signal) {
+  const sourceOwned = signal?.source_owned || {};
+  const parrandaOwned = signal?.parranda_owned || {};
+  const displayGate = signal?.display_gate || {};
+
+  return {
+    id: signal?.id || null,
+    role: signal?.role || null,
+    signal_type: signal?.signal_type || signal?.type || null,
+    signal_kind: parrandaOwned.signal_kind || null,
+    confidence: signal?.confidence || null,
+    title: sourceOwned.title || signal?.title || null,
+    dayflow_reason: parrandaOwned.dayflow_reason || null,
+    source: {
+      id: signal?.source?.id || null,
+      label: signal?.source?.label || null,
+    },
+    display_gate: {
+      may_show_in_pulse: displayGate.may_show_in_pulse === true,
+      may_show_in_live_list: displayGate.may_show_in_live_list === true,
+      may_create_place_candidate: displayGate.may_create_place_candidate === true,
+      may_show_as_nearby: displayGate.may_show_as_nearby === true,
+      may_influence_routes: displayGate.may_influence_routes === true,
+      reasons: Array.isArray(displayGate.reasons) ? displayGate.reasons : [],
+    },
   };
 }
 
@@ -69,5 +112,6 @@ function compactInspectEvent(event, compatEvent) {
 
 module.exports = {
   SOURCE_PROVIDER_INSPECT_EVENT_LIMIT,
+  SOURCE_PROVIDER_INSPECT_SIGNAL_LIMIT,
   buildSourceProviderInspect,
 };
