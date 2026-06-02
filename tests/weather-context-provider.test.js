@@ -291,6 +291,37 @@ test("source-backed weather signals are threaded into the ranked Pulse output", 
   assert.ok(typeof signal.score === "number" && signal.score > 0, "weather signal is ranked");
 });
 
+test("ranked weather signal preserves compact source provenance without raw payload leakage", async () => {
+  const pulse = await buildCityPulse(cityWithWeather(romeCity, RAIN), {
+    date: DATE,
+    now: NOW,
+    lang: "en",
+  });
+  const signal = weatherSignalsOf(pulse)[0];
+  assert.ok(signal, "expected a ranked weather signal");
+
+  // Provenance rides the ranked signals[] path itself, not only ?inspect=sources.
+  const provenance = signal.source_provider_signal;
+  assert.ok(provenance, "ranked weather signal must carry source_provider_signal");
+  assert.equal(provenance.provider_id, WEATHER_CONTEXT_PROVIDER_ID);
+  assert.equal(provenance.role, "weather_context");
+  assert.equal(provenance.city, "rome", "provenance city is the bound city, not the generic sentinel");
+  assert.equal(provenance.signal_type, "weather_shift");
+  assert.equal(provenance.signal_kind, "rain");
+  assert.ok(provenance.dayflow_reason && provenance.dayflow_reason.length > 0);
+
+  // The provenance carries the gate proving weather stays Pulse-only.
+  assert.equal(provenance.display_gate.may_create_place_candidate, false);
+  assert.equal(provenance.display_gate.may_show_as_nearby, false);
+  assert.equal(provenance.display_gate.may_influence_routes, false);
+
+  // The generic sentinel must never appear anywhere in the provenance.
+  assert.ok(
+    !JSON.stringify(provenance).includes(GENERIC_PROVIDER_CITY),
+    "generic sentinel must not leak into ranked-signal provenance",
+  );
+});
+
 // --- Weather never becomes events / place candidates / nearby / routes -------
 
 test("weather signal display gate keeps it as Pulse context only", async () => {
