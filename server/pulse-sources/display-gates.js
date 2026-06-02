@@ -66,7 +66,6 @@ function normalizeConfidence(value) {
   if (confidence === "strong" || confidence === "medium" || confidence === "low" || confidence === "needs_review") {
     return confidence;
   }
-  if (confidence === "needs_review") return "needs_review";
   return "needs_review";
 }
 
