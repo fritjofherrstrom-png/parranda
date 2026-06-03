@@ -1358,6 +1358,18 @@ function formatMoveOutput(candidate) {
 }
 
 async function buildBlitzDecision(cityConfig, payload = {}) {
+  // Experimental, opt-in only: route to the candidate-spine path when the flag
+  // is set. Default Blitz below is byte-stable and runs whenever it is not.
+  // Lazy require avoids a circular dependency at module load.
+  const candidateMode = require("./candidates/blitz-candidate-mode");
+  if (candidateMode.isCandidateBlitzModeEnabled(payload)) {
+    return candidateMode.buildCandidateBlitzDecision(cityConfig, payload, {
+      resolveNowContext,
+      resolveTimeBand,
+      resolveBlitzPreferences,
+    });
+  }
+
   const lang = normalizeLanguage(payload.lang);
   const nowContext = resolveNowContext(cityConfig, payload);
   const origin = await resolveOriginPoint(cityConfig, payload.origin || payload.start || null);
