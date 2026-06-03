@@ -1,0 +1,221 @@
+/**
+ * External / open evidence provider v1.
+ *
+ * The first bridge from the Candidate Spine to source-backed candidates BEYOND
+ * the curated city catalog. It is deliberately fixture/injection backed and
+ * makes NO network calls — a real OSM/Wikidata/open-data fetch would simply
+ * populate the `dataset` this provider consumes; the architecture is identical.
+ *
+ *   external/open record
+ *     → source-backed place candidate (NOT Parranda-verified)
+ *     → explicit evidence claims (existence / location / category [+ consensus])
+ *     → (reduced confidence → gates → fit) handled downstream by the spine
+ *
+ * Hard product stances baked in here:
+ *   - external candidates are city_pack_owned:false, human_verified:false, and
+ *     carry candidate_origin:"external_open" so nothing downstream can mistake
+ *     them for curated truth.
+ *   - confidence is NOT declared by this provider; it emits evidence and lets
+ *     the reducer derive belief. Corroboration across source families is what
+ *     lifts existence — a single weak family stays weak; consensus alone does
+ *     not promote.
+ *   - a record with no reliable location (no coords / no known place) becomes a
+ *     map_result that the gates will keep out of user-facing moves.
+ *
+ * Deterministic and pure given its dataset.
+ */
+
+const { normalizePlaceCandidate, validatePlaceCandidate } = require("./contract");
+const { createEvidence, SOURCE_FAMILIES } = require("../candidates/evidence");
+
+const EXTERNAL_OPEN_PROVIDER_META = Object.freeze({
+  provider_id: "open-data-osm-wikidata-v1",
+  source_family: "map",
+  source_tier: "inferred",
+  source_policy: "open_data_attribution_required",
+});
+
+const CANDIDATE_ORIGIN = "external_open";
+
+class ExternalOpenCandidateProvider {
+  constructor(cityConfig, { dataset, observedAt = null } = {}) {
+    if (!cityConfig || typeof cityConfig !== "object") {
+      throw new Error("ExternalOpenCandidateProvider requires a city config");
+    }
+    this.cityConfig = cityConfig;
+    this.dataset = dataset;
+    this.observedAt = observedAt;
+  }
+
+  listCandidates() {
+    const records = resolveDataset(this.dataset, this.cityConfig);
+    return records
+      .map((record, index) => mapRecordToCandidate(this.cityConfig, record, this.observedAt, index))
+      .filter(Boolean);
+  }
+}
+
+function createExternalOpenProvider(cityConfig, options = {}) {
+  return new ExternalOpenCandidateProvider(cityConfig, options);
+}
+
+/**
+ * Dataset resolution order (NO network):
+ *   - a function → called once with cityConfig (injectable loader; lets tests
+ *     count calls and lets a future real fetcher plug in)
+ *   - an array → used directly (injected fixtures in tests)
+ *   - undefined → built-in deterministic fixtures for the city
+ */
+function resolveDataset(dataset, cityConfig) {
+  if (typeof dataset === "function") {
+    const produced = dataset(cityConfig);
+    return Array.isArray(produced) ? produced : [];
+  }
+  if (Array.isArray(dataset)) {
+    return dataset;
+  }
+  // Lazy: only load fixtures when this provider actually runs.
+  const { getOpenCandidateFixtures } = require("./fixtures/open-candidates");
+  return getOpenCandidateFixtures(cityConfig.key);
+}
+
+function mapRecordToCandidate(cityConfig, record, observedAt, index) {
+  if (!record || typeof record !== "object") return null;
+  const name = firstString(record.name, record.label, record.title);
+  if (!name) return null;
+
+  const hasCoords = Number.isFinite(record.lat) && Number.isFinite(record.lng);
+  const type = firstString(record.type, record.category, "place");
+  const sources = Array.isArray(record.sources) ? record.sources.filter(Boolean) : [];
+
+  const evidence = buildEvidence(record, sources, hasCoords, type, observedAt);
+
+  // Source tier = the strongest tier any contributing source claims. Provider
+  // default applies when a source omits it.
+  const sourceTier = strongestTier(sources) || EXTERNAL_OPEN_PROVIDER_META.source_tier;
+  const primaryFamily = firstString(sources[0]?.family, EXTERNAL_OPEN_PROVIDER_META.source_family);
+
+  const base = normalizePlaceCandidate({
+    id: firstString(record.id, `${cityConfig.key}-ext-${index}`),
+    city: cityConfig.key,
+    label: name,
+    type,
+    // located → a real place we can route to; unlocated → a search-style result
+    candidate_kind: hasCoords ? "real_place" : "map_result",
+    lat: hasCoords ? record.lat : undefined,
+    lng: hasCoords ? record.lng : undefined,
+    area: firstString(record.area, record.neighborhood),
+    tags: Array.isArray(record.tags) ? record.tags : [],
+    time_fit: Array.isArray(record.time_fit) ? record.time_fit : [],
+    route_roles: ["external_candidate"],
+    source: {
+      kind: "open_data",
+      id: EXTERNAL_OPEN_PROVIDER_META.provider_id,
+      label: firstString(sources[0]?.provider, "open data"),
+      url: firstString(sources[0]?.url),
+    },
+    trust: {
+      // NOT verified, NOT declared-high — the reducer derives real belief.
+      source_tier: sourceTier,
+      confidence: "needs_review",
+      human_verified: false,
+      freshness: firstString(record.freshness, "fresh"),
+    },
+    city_pack_owned: false,
+  });
+
+  // Spine extras (validatePlaceCandidate tolerates additional fields).
+  base.evidence = evidence;
+  base.candidate_origin = CANDIDATE_ORIGIN;
+  base.provider_id = EXTERNAL_OPEN_PROVIDER_META.provider_id;
+  base.source_family = primaryFamily;
+  base.source_policy = EXTERNAL_OPEN_PROVIDER_META.source_policy;
+
+  return validatePlaceCandidate(base, `externalOpenCandidate[${index}]`);
+}
+
+function buildEvidence(record, sources, hasCoords, type, observedAt) {
+  const evidence = [];
+
+  for (const source of sources) {
+    const family = normalizeFamily(source.family);
+    const ref = {
+      provider_id: firstString(source.provider, source.provider_id, "open-data"),
+      source_family: family,
+      source_tier: firstString(source.tier, "inferred"),
+      url: firstString(source.url) || undefined,
+      label: firstString(source.provider, source.label) || undefined,
+    };
+    const freshness = firstString(source.freshness, record.freshness, "fresh");
+
+    evidence.push(
+      createEvidence({ claim_type: "existence", value: true, ...ref, observed_at: observedAt, freshness }),
+    );
+    if (hasCoords) {
+      evidence.push(
+        createEvidence({
+          claim_type: "location",
+          value: { lat: record.lat, lng: record.lng },
+          ...ref,
+          observed_at: observedAt,
+          freshness,
+        }),
+      );
+    }
+    evidence.push(
+      createEvidence({ claim_type: "category", value: type, ...ref, observed_at: observedAt, freshness }),
+    );
+  }
+
+  // Consensus is recorded as evidence but quarantined — banding + the reducer
+  // make sure it confirms, never promotes.
+  const popularity = record.popularity || record.consensus;
+  if (popularity && typeof popularity === "object") {
+    const ref = {
+      provider_id: "map-consensus",
+      source_family: "map",
+      source_tier: "inferred",
+      url: firstString(popularity.url) || undefined,
+    };
+    if (Number.isFinite(popularity.count)) {
+      evidence.push(createEvidence({ claim_type: "popularity", value: popularity.count, ...ref, observed_at: observedAt }));
+    }
+    if (Number.isFinite(popularity.rating)) {
+      evidence.push(createEvidence({ claim_type: "sentiment", value: popularity.rating, ...ref, observed_at: observedAt }));
+    }
+  }
+
+  return evidence;
+}
+
+function normalizeFamily(family) {
+  const value = firstString(family).toLowerCase();
+  return SOURCE_FAMILIES.has(value) ? value : "map";
+}
+
+const TIER_RANK = { official: 5, verified: 4, curated: 3, computed: 2, editorial: 2, inferred: 1, fallback: 0 };
+function strongestTier(sources) {
+  let best = null;
+  let bestRank = -1;
+  for (const source of sources) {
+    const tier = firstString(source.tier).toLowerCase();
+    const rank = TIER_RANK[tier];
+    if (rank !== undefined && rank > bestRank) {
+      bestRank = rank;
+      best = tier;
+    }
+  }
+  return best;
+}
+
+function firstString(...values) {
+  return values.map((value) => String(value === undefined || value === null ? "" : value).trim()).find(Boolean) || "";
+}
+
+module.exports = {
+  EXTERNAL_OPEN_PROVIDER_META,
+  CANDIDATE_ORIGIN,
+  ExternalOpenCandidateProvider,
+  createExternalOpenProvider,
+  mapRecordToCandidate,
+};

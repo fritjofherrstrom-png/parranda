@@ -4,6 +4,10 @@ const { validatePlaceCandidate } = require("./contract");
 const DEFAULT_PROVIDER_SPECS = [
   {
     id: "curated-catalog",
+    provider_id: "curated-catalog",
+    source_family: "catalog",
+    source_tier: "curated",
+    source_policy: "parranda_curated",
     create(cityConfig) {
       return new CuratedCatalogProvider(cityConfig);
     },
@@ -66,6 +70,10 @@ function collectPlaceCandidatesForCity(cityConfig, options = {}) {
     candidates.push(...providerCandidates);
     providerReports.push({
       id: spec.id,
+      provider_id: spec.provider_id,
+      source_family: spec.source_family,
+      source_tier: spec.source_tier,
+      source_policy: spec.source_policy,
       count: providerCandidates.length,
       summary: summarizeCandidates(providerCandidates),
     });
@@ -88,6 +96,10 @@ function summarizeCandidateCollection(candidates = [], providerReports = []) {
     by_trust_tier: summary.by_trust_tier,
     by_provider: providerReports.reduce((accumulator, report) => {
       accumulator[report.id] = {
+        provider_id: report.provider_id || report.id,
+        source_family: report.source_family || null,
+        source_tier: report.source_tier || null,
+        source_policy: report.source_policy || null,
         count: report.count,
         by_candidate_kind: report.summary.by_candidate_kind,
         by_trust_tier: report.summary.by_trust_tier,
@@ -128,6 +140,10 @@ function validateProviderSpec(spec) {
   }
   return {
     id: spec.id.trim(),
+    provider_id: typeof spec.provider_id === "string" && spec.provider_id.trim() ? spec.provider_id.trim() : spec.id.trim(),
+    source_family: spec.source_family || null,
+    source_tier: spec.source_tier || null,
+    source_policy: spec.source_policy || null,
     create: spec.create,
   };
 }

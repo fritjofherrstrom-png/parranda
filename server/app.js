@@ -1273,6 +1273,12 @@ function buildApp() {
         // Experimental, opt-in candidate-spine path (default Blitz unchanged
         // unless this flag is set). Accepts ?candidate_mode=1 or body field.
         candidate_mode: request.query?.candidate_mode ?? request.body?.candidate_mode,
+        // Nested opt-in: source-backed external/open candidates (only consulted
+        // when candidate_mode is also on). ?include_external_candidates=1 or
+        // ?candidate_sources=open, or the equivalent body fields.
+        include_external_candidates:
+          request.query?.include_external_candidates ?? request.body?.include_external_candidates,
+        candidate_sources: request.query?.candidate_sources ?? request.body?.candidate_sources,
         weather: request.body?.weather,
         lens: request.body?.lens,
         lang,

@@ -19,7 +19,10 @@
  * Uses only existing city/catalog candidates. No external providers, no graph.
  */
 
-const { collectPlaceCandidatesForCity } = require("../place-candidates/provider-registry");
+const {
+  collectPlaceCandidatesForCity,
+  DEFAULT_PROVIDER_SPECS,
+} = require("../place-candidates/provider-registry");
 const { deriveEvidenceFromPlaceCandidate } = require("./evidence");
 const { reduceEvidence } = require("./evidence-reducer");
 const { evaluateCandidateGates, targetFromPlaceCandidate } = require("./gates");
@@ -28,9 +31,28 @@ const { normalizeUserIntents } = require("./intent-vocabulary");
 const { scoreCandidateFit } = require("./fit-scorer");
 
 const TRUTHY_FLAGS = new Set([true, 1, "1", "on", "yes", "true"]);
+const OPEN_SOURCE_TOKENS = new Set(["open", "external", "open_data", "open-data", "osm", "wikidata"]);
 
 function isCandidateBlitzModeEnabled(payload = {}) {
   return TRUTHY_FLAGS.has(payload.candidate_mode) || TRUTHY_FLAGS.has(payload.candidateMode);
+}
+
+/**
+ * External candidates are a SECOND opt-in, nested under candidate_mode. Enabled
+ * by include_external_candidates=1 or candidate_sources=open (csv/array). When
+ * off, the external provider module is never even require()'d (see
+ * buildProviderSpecs) — catalog-only and default Blitz cannot load it.
+ */
+function isExternalCandidatesEnabled(payload = {}) {
+  if (
+    TRUTHY_FLAGS.has(payload.include_external_candidates) ||
+    TRUTHY_FLAGS.has(payload.includeExternalCandidates)
+  ) {
+    return true;
+  }
+  const sources = payload.candidate_sources ?? payload.candidateSources;
+  const list = Array.isArray(sources) ? sources : String(sources || "").split(/[,\s]+/);
+  return list.map((token) => String(token).toLowerCase().trim()).some((token) => OPEN_SOURCE_TOKENS.has(token));
 }
 
 /**
@@ -58,7 +80,9 @@ function buildCandidateBlitzDecision(cityConfig, payload = {}, helpers = {}) {
   const lens = typeof payload.lens === "string" ? payload.lens : null;
   const context = { timeBand, weekday: nowContext.weekday, weather, origin, lens };
 
-  const collection = collectPlaceCandidatesForCity(cityConfig);
+  const externalEnabled = isExternalCandidatesEnabled(payload);
+  const providerSpecs = buildProviderSpecs({ externalEnabled, payload, now: nowContext.date });
+  const collection = collectPlaceCandidatesForCity(cityConfig, { providerSpecs });
   const allCandidates = Array.isArray(collection.candidates) ? collection.candidates : [];
 
   const eligible = [];
@@ -74,6 +98,7 @@ function buildCandidateBlitzDecision(cityConfig, payload = {}, helpers = {}) {
       rejected.push({
         id: candidate.id,
         label: candidate.label,
+        origin: candidateOrigin(candidate),
         reason: primaryRejectionReason(gates, candidate),
       });
       continue;
@@ -106,6 +131,8 @@ function buildCandidateBlitzDecision(cityConfig, payload = {}, helpers = {}) {
       normalized_intents: normalized.intents,
       requested_modifiers: normalized.modifiers,
       unmapped_preferences: normalized.unmapped,
+      external_candidates_enabled: externalEnabled,
+      candidate_providers: providerSpecs.map((spec) => spec.id),
       lens,
     },
     reroll_supported: false,
@@ -113,10 +140,10 @@ function buildCandidateBlitzDecision(cityConfig, payload = {}, helpers = {}) {
 
   // --- Honest fallbacks ------------------------------------------------------
   if (!allCandidates.length) {
-    return { ...base, best_move: null, backup_option: null, inspect: emptyInspect("no_candidates", normalized, rejected, []), reason: "no_candidates" };
+    return { ...base, best_move: null, backup_option: null, inspect: emptyInspect("no_candidates", normalized, rejected, [], externalEnabled), reason: "no_candidates" };
   }
   if (!ranked.length) {
-    return { ...base, best_move: null, backup_option: null, inspect: emptyInspect("no_eligible_candidates", normalized, rejected, []), reason: "no_eligible_candidates" };
+    return { ...base, best_move: null, backup_option: null, inspect: emptyInspect("no_eligible_candidates", normalized, rejected, [], externalEnabled), reason: "no_eligible_candidates" };
   }
 
   const best = ranked[0];
@@ -129,8 +156,40 @@ function buildCandidateBlitzDecision(cityConfig, payload = {}, helpers = {}) {
     best_move: formatMove(best, "best"),
     backup_option: backup ? formatMove(backup, "backup") : null,
     reason: noPreferenceMatch ? "no_preference_match_offering_general" : "ok",
-    inspect: buildInspect({ normalized, ranked, rejected, best, context }),
+    inspect: buildInspect({ normalized, ranked, rejected, best, context, externalEnabled }),
   };
+}
+
+/**
+ * Build the provider spec list. Curated catalog is always present. The external
+ * open provider is added — and its module require()'d — ONLY when external
+ * candidates are explicitly enabled, so catalog-only and default Blitz paths
+ * never load external code.
+ */
+function buildProviderSpecs({ externalEnabled, payload, now }) {
+  const specs = [...DEFAULT_PROVIDER_SPECS];
+  if (!externalEnabled) {
+    return specs;
+  }
+  const {
+    createExternalOpenProvider,
+    EXTERNAL_OPEN_PROVIDER_META,
+  } = require("../place-candidates/external-open-provider");
+  specs.push({
+    id: EXTERNAL_OPEN_PROVIDER_META.provider_id,
+    provider_id: EXTERNAL_OPEN_PROVIDER_META.provider_id,
+    source_family: EXTERNAL_OPEN_PROVIDER_META.source_family,
+    source_tier: EXTERNAL_OPEN_PROVIDER_META.source_tier,
+    source_policy: EXTERNAL_OPEN_PROVIDER_META.source_policy,
+    create: (city) =>
+      createExternalOpenProvider(city, { dataset: payload.external_dataset, observedAt: now }),
+  });
+  return specs;
+}
+
+function candidateOrigin(candidate) {
+  if (candidate.candidate_origin) return candidate.candidate_origin;
+  return candidate.city_pack_owned ? "curated_catalog" : "external_open";
 }
 
 /**
@@ -172,7 +231,7 @@ function rankEligible(eligible) {
 }
 
 function formatMove(entry, slot) {
-  const { candidate, gates, fit } = entry;
+  const { candidate, gates, fit, derived } = entry;
   return {
     candidate_id: candidate.id,
     label: candidate.label,
@@ -180,6 +239,8 @@ function formatMove(entry, slot) {
     candidate_kind: candidate.candidate_kind,
     lat: candidate.lat ?? null,
     lng: candidate.lng ?? null,
+    origin: candidateOrigin(candidate),
+    provenance: candidateProvenance(candidate, derived),
     match_tier: matchTier(fit.intent_match, slot),
     fit_score: fit.primary_score,
     intent_base: fit.intent_base,
@@ -193,6 +254,19 @@ function formatMove(entry, slot) {
   };
 }
 
+function candidateProvenance(candidate, derived) {
+  const curated = candidate.city_pack_owned === true;
+  return {
+    provider_id: candidate.provider_id || (curated ? "curated-catalog" : null),
+    source_family: candidate.source_family || (curated ? "catalog" : null),
+    source_tier: candidate.trust?.source_tier || null,
+    source_policy: candidate.source_policy || (curated ? "parranda_curated" : null),
+    human_verified: candidate.trust?.human_verified === true,
+    existence_confidence: derived?.existence_confidence || null,
+    provenance_diversity: derived?.provenance_diversity ?? null,
+  };
+}
+
 function matchTier(intentMatch, slot) {
   if (intentMatch === "covered") return "primary";
   if (intentMatch === "partial") return "supporting";
@@ -200,16 +274,19 @@ function matchTier(intentMatch, slot) {
   return "fallback"; // intent_match === "none"
 }
 
-function buildInspect({ normalized, ranked, rejected, best, context }) {
+function buildInspect({ normalized, ranked, rejected, best, context, externalEnabled }) {
   return {
     requested_intents: normalized.intents,
     requested_modifiers: normalized.modifiers,
     unmapped_preferences: normalized.unmapped,
+    external_candidates_enabled: externalEnabled,
     eligible_count: ranked.length,
     rejected_count: rejected.length,
+    by_origin: countByOrigin(ranked, rejected),
     selected: {
       candidate_id: best.candidate.id,
       label: best.candidate.label,
+      origin: candidateOrigin(best.candidate),
       match_tier: matchTier(best.fit.intent_match, "best"),
       gates_passed: Object.keys(best.gates).filter((k) => best.gates[k] === true),
       covered_preferences: best.fit.covered_preferences,
@@ -217,11 +294,13 @@ function buildInspect({ normalized, ranked, rejected, best, context }) {
       partial_preferences: best.fit.partial_preferences,
       fit_reasons: best.fit.reasons,
       existence_confidence: best.derived.existence_confidence,
+      provenance_diversity: best.derived.provenance_diversity,
     },
     ranked_sample: ranked.slice(0, 5).map((e) => ({
       id: e.candidate.id,
       label: e.candidate.label,
       type: e.candidate.type,
+      origin: candidateOrigin(e.candidate),
       intent_match: e.fit.intent_match,
       fit_score: e.fit.primary_score,
     })),
@@ -234,17 +313,32 @@ function buildInspect({ normalized, ranked, rejected, best, context }) {
   };
 }
 
-function emptyInspect(reason, normalized, rejected, ranked) {
+function emptyInspect(reason, normalized, rejected, ranked, externalEnabled) {
   return {
     requested_intents: normalized.intents,
     requested_modifiers: normalized.modifiers,
     unmapped_preferences: normalized.unmapped,
+    external_candidates_enabled: Boolean(externalEnabled),
     eligible_count: ranked.length,
     rejected_count: rejected.length,
+    by_origin: countByOrigin(ranked, rejected),
     rejected_sample: rejected.slice(0, 5),
     reason,
     bypass: { default_blitz_bypassed: true, reason: "experimental candidate_mode enabled" },
   };
+}
+
+function countByOrigin(ranked, rejected) {
+  const tally = { eligible: {}, rejected: {} };
+  for (const entry of ranked) {
+    const origin = candidateOrigin(entry.candidate);
+    tally.eligible[origin] = (tally.eligible[origin] || 0) + 1;
+  }
+  for (const entry of rejected) {
+    const origin = entry.origin || "unknown";
+    tally.rejected[origin] = (tally.rejected[origin] || 0) + 1;
+  }
+  return tally;
 }
 
 function primaryRejectionReason(gates, candidate) {
@@ -285,6 +379,7 @@ function fallbackTimeBand(hour) {
 
 module.exports = {
   isCandidateBlitzModeEnabled,
+  isExternalCandidatesEnabled,
   buildCandidateBlitzDecision,
   evaluateCandidateEligibility,
 };
