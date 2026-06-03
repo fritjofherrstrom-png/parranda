@@ -101,10 +101,13 @@ const CANONICAL_INTENTS = {
 };
 
 // Context modifiers — they TILT scoring, they are never intents themselves.
+// All token arrays are slugged at match time, so "golden hour" / "golden-hour"
+// / "golden_hour" all match the same bucket. Do not add format-specific
+// duplicates here.
 const MODIFIERS = {
-  sunset: { tags: ["golden hour"], time_fit: ["golden-hour"], tilt_intents: ["scenic"] },
-  golden_hour: { tags: ["golden hour"], time_fit: ["golden-hour"], tilt_intents: ["scenic"] },
-  waterfront: { tags: ["coast"], types: ["promenade", "beach"], tilt_intents: ["scenic", "swimming"] },
+  sunset: { tokens: ["golden_hour", "sunset"], tilt_intents: ["scenic"] },
+  golden_hour: { tokens: ["golden_hour", "sunset"], tilt_intents: ["scenic"] },
+  waterfront: { tokens: ["coast", "promenade", "beach", "waterfront", "seaside"], tilt_intents: ["scenic", "swimming"] },
 };
 
 const MODIFIER_ALIASES = {
@@ -190,25 +193,26 @@ function matchCandidateToIntent(candidate, intent) {
   if (!def) return { strength: 0, level: "none", reason: null };
 
   const type = slug(candidate?.type);
-  const tags = new Set((candidate?.tags || []).map((t) => String(t).toLowerCase().trim()));
+  const tagSlugs = slugSet(candidate?.tags);
 
-  const strongType = def.strong_types?.some((t) => slug(t) === type);
-  const strongTag = def.strong_tags?.some((tag) => tags.has(tag.toLowerCase()));
-  if (strongType || strongTag) {
+  const strongTypeHit = (def.strong_types || []).map(slug).includes(type);
+  const strongTagSlugs = (def.strong_tags || []).map(slug);
+  const strongTagHit = strongTagSlugs.find((s) => tagSlugs.has(s));
+  if (strongTypeHit || strongTagHit) {
     return {
       strength: STRONG_MATCH,
       level: "strong",
-      reason: strongType ? `type:${type}` : `tag:${[...tags].find((t) => def.strong_tags.includes(t))}`,
+      reason: strongTypeHit ? `type:${type}` : `tag:${strongTagHit}`,
     };
   }
 
-  const weakType = def.weak_types?.some((t) => slug(t) === type);
-  const weakTag = def.weak_tags?.some((tag) => tags.has(tag.toLowerCase()));
-  if (weakType || weakTag) {
+  const weakTypeHit = (def.weak_types || []).map(slug).includes(type);
+  const weakTagHit = (def.weak_tags || []).map(slug).some((s) => tagSlugs.has(s));
+  if (weakTypeHit || weakTagHit) {
     return {
       strength: WEAK_MATCH,
       level: "weak",
-      reason: weakType ? `adjacent_type:${type}` : "adjacent_tag",
+      reason: weakTypeHit ? `adjacent_type:${type}` : "adjacent_tag",
     };
   }
 
@@ -217,20 +221,28 @@ function matchCandidateToIntent(candidate, intent) {
 
 /**
  * Which canonical modifiers does this candidate express (golden hour, coast…)?
+ * All comparisons go through slug(), so "golden hour", "golden-hour", and
+ * "golden_hour" collapse to the same bucket regardless of which the source
+ * happened to write.
  */
 function candidateModifiers(candidate) {
-  const type = slug(candidate?.type);
-  const tags = new Set((candidate?.tags || []).map((t) => String(t).toLowerCase().trim()));
-  const timeFit = new Set((candidate?.time_fit || []).map((t) => String(t).toLowerCase().trim()));
-  const present = new Set();
+  const haystack = new Set([
+    slug(candidate?.type),
+    ...slugSet(candidate?.tags),
+    ...slugSet(candidate?.time_fit),
+  ]);
 
+  const present = new Set();
   for (const [modifier, def] of Object.entries(MODIFIERS)) {
-    const tagHit = (def.tags || []).some((t) => tags.has(t));
-    const typeHit = (def.types || []).some((t) => slug(t) === type);
-    const timeHit = (def.time_fit || []).some((t) => timeFit.has(t));
-    if (tagHit || typeHit || timeHit) present.add(modifier);
+    if ((def.tokens || []).map(slug).some((t) => haystack.has(t))) {
+      present.add(modifier);
+    }
   }
   return [...present];
+}
+
+function slugSet(values) {
+  return new Set((values || []).map(slug).filter(Boolean));
 }
 
 /**

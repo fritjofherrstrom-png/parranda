@@ -11,6 +11,7 @@ const { scoreCandidateFit, CONTEXT_CAP } = require("../server/candidates/fit-sco
 const {
   normalizeUserIntents,
   matchCandidateToIntent,
+  candidateModifiers,
 } = require("../server/candidates/intent-vocabulary");
 const { createEvidence } = require("../server/candidates/evidence");
 
@@ -144,6 +145,28 @@ test("second hand / vintage is preserved and not collapsed into generic shopping
   const winner = rome.catalog.allItems.find((i) => i.id === out.best_move.candidate_id);
   const tags = (winner?.tags || []).map((t) => t.toLowerCase());
   assert.ok(["second_hand", "vintage", "antique", "antiques"].some((t) => tags.includes(t)));
+});
+
+test("golden_hour modifier matches all spellings consistently (tags + time_fit)", () => {
+  // Three on-the-wire spellings — must collapse to the same modifier bucket.
+  for (const tag of ["golden hour", "golden-hour", "golden_hour"]) {
+    const present = candidateModifiers({ tags: [tag] });
+    assert.ok(
+      present.includes("golden_hour") && present.includes("sunset"),
+      `tag "${tag}" should match golden_hour + sunset; got ${JSON.stringify(present)}`,
+    );
+  }
+  // time_fit field carries the same alias surface.
+  for (const tf of ["golden hour", "golden-hour", "golden_hour"]) {
+    const present = candidateModifiers({ time_fit: [tf] });
+    assert.ok(
+      present.includes("golden_hour"),
+      `time_fit "${tf}" should match golden_hour; got ${JSON.stringify(present)}`,
+    );
+  }
+  // waterfront alias surface
+  assert.deepEqual(candidateModifiers({ tags: ["coast"] }), ["waterfront"]);
+  assert.deepEqual(candidateModifiers({ type: "beach" }), ["waterfront"]);
 });
 
 // 6 ------------------------------------------------------------------------

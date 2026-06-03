@@ -1357,12 +1357,27 @@ function formatMoveOutput(candidate) {
   };
 }
 
+// Local, dependency-free flag check — kept inline so the experimental
+// candidate-mode module is not require()'d on the default Blitz path. Keep
+// truthy tokens in sync with isCandidateBlitzModeEnabled in candidates/blitz-
+// candidate-mode.js (single-source unit tests live there).
+const CANDIDATE_BLITZ_TRUTHY = new Set([true, 1, "1", "on", "yes", "true"]);
+function isCandidateBlitzFlagSet(payload = {}) {
+  return (
+    CANDIDATE_BLITZ_TRUTHY.has(payload.candidate_mode) ||
+    CANDIDATE_BLITZ_TRUTHY.has(payload.candidateMode)
+  );
+}
+
 async function buildBlitzDecision(cityConfig, payload = {}) {
   // Experimental, opt-in only: route to the candidate-spine path when the flag
   // is set. Default Blitz below is byte-stable and runs whenever it is not.
-  // Lazy require avoids a circular dependency at module load.
-  const candidateMode = require("./candidates/blitz-candidate-mode");
-  if (candidateMode.isCandidateBlitzModeEnabled(payload)) {
+  //
+  // The flag check is INLINED here so the experimental module is not even
+  // require()'d on the default path — a load-time bug in candidate mode must
+  // never affect default Blitz blast radius.
+  if (isCandidateBlitzFlagSet(payload)) {
+    const candidateMode = require("./candidates/blitz-candidate-mode");
     return candidateMode.buildCandidateBlitzDecision(cityConfig, payload, {
       resolveNowContext,
       resolveTimeBand,
