@@ -36,6 +36,7 @@ const { normalizeUserIntents } = require("./intent-vocabulary");
 const { scoreCandidateFit } = require("./fit-scorer");
 const { classifyCatalogDensity, calibrateSource } = require("./source-calibration");
 const { resolveAgnosticConfidence } = require("./agnostic-context");
+const { resolveCandidateIdentity } = require("./entity-resolution");
 
 // Curated/verified Parranda candidates keep priority when fit is comparable.
 // They get a flat priority that dominates any source-calibration influence, so
@@ -103,7 +104,16 @@ function buildCandidateBlitzDecision(cityConfig, payload = {}, helpers = {}) {
     now: nowContext.date,
   });
   const collection = collectPlaceCandidatesForCity(cityConfig, { providerSpecs });
-  const allCandidates = Array.isArray(collection.candidates) ? collection.candidates : [];
+  const collected = Array.isArray(collection.candidates) ? collection.candidates : [];
+
+  // Entity safety (#238): resolve identity BEFORE gates/fit so the same real
+  // place arriving as both curated + external becomes ONE canonical candidate.
+  // A confident curated↔external match enriches the curated candidate with the
+  // external evidence/attribution and suppresses the external duplicate;
+  // ambiguous matches stay separate. This is a no-op when nothing matches, so
+  // catalog-only and city candidate_mode output is unchanged.
+  const identity = resolveCandidateIdentity(collected, { now: nowContext.date });
+  const allCandidates = identity.candidates;
 
   // How much CURATED ground-truth this area has (external candidates must not
   // inflate it — an area we have not curated is honestly "absent" even when open
@@ -182,10 +192,10 @@ function buildCandidateBlitzDecision(cityConfig, payload = {}, helpers = {}) {
 
   // --- Honest fallbacks ------------------------------------------------------
   if (!allCandidates.length) {
-    return { ...base, best_move: null, backup_option: null, confidence: resolveAgnosticConfidence({ best: null, density }), inspect: emptyInspect("no_candidates", normalized, rejected, [], externalEnabled, density), reason: "no_candidates" };
+    return { ...base, best_move: null, backup_option: null, confidence: resolveAgnosticConfidence({ best: null, density }), inspect: emptyInspect("no_candidates", normalized, rejected, [], externalEnabled, density, identity), reason: "no_candidates" };
   }
   if (!ranked.length) {
-    return { ...base, best_move: null, backup_option: null, confidence: resolveAgnosticConfidence({ best: null, density }), inspect: emptyInspect("no_eligible_candidates", normalized, rejected, [], externalEnabled, density), reason: "no_eligible_candidates" };
+    return { ...base, best_move: null, backup_option: null, confidence: resolveAgnosticConfidence({ best: null, density }), inspect: emptyInspect("no_eligible_candidates", normalized, rejected, [], externalEnabled, density, identity), reason: "no_eligible_candidates" };
   }
 
   const best = ranked[0];
@@ -201,7 +211,7 @@ function buildCandidateBlitzDecision(cityConfig, payload = {}, helpers = {}) {
     // citypack confidence.
     confidence: resolveAgnosticConfidence({ best, density }),
     reason: noPreferenceMatch ? "no_preference_match_offering_general" : "ok",
-    inspect: buildInspect({ normalized, ranked, rejected, best, context, externalEnabled, density }),
+    inspect: buildInspect({ normalized, ranked, rejected, best, context, externalEnabled, density, identity }),
   };
 }
 
@@ -350,8 +360,13 @@ function candidateProvenance(candidate, derived) {
     provenance_diversity: derived?.provenance_diversity ?? null,
     // Minimal attribution seam — enough for a UI to render "Source: OSM,
     // Wikidata" without leaking the raw evidence ledger. Open-data sources
-    // typically require visible attribution.
+    // typically require visible attribution. After an entity-safety merge this
+    // includes the absorbed external source(s).
     attribution: buildAttribution(candidate),
+    // Entity safety (#238): when an external duplicate was merged into this
+    // candidate, show where the corroboration came from. Empty/absent otherwise.
+    corroborated_by_external: Array.isArray(candidate.merged_from) && candidate.merged_from.length > 0,
+    merged_from: Array.isArray(candidate.merged_from) ? candidate.merged_from : [],
   };
 }
 
@@ -379,13 +394,14 @@ function matchTier(intentMatch, slot) {
   return "fallback"; // intent_match === "none"
 }
 
-function buildInspect({ normalized, ranked, rejected, best, context, externalEnabled, density }) {
+function buildInspect({ normalized, ranked, rejected, best, context, externalEnabled, density, identity }) {
   return {
     requested_intents: normalized.intents,
     requested_modifiers: normalized.modifiers,
     unmapped_preferences: normalized.unmapped,
     external_candidates_enabled: externalEnabled,
     catalog_density: density,
+    entity_resolution: identitySummary(identity),
     eligible_count: ranked.length,
     rejected_count: rejected.length,
     by_origin: countByOrigin(ranked, rejected),
@@ -402,6 +418,7 @@ function buildInspect({ normalized, ranked, rejected, best, context, externalEna
       existence_confidence: best.derived.existence_confidence,
       provenance_diversity: best.derived.provenance_diversity,
       calibration: best.calibration || null,
+      corroborated_by_external: Array.isArray(best.candidate.merged_from) && best.candidate.merged_from.length > 0,
     },
     ranked_sample: ranked.slice(0, 5).map((e) => ({
       id: e.candidate.id,
@@ -421,19 +438,30 @@ function buildInspect({ normalized, ranked, rejected, best, context, externalEna
   };
 }
 
-function emptyInspect(reason, normalized, rejected, ranked, externalEnabled, density) {
+function emptyInspect(reason, normalized, rejected, ranked, externalEnabled, density, identity) {
   return {
     requested_intents: normalized.intents,
     requested_modifiers: normalized.modifiers,
     unmapped_preferences: normalized.unmapped,
     external_candidates_enabled: Boolean(externalEnabled),
     catalog_density: density || "rich",
+    entity_resolution: identitySummary(identity),
     eligible_count: ranked.length,
     rejected_count: rejected.length,
     by_origin: countByOrigin(ranked, rejected),
     rejected_sample: rejected.slice(0, 5),
     reason,
     bypass: { default_blitz_bypassed: true, reason: "experimental candidate_mode enabled" },
+  };
+}
+
+function identitySummary(identity) {
+  if (!identity || typeof identity !== "object") {
+    return { merged_count: 0, ambiguous_kept_separate: 0, merges: [] };
+  }
+  return {
+    ...(identity.summary || { merged_count: 0, ambiguous_kept_separate: 0 }),
+    merges: Array.isArray(identity.merges) ? identity.merges.slice(0, 8) : [],
   };
 }
 
