@@ -7,16 +7,21 @@
  * byte-stable.
  *
  * Pipeline:
- *   collect existing place candidates
+ *   collect candidates (curated catalog + optional external/open provider,
+ *     opt-in via include_external_candidates — see #234)
  *     → derive evidence (bridge) → reduce → gates
  *     → keep only candidates eligible as a user-facing nearby/now move
  *       (this is where structural / context / weak / popularity-only candidates
  *        are dropped — gates, not the scorer, enforce that)
  *     → score fit (intent primary; context bounded)
- *     → rank lexicographically by intent coverage, then context
+ *     → calibrate source influence (#235; bounded, no consensus input)
+ *     → rank lexicographically: intent coverage → fit → source priority
+ *       (curated dominates the tiebreak; source-backed ordered by existence +
+ *        context-calibrated influence)
  *     → pick best + backup, or emit an HONEST fallback (never hallucinate)
  *
- * Uses only existing city/catalog candidates. No external providers, no graph.
+ * Promotes the existing spine — no fourth pipeline. External providers/
+ * fixtures stay strictly opt-in and fail closed without a trusted loader.
  */
 
 const {
@@ -29,6 +34,13 @@ const { evaluateCandidateGates, targetFromPlaceCandidate } = require("./gates");
 const { confidenceRank } = require("./confidence");
 const { normalizeUserIntents } = require("./intent-vocabulary");
 const { scoreCandidateFit } = require("./fit-scorer");
+const { classifyCatalogDensity, calibrateSource } = require("./source-calibration");
+const { resolveAgnosticConfidence } = require("./agnostic-context");
+
+// Curated/verified Parranda candidates keep priority when fit is comparable.
+// They get a flat priority that dominates any source-calibration influence, so
+// calibration only ever reorders the SOURCE-BACKED set among itself.
+const CURATED_SOURCE_PRIORITY = 100;
 
 const TRUTHY_FLAGS = new Set([true, 1, "1", "on", "yes", "true"]);
 const OPEN_SOURCE_TOKENS = new Set(["open", "external", "open_data", "open-data", "osm", "wikidata"]);
@@ -93,6 +105,14 @@ function buildCandidateBlitzDecision(cityConfig, payload = {}, helpers = {}) {
   const collection = collectPlaceCandidatesForCity(cityConfig, { providerSpecs });
   const allCandidates = Array.isArray(collection.candidates) ? collection.candidates : [];
 
+  // How much CURATED ground-truth this area has (external candidates must not
+  // inflate it — an area we have not curated is honestly "absent" even when open
+  // sources supply candidates). Drives source calibration and honest confidence.
+  const curatedRealPlaceCount = allCandidates.filter(
+    (candidate) => candidate.city_pack_owned === true && candidate.is_structural !== true,
+  ).length;
+  const density = classifyCatalogDensity(curatedRealPlaceCount);
+
   const eligible = [];
   const rejected = [];
   for (const candidate of allCandidates) {
@@ -118,7 +138,19 @@ function buildCandidateBlitzDecision(cityConfig, payload = {}, helpers = {}) {
       userModifiers: normalized.modifiers,
       context,
     });
-    eligible.push({ candidate, derived, gates, fit });
+    // Source calibration: how much this source family's influence should count
+    // in THIS context. Curated candidates are calibrated too (for inspect), but
+    // the ranker gives them a flat dominant priority regardless.
+    const calibration = calibrateSource({
+      family: candidate.source_family || (candidate.city_pack_owned ? "catalog" : "map"),
+      tier: candidate.trust?.source_tier,
+      intents: normalized.intents,
+      lens,
+      density,
+      diversity: derived.provenance_diversity,
+      freshness: derived.freshness,
+    });
+    eligible.push({ candidate, derived, gates, fit, calibration });
   }
 
   const ranked = rankEligible(eligible);
@@ -141,6 +173,8 @@ function buildCandidateBlitzDecision(cityConfig, payload = {}, helpers = {}) {
       unmapped_preferences: normalized.unmapped,
       external_candidates_enabled: externalEnabled,
       candidate_providers: providerSpecs.map((spec) => spec.id),
+      catalog_density: density,
+      agnostic: cityConfig.agnostic === true || density !== "rich",
       lens,
     },
     reroll_supported: false,
@@ -148,10 +182,10 @@ function buildCandidateBlitzDecision(cityConfig, payload = {}, helpers = {}) {
 
   // --- Honest fallbacks ------------------------------------------------------
   if (!allCandidates.length) {
-    return { ...base, best_move: null, backup_option: null, inspect: emptyInspect("no_candidates", normalized, rejected, [], externalEnabled), reason: "no_candidates" };
+    return { ...base, best_move: null, backup_option: null, confidence: resolveAgnosticConfidence({ best: null, density }), inspect: emptyInspect("no_candidates", normalized, rejected, [], externalEnabled, density), reason: "no_candidates" };
   }
   if (!ranked.length) {
-    return { ...base, best_move: null, backup_option: null, inspect: emptyInspect("no_eligible_candidates", normalized, rejected, [], externalEnabled), reason: "no_eligible_candidates" };
+    return { ...base, best_move: null, backup_option: null, confidence: resolveAgnosticConfidence({ best: null, density }), inspect: emptyInspect("no_eligible_candidates", normalized, rejected, [], externalEnabled, density), reason: "no_eligible_candidates" };
   }
 
   const best = ranked[0];
@@ -163,8 +197,11 @@ function buildCandidateBlitzDecision(cityConfig, payload = {}, helpers = {}) {
     ...base,
     best_move: formatMove(best, "best"),
     backup_option: backup ? formatMove(backup, "backup") : null,
+    // Honest confidence — a source-backed or thin-city move never claims full
+    // citypack confidence.
+    confidence: resolveAgnosticConfidence({ best, density }),
     reason: noPreferenceMatch ? "no_preference_match_offering_general" : "ok",
-    inspect: buildInspect({ normalized, ranked, rejected, best, context, externalEnabled }),
+    inspect: buildInspect({ normalized, ranked, rejected, best, context, externalEnabled, density }),
   };
 }
 
@@ -255,16 +292,27 @@ function rankEligible(eligible) {
     // 3. fit score (intent base + bounded context)
     const score = b.fit.primary_score - a.fit.primary_score;
     if (Math.abs(score) > 1e-9) return score;
-    // 4. stronger existence confidence wins ties
-    const conf = confidenceRank(b.derived.existence_confidence) - confidenceRank(a.derived.existence_confidence);
-    if (conf) return conf;
+    // 4. source priority: curated dominates (priority preserved when fit is
+    //    comparable); source-backed candidates are ordered by existence +
+    //    context-calibrated source influence. Consensus never enters here.
+    const sp = sourcePriority(b) - sourcePriority(a);
+    if (Math.abs(sp) > 1e-9) return sp;
     // 5. stable
     return String(a.candidate.id).localeCompare(String(b.candidate.id));
   });
 }
 
+function sourcePriority(entry) {
+  if (entry.candidate.city_pack_owned === true) {
+    return CURATED_SOURCE_PRIORITY;
+  }
+  const existence = confidenceRank(entry.derived?.existence_confidence);
+  const influence = entry.calibration?.influence || 0;
+  return existence + influence;
+}
+
 function formatMove(entry, slot) {
-  const { candidate, gates, fit, derived } = entry;
+  const { candidate, gates, fit, derived, calibration } = entry;
   return {
     candidate_id: candidate.id,
     label: candidate.label,
@@ -274,6 +322,9 @@ function formatMove(entry, slot) {
     lng: candidate.lng ?? null,
     origin: candidateOrigin(candidate),
     provenance: candidateProvenance(candidate, derived),
+    calibration: calibration
+      ? { level: calibration.level, influence: calibration.influence, reasons: calibration.reasons }
+      : null,
     match_tier: matchTier(fit.intent_match, slot),
     fit_score: fit.primary_score,
     intent_base: fit.intent_base,
@@ -328,12 +379,13 @@ function matchTier(intentMatch, slot) {
   return "fallback"; // intent_match === "none"
 }
 
-function buildInspect({ normalized, ranked, rejected, best, context, externalEnabled }) {
+function buildInspect({ normalized, ranked, rejected, best, context, externalEnabled, density }) {
   return {
     requested_intents: normalized.intents,
     requested_modifiers: normalized.modifiers,
     unmapped_preferences: normalized.unmapped,
     external_candidates_enabled: externalEnabled,
+    catalog_density: density,
     eligible_count: ranked.length,
     rejected_count: rejected.length,
     by_origin: countByOrigin(ranked, rejected),
@@ -349,6 +401,7 @@ function buildInspect({ normalized, ranked, rejected, best, context, externalEna
       fit_reasons: best.fit.reasons,
       existence_confidence: best.derived.existence_confidence,
       provenance_diversity: best.derived.provenance_diversity,
+      calibration: best.calibration || null,
     },
     ranked_sample: ranked.slice(0, 5).map((e) => ({
       id: e.candidate.id,
@@ -357,6 +410,7 @@ function buildInspect({ normalized, ranked, rejected, best, context, externalEna
       origin: candidateOrigin(e.candidate),
       intent_match: e.fit.intent_match,
       fit_score: e.fit.primary_score,
+      source_influence: e.calibration ? e.calibration.influence : null,
     })),
     rejected_sample: rejected.slice(0, 5),
     context_applied: { time_band: context.timeBand, weather: Boolean(context.weather), origin: Boolean(context.origin), lens: context.lens || "neutral" },
@@ -367,12 +421,13 @@ function buildInspect({ normalized, ranked, rejected, best, context, externalEna
   };
 }
 
-function emptyInspect(reason, normalized, rejected, ranked, externalEnabled) {
+function emptyInspect(reason, normalized, rejected, ranked, externalEnabled, density) {
   return {
     requested_intents: normalized.intents,
     requested_modifiers: normalized.modifiers,
     unmapped_preferences: normalized.unmapped,
     external_candidates_enabled: Boolean(externalEnabled),
+    catalog_density: density || "rich",
     eligible_count: ranked.length,
     rejected_count: rejected.length,
     by_origin: countByOrigin(ranked, rejected),
