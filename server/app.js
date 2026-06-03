@@ -1302,10 +1302,15 @@ function buildApp() {
       //   proximity. The agnostic context has an empty curated catalog, so
       //   without a trusted external loader (which the public payload cannot
       //   inject — see #234) this fails closed honestly.
+      const candidateModeRaw =
+        request.query?.candidate_mode ??
+        request.query?.candidateMode ??
+        request.body?.candidate_mode ??
+        request.body?.candidateMode;
       const candidateModeRequested =
-        String(request.query?.candidate_mode ?? request.body?.candidate_mode ?? "").trim() !== "" ||
-        request.body?.candidate_mode === true ||
-        request.body?.candidate_mode === 1;
+        String(candidateModeRaw ?? "").trim() !== "" ||
+        candidateModeRaw === true ||
+        candidateModeRaw === 1;
       const coords = parseBlitzCoordinates(request);
       const noRecognizedCity = !requestedCity || cityFallbackUsed;
       const useAgnostic = candidateModeRequested && coords && noRecognizedCity;
@@ -1333,8 +1338,9 @@ function buildApp() {
         memory: request.body?.memory,
         previous_route: request.body?.previous_route,
         // Experimental, opt-in candidate-spine path (default Blitz unchanged
-        // unless this flag is set). Accepts ?candidate_mode=1 or body field.
-        candidate_mode: request.query?.candidate_mode ?? request.body?.candidate_mode,
+        // unless this flag is set). Accepts ?candidate_mode=1 / ?candidateMode=1
+        // or the equivalent body fields (snake_case and camelCase both work).
+        candidate_mode: candidateModeRaw,
         // Nested opt-in: source-backed external/open candidates (only consulted
         // when candidate_mode is also on). ?include_external_candidates=1 or
         // ?candidate_sources=open, or the equivalent body fields. snake_case

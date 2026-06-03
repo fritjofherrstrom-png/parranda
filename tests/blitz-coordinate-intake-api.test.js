@@ -250,3 +250,24 @@ test("out-of-range lng (e.g. 181) is rejected as invalid", async () => {
     assert.equal(response.body.agnostic_context.used, false);
   });
 });
+
+test("camelCase candidateMode flag also triggers agnostic path", async () => {
+  await withServer(async (server) => {
+    // query ?candidateMode=1
+    const viaQuery = await postJson(server, "/api/blitz?candidateMode=1", {
+      lat: 59.5,
+      lng: 18.0,
+      preferences: ["scenic"],
+    });
+    assert.equal(viaQuery.body.agnostic_context.used, true);
+
+    // body candidateMode: 1
+    const viaBody = await postJson(server, "/api/blitz", {
+      candidateMode: 1,
+      lat: 59.5,
+      lng: 18.0,
+      preferences: ["scenic"],
+    });
+    assert.equal(viaBody.body.agnostic_context.used, true);
+  });
+});
