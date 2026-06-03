@@ -81,7 +81,15 @@ function buildCandidateBlitzDecision(cityConfig, payload = {}, helpers = {}) {
   const context = { timeBand, weekday: nowContext.weekday, weather, origin, lens };
 
   const externalEnabled = isExternalCandidatesEnabled(payload);
-  const providerSpecs = buildProviderSpecs({ externalEnabled, payload, now: nowContext.date });
+  // The candidate engine never accepts a dataset/loader from the public
+  // payload — that would let `/api/blitz` callers inject arbitrary candidates.
+  // Test/dev callers pass external_provider injection through the THIRD
+  // `helpers` argument (not the payload). Public HTTP cannot reach it.
+  const providerSpecs = buildProviderSpecs({
+    externalEnabled,
+    externalOptions: helpers.external_provider || null,
+    now: nowContext.date,
+  });
   const collection = collectPlaceCandidatesForCity(cityConfig, { providerSpecs });
   const allCandidates = Array.isArray(collection.candidates) ? collection.candidates : [];
 
@@ -165,8 +173,14 @@ function buildCandidateBlitzDecision(cityConfig, payload = {}, helpers = {}) {
  * open provider is added — and its module require()'d — ONLY when external
  * candidates are explicitly enabled, so catalog-only and default Blitz paths
  * never load external code.
+ *
+ * The external provider FAILS CLOSED at runtime: without an injected
+ * dataset/loader OR an explicit useBundledFixtures opt-in, it returns []. This
+ * stops fixtures from masquerading as runtime open data on a normal
+ * `candidate_sources=open` HTTP call. Test/dev injection arrives through the
+ * trusted `helpers.external_provider` channel (NOT the public payload).
  */
-function buildProviderSpecs({ externalEnabled, payload, now }) {
+function buildProviderSpecs({ externalEnabled, externalOptions, now }) {
   const specs = [...DEFAULT_PROVIDER_SPECS];
   if (!externalEnabled) {
     return specs;
@@ -175,16 +189,35 @@ function buildProviderSpecs({ externalEnabled, payload, now }) {
     createExternalOpenProvider,
     EXTERNAL_OPEN_PROVIDER_META,
   } = require("../place-candidates/external-open-provider");
+
+  const providerOptions = sanitizeExternalOptions(externalOptions, now);
+
   specs.push({
     id: EXTERNAL_OPEN_PROVIDER_META.provider_id,
     provider_id: EXTERNAL_OPEN_PROVIDER_META.provider_id,
     source_family: EXTERNAL_OPEN_PROVIDER_META.source_family,
     source_tier: EXTERNAL_OPEN_PROVIDER_META.source_tier,
     source_policy: EXTERNAL_OPEN_PROVIDER_META.source_policy,
-    create: (city) =>
-      createExternalOpenProvider(city, { dataset: payload.external_dataset, observedAt: now }),
+    create: (city) => createExternalOpenProvider(city, providerOptions),
   });
   return specs;
+}
+
+function sanitizeExternalOptions(externalOptions, now) {
+  if (!externalOptions || typeof externalOptions !== "object") {
+    return { observedAt: now };
+  }
+  const out = { observedAt: now };
+  // Only honour these explicitly-named injection seams. Anything else on the
+  // object is ignored, so future fields cannot leak from the payload by
+  // accident.
+  if (Array.isArray(externalOptions.dataset) || typeof externalOptions.dataset === "function") {
+    out.dataset = externalOptions.dataset;
+  }
+  if (externalOptions.useBundledFixtures === true) {
+    out.useBundledFixtures = true;
+  }
+  return out;
 }
 
 function candidateOrigin(candidate) {
@@ -264,7 +297,28 @@ function candidateProvenance(candidate, derived) {
     human_verified: candidate.trust?.human_verified === true,
     existence_confidence: derived?.existence_confidence || null,
     provenance_diversity: derived?.provenance_diversity ?? null,
+    // Minimal attribution seam — enough for a UI to render "Source: OSM,
+    // Wikidata" without leaking the raw evidence ledger. Open-data sources
+    // typically require visible attribution.
+    attribution: buildAttribution(candidate),
   };
+}
+
+function buildAttribution(candidate) {
+  const evidence = Array.isArray(candidate.evidence) ? candidate.evidence : [];
+  const byProvider = new Map();
+  for (const item of evidence) {
+    const ref = item.source_ref || {};
+    const key = ref.provider_id || ref.label;
+    if (!key || byProvider.has(key)) continue;
+    byProvider.set(key, {
+      provider_id: ref.provider_id || null,
+      label: ref.label || ref.provider_id || null,
+      source_family: ref.source_family || null,
+      url: ref.url || null,
+    });
+  }
+  return [...byProvider.values()];
 }
 
 function matchTier(intentMatch, slot) {

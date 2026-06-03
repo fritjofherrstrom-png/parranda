@@ -38,17 +38,18 @@ const EXTERNAL_OPEN_PROVIDER_META = Object.freeze({
 const CANDIDATE_ORIGIN = "external_open";
 
 class ExternalOpenCandidateProvider {
-  constructor(cityConfig, { dataset, observedAt = null } = {}) {
+  constructor(cityConfig, { dataset, observedAt = null, useBundledFixtures = false } = {}) {
     if (!cityConfig || typeof cityConfig !== "object") {
       throw new Error("ExternalOpenCandidateProvider requires a city config");
     }
     this.cityConfig = cityConfig;
     this.dataset = dataset;
     this.observedAt = observedAt;
+    this.useBundledFixtures = useBundledFixtures === true;
   }
 
   listCandidates() {
-    const records = resolveDataset(this.dataset, this.cityConfig);
+    const records = resolveDataset(this.dataset, this.cityConfig, this.useBundledFixtures);
     return records
       .map((record, index) => mapRecordToCandidate(this.cityConfig, record, this.observedAt, index))
       .filter(Boolean);
@@ -60,13 +61,20 @@ function createExternalOpenProvider(cityConfig, options = {}) {
 }
 
 /**
- * Dataset resolution order (NO network):
+ * Dataset resolution — FAIL CLOSED at runtime.
+ *
  *   - a function → called once with cityConfig (injectable loader; lets tests
  *     count calls and lets a future real fetcher plug in)
- *   - an array → used directly (injected fixtures in tests)
- *   - undefined → built-in deterministic fixtures for the city
+ *   - an array → used directly (explicit injection)
+ *   - undefined → []
+ *
+ * Bundled deterministic fixtures are NEVER auto-loaded at runtime; they exist
+ * only as a development/testing aid and must be opted into explicitly via the
+ * { useBundledFixtures: true } option (test/dev seam) — typically not exposed
+ * over HTTP. This stops a `candidate_sources=open` runtime call from silently
+ * surfacing demo records as if they were real source-backed open data.
  */
-function resolveDataset(dataset, cityConfig) {
+function resolveDataset(dataset, cityConfig, useBundledFixtures) {
   if (typeof dataset === "function") {
     const produced = dataset(cityConfig);
     return Array.isArray(produced) ? produced : [];
@@ -74,9 +82,13 @@ function resolveDataset(dataset, cityConfig) {
   if (Array.isArray(dataset)) {
     return dataset;
   }
-  // Lazy: only load fixtures when this provider actually runs.
-  const { getOpenCandidateFixtures } = require("./fixtures/open-candidates");
-  return getOpenCandidateFixtures(cityConfig.key);
+  if (useBundledFixtures === true) {
+    const { getOpenCandidateFixtures } = require("./fixtures/open-candidates");
+    return getOpenCandidateFixtures(cityConfig.key);
+  }
+  // Fail closed: no loader → no candidates. Real OSM/Wikidata wiring will pass
+  // a dataset function; tests/dev opt into bundled fixtures explicitly.
+  return [];
 }
 
 function mapRecordToCandidate(cityConfig, record, observedAt, index) {

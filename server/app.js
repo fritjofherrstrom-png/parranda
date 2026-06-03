@@ -1275,10 +1275,19 @@ function buildApp() {
         candidate_mode: request.query?.candidate_mode ?? request.body?.candidate_mode,
         // Nested opt-in: source-backed external/open candidates (only consulted
         // when candidate_mode is also on). ?include_external_candidates=1 or
-        // ?candidate_sources=open, or the equivalent body fields.
+        // ?candidate_sources=open, or the equivalent body fields. snake_case
+        // and camelCase are both accepted at the HTTP edge for parity with the
+        // engine's isExternalCandidatesEnabled().
         include_external_candidates:
-          request.query?.include_external_candidates ?? request.body?.include_external_candidates,
-        candidate_sources: request.query?.candidate_sources ?? request.body?.candidate_sources,
+          request.query?.include_external_candidates ??
+          request.query?.includeExternalCandidates ??
+          request.body?.include_external_candidates ??
+          request.body?.includeExternalCandidates,
+        candidate_sources:
+          request.query?.candidate_sources ??
+          request.query?.candidateSources ??
+          request.body?.candidate_sources ??
+          request.body?.candidateSources,
         weather: request.body?.weather,
         lens: request.body?.lens,
         lang,

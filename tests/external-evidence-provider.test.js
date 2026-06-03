@@ -36,54 +36,91 @@ test("external candidates are a nested opt-in flag", () => {
 });
 
 test("default Blitz (no candidate_mode) never invokes the external provider", async () => {
-  let calls = 0;
-  const spy = () => {
-    calls += 1;
-    return [];
-  };
-  const legacy = await buildBlitzDecision(rome, { date: DATE, external_dataset: spy, preferences: ["scenic"] });
+  const legacy = await buildBlitzDecision(rome, { date: DATE, preferences: ["scenic"] });
   assert.equal(legacy.experimental, undefined);
-  assert.equal(calls, 0);
 });
 
 test("candidate_mode without the external flag stays catalog-only", async () => {
-  let calls = 0;
-  const spy = () => {
-    calls += 1;
-    return [];
-  };
   const out = await buildBlitzDecision(rome, {
     candidate_mode: 1,
     date: DATE,
-    external_dataset: spy,
     preferences: ["scenic"],
   });
-  assert.equal(calls, 0); // external provider never created
   assert.equal(out.context.external_candidates_enabled, false);
   assert.deepEqual(out.context.candidate_providers, ["curated-catalog"]);
   assert.equal(out.inspect.by_origin.eligible.external_open, undefined);
 });
 
-test("external flag adds source-backed candidates (and calls the injected loader once)", async () => {
-  let calls = 0;
-  const injected = [
-    { id: "inj-beach", name: "Injected Beach", type: "beach", lat: 41.73, lng: 12.27, tags: ["coast"], sources: TWO_FAMILIES },
-  ];
-  const loader = () => {
-    calls += 1;
-    return injected;
-  };
+test("external flag WITHOUT an injected loader returns no external candidates (fails closed)", async () => {
+  // Source-honesty regression: a real /api/blitz call with
+  // ?candidate_mode=1&include_external_candidates=1 must NOT surface bundled
+  // fixtures as if they were runtime open-data candidates.
   const out = await buildBlitzDecision(rome, {
     candidate_mode: 1,
     include_external_candidates: 1,
     date: DATE,
-    external_dataset: loader,
     preferences: ["swimming"],
   });
+  assert.equal(out.context.external_candidates_enabled, true);
+  // Provider IS registered (so callers can see the seam exists)…
+  assert.ok(out.context.candidate_providers.includes(EXTERNAL_OPEN_PROVIDER_META.provider_id));
+  // …but it returned zero external candidates because no loader was injected.
+  assert.equal(out.inspect.by_origin.eligible.external_open || 0, 0);
+  // Rome has no curated swimming → honest fallback, not a fixture beach.
+  assert.notEqual(out.best_move && out.best_move.origin, "external_open");
+});
+
+test("external flag with an INJECTED loader (trusted seam) adds source-backed candidates", () => {
+  let calls = 0;
+  const loader = () => {
+    calls += 1;
+    return [
+      { id: "inj-beach", name: "Injected Beach", type: "beach", lat: 41.73, lng: 12.27, tags: ["coast"], sources: TWO_FAMILIES },
+    ];
+  };
+  // Trusted injection lives on the third (helpers) arg of the engine, NOT on
+  // the public payload — proving HTTP callers cannot reach this seam.
+  const out = buildCandidateBlitzDecision(
+    rome,
+    { candidate_mode: 1, include_external_candidates: 1, date: DATE, preferences: ["swimming"] },
+    { external_provider: { dataset: loader } },
+  );
   assert.ok(calls >= 1);
   assert.equal(out.context.external_candidates_enabled, true);
   assert.ok(out.context.candidate_providers.includes(EXTERNAL_OPEN_PROVIDER_META.provider_id));
   assert.ok(out.inspect.by_origin.eligible.external_open >= 1);
+});
+
+test("a payload field named external_dataset is ignored (no public injection seam)", async () => {
+  // If anyone POSTs an `external_dataset` field, the engine must not honour it.
+  const malicious = () => [
+    { id: "evil", name: "Fake place", type: "beach", lat: 0, lng: 0, sources: TWO_FAMILIES },
+  ];
+  const out = await buildBlitzDecision(rome, {
+    candidate_mode: 1,
+    include_external_candidates: 1,
+    date: DATE,
+    external_dataset: malicious, // ← MUST be ignored
+    preferences: ["swimming"],
+  });
+  assert.equal(out.inspect.by_origin.eligible.external_open || 0, 0);
+});
+
+test("useBundledFixtures is an explicit test/dev seam (off by default at runtime)", () => {
+  // Public-style call: no fixtures.
+  const runtime = buildCandidateBlitzDecision(
+    rome,
+    { candidate_mode: 1, include_external_candidates: 1, date: DATE, preferences: ["swimming"] },
+  );
+  assert.equal(runtime.inspect.by_origin.eligible.external_open || 0, 0);
+
+  // Test/dev call: bundled fixtures opted into through the trusted helper.
+  const dev = buildCandidateBlitzDecision(
+    rome,
+    { candidate_mode: 1, include_external_candidates: 1, date: DATE, preferences: ["swimming"] },
+    { external_provider: { useBundledFixtures: true } },
+  );
+  assert.ok(dev.inspect.by_origin.eligible.external_open >= 1);
 });
 
 // --- provenance ------------------------------------------------------------
@@ -153,30 +190,50 @@ test("an open candidate with reliable coordinates + corroborating evidence is el
 });
 
 // --- ranking vs curated ----------------------------------------------------
+// These tests use the explicit trusted bundled-fixtures seam so the assertion
+// is about ranking behaviour, not about runtime auto-loading (which is off).
+const WITH_FIXTURES = { external_provider: { useBundledFixtures: true } };
+
 test("a curated candidate still beats an external one when it fits as well", () => {
-  const out = buildCandidateBlitzDecision(rome, {
-    candidate_mode: 1,
-    include_external_candidates: 1,
-    date: DATE,
-    preferences: ["scenic"],
-  });
+  const out = buildCandidateBlitzDecision(
+    rome,
+    { candidate_mode: 1, include_external_candidates: 1, date: DATE, preferences: ["scenic"] },
+    WITH_FIXTURES,
+  );
   // Rome's curated viewpoints (existence high) out-rank the medium external one.
   assert.equal(out.best_move.origin, "curated_catalog");
   assert.equal(out.best_move.type, "viewpoint");
 });
 
 test("an external candidate wins when it is the only strong preference match", () => {
-  // Rome's curated catalog has no swimming; the open beach is the only match.
-  const out = buildCandidateBlitzDecision(rome, {
-    candidate_mode: 1,
-    include_external_candidates: 1,
-    date: DATE,
-    preferences: ["swimming"],
-  });
+  // Rome's curated catalog has no swimming; the open beach is the only match
+  // — once fixtures are explicitly injected via the trusted dev seam.
+  const out = buildCandidateBlitzDecision(
+    rome,
+    { candidate_mode: 1, include_external_candidates: 1, date: DATE, preferences: ["swimming"] },
+    WITH_FIXTURES,
+  );
   assert.equal(out.best_move.origin, "external_open");
   assert.ok(out.best_move.covered_preferences.includes("swimming"));
   assert.equal(out.best_move.match_tier, "primary");
   assert.equal(out.best_move.provenance.human_verified, false);
+});
+
+test("external best_move carries attribution (provider + source URL) for UI rendering", () => {
+  const out = buildCandidateBlitzDecision(
+    rome,
+    { candidate_mode: 1, include_external_candidates: 1, date: DATE, preferences: ["swimming"] },
+    WITH_FIXTURES,
+  );
+  const attribution = out.best_move.provenance.attribution;
+  assert.ok(Array.isArray(attribution));
+  assert.ok(attribution.length >= 1, "attribution must not be empty for an external candidate");
+  for (const entry of attribution) {
+    assert.ok(entry.provider_id || entry.label, "each attribution entry needs at least a provider id/label");
+    if (entry.url) {
+      assert.match(entry.url, /^https?:/, "attribution URLs must be http(s)");
+    }
+  }
 });
 
 // --- intent preservation for external --------------------------------------
@@ -198,19 +255,21 @@ test("second_hand/vintage and scenic/viewpoint are preserved for external candid
 });
 
 // --- no network ------------------------------------------------------------
-test("external provider performs no network calls (fetch is never touched)", async () => {
+test("external provider performs no network calls (fetch is never touched)", () => {
   const originalFetch = global.fetch;
   global.fetch = () => {
     throw new Error("network call attempted during external candidate test");
   };
   try {
-    const out = await buildBlitzDecision(rome, {
-      candidate_mode: 1,
-      include_external_candidates: 1,
-      date: DATE,
-      preferences: ["swimming"],
-    });
+    // Use the trusted bundled-fixtures seam to actually exercise external
+    // candidates — and prove the path never touches fetch.
+    const out = buildCandidateBlitzDecision(
+      rome,
+      { candidate_mode: 1, include_external_candidates: 1, date: DATE, preferences: ["swimming"] },
+      WITH_FIXTURES,
+    );
     assert.ok(out.best_move); // built entirely from fixtures, no fetch
+    assert.equal(out.best_move.origin, "external_open");
   } finally {
     global.fetch = originalFetch;
   }
