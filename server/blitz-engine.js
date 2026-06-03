@@ -1369,19 +1369,24 @@ function isCandidateBlitzFlagSet(payload = {}) {
   );
 }
 
-async function buildBlitzDecision(cityConfig, payload = {}) {
+async function buildBlitzDecision(cityConfig, payload = {}, extras = {}) {
   // Experimental, opt-in only: route to the candidate-spine path when the flag
   // is set. Default Blitz below is byte-stable and runs whenever it is not.
   //
   // The flag check is INLINED here so the experimental module is not even
   // require()'d on the default path — a load-time bug in candidate mode must
   // never affect default Blitz blast radius.
+  //
+  // `extras` is the trusted helper channel for server-side injections (e.g. the
+  // #237 open-data loader's pre-fetched dataset). It is forwarded only into
+  // candidate_mode helpers and NEVER reaches default Blitz.
   if (isCandidateBlitzFlagSet(payload)) {
     const candidateMode = require("./candidates/blitz-candidate-mode");
     return candidateMode.buildCandidateBlitzDecision(cityConfig, payload, {
       resolveNowContext,
       resolveTimeBand,
       resolveBlitzPreferences,
+      ...(extras && typeof extras === "object" ? extras : {}),
     });
   }
 

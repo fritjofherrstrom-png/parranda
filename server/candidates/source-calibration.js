@@ -54,6 +54,11 @@ const INTENT_FAMILY_AFFINITY = {
 
 const FAMILY_BASELINE = {
   official: 0.3,
+  // Linked open knowledge (Wikidata/Wikipedia): credible structured evidence,
+  // above generic map geodata but below authoritative official data. Defined
+  // explicitly so the family is never a silent 0; note it is deliberately NOT
+  // matched by the community/local lens rules below.
+  open_knowledge: 0.2,
   editorial: 0.2,
   community: 0.1,
   live: 0.1,
