@@ -15,8 +15,8 @@
  *
  * NOTE: this module is additive. It does NOT replace display-gates.js; Pulse
  * keeps using that for its event stream this release. The gate names here are a
- * superset:  may_show_in_pulse ≈ may_show, may_influence_routes ≈
- * may_influence_route, may_create_place_candidate / may_show_as_nearby match.
+ * superset:  may_show_in_pulse ≈ may_show, and may_influence_routes /
+ * may_create_place_candidate / may_show_as_nearby match Pulse's names directly.
  *
  * Pure given (target, derived, context).
  *
@@ -33,7 +33,7 @@ const GATE_KEYS = [
   "may_show",
   "may_suggest_now",
   "may_show_as_nearby",
-  "may_influence_route",
+  "may_influence_routes",
   "may_create_place_candidate",
   "may_anchor_route",
   "may_show_in_debug_only",
@@ -48,6 +48,10 @@ function evaluateCandidateGates({ target = {}, derived = {}, context = {} } = {}
     : 0;
   const hasLabel = hasText(target.label);
   const isContext = target.is_context === true;
+  // Structural candidates (area_preset / structural_anchor) are route STRUCTURE,
+  // not user places. They may still anchor/influence a route shape when trusted,
+  // but they must never be offered to a user as a place/nearby/now suggestion.
+  const isStructural = target.is_structural === true;
   const humanVerified = target.human_verified === true;
   const hasReliablePlaceTarget = resolvePlaceTarget(target, reasons);
 
@@ -63,16 +67,26 @@ function evaluateCandidateGates({ target = {}, derived = {}, context = {} } = {}
   const mayShow = isContext ? hasLabel : hasLabel && confidenceAtLeast(existence, "low");
   if (mayShow) reasons.push("eligible_to_show");
 
-  const mayShowAsNearby =
-    !isContext && hasReliablePlaceTarget && confidenceAtLeast(existence, "medium");
+  // User-facing place gates: structural route scaffolding is excluded from all
+  // of these, even when trusted.
+  const userPlaceEligible = !isContext && !isStructural;
 
-  const mayInfluenceRoute =
-    !isContext &&
+  const mayShowAsNearby =
+    userPlaceEligible && hasReliablePlaceTarget && confidenceAtLeast(existence, "medium");
+
+  const mayCreatePlaceCandidate =
+    userPlaceEligible &&
     hasReliablePlaceTarget &&
     confidenceAtLeast(existence, "medium") &&
     corroborated;
 
-  const mayCreatePlaceCandidate = mayInfluenceRoute;
+  // Route-structure gates: structural candidates MAY participate here when
+  // trusted (a structural_anchor carrying a route shape is exactly this case).
+  const mayInfluenceRoutes =
+    !isContext &&
+    hasReliablePlaceTarget &&
+    confidenceAtLeast(existence, "medium") &&
+    corroborated;
 
   const mayAnchorRoute =
     !isContext &&
@@ -85,8 +99,11 @@ function evaluateCandidateGates({ target = {}, derived = {}, context = {} } = {}
   // Anything that can't be shown to a user is still inspectable for debugging.
   const mayShowInDebugOnly = !mayShow;
   if (isContext) reasons.push("context_not_a_place");
+  if (isStructural) reasons.push("structural_route_only");
   if (!hasReliablePlaceTarget && !isContext) reasons.push("no_reliable_place_target");
-  if (mayShow && !mayShowAsNearby && !isContext) reasons.push("shown_but_not_route_eligible");
+  if (mayShow && !mayShowAsNearby && !isContext && !isStructural) {
+    reasons.push("shown_but_not_route_eligible");
+  }
   if (!corroborated && hasReliablePlaceTarget && confidenceAtLeast(existence, "medium")) {
     reasons.push("blocked_promotion_uncorroborated");
   }
@@ -95,7 +112,7 @@ function evaluateCandidateGates({ target = {}, derived = {}, context = {} } = {}
     may_show: mayShow,
     may_suggest_now: maySuggestNow,
     may_show_as_nearby: mayShowAsNearby,
-    may_influence_route: mayInfluenceRoute,
+    may_influence_routes: mayInfluenceRoutes,
     may_create_place_candidate: mayCreatePlaceCandidate,
     may_anchor_route: mayAnchorRoute,
     may_show_in_debug_only: mayShowInDebugOnly,
@@ -121,12 +138,30 @@ function resolvePlaceTarget(target, reasons) {
  */
 function targetFromPlaceCandidate(candidate = {}) {
   const trust = candidate.trust || {};
+  const candidateKind = candidate.candidate_kind || "";
+
+  // A generic normalized candidate id is NOT a reliable place target — a future
+  // draft/source-backed/url-derived candidate carries an id but may be nowhere
+  // real. Only an explicit known_place_id counts, OR the candidate's own id when
+  // it is a verified, Parranda-owned catalog place.
+  const verifiedCatalogPlace =
+    candidate.city_pack_owned === true && trust.human_verified === true;
+  const knownPlaceId =
+    hasText(candidate.known_place_id)
+      ? candidate.known_place_id
+      : verifiedCatalogPlace && hasText(candidate.id)
+        ? candidate.id
+        : "";
+
   return {
     label: candidate.label || candidate.name || "",
     lat: candidate.lat,
     lng: candidate.lng,
-    known_place_id: candidate.known_place_id || candidate.id || "",
-    candidate_kind: candidate.candidate_kind || "",
+    known_place_id: knownPlaceId,
+    candidate_kind: candidateKind,
+    is_structural:
+      candidate.is_structural === true ||
+      ["area_preset", "structural_anchor"].includes(candidateKind),
     human_verified: trust.human_verified === true,
     is_context: false,
   };

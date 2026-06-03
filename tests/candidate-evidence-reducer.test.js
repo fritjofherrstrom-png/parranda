@@ -128,6 +128,36 @@ test("freshness derives from best claim but is capped by observed age", () => {
   assert.equal(old.freshness, "stale");
 });
 
+test("zero-weight evidence is carried but cannot raise confidence or promote", () => {
+  const derived = reduceEvidence(
+    [
+      existence("official", "official", { weight: 0 }),
+      createEvidence({
+        claim_type: "popularity",
+        value: 9000,
+        provider_id: "m",
+        source_family: "map",
+        source_tier: "inferred",
+        weight: 0,
+      }),
+    ],
+    { now: NOW },
+  );
+  assert.equal(derived.existence_confidence, "needs_review");
+  assert.equal(derived.provenance_diversity, 0);
+  assert.equal(derived.consensus.volume_band, "none");
+  assert.deepEqual(derived.reasons, ["all_evidence_zero_weight"]);
+});
+
+test("a zero-weight claim does not add to provenance diversity", () => {
+  const derived = reduceEvidence(
+    [existence("official", "official", { weight: 1 }), existence("map", "inferred", { weight: 0 })],
+    { now: NOW },
+  );
+  // only the weighted official family counts.
+  assert.equal(derived.provenance_diversity, 1);
+});
+
 test("reducer is pure: same inputs + same now → deep-equal output", () => {
   const evidence = [existence("official", "official"), existence("map", "inferred")];
   const a = reduceEvidence(evidence, { now: NOW });

@@ -51,18 +51,20 @@ function reduceEvidence(evidence, { now = null } = {}) {
   const reasons = [];
 
   if (!items.length) {
-    return {
-      existence_confidence: "needs_review",
-      category_confidence: "needs_review",
-      provenance_diversity: 0,
-      freshness: "unknown",
-      consensus: { volume_band: "none", sentiment_band: "unknown" },
-      reasons: ["no_evidence"],
-    };
+    return emptyDerived("no_evidence");
   }
 
-  const existenceItems = items.filter((item) => EXISTENCE_CLAIM_TYPES.has(item.claim_type));
-  const categoryItems = items.filter((item) => item.claim_type === "category");
+  // `weight` is the source's reliability for a claim. v1 uses it as a minimal
+  // contribution gate: zero-weight (or negative) evidence is carried in the
+  // ledger but cannot raise confidence, diversity, or consensus — so it can
+  // never promote a candidate. Graded weighting is reserved for a later step.
+  const contributing = items.filter((item) => Number(item.weight) > 0);
+  if (!contributing.length) {
+    return emptyDerived("all_evidence_zero_weight");
+  }
+
+  const existenceItems = contributing.filter((item) => EXISTENCE_CLAIM_TYPES.has(item.claim_type));
+  const categoryItems = contributing.filter((item) => item.claim_type === "category");
 
   // --- Provenance diversity: distinct source families asserting the place ---
   const existenceFamilies = distinctFamilies(existenceItems);
@@ -85,10 +87,10 @@ function reduceEvidence(evidence, { now = null } = {}) {
     : "needs_review";
 
   // --- Freshness: best freshness among evidence, capped by observed age -----
-  const freshness = deriveFreshness(items, now, reasons);
+  const freshness = deriveFreshness(contributing, now, reasons);
 
   // --- Consensus: banded popularity + sentiment (never raw ranking) ---------
-  const consensus = deriveConsensus(items, reasons);
+  const consensus = deriveConsensus(contributing, reasons);
 
   return {
     existence_confidence: existenceConfidence,
@@ -97,6 +99,17 @@ function reduceEvidence(evidence, { now = null } = {}) {
     freshness,
     consensus,
     reasons,
+  };
+}
+
+function emptyDerived(reason) {
+  return {
+    existence_confidence: "needs_review",
+    category_confidence: "needs_review",
+    provenance_diversity: 0,
+    freshness: "unknown",
+    consensus: { volume_band: "none", sentiment_band: "unknown" },
+    reasons: [reason],
   };
 }
 

@@ -36,7 +36,7 @@ test("a curated, human-verified place with coordinates can anchor a route", () =
   });
   assert.equal(gates.may_show, true);
   assert.equal(gates.may_show_as_nearby, true);
-  assert.equal(gates.may_influence_route, true);
+  assert.equal(gates.may_influence_routes, true);
   assert.equal(gates.may_create_place_candidate, true);
   assert.equal(gates.may_anchor_route, true);
   assert.equal(gates.may_show_in_debug_only, false);
@@ -57,7 +57,7 @@ test("INVARIANT: popularity-only single-family candidate may show but never prom
   assert.equal(gates.may_show, true); // can appear
   assert.equal(gates.may_anchor_route, false); // cannot anchor
   assert.equal(gates.may_create_place_candidate, false); // cannot materialize
-  assert.equal(gates.may_influence_route, false); // cannot steer routes
+  assert.equal(gates.may_influence_routes, false); // cannot steer routes
 });
 
 test("cross-family corroboration unlocks route influence without human verification", () => {
@@ -66,7 +66,7 @@ test("cross-family corroboration unlocks route influence without human verificat
     evidence: [existence("official", "official"), existence("map", "inferred")],
   });
   // diversity 2 + medium+ existence → may influence/create, but anchor needs high.
-  assert.equal(gates.may_influence_route, true);
+  assert.equal(gates.may_influence_routes, true);
   assert.equal(gates.may_create_place_candidate, true);
 });
 
@@ -101,7 +101,7 @@ test("context/weather-like signal can show but structurally cannot become a plac
   assert.equal(gates.may_show, true); // weather may explain
   assert.equal(gates.may_create_place_candidate, false);
   assert.equal(gates.may_anchor_route, false);
-  assert.equal(gates.may_influence_route, false);
+  assert.equal(gates.may_influence_routes, false);
   assert.equal(gates.may_show_as_nearby, false);
   assert.ok(gates.reasons.includes("context_not_a_place"));
 });
@@ -127,4 +127,85 @@ test("targetFromPlaceCandidate carries coordinates + human_verified through", ()
   assert.equal(target.lat, 41.8986);
   assert.equal(target.human_verified, true);
   assert.equal(target.is_context, false);
+});
+
+test("a draft/source-backed candidate with an id but no coordinates is NOT a reliable place target", () => {
+  // id present, but not a verified catalog place and no coordinates → its id
+  // must not count as a known place. This protects future draft/url candidates.
+  const target = targetFromPlaceCandidate({
+    id: "osm-node-12345",
+    label: "Some cafe from OSM",
+    trust: { human_verified: false },
+    city_pack_owned: false,
+  });
+  assert.equal(target.known_place_id, "");
+
+  const { gates } = gatesFor({
+    target,
+    evidence: [existence("map", "inferred"), existence("community", "inferred")],
+  });
+  assert.equal(gates.may_show, true);
+  assert.equal(gates.may_create_place_candidate, false);
+  assert.equal(gates.may_anchor_route, false);
+  assert.ok(gates.reasons.includes("no_reliable_place_target"));
+});
+
+test("a verified catalog candidate's id counts as a known place target", () => {
+  const target = targetFromPlaceCandidate({
+    id: "rome-pantheon",
+    label: "Pantheon",
+    candidate_kind: "real_place",
+    trust: { human_verified: true },
+    city_pack_owned: true,
+  });
+  assert.equal(target.known_place_id, "rome-pantheon");
+
+  const { gates } = gatesFor({
+    target,
+    evidence: [existence("catalog", "curated")],
+  });
+  // no coordinates, but a verified catalog id makes it a reliable target.
+  assert.equal(gates.may_create_place_candidate, true);
+  assert.equal(gates.may_anchor_route, true);
+});
+
+test("structural_anchor is route structure, not a user place", () => {
+  const target = targetFromPlaceCandidate({
+    id: "rome-trastevere",
+    label: "Trastevere",
+    candidate_kind: "structural_anchor",
+    lat: 41.889,
+    lng: 12.469,
+    trust: { human_verified: true },
+    city_pack_owned: true,
+    is_structural: true,
+  });
+  assert.equal(target.is_structural, true);
+
+  const { gates } = gatesFor({ target, evidence: [existence("catalog", "curated")] });
+  // never offered to a user as a place / nearby / now move
+  assert.equal(gates.may_create_place_candidate, false);
+  assert.equal(gates.may_show_as_nearby, false);
+  assert.equal(gates.may_suggest_now, false);
+  // but a trusted structural_anchor may still carry/anchor route structure
+  assert.equal(gates.may_anchor_route, true);
+  assert.equal(gates.may_influence_routes, true);
+  assert.ok(gates.reasons.includes("structural_route_only"));
+});
+
+test("area_preset structural candidates also cannot become user places", () => {
+  const target = targetFromPlaceCandidate({
+    id: "rome-centro",
+    label: "Centro Storico",
+    candidate_kind: "area_preset",
+    lat: 41.9,
+    lng: 12.48,
+    trust: { human_verified: true },
+    city_pack_owned: true,
+  });
+  assert.equal(target.is_structural, true);
+  const { gates } = gatesFor({ target, evidence: [existence("catalog", "curated")] });
+  assert.equal(gates.may_create_place_candidate, false);
+  assert.equal(gates.may_show_as_nearby, false);
+  assert.equal(gates.may_suggest_now, false);
 });
