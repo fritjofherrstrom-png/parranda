@@ -14,6 +14,7 @@ const {
 const { routeWalkingPath } = require("./walking-router");
 const { normalizeTrust } = require("./place-candidates/contract");
 const { normalizeTrustSummary } = require("./route-candidates/contract");
+const { buildDayflowContext } = require("./planner/dayflow-context");
 
 const defaultCityConfig = getCityConfig("rome");
 
@@ -6692,6 +6693,16 @@ async function generateRecommendations({
             live_events: [],
             primary_route: null,
             alternatives: [],
+            // Even without a route, meaningful weather still explains the day.
+            // No primary_route → no live read; weather context can still apply.
+            dayflow_context: buildDayflowContext({
+              weather,
+              liveEvents: [],
+              primaryRoute: null,
+              date,
+              cityConfig: getActiveCityConfig(),
+              lang: routeResultLang,
+            }),
           });
           continue;
         }
@@ -6732,6 +6743,17 @@ async function generateRecommendations({
           live_events: annotatedLiveEvents,
           primary_route: primary.route,
           alternatives: alternatives.map((entry) => entry.route),
+          // Source-aware "today's read": explains why the day leans the way it
+          // does, reusing the same weather interpreter Pulse uses. Null when
+          // nothing meaningful applies (boring weather, no proximate live event).
+          dayflow_context: buildDayflowContext({
+            weather,
+            liveEvents: annotatedLiveEvents,
+            primaryRoute: primary.route,
+            date,
+            cityConfig: getActiveCityConfig(),
+            lang: routeResultLang,
+          }),
         });
     }
 

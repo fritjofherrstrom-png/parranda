@@ -9244,6 +9244,7 @@ function createApiRouteView(
   liveEvents = [],
   savePayload = null,
   dayDate = null,
+  dayflowContext = null,
 ) {
   const stopLabels = route.main_stops.map((stop) => stop.label).join(" • ");
   const liveEventById = new Map((liveEvents || []).map((event) => [String(event.id), event]));
@@ -9342,6 +9343,7 @@ function createApiRouteView(
           }
         : null,
     })),
+    dayflowContext: dayflowContext || null,
   };
 
   routeView.usefulSignals = buildUsefulRouteSignals(routeView);
@@ -10683,6 +10685,40 @@ function createActiveDayView(routeView, { routeKey }) {
     weatherNote.textContent = routeView.weatherNote;
   }
 
+  // Source-aware "today's read" — explains the day's lean using the same
+  // weather interpreter Pulse uses. Hidden when there's nothing meaningful to
+  // say (boring weather, no proximate live event).
+  const dayflowBlock = view.querySelector(".active-day-dayflow");
+  if (dayflowBlock) {
+    const dayflow = routeView.dayflowContext;
+    if (dayflow && (dayflow.weather || dayflow.live)) {
+      const eyebrow = dayflowBlock.querySelector(".active-day-dayflow-eyebrow");
+      const headlineEl = dayflowBlock.querySelector(".active-day-dayflow-headline");
+      const reasonEl = dayflowBlock.querySelector(".active-day-dayflow-reason");
+      if (eyebrow) {
+        eyebrow.textContent = t("route.dayflowEyebrow", "Today's read");
+        if (dayflow.lean) {
+          eyebrow.setAttribute("data-lean", dayflow.lean);
+        }
+      }
+      if (headlineEl) {
+        headlineEl.textContent = dayflow.headline || "";
+      }
+      if (reasonEl) {
+        // Prefer the weather reason (explains WHY the day leans this way).
+        // For live-only context the headline already says everything; avoid
+        // echoing the same string in the reason line.
+        const reason = dayflow.weather?.reason || "";
+        const isDuplicate = reason && reason === dayflow.headline;
+        reasonEl.textContent = reason;
+        reasonEl.hidden = !reason || isDuplicate;
+      }
+      dayflowBlock.hidden = false;
+    } else {
+      dayflowBlock.hidden = true;
+    }
+  }
+
   const specialNotes = [
     routeView.pulseNote,
     routeView.liveEventFitNote,
@@ -11180,6 +11216,7 @@ function renderPlannedDays() {
     (activeDay.live_events || []).filter((event) => event.best_route_id === activeDay.primary_route.id),
     null,
     activeDay.date,
+    activeDay.dayflow_context || null,
   );
   const primaryKey = `${activeDay.date}:${activeDay.primary_route.id}:primary`;
   const primarySlot = dayCard.querySelector(".planner-primary-slot");
