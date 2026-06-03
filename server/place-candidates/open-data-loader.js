@@ -15,8 +15,8 @@
  *   - Fail closed on every error path (network, non-200, parse, timeout,
  *     malformed payload) — return `[]`, never throw, never hallucinate.
  *   - Source honesty: each record carries OSM as a `map` source; when the OSM
- *     element ALSO carries a `wikidata` tag, a SECOND source (`community`) is
- *     emitted so the reducer sees real provenance diversity. Without it, a
+ *     element ALSO carries a `wikidata` tag, a SECOND source (`open_knowledge`)
+ *     is emitted so the reducer sees real provenance diversity. Without it, a
  *     single-family record stays low and is gated out by the existing gates —
  *     OSM alone never becomes a user-facing move. This is the safer default.
  *   - No app-owned copy of external text: only attribution-bearing source refs.
