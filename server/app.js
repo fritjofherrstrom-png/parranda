@@ -11,6 +11,7 @@ const {
 const { diversifyRecommendationDays } = require("./route-diversity");
 const { buildClientI18nPayload, normalizeLanguage, translate } = require("./ui-i18n");
 const { buildCityPulse } = require("./pulse-engine");
+const { buildCandidateIntelligenceInspect } = require("./candidates");
 const { buildMasthead } = require("./pulse-engine/masthead");
 const { classifySignalQuality } = require("./pulse-engine/signal-quality");
 const {
@@ -938,6 +939,28 @@ function buildApp() {
 
   app.get("/api/health", (_request, response) => {
     response.json({ ok: true });
+  });
+
+  // Candidate Intelligence Spine — read-only inspect/debug projection.
+  // Runs the spine (evidence → reducer → gates → fit shape) over the city's
+  // existing place candidates. Debug-only; changes no user-facing output.
+  app.get("/api/candidate-inspect", (request, response) => {
+    try {
+      const { cityConfig, requestedCity, cityFallbackUsed } = resolveRequestCity(request.query.city);
+      const now = String(request.query.date || "").trim() || cityConfig.todayIsoDate();
+      const limitRaw = Number.parseInt(request.query.limit, 10);
+      const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : null;
+      response.json({
+        requested_city: requestedCity,
+        city_fallback_used: cityFallbackUsed,
+        ...buildCandidateIntelligenceInspect(cityConfig, { now, limit }),
+      });
+    } catch (error) {
+      response.status(500).json({
+        error: "Candidate inspect failed",
+        detail: error.message,
+      });
+    }
   });
 
   app.get("/api/places/search", (request, response) => {
