@@ -367,6 +367,9 @@ function candidateProvenance(candidate, derived) {
     // candidate, show where the corroboration came from. Empty/absent otherwise.
     corroborated_by_external: Array.isArray(candidate.merged_from) && candidate.merged_from.length > 0,
     merged_from: Array.isArray(candidate.merged_from) ? candidate.merged_from : [],
+    // Field reconciliation (#239): which safe fields were filled from a merged
+    // external twin, plus any kept-curated coordinate conflicts. Null when none.
+    reconciliation: candidate.reconciliation || null,
   };
 }
 

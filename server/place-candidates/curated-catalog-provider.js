@@ -35,7 +35,7 @@ function normalizeCatalogItem(cityConfig, item = {}) {
   const area = resolveAreaToken(cityConfig, item);
   const macro = resolveMacroToken(cityConfig, area);
 
-  return normalizePlaceCandidate({
+  const candidate = normalizePlaceCandidate({
     id: item.id,
     city: cityConfig.key,
     label: item.name || item.label,
@@ -62,6 +62,25 @@ function normalizeCatalogItem(cityConfig, item = {}) {
     },
     city_pack_owned: true,
   });
+
+  // Preserve a stable identity key from the pack (e.g. a Wikidata Q-id) when
+  // present. Additive field — only entity-resolution (#238/#239) reads it, to
+  // hard-match a curated place against an external twin and, when the curated
+  // entry lacks coordinates, fill them from that twin.
+  const knownId = firstNonEmpty(item.wikidata, item.wikidata_id, item.known_place_id);
+  if (knownId) {
+    candidate.known_place_id = knownId;
+  }
+
+  return candidate;
+}
+
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    const trimmed = String(value === undefined || value === null ? "" : value).trim();
+    if (trimmed) return trimmed;
+  }
+  return "";
 }
 
 function resolveCatalogCandidateKind(item = {}) {
