@@ -7,16 +7,21 @@
  * byte-stable.
  *
  * Pipeline:
- *   collect existing place candidates
+ *   collect candidates (curated catalog + optional external/open provider,
+ *     opt-in via include_external_candidates — see #234)
  *     → derive evidence (bridge) → reduce → gates
  *     → keep only candidates eligible as a user-facing nearby/now move
  *       (this is where structural / context / weak / popularity-only candidates
  *        are dropped — gates, not the scorer, enforce that)
  *     → score fit (intent primary; context bounded)
- *     → rank lexicographically by intent coverage, then context
+ *     → calibrate source influence (#235; bounded, no consensus input)
+ *     → rank lexicographically: intent coverage → fit → source priority
+ *       (curated dominates the tiebreak; source-backed ordered by existence +
+ *        context-calibrated influence)
  *     → pick best + backup, or emit an HONEST fallback (never hallucinate)
  *
- * Uses only existing city/catalog candidates. No external providers, no graph.
+ * Promotes the existing spine — no fourth pipeline. External providers/
+ * fixtures stay strictly opt-in and fail closed without a trusted loader.
  */
 
 const {

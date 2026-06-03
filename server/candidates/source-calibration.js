@@ -76,6 +76,11 @@ const FAMILY_BASELINE = {
  */
 function calibrateSource(input = {}) {
   const family = String(input.family || "").toLowerCase();
+  // `tier` is accepted today but not yet weighted — reserved for the upcoming
+  // source-policy work (official/verified/inferred/fallback). Wiring it now
+  // would risk double-counting with the gates' existence-confidence; keep this
+  // as a stable seam until that PR explicitly defines its contribution.
+  // (input.tier intentionally unused for now.)
   const intents = Array.isArray(input.intents) ? input.intents : [];
   const lens = String(input.lens || "").toLowerCase();
   const density = String(input.density || "rich").toLowerCase();
