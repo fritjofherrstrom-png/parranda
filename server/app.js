@@ -12,6 +12,7 @@ const { diversifyRecommendationDays } = require("./route-diversity");
 const { buildClientI18nPayload, normalizeLanguage, translate } = require("./ui-i18n");
 const { buildCityPulse } = require("./pulse-engine");
 const { buildCandidateIntelligenceInspect } = require("./candidates");
+const { buildAgnosticCityContext } = require("./candidates/agnostic-context");
 const { buildMasthead } = require("./pulse-engine/masthead");
 const { classifySignalQuality } = require("./pulse-engine/signal-quality");
 const {
@@ -355,6 +356,36 @@ function resolveRequestCity(city) {
     requestedCity: resolution.requestedKey,
     cityFallbackUsed: resolution.fallbackUsed,
   };
+}
+
+/**
+ * Parse a {lat,lng} pair from the /api/blitz request. Accepts top-level
+ * fields (query or body) or the existing `origin.{lat,lng}` shape. Returns
+ * null when the inputs are missing, non-finite, or outside valid ranges —
+ * invalid coordinates are IGNORED (predictable fall-through to normal city
+ * behavior), they never throw or 400 the request.
+ */
+function parseBlitzCoordinates(request) {
+  const body = request.body || {};
+  const query = request.query || {};
+  const origin = body.origin && typeof body.origin === "object" ? body.origin : {};
+
+  const latRaw = body.lat ?? query.lat ?? origin.lat;
+  const lngRaw = body.lng ?? query.lng ?? origin.lng;
+  const lat = Number(latRaw);
+  const lng = Number(lngRaw);
+
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng) ||
+    lat < -90 ||
+    lat > 90 ||
+    lng < -180 ||
+    lng > 180
+  ) {
+    return null;
+  }
+  return { lat, lng };
 }
 
 function escapeHtml(value) {
@@ -1259,12 +1290,43 @@ function buildApp() {
 
   app.post("/api/blitz", async (request, response) => {
     try {
-      const { cityConfig, requestedCity, cityFallbackUsed } = resolveRequestCity(request.body?.city);
+      const { cityConfig: resolvedCity, requestedCity, cityFallbackUsed } = resolveRequestCity(request.body?.city);
       const lang = normalizeLanguage(request.query?.lang || request.body?.lang);
+
+      // Agnostic coordinate intake (#236):
+      //   When candidate_mode is on, valid coords are supplied, AND no
+      //   recognized city was requested (no city sent OR an unknown city
+      //   triggered fallback), synthesize a coordinates-only agnostic context
+      //   so the candidate-spine path can run with curation_density="absent".
+      //   Recognized cities keep their config; coords still feed `origin` for
+      //   proximity. The agnostic context has an empty curated catalog, so
+      //   without a trusted external loader (which the public payload cannot
+      //   inject — see #234) this fails closed honestly.
+      const candidateModeRequested =
+        String(request.query?.candidate_mode ?? request.body?.candidate_mode ?? "").trim() !== "" ||
+        request.body?.candidate_mode === true ||
+        request.body?.candidate_mode === 1;
+      const coords = parseBlitzCoordinates(request);
+      const noRecognizedCity = !requestedCity || cityFallbackUsed;
+      const useAgnostic = candidateModeRequested && coords && noRecognizedCity;
+      const cityConfig = useAgnostic
+        ? buildAgnosticCityContext({
+            lat: coords.lat,
+            lng: coords.lng,
+            todayIsoDate: resolvedCity.todayIsoDate,
+            timezone: resolvedCity.timezone || "UTC",
+          })
+        : resolvedCity;
+
+      // When agnostic, surface coords as the origin so proximity/inspect remain
+      // honest. Existing `origin` payload still wins if explicitly provided.
+      const explicitOrigin = request.body?.origin || request.body?.selected_origin || request.body?.start || null;
+      const effectiveOrigin = explicitOrigin || (useAgnostic ? { lat: coords.lat, lng: coords.lng } : null);
+
       const result = await buildBlitzDecision(cityConfig, {
         date: request.body?.date,
         now: request.body?.now,
-        origin: request.body?.origin || request.body?.selected_origin || request.body?.start || null,
+        origin: effectiveOrigin,
         mode: request.body?.mode || "auto",
         intent_keys: Array.isArray(request.body?.intent_keys) ? request.body.intent_keys : [],
         preferences: Array.isArray(request.body?.preferences) ? request.body.preferences : [],
@@ -1297,6 +1359,9 @@ function buildApp() {
         ...result,
         requested_city: requestedCity,
         city_fallback_used: cityFallbackUsed,
+        agnostic_context: useAgnostic
+          ? { used: true, lat: coords.lat, lng: coords.lng, reason: requestedCity ? "city_fallback" : "no_city_requested" }
+          : { used: false },
       });
     } catch (error) {
       response.status(500).json({
