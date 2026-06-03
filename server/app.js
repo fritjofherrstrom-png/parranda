@@ -13,6 +13,8 @@ const { buildClientI18nPayload, normalizeLanguage, translate } = require("./ui-i
 const { buildCityPulse } = require("./pulse-engine");
 const { buildCandidateIntelligenceInspect } = require("./candidates");
 const { buildAgnosticCityContext } = require("./candidates/agnostic-context");
+const { isExternalCandidatesEnabled } = require("./candidates/blitz-candidate-mode");
+const { resolveDefaultOpenDataLoader } = require("./place-candidates/open-data-loader");
 const { buildMasthead } = require("./pulse-engine/masthead");
 const { classifySignalQuality } = require("./pulse-engine/signal-quality");
 const {
@@ -386,6 +388,25 @@ function parseBlitzCoordinates(request) {
     return null;
   }
   return { lat, lng };
+}
+
+/**
+ * Whether the request opts into external/open candidates. Delegates to the
+ * engine's canonical flag check so HTTP and engine never drift. Accepts both
+ * snake_case and camelCase, query and body.
+ */
+function isExternalCandidatesRequested(request) {
+  const query = request.query || {};
+  const body = request.body || {};
+  return isExternalCandidatesEnabled({
+    include_external_candidates:
+      query.include_external_candidates ??
+      query.includeExternalCandidates ??
+      body.include_external_candidates ??
+      body.includeExternalCandidates,
+    candidate_sources:
+      query.candidate_sources ?? query.candidateSources ?? body.candidate_sources ?? body.candidateSources,
+  });
 }
 
 function escapeHtml(value) {
@@ -954,7 +975,15 @@ function blockPrivateRepoPaths(request, response, next) {
   next();
 }
 
-function buildApp() {
+/**
+ * @param {object} [options]
+ * @param {Function|null} [options.openDataLoader]  Trusted server-side loader
+ *   from createOpenDataLoader (#237). Injectable in tests. Defaults to the
+ *   env-gated loader (`PARRANDA_OPEN_DATA_LOADER=enabled`) so production opts
+ *   in explicitly and tests stay deterministic. NEVER reachable from the
+ *   public request payload.
+ */
+function buildApp({ openDataLoader = resolveDefaultOpenDataLoader() } = {}) {
   const app = express();
 
   app.use(express.json());
@@ -1328,6 +1357,31 @@ function buildApp() {
       const explicitOrigin = request.body?.origin || request.body?.selected_origin || request.body?.start || null;
       const effectiveOrigin = explicitOrigin || (useAgnostic ? { lat: coords.lat, lng: coords.lng } : null);
 
+      // Real open-data loader (#237): when agnostic AND external candidates are
+      // explicitly enabled AND the server was constructed with a loader, fetch
+      // open records around the coordinates and pass them via the TRUSTED
+      // helper channel (extras.external_provider). Public payload never touches
+      // this. Any fetch error / timeout / parse error fails closed — the
+      // candidate spine then returns its honest no_candidates response.
+      const externalEnabled = isExternalCandidatesRequested(request);
+      let externalProviderExtras = null;
+      let openDataLoaderStatus = "skipped";
+      if (useAgnostic && externalEnabled && typeof openDataLoader === "function") {
+        try {
+          const records = await openDataLoader({ lat: coords.lat, lng: coords.lng });
+          if (Array.isArray(records) && records.length > 0) {
+            externalProviderExtras = { external_provider: { dataset: records } };
+            openDataLoaderStatus = `loaded:${records.length}`;
+          } else {
+            openDataLoaderStatus = "loaded:0";
+          }
+        } catch (_error) {
+          openDataLoaderStatus = "error_failed_closed";
+        }
+      } else if (useAgnostic && externalEnabled) {
+        openDataLoaderStatus = "no_loader_configured";
+      }
+
       const result = await buildBlitzDecision(cityConfig, {
         date: request.body?.date,
         now: request.body?.now,
@@ -1359,14 +1413,24 @@ function buildApp() {
         weather: request.body?.weather,
         lens: request.body?.lens,
         lang,
-      });
+      },
+      // Trusted server-side extras: pre-fetched open-data records (if any) reach
+      // the candidate spine ONLY through this third argument — never the public
+      // payload. Null when the loader was off/empty/errored (→ fails closed).
+      externalProviderExtras || {});
 
       response.json({
         ...result,
         requested_city: requestedCity,
         city_fallback_used: cityFallbackUsed,
         agnostic_context: useAgnostic
-          ? { used: true, lat: coords.lat, lng: coords.lng, reason: requestedCity ? "city_fallback" : "no_city_requested" }
+          ? {
+              used: true,
+              lat: coords.lat,
+              lng: coords.lng,
+              reason: requestedCity ? "city_fallback" : "no_city_requested",
+              open_data_loader: openDataLoaderStatus,
+            }
           : { used: false },
       });
     } catch (error) {
