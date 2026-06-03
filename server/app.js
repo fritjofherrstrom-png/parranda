@@ -1270,6 +1270,11 @@ function buildApp() {
         preferences: Array.isArray(request.body?.preferences) ? request.body.preferences : [],
         memory: request.body?.memory,
         previous_route: request.body?.previous_route,
+        // Experimental, opt-in candidate-spine path (default Blitz unchanged
+        // unless this flag is set). Accepts ?candidate_mode=1 or body field.
+        candidate_mode: request.query?.candidate_mode ?? request.body?.candidate_mode,
+        weather: request.body?.weather,
+        lens: request.body?.lens,
         lang,
       });
 
