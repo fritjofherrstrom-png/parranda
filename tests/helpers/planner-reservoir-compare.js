@@ -1,5 +1,5 @@
 /**
- * Test-only helper for #247 planner reservoir QA / comparison scenarios.
+ * Test-only helper for #248 planner reservoir QA / comparison scenarios.
  *
  * Drives /api/route-recommendations deterministically (mocked weather, injected
  * open-data loader — no live network) and compares inspect vs default responses.

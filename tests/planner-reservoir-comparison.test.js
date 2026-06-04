@@ -1,5 +1,5 @@
 /**
- * #247 Planner Reservoir QA / comparison scenarios.
+ * #248 Planner Reservoir QA / comparison scenarios.
  *
  * A truth-serum pass over the #246 inspect sidecar BEFORE the reservoir is
  * allowed to influence Planner output. QA-only: no production behavior changes.
@@ -39,7 +39,8 @@ test("Rome rich citypack: inspect stays rich and does not change the route", asy
     body: routeBody("rome", ["scenic", "food"]),
   });
   assert.equal(planner_roles.density, "rich");
-  assert.ok(!planner_roles.summary || true);
+  assert.ok(planner_roles.summary);
+  assert.ok(planner_roles.summary.by_status);
   // requested anchors fill from curated catalog
   assert.equal(roleByName(planner_roles, "scenic_anchor").status, "filled");
   assert.equal(roleByName(planner_roles, "food_anchor").status, "filled");
@@ -100,7 +101,7 @@ test("Athens external gap-fill: a trusted loader can fill a missing role", async
 
 // === Hotfix regression at API level ========================================
 
-test("Rome + swimming preference reports the role as MISSING, never fallback (hotfix #245.1)", async () => {
+test("Rome + swimming preference reports the role as MISSING, never fallback (hotfix #247)", async () => {
   const { planner_roles, dayflow } = await compareInspectVsDefault({
     body: routeBody("rome", ["swimming"]),
   });
@@ -205,7 +206,9 @@ test("time context is exposed as diagnostics only (no route sequencing)", async 
 });
 
 // === Documented findings (current behavior — see PR body) ===================
-// These lock today's behavior so the planned refinements are visible regressions.
+// These FINDING tests are characterization tests for current known limitations.
+// They intentionally lock today's behavior so the next dayflow-honesty
+// refinement PR can update them deliberately rather than accidentally.
 
 test("FINDING: a rich INLAND city with no preferences is classified 'partial' (lacks a beach)", () => {
   const rome = require("../server/cities/rome.js");
