@@ -108,6 +108,17 @@ const ATHENS_BODY = {
   budget_tier: "standard",
 };
 
+const ROME_SWIMMING_BODY = {
+  city: "rome",
+  dates: ["2026-05-25"],
+  start: { type: "auto" },
+  end: { type: "auto" },
+  walking_km_target: 7,
+  preferences: ["swimming"],
+  distance_mode: "soft_target",
+  budget_tier: "standard",
+};
+
 function primaryRouteShape(responseBody) {
   const route = responseBody.days?.[0]?.primary_route || {};
   return {
@@ -268,6 +279,38 @@ test("unknown lens remains neutral in planner role inspect", async () => {
 
     assert.equal(response.status, 200);
     assert.equal(response.body.planner_roles.lens, null);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    global.fetch = originalFetch;
+  }
+});
+
+test("Rome swimming inspect reports genuinely unavailable role as missing without changing route output", async () => {
+  global.fetch = mockStableWeatherFetch();
+  const server = buildApp({ openDataLoader: null }).listen(0);
+  try {
+    const base = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations?lang=en",
+      body: ROME_SWIMMING_BODY,
+    });
+    const inspected = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations?lang=en",
+      body: {
+        ...ROME_SWIMMING_BODY,
+        planner_inspect: true,
+        include_candidate_roles: true,
+      },
+    });
+
+    assert.equal(inspected.status, 200);
+    const swim = inspected.body.planner_roles.roles.find((role) => role.role === "swimming_coast_option");
+    assert.equal(swim.status, "missing");
+    assert.equal(swim.candidates.length, 0);
+    assert.ok(inspected.body.dayflow_honesty.role_coverage.missing.includes("swimming_coast_option"));
+    assert.notEqual(inspected.body.dayflow_honesty.day_status, "full");
+    assert.deepEqual(primaryRouteShape(inspected.body), primaryRouteShape(base.body));
   } finally {
     await new Promise((resolve) => server.close(resolve));
     global.fetch = originalFetch;
