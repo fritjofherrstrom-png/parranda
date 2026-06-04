@@ -61,6 +61,12 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
     city: cityConfig.key,
     density: candidatePool.density,
     lens: candidatePool.context.lens,
+    context: {
+      date: candidatePool.context.date || null,
+      now: candidatePool.context.now_iso || null,
+      time_band: candidatePool.context.timeBand || null,
+    },
+    requested_preferences: candidatePool.normalized.intents || [],
     roles,
     summary: summarizeRoles(roles),
   };

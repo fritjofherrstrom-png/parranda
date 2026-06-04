@@ -15,8 +15,11 @@ const { buildCandidateIntelligenceInspect } = require("./candidates");
 const { buildAgnosticCityContext } = require("./candidates/agnostic-context");
 const { isExternalCandidatesEnabled } = require("./candidates/blitz-candidate-mode");
 const { classifyCatalogDensity } = require("./candidates/source-calibration");
+const { selectPlannerRoleCandidates } = require("./planner/role-selector");
+const { summarizeDayflowHonesty } = require("./planner/dayflow-honesty");
 const { collectPlaceCandidatesForCity } = require("./place-candidates/provider-registry");
 const { resolveDefaultOpenDataLoader } = require("./place-candidates/open-data-loader");
+const { EXTERNAL_OPEN_PROVIDER_META } = require("./place-candidates/external-open-provider");
 const { buildMasthead } = require("./pulse-engine/masthead");
 const { classifySignalQuality } = require("./pulse-engine/signal-quality");
 const {
@@ -42,6 +45,7 @@ const blockedPublicRootFiles = new Set([
   "/render.yaml",
   "/README.md",
 ]);
+const TRUTHY_INSPECT_FLAGS = new Set([true, 1, "1", "on", "yes", "true"]);
 
 const pulseVibeByTag = {
   kultur: "curious",
@@ -427,6 +431,122 @@ function isExternalCandidatesRequested(request) {
     candidate_sources:
       query.candidate_sources ?? query.candidateSources ?? body.candidate_sources ?? body.candidateSources,
   });
+}
+
+function isPlannerCandidateInspectRequested(request) {
+  const query = request.query || {};
+  const body = request.body || {};
+  return (
+    isTruthyInspectFlag(query.planner_inspect) ||
+    isTruthyInspectFlag(query.plannerInspect) ||
+    isTruthyInspectFlag(query.include_candidate_roles) ||
+    isTruthyInspectFlag(query.includeCandidateRoles) ||
+    isTruthyInspectFlag(body.planner_inspect) ||
+    isTruthyInspectFlag(body.plannerInspect) ||
+    isTruthyInspectFlag(body.include_candidate_roles) ||
+    isTruthyInspectFlag(body.includeCandidateRoles)
+  );
+}
+
+function isTruthyInspectFlag(value) {
+  return TRUTHY_INSPECT_FLAGS.has(value) || TRUTHY_INSPECT_FLAGS.has(String(value).toLowerCase());
+}
+
+function resolvePlannerRoleOrigin(cityConfig, requestBody = {}) {
+  const explicit = requestBody.origin || requestBody.selected_origin || requestBody.home_base || requestBody.homeBase || requestBody.start;
+  const explicitCoords = resolveLatLng(explicit);
+  if (explicitCoords) return explicitCoords;
+  const center = cityConfig?.center;
+  if (center && Number.isFinite(center.lat) && Number.isFinite(center.lng)) {
+    return { lat: center.lat, lng: center.lng, label: cityConfig.label || cityConfig.key || null };
+  }
+  return null;
+}
+
+function resolveLatLng(value) {
+  if (!value || typeof value !== "object") return null;
+  if (Number.isFinite(value.lat) && Number.isFinite(value.lng)) {
+    return { lat: value.lat, lng: value.lng, label: value.label || value.name || null };
+  }
+  if (Number.isFinite(value.coordinates?.lat) && Number.isFinite(value.coordinates?.lng)) {
+    return { lat: value.coordinates.lat, lng: value.coordinates.lng, label: value.label || value.name || null };
+  }
+  return null;
+}
+
+async function buildPlannerCandidateInspectSidecar({ cityConfig, request, routePayload, openDataLoader }) {
+  const roleOrigin = resolvePlannerRoleOrigin(cityConfig, request.body || {});
+  const externalRequested = isExternalCandidatesRequested(request);
+  const rolePayload = {
+    city: cityConfig.key,
+    date: routePayload.dates[0] || cityConfig.todayIsoDate(),
+    now: request.body?.now || null,
+    preferences: routePayload.preferences,
+    lens: request.body?.lens || request.query?.lens || null,
+    weather: request.body?.weather || null,
+    origin: roleOrigin,
+    include_external_candidates:
+      request.query?.include_external_candidates ??
+      request.query?.includeExternalCandidates ??
+      request.body?.include_external_candidates ??
+      request.body?.includeExternalCandidates,
+    candidate_sources:
+      request.query?.candidate_sources ??
+      request.query?.candidateSources ??
+      request.body?.candidate_sources ??
+      request.body?.candidateSources,
+  };
+
+  const { helpers, sourceStatus } = await resolvePlannerRoleHelpers({
+    externalRequested,
+    openDataLoader,
+    anchor: roleOrigin,
+  });
+  const plannerRoles = selectPlannerRoleCandidates(cityConfig, rolePayload, helpers);
+  const dayflowHonesty = summarizeDayflowHonesty(plannerRoles);
+
+  return {
+    planner_roles: {
+      scope: "plan",
+      density: plannerRoles.density,
+      lens: plannerRoles.lens,
+      context: plannerRoles.context,
+      summary: plannerRoles.summary,
+      source_status: [sourceStatus],
+      roles: plannerRoles.roles,
+    },
+    dayflow_honesty: dayflowHonesty,
+  };
+}
+
+async function resolvePlannerRoleHelpers({ externalRequested, openDataLoader, anchor }) {
+  const baseStatus = {
+    provider_id: EXTERNAL_OPEN_PROVIDER_META.provider_id,
+    status: "skipped",
+    external_candidates_requested: externalRequested,
+    anchor: anchor || null,
+  };
+  if (!externalRequested) {
+    return { helpers: {}, sourceStatus: baseStatus };
+  }
+  if (typeof openDataLoader !== "function") {
+    return { helpers: {}, sourceStatus: { ...baseStatus, status: "no_loader_configured" } };
+  }
+  if (!anchor) {
+    return { helpers: {}, sourceStatus: { ...baseStatus, status: "no_anchor" } };
+  }
+  try {
+    const records = await openDataLoader(anchor);
+    if (!Array.isArray(records) || records.length === 0) {
+      return { helpers: {}, sourceStatus: { ...baseStatus, status: "loaded:0" } };
+    }
+    return {
+      helpers: { external_provider: { dataset: records } },
+      sourceStatus: { ...baseStatus, status: `loaded:${records.length}` },
+    };
+  } catch (_error) {
+    return { helpers: {}, sourceStatus: { ...baseStatus, status: "error_failed_closed" } };
+  }
 }
 
 function escapeHtml(value) {
@@ -1324,10 +1444,19 @@ function buildApp({ openDataLoader = resolveDefaultOpenDataLoader() } = {}) {
       }
 
       const result = diversifyRecommendationDays(await generateRecommendations(payload));
+      const plannerInspectSidecar = isPlannerCandidateInspectRequested(request)
+        ? await buildPlannerCandidateInspectSidecar({
+            cityConfig,
+            request,
+            routePayload: payload,
+            openDataLoader,
+          })
+        : null;
       response.json({
         ...result,
         requested_city: requestedCity,
         city_fallback_used: cityFallbackUsed,
+        ...(plannerInspectSidecar || {}),
       });
     } catch (error) {
       response.status(500).json({
