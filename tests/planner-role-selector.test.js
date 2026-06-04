@@ -298,8 +298,10 @@ test("sparse and agnostic contexts remain honest about missing roles", () => {
     ],
   );
   assert.equal(role(sparse, "scenic_anchor").status, "partial");
-  assert.equal(role(sparse, "food_anchor").status, "fallback");
-  assert.equal(role(sparse, "coffee_fika_stop").status, "fallback");
+  assert.equal(role(sparse, "food_anchor").status, "missing");
+  assert.equal(role(sparse, "food_anchor").candidates.length, 0);
+  assert.equal(role(sparse, "coffee_fika_stop").status, "missing");
+  assert.equal(role(sparse, "coffee_fika_stop").candidates.length, 0);
 
   const agnostic = buildAgnosticCityContext({ lat: 55.6, lng: 13.0, todayIsoDate: () => DATE });
   const agnosticOut = decide(
@@ -314,7 +316,32 @@ test("sparse and agnostic contexts remain honest about missing roles", () => {
   );
   assert.equal(agnosticOut.density, "absent");
   assert.equal(role(agnosticOut, "food_anchor").status, "partial");
-  assert.equal(role(agnosticOut, "scenic_anchor").status, "fallback");
+  assert.equal(role(agnosticOut, "scenic_anchor").status, "missing");
+  assert.equal(role(agnosticOut, "scenic_anchor").candidates.length, 0);
+});
+
+test("roles with no relevant candidates stay missing instead of fallback", () => {
+  const out = decide(
+    city([
+      item({
+        id: "church",
+        name: "Church Stop",
+        kind: "church",
+        tags: ["kultur"],
+      }),
+      item({
+        id: "market",
+        name: "Market Stop",
+        kind: "market",
+        tags: ["marknad"],
+      }),
+    ]),
+    { preferences: ["swimming"] },
+  );
+
+  const swim = role(out, "swimming_coast_option");
+  assert.equal(swim.status, "missing");
+  assert.equal(swim.candidates.length, 0);
 });
 
 test("weak, popularity-only, and structural candidates do not fill user-facing roles", () => {

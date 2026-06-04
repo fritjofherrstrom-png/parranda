@@ -73,32 +73,39 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
 }
 
 function buildRankedEntriesForRole(spec, candidatePool) {
-  const entries = candidatePool.pool.map(({ candidate, derived, gates, evidence }) => {
-    const fit = scoreCandidateFit({
-      candidate,
-      userIntents: spec.intents,
-      userModifiers: candidatePool.normalized.modifiers,
-      context: candidatePool.context,
-    });
-    const calibration = calibrateSource({
-      family: candidate.source_family || (candidate.city_pack_owned ? "catalog" : "map"),
-      tier: candidate.trust?.source_tier,
-      intents: spec.intents,
-      lens: candidatePool.context.lens,
-      density: candidatePool.density,
-      diversity: derived.provenance_diversity,
-      freshness: derived.freshness,
-    });
-    return {
-      candidate,
-      derived,
-      gates,
-      evidence,
-      fit,
-      calibration,
-      candidate_status: candidateStatusForRole({ fit, gates, spec }),
-    };
-  });
+  const entries = candidatePool.pool
+    .map(({ candidate, derived, gates, evidence }) => {
+      const fit = scoreCandidateFit({
+        candidate,
+        userIntents: spec.intents,
+        userModifiers: candidatePool.normalized.modifiers,
+        context: candidatePool.context,
+      });
+      const covered = coversAny(fit.covered_preferences, spec.intents);
+      const adjacent = coversAny(fit.partial_preferences, spec.intents);
+      if (!covered && !adjacent) {
+        return null;
+      }
+      const calibration = calibrateSource({
+        family: candidate.source_family || (candidate.city_pack_owned ? "catalog" : "map"),
+        tier: candidate.trust?.source_tier,
+        intents: spec.intents,
+        lens: candidatePool.context.lens,
+        density: candidatePool.density,
+        diversity: derived.provenance_diversity,
+        freshness: derived.freshness,
+      });
+      return {
+        candidate,
+        derived,
+        gates,
+        evidence,
+        fit,
+        calibration,
+        candidate_status: candidateStatusForRole({ fit, gates, spec }),
+      };
+    })
+    .filter((entry) => entry && entry.candidate_status !== "missing");
 
   const byStatus = {
     filled: entries.filter((entry) => entry.candidate_status === "filled"),
@@ -116,13 +123,19 @@ function buildRankedEntriesForRole(spec, candidatePool) {
 function candidateStatusForRole({ fit, gates, spec }) {
   const covered = coversAny(fit.covered_preferences, spec.intents);
   const adjacent = coversAny(fit.partial_preferences, spec.intents);
+  if (!covered && !adjacent) {
+    return "missing";
+  }
   if (covered && gates[spec.gate] === true) {
     return "filled";
   }
-  if ((covered || adjacent) && gates.may_influence_routes === true) {
+  if (gates.may_influence_routes === true) {
     return "partial";
   }
-  return "fallback";
+  if (gates.may_show_as_nearby === true) {
+    return "fallback";
+  }
+  return "missing";
 }
 
 function formatRoleCandidate(entry, role, roleEntries) {
