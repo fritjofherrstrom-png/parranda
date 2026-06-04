@@ -37,16 +37,30 @@ const MAX_LIMIT = 100;
 // every entry maps cleanly into the canonical intent vocabulary. Add lines
 // here when adding a new intent — do not branch in the mapping function.
 const OSM_TAG_MAP = [
+  // scenic
   { key: "tourism", value: "viewpoint", type: "viewpoint", tags: ["utsikt"] },
+  // swimming / coast
   { key: "natural", value: "beach", type: "beach", tags: ["coast"] },
   { key: "leisure", value: "beach_resort", type: "beach", tags: ["coast"] },
+  { key: "leisure", value: "swimming_area", type: "beach", tags: ["coast", "bathing"] },
+  // second hand / vintage (NOT generic retail)
   { key: "shop", value: "second_hand", type: "vintage-shop", tags: ["second_hand"] },
   { key: "shop", value: "antiques", type: "vintage-shop", tags: ["vintage", "antique"] },
+  { key: "shop", value: "charity", type: "vintage-shop", tags: ["second_hand", "charity"] },
+  // food (restaurant / taverna-style / street food)
   { key: "amenity", value: "restaurant", type: "restaurant", tags: ["mat"] },
-  { key: "amenity", value: "cafe", type: "cafe", tags: [] },
+  { key: "amenity", value: "fast_food", type: "street-food", tags: ["mat"] },
+  // coffee / fika
+  { key: "amenity", value: "cafe", type: "cafe", tags: ["fika"] },
+  // bars / evening (pub & biergarten read as bars, not food)
   { key: "amenity", value: "bar", type: "bar", tags: ["nattliv"] },
+  { key: "amenity", value: "pub", type: "bar", tags: ["nattliv"] },
+  { key: "amenity", value: "biergarten", type: "bar", tags: ["nattliv", "öl"] },
+  // markets
   { key: "amenity", value: "marketplace", type: "market", tags: ["market"] },
+  // culture
   { key: "tourism", value: "museum", type: "museum", tags: ["kultur", "museum"] },
+  { key: "tourism", value: "gallery", type: "gallery", tags: ["kultur"] },
 ];
 
 function createOpenDataLoader({
