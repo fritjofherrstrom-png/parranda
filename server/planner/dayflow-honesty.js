@@ -1,4 +1,5 @@
 const LOW_CONFIDENCE = new Set(["low", "needs_review", null, undefined]);
+const DEFAULT_TARGET_ROLES = Object.freeze(["scenic_anchor", "food_anchor"]);
 
 function summarizeDayflowHonesty(plannerRoles = {}, options = {}) {
   const roles = Array.isArray(plannerRoles.roles) ? plannerRoles.roles : [];
@@ -6,18 +7,23 @@ function summarizeDayflowHonesty(plannerRoles = {}, options = {}) {
     ...(Array.isArray(plannerRoles.requested_preferences) ? plannerRoles.requested_preferences : []),
     ...(Array.isArray(options.requested_preferences) ? options.requested_preferences : []),
   ]);
+  const targetRoles = resolveHonestyTargetRoles(roles, requestedPreferences);
+  const targetRoleNames = new Set(targetRoles.map((role) => role.role));
   const roleCoverage = buildRoleCoverage(roles);
   const uniqueCandidates = uniqueRoleCandidates(roles);
   const preferenceCoverage = buildPreferenceCoverage({ roles, requestedPreferences });
   const trustSummary = buildTrustSummary(uniqueCandidates);
   const timeSummary = buildTimeSummary({ plannerRoles, roles });
+  const targetCandidateSummary = buildTargetCandidateSummary(targetRoles);
   const qualityFlags = buildQualityFlags({
     roles,
+    targetRoleNames,
     density: plannerRoles.density,
     trustSummary,
     timeSummary,
+    targetCandidateSummary,
   });
-  const dayStatus = classifyDayStatus({ roles, roleCoverage });
+  const dayStatus = classifyDayStatus({ targetRoles, targetCandidateSummary });
 
   return {
     day_status: dayStatus,
@@ -26,8 +32,14 @@ function summarizeDayflowHonesty(plannerRoles = {}, options = {}) {
     trust_summary: trustSummary,
     time_summary: timeSummary,
     quality_flags: qualityFlags,
-    reasons: buildReasons({ dayStatus, roleCoverage, preferenceCoverage, trustSummary, plannerRoles }),
+    reasons: buildReasons({ dayStatus, roleCoverage, preferenceCoverage, trustSummary, plannerRoles, targetRoles }),
   };
+}
+
+function resolveHonestyTargetRoles(roles, _requestedPreferences = []) {
+  const requestedRoles = roles.filter((role) => role.requested === true);
+  if (requestedRoles.length) return requestedRoles;
+  return roles.filter((role) => DEFAULT_TARGET_ROLES.includes(role.role));
 }
 
 function buildRoleCoverage(roles) {
@@ -119,7 +131,7 @@ function buildTimeSummary({ plannerRoles, roles }) {
   };
 }
 
-function buildQualityFlags({ roles, density, trustSummary, timeSummary }) {
+function buildQualityFlags({ roles, targetRoleNames, density, trustSummary, timeSummary, targetCandidateSummary }) {
   const flags = new Set();
   if (density === "thin" || density === "absent") {
     flags.add("thin_catalog_density");
@@ -132,6 +144,7 @@ function buildQualityFlags({ roles, density, trustSummary, timeSummary }) {
   }
 
   for (const role of roles) {
+    if (!targetRoleNames.has(role.role)) continue;
     if (role.status === "missing") flags.add(`missing_${role.role}`);
     if (role.status === "fallback") flags.add(`fallback_${role.role}`);
     if (role.status === "partial") flags.add(`partial_${role.role}`);
@@ -142,34 +155,59 @@ function buildQualityFlags({ roles, density, trustSummary, timeSummary }) {
   }
 
   for (const role of timeSummary.time_matched_roles) {
+    if (!targetRoleNames.has(role)) continue;
     flags.add(`${role}_time_matched`);
   }
   for (const role of timeSummary.time_mismatched_roles) {
+    if (!targetRoleNames.has(role)) continue;
     flags.add(`time_mismatch_${role}`);
   }
-  if (timeSummary.missing_time_data_roles.length) {
+  if (timeSummary.missing_time_data_roles.some((role) => targetRoleNames.has(role))) {
     flags.add("missing_time_data");
+  }
+  if (targetCandidateSummary.single_candidate_multi_role_coverage) {
+    flags.add("single_candidate_multi_role_coverage");
   }
 
   return [...flags].sort();
 }
 
-function classifyDayStatus({ roles, roleCoverage }) {
-  const requestedRoles = roles.filter((role) => role.requested === true);
-  const targetRoles = requestedRoles.length ? requestedRoles : roles;
+function classifyDayStatus({ targetRoles, targetCandidateSummary }) {
   const targetFilled = targetRoles.length > 0 && targetRoles.every((role) => role.status === "filled");
-  if (targetFilled) return "full";
+  if (targetFilled && !targetCandidateSummary.single_candidate_multi_role_coverage) return "full";
+  if (targetFilled) return "partial";
 
-  const usableCount = roleCoverage.filled.length + roleCoverage.partial.length;
-  if (usableCount === 0 && roleCoverage.fallback.length > 0) return "fallback_heavy";
+  const targetFilledCount = targetRoles.filter((role) => role.status === "filled").length;
+  const targetPartialCount = targetRoles.filter((role) => role.status === "partial").length;
+  const targetFallbackCount = targetRoles.filter((role) => role.status === "fallback").length;
+  const usableCount = targetFilledCount + targetPartialCount;
+  if (usableCount === 0 && targetFallbackCount > 0) return "fallback_heavy";
   if (usableCount === 0) return "sparse";
-  if (roleCoverage.fallback.length > usableCount) return "fallback_heavy";
+  if (targetFallbackCount > usableCount) return "fallback_heavy";
   return "partial";
 }
 
-function buildReasons({ dayStatus, roleCoverage, preferenceCoverage, trustSummary, plannerRoles }) {
+function buildTargetCandidateSummary(targetRoles) {
+  const filledTargetRoles = targetRoles.filter((role) => role.status === "filled");
+  const filledCandidateIds = new Set();
+  for (const role of filledTargetRoles) {
+    for (const filledCandidate of (role.candidates || []).filter((candidate) => candidate.candidate_status === "filled")) {
+      if (filledCandidate?.candidate_id) filledCandidateIds.add(filledCandidate.candidate_id);
+    }
+  }
+
+  return {
+    filled_target_roles: filledTargetRoles.map((role) => role.role).sort(),
+    unique_filled_candidate_count: filledCandidateIds.size,
+    single_candidate_multi_role_coverage:
+      filledTargetRoles.length > 1 && filledCandidateIds.size === 1,
+  };
+}
+
+function buildReasons({ dayStatus, roleCoverage, preferenceCoverage, trustSummary, plannerRoles, targetRoles }) {
   const reasons = [`day_status:${dayStatus}`];
   if (plannerRoles.density) reasons.push(`catalog_density:${plannerRoles.density}`);
+  if (targetRoles.length) reasons.push(`target_roles:${targetRoles.map((role) => role.role).join(",")}`);
   if (roleCoverage.filled.length) reasons.push(`filled_roles:${roleCoverage.filled.length}`);
   if (roleCoverage.partial.length) reasons.push(`partial_roles:${roleCoverage.partial.length}`);
   if (roleCoverage.fallback.length) reasons.push(`fallback_roles:${roleCoverage.fallback.length}`);
@@ -217,5 +255,6 @@ function unique(values) {
 }
 
 module.exports = {
+  resolveHonestyTargetRoles,
   summarizeDayflowHonesty,
 };
