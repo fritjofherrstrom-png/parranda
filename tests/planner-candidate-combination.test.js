@@ -1,0 +1,247 @@
+const assert = require("node:assert/strict");
+const test = require("node:test");
+
+const { buildCandidateCombination } = require("../server/planner/candidate-combination");
+
+// --- builders (mirror role-selector output shape) --------------------------
+
+function candidate(id, over = {}) {
+  return {
+    candidate_id: id,
+    label: over.label || id,
+    type: over.type || "place",
+    candidate_kind: "real_place",
+    candidate_status: over.candidate_status || "filled",
+    planner_usable: over.planner_usable ?? (over.candidate_status !== "fallback"),
+    origin: over.origin || "curated_catalog",
+    confidence: over.confidence || "high",
+    coordinates: "coordinates" in over ? over.coordinates : { lat: over.lat ?? 41.9, lng: over.lng ?? 12.49 },
+    also_covers: over.also_covers || [],
+    fit_reasons: over.fit_reasons || ["covers:scenic(type:viewpoint)"],
+  };
+}
+
+function role(name, { slot = "anchor", requested = true, candidates = [] } = {}) {
+  const status = candidates.length
+    ? candidates.reduce((best, c) => rank(c.candidate_status) > rank(best) ? c.candidate_status : best, "missing")
+    : "missing";
+  return { role: name, slot, gate: slot === "anchor" ? "may_anchor_route" : "may_influence_routes", requested, status, planner_usable: status === "filled" || status === "partial", candidates };
+}
+function rank(s) {
+  return { missing: 0, fallback: 1, partial: 2, filled: 3 }[s] || 0;
+}
+function plannerRoles(roles, context = {}) {
+  return { city: "test", density: "rich", lens: null, roles, context };
+}
+
+// Two compact points (~0.2 km apart) and one far point (~6 km).
+const NEAR_A = { lat: 41.9000, lng: 12.4900 };
+const NEAR_B = { lat: 41.9010, lng: 12.4912 };
+const FAR = { lat: 41.9000, lng: 12.5600 };
+
+// --- 1. compact filled anchors → ready -------------------------------------
+test("compact filled anchors produce status ready", () => {
+  const out = buildCandidateCombination(
+    plannerRoles([
+      role("scenic_anchor", { candidates: [candidate("v1", { type: "viewpoint", coordinates: NEAR_A })] }),
+      role("food_anchor", { candidates: [candidate("r1", { type: "restaurant", coordinates: NEAR_B })] }),
+    ]),
+  );
+  assert.equal(out.status, "ready");
+  assert.ok(["strong", "ok"].includes(out.geometry_summary.coherence));
+  assert.equal(out.selected.length, 2);
+  assert.deepEqual(out.unresolved_roles, []);
+});
+
+// --- 2. spread-out → weak_geometry -----------------------------------------
+test("both roles filled but far apart produce weak_geometry, not ready", () => {
+  const out = buildCandidateCombination(
+    plannerRoles([
+      role("scenic_anchor", { candidates: [candidate("v1", { coordinates: NEAR_A })] }),
+      role("food_anchor", { candidates: [candidate("r1", { coordinates: FAR })] }),
+    ]),
+  );
+  assert.equal(out.status, "weak_geometry");
+  assert.equal(out.geometry_summary.coherence, "weak");
+  assert.ok(out.geometry_summary.max_pairwise_km > 2.5);
+  assert.ok(out.quality_flags.includes("weak_geometry"));
+});
+
+// --- 3. partial coverage but coherent → partial ----------------------------
+test("a missing target role yields partial when the rest is coherent", () => {
+  const out = buildCandidateCombination(
+    plannerRoles([
+      role("scenic_anchor", { candidates: [candidate("v1", { coordinates: NEAR_A })] }),
+      role("food_anchor", { candidates: [] }), // missing
+    ]),
+  );
+  assert.equal(out.status, "partial");
+  assert.equal(out.selected.length, 1);
+  assert.deepEqual(out.unresolved_roles, [{ role: "food_anchor", reason: "no_candidate" }]);
+});
+
+// --- 4. all target roles missing → insufficient ----------------------------
+test("no usable target roles produce insufficient with explicit unresolved roles", () => {
+  const out = buildCandidateCombination(
+    plannerRoles([
+      role("scenic_anchor", { candidates: [] }),
+      role("food_anchor", { candidates: [] }),
+    ]),
+  );
+  assert.equal(out.status, "insufficient");
+  assert.equal(out.selected.length, 0);
+  assert.equal(out.unresolved_roles.length, 2);
+});
+
+// --- 5. same candidate covers multiple roles → honest ----------------------
+test("a single candidate covering two roles is reported, not overstated", () => {
+  const rooftop = candidate("rooftop", { type: "rooftop-bar", coordinates: NEAR_A, also_covers: [{ role: "evening_bar_option", status: "filled" }] });
+  const out = buildCandidateCombination(
+    plannerRoles([
+      role("scenic_anchor", { candidates: [rooftop] }),
+      role("evening_bar_option", { slot: "option", candidates: [rooftop] }),
+    ]),
+  );
+  assert.ok(out.duplicate_role_coverage.some((d) => d.candidate_id === "rooftop" && d.roles.length === 2));
+  assert.ok(out.quality_flags.includes("duplicate_role_coverage"));
+});
+
+// --- 6. missing coordinates → incomplete geometry, not ready ---------------
+test("a selected candidate without coordinates makes geometry incomplete and blocks ready", () => {
+  const out = buildCandidateCombination(
+    plannerRoles([
+      role("scenic_anchor", { candidates: [candidate("v1", { coordinates: NEAR_A })] }),
+      role("food_anchor", { candidates: [candidate("r1", { coordinates: null })] }),
+    ]),
+  );
+  assert.equal(out.geometry_summary.coherence, "incomplete");
+  assert.notEqual(out.status, "ready");
+  assert.ok(out.quality_flags.includes("incomplete_geometry_missing_coordinates"));
+});
+
+// --- 7. curated-first tie behavior -----------------------------------------
+test("curated wins over a comparable external candidate at the same spot", () => {
+  const out = buildCandidateCombination(
+    plannerRoles([
+      role("scenic_anchor", {
+        candidates: [
+          candidate("ext", { origin: "external_open", coordinates: NEAR_A }),
+          candidate("cur", { origin: "curated_catalog", coordinates: NEAR_A }),
+        ],
+      }),
+      role("food_anchor", { candidates: [candidate("r1", { coordinates: NEAR_B })] }),
+    ]),
+  );
+  const scenicPick = out.selected.find((s) => s.role === "scenic_anchor");
+  assert.equal(scenicPick.candidate_id, "cur"); // curated-first tie-break
+});
+
+// --- 8. proximity chooses a more coherent same-tier candidate --------------
+test("within the same status tier, proximity prefers the more coherent candidate", () => {
+  const out = buildCandidateCombination(
+    plannerRoles([
+      role("scenic_anchor", { candidates: [candidate("v1", { coordinates: NEAR_A })] }),
+      role("food_anchor", {
+        candidates: [
+          candidate("r-far", { candidate_status: "filled", coordinates: FAR }), // ranked first by reservoir
+          candidate("r-near", { candidate_status: "filled", coordinates: NEAR_B }), // closer to scenic
+        ],
+      }),
+    ]),
+  );
+  const foodPick = out.selected.find((s) => s.role === "food_anchor");
+  assert.equal(foodPick.candidate_id, "r-near"); // geometry breaks the same-tier tie
+  assert.equal(out.status, "ready");
+});
+
+test("proximity never lets a partial candidate beat a filled one (status tier first)", () => {
+  const out = buildCandidateCombination(
+    plannerRoles([
+      role("scenic_anchor", { candidates: [candidate("v1", { coordinates: FAR })] }),
+      role("food_anchor", {
+        candidates: [
+          candidate("r-filled-far", { candidate_status: "filled", coordinates: NEAR_A }),
+          candidate("r-partial-near", { candidate_status: "partial", coordinates: FAR }),
+        ],
+      }),
+    ]),
+  );
+  const foodPick = out.selected.find((s) => s.role === "food_anchor");
+  assert.equal(foodPick.candidate_id, "r-filled-far"); // filled wins despite worse geometry
+});
+
+// --- 9. fallback candidates never make a ready combination ------------------
+test("a fallback-only role is unresolved and the combination is not ready", () => {
+  const out = buildCandidateCombination(
+    plannerRoles([
+      role("scenic_anchor", { candidates: [candidate("v1", { coordinates: NEAR_A })] }),
+      role("food_anchor", { candidates: [candidate("fb", { candidate_status: "fallback", planner_usable: false, coordinates: NEAR_B })] }),
+    ]),
+  );
+  assert.notEqual(out.status, "ready");
+  assert.ok(out.unresolved_roles.some((r) => r.role === "food_anchor" && r.reason === "fallback_only"));
+  assert.ok(!out.selected.some((s) => s.candidate_id === "fb")); // fallback never selected
+  assert.ok(out.quality_flags.includes("fallback_only_food_anchor"));
+});
+
+// --- 10. determinism --------------------------------------------------------
+test("same input is deterministic (ids, status, geometry)", () => {
+  const input = plannerRoles([
+    role("scenic_anchor", { candidates: [candidate("v1", { coordinates: NEAR_A }), candidate("v2", { coordinates: NEAR_B })] }),
+    role("food_anchor", { candidates: [candidate("r1", { coordinates: NEAR_B }), candidate("r2", { coordinates: FAR })] }),
+  ]);
+  const a = buildCandidateCombination(input);
+  const b = buildCandidateCombination(input);
+  assert.deepEqual(a, b);
+});
+
+// --- 11. input immutability -------------------------------------------------
+test("the helper does not mutate its inputs", () => {
+  const input = plannerRoles([
+    role("scenic_anchor", { candidates: [candidate("v1", { coordinates: NEAR_A })] }),
+    role("food_anchor", { candidates: [candidate("r1", { coordinates: NEAR_B })] }),
+  ]);
+  const snapshot = JSON.stringify(input);
+  buildCandidateCombination(input);
+  assert.equal(JSON.stringify(input), snapshot);
+});
+
+// --- additions: single-role + origin distance ------------------------------
+test("a single target role is coherent (no spread) and can be ready", () => {
+  const out = buildCandidateCombination(
+    plannerRoles([role("food_anchor", { requested: true, candidates: [candidate("r1", { coordinates: NEAR_A })] })]),
+  );
+  // only food_anchor requested → it's the sole target
+  const food = out.selected.find((s) => s.role === "food_anchor");
+  assert.ok(food);
+  assert.equal(out.geometry_summary.max_pairwise_km, 0);
+  assert.equal(out.geometry_summary.coherence, "strong");
+  assert.ok(out.quality_flags.includes("single_role_combination"));
+});
+
+test("origin_distance_km is exposed when an origin is provided", () => {
+  const out = buildCandidateCombination(
+    plannerRoles(
+      [
+        role("scenic_anchor", { candidates: [candidate("v1", { coordinates: NEAR_A })] }),
+        role("food_anchor", { candidates: [candidate("r1", { coordinates: NEAR_B })] }),
+      ],
+      { origin: { lat: 41.95, lng: 12.49 } },
+    ),
+  );
+  assert.ok(Number.isFinite(out.geometry_summary.origin_distance_km));
+  assert.ok(out.geometry_summary.origin_distance_km > 0);
+});
+
+test("the result is never labeled a route / day plan (framing guard)", () => {
+  const out = buildCandidateCombination(
+    plannerRoles([
+      role("scenic_anchor", { candidates: [candidate("v1", { coordinates: NEAR_A })] }),
+      role("food_anchor", { candidates: [candidate("r1", { coordinates: NEAR_B })] }),
+    ]),
+  );
+  const keys = Object.keys(out);
+  for (const forbidden of ["route", "day_plan", "itinerary", "main_stops", "sequence"]) {
+    assert.ok(!keys.includes(forbidden), `must not expose ${forbidden}`);
+  }
+});
