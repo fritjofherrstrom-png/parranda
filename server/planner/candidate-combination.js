@@ -34,7 +34,7 @@ const DEFAULT_TOP_K = 3;
 // as a runaway-guard for future role-set growth; it never silently drops a
 // requested role (any capped-out requested role surfaces as unresolved with
 // reason "capped_out", and a capped result cannot be `ready`).
-const DEFAULT_MAX_TARGET_ROLES = 8;
+const DEFAULT_MAX_TARGET_ROLES = 6;
 // Conservative, documented coherence thresholds (km, max pairwise distance).
 const STRONG_KM = 1.2; // compact, easily-walkable cluster
 const OK_KM = 2.5; // plausible city-scale cluster
@@ -161,7 +161,7 @@ function compareScore(a, b) {
   for (let i = 0; i < a.length; i += 1) {
     if (a[i] !== b[i]) return a[i] - b[i];
   }
-  // 7. deterministic final tie-break handled by caller order; treat equal as 0
+  // 7. Final candidate-id tie-break is handled by chooseBestCombination().
   return 0;
 }
 
