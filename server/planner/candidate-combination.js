@@ -30,7 +30,11 @@
 const { resolveHonestyTargetRoles } = require("./dayflow-honesty");
 
 const DEFAULT_TOP_K = 3;
-const DEFAULT_MAX_TARGET_ROLES = 4; // bound the Cartesian product (roles × topK)
+// All six v0 roles × topK=3 = 729 combinations — cheap. The cap exists only
+// as a runaway-guard for future role-set growth; it never silently drops a
+// requested role (any capped-out requested role surfaces as unresolved with
+// reason "capped_out", and a capped result cannot be `ready`).
+const DEFAULT_MAX_TARGET_ROLES = 8;
 // Conservative, documented coherence thresholds (km, max pairwise distance).
 const STRONG_KM = 1.2; // compact, easily-walkable cluster
 const OK_KM = 2.5; // plausible city-scale cluster
@@ -45,12 +49,15 @@ function buildCandidateCombination(plannerRoles = {}, dayflowHonesty = {}, optio
   const strongKm = Number.isFinite(options.strongKm) ? options.strongKm : STRONG_KM;
   const okKm = Number.isFinite(options.okKm) ? options.okKm : OK_KM;
 
-  const targetRoles = capTargetRoles(resolveHonestyTargetRoles(roles), maxTargetRoles);
+  const { kept: targetRoles, dropped: cappedOut } = capTargetRoles(
+    resolveHonestyTargetRoles(roles),
+    maxTargetRoles,
+  );
 
   // Partition target roles into: those with planner-usable options, those that
   // only have fallback candidates, and those with nothing.
   const usableByRole = [];
-  const unresolved = [];
+  const unresolved = cappedOut.map((role) => ({ role: role.role, reason: "capped_out" }));
   for (const role of targetRoles) {
     const usable = (role.candidates || [])
       .filter((candidate) => candidate.planner_usable === true && candidate.candidate_status !== "fallback")
@@ -92,11 +99,30 @@ function chooseBestCombination(usableByRole, geoOpts) {
   for (const combo of cartesian(usableByRole)) {
     const geometry = summarizeGeometry(combo, geoOpts);
     const score = scoreCombination(combo, geometry);
-    if (!best || compareScore(score, best.score) > 0) {
-      best = { picks: combo, geometry, score };
+    if (!best) {
+      best = { picks: combo, geometry, score, idKey: comboIdKey(combo) };
+      continue;
+    }
+    const cmp = compareScore(score, best.score);
+    if (cmp > 0) {
+      best = { picks: combo, geometry, score, idKey: comboIdKey(combo) };
+    } else if (cmp === 0) {
+      // 7. deterministic final tie-break: lexicographic by sorted candidate ids
+      // so caller order can never change the winner.
+      const idKey = comboIdKey(combo);
+      if (idKey < best.idKey) {
+        best = { picks: combo, geometry, score, idKey };
+      }
     }
   }
   return best;
+}
+
+function comboIdKey(combo) {
+  return combo
+    .map((pick) => String(pick.candidate.candidate_id || ""))
+    .sort()
+    .join("|");
 }
 
 // combo = [{ role, slot, candidate }]
@@ -222,6 +248,7 @@ function buildQualityFlags({ unresolved, geometry, duplicateRoleCoverage, picks 
   if (geometry.coherence === "incomplete") flags.add("incomplete_geometry_missing_coordinates");
   for (const role of unresolved) {
     if (role.reason === "fallback_only") flags.add(`fallback_only_${role.role}`);
+    else if (role.reason === "capped_out") flags.add(`capped_out_${role.role}`);
     else flags.add(`missing_${role.role}`);
   }
   if (duplicateRoleCoverage.length) flags.add("duplicate_role_coverage");
@@ -271,7 +298,13 @@ function emptyResult({ status, unresolved, reason }) {
       coherence: "incomplete",
       reasons: ["no_selection"],
     },
-    quality_flags: unresolved.map((r) => (r.reason === "fallback_only" ? `fallback_only_${r.role}` : `missing_${r.role}`)).sort(),
+    quality_flags: unresolved
+      .map((r) => {
+        if (r.reason === "fallback_only") return `fallback_only_${r.role}`;
+        if (r.reason === "capped_out") return `capped_out_${r.role}`;
+        return `missing_${r.role}`;
+      })
+      .sort(),
     reasons: [`status:${status}`, reason],
   };
 }
@@ -279,12 +312,14 @@ function emptyResult({ status, unresolved, reason }) {
 // --- helpers ---------------------------------------------------------------
 
 function capTargetRoles(targetRoles, max) {
-  if (targetRoles.length <= max) return targetRoles;
-  // Keep anchors first (slot === "anchor"), then the rest in their existing
-  // order, until the cap. Deterministic.
+  if (targetRoles.length <= max) return { kept: targetRoles, dropped: [] };
+  // Anchors first (slot === "anchor"), then the rest in their existing order.
+  // Anything beyond the cap surfaces as `dropped` — capped-out REQUESTED roles
+  // must become explicit unresolved so the result can never be `ready`.
   const anchors = targetRoles.filter((r) => r.slot === "anchor");
   const rest = targetRoles.filter((r) => r.slot !== "anchor");
-  return [...anchors, ...rest].slice(0, max);
+  const ordered = [...anchors, ...rest];
+  return { kept: ordered.slice(0, max), dropped: ordered.slice(max) };
 }
 
 function confidenceRank(value) {

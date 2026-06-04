@@ -233,6 +233,54 @@ test("origin_distance_km is exposed when an origin is provided", () => {
   assert.ok(out.geometry_summary.origin_distance_km > 0);
 });
 
+// --- regression: requested roles must never be silently dropped by the cap --
+test("six requested roles all surface — none are silently dropped by the role cap", () => {
+  const roles = [
+    role("scenic_anchor", { candidates: [candidate("v", { coordinates: NEAR_A })] }),
+    role("food_anchor", { candidates: [candidate("r", { coordinates: NEAR_B })] }),
+    role("coffee_fika_stop", { slot: "stop", candidates: [candidate("c", { coordinates: NEAR_A })] }),
+    role("evening_bar_option", { slot: "option", candidates: [candidate("b", { coordinates: NEAR_B })] }),
+    role("swimming_coast_option", { slot: "option", candidates: [candidate("s", { coordinates: NEAR_A })] }),
+    role("vintage_second_hand_option", { slot: "option", candidates: [candidate("vt", { coordinates: NEAR_B })] }),
+  ];
+  const out = buildCandidateCombination(plannerRoles(roles));
+  assert.equal(out.selected.length, 6, "all six requested roles should be present");
+  assert.deepEqual(out.unresolved_roles, [], "nothing should be silently capped out");
+});
+
+test("capped-out requested roles become explicit unresolved and the result is not ready", () => {
+  // force the cap below the requested role count
+  const roles = [
+    role("scenic_anchor", { candidates: [candidate("v", { coordinates: NEAR_A })] }),
+    role("food_anchor", { candidates: [candidate("r", { coordinates: NEAR_B })] }),
+    role("coffee_fika_stop", { slot: "stop", candidates: [candidate("c", { coordinates: NEAR_A })] }),
+  ];
+  const out = buildCandidateCombination(plannerRoles(roles), {}, { maxTargetRoles: 2 });
+  // capped-out role surfaces honestly
+  const cappedNames = out.unresolved_roles
+    .filter((r) => r.reason === "capped_out")
+    .map((r) => r.role);
+  assert.deepEqual(cappedNames, ["coffee_fika_stop"]);
+  // …and the result cannot be `ready` while requested roles are unresolved
+  assert.notEqual(out.status, "ready");
+  assert.ok(out.quality_flags.includes("capped_out_coffee_fika_stop"));
+});
+
+// --- regression: deterministic candidate-id tie-break -----------------------
+test("final tie-break is candidate-id, not caller order", () => {
+  // Two food candidates with IDENTICAL coords, status, origin, confidence —
+  // every score dimension ties. Reverse caller order and assert the same id wins.
+  const scenic = role("scenic_anchor", { candidates: [candidate("v", { coordinates: NEAR_A })] });
+  const a = candidate("alpha", { coordinates: NEAR_B });
+  const b = candidate("beta", { coordinates: NEAR_B });
+  const out1 = buildCandidateCombination(plannerRoles([scenic, role("food_anchor", { candidates: [a, b] })]));
+  const out2 = buildCandidateCombination(plannerRoles([scenic, role("food_anchor", { candidates: [b, a] })]));
+  const food1 = out1.selected.find((s) => s.role === "food_anchor").candidate_id;
+  const food2 = out2.selected.find((s) => s.role === "food_anchor").candidate_id;
+  assert.equal(food1, food2, "caller order must not change the selected id");
+  assert.equal(food1, "alpha", "lexicographically smaller id should win the tie");
+});
+
 test("the result is never labeled a route / day plan (framing guard)", () => {
   const out = buildCandidateCombination(
     plannerRoles([
