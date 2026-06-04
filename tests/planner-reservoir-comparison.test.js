@@ -205,27 +205,23 @@ test("time context is exposed as diagnostics only (no route sequencing)", async 
   assert.deepEqual(def.days?.[0]?.primary_route?.main_stops?.map((s) => s.id), inspected.days?.[0]?.primary_route?.main_stops?.map((s) => s.id));
 });
 
-// === Documented findings (current behavior — see PR body) ===================
-// These FINDING tests are characterization tests for current known limitations.
-// They intentionally lock today's behavior so the next dayflow-honesty
-// refinement PR can update them deliberately rather than accidentally.
+// === Corrected #248 findings ===============================================
+// These were characterization tests in #248. They now assert the refined
+// honesty scope so future changes do not accidentally reintroduce the noise.
 
-test("FINDING: a rich INLAND city with no preferences is classified 'partial' (lacks a beach)", () => {
+test("no-preference rich inland city evaluates core anchors instead of every option role", () => {
   const rome = require("../server/cities/rome.js");
   const pr = selectPlannerRoleCandidates(rome, { candidate_mode: 1, date: DATE });
   const dayflow = summarizeDayflowHonesty({ ...pr, requested_preferences: [] });
-  // Current behavior: no-preference day_status targets ALL six role slots, so a
-  // rich complete inland city can never be "full" because swimming is missing.
-  // Recommended refinement (next PR): target anchor roles when no preferences.
-  assert.equal(dayflow.day_status, "partial");
+  assert.equal(dayflow.day_status, "full");
   assert.ok(dayflow.role_coverage.missing.includes("swimming_coast_option"));
+  assert.equal(dayflow.quality_flags.includes("missing_swimming_coast_option"), false);
 });
 
-test("FINDING: quality flags fire for UNREQUESTED missing roles (potential noise)", () => {
+test("unrequested missing option roles remain visible without becoming quality flags", () => {
   const rome = require("../server/cities/rome.js");
   const pr = selectPlannerRoleCandidates(rome, { candidate_mode: 1, date: DATE, preferences: ["scenic"] });
   const dayflow = summarizeDayflowHonesty({ ...pr, requested_preferences: ["scenic"] });
-  // swimming was NOT requested, yet a missing_* flag is emitted.
-  // Recommended refinement: scope missing/partial flags to requested roles.
-  assert.ok(dayflow.quality_flags.includes("missing_swimming_coast_option"));
+  assert.ok(dayflow.role_coverage.missing.includes("swimming_coast_option"));
+  assert.equal(dayflow.quality_flags.includes("missing_swimming_coast_option"), false);
 });

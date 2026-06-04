@@ -121,6 +121,68 @@ test("no usable candidates in sparse context returns sparse", () => {
   assert.ok(summary.quality_flags.includes("missing_food_anchor"));
 });
 
+test("requested missing option role affects day status and emits scoped missing flag", () => {
+  const summary = summarizeDayflowHonesty(plannerRoles({
+    requested_preferences: ["swimming"],
+    roles: [
+      role("scenic_anchor", "filled", [candidate({ candidate_id: "view", covered_preferences: ["scenic"] })], { requested: false }),
+      role("food_anchor", "filled", [candidate({ candidate_id: "food", covered_preferences: ["food"] })], { requested: false }),
+      role("swimming_coast_option", "missing", [], { requested: true }),
+    ],
+  }));
+
+  assert.equal(summary.day_status, "sparse");
+  assert.ok(summary.quality_flags.includes("missing_swimming_coast_option"));
+});
+
+test("no preferences target scenic and food anchors, not unrequested option roles", () => {
+  const summary = summarizeDayflowHonesty(plannerRoles({
+    requested_preferences: [],
+    roles: [
+      role("scenic_anchor", "filled", [candidate({ candidate_id: "view", covered_preferences: ["scenic"] })], { requested: false }),
+      role("food_anchor", "filled", [candidate({ candidate_id: "food", covered_preferences: ["food"] })], { requested: false }),
+      role("swimming_coast_option", "missing", [], { requested: false }),
+      role("evening_bar_option", "missing", [], { requested: false }),
+    ],
+  }));
+
+  assert.equal(summary.day_status, "full");
+  assert.equal(summary.quality_flags.includes("missing_swimming_coast_option"), false);
+  assert.equal(summary.quality_flags.includes("missing_evening_bar_option"), false);
+});
+
+test("quality flags are scoped to target roles while role coverage remains complete", () => {
+  const summary = summarizeDayflowHonesty(plannerRoles({
+    requested_preferences: ["scenic"],
+    roles: [
+      role("scenic_anchor", "filled", [candidate({ candidate_id: "view", covered_preferences: ["scenic"] })]),
+      role("food_anchor", "missing", [], { requested: false }),
+      role("swimming_coast_option", "missing", [], { requested: false }),
+    ],
+  }));
+
+  assert.deepEqual(summary.role_coverage.missing, ["food_anchor", "swimming_coast_option"]);
+  assert.equal(summary.quality_flags.includes("missing_food_anchor"), false);
+  assert.equal(summary.quality_flags.includes("missing_swimming_coast_option"), false);
+});
+
+test("one filled candidate covering multiple requested roles downgrades robust full status", () => {
+  const rooftop = candidate({
+    candidate_id: "rooftop",
+    covered_preferences: ["scenic", "bars"],
+  });
+  const summary = summarizeDayflowHonesty(plannerRoles({
+    requested_preferences: ["scenic", "bars"],
+    roles: [
+      role("scenic_anchor", "filled", [rooftop], { requested: true }),
+      role("evening_bar_option", "filled", [rooftop], { requested: true }),
+    ],
+  }));
+
+  assert.equal(summary.day_status, "partial");
+  assert.ok(summary.quality_flags.includes("single_candidate_multi_role_coverage"));
+});
+
 test("trust summary counts curated, external, low confidence, and human verified candidates", () => {
   const summary = summarizeDayflowHonesty(plannerRoles({
     roles: [
