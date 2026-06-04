@@ -14,6 +14,8 @@ const { buildCityPulse } = require("./pulse-engine");
 const { buildCandidateIntelligenceInspect } = require("./candidates");
 const { buildAgnosticCityContext } = require("./candidates/agnostic-context");
 const { isExternalCandidatesEnabled } = require("./candidates/blitz-candidate-mode");
+const { classifyCatalogDensity } = require("./candidates/source-calibration");
+const { collectPlaceCandidatesForCity } = require("./place-candidates/provider-registry");
 const { resolveDefaultOpenDataLoader } = require("./place-candidates/open-data-loader");
 const { buildMasthead } = require("./pulse-engine/masthead");
 const { classifySignalQuality } = require("./pulse-engine/signal-quality");
@@ -388,6 +390,24 @@ function parseBlitzCoordinates(request) {
     return null;
   }
   return { lat, lng };
+}
+
+/**
+ * Curated catalog density of a recognized city ("rich" | "thin" | "absent"),
+ * measured the same way the engine does (curated, non-structural real places).
+ * Used to gate open-data augmentation to thin cities only — rich citypacks like
+ * Rome/Barcelona never auto-augment and stay curated-first.
+ */
+function curatedDensityOf(cityConfig) {
+  try {
+    const collected = collectPlaceCandidatesForCity(cityConfig).candidates || [];
+    const curatedRealPlaces = collected.filter(
+      (c) => c.city_pack_owned === true && c.is_structural !== true,
+    ).length;
+    return classifyCatalogDensity(curatedRealPlaces);
+  } catch (_error) {
+    return "rich"; // on any error, never augment (treat as rich → no augmentation)
+  }
 }
 
 /**
@@ -1357,18 +1377,35 @@ function buildApp({ openDataLoader = resolveDefaultOpenDataLoader() } = {}) {
       const explicitOrigin = request.body?.origin || request.body?.selected_origin || request.body?.start || null;
       const effectiveOrigin = explicitOrigin || (useAgnostic ? { lat: coords.lat, lng: coords.lng } : null);
 
-      // Real open-data loader (#237): when agnostic AND external candidates are
-      // explicitly enabled AND the server was constructed with a loader, fetch
-      // open records around the coordinates and pass them via the TRUSTED
-      // helper channel (extras.external_provider). Public payload never touches
-      // this. Any fetch error / timeout / parse error fails closed — the
-      // candidate spine then returns its honest no_candidates response.
       const externalEnabled = isExternalCandidatesRequested(request);
+
+      // Thin recognized-city augmentation (#241): a RECOGNIZED city (not the
+      // agnostic path) that is curated-THIN may also pull trusted open-data
+      // records to fill catalog gaps. Rich citypacks (Rome/Barcelona) are NOT
+      // thin → they never auto-augment and stay curated-first. The records flow
+      // through the same trusted external_provider channel; #235 keeps curated
+      // ahead on comparable fit and #238/#239 dedupe+reconcile any twins.
+      const recognizedCity = candidateModeRequested && externalEnabled && !useAgnostic && Boolean(requestedCity) && !cityFallbackUsed;
+      const cityDensity = recognizedCity ? curatedDensityOf(cityConfig) : null;
+      const augmentRecognized = recognizedCity && cityDensity === "thin";
+      // Anchor the open-data query at the request coords if given, else the
+      // recognized city's center.
+      const cityCenter =
+        cityConfig.center && Number.isFinite(cityConfig.center.lat) && Number.isFinite(cityConfig.center.lng)
+          ? { lat: cityConfig.center.lat, lng: cityConfig.center.lng }
+          : null;
+      const loaderAnchor = useAgnostic ? coords : augmentRecognized ? coords || cityCenter : null;
+
+      // Real open-data loader (#237/#241): fetch when EITHER the agnostic path
+      // or a thin recognized-city augmentation applies, external candidates are
+      // enabled, the server was built with a loader, and we have an anchor. The
+      // public payload never reaches this; any fetch error fails closed.
+      const shouldLoad = (useAgnostic || augmentRecognized) && externalEnabled;
       let externalProviderExtras = null;
       let openDataLoaderStatus = "skipped";
-      if (useAgnostic && externalEnabled && typeof openDataLoader === "function") {
+      if (shouldLoad && typeof openDataLoader === "function" && loaderAnchor) {
         try {
-          const records = await openDataLoader({ lat: coords.lat, lng: coords.lng });
+          const records = await openDataLoader(loaderAnchor);
           if (Array.isArray(records) && records.length > 0) {
             externalProviderExtras = { external_provider: { dataset: records } };
             openDataLoaderStatus = `loaded:${records.length}`;
@@ -1378,7 +1415,7 @@ function buildApp({ openDataLoader = resolveDefaultOpenDataLoader() } = {}) {
         } catch (_error) {
           openDataLoaderStatus = "error_failed_closed";
         }
-      } else if (useAgnostic && externalEnabled) {
+      } else if (shouldLoad) {
         openDataLoaderStatus = "no_loader_configured";
       }
 
@@ -1432,6 +1469,12 @@ function buildApp({ openDataLoader = resolveDefaultOpenDataLoader() } = {}) {
               open_data_loader: openDataLoaderStatus,
             }
           : { used: false },
+        // Thin recognized-city open-data augmentation status (#241). `used` is
+        // true only when a recognized city was curated-thin and the loader path
+        // ran; rich citypacks report used:false with reason "rich_citypack".
+        open_data_augmentation: augmentRecognized
+          ? { used: true, reason: "thin_recognized_city", catalog_density: cityDensity, anchor: loaderAnchor, open_data_loader: openDataLoaderStatus }
+          : { used: false, reason: recognizedCity ? `not_thin:${cityDensity}` : "not_applicable" },
       });
     } catch (error) {
       response.status(500).json({
