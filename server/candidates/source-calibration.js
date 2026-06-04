@@ -28,6 +28,8 @@
  * lesson learned in one city generalizes.
  */
 
+const { normalizeLens } = require("./lens");
+
 const INFLUENCE_MIN = -1;
 const INFLUENCE_MAX = 1;
 
@@ -87,7 +89,7 @@ function calibrateSource(input = {}) {
   // as a stable seam until that PR explicitly defines its contribution.
   // (input.tier intentionally unused for now.)
   const intents = Array.isArray(input.intents) ? input.intents : [];
-  const lens = String(input.lens || "").toLowerCase();
+  const lens = normalizeLens(input.lens);
   const density = String(input.density || "rich").toLowerCase();
   const diversity = Number.isFinite(input.diversity) ? input.diversity : 0;
   const freshness = String(input.freshness || "unknown").toLowerCase();

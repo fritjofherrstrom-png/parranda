@@ -13,14 +13,14 @@
  * Pure / side-effect free.
  */
 
-// The fit dimensions Parranda judges. `lens` (tourist/local/rediscover) is a
+const { LENS_VALUES, normalizeLens } = require("./lens");
+
+// The fit dimensions Parranda judges. `lens` (first_time/local/rediscover) is a
 // modifier over these weights, not a dimension itself.
 const FIT_DIMENSIONS = ["intent", "route", "time", "weather", "moment", "local"];
 
-const LENS_VALUES = ["first_time", "balanced", "local", "rediscover", "surprise"];
-
 function createFitDecomposition({ lens = null, dimensions = {} } = {}) {
-  const normalizedLens = LENS_VALUES.includes(lens) ? lens : null;
+  const normalizedLens = normalizeLens(lens);
 
   const dims = FIT_DIMENSIONS.reduce((acc, key) => {
     const override = dimensions[key] || {};

@@ -1448,7 +1448,7 @@ function buildApp({ openDataLoader = resolveDefaultOpenDataLoader() } = {}) {
           request.body?.candidate_sources ??
           request.body?.candidateSources,
         weather: request.body?.weather,
-        lens: request.body?.lens,
+        lens: request.query?.lens ?? request.body?.lens,
         lang,
       },
       // Trusted server-side extras: pre-fetched open-data records (if any) reach

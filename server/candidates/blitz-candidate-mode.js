@@ -37,6 +37,7 @@ const { scoreCandidateFit } = require("./fit-scorer");
 const { classifyCatalogDensity, calibrateSource } = require("./source-calibration");
 const { resolveAgnosticConfidence } = require("./agnostic-context");
 const { resolveCandidateIdentity } = require("./entity-resolution");
+const { normalizeLens } = require("./lens");
 
 // Curated/verified Parranda candidates keep priority when fit is comparable.
 // They get a flat priority that dominates any source-calibration influence, so
@@ -90,7 +91,7 @@ function buildCandidateBlitzDecision(cityConfig, payload = {}, helpers = {}) {
   const normalized = normalizeUserIntents([...(prefs.preferences || []), ...(prefs.intent_keys || [])]);
   const origin = resolveOriginCoords(payload.origin || payload.start);
   const weather = payload.weather && typeof payload.weather === "object" ? payload.weather : null;
-  const lens = typeof payload.lens === "string" ? payload.lens : null;
+  const lens = normalizeLens(payload.lens);
   const context = { timeBand, weekday: nowContext.weekday, weather, origin, lens };
 
   const externalEnabled = isExternalCandidatesEnabled(payload);
