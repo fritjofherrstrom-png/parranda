@@ -33,6 +33,8 @@ const GEO_MERGE_M = 75; // close enough to be the same place, with a name match
 const GEO_TIGHT_M = 30; // very close: exact normalized name is enough
 const GEO_HARD_ID_M = 500; // sanity bound when a shared wikidata id is present
 const NAME_SIM_MIN = 0.6; // max(token Jaccard, distinctive-token Jaccard)
+const COORD_CONFLICT_M = 100; // curated vs external coords farther apart than this
+// are flagged as a conflict (kept curated, never silently overwritten)
 
 // Tokens stripped before computing "distinctive" name overlap: articles +
 // generic category nouns across the languages Parranda touches. A name with no
@@ -107,6 +109,7 @@ function resolveCandidateIdentity(candidates, { now = null } = {}) {
     const existing = survivors[i].candidate;
     const canonical = chooseCanonical(existing, candidate);
     const duplicate = canonical === existing ? candidate : existing;
+    const reconciliation = reconcileFields(canonical, duplicate);
     survivors[i] = { candidate: mergeInto(canonical, duplicate, { now }) };
     merges.push({
       duplicate_id: duplicate.id,
@@ -116,17 +119,22 @@ function resolveCandidateIdentity(candidates, { now = null } = {}) {
       decision: "merged",
       confidence: verdict.confidence,
       signals: verdict.signals,
+      reconciled_fields: reconciliation.reconciliation.filled,
+      conflicts: reconciliation.reconciliation.conflicts,
     });
   }
 
+  const mergedRecords = merges.filter((m) => m.decision === "merged");
   return {
     candidates: survivors.map((s) => s.candidate),
     merges,
     summary: {
       input_count: input.length,
       output_count: survivors.length,
-      merged_count: merges.filter((m) => m.decision === "merged").length,
+      merged_count: mergedRecords.length,
       ambiguous_kept_separate: ambiguousKept,
+      reconciled_count: mergedRecords.filter((m) => m.reconciled_fields.length > 0).length,
+      conflict_count: mergedRecords.filter((m) => m.conflicts.length > 0).length,
     },
   };
 }
@@ -215,10 +223,58 @@ function mergeInto(canonical, duplicate, { now = null } = {}) {
     },
   ];
 
-  // Canonical keeps its own identity/fields (curated truth wins). It only gains
-  // the absorbed evidence ledger + a merged_from trail. We do NOT overwrite
-  // canonical coordinates/label/type from the duplicate in v1.
-  return { ...canonical, evidence, merged_from: mergedFrom };
+  // Canonical keeps its identity/taste fields (curated truth wins). It gains the
+  // absorbed evidence ledger, a merged_from trail, and a bounded field
+  // reconciliation: only SAFE missing/conflicting operational fields are
+  // touched (v2: coordinates). Label/type/tags are always preserved.
+  const { patch, reconciliation } = reconcileFields(canonical, duplicate);
+  const prior = canonical.reconciliation || { filled: [], conflicts: [] };
+  const merged = { ...canonical, ...patch, evidence, merged_from: mergedFrom };
+
+  const filled = [...prior.filled, ...reconciliation.filled];
+  const conflicts = [...prior.conflicts, ...reconciliation.conflicts];
+  if (filled.length || conflicts.length) {
+    merged.reconciliation = { filled, conflicts };
+  }
+  return merged;
+}
+
+/**
+ * Bounded field reconciliation: enrich a curated candidate from its merged
+ * external twin WITHOUT touching curated identity/taste.
+ *   - missing curated coordinates → filled from the external twin
+ *   - close coordinates → curated kept (no change)
+ *   - far coordinates → curated kept, conflict exposed for inspect
+ *   - label / type / tags → always preserved (never reconciled in v2)
+ *
+ * @returns {{ patch: object, reconciliation: { filled: string[], conflicts: object[] } }}
+ */
+function reconcileFields(canonical, duplicate) {
+  const patch = {};
+  const filled = [];
+  const conflicts = [];
+
+  const canHas = hasCoords(canonical);
+  const dupHas = hasCoords(duplicate);
+
+  if (!canHas && dupHas) {
+    patch.lat = duplicate.lat;
+    patch.lng = duplicate.lng;
+    filled.push("coordinates");
+  } else if (canHas && dupHas) {
+    const d = haversineM(canonical.lat, canonical.lng, duplicate.lat, duplicate.lng);
+    if (d > COORD_CONFLICT_M) {
+      conflicts.push({
+        field: "coordinates",
+        kept: "curated",
+        curated: { lat: canonical.lat, lng: canonical.lng },
+        external: { lat: duplicate.lat, lng: duplicate.lng },
+        distance_m: round(d),
+      });
+    }
+  }
+
+  return { patch, reconciliation: { filled, conflicts } };
 }
 
 // --- evidence helpers ------------------------------------------------------
@@ -362,8 +418,10 @@ module.exports = {
   GEO_MERGE_M,
   GEO_TIGHT_M,
   NAME_SIM_MIN,
+  COORD_CONFLICT_M,
   resolveCandidateIdentity,
   matchIdentity,
+  reconcileFields,
   normalizeName,
   distinctiveTokens,
   nameSimilarity,
