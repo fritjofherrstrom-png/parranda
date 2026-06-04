@@ -12,6 +12,8 @@ const test = require("node:test");
 const { scoreCandidateFit } = require("../server/candidates/fit-scorer");
 const { buildCandidateBlitzDecision } = require("../server/candidates/blitz-candidate-mode");
 const { buildAgnosticCityContext } = require("../server/candidates/agnostic-context");
+const { normalizeLens } = require("../server/candidates/lens");
+const { calibrateSource } = require("../server/candidates/source-calibration");
 
 const rome = require("../server/cities/rome.js");
 const DATE = "2026-06-03";
@@ -27,6 +29,30 @@ function lensScore(candidate, lens, intent) {
     context: { timeBand: "midday", lens },
   });
 }
+
+// --- normalization ---------------------------------------------------------
+test("normalizeLens maps aliases and presentation variants to canonical lens values", () => {
+  assert.equal(normalizeLens("tourist"), "first_time");
+  assert.equal(normalizeLens("Local"), "local");
+  assert.equal(normalizeLens(" local "), "local");
+  assert.equal(normalizeLens("unknown"), null);
+});
+
+test("lens normalization is consistent across fit, decision context, and calibration", () => {
+  const tourist = lensScore(landmark, "tourist");
+  assert.equal(tourist.lens, "first_time");
+  assert.equal(tourist.dimensions.local.score, 0.4);
+
+  const local = buildCandidateBlitzDecision(rome, { candidate_mode: 1, date: DATE, preferences: ["scenic"], lens: " Local " });
+  assert.equal(local.context.lens, "local");
+  assert.ok(Number.isFinite(local.best_move.dimensions.local.score));
+
+  const calibration = calibrateSource({ family: "map", lens: " Local ", density: "rich", diversity: 2 });
+  assert.ok(calibration.reasons.includes("local_lens_softens_generic_map:-0.1"));
+
+  const unknown = buildCandidateBlitzDecision(rome, { candidate_mode: 1, date: DATE, preferences: ["scenic"], lens: "not-a-lens" });
+  assert.equal(unknown.context.lens, null);
+});
 
 // --- unit: the local dimension --------------------------------------------
 test("no lens / balanced leaves the local dimension neutral (no regression)", () => {

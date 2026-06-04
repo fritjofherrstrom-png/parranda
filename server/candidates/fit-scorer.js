@@ -11,12 +11,14 @@
  *   - ROUTE / TIME / WEATHER are BOUNDED modifiers that only tilt ordering
  *     WITHIN a coverage tier. Their combined magnitude is capped below a single
  *     intent increment, so context can break ties but never dominate fit.
- *   - MOMENT (live) and LOCAL (lens) are reserved/neutral in v1.
+ *   - MOMENT (live) stays neutral in v1. LOCAL is a tag-based experience-lens
+ *     tilt v1 — not a full "locals know best" ranker.
  *
  * Pure / side-effect free.
  */
 
 const { createFitDecomposition } = require("./fit");
+const { normalizeLens } = require("./lens");
 const { matchCandidateToIntent, candidateModifiers, STRONG_MATCH } = require("./intent-vocabulary");
 
 const CONTEXT_CAP = 0.9; // total context tilt magnitude — strictly < STRONG_MATCH (2.0)
@@ -42,7 +44,9 @@ const TIME_BAND_TOKENS = new Set(["morning", "midday", "afternoon", "evening", "
  * @returns {object} fit decomposition + coverage + reasons
  */
 function scoreCandidateFit({ candidate, userIntents = [], userModifiers = [], context = {} } = {}) {
-  const decomposition = createFitDecomposition({ lens: context.lens || null });
+  const normalizedLens = normalizeLens(context.lens);
+  const normalizedContext = { ...context, lens: normalizedLens };
+  const decomposition = createFitDecomposition({ lens: normalizedLens });
   const reasons = [];
 
   // --- INTENT (primary) -----------------------------------------------------
@@ -72,15 +76,15 @@ function scoreCandidateFit({ candidate, userIntents = [], userModifiers = [], co
   setDim(decomposition, "intent", intentBase, reasons.filter((r) => /^(covers|partial|general)/.test(r)));
 
   // --- ROUTE (kind suitability + proximity) ---------------------------------
-  const route = scoreRoute(candidate, context, reasons);
+  const route = scoreRoute(candidate, normalizedContext, reasons);
   setDim(decomposition, "route", route.score, route.reasons);
 
   // --- TIME -----------------------------------------------------------------
-  const time = scoreTime(candidate, context, userModifiers, reasons);
+  const time = scoreTime(candidate, normalizedContext, userModifiers, reasons);
   setDim(decomposition, "time", time.score, time.reasons);
 
   // --- WEATHER --------------------------------------------------------------
-  const weather = scoreWeather(candidate, context, userModifiers, reasons);
+  const weather = scoreWeather(candidate, normalizedContext, userModifiers, reasons);
   setDim(decomposition, "weather", weather.score, weather.reasons);
 
   // moment stays neutral in v1
@@ -90,7 +94,7 @@ function scoreCandidateFit({ candidate, userIntents = [], userModifiers = [], co
   // The lens reweights which PLACES rise, from the same candidate set. v2:
   // additive lifts only (never penalties) so it tilts within a coverage tier
   // and never drags curated below a comparably-fitting candidate (#235).
-  const lens = scoreLens(candidate, context);
+  const lens = scoreLens(candidate, normalizedContext);
   setDim(decomposition, "local", lens.score, lens.reasons.length ? lens.reasons : ["lens_neutral"]);
 
   // Context is bounded so it can only tilt within a coverage tier.
@@ -255,7 +259,7 @@ const LOCAL_TAGS = new Set([
  * @returns {{ score: number, reasons: string[] }}
  */
 function scoreLens(candidate, context) {
-  const lens = String(context?.lens || "").toLowerCase();
+  const lens = normalizeLens(context?.lens);
   if (!lens || lens === "balanced") return { score: 0, reasons: [] };
 
   const type = String(candidate?.type || "").toLowerCase();
@@ -266,7 +270,7 @@ function scoreLens(candidate, context) {
   const reasons = [];
   let score = 0;
 
-  if (lens === "first_time" || lens === "tourist") {
+  if (lens === "first_time") {
     if (legible) {
       score += 0.4;
       reasons.push("lens_first_time_classic");
