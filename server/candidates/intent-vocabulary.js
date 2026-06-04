@@ -26,41 +26,54 @@ const CANONICAL_INTENTS = {
   second_hand: {
     label: "second hand / vintage",
     category_types: ["vintage-shop"],
-    strong_types: ["vintage-shop"],
-    strong_tags: ["second_hand", "vintage", "antique", "antiques"],
+    strong_types: ["vintage-shop", "thrift-shop", "charity-shop", "antiques-shop"],
+    strong_tags: ["second_hand", "vintage", "antique", "antiques", "thrift", "loppis", "flea"],
     // NOTE: generic "shopping" / "shop" is intentionally absent — second hand
     // must not be diluted into generic retail.
     weak_types: [],
     weak_tags: [],
-    aliases: ["second_hand", "secondhand", "second hand", "vintage", "antique", "antiques", "thrift", "loppis", "flea"],
+    aliases: ["second_hand", "secondhand", "second hand", "vintage", "antique", "antiques", "thrift", "loppis", "flea", "charity", "preloved"],
   },
   scenic: {
     label: "viewpoint / scenic",
     category_types: ["viewpoint"],
     route_role: "viewpoint_anchor",
-    strong_types: ["viewpoint"],
-    strong_tags: ["utsikt"],
+    strong_types: ["viewpoint", "lookout", "overlook"],
+    strong_tags: ["utsikt", "panorama", "vista"],
     weak_types: ["rooftop-bar", "promenade", "park", "garden", "bridge", "castle"],
     weak_tags: ["coast", "dolce-vita"],
-    aliases: ["scenic", "viewpoint", "viewpoints", "view", "views", "utsikt", "panorama", "vista", "lookout"],
+    aliases: ["scenic", "viewpoint", "viewpoints", "view", "views", "utsikt", "panorama", "vista", "lookout", "overlook"],
   },
   food: {
     label: "food",
     category_types: ["restaurant"],
-    strong_types: ["restaurant", "pizza", "street-food", "trattoria"],
-    strong_tags: ["mat", "pizza", "tapas"],
+    // taverna/tavern/osteria/bistro are taverna-style eateries (Greek/Italian)
+    // → food, not generic. (English "pub" stays under bars.)
+    strong_types: ["restaurant", "pizza", "street-food", "trattoria", "taverna", "tavern", "osteria", "bistro", "fast-food"],
+    strong_tags: ["mat", "pizza", "tapas", "meze"],
     weak_types: ["bakery", "cafe", "café"],
     weak_tags: ["aperitivo"],
-    aliases: ["food", "eat", "mat", "restaurant", "dinner", "lunch", "pizza", "tapas", "trattoria"],
+    aliases: ["food", "eat", "mat", "restaurant", "dinner", "lunch", "pizza", "tapas", "trattoria", "taverna", "tavern", "osteria", "bistro", "eatery", "meze"],
+  },
+  coffee: {
+    label: "coffee / fika / café",
+    category_types: ["cafe"],
+    // café / coffee / fika is its OWN intent now — no longer only a weak food
+    // match. A café strongly covers `coffee`/`fika`.
+    strong_types: ["cafe", "café", "coffee", "coffee-shop", "coffeehouse"],
+    strong_tags: ["fika", "kaffe", "coffee", "espresso"],
+    weak_types: ["bakery"],
+    weak_tags: [],
+    aliases: ["coffee", "fika", "cafe", "café", "kaffe", "espresso", "cappuccino", "latte", "kafferep"],
   },
   bars: {
     label: "bars / drinks",
     category_types: ["bar"],
-    strong_types: ["bar", "wine-bar", "cocktail-bar", "rooftop-bar"],
+    strong_types: ["bar", "wine-bar", "cocktail-bar", "rooftop-bar", "pub", "biergarten", "taproom"],
     strong_tags: ["öl", "vin", "cocktail", "aperitivo", "vermut", "nattliv", "party"],
     weak_types: [],
     weak_tags: ["tapas", "kväll"],
-    aliases: ["bar", "bars", "drinks", "drink", "cocktail", "cocktails", "wine", "beer", "öl", "vin", "nightlife", "nattliv", "kväll", "party", "aperitivo", "vermut"],
+    aliases: ["bar", "bars", "drinks", "drink", "cocktail", "cocktails", "wine", "beer", "öl", "vin", "nightlife", "nattliv", "kväll", "party", "aperitivo", "vermut", "pub", "biergarten", "taproom", "evening"],
   },
   markets: {
     label: "markets",
@@ -83,11 +96,11 @@ const CANONICAL_INTENTS = {
   swimming: {
     label: "swimming",
     category_types: ["beach"],
-    strong_types: ["beach"],
-    strong_tags: ["coast", "bad", "strand", "lido", "beach"],
+    strong_types: ["beach", "bathing-spot", "swimming-area"],
+    strong_tags: ["coast", "bad", "strand", "lido", "beach", "bathing", "badplats", "kallbad"],
     weak_types: ["promenade"],
     weak_tags: [],
-    aliases: ["swim", "swimming", "beach", "bad", "strand", "lido", "badplats", "sea"],
+    aliases: ["swim", "swimming", "beach", "bad", "strand", "lido", "badplats", "sea", "bathing", "kallbad", "havsbad"],
   },
   low_energy: {
     label: "low-energy",
