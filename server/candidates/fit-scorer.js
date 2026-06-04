@@ -83,12 +83,18 @@ function scoreCandidateFit({ candidate, userIntents = [], userModifiers = [], co
   const weather = scoreWeather(candidate, context, userModifiers, reasons);
   setDim(decomposition, "weather", weather.score, weather.reasons);
 
-  // moment / local stay neutral in v1
+  // moment stays neutral in v1
   setDim(decomposition, "moment", 0, []);
-  setDim(decomposition, "local", 0, ["lens_neutral"]);
+
+  // --- LOCAL (experience lens) ---------------------------------------------
+  // The lens reweights which PLACES rise, from the same candidate set. v2:
+  // additive lifts only (never penalties) so it tilts within a coverage tier
+  // and never drags curated below a comparably-fitting candidate (#235).
+  const lens = scoreLens(candidate, context);
+  setDim(decomposition, "local", lens.score, lens.reasons.length ? lens.reasons : ["lens_neutral"]);
 
   // Context is bounded so it can only tilt within a coverage tier.
-  const rawContext = route.score + time.score + weather.score;
+  const rawContext = route.score + time.score + weather.score + lens.score;
   const contextTotal = clamp(rawContext, -CONTEXT_CAP, CONTEXT_CAP);
 
   const primaryScore = round(intentBase + contextTotal);
@@ -222,6 +228,67 @@ function scoreWeather(candidate, context, userModifiers, reasons) {
   }
 
   return { score: clamp(score, -0.5, 0.5), reasons: localReasons };
+}
+
+// Legibility signals: clearly iconic types + "classic/landmark" tags. Tourist
+// lenses lift these; local lenses leave them flat (relative softening).
+const LEGIBLE_TYPES = new Set([
+  "landmark", "castle", "basilica", "cathedral", "monument", "palace", "ruins",
+]);
+const LEGIBLE_TAGS = new Set([
+  "klassiker", "classic", "iconic", "turist", "tourist", "landmark", "must-see", "must see", "dolce-vita",
+]);
+// Localness signals: neighborhood / everyday / under-surfaced. Local + rediscover
+// lenses lift these.
+const LOCAL_TAGS = new Set([
+  "lokalt", "local", "hidden gems", "hidden-gems", "hidden_gems", "low-key", "lowkey",
+  "hippt", "neighbourhood", "neighborhood", "kiez", "kvarter", "vardag",
+]);
+
+/**
+ * Experience-lens fit (v1): bounded, ADDITIVE-ONLY reweighting of which places
+ * rise. No penalties — a candidate with no legibility/localness signal scores 0,
+ * so local mode never "blindly rewards obscurity" and tourist mode never punishes
+ * neighborhood stops; defaults are softened only relatively. Returns 0 for
+ * balanced / no lens (so default behavior is unchanged).
+ *
+ * @returns {{ score: number, reasons: string[] }}
+ */
+function scoreLens(candidate, context) {
+  const lens = String(context?.lens || "").toLowerCase();
+  if (!lens || lens === "balanced") return { score: 0, reasons: [] };
+
+  const type = String(candidate?.type || "").toLowerCase();
+  const tags = new Set((candidate?.tags || []).map((t) => String(t).toLowerCase().trim()));
+  const legible = LEGIBLE_TYPES.has(type) || hasAny(tags, LEGIBLE_TAGS);
+  const local = hasAny(tags, LOCAL_TAGS);
+
+  const reasons = [];
+  let score = 0;
+
+  if (lens === "first_time" || lens === "tourist") {
+    if (legible) {
+      score += 0.4;
+      reasons.push("lens_first_time_classic");
+    }
+  } else if (lens === "local" || lens === "rediscover") {
+    if (local) {
+      score += 0.4;
+      reasons.push("lens_local_neighborhood");
+    }
+  } else if (lens === "surprise") {
+    if (local) {
+      score += 0.3;
+      reasons.push("lens_surprise_offbeat");
+    }
+  }
+
+  return { score: clamp(score, -0.5, 0.5), reasons };
+}
+
+function hasAny(set, candidates) {
+  for (const value of candidates) if (set.has(value)) return true;
+  return false;
 }
 
 function setDim(decomposition, key, score, dimReasons) {
