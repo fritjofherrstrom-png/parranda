@@ -22,6 +22,10 @@ const { buildRouteCandidateAdapterInspect } = require("./planner/candidate-combi
 const { buildRouteAbScoringInspect } = require("./planner/route-ab-scoring");
 const { buildRouteOutputDiagnostics } = require("./planner/route-output-diagnostics");
 const { buildAgnosticRouteCandidateDiagnostics } = require("./planner/agnostic-route-candidate-diagnostics");
+const {
+  composeAgnosticRouteOutput,
+  buildBlockedAgnosticRouteOutputExperiment,
+} = require("./planner/agnostic-route-output");
 const { collectPlaceCandidatesForCity } = require("./place-candidates/provider-registry");
 const { resolveDefaultOpenDataLoader } = require("./place-candidates/open-data-loader");
 const { EXTERNAL_OPEN_PROVIDER_META } = require("./place-candidates/external-open-provider");
@@ -526,6 +530,23 @@ function inspectListHas(value, token) {
     .split(",")
     .map((part) => part.trim().toLowerCase())
     .includes(token);
+}
+
+// #259 — the explicit EXPERIMENT flag that authorizes route mutation/synthesis.
+// Parsed INDEPENDENTLY of the `inspect` list on purpose: `inspect=` may only
+// expose diagnostics and must NEVER mutate route output. Primary flag is
+// `experimental_agnostic_route_output=1`; optional alias `experiment=agnostic_route_output`.
+function isAgnosticRouteOutputExperimentRequested(request) {
+  const query = request.query || {};
+  const body = request.body || {};
+  return (
+    isTruthyInspectFlag(query.experimental_agnostic_route_output) ||
+    isTruthyInspectFlag(query.experimentalAgnosticRouteOutput) ||
+    isTruthyInspectFlag(body.experimental_agnostic_route_output) ||
+    isTruthyInspectFlag(body.experimentalAgnosticRouteOutput) ||
+    inspectListHas(query.experiment, "agnostic_route_output") ||
+    inspectListHas(body.experiment, "agnostic_route_output")
+  );
 }
 
 function isTruthyInspectFlag(value) {
@@ -1592,8 +1613,25 @@ function buildApp({ openDataLoader = resolveDefaultOpenDataLoader() } = {}) {
         includeLiveEvents: Boolean(request.body?.include_live_events),
       };
 
+      // #259 — the explicit experiment flag is the ONLY thing that may mutate or
+      // synthesize route output. It is parsed independently of `inspect`. The
+      // agnostic gate mirrors /api/blitz: valid coords + no recognized citypack
+      // (unknown/fallback city, or no city sent at all). Recognized cities stay
+      // on the default path untouched.
+      const experimentRequested = isAgnosticRouteOutputExperimentRequested(request);
+      const experimentCoords = parseBlitzCoordinates(request);
+      const noRecognizedCity = !requestedCity || cityFallbackUsed;
+      const missingAgnosticExperimentCoords =
+        experimentRequested && noRecognizedCity && !experimentCoords;
+      const useAgnosticRouteExperiment =
+        experimentRequested && Boolean(experimentCoords) && noRecognizedCity;
+
+      // Build the would-be BASELINE response as a value (not sent yet) so the
+      // experiment can preserve it for comparison. When the flag is absent this
+      // is returned verbatim — identical behavior to before #259.
+      let baselineBody;
       if (cityFallbackUsed) {
-        response.json({
+        baselineBody = {
           city: requestedCity,
           days: [],
           resolved_home_base: null,
@@ -1602,12 +1640,9 @@ function buildApp({ openDataLoader = resolveDefaultOpenDataLoader() } = {}) {
           requested_city: requestedCity,
           city_fallback_used: true,
           readiness: buildUnsupportedCityReadiness(requestedCity),
-        });
-        return;
-      }
-
-      if (shouldReturnPreviewRouteNoop(cityConfig)) {
-        response.json({
+        };
+      } else if (shouldReturnPreviewRouteNoop(cityConfig)) {
+        baselineBody = {
           city,
           days: [],
           resolved_home_base: null,
@@ -1619,45 +1654,87 @@ function buildApp({ openDataLoader = resolveDefaultOpenDataLoader() } = {}) {
             requestedKey: requestedCity || city,
             fallbackUsed: cityFallbackUsed,
           }, { routedDayCount: 0 }),
+        };
+      } else {
+        const result = diversifyRecommendationDays(await generateRecommendations(payload));
+        const plannerInspectSidecar = isPlannerCandidateInspectRequested(request)
+          ? await buildPlannerCandidateInspectSidecar({
+              cityConfig,
+              request,
+              routePayload: payload,
+              routeResult: result,
+              openDataLoader,
+            })
+          : null;
+        const routeOutputDiagnosticsSidecar = isRouteOutputInspectRequested(request)
+          ? {
+              route_output_diagnostics: buildRouteOutputDiagnostics({
+                city,
+                routeResult: result,
+                includeAlternatives: true,
+              }),
+            }
+          : null;
+        const agnosticRouteCandidateSidecar = isAgnosticRouteCandidateInspectRequested(request)
+          ? await buildAgnosticRouteCandidateSidecar({
+              cityConfig,
+              request,
+              routePayload: payload,
+              routeResult: result,
+              openDataLoader,
+            })
+          : null;
+        baselineBody = {
+          ...result,
+          requested_city: requestedCity,
+          city_fallback_used: cityFallbackUsed,
+          ...(plannerInspectSidecar || {}),
+          ...(routeOutputDiagnosticsSidecar || {}),
+          ...(agnosticRouteCandidateSidecar || {}),
+        };
+      }
+
+      if (missingAgnosticExperimentCoords) {
+        response.json({
+          ...baselineBody,
+          agnostic_route_output_experiment: buildBlockedAgnosticRouteOutputExperiment({
+            baselineResult: baselineBody,
+            blocker: "missing_or_invalid_coordinates",
+            sourceStatus: {
+              status: "no_anchor",
+              external_candidates_requested: isExternalCandidatesRequested(request),
+              anchor: null,
+            },
+          }),
         });
         return;
       }
 
-      const result = diversifyRecommendationDays(await generateRecommendations(payload));
-      const plannerInspectSidecar = isPlannerCandidateInspectRequested(request)
-        ? await buildPlannerCandidateInspectSidecar({
-            cityConfig,
-            request,
-            routePayload: payload,
-            routeResult: result,
-            openDataLoader,
-          })
-        : null;
-      const routeOutputDiagnosticsSidecar = isRouteOutputInspectRequested(request)
-        ? {
-            route_output_diagnostics: buildRouteOutputDiagnostics({
-              city,
-              routeResult: result,
-              includeAlternatives: true,
-            }),
-          }
-        : null;
-      const agnosticRouteCandidateSidecar = isAgnosticRouteCandidateInspectRequested(request)
-        ? await buildAgnosticRouteCandidateSidecar({
-            cityConfig,
-            request,
-            routePayload: payload,
-            routeResult: result,
-            openDataLoader,
-          })
-        : null;
+      if (!useAgnosticRouteExperiment) {
+        response.json(baselineBody);
+        return;
+      }
+
+      // Experiment path: behind the explicit flag, a coordinate-only / non-citypack
+      // request can RETURN an experimental trusted-candidate route (eligibility
+      // passes) or honest blockers with the baseline left intact (eligibility
+      // fails). Only the server-side openDataLoader is consulted — public payload
+      // never becomes trusted data.
+      const { result: experimentResult, experiment } = await composeAgnosticRouteOutput({
+        coords: experimentCoords,
+        baselineResult: baselineBody,
+        externalRequested: isExternalCandidatesRequested(request),
+        openDataLoader,
+        preferences,
+        lens: request.body?.lens || request.query?.lens || null,
+        weather: request.body?.weather || null,
+        date: payload.dates[0] || null,
+        todayIsoDate: cityConfig.todayIsoDate,
+        timezone: cityConfig.timezone || "UTC",
+      });
       response.json({
-        ...result,
-        requested_city: requestedCity,
-        city_fallback_used: cityFallbackUsed,
-        ...(plannerInspectSidecar || {}),
-        ...(routeOutputDiagnosticsSidecar || {}),
-        ...(agnosticRouteCandidateSidecar || {}),
+        ...experimentResult,
+        agnostic_route_output_experiment: experiment,
       });
     } catch (error) {
       response.status(500).json({
