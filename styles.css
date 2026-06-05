@@ -2318,13 +2318,16 @@ body.is-planner-entry .planner-mode-button.is-active {
 
 .planner-day-choice-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 16px;
+  grid-template-columns: 1fr auto;
+  gap: 12px 16px;
   padding: 18px;
   border-radius: 28px;
   background: rgba(255, 252, 247, 0.84);
   border: 1px solid rgba(70, 38, 18, 0.08);
+}
+
+.planner-day-choice-copy {
+  grid-column: 1 / -1;
 }
 
 .planner-day-choice-copy h3 {
@@ -2344,6 +2347,10 @@ body.is-planner-entry .planner-mode-button.is-active {
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
+}
+
+.planner-day-range-actions .ghost-button {
+  white-space: nowrap;
 }
 
 .planner-day-preset-button {
