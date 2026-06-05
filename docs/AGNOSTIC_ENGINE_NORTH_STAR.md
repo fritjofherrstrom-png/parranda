@@ -53,6 +53,15 @@ candidate spine
 
 This work is useful foundation, but it is not the final agnostic engine. The next phase must move from observability toward capability.
 
+## Update after #259
+
+The roadmap numbering below predates the merge order. The actual sequence was:
+
+- **#258** delivered this north-star, `CLAUDE.md`, and `CODEX.md` (alignment/memory).
+- **#259** delivered the first **capability** step: the experimental any-place route-output on `/api/route-recommendations`. Behind the explicit `experimental_agnostic_route_output=1` flag (alias `experiment=agnostic_route_output`), a coordinate-only / non-citypack request now **returns** an experimental route built from trusted source-backed candidates — replacing `days[0].primary_route` when a baseline route exists, or synthesizing a clearly-experimental first day when the baseline is the empty fallback — and preserves the baseline plus honest blockers under a top-level `agnostic_route_output_experiment` block. Eligibility failure returns the baseline unchanged with explicit blockers. Default behavior is unchanged without the flag; `inspect=` never mutates; public payload is never trusted; order is `unvalidated` with no ETA/walking/opening-hours claims.
+
+Still missing before a true any-place Planner (now the next steps): freeform place intake/geocoding (coords-only today), a **validated** walking sequence + budget (#261), time/live/pulse context in composition (#262), confidence calibration for sparse multi-role/multi-day sets, and a frontend dogfood path (#263).
+
 ## Anti-drift rule
 
 Every PR in the agnostic/planner line must be one of:
@@ -126,10 +135,10 @@ Review agnostic/planner PRs in this order:
 The current direction should be:
 
 ```txt
-#258 — experimental any-place route-output POC + readiness blockers
-#259 — city/context intake contract for unknown/non-citypack places
-#260 — trusted provider/loader path for arbitrary place candidates
-#261 — route ordering + walking-budget validation
+#258 — DONE: agnostic engine north-star + CLAUDE.md / CODEX.md (alignment/memory)
+#259 — DONE: experimental any-place route-output capability + readiness blockers
+#260 — freeform place intake / geocoding contract for unknown/non-citypack places
+#261 — route ordering + walking-budget validation (replace unvalidated order)
 #262 — time/live/pulse context integration
 #263 — frontend dogfood mode: enter any place -> get honest route/dayflow output
 ```
