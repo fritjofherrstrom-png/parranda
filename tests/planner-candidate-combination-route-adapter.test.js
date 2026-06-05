@@ -168,6 +168,39 @@ test("compare: a null route reports honestly without crashing", () => {
   assert.ok(cmp.reasons.includes("no_primary_route"));
 });
 
+test("agnostic coordinate-only context: adapter can represent trusted external candidates without a route", () => {
+  const out = buildRouteCandidateAdapterInspect({
+    city: "agnostic",
+    candidateCombination: combo({
+      selected: [
+        sel("food_anchor", "osm-malmo-food-1", {
+          label: "Agnostic food candidate",
+          origin: "external_open",
+          confidence: "medium",
+          coordinates: { lat: 55.605, lng: 13.003 },
+        }),
+      ],
+      geometry_summary: {
+        coherence: "ok",
+        max_pairwise_km: 0,
+        candidate_count: 1,
+        geocoded_count: 1,
+      },
+      quality_flags: ["source_backed_only"],
+    }),
+    route: null,
+    context: { origin: { lat: 55.605, lng: 13.003 } },
+  });
+
+  assert.equal(out.status, "available");
+  assert.deepEqual(out.candidate.stop_ids, ["osm-malmo-food-1"]);
+  assert.equal(out.candidate.stops[0].origin, "external_open");
+  assert.equal(out.comparison_to_primary_route.primary_route_id, null);
+  assert.ok(out.comparison_to_primary_route.reasons.includes("no_primary_route"));
+  assert.equal(out.scoring_probe.comparable, false);
+  assert.ok(out.scoring_probe.blockers.includes("no_primary_route"));
+});
+
 test("determinism: same input → same adapter output", () => {
   const c = combo();
   const r = route(["x", "y"]);
