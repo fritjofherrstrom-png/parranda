@@ -20,6 +20,7 @@ const { summarizeDayflowHonesty } = require("./planner/dayflow-honesty");
 const { buildCandidateCombinationInspect } = require("./planner/candidate-combination-inspect");
 const { buildRouteCandidateAdapterInspect } = require("./planner/candidate-combination-route-adapter");
 const { buildRouteAbScoringInspect } = require("./planner/route-ab-scoring");
+const { buildRouteOutputDiagnostics } = require("./planner/route-output-diagnostics");
 const { collectPlaceCandidatesForCity } = require("./place-candidates/provider-registry");
 const { resolveDefaultOpenDataLoader } = require("./place-candidates/open-data-loader");
 const { EXTERNAL_OPEN_PROVIDER_META } = require("./place-candidates/external-open-provider");
@@ -488,6 +489,18 @@ function isRouteAbScoringInspectRequested(request) {
     isTruthyInspectFlag(query.inspectRouteAbScoring) ||
     isTruthyInspectFlag(body.inspect_route_ab_scoring) ||
     isTruthyInspectFlag(body.inspectRouteAbScoring)
+  );
+}
+
+function isRouteOutputInspectRequested(request) {
+  const query = request.query || {};
+  const body = request.body || {};
+  return (
+    inspectListHas(query.inspect, "route_output") ||
+    isTruthyInspectFlag(query.inspect_route_output) ||
+    isTruthyInspectFlag(query.inspectRouteOutput) ||
+    isTruthyInspectFlag(body.inspect_route_output) ||
+    isTruthyInspectFlag(body.inspectRouteOutput)
   );
 }
 
@@ -1538,11 +1551,21 @@ function buildApp({ openDataLoader = resolveDefaultOpenDataLoader() } = {}) {
             openDataLoader,
           })
         : null;
+      const routeOutputDiagnosticsSidecar = isRouteOutputInspectRequested(request)
+        ? {
+            route_output_diagnostics: buildRouteOutputDiagnostics({
+              city,
+              routeResult: result,
+              includeAlternatives: true,
+            }),
+          }
+        : null;
       response.json({
         ...result,
         requested_city: requestedCity,
         city_fallback_used: cityFallbackUsed,
         ...(plannerInspectSidecar || {}),
+        ...(routeOutputDiagnosticsSidecar || {}),
       });
     } catch (error) {
       response.status(500).json({
