@@ -19,6 +19,7 @@ const { selectPlannerRoleCandidates } = require("./planner/role-selector");
 const { summarizeDayflowHonesty } = require("./planner/dayflow-honesty");
 const { buildCandidateCombinationInspect } = require("./planner/candidate-combination-inspect");
 const { buildRouteCandidateAdapterInspect } = require("./planner/candidate-combination-route-adapter");
+const { buildRouteAbScoringInspect } = require("./planner/route-ab-scoring");
 const { collectPlaceCandidatesForCity } = require("./place-candidates/provider-registry");
 const { resolveDefaultOpenDataLoader } = require("./place-candidates/open-data-loader");
 const { EXTERNAL_OPEN_PROVIDER_META } = require("./place-candidates/external-open-provider");
@@ -441,6 +442,7 @@ function isPlannerCandidateInspectRequested(request) {
   return (
     isCandidateCombinationInspectRequested(request) ||
     isRouteCandidateAdapterInspectRequested(request) ||
+    isRouteAbScoringInspectRequested(request) ||
     inspectListHas(query.inspect, "planner_roles") ||
     isTruthyInspectFlag(query.planner_inspect) ||
     isTruthyInspectFlag(query.plannerInspect) ||
@@ -474,6 +476,18 @@ function isRouteCandidateAdapterInspectRequested(request) {
     isTruthyInspectFlag(query.inspectRouteCandidateAdapter) ||
     isTruthyInspectFlag(body.inspect_route_candidate_adapter) ||
     isTruthyInspectFlag(body.inspectRouteCandidateAdapter)
+  );
+}
+
+function isRouteAbScoringInspectRequested(request) {
+  const query = request.query || {};
+  const body = request.body || {};
+  return (
+    inspectListHas(query.inspect, "route_ab_scoring") ||
+    isTruthyInspectFlag(query.inspect_route_ab_scoring) ||
+    isTruthyInspectFlag(query.inspectRouteAbScoring) ||
+    isTruthyInspectFlag(body.inspect_route_ab_scoring) ||
+    isTruthyInspectFlag(body.inspectRouteAbScoring)
   );
 }
 
@@ -541,11 +555,14 @@ async function buildPlannerCandidateInspectSidecar({ cityConfig, request, routeP
   const plannerRoles = selectPlannerRoleCandidates(cityConfig, rolePayload, helpers);
   const dayflowHonesty = summarizeDayflowHonesty(plannerRoles);
   const primaryRoute = routeResult?.days?.[0]?.primary_route || null;
-  // The route-candidate adapter (#253) consumes the candidate combination, so
-  // build the combination when EITHER inspect flag is requested.
+  // The route-candidate adapter (#253) consumes the candidate combination, and
+  // the A/B scoring sidecar (#254) consumes the adapter. Build upstream
+  // diagnostics when any downstream flag needs them, but only expose the
+  // sidecars that were explicitly requested.
   const wantCombination = isCandidateCombinationInspectRequested(request);
   const wantAdapter = isRouteCandidateAdapterInspectRequested(request);
-  const candidateCombination = (wantCombination || wantAdapter)
+  const wantAbScoring = isRouteAbScoringInspectRequested(request);
+  const candidateCombination = (wantCombination || wantAdapter || wantAbScoring)
     ? buildCandidateCombinationInspect({
         plannerRoles,
         dayflowHonesty,
@@ -554,12 +571,19 @@ async function buildPlannerCandidateInspectSidecar({ cityConfig, request, routeP
       })
     : null;
   // Experimental, inspect-only A/B adapter. Default route output is untouched.
-  const routeCandidateAdapter = wantAdapter
+  const routeCandidateAdapter = (wantAdapter || wantAbScoring)
     ? buildRouteCandidateAdapterInspect({
         city: cityConfig.key,
         candidateCombination,
         route: primaryRoute,
         context: { origin: roleOrigin },
+      })
+    : null;
+  const routeAbScoring = wantAbScoring
+    ? buildRouteAbScoringInspect({
+        city: cityConfig.key,
+        primaryRoute,
+        routeCandidateAdapter,
       })
     : null;
 
@@ -575,7 +599,8 @@ async function buildPlannerCandidateInspectSidecar({ cityConfig, request, routeP
     },
     dayflow_honesty: dayflowHonesty,
     ...(wantCombination && candidateCombination ? { candidate_combination: candidateCombination } : {}),
-    ...(routeCandidateAdapter ? { route_candidate_adapter: routeCandidateAdapter } : {}),
+    ...(wantAdapter && routeCandidateAdapter ? { route_candidate_adapter: routeCandidateAdapter } : {}),
+    ...(routeAbScoring ? { route_ab_scoring: routeAbScoring } : {}),
   };
 }
 
