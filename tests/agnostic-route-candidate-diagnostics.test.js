@@ -116,7 +116,20 @@ test("unit: serialized diagnostic contains no banned route-claim vocabulary", ()
   const c = combo({ selected: [sel("swimming_coast_option", "ext-beach", { origin: "external_open" })] });
   const out = buildAgnosticRouteCandidateDiagnostics({ city: "rome", externalRequested: true, sourceStatus: { status: "loaded:1" }, candidateCombination: c, primaryRoute: route(["a"]) });
   const json = JSON.stringify(out).toLowerCase();
-  for (const banned of ["walking_time", "travel_time", "eta", "duration", "opening_hours", "better route", "best route", "candidate wins", "route_ready"]) {
+  for (const banned of [
+    "walking_time",
+    "travel_time",
+    "eta",
+    "duration",
+    "opening_hours",
+    "better route",
+    "best route",
+    "candidate wins",
+    "better_route",
+    "best_route",
+    "candidate_wins",
+    "route_ready",
+  ]) {
     assert.ok(!json.includes(banned), `must not contain "${banned}"`);
   }
 });
@@ -229,12 +242,46 @@ test("API: public payload cannot inject candidate / route / loader data", async 
   });
 });
 
+test("API: inspect=route_output,agnostic_route_candidate attaches only requested sidecars and preserves route shape", async () => {
+  await withServer(null, async (server) => {
+    const body = routeBody("rome", ["scenic", "food"]);
+    const def = await post(server, "", body);
+    const r = await post(server, "inspect=route_output,agnostic_route_candidate", body);
+    assert.ok(r.route_output_diagnostics, "route_output_diagnostics should be present");
+    assert.ok(r.agnostic_route_candidate, "agnostic_route_candidate should be present");
+    assert.equal(r.planner_roles, undefined);
+    assert.equal(r.dayflow_honesty, undefined);
+    assert.equal(r.candidate_combination, undefined);
+    assert.equal(r.route_candidate_adapter, undefined);
+    assert.equal(r.route_ab_scoring, undefined);
+    assert.deepEqual(primaryRouteShape(r), primaryRouteShape(def));
+    assert.deepEqual(
+      (r.days?.[0]?.primary_route?.main_stops || []).map((stop) => stop.id),
+      (def.days?.[0]?.primary_route?.main_stops || []).map((stop) => stop.id),
+      "main_stops must not mutate under combined inspect flags",
+    );
+  });
+});
+
 test("API: serialized sidecar contains no banned route-claim vocabulary", async () => {
   const loader = makeLoader([externalRecord("ath-beach", "Kavouri Beach", "beach", 37.82, 23.78, ["coast"])]);
   await withServer(loader, async (server) => {
     const r = await post(server, `${FLAG}&include_external_candidates=1`, routeBody("athens", ["swimming"], { include_external_candidates: 1 }));
     const json = JSON.stringify(r.agnostic_route_candidate).toLowerCase();
-    for (const banned of ["walking_time", "travel_time", "eta", "duration", "opening_hours", "better route", "best route", "candidate wins", "route_ready"]) {
+    for (const banned of [
+      "walking_time",
+      "travel_time",
+      "eta",
+      "duration",
+      "opening_hours",
+      "better route",
+      "best route",
+      "candidate wins",
+      "better_route",
+      "best_route",
+      "candidate_wins",
+      "route_ready",
+    ]) {
       assert.ok(!json.includes(banned), `must not contain "${banned}"`);
     }
   });
