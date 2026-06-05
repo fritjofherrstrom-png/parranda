@@ -17,6 +17,7 @@ const { isExternalCandidatesEnabled } = require("./candidates/blitz-candidate-mo
 const { classifyCatalogDensity } = require("./candidates/source-calibration");
 const { selectPlannerRoleCandidates } = require("./planner/role-selector");
 const { summarizeDayflowHonesty } = require("./planner/dayflow-honesty");
+const { buildCandidateCombinationInspect } = require("./planner/candidate-combination-inspect");
 const { collectPlaceCandidatesForCity } = require("./place-candidates/provider-registry");
 const { resolveDefaultOpenDataLoader } = require("./place-candidates/open-data-loader");
 const { EXTERNAL_OPEN_PROVIDER_META } = require("./place-candidates/external-open-provider");
@@ -437,6 +438,8 @@ function isPlannerCandidateInspectRequested(request) {
   const query = request.query || {};
   const body = request.body || {};
   return (
+    isCandidateCombinationInspectRequested(request) ||
+    inspectListHas(query.inspect, "planner_roles") ||
     isTruthyInspectFlag(query.planner_inspect) ||
     isTruthyInspectFlag(query.plannerInspect) ||
     isTruthyInspectFlag(query.include_candidate_roles) ||
@@ -446,6 +449,25 @@ function isPlannerCandidateInspectRequested(request) {
     isTruthyInspectFlag(body.include_candidate_roles) ||
     isTruthyInspectFlag(body.includeCandidateRoles)
   );
+}
+
+function isCandidateCombinationInspectRequested(request) {
+  const query = request.query || {};
+  const body = request.body || {};
+  return (
+    inspectListHas(query.inspect, "candidate_combination") ||
+    isTruthyInspectFlag(query.inspect_candidate_combination) ||
+    isTruthyInspectFlag(query.inspectCandidateCombination) ||
+    isTruthyInspectFlag(body.inspect_candidate_combination) ||
+    isTruthyInspectFlag(body.inspectCandidateCombination)
+  );
+}
+
+function inspectListHas(value, token) {
+  return String(value || "")
+    .split(",")
+    .map((part) => part.trim().toLowerCase())
+    .includes(token);
 }
 
 function isTruthyInspectFlag(value) {
@@ -474,7 +496,7 @@ function resolveLatLng(value) {
   return null;
 }
 
-async function buildPlannerCandidateInspectSidecar({ cityConfig, request, routePayload, openDataLoader }) {
+async function buildPlannerCandidateInspectSidecar({ cityConfig, request, routePayload, routeResult, openDataLoader }) {
   const roleOrigin = resolvePlannerRoleOrigin(cityConfig, request.body || {});
   const externalRequested = isExternalCandidatesRequested(request);
   const rolePayload = {
@@ -504,6 +526,14 @@ async function buildPlannerCandidateInspectSidecar({ cityConfig, request, routeP
   });
   const plannerRoles = selectPlannerRoleCandidates(cityConfig, rolePayload, helpers);
   const dayflowHonesty = summarizeDayflowHonesty(plannerRoles);
+  const candidateCombination = isCandidateCombinationInspectRequested(request)
+    ? buildCandidateCombinationInspect({
+        plannerRoles,
+        dayflowHonesty,
+        route: routeResult?.days?.[0]?.primary_route || null,
+        options: { origin: roleOrigin },
+      })
+    : null;
 
   return {
     planner_roles: {
@@ -516,6 +546,7 @@ async function buildPlannerCandidateInspectSidecar({ cityConfig, request, routeP
       roles: plannerRoles.roles,
     },
     dayflow_honesty: dayflowHonesty,
+    ...(candidateCombination ? { candidate_combination: candidateCombination } : {}),
   };
 }
 
@@ -1449,6 +1480,7 @@ function buildApp({ openDataLoader = resolveDefaultOpenDataLoader() } = {}) {
             cityConfig,
             request,
             routePayload: payload,
+            routeResult: result,
             openDataLoader,
           })
         : null;
