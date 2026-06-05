@@ -240,8 +240,8 @@ test(
     assert.equal(noFlag.body.agnostic_route_output_experiment, undefined);
     assert.deepEqual(noFlag.body.days, []);
 
-    // inspect=agnostic_route_output / agnostic_route_candidate may expose
-    // diagnostics ONLY — never a mutated/synthesized route.
+    // inspect=agnostic_route_output / agnostic_route_candidate may be present
+    // without ever authorizing a mutated/synthesized route.
     for (const token of ["agnostic_route_output", "agnostic_route_candidate"]) {
       const inspected = await requestJson(server, {
         path: `/api/route-recommendations?lang=en&inspect=${token}&include_external_candidates=1`,
@@ -318,10 +318,37 @@ test(
     assert.equal(exp.route_mutation, false);
     assert.equal(exp.selected_variant, "baseline");
     assert.equal(exp.eligibility.eligible, false);
-    assert.ok(exp.readiness_blockers.includes("missing_trusted_coordinates"));
+    assert.ok(exp.readiness_blockers.includes("missing_or_invalid_coordinates"));
     assert.deepEqual(r.body.days, [], "baseline empty-days fallback is untouched");
     assert.equal(exp.experimental_route, null);
     assert.equal(r.body.city, "atlantis-no-coordinates");
+    assert.equal(r.body.city_fallback_used, true);
+  }),
+);
+
+test(
+  "api: invalid coordinates with the experiment flag → no mutation, explicit blocker",
+  withServer(makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })), async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}`,
+      body: {
+        city: "atlantis-invalid-coordinates",
+        dates: [DATE],
+        lat: "not-a-number",
+        lng: 12.49,
+        preferences: ["food", "coffee"],
+        include_external_candidates: 1,
+      },
+    });
+    const exp = r.body.agnostic_route_output_experiment;
+    assert.ok(exp, "explicit experiment flag should return exact blockers for invalid coords");
+    assert.equal(exp.route_mutation, false);
+    assert.equal(exp.selected_variant, "baseline");
+    assert.equal(exp.eligibility.eligible, false);
+    assert.ok(exp.readiness_blockers.includes("missing_or_invalid_coordinates"));
+    assert.deepEqual(r.body.days, [], "baseline empty-days fallback is untouched");
+    assert.equal(exp.experimental_route, null);
+    assert.equal(r.body.city, "atlantis-invalid-coordinates");
     assert.equal(r.body.city_fallback_used, true);
   }),
 );

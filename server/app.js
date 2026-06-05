@@ -1699,7 +1699,7 @@ function buildApp({ openDataLoader = resolveDefaultOpenDataLoader() } = {}) {
           ...baselineBody,
           agnostic_route_output_experiment: buildBlockedAgnosticRouteOutputExperiment({
             baselineResult: baselineBody,
-            blocker: "missing_trusted_coordinates",
+            blocker: "missing_or_invalid_coordinates",
             sourceStatus: {
               status: "no_anchor",
               external_candidates_requested: isExternalCandidatesRequested(request),
