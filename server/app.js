@@ -18,6 +18,7 @@ const { classifyCatalogDensity } = require("./candidates/source-calibration");
 const { selectPlannerRoleCandidates } = require("./planner/role-selector");
 const { summarizeDayflowHonesty } = require("./planner/dayflow-honesty");
 const { buildCandidateCombinationInspect } = require("./planner/candidate-combination-inspect");
+const { buildRouteCandidateAdapterInspect } = require("./planner/candidate-combination-route-adapter");
 const { collectPlaceCandidatesForCity } = require("./place-candidates/provider-registry");
 const { resolveDefaultOpenDataLoader } = require("./place-candidates/open-data-loader");
 const { EXTERNAL_OPEN_PROVIDER_META } = require("./place-candidates/external-open-provider");
@@ -439,6 +440,7 @@ function isPlannerCandidateInspectRequested(request) {
   const body = request.body || {};
   return (
     isCandidateCombinationInspectRequested(request) ||
+    isRouteCandidateAdapterInspectRequested(request) ||
     inspectListHas(query.inspect, "planner_roles") ||
     isTruthyInspectFlag(query.planner_inspect) ||
     isTruthyInspectFlag(query.plannerInspect) ||
@@ -460,6 +462,18 @@ function isCandidateCombinationInspectRequested(request) {
     isTruthyInspectFlag(query.inspectCandidateCombination) ||
     isTruthyInspectFlag(body.inspect_candidate_combination) ||
     isTruthyInspectFlag(body.inspectCandidateCombination)
+  );
+}
+
+function isRouteCandidateAdapterInspectRequested(request) {
+  const query = request.query || {};
+  const body = request.body || {};
+  return (
+    inspectListHas(query.inspect, "route_candidate_adapter") ||
+    isTruthyInspectFlag(query.inspect_route_candidate_adapter) ||
+    isTruthyInspectFlag(query.inspectRouteCandidateAdapter) ||
+    isTruthyInspectFlag(body.inspect_route_candidate_adapter) ||
+    isTruthyInspectFlag(body.inspectRouteCandidateAdapter)
   );
 }
 
@@ -526,12 +540,26 @@ async function buildPlannerCandidateInspectSidecar({ cityConfig, request, routeP
   });
   const plannerRoles = selectPlannerRoleCandidates(cityConfig, rolePayload, helpers);
   const dayflowHonesty = summarizeDayflowHonesty(plannerRoles);
-  const candidateCombination = isCandidateCombinationInspectRequested(request)
+  const primaryRoute = routeResult?.days?.[0]?.primary_route || null;
+  // The route-candidate adapter (#253) consumes the candidate combination, so
+  // build the combination when EITHER inspect flag is requested.
+  const wantCombination = isCandidateCombinationInspectRequested(request);
+  const wantAdapter = isRouteCandidateAdapterInspectRequested(request);
+  const candidateCombination = (wantCombination || wantAdapter)
     ? buildCandidateCombinationInspect({
         plannerRoles,
         dayflowHonesty,
-        route: routeResult?.days?.[0]?.primary_route || null,
+        route: primaryRoute,
         options: { origin: roleOrigin },
+      })
+    : null;
+  // Experimental, inspect-only A/B adapter. Default route output is untouched.
+  const routeCandidateAdapter = wantAdapter
+    ? buildRouteCandidateAdapterInspect({
+        city: cityConfig.key,
+        candidateCombination,
+        route: primaryRoute,
+        context: { origin: roleOrigin },
       })
     : null;
 
@@ -546,7 +574,8 @@ async function buildPlannerCandidateInspectSidecar({ cityConfig, request, routeP
       roles: plannerRoles.roles,
     },
     dayflow_honesty: dayflowHonesty,
-    ...(candidateCombination ? { candidate_combination: candidateCombination } : {}),
+    ...(wantCombination && candidateCombination ? { candidate_combination: candidateCombination } : {}),
+    ...(routeCandidateAdapter ? { route_candidate_adapter: routeCandidateAdapter } : {}),
   };
 }
 
