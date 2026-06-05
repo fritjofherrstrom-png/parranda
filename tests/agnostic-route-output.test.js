@@ -302,6 +302,31 @@ test(
 // --- API: fail-closed → honest blockers, no mutation ------------------------
 
 test(
+  "api: missing coordinates with the experiment flag → no mutation, explicit blocker",
+  withServer(makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })), async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}`,
+      body: {
+        city: "atlantis-no-coordinates",
+        dates: [DATE],
+        preferences: ["food", "coffee"],
+        include_external_candidates: 1,
+      },
+    });
+    const exp = r.body.agnostic_route_output_experiment;
+    assert.ok(exp, "explicit experiment flag should return exact blockers even without coords");
+    assert.equal(exp.route_mutation, false);
+    assert.equal(exp.selected_variant, "baseline");
+    assert.equal(exp.eligibility.eligible, false);
+    assert.ok(exp.readiness_blockers.includes("missing_trusted_coordinates"));
+    assert.deepEqual(r.body.days, [], "baseline empty-days fallback is untouched");
+    assert.equal(exp.experimental_route, null);
+    assert.equal(r.body.city, "atlantis-no-coordinates");
+    assert.equal(r.body.city_fallback_used, true);
+  }),
+);
+
+test(
   "api: empty trusted loader → no mutation, explicit blockers, baseline intact",
   withServer(makeLoader([]), async (server) => {
     const r = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: agnosticBody() });

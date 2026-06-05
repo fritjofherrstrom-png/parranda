@@ -22,7 +22,10 @@ const { buildRouteCandidateAdapterInspect } = require("./planner/candidate-combi
 const { buildRouteAbScoringInspect } = require("./planner/route-ab-scoring");
 const { buildRouteOutputDiagnostics } = require("./planner/route-output-diagnostics");
 const { buildAgnosticRouteCandidateDiagnostics } = require("./planner/agnostic-route-candidate-diagnostics");
-const { composeAgnosticRouteOutput } = require("./planner/agnostic-route-output");
+const {
+  composeAgnosticRouteOutput,
+  buildBlockedAgnosticRouteOutputExperiment,
+} = require("./planner/agnostic-route-output");
 const { collectPlaceCandidatesForCity } = require("./place-candidates/provider-registry");
 const { resolveDefaultOpenDataLoader } = require("./place-candidates/open-data-loader");
 const { EXTERNAL_OPEN_PROVIDER_META } = require("./place-candidates/external-open-provider");
@@ -1618,6 +1621,8 @@ function buildApp({ openDataLoader = resolveDefaultOpenDataLoader() } = {}) {
       const experimentRequested = isAgnosticRouteOutputExperimentRequested(request);
       const experimentCoords = parseBlitzCoordinates(request);
       const noRecognizedCity = !requestedCity || cityFallbackUsed;
+      const missingAgnosticExperimentCoords =
+        experimentRequested && noRecognizedCity && !experimentCoords;
       const useAgnosticRouteExperiment =
         experimentRequested && Boolean(experimentCoords) && noRecognizedCity;
 
@@ -1687,6 +1692,22 @@ function buildApp({ openDataLoader = resolveDefaultOpenDataLoader() } = {}) {
           ...(routeOutputDiagnosticsSidecar || {}),
           ...(agnosticRouteCandidateSidecar || {}),
         };
+      }
+
+      if (missingAgnosticExperimentCoords) {
+        response.json({
+          ...baselineBody,
+          agnostic_route_output_experiment: buildBlockedAgnosticRouteOutputExperiment({
+            baselineResult: baselineBody,
+            blocker: "missing_trusted_coordinates",
+            sourceStatus: {
+              status: "no_anchor",
+              external_candidates_requested: isExternalCandidatesRequested(request),
+              anchor: null,
+            },
+          }),
+        });
+        return;
       }
 
       if (!useAgnosticRouteExperiment) {

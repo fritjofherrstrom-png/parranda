@@ -253,6 +253,22 @@ function buildExperimentBlock({
   };
 }
 
+function buildBlockedAgnosticRouteOutputExperiment({ baselineResult, blocker, sourceStatus = null }) {
+  return buildExperimentBlock({
+    routeMutation: false,
+    eligibility: {
+      eligible: false,
+      blockers: [blocker],
+      caveats: [],
+      checks: {},
+    },
+    baselineResult,
+    candidateReadiness: null,
+    experimentalRoute: null,
+    sourceStatus,
+  });
+}
+
 /**
  * Compose the agnostic route-output experiment.
  *
@@ -376,5 +392,6 @@ module.exports = {
   buildExperimentalDay,
   applyRouteMutation,
   buildExperimentBlock,
+  buildBlockedAgnosticRouteOutputExperiment,
   MIN_VIABLE_GEOCODED_STOPS,
 };
