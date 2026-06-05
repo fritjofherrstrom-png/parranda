@@ -21,6 +21,7 @@ const { buildCandidateCombinationInspect } = require("./planner/candidate-combin
 const { buildRouteCandidateAdapterInspect } = require("./planner/candidate-combination-route-adapter");
 const { buildRouteAbScoringInspect } = require("./planner/route-ab-scoring");
 const { buildRouteOutputDiagnostics } = require("./planner/route-output-diagnostics");
+const { buildAgnosticRouteCandidateDiagnostics } = require("./planner/agnostic-route-candidate-diagnostics");
 const { collectPlaceCandidatesForCity } = require("./place-candidates/provider-registry");
 const { resolveDefaultOpenDataLoader } = require("./place-candidates/open-data-loader");
 const { EXTERNAL_OPEN_PROVIDER_META } = require("./place-candidates/external-open-provider");
@@ -504,6 +505,22 @@ function isRouteOutputInspectRequested(request) {
   );
 }
 
+// #257 — INDEPENDENT of isPlannerCandidateInspectRequested on purpose: this
+// sidecar must be requestable alone without exposing planner_roles /
+// dayflow_honesty / candidate_combination / route_candidate_adapter /
+// route_ab_scoring / route_output_diagnostics.
+function isAgnosticRouteCandidateInspectRequested(request) {
+  const query = request.query || {};
+  const body = request.body || {};
+  return (
+    inspectListHas(query.inspect, "agnostic_route_candidate") ||
+    isTruthyInspectFlag(query.inspect_agnostic_route_candidate) ||
+    isTruthyInspectFlag(query.inspectAgnosticRouteCandidate) ||
+    isTruthyInspectFlag(body.inspect_agnostic_route_candidate) ||
+    isTruthyInspectFlag(body.inspectAgnosticRouteCandidate)
+  );
+}
+
 function inspectListHas(value, token) {
   return String(value || "")
     .split(",")
@@ -537,10 +554,8 @@ function resolveLatLng(value) {
   return null;
 }
 
-async function buildPlannerCandidateInspectSidecar({ cityConfig, request, routePayload, routeResult, openDataLoader }) {
-  const roleOrigin = resolvePlannerRoleOrigin(cityConfig, request.body || {});
-  const externalRequested = isExternalCandidatesRequested(request);
-  const rolePayload = {
+function buildPlannerRolePayload(cityConfig, request, routePayload, roleOrigin) {
+  return {
     city: cityConfig.key,
     date: routePayload.dates[0] || cityConfig.todayIsoDate(),
     now: request.body?.now || null,
@@ -559,6 +574,12 @@ async function buildPlannerCandidateInspectSidecar({ cityConfig, request, routeP
       request.body?.candidate_sources ??
       request.body?.candidateSources,
   };
+}
+
+async function buildPlannerCandidateInspectSidecar({ cityConfig, request, routePayload, routeResult, openDataLoader }) {
+  const roleOrigin = resolvePlannerRoleOrigin(cityConfig, request.body || {});
+  const externalRequested = isExternalCandidatesRequested(request);
+  const rolePayload = buildPlannerRolePayload(cityConfig, request, routePayload, roleOrigin);
 
   const { helpers, sourceStatus } = await resolvePlannerRoleHelpers({
     externalRequested,
@@ -644,6 +665,67 @@ async function resolvePlannerRoleHelpers({ externalRequested, openDataLoader, an
     };
   } catch (_error) {
     return { helpers: {}, sourceStatus: { ...baseStatus, status: "error_failed_closed" } };
+  }
+}
+
+// #257 — builds ONLY the agnostic_route_candidate sidecar, independently of the
+// planner-inspect sidecar (so it can be requested alone). Fails closed and never
+// throws: a loader/diagnostic failure must not break route generation.
+async function buildAgnosticRouteCandidateSidecar({ cityConfig, request, routePayload, routeResult, openDataLoader }) {
+  const primaryRoute = routeResult?.days?.[0]?.primary_route || null;
+  const externalRequested = isExternalCandidatesRequested(request);
+  try {
+    // Fail-closed before any fetch when external candidates were not opted in.
+    if (!externalRequested) {
+      return {
+        agnostic_route_candidate: buildAgnosticRouteCandidateDiagnostics({
+          city: cityConfig.key,
+          externalRequested: false,
+          sourceStatus: null,
+          candidateCombination: null,
+          primaryRoute,
+        }),
+      };
+    }
+    const roleOrigin = resolvePlannerRoleOrigin(cityConfig, request.body || {});
+    const rolePayload = buildPlannerRolePayload(cityConfig, request, routePayload, roleOrigin);
+    const { helpers, sourceStatus } = await resolvePlannerRoleHelpers({
+      externalRequested,
+      openDataLoader,
+      anchor: roleOrigin,
+    });
+    const plannerRoles = selectPlannerRoleCandidates(cityConfig, rolePayload, helpers);
+    const candidateCombination = buildCandidateCombinationInspect({
+      plannerRoles,
+      dayflowHonesty: summarizeDayflowHonesty(plannerRoles),
+      route: primaryRoute,
+      options: { origin: roleOrigin },
+    });
+    return {
+      agnostic_route_candidate: buildAgnosticRouteCandidateDiagnostics({
+        city: cityConfig.key,
+        externalRequested: true,
+        sourceStatus,
+        candidateCombination,
+        primaryRoute,
+      }),
+    };
+  } catch (error) {
+    return {
+      agnostic_route_candidate: {
+        status: "unavailable",
+        city: cityConfig.key,
+        experimental: true,
+        route_mutation: false,
+        source: "trusted_candidate_pool",
+        source_status: { status: "diagnostic_failed" },
+        candidate: null,
+        comparison_to_route_output: null,
+        blockers: ["agnostic_route_candidate_inspect_failed", `error:${error.message}`],
+        signals: [],
+        recommendation: "needs_more_data",
+      },
+    };
   }
 }
 
@@ -1560,12 +1642,22 @@ function buildApp({ openDataLoader = resolveDefaultOpenDataLoader() } = {}) {
             }),
           }
         : null;
+      const agnosticRouteCandidateSidecar = isAgnosticRouteCandidateInspectRequested(request)
+        ? await buildAgnosticRouteCandidateSidecar({
+            cityConfig,
+            request,
+            routePayload: payload,
+            routeResult: result,
+            openDataLoader,
+          })
+        : null;
       response.json({
         ...result,
         requested_city: requestedCity,
         city_fallback_used: cityFallbackUsed,
         ...(plannerInspectSidecar || {}),
         ...(routeOutputDiagnosticsSidecar || {}),
+        ...(agnosticRouteCandidateSidecar || {}),
       });
     } catch (error) {
       response.status(500).json({
