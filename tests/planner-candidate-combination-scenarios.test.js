@@ -69,11 +69,26 @@ function buildSummary({ city, preferences, inspected }) {
     time_matched_roles: dayflow.time_summary?.time_matched_roles || [],
     time_mismatched_roles: dayflow.time_summary?.time_mismatched_roles || [],
     missing_time_data_roles: dayflow.time_summary?.missing_time_data_roles || [],
+    // dayflow.time_summary does not emit a per-reason rollup, but the raw time
+    // tokens are carried on each selected candidate's fit reasons. Roll the
+    // time-related ones up here so the diagnostic exposes them explicitly.
+    time_reasons: rollUpTimeReasons(cc.selected),
   };
   const { category, reasons } = classifyCandidateRouteComparison(summary);
   summary.mismatch_category = category;
   summary.reasons = reasons;
   return summary;
+}
+
+const TIME_REASON_RE = /^(time_match:|time_mismatch:)|^(golden_hour_window|requested_golden_hour)$/;
+function rollUpTimeReasons(selected = []) {
+  const reasons = new Set();
+  for (const candidate of selected) {
+    for (const reason of candidate.reasons || []) {
+      if (TIME_REASON_RE.test(String(reason))) reasons.add(reason);
+    }
+  }
+  return [...reasons].sort();
 }
 
 // Conservative, deterministic, neutral. Precedence runs most-specific first.
@@ -189,6 +204,8 @@ test("evening context: time-fit info is exposed in diagnostics (no sequencing ch
   assert.ok("time_band" in s);
   assert.ok(Array.isArray(s.time_matched_roles));
   assert.ok(Array.isArray(s.time_mismatched_roles));
+  assert.ok(Array.isArray(s.missing_time_data_roles));
+  assert.ok(Array.isArray(s.time_reasons));
   // diagnostic only — route output is unchanged (asserted by the helper)
   assert.equal(typeof s.mismatch_category, "string");
 });
