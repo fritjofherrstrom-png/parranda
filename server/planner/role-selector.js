@@ -157,6 +157,11 @@ function formatRoleCandidate(entry, role, roleEntries) {
     missing_preferences: fit.missing_preferences,
     fit_reasons: fit.reasons,
     lens_reasons: fit.dimensions?.local?.reasons || [],
+    // Surface the already-computed weather/time fit reasons (e.g.
+    // "rain_favors_indoor", "time_match:evening") so downstream context can
+    // honestly explain how trusted weather/time influenced this candidate.
+    weather_reasons: fit.dimensions?.weather?.reasons || [],
+    time_reasons: fit.dimensions?.time?.reasons || [],
     gates: {
       may_anchor_route: gates.may_anchor_route === true,
       may_influence_routes: gates.may_influence_routes === true,

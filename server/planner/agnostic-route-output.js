@@ -32,6 +32,8 @@ const { buildCandidateCombinationInspect } = require("./candidate-combination-in
 const { buildRouteCandidateFromCandidateCombination } = require("./candidate-combination-route-adapter");
 const { assessCityCandidateReadiness } = require("../place-candidates/readiness");
 const { validateAgnosticWalkingOrder } = require("./agnostic-route-walking-validation");
+const { resolveAgnosticContext, collectInfluenceReasons } = require("./agnostic-route-context");
+const { buildDayflowContext } = require("./dayflow-context");
 
 // A route needs at least an ordered pair of geocoded, stable-id stops. Fewer
 // than this is honestly "not a route".
@@ -322,13 +324,18 @@ async function composeAgnosticRouteOutput({
   openDataLoader = null,
   preferences = [],
   lens = null,
-  weather = null,
   date = null,
   todayIsoDate = null,
   timezone = "UTC",
+  lang = "en",
   walkingRouter = null,
   walkingConfig = null,
   walkingBudget = null,
+  // #262 — trusted context seams. Public payload weather is NEVER trusted; the
+  // weather/time context comes only from these server-injected sources.
+  weatherProvider = null,
+  clock = null,
+  trustedTimezone = null,
 }) {
   const agnosticContext = buildAgnosticCityContext({
     lat: coords.lat,
@@ -345,13 +352,36 @@ async function composeAgnosticRouteOutput({
     anchor: origin,
   });
 
+  // #262 / correction #5 — only resolve trusted context (which may fetch weather)
+  // when we will actually run trusted candidate selection. When a hard blocker is
+  // already known (no external opt-in, or the loader skipped/empty/errored), skip
+  // the weather call; context is never an eligibility substitute.
+  const loaderStatus = (sourceStatus && sourceStatus.status) || "skipped";
+  const willRunTrustedSelection =
+    Boolean(externalRequested) && typeof loaderStatus === "string" && loaderStatus.startsWith("loaded:") && loaderStatus !== "loaded:0";
+  const ctx = willRunTrustedSelection
+    ? await resolveAgnosticContext({
+        coords,
+        date: effectiveDate,
+        trustedTimezone,
+        weatherProvider,
+        clock,
+        lang,
+        cityLabel: agnosticContext.label,
+      })
+    : null;
+
   const rolePayload = {
     city: agnosticContext.key,
     date: effectiveDate,
     preferences: Array.isArray(preferences) ? preferences : [],
     lens: lens || null,
-    weather: weather || null,
+    // Trusted weather only — payload weather is never consulted.
+    weather: ctx ? ctx.weather || null : null,
     origin,
+    // Trusted time only, in the candidate-pool's expected payload format
+    // (`hour` number + ISO `now`), and only when the timezone is known.
+    ...(ctx && ctx.timezoneKnown ? { hour: ctx.hour, now: ctx.now } : {}),
     // Signal the engine's external opt-in so the source-backed provider runs.
     include_external_candidates: externalRequested ? 1 : undefined,
     candidate_sources: externalRequested ? "open" : undefined,
@@ -371,6 +401,16 @@ async function composeAgnosticRouteOutput({
   });
   const adaptedBody = adapted && adapted.body ? adapted.body : {};
 
+  // #262 — the trusted-context surface (or a cheap "skipped" marker when a hard
+  // blocker meant no trusted selection ran). When context ran, explain how it
+  // influenced composition via the SELECTED candidates' weather/time fit reasons.
+  const contextBlock = ctx ? ctx.contextBlock : buildSkippedContextBlock({ loaderStatus, externalRequested });
+  if (ctx) {
+    const influence = collectInfluenceReasons(plannerRoles, candidateCombination);
+    contextBlock.influence.weather_fit_reasons = influence.weather;
+    contextBlock.influence.time_fit_reasons = influence.time;
+  }
+
   const providerSpecs = buildProviderSpecs({
     externalEnabled: Boolean(externalRequested),
     externalOptions: helpers.external_provider || null,
@@ -386,17 +426,16 @@ async function composeAgnosticRouteOutput({
   });
 
   if (!eligibility.eligible) {
-    return {
-      result: baselineResult,
-      experiment: buildExperimentBlock({
-        routeMutation: false,
-        eligibility,
-        baselineResult,
-        candidateReadiness,
-        experimentalRoute: null,
-        sourceStatus,
-      }),
-    };
+    const experiment = buildExperimentBlock({
+      routeMutation: false,
+      eligibility,
+      baselineResult,
+      candidateReadiness,
+      experimentalRoute: null,
+      sourceStatus,
+    });
+    experiment.context = contextBlock;
+    return { result: baselineResult, experiment };
   }
 
   // #261 — validate the EXISTING candidate stop order against a walking budget
@@ -434,6 +473,7 @@ async function composeAgnosticRouteOutput({
       sourceStatus,
     });
     experiment.walking_validation = walkingSummary;
+    experiment.context = contextBlock;
     return { result: baselineResult, experiment };
   }
 
@@ -444,6 +484,23 @@ async function composeAgnosticRouteOutput({
   });
   const mutated = applyRouteMutation({ baselineResult, primaryRoute: experimentalRoute, date: effectiveDate });
 
+  // #262 — attach an honest day-level dayflow read when the trusted weather is
+  // dayflow-relevant (buildDayflowContext returns null on boring weather). Live
+  // is always empty for any-place context (no trusted live source).
+  if (ctx && ctx.weather && mutated.days && mutated.days[0]) {
+    const dayflow = buildDayflowContext({
+      weather: ctx.weather,
+      liveEvents: [],
+      primaryRoute: experimentalRoute,
+      date: effectiveDate,
+      cityConfig: agnosticContext,
+      lang,
+    });
+    if (dayflow) {
+      mutated.days[0].dayflow_context = dayflow;
+    }
+  }
+
   const experiment = buildExperimentBlock({
     routeMutation: true,
     eligibility,
@@ -453,9 +510,27 @@ async function composeAgnosticRouteOutput({
     sourceStatus,
   });
   experiment.walking_validation = walkingSummary;
+  experiment.context = contextBlock;
   return {
     result: mutated,
     experiment,
+  };
+}
+
+// A cheap context marker for paths where a hard blocker meant we never ran
+// trusted selection (so no weather/time was fetched). Honest about the skip.
+function buildSkippedContextBlock({ loaderStatus, externalRequested }) {
+  const reason = !externalRequested
+    ? "external_candidates_not_requested"
+    : LOADER_BLOCKERS[loaderStatus] || "context_not_resolved";
+  return {
+    status: "skipped",
+    reason,
+    time: { timezone: null, timezone_known: false, status: "timezone_unavailable", now: null, time_band: null },
+    weather: { status: "skipped", read: null },
+    computed_signals: [],
+    live: { available: false, reason: "no_any_place_live_source" },
+    influence: { weather_fed_into_selection: false, time_fed_into_selection: false, weather_fit_reasons: [], time_fit_reasons: [] },
   };
 }
 
