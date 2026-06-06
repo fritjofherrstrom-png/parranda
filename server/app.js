@@ -26,6 +26,7 @@ const {
   composeAgnosticRouteOutput,
   buildBlockedAgnosticRouteOutputExperiment,
 } = require("./planner/agnostic-route-output");
+const { resolveAgnosticIntake, parsePlaceQuery } = require("./planner/agnostic-place-intake");
 const { collectPlaceCandidatesForCity } = require("./place-candidates/provider-registry");
 const { resolveDefaultOpenDataLoader } = require("./place-candidates/open-data-loader");
 const { EXTERNAL_OPEN_PROVIDER_META } = require("./place-candidates/external-open-provider");
@@ -1324,7 +1325,7 @@ function blockPrivateRepoPaths(request, response, next) {
  *   in explicitly and tests stay deterministic. NEVER reachable from the
  *   public request payload.
  */
-function buildApp({ openDataLoader = resolveDefaultOpenDataLoader() } = {}) {
+function buildApp({ openDataLoader = resolveDefaultOpenDataLoader(), placeResolver = null } = {}) {
   const app = express();
 
   app.use(express.json());
@@ -1620,11 +1621,14 @@ function buildApp({ openDataLoader = resolveDefaultOpenDataLoader() } = {}) {
       // on the default path untouched.
       const experimentRequested = isAgnosticRouteOutputExperimentRequested(request);
       const experimentCoords = parseBlitzCoordinates(request);
+      // #260 — freeform place query, from the public `place` / `place_query` /
+      // `location_query` fields ONLY. `city` is never treated as the place query.
+      const placeQuery = parsePlaceQuery(request);
       const noRecognizedCity = !requestedCity || cityFallbackUsed;
-      const missingAgnosticExperimentCoords =
-        experimentRequested && noRecognizedCity && !experimentCoords;
-      const useAgnosticRouteExperiment =
-        experimentRequested && Boolean(experimentCoords) && noRecognizedCity;
+      // The experiment engages on the flag + a non-citypack context. The trusted
+      // coordinate anchor (explicit coords, else a resolved freeform place) is
+      // determined below; failure to anchor returns honest blockers.
+      const useAgnosticRouteExperiment = experimentRequested && noRecognizedCity;
 
       // Build the would-be BASELINE response as a value (not sent yet) so the
       // experiment can preserve it for comparison. When the flag is absent this
@@ -1694,34 +1698,46 @@ function buildApp({ openDataLoader = resolveDefaultOpenDataLoader() } = {}) {
         };
       }
 
-      if (missingAgnosticExperimentCoords) {
-        response.json({
-          ...baselineBody,
-          agnostic_route_output_experiment: buildBlockedAgnosticRouteOutputExperiment({
-            baselineResult: baselineBody,
-            blocker: "missing_or_invalid_coordinates",
-            sourceStatus: {
-              status: "no_anchor",
-              external_candidates_requested: isExternalCandidatesRequested(request),
-              anchor: null,
-            },
-          }),
-        });
-        return;
-      }
-
       if (!useAgnosticRouteExperiment) {
         response.json(baselineBody);
         return;
       }
 
-      // Experiment path: behind the explicit flag, a coordinate-only / non-citypack
-      // request can RETURN an experimental trusted-candidate route (eligibility
-      // passes) or honest blockers with the baseline left intact (eligibility
-      // fails). Only the server-side openDataLoader is consulted — public payload
-      // never becomes trusted data.
-      const { result: experimentResult, experiment } = await composeAgnosticRouteOutput({
+      // #260 — resolve the TRUSTED coordinate anchor. Explicit valid coords win
+      // (the resolver is never called); otherwise a freeform `place` query is
+      // resolved through the server-injected `placeResolver`. The public payload
+      // can supply only the query string — resolved coordinates/confidence/
+      // provenance come solely from the trusted resolver. Any missing/invalid/
+      // ambiguous/low-confidence outcome fails closed with an explicit blocker.
+      const { anchor, intake } = await resolveAgnosticIntake({
         coords: experimentCoords,
+        placeQuery,
+        placeResolver,
+      });
+
+      if (!anchor) {
+        // No trusted anchor → no route. Place resolution alone never produces a
+        // route; the baseline is returned unchanged with the intake blocker.
+        const blockedExperiment = buildBlockedAgnosticRouteOutputExperiment({
+          baselineResult: baselineBody,
+          blocker: intake.blockers[0] || "missing_or_invalid_coordinates",
+          sourceStatus: {
+            status: "no_anchor",
+            external_candidates_requested: isExternalCandidatesRequested(request),
+            anchor: null,
+          },
+        });
+        blockedExperiment.intake = intake;
+        response.json({ ...baselineBody, agnostic_route_output_experiment: blockedExperiment });
+        return;
+      }
+
+      // Trusted anchor in hand → existing #259 route-output path. Place
+      // resolution does NOT satisfy route eligibility on its own: external
+      // candidate opt-in + the trusted server openDataLoader are still required
+      // inside composeAgnosticRouteOutput. Public payload never becomes trusted.
+      const { result: experimentResult, experiment } = await composeAgnosticRouteOutput({
+        coords: anchor,
         baselineResult: baselineBody,
         externalRequested: isExternalCandidatesRequested(request),
         openDataLoader,
@@ -1732,6 +1748,7 @@ function buildApp({ openDataLoader = resolveDefaultOpenDataLoader() } = {}) {
         todayIsoDate: cityConfig.todayIsoDate,
         timezone: cityConfig.timezone || "UTC",
       });
+      experiment.intake = intake;
       response.json({
         ...experimentResult,
         agnostic_route_output_experiment: experiment,

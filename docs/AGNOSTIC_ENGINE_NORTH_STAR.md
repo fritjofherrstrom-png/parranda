@@ -60,7 +60,9 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 - **#258** delivered this north-star, `CLAUDE.md`, and `CODEX.md` (alignment/memory).
 - **#259** delivered the first **capability** step: the experimental any-place route-output on `/api/route-recommendations`. Behind the explicit `experimental_agnostic_route_output=1` flag (alias `experiment=agnostic_route_output`), a coordinate-only / non-citypack request now **returns** an experimental route built from trusted source-backed candidates — replacing `days[0].primary_route` when a baseline route exists, or synthesizing a clearly-experimental first day when the baseline is the empty fallback — and preserves the baseline plus honest blockers under a top-level `agnostic_route_output_experiment` block. Eligibility failure returns the baseline unchanged with explicit blockers. Default behavior is unchanged without the flag; `inspect=` never mutates; public payload is never trusted; order is `unvalidated` with no ETA/walking/opening-hours claims.
 
-Still missing before a true any-place Planner (now the next steps): freeform place intake/geocoding (coords-only today), a **validated** walking sequence + budget (#261), time/live/pulse context in composition (#262), confidence calibration for sparse multi-role/multi-day sets, and a frontend dogfood path (#263).
+- **#260** delivered freeform **place intake**: behind the same flag, a `place` / `place_query` / `location_query` string is resolved to a trusted coordinate anchor through a **server-injectable `placeResolver`** seam and fed into the #259 path. The resolver returns ONLY `{ label, lat, lng, confidence, provenance }` — never route candidates — so place resolution alone never produces a route (external opt-in + the trusted server `openDataLoader` are still required). Explicit valid `lat`/`lng` always win (resolver never called). The public payload may supply only the query string; resolved coordinates/confidence/provenance come solely from the resolver. Low confidence, ambiguity, unresolved, resolver-missing/error, and invalid resolved coords all fail closed with explicit blockers surfaced under `agnostic_route_output_experiment.intake`. `city` is never the place query; recognized citypacks stay on the default path. No generic production geocoder is wired in this PR — the seam is injected (deterministic in tests, no live network).
+
+Still missing before a true any-place Planner (now the next steps): a **validated** walking sequence + budget (#261), time/live/pulse context in composition (#262), confidence calibration for sparse multi-role/multi-day sets, a production place-resolver wiring, and a frontend dogfood path (#263).
 
 ## Anti-drift rule
 
@@ -137,7 +139,7 @@ The current direction should be:
 ```txt
 #258 — DONE: agnostic engine north-star + CLAUDE.md / CODEX.md (alignment/memory)
 #259 — DONE: experimental any-place route-output capability + readiness blockers
-#260 — freeform place intake / geocoding contract for unknown/non-citypack places
+#260 — DONE: freeform place intake (place query → trusted coordinate anchor → #259 path)
 #261 — route ordering + walking-budget validation (replace unvalidated order)
 #262 — time/live/pulse context integration
 #263 — frontend dogfood mode: enter any place -> get honest route/dayflow output
