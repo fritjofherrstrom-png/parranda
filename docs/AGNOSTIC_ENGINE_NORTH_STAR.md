@@ -62,7 +62,9 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 
 - **#260** delivered freeform **place intake**: behind the same flag, a `place` / `place_query` / `location_query` string is resolved to a trusted coordinate anchor through a **server-injectable `placeResolver`** seam and fed into the #259 path. The resolver returns ONLY one or more place-resolution candidates shaped `{ label, lat, lng, confidence, provenance }` — never route candidates — so place resolution alone never produces a route (external opt-in + the trusted server `openDataLoader` are still required). Explicit valid `lat`/`lng` always win (resolver never called). The public payload may supply only the query string; resolved coordinates/confidence/provenance come solely from the resolver. Low confidence, ambiguity, unresolved, resolver-missing/error, and invalid resolved coords all fail closed with explicit blockers surfaced under `agnostic_route_output_experiment.intake`. `city` is never the place query; recognized citypacks stay on the default path. No generic production geocoder is wired in this PR — the seam is injected (deterministic in tests, no live network).
 
-Still missing before a true any-place Planner (now the next steps): a **validated** walking sequence + budget (#261), time/live/pulse context in composition (#262), confidence calibration for sparse multi-role/multi-day sets, a production place-resolver wiring, and a frontend dogfood path (#263).
+- **#261** delivered **walking-budget validation** of the existing candidate stop order. Behind the same flag, after trusted-candidate eligibility passes, the candidate order is routed (in its existing order) through the shared `routeWalkingPath` walking-router contract and checked: every stop finite, exactly `stops.length - 1` legs, finite leg distances/minutes, total under a one-day cap, and each leg under a per-leg cap. On success the experimental route replaces the old `unvalidated` caveat with `order_confidence: "walking_budget_validated"` and honest walking ESTIMATE fields (`estimated_km`, `estimated_walk_minutes`, `walking_legs`, `walking_path_points`, `routing_source`), with a `heuristic_walking_estimate` / `walking_router_fallback_used` caveat when applicable. On any router/leg/budget failure it fails closed: the baseline is unchanged and explicit blockers (`walking_route_unavailable`, `invalid_walking_leg_count`, `walking_validation_failed`, `walking_budget_exceeded`, `walking_leg_budget_exceeded`, `invalid_walking_coordinates`) are surfaced under `agnostic_route_output_experiment` with a `walking_validation` checks block. This **validates** the candidate order — it does **not** optimize, reorder, TSP, or pick a "best/fastest/shortest" route — and it never claims a live ETA (estimates only). The walking router is injectable for deterministic tests; no live network is added.
+
+Still missing before a true any-place Planner (now the next steps): time/live/pulse context in composition (#262), confidence calibration for sparse multi-role/multi-day sets, a production place-resolver wiring, a frontend dogfood path (#263), and live ETA / real-time routing (explicitly out of scope).
 
 ## Anti-drift rule
 
@@ -140,7 +142,7 @@ The current direction should be:
 #258 — DONE: agnostic engine north-star + CLAUDE.md / CODEX.md (alignment/memory)
 #259 — DONE: experimental any-place route-output capability + readiness blockers
 #260 — DONE: freeform place intake (place query → trusted coordinate anchor → #259 path)
-#261 — route ordering + walking-budget validation (replace unvalidated order)
+#261 — DONE: walking-budget validation of the existing candidate order (no optimization)
 #262 — time/live/pulse context integration
 #263 — frontend dogfood mode: enter any place -> get honest route/dayflow output
 ```

@@ -15,11 +15,13 @@
  *     public request payload can never inject candidates (fail-closed).
  *   - No named-city or narrow-intent branching: the agnostic context is built
  *     purely from coordinates.
- *   - The experimental route is honest: candidate role order with
- *     `order_confidence: "unvalidated"`, and NO eta / walking time / duration /
- *     opening-hours / "better route" claims.
+ *   - The experimental route is honest: the candidate role order is preserved
+ *     (never optimized/reordered). Since #261 that order is validated against a
+ *     walking budget, surfacing walking distance/minute ESTIMATES — never a live
+ *     arrival time, opening hours, or "better/optimal/fastest/shortest" claims.
  *
- * Pure except for the awaited trusted loader. Deterministic given its inputs.
+ * Pure except for the awaited trusted loader + injectable walking router.
+ * Deterministic given its inputs.
  */
 
 const { buildAgnosticCityContext } = require("../candidates/agnostic-context");
@@ -29,6 +31,7 @@ const { summarizeDayflowHonesty } = require("./dayflow-honesty");
 const { buildCandidateCombinationInspect } = require("./candidate-combination-inspect");
 const { buildRouteCandidateFromCandidateCombination } = require("./candidate-combination-route-adapter");
 const { assessCityCandidateReadiness } = require("../place-candidates/readiness");
+const { validateAgnosticWalkingOrder } = require("./agnostic-route-walking-validation");
 
 // A route needs at least an ordered pair of geocoded, stable-id stops. Fewer
 // than this is honestly "not a route".
@@ -96,7 +99,9 @@ function safeAssessReadiness(cityConfig, options) {
  */
 function evaluateEligibility({ externalRequested, sourceStatus, adaptedBody, candidateReadiness }) {
   const blockers = [];
-  const caveats = ["walking_order_unvalidated"];
+  // Walking-order honesty is decided downstream by the #261 walking-budget
+  // validation step — not pre-asserted here.
+  const caveats = [];
   const checks = {};
 
   checks.external_candidates_requested = Boolean(externalRequested);
@@ -157,7 +162,7 @@ function evaluateEligibility({ externalRequested, sourceStatus, adaptedBody, can
  * legs, walking minutes, and opening hours so it can never be mistaken for a
  * validated route.
  */
-function buildExperimentalPrimaryRoute({ cityKey, adaptedBody }) {
+function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation = null }) {
   const stops = (Array.isArray(adaptedBody?.stops) ? adaptedBody.stops : []).map((stop) => ({
     id: stop.candidate_id || null,
     label: stop.label || null,
@@ -169,24 +174,58 @@ function buildExperimentalPrimaryRoute({ cityKey, adaptedBody }) {
   }));
   const stopIds = stops.map((stop) => stop.id).filter(Boolean);
 
-  return {
+  const base = {
     id: `agnostic-experimental:${cityKey || "agnostic"}:${[...stopIds].sort().join("+") || "empty"}`,
     experimental: true,
     experimental_agnostic_route: true,
     source: "trusted_candidate_pool",
     // Neutral, honest title — no city name, no "better/best/optimal/fastest".
     title: "Experimental any-place candidate route",
-    summary:
-      "Experimental route composed from trusted source-backed candidates. Stop order is unvalidated; no walking time, ETA, or opening hours are implied.",
+    // Order is the candidate role order throughout — validation never reorders.
     main_stops: stops,
     target_roles: Array.isArray(adaptedBody?.target_roles) ? adaptedBody.target_roles : [],
     unresolved_roles: Array.isArray(adaptedBody?.unresolved_roles) ? adaptedBody.unresolved_roles : [],
     geometry_summary: adaptedBody?.geometry_summary || null,
     trust_summary: adaptedBody?.trust_summary || null,
+  };
+
+  // #261 — when the candidate order passed walking-budget validation, surface
+  // honest walking distance/minute ESTIMATES (heuristic or OSRM, never a live
+  // arrival time). The order is still the candidate order; validation checked
+  // it, it did not optimize it.
+  if (walkingValidation && walkingValidation.valid && walkingValidation.result) {
+    const wr = walkingValidation.result;
+    const totalWalkMinutes = (Array.isArray(wr.legs) ? wr.legs : []).reduce(
+      (sum, leg) => sum + (Number.isFinite(leg && leg.estimated_walk_minutes) ? leg.estimated_walk_minutes : 0),
+      0,
+    );
+    const caveats = ["experimental"];
+    if (wr.source !== "osrm" || wr.fallbackUsed) caveats.push("heuristic_walking_estimate");
+    if (wr.fallbackUsed) caveats.push("walking_router_fallback_used");
+    return {
+      ...base,
+      summary:
+        "Experimental route composed from trusted source-backed candidates. The candidate stop order has been validated against a walking budget; walking distances and minutes are estimates, not a live arrival time.",
+      order_source: "trusted_candidate_pool+walking_router",
+      order_confidence: "walking_budget_validated",
+      routing_source: wr.source || "heuristic",
+      estimated_km: wr.estimatedKm,
+      estimated_walk_minutes: totalWalkMinutes,
+      walking_legs: wr.legs,
+      walking_path_points: wr.pathPoints,
+      caveats,
+    };
+  }
+
+  // Fallback (no validation supplied): the pre-#261 unvalidated shape.
+  return {
+    ...base,
+    summary:
+      "Experimental route composed from trusted source-backed candidates. Stop order is unvalidated; no walking time or opening hours are implied.",
     order_source: "candidate_role_order",
     order_confidence: "unvalidated",
     routing_source: "none",
-    caveats: ["walking_order_unvalidated", "no_eta", "no_walking_time", "no_opening_hours", "experimental"],
+    caveats: ["walking_order_unvalidated", "no_walking_time", "no_opening_hours", "experimental"],
   };
 }
 
@@ -287,6 +326,9 @@ async function composeAgnosticRouteOutput({
   date = null,
   todayIsoDate = null,
   timezone = "UTC",
+  walkingRouter = null,
+  walkingConfig = null,
+  walkingBudget = null,
 }) {
   const agnosticContext = buildAgnosticCityContext({
     lat: coords.lat,
@@ -357,19 +399,63 @@ async function composeAgnosticRouteOutput({
     };
   }
 
-  const experimentalRoute = buildExperimentalPrimaryRoute({ cityKey: agnosticContext.key, adaptedBody });
-  const mutated = applyRouteMutation({ baselineResult, primaryRoute: experimentalRoute, date: effectiveDate });
+  // #261 — validate the EXISTING candidate stop order against a walking budget
+  // (distance, leg count, per-leg + total caps) BEFORE any mutation. This never
+  // reorders/optimizes: it routes the stops in their candidate order and fails
+  // closed on any router/leg/budget problem.
+  const orderedStops = (Array.isArray(adaptedBody.stops) ? adaptedBody.stops : []).map((stop) => ({
+    lat: stop.coordinates && Number.isFinite(stop.coordinates.lat) ? stop.coordinates.lat : null,
+    lng: stop.coordinates && Number.isFinite(stop.coordinates.lng) ? stop.coordinates.lng : null,
+    label: stop.label || null,
+    id: stop.candidate_id || null,
+  }));
+  const walking = await validateAgnosticWalkingOrder({
+    stops: orderedStops,
+    walkingRouter,
+    walkingConfig: walkingConfig || {},
+    budget: walkingBudget || {},
+  });
+  const walkingSummary = { valid: walking.valid, blockers: walking.blockers, checks: walking.checks };
 
-  return {
-    result: mutated,
-    experiment: buildExperimentBlock({
-      routeMutation: true,
-      eligibility,
+  if (!walking.valid) {
+    // Trusted candidates were eligible, but their existing order failed walking
+    // validation → no route. Baseline unchanged; explicit walking blockers.
+    const walkingFailedEligibility = {
+      ...eligibility,
+      eligible: false,
+      blockers: dedupe([...eligibility.blockers, ...walking.blockers]),
+    };
+    const experiment = buildExperimentBlock({
+      routeMutation: false,
+      eligibility: walkingFailedEligibility,
       baselineResult,
       candidateReadiness,
-      experimentalRoute,
+      experimentalRoute: null,
       sourceStatus,
-    }),
+    });
+    experiment.walking_validation = walkingSummary;
+    return { result: baselineResult, experiment };
+  }
+
+  const experimentalRoute = buildExperimentalPrimaryRoute({
+    cityKey: agnosticContext.key,
+    adaptedBody,
+    walkingValidation: walking,
+  });
+  const mutated = applyRouteMutation({ baselineResult, primaryRoute: experimentalRoute, date: effectiveDate });
+
+  const experiment = buildExperimentBlock({
+    routeMutation: true,
+    eligibility,
+    baselineResult,
+    candidateReadiness,
+    experimentalRoute,
+    sourceStatus,
+  });
+  experiment.walking_validation = walkingSummary;
+  return {
+    result: mutated,
+    experiment,
   };
 }
 
