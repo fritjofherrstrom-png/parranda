@@ -149,6 +149,52 @@ test("pure: non-finite leg distance/minutes → walking_validation_failed", asyn
   assert.deepEqual(out.blockers, ["walking_validation_failed"]);
 });
 
+test("pure: negative leg distance/minutes or estimatedKm → walking_validation_failed", async () => {
+  const negativeDistance = await validateAgnosticWalkingOrder({
+    stops: STOPS3,
+    walkingRouter: async (points) => ({ source: "heuristic", estimatedKm: 1, legs: points.slice(1).map(() => ({ distance_km: -0.1, estimated_walk_minutes: 3 })), pathPoints: points, fallbackUsed: false }),
+  });
+  assert.equal(negativeDistance.valid, false);
+  assert.deepEqual(negativeDistance.blockers, ["walking_validation_failed"]);
+
+  const negativeMinutes = await validateAgnosticWalkingOrder({
+    stops: STOPS3,
+    walkingRouter: async (points) => ({ source: "heuristic", estimatedKm: 1, legs: points.slice(1).map(() => ({ distance_km: 0.1, estimated_walk_minutes: -3 })), pathPoints: points, fallbackUsed: false }),
+  });
+  assert.equal(negativeMinutes.valid, false);
+  assert.deepEqual(negativeMinutes.blockers, ["walking_validation_failed"]);
+
+  const negativeTotal = await validateAgnosticWalkingOrder({
+    stops: STOPS3,
+    walkingRouter: async (points) => ({ source: "heuristic", estimatedKm: -1, legs: points.slice(1).map(() => ({ distance_km: 0.1, estimated_walk_minutes: 3 })), pathPoints: points, fallbackUsed: false }),
+  });
+  assert.equal(negativeTotal.valid, false);
+  assert.deepEqual(negativeTotal.blockers, ["walking_validation_failed"]);
+});
+
+test("pure: missing, too-short, or invalid pathPoints → invalid_walking_path_points", async () => {
+  const missing = await validateAgnosticWalkingOrder({
+    stops: STOPS3,
+    walkingRouter: async (points) => ({ source: "heuristic", estimatedKm: 0.2, legs: points.slice(1).map(() => ({ distance_km: 0.1, estimated_walk_minutes: 3 })), fallbackUsed: false }),
+  });
+  assert.equal(missing.valid, false);
+  assert.deepEqual(missing.blockers, ["invalid_walking_path_points"]);
+
+  const tooShort = await validateAgnosticWalkingOrder({
+    stops: STOPS3,
+    walkingRouter: async (points) => ({ source: "heuristic", estimatedKm: 0.2, legs: points.slice(1).map(() => ({ distance_km: 0.1, estimated_walk_minutes: 3 })), pathPoints: points.slice(0, 1), fallbackUsed: false }),
+  });
+  assert.equal(tooShort.valid, false);
+  assert.deepEqual(tooShort.blockers, ["invalid_walking_path_points"]);
+
+  const invalidPoint = await validateAgnosticWalkingOrder({
+    stops: STOPS3,
+    walkingRouter: async (points) => ({ source: "heuristic", estimatedKm: 0.2, legs: points.slice(1).map(() => ({ distance_km: 0.1, estimated_walk_minutes: 3 })), pathPoints: [{ lat: 999, lng: 12 }, ...points.slice(1)], fallbackUsed: false }),
+  });
+  assert.equal(invalidPoint.valid, false);
+  assert.deepEqual(invalidPoint.blockers, ["invalid_walking_path_points"]);
+});
+
 test("pure: total distance over the one-day cap → walking_budget_exceeded", async () => {
   const out = await validateAgnosticWalkingOrder({ stops: STOPS3, walkingRouter: routerPerLeg({ km: 50, minutes: 600 }) });
   assert.equal(out.valid, false);
@@ -206,18 +252,18 @@ test(
     assert.equal(exp.route_mutation, true);
     assert.equal(exp.walking_validation.valid, true);
     assert.equal(route.order_confidence, "walking_budget_validated");
-    assert.equal(route.order_source, "trusted_candidate_pool+walking_router");
+    assert.equal(route.order_source, "trusted_candidate_pool+candidate_role_order");
     assert.equal(route.routing_source, "heuristic");
     assert.ok(Number.isFinite(route.estimated_km));
     assert.ok(Number.isFinite(route.estimated_walk_minutes));
-    assert.equal(route.walking_legs.length, route.main_stops.length - 1);
-    assert.ok(Array.isArray(route.walking_path_points) && route.walking_path_points.length >= route.main_stops.length);
+    assert.equal(route.legs.length, route.main_stops.length - 1);
+    assert.ok(Array.isArray(route.map_path_points) && route.map_path_points.length >= route.main_stops.length);
     // Old unvalidated caveats are gone.
     assert.equal(route.caveats.includes("walking_order_unvalidated"), false);
     assert.equal(route.caveats.includes("no_walking_time"), false);
     assert.ok(route.caveats.includes("heuristic_walking_estimate"), "heuristic estimate stays honest");
     // Sum of leg minutes equals the surfaced total.
-    const summed = route.walking_legs.reduce((s, l) => s + l.estimated_walk_minutes, 0);
+    const summed = route.legs.reduce((s, l) => s + l.estimated_walk_minutes, 0);
     assert.equal(route.estimated_walk_minutes, summed);
   }),
 );
@@ -231,7 +277,7 @@ test(
     // metadata — these assertions force a real route-output capability change.
     assert.notEqual(route.order_confidence, "unvalidated");
     assert.equal(route.order_confidence, "walking_budget_validated");
-    assert.ok("estimated_km" in route && "estimated_walk_minutes" in route && "walking_legs" in route);
+    assert.ok("estimated_km" in route && "estimated_walk_minutes" in route && "legs" in route);
   }),
 );
 
@@ -273,6 +319,18 @@ test(
   }),
 );
 
+test(
+  "api: invalid walking path points → fail closed",
+  withServer({ openDataLoader: makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })), walkingRouter: async (points) => ({ source: "heuristic", estimatedKm: 0.2, legs: points.slice(1).map(() => ({ distance_km: 0.1, estimated_walk_minutes: 2 })), pathPoints: [], fallbackUsed: false }) }, async (server) => {
+    const r = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: agnosticBody() });
+    const exp = r.body.agnostic_route_output_experiment;
+    assert.equal(exp.route_mutation, false);
+    assert.equal(exp.experimental_route, null);
+    assert.ok(exp.readiness_blockers.includes("invalid_walking_path_points"));
+    assert.deepEqual(r.body.days, []);
+  }),
+);
+
 // =====================================================================
 // API: public trust boundary + no reordering + no overclaims
 // =====================================================================
@@ -285,8 +343,8 @@ test(
       body: agnosticBody({
         estimated_km: 9999,
         estimated_walk_minutes: 9999,
-        walking_legs: [{ distance_km: 9999, estimated_walk_minutes: 9999 }],
-        walking_path_points: [{ lat: 0, lng: 0 }],
+        legs: [{ distance_km: 9999, estimated_walk_minutes: 9999 }],
+        map_path_points: [{ lat: 0, lng: 0 }],
         order_confidence: "hacked",
         walking_validation: { valid: true, blockers: [], checks: {} },
       }),
@@ -294,8 +352,8 @@ test(
     const route = r.body.days[0].primary_route;
     assert.equal(route.order_confidence, "walking_budget_validated", "server validation result wins");
     assert.notEqual(route.estimated_km, 9999, "payload walking metadata is ignored");
-    assert.notDeepEqual(route.walking_path_points, [{ lat: 0, lng: 0 }]);
-    assert.ok(route.walking_legs.every((l) => l.distance_km !== 9999));
+    assert.notDeepEqual(route.map_path_points, [{ lat: 0, lng: 0 }]);
+    assert.ok(route.legs.every((l) => l.distance_km !== 9999));
   }),
 );
 

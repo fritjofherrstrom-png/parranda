@@ -40,6 +40,10 @@ function failed(blockers, checks) {
   return { valid: false, blockers, checks, result: null };
 }
 
+function isValidPathPoint(point) {
+  return Boolean(point) && isFiniteCoordinate(Number(point.lat), Number(point.lng));
+}
+
 /**
  * @param {object} params
  * @param {Array<{lat:number,lng:number,label?:string}>} params.stops  ordered candidate stops
@@ -89,14 +93,31 @@ async function validateAgnosticWalkingOrder({ stops, walkingRouter, walkingConfi
     return failed(["invalid_walking_leg_count"], { ...checks, leg_count: result.legs.length });
   }
 
-  // 4. Every leg must have finite distance + walking minutes.
+  // 4. Every leg must have finite, non-negative distance + walking minutes.
   const legDistances = result.legs.map((leg) => Number(leg && leg.distance_km));
   const legMinutes = result.legs.map((leg) => Number(leg && leg.estimated_walk_minutes));
-  if (!legDistances.every(Number.isFinite) || !legMinutes.every(Number.isFinite)) {
+  const hasValidLegDistances = legDistances.every((value) => Number.isFinite(value) && value >= 0);
+  const hasValidLegMinutes = legMinutes.every((value) => Number.isFinite(value) && value >= 0);
+  if (!hasValidLegDistances || !hasValidLegMinutes) {
     return failed(["walking_validation_failed"], { ...checks, leg_count: result.legs.length });
   }
 
-  const totalKm = Number.isFinite(result.estimatedKm)
+  // 5. Path geometry is part of the walking-router contract. Do not fabricate it
+  // here: a missing/invalid path means the route is not walking-validated.
+  if (
+    !Array.isArray(result.pathPoints) ||
+    result.pathPoints.length < points.length ||
+    !result.pathPoints.every(isValidPathPoint)
+  ) {
+    return failed(["invalid_walking_path_points"], { ...checks, leg_count: result.legs.length });
+  }
+
+  const hasRouterEstimatedKm = Object.prototype.hasOwnProperty.call(result, "estimatedKm");
+  if (hasRouterEstimatedKm && (!Number.isFinite(result.estimatedKm) || result.estimatedKm < 0)) {
+    return failed(["walking_validation_failed"], { ...checks, leg_count: result.legs.length });
+  }
+
+  const totalKm = hasRouterEstimatedKm
     ? result.estimatedKm
     : Number(legDistances.reduce((sum, value) => sum + value, 0).toFixed(1));
   const maxLegKm = Math.max(...legDistances);
@@ -128,9 +149,7 @@ async function validateAgnosticWalkingOrder({ stops, walkingRouter, walkingConfi
       source: result.source || null,
       estimatedKm: totalKm,
       legs: result.legs,
-      pathPoints: Array.isArray(result.pathPoints)
-        ? result.pathPoints
-        : points.map((point) => ({ lat: point.lat, lng: point.lng })),
+      pathPoints: result.pathPoints,
       fallbackUsed: Boolean(result.fallbackUsed),
     },
   };

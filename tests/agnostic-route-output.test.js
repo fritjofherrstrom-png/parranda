@@ -441,9 +441,10 @@ test(
   withServer(makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })), async (server) => {
     const r = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: agnosticBody() });
     const route = r.body.days[0].primary_route;
-    // The validated route exposes honest walking ESTIMATE fields but never an
-    // ETA field, opening hours, or legacy route-engine quality fields.
-    for (const banned of ["eta", "opening_hours", "legs", "longest_leg_minutes", "average_leg_minutes", "walk_minutes", "duration_minutes", "map_path_points"]) {
+    // The validated route exposes existing route-result walking fields (`legs`,
+    // `map_path_points`) but never an ETA field, opening hours, or legacy
+    // route-engine quality fields.
+    for (const banned of ["eta", "opening_hours", "longest_leg_minutes", "average_leg_minutes", "walk_minutes", "duration_minutes"]) {
       assert.equal(banned in route, false, `experimental route must not expose ${banned}`);
     }
     // No ETA wording anywhere in the route field names.

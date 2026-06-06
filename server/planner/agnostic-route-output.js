@@ -157,10 +157,10 @@ function evaluateEligibility({ externalRequested, sourceStatus, adaptedBody, can
 }
 
 /**
- * Build the experimental primary_route from the adapted candidate body. It is
- * deliberately a DISTINCT, clearly-experimental shape: it omits estimated_km,
- * legs, walking minutes, and opening hours so it can never be mistaken for a
- * validated route.
+ * Build the experimental primary_route from the adapted candidate body. It stays
+ * clearly experimental. Without #261 walking validation it omits geometry/timing;
+ * after validation it uses the existing route-result walking fields (`legs`,
+ * `map_path_points`) while still avoiding opening-hours/live-arrival claims.
  */
 function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation = null }) {
   const stops = (Array.isArray(adaptedBody?.stops) ? adaptedBody.stops : []).map((stop) => ({
@@ -206,13 +206,13 @@ function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation
       ...base,
       summary:
         "Experimental route composed from trusted source-backed candidates. The candidate stop order has been validated against a walking budget; walking distances and minutes are estimates, not a live arrival time.",
-      order_source: "trusted_candidate_pool+walking_router",
+      order_source: "trusted_candidate_pool+candidate_role_order",
       order_confidence: "walking_budget_validated",
       routing_source: wr.source || "heuristic",
       estimated_km: wr.estimatedKm,
       estimated_walk_minutes: totalWalkMinutes,
-      walking_legs: wr.legs,
-      walking_path_points: wr.pathPoints,
+      legs: wr.legs,
+      map_path_points: wr.pathPoints,
       caveats,
     };
   }
