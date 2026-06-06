@@ -1325,7 +1325,12 @@ function blockPrivateRepoPaths(request, response, next) {
  *   in explicitly and tests stay deterministic. NEVER reachable from the
  *   public request payload.
  */
-function buildApp({ openDataLoader = resolveDefaultOpenDataLoader(), placeResolver = null } = {}) {
+function buildApp({
+  openDataLoader = resolveDefaultOpenDataLoader(),
+  placeResolver = null,
+  walkingRouter = null,
+  walkingConfig = null,
+} = {}) {
   const app = express();
 
   app.use(express.json());
@@ -1747,6 +1752,8 @@ function buildApp({ openDataLoader = resolveDefaultOpenDataLoader(), placeResolv
         date: payload.dates[0] || null,
         todayIsoDate: cityConfig.todayIsoDate,
         timezone: cityConfig.timezone || "UTC",
+        walkingRouter,
+        walkingConfig,
       });
       experiment.intake = intake;
       response.json({

@@ -140,7 +140,9 @@ test("unit: viable trusted pair is eligible; thin readiness is a caveat, not a b
   const e = evaluateEligibility({ externalRequested: true, sourceStatus: { status: "loaded:2" }, adaptedBody: adaptedBody(), candidateReadiness: { can_support_planner: false, real_place_count: 2, coordinate_coverage: 1 } });
   assert.equal(e.eligible, true);
   assert.deepEqual(e.blockers, []);
-  assert.ok(e.caveats.includes("walking_order_unvalidated"));
+  // #261: walking-order honesty moved downstream to walking validation, so it is
+  // no longer pre-asserted as an eligibility caveat.
+  assert.equal(e.caveats.includes("walking_order_unvalidated"), false);
   assert.ok(e.caveats.includes("below_planner_candidate_threshold"));
 });
 
@@ -270,7 +272,8 @@ test(
     const day = r.body.days[0];
     assert.equal(day.experimental_agnostic_day, true);
     assert.equal(day.primary_route.experimental, true);
-    assert.equal(day.primary_route.order_confidence, "unvalidated");
+    // #261: the candidate order is now walking-budget validated.
+    assert.equal(day.primary_route.order_confidence, "walking_budget_validated");
     assert.ok(day.primary_route.main_stops.length >= 2);
     // Stops are the trusted loader records, not catalog/public data.
     assert.ok(day.primary_route.main_stops.every((s) => /^(food|cafe|view)-/.test(s.id)));
@@ -438,16 +441,20 @@ test(
   withServer(makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })), async (server) => {
     const r = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: agnosticBody() });
     const route = r.body.days[0].primary_route;
-    for (const banned of ["estimated_km", "legs", "longest_leg_minutes", "average_leg_minutes", "walk_minutes", "duration_minutes", "opening_hours", "eta", "map_path_points"]) {
+    // The validated route exposes existing route-result walking fields (`legs`,
+    // `map_path_points`) but never an ETA field, opening hours, or legacy
+    // route-engine quality fields.
+    for (const banned of ["eta", "opening_hours", "longest_leg_minutes", "average_leg_minutes", "walk_minutes", "duration_minutes"]) {
       assert.equal(banned in route, false, `experimental route must not expose ${banned}`);
     }
-    assert.equal(route.order_confidence, "unvalidated");
-    assert.equal(route.routing_source, "none");
-    // Banned vocabulary scan: unambiguous quality/comparison CLAIMS that must
-    // never appear. (Fake ETA/walking is already guarded structurally above;
-    // the route's honest disclaimer may legitimately mention them in negation.)
+    // No ETA wording anywhere in the route field names.
+    assert.ok(Object.keys(route).every((key) => !key.toLowerCase().includes("eta")), "no field name implies ETA");
+    // No leftover unvalidated/no-walking-time caveats.
+    assert.equal(route.caveats.includes("walking_order_unvalidated"), false);
+    assert.equal(route.caveats.includes("no_walking_time"), false);
+    // Banned vocabulary scan: unambiguous quality/comparison CLAIMS.
     const blob = JSON.stringify({ route, experiment: r.body.agnostic_route_output_experiment }).toLowerCase();
-    for (const phrase of ["better route", "best route", "optimal route", "fastest route", "shortest route", "recommended over", "minutes away", "min walk"]) {
+    for (const phrase of ["better route", "best route", "optimal", "fastest", "shortest", "recommended over", "minutes away", "min walk", "live that fits"]) {
       assert.equal(blob.includes(phrase), false, `must not claim "${phrase}"`);
     }
   }),

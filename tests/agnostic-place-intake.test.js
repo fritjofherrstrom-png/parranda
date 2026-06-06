@@ -401,12 +401,14 @@ test(
   withServer({ openDataLoader: makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })), placeResolver: resolverTo({ lat: 41.9, lng: 12.49 }) }, async (server) => {
     const r = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: placeBody() });
     const route = r.body.days[0].primary_route;
-    for (const banned of ["estimated_km", "legs", "longest_leg_minutes", "average_leg_minutes", "walk_minutes", "duration_minutes", "opening_hours", "eta", "map_path_points"]) {
+    for (const banned of ["eta", "opening_hours", "longest_leg_minutes", "average_leg_minutes", "walk_minutes", "duration_minutes"]) {
       assert.equal(banned in route, false, `experimental route must not expose ${banned}`);
     }
-    assert.equal(route.order_confidence, "unvalidated");
+    assert.ok(Object.keys(route).every((key) => !key.toLowerCase().includes("eta")), "no field name implies ETA");
+    // #261: a place-anchored route is walking-budget validated, not unvalidated.
+    assert.equal(route.order_confidence, "walking_budget_validated");
     const blob = JSON.stringify({ route, experiment: r.body.agnostic_route_output_experiment }).toLowerCase();
-    for (const phrase of ["better route", "best route", "optimal route", "fastest route", "shortest route", "recommended over", "minutes away", "min walk"]) {
+    for (const phrase of ["better route", "best route", "optimal", "fastest", "shortest", "recommended over", "minutes away", "min walk", "live that fits"]) {
       assert.equal(blob.includes(phrase), false, `must not claim "${phrase}"`);
     }
   }),
