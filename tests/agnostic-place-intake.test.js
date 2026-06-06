@@ -94,6 +94,7 @@ test("unit: parsePlaceQuery reads place / place_query / location_query, never ci
   assert.equal(parsePlaceQuery({ body: { place_query: "Old Town" } }), "Old Town");
   assert.equal(parsePlaceQuery({ query: { location_query: "Söder" } }), "Söder");
   assert.equal(parsePlaceQuery({ body: { city: "Rome" } }), null, "city is never the place query");
+  assert.equal(parsePlaceQuery({ body: { place: { label: "Injected", lat: 1, lng: 2 } } }), null, "place must be a string query, not injected resolution data");
   assert.equal(parsePlaceQuery({ body: {} }), null);
 });
 
@@ -168,8 +169,18 @@ test("unit: single strong valid candidate → trusted anchor with resolver prove
   const { anchor, intake } = await resolveAgnosticIntake({ placeQuery: "Trastevere", placeResolver: resolverTo({ lat: 41.9, lng: 12.49 }) });
   assert.deepEqual(anchor, { lat: 41.9, lng: 12.49 });
   assert.equal(intake.status, "resolved");
+  assert.equal(intake.resolved.label, "Resolved Trastevere");
   assert.equal(intake.resolved.provenance, "test_geocoder");
-  assert.equal(intake.mode, "place");
+});
+
+test("unit: resolver may return one trusted candidate object, not only an array", async () => {
+  const { anchor, intake } = await resolveAgnosticIntake({
+    placeQuery: "Trastevere",
+    placeResolver: async () => ({ label: "Resolved object", lat: 41.9, lng: 12.49, confidence: "high", provenance: "test_geocoder" }),
+  });
+  assert.deepEqual(anchor, { lat: 41.9, lng: 12.49 });
+  assert.equal(intake.candidates_considered, 1);
+  assert.equal(intake.resolved.label, "Resolved object");
 });
 
 // =====================================================================

@@ -43,7 +43,14 @@ function parsePlaceQuery(request) {
     query.place_query ??
     body.location_query ??
     query.location_query;
-  const trimmed = String(raw ?? "").trim();
+
+  // The public payload may provide ONLY a freeform query string. Do not coerce
+  // objects/arrays into "[object Object]" and hand them to the trusted resolver.
+  if (typeof raw !== "string") {
+    return null;
+  }
+
+  const trimmed = raw.trim();
   return trimmed || null;
 }
 
@@ -118,7 +125,7 @@ async function resolveAgnosticIntake({ coords = null, placeQuery = null, placeRe
     return { anchor: null, intake: intake("place", placeQuery, { blockers: ["place_resolver_error"] }) };
   }
 
-  const candidates = Array.isArray(resolved) ? resolved : [];
+  const candidates = Array.isArray(resolved) ? resolved : resolved && typeof resolved === "object" ? [resolved] : [];
   if (!candidates.length) {
     return { anchor: null, intake: intake("place", placeQuery, { blockers: ["place_not_resolved"] }) };
   }
