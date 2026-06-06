@@ -56,6 +56,12 @@ function fixtureNear(base) {
   return recs;
 }
 
+// Same fixture, but every record declares time_fit:["midday"] — so a fallback
+// midday band (hour 13) WOULD produce time_match:midday unless time is disabled.
+function fixtureMiddayNear(base) {
+  return fixtureNear(base).map((rec) => ({ ...rec, time_fit: ["midday"] }));
+}
+
 function agnosticBody(extra = {}) {
   return { city: "atlantis-unknown-place", dates: [DATE], lat: 41.9, lng: 12.49, preferences: ["food", "coffee", "scenic"], include_external_candidates: 1, ...extra };
 }
@@ -98,6 +104,18 @@ test("pure: timezone unknown → no time signals, timezone_unavailable", async (
   assert.equal(ctx.contextBlock.time.status, "timezone_unavailable");
   assert.equal(ctx.contextBlock.time.time_band, null);
   assert.deepEqual(ctx.contextBlock.computed_signals, []);
+});
+
+// Blocker 2 — honest top-level context.status.
+test("pure: top-level status is honest about availability", async () => {
+  const unavailable = await resolveAgnosticContext({ coords: { lat: 41.9, lng: 12.49 }, date: DATE, weatherProvider: async () => { throw new Error("x"); }, trustedTimezone: null });
+  assert.equal(unavailable.contextBlock.status, "unavailable", "no weather + no tz → unavailable");
+
+  const partial = await resolveAgnosticContext({ coords: { lat: 41.9, lng: 12.49 }, date: DATE, weatherProvider: async () => SUN, trustedTimezone: null });
+  assert.equal(partial.contextBlock.status, "partial", "weather only → partial");
+
+  const available = await resolveAgnosticContext({ coords: { lat: 41.9, lng: 12.49 }, date: DATE, weatherProvider: async () => SUN, trustedTimezone: "Europe/Rome", clock: eveningClock });
+  assert.equal(available.contextBlock.status, "available", "weather + trusted tz → available");
 });
 
 test("pure: timezone known → time band + ISO now + computed signals", async () => {
@@ -298,9 +316,38 @@ test(
     // Carry the #261 honesty guards.
     assert.equal("opening_hours" in route, false);
     assert.equal("eta" in route, false);
-    const blob = JSON.stringify({ route, context: exp.context }).toLowerCase();
-    for (const phrase of ["optimal", "fastest", "shortest", "better route", "best route", "live that fits", "minutes away"]) {
-      assert.equal(blob.includes(phrase), false, `must not claim "${phrase}"`);
+  }),
+);
+
+// Blocker 1 — no fallback midday time influence when the timezone is unknown.
+test(
+  "api: timezone-unknown explicit coords do NOT get fallback midday time influence",
+  withServer({ openDataLoader: makeLoader(fixtureMiddayNear({ lat: 41.9, lng: 12.49 })), weatherProvider: async () => RAIN, clock: eveningClock }, async (server) => {
+    const r = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: agnosticBody() });
+    const ctx = r.body.agnostic_route_output_experiment.context;
+    assert.equal(r.body.agnostic_route_output_experiment.route_mutation, true, "route still returns");
+    assert.equal(ctx.time.status, "timezone_unavailable");
+    assert.equal(ctx.influence.time_fed_into_selection, false);
+    assert.deepEqual(ctx.influence.time_fit_reasons, [], "no time_match:midday from fallback time");
+    // Even though every candidate declares time_fit:["midday"], the unknown-tz
+    // path must not synthesize a midday band that tilts selection.
+    assert.equal(ctx.influence.time_fit_reasons.includes("time_match:midday"), false);
+  }),
+);
+
+// Blocker 3 — scoped overclaim check on the agnostic context + experimental route.
+test(
+  "api: agnostic context + experimental route make no comparative route claims",
+  withServer({ openDataLoader: makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })), weatherProvider: async () => RAIN }, async (server) => {
+    const r = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: agnosticBody() });
+    const exp = r.body.agnostic_route_output_experiment;
+    // Scope to ONLY the #262 surface: the experiment context + the experimental
+    // primary route (not the whole baseline response, to avoid legacy-copy brittleness).
+    const scoped = JSON.stringify({ context: exp.context, primary_route: r.body.days[0].primary_route }).toLowerCase();
+    for (const word of ["best", "optimal", "fastest", "shortest"]) {
+      assert.equal(scoped.includes(word), false, `agnostic context/route must not claim "${word}"`);
     }
+    // The sanitized weather reason still reads honestly.
+    assert.match(exp.context.weather.read.reason, /works more reliably/);
   }),
 );

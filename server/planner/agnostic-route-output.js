@@ -387,7 +387,26 @@ async function composeAgnosticRouteOutput({
     candidate_sources: externalRequested ? "open" : undefined,
   };
 
-  const plannerRoles = selectPlannerRoleCandidates(agnosticContext, rolePayload, helpers);
+  // #262 — time-of-day may influence selection ONLY when a trusted timezone is
+  // known. Otherwise, explicitly disable the candidate-pool's fallback now/time
+  // context so it never synthesizes a midday band that would tilt scoring. This
+  // applies only to this flag-gated agnostic path (default citypack/blitz flows
+  // never pass through here, so their time behavior is untouched).
+  const trustedTimeKnown = Boolean(ctx && ctx.timezoneKnown);
+  const selectionHelpers = trustedTimeKnown
+    ? helpers
+    : {
+        ...helpers,
+        resolveNowContext: (cfg, pl) => ({
+          date: (pl && pl.date) || cfg.todayIsoDate(),
+          hour: null,
+          weekday: null,
+          now_iso: null,
+        }),
+        resolveTimeBand: () => null,
+      };
+
+  const plannerRoles = selectPlannerRoleCandidates(agnosticContext, rolePayload, selectionHelpers);
   const dayflowHonesty = summarizeDayflowHonesty(plannerRoles);
   const candidateCombination = buildCandidateCombinationInspect({
     plannerRoles,

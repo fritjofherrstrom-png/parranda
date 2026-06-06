@@ -71,11 +71,22 @@ function summarizeComputedSignal(signal) {
   };
 }
 
+// #262 — keep the agnostic weather read non-comparative. The shared weather copy
+// can say a route "reads best"; that conflicts with this experiment's no
+// best/optimal/fastest/shortest route claims, so we sanitize it locally (the
+// shared copy is left intact for other surfaces).
+function sanitizeAgnosticCopy(text) {
+  if (typeof text !== "string") return text;
+  return text
+    .replace(/\breads best\b/gi, "works more reliably")
+    .replace(/\b(best|optimal|fastest|shortest)\b/gi, "reliable");
+}
+
 function summarizeWeatherRead(signal) {
   return {
     kind: signal.parranda_owned?.signal_kind || null,
-    headline: signal.title || null,
-    reason: signal.reason || null,
+    headline: sanitizeAgnosticCopy(signal.title || null),
+    reason: sanitizeAgnosticCopy(signal.reason || null),
     confidence: signal.confidence || "medium",
     provenance: {
       signal_type: "weather_shift",
@@ -174,8 +185,19 @@ async function resolveAgnosticContext({
     weatherRead = null;
   }
 
+  // #262 — top-level status reflects ACTUAL context availability (honest, never a
+  // route gate). Weather is "available" when a trusted weather object resolved
+  // (dayflow-relevant or boring); time is "available" when a trusted timezone is
+  // known. `skipped` is reserved for hard-blocker paths (set by the caller).
+  const weatherAvailable = weatherStatus === "resolved" || weatherStatus === "no_signal";
+  const timeAvailable = timezoneKnown;
+  let status;
+  if (weatherAvailable && timeAvailable) status = "available";
+  else if (weatherAvailable || timeAvailable) status = "partial";
+  else status = "unavailable";
+
   const contextBlock = {
-    status: "resolved",
+    status,
     time: {
       timezone,
       timezone_known: timezoneKnown,

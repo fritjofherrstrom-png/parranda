@@ -163,6 +163,13 @@ function scoreRoute(candidate, context, reasons) {
 
 function scoreTime(candidate, context, userModifiers, reasons) {
   const band = context.timeBand;
+  // No trusted time band → no time-of-day influence at all (not even a mismatch
+  // penalty). In practice `band` is only ever absent on the agnostic route
+  // experiment path when the timezone is unknown; citypack/blitz flows always
+  // resolve a band, so they are unaffected.
+  if (!band) {
+    return { score: 0, reasons: [] };
+  }
   const localReasons = [];
   let score = 0;
   const timeFit = new Set((candidate.time_fit || []).map((t) => String(t).toLowerCase()));
