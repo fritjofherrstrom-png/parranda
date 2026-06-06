@@ -1330,6 +1330,8 @@ function buildApp({
   placeResolver = null,
   walkingRouter = null,
   walkingConfig = null,
+  weatherProvider = null,
+  clock = null,
 } = {}) {
   const app = express();
 
@@ -1748,12 +1750,18 @@ function buildApp({
         openDataLoader,
         preferences,
         lens: request.body?.lens || request.query?.lens || null,
-        weather: request.body?.weather || null,
+        // #262 — payload weather is NOT trusted; trusted weather/time come only
+        // from the server-injected seams. `trustedTimezone` is taken from the
+        // trusted resolver's resolved candidate when it supplied one.
         date: payload.dates[0] || null,
         todayIsoDate: cityConfig.todayIsoDate,
         timezone: cityConfig.timezone || "UTC",
+        lang,
         walkingRouter,
         walkingConfig,
+        weatherProvider,
+        clock,
+        trustedTimezone: intake.resolved?.timezone || null,
       });
       experiment.intake = intake;
       response.json({

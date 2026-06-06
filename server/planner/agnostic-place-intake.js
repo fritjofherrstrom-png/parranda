@@ -184,6 +184,10 @@ async function resolveAgnosticIntake({ coords = null, placeQuery = null, placeRe
         lng,
         confidence: best.confidence ?? null,
         provenance: best.provenance || null,
+        // #262 — an optional trusted IANA timezone the resolver may supply. It is
+        // validated downstream before any time-of-day signal runs; absent/invalid
+        // → time signals are omitted honestly. The public payload cannot set this.
+        timezone: typeof best.timezone === "string" && best.timezone.trim() ? best.timezone.trim() : null,
       },
     }),
   };

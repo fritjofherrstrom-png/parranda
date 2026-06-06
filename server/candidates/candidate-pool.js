@@ -256,12 +256,19 @@ function fallbackNowContext(cityConfig, payload) {
   return { date, hour, weekday: null, now_iso: payload.now || `${date}T13:00:00` };
 }
 
-function fallbackTimeBand(hour) {
+// Single source of truth for hour → time band. Exported so other trusted time
+// paths (e.g. the agnostic route context) use the SAME semantics the candidate
+// pool already scores against, instead of duplicating divergent logic.
+function resolveTimeBandFromHour(hour) {
   if (hour >= 6 && hour < 11) return "morning";
   if (hour >= 11 && hour < 15) return "midday";
   if (hour >= 15 && hour < 18) return "afternoon";
   if (hour >= 18 && hour < 23) return "evening";
   return "late";
+}
+
+function fallbackTimeBand(hour) {
+  return resolveTimeBandFromHour(hour);
 }
 
 module.exports = {
@@ -274,5 +281,6 @@ module.exports = {
   isExternalCandidatesEnabled,
   matchTier,
   rankEligible,
+  resolveTimeBandFromHour,
   sourcePriority,
 };
