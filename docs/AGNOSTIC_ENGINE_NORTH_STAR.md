@@ -66,7 +66,9 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 
 - **#262** delivered **trusted time + weather context** for the experiment. Behind the same flag, when trusted candidate selection runs, a server-injected `weatherProvider` + `clock` resolve a TRUSTED context that (a) influences candidate composition through the existing fit-scorer inputs (weather + time band) and (b) is surfaced under `agnostic_route_output_experiment.context` (`time`, `weather.read`, `computed_signals`, `live`, and an `influence` block that explains exactly which weather/time fit reasons reached the selected candidates), plus an honest `days[0].dayflow_context` when the weather is dayflow-relevant. **Weather-first / timezone-gated:** weather works for any coordinates; time-of-day / golden-hour / city-rhythm run ONLY when a trusted IANA timezone is known (supplied by the resolver), else omitted with `timezone_unavailable` (no coordinate→timezone lookup). The **public payload weather is no longer trusted** — only the server seam is. Live-event scraping is OUT (`live.available:false`); no live signal becomes a route stop. Context is fail-soft and never substitutes for candidate eligibility or walking validation; a hard blocker known before selection skips the weather call entirely. No ETA / opening-hours / "best/optimal/fastest/shortest" claims. Seams are injected (deterministic in tests, no live network).
 
-Still missing before a true any-place Planner (now the next steps): confidence calibration for sparse multi-role/multi-day sets, production place-resolver + weather wiring, a frontend dogfood path (#263), and live ETA / real-time routing (explicitly out of scope).
+- **#263** delivered a **production trusted place resolver** behind the #260 seam: `server/place-candidates/place-resolver.js` (`createNominatimPlaceResolver` + env-gated `resolveDefaultPlaceResolver`) wires OSM Nominatim, so a deploy that sets `PARRANDA_PLACE_RESOLVER` can turn a freeform place name into a trusted coordinate anchor for real. **Default-off** (unset env → `null` → behavior unchanged). Low-volume dogfood/MVP posture: deploy-configurable identifying User-Agent, global per-instance ≤1 req/s rate gate + in-flight dedupe + in-memory TTL cache + query normalization/clamping, fail-closed `[]` on any error. **Conservative confidence** (never "high"; a clear single match anchors, genuine near-ties → `ambiguous_place`, vague → `low`). Mapped candidates carry compact `provenance`/`attribution`/`license` (ODbL) — no raw provider payload. **No timezone** supplied (no coordinate→timezone lookup), so freeform places keep time-of-day off (`timezone_unavailable`). Not commercial-cleared; higher volume needs persistent caching and/or a paid/self-hosted provider (see `docs/PULSE_SOURCE_PROVIDER_REGISTRY.md`).
+
+Still missing before a true any-place Planner (now the next steps): confidence calibration for sparse multi-role/multi-day sets, a frontend dogfood path (#264), persistent geocode caching / a paid-or-self-hosted geocoder for scale, and live ETA / real-time routing (explicitly out of scope).
 
 ## Anti-drift rule
 
@@ -146,7 +148,8 @@ The current direction should be:
 #260 — DONE: freeform place intake (place query → trusted coordinate anchor → #259 path)
 #261 — DONE: walking-budget validation of the existing candidate order (no optimization)
 #262 — DONE: trusted time + weather context (timezone-gated; weather-first; no live scraping)
-#263 — frontend dogfood mode: enter any place -> get honest route/dayflow output
+#263 — DONE: production trusted place resolver (Nominatim, env-gated default-off; not commercial-cleared)
+#264 — frontend dogfood mode: enter any place -> get honest route/dayflow output
 ```
 
 The numbers may shift, but the sequence should not drift back into endless diagnostics.

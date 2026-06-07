@@ -141,3 +141,29 @@ reports a capped signal summary:
 It does not dump raw provider payloads by default. The inspect shape is meant to
 speed up provider review and failure diagnosis without turning `/api/city-pulse`
 into a raw source debugger.
+
+## Source honesty — place resolver (geocoding) licensing (#263)
+
+The agnostic place resolver (`server/place-candidates/place-resolver.js`,
+`createNominatimPlaceResolver` / `resolveDefaultPlaceResolver`) wires OSM
+**Nominatim** behind the trusted `placeResolver` seam. It is **default-off**:
+`resolveDefaultPlaceResolver(env)` returns `null` unless the deploy sets
+`PARRANDA_PLACE_RESOLVER`, so default behavior is unchanged.
+
+This is **low-volume, user-triggered dogfood/MVP** wiring, not a
+production-commercial-cleared geocoding service:
+
+- Nominatim's usage policy requires a valid identifying **User-Agent**
+  (deploy-configurable via `PARRANDA_PLACE_RESOLVER_USER_AGENT`, default carries a
+  project/contact URL), **≤1 request/second** (honored per-resolver-instance via a
+  global rate gate + in-flight dedupe), and **client-side caching of repeated
+  queries** (in-memory TTL only — lost on restart).
+- Nominatim asks geocoding-**primary** services to self-host. Higher-volume or
+  commercial use needs **persistent caching and/or a paid or self-hosted provider**
+  (e.g. OpenCage, Geoapify, LocationIQ, or self-hosted Photon/Pelias).
+- Data is **© OpenStreetMap contributors under ODbL**; mapped candidates carry
+  `attribution` + `license` so a UI that displays a resolved place can show it.
+- Nominatim returns **no timezone**, so freeform-place requests keep time-of-day
+  signals off (`timezone_unavailable`, per #262). No coordinate→timezone lookup is added.
+
+This note is the honest record; it does not block development use.
