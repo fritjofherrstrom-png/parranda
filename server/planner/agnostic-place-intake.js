@@ -184,6 +184,11 @@ async function resolveAgnosticIntake({ coords = null, placeQuery = null, placeRe
         lng,
         confidence: best.confidence ?? null,
         provenance: best.provenance || null,
+        // #263 — forward compact attribution/license when the resolver supplies
+        // them (e.g. OSM/Nominatim → ODbL), so a downstream surface can honor the
+        // source's attribution requirement. Absent for resolvers that omit them.
+        attribution: typeof best.attribution === "string" && best.attribution.trim() ? best.attribution.trim() : null,
+        license: typeof best.license === "string" && best.license.trim() ? best.license.trim() : null,
         // #262 — an optional trusted IANA timezone the resolver may supply. It is
         // validated downstream before any time-of-day signal runs; absent/invalid
         // → time signals are omitted honestly. The public payload cannot set this.

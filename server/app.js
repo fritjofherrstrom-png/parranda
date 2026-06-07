@@ -29,6 +29,7 @@ const {
 const { resolveAgnosticIntake, parsePlaceQuery } = require("./planner/agnostic-place-intake");
 const { collectPlaceCandidatesForCity } = require("./place-candidates/provider-registry");
 const { resolveDefaultOpenDataLoader } = require("./place-candidates/open-data-loader");
+const { resolveDefaultPlaceResolver } = require("./place-candidates/place-resolver");
 const { EXTERNAL_OPEN_PROVIDER_META } = require("./place-candidates/external-open-provider");
 const { buildMasthead } = require("./pulse-engine/masthead");
 const { classifySignalQuality } = require("./pulse-engine/signal-quality");
@@ -1327,7 +1328,7 @@ function blockPrivateRepoPaths(request, response, next) {
  */
 function buildApp({
   openDataLoader = resolveDefaultOpenDataLoader(),
-  placeResolver = null,
+  placeResolver = resolveDefaultPlaceResolver(),
   walkingRouter = null,
   walkingConfig = null,
   weatherProvider = null,
