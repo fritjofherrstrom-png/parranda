@@ -109,6 +109,18 @@ test("pure: a vague/junk single match (low importance) → 'low'", async () => {
   assert.equal(out[0].confidence, "low");
 });
 
+test("pure: multiple low-importance near-ties remain low, not medium", async () => {
+  const r = createNominatimPlaceResolver({
+    fetcher: fetcherReturning([
+      nominatim("Junk A", 1, 1, 0.05),
+      nominatim("Junk B", 2, 2, 0.04),
+    ]),
+    minIntervalMs: 0,
+  });
+  const out = await r("junk query");
+  assert.deepEqual(out.map((c) => c.confidence), ["low", "low"]);
+});
+
 test("pure: empty / whitespace / too-long / non-string queries return [] WITHOUT fetching", async () => {
   const calls = [];
   const r = createNominatimPlaceResolver({ fetcher: fetcherReturning([], calls), minIntervalMs: 0 });

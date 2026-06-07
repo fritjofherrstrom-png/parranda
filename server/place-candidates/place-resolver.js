@@ -102,6 +102,13 @@ function classifyConfidences(rawCandidates) {
     return sorted.map((candidate, index) => ({ ...candidate, confidence: index === 0 ? "medium" : "low" }));
   }
 
+  // Junk floor catches multi-result vague queries (e.g. two near-ties at
+  // importance 0.05 / 0.04). Without this, the near-tie branch would promote
+  // both to "medium" and the intake would fire `ambiguous_place` on junk.
+  if (topImportance < JUNK_IMPORTANCE_FLOOR) {
+    return sorted.map((candidate) => ({ ...candidate, confidence: "low" }));
+  }
+
   const inAnchorTier = (candidate) =>
     candidate.importance !== null && candidate.importance >= topImportance - AMBIGUITY_MARGIN;
   const anchorCount = sorted.filter(inAnchorTier).length;
