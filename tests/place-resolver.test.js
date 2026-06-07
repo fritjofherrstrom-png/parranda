@@ -135,6 +135,32 @@ test("pure: http error / network throw / malformed json all fail closed (no thro
   assert.deepEqual(await badJson("x"), []);
 });
 
+test("pure: a transient provider failure is NOT cached (retries on next call)", async () => {
+  const calls = [];
+  let nth = 0;
+  const fetcher = async (url, opts) => {
+    calls.push({ url, headers: opts && opts.headers });
+    nth += 1;
+    return nth === 1 ? jsonResponse(500, []) : jsonResponse(200, [nominatim("Trastevere", 41.9, 12.49, 0.55, ["relation", "1"])]);
+  };
+  const r = createNominatimPlaceResolver({ fetcher, minIntervalMs: 0 });
+  const first = await r("Trastevere");
+  assert.deepEqual(first, [], "transient 500 → []");
+  const second = await r("Trastevere");
+  assert.equal(calls.length, 2, "failure was not cached → fetched again");
+  assert.equal(second.length, 1, "second call returns the real candidate");
+  assert.equal(second[0].confidence, "medium");
+});
+
+test("pure: an invalid configured endpoint fails closed without throwing or fetching", async () => {
+  const calls = [];
+  const r = createNominatimPlaceResolver({ endpoint: "not a url", fetcher: fetcherReturning([nominatim("A", 1, 1, 0.5)], calls), minIntervalMs: 0 });
+  let out;
+  await assert.doesNotReject(async () => { out = await r("Trastevere"); });
+  assert.deepEqual(out, []);
+  assert.equal(calls.length, 0, "fetch must not be called for an invalid endpoint");
+});
+
 test("pure: limit is clamped to [1,10]", async () => {
   const calls = [];
   const r = createNominatimPlaceResolver({ fetcher: fetcherReturning([nominatim("A", 1, 1, 0.5)], calls), limit: 50, minIntervalMs: 0 });

@@ -148,14 +148,28 @@ function createNominatimPlaceResolver({
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 } = {}) {
   const clampedLimit = clampInt(limit, 1, MAX_LIMIT, DEFAULT_LIMIT);
+  // Pre-validate the configured endpoint ONCE. An invalid endpoint makes the
+  // resolver fail closed (return []) without ever calling fetch — never throws.
+  let endpointValid = true;
+  try {
+    // eslint-disable-next-line no-new
+    new URL(endpoint);
+  } catch (_error) {
+    endpointValid = false;
+  }
   // Per-instance state: in-memory TTL cache, in-flight dedupe, and a single
   // global rate gate (spacing applies across ALL queries on this instance).
   const cache = new Map();
   const inFlight = new Map();
   let nextSlot = 0;
 
+  // fetchAndMap distinguishes provider SUCCESS from FAILURE so the caller only
+  // caches successes. A successful 200 (including a legitimate empty array) is
+  // cacheable; any http-non-ok / network / timeout / parse / malformed failure is
+  // NOT cacheable (so a transient blip never poison-caches `[]` for the TTL).
+  // The public contract still returns `candidates[]` and fails closed.
   async function fetchAndMap(query) {
-    if (typeof fetcher !== "function") return [];
+    if (typeof fetcher !== "function") return { ok: false, candidates: [] };
 
     // Global rate gate: reserve the next slot synchronously (so concurrent
     // distinct queries serialize), then wait out the spacing.
@@ -165,26 +179,27 @@ function createNominatimPlaceResolver({
     const wait = start - current;
     if (wait > 0) await sleep(wait);
 
-    const url = new URL(endpoint);
-    url.searchParams.set("q", query);
-    url.searchParams.set("format", "jsonv2");
-    url.searchParams.set("addressdetails", "0");
-    url.searchParams.set("limit", String(clampedLimit));
-
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
+      // URL construction is inside the try so a bad endpoint fails closed too.
+      const url = new URL(endpoint);
+      url.searchParams.set("q", query);
+      url.searchParams.set("format", "jsonv2");
+      url.searchParams.set("addressdetails", "0");
+      url.searchParams.set("limit", String(clampedLimit));
+
       const response = await fetcher(url.toString(), {
         signal: controller.signal,
         headers: { "User-Agent": userAgent, Accept: "application/json" },
       });
-      if (!response || !response.ok) return [];
+      if (!response || !response.ok) return { ok: false, candidates: [] };
       const data = await response.json();
-      if (!Array.isArray(data)) return [];
+      if (!Array.isArray(data)) return { ok: false, candidates: [] };
       const raw = data.map(toRawCandidate).filter(Boolean);
-      return classifyConfidences(raw).map(finalizeCandidate);
+      return { ok: true, candidates: classifyConfidences(raw).map(finalizeCandidate) };
     } catch (_error) {
-      return [];
+      return { ok: false, candidates: [] };
     } finally {
       clearTimeout(timer);
     }
@@ -193,6 +208,8 @@ function createNominatimPlaceResolver({
   return async function resolvePlace(rawQuery) {
     const query = normalizeQuery(rawQuery);
     if (!query) return [];
+    // An invalid configured endpoint fails closed without ever calling fetch.
+    if (!endpointValid) return [];
     const key = query.toLowerCase();
 
     const cached = cache.get(key);
@@ -201,14 +218,18 @@ function createNominatimPlaceResolver({
       cache.delete(key);
     }
 
-    if (inFlight.has(key)) return clone(await inFlight.get(key));
+    if (inFlight.has(key)) {
+      const inflight = await inFlight.get(key);
+      return clone(inflight.candidates);
+    }
 
     const promise = fetchAndMap(query);
     inFlight.set(key, promise);
     try {
-      const value = await promise;
-      cache.set(key, { at: now(), value });
-      return clone(value);
+      const result = await promise;
+      // Only cache SUCCESSFUL provider responses — never transient failures.
+      if (result.ok) cache.set(key, { at: now(), value: result.candidates });
+      return clone(result.candidates);
     } finally {
       inFlight.delete(key);
     }
