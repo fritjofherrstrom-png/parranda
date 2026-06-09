@@ -8228,3 +8228,69 @@ body.is-printing-guide #routeGuideDrawer {
 /* ============================================================================
  * /PULSE DESIGN REVISIONS
  * ============================================================================ */
+
+/* ============================================================================
+ * #264 — DOGFOOD UI (env-gated `/dogfood`)
+ * Namespaced `.dogfood-*` rules. Loaded by every page that links to styles.css
+ * but only used by the dogfood shell template.
+ * ============================================================================ */
+.dogfood-body {
+  background: var(--paper, #f7efe5);
+  color: var(--text, #241914);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  margin: 0;
+  padding: 0;
+}
+.dogfood-shell { max-width: 960px; margin: 0 auto; padding: 24px 20px 64px; }
+.dogfood-banner {
+  background: var(--accent-deep, #7f2d1a);
+  color: #fff;
+  border-radius: 12px;
+  padding: 18px 22px;
+  margin-bottom: 28px;
+  box-shadow: var(--shadow-soft, 0 18px 44px rgba(69, 35, 13, 0.08));
+}
+.dogfood-banner-label { display: inline-block; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.85; }
+.dogfood-banner-title { margin: 6px 0 6px; font-size: 18px; line-height: 1.4; }
+.dogfood-banner-detail { margin: 0; font-size: 14px; opacity: 0.92; line-height: 1.5; }
+.dogfood-section-heading { font-size: 18px; margin: 28px 0 8px; }
+.dogfood-section-subheading { font-size: 14px; margin: 16px 0 6px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink, #1d120d); opacity: 0.7; }
+.dogfood-disclosure { font-size: 13px; opacity: 0.78; margin: 0 0 16px; }
+.dogfood-form { display: flex; flex-direction: column; gap: 18px; }
+.dogfood-fieldset { border: 1px solid rgba(31, 18, 13, 0.12); border-radius: 10px; padding: 14px 16px; margin: 0; }
+.dogfood-legend { padding: 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent-deep, #7f2d1a); }
+.dogfood-field { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
+.dogfood-label { font-size: 13px; font-weight: 600; }
+.dogfood-hint { font-size: 12px; opacity: 0.7; }
+.dogfood-field input { padding: 8px 10px; border: 1px solid rgba(31, 18, 13, 0.18); border-radius: 8px; font-size: 14px; background: var(--surface, rgba(255, 249, 239, 0.8)); }
+.dogfood-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.dogfood-actions { display: flex; gap: 14px; align-items: center; }
+.dogfood-submit { background: var(--accent, #af4d24); color: #fff; border: none; padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.dogfood-submit:hover { background: var(--accent-deep, #7f2d1a); }
+.dogfood-status { font-size: 13px; opacity: 0.78; }
+.dogfood-status--error { color: var(--accent-deep, #7f2d1a); font-weight: 600; opacity: 1; }
+.dogfood-result { margin-top: 32px; }
+.dogfood-result-summary { font-size: 14px; margin-bottom: 12px; }
+.dogfood-summary-line { margin: 4px 0; }
+.dogfood-route { margin-bottom: 16px; }
+.dogfood-route-title { margin: 6px 0; font-size: 16px; }
+.dogfood-route-summary { font-size: 14px; opacity: 0.85; }
+.dogfood-route-meta, .dogfood-stop-list, .dogfood-blocker-list, .dogfood-caveat-list, .dogfood-intake-candidates, .dogfood-influence, .dogfood-computed-signals { padding-left: 18px; margin: 8px 0; }
+.dogfood-route-meta-item, .dogfood-blocker-tile, .dogfood-caveat-tile, .dogfood-stop-row, .dogfood-intake-candidate { font-size: 13px; padding: 4px 0; }
+.dogfood-stop-row { list-style: decimal; }
+.dogfood-stop-label { font-weight: 600; margin-right: 8px; }
+.dogfood-stop-role, .dogfood-stop-origin, .dogfood-stop-confidence { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: rgba(175, 77, 36, 0.1); color: var(--accent-deep, #7f2d1a); margin-right: 6px; }
+.dogfood-blocker-tile { background: rgba(127, 45, 26, 0.08); border-left: 3px solid var(--accent-deep, #7f2d1a); padding: 8px 10px; margin: 6px 0; border-radius: 6px; list-style: none; }
+.dogfood-blocker-token { display: block; font-family: monospace; font-size: 11px; opacity: 0.8; }
+.dogfood-blocker-caption { display: block; font-size: 13px; }
+.dogfood-caveat-tile { background: rgba(215, 160, 77, 0.18); padding: 4px 10px; margin: 4px 0; border-radius: 6px; list-style: none; font-size: 12px; }
+.dogfood-map { height: 360px; margin: 16px 0; border-radius: 10px; overflow: hidden; box-shadow: var(--shadow-soft, 0 18px 44px rgba(69, 35, 13, 0.08)); }
+.dogfood-kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; font-size: 13px; margin: 8px 0; }
+.dogfood-kv-key { opacity: 0.7; }
+.dogfood-kv-value { font-family: monospace; font-size: 12px; }
+.dogfood-footer { margin-top: 48px; font-size: 13px; opacity: 0.7; }
+.dogfood-feedback-link { color: var(--accent-deep, #7f2d1a); }
+@media (max-width: 640px) {
+  .dogfood-row { grid-template-columns: 1fr; }
+  .dogfood-kv { grid-template-columns: 1fr; }
+}

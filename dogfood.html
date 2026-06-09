@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="__PARRANDA_LANG__">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>__PARRANDA_DOGFOOD_TITLE__</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
+</head>
+<body class="dogfood-body">
+  <script>
+    window.__PARRANDA_LANGUAGE__ = "__PARRANDA_UI_LANG__";
+    window.__PARRANDA_I18N__ = __PARRANDA_I18N_BOOTSTRAP__;
+  </script>
+
+  <main class="dogfood-shell" role="main">
+    <header class="dogfood-banner" data-testid="dogfood-banner">
+      <span class="dogfood-banner-label">__PARRANDA_DOGFOOD_BANNER_LABEL__</span>
+      <h1 class="dogfood-banner-title">__PARRANDA_DOGFOOD_BANNER_TITLE__</h1>
+      <p class="dogfood-banner-detail">__PARRANDA_DOGFOOD_BANNER_DETAIL__</p>
+    </header>
+
+    <section class="dogfood-form-section" aria-labelledby="dogfoodFormHeading">
+      <h2 id="dogfoodFormHeading" class="dogfood-section-heading">__PARRANDA_DOGFOOD_FORM_TITLE__</h2>
+      <p class="dogfood-disclosure">__PARRANDA_DOGFOOD_DISCLOSURE__</p>
+      <form id="dogfoodForm" class="dogfood-form" novalidate>
+        <fieldset class="dogfood-fieldset">
+          <legend class="dogfood-legend">__PARRANDA_DOGFOOD_INTAKE_LEGEND__</legend>
+          <label class="dogfood-field">
+            <span class="dogfood-label">__PARRANDA_DOGFOOD_PLACE_LABEL__</span>
+            <input type="text" id="dogfoodPlace" name="place" autocomplete="off" maxlength="200" />
+            <small class="dogfood-hint">__PARRANDA_DOGFOOD_PLACE_HINT__</small>
+          </label>
+          <div class="dogfood-row">
+            <label class="dogfood-field">
+              <span class="dogfood-label">__PARRANDA_DOGFOOD_LAT_LABEL__</span>
+              <input type="number" id="dogfoodLat" name="lat" step="any" min="-90" max="90" />
+            </label>
+            <label class="dogfood-field">
+              <span class="dogfood-label">__PARRANDA_DOGFOOD_LNG_LABEL__</span>
+              <input type="number" id="dogfoodLng" name="lng" step="any" min="-180" max="180" />
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset class="dogfood-fieldset">
+          <legend class="dogfood-legend">__PARRANDA_DOGFOOD_DAY_LEGEND__</legend>
+          <label class="dogfood-field">
+            <span class="dogfood-label">__PARRANDA_DOGFOOD_DATE_LABEL__</span>
+            <input type="date" id="dogfoodDate" name="date" />
+          </label>
+          <label class="dogfood-field">
+            <span class="dogfood-label">__PARRANDA_DOGFOOD_PREFS_LABEL__</span>
+            <input type="text" id="dogfoodPrefs" name="preferences" placeholder="food, coffee, scenic" />
+            <small class="dogfood-hint">__PARRANDA_DOGFOOD_PREFS_HINT__</small>
+          </label>
+        </fieldset>
+
+        <div class="dogfood-actions">
+          <button type="submit" class="dogfood-submit">__PARRANDA_DOGFOOD_SUBMIT_LABEL__</button>
+          <span class="dogfood-status" id="dogfoodStatus" aria-live="polite"></span>
+        </div>
+      </form>
+    </section>
+
+    <section class="dogfood-result" aria-labelledby="dogfoodResultHeading" id="dogfoodResult" hidden>
+      <h2 id="dogfoodResultHeading" class="dogfood-section-heading">__PARRANDA_DOGFOOD_RESULT_TITLE__</h2>
+      <div class="dogfood-result-summary" id="dogfoodResultSummary"></div>
+      <div class="dogfood-route" id="dogfoodRoute"></div>
+      <div class="dogfood-map" id="dogfoodMap" aria-hidden="true"></div>
+      <div class="dogfood-blockers" id="dogfoodBlockers"></div>
+      <div class="dogfood-intake" id="dogfoodIntake"></div>
+      <div class="dogfood-context" id="dogfoodContext"></div>
+      <div class="dogfood-walking" id="dogfoodWalking"></div>
+    </section>
+
+    <footer class="dogfood-footer">
+      <p>
+        <a class="dogfood-feedback-link" target="_blank" rel="noopener" href="https://github.com/fritjofherrstrom-png/parranda/blob/main/ALPHA_FEEDBACK.md">
+          __PARRANDA_DOGFOOD_FEEDBACK_LINK_LABEL__
+        </a>
+      </p>
+    </footer>
+  </main>
+
+  <script src="/vendor/leaflet/leaflet.js"></script>
+  <script src="/dogfood-render.js"></script>
+  <script src="/dogfood.js"></script>
+</body>
+</html>

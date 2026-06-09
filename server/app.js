@@ -40,6 +40,7 @@ const {
 const appRoot = path.resolve(__dirname, "..");
 const appShellTemplate = fs.readFileSync(path.join(appRoot, "index.html"), "utf8");
 const landingShellTemplate = fs.readFileSync(path.join(appRoot, "landing.html"), "utf8");
+const dogfoodShellTemplate = fs.readFileSync(path.join(appRoot, "dogfood.html"), "utf8");
 const publicRootFiles = new Set([
   "styles.css",
   "script.js",
@@ -48,6 +49,10 @@ const publicRootFiles = new Set([
   "landing.js",
   "manifest.webmanifest",
   "sw.js",
+  // #264 — dogfood UI assets (the page itself is env-gated; these two files are
+  // small, harmless leaf assets that only do anything when /dogfood is enabled).
+  "dogfood.js",
+  "dogfood-render.js",
 ]);
 const blockedPublicPrefixes = ["/server/", "/tests/", "/docs/"];
 const blockedPublicRootFiles = new Set([
@@ -1209,6 +1214,65 @@ function renderLandingShell({ lang = "en" } = {}) {
   );
 }
 
+function isDogfoodUiEnabled(env) {
+  const flag = String((env && env.PARRANDA_DOGFOOD_UI) ?? "").trim().toLowerCase();
+  return flag === "enabled" || flag === "1" || flag === "true";
+}
+
+function renderDogfoodShell({ lang = "en" } = {}) {
+  const uiLang = normalizeLanguage(lang);
+  const i18nBootstrap = buildClientI18nPayload();
+  const tr = (key, fallback = "") => translate(uiLang, key, {}, fallback);
+  const replacements = {
+    "__PARRANDA_LANG__": escapeHtml(uiLang),
+    "__PARRANDA_UI_LANG__": escapeHtml(uiLang),
+    "__PARRANDA_I18N_BOOTSTRAP__": serializeInlineJson(i18nBootstrap),
+    "__PARRANDA_DOGFOOD_TITLE__": escapeHtml(tr("dogfood.shellTitle", "Parranda · Agnostic route dogfood")),
+    "__PARRANDA_DOGFOOD_BANNER_LABEL__": escapeHtml(tr("dogfood.banner.label", "Experimental")),
+    "__PARRANDA_DOGFOOD_BANNER_TITLE__": escapeHtml(
+      tr("dogfood.banner.title", "Experimental any-place route — not a finalized Parranda Planner day.")
+    ),
+    "__PARRANDA_DOGFOOD_BANNER_DETAIL__": escapeHtml(
+      tr(
+        "dogfood.banner.detail",
+        "This page exercises the experimental agnostic route engine and uses trusted source-backed candidates. Results may fail closed; honest blockers will be shown."
+      )
+    ),
+    "__PARRANDA_DOGFOOD_FORM_TITLE__": escapeHtml(tr("dogfood.form.title", "Try an any-place route")),
+    "__PARRANDA_DOGFOOD_DISCLOSURE__": escapeHtml(
+      tr(
+        "dogfood.form.disclosure",
+        "This dogfood uses trusted source-backed candidates and the experimental route engine. Provide a place name (if a resolver is configured) or explicit coordinates."
+      )
+    ),
+    "__PARRANDA_DOGFOOD_INTAKE_LEGEND__": escapeHtml(tr("dogfood.form.intakeLegend", "Place or coordinates")),
+    "__PARRANDA_DOGFOOD_PLACE_LABEL__": escapeHtml(tr("dogfood.form.placeLabel", "Place name (freeform)")),
+    "__PARRANDA_DOGFOOD_PLACE_HINT__": escapeHtml(
+      tr(
+        "dogfood.form.placeHint",
+        "Only used if the deploy has PARRANDA_PLACE_RESOLVER enabled; otherwise the request fails closed with place_resolver_unavailable."
+      )
+    ),
+    "__PARRANDA_DOGFOOD_LAT_LABEL__": escapeHtml(tr("dogfood.form.latLabel", "Latitude")),
+    "__PARRANDA_DOGFOOD_LNG_LABEL__": escapeHtml(tr("dogfood.form.lngLabel", "Longitude")),
+    "__PARRANDA_DOGFOOD_DAY_LEGEND__": escapeHtml(tr("dogfood.form.dayLegend", "Day & intent")),
+    "__PARRANDA_DOGFOOD_DATE_LABEL__": escapeHtml(tr("dogfood.form.dateLabel", "Date")),
+    "__PARRANDA_DOGFOOD_PREFS_LABEL__": escapeHtml(tr("dogfood.form.prefsLabel", "Preferences")),
+    "__PARRANDA_DOGFOOD_PREFS_HINT__": escapeHtml(
+      tr("dogfood.form.prefsHint", "Comma-separated tokens, e.g. food, coffee, scenic.")
+    ),
+    "__PARRANDA_DOGFOOD_SUBMIT_LABEL__": escapeHtml(tr("dogfood.form.submitLabel", "Run experimental request")),
+    "__PARRANDA_DOGFOOD_RESULT_TITLE__": escapeHtml(tr("dogfood.result.title", "Honest experimental result")),
+    "__PARRANDA_DOGFOOD_FEEDBACK_LINK_LABEL__": escapeHtml(
+      tr("dogfood.feedback.linkLabel", "Send feedback (ALPHA_FEEDBACK.md on GitHub)")
+    ),
+  };
+  return Object.entries(replacements).reduce(
+    (html, [token, value]) => html.split(token).join(value),
+    dogfoodShellTemplate,
+  );
+}
+
 function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed, lang = "en", plannerEntryRoute = false }) {
   const uiLang = normalizeLanguage(lang);
   const requestedLabel = cityFallbackUsed ? humanizeCityKey(requestedCity) : "";
@@ -1340,6 +1404,21 @@ function buildApp({
   app.get(["/", "/index.html"], (request, response) => {
     response.type("html").send(
       renderLandingShell({ lang: normalizeLanguage(request.query?.lang) })
+    );
+  });
+
+  // #264 — env-gated dogfood UI for the agnostic route experiment. Off by
+  // default (any value other than enabled/1/true → 404); when on it serves an
+  // experimental page that exercises POST /api/route-recommendations behind the
+  // existing experiment flag. The page does NOT change /api/* behavior in any
+  // way; it only adds a UI for the existing experimental output.
+  app.get("/dogfood", (request, response) => {
+    if (!isDogfoodUiEnabled(process.env)) {
+      response.status(404).type("text/plain").send("Not found");
+      return;
+    }
+    response.type("html").send(
+      renderDogfoodShell({ lang: normalizeLanguage(request.query?.lang) })
     );
   });
 
@@ -1948,4 +2027,5 @@ function buildApp({
 module.exports = {
   buildApp,
   buildPlannerAreas,
+  isDogfoodUiEnabled,
 };
