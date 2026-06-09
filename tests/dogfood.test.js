@@ -18,6 +18,8 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const http = require("node:http");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const { buildApp, isDogfoodUiEnabled } = require("../server/app");
 const Render = require("../dogfood-render");
@@ -29,6 +31,7 @@ const {
 } = require("./helpers/planner-reservoir-compare");
 
 const ORIGINAL_FETCH = global.fetch;
+const DOGFOOD_CLIENT_SOURCE = fs.readFileSync(path.join(__dirname, "..", "dogfood.js"), "utf8");
 
 function getHtml(server, path) {
   const { port } = server.address();
@@ -146,6 +149,24 @@ test(
     }
   }),
 );
+
+test("client: Leaflet tooltips use a textContent DOM node, never a raw HTML string", () => {
+  assert.match(
+    DOGFOOD_CLIENT_SOURCE,
+    /function buildSafeTooltipLabelNode\(label\) \{[\s\S]*?tooltip\.textContent = String\(label\);[\s\S]*?return tooltip;[\s\S]*?\}/,
+    "tooltip helper must render labels through textContent",
+  );
+  assert.match(
+    DOGFOOD_CLIENT_SOURCE,
+    /marker\.bindTooltip\(buildSafeTooltipLabelNode\(label\), \{ direction: "top" \}\)/,
+    "Leaflet receives a DOM node, not the raw source-backed label string",
+  );
+  assert.doesNotMatch(
+    DOGFOOD_CLIENT_SOURCE,
+    /marker\.bindTooltip\(label\s*,/,
+    "raw labels must never be passed to Leaflet because string tooltips are treated as HTML",
+  );
+});
 
 // === Shared DogfoodRender helpers ==========================================
 

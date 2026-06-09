@@ -108,6 +108,13 @@
     return leafletMap;
   }
 
+  function buildSafeTooltipLabelNode(label) {
+    var tooltip = document.createElement("span");
+    tooltip.className = "dogfood-map-tooltip-label";
+    tooltip.textContent = String(label);
+    return tooltip;
+  }
+
   function drawDogfoodMap(route) {
     var map = ensureMap();
     if (!map || !leafletLayer) return;
@@ -130,7 +137,7 @@
         fillOpacity: 0.9,
       });
       var label = stop.label || stop.id || "";
-      if (label) marker.bindTooltip(label, { direction: "top" });
+      if (label) marker.bindTooltip(buildSafeTooltipLabelNode(label), { direction: "top" });
       marker.addTo(leafletLayer);
     });
     if (coords.length >= 2) {
