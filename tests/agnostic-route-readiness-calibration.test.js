@@ -6,13 +6,13 @@ const { calibrateAgnosticRouteReadiness } = require("../server/planner/agnostic-
 function baseRoute(overrides = {}) {
   return {
     main_stops: [
-      { id: "food-1", origin: "external_open" },
-      { id: "cafe-1", origin: "external_open" },
-      { id: "view-1", origin: "external_open" },
+      { id: "food-1", origin: "trusted_curated" },
+      { id: "cafe-1", origin: "trusted_curated" },
+      { id: "view-1", origin: "trusted_curated" },
     ],
     unresolved_roles: [],
-    caveats: ["experimental", "heuristic_walking_estimate"],
-    routing_source: "heuristic",
+    caveats: ["experimental"],
+    routing_source: "validated_walking_router",
     ...overrides,
   };
 }
@@ -22,7 +22,7 @@ function readiness(overrides = {}) {
     real_place_count: 30,
     coordinate_coverage: 1,
     can_support_planner: true,
-    by_provider: { external_provider: 30 },
+    by_provider: { official: 18, curated: 12 },
     ...overrides,
   };
 }
@@ -43,6 +43,25 @@ function context(overrides = {}) {
   };
 }
 
+function producedInput(overrides = {}) {
+  return {
+    routeMutation: true,
+    eligibility: { blockers: [], caveats: [] },
+    candidateReadiness: readiness(),
+    experimentalRoute: baseRoute(),
+    sourceStatus: { status: "loaded:30" },
+    walkingValidation: { valid: true, blockers: [], checks: { walking_source: "validated_walking_router", fallback_used: false } },
+    routeOrdering: { source: "trusted_candidate_pool+role_order+proximity_sequence", fallback_used: false },
+    context: context(),
+    dayflowContextPresent: true,
+    ...overrides,
+  };
+}
+
+function cappedBy(out) {
+  return [...out.reasons, ...out.caps].filter((token) => token.startsWith("capped_by_"));
+}
+
 test("environment-not-wired is not treated as weak candidate supply", () => {
   const out = calibrateAgnosticRouteReadiness({
     routeMutation: false,
@@ -57,68 +76,96 @@ test("environment-not-wired is not treated as weak candidate supply", () => {
   assert.equal(out.reasons.includes("candidate_supply_blocked_route"), false);
 });
 
-test("dense produced route is medium at most and preserves conservative caps", () => {
+test("place resolver unavailable is environment-not-wired", () => {
   const out = calibrateAgnosticRouteReadiness({
-    routeMutation: true,
-    eligibility: { blockers: [], caveats: [] },
-    candidateReadiness: readiness(),
-    experimentalRoute: baseRoute(),
-    sourceStatus: { status: "loaded:30" },
-    walkingValidation: { valid: true, blockers: [], checks: { walking_source: "heuristic", fallback_used: false } },
-    routeOrdering: { source: "trusted_candidate_pool+role_order+proximity_sequence" },
-    context: context(),
-    dayflowContextPresent: true,
+    routeMutation: false,
+    eligibility: { blockers: ["place_resolver_unavailable"], caveats: [] },
+    sourceStatus: { status: "skipped" },
   });
+
+  assert.equal(out.status, "environment_not_wired");
+  assert.equal(out.level, "unavailable");
+  assert.ok(out.reasons.includes("place_resolver_unavailable"));
+});
+
+test("external candidates not requested is not-applicable, not blocked", () => {
+  const out = calibrateAgnosticRouteReadiness({
+    routeMutation: false,
+    eligibility: { blockers: ["external_candidates_not_requested"], caveats: [] },
+    sourceStatus: { status: "skipped" },
+  });
+
+  assert.equal(out.status, "not_applicable");
+  assert.equal(out.level, "unavailable");
+  assert.ok(out.reasons.includes("external_candidates_not_requested"));
+});
+
+test("dense produced route with resolver timezone and no caps is usable", () => {
+  const out = calibrateAgnosticRouteReadiness(producedInput());
 
   assert.equal(out.status, "usable");
   assert.equal(out.level, "medium");
   assert.ok(out.reasons.includes("walking_validated"));
   assert.ok(out.reasons.includes("resolver_attested_timezone"));
-  assert.ok(out.caps.includes("external_only_candidates"));
-  assert.ok(out.caps.includes("heuristic_walking_estimate"));
+  assert.equal(out.level, "medium");
+  assert.equal(out.level === "high", false);
+  assert.deepEqual(cappedBy(out), []);
+});
+
+test("usable never coexists with capped_by tokens and thin_usable always has one", () => {
+  const usable = calibrateAgnosticRouteReadiness(producedInput());
+  assert.equal(usable.status, "usable");
+  assert.deepEqual(cappedBy(usable), []);
+
+  const thin = calibrateAgnosticRouteReadiness(
+    producedInput({
+      context: context({
+        time: {
+          timezone_source: "weather_provider_auto",
+          timezone_trust: "derived_from_weather_provider",
+          time_band: "evening",
+        },
+      }),
+    }),
+  );
+  assert.equal(thin.status, "thin_usable");
+  assert.ok(cappedBy(thin).length > 0);
 });
 
 test("weather-provider timezone is surfaced as derived and capped", () => {
-  const out = calibrateAgnosticRouteReadiness({
-    routeMutation: true,
-    eligibility: { blockers: [], caveats: [] },
-    candidateReadiness: readiness(),
-    experimentalRoute: baseRoute(),
-    sourceStatus: { status: "loaded:30" },
-    walkingValidation: { valid: true, blockers: [], checks: { walking_source: "heuristic", fallback_used: false } },
-    context: context({
-      time: {
-        timezone_source: "weather_provider_auto",
-        timezone_trust: "derived_from_weather_provider",
-        time_band: "evening",
-      },
+  const out = calibrateAgnosticRouteReadiness(
+    producedInput({
+      context: context({
+        time: {
+          timezone_source: "weather_provider_auto",
+          timezone_trust: "derived_from_weather_provider",
+          time_band: "evening",
+        },
+      }),
     }),
-  });
+  );
 
+  assert.equal(out.status, "thin_usable");
   assert.ok(out.reasons.includes("weather_provider_auto_timezone"));
-  assert.ok(out.caps.includes("derived_timezone"));
+  assert.ok(out.caps.includes("capped_by_derived_timezone"));
   assert.equal(out.inputs.timezone_trust, "derived_from_weather_provider");
 });
 
-test("missing timezone keeps a produced route thin and does not claim time influence", () => {
-  const out = calibrateAgnosticRouteReadiness({
-    routeMutation: true,
-    eligibility: { blockers: [], caveats: [] },
-    candidateReadiness: readiness(),
-    experimentalRoute: baseRoute(),
-    sourceStatus: { status: "loaded:30" },
-    walkingValidation: { valid: true, blockers: [], checks: { walking_source: "heuristic", fallback_used: false } },
-    context: context({
-      time: { timezone_source: null, timezone_trust: "unavailable", time_band: null },
-      influence: { weather_fed_into_selection: true, time_fed_into_selection: false },
-      computed_signals: [],
+test("missing timezone keeps a produced route thin with partial-context cap", () => {
+  const out = calibrateAgnosticRouteReadiness(
+    producedInput({
+      context: context({
+        time: { timezone_source: null, timezone_trust: "unavailable", time_band: null },
+        influence: { weather_fed_into_selection: true, time_fed_into_selection: false },
+        computed_signals: [],
+      }),
     }),
-  });
+  );
 
   assert.equal(out.status, "thin_usable");
   assert.equal(out.level, "low");
   assert.ok(out.reasons.includes("timezone_unavailable"));
-  assert.ok(out.caps.includes("no_time_context"));
+  assert.ok(out.caps.includes("capped_by_partial_context"));
   assert.equal(out.inputs.time_fed_into_selection, false);
 });
 
@@ -151,31 +198,53 @@ test("walking failure and fallback are reflected without route-quality overclaim
   assert.equal(blocked.status, "blocked");
   assert.ok(blocked.reasons.includes("walking_validation_blocked_route"));
 
-  const fallback = calibrateAgnosticRouteReadiness({
-    routeMutation: true,
-    eligibility: { blockers: [], caveats: [] },
-    candidateReadiness: readiness(),
-    experimentalRoute: baseRoute({ caveats: ["experimental", "walking_router_fallback_used"] }),
-    sourceStatus: { status: "loaded:30" },
-    walkingValidation: { valid: true, blockers: [], checks: { walking_source: "heuristic", fallback_used: true } },
-    routeOrdering: { source: "trusted_candidate_pool+candidate_role_order", fallback_used: true },
-    context: context(),
-  });
+  const fallback = calibrateAgnosticRouteReadiness(
+    producedInput({
+      experimentalRoute: baseRoute({ caveats: ["experimental", "walking_router_fallback_used"] }),
+      walkingValidation: { valid: true, blockers: [], checks: { walking_source: "heuristic", fallback_used: true } },
+      routeOrdering: { source: "trusted_candidate_pool+candidate_role_order", fallback_used: true },
+    }),
+  );
   assert.equal(fallback.status, "thin_usable");
-  assert.ok(fallback.caps.includes("walking_router_fallback_used"));
-  assert.ok(fallback.caps.includes("route_ordering_fallback"));
+  assert.ok(fallback.caps.includes("capped_by_heuristic_walking"));
+  assert.ok(fallback.caps.includes("capped_by_role_order_fallback"));
+});
+
+test("external-only, unresolved roles, and below-threshold route caps are closed vocabulary", () => {
+  const out = calibrateAgnosticRouteReadiness(
+    producedInput({
+      candidateReadiness: readiness({ can_support_planner: false }),
+      experimentalRoute: baseRoute({
+        main_stops: [
+          { id: "food-1", origin: "external_open" },
+          { id: "cafe-1", origin: "external_open" },
+          { id: "view-1", origin: "external_open" },
+        ],
+        unresolved_roles: ["swim"],
+      }),
+    }),
+  );
+
+  assert.equal(out.status, "thin_usable");
+  assert.ok(out.caps.includes("capped_by_external_only_sources"));
+  assert.ok(out.caps.includes("capped_by_unresolved_roles"));
+  assert.ok(out.caps.includes("capped_by_below_planner_candidate_threshold"));
+});
+
+test("calibration is deterministic and does not mutate evidence", () => {
+  const input = producedInput({
+    experimentalRoute: baseRoute({ main_stops: [{ id: "food-1", origin: "trusted_curated" }, { id: "cafe-1", origin: "trusted_curated" }, { id: "view-1", origin: "trusted_curated" }] }),
+  });
+  const before = JSON.stringify(input);
+  const first = calibrateAgnosticRouteReadiness(input);
+  const second = calibrateAgnosticRouteReadiness(input);
+
+  assert.deepEqual(first, second);
+  assert.equal(JSON.stringify(input), before);
 });
 
 test("serialized calibration avoids banned route-claim vocabulary", () => {
-  const out = calibrateAgnosticRouteReadiness({
-    routeMutation: true,
-    eligibility: { blockers: [], caveats: [] },
-    candidateReadiness: readiness(),
-    experimentalRoute: baseRoute(),
-    sourceStatus: { status: "loaded:30" },
-    walkingValidation: { valid: true, blockers: [], checks: { walking_source: "heuristic" } },
-    context: context(),
-  });
+  const out = calibrateAgnosticRouteReadiness(producedInput());
   const blob = JSON.stringify(out).toLowerCase();
   for (const word of ["best route", "optimal", "fastest", "shortest", "eta", "live arrival", "opening hours", "open today"]) {
     assert.equal(blob.includes(word), false, `calibration must not claim ${word}`);

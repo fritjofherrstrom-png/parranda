@@ -3,10 +3,12 @@
  *
  * This does not make a route more true, ranked, fast, or ready for default
  * Planner use. It only explains how much trust the experimental output has
- * based on already-trusted server-side facts.
+ * based on already-trusted server-side facts. Keep this helper post-hoc:
+ * evidence in, verdict out.
  */
 
-const ENVIRONMENT_BLOCKERS = new Set(["no_trusted_loader"]);
+const ENVIRONMENT_BLOCKERS = new Set(["no_trusted_loader", "place_resolver_unavailable"]);
+const NOT_APPLICABLE_BLOCKERS = new Set(["external_candidates_not_requested"]);
 
 const WALKING_BLOCKERS = new Set([
   "walking_route_unavailable",
@@ -17,6 +19,16 @@ const WALKING_BLOCKERS = new Set([
   "walking_budget_exceeded",
   "walking_leg_budget_exceeded",
 ]);
+
+const CAP_TOKENS = {
+  heuristicWalking: "capped_by_heuristic_walking",
+  roleOrderFallback: "capped_by_role_order_fallback",
+  derivedTimezone: "capped_by_derived_timezone",
+  partialContext: "capped_by_partial_context",
+  unresolvedRoles: "capped_by_unresolved_roles",
+  externalOnlySources: "capped_by_external_only_sources",
+  belowPlannerCandidateThreshold: "capped_by_below_planner_candidate_threshold",
+};
 
 function calibrateAgnosticRouteReadiness({
   routeMutation = false,
@@ -74,11 +86,27 @@ function calibrateAgnosticRouteReadiness({
   const caps = ["experimental_agnostic_route"];
 
   if (isEnvironmentNotWired({ sourceStatus, blockers })) {
-    reasons.push("environment_not_wired", "no_trusted_loader");
+    reasons.push("environment_not_wired", ...blockers.filter((blocker) => ENVIRONMENT_BLOCKERS.has(blocker)));
+    if (!reasons.includes("no_trusted_loader") && sourceStatus?.status === "no_loader_configured") {
+      reasons.push("no_trusted_loader");
+    }
     return {
       status: "environment_not_wired",
       level: "unavailable",
-      summary: "The agnostic route experiment could not run because no trusted candidate loader is wired.",
+      summary: "The agnostic route experiment could not run because required trusted infrastructure is not wired.",
+      reasons: unique(reasons),
+      caps: unique(caps),
+      inputs,
+    };
+  }
+
+  if (!routeMutation && isNotApplicable({ sourceStatus, blockers })) {
+    reasons.push(...blockers);
+    if (!reasons.length) reasons.push("not_applicable");
+    return {
+      status: "not_applicable",
+      level: "unavailable",
+      summary: "No agnostic route-readiness calibration applies to this response.",
       reasons: unique(reasons),
       caps: unique(caps),
       inputs,
@@ -110,72 +138,59 @@ function calibrateAgnosticRouteReadiness({
 
   reasons.push("experimental_route_produced");
   if (inputs.walking_valid) reasons.push("walking_validated");
-  if (inputs.walking_source === "heuristic" || caveats.includes("heuristic_walking_estimate")) {
+  if (isHeuristicWalking(inputs.walking_source) || caveats.includes("heuristic_walking_estimate")) {
     reasons.push("heuristic_walking_estimate");
-    caps.push("heuristic_walking_estimate");
+    caps.push(CAP_TOKENS.heuristicWalking);
   }
   if (inputs.walking_fallback_used) {
     reasons.push("walking_router_fallback_used");
-    caps.push("walking_router_fallback_used");
+    caps.push(CAP_TOKENS.heuristicWalking);
   }
 
   if (inputs.route_ordering_mode === "trusted_candidate_pool+role_order+proximity_sequence") {
     reasons.push("proximity_ordering_validated");
   } else if (routeOrdering?.fallback_used) {
     reasons.push("role_order_fallback_after_sequence_validation");
-    caps.push("route_ordering_fallback");
+    caps.push(CAP_TOKENS.roleOrderFallback);
   }
 
   if (inputs.timezone_source === "resolver_attested") {
     reasons.push("resolver_attested_timezone");
   } else if (inputs.timezone_source === "weather_provider_auto") {
     reasons.push("weather_provider_auto_timezone");
-    caps.push("derived_timezone");
+    caps.push(CAP_TOKENS.derivedTimezone);
   } else {
     reasons.push("timezone_unavailable");
-    caps.push("no_time_context");
+    caps.push(CAP_TOKENS.partialContext);
   }
 
   if (inputs.weather_fed_into_selection) reasons.push("weather_context_used");
   if (inputs.time_fed_into_selection) reasons.push("time_context_used");
-  if (!inputs.time_fed_into_selection) caps.push("partial_context");
+  if (!inputs.time_fed_into_selection || !inputs.dayflow_context_present || inputs.computed_signal_count === 0) {
+    caps.push(CAP_TOKENS.partialContext);
+  }
 
   if (inputs.all_external_stops) {
     reasons.push("source_backed_external_candidates");
-    caps.push("external_only_candidates");
-  }
-  if (inputs.source_family_count !== null && inputs.source_family_count < 2) {
-    caps.push("low_source_diversity");
+    caps.push(CAP_TOKENS.externalOnlySources);
   }
   if (inputs.can_support_planner === false) {
     reasons.push("below_planner_candidate_threshold");
-    caps.push("below_planner_candidate_threshold");
-  }
-  if (inputs.selected_stop_count < 3) {
-    caps.push("low_selected_stop_count");
+    caps.push(CAP_TOKENS.belowPlannerCandidateThreshold);
   }
   if (inputs.unresolved_role_count > 0) {
-    caps.push("unresolved_roles");
-  }
-  if (inputs.coordinate_coverage !== null && inputs.coordinate_coverage < 0.8) {
-    caps.push("low_coordinate_coverage");
+    caps.push(CAP_TOKENS.unresolvedRoles);
   }
 
-  const thin =
-    inputs.can_support_planner === false ||
-    inputs.selected_stop_count < 3 ||
-    inputs.unresolved_role_count > 0 ||
-    inputs.source_family_count === 0 ||
-    inputs.coordinate_coverage < 0.8 ||
-    caps.includes("no_time_context") ||
-    caps.includes("walking_router_fallback_used");
+  const cappedByTokens = unique(caps.filter((cap) => cap.startsWith("capped_by_")));
+  const thin = cappedByTokens.length > 0;
 
   return {
     status: thin ? "thin_usable" : "usable",
     level: thin ? "low" : "medium",
     summary: thin
       ? "The experimental agnostic route is usable for dogfood, but evidence or context is thin."
-      : "The experimental agnostic route is usable for dogfood with conservative readiness caps.",
+      : "The experimental agnostic route is usable for dogfood with no capped readiness reason.",
     reasons: unique(reasons),
     caps: unique(caps),
     inputs,
@@ -184,6 +199,10 @@ function calibrateAgnosticRouteReadiness({
 
 function isEnvironmentNotWired({ sourceStatus, blockers }) {
   return sourceStatus?.status === "no_loader_configured" || blockers.some((blocker) => ENVIRONMENT_BLOCKERS.has(blocker));
+}
+
+function isNotApplicable({ sourceStatus, blockers }) {
+  return sourceStatus?.status === "skipped" || blockers.some((blocker) => NOT_APPLICABLE_BLOCKERS.has(blocker));
 }
 
 function blockerReasons(blockers) {
@@ -203,6 +222,10 @@ function finiteOrNull(value) {
 function isExternalStop(stop) {
   const origin = String(stop?.origin || "").toLowerCase();
   return origin.includes("external") || origin.includes("open");
+}
+
+function isHeuristicWalking(source) {
+  return String(source || "").toLowerCase().includes("heuristic");
 }
 
 function unique(list) {

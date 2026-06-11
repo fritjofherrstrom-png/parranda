@@ -330,7 +330,7 @@ test(
     assert.equal(exp.readiness_calibration.status, "thin_usable");
     assert.equal(exp.readiness_calibration.level, "low");
     assert.ok(exp.readiness_calibration.reasons.includes("walking_validated"));
-    assert.ok(exp.readiness_calibration.caps.includes("no_time_context"));
+    assert.ok(exp.readiness_calibration.caps.includes("capped_by_partial_context"));
     const day = r.body.days[0];
     assert.equal(day.experimental_agnostic_day, true);
     assert.equal(day.primary_route.experimental, true);
@@ -440,13 +440,13 @@ test(
 );
 
 test(
-  "api: external candidates not requested → no mutation, explicit blocker",
+  "api: external candidates not requested → no mutation, not applicable calibration",
   withServer(makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })), async (server) => {
     const r = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: agnosticBody({ include_external_candidates: undefined }) });
     const exp = r.body.agnostic_route_output_experiment;
     assert.equal(exp.route_mutation, false);
     assert.ok(exp.readiness_blockers.includes("external_candidates_not_requested"));
-    assert.equal(exp.readiness_calibration.status, "blocked");
+    assert.equal(exp.readiness_calibration.status, "not_applicable");
   }),
 );
 
@@ -562,7 +562,8 @@ test(
       const calibration = r.body.agnostic_route_output_experiment.readiness_calibration;
       assert.equal(r.body.agnostic_route_output_experiment.route_mutation, true);
       assert.ok(calibration.reasons.includes("weather_provider_auto_timezone"));
-      assert.ok(calibration.caps.includes("derived_timezone"));
+      assert.equal(calibration.status, "thin_usable");
+      assert.ok(calibration.caps.includes("capped_by_derived_timezone"));
       assert.equal(calibration.inputs.timezone_source, "weather_provider_auto");
       assert.equal(calibration.inputs.timezone_trust, "derived_from_weather_provider");
       assert.equal(calibration.inputs.time_fed_into_selection, true);
