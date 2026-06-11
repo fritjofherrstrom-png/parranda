@@ -1,11 +1,11 @@
 /**
  * #261 — agnostic route walking-budget validation.
  *
- * Validates the EXISTING experimental candidate stop order against walking
- * distance / leg count / budget, and on success returns an experimental any-place
- * route with honest walking distance/minute ESTIMATES. It never reorders or
- * optimizes, never claims a live arrival time, and fails closed on any router /
- * leg / budget problem.
+ * Validates the SUPPLIED experimental stop order against walking distance / leg
+ * count / budget, and on success returns an experimental any-place route with
+ * honest walking distance/minute ESTIMATES. The validator itself never reorders,
+ * never claims a live arrival time, and fails closed on any router / leg /
+ * budget problem.
  */
 
 const assert = require("node:assert/strict");
@@ -332,7 +332,7 @@ test(
 );
 
 // =====================================================================
-// API: public trust boundary + no reordering + no overclaims
+// API: public trust boundary + produced order + no overclaims
 // =====================================================================
 
 test(
@@ -358,7 +358,7 @@ test(
 );
 
 test(
-  "api: walking validation preserves candidate stop order — no reorder/optimize",
+  "api: walking validation receives the produced route order",
   async () => {
     global.fetch = mockStableWeatherFetch();
     const seen = [];
@@ -371,7 +371,7 @@ test(
       const r = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: agnosticBody() });
       const route = r.body.days[0].primary_route;
       const routeOrder = route.main_stops.map((s) => `${s.lat},${s.lng}`);
-      assert.deepEqual(seen[0], routeOrder, "router received stops in the produced (candidate) order");
+      assert.deepEqual(seen[0], routeOrder, "router received stops in the produced route order");
     } finally {
       await new Promise((resolve) => server.close(resolve));
       global.fetch = ORIGINAL_FETCH;
