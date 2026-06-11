@@ -185,7 +185,9 @@ function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation
     source: "trusted_candidate_pool",
     // Neutral, honest title — no city name, no "better/best/optimal/fastest".
     title: "Experimental any-place candidate route",
-    // Order is the candidate role order throughout — validation never reorders.
+    // Order is whatever trusted candidate order the caller supplied: candidate
+    // role order by default, or the flag-gated proximity sequence after it has
+    // passed walking-budget validation. Validation itself never reorders.
     main_stops: stops,
     target_roles: Array.isArray(adaptedBody?.target_roles) ? adaptedBody.target_roles : [],
     unresolved_roles: Array.isArray(adaptedBody?.unresolved_roles) ? adaptedBody.unresolved_roles : [],
@@ -194,10 +196,11 @@ function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation
     route_ordering: sanitizeRouteOrdering(routeOrdering),
   };
 
-  // #261 — when the candidate order passed walking-budget validation, surface
-  // honest walking distance/minute ESTIMATES (heuristic or OSRM, never a live
-  // arrival time). The order is still the candidate order; validation checked
-  // it, it did not optimize it.
+  // #261/#265 — when the supplied candidate order passed walking-budget
+  // validation, surface honest walking distance/minute ESTIMATES (heuristic or
+  // OSRM, never a live arrival time). The supplied order may be original role
+  // order or the #265 proximity sequence; validation checked it, it did not
+  // optimize it.
   if (walkingValidation && walkingValidation.valid && walkingValidation.result) {
     const wr = walkingValidation.result;
     const totalWalkMinutes = (Array.isArray(wr.legs) ? wr.legs : []).reduce(

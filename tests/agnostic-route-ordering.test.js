@@ -61,6 +61,20 @@ test("already-local candidate order is preserved", () => {
   assert.ok(out.ordering.reasons.includes("candidate_role_order_already_local"));
 });
 
+test("equal-distance choices are deterministic and preserve original candidate order", () => {
+  const input = body([
+    stop("a", "food_anchor", 0, 0),
+    stop("b", "coffee_fika_stop", 0, 1),
+    stop("c", "scenic_anchor", 0, -1),
+  ]);
+
+  const first = buildAgnosticRouteOrdering({ adaptedBody: input });
+  const second = buildAgnosticRouteOrdering({ adaptedBody: input });
+
+  assert.deepEqual(first.ordering.ordered_stop_ids, ["a", "b", "c"]);
+  assert.deepEqual(second.ordering.ordered_stop_ids, first.ordering.ordered_stop_ids);
+});
+
 test("small, incomplete, or duplicate candidate sets do not reorder", () => {
   const small = buildAgnosticRouteOrdering({
     adaptedBody: body([stop("a", "food_anchor", 41.9, 12.49), stop("b", "coffee_fika_stop", 41.901, 12.49)]),
