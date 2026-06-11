@@ -11,9 +11,11 @@
  *   - Public payload weather/time/signals are NEVER consulted here — only the
  *     server-injected `weatherProvider` and `clock`.
  *   - Weather-first / timezone-gated: weather works for any coordinates; time-of-day
- *     / golden-hour / city-rhythm run ONLY when a trusted IANA timezone is known
- *     (resolver-provided). When unknown, time is omitted with `timezone_unavailable`.
- *     No coordinate→timezone lookup.
+ *     / golden-hour / city-rhythm run ONLY when a trusted IANA timezone is known.
+ *     Resolver-attested timezone is preferred; otherwise the trusted weather
+ *     provider may supply an auto-resolved IANA timezone. This is labeled as
+ *     `weather_provider_auto`, never as resolver-attested. No public payload
+ *     timezone is trusted.
  *   - Live-event scraping is OUT: `live` is always { available:false }. No live
  *     event becomes a route stop.
  *   - Fail-SOFT: every part is guarded; a missing/erroring provider or unknown
@@ -103,9 +105,50 @@ function summarizeWeatherRead(signal) {
  * camelCase shape `interpretWeatherForDayflow` / the fit-scorer already read) or null.
  */
 function defaultWeatherProvider({ lat, lng, date, timezone } = {}) {
-  return fetchWeatherForDates([date], { lat, lng }, { timezone })
+  const options = timezone ? { timezone } : {};
+  return fetchWeatherForDates([date], { lat, lng }, options)
     .then((byDate) => (byDate && byDate[date]) || null)
     .catch(() => null);
+}
+
+function resolveWeatherTimezone(weather) {
+  const resolution = weather && typeof weather === "object" ? weather.timezone_resolution : null;
+  const timezone = typeof resolution?.timezone === "string" ? resolution.timezone.trim() : "";
+  if (!isValidIanaTimezone(timezone)) {
+    return null;
+  }
+
+  return {
+    timezone,
+    timezoneSource: "weather_provider_auto",
+    timezoneTrust: "derived_from_weather_provider",
+  };
+}
+
+function resolveTrustedTimezone({ trustedTimezone, weather }) {
+  if (isValidIanaTimezone(trustedTimezone)) {
+    return {
+      timezone: trustedTimezone.trim(),
+      timezoneKnown: true,
+      timezoneSource: "resolver_attested",
+      timezoneTrust: "resolver_attested",
+    };
+  }
+
+  const weatherTimezone = resolveWeatherTimezone(weather);
+  if (weatherTimezone) {
+    return {
+      ...weatherTimezone,
+      timezoneKnown: true,
+    };
+  }
+
+  return {
+    timezone: null,
+    timezoneKnown: false,
+    timezoneSource: null,
+    timezoneTrust: "unavailable",
+  };
 }
 
 /**
@@ -123,8 +166,43 @@ async function resolveAgnosticContext({
 } = {}) {
   const lat = coords ? Number(coords.lat) : NaN;
   const lng = coords ? Number(coords.lng) : NaN;
-  const timezoneKnown = isValidIanaTimezone(trustedTimezone);
-  const timezone = timezoneKnown ? trustedTimezone : null;
+
+  // --- Weather (any-place, fail-soft) ---
+  let weather = null;
+  let weatherStatus = "unavailable";
+  let weatherRead = null;
+  try {
+    const provider = typeof weatherProvider === "function" ? weatherProvider : defaultWeatherProvider;
+    if (Number.isFinite(lat) && Number.isFinite(lng) && date) {
+      const explicitTimezone = isValidIanaTimezone(trustedTimezone) ? trustedTimezone.trim() : null;
+      const resolved = await provider({
+        lat,
+        lng,
+        date,
+        ...(explicitTimezone ? { timezone: explicitTimezone } : {}),
+      });
+      if (resolved && typeof resolved === "object") {
+        weather = resolved;
+        const signal = interpretWeatherForDayflow(resolved, { date, cityConfig: { key: "agnostic-area" }, lang });
+        if (signal) {
+          weatherStatus = "resolved";
+          weatherRead = summarizeWeatherRead(signal);
+        } else {
+          // Weather present but nothing dayflow-relevant (boring weather — honest silence).
+          weatherStatus = "no_signal";
+        }
+      }
+    }
+  } catch (_error) {
+    weather = null;
+    weatherStatus = "unavailable";
+    weatherRead = null;
+  }
+
+  const { timezone, timezoneKnown, timezoneSource, timezoneTrust } = resolveTrustedTimezone({
+    trustedTimezone,
+    weather,
+  });
 
   // --- Time (tz-gated) ---
   let cityNow = null;
@@ -159,32 +237,6 @@ async function resolveAgnosticContext({
     }
   }
 
-  // --- Weather (any-place, fail-soft) ---
-  let weather = null;
-  let weatherStatus = "unavailable";
-  let weatherRead = null;
-  try {
-    const provider = typeof weatherProvider === "function" ? weatherProvider : defaultWeatherProvider;
-    if (Number.isFinite(lat) && Number.isFinite(lng) && date) {
-      const resolved = await provider({ lat, lng, date, timezone: timezone || "UTC" });
-      if (resolved && typeof resolved === "object") {
-        weather = resolved;
-        const signal = interpretWeatherForDayflow(resolved, { date, cityConfig: { key: "agnostic-area" }, lang });
-        if (signal) {
-          weatherStatus = "resolved";
-          weatherRead = summarizeWeatherRead(signal);
-        } else {
-          // Weather present but nothing dayflow-relevant (boring weather — honest silence).
-          weatherStatus = "no_signal";
-        }
-      }
-    }
-  } catch (_error) {
-    weather = null;
-    weatherStatus = "unavailable";
-    weatherRead = null;
-  }
-
   // #262 — top-level status reflects ACTUAL context availability (honest, never a
   // route gate). Weather is "available" when a trusted weather object resolved
   // (dayflow-relevant or boring); time is "available" when a trusted timezone is
@@ -201,6 +253,8 @@ async function resolveAgnosticContext({
     time: {
       timezone,
       timezone_known: timezoneKnown,
+      timezone_source: timezoneSource,
+      timezone_trust: timezoneTrust,
       status: timezoneKnown ? "resolved" : "timezone_unavailable",
       now: nowIso,
       time_band: timeBand,
@@ -260,4 +314,5 @@ module.exports = {
   collectInfluenceReasons,
   defaultWeatherProvider,
   isValidIanaTimezone,
+  resolveWeatherTimezone,
 };

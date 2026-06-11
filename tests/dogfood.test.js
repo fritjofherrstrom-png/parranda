@@ -226,7 +226,15 @@ function successResponse(overrides = {}) {
       walking_validation: { valid: true, blockers: [], checks: { stop_count: 2, leg_count: 1, total_walk_km: 0.3, max_leg_km: 0.3, total_estimated_walk_minutes: 4, total_budget_km: 25, max_leg_budget_km: 6, walking_source: "heuristic", fallback_used: false } },
       context: {
         status: "available",
-        time: { timezone: "Europe/Rome", timezone_known: true, status: "resolved", now: "2026-05-25T19:30:00", time_band: "evening" },
+        time: {
+          timezone: "Europe/Rome",
+          timezone_known: true,
+          timezone_source: "weather_provider_auto",
+          timezone_trust: "derived_from_weather_provider",
+          status: "resolved",
+          now: "2026-05-25T19:30:00",
+          time_band: "evening",
+        },
         weather: { status: "resolved", read: { kind: "outdoor_window", headline: "Pleasant window for outdoor stops.", reason: "Sun, dry, mild.", confidence: "medium" } },
         computed_signals: [{ type: "golden_hour", headline: "Golden hour nearby", source: "computed_pulse" }],
         live: { available: false, reason: "no_any_place_live_source" },
@@ -288,6 +296,8 @@ test("pure: a success response surfaces stops, walking estimate, caveats, intake
   // Context populated
   assert.equal(view.context.statusLabel, "Available");
   assert.equal(view.context.time.timeBand, "evening");
+  assert.equal(view.context.time.timezoneSource, "weather_provider_auto");
+  assert.equal(view.context.time.timezoneTrust, "derived_from_weather_provider");
   assert.deepEqual(view.context.influence.weatherReasons, ["sun_favors_scenic"]);
   // Walking validation summary
   assert.equal(view.walking.valid, true);

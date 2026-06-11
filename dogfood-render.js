@@ -187,6 +187,8 @@
       time: {
         timezoneKnown: Boolean(ctx.time && ctx.time.timezone_known),
         timezone: ctx.time && isString(ctx.time.timezone) ? ctx.time.timezone : null,
+        timezoneSource: ctx.time && isString(ctx.time.timezone_source) ? ctx.time.timezone_source : null,
+        timezoneTrust: ctx.time && isString(ctx.time.timezone_trust) ? ctx.time.timezone_trust : null,
         status: ctx.time && ctx.time.status ? ctx.time.status : null,
         now: ctx.time && isString(ctx.time.now) ? ctx.time.now : null,
         timeBand: ctx.time && isString(ctx.time.time_band) ? ctx.time.time_band : null,

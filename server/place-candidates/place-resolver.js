@@ -22,8 +22,9 @@
  *   - Conservative confidence: we never label a result "high" (reserved for
  *     human-verified), prefer ambiguity / low-confidence over anchoring a vague
  *     match, and never use provider popularity to overstate certainty.
- *   - No timezone is ever supplied (no coordinate→timezone lookup), so freeform
- *     places keep time-of-day signals off (honest, per #262).
+ *   - The resolver does not supply timezone (no coordinate→timezone lookup).
+ *     Agnostic route context may derive a lower-trust timezone separately from
+ *     trusted weather-provider auto metadata.
  *
  * Deterministic given its injected `fetcher` / `now` / `sleep` (tests inject
  * these; nothing here touches the network unless a real fetcher is configured).
@@ -136,7 +137,7 @@ function finalizeCandidate(candidate) {
     license: "ODbL",
     source_tier: "inferred",
     osm_ref: candidate.osm_ref,
-    // Deliberately NO timezone — never supply one (no coordinate→timezone lookup).
+    // Deliberately NO timezone — the resolver does not do coordinate→timezone lookup.
   };
 }
 

@@ -316,6 +316,14 @@
       dl.appendChild(el("dt", "dogfood-kv-key", t("dogfood.context.timezone", "Timezone")));
       dl.appendChild(el("dd", "dogfood-kv-value", ctx.time.timezone));
     }
+    if (ctx.time.timezoneSource) {
+      dl.appendChild(el("dt", "dogfood-kv-key", t("dogfood.context.timezoneSource", "Timezone source")));
+      dl.appendChild(el("dd", "dogfood-kv-value", ctx.time.timezoneSource));
+    }
+    if (ctx.time.timezoneTrust) {
+      dl.appendChild(el("dt", "dogfood-kv-key", t("dogfood.context.timezoneTrust", "Timezone trust")));
+      dl.appendChild(el("dd", "dogfood-kv-value", ctx.time.timezoneTrust));
+    }
     if (ctx.time.timeBand) {
       dl.appendChild(el("dt", "dogfood-kv-key", t("dogfood.context.timeBand", "Time band")));
       dl.appendChild(el("dd", "dogfood-kv-value", ctx.time.timeBand));

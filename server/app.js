@@ -1832,7 +1832,8 @@ function buildApp({
         lens: request.body?.lens || request.query?.lens || null,
         // #262 — payload weather is NOT trusted; trusted weather/time come only
         // from the server-injected seams. `trustedTimezone` is taken from the
-        // trusted resolver's resolved candidate when it supplied one.
+        // trusted resolver when present; otherwise agnostic context may derive a
+        // lower-trust timezone from trusted weather-provider auto metadata.
         date: payload.dates[0] || null,
         todayIsoDate: cityConfig.todayIsoDate,
         timezone: cityConfig.timezone || "UTC",
