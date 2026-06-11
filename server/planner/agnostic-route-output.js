@@ -36,6 +36,7 @@ const { validateAgnosticWalkingOrder } = require("./agnostic-route-walking-valid
 const { buildAgnosticRouteOrdering } = require("./agnostic-route-ordering");
 const { resolveAgnosticContext, collectInfluenceReasons } = require("./agnostic-route-context");
 const { buildDayflowContext } = require("./dayflow-context");
+const { calibrateAgnosticRouteReadiness } = require("./agnostic-route-readiness-calibration");
 
 // A route needs at least an ordered pair of geocoded, stable-id stops. Fewer
 // than this is honestly "not a route".
@@ -299,9 +300,13 @@ function buildExperimentBlock({
   candidateReadiness,
   experimentalRoute,
   sourceStatus,
+  walkingValidation = null,
+  routeOrdering = null,
+  context = null,
+  dayflowContextPresent = false,
 }) {
   const baselineDay = baselineResult && Array.isArray(baselineResult.days) ? baselineResult.days[0] : null;
-  return {
+  const block = {
     experimental: true,
     route_mutation: routeMutation,
     selected_variant: routeMutation ? "experimental_agnostic" : "baseline",
@@ -318,6 +323,18 @@ function buildExperimentBlock({
     readiness_blockers: eligibility.blockers,
     caveats: eligibility.caveats,
   };
+  block.readiness_calibration = calibrateAgnosticRouteReadiness({
+    routeMutation,
+    eligibility,
+    candidateReadiness,
+    experimentalRoute,
+    sourceStatus,
+    walkingValidation,
+    routeOrdering,
+    context,
+    dayflowContextPresent,
+  });
+  return block;
 }
 
 function buildBlockedAgnosticRouteOutputExperiment({ baselineResult, blocker, sourceStatus = null }) {
@@ -478,6 +495,7 @@ async function composeAgnosticRouteOutput({
       candidateReadiness,
       experimentalRoute: null,
       sourceStatus,
+      context: contextBlock,
     });
     experiment.context = contextBlock;
     return { result: baselineResult, experiment };
@@ -549,6 +567,9 @@ async function composeAgnosticRouteOutput({
       candidateReadiness,
       experimentalRoute: null,
       sourceStatus,
+      walkingValidation: walkingSummary,
+      routeOrdering: sanitizeRouteOrdering(routeOrdering),
+      context: contextBlock,
     });
     experiment.walking_validation = walkingSummary;
     experiment.route_ordering = sanitizeRouteOrdering(routeOrdering);
@@ -580,6 +601,7 @@ async function composeAgnosticRouteOutput({
       mutated.days[0].dayflow_context = dayflow;
     }
   }
+  const dayflowContextPresent = Boolean(mutated.days && mutated.days[0] && mutated.days[0].dayflow_context);
 
   const experiment = buildExperimentBlock({
     routeMutation: true,
@@ -588,6 +610,10 @@ async function composeAgnosticRouteOutput({
     candidateReadiness,
     experimentalRoute,
     sourceStatus,
+    walkingValidation: walkingSummary,
+    routeOrdering: sanitizeRouteOrdering(routeOrdering),
+    context: contextBlock,
+    dayflowContextPresent,
   });
   experiment.walking_validation = walkingSummary;
   experiment.route_ordering = sanitizeRouteOrdering(routeOrdering);

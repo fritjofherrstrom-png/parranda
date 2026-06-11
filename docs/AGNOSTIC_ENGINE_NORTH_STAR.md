@@ -72,7 +72,11 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 
 - **#265** introduces a narrow **route-ordering/rhythm capability** behind the same experiment flag: trusted candidate role order can seed a deterministic proximity sequence before walking validation. The sequence is server-derived from trusted candidate IDs + coordinates, never public payload; walking validation remains the final gate; if proximity ordering fails but original role order validates, the experiment falls back honestly to role order with `route_ordering.fallback_used` diagnostics. This is not TSP, not live routing, and not a "best/optimal/fastest/shortest" claim.
 
-Still missing before a true any-place Planner (now the next steps): confidence calibration for sparse multi-role/multi-day sets, multi-day experimental output, persistent geocode caching / a paid-or-self-hosted geocoder for scale, and live ETA / real-time routing (explicitly out of scope).
+- **#266** unlocked **trusted weather-provider timezone acquisition** for freeform/coordinate any-place requests. The place resolver still does not do coordinate→timezone lookup; instead the trusted weather seam may use Open-Meteo `timezone=auto`, validate the returned IANA timezone, and label it `weather_provider_auto` / `derived_from_weather_provider`. Resolver-attested timezone remains stronger. Missing/invalid timezone remains fail-soft and never blocks a route.
+
+- **#267** adds **conservative readiness/calibration** to the same experiment block. It does not make the route more true, change route output, or promote default Planner behavior. It explains whether an experimental one-day agnostic route is `usable`, `thin_usable`, `blocked`, `environment_not_wired`, or `not_applicable`, with `medium` / `low` / `unavailable` levels only. Calibration is derived from trusted loader status, candidate readiness, geometry, walking validation, route ordering, and context/time/weather facts; it has no numeric score, no "high confidence", and no "best/optimal/fastest/shortest" route claim.
+
+Still missing before a true any-place Planner (now the next steps): stronger generic candidate supply where source-backed candidates are sparse, richer single-day composition quality after calibration, multi-day experimental output, persistent geocode caching / a paid-or-self-hosted geocoder for scale, and live ETA / real-time routing (explicitly out of scope).
 
 ## Anti-drift rule
 
@@ -154,6 +158,9 @@ The current direction should be:
 #262 — DONE: trusted time + weather context (resolver/weather-provider timezone gated; weather-first; no live scraping)
 #263 — DONE: production trusted place resolver (Nominatim, env-gated default-off; not commercial-cleared)
 #264 — frontend dogfood mode: enter any place -> get honest route/dayflow output
+#265 — DONE: conservative proximity ordering before walking validation (fallback to role order)
+#266 — DONE: trusted weather-provider timezone auto-resolution (lower-trust derived timezone)
+#267 — DONE: conservative readiness/calibration for experimental agnostic one-day output
 ```
 
 The numbers may shift, but the sequence should not drift back into endless diagnostics.

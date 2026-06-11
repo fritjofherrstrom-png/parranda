@@ -36,6 +36,26 @@ const {
 const ORIGINAL_FETCH = global.fetch;
 const FLAG = "experimental_agnostic_route_output=1";
 const DATE = "2026-05-25";
+const SUN_AUTO_TZ = {
+  condition: "sun",
+  maxTemp: 24,
+  minTemp: 14,
+  apparentTempMax: 23,
+  precipitationProbabilityMax: 5,
+  precipitationSum: 0,
+  windSpeedMax: 8,
+  source: "test",
+  stale: false,
+  timezone_resolution: {
+    timezone: "Europe/Rome",
+    timezone_source: "weather_provider_auto",
+    utc_offset_seconds: 7200,
+  },
+};
+
+function eveningClock() {
+  return new Date("2026-05-25T17:30:00Z");
+}
 
 // A role-diverse, >=25 geocoded, tightly-clustered trusted fixture near an
 // anchor — enough to fill multiple roles AND clear the planner readiness bar.
@@ -255,6 +275,7 @@ test(
     assert.equal(withInertParams.status, 200);
     assert.equal(plain.body.agnostic_route_output_experiment, undefined, "no experiment block by default");
     assert.equal(withInertParams.body.agnostic_route_output_experiment, undefined, "coords+external without the flag add no experiment block");
+    assert.equal(withInertParams.body.readiness_calibration, undefined, "no top-level calibration on default path");
     assert.deepEqual(primaryRouteShape(withInertParams.body), primaryRouteShape(plain.body), "route shape unchanged");
     assert.deepEqual(Object.keys(withInertParams.body).sort(), Object.keys(plain.body).sort(), "no new default top-level fields");
   }),
@@ -306,6 +327,10 @@ test(
     assert.equal(exp.route_mutation, true);
     assert.equal(exp.selected_variant, "experimental_agnostic");
     assert.equal(exp.baseline.had_primary_route, false, "unknown city had no baseline route");
+    assert.equal(exp.readiness_calibration.status, "thin_usable");
+    assert.equal(exp.readiness_calibration.level, "low");
+    assert.ok(exp.readiness_calibration.reasons.includes("walking_validated"));
+    assert.ok(exp.readiness_calibration.caps.includes("capped_by_partial_context"));
     const day = r.body.days[0];
     assert.equal(day.experimental_agnostic_day, true);
     assert.equal(day.primary_route.experimental, true);
@@ -332,6 +357,7 @@ test(
     // and the experimental route/day markers, not by relabeling top-level city.
     assert.equal(r.body.city, "rome");
     assert.equal(exp.baseline.had_primary_route, true, "no-city request fell back to the default city route");
+    assert.ok(exp.readiness_calibration, "route mutation carries readiness calibration");
     assert.ok(exp.baseline.primary_route && exp.baseline.primary_route.id, "baseline route preserved for comparison");
     assert.notEqual(exp.baseline.primary_route.id, r.body.days[0].primary_route.id, "returned route is the experimental one");
     assert.equal(r.body.days[0].experimental_agnostic_route_applied, true);
@@ -359,6 +385,8 @@ test(
     assert.equal(exp.selected_variant, "baseline");
     assert.equal(exp.eligibility.eligible, false);
     assert.ok(exp.readiness_blockers.includes("missing_or_invalid_coordinates"));
+    assert.equal(exp.readiness_calibration.status, "blocked");
+    assert.equal(exp.readiness_calibration.level, "unavailable");
     assert.deepEqual(r.body.days, [], "baseline empty-days fallback is untouched");
     assert.equal(exp.experimental_route, null);
     assert.equal(r.body.city, "atlantis-no-coordinates");
@@ -386,6 +414,8 @@ test(
     assert.equal(exp.selected_variant, "baseline");
     assert.equal(exp.eligibility.eligible, false);
     assert.ok(exp.readiness_blockers.includes("missing_or_invalid_coordinates"));
+    assert.equal(exp.readiness_calibration.status, "blocked");
+    assert.equal(exp.readiness_calibration.level, "unavailable");
     assert.deepEqual(r.body.days, [], "baseline empty-days fallback is untouched");
     assert.equal(exp.experimental_route, null);
     assert.equal(r.body.city, "atlantis-invalid-coordinates");
@@ -401,19 +431,43 @@ test(
     assert.equal(exp.route_mutation, false);
     assert.equal(exp.selected_variant, "baseline");
     assert.ok(exp.readiness_blockers.includes("no_usable_trusted_records"));
+    assert.equal(exp.readiness_calibration.status, "blocked");
+    assert.equal(exp.readiness_calibration.level, "unavailable");
+    assert.ok(exp.readiness_calibration.reasons.includes("candidate_supply_blocked_route"));
     assert.deepEqual(r.body.days, [], "baseline empty-days fallback is untouched");
     assert.equal(exp.experimental_route, null);
   }),
 );
 
 test(
-  "api: external candidates not requested → no mutation, explicit blocker",
+  "api: external candidates not requested → no mutation, not applicable calibration",
   withServer(makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })), async (server) => {
     const r = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: agnosticBody({ include_external_candidates: undefined }) });
     const exp = r.body.agnostic_route_output_experiment;
     assert.equal(exp.route_mutation, false);
     assert.ok(exp.readiness_blockers.includes("external_candidates_not_requested"));
+    assert.equal(exp.readiness_calibration.status, "not_applicable");
   }),
+);
+
+test(
+  "api: no loader configured is environment-not-wired, not weak candidate supply",
+  async () => {
+    global.fetch = mockStableWeatherFetch();
+    const server = buildApp({ openDataLoader: null }).listen(0);
+    try {
+      const r = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: agnosticBody() });
+      const calibration = r.body.agnostic_route_output_experiment.readiness_calibration;
+      assert.equal(r.body.agnostic_route_output_experiment.route_mutation, false);
+      assert.equal(calibration.status, "environment_not_wired");
+      assert.equal(calibration.level, "unavailable");
+      assert.ok(calibration.reasons.includes("no_trusted_loader"));
+      assert.equal(calibration.reasons.includes("candidate_supply_blocked_route"), false);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+      global.fetch = ORIGINAL_FETCH;
+    }
+  },
 );
 
 // --- API: public payload is never trusted ----------------------------------
@@ -431,8 +485,93 @@ test(
     const exp = r.body.agnostic_route_output_experiment;
     assert.equal(exp.route_mutation, false, "injected payload must not enable a route");
     assert.ok(exp.readiness_blockers.includes("no_usable_trusted_records"));
+    assert.equal(exp.readiness_calibration.status, "blocked");
+    assert.notEqual(exp.readiness_calibration.status, "usable");
     assert.deepEqual(r.body.days, []);
   }),
+);
+
+test(
+  "api: public payload cannot inject readiness calibration",
+  withServer(makeLoader([]), async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}`,
+      body: agnosticBody({
+        readiness_calibration: {
+          status: "usable",
+          level: "medium",
+          reasons: ["payload"],
+          caps: [],
+          inputs: { selected_stop_count: 99 },
+        },
+        confidence: "high",
+        readiness: "ready",
+        level: "medium",
+        status: "usable",
+        reasons: ["payload"],
+        caps: [],
+        inputs: { loader_status: "payload" },
+      }),
+    });
+    const calibration = r.body.agnostic_route_output_experiment.readiness_calibration;
+    assert.equal(calibration.status, "blocked");
+    assert.equal(calibration.level, "unavailable");
+    assert.equal(calibration.reasons.includes("payload"), false);
+    assert.notEqual(calibration.inputs.loader_status, "payload");
+  }),
+);
+
+test(
+  "api: resolver-attested timezone route carries conservative medium calibration",
+  async () => {
+    global.fetch = mockStableWeatherFetch();
+    const server = buildApp({
+      openDataLoader: makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })),
+      weatherProvider: async () => ({ condition: "sun", maxTemp: 24, minTemp: 14, apparentTempMax: 23, precipitationProbabilityMax: 5, precipitationSum: 0, windSpeedMax: 8, source: "test", stale: false }),
+      clock: eveningClock,
+      placeResolver: async () => [{ label: "Resolver place", lat: 41.9, lng: 12.49, confidence: "high", provenance: "test_resolver", timezone: "Europe/Rome" }],
+    }).listen(0);
+    try {
+      const r = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: { city: "unknown-place", dates: [DATE], place: "Resolver place", preferences: ["food", "coffee", "scenic"], include_external_candidates: 1 } });
+      const calibration = r.body.agnostic_route_output_experiment.readiness_calibration;
+      assert.equal(r.body.agnostic_route_output_experiment.route_mutation, true);
+      assert.ok(["usable", "thin_usable"].includes(calibration.status));
+      assert.ok(["medium", "low"].includes(calibration.level));
+      assert.notEqual(calibration.level, "high");
+      assert.ok(calibration.reasons.includes("walking_validated"));
+      assert.ok(calibration.reasons.includes("resolver_attested_timezone"));
+      assert.equal(calibration.inputs.timezone_source, "resolver_attested");
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+      global.fetch = ORIGINAL_FETCH;
+    }
+  },
+);
+
+test(
+  "api: weather-provider-auto timezone is capped as derived context",
+  async () => {
+    global.fetch = mockStableWeatherFetch();
+    const server = buildApp({
+      openDataLoader: makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })),
+      weatherProvider: async () => SUN_AUTO_TZ,
+      clock: eveningClock,
+    }).listen(0);
+    try {
+      const r = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: agnosticBody() });
+      const calibration = r.body.agnostic_route_output_experiment.readiness_calibration;
+      assert.equal(r.body.agnostic_route_output_experiment.route_mutation, true);
+      assert.ok(calibration.reasons.includes("weather_provider_auto_timezone"));
+      assert.equal(calibration.status, "thin_usable");
+      assert.ok(calibration.caps.includes("capped_by_derived_timezone"));
+      assert.equal(calibration.inputs.timezone_source, "weather_provider_auto");
+      assert.equal(calibration.inputs.timezone_trust, "derived_from_weather_provider");
+      assert.equal(calibration.inputs.time_fed_into_selection, true);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+      global.fetch = ORIGINAL_FETCH;
+    }
+  },
 );
 
 // --- API: no named-city hardcoding -----------------------------------------
@@ -491,7 +630,7 @@ test(
     assert.equal(route.caveats.includes("no_walking_time"), false);
     // Banned vocabulary scan: unambiguous quality/comparison CLAIMS.
     const blob = JSON.stringify({ route, experiment: r.body.agnostic_route_output_experiment }).toLowerCase();
-    for (const phrase of ["better route", "best route", "optimal", "fastest", "shortest", "recommended over", "minutes away", "min walk", "live that fits"]) {
+    for (const phrase of ["better route", "best route", "optimal", "fastest", "shortest", "recommended over", "minutes away", "min walk", "live that fits", "eta", "opening hours", "open today"]) {
       assert.equal(blob.includes(phrase), false, `must not claim "${phrase}"`);
     }
   }),
@@ -510,6 +649,7 @@ test("unit: composer fails closed (no loader) and never mutates", async () => {
   });
   assert.equal(experiment.route_mutation, false);
   assert.ok(experiment.readiness_blockers.includes("no_trusted_loader"));
+  assert.equal(experiment.readiness_calibration.status, "environment_not_wired");
   assert.equal(result, baseline, "baseline returned unchanged by reference when not eligible");
   assert.equal(typeof buildExperimentalDay, "function");
 });
