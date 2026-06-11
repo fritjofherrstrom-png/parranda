@@ -48,6 +48,14 @@ function fixtureNear(base) {
   return recs;
 }
 
+function fixtureNeedsOrderingFallback() {
+  return [
+    externalRecord("view-a", "View A", "viewpoint", 41.9, 12.49, ["utsikt"]),
+    externalRecord("food-c", "Food C", "restaurant", 41.92, 12.49, ["mat"]),
+    externalRecord("bar-b", "Bar B", "bar", 41.901, 12.49, ["bar"]),
+  ];
+}
+
 function agnosticBody(extra = {}) {
   return {
     city: "atlantis-unknown-place",
@@ -331,6 +339,62 @@ test(
   }),
 );
 
+test(
+  "api: proximity order failure falls back to original role order when role order validates",
+  async () => {
+    global.fetch = mockStableWeatherFetch();
+    const seen = [];
+    const proximityOrder = "41.9,12.49|41.901,12.49|41.92,12.49";
+    const originalRoleOrder = "41.9,12.49|41.92,12.49|41.901,12.49";
+    const fallbackRouter = async (points) => {
+      const signature = points.map((p) => `${p.lat},${p.lng}`).join("|");
+      seen.push(signature);
+      if (signature === proximityOrder) {
+        return {
+          source: "heuristic",
+          estimatedKm: 99,
+          legs: points.slice(1).map(() => ({ distance_km: 99, estimated_walk_minutes: 999 })),
+          pathPoints: points.map((p) => ({ lat: p.lat, lng: p.lng })),
+          fallbackUsed: false,
+        };
+      }
+      if (signature === originalRoleOrder) {
+        return {
+          source: "heuristic",
+          estimatedKm: 0.8,
+          legs: points.slice(1).map(() => ({ distance_km: 0.4, estimated_walk_minutes: 6 })),
+          pathPoints: points.map((p) => ({ lat: p.lat, lng: p.lng })),
+          fallbackUsed: false,
+        };
+      }
+      throw new Error(`unexpected order ${signature}`);
+    };
+
+    const server = buildApp({ openDataLoader: makeLoader(fixtureNeedsOrderingFallback()), walkingRouter: fallbackRouter }).listen(0);
+    try {
+      const r = await requestJson(server, {
+        path: `/api/route-recommendations?lang=en&${FLAG}`,
+        body: agnosticBody({ preferences: ["scenic", "food", "bars"] }),
+      });
+      const exp = r.body.agnostic_route_output_experiment;
+      const route = r.body.days[0].primary_route;
+
+      assert.equal(exp.route_mutation, true);
+      assert.deepEqual(seen, [proximityOrder, originalRoleOrder]);
+      assert.deepEqual(route.main_stops.map((stop) => stop.id), ["view-a", "food-c", "bar-b"]);
+      assert.equal(exp.route_ordering.fallback_used, true);
+      assert.equal(exp.route_ordering.fallback_reason, "proximity_sequence_failed_walking_validation");
+      assert.ok(exp.route_ordering.failed_sequence_validation, "failed proximity validation is preserved");
+      assert.equal(exp.walking_validation.valid, true);
+      assert.equal(route.route_ordering.fallback_used, true);
+      assert.equal(route.order_source, "trusted_candidate_pool+candidate_role_order");
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+      global.fetch = ORIGINAL_FETCH;
+    }
+  },
+);
+
 // =====================================================================
 // API: public trust boundary + produced order + no overclaims
 // =====================================================================
@@ -354,6 +418,34 @@ test(
     assert.notEqual(route.estimated_km, 9999, "payload walking metadata is ignored");
     assert.notDeepEqual(route.map_path_points, [{ lat: 0, lng: 0 }]);
     assert.ok(route.legs.every((l) => l.distance_km !== 9999));
+  }),
+);
+
+test(
+  "api: public payload cannot inject or override route ordering metadata",
+  withServer({ openDataLoader: makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })) }, async (server) => {
+    const evilIds = ["evil-a", "evil-b"];
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}`,
+      body: agnosticBody({
+        route_ordering: {
+          applied: true,
+          ordered_stop_ids: evilIds,
+        },
+        ordered_stop_ids: evilIds,
+        stop_ids: evilIds,
+      }),
+    });
+    const route = r.body.days[0].primary_route;
+    const exp = r.body.agnostic_route_output_experiment;
+    const blob = JSON.stringify({ route, exp });
+
+    assert.equal(exp.route_mutation, true);
+    assert.equal(blob.includes("evil-a"), false);
+    assert.equal(blob.includes("evil-b"), false);
+    assert.notDeepEqual(route.route_ordering && route.route_ordering.ordered_stop_ids, evilIds);
+    assert.notDeepEqual(exp.route_ordering && exp.route_ordering.ordered_stop_ids, evilIds);
+    assert.ok(route.main_stops.every((stop) => !evilIds.includes(stop.id)));
   }),
 );
 
