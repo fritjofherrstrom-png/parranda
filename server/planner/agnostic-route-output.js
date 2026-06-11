@@ -15,10 +15,11 @@
  *     public request payload can never inject candidates (fail-closed).
  *   - No named-city or narrow-intent branching: the agnostic context is built
  *     purely from coordinates.
- *   - The experimental route is honest: the candidate role order is preserved
- *     (never optimized/reordered). Since #261 that order is validated against a
- *     walking budget, surfacing walking distance/minute ESTIMATES — never a live
- *     arrival time, opening hours, or "better/optimal/fastest/shortest" claims.
+ *   - The experimental route is honest: candidate role order can seed a small
+ *     proximity sequence, but only inside this flag-gated experiment and only
+ *     when the produced order passes walking-budget validation. It still
+ *     surfaces walking distance/minute ESTIMATES — never a live arrival time,
+ *     opening hours, or "better/optimal/fastest/shortest" claims.
  *
  * Pure except for the awaited trusted loader + injectable walking router.
  * Deterministic given its inputs.
@@ -32,6 +33,7 @@ const { buildCandidateCombinationInspect } = require("./candidate-combination-in
 const { buildRouteCandidateFromCandidateCombination } = require("./candidate-combination-route-adapter");
 const { assessCityCandidateReadiness } = require("../place-candidates/readiness");
 const { validateAgnosticWalkingOrder } = require("./agnostic-route-walking-validation");
+const { buildAgnosticRouteOrdering } = require("./agnostic-route-ordering");
 const { resolveAgnosticContext, collectInfluenceReasons } = require("./agnostic-route-context");
 const { buildDayflowContext } = require("./dayflow-context");
 
@@ -164,7 +166,7 @@ function evaluateEligibility({ externalRequested, sourceStatus, adaptedBody, can
  * after validation it uses the existing route-result walking fields (`legs`,
  * `map_path_points`) while still avoiding opening-hours/live-arrival claims.
  */
-function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation = null }) {
+function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation = null, routeOrdering = null }) {
   const stops = (Array.isArray(adaptedBody?.stops) ? adaptedBody.stops : []).map((stop) => ({
     id: stop.candidate_id || null,
     label: stop.label || null,
@@ -183,18 +185,22 @@ function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation
     source: "trusted_candidate_pool",
     // Neutral, honest title — no city name, no "better/best/optimal/fastest".
     title: "Experimental any-place candidate route",
-    // Order is the candidate role order throughout — validation never reorders.
+    // Order is whatever trusted candidate order the caller supplied: candidate
+    // role order by default, or the flag-gated proximity sequence after it has
+    // passed walking-budget validation. Validation itself never reorders.
     main_stops: stops,
     target_roles: Array.isArray(adaptedBody?.target_roles) ? adaptedBody.target_roles : [],
     unresolved_roles: Array.isArray(adaptedBody?.unresolved_roles) ? adaptedBody.unresolved_roles : [],
     geometry_summary: adaptedBody?.geometry_summary || null,
     trust_summary: adaptedBody?.trust_summary || null,
+    route_ordering: sanitizeRouteOrdering(routeOrdering),
   };
 
-  // #261 — when the candidate order passed walking-budget validation, surface
-  // honest walking distance/minute ESTIMATES (heuristic or OSRM, never a live
-  // arrival time). The order is still the candidate order; validation checked
-  // it, it did not optimize it.
+  // #261/#265 — when the supplied candidate order passed walking-budget
+  // validation, surface honest walking distance/minute ESTIMATES (heuristic or
+  // OSRM, never a live arrival time). The supplied order may be original role
+  // order or the #265 proximity sequence; validation checked it, it did not
+  // optimize it.
   if (walkingValidation && walkingValidation.valid && walkingValidation.result) {
     const wr = walkingValidation.result;
     const totalWalkMinutes = (Array.isArray(wr.legs) ? wr.legs : []).reduce(
@@ -204,11 +210,15 @@ function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation
     const caveats = ["experimental"];
     if (wr.source !== "osrm" || wr.fallbackUsed) caveats.push("heuristic_walking_estimate");
     if (wr.fallbackUsed) caveats.push("walking_router_fallback_used");
+    if (routeOrdering && routeOrdering.applied) caveats.push("experimental_proximity_sequence");
     return {
       ...base,
       summary:
-        "Experimental route composed from trusted source-backed candidates. The candidate stop order has been validated against a walking budget; walking distances and minutes are estimates, not a live arrival time.",
-      order_source: "trusted_candidate_pool+candidate_role_order",
+        "Experimental route composed from trusted source-backed candidates. The stop order has been validated against a walking budget; walking distances and minutes are estimates, not a live arrival time.",
+      order_source:
+        routeOrdering && routeOrdering.applied
+          ? routeOrdering.source || "trusted_candidate_pool+role_order+proximity_sequence"
+          : "trusted_candidate_pool+candidate_role_order",
       order_confidence: "walking_budget_validated",
       routing_source: wr.source || "heuristic",
       estimated_km: wr.estimatedKm,
@@ -228,6 +238,22 @@ function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation
     order_confidence: "unvalidated",
     routing_source: "none",
     caveats: ["walking_order_unvalidated", "no_walking_time", "no_opening_hours", "experimental"],
+  };
+}
+
+function sanitizeRouteOrdering(ordering) {
+  if (!ordering || typeof ordering !== "object") return null;
+  return {
+    applied: Boolean(ordering.applied),
+    changed: Boolean(ordering.changed),
+    source: ordering.source || null,
+    confidence: ordering.confidence || null,
+    original_stop_ids: Array.isArray(ordering.original_stop_ids) ? ordering.original_stop_ids : [],
+    ordered_stop_ids: Array.isArray(ordering.ordered_stop_ids) ? ordering.ordered_stop_ids : [],
+    reasons: Array.isArray(ordering.reasons) ? ordering.reasons : [],
+    fallback_used: Boolean(ordering.fallback_used),
+    fallback_reason: ordering.fallback_reason || null,
+    failed_sequence_validation: ordering.failed_sequence_validation || null,
   };
 }
 
@@ -457,22 +483,55 @@ async function composeAgnosticRouteOutput({
     return { result: baselineResult, experiment };
   }
 
-  // #261 — validate the EXISTING candidate stop order against a walking budget
-  // (distance, leg count, per-leg + total caps) BEFORE any mutation. This never
-  // reorders/optimizes: it routes the stops in their candidate order and fails
-  // closed on any router/leg/budget problem.
-  const orderedStops = (Array.isArray(adaptedBody.stops) ? adaptedBody.stops : []).map((stop) => ({
-    lat: stop.coordinates && Number.isFinite(stop.coordinates.lat) ? stop.coordinates.lat : null,
-    lng: stop.coordinates && Number.isFinite(stop.coordinates.lng) ? stop.coordinates.lng : null,
-    label: stop.label || null,
-    id: stop.candidate_id || null,
-  }));
-  const walking = await validateAgnosticWalkingOrder({
-    stops: orderedStops,
+  // The route candidate arrives in role order. For the flag-gated experiment we
+  // may apply a conservative proximity sequence, then validate that produced
+  // order against walking budgets before any mutation. If the sequence fails
+  // but the original role order validates, fall back to the original order.
+  const orderingAttempt = buildAgnosticRouteOrdering({ adaptedBody });
+  let finalAdaptedBody = orderingAttempt.adaptedBody;
+  let routeOrdering = orderingAttempt.ordering;
+  let walking = await validateAgnosticWalkingOrder({
+    stops: toWalkingStops(finalAdaptedBody),
     walkingRouter,
     walkingConfig: walkingConfig || {},
     budget: walkingBudget || {},
   });
+
+  if (!walking.valid && routeOrdering && routeOrdering.applied) {
+    const failedSequenceValidation = { valid: walking.valid, blockers: walking.blockers, checks: walking.checks };
+    const originalWalking = await validateAgnosticWalkingOrder({
+      stops: toWalkingStops(adaptedBody),
+      walkingRouter,
+      walkingConfig: walkingConfig || {},
+      budget: walkingBudget || {},
+    });
+    if (originalWalking.valid) {
+      finalAdaptedBody = adaptedBody;
+      walking = originalWalking;
+      routeOrdering = {
+        ...routeOrdering,
+        applied: false,
+        changed: false,
+        source: "trusted_candidate_pool+candidate_role_order",
+        confidence: "role_order_fallback",
+        ordered_stop_ids: routeOrdering.original_stop_ids,
+        fallback_used: true,
+        fallback_reason: "proximity_sequence_failed_walking_validation",
+        failed_sequence_validation: failedSequenceValidation,
+        reasons: dedupe([...(routeOrdering.reasons || []), "fallback_to_candidate_role_order"]),
+      };
+    } else {
+      walking = {
+        ...originalWalking,
+        blockers: dedupe([...(walking.blockers || []), ...(originalWalking.blockers || [])]),
+      };
+      routeOrdering = {
+        ...routeOrdering,
+        failed_sequence_validation: failedSequenceValidation,
+      };
+    }
+  }
+
   const walkingSummary = { valid: walking.valid, blockers: walking.blockers, checks: walking.checks };
 
   if (!walking.valid) {
@@ -492,14 +551,16 @@ async function composeAgnosticRouteOutput({
       sourceStatus,
     });
     experiment.walking_validation = walkingSummary;
+    experiment.route_ordering = sanitizeRouteOrdering(routeOrdering);
     experiment.context = contextBlock;
     return { result: baselineResult, experiment };
   }
 
   const experimentalRoute = buildExperimentalPrimaryRoute({
     cityKey: agnosticContext.key,
-    adaptedBody,
+    adaptedBody: finalAdaptedBody,
     walkingValidation: walking,
+    routeOrdering,
   });
   const mutated = applyRouteMutation({ baselineResult, primaryRoute: experimentalRoute, date: effectiveDate });
 
@@ -529,11 +590,21 @@ async function composeAgnosticRouteOutput({
     sourceStatus,
   });
   experiment.walking_validation = walkingSummary;
+  experiment.route_ordering = sanitizeRouteOrdering(routeOrdering);
   experiment.context = contextBlock;
   return {
     result: mutated,
     experiment,
   };
+}
+
+function toWalkingStops(adaptedBody) {
+  return (Array.isArray(adaptedBody?.stops) ? adaptedBody.stops : []).map((stop) => ({
+    lat: stop.coordinates && Number.isFinite(stop.coordinates.lat) ? stop.coordinates.lat : null,
+    lng: stop.coordinates && Number.isFinite(stop.coordinates.lng) ? stop.coordinates.lng : null,
+    label: stop.label || null,
+    id: stop.candidate_id || null,
+  }));
 }
 
 // A cheap context marker for paths where a hard blocker meant we never ran

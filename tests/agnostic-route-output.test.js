@@ -162,6 +162,43 @@ test("unit: experimental route omits ETA/walking/opening-hours and marks order u
   assert.ok(route.caveats.includes("walking_order_unvalidated"));
 });
 
+test("unit: experimental route can surface validated proximity ordering metadata", () => {
+  const walkingValidation = {
+    valid: true,
+    result: {
+      source: "heuristic",
+      estimatedKm: 1.2,
+      fallbackUsed: false,
+      legs: [{ distance_km: 1.2, estimated_walk_minutes: 16 }],
+      pathPoints: [
+        { lat: 41.9, lng: 12.49 },
+        { lat: 41.901, lng: 12.491 },
+      ],
+    },
+  };
+  const routeOrdering = {
+    applied: true,
+    changed: true,
+    source: "trusted_candidate_pool+role_order+proximity_sequence",
+    confidence: "walking_budget_candidate",
+    original_stop_ids: ["r1", "c1"],
+    ordered_stop_ids: ["c1", "r1"],
+    reasons: ["proximity_sequence_applied", "requires_walking_budget_validation"],
+  };
+  const route = buildExperimentalPrimaryRoute({
+    cityKey: "agnostic-area",
+    adaptedBody: adaptedBody(),
+    walkingValidation,
+    routeOrdering,
+  });
+
+  assert.equal(route.order_source, "trusted_candidate_pool+role_order+proximity_sequence");
+  assert.equal(route.order_confidence, "walking_budget_validated");
+  assert.equal(route.route_ordering.applied, true);
+  assert.deepEqual(route.route_ordering.ordered_stop_ids, ["c1", "r1"]);
+  assert.ok(route.caveats.includes("experimental_proximity_sequence"));
+});
+
 // --- unit: mutation vs synthesis, original never mutated --------------------
 
 test("unit: replace branch swaps days[0].primary_route, original untouched", () => {
