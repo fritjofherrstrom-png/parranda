@@ -177,9 +177,13 @@
 
 
   function calibrationReasonTile(token, i18n) {
-    var key = CALIBRATION_REASON_KEYS[token] || BLOCKER_KEYS[token];
+    // The backend prefixes pass-through blocker reasons as `blocker:<token>` in
+    // blocked verdicts (blockerReasons in agnostic-route-readiness-calibration.js);
+    // strip the prefix for the caption lookup but keep the full token visible.
+    var lookup = token.indexOf("blocker:") === 0 ? token.slice("blocker:".length) : token;
+    var key = CALIBRATION_REASON_KEYS[lookup] || BLOCKER_KEYS[lookup];
     var caption = key
-      ? translate(i18n, key, token)
+      ? translate(i18n, key, lookup)
       : translate(i18n, "dogfood.calibration.reason.unknown", token) + " (" + token + ")";
     return { token: token, caption: sanitize(caption) };
   }
@@ -198,7 +202,7 @@
     var status = isString(calibration.status) ? calibration.status : "not_applicable";
     return {
       status: status,
-      statusLabel: translate(i18n, CALIBRATION_STATUS_KEYS[status] || "dogfood.calibration.status.not_applicable", status),
+      statusLabel: translate(i18n, CALIBRATION_STATUS_KEYS[status], status),
       guide: translate(i18n, "dogfood.calibration.guide." + status, status),
       level: isString(calibration.level) ? calibration.level : null,
       summary: sanitize(isString(calibration.summary) ? calibration.summary : null),

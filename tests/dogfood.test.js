@@ -179,6 +179,7 @@ const TINY_I18N = {
     "dogfood.banner.detail": "Uses trusted source-backed candidates.",
     "dogfood.blocker.external_candidates_not_requested": "External candidates not requested.",
     "dogfood.blocker.no_usable_trusted_records": "No usable trusted records.",
+    "dogfood.blocker.incomplete_geometry": "Too few stops have usable coordinates.",
     "dogfood.blocker.place_resolver_unavailable": "No place resolver configured.",
     "dogfood.blocker.unknown": "Unknown blocker",
     "dogfood.caveat.experimental": "Experimental",
@@ -316,7 +317,11 @@ function blockerResponse(blockers = ["no_usable_trusted_records"]) {
         status: blockers.includes("external_candidates_not_requested") ? "not_applicable" : "blocked",
         level: "unavailable",
         summary: "No experimental route was produced.",
-        reasons: blockers.slice(),
+        // Blocked verdicts carry pass-through blockers as `blocker:<token>`
+        // (blockerReasons in agnostic-route-readiness-calibration.js).
+        reasons: blockers.includes("external_candidates_not_requested")
+          ? blockers.slice()
+          : blockers.map((token) => `blocker:${token}`),
         caps: ["experimental_agnostic_route"],
         inputs: { selected_stop_count: 0 },
       },
@@ -438,6 +443,31 @@ test("pure: unknown calibration reason and cap surface honest fallback with raw 
   assert.ok(summary.reasons[0].caption.includes("future_reason_token"));
   assert.ok(summary.caps[0].caption.includes("Unknown readiness cap"));
   assert.ok(summary.caps[0].caption.includes("future_cap_token"));
+});
+
+test("pure: blocked-verdict `blocker:`-prefixed reasons render the blocker caption, not the unknown fallback", () => {
+  const view = Render.buildExperimentView(blockerResponse(["no_usable_trusted_records", "incomplete_geometry"]), TINY_I18N);
+  const byToken = Object.fromEntries(view.calibration.reasons.map((tile) => [tile.token, tile.caption]));
+  // Full prefixed token stays visible; caption comes from the blocker i18n map.
+  assert.equal(byToken["blocker:no_usable_trusted_records"], TINY_I18N.strings["dogfood.blocker.no_usable_trusted_records"]);
+  assert.equal(byToken["blocker:incomplete_geometry"], TINY_I18N.strings["dogfood.blocker.incomplete_geometry"]);
+  for (const tile of view.calibration.reasons) {
+    assert.ok(!tile.caption.includes("Unknown readiness reason"), `known blocker reason fell back: ${tile.token}`);
+  }
+  // A prefixed token we do not know still falls back honestly with the raw token.
+  const unknown = Render.buildCalibrationSummary({
+    readiness_calibration: { status: "blocked", level: "unavailable", summary: "x", reasons: ["blocker:some_future_blocker"], caps: [], inputs: {} },
+  }, TINY_I18N);
+  assert.ok(unknown.reasons[0].caption.includes("blocker:some_future_blocker"));
+});
+
+test("pure: an unknown future calibration status keeps its raw token as label instead of mislabeling as not_applicable", () => {
+  const summary = Render.buildCalibrationSummary({
+    readiness_calibration: { status: "future_status", level: "low", summary: "x", reasons: [], caps: [], inputs: {} },
+  }, TINY_I18N);
+  assert.equal(summary.status, "future_status");
+  assert.equal(summary.statusLabel, "future_status");
+  assert.notEqual(summary.statusLabel, TINY_I18N.strings["dogfood.calibration.status.not_applicable"]);
 });
 
 test("guard: rendered view text containing calibration has no eta/best route/optimal/fastest/shortest", () => {
