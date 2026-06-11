@@ -32,6 +32,14 @@ const DATE = "2026-05-25";
 
 const RAIN = { condition: "rain", maxTemp: 14, minTemp: 9, apparentTempMax: 13, precipitationProbabilityMax: 85, precipitationSum: 4, windSpeedMax: 10, source: "test", stale: false };
 const SUN = { condition: "sun", maxTemp: 24, minTemp: 14, apparentTempMax: 23, precipitationProbabilityMax: 5, precipitationSum: 0, windSpeedMax: 8, source: "test", stale: false };
+const SUN_WITH_AUTO_TZ = {
+  ...SUN,
+  timezone_resolution: {
+    timezone: "Europe/Rome",
+    timezone_source: "weather_provider_auto",
+    utc_offset_seconds: 7200,
+  },
+};
 
 // 19:30 Europe/Rome — evening, golden-hour-eligible (May).
 function eveningClock() {
@@ -126,6 +134,63 @@ test("pure: timezone known → time band + ISO now + computed signals", async ()
   assert.match(ctx.contextBlock.time.now, /^2026-05-25T19:30:00$/);
   assert.ok(ctx.contextBlock.computed_signals.length >= 1, "computed signals present when tz known");
   assert.ok(ctx.contextBlock.computed_signals.every((s) => s.source === "computed_pulse"));
+});
+
+test("pure: trusted weather auto timezone enables time context with lower trust tier", async () => {
+  const ctx = await resolveAgnosticContext({
+    coords: { lat: 41.9, lng: 12.49 },
+    date: DATE,
+    weatherProvider: async () => SUN_WITH_AUTO_TZ,
+    trustedTimezone: null,
+    clock: eveningClock,
+  });
+
+  assert.equal(ctx.timezoneKnown, true);
+  assert.equal(ctx.contextBlock.time.status, "resolved");
+  assert.equal(ctx.contextBlock.time.timezone, "Europe/Rome");
+  assert.equal(ctx.contextBlock.time.timezone_source, "weather_provider_auto");
+  assert.equal(ctx.contextBlock.time.timezone_trust, "derived_from_weather_provider");
+  assert.equal(ctx.contextBlock.time.time_band, "evening");
+  assert.ok(ctx.contextBlock.computed_signals.length >= 1, "computed signals present when weather supplies timezone");
+});
+
+test("pure: weather timezone source label is normalized to the trusted seam", async () => {
+  const ctx = await resolveAgnosticContext({
+    coords: { lat: 41.9, lng: 12.49 },
+    date: DATE,
+    weatherProvider: async () => ({
+      ...SUN,
+      timezone_resolution: {
+        timezone: "Europe/Rome",
+        timezone_source: "future_custom_provider_label",
+      },
+    }),
+    trustedTimezone: null,
+    clock: eveningClock,
+  });
+
+  assert.equal(ctx.contextBlock.time.status, "resolved");
+  assert.equal(ctx.contextBlock.time.timezone_source, "weather_provider_auto");
+  assert.equal(ctx.contextBlock.time.timezone_trust, "derived_from_weather_provider");
+});
+
+test("pure: invalid weather timezone metadata is ignored", async () => {
+  const ctx = await resolveAgnosticContext({
+    coords: { lat: 41.9, lng: 12.49 },
+    date: DATE,
+    weatherProvider: async () => ({
+      ...SUN,
+      timezone_resolution: { timezone: "Not/AZone", timezone_source: "weather_provider_auto" },
+    }),
+    trustedTimezone: null,
+    clock: eveningClock,
+  });
+
+  assert.equal(ctx.timezoneKnown, false);
+  assert.equal(ctx.contextBlock.time.status, "timezone_unavailable");
+  assert.equal(ctx.contextBlock.time.timezone_source, null);
+  assert.equal(ctx.contextBlock.time.timezone_trust, "unavailable");
+  assert.deepEqual(ctx.contextBlock.computed_signals, []);
 });
 
 test("pure: an invalid timezone is treated as unknown (no lookup)", async () => {
@@ -225,6 +290,8 @@ test(
     const ctx = r.body.agnostic_route_output_experiment.context;
     assert.equal(ctx.time.status, "resolved");
     assert.equal(ctx.time.timezone, "Europe/Rome");
+    assert.equal(ctx.time.timezone_source, "resolver_attested");
+    assert.equal(ctx.time.timezone_trust, "resolver_attested");
     assert.equal(ctx.time.time_band, "evening");
     assert.ok(ctx.computed_signals.length >= 1);
     assert.equal(ctx.influence.time_fed_into_selection, true);
@@ -235,7 +302,7 @@ test(
 );
 
 test(
-  "api: explicit coordinates (no resolver tz) → timezone_unavailable, route still produced",
+  "api: explicit coordinates with no trusted timezone metadata → timezone_unavailable, route still produced",
   withServer({ openDataLoader: makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })), weatherProvider: async () => RAIN, clock: eveningClock }, async (server) => {
     const r = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: agnosticBody() });
     const ctx = r.body.agnostic_route_output_experiment.context;
@@ -243,6 +310,44 @@ test(
     assert.equal(ctx.time.status, "timezone_unavailable");
     assert.deepEqual(ctx.computed_signals, []);
     assert.equal(ctx.influence.time_fed_into_selection, false);
+  }),
+);
+
+test(
+  "api: weather-provider auto timezone lights up time context for coordinate requests",
+  withServer({ openDataLoader: makeLoader(fixtureMiddayNear({ lat: 41.9, lng: 12.49 })), weatherProvider: async () => SUN_WITH_AUTO_TZ, clock: eveningClock }, async (server) => {
+    const r = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: agnosticBody() });
+    const ctx = r.body.agnostic_route_output_experiment.context;
+    assert.equal(r.body.agnostic_route_output_experiment.route_mutation, true);
+    assert.equal(ctx.time.status, "resolved");
+    assert.equal(ctx.time.timezone, "Europe/Rome");
+    assert.equal(ctx.time.timezone_source, "weather_provider_auto");
+    assert.equal(ctx.time.timezone_trust, "derived_from_weather_provider");
+    assert.equal(ctx.time.time_band, "evening");
+    assert.ok(ctx.computed_signals.length >= 1, "golden-hour/city-rhythm signals can run");
+    assert.equal(ctx.influence.time_fed_into_selection, true);
+    assert.ok(ctx.influence.time_fit_reasons.some((reason) => reason.startsWith("time_") || reason.startsWith("golden_hour")));
+  }),
+);
+
+test(
+  "api: public payload cannot inject timezone/time context",
+  withServer({ openDataLoader: makeLoader(fixtureMiddayNear({ lat: 41.9, lng: 12.49 })), weatherProvider: async () => RAIN, clock: eveningClock }, async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}`,
+      body: agnosticBody({
+        timezone: "Europe/Rome",
+        time: { timezone: "Europe/Rome", time_band: "evening" },
+        now: "2026-05-25T19:30:00",
+        context: { time: { timezone: "Europe/Rome" } },
+        weather: { ...SUN_WITH_AUTO_TZ },
+      }),
+    });
+    const ctx = r.body.agnostic_route_output_experiment.context;
+    assert.equal(ctx.time.status, "timezone_unavailable");
+    assert.equal(ctx.time.timezone, null);
+    assert.equal(ctx.influence.time_fed_into_selection, false);
+    assert.deepEqual(ctx.influence.time_fit_reasons, []);
   }),
 );
 

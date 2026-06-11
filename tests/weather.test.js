@@ -12,6 +12,13 @@ const ANCHOR = { lat: 41.3874, lng: 2.1686 };
 
 function weatherPayload(date, overrides = {}) {
   return {
+    ...(overrides.timezone ? { timezone: overrides.timezone } : {}),
+    ...(Number.isFinite(overrides.utcOffsetSeconds)
+      ? { utc_offset_seconds: overrides.utcOffsetSeconds }
+      : {}),
+    ...(overrides.timezoneAbbreviation
+      ? { timezone_abbreviation: overrides.timezoneAbbreviation }
+      : {}),
     daily: {
       time: [date],
       weathercode: [overrides.code ?? 1],
@@ -57,6 +64,24 @@ test("buildWeatherUrl sorts dates and includes richer Open-Meteo fields", () => 
   assert.match(request.url.searchParams.get("daily"), /uv_index_max/);
 });
 
+test("buildWeatherUrl uses Open-Meteo auto timezone when no explicit timezone is passed", () => {
+  const request = buildWeatherUrl(["2027-06-14"], ANCHOR);
+
+  assert.equal(request.timezone, "auto");
+  assert.equal(request.timezoneMode, "auto");
+  assert.equal(request.url.searchParams.get("timezone"), "auto");
+});
+
+test("buildWeatherUrl keeps explicit timezone path explicit", () => {
+  const request = buildWeatherUrl(["2027-06-14"], ANCHOR, {
+    timezone: "Europe/Madrid",
+  });
+
+  assert.equal(request.timezone, "Europe/Madrid");
+  assert.equal(request.timezoneMode, "explicit");
+  assert.equal(request.url.searchParams.get("timezone"), "Europe/Madrid");
+});
+
 test("fetchWeatherForDates returns safe empty object for empty/invalid date input", async () => {
   assert.deepEqual(await fetchWeatherForDates([], ANCHOR), {});
   assert.deepEqual(await fetchWeatherForDates(null, ANCHOR), {});
@@ -82,6 +107,51 @@ test("fetchWeatherForDates normalizes richer weather metadata", async () => {
   assert.equal(result["2027-06-14"].source, "open-meteo");
   assert.equal(result["2027-06-14"].stale, false);
   assert.equal(result["2027-06-14"].confidence, "medium");
+});
+
+test("fetchWeatherForDates preserves valid auto timezone metadata on date weather", async () => {
+  const result = await fetchWeatherForDates(["2027-06-14"], ANCHOR, {
+    fetchWeatherJson: async (url) => {
+      assert.equal(url.searchParams.get("timezone"), "auto");
+      return weatherPayload("2027-06-14", {
+        timezone: "Europe/Athens",
+        utcOffsetSeconds: 10800,
+        timezoneAbbreviation: "EEST",
+      });
+    },
+  });
+
+  assert.deepEqual(result["2027-06-14"].timezone_resolution, {
+    timezone: "Europe/Athens",
+    timezone_source: "weather_provider_auto",
+    utc_offset_seconds: 10800,
+    timezone_abbreviation: "EEST",
+  });
+});
+
+test("fetchWeatherForDates ignores invalid or missing auto timezone metadata", async () => {
+  const invalid = await fetchWeatherForDates(["2027-06-14"], ANCHOR, {
+    fetchWeatherJson: async () => weatherPayload("2027-06-14", { timezone: "Not/AZone" }),
+  });
+  assert.equal(invalid["2027-06-14"].timezone_resolution, undefined);
+
+  resetWeatherCache();
+  const missing = await fetchWeatherForDates(["2027-06-14"], ANCHOR, {
+    fetchWeatherJson: async () => weatherPayload("2027-06-14"),
+  });
+  assert.equal(missing["2027-06-14"].timezone_resolution, undefined);
+});
+
+test("fetchWeatherForDates explicit timezone path does not attach auto metadata", async () => {
+  const result = await fetchWeatherForDates(["2027-06-14"], ANCHOR, {
+    timezone: "Europe/Madrid",
+    fetchWeatherJson: async (url) => {
+      assert.equal(url.searchParams.get("timezone"), "Europe/Madrid");
+      return weatherPayload("2027-06-14", { timezone: "Europe/Madrid" });
+    },
+  });
+
+  assert.equal(result["2027-06-14"].timezone_resolution, undefined);
 });
 
 test("fetchWeatherForDates caches same anchor/timezone/date window", async () => {

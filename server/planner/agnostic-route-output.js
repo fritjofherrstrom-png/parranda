@@ -616,7 +616,15 @@ function buildSkippedContextBlock({ loaderStatus, externalRequested }) {
   return {
     status: "skipped",
     reason,
-    time: { timezone: null, timezone_known: false, status: "timezone_unavailable", now: null, time_band: null },
+    time: {
+      timezone: null,
+      timezone_known: false,
+      timezone_source: null,
+      timezone_trust: "unavailable",
+      status: "timezone_unavailable",
+      now: null,
+      time_band: null,
+    },
     weather: { status: "skipped", read: null },
     computed_signals: [],
     live: { available: false, reason: "no_any_place_live_source" },

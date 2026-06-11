@@ -53,8 +53,29 @@ function normalizeDateWindow(dates) {
   };
 }
 
-function normalizeTimezone(value) {
-  return typeof value === "string" && value.trim() ? value.trim() : "UTC";
+function isValidIanaTimezone(value) {
+  if (typeof value !== "string" || !value.trim()) return false;
+  try {
+    Intl.DateTimeFormat("en-US", { timeZone: value.trim() });
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function normalizeTimezoneRequest(options = {}) {
+  const explicit = typeof options.timezone === "string" && options.timezone.trim();
+  if (explicit && options.timezone.trim().toLowerCase() !== "auto") {
+    return {
+      timezone: options.timezone.trim(),
+      timezoneMode: "explicit",
+    };
+  }
+
+  return {
+    timezone: "auto",
+    timezoneMode: "auto",
+  };
 }
 
 function cacheCoord(value) {
@@ -72,7 +93,7 @@ function buildWeatherUrl(dates, anchor, options = {}) {
   }
 
   const weatherAnchor = assertValidAnchor(anchor);
-  const timezone = normalizeTimezone(options.timezone);
+  const { timezone, timezoneMode } = normalizeTimezoneRequest(options);
   const url = new URL("https://api.open-meteo.com/v1/forecast");
   url.searchParams.set("latitude", String(weatherAnchor.lat));
   url.searchParams.set("longitude", String(weatherAnchor.lng));
@@ -98,6 +119,7 @@ function buildWeatherUrl(dates, anchor, options = {}) {
     url,
     anchor: weatherAnchor,
     timezone,
+    timezoneMode,
     ...dateWindow,
     cacheKey: buildCacheKey({
       anchor: weatherAnchor,
@@ -154,7 +176,30 @@ function readWeatherCode(daily = {}, index) {
   return weatherCodes[index];
 }
 
-function normalizeWeatherPayload(payload, requestedDates, fetchedAt) {
+function normalizeTimezoneResolution(payload, request) {
+  if (!request || request.timezoneMode !== "auto") {
+    return null;
+  }
+
+  const timezone = typeof payload?.timezone === "string" ? payload.timezone.trim() : "";
+  if (!isValidIanaTimezone(timezone)) {
+    return null;
+  }
+
+  const resolution = {
+    timezone,
+    timezone_source: "weather_provider_auto",
+  };
+  if (Number.isFinite(payload.utc_offset_seconds)) {
+    resolution.utc_offset_seconds = payload.utc_offset_seconds;
+  }
+  if (typeof payload.timezone_abbreviation === "string" && payload.timezone_abbreviation.trim()) {
+    resolution.timezone_abbreviation = payload.timezone_abbreviation.trim();
+  }
+  return resolution;
+}
+
+function normalizeWeatherPayload(payload, requestedDates, fetchedAt, options = {}) {
   const result = {};
   const daily = payload?.daily || {};
   const times = daily.time || [];
@@ -167,6 +212,7 @@ function normalizeWeatherPayload(payload, requestedDates, fetchedAt) {
   const apparentMax = daily.apparent_temperature_max || [];
   const current = payload?.current || {};
   const dateSet = new Set(requestedDates);
+  const timezoneResolution = normalizeTimezoneResolution(payload, options.request);
 
   times.forEach((date, index) => {
     if (!dateSet.has(date)) {
@@ -202,6 +248,7 @@ function normalizeWeatherPayload(payload, requestedDates, fetchedAt) {
       fetched_at: fetchedAt,
       stale: false,
       confidence: "medium",
+      ...(timezoneResolution ? { timezone_resolution: timezoneResolution } : {}),
     };
   });
 
@@ -233,7 +280,7 @@ async function fetchWeatherForDates(dates, anchor, options = {}) {
     try {
       const payload = await fetcher(request.url, { timeoutMs: options.timeoutMs });
       const fetchedAt = new Date().toISOString();
-      const items = normalizeWeatherPayload(payload, request.dates, fetchedAt);
+      const items = normalizeWeatherPayload(payload, request.dates, fetchedAt, { request });
       cache.set(request.cacheKey, {
         fetchedAt: Date.now(),
         fetchedAtIso: fetchedAt,
@@ -269,4 +316,5 @@ module.exports = {
   fetchWeatherForDates,
   resetWeatherCache,
   summarizeWeather,
+  isValidIanaTimezone,
 };
