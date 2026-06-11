@@ -149,6 +149,54 @@
 
   // ----- DOM assembly from the shared view structure ------------------------
 
+  function appendCalibrationTiles(list, tiles, classPrefix) {
+    tiles.forEach(function (tile) {
+      var item = el("li", classPrefix + "-tile");
+      item.setAttribute("data-token", tile.token);
+      item.appendChild(el("span", classPrefix + "-token", tile.token));
+      item.appendChild(el("span", classPrefix + "-caption", tile.caption));
+      list.appendChild(item);
+    });
+  }
+
+  function renderCalibration(view) {
+    var node = $("dogfoodCalibration");
+    clear(node);
+    if (!view.calibration) {
+      node.hidden = true;
+      return;
+    }
+    node.hidden = false;
+    var calibration = view.calibration;
+    node.setAttribute("data-status", calibration.status);
+    node.appendChild(el("h3", "dogfood-calibration-heading", t("dogfood.calibration.heading", "Readiness verdict")));
+
+    var badge = el("div", "dogfood-calibration-badge");
+    badge.setAttribute("data-status", calibration.status);
+    var statusToken = el("span", "dogfood-calibration-status-token");
+    statusToken.textContent = String(calibration.status);
+    badge.appendChild(statusToken);
+    badge.appendChild(el("span", "dogfood-calibration-status-label", calibration.statusLabel));
+    node.appendChild(badge);
+
+    if (calibration.guide) node.appendChild(el("p", "dogfood-calibration-guide", calibration.guide));
+    if (calibration.summary) node.appendChild(el("p", "dogfood-calibration-summary", calibration.summary));
+    if (calibration.level) {
+      node.appendChild(el("p", "dogfood-calibration-level", t("dogfood.calibration.level", "Level") + ": " + calibration.level));
+    }
+
+    if (calibration.reasons && calibration.reasons.length) {
+      var reasons = el("ul", "dogfood-calibration-reasons");
+      appendCalibrationTiles(reasons, calibration.reasons, "dogfood-calibration-reason");
+      node.appendChild(reasons);
+    }
+    if (calibration.caps && calibration.caps.length) {
+      var caps = el("ul", "dogfood-calibration-caps");
+      appendCalibrationTiles(caps, calibration.caps, "dogfood-calibration-cap");
+      node.appendChild(caps);
+    }
+  }
+
   function renderBlockers(view) {
     var node = $("dogfoodBlockers");
     clear(node);
@@ -396,6 +444,7 @@
     var view = Render.buildExperimentView(response, i18n);
     var result = $("dogfoodResult");
     result.hidden = false;
+    renderCalibration(view);
     renderSummary(view);
     renderRoute(view);
     renderBlockers(view);

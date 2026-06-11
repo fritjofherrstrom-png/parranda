@@ -8290,6 +8290,29 @@ body.is-printing-guide #routeGuideDrawer {
 .dogfood-kv-value { font-family: monospace; font-size: 12px; }
 .dogfood-footer { margin-top: 48px; font-size: 13px; opacity: 0.7; }
 .dogfood-feedback-link { color: var(--accent-deep, #7f2d1a); }
+
+.dogfood-calibration {
+  margin: 12px 0 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(31, 18, 13, 0.14);
+  border-left: 4px solid rgba(31, 18, 13, 0.34);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.48);
+}
+.dogfood-calibration[data-status="environment_not_wired"] { border-left-color: var(--accent-deep, #7f2d1a); }
+.dogfood-calibration-heading { margin: 0 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink, #1d120d); opacity: 0.76; }
+.dogfood-calibration-badge { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 5px 10px; border-radius: 999px; background: rgba(31, 18, 13, 0.08); color: var(--ink, #1d120d); }
+.dogfood-calibration-badge[data-status="environment_not_wired"] { background: rgba(127, 45, 26, 0.12); }
+.dogfood-calibration-status-token { font-family: monospace; font-size: 11px; }
+.dogfood-calibration-status-label { font-size: 12px; font-weight: 700; }
+.dogfood-calibration-guide, .dogfood-calibration-summary, .dogfood-calibration-level { margin: 8px 0 0; font-size: 13px; line-height: 1.45; }
+.dogfood-calibration-guide { color: var(--text, #241914); }
+.dogfood-calibration-summary { color: var(--muted, #6b564c); }
+.dogfood-calibration-level { font-family: monospace; font-size: 12px; color: var(--muted, #6b564c); }
+.dogfood-calibration-reasons, .dogfood-calibration-caps { padding-left: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.dogfood-calibration-reason-tile, .dogfood-calibration-cap-tile { list-style: none; padding: 7px 9px; border-radius: 8px; background: rgba(31, 18, 13, 0.05); font-size: 12px; }
+.dogfood-calibration-reason-token, .dogfood-calibration-cap-token { display: block; font-family: monospace; font-size: 11px; opacity: 0.72; }
+.dogfood-calibration-reason-caption, .dogfood-calibration-cap-caption { display: block; margin-top: 2px; }
 @media (max-width: 640px) {
   .dogfood-row { grid-template-columns: 1fr; }
   .dogfood-kv { grid-template-columns: 1fr; }
