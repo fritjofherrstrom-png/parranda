@@ -124,6 +124,17 @@ test("loader sends an identifying User-Agent (Overpass returns 406 without one)"
   assert.equal(customHeaders["User-Agent"], "Parranda-Test/0.1 (+https://example.test)");
 });
 
+test("loader UA is identical to the resolver UA (one app identity, no ad-hoc strings)", () => {
+  const resolver = require("../server/place-candidates/place-resolver");
+  assert.equal(DEFAULT_USER_AGENT, resolver.DEFAULT_USER_AGENT);
+});
+
+test("default timeout stays realistic for live Overpass latency (4-6s observed)", () => {
+  const { DEFAULT_TIMEOUT_MS } = require("../server/place-candidates/open-data-loader");
+  // 5s silently turned dense areas into loaded:0; keep headroom above real latency.
+  assert.ok(DEFAULT_TIMEOUT_MS >= 10000, `DEFAULT_TIMEOUT_MS ${DEFAULT_TIMEOUT_MS} < 10000`);
+});
+
 test("non-200 response fails closed", async () => {
   const loader = createOpenDataLoader({ fetcher: async () => ({ ok: false, status: 429 }) });
   assert.deepEqual(await loader({ lat: 1, lng: 1 }), []);
