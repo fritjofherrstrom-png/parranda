@@ -23,6 +23,7 @@ const path = require("node:path");
 
 const { buildApp, isDogfoodUiEnabled } = require("../server/app");
 const Render = require("../dogfood-render");
+const { translations } = require("../server/ui-i18n");
 const {
   externalRecord,
   makeLoader,
@@ -178,6 +179,7 @@ const TINY_I18N = {
     "dogfood.banner.detail": "Uses trusted source-backed candidates.",
     "dogfood.blocker.external_candidates_not_requested": "External candidates not requested.",
     "dogfood.blocker.no_usable_trusted_records": "No usable trusted records.",
+    "dogfood.blocker.incomplete_geometry": "Too few stops have usable coordinates.",
     "dogfood.blocker.place_resolver_unavailable": "No place resolver configured.",
     "dogfood.blocker.unknown": "Unknown blocker",
     "dogfood.caveat.experimental": "Experimental",
@@ -189,6 +191,46 @@ const TINY_I18N = {
     "dogfood.diff.synthesized": "Experimental day synthesized (no baseline route).",
     "dogfood.diff.baseline_kept": "Baseline returned unchanged.",
     "dogfood.walking.checks": "Walking validation",
+    "dogfood.calibration.heading": "Readiness verdict",
+    "dogfood.calibration.level": "Level",
+    "dogfood.calibration.status.usable": "Usable",
+    "dogfood.calibration.status.thin_usable": "Thin usable",
+    "dogfood.calibration.status.blocked": "Blocked",
+    "dogfood.calibration.status.environment_not_wired": "Environment not wired",
+    "dogfood.calibration.status.not_applicable": "Not applicable",
+    "dogfood.calibration.guide.usable": "Usable for dogfood evaluation — not production-ready.",
+    "dogfood.calibration.guide.thin_usable": "Usable for dogfood only with caps.",
+    "dogfood.calibration.guide.blocked": "No experimental route was produced; inspect blockers.",
+    "dogfood.calibration.guide.environment_not_wired": "Deployment is missing required source wiring, not a bad place verdict.",
+    "dogfood.calibration.guide.not_applicable": "The experiment did not apply to this response.",
+    "dogfood.calibration.reason.experimental_route_produced": "Experimental route was produced.",
+    "dogfood.calibration.reason.walking_validated": "Walking-budget validation passed.",
+    "dogfood.calibration.reason.proximity_ordering_validated": "Proximity ordering was validated.",
+    "dogfood.calibration.reason.role_order_fallback_after_sequence_validation": "Role-order fallback after sequence validation.",
+    "dogfood.calibration.reason.resolver_attested_timezone": "Timezone came from resolver metadata.",
+    "dogfood.calibration.reason.weather_provider_auto_timezone": "Timezone was derived from weather provider metadata.",
+    "dogfood.calibration.reason.timezone_unavailable": "Timezone was unavailable.",
+    "dogfood.calibration.reason.weather_context_used": "Weather context influenced candidate choice.",
+    "dogfood.calibration.reason.time_context_used": "Time context influenced candidate choice.",
+    "dogfood.calibration.reason.heuristic_walking_estimate": "Walking is heuristic.",
+    "dogfood.calibration.reason.walking_router_fallback_used": "Walking-router fallback was used.",
+    "dogfood.calibration.reason.source_backed_external_candidates": "Stops came from source-backed external candidates.",
+    "dogfood.calibration.reason.below_planner_candidate_threshold": "Candidate supply is below planner threshold.",
+    "dogfood.calibration.reason.environment_not_wired": "Required deployment wiring is missing.",
+    "dogfood.calibration.reason.not_applicable": "Calibration is not applicable.",
+    "dogfood.calibration.reason.walking_validation_blocked_route": "Walking validation blocked the route.",
+    "dogfood.calibration.reason.geometry_coherence_blocked_route": "Geometry coherence blocked the route.",
+    "dogfood.calibration.reason.candidate_supply_blocked_route": "Candidate supply blocked the route.",
+    "dogfood.calibration.reason.unknown": "Unknown readiness reason",
+    "dogfood.calibration.cap.experimental_agnostic_route": "Experimental agnostic route only.",
+    "dogfood.calibration.cap.capped_by_heuristic_walking": "Capped by heuristic walking.",
+    "dogfood.calibration.cap.capped_by_role_order_fallback": "Capped by role-order fallback.",
+    "dogfood.calibration.cap.capped_by_derived_timezone": "Capped by derived timezone.",
+    "dogfood.calibration.cap.capped_by_partial_context": "Capped by partial context.",
+    "dogfood.calibration.cap.capped_by_unresolved_roles": "Capped by unresolved roles.",
+    "dogfood.calibration.cap.capped_by_external_only_sources": "Capped by external-only sources.",
+    "dogfood.calibration.cap.capped_by_below_planner_candidate_threshold": "Capped by below-threshold candidates.",
+    "dogfood.calibration.cap.unknown": "Unknown readiness cap",
   },
 };
 
@@ -222,6 +264,14 @@ function successResponse(overrides = {}) {
       eligibility: { eligible: true, blockers: [], caveats: [], checks: {} },
       baseline: { had_primary_route: false, primary_route: null, readiness: null },
       readiness_blockers: [],
+      readiness_calibration: {
+        status: "thin_usable",
+        level: "low",
+        summary: "The experimental agnostic route is usable for dogfood, but evidence or context is thin.",
+        reasons: ["experimental_route_produced", "walking_validated", "weather_provider_auto_timezone"],
+        caps: ["experimental_agnostic_route", "capped_by_derived_timezone", "capped_by_heuristic_walking"],
+        inputs: { selected_stop_count: 2, loader_status: "loaded:2" },
+      },
       caveats: [],
       walking_validation: { valid: true, blockers: [], checks: { stop_count: 2, leg_count: 1, total_walk_km: 0.3, max_leg_km: 0.3, total_estimated_walk_minutes: 4, total_budget_km: 25, max_leg_budget_km: 6, walking_source: "heuristic", fallback_used: false } },
       context: {
@@ -263,6 +313,18 @@ function blockerResponse(blockers = ["no_usable_trusted_records"]) {
       eligibility: { eligible: false, blockers: blockers.slice(), caveats: [], checks: {} },
       baseline: { had_primary_route: false, primary_route: null, readiness: null },
       readiness_blockers: blockers.slice(),
+      readiness_calibration: {
+        status: blockers.includes("external_candidates_not_requested") ? "not_applicable" : "blocked",
+        level: "unavailable",
+        summary: "No experimental route was produced.",
+        // Blocked verdicts carry pass-through blockers as `blocker:<token>`
+        // (blockerReasons in agnostic-route-readiness-calibration.js).
+        reasons: blockers.includes("external_candidates_not_requested")
+          ? blockers.slice()
+          : blockers.map((token) => `blocker:${token}`),
+        caps: ["experimental_agnostic_route"],
+        inputs: { selected_stop_count: 0 },
+      },
       caveats: [],
       context: { status: "skipped", reason: "external_candidates_not_requested", time: { timezone: null, timezone_known: false, status: "timezone_unavailable", now: null, time_band: null }, weather: { status: "skipped", read: null }, computed_signals: [], live: { available: false, reason: "no_any_place_live_source" }, influence: { weather_fed_into_selection: false, time_fed_into_selection: false, weather_fit_reasons: [], time_fit_reasons: [] } },
       intake: { mode: "place", status: "unresolved", query: "Trastevere", candidates_considered: 0, resolved: null, blockers: ["place_resolver_unavailable"] },
@@ -331,6 +393,127 @@ test("pure: an unknown blocker token still surfaces honestly with the raw token"
   assert.ok(tile, "unknown token still tiled");
   assert.ok(tile.caption.includes("Unknown blocker"));
   assert.ok(tile.caption.includes("some_new_token_from_a_future_pr"));
+});
+
+
+// --- pure: readiness calibration verdict ---------------------------------
+
+test("pure: buildCalibrationSummary surfaces all five statuses with labels and guides", () => {
+  for (const status of ["usable", "thin_usable", "blocked", "environment_not_wired", "not_applicable"]) {
+    const summary = Render.buildCalibrationSummary({
+      readiness_calibration: {
+        status,
+        level: status === "usable" ? "medium" : "unavailable",
+        summary: "Usable for dogfood evaluation — not production-ready.",
+        reasons: status === "environment_not_wired" ? ["environment_not_wired", "no_trusted_loader"] : ["experimental_route_produced"],
+        caps: status === "thin_usable" ? ["experimental_agnostic_route", "capped_by_partial_context", "capped_by_derived_timezone"] : ["experimental_agnostic_route"],
+        inputs: { selected_stop_count: 3 },
+      },
+    }, TINY_I18N);
+    assert.equal(summary.status, status);
+    assert.equal(summary.statusLabel, TINY_I18N.strings[`dogfood.calibration.status.${status}`]);
+    assert.equal(summary.guide, TINY_I18N.strings[`dogfood.calibration.guide.${status}`]);
+    assert.equal("inputs" in summary, false, "inputs stay JSON-only diagnostics, not view text");
+  }
+});
+
+test("pure: buildExperimentView includes calibration, and missing readiness_calibration stays back-compatible", () => {
+  const view = Render.buildExperimentView(successResponse(), TINY_I18N);
+  assert.equal(view.calibration.status, "thin_usable");
+  assert.equal(view.calibration.level, "low");
+  assert.equal(view.calibration.reasons[0].caption, "Experimental route was produced.");
+  assert.ok(view.calibration.caps.some((cap) => cap.token === "capped_by_derived_timezone"));
+
+  const legacy = successResponse({ readiness_calibration: undefined });
+  assert.equal(Render.buildExperimentView(legacy, TINY_I18N).calibration, null);
+});
+
+test("pure: unknown calibration reason and cap surface honest fallback with raw token", () => {
+  const summary = Render.buildCalibrationSummary({
+    readiness_calibration: {
+      status: "thin_usable",
+      level: "low",
+      summary: "Experimental verdict.",
+      reasons: ["future_reason_token"],
+      caps: ["future_cap_token"],
+      inputs: {},
+    },
+  }, TINY_I18N);
+  assert.ok(summary.reasons[0].caption.includes("Unknown readiness reason"));
+  assert.ok(summary.reasons[0].caption.includes("future_reason_token"));
+  assert.ok(summary.caps[0].caption.includes("Unknown readiness cap"));
+  assert.ok(summary.caps[0].caption.includes("future_cap_token"));
+});
+
+test("pure: blocked-verdict `blocker:`-prefixed reasons render the blocker caption, not the unknown fallback", () => {
+  const view = Render.buildExperimentView(blockerResponse(["no_usable_trusted_records", "incomplete_geometry"]), TINY_I18N);
+  const byToken = Object.fromEntries(view.calibration.reasons.map((tile) => [tile.token, tile.caption]));
+  // Full prefixed token stays visible; caption comes from the blocker i18n map.
+  assert.equal(byToken["blocker:no_usable_trusted_records"], TINY_I18N.strings["dogfood.blocker.no_usable_trusted_records"]);
+  assert.equal(byToken["blocker:incomplete_geometry"], TINY_I18N.strings["dogfood.blocker.incomplete_geometry"]);
+  for (const tile of view.calibration.reasons) {
+    assert.ok(!tile.caption.includes("Unknown readiness reason"), `known blocker reason fell back: ${tile.token}`);
+  }
+  // A prefixed token we do not know still falls back honestly with the raw token.
+  const unknown = Render.buildCalibrationSummary({
+    readiness_calibration: { status: "blocked", level: "unavailable", summary: "x", reasons: ["blocker:some_future_blocker"], caps: [], inputs: {} },
+  }, TINY_I18N);
+  assert.ok(unknown.reasons[0].caption.includes("blocker:some_future_blocker"));
+});
+
+test("pure: an unknown future calibration status keeps its raw token as label instead of mislabeling as not_applicable", () => {
+  const summary = Render.buildCalibrationSummary({
+    readiness_calibration: { status: "future_status", level: "low", summary: "x", reasons: [], caps: [], inputs: {} },
+  }, TINY_I18N);
+  assert.equal(summary.status, "future_status");
+  assert.equal(summary.statusLabel, "future_status");
+  assert.notEqual(summary.statusLabel, TINY_I18N.strings["dogfood.calibration.status.not_applicable"]);
+});
+
+test("guard: rendered view text containing calibration has no eta/best route/optimal/fastest/shortest", () => {
+  const response = successResponse({
+    readiness_calibration: {
+      status: "thin_usable",
+      level: "low",
+      summary: "This is the best route with eta-like claims.",
+      reasons: ["experimental_route_produced", "walking_validated"],
+      caps: ["experimental_agnostic_route", "capped_by_partial_context"],
+      inputs: { selected_stop_count: 2 },
+    },
+  });
+  const text = Render.flattenViewText(Render.buildExperimentView(response, TINY_I18N));
+  for (const banned of ["eta", "best route", "optimal", "fastest", "shortest"]) {
+    const re = new RegExp("\\b" + banned.replace(/\s+/g, "\\s+") + "\\b", "i");
+    assert.equal(re.test(text), false, `must not contain "${banned}"`);
+  }
+});
+
+test("i18n: calibration maps reference keys present in both sv and en", () => {
+  const keys = new Set([
+    "dogfood.calibration.heading",
+    "dogfood.calibration.level",
+    ...Object.values(Render.CALIBRATION_STATUS_KEYS),
+    ...Object.values(Render.CALIBRATION_REASON_KEYS),
+    ...Object.values(Render.CALIBRATION_CAP_KEYS),
+    "dogfood.calibration.reason.unknown",
+    "dogfood.calibration.cap.unknown",
+  ]);
+  for (const status of Object.keys(Render.CALIBRATION_STATUS_KEYS)) {
+    keys.add(`dogfood.calibration.guide.${status}`);
+  }
+  for (const lang of ["sv", "en"]) {
+    for (const key of keys) {
+      assert.equal(typeof translations[lang][key], "string", `${lang} missing ${key}`);
+      assert.ok(translations[lang][key].length > 0, `${lang} empty ${key}`);
+    }
+  }
+});
+
+test("client: renderCalibration exists, is invoked first, and avoids innerHTML", () => {
+  assert.match(DOGFOOD_CLIENT_SOURCE, /function renderCalibration\(view\) \{[\s\S]*?textContent[\s\S]*?el\(/, "renderCalibration must build text via el/textContent");
+  assert.match(DOGFOOD_CLIENT_SOURCE, /renderCalibration\(view\);[\s\S]*?renderSummary\(view\);/, "calibration renders before summary/route/blockers");
+  const body = DOGFOOD_CLIENT_SOURCE.match(/function renderCalibration\(view\) \{[\s\S]*?\n  \}/)[0];
+  assert.doesNotMatch(body, /innerHTML\s*=/, "calibration renderer must not use innerHTML");
 });
 
 // --- guard: no comparative wording, no ETA ------------------------------

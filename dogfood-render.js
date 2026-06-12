@@ -63,6 +63,47 @@
     below_planner_candidate_threshold: "dogfood.caveat.below_planner_candidate_threshold",
   };
 
+
+  var CALIBRATION_STATUS_KEYS = {
+    usable: "dogfood.calibration.status.usable",
+    thin_usable: "dogfood.calibration.status.thin_usable",
+    blocked: "dogfood.calibration.status.blocked",
+    environment_not_wired: "dogfood.calibration.status.environment_not_wired",
+    not_applicable: "dogfood.calibration.status.not_applicable",
+  };
+
+  var CALIBRATION_REASON_KEYS = {
+    experimental_route_produced: "dogfood.calibration.reason.experimental_route_produced",
+    walking_validated: "dogfood.calibration.reason.walking_validated",
+    proximity_ordering_validated: "dogfood.calibration.reason.proximity_ordering_validated",
+    role_order_fallback_after_sequence_validation: "dogfood.calibration.reason.role_order_fallback_after_sequence_validation",
+    resolver_attested_timezone: "dogfood.calibration.reason.resolver_attested_timezone",
+    weather_provider_auto_timezone: "dogfood.calibration.reason.weather_provider_auto_timezone",
+    timezone_unavailable: "dogfood.calibration.reason.timezone_unavailable",
+    weather_context_used: "dogfood.calibration.reason.weather_context_used",
+    time_context_used: "dogfood.calibration.reason.time_context_used",
+    heuristic_walking_estimate: "dogfood.calibration.reason.heuristic_walking_estimate",
+    walking_router_fallback_used: "dogfood.calibration.reason.walking_router_fallback_used",
+    source_backed_external_candidates: "dogfood.calibration.reason.source_backed_external_candidates",
+    below_planner_candidate_threshold: "dogfood.calibration.reason.below_planner_candidate_threshold",
+    environment_not_wired: "dogfood.calibration.reason.environment_not_wired",
+    not_applicable: "dogfood.calibration.reason.not_applicable",
+    walking_validation_blocked_route: "dogfood.calibration.reason.walking_validation_blocked_route",
+    geometry_coherence_blocked_route: "dogfood.calibration.reason.geometry_coherence_blocked_route",
+    candidate_supply_blocked_route: "dogfood.calibration.reason.candidate_supply_blocked_route",
+  };
+
+  var CALIBRATION_CAP_KEYS = {
+    experimental_agnostic_route: "dogfood.calibration.cap.experimental_agnostic_route",
+    capped_by_heuristic_walking: "dogfood.calibration.cap.capped_by_heuristic_walking",
+    capped_by_role_order_fallback: "dogfood.calibration.cap.capped_by_role_order_fallback",
+    capped_by_derived_timezone: "dogfood.calibration.cap.capped_by_derived_timezone",
+    capped_by_partial_context: "dogfood.calibration.cap.capped_by_partial_context",
+    capped_by_unresolved_roles: "dogfood.calibration.cap.capped_by_unresolved_roles",
+    capped_by_external_only_sources: "dogfood.calibration.cap.capped_by_external_only_sources",
+    capped_by_below_planner_candidate_threshold: "dogfood.calibration.cap.capped_by_below_planner_candidate_threshold",
+  };
+
   // i18n bootstrap is { lang, strings: { key: value } }. We never embed user-facing
   // copy in this module: callers pass an i18n object (the test stubs are tiny).
   function translate(i18n, key, fallback) {
@@ -132,6 +173,46 @@
     add(experiment.intake && experiment.intake.blockers);
     add(experiment.walking_validation && experiment.walking_validation.blockers);
     return tokens;
+  }
+
+
+  function calibrationReasonTile(token, i18n) {
+    // The backend prefixes pass-through blocker reasons as `blocker:<token>` in
+    // blocked verdicts (blockerReasons in agnostic-route-readiness-calibration.js);
+    // strip the prefix for the caption lookup but keep the full token visible.
+    var lookup = token.indexOf("blocker:") === 0 ? token.slice("blocker:".length) : token;
+    var key = CALIBRATION_REASON_KEYS[lookup] || BLOCKER_KEYS[lookup];
+    var caption = key
+      ? translate(i18n, key, lookup)
+      : translate(i18n, "dogfood.calibration.reason.unknown", token) + " (" + token + ")";
+    return { token: token, caption: sanitize(caption) };
+  }
+
+  function calibrationCapTile(token, i18n) {
+    var key = CALIBRATION_CAP_KEYS[token];
+    var caption = key
+      ? translate(i18n, key, token)
+      : translate(i18n, "dogfood.calibration.cap.unknown", token) + " (" + token + ")";
+    return { token: token, caption: sanitize(caption) };
+  }
+
+  function buildCalibrationSummary(experiment, i18n) {
+    var calibration = experiment && experiment.readiness_calibration;
+    if (!calibration) return null;
+    var status = isString(calibration.status) ? calibration.status : "not_applicable";
+    return {
+      status: status,
+      statusLabel: translate(i18n, CALIBRATION_STATUS_KEYS[status], status),
+      guide: translate(i18n, "dogfood.calibration.guide." + status, status),
+      level: isString(calibration.level) ? calibration.level : null,
+      summary: sanitize(isString(calibration.summary) ? calibration.summary : null),
+      reasons: Array.isArray(calibration.reasons)
+        ? calibration.reasons.filter(isString).map(function (token) { return calibrationReasonTile(token, i18n); })
+        : [],
+      caps: Array.isArray(calibration.caps)
+        ? calibration.caps.filter(isString).map(function (token) { return calibrationCapTile(token, i18n); })
+        : [],
+    };
   }
 
   // ----- Intake summary -----------------------------------------------------
@@ -317,6 +398,7 @@
       selectedVariant: experiment && experiment.selected_variant ? experiment.selected_variant : null,
       blockers: [],
       caveats: [],
+      calibration: null,
       intake: null,
       context: null,
       walking: null,
@@ -327,6 +409,7 @@
     if (!experiment) return view;
 
     view.blockers = collectBlockerTokens(experiment).map(function (token) { return blockerTile(token, i18n); });
+    view.calibration = buildCalibrationSummary(experiment, i18n);
     view.caveats = Array.isArray(experiment.caveats)
       ? experiment.caveats.map(function (token) { return caveatTile(token, i18n); })
       : [];
@@ -368,7 +451,10 @@
       if (Array.isArray(value)) { value.forEach(visit); return; }
       if (typeof value === "object") {
         var keys = Object.keys(value);
-        for (var i = 0; i < keys.length; i += 1) visit(value[keys[i]]);
+        for (var i = 0; i < keys.length; i += 1) {
+          if (keys[i] === "bannedWordsFound") continue;
+          visit(value[keys[i]]);
+        }
       }
     };
     visit(view);
@@ -378,12 +464,16 @@
   var api = {
     BLOCKER_KEYS: BLOCKER_KEYS,
     CAVEAT_KEYS: CAVEAT_KEYS,
+    CALIBRATION_STATUS_KEYS: CALIBRATION_STATUS_KEYS,
+    CALIBRATION_REASON_KEYS: CALIBRATION_REASON_KEYS,
+    CALIBRATION_CAP_KEYS: CALIBRATION_CAP_KEYS,
     translate: translate,
     sanitize: sanitize,
     buildBanner: buildBanner,
     blockerTile: blockerTile,
     caveatTile: caveatTile,
     collectBlockerTokens: collectBlockerTokens,
+    buildCalibrationSummary: buildCalibrationSummary,
     buildIntakeSummary: buildIntakeSummary,
     buildContextSummary: buildContextSummary,
     buildWalkingChecksSummary: buildWalkingChecksSummary,
