@@ -36,6 +36,7 @@ const { buildAgnosticCityContext } = require("../server/candidates/agnostic-cont
 const { buildEligibleCandidatePool, buildProviderSpecs } = require("../server/candidates/candidate-pool");
 const { evaluateCandidateGates, targetFromPlaceCandidate } = require("../server/candidates/gates");
 const { ExternalOpenCandidateProvider } = require("../server/place-candidates/external-open-provider");
+const { createOpenDataLoader } = require("../server/place-candidates/open-data-loader");
 
 const ORIGINAL_FETCH = global.fetch;
 const FLAG = "experimental_agnostic_route_output=1";
@@ -578,6 +579,35 @@ test(
     assert.ok(exp.readiness_calibration.reasons.includes("candidate_supply_blocked_route"));
     assert.deepEqual(r.body.days, [], "baseline empty-days fallback is untouched");
     assert.equal(exp.experimental_route, null);
+  }),
+);
+
+test(
+  "api: real loader non-200 surfaces loader_error instead of genuine empty",
+  withServer(createOpenDataLoader({ fetcher: async () => ({ ok: false, status: 429 }) }), async (server) => {
+    const r = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: agnosticBody() });
+    const exp = r.body.agnostic_route_output_experiment;
+    assert.equal(exp.route_mutation, false);
+    assert.equal(exp.source_status.status, "error_failed_closed");
+    assert.equal(exp.source_status.error, "http_non_200");
+    assert.ok(exp.readiness_blockers.includes("loader_error"));
+    assert.equal(exp.readiness_blockers.includes("no_usable_trusted_records"), false);
+    assert.equal(exp.readiness_calibration.status, "blocked");
+    assert.equal(exp.readiness_calibration.inputs.loader_status, "error_failed_closed");
+    assert.deepEqual(r.body.days, [], "baseline empty-days fallback is untouched");
+  }),
+);
+
+test(
+  "api: real loader genuine empty remains no_usable_trusted_records",
+  withServer(createOpenDataLoader({ fetcher: async () => ({ ok: true, json: async () => ({ elements: [] }) }) }), async (server) => {
+    const r = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: agnosticBody() });
+    const exp = r.body.agnostic_route_output_experiment;
+    assert.equal(exp.route_mutation, false);
+    assert.equal(exp.source_status.status, "loaded:0");
+    assert.equal(exp.source_status.error, null);
+    assert.ok(exp.readiness_blockers.includes("no_usable_trusted_records"));
+    assert.equal(exp.readiness_blockers.includes("loader_error"), false);
   }),
 );
 
