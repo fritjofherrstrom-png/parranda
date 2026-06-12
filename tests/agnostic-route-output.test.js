@@ -32,6 +32,10 @@ const {
   buildExperimentBlock,
   composeAgnosticRouteOutput,
 } = require("../server/planner/agnostic-route-output");
+const { buildAgnosticCityContext } = require("../server/candidates/agnostic-context");
+const { buildEligibleCandidatePool, buildProviderSpecs } = require("../server/candidates/candidate-pool");
+const { evaluateCandidateGates, targetFromPlaceCandidate } = require("../server/candidates/gates");
+const { ExternalOpenCandidateProvider } = require("../server/place-candidates/external-open-provider");
 
 const ORIGINAL_FETCH = global.fetch;
 const FLAG = "experimental_agnostic_route_output=1";
@@ -73,6 +77,41 @@ function fixtureNear(base) {
   for (let i = 0; i < 5; i += 1) {
     const c = j(i + 1);
     recs.push(externalRecord(`view-${i}`, `View ${i}`, "viewpoint", c.lat, c.lng, ["utsikt"]));
+  }
+  return recs;
+}
+
+function singleFamilyExternalRecord(id, name, type, lat, lng, tags = []) {
+  return {
+    id,
+    name,
+    type,
+    lat,
+    lng,
+    tags,
+    sources: [
+      { provider: "osm", family: "map", tier: "inferred", url: `https://www.openstreetmap.org/node/${id}` },
+    ],
+  };
+}
+
+// Dense but single-family OSM-style fixture: source-backed and geocoded, yet not
+// globally promotion-worthy. #270 may admit it only inside the explicit agnostic
+// route-output experiment, with the original gate truth still visible.
+function singleFamilyFixtureNear(base) {
+  const recs = [];
+  const j = (i) => ({ lat: base.lat + (i % 5) * 0.0008, lng: base.lng + Math.floor(i / 5) * 0.0008 });
+  for (let i = 0; i < 10; i += 1) {
+    const c = j(i);
+    recs.push(singleFamilyExternalRecord(`osm-food-${i}`, `OSM Food ${i}`, "restaurant", c.lat, c.lng, ["mat"]));
+  }
+  for (let i = 0; i < 10; i += 1) {
+    const c = j(i + 2);
+    recs.push(singleFamilyExternalRecord(`osm-cafe-${i}`, `OSM Cafe ${i}`, "cafe", c.lat, c.lng, ["fika"]));
+  }
+  for (let i = 0; i < 5; i += 1) {
+    const c = j(i + 1);
+    recs.push(singleFamilyExternalRecord(`osm-view-${i}`, `OSM View ${i}`, "viewpoint", c.lat, c.lng, ["utsikt"]));
   }
   return recs;
 }
@@ -259,6 +298,42 @@ test("unit: experiment block preserves baseline primary_route + readiness", () =
   assert.equal(block.experimental_route.id, "exp");
 });
 
+// --- #270: inferred external candidate guardrails --------------------------
+
+test("unit: shared gates and default pool still reject single-family inferred external records", () => {
+  const base = { lat: 41.9, lng: 12.49 };
+  const city = buildAgnosticCityContext({ lat: base.lat, lng: base.lng, todayIsoDate: () => DATE });
+  const provider = new ExternalOpenCandidateProvider(city, {
+    dataset: [singleFamilyExternalRecord("osm-food-default", "OSM Food Default", "restaurant", base.lat, base.lng, ["mat"])],
+    observedAt: DATE,
+  });
+  const [candidate] = provider.listCandidates();
+  const gates = evaluateCandidateGates({ target: targetFromPlaceCandidate(candidate), derived: { existence_confidence: "low", provenance_diversity: 1 } });
+  assert.equal(gates.may_show_as_nearby, false);
+  assert.equal(gates.may_influence_routes, false);
+  assert.ok(gates.reasons.includes("shown_but_not_route_eligible"));
+
+  const providerSpecs = buildProviderSpecs({
+    externalEnabled: true,
+    externalOptions: { dataset: [singleFamilyExternalRecord("osm-food-pool", "OSM Food Pool", "restaurant", base.lat, base.lng, ["mat"])] },
+    now: DATE,
+  });
+  const pool = buildEligibleCandidatePool(city, { include_external_candidates: 1, preferences: ["food"], origin: base }, { resolveNowContext: () => ({ date: DATE, hour: 13, weekday: null, now_iso: `${DATE}T13:00:00Z` }), resolveTimeBand: () => "midday", external_provider: { dataset: [] } });
+  assert.equal(pool.pool.some((entry) => entry.candidate.id === "osm-food-pool"), false);
+
+  const poolWithSpecs = buildEligibleCandidatePool(
+    city,
+    { include_external_candidates: 1, preferences: ["food"], origin: base },
+    {
+      resolveNowContext: () => ({ date: DATE, hour: 13, weekday: null, now_iso: `${DATE}T13:00:00Z` }),
+      resolveTimeBand: () => "midday",
+      external_provider: { dataset: [singleFamilyExternalRecord("osm-food-pool", "OSM Food Pool", "restaurant", base.lat, base.lng, ["mat"])] },
+    },
+  );
+  assert.equal(poolWithSpecs.pool.some((entry) => entry.candidate.id === "osm-food-pool"), false, "default candidate pool must not admit uncorroborated inferred external records");
+  assert.ok(providerSpecs.length >= 1, "provider specs are still buildable for external opt-in");
+});
+
 // --- API: default unchanged -------------------------------------------------
 
 test(
@@ -339,6 +414,36 @@ test(
     assert.ok(day.primary_route.main_stops.length >= 2);
     // Stops are the trusted loader records, not catalog/public data.
     assert.ok(day.primary_route.main_stops.every((s) => /^(food|cafe|view)-/.test(s.id)));
+  }),
+);
+
+test(
+  "api: experiment-only inferred external promotion can produce a capped route while preserving gate truth",
+  withServer(makeLoader(singleFamilyFixtureNear({ lat: 41.9, lng: 12.49 })), async (server) => {
+    const withoutFlag = await requestJson(server, {
+      path: "/api/route-recommendations?lang=en&include_external_candidates=1",
+      body: agnosticBody(),
+    });
+    assert.equal(withoutFlag.body.agnostic_route_output_experiment, undefined);
+    assert.deepEqual(withoutFlag.body.days, [], "default path must not admit single-family inferred records");
+
+    const r = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: agnosticBody() });
+    const exp = r.body.agnostic_route_output_experiment;
+    assert.equal(exp.route_mutation, true);
+    assert.equal(exp.readiness_calibration.status, "thin_usable");
+    assert.ok(exp.readiness_calibration.caps.includes("capped_by_external_only_sources"));
+    assert.equal(exp.candidate_readiness.can_support_planner, true);
+    assert.ok(exp.candidate_readiness.warnings.includes("low_trust_candidates_dominate"));
+    const stops = r.body.days[0].primary_route.main_stops;
+    assert.ok(stops.length >= 2);
+    assert.ok(stops.every((stop) => stop.origin === "external_open"));
+    assert.ok(stops.every((stop) => stop.confidence === "low"));
+    assert.ok(
+      exp.experimental_route.gate_diagnostics.some((diag) =>
+        diag.reasons.includes("blocked_promotion_uncorroborated"),
+      ),
+      "experiment diagnostics must carry the true shared-gate rejection reason",
+    );
   }),
 );
 

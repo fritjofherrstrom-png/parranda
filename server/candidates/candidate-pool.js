@@ -89,6 +89,13 @@ function buildEligibleCandidatePool(cityConfig, payload = {}, helpers = {}) {
       now: nowContext.date,
     });
     if (!eligible) {
+      const experimentalAdmission = typeof helpers.experimentalAdmitCandidate === "function"
+        ? helpers.experimentalAdmitCandidate({ candidate, derived, gates, evidence })
+        : null;
+      if (experimentalAdmission && experimentalAdmission.allowed === true) {
+        pool.push({ candidate, derived, gates, evidence, experimental_admission: experimentalAdmission });
+        continue;
+      }
       rejected.push({
         id: candidate.id,
         label: candidate.label,

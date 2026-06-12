@@ -76,6 +76,8 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 
 - **#267** adds **conservative readiness/calibration** to the same experiment block. It does not make the route more true, change route output, or promote default Planner behavior. It explains whether an experimental one-day agnostic route is `usable`, `thin_usable`, `blocked`, `environment_not_wired`, or `not_applicable`, with `medium` / `low` / `unavailable` levels only. Calibration is derived from trusted loader status, candidate readiness, geometry, walking validation, route ordering, and context/time/weather facts; it has no numeric score, no "high confidence", and no "best/optimal/fastest/shortest" route claim.
 
+- **#270** removes the real-loader trust-wall for the **explicit agnostic route-output experiment only**: source-backed, attribution-bearing, geocoded `external_open` candidates whose evidence is single-family `inferred` may be admitted at the candidate-pool / role-selection seam when no higher-trust candidate fills a role. The shared gates still reject those records for default Planner, Blitz, Pulse, nearby, and ordinary candidate-pool use. Experimentally admitted stops carry their true gate diagnostics (including uncorroborated-promotion reasons), keep low confidence and `external_open` origin, and the readiness calibration stays capped (`thin_usable`, never `usable`) via external-only source caps.
+
 Still missing before a true any-place Planner (now the next steps): stronger generic candidate supply where source-backed candidates are sparse, richer single-day composition quality after calibration, multi-day experimental output, persistent geocode caching / a paid-or-self-hosted geocoder for scale, and live ETA / real-time routing (explicitly out of scope).
 
 ## Anti-drift rule
@@ -161,6 +163,7 @@ The current direction should be:
 #265 — DONE: conservative proximity ordering before walking validation (fallback to role order)
 #266 — DONE: trusted weather-provider timezone auto-resolution (lower-trust derived timezone)
 #267 — DONE: conservative readiness/calibration for experimental agnostic one-day output
+#270 — IN PROGRESS: experiment-only admission of single-family inferred external candidates with capped calibration
 ```
 
 The numbers may shift, but the sequence should not drift back into endless diagnostics.

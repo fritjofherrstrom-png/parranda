@@ -280,6 +280,7 @@ function formatSelected(pick) {
     coordinates: resolveCoords(c.coordinates),
     also_covers: Array.isArray(c.also_covers) ? c.also_covers : [],
     reasons: Array.isArray(c.fit_reasons) ? c.fit_reasons.slice(0, 6) : [],
+    experimental_admission: c.experimental_admission || null,
   };
 }
 

@@ -47,6 +47,7 @@ function buildRouteCandidateFromCandidateCombination({ city, candidateCombinatio
     coordinates: resolveCoords(s.coordinates),
     origin: s.origin || null,
     confidence: s.confidence || null,
+    experimental_admission: s.experimental_admission || null,
   }));
   const stopIds = stops.map((s) => s.candidate_id).filter(Boolean);
   const targetRoles = stops.map((s) => s.role);
