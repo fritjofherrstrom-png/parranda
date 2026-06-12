@@ -51,6 +51,49 @@ test("a malformed wikidata tag does not add a second source", () => {
   assert.deepEqual(record.sources.map((s) => s.family), ["map"]);
 });
 
+test("OSM brand tag yields chain:true + brand name; absence yields chain:false (#272)", () => {
+  const chain = mapOsmElement({
+    type: "node",
+    id: 50,
+    lat: 55.6,
+    lon: 13.0,
+    tags: { name: "Burger King", amenity: "fast_food", brand: "Burger King", "brand:wikidata": "Q177054" },
+  });
+  assert.equal(chain.chain, true);
+  assert.equal(chain.brand, "Burger King");
+
+  // brand:wikidata alone still marks a chain (some elements lack the text tag)
+  const wikidataOnly = mapOsmElement({
+    type: "node",
+    id: 51,
+    lat: 55.6,
+    lon: 13.0,
+    tags: { name: "Subway", amenity: "fast_food", "brand:wikidata": "Q244457" },
+  });
+  assert.equal(wikidataOnly.chain, true);
+  assert.equal(wikidataOnly.brand, null);
+
+  const local = mapOsmElement({
+    type: "node",
+    id: 52,
+    lat: 55.6,
+    lon: 13.0,
+    tags: { name: "Orvars Korvar", amenity: "fast_food" },
+  });
+  assert.equal(local.chain, false);
+  assert.equal(local.brand, null);
+
+  // whitespace-only brand is not a chain signal
+  const blank = mapOsmElement({
+    type: "node",
+    id: 53,
+    lat: 55.6,
+    lon: 13.0,
+    tags: { name: "Kiosk", amenity: "cafe", brand: "   " },
+  });
+  assert.equal(blank.chain, false);
+});
+
 test("records without a name or coordinates are dropped", () => {
   assert.equal(mapOsmElement({ type: "node", id: 1, lat: 1, lon: 1, tags: { tourism: "viewpoint" } }), null);
   assert.equal(mapOsmElement({ type: "node", id: 1, tags: { name: "X", tourism: "viewpoint" } }), null);

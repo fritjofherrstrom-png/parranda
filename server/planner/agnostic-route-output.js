@@ -321,6 +321,11 @@ function buildGateDiagnostic(stop) {
     policy: admission.policy || "experimental_inferred_external",
     reasons: Array.isArray(admission.reasons) ? admission.reasons : [],
     gate_reasons: Array.isArray(admission.gate_reasons) ? admission.gate_reasons : [],
+    // #272 — local-feel honesty on the selected stop (chain_candidate,
+    // secondary_type_for_role, chain_fallback_no_local_option).
+    ...(Array.isArray(stop.local_feel_reasons) && stop.local_feel_reasons.length
+      ? { local_feel_reasons: stop.local_feel_reasons }
+      : {}),
   };
 }
 
