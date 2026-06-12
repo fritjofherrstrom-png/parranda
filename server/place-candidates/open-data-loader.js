@@ -89,7 +89,7 @@ function createOpenDataLoader({
   const boundedTimeoutMs = Math.max(50, Math.floor(timeoutMs));
 
   return async function loadOpenDataAround({ lat, lng } = {}) {
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return withLoaderStatus([], "loaded:0", null);
 
     const radiusM = Math.round(boundedRadiusKm * 1000);
     const query = buildOverpassQuery({ lat, lng, radiusM, limit: boundedLimit });
@@ -109,15 +109,22 @@ function createOpenDataLoader({
         body: `data=${encodeURIComponent(query)}`,
         signal: controller.signal,
       });
-      if (!response || response.ok !== true) return [];
-      payload = await response.json();
-    } catch (_error) {
-      return []; // fail closed on any fetch/parse error or timeout
+      if (!response || response.ok !== true) {
+        return withLoaderStatus([], "error_failed_closed", "http_non_200");
+      }
+      try {
+        payload = await response.json();
+      } catch (_error) {
+        return withLoaderStatus([], "error_failed_closed", "parse_error");
+      }
+    } catch (error) {
+      return withLoaderStatus([], "error_failed_closed", classifyFetchError(error));
     } finally {
       clearTimeout(timer);
     }
 
-    return mapOverpassResponse(payload, boundedLimit);
+    const records = mapOverpassResponse(payload, boundedLimit);
+    return withLoaderStatus(records, records.length > 0 ? `loaded:${records.length}` : "loaded:0", null);
   };
 }
 
@@ -142,6 +149,30 @@ function mapOverpassResponse(payload, limit) {
     records.push(record);
   }
   return records;
+}
+
+function withLoaderStatus(records, status, error) {
+  const output = Array.isArray(records) ? records : [];
+  Object.defineProperty(output, "loader_status", {
+    value: status,
+    enumerable: false,
+    configurable: true,
+  });
+  Object.defineProperty(output, "loader_error", {
+    value: error,
+    enumerable: false,
+    configurable: true,
+  });
+  return output;
+}
+
+function classifyFetchError(error) {
+  const name = typeof error?.name === "string" ? error.name.toLowerCase() : "";
+  const message = typeof error?.message === "string" ? error.message.toLowerCase() : "";
+  if (name.includes("abort") || message.includes("abort") || message.includes("timeout")) {
+    return "timeout_or_abort";
+  }
+  return "fetch_error";
 }
 
 function mapOsmElement(element) {

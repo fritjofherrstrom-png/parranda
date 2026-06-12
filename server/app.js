@@ -684,15 +684,23 @@ async function resolvePlannerRoleHelpers({ externalRequested, openDataLoader, an
   }
   try {
     const records = await openDataLoader(anchor);
+    const loaderStatus = typeof records?.loader_status === "string" ? records.loader_status : null;
+    const loaderError = records?.loader_error || null;
+    if (loaderStatus === "error_failed_closed") {
+      return {
+        helpers: {},
+        sourceStatus: { ...baseStatus, status: "error_failed_closed", error: loaderError },
+      };
+    }
     if (!Array.isArray(records) || records.length === 0) {
-      return { helpers: {}, sourceStatus: { ...baseStatus, status: "loaded:0" } };
+      return { helpers: {}, sourceStatus: { ...baseStatus, status: "loaded:0", error: loaderError } };
     }
     return {
       helpers: { external_provider: { dataset: records } },
-      sourceStatus: { ...baseStatus, status: `loaded:${records.length}` },
+      sourceStatus: { ...baseStatus, status: `loaded:${records.length}`, error: loaderError },
     };
   } catch (_error) {
-    return { helpers: {}, sourceStatus: { ...baseStatus, status: "error_failed_closed" } };
+    return { helpers: {}, sourceStatus: { ...baseStatus, status: "error_failed_closed", error: "fetch_error" } };
   }
 }
 
@@ -1923,17 +1931,23 @@ function buildApp({
       const shouldLoad = (useAgnostic || augmentRecognized) && externalEnabled;
       let externalProviderExtras = null;
       let openDataLoaderStatus = "skipped";
+      let openDataLoaderError = null;
       if (shouldLoad && typeof openDataLoader === "function" && loaderAnchor) {
         try {
           const records = await openDataLoader(loaderAnchor);
-          if (Array.isArray(records) && records.length > 0) {
+          const loaderStatus = typeof records?.loader_status === "string" ? records.loader_status : null;
+          openDataLoaderError = records?.loader_error || null;
+          if (Array.isArray(records) && records.length > 0 && loaderStatus !== "error_failed_closed") {
             externalProviderExtras = { external_provider: { dataset: records } };
             openDataLoaderStatus = `loaded:${records.length}`;
+          } else if (loaderStatus === "error_failed_closed") {
+            openDataLoaderStatus = "error_failed_closed";
           } else {
             openDataLoaderStatus = "loaded:0";
           }
         } catch (_error) {
           openDataLoaderStatus = "error_failed_closed";
+          openDataLoaderError = "fetch_error";
         }
       } else if (shouldLoad) {
         openDataLoaderStatus = "no_loader_configured";
@@ -1987,13 +2001,21 @@ function buildApp({
               lng: coords.lng,
               reason: requestedCity ? "city_fallback" : "no_city_requested",
               open_data_loader: openDataLoaderStatus,
+              open_data_loader_error: openDataLoaderError,
             }
           : { used: false },
         // Thin recognized-city open-data augmentation status (#241). `used` is
         // true only when a recognized city was curated-thin and the loader path
         // ran; rich citypacks report used:false with reason "rich_citypack".
         open_data_augmentation: augmentRecognized
-          ? { used: true, reason: "thin_recognized_city", catalog_density: cityDensity, anchor: loaderAnchor, open_data_loader: openDataLoaderStatus }
+          ? {
+              used: true,
+              reason: "thin_recognized_city",
+              catalog_density: cityDensity,
+              anchor: loaderAnchor,
+              open_data_loader: openDataLoaderStatus,
+              open_data_loader_error: openDataLoaderError,
+            }
           : { used: false, reason: recognizedCity ? `not_thin:${cityDensity}` : "not_applicable" },
       });
     } catch (error) {

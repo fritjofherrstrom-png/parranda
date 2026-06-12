@@ -135,25 +135,44 @@ test("default timeout stays realistic for live Overpass latency (4-6s observed)"
   assert.ok(DEFAULT_TIMEOUT_MS >= 10000, `DEFAULT_TIMEOUT_MS ${DEFAULT_TIMEOUT_MS} < 10000`);
 });
 
-test("non-200 response fails closed", async () => {
+test("non-200 response fails closed with inspectable loader_error status", async () => {
   const loader = createOpenDataLoader({ fetcher: async () => ({ ok: false, status: 429 }) });
-  assert.deepEqual(await loader({ lat: 1, lng: 1 }), []);
+  const records = await loader({ lat: 1, lng: 1 });
+  assert.deepEqual(records, []);
+  assert.equal(records.loader_status, "error_failed_closed");
+  assert.equal(records.loader_error, "http_non_200");
 });
 
-test("a thrown fetch error (incl. abort/timeout) fails closed", async () => {
+test("a thrown fetch error (incl. abort/timeout) fails closed with inspectable timeout/fetch status", async () => {
   const loader = createOpenDataLoader({
     fetcher: async () => {
-      throw new Error("AbortError");
+      const error = new Error("AbortError");
+      error.name = "AbortError";
+      throw error;
     },
   });
-  assert.deepEqual(await loader({ lat: 1, lng: 1 }), []);
+  const records = await loader({ lat: 1, lng: 1 });
+  assert.deepEqual(records, []);
+  assert.equal(records.loader_status, "error_failed_closed");
+  assert.equal(records.loader_error, "timeout_or_abort");
 });
 
-test("a JSON parse failure fails closed", async () => {
+test("a JSON parse failure fails closed with inspectable parse status", async () => {
   const loader = createOpenDataLoader({
     fetcher: async () => ({ ok: true, json: async () => { throw new Error("bad json"); } }),
   });
-  assert.deepEqual(await loader({ lat: 1, lng: 1 }), []);
+  const records = await loader({ lat: 1, lng: 1 });
+  assert.deepEqual(records, []);
+  assert.equal(records.loader_status, "error_failed_closed");
+  assert.equal(records.loader_error, "parse_error");
+});
+
+test("genuine empty Overpass response remains loaded:0, not loader_error", async () => {
+  const loader = createOpenDataLoader({ fetcher: async () => ({ ok: true, json: async () => ({ elements: [] }) }) });
+  const records = await loader({ lat: 1, lng: 1 });
+  assert.deepEqual(records, []);
+  assert.equal(records.loader_status, "loaded:0");
+  assert.equal(records.loader_error, null);
 });
 
 test("invalid coordinates return no records without calling the fetcher", async () => {

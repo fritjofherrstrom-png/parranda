@@ -76,15 +76,23 @@ async function resolveTrustedHelpers({ externalRequested, openDataLoader, anchor
   }
   try {
     const records = await openDataLoader(anchor);
+    const loaderStatus = typeof records?.loader_status === "string" ? records.loader_status : null;
+    const loaderError = records?.loader_error || null;
+    if (loaderStatus === "error_failed_closed") {
+      return {
+        helpers: {},
+        sourceStatus: { ...baseStatus, status: "error_failed_closed", error: loaderError },
+      };
+    }
     if (!Array.isArray(records) || records.length === 0) {
-      return { helpers: {}, sourceStatus: { ...baseStatus, status: "loaded:0" } };
+      return { helpers: {}, sourceStatus: { ...baseStatus, status: "loaded:0", error: loaderError } };
     }
     return {
       helpers: { external_provider: { dataset: records } },
-      sourceStatus: { ...baseStatus, status: `loaded:${records.length}` },
+      sourceStatus: { ...baseStatus, status: `loaded:${records.length}`, error: loaderError },
     };
   } catch (_error) {
-    return { helpers: {}, sourceStatus: { ...baseStatus, status: "error_failed_closed" } };
+    return { helpers: {}, sourceStatus: { ...baseStatus, status: "error_failed_closed", error: "fetch_error" } };
   }
 }
 
