@@ -596,6 +596,43 @@ test(
 );
 
 test(
+  "api: #272 a gate-passing external chain still surfaces local-feel diagnostics honestly",
+  withServer(
+    makeLoader([
+      // A corroborated chain (map + open_knowledge → diversity 2 → passes shared
+      // gates as a real `filled` candidate) carrying the OSM brand tag. Plus a
+      // non-chain corroborated cafe for the other role.
+      Object.assign(
+        externalRecord("food-chain-corr", "Chain Burger", "street-food", 55.605, 13.0038, ["mat"]),
+        { chain: true, brand: "Chain Burger" },
+      ),
+      externalRecord("cafe-local-corr", "Kafé Hörnan", "cafe", 55.6053, 13.004, ["fika"]),
+    ]),
+    async (server) => {
+      const r = await requestJson(server, {
+        path: `/api/route-recommendations?lang=en&${FLAG}`,
+        body: agnosticBody({ lat: 55.605, lng: 13.0038, preferences: ["food", "coffee"] }),
+      });
+      const exp = r.body.agnostic_route_output_experiment;
+      assert.equal(exp.route_mutation, true);
+      const stops = r.body.days[0].primary_route.main_stops;
+      const byRole = Object.fromEntries(stops.map((s) => [s.role, s.id]));
+      assert.equal(byRole.food_anchor, "food-chain-corr",
+        "the only food option is a corroborated chain — it must still fill the role");
+      // The chain is gate-passing (no experimental_admission), but #272 still
+      // surfaces local-feel honesty on the selected stop.
+      const chainDiag = exp.experimental_route.gate_diagnostics.find((d) => d.candidate_id === "food-chain-corr");
+      assert.ok(chainDiag, "a gate-passing chain stop still produces a local-feel diagnostic");
+      assert.ok(!("policy" in chainDiag), "no admission policy on a gate-passing stop");
+      assert.ok(chainDiag.local_feel_reasons.includes("chain_candidate"));
+      assert.ok(chainDiag.local_feel_reasons.includes("secondary_type_for_role"));
+      // The non-chain cafe has no local-feel signal → no diagnostic entry.
+      assert.equal(exp.experimental_route.gate_diagnostics.find((d) => d.candidate_id === "cafe-local-corr"), undefined);
+    },
+  ),
+);
+
+test(
   "api: #272 default path leaks no chain/local-feel fields (flag off → byte-shape unchanged)",
   withServer(makeLoader(malmoShapedFixture({ lat: 55.605, lng: 13.0038 })), async (server) => {
     const r = await requestJson(server, {
