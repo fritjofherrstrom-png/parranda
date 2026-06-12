@@ -101,7 +101,7 @@ function admitExperimentalInferredExternalCandidate({ candidate, derived, gates 
   const attribution = collectCandidateAttribution(candidate);
   const sourceTier = String(candidate?.trust?.source_tier || "").toLowerCase();
   const external = candidate?.candidate_origin === "external_open" || candidate?.city_pack_owned === false;
-  const sourceBacked = attribution.length > 0 || Array.isArray(candidate?.evidence) && candidate.evidence.length > 0;
+  const sourceBacked = attribution.length > 0;
   if (!external || sourceTier !== "inferred" || !hasCoords || !hasText(candidate?.label) || !sourceBacked) {
     return { allowed: false };
   }
