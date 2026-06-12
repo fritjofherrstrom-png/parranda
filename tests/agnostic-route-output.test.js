@@ -432,6 +432,10 @@ test(
     assert.equal(exp.route_mutation, true);
     assert.equal(exp.readiness_calibration.status, "thin_usable");
     assert.ok(exp.readiness_calibration.caps.includes("capped_by_external_only_sources"));
+    // NOTE: true here is fixture-specific — this fixture has exactly 25 records and
+    // DEFAULT_MIN_REAL_PLACES_FOR_PLANNER is 25. Live dense places often land at ~24
+    // after dedupe and get `false` (a soft caveat, not a blocker). Do not read this
+    // assertion as live behavior.
     assert.equal(exp.candidate_readiness.can_support_planner, true);
     assert.ok(exp.candidate_readiness.warnings.includes("low_trust_candidates_dominate"));
     const stops = r.body.days[0].primary_route.main_stops;
@@ -445,6 +449,39 @@ test(
       "experiment diagnostics must carry the true shared-gate rejection reason",
     );
   }),
+);
+
+test(
+  "api: a corroborated candidate always wins its role over admitted inferred ones (status outranks fit)",
+  withServer(
+    makeLoader([
+      // ONE corroborated food record (map + open_knowledge → diversity 2 → passes
+      // shared gates as a real `filled` candidate)...
+      externalRecord("food-corroborated", "Corroborated Food", "restaurant", 41.9001, 12.4901, ["mat"]),
+      // ...among many single-family inferred records competing for the same role.
+      ...singleFamilyFixtureNear({ lat: 41.9, lng: 12.49 }),
+    ]),
+    async (server) => {
+      const r = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: agnosticBody() });
+      const exp = r.body.agnostic_route_output_experiment;
+      assert.equal(exp.route_mutation, true);
+
+      const stops = r.body.days[0].primary_route.main_stops;
+      const foodStops = stops.filter((stop) => /food/i.test(stop.role || "") || /food/.test(stop.id || ""));
+      assert.ok(foodStops.length >= 1, "a food-role stop must exist");
+      assert.ok(
+        foodStops.some((stop) => stop.id === "food-corroborated"),
+        `the corroborated candidate must win the food role; got ${JSON.stringify(foodStops.map((s) => s.id))}`,
+      );
+
+      // The corroborated winner passed the shared gates — it must NOT carry an
+      // experimental-admission diagnostic. Admitted inferred stops must.
+      const diags = exp.experimental_route.gate_diagnostics;
+      assert.ok(diags.every((diag) => diag.candidate_id !== "food-corroborated"),
+        "a shared-gate-passing stop must not be labeled experimentally admitted");
+      assert.ok(diags.length >= 1, "admitted inferred stops still carry diagnostics");
+    },
+  ),
 );
 
 test(

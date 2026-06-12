@@ -59,9 +59,15 @@ function buildCandidateCombination(plannerRoles = {}, dayflowHonesty = {}, optio
   const usableByRole = [];
   const unresolved = cappedOut.map((role) => ({ role: role.role, reason: "capped_out" }));
   for (const role of targetRoles) {
-    const usable = (role.candidates || [])
-      .filter((candidate) => candidate.planner_usable === true && candidate.candidate_status !== "fallback")
-      .slice(0, topK);
+    const usableAll = (role.candidates || [])
+      .filter((candidate) => candidate.planner_usable === true && candidate.candidate_status !== "fallback");
+    // #270 contract: experimentally admitted candidates fill a role ONLY when no
+    // gate-passing candidate fills it. When one exists, admitted entries are not
+    // even options — geometry optimization must not trade trust for distance.
+    const gatePassing = usableAll.filter(
+      (candidate) => !(candidate.experimental_admission && candidate.experimental_admission.allowed === true),
+    );
+    const usable = (gatePassing.length ? gatePassing : usableAll).slice(0, topK);
     if (usable.length) {
       usableByRole.push({ role: role.role, slot: role.slot, options: usable });
     } else {

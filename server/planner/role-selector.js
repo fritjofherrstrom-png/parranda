@@ -108,15 +108,22 @@ function buildRankedEntriesForRole(spec, candidatePool) {
     })
     .filter((entry) => entry && entry.candidate_status !== "missing");
 
+  // Experimentally admitted entries (shared gates rejected them; the agnostic
+  // experiment admitted them anyway) rank AFTER every gate-passing entry of the
+  // same status: a candidate that actually cleared the shared gates must never
+  // lose its role to an admitted one on fit score alone.
+  const isAdmitted = (entry) => entry.experimental_admission && entry.experimental_admission.allowed === true;
   const byStatus = {
     filled: entries.filter((entry) => entry.candidate_status === "filled"),
-    partial: entries.filter((entry) => entry.candidate_status === "partial"),
+    partial: entries.filter((entry) => entry.candidate_status === "partial" && !isAdmitted(entry)),
+    partialAdmitted: entries.filter((entry) => entry.candidate_status === "partial" && isAdmitted(entry)),
     fallback: entries.filter((entry) => entry.candidate_status === "fallback"),
   };
 
   return [
     ...rankEligible(byStatus.filled),
     ...rankEligible(byStatus.partial),
+    ...rankEligible(byStatus.partialAdmitted),
     ...rankEligible(byStatus.fallback),
   ];
 }
