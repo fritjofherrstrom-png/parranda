@@ -314,14 +314,25 @@ function sanitizeRouteOrdering(ordering) {
 
 function buildGateDiagnostic(stop) {
   const admission = stop?.experimental_admission;
-  if (!admission || admission.allowed !== true) return null;
-  return {
+  const admitted = Boolean(admission && admission.allowed === true);
+  const localFeelReasons = Array.isArray(stop?.local_feel_reasons) ? stop.local_feel_reasons : [];
+  // #272 — a gate-passing external candidate can still be a chain or a
+  // secondary-type pick; surface that honestly on any selected stop that has a
+  // local-feel signal, not only experimentally admitted ones. Stops with
+  // neither admission nor a local-feel signal stay out of the diagnostics list
+  // (today's behavior).
+  if (!admitted && !localFeelReasons.length) return null;
+  const diagnostic = {
     candidate_id: stop.candidate_id || null,
     role: stop.role || null,
-    policy: admission.policy || "experimental_inferred_external",
-    reasons: Array.isArray(admission.reasons) ? admission.reasons : [],
-    gate_reasons: Array.isArray(admission.gate_reasons) ? admission.gate_reasons : [],
   };
+  if (admitted) {
+    diagnostic.policy = admission.policy || "experimental_inferred_external";
+    diagnostic.reasons = Array.isArray(admission.reasons) ? admission.reasons : [];
+    diagnostic.gate_reasons = Array.isArray(admission.gate_reasons) ? admission.gate_reasons : [];
+  }
+  if (localFeelReasons.length) diagnostic.local_feel_reasons = localFeelReasons;
+  return diagnostic;
 }
 
 /**

@@ -142,6 +142,11 @@ function mapRecordToCandidate(cityConfig, record, observedAt, index) {
   base.provider_id = EXTERNAL_OPEN_PROVIDER_META.provider_id;
   base.source_family = primaryFamily;
   base.source_policy = EXTERNAL_OPEN_PROVIDER_META.source_policy;
+  // Chain signal (#272): carried verbatim from the loader record (OSM brand tag,
+  // never name matching). Composition may prefer non-chain options; chains stay
+  // valid sparse fallbacks.
+  base.chain = record.chain === true;
+  base.brand = typeof record.brand === "string" && record.brand.trim() ? record.brand.trim() : null;
 
   return validatePlaceCandidate(base, `externalOpenCandidate[${index}]`);
 }

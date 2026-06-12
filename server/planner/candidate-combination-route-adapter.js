@@ -47,6 +47,11 @@ function buildRouteCandidateFromCandidateCombination({ city, candidateCombinatio
     coordinates: resolveCoords(s.coordinates),
     origin: s.origin || null,
     confidence: s.confidence || null,
+    // #272 — present only when the agnostic experiment seam computed the rank;
+    // every other adapter consumer keeps today's stop shape verbatim.
+    ...(Number.isFinite(s.local_feel_rank)
+      ? { local_feel_rank: s.local_feel_rank, local_feel_reasons: Array.isArray(s.local_feel_reasons) ? s.local_feel_reasons : [] }
+      : {}),
     experimental_admission: s.experimental_admission || null,
   }));
   const stopIds = stops.map((s) => s.candidate_id).filter(Boolean);

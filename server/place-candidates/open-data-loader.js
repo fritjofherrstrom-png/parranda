@@ -219,6 +219,12 @@ function mapOsmElement(element) {
     });
   }
 
+  // Chain signal (#272): the OSM `brand` / `brand:wikidata` TAG is the signal —
+  // never name-string matching. Chains stay valid candidates (sparse fallback);
+  // downstream composition may prefer non-chain options, never ban them.
+  const brandName = typeof tags.brand === "string" && tags.brand.trim() ? tags.brand.trim() : null;
+  const brandWikidata = typeof tags["brand:wikidata"] === "string" && tags["brand:wikidata"].trim();
+
   return {
     id: `osm-${elementType}-${osmId}`,
     name,
@@ -227,6 +233,8 @@ function mapOsmElement(element) {
     lng: coords.lng,
     tags: mapping.tags.slice(),
     sources,
+    chain: Boolean(brandName || brandWikidata),
+    brand: brandName,
   };
 }
 

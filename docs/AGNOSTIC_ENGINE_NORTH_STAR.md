@@ -78,6 +78,8 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 
 - **#270** removes the real-loader trust-wall for the **explicit agnostic route-output experiment only**: source-backed, attribution-bearing, geocoded `external_open` candidates whose evidence is single-family `inferred` may be admitted at the candidate-pool / role-selection seam when no higher-trust candidate fills a role. The shared gates still reject those records for default Planner, Blitz, Pulse, nearby, and ordinary candidate-pool use. Experimentally admitted stops carry their true gate diagnostics (including uncorroborated-promotion reasons), keep low confidence and `external_open` origin, and the readiness calibration stays capped (`thin_usable`, never `usable`) via external-only source caps.
 
+- **#272** adds **generic local-feel preference v1** inside the same experiment seam: the loader carries the OSM `brand`/`brand:wikidata` tag as a `chain` signal (the tag is the signal — never name matching), and composition orders options by coverage first, then non-chain primary-type > non-chain secondary > chain primary > chain secondary, then fit. Geometry optimization picks only within the best non-empty local-feel tier, so distance never trades away local feel. Chains are demoted, NEVER banned — in sparse places a chain still fills the role, honestly labeled (`chain_candidate`, `chain_fallback_no_local_option`, `secondary_type_for_role` in the route's gate diagnostics). Default Planner, Blitz, Pulse, and citypack flows are untouched: the preference activates only through the experiment-injected seam.
+
 Still missing before a true any-place Planner (now the next steps): stronger generic candidate supply where source-backed candidates are sparse, richer single-day composition quality after calibration, multi-day experimental output, persistent geocode caching / a paid-or-self-hosted geocoder for scale, and live ETA / real-time routing (explicitly out of scope).
 
 ## Anti-drift rule
@@ -163,7 +165,9 @@ The current direction should be:
 #265 — DONE: conservative proximity ordering before walking validation (fallback to role order)
 #266 — DONE: trusted weather-provider timezone auto-resolution (lower-trust derived timezone)
 #267 — DONE: conservative readiness/calibration for experimental agnostic one-day output
-#270 — IN PROGRESS: experiment-only admission of single-family inferred external candidates with capped calibration
+#270 — DONE: experiment-only admission of single-family inferred external candidates with capped calibration
+#271 — DONE: loader error observability (error_failed_closed vs genuinely empty)
+#272 — IN PROGRESS: generic local-feel preference v1 (chain demotion + role-type preference, experiment-only)
 ```
 
 The numbers may shift, but the sequence should not drift back into endless diagnostics.

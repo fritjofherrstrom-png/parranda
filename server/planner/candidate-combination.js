@@ -67,7 +67,25 @@ function buildCandidateCombination(plannerRoles = {}, dayflowHonesty = {}, optio
     const gatePassing = usableAll.filter(
       (candidate) => !(candidate.experimental_admission && candidate.experimental_admission.allowed === true),
     );
-    const usable = (gatePassing.length ? gatePassing : usableAll).slice(0, topK);
+    const trustTier = gatePassing.length ? gatePassing : usableAll;
+    // #272 contract (same shape as #270, one layer down): within the chosen
+    // trust tier — coverage first (an option that covers the role's intent
+    // always beats adjacent-only), then only the best non-empty local-feel
+    // tier becomes options. Geometry must not trade local feel for distance.
+    // Active ONLY when the agnostic experiment seam computed ranks (field
+    // present); every other flow keeps today's options verbatim. Chains are
+    // never banned: when the best tier IS chains (sparse case), they are the
+    // options.
+    let usablePool = trustTier;
+    if (trustTier.some((candidate) => Number.isFinite(candidate.local_feel_rank))) {
+      const covers = (candidate) => Array.isArray(candidate.covered_preferences) && candidate.covered_preferences.length > 0;
+      const covering = trustTier.filter(covers);
+      const coveragePool = covering.length ? covering : trustTier;
+      const feelRank = (candidate) => (Number.isFinite(candidate.local_feel_rank) ? candidate.local_feel_rank : 0);
+      const bestFeel = coveragePool.reduce((best, candidate) => Math.min(best, feelRank(candidate)), 3);
+      usablePool = coveragePool.filter((candidate) => feelRank(candidate) === bestFeel);
+    }
+    const usable = usablePool.slice(0, topK);
     if (usable.length) {
       usableByRole.push({ role: role.role, slot: role.slot, options: usable });
     } else {
@@ -275,6 +293,22 @@ function buildReasons({ status, usableByRole, unresolved, geometry, duplicateRol
 
 function formatSelected(pick) {
   const c = pick.candidate;
+  const reasons = Array.isArray(c.fit_reasons) ? c.fit_reasons.slice(0, 6) : [];
+  // #272 honesty: with tier-restricted options, a selected chain means no
+  // non-chain option could fill this role — say so on the stop itself. The
+  // rank exists only in the agnostic experiment path.
+  if (Number.isFinite(c.local_feel_rank) && c.local_feel_rank >= 2) {
+    reasons.push("chain_fallback_no_local_option");
+  }
+  if (Array.isArray(c.local_feel_reasons) && c.local_feel_reasons.length) {
+    for (const reason of c.local_feel_reasons) {
+      if (!reasons.includes(reason)) reasons.push(reason);
+    }
+  }
+  const localFeelReasons = [
+    ...(Array.isArray(c.local_feel_reasons) ? c.local_feel_reasons : []),
+    ...(Number.isFinite(c.local_feel_rank) && c.local_feel_rank >= 2 ? ["chain_fallback_no_local_option"] : []),
+  ];
   return {
     role: pick.role,
     candidate_id: c.candidate_id,
@@ -285,7 +319,11 @@ function formatSelected(pick) {
     confidence: c.confidence,
     coordinates: resolveCoords(c.coordinates),
     also_covers: Array.isArray(c.also_covers) ? c.also_covers : [],
-    reasons: Array.isArray(c.fit_reasons) ? c.fit_reasons.slice(0, 6) : [],
+    reasons,
+    // Present only when the agnostic experiment seam computed the rank.
+    ...(Number.isFinite(c.local_feel_rank)
+      ? { local_feel_rank: c.local_feel_rank, local_feel_reasons: localFeelReasons }
+      : {}),
     experimental_admission: c.experimental_admission || null,
   };
 }

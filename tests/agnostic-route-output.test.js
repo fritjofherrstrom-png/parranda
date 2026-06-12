@@ -82,7 +82,7 @@ function fixtureNear(base) {
   return recs;
 }
 
-function singleFamilyExternalRecord(id, name, type, lat, lng, tags = []) {
+function singleFamilyExternalRecord(id, name, type, lat, lng, tags = [], opts = {}) {
   return {
     id,
     name,
@@ -93,6 +93,7 @@ function singleFamilyExternalRecord(id, name, type, lat, lng, tags = []) {
     sources: [
       { provider: "osm", family: "map", tier: "inferred", url: `https://www.openstreetmap.org/node/${id}` },
     ],
+    ...(opts.chain !== undefined ? { chain: opts.chain, brand: opts.brand || null } : {}),
   };
 }
 
@@ -483,6 +484,167 @@ test(
       assert.ok(diags.length >= 1, "admitted inferred stops still carry diagnostics");
     },
   ),
+);
+
+// --- #272: generic local-feel preference (chain demotion + role-type preference)
+
+// Malmö-shaped: brand-tagged chains sit geometrically tightest; non-chain local
+// spots exist slightly farther out. Local feel must win over distance.
+function malmoShapedFixture(base) {
+  return [
+    singleFamilyExternalRecord("chain-burger-1", "Chain Burger", "street-food", base.lat, base.lng, ["mat"], { chain: true, brand: "Chain Burger" }),
+    singleFamilyExternalRecord("chain-burger-2", "Chain Burger", "street-food", base.lat + 0.0001, base.lng, ["mat"], { chain: true, brand: "Chain Burger" }),
+    singleFamilyExternalRecord("chain-espresso", "Chain Espresso", "cafe", base.lat, base.lng + 0.0001, ["fika"], { chain: true, brand: "Chain Espresso" }),
+    singleFamilyExternalRecord("local-rest-1", "Lokal Vinkällare", "restaurant", base.lat + 0.004, base.lng + 0.001, ["mat"]),
+    singleFamilyExternalRecord("local-rest-2", "Lokal Källare", "restaurant", base.lat + 0.0045, base.lng + 0.0012, ["mat"]),
+    singleFamilyExternalRecord("local-street", "Lokal Korv", "street-food", base.lat + 0.0042, base.lng + 0.0011, ["mat"]),
+    singleFamilyExternalRecord("local-cafe", "Lokal Pâtisserie", "cafe", base.lat + 0.005, base.lng + 0.0013, ["fika"]),
+  ];
+}
+
+test(
+  "api: #272 non-chain local spots win roles over geometrically tighter chains",
+  withServer(makeLoader(malmoShapedFixture({ lat: 55.605, lng: 13.0038 })), async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}`,
+      body: agnosticBody({ lat: 55.605, lng: 13.0038, preferences: ["food", "coffee"] }),
+    });
+    const exp = r.body.agnostic_route_output_experiment;
+    assert.equal(exp.route_mutation, true);
+    const stops = r.body.days[0].primary_route.main_stops;
+    const byRole = Object.fromEntries(stops.map((s) => [s.role, s.id]));
+    assert.ok(["local-rest-1", "local-rest-2"].includes(byRole.food_anchor),
+      `food role must go to a non-chain restaurant, got ${byRole.food_anchor}`);
+    assert.equal(byRole.coffee_fika_stop, "local-cafe",
+      "coffee role must go to the non-chain cafe, not the tighter chain espresso");
+    // No selected stop is a chain → no chain tokens on the route diagnostics.
+    for (const diag of exp.experimental_route.gate_diagnostics) {
+      assert.ok(!(diag.local_feel_reasons || []).includes("chain_candidate"),
+        `selected stop ${diag.candidate_id} must not be a chain here`);
+    }
+  }),
+);
+
+test(
+  "api: #272 sparse fallback — a chain still fills the role honestly when nothing local exists",
+  withServer(
+    makeLoader([
+      singleFamilyExternalRecord("chain-burger-only", "Chain Burger", "street-food", 55.605, 13.0038, ["mat"], { chain: true, brand: "Chain Burger" }),
+      singleFamilyExternalRecord("local-cafe", "Lokal Pâtisserie", "cafe", 55.6055, 13.004, ["fika"]),
+    ]),
+    async (server) => {
+      const r = await requestJson(server, {
+        path: `/api/route-recommendations?lang=en&${FLAG}`,
+        body: agnosticBody({ lat: 55.605, lng: 13.0038, preferences: ["food", "coffee"] }),
+      });
+      const exp = r.body.agnostic_route_output_experiment;
+      assert.equal(exp.route_mutation, true, "chains are a valid sparse fallback — never banned");
+      const stops = r.body.days[0].primary_route.main_stops;
+      const byRole = Object.fromEntries(stops.map((s) => [s.role, s.id]));
+      assert.equal(byRole.food_anchor, "chain-burger-only");
+      const chainDiag = exp.experimental_route.gate_diagnostics.find((d) => d.candidate_id === "chain-burger-only");
+      assert.ok(chainDiag, "selected chain stop carries a diagnostic");
+      assert.ok(chainDiag.local_feel_reasons.includes("chain_candidate"));
+      assert.ok(chainDiag.local_feel_reasons.includes("chain_fallback_no_local_option"));
+      assert.ok(chainDiag.local_feel_reasons.includes("secondary_type_for_role"));
+    },
+  ),
+);
+
+test(
+  "api: #272 role-type preference — restaurant beats street-food for the food role; street-food wins alone",
+  withServer(
+    makeLoader([
+      // Distinct distinctive-name tokens — entity-resolution must not merge these.
+      singleFamilyExternalRecord("sf-1", "Snabbmat Expressen", "street-food", 55.605, 13.0038, ["mat"]),
+      singleFamilyExternalRecord("rest-1", "Trattoria Bella Vista", "restaurant", 55.6053, 13.004, ["mat"]),
+      singleFamilyExternalRecord("cafe-1", "Kafé Hörnan", "cafe", 55.6051, 13.0042, ["fika"]),
+    ]),
+    async (server) => {
+      const r = await requestJson(server, {
+        path: `/api/route-recommendations?lang=en&${FLAG}`,
+        body: agnosticBody({ lat: 55.605, lng: 13.0038, preferences: ["food", "coffee"] }),
+      });
+      const stops = r.body.days[0].primary_route.main_stops;
+      const byRole = Object.fromEntries(stops.map((s) => [s.role, s.id]));
+      assert.equal(byRole.food_anchor, "rest-1", "primary type (restaurant) wins at equal trust");
+    },
+  ),
+);
+
+test(
+  "api: #272 street-food fills the food role when no restaurant exists (secondary type, honest reason)",
+  withServer(
+    makeLoader([
+      singleFamilyExternalRecord("sf-only", "Snabbmat Expressen", "street-food", 55.605, 13.0038, ["mat"]),
+      singleFamilyExternalRecord("cafe-1", "Kafé Hörnan", "cafe", 55.6051, 13.0042, ["fika"]),
+    ]),
+    async (server) => {
+      const r = await requestJson(server, {
+        path: `/api/route-recommendations?lang=en&${FLAG}`,
+        body: agnosticBody({ lat: 55.605, lng: 13.0038, preferences: ["food", "coffee"] }),
+      });
+      const exp = r.body.agnostic_route_output_experiment;
+      assert.equal(exp.route_mutation, true);
+      const byRole = Object.fromEntries(r.body.days[0].primary_route.main_stops.map((s) => [s.role, s.id]));
+      assert.equal(byRole.food_anchor, "sf-only");
+      const diag = exp.experimental_route.gate_diagnostics.find((d) => d.candidate_id === "sf-only");
+      assert.ok(diag.local_feel_reasons.includes("secondary_type_for_role"));
+      assert.ok(!diag.local_feel_reasons.includes("chain_candidate"), "non-chain street food is not a chain");
+    },
+  ),
+);
+
+test(
+  "api: #272 a gate-passing external chain still surfaces local-feel diagnostics honestly",
+  withServer(
+    makeLoader([
+      // A corroborated chain (map + open_knowledge → diversity 2 → passes shared
+      // gates as a real `filled` candidate) carrying the OSM brand tag. Plus a
+      // non-chain corroborated cafe for the other role.
+      Object.assign(
+        externalRecord("food-chain-corr", "Chain Burger", "street-food", 55.605, 13.0038, ["mat"]),
+        { chain: true, brand: "Chain Burger" },
+      ),
+      externalRecord("cafe-local-corr", "Kafé Hörnan", "cafe", 55.6053, 13.004, ["fika"]),
+    ]),
+    async (server) => {
+      const r = await requestJson(server, {
+        path: `/api/route-recommendations?lang=en&${FLAG}`,
+        body: agnosticBody({ lat: 55.605, lng: 13.0038, preferences: ["food", "coffee"] }),
+      });
+      const exp = r.body.agnostic_route_output_experiment;
+      assert.equal(exp.route_mutation, true);
+      const stops = r.body.days[0].primary_route.main_stops;
+      const byRole = Object.fromEntries(stops.map((s) => [s.role, s.id]));
+      assert.equal(byRole.food_anchor, "food-chain-corr",
+        "the only food option is a corroborated chain — it must still fill the role");
+      // The chain is gate-passing (no experimental_admission), but #272 still
+      // surfaces local-feel honesty on the selected stop.
+      const chainDiag = exp.experimental_route.gate_diagnostics.find((d) => d.candidate_id === "food-chain-corr");
+      assert.ok(chainDiag, "a gate-passing chain stop still produces a local-feel diagnostic");
+      assert.ok(!("policy" in chainDiag), "no admission policy on a gate-passing stop");
+      assert.ok(chainDiag.local_feel_reasons.includes("chain_candidate"));
+      assert.ok(chainDiag.local_feel_reasons.includes("secondary_type_for_role"));
+      // The non-chain cafe has no local-feel signal → no diagnostic entry.
+      assert.equal(exp.experimental_route.gate_diagnostics.find((d) => d.candidate_id === "cafe-local-corr"), undefined);
+    },
+  ),
+);
+
+test(
+  "api: #272 default path leaks no chain/local-feel fields (flag off → byte-shape unchanged)",
+  withServer(makeLoader(malmoShapedFixture({ lat: 55.605, lng: 13.0038 })), async (server) => {
+    const r = await requestJson(server, {
+      path: "/api/route-recommendations?lang=en&include_external_candidates=1",
+      body: agnosticBody({ lat: 55.605, lng: 13.0038, preferences: ["food", "coffee"] }),
+    });
+    assert.equal(r.body.agnostic_route_output_experiment, undefined);
+    assert.deepEqual(r.body.days, []);
+    const blob = JSON.stringify(r.body);
+    assert.ok(!blob.includes("local_feel"), "local_feel must not leak into default responses");
+    assert.ok(!blob.includes("chain_candidate"), "chain tokens must not leak into default responses");
+  }),
 );
 
 test(

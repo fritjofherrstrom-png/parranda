@@ -16,13 +16,40 @@ const { scoreCandidateFit } = require("../candidates/fit-scorer");
 const { calibrateSource } = require("../candidates/source-calibration");
 
 const ROLE_SPEC = Object.freeze({
-  scenic_anchor: { intents: ["scenic"], slot: "anchor", gate: "may_anchor_route" },
-  food_anchor: { intents: ["food"], slot: "anchor", gate: "may_anchor_route" },
-  coffee_fika_stop: { intents: ["coffee"], slot: "stop", gate: "may_influence_routes" },
-  evening_bar_option: { intents: ["bars"], slot: "option", gate: "may_influence_routes" },
-  swimming_coast_option: { intents: ["swimming"], slot: "option", gate: "may_influence_routes" },
-  vintage_second_hand_option: { intents: ["second_hand"], slot: "option", gate: "may_influence_routes" },
+  scenic_anchor: { intents: ["scenic"], slot: "anchor", gate: "may_anchor_route", primaryTypes: ["viewpoint"] },
+  food_anchor: { intents: ["food"], slot: "anchor", gate: "may_anchor_route", primaryTypes: ["restaurant"] },
+  coffee_fika_stop: { intents: ["coffee"], slot: "stop", gate: "may_influence_routes", primaryTypes: ["cafe"] },
+  evening_bar_option: { intents: ["bars"], slot: "option", gate: "may_influence_routes", primaryTypes: ["bar"] },
+  swimming_coast_option: { intents: ["swimming"], slot: "option", gate: "may_influence_routes", primaryTypes: ["beach"] },
+  vintage_second_hand_option: { intents: ["second_hand"], slot: "option", gate: "may_influence_routes", primaryTypes: ["vintage-shop"] },
 });
+
+// #272 — generic local-feel preference (agnostic experiment only). Within a
+// status bucket, external candidates order by: non-chain primary-type (0),
+// non-chain secondary (1), chain primary (2), chain secondary (3). The chain
+// signal is the OSM brand tag carried by the loader — never name matching.
+// Chains are demoted, NEVER banned: they remain valid sparse fallbacks.
+// Non-external candidates always rank 0, so curated/citypack flows and any
+// path without the experiment seam are byte-identical.
+function localFeelRank(spec, candidate) {
+  if (candidate.candidate_origin !== "external_open") return 0;
+  const chain = candidate.chain === true;
+  const primary = Array.isArray(spec.primaryTypes) && spec.primaryTypes.includes(String(candidate.type || "").toLowerCase());
+  if (!chain && primary) return 0;
+  if (!chain && !primary) return 1;
+  if (chain && primary) return 2;
+  return 3;
+}
+
+function localFeelReasons(spec, candidate) {
+  if (candidate.candidate_origin !== "external_open") return [];
+  const reasons = [];
+  if (candidate.chain === true) reasons.push("chain_candidate");
+  if (Array.isArray(spec.primaryTypes) && !spec.primaryTypes.includes(String(candidate.type || "").toLowerCase())) {
+    reasons.push("secondary_type_for_role");
+  }
+  return reasons;
+}
 
 const ROLE_ORDER = Object.freeze(Object.keys(ROLE_SPEC));
 const STATUS_RANK = Object.freeze({ missing: 0, fallback: 1, partial: 2, filled: 3 });
@@ -34,9 +61,14 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
   const candidatePool = buildEligibleCandidatePool(cityConfig, payload, helpers);
   const requestedIntents = new Set(candidatePool.normalized.intents || []);
 
+  // Local-feel preference activates through the same seam as #270 admission:
+  // only the agnostic route-output experiment injects this helper, so every
+  // other caller (default Planner, Blitz, Pulse, citypack inspect) is untouched.
+  const localFeelActive = typeof helpers.experimentalAdmitCandidate === "function";
+
   const roleEntries = {};
   for (const [role, spec] of Object.entries(ROLE_SPEC)) {
-    roleEntries[role] = buildRankedEntriesForRole(spec, candidatePool);
+    roleEntries[role] = buildRankedEntriesForRole(spec, candidatePool, localFeelActive);
   }
 
   const roles = ROLE_ORDER.map((role) => {
@@ -72,7 +104,7 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
   };
 }
 
-function buildRankedEntriesForRole(spec, candidatePool) {
+function buildRankedEntriesForRole(spec, candidatePool, localFeelActive = false) {
   const entries = candidatePool.pool
     .map(({ candidate, derived, gates, evidence, experimental_admission }) => {
       const fit = scoreCandidateFit({
@@ -104,6 +136,9 @@ function buildRankedEntriesForRole(spec, candidatePool) {
         calibration,
         experimental_admission,
         candidate_status: candidateStatusForRole({ fit, gates, spec, experimentalAdmission: experimental_admission }),
+        ...(localFeelActive
+          ? { local_feel_rank: localFeelRank(spec, candidate), local_feel_reasons: localFeelReasons(spec, candidate) }
+          : {}),
       };
     })
     .filter((entry) => entry && entry.candidate_status !== "missing");
@@ -120,11 +155,26 @@ function buildRankedEntriesForRole(spec, candidatePool) {
     fallback: entries.filter((entry) => entry.candidate_status === "fallback"),
   };
 
+  // #272 — within each status bucket, order by coverage FIRST (a candidate that
+  // actually covers the role's intent always beats an adjacent-only one — local
+  // feel must never trump coverage), THEN local-feel tier, THEN fit. Inactive
+  // seam → plain rankEligible, exactly today's order.
+  const rankByLocalFeel = (bucket) => {
+    if (!localFeelActive) return rankEligible(bucket);
+    const covers = (entry) => Array.isArray(entry.fit.covered_preferences) && entry.fit.covered_preferences.length > 0;
+    const groups = [[], [], [], [], [], [], [], []];
+    for (const entry of bucket) {
+      const feel = Number.isFinite(entry.local_feel_rank) ? entry.local_feel_rank : 0;
+      groups[(covers(entry) ? 0 : 4) + feel].push(entry);
+    }
+    return groups.flatMap((group) => rankEligible(group));
+  };
+
   return [
-    ...rankEligible(byStatus.filled),
-    ...rankEligible(byStatus.partial),
-    ...rankEligible(byStatus.partialAdmitted),
-    ...rankEligible(byStatus.fallback),
+    ...rankByLocalFeel(byStatus.filled),
+    ...rankByLocalFeel(byStatus.partial),
+    ...rankByLocalFeel(byStatus.partialAdmitted),
+    ...rankByLocalFeel(byStatus.fallback),
   ];
 }
 
@@ -167,6 +217,16 @@ function formatRoleCandidate(entry, role, roleEntries) {
     partial_preferences: fit.partial_preferences,
     missing_preferences: fit.missing_preferences,
     fit_reasons: fit.reasons,
+    // #272 — present ONLY when the experiment seam is active (entry carries the
+    // rank); default/citypack role payloads stay byte-identical.
+    ...(Number.isFinite(entry.local_feel_rank)
+      ? {
+          local_feel_rank: entry.local_feel_rank,
+          local_feel_reasons: entry.local_feel_reasons || [],
+          chain: entry.candidate.chain === true,
+          brand: typeof entry.candidate.brand === "string" ? entry.candidate.brand : null,
+        }
+      : {}),
     experimental_admission: sanitizeExperimentalAdmission(experimental_admission),
     lens_reasons: fit.dimensions?.local?.reasons || [],
     // Surface the already-computed weather/time fit reasons (e.g.
