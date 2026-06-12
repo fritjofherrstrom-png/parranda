@@ -27,9 +27,16 @@
  */
 
 const DEFAULT_OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
+// Overpass (like Nominatim, see place-resolver.js) rejects requests without an
+// identifying User-Agent with HTTP 406 — without this header every live call
+// fails closed and the loader silently returns [].
+const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
 const DEFAULT_RADIUS_KM = 1.0;
 const DEFAULT_LIMIT = 25;
-const DEFAULT_TIMEOUT_MS = 5000;
+// Live Overpass responses for this query routinely take 4–6s (the query itself
+// declares a 25s server budget); a 5s client abort silently turned dense areas
+// into fake "no data". Still a hard bound via AbortController.
+const DEFAULT_TIMEOUT_MS = 12000;
 const MAX_RADIUS_KM = 5.0;
 const MAX_LIMIT = 100;
 
@@ -69,6 +76,7 @@ function createOpenDataLoader({
   radiusKm = DEFAULT_RADIUS_KM,
   limit = DEFAULT_LIMIT,
   timeoutMs = DEFAULT_TIMEOUT_MS,
+  userAgent = DEFAULT_USER_AGENT,
 } = {}) {
   if (typeof fetcher !== "function") {
     return null; // honest fail closed: no fetcher → no loader
@@ -90,7 +98,11 @@ function createOpenDataLoader({
     try {
       const response = await fetcher(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "User-Agent": userAgent,
+          Accept: "application/json",
+        },
         body: `data=${encodeURIComponent(query)}`,
         signal: controller.signal,
       });
@@ -222,6 +234,7 @@ function clamp(value, min, max) {
 
 module.exports = {
   DEFAULT_OVERPASS_ENDPOINT,
+  DEFAULT_USER_AGENT,
   DEFAULT_RADIUS_KM,
   DEFAULT_LIMIT,
   DEFAULT_TIMEOUT_MS,
