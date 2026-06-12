@@ -33,7 +33,10 @@ const DEFAULT_OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
 const DEFAULT_RADIUS_KM = 1.0;
 const DEFAULT_LIMIT = 25;
-const DEFAULT_TIMEOUT_MS = 5000;
+// Live Overpass responses for this query routinely take 4–6s (the query itself
+// declares a 25s server budget); a 5s client abort silently turned dense areas
+// into fake "no data". Still a hard bound via AbortController.
+const DEFAULT_TIMEOUT_MS = 12000;
 const MAX_RADIUS_KM = 5.0;
 const MAX_LIMIT = 100;
 
