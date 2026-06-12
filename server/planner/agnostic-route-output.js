@@ -96,6 +96,47 @@ function safeAssessReadiness(cityConfig, options) {
   }
 }
 
+function admitExperimentalInferredExternalCandidate({ candidate, derived, gates } = {}) {
+  const hasCoords = Number.isFinite(candidate?.lat) && Number.isFinite(candidate?.lng);
+  const attribution = collectCandidateAttribution(candidate);
+  const sourceTier = String(candidate?.trust?.source_tier || "").toLowerCase();
+  const external = candidate?.candidate_origin === "external_open" || candidate?.city_pack_owned === false;
+  const sourceBacked = attribution.length > 0;
+  if (!external || sourceTier !== "inferred" || !hasCoords || !hasText(candidate?.label) || !sourceBacked) {
+    return { allowed: false };
+  }
+  const gateReasons = Array.isArray(gates?.reasons) ? gates.reasons : [];
+  const reasons = dedupe([
+    "experimental_inferred_external_admission",
+    "source_backed_external_candidate",
+    "has_coordinates",
+    ...gateReasons,
+  ]);
+  if (candidate?.trust?.human_verified !== true && Number(derived?.provenance_diversity || 0) < 2) {
+    reasons.push("blocked_promotion_uncorroborated");
+  }
+  if (String(derived?.existence_confidence || "") === "low") {
+    reasons.push("low_existence_confidence");
+  }
+  return {
+    allowed: true,
+    policy: "experimental_inferred_external",
+    reasons: dedupe(reasons),
+    gate_reasons: gateReasons,
+  };
+}
+
+function collectCandidateAttribution(candidate) {
+  const evidence = Array.isArray(candidate?.evidence) ? candidate.evidence : [];
+  return evidence
+    .map((item) => item && item.source_ref)
+    .filter((ref) => ref && (hasText(ref.provider_id) || hasText(ref.url) || hasText(ref.label)));
+}
+
+function hasText(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 /**
  * Decide whether a trusted candidate combination is eligible to BECOME the
  * returned route. Hard blockers prevent mutation; caveats accompany a produced
@@ -168,7 +209,8 @@ function evaluateEligibility({ externalRequested, sourceStatus, adaptedBody, can
  * `map_path_points`) while still avoiding opening-hours/live-arrival claims.
  */
 function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation = null, routeOrdering = null }) {
-  const stops = (Array.isArray(adaptedBody?.stops) ? adaptedBody.stops : []).map((stop) => ({
+  const inputStops = Array.isArray(adaptedBody?.stops) ? adaptedBody.stops : [];
+  const stops = inputStops.map((stop) => ({
     id: stop.candidate_id || null,
     label: stop.label || null,
     role: stop.role || null,
@@ -178,6 +220,9 @@ function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation
     lng: stop.coordinates && Number.isFinite(stop.coordinates.lng) ? stop.coordinates.lng : null,
   }));
   const stopIds = stops.map((stop) => stop.id).filter(Boolean);
+  const gateDiagnostics = inputStops
+    .map((stop) => buildGateDiagnostic(stop))
+    .filter(Boolean);
 
   const base = {
     id: `agnostic-experimental:${cityKey || "agnostic"}:${[...stopIds].sort().join("+") || "empty"}`,
@@ -194,6 +239,7 @@ function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation
     unresolved_roles: Array.isArray(adaptedBody?.unresolved_roles) ? adaptedBody.unresolved_roles : [],
     geometry_summary: adaptedBody?.geometry_summary || null,
     trust_summary: adaptedBody?.trust_summary || null,
+    gate_diagnostics: gateDiagnostics,
     route_ordering: sanitizeRouteOrdering(routeOrdering),
   };
 
@@ -255,6 +301,18 @@ function sanitizeRouteOrdering(ordering) {
     fallback_used: Boolean(ordering.fallback_used),
     fallback_reason: ordering.fallback_reason || null,
     failed_sequence_validation: ordering.failed_sequence_validation || null,
+  };
+}
+
+function buildGateDiagnostic(stop) {
+  const admission = stop?.experimental_admission;
+  if (!admission || admission.allowed !== true) return null;
+  return {
+    candidate_id: stop.candidate_id || null,
+    role: stop.role || null,
+    policy: admission.policy || "experimental_inferred_external",
+    reasons: Array.isArray(admission.reasons) ? admission.reasons : [],
+    gate_reasons: Array.isArray(admission.gate_reasons) ? admission.gate_reasons : [],
   };
 }
 
@@ -437,9 +495,10 @@ async function composeAgnosticRouteOutput({
   // never pass through here, so their time behavior is untouched).
   const trustedTimeKnown = Boolean(ctx && ctx.timezoneKnown);
   const selectionHelpers = trustedTimeKnown
-    ? helpers
+    ? { ...helpers, experimentalAdmitCandidate: admitExperimentalInferredExternalCandidate }
     : {
         ...helpers,
+        experimentalAdmitCandidate: admitExperimentalInferredExternalCandidate,
         resolveNowContext: (cfg, pl) => ({
           date: (pl && pl.date) || cfg.todayIsoDate(),
           hour: null,

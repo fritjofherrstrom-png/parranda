@@ -74,7 +74,7 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
 
 function buildRankedEntriesForRole(spec, candidatePool) {
   const entries = candidatePool.pool
-    .map(({ candidate, derived, gates, evidence }) => {
+    .map(({ candidate, derived, gates, evidence, experimental_admission }) => {
       const fit = scoreCandidateFit({
         candidate,
         userIntents: spec.intents,
@@ -102,25 +102,33 @@ function buildRankedEntriesForRole(spec, candidatePool) {
         evidence,
         fit,
         calibration,
-        candidate_status: candidateStatusForRole({ fit, gates, spec }),
+        experimental_admission,
+        candidate_status: candidateStatusForRole({ fit, gates, spec, experimentalAdmission: experimental_admission }),
       };
     })
     .filter((entry) => entry && entry.candidate_status !== "missing");
 
+  // Experimentally admitted entries (shared gates rejected them; the agnostic
+  // experiment admitted them anyway) rank AFTER every gate-passing entry of the
+  // same status: a candidate that actually cleared the shared gates must never
+  // lose its role to an admitted one on fit score alone.
+  const isAdmitted = (entry) => entry.experimental_admission && entry.experimental_admission.allowed === true;
   const byStatus = {
     filled: entries.filter((entry) => entry.candidate_status === "filled"),
-    partial: entries.filter((entry) => entry.candidate_status === "partial"),
+    partial: entries.filter((entry) => entry.candidate_status === "partial" && !isAdmitted(entry)),
+    partialAdmitted: entries.filter((entry) => entry.candidate_status === "partial" && isAdmitted(entry)),
     fallback: entries.filter((entry) => entry.candidate_status === "fallback"),
   };
 
   return [
     ...rankEligible(byStatus.filled),
     ...rankEligible(byStatus.partial),
+    ...rankEligible(byStatus.partialAdmitted),
     ...rankEligible(byStatus.fallback),
   ];
 }
 
-function candidateStatusForRole({ fit, gates, spec }) {
+function candidateStatusForRole({ fit, gates, spec, experimentalAdmission = null }) {
   const covered = coversAny(fit.covered_preferences, spec.intents);
   const adjacent = coversAny(fit.partial_preferences, spec.intents);
   if (!covered && !adjacent) {
@@ -132,6 +140,9 @@ function candidateStatusForRole({ fit, gates, spec }) {
   if (gates.may_influence_routes === true) {
     return "partial";
   }
+  if (experimentalAdmission && experimentalAdmission.allowed === true && (covered || adjacent)) {
+    return "partial";
+  }
   if (gates.may_show_as_nearby === true) {
     return "fallback";
   }
@@ -139,7 +150,7 @@ function candidateStatusForRole({ fit, gates, spec }) {
 }
 
 function formatRoleCandidate(entry, role, roleEntries) {
-  const { candidate, derived, fit, gates, calibration, candidate_status } = entry;
+  const { candidate, derived, fit, gates, calibration, candidate_status, experimental_admission } = entry;
   const provenance = candidateProvenance(candidate, derived);
   return {
     candidate_id: candidate.id,
@@ -156,6 +167,7 @@ function formatRoleCandidate(entry, role, roleEntries) {
     partial_preferences: fit.partial_preferences,
     missing_preferences: fit.missing_preferences,
     fit_reasons: fit.reasons,
+    experimental_admission: sanitizeExperimentalAdmission(experimental_admission),
     lens_reasons: fit.dimensions?.local?.reasons || [],
     // Surface the already-computed weather/time fit reasons (e.g.
     // "rain_favors_indoor", "time_match:evening") so downstream context can
@@ -192,6 +204,16 @@ function alsoCovers(candidateId, currentRole, roleEntries) {
     });
   }
   return covers;
+}
+
+function sanitizeExperimentalAdmission(admission) {
+  if (!admission || admission.allowed !== true) return null;
+  return {
+    allowed: true,
+    policy: admission.policy || "experimental_inferred_external",
+    reasons: Array.isArray(admission.reasons) ? admission.reasons : [],
+    gate_reasons: Array.isArray(admission.gate_reasons) ? admission.gate_reasons : [],
+  };
 }
 
 function strongestStatus(candidates) {

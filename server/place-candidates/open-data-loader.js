@@ -17,8 +17,11 @@
  *   - Source honesty: each record carries OSM as a `map` source; when the OSM
  *     element ALSO carries a `wikidata` tag, a SECOND source (`open_knowledge`)
  *     is emitted so the reducer sees real provenance diversity. Without it, a
- *     single-family record stays low and is gated out by the existing gates —
- *     OSM alone never becomes a user-facing move. This is the safer default.
+ *     single-family record stays low and is gated out by the existing shared
+ *     gates by default. The explicit agnostic route-output experiment may admit
+ *     those attribution-bearing geocoded records through its own seam, but only
+ *     with visible gate diagnostics and capped calibration; default Planner,
+ *     Blitz, Pulse, and nearby surfaces stay on the safer shared gates.
  *   - No app-owned copy of external text: only attribution-bearing source refs.
  *
  * What this is NOT: Google/Tripadvisor/Facebook/social/review scraping; a
