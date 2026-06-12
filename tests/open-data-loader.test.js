@@ -8,6 +8,7 @@ const {
   mapOverpassResponse,
   mapOsmElement,
   MAX_RADIUS_KM,
+  DEFAULT_USER_AGENT,
 } = require("../server/place-candidates/open-data-loader");
 
 // --- OSM element mapping ---------------------------------------------------
@@ -100,6 +101,27 @@ test("injected fetcher maps an Overpass payload into records (no live network)",
   assert.equal(records.length, 1);
   assert.equal(records[0].id, "osm-node-42");
   assert.ok(calledUrl.includes("overpass"));
+});
+
+test("loader sends an identifying User-Agent (Overpass returns 406 without one)", async () => {
+  let capturedHeaders = null;
+  const fetcher = async (_url, opts) => {
+    capturedHeaders = opts.headers;
+    return { ok: true, json: async () => ({ elements: [] }) };
+  };
+  const loader = createOpenDataLoader({ fetcher });
+  await loader({ lat: 41.9, lng: 12.5 });
+  assert.equal(capturedHeaders["User-Agent"], DEFAULT_USER_AGENT);
+  assert.match(capturedHeaders["User-Agent"], /^Parranda\/1\.0 \(\+https:\/\//);
+  assert.equal(capturedHeaders.Accept, "application/json");
+
+  let customHeaders = null;
+  const custom = createOpenDataLoader({
+    fetcher: async (_url, opts) => { customHeaders = opts.headers; return { ok: true, json: async () => ({ elements: [] }) }; },
+    userAgent: "Parranda-Test/0.1 (+https://example.test)",
+  });
+  await custom({ lat: 41.9, lng: 12.5 });
+  assert.equal(customHeaders["User-Agent"], "Parranda-Test/0.1 (+https://example.test)");
 });
 
 test("non-200 response fails closed", async () => {
