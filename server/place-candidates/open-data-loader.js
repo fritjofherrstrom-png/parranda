@@ -36,6 +36,10 @@ const DEFAULT_OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
 const DEFAULT_RADIUS_KM = 1.0;
 const DEFAULT_LIMIT = 25;
+// How many raw elements to ask Overpass for before balancing down to the final
+// limit. Wider than the limit so scarce categories survive a dense centre;
+// still small and bounded (one query).
+const OVERPASS_FETCH_CAP = 150;
 // Live Overpass responses for this query routinely take 4–6s (the query itself
 // declares a 25s server budget); a 5s client abort silently turned dense areas
 // into fake "no data". Still a hard bound via AbortController.
@@ -47,8 +51,19 @@ const MAX_LIMIT = 100;
 // every entry maps cleanly into the canonical intent vocabulary. Add lines
 // here when adding a new intent — do not branch in the mapping function.
 const OSM_TAG_MAP = [
-  // scenic
+  // scenic — viewpoints are rare in flat city centres, so the scenic role used
+  // to go unfilled everywhere (#273). A scenic anchor in any place is also a
+  // notable park, public garden, waterfront, or castle. These types are ALREADY
+  // recognized as scenic by the shared intent vocabulary (weak_types), so this
+  // is purely the loader catching up — zero change to citypack/default scoring.
+  // (squares / monuments / attractions need new vocab types → deferred so this
+  // PR stays loader-only and changes no shared behaviour.)
   { key: "tourism", value: "viewpoint", type: "viewpoint", tags: ["utsikt"] },
+  { key: "leisure", value: "park", type: "park", tags: ["park", "green"] },
+  { key: "leisure", value: "garden", type: "garden", tags: ["garden", "green"] },
+  { key: "leisure", value: "marina", type: "promenade", tags: ["waterfront", "coast"] },
+  { key: "man_made", value: "pier", type: "promenade", tags: ["waterfront", "coast"] },
+  { key: "historic", value: "castle", type: "castle", tags: ["historic", "landmark"] },
   // swimming / coast
   { key: "natural", value: "beach", type: "beach", tags: ["coast"] },
   { key: "leisure", value: "beach_resort", type: "beach", tags: ["coast"] },
@@ -92,7 +107,11 @@ function createOpenDataLoader({
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return withLoaderStatus([], "loaded:0", null);
 
     const radiusM = Math.round(boundedRadiusKm * 1000);
-    const query = buildOverpassQuery({ lat, lng, radiusM, limit: boundedLimit });
+    // Fetch wider than the final limit so scarce-but-important categories
+    // (scenic in a food-dense centre) are present in the response, then balance
+    // down to `boundedLimit` client-side. Still one bounded query.
+    const fetchBreadth = Math.min(boundedLimit * 6, OVERPASS_FETCH_CAP);
+    const query = buildOverpassQuery({ lat, lng, radiusM, limit: fetchBreadth });
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), boundedTimeoutMs);
@@ -129,26 +148,87 @@ function createOpenDataLoader({
 }
 
 function buildOverpassQuery({ lat, lng, radiusM, limit }) {
-  const filters = OSM_TAG_MAP.flatMap(({ key, value }) => [
-    `node["${key}"="${value}"](around:${radiusM},${lat},${lng});`,
-    `way["${key}"="${value}"](around:${radiusM},${lat},${lng});`,
-  ]).join("");
-  return `[out:json][timeout:25];(${filters});out center ${limit};`;
+  // Per-category `out` budgets. Overpass outputs nodes before ways, so a single
+  // combined `out center N` lets food/bar/cafe NODES exhaust N before park/
+  // castle WAYS are ever emitted — scarce area-typed scenic places vanished
+  // server-side (#273). Grouping by category with its own `out` guarantees each
+  // category contributes regardless of node/way ordering. Still one request.
+  const groups = new Map();
+  for (const { key, value, type } of OSM_TAG_MAP) {
+    const category = TYPE_CATEGORY[type] || "other";
+    if (!groups.has(category)) groups.set(category, []);
+    groups.get(category).push({ key, value });
+  }
+  const perCategory = Math.max(6, Math.ceil(limit / groups.size));
+  const blocks = [];
+  let i = 0;
+  for (const [category, entries] of groups) {
+    const setName = `c${i}`;
+    const filters = entries
+      .flatMap(({ key, value }) => [
+        `node["${key}"="${value}"](around:${radiusM},${lat},${lng});`,
+        `way["${key}"="${value}"](around:${radiusM},${lat},${lng});`,
+      ])
+      .join("");
+    blocks.push(`(${filters})->.${setName};.${setName} out center ${perCategory};`);
+    i += 1;
+  }
+  return `[out:json][timeout:25];${blocks.join("")}`;
 }
+
+// Parranda type → coarse intent category, for category-balanced selection.
+const TYPE_CATEGORY = {
+  viewpoint: "scenic", park: "scenic", garden: "scenic", promenade: "scenic", castle: "scenic",
+  restaurant: "food", "street-food": "food",
+  cafe: "coffee",
+  bar: "bars",
+  market: "market",
+  museum: "culture", gallery: "culture",
+  beach: "swimming",
+  "vintage-shop": "vintage",
+};
 
 function mapOverpassResponse(payload, limit) {
   if (!payload || !Array.isArray(payload.elements)) return [];
-  const records = [];
+  // Map + dedupe everything Overpass returned (already bounded by the fetch
+  // cap), preserving response order.
+  const mapped = [];
   const seenIds = new Set();
   for (const element of payload.elements) {
-    if (records.length >= limit) break;
     const record = mapOsmElement(element);
     if (!record) continue;
     if (seenIds.has(record.id)) continue; // exact-id dedupe inside the loader
     seenIds.add(record.id);
-    records.push(record);
+    mapped.push(record);
   }
-  return records;
+  if (mapped.length <= limit) return mapped;
+
+  // Category-balanced round-robin: a food-dense centre must not crowd out the
+  // single scenic anchor. Buckets keep response order; we take one per category
+  // per round until the limit is reached. Deterministic given the input order.
+  const buckets = new Map();
+  for (const record of mapped) {
+    const category = TYPE_CATEGORY[record.type] || "other";
+    if (!buckets.has(category)) buckets.set(category, []);
+    buckets.get(category).push(record);
+  }
+  const order = [...buckets.keys()]; // first-seen category order — deterministic
+  const balanced = [];
+  let round = 0;
+  while (balanced.length < limit) {
+    let tookOne = false;
+    for (const category of order) {
+      const bucket = buckets.get(category);
+      if (round < bucket.length) {
+        balanced.push(bucket[round]);
+        tookOne = true;
+        if (balanced.length >= limit) break;
+      }
+    }
+    if (!tookOne) break; // all buckets exhausted
+    round += 1;
+  }
+  return balanced;
 }
 
 function withLoaderStatus(records, status, error) {

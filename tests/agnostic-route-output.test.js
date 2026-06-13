@@ -633,6 +633,57 @@ test(
 );
 
 test(
+  "api: #273 a city park fills the scenic role (no viewpoint needed)",
+  withServer(
+    makeLoader([
+      // No viewpoint anywhere (the flat-city case). A park, a square, a castle
+      // are the scenic anchors — they must now fill scenic_anchor.
+      singleFamilyExternalRecord("scenic-park", "Kungsparken", "park", 55.6053, 13.004, ["park", "green"]),
+      singleFamilyExternalRecord("food-1", "Trattoria Bella Vista", "restaurant", 55.605, 13.0038, ["mat"]),
+      singleFamilyExternalRecord("cafe-1", "Kafé Hörnan", "cafe", 55.6051, 13.0042, ["fika"]),
+    ]),
+    async (server) => {
+      const r = await requestJson(server, {
+        path: `/api/route-recommendations?lang=en&${FLAG}`,
+        body: agnosticBody({ lat: 55.605, lng: 13.0038, preferences: ["food", "coffee", "scenic"] }),
+      });
+      const exp = r.body.agnostic_route_output_experiment;
+      assert.equal(exp.route_mutation, true);
+      const byRole = Object.fromEntries(r.body.days[0].primary_route.main_stops.map((s) => [s.role, s.id]));
+      assert.equal(byRole.scenic_anchor, "scenic-park", "a park must fill the scenic role when no viewpoint exists");
+      // The scenic role is now resolved (was always unresolved before #273).
+      const unresolved = (exp.experimental_route.unresolved_roles || []).map((u) => u.role);
+      assert.ok(!unresolved.includes("scenic_anchor"), "scenic_anchor should be resolved by the park");
+      // Honest labeling: a park is an adjacent (secondary) scenic type vs the
+      // canonical viewpoint — the diagnostic says so rather than overclaiming.
+      const parkDiag = exp.experimental_route.gate_diagnostics.find((d) => d.candidate_id === "scenic-park");
+      assert.ok(parkDiag, "the scenic park stop carries a diagnostic");
+      assert.ok((parkDiag.local_feel_reasons || []).includes("secondary_type_for_role"),
+        "a park honestly labels as a secondary scenic type (viewpoint is canonical)");
+    },
+  ),
+);
+
+test(
+  "api: #273 a viewpoint still wins scenic over a park at equal trust (canonical type ranks first)",
+  withServer(
+    makeLoader([
+      singleFamilyExternalRecord("scenic-park", "Stadsparken", "park", 55.6055, 13.0045, ["park", "green"]),
+      singleFamilyExternalRecord("scenic-view", "Utsiktspunkten", "viewpoint", 55.6052, 13.0041, ["utsikt"]),
+      singleFamilyExternalRecord("food-1", "Trattoria Bella Vista", "restaurant", 55.605, 13.0038, ["mat"]),
+    ]),
+    async (server) => {
+      const r = await requestJson(server, {
+        path: `/api/route-recommendations?lang=en&${FLAG}`,
+        body: agnosticBody({ lat: 55.605, lng: 13.0038, preferences: ["food", "scenic"] }),
+      });
+      const byRole = Object.fromEntries(r.body.days[0].primary_route.main_stops.map((s) => [s.role, s.id]));
+      assert.equal(byRole.scenic_anchor, "scenic-view", "viewpoint is the canonical scenic type and should rank first");
+    },
+  ),
+);
+
+test(
   "api: #272 default path leaks no chain/local-feel fields (flag off → byte-shape unchanged)",
   withServer(makeLoader(malmoShapedFixture({ lat: 55.605, lng: 13.0038 })), async (server) => {
     const r = await requestJson(server, {
