@@ -80,6 +80,8 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 
 - **#272** adds **generic local-feel preference v1** inside the same experiment seam: the loader carries the OSM `brand`/`brand:wikidata` tag as a `chain` signal (the tag is the signal — never name matching), and composition orders options by coverage first, then non-chain primary-type > non-chain secondary > chain primary > chain secondary, then fit. Geometry optimization picks only within the best non-empty local-feel tier, so distance never trades away local feel. Chains are demoted, NEVER banned — in sparse places a chain still fills the role, honestly labeled (`chain_candidate`, `chain_fallback_no_local_option`, `secondary_type_for_role` in the route's gate diagnostics). Default Planner, Blitz, Pulse, and citypack flows are untouched: the preference activates only through the experiment-injected seam.
 
+- **#273** broadens **role coverage** so a day is more than food + coffee: the loader emits notable parks, public gardens, waterfronts and castles (already scenic in the shared intent vocabulary) so the scenic role fills in flat cities that have no viewpoint, and fetches Overpass with per-category `out` budgets + category-balanced selection so scarce area-typed scenic places are not starved by dense food/bar nodes. Viewpoint stays the canonical scenic type (curated/citypack scoring unchanged); a park fills only as an honest adjacent/secondary scenic match. Loader-only — no shared vocabulary or default-scoring change.
+
 Still missing before a true any-place Planner (now the next steps): stronger generic candidate supply where source-backed candidates are sparse, richer single-day composition quality after calibration, multi-day experimental output, persistent geocode caching / a paid-or-self-hosted geocoder for scale, and live ETA / real-time routing (explicitly out of scope).
 
 ## Anti-drift rule
@@ -167,7 +169,8 @@ The current direction should be:
 #267 — DONE: conservative readiness/calibration for experimental agnostic one-day output
 #270 — DONE: experiment-only admission of single-family inferred external candidates with capped calibration
 #271 — DONE: loader error observability (error_failed_closed vs genuinely empty)
-#272 — IN PROGRESS: generic local-feel preference v1 (chain demotion + role-type preference, experiment-only)
+#272 — DONE: generic local-feel preference v1 (chain demotion + role-type preference, experiment-only)
+#273 — IN PROGRESS: scenic/role coverage breadth (loader emits parks/gardens/waterfront/castle; per-category fetch budget)
 ```
 
 The numbers may shift, but the sequence should not drift back into endless diagnostics.

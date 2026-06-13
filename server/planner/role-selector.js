@@ -16,7 +16,7 @@ const { scoreCandidateFit } = require("../candidates/fit-scorer");
 const { calibrateSource } = require("../candidates/source-calibration");
 
 const ROLE_SPEC = Object.freeze({
-  scenic_anchor: { intents: ["scenic"], slot: "anchor", gate: "may_anchor_route", primaryTypes: ["viewpoint"] },
+  scenic_anchor: { intents: ["scenic"], slot: "anchor", gate: "may_anchor_route", primaryTypes: ["viewpoint", "lookout", "overlook"] },
   food_anchor: { intents: ["food"], slot: "anchor", gate: "may_anchor_route", primaryTypes: ["restaurant"] },
   coffee_fika_stop: { intents: ["coffee"], slot: "stop", gate: "may_influence_routes", primaryTypes: ["cafe"] },
   evening_bar_option: { intents: ["bars"], slot: "option", gate: "may_influence_routes", primaryTypes: ["bar"] },

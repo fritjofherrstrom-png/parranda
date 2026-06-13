@@ -94,6 +94,57 @@ test("OSM brand tag yields chain:true + brand name; absence yields chain:false (
   assert.equal(blank.chain, false);
 });
 
+test("scenic place types beyond viewpoint are mapped to vocab-known scenic types (#273)", () => {
+  const cases = [
+    [{ leisure: "park" }, "park"],
+    [{ leisure: "garden" }, "garden"],
+    [{ historic: "castle" }, "castle"],
+    [{ leisure: "marina" }, "promenade"],
+    [{ man_made: "pier" }, "promenade"],
+  ];
+  for (const [tag, expectedType] of cases) {
+    const record = mapOsmElement({ type: "node", id: 100, lat: 55.6, lon: 13.0, tags: { name: "X", ...tag } });
+    assert.ok(record, `expected a record for ${JSON.stringify(tag)}`);
+    assert.equal(record.type, expectedType, `${JSON.stringify(tag)} → ${expectedType}`);
+  }
+});
+
+test("loader-emitted scenic types match the scenic intent (viewpoint covers, the rest are adjacent) (#273)", () => {
+  const { matchCandidateToIntent } = require("../server/candidates/intent-vocabulary");
+  // viewpoint is the canonical (covering) scenic type
+  assert.equal(matchCandidateToIntent({ type: "viewpoint", tags: [] }, "scenic").level, "strong");
+  // the broadened loader types are genuine-but-adjacent scenic matches — enough
+  // to fill an otherwise-empty scenic role in the agnostic experiment, while a
+  // viewpoint still outranks them. They must NOT have become strong (that would
+  // change curated/citypack scoring).
+  for (const type of ["park", "garden", "promenade", "castle"]) {
+    const m = matchCandidateToIntent({ type, tags: [] }, "scenic");
+    assert.ok(m.strength > 0, `${type} should at least adjacent-match scenic`);
+    assert.notEqual(m.level, "strong", `${type} must stay adjacent, not strong (shared scoring unchanged)`);
+  }
+});
+
+test("category-balanced selection keeps a scarce scenic record out of a food-dense response (#273)", () => {
+  const elements = [];
+  for (let i = 0; i < 40; i += 1) {
+    elements.push({ type: "node", id: i, lat: 55.6, lon: 13.0, tags: { name: `Rest ${i}`, amenity: "restaurant" } });
+  }
+  // One park, last in the response — a naive head-of-list cap would drop it.
+  elements.push({ type: "node", id: 999, lat: 55.6, lon: 13.0, tags: { name: "Kungsparken", leisure: "park" } });
+  const out = mapOverpassResponse({ elements }, 25);
+  assert.equal(out.length, 25);
+  assert.ok(out.some((r) => r.type === "park"), "the lone park must survive category balancing");
+});
+
+test("balancing is a no-op when the response already fits the limit (#273)", () => {
+  const elements = [
+    { type: "node", id: 1, lat: 55.6, lon: 13.0, tags: { name: "A", amenity: "restaurant" } },
+    { type: "node", id: 2, lat: 55.6, lon: 13.0, tags: { name: "B", leisure: "park" } },
+  ];
+  const out = mapOverpassResponse({ elements }, 25);
+  assert.deepEqual(out.map((r) => r.id), ["osm-node-1", "osm-node-2"]); // order preserved
+});
+
 test("records without a name or coordinates are dropped", () => {
   assert.equal(mapOsmElement({ type: "node", id: 1, lat: 1, lon: 1, tags: { tourism: "viewpoint" } }), null);
   assert.equal(mapOsmElement({ type: "node", id: 1, tags: { name: "X", tourism: "viewpoint" } }), null);
@@ -227,10 +278,15 @@ test("invalid coordinates return no records without calling the fetcher", async 
 
 // --- bounded query ---------------------------------------------------------
 
-test("the Overpass query is bounded by radius and limit", () => {
+test("the Overpass query is bounded by radius and uses per-category out budgets (#273)", () => {
   const q = buildOverpassQuery({ lat: 41.9, lng: 12.5, radiusM: 1000, limit: 25 });
   assert.match(q, /around:1000,41\.9,12\.5/);
-  assert.match(q, /out center 25;/);
+  // Per-category set + out (so area-typed scenic ways are not starved by nodes).
+  assert.match(q, /->\.c0;\.c0 out center \d+;/);
+  assert.ok((q.match(/out center \d+;/g) || []).length >= 2, "multiple category out budgets");
+  // Scenic and food tags are both present.
+  assert.match(q, /leisure"="park"/);
+  assert.match(q, /amenity"="restaurant"/);
 });
 
 test("radius and limit are clamped to safe maxima", async () => {
