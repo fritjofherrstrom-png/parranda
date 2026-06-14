@@ -36,6 +36,26 @@ display gates, dedupe, and route/Pulse eligibility.
 weather, alerts, transport, air quality, coast/dayflow, and computed daily
 signals.
 
+`TimeSensitiveSourceEvent` is the generic contract for source-backed happenings
+that may matter because of **when** they happen, not just where they are:
+
+- `candidate_kind: "source_event"`
+- source identity: `source_url`, `source_label`, `source_type`, `source_tier`
+- place context: `city`, `place_context`, `area`, optional `lat` / `lng`
+- timing: `starts_at`, `ends_at`, optional `time_window`, `recurrence`,
+  `last_checked`, `freshness`
+- trust: canonical `confidence`, `provenance`
+- planning hints: `tags`, `intents`, optional `route_role_hint`
+- `timing_relevance`: `now`, `today`, `tonight`, `future`, `stale`, or
+  `unknown`
+
+The contract is city-agnostic. A night market, civic calendar event, venue
+programming item, temporary waterfront activity, or seasonal market all enter
+through the same normalization path. A source URL / source label / provenance is
+required for strong confidence; stale or expired events are downgraded instead
+of promoted. This PR only creates the contract — it does not wire time-sensitive
+events into default Planner, Blitz, citypacks, or route output.
+
 ## Display Gates
 
 The gate helper answers:

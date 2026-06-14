@@ -24,6 +24,10 @@ const {
   createWeatherContextProvider,
   interpretWeatherForDayflow,
 } = require("./weather-context-provider");
+const {
+  normalizeTimeSensitiveSourceEvent,
+  normalizeTimingRelevance,
+} = require("./time-sensitive-event");
 
 module.exports = {
   SourceProviderRegistry,
@@ -42,4 +46,6 @@ module.exports = {
   weatherContextDescriptor,
   createWeatherContextProvider,
   interpretWeatherForDayflow,
+  normalizeTimeSensitiveSourceEvent,
+  normalizeTimingRelevance,
 };
