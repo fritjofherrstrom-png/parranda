@@ -24,14 +24,15 @@ const ROLE_SPEC = Object.freeze({
   vintage_second_hand_option: { intents: ["second_hand"], slot: "option", gate: "may_influence_routes", primaryTypes: ["vintage-shop"] },
 });
 
-// #277 — roles that exist ONLY in the flag-gated agnostic route-output
+// #277/#278 — roles that exist ONLY in the flag-gated agnostic route-output
 // experiment (activated by the same experimentalAdmitCandidate seam as #270/#272).
-// The `museums` intent + museum/gallery loader types already existed; without a
-// role a requested "museums"/"culture" preference was silently dropped. Kept OUT
+// The `museums` and `markets` intents + matching loader types already existed;
+// without route roles those requested preferences were silently dropped. Kept OUT
 // of the shared ROLE_SPEC so citypack/default planner-role enumeration (and its
 // inspect sidecars) are byte-identical.
 const EXPERIMENT_ROLE_SPEC = Object.freeze({
   culture_stop: { intents: ["museums"], slot: "stop", gate: "may_influence_routes", primaryTypes: ["museum", "gallery"] },
+  market_stop: { intents: ["markets"], slot: "stop", gate: "may_influence_routes", primaryTypes: ["market", "event_market"] },
 });
 
 // #272 — generic local-feel preference (agnostic experiment only). Within a

@@ -90,6 +90,8 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 
 - **#277** adds the first **composition-richness** role: a daytime `culture_stop` (museum / gallery). The `museums` intent and museum/gallery loader types already existed, so a requested "museums"/"culture" preference used to be silently dropped (no role to fill); now it fills an honest midday cultural stop (or surfaces as an unresolved role). The role lives in an experiment-only spec gated on the same seam as #270/#272 — it never appears in the shared planner-role enumeration, so citypack/default inspect sidecars are byte-identical.
 
+- **#278** continues the same **composition-richness** fix for markets: a daytime `market_stop` (market / event market) consumes the already-existing `markets` intent and OSM `market` loader type. A requested "markets"/"marknad" preference no longer disappears just because no route role existed; it fills an honest midday market stop (or surfaces as unresolved). Like `culture_stop`, it is experiment-only and gated on the #270/#272 seam so shared role enumeration and default/citypack inspect output stay unchanged.
+
 Still missing before a true any-place Planner (now the next steps): stronger generic candidate supply where source-backed candidates are sparse, richer single-day composition quality after calibration, multi-day experimental output, persistent geocode caching / a paid-or-self-hosted geocoder for scale, and live ETA / real-time routing (explicitly out of scope).
 
 ## Anti-drift rule
@@ -182,7 +184,8 @@ The current direction should be:
 #274 — DONE: daypart rhythm ordering (morning→evening slots, proximity within-slot, walking validation final gate)
 #275 — DONE: daypart honesty (per-stop daypart labels, daypart_arc, current_local_time_band, not-anchored caveat)
 #276 — DONE: time-anchored selection (today→anchor day to now + drop past dayparts; future→full plan; conservative >=2 floor)
-#277 — IN PROGRESS: composition richness v1 (experiment-only culture_stop role; museums/gallery now fills a midday stop)
+#277 — DONE: composition richness v1 (experiment-only culture_stop role; museums/gallery now fills a midday stop)
+#278 — IN PROGRESS: composition richness v1b (experiment-only market_stop role; markets now fills a midday stop)
 ```
 
 The numbers may shift, but the sequence should not drift back into endless diagnostics.
