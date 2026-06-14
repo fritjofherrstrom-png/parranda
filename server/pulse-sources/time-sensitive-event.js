@@ -68,22 +68,23 @@ function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
 }
 
 function normalizeTimingRelevance(explicit, facts = {}) {
+  const { now, startsAt, endsAt } = facts;
+  if (firstString(facts.freshness) === "stale") {
+    return "stale";
+  }
+  if (now && endsAt && endsAt < now) {
+    return "stale";
+  }
+
   const explicitValue = firstString(explicit);
   if (VALID_TIMING_RELEVANCE.has(explicitValue)) {
     return explicitValue;
   }
 
-  const { now, startsAt, endsAt } = facts;
-  if (firstString(facts.freshness) === "stale") {
-    return "stale";
-  }
   if (!now || !startsAt) {
     return "unknown";
   }
 
-  if (endsAt && endsAt < now) {
-    return "stale";
-  }
   if (startsAt <= now && (!endsAt || endsAt >= now)) {
     return "now";
   }

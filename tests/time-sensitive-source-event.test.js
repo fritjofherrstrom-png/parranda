@@ -99,6 +99,23 @@ test("expired or stale events are downgraded instead of promoted", () => {
   assert.equal(stale.confidence, "low");
 });
 
+test("explicit timing relevance cannot promote an expired event", () => {
+  const normalized = normalizeTimeSensitiveSourceEvent(
+    event({
+      timing_relevance: "now",
+      starts_at: "2026-07-09T17:00:00.000Z",
+      ends_at: "2026-07-09T22:00:00.000Z",
+      confidence: "strong",
+    }),
+    { now: NOW },
+  );
+
+  assert.equal(normalized.timing_relevance, "stale");
+  assert.equal(normalized.confidence, "low");
+  assert.ok(normalized.timing_reasons.includes("timing_stale"));
+  assert.ok(!normalized.timing_reasons.includes("timing_now"));
+});
+
 test("event without source or provenance cannot receive strong confidence", () => {
   const normalized = normalizeTimeSensitiveSourceEvent(
     event({
