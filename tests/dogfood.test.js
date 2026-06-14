@@ -346,6 +346,10 @@ test("pure: a success response surfaces stops, walking estimate, caveats, intake
   assert.equal(view.route.stops[0].daypart, "afternoon");
   assert.equal(view.route.stops[1].daypart, "morning");
   assert.equal(view.route.mapStops.length, 2);
+  // #275/#276 — daypart arc + anchoring fields surfaced honestly (defaults when absent)
+  assert.deepEqual(view.route.daypartArc, []);
+  assert.equal(view.route.anchoredToLocalTime, false);
+  assert.deepEqual(view.route.trimmedDayparts, []);
   // Walking ESTIMATE fields are present and honest
   assert.equal(view.route.estimatedKm, 0.3);
   assert.equal(view.route.estimatedWalkMinutes, 4);
@@ -512,10 +516,26 @@ test("i18n: calibration maps reference keys present in both sv and en", () => {
   }
 });
 
+test("pure: an anchored route surfaces daypart arc + trimmed dayparts in the view (#276)", () => {
+  const response = successResponse();
+  response.days[0].primary_route.daypart_arc = ["afternoon", "evening"];
+  response.days[0].primary_route.current_local_time_band = "afternoon";
+  response.days[0].primary_route.anchored_to_local_time = true;
+  response.days[0].primary_route.trimmed_dayparts = ["morning", "midday"];
+  response.days[0].primary_route.caveats = ["experimental", "day_anchored_to_current_time"];
+  const view = Render.buildExperimentView(response, TINY_I18N);
+  assert.deepEqual(view.route.daypartArc, ["afternoon", "evening"]);
+  assert.equal(view.route.currentLocalTimeBand, "afternoon");
+  assert.equal(view.route.anchoredToLocalTime, true);
+  assert.deepEqual(view.route.trimmedDayparts, ["morning", "midday"]);
+  assert.ok(view.route.caveats.some((c) => c.token === "day_anchored_to_current_time"));
+});
+
 test("i18n: every caveat caption (incl. #275 daypart) exists in both sv and en", () => {
   const keys = Object.values(Render.CAVEAT_KEYS);
   assert.ok(keys.includes("dogfood.caveat.daypart_arc_precedes_local_time"));
   assert.ok(keys.includes("dogfood.caveat.experimental_daypart_sequence"));
+  assert.ok(keys.includes("dogfood.caveat.day_anchored_to_current_time"));
   for (const lang of ["sv", "en"]) {
     for (const key of keys) {
       assert.equal(typeof translations[lang][key], "string", `${lang} missing ${key}`);

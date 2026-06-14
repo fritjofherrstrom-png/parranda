@@ -62,6 +62,11 @@ function eveningClock() {
   return new Date("2026-05-25T17:30:00Z");
 }
 
+// 10:00Z = 12:00 Europe/Rome → "midday" band (SUN_AUTO_TZ resolves Rome, +2h).
+function middayClock() {
+  return new Date("2026-05-25T10:00:00Z");
+}
+
 // A role-diverse, >=25 geocoded, tightly-clustered trusted fixture near an
 // anchor — enough to fill multiple roles AND clear the planner readiness bar.
 function fixtureNear(base) {
@@ -314,6 +319,36 @@ test("unit: daypart_arc_precedes_local_time caveat fires only when the arc leads
 
   const atNight = buildExperimentalPrimaryRoute({ cityKey: "x", adaptedBody: morningArc, walkingValidation: wv, routeOrdering: ro, currentTimeBand: "late" });
   assert.equal(atNight.caveats.includes("daypart_arc_precedes_local_time"), false, "night reads as the coming day → no caveat");
+});
+
+test("unit: #276 an anchored route reports the trim and never also 'precedes' the local time", () => {
+  const wv = {
+    valid: true,
+    result: { source: "heuristic", estimatedKm: 0.4, legs: [{ estimated_walk_minutes: 5 }], pathPoints: [{ lat: 0, lng: 0 }, { lat: 0, lng: 0.001 }] },
+  };
+  // The morning/midday stops were already trimmed by the caller; the route here
+  // only carries afternoon + evening and is flagged anchored.
+  const anchoredBody = adaptedBody({
+    stops: [
+      { role: "food_anchor", candidate_id: "f", label: "F", origin: "external_open", confidence: "low", coordinates: { lat: 0, lng: 0 } },
+      { role: "evening_bar_option", candidate_id: "b", label: "B", origin: "external_open", confidence: "low", coordinates: { lat: 0, lng: 0.001 } },
+    ],
+  });
+  const ro = { applied: true, source: "trusted_candidate_pool+daypart_rhythm+proximity_sequence" };
+  const route = buildExperimentalPrimaryRoute({
+    cityKey: "x",
+    adaptedBody: anchoredBody,
+    walkingValidation: wv,
+    routeOrdering: ro,
+    currentTimeBand: "afternoon",
+    anchoredToLocalTime: true,
+    trimmedDayparts: ["morning", "midday"],
+  });
+  assert.deepEqual(route.daypart_arc, ["afternoon", "evening"]);
+  assert.equal(route.anchored_to_local_time, true);
+  assert.deepEqual(route.trimmed_dayparts, ["morning", "midday"]);
+  assert.ok(route.caveats.includes("day_anchored_to_current_time"));
+  assert.equal(route.caveats.includes("daypart_arc_precedes_local_time"), false, "anchored cannot also precede");
 });
 
 // --- unit: mutation vs synthesis, original never mutated --------------------
@@ -1008,6 +1043,66 @@ test(
       assert.equal(calibration.inputs.timezone_source, "weather_provider_auto");
       assert.equal(calibration.inputs.timezone_trust, "derived_from_weather_provider");
       assert.equal(calibration.inputs.time_fed_into_selection, true);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+      global.fetch = ORIGINAL_FETCH;
+    }
+  },
+);
+
+// --- API: #276 time-anchored selection (proves ctx.timeBand reaches the route)
+
+test(
+  "api: a today-dated request at midday anchors the day to now and drops the morning",
+  async () => {
+    global.fetch = mockStableWeatherFetch();
+    const server = buildApp({
+      openDataLoader: makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })),
+      weatherProvider: async () => SUN_AUTO_TZ,
+      clock: middayClock,
+    }).listen(0);
+    try {
+      const r = await requestJson(server, {
+        path: `/api/route-recommendations?lang=en&${FLAG}`,
+        body: { city: "unknown-place", dates: [DATE], lat: 41.9, lng: 12.49, preferences: ["food", "coffee", "scenic"], include_external_candidates: 1 },
+      });
+      const route = r.body.days[0].primary_route;
+      // ctx.timeBand (midday) reached the route AND drove anchoring.
+      assert.equal(route.current_local_time_band, "midday");
+      assert.equal(route.anchored_to_local_time, true);
+      assert.ok(route.trimmed_dayparts.includes("morning"), "the already-past morning coffee is dropped");
+      assert.equal(route.daypart_arc[0], "midday", "the day now starts at the current band");
+      assert.ok(route.caveats.includes("day_anchored_to_current_time"));
+      assert.equal(route.caveats.includes("daypart_arc_precedes_local_time"), false);
+      assert.ok(route.main_stops.length >= 2, "conservative floor: a real day still has >=2 stops");
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+      global.fetch = ORIGINAL_FETCH;
+    }
+  },
+);
+
+test(
+  "api: a future-dated request keeps the full day arc and never claims it precedes now",
+  async () => {
+    global.fetch = mockStableWeatherFetch();
+    const server = buildApp({
+      openDataLoader: makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })),
+      weatherProvider: async () => SUN_AUTO_TZ,
+      clock: middayClock,
+    }).listen(0);
+    try {
+      const r = await requestJson(server, {
+        path: `/api/route-recommendations?lang=en&${FLAG}`,
+        body: { city: "unknown-place", dates: ["2026-05-30"], lat: 41.9, lng: 12.49, preferences: ["food", "coffee", "scenic"], include_external_candidates: 1 },
+      });
+      const route = r.body.days[0].primary_route;
+      assert.equal(route.anchored_to_local_time, false, "a future plan is not trimmed");
+      assert.deepEqual(route.trimmed_dayparts, []);
+      assert.equal(route.current_local_time_band, null, "the current band is irrelevant to a future day");
+      assert.equal(route.caveats.includes("daypart_arc_precedes_local_time"), false, "a future morning is not 'past'");
+      assert.equal(route.caveats.includes("day_anchored_to_current_time"), false);
+      assert.ok(route.daypart_arc.includes("morning"), "the full arc is kept");
     } finally {
       await new Promise((resolve) => server.close(resolve));
       global.fetch = ORIGINAL_FETCH;

@@ -86,6 +86,8 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 
 - **#275** makes the daypart rhythm **honest and visible**: every stop carries an approximate daypart label (morning → midday → afternoon → evening; NOT a scheduled clock time), the route exposes its `daypart_arc` and the trusted `current_local_time_band`, and when the arc leads with a daypart that is already past the trusted local band it says so via the `daypart_arc_precedes_local_time` caveat ("a full-day arc, not anchored to now"). Only the timezone-resolved band (#262/#266) anchors the arc; tz unknown → positional arc, no fabricated time, no caveat. `late` (night) reads as the coming day. Flag-gated; default Planner / citypack untouched. This makes the day's rhythm legible AND closes the honesty gap where a midday/evening request used to silently lead with a morning stop.
 
+- **#276** makes the daypart rhythm **active**: a today-dated request with a trusted timezone is *anchored to now* — already-past dayparts are dropped so the day starts at the current local band instead of always at the morning (`anchored_to_local_time` + `trimmed_dayparts` + a `day_anchored_to_current_time` caveat). A future-dated request is a plan and keeps the full arc untouched (this also fixes the #275 caveat so a future morning is no longer flagged as "already past"). Conservative: anchoring never thins the day below two stops — if it would, the full arc is kept and the #275 not-anchored caveat stands. Only the trusted, timezone-resolved band drives this; tz unknown → positional arc. Flag-gated; default Planner / citypack untouched. No fabricated clock times — daypart bands only.
+
 Still missing before a true any-place Planner (now the next steps): stronger generic candidate supply where source-backed candidates are sparse, richer single-day composition quality after calibration, multi-day experimental output, persistent geocode caching / a paid-or-self-hosted geocoder for scale, and live ETA / real-time routing (explicitly out of scope).
 
 ## Anti-drift rule
@@ -176,7 +178,8 @@ The current direction should be:
 #272 — DONE: generic local-feel preference v1 (chain demotion + role-type preference, experiment-only)
 #273 — DONE: scenic/role coverage breadth (loader emits parks/gardens/waterfront/castle; per-category fetch budget)
 #274 — DONE: daypart rhythm ordering (morning→evening slots, proximity within-slot, walking validation final gate)
-#275 — IN PROGRESS: daypart honesty (per-stop daypart labels, daypart_arc, current_local_time_band, not-anchored caveat)
+#275 — DONE: daypart honesty (per-stop daypart labels, daypart_arc, current_local_time_band, not-anchored caveat)
+#276 — IN PROGRESS: time-anchored selection (today→anchor day to now + drop past dayparts; future→full plan; conservative >=2 floor)
 ```
 
 The numbers may shift, but the sequence should not drift back into endless diagnostics.
