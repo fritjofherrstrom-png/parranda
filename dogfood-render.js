@@ -63,6 +63,7 @@
     below_planner_candidate_threshold: "dogfood.caveat.below_planner_candidate_threshold",
     experimental_daypart_sequence: "dogfood.caveat.experimental_daypart_sequence",
     daypart_arc_precedes_local_time: "dogfood.caveat.daypart_arc_precedes_local_time",
+    day_anchored_to_current_time: "dogfood.caveat.day_anchored_to_current_time",
   };
 
 
@@ -368,6 +369,12 @@
       routingSource: isString(route.routing_source) ? route.routing_source : null,
       estimatedKm: isFiniteNumber(route.estimated_km) ? route.estimated_km : null,
       estimatedWalkMinutes: isFiniteNumber(route.estimated_walk_minutes) ? route.estimated_walk_minutes : null,
+      // #275/#276 — the day's daypart arc, the trusted current band, and whether
+      // the day was anchored to "now" (with which already-past dayparts dropped).
+      daypartArc: Array.isArray(route.daypart_arc) ? route.daypart_arc.slice() : [],
+      currentLocalTimeBand: isString(route.current_local_time_band) ? route.current_local_time_band : null,
+      anchoredToLocalTime: Boolean(route.anchored_to_local_time),
+      trimmedDayparts: Array.isArray(route.trimmed_dayparts) ? route.trimmed_dayparts.slice() : [],
       stops: stops,
       caveats: caveats,
       // Geometry the dogfood map renderer consumes (and only this).

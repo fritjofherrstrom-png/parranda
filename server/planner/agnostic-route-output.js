@@ -216,7 +216,7 @@ function evaluateEligibility({ externalRequested, sourceStatus, adaptedBody, can
  * after validation it uses the existing route-result walking fields (`legs`,
  * `map_path_points`) while still avoiding opening-hours/live-arrival claims.
  */
-function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation = null, routeOrdering = null, currentTimeBand = null }) {
+function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation = null, routeOrdering = null, currentTimeBand = null, anchoredToLocalTime = false, trimmedDayparts = [] }) {
   const inputStops = Array.isArray(adaptedBody?.stops) ? adaptedBody.stops : [];
   const stops = inputStops.map((stop) => ({
     id: stop.candidate_id || null,
@@ -279,7 +279,9 @@ function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation
     const earliestRank = daypartArc.length ? timeBandRank(daypartArc[0]) : null;
     const precedesLocalTime =
       currentRank !== null && earliestRank !== null && earliestRank < currentRank;
-    if (precedesLocalTime) caveats.push("daypart_arc_precedes_local_time");
+    // #276 — when the day was anchored to "now" it cannot also precede it.
+    if (precedesLocalTime && !anchoredToLocalTime) caveats.push("daypart_arc_precedes_local_time");
+    if (anchoredToLocalTime) caveats.push("day_anchored_to_current_time");
     return {
       ...base,
       summary:
@@ -295,9 +297,13 @@ function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation
       legs: wr.legs,
       map_path_points: wr.pathPoints,
       daypart_arc: daypartArc,
-      // The trusted current local band, only when known (tz resolved). Null
-      // otherwise — no fabricated time, positional arc stands honestly.
+      // The trusted current local band, only when known (tz resolved) AND the
+      // request is today-dated. Null otherwise — no fabricated time.
       current_local_time_band: currentRank !== null ? currentTimeBand : null,
+      // #276 — true when the day was trimmed to start at the current local band;
+      // trimmed_dayparts lists the already-past parts of the day that were dropped.
+      anchored_to_local_time: Boolean(anchoredToLocalTime),
+      trimmed_dayparts: Array.isArray(trimmedDayparts) ? trimmedDayparts : [],
       caveats,
     };
   }
@@ -327,6 +333,39 @@ function sanitizeRouteOrdering(ordering) {
     fallback_used: Boolean(ordering.fallback_used),
     fallback_reason: ordering.fallback_reason || null,
     failed_sequence_validation: ordering.failed_sequence_validation || null,
+  };
+}
+
+// #276 — anchor the day to the trusted current local band by dropping stops
+// whose daypart is already fully past. Conservative: never thins the day below
+// two stops, and if anchoring would, keeps the full arc untouched (the caller
+// then preserves the #275 not-anchored caveat). Only the caller decides WHEN to
+// call this (today-dated requests with a known timezone) — this is pure.
+function anchorAdaptedBodyToCurrentBand(adaptedBody, currentRank) {
+  const stops = Array.isArray(adaptedBody?.stops) ? adaptedBody.stops : [];
+  const kept = [];
+  const trimmedDayparts = [];
+  for (const stop of stops) {
+    const daypart = daypartForRole(stop.role || null);
+    const rank = timeBandRank(daypart);
+    if (rank !== null && rank < currentRank) {
+      if (!trimmedDayparts.includes(daypart)) trimmedDayparts.push(daypart);
+    } else {
+      kept.push(stop);
+    }
+  }
+  if (kept.length < 2 || kept.length === stops.length) {
+    return { anchored: false, adaptedBody, trimmedDayparts: [] };
+  }
+  return {
+    anchored: true,
+    trimmedDayparts,
+    adaptedBody: {
+      ...adaptedBody,
+      stops: kept,
+      stop_ids: kept.map((s) => s.candidate_id || s.id || s.place_id).filter(Boolean),
+      target_roles: kept.map((s) => s.role).filter(Boolean),
+    },
   };
 }
 
@@ -597,11 +636,36 @@ async function composeAgnosticRouteOutput({
     return { result: baselineResult, experiment };
   }
 
+  // #276 — time-anchored selection. ONLY for a today-dated request with a
+  // trusted timezone: drop stops whose daypart is already fully past so the day
+  // starts at "now" instead of always at the morning. A future-dated request is
+  // a plan — keep the full arc untouched. Conservative: anchoring never thins
+  // the day below two stops (else the full arc is kept + the #275 caveat stands).
+  const trustedBand = ctx && ctx.timezoneKnown ? ctx.timeBand : null;
+  const trustedBandRank = timeBandRank(trustedBand);
+  const isTodayRequest = Boolean(
+    ctx && ctx.timezoneKnown && typeof ctx.now === "string" && effectiveDate === ctx.now.slice(0, 10),
+  );
+  let workingBody = adaptedBody;
+  let anchoredToLocalTime = false;
+  let trimmedDayparts = [];
+  if (isTodayRequest && trustedBandRank !== null) {
+    const anchored = anchorAdaptedBodyToCurrentBand(adaptedBody, trustedBandRank);
+    if (anchored.anchored) {
+      workingBody = anchored.adaptedBody;
+      anchoredToLocalTime = true;
+      trimmedDayparts = anchored.trimmedDayparts;
+    }
+  }
+  // The arc-vs-now caveat (#275) is only meaningful for a today-dated request:
+  // for a future plan, leading with the morning is correct, not "already past".
+  const routeCurrentBand = isTodayRequest ? trustedBand : null;
+
   // The route candidate arrives in role order. For the flag-gated experiment we
-  // may apply a conservative proximity sequence, then validate that produced
+  // may apply a conservative daypart-rhythm sequence, then validate that produced
   // order against walking budgets before any mutation. If the sequence fails
   // but the original role order validates, fall back to the original order.
-  const orderingAttempt = buildAgnosticRouteOrdering({ adaptedBody });
+  const orderingAttempt = buildAgnosticRouteOrdering({ adaptedBody: workingBody });
   let finalAdaptedBody = orderingAttempt.adaptedBody;
   let routeOrdering = orderingAttempt.ordering;
   let walking = await validateAgnosticWalkingOrder({
@@ -613,14 +677,15 @@ async function composeAgnosticRouteOutput({
 
   if (!walking.valid && routeOrdering && routeOrdering.applied) {
     const failedSequenceValidation = { valid: walking.valid, blockers: walking.blockers, checks: walking.checks };
+    // Fall back to the (anchored) role order, not the full pre-anchor set.
     const originalWalking = await validateAgnosticWalkingOrder({
-      stops: toWalkingStops(adaptedBody),
+      stops: toWalkingStops(workingBody),
       walkingRouter,
       walkingConfig: walkingConfig || {},
       budget: walkingBudget || {},
     });
     if (originalWalking.valid) {
-      finalAdaptedBody = adaptedBody;
+      finalAdaptedBody = workingBody;
       walking = originalWalking;
       routeOrdering = {
         ...routeOrdering,
@@ -678,9 +743,12 @@ async function composeAgnosticRouteOutput({
     adaptedBody: finalAdaptedBody,
     walkingValidation: walking,
     routeOrdering,
-    // #275 — only the trusted, timezone-resolved band anchors the arc; when the
-    // timezone is unknown this is null and the arc stays positional + honest.
-    currentTimeBand: ctx && ctx.timezoneKnown ? ctx.timeBand : null,
+    // #275/#276 — the band is comparison-relevant ONLY for a today-dated request
+    // (null for a future plan or unknown tz, so no spurious not-anchored caveat).
+    currentTimeBand: routeCurrentBand,
+    // #276 — whether the day was trimmed to start at the current local band.
+    anchoredToLocalTime,
+    trimmedDayparts,
   });
   const mutated = applyRouteMutation({ baselineResult, primaryRoute: experimentalRoute, date: effectiveDate });
 
