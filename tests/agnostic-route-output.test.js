@@ -524,6 +524,45 @@ test(
   }),
 );
 
+// --- API: #278 market role --------------------------------------------------
+
+test(
+  "api: a requested markets preference fills a daytime market stop (was silently dropped)",
+  withServer(
+    makeLoader([
+      singleFamilyExternalRecord("cafe-1", "Kafé Hörnan", "cafe", 41.9, 12.49, ["fika"]),
+      singleFamilyExternalRecord("market-1", "Mercato Centrale", "market", 41.901, 12.491, ["market"]),
+      singleFamilyExternalRecord("food-1", "Trattoria Bella Vista", "restaurant", 41.902, 12.492, ["mat"]),
+    ]),
+    async (server) => {
+      const r = await requestJson(server, {
+        path: `/api/route-recommendations?lang=en&${FLAG}`,
+        body: agnosticBody({ preferences: ["coffee", "markets", "food"] }),
+      });
+      const exp = r.body.agnostic_route_output_experiment;
+      assert.equal(exp.route_mutation, true);
+      const byRole = Object.fromEntries(r.body.days[0].primary_route.main_stops.map((s) => [s.role, s.id]));
+      assert.equal(byRole.market_stop, "market-1", "the market fills a market role instead of vanishing");
+      assert.ok(exp.experimental_route.target_roles.includes("market_stop"));
+      // Honest daypart: markets are a daytime (midday) stop, before the food anchor.
+      const stops = r.body.days[0].primary_route.main_stops;
+      const marketIdx = stops.findIndex((s) => s.role === "market_stop");
+      const foodIdx = stops.findIndex((s) => s.role === "food_anchor");
+      assert.equal(stops[marketIdx].daypart, "midday");
+      assert.ok(marketIdx < foodIdx, "the market (midday) comes before the food anchor (afternoon)");
+    },
+  ),
+);
+
+test(
+  "api: a request without a markets preference produces no market role (default behaviour unchanged)",
+  withServer(makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })), async (server) => {
+    const r = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: agnosticBody() });
+    const target = r.body.agnostic_route_output_experiment.experimental_route.target_roles || [];
+    assert.equal(target.includes("market_stop"), false, "market role only appears when markets is requested");
+  }),
+);
+
 // --- API: synthesis (unknown city) + mutation (no city / default route) -----
 
 test(
