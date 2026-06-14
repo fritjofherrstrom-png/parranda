@@ -82,6 +82,8 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 
 - **#273** broadens **role coverage** so a day is more than food + coffee: the loader emits notable parks, public gardens, waterfronts and castles (already scenic in the shared intent vocabulary) so the scenic role fills in flat cities that have no viewpoint, and fetches Overpass with per-category `out` budgets + category-balanced selection so scarce area-typed scenic places are not starved by dense food/bar nodes. Viewpoint stays the canonical scenic type (curated/citypack scoring unchanged); a park fills only as an honest adjacent/secondary scenic match. Loader-only — no shared vocabulary or default-scoring change.
 
+- **#274** makes the day read **morning → evening**: route ordering becomes daypart-PRIMARY (coffee early, scenic daytime, the food anchor mid-day, an evening bar last) with proximity as the SECONDARY tie-break within a daypart slot and across slot transitions. Still not TSP / shortest-route — it trades a little walking (≈0.3 km in the probed cases) for a coherent day, and walking-budget validation remains the final gate with honest fallback to role order if the sequence fails. The role→slot map is generic and deterministic (no clock dependency, no city logic). Before #274 proximity could bury an evening bar mid-day (observed live in Bologna: scenic → bar → food → coffee); after, all probed cities produce coffee → scenic → food → evening.
+
 Still missing before a true any-place Planner (now the next steps): stronger generic candidate supply where source-backed candidates are sparse, richer single-day composition quality after calibration, multi-day experimental output, persistent geocode caching / a paid-or-self-hosted geocoder for scale, and live ETA / real-time routing (explicitly out of scope).
 
 ## Anti-drift rule
@@ -170,7 +172,8 @@ The current direction should be:
 #270 — DONE: experiment-only admission of single-family inferred external candidates with capped calibration
 #271 — DONE: loader error observability (error_failed_closed vs genuinely empty)
 #272 — DONE: generic local-feel preference v1 (chain demotion + role-type preference, experiment-only)
-#273 — IN PROGRESS: scenic/role coverage breadth (loader emits parks/gardens/waterfront/castle; per-category fetch budget)
+#273 — DONE: scenic/role coverage breadth (loader emits parks/gardens/waterfront/castle; per-category fetch budget)
+#274 — IN PROGRESS: daypart rhythm ordering (morning→evening slots, proximity within-slot, walking validation final gate)
 ```
 
 The numbers may shift, but the sequence should not drift back into endless diagnostics.

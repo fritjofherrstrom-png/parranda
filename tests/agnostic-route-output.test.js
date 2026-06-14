@@ -240,11 +240,11 @@ test("unit: experimental route can surface validated proximity ordering metadata
   const routeOrdering = {
     applied: true,
     changed: true,
-    source: "trusted_candidate_pool+role_order+proximity_sequence",
+    source: "trusted_candidate_pool+daypart_rhythm+proximity_sequence",
     confidence: "walking_budget_candidate",
     original_stop_ids: ["r1", "c1"],
     ordered_stop_ids: ["c1", "r1"],
-    reasons: ["proximity_sequence_applied", "requires_walking_budget_validation"],
+    reasons: ["daypart_sequence_applied", "requires_walking_budget_validation"],
   };
   const route = buildExperimentalPrimaryRoute({
     cityKey: "agnostic-area",
@@ -253,11 +253,11 @@ test("unit: experimental route can surface validated proximity ordering metadata
     routeOrdering,
   });
 
-  assert.equal(route.order_source, "trusted_candidate_pool+role_order+proximity_sequence");
+  assert.equal(route.order_source, "trusted_candidate_pool+daypart_rhythm+proximity_sequence");
   assert.equal(route.order_confidence, "walking_budget_validated");
   assert.equal(route.route_ordering.applied, true);
   assert.deepEqual(route.route_ordering.ordered_stop_ids, ["c1", "r1"]);
-  assert.ok(route.caveats.includes("experimental_proximity_sequence"));
+  assert.ok(route.caveats.includes("experimental_daypart_sequence"));
 });
 
 // --- unit: mutation vs synthesis, original never mutated --------------------
