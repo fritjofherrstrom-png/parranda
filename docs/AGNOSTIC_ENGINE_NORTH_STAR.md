@@ -92,7 +92,9 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 
 - **#278** continues the same **composition-richness** fix for markets: a daytime `market_stop` (market / event market) consumes the already-existing `markets` intent and OSM `market` loader type. A requested "markets"/"marknad" preference no longer disappears just because no route role existed; it fills an honest midday market stop (or surfaces as unresolved). Like `culture_stop`, it is experiment-only and gated on the #270/#272 seam so shared role enumeration and default/citypack inspect output stay unchanged.
 
-Still missing before a true any-place Planner (now the next steps): stronger generic candidate supply where source-backed candidates are sparse, richer single-day composition quality after calibration, multi-day experimental output, persistent geocode caching / a paid-or-self-hosted geocoder for scale, and live ETA / real-time routing (explicitly out of scope).
+- The next single-day foundation is **time-sensitive source-event understanding**: a generic, source-backed contract for happenings whose value depends on time windows (markets, night markets, venue programming, civic/culture calendars, seasonal activity, and temporary street/riverfront/coast opportunities). This is not a named-city hack and not multi-day. The engine needs to know what is happening, when it is relevant, how trustworthy the source is, and whether it can later influence Pulse/dayflow/routes without inventing opening-hours, ETA, or "best route" claims.
+
+Still missing before a true any-place Planner (now the next steps): stronger generic candidate supply where source-backed candidates are sparse, richer single-day composition quality after calibration, time-sensitive source events feeding Pulse/dayflow/route composition, multi-day experimental output, persistent geocode caching / a paid-or-self-hosted geocoder for scale, and live ETA / real-time routing (explicitly out of scope).
 
 ## Anti-drift rule
 
@@ -185,7 +187,7 @@ The current direction should be:
 #275 — DONE: daypart honesty (per-stop daypart labels, daypart_arc, current_local_time_band, not-anchored caveat)
 #276 — DONE: time-anchored selection (today→anchor day to now + drop past dayparts; future→full plan; conservative >=2 floor)
 #277 — DONE: composition richness v1 (experiment-only culture_stop role; museums/gallery now fills a midday stop)
-#278 — IN PROGRESS: composition richness v1b (experiment-only market_stop role; markets now fills a midday stop)
+#278 — DONE: composition richness v1b (experiment-only market_stop role; markets now fills a midday stop)
 ```
 
 The numbers may shift, but the sequence should not drift back into endless diagnostics.
