@@ -52,7 +52,7 @@ function fixtureNeedsOrderingFallback() {
   return [
     externalRecord("view-a", "View A", "viewpoint", 41.9, 12.49, ["utsikt"]),
     externalRecord("food-c", "Food C", "restaurant", 41.92, 12.49, ["mat"]),
-    externalRecord("bar-b", "Bar B", "bar", 41.901, 12.49, ["bar"]),
+    externalRecord("cafe-b", "Cafe B", "cafe", 41.901, 12.49, ["fika"]),
   ];
 }
 
@@ -260,7 +260,9 @@ test(
     assert.equal(exp.route_mutation, true);
     assert.equal(exp.walking_validation.valid, true);
     assert.equal(route.order_confidence, "walking_budget_validated");
-    assert.equal(route.order_source, "trusted_candidate_pool+candidate_role_order");
+    // food/coffee/scenic role order is daypart-incoherent (coffee should be
+    // morning) → daypart sequencing applies and is walking-validated.
+    assert.equal(route.order_source, "trusted_candidate_pool+daypart_rhythm+proximity_sequence");
     assert.equal(route.routing_source, "heuristic");
     assert.ok(Number.isFinite(route.estimated_km));
     assert.ok(Number.isFinite(route.estimated_walk_minutes));
@@ -340,16 +342,18 @@ test(
 );
 
 test(
-  "api: proximity order failure falls back to original role order when role order validates",
+  "api: daypart order failure falls back to original role order when role order validates",
   async () => {
     global.fetch = mockStableWeatherFetch();
     const seen = [];
-    const proximityOrder = "41.9,12.49|41.901,12.49|41.92,12.49";
-    const originalRoleOrder = "41.9,12.49|41.92,12.49|41.901,12.49";
+    // Role order (candidate-combination order) is scenic → food → coffee.
+    // Daypart reorders to coffee → scenic → food (coffee moves to the morning).
+    const daypartOrder = "41.901,12.49|41.9,12.49|41.92,12.49"; // cafe-b, view-a, food-c
+    const originalRoleOrder = "41.9,12.49|41.92,12.49|41.901,12.49"; // view-a, food-c, cafe-b
     const fallbackRouter = async (points) => {
       const signature = points.map((p) => `${p.lat},${p.lng}`).join("|");
       seen.push(signature);
-      if (signature === proximityOrder) {
+      if (signature === daypartOrder) {
         return {
           source: "heuristic",
           estimatedKm: 99,
@@ -374,17 +378,17 @@ test(
     try {
       const r = await requestJson(server, {
         path: `/api/route-recommendations?lang=en&${FLAG}`,
-        body: agnosticBody({ preferences: ["scenic", "food", "bars"] }),
+        body: agnosticBody({ preferences: ["scenic", "food", "coffee"] }),
       });
       const exp = r.body.agnostic_route_output_experiment;
       const route = r.body.days[0].primary_route;
 
       assert.equal(exp.route_mutation, true);
-      assert.deepEqual(seen, [proximityOrder, originalRoleOrder]);
-      assert.deepEqual(route.main_stops.map((stop) => stop.id), ["view-a", "food-c", "bar-b"]);
+      assert.deepEqual(seen, [daypartOrder, originalRoleOrder]);
+      assert.deepEqual(route.main_stops.map((stop) => stop.id), ["view-a", "food-c", "cafe-b"]);
       assert.equal(exp.route_ordering.fallback_used, true);
-      assert.equal(exp.route_ordering.fallback_reason, "proximity_sequence_failed_walking_validation");
-      assert.ok(exp.route_ordering.failed_sequence_validation, "failed proximity validation is preserved");
+      assert.equal(exp.route_ordering.fallback_reason, "daypart_sequence_failed_walking_validation");
+      assert.ok(exp.route_ordering.failed_sequence_validation, "failed daypart validation is preserved");
       assert.equal(exp.walking_validation.valid, true);
       assert.equal(route.route_ordering.fallback_used, true);
       assert.equal(route.order_source, "trusted_candidate_pool+candidate_role_order");

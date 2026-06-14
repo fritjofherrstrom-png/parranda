@@ -147,8 +147,14 @@ function calibrateAgnosticRouteReadiness({
     caps.push(CAP_TOKENS.heuristicWalking);
   }
 
-  if (inputs.route_ordering_mode === "trusted_candidate_pool+role_order+proximity_sequence") {
-    reasons.push("proximity_ordering_validated");
+  // A sequenced order (daypart rhythm + proximity, #274; or the earlier
+  // proximity-only mode) that survived walking validation is a readiness signal;
+  // a fall back to raw role order after a sequence attempt is a cap.
+  const sequencedOrder =
+    typeof inputs.route_ordering_mode === "string" &&
+    (inputs.route_ordering_mode.includes("daypart_rhythm") || inputs.route_ordering_mode.includes("proximity_sequence"));
+  if (sequencedOrder) {
+    reasons.push("daypart_ordering_validated");
   } else if (routeOrdering?.fallback_used) {
     reasons.push("role_order_fallback_after_sequence_validation");
     caps.push(CAP_TOKENS.roleOrderFallback);

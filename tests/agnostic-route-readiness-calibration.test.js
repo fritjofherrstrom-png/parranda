@@ -51,7 +51,7 @@ function producedInput(overrides = {}) {
     experimentalRoute: baseRoute(),
     sourceStatus: { status: "loaded:30" },
     walkingValidation: { valid: true, blockers: [], checks: { walking_source: "validated_walking_router", fallback_used: false } },
-    routeOrdering: { source: "trusted_candidate_pool+role_order+proximity_sequence", fallback_used: false },
+    routeOrdering: { source: "trusted_candidate_pool+daypart_rhythm+proximity_sequence", fallback_used: false },
     context: context(),
     dayflowContextPresent: true,
     ...overrides,

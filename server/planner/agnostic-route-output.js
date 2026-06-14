@@ -265,14 +265,14 @@ function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation
     const caveats = ["experimental"];
     if (wr.source !== "osrm" || wr.fallbackUsed) caveats.push("heuristic_walking_estimate");
     if (wr.fallbackUsed) caveats.push("walking_router_fallback_used");
-    if (routeOrdering && routeOrdering.applied) caveats.push("experimental_proximity_sequence");
+    if (routeOrdering && routeOrdering.applied) caveats.push("experimental_daypart_sequence");
     return {
       ...base,
       summary:
-        "Experimental route composed from trusted source-backed candidates. The stop order has been validated against a walking budget; walking distances and minutes are estimates, not a live arrival time.",
+        "Experimental route composed from trusted source-backed candidates. The stop order follows a rough daypart rhythm and has been validated against a walking budget; walking distances and minutes are estimates, not a live arrival time.",
       order_source:
         routeOrdering && routeOrdering.applied
-          ? routeOrdering.source || "trusted_candidate_pool+role_order+proximity_sequence"
+          ? routeOrdering.source || "trusted_candidate_pool+daypart_rhythm+proximity_sequence"
           : "trusted_candidate_pool+candidate_role_order",
       order_confidence: "walking_budget_validated",
       routing_source: wr.source || "heuristic",
@@ -612,7 +612,7 @@ async function composeAgnosticRouteOutput({
         confidence: "role_order_fallback",
         ordered_stop_ids: routeOrdering.original_stop_ids,
         fallback_used: true,
-        fallback_reason: "proximity_sequence_failed_walking_validation",
+        fallback_reason: "daypart_sequence_failed_walking_validation",
         failed_sequence_validation: failedSequenceValidation,
         reasons: dedupe([...(routeOrdering.reasons || []), "fallback_to_candidate_role_order"]),
       };

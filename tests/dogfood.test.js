@@ -205,7 +205,7 @@ const TINY_I18N = {
     "dogfood.calibration.guide.not_applicable": "The experiment did not apply to this response.",
     "dogfood.calibration.reason.experimental_route_produced": "Experimental route was produced.",
     "dogfood.calibration.reason.walking_validated": "Walking-budget validation passed.",
-    "dogfood.calibration.reason.proximity_ordering_validated": "Proximity ordering was validated.",
+    "dogfood.calibration.reason.daypart_ordering_validated": "Daypart rhythm ordering was validated.",
     "dogfood.calibration.reason.role_order_fallback_after_sequence_validation": "Role-order fallback after sequence validation.",
     "dogfood.calibration.reason.resolver_attested_timezone": "Timezone came from resolver metadata.",
     "dogfood.calibration.reason.weather_provider_auto_timezone": "Timezone was derived from weather provider metadata.",

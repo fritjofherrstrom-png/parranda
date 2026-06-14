@@ -75,7 +75,7 @@
   var CALIBRATION_REASON_KEYS = {
     experimental_route_produced: "dogfood.calibration.reason.experimental_route_produced",
     walking_validated: "dogfood.calibration.reason.walking_validated",
-    proximity_ordering_validated: "dogfood.calibration.reason.proximity_ordering_validated",
+    daypart_ordering_validated: "dogfood.calibration.reason.daypart_ordering_validated",
     role_order_fallback_after_sequence_validation: "dogfood.calibration.reason.role_order_fallback_after_sequence_validation",
     resolver_attested_timezone: "dogfood.calibration.reason.resolver_attested_timezone",
     weather_provider_auto_timezone: "dogfood.calibration.reason.weather_provider_auto_timezone",
