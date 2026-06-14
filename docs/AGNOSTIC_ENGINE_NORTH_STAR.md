@@ -88,6 +88,8 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 
 - **#276** makes the daypart rhythm **active**: a today-dated request with a trusted timezone is *anchored to now* — already-past dayparts are dropped so the day starts at the current local band instead of always at the morning (`anchored_to_local_time` + `trimmed_dayparts` + a `day_anchored_to_current_time` caveat). A future-dated request is a plan and keeps the full arc untouched (this also fixes the #275 caveat so a future morning is no longer flagged as "already past"). Conservative: anchoring never thins the day below two stops — if it would, the full arc is kept and the #275 not-anchored caveat stands. Only the trusted, timezone-resolved band drives this; tz unknown → positional arc. Flag-gated; default Planner / citypack untouched. No fabricated clock times — daypart bands only.
 
+- **#277** adds the first **composition-richness** role: a daytime `culture_stop` (museum / gallery). The `museums` intent and museum/gallery loader types already existed, so a requested "museums"/"culture" preference used to be silently dropped (no role to fill); now it fills an honest midday cultural stop (or surfaces as an unresolved role). The role lives in an experiment-only spec gated on the same seam as #270/#272 — it never appears in the shared planner-role enumeration, so citypack/default inspect sidecars are byte-identical.
+
 Still missing before a true any-place Planner (now the next steps): stronger generic candidate supply where source-backed candidates are sparse, richer single-day composition quality after calibration, multi-day experimental output, persistent geocode caching / a paid-or-self-hosted geocoder for scale, and live ETA / real-time routing (explicitly out of scope).
 
 ## Anti-drift rule
@@ -179,7 +181,8 @@ The current direction should be:
 #273 — DONE: scenic/role coverage breadth (loader emits parks/gardens/waterfront/castle; per-category fetch budget)
 #274 — DONE: daypart rhythm ordering (morning→evening slots, proximity within-slot, walking validation final gate)
 #275 — DONE: daypart honesty (per-stop daypart labels, daypart_arc, current_local_time_band, not-anchored caveat)
-#276 — IN PROGRESS: time-anchored selection (today→anchor day to now + drop past dayparts; future→full plan; conservative >=2 floor)
+#276 — DONE: time-anchored selection (today→anchor day to now + drop past dayparts; future→full plan; conservative >=2 floor)
+#277 — IN PROGRESS: composition richness v1 (experiment-only culture_stop role; museums/gallery now fills a midday stop)
 ```
 
 The numbers may shift, but the sequence should not drift back into endless diagnostics.

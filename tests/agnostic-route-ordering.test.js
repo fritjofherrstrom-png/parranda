@@ -158,6 +158,7 @@ test("small, incomplete, or duplicate candidate sets do not reorder", () => {
 test("daypartForRole maps roles onto an ordered morning→evening arc (#275)", () => {
   assert.equal(daypartForRole("coffee_fika_stop"), "morning");
   assert.equal(daypartForRole("scenic_anchor"), "midday");
+  assert.equal(daypartForRole("culture_stop"), "midday"); // #277 daytime museum/gallery
   assert.equal(daypartForRole("food_anchor"), "afternoon");
   assert.equal(daypartForRole("evening_bar_option"), "evening");
   // unknown roles land in the neutral midday-ish slot, never crash
