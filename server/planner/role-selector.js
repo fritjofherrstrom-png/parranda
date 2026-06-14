@@ -24,6 +24,16 @@ const ROLE_SPEC = Object.freeze({
   vintage_second_hand_option: { intents: ["second_hand"], slot: "option", gate: "may_influence_routes", primaryTypes: ["vintage-shop"] },
 });
 
+// #277 — roles that exist ONLY in the flag-gated agnostic route-output
+// experiment (activated by the same experimentalAdmitCandidate seam as #270/#272).
+// The `museums` intent + museum/gallery loader types already existed; without a
+// role a requested "museums"/"culture" preference was silently dropped. Kept OUT
+// of the shared ROLE_SPEC so citypack/default planner-role enumeration (and its
+// inspect sidecars) are byte-identical.
+const EXPERIMENT_ROLE_SPEC = Object.freeze({
+  culture_stop: { intents: ["museums"], slot: "stop", gate: "may_influence_routes", primaryTypes: ["museum", "gallery"] },
+});
+
 // #272 — generic local-feel preference (agnostic experiment only). Within a
 // status bucket, external candidates order by: non-chain primary-type (0),
 // non-chain secondary (1), chain primary (2), chain secondary (3). The chain
@@ -66,13 +76,18 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
   // other caller (default Planner, Blitz, Pulse, citypack inspect) is untouched.
   const localFeelActive = typeof helpers.experimentalAdmitCandidate === "function";
 
+  // Experiment-only roles (#277) join the set ONLY on the agnostic experiment
+  // path; every other caller sees exactly the shared ROLE_SPEC.
+  const activeRoleSpec = localFeelActive ? { ...ROLE_SPEC, ...EXPERIMENT_ROLE_SPEC } : ROLE_SPEC;
+  const activeRoleOrder = Object.keys(activeRoleSpec);
+
   const roleEntries = {};
-  for (const [role, spec] of Object.entries(ROLE_SPEC)) {
+  for (const [role, spec] of Object.entries(activeRoleSpec)) {
     roleEntries[role] = buildRankedEntriesForRole(spec, candidatePool, localFeelActive);
   }
 
-  const roles = ROLE_ORDER.map((role) => {
-    const spec = ROLE_SPEC[role];
+  const roles = activeRoleOrder.map((role) => {
+    const spec = activeRoleSpec[role];
     const entries = roleEntries[role];
     const candidates = entries.slice(0, limitPerRole).map((entry) =>
       formatRoleCandidate(entry, role, roleEntries),

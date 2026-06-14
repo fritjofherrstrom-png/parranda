@@ -485,6 +485,45 @@ test(
   }),
 );
 
+// --- API: #277 culture role -------------------------------------------------
+
+test(
+  "api: a requested museums preference fills a daytime culture stop (was silently dropped)",
+  withServer(
+    makeLoader([
+      singleFamilyExternalRecord("cafe-1", "Kafé Hörnan", "cafe", 41.9, 12.49, ["fika"]),
+      singleFamilyExternalRecord("museum-1", "Stadsmuseet", "museum", 41.901, 12.491, ["kultur", "museum"]),
+      singleFamilyExternalRecord("food-1", "Trattoria Bella Vista", "restaurant", 41.902, 12.492, ["mat"]),
+    ]),
+    async (server) => {
+      const r = await requestJson(server, {
+        path: `/api/route-recommendations?lang=en&${FLAG}`,
+        body: agnosticBody({ preferences: ["coffee", "museums", "food"] }),
+      });
+      const exp = r.body.agnostic_route_output_experiment;
+      assert.equal(exp.route_mutation, true);
+      const byRole = Object.fromEntries(r.body.days[0].primary_route.main_stops.map((s) => [s.role, s.id]));
+      assert.equal(byRole.culture_stop, "museum-1", "the museum fills a culture role instead of vanishing");
+      assert.ok(exp.experimental_route.target_roles.includes("culture_stop"));
+      // Honest daypart: museums are a daytime (midday) stop, before the food anchor.
+      const stops = r.body.days[0].primary_route.main_stops;
+      const cultureIdx = stops.findIndex((s) => s.role === "culture_stop");
+      const foodIdx = stops.findIndex((s) => s.role === "food_anchor");
+      assert.equal(stops[cultureIdx].daypart, "midday");
+      assert.ok(cultureIdx < foodIdx, "the museum (midday) comes before the food anchor (afternoon)");
+    },
+  ),
+);
+
+test(
+  "api: a request without a museums preference produces no culture role (default behaviour unchanged)",
+  withServer(makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })), async (server) => {
+    const r = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: agnosticBody() });
+    const target = r.body.agnostic_route_output_experiment.experimental_route.target_roles || [];
+    assert.equal(target.includes("culture_stop"), false, "culture role only appears when museums is requested");
+  }),
+);
+
 // --- API: synthesis (unknown city) + mutation (no city / default route) -----
 
 test(
