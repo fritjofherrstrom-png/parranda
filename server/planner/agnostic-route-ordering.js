@@ -29,9 +29,30 @@ const DAYPART_SLOT = {
 };
 const DEFAULT_SLOT = 2;
 
+// Slot → human daypart label, aligned to the time-band vocabulary
+// (resolveTimeBandFromHour: morning/midday/afternoon/evening) so a stop's
+// daypart can be compared against the trusted current local time band. These
+// are approximate arc positions, NOT scheduled clock times.
+const SLOT_DAYPART = ["morning", "midday", "afternoon", "evening"];
+// Comparable rank for the trusted time bands. `late` (23–06) is intentionally
+// absent: at night the day-arc reads as the coming day, not an already-past one.
+const TIME_BAND_RANK = { morning: 0, midday: 1, afternoon: 2, evening: 3 };
+
 function daypartSlot(stop) {
   const role = stop && typeof stop.role === "string" ? stop.role : "";
   return Object.prototype.hasOwnProperty.call(DAYPART_SLOT, role) ? DAYPART_SLOT[role] : DEFAULT_SLOT;
+}
+
+// The daypart label a role occupies in the day-arc (morning…evening).
+function daypartForRole(role) {
+  const slot = daypartSlot({ role });
+  return SLOT_DAYPART[slot] || SLOT_DAYPART[DEFAULT_SLOT];
+}
+
+function timeBandRank(band) {
+  return typeof band === "string" && Object.prototype.hasOwnProperty.call(TIME_BAND_RANK, band)
+    ? TIME_BAND_RANK[band]
+    : null;
 }
 
 function buildAgnosticRouteOrdering({ adaptedBody } = {}) {
@@ -224,4 +245,6 @@ function toRad(deg) {
 module.exports = {
   buildAgnosticRouteOrdering,
   stableStopId,
+  daypartForRole,
+  timeBandRank,
 };

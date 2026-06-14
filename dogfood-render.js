@@ -61,6 +61,8 @@
     heuristic_walking_estimate: "dogfood.caveat.heuristic_walking_estimate",
     walking_router_fallback_used: "dogfood.caveat.walking_router_fallback_used",
     below_planner_candidate_threshold: "dogfood.caveat.below_planner_candidate_threshold",
+    experimental_daypart_sequence: "dogfood.caveat.experimental_daypart_sequence",
+    daypart_arc_precedes_local_time: "dogfood.caveat.daypart_arc_precedes_local_time",
   };
 
 
@@ -343,6 +345,9 @@
             id: stop.id || null,
             label: sanitize(isString(stop.label) ? stop.label : null),
             role: isString(stop.role) ? stop.role : null,
+            // #275 — approximate daypart position (morning…evening), makes the
+            // day's rhythm visible. Not a scheduled time.
+            daypart: isString(stop.daypart) ? stop.daypart : null,
             origin: isString(stop.origin) ? stop.origin : null,
             confidence: stop.confidence == null ? null : String(stop.confidence),
             lat: isFiniteNumber(stop.lat) ? stop.lat : null,
