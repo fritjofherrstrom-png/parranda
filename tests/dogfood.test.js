@@ -245,8 +245,8 @@ function successResponse(overrides = {}) {
         title: "Experimental any-place candidate route",
         summary: "Trusted source-backed candidates; walking-budget validated.",
         main_stops: [
-          { id: "food-1", label: "Food One", role: "food_anchor", origin: "external_open", confidence: "medium", lat: 41.9, lng: 12.49 },
-          { id: "cafe-1", label: "Cafe One", role: "coffee_fika_stop", origin: "external_open", confidence: "medium", lat: 41.901, lng: 12.491 },
+          { id: "food-1", label: "Food One", role: "food_anchor", daypart: "afternoon", origin: "external_open", confidence: "medium", lat: 41.9, lng: 12.49 },
+          { id: "cafe-1", label: "Cafe One", role: "coffee_fika_stop", daypart: "morning", origin: "external_open", confidence: "medium", lat: 41.901, lng: 12.491 },
         ],
         order_source: "trusted_candidate_pool+candidate_role_order",
         order_confidence: "walking_budget_validated",
@@ -342,6 +342,9 @@ test("pure: a success response surfaces stops, walking estimate, caveats, intake
   // Stops (labels + roles + lat/lng for the map renderer)
   assert.equal(view.route.stops.length, 2);
   assert.equal(view.route.stops[0].label, "Food One");
+  // #275 — honest daypart label surfaced per stop
+  assert.equal(view.route.stops[0].daypart, "afternoon");
+  assert.equal(view.route.stops[1].daypart, "morning");
   assert.equal(view.route.mapStops.length, 2);
   // Walking ESTIMATE fields are present and honest
   assert.equal(view.route.estimatedKm, 0.3);
@@ -501,6 +504,18 @@ test("i18n: calibration maps reference keys present in both sv and en", () => {
   for (const status of Object.keys(Render.CALIBRATION_STATUS_KEYS)) {
     keys.add(`dogfood.calibration.guide.${status}`);
   }
+  for (const lang of ["sv", "en"]) {
+    for (const key of keys) {
+      assert.equal(typeof translations[lang][key], "string", `${lang} missing ${key}`);
+      assert.ok(translations[lang][key].length > 0, `${lang} empty ${key}`);
+    }
+  }
+});
+
+test("i18n: every caveat caption (incl. #275 daypart) exists in both sv and en", () => {
+  const keys = Object.values(Render.CAVEAT_KEYS);
+  assert.ok(keys.includes("dogfood.caveat.daypart_arc_precedes_local_time"));
+  assert.ok(keys.includes("dogfood.caveat.experimental_daypart_sequence"));
   for (const lang of ["sv", "en"]) {
     for (const key of keys) {
       assert.equal(typeof translations[lang][key], "string", `${lang} missing ${key}`);

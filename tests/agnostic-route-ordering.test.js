@@ -1,7 +1,11 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { buildAgnosticRouteOrdering } = require("../server/planner/agnostic-route-ordering");
+const {
+  buildAgnosticRouteOrdering,
+  daypartForRole,
+  timeBandRank,
+} = require("../server/planner/agnostic-route-ordering");
 
 function stop(id, role, lat, lng) {
   return {
@@ -149,4 +153,22 @@ test("small, incomplete, or duplicate candidate sets do not reorder", () => {
   });
   assert.equal(duplicate.ordering.applied, false);
   assert.ok(duplicate.ordering.reasons.includes("duplicate_candidate_ids"));
+});
+
+test("daypartForRole maps roles onto an ordered morning→evening arc (#275)", () => {
+  assert.equal(daypartForRole("coffee_fika_stop"), "morning");
+  assert.equal(daypartForRole("scenic_anchor"), "midday");
+  assert.equal(daypartForRole("food_anchor"), "afternoon");
+  assert.equal(daypartForRole("evening_bar_option"), "evening");
+  // unknown roles land in the neutral midday-ish slot, never crash
+  assert.equal(daypartForRole("something_new"), "afternoon");
+  assert.equal(daypartForRole(null), "afternoon");
+});
+
+test("timeBandRank is comparable for day bands and null for night/unknown (#275)", () => {
+  assert.ok(timeBandRank("morning") < timeBandRank("midday"));
+  assert.ok(timeBandRank("midday") < timeBandRank("afternoon"));
+  assert.ok(timeBandRank("afternoon") < timeBandRank("evening"));
+  assert.equal(timeBandRank("late"), null); // night → arc reads as the coming day
+  assert.equal(timeBandRank("nonsense"), null);
 });

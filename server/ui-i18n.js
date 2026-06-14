@@ -814,6 +814,8 @@ const translations = {
     "dogfood.caveat.heuristic_walking_estimate": "Heuristisk promenadestimering",
     "dogfood.caveat.walking_router_fallback_used": "Walking-router fallback aktiverad",
     "dogfood.caveat.below_planner_candidate_threshold": "Under planner-tröskeln (ärlig honest-mode)",
+    "dogfood.caveat.experimental_daypart_sequence": "Stoppen är ordnade i en ungefärlig dagrytm (morgon→kväll), inte schemalagda tider.",
+    "dogfood.caveat.daypart_arc_precedes_local_time": "Dagbågen börjar på morgonen men den lokala tiden är redan senare — det här är en heldagsbåge, inte förankrad till nu.",
   },
   en: {
     "shell.plannerEyebrow": "PLANNER",
@@ -1627,6 +1629,8 @@ const translations = {
     "dogfood.caveat.heuristic_walking_estimate": "Heuristic walking estimate",
     "dogfood.caveat.walking_router_fallback_used": "Walking router fallback used",
     "dogfood.caveat.below_planner_candidate_threshold": "Below the planner-candidate threshold (honest mode)",
+    "dogfood.caveat.experimental_daypart_sequence": "Stops are ordered in a rough daypart rhythm (morning→evening), not scheduled times.",
+    "dogfood.caveat.daypart_arc_precedes_local_time": "The day-arc starts in the morning but the local time is already later — this is a full-day arc, not anchored to now.",
   },
 };
 

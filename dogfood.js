@@ -262,6 +262,7 @@
       var stopList = el("ol", "dogfood-stop-list");
       route.stops.forEach(function (stop) {
         var li = el("li", "dogfood-stop-row");
+        if (stop.daypart) li.appendChild(el("span", "dogfood-stop-daypart", stop.daypart));
         if (stop.label) li.appendChild(el("span", "dogfood-stop-label", stop.label));
         if (stop.role) li.appendChild(el("span", "dogfood-stop-role", stop.role));
         if (stop.origin) li.appendChild(el("span", "dogfood-stop-origin", stop.origin));

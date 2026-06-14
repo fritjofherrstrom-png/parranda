@@ -33,7 +33,7 @@ const { buildCandidateCombinationInspect } = require("./candidate-combination-in
 const { buildRouteCandidateFromCandidateCombination } = require("./candidate-combination-route-adapter");
 const { assessCityCandidateReadiness } = require("../place-candidates/readiness");
 const { validateAgnosticWalkingOrder } = require("./agnostic-route-walking-validation");
-const { buildAgnosticRouteOrdering } = require("./agnostic-route-ordering");
+const { buildAgnosticRouteOrdering, daypartForRole, timeBandRank } = require("./agnostic-route-ordering");
 const { resolveAgnosticContext, collectInfluenceReasons } = require("./agnostic-route-context");
 const { buildDayflowContext } = require("./dayflow-context");
 const { calibrateAgnosticRouteReadiness } = require("./agnostic-route-readiness-calibration");
@@ -216,7 +216,7 @@ function evaluateEligibility({ externalRequested, sourceStatus, adaptedBody, can
  * after validation it uses the existing route-result walking fields (`legs`,
  * `map_path_points`) while still avoiding opening-hours/live-arrival claims.
  */
-function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation = null, routeOrdering = null }) {
+function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation = null, routeOrdering = null, currentTimeBand = null }) {
   const inputStops = Array.isArray(adaptedBody?.stops) ? adaptedBody.stops : [];
   const stops = inputStops.map((stop) => ({
     id: stop.candidate_id || null,
@@ -224,6 +224,10 @@ function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation
     role: stop.role || null,
     origin: stop.origin || null,
     confidence: stop.confidence || null,
+    // #275 — honest daypart label (morning…evening), approximate arc position,
+    // NOT a scheduled clock time. Derived from the same role→slot map ordering
+    // uses, so the label always matches the sequence.
+    daypart: daypartForRole(stop.role || null),
     lat: stop.coordinates && Number.isFinite(stop.coordinates.lat) ? stop.coordinates.lat : null,
     lng: stop.coordinates && Number.isFinite(stop.coordinates.lng) ? stop.coordinates.lng : null,
   }));
@@ -266,6 +270,16 @@ function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation
     if (wr.source !== "osrm" || wr.fallbackUsed) caveats.push("heuristic_walking_estimate");
     if (wr.fallbackUsed) caveats.push("walking_router_fallback_used");
     if (routeOrdering && routeOrdering.applied) caveats.push("experimental_daypart_sequence");
+    // #275 — daypart-arc honesty. The arc is the ordered list of stop dayparts.
+    // When the trusted current local band is known and sits AFTER the arc's
+    // earliest daypart, the day leads with an already-past part of the day —
+    // surface that honestly rather than pretending it is anchored to "now".
+    const daypartArc = stops.map((stop) => stop.daypart).filter(Boolean);
+    const currentRank = timeBandRank(currentTimeBand);
+    const earliestRank = daypartArc.length ? timeBandRank(daypartArc[0]) : null;
+    const precedesLocalTime =
+      currentRank !== null && earliestRank !== null && earliestRank < currentRank;
+    if (precedesLocalTime) caveats.push("daypart_arc_precedes_local_time");
     return {
       ...base,
       summary:
@@ -280,6 +294,10 @@ function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation
       estimated_walk_minutes: totalWalkMinutes,
       legs: wr.legs,
       map_path_points: wr.pathPoints,
+      daypart_arc: daypartArc,
+      // The trusted current local band, only when known (tz resolved). Null
+      // otherwise — no fabricated time, positional arc stands honestly.
+      current_local_time_band: currentRank !== null ? currentTimeBand : null,
       caveats,
     };
   }
@@ -660,6 +678,9 @@ async function composeAgnosticRouteOutput({
     adaptedBody: finalAdaptedBody,
     walkingValidation: walking,
     routeOrdering,
+    // #275 — only the trusted, timezone-resolved band anchors the arc; when the
+    // timezone is unknown this is null and the arc stays positional + honest.
+    currentTimeBand: ctx && ctx.timezoneKnown ? ctx.timeBand : null,
   });
   const mutated = applyRouteMutation({ baselineResult, primaryRoute: experimentalRoute, date: effectiveDate });
 

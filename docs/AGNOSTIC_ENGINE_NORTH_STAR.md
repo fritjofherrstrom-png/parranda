@@ -84,6 +84,8 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 
 - **#274** makes the day read **morning → evening**: route ordering becomes daypart-PRIMARY (coffee early, scenic daytime, the food anchor mid-day, an evening bar last) with proximity as the SECONDARY tie-break within a daypart slot and across slot transitions. Still not TSP / shortest-route — it trades a little walking (≈0.3 km in the probed cases) for a coherent day, and walking-budget validation remains the final gate with honest fallback to role order if the sequence fails. The role→slot map is generic and deterministic (no clock dependency, no city logic). Before #274 proximity could bury an evening bar mid-day (observed live in Bologna: scenic → bar → food → coffee); after, all probed cities produce coffee → scenic → food → evening.
 
+- **#275** makes the daypart rhythm **honest and visible**: every stop carries an approximate daypart label (morning → midday → afternoon → evening; NOT a scheduled clock time), the route exposes its `daypart_arc` and the trusted `current_local_time_band`, and when the arc leads with a daypart that is already past the trusted local band it says so via the `daypart_arc_precedes_local_time` caveat ("a full-day arc, not anchored to now"). Only the timezone-resolved band (#262/#266) anchors the arc; tz unknown → positional arc, no fabricated time, no caveat. `late` (night) reads as the coming day. Flag-gated; default Planner / citypack untouched. This makes the day's rhythm legible AND closes the honesty gap where a midday/evening request used to silently lead with a morning stop.
+
 Still missing before a true any-place Planner (now the next steps): stronger generic candidate supply where source-backed candidates are sparse, richer single-day composition quality after calibration, multi-day experimental output, persistent geocode caching / a paid-or-self-hosted geocoder for scale, and live ETA / real-time routing (explicitly out of scope).
 
 ## Anti-drift rule
@@ -173,7 +175,8 @@ The current direction should be:
 #271 — DONE: loader error observability (error_failed_closed vs genuinely empty)
 #272 — DONE: generic local-feel preference v1 (chain demotion + role-type preference, experiment-only)
 #273 — DONE: scenic/role coverage breadth (loader emits parks/gardens/waterfront/castle; per-category fetch budget)
-#274 — IN PROGRESS: daypart rhythm ordering (morning→evening slots, proximity within-slot, walking validation final gate)
+#274 — DONE: daypart rhythm ordering (morning→evening slots, proximity within-slot, walking validation final gate)
+#275 — IN PROGRESS: daypart honesty (per-stop daypart labels, daypart_arc, current_local_time_band, not-anchored caveat)
 ```
 
 The numbers may shift, but the sequence should not drift back into endless diagnostics.

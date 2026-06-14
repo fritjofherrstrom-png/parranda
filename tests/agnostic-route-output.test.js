@@ -260,6 +260,62 @@ test("unit: experimental route can surface validated proximity ordering metadata
   assert.ok(route.caveats.includes("experimental_daypart_sequence"));
 });
 
+// --- unit: #275 daypart honesty -------------------------------------------
+
+test("unit: stops carry honest daypart labels and the arc reflects the role order", () => {
+  const route = buildExperimentalPrimaryRoute({
+    cityKey: "agnostic-area",
+    adaptedBody: adaptedBody(),
+    walkingValidation: {
+      valid: true,
+      result: {
+        source: "heuristic",
+        estimatedKm: 0.3,
+        legs: [{ estimated_walk_minutes: 4 }],
+        pathPoints: [{ lat: 41.9, lng: 12.49 }, { lat: 41.901, lng: 12.491 }],
+      },
+    },
+    routeOrdering: { applied: true, source: "trusted_candidate_pool+daypart_rhythm+proximity_sequence" },
+  });
+  // adaptedBody() stops are food_anchor + coffee_fika_stop → afternoon + morning.
+  assert.deepEqual(route.main_stops.map((s) => s.daypart), ["afternoon", "morning"]);
+  assert.deepEqual(route.daypart_arc, ["afternoon", "morning"]);
+});
+
+test("unit: daypart_arc_precedes_local_time caveat fires only when the arc leads before the trusted band", () => {
+  const wv = {
+    valid: true,
+    result: {
+      source: "heuristic",
+      estimatedKm: 0.5,
+      legs: [{ estimated_walk_minutes: 5 }, { estimated_walk_minutes: 6 }],
+      pathPoints: [{ lat: 0, lng: 0 }, { lat: 0, lng: 0.001 }, { lat: 0, lng: 0.002 }],
+    },
+  };
+  const morningArc = adaptedBody({
+    stops: [
+      { role: "coffee_fika_stop", candidate_id: "c", label: "C", origin: "external_open", confidence: "low", coordinates: { lat: 0, lng: 0 } },
+      { role: "scenic_anchor", candidate_id: "s", label: "S", origin: "external_open", confidence: "low", coordinates: { lat: 0, lng: 0.001 } },
+      { role: "food_anchor", candidate_id: "f", label: "F", origin: "external_open", confidence: "low", coordinates: { lat: 0, lng: 0.002 } },
+    ],
+  });
+  const ro = { applied: true, source: "trusted_candidate_pool+daypart_rhythm+proximity_sequence" };
+
+  const atEvening = buildExperimentalPrimaryRoute({ cityKey: "x", adaptedBody: morningArc, walkingValidation: wv, routeOrdering: ro, currentTimeBand: "evening" });
+  assert.ok(atEvening.caveats.includes("daypart_arc_precedes_local_time"), "evening request leading with morning → caveat");
+  assert.equal(atEvening.current_local_time_band, "evening");
+
+  const atMorning = buildExperimentalPrimaryRoute({ cityKey: "x", adaptedBody: morningArc, walkingValidation: wv, routeOrdering: ro, currentTimeBand: "morning" });
+  assert.equal(atMorning.caveats.includes("daypart_arc_precedes_local_time"), false, "morning request aligns → no caveat");
+
+  const tzUnknown = buildExperimentalPrimaryRoute({ cityKey: "x", adaptedBody: morningArc, walkingValidation: wv, routeOrdering: ro, currentTimeBand: null });
+  assert.equal(tzUnknown.caveats.includes("daypart_arc_precedes_local_time"), false, "tz unknown → positional arc, no caveat");
+  assert.equal(tzUnknown.current_local_time_band, null, "no fabricated band when tz unknown");
+
+  const atNight = buildExperimentalPrimaryRoute({ cityKey: "x", adaptedBody: morningArc, walkingValidation: wv, routeOrdering: ro, currentTimeBand: "late" });
+  assert.equal(atNight.caveats.includes("daypart_arc_precedes_local_time"), false, "night reads as the coming day → no caveat");
+});
+
 // --- unit: mutation vs synthesis, original never mutated --------------------
 
 test("unit: replace branch swaps days[0].primary_route, original untouched", () => {
