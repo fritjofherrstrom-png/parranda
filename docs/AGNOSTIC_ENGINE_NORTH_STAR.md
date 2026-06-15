@@ -94,6 +94,8 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 
 - The next single-day foundation is **time-sensitive source-event understanding**: a generic, source-backed contract for happenings whose value depends on time windows (markets, night markets, venue programming, civic/culture calendars, seasonal activity, and temporary street/riverfront/coast opportunities). This is not a named-city hack and not multi-day. The engine needs to know what is happening, when it is relevant, how trustworthy the source is, and whether it can later influence Pulse/dayflow/routes without inventing opening-hours, ETA, or "best route" claims.
 
+- **#280** makes that source-event contract **provider-collectable**: trusted source providers can emit a separate `time_sensitive_events` list, the registry normalizes it through the generic #279 contract, and source inspect exposes capped rows for review. These events remain separate from legacy live events, Pulse cards, Blitz, citypacks, route candidates, and route stops. The capability unlocked is safe collection + inspectability; consumption by Pulse/dayflow/routes is still a later gated PR.
+
 Still missing before a true any-place Planner (now the next steps): stronger generic candidate supply where source-backed candidates are sparse, richer single-day composition quality after calibration, time-sensitive source events feeding Pulse/dayflow/route composition, multi-day experimental output, persistent geocode caching / a paid-or-self-hosted geocoder for scale, and live ETA / real-time routing (explicitly out of scope).
 
 ## Anti-drift rule
@@ -188,6 +190,8 @@ The current direction should be:
 #276 — DONE: time-anchored selection (today→anchor day to now + drop past dayparts; future→full plan; conservative >=2 floor)
 #277 — DONE: composition richness v1 (experiment-only culture_stop role; museums/gallery now fills a midday stop)
 #278 — DONE: composition richness v1b (experiment-only market_stop role; markets now fills a midday stop)
+#279 — DONE: generic time-sensitive source-event contract (source-backed happenings with timing relevance)
+#280 — IN PROGRESS: source-provider bridge for time-sensitive events (collect + inspect, not consumed)
 ```
 
 The numbers may shift, but the sequence should not drift back into endless diagnostics.

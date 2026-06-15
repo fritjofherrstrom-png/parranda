@@ -53,8 +53,13 @@ The contract is city-agnostic. A night market, civic calendar event, venue
 programming item, temporary waterfront activity, or seasonal market all enter
 through the same normalization path. A source URL / source label / provenance is
 required for strong confidence; stale or expired events are downgraded instead
-of promoted. This PR only creates the contract — it does not wire time-sensitive
-events into default Planner, Blitz, citypacks, or route output.
+of promoted.
+
+Providers may now return a separate `time_sensitive_events` list. The registry
+normalizes those rows through the time-sensitive source-event contract and keeps
+them separate from legacy live events, source signals, and route candidates.
+They are inspectable provider output, not user-facing Pulse cards and not route
+stops.
 
 ## Display Gates
 
@@ -157,6 +162,14 @@ reports a capped signal summary:
 - capped `signal_rows`
 - per-signal `signal_type`, `signal_kind`, `confidence`, and `dayflow_reason`
 - per-signal `display_gate` (proving weather stays Pulse-only)
+
+For time-sensitive source-event providers it reports a capped event summary:
+
+- `normalized_time_sensitive_event_count`
+- capped `time_sensitive_event_rows`
+- per-event `timing_relevance`, `starts_at`, `ends_at`, `confidence`,
+  `route_role_hint`, `candidate_kind`, source label/URL, and coordinates when
+  known
 
 It does not dump raw provider payloads by default. The inspect shape is meant to
 speed up provider review and failure diagnosis without turning `/api/city-pulse`

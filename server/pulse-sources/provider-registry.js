@@ -1,5 +1,6 @@
 const { normalizeSourceDescriptor } = require("./source-descriptor");
 const { normalizeSourceEvent, normalizeSourceSignal } = require("./normalize-event");
+const { normalizeTimeSensitiveSourceEvent } = require("./time-sensitive-event");
 const { dedupeNormalizedEvents } = require("./dedupe");
 
 const DEFAULT_ENABLED_STATUSES = new Set(["active"]);
@@ -52,6 +53,7 @@ async function collectPulseSourcesForCity(cityConfig, options = {}) {
   const sourceStatuses = [];
   const events = [];
   const signals = [];
+  const timeSensitiveEvents = [];
 
   for (const spec of providerSpecs) {
     const specDescriptor = spec.descriptor;
@@ -87,25 +89,40 @@ async function collectPulseSourcesForCity(cityConfig, options = {}) {
       const result = await Promise.resolve(provider.collect(options.context || {}));
       const rawEvents = Array.isArray(result?.events) ? result.events : [];
       const rawSignals = Array.isArray(result?.signals) ? result.signals : [];
+      const rawTimeSensitiveEvents = Array.isArray(result?.time_sensitive_events)
+        ? result.time_sensitive_events
+        : [];
       const normalizedEvents = rawEvents
         .map((event, index) => normalizeSourceEvent(event, descriptor, { index }))
         .filter(Boolean);
       const normalizedSignals = rawSignals
         .map((signal, index) => normalizeSourceSignal(signal, descriptor, { index }))
         .filter(Boolean);
+      const normalizedTimeSensitiveEvents = rawTimeSensitiveEvents
+        .map((event, index) =>
+          normalizeTimeSensitiveSourceEvent(withDescriptorSourceDefaults(event, descriptor), {
+            index,
+            city: descriptor.city,
+            now: options.context?.now,
+          }),
+        )
+        .filter(Boolean);
 
       events.push(...normalizedEvents);
       signals.push(...normalizedSignals);
+      timeSensitiveEvents.push(...normalizedTimeSensitiveEvents);
       sourceStatuses.push({
         ...statusFor(descriptor, "ok"),
         events: normalizedEvents.length,
         signals: normalizedSignals.length,
+        time_sensitive_events: normalizedTimeSensitiveEvents.length,
       });
     } catch (error) {
       sourceStatuses.push({
         ...statusFor(descriptor, "failed", error?.message || "provider_failed"),
         events: 0,
         signals: 0,
+        time_sensitive_events: 0,
       });
     }
   }
@@ -114,6 +131,7 @@ async function collectPulseSourcesForCity(cityConfig, options = {}) {
     city: cityConfig.key,
     events: dedupeNormalizedEvents(events),
     signals,
+    time_sensitive_events: timeSensitiveEvents,
     source_status: sourceStatuses,
   };
 }
@@ -159,6 +177,20 @@ function toFilterSet(values) {
     return null;
   }
   return new Set(values.map((value) => String(value || "").trim()).filter(Boolean));
+}
+
+function withDescriptorSourceDefaults(event, descriptor) {
+  if (!event || typeof event !== "object" || Array.isArray(event)) {
+    return event;
+  }
+  return {
+    source_label: descriptor.label || null,
+    source_url: descriptor.sourceUrl || null,
+    source_type: descriptor.sourceType || null,
+    source_tier: descriptor.trust?.source_tier || null,
+    city: descriptor.city,
+    ...event,
+  };
 }
 
 module.exports = {
