@@ -96,6 +96,8 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 
 - **#280** makes that source-event contract **provider-collectable**: trusted source providers can emit a separate `time_sensitive_events` list, the registry normalizes it through the generic #279 contract, and source inspect exposes capped rows for review. These events remain separate from legacy live events, Pulse cards, Blitz, citypacks, route candidates, and route stops. The capability unlocked is safe collection + inspectability; consumption by Pulse/dayflow/routes is still a later gated PR.
 
+- **#281** adds a **thin-day readiness cap**: a produced route with two or fewer stops now reads `thin_usable` (cap `capped_by_thin_day`, reason `thin_day_few_stops`), never `usable`, even with strong sources and full context. Closes the #276 review note — a time-anchored evening day trims to food + bar and used to overstate as `usable`/`medium`. Generic and deterministic (stop-count only); flag-gated calibration, default Planner / citypack untouched.
+
 Still missing before a true any-place Planner (now the next steps): stronger generic candidate supply where source-backed candidates are sparse, richer single-day composition quality after calibration, time-sensitive source events feeding Pulse/dayflow/route composition, multi-day experimental output, persistent geocode caching / a paid-or-self-hosted geocoder for scale, and live ETA / real-time routing (explicitly out of scope).
 
 ## Anti-drift rule
@@ -192,6 +194,7 @@ The current direction should be:
 #278 — DONE: composition richness v1b (experiment-only market_stop role; markets now fills a midday stop)
 #279 — DONE: generic time-sensitive source-event contract (source-backed happenings with timing relevance)
 #280 — IN PROGRESS: source-provider bridge for time-sensitive events (collect + inspect, not consumed)
+#281 — DONE: thin-day readiness cap (<=2 stops → thin_usable, closes #276 note)
 ```
 
 The numbers may shift, but the sequence should not drift back into endless diagnostics.
