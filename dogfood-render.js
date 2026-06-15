@@ -105,6 +105,7 @@
     capped_by_unresolved_roles: "dogfood.calibration.cap.capped_by_unresolved_roles",
     capped_by_external_only_sources: "dogfood.calibration.cap.capped_by_external_only_sources",
     capped_by_below_planner_candidate_threshold: "dogfood.calibration.cap.capped_by_below_planner_candidate_threshold",
+    capped_by_thin_day: "dogfood.calibration.cap.capped_by_thin_day",
   };
 
   // i18n bootstrap is { lang, strings: { key: value } }. We never embed user-facing

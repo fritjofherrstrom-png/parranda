@@ -94,6 +94,8 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 
 - The next single-day foundation is **time-sensitive source-event understanding**: a generic, source-backed contract for happenings whose value depends on time windows (markets, night markets, venue programming, civic/culture calendars, seasonal activity, and temporary street/riverfront/coast opportunities). This is not a named-city hack and not multi-day. The engine needs to know what is happening, when it is relevant, how trustworthy the source is, and whether it can later influence Pulse/dayflow/routes without inventing opening-hours, ETA, or "best route" claims.
 
+- **#281** adds a **thin-day readiness cap**: a produced route with two or fewer stops now reads `thin_usable` (cap `capped_by_thin_day`, reason `thin_day_few_stops`), never `usable`, even with strong sources and full context. Closes the #276 review note — a time-anchored evening day trims to food + bar and used to overstate as `usable`/`medium`. Generic and deterministic (stop-count only); flag-gated calibration, default Planner / citypack untouched.
+
 Still missing before a true any-place Planner (now the next steps): stronger generic candidate supply where source-backed candidates are sparse, richer single-day composition quality after calibration, time-sensitive source events feeding Pulse/dayflow/route composition, multi-day experimental output, persistent geocode caching / a paid-or-self-hosted geocoder for scale, and live ETA / real-time routing (explicitly out of scope).
 
 ## Anti-drift rule
