@@ -679,6 +679,62 @@ test("buildCityPulse defaults `now` so the staleness guardrail holds on the real
   assert.equal(row.confidence, "low", "a stale event cannot keep strong confidence");
 });
 
+test("an empty per-event source_label does not erase the provider's descriptor backing", async () => {
+  const result = await collectPulseSourcesForCity(city, {
+    providerSpecs: [
+      providerSpec({
+        time_sensitive_events: [
+          {
+            id: "market",
+            title: "Backed market",
+            starts_at: "2026-07-10T18:00:00.000Z",
+            ends_at: "2026-07-10T22:00:00.000Z",
+            confidence: "strong",
+            source_label: "", // explicitly empty — must fall back to the descriptor
+            source_url: "",
+          },
+        ],
+      }),
+    ],
+    context: { now: new Date("2026-07-10T19:00:00.000Z") },
+  });
+
+  assert.equal(result.time_sensitive_events.length, 1);
+  assert.equal(result.time_sensitive_events[0].source_label, "Test Official Agenda");
+  assert.equal(result.time_sensitive_events[0].source_url, "https://example.test/agenda");
+  // Backing preserved → confidence is NOT downgraded for missing source.
+  assert.ok(!(result.time_sensitive_events[0].timing_reasons || []).includes("missing_source_backing"));
+});
+
+test("literal duplicate time-sensitive events collapse; distinct ones are kept", async () => {
+  const dup = {
+    id: "river-market",
+    title: "River market",
+    starts_at: "2026-07-10T18:00:00.000Z",
+    ends_at: "2026-07-10T22:00:00.000Z",
+    confidence: "strong",
+    source_url: "https://example.test/river-market",
+  };
+  const result = await collectPulseSourcesForCity(city, {
+    providerSpecs: [
+      providerSpec({
+        time_sensitive_events: [
+          dup,
+          { ...dup }, // identical → collapses
+          { ...dup, id: "hill-market", source_url: "https://example.test/hill-market" }, // distinct → kept
+        ],
+      }),
+    ],
+    context: { now: new Date("2026-07-10T19:00:00.000Z") },
+  });
+
+  assert.equal(result.time_sensitive_events.length, 2, "the literal duplicate is collapsed, the distinct event kept");
+  assert.deepEqual(
+    result.time_sensitive_events.map((event) => event.id).sort(),
+    ["hill-market", "river-market"],
+  );
+});
+
 test("pulse source registry core has no city-specific branches", () => {
   const files = [
     "server/pulse-sources/source-descriptor.js",

@@ -131,7 +131,7 @@ async function collectPulseSourcesForCity(cityConfig, options = {}) {
     city: cityConfig.key,
     events: dedupeNormalizedEvents(events),
     signals,
-    time_sensitive_events: timeSensitiveEvents,
+    time_sensitive_events: dedupeTimeSensitiveEvents(timeSensitiveEvents),
     source_status: sourceStatuses,
   };
 }
@@ -179,18 +179,55 @@ function toFilterSet(values) {
   return new Set(values.map((value) => String(value || "").trim()).filter(Boolean));
 }
 
+// The descriptor carries provider-level source backing (label/url/type/tier).
+// An event's own source field WINS when it is non-empty, but an explicitly
+// EMPTY event field must not erase the descriptor's real backing — otherwise a
+// provider that returns `source_label: ""` per event would silently drop its
+// own provenance and get downgraded. (firstNonEmpty, not spread-clobber.)
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value;
+    if (value != null && typeof value !== "string") return value;
+  }
+  return null;
+}
+
 function withDescriptorSourceDefaults(event, descriptor) {
   if (!event || typeof event !== "object" || Array.isArray(event)) {
     return event;
   }
   return {
-    source_label: descriptor.label || null,
-    source_url: descriptor.sourceUrl || null,
-    source_type: descriptor.sourceType || null,
-    source_tier: descriptor.trust?.source_tier || null,
     city: descriptor.city,
     ...event,
+    source_label: firstNonEmpty(event.source_label, descriptor.label),
+    source_url: firstNonEmpty(event.source_url, descriptor.sourceUrl),
+    source_type: firstNonEmpty(event.source_type, descriptor.sourceType),
+    source_tier: firstNonEmpty(event.source_tier, descriptor.trust?.source_tier),
   };
+}
+
+// Conservative dedup for time-sensitive events: collapse only LITERAL duplicates
+// (same normalized identity from the same source/start), never distinct events.
+// The legacy event dedup keys on `source.id`/`source_owned`, a different shape,
+// so time-sensitive events need their own key.
+function dedupeTimeSensitiveEvents(events = []) {
+  const seen = new Set();
+  const out = [];
+  for (const event of events) {
+    if (!event) continue;
+    const key = [
+      event.city || "",
+      event.id || "",
+      event.source_url || event.source_label || "",
+      event.starts_at || "",
+    ]
+      .map((value) => String(value || "").trim().toLowerCase())
+      .join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(event);
+  }
+  return out;
 }
 
 module.exports = {
