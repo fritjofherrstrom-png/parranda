@@ -29,6 +29,13 @@ const {
   normalizeTimeSensitiveSourceEvent,
   normalizeTimingRelevance,
 } = require("./time-sensitive-event");
+const {
+  SCHEMA_ORG_EVENT_PROVIDER_ID,
+  createSchemaOrgEventProvider,
+  resolveDefaultSchemaOrgEventProvider,
+  extractSchemaOrgEvents,
+  mapSchemaOrgEventToRaw,
+} = require("./schema-org-event-provider");
 
 module.exports = {
   SourceProviderRegistry,
@@ -50,4 +57,9 @@ module.exports = {
   interpretWeatherForDayflow,
   normalizeTimeSensitiveSourceEvent,
   normalizeTimingRelevance,
+  SCHEMA_ORG_EVENT_PROVIDER_ID,
+  createSchemaOrgEventProvider,
+  resolveDefaultSchemaOrgEventProvider,
+  extractSchemaOrgEvents,
+  mapSchemaOrgEventToRaw,
 };
