@@ -230,6 +230,7 @@ const TINY_I18N = {
     "dogfood.calibration.cap.capped_by_unresolved_roles": "Capped by unresolved roles.",
     "dogfood.calibration.cap.capped_by_external_only_sources": "Capped by external-only sources.",
     "dogfood.calibration.cap.capped_by_below_planner_candidate_threshold": "Capped by below-threshold candidates.",
+    "dogfood.calibration.cap.capped_by_thin_day": "Capped by thin day.",
     "dogfood.calibration.cap.unknown": "Unknown readiness cap",
   },
 };

@@ -28,7 +28,14 @@ const CAP_TOKENS = {
   unresolvedRoles: "capped_by_unresolved_roles",
   externalOnlySources: "capped_by_external_only_sources",
   belowPlannerCandidateThreshold: "capped_by_below_planner_candidate_threshold",
+  thinDay: "capped_by_thin_day",
 };
+
+// A produced route with this few stops is a minimal day, not a full one — even
+// with strong sources and context it should read thin_usable, never usable.
+// (#281: closes the #276 review note — a time-anchored evening day trims to
+// food + bar and used to read usable/medium.)
+const THIN_DAY_STOP_THRESHOLD = 2;
 
 function calibrateAgnosticRouteReadiness({
   routeMutation = false,
@@ -186,6 +193,10 @@ function calibrateAgnosticRouteReadiness({
   }
   if (inputs.unresolved_role_count > 0) {
     caps.push(CAP_TOKENS.unresolvedRoles);
+  }
+  if (Number.isFinite(inputs.selected_stop_count) && inputs.selected_stop_count <= THIN_DAY_STOP_THRESHOLD) {
+    reasons.push("thin_day_few_stops");
+    caps.push(CAP_TOKENS.thinDay);
   }
 
   const cappedByTokens = unique(caps.filter((cap) => cap.startsWith("capped_by_")));

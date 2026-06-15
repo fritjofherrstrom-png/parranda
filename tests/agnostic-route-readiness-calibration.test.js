@@ -132,6 +132,31 @@ test("usable never coexists with capped_by tokens and thin_usable always has one
   assert.ok(cappedBy(thin).length > 0);
 });
 
+test("#281 — a 2-stop day is capped thin even with strong sources and full context", () => {
+  // Same strong inputs that otherwise produce `usable`, but only two stops
+  // (e.g. a time-anchored evening day trimmed to food + bar). It must read
+  // thin_usable, not usable.
+  const thin = calibrateAgnosticRouteReadiness(
+    producedInput({
+      experimentalRoute: baseRoute({
+        main_stops: [
+          { id: "food-1", origin: "trusted_curated" },
+          { id: "bar-1", origin: "trusted_curated" },
+        ],
+      }),
+    }),
+  );
+  assert.equal(thin.status, "thin_usable");
+  assert.equal(thin.level, "low");
+  assert.ok(thin.caps.includes("capped_by_thin_day"));
+  assert.ok(thin.reasons.includes("thin_day_few_stops"));
+
+  // A three-stop day with the same strong inputs is NOT thin-capped.
+  const full = calibrateAgnosticRouteReadiness(producedInput());
+  assert.equal(full.status, "usable");
+  assert.equal(full.caps.includes("capped_by_thin_day"), false);
+});
+
 test("weather-provider timezone is surfaced as derived and capped", () => {
   const out = calibrateAgnosticRouteReadiness(
     producedInput({
