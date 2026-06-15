@@ -643,6 +643,42 @@ test("city-pulse source inspect includes time-sensitive event rows without rende
   assert.equal(pulse.source_provider_inspect.time_sensitive_event_rows[0].route_role_hint, "market_stop");
 });
 
+test("buildCityPulse defaults `now` so the staleness guardrail holds on the real (now-less) /api path", async () => {
+  // The real /api/city-pulse route calls buildCityPulse WITHOUT `now`. The
+  // staleness downgrade must still apply — an expired event a provider claims
+  // is "now" must not be trusted verbatim just because the caller omitted now.
+  const pulse = await buildCityPulse(
+    {
+      ...city,
+      timezone: "Europe/Rome",
+      services: {
+        pulseSourceProviders: [
+          providerSpec({
+            events: [],
+            time_sensitive_events: [
+              {
+                id: "expired-market",
+                title: "Yesteryear market",
+                timing_relevance: "now",
+                starts_at: "2020-01-01T18:00:00.000Z",
+                ends_at: "2020-01-01T22:00:00.000Z",
+                confidence: "strong",
+                source_url: "https://example.test/old-market",
+                source_label: "Official city calendar",
+              },
+            ],
+          }),
+        ],
+      },
+    },
+    { date: "2026-07-10", inspectSources: true, lang: "en" }, // NOTE: no `now`
+  );
+
+  const row = pulse.source_provider_inspect.time_sensitive_event_rows[0];
+  assert.equal(row.timing_relevance, "stale", "expired event must be stale even without an injected now");
+  assert.equal(row.confidence, "low", "a stale event cannot keep strong confidence");
+});
+
 test("pulse source registry core has no city-specific branches", () => {
   const files = [
     "server/pulse-sources/source-descriptor.js",

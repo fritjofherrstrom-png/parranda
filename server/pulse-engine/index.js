@@ -37,7 +37,13 @@ const CITY_AGNOSTIC_GENERATORS = [
  * @param {string} [options.lang]
  */
 async function buildCityPulse(cityConfig, options = {}) {
-  const { date, now, lang } = options;
+  const { date, lang } = options;
+  // Default to wall-clock when a caller omits `now` (the real /api/city-pulse
+  // route does). buildEngineContext already defaults internally, but the
+  // time-sensitive source-event bridge needs a concrete `now` to downgrade
+  // expired/stale events — without it an expired event a provider claims is
+  // "now" would be trusted verbatim. Tests inject `now` for determinism.
+  const now = options.now || new Date();
 
   const [weather, sourceResult] = await Promise.all([
     safeFetchWeather(cityConfig, date),
