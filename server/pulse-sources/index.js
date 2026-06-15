@@ -15,6 +15,7 @@ const { buildDisplayGate } = require("./display-gates");
 const {
   SOURCE_PROVIDER_INSPECT_EVENT_LIMIT,
   SOURCE_PROVIDER_INSPECT_SIGNAL_LIMIT,
+  SOURCE_PROVIDER_INSPECT_TIME_SENSITIVE_EVENT_LIMIT,
   buildSourceProviderInspect,
 } = require("./inspect");
 const { dedupeNormalizedEvents } = require("./dedupe");
@@ -40,6 +41,7 @@ module.exports = {
   buildDisplayGate,
   SOURCE_PROVIDER_INSPECT_EVENT_LIMIT,
   SOURCE_PROVIDER_INSPECT_SIGNAL_LIMIT,
+  SOURCE_PROVIDER_INSPECT_TIME_SENSITIVE_EVENT_LIMIT,
   buildSourceProviderInspect,
   dedupeNormalizedEvents,
   WEATHER_CONTEXT_PROVIDER_ID,

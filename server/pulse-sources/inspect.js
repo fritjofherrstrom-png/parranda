@@ -1,5 +1,6 @@
 const SOURCE_PROVIDER_INSPECT_EVENT_LIMIT = 10;
 const SOURCE_PROVIDER_INSPECT_SIGNAL_LIMIT = 10;
+const SOURCE_PROVIDER_INSPECT_TIME_SENSITIVE_EVENT_LIMIT = 10;
 
 function buildSourceProviderInspect({
   city,
@@ -9,6 +10,7 @@ function buildSourceProviderInspect({
   normalized_events = [],
   compat_events = [],
   normalized_signals = [],
+  normalized_time_sensitive_events = [],
 } = {}) {
   const compatBySourceEventId = new Map(
     (Array.isArray(compat_events) ? compat_events : [])
@@ -24,6 +26,12 @@ function buildSourceProviderInspect({
   const signalRows = signals
     .slice(0, SOURCE_PROVIDER_INSPECT_SIGNAL_LIMIT)
     .map((signal) => compactInspectSignal(signal));
+  const timeSensitiveEvents = Array.isArray(normalized_time_sensitive_events)
+    ? normalized_time_sensitive_events
+    : [];
+  const timeSensitiveEventRows = timeSensitiveEvents
+    .slice(0, SOURCE_PROVIDER_INSPECT_TIME_SENSITIVE_EVENT_LIMIT)
+    .map(compactInspectTimeSensitiveEvent);
 
   return {
     city: String(city || "").trim() || null,
@@ -40,6 +48,10 @@ function buildSourceProviderInspect({
     returned_signal_rows: signalRows.length,
     truncated_signal_count: Math.max(0, signals.length - signalRows.length),
     signal_rows: signalRows,
+    normalized_time_sensitive_event_count: timeSensitiveEvents.length,
+    returned_time_sensitive_event_rows: timeSensitiveEventRows.length,
+    truncated_time_sensitive_event_count: Math.max(0, timeSensitiveEvents.length - timeSensitiveEventRows.length),
+    time_sensitive_event_rows: timeSensitiveEventRows,
   };
 }
 
@@ -110,8 +122,35 @@ function compactInspectEvent(event, compatEvent) {
   };
 }
 
+function compactInspectTimeSensitiveEvent(event) {
+  return {
+    id: event?.id || null,
+    title: event?.title || event?.name || null,
+    candidate_kind: event?.candidate_kind || null,
+    timing_relevance: event?.timing_relevance || null,
+    starts_at: event?.starts_at || null,
+    ends_at: event?.ends_at || null,
+    confidence: event?.confidence || null,
+    route_role_hint: event?.route_role_hint || null,
+    source: {
+      label: event?.source_label || event?.provenance?.source_label || null,
+      url: event?.source_url || event?.provenance?.source_url || null,
+      type: event?.source_type || null,
+      tier: event?.source_tier || null,
+    },
+    place: {
+      city: event?.city || null,
+      area: event?.area || null,
+      lat: Number.isFinite(event?.lat) ? event.lat : null,
+      lng: Number.isFinite(event?.lng) ? event.lng : null,
+    },
+    timing_reasons: Array.isArray(event?.timing_reasons) ? event.timing_reasons : [],
+  };
+}
+
 module.exports = {
   SOURCE_PROVIDER_INSPECT_EVENT_LIMIT,
   SOURCE_PROVIDER_INSPECT_SIGNAL_LIMIT,
+  SOURCE_PROVIDER_INSPECT_TIME_SENSITIVE_EVENT_LIMIT,
   buildSourceProviderInspect,
 };
