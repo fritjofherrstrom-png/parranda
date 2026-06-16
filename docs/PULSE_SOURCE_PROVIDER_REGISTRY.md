@@ -58,8 +58,10 @@ of promoted.
 Providers may now return a separate `time_sensitive_events` list. The registry
 normalizes those rows through the time-sensitive source-event contract and keeps
 them separate from legacy live events, source signals, and route candidates.
-They are inspectable provider output, not user-facing Pulse cards and not route
-stops.
+The Pulse engine may consume them as gated, salience-ranked context signals when
+they are source-backed, current/today/tonight, and at least medium confidence.
+They are still not route stops, route candidates, citypack candidates, or
+Planner mutations.
 
 ## Display Gates
 
