@@ -203,6 +203,7 @@ function withDescriptorSourceDefaults(event, descriptor) {
     source_url: firstNonEmpty(event.source_url, descriptor.sourceUrl),
     source_type: firstNonEmpty(event.source_type, descriptor.sourceType),
     source_tier: firstNonEmpty(event.source_tier, descriptor.trust?.source_tier),
+    confidence: firstNonEmpty(event.confidence, event.trust?.confidence, descriptor.trust?.confidence),
   };
 }
 

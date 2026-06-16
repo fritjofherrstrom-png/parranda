@@ -4,6 +4,8 @@ const path = require("node:path");
 const test = require("node:test");
 
 const { buildCityPulse } = require("../server/pulse-engine");
+const { createLinkedEventsProvider } = require("../server/pulse-sources/linked-events-source-provider");
+const { createSchemaOrgEventProvider } = require("../server/pulse-sources/schema-org-event-provider");
 const {
   buildTimeSensitiveEventSignal,
   timeSensitiveEventsToPulseSignals,
@@ -81,6 +83,10 @@ function event(overrides = {}) {
   };
 }
 
+function jsonResponse(body) {
+  return { ok: true, json: async () => body };
+}
+
 test("source-backed time-sensitive events become gated Pulse signals", async () => {
   const pulse = await buildCityPulse(cityWithEvents([event()]), {
     date: "2026-08-05",
@@ -109,6 +115,89 @@ test("time-sensitive event salience can outrank generic rhythm context", async (
 
   assert.equal(pulse.signals[0].id, "source-event-event-1");
   assert.ok(pulse.signals[0].score > 0);
+});
+
+test("Linked Events provider descriptor confidence lets real provider events enter Pulse", async () => {
+  const linkedEvent = {
+    id: "helsinki:market-1",
+    name: { en: "Evening market at the square" },
+    start_time: "2026-08-05T09:00:00Z",
+    end_time: "2026-08-05T12:00:00Z",
+    event_status: "EventScheduled",
+    data_source: "helsinki",
+    publisher: "ahjo:u321200",
+    info_url: { en: "https://hel.fi/event/market-1" },
+    location: {
+      name: { en: "Market Square" },
+      position: { type: "Point", coordinates: [24.924204, 60.181667] },
+    },
+    keywords: [{ name: { en: "market" } }],
+  };
+  const provider = createLinkedEventsProvider({
+    endpoint: "https://api.hel.fi/linkedevents/v1/event/",
+    label: "Helsinki Linked Events",
+    sourceUrl: "https://api.hel.fi/linkedevents/v1/",
+    fetcher: async () => jsonResponse({ data: [linkedEvent] }),
+  });
+  const city = {
+    ...cityWithEvents([]),
+    services: {
+      ...cityWithEvents([]).services,
+      pulseSourceProviders: [provider],
+    },
+  };
+
+  const pulse = await buildCityPulse(city, {
+    date: "2026-08-05",
+    now: NOW,
+    lang: "en",
+  });
+
+  const signal = pulse.signals.find((entry) => entry.title === "Evening market at the square");
+  assert.ok(signal, "expected Linked Events row with descriptor confidence to become a Pulse signal");
+  assert.equal(signal.signal_quality.displayable, true);
+  assert.equal(signal.time_sensitive_source_event.confidence, "medium");
+  assert.equal(signal.source.label, "Helsinki Linked Events");
+});
+
+test("schema.org provider descriptor confidence lets real provider events enter Pulse", async () => {
+  const schemaEvent = {
+    "@type": "Event",
+    "@id": "https://feed.test/event/night-market",
+    name: "Night market by the river",
+    startDate: "2026-08-05T09:00:00Z",
+    endDate: "2026-08-05T12:00:00Z",
+    url: "https://feed.test/event/night-market",
+    location: {
+      name: "Riverfront",
+      geo: { latitude: 60.181667, longitude: 24.924204 },
+    },
+  };
+  const provider = createSchemaOrgEventProvider({
+    endpoint: "https://feed.test/events.jsonld",
+    label: "Schema Calendar",
+    sourceUrl: "https://feed.test/",
+    fetcher: async () => jsonResponse({ "@graph": [schemaEvent] }),
+  });
+  const city = {
+    ...cityWithEvents([]),
+    services: {
+      ...cityWithEvents([]).services,
+      pulseSourceProviders: [provider],
+    },
+  };
+
+  const pulse = await buildCityPulse(city, {
+    date: "2026-08-05",
+    now: NOW,
+    lang: "en",
+  });
+
+  const signal = pulse.signals.find((entry) => entry.title === "Night market by the river");
+  assert.ok(signal, "expected schema.org/Event row with descriptor confidence to become a Pulse signal");
+  assert.equal(signal.signal_quality.displayable, true);
+  assert.equal(signal.time_sensitive_source_event.confidence, "medium");
+  assert.equal(signal.source.label, "Schema Calendar");
 });
 
 test("stale, future, and weak-provenance events are not consumed as Pulse signals", async () => {
