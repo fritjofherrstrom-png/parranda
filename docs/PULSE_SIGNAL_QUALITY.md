@@ -60,12 +60,28 @@ URL-only live signals may be displayable/actionable when they have a source URL,
 but they are not treated as internal place-drawer actions unless they have an
 internal target such as `official_event_id`, `place_query`, or `related_stop_id`.
 
+## Time-sensitive source events
+
+Time-sensitive source events from providers enter Pulse through a separate
+consumption gate before normalization. The gate is intentionally narrower than
+provider collection:
+
+- `timing_relevance` must be `now`, `today`, or `tonight`.
+- `confidence` must be `strong` or `medium`.
+- source backing must exist through `source_url`, `source_label`, or provenance.
+- stale, future, unknown, source-thin, or low-confidence rows stay out of Pulse.
+
+Eligible rows become normal Pulse signals and then pass through the same
+`normalizeSignal()`, `classifySignalQuality()`, ranking, and masthead logic as
+other signals. Salience is generic: timing relevance, confidence/source tier,
+place/coordinate evidence, role hints, and event specificity can move a real
+timed happening up the hierarchy without making it a route stop.
+
 ## Non-goals for v1
 
-- No full source registry yet.
 - No city-specific quality branches.
-- No new Pulse source adapters.
 - No route/planner behavior changes.
 - No large UI redesign.
 
-The next natural step is `feat(pulse): introduce source-driven signal registry`.
+Time-sensitive Pulse signals remain context until a later gated dayflow/route
+consumption step explicitly decides otherwise.

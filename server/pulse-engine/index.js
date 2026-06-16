@@ -12,6 +12,7 @@ const {
 const liveEventsGenerator = require("./generators/live-events");
 const cityRhythmGenerator = require("./generators/city-rhythm");
 const goldenHourGenerator = require("./generators/golden-hour");
+const { timeSensitiveEventsToPulseSignals } = require("./time-sensitive-events");
 
 /**
  * Engine-level generators that run for every city. A generator is only
@@ -79,6 +80,12 @@ async function buildCityPulse(cityConfig, options = {}) {
   const rawSignals = [];
   for (const sourceSignal of sourceResult.signals || []) {
     const raw = sourceSignalToRawSignal(sourceSignal);
+    if (raw) rawSignals.push(raw);
+  }
+  for (const raw of timeSensitiveEventsToPulseSignals(
+    sourceResult.normalized_time_sensitive_events || [],
+    context,
+  )) {
     if (raw) rawSignals.push(raw);
   }
   for (const generator of generators) {
