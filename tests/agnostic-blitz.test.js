@@ -48,7 +48,7 @@ test("catalog density reflects curated ground-truth, not external augmentation",
   assert.equal(romeOut.context.catalog_density, "rich");
 
   const athensOut = await buildBlitzDecision(athens, { candidate_mode: 1, date: DATE, preferences: ["scenic"] });
-  assert.equal(athensOut.context.catalog_density, "thin"); // 20 curated real places
+  assert.equal(athensOut.context.catalog_density, "thin"); // preview city stays honestly thin
 
   // an uncurated coordinate area is honestly "absent" even with open candidates
   const agnostic = buildAgnosticCityContext({ lat: 41.9, lng: 12.5, todayIsoDate: () => DATE });

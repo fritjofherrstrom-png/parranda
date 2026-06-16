@@ -80,7 +80,7 @@ function buildEligibleCandidatePool(cityConfig, payload = {}, helpers = {}) {
   const curatedRealPlaceCount = allCandidates.filter(
     (candidate) => candidate.city_pack_owned === true && candidate.is_structural !== true,
   ).length;
-  const density = classifyCatalogDensity(curatedRealPlaceCount);
+  const density = resolveCatalogDensity(cityConfig, curatedRealPlaceCount);
 
   const pool = [];
   const rejected = [];
@@ -118,6 +118,14 @@ function buildEligibleCandidatePool(cityConfig, payload = {}, helpers = {}) {
     allCandidates,
     externalEnabled,
   };
+}
+
+function resolveCatalogDensity(cityConfig, curatedRealPlaceCount) {
+  const density = classifyCatalogDensity(curatedRealPlaceCount);
+  if (cityConfig?.visibility === "preview" && density === "rich") {
+    return "thin";
+  }
+  return density;
 }
 
 function evaluateCandidateEligibility(candidate, { now = null } = {}) {

@@ -942,6 +942,30 @@ test("GET /athens/plan renderar planner-entry-route shell för Athens", async ()
   }
 });
 
+test("GET /athens?lang=en surfaces the field-test preview copy without pretending Athens is curated", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during athens preview shell test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestText(server, {
+      path: "/athens?lang=en",
+    });
+
+    assert.equal(response.status, 200);
+    assert.match(response.body, /<body data-city-key="athens"/);
+    assert.match(response.body, /Athens preview for field testing/);
+    assert.match(response.body, /Athens preview planner/);
+    assert.match(response.body, /Build a simple test day from verified Athens places\./);
+    assert.match(response.body, /Preview • low confidence • no handbuilt routes\./);
+    assert.match(response.body, /Test the Athens planner/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test("GET /unknown-city/plan använder ärlig fallback med plannerEntryRoute", async () => {
   global.fetch = async (url) => {
     throw new Error(`Unexpected fetch during unknown-city planner-entry-route test: ${url}`);

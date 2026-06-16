@@ -42,7 +42,7 @@ test("barcelona uppfyller city-kontraktet som registrerad preview-stad", () => {
   assert.equal(cityConfigs.barcelona.catalog.routeTemplates.length, 7);
 });
 
-test("athens uppfyller city-kontraktet som registrerad preview-skelettstad", () => {
+test("athens uppfyller city-kontraktet som registrerad preview-stad", () => {
   assert.doesNotThrow(() => validateCityConfig(athens));
   const resolution = resolveCityConfig("athens", { allowFallback: false });
   assert.equal(resolution.cityConfig.key, "athens");
@@ -52,7 +52,7 @@ test("athens uppfyller city-kontraktet som registrerad preview-skelettstad", () 
   assert.equal(cityConfigs.athens.visibility, "preview");
   assert.equal(cityConfigs.athens.locale, "el-GR");
   assert.equal(cityConfigs.athens.currency, "EUR");
-  assert.equal(cityConfigs.athens.catalog.allItems.length, 20);
+  assert.equal(cityConfigs.athens.catalog.allItems.length, 26);
   assert.equal(cityConfigs.athens.catalog.routeTemplates.length, 0);
 });
 
