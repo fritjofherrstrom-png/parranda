@@ -100,6 +100,8 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 
 - **#282** wires the **first concrete time-sensitive event source**: a generic, feed-agnostic **schema.org/Event provider** behind the #280 bridge. It normalizes any schema.org/Event JSON-LD feed (envelope-tolerant: bare / array / `@graph` / `items`) into the #279 contract — id, title, startDate/endDate, geo lat/lng, per-event url, multilingual name, cancelled→stale. Env-gated default-off (`PARRANDA_SCHEMA_ORG_EVENT_SOURCE`, mirrors the loader/resolver), fail-soft on every error path, carries a display `license_label`. Proven against fixtures + the registry; **not yet consumed** by Pulse/dayflow/routes (later gated step). The chosen live target is Visit Sweden (CC-BY 4.0, covers Skåne/Österlen) once API access is configured; the generic schema.org shape means any other Event feed plugs in by config. Decision-probe ruled out social platforms (ToS) and kept OSM/Wikidata as enrichment, not event sources.
 
+- **#283** wires the **first REACHABLE, no-key time-sensitive feed**: a Linked Events provider (the open-source 6aika / City-of-Helsinki events API that many Nordic cities run). Reachable today with no credential, CC-BY 4.0, and it meets every source criterion — event/title, start/end, geocoded venue (coords inline via `include=location`, GeoJSON [lng,lat]), source/provenance (info_url + data_source/publisher), license/attribution, broad coverage, low noise — and is fail-soft when nothing's there. Sibling to the #282 schema.org provider (different feed shape, same #279 normalization target, same #280 bridge). **Validated LIVE against api.hel.fi**: real events flow through the full pipeline geocoded + source-backed + honestly-timed. Env-gated default-off (`PARRANDA_LINKED_EVENTS_SOURCE`); not consumed yet. This is the "find a way without a Visit Sweden key" answer — feed choice is config, not a hard dependency.
+
 Still missing before a true any-place Planner (now the next steps): stronger generic candidate supply where source-backed candidates are sparse, richer single-day composition quality after calibration, time-sensitive source events feeding Pulse/dayflow/route composition, multi-day experimental output, persistent geocode caching / a paid-or-self-hosted geocoder for scale, and live ETA / real-time routing (explicitly out of scope).
 
 ## Anti-drift rule
@@ -197,7 +199,8 @@ The current direction should be:
 #279 — DONE: generic time-sensitive source-event contract (source-backed happenings with timing relevance)
 #280 — IN PROGRESS: source-provider bridge for time-sensitive events (collect + inspect, not consumed)
 #281 — DONE: thin-day readiness cap (<=2 stops → thin_usable, closes #276 note)
-#282 — IN PROGRESS: generic schema.org/Event source provider (env-gated, fixtures, not consumed; Visit Sweden = live target)
+#282 — DONE: generic schema.org/Event source provider (env-gated, fixtures; Visit Sweden = live target when keyed)
+#283 — IN PROGRESS: Linked Events provider (reachable no-key feed, LIVE-validated against api.hel.fi, not consumed)
 ```
 
 The numbers may shift, but the sequence should not drift back into endless diagnostics.

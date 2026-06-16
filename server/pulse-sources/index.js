@@ -36,6 +36,14 @@ const {
   extractSchemaOrgEvents,
   mapSchemaOrgEventToRaw,
 } = require("./schema-org-event-provider");
+const {
+  LINKED_EVENTS_PROVIDER_ID,
+  createLinkedEventsProvider,
+  resolveDefaultLinkedEventsProvider,
+  extractLinkedEvents,
+  mapLinkedEventToRaw,
+  buildEventsUrl,
+} = require("./linked-events-source-provider");
 
 module.exports = {
   SourceProviderRegistry,
@@ -62,4 +70,10 @@ module.exports = {
   resolveDefaultSchemaOrgEventProvider,
   extractSchemaOrgEvents,
   mapSchemaOrgEventToRaw,
+  LINKED_EVENTS_PROVIDER_ID,
+  createLinkedEventsProvider,
+  resolveDefaultLinkedEventsProvider,
+  extractLinkedEvents,
+  mapLinkedEventToRaw,
+  buildEventsUrl,
 };
