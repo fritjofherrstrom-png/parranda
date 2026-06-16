@@ -197,10 +197,10 @@ The current direction should be:
 #277 — DONE: composition richness v1 (experiment-only culture_stop role; museums/gallery now fills a midday stop)
 #278 — DONE: composition richness v1b (experiment-only market_stop role; markets now fills a midday stop)
 #279 — DONE: generic time-sensitive source-event contract (source-backed happenings with timing relevance)
-#280 — IN PROGRESS: source-provider bridge for time-sensitive events (collect + inspect, not consumed)
+#280 — DONE: source-provider bridge for time-sensitive events (collect + inspect, not consumed)
 #281 — DONE: thin-day readiness cap (<=2 stops → thin_usable, closes #276 note)
 #282 — DONE: generic schema.org/Event source provider (env-gated, fixtures; Visit Sweden = live target when keyed)
-#283 — IN PROGRESS: Linked Events provider (reachable no-key feed, LIVE-validated against api.hel.fi, not consumed)
+#283 — IN PROGRESS: Linked Events provider (reachable no-key feed, env-wired, LIVE-validated against api.hel.fi, not consumed)
 ```
 
 The numbers may shift, but the sequence should not drift back into endless diagnostics.

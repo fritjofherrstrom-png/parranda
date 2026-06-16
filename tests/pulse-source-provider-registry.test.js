@@ -12,6 +12,7 @@ const {
   normalizeSourceDescriptor,
   normalizeSourceEvent,
   normalizeSourceSignal,
+  LINKED_EVENTS_PROVIDER_ID,
 } = require("../server/pulse-sources");
 const { buildCityPulse } = require("../server/pulse-engine");
 const { buildDisplayGate, normalizeConfidence } = require("../server/pulse-sources/display-gates");
@@ -641,6 +642,62 @@ test("city-pulse source inspect includes time-sensitive event rows without rende
   assert.equal(pulse.source_provider_inspect.normalized_time_sensitive_event_count, 1);
   assert.equal(pulse.source_provider_inspect.time_sensitive_event_rows[0].timing_relevance, "now");
   assert.equal(pulse.source_provider_inspect.time_sensitive_event_rows[0].route_role_hint, "market_stop");
+});
+
+test("env-gated Linked Events provider is wired into the city-pulse inspect path", async () => {
+  const originalSource = process.env.PARRANDA_LINKED_EVENTS_SOURCE;
+  const originalFetch = globalThis.fetch;
+  process.env.PARRANDA_LINKED_EVENTS_SOURCE = "https://api.hel.fi/linkedevents/v1/event/";
+  globalThis.fetch = async (url) => {
+    assert.match(String(url), /include=location/);
+    return {
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            id: "helsinki:event-1",
+            name: { en: "Open-air film" },
+            start_time: "2026-07-10T18:00:00.000Z",
+            end_time: "2026-07-10T20:00:00.000Z",
+            info_url: { en: "https://hel.fi/event-1" },
+            location: {
+              name: { en: "Senate Square" },
+              position: { type: "Point", coordinates: [24.9522, 60.1695] },
+            },
+          },
+        ],
+      }),
+    };
+  };
+
+  try {
+    const pulse = await buildCityPulse(
+      {
+        ...city,
+        timezone: "Europe/Helsinki",
+        services: {},
+      },
+      {
+        date: "2026-07-10",
+        now: new Date("2026-07-10T16:00:00.000Z"),
+        inspectSources: true,
+        lang: "en",
+      },
+    );
+
+    assert.ok(pulse.source_provider_inspect.provider_ids.includes(LINKED_EVENTS_PROVIDER_ID));
+    assert.equal(pulse.source_status.find((status) => status.id === LINKED_EVENTS_PROVIDER_ID)?.status, "ok");
+    assert.equal(pulse.source_provider_inspect.normalized_time_sensitive_event_count, 1);
+    assert.equal(pulse.source_provider_inspect.time_sensitive_event_rows[0].source.url, "https://hel.fi/event-1");
+    assert.deepEqual(pulse.events, [], "time-sensitive source events are still inspect-only, not legacy live events");
+  } finally {
+    if (originalSource === undefined) {
+      delete process.env.PARRANDA_LINKED_EVENTS_SOURCE;
+    } else {
+      process.env.PARRANDA_LINKED_EVENTS_SOURCE = originalSource;
+    }
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("buildCityPulse defaults `now` so the staleness guardrail holds on the real (now-less) /api path", async () => {

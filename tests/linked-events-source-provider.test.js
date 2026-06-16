@@ -59,6 +59,12 @@ test("maps a Linked Events record (GeoJSON [lng,lat]) to the raw shape", () => {
   assert.equal(raw.source_url, "https://hel.fi/event/1");
   assert.equal(raw.place_context, "Central Park");
   assert.deepEqual(raw.tags, ["outdoors", "sports"]);
+  assert.deepEqual(raw.provenance, {
+    source_url: "https://hel.fi/event/1",
+    source_label: "helsinki",
+    attribution: "helsinki / ahjo:u321200",
+    license: "CC-BY 4.0",
+  });
 });
 
 test("prefers en→sv→fi for localized name, falls back to any present language", () => {

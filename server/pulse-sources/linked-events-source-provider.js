@@ -156,8 +156,21 @@ function mapLinkedEventToRaw(event) {
     lat: coords.lat,
     lng: coords.lng,
     tags: keywordList(event.keywords),
+    provenance: linkedEventProvenance(event, { sourceUrl }),
     // Linked Events event_status: EventCancelled / EventPostponed → not live.
     freshness: isCancelledOrPostponed(event.event_status) ? "stale" : null,
+  });
+}
+
+function linkedEventProvenance(event, { sourceUrl } = {}) {
+  const dataSource = firstString(event.data_source, event.publisher);
+  const publisher = firstString(event.publisher);
+  const attribution = [dataSource, publisher].filter(Boolean).join(" / ") || null;
+  return compact({
+    source_url: sourceUrl || null,
+    source_label: dataSource || publisher,
+    attribution,
+    license: firstString(event.license_label, event.license) || "CC-BY 4.0",
   });
 }
 
