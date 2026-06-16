@@ -6,6 +6,8 @@ const {
   collectPulseSourcesForCity,
   normalizedEventToLiveEvent,
   buildSourceProviderInspect,
+  resolveDefaultSchemaOrgEventProvider,
+  resolveDefaultLinkedEventsProvider,
 } = require("../pulse-sources");
 const liveEventsGenerator = require("./generators/live-events");
 const cityRhythmGenerator = require("./generators/city-rhythm");
@@ -105,6 +107,8 @@ async function buildCityPulse(cityConfig, options = {}) {
 
   const ranked = scoreSignals(normalized, context);
 
+  const providerSpecs = resolvePulseSourceProviders(cityConfig);
+
   return {
     city: context.city.key,
     date: context.date,
@@ -119,7 +123,7 @@ async function buildCityPulse(cityConfig, options = {}) {
       ? buildSourceProviderInspect({
           city: context.city.key,
           date: context.date,
-          providerSpecs: cityConfig?.services?.pulseSourceProviders || [],
+          providerSpecs,
           source_status: sourceResult.source_status || [],
           normalized_events: sourceResult.normalized_events || [],
           compat_events: sourceResult.compat_events || [],
@@ -165,8 +169,30 @@ async function safeFetchLiveEvents(cityConfig, date) {
   }
 }
 
+function resolvePulseSourceProviders(cityConfig) {
+  const configured = Array.isArray(cityConfig?.services?.pulseSourceProviders)
+    ? cityConfig.services.pulseSourceProviders
+    : [];
+  const defaults = [resolveDefaultSchemaOrgEventProvider(), resolveDefaultLinkedEventsProvider()].filter(Boolean);
+  if (configured.length === 0) return dedupeProviderSpecs(defaults);
+  if (defaults.length === 0) return configured;
+  return dedupeProviderSpecs([...configured, ...defaults]);
+}
+
+function dedupeProviderSpecs(providerSpecs = []) {
+  const seen = new Set();
+  const out = [];
+  for (const spec of providerSpecs) {
+    const id = spec?.descriptor?.id || spec?.id || null;
+    if (id && seen.has(id)) continue;
+    if (id) seen.add(id);
+    out.push(spec);
+  }
+  return out;
+}
+
 async function safeFetchPulseSources(cityConfig, date, sourceContext = {}) {
-  const providerSpecs = cityConfig?.services?.pulseSourceProviders;
+  const providerSpecs = resolvePulseSourceProviders(cityConfig);
   if (!Array.isArray(providerSpecs) || providerSpecs.length === 0) {
     return {
       events: await safeFetchLiveEvents(cityConfig, date),
