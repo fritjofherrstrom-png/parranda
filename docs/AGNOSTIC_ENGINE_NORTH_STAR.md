@@ -98,6 +98,8 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 
 - **#281** adds a **thin-day readiness cap**: a produced route with two or fewer stops now reads `thin_usable` (cap `capped_by_thin_day`, reason `thin_day_few_stops`), never `usable`, even with strong sources and full context. Closes the #276 review note — a time-anchored evening day trims to food + bar and used to overstate as `usable`/`medium`. Generic and deterministic (stop-count only); flag-gated calibration, default Planner / citypack untouched.
 
+- **#282** wires the **first concrete time-sensitive event source**: a generic, feed-agnostic **schema.org/Event provider** behind the #280 bridge. It normalizes any schema.org/Event JSON-LD feed (envelope-tolerant: bare / array / `@graph` / `items`) into the #279 contract — id, title, startDate/endDate, geo lat/lng, per-event url, multilingual name, cancelled→stale. Env-gated default-off (`PARRANDA_SCHEMA_ORG_EVENT_SOURCE`, mirrors the loader/resolver), fail-soft on every error path, carries a display `license_label`. Proven against fixtures + the registry; **not yet consumed** by Pulse/dayflow/routes (later gated step). The chosen live target is Visit Sweden (CC-BY 4.0, covers Skåne/Österlen) once API access is configured; the generic schema.org shape means any other Event feed plugs in by config. Decision-probe ruled out social platforms (ToS) and kept OSM/Wikidata as enrichment, not event sources.
+
 Still missing before a true any-place Planner (now the next steps): stronger generic candidate supply where source-backed candidates are sparse, richer single-day composition quality after calibration, time-sensitive source events feeding Pulse/dayflow/route composition, multi-day experimental output, persistent geocode caching / a paid-or-self-hosted geocoder for scale, and live ETA / real-time routing (explicitly out of scope).
 
 ## Anti-drift rule
@@ -195,6 +197,7 @@ The current direction should be:
 #279 — DONE: generic time-sensitive source-event contract (source-backed happenings with timing relevance)
 #280 — IN PROGRESS: source-provider bridge for time-sensitive events (collect + inspect, not consumed)
 #281 — DONE: thin-day readiness cap (<=2 stops → thin_usable, closes #276 note)
+#282 — IN PROGRESS: generic schema.org/Event source provider (env-gated, fixtures, not consumed; Visit Sweden = live target)
 ```
 
 The numbers may shift, but the sequence should not drift back into endless diagnostics.
