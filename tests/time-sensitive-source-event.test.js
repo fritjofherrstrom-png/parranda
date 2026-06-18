@@ -132,6 +132,28 @@ test("event without source or provenance cannot receive strong confidence", () =
   assert.ok(!normalized.timing_reasons.includes("confidence_strong"));
 });
 
+test("local-language event metadata is preserved without blocking normalization", () => {
+  const normalized = normalizeTimeSensitiveSourceEvent(
+    event({
+      title: "Θερινή αγορά στη γειτονιά",
+      source_language: "el",
+      event_language: "el",
+      translation_status: "provided",
+      translation_confidence: "medium",
+      translated_atoms: ["category", "status"],
+    }),
+    { now: NOW },
+  );
+
+  assert.equal(normalized.title, "Θερινή αγορά στη γειτονιά");
+  assert.equal(normalized.source_language, "el");
+  assert.equal(normalized.event_language, "el");
+  assert.equal(normalized.translation_status, "provided");
+  assert.equal(normalized.translation_confidence, "medium");
+  assert.deepEqual(normalized.translated_atoms, ["category", "status"]);
+  assert.equal(normalized.timing_relevance, "now");
+});
+
 test("contract is city-agnostic and does not branch on specific city keys", () => {
   const bologna = normalizeTimeSensitiveSourceEvent(event({ city: "bologna", title: "Seasonal street market" }), {
     now: NOW,

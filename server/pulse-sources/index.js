@@ -44,6 +44,12 @@ const {
   mapLinkedEventToRaw,
   buildEventsUrl,
 } = require("./linked-events-source-provider");
+const {
+  EXTRACTION_TIERS,
+  SOURCE_FAMILIES,
+  evaluateLiveEventSourceCandidate,
+  normalizeSourceCandidate,
+} = require("./source-discovery");
 
 module.exports = {
   SourceProviderRegistry,
@@ -76,4 +82,8 @@ module.exports = {
   extractLinkedEvents,
   mapLinkedEventToRaw,
   buildEventsUrl,
+  EXTRACTION_TIERS,
+  SOURCE_FAMILIES,
+  evaluateLiveEventSourceCandidate,
+  normalizeSourceCandidate,
 };
