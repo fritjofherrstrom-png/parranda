@@ -51,6 +51,13 @@ function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
     freshness: firstString(rawEvent.freshness) || (timingRelevance === "stale" ? "stale" : null),
     last_checked: lastChecked ? lastChecked.toISOString() : null,
     confidence,
+    source_language: normalizeLanguage(rawEvent.source_language || rawEvent.language),
+    event_language: normalizeLanguage(rawEvent.event_language || rawEvent.source_language || rawEvent.language),
+    translation_status: normalizeTranslationStatus(rawEvent.translation_status || rawEvent.translation?.status),
+    translation_confidence: normalizeTranslationConfidence(
+      rawEvent.translation_confidence || rawEvent.translation?.confidence,
+    ),
+    translated_atoms: normalizeStringList(rawEvent.translated_atoms || rawEvent.translation?.atoms),
     provenance,
     candidate_kind: "source_event",
     tags: normalizeStringList(rawEvent.tags),
@@ -180,6 +187,21 @@ function normalizeCoordinates(rawEvent) {
 function normalizeStringList(value) {
   const items = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
   return [...new Set(items.map((item) => firstString(item)).filter(Boolean))];
+}
+
+function normalizeLanguage(value) {
+  const raw = firstString(value).toLowerCase();
+  return /^[a-z]{2,3}(-[a-z0-9]+)?$/.test(raw) ? raw : "";
+}
+
+function normalizeTranslationStatus(value) {
+  const raw = firstString(value).toLowerCase();
+  return ["not_required", "needed", "provided", "unavailable", "unknown"].includes(raw) ? raw : "";
+}
+
+function normalizeTranslationConfidence(value) {
+  const raw = firstString(value).toLowerCase();
+  return ["high", "medium", "low", "none", "unknown"].includes(raw) ? raw : "";
 }
 
 function parseDate(value) {

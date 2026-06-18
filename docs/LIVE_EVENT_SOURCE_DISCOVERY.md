@@ -89,6 +89,10 @@ node scripts/probe-live-event-sources.js source-candidates.json
 7. `existing_provider_family`
    - Use repo providers such as schema.org/Event and Linked Events when the
      source shape already matches.
+8. `unknown_source_family`
+   - Low-priority bucket for sources that do not match a known family yet.
+   - Unknown sources must not be upgraded into official/tourism families by
+     default; they stay probe-only until classified.
 
 ## Extraction Tiers
 
@@ -177,6 +181,36 @@ available. Expiry facts win over source-provided `timing_relevance`.
 Timezone handling belongs in the provider adapter or trusted context layer. If
 an event source only exposes local date strings, the adapter must either attach
 a trusted timezone or downgrade timing precision honestly.
+
+## Local-Language And Translation
+
+Local-language sources are first-class candidates. Parranda should not reject a
+good source because it is Greek, Catalan, Italian, Swedish, or any other local
+language.
+
+Discovery should:
+
+- use local-language discovery terms alongside English terms;
+- detect and preserve `source_language` and `event_language`;
+- preserve original titles and source-owned truth;
+- translate only short factual atoms when needed for display, search, or
+  salience;
+- record `translation_status` and `translation_confidence` when translation
+  happens;
+- keep translated atoms separate from raw source facts.
+
+Examples of factual atoms that may be translated:
+
+- category;
+- short venue type;
+- status;
+- simple event kind;
+- route/salience hint labels.
+
+Do not translate or rewrite full editorial descriptions as Parranda-owned
+content. If translation is missing, the event can still be source-backed; Pulse
+should wrap it in localized Parranda chrome while keeping the raw event title in
+its source language.
 
 ## Geocoding And Venue Handling
 
@@ -287,6 +321,11 @@ The normalized event shape should include:
   "freshness": "fresh",
   "last_checked": "2026-06-18T08:00:00Z",
   "confidence": "medium",
+  "source_language": "el",
+  "event_language": "el",
+  "translation_status": "provided",
+  "translation_confidence": "medium",
+  "translated_atoms": ["category"],
   "provenance": {
     "source_label": "Official source",
     "source_url": "https://source.example/event"
@@ -388,19 +427,25 @@ venue handling would be owned by the provider adapter.
   "freshness": "fresh",
   "last_checked": "2026-06-18T08:00:00Z",
   "confidence": "medium",
+  "source_language": "el",
+  "event_language": "el",
+  "translation_status": "not_required",
+  "translation_confidence": "none",
   "provenance": {
     "source_label": "Municipality of Athens",
     "source_url": "https://www.cityofathens.gr/data/9i-synedriasi-1is-dk-9/"
   },
   "candidate_kind": "source_event",
-  "tags": ["civic"],
-  "intents": ["culture"],
-  "route_role_hint": "culture_stop",
-  "timing_relevance": "today"
+  "tags": ["civic", "administrative"],
+  "intents": [],
+  "timing_relevance": "today",
+  "visitor_relevance": "low",
+  "salience": "low"
 }
 ```
 
 This event would be source-backed and time-sensitive, but its salience may be
 low for a visitor route because it is civic/admin rather than cultural or
-experiential. That is the point of separating source discovery from Pulse
-salience.
+experiential. It should remain inspectable and maybe city-contextual, but it
+should not masquerade as a culture stop or visitor route anchor. That is the
+point of separating source discovery from Pulse salience.

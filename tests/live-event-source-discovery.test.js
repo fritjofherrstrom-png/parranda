@@ -98,6 +98,39 @@ test("stable HTML scraping is a valid tier when constrained by terms and source 
   assert.ok(!result.reasons.includes("probe_only_stable_html_calendar"));
 });
 
+test("local-language sources are first-class and preserve translation metadata", () => {
+  const result = evaluateLiveEventSourceCandidate(
+    candidate({
+      id: "local-language-calendar",
+      source_language: "el",
+      event_language: "el",
+      local_discovery_terms: ["εκδηλώσεις", "φεστιβάλ Αθήνα"],
+      translation_status: "provided",
+      translation_confidence: "medium",
+      translated_atoms: ["title", "category"],
+      extractable: {
+        title: true,
+        start: true,
+        source_url: true,
+        venue: true,
+        stable_html: true,
+        venue_geocodable: true,
+      },
+    }),
+  );
+
+  assert.equal(result.status, "viable_provider_probe");
+  assert.equal(result.source_language, "el");
+  assert.equal(result.event_language, "el");
+  assert.deepEqual(result.local_discovery_terms, ["εκδηλώσεις", "φεστιβάλ Αθήνα"]);
+  assert.equal(result.translation_status, "provided");
+  assert.equal(result.translation_confidence, "medium");
+  assert.deepEqual(result.translated_atoms, ["title", "category"]);
+  assert.ok(result.reasons.includes("local_language_source"));
+  assert.ok(result.reasons.includes("has_local_discovery_terms"));
+  assert.ok(result.reasons.includes("translation_available"));
+});
+
 test("JS-rendered scraping and weak listings stay probe-only until reviewed", () => {
   const jsRendered = evaluateLiveEventSourceCandidate(
     candidate({
@@ -180,7 +213,7 @@ test("restricted or incomplete sources are rejected with explicit blockers", () 
   assert.ok(incomplete.blockers.includes("missing_source_url"));
 });
 
-test("unknown source families normalize without hardcoding a city", () => {
+test("unknown source families stay low-priority instead of becoming official tourism", () => {
   const normalized = normalizeSourceCandidate(
     candidate({
       place: "Any Place",
@@ -191,7 +224,10 @@ test("unknown source families normalize without hardcoding a city", () => {
   );
 
   assert.equal(normalized.place, "Any Place");
-  assert.equal(normalized.family, "official_tourism_calendar");
+  assert.equal(normalized.raw_family, "made_up_family");
+  assert.equal(normalized.family, "unknown_source_family");
+  assert.equal(normalized.family_known, false);
+  assert.equal(SOURCE_FAMILIES[normalized.family].priority, 99);
   assert.equal(normalized.trust_tier, "unknown");
   assert.equal(normalized.terms_status, "unknown");
 

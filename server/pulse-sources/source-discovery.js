@@ -34,6 +34,11 @@ const SOURCE_FAMILIES = Object.freeze({
     label: "Existing Parranda provider family",
     preferredAdapters: ["schema_org_event", "linked_events"],
   },
+  unknown_source_family: {
+    priority: 99,
+    label: "Unknown source family",
+    preferredAdapters: ["needs_adapter"],
+  },
 });
 
 const EXTRACTION_TIERS = Object.freeze({
@@ -125,6 +130,11 @@ function evaluateLiveEventSourceCandidate(candidate = {}) {
   if (normalized.terms_status === "permission_required") reasons.push("permission_required_before_runtime");
   if (normalized.terms_status === "unknown") reasons.push("terms_need_review");
   if (!tierInfo.runtimeEligible) reasons.push(`probe_only_${normalized.extraction_tier}`);
+  if (!normalized.family_known) reasons.push("unknown_source_family");
+  if (normalized.source_language && normalized.source_language !== "en") reasons.push("local_language_source");
+  if (normalized.local_discovery_terms.length > 0) reasons.push("has_local_discovery_terms");
+  if (normalized.translation_status === "provided") reasons.push("translation_available");
+  if (normalized.translation_status === "needed") reasons.push("translation_needed_for_display");
 
   let status = "rejected";
   if (blockers.length === 0 && termsScore >= 2 && tierInfo.runtimeEligible) {
@@ -145,13 +155,16 @@ function evaluateLiveEventSourceCandidate(candidate = {}) {
 }
 
 function normalizeSourceCandidate(candidate = {}) {
-  const family = normalizeFamily(candidate.family);
+  const familyInfo = normalizeFamily(candidate.family);
+  const family = familyInfo.family;
   const adapter = firstString(candidate.adapter, inferAdapter(candidate));
   const extractionTier = normalizeExtractionTier(candidate.extraction_tier || inferExtractionTier(candidate));
   return {
     id: firstString(candidate.id, candidate.url, candidate.source_label),
     place: firstString(candidate.place),
+    raw_family: firstString(candidate.family),
     family,
+    family_known: familyInfo.known,
     family_label: SOURCE_FAMILIES[family]?.label || family,
     source_label: firstString(candidate.source_label, candidate.label),
     url: firstString(candidate.url, candidate.source_url),
@@ -159,6 +172,14 @@ function normalizeSourceCandidate(candidate = {}) {
     adapter,
     extraction_tier: extractionTier,
     extraction_tier_label: EXTRACTION_TIERS[extractionTier]?.label || "",
+    source_language: normalizeLanguage(candidate.source_language || candidate.language),
+    event_language: normalizeLanguage(candidate.event_language || candidate.source_language || candidate.language),
+    local_discovery_terms: normalizeStringList(candidate.local_discovery_terms),
+    translation_status: normalizeTranslationStatus(candidate.translation_status || candidate.translation?.status),
+    translation_confidence: normalizeTranslationConfidence(
+      candidate.translation_confidence || candidate.translation?.confidence,
+    ),
+    translated_atoms: normalizeStringList(candidate.translated_atoms || candidate.translation?.atoms),
     trust_tier: normalizeTrustTier(candidate.trust_tier || candidate.source_tier),
     terms_status: normalizeTermsStatus(candidate.terms_status),
     license: firstString(candidate.license),
@@ -218,7 +239,8 @@ function inferExtractionTier(candidate = {}) {
 
 function normalizeFamily(value) {
   const raw = firstString(value);
-  return SOURCE_FAMILIES[raw] ? raw : "official_tourism_calendar";
+  if (SOURCE_FAMILIES[raw]) return { family: raw, known: true };
+  return { family: "unknown_source_family", known: false };
 }
 
 function normalizeTrustTier(value) {
@@ -234,6 +256,26 @@ function normalizeTermsStatus(value) {
 function normalizeExtractionTier(value) {
   const raw = firstString(value).toLowerCase();
   return EXTRACTION_TIERS[raw] ? raw : "stable_html_calendar";
+}
+
+function normalizeLanguage(value) {
+  const raw = firstString(value).toLowerCase();
+  return /^[a-z]{2,3}(-[a-z0-9]+)?$/.test(raw) ? raw : "";
+}
+
+function normalizeTranslationStatus(value) {
+  const raw = firstString(value).toLowerCase();
+  return ["not_required", "needed", "provided", "unavailable", "unknown"].includes(raw) ? raw : "unknown";
+}
+
+function normalizeTranslationConfidence(value) {
+  const raw = firstString(value).toLowerCase();
+  return ["high", "medium", "low", "none", "unknown"].includes(raw) ? raw : "unknown";
+}
+
+function normalizeStringList(value) {
+  const items = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
+  return [...new Set(items.map((item) => firstString(item)).filter(Boolean))];
 }
 
 function firstString(...values) {
