@@ -85,6 +85,55 @@ Priority order:
 
 Top-tier sources are common in some large cities and institutions, but not universal. Good code should maximize tiers 1-3 while supporting tier 4 as a controlled source family.
 
+## Local-language sources and translation
+
+The most useful live/Pulse sources are often local, non-generic, and written in the local language. The engine must treat local-language sources as first-class candidates, not as lower-value fallbacks.
+
+Source discovery should record language metadata for both sources and events:
+
+- source page language when detectable;
+- event title language;
+- venue/address language;
+- whether structured data already provides multiple languages;
+- whether translation was applied;
+- translation confidence and provider, when applicable.
+
+The source of truth should remain the original source. Translation is a presentation and normalization layer, not a replacement for provenance.
+
+Recommended event shape extension:
+
+```json
+{
+  "title_original": "local-language title",
+  "title_display": "English or user-language title",
+  "language_original": "el",
+  "language_display": "en",
+  "translation_status": "machine_translated",
+  "translation_confidence": "medium",
+  "source_url": "https://example.test/event"
+}
+```
+
+Translation should prioritize short factual atoms:
+
+- event title;
+- category/kind;
+- short venue label;
+- minimal timing/status labels;
+- short summary only when necessary and permitted.
+
+Do not translate or copy long editorial descriptions as Parranda content unless the source terms and product need clearly allow it. Prefer linking to the original event page.
+
+Runtime should not block a good source merely because it is not in English. Instead:
+
+1. parse structured facts in the original language;
+2. normalize timing/venue/source URL independently of translation;
+3. translate only the fields needed for user display or salience classification;
+4. preserve original labels for audit/debug and attribution;
+5. fail softly if translation is unavailable by showing the original title plus source link when acceptable.
+
+Translation can also improve source discovery. Queries and probes should use local-language search terms and common event/calendar words for the resolved place/region, not only English terms. Citypacks may optionally add local search terms and venue aliases, but agnostic discovery should still infer likely language from the resolver, country/region, and source metadata.
+
 ## Scraping policy
 
 Scraping is not categorically forbidden. It is a valid source family when structured APIs/feeds are unavailable.
@@ -164,6 +213,8 @@ Each probe should report:
 - geo exists or venue is geocodable;
 - source URL available;
 - event status available if present;
+- source/event language detected;
+- translation needed for display/salience;
 - freshness/coverage;
 - license/terms/attribution clarity;
 - estimated latency;
@@ -179,6 +230,7 @@ Score sources on:
 - parseability: API/feed/JSON-LD/stable HTML/JS-rendered;
 - freshness: current event coverage and recent updates;
 - geo quality: direct geo, venue geocodable, vague venue, no venue;
+- language handling: local-language source accepted, translation path available when needed;
 - attribution clarity;
 - terms/robots clarity;
 - latency and reliability;
@@ -208,6 +260,8 @@ When duplicates conflict, prefer:
 5. richer geo/timing source.
 
 Fusion should preserve provenance from all contributing sources where useful.
+
+For multilingual duplicates, compare both original and translated/normalized titles when available. Do not treat two events as different merely because one source is local-language and another is English.
 
 ## Pulse integration
 
@@ -247,6 +301,7 @@ For an agnostic place, the engine should:
 - resolve the place strongly;
 - build or reuse a Source Graph;
 - try multiple source families;
+- include local-language source discovery terms;
 - show trusted Pulse signals if available;
 - show an honest empty/thin state if not.
 
@@ -262,6 +317,8 @@ Do not make events route stops in a source-discovery PR.
 
 Do not claim a city has live Pulse unless at least one runtime-eligible source exists and fresh events pass the existing gates.
 
+Do not demote a source merely because it is in the local language. Treat translation as an engine capability, not as a reason to ignore local sources.
+
 ## Immediate next useful build steps
 
 1. Keep the current source-discovery work as a foundation: evaluator, fixture CLI, and docs.
@@ -271,7 +328,9 @@ Do not claim a city has live Pulse unless at least one runtime-eligible source e
    - ICS/RSS,
    - WordPress/The Events Calendar if present,
    - stable HTML calendar extraction as a controlled tier.
-4. Add cache/TTL/source-health fields before any traffic-facing runtime use.
-5. Feed only runtime-eligible, normalized events into existing `time_sensitive_events` and Pulse salience.
+4. Add language detection and local-language query/probe support before judging source coverage.
+5. Add a translation-status field to normalized event/source records before any user-facing multilingual runtime use.
+6. Add cache/TTL/source-health fields before any traffic-facing runtime use.
+7. Feed only runtime-eligible, normalized events into existing `time_sensitive_events` and Pulse salience.
 
 The goal is not "find one Athens source". The goal is a repeatable live-source discovery muscle that can start with a place and quickly reuse or find multiple possible sources, without requiring a citypack and without relying on a single hardcoded calendar.
