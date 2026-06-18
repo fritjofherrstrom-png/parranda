@@ -8,6 +8,7 @@ const {
   buildSourceProviderInspect,
   resolveDefaultSchemaOrgEventProvider,
   resolveDefaultLinkedEventsProvider,
+  resolveDefaultEventsCalendarProvider,
 } = require("../pulse-sources");
 const liveEventsGenerator = require("./generators/live-events");
 const cityRhythmGenerator = require("./generators/city-rhythm");
@@ -180,7 +181,11 @@ function resolvePulseSourceProviders(cityConfig) {
   const configured = Array.isArray(cityConfig?.services?.pulseSourceProviders)
     ? cityConfig.services.pulseSourceProviders
     : [];
-  const defaults = [resolveDefaultSchemaOrgEventProvider(), resolveDefaultLinkedEventsProvider()].filter(Boolean);
+  const defaults = [
+    resolveDefaultSchemaOrgEventProvider(),
+    resolveDefaultLinkedEventsProvider(),
+    resolveDefaultEventsCalendarProvider(),
+  ].filter(Boolean);
   if (configured.length === 0) return dedupeProviderSpecs(defaults);
   if (defaults.length === 0) return configured;
   return dedupeProviderSpecs([...configured, ...defaults]);
