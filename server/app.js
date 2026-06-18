@@ -424,7 +424,11 @@ function curatedDensityOf(cityConfig) {
     const curatedRealPlaces = collected.filter(
       (c) => c.city_pack_owned === true && c.is_structural !== true,
     ).length;
-    return classifyCatalogDensity(curatedRealPlaces);
+    const density = classifyCatalogDensity(curatedRealPlaces);
+    if (cityConfig?.visibility === "preview" && density === "rich") {
+      return "thin";
+    }
+    return density;
   } catch (_error) {
     return "rich"; // on any error, never augment (treat as rich → no augmentation)
   }
@@ -811,10 +815,21 @@ function shouldReturnPreviewRouteNoop(cityConfig) {
   return isPreviewCityConfig(cityConfig) && !cityConfig.catalog?.allItems?.length;
 }
 
+function getLocalizedPreviewSurfaceValue(cityConfig, lang, key) {
+  const value = cityConfig?.previewSurface?.[key];
+
+  if (!value || typeof value !== "object") {
+    return typeof value === "string" ? value : null;
+  }
+
+  return value[normalizeLanguage(lang)] || value.en || value.sv || null;
+}
+
 function buildShellCopy(shellMode, options = {}) {
   const cityLabel = options.displayLabel || "Staden";
   const lang = normalizeLanguage(options.lang);
   const cityUpper = cityLabel.toLocaleUpperCase(lang === "en" ? "en-US" : "sv-SE");
+  const cityConfig = options.cityConfig || null;
   const scope =
     shellMode === "fallback-preview"
       ? "shell.fallback"
@@ -825,24 +840,26 @@ function buildShellCopy(shellMode, options = {}) {
         : "shell.curated";
   const replacements = { city: cityLabel, cityUpper };
   const tr = (key, fallback = "") => translate(lang, `${scope}.${key}`, replacements, fallback);
+  const previewOverride = (key, fallback) =>
+    getLocalizedPreviewSurfaceValue(cityConfig, lang, key) || fallback;
 
   return {
-    brandSubtitle: tr("brandSubtitle"),
+    brandSubtitle: previewOverride("brandSubtitle", tr("brandSubtitle")),
     eyebrow: scope === "shell.curated" ? "" : tr("eyebrow"),
-    heroHeadline: tr("heroHeadline"),
-    heroLead: tr("heroLead"),
+    heroHeadline: previewOverride("heroHeadline", tr("heroHeadline")),
+    heroLead: previewOverride("heroLead", tr("heroLead")),
     heroLiveLabel: tr("heroLiveLabel"),
-    plannerTitle: tr("plannerTitle"),
-    plannerSummary: tr("plannerSummary"),
-    plannerCtaLabel: tr("plannerCtaLabel"),
-    plannerMicrocopy: tr("plannerMicrocopy"),
-    wildcardLabel: tr("wildcardLabel"),
-    wildcardTitle: tr("wildcardTitle"),
-    wildcardSummary: tr("wildcardSummary"),
-    wildcardMeta: tr("wildcardMeta"),
-    wildcardTag1: tr("wildcardTag1"),
-    wildcardTag2: tr("wildcardTag2"),
-    wildcardTag3: tr("wildcardTag3"),
+    plannerTitle: previewOverride("plannerTitle", tr("plannerTitle")),
+    plannerSummary: previewOverride("plannerSummary", tr("plannerSummary")),
+    plannerCtaLabel: previewOverride("plannerCtaLabel", tr("plannerCtaLabel")),
+    plannerMicrocopy: previewOverride("plannerMicrocopy", tr("plannerMicrocopy")),
+    wildcardLabel: previewOverride("wildcardLabel", tr("wildcardLabel")),
+    wildcardTitle: previewOverride("wildcardTitle", tr("wildcardTitle")),
+    wildcardSummary: previewOverride("wildcardSummary", tr("wildcardSummary")),
+    wildcardMeta: previewOverride("wildcardMeta", tr("wildcardMeta")),
+    wildcardTag1: previewOverride("wildcardTag1", tr("wildcardTag1")),
+    wildcardTag2: previewOverride("wildcardTag2", tr("wildcardTag2")),
+    wildcardTag3: previewOverride("wildcardTag3", tr("wildcardTag3")),
     wildcardActionsHidden: scope === "shell.curated" ? "" : "hidden",
   };
 }
@@ -1288,6 +1305,7 @@ function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed, lang = "e
   const searchLabel = requestedLabel || getCitySearchLabel(cityConfig);
   const shellMode = resolveShellMode(cityConfig, cityFallbackUsed);
   const shellCopy = buildShellCopy(shellMode, {
+    cityConfig,
     displayLabel,
     lang: uiLang,
   });
@@ -1312,6 +1330,7 @@ function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed, lang = "e
     fallbackUsed: cityFallbackUsed,
     plannerEntryRoute,
     lang: uiLang,
+    previewSurface: cityConfig.previewSurface || null,
   };
   const i18nBootstrap = buildClientI18nPayload();
 

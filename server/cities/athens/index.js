@@ -120,6 +120,60 @@ module.exports = {
   searchLabel: ATHENS_LABEL,
   editorialAreaLabel: ATHENS_LABEL,
   fallbackLabel: ATHENS_LABEL,
+  previewSurface: {
+    brandSubtitle: {
+      sv: "Athens preview för fälttest",
+      en: "Athens preview for field testing",
+    },
+    heroHeadline: {
+      sv: "Athens är redo att provas försiktigt.",
+      en: "Athens is ready for a careful field test.",
+    },
+    heroLead: {
+      sv: "Parranda har verifierade Athens-platser nog för enkla dagar, men visar fortfarande låg confidence och preliminära stopp när täckningen blir tunn.",
+      en: "Parranda has enough verified Athens places for simple days, while still showing low confidence and provisional stops when coverage gets thin.",
+    },
+    plannerTitle: {
+      sv: "Planerare för Athens-preview",
+      en: "Athens preview planner",
+    },
+    plannerSummary: {
+      sv: "Bygg en enkel testdag från verifierade Athens-platser. Det här är inte ett fullt citypack ännu: readiness, confidence och preliminära källstopp syns öppet.",
+      en: "Build a simple test day from verified Athens places. This is not a full citypack yet: readiness, confidence, and provisional source stops stay visible.",
+    },
+    plannerCtaLabel: {
+      sv: "Testa Athens-planeraren",
+      en: "Test the Athens planner",
+    },
+    plannerMicrocopy: {
+      sv: "Preview • låg confidence • inga handbyggda rutter.",
+      en: "Preview • low confidence • no handbuilt routes.",
+    },
+    wildcardLabel: {
+      sv: "ATHENS BETA",
+      en: "ATHENS BETA",
+    },
+    wildcardTitle: {
+      sv: "Athens kör som preview",
+      en: "Athens is running as preview",
+    },
+    wildcardSummary: {
+      sv: "Pulse, Blitz och planner får använda Athens-identitet och verifierade platser, men staden hålls ärligt tunn tills mer källmaterial finns.",
+      en: "Pulse, Blitz, and planner can use Athens identity and verified places, while the city stays honestly thin until more source material exists.",
+    },
+    wildcardMeta: {
+      sv: "Preview • verifierade platser • ingen citypack-mognad.",
+      en: "Preview • verified places • not citypack-mature.",
+    },
+    wildcardTag2: {
+      sv: "Fälttest",
+      en: "Field test",
+    },
+    wildcardTag3: {
+      sv: "Thin",
+      en: "Thin",
+    },
+  },
   center: ATHENS_CENTER,
   todayIsoDate,
   catalog: {

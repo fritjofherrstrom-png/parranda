@@ -53,11 +53,12 @@ test("inspect-city-pack supports registered Athens preview skeleton", () => {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /City pack inspection: athens \(Athens\)/);
   assert.match(result.stdout, /Visibility: preview/);
-  assert.match(result.stdout, /- items: 20/);
+  assert.match(result.stdout, /- items: 26/);
   assert.match(result.stdout, /- route templates: 0/);
   assert.match(result.stdout, /- Blitz baseline: yes/);
+  assert.match(result.stdout, /- can support Planner candidates: yes/);
   assert.match(result.stdout, /- Planner baseline: no/);
-  assert.match(result.stdout, /Final status: (preview_ready|partial)/);
+  assert.match(result.stdout, /Final status: preview_ready/);
   assert.equal(result.stderr, "");
 });
 

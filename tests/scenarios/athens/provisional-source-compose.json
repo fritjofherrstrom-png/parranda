@@ -16,10 +16,10 @@
         "uses_provisional_sources": true,
         "provisional_stop_count": 2,
         "credibility_tier": "low",
-        "estimated_km": 2.9,
+        "estimated_km": 3.3,
         "longest_leg_km": 1,
         "longest_leg_minutes": 12,
-        "average_leg_minutes": 7,
+        "average_leg_minutes": 8,
         "stops": [
           {
             "label": "Acropolis Museum",
@@ -27,12 +27,9 @@
             "live": false
           },
           {
-            "label": "Pnyx",
+            "label": "EMST - National Museum of Contemporary Art",
             "area": "koukaki-makrygianni",
-            "live": false,
-            "provisional": true,
-            "source_tier": "inferred",
-            "confidence": "needs_review"
+            "live": false
           },
           {
             "label": "Filopappou Hill",
@@ -43,9 +40,12 @@
             "confidence": "needs_review"
           },
           {
-            "label": "Little Tree Books & Coffee",
+            "label": "Pnyx",
             "area": "koukaki-makrygianni",
-            "live": false
+            "live": false,
+            "provisional": true,
+            "source_tier": "inferred",
+            "confidence": "needs_review"
           }
         ],
         "legs": [
@@ -57,27 +57,27 @@
           },
           {
             "from": "Acropolis Museum",
-            "to": "Pnyx",
+            "to": "EMST - National Museum of Contemporary Art",
+            "km": 0.5,
+            "minutes": 6
+          },
+          {
+            "from": "EMST - National Museum of Contemporary Art",
+            "to": "Filopappou Hill",
             "km": 1,
             "minutes": 12
           },
           {
-            "from": "Pnyx",
-            "to": "Filopappou Hill",
+            "from": "Filopappou Hill",
+            "to": "Pnyx",
             "km": 0.7,
             "minutes": 8
           },
           {
-            "from": "Filopappou Hill",
-            "to": "Little Tree Books & Coffee",
-            "km": 0.9,
-            "minutes": 11
-          },
-          {
-            "from": "Little Tree Books & Coffee",
+            "from": "Pnyx",
             "to": "Makrygianni",
-            "km": 0.2,
-            "minutes": 2
+            "km": 1,
+            "minutes": 12
           }
         ]
       },

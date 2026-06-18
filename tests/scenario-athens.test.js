@@ -1,6 +1,7 @@
 /**
- * Scenario: Athens — a real but THIN citypack (20 curated places), the next
- * beta city. Evaluates whether citypack + external evidence cooperate: dedupe,
+ * Scenario: Athens — a real but still THIN preview citypack with enough
+ * verified places for field testing, but not enough maturity to claim rich
+ * density. Evaluates whether citypack + external evidence cooperate: dedupe,
  * honest thin density, calibration not overpowering curated, honest confidence.
  *
  * Athens is a recognized city, so external records are injected at the ENGINE
@@ -33,7 +34,7 @@ function decide(preferences, dataset, over = {}) {
 
 test("Athens is honestly THIN, never claims citypack-rich", () => {
   const out = decide(["scenic"], null);
-  assert.equal(out.context.catalog_density, "thin"); // 20 curated places
+  assert.equal(out.context.catalog_density, "thin"); // preview city stays thin
   assert.equal(out.best_move.origin, "curated_catalog");
   assert.equal(out.confidence.level, "medium"); // curated but thin → not "high"
 });
