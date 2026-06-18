@@ -32,7 +32,7 @@ const SOURCE_FAMILIES = Object.freeze({
   existing_provider_family: {
     priority: 7,
     label: "Existing Parranda provider family",
-    preferredAdapters: ["schema_org_event", "linked_events"],
+    preferredAdapters: ["schema_org_event", "linked_events", "the_events_calendar", "ical"],
   },
   unknown_source_family: {
     priority: 99,
@@ -194,6 +194,7 @@ function normalizeSourceCandidate(candidate = {}) {
       recurrence: Boolean(candidate.extractable?.recurrence),
       schema_org_event: Boolean(candidate.extractable?.schema_org_event),
       linked_events: Boolean(candidate.extractable?.linked_events),
+      the_events_calendar: Boolean(candidate.extractable?.the_events_calendar),
       ical: Boolean(candidate.extractable?.ical),
       rss: Boolean(candidate.extractable?.rss),
       stable_html: Boolean(candidate.extractable?.stable_html),
@@ -210,7 +211,12 @@ function sourceFamilyPriority(family) {
 }
 
 function mapsToExistingProvider(adapter) {
-  return adapter === "schema_org_event" || adapter === "linked_events";
+  return (
+    adapter === "schema_org_event" ||
+    adapter === "linked_events" ||
+    adapter === "the_events_calendar" ||
+    adapter === "ical"
+  );
 }
 
 function inferAdapter(candidate = {}) {

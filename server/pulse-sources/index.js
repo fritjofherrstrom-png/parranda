@@ -45,6 +45,17 @@ const {
   buildEventsUrl,
 } = require("./linked-events-source-provider");
 const {
+  EVENTS_CALENDAR_PROVIDER_ID,
+  createEventsCalendarProvider,
+  resolveDefaultEventsCalendarProvider,
+  extractEventsCalendarSourceEvents,
+  extractTheEventsCalendarEvents,
+  extractIcalEvents,
+  mapEventsCalendarEventToRaw,
+  mapTheEventsCalendarEventToRaw,
+  mapIcalEventToRaw,
+} = require("./events-calendar-source-provider");
+const {
   EXTRACTION_TIERS,
   SOURCE_FAMILIES,
   evaluateLiveEventSourceCandidate,
@@ -82,6 +93,15 @@ module.exports = {
   extractLinkedEvents,
   mapLinkedEventToRaw,
   buildEventsUrl,
+  EVENTS_CALENDAR_PROVIDER_ID,
+  createEventsCalendarProvider,
+  resolveDefaultEventsCalendarProvider,
+  extractEventsCalendarSourceEvents,
+  extractTheEventsCalendarEvents,
+  extractIcalEvents,
+  mapEventsCalendarEventToRaw,
+  mapTheEventsCalendarEventToRaw,
+  mapIcalEventToRaw,
   EXTRACTION_TIERS,
   SOURCE_FAMILIES,
   evaluateLiveEventSourceCandidate,
