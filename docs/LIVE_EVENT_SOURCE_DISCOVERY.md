@@ -429,7 +429,7 @@ venue handling would be owned by the provider adapter.
   "confidence": "medium",
   "source_language": "el",
   "event_language": "el",
-  "translation_status": "not_required",
+  "translation_status": "needed",
   "translation_confidence": "none",
   "provenance": {
     "source_label": "Municipality of Athens",
