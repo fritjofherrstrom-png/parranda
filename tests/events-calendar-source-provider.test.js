@@ -37,6 +37,8 @@ function tecEvent(overrides = {}) {
 
 function icsFixture(overrides = {}) {
   const summary = overrides.summary || "Καλοκαιρινή αγορά";
+  const dtstart = overrides.dtstart || "DTSTART:20260912T180000Z";
+  const dtend = overrides.dtend || "DTEND:20260912T220000Z";
   return [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -44,8 +46,8 @@ function icsFixture(overrides = {}) {
     "BEGIN:VEVENT",
     "UID:athens-market-1@example.test",
     `SUMMARY;LANGUAGE=el:${summary}`,
-    "DTSTART:20260912T180000Z",
-    "DTEND:20260912T220000Z",
+    dtstart,
+    dtend,
     "LOCATION:Plateia Test",
     "GEO:37.976;23.726",
     "URL:https://calendar.test/ics/athens-market-1",
@@ -153,6 +155,52 @@ test("parses iCal VEVENT feeds and preserves local-language metadata", () => {
   assert.equal(raw.recurrence, "FREQ=WEEKLY;COUNT=4");
   assert.equal(raw.event_language, "el");
   assert.equal(raw.translation_status, "needed");
+});
+
+test("iCal Zulu date-times convert to ISO UTC, but floating/TZID date-times stay unknown", () => {
+  const zulu = mapEventsCalendarEventToRaw(extractIcalEvents(icsFixture({
+    dtstart: "DTSTART:20260912T180000Z",
+    dtend: "DTEND:20260912T220000Z",
+  }))[0]);
+  assert.equal(zulu.starts_at, "2026-09-12T18:00:00.000Z");
+  assert.equal(zulu.ends_at, "2026-09-12T22:00:00.000Z");
+
+  const tzid = mapEventsCalendarEventToRaw(extractIcalEvents(icsFixture({
+    dtstart: "DTSTART;TZID=Europe/Athens:20260912T180000",
+    dtend: "DTEND;TZID=Europe/Athens:20260912T220000",
+  }))[0]);
+  assert.equal(tzid.starts_at, undefined);
+  assert.equal(tzid.ends_at, undefined);
+
+  const floating = mapEventsCalendarEventToRaw(extractIcalEvents(icsFixture({
+    dtstart: "DTSTART:20260912T180000",
+    dtend: "DTEND:20260912T220000",
+  }))[0]);
+  assert.equal(floating.starts_at, undefined);
+  assert.equal(floating.ends_at, undefined);
+});
+
+test("iCal floating date-times do not promote through registry when timezone is unresolved", async () => {
+  const result = await collectPulseSourcesForCity(city, {
+    providerSpecs: [
+      provider({
+        format: "ical",
+        fetcher: async () => response(icsFixture({
+          dtstart: "DTSTART:20260912T180000",
+          dtend: "DTEND:20260912T220000",
+        }), "text/calendar"),
+      }),
+    ],
+    enabledStatuses: ["candidate"],
+    context: { now: NOW },
+  });
+
+  assert.equal(result.time_sensitive_events.length, 1);
+  const event = result.time_sensitive_events[0];
+  assert.equal(event.timing_relevance, "unknown");
+  assert.equal(event.starts_at, undefined);
+  assert.equal(event.ends_at, undefined);
+  assert.ok(!(event.timing_reasons || []).includes("timing_now"));
 });
 
 test("configured candidate provider normalizes iCal events through the registry when enabled", async () => {

@@ -287,9 +287,13 @@ function parseIcalDate(property) {
   if (/^\d{8}$/.test(value)) {
     return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}T00:00:00.000Z`;
   }
+  if (property?.params?.TZID) {
+    return null;
+  }
   const match = value.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z?)$/);
   if (match) {
     const [, year, month, day, hour, minute, second, zulu] = match;
+    if (!zulu) return null;
     const date = new Date(Date.UTC(
       Number(year),
       Number(month) - 1,
@@ -299,7 +303,7 @@ function parseIcalDate(property) {
       Number(second),
     ));
     if (!Number.isFinite(date.getTime())) return null;
-    return zulu ? date.toISOString() : date.toISOString();
+    return date.toISOString();
   }
   const parsed = new Date(value);
   return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
