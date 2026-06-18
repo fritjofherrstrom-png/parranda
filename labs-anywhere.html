@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="__PARRANDA_LANG__">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Parranda | Any-place alpha</title>
+    <meta name="theme-color" content="#af4d24" />
+    <meta
+      name="description"
+      content="Any-place alpha for Parranda: source-backed, honest experimental one-day routes."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="stylesheet" href="/styles.css?v=26" />
+    <script>
+      window.__PARRANDA_LANGUAGE__ = "__PARRANDA_UI_LANG__";
+      window.__PARRANDA_ANYWHERE_PLACE__ = __PARRANDA_ANYWHERE_PLACE_JSON__;
+      window.__PARRANDA_I18N__ = __PARRANDA_I18N_JSON__;
+    </script>
+  </head>
+  <body class="anywhere-alpha-page" data-lang="__PARRANDA_LANG__">
+    <main class="anywhere-alpha">
+      <header class="anywhere-alpha__header">
+        <a class="anywhere-alpha__brand" href="/?lang=__PARRANDA_UI_LANG__" aria-label="Parranda home">
+          <span class="anywhere-alpha__mark">P</span>
+          <span>
+            <strong>Parranda</strong>
+            <small>Any-place alpha</small>
+          </span>
+        </a>
+        <span class="anywhere-alpha__badge">Alpha · source-backed · honest blockers</span>
+      </header>
+
+      <section class="anywhere-alpha__hero" aria-labelledby="anywhereTitle">
+        <p class="anywhere-alpha__eyebrow">Any-place alpha</p>
+        <h1 id="anywhereTitle">Build a day from a real place, even before Parranda has a citypack.</h1>
+        <p class="anywhere-alpha__lead">
+          Parranda tries to build one day from source-backed data and tells you when coverage is thin, blocked, or only experimental.
+        </p>
+        <form class="anywhere-alpha__form" id="anywhereForm">
+          <label for="anywherePlace">
+            Place
+            <input
+              id="anywherePlace"
+              name="place"
+              type="search"
+              value="__PARRANDA_ANYWHERE_PLACE_VALUE__"
+              placeholder="Malmö, Bologna, Naxos, Simrishamn..."
+              autocomplete="off"
+            />
+          </label>
+          <button type="submit">Build alpha day</button>
+        </form>
+        <p class="anywhere-alpha__note">
+          This does not mark the place as live or citypack-supported. It uses the same experimental agnostic engine proven in dogfood.
+        </p>
+      </section>
+
+      <section class="anywhere-alpha__status" id="anywhereStatus" aria-live="polite">
+        <p>Enter a place to start the alpha flow.</p>
+      </section>
+
+      <section class="anywhere-alpha__grid" id="anywhereResult" hidden>
+        <article class="anywhere-card anywhere-card--route" id="anywhereRoute"></article>
+        <aside class="anywhere-alpha__side">
+          <article class="anywhere-card" id="anywhereReadiness"></article>
+          <article class="anywhere-card" id="anywhereSources"></article>
+          <article class="anywhere-card" id="anywhereContext"></article>
+          <article class="anywhere-card" id="anywhereBlockers"></article>
+        </aside>
+      </section>
+    </main>
+
+    <script src="/dogfood-render.js?v=26"></script>
+    <script src="/labs-anywhere.js?v=1"></script>
+  </body>
+</html>

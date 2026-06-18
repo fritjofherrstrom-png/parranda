@@ -57,6 +57,16 @@
     return entry ? "/" + entry.key : null;
   }
 
+  function buildAnyPlaceAlphaUrl(raw) {
+    var place = String(raw || "").trim();
+    if (!place) return null;
+    var params = new URLSearchParams();
+    params.set("place", place);
+    params.set("planner", "open");
+    params.set("lang", currentLang());
+    return "/labs/anywhere?" + params.toString();
+  }
+
   function updateCtaState() {
     var val = cityInput ? cityInput.value.trim() : "";
     var enabled = val.length > 0;
@@ -135,10 +145,9 @@
         window.location.href = cityPath + "?" + params.toString();
         return;
       }
-      if (val.trim()) {
-        cityInput.setCustomValidity(COPY.unsupported || "Vi är live i Barcelona och Rom just nu. Prova en av dem!");
-        cityInput.reportValidity();
-        setTimeout(function () { cityInput.setCustomValidity(""); }, 3000);
+      var anyPlaceUrl = buildAnyPlaceAlphaUrl(val);
+      if (anyPlaceUrl) {
+        window.location.href = anyPlaceUrl;
       }
     });
   }

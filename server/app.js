@@ -41,12 +41,14 @@ const appRoot = path.resolve(__dirname, "..");
 const appShellTemplate = fs.readFileSync(path.join(appRoot, "index.html"), "utf8");
 const landingShellTemplate = fs.readFileSync(path.join(appRoot, "landing.html"), "utf8");
 const dogfoodShellTemplate = fs.readFileSync(path.join(appRoot, "dogfood.html"), "utf8");
+const anyPlaceAlphaShellTemplate = fs.readFileSync(path.join(appRoot, "labs-anywhere.html"), "utf8");
 const publicRootFiles = new Set([
   "styles.css",
   "script.js",
   "ux-pass1.js",
   "planner-trust.js",
   "landing.js",
+  "labs-anywhere.js",
   "manifest.webmanifest",
   "sw.js",
   // #264 — dogfood UI assets (the page itself is env-gated; these two files are
@@ -1176,10 +1178,19 @@ function renderLandingShell({ lang = "en" } = {}) {
     "__PARRANDA_LANDING_SEARCH_PLACEHOLDER__": escapeHtml(tr("landing.search.placeholder")),
     "__PARRANDA_LANDING_SEARCH_SUBMIT__": escapeHtml(tr("landing.search.submit")),
     "__PARRANDA_LANDING_SEARCH_SUBMIT_DISABLED__": escapeHtml(tr("landing.search.submitDisabled")),
-    "__PARRANDA_LANDING_SEARCH_UNSUPPORTED__": escapeHtml(tr("landing.search.unsupported")),
     "__PARRANDA_LANDING_SEARCH_LABEL__": escapeHtml(tr("landing.search.label")),
     "__PARRANDA_LANDING_SKIP_LINK__": escapeHtml(tr("landing.search.skipLink")),
     "__PARRANDA_LANDING_CITY_REGISTRY__": serializeInlineJson(buildLandingCityRegistry()),
+    "__PARRANDA_LANDING_COPY_JSON__": serializeInlineJson({
+      unsupported: tr("landing.search.unsupported"),
+      submit: tr("landing.search.submit"),
+      submitDisabled: tr("landing.search.submitDisabled"),
+      blitzLoading: tr("landing.blitz.loading"),
+      blitzGeoFallback: tr("landing.blitz.geoFallback"),
+      blitzNoCity: tr("landing.blitz.noCity"),
+      blitzError: tr("landing.blitz.error"),
+      blitzInfo: tr("landing.blitz.info"),
+    }),
     "__PARRANDA_LANDING_NAV_ROME__": escapeHtml(tr("landing.nav.rome")),
     "__PARRANDA_LANDING_NAV_LAYOUTS__": escapeHtml(tr("landing.nav.layouts")),
     "__PARRANDA_LANDING_LINK_BCN__": `/barcelona${langSuffix}`,
@@ -1236,6 +1247,21 @@ function renderLandingShell({ lang = "en" } = {}) {
   return Object.entries(replacements).reduce(
     (h, [token, value]) => h.split(token).join(value),
     landingShellTemplate,
+  );
+}
+
+function renderAnyPlaceAlphaShell({ lang = "en", place = "" } = {}) {
+  const uiLang = normalizeLanguage(lang);
+  const replacements = {
+    "__PARRANDA_LANG__": escapeHtml(uiLang),
+    "__PARRANDA_UI_LANG__": escapeHtml(uiLang),
+    "__PARRANDA_ANYWHERE_PLACE_VALUE__": escapeHtml(String(place || "")),
+    "__PARRANDA_ANYWHERE_PLACE_JSON__": serializeInlineJson(String(place || "")),
+    "__PARRANDA_I18N_JSON__": serializeInlineJson(buildClientI18nPayload()),
+  };
+  return Object.entries(replacements).reduce(
+    (html, [token, value]) => html.split(token).join(value),
+    anyPlaceAlphaShellTemplate,
   );
 }
 
@@ -1446,6 +1472,15 @@ function buildApp({
     }
     response.type("html").send(
       renderDogfoodShell({ lang: normalizeLanguage(request.query?.lang) })
+    );
+  });
+
+  app.get("/labs/anywhere", (request, response) => {
+    response.type("html").send(
+      renderAnyPlaceAlphaShell({
+        lang: normalizeLanguage(request.query?.lang),
+        place: typeof request.query?.place === "string" ? request.query.place : "",
+      })
     );
   });
 
