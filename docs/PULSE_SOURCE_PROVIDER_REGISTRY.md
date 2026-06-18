@@ -63,6 +63,11 @@ they are source-backed, current/today/tonight, and at least medium confidence.
 They are still not route stops, route candidates, citypack candidates, or
 Planner mutations.
 
+For source acquisition and evaluation before a provider is wired, see
+[`LIVE_EVENT_SOURCE_DISCOVERY.md`](./LIVE_EVENT_SOURCE_DISCOVERY.md). That doc
+defines the multi-source discovery algorithm, trust/freshness model, and Athens
+worked example for deciding which source families deserve provider probes.
+
 ## Display Gates
 
 The gate helper answers:

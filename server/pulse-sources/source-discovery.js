@@ -1,0 +1,252 @@
+const SOURCE_FAMILIES = Object.freeze({
+  official_municipal_calendar: {
+    priority: 1,
+    label: "Official city/municipal events calendar",
+    preferredAdapters: ["linked_events", "the_events_calendar", "ical", "schema_org_event"],
+  },
+  official_tourism_calendar: {
+    priority: 2,
+    label: "Official tourism/destination calendar",
+    preferredAdapters: ["schema_org_event", "html_event_listing", "ical"],
+  },
+  cultural_institution_calendar: {
+    priority: 3,
+    label: "Cultural institution or major venue calendar",
+    preferredAdapters: ["schema_org_event", "venue_calendar", "html_event_listing"],
+  },
+  schema_org_event: {
+    priority: 4,
+    label: "schema.org/Event JSON-LD",
+    preferredAdapters: ["schema_org_event"],
+  },
+  open_data_event_api: {
+    priority: 5,
+    label: "Open-data event API",
+    preferredAdapters: ["linked_events", "open_data_event_api", "the_events_calendar"],
+  },
+  compatible_ticket_api: {
+    priority: 6,
+    label: "Ticket/event API with compatible terms",
+    preferredAdapters: ["ticket_event_api"],
+  },
+  existing_provider_family: {
+    priority: 7,
+    label: "Existing Parranda provider family",
+    preferredAdapters: ["schema_org_event", "linked_events"],
+  },
+});
+
+const EXTRACTION_TIERS = Object.freeze({
+  official_api_open_data: {
+    tier: 1,
+    label: "Official API / open data feed",
+    score: 4,
+    runtimeEligible: true,
+  },
+  ics_rss_feed: {
+    tier: 2,
+    label: "ICS / RSS / calendar feed",
+    score: 3,
+    runtimeEligible: true,
+  },
+  schema_org_json_ld: {
+    tier: 3,
+    label: "schema.org/Event / JSON-LD structured data",
+    score: 3,
+    runtimeEligible: true,
+  },
+  stable_html_calendar: {
+    tier: 4,
+    label: "Stable HTML calendar scraping",
+    score: 1,
+    runtimeEligible: true,
+  },
+  js_rendered_browser: {
+    tier: 5,
+    label: "JS-rendered/browser scraping",
+    score: 0,
+    runtimeEligible: false,
+  },
+  weak_social_manual: {
+    tier: 6,
+    label: "Weak social/manual listing",
+    score: -1,
+    runtimeEligible: false,
+  },
+});
+
+const TRUST_SCORE = Object.freeze({
+  official: 4,
+  civic: 3,
+  institution: 3,
+  commercial: 2,
+  community: 1,
+  unknown: 0,
+});
+
+const TERMS_SCORE = Object.freeze({
+  open_license: 3,
+  api_terms_compatible: 2,
+  permission_required: 1,
+  unknown: 0,
+  restricted: -2,
+});
+
+function evaluateLiveEventSourceCandidate(candidate = {}) {
+  const normalized = normalizeSourceCandidate(candidate);
+  const reasons = [];
+  const blockers = [];
+
+  if (!normalized.url && !normalized.discovery_method) blockers.push("missing_source_locator");
+  if (!normalized.extractable.title) blockers.push("missing_title");
+  if (!normalized.extractable.start) blockers.push("missing_start_time");
+  if (!normalized.extractable.source_url) blockers.push("missing_source_url");
+
+  const hasVenuePath = normalized.extractable.geo || normalized.extractable.venue_geocodable;
+  if (!hasVenuePath) reasons.push("no_geo_but_city_level_possible");
+  if (normalized.extractable.geo) reasons.push("has_provider_geo");
+  if (normalized.extractable.venue_geocodable) reasons.push("venue_geocodable");
+  if (normalized.extractable.end) reasons.push("has_end_time");
+  if (normalized.extractable.recurrence) reasons.push("has_recurrence");
+
+  const trustScore = TRUST_SCORE[normalized.trust_tier] ?? TRUST_SCORE.unknown;
+  const termsScore = TERMS_SCORE[normalized.terms_status] ?? TERMS_SCORE.unknown;
+  const tierInfo = EXTRACTION_TIERS[normalized.extraction_tier] || EXTRACTION_TIERS.stable_html_calendar;
+  const extractionScore = [
+    normalized.extractable.title,
+    normalized.extractable.start,
+    normalized.extractable.source_url,
+    normalized.extractable.venue,
+    normalized.extractable.geo || normalized.extractable.venue_geocodable,
+  ].filter(Boolean).length;
+  const score = trustScore + termsScore + tierInfo.score + extractionScore;
+
+  if (normalized.terms_status === "restricted") blockers.push("terms_restricted");
+  if (normalized.terms_status === "permission_required") reasons.push("permission_required_before_runtime");
+  if (normalized.terms_status === "unknown") reasons.push("terms_need_review");
+  if (!tierInfo.runtimeEligible) reasons.push(`probe_only_${normalized.extraction_tier}`);
+
+  let status = "rejected";
+  if (blockers.length === 0 && termsScore >= 2 && tierInfo.runtimeEligible) {
+    status = "viable_provider_probe";
+  } else if (blockers.length <= 1 && termsScore >= 0 && normalized.extractable.title && normalized.extractable.start) {
+    status = "needs_adapter_or_permission";
+  }
+
+  return {
+    ...normalized,
+    priority: sourceFamilyPriority(normalized.family),
+    status,
+    score,
+    maps_to_existing_provider: mapsToExistingProvider(normalized.adapter),
+    reasons,
+    blockers,
+  };
+}
+
+function normalizeSourceCandidate(candidate = {}) {
+  const family = normalizeFamily(candidate.family);
+  const adapter = firstString(candidate.adapter, inferAdapter(candidate));
+  const extractionTier = normalizeExtractionTier(candidate.extraction_tier || inferExtractionTier(candidate));
+  return {
+    id: firstString(candidate.id, candidate.url, candidate.source_label),
+    place: firstString(candidate.place),
+    family,
+    family_label: SOURCE_FAMILIES[family]?.label || family,
+    source_label: firstString(candidate.source_label, candidate.label),
+    url: firstString(candidate.url, candidate.source_url),
+    discovery_method: firstString(candidate.discovery_method),
+    adapter,
+    extraction_tier: extractionTier,
+    extraction_tier_label: EXTRACTION_TIERS[extractionTier]?.label || "",
+    trust_tier: normalizeTrustTier(candidate.trust_tier || candidate.source_tier),
+    terms_status: normalizeTermsStatus(candidate.terms_status),
+    license: firstString(candidate.license),
+    extractable: {
+      title: Boolean(candidate.extractable?.title),
+      start: Boolean(candidate.extractable?.start),
+      end: Boolean(candidate.extractable?.end),
+      venue: Boolean(candidate.extractable?.venue),
+      source_url: Boolean(candidate.extractable?.source_url),
+      geo: Boolean(candidate.extractable?.geo),
+      venue_geocodable: Boolean(candidate.extractable?.venue_geocodable),
+      recurrence: Boolean(candidate.extractable?.recurrence),
+      schema_org_event: Boolean(candidate.extractable?.schema_org_event),
+      linked_events: Boolean(candidate.extractable?.linked_events),
+      ical: Boolean(candidate.extractable?.ical),
+      rss: Boolean(candidate.extractable?.rss),
+      stable_html: Boolean(candidate.extractable?.stable_html),
+      js_rendered: Boolean(candidate.extractable?.js_rendered),
+      social: Boolean(candidate.extractable?.social),
+      manual_listing: Boolean(candidate.extractable?.manual_listing),
+    },
+    notes: firstString(candidate.notes),
+  };
+}
+
+function sourceFamilyPriority(family) {
+  return SOURCE_FAMILIES[family]?.priority || 99;
+}
+
+function mapsToExistingProvider(adapter) {
+  return adapter === "schema_org_event" || adapter === "linked_events";
+}
+
+function inferAdapter(candidate = {}) {
+  if (candidate.extractable?.schema_org_event) return "schema_org_event";
+  if (candidate.extractable?.linked_events) return "linked_events";
+  if (candidate.extractable?.ical) return "ical";
+  if (candidate.extractable?.the_events_calendar) return "the_events_calendar";
+  return "needs_adapter";
+}
+
+function inferExtractionTier(candidate = {}) {
+  if (
+    candidate.extractable?.official_api ||
+    candidate.extractable?.the_events_calendar ||
+    candidate.extractable?.linked_events
+  ) {
+    return "official_api_open_data";
+  }
+  if (candidate.extractable?.ical || candidate.extractable?.rss) return "ics_rss_feed";
+  if (candidate.extractable?.schema_org_event) return "schema_org_json_ld";
+  if (candidate.extractable?.stable_html) return "stable_html_calendar";
+  if (candidate.extractable?.js_rendered) return "js_rendered_browser";
+  if (candidate.extractable?.social || candidate.extractable?.manual_listing) return "weak_social_manual";
+  return "stable_html_calendar";
+}
+
+function normalizeFamily(value) {
+  const raw = firstString(value);
+  return SOURCE_FAMILIES[raw] ? raw : "official_tourism_calendar";
+}
+
+function normalizeTrustTier(value) {
+  const raw = firstString(value).toLowerCase();
+  return TRUST_SCORE[raw] != null ? raw : "unknown";
+}
+
+function normalizeTermsStatus(value) {
+  const raw = firstString(value).toLowerCase();
+  return TERMS_SCORE[raw] != null ? raw : "unknown";
+}
+
+function normalizeExtractionTier(value) {
+  const raw = firstString(value).toLowerCase();
+  return EXTRACTION_TIERS[raw] ? raw : "stable_html_calendar";
+}
+
+function firstString(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
+module.exports = {
+  EXTRACTION_TIERS,
+  SOURCE_FAMILIES,
+  evaluateLiveEventSourceCandidate,
+  normalizeSourceCandidate,
+  mapsToExistingProvider,
+};
