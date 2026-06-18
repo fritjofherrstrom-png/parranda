@@ -149,6 +149,10 @@ module.exports = {
       sv: "Preview • låg confidence • inga handbyggda rutter.",
       en: "Preview • low confidence • no handbuilt routes.",
     },
+    wildcardLabel: {
+      sv: "ATHENS BETA",
+      en: "ATHENS BETA",
+    },
     wildcardTitle: {
       sv: "Athens kör som preview",
       en: "Athens is running as preview",
@@ -160,6 +164,14 @@ module.exports = {
     wildcardMeta: {
       sv: "Preview • verifierade platser • ingen citypack-mognad.",
       en: "Preview • verified places • not citypack-mature.",
+    },
+    wildcardTag2: {
+      sv: "Fälttest",
+      en: "Field test",
+    },
+    wildcardTag3: {
+      sv: "Thin",
+      en: "Thin",
     },
   },
   center: ATHENS_CENTER,

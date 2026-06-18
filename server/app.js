@@ -853,13 +853,13 @@ function buildShellCopy(shellMode, options = {}) {
     plannerSummary: previewOverride("plannerSummary", tr("plannerSummary")),
     plannerCtaLabel: previewOverride("plannerCtaLabel", tr("plannerCtaLabel")),
     plannerMicrocopy: previewOverride("plannerMicrocopy", tr("plannerMicrocopy")),
-    wildcardLabel: tr("wildcardLabel"),
+    wildcardLabel: previewOverride("wildcardLabel", tr("wildcardLabel")),
     wildcardTitle: previewOverride("wildcardTitle", tr("wildcardTitle")),
     wildcardSummary: previewOverride("wildcardSummary", tr("wildcardSummary")),
     wildcardMeta: previewOverride("wildcardMeta", tr("wildcardMeta")),
-    wildcardTag1: tr("wildcardTag1"),
-    wildcardTag2: tr("wildcardTag2"),
-    wildcardTag3: tr("wildcardTag3"),
+    wildcardTag1: previewOverride("wildcardTag1", tr("wildcardTag1")),
+    wildcardTag2: previewOverride("wildcardTag2", tr("wildcardTag2")),
+    wildcardTag3: previewOverride("wildcardTag3", tr("wildcardTag3")),
     wildcardActionsHidden: scope === "shell.curated" ? "" : "hidden",
   };
 }
@@ -1330,6 +1330,7 @@ function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed, lang = "e
     fallbackUsed: cityFallbackUsed,
     plannerEntryRoute,
     lang: uiLang,
+    previewSurface: cityConfig.previewSurface || null,
   };
   const i18nBootstrap = buildClientI18nPayload();
 
