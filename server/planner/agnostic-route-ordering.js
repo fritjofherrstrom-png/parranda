@@ -51,6 +51,13 @@ function daypartForRole(role) {
   return SLOT_DAYPART[slot] || SLOT_DAYPART[DEFAULT_SLOT];
 }
 
+// The numeric daypart slot rank for a role (lower = earlier). Shared with the
+// route engine's agnostic_compose daypart post-pass so both order the day by the
+// same generic role→slot vocabulary. Unknown roles → the neutral midday slot.
+function daypartSlotForRole(role) {
+  return daypartSlot({ role: typeof role === "string" ? role : "" });
+}
+
 function timeBandRank(band) {
   return typeof band === "string" && Object.prototype.hasOwnProperty.call(TIME_BAND_RANK, band)
     ? TIME_BAND_RANK[band]
@@ -248,5 +255,7 @@ module.exports = {
   buildAgnosticRouteOrdering,
   stableStopId,
   daypartForRole,
+  daypartSlotForRole,
+  SLOT_DAYPART,
   timeBandRank,
 };
