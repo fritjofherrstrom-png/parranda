@@ -120,8 +120,112 @@ function buildAgnosticEngineCityConfig({
   };
 }
 
+// --- candidate supply ------------------------------------------------------
+
+function finiteCoords(coordinates) {
+  if (!coordinates || typeof coordinates !== "object") return null;
+  const { lat, lng } = coordinates;
+  return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+}
+
+// Index the RICH role candidates (from formatRoleCandidate) by role+id and by
+// bare id. The combination's `selected[]` (formatSelected) is intentionally
+// lossy — it drops type/provenance/attribution — so to build honestly-attributed
+// source candidates we join each selected pick back to its rich source here.
+function buildRichCandidateIndex(plannerRoles) {
+  const index = new Map();
+  const roles = Array.isArray(plannerRoles?.roles) ? plannerRoles.roles : [];
+  for (const roleEntry of roles) {
+    const role = roleEntry?.role;
+    const candidates = Array.isArray(roleEntry?.candidates) ? roleEntry.candidates : [];
+    for (const candidate of candidates) {
+      const id = candidate?.candidate_id;
+      if (!id) continue;
+      if (role) index.set(`${role}::${id}`, candidate);
+      if (!index.has(`*::${id}`)) index.set(`*::${id}`, candidate);
+    }
+  }
+  return index;
+}
+
+// Map ONE admitted, source-backed candidate to the engine's sourceCandidate
+// (place-candidate draft_place) shape. Trust is reconstructed CONSERVATIVELY:
+// these are never curated/human-verified, so the route built from them stays
+// honestly low-confidence. Source attribution (provider label/url) is preserved
+// from the rich candidate's provenance so provenance survives to the stop.
+function toSourceCandidate({ pick, rich, coords, city, role }) {
+  const provenance = (rich && rich.provenance) || {};
+  const attribution = Array.isArray(provenance.attribution) ? provenance.attribution : [];
+  const firstSource = attribution[0] || {};
+  const confidence = (rich && rich.confidence) || pick.confidence || "needs_review";
+  return {
+    id: pick.candidate_id,
+    city,
+    label: (rich && rich.label) || pick.label || pick.candidate_id,
+    type: (rich && rich.type) || "place",
+    candidate_kind: "draft_place",
+    is_structural: false,
+    city_pack_owned: false,
+    lat: coords.lat,
+    lng: coords.lng,
+    area: null,
+    tags: [],
+    route_roles: role ? [role] : [],
+    source: {
+      kind: "open_geo_source",
+      label: firstSource.label || provenance.source_family || "open data",
+      url: firstSource.url || null,
+    },
+    trust: {
+      source_tier: provenance.source_tier || "inferred",
+      confidence,
+      human_verified: provenance.human_verified === true,
+      freshness: "unknown",
+    },
+    confidence,
+    freshness: "unknown",
+    provenance: {
+      why_included: "Source-backed candidate admitted to the agnostic route.",
+      provider_id: provenance.provider_id || null,
+      attribution,
+      corroborated_by_external: provenance.corroborated_by_external === true,
+      weatherTags: [],
+    },
+  };
+}
+
+/**
+ * Join the selected role-combination back to the rich planner-role candidates
+ * and project the result into engine `sourceCandidates`. Only candidates with
+ * finite coordinates survive (a stop must have a location); duplicates by id are
+ * collapsed. Pure / side-effect free.
+ *
+ * @param {object} params
+ * @param {Array<object>} params.selected     candidateCombination.selected[]
+ * @param {object} params.plannerRoles         selectPlannerRoleCandidates() result
+ * @param {string} [params.city]               cityConfig.key the candidates bind to
+ * @returns {Array<object>} sourceCandidate[]
+ */
+function mapAdmittedSelectionToSourceCandidates({ selected = [], plannerRoles = null, city = AGNOSTIC_ENGINE_CITY_KEY } = {}) {
+  const index = buildRichCandidateIndex(plannerRoles);
+  const out = [];
+  const seen = new Set();
+  for (const pick of Array.isArray(selected) ? selected : []) {
+    const id = pick && pick.candidate_id;
+    if (!id || seen.has(id)) continue;
+    const role = pick.role || null;
+    const rich = (role && index.get(`${role}::${id}`)) || index.get(`*::${id}`) || null;
+    const coords = finiteCoords(pick.coordinates) || (rich && finiteCoords(rich.coordinates));
+    if (!coords) continue; // no geo → cannot honestly be a stop
+    seen.add(id);
+    out.push(toSourceCandidate({ pick, rich, coords, city, role }));
+  }
+  return out;
+}
+
 module.exports = {
   AGNOSTIC_ENGINE_CITY_KEY,
   buildAgnosticEngineCityConfig,
   buildAgnosticNoopServices,
+  mapAdmittedSelectionToSourceCandidates,
 };
