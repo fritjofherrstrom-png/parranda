@@ -15,6 +15,7 @@ const { routeWalkingPath } = require("./walking-router");
 const { normalizeTrust } = require("./place-candidates/contract");
 const { normalizeTrustSummary } = require("./route-candidates/contract");
 const { buildDayflowContext } = require("./planner/dayflow-context");
+const { daypartSlotForRole, SLOT_DAYPART } = require("./planner/agnostic-route-ordering");
 
 const defaultCityConfig = getCityConfig("rome");
 
@@ -4261,6 +4262,64 @@ function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endPr
   };
 }
 
+// The earliest daypart slot a stop can fill, from its planner role(s). Null when
+// the stop carries no role metadata (nothing to sequence by → geometry stands).
+// Roles are read from the stop if present, else resolved from the provisional
+// source candidate by id — this keeps the daypart post-pass self-contained in
+// the ordering layer and never depends on the provisional-stop mapper carrying
+// role data (that mapper is owned elsewhere).
+function composeStopDaypartSlot(stop, roleById = null) {
+  let roles = Array.isArray(stop?.route_roles) && stop.route_roles.length ? stop.route_roles : null;
+  if (!roles && roleById && stop?.id != null) {
+    const looked = roleById.get(stop.id);
+    roles = Array.isArray(looked) ? looked : null;
+  }
+  if (!roles) return null;
+  let min = null;
+  for (const role of roles) {
+    const slot = daypartSlotForRole(role);
+    if (Number.isFinite(slot) && (min === null || slot < min)) min = slot;
+  }
+  return min;
+}
+
+// Accept up to ~35% more walking (or +0.8km) for a coherent day-arc; beyond that
+// the geometry order wins. Mirrors the legacy ordering's "trade a little walking
+// for a day that makes sense, walking budget stays the final gate".
+const DAYPART_WALK_TOLERANCE = 1.35;
+const NEUTRAL_DAYPART_SLOT = 2; // midday — where role-less stops sit in the arc
+
+// Reorder geometry-optimal stops into a morning→evening daypart arc, preserving
+// proximity WITHIN a slot (stable sort keeps the geometry order). Falls back to
+// the geometry order when no stop has a role, when the order is already correct,
+// or when the daypart order would break the walk budget.
+function applyAgnosticDaypartOrder(orderedStops, geometry, geomFor, roleById = null) {
+  const slots = orderedStops.map((stop) => composeStopDaypartSlot(stop, roleById));
+  if (slots.every((slot) => slot === null)) {
+    return { stops: orderedStops, geometry, applied: false, fallback: false, reason: "no_role_metadata" };
+  }
+  const annotated = orderedStops.map((stop, index) => ({
+    stop,
+    index,
+    slot: slots[index] === null ? NEUTRAL_DAYPART_SLOT : slots[index],
+  }));
+  const reordered = [...annotated].sort((a, b) => a.slot - b.slot || a.index - b.index).map((entry) => entry.stop);
+  const changed = reordered.some((stop, index) => stop !== orderedStops[index]);
+  if (!changed) {
+    return { stops: orderedStops, geometry, applied: true, fallback: false, reason: "already_daypart_ordered" };
+  }
+  const daypartGeometry = geomFor(reordered);
+  const baseKm = Number.isFinite(geometry?.estimatedKm) ? geometry.estimatedKm : null;
+  const newKm = Number.isFinite(daypartGeometry?.estimatedKm) ? daypartGeometry.estimatedKm : null;
+  const walkable = baseKm === null || newKm === null
+    ? true
+    : newKm <= Math.max(baseKm * DAYPART_WALK_TOLERANCE, baseKm + 0.8);
+  if (!walkable) {
+    return { stops: orderedStops, geometry, applied: false, fallback: true, reason: "daypart_order_exceeded_walk_budget" };
+  }
+  return { stops: reordered, geometry: daypartGeometry, applied: true, fallback: false, reason: "daypart_rhythm" };
+}
+
 function buildRouteLegs(points) {
   const legs = [];
 
@@ -5082,7 +5141,36 @@ function buildRouteFromTemplate(
     legPacing,
     lang,
   );
-  const bridgedStops = insertBridgeStopsForLongLegs(orderedStops, {
+
+  // Agnostic_compose daypart post-pass (gated). Reorder the geometry-optimal
+  // stops so the day reads morning→evening (coffee/scenic earlier, food mid-day,
+  // bar last), preferring the daypart arc but falling back to the geometry order
+  // if it would break the walk budget. Every non-agnostic template keeps the
+  // pure geometry order, byte-identical.
+  let composeOrderedStops = orderedStops;
+  let composeGeometry = geometry;
+  let agnosticDaypartOrdering = null;
+  let composeRoleById = null;
+  if (template.id === AGNOSTIC_COMPOSE_TEMPLATE_ID) {
+    const geomFor = (candidate) =>
+      shape === "loop"
+        ? summarizeLoopGeometry(candidate, start, end, startProfile, targetKm, distanceMode, legPacing, lang)
+        : summarizeArcGeometry(candidate, start, end, startProfile, endProfile, targetKm, distanceMode, legPacing, lang);
+    // Resolve planner roles from the provisional source candidates by id (the
+    // provisional-stop mapper does not carry roles, and is owned elsewhere).
+    composeRoleById = new Map(
+      getSourceCandidates().map((candidate) => [
+        candidate.id,
+        Array.isArray(candidate.route_roles) ? candidate.route_roles : [],
+      ]),
+    );
+    const dp = applyAgnosticDaypartOrder(orderedStops, geometry, geomFor, composeRoleById);
+    composeOrderedStops = dp.stops;
+    composeGeometry = dp.geometry;
+    agnosticDaypartOrdering = { applied: dp.applied, fallback: dp.fallback, reason: dp.reason };
+  }
+
+  const bridgedStops = insertBridgeStopsForLongLegs(composeOrderedStops, {
     start,
     end,
     preferences,
@@ -5099,8 +5187,8 @@ function buildRouteFromTemplate(
   );
   const finalOrderedStops = rebalancedStops;
   const finalGeometry =
-    finalOrderedStops === orderedStops
-      ? geometry
+    finalOrderedStops === composeOrderedStops
+      ? composeGeometry
       : shape === "loop"
         ? summarizeLoopGeometry(
             finalOrderedStops,
@@ -5215,6 +5303,23 @@ function buildRouteFromTemplate(
     geo_quality_score: Number((finalGeometry?.qualityScore || 0).toFixed(1)),
     pool_fit_penalty: Math.max(0, rawPool.length - finalOrderedStops.length - 1) * 0.9,
   };
+
+  // Agnostic_compose daypart labels (gated). Attach the morning→evening arc the
+  // post-pass produced: a per-stop daypart label + the route-level arc + the
+  // ordering verdict (applied / geometry fallback). These are LABELS — the
+  // engine geometry + daypart post-pass already set the actual sequence. Null
+  // labels are honest for role-less stops (e.g. inserted bridge stops).
+  if (agnosticDaypartOrdering) {
+    const dayparts = finalOrderedStops.map((stop) => {
+      const slot = composeStopDaypartSlot(stop, composeRoleById);
+      return slot === null ? null : SLOT_DAYPART[slot] || null;
+    });
+    mainStops.forEach((stop, index) => {
+      if (dayparts[index]) stop.daypart = dayparts[index];
+    });
+    route.daypart_arc = dayparts;
+    route.agnostic_daypart_ordering = agnosticDaypartOrdering;
+  }
 
   return attachRouteLineage(route, routeIdentity);
 }
@@ -6825,6 +6930,9 @@ async function generateAgnosticRecommendations({ cityConfig, ...routeParams } = 
 module.exports = {
   generateRecommendations,
   generateAgnosticRecommendations,
+  // Exported for focused testing of the agnostic_compose daypart post-pass.
+  composeStopDaypartSlot,
+  applyAgnosticDaypartOrder,
   resolvePoint,
   expandDateRange,
   buildRouteFromTemplate,
