@@ -1000,5 +1000,6 @@ module.exports = {
   applyRouteMutation,
   buildExperimentBlock,
   buildBlockedAgnosticRouteOutputExperiment,
+  admitExperimentalInferredExternalCandidate,
   MIN_VIABLE_GEOCODED_STOPS,
 };

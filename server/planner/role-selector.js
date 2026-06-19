@@ -91,7 +91,7 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
     const spec = activeRoleSpec[role];
     const entries = roleEntries[role];
     const candidates = entries.slice(0, limitPerRole).map((entry) =>
-      formatRoleCandidate(entry, role, roleEntries),
+      formatRoleCandidate(entry, role, roleEntries, activeRoleSpec),
     );
     const status = strongestStatus(candidates);
     return {
@@ -215,7 +215,7 @@ function candidateStatusForRole({ fit, gates, spec, experimentalAdmission = null
   return "missing";
 }
 
-function formatRoleCandidate(entry, role, roleEntries) {
+function formatRoleCandidate(entry, role, roleEntries, roleSpec = ROLE_SPEC) {
   const { candidate, derived, fit, gates, calibration, candidate_status, experimental_admission } = entry;
   const provenance = candidateProvenance(candidate, derived);
   return {
@@ -263,20 +263,22 @@ function formatRoleCandidate(entry, role, roleEntries) {
     calibration: calibration
       ? { level: calibration.level, influence: calibration.influence, reasons: calibration.reasons }
       : null,
-    also_covers: alsoCovers(candidate.id, role, roleEntries),
+    also_covers: alsoCovers(candidate.id, role, roleEntries, roleSpec),
   };
 }
 
-function alsoCovers(candidateId, currentRole, roleEntries) {
+function alsoCovers(candidateId, currentRole, roleEntries, roleSpec = ROLE_SPEC) {
   const covers = [];
   for (const [role, entries] of Object.entries(roleEntries)) {
     if (role === currentRole) continue;
+    const spec = roleSpec[role];
+    if (!spec) continue;
     const entry = entries.find((candidateEntry) => candidateEntry.candidate.id === candidateId);
     if (!entry || entry.candidate_status === "fallback") continue;
     covers.push({
       role,
       status: entry.candidate_status,
-      match: coversAny(entry.fit.covered_preferences, ROLE_SPEC[role].intents) ? "covered" : "partial",
+      match: coversAny(entry.fit.covered_preferences, spec.intents) ? "covered" : "partial",
     });
   }
   return covers;
