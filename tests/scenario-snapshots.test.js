@@ -339,12 +339,15 @@ const scenarioMatrix = [
     },
   },
   // Athens provisional source-candidate compose — same thin Athens citypack as
-  // preview-zero-state, but anchored in the thin Koukaki-Makrygianni south where
-  // the verified pool runs out. This snapshot locks the provisional layer:
-  // verified Athens items are still preferred (verified-first), and only the
-  // leftover slots are filled by clearly-marked provisional source candidates
-  // (provisional: true, source_tier "inferred", confidence "needs_review").
-  // The route stays low-confidence agnostic_compose and every stop is athens-*.
+  // preview-zero-state, anchored in the thin Koukaki-Makrygianni south. This
+  // snapshot locks the PREVIEW-BETA supplement: verified Athens items remain the
+  // higher-trust spine (present + preferred), but because Athens is a preview
+  // city the engine now lets clearly-marked provisional source candidates
+  // SUPPLEMENT the day (reserved slots), not just fill leftover gaps — so a thin
+  // preview city's day is visibly fuller. Every supplemental stop stays
+  // provisional: true, source_tier "inferred", confidence "needs_review"; the
+  // route stays low-confidence agnostic_compose and every stop is athens-*.
+  // (Non-preview cities keep strict verified-first — see Rome/Barcelona.)
   {
     city: "athens",
     name: "provisional-source-compose",

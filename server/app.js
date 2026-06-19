@@ -1798,14 +1798,45 @@ function buildApp({
           }, { routedDayCount: 0 }),
         };
       } else {
-        const registeredCityFillEligible =
+        // Preview-beta engine activation. A PREVIEW citypack that is curated-THIN
+        // auto-activates the engine-backed registered-city candidate fill WITHOUT
+        // any manual query flags, so opening its planner is visibly richer when a
+        // trusted loader has supply. Generic by construction — it keys on
+        // visibility:"preview" + thin density, never a city name; Athens is just
+        // the only preview city today. Rich citypacks (Rome / Barcelona-beta —
+        // not preview, not thin) never qualify; other registered cities keep the
+        // explicit-flag gate. The fill itself stays trust-safe: curated candidates
+        // remain the higher-trust spine, source-backed records are supplemental
+        // fill only, and the public payload can never inject candidates (the
+        // loader is the server-injected `openDataLoader`).
+        // The explicit-flag registered-city fill (#294 contract): gap-only fill
+        // for any thin registered city when the three diagnostic flags are set.
+        const flagGatedFill =
           experimentRequested &&
           isAgnosticEngineComposeRequested(request) &&
-          isExternalCandidatesRequested(request) &&
+          isExternalCandidatesRequested(request);
+        // Preview-beta auto-activation: a PREVIEW citypack that is curated-THIN
+        // turns the registered-city fill ON with NO manual flags, and in DEPTH
+        // mode (source-backed variety across roles, not just role gaps), so the
+        // planner is visibly fuller. Generic — keys on visibility:"preview" +
+        // thin density, never a city name (Athens is the only preview city
+        // today). Excludes the flag path so #294's gap-only contract is
+        // unchanged when the diagnostic flags are explicitly set. Rich citypacks
+        // (Rome / Barcelona-beta) never qualify. Curated stays the higher-trust
+        // spine; source-backed stops stay provisional; the public payload can
+        // never inject candidates (the loader is server-injected).
+        const previewBetaEngine =
+          isPreviewCityConfig(cityConfig) &&
           !noRecognizedCity &&
-          curatedDensityOf(cityConfig) === "thin";
+          curatedDensityOf(cityConfig) === "thin" &&
+          !flagGatedFill;
+        const registeredCityFillEligible =
+          !noRecognizedCity &&
+          curatedDensityOf(cityConfig) === "thin" &&
+          (previewBetaEngine || flagGatedFill);
         let generationCityConfig = cityConfig;
         let registeredCityFillSidecar = null;
+        let previewBetaActive = false;
         if (registeredCityFillEligible) {
           const roleOrigin = resolvePlannerRoleOrigin(cityConfig, request.body || {});
           const rolePayload = buildPlannerRolePayload(cityConfig, request, payload, roleOrigin);
@@ -1821,9 +1852,13 @@ function buildApp({
             helpers,
             sourceStatus,
             catalogDensity: "thin",
+            // Preview-beta pulls source-backed DEPTH (variety across roles), not
+            // only role-gap fill, so a thin preview city is visibly fuller.
+            depth: previewBetaEngine,
           });
           generationCityConfig = fill.cityConfig || cityConfig;
           registeredCityFillSidecar = { registered_city_candidate_fill: fill.sidecar };
+          previewBetaActive = previewBetaEngine;
         }
         const result = diversifyRecommendationDays(await generateRecommendations({
           ...payload,
@@ -1856,10 +1891,33 @@ function buildApp({
               openDataLoader,
             })
           : null;
+        // Compact, honest preview-beta status on the route response. `active`
+        // reflects whether source-backed stops actually reached the day (from the
+        // loader fill OR the citypack's own provisional candidates the preview
+        // engine now composes) — never a silent thin day. `loader_fill_reason`
+        // explains the loader's contribution or why it fell back.
+        let previewEngineStatus = null;
+        if (previewBetaActive) {
+          const fillInfo =
+            (registeredCityFillSidecar && registeredCityFillSidecar.registered_city_candidate_fill) || {};
+          const mainStops =
+            (result && Array.isArray(result.days) && result.days[0] && result.days[0].primary_route &&
+              Array.isArray(result.days[0].primary_route.main_stops) && result.days[0].primary_route.main_stops) || [];
+          const sourceBackedStops = mainStops.filter((stop) => stop && stop.provisional === true).length;
+          previewEngineStatus = {
+            preview_engine_mode: true,
+            planner_mode: "preview_beta_engine",
+            active: sourceBackedStops > 0,
+            source_backed_stop_count: sourceBackedStops,
+            loader_fill_reason: fillInfo.reason || null,
+            loader_supplemental_count: fillInfo.supplemental_candidate_count || 0,
+          };
+        }
         baselineBody = {
           ...result,
           requested_city: requestedCity,
           city_fallback_used: cityFallbackUsed,
+          ...(previewEngineStatus ? { preview_engine: previewEngineStatus } : {}),
           ...(registeredCityFillSidecar || {}),
           ...(plannerInspectSidecar || {}),
           ...(routeOutputDiagnosticsSidecar || {}),

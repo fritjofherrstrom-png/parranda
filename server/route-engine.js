@@ -4064,18 +4064,46 @@ function buildStopPool(
   // slots verified items left empty once we slice to effectiveSupplementalLimit.
   // This keeps the route spine + verified-dense neighborhoods byte-identical
   // while thin neighborhoods gain honest, clearly-marked fill.
+  // For a PREVIEW citypack, provisional source-backed candidates only have to be
+  // geometrically usable (finite score) rather than clear the full supplemental
+  // score threshold the verified spine is held to — otherwise a thin preview
+  // city's source-backed fill is filtered out before it can supplement the day.
+  // They still rank by score and stay provisional:true. Every other city keeps
+  // the strict threshold, byte-identical.
+  const previewCityProvisional = getActiveCityConfig().visibility === "preview";
   const provisionalSupplemental =
     template.id === AGNOSTIC_COMPOSE_TEMPLATE_ID
       ? buildProvisionalComposeStops()
           .filter((item) => candidateFitsLockedCorridor(item))
           .map(scoreSupplementalCandidate)
-          .filter(passesSupplementalThreshold)
+          .filter((entry) => (previewCityProvisional ? Number.isFinite(entry.score) : passesSupplementalThreshold(entry)))
           .sort((left, right) => right.score - left.score)
       : [];
 
-  const supplemental = [...verifiedSupplemental, ...provisionalSupplemental]
-    .slice(0, effectiveSupplementalLimit)
-    .map((entry) => entry.item);
+  // Preview-city beta supplement. A thin PREVIEW citypack (an early field-test
+  // city such as Athens) keeps its curated catalog as the higher-trust spine,
+  // but lets clearly-marked provisional source-backed candidates SUPPLEMENT it —
+  // filling the slots the thin curated catalog leaves empty — instead of being
+  // crowded out by the verified-first slice. Gated to visibility:"preview", so
+  // every other city stays verified-first and byte-identical. The supplemental
+  // stops stay provisional:true / lower-trust (formatMainStop), so nothing is
+  // presented as curated confidence. This is what makes a thin preview city's
+  // day visibly fuller when a trusted loader has supply.
+  const PREVIEW_PROVISIONAL_SLOTS = 4;
+  const previewSupplement =
+    template.id === AGNOSTIC_COMPOSE_TEMPLATE_ID &&
+    getActiveCityConfig().visibility === "preview" &&
+    provisionalSupplemental.length > 0;
+  let supplemental;
+  if (previewSupplement) {
+    const verifiedSlice = verifiedSupplemental.slice(0, effectiveSupplementalLimit);
+    const room = Math.max(0, effectiveSupplementalLimit + PREVIEW_PROVISIONAL_SLOTS - verifiedSlice.length);
+    supplemental = [...verifiedSlice, ...provisionalSupplemental.slice(0, room)].map((entry) => entry.item);
+  } else {
+    supplemental = [...verifiedSupplemental, ...provisionalSupplemental]
+      .slice(0, effectiveSupplementalLimit)
+      .map((entry) => entry.item);
+  }
 
   return uniqueStops([...hybridBasePool, ...supplemental]);
 }
@@ -5070,6 +5098,25 @@ function buildRouteFromTemplate(
 
   if (!selectedStops.length) {
     selectedStops = sortedPool.slice(0, Math.min(rawPool.length, 3)).map((entry) => entry.item);
+  }
+
+  // Preview-city beta: verified curated items always rank first (the higher-trust
+  // spine), so for a thin preview citypack they crowd out every source-backed
+  // candidate and the day never changes. Reserve a few slots for the top-scoring
+  // provisional source-backed stops so a thin preview city's day is visibly
+  // fuller and more varied when a trusted loader has supply. Gated to preview
+  // visibility + the agnostic-compose path — every other city is byte-identical.
+  // Stops stay provisional:true / lower-trust (formatMainStop), never curated.
+  const PREVIEW_PROVISIONAL_RESERVE = 3;
+  if (getActiveCityConfig().visibility === "preview" && template.id === AGNOSTIC_COMPOSE_TEMPLATE_ID) {
+    const selectedIds = new Set(selectedStops.map((stop) => stop.id));
+    const provisionalPicks = sortedPool
+      .filter((entry) => entry.item.provisional === true && !selectedIds.has(entry.item.id))
+      .slice(0, PREVIEW_PROVISIONAL_RESERVE)
+      .map((entry) => entry.item);
+    if (provisionalPicks.length) {
+      selectedStops = [...selectedStops, ...provisionalPicks];
+    }
   }
 
   if (
