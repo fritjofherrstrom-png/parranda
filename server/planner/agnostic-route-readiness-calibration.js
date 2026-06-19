@@ -237,6 +237,13 @@ function finiteOrNull(value) {
 }
 
 function isExternalStop(stop) {
+  // A provisional source candidate is external/unverified by definition. Engine
+  // agnostic_compose stops carry `provisional: true` (via formatMainStop) but no
+  // `origin` field, whereas the legacy synthesizer's stops carry an external
+  // `origin` — recognize both so an all-source-backed any-place route always
+  // trips capped_by_external_only_sources and stays honestly thin_usable, never
+  // usable.
+  if (stop?.provisional === true) return true;
   const origin = String(stop?.origin || "").toLowerCase();
   return origin.includes("external") || origin.includes("open");
 }

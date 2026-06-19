@@ -26,6 +26,7 @@ const {
   composeAgnosticRouteOutput,
   buildBlockedAgnosticRouteOutputExperiment,
 } = require("./planner/agnostic-route-output");
+const { evaluateAgnosticPromotion } = require("./planner/agnostic-promotion-gate");
 const { resolveAgnosticIntake, parsePlaceQuery } = require("./planner/agnostic-place-intake");
 const { collectPlaceCandidatesForCity } = require("./place-candidates/provider-registry");
 const { resolveDefaultOpenDataLoader } = require("./place-candidates/open-data-loader");
@@ -557,6 +558,25 @@ function isAgnosticRouteOutputExperimentRequested(request) {
     isTruthyInspectFlag(body.experimentalAgnosticRouteOutput) ||
     inspectListHas(query.experiment, "agnostic_route_output") ||
     inspectListHas(body.experiment, "agnostic_route_output")
+  );
+}
+
+// Convergence gate (env/flag-gated, default off). When set, the agnostic route
+// is synthesized through the route engine's own agnostic_compose and only
+// PROMOTED to the returned route when the readiness calibration clears the
+// thin_usable/low bar (else baseline + diagnostic). Default-off keeps the
+// legacy in-module synthesizer and the prior always-return behavior unchanged,
+// and respects "no public flip without persistent cache" — production opts in
+// via PARRANDA_AGNOSTIC_ENGINE_COMPOSE only when ready.
+function isAgnosticEngineComposeRequested(request) {
+  const query = request.query || {};
+  const body = request.body || {};
+  return (
+    isTruthyInspectFlag(process.env.PARRANDA_AGNOSTIC_ENGINE_COMPOSE) ||
+    isTruthyInspectFlag(query.agnostic_engine_compose) ||
+    isTruthyInspectFlag(query.agnosticEngineCompose) ||
+    isTruthyInspectFlag(body.agnostic_engine_compose) ||
+    isTruthyInspectFlag(body.agnosticEngineCompose)
   );
 }
 
@@ -1850,6 +1870,7 @@ function buildApp({
       // resolution does NOT satisfy route eligibility on its own: external
       // candidate opt-in + the trusted server openDataLoader are still required
       // inside composeAgnosticRouteOutput. Public payload never becomes trusted.
+      const useEngineCompose = isAgnosticEngineComposeRequested(request);
       const { result: experimentResult, experiment } = await composeAgnosticRouteOutput({
         coords: anchor,
         baselineResult: baselineBody,
@@ -1870,8 +1891,33 @@ function buildApp({
         weatherProvider,
         clock,
         trustedTimezone: intake.resolved?.timezone || null,
+        synthesizeVia: useEngineCompose ? "engine" : "legacy",
       });
       experiment.intake = intake;
+
+      // Promotion gate (engine-compose path only). The legacy path keeps its
+      // prior behavior — the experiment route is always returned. On the engine
+      // path, the synthesized route only REPLACES the baseline when calibration
+      // clears the honest thin_usable/low bar with promotable caps and the anchor
+      // resolved strongly (the intake already fails closed on weak resolves, so
+      // this is a defensive re-check). Otherwise the baseline is returned and the
+      // route stays in the diagnostic experiment block.
+      if (useEngineCompose) {
+        const strongAnchor =
+          intake.resolved?.confidence === "explicit" ||
+          ["high", "medium"].includes(String(intake.resolved?.confidence ?? "").toLowerCase());
+        const promotion = evaluateAgnosticPromotion({
+          calibration: experiment.readiness_calibration,
+          strongAnchor,
+        });
+        experiment.promotion = promotion;
+        response.json({
+          ...(promotion.promote ? experimentResult : baselineBody),
+          agnostic_route_output_experiment: experiment,
+        });
+        return;
+      }
+
       response.json({
         ...experimentResult,
         agnostic_route_output_experiment: experiment,
