@@ -110,6 +110,18 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 
 Still missing before a true any-place Planner (now the next steps): stronger generic candidate supply where source-backed candidates are sparse, richer single-day composition quality after calibration, time-sensitive source events feeding dayflow/route composition, multi-day experimental output, persistent geocode caching / a paid-or-self-hosted geocoder for scale, and live ETA / real-time routing (explicitly out of scope).
 
+## Why the agnostic feel isn't in the product yet — synthesis vs supply vs source-fit
+
+Audited 2026-06-19 from real Athens dogfooding (the felt experience was unchanged despite the convergence work). "Agnostic feel" has **three independent halves**; shipping one does not move the product on its own:
+
+1. **Synthesis** — compose an honest day from whatever candidates exist (route-engine `agnostic_compose` + daypart ordering #293 + readiness gate/observability #290/#292/#295). **Built and proven.** The #295 probe shows the engine path is promotion-`eligible` under adequate supply and `blocked` only by supply-driven caps. Deliberately gated/unpromoted per the guardrail.
+2. **Supply** — enough trusted source-backed candidates that even a thin city composes a *rich* day. **This is the gating lever, and it has not landed.** It is the candidate-reservoir / registered-thin-city fill work (Codex track). Until it lands, no amount of synthesis work changes the felt product.
+3. **Live-source fit** — pulse feeds that are culturally relevant, not administrative. Athens's wired City-of-Athens events calendar returns HTTP 200 but mostly municipal council meetings (`Συνεδρίαση …`) → "same pulse". This is source selection + salience (pulse lane), not a wiring failure.
+
+Evidence from Athens (registered, thin): **26 verified catalog items, 4 provisional candidates, 0 templates.** Two consequences make the synthesis work invisible there: (a) Athens is a **registered** city, so the entire any-place stack (convergence / promotion gate / observability) is gated behind `noRecognizedCity` and **never runs for it**; (b) #293 daypart ordering is **inert for Athens** because its 26 catalog items carry no `route_roles` (only the 4 provisional candidates do). So the synthesis we shipped does not touch Athens's felt experience.
+
+**Implication (anti-drift):** the synthesis engine is **ready and starved**. The bottleneck to "Parranda feels agnostic" is **supply** and **source-fit**, not more synthesis. Do not keep building synthesis expecting the product to change — it will not until supply lands. Ownership split: **supply → Codex (gating)**, **source-fit → pulse lane**, **synthesis → ready, awaiting supply + a deliberate promotion**.
+
 ## Anti-drift rule
 
 Every PR in the agnostic/planner line must be one of:
