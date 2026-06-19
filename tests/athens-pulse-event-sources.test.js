@@ -157,7 +157,8 @@ test("Athens event source failures fail soft without breaking source collection"
 
     assert.deepEqual(result.time_sensitive_events, []);
     const citySource = result.source_status.find((status) => status.id === "athens-city-events-calendar");
-    assert.equal(citySource.status, "ok");
+    assert.equal(citySource.status, "failed");
+    assert.equal(citySource.reason, "source temporarily unavailable");
     assert.equal(citySource.time_sensitive_events, 0);
   } finally {
     global.fetch = originalFetch;

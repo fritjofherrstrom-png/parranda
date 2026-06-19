@@ -90,12 +90,12 @@ function createEventsCalendarProvider(providerOptions = {}) {
               signal: controller.signal,
             });
             if (!response || response.ok !== true) {
-              return { events: [], signals: [], time_sensitive_events: [] };
+              throw new Error(`source_http_${response?.status || "not_ok"}`);
             }
             contentType = response.headers?.get?.("content-type") || "";
             body = await readResponseBody(response);
-          } catch (_error) {
-            return { events: [], signals: [], time_sensitive_events: [] };
+          } catch (error) {
+            throw new Error(error?.message || "source_fetch_failed");
           } finally {
             clearTimeout(timer);
           }

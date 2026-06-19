@@ -290,14 +290,14 @@ test("no endpoint, non-200, thrown error, and malformed payload fail soft", asyn
     [],
   );
 
-  assert.deepEqual(
-    (await collectPulseSourcesForCity(city, {
-      providerSpecs: [provider({ fetcher: async () => ({ ok: false, status: 503 }) })],
-      enabledStatuses: ["candidate"],
-      context: { now: NOW },
-    })).time_sensitive_events,
-    [],
-  );
+  const nonOk = await collectPulseSourcesForCity(city, {
+    providerSpecs: [provider({ fetcher: async () => ({ ok: false, status: 503 }) })],
+    enabledStatuses: ["candidate"],
+    context: { now: NOW },
+  });
+  assert.deepEqual(nonOk.time_sensitive_events, []);
+  assert.equal(nonOk.source_status[0].status, "failed");
+  assert.equal(nonOk.source_status[0].reason, "source_http_503");
 
   const thrown = await collectPulseSourcesForCity(city, {
     providerSpecs: [provider({ fetcher: async () => { throw new Error("boom"); } })],
@@ -305,7 +305,8 @@ test("no endpoint, non-200, thrown error, and malformed payload fail soft", asyn
     context: { now: NOW },
   });
   assert.deepEqual(thrown.time_sensitive_events, []);
-  assert.equal(thrown.source_status[0].status, "ok", "fail-soft inside collect, not a registry failure");
+  assert.equal(thrown.source_status[0].status, "failed", "fetch failure is reported honestly but fail-soft");
+  assert.equal(thrown.source_status[0].reason, "boom");
 
   assert.deepEqual(extractEventsCalendarSourceEvents("{not json", { format: "json" }), []);
 });
