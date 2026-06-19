@@ -26,6 +26,7 @@ const {
   composeAgnosticRouteOutput,
   buildBlockedAgnosticRouteOutputExperiment,
 } = require("./planner/agnostic-route-output");
+const { buildRegisteredCityCandidateFill } = require("./planner/registered-city-candidate-fill");
 const { evaluateAgnosticPromotion } = require("./planner/agnostic-promotion-gate");
 const { buildEngineReadinessVerdict } = require("./planner/agnostic-engine-readiness");
 const { resolveAgnosticIntake, parsePlaceQuery } = require("./planner/agnostic-place-intake");
@@ -1751,9 +1752,11 @@ function buildApp({
 
       // #259 — the explicit experiment flag is the ONLY thing that may mutate or
       // synthesize route output. It is parsed independently of `inspect`. The
-      // agnostic gate mirrors /api/blitz: valid coords + no recognized citypack
-      // (unknown/fallback city, or no city sent at all). Recognized cities stay
-      // on the default path untouched.
+      // agnostic gate mirrors /api/blitz for ROUTE REPLACEMENT: valid coords +
+      // no recognized citypack (unknown/fallback city, or no city sent at all).
+      // Recognized citypacks do not enter the any-place replacement path; thin
+      // registered cities may only receive source-backed supplemental fill below
+      // when the explicit engine/external flags are present.
       const experimentRequested = isAgnosticRouteOutputExperimentRequested(request);
       const experimentCoords = parseBlitzCoordinates(request);
       // #260 — freeform place query, from the public `place` / `place_query` /
@@ -1795,10 +1798,40 @@ function buildApp({
           }, { routedDayCount: 0 }),
         };
       } else {
-        const result = diversifyRecommendationDays(await generateRecommendations(payload));
+        const registeredCityFillEligible =
+          experimentRequested &&
+          isAgnosticEngineComposeRequested(request) &&
+          isExternalCandidatesRequested(request) &&
+          !noRecognizedCity &&
+          curatedDensityOf(cityConfig) === "thin";
+        let generationCityConfig = cityConfig;
+        let registeredCityFillSidecar = null;
+        if (registeredCityFillEligible) {
+          const roleOrigin = resolvePlannerRoleOrigin(cityConfig, request.body || {});
+          const rolePayload = buildPlannerRolePayload(cityConfig, request, payload, roleOrigin);
+          const { helpers, sourceStatus } = await resolvePlannerRoleHelpers({
+            externalRequested: true,
+            openDataLoader,
+            anchor: roleOrigin,
+          });
+          const fill = buildRegisteredCityCandidateFill({
+            cityConfig,
+            rolePayload,
+            roleOrigin,
+            helpers,
+            sourceStatus,
+            catalogDensity: "thin",
+          });
+          generationCityConfig = fill.cityConfig || cityConfig;
+          registeredCityFillSidecar = { registered_city_candidate_fill: fill.sidecar };
+        }
+        const result = diversifyRecommendationDays(await generateRecommendations({
+          ...payload,
+          ...(generationCityConfig !== cityConfig ? { cityConfigOverride: generationCityConfig } : {}),
+        }));
         const plannerInspectSidecar = isPlannerCandidateInspectRequested(request)
           ? await buildPlannerCandidateInspectSidecar({
-              cityConfig,
+              cityConfig: generationCityConfig,
               request,
               routePayload: payload,
               routeResult: result,
@@ -1816,7 +1849,7 @@ function buildApp({
           : null;
         const agnosticRouteCandidateSidecar = isAgnosticRouteCandidateInspectRequested(request)
           ? await buildAgnosticRouteCandidateSidecar({
-              cityConfig,
+              cityConfig: generationCityConfig,
               request,
               routePayload: payload,
               routeResult: result,
@@ -1827,6 +1860,7 @@ function buildApp({
           ...result,
           requested_city: requestedCity,
           city_fallback_used: cityFallbackUsed,
+          ...(registeredCityFillSidecar || {}),
           ...(plannerInspectSidecar || {}),
           ...(routeOutputDiagnosticsSidecar || {}),
           ...(agnosticRouteCandidateSidecar || {}),

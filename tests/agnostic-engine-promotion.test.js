@@ -4,7 +4,7 @@
  * when calibration clears the honest thin_usable/low bar.
  *
  * Proves the brief's acceptance behaviors:
- *   - registered-city behavior is unchanged (the engine flag is a no-op there);
+ *   - rich registered-city behavior is unchanged (the engine flag is a no-op there);
  *   - an unsupported, strongly-resolved place enters agnostic_compose ONLY under
  *     the gate, and a healthy route is promoted (synthesized_via the engine);
  *   - a thin/insufficient supply does NOT promote — baseline returned, honest;
@@ -134,14 +134,15 @@ test(
 );
 
 test(
-  "a registered citypack is untouched even with the engine flag set",
+  "a rich registered citypack is untouched even with the engine flag set",
   withServer(makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })), async (server) => {
     const r = await requestJson(server, {
       path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
       body: { city: "rome", dates: [DATE] },
     });
-    // A recognized city never enters the agnostic path — no experiment, no gate.
+    // A rich recognized city never enters the supplemental fill or any-place path.
     assert.equal(r.body.agnostic_route_output_experiment, undefined);
+    assert.equal(r.body.registered_city_candidate_fill, undefined);
     assert.equal(r.body.city, "rome");
     assert.ok(Array.isArray(r.body.days));
   }),

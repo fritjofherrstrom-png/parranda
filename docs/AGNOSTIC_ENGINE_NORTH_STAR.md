@@ -221,6 +221,7 @@ The current direction should be:
 #283 — IN PROGRESS: Linked Events provider (reachable no-key feed, env-wired, LIVE-validated against api.hel.fi, not consumed)
 #convergence-1 — DONE (#290): any-place routes through the engine's own agnostic_compose (generateAgnosticRecommendations + cityConfigOverride seam, byte-stable; buildStopPool seeds provisional-only when catalog empty). Dormant.
 #convergence-2 — DONE: candidate-supply mapper + thin_usable/low promotion gate + app wiring behind PARRANDA_AGNOSTIC_ENGINE_COMPOSE (default off). Legacy synthesizer staged for removal. Pending before public flip: persistent cache, daypart→compose ordering, retire legacy synthesizer.
+#registered-reservoir — DONE: registered-but-thin citypacks can opt into the same source-backed candidate reservoir as supplemental fill behind explicit experiment/external flags. Curated citypack candidates remain the higher-trust spine; source-backed fill stays provisional, low-trust, attributed, and never citypack-owned.
 ```
 
 The numbers may shift, but the sequence should not drift back into endless diagnostics.
