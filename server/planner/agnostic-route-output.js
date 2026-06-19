@@ -37,6 +37,11 @@ const { buildAgnosticRouteOrdering, daypartForRole, timeBandRank } = require("./
 const { resolveAgnosticContext, collectInfluenceReasons } = require("./agnostic-route-context");
 const { buildDayflowContext } = require("./dayflow-context");
 const { calibrateAgnosticRouteReadiness } = require("./agnostic-route-readiness-calibration");
+const { generateAgnosticRecommendations } = require("../route-engine");
+const {
+  buildAgnosticEngineCityConfig,
+  mapAdmittedSelectionToSourceCandidates,
+} = require("./agnostic-engine-compose");
 
 // A route needs at least an ordered pair of geocoded, stable-id stops. Fewer
 // than this is honestly "not a route".
@@ -513,6 +518,12 @@ async function composeAgnosticRouteOutput({
   weatherProvider = null,
   clock = null,
   trustedTimezone = null,
+  // Synthesis backend. "engine" routes the admitted candidates through the
+  // route engine's own agnostic_compose (the convergence path); "legacy" keeps
+  // the in-module experimental synthesizer (default, so existing callers/tests
+  // are unchanged). The legacy synthesizer is staged for removal once the engine
+  // path is proven in production.
+  synthesizeVia = "legacy",
 }) {
   const agnosticContext = buildAgnosticCityContext({
     lat: coords.lat,
@@ -634,6 +645,32 @@ async function composeAgnosticRouteOutput({
     });
     experiment.context = contextBlock;
     return { result: baselineResult, experiment };
+  }
+
+  // Convergence path: synthesize the route through the engine's own
+  // agnostic_compose instead of the in-module experimental synthesizer. The
+  // admitted candidates become the engine's source candidates; the engine owns
+  // geometry/ordering/walking-truth and the honesty markers. Daypart rhythm
+  // (#274–278) is preserved as a label, not the sequencer (follow-up promotes it
+  // into compose ordering).
+  if (synthesizeVia === "engine") {
+    return composeAgnosticRouteViaEngine({
+      agnosticContext,
+      origin,
+      effectiveDate,
+      plannerRoles,
+      candidateCombination,
+      eligibility,
+      candidateReadiness,
+      sourceStatus,
+      contextBlock,
+      ctx,
+      baselineResult,
+      walkingKmTarget: Number.isFinite(walkingBudget?.targetKm) ? walkingBudget.targetKm : undefined,
+      preferences,
+      timezone,
+      lang,
+    });
   }
 
   // #276 — time-anchored selection. ONLY for a today-dated request with a
@@ -789,6 +826,124 @@ async function composeAgnosticRouteOutput({
     result: mutated,
     experiment,
   };
+}
+
+// Convergence synthesizer: route the admitted candidates through the route
+// engine's own agnostic_compose. The engine owns geometry/ordering/walking-truth
+// and stamps the honesty markers (routing_source "agnostic_compose",
+// confidence "low", provisional stops). Calibration + the experiment block are
+// computed the same way as the legacy path, so the promotion gate and inspect
+// surfaces see an identical shape.
+async function composeAgnosticRouteViaEngine({
+  agnosticContext,
+  origin,
+  effectiveDate,
+  plannerRoles,
+  candidateCombination,
+  eligibility,
+  candidateReadiness,
+  sourceStatus,
+  contextBlock,
+  baselineResult,
+  walkingKmTarget,
+  preferences,
+  timezone,
+  lang,
+}) {
+  const sourceCandidates = mapAdmittedSelectionToSourceCandidates({
+    selected: (candidateCombination && candidateCombination.selected) || [],
+    plannerRoles,
+    city: agnosticContext.key,
+  });
+
+  const engineCityConfig = buildAgnosticEngineCityConfig({
+    anchor: origin,
+    sourceCandidates,
+    timezone: timezone || "UTC",
+    todayIsoDate: agnosticContext.todayIsoDate,
+    label: agnosticContext.label,
+    key: agnosticContext.key,
+  });
+
+  const engineResult = await generateAgnosticRecommendations({
+    cityConfig: engineCityConfig,
+    dates: [effectiveDate],
+    start: { type: "auto" },
+    end: { type: "auto" },
+    walkingKmTarget: Number.isFinite(walkingKmTarget) ? walkingKmTarget : 6,
+    preferences: Array.isArray(preferences) ? preferences : [],
+    lang,
+  });
+
+  const engineDay = (engineResult && Array.isArray(engineResult.days) && engineResult.days[0]) || null;
+  const engineRoute = (engineDay && engineDay.primary_route) || null;
+
+  // No coherent walk (engine returns < 2 viable stops → null route). Honest
+  // empty; baseline unchanged, explicit thin blocker.
+  if (!engineRoute) {
+    const thinEligibility = {
+      ...eligibility,
+      eligible: false,
+      blockers: dedupe([...(eligibility.blockers || []), "agnostic_compose_too_thin"]),
+    };
+    const experiment = buildExperimentBlock({
+      routeMutation: false,
+      eligibility: thinEligibility,
+      baselineResult,
+      candidateReadiness,
+      experimentalRoute: null,
+      sourceStatus,
+      context: contextBlock,
+    });
+    experiment.context = contextBlock;
+    experiment.synthesized_via = "agnostic_compose_engine";
+    return { result: baselineResult, experiment };
+  }
+
+  // Engine geometry owns the actual stop order. Daypart rhythm (#274–278) is a
+  // label here, not the sequencer — promoting it into compose ordering is a
+  // follow-up, so we record the intent honestly rather than fabricate an arc.
+  const routeOrdering = {
+    source: "engine_geometry",
+    applied: false,
+    changed: false,
+    confidence: "engine_compose",
+    daypart_arc: null,
+    reasons: ["engine_geometry_ordering", "daypart_promotion_pending"],
+  };
+  // The engine only returns a route after its own walking-truth pass, so a
+  // present route is walking-coherent. We do not claim a budget check the engine
+  // did not run; the source string marks where validation came from.
+  const walkingSummary = {
+    valid: true,
+    blockers: [],
+    checks: { walking_source: engineRoute.routing_source || "agnostic_compose" },
+  };
+  const dayflowContextPresent = Boolean(engineDay.dayflow_context);
+
+  const experiment = buildExperimentBlock({
+    routeMutation: true,
+    eligibility,
+    baselineResult,
+    candidateReadiness,
+    experimentalRoute: engineRoute,
+    sourceStatus,
+    walkingValidation: walkingSummary,
+    routeOrdering,
+    context: contextBlock,
+    dayflowContextPresent,
+  });
+  experiment.walking_validation = walkingSummary;
+  experiment.route_ordering = routeOrdering;
+  experiment.context = contextBlock;
+  experiment.synthesized_via = "agnostic_compose_engine";
+
+  const result = applyRouteMutation({ baselineResult, primaryRoute: engineRoute, date: effectiveDate });
+  if (engineDay.dayflow_context && Array.isArray(result.days) && result.days[0]) {
+    result.days[0].dayflow_context = engineDay.dayflow_context;
+  }
+
+  return { result, experiment };
 }
 
 function toWalkingStops(adaptedBody) {

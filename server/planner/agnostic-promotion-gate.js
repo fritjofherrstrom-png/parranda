@@ -52,7 +52,11 @@ function evaluateAgnosticPromotion({ calibration = null, strongAnchor = false } 
   const status = calibration.status || null;
   const level = calibration.level || null;
   const caps = Array.isArray(calibration.caps) ? calibration.caps : [];
-  const blockedCaps = caps.filter((cap) => !ALLOWED_CAPS.has(cap));
+  // Only `capped_by_*` tokens are real limitations; the always-present
+  // `experimental_agnostic_route` marker (and any non-capped_by reason) is not a
+  // promotion blocker. Mirror calibration's own cappedByTokens filter.
+  const realCaps = caps.filter((cap) => String(cap).startsWith("capped_by_"));
+  const blockedCaps = realCaps.filter((cap) => !ALLOWED_CAPS.has(cap));
 
   if (!strongAnchor) reasons.push("anchor_not_strong");
   if (!PROMOTABLE_STATUSES.has(status)) reasons.push(`status_not_promotable:${status || "none"}`);

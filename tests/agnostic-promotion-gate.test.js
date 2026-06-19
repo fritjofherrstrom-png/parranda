@@ -83,6 +83,15 @@ test("a medium-level usable route promotes (forward-compatible even if unreachab
   assert.equal(verdict.promote, true);
 });
 
+test("the always-present experimental_agnostic_route marker is not a blocking cap", () => {
+  const verdict = evaluateAgnosticPromotion({
+    calibration: calibration({ caps: ["experimental_agnostic_route", "capped_by_external_only_sources"] }),
+    strongAnchor: true,
+  });
+  assert.equal(verdict.promote, true);
+  assert.deepEqual(verdict.blocked_caps, []);
+});
+
 test("missing calibration never promotes, never throws", () => {
   assert.equal(evaluateAgnosticPromotion({ calibration: null, strongAnchor: true }).promote, false);
   assert.equal(evaluateAgnosticPromotion({}).promote, false);
