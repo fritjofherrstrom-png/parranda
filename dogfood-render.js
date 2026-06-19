@@ -108,6 +108,25 @@
     capped_by_thin_day: "dogfood.calibration.cap.capped_by_thin_day",
   };
 
+  // Engine-path retirement-readiness observability (#engine-readiness). Maps the
+  // promotion decision + the "remaining before legacy can be retired" tokens to
+  // captions. capped_by_* tokens fall back to CALIBRATION_CAP_KEYS so the gate's
+  // blocking caps read identically wherever they surface.
+  var ENGINE_READINESS_DECISION_KEYS = {
+    eligible: "dogfood.engine_readiness.decision.eligible",
+    blocked: "dogfood.engine_readiness.decision.blocked",
+    unknown: "dogfood.engine_readiness.decision.unknown",
+  };
+  var ENGINE_READINESS_REMAINING_KEYS = {
+    engine_path_not_active: "dogfood.engine_readiness.remaining.engine_path_not_active",
+    no_promotion_verdict: "dogfood.engine_readiness.remaining.no_promotion_verdict",
+    promotion_blocked_unspecified: "dogfood.engine_readiness.remaining.promotion_blocked_unspecified",
+    anchor_not_strong: "dogfood.engine_readiness.remaining.anchor_not_strong",
+    capped_by_non_promotable: "dogfood.engine_readiness.remaining.capped_by_non_promotable",
+    status_not_promotable: "dogfood.engine_readiness.remaining.status_not_promotable",
+    level_not_promotable: "dogfood.engine_readiness.remaining.level_not_promotable",
+  };
+
   // i18n bootstrap is { lang, strings: { key: value } }. We never embed user-facing
   // copy in this module: callers pass an i18n object (the test stubs are tiny).
   function translate(i18n, key, fallback) {
@@ -215,6 +234,52 @@
         : [],
       caps: Array.isArray(calibration.caps)
         ? calibration.caps.filter(isString).map(function (token) { return calibrationCapTile(token, i18n); })
+        : [],
+    };
+  }
+
+  // ----- Engine-path retirement-readiness -----------------------------------
+
+  function engineRemainingTile(token, i18n) {
+    // status_not_promotable:<x> / level_not_promotable:<x> carry a suffix; key on
+    // the prefix but keep the full token visible.
+    var colon = token.indexOf(":");
+    var base = colon > -1 ? token.slice(0, colon) : token;
+    var key = ENGINE_READINESS_REMAINING_KEYS[token]
+      || ENGINE_READINESS_REMAINING_KEYS[base]
+      || CALIBRATION_CAP_KEYS[token];
+    var caption = key
+      ? translate(i18n, key, token)
+      : translate(i18n, "dogfood.engine_readiness.remaining.unknown", token) + " (" + token + ")";
+    return { token: token, caption: sanitize(caption) };
+  }
+
+  function buildEngineReadinessSummary(experiment, i18n) {
+    var readiness = experiment && experiment.engine_readiness;
+    if (!readiness) return null;
+    var decision = isString(readiness.promotion_decision) ? readiness.promotion_decision : "unknown";
+    var dp = readiness.daypart || null;
+    return {
+      enginePathActive: Boolean(readiness.engine_path_active),
+      synthesizedVia: isString(readiness.synthesized_via) ? readiness.synthesized_via : null,
+      decision: decision,
+      decisionLabel: translate(i18n, ENGINE_READINESS_DECISION_KEYS[decision] || ENGINE_READINESS_DECISION_KEYS.unknown, decision),
+      guide: translate(i18n, "dogfood.engine_readiness.guide." + decision, decision),
+      retirementReady: Boolean(readiness.retirement_ready),
+      daypart: dp
+        ? {
+            applied: Boolean(dp.applied),
+            fallback: Boolean(dp.fallback),
+            reason: isString(dp.reason) ? dp.reason : null,
+            caption: translate(
+              i18n,
+              "dogfood.engine_readiness.daypart." + (dp.fallback ? "fallback" : dp.applied ? "applied" : "none"),
+              dp.reason || "",
+            ),
+          }
+        : null,
+      remaining: Array.isArray(readiness.remaining_for_default)
+        ? readiness.remaining_for_default.filter(isString).map(function (token) { return engineRemainingTile(token, i18n); })
         : [],
     };
   }
@@ -412,6 +477,7 @@
       blockers: [],
       caveats: [],
       calibration: null,
+      engineReadiness: null,
       intake: null,
       context: null,
       walking: null,
@@ -423,6 +489,7 @@
 
     view.blockers = collectBlockerTokens(experiment).map(function (token) { return blockerTile(token, i18n); });
     view.calibration = buildCalibrationSummary(experiment, i18n);
+    view.engineReadiness = buildEngineReadinessSummary(experiment, i18n);
     view.caveats = Array.isArray(experiment.caveats)
       ? experiment.caveats.map(function (token) { return caveatTile(token, i18n); })
       : [];
@@ -480,6 +547,8 @@
     CALIBRATION_STATUS_KEYS: CALIBRATION_STATUS_KEYS,
     CALIBRATION_REASON_KEYS: CALIBRATION_REASON_KEYS,
     CALIBRATION_CAP_KEYS: CALIBRATION_CAP_KEYS,
+    ENGINE_READINESS_DECISION_KEYS: ENGINE_READINESS_DECISION_KEYS,
+    ENGINE_READINESS_REMAINING_KEYS: ENGINE_READINESS_REMAINING_KEYS,
     translate: translate,
     sanitize: sanitize,
     buildBanner: buildBanner,
@@ -487,6 +556,7 @@
     caveatTile: caveatTile,
     collectBlockerTokens: collectBlockerTokens,
     buildCalibrationSummary: buildCalibrationSummary,
+    buildEngineReadinessSummary: buildEngineReadinessSummary,
     buildIntakeSummary: buildIntakeSummary,
     buildContextSummary: buildContextSummary,
     buildWalkingChecksSummary: buildWalkingChecksSummary,
