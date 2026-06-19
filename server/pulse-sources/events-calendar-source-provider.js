@@ -15,23 +15,37 @@ const DEFAULT_TIMEOUT_MS = 8000;
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 
-function buildDescriptor({ label, sourceUrl, license, status = "candidate", sourceType = "official_website" } = {}) {
+function buildDescriptor({
+  id,
+  label,
+  sourceUrl,
+  license,
+  status = "candidate",
+  sourceType = "official_website",
+  supportedLanguages,
+  updateCadence,
+  parsingRisk,
+  trust,
+} = {}) {
   const descriptor = {
-    id: EVENTS_CALENDAR_PROVIDER_ID,
+    id: id || EVENTS_CALENDAR_PROVIDER_ID,
     label: label || "The Events Calendar / iCal",
     city: GENERIC_PROVIDER_CITY,
     role: "official_live_baseline",
     sourceType,
     status,
     intendedUse: "pulse",
-    supportedLanguages: ["en"],
-    updateCadence: "hourly",
-    parsingRisk: "medium",
+    supportedLanguages: Array.isArray(supportedLanguages) && supportedLanguages.length
+      ? supportedLanguages
+      : ["en"],
+    updateCadence: updateCadence || "hourly",
+    parsingRisk: parsingRisk || "medium",
     trust: {
       source_tier: "official",
       confidence: "medium",
       human_verified: false,
       freshness: "fresh",
+      ...(trust && typeof trust === "object" ? trust : {}),
     },
     cachePolicy: { kind: "memory", ttlSeconds: 1800 },
     sourceOwnedFields: ["title", "starts_at", "ends_at", "lat", "lng", "source_url", "place_context"],

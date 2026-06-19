@@ -12,6 +12,7 @@ const noopServices = optionalRequire("../noop-services");
 const geocoding = optionalRequire("../../geocoding");
 const weather = optionalRequire("../../weather");
 const weatherContextProvider = optionalRequire("../../pulse-sources/weather-context-provider");
+const eventsCalendarSourceProvider = optionalRequire("../../pulse-sources/events-calendar-source-provider");
 
 const athensEditorial = createEditorialService(ATHENS_LABEL);
 const geocodeQuery = createGeocodeQuery();
@@ -110,6 +111,83 @@ function fetchLiveEventsForDates(dates = []) {
   );
 }
 
+function createReviewNeededPulseSourceProvider({ id, label, sourceUrl, sourceType, role, supportedLanguages }) {
+  const descriptor = {
+    id,
+    label,
+    city: ATHENS_KEY,
+    role,
+    sourceType,
+    sourceUrl,
+    status: "candidate",
+    intendedUse: "pulse",
+    supportedLanguages,
+    updateCadence: "daily",
+    parsingRisk: "review-needed",
+    trust: {
+      source_tier: "verified",
+      confidence: "low",
+      human_verified: false,
+      freshness: "unknown",
+    },
+    cachePolicy: { kind: "memory", ttlSeconds: 1800 },
+    sourceOwnedFields: ["title", "starts_at", "ends_at", "source_url", "place_context"],
+    parrandaOwnedFields: ["intents", "route_role_hint"],
+  };
+  return {
+    descriptor,
+    create(cityConfig) {
+      return {
+        descriptor: { ...descriptor, city: cityConfig?.key || ATHENS_KEY },
+        async collect() {
+          return { events: [], signals: [], time_sensitive_events: [] };
+        },
+      };
+    },
+  };
+}
+
+function createAthensPulseSourceProviders() {
+  const providers = [];
+  if (weatherContextProvider?.createWeatherContextProvider) {
+    providers.push(weatherContextProvider.createWeatherContextProvider());
+  }
+  if (eventsCalendarSourceProvider?.createEventsCalendarProvider) {
+    providers.push(
+      eventsCalendarSourceProvider.createEventsCalendarProvider({
+        id: "athens-city-events-calendar",
+        endpoint: "https://www.cityofathens.gr/wp-json/tribe/events/v1/events?per_page=20",
+        format: "json",
+        label: "City of Athens events calendar",
+        sourceUrl: "https://www.cityofathens.gr/en/calendar-events/",
+        license: "Official public calendar; reuse terms review pending",
+        status: "active",
+        sourceType: "official_api",
+        supportedLanguages: ["el", "en"],
+        updateCadence: "hourly",
+        parsingRisk: "medium",
+        trust: {
+          source_tier: "official",
+          confidence: "medium",
+          human_verified: false,
+          freshness: "fresh",
+        },
+      }),
+    );
+  }
+  providers.push(
+    createReviewNeededPulseSourceProvider({
+      id: "athens-megaron-calendar-candidate",
+      label: "Megaron Athens events calendar",
+      sourceUrl: "https://www.megaron.gr/en/events-2/calendar/",
+      sourceType: "venue_feed",
+      role: "venue_programming",
+      supportedLanguages: ["el", "en"],
+    }),
+  );
+  return providers;
+}
+
 module.exports = {
   key: ATHENS_KEY,
   label: ATHENS_LABEL,
@@ -193,9 +271,7 @@ module.exports = {
     getCityPulse: athensEditorial.getCityPulse,
     getDateSignals: athensEditorial.getDateSignals,
     fetchLiveEventsForDates,
-    pulseSourceProviders: weatherContextProvider
-      ? [weatherContextProvider.createWeatherContextProvider()]
-      : [],
+    pulseSourceProviders: createAthensPulseSourceProviders(),
     signalGenerators: [],
   },
   walking: {
