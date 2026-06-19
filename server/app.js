@@ -27,6 +27,7 @@ const {
   buildBlockedAgnosticRouteOutputExperiment,
 } = require("./planner/agnostic-route-output");
 const { evaluateAgnosticPromotion } = require("./planner/agnostic-promotion-gate");
+const { buildEngineReadinessVerdict } = require("./planner/agnostic-engine-readiness");
 const { resolveAgnosticIntake, parsePlaceQuery } = require("./planner/agnostic-place-intake");
 const { collectPlaceCandidatesForCity } = require("./place-candidates/provider-registry");
 const { resolveDefaultOpenDataLoader } = require("./place-candidates/open-data-loader");
@@ -1911,6 +1912,10 @@ function buildApp({
           strongAnchor,
         });
         experiment.promotion = promotion;
+        // Retirement-readiness observability: a consolidated, honest verdict on
+        // whether the engine path is ready to become the default synthesizer,
+        // and if not, exactly what remains. Read-only; promotes nothing.
+        experiment.engine_readiness = buildEngineReadinessVerdict(experiment);
         response.json({
           ...(promotion.promote ? experimentResult : baselineBody),
           agnostic_route_output_experiment: experiment,
@@ -1918,6 +1923,9 @@ function buildApp({
         return;
       }
 
+      // Legacy path: surface the same verdict so a tester can see they are NOT
+      // on the engine path (engine_path_active: false) — no behavior change.
+      experiment.engine_readiness = buildEngineReadinessVerdict(experiment);
       response.json({
         ...experimentResult,
         agnostic_route_output_experiment: experiment,

@@ -197,6 +197,40 @@
     }
   }
 
+  function renderEngineReadiness(view) {
+    var node = $("dogfoodEngineReadiness");
+    clear(node);
+    if (!view.engineReadiness) {
+      node.hidden = true;
+      return;
+    }
+    node.hidden = false;
+    var r = view.engineReadiness;
+    node.setAttribute("data-decision", r.decision);
+    node.appendChild(el("h3", "dogfood-engine-readiness-heading", t("dogfood.engine_readiness.heading", "Engine-path readiness")));
+
+    var badge = el("div", "dogfood-engine-readiness-badge");
+    badge.setAttribute("data-decision", r.decision);
+    var token = el("span", "dogfood-engine-readiness-decision-token");
+    token.textContent = String(r.decision);
+    badge.appendChild(token);
+    badge.appendChild(el("span", "dogfood-engine-readiness-decision-label", r.decisionLabel));
+    node.appendChild(badge);
+
+    node.appendChild(el("p", "dogfood-engine-readiness-path",
+      t(r.enginePathActive ? "dogfood.engine_readiness.path.engine" : "dogfood.engine_readiness.path.legacy",
+        r.synthesizedVia || "")));
+    if (r.guide) node.appendChild(el("p", "dogfood-engine-readiness-guide", r.guide));
+    if (r.daypart && r.daypart.caption) {
+      node.appendChild(el("p", "dogfood-engine-readiness-daypart", r.daypart.caption));
+    }
+    if (r.remaining && r.remaining.length) {
+      var list = el("ul", "dogfood-engine-readiness-remaining");
+      appendCalibrationTiles(list, r.remaining, "dogfood-engine-readiness-remaining");
+      node.appendChild(list);
+    }
+  }
+
   function renderBlockers(view) {
     var node = $("dogfoodBlockers");
     clear(node);
@@ -446,6 +480,7 @@
     var result = $("dogfoodResult");
     result.hidden = false;
     renderCalibration(view);
+    renderEngineReadiness(view);
     renderSummary(view);
     renderRoute(view);
     renderBlockers(view);

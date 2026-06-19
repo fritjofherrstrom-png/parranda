@@ -8313,6 +8313,28 @@ body.is-printing-guide #routeGuideDrawer {
 .dogfood-calibration-reason-tile, .dogfood-calibration-cap-tile { list-style: none; padding: 7px 9px; border-radius: 8px; background: rgba(31, 18, 13, 0.05); font-size: 12px; }
 .dogfood-calibration-reason-token, .dogfood-calibration-cap-token { display: block; font-family: monospace; font-size: 11px; opacity: 0.72; }
 .dogfood-calibration-reason-caption, .dogfood-calibration-cap-caption { display: block; margin-top: 2px; }
+.dogfood-engine-readiness {
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(31, 18, 13, 0.14);
+  border-left: 4px solid rgba(31, 18, 13, 0.34);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.48);
+}
+.dogfood-engine-readiness[data-decision="blocked"] { border-left-color: var(--accent-deep, #7f2d1a); }
+.dogfood-engine-readiness-heading { margin: 0 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink, #1d120d); opacity: 0.76; }
+.dogfood-engine-readiness-badge { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 5px 10px; border-radius: 999px; background: rgba(31, 18, 13, 0.08); color: var(--ink, #1d120d); }
+.dogfood-engine-readiness-badge[data-decision="blocked"] { background: rgba(127, 45, 26, 0.12); }
+.dogfood-engine-readiness-decision-token { font-family: monospace; font-size: 11px; }
+.dogfood-engine-readiness-decision-label { font-size: 12px; font-weight: 700; }
+.dogfood-engine-readiness-path, .dogfood-engine-readiness-guide, .dogfood-engine-readiness-daypart { margin: 8px 0 0; font-size: 13px; line-height: 1.45; }
+.dogfood-engine-readiness-path { font-family: monospace; font-size: 12px; color: var(--muted, #6b564c); }
+.dogfood-engine-readiness-guide { color: var(--text, #241914); }
+.dogfood-engine-readiness-daypart { color: var(--muted, #6b564c); }
+.dogfood-engine-readiness-remaining { padding-left: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+.dogfood-engine-readiness-remaining-tile { list-style: none; padding: 7px 9px; border-radius: 8px; background: rgba(31, 18, 13, 0.05); font-size: 12px; }
+.dogfood-engine-readiness-remaining-token { display: block; font-family: monospace; font-size: 11px; opacity: 0.72; }
+.dogfood-engine-readiness-remaining-caption { display: block; margin-top: 2px; }
 @media (max-width: 640px) {
   .dogfood-row { grid-template-columns: 1fr; }
   .dogfood-kv { grid-template-columns: 1fr; }
