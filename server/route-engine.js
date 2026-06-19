@@ -3963,7 +3963,26 @@ function buildStopPool(
     .sort((left, right) => right.score - left.score)
     .slice(0, effectiveCatalogSeedLimit)
     .map((entry) => entry.item);
-  const hybridBasePool = uniqueStops([...basePool, ...catalogSeedCandidates]);
+  let hybridBasePool = uniqueStops([...basePool, ...catalogSeedCandidates]);
+
+  // Any-place compose: a truly catalog-less context (no verified items at all)
+  // has nothing to seed the base pool with — its ONLY places are the
+  // source-backed provisional candidates. Seed the pool from those so the walk
+  // can form. The provisional candidates keep `provisional: true` + their low
+  // trust through formatMainStop, so the route stays honestly marked. This is
+  // gated to the agnostic-compose template AND an empty catalog, so every
+  // registered city (incl. thin Athens, which has verified items) is untouched:
+  // there, hybridBasePool is non-empty and provisional candidates remain
+  // verified-first FILL via the supplemental path below.
+  if (
+    !hybridBasePool.length &&
+    template.id === AGNOSTIC_COMPOSE_TEMPLATE_ID &&
+    getAllItems().length === 0
+  ) {
+    hybridBasePool = uniqueStops(
+      buildProvisionalComposeStops().filter(candidateFitsLockedCorridor),
+    );
+  }
 
   if (!hybridBasePool.length && !manualAnchorsLocked) {
     return [];
@@ -6419,9 +6438,26 @@ async function generateRecommendations({
   legPacing = "balanced",
   lang = "sv",
   includeLiveEvents = false,
+  // Any-place / agnostic callers may supply a fully-built coordinates-only
+  // cityConfig directly (empty curated catalog + `sourceCandidates`, no route
+  // templates → the existing agnostic_compose branch). This bypasses the
+  // registered-city registry WITHOUT a fourth pipeline. Registered-city callers
+  // pass no override, so resolveCityConfig — and every downstream behavior — is
+  // byte-for-byte unchanged. See generateAgnosticRecommendations.
+  cityConfigOverride = null,
 }) {
   const routeResultLang = normalizeRouteResultLanguage(lang);
-  const cityResolution = resolveCityConfig(city);
+  const cityResolution = cityConfigOverride
+    ? {
+        requestedKey: cityConfigOverride.key,
+        matchedKey: cityConfigOverride.key,
+        resolvedKey: cityConfigOverride.key,
+        cityConfig: cityConfigOverride,
+        found: true,
+        fallbackUsed: false,
+        defaultUsed: false,
+      }
+    : resolveCityConfig(city);
 
   // A city that was explicitly requested but is not registered must not be
   // silently planned as the fallback city — that would leak the fallback
@@ -6770,8 +6806,25 @@ async function generateRecommendations({
   });
 }
 
+// Any-place entry: plan a coordinates-only / source-backed place through the
+// EXACT same engine loop as a registered city, reusing the existing
+// agnostic_compose branch (empty templates → geometry-ordered walk built from
+// `cityConfig.sourceCandidates`). This is the convergence seam — there is no
+// second synthesizer. Supply by `generateAgnosticRecommendations({ cityConfig,
+// ...routeParams })`. Honest degradation is inherited: < 2 viable stops yields a
+// null route (agnosticTooThin), never an invented one. Ordering is the engine's
+// geometry/scoring; daypart rhythm is a label the caller may attach, not the
+// sequencer (staged — promoted into compose ordering in a follow-up).
+async function generateAgnosticRecommendations({ cityConfig, ...routeParams } = {}) {
+  if (!cityConfig || typeof cityConfig !== "object") {
+    throw new Error("generateAgnosticRecommendations requires a cityConfig");
+  }
+  return generateRecommendations({ ...routeParams, cityConfigOverride: cityConfig });
+}
+
 module.exports = {
   generateRecommendations,
+  generateAgnosticRecommendations,
   resolvePoint,
   expandDateRange,
   buildRouteFromTemplate,
