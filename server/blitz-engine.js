@@ -1223,11 +1223,18 @@ function buildStopCandidates(params) {
     hasSecondHandCoverage,
     coverageNote,
     lang = "sv",
+    rankedItems,
   } = params;
 
-  return filterCandidateItems(cityConfig)
-    .map((item) =>
-      buildSingleStopCandidate({
+  // Spine-ranked path: when the candidate spine has already made the decision
+  // (preview/thin/agnostic), present its ranked candidates in spine order rather
+  // than re-scoring by editorial fit. Otherwise the editorial scorer ranks the
+  // curated catalogue as before (rich cities unchanged).
+  const usingSpine = Array.isArray(rankedItems) && rankedItems.length > 0;
+  const items = usingSpine ? rankedItems : filterCandidateItems(cityConfig);
+  return items
+    .map((item, index) => {
+      const candidate = buildSingleStopCandidate({
         item,
         origin,
         preferences,
@@ -1240,11 +1247,47 @@ function buildStopCandidates(params) {
         hasSecondHandCoverage,
         coverageNote,
         lang,
-      }),
-    )
+      });
+      if (usingSpine && candidate) {
+        // The spine already decided (intent → fit → source-priority); the
+        // editorial layer only PRESENTS. Order strictly by spine rank, with the
+        // reroll memory penalty on top so reroll still moves through the pool.
+        const memoryPenalty = scoreMemoryPenalty(item, memory, candidate.move_kind, candidate.areaTokens || []);
+        candidate.score = Number(((rankedItems.length - index) * 10 + memoryPenalty).toFixed(2));
+        candidate.spine_rank = index;
+      }
+      return candidate;
+    })
     .filter((candidate) => Number.isFinite(candidate.score))
     .sort((left, right) => right.score - left.score)
     .slice(0, 16);
+}
+
+// Map a spine-ranked candidate to the editorial item the presentation layer
+// expects. A CURATED winner renders from its full catalogue item (preserving the
+// vibe / opening / price fields the editorial formatter uses, so curated output
+// is unchanged). A SOURCE-BACKED winner maps to the editorial item shape and
+// stays provisional:true / lower-trust — honest, never presented as curated.
+function spineCandidateToItem(candidate, cityConfig) {
+  if (!candidate) return null;
+  if (candidate.city_pack_owned === true) {
+    const original = (cityConfig.catalog.allItems || []).find((item) => item.id === candidate.id);
+    if (original) return original;
+  }
+  if (!Number.isFinite(candidate.lat) || !Number.isFinite(candidate.lng)) return null;
+  return {
+    id: candidate.id,
+    name: candidate.label || candidate.name || candidate.id,
+    kind: candidate.type || candidate.kind || "stop",
+    lat: candidate.lat,
+    lng: candidate.lng,
+    area: candidate.area || null,
+    tags: Array.isArray(candidate.tags) ? candidate.tags : [],
+    provisional: true,
+    source: candidate.source || null,
+    trust: candidate.trust || null,
+    provenance: candidate.provenance || null,
+  };
 }
 
 function buildAllCandidates(params) {
@@ -1405,6 +1448,29 @@ async function buildBlitzDecision(cityConfig, payload = {}, extras = {}) {
     preferences.includes("second_hand") && !hasSecondHandCoverage
       ? translate(lang, "blitz.coverageNoteNoSecondHand", { city: cityConfig.label })
       : null;
+
+  // Source-fit decision substrate (preview/thin/agnostic): let the shared
+  // candidate spine make the decision (intent → fit → source-priority; curated
+  // wins comparable fit, source-backed wins on better fit), then present its
+  // ranked winners through this editorial layer. `spine_ranking` is set by the
+  // /api/blitz wiring for those contexts only; default Blitz (rich citypacks) is
+  // byte-stable and never computes it.
+  let rankedItems = null;
+  if (payload.spine_ranking) {
+    const candidateMode = require("./candidates/blitz-candidate-mode");
+    const { ranked } = candidateMode.rankCandidatesForBlitz(
+      cityConfig,
+      { ...payload, origin },
+      {
+        resolveNowContext,
+        resolveTimeBand,
+        resolveBlitzPreferences,
+        ...(extras && typeof extras === "object" ? extras : {}),
+      },
+    );
+    rankedItems = ranked.map((entry) => spineCandidateToItem(entry.candidate, cityConfig)).filter(Boolean);
+  }
+
   const candidates = buildAllCandidates({
     cityConfig,
     origin,
@@ -1418,6 +1484,7 @@ async function buildBlitzDecision(cityConfig, payload = {}, extras = {}) {
     hasSecondHandCoverage,
     coverageNote,
     lang,
+    rankedItems,
   });
   const { primary, backup } = choosePrimaryAndBackup(candidates, payload.mode || DEFAULT_BLITZ_MODE);
   const updatedMemory = buildUpdatedMemory(memory, primary, nowContext.now_iso);

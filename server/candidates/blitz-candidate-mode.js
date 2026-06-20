@@ -51,19 +51,15 @@ function isCandidateBlitzModeEnabled(payload = {}) {
  * @param {object} [helpers] injectable { resolveNowContext, resolveTimeBand,
  *   resolveBlitzPreferences } — supplied by blitz-engine to avoid duplication.
  */
-function buildCandidateBlitzDecision(cityConfig, payload = {}, helpers = {}) {
+// Shared decision substrate: collect → gate → fit-score → calibrate → rank the
+// candidate pool, returning the ranked eligible entries (intent coverage → fit →
+// source priority; curated dominates the tiebreak, source-backed wins on better
+// fit). Exported so the editorial Blitz path can use the SAME ranking as its
+// decision for preview/thin/agnostic contexts, then render the winners through
+// its own presentation layer — without duplicating the ranking logic.
+function rankCandidatesForBlitz(cityConfig, payload = {}, helpers = {}) {
   const candidatePool = buildEligibleCandidatePool(cityConfig, payload, helpers);
-  const {
-    allCandidates,
-    context,
-    density,
-    externalEnabled,
-    identity,
-    normalized,
-    pool,
-    providerSpecs,
-    rejected,
-  } = candidatePool;
+  const { context, density, normalized, pool } = candidatePool;
 
   const eligible = [];
   for (const { candidate, derived, gates } of pool) {
@@ -88,7 +84,21 @@ function buildCandidateBlitzDecision(cityConfig, payload = {}, helpers = {}) {
     eligible.push({ candidate, derived, gates, fit, calibration });
   }
 
-  const ranked = rankEligible(eligible);
+  return { ranked: rankEligible(eligible), candidatePool };
+}
+
+function buildCandidateBlitzDecision(cityConfig, payload = {}, helpers = {}) {
+  const { ranked, candidatePool } = rankCandidatesForBlitz(cityConfig, payload, helpers);
+  const {
+    allCandidates,
+    context,
+    density,
+    externalEnabled,
+    identity,
+    normalized,
+    providerSpecs,
+    rejected,
+  } = candidatePool;
 
   const base = {
     city: cityConfig.key,
@@ -255,5 +265,6 @@ module.exports = {
   isCandidateBlitzModeEnabled,
   isExternalCandidatesEnabled,
   buildCandidateBlitzDecision,
+  rankCandidatesForBlitz,
   evaluateCandidateEligibility,
 };
