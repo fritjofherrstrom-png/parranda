@@ -52,6 +52,14 @@ test("Athens evening/bar intent returns a real curated move", () => {
   assert.equal(out.best_move.origin, "curated_catalog");
 });
 
+test("Athens second hand resolves to the curated flea-market spine, not generic shopping", () => {
+  const out = decide(["second_hand"], null);
+  assert.equal(out.best_move.candidate_id, "athens-avissinias-flea-market");
+  assert.equal(out.best_move.origin, "curated_catalog");
+  assert.ok(out.best_move.covered_preferences.includes("second_hand"));
+  assert.match(out.best_move.fit_reasons.join(" "), /tag:second_hand/);
+});
+
 test("an external duplicate of a curated viewpoint merges in (no identity competition)", () => {
   const vp = curatedViewpoint();
   const dataset = [osmRecord("a-dup", vp.label, "viewpoint", vp.lat + 0.0001, vp.lng, { tags: ["utsikt"], wikidata: "Q1" })];
