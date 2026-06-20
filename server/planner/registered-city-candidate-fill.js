@@ -14,6 +14,29 @@ const { buildCandidateCombination } = require("./candidate-combination");
 const { mapAdmittedSelectionToSourceCandidates } = require("./agnostic-engine-compose");
 const { admitExperimentalInferredExternalCandidate } = require("./agnostic-route-output");
 
+// Gather source-backed (non-curated) candidates from the reservoir as DEPTH —
+// the top-ranked external candidate of every role, regardless of whether the
+// curated spine already won that role's combination slot. This is what lets a
+// thin preview city gain visible source-backed variety: gap-only fill declines
+// when curated covers the roles, but depth fill still offers honest supplemental
+// options the engine can compose alongside the curated spine.
+function gatherDepthExternalPicks(plannerRoles, perRole = 3) {
+  const roles = Array.isArray(plannerRoles?.roles) ? plannerRoles.roles : [];
+  const picks = [];
+  for (const roleEntry of roles) {
+    const role = roleEntry && roleEntry.role;
+    const candidates = Array.isArray(roleEntry?.candidates) ? roleEntry.candidates : [];
+    let taken = 0;
+    for (const candidate of candidates) {
+      if (!candidate || candidate.origin === "curated_catalog") continue;
+      if (!candidate.candidate_id) continue;
+      picks.push({ role, candidate_id: candidate.candidate_id, coordinates: candidate.coordinates || null });
+      if (++taken >= perRole) break;
+    }
+  }
+  return picks;
+}
+
 function buildRegisteredCityCandidateFill({
   cityConfig,
   rolePayload,
@@ -21,6 +44,9 @@ function buildRegisteredCityCandidateFill({
   helpers = {},
   sourceStatus = null,
   catalogDensity = null,
+  // Preview-beta depth: gather source-backed candidates across all roles as
+  // supplemental options, not only the role gaps the curated spine left empty.
+  depth = false,
 } = {}) {
   const baseSidecar = {
     scope: "registered_city",
@@ -49,8 +75,11 @@ function buildRegisteredCityCandidateFill({
     const combination = buildCandidateCombination(plannerRoles, dayflowHonesty, { origin: roleOrigin });
     const selected = Array.isArray(combination?.selected) ? combination.selected : [];
     const externalSelected = selected.filter((pick) => pick && pick.origin !== "curated_catalog");
+    // Depth mode adds the reservoir's source-backed candidates across roles;
+    // gap-only mode keeps just the externals the combination actually selected.
+    const externalForFill = depth ? gatherDepthExternalPicks(plannerRoles) : externalSelected;
     const mapped = mapAdmittedSelectionToSourceCandidates({
-      selected: externalSelected,
+      selected: externalForFill,
       plannerRoles,
       city: cityConfig.key,
     });

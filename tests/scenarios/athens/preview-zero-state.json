@@ -13,14 +13,17 @@
         "day_profile": "light",
         "anchor_zone": "Gazi & Kerameikos",
         "routing_source": "agnostic_compose",
-        "estimated_km": 3.3,
-        "longest_leg_km": 1.3,
-        "longest_leg_minutes": 16,
-        "average_leg_minutes": 10,
+        "uses_provisional_sources": true,
+        "provisional_stop_count": 3,
+        "credibility_tier": "low",
+        "estimated_km": 7.5,
+        "longest_leg_km": 1.8,
+        "longest_leg_minutes": 22,
+        "average_leg_minutes": 13,
         "stops": [
           {
-            "label": "Klimataria",
-            "area": "monastiraki-psyrri",
+            "label": "Ama Lachei stis Nefelis",
+            "area": "exarchia",
             "live": false
           },
           {
@@ -29,35 +32,77 @@
             "live": false
           },
           {
-            "label": "Ama Lachei stis Nefelis",
-            "area": "exarchia",
+            "label": "Klimataria",
+            "area": "monastiraki-psyrri",
             "live": false
+          },
+          {
+            "label": "Pnyx",
+            "area": "koukaki-makrygianni",
+            "live": false,
+            "provisional": true,
+            "source_tier": "inferred",
+            "confidence": "needs_review"
+          },
+          {
+            "label": "Filopappou Hill",
+            "area": "koukaki-makrygianni",
+            "live": false,
+            "provisional": true,
+            "source_tier": "inferred",
+            "confidence": "needs_review"
+          },
+          {
+            "label": "Hill of the Nymphs",
+            "area": "koukaki-makrygianni",
+            "live": false,
+            "provisional": true,
+            "source_tier": "inferred",
+            "confidence": "needs_review"
           }
         ],
         "legs": [
           {
             "from": "Athens",
-            "to": "Klimataria",
-            "km": 0.5,
-            "minutes": 6
-          },
-          {
-            "from": "Klimataria",
-            "to": "Alexandrino",
-            "km": 1.3,
-            "minutes": 16
-          },
-          {
-            "from": "Alexandrino",
             "to": "Ama Lachei stis Nefelis",
+            "km": 1.2,
+            "minutes": 14
+          },
+          {
+            "from": "Ama Lachei stis Nefelis",
+            "to": "Alexandrino",
             "km": 0.3,
             "minutes": 4
           },
           {
-            "from": "Ama Lachei stis Nefelis",
+            "from": "Alexandrino",
+            "to": "Klimataria",
+            "km": 1.3,
+            "minutes": 16
+          },
+          {
+            "from": "Klimataria",
+            "to": "Pnyx",
+            "km": 1.4,
+            "minutes": 17
+          },
+          {
+            "from": "Pnyx",
+            "to": "Filopappou Hill",
+            "km": 0.7,
+            "minutes": 8
+          },
+          {
+            "from": "Filopappou Hill",
+            "to": "Hill of the Nymphs",
+            "km": 0.8,
+            "minutes": 10
+          },
+          {
+            "from": "Hill of the Nymphs",
             "to": "Athens",
-            "km": 1.2,
-            "minutes": 14
+            "km": 1.8,
+            "minutes": 22
           }
         ]
       },
