@@ -27,6 +27,7 @@ const {
   buildBlockedAgnosticRouteOutputExperiment,
 } = require("./planner/agnostic-route-output");
 const { buildRegisteredCityCandidateFill } = require("./planner/registered-city-candidate-fill");
+const { buildPreviewBetaEngineStatus } = require("./planner/preview-beta-engine-status");
 const { evaluateAgnosticPromotion } = require("./planner/agnostic-promotion-gate");
 const { buildEngineReadinessVerdict } = require("./planner/agnostic-engine-readiness");
 const { resolveAgnosticIntake, parsePlaceQuery } = require("./planner/agnostic-place-intake");
@@ -1894,24 +1895,16 @@ function buildApp({
         // Compact, honest preview-beta status on the route response. `active`
         // reflects whether source-backed stops actually reached the day (from the
         // loader fill OR the citypack's own provisional candidates the preview
-        // engine now composes) — never a silent thin day. `loader_fill_reason`
-        // explains the loader's contribution or why it fell back.
+        // engine now composes) — never a silent thin day. The field-test status
+        // also names the remaining thin edges and keeps Pulse/Blitz boundaries
+        // explicit until those lanes deliberately feed route composition.
         let previewEngineStatus = null;
         if (previewBetaActive) {
-          const fillInfo =
-            (registeredCityFillSidecar && registeredCityFillSidecar.registered_city_candidate_fill) || {};
-          const mainStops =
-            (result && Array.isArray(result.days) && result.days[0] && result.days[0].primary_route &&
-              Array.isArray(result.days[0].primary_route.main_stops) && result.days[0].primary_route.main_stops) || [];
-          const sourceBackedStops = mainStops.filter((stop) => stop && stop.provisional === true).length;
-          previewEngineStatus = {
-            preview_engine_mode: true,
-            planner_mode: "preview_beta_engine",
-            active: sourceBackedStops > 0,
-            source_backed_stop_count: sourceBackedStops,
-            loader_fill_reason: fillInfo.reason || null,
-            loader_supplemental_count: fillInfo.supplemental_candidate_count || 0,
-          };
+          previewEngineStatus = buildPreviewBetaEngineStatus({
+            cityConfig,
+            routeResult: result,
+            fillSidecar: registeredCityFillSidecar,
+          });
         }
         baselineBody = {
           ...result,
