@@ -48,6 +48,42 @@ function primaryStops(body) {
 }
 
 test(
+  "Athens preview auto-consumes the trusted loader WITHOUT manual flags (external opt-in is implicit)",
+  withServer(
+    // A realistic open-data spread near the Athens centre (the role selector
+    // needs reasonable supply density, mirroring a live OSM neighbourhood).
+    makeLoader(
+      (() => {
+        const base = { lat: 37.9685, lng: 23.7257 };
+        const at = (i) => ({ lat: base.lat + (i % 6) * 0.0008, lng: base.lng + Math.floor(i / 6) * 0.0008 });
+        const recs = [];
+        for (let i = 0; i < 8; i += 1) { const c = at(i); recs.push(externalRecord(`osm-ext-food-${i}`, `Open Taverna ${i}`, "restaurant", c.lat, c.lng, ["mat"])); }
+        for (let i = 0; i < 7; i += 1) { const c = at(i + 3); recs.push(externalRecord(`osm-ext-cafe-${i}`, `Open Kafeneio ${i}`, "cafe", c.lat, c.lng, ["fika"])); }
+        for (let i = 0; i < 5; i += 1) { const c = at(i + 2); recs.push(externalRecord(`osm-ext-bar-${i}`, `Open Bar ${i}`, "bar", c.lat, c.lng, ["bar"])); }
+        return recs;
+      })(),
+    ),
+    async (server) => {
+      // No manual flags at all — the preview-beta path must signal the external
+      // opt-in itself so the loader's candidates reach the route (regression: it
+      // used to be silently inert and only the citypack's built-in provisional
+      // candidates surfaced).
+      const res = await requestJson(server, {
+        path: "/api/route-recommendations?lang=en",
+        body: athensBody({ preferences: ["mat", "fika", "bar"] }),
+      });
+      assert.ok(res.body.preview_engine);
+      assert.equal(res.body.preview_engine.loader_fill_reason, "thin_registered_city_source_fill");
+      assert.ok(res.body.preview_engine.loader_supplemental_count > 0, "the trusted loader must contribute candidates");
+      const stops = primaryStops(res.body);
+      const loaderStops = stops.filter((s) => String(s.id).startsWith("osm-ext-"));
+      assert.ok(loaderStops.length > 0, "real loader-sourced places must reach the Athens route");
+      loaderStops.forEach((s) => assert.equal(s.provisional, true, "loader stops stay provisional / lower-trust"));
+    },
+  ),
+);
+
+test(
   "Athens preview planner auto-activates the source-backed supplement WITHOUT manual flags",
   withServer(null, async (server) => {
     // No experiment / engine-compose / external flags, no loader.
