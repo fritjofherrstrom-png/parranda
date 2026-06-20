@@ -2086,8 +2086,21 @@ function buildApp({
       // through the same trusted external_provider channel; #235 keeps curated
       // ahead on comparable fit and #238/#239 dedupe+reconcile any twins.
       const recognizedCity = candidateModeRequested && externalEnabled && !useAgnostic && Boolean(requestedCity) && !cityFallbackUsed;
-      const cityDensity = recognizedCity ? curatedDensityOf(cityConfig) : null;
-      const augmentRecognized = recognizedCity && cityDensity === "thin";
+      // Preview/thin recognized city (e.g. Athens) WITHOUT manual flags: route the
+      // editorial Blitz decision through the shared candidate spine (source-fit
+      // ranking) and pull trusted source-backed supply, so source-backed
+      // candidates can win when they better satisfy the intent — while the output
+      // stays the editorial format the frontend renders. The candidate_mode flag
+      // path is left to the candidate-spine output (unchanged); rich citypacks
+      // never qualify.
+      const previewSpineBlitz =
+        !useAgnostic &&
+        !candidateModeRequested &&
+        Boolean(requestedCity) &&
+        !cityFallbackUsed &&
+        (isPreviewCityConfig(cityConfig) || curatedDensityOf(cityConfig) === "thin");
+      const cityDensity = recognizedCity || previewSpineBlitz ? curatedDensityOf(cityConfig) : null;
+      const augmentRecognized = (recognizedCity && cityDensity === "thin") || previewSpineBlitz;
       // Anchor the open-data query at the request coords if given, else the
       // recognized city's center.
       const cityCenter =
@@ -2100,7 +2113,7 @@ function buildApp({
       // or a thin recognized-city augmentation applies, external candidates are
       // enabled, the server was built with a loader, and we have an anchor. The
       // public payload never reaches this; any fetch error fails closed.
-      const shouldLoad = (useAgnostic || augmentRecognized) && externalEnabled;
+      const shouldLoad = (useAgnostic || augmentRecognized) && (externalEnabled || previewSpineBlitz);
       let externalProviderExtras = null;
       let openDataLoaderStatus = "skipped";
       let openDataLoaderError = null;
@@ -2138,21 +2151,27 @@ function buildApp({
         // unless this flag is set). Accepts ?candidate_mode=1 / ?candidateMode=1
         // or the equivalent body fields (snake_case and camelCase both work).
         candidate_mode: candidateModeRaw,
-        // Nested opt-in: source-backed external/open candidates (only consulted
-        // when candidate_mode is also on). ?include_external_candidates=1 or
-        // ?candidate_sources=open, or the equivalent body fields. snake_case
+        // Preview/thin recognized city: route the editorial Blitz decision
+        // through the candidate spine (source-fit), no manual flag. Implies the
+        // source-backed opt-in below so the spine sees the trusted supply.
+        spine_ranking: previewSpineBlitz,
+        // Nested opt-in: source-backed external/open candidates (consulted when
+        // candidate_mode OR spine_ranking is on). ?include_external_candidates=1
+        // or ?candidate_sources=open, or the equivalent body fields. snake_case
         // and camelCase are both accepted at the HTTP edge for parity with the
         // engine's isExternalCandidatesEnabled().
         include_external_candidates:
           request.query?.include_external_candidates ??
           request.query?.includeExternalCandidates ??
           request.body?.include_external_candidates ??
-          request.body?.includeExternalCandidates,
+          request.body?.includeExternalCandidates ??
+          (previewSpineBlitz ? 1 : undefined),
         candidate_sources:
           request.query?.candidate_sources ??
           request.query?.candidateSources ??
           request.body?.candidate_sources ??
-          request.body?.candidateSources,
+          request.body?.candidateSources ??
+          (previewSpineBlitz ? "open" : undefined),
         weather: request.body?.weather,
         lens: request.query?.lens ?? request.body?.lens,
         lang,
