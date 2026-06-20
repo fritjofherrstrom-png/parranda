@@ -675,8 +675,15 @@ function scorePulseForItem(item, pulseItems = [], cityConfig) {
 function scoreMemoryPenalty(item, memory, moveKind, areaTokens = []) {
   let penalty = 0;
 
+  // Any place shown in the recent window is pushed below every not-yet-shown
+  // candidate (a penalty larger than any realistic score lead), so reroll moves
+  // through the available candidate pool instead of locking onto one dominant
+  // place. The old flat -3.5 let the highest-raw-score place win again the moment
+  // the alternatives were also penalized — so a reroll could keep returning the
+  // same move. The window is bounded (recent_stop_ids keeps the last 10), so the
+  // oldest place naturally returns once the others have been shown.
   if (memory.recent_stop_ids.includes(item.id)) {
-    penalty -= 3.5;
+    penalty -= 30;
   }
 
   if (memory.recent_move_kinds.includes(moveKind)) {
