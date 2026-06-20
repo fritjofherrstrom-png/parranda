@@ -6,6 +6,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const { buildApp } = require("../server/app");
+const { buildPreviewBetaEngineStatus } = require("../server/planner/preview-beta-engine-status");
 const {
   externalRecord,
   makeLoader,
@@ -58,7 +59,7 @@ test(
     assert.ok(res.body.preview_engine, "preview_engine status is present without any flags");
     assert.equal(res.body.preview_engine.preview_engine_mode, true);
     assert.equal(res.body.preview_engine.planner_mode, "preview_beta_engine");
-    assert.equal(res.body.preview_engine.field_test_status, "fuller_preview_day");
+    assert.equal(res.body.preview_engine.beta_status, "fuller_preview_day");
     assert.equal(res.body.preview_engine.visible_change, "source_backed_stops_in_primary_route");
     // Visibly fuller: source-backed stops are now in the day, marked honestly.
     assert.ok(sourceBacked.length > 0, "expected source-backed stops in the Athens day");
@@ -70,9 +71,33 @@ test(
       res.body.preview_engine.source_backed_stop_ids,
       sourceBacked.map((s) => s.id),
     );
+    assert.equal(res.body.preview_engine.promotion_readiness.status, "needs_evidence_review");
+    assert.equal(res.body.preview_engine.promotion_readiness.visible_candidate_count, sourceBacked.length);
+    assert.deepEqual(
+      res.body.preview_engine.promotion_readiness.visible_candidate_ids,
+      sourceBacked.map((s) => s.id),
+    );
+    assert.deepEqual(res.body.preview_engine.promotion_readiness.promote_when, [
+      "source_evidence_is_stronger_than_single_inferred_record",
+      "coordinates_and_area_are_stable",
+      "route_role_is_supported_by_evidence_or_curator_review",
+      "runtime_copy_needs_no_hours_eta_or_access_claim",
+      "catalog_provenance_can_explain_why_this_belongs_in_parranda",
+    ]);
+    res.body.preview_engine.promotion_readiness.candidates.forEach((candidate) => {
+      assert.equal(candidate.promotion_status, "needs_evidence_review");
+      assert.ok(candidate.id.startsWith("athens-"));
+      assert.ok(candidate.label);
+      assert.ok(candidate.source_label);
+      assert.ok(candidate.source_url);
+      assert.ok(candidate.why_included);
+      assert.match(candidate.promotion_focus, /route_fit|evidence/);
+      assert.ok(candidate.evidence_gaps.includes("stronger_than_single_inferred_source"));
+      assert.ok(candidate.evidence_gaps.includes("no_hours_eta_or_access_claim"));
+    });
     assert.ok(
       res.body.preview_engine.still_thin.includes("provisional_source_candidates_unverified"),
-      "field-test status must admit provisional stops are still unverified",
+      "beta status must admit provisional stops are still unverified",
     );
     assert.ok(
       res.body.preview_engine.still_thin.includes("pulse_live_context_only"),
@@ -157,3 +182,29 @@ test(
     assert.ok(!stops.some((s) => s.id === "evil-injected" || s.id === "evil-2"));
   }),
 );
+
+test("preview beta promotion readiness is explicitly empty when no provisional stop is visible", () => {
+  const status = buildPreviewBetaEngineStatus({
+    cityConfig: { sourceCandidates: [] },
+    routeResult: {
+      days: [
+        {
+          primary_route: {
+            main_stops: [
+              { id: "athens-curated-1", label: "Curated 1" },
+              { id: "athens-curated-2", label: "Curated 2" },
+            ],
+          },
+        },
+      ],
+    },
+    fillSidecar: { registered_city_candidate_fill: { reason: "curated_candidates_satisfied_roles" } },
+  });
+
+  assert.equal(status.active, false);
+  assert.equal(status.beta_status, "preview_engine_fallback");
+  assert.equal(status.promotion_readiness.status, "no_visible_provisional_candidates");
+  assert.equal(status.promotion_readiness.visible_candidate_count, 0);
+  assert.deepEqual(status.promotion_readiness.visible_candidate_ids, []);
+  assert.deepEqual(status.promotion_readiness.candidates, []);
+});
