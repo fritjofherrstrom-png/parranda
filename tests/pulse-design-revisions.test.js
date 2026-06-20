@@ -129,3 +129,16 @@ test("Pulse i18n keeps current city and golden-hour keys in SV and EN", () => {
   assert.equal(translations.sv["pulse.sunset"], undefined);
   assert.equal(translations.en["pulse.sunset"], undefined);
 });
+
+test("Pulse renders compact source status visibility from API summary", () => {
+  const markup = pulseEditionMarkup();
+  const renderPulse = stripJsComments(functionSource("renderCityPulse", "async function loadCityPulse"));
+  const loadPulse = stripJsComments(functionSource("loadCityPulse", "function createMapUrl"));
+
+  assert.match(markup, /id="cityPulseSourceStatus"/);
+  assert.match(renderPulse, /cityPulseSourceStatus\.textContent = cityPulseState\.source_status_summary\?\.text \|\| ""/);
+  assert.match(renderPulse, /cityPulseSourceStatus\.hidden = !cityPulseState\.source_status_summary\?\.text/);
+  assert.match(loadPulse, /source_status_summary: response\.source_status_summary \|\| null/);
+  assert.equal(translate("en", "pulse.sourceStatusFallback"), "Live sources status unavailable");
+  assert.equal(translate("sv", "pulse.sourceStatusFallback"), "Livekällornas status saknas");
+});

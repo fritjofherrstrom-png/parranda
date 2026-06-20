@@ -1768,6 +1768,22 @@ body.is-planner-entry .planner-mode-button.is-active {
   margin: 18px 0 4px;
 }
 
+.city-pulse-source-status {
+  position: relative;
+  z-index: 1;
+  width: fit-content;
+  max-width: 100%;
+  margin: 10px 0 16px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(247, 239, 229, 0.16);
+  background: rgba(247, 239, 229, 0.05);
+  color: rgba(255, 247, 239, 0.76);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
 .city-pulse-day-chip {
   padding: 10px 14px;
   border-radius: 999px;

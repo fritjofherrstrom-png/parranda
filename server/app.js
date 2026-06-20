@@ -1060,6 +1060,7 @@ function buildStaticShellI18nReplacements(lang) {
     "__PARRANDA_I18N_PULSE_TIMELINE__": tr("pulse.firstPaintTimeline"),
     "__PARRANDA_I18N_PULSE_TIMELINE_LOADING__": tr("pulse.firstPaintTimelineLoading"),
     "__PARRANDA_I18N_PULSE_UTILITY__": tr("pulse.firstPaintUtility"),
+    "__PARRANDA_I18N_PULSE_SOURCE_STATUS_FALLBACK__": tr("pulse.sourceStatusFallback"),
     "__PARRANDA_I18N_ROUTE_MAIN_BADGE__": tr("route.mainBadge"),
     "__PARRANDA_I18N_ROUTE_ORDER__": tr("route.routeOrder"),
     "__PARRANDA_I18N_ROUTE_LIVE_THAT_FITS__": tr("route.liveThatFits"),
@@ -1698,6 +1699,7 @@ function buildApp({
         official_events: officialEvents,
         weather: engineResult.weather || null,
         source_status: engineResult.source_status || [],
+        source_status_summary: engineResult.source_status_summary || null,
         ...(inspectSources ? { source_provider_inspect: engineResult.source_provider_inspect || null } : {}),
       });
     } catch (error) {

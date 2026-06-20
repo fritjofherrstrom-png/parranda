@@ -1873,6 +1873,7 @@ const cityPulseFilters = document.getElementById("cityPulseFilters");
 const cityPulseLevels = document.getElementById("cityPulseLevels");
 const cityPulseUtilityNote = document.getElementById("cityPulseUtilityNote");
 const cityPulseFooter = document.getElementById("cityPulseFooter");
+const cityPulseSourceStatus = document.getElementById("cityPulseSourceStatus");
 // The standalone .city-pulse-live wrapper was retired in the design
 // revisions — the live-dot now lives inline inside the hero eyebrow.
 // We address the dot directly via its sibling in #cityPulseEditionLabel.
@@ -6024,6 +6025,10 @@ function renderCityPulse() {
       cityPulseGoldenHourItem.hidden = true;
     }
   }
+  if (cityPulseSourceStatus) {
+    cityPulseSourceStatus.textContent = cityPulseState.source_status_summary?.text || "";
+    cityPulseSourceStatus.hidden = !cityPulseState.source_status_summary?.text;
+  }
   cityPulseFooter.textContent =
     cityPulseState.footer_note ||
     t("pulse.footer", "Den här sektionen blandar säkra lokala rytmer med det som är värt att väga in just nu.");
@@ -6294,6 +6299,7 @@ async function loadCityPulse(dateString = getTodayIsoDate()) {
       signals: Array.isArray(response.signals) ? response.signals : [],
       moments: Array.isArray(response.moments) ? response.moments : [],
       official_events: Array.isArray(response.official_events) ? response.official_events : [],
+      source_status_summary: response.source_status_summary || null,
       weather: response.weather || null,
       wildcards:
         Array.isArray(response.wildcards) && response.wildcards.length
