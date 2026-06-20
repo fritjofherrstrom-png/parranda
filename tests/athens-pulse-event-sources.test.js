@@ -265,3 +265,50 @@ test("Athens still has live venue events when City of Athens endpoint is blocked
     global.fetch = originalFetch;
   }
 });
+
+test("Athens Pulse API summarizes visible live source health without hiding blocked official source", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async (url) => {
+    if (String(url).startsWith("https://www.cityofathens.gr/wp-json/tribe/events/v1/events")) {
+      return { ok: false, status: 403, headers: { get: () => "text/html" }, text: async () => "blocked" };
+    }
+    if (String(url) === "https://www.megaron.gr/en/events-2/calendar/") {
+      return textResponse(megaronListingHtml());
+    }
+    if (String(url) === "https://www.megaron.gr/en/event/test-garden-concert/") {
+      return textResponse(megaronDetailHtml());
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  };
+  try {
+    const pulse = await buildCityPulse(
+      {
+        ...athens,
+        services: {
+          ...athens.services,
+          fetchWeatherForDates: async () => ({ [DATE]: null }),
+          pulseSourceProviders: nonWeatherProviders(),
+        },
+      },
+      { date: DATE, now: NOW, lang: "en", inspectSources: true },
+    );
+
+    assert.deepEqual(pulse.source_status_summary.ok.map((source) => source.label), [
+      "Megaron Athens events calendar",
+    ]);
+    assert.deepEqual(pulse.source_status_summary.blocked.map((source) => source.label), [
+      "City of Athens events calendar",
+    ]);
+    assert.equal(
+      pulse.source_status_summary.text,
+      "Live sources: Megaron Athens events calendar ok; City of Athens events calendar blocked",
+    );
+    assert.ok(
+      pulse.source_provider_inspect.source_status.some(
+        (status) => status.id === "athens-city-events-calendar" && status.reason === "source_http_403",
+      ),
+    );
+  } finally {
+    global.fetch = originalFetch;
+  }
+});

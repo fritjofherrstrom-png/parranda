@@ -116,6 +116,7 @@ async function buildCityPulse(cityConfig, options = {}) {
   const ranked = scoreSignals(normalized, context);
 
   const providerSpecs = resolvePulseSourceProviders(cityConfig);
+  const sourceStatus = sourceResult.source_status || [];
 
   return {
     city: context.city.key,
@@ -126,13 +127,14 @@ async function buildCityPulse(cityConfig, options = {}) {
     signals: ranked,
     weather: context.weather,
     events: context.events,
-    source_status: sourceResult.source_status || [],
+    source_status: sourceStatus,
+    source_status_summary: buildPulseSourceStatusSummary(sourceStatus, providerSpecs, context.lang),
     source_provider_inspect: options.inspectSources
       ? buildSourceProviderInspect({
           city: context.city.key,
           date: context.date,
           providerSpecs,
-          source_status: sourceResult.source_status || [],
+          source_status: sourceStatus,
           normalized_events: sourceResult.normalized_events || [],
           compat_events: sourceResult.compat_events || [],
           normalized_signals: sourceResult.normalized_signals || [],
@@ -201,6 +203,59 @@ function dedupeProviderSpecs(providerSpecs = []) {
     out.push(spec);
   }
   return out;
+}
+
+function buildPulseSourceStatusSummary(sourceStatus = [], providerSpecs = [], lang = "sv") {
+  const labelsById = new Map(
+    (Array.isArray(providerSpecs) ? providerSpecs : [])
+      .map((spec) => [
+        spec?.descriptor?.id || spec?.id || null,
+        spec?.descriptor?.label || spec?.label || spec?.descriptor?.id || spec?.id || null,
+      ])
+      .filter(([id, label]) => id && label),
+  );
+  const rows = (Array.isArray(sourceStatus) ? sourceStatus : [])
+    .map((status) => ({
+      id: status?.id || null,
+      label: labelsById.get(status?.id) || status?.id || "Unknown source",
+      status: status?.status || "unknown",
+      reason: status?.reason || null,
+      time_sensitive_events: Number(status?.time_sensitive_events || 0),
+    }))
+    .filter((status) => status.id);
+
+  const ok = rows.filter((status) => status.status === "ok" && status.time_sensitive_events > 0);
+  const blocked = rows.filter((status) => isBlockedSourceStatus(status));
+  const failed = rows.filter((status) => status.status === "failed" && !isBlockedSourceStatus(status));
+  const skipped = rows.filter((status) => status.status === "skipped");
+  const isEnglish = String(lang || "").toLowerCase().startsWith("en");
+  const parts = [];
+
+  if (ok.length) {
+    parts.push(`${ok.map((source) => source.label).join(", ")} ok`);
+  }
+  if (blocked.length) {
+    parts.push(`${blocked.map((source) => source.label).join(", ")} blocked`);
+  }
+  if (failed.length) {
+    parts.push(`${failed.map((source) => source.label).join(", ")} failed`);
+  }
+
+  return {
+    label: isEnglish ? "Live sources" : "Livekällor",
+    text: parts.length
+      ? `${isEnglish ? "Live sources" : "Livekällor"}: ${parts.join("; ")}`
+      : "",
+    ok,
+    blocked,
+    failed,
+    skipped,
+  };
+}
+
+function isBlockedSourceStatus(status) {
+  const reason = String(status?.reason || "").toLowerCase();
+  return status?.status === "failed" && (reason.includes("403") || reason.includes("blocked"));
 }
 
 async function safeFetchPulseSources(cityConfig, date, sourceContext = {}) {
