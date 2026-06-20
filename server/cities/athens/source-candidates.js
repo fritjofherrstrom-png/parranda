@@ -10,10 +10,12 @@
 //
 // Shape conforms to server/place-candidates/contract.js (draft_place). The
 // extra `provenance` block carries the engine-facing hints (weatherTags) plus
-// the human-readable why/source note. Coordinates are well-known stable
-// landmarks; nothing here is invented.
+// the human-readable why/source note. The second-hand subset follows
+// docs/candidate-packs/second-hand-source-pack-playbook.md: open geodata can
+// seed provisional route fill, never verified catalog promotion.
 
 const LAST_SEEN = "2026-05-24";
+const SECOND_HAND_PLAYBOOK = "docs/candidate-packs/second-hand-source-pack-playbook.md";
 
 const PROVISIONAL_SOURCE_NOTE =
   "Provisional source candidate surfaced from open geodata. Not yet human-verified or promoted into the Athens citypack; used only as honest low-confidence fill for thin neighborhoods.";
@@ -31,6 +33,8 @@ function vintageSourceCandidate({
   area,
   tags = [],
   routeRoles = ["connector", "vintage_second_hand_option"],
+  packRole,
+  scopeBasis,
   why,
 }) {
   return {
@@ -66,6 +70,9 @@ function vintageSourceCandidate({
       source_note: PROVISIONAL_SOURCE_NOTE,
       last_seen: LAST_SEEN,
       osm_node: String(osmNode),
+      candidate_pack_playbook: SECOND_HAND_PLAYBOOK,
+      pack_role: packRole,
+      scope_basis: scopeBasis,
       weatherTags: ["all-weather"],
     },
   };
@@ -80,6 +87,8 @@ const sourceCandidates = [
     lng: 23.7216782,
     area: "monastiraki-psyrri",
     tags: ["kilo", "shopping", "lokalt"],
+    packRole: "utility_anchor",
+    scopeBasis: "kilo-format vintage clothing stop; generic shopping is secondary only.",
     why:
       "Open geodata names a Kilo Shop beside the Monastiraki flea-market cluster; useful as provisional vintage clothing density pending human verification.",
   }),
@@ -91,6 +100,9 @@ const sourceCandidates = [
     lng: 23.7219415,
     area: "monastiraki-psyrri",
     tags: ["antiques", "loppis", "flea", "shopping"],
+    packRole: "market_context_anchor",
+    scopeBasis:
+      "Open geodata carries second_hand and the stop sits inside the Avissinias flea-market context; antiques/flea tags are secondary market context, not standalone generic antiques.",
     why:
       "Open geodata tags this Monastiraki-adjacent shop as second_hand; it strengthens the Avissinias vintage/flea-market walk without being promoted to verified catalog.",
   }),
@@ -102,6 +114,8 @@ const sourceCandidates = [
     lng: 23.7340862,
     area: "exarchia",
     tags: ["thrift", "shopping", "lokalt"],
+    packRole: "utility_anchor",
+    scopeBasis: "Named thrift shop; generic shopping is secondary only.",
     why:
       "Open geodata carries an English thrift-shop name near Exarchia; provisional fill for single-intent second-hand days pending source corroboration.",
   }),
@@ -113,6 +127,8 @@ const sourceCandidates = [
     lng: 23.7365609,
     area: "exarchia",
     tags: ["shopping"],
+    packRole: "utility_anchor",
+    scopeBasis: "Open geodata tags the place as second_hand; generic shopping is secondary only.",
     why:
       "Open geodata tags Bohbo as second_hand near the Exarchia/Kolonaki edge; useful as central-north second-hand density only while marked provisional.",
   }),
@@ -124,6 +140,8 @@ const sourceCandidates = [
     lng: 23.7321778,
     area: "kypseli",
     tags: ["shopping"],
+    packRole: "utility_anchor",
+    scopeBasis: "Named vintage clothing signal in open geodata; generic shopping is secondary only.",
     why:
       "Open geodata names a Vintage Room on Patision with recent check dates; provisional north-side vintage density for Athens preview routes.",
   }),
@@ -135,6 +153,8 @@ const sourceCandidates = [
     lng: 23.7346553,
     area: "kypseli",
     tags: ["shopping", "lokalt"],
+    packRole: "utility_anchor",
+    scopeBasis: "Open geodata tags the place as second_hand; generic shopping is secondary only.",
     why:
       "Open geodata tags Bee Hive as second_hand around Kypseli; provisional fill for thin northern second-hand coverage pending human verification.",
   }),
@@ -146,6 +166,8 @@ const sourceCandidates = [
     lng: 23.728221,
     area: "koukaki-makrygianni",
     tags: ["shopping"],
+    packRole: "utility_anchor",
+    scopeBasis: "Named vintage clothing signal in open geodata; generic shopping is secondary only.",
     why:
       "Open geodata names MoVintage Athens near Koukaki/Makrygianni; provisional south-side vintage clothing density for Athens preview routes.",
   }),
@@ -157,6 +179,8 @@ const sourceCandidates = [
     lng: 23.7232843,
     area: "koukaki-makrygianni",
     tags: ["shopping"],
+    packRole: "utility_anchor",
+    scopeBasis: "Named vintage clothing signal in open geodata; generic shopping is secondary only.",
     why:
       "Open geodata names Vintage Lovers near the south-center walking belt; provisional vintage clothing stop pending human verification.",
   }),

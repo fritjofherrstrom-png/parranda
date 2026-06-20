@@ -160,6 +160,36 @@ test("Athens provisional source candidates conform to the place-candidate contra
   });
 });
 
+test("Athens second-hand provisional candidates follow the shared source-pack playbook", () => {
+  const secondHandCandidates = athensSourceCandidates.filter(
+    (candidate) => candidate.type === "vintage-shop" || (candidate.route_roles || []).includes("vintage_second_hand_option"),
+  );
+
+  assert.ok(secondHandCandidates.length >= 2, "expected Athens second-hand source-pack candidates");
+  secondHandCandidates.forEach((candidate) => {
+    const tags = new Set(candidate.tags || []);
+    assert.equal(candidate.type, "vintage-shop");
+    assert.equal(candidate.city_pack_owned, false);
+    assert.equal(candidate.trust.source_tier, "inferred");
+    assert.equal(candidate.trust.confidence, "needs_review");
+    assert.equal(candidate.trust.human_verified, false);
+    assert.ok(tags.has("second_hand"), `${candidate.id} must carry the explicit second_hand intent`);
+    assert.ok(tags.has("vintage"), `${candidate.id} must carry the vintage signal`);
+    assert.ok(candidate.provenance?.candidate_pack_playbook?.endsWith("second-hand-source-pack-playbook.md"));
+    assert.ok(candidate.provenance?.pack_role, `${candidate.id} must classify its pack role`);
+    assert.ok(candidate.provenance?.scope_basis, `${candidate.id} must explain why it fits strict second-hand scope`);
+
+    if (tags.has("antiques")) {
+      assert.equal(
+        candidate.provenance.pack_role,
+        "market_context_anchor",
+        "antiques may appear only as secondary market context, never as the standalone second-hand basis",
+      );
+      assert.ok(tags.has("flea") || tags.has("loppis"));
+    }
+  });
+});
+
 test("thin city compose supplements with clearly-marked provisional candidates, verified-first", async () => {
   // Anchor in the thin Koukaki-Makrygianni south where the verified pool runs
   // out, so provisional candidates can fill the leftover slots.
