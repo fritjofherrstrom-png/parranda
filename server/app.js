@@ -1841,6 +1841,18 @@ function buildApp({
         if (registeredCityFillEligible) {
           const roleOrigin = resolvePlannerRoleOrigin(cityConfig, request.body || {});
           const rolePayload = buildPlannerRolePayload(cityConfig, request, payload, roleOrigin);
+          // Preview-beta auto-activation IMPLIES the source-backed reservoir, but
+          // the request carries no explicit `include_external_candidates` flag — so
+          // signal the external opt-in to the role selector here, otherwise the
+          // trusted loader's candidates never reach the planner roles and the
+          // loader fill is silently inert (only the citypack's own provisional
+          // candidates would surface). The explicit-flag path already carries its
+          // own opt-in. The loader is still the server-injected `openDataLoader`;
+          // the public payload can never inject candidates.
+          if (previewBetaEngine) {
+            rolePayload.include_external_candidates = 1;
+            rolePayload.candidate_sources = rolePayload.candidate_sources || "open";
+          }
           const { helpers, sourceStatus } = await resolvePlannerRoleHelpers({
             externalRequested: true,
             openDataLoader,
