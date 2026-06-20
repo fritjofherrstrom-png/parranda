@@ -13,6 +13,7 @@ const geocoding = optionalRequire("../../geocoding");
 const weather = optionalRequire("../../weather");
 const weatherContextProvider = optionalRequire("../../pulse-sources/weather-context-provider");
 const eventsCalendarSourceProvider = optionalRequire("../../pulse-sources/events-calendar-source-provider");
+const htmlVenueCalendarProvider = optionalRequire("../../pulse-sources/html-venue-calendar-provider");
 
 const athensEditorial = createEditorialService(ATHENS_LABEL);
 const geocodeQuery = createGeocodeQuery();
@@ -175,16 +176,43 @@ function createAthensPulseSourceProviders() {
       }),
     );
   }
-  providers.push(
-    createReviewNeededPulseSourceProvider({
-      id: "athens-megaron-calendar-candidate",
-      label: "Megaron Athens events calendar",
-      sourceUrl: "https://www.megaron.gr/en/events-2/calendar/",
-      sourceType: "venue_feed",
-      role: "venue_programming",
-      supportedLanguages: ["el", "en"],
-    }),
-  );
+  if (htmlVenueCalendarProvider?.createHtmlVenueCalendarProvider) {
+    providers.push(
+      htmlVenueCalendarProvider.createHtmlVenueCalendarProvider({
+        id: "athens-megaron-calendar",
+        endpoint: "https://www.megaron.gr/en/events-2/calendar/",
+        label: "Megaron Athens events calendar",
+        sourceUrl: "https://www.megaron.gr/en/events-2/calendar/",
+        license: "Venue calendar; reuse terms review pending",
+        status: "active",
+        sourceType: "venue_feed",
+        role: "venue_programming",
+        supportedLanguages: ["el", "en"],
+        updateCadence: "daily",
+        parsingRisk: "medium",
+        sourceLanguage: "en",
+        timezoneOffset: "+03:00",
+        routeRoleHint: "evening_anchor",
+        trust: {
+          source_tier: "verified",
+          confidence: "medium",
+          human_verified: false,
+          freshness: "fresh",
+        },
+      }),
+    );
+  } else {
+    providers.push(
+      createReviewNeededPulseSourceProvider({
+        id: "athens-megaron-calendar-candidate",
+        label: "Megaron Athens events calendar",
+        sourceUrl: "https://www.megaron.gr/en/events-2/calendar/",
+        sourceType: "venue_feed",
+        role: "venue_programming",
+        supportedLanguages: ["el", "en"],
+      }),
+    );
+  }
   return providers;
 }
 
