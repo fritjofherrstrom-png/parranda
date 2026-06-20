@@ -56,6 +56,12 @@ const {
   mapIcalEventToRaw,
 } = require("./events-calendar-source-provider");
 const {
+  HTML_VENUE_CALENDAR_PROVIDER_ID,
+  createHtmlVenueCalendarProvider,
+  extractHtmlVenueCalendarEvents,
+  extractHtmlVenueEventDetail,
+} = require("./html-venue-calendar-provider");
+const {
   EXTRACTION_TIERS,
   SOURCE_FAMILIES,
   evaluateLiveEventSourceCandidate,
@@ -102,6 +108,10 @@ module.exports = {
   mapEventsCalendarEventToRaw,
   mapTheEventsCalendarEventToRaw,
   mapIcalEventToRaw,
+  HTML_VENUE_CALENDAR_PROVIDER_ID,
+  createHtmlVenueCalendarProvider,
+  extractHtmlVenueCalendarEvents,
+  extractHtmlVenueEventDetail,
   EXTRACTION_TIERS,
   SOURCE_FAMILIES,
   evaluateLiveEventSourceCandidate,
