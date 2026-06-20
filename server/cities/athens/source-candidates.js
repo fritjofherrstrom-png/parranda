@@ -18,7 +18,148 @@ const LAST_SEEN = "2026-05-24";
 const PROVISIONAL_SOURCE_NOTE =
   "Provisional source candidate surfaced from open geodata. Not yet human-verified or promoted into the Athens citypack; used only as honest low-confidence fill for thin neighborhoods.";
 
+function osmNodeUrl(id) {
+  return `https://www.openstreetmap.org/node/${id}`;
+}
+
+function vintageSourceCandidate({
+  id,
+  osmNode,
+  label,
+  lat,
+  lng,
+  area,
+  tags = [],
+  routeRoles = ["connector", "vintage_second_hand_option"],
+  why,
+}) {
+  return {
+    id,
+    city: "athens",
+    label,
+    type: "vintage-shop",
+    candidate_kind: "draft_place",
+    is_structural: false,
+    city_pack_owned: false,
+    lat,
+    lng,
+    area,
+    tags: ["second_hand", "vintage", ...tags],
+    vibes: [],
+    time_fit: ["morning", "afternoon"],
+    route_roles: routeRoles,
+    source: {
+      kind: "open_geo_source",
+      label: "OpenStreetMap",
+      url: osmNodeUrl(osmNode),
+    },
+    trust: {
+      source_tier: "inferred",
+      confidence: "needs_review",
+      human_verified: false,
+      freshness: "unknown",
+    },
+    confidence: "needs_review",
+    freshness: "unknown",
+    provenance: {
+      why_included: why,
+      source_note: PROVISIONAL_SOURCE_NOTE,
+      last_seen: LAST_SEEN,
+      osm_node: String(osmNode),
+      weatherTags: ["all-weather"],
+    },
+  };
+}
+
 const sourceCandidates = [
+  vintageSourceCandidate({
+    id: "athens-kilo-shop-monastiraki",
+    osmNode: 4285025700,
+    label: "Kilo Shop",
+    lat: 37.9773988,
+    lng: 23.7216782,
+    area: "monastiraki-psyrri",
+    tags: ["kilo", "shopping", "lokalt"],
+    why:
+      "Open geodata names a Kilo Shop beside the Monastiraki flea-market cluster; useful as provisional vintage clothing density pending human verification.",
+  }),
+  vintageSourceCandidate({
+    id: "athens-palaiopoleion-ton-athinon",
+    osmNode: 4285025704,
+    label: "Palaiopoleion ton Athinon",
+    lat: 37.9771509,
+    lng: 23.7219415,
+    area: "monastiraki-psyrri",
+    tags: ["antiques", "loppis", "flea", "shopping"],
+    why:
+      "Open geodata tags this Monastiraki-adjacent shop as second_hand; it strengthens the Avissinias vintage/flea-market walk without being promoted to verified catalog.",
+  }),
+  vintageSourceCandidate({
+    id: "athens-reset-thrift-shop",
+    osmNode: 4943398235,
+    label: "Reset Thrift Shop",
+    lat: 37.9868502,
+    lng: 23.7340862,
+    area: "exarchia",
+    tags: ["thrift", "shopping", "lokalt"],
+    why:
+      "Open geodata carries an English thrift-shop name near Exarchia; provisional fill for single-intent second-hand days pending source corroboration.",
+  }),
+  vintageSourceCandidate({
+    id: "athens-bohbo-second-hand",
+    osmNode: 10174064368,
+    label: "Bohbo",
+    lat: 37.9831957,
+    lng: 23.7365609,
+    area: "exarchia",
+    tags: ["shopping"],
+    why:
+      "Open geodata tags Bohbo as second_hand near the Exarchia/Kolonaki edge; useful as central-north second-hand density only while marked provisional.",
+  }),
+  vintageSourceCandidate({
+    id: "athens-vintage-room-patision",
+    osmNode: 5684066961,
+    label: "Vintage Room",
+    lat: 37.9961324,
+    lng: 23.7321778,
+    area: "kypseli",
+    tags: ["shopping"],
+    why:
+      "Open geodata names a Vintage Room on Patision with recent check dates; provisional north-side vintage density for Athens preview routes.",
+  }),
+  vintageSourceCandidate({
+    id: "athens-bee-hive-second-hand",
+    osmNode: 10118352739,
+    label: "Bee Hive",
+    lat: 38.0003504,
+    lng: 23.7346553,
+    area: "kypseli",
+    tags: ["shopping", "lokalt"],
+    why:
+      "Open geodata tags Bee Hive as second_hand around Kypseli; provisional fill for thin northern second-hand coverage pending human verification.",
+  }),
+  vintageSourceCandidate({
+    id: "athens-movintage",
+    osmNode: 2690369510,
+    label: "MoVintage Athens",
+    lat: 37.9669862,
+    lng: 23.728221,
+    area: "koukaki-makrygianni",
+    tags: ["shopping"],
+    why:
+      "Open geodata names MoVintage Athens near Koukaki/Makrygianni; provisional south-side vintage clothing density for Athens preview routes.",
+  }),
+  vintageSourceCandidate({
+    id: "athens-vintage-lovers",
+    osmNode: 4015408206,
+    label: "Vintage Lovers",
+    lat: 37.9637316,
+    lng: 23.7232843,
+    area: "koukaki-makrygianni",
+    tags: ["shopping"],
+    why:
+      "Open geodata names Vintage Lovers near the south-center walking belt; provisional vintage clothing stop pending human verification.",
+  }),
   {
     id: "athens-filopappou-hill",
     city: "athens",

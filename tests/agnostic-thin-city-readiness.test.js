@@ -226,6 +226,47 @@ test("thin city compose supplements with clearly-marked provisional candidates, 
   });
 });
 
+test("Athens second-hand source pack composes a single-intent vintage day", async () => {
+  const result = await generateRecommendations({
+    ...basePayload,
+    city: "athens",
+    dates: ["2026-06-20"],
+    start: { type: "auto" },
+    end: { type: "auto" },
+    preferences: ["second_hand"],
+  });
+
+  assert.equal(result.readiness.signal, "source_enrichment_needed");
+  assert.equal(
+    result.readiness.catalog.provisional_source_count,
+    athensSourceCandidates.length,
+    "second-hand pack must stay in provisional source count, not verified catalog count",
+  );
+
+  const route = result.days[0].primary_route;
+  assert.ok(route, "expected Athens second_hand to compose a route, not fall back to null");
+  assert.equal(route.routing_source, "agnostic_compose");
+  assert.equal(route.confidence, "low");
+  assert.match(route.title, /second hand|vintage/i);
+
+  const stops = route.main_stops || [];
+  const provisionalVintageStops = stops.filter(
+    (stop) => stop.provisional === true && (stop.tags || []).includes("second_hand"),
+  );
+  assert.ok(
+    provisionalVintageStops.length >= 2,
+    "expected provisional vintage-shop density to carry the second-hand day",
+  );
+  assert.ok(
+    stops.some((stop) => stop.id === "athens-avissinias-flea-market" && (stop.tags || []).includes("second_hand")),
+    "Avissinias should remain the verified flea-market spine for Athens second-hand",
+  );
+  assert.ok(
+    stops.some((stop) => stop.id === "athens-kilo-shop-monastiraki" || stop.id === "athens-palaiopoleion-ton-athinon"),
+    "Monastiraki second-hand pack stops should be available to the composed route",
+  );
+});
+
 test("mature citypack never pulls provisional candidates (no source-candidate layer)", async () => {
   const result = await generateRecommendations({
     ...basePayload,
