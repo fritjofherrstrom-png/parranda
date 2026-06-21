@@ -246,7 +246,12 @@ test("Rome swimming: adapter unavailable, not route-ready, route still plans", a
   assert.ok(inspected.days?.[0]?.primary_route, "route still produced");
 });
 
-test("Athens swimming + trusted external loader: adapter carries the external gap-fill", async () => {
+test("Athens swimming + trusted external loader: adapter shows the gap is now consumed by the preview route", async () => {
+  // Evolved by feat/athens-preview-planner-preference-driven: the source-backed
+  // swimming beach now composes into primary_route (preview preference-driven
+  // composition), so the adapter observes OVERLAP with the route — the candidate
+  // is already consumed, not an open gap to forward to A/B scoring. The adapter
+  // stays strictly diagnostic; it just reports a different, honest state.
   const loader = makeLoader([externalRecord("ath-beach", "Kavouri Beach", "beach", 37.82, 23.78, ["coast"])]);
   const { inspected } = await compareInspectVsDefault({
     openDataLoader: loader,
@@ -255,9 +260,9 @@ test("Athens swimming + trusted external loader: adapter carries the external ga
   });
   const rca = inspected.route_candidate_adapter;
   assert.ok(rca.candidate.stops.some((s) => s.origin === "external_open"));
-  assert.equal(rca.comparison_to_primary_route.overlap_count, 0);
-  assert.ok(rca.scoring_probe.positive_signals.includes("trusted_external_gap_fill"));
-  assert.equal(rca.scoring_probe.recommendation, "candidate_for_ab_route_scoring");
+  assert.equal(rca.comparison_to_primary_route.overlap_count, 1);
+  assert.ok(rca.scoring_probe.positive_signals.includes("target_roles_covered"));
+  assert.equal(rca.scoring_probe.recommendation, "inspect_only");
 });
 
 test("public payload cannot inject adapter / candidate / route data", async () => {

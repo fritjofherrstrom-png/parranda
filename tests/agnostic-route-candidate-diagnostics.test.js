@@ -204,19 +204,32 @@ test("API: external requested but no loader → fail closed with no_trusted_load
   });
 });
 
-test("API: Athens swimming + trusted loader → source-backed gap beside an unchanged route", async () => {
+test("API: Athens swimming + trusted loader → source-backed beach now composes INTO the preview route", async () => {
+  // Evolved by feat/athens-preview-planner-preference-driven: a thin PREVIEW
+  // city now lets the reservoir's preference-fit verdict pull a source-backed
+  // EXACT intent match (the loader's swimming beach — a gap the Athens catalog
+  // lacks) into the actual preview route. What used to surface only as an
+  // inspect-only candidate GAP beside an unchanged route is now genuinely filled,
+  // so the diagnostic correctly reports overlap + inspect_only instead of a gap.
   const loader = makeLoader([externalRecord("ath-beach", "Kavouri Beach", "beach", 37.82, 23.78, ["coast"])]);
   await withServer(loader, async (server) => {
     const body = routeBody("athens", ["swimming"], { include_external_candidates: 1 });
     const def = await post(server, "", body);
     const r = await post(server, `${FLAG}&include_external_candidates=1`, body);
+    // The source-backed beach is now a real main stop, and swimming is honestly
+    // reported covered (not a silent miss, not a fabricated curated claim).
+    const mainIds = (def.days?.[0]?.primary_route?.main_stops || []).map((s) => s.id);
+    assert.ok(mainIds.includes("ath-beach"), "source-backed swimming beach should compose into the preview route");
+    assert.deepEqual(def.preference_coverage.covered, ["swimming"]);
+    // The diagnostic no longer flags an unfilled gap: the route already contains
+    // the source-backed option, so it overlaps and stays inspect-only.
     const arc = r.agnostic_route_candidate;
     assert.equal(arc.status, "available");
-    assert.equal(arc.recommendation, "candidate_gap_detected");
+    assert.equal(arc.recommendation, "inspect_only");
     assert.ok(arc.candidate.stops.some((s) => s.origin === "external_open"));
-    assert.equal(arc.comparison_to_route_output.overlap_count, 0);
+    assert.equal(arc.comparison_to_route_output.overlap_count, 1);
     assert.equal(arc.route_mutation, false);
-    // actual route is byte/shape stable
+    // route still byte/shape stable between default and inspect calls
     assert.deepEqual(primaryRouteShape(r), primaryRouteShape(def));
   });
 });
