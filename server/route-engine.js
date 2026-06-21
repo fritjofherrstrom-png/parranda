@@ -130,8 +130,20 @@ function getSourceCandidates() {
 }
 
 function buildProvisionalComposeStops() {
+  // Preference-driven preview composition: when the reservoir judged preference
+  // fit (`__previewPreferenceFit` on the active preview config), a provisional
+  // source candidate may enter composition ONLY if it matches a requested
+  // preference. This is the single chokepoint feeding every provisional path
+  // (base-pool seed, supplemental fill, the reserve slice), so a dense off-intent
+  // pack (e.g. a second-hand pack) cannot seed, fill, or anchor an unrelated
+  // preference's day — and an all-miss request (empty map) yields an honest
+  // curated-only day, never a silent source-pack fallback. With no fit map (no
+  // preferences requested) every provisional stays: pre-existing behavior.
+  const activeConfig = getActiveCityConfig();
+  const previewFit = activeConfig.visibility === "preview" ? activeConfig.__previewPreferenceFit : null;
   return getSourceCandidates()
     .filter((candidate) => candidate && Number.isFinite(candidate.lat) && Number.isFinite(candidate.lng))
+    .filter((candidate) => !previewFit || Boolean(previewFit[candidate.id]))
     .map((candidate) => ({
       id: candidate.id,
       name: candidate.label,
@@ -3551,6 +3563,26 @@ function preferenceBoostForStop(
   return score;
 }
 
+// Reservoir-driven preference boost for a thin PREVIEW city. The shared candidate
+// reservoir (same fit logic as Blitz) judges which catalogue/source-backed
+// candidates actually satisfy the requested preferences and hands the route
+// engine a per-id fit map on the active config (`__previewPreferenceFit`). The
+// boost is large enough to overcome generic geometry/anchor dominance, so a thin
+// preview city's stop SELECTION is preference-driven (different preferences →
+// different stops) instead of recycling the same near-anchor cluster. Gated to
+// preview visibility + only candidates the reservoir judged a real match, so no
+// generic non-match is boosted and every other city is byte-identical. Source-fit
+// is NOT re-implemented here — it comes from the reservoir.
+function previewPreferenceBoostForStop(item) {
+  const cfg = getActiveCityConfig();
+  const fitMap = cfg && cfg.visibility === "preview" ? cfg.__previewPreferenceFit : null;
+  if (!fitMap || !item || item.id == null) return 0;
+  const fit = fitMap[item.id];
+  if (!fit) return 0;
+  const base = fit.match === "covered" ? 9 : fit.match === "partial" ? 4 : 0;
+  return base + Math.max(0, Number(fit.score) || 0) * 1.5;
+}
+
 function scoreStopCandidate({
   item,
   index,
@@ -3580,6 +3612,7 @@ function scoreStopCandidate({
   let score = (item.anchorWeight || 1) + Math.max(0, 1.2 - index * 0.08);
 
   score += preferenceBoostForStop(item, preferences, optimizerMode, modifier, strictTags);
+  score += previewPreferenceBoostForStop(item);
   if (item.isLiveEvent) {
     score += 3.4;
   }
@@ -3713,6 +3746,7 @@ function scoreSupplementalPoolItem({
   const distanceToStart = haversineKm(start, item);
   const distanceToEnd = haversineKm(end, item);
   let score = preferenceBoostForStop(item, preferences, optimizerMode, modifier, strictTags);
+  score += previewPreferenceBoostForStop(item);
   score += item.anchorWeight || 1;
   if (item.isLiveEvent) {
     score += 4.2;
@@ -5110,8 +5144,19 @@ function buildRouteFromTemplate(
   const PREVIEW_PROVISIONAL_RESERVE = 3;
   if (getActiveCityConfig().visibility === "preview" && template.id === AGNOSTIC_COMPOSE_TEMPLATE_ID) {
     const selectedIds = new Set(selectedStops.map((stop) => stop.id));
+    // When the reservoir judged preference fit (preference-driven preview), only
+    // reserve provisional candidates that actually MATCH the request, so a dense
+    // off-intent source pack (e.g. a second-hand pack) does not leak into every
+    // preference's day. Without a fit map (no specific preferences), reserve the
+    // top provisional as before.
+    const previewFit = getActiveCityConfig().__previewPreferenceFit || null;
     const provisionalPicks = sortedPool
-      .filter((entry) => entry.item.provisional === true && !selectedIds.has(entry.item.id))
+      .filter(
+        (entry) =>
+          entry.item.provisional === true &&
+          !selectedIds.has(entry.item.id) &&
+          (!previewFit || previewFit[entry.item.id]),
+      )
       .slice(0, PREVIEW_PROVISIONAL_RESERVE)
       .map((entry) => entry.item);
     if (provisionalPicks.length) {

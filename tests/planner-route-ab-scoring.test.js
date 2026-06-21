@@ -175,7 +175,12 @@ test("Rome swimming: adapter unavailable, A/B blocked, baseline still selected, 
 
 // 2. Athens swimming + trusted external loader: A/B surfaces gap-fill as
 //    DIAGNOSTIC evidence — never as consumption.
-test("Athens swim + trusted external: A/B surfaces gap-fill diagnostic, baseline still selected", async () => {
+test("Athens swim + trusted external: source-backed stop consumed into baseline, A/B still never promotes", async () => {
+  // Evolved by feat/athens-preview-planner-preference-driven: the source-backed
+  // swimming beach now lives in the BASELINE preview route itself (preference-
+  // driven composition), so the adapter variant carries it and the probe reports
+  // it as already consumed (inspect_only) rather than an open gap to score. The
+  // A/B layer's safety contract is unchanged: it never mutates or promotes.
   const loader = makeLoader([externalRecord("ath-beach", "Kavouri Beach", "beach", 37.82, 23.78, ["coast"])]);
   const { inspected } = await compareInspectVsDefault({
     openDataLoader: loader,
@@ -184,13 +189,14 @@ test("Athens swim + trusted external: A/B surfaces gap-fill diagnostic, baseline
   });
   const ab = inspected.route_ab_scoring;
   const cand = ab.variants.candidate_combination_adapter;
-  // trusted external candidate is carried as a diagnostic signal
+  // the source-backed stop is carried, and the probe reports it as consumed
+  assert.ok(cand.stop_ids.includes("ath-beach"), "adapted candidate should carry the external stop id(s)");
   assert.ok(
-    cand.signals.includes("probe:trusted_external_gap_fill"),
-    "trusted external gap-fill should surface in scoring signals",
+    cand.signals.includes("probe:inspect_only"),
+    "consumed source-backed stop should surface as inspect_only, not an open gap",
   );
-  assert.ok(cand.stop_ids.length > 0, "adapted candidate should carry the external stop id(s)");
-  // …but the A/B layer NEVER promotes it
+  // …and the A/B layer NEVER promotes/mutates — baseline (which now already
+  // contains the source-backed stop) stays selected.
   assert.equal(ab.decision.selected_variant, "baseline_primary");
   assert.equal(ab.route_mutation, false);
   assert.equal(cand.route_claim, false);

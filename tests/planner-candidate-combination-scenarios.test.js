@@ -188,12 +188,17 @@ test("Athens scenic+food: thin city stays honest, divergence classified", async 
   assert.ok(s.day_status !== "full" || s.combo_status === "ready");
 });
 
-test("Athens swimming + trusted external loader: external gap is NOT consumed by the route", async () => {
+test("Athens swimming + trusted external loader: source-backed gap is now CONSUMED by the preview route", async () => {
+  // Evolved by feat/athens-preview-planner-preference-driven: a thin PREVIEW city
+  // now lets the reservoir's preference-fit verdict compose a source-backed EXACT
+  // match (the loader's swimming beach — a gap the curated Athens catalog lacks)
+  // into the actual route. It is therefore no longer an unconsumed gap; the
+  // combination↔route comparison now reports overlap and aligns.
   const loader = makeLoader([externalRecord("ath-beach", "Kavouri Beach", "beach", 37.82, 23.78, ["coast"])]);
   const s = await runScenario("athens", ["swimming"], { openDataLoader: loader, extra: { include_external_candidates: 1 } });
   assert.ok(s.selected_origins.includes("external_open"), "trusted external candidate should be selected");
-  assert.equal(s.overlap_count, 0, "route does not consume the external candidate yet");
-  assert.equal(s.mismatch_category, "external_gap_not_consumed");
+  assert.equal(s.overlap_count, 1, "preview route now consumes the external candidate");
+  assert.equal(s.mismatch_category, "aligned");
 });
 
 // --- time diagnostics ======================================================

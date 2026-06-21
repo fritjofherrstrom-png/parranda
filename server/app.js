@@ -27,6 +27,7 @@ const {
   buildBlockedAgnosticRouteOutputExperiment,
 } = require("./planner/agnostic-route-output");
 const { buildRegisteredCityCandidateFill } = require("./planner/registered-city-candidate-fill");
+const { buildPreviewPreferenceFit } = require("./planner/preview-preference-fit");
 const { buildPreviewBetaEngineStatus } = require("./planner/preview-beta-engine-status");
 const { evaluateAgnosticPromotion } = require("./planner/agnostic-promotion-gate");
 const { buildEngineReadinessVerdict } = require("./planner/agnostic-engine-readiness");
@@ -1840,6 +1841,7 @@ function buildApp({
         let generationCityConfig = cityConfig;
         let registeredCityFillSidecar = null;
         let previewBetaActive = false;
+        let previewPreferenceCoverage = null;
         if (registeredCityFillEligible) {
           const roleOrigin = resolvePlannerRoleOrigin(cityConfig, request.body || {});
           const rolePayload = buildPlannerRolePayload(cityConfig, request, payload, roleOrigin);
@@ -1874,6 +1876,27 @@ function buildApp({
           generationCityConfig = fill.cityConfig || cityConfig;
           registeredCityFillSidecar = { registered_city_candidate_fill: fill.sidecar };
           previewBetaActive = previewBetaEngine;
+          // Preference-driven composition: ask the shared candidate reservoir
+          // which catalogue/source-backed candidates actually satisfy each
+          // requested preference, and hand the route engine a per-id fit map so
+          // stop SELECTION is preference-shaped (different preferences →
+          // different `primary_route.main_stops`) instead of recycling the same
+          // near-anchor cluster. Generic to preview-thin cities; source-fit is
+          // the reservoir's verdict, not re-implemented here. Coverage surfaces
+          // any preference nothing could satisfy, honestly, on the response.
+          if (isPreviewCityConfig(generationCityConfig)) {
+            const prefFit = buildPreviewPreferenceFit(generationCityConfig, {
+              preferences: Array.isArray(payload.preferences) ? payload.preferences : [],
+              origin: roleOrigin,
+              date: Array.isArray(payload.dates) ? payload.dates[0] : payload.date || null,
+            });
+            if (prefFit.fitMap) {
+              generationCityConfig = { ...generationCityConfig, __previewPreferenceFit: prefFit.fitMap };
+            }
+            if (Array.isArray(prefFit.coverage) && prefFit.coverage.length) {
+              previewPreferenceCoverage = prefFit.coverage;
+            }
+          }
         }
         const result = diversifyRecommendationDays(await generateRecommendations({
           ...payload,
@@ -1920,11 +1943,22 @@ function buildApp({
             fillSidecar: registeredCityFillSidecar,
           });
         }
+        const previewPreferenceSidecar = previewPreferenceCoverage
+          ? {
+              preference_coverage: {
+                entries: previewPreferenceCoverage,
+                covered: previewPreferenceCoverage.filter((c) => c.status === "covered").map((c) => c.preference),
+                partial: previewPreferenceCoverage.filter((c) => c.status === "partial").map((c) => c.preference),
+                missing: previewPreferenceCoverage.filter((c) => c.status === "missing").map((c) => c.preference),
+              },
+            }
+          : null;
         baselineBody = {
           ...result,
           requested_city: requestedCity,
           city_fallback_used: cityFallbackUsed,
           ...(previewEngineStatus ? { preview_engine: previewEngineStatus } : {}),
+          ...(previewPreferenceSidecar || {}),
           ...(registeredCityFillSidecar || {}),
           ...(plannerInspectSidecar || {}),
           ...(routeOutputDiagnosticsSidecar || {}),

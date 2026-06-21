@@ -49,10 +49,17 @@ Blitz, Planner, Pulse/live, and future Almanac objects should speak through comm
 Current status:
 
 - Blitz: strong.
-- Planner / Your Day: partial; still relies heavily on legacy catalog/template composition.
+- Planner / Your Day: partial; rich citypacks still use legacy catalog/template
+  composition, but thin PREVIEW cities now let the reservoir's fit verdict drive
+  stop SELECTION for requested preferences (different preferences → different
+  `primary_route.main_stops`; a preference nothing satisfies is reported missing
+  instead of silently filled by an off-intent source pack). Rich-citypack
+  composition is deliberately untouched.
 - Pulse/live: source-provider foundations exist, but event/local-live candidates are not yet first-class in the candidate spine.
 
-Next step: build the Candidate Reservoir -> Planner bridge.
+Next step: extend reservoir-driven composition from preview-thin cities to the
+general Planner path (rich citypacks + agnostic), and make missing/partial
+preference coverage first-class in the route output contract.
 
 ### 2. City packs are accelerators, not dependencies
 
