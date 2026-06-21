@@ -1260,7 +1260,20 @@ function buildStopCandidates(params) {
         // editorial layer only PRESENTS. Order strictly by spine rank, with the
         // reroll memory penalty on top so reroll still moves through the pool.
         const memoryPenalty = scoreMemoryPenalty(item, memory, candidate.move_kind, candidate.areaTokens || []);
-        candidate.score = Number(((rankedItems.length - index) * 10 + memoryPenalty).toFixed(2));
+        let spineScore = (rankedItems.length - index) * 10;
+        // Reroll variety: push a place already shown in the bounded recent window
+        // BELOW the entire not-yet-shown set so reroll walks the pool. The flat
+        // -30 recent-stop penalty inside scoreMemoryPenalty cannot do this against
+        // the ×10 spine spacing — a few ranks of lead already exceed 30 — so a
+        // dominant top-ranked place re-won every reroll once the first few were
+        // shown (back-to-back lock). Demote shown candidates past the full spine
+        // range; not-yet-shown candidates keep their exact spine score, so a
+        // single move (no memory) is byte-identical to before. The move-kind /
+        // area tiebreaks from scoreMemoryPenalty still order within each tier.
+        if (memory.recent_stop_ids.includes(item.id)) {
+          spineScore -= rankedItems.length * 10 + 100;
+        }
+        candidate.score = Number((spineScore + memoryPenalty).toFixed(2));
         candidate.spine_rank = index;
       }
       return candidate;
