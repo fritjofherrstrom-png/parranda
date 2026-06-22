@@ -10,6 +10,8 @@
  * score should still outrank a low-priority editorial item.
  */
 
+const { classifyCulturalSalience } = require("./cultural-salience");
+
 const TRUST_WEIGHT = {
   verified: 1.4,
   official: 1.3,
@@ -58,12 +60,26 @@ function scoreSignals(signals, _context) {
     // The raw score has historically lived in the 0..10 range. Normalize
     // it into a similar magnitude before multiplying by the layered weights.
     const base = 1 + Math.max(0, Math.min(raw, 10)) * 0.1;
-    const computed = trust * fresh * typeW * base;
 
-    return {
+    // Cultural-relevance salience: a live feed mixes real happenings with
+    // administrative/civic notices (council/committee meetings). Without this a
+    // bureaucratic notice ranks like a concert on timing/confidence alone.
+    // Cultural cues lift; administrative notices are demoted (never zeroed — a
+    // council meeting is still a real current signal, just not a headline);
+    // neutral signals keep weight 1 so their output is byte-identical to before.
+    const salience = classifyCulturalSalience(signal);
+    const computed = trust * fresh * typeW * base * salience.weight;
+
+    const scored = {
       ...signal,
       score: Number(computed.toFixed(3)),
     };
+    // Tag only non-neutral signals so neutral output is unchanged and the
+    // masthead can keep administrative notices out of the page headline.
+    if (salience.tier !== "neutral") {
+      scored.cultural_salience = salience.tier;
+    }
+    return scored;
   });
 
   return ranked

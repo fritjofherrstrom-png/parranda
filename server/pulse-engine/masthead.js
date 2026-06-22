@@ -107,11 +107,22 @@ function pickMastheadSignal(signals) {
 
   if (renderableSignals.length === 0) return null;
 
-  const preferred = renderableSignals.find(
+  // Keep administrative/civic-notice signals (council/committee meetings, tagged
+  // `cultural_salience: "administrative"` by the ranker) out of the masthead
+  // when any non-administrative signal can headline — a council meeting should
+  // never be the city's "live experience" headline if a real happening exists.
+  // If administrative notices are all there is, fall back to them rather than
+  // leaving the page blank.
+  const nonAdministrative = renderableSignals.filter(
+    (signal) => signal && signal.cultural_salience !== "administrative",
+  );
+  const pool = nonAdministrative.length ? nonAdministrative : renderableSignals;
+
+  const preferred = pool.find(
     (signal) => signal && PREFERRED_TYPES_FOR_HEADLINE.has(signal.type),
   );
 
-  return preferred || renderableSignals[0] || null;
+  return preferred || pool[0] || null;
 }
 
 function hasMastheadHeadline(signal) {
