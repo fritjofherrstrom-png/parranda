@@ -2964,6 +2964,13 @@ let plannedDays = [];
 let activePlannedDate = null;
 let latestPlannerSnapshot = null;
 let latestPlannerResolution = null;
+// Authoritative preference coverage from the route response (#308). Present only
+// for preview-thin cities; null for rich citypacks (which keep the legacy
+// tag-heuristic intent notes). Paired with the intent keys actually planned so
+// the honesty note maps the reservoir's per-signal verdict back to the chips the
+// user chose.
+let latestPlannerCoverage = null;
+let latestPlannerCoverageIntentKeys = [];
 let activeDistrictId = "monti";
 let activeOptimizerMode = null;
 let activeDistanceMode = "soft_target";
@@ -6535,6 +6542,20 @@ function updateLatestPlannerRestoreNotice() {
 
 function applyPlannerResponseState(response, options = {}) {
   plannedDays = Array.isArray(response?.days) ? response.days : [];
+  // Capture the authoritative reservoir coverage verdict (#308) plus the chips
+  // that were actually planned. The checkboxes already reflect the planned
+  // selection at this point — for a fresh plan they are the current selection,
+  // and on restore applyPlannerSnapshot has re-applied the snapshot before this
+  // runs — so the selected intent keys are the correct chip set to map onto.
+  latestPlannerCoverage =
+    response?.preference_coverage && typeof response.preference_coverage === "object"
+      ? response.preference_coverage
+      : null;
+  // Gate to EXPLICITLY chosen chips (same gate as the tag-visibility notes), so
+  // a default-mode plan the user didn't actively shape never nags about a thin
+  // default chip. Coverage notes then only surface gaps in preferences the user
+  // deliberately asked for.
+  latestPlannerCoverageIntentKeys = latestPlannerCoverage ? getExplicitSelectedIntentKeys() : [];
   const resolvedState = {
     homeBase: response?.resolved_home_base || null,
     start: response?.resolved_start || null,
@@ -11110,7 +11131,7 @@ function buildPlannerIntentVisibilityState() {
   });
 }
 
-function buildPlannerIntentNotes(visibilityState) {
+function buildPlannerIntentNotes(visibilityState, options = {}) {
   if (!visibilityState) {
     return [];
   }
@@ -11135,7 +11156,12 @@ function buildPlannerIntentNotes(visibilityState) {
     }
   }
 
-  if (visibilityState.missingIntentKeys.length) {
+  // When the server returned an authoritative reservoir coverage verdict
+  // (preview-thin cities, #308), the missing-preference honesty note comes from
+  // buildPlannerCoverageNotes instead of this tag-visibility heuristic — so we
+  // skip it here to avoid a duplicate, possibly-conflicting line. The day-cue
+  // note above still applies. Rich citypacks keep the heuristic note unchanged.
+  if (!options.skipMissing && visibilityState.missingIntentKeys.length) {
     const missingLabels = visibilityState.missingIntentKeys
       .filter((intentKey) => plannerIntentByKey.has(intentKey))
       .map(getPlannerIntentLabel)
@@ -11151,6 +11177,91 @@ function buildPlannerIntentNotes(visibilityState) {
   }
 
   return notes;
+}
+
+// Map the route response's per-signal preference coverage (#308) back onto a
+// planner chip. A chip sends several payloadSignals (e.g. Views → utsikt +
+// hidden gems); the chip is covered if ANY of its signals matched, partial if
+// some only partially matched, and missing only if every signal it requested
+// came back unmatched. Returns null when none of the chip's signals were part
+// of this request (so it never invents a verdict).
+function coverageStatusForIntentKey(intentKey, coverage) {
+  const definition = plannerIntentByKey.get(intentKey);
+  if (!definition || !coverage) {
+    return null;
+  }
+  const statusBySignal = new Map(
+    (Array.isArray(coverage.entries) ? coverage.entries : []).map((entry) => [entry.preference, entry.status]),
+  );
+  let evaluated = false;
+  let covered = false;
+  let partial = false;
+  for (const signal of definition.payloadSignals || []) {
+    if (!statusBySignal.has(signal)) {
+      continue;
+    }
+    evaluated = true;
+    const status = statusBySignal.get(signal);
+    if (status === "covered") {
+      covered = true;
+    } else if (status === "partial") {
+      partial = true;
+    }
+  }
+  if (!evaluated) {
+    return null;
+  }
+  return covered ? "covered" : partial ? "partial" : "missing";
+}
+
+// Authoritative preference-coverage notes (#308). For a preview-thin city, the
+// reservoir reports which requested preferences it could actually satisfy. We
+// surface the honest gaps — partial matches and outright misses — at the chip
+// level the user selected, so an unfilled preference is visible instead of being
+// silently absorbed into a generic day. Returns [] for rich citypacks (no
+// coverage) or when everything the user asked for was covered.
+function buildPlannerCoverageNotes() {
+  const coverage = latestPlannerCoverage;
+  if (!coverage || !latestPlannerCoverageIntentKeys.length) {
+    return [];
+  }
+
+  const partialLabels = [];
+  const missingLabels = [];
+  for (const intentKey of latestPlannerCoverageIntentKeys) {
+    if (!plannerIntentByKey.has(intentKey)) {
+      continue;
+    }
+    const status = coverageStatusForIntentKey(intentKey, coverage);
+    if (status === "partial") {
+      partialLabels.push(getPlannerIntentLabel(intentKey));
+    } else if (status === "missing") {
+      missingLabels.push(getPlannerIntentLabel(intentKey));
+    }
+  }
+
+  const notes = [];
+  if (missingLabels.length) {
+    const labels = formatPlannerIntentLabelList(missingLabels.slice(0, 3));
+    notes.push(
+      isEnglishUi
+        ? `${labels} couldn’t be filled from today’s ${plannerCityLabelForNote()} sources — shown as honestly missing, not swapped for a generic stop.`
+        : `${labels} gick inte att fylla från dagens ${plannerCityLabelForNote()}-källor — visas ärligt som saknat, inte utbytt mot ett generiskt stopp.`,
+    );
+  }
+  if (partialLabels.length) {
+    const labels = formatPlannerIntentLabelList(partialLabels.slice(0, 3));
+    notes.push(
+      isEnglishUi
+        ? `${labels} is only partly matched in today’s route.`
+        : `${labels} matchas bara delvis i dagens rutt.`,
+    );
+  }
+  return notes;
+}
+
+function plannerCityLabelForNote() {
+  return document.body?.dataset?.cityLabel || (isEnglishUi ? "local" : "lokala");
 }
 
 function buildRouteResultHeading(cityLabel) {
@@ -11231,13 +11342,21 @@ function renderPlannedDays() {
     dayTabs.appendChild(button);
   });
 
-  const intentNotes = buildPlannerIntentNotes(intentVisibilityState);
+  // Authoritative reservoir coverage notes first (preview-thin honesty, #308),
+  // then the tag-visibility day cues. When authoritative coverage exists its
+  // missing verdict replaces the heuristic one (skipMissing) so the gap is
+  // reported once, accurately.
+  const coverageNotes = buildPlannerCoverageNotes();
+  const intentNotes = buildPlannerIntentNotes(intentVisibilityState, {
+    skipMissing: Boolean(latestPlannerCoverage),
+  });
+  const resultNotes = [...coverageNotes, ...intentNotes];
 
-  if (intentNotes.length) {
+  if (resultNotes.length) {
     const noteList = document.createElement("div");
     noteList.className = "planner-results-intent-notes";
 
-    intentNotes.forEach((text) => {
+    resultNotes.forEach((text) => {
       const note = document.createElement("p");
       note.className = "planner-results-intent-note";
       note.textContent = text;
