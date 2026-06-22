@@ -26,3 +26,14 @@ services:
       # makes the cache durable — see AGNOSTIC_ENGINE_NORTH_STAR.md.)
       - key: PARRANDA_CACHE_DIR
         value: /tmp/parranda-source-cache
+      # Second open source FAMILY: Wikidata notable places (CC0). Independent of
+      # OSM, so a place both sources know merges (entity-resolution) into one
+      # candidate with two families → real cross-source consensus past the
+      # single-family `map` ceiling. Cached like Overpass.
+      - key: PARRANDA_WIKIDATA_SOURCE
+        value: enabled
+      # Wikidata label-language priority (local first) so names match local OSM
+      # names for entity-resolution. Per-request locale resolution is a follow-up;
+      # for the current Athens field test, Greek first.
+      - key: PARRANDA_WIKIDATA_LABEL_LANGS
+        value: el,en

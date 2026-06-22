@@ -310,7 +310,13 @@ function normalizeName(value) {
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
+    // Keep ANY-script letters + digits (Unicode-aware), not just ASCII. The old
+    // `[^a-z0-9]` stripped every non-Latin character, so a Greek/Cyrillic/etc.
+    // name normalized to "" → zero tokens → it could never merge on geo+name and
+    // cross-source consensus was impossible for non-Latin cities. ASCII names are
+    // unaffected (a-z0-9 ⊂ \p{L}\p{N}); NFD + diacritic stripping above still
+    // folds accented Latin the same way.
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim()
     .replace(/\s+/g, " ");
 }

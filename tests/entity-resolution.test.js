@@ -58,6 +58,19 @@ test("nameSimilarity handles category-word-on-one-side via distinctive tokens", 
   assert.ok(nameSimilarity("Bar Roma", "Bar Milano") < 0.6);
 });
 
+test("non-Latin (Greek) names produce tokens and merge — cross-source consensus is not Latin-only", () => {
+  // Pre-fix, the ASCII-only normalizer stripped Greek to "" → zero tokens → these
+  // could never merge on geo+name, so consensus was impossible for Athens.
+  assert.equal(normalizeName("Επιγραφικό Μουσείο"), "επιγραφικο μουσειο");
+  assert.ok(distinctiveTokens("Επιγραφικό Μουσείο").size >= 1);
+  // Cyrillic too — the fix is generic, not a Greek special-case.
+  assert.ok(distinctiveTokens("Третьяковская галерея").size >= 1);
+
+  const a = external({ id: "osm-gr", label: "Επιγραφικό Μουσείο", type: "museum", lat: 37.9890, lng: 23.7330, evidence: [{ claim_type: "existence", value: true, source_ref: { provider_id: "osm", source_family: "map" } }] });
+  const b = external({ id: "wikidata-Q1768487", label: "Επιγραφικό Μουσείο", type: "museum", lat: 37.98902, lng: 23.73301, evidence: [{ claim_type: "existence", value: true, source_ref: { provider_id: "wikidata", source_family: "open_knowledge" } }] });
+  assert.equal(matchIdentity(a, b).same, true, "two Greek-named open-source records at the same spot merge");
+});
+
 test("wikidataIdOf reads id from evidence source urls or known fields", () => {
   assert.equal(wikidataIdOf(external()), "Q42");
   assert.equal(wikidataIdOf(curated({ known_place_id: "Q99" })), "Q99");

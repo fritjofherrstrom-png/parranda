@@ -133,12 +133,33 @@ function createSourceCache(options = {}) {
     }
   }
 
+  // Synchronous lookup with NO producer: returns a fresh cached value (memory,
+  // then disk) or null. Lets a caller decide to serve immediately on a miss and
+  // warm the cache out-of-band (used for slow sources like WDQS that must not
+  // block the request path).
+  function peek(key) {
+    const memEntry = mem.get(key);
+    if (fresh(memEntry)) return memEntry.value;
+    const fileEntry = readFile(key);
+    if (fileEntry) {
+      mem.set(key, fileEntry);
+      return fileEntry.value;
+    }
+    return null;
+  }
+
+  // Kick a producer to populate the cache without awaiting it (de-duped by the
+  // in-flight map inside get). Fire-and-forget; errors are swallowed.
+  function warm(key, producer, opts = {}) {
+    Promise.resolve(get(key, producer, opts)).catch(() => {});
+  }
+
   function clear() {
     mem.clear();
     inFlight.clear();
   }
 
-  return { get, clear, namespace, ttlMs: boundedTtlMs, fileBacked: Boolean(fileDir) };
+  return { get, peek, warm, clear, namespace, ttlMs: boundedTtlMs, fileBacked: Boolean(fileDir) };
 }
 
 module.exports = { createSourceCache, DEFAULT_TTL_MS };
