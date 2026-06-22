@@ -6,3 +6,23 @@ services:
     startCommand: npm start
     healthCheckPath: /api/health
     autoDeployTrigger: commit
+    envVars:
+      # Turn ON live source acquisition in production. These were unset, so the
+      # deployed app ran on curated catalog + city-owned source packs ONLY —
+      # every loader / resolver / source-backed PR was dark in prod. The loader
+      # is rate-safe to enable now: it is wrapped in a de-duping, TTL, optional
+      # file-backed cache (see PARRANDA_CACHE_DIR) so repeat/concurrent lookups
+      # for the same anchor never re-hit Overpass.
+      - key: PARRANDA_OPEN_DATA_LOADER
+        value: enabled
+      # Freeform place-name → trusted coordinate anchor (Nominatim). Already
+      # carries its own UA + 1 req/s gate + in-memory cache; fail-closed.
+      - key: PARRANDA_PLACE_RESOLVER
+        value: enabled
+      # Source-cache directory. /tmp is writable on Render and gives a per-instance
+      # cache that survives across requests and coalesces concurrent lookups. For
+      # cross-redeploy persistence, attach a Render disk and point this at its
+      # mount path. (Agnostic engine-compose promotion stays OFF until that disk
+      # makes the cache durable — see AGNOSTIC_ENGINE_NORTH_STAR.md.)
+      - key: PARRANDA_CACHE_DIR
+        value: /tmp/parranda-source-cache

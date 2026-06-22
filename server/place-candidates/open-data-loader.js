@@ -29,6 +29,8 @@
  * service. Those are deliberate next-step boundaries.
  */
 
+const { createSourceCache } = require("./source-cache");
+
 const DEFAULT_OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
 // Overpass (like Nominatim, see place-resolver.js) rejects requests without an
 // identifying User-Agent with HTTP 406 — without this header every live call
@@ -95,6 +97,7 @@ function createOpenDataLoader({
   limit = DEFAULT_LIMIT,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   userAgent = DEFAULT_USER_AGENT,
+  cache = null,
 } = {}) {
   if (typeof fetcher !== "function") {
     return null; // honest fail closed: no fetcher → no loader
@@ -103,7 +106,7 @@ function createOpenDataLoader({
   const boundedLimit = Math.max(1, Math.min(Math.floor(limit), MAX_LIMIT));
   const boundedTimeoutMs = Math.max(50, Math.floor(timeoutMs));
 
-  return async function loadOpenDataAround({ lat, lng } = {}) {
+  const loadOpenDataAround = async function loadOpenDataAround({ lat, lng } = {}) {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return withLoaderStatus([], "loaded:0", null);
 
     const radiusM = Math.round(boundedRadiusKm * 1000);
@@ -144,6 +147,32 @@ function createOpenDataLoader({
 
     const records = mapOverpassResponse(payload, boundedLimit);
     return withLoaderStatus(records, records.length > 0 ? `loaded:${records.length}` : "loaded:0", null);
+  };
+
+  if (!cache || typeof cache.get !== "function") {
+    return loadOpenDataAround;
+  }
+
+  // Cached loader: repeat/concurrent lookups for the same anchor must not re-hit
+  // Overpass (the "no public flip without persistent caching" guardrail). The key
+  // buckets the anchor to ~110 m and carries the radius/limit that shaped the
+  // query; the cache coalesces concurrent identical lookups and (when file-backed)
+  // survives across requests. Only non-error results are stored, so a transient
+  // outage is never frozen in.
+  return async function cachedLoadOpenDataAround({ lat, lng } = {}) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return loadOpenDataAround({ lat, lng });
+    }
+    const key = `${lat.toFixed(3)},${lng.toFixed(3)}:r${boundedRadiusKm}:l${boundedLimit}`;
+    const entry = await cache.get(
+      key,
+      async () => {
+        const result = await loadOpenDataAround({ lat, lng });
+        return { records: Array.from(result), status: result.loader_status, error: result.loader_error };
+      },
+      { shouldStore: (value) => value && typeof value.status === "string" && !value.status.startsWith("error") },
+    );
+    return withLoaderStatus(entry.records, entry.status, entry.error);
   };
 }
 
@@ -345,7 +374,17 @@ function findOsmMapping(tags) {
 function resolveDefaultOpenDataLoader(env = process.env) {
   const flag = String(env?.PARRANDA_OPEN_DATA_LOADER || "").toLowerCase();
   if (flag !== "enabled" && flag !== "1" && flag !== "true") return null;
-  return createOpenDataLoader();
+  // Wrap the live Overpass loader in a persistent-capable cache so a deploy can
+  // turn it on without re-hitting Overpass on every request. File-backed when
+  // PARRANDA_CACHE_DIR is set (point it at a mounted disk to survive redeploys);
+  // in-memory + de-duping otherwise.
+  const ttlMs = Number(env?.PARRANDA_SOURCE_CACHE_TTL_MS);
+  const cache = createSourceCache({
+    namespace: "overpass",
+    dir: env?.PARRANDA_CACHE_DIR || null,
+    ttlMs: Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : undefined,
+  });
+  return createOpenDataLoader({ cache });
 }
 
 function clamp(value, min, max) {
