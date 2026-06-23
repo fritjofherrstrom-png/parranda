@@ -58,6 +58,34 @@ test("nameSimilarity handles category-word-on-one-side via distinctive tokens", 
   assert.ok(nameSimilarity("Bar Roma", "Bar Milano") < 0.6);
 });
 
+test("non-Latin names (Greek AND Cyrillic) produce tokens and merge — consensus is script-agnostic, not Athens-only", () => {
+  // Pre-fix, the ASCII-only normalizer stripped any non-Latin name to "" → zero
+  // tokens → it could never merge on geo+name, so cross-source consensus was
+  // impossible for non-Latin cities generally (Athens was just where we hit it).
+  // Two independent scripts prove the fix is generic.
+  assert.equal(normalizeName("Επιγραφικό Μουσείο"), "επιγραφικο μουσειο"); // Greek
+  assert.ok(distinctiveTokens("Επιγραφικό Μουσείο").size >= 1);
+  assert.ok(distinctiveTokens("Третьяковская галерея").size >= 1); // Cyrillic (Moscow)
+
+  // Greek: a place OSM + Wikidata both know merges into one (two families).
+  const gA = external({ id: "osm-gr", label: "Επιγραφικό Μουσείο", type: "museum", lat: 37.9890, lng: 23.7330, evidence: [{ claim_type: "existence", value: true, source_ref: { provider_id: "osm", source_family: "map" } }] });
+  const gB = external({ id: "wikidata-Q1768487", label: "Επιγραφικό Μουσείο", type: "museum", lat: 37.98902, lng: 23.73301, evidence: [{ claim_type: "existence", value: true, source_ref: { provider_id: "wikidata", source_family: "open_knowledge" } }] });
+  assert.equal(matchIdentity(gA, gB).same, true, "two Greek-named open-source records at the same spot merge");
+
+  // Cyrillic: same generic capability, a different city/script (Moscow gallery).
+  const cA = external({ id: "osm-ru", label: "Третьяковская галерея", type: "gallery", lat: 55.7415, lng: 37.6208, evidence: [{ claim_type: "existence", value: true, source_ref: { provider_id: "osm", source_family: "map" } }] });
+  const cB = external({ id: "wikidata-Q2616", label: "Третьяковская галерея", type: "gallery", lat: 55.74152, lng: 37.62081, evidence: [{ claim_type: "existence", value: true, source_ref: { provider_id: "wikidata", source_family: "open_knowledge" } }] });
+  assert.equal(matchIdentity(cA, cB).same, true, "two Cyrillic-named open-source records at the same spot merge");
+});
+
+test("Latin-name merging is unchanged by the Unicode fix (no regression)", () => {
+  // ASCII normalization is byte-identical to before (a-z0-9 ⊂ \p{L}\p{N}), so
+  // existing Latin/curated merges behave exactly as they did.
+  assert.equal(normalizeName("Caffè  Sant'Eustachio!"), "caffe sant eustachio");
+  const a = external({ id: "osm-lat", label: "Gianicolo Terrace", type: "viewpoint", lat: 41.8896, lng: 12.4583, evidence: [{ claim_type: "existence", value: true, source_ref: { provider_id: "osm", source_family: "map" } }] });
+  assert.equal(matchIdentity(curated(), a).same, true, "curated ↔ external Latin merge still fires");
+});
+
 test("wikidataIdOf reads id from evidence source urls or known fields", () => {
   assert.equal(wikidataIdOf(external()), "Q42");
   assert.equal(wikidataIdOf(curated({ known_place_id: "Q99" })), "Q99");

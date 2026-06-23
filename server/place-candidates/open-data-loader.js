@@ -30,6 +30,7 @@
  */
 
 const { createSourceCache } = require("./source-cache");
+const { createWikidataSource } = require("./wikidata-source");
 
 const DEFAULT_OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
 // Overpass (like Nominatim, see place-resolver.js) rejects requests without an
@@ -384,7 +385,65 @@ function resolveDefaultOpenDataLoader(env = process.env) {
     dir: env?.PARRANDA_CACHE_DIR || null,
     ttlMs: Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : undefined,
   });
-  return createOpenDataLoader({ cache });
+  const osmLoader = createOpenDataLoader({ cache });
+
+  // Optional SECOND open source family: Wikidata notable places. When enabled,
+  // both sources are queried (each independently cached) and concatenated; the
+  // downstream entity-resolution merges OSM↔Wikidata duplicates so a place both
+  // sources know carries two families (`map` + `open_knowledge`) → real
+  // cross-source consensus past the single-family ceiling the reducer enforces.
+  const wikiFlag = String(env?.PARRANDA_WIKIDATA_SOURCE || "").toLowerCase();
+  if (wikiFlag !== "enabled" && wikiFlag !== "1" && wikiFlag !== "true") {
+    return osmLoader;
+  }
+  // Label-language priority (local first) so Wikidata names match local OSM
+  // names for entity-resolution. Configurable per deploy; multi-city per-request
+  // locale resolution is a follow-up.
+  const labelLanguages = String(env?.PARRANDA_WIKIDATA_LABEL_LANGS || "en")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const wikiRaw = createWikidataSource({ labelLanguages });
+  if (typeof wikiRaw !== "function") return osmLoader;
+  const wikiCache = createSourceCache({
+    namespace: "wikidata",
+    dir: env?.PARRANDA_CACHE_DIR || null,
+    ttlMs: Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : undefined,
+  });
+  const storeNonEmpty = { shouldStore: (value) => Array.isArray(value) && value.length > 0 };
+  const wikiSource = ({ lat, lng } = {}) => {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];
+    const key = `${lat.toFixed(3)},${lng.toFixed(3)}`;
+    const cached = wikiCache.peek(key);
+    if (cached) return cached;
+    // WDQS cold queries are slow (~10-20s) and must NOT block the route. On a
+    // cache miss, warm Wikidata out-of-band and serve OSM-only this time; the
+    // next request for this anchor includes the Wikidata family from cache.
+    // (Field testing revisits the same city, so cross-source consensus appears
+    // on the repeat visit — without ever making a route request wait on WDQS.)
+    // Only non-empty results are cached, so a transient SPARQL failure is not
+    // frozen for the TTL.
+    wikiCache.warm(key, () => wikiRaw({ lat, lng }), storeNonEmpty);
+    return [];
+  };
+  return composeOpenDataLoaders(osmLoader, wikiSource);
+}
+
+// Compose the OSM loader (returns a `withLoaderStatus` array) with the Wikidata
+// source (returns a plain array). Both run concurrently and fail soft on their
+// own; the combined result is a `withLoaderStatus` array carrying every record.
+function composeOpenDataLoaders(osmLoader, wikiSource) {
+  return async function loadComposedOpenData({ lat, lng } = {}) {
+    const [osm, wiki] = await Promise.all([
+      Promise.resolve(osmLoader({ lat, lng })).catch(() => withLoaderStatus([], "error_failed_closed", "osm_threw")),
+      Promise.resolve(wikiSource({ lat, lng })).catch(() => []),
+    ]);
+    const osmRecords = Array.isArray(osm) ? osm : [];
+    const wikiRecords = Array.isArray(wiki) ? wiki : [];
+    const records = [...osmRecords, ...wikiRecords];
+    const status = records.length > 0 ? `loaded:${records.length}` : (osm.loader_status || "loaded:0");
+    return withLoaderStatus(records, status, osm.loader_error || null);
+  };
 }
 
 function clamp(value, min, max) {
