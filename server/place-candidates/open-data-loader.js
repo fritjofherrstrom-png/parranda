@@ -37,7 +37,10 @@ const DEFAULT_OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
 // identifying User-Agent with HTTP 406 — without this header every live call
 // fails closed and the loader silently returns [].
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
-const DEFAULT_RADIUS_KM = 1.0;
+// A single-day walking loop ranges well beyond 1 km from the anchor; 1.5 km
+// reach catches the scenic/cultural/second-hand places that cluster outside a
+// tight centre without pulling in a different district. Generic — every city.
+const DEFAULT_RADIUS_KM = 1.5;
 const DEFAULT_LIMIT = 25;
 // How many raw elements to ask Overpass for before balancing down to the final
 // limit. Wider than the limit so scarce categories survive a dense centre;
@@ -63,6 +66,7 @@ const OSM_TAG_MAP = [
   // PR stays loader-only and changes no shared behaviour.)
   { key: "tourism", value: "viewpoint", type: "viewpoint", tags: ["utsikt"] },
   { key: "leisure", value: "park", type: "park", tags: ["park", "green"] },
+  { key: "leisure", value: "nature_reserve", type: "park", tags: ["park", "green"] },
   { key: "leisure", value: "garden", type: "garden", tags: ["garden", "green"] },
   { key: "leisure", value: "marina", type: "promenade", tags: ["waterfront", "coast"] },
   { key: "man_made", value: "pier", type: "promenade", tags: ["waterfront", "coast"] },
@@ -75,11 +79,19 @@ const OSM_TAG_MAP = [
   { key: "shop", value: "second_hand", type: "vintage-shop", tags: ["second_hand"] },
   { key: "shop", value: "antiques", type: "vintage-shop", tags: ["vintage", "antique"] },
   { key: "shop", value: "charity", type: "vintage-shop", tags: ["second_hand", "charity"] },
+  { key: "shop", value: "vintage", type: "vintage-shop", tags: ["vintage", "second_hand"] },
   // food (restaurant / taverna-style / street food)
   { key: "amenity", value: "restaurant", type: "restaurant", tags: ["mat"] },
   { key: "amenity", value: "fast_food", type: "street-food", tags: ["mat"] },
-  // coffee / fika
+  // coffee / fika — a café, a dedicated coffee shop, a bakery, and a gelateria
+  // are all fika stops. All map to the EXISTING `cafe` type (recognized as fika
+  // by the shared vocab), so this is purely broader OSM coverage of a role that
+  // already exists — no new vocab, every city benefits identically.
   { key: "amenity", value: "cafe", type: "cafe", tags: ["fika"] },
+  { key: "shop", value: "coffee", type: "cafe", tags: ["fika"] },
+  { key: "shop", value: "bakery", type: "cafe", tags: ["fika"] },
+  { key: "shop", value: "pastry", type: "cafe", tags: ["fika"] },
+  { key: "amenity", value: "ice_cream", type: "cafe", tags: ["fika"] },
   // bars / evening (pub & biergarten read as bars, not food)
   { key: "amenity", value: "bar", type: "bar", tags: ["nattliv"] },
   { key: "amenity", value: "pub", type: "bar", tags: ["nattliv"] },
@@ -89,6 +101,7 @@ const OSM_TAG_MAP = [
   // culture
   { key: "tourism", value: "museum", type: "museum", tags: ["kultur", "museum"] },
   { key: "tourism", value: "gallery", type: "gallery", tags: ["kultur"] },
+  { key: "amenity", value: "arts_centre", type: "gallery", tags: ["kultur"] },
 ];
 
 function createOpenDataLoader({

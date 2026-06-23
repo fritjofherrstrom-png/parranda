@@ -40,6 +40,22 @@ test("OSM element without wikidata stays single-family (will be gated out downst
   assert.deepEqual(record.sources.map((s) => s.family), ["map"]);
 });
 
+test("broadened OSM coverage maps to existing recognized types (no new vocab, generic for every city)", () => {
+  const cases = [
+    [{ shop: "bakery" }, "cafe", "fika"],
+    [{ shop: "coffee" }, "cafe", "fika"],
+    [{ amenity: "ice_cream" }, "cafe", "fika"],
+    [{ shop: "vintage" }, "vintage-shop", "vintage"],
+    [{ leisure: "nature_reserve" }, "park", "green"],
+    [{ amenity: "arts_centre" }, "gallery", "kultur"],
+  ];
+  for (const [tags, type, tag] of cases) {
+    const record = mapOsmElement({ type: "node", id: 1, lat: 41.9, lon: 12.5, tags: { name: "X", ...tags } });
+    assert.equal(record && record.type, type, JSON.stringify(tags));
+    assert.ok(record.tags.includes(tag), `${JSON.stringify(tags)} carries ${tag}`);
+  }
+});
+
 test("a malformed wikidata tag does not add a second source", () => {
   const record = mapOsmElement({
     type: "node",
