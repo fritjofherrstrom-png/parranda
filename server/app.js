@@ -1953,11 +1953,51 @@ function buildApp({
               },
             }
           : null;
+        // Agnostic place STRUCTURE: derive the place's districts from the
+        // candidate pool the route already has (curated catalog + loaded
+        // source-backed), and compose a day ACROSS them for the requested
+        // intents. Additive + fail-soft: a new `place_structure` field, never a
+        // mutation of the route. Generic — any city with a candidate pool; pure
+        // geometry + tag tallies, no citypack, no extra fetch. (Rendering this in
+        // the UI + the unknown-city agnostic path are follow-ups; this surfaces
+        // the intelligence on the response without touching default behaviour.)
+        let placeStructureSidecar = null;
+        try {
+          const structureCandidates = [
+            ...((generationCityConfig.catalog && generationCityConfig.catalog.allItems) || []),
+            ...(generationCityConfig.sourceCandidates || []),
+          ].filter((c) => c && Number.isFinite(c.lat) && Number.isFinite(c.lng));
+          if (structureCandidates.length >= 3) {
+            const { composeDistrictDay } = require("./candidates/district-composition");
+            const day = composeDistrictDay(structureCandidates, {
+              intents: Array.isArray(payload.preferences) ? payload.preferences : [],
+              maxAreas: 3,
+            });
+            if (day.structure.area_count > 0) {
+              placeStructureSidecar = {
+                place_structure: {
+                  area_count: day.structure.area_count,
+                  scattered_count: day.structure.scattered_count,
+                  areas: day.structure.areas,
+                  district_day: {
+                    areas: day.areas,
+                    legs: day.legs,
+                    covered_intents: day.covered_intents,
+                    missing_intents: day.missing_intents,
+                  },
+                },
+              };
+            }
+          }
+        } catch (_error) {
+          placeStructureSidecar = null; // fail soft: structure never blocks a route
+        }
         baselineBody = {
           ...result,
           requested_city: requestedCity,
           city_fallback_used: cityFallbackUsed,
           ...(previewEngineStatus ? { preview_engine: previewEngineStatus } : {}),
+          ...(placeStructureSidecar || {}),
           ...(previewPreferenceSidecar || {}),
           ...(registeredCityFillSidecar || {}),
           ...(plannerInspectSidecar || {}),
