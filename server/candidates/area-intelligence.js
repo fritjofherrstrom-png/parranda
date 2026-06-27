@@ -22,12 +22,23 @@
 
 const EARTH_RADIUS_M = 6371000;
 
-// Two candidates within this walking distance are treated as the same area. A
-// district is "a few minutes' walk of related places", so ~350 m links the
-// fabric of one neighbourhood without bridging across a whole city.
+// Fallback walking-link when a set is too small to derive its own spacing. A
+// district is "a few minutes' walk of related places".
 const DEFAULT_LINK_KM = 0.35;
 // A cluster smaller than this is "scattered", not a district worth naming.
 const DEFAULT_MIN_AREA_SIZE = 3;
+
+// Density adaptation: when no explicit link distance is given, the district
+// radius is derived from the candidate set's OWN nearest-neighbour spacing, so a
+// dense city (Rome's tightly-packed catalogue) splits into several compact
+// districts instead of collapsing into one blob, while a sparse city still
+// groups. radius = clamp(medianNearestNeighbour * GROWTH, MIN, MAX).
+const ADAPT_GROWTH = 2.5;
+const ADAPT_MIN_KM = 0.15;
+// A district should stay walkable-tight (≤ ~600 m across). This ceiling is what
+// forces a dense catalogue to split into several distinct-character districts
+// instead of one large area swallowing every intent.
+const ADAPT_MAX_KM = 0.3;
 
 function toRad(deg) {
   return (deg * Math.PI) / 180;
@@ -56,8 +67,34 @@ const DAYPART_TOKENS = {
   evening: ["evening", "kväll", "kvall", "night", "nattliv", "sunset"],
 };
 
+// When a place carries no explicit daypart token, its TYPE still implies when it
+// reads best (a café is a morning thing, a bar an evening one). Generic, no place
+// names — the same vocabulary the engine already uses. Explicit time signals are
+// weighted above these inferred ones, so this only fills the silence; it never
+// overrides a real time_fit.
+const TYPE_DAYPART_HINTS = {
+  cafe: "morning", "café": "morning", coffee: "morning", bakery: "morning", pastry: "morning", breakfast: "morning",
+  market: "midday", marketplace: "midday", deli: "midday", "vintage-shop": "midday", vintage: "midday", thrift: "midday", shop: "midday",
+  restaurant: "midday", food: "midday", taverna: "midday", "street-food": "midday", "fast_food": "midday", lunch: "midday",
+  museum: "midday", gallery: "midday", "arts_centre": "midday", castle: "midday", monument: "midday", church: "midday", history: "midday",
+  viewpoint: "afternoon", scenic: "afternoon", park: "afternoon", garden: "afternoon", "nature_reserve": "afternoon", beach: "afternoon", promenade: "afternoon", waterfront: "afternoon",
+  bar: "evening", pub: "evening", nightclub: "evening", "wine-bar": "evening", cocktail: "evening",
+};
+const DAYPART_EXPLICIT_WEIGHT = 2;
+const DAYPART_INFERRED_WEIGHT = 1;
+
 function normToken(value) {
   return String(value == null ? "" : value).trim().toLowerCase();
+}
+
+// A single inferred daypart from a candidate's type/tags (first match wins by
+// band order). Used only as a low-weight fallback alongside explicit signals.
+function inferDaypartFromType(candidate) {
+  for (const token of candidateTokens(candidate)) {
+    const band = TYPE_DAYPART_HINTS[token];
+    if (band) return band;
+  }
+  return null;
 }
 
 function candidateTokens(candidate) {
@@ -77,42 +114,78 @@ function candidateDayparts(candidate) {
   return out;
 }
 
-// --- deterministic spatial clustering (union-find) -------------------------
+// --- deterministic, density-adaptive, compact clustering -------------------
 
-function clusterCandidatesIntoAreas(candidates, { linkKm = DEFAULT_LINK_KM } = {}) {
+// Median nearest-neighbour distance → the set's natural spacing.
+function adaptiveRadiusKm(items) {
+  if (items.length < 2) return DEFAULT_LINK_KM;
+  const nn = [];
+  for (let i = 0; i < items.length; i += 1) {
+    let best = Infinity;
+    for (let j = 0; j < items.length; j += 1) {
+      if (j === i) continue;
+      const d = haversineKm(items[i], items[j]);
+      if (d < best) best = d;
+    }
+    if (Number.isFinite(best)) nn.push(best);
+  }
+  if (!nn.length) return DEFAULT_LINK_KM;
+  nn.sort((a, b) => a - b);
+  const median = nn[Math.floor(nn.length / 2)];
+  return Math.min(ADAPT_MAX_KM, Math.max(ADAPT_MIN_KM, median * ADAPT_GROWTH));
+}
+
+/**
+ * Cluster candidates into COMPACT districts. A district is a walkable disk of
+ * radius `radius` around a dense seed — NOT a single-linkage chain, which would
+ * merge a whole dense city into one component. We seed from the densest point
+ * (deterministic tie-break), claim every still-unclaimed point within `radius`,
+ * and repeat. So a dense catalogue yields several tight districts; a sparse one
+ * still groups what is genuinely close. `linkKm`, when given, is the explicit
+ * radius (the knob); otherwise it is derived from the set's own spacing.
+ */
+function clusterCandidatesIntoAreas(candidates, { linkKm } = {}) {
   // Stable input order so the output is deterministic regardless of caller order.
   const items = (Array.isArray(candidates) ? candidates : [])
     .filter(hasCoords)
     .slice()
     .sort((a, b) => String(a.id ?? "").localeCompare(String(b.id ?? "")) || a.lat - b.lat || a.lng - b.lng);
+  if (!items.length) return [];
 
-  const parent = items.map((_, i) => i);
-  const find = (i) => {
-    while (parent[i] !== i) {
-      parent[i] = parent[parent[i]];
-      i = parent[i];
+  const radius = Number.isFinite(linkKm) ? linkKm : adaptiveRadiusKm(items);
+
+  // Local density = neighbours within radius. Drives a deterministic seed order.
+  const density = items.map((_, i) => {
+    let n = 0;
+    for (let j = 0; j < items.length; j += 1) {
+      if (j !== i && haversineKm(items[i], items[j]) <= radius) n += 1;
     }
-    return i;
-  };
-  const union = (i, j) => {
-    const ri = find(i);
-    const rj = find(j);
-    if (ri !== rj) parent[Math.max(ri, rj)] = Math.min(ri, rj);
-  };
+    return n;
+  });
+  const order = items
+    .map((_, i) => i)
+    .sort(
+      (a, b) =>
+        density[b] - density[a] ||
+        String(items[a].id ?? "").localeCompare(String(items[b].id ?? "")) ||
+        items[a].lat - items[b].lat ||
+        items[a].lng - items[b].lng,
+    );
 
-  for (let i = 0; i < items.length; i += 1) {
-    for (let j = i + 1; j < items.length; j += 1) {
-      if (haversineKm(items[i], items[j]) <= linkKm) union(i, j);
+  const claimed = new Array(items.length).fill(false);
+  const groups = [];
+  for (const seed of order) {
+    if (claimed[seed]) continue;
+    const members = [];
+    for (let j = 0; j < items.length; j += 1) {
+      if (!claimed[j] && haversineKm(items[seed], items[j]) <= radius) {
+        claimed[j] = true;
+        members.push(items[j]);
+      }
     }
+    groups.push(members);
   }
-
-  const groups = new Map();
-  for (let i = 0; i < items.length; i += 1) {
-    const root = find(i);
-    if (!groups.has(root)) groups.set(root, []);
-    groups.get(root).push(items[i]);
-  }
-  return [...groups.values()];
+  return groups;
 }
 
 // --- per-area character profile --------------------------------------------
@@ -140,7 +213,14 @@ function profileArea(members) {
       const t = normToken(tag);
       if (t) tagCounts.set(t, (tagCounts.get(t) || 0) + 1);
     }
-    for (const band of candidateDayparts(c)) daypartCounts.set(band, (daypartCounts.get(band) || 0) + 1);
+    // Explicit time signals carry more weight than the type-inferred fallback, so
+    // a real time_fit always wins; inference only breaks silence/ties — which is
+    // what stops several districts all defaulting to the same daypart.
+    for (const band of candidateDayparts(c)) {
+      daypartCounts.set(band, (daypartCounts.get(band) || 0) + DAYPART_EXPLICIT_WEIGHT);
+    }
+    const inferred = inferDaypartFromType(c);
+    if (inferred) daypartCounts.set(inferred, (daypartCounts.get(inferred) || 0) + DAYPART_INFERRED_WEIGHT);
   }
   return {
     size: list.length,
