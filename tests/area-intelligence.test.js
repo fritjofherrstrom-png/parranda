@@ -57,6 +57,38 @@ test("a tighter link distance splits, a looser one merges (generic knob, not cit
   assert.equal(split.scattered_count, 7);
 });
 
+test("a dense continuous strip splits into several compact districts, not one blob", () => {
+  // 10 places in a ~1.2 km line, each ~135 m from the next. Single-linkage on a
+  // fixed link would chain all ten into ONE giant 'district' (the bug this fixes);
+  // density-adaptive compact clustering bounds each district to a walkable disk.
+  const strip = Array.from({ length: 10 }, (_, i) => ({
+    id: `s${i}`,
+    type: "cafe",
+    tags: ["fika"],
+    lat: 41.9 + i * 0.00135,
+    lng: 12.5,
+  }));
+  const s = summarizePlaceStructure(strip);
+  assert.ok(s.area_count >= 2, "the dense strip splits into multiple districts");
+  assert.ok(
+    Math.max(...s.areas.map((a) => a.size)) < strip.length,
+    "no single district swallows the whole strip",
+  );
+});
+
+test("daypart hint falls back to district character when no explicit time signal", () => {
+  // None of these carry a time_fit; the type alone should still place the café
+  // district in the morning and the bar district in the evening (so two districts
+  // don't both default to the same daypart).
+  const cafes = [0, 1, 2].map((i) => ({ id: `k${i}`, type: "cafe", tags: ["fika"], lat: 41.9 + i * 0.0004, lng: 12.5 }));
+  const bars = [0, 1, 2].map((i) => ({ id: `b${i}`, type: "bar", tags: ["nightlife"], lat: 41.93 + i * 0.0004, lng: 12.53 }));
+  const s = summarizePlaceStructure([...cafes, ...bars]);
+  const cafe = s.areas.find((a) => a.dominant_types.includes("cafe"));
+  const bar = s.areas.find((a) => a.dominant_types.includes("bar"));
+  assert.equal(cafe.daypart_hint, "morning");
+  assert.equal(bar.daypart_hint, "evening");
+});
+
 test("empty / coordinate-less input degrades to no structure (no throw)", () => {
   assert.deepEqual(summarizePlaceStructure([]), { areas: [], scattered_count: 0, area_count: 0 });
   assert.deepEqual(summarizePlaceStructure([{ id: "x", type: "cafe" }]), { areas: [], scattered_count: 0, area_count: 0 });
