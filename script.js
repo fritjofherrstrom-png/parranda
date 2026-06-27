@@ -2971,6 +2971,13 @@ let latestPlannerResolution = null;
 // user chose.
 let latestPlannerCoverage = null;
 let latestPlannerCoverageIntentKeys = [];
+// Agnostic place STRUCTURE (#315): the districts the engine derived for the
+// place and the day it composed across them. Delivered additively on the route
+// response for ANY city (recognized or freeform/coords, no citypack required).
+// Rendered as honest data — districts, what each covers, daypart order, the
+// walking gap between them, and the intents nothing could cover. Null when the
+// response carries no structure (too few placed candidates / loader off).
+let latestPlaceStructure = null;
 let activeDistrictId = "monti";
 let activeOptimizerMode = null;
 let activeDistanceMode = "soft_target";
@@ -6556,6 +6563,13 @@ function applyPlannerResponseState(response, options = {}) {
   // default chip. Coverage notes then only surface gaps in preferences the user
   // deliberately asked for.
   latestPlannerCoverageIntentKeys = latestPlannerCoverage ? getExplicitSelectedIntentKeys() : [];
+  latestPlaceStructure =
+    response?.place_structure &&
+    typeof response.place_structure === "object" &&
+    response.place_structure.district_day &&
+    typeof response.place_structure.district_day === "object"
+      ? response.place_structure
+      : null;
   const resolvedState = {
     homeBase: response?.resolved_home_base || null,
     start: response?.resolved_start || null,
@@ -11214,6 +11228,140 @@ function coverageStatusForIntentKey(intentKey, coverage) {
   return covered ? "covered" : partial ? "partial" : "missing";
 }
 
+// Localized labels for the agnostic place-structure panel (#315). Generic axes
+// and dayparts — no place names — so the same panel renders for any city.
+const PLACE_STRUCTURE_DAYPART_LABELS = {
+  morning: { sv: "Förmiddag", en: "Morning" },
+  midday: { sv: "Mitt på dagen", en: "Midday" },
+  afternoon: { sv: "Eftermiddag", en: "Afternoon" },
+  evening: { sv: "Kväll", en: "Evening" },
+};
+const PLACE_STRUCTURE_INTENT_LABELS = {
+  second_hand: { sv: "Second hand", en: "Second-hand" },
+  fika: { sv: "Fika", en: "Coffee" },
+  food: { sv: "Mat", en: "Food" },
+  views: { sv: "Utsikt", en: "Views" },
+  culture: { sv: "Kultur", en: "Culture" },
+  nightlife: { sv: "Nattliv", en: "Nightlife" },
+  green: { sv: "Grönt", en: "Green" },
+  market: { sv: "Marknad", en: "Market" },
+};
+function placeStructureLabel(map, key) {
+  const entry = map[key];
+  if (!entry) return String(key || "").replace(/_/g, " ");
+  return isEnglishUi ? entry.en : entry.sv;
+}
+
+// Render the agnostic place STRUCTURE (#315) — the districts the engine derived
+// for this place and the day it composed across them — as honest data. This is
+// the any-city "smart day" made VISIBLE: it appears for any place whose response
+// carries a place_structure, with no citypack and no city-specific code. Honest
+// throughout — daypart order, what each district covers, the walking gap between
+// them, and the intents no district could satisfy. Returns a DOM node, or null
+// when there is nothing trustworthy to show.
+function buildPlaceStructurePanel() {
+  const structure = latestPlaceStructure;
+  const day = structure?.district_day;
+  const areas = Array.isArray(day?.areas)
+    ? day.areas.filter((area) => area && Array.isArray(area.stop_ids) && area.stop_ids.length)
+    : [];
+  if (areas.length < 1) {
+    return null;
+  }
+
+  const panel = document.createElement("section");
+  panel.className = "planner-place-structure";
+  panel.setAttribute("aria-label", isEnglishUi ? "Your day across the districts" : "Din dag genom distrikten");
+
+  const eyebrow = document.createElement("p");
+  eyebrow.className = "planner-place-structure-eyebrow";
+  const districtCount =
+    areas.length === 1
+      ? isEnglishUi
+        ? "1 district"
+        : "1 distrikt"
+      : isEnglishUi
+        ? `${areas.length} districts`
+        : `${areas.length} distrikt`;
+  eyebrow.textContent = isEnglishUi
+    ? `Your day across the city — ${districtCount}`
+    : `Din dag genom staden — ${districtCount}`;
+  panel.appendChild(eyebrow);
+
+  const list = document.createElement("div");
+  list.className = "planner-place-structure-list";
+
+  areas.forEach((area, index) => {
+    // Honest inter-district leg (distance only — never a fabricated time) shown
+    // between the districts it connects.
+    if (index > 0) {
+      const leg = Array.isArray(day.legs) ? day.legs.find((entry) => entry && entry.to_area === index) : null;
+      if (leg && Number.isFinite(leg.distance_km)) {
+        const legEl = document.createElement("div");
+        legEl.className = "planner-district-leg";
+        legEl.textContent = `≈ ${leg.distance_km} km`;
+        list.appendChild(legEl);
+      }
+    }
+
+    const card = document.createElement("div");
+    card.className = "planner-district";
+
+    const top = document.createElement("div");
+    top.className = "planner-district-top";
+
+    const order = document.createElement("span");
+    order.className = "planner-district-order";
+    order.textContent = String(index + 1);
+    top.appendChild(order);
+
+    if (area.daypart_hint && PLACE_STRUCTURE_DAYPART_LABELS[area.daypart_hint]) {
+      const daypart = document.createElement("span");
+      daypart.className = "planner-district-daypart";
+      daypart.textContent = placeStructureLabel(PLACE_STRUCTURE_DAYPART_LABELS, area.daypart_hint);
+      top.appendChild(daypart);
+    }
+
+    const stopCount = area.stop_ids.length;
+    const stops = document.createElement("span");
+    stops.className = "planner-district-stops";
+    stops.textContent = isEnglishUi
+      ? `${stopCount} stop${stopCount === 1 ? "" : "s"}`
+      : `${stopCount} stopp`;
+    top.appendChild(stops);
+    card.appendChild(top);
+
+    const covers = Array.isArray(area.covers) ? area.covers : [];
+    if (covers.length) {
+      const chips = document.createElement("div");
+      chips.className = "planner-district-covers";
+      covers.forEach((axis) => {
+        const chip = document.createElement("span");
+        chip.className = "planner-district-chip";
+        chip.textContent = placeStructureLabel(PLACE_STRUCTURE_INTENT_LABELS, axis);
+        chips.appendChild(chip);
+      });
+      card.appendChild(chips);
+    }
+
+    list.appendChild(card);
+  });
+
+  panel.appendChild(list);
+
+  // Honest coverage footer: intents no district could satisfy. Never hidden.
+  const missing = Array.isArray(day.missing_intents) ? day.missing_intents : [];
+  if (missing.length) {
+    const note = document.createElement("p");
+    note.className = "planner-place-structure-missing";
+    const labels = missing.map((axis) => placeStructureLabel(PLACE_STRUCTURE_INTENT_LABELS, axis)).join(", ");
+    note.textContent = isEnglishUi ? `No district covered: ${labels}` : `Inget distrikt täckte: ${labels}`;
+    panel.appendChild(note);
+  }
+
+  return panel;
+}
+
 // Authoritative preference-coverage notes (#308). For a preview-thin city, the
 // reservoir reports which requested preferences it could actually satisfy. We
 // surface the honest gaps — partial matches and outright misses — at the chip
@@ -11364,6 +11512,14 @@ function renderPlannedDays() {
     });
 
     shell.appendChild(noteList);
+  }
+
+  // The agnostic place structure (#315): the districts + the day composed across
+  // them, for ANY city, rendered as honest data. Additive — absent for responses
+  // that carry no structure, so default rendering is unchanged.
+  const placeStructurePanel = buildPlaceStructurePanel();
+  if (placeStructurePanel) {
+    shell.appendChild(placeStructurePanel);
   }
 
   const dayCard = plannerDayTemplate.content.firstElementChild.cloneNode(true);
