@@ -2040,6 +2040,52 @@ function buildApp({
         return;
       }
 
+      // ANY-CITY place STRUCTURE: for an unknown, citypack-less place, derive the
+      // place's districts + compose a day across them from the SAME source-backed
+      // candidates the agnostic route loads around the trusted anchor. This is the
+      // generic arc — type any city → its real areas, a smart cross-district day,
+      // honest about what it can't cover — with no citypack and no city-specific
+      // code. Same `place_structure` field/shape as the recognized-city path, so a
+      // UI renders one thing regardless of path. The loader is cache-backed (#312)
+      // so this is a hit, not a second fetch. Additive + fail-soft: it never
+      // mutates the route or the experiment verdict, and the promotion gate is
+      // untouched (structure surfaces even while the synthesized route stays in the
+      // diagnostic block, so the intelligence is visible before any deploy flip).
+      let agnosticPlaceStructure = null;
+      if (isExternalCandidatesRequested(request) && typeof openDataLoader === "function") {
+        try {
+          const records = await openDataLoader(anchor);
+          const structureCandidates = (Array.isArray(records) ? records : []).filter(
+            (c) => c && Number.isFinite(c.lat) && Number.isFinite(c.lng),
+          );
+          if (structureCandidates.length >= 3) {
+            const { composeDistrictDay } = require("./candidates/district-composition");
+            const day = composeDistrictDay(structureCandidates, {
+              intents: Array.isArray(preferences) ? preferences : [],
+              maxAreas: 3,
+            });
+            if (day.structure.area_count > 0) {
+              agnosticPlaceStructure = {
+                area_count: day.structure.area_count,
+                scattered_count: day.structure.scattered_count,
+                areas: day.structure.areas,
+                district_day: {
+                  areas: day.areas,
+                  legs: day.legs,
+                  covered_intents: day.covered_intents,
+                  missing_intents: day.missing_intents,
+                },
+              };
+            }
+          }
+        } catch (_error) {
+          agnosticPlaceStructure = null; // fail soft: structure never blocks the route
+        }
+      }
+      const agnosticPlaceStructureSidecar = agnosticPlaceStructure
+        ? { place_structure: agnosticPlaceStructure }
+        : {};
+
       // Trusted anchor in hand → existing #259 route-output path. Place
       // resolution does NOT satisfy route eligibility on its own: external
       // candidate opt-in + the trusted server openDataLoader are still required
@@ -2091,6 +2137,7 @@ function buildApp({
         experiment.engine_readiness = buildEngineReadinessVerdict(experiment);
         response.json({
           ...(promotion.promote ? experimentResult : baselineBody),
+          ...agnosticPlaceStructureSidecar,
           agnostic_route_output_experiment: experiment,
         });
         return;
@@ -2101,6 +2148,7 @@ function buildApp({
       experiment.engine_readiness = buildEngineReadinessVerdict(experiment);
       response.json({
         ...experimentResult,
+        ...agnosticPlaceStructureSidecar,
         agnostic_route_output_experiment: experiment,
       });
     } catch (error) {
