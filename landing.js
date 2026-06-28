@@ -129,6 +129,7 @@
       var val = cityInput ? cityInput.value : "";
       var cityPath = resolveCity(val);
       if (cityPath) {
+        // Registered/known city → its normal city shell (unchanged).
         var params = new URLSearchParams();
         params.set("planner", "open");
         params.set("lang", currentLang());
@@ -136,9 +137,14 @@
         return;
       }
       if (val.trim()) {
-        cityInput.setCustomValidity(COPY.unsupported || "Vi är live i Barcelona och Rom just nu. Prova en av dem!");
-        cityInput.reportValidity();
-        setTimeout(function () { cityInput.setCustomValidity(""); }, 3000);
+        // Unknown / freeform place → the any-place alpha surface, which composes a
+        // day from open data (no city pack). The typed text is the freeform place;
+        // never a recognized city key.
+        var anyParams = new URLSearchParams();
+        anyParams.set("place", val.trim());
+        anyParams.set("planner", "open");
+        anyParams.set("lang", currentLang());
+        window.location.href = "/labs/anywhere?" + anyParams.toString();
       }
     });
   }

@@ -2049,6 +2049,14 @@ function getFrontendCityConfig() {
 }
 
 const isPlannerEntryRoute = window.__PARRANDA_CITY__?.plannerEntryRoute === true;
+// Any-place ALPHA mode (/labs/anywhere): the planner runs against a freeform place
+// via the agnostic engine, with NO citypack. Every citypack-only side effect
+// (city-pulse, places/search, place-details, the cross-page latest-plan restore)
+// is guarded off when this is true. The branch guard is the sentinel key; the
+// visible label is the typed place.
+const anywhereMode = window.__PARRANDA_CITY__?.anywhereMode === true;
+const anywherePlace =
+  typeof window.__PARRANDA_CITY__?.place === "string" ? window.__PARRANDA_CITY__.place.trim() : "";
 let isPlannerInlineOpen = false;
 const plannerCity = getFrontendCityConfig();
 const plannerCityKey = plannerCity.key;
@@ -2640,6 +2648,8 @@ function buildNonRomeFallbackNote() {
 function syncShellModeState() {
   document.body?.classList.toggle("mode-rome-curated", isRomeCuratedMode);
   document.body?.classList.toggle("mode-curated", isCuratedMode);
+  // Any-place alpha: suppress citypack chrome (Blitz hero, pulse teaser) via CSS.
+  document.body?.classList.toggle("anywhere-mode", anywhereMode);
   document.body?.classList.toggle("mode-city-preview", !isCuratedMode);
   document.body?.classList.toggle("mode-city-fallback", isFallbackRequestedCity);
   document.body?.classList.toggle("mode-city-internal", isInternalCityMode);
@@ -2971,6 +2981,13 @@ let latestPlannerResolution = null;
 // user chose.
 let latestPlannerCoverage = null;
 let latestPlannerCoverageIntentKeys = [];
+// Agnostic place STRUCTURE (#315): the districts the engine derived for the
+// place and the day it composed across them. Delivered additively on the route
+// response for ANY city (recognized or freeform/coords, no citypack required).
+// Rendered as honest data — districts, what each covers, daypart order, the
+// walking gap between them, and the intents nothing could cover. Null when the
+// response carries no structure (too few placed candidates / loader off).
+let latestPlaceStructure = null;
 let activeDistrictId = "monti";
 let activeOptimizerMode = null;
 let activeDistanceMode = "soft_target";
@@ -4418,6 +4435,10 @@ async function applyWildcardToPlanner(wildcard, { autoPlan = true, sourceLabel =
 }
 
 async function loadHeroBlitz({ openAfter = false } = {}) {
+  // No citypack Blitz in any-place alpha mode — never POST /api/blitz?city=anywhere.
+  if (anywhereMode) {
+    return null;
+  }
   if (!isCuratedMode) {
     renderHeroBlitz();
     return null;
@@ -6273,6 +6294,10 @@ function renderCityPulse() {
 }
 
 async function loadCityPulse(dateString = getTodayIsoDate()) {
+  // No citypack in any-place alpha mode — never call /api/city-pulse?city=anywhere.
+  if (anywhereMode) {
+    return;
+  }
   const targetDate = dateString || getTodayIsoDate();
 
   activeLiveDate = targetDate;
@@ -6445,6 +6470,12 @@ function readLatestPlannerPlanRecord() {
 }
 
 function persistLatestPlannerPlan(response) {
+  // The latest-plan store is a single global key (not per-place); persisting an
+  // any-place result would bleed place A's plan onto place B (or a real city).
+  // Skip it entirely in alpha mode.
+  if (anywhereMode) {
+    return null;
+  }
   const record = buildLatestPlannerPlanRecord(response);
 
   if (!record) {
@@ -6556,6 +6587,13 @@ function applyPlannerResponseState(response, options = {}) {
   // default chip. Coverage notes then only surface gaps in preferences the user
   // deliberately asked for.
   latestPlannerCoverageIntentKeys = latestPlannerCoverage ? getExplicitSelectedIntentKeys() : [];
+  latestPlaceStructure =
+    response?.place_structure &&
+    typeof response.place_structure === "object" &&
+    response.place_structure.district_day &&
+    typeof response.place_structure.district_day === "object"
+      ? response.place_structure
+      : null;
   const resolvedState = {
     homeBase: response?.resolved_home_base || null,
     start: response?.resolved_start || null,
@@ -6580,6 +6618,11 @@ function applyPlannerResponseState(response, options = {}) {
 }
 
 function restoreLatestPlannerPlan() {
+  // Never restore a previously-saved (real-city) plan onto the any-place alpha —
+  // the storage key is global, so it would show another place's day here.
+  if (anywhereMode) {
+    return;
+  }
   const record = readLatestPlannerPlanRecord();
 
   if (!record) {
@@ -8794,6 +8837,11 @@ function openPlaceDrawer(item) {
 }
 
 async function openPlaceDrawerByQuery(query) {
+  // No citypack place index in alpha mode — don't query /api/place-details?city=anywhere.
+  if (anywhereMode) {
+    openPlaceDrawer({ label: query });
+    return;
+  }
   try {
     const response = await fetchJson(
       `${routeApiBase}/place-details?city=${encodeURIComponent(plannerCityKey)}&q=${encodeURIComponent(query)}`,
@@ -9685,6 +9733,14 @@ async function buildPlannerPoint(pointKey) {
 async function loadPlannerOptions() {
   plannerOptions = isRomeCuratedMode ? createLocalPlannerOptions() : [];
   populatePresetSelects();
+
+  // Any-place alpha has no citypack place index — skip /api/places/search?city=anywhere.
+  // The route API lives on the same server; the agnostic request itself fails
+  // honestly (→ "unavailable" state) if it is down, so mark the API available.
+  if (anywhereMode) {
+    setRouteApiStatus(true);
+    return;
+  }
 
   if (isFallbackRequestedCity) {
     setRouteApiStatus(false);
@@ -11214,6 +11270,140 @@ function coverageStatusForIntentKey(intentKey, coverage) {
   return covered ? "covered" : partial ? "partial" : "missing";
 }
 
+// Localized labels for the agnostic place-structure panel (#315). Generic axes
+// and dayparts — no place names — so the same panel renders for any city.
+const PLACE_STRUCTURE_DAYPART_LABELS = {
+  morning: { sv: "Förmiddag", en: "Morning" },
+  midday: { sv: "Mitt på dagen", en: "Midday" },
+  afternoon: { sv: "Eftermiddag", en: "Afternoon" },
+  evening: { sv: "Kväll", en: "Evening" },
+};
+const PLACE_STRUCTURE_INTENT_LABELS = {
+  second_hand: { sv: "Second hand", en: "Second-hand" },
+  fika: { sv: "Fika", en: "Coffee" },
+  food: { sv: "Mat", en: "Food" },
+  views: { sv: "Utsikt", en: "Views" },
+  culture: { sv: "Kultur", en: "Culture" },
+  nightlife: { sv: "Nattliv", en: "Nightlife" },
+  green: { sv: "Grönt", en: "Green" },
+  market: { sv: "Marknad", en: "Market" },
+};
+function placeStructureLabel(map, key) {
+  const entry = map[key];
+  if (!entry) return String(key || "").replace(/_/g, " ");
+  return isEnglishUi ? entry.en : entry.sv;
+}
+
+// Render the agnostic place STRUCTURE (#315) — the districts the engine derived
+// for this place and the day it composed across them — as honest data. This is
+// the any-city "smart day" made VISIBLE: it appears for any place whose response
+// carries a place_structure, with no citypack and no city-specific code. Honest
+// throughout — daypart order, what each district covers, the walking gap between
+// them, and the intents no district could satisfy. Returns a DOM node, or null
+// when there is nothing trustworthy to show.
+function buildPlaceStructurePanel() {
+  const structure = latestPlaceStructure;
+  const day = structure?.district_day;
+  const areas = Array.isArray(day?.areas)
+    ? day.areas.filter((area) => area && Array.isArray(area.stop_ids) && area.stop_ids.length)
+    : [];
+  if (areas.length < 1) {
+    return null;
+  }
+
+  const panel = document.createElement("section");
+  panel.className = "planner-place-structure";
+  panel.setAttribute("aria-label", isEnglishUi ? "Your day across the districts" : "Din dag genom distrikten");
+
+  const eyebrow = document.createElement("p");
+  eyebrow.className = "planner-place-structure-eyebrow";
+  const districtCount =
+    areas.length === 1
+      ? isEnglishUi
+        ? "1 district"
+        : "1 distrikt"
+      : isEnglishUi
+        ? `${areas.length} districts`
+        : `${areas.length} distrikt`;
+  eyebrow.textContent = isEnglishUi
+    ? `Your day across the city — ${districtCount}`
+    : `Din dag genom staden — ${districtCount}`;
+  panel.appendChild(eyebrow);
+
+  const list = document.createElement("div");
+  list.className = "planner-place-structure-list";
+
+  areas.forEach((area, index) => {
+    // Honest inter-district leg (distance only — never a fabricated time) shown
+    // between the districts it connects.
+    if (index > 0) {
+      const leg = Array.isArray(day.legs) ? day.legs.find((entry) => entry && entry.to_area === index) : null;
+      if (leg && Number.isFinite(leg.distance_km)) {
+        const legEl = document.createElement("div");
+        legEl.className = "planner-district-leg";
+        legEl.textContent = `≈ ${leg.distance_km} km`;
+        list.appendChild(legEl);
+      }
+    }
+
+    const card = document.createElement("div");
+    card.className = "planner-district";
+
+    const top = document.createElement("div");
+    top.className = "planner-district-top";
+
+    const order = document.createElement("span");
+    order.className = "planner-district-order";
+    order.textContent = String(index + 1);
+    top.appendChild(order);
+
+    if (area.daypart_hint && PLACE_STRUCTURE_DAYPART_LABELS[area.daypart_hint]) {
+      const daypart = document.createElement("span");
+      daypart.className = "planner-district-daypart";
+      daypart.textContent = placeStructureLabel(PLACE_STRUCTURE_DAYPART_LABELS, area.daypart_hint);
+      top.appendChild(daypart);
+    }
+
+    const stopCount = area.stop_ids.length;
+    const stops = document.createElement("span");
+    stops.className = "planner-district-stops";
+    stops.textContent = isEnglishUi
+      ? `${stopCount} stop${stopCount === 1 ? "" : "s"}`
+      : `${stopCount} stopp`;
+    top.appendChild(stops);
+    card.appendChild(top);
+
+    const covers = Array.isArray(area.covers) ? area.covers : [];
+    if (covers.length) {
+      const chips = document.createElement("div");
+      chips.className = "planner-district-covers";
+      covers.forEach((axis) => {
+        const chip = document.createElement("span");
+        chip.className = "planner-district-chip";
+        chip.textContent = placeStructureLabel(PLACE_STRUCTURE_INTENT_LABELS, axis);
+        chips.appendChild(chip);
+      });
+      card.appendChild(chips);
+    }
+
+    list.appendChild(card);
+  });
+
+  panel.appendChild(list);
+
+  // Honest coverage footer: intents no district could satisfy. Never hidden.
+  const missing = Array.isArray(day.missing_intents) ? day.missing_intents : [];
+  if (missing.length) {
+    const note = document.createElement("p");
+    note.className = "planner-place-structure-missing";
+    const labels = missing.map((axis) => placeStructureLabel(PLACE_STRUCTURE_INTENT_LABELS, axis)).join(", ");
+    note.textContent = isEnglishUi ? `No district covered: ${labels}` : `Inget distrikt täckte: ${labels}`;
+    panel.appendChild(note);
+  }
+
+  return panel;
+}
+
 // Authoritative preference-coverage notes (#308). For a preview-thin city, the
 // reservoir reports which requested preferences it could actually satisfy. We
 // surface the honest gaps — partial matches and outright misses — at the chip
@@ -11364,6 +11554,14 @@ function renderPlannedDays() {
     });
 
     shell.appendChild(noteList);
+  }
+
+  // The agnostic place structure (#315): the districts + the day composed across
+  // them, for ANY city, rendered as honest data. Additive — absent for responses
+  // that carry no structure, so default rendering is unchanged.
+  const placeStructurePanel = buildPlaceStructurePanel();
+  if (placeStructurePanel) {
+    shell.appendChild(placeStructurePanel);
   }
 
   const dayCard = plannerDayTemplate.content.firstElementChild.cloneNode(true);
@@ -11670,12 +11868,128 @@ function renderRouteResults() {
   renderFallbackRoutes();
 }
 
+// Render the any-place alpha result. The classifier has ALREADY gated the data:
+// for anything other than a real composed day the response handed to
+// applyPlannerResponseState has `days: []`, so a baseline city day can never reach
+// the day cards. `structure_only` shows the district panel but is explicitly NOT a
+// finished route (no day cards, no "your day is ready"); `unavailable` is honest.
+function renderAnywhereResults(classification) {
+  const placeLabel = classification.placeLabel || anywherePlace;
+
+  if (classification.status === "composed") {
+    // A real composed day for the typed place → the normal day + district panel.
+    renderRouteResults();
+    setPlannerStatusMessage(
+      tf("anywhere.status.composed", { place: placeLabel }, `Composed a day in ${placeLabel} from open data.`),
+      "success",
+    );
+    updateRouteMatchSummary("");
+    return;
+  }
+
+  // Not a finished route — render directly, never through the citypack fallback path.
+  routeResults.innerHTML = "";
+  const wrap = document.createElement("section");
+  wrap.className = "planner-results-shell anywhere-state";
+
+  const note = document.createElement("p");
+  note.className = "anywhere-state-note";
+
+  if (classification.status === "structure_only") {
+    note.textContent = tf(
+      "anywhere.status.structureOnly",
+      { place: placeLabel },
+      `Parranda read the shape of ${placeLabel} but couldn't compose a full day here yet.`,
+    );
+    wrap.appendChild(note);
+    const panel = buildPlaceStructurePanel();
+    if (panel) {
+      wrap.appendChild(panel);
+    }
+  } else {
+    note.textContent = tf(
+      "anywhere.status.unavailable",
+      { place: placeLabel },
+      `Parranda couldn't compose a day in ${placeLabel} yet — there isn't enough open data here right now.`,
+    );
+    wrap.appendChild(note);
+  }
+
+  routeResults.appendChild(wrap);
+  setPlannerStatusMessage("");
+  updateRouteMatchSummary("");
+}
+
+// Any-place ALPHA planner: drive the agnostic engine for a freeform place, then
+// render honestly. No `city` is ever sent; the three flags engage the engine path.
+async function planRoutesAnywhere({ dates, preferences }) {
+  const place = anywherePlace;
+  const decision = window.AnywhereRenderDecision;
+
+  if (!place || !decision) {
+    renderAnywhereResults({ status: "unavailable", placeLabel: place, hasStructure: false });
+    return;
+  }
+  if (!routeApiAvailable) {
+    renderAnywhereResults({ status: "unavailable", placeLabel: place, hasStructure: false });
+    return;
+  }
+
+  const autoPoint = { type: plannerAutoMode, label: t("planner.autoChoiceLabel", "Parranda väljer") };
+  const payload = {
+    // Freeform place ONLY — never a recognized city key.
+    place,
+    place_query: place,
+    dates,
+    home_base: autoPoint,
+    start: autoPoint,
+    end: autoPoint,
+    walking_km_target: Number(walkingKmTarget.value),
+    leg_pacing: legPacingSelect?.value || "balanced",
+    preferences,
+    optimizer_mode: activeOptimizerMode,
+    distance_mode: activeDistanceMode,
+    budget_tier: activeBudgetTier,
+    modifier: activeRouteModifier,
+    // Engage the current agnostic ENGINE path (harmless if env already enables it).
+    experimental_agnostic_route_output: 1,
+    include_external_candidates: 1,
+    agnostic_engine_compose: 1,
+  };
+  latestPlannerSnapshot = buildPlannerSnapshot(payload, dates);
+
+  let response;
+  try {
+    response = await fetchJson(`${routeApiBase}/route-recommendations?lang=${encodeURIComponent(activeUiLanguage)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    renderAnywhereResults({ status: "unavailable", placeLabel: place, hasStructure: false });
+    return;
+  }
+
+  const classification = decision.classifyAnywhereResult(response, { place });
+  // DATA gate: for anything other than a real composed day, days are emptied so the
+  // day cards can never render a baseline city day under the typed place.
+  const safe = decision.safeResponseFor(response, classification);
+  applyPlannerResponseState(safe, { fallbackDate: routeDateFrom.value || getTodayIsoDate() });
+  renderAnywhereResults(classification);
+}
+
 async function planRoutes() {
   const dates = expandDateRange(routeDateFrom.value, routeDateTo.value);
   const preferences = getSelectedPreferences();
 
   if (routeGuideDrawer && !routeGuideDrawer.hidden) {
     closeRouteGuide();
+  }
+
+  // Any-place alpha takes its own honest path (agnostic engine + classifier gate).
+  if (anywhereMode) {
+    await planRoutesAnywhere({ dates, preferences });
+    return;
   }
 
   if (!routeApiAvailable) {

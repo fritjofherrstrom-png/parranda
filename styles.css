@@ -3756,6 +3756,132 @@ body.is-planner-entry .planner-mode-button.is-active {
   line-height: 1.55;
 }
 
+/* Agnostic place structure (#315): districts + the composed district day. */
+.planner-place-structure {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 252, 247, 0.62);
+  border: 1px solid rgba(70, 38, 18, 0.1);
+}
+
+/* Any-place alpha: suppress citypack-only chrome (no city pack here) — the Blitz
+   hero, the Pulse teaser, the live Pulse edition, and the live tab button. The
+   any-place engine has no curated Pulse/live feed, so none of these belong here. */
+body.anywhere-mode .hero-quickstart,
+body.anywhere-mode #cityPulseTeaser,
+body.anywhere-mode #cityPulseStart,
+body.anywhere-mode .city-pulse-edition,
+body.anywhere-mode #heroLiveButton {
+  display: none !important;
+}
+
+/* Any-place alpha honest states (structure-only / unavailable). */
+.anywhere-state {
+  display: grid;
+  gap: 14px;
+}
+
+.anywhere-state-note {
+  margin: 0;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: rgba(255, 252, 247, 0.7);
+  border: 1px solid rgba(70, 38, 18, 0.12);
+  color: var(--ink, #2b1a0f);
+  font-size: 0.98rem;
+  line-height: 1.5;
+  max-width: 100%;
+}
+
+.planner-place-structure-eyebrow {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.planner-place-structure-list {
+  display: grid;
+  gap: 6px;
+}
+
+.planner-district {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.66);
+  border: 1px solid rgba(70, 38, 18, 0.08);
+}
+
+.planner-district-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.planner-district-order {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--accent, #b6582f);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.planner-district-daypart {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink, #3a2114);
+}
+
+.planner-district-stops {
+  margin-left: auto;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+.planner-district-covers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.planner-district-chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(182, 88, 47, 0.12);
+  border: 1px solid rgba(182, 88, 47, 0.22);
+  color: var(--ink, #3a2114);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.planner-district-leg {
+  justify-self: center;
+  padding: 2px 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.planner-place-structure-missing {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
 /* Day-tab pill track */
 .planner-day-tabs {
   display: inline-flex;
