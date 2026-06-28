@@ -266,8 +266,22 @@ async function collectAnchorEvents({ anchor, now = null, date = null, registry, 
   };
 }
 
+/**
+ * Env-gated default supply, mirroring the loader/resolver: a no-arg deploy gets
+ * `null` (no live-event calls — production opts in explicitly via
+ * PARRANDA_AGNOSTIC_EVENTS). Returns an `({anchor, now}) => Promise<result>`
+ * bound to the env-resolved registry, using global fetch.
+ */
+function resolveDefaultEventSupply(env = process.env) {
+  const flag = String((env && env.PARRANDA_AGNOSTIC_EVENTS) || "").trim().toLowerCase();
+  if (!["enabled", "1", "true", "on", "yes"].includes(flag)) return null;
+  const registry = resolveEventFeedRegistry(env);
+  return ({ anchor, now } = {}) => collectAnchorEvents({ anchor, now, registry });
+}
+
 module.exports = {
   collectAnchorEvents,
+  resolveDefaultEventSupply,
   resolveEventFeedRegistry,
   resolveEventFeedForAnchor,
   buildAnchorEventEndpoint,
