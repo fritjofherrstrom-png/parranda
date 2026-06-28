@@ -8,6 +8,7 @@ const test = require("node:test");
 
 const {
   collectAnchorEvents,
+  resolveEventFeedRegistry,
   resolveEventFeedForAnchor,
   buildAnchorEventEndpoint,
   BUILTIN_EVENT_FEEDS,
@@ -48,6 +49,24 @@ function linkedEventsPayload() {
 function fetcherFor(payload) {
   return async () => ({ ok: true, json: async () => payload });
 }
+
+test("the feed registry is generic + deploy-configurable (a city is data, not code)", () => {
+  // Default: just the built-in fixture.
+  assert.equal(resolveEventFeedRegistry({}).length, BUILTIN_EVENT_FEEDS.length);
+
+  // A deployment adds the open feed covering its region via env — no code change.
+  const stockholm = JSON.stringify([
+    { id: "se-stockholm", label: "Stockholm", base: "https://example.org/se/v1/event/", bbox: [17.8, 59.2, 18.2, 59.45] },
+  ]);
+  const extended = resolveEventFeedRegistry({ PARRANDA_EVENT_FEEDS: stockholm });
+  assert.equal(extended.length, BUILTIN_EVENT_FEEDS.length + 1);
+  // An anchor in central Stockholm now resolves to the configured feed.
+  const feed = resolveEventFeedForAnchor({ lat: 59.33, lng: 18.06 }, extended);
+  assert.ok(feed && feed.id === "se-stockholm");
+
+  // Malformed config is ignored — keep the built-in, never throw.
+  assert.equal(resolveEventFeedRegistry({ PARRANDA_EVENT_FEEDS: "{not json" }).length, BUILTIN_EVENT_FEEDS.length);
+});
 
 test("an anchor inside an open feed resolves the feed; outside, it does not", () => {
   const feed = resolveEventFeedForAnchor(HELSINKI);

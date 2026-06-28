@@ -53,6 +53,38 @@ const BUILTIN_EVENT_FEEDS = [
   },
 ];
 
+/**
+ * The registry is GENERIC and deploy-configurable: a city is a data row, never
+ * code. `PARRANDA_EVENT_FEEDS` (a JSON array of {id,label,base,bbox,license})
+ * lets any deployment add the open feed covering its region without touching the
+ * engine — Helsinki is the built-in *fixture* that proves the path, not the
+ * product scope. Malformed config is ignored (keep the built-in), never throws.
+ */
+function resolveEventFeedRegistry(env = process.env) {
+  const feeds = [...BUILTIN_EVENT_FEEDS];
+  const extra = String((env && env.PARRANDA_EVENT_FEEDS) || "").trim();
+  if (!extra) return feeds;
+  try {
+    const parsed = JSON.parse(extra);
+    if (Array.isArray(parsed)) {
+      for (const f of parsed) {
+        if (f && typeof f.base === "string" && Array.isArray(f.bbox) && f.bbox.length >= 4) {
+          feeds.push({
+            id: String(f.id || `feed-${feeds.length}`),
+            label: String(f.label || f.id || "Events"),
+            base: f.base,
+            bbox: f.bbox.map(Number),
+            license: f.license != null ? String(f.license) : null,
+          });
+        }
+      }
+    }
+  } catch (_e) {
+    // malformed PARRANDA_EVENT_FEEDS → keep the built-in registry, never throw
+  }
+  return feeds;
+}
+
 function hasAnchor(anchor) {
   return anchor && Number.isFinite(anchor.lat) && Number.isFinite(anchor.lng);
 }
@@ -181,7 +213,7 @@ function rankAndCap(views) {
  * @returns {Promise<{coverage:"covered"|"uncovered", feed:object|null, tonight:object[], this_week:object[]}>}
  */
 async function collectAnchorEvents({ anchor, now = null, date = null, registry, fetcher, radiusM } = {}) {
-  const feed = resolveEventFeedForAnchor(anchor, registry || BUILTIN_EVENT_FEEDS);
+  const feed = resolveEventFeedForAnchor(anchor, registry || resolveEventFeedRegistry());
   if (!feed) {
     return { coverage: "uncovered", feed: null, tonight: [], this_week: [] };
   }
@@ -236,6 +268,7 @@ async function collectAnchorEvents({ anchor, now = null, date = null, registry, 
 
 module.exports = {
   collectAnchorEvents,
+  resolveEventFeedRegistry,
   resolveEventFeedForAnchor,
   buildAnchorEventEndpoint,
   BUILTIN_EVENT_FEEDS,
