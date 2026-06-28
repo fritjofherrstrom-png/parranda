@@ -2049,6 +2049,14 @@ function getFrontendCityConfig() {
 }
 
 const isPlannerEntryRoute = window.__PARRANDA_CITY__?.plannerEntryRoute === true;
+// Any-place ALPHA mode (/labs/anywhere): the planner runs against a freeform place
+// via the agnostic engine, with NO citypack. Every citypack-only side effect
+// (city-pulse, places/search, place-details, the cross-page latest-plan restore)
+// is guarded off when this is true. The branch guard is the sentinel key; the
+// visible label is the typed place.
+const anywhereMode = window.__PARRANDA_CITY__?.anywhereMode === true;
+const anywherePlace =
+  typeof window.__PARRANDA_CITY__?.place === "string" ? window.__PARRANDA_CITY__.place.trim() : "";
 let isPlannerInlineOpen = false;
 const plannerCity = getFrontendCityConfig();
 const plannerCityKey = plannerCity.key;
@@ -2640,6 +2648,8 @@ function buildNonRomeFallbackNote() {
 function syncShellModeState() {
   document.body?.classList.toggle("mode-rome-curated", isRomeCuratedMode);
   document.body?.classList.toggle("mode-curated", isCuratedMode);
+  // Any-place alpha: suppress citypack chrome (Blitz hero, pulse teaser) via CSS.
+  document.body?.classList.toggle("anywhere-mode", anywhereMode);
   document.body?.classList.toggle("mode-city-preview", !isCuratedMode);
   document.body?.classList.toggle("mode-city-fallback", isFallbackRequestedCity);
   document.body?.classList.toggle("mode-city-internal", isInternalCityMode);
@@ -4425,6 +4435,10 @@ async function applyWildcardToPlanner(wildcard, { autoPlan = true, sourceLabel =
 }
 
 async function loadHeroBlitz({ openAfter = false } = {}) {
+  // No citypack Blitz in any-place alpha mode — never POST /api/blitz?city=anywhere.
+  if (anywhereMode) {
+    return null;
+  }
   if (!isCuratedMode) {
     renderHeroBlitz();
     return null;
@@ -6280,6 +6294,10 @@ function renderCityPulse() {
 }
 
 async function loadCityPulse(dateString = getTodayIsoDate()) {
+  // No citypack in any-place alpha mode — never call /api/city-pulse?city=anywhere.
+  if (anywhereMode) {
+    return;
+  }
   const targetDate = dateString || getTodayIsoDate();
 
   activeLiveDate = targetDate;
@@ -6452,6 +6470,12 @@ function readLatestPlannerPlanRecord() {
 }
 
 function persistLatestPlannerPlan(response) {
+  // The latest-plan store is a single global key (not per-place); persisting an
+  // any-place result would bleed place A's plan onto place B (or a real city).
+  // Skip it entirely in alpha mode.
+  if (anywhereMode) {
+    return null;
+  }
   const record = buildLatestPlannerPlanRecord(response);
 
   if (!record) {
@@ -6594,6 +6618,11 @@ function applyPlannerResponseState(response, options = {}) {
 }
 
 function restoreLatestPlannerPlan() {
+  // Never restore a previously-saved (real-city) plan onto the any-place alpha —
+  // the storage key is global, so it would show another place's day here.
+  if (anywhereMode) {
+    return;
+  }
   const record = readLatestPlannerPlanRecord();
 
   if (!record) {
@@ -8808,6 +8837,11 @@ function openPlaceDrawer(item) {
 }
 
 async function openPlaceDrawerByQuery(query) {
+  // No citypack place index in alpha mode — don't query /api/place-details?city=anywhere.
+  if (anywhereMode) {
+    openPlaceDrawer({ label: query });
+    return;
+  }
   try {
     const response = await fetchJson(
       `${routeApiBase}/place-details?city=${encodeURIComponent(plannerCityKey)}&q=${encodeURIComponent(query)}`,
@@ -9699,6 +9733,14 @@ async function buildPlannerPoint(pointKey) {
 async function loadPlannerOptions() {
   plannerOptions = isRomeCuratedMode ? createLocalPlannerOptions() : [];
   populatePresetSelects();
+
+  // Any-place alpha has no citypack place index — skip /api/places/search?city=anywhere.
+  // The route API lives on the same server; the agnostic request itself fails
+  // honestly (→ "unavailable" state) if it is down, so mark the API available.
+  if (anywhereMode) {
+    setRouteApiStatus(true);
+    return;
+  }
 
   if (isFallbackRequestedCity) {
     setRouteApiStatus(false);
@@ -11826,12 +11868,128 @@ function renderRouteResults() {
   renderFallbackRoutes();
 }
 
+// Render the any-place alpha result. The classifier has ALREADY gated the data:
+// for anything other than a real composed day the response handed to
+// applyPlannerResponseState has `days: []`, so a baseline city day can never reach
+// the day cards. `structure_only` shows the district panel but is explicitly NOT a
+// finished route (no day cards, no "your day is ready"); `unavailable` is honest.
+function renderAnywhereResults(classification) {
+  const placeLabel = classification.placeLabel || anywherePlace;
+
+  if (classification.status === "composed") {
+    // A real composed day for the typed place → the normal day + district panel.
+    renderRouteResults();
+    setPlannerStatusMessage(
+      tf("anywhere.status.composed", { place: placeLabel }, `Composed a day in ${placeLabel} from open data.`),
+      "success",
+    );
+    updateRouteMatchSummary("");
+    return;
+  }
+
+  // Not a finished route — render directly, never through the citypack fallback path.
+  routeResults.innerHTML = "";
+  const wrap = document.createElement("section");
+  wrap.className = "planner-results-shell anywhere-state";
+
+  const note = document.createElement("p");
+  note.className = "anywhere-state-note";
+
+  if (classification.status === "structure_only") {
+    note.textContent = tf(
+      "anywhere.status.structureOnly",
+      { place: placeLabel },
+      `Parranda read the shape of ${placeLabel} but couldn't compose a full day here yet.`,
+    );
+    wrap.appendChild(note);
+    const panel = buildPlaceStructurePanel();
+    if (panel) {
+      wrap.appendChild(panel);
+    }
+  } else {
+    note.textContent = tf(
+      "anywhere.status.unavailable",
+      { place: placeLabel },
+      `Parranda couldn't compose a day in ${placeLabel} yet — there isn't enough open data here right now.`,
+    );
+    wrap.appendChild(note);
+  }
+
+  routeResults.appendChild(wrap);
+  setPlannerStatusMessage("");
+  updateRouteMatchSummary("");
+}
+
+// Any-place ALPHA planner: drive the agnostic engine for a freeform place, then
+// render honestly. No `city` is ever sent; the three flags engage the engine path.
+async function planRoutesAnywhere({ dates, preferences }) {
+  const place = anywherePlace;
+  const decision = window.AnywhereRenderDecision;
+
+  if (!place || !decision) {
+    renderAnywhereResults({ status: "unavailable", placeLabel: place, hasStructure: false });
+    return;
+  }
+  if (!routeApiAvailable) {
+    renderAnywhereResults({ status: "unavailable", placeLabel: place, hasStructure: false });
+    return;
+  }
+
+  const autoPoint = { type: plannerAutoMode, label: t("planner.autoChoiceLabel", "Parranda väljer") };
+  const payload = {
+    // Freeform place ONLY — never a recognized city key.
+    place,
+    place_query: place,
+    dates,
+    home_base: autoPoint,
+    start: autoPoint,
+    end: autoPoint,
+    walking_km_target: Number(walkingKmTarget.value),
+    leg_pacing: legPacingSelect?.value || "balanced",
+    preferences,
+    optimizer_mode: activeOptimizerMode,
+    distance_mode: activeDistanceMode,
+    budget_tier: activeBudgetTier,
+    modifier: activeRouteModifier,
+    // Engage the current agnostic ENGINE path (harmless if env already enables it).
+    experimental_agnostic_route_output: 1,
+    include_external_candidates: 1,
+    agnostic_engine_compose: 1,
+  };
+  latestPlannerSnapshot = buildPlannerSnapshot(payload, dates);
+
+  let response;
+  try {
+    response = await fetchJson(`${routeApiBase}/route-recommendations?lang=${encodeURIComponent(activeUiLanguage)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    renderAnywhereResults({ status: "unavailable", placeLabel: place, hasStructure: false });
+    return;
+  }
+
+  const classification = decision.classifyAnywhereResult(response, { place });
+  // DATA gate: for anything other than a real composed day, days are emptied so the
+  // day cards can never render a baseline city day under the typed place.
+  const safe = decision.safeResponseFor(response, classification);
+  applyPlannerResponseState(safe, { fallbackDate: routeDateFrom.value || getTodayIsoDate() });
+  renderAnywhereResults(classification);
+}
+
 async function planRoutes() {
   const dates = expandDateRange(routeDateFrom.value, routeDateTo.value);
   const preferences = getSelectedPreferences();
 
   if (routeGuideDrawer && !routeGuideDrawer.hidden) {
     closeRouteGuide();
+  }
+
+  // Any-place alpha takes its own honest path (agnostic engine + classifier gate).
+  if (anywhereMode) {
+    await planRoutesAnywhere({ dates, preferences });
+    return;
   }
 
   if (!routeApiAvailable) {

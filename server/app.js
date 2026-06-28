@@ -58,6 +58,9 @@ const publicRootFiles = new Set([
   // small, harmless leaf assets that only do anything when /dogfood is enabled).
   "dogfood.js",
   "dogfood-render.js",
+  // any-place alpha (/labs/anywhere): shared honest-result classifier used by the
+  // planner shell and Node tests (UMD). Harmless leaf asset elsewhere.
+  "anywhere-render-decision.js",
 ]);
 const blockedPublicPrefixes = ["/server/", "/tests/", "/docs/"];
 const blockedPublicRootFiles = new Set([
@@ -1402,6 +1405,102 @@ function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed, lang = "e
   return renderedShell;
 }
 
+// `/labs/anywhere` — the freeform any-place ALPHA surface. Reuses the planner app
+// shell (so the planner UI + district panel are present) but with neutral alpha
+// copy and an `anywhereMode` bootstrap. It assigns NO recognized-city identity to
+// the typed place: `key` stays "anywhere", only the visible label carries the
+// place. This is a product surface, not a diagnostics shell — no citypack, no raw
+// tokens. The agnostic request itself is driven client-side (script.js anywhere
+// mode); this function only serves the shell.
+function renderAnywhereShell({ place = "", plannerEntryRoute = false, lang = "en" } = {}) {
+  const uiLang = normalizeLanguage(lang);
+  const placeLabel = String(place || "").trim();
+  const tr = (key, fallback) => translate(uiLang, key, { place: placeLabel }, fallback);
+
+  const bootstrap = {
+    anywhereMode: true,
+    place: placeLabel,
+    key: "anywhere",
+    label: placeLabel,
+    displayLabel: placeLabel,
+    searchLabel: placeLabel,
+    visibility: "alpha",
+    timezone: null,
+    locale: null,
+    currency: null,
+    center: null,
+    plannerAreas: [],
+    requestedKey: null,
+    fallbackUsed: false,
+    plannerEntryRoute,
+    lang: uiLang,
+    previewSurface: null,
+  };
+
+  const title = placeLabel
+    ? tr("anywhere.title", `${placeLabel} · Parranda (any-place alpha)`)
+    : tr("anywhere.titleEmpty", "Any place · Parranda (alpha)");
+  const heroHeadline = placeLabel
+    ? tr("anywhere.heroHeadline", `Your day in ${placeLabel}`)
+    : tr("anywhere.heroHeadlineEmpty", "Type any place");
+  const metaDescription = tr(
+    "anywhere.metaDescription",
+    "Parranda's any-place alpha: type any city and get a smart, walkable day composed from open data — honest about what it can and can't compose yet.",
+  );
+
+  const replacements = {
+    "__PARRANDA_LANG__": escapeHtml(uiLang),
+    "__PARRANDA_UI_LANG__": escapeHtml(uiLang),
+    "__PARRANDA_I18N_BOOTSTRAP__": serializeInlineJson(buildClientI18nPayload()),
+    "__PARRANDA_OG_LOCALE__": uiLang === "en" ? "en_US" : "sv_SE",
+    "__PARRANDA_TITLE__": escapeHtml(title),
+    "__PARRANDA_META_DESCRIPTION__": escapeHtml(metaDescription),
+    "__PARRANDA_OG_TITLE__": escapeHtml(title),
+    "__PARRANDA_OG_DESCRIPTION__": escapeHtml(metaDescription),
+    "__PARRANDA_TWITTER_TITLE__": escapeHtml(title),
+    "__PARRANDA_TWITTER_DESCRIPTION__": escapeHtml(metaDescription),
+    "__PARRANDA_CITY_KEY__": escapeHtml("anywhere"),
+    "__PARRANDA_CITY_LABEL__": escapeHtml(placeLabel),
+    "__PARRANDA_CITY_MAP_URL__": "",
+    "__PARRANDA_BRAND_SUBTITLE__": escapeHtml(tr("anywhere.brandSubtitle", "Any-place alpha")),
+    "__PARRANDA_CITY_EYEBROW__": escapeHtml(tr("anywhere.eyebrow", "Any-place alpha")),
+    "__PARRANDA_HERO_HEADLINE__": escapeHtml(heroHeadline),
+    "__PARRANDA_HERO_LEAD__": escapeHtml(
+      tr(
+        "anywhere.heroLead",
+        "Parranda composes a day from open data — no city pack required. It is honest when it can only read the place's shape, or can't compose a day yet.",
+      ),
+    ),
+    "__PARRANDA_HERO_LIVE_LABEL__": escapeHtml(tr("anywhere.heroLiveLabel", "Alpha")),
+    "__PARRANDA_PLANNER_TITLE__": escapeHtml(tr("anywhere.plannerTitle", "Plan a day anywhere")),
+    "__PARRANDA_PLANNER_SUMMARY__": escapeHtml(
+      tr("anywhere.plannerSummary", "Pick what you're in the mood for and Parranda composes a walkable day."),
+    ),
+    "__PARRANDA_PLANNER_CTA_LABEL__": escapeHtml(tr("anywhere.plannerCta", "Build my day")),
+    "__PARRANDA_PLANNER_MICROCOPY__": escapeHtml(
+      tr("anywhere.plannerMicrocopy", "Alpha — composed live from open data, honest about its limits."),
+    ),
+    // The Blitz/wildcard teaser is citypack-shaped; hide its actions on the alpha.
+    "__PARRANDA_WILDCARD_LABEL__": escapeHtml(tr("anywhere.wildcardLabel", "Alpha")),
+    "__PARRANDA_WILDCARD_TITLE__": escapeHtml(tr("anywhere.wildcardTitle", "Any-place engine")),
+    "__PARRANDA_WILDCARD_SUMMARY__": escapeHtml(
+      tr("anywhere.wildcardSummary", "Type any place above to see Parranda compose a day from open data."),
+    ),
+    "__PARRANDA_WILDCARD_META__": "",
+    "__PARRANDA_WILDCARD_TAG_1__": "",
+    "__PARRANDA_WILDCARD_TAG_2__": "",
+    "__PARRANDA_WILDCARD_TAG_3__": "",
+    "__PARRANDA_WILDCARD_ACTIONS_HIDDEN__": "hidden",
+    "__PARRANDA_CITY_BOOTSTRAP__": serializeInlineJson(bootstrap),
+    ...buildStaticShellI18nReplacements(uiLang),
+  };
+
+  return Object.entries(replacements).reduce(
+    (html, [token, replacement]) => html.split(token).join(replacement),
+    appShellTemplate,
+  );
+}
+
 function inferShellCity(request) {
   const pathSegments = String(request.path || "")
     .split("/")
@@ -1471,6 +1570,19 @@ function buildApp({
     }
     response.type("html").send(
       renderDogfoodShell({ lang: normalizeLanguage(request.query?.lang) })
+    );
+  });
+
+  // Any-place ALPHA product surface. A freeform `place` (never a recognized city)
+  // gets the planner shell in `anywhereMode`; the client then drives the agnostic
+  // engine request. Always available (not env-gated) — it is a product doorway,
+  // not a diagnostics page. The agnostic *route* still needs the trusted loader to
+  // be configured to compose anything; without it the surface honestly says so.
+  app.get("/labs/anywhere", (request, response) => {
+    const place = typeof request.query?.place === "string" ? request.query.place : "";
+    const plannerEntryRoute = String(request.query?.planner || "") === "open";
+    response.type("html").send(
+      renderAnywhereShell({ place, plannerEntryRoute, lang: normalizeLanguage(request.query?.lang) }),
     );
   });
 
@@ -2066,6 +2178,11 @@ function buildApp({
             });
             if (day.structure.area_count > 0) {
               agnosticPlaceStructure = {
+                // Provenance: this structure was derived for the TRUSTED resolved
+                // anchor of the freeform place — NOT a recognized-city baseline. The
+                // any-place surface trusts only `agnostic_anchor` structure, so a
+                // fallback city's structure can never be shown as the typed place.
+                provenance: "agnostic_anchor",
                 area_count: day.structure.area_count,
                 scattered_count: day.structure.scattered_count,
                 areas: day.structure.areas,

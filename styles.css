@@ -3767,6 +3767,35 @@ body.is-planner-entry .planner-mode-button.is-active {
   border: 1px solid rgba(70, 38, 18, 0.1);
 }
 
+/* Any-place alpha: suppress citypack-only chrome (no city pack here) — the Blitz
+   hero, the Pulse teaser, the live Pulse edition, and the live tab button. The
+   any-place engine has no curated Pulse/live feed, so none of these belong here. */
+body.anywhere-mode .hero-quickstart,
+body.anywhere-mode #cityPulseTeaser,
+body.anywhere-mode #cityPulseStart,
+body.anywhere-mode .city-pulse-edition,
+body.anywhere-mode #heroLiveButton {
+  display: none !important;
+}
+
+/* Any-place alpha honest states (structure-only / unavailable). */
+.anywhere-state {
+  display: grid;
+  gap: 14px;
+}
+
+.anywhere-state-note {
+  margin: 0;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: rgba(255, 252, 247, 0.7);
+  border: 1px solid rgba(70, 38, 18, 0.12);
+  color: var(--ink, #2b1a0f);
+  font-size: 0.98rem;
+  line-height: 1.5;
+  max-width: 100%;
+}
+
 .planner-place-structure-eyebrow {
   margin: 0;
   font-size: 0.78rem;
