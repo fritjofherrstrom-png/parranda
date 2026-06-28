@@ -4224,7 +4224,7 @@ function buildBlitzRouteGuideView(result) {
       label: stop.label,
       area: stop.area,
       tagSummary: (stop.tags || []).slice(0, 3).join(" • "),
-      summary: stop.tags?.length ? stop.tags.join(", ") : t("blitz.guideStopItemDefault"),
+      summary: stop.tags?.length ? (Array.isArray(stop.tags) ? stop.tags : []).join(", ") : t("blitz.guideStopItemDefault"),
       text: `${index + 1}. ${stop.label}`,
       query: stop.label,
       source: "curated",
@@ -9384,15 +9384,15 @@ function createApiRouteView(
     legSummary: buildLegSummary(route),
     stops: route.main_stops.map(
       (stop, index) =>
-        `${index + 1}. ${stop.label} • ${stop.area} • ${stop.tags.join(", ")}`,
+        `${index + 1}. ${stop.label} • ${stop.area || ""} • ${(Array.isArray(stop.tags) ? stop.tags : []).join(", ")}`,
     ),
     stopItems: route.main_stops.map((stop, index) => ({
       order: index + 1,
       label: stop.label,
       area: stop.area,
       tagSummary: formatRouteStopTagSummary(stop.tags),
-      summary: normalizeRouteResultCopy(stop.summary || stop.vibe || stop.tags.join(", ")),
-      text: `${index + 1}. ${stop.label} • ${stop.area} • ${stop.tags.join(", ")}`,
+      summary: normalizeRouteResultCopy(stop.summary || stop.vibe || (Array.isArray(stop.tags) ? stop.tags : []).join(", ")),
+      text: `${index + 1}. ${stop.label} • ${stop.area} • ${(Array.isArray(stop.tags) ? stop.tags : []).join(", ")}`,
       query: stop.drawer_query || stop.label,
       isLiveEvent: Boolean(stop.is_live_event),
       provisional: stop.provisional === true,
@@ -9441,7 +9441,7 @@ function createApiRouteView(
       order: index + 1,
       label: stop.label,
       area: stop.area,
-      summary: normalizeRouteResultCopy(stop.summary || stop.vibe || stop.tags.join(", ")),
+      summary: normalizeRouteResultCopy(stop.summary || stop.vibe || (Array.isArray(stop.tags) ? stop.tags : []).join(", ")),
       meta: [
         stop.is_live_event ? (isEnglishUi ? "Live right now" : "Live just nu") : null,
         stop.best_time ? `${isEnglishUi ? "Best" : "Bäst"}: ${stop.best_time}` : null,

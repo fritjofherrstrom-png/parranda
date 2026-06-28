@@ -1,9 +1,9 @@
-const CACHE_NAME = "parranda-v32";
+const CACHE_NAME = "parranda-v33";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css?v=23",
-  "./script.js?v=35",
+  "./script.js?v=36",
   "./ux-pass1.js?v=10",
   "./manifest.webmanifest",
   "./vendor/leaflet/leaflet.css",
