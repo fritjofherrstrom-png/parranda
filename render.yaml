@@ -41,3 +41,12 @@ services:
       # AGNOSTIC_ENGINE_NORTH_STAR.md). Remove/replace this when that lands.
       - key: PARRANDA_WIKIDATA_LABEL_LANGS
         value: el,en
+      # Live events near the anchor — "what's on tonight / this week" from open,
+      # key-free municipal feeds (Linked Events; CC-BY). GENERIC + deploy-
+      # configurable: a city is a data row, never code. The built-in registry has
+      # the validated Helsinki instance; add more regions via PARRANDA_EVENT_FEEDS
+      # (a JSON array of {id,label,base,bbox,license}) without touching the engine.
+      # Honest + never required: an anchor no feed covers returns honest absence
+      # and the route/districts still compose. Off by default; enabled here.
+      - key: PARRANDA_AGNOSTIC_EVENTS
+        value: enabled

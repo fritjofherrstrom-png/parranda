@@ -25,7 +25,9 @@ const { scoreTimeSensitiveEventSalience } = require("../pulse-engine/time-sensit
 
 const DEFAULT_RADIUS_M = 3000;
 const MAX_PER_BUCKET = 6;
-const FETCH_LIMIT = 60;
+// Wide enough that today's later (evening) events and the next days both fit in
+// one chronological page after permanent infrastructure is excluded.
+const FETCH_LIMIT = 100;
 const THIS_WEEK_HORIZON_DAYS = 7;
 const TONIGHT_TIMING = new Set(["now", "today", "tonight"]);
 // A "happening" is time-bounded (a gig, tour, market, festival) — not permanent
@@ -102,12 +104,13 @@ function resolveEventFeedForAnchor(anchor, registry = BUILTIN_EVENT_FEEDS) {
   return null;
 }
 
-// Geo-filter the feed to the anchor + return genuine upcoming happenings.
-// `sort=start_time` is a trap: it surfaces recurring-series ORIGIN dates (years
-// in the past), starving real upcoming events out of the page. `max_duration`
-// excludes permanent infrastructure (always-open museums) and `sort=end_time`
-// surfaces what is ending/relevant soonest. The provider's own buildEventsUrl
-// adds include/page_size/start/format WITHOUT clobbering these.
+// Geo-filter the feed to the anchor + return genuine upcoming happenings in
+// chronological order. The trap: `sort=start_time` ALONE surfaces recurring-series
+// ORIGIN dates (years in the past) first; but PAIRED with `max_duration` those
+// permanent/recurring umbrellas (origin→last-occurrence span is huge) are
+// excluded, leaving clean soonest-first events that fill BOTH tonight and the
+// week. The provider's own buildEventsUrl adds include/page_size/start/format
+// WITHOUT clobbering these.
 function buildAnchorEventEndpoint(base, anchor, { radiusM = DEFAULT_RADIUS_M } = {}) {
   let url;
   try {
@@ -117,7 +120,7 @@ function buildAnchorEventEndpoint(base, anchor, { radiusM = DEFAULT_RADIUS_M } =
   }
   url.searchParams.set("dwithin_origin", `${anchor.lng},${anchor.lat}`);
   url.searchParams.set("dwithin_metres", String(Math.max(100, Math.round(radiusM))));
-  url.searchParams.set("sort", "end_time");
+  url.searchParams.set("sort", "start_time");
   url.searchParams.set("max_duration", String(MAX_DURATION_SECONDS));
   return url.toString();
 }
@@ -223,19 +226,28 @@ async function collectAnchorEvents({ anchor, now = null, date = null, registry, 
     endpoint,
     fetcher: fetcher || undefined,
     limit: FETCH_LIMIT,
+    // A geo + include=location page of 100 is heavier than the provider's 8 s
+    // default; give it room so a slow-but-fine feed isn't silently emptied.
+    timeoutMs: 15000,
     label: feed.label,
     license: feed.license,
   });
 
+  const nowDate = now ? new Date(now) : null;
+  // Window the feed from NOW forward (a datetime, not "today") so a late-evening
+  // request doesn't waste the page on this-morning's already-past events — the
+  // bias that empties tonight/this_week. Ongoing multi-day events still overlap
+  // [now, …] and are returned.
+  const startParam = date || (nowDate ? nowDate.toISOString() : null);
+
   let raw = [];
   try {
-    const collected = await provider.create({ key: null }).collect({ date });
+    const collected = await provider.create({ key: null }).collect({ date: startParam });
     raw = Array.isArray(collected && collected.time_sensitive_events) ? collected.time_sensitive_events : [];
   } catch (_e) {
     raw = [];
   }
 
-  const nowDate = now ? new Date(now) : null;
   const tonight = [];
   const thisWeek = [];
   for (const rawEvent of raw) {

@@ -3882,6 +3882,77 @@ body.anywhere-mode #heroLiveButton {
   font-style: italic;
 }
 
+/* Live events near the place — "what's on tonight / this week" (any place). */
+.planner-live-events {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 252, 247, 0.62);
+  border: 1px solid rgba(70, 38, 18, 0.1);
+}
+
+.planner-live-events-eyebrow {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.planner-live-events-empty {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.planner-live-events-group {
+  display: grid;
+  gap: 6px;
+}
+
+.planner-live-events-group-label {
+  margin: 2px 0 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink, #2b1a0f);
+}
+
+.planner-live-event {
+  display: grid;
+  gap: 2px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(70, 38, 18, 0.08);
+  text-decoration: none;
+  color: inherit;
+}
+
+a.planner-live-event:hover {
+  border-color: rgba(70, 38, 18, 0.2);
+}
+
+.planner-live-event-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ink, #2b1a0f);
+}
+
+.planner-live-event-when {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.planner-live-events-source {
+  margin: 2px 0 0;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
 /* Day-tab pill track */
 .planner-day-tabs {
   display: inline-flex;

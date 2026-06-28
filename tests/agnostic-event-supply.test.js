@@ -79,7 +79,7 @@ test("the endpoint is geo-filtered to the anchor and excludes permanent infrastr
   const url = new URL(buildAnchorEventEndpoint(BUILTIN_EVENT_FEEDS[0].base, HELSINKI));
   assert.equal(url.searchParams.get("dwithin_origin"), "24.94,60.17");
   assert.ok(Number(url.searchParams.get("dwithin_metres")) > 0);
-  assert.equal(url.searchParams.get("sort"), "end_time");
+  assert.equal(url.searchParams.get("sort"), "start_time");
   assert.ok(Number(url.searchParams.get("max_duration")) > 0, "duration cap excludes always-open venues");
 });
 
