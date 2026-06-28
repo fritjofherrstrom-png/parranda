@@ -120,6 +120,29 @@ test("tonight ranks by salience: an ongoing 'now' event outranks a later-today o
   assert.equal(out.tonight[0].id, "now1");
 });
 
+test("cultural events outrank civic/admin notices in the same bucket (smart, not just timely)", async () => {
+  const ev = (id, name, start, end, lat, lng) => ({
+    id,
+    name: { en: name },
+    start_time: start,
+    end_time: end,
+    location: { position: { coordinates: [lng, lat] }, name: { en: "Venue " + id } },
+    info_url: { en: `https://example.org/${id}` },
+    data_source: "helsinki",
+  });
+  const payload = {
+    data: [
+      ev("admin1", "City Council Meeting", "2026-06-28T18:00:00Z", "2026-06-28T20:00:00Z", 60.17, 24.94),
+      ev("culture1", "Jazz concert at the hall", "2026-06-28T18:00:00Z", "2026-06-28T20:00:00Z", 60.171, 24.941),
+    ],
+  };
+  const out = await collectAnchorEvents({ anchor: HELSINKI, now: NOW, fetcher: fetcherFor(payload) });
+  const ids = out.tonight.map((e) => e.id);
+  assert.ok(ids.indexOf("culture1") < ids.indexOf("admin1"), "the concert ranks above the council meeting");
+  assert.equal(out.tonight.find((e) => e.id === "culture1").cultural_tier, "cultural");
+  assert.equal(out.tonight.find((e) => e.id === "admin1").cultural_tier, "administrative");
+});
+
 test("an uncovered anchor returns honest empty — no fetch, no fabricated events", async () => {
   let fetched = false;
   const out = await collectAnchorEvents({

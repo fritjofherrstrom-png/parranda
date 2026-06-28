@@ -22,6 +22,7 @@
 const { createLinkedEventsProvider } = require("../pulse-sources/linked-events-source-provider");
 const { normalizeTimeSensitiveSourceEvent } = require("../pulse-sources/time-sensitive-event");
 const { scoreTimeSensitiveEventSalience } = require("../pulse-engine/time-sensitive-events");
+const { classifyCulturalSalience } = require("../pulse-engine/cultural-salience");
 
 const DEFAULT_RADIUS_M = 3000;
 const MAX_PER_BUCKET = 6;
@@ -176,6 +177,12 @@ function toEventView(event, feed) {
   const title = String(event.title || event.name || "").trim();
   if (!title) return null;
   const salience = scoreTimeSensitiveEventSalience(event);
+  // Make "what's on" SMART, not just timely: a multilingual (en/el/sv) cultural
+  // classifier lifts notable culture (concerts, festivals, exhibitions, workshops)
+  // and demotes civic/admin notices (council/committee meetings) — generic, never
+  // a city hack. Cultural cue wins ambiguity; neutral is unchanged.
+  const cultural = classifyCulturalSalience(event);
+  const score = Number(Math.min(salience.score * cultural.weight, 10).toFixed(2));
   return {
     id: event.id || null,
     title,
@@ -189,7 +196,8 @@ function toEventView(event, feed) {
     source_url: event.source_url || event.provenance?.source_url || null,
     license: event.provenance?.license || feed.license || null,
     trust_level: event.confidence || null,
-    salience_score: salience.score,
+    cultural_tier: cultural.tier,
+    salience_score: score,
   };
 }
 
