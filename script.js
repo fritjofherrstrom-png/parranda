@@ -11382,9 +11382,13 @@ function buildLiveEventsPanel() {
         ? isEnglishUi
           ? "No live-events feed reaches this place yet — Parranda won't invent one."
           : "Ingen live-eventkälla täcker den här platsen än — Parranda hittar inte på en."
-        : isEnglishUi
-          ? "Nothing notable on near here right now."
-          : "Inget särskilt på gång i närheten just nu.";
+        : live.pending
+          ? isEnglishUi
+            ? "Checking what's on near here — reload in a moment."
+            : "Kollar vad som händer i närheten — ladda om strax."
+          : isEnglishUi
+            ? "Nothing notable on near here right now."
+            : "Inget särskilt på gång i närheten just nu.";
     panel.appendChild(note);
     return panel;
   }
@@ -11503,6 +11507,30 @@ function buildPlaceStructurePanel() {
   });
 
   panel.appendChild(list);
+
+  // EVENING ANCHOR (PR-B): a genuine tonight-event woven into the day — a real
+  // happening with its own time window + source, tied to the nearest district.
+  // Honest: an anchor, not a walking-validated stop (no ETA shown). Absent when
+  // no geocoded tonight-event exists, so nothing is fabricated.
+  const eveningEvent = day && day.evening_event;
+  if (eveningEvent && eveningEvent.title) {
+    const card = document.createElement("div");
+    card.className = "planner-district planner-evening-event";
+    const label = document.createElement("p");
+    label.className = "planner-evening-event-label";
+    label.textContent = isEnglishUi ? "And tonight" : "Och ikväll";
+    card.appendChild(label);
+    card.appendChild(buildLiveEventRow(eveningEvent));
+    if (Number.isInteger(eveningEvent.near_area_index)) {
+      const near = document.createElement("p");
+      near.className = "planner-evening-event-near";
+      const n = eveningEvent.near_area_index + 1;
+      const km = Number.isFinite(eveningEvent.near_area_km) ? ` · ≈ ${eveningEvent.near_area_km} km` : "";
+      near.textContent = isEnglishUi ? `Near district ${n}${km}` : `Nära distrikt ${n}${km}`;
+      card.appendChild(near);
+    }
+    panel.appendChild(card);
+  }
 
   // Honest coverage footer: intents no district could satisfy. Never hidden.
   const missing = Array.isArray(day.missing_intents) ? day.missing_intents : [];

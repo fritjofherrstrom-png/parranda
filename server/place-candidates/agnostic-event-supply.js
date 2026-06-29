@@ -22,23 +22,23 @@
 const { createLinkedEventsProvider } = require("../pulse-sources/linked-events-source-provider");
 const { normalizeTimeSensitiveSourceEvent } = require("../pulse-sources/time-sensitive-event");
 const { scoreTimeSensitiveEventSalience } = require("../pulse-engine/time-sensitive-events");
+const { createSourceCache } = require("./source-cache");
 const { classifyCulturalSalience } = require("../pulse-engine/cultural-salience");
 
 const DEFAULT_RADIUS_M = 3000;
 const MAX_PER_BUCKET = 6;
 // Wide enough that today's later (evening) events and the next days both fit in
 // one chronological page after permanent infrastructure is excluded.
-const FETCH_LIMIT = 100;
+const FETCH_LIMIT = 40;
 const THIS_WEEK_HORIZON_DAYS = 7;
 const TONIGHT_TIMING = new Set(["now", "today", "tonight"]);
 // A "happening" is time-bounded (a gig, tour, market, festival) — not permanent
 // infrastructure (a museum open since 2001). Events longer than this are
-// always-open, not something that is "on tonight", and are excluded. Mirrors the
-// feed-level `max_duration` query param, but feed-agnostic so it protects ANY
-// provider and the deterministic tests (which inject payloads, not query params).
+// always-open, not something that is "on", and are excluded CLIENT-side. This is
+// the duration guard (the query uses sort=end_time to surface current events, not
+// a slow server-side max_duration), feed-agnostic so it protects ANY provider and
+// the deterministic tests (which inject payloads, not query params).
 const MAX_HAPPENING_DAYS = 14;
-// Feed-level cap (seconds) for the Linked Events query — same intent.
-const MAX_DURATION_SECONDS = 7 * 24 * 60 * 60;
 
 // Geo-keyed registry of OPEN, key-free municipal event feeds running the Linked
 // Events platform (api.hel.fi and the many Nordic cities on the same open-source
@@ -105,13 +105,14 @@ function resolveEventFeedForAnchor(anchor, registry = BUILTIN_EVENT_FEEDS) {
   return null;
 }
 
-// Geo-filter the feed to the anchor + return genuine upcoming happenings in
-// chronological order. The trap: `sort=start_time` ALONE surfaces recurring-series
-// ORIGIN dates (years in the past) first; but PAIRED with `max_duration` those
-// permanent/recurring umbrellas (origin→last-occurrence span is huge) are
-// excluded, leaving clean soonest-first events that fill BOTH tonight and the
-// week. The provider's own buildEventsUrl adds include/page_size/start/format
-// WITHOUT clobbering these.
+// Geo-filter the feed to the anchor + return genuine CURRENT happenings.
+// The key is `sort=end_time`: it surfaces the soonest-ENDING events first — i.e.
+// what is genuinely on now / today — and naturally pushes permanent exhibitions
+// (whose end_time is years away) to the BACK. Crucially it avoids the server-side
+// `max_duration` filter, which forced recurring-series expansion and made the
+// query ~25 s; this query returns in a few seconds. Permanence/duration is then
+// filtered CLIENT-side (isEphemeralHappening), feed-agnostically. The provider's
+// own buildEventsUrl adds include/page_size/start/format WITHOUT clobbering these.
 function buildAnchorEventEndpoint(base, anchor, { radiusM = DEFAULT_RADIUS_M } = {}) {
   let url;
   try {
@@ -121,8 +122,7 @@ function buildAnchorEventEndpoint(base, anchor, { radiusM = DEFAULT_RADIUS_M } =
   }
   url.searchParams.set("dwithin_origin", `${anchor.lng},${anchor.lat}`);
   url.searchParams.set("dwithin_metres", String(Math.max(100, Math.round(radiusM))));
-  url.searchParams.set("sort", "start_time");
-  url.searchParams.set("max_duration", String(MAX_DURATION_SECONDS));
+  url.searchParams.set("sort", "end_time");
   return url.toString();
 }
 
@@ -223,7 +223,7 @@ function rankAndCap(views) {
  * @param {Function} [opts.fetcher]              injected fetch (tests)
  * @returns {Promise<{coverage:"covered"|"uncovered", feed:object|null, tonight:object[], this_week:object[]}>}
  */
-async function collectAnchorEvents({ anchor, now = null, date = null, registry, fetcher, radiusM } = {}) {
+async function collectAnchorEvents({ anchor, now = null, date = null, registry, fetcher, radiusM, timeoutMs = 15000 } = {}) {
   const feed = resolveEventFeedForAnchor(anchor, registry || resolveEventFeedRegistry());
   if (!feed) {
     return { coverage: "uncovered", feed: null, tonight: [], this_week: [] };
@@ -234,9 +234,10 @@ async function collectAnchorEvents({ anchor, now = null, date = null, registry, 
     endpoint,
     fetcher: fetcher || undefined,
     limit: FETCH_LIMIT,
-    // A geo + include=location page of 100 is heavier than the provider's 8 s
-    // default; give it room so a slow-but-fine feed isn't silently emptied.
-    timeoutMs: 15000,
+    // A geo `dwithin` page is slow and high-variance on the live feed; give it
+    // room. This runs out-of-band (background-warm), so a long timeout never
+    // blocks the route — see resolveDefaultEventSupply.
+    timeoutMs: Math.max(1000, Math.floor(timeoutMs) || 15000),
     label: feed.label,
     license: feed.license,
   });
@@ -292,11 +293,54 @@ async function collectAnchorEvents({ anchor, now = null, date = null, registry, 
  * PARRANDA_AGNOSTIC_EVENTS). Returns an `({anchor, now}) => Promise<result>`
  * bound to the env-resolved registry, using global fetch.
  */
+// Coarse cache key: ~1 km anchor bucket + hour bucket (events are time-sensitive,
+// so the window must not be stale, but a fresh request a minute later must hit).
+function eventCacheKey(anchor, now) {
+  const lat = Number(anchor.lat).toFixed(2);
+  const lng = Number(anchor.lng).toFixed(2);
+  const hour = (now ? new Date(now) : new Date(0)).toISOString().slice(0, 13);
+  return `${lat},${lng}:${hour}`;
+}
+
+const EVENT_CACHE_TTL_MS = 20 * 60 * 1000; // 20 min — time-sensitive, but reusable
+const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a route
+
+/**
+ * Default event supply: env-gated + BACKGROUND-WARMED. The live municipal feed is
+ * slow and high-variance (a geo query can take 8–25 s), so it must NEVER be
+ * fetched inline on the route. On a cold anchor we kick an out-of-band warm and
+ * return an honest `pending` (the route is instant); once warm, the next visit
+ * serves cached events. An uncovered anchor returns honest absence immediately.
+ */
 function resolveDefaultEventSupply(env = process.env) {
   const flag = String((env && env.PARRANDA_AGNOSTIC_EVENTS) || "").trim().toLowerCase();
   if (!["enabled", "1", "true", "on", "yes"].includes(flag)) return null;
   const registry = resolveEventFeedRegistry(env);
-  return ({ anchor, now } = {}) => collectAnchorEvents({ anchor, now, registry });
+  const cache = createSourceCache({
+    namespace: "agnostic-events",
+    ttlMs: EVENT_CACHE_TTL_MS,
+    dir: (env && env.PARRANDA_CACHE_DIR) || null,
+  });
+  return ({ anchor, now } = {}) => {
+    const feed = hasAnchor(anchor) ? resolveEventFeedForAnchor(anchor, registry) : null;
+    if (!feed) {
+      return Promise.resolve({ coverage: "uncovered", feed: null, tonight: [], this_week: [] });
+    }
+    const key = eventCacheKey(anchor, now);
+    const cached = cache.peek(key);
+    if (cached) return Promise.resolve(cached);
+    // Cold: warm out-of-band (long timeout, fire-and-forget), serve honest pending.
+    cache.warm(key, () => collectAnchorEvents({ anchor, now, registry, timeoutMs: WARM_TIMEOUT_MS }), {
+      shouldStore: (r) => r && r.coverage === "covered" && (r.tonight.length + r.this_week.length) > 0,
+    });
+    return Promise.resolve({
+      coverage: "covered",
+      feed: { id: feed.id, label: feed.label, license: feed.license },
+      tonight: [],
+      this_week: [],
+      pending: true,
+    });
+  };
 }
 
 module.exports = {
@@ -305,6 +349,7 @@ module.exports = {
   resolveEventFeedRegistry,
   resolveEventFeedForAnchor,
   buildAnchorEventEndpoint,
+  eventCacheKey,
   BUILTIN_EVENT_FEEDS,
   DEFAULT_RADIUS_M,
 };

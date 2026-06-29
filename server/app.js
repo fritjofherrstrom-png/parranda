@@ -2201,9 +2201,8 @@ function buildApp({
           agnosticPlaceStructure = null; // fail soft: structure never blocks the route
         }
       }
-      const agnosticPlaceStructureSidecar = agnosticPlaceStructure
-        ? { place_structure: agnosticPlaceStructure }
-        : {};
+      // (the place_structure sidecar is built below, AFTER live events are
+      // collected, so a genuine tonight-event can be woven into the day)
 
       // ANY-PLACE LIVE EVENTS: what is happening near the trusted anchor tonight /
       // this week, from an open municipal feed that covers it. Env-gated +
@@ -2222,6 +2221,9 @@ function buildApp({
               feed: collected.feed || null,
               tonight: Array.isArray(collected.tonight) ? collected.tonight : [],
               this_week: Array.isArray(collected.this_week) ? collected.this_week : [],
+              // The live feed is background-warmed; `pending` means "covered, still
+              // checking" so the UI never reads an empty warm as "nothing on".
+              ...(collected.pending ? { pending: true } : {}),
             };
           }
         } catch (_error) {
@@ -2229,6 +2231,22 @@ function buildApp({
         }
       }
       const liveEventsSidecar = liveEvents ? { live_events: liveEvents } : {};
+
+      // EVENTS INTO THE DAY: weave the top genuine tonight-event (with real
+      // coordinates) into the composed day as an honest EVENING ANCHOR — a real
+      // happening with its time window + source, tied to the nearest district. It
+      // is an anchor, not a walking-validated stop (no ETA/geometry claim).
+      // Additive + fail-soft: no suitable event → the day is unchanged.
+      let wovenPlaceStructure = agnosticPlaceStructure;
+      try {
+        const { weaveEveningEvent } = require("./candidates/evening-event-weave");
+        wovenPlaceStructure = weaveEveningEvent(agnosticPlaceStructure, liveEvents);
+      } catch (_error) {
+        wovenPlaceStructure = agnosticPlaceStructure;
+      }
+      const agnosticPlaceStructureSidecar = wovenPlaceStructure
+        ? { place_structure: wovenPlaceStructure }
+        : {};
 
       // Trusted anchor in hand → existing #259 route-output path. Place
       // resolution does NOT satisfy route eligibility on its own: external
