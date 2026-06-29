@@ -2988,6 +2988,10 @@ let latestPlannerCoverageIntentKeys = [];
 // walking gap between them, and the intents nothing could cover. Null when the
 // response carries no structure (too few placed candidates / loader off).
 let latestPlaceStructure = null;
+// Live events near the place — what's on tonight / this week, from an open feed
+// that covers the anchor. Null when the response carries no live_events; an
+// `uncovered` coverage means the place has no feed yet (honest absence).
+let latestLiveEvents = null;
 let activeDistrictId = "monti";
 let activeOptimizerMode = null;
 let activeDistanceMode = "soft_target";
@@ -4220,7 +4224,7 @@ function buildBlitzRouteGuideView(result) {
       label: stop.label,
       area: stop.area,
       tagSummary: (stop.tags || []).slice(0, 3).join(" • "),
-      summary: stop.tags?.length ? stop.tags.join(", ") : t("blitz.guideStopItemDefault"),
+      summary: stop.tags?.length ? (Array.isArray(stop.tags) ? stop.tags : []).join(", ") : t("blitz.guideStopItemDefault"),
       text: `${index + 1}. ${stop.label}`,
       query: stop.label,
       source: "curated",
@@ -6593,6 +6597,10 @@ function applyPlannerResponseState(response, options = {}) {
     response.place_structure.district_day &&
     typeof response.place_structure.district_day === "object"
       ? response.place_structure
+      : null;
+  latestLiveEvents =
+    response?.live_events && typeof response.live_events === "object" && response.live_events.coverage
+      ? response.live_events
       : null;
   const resolvedState = {
     homeBase: response?.resolved_home_base || null,
@@ -9376,15 +9384,15 @@ function createApiRouteView(
     legSummary: buildLegSummary(route),
     stops: route.main_stops.map(
       (stop, index) =>
-        `${index + 1}. ${stop.label} • ${stop.area} • ${stop.tags.join(", ")}`,
+        `${index + 1}. ${stop.label} • ${stop.area || ""} • ${(Array.isArray(stop.tags) ? stop.tags : []).join(", ")}`,
     ),
     stopItems: route.main_stops.map((stop, index) => ({
       order: index + 1,
       label: stop.label,
       area: stop.area,
       tagSummary: formatRouteStopTagSummary(stop.tags),
-      summary: normalizeRouteResultCopy(stop.summary || stop.vibe || stop.tags.join(", ")),
-      text: `${index + 1}. ${stop.label} • ${stop.area} • ${stop.tags.join(", ")}`,
+      summary: normalizeRouteResultCopy(stop.summary || stop.vibe || (Array.isArray(stop.tags) ? stop.tags : []).join(", ")),
+      text: `${index + 1}. ${stop.label} • ${stop.area} • ${(Array.isArray(stop.tags) ? stop.tags : []).join(", ")}`,
       query: stop.drawer_query || stop.label,
       isLiveEvent: Boolean(stop.is_live_event),
       provisional: stop.provisional === true,
@@ -9433,7 +9441,7 @@ function createApiRouteView(
       order: index + 1,
       label: stop.label,
       area: stop.area,
-      summary: normalizeRouteResultCopy(stop.summary || stop.vibe || stop.tags.join(", ")),
+      summary: normalizeRouteResultCopy(stop.summary || stop.vibe || (Array.isArray(stop.tags) ? stop.tags : []).join(", ")),
       meta: [
         stop.is_live_event ? (isEnglishUi ? "Live right now" : "Live just nu") : null,
         stop.best_time ? `${isEnglishUi ? "Best" : "Bäst"}: ${stop.best_time}` : null,
@@ -11301,6 +11309,111 @@ function placeStructureLabel(map, key) {
 // throughout — daypart order, what each district covers, the walking gap between
 // them, and the intents no district could satisfy. Returns a DOM node, or null
 // when there is nothing trustworthy to show.
+// A compact, honest "when" label from the feed's start time. Weekday + time only;
+// never a fabricated duration or "ends at" we don't have.
+function formatLiveEventWhen(event) {
+  if (!event || !event.starts_at) return "";
+  const date = new Date(event.starts_at);
+  if (Number.isNaN(date.getTime())) return "";
+  try {
+    return date.toLocaleString(isEnglishUi ? "en-GB" : "sv-SE", {
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch (_error) {
+    return "";
+  }
+}
+
+function buildLiveEventRow(event) {
+  const hasLink = Boolean(event.source_url);
+  const row = document.createElement(hasLink ? "a" : "div");
+  row.className = "planner-live-event";
+  if (hasLink) {
+    row.href = event.source_url;
+    row.target = "_blank";
+    row.rel = "noopener noreferrer";
+  }
+  const title = document.createElement("span");
+  title.className = "planner-live-event-title";
+  title.textContent = event.title || "";
+  row.appendChild(title);
+
+  const when = formatLiveEventWhen(event);
+  if (when) {
+    const meta = document.createElement("span");
+    meta.className = "planner-live-event-when";
+    meta.textContent = event.place ? `${when} · ${event.place}` : when;
+    row.appendChild(meta);
+  } else if (event.place) {
+    const place = document.createElement("span");
+    place.className = "planner-live-event-when";
+    place.textContent = event.place;
+    row.appendChild(place);
+  }
+  return row;
+}
+
+// "What's on near here" — live events tonight / this week, for ANY place, from an
+// open municipal feed that covers the anchor. Honest absence when no feed reaches
+// the place (it never pretends). Additive — null when the response carries no
+// live_events, so default rendering is unchanged.
+function buildLiveEventsPanel() {
+  const live = latestLiveEvents;
+  if (!live || !live.coverage) return null;
+  const tonight = Array.isArray(live.tonight) ? live.tonight : [];
+  const thisWeek = Array.isArray(live.this_week) ? live.this_week : [];
+
+  const panel = document.createElement("section");
+  panel.className = "planner-live-events";
+  panel.setAttribute("aria-label", isEnglishUi ? "What's on near here" : "Vad som händer i närheten");
+
+  const eyebrow = document.createElement("p");
+  eyebrow.className = "planner-live-events-eyebrow";
+  eyebrow.textContent = isEnglishUi ? "Happening near here" : "Händer i närheten";
+  panel.appendChild(eyebrow);
+
+  if (live.coverage === "uncovered" || (!tonight.length && !thisWeek.length)) {
+    const note = document.createElement("p");
+    note.className = "planner-live-events-empty";
+    note.textContent =
+      live.coverage === "uncovered"
+        ? isEnglishUi
+          ? "No live-events feed reaches this place yet — Parranda won't invent one."
+          : "Ingen live-eventkälla täcker den här platsen än — Parranda hittar inte på en."
+        : isEnglishUi
+          ? "Nothing notable on near here right now."
+          : "Inget särskilt på gång i närheten just nu.";
+    panel.appendChild(note);
+    return panel;
+  }
+
+  const renderGroup = (label, events) => {
+    if (!events.length) return;
+    const group = document.createElement("div");
+    group.className = "planner-live-events-group";
+    const heading = document.createElement("p");
+    heading.className = "planner-live-events-group-label";
+    heading.textContent = label;
+    group.appendChild(heading);
+    events.forEach((event) => group.appendChild(buildLiveEventRow(event)));
+    panel.appendChild(group);
+  };
+  renderGroup(isEnglishUi ? "Tonight" : "Ikväll", tonight);
+  renderGroup(isEnglishUi ? "This week" : "Den här veckan", thisWeek);
+
+  const feedLabel = live.feed && live.feed.label;
+  if (feedLabel) {
+    const source = document.createElement("p");
+    source.className = "planner-live-events-source";
+    const license = live.feed.license ? ` · ${live.feed.license}` : "";
+    source.textContent = `${isEnglishUi ? "Source" : "Källa"}: ${feedLabel}${license}`;
+    panel.appendChild(source);
+  }
+  return panel;
+}
+
 function buildPlaceStructurePanel() {
   const structure = latestPlaceStructure;
   const day = structure?.district_day;
@@ -11562,6 +11675,13 @@ function renderPlannedDays() {
   const placeStructurePanel = buildPlaceStructurePanel();
   if (placeStructurePanel) {
     shell.appendChild(placeStructurePanel);
+  }
+
+  // Live events near the place — what's on tonight / this week (any place, open
+  // feed, honest absence). Additive — absent unless the response carries them.
+  const liveEventsPanel = buildLiveEventsPanel();
+  if (liveEventsPanel) {
+    shell.appendChild(liveEventsPanel);
   }
 
   const dayCard = plannerDayTemplate.content.firstElementChild.cloneNode(true);
@@ -11913,6 +12033,13 @@ function renderAnywhereResults(classification) {
       `Parranda couldn't compose a day in ${placeLabel} yet — there isn't enough open data here right now.`,
     );
     wrap.appendChild(note);
+  }
+
+  // Live events are independent of route composition — "what's on near here" is
+  // worth showing even when no full day composed (structure-only / unavailable).
+  const liveEventsPanel = buildLiveEventsPanel();
+  if (liveEventsPanel) {
+    wrap.appendChild(liveEventsPanel);
   }
 
   routeResults.appendChild(wrap);

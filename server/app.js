@@ -35,6 +35,7 @@ const { resolveAgnosticIntake, parsePlaceQuery } = require("./planner/agnostic-p
 const { collectPlaceCandidatesForCity } = require("./place-candidates/provider-registry");
 const { resolveDefaultOpenDataLoader } = require("./place-candidates/open-data-loader");
 const { resolveDefaultPlaceResolver } = require("./place-candidates/place-resolver");
+const { resolveDefaultEventSupply } = require("./place-candidates/agnostic-event-supply");
 const { EXTERNAL_OPEN_PROVIDER_META } = require("./place-candidates/external-open-provider");
 const { buildMasthead } = require("./pulse-engine/masthead");
 const { classifySignalQuality } = require("./pulse-engine/signal-quality");
@@ -1544,6 +1545,7 @@ function blockPrivateRepoPaths(request, response, next) {
 function buildApp({
   openDataLoader = resolveDefaultOpenDataLoader(),
   placeResolver = resolveDefaultPlaceResolver(),
+  eventSupply = resolveDefaultEventSupply(),
   walkingRouter = null,
   walkingConfig = null,
   weatherProvider = null,
@@ -2203,6 +2205,31 @@ function buildApp({
         ? { place_structure: agnosticPlaceStructure }
         : {};
 
+      // ANY-PLACE LIVE EVENTS: what is happening near the trusted anchor tonight /
+      // this week, from an open municipal feed that covers it. Env-gated +
+      // injectable (resolveDefaultEventSupply / buildApp). Additive + fail-soft +
+      // NEVER required: an uncovered anchor returns honest absence and the route is
+      // unaffected. Same generic shape regardless of place; the engine works
+      // without any event provider.
+      let liveEvents = null;
+      if (typeof eventSupply === "function" && anchor) {
+        try {
+          const eventsNow = clock && typeof clock.now === "function" ? clock.now() : new Date().toISOString();
+          const collected = await eventSupply({ anchor, now: eventsNow });
+          if (collected && (collected.coverage === "covered" || collected.coverage === "uncovered")) {
+            liveEvents = {
+              coverage: collected.coverage,
+              feed: collected.feed || null,
+              tonight: Array.isArray(collected.tonight) ? collected.tonight : [],
+              this_week: Array.isArray(collected.this_week) ? collected.this_week : [],
+            };
+          }
+        } catch (_error) {
+          liveEvents = null; // fail soft: live events never block the route
+        }
+      }
+      const liveEventsSidecar = liveEvents ? { live_events: liveEvents } : {};
+
       // Trusted anchor in hand → existing #259 route-output path. Place
       // resolution does NOT satisfy route eligibility on its own: external
       // candidate opt-in + the trusted server openDataLoader are still required
@@ -2255,6 +2282,7 @@ function buildApp({
         response.json({
           ...(promotion.promote ? experimentResult : baselineBody),
           ...agnosticPlaceStructureSidecar,
+          ...liveEventsSidecar,
           agnostic_route_output_experiment: experiment,
         });
         return;
@@ -2266,6 +2294,7 @@ function buildApp({
       response.json({
         ...experimentResult,
         ...agnosticPlaceStructureSidecar,
+        ...liveEventsSidecar,
         agnostic_route_output_experiment: experiment,
       });
     } catch (error) {
