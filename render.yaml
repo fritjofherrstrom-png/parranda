@@ -6,6 +6,18 @@ services:
     startCommand: npm start
     healthCheckPath: /api/health
     autoDeployTrigger: commit
+    # Persistent source cache. Without this the Overpass/Wikidata cache lives on
+    # ephemeral /tmp, so every new instance / redeploy re-pays the slow cold load
+    # for each place — the only thing between "works" and "a stranger types any
+    # city in prod and reliably gets a rich day". A disk makes a place's cold load
+    # a ONE-TIME cost that survives redeploys. Trade-off (honest): a Render disk
+    # pins the service to a single instance (no horizontal autoscaling; deploys
+    # become recreate, not zero-downtime). Fine for a low-volume alpha. 1 GB is
+    # ample for JSON cache blobs.
+    disk:
+      name: parranda-cache
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       # Turn ON live source acquisition in production. These were unset, so the
       # deployed app ran on curated catalog + city-owned source packs ONLY —
@@ -19,13 +31,12 @@ services:
       # carries its own UA + 1 req/s gate + in-memory cache; fail-closed.
       - key: PARRANDA_PLACE_RESOLVER
         value: enabled
-      # Source-cache directory. /tmp is writable on Render and gives a per-instance
-      # cache that survives across requests and coalesces concurrent lookups. For
-      # cross-redeploy persistence, attach a Render disk and point this at its
-      # mount path. (Agnostic engine-compose promotion stays OFF until that disk
-      # makes the cache durable — see AGNOSTIC_ENGINE_NORTH_STAR.md.)
+      # Source-cache directory — pointed at the mounted persistent disk above so
+      # the cache survives redeploys (a place's slow cold load is paid once, then
+      # reused). This is the durable-cache half of "no public flip without
+      # persistent caching" (see AGNOSTIC_ENGINE_NORTH_STAR.md).
       - key: PARRANDA_CACHE_DIR
-        value: /tmp/parranda-source-cache
+        value: /var/data/parranda-source-cache
       # Second open source FAMILY: Wikidata notable places (CC0). Independent of
       # OSM, so a place both sources know merges (entity-resolution) into one
       # candidate with two families → real cross-source consensus past the
