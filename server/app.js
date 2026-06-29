@@ -2081,7 +2081,12 @@ function buildApp({
             ...((generationCityConfig.catalog && generationCityConfig.catalog.allItems) || []),
             ...(generationCityConfig.sourceCandidates || []),
           ].filter((c) => c && Number.isFinite(c.lat) && Number.isFinite(c.lng));
-          if (structureCandidates.length >= 3) {
+          // Only a GENUINELY recognized city emits structure here. An unknown city
+          // that fell back must NOT present the fallback city's catalogue as the
+          // typed place — the agnostic path supplies the real anchor-derived
+          // structure (or honest absence). Without this gate, a cold agnostic
+          // loader leaks the fallback city's districts as if they were the place.
+          if (!noRecognizedCity && structureCandidates.length >= 3) {
             const { composeDistrictDay } = require("./candidates/district-composition");
             const day = composeDistrictDay(structureCandidates, {
               intents: Array.isArray(payload.preferences) ? payload.preferences : [],
@@ -2090,6 +2095,7 @@ function buildApp({
             if (day.structure.area_count > 0) {
               placeStructureSidecar = {
                 place_structure: {
+                  provenance: "recognized_city",
                   area_count: day.structure.area_count,
                   scattered_count: day.structure.scattered_count,
                   areas: day.structure.areas,
