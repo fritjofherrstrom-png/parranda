@@ -292,6 +292,44 @@ test("invalid coordinates return no records without calling the fetcher", async 
   assert.equal(called, false);
 });
 
+// --- configurable Overpass mirror failover (deploy-set HA, default single) --
+
+test("a configured mirror set fails over on error (HA) — second mirror rescues the load", async () => {
+  const calls = [];
+  const fetcher = async (endpoint) => {
+    calls.push(endpoint);
+    if (calls.length === 1) throw new Error("primary cold/overloaded"); // first mirror down
+    return { ok: true, json: async () => ({ elements: [{ type: "node", id: 7, lat: 41.9, lon: 12.5, tags: { amenity: "cafe", name: "Bar" } }] }) };
+  };
+  const loader = createOpenDataLoader({ fetcher, endpoints: ["https://m1/overpass", "https://m2/overpass"] });
+  const records = await loader({ lat: 41.9, lng: 12.5 });
+  assert.equal(records.length, 1, "records recovered from the second mirror");
+  assert.equal(records.loader_status, "loaded:1");
+  assert.deepEqual(calls, ["https://m1/overpass", "https://m2/overpass"], "primary failed → fallback tried");
+});
+
+test("the DEFAULT endpoint set is primary-only — no failover to slow public mirrors", async () => {
+  // Public fallback mirrors measured 60-77 s; defaulting to them only adds latency
+  // for no rescue. Failover is opt-in via an explicit endpoints/PARRANDA_OVERPASS_ENDPOINTS.
+  let calls = 0;
+  const loader = createOpenDataLoader({ fetcher: async () => { calls += 1; throw new Error("down"); } });
+  const records = await loader({ lat: 41.9, lng: 12.5 });
+  assert.deepEqual(records, []);
+  assert.equal(calls, 1, "default does not fan out to public fallback mirrors");
+});
+
+test("a genuine empty 200 does NOT fail over, even with multiple mirrors configured", async () => {
+  let calls = 0;
+  const loader = createOpenDataLoader({
+    endpoints: ["https://m1/overpass", "https://m2/overpass"],
+    fetcher: async () => { calls += 1; return { ok: true, json: async () => ({ elements: [] }) }; },
+  });
+  const records = await loader({ lat: 1, lng: 1 });
+  assert.deepEqual(records, []);
+  assert.equal(records.loader_status, "loaded:0");
+  assert.equal(calls, 1, "a real empty result is not retried against another mirror");
+});
+
 // --- bounded query ---------------------------------------------------------
 
 test("the Overpass query is bounded by radius and uses per-category out budgets (#273)", () => {

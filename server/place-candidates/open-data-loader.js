@@ -33,6 +33,16 @@ const { createSourceCache } = require("./source-cache");
 const { createWikidataSource } = require("./wikidata-source");
 
 const DEFAULT_OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
+// Mirror failover is a MECHANISM, not a free fix. The loader can try several
+// Overpass endpoints in order, failing over on a transport/parse error (never on
+// a genuine empty 200). But the DEFAULT is primary-only on purpose: measured live,
+// the public fallback mirrors (kumi.systems, private.coffee) take 60-77 s for a
+// trivial query — far beyond any route timeout, so defaulting to them would only
+// add latency on the sad path for zero rescue. The real cold-loader robustness
+// lever is the persistent disk cache (one slow load per place, then cached) + a
+// faster/self-hosted Overpass. A deploy that runs such mirrors lists them via
+// PARRANDA_OVERPASS_ENDPOINTS to get HA failover.
+const DEFAULT_OVERPASS_FALLBACKS = [];
 // Overpass (like Nominatim, see place-resolver.js) rejects requests without an
 // identifying User-Agent with HTTP 406 — without this header every live call
 // fails closed and the loader silently returns [].
@@ -106,7 +116,8 @@ const OSM_TAG_MAP = [
 
 function createOpenDataLoader({
   fetcher = typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null,
-  endpoint = DEFAULT_OVERPASS_ENDPOINT,
+  endpoint = null,
+  endpoints = null,
   radiusKm = DEFAULT_RADIUS_KM,
   limit = DEFAULT_LIMIT,
   timeoutMs = DEFAULT_TIMEOUT_MS,
@@ -119,6 +130,46 @@ function createOpenDataLoader({
   const boundedRadiusKm = clamp(radiusKm, 0.1, MAX_RADIUS_KM);
   const boundedLimit = Math.max(1, Math.min(Math.floor(limit), MAX_LIMIT));
   const boundedTimeoutMs = Math.max(50, Math.floor(timeoutMs));
+  // Resolve the endpoint set. An explicit single `endpoint` (e.g. an injected
+  // test) stays single-shot; otherwise the default primary + fallback mirror(s)
+  // give cold-load failover. `endpoints` (array) overrides both.
+  const resolvedEndpoints =
+    Array.isArray(endpoints) && endpoints.length
+      ? endpoints.filter(Boolean)
+      : endpoint
+        ? [endpoint]
+        : [DEFAULT_OVERPASS_ENDPOINT, ...DEFAULT_OVERPASS_FALLBACKS];
+
+  // One attempt against one mirror. Returns { ok, payload } on a usable response,
+  // or { ok:false, status, error } so the caller can fail over to the next mirror.
+  async function attemptOverpass(targetEndpoint, query) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), boundedTimeoutMs);
+    try {
+      const response = await fetcher(targetEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "User-Agent": userAgent,
+          Accept: "application/json",
+        },
+        body: `data=${encodeURIComponent(query)}`,
+        signal: controller.signal,
+      });
+      if (!response || response.ok !== true) {
+        return { ok: false, status: "error_failed_closed", error: "http_non_200" };
+      }
+      try {
+        return { ok: true, payload: await response.json() };
+      } catch (_error) {
+        return { ok: false, status: "error_failed_closed", error: "parse_error" };
+      }
+    } catch (error) {
+      return { ok: false, status: "error_failed_closed", error: classifyFetchError(error) };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 
   const loadOpenDataAround = async function loadOpenDataAround({ lat, lng } = {}) {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return withLoaderStatus([], "loaded:0", null);
@@ -130,37 +181,18 @@ function createOpenDataLoader({
     const fetchBreadth = Math.min(boundedLimit * 6, OVERPASS_FETCH_CAP);
     const query = buildOverpassQuery({ lat, lng, radiusM, limit: fetchBreadth });
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), boundedTimeoutMs);
-
-    let payload;
-    try {
-      const response = await fetcher(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          "User-Agent": userAgent,
-          Accept: "application/json",
-        },
-        body: `data=${encodeURIComponent(query)}`,
-        signal: controller.signal,
-      });
-      if (!response || response.ok !== true) {
-        return withLoaderStatus([], "error_failed_closed", "http_non_200");
+    // Try each mirror in order; fail over ONLY on a transport/parse error — a
+    // genuine 200 (even with zero elements) is a real answer, not a failure.
+    let last = { status: "error_failed_closed", error: "no_endpoint" };
+    for (const targetEndpoint of resolvedEndpoints) {
+      const attempt = await attemptOverpass(targetEndpoint, query);
+      if (attempt.ok) {
+        const records = mapOverpassResponse(attempt.payload, boundedLimit);
+        return withLoaderStatus(records, records.length > 0 ? `loaded:${records.length}` : "loaded:0", null);
       }
-      try {
-        payload = await response.json();
-      } catch (_error) {
-        return withLoaderStatus([], "error_failed_closed", "parse_error");
-      }
-    } catch (error) {
-      return withLoaderStatus([], "error_failed_closed", classifyFetchError(error));
-    } finally {
-      clearTimeout(timer);
+      last = attempt;
     }
-
-    const records = mapOverpassResponse(payload, boundedLimit);
-    return withLoaderStatus(records, records.length > 0 ? `loaded:${records.length}` : "loaded:0", null);
+    return withLoaderStatus([], last.status, last.error);
   };
 
   if (!cache || typeof cache.get !== "function") {
@@ -398,7 +430,16 @@ function resolveDefaultOpenDataLoader(env = process.env) {
     dir: env?.PARRANDA_CACHE_DIR || null,
     ttlMs: Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : undefined,
   });
-  const osmLoader = createOpenDataLoader({ cache });
+  // Deploy-overridable Overpass mirror set (comma-separated) for cold-load
+  // failover; defaults to the built-in primary + fallback mirror.
+  const endpointsRaw = String(env?.PARRANDA_OVERPASS_ENDPOINTS || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const osmLoader = createOpenDataLoader({
+    cache,
+    ...(endpointsRaw.length ? { endpoints: endpointsRaw } : {}),
+  });
 
   // Optional SECOND open source family: Wikidata notable places. When enabled,
   // both sources are queried (each independently cached) and concatenated; the

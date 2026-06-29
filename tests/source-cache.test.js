@@ -145,7 +145,13 @@ test("a failed Overpass response is not cached (the next lookup retries)", async
     calls += 1;
     return { ok: false, status: 429 };
   };
-  const loader = createOpenDataLoader({ fetcher, cache: createSourceCache({ namespace: "overpass", ttlMs: 60000, now: mutableClock() }) });
+  // Single explicit endpoint so this stays a CACHE test (mirror failover, which
+  // would multiply the call count, is covered in open-data-loader.test.js).
+  const loader = createOpenDataLoader({
+    fetcher,
+    endpoint: "https://example.org/overpass",
+    cache: createSourceCache({ namespace: "overpass", ttlMs: 60000, now: mutableClock() }),
+  });
   const first = await loader({ lat: 1, lng: 1 });
   const second = await loader({ lat: 1, lng: 1 });
   assert.equal(first.loader_status, "error_failed_closed");
