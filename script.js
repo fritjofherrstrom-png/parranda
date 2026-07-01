@@ -11448,6 +11448,16 @@ function buildPlaceStructurePanel() {
     : `Din dag genom staden — ${districtCount}`;
   panel.appendChild(eyebrow);
 
+  // Provenance — make the flagship visible instead of hidden: an agnostic day was
+  // composed LIVE from open map data, no hand-made city pack. State it plainly so
+  // the any-place win reads as a strength, not an unlabelled fallback.
+  if (structure.provenance === "agnostic_anchor") {
+    const prov = document.createElement("p");
+    prov.className = "planner-place-structure-provenance";
+    prov.textContent = isEnglishUi ? "Built live from the map — no city pack" : "Byggd live från kartan — inget city pack";
+    panel.appendChild(prov);
+  }
+
   const list = document.createElement("div");
   list.className = "planner-place-structure-list";
 
