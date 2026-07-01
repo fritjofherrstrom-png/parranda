@@ -8,6 +8,25 @@ const test = require("node:test");
 
 const { summarizePlaceStructure, clusterCandidatesIntoAreas, profileArea } = require("../server/candidates/area-intelligence");
 
+// A concentrated "blob": two sub-areas ~300 m apart that a fixed 0.35 km radius
+// merges into ONE district, but a tighter radius splits into two. This is the
+// exact Tallinn/Montevideo single-blob failure mode.
+function blobCity() {
+  const sub = (prefix, lat, lng, n) =>
+    Array.from({ length: n }, (_, i) => ({ id: `${prefix}${i}`, type: "cafe", tags: ["fika"], lat: lat + i * 0.0003, lng: lng + (i % 2) * 0.0003 }));
+  return [...sub("a", 60.17, 24.94, 8), ...sub("b", 60.1727, 24.94, 7)];
+}
+
+test("the production path ADAPTS the radius — a blob that fixed 0.35 km merges is split (guards the dead-adaptive bug)", () => {
+  const blob = blobCity();
+  // Fixed 0.35 km (the old hard-coded default) merges the two sub-areas into one.
+  const fixed = summarizePlaceStructure(blob, { linkKm: 0.35 });
+  assert.equal(fixed.area_count, 1, "at a fixed 0.35 km the blob is a single district");
+  // The default (no linkKm) production path must adapt and split it into two.
+  const adaptive = summarizePlaceStructure(blob);
+  assert.ok(adaptive.area_count >= 2, "the adaptive search splits the blob into a real arc");
+});
+
 // A synthetic ANY-city candidate set (could be OSM output for any coordinates):
 // - a vintage/market quarter (3 places, tightly clustered)
 // - a café district ~1 km away (3 places, tightly clustered)

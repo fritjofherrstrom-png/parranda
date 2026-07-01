@@ -28,17 +28,15 @@ const DEFAULT_LINK_KM = 0.35;
 // A cluster smaller than this is "scattered", not a district worth naming.
 const DEFAULT_MIN_AREA_SIZE = 3;
 
-// Density adaptation: when no explicit link distance is given, the district
-// radius is derived from the candidate set's OWN nearest-neighbour spacing, so a
-// dense city (Rome's tightly-packed catalogue) splits into several compact
-// districts instead of collapsing into one blob, while a sparse city still
-// groups. radius = clamp(medianNearestNeighbour * GROWTH, MIN, MAX).
-const ADAPT_GROWTH = 2.5;
-const ADAPT_MIN_KM = 0.15;
-// A district should stay walkable-tight (≤ ~600 m across). This ceiling is what
-// forces a dense catalogue to split into several distinct-character districts
-// instead of one large area swallowing every intent.
-const ADAPT_MAX_KM = 0.3;
+// Structure-adaptive clustering: when no explicit link distance is given, the
+// radius is CHOSEN per place from this small walkable-scale set — the one that
+// yields the best district structure (see chooseAdaptiveRadius). A single fixed
+// radius blobs concentrated cities and over-scatters spread ones; searching adapts
+// to each place's actual layout.
+const CANDIDATE_RADII_KM = [0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45];
+// Don't chase more than this many districts — a dense city should not be shredded
+// into a dozen tiny areas; the composer only uses a few anyway.
+const TARGET_DISTRICTS = 4;
 
 function toRad(deg) {
   return (deg * Math.PI) / 180;
@@ -114,47 +112,13 @@ function candidateDayparts(candidate) {
   return out;
 }
 
-// --- deterministic, density-adaptive, compact clustering -------------------
+// --- deterministic, structure-adaptive, compact clustering -----------------
 
-// Median nearest-neighbour distance → the set's natural spacing.
-function adaptiveRadiusKm(items) {
-  if (items.length < 2) return DEFAULT_LINK_KM;
-  const nn = [];
-  for (let i = 0; i < items.length; i += 1) {
-    let best = Infinity;
-    for (let j = 0; j < items.length; j += 1) {
-      if (j === i) continue;
-      const d = haversineKm(items[i], items[j]);
-      if (d < best) best = d;
-    }
-    if (Number.isFinite(best)) nn.push(best);
-  }
-  if (!nn.length) return DEFAULT_LINK_KM;
-  nn.sort((a, b) => a - b);
-  const median = nn[Math.floor(nn.length / 2)];
-  return Math.min(ADAPT_MAX_KM, Math.max(ADAPT_MIN_KM, median * ADAPT_GROWTH));
-}
-
-/**
- * Cluster candidates into COMPACT districts. A district is a walkable disk of
- * radius `radius` around a dense seed — NOT a single-linkage chain, which would
- * merge a whole dense city into one component. We seed from the densest point
- * (deterministic tie-break), claim every still-unclaimed point within `radius`,
- * and repeat. So a dense catalogue yields several tight districts; a sparse one
- * still groups what is genuinely close. `linkKm`, when given, is the explicit
- * radius (the knob); otherwise it is derived from the set's own spacing.
- */
-function clusterCandidatesIntoAreas(candidates, { linkKm } = {}) {
-  // Stable input order so the output is deterministic regardless of caller order.
-  const items = (Array.isArray(candidates) ? candidates : [])
-    .filter(hasCoords)
-    .slice()
-    .sort((a, b) => String(a.id ?? "").localeCompare(String(b.id ?? "")) || a.lat - b.lat || a.lng - b.lng);
-  if (!items.length) return [];
-
-  const radius = Number.isFinite(linkKm) ? linkKm : adaptiveRadiusKm(items);
-
-  // Local density = neighbours within radius. Drives a deterministic seed order.
+// Greedy compact grouping at a FIXED radius on already-sorted items. A district
+// is a walkable disk around the densest seed — NOT a single-linkage chain (which
+// merges a whole dense city into one blob). Deterministic: densest-first seed
+// order with stable tie-breaks.
+function groupItemsAtRadius(items, radius) {
   const density = items.map((_, i) => {
     let n = 0;
     for (let j = 0; j < items.length; j += 1) {
@@ -171,7 +135,6 @@ function clusterCandidatesIntoAreas(candidates, { linkKm } = {}) {
         items[a].lat - items[b].lat ||
         items[a].lng - items[b].lng,
     );
-
   const claimed = new Array(items.length).fill(false);
   const groups = [];
   for (const seed of order) {
@@ -186,6 +149,57 @@ function clusterCandidatesIntoAreas(candidates, { linkKm } = {}) {
     groups.push(members);
   }
   return groups;
+}
+
+/**
+ * Choose the link radius that yields the best district STRUCTURE for this set:
+ * the MOST districts (capped at TARGET_DISTRICTS so a dense city is not
+ * over-split), tie-broken by the FEWEST scattered candidates, then the LARGER
+ * radius (more cohesive districts). A single fixed radius cannot do this — a
+ * concentrated city blobs at 0.35 km and needs a tighter radius to split, while a
+ * spread city over-scatters at a tight radius; a nearest-neighbour radius
+ * over-splits dense centres. Searching a small radius set and scoring the
+ * resulting structure adapts per place without either failure mode. (Verified on
+ * live OSM: splits the Tallinn/Montevideo blobs into a real arc while keeping the
+ * Lyon/Tbilisi multi-district structure intact.)
+ */
+function chooseAdaptiveRadius(items, minAreaSize) {
+  let best = null;
+  for (const r of CANDIDATE_RADII_KM) {
+    const groups = groupItemsAtRadius(items, r);
+    let districts = 0;
+    let scattered = 0;
+    for (const g of groups) {
+      if (g.length >= minAreaSize) districts += 1;
+      else scattered += g.length;
+    }
+    const eff = Math.min(districts, TARGET_DISTRICTS);
+    if (
+      !best ||
+      eff > best.eff ||
+      (eff === best.eff && (scattered < best.scattered || (scattered === best.scattered && r > best.r)))
+    ) {
+      best = { r, eff, scattered };
+    }
+  }
+  return best ? best.r : DEFAULT_LINK_KM;
+}
+
+/**
+ * Cluster candidates into COMPACT districts. `linkKm`, when given, is the explicit
+ * radius (the knob); otherwise the radius is chosen per place to give the best
+ * district structure (chooseAdaptiveRadius).
+ */
+function clusterCandidatesIntoAreas(candidates, { linkKm, minAreaSize = DEFAULT_MIN_AREA_SIZE } = {}) {
+  // Stable input order so the output is deterministic regardless of caller order.
+  const items = (Array.isArray(candidates) ? candidates : [])
+    .filter(hasCoords)
+    .slice()
+    .sort((a, b) => String(a.id ?? "").localeCompare(String(b.id ?? "")) || a.lat - b.lat || a.lng - b.lng);
+  if (!items.length) return [];
+
+  const radius = Number.isFinite(linkKm) ? linkKm : chooseAdaptiveRadius(items, minAreaSize);
+  return groupItemsAtRadius(items, radius);
 }
 
 // --- per-area character profile --------------------------------------------
@@ -239,8 +253,11 @@ function profileArea(members) {
  *   then by center (deterministic). `scattered_count` is candidates that did not
  *   form a district. Generic: no city pack, no network, no place-specific logic.
  */
-function summarizePlaceStructure(candidates, { linkKm = DEFAULT_LINK_KM, minAreaSize = DEFAULT_MIN_AREA_SIZE } = {}) {
-  const clusters = clusterCandidatesIntoAreas(candidates, { linkKm });
+function summarizePlaceStructure(candidates, { linkKm, minAreaSize = DEFAULT_MIN_AREA_SIZE } = {}) {
+  // Pass linkKm THROUGH untouched (no DEFAULT_LINK_KM default here — that silently
+  // pinned every caller to a fixed 0.35 km and bypassed adaptation). Forward
+  // minAreaSize so the radius search counts the SAME districts this function will.
+  const clusters = clusterCandidatesIntoAreas(candidates, { linkKm, minAreaSize });
   const areas = [];
   let scattered = 0;
   for (const cluster of clusters) {
