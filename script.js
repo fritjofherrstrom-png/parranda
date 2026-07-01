@@ -11316,11 +11316,12 @@ function formatLiveEventWhen(event) {
   const date = new Date(event.starts_at);
   if (Number.isNaN(date.getTime())) return "";
   try {
-    return date.toLocaleString(isEnglishUi ? "en-GB" : "sv-SE", {
-      weekday: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    // Format in the VENUE's timezone (carried on the event from its feed's
+    // region) so "tonight" shows the real local start time — not the viewer's
+    // wall clock. Falls back to the viewer's locale tz only if the feed has none.
+    const options = { weekday: "short", hour: "2-digit", minute: "2-digit" };
+    if (event.timezone) options.timeZone = event.timezone;
+    return date.toLocaleString(isEnglishUi ? "en-GB" : "sv-SE", options);
   } catch (_error) {
     return "";
   }
@@ -11501,6 +11502,19 @@ function buildPlaceStructurePanel() {
         chips.appendChild(chip);
       });
       card.appendChild(chips);
+    }
+
+    // Concrete place names turn "3 stops" into an actual itinerary. Show the top
+    // few on-intent names; if more remain, add a quiet "+N more".
+    const names = Array.isArray(area.stop_names) ? area.stop_names.filter(Boolean) : [];
+    if (names.length) {
+      const shown = names.slice(0, 3);
+      const more = stopCount - shown.length;
+      const namesEl = document.createElement("p");
+      namesEl.className = "planner-district-names";
+      namesEl.textContent =
+        shown.join(" · ") + (more > 0 ? (isEnglishUi ? ` · +${more} more` : ` · +${more} till`) : "");
+      card.appendChild(namesEl);
     }
 
     list.appendChild(card);

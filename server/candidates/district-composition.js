@@ -131,6 +131,13 @@ function composeDistrictDay(candidates, { intents = [], maxAreas = 2, linkKm, mi
       covers: s.covers,
       size: s.area.size,
       stop_ids: stopsSource.map((m) => m.id).filter((id) => id != null),
+      // A few concrete, on-intent place NAMES so the UI can show an actual
+      // itinerary ("Taverna A · Mokka · Mirador") instead of a bare "3 stops".
+      // Names only; no prose, no fabrication (empty when a member has no name).
+      stop_names: stopsSource
+        .map((m) => String((m && (m.name || m.label || m.title)) || "").trim())
+        .filter(Boolean)
+        .slice(0, 4),
     };
   });
 

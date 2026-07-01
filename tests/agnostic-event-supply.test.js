@@ -110,6 +110,9 @@ test("covered anchor buckets events into tonight (now/today/tonight) and this_we
   const tonightGig = out.tonight.find((e) => e.id === "tonight1");
   assert.ok(tonightGig.starts_at && tonightGig.source_url && tonightGig.license);
   assert.ok(Number.isFinite(tonightGig.lat) && Number.isFinite(tonightGig.lng));
+  // The feed's region timezone rides along so the UI shows the VENUE-local time,
+  // not the viewer's (the built-in Helsinki feed is Europe/Helsinki).
+  assert.equal(tonightGig.timezone, "Europe/Helsinki");
 });
 
 test("tonight ranks by salience: an ongoing 'now' event outranks a later-today one", async () => {

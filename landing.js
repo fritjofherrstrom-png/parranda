@@ -398,11 +398,14 @@
     var entry = val ? resolveEntryLoose(val) : null;
     if (entry) { runBlitzForCity(entry.key); return; }
     if (val) {
-      if (cityInput) {
-        cityInput.setCustomValidity(COPY.unsupported || "Vi är live i Barcelona och Rom just nu. Prova en av dem!");
-        cityInput.reportValidity();
-        setTimeout(function () { cityInput.setCustomValidity(""); }, 3000);
-      }
+      // An unrecognized freeform place → the any-place surface, CONSISTENT with
+      // the planner search (which already routes here). No "we're only live in two
+      // cities" rejection sitting right next to a doorway that accepts any place.
+      var anyParams = new URLSearchParams();
+      anyParams.set("place", val);
+      anyParams.set("planner", "open");
+      anyParams.set("lang", currentLang());
+      window.location.href = "/labs/anywhere?" + anyParams.toString();
       return;
     }
     if (!navigator.geolocation) {
