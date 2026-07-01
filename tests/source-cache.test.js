@@ -98,11 +98,26 @@ test("file backing persists a value across separate cache instances", async () =
 
 // --- loader integration ----------------------------------------------------
 
-function viewpointPayload() {
+// A rich, varied payload (incl. a viewpoint) so the loader does not trigger a
+// thin-city aperture expansion — keeps these tests focused on CACHING, not supply.
+function richLoaderPayload() {
+  const kinds = [
+    { tourism: "viewpoint", wikidata: "Q1" },
+    { amenity: "cafe" },
+    { amenity: "bar" },
+    { tourism: "museum" },
+    { leisure: "park" },
+  ];
   return {
     ok: true,
     json: async () => ({
-      elements: [{ type: "node", id: 42, lat: 41.9, lon: 12.5, tags: { name: "V", tourism: "viewpoint", wikidata: "Q1" } }],
+      elements: Array.from({ length: 14 }, (_, i) => ({
+        type: "node",
+        id: i + 1,
+        lat: 41.9 + i * 0.0005,
+        lon: 12.5,
+        tags: { name: `P${i}`, ...kinds[i % kinds.length] },
+      })),
     }),
   };
 }
@@ -111,7 +126,7 @@ test("a cached loader serves a repeat lookup for the same anchor without re-hitt
   let calls = 0;
   const fetcher = async () => {
     calls += 1;
-    return viewpointPayload();
+    return richLoaderPayload();
   };
   const cache = createSourceCache({ namespace: "overpass", ttlMs: 60000, now: mutableClock() });
   const loader = createOpenDataLoader({ fetcher, cache });
@@ -121,10 +136,10 @@ test("a cached loader serves a repeat lookup for the same anchor without re-hitt
   const second = await loader({ lat: 41.9001, lng: 12.5001 });
 
   assert.equal(calls, 1, "second lookup must come from cache");
-  assert.equal(first.loader_status, "loaded:1");
-  assert.equal(second.loader_status, "loaded:1");
-  assert.equal(second.length, 1);
-  assert.equal(second[0].type, "viewpoint");
+  assert.equal(first.loader_status, "loaded:14");
+  assert.equal(second.loader_status, "loaded:14");
+  assert.ok(second.length >= 12);
+  assert.ok(second.some((r) => r.type === "viewpoint"), "the cached result carries its varied records");
 });
 
 test("concurrent loader lookups for the same anchor coalesce to one Overpass call", async () => {
@@ -132,7 +147,7 @@ test("concurrent loader lookups for the same anchor coalesce to one Overpass cal
   const fetcher = async () => {
     calls += 1;
     await new Promise((r) => setTimeout(r, 10));
-    return viewpointPayload();
+    return richLoaderPayload();
   };
   const loader = createOpenDataLoader({ fetcher, cache: createSourceCache({ namespace: "overpass", ttlMs: 60000, now: mutableClock() }) });
   await Promise.all([loader({ lat: 41.9, lng: 12.5 }), loader({ lat: 41.9, lng: 12.5 })]);
@@ -162,7 +177,7 @@ test("an uncached loader (no cache option) is byte-for-byte the prior behavior",
   let calls = 0;
   const fetcher = async () => {
     calls += 1;
-    return viewpointPayload();
+    return richLoaderPayload();
   };
   const loader = createOpenDataLoader({ fetcher }); // no cache
   await loader({ lat: 41.9, lng: 12.5 });

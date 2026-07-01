@@ -296,16 +296,19 @@ test("invalid coordinates return no records without calling the fetcher", async 
 
 test("a configured mirror set fails over on error (HA) — second mirror rescues the load", async () => {
   const calls = [];
+  // Rich, varied result so the load isn't thin (no aperture expansion muddying
+  // the failover assertion).
+  const kinds = [{ amenity: "cafe" }, { amenity: "bar" }, { tourism: "museum" }, { leisure: "park" }];
+  const rich = { elements: Array.from({ length: 15 }, (_, i) => ({ type: "node", id: i + 1, lat: 41.9 + i * 0.001, lon: 12.5, tags: { name: `P${i}`, ...kinds[i % kinds.length] } })) };
   const fetcher = async (endpoint) => {
     calls.push(endpoint);
     if (calls.length === 1) throw new Error("primary cold/overloaded"); // first mirror down
-    return { ok: true, json: async () => ({ elements: [{ type: "node", id: 7, lat: 41.9, lon: 12.5, tags: { amenity: "cafe", name: "Bar" } }] }) };
+    return { ok: true, json: async () => rich };
   };
   const loader = createOpenDataLoader({ fetcher, endpoints: ["https://m1/overpass", "https://m2/overpass"] });
   const records = await loader({ lat: 41.9, lng: 12.5 });
-  assert.equal(records.length, 1, "records recovered from the second mirror");
-  assert.equal(records.loader_status, "loaded:1");
-  assert.deepEqual(calls, ["https://m1/overpass", "https://m2/overpass"], "primary failed → fallback tried");
+  assert.ok(records.length >= 12, "records recovered from the second mirror");
+  assert.deepEqual(calls, ["https://m1/overpass", "https://m2/overpass"], "primary failed → fallback tried; rich → no expansion");
 });
 
 test("the DEFAULT endpoint set is primary-only — no failover to slow public mirrors", async () => {
@@ -318,16 +321,83 @@ test("the DEFAULT endpoint set is primary-only — no failover to slow public mi
   assert.equal(calls, 1, "default does not fan out to public fallback mirrors");
 });
 
-test("a genuine empty 200 does NOT fail over, even with multiple mirrors configured", async () => {
-  let calls = 0;
+test("a genuine empty 200 does NOT fail over to the fallback mirror", async () => {
+  const calls = [];
   const loader = createOpenDataLoader({
     endpoints: ["https://m1/overpass", "https://m2/overpass"],
-    fetcher: async () => { calls += 1; return { ok: true, json: async () => ({ elements: [] }) }; },
+    fetcher: async (endpoint) => { calls.push(endpoint); return { ok: true, json: async () => ({ elements: [] }) }; },
   });
   const records = await loader({ lat: 1, lng: 1 });
   assert.deepEqual(records, []);
   assert.equal(records.loader_status, "loaded:0");
-  assert.equal(calls, 1, "a real empty result is not retried against another mirror");
+  // Empty is a real answer, not a failover trigger → the fallback mirror is never hit.
+  assert.ok(!calls.includes("https://m2/overpass"), "an empty 200 never fails over to another mirror");
+  // (An empty first pass does trigger ONE wider-radius expansion — on the SAME primary.)
+  assert.deepEqual(calls, ["https://m1/overpass", "https://m1/overpass"], "primary tried at default + expanded radius, no fallover");
+});
+
+// --- thin-city aperture expansion (supply density) -------------------------
+
+// A fetcher whose result depends on the query radius (the body is url-encoded, so
+// decode before matching). Rich only at the wider 3 km radius.
+function radiusVaryingFetcher({ thin, rich }) {
+  let calls = 0;
+  const kinds = [{ amenity: "cafe" }, { amenity: "restaurant" }, { amenity: "bar" }, { tourism: "museum" }, { leisure: "park" }];
+  const els = (n) => Array.from({ length: n }, (_, i) => ({ type: "node", id: i + 1, lat: 1 + i * 0.001, lon: 1, tags: { name: `P${i}`, ...kinds[i % kinds.length] } }));
+  const fetcher = async (_url, opts) => {
+    calls += 1;
+    const wide = /around:3000/.test(decodeURIComponent(opts.body));
+    return { ok: true, json: async () => ({ elements: els(wide ? rich : thin) }) };
+  };
+  fetcher.calls = () => calls;
+  return fetcher;
+}
+
+test("a THIN first pass expands the radius once and keeps the richer wider result", async () => {
+  const fetcher = radiusVaryingFetcher({ thin: 5, rich: 20 });
+  const loader = createOpenDataLoader({ fetcher, endpoint: "https://x/overpass" });
+  const records = await loader({ lat: 59.44, lng: 24.75 });
+  assert.equal(records.length, 20, "the wider pass's richer supply is returned");
+  assert.equal(records.loader_status, "loaded:20");
+  assert.equal(fetcher.calls(), 2, "one expansion query, not more");
+});
+
+test("a RICH first pass never expands (no wasted second query)", async () => {
+  const fetcher = radiusVaryingFetcher({ thin: 5, rich: 20 });
+  const loader = createOpenDataLoader({ fetcher, endpoint: "https://x/overpass" });
+  const records = await loader({ lat: 41.9, lng: 12.5 }); // first pass = 25 (rich) below
+  // Force a rich first pass by making both radii rich:
+  const richFetcher = radiusVaryingFetcher({ thin: 25, rich: 25 });
+  const richLoader = createOpenDataLoader({ fetcher: richFetcher, endpoint: "https://x/overpass" });
+  const rich = await richLoader({ lat: 41.9, lng: 12.5 });
+  assert.equal(rich.length, 25);
+  assert.equal(richFetcher.calls(), 1, "a rich first pass is not expanded");
+  void records;
+});
+
+test("expansion is kept ONLY when actually richer — else the first pass stands", async () => {
+  const fetcher = radiusVaryingFetcher({ thin: 4, rich: 3 }); // wider is NOT richer
+  const loader = createOpenDataLoader({ fetcher, endpoint: "https://x/overpass" });
+  const records = await loader({ lat: 1, lng: 1 });
+  assert.equal(records.length, 4, "the (better) first pass is kept");
+  assert.equal(fetcher.calls(), 2, "it still tried the wider radius once");
+});
+
+test("a thin pass caused by few CATEGORIES (not few records) still expands", async () => {
+  // 15 records but all one type → thin by category even though count is high.
+  let calls = 0;
+  const fetcher = async (_url, opts) => {
+    calls += 1;
+    const wide = /around:3000/.test(decodeURIComponent(opts.body));
+    const n = wide ? 8 : 15;
+    const tag = wide ? (i) => [{ amenity: "cafe" }, { amenity: "bar" }, { tourism: "museum" }][i % 3] : () => ({ amenity: "cafe" });
+    const els = Array.from({ length: n }, (_, i) => ({ type: "node", id: i + 1, lat: 1 + i * 0.001, lon: 1, tags: { name: `P${i}`, ...tag(i) } }));
+    return { ok: true, json: async () => ({ elements: els }) };
+  };
+  const loader = createOpenDataLoader({ fetcher, endpoint: "https://x/overpass" });
+  const records = await loader({ lat: 1, lng: 1 });
+  assert.equal(calls, 2, "single-category first pass is thin → expands for variety");
+  assert.ok(records.some((r) => r.type === "bar") && records.some((r) => r.type === "museum"), "the wider pass added variety");
 });
 
 // --- bounded query ---------------------------------------------------------
