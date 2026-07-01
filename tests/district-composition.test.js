@@ -29,6 +29,18 @@ function fourDistrictCity() {
   ];
 }
 
+test("each district carries a few concrete stop NAMES (so the UI shows an itinerary, not a count)", () => {
+  const named = [
+    { id: "n0", name: "Taverna Aleksis", type: "restaurant", tags: ["food"], lat: 60.0, lng: 24.0 },
+    { id: "n1", name: "Mokka Café", type: "cafe", tags: ["fika"], lat: 60.0006, lng: 24.0 },
+    { id: "n2", name: "Bar Loose", type: "bar", tags: ["nightlife"], lat: 60.0, lng: 24.0006 },
+  ];
+  const day = composeDistrictDay(named, { intents: ["food", "fika", "nightlife"], maxAreas: 2 });
+  const names = day.areas.flatMap((a) => a.stop_names);
+  assert.ok(names.includes("Taverna Aleksis") && names.includes("Mokka Café"), "real names are forwarded");
+  assert.ok(day.areas.every((a) => a.stop_names.length <= 4), "names are capped for a readable card");
+});
+
 test("composes complementary districts that cover the requested intents", () => {
   const day = composeDistrictDay(fourDistrictCity(), { intents: ["second_hand", "fika"], maxAreas: 3 });
   assert.deepEqual(day.covered_intents.slice().sort(), ["fika", "second_hand"]);

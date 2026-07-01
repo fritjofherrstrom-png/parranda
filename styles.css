@@ -3805,6 +3805,13 @@ body.anywhere-mode #heroLiveButton {
   color: var(--muted);
 }
 
+.planner-place-structure-provenance {
+  margin: 2px 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent, #b6582f);
+}
+
 .planner-place-structure-list {
   display: grid;
   gap: 6px;
@@ -3855,6 +3862,13 @@ body.anywhere-mode #heroLiveButton {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.planner-district-names {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--ink, #3a2114);
+  line-height: 1.35;
 }
 
 .planner-district-chip {

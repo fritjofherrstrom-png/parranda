@@ -53,6 +53,10 @@ const BUILTIN_EVENT_FEEDS = [
     base: "https://api.hel.fi/linkedevents/v1/event/",
     bbox: [24.5, 60.0, 25.3, 60.45], // Greater Helsinki / capital region
     license: "CC-BY 4.0",
+    // The feed's region timezone — so a "tonight" time renders in the VENUE's
+    // local clock, not the viewer's. A feed is region-scoped (bbox), so a
+    // feed-level tz is accurate for its events. IANA name.
+    timezone: "Europe/Helsinki",
   },
 ];
 
@@ -78,6 +82,7 @@ function resolveEventFeedRegistry(env = process.env) {
             base: f.base,
             bbox: f.bbox.map(Number),
             license: f.license != null ? String(f.license) : null,
+            timezone: f.timezone != null ? String(f.timezone) : null,
           });
         }
       }
@@ -198,6 +203,8 @@ function toEventView(event, feed) {
     trust_level: event.confidence || null,
     cultural_tier: cultural.tier,
     salience_score: score,
+    // The venue's region timezone so the UI shows the real local start time.
+    timezone: feed.timezone || null,
   };
 }
 
