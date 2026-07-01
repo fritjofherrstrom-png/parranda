@@ -62,6 +62,14 @@ const OVERPASS_FETCH_CAP = 150;
 const DEFAULT_TIMEOUT_MS = 12000;
 const MAX_RADIUS_KM = 5.0;
 const MAX_LIMIT = 100;
+// Thin-city aperture expansion. A tight centre in a sparse city legitimately
+// holds few mapped places within the default radius, so the day starves while
+// MAX_RADIUS_KM is left unused. If the first pass is thin — few records OR few
+// distinct categories — reach WIDER once before declaring scarcity. Response-
+// driven, bounded (one extra query), and generic for every city (no place logic).
+const EXPANSION_RADIUS_KM = 3.0;
+const THIN_RECORD_COUNT = 12; // < ~half the default limit → thin
+const THIN_CATEGORY_COUNT = 3; // fewer distinct place types than a real day needs
 
 // Small, intent-mapped OSM tag → Parranda type table. Kept conservative so
 // every entry maps cleanly into the canonical intent vocabulary. Add lines
@@ -113,6 +121,33 @@ const OSM_TAG_MAP = [
   { key: "tourism", value: "gallery", type: "gallery", tags: ["kultur"] },
   { key: "amenity", value: "arts_centre", type: "gallery", tags: ["kultur"] },
 ];
+
+// Distinct place TYPES in a record set — a proxy for how varied a day can be.
+function distinctCategoryCount(records) {
+  const cats = new Set();
+  for (const r of Array.isArray(records) ? records : []) {
+    if (r && r.type) cats.add(r.type);
+  }
+  return cats.size;
+}
+
+// A first pass is "thin" when it holds too few records OR too few distinct types
+// to compose a varied day. An error result is NOT thin (expanding the radius
+// won't fix a down mirror), and a genuinely rich pass is never expanded.
+function isThinSupply(records) {
+  if (!Array.isArray(records)) return true;
+  if (typeof records.loader_status === "string" && records.loader_status.startsWith("error")) return false;
+  return records.length < THIN_RECORD_COUNT || distinctCategoryCount(records) < THIN_CATEGORY_COUNT;
+}
+
+// A varied day is worth more than a bigger pile of the same type: category
+// VARIETY dominates, record count is the tiebreak. So a wider pass with fewer
+// records but more distinct types (8 across 3 categories) beats a thin one with
+// more records of one type (15 cafés), while a wider pass that adds neither is
+// discarded. This is what "richer" means for the expansion.
+function supplyScore(records) {
+  return distinctCategoryCount(records) * 1000 + (Array.isArray(records) ? records.length : 0);
+}
 
 function createOpenDataLoader({
   fetcher = typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null,
@@ -171,16 +206,12 @@ function createOpenDataLoader({
     }
   }
 
-  const loadOpenDataAround = async function loadOpenDataAround({ lat, lng } = {}) {
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return withLoaderStatus([], "loaded:0", null);
-
-    const radiusM = Math.round(boundedRadiusKm * 1000);
-    // Fetch wider than the final limit so scarce-but-important categories
-    // (scenic in a food-dense centre) are present in the response, then balance
-    // down to `boundedLimit` client-side. Still one bounded query.
+  // One geocoded query at a given radius, with mirror failover. Fetch wider than
+  // the final limit so scarce-but-important categories (scenic in a food-dense
+  // centre) survive, then balance down to `boundedLimit` client-side.
+  async function fetchAtRadius(lat, lng, radiusM) {
     const fetchBreadth = Math.min(boundedLimit * 6, OVERPASS_FETCH_CAP);
     const query = buildOverpassQuery({ lat, lng, radiusM, limit: fetchBreadth });
-
     // Try each mirror in order; fail over ONLY on a transport/parse error — a
     // genuine 200 (even with zero elements) is a real answer, not a failure.
     let last = { status: "error_failed_closed", error: "no_endpoint" };
@@ -193,6 +224,23 @@ function createOpenDataLoader({
       last = attempt;
     }
     return withLoaderStatus([], last.status, last.error);
+  }
+
+  const loadOpenDataAround = async function loadOpenDataAround({ lat, lng } = {}) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return withLoaderStatus([], "loaded:0", null);
+
+    const first = await fetchAtRadius(lat, lng, Math.round(boundedRadiusKm * 1000));
+
+    // Thin-city aperture expansion (see EXPANSION_RADIUS_KM): reach wider once
+    // when the first pass is genuinely sparse, and keep the wider result only if
+    // it is actually richer. Never expands on a rich city, an error, or when
+    // already at MAX_RADIUS_KM.
+    if (isThinSupply(first) && boundedRadiusKm < MAX_RADIUS_KM) {
+      const widerKm = Math.min(EXPANSION_RADIUS_KM, MAX_RADIUS_KM);
+      const wider = await fetchAtRadius(lat, lng, Math.round(widerKm * 1000));
+      if (supplyScore(wider) > supplyScore(first)) return wider;
+    }
+    return first;
   };
 
   if (!cache || typeof cache.get !== "function") {
