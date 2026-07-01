@@ -62,8 +62,15 @@ test(
       body: { city: "nowhere-unknown-xyz", dates: ["2026-06-23"], preferences: ["food"] },
     });
     assert.equal(response.status, 200);
-    // No assertion that place_structure exists — it is additive and optional; the
-    // point is the request succeeds and is not corrupted by the structure step.
     assert.ok(response.body, "response body present");
+    // HONESTY: an unknown city falls back to a default city's catalogue, but the
+    // response must NOT present that fallback city's districts as the typed place.
+    // The recognized-city structure is gated to genuinely recognized cities; the
+    // agnostic path (not exercised here — no loader) supplies the real one or none.
+    assert.notEqual(
+      response.body.place_structure && response.body.place_structure.provenance,
+      "recognized_city",
+      "a fallback city must never masquerade as the typed place's structure",
+    );
   }),
 );

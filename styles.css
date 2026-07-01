@@ -3882,6 +3882,34 @@ body.anywhere-mode #heroLiveButton {
   font-style: italic;
 }
 
+/* Evening anchor — a genuine tonight-event woven into the day (PR-B). */
+.planner-evening-event {
+  gap: 4px;
+  background: rgba(182, 88, 47, 0.07);
+  border-color: rgba(182, 88, 47, 0.2);
+}
+
+.planner-evening-event-label {
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent, #b6582f);
+}
+
+.planner-evening-event .planner-live-event {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.planner-evening-event-near {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 /* Live events near the place — "what's on tonight / this week" (any place). */
 .planner-live-events {
   display: grid;

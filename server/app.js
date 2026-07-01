@@ -2081,7 +2081,12 @@ function buildApp({
             ...((generationCityConfig.catalog && generationCityConfig.catalog.allItems) || []),
             ...(generationCityConfig.sourceCandidates || []),
           ].filter((c) => c && Number.isFinite(c.lat) && Number.isFinite(c.lng));
-          if (structureCandidates.length >= 3) {
+          // Only a GENUINELY recognized city emits structure here. An unknown city
+          // that fell back must NOT present the fallback city's catalogue as the
+          // typed place — the agnostic path supplies the real anchor-derived
+          // structure (or honest absence). Without this gate, a cold agnostic
+          // loader leaks the fallback city's districts as if they were the place.
+          if (!noRecognizedCity && structureCandidates.length >= 3) {
             const { composeDistrictDay } = require("./candidates/district-composition");
             const day = composeDistrictDay(structureCandidates, {
               intents: Array.isArray(payload.preferences) ? payload.preferences : [],
@@ -2090,6 +2095,7 @@ function buildApp({
             if (day.structure.area_count > 0) {
               placeStructureSidecar = {
                 place_structure: {
+                  provenance: "recognized_city",
                   area_count: day.structure.area_count,
                   scattered_count: day.structure.scattered_count,
                   areas: day.structure.areas,
@@ -2201,9 +2207,8 @@ function buildApp({
           agnosticPlaceStructure = null; // fail soft: structure never blocks the route
         }
       }
-      const agnosticPlaceStructureSidecar = agnosticPlaceStructure
-        ? { place_structure: agnosticPlaceStructure }
-        : {};
+      // (the place_structure sidecar is built below, AFTER live events are
+      // collected, so a genuine tonight-event can be woven into the day)
 
       // ANY-PLACE LIVE EVENTS: what is happening near the trusted anchor tonight /
       // this week, from an open municipal feed that covers it. Env-gated +
@@ -2222,6 +2227,9 @@ function buildApp({
               feed: collected.feed || null,
               tonight: Array.isArray(collected.tonight) ? collected.tonight : [],
               this_week: Array.isArray(collected.this_week) ? collected.this_week : [],
+              // The live feed is background-warmed; `pending` means "covered, still
+              // checking" so the UI never reads an empty warm as "nothing on".
+              ...(collected.pending ? { pending: true } : {}),
             };
           }
         } catch (_error) {
@@ -2229,6 +2237,22 @@ function buildApp({
         }
       }
       const liveEventsSidecar = liveEvents ? { live_events: liveEvents } : {};
+
+      // EVENTS INTO THE DAY: weave the top genuine tonight-event (with real
+      // coordinates) into the composed day as an honest EVENING ANCHOR — a real
+      // happening with its time window + source, tied to the nearest district. It
+      // is an anchor, not a walking-validated stop (no ETA/geometry claim).
+      // Additive + fail-soft: no suitable event → the day is unchanged.
+      let wovenPlaceStructure = agnosticPlaceStructure;
+      try {
+        const { weaveEveningEvent } = require("./candidates/evening-event-weave");
+        wovenPlaceStructure = weaveEveningEvent(agnosticPlaceStructure, liveEvents);
+      } catch (_error) {
+        wovenPlaceStructure = agnosticPlaceStructure;
+      }
+      const agnosticPlaceStructureSidecar = wovenPlaceStructure
+        ? { place_structure: wovenPlaceStructure }
+        : {};
 
       // Trusted anchor in hand → existing #259 route-output path. Place
       // resolution does NOT satisfy route eligibility on its own: external

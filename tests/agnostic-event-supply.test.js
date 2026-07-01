@@ -75,12 +75,14 @@ test("an anchor inside an open feed resolves the feed; outside, it does not", ()
   assert.equal(resolveEventFeedForAnchor({ lat: NaN, lng: NaN }), null);
 });
 
-test("the endpoint is geo-filtered to the anchor and excludes permanent infrastructure", () => {
+test("the endpoint is geo-filtered to the anchor and sorted soonest-ending-first", () => {
   const url = new URL(buildAnchorEventEndpoint(BUILTIN_EVENT_FEEDS[0].base, HELSINKI));
   assert.equal(url.searchParams.get("dwithin_origin"), "24.94,60.17");
   assert.ok(Number(url.searchParams.get("dwithin_metres")) > 0);
-  assert.equal(url.searchParams.get("sort"), "start_time");
-  assert.ok(Number(url.searchParams.get("max_duration")) > 0, "duration cap excludes always-open venues");
+  // sort=end_time surfaces what is genuinely on now/today and pushes permanent
+  // exhibitions (end years away) to the back — fast, no max_duration expansion.
+  assert.equal(url.searchParams.get("sort"), "end_time");
+  assert.equal(url.searchParams.get("max_duration"), null, "no slow server-side duration expansion");
 });
 
 test("covered anchor buckets events into tonight (now/today/tonight) and this_week (<=7d)", async () => {
