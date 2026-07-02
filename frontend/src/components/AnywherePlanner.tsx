@@ -1,0 +1,378 @@
+/**
+ * Any-city planner — the first React-island surface of the new frontend.
+ *
+ * Talks to the EXISTING Express API (same payload as the production anywhere
+ * mode) and renders through the SHARED honesty module, so this surface can never
+ * dress a fallback city's day up as the typed place:
+ *   composed       → day stops + district panel + events + map
+ *   structure_only → district panel only, honest "not a finished route" note
+ *   unavailable    → honest empty state (never a crash)
+ */
+import { useEffect, useMemo, useRef, useState } from "react";
+import "leaflet/dist/leaflet.css";
+import { buildAnywherePayload, ANYWHERE_PREFERENCES } from "../lib/anywhere-payload.mjs";
+import { anywhereDecision, type AnywhereClassification } from "../lib/anywhere-decision";
+
+type Lang = "sv" | "en";
+
+interface DistrictArea {
+  center?: { lat: number; lng: number } | null;
+  daypart_hint?: string | null;
+  covers?: string[];
+  stop_names?: string[];
+  stops?: Array<{ id?: string | null; name?: string | null; lat: number; lng: number }>;
+  stop_ids?: string[];
+}
+
+interface PlaceStructure {
+  provenance?: string;
+  area_count?: number;
+  district_day?: {
+    areas?: DistrictArea[];
+    legs?: Array<{ distance_km?: number | null }>;
+    covered_intents?: string[];
+    missing_intents?: string[];
+    evening_event?: {
+      title?: string | null;
+      starts_at?: string | null;
+      place?: string | null;
+      source_url?: string | null;
+    } | null;
+  };
+}
+
+interface LiveEvents {
+  coverage?: string;
+  pending?: boolean;
+  feed?: { label?: string; license?: string } | null;
+  tonight?: Array<{ id?: string; title?: string; starts_at?: string; place?: string; source_url?: string; timezone?: string }>;
+  this_week?: Array<{ id?: string; title?: string; starts_at?: string; place?: string; source_url?: string; timezone?: string }>;
+}
+
+const DAYPART_LABELS: Record<string, { sv: string; en: string }> = {
+  morning: { sv: "Morgon", en: "Morning" },
+  midday: { sv: "Mitt på dagen", en: "Midday" },
+  afternoon: { sv: "Eftermiddag", en: "Afternoon" },
+  evening: { sv: "Kväll", en: "Evening" },
+};
+
+const INTENT_LABELS: Record<string, { sv: string; en: string }> = {
+  food: { sv: "Mat", en: "Food" },
+  culture: { sv: "Kultur", en: "Culture" },
+  views: { sv: "Utsikt", en: "Views" },
+  fika: { sv: "Fika", en: "Coffee" },
+  nightlife: { sv: "Kvällsliv", en: "Nightlife" },
+  green: { sv: "Grönt", en: "Green" },
+  second_hand: { sv: "Second hand", en: "Second hand" },
+  market: { sv: "Marknad", en: "Market" },
+};
+
+function label(map: Record<string, { sv: string; en: string }>, key: string | null | undefined, lang: Lang): string {
+  if (!key) return "";
+  return map[key]?.[lang] ?? key;
+}
+
+function eventWhen(ev: { starts_at?: string; timezone?: string }, lang: Lang): string {
+  if (!ev.starts_at) return "";
+  const date = new Date(ev.starts_at);
+  if (Number.isNaN(date.getTime())) return "";
+  try {
+    const opts: Intl.DateTimeFormatOptions = { weekday: "short", hour: "2-digit", minute: "2-digit" };
+    if (ev.timezone) opts.timeZone = ev.timezone; // venue-local time, never the viewer's
+    return date.toLocaleString(lang === "en" ? "en-GB" : "sv-SE", opts);
+  } catch {
+    return "";
+  }
+}
+
+export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: Lang }) {
+  // Static output can't read query params at request time, so honor the
+  // production language contract (?lang=sv) client-side: EN default, SV explicit.
+  const [lang, setLang] = useState<Lang>(initialLang);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("lang");
+    if (q === "sv" || q === "en") setLang(q);
+  }, []);
+  const [place, setPlace] = useState("");
+  const [selected, setSelected] = useState<string[]>(["food", "culture", "views"]);
+  const [phase, setPhase] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [classification, setClassification] = useState<AnywhereClassification | null>(null);
+  const [safeResponse, setSafeResponse] = useState<any>(null);
+  const mapRef = useRef<HTMLDivElement | null>(null);
+  const leafletRef = useRef<{ map: any; layer: any } | null>(null);
+
+  const t = (sv: string, en: string) => (lang === "en" ? en : sv);
+
+  async function plan(event?: { preventDefault?: () => void }) {
+    event?.preventDefault?.();
+    const trimmed = place.trim();
+    if (!trimmed) return;
+    setPhase("loading");
+    setClassification(null);
+    setSafeResponse(null);
+    try {
+      const payload = buildAnywherePayload({
+        place: trimmed,
+        dates: [new Date().toISOString().slice(0, 10)],
+        preferences: selected,
+      });
+      const response = await fetch(`/api/route-recommendations?lang=${lang}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await response.json();
+      const decision = anywhereDecision();
+      const cls = decision.classifyAnywhereResult(body, { place: trimmed });
+      setClassification(cls);
+      setSafeResponse(decision.safeResponseFor(body, cls));
+      setPhase("done");
+    } catch {
+      setPhase("error");
+    }
+  }
+
+  const structure: PlaceStructure | null = safeResponse?.place_structure ?? null;
+  const day = structure?.district_day;
+  const liveEvents: LiveEvents | null = safeResponse?.live_events ?? null;
+  const composedStops: string[] = useMemo(() => {
+    const stops = safeResponse?.days?.[0]?.primary_route?.main_stops;
+    if (!Array.isArray(stops)) return [];
+    return stops.map((s: any) => String(s?.name || s?.label || "").trim()).filter(Boolean);
+  }, [safeResponse]);
+
+  // Draw the day on the map (numbered districts + dashed arc + stop dots) —
+  // the same spatial story as the production Map tab.
+  useEffect(() => {
+    let cancelled = false;
+    async function draw() {
+      const areas = (day?.areas ?? []).filter(
+        (a) => a?.center && Number.isFinite(a.center!.lat) && Number.isFinite(a.center!.lng),
+      );
+      if (!mapRef.current || !areas.length) return;
+      const L = (await import("leaflet")).default;
+      if (cancelled || !mapRef.current) return;
+
+      if (!leafletRef.current) {
+        const map = L.map(mapRef.current, { zoomControl: true, scrollWheelZoom: false }).setView([30, 10], 2);
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          maxZoom: 19,
+        }).addTo(map);
+        leafletRef.current = { map, layer: L.layerGroup().addTo(map) };
+      }
+      const { map, layer } = leafletRef.current;
+      layer.clearLayers();
+
+      const bounds: Array<[number, number]> = [];
+      const arc = areas.map((a) => [a.center!.lat, a.center!.lng] as [number, number]);
+      if (arc.length > 1) layer.addLayer(L.polyline(arc, { color: "#b6582f", weight: 3, dashArray: "6 8", opacity: 0.85 }));
+      areas.forEach((area, index) => {
+        bounds.push([area.center!.lat, area.center!.lng]);
+        const icon = L.divIcon({ className: "district-map-marker", html: String(index + 1), iconSize: [28, 28], iconAnchor: [14, 14] });
+        layer.addLayer(L.marker([area.center!.lat, area.center!.lng], { icon, zIndexOffset: 1000 }));
+        (area.stops ?? []).forEach((stop) => {
+          if (!Number.isFinite(stop?.lat) || !Number.isFinite(stop?.lng)) return;
+          bounds.push([stop.lat, stop.lng]);
+          const dot = L.circleMarker([stop.lat, stop.lng], { radius: 5, color: "#b6582f", weight: 2, fillColor: "#fffaf3", fillOpacity: 0.95 });
+          if (stop.name) {
+            const safe = document.createElement("div");
+            safe.textContent = stop.name;
+            dot.bindTooltip(safe.innerHTML);
+          }
+          layer.addLayer(dot);
+        });
+      });
+      map.invalidateSize();
+      if (bounds.length) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 15 });
+    }
+    draw();
+    return () => {
+      cancelled = true;
+    };
+  }, [day]);
+
+  const showDay = classification?.status === "composed";
+  const showStructure = classification?.status === "composed" || classification?.status === "structure_only";
+
+  return (
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+      <form onSubmit={plan} className="flex flex-col gap-3">
+        <label className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">
+          {t("Skriv en stad — vilken som helst", "Type a city — any city")}
+        </label>
+        <div className="flex gap-2">
+          <input
+            value={place}
+            onChange={(e) => setPlace(e.target.value)}
+            placeholder={t("t.ex. Lyon, Tbilisi, Kyoto …", "e.g. Lyon, Tbilisi, Kyoto …")}
+            className="flex-1 rounded-parranda border border-parranda-ink/15 bg-parranda-ink/10 px-4 py-3 text-parranda-ink shadow-sm outline-none focus:border-parranda-accent"
+          />
+          <button
+            type="submit"
+            disabled={phase === "loading" || !place.trim()}
+            className="rounded-parranda bg-parranda-accent px-5 py-3 font-semibold text-white shadow-sm disabled:opacity-40"
+          >
+            {phase === "loading" ? t("Komponerar…", "Composing…") : t("Bygg min dag", "Build my day")}
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {ANYWHERE_PREFERENCES.map((pref: { key: string; sv: string; en: string }) => {
+            const active = selected.includes(pref.key);
+            return (
+              <button
+                type="button"
+                key={pref.key}
+                onClick={() => setSelected((cur) => (active ? cur.filter((k) => k !== pref.key) : [...cur, pref.key]))}
+                className={
+                  "rounded-full border px-3 py-1 text-sm transition " +
+                  (active
+                    ? "border-parranda-accent bg-parranda-accent/15 font-semibold text-parranda-ink"
+                    : "border-parranda-ink/15 bg-parranda-ink/10 text-parranda-ink/70")
+                }
+              >
+                {lang === "en" ? pref.en : pref.sv}
+              </button>
+            );
+          })}
+        </div>
+      </form>
+
+      {phase === "error" && (
+        <p className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4 text-sm text-parranda-ink/80">
+          {t("Motorn svarar inte just nu. Försök igen om en stund.", "The engine isn't answering right now. Try again shortly.")}
+        </p>
+      )}
+
+      {phase === "done" && classification?.status === "unavailable" && (
+        <p className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4 text-sm text-parranda-ink/80">
+          {t(
+            `Parranda kunde inte komponera en dag för ${classification.placeLabel || place} ännu — inget hittas på, inget fejkas.`,
+            `Parranda couldn't compose a day for ${classification.placeLabel || place} yet — nothing is invented in its place.`,
+          )}
+        </p>
+      )}
+
+      {showStructure && structure && (
+        <section className="flex flex-col gap-4 rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">
+              {t("Din dag genom staden", "Your day across the city")}
+              {typeof structure.area_count === "number" ? ` — ${structure.area_count} ${t("distrikt", "districts")}` : ""}
+            </p>
+            {structure.provenance === "agnostic_anchor" && (
+              <p className="mt-1 text-sm font-semibold text-parranda-accent">
+                {t("Byggd live från kartan — inget city pack", "Built live from the map — no city pack")}
+              </p>
+            )}
+            {classification?.status === "structure_only" && (
+              <p className="mt-1 text-sm text-parranda-ink/70">
+                {t("Struktur hittad — men ingen färdig rutt ännu.", "Structure found — but no finished route yet.")}
+              </p>
+            )}
+          </div>
+
+          <ol className="flex flex-col gap-3">
+            {(day?.areas ?? []).map((area, index) => (
+              <li key={index} className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/10 p-4">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-parranda-accent text-sm font-bold text-white">
+                    {index + 1}
+                  </span>
+                  {area.daypart_hint && (
+                    <span className="text-sm font-semibold text-parranda-ink">{label(DAYPART_LABELS, area.daypart_hint, lang)}</span>
+                  )}
+                  <span className="ml-auto text-xs text-parranda-ink/60">
+                    {(area.stop_ids?.length ?? area.stops?.length ?? 0)} {t("stopp", "stops")}
+                  </span>
+                </div>
+                {(area.covers ?? []).length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {(area.covers ?? []).map((axis) => (
+                      <span key={axis} className="rounded-full border border-parranda-accent/30 bg-parranda-accent/10 px-2.5 py-0.5 text-xs font-semibold text-parranda-ink">
+                        {label(INTENT_LABELS, axis, lang)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {(area.stop_names ?? []).length > 0 && (
+                  <p className="mt-2 text-sm text-parranda-ink">{(area.stop_names ?? []).join(" · ")}</p>
+                )}
+                {index < (day?.areas?.length ?? 0) - 1 && Number.isFinite(day?.legs?.[index]?.distance_km as number) && (
+                  <p className="mt-2 text-xs text-parranda-ink/60">≈ {day!.legs![index]!.distance_km} km {t("till nästa distrikt", "to the next district")}</p>
+                )}
+              </li>
+            ))}
+          </ol>
+
+          {day?.evening_event?.title && (
+            <div className="rounded-parranda border border-parranda-accent/25 bg-parranda-accent/10 p-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-parranda-accent">{t("Och ikväll", "And tonight")}</p>
+              <p className="mt-1 text-sm font-semibold text-parranda-ink">{day.evening_event.title}</p>
+              {day.evening_event.place && <p className="text-xs text-parranda-ink/70">{day.evening_event.place}</p>}
+            </div>
+          )}
+
+          {(day?.missing_intents ?? []).length > 0 && (
+            <p className="text-sm italic text-parranda-ink/60">
+              {t("Inget distrikt täckte:", "No district covered:")} {(day?.missing_intents ?? []).map((k) => label(INTENT_LABELS, k, lang)).join(", ")}
+            </p>
+          )}
+
+          <div ref={mapRef} className="h-80 w-full overflow-hidden rounded-parranda border border-parranda-ink/10" />
+        </section>
+      )}
+
+      {showDay && composedStops.length > 0 && (
+        <section className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">{t("Dagens stopp", "Today's stops")}</p>
+          <ol className="mt-2 flex flex-col gap-1.5">
+            {composedStops.map((name, i) => (
+              <li key={i} className="text-sm text-parranda-ink">
+                <span className="font-semibold text-parranda-accent">{i + 1}.</span> {name}
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+
+      {phase === "done" && liveEvents && (liveEvents.coverage === "covered" || liveEvents.coverage === "uncovered") && (
+        <section className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">{t("Händer i närheten", "Happening near here")}</p>
+          {liveEvents.coverage === "uncovered" && (
+            <p className="mt-2 text-sm text-parranda-ink/70">
+              {t("Ingen live-eventkälla täcker den här platsen än — Parranda hittar inte på en.", "No live-events feed reaches this place yet — Parranda won't invent one.")}
+            </p>
+          )}
+          {liveEvents.coverage === "covered" && liveEvents.pending && (
+            <p className="mt-2 text-sm text-parranda-ink/70">{t("Kollar vad som händer — ladda om strax.", "Checking what's on — reload in a moment.")}</p>
+          )}
+          {(["tonight", "this_week"] as const).map((bucket) => {
+            const events = liveEvents[bucket] ?? [];
+            if (!events.length) return null;
+            return (
+              <div key={bucket} className="mt-3">
+                <p className="text-sm font-semibold text-parranda-ink">{bucket === "tonight" ? t("Ikväll", "Tonight") : t("Den här veckan", "This week")}</p>
+                <ul className="mt-1 flex flex-col gap-1">
+                  {events.slice(0, 4).map((ev, i) => (
+                    <li key={ev.id ?? i} className="text-sm text-parranda-ink/85">
+                      <span className="font-medium">{ev.title}</span>
+                      {eventWhen(ev, lang) && <span className="text-parranda-ink/60"> · {eventWhen(ev, lang)}</span>}
+                      {ev.place && <span className="text-parranda-ink/60"> · {ev.place}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+          {liveEvents.feed?.label && (
+            <p className="mt-3 text-xs text-parranda-ink/50">
+              {t("Källa", "Source")}: {liveEvents.feed.label}
+              {liveEvents.feed.license ? ` · ${liveEvents.feed.license}` : ""}
+            </p>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}

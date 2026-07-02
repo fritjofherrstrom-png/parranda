@@ -35,6 +35,21 @@ Not allowed in the foundation PR:
 - No planner-entry polish bundled into the foundation work.
 - No changes to current app behavior.
 
+## Approved additions (2026-07-02)
+
+Owner-approved, per the "unless separately approved" clause:
+
+- **React islands** (`@astrojs/react`) are approved as the component model for new
+  frontend surfaces, together with the already-scaffolded Tailwind setup.
+- **First surface: the any-city planner** (`/anywhere` in the new frontend) —
+  search a freeform place → composed day → district panel → live events → map,
+  built against the EXISTING Express API (`/api/route-recommendations` with the
+  agnostic flags) and the SHARED honesty module (`anywhere-render-decision.js`).
+- This remains a **parallel, non-production surface**: no production route
+  takeover, no change to current app behavior. The Express app is still the
+  production source of truth; takeover of any route still requires the Surface
+  migration rule below.
+
 ## Surface migration rule
 
 Every later migrated surface must prove parity before takeover:
