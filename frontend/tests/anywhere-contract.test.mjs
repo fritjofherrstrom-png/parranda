@@ -9,7 +9,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { buildAnywherePayload, ANYWHERE_PREFERENCES } from "../src/lib/anywhere-payload.mjs";
+import { buildAnywherePayload, ANYWHERE_PREFERENCES, WALK_PRESETS, isoDateFromOffset } from "../src/lib/anywhere-payload.mjs";
 
 const require = createRequire(import.meta.url);
 const decision = require("../../anywhere-render-decision.js");
@@ -23,6 +23,17 @@ test("payload carries the freeform place + the three agnostic flags, never a cit
   assert.equal(payload.agnostic_engine_compose, 1);
   assert.ok(!("city" in payload), "a recognized city key must never be sent from the anywhere surface");
   assert.deepEqual(payload.preferences, ["food", "views"]);
+});
+
+test("planner depth: walking presets map to walking_km_target; tomorrow is a real date", () => {
+  const preset = WALK_PRESETS.find((p) => p.key === "long");
+  const payload = buildAnywherePayload({ place: "Lyon", dates: ["2026-07-03"], walkingKmTarget: preset.km });
+  assert.equal(payload.walking_km_target, 9, "the long preset reaches the engine's walking target");
+  // Deterministic date math (injectable base, no real clock in tests).
+  assert.equal(isoDateFromOffset(0, new Date("2026-07-02T12:00:00Z")), "2026-07-02");
+  assert.equal(isoDateFromOffset(1, new Date("2026-07-02T12:00:00Z")), "2026-07-03");
+  // Month rollover stays correct.
+  assert.equal(isoDateFromOffset(1, new Date("2026-07-31T12:00:00Z")), "2026-08-01");
 });
 
 test("preference chips map to the engine's canonical intent axes", () => {

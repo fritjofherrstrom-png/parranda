@@ -17,6 +17,21 @@ export const ANYWHERE_PREFERENCES = [
   { key: "second_hand", sv: "Second hand", en: "Second hand" },
 ];
 
+// ISO date (YYYY-MM-DD) offset by N days from a base date — pure + injectable so
+// "tomorrow" is unit-testable without a real clock.
+export function isoDateFromOffset(offsetDays = 0, from = new Date()) {
+  const d = new Date(from.getTime());
+  d.setDate(d.getDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
+}
+
+// Walking-length presets → the same walking_km_target the production planner sends.
+export const WALK_PRESETS = [
+  { key: "short", km: 4, sv: "Kort · ~4 km", en: "Short · ~4 km" },
+  { key: "balanced", km: 6, sv: "Lagom · ~6 km", en: "Balanced · ~6 km" },
+  { key: "long", km: 9, sv: "Lång · ~9 km", en: "Long · ~9 km" },
+];
+
 export function buildAnywherePayload({ place, dates, preferences = [], walkingKmTarget = 6 } = {}) {
   const autoPoint = { type: "auto", label: "Parranda väljer" };
   return {

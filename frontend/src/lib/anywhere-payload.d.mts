@@ -6,6 +6,17 @@ export interface AnywherePreference {
 
 export declare const ANYWHERE_PREFERENCES: AnywherePreference[];
 
+export interface WalkPreset {
+  key: string;
+  km: number;
+  sv: string;
+  en: string;
+}
+
+export declare const WALK_PRESETS: WalkPreset[];
+
+export declare function isoDateFromOffset(offsetDays?: number, from?: Date): string;
+
 export declare function buildAnywherePayload(options?: {
   place?: string;
   dates?: string[];

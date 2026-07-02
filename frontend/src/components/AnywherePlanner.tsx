@@ -10,7 +10,12 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
-import { buildAnywherePayload, ANYWHERE_PREFERENCES } from "../lib/anywhere-payload.mjs";
+import {
+  buildAnywherePayload,
+  ANYWHERE_PREFERENCES,
+  WALK_PRESETS,
+  isoDateFromOffset,
+} from "../lib/anywhere-payload.mjs";
 import { anywhereDecision, type AnywhereClassification } from "../lib/anywhere-decision";
 
 type Lang = "sv" | "en";
@@ -95,26 +100,42 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   }, []);
   const [place, setPlace] = useState("");
   const [selected, setSelected] = useState<string[]>(["food", "culture", "views"]);
+  const [dayOffset, setDayOffset] = useState<0 | 1>(0); // today / tomorrow
+  const [walkKey, setWalkKey] = useState("balanced");
   const [phase, setPhase] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [loadingStage, setLoadingStage] = useState(0);
   const [classification, setClassification] = useState<AnywhereClassification | null>(null);
   const [safeResponse, setSafeResponse] = useState<any>(null);
   const mapRef = useRef<HTMLDivElement | null>(null);
   const leafletRef = useRef<{ map: any; layer: any } | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const t = (sv: string, en: string) => (lang === "en" ? en : sv);
 
-  async function plan(event?: { preventDefault?: () => void }) {
-    event?.preventDefault?.();
-    const trimmed = place.trim();
-    if (!trimmed) return;
-    setPhase("loading");
-    setClassification(null);
-    setSafeResponse(null);
+  // Honest staged feedback while a cold place composes (5–20 s): describe what
+  // the engine is actually doing, never a fake progress number.
+  useEffect(() => {
+    if (phase !== "loading") {
+      setLoadingStage(0);
+      return;
+    }
+    const timers = [setTimeout(() => setLoadingStage(1), 4000), setTimeout(() => setLoadingStage(2), 10000)];
+    return () => timers.forEach(clearTimeout);
+  }, [phase]);
+
+  async function execute(trimmed: string, { silent = false }: { silent?: boolean } = {}) {
+    if (!silent) {
+      setPhase("loading");
+      setClassification(null);
+      setSafeResponse(null);
+    }
     try {
+      const preset = WALK_PRESETS.find((p: { key: string }) => p.key === walkKey) ?? WALK_PRESETS[1];
       const payload = buildAnywherePayload({
         place: trimmed,
-        dates: [new Date().toISOString().slice(0, 10)],
+        dates: [isoDateFromOffset(dayOffset)],
         preferences: selected,
+        walkingKmTarget: preset.km,
       });
       const response = await fetch(`/api/route-recommendations?lang=${lang}`, {
         method: "POST",
@@ -124,12 +145,35 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       const body = await response.json();
       const decision = anywhereDecision();
       const cls = decision.classifyAnywhereResult(body, { place: trimmed });
+      const safe = decision.safeResponseFor(body, cls);
       setClassification(cls);
-      setSafeResponse(decision.safeResponseFor(body, cls));
+      setSafeResponse(safe);
       setPhase("done");
+      // The live-events feed is background-warmed server-side: a cold anchor
+      // returns an honest `pending`. Re-ask ONCE after the warm window instead of
+      // telling the user to reload — everything else comes from cache, so the
+      // retry is cheap. Never loops: a second pending stays pending.
+      if (!silent && safe?.live_events?.pending) {
+        if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = setTimeout(() => {
+          execute(trimmed, { silent: true }).catch(() => {});
+        }, 9000);
+      }
     } catch {
-      setPhase("error");
+      if (!silent) setPhase("error");
     }
+  }
+
+  useEffect(() => () => {
+    if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+  }, []);
+
+  async function plan(event?: { preventDefault?: () => void }) {
+    event?.preventDefault?.();
+    const trimmed = place.trim();
+    if (!trimmed) return;
+    if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    await execute(trimmed);
   }
 
   const structure: PlaceStructure | null = safeResponse?.place_structure ?? null;
@@ -236,6 +280,51 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             );
           })}
         </div>
+
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex gap-1.5" role="group" aria-label={t("Vilken dag", "Which day")}>
+            {([0, 1] as const).map((offset) => (
+              <button
+                type="button"
+                key={offset}
+                onClick={() => setDayOffset(offset)}
+                className={
+                  "rounded-full border px-3 py-1 text-sm transition " +
+                  (dayOffset === offset
+                    ? "border-parranda-accent bg-parranda-accent/15 font-semibold text-parranda-ink"
+                    : "border-parranda-ink/15 bg-parranda-ink/10 text-parranda-ink/70")
+                }
+              >
+                {offset === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow")}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-1.5" role="group" aria-label={t("Gånglängd", "Walking length")}>
+            {WALK_PRESETS.map((preset: { key: string; km: number; sv: string; en: string }) => (
+              <button
+                type="button"
+                key={preset.key}
+                onClick={() => setWalkKey(preset.key)}
+                className={
+                  "rounded-full border px-3 py-1 text-sm transition " +
+                  (walkKey === preset.key
+                    ? "border-parranda-accent bg-parranda-accent/15 font-semibold text-parranda-ink"
+                    : "border-parranda-ink/15 bg-parranda-ink/10 text-parranda-ink/70")
+                }
+              >
+                {lang === "en" ? preset.en : preset.sv}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {phase === "loading" && (
+          <p className="text-sm text-parranda-ink/70" aria-live="polite">
+            {loadingStage === 0 && t("Hittar platsen …", "Finding the place …")}
+            {loadingStage === 1 && t("Läser kartan — riktiga platser, ingen katalog …", "Reading the map — real places, no catalog …")}
+            {loadingStage === 2 && t("Komponerar dagen genom distrikten …", "Composing the day across the districts …")}
+          </p>
+        )}
       </form>
 
       {phase === "error" && (
@@ -345,7 +434,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             </p>
           )}
           {liveEvents.coverage === "covered" && liveEvents.pending && (
-            <p className="mt-2 text-sm text-parranda-ink/70">{t("Kollar vad som händer — ladda om strax.", "Checking what's on — reload in a moment.")}</p>
+            <p className="mt-2 text-sm text-parranda-ink/70">{t("Kollar vad som händer — uppdateras automatiskt strax.", "Checking what's on — updates automatically in a moment.")}</p>
           )}
           {(["tonight", "this_week"] as const).map((bucket) => {
             const events = liveEvents[bucket] ?? [];
