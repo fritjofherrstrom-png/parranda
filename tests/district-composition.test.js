@@ -41,6 +41,23 @@ test("each district carries a few concrete stop NAMES (so the UI shows an itiner
   assert.ok(day.areas.every((a) => a.stop_names.length <= 4), "names are capped for a readable card");
 });
 
+test("each district carries map-drawable stops (id + name + real coords, never fabricated)", () => {
+  const named = [
+    { id: "m0", name: "Taverna Aleksis", type: "restaurant", tags: ["food"], lat: 60.0, lng: 24.0 },
+    { id: "m1", name: "Mokka Café", type: "cafe", tags: ["fika"], lat: 60.0006, lng: 24.0 },
+    { id: "m2", type: "bar", tags: ["nightlife"], lat: 60.0, lng: 24.0006 }, // no name → name null, coords kept
+    { id: "m3", name: "Ghost", type: "cafe", tags: ["fika"] }, // no coords → excluded from stops
+  ];
+  const day = composeDistrictDay(named, { intents: ["food", "fika", "nightlife"], maxAreas: 2 });
+  const stops = day.areas.flatMap((a) => a.stops);
+  assert.ok(stops.length >= 3, "coordinate-bearing stops are emitted");
+  for (const s of stops) {
+    assert.ok(Number.isFinite(s.lat) && Number.isFinite(s.lng), "every emitted stop has real coords");
+  }
+  assert.ok(stops.some((s) => s.name === "Taverna Aleksis"));
+  assert.ok(!stops.some((s) => s.id === "m3"), "a stop without coords is never fabricated onto the map");
+});
+
 test("composes complementary districts that cover the requested intents", () => {
   const day = composeDistrictDay(fourDistrictCity(), { intents: ["second_hand", "fika"], maxAreas: 3 });
   assert.deepEqual(day.covered_intents.slice().sort(), ["fika", "second_hand"]);

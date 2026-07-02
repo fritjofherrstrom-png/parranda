@@ -537,8 +537,8 @@ test("service worker registration is root-scoped for nested city routes", () => 
 
   assert.match(source, /navigator\.serviceWorker\.register\("\/sw\.js", \{ scope: "\/" \}\)/);
   assert.doesNotMatch(source, /navigator\.serviceWorker\.register\("\.\/sw\.js"\)/);
-  assert.match(sw, /const CACHE_NAME = "parranda-v35"/);
-  assert.match(sw, /"\.\/script\.js\?v=38"/);
+  assert.match(sw, /const CACHE_NAME = "parranda-v36"/);
+  assert.match(sw, /"\.\/script\.js\?v=39"/);
   assert.doesNotMatch(sw, /"\.\/script\.js\?v=26"/);
 });
 
@@ -769,10 +769,11 @@ test("GET / renderar global landing page (inte city-shell)", async () => {
     assert.ok(!response.body.includes("__PARRANDA_TITLE__"));
     assert.ok(!response.body.includes('data-city-key="rome"'));
     assert.ok(!response.body.includes('window.__PARRANDA_CITY__'));
-    // Landing v2: locked hero headline + subcopy (default EN)
+    // Landing v2: locked hero headline + ANY-CITY subcopy (default EN) — the
+    // landing must invite any city, never read as a two-city product.
     assert.match(response.body, /Next stop\?/);
-    assert.match(response.body, /Choose a city\. Parranda builds a day/);
-    assert.match(response.body, /Search city/);
+    assert.match(response.body, /Type any city\. Parranda builds a day/);
+    assert.match(response.body, /Type a city — any city/);
     assert.match(response.body, /lp-hero/);
     assert.match(response.body, /<html lang="en">/);
     // City registry server-rendered for JS-driven inline completion (Barcelona + Rom; aliases included)
@@ -820,10 +821,10 @@ test("GET /?lang=en renderar landing v2 med engelsk copy", async () => {
     const response = await requestText(server, { path: "/?lang=en" });
 
     assert.equal(response.status, 200);
-    // EN hero copy
+    // EN hero copy (any-city invitation)
     assert.match(response.body, /Next stop\?/);
-    assert.match(response.body, /Choose a city\. Parranda builds a day/);
-    assert.match(response.body, /Search city/);
+    assert.match(response.body, /Type any city\. Parranda builds a day/);
+    assert.match(response.body, /Type a city — any city/);
     assert.match(response.body, /<html lang="en">/);
     // Registry still rendered, internal city still filtered
     assert.match(response.body, /window\.__PARRANDA_CITIES__/);
@@ -1322,17 +1323,17 @@ test("landing and city shells use root-absolute asset urls for deep routes", asy
   assert.match(cityShell, /href="\/manifest\.webmanifest"/);
   assert.match(cityShell, /href="\/assets\/icons\/icon-192\.png"/);
   assert.match(cityShell, /href="\/vendor\/leaflet\/leaflet\.css"/);
-  assert.match(cityShell, /href="\/styles\.css\?v=25"/);
+  assert.match(cityShell, /href="\/styles\.css\?v=26"/);
   assert.match(cityShell, /src="\/vendor\/leaflet\/leaflet\.js"/);
   assert.match(cityShell, /src="\/planner-trust\.js\?v=2"/);
-  assert.match(cityShell, /src="\/script\.js\?v=38"/);
+  assert.match(cityShell, /src="\/script\.js\?v=39"/);
   assert.match(cityShell, /src="\/ux-pass1\.js\?v=10"/);
   assert.match(landingShell, /href="\/manifest\.webmanifest"/);
   assert.match(landingShell, /href="\/assets\/icons\/icon-192\.png"/);
-  assert.match(landingShell, /href="\/styles\.css\?v=27"/);
-  assert.doesNotMatch(cityShell, /href="styles\.css\?v=25"/);
-  assert.doesNotMatch(cityShell, /src="script\.js\?v=38"/);
-  assert.doesNotMatch(landingShell, /href="styles\.css\?v=27"/);
+  assert.match(landingShell, /href="\/styles\.css\?v=28"/);
+  assert.doesNotMatch(cityShell, /href="styles\.css\?v=26"/);
+  assert.doesNotMatch(cityShell, /src="script\.js\?v=39"/);
+  assert.doesNotMatch(landingShell, /href="styles\.css\?v=28"/);
 
   global.fetch = async (url) => {
     throw new Error(`Unexpected fetch during deep-route shell asset test: ${url}`);
@@ -1346,8 +1347,8 @@ test("landing and city shells use root-absolute asset urls for deep routes", asy
     });
 
     assert.equal(response.status, 200);
-    assert.match(response.body, /<link rel="stylesheet" href="\/styles\.css\?v=25" \/>/);
-    assert.match(response.body, /<script src="\/script\.js\?v=38"><\/script>/);
+    assert.match(response.body, /<link rel="stylesheet" href="\/styles\.css\?v=26" \/>/);
+    assert.match(response.body, /<script src="\/script\.js\?v=39"><\/script>/);
     assert.match(response.body, /<script src="\/planner-trust\.js\?v=2"><\/script>/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
