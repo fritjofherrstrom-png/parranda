@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Numbered district marker on the Leaflet map — same visual as the current app
+   so the map reads as one product across old and new frontends. */
+.district-map-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgb(var(--p-color-accent));
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  border: 2px solid #fffaf3;
+  box-shadow: 0 1px 6px rgba(58, 33, 20, 0.35);
+}
