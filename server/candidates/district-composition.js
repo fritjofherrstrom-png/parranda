@@ -138,6 +138,16 @@ function composeDistrictDay(candidates, { intents = [], maxAreas = 2, linkKm, mi
         .map((m) => String((m && (m.name || m.label || m.title)) || "").trim())
         .filter(Boolean)
         .slice(0, 4),
+      // The stops as map-drawable points (id + name + coords) so the UI can put
+      // the day ON the map — real positions only, never fabricated.
+      stops: stopsSource
+        .filter((m) => m && Number.isFinite(m.lat) && Number.isFinite(m.lng))
+        .map((m) => ({
+          id: m.id != null ? m.id : null,
+          name: String((m.name || m.label || m.title) || "").trim() || null,
+          lat: m.lat,
+          lng: m.lng,
+        })),
     };
   });
 

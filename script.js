@@ -2963,6 +2963,9 @@ let activeTab = "routes";
 let activeRouteKey = null;
 let deferredInstallPrompt = null;
 let map;
+// Leaflet layer holding the composed day's districts (numbered centroids +
+// walking arc + stop dots). Rebuilt from latestPlaceStructure on every plan.
+let districtMapLayer = null;
 let markers = new Map();
 let routeOverlay;
 let currentLocationCoords = null;
@@ -6598,6 +6601,8 @@ function applyPlannerResponseState(response, options = {}) {
     typeof response.place_structure.district_day === "object"
       ? response.place_structure
       : null;
+  // Put the composed day ON the map (numbered districts + walking arc + stops).
+  renderDistrictMapOverlay();
   latestLiveEvents =
     response?.live_events && typeof response.live_events === "object" && response.live_events.coverage
       ? response.live_events
@@ -9828,6 +9833,9 @@ function switchTab(tabName) {
   if (tabName === "overview" && map) {
     window.setTimeout(() => {
       map.invalidateSize();
+      // Redraw the day's districts once the map has its real size (fitBounds on
+      // a hidden map computes a wrong viewport).
+      renderDistrictMapOverlay();
     }, 50);
   }
 }
@@ -10084,12 +10092,15 @@ function initMap() {
     return;
   }
 
-  const mapCenter = plannerCity.center || { lat: 41.8933, lng: 12.4964 };
+  // Never show another city's map as if it were this place: with no known city
+  // center (the any-place shell), start at a neutral world view — the composed
+  // day's districts re-center the map the moment a plan lands (fitBounds below).
+  const mapCenter = plannerCity.center || (anywhereMode ? null : { lat: 41.8933, lng: 12.4964 });
 
   map = L.map("map", {
     zoomControl: true,
     scrollWheelZoom: true,
-  }).setView([mapCenter.lat, mapCenter.lng], 12);
+  }).setView(mapCenter ? [mapCenter.lat, mapCenter.lng] : [30, 10], mapCenter ? 12 : 2);
 
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution:
@@ -10117,6 +10128,80 @@ function initMap() {
   });
 
   updateMapPanel(getPlaceByName(selectedPlaceName));
+
+  // A plan may already have landed before the map initialized (planner-first
+  // flow) — draw its districts now.
+  renderDistrictMapOverlay();
+}
+
+// Draw the composed day ON the map: a numbered marker per district (matching the
+// "Your day across the city" panel's ordering), a dashed walking arc between
+// district centers, and a small dot per concrete stop. Rebuilt from
+// latestPlaceStructure on every plan; removed when a plan has no structure.
+// Popup/tooltip content is built via DOM (never HTML strings) since stop names
+// come from open data.
+function renderDistrictMapOverlay() {
+  if (!map || typeof L === "undefined") return;
+  if (districtMapLayer) {
+    districtMapLayer.remove();
+    districtMapLayer = null;
+  }
+  const day = latestPlaceStructure?.district_day;
+  const areas = Array.isArray(day?.areas)
+    ? day.areas.filter((a) => a && a.center && Number.isFinite(a.center.lat) && Number.isFinite(a.center.lng))
+    : [];
+  if (!areas.length) return;
+
+  districtMapLayer = L.layerGroup().addTo(map);
+  const bounds = [];
+
+  // Honest inter-district walking arc (dashed — a direction, not a road route).
+  const arc = areas.map((a) => [a.center.lat, a.center.lng]);
+  if (arc.length > 1) {
+    L.polyline(arc, { color: "#b6582f", weight: 3, dashArray: "6 8", opacity: 0.85 }).addTo(districtMapLayer);
+  }
+
+  areas.forEach((area, index) => {
+    bounds.push([area.center.lat, area.center.lng]);
+
+    const icon = L.divIcon({
+      className: "district-map-marker",
+      html: String(index + 1),
+      iconSize: [28, 28],
+      iconAnchor: [14, 14],
+    });
+    const marker = L.marker([area.center.lat, area.center.lng], { icon, zIndexOffset: 1000 }).addTo(districtMapLayer);
+    const popup = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = isEnglishUi ? `District ${index + 1}` : `Distrikt ${index + 1}`;
+    popup.appendChild(title);
+    const names = Array.isArray(area.stop_names) ? area.stop_names.filter(Boolean).slice(0, 3) : [];
+    if (names.length) {
+      const line = document.createElement("div");
+      line.textContent = names.join(" · ");
+      popup.appendChild(line);
+    }
+    marker.bindPopup(popup);
+
+    (Array.isArray(area.stops) ? area.stops : []).forEach((stop) => {
+      if (!stop || !Number.isFinite(stop.lat) || !Number.isFinite(stop.lng)) return;
+      bounds.push([stop.lat, stop.lng]);
+      const dot = L.circleMarker([stop.lat, stop.lng], {
+        radius: 5,
+        color: "#b6582f",
+        weight: 2,
+        fillColor: "#fffaf3",
+        fillOpacity: 0.95,
+      }).addTo(districtMapLayer);
+      if (stop.name) {
+        const safe = document.createElement("div");
+        safe.textContent = stop.name;
+        dot.bindTooltip(safe.innerHTML);
+      }
+    });
+  });
+
+  map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
 }
 
 function renderSpotlights() {

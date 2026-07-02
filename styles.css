@@ -3871,6 +3871,23 @@ body.anywhere-mode #heroLiveButton {
   line-height: 1.35;
 }
 
+/* Numbered district marker on the Leaflet map — mirrors .planner-district-order
+   so the map and the "Your day across the city" panel read as one story. */
+.district-map-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--accent, #b6582f);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  border: 2px solid #fffaf3;
+  box-shadow: 0 1px 6px rgba(58, 33, 20, 0.35);
+}
+
 .planner-district-chip {
   padding: 3px 10px;
   border-radius: 999px;
