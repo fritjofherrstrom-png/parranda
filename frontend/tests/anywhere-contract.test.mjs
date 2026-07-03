@@ -9,10 +9,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { buildAnywherePayload, ANYWHERE_PREFERENCES, WALK_PRESETS, isoDateFromOffset } from "../src/lib/anywhere-payload.mjs";
 
 const require = createRequire(import.meta.url);
 const decision = require("../../anywhere-render-decision.js");
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const frontendRoot = path.resolve(__dirname, "..");
+
+function readFrontendSource(relativePath) {
+  return fs.readFileSync(path.join(frontendRoot, relativePath), "utf8");
+}
 
 test("payload carries the freeform place + the three agnostic flags, never a city key", () => {
   const payload = buildAnywherePayload({ place: "Lyon", dates: ["2026-07-02"], preferences: ["food", "views"] });
@@ -95,4 +104,31 @@ test("classification flows through the SHARED honesty module (no duplicated rule
   // unavailable: nothing trustworthy at all.
   const unavailable = decision.classifyAnywhereResult({ days: [] }, { place: "Nowhere" });
   assert.equal(unavailable.status, "unavailable");
+});
+
+test("product surface does not reintroduce the old labs/dogfood identity", () => {
+  const source = [
+    readFrontendSource("src/pages/anywhere.astro"),
+    readFrontendSource("src/components/AnywherePlanner.tsx"),
+  ].join("\n");
+
+  for (const forbidden of [
+    /Any-place alpha/i,
+    /\bdogfood\b/i,
+    /Experimental route/i,
+    /\blabs\/anywhere\b/i,
+    /\broute_mutation\b/i,
+    /\bcandidate_role_order\b/i,
+    /\bselected_variant\b/i,
+  ]) {
+    assert.doesNotMatch(source, forbidden);
+  }
+});
+
+test("arrival with a freeform place is a result flow, not a second search step", () => {
+  const source = readFrontendSource("src/components/AnywherePlanner.tsx");
+
+  assert.match(source, /params\.get\("place"\)/);
+  assert.match(source, /setPlace\(trimmed\)/);
+  assert.match(source, /execute\(\{ place: trimmed \}/);
 });
