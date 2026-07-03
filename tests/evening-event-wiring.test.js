@@ -103,6 +103,50 @@ test("a tonight-event with NO coordinates → no evening anchor, but the day is 
   });
 });
 
+test("administrative live events do not become evening anchors when a cultural event exists", async () => {
+  const eventSupply = async () => ({
+    coverage: "covered",
+    feed: { id: "f", label: "Feed", license: "CC-BY 4.0" },
+    tonight: [
+      {
+        id: "admin",
+        title: "Municipal committee session",
+        starts_at: "2026-06-28T18:00:00Z",
+        source_url: "https://x/admin",
+        source_label: "Official calendar",
+        lat: 60.1706,
+        lng: 24.9408,
+        cultural_tier: "administrative",
+        salience_score: 9.8,
+      },
+      {
+        id: "culture",
+        title: "Evening courtyard concert",
+        starts_at: "2026-06-28T20:00:00Z",
+        source_url: "https://x/culture",
+        source_label: "Official calendar",
+        lat: 60.1707,
+        lng: 24.9409,
+        cultural_tier: "cultural",
+        salience_score: 7.2,
+      },
+    ],
+    this_week: [],
+  });
+  await withServer({ openDataLoader: loaderFor(CAFES), eventSupply }, async (server) => {
+    const res = await post(server, BODY);
+    const ev = res.place_structure?.district_day?.evening_event;
+    assert.ok(ev, "cultural evening_event woven into the day");
+    assert.equal(ev.id, "culture");
+    assert.equal(ev.cultural_tier, "cultural");
+    assert.equal(
+      (res.days?.[0]?.primary_route?.main_stops || []).some((stop) => stop.id === "culture" || stop.id === "admin"),
+      false,
+      "live events are not injected into main_stops",
+    );
+  });
+});
+
 test("no event supply → no evening anchor, place_structure unchanged", async () => {
   await withServer({ openDataLoader: loaderFor(CAFES), eventSupply: null }, async (server) => {
     const res = await post(server, BODY);
