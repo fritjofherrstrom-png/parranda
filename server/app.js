@@ -1187,7 +1187,7 @@ function buildLandingCityRegistry() {
   return entries;
 }
 
-function renderLandingShell({ lang = "en" } = {}) {
+function renderLandingShell({ lang = "en", anywhereV2 = false } = {}) {
   const uiLang = normalizeLanguage(lang);
   const ogLocale = uiLang === "en" ? "en_US" : "sv_SE";
   const tr = (key) => translate(uiLang, key);
@@ -1198,6 +1198,9 @@ function renderLandingShell({ lang = "en" } = {}) {
     "__PARRANDA_LANG__": escapeHtml(uiLang),
     "__PARRANDA_UI_LANG__": escapeHtml(uiLang),
     "__PARRANDA_OG_LOCALE__": ogLocale,
+    // True only when the NEW-frontend /anywhere surface is actively served
+    // (flag on + build present) — the landing then routes freeform places there.
+    "__PARRANDA_ANYWHERE_V2_FLAG__": anywhereV2 ? "true" : "false",
     "__PARRANDA_LANDING_TITLE__": escapeHtml(tr("landing.title")),
     "__PARRANDA_LANDING_META_DESC__": escapeHtml(tr("landing.meta.description")),
     "__PARRANDA_LANDING_HEADLINE__": escapeHtml(tr("landing.hero.headline")),
@@ -1270,6 +1273,13 @@ function renderLandingShell({ lang = "en" } = {}) {
 
 function isDogfoodUiEnabled(env) {
   const flag = String((env && env.PARRANDA_DOGFOOD_UI) ?? "").trim().toLowerCase();
+  return flag === "enabled" || flag === "1" || flag === "true";
+}
+
+// NEW-frontend takeover of /anywhere (docs/FRONTEND_MIGRATION_CONTRACT.md).
+// Default OFF: unset env → the request falls through to the existing behavior.
+function isAnywhereV2Enabled(env = process.env) {
+  const flag = String((env && env.PARRANDA_NEW_ANYWHERE) ?? "").trim().toLowerCase();
   return flag === "enabled" || flag === "1" || flag === "true";
 }
 
@@ -1550,13 +1560,20 @@ function buildApp({
   walkingConfig = null,
   weatherProvider = null,
   clock = null,
+  // NEW-frontend /anywhere takeover (contract-gated): the flag decides serving,
+  // the dir is injectable for deterministic tests. Both default to production
+  // values (env flag + the frontend workspace's build output).
+  anywhereV2Enabled = isAnywhereV2Enabled(),
+  anywhereV2Dir = path.join(appRoot, "frontend", "dist"),
 } = {}) {
   const app = express();
 
   app.use(express.json());
   app.get(["/", "/index.html"], (request, response) => {
     response.type("html").send(
-      renderLandingShell({ lang: normalizeLanguage(request.query?.lang) })
+      // anywhereV2Active is defined below in this scope; handlers run at request
+      // time, so the closure reference is safe.
+      renderLandingShell({ lang: normalizeLanguage(request.query?.lang), anywhereV2: anywhereV2Active() })
     );
   });
 
@@ -1586,6 +1603,29 @@ function buildApp({
     response.type("html").send(
       renderAnywhereShell({ place, plannerEntryRoute, lang: normalizeLanguage(request.query?.lang) }),
     );
+  });
+
+  // /anywhere — the NEW frontend's any-city planner (explicit route takeover per
+  // docs/FRONTEND_MIGRATION_CONTRACT.md). Served ONLY when the flag is on AND the
+  // built surface exists; otherwise the request falls through to the catch-all
+  // (today's behavior, byte-stable). Rollback = unset PARRANDA_NEW_ANYWHERE;
+  // /labs/anywhere above remains untouched as the fallback surface.
+  const anywhereV2Html = path.join(anywhereV2Dir, "anywhere", "index.html");
+  const anywhereV2Active = () => anywhereV2Enabled && fs.existsSync(anywhereV2Html);
+  app.get("/anywhere", (request, response, next) => {
+    if (!anywhereV2Active()) {
+      next();
+      return;
+    }
+    response.sendFile(anywhereV2Html);
+  });
+  const anywhereV2Assets = express.static(path.join(anywhereV2Dir, "_astro"), { index: false, dotfiles: "ignore" });
+  app.use("/_astro", (request, response, next) => {
+    if (!anywhereV2Active()) {
+      next();
+      return;
+    }
+    anywhereV2Assets(request, response, next);
   });
 
   app.get([...publicRootFiles].map((assetName) => `/${assetName}`), servePublicRootAsset);

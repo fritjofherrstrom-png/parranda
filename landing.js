@@ -137,14 +137,16 @@
         return;
       }
       if (val.trim()) {
-        // Unknown / freeform place → the any-place alpha surface, which composes a
+        // Unknown / freeform place → the any-place surface, which composes a
         // day from open data (no city pack). The typed text is the freeform place;
-        // never a recognized city key.
+        // never a recognized city key. When the NEW frontend serves /anywhere
+        // (server-declared flag), route there — it auto-plans on arrival.
         var anyParams = new URLSearchParams();
         anyParams.set("place", val.trim());
         anyParams.set("planner", "open");
         anyParams.set("lang", currentLang());
-        window.location.href = "/labs/anywhere?" + anyParams.toString();
+        var anyBase = window.__PARRANDA_ANYWHERE_V2__ === true ? "/anywhere" : "/labs/anywhere";
+        window.location.href = anyBase + "?" + anyParams.toString();
       }
     });
   }
@@ -405,7 +407,8 @@
       anyParams.set("place", val);
       anyParams.set("planner", "open");
       anyParams.set("lang", currentLang());
-      window.location.href = "/labs/anywhere?" + anyParams.toString();
+      var anyBase = window.__PARRANDA_ANYWHERE_V2__ === true ? "/anywhere" : "/labs/anywhere";
+      window.location.href = anyBase + "?" + anyParams.toString();
       return;
     }
     if (!navigator.geolocation) {

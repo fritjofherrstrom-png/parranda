@@ -98,6 +98,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     const q = new URLSearchParams(window.location.search).get("lang");
     if (q === "sv" || q === "en") setLang(q);
   }, []);
+  // The page shell is static — keep the document title on the language contract.
+  useEffect(() => {
+    document.title = lang === "sv" ? "Parranda — vilken stad som helst" : "Parranda — any city";
+  }, [lang]);
   const [place, setPlace] = useState("");
   const [mode, setMode] = useState<"typed" | "near_me">("typed"); // start context
   const [geoHint, setGeoHint] = useState<string | null>(null);
@@ -127,7 +131,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
   type Anchor = { place?: string; coords?: { lat: number; lng: number } };
 
-  async function execute(anchor: Anchor, { silent = false }: { silent?: boolean } = {}) {
+  async function execute(anchor: Anchor, { silent = false, langOverride }: { silent?: boolean; langOverride?: Lang } = {}) {
     if (!silent) {
       setPhase("loading");
       setClassification(null);
@@ -142,7 +146,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         preferences: selected,
         walkingKmTarget: preset.km,
       });
-      const response = await fetch(`/api/route-recommendations?lang=${lang}`, {
+      const response = await fetch(`/api/route-recommendations?lang=${langOverride ?? lang}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -174,6 +178,23 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
   useEffect(() => () => {
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+  }, []);
+
+  // Arriving with ?place= (e.g. from the landing search) composes the day
+  // IMMEDIATELY — the user typed a city and expects a day, not a second form.
+  const autoPlannedRef = useRef(false);
+  useEffect(() => {
+    if (autoPlannedRef.current) return;
+    autoPlannedRef.current = true;
+    const params = new URLSearchParams(window.location.search);
+    const trimmed = (params.get("place") || "").trim();
+    if (!trimmed) return;
+    setPlace(trimmed);
+    // The lang state is still the initial value on mount — read the URL directly
+    // so the auto-plan request carries the user's actual language.
+    const urlLang = params.get("lang");
+    execute({ place: trimmed }, { langOverride: urlLang === "sv" || urlLang === "en" ? urlLang : undefined }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // "Near me now": the user's real position becomes the trusted anchor (explicit
@@ -282,6 +303,18 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+      <header className="flex flex-col gap-2">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-parranda-glow">
+          {t("Any-city planner", "Any-city planner")}
+        </p>
+        <h1 className="font-display text-4xl font-bold text-parranda-ink">{t("Nästa stopp?", "Next stop?")}</h1>
+        <p className="max-w-prose text-parranda-ink/75">
+          {t(
+            "Skriv vilken stad som helst. Parranda bygger en dag med rätt rytm, rätt kvarter och rätt timing — extra kurerat i Barcelona och Rom.",
+            "Type any city. Parranda builds a day with the right rhythm, neighborhoods and timing — extra curated in Barcelona and Rome.",
+          )}
+        </p>
+      </header>
       <form onSubmit={plan} className="flex flex-col gap-3">
         <label className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">
           {t("Skriv en stad — vilken som helst", "Type a city — any city")}
