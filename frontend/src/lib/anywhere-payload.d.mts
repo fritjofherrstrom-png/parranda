@@ -19,12 +19,15 @@ export declare function isoDateFromOffset(offsetDays?: number, from?: Date): str
 
 export declare function buildAnywherePayload(options?: {
   place?: string;
+  coords?: { lat: number; lng: number } | null;
   dates?: string[];
   preferences?: string[];
   walkingKmTarget?: number;
 }): {
-  place: string | undefined;
-  place_query: string | undefined;
+  place?: string;
+  place_query?: string;
+  lat?: number;
+  lng?: number;
   dates: string[] | undefined;
   home_base: { type: string; label: string };
   start: { type: string; label: string };

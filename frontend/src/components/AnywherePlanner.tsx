@@ -99,6 +99,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     if (q === "sv" || q === "en") setLang(q);
   }, []);
   const [place, setPlace] = useState("");
+  const [mode, setMode] = useState<"typed" | "near_me">("typed"); // start context
+  const [geoHint, setGeoHint] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>(["food", "culture", "views"]);
   const [dayOffset, setDayOffset] = useState<0 | 1>(0); // today / tomorrow
   const [walkKey, setWalkKey] = useState("balanced");
@@ -123,7 +125,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     return () => timers.forEach(clearTimeout);
   }, [phase]);
 
-  async function execute(trimmed: string, { silent = false }: { silent?: boolean } = {}) {
+  type Anchor = { place?: string; coords?: { lat: number; lng: number } };
+
+  async function execute(anchor: Anchor, { silent = false }: { silent?: boolean } = {}) {
     if (!silent) {
       setPhase("loading");
       setClassification(null);
@@ -132,7 +136,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     try {
       const preset = WALK_PRESETS.find((p: { key: string }) => p.key === walkKey) ?? WALK_PRESETS[1];
       const payload = buildAnywherePayload({
-        place: trimmed,
+        place: anchor.place,
+        coords: anchor.coords ?? null,
         dates: [isoDateFromOffset(dayOffset)],
         preferences: selected,
         walkingKmTarget: preset.km,
@@ -144,7 +149,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       });
       const body = await response.json();
       const decision = anywhereDecision();
-      const cls = decision.classifyAnywhereResult(body, { place: trimmed });
+      // With a coords anchor there is no typed text — the label falls back to a
+      // neutral "your position" (the engine's resolved label wins when present).
+      const fallbackLabel = anchor.place ?? t("din position", "your position");
+      const cls = decision.classifyAnywhereResult(body, { place: fallbackLabel });
       const safe = decision.safeResponseFor(body, cls);
       setClassification(cls);
       setSafeResponse(safe);
@@ -156,7 +164,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       if (!silent && safe?.live_events?.pending) {
         if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
         pollTimerRef.current = setTimeout(() => {
-          execute(trimmed, { silent: true }).catch(() => {});
+          execute(anchor, { silent: true }).catch(() => {});
         }, 9000);
       }
     } catch {
@@ -168,12 +176,45 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
   }, []);
 
+  // "Near me now": the user's real position becomes the trusted anchor (explicit
+  // coords win in the agnostic intake). Honest failure — a denied/failed
+  // geolocation shows a hint and never fakes a position.
+  function currentPosition(): Promise<{ lat: number; lng: number }> {
+    return new Promise((resolve, reject) => {
+      if (!("geolocation" in navigator)) {
+        reject(new Error("unsupported"));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => reject(new Error("denied")),
+        { timeout: 10000 },
+      );
+    });
+  }
+
   async function plan(event?: { preventDefault?: () => void }) {
     event?.preventDefault?.();
+    setGeoHint(null);
+    if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    if (mode === "near_me") {
+      try {
+        const coords = await currentPosition();
+        await execute({ coords });
+      } catch {
+        setGeoHint(
+          t(
+            "Platsdelning nekades eller misslyckades — skriv en stad i stället.",
+            "Location sharing was denied or failed — type a city instead.",
+          ),
+        );
+        setMode("typed");
+      }
+      return;
+    }
     const trimmed = place.trim();
     if (!trimmed) return;
-    if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
-    await execute(trimmed);
+    await execute({ place: trimmed });
   }
 
   const structure: PlaceStructure | null = safeResponse?.place_structure ?? null;
@@ -245,21 +286,48 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         <label className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">
           {t("Skriv en stad — vilken som helst", "Type a city — any city")}
         </label>
+        <div className="flex gap-1.5" role="group" aria-label={t("Startpunkt", "Starting point")}>
+          {(["typed", "near_me"] as const).map((m) => (
+            <button
+              type="button"
+              key={m}
+              onClick={() => {
+                setMode(m);
+                setGeoHint(null);
+              }}
+              className={
+                "rounded-full border px-3 py-1 text-sm transition " +
+                (mode === m
+                  ? "border-parranda-accent bg-parranda-accent/15 font-semibold text-parranda-ink"
+                  : "border-parranda-ink/15 bg-parranda-ink/10 text-parranda-ink/70")
+              }
+            >
+              {m === "typed" ? t("Skriv stad", "Type a city") : t("Nära mig nu", "Near me now")}
+            </button>
+          ))}
+        </div>
         <div className="flex gap-2">
-          <input
-            value={place}
-            onChange={(e) => setPlace(e.target.value)}
-            placeholder={t("t.ex. Lyon, Tbilisi, Kyoto …", "e.g. Lyon, Tbilisi, Kyoto …")}
-            className="flex-1 rounded-parranda border border-parranda-ink/15 bg-parranda-ink/10 px-4 py-3 text-parranda-ink shadow-sm outline-none focus:border-parranda-accent"
-          />
+          {mode === "typed" ? (
+            <input
+              value={place}
+              onChange={(e) => setPlace(e.target.value)}
+              placeholder={t("t.ex. Lyon, Tbilisi, Kyoto …", "e.g. Lyon, Tbilisi, Kyoto …")}
+              className="flex-1 rounded-parranda border border-parranda-ink/15 bg-parranda-ink/10 px-4 py-3 text-parranda-ink shadow-sm outline-none focus:border-parranda-accent"
+            />
+          ) : (
+            <p className="flex-1 self-center text-sm text-parranda-ink/70">
+              {t("Din position blir dagens startpunkt.", "Your position becomes the day's starting point.")}
+            </p>
+          )}
           <button
             type="submit"
-            disabled={phase === "loading" || !place.trim()}
+            disabled={phase === "loading" || (mode === "typed" && !place.trim())}
             className="rounded-parranda bg-parranda-accent px-5 py-3 font-semibold text-white shadow-sm disabled:opacity-40"
           >
             {phase === "loading" ? t("Komponerar…", "Composing…") : t("Bygg min dag", "Build my day")}
           </button>
         </div>
+        {geoHint && <p className="text-sm text-parranda-ink/70">{geoHint}</p>}
         <div className="flex flex-wrap gap-2">
           {ANYWHERE_PREFERENCES.map((pref: { key: string; sv: string; en: string }) => {
             const active = selected.includes(pref.key);

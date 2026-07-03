@@ -32,11 +32,18 @@ export const WALK_PRESETS = [
   { key: "long", km: 9, sv: "Lång · ~9 km", en: "Long · ~9 km" },
 ];
 
-export function buildAnywherePayload({ place, dates, preferences = [], walkingKmTarget = 6 } = {}) {
+export function buildAnywherePayload({ place, coords, dates, preferences = [], walkingKmTarget = 6 } = {}) {
   const autoPoint = { type: "auto", label: "Parranda väljer" };
+  // Two exclusive anchor modes, mirroring the engine's intake precedence:
+  //  - coords ("near me now"): top-level lat/lng — explicit coords WIN in the
+  //    agnostic intake (parseBlitzCoordinates), and no place text is sent;
+  //  - place (typed city): freeform text only, never a recognized city key.
+  const anchor =
+    coords && Number.isFinite(coords.lat) && Number.isFinite(coords.lng)
+      ? { lat: coords.lat, lng: coords.lng }
+      : { place, place_query: place };
   return {
-    place,
-    place_query: place,
+    ...anchor,
     dates,
     home_base: autoPoint,
     start: autoPoint,

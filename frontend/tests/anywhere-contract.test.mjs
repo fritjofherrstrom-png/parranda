@@ -36,6 +36,30 @@ test("planner depth: walking presets map to walking_km_target; tomorrow is a rea
   assert.equal(isoDateFromOffset(1, new Date("2026-07-31T12:00:00Z")), "2026-08-01");
 });
 
+test("start context: a coords anchor ('near me now') sends top-level lat/lng and NO place text", () => {
+  const payload = buildAnywherePayload({
+    coords: { lat: 59.437, lng: 24.7536 },
+    dates: ["2026-07-03"],
+    preferences: ["food"],
+  });
+  // Explicit coords WIN in the agnostic intake (parseBlitzCoordinates reads
+  // body.lat/lng) — the anchor is the user's real position.
+  assert.equal(payload.lat, 59.437);
+  assert.equal(payload.lng, 24.7536);
+  assert.ok(!("place" in payload) && !("place_query" in payload), "no place text in coords mode");
+  assert.ok(!("city" in payload), "never a recognized city key");
+  // The three agnostic flags still engage the engine path.
+  assert.equal(payload.experimental_agnostic_route_output, 1);
+  assert.equal(payload.include_external_candidates, 1);
+  assert.equal(payload.agnostic_engine_compose, 1);
+});
+
+test("start context: a typed place sends NO coords (the modes are exclusive)", () => {
+  const payload = buildAnywherePayload({ place: "Lyon", dates: ["2026-07-03"] });
+  assert.ok(!("lat" in payload) && !("lng" in payload), "no coords in typed mode");
+  assert.equal(payload.place, "Lyon");
+});
+
 test("preference chips map to the engine's canonical intent axes", () => {
   const keys = ANYWHERE_PREFERENCES.map((p) => p.key);
   for (const key of ["food", "culture", "views", "fika", "nightlife", "green", "second_hand"]) {
