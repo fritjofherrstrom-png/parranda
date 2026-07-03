@@ -2,7 +2,10 @@ services:
   - type: web
     name: parranda
     runtime: node
-    buildCommand: npm install
+    # Also builds the NEW frontend (frontend/dist) so the /anywhere takeover can
+    # be flipped on with just PARRANDA_NEW_ANYWHERE=enabled — the flag decides
+    # serving, the build is always present. (~1 min extra per deploy.)
+    buildCommand: npm install && npm --prefix frontend install && npm --prefix frontend run build
     startCommand: npm start
     healthCheckPath: /api/health
     autoDeployTrigger: commit
@@ -61,3 +64,10 @@ services:
       # and the route/districts still compose. Off by default; enabled here.
       - key: PARRANDA_AGNOSTIC_EVENTS
         value: enabled
+      # NEW-frontend /anywhere takeover (docs/FRONTEND_MIGRATION_CONTRACT.md).
+      # Deliberately NOT set: the build ships with every deploy (see buildCommand)
+      # but serving stays on today's surface until the owner explicitly flips
+      # PARRANDA_NEW_ANYWHERE=enabled here or in the dashboard. Rollback = unset;
+      # /labs/anywhere always remains as the fallback surface.
+      # - key: PARRANDA_NEW_ANYWHERE
+      #   value: enabled

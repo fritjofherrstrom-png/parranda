@@ -1,45 +1,27 @@
 ---
-// The first React-island surface of the new frontend: the any-city planner.
-// Parallel, non-production (see docs/FRONTEND_MIGRATION_CONTRACT.md — Approved
-// additions 2026-07-02): built against the EXISTING Express API + the SHARED
-// honesty module. English default; Swedish via ?lang=sv (same language contract
-// as production).
+// The any-city planner — the new frontend's first production-capable surface.
+// The shell is intentionally BARE: all copy lives in the island so the language
+// contract (EN default, ?lang=sv explicit) is honored fully client-side (static
+// output cannot read query params at request time). Served in production by the
+// Express app behind PARRANDA_NEW_ANYWHERE (see docs/FRONTEND_MIGRATION_CONTRACT.md).
 import "../styles/tokens.css";
 import "../styles/tailwind.css";
 import AnywherePlanner from "../components/AnywherePlanner";
-
-const lang = Astro.url.searchParams.get("lang") === "sv" ? "sv" : "en";
-const copy =
-  lang === "sv"
-    ? {
-        title: "Parranda — vilken stad som helst",
-        eyebrow: "Any-city planner · ny frontend",
-        heading: "Nästa stopp?",
-        sub: "Skriv vilken stad som helst. Parranda bygger en dag med rätt rytm, rätt kvarter och rätt timing — extra kurerat i Barcelona och Rom.",
-      }
-    : {
-        title: "Parranda — any city",
-        eyebrow: "Any-city planner · new frontend",
-        heading: "Next stop?",
-        sub: "Type any city. Parranda builds a day with the right rhythm, neighborhoods and timing — extra curated in Barcelona and Rome.",
-      };
 ---
 
-<html lang={lang}>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{copy.title}</title>
-    <meta name="description" content={copy.sub} />
+    <title>Parranda — any city</title>
+    <meta
+      name="description"
+      content="Type any city. Parranda builds a day with the right rhythm, neighborhoods and timing — extra curated in Barcelona and Rome."
+    />
   </head>
   <body>
     <main class="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-16">
-      <header class="flex flex-col gap-2">
-        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-parranda-glow">{copy.eyebrow}</p>
-        <h1 class="font-display text-4xl font-bold text-parranda-ink">{copy.heading}</h1>
-        <p class="max-w-prose text-parranda-ink/75">{copy.sub}</p>
-      </header>
-      <AnywherePlanner client:load lang={lang} />
+      <AnywherePlanner client:load />
     </main>
   </body>
 </html>
