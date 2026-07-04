@@ -17,7 +17,32 @@ import {
   isoDateFromOffset,
 } from "../lib/anywhere-payload.mjs";
 import { mapsPlaceUrl, mapsWalkingRouteUrl, dayStops } from "../lib/maps-links.mjs";
+import {
+  buildSavedEntry,
+  upsertSaved,
+  removeSaved,
+  LAST_KEY,
+  SAVED_KEY,
+  type SavedEntry,
+} from "../lib/anywhere-storage.mjs";
 import { anywhereDecision, type AnywhereClassification } from "../lib/anywhere-decision";
+
+function readLS<T>(key: string, fallback: T): T {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeLS(key: string, value: unknown): void {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* private mode / quota — retention is best-effort, never fatal */
+  }
+}
 
 type Lang = "sv" | "en";
 
@@ -114,9 +139,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [classification, setClassification] = useState<AnywhereClassification | null>(null);
   const [safeResponse, setSafeResponse] = useState<any>(null);
   const [mapDrawn, setMapDrawn] = useState(false);
+  const [savedDays, setSavedDays] = useState<SavedEntry[]>([]);
+  const [restoredAt, setRestoredAt] = useState<string | null>(null); // set when showing a SNAPSHOT
   const mapRef = useRef<HTMLDivElement | null>(null);
   const leafletRef = useRef<{ map: any; layer: any } | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastEntryRef = useRef<SavedEntry | null>(null); // the latest composed day, for "save"
 
   const t = (sv: string, en: string) => (lang === "en" ? en : sv);
 
@@ -167,6 +195,23 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setClassification(cls);
       setSafeResponse(safe);
       setPhase("done");
+      // Retention: remember this composed day so a reload doesn't lose it, and
+      // so the user can save it. A fresh compose is LIVE, so clear the snapshot flag.
+      if (!silent) {
+        const prefs = preferencesOverride ?? selected;
+        const entry = buildSavedEntry({
+          place: anchor.place,
+          label: anchor.place || t("Min position", "My position"),
+          dateIso: isoDateFromOffset(dayOffset),
+          savedAt: new Date().toISOString(),
+          safeResponse: safe,
+          classification: cls,
+          inputs: { place: anchor.place ?? null, mode, dayOffset, walkKey, selected: prefs },
+        });
+        lastEntryRef.current = entry;
+        writeLS(LAST_KEY, entry);
+        setRestoredAt(null);
+      }
       // The live-events feed is background-warmed server-side: a cold anchor
       // returns an honest `pending`. Re-ask ONCE after the warm window instead of
       // telling the user to reload — everything else comes from cache, so the
@@ -186,22 +231,65 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
   }, []);
 
+  // Show a stored day WITHOUT re-fetching. A restored day is a snapshot (events /
+  // "today" may be stale), so restoredAt is set and the UI labels it + offers rebuild.
+  function restoreEntry(entry: SavedEntry) {
+    const i = entry.inputs;
+    if (i) {
+      if (typeof i.place === "string") setPlace(i.place);
+      if (i.mode === "typed" || i.mode === "near_me") setMode(i.mode);
+      if (i.dayOffset === 0 || i.dayOffset === 1) setDayOffset(i.dayOffset);
+      if (typeof i.walkKey === "string") setWalkKey(i.walkKey);
+      if (Array.isArray(i.selected)) setSelected(i.selected);
+    }
+    lastEntryRef.current = entry;
+    setClassification(entry.classification);
+    setSafeResponse(entry.safeResponse);
+    setMapDrawn(false);
+    setPhase("done");
+    setRestoredAt(entry.savedAt);
+  }
+
   // Arriving with ?place= (e.g. from the landing search) composes the day
   // IMMEDIATELY — the user typed a city and expects a day, not a second form.
+  // Otherwise, restore the last day so a reload doesn't lose it.
   const autoPlannedRef = useRef(false);
   useEffect(() => {
     if (autoPlannedRef.current) return;
     autoPlannedRef.current = true;
+    setSavedDays(readLS<SavedEntry[]>(SAVED_KEY, []));
     const params = new URLSearchParams(window.location.search);
     const trimmed = (params.get("place") || "").trim();
-    if (!trimmed) return;
-    setPlace(trimmed);
-    // The lang state is still the initial value on mount — read the URL directly
-    // so the auto-plan request carries the user's actual language.
-    const urlLang = params.get("lang");
-    execute({ place: trimmed }, { langOverride: urlLang === "sv" || urlLang === "en" ? urlLang : undefined }).catch(() => {});
+    if (trimmed) {
+      setPlace(trimmed);
+      // The lang state is still the initial value on mount — read the URL directly
+      // so the auto-plan request carries the user's actual language.
+      const urlLang = params.get("lang");
+      execute({ place: trimmed }, { langOverride: urlLang === "sv" || urlLang === "en" ? urlLang : undefined }).catch(() => {});
+      return;
+    }
+    const last = readLS<SavedEntry | null>(LAST_KEY, null);
+    if (last && last.safeResponse && last.classification) restoreEntry(last);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function saveDay() {
+    const entry = lastEntryRef.current;
+    if (!entry) return;
+    const stamped = { ...entry, savedAt: new Date().toISOString() };
+    const next = upsertSaved(savedDays, stamped);
+    setSavedDays(next);
+    writeLS(SAVED_KEY, next);
+    setRestoredAt(stamped.savedAt);
+  }
+
+  function removeSavedDay(id: string) {
+    const next = removeSaved(savedDays, id);
+    setSavedDays(next);
+    writeLS(SAVED_KEY, next);
+  }
+
+  const isSaved = Boolean(lastEntryRef.current && savedDays.some((e) => e.id === lastEntryRef.current!.id));
 
   // "Near me now": the user's real position becomes the trusted anchor (explicit
   // coords win in the agnostic intake). Honest failure — a denied/failed
@@ -475,6 +563,34 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         )}
       </form>
 
+      {savedDays.length > 0 && (
+        <section className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">{t("Sparade dagar", "Saved days")}</p>
+          <ul className="mt-2 flex flex-col gap-1.5">
+            {savedDays.map((entry) => (
+              <li key={entry.id} className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => restoreEntry(entry)}
+                  className="flex-1 text-left text-sm text-parranda-ink hover:text-parranda-accent"
+                >
+                  <span className="font-semibold">{entry.label}</span>
+                  {entry.dateIso && <span className="text-parranda-ink/60"> · {entry.dateIso}</span>}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeSavedDay(entry.id)}
+                  aria-label={t("Ta bort", "Remove")}
+                  className="shrink-0 rounded-full px-2 text-parranda-ink/40 hover:text-parranda-accent"
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {phase === "error" && (
         <p className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4 text-sm text-parranda-ink/80">
           {t("Motorn svarar inte just nu. Försök igen om en stund.", "The engine isn't answering right now. Try again shortly.")}
@@ -492,21 +608,39 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
       {showStructure && structure && (
         <section className="flex flex-col gap-4 rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">
-              {t("Din dag genom staden", "Your day across the city")}
-              {typeof structure.area_count === "number" ? ` — ${structure.area_count} ${t("distrikt", "districts")}` : ""}
-            </p>
-            {structure.provenance === "agnostic_anchor" && (
-              <p className="mt-1 text-sm font-semibold text-parranda-accent">
-                {t("Byggd live från kartan — inget city pack", "Built live from the map — no city pack")}
+          <div className="flex items-start gap-3">
+            <div className="flex-1">
+              <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">
+                {t("Din dag genom staden", "Your day across the city")}
+                {typeof structure.area_count === "number" ? ` — ${structure.area_count} ${t("distrikt", "districts")}` : ""}
               </p>
-            )}
-            {classification?.status === "structure_only" && (
-              <p className="mt-1 text-sm text-parranda-ink/70">
-                {t("Struktur hittad — men ingen färdig rutt ännu.", "Structure found — but no finished route yet.")}
-              </p>
-            )}
+              {structure.provenance === "agnostic_anchor" && (
+                <p className="mt-1 text-sm font-semibold text-parranda-accent">
+                  {t("Byggd live från kartan — inget city pack", "Built live from the map — no city pack")}
+                </p>
+              )}
+              {classification?.status === "structure_only" && (
+                <p className="mt-1 text-sm text-parranda-ink/70">
+                  {t("Struktur hittad — men ingen färdig rutt ännu.", "Structure found — but no finished route yet.")}
+                </p>
+              )}
+              {restoredAt && (
+                <p className="mt-1 text-xs text-parranda-ink/60">
+                  {t("Sparad dag", "Saved day")} · {new Date(restoredAt).toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE")} —{" "}
+                  <button type="button" onClick={() => resolveAndRun()} className="underline underline-offset-2 hover:text-parranda-accent">
+                    {t("bygg om för färska events", "rebuild for fresh events")}
+                  </button>
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={saveDay}
+              disabled={isSaved}
+              className="shrink-0 rounded-full border border-parranda-accent/40 px-3 py-1 text-sm font-semibold text-parranda-accent disabled:opacity-50"
+            >
+              {isSaved ? t("★ Sparad", "★ Saved") : t("☆ Spara dagen", "☆ Save day")}
+            </button>
           </div>
 
           <ol className="flex flex-col gap-3">
