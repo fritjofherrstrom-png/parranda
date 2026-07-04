@@ -16,6 +16,7 @@ import {
   WALK_PRESETS,
   isoDateFromOffset,
 } from "../lib/anywhere-payload.mjs";
+import { mapsPlaceUrl, mapsWalkingRouteUrl, dayStops } from "../lib/maps-links.mjs";
 import { anywhereDecision, type AnywhereClassification } from "../lib/anywhere-decision";
 
 type Lang = "sv" | "en";
@@ -112,6 +113,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [loadingStage, setLoadingStage] = useState(0);
   const [classification, setClassification] = useState<AnywhereClassification | null>(null);
   const [safeResponse, setSafeResponse] = useState<any>(null);
+  const [mapDrawn, setMapDrawn] = useState(false);
   const mapRef = useRef<HTMLDivElement | null>(null);
   const leafletRef = useRef<{ map: any; layer: any } | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -131,11 +133,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
   type Anchor = { place?: string; coords?: { lat: number; lng: number } };
 
-  async function execute(anchor: Anchor, { silent = false, langOverride }: { silent?: boolean; langOverride?: Lang } = {}) {
+  async function execute(
+    anchor: Anchor,
+    { silent = false, langOverride, preferencesOverride }: { silent?: boolean; langOverride?: Lang; preferencesOverride?: string[] } = {},
+  ) {
     if (!silent) {
       setPhase("loading");
       setClassification(null);
       setSafeResponse(null);
+      setMapDrawn(false);
     }
     try {
       const preset = WALK_PRESETS.find((p: { key: string }) => p.key === walkKey) ?? WALK_PRESETS[1];
@@ -143,7 +149,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         place: anchor.place,
         coords: anchor.coords ?? null,
         dates: [isoDateFromOffset(dayOffset)],
-        preferences: selected,
+        preferences: preferencesOverride ?? selected,
         walkingKmTarget: preset.km,
       });
       const response = await fetch(`/api/route-recommendations?lang=${langOverride ?? lang}`, {
@@ -214,14 +220,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     });
   }
 
-  async function plan(event?: { preventDefault?: () => void }) {
-    event?.preventDefault?.();
+  // Resolve the anchor (typed place or the user's real position) and compose.
+  // Shared by "Build my day" and "Blitz" (which only overrides the preferences).
+  async function resolveAndRun(opts: { preferencesOverride?: string[] } = {}) {
     setGeoHint(null);
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     if (mode === "near_me") {
       try {
         const coords = await currentPosition();
-        await execute({ coords });
+        await execute({ coords }, opts);
       } catch {
         setGeoHint(
           t(
@@ -235,7 +242,23 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     }
     const trimmed = place.trim();
     if (!trimmed) return;
-    await execute({ place: trimmed });
+    await execute({ place: trimmed }, opts);
+  }
+
+  async function plan(event?: { preventDefault?: () => void }) {
+    event?.preventDefault?.();
+    await resolveAndRun();
+  }
+
+  // Blitz — a quick, unplanned start: pick 2–4 preference axes at random and
+  // compose immediately (still an honest, source-backed day; only the choosing
+  // is done for you). Works from a typed city or the current position.
+  function blitz() {
+    const keys = ANYWHERE_PREFERENCES.map((p: { key: string }) => p.key);
+    const shuffled = keys.slice().sort(() => Math.random() - 0.5);
+    const picked = shuffled.slice(0, 2 + Math.floor(Math.random() * 3));
+    setSelected(picked);
+    resolveAndRun({ preferencesOverride: picked });
   }
 
   const structure: PlaceStructure | null = safeResponse?.place_structure ?? null;
@@ -246,6 +269,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     if (!Array.isArray(stops)) return [];
     return stops.map((s: any) => String(s?.name || s?.label || "").trim()).filter(Boolean);
   }, [safeResponse]);
+  // A single "open the whole day in Google Maps" walking route across every
+  // coord-bearing stop, in visit order (null when there aren't enough).
+  const routeUrl = useMemo(() => mapsWalkingRouteUrl(dayStops(day)), [day]);
 
   // Draw the day on the map (numbered districts + dashed arc + stop dots) —
   // the same spatial story as the production Map tab.
@@ -255,10 +281,21 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       const areas = (day?.areas ?? []).filter(
         (a) => a?.center && Number.isFinite(a.center!.lat) && Number.isFinite(a.center!.lng),
       );
-      if (!mapRef.current || !areas.length) return;
+      if (!mapRef.current || !areas.length) {
+        setMapDrawn(true); // nothing to draw — clear the placeholder
+        return;
+      }
       const L = (await import("leaflet")).default;
       if (cancelled || !mapRef.current) return;
 
+      // The map div unmounts/remounts between composes (classification resets to
+      // null while loading), so a reused Leaflet instance can be bound to a
+      // now-detached node. If the live map isn't attached to the CURRENT div,
+      // tear it down and recreate — otherwise a second search shows a blank map.
+      if (leafletRef.current && leafletRef.current.map.getContainer() !== mapRef.current) {
+        leafletRef.current.map.remove();
+        leafletRef.current = null;
+      }
       if (!leafletRef.current) {
         const map = L.map(mapRef.current, { zoomControl: true, scrollWheelZoom: false }).setView([30, 10], 2);
         L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -291,6 +328,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       });
       map.invalidateSize();
       if (bounds.length) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 15 });
+      setMapDrawn(true);
     }
     draw();
     return () => {
@@ -358,6 +396,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             className="rounded-parranda bg-parranda-accent px-5 py-3 font-semibold text-white shadow-sm disabled:opacity-40"
           >
             {phase === "loading" ? t("Komponerar…", "Composing…") : t("Bygg min dag", "Build my day")}
+          </button>
+          <button
+            type="button"
+            onClick={blitz}
+            disabled={phase === "loading" || (mode === "typed" && !place.trim())}
+            title={t("Överraska mig — slumpade preferenser", "Surprise me — random preferences")}
+            className="rounded-parranda border border-parranda-accent/40 px-4 py-3 font-semibold text-parranda-accent shadow-sm disabled:opacity-40"
+          >
+            {t("⚡ Blitz", "⚡ Blitz")}
           </button>
         </div>
         {geoHint && <p className="text-sm text-parranda-ink/70">{geoHint}</p>}
@@ -485,9 +532,34 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                     ))}
                   </div>
                 )}
-                {(area.stop_names ?? []).length > 0 && (
+                {Array.isArray(area.stops) && area.stops.length > 0 ? (
+                  <p className="mt-2 text-sm text-parranda-ink">
+                    {area.stops.map((stop, si) => {
+                      const url = mapsPlaceUrl(stop);
+                      const name = (stop.name || area.stop_names?.[si] || "").trim();
+                      if (!name) return null;
+                      return (
+                        <span key={stop.id ?? si}>
+                          {si > 0 && " · "}
+                          {url ? (
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent"
+                            >
+                              {name}
+                            </a>
+                          ) : (
+                            name
+                          )}
+                        </span>
+                      );
+                    })}
+                  </p>
+                ) : (area.stop_names ?? []).length > 0 ? (
                   <p className="mt-2 text-sm text-parranda-ink">{(area.stop_names ?? []).join(" · ")}</p>
-                )}
+                ) : null}
                 {index < (day?.areas?.length ?? 0) - 1 && Number.isFinite(day?.legs?.[index]?.distance_km as number) && (
                   <p className="mt-2 text-xs text-parranda-ink/60">≈ {day!.legs![index]!.distance_km} km {t("till nästa distrikt", "to the next district")}</p>
                 )}
@@ -509,7 +581,26 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             </p>
           )}
 
-          <div ref={mapRef} className="h-80 w-full overflow-hidden rounded-parranda border border-parranda-ink/10" />
+          {routeUrl && (
+            <a
+              href={routeUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 self-start rounded-parranda border border-parranda-accent/40 px-4 py-2 text-sm font-semibold text-parranda-accent hover:bg-parranda-accent/10"
+            >
+              {t("Öppna rutten i Google Maps", "Open the route in Google Maps")}
+              <span aria-hidden="true">↗</span>
+            </a>
+          )}
+
+          <div className="relative h-80 w-full overflow-hidden rounded-parranda border border-parranda-ink/10">
+            <div ref={mapRef} className="h-full w-full" />
+            {!mapDrawn && (
+              <div className="absolute inset-0 flex items-center justify-center bg-parranda-ink/10 text-sm text-parranda-ink/60">
+                {t("Ritar kartan …", "Drawing the map …")}
+              </div>
+            )}
+          </div>
         </section>
       )}
 
