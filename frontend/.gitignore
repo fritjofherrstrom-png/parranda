@@ -1,3 +1,6 @@
-dist/
+# NOTE: dist/ is intentionally TRACKED (committed) — the deploy host serves the
+# prebuilt any-city frontend from frontend/dist and does not reliably run the
+# frontend build step. Rebuild + commit dist when the frontend source changes:
+#   npm --prefix frontend run build && git add frontend/dist
 .astro/
 node_modules/
