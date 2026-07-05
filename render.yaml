@@ -9,18 +9,12 @@ services:
     startCommand: npm start
     healthCheckPath: /api/health
     autoDeployTrigger: commit
-    # Persistent source cache. Without this the Overpass/Wikidata cache lives on
-    # ephemeral /tmp, so every new instance / redeploy re-pays the slow cold load
-    # for each place — the only thing between "works" and "a stranger types any
-    # city in prod and reliably gets a rich day". A disk makes a place's cold load
-    # a ONE-TIME cost that survives redeploys. Trade-off (honest): a Render disk
-    # pins the service to a single instance (no horizontal autoscaling; deploys
-    # become recreate, not zero-downtime). Fine for a low-volume alpha. 1 GB is
-    # ample for JSON cache blobs.
-    disk:
-      name: parranda-cache
-      mountPath: /var/data
-      sizeGB: 1
+    # NOTE: a persistent disk (durable Overpass/Wikidata cache across redeploys)
+    # is DELIBERATELY not declared here — Render disks require a paid instance, and
+    # a disk block blocks a clean Blueprint sync on the free tier. The cache lives
+    # on ephemeral /tmp instead (per-instance, rebuilt on cold start). Re-add a
+    # `disk:` + point PARRANDA_CACHE_DIR at its mountPath when moving to a paid
+    # instance — see AGNOSTIC_ENGINE_NORTH_STAR.md for the durable-cache rationale.
     envVars:
       # Turn ON live source acquisition in production. These were unset, so the
       # deployed app ran on curated catalog + city-owned source packs ONLY —
@@ -34,12 +28,11 @@ services:
       # carries its own UA + 1 req/s gate + in-memory cache; fail-closed.
       - key: PARRANDA_PLACE_RESOLVER
         value: enabled
-      # Source-cache directory — pointed at the mounted persistent disk above so
-      # the cache survives redeploys (a place's slow cold load is paid once, then
-      # reused). This is the durable-cache half of "no public flip without
-      # persistent caching" (see AGNOSTIC_ENGINE_NORTH_STAR.md).
+      # Source-cache directory — ephemeral /tmp (writable on Render, per-instance,
+      # survives across requests within an instance). Point this at a mounted
+      # disk's path once on a paid instance for cross-redeploy durability.
       - key: PARRANDA_CACHE_DIR
-        value: /var/data/parranda-source-cache
+        value: /tmp/parranda-source-cache
       # Second open source FAMILY: Wikidata notable places (CC0). Independent of
       # OSM, so a place both sources know merges (entity-resolution) into one
       # candidate with two families → real cross-source consensus past the
@@ -64,10 +57,8 @@ services:
       # and the route/districts still compose. Off by default; enabled here.
       - key: PARRANDA_AGNOSTIC_EVENTS
         value: enabled
-      # NEW-frontend /anywhere takeover (docs/FRONTEND_MIGRATION_CONTRACT.md).
-      # Deliberately NOT set: the build ships with every deploy (see buildCommand)
-      # but serving stays on today's surface until the owner explicitly flips
-      # PARRANDA_NEW_ANYWHERE=enabled here or in the dashboard. Rollback = unset;
-      # /labs/anywhere always remains as the fallback surface.
-      # - key: PARRANDA_NEW_ANYWHERE
-      #   value: enabled
+      # NEW-frontend /anywhere takeover (docs/FRONTEND_MIGRATION_CONTRACT.md). The
+      # prebuilt surface is committed at frontend/dist and served when this is
+      # enabled. Rollback = unset; /labs/anywhere always remains as the fallback.
+      - key: PARRANDA_NEW_ANYWHERE
+        value: enabled
