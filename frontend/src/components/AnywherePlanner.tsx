@@ -17,6 +17,7 @@ import {
   isoDateFromOffset,
 } from "../lib/anywhere-payload.mjs";
 import { mapsPlaceUrl, mapsWalkingRouteUrl, dayStops } from "../lib/maps-links.mjs";
+import { buildShareUrl, decodeShareParams } from "../lib/anywhere-share.mjs";
 import {
   buildSavedEntry,
   upsertSaved,
@@ -141,6 +142,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [mapDrawn, setMapDrawn] = useState(false);
   const [savedDays, setSavedDays] = useState<SavedEntry[]>([]);
   const [restoredAt, setRestoredAt] = useState<string | null>(null); // set when showing a SNAPSHOT
+  const [shareCopied, setShareCopied] = useState(false);
   const mapRef = useRef<HTMLDivElement | null>(null);
   const leafletRef = useRef<{ map: any; layer: any } | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -163,7 +165,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
   async function execute(
     anchor: Anchor,
-    { silent = false, langOverride, preferencesOverride }: { silent?: boolean; langOverride?: Lang; preferencesOverride?: string[] } = {},
+    {
+      silent = false,
+      langOverride,
+      preferencesOverride,
+      dayOffsetOverride,
+      walkKeyOverride,
+    }: { silent?: boolean; langOverride?: Lang; preferencesOverride?: string[]; dayOffsetOverride?: 0 | 1; walkKeyOverride?: string } = {},
   ) {
     if (!silent) {
       setPhase("loading");
@@ -172,11 +180,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setMapDrawn(false);
     }
     try {
-      const preset = WALK_PRESETS.find((p: { key: string }) => p.key === walkKey) ?? WALK_PRESETS[1];
+      const effectiveWalkKey = walkKeyOverride ?? walkKey;
+      const effectiveDayOffset = dayOffsetOverride ?? dayOffset;
+      const preset = WALK_PRESETS.find((p: { key: string }) => p.key === effectiveWalkKey) ?? WALK_PRESETS[1];
       const payload = buildAnywherePayload({
         place: anchor.place,
         coords: anchor.coords ?? null,
-        dates: [isoDateFromOffset(dayOffset)],
+        dates: [isoDateFromOffset(effectiveDayOffset)],
         preferences: preferencesOverride ?? selected,
         walkingKmTarget: preset.km,
       });
@@ -202,11 +212,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         const entry = buildSavedEntry({
           place: anchor.place,
           label: anchor.place || t("Min position", "My position"),
-          dateIso: isoDateFromOffset(dayOffset),
+          dateIso: isoDateFromOffset(effectiveDayOffset),
           savedAt: new Date().toISOString(),
           safeResponse: safe,
           classification: cls,
-          inputs: { place: anchor.place ?? null, mode, dayOffset, walkKey, selected: prefs },
+          inputs: { place: anchor.place ?? null, mode, dayOffset: effectiveDayOffset, walkKey: effectiveWalkKey, selected: prefs },
         });
         lastEntryRef.current = entry;
         writeLS(LAST_KEY, entry);
@@ -258,14 +268,24 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     if (autoPlannedRef.current) return;
     autoPlannedRef.current = true;
     setSavedDays(readLS<SavedEntry[]>(SAVED_KEY, []));
-    const params = new URLSearchParams(window.location.search);
-    const trimmed = (params.get("place") || "").trim();
-    if (trimmed) {
-      setPlace(trimmed);
-      // The lang state is still the initial value on mount — read the URL directly
-      // so the auto-plan request carries the user's actual language.
-      const urlLang = params.get("lang");
-      execute({ place: trimmed }, { langOverride: urlLang === "sv" || urlLang === "en" ? urlLang : undefined }).catch(() => {});
+    // A shared link carries the WHOLE day's inputs (place + prefs + day + length),
+    // so it auto-plans exactly what the sharer saw — composed fresh for the opener.
+    const allowedPrefs = ANYWHERE_PREFERENCES.map((p: { key: string }) => p.key);
+    const shared = decodeShareParams(window.location.search, allowedPrefs);
+    if (shared.place) {
+      setPlace(shared.place);
+      if (shared.preferences.length) setSelected(shared.preferences);
+      setDayOffset(shared.dayOffset);
+      setWalkKey(shared.walkKey);
+      execute(
+        { place: shared.place },
+        {
+          langOverride: shared.lang ?? undefined,
+          preferencesOverride: shared.preferences.length ? shared.preferences : undefined,
+          dayOffsetOverride: shared.dayOffset,
+          walkKeyOverride: shared.walkKey,
+        },
+      ).catch(() => {});
       return;
     }
     const last = readLS<SavedEntry | null>(LAST_KEY, null);
@@ -288,6 +308,32 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setSavedDays(next);
     writeLS(SAVED_KEY, next);
   }
+
+  // Share the day: a link that carries the day's INPUTS (place + prefs + day +
+  // length + language) so it auto-plans the same day for whoever opens it —
+  // composed fresh, so their events / "today" are honest to when they open it.
+  async function shareDay() {
+    const entry = lastEntryRef.current;
+    const i = entry?.inputs;
+    if (!i || !i.place) return; // coords-anchored days have no shareable place text
+    const url = buildShareUrl(window.location.origin, {
+      place: i.place,
+      preferences: Array.isArray(i.selected) ? i.selected : [],
+      dayOffset: i.dayOffset ?? 0,
+      walkKey: i.walkKey ?? "balanced",
+      lang,
+    });
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareCopied(true);
+      window.setTimeout(() => setShareCopied(false), 2500);
+    } catch {
+      // Clipboard blocked (permissions/insecure context) — fall back to a prompt.
+      window.prompt(t("Kopiera länken:", "Copy the link:"), url);
+    }
+  }
+  // A coords-anchored day has no shareable place text.
+  const canShare = Boolean(lastEntryRef.current?.inputs?.place);
 
   const isSaved = Boolean(lastEntryRef.current && savedDays.some((e) => e.id === lastEntryRef.current!.id));
 
@@ -633,14 +679,27 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 </p>
               )}
             </div>
-            <button
-              type="button"
-              onClick={saveDay}
-              disabled={isSaved}
-              className="shrink-0 rounded-full border border-parranda-accent/40 px-3 py-1 text-sm font-semibold text-parranda-accent disabled:opacity-50"
-            >
-              {isSaved ? t("★ Sparad", "★ Saved") : t("☆ Spara dagen", "☆ Save day")}
-            </button>
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              <div className="flex gap-1.5">
+                {canShare && (
+                  <button
+                    type="button"
+                    onClick={shareDay}
+                    className="rounded-full border border-parranda-accent/40 px-3 py-1 text-sm font-semibold text-parranda-accent"
+                  >
+                    {shareCopied ? t("✓ Kopierad", "✓ Copied") : t("↗ Dela dagen", "↗ Share day")}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={saveDay}
+                  disabled={isSaved}
+                  className="rounded-full border border-parranda-accent/40 px-3 py-1 text-sm font-semibold text-parranda-accent disabled:opacity-50"
+                >
+                  {isSaved ? t("★ Sparad", "★ Saved") : t("☆ Spara dagen", "☆ Save day")}
+                </button>
+              </div>
+            </div>
           </div>
 
           <ol className="flex flex-col gap-3">
