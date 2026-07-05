@@ -81,16 +81,34 @@ const TYPE_DAYPART_HINTS = {
 const DAYPART_EXPLICIT_WEIGHT = 2;
 const DAYPART_INFERRED_WEIGHT = 1;
 
+// How DEFINITIVE a type's daypart is. A bar/nightclub is unambiguously an evening
+// place; a café a morning one — so they should out-weigh the ambiguous daytime
+// types (a restaurant spans lunch AND dinner; a museum could be any daytime hour).
+// Without this, a nightlife district full of restaurants + a few bars tallies as
+// "midday" because every type counted the same. Default strength is 1.
+const TYPE_DAYPART_STRENGTH = {
+  bar: 3, pub: 3, nightclub: 3, "wine-bar": 3, cocktail: 3,
+  cafe: 2, "café": 2, coffee: 2, bakery: 2, pastry: 2, breakfast: 2,
+  restaurant: 0.5, food: 0.5, taverna: 0.5, "street-food": 0.5, "fast_food": 0.5, lunch: 0.5,
+};
+
+// Ordinal position of each daypart, for weighted-mean scoring downstream.
+const DAYPART_RANK = { morning: 0, midday: 1, afternoon: 2, evening: 3 };
+
 function normToken(value) {
   return String(value == null ? "" : value).trim().toLowerCase();
 }
 
 // A single inferred daypart from a candidate's type/tags (first match wins by
-// band order). Used only as a low-weight fallback alongside explicit signals.
+// band order), with the token's DEFINITIVENESS strength. Used as a fallback
+// alongside explicit signals; the strength lets a bar out-weigh a restaurant.
 function inferDaypartFromType(candidate) {
   for (const token of candidateTokens(candidate)) {
     const band = TYPE_DAYPART_HINTS[token];
-    if (band) return band;
+    if (band) {
+      const strength = TYPE_DAYPART_STRENGTH[token] ?? DAYPART_INFERRED_WEIGHT;
+      return { band, strength };
+    }
   }
   return null;
 }
@@ -234,7 +252,7 @@ function profileArea(members) {
       daypartCounts.set(band, (daypartCounts.get(band) || 0) + DAYPART_EXPLICIT_WEIGHT);
     }
     const inferred = inferDaypartFromType(c);
-    if (inferred) daypartCounts.set(inferred, (daypartCounts.get(inferred) || 0) + DAYPART_INFERRED_WEIGHT);
+    if (inferred) daypartCounts.set(inferred.band, (daypartCounts.get(inferred.band) || 0) + inferred.strength);
   }
   return {
     size: list.length,
@@ -242,6 +260,9 @@ function profileArea(members) {
     dominant_types: topEntries(typeCounts, 3).map((e) => e.key),
     dominant_intents: topEntries(tagCounts, 4).map((e) => e.key),
     daypart_hint: topEntries(daypartCounts, 1).map((e) => e.key)[0] || null,
+    // The FULL daypart distribution (band → weight) so the composer can score the
+    // day's arc and resolve collisions, instead of only seeing a single argmax.
+    daypart_weights: Object.fromEntries(daypartCounts),
     member_ids: list.map((c) => c.id).filter((id) => id != null),
   };
 }
