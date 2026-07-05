@@ -80,6 +80,39 @@ test("orders districts by daypart: morning district before evening district", ()
   assert.equal(day.areas[1].daypart_hint, "evening");
 });
 
+test("daypart coherence: the day reads as a distinct morning→evening arc (no two districts share a daypart)", () => {
+  const cluster = (prefix, lat, specs) =>
+    specs.map((s, i) => ({ id: `${prefix}${i}`, name: `${prefix}${i}`, type: s.type, tags: s.tags, lat: lat + i * 0.0003, lng: 24.0 }));
+  // Three well-separated clusters: café-morning, culture+food-midday, bars-evening.
+  const city = [
+    ...cluster("m", 60.10, [{ type: "cafe", tags: ["fika"] }, { type: "cafe", tags: ["fika"] }, { type: "bakery", tags: ["fika"] }]),
+    ...cluster("d", 60.13, [{ type: "museum", tags: ["culture"] }, { type: "restaurant", tags: ["food"] }, { type: "gallery", tags: ["culture"] }]),
+    ...cluster("e", 60.16, [{ type: "bar", tags: ["nightlife"] }, { type: "bar", tags: ["nightlife"] }, { type: "pub", tags: ["nightlife"] }]),
+  ];
+  const day = composeDistrictDay(city, { intents: ["fika", "culture", "food", "nightlife"], maxAreas: 3 });
+  assert.equal(day.areas.length, 3);
+  const dayparts = day.areas.map((a) => a.daypart_hint);
+  assert.equal(new Set(dayparts).size, 3, `distinct dayparts, got ${dayparts.join("/")}`);
+  // Ordered morning → evening, and the bar strip reads evening (not midday).
+  assert.ok(day.areas[0].covers.includes("fika"), "café morning district first");
+  assert.equal(day.areas[day.areas.length - 1].daypart_hint, "evening");
+  assert.ok(day.areas[day.areas.length - 1].covers.includes("nightlife"), "nightlife district reads evening, last");
+});
+
+test("a district with a few strong-evening bars amid daytime types leans later than a pure-daytime one", () => {
+  const cluster = (prefix, lat, specs) =>
+    specs.map((s, i) => ({ id: `${prefix}${i}`, name: `${prefix}${i}`, type: s.type, tags: s.tags, lat: lat + i * 0.0003, lng: 24.0 }));
+  // Two clusters both heavy on daytime types, but one has bars — it must sort later.
+  const city = [
+    ...cluster("day", 60.10, [{ type: "restaurant", tags: ["food"] }, { type: "museum", tags: ["culture"] }, { type: "gallery", tags: ["culture"] }]),
+    ...cluster("night", 60.14, [{ type: "restaurant", tags: ["food"] }, { type: "bar", tags: ["nightlife"] }, { type: "bar", tags: ["nightlife"] }]),
+  ];
+  const day = composeDistrictDay(city, { intents: ["food", "culture", "nightlife"], maxAreas: 2 });
+  assert.equal(day.areas.length, 2);
+  const nightIdx = day.areas.findIndex((a) => a.covers.includes("nightlife"));
+  assert.equal(nightIdx, 1, "the bar-bearing district sorts later despite shared daytime types (bar strength wins)");
+});
+
 test("honestly reports an intent no district can satisfy (no fabricated district)", () => {
   // A city with NO scenic district; user wants views.
   const noScenic = fourDistrictCity().filter((c) => !c.id.startsWith("view"));

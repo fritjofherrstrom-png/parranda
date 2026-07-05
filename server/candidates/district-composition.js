@@ -43,6 +43,50 @@ const TOKEN_TO_AXIS = (() => {
 })();
 
 const DAYPART_ORDER = { morning: 0, midday: 1, afternoon: 2, evening: 3 };
+const RANK_DAYPART = ["morning", "midday", "afternoon", "evening"];
+
+// A district's daypart lean as a CONTINUOUS score (0=morning .. 3=evening) from
+// its full daypart distribution — not a single argmax. This is what stops a
+// nightlife district (a few strong-evening bars amid many ambiguous daytime
+// types) from reading "midday": the distribution's weighted mean captures the
+// real lean. Falls back to the argmax hint, then midday.
+function daypartScore(area) {
+  const weights = area && area.daypart_weights;
+  if (weights && typeof weights === "object") {
+    let sum = 0;
+    let total = 0;
+    for (const [band, weight] of Object.entries(weights)) {
+      if (band in DAYPART_ORDER && Number.isFinite(weight) && weight > 0) {
+        sum += DAYPART_ORDER[band] * weight;
+        total += weight;
+      }
+    }
+    if (total > 0) return sum / total;
+  }
+  return area && area.daypart_hint in DAYPART_ORDER ? DAYPART_ORDER[area.daypart_hint] : 1;
+}
+
+// Given the score-sorted districts, assign each a DISTINCT daypart forming a
+// morning→evening arc. Each band is bounded so it leaves room for the districts
+// BEFORE it (>= its index) and AFTER it (<= 3 - remaining), which distributes a
+// mid-range cluster across the available bands (centered) instead of pushing
+// everything up into the evening cap and colliding. Order-preserving + strictly
+// increasing, so the rendered day always reads as a progression.
+function assignCoherentDayparts(sortedScores) {
+  const n = sortedScores.length;
+  const bands = [];
+  let prev = -1;
+  for (let i = 0; i < n; i += 1) {
+    const lo = i; // room for the i districts already placed before this one
+    const hi = 3 - (n - 1 - i); // room for the districts still to come after it
+    let band = Math.round(sortedScores[i]);
+    band = Math.max(lo, Math.min(hi, band));
+    band = Math.min(Math.max(band, prev + 1), hi);
+    bands.push(RANK_DAYPART[Math.max(0, Math.min(3, band))]);
+    prev = band;
+  }
+  return bands;
+}
 
 function norm(value) {
   return String(value == null ? "" : value).trim().toLowerCase();
@@ -108,15 +152,18 @@ function composeDistrictDay(candidates, { intents = [], maxAreas = 2, linkKm, mi
     selected.push(next);
   }
 
-  // Visit order: by district daypart when known (morning → evening), else as
-  // selected (coverage-priority). Deterministic.
+  // Visit order: by each district's CONTINUOUS daypart lean (morning → evening),
+  // tie-broken deterministically. Then relabel the sequence as a coherent arc so
+  // no two districts share a daypart and a nightlife district reads evening.
   selected.sort((a, b) => {
-    const da = a.area.daypart_hint in DAYPART_ORDER ? DAYPART_ORDER[a.area.daypart_hint] : 99;
-    const db = b.area.daypart_hint in DAYPART_ORDER ? DAYPART_ORDER[b.area.daypart_hint] : 99;
-    return da - db;
+    const da = daypartScore(a.area);
+    const db = daypartScore(b.area);
+    if (da !== db) return da - db;
+    return (b.area.size || 0) - (a.area.size || 0);
   });
+  const coherentDayparts = assignCoherentDayparts(selected.map((s) => daypartScore(s.area)));
 
-  const areas = selected.map((s) => {
+  const areas = selected.map((s, index) => {
     const members = (s.area.member_ids || []).map((id) => byId.get(id)).filter(Boolean);
     // On-intent stops first (members matching a wanted axis), then the rest.
     const onIntent = members.filter((m) => {
@@ -126,7 +173,9 @@ function composeDistrictDay(candidates, { intents = [], maxAreas = 2, linkKm, mi
     const stopsSource = wantedAxes.length && onIntent.length ? onIntent : members;
     return {
       center: s.area.center,
-      daypart_hint: s.area.daypart_hint,
+      // The coherent arc daypart (distinct across the day), not the raw per-district
+      // argmax — so the rendered day reads morning → evening.
+      daypart_hint: coherentDayparts[index] || s.area.daypart_hint,
       character: s.area.dominant_types,
       covers: s.covers,
       size: s.area.size,
