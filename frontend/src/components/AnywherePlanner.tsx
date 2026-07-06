@@ -1,5 +1,5 @@
 /**
- * Any-city planner — the first React-island surface of the new frontend.
+ * Planner surface for freeform places — the first React-island surface of the new frontend.
  *
  * Talks to the EXISTING Express API (same payload as the production anywhere
  * mode) and renders through the SHARED honesty module, so this surface can never
@@ -16,7 +16,7 @@ import {
   WALK_PRESETS,
   isoDateFromOffset,
 } from "../lib/anywhere-payload.mjs";
-import { mapsPlaceUrl, mapsWalkingRouteUrl, dayStops } from "../lib/maps-links.mjs";
+import { mapsPlaceUrl, mapsWalkingRouteUrl, primaryRouteStops } from "../lib/maps-links.mjs";
 import { buildShareUrl, decodeShareParams } from "../lib/anywhere-share.mjs";
 import {
   buildSavedEntry,
@@ -127,7 +127,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   }, []);
   // The page shell is static — keep the document title on the language contract.
   useEffect(() => {
-    document.title = lang === "sv" ? "Parranda — vilken stad som helst" : "Parranda — any city";
+    document.title = lang === "sv" ? "Parranda — planera plats" : "Parranda — plan this place";
   }, [lang]);
   const [place, setPlace] = useState("");
   const [mode, setMode] = useState<"typed" | "near_me">("typed"); // start context
@@ -398,14 +398,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const structure: PlaceStructure | null = safeResponse?.place_structure ?? null;
   const day = structure?.district_day;
   const liveEvents: LiveEvents | null = safeResponse?.live_events ?? null;
+  const routeStops = useMemo(() => primaryRouteStops(safeResponse), [safeResponse]);
   const composedStops: string[] = useMemo(() => {
-    const stops = safeResponse?.days?.[0]?.primary_route?.main_stops;
-    if (!Array.isArray(stops)) return [];
-    return stops.map((s: any) => String(s?.name || s?.label || "").trim()).filter(Boolean);
-  }, [safeResponse]);
+    return routeStops.map((s: any) => String(s?.name || s?.label || "").trim()).filter(Boolean);
+  }, [routeStops]);
   // A single "open the whole day in Google Maps" walking route across every
-  // coord-bearing stop, in visit order (null when there aren't enough).
-  const routeUrl = useMemo(() => mapsWalkingRouteUrl(dayStops(day)), [day]);
+  // coord-bearing primary-route stop, in the exact order the API returned.
+  const routeUrl = useMemo(() => mapsWalkingRouteUrl(routeStops), [routeStops]);
 
   // Draw the day on the map (numbered districts + dashed arc + stop dots) —
   // the same spatial story as the production Map tab.
@@ -477,19 +476,19 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
       <header className="flex flex-col gap-2">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-parranda-glow">
-          {t("Any-city planner", "Any-city planner")}
+          {t("Planerare", "Planner")}
         </p>
-        <h1 className="font-display text-4xl font-bold text-parranda-ink">{t("Nästa stopp?", "Next stop?")}</h1>
+        <h1 className="font-display text-4xl font-bold text-parranda-ink">{t("Bygg din dag", "Build your day")}</h1>
         <p className="max-w-prose text-parranda-ink/75">
           {t(
-            "Skriv vilken stad som helst. Parranda bygger en dag med rätt rytm, rätt kvarter och rätt timing — extra kurerat i Barcelona och Rom.",
-            "Type any city. Parranda builds a day with the right rhythm, neighborhoods and timing — extra curated in Barcelona and Rome.",
+            "Skriv en plats. Parranda försöker bygga en dag med rätt rytm, rätt kvarter och ärlig källtäckning.",
+            "Type a place. Parranda tries to build a day with the right rhythm, neighborhoods and honest source coverage.",
           )}
         </p>
       </header>
       <form onSubmit={plan} className="flex flex-col gap-3">
         <label className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">
-          {t("Skriv en stad — vilken som helst", "Type a city — any city")}
+          {t("Skriv plats", "Type a place")}
         </label>
         <div className="flex gap-1.5" role="group" aria-label={t("Startpunkt", "Starting point")}>
           {(["typed", "near_me"] as const).map((m) => (
@@ -604,7 +603,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           <p className="text-sm text-parranda-ink/70" aria-live="polite">
             {loadingStage === 0 && t("Hittar platsen …", "Finding the place …")}
             {loadingStage === 1 && t("Läser kartan — riktiga platser, ingen katalog …", "Reading the map — real places, no catalog …")}
-            {loadingStage === 2 && t("Komponerar dagen genom distrikten …", "Composing the day across the districts …")}
+            {loadingStage === 2 &&
+              t(
+                "Komponerar dagen genom distrikten — det kan ta lite längre utan citypack …",
+                "Composing the day across the districts — places without a citypack can take a little longer …",
+              )}
           </p>
         )}
       </form>
@@ -657,12 +660,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           <div className="flex items-start gap-3">
             <div className="flex-1">
               <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">
-                {t("Din dag genom staden", "Your day across the city")}
-                {typeof structure.area_count === "number" ? ` — ${structure.area_count} ${t("distrikt", "districts")}` : ""}
+                {t("Din rutt genom staden", "Your route across the city")}
+                {routeStops.length ? ` — ${routeStops.length} ${t("stopp", "stops")}` : ""}
               </p>
               {structure.provenance === "agnostic_anchor" && (
                 <p className="mt-1 text-sm font-semibold text-parranda-accent">
-                  {t("Byggd live från kartan — inget city pack", "Built live from the map — no city pack")}
+                  {t(
+                    `Byggd från källstödd data${typeof structure.area_count === "number" ? ` över ${structure.area_count} distrikt` : ""} — tunnare än ett fullt citypack`,
+                    `Built from source-backed data${typeof structure.area_count === "number" ? ` across ${structure.area_count} districts` : ""} — thinner than a full citypack`,
+                  )}
                 </p>
               )}
               {classification?.status === "structure_only" && (

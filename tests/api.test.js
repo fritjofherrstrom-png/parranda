@@ -473,6 +473,14 @@ test("landing city submit opens the city-shell embedded planner, not /plan", () 
   assert.doesNotMatch(source, /"\/" \+ city \+ "\/plan"/);
 });
 
+test("landing city input Enter submits the same planner handoff as the CTA", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "landing.js"), "utf8");
+
+  assert.match(source, /cityInput\.addEventListener\("keydown"/);
+  assert.match(source, /e\.key !== "Enter"/);
+  assert.match(source, /plannerForm\.requestSubmit\(\)/);
+});
+
 test("planner-open city shell uses inline planner mount instead of modal path", () => {
   const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
   const source = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
