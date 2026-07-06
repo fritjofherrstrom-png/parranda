@@ -22,8 +22,10 @@ function weaveEveningEvent(placeStructure, liveEvents) {
   }
   const tonight = liveEvents && Array.isArray(liveEvents.tonight) ? liveEvents.tonight : [];
   // The list is already salience-ranked; take the top event that has real
-  // coordinates (a happening we can place on the map honestly).
-  const event = tonight.find((e) => e && Number.isFinite(e.lat) && Number.isFinite(e.lng) && (e.title || e.id));
+  // coordinates AND is salient enough to shape a visitor-facing day. Civic/admin
+  // notices can stay in Pulse/source inspect, but must not become an evening
+  // anchor just because they are timed and geocoded.
+  const event = tonight.find(isEligibleEveningAnchor);
   if (!event) return placeStructure;
 
   const areas = Array.isArray(placeStructure.district_day.areas) ? placeStructure.district_day.areas : [];
@@ -49,6 +51,8 @@ function weaveEveningEvent(placeStructure, liveEvents) {
     source_label: event.source_label || null,
     source_url: event.source_url || null,
     license: event.license || null,
+    cultural_tier: event.cultural_tier || null,
+    salience_score: Number.isFinite(event.salience_score) ? event.salience_score : null,
     lat: event.lat,
     lng: event.lng,
     near_area_index: nearIndex,
@@ -61,4 +65,23 @@ function weaveEveningEvent(placeStructure, liveEvents) {
   };
 }
 
-module.exports = { weaveEveningEvent };
+function isEligibleEveningAnchor(event) {
+  if (!event || typeof event !== "object") return false;
+  if (!Number.isFinite(event.lat) || !Number.isFinite(event.lng)) return false;
+  if (!(event.title || event.id)) return false;
+  if (!event.source_url && !event.source_label) return false;
+
+  const timing = String(event.timing_relevance || "").toLowerCase();
+  if (timing && !["now", "today", "tonight"].includes(timing)) return false;
+
+  if (event.cultural_tier === "administrative") return false;
+  if (event.cultural_tier === "cultural") return true;
+
+  // Older injected/event fixtures may predate cultural_tier. Keep the path
+  // useful for clearly salient events, while still preventing low-score noise
+  // from becoming the day's anchor.
+  if (Number.isFinite(event.salience_score)) return event.salience_score >= 6;
+  return true;
+}
+
+module.exports = { weaveEveningEvent, isEligibleEveningAnchor };
