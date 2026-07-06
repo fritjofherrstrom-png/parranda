@@ -15,6 +15,10 @@ const {
 } = require("../server/place-candidates/agnostic-event-supply");
 
 const HELSINKI = { lat: 60.17, lng: 24.94 }; // inside the built-in feed bbox
+const ESPOO = { lat: 60.2055, lng: 24.6559 };
+const VANTAA = { lat: 60.2934, lng: 25.0378 };
+const KAUNIAINEN = { lat: 60.2124, lng: 24.7276 };
+const PORVOO = { lat: 60.3923, lng: 25.6651 };
 const ROME = { lat: 41.9, lng: 12.5 }; // outside every feed bbox
 const NOW = "2026-06-28T12:00:00Z";
 
@@ -71,8 +75,18 @@ test("the feed registry is generic + deploy-configurable (a city is data, not co
 test("an anchor inside an open feed resolves the feed; outside, it does not", () => {
   const feed = resolveEventFeedForAnchor(HELSINKI);
   assert.ok(feed && feed.id === "linkedevents-helsinki");
+  assert.equal(feed.label, "Helsinki Region Linked Events");
   assert.equal(resolveEventFeedForAnchor(ROME), null);
   assert.equal(resolveEventFeedForAnchor({ lat: NaN, lng: NaN }), null);
+});
+
+test("the built-in Linked Events coverage is regional, but still bounded", () => {
+  for (const anchor of [HELSINKI, ESPOO, VANTAA, KAUNIAINEN]) {
+    const feed = resolveEventFeedForAnchor(anchor);
+    assert.ok(feed, "capital-region anchor resolves to the live-verified feed");
+    assert.equal(feed.id, "linkedevents-helsinki");
+  }
+  assert.equal(resolveEventFeedForAnchor(PORVOO), null, "nearby cities outside the verified bbox stay uncovered");
 });
 
 test("the endpoint is geo-filtered to the anchor and sorted soonest-ending-first", () => {

@@ -45,13 +45,15 @@ const MAX_HAPPENING_DAYS = 14;
 // API; CC-BY 4.0). Built-in entries are ones validated reachable without a
 // credential. The list is GENERIC and extensible: each entry is an honest
 // coverage bbox [west, south, east, north]; an anchor outside every bbox returns
-// coverage:"uncovered". Adding Turku/Tampere/Oulu/etc. is one more data row.
+// coverage:"uncovered". Adding a new region is one data row, but only after the
+// endpoint is live-verified (do not add candidate feeds that 404, fail DNS, or
+// block JSON access).
 const BUILTIN_EVENT_FEEDS = [
   {
     id: "linkedevents-helsinki",
-    label: "Helsinki Linked Events",
+    label: "Helsinki Region Linked Events",
     base: "https://api.hel.fi/linkedevents/v1/event/",
-    bbox: [24.5, 60.0, 25.3, 60.45], // Greater Helsinki / capital region
+    bbox: [24.5, 60.0, 25.3, 60.45], // Helsinki, Espoo, Vantaa, Kauniainen (live-verified)
     license: "CC-BY 4.0",
     // The feed's region timezone — so a "tonight" time renders in the VENUE's
     // local clock, not the viewer's. A feed is region-scoped (bbox), so a
