@@ -121,6 +121,14 @@
       applyInlineCompletion(inserting);
       updateCtaState();
     });
+    cityInput.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" || e.isComposing) return;
+      var val = cityInput.value.trim();
+      if (!val || !plannerForm) return;
+      e.preventDefault();
+      if (typeof plannerForm.requestSubmit === "function") plannerForm.requestSubmit();
+      else plannerForm.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
   }
 
   if (plannerForm) {

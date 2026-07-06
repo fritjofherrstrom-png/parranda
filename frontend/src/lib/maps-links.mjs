@@ -52,3 +52,11 @@ export function dayStops(day) {
   const areas = day && Array.isArray(day.areas) ? day.areas : [];
   return areas.flatMap((a) => (Array.isArray(a.stops) ? a.stops : []));
 }
+
+// Route stops in the actual primary route order. This is intentionally separate
+// from `dayStops()`: district/day structure can contain contextual candidates
+// that are not part of the route the API actually returned.
+export function primaryRouteStops(response) {
+  const stops = response?.days?.[0]?.primary_route?.main_stops;
+  return Array.isArray(stops) ? stops : [];
+}

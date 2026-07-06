@@ -5,7 +5,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mapsPlaceUrl, mapsWalkingRouteUrl, dayStops } from "../src/lib/maps-links.mjs";
+import { mapsPlaceUrl, mapsWalkingRouteUrl, dayStops, primaryRouteStops } from "../src/lib/maps-links.mjs";
 
 test("mapsPlaceUrl pins real coords, and refuses a coordless stop (no fabrication)", () => {
   assert.equal(mapsPlaceUrl({ lat: 41.15, lng: -8.61 }), "https://www.google.com/maps/search/?api=1&query=41.15,-8.61");
@@ -49,4 +49,39 @@ test("dayStops flattens districts in visit order, coordless stops included as-is
   const u = new URL(mapsWalkingRouteUrl(stops));
   assert.equal(u.searchParams.get("origin"), "1,1");
   assert.equal(u.searchParams.get("destination"), "3,3");
+});
+
+test("primaryRouteStops reads the returned route, not contextual district candidates", () => {
+  const response = {
+    days: [
+      {
+        primary_route: {
+          main_stops: [
+            { id: "route-1", lat: 1, lng: 1 },
+            { id: "route-2", lat: 2, lng: 2 },
+          ],
+        },
+      },
+    ],
+    place_structure: {
+      district_day: {
+        areas: [
+          {
+            stops: [
+              { id: "context-1", lat: 10, lng: 10 },
+              { id: "context-2", lat: 20, lng: 20 },
+              { id: "context-3", lat: 30, lng: 30 },
+            ],
+          },
+        ],
+      },
+    },
+  };
+
+  assert.deepEqual(primaryRouteStops(response).map((s) => s.id), ["route-1", "route-2"]);
+  assert.deepEqual(dayStops(response.place_structure.district_day).map((s) => s.id), [
+    "context-1",
+    "context-2",
+    "context-3",
+  ]);
 });
