@@ -125,10 +125,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     const q = new URLSearchParams(window.location.search).get("lang");
     if (q === "sv" || q === "en") setLang(q);
   }, []);
-  // The page shell is static — keep the document title on the language contract.
-  useEffect(() => {
-    document.title = lang === "sv" ? "Parranda — planera plats" : "Parranda — plan this place";
-  }, [lang]);
   const [place, setPlace] = useState("");
   const [mode, setMode] = useState<"typed" | "near_me">("typed"); // start context
   const [geoHint, setGeoHint] = useState<string | null>(null);
@@ -149,6 +145,33 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const lastEntryRef = useRef<SavedEntry | null>(null); // the latest composed day, for "save"
 
   const t = (sv: string, en: string) => (lang === "en" ? en : sv);
+  const typedPlaceLabel = place.trim();
+  const plannerTitle =
+    mode === "near_me"
+      ? t("Planerar nära dig", "Planning near you")
+      : typedPlaceLabel
+        ? t(`Planerar ${typedPlaceLabel}`, `Planning ${typedPlaceLabel}`)
+        : t("Bygg din dag", "Build your day");
+  const plannerIntro =
+    mode === "near_me"
+      ? t(
+          "Parranda använder din position som startpunkt och bygger en dag med ärlig källtäckning.",
+          "Parranda uses your position as the starting point and builds a day with honest source coverage.",
+        )
+      : typedPlaceLabel
+        ? t(
+            "Justera känsla, dag och gånglängd — Parranda bygger från platsen du skrev.",
+            "Adjust mood, day and walking length — Parranda uses the place you typed.",
+          )
+        : t(
+            "Skriv en plats. Parranda försöker bygga en dag med rätt rytm, rätt kvarter och ärlig källtäckning.",
+            "Type a place. Parranda tries to build a day with the right rhythm, neighborhoods and honest source coverage.",
+          );
+
+  // The page shell is static — keep the browser title aligned with the active planner subject.
+  useEffect(() => {
+    document.title = typedPlaceLabel ? `${typedPlaceLabel} · Parranda` : lang === "sv" ? "Parranda — planera plats" : "Parranda — plan this place";
+  }, [lang, typedPlaceLabel]);
 
   // Honest staged feedback while a cold place composes (5–20 s): describe what
   // the engine is actually doing, never a fake progress number.
@@ -479,17 +502,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-parranda-glow">
           {t("Planerare", "Planner")}
         </p>
-        <h1 className="font-display text-4xl font-bold text-parranda-ink">{t("Bygg din dag", "Build your day")}</h1>
-        <p className="max-w-prose text-parranda-ink/75">
-          {t(
-            "Skriv en plats. Parranda försöker bygga en dag med rätt rytm, rätt kvarter och ärlig källtäckning.",
-            "Type a place. Parranda tries to build a day with the right rhythm, neighborhoods and honest source coverage.",
-          )}
-        </p>
+        <h1 className="font-display text-4xl font-bold text-parranda-ink">{plannerTitle}</h1>
+        <p className="max-w-prose text-parranda-ink/75">{plannerIntro}</p>
       </header>
       <form onSubmit={plan} className="flex flex-col gap-3">
         <label className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">
-          {t("Skriv plats", "Type a place")}
+          {t("Plats", "Place")}
         </label>
         <div className="flex gap-1.5" role="group" aria-label={t("Startpunkt", "Starting point")}>
           {(["typed", "near_me"] as const).map((m) => (
