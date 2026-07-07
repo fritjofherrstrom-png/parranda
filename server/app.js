@@ -1271,6 +1271,16 @@ function renderLandingShell({ lang = "en", anywhereV2 = false } = {}) {
   );
 }
 
+function renderAnywhereV2Shell(html, { lang = "en" } = {}) {
+  const uiLang = normalizeLanguage(lang);
+  return String(html || "").replace(/<html\b([^>]*)>/i, (_match, attrs = "") => {
+    const nextAttrs = /\blang\s*=/.test(attrs)
+      ? attrs.replace(/\blang\s*=\s*("[^"]*"|'[^']*'|[^\s>]*)/i, `lang="${uiLang}"`)
+      : `${attrs} lang="${uiLang}"`;
+    return `<html${nextAttrs}>`;
+  });
+}
+
 function isDogfoodUiEnabled(env) {
   const flag = String((env && env.PARRANDA_DOGFOOD_UI) ?? "").trim().toLowerCase();
   return flag === "enabled" || flag === "1" || flag === "true";
@@ -1617,7 +1627,11 @@ function buildApp({
       next();
       return;
     }
-    response.sendFile(anywhereV2Html);
+    response.type("html").send(
+      renderAnywhereV2Shell(fs.readFileSync(anywhereV2Html, "utf8"), {
+        lang: request.query?.lang,
+      }),
+    );
   });
   const anywhereV2Assets = express.static(path.join(anywhereV2Dir, "_astro"), { index: false, dotfiles: "ignore" });
   app.use("/_astro", (request, response, next) => {

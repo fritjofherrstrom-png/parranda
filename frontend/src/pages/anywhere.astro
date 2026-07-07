@@ -1,9 +1,9 @@
 ---
 // The any-city planner — the new frontend's first production-capable surface.
-// The shell is intentionally BARE: all copy lives in the island so the language
-// contract (EN default, ?lang=sv explicit) is honored fully client-side (static
-// output cannot read query params at request time). Served in production by the
-// Express app behind PARRANDA_NEW_ANYWHERE (see docs/FRONTEND_MIGRATION_CONTRACT.md).
+// The shell is intentionally BARE: all copy lives in the island. Express owns
+// the request-time <html lang> contract for /anywhere because static Astro
+// output cannot read query params directly. Served in production behind
+// PARRANDA_NEW_ANYWHERE (see docs/FRONTEND_MIGRATION_CONTRACT.md).
 import "../styles/tokens.css";
 import "../styles/tailwind.css";
 import AnywherePlanner from "../components/AnywherePlanner";
