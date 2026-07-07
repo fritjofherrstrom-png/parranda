@@ -110,3 +110,12 @@ test("route result copy keeps route stops authoritative and district candidates 
   );
   assert.doesNotMatch(anywherePlannerSource, /Structure found — but no finished route yet\./);
 });
+
+test("planner surface consumes landing input instead of presenting a separate any-city product", () => {
+  assert.match(anywherePlannerSource, /Planerar \$\{typedPlaceLabel\}/);
+  assert.match(anywherePlannerSource, /Planning \$\{typedPlaceLabel\}/);
+  assert.match(anywherePlannerSource, /Justera känsla, dag och gånglängd/);
+  assert.match(anywherePlannerSource, /Adjust mood, day and walking length/);
+  assert.match(anywherePlannerSource, /t\("Plats", "Place"\)/);
+  assert.doesNotMatch(anywherePlannerSource, /ANY-CITY PLANNER|Any-place Alpha|Experimental route|dogfood/i);
+});
