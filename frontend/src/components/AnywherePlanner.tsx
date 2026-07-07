@@ -399,6 +399,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const day = structure?.district_day;
   const liveEvents: LiveEvents | null = safeResponse?.live_events ?? null;
   const routeStops = useMemo(() => primaryRouteStops(safeResponse), [safeResponse]);
+  const hasPrimaryRoute = routeStops.length > 0;
   const composedStops: string[] = useMemo(() => {
     return routeStops.map((s: any) => String(s?.name || s?.label || "").trim()).filter(Boolean);
   }, [routeStops]);
@@ -660,8 +661,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           <div className="flex items-start gap-3">
             <div className="flex-1">
               <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">
-                {t("Din rutt genom staden", "Your route across the city")}
-                {routeStops.length ? ` — ${routeStops.length} ${t("stopp", "stops")}` : ""}
+                {hasPrimaryRoute ? t("Din rutt genom staden", "Your route across the city") : t("Kandidater nära platsen", "Candidates near this place")}
+                {hasPrimaryRoute ? ` — ${routeStops.length} ${t("stopp", "stops")}` : ""}
               </p>
               {structure.provenance === "agnostic_anchor" && (
                 <p className="mt-1 text-sm font-semibold text-parranda-accent">
@@ -673,7 +674,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               )}
               {classification?.status === "structure_only" && (
                 <p className="mt-1 text-sm text-parranda-ink/70">
-                  {t("Struktur hittad — men ingen färdig rutt ännu.", "Structure found — but no finished route yet.")}
+                  {t(
+                    "Parranda hittade platskandidater, men inte en tillräckligt stark rutt ännu.",
+                    "Parranda found place candidates, but not a reliable route yet.",
+                  )}
                 </p>
               )}
               {restoredAt && (
@@ -719,7 +723,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                     <span className="text-sm font-semibold text-parranda-ink">{label(DAYPART_LABELS, area.daypart_hint, lang)}</span>
                   )}
                   <span className="ml-auto text-xs text-parranda-ink/60">
-                    {(area.stop_ids?.length ?? area.stops?.length ?? 0)} {t("stopp", "stops")}
+                    {(area.stop_ids?.length ?? area.stops?.length ?? 0)} {t("träffar", "places")}
                   </span>
                 </div>
                 {(area.covers ?? []).length > 0 && (

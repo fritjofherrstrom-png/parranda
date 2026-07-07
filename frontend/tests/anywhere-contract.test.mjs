@@ -9,10 +9,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
 import { buildAnywherePayload, ANYWHERE_PREFERENCES, WALK_PRESETS, isoDateFromOffset } from "../src/lib/anywhere-payload.mjs";
 
 const require = createRequire(import.meta.url);
 const decision = require("../../anywhere-render-decision.js");
+const anywherePlannerSource = readFileSync(new URL("../src/components/AnywherePlanner.tsx", import.meta.url), "utf8");
 
 test("payload carries the freeform place + the three agnostic flags, never a city key", () => {
   const payload = buildAnywherePayload({ place: "Lyon", dates: ["2026-07-02"], preferences: ["food", "views"] });
@@ -95,4 +97,16 @@ test("classification flows through the SHARED honesty module (no duplicated rule
   // unavailable: nothing trustworthy at all.
   const unavailable = decision.classifyAnywhereResult({ days: [] }, { place: "Nowhere" });
   assert.equal(unavailable.status, "unavailable");
+});
+
+test("route result copy keeps route stops authoritative and district candidates contextual", () => {
+  assert.match(anywherePlannerSource, /Candidates near this place/);
+  assert.match(anywherePlannerSource, /Parranda found place candidates, but not a reliable route yet\./);
+  assert.match(anywherePlannerSource, /t\("träffar", "places"\)/);
+  assert.doesNotMatch(
+    anywherePlannerSource,
+    /area\.stop_ids\?\.length[\s\S]{0,120}t\("stopp", "stops"\)/,
+    "district/context candidate counts must not be labelled as route stops",
+  );
+  assert.doesNotMatch(anywherePlannerSource, /Structure found — but no finished route yet\./);
 });
