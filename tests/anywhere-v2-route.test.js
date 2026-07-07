@@ -33,7 +33,7 @@ function makeDist() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "parranda-anywhere-dist-"));
   fs.mkdirSync(path.join(dir, "anywhere"), { recursive: true });
   fs.mkdirSync(path.join(dir, "_astro"), { recursive: true });
-  fs.writeFileSync(path.join(dir, "anywhere", "index.html"), "<!doctype html><html><body>NEW-FRONTEND-ANYWHERE</body></html>");
+  fs.writeFileSync(path.join(dir, "anywhere", "index.html"), '<!doctype html><html lang="en"><body>NEW-FRONTEND-ANYWHERE</body></html>');
   fs.writeFileSync(path.join(dir, "_astro", "app.js"), "console.log('island');");
   return dir;
 }
@@ -54,6 +54,7 @@ test("flag ON + build present: /anywhere serves the new frontend, assets serve, 
       const page = await get(server, "/anywhere?place=Lyon&lang=sv");
       assert.equal(page.status, 200);
       assert.match(page.body, /NEW-FRONTEND-ANYWHERE/);
+      assert.match(page.body, /<html lang="sv">/);
 
       const asset = await get(server, "/_astro/app.js");
       assert.equal(asset.status, 200);
@@ -66,6 +67,23 @@ test("flag ON + build present: /anywhere serves the new frontend, assets serve, 
       const labs = await get(server, "/labs/anywhere?place=Lyon");
       assert.equal(labs.status, 200);
       assert.match(labs.body, /__PARRANDA_CITY__|anywhere/i);
+    });
+  } finally {
+    fs.rmSync(dist, { recursive: true, force: true });
+  }
+});
+
+test("flag ON + build present: /anywhere keeps English as default html lang", async () => {
+  const dist = makeDist();
+  try {
+    await withServer({ anywhereV2Enabled: true, anywhereV2Dir: dist }, async (server) => {
+      const defaultPage = await get(server, "/anywhere?place=Lyon");
+      assert.equal(defaultPage.status, 200);
+      assert.match(defaultPage.body, /<html lang="en">/);
+
+      const invalidLangPage = await get(server, "/anywhere?place=Lyon&lang=fr");
+      assert.equal(invalidLangPage.status, 200);
+      assert.match(invalidLangPage.body, /<html lang="en">/);
     });
   } finally {
     fs.rmSync(dist, { recursive: true, force: true });
