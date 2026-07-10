@@ -132,3 +132,10 @@ test("planner surface consumes landing input instead of presenting a separate an
   assert.match(anywherePlannerSource, /t\("Plats", "Place"\)/);
   assert.doesNotMatch(anywherePlannerSource, /ANY-CITY PLANNER|Any-place Alpha|Experimental route|dogfood/i);
 });
+
+test("planner honesty copy avoids internal catalog/citypack language", () => {
+  assert.match(anywherePlannerSource, /Parranda har inte full kurering här ännu/);
+  assert.match(anywherePlannerSource, /Parranda does not have full curation here yet/);
+  assert.match(anywherePlannerSource, /Reading the map and looking for real places/);
+  assert.doesNotMatch(anywherePlannerSource, /citypack|city pack|no catalog|ingen katalog|fullt citypack/i);
+});

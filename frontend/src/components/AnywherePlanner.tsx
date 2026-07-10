@@ -629,11 +629,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         {phase === "loading" && (
           <p className="text-sm text-parranda-ink/70" aria-live="polite">
             {loadingStage === 0 && t("Hittar platsen …", "Finding the place …")}
-            {loadingStage === 1 && t("Läser kartan — riktiga platser, ingen katalog …", "Reading the map — real places, no catalog …")}
+            {loadingStage === 1 && t("Läser kartan och letar efter riktiga platser …", "Reading the map and looking for real places …")}
             {loadingStage === 2 &&
               t(
-                "Komponerar dagen genom distrikten — det kan ta lite längre utan citypack …",
-                "Composing the day across the districts — places without a citypack can take a little longer …",
+                "Komponerar dagen genom områdena — platser utan full kurering kan ta lite längre …",
+                "Composing the day across the areas — places without full curation can take a little longer …",
               )}
           </p>
         )}
@@ -693,8 +693,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               {structure.provenance === "agnostic_anchor" && (
                 <p className="mt-1 text-sm font-semibold text-parranda-accent">
                   {t(
-                    `Byggd från källstödd data${typeof structure.area_count === "number" ? ` över ${structure.area_count} distrikt` : ""} — tunnare än ett fullt citypack`,
-                    `Built from source-backed data${typeof structure.area_count === "number" ? ` across ${structure.area_count} districts` : ""} — thinner than a full citypack`,
+                    `Byggd från källstödda platser${typeof structure.area_count === "number" ? ` över ${structure.area_count} områden` : ""} — Parranda har inte full kurering här ännu`,
+                    `Built from source-backed places${typeof structure.area_count === "number" ? ` across ${structure.area_count} areas` : ""} — Parranda does not have full curation here yet`,
                   )}
                 </p>
               )}
