@@ -20,6 +20,7 @@
  */
 
 const { createLinkedEventsProvider } = require("../pulse-sources/linked-events-source-provider");
+const { createTicketmasterProvider } = require("../pulse-sources/ticketmaster-source-provider");
 const { normalizeTimeSensitiveSourceEvent } = require("../pulse-sources/time-sensitive-event");
 const { scoreTimeSensitiveEventSalience } = require("../pulse-engine/time-sensitive-events");
 const { createSourceCache } = require("./source-cache");
@@ -98,6 +99,25 @@ function resolveEventFeedRegistry(env = process.env) {
 function hasAnchor(anchor) {
   return anchor && Number.isFinite(anchor.lat) && Number.isFinite(anchor.lng);
 }
+
+/**
+ * The GLOBAL provider family — one integration that answers "what's on near these
+ * coordinates" for ANY anchor (no bbox registry, no per-city rows). Key-gated and
+ * fail-closed: without PARRANDA_TICKETMASTER_KEY the family is absent. Municipal
+ * open feeds stay a complementary family for hyper-local happenings; this is what
+ * makes live events work REGARDLESS of city, not via region hacks.
+ */
+function resolveGlobalEventKey(env = process.env) {
+  const key = String((env && env.PARRANDA_TICKETMASTER_KEY) || "").trim();
+  return key || null;
+}
+
+const GLOBAL_FEED_DESCRIPTOR = Object.freeze({
+  id: "ticketmaster-global",
+  label: "Ticketmaster",
+  license: null, // commercial listings — attribution + outbound link, no open license claimed
+  family: "global_commercial",
+});
 
 // First feed whose coverage bbox contains the anchor (deterministic by list
 // order). No match → null (honest "no feed reaches here").
@@ -179,8 +199,10 @@ function dedupeViews(views) {
 }
 
 // Honest, prose-free user view of one event. The UI/i18n layer renders the label;
-// this stays data (ids, ISO times, coords, source, trust).
-function toEventView(event, feed) {
+// this stays data (ids, ISO times, coords, source, trust). `eventTimezone` (from
+// sources that carry an EVENT-level tz, e.g. the global provider) beats the
+// feed-level region timezone — the truest venue-local clock wins.
+function toEventView(event, feed, { eventTimezone = null } = {}) {
   const title = String(event.title || event.name || "").trim();
   if (!title) return null;
   const salience = scoreTimeSensitiveEventSalience(event);
@@ -205,8 +227,8 @@ function toEventView(event, feed) {
     trust_level: event.confidence || null,
     cultural_tier: cultural.tier,
     salience_score: score,
-    // The venue's region timezone so the UI shows the real local start time.
-    timezone: feed.timezone || null,
+    // The venue-local timezone so the UI shows the real local start time.
+    timezone: eventTimezone || feed.timezone || null,
   };
 }
 
@@ -232,26 +254,55 @@ function rankAndCap(views) {
  * @param {Function} [opts.fetcher]              injected fetch (tests)
  * @returns {Promise<{coverage:"covered"|"uncovered", feed:object|null, tonight:object[], this_week:object[]}>}
  */
-async function collectAnchorEvents({ anchor, now = null, date = null, registry, fetcher, radiusM, timeoutMs = 15000 } = {}) {
+async function collectAnchorEvents({
+  anchor,
+  now = null,
+  date = null,
+  registry,
+  fetcher,
+  radiusM,
+  timeoutMs = 15000,
+  globalKey = null,
+} = {}) {
+  // Family resolution: a municipal open feed covering the anchor wins (richest
+  // hyper-local data where it exists); otherwise the GLOBAL provider answers for
+  // ANY coordinate (key-gated); neither → honest absence. No per-city branches.
   const feed = resolveEventFeedForAnchor(anchor, registry || resolveEventFeedRegistry());
-  if (!feed) {
+  if (!feed && !(globalKey && hasAnchor(anchor))) {
     return { coverage: "uncovered", feed: null, tonight: [], this_week: [] };
   }
 
-  const endpoint = buildAnchorEventEndpoint(feed.base, anchor, { radiusM });
-  const provider = createLinkedEventsProvider({
-    endpoint,
-    fetcher: fetcher || undefined,
-    limit: FETCH_LIMIT,
-    // A geo `dwithin` page is slow and high-variance on the live feed; give it
-    // room. This runs out-of-band (background-warm), so a long timeout never
-    // blocks the route — see resolveDefaultEventSupply.
-    timeoutMs: Math.max(1000, Math.floor(timeoutMs) || 15000),
-    label: feed.label,
-    license: feed.license,
-  });
-
   const nowDate = now ? new Date(now) : null;
+  let provider;
+  let feedForView;
+  if (feed) {
+    const endpoint = buildAnchorEventEndpoint(feed.base, anchor, { radiusM });
+    provider = createLinkedEventsProvider({
+      endpoint,
+      fetcher: fetcher || undefined,
+      limit: FETCH_LIMIT,
+      // A geo `dwithin` page is slow and high-variance on the live feed; give it
+      // room. This runs out-of-band (background-warm), so a long timeout never
+      // blocks the route — see resolveDefaultEventSupply.
+      timeoutMs: Math.max(1000, Math.floor(timeoutMs) || 15000),
+      label: feed.label,
+      license: feed.license,
+    });
+  } else {
+    provider = createTicketmasterProvider({
+      key: globalKey,
+      anchor,
+      radiusKm: Math.max(1, Math.round((radiusM || DEFAULT_RADIUS_M) / 1000)),
+      windowDays: THIS_WEEK_HORIZON_DAYS,
+      now: nowDate || undefined,
+      fetcher: fetcher || undefined,
+      timeoutMs: Math.max(1000, Math.floor(timeoutMs) || 15000),
+      pageSize: FETCH_LIMIT,
+    });
+    feedForView = GLOBAL_FEED_DESCRIPTOR;
+  }
+  const activeFeed = feed || feedForView;
+
   // Window the feed from NOW forward (a datetime, not "today") so a late-evening
   // request doesn't waste the page on this-morning's already-past events — the
   // bias that empties tonight/this_week. Ongoing multi-day events still overlap
@@ -269,14 +320,17 @@ async function collectAnchorEvents({ anchor, now = null, date = null, registry, 
   const tonight = [];
   const thisWeek = [];
   for (const rawEvent of raw) {
-    // Linked Events is an official municipal feed: stamp its descriptor-level
-    // trust so the #279 normalizer rates it honestly (medium / official) rather
-    // than defaulting to needs_review. Real source backing already present.
+    // Both families are primary sources for their listings (a municipal feed for
+    // its city's calendar; the global ticketing source for its own inventory):
+    // stamp descriptor-level trust so the #279 normalizer rates them honestly
+    // (medium / official) rather than defaulting to needs_review.
     const enriched = { source_tier: "official", confidence: "medium", ...rawEvent };
     const normalized = normalizeTimeSensitiveSourceEvent(enriched, nowDate ? { now: nowDate } : {});
     if (!normalized) continue;
     if (!isEphemeralHappening(normalized, nowDate)) continue; // drop permanent/malformed (both buckets)
-    const view = toEventView(normalized, feed);
+    // Event-level timezone (global provider carries one per event) beats the
+    // feed-level region timezone.
+    const view = toEventView(normalized, activeFeed, { eventTimezone: rawEvent.timezone || null });
     if (!view) continue;
     if (TONIGHT_TIMING.has(normalized.timing_relevance)) {
       tonight.push(view);
@@ -290,7 +344,12 @@ async function collectAnchorEvents({ anchor, now = null, date = null, registry, 
 
   return {
     coverage: "covered",
-    feed: { id: feed.id, label: feed.label, license: feed.license },
+    feed: {
+      id: activeFeed.id,
+      label: activeFeed.label,
+      license: activeFeed.license ?? null,
+      family: activeFeed.family || "municipal_open",
+    },
     tonight: rankAndCap(tonight),
     this_week: rankAndCap(thisWeek),
   };
@@ -325,6 +384,7 @@ function resolveDefaultEventSupply(env = process.env) {
   const flag = String((env && env.PARRANDA_AGNOSTIC_EVENTS) || "").trim().toLowerCase();
   if (!["enabled", "1", "true", "on", "yes"].includes(flag)) return null;
   const registry = resolveEventFeedRegistry(env);
+  const globalKey = resolveGlobalEventKey(env);
   const cache = createSourceCache({
     namespace: "agnostic-events",
     ttlMs: EVENT_CACHE_TTL_MS,
@@ -332,19 +392,24 @@ function resolveDefaultEventSupply(env = process.env) {
   });
   return ({ anchor, now } = {}) => {
     const feed = hasAnchor(anchor) ? resolveEventFeedForAnchor(anchor, registry) : null;
-    if (!feed) {
+    // Coverage = a municipal feed covering the anchor OR the global family (any
+    // coordinate). Neither → honest absence, never an invented happening.
+    if (!feed && !(globalKey && hasAnchor(anchor))) {
       return Promise.resolve({ coverage: "uncovered", feed: null, tonight: [], this_week: [] });
     }
+    const descriptor = feed
+      ? { id: feed.id, label: feed.label, license: feed.license ?? null, family: "municipal_open" }
+      : { ...GLOBAL_FEED_DESCRIPTOR };
     const key = eventCacheKey(anchor, now);
     const cached = cache.peek(key);
     if (cached) return Promise.resolve(cached);
     // Cold: warm out-of-band (long timeout, fire-and-forget), serve honest pending.
-    cache.warm(key, () => collectAnchorEvents({ anchor, now, registry, timeoutMs: WARM_TIMEOUT_MS }), {
+    cache.warm(key, () => collectAnchorEvents({ anchor, now, registry, timeoutMs: WARM_TIMEOUT_MS, globalKey }), {
       shouldStore: (r) => r && r.coverage === "covered" && (r.tonight.length + r.this_week.length) > 0,
     });
     return Promise.resolve({
       coverage: "covered",
-      feed: { id: feed.id, label: feed.label, license: feed.license },
+      feed: descriptor,
       tonight: [],
       this_week: [],
       pending: true,
@@ -357,8 +422,10 @@ module.exports = {
   resolveDefaultEventSupply,
   resolveEventFeedRegistry,
   resolveEventFeedForAnchor,
+  resolveGlobalEventKey,
   buildAnchorEventEndpoint,
   eventCacheKey,
   BUILTIN_EVENT_FEEDS,
+  GLOBAL_FEED_DESCRIPTOR,
   DEFAULT_RADIUS_M,
 };
