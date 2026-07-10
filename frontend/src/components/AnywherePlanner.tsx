@@ -136,6 +136,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [classification, setClassification] = useState<AnywhereClassification | null>(null);
   const [safeResponse, setSafeResponse] = useState<any>(null);
   const [mapDrawn, setMapDrawn] = useState(false);
+  const [upgradePending, setUpgradePending] = useState(false); // cold-start: structure upgrade in flight
   const [savedDays, setSavedDays] = useState<SavedEntry[]>([]);
   const [restoredAt, setRestoredAt] = useState<string | null>(null); // set when showing a SNAPSHOT
   const [shareCopied, setShareCopied] = useState(false);
@@ -228,9 +229,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setClassification(cls);
       setSafeResponse(safe);
       setPhase("done");
+      if (silent) setUpgradePending(false); // the one silent re-ask has landed (better or not)
       // Retention: remember this composed day so a reload doesn't lose it, and
-      // so the user can save it. A fresh compose is LIVE, so clear the snapshot flag.
-      if (!silent) {
+      // so the user can save it. A fresh compose is LIVE, so clear the snapshot
+      // flag. A SILENT upgrade also refreshes the stored entry (so save/share use
+      // the upgraded day) but never touches the snapshot flag.
+      if (!silent || safe?.place_structure) {
         const prefs = preferencesOverride ?? selected;
         const entry = buildSavedEntry({
           place: anchor.place,
@@ -243,13 +247,17 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         });
         lastEntryRef.current = entry;
         writeLS(LAST_KEY, entry);
-        setRestoredAt(null);
+        if (!silent) setRestoredAt(null);
       }
-      // The live-events feed is background-warmed server-side: a cold anchor
-      // returns an honest `pending`. Re-ask ONCE after the warm window instead of
-      // telling the user to reload — everything else comes from cache, so the
-      // retry is cheap. Never loops: a second pending stays pending.
-      if (!silent && safe?.live_events?.pending) {
+      // ONE silent re-ask after the warm window covers BOTH cold-start honesty
+      // gaps: (a) live events returned an honest `pending` (feed is background-
+      // warming), and (b) a COLD first pass composed a route but no district
+      // structure (the loader warmed during the request — the re-ask upgrades the
+      // day with districts/map/save/share). Everything is cached by then, so the
+      // retry is cheap. Never loops: scheduling only happens on non-silent runs.
+      const needsStructureUpgrade = cls.status === "composed" && !safe?.place_structure;
+      if (!silent && (safe?.live_events?.pending || needsStructureUpgrade)) {
+        if (needsStructureUpgrade) setUpgradePending(true);
         if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
         pollTimerRef.current = setTimeout(() => {
           execute(anchor, { silent: true }).catch(() => {});
@@ -823,6 +831,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             )}
           </div>
         </section>
+      )}
+
+      {phase === "done" && upgradePending && !structure && (
+        <p className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4 text-sm text-parranda-ink/70" aria-live="polite">
+          {t(
+            "Läser in distrikt & karta — uppdateras automatiskt strax.",
+            "Loading districts & map — updates automatically in a moment.",
+          )}
+        </p>
       )}
 
       {showDay && composedStops.length > 0 && (
