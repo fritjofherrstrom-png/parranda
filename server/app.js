@@ -1293,6 +1293,24 @@ function isAnywhereV2Enabled(env = process.env) {
   return flag === "enabled" || flag === "1" || flag === "true";
 }
 
+// NEW-frontend takeover of the LANDING (GET /). Default OFF: unset env → the
+// current server-rendered landing, byte-stable. See FRONTEND_MIGRATION_CONTRACT.
+function isNewLandingEnabled(env = process.env) {
+  const flag = String((env && env.PARRANDA_NEW_LANDING) ?? "").trim().toLowerCase();
+  return flag === "enabled" || flag === "1" || flag === "true";
+}
+
+// Serve-time mutation of the prebuilt landing HTML: the request-time <html lang>
+// (static output cannot read query params) and the CITY REGISTRY injected by
+// replacing the QUOTED token (a city is data, never baked into the static build).
+function renderLandingV2Shell(html, { lang, registryJson } = {}) {
+  const uiLang = normalizeLanguage(lang);
+  return String(html)
+    .replace('<html lang="en">', `<html lang="${escapeHtml(uiLang)}">`)
+    .split('"__PARRANDA_LANDING_REGISTRY__"')
+    .join(registryJson || "{}");
+}
+
 function renderDogfoodShell({ lang = "en" } = {}) {
   const uiLang = normalizeLanguage(lang);
   const i18nBootstrap = buildClientI18nPayload();
@@ -1575,11 +1593,29 @@ function buildApp({
   // values (env flag + the frontend workspace's build output).
   anywhereV2Enabled = isAnywhereV2Enabled(),
   anywhereV2Dir = path.join(appRoot, "frontend", "dist"),
+  newLandingEnabled = isNewLandingEnabled(),
 } = {}) {
   const app = express();
 
   app.use(express.json());
+  // GET / — the NEW-frontend landing takeover (explicit per the migration
+  // contract). Served ONLY when its flag is on, the built page exists AND the
+  // /anywhere surface is active (the new landing routes freeform places there —
+  // it must never point at a missing surface). Otherwise: today's landing,
+  // byte-stable. Rollback = unset PARRANDA_NEW_LANDING.
+  const landingV2Html = path.join(anywhereV2Dir, "index.html");
+  const landingV2Active = () =>
+    newLandingEnabled && anywhereV2Active() && fs.existsSync(landingV2Html);
   app.get(["/", "/index.html"], (request, response) => {
+    if (landingV2Active()) {
+      response.type("html").send(
+        renderLandingV2Shell(fs.readFileSync(landingV2Html, "utf8"), {
+          lang: request.query?.lang,
+          registryJson: serializeInlineJson(buildLandingCityRegistry()),
+        }),
+      );
+      return;
+    }
     response.type("html").send(
       // anywhereV2Active is defined below in this scope; handlers run at request
       // time, so the closure reference is safe.
