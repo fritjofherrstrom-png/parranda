@@ -99,6 +99,24 @@ const INTENT_LABELS: Record<string, { sv: string; en: string }> = {
   market: { sv: "Marknad", en: "Market" },
 };
 
+// Per-stop TYPE chips ("what is this place") — the engine's vocabulary, localized.
+const TYPE_LABELS: Record<string, { sv: string; en: string }> = {
+  museum: { sv: "Museum", en: "Museum" },
+  gallery: { sv: "Galleri", en: "Gallery" },
+  park: { sv: "Park", en: "Park" },
+  garden: { sv: "Trädgård", en: "Garden" },
+  restaurant: { sv: "Restaurang", en: "Restaurant" },
+  cafe: { sv: "Café", en: "Café" },
+  bar: { sv: "Bar", en: "Bar" },
+  viewpoint: { sv: "Utsikt", en: "Viewpoint" },
+  market: { sv: "Marknad", en: "Market" },
+  "vintage-shop": { sv: "Second hand", en: "Vintage" },
+  "street-food": { sv: "Street food", en: "Street food" },
+  beach: { sv: "Strand", en: "Beach" },
+  promenade: { sv: "Promenad", en: "Promenade" },
+  castle: { sv: "Slott", en: "Castle" },
+};
+
 function label(map: Record<string, { sv: string; en: string }>, key: string | null | undefined, lang: Lang): string {
   if (!key) return "";
   return map[key]?.[lang] ?? key;
@@ -434,6 +452,25 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const composedStops: string[] = useMemo(() => {
     return routeStops.map((s: any) => String(s?.name || s?.label || "").trim()).filter(Boolean);
   }, [routeStops]);
+  // The engine computes far more than names — surface the TRUSTWORTHY parts:
+  // the real walking numbers + per-leg distances, and the day's weather read
+  // (dayflow_context comes from the trusted server-side weather provider, already
+  // localized). The day-signal/title/summary fields are NOT rendered on this
+  // surface: they can carry baseline-city phrasing and placeholder labels.
+  const primaryRoute: any = safeResponse?.days?.[0]?.primary_route ?? null;
+  const dayflow: any = safeResponse?.days?.[0]?.dayflow_context ?? null;
+  const legForStop = (index: number): { km: number | null; minutes: number | null } | null => {
+    if (index === 0 || !Array.isArray(primaryRoute?.legs)) return null;
+    const indexed: any = routeStops[index];
+    const stopLabel = String(indexed?.label ?? indexed?.name ?? "").trim();
+    if (!stopLabel) return null;
+    const leg = primaryRoute.legs.find((l: any) => String(l?.to_label ?? "").trim() === stopLabel);
+    if (!leg) return null;
+    return {
+      km: Number.isFinite(leg.distance_km) ? leg.distance_km : null,
+      minutes: Number.isFinite(leg.estimated_walk_minutes) ? leg.estimated_walk_minutes : null,
+    };
+  };
   // A single "open the whole day in Google Maps" walking route across every
   // coord-bearing primary-route stop, in the exact order the API returned.
   const routeUrl = useMemo(() => mapsWalkingRouteUrl(routeStops), [routeStops]);
@@ -473,8 +510,17 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       layer.clearLayers();
 
       const bounds: Array<[number, number]> = [];
+      // The REAL route geometry (the engine's actual stop order) as a solid line;
+      // the dashed inter-district arc stays as directional context beneath it.
+      const path = (Array.isArray(primaryRoute?.map_path_points) ? primaryRoute.map_path_points : [])
+        .filter((p: any) => p && Number.isFinite(p.lat) && Number.isFinite(p.lng))
+        .map((p: any) => [p.lat, p.lng] as [number, number]);
+      if (path.length > 1) {
+        layer.addLayer(L.polyline(path, { color: "#b6582f", weight: 4, opacity: 0.9 }));
+        for (const pt of path) bounds.push(pt);
+      }
       const arc = areas.map((a) => [a.center!.lat, a.center!.lng] as [number, number]);
-      if (arc.length > 1) layer.addLayer(L.polyline(arc, { color: "#b6582f", weight: 3, dashArray: "6 8", opacity: 0.85 }));
+      if (arc.length > 1) layer.addLayer(L.polyline(arc, { color: "#b6582f", weight: 3, dashArray: "6 8", opacity: 0.55 }));
       areas.forEach((area, index) => {
         bounds.push([area.center!.lat, area.center!.lng]);
         const icon = L.divIcon({ className: "district-map-marker", html: String(index + 1), iconSize: [28, 28], iconAnchor: [14, 14] });
@@ -499,7 +545,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     return () => {
       cancelled = true;
     };
-  }, [day]);
+  }, [day, primaryRoute]);
 
   const showDay = classification?.status === "composed";
   const showStructure = classification?.status === "composed" || classification?.status === "structure_only";
@@ -842,15 +888,64 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </p>
       )}
 
-      {showDay && composedStops.length > 0 && (
+      {showDay && dayflow?.weather?.headline && (
+        <section className="rounded-parranda border border-parranda-accent/25 bg-parranda-accent/10 p-5 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-wider text-parranda-accent">{t("Dagens läsning", "Today's read")}</p>
+          <p className="mt-1 text-sm font-semibold text-parranda-ink">{dayflow.weather.headline}</p>
+          {dayflow.weather.reason && <p className="mt-1 text-sm text-parranda-ink/75">{dayflow.weather.reason}</p>}
+          {dayflow.weather.pitch && <p className="mt-1 text-sm font-medium text-parranda-ink">{dayflow.weather.pitch}</p>}
+        </section>
+      )}
+
+      {showDay && routeStops.length > 0 && (
         <section className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">{t("Dagens stopp", "Today's stops")}</p>
-          <ol className="mt-2 flex flex-col gap-1.5">
-            {composedStops.map((name, i) => (
-              <li key={i} className="text-sm text-parranda-ink">
-                <span className="font-semibold text-parranda-accent">{i + 1}.</span> {name}
-              </li>
-            ))}
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">{t("Dagens stopp", "Today's stops")}</p>
+            {Number.isFinite(primaryRoute?.estimated_km) && (
+              <p className="text-xs text-parranda-ink/60">
+                ≈ {primaryRoute.estimated_km} km
+                {Number.isFinite(primaryRoute?.longest_leg_km) ? ` · ${t("längsta ben", "longest leg")} ${primaryRoute.longest_leg_km} km` : ""}
+              </p>
+            )}
+          </div>
+          <ol className="mt-2 flex flex-col">
+            {routeStops.map((stop: any, i: number) => {
+              const name = String(stop?.label || stop?.name || "").trim();
+              if (!name) return null;
+              const leg = legForStop(i);
+              const pin = mapsPlaceUrl(stop);
+              return (
+                <li key={stop?.id ?? i} className="flex flex-col">
+                  {leg && (leg.minutes != null || leg.km != null) && (
+                    <span className="ml-3 border-l border-dashed border-parranda-ink/25 py-1 pl-4 text-xs text-parranda-ink/55">
+                      ↓ {leg.minutes != null ? `${leg.minutes} min` : ""}
+                      {leg.minutes != null && leg.km != null ? " · " : ""}
+                      {leg.km != null ? `${leg.km} km` : ""}
+                    </span>
+                  )}
+                  <span className="flex flex-wrap items-center gap-2 py-0.5 text-sm text-parranda-ink">
+                    <span className="font-semibold text-parranda-accent">{i + 1}.</span>
+                    {pin ? (
+                      <a href={pin} target="_blank" rel="noopener noreferrer" className="underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
+                        {name}
+                      </a>
+                    ) : (
+                      name
+                    )}
+                    {stop?.type && (
+                      <span className="rounded-full border border-parranda-ink/15 bg-parranda-ink/10 px-2 py-0.5 text-xs text-parranda-ink/75">
+                        {label(TYPE_LABELS, stop.type, lang)}
+                      </span>
+                    )}
+                    {stop?.daypart && (
+                      <span className="rounded-full border border-parranda-accent/30 bg-parranda-accent/10 px-2 py-0.5 text-xs font-semibold text-parranda-ink">
+                        {label(DAYPART_LABELS, stop.daypart, lang)}
+                      </span>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
           </ol>
         </section>
       )}
