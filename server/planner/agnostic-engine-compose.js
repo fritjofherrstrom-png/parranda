@@ -49,7 +49,7 @@ function buildAgnosticNoopServices() {
       return { items: [] };
     },
     getDateSignals() {
-      return {};
+      return [];
     },
     async fetchLiveEventsForDates() {
       return {};

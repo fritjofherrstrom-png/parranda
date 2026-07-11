@@ -2369,6 +2369,7 @@ function buildApp({
         weatherProvider,
         clock,
         trustedTimezone: intake.resolved?.timezone || null,
+        placeLabel: intake.resolved?.label || placeQuery || null,
         synthesizeVia: useEngineCompose ? "engine" : "legacy",
       });
       experiment.intake = intake;

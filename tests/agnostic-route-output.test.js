@@ -1267,3 +1267,43 @@ test("unit: composer fails closed (no loader) and never mutates", async () => {
   assert.equal(result, baseline, "baseline returned unchanged by reference when not eligible");
   assert.equal(typeof buildExperimentalDay, "function");
 });
+
+test("unit: engine composer scrubs fallback-city signals and placeholder route prose", async () => {
+  const baseline = {
+    city: "rome",
+    days: [
+      {
+        date: DATE,
+        primary_route: null,
+        alternatives: [],
+        date_signals: [{ title: "Sommarkväll i Rom", note: "Fallback city signal" }],
+      },
+    ],
+    readiness: { unsupported: true },
+  };
+  const { result, experiment } = await composeAgnosticRouteOutput({
+    coords: { lat: 55.6, lng: 13.0 },
+    baselineResult: baseline,
+    externalRequested: true,
+    openDataLoader: makeLoader(fixtureNear({ lat: 55.6, lng: 13.0 })),
+    preferences: ["food", "coffee", "scenic"],
+    date: DATE,
+    todayIsoDate: DATE,
+    synthesizeVia: "engine",
+    placeLabel: "Malmö",
+    lang: "sv",
+  });
+
+  const day = result.days[0];
+  const route = day.primary_route;
+  assert.ok(route, "engine compose should return a promoted experimental route");
+  assert.deepEqual(day.date_signals, [], "fallback city date_signals must be scrubbed from agnostic output");
+  assert.equal(route.title, "Plan för Malmö");
+  assert.match(route.summary, /Malmö/);
+  assert.match(route.why_recommended, /Malmö/);
+  const publicBlob = JSON.stringify({ day, experiment }).toLowerCase();
+  assert.equal(publicBlob.includes("sommarkväll i rom"), false);
+  assert.equal(publicBlob.includes("nearby loop"), false);
+  assert.equal(publicBlob.includes("experimental route"), false);
+  assert.equal(baseline.days[0].date_signals[0].title, "Sommarkväll i Rom", "baseline object remains untouched");
+});
