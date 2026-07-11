@@ -112,6 +112,22 @@ test("a cold-start thin compose schedules ONE silent structure upgrade (never lo
   assert.match(anywherePlannerSource, /if \(!silent \|\| safe\?\.place_structure\)/);
 });
 
+test("the surface renders the engine's TRUSTWORTHY richness — and never the contaminated fields", () => {
+  // Rendered: the trusted weather read, real walking numbers, per-leg distances,
+  // per-stop type/daypart chips, and the real route geometry on the map.
+  assert.match(anywherePlannerSource, /dayflow\?\.weather\?\.headline/);
+  assert.match(anywherePlannerSource, /primaryRoute\?\.estimated_km/);
+  assert.match(anywherePlannerSource, /estimated_walk_minutes/);
+  assert.match(anywherePlannerSource, /map_path_points/);
+  assert.match(anywherePlannerSource, /TYPE_LABELS, stop\.type/);
+  assert.match(anywherePlannerSource, /DAYPART_LABELS, stop\.daypart/);
+  // NEVER rendered: fields that can carry baseline-city phrasing or placeholder
+  // labels on the agnostic path (verified live: date_signals said "i Rom" for a
+  // Malmö day; title/summary said "Nearby loop").
+  assert.doesNotMatch(anywherePlannerSource, /date_signals/);
+  assert.doesNotMatch(anywherePlannerSource, /primaryRoute\?\.title|primaryRoute\?\.summary|why_recommended|curator_voice/);
+});
+
 test("route result copy keeps route stops authoritative and district candidates contextual", () => {
   assert.match(anywherePlannerSource, /Candidates near this place/);
   assert.match(anywherePlannerSource, /Parranda found place candidates, but not a reliable route yet\./);
