@@ -53,6 +53,9 @@ function weaveEveningEvent(placeStructure, liveEvents) {
     license: event.license || null,
     cultural_tier: event.cultural_tier || null,
     salience_score: Number.isFinite(event.salience_score) ? event.salience_score : null,
+    // Venue-local timezone rides along (same contract as the event views) so a
+    // "tonight at 19:00" renders in the VENUE's clock wherever it is shown.
+    timezone: event.timezone || null,
     lat: event.lat,
     lng: event.lng,
     near_area_index: nearIndex,
