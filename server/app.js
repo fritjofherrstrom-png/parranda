@@ -576,6 +576,21 @@ function isAgnosticRouteOutputExperimentRequested(request) {
 // legacy in-module synthesizer and the prior always-return behavior unchanged,
 // and respects "no public flip without persistent cache" — production opts in
 // via PARRANDA_AGNOSTIC_ENGINE_COMPOSE only when ready.
+// EVENTS AS ROUTE STOPS: when the evening anchor is a genuinely walkable
+// extension of the AGNOSTIC day, weave it in as the walking-validated final
+// stop (see candidates/event-route-stop-weave). Fail-soft + honest: any error
+// or failed gate returns the inputs unchanged — the anchor card remains and no
+// walk is claimed. The module itself refuses non-agnostic days, so a fallback
+// city's route can never receive the typed place's event.
+async function weaveEventStopFailSoft({ result, placeStructure, walkingRouter, walkingConfig }) {
+  try {
+    const { weaveEveningEventRouteStop } = require("./candidates/event-route-stop-weave");
+    return await weaveEveningEventRouteStop({ result, placeStructure, walkingRouter, walkingConfig });
+  } catch (_error) {
+    return { result, placeStructure, applied: false, blockers: ["weave_error"] };
+  }
+}
+
 function isAgnosticEngineComposeRequested(request) {
   const query = request.query || {};
   const body = request.body || {};
@@ -2393,9 +2408,15 @@ function buildApp({
         // whether the engine path is ready to become the default synthesizer,
         // and if not, exactly what remains. Read-only; promotes nothing.
         experiment.engine_readiness = buildEngineReadinessVerdict(experiment);
+        const engineWoven = await weaveEventStopFailSoft({
+          result: promotion.promote ? experimentResult : baselineBody,
+          placeStructure: wovenPlaceStructure,
+          walkingRouter,
+          walkingConfig,
+        });
         response.json({
-          ...(promotion.promote ? experimentResult : baselineBody),
-          ...agnosticPlaceStructureSidecar,
+          ...engineWoven.result,
+          ...(engineWoven.placeStructure ? { place_structure: engineWoven.placeStructure } : {}),
           ...liveEventsSidecar,
           agnostic_route_output_experiment: experiment,
         });
@@ -2405,9 +2426,15 @@ function buildApp({
       // Legacy path: surface the same verdict so a tester can see they are NOT
       // on the engine path (engine_path_active: false) — no behavior change.
       experiment.engine_readiness = buildEngineReadinessVerdict(experiment);
+      const legacyWoven = await weaveEventStopFailSoft({
+        result: experimentResult,
+        placeStructure: wovenPlaceStructure,
+        walkingRouter,
+        walkingConfig,
+      });
       response.json({
-        ...experimentResult,
-        ...agnosticPlaceStructureSidecar,
+        ...legacyWoven.result,
+        ...(legacyWoven.placeStructure ? { place_structure: legacyWoven.placeStructure } : {}),
         ...liveEventsSidecar,
         agnostic_route_output_experiment: experiment,
       });

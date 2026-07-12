@@ -69,6 +69,8 @@ interface PlaceStructure {
       starts_at?: string | null;
       place?: string | null;
       source_url?: string | null;
+      woven_into_route?: boolean;
+      route_leg_km?: number | null;
     } | null;
   };
 }
@@ -847,6 +849,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               <p className="text-xs font-bold uppercase tracking-wider text-parranda-accent">{t("Och ikväll", "And tonight")}</p>
               <p className="mt-1 text-sm font-semibold text-parranda-ink">{day.evening_event.title}</p>
               {day.evening_event.place && <p className="text-xs text-parranda-ink/70">{day.evening_event.place}</p>}
+              {day.evening_event.woven_into_route && (
+                <p className="mt-1 text-xs text-parranda-ink/70">
+                  {t("Vävd i rutten som sista stopp", "Woven into the route as the last stop")}
+                  {Number.isFinite(day.evening_event.route_leg_km) ? ` · ↓ ${day.evening_event.route_leg_km} km` : ""}
+                </p>
+              )}
             </div>
           )}
 
@@ -935,6 +943,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                     {stop?.type && (
                       <span className="rounded-full border border-parranda-ink/15 bg-parranda-ink/10 px-2 py-0.5 text-xs text-parranda-ink/75">
                         {label(TYPE_LABELS, stop.type, lang)}
+                      </span>
+                    )}
+                    {stop?.is_live_event && (
+                      <span className="rounded-full border border-parranda-accent bg-parranda-accent/15 px-2 py-0.5 text-xs font-bold text-parranda-accent">
+                        {t("Ikväll", "Tonight")}
+                        {stop?.starts_at ? ` · ${eventWhen(stop, lang)}` : ""}
                       </span>
                     )}
                     {stop?.daypart && (

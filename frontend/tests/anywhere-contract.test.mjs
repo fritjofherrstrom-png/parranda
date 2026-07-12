@@ -128,6 +128,17 @@ test("the surface renders the engine's TRUSTWORTHY richness — and never the co
   assert.doesNotMatch(anywherePlannerSource, /primaryRoute\?\.title|primaryRoute\?\.summary|why_recommended|curator_voice/);
 });
 
+test("a woven live-event stop is marked, and the anchor card agrees with the route", () => {
+  // The event stop renders with an explicit live chip (never dressed as a
+  // stable place), and the "And tonight" card states when it was woven in as
+  // the route's last stop — the two surfaces must agree, not duplicate claims.
+  assert.match(anywherePlannerSource, /stop\?\.is_live_event && \(/);
+  assert.match(anywherePlannerSource, /t\("Ikväll", "Tonight"\)/);
+  assert.match(anywherePlannerSource, /day\.evening_event\.woven_into_route && \(/);
+  assert.match(anywherePlannerSource, /Vävd i rutten som sista stopp/);
+  assert.match(anywherePlannerSource, /Woven into the route as the last stop/);
+});
+
 test("route result copy keeps route stops authoritative and district candidates contextual", () => {
   assert.match(anywherePlannerSource, /Candidates near this place/);
   assert.match(anywherePlannerSource, /Parranda found place candidates, but not a reliable route yet\./);
