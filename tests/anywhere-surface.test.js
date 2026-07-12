@@ -22,7 +22,7 @@ function get(server, path) {
     http.get({ hostname: "127.0.0.1", port, path }, (r) => {
       let d = "";
       r.on("data", (c) => (d += c));
-      r.on("end", () => resolve({ status: r.statusCode, body: d }));
+      r.on("end", () => resolve({ status: r.statusCode, headers: r.headers, body: d }));
     }).on("error", reject);
   });
 }
@@ -72,8 +72,16 @@ test("a registered city still serves its normal city shell (not the alpha)", asy
   });
 });
 
-test("an unknown place serves the neutral alpha shell with an anywhere bootstrap (EN + SV)", async () => {
+test("promoted default: /labs/anywhere funnels to the canonical /anywhere surface, inputs preserved", async () => {
   await withServer({}, async (server) => {
+    const res = await get(server, "/labs/anywhere?place=Tbilisi&planner=open&lang=sv");
+    assert.equal(res.status, 302, "the old doorway redirects while the promoted surface is active");
+    assert.equal(res.headers.location, "/anywhere?place=Tbilisi&planner=open&lang=sv");
+  });
+});
+
+test("an unknown place serves the neutral alpha shell with an anywhere bootstrap (EN + SV) — opt-out fallback", async () => {
+  await withServer({ anywhereV2Enabled: false }, async (server) => {
     for (const [lang, expectLead] of [["en", /open data/i], ["sv", /öppna data/i]]) {
       const res = await get(server, `/labs/anywhere?place=Tbilisi&planner=open&lang=${lang}`);
       assert.equal(res.status, 200);

@@ -381,18 +381,17 @@ test("public pages default to English while explicit Swedish stays available", a
   const server = buildApp().listen(0);
 
   try {
+    // The landing is the PROMOTED new-frontend surface (FRONTEND_MIGRATION_
+    // CONTRACT "Promoted surfaces"): the language contract holds via the
+    // request-time <html lang>; copy is rendered client-side by the island.
     const landing = await requestText(server, { path: "/" });
     assert.equal(landing.status, 200);
     assert.match(landing.body, /<html lang="en">/);
-    assert.match(landing.body, /window\.__PARRANDA_LANGUAGE__ = "en";/);
-    assert.ok(stripI18nBootstrap(landing.body).includes("Next stop?"));
-    assert.equal(stripI18nBootstrap(landing.body).includes("Nästa stopp"), false);
+    assert.match(landing.body, /window\.__PARRANDA_CITIES__ = \{/, "city registry injected at serve time");
 
     const swedishLanding = await requestText(server, { path: "/?lang=sv" });
     assert.equal(swedishLanding.status, 200);
     assert.match(swedishLanding.body, /<html lang="sv">/);
-    assert.match(swedishLanding.body, /window\.__PARRANDA_LANGUAGE__ = "sv";/);
-    assert.ok(stripI18nBootstrap(swedishLanding.body).includes("Nästa stopp"));
 
     for (const pathName of ["/barcelona", "/rome", "/athens", "/barcelona/plan"]) {
       const response = await requestText(server, { path: pathName });
@@ -761,12 +760,15 @@ test("GET /api/places/search för barcelona visar inte strukturella route anchor
   }
 });
 
-test("GET / renderar global landing page (inte city-shell)", async () => {
+test("GET / renderar global landing page (inte city-shell) — opt-out-fallbacken intakt", async () => {
   global.fetch = async (url) => {
     throw new Error(`Unexpected fetch during landing page test: ${url}`);
   };
 
-  const server = buildApp().listen(0);
+  // The OLD landing is the rollback surface behind PARRANDA_NEW_LANDING=disabled
+  // (FRONTEND_MIGRATION_CONTRACT "Promoted surfaces") — it must stay intact
+  // until the promoted default has soaked and a separate cleanup removes it.
+  const server = buildApp({ newLandingEnabled: false }).listen(0);
 
   try {
     const response = await requestText(server, { path: "/" });
@@ -818,12 +820,12 @@ test("GET / renderar global landing page (inte city-shell)", async () => {
   }
 });
 
-test("GET /?lang=en renderar landing v2 med engelsk copy", async () => {
+test("GET /?lang=en renderar landing v2 med engelsk copy — opt-out-fallbacken intakt", async () => {
   global.fetch = async (url) => {
     throw new Error(`Unexpected fetch during EN landing test: ${url}`);
   };
 
-  const server = buildApp().listen(0);
+  const server = buildApp({ newLandingEnabled: false }).listen(0);
 
   try {
     const response = await requestText(server, { path: "/?lang=en" });

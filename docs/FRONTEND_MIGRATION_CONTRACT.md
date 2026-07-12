@@ -50,6 +50,34 @@ Owner-approved, per the "unless separately approved" clause:
   production source of truth; takeover of any route still requires the Surface
   migration rule below.
 
+## Promoted surfaces (2026-07-12)
+
+Readiness was proven for the first two migrated surfaces (parity checklists in
+#328/#344, live browser verification, the full suite), so per the anti-drift
+rule that experiment flags are not a permanent excuse, their route ownership is
+now the DEFAULT:
+
+- **`/anywhere`** is owned by the new frontend by default. Opt out with
+  `PARRANDA_NEW_ANYWHERE=disabled`.
+- **`GET /` (landing)** is owned by the new frontend by default, still gated on
+  the `/anywhere` surface being active (the landing routes freeform places
+  there — it never points at a missing surface). Opt out with
+  `PARRANDA_NEW_LANDING=disabled`.
+- Both remain gated on the **built page existing** (`frontend/dist` is
+  committed): a deployment without the build automatically serves the prior
+  Express surface, byte-stable.
+- **`/labs/anywhere`** redirects (302) to `/anywhere` with the same
+  place/planner/lang inputs while the new surface is active; when opted
+  out/unbuilt it still serves the old alpha shell. It is the rollback surface
+  and is deleted only after the promoted default has soaked.
+- Rollback for every case is one env var, no redeploy of code.
+
+The old landing shell, the `/labs/anywhere` alpha shell, and their script.js
+anywhere mode remain in the tree as the opt-out fallback. Removing them is a
+LATER, separate cleanup PR once the promoted default has soaked — not part of
+the promotion itself. The curated city shells (`/:city?planner=open`) are NOT
+migrated and remain owned by the current Express app.
+
 ## Surface migration rule
 
 Every later migrated surface must prove parity before takeover:
