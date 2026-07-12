@@ -8,9 +8,17 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { resolveDefaultEventSupply, eventCacheKey } = require("../server/place-candidates/agnostic-event-supply");
+const {
+  resolveDefaultEventSupply,
+  eventCacheKey,
+  HELSINKI_LINKED_EVENTS_FEED,
+} = require("../server/place-candidates/agnostic-event-supply");
 
 const ORIGINAL_FETCH = global.fetch;
+
+// Coverage is opt-in — the product default has no baked-in city. A deployment
+// configures its region's open feed via env; here the Helsinki fixture stands in.
+const FEEDS_ENV = JSON.stringify([HELSINKI_LINKED_EVENTS_FEED]);
 
 test("default supply is null unless env-enabled, a function when enabled", () => {
   assert.equal(resolveDefaultEventSupply({}), null);
@@ -25,7 +33,7 @@ test("a cold covered anchor returns pending immediately — does not await the s
     throw new Error("feed slow/unreachable");
   };
   try {
-    const supply = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: "enabled" });
+    const supply = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: "enabled", PARRANDA_EVENT_FEEDS: FEEDS_ENV });
     const out = await supply({ anchor: { lat: 60.17, lng: 24.94 }, now: "2026-06-28T18:00:00Z" });
     assert.equal(out.coverage, "covered");
     assert.equal(out.pending, true, "honest pending, not a fabricated empty");
