@@ -102,13 +102,28 @@ test("flag ON but NO landing build: falls back to today's landing", async () => 
   }
 });
 
-test("flag OFF (default): today's landing byte-identical behavior", async () => {
+test("PROMOTED DEFAULT: no flag needed — the new landing serves when built + anywhere active", async () => {
   const dist = makeDist();
+  const priorEnv = process.env.PARRANDA_NEW_LANDING;
+  delete process.env.PARRANDA_NEW_LANDING;
   try {
     await withServer({ anywhereV2Enabled: true, anywhereV2Dir: dist }, async (server) => {
       const page = await get(server, "/?lang=en");
+      assert.match(page.body, /NEW-LANDING/, "default ownership: the promoted landing serves with no env set");
+    });
+  } finally {
+    if (priorEnv !== undefined) process.env.PARRANDA_NEW_LANDING = priorEnv;
+    fs.rmSync(dist, { recursive: true, force: true });
+  }
+});
+
+test("opt-out (PARRANDA_NEW_LANDING=disabled): the prior landing serves, byte-stable", async () => {
+  const dist = makeDist();
+  try {
+    await withServer({ newLandingEnabled: false, anywhereV2Enabled: true, anywhereV2Dir: dist }, async (server) => {
+      const page = await get(server, "/?lang=en");
       assert.doesNotMatch(page.body, /NEW-LANDING/);
-      assert.match(page.body, /Next stop\?/, "current landing hero");
+      assert.match(page.body, /Next stop\?/, "the rollback landing hero");
     });
   } finally {
     fs.rmSync(dist, { recursive: true, force: true });

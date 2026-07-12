@@ -24,7 +24,7 @@ function get(server, requestPath) {
     http.get({ hostname: "127.0.0.1", port, path: requestPath }, (res) => {
       let body = "";
       res.on("data", (chunk) => (body += chunk));
-      res.on("end", () => resolve({ status: res.statusCode, body }));
+      res.on("end", () => resolve({ status: res.statusCode, headers: res.headers, body }));
     }).on("error", reject);
   });
 }
@@ -63,12 +63,29 @@ test("flag ON + build present: /anywhere serves the new frontend, assets serve, 
       const landing = await get(server, "/?lang=en");
       assert.match(landing.body, /window\.__PARRANDA_ANYWHERE_V2__ = true;/);
 
-      // The rollback surface is untouched.
-      const labs = await get(server, "/labs/anywhere?place=Lyon");
-      assert.equal(labs.status, 200);
-      assert.match(labs.body, /__PARRANDA_CITY__|anywhere/i);
+      // Promoted default: the labs doorway funnels into the ONE canonical
+      // surface, inputs preserved.
+      const labs = await get(server, "/labs/anywhere?place=Lyon&planner=open&lang=sv");
+      assert.equal(labs.status, 302);
+      assert.equal(labs.headers.location, "/anywhere?place=Lyon&planner=open&lang=sv");
     });
   } finally {
+    fs.rmSync(dist, { recursive: true, force: true });
+  }
+});
+
+test("PROMOTED DEFAULT: no flag needed — /anywhere serves the new frontend when the build exists", async () => {
+  const dist = makeDist();
+  const priorEnv = process.env.PARRANDA_NEW_ANYWHERE;
+  delete process.env.PARRANDA_NEW_ANYWHERE;
+  try {
+    await withServer({ anywhereV2Dir: dist }, async (server) => {
+      const page = await get(server, "/anywhere?place=Lyon");
+      assert.equal(page.status, 200);
+      assert.match(page.body, /NEW-FRONTEND-ANYWHERE/, "default ownership: the promoted surface serves with no env set");
+    });
+  } finally {
+    if (priorEnv !== undefined) process.env.PARRANDA_NEW_ANYWHERE = priorEnv;
     fs.rmSync(dist, { recursive: true, force: true });
   }
 });
@@ -90,8 +107,8 @@ test("flag ON + build present: /anywhere keeps English as default html lang", as
   }
 });
 
-test("flag OFF (default): /anywhere falls through to today's behavior; landing declares v2=false", async () => {
-  await withServer({}, async (server) => {
+test("opt-out (PARRANDA_NEW_ANYWHERE=disabled): /anywhere falls back to the prior behavior; landing declares v2=false", async () => {
+  await withServer({ anywhereV2Enabled: false }, async (server) => {
     const page = await get(server, "/anywhere");
     assert.equal(page.status, 200);
     // Today's behavior: the catch-all city shell (bootstrap present), NOT the new page.
