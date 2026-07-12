@@ -12,9 +12,15 @@ const {
   resolveEventFeedForAnchor,
   buildAnchorEventEndpoint,
   BUILTIN_EVENT_FEEDS,
+  HELSINKI_LINKED_EVENTS_FEED,
 } = require("../server/place-candidates/agnostic-event-supply");
 
-const HELSINKI = { lat: 60.17, lng: 24.94 }; // inside the built-in feed bbox
+// The municipal-feed path is exercised by INJECTING the Helsinki fixture as a
+// registry — never by relying on a baked-in default (there is none; the product
+// default has no special city). This proves the mechanism is generic: it works
+// with any injected open feed, Helsinki being one live-verified example.
+const FIXTURE_REGISTRY = [HELSINKI_LINKED_EVENTS_FEED];
+const HELSINKI = { lat: 60.17, lng: 24.94 }; // inside the fixture feed bbox
 const ESPOO = { lat: 60.2055, lng: 24.6559 };
 const VANTAA = { lat: 60.2934, lng: 25.0378 };
 const KAUNIAINEN = { lat: 60.2124, lng: 24.7276 };
@@ -54,43 +60,49 @@ function fetcherFor(payload) {
   return async () => ({ ok: true, json: async () => payload });
 }
 
-test("the feed registry is generic + deploy-configurable (a city is data, not code)", () => {
-  // Default: just the built-in fixture.
-  assert.equal(resolveEventFeedRegistry({}).length, BUILTIN_EVENT_FEEDS.length);
+test("the product default registry is EMPTY — no city is special out of the box", () => {
+  // The anti-drift guarantee: nothing is baked in, so no single place gets events
+  // that its neighbours don't. Live events come uniformly from the global provider
+  // (or an honest absence), never from a per-city default feed.
+  assert.equal(BUILTIN_EVENT_FEEDS.length, 0);
+  assert.equal(resolveEventFeedRegistry({}).length, 0);
+  assert.equal(resolveEventFeedForAnchor(HELSINKI), null, "no default feed covers even Helsinki");
+});
 
+test("the feed registry is generic + deploy-configurable (a city is data, not code)", () => {
   // A deployment adds the open feed covering its region via env — no code change.
   const stockholm = JSON.stringify([
     { id: "se-stockholm", label: "Stockholm", base: "https://example.org/se/v1/event/", bbox: [17.8, 59.2, 18.2, 59.45] },
   ]);
   const extended = resolveEventFeedRegistry({ PARRANDA_EVENT_FEEDS: stockholm });
-  assert.equal(extended.length, BUILTIN_EVENT_FEEDS.length + 1);
+  assert.equal(extended.length, 1);
   // An anchor in central Stockholm now resolves to the configured feed.
   const feed = resolveEventFeedForAnchor({ lat: 59.33, lng: 18.06 }, extended);
   assert.ok(feed && feed.id === "se-stockholm");
 
-  // Malformed config is ignored — keep the built-in, never throw.
-  assert.equal(resolveEventFeedRegistry({ PARRANDA_EVENT_FEEDS: "{not json" }).length, BUILTIN_EVENT_FEEDS.length);
+  // Malformed config is ignored — keep whatever is built-in (empty), never throw.
+  assert.equal(resolveEventFeedRegistry({ PARRANDA_EVENT_FEEDS: "{not json" }).length, 0);
 });
 
-test("an anchor inside an open feed resolves the feed; outside, it does not", () => {
-  const feed = resolveEventFeedForAnchor(HELSINKI);
+test("an anchor inside an injected open feed resolves it; outside, it does not", () => {
+  const feed = resolveEventFeedForAnchor(HELSINKI, FIXTURE_REGISTRY);
   assert.ok(feed && feed.id === "linkedevents-helsinki");
   assert.equal(feed.label, "Helsinki Region Linked Events");
-  assert.equal(resolveEventFeedForAnchor(ROME), null);
-  assert.equal(resolveEventFeedForAnchor({ lat: NaN, lng: NaN }), null);
+  assert.equal(resolveEventFeedForAnchor(ROME, FIXTURE_REGISTRY), null);
+  assert.equal(resolveEventFeedForAnchor({ lat: NaN, lng: NaN }, FIXTURE_REGISTRY), null);
 });
 
-test("the built-in Linked Events coverage is regional, but still bounded", () => {
+test("an injected Linked Events feed's coverage is regional, but still bounded", () => {
   for (const anchor of [HELSINKI, ESPOO, VANTAA, KAUNIAINEN]) {
-    const feed = resolveEventFeedForAnchor(anchor);
+    const feed = resolveEventFeedForAnchor(anchor, FIXTURE_REGISTRY);
     assert.ok(feed, "capital-region anchor resolves to the live-verified feed");
     assert.equal(feed.id, "linkedevents-helsinki");
   }
-  assert.equal(resolveEventFeedForAnchor(PORVOO), null, "nearby cities outside the verified bbox stay uncovered");
+  assert.equal(resolveEventFeedForAnchor(PORVOO, FIXTURE_REGISTRY), null, "nearby cities outside the verified bbox stay uncovered");
 });
 
 test("the endpoint is geo-filtered to the anchor and sorted soonest-ending-first", () => {
-  const url = new URL(buildAnchorEventEndpoint(BUILTIN_EVENT_FEEDS[0].base, HELSINKI));
+  const url = new URL(buildAnchorEventEndpoint(HELSINKI_LINKED_EVENTS_FEED.base, HELSINKI));
   assert.equal(url.searchParams.get("dwithin_origin"), "24.94,60.17");
   assert.ok(Number(url.searchParams.get("dwithin_metres")) > 0);
   // sort=end_time surfaces what is genuinely on now/today and pushes permanent
@@ -103,6 +115,7 @@ test("covered anchor buckets events into tonight (now/today/tonight) and this_we
   const out = await collectAnchorEvents({
     anchor: HELSINKI,
     now: NOW,
+    registry: FIXTURE_REGISTRY,
     fetcher: fetcherFor(linkedEventsPayload()),
   });
   assert.equal(out.coverage, "covered");
@@ -133,6 +146,7 @@ test("tonight ranks by salience: an ongoing 'now' event outranks a later-today o
   const out = await collectAnchorEvents({
     anchor: HELSINKI,
     now: NOW,
+    registry: FIXTURE_REGISTRY,
     fetcher: fetcherFor(linkedEventsPayload()),
   });
   // 'now' timing scores highest in the shared salience scorer.
@@ -155,7 +169,7 @@ test("cultural events outrank civic/admin notices in the same bucket (smart, not
       ev("culture1", "Jazz concert at the hall", "2026-06-28T18:00:00Z", "2026-06-28T20:00:00Z", 60.171, 24.941),
     ],
   };
-  const out = await collectAnchorEvents({ anchor: HELSINKI, now: NOW, fetcher: fetcherFor(payload) });
+  const out = await collectAnchorEvents({ anchor: HELSINKI, now: NOW, registry: FIXTURE_REGISTRY, fetcher: fetcherFor(payload) });
   const ids = out.tonight.map((e) => e.id);
   assert.ok(ids.indexOf("culture1") < ids.indexOf("admin1"), "the concert ranks above the council meeting");
   assert.equal(out.tonight.find((e) => e.id === "culture1").cultural_tier, "cultural");
@@ -167,25 +181,27 @@ test("an uncovered anchor returns honest empty — no fetch, no fabricated event
   const out = await collectAnchorEvents({
     anchor: ROME,
     now: NOW,
+    registry: FIXTURE_REGISTRY,
     fetcher: async () => {
       fetched = true;
       return { ok: true, json: async () => linkedEventsPayload() };
     },
   });
   assert.equal(out.coverage, "uncovered");
-  assert.equal(fetched, false, "no feed covers the anchor → no network call");
+  assert.equal(fetched, false, "an anchor outside every present feed → no network call");
   assert.deepEqual(out.tonight, []);
   assert.deepEqual(out.this_week, []);
 });
 
 test("fail-soft: a feed error yields covered-but-empty, never a throw", async () => {
-  const httpError = await collectAnchorEvents({ anchor: HELSINKI, now: NOW, fetcher: async () => ({ ok: false }) });
+  const httpError = await collectAnchorEvents({ anchor: HELSINKI, now: NOW, registry: FIXTURE_REGISTRY, fetcher: async () => ({ ok: false }) });
   assert.equal(httpError.coverage, "covered");
   assert.deepEqual(httpError.tonight, []);
 
   const thrower = await collectAnchorEvents({
     anchor: HELSINKI,
     now: NOW,
+    registry: FIXTURE_REGISTRY,
     fetcher: async () => {
       throw new Error("network down");
     },

@@ -15,6 +15,7 @@ const {
   resolveDefaultEventSupply,
   resolveGlobalEventKey,
   GLOBAL_FEED_DESCRIPTOR,
+  HELSINKI_LINKED_EVENTS_FEED,
 } = require("../server/place-candidates/agnostic-event-supply");
 const { buildDiscoveryUrl, mapDiscoveryEvent } = require("../server/pulse-sources/ticketmaster-source-provider");
 
@@ -115,6 +116,9 @@ test("a municipal open feed still wins where it covers the anchor (hyper-local f
   const out = await collectAnchorEvents({
     anchor: HELSINKI,
     now: NOW,
+    // The municipal feed is present (a deployment configured it); it must win over
+    // the global provider where it covers the anchor.
+    registry: [HELSINKI_LINKED_EVENTS_FEED],
     fetcher: fetcherFor({ data: [] }, log),
     globalKey: "test-key",
   });
