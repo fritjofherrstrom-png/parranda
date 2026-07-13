@@ -204,6 +204,11 @@ route stops. It evaluates the live-source coverage around a place/time window:
 - which community/social hints need corroboration;
 - which local-language terms should be used next.
 
+The graph reports acquisition readiness only. `can_collect_pulse_candidates`
+and `can_evaluate_route_salience` mean the source mix is broad enough for later
+event evaluation; they do not claim that a current event exists. Event-level
+timing, fusion, and corroboration remain downstream gates.
+
 This matters because local live quality is not only "did we find an event?"
 Parranda also needs to know whether it has broad enough source-family coverage
 to trust that it is not missing the important local rhythm.

@@ -83,8 +83,8 @@ test("local live source graph turns independent sources into coverage, not a raw
     "official_municipal_calendar",
     "venue_owned_calendar",
   ]);
-  assert.equal(graph.coverage.can_support_pulse_now, true);
-  assert.equal(graph.coverage.can_support_route_salience, true);
+  assert.equal(graph.coverage.can_collect_pulse_candidates, true);
+  assert.equal(graph.coverage.can_evaluate_route_salience, true);
   assert.ok(graph.discovery_terms.includes("loppis"));
   assert.ok(graph.discovery_terms.includes("södra Skåne"));
 
@@ -127,8 +127,8 @@ test("community and social listings are discovered but never become strong runti
   });
 
   assert.equal(graph.coverage.status, "thin");
-  assert.equal(graph.coverage.can_support_pulse_now, false);
-  assert.equal(graph.coverage.can_support_route_salience, false);
+  assert.equal(graph.coverage.can_collect_pulse_candidates, false);
+  assert.equal(graph.coverage.can_evaluate_route_salience, false);
   assert.deepEqual(graph.coverage.needs_corroboration_families, ["community_social_listing"]);
   assert.equal(graph.social_coverage.status, "needs_corroboration");
   assert.ok(graph.social_coverage.reasons.includes("social_signal_not_enough_for_runtime_claims"));
@@ -137,6 +137,100 @@ test("community and social listings are discovered but never become strong runti
   assert.equal(social.status, "needs_corroboration");
   assert.equal(social.candidates[0].corroboration_required, true);
   assert.ok(social.reasons.includes("community_or_social_requires_corroboration"));
+});
+
+test("blocked, stale, and probe-only sources never count as covered runtime supply", () => {
+  const graph = buildLocalLiveSourceGraph({
+    sourceCandidates: [
+      source({ id: "blocked", source_health: "blocked", runtime_policy: "blocked" }),
+      source({
+        id: "stale",
+        family: "official_tourism_calendar",
+        source_health: "stale",
+        runtime_policy: "runtime_ok",
+      }),
+      source({
+        id: "probe",
+        family: "venue_owned_calendar",
+        source_health: "healthy",
+        runtime_policy: "probe_only",
+      }),
+    ],
+  });
+
+  assert.equal(graph.coverage.runtime_ready_source_count, 0);
+  assert.equal(graph.coverage.can_collect_pulse_candidates, false);
+  assert.equal(graph.coverage.can_evaluate_route_salience, false);
+  assert.equal(
+    graph.source_families.find((family) => family.family === "official_municipal_calendar").status,
+    "blocked",
+  );
+  assert.equal(
+    graph.source_families.find((family) => family.family === "official_tourism_calendar").status,
+    "needs_review",
+  );
+  assert.equal(
+    graph.source_families.find((family) => family.family === "venue_owned_calendar").status,
+    "needs_review",
+  );
+});
+
+test("one publisher cannot masquerade as three independent source families", () => {
+  const graph = buildLocalLiveSourceGraph({
+    sourceCandidates: [
+      source({ id: "municipal", family: "official_municipal_calendar", url: "https://same.example/city" }),
+      source({ id: "tourism", family: "official_tourism_calendar", url: "https://same.example/tourism" }),
+      source({ id: "venue", family: "venue_owned_calendar", url: "https://same.example/venue" }),
+    ],
+  });
+
+  assert.equal(graph.coverage.independent_runtime_source_count, 1);
+  assert.equal(graph.coverage.status, "thin");
+  assert.equal(graph.coverage.can_evaluate_route_salience, false);
+});
+
+test("an unrelated official source is context, not corroboration of a social event", () => {
+  const graph = buildLocalLiveSourceGraph({
+    sourceCandidates: [
+      source({ id: "official" }),
+      source({
+        id: "social",
+        family: "community_social_listing",
+        url: "https://social.example.test/post",
+        extraction_tier: "weak_social_manual",
+        trust_tier: "community",
+        terms_status: "unknown",
+        runtime_policy: "probe_only",
+        corroboration_required: true,
+        extractable: { title: true, start: true, source_url: true, social: true },
+      }),
+    ],
+  });
+
+  assert.equal(graph.social_coverage.status, "needs_corroboration");
+  assert.equal(graph.social_coverage.stronger_source_context_present, true);
+  assert.ok(graph.social_coverage.reasons.includes("stronger_source_context_available_but_event_match_required"));
+});
+
+test("discovery terms use supplied local-language vocabulary instead of hardcoded regions", () => {
+  const graph = buildLocalLiveSourceGraph({
+    place: {
+      label: "Athína",
+      language_hints: ["el"],
+      local_discovery_terms: ["εκδηλώσεις", "συναυλία", "αγορά"],
+    },
+    sourceCandidates: [
+      source({
+        id: "local-calendar",
+        source_language: "el",
+        local_discovery_terms: ["φεστιβάλ"],
+      }),
+    ],
+  });
+
+  assert.ok(graph.discovery_terms.includes("εκδηλώσεις"));
+  assert.ok(graph.discovery_terms.includes("φεστιβάλ"));
+  assert.equal(graph.discovery_terms.includes("loppis"), false);
 });
 
 test("local-language and market source candidates stay first-class acquisition targets", () => {

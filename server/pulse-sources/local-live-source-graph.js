@@ -47,7 +47,7 @@ function buildLocalLiveSourceGraph({
     place_context: placeContext,
     time_window: normalizeTimeWindow(timeWindow),
     intent_hints: normalizeStringList(intentHints),
-    discovery_terms: buildDiscoveryTerms(placeContext, intentHints),
+    discovery_terms: buildDiscoveryTerms(placeContext, intentHints, evaluatedCandidates),
     coverage,
     source_families: sourceFamilies,
     social_coverage: summarizeSocialCoverage(sourceFamilies),
@@ -59,13 +59,17 @@ function summarizeFamilyCoverage(family, candidates) {
   const knownFamily = SOURCE_FAMILIES[family] ? family : "unknown_source_family";
   const sortedCandidates = [...candidates].sort(compareEvaluatedSourceCandidates);
   const best = sortedCandidates[0] || null;
-  const hasViable = sortedCandidates.some((candidate) => candidate.status === "viable_provider_probe");
+  const viableCandidates = sortedCandidates.filter((candidate) => candidate.status === "viable_provider_probe");
+  const independentlyViableCandidates = viableCandidates.filter(
+    (candidate) => !candidateRequiresCorroboration(knownFamily, candidate),
+  );
+  const hasViable = viableCandidates.length > 0;
   const hasNeedsReview = sortedCandidates.some((candidate) => candidate.status === "needs_adapter_or_permission");
   const hasRejected = sortedCandidates.some((candidate) => candidate.status === "rejected");
   const socialLike = isCommunityOrSocialFamily(knownFamily, sortedCandidates);
 
   let status = "missing";
-  if (hasViable && !socialLike) {
+  if (independentlyViableCandidates.length > 0) {
     status = "covered";
   } else if (hasViable || (socialLike && hasNeedsReview)) {
     status = "needs_corroboration";
@@ -82,7 +86,7 @@ function summarizeFamilyCoverage(family, candidates) {
     status,
     candidate_count: sortedCandidates.length,
     best_candidate_id: best?.id || null,
-    runtime_ready_count: sortedCandidates.filter((candidate) => candidate.status === "viable_provider_probe").length,
+    runtime_ready_count: independentlyViableCandidates.length,
     needs_review_count: sortedCandidates.filter((candidate) => candidate.status === "needs_adapter_or_permission").length,
     rejected_count: sortedCandidates.filter((candidate) => candidate.status === "rejected").length,
     coverage_tags: unionSorted(sortedCandidates.flatMap((candidate) => candidate.coverage_tags || [])),
@@ -105,13 +109,24 @@ function summarizeCoverage(sourceFamilies, candidates) {
     coveredFamilies.length === 0 &&
     sourceFamilies.some((family) => family.status === "needs_corroboration") &&
     sourceFamilies.every((family) => family.status !== "covered");
+  const runtimeCandidates = candidates.filter(
+    (candidate) =>
+      candidate.status === "viable_provider_probe" &&
+      !isCommunityOrSocialFamily(candidate.family, [candidate]),
+  );
+  const coveredSourceOrigins = unionSorted(runtimeCandidates.map((candidate) => candidate.source_identity || candidate.id));
+  const independentRuntimeSourceCount = coveredSourceOrigins.length;
 
   let status = "missing";
-  if (coveredFamilies.length >= 3 && hasCoreRuntimeCoverage(sourceFamilies)) {
+  if (
+    coveredFamilies.length >= 3 &&
+    independentRuntimeSourceCount >= 3 &&
+    hasCoreRuntimeCoverage(sourceFamilies)
+  ) {
     status = "strong";
-  } else if (coveredFamilies.length >= 2) {
+  } else if (coveredFamilies.length >= 2 && independentRuntimeSourceCount >= 2) {
     status = "partial";
-  } else if (coveredFamilies.length === 1 || needsReviewFamilies.length > 0 || socialOnly) {
+  } else if (coveredFamilies.length >= 1 || needsReviewFamilies.length > 0 || socialOnly) {
     status = "thin";
   }
 
@@ -123,7 +138,9 @@ function summarizeCoverage(sourceFamilies, candidates) {
 
   return {
     status,
-    runtime_ready_source_count: candidates.filter((candidate) => candidate.status === "viable_provider_probe").length,
+    runtime_ready_source_count: runtimeCandidates.length,
+    independent_runtime_source_count: independentRuntimeSourceCount,
+    covered_source_origins: coveredSourceOrigins,
     covered_families: coveredFamilies,
     needs_review_families: needsReviewFamilies,
     needs_corroboration_families: sourceFamilies
@@ -131,8 +148,13 @@ function summarizeCoverage(sourceFamilies, candidates) {
       .map((family) => family.family),
     missing_families: missingFamilies,
     blocked_families: blockedFamilies,
-    can_support_pulse_now: coveredFamilies.length >= 1 && !socialOnly,
-    can_support_route_salience: hasCoreRuntimeCoverage(sourceFamilies) && coveredFamilies.length >= 2,
+    can_collect_pulse_candidates: coveredFamilies.length >= 1 && independentRuntimeSourceCount >= 1 && !socialOnly,
+    can_evaluate_route_salience:
+      hasCoreRuntimeCoverage(sourceFamilies) &&
+      coveredFamilies.length >= 2 &&
+      independentRuntimeSourceCount >= 2,
+    event_evidence_evaluated: false,
+    time_window_evaluated: false,
     confidence_ceiling: status === "strong" ? "medium" : status === "partial" ? "low" : "needs_review",
     reasons,
   };
@@ -143,14 +165,18 @@ function summarizeSocialCoverage(sourceFamilies) {
   const candidateCount = socialFamilies.reduce((sum, family) => sum + family.candidate_count, 0);
   const hasRuntimeCorroboration = sourceFamilies.some((family) => family.status === "covered" && !isCommunityOrSocialFamily(family.family));
   return {
-    status: candidateCount === 0 ? "absent" : hasRuntimeCorroboration ? "corroborated_signal" : "needs_corroboration",
+    // Source-family coverage is context, not event-level corroboration. A social
+    // post only becomes corroborated after a later fusion stage matches the same
+    // factual event atoms (time/place/title) against another source.
+    status: candidateCount === 0 ? "absent" : "needs_corroboration",
     candidate_count: candidateCount,
     families: socialFamilies.map((family) => family.family),
+    stronger_source_context_present: hasRuntimeCorroboration,
     reasons:
       candidateCount === 0
         ? ["no_social_or_community_source_seen"]
         : hasRuntimeCorroboration
-          ? ["social_signal_has_stronger_source_context"]
+          ? ["stronger_source_context_available_but_event_match_required"]
           : ["social_signal_not_enough_for_runtime_claims"],
   };
 }
@@ -179,6 +205,7 @@ function compactGraphCandidate(candidate) {
     terms_status: candidate.terms_status,
     source_health: candidate.source_health,
     runtime_policy: candidate.runtime_policy,
+    source_identity: candidate.source_identity || null,
     corroboration_required: candidate.corroboration_required === true || isSocialExtraction(candidate),
     score: candidate.score,
     maps_to_existing_provider: candidate.maps_to_existing_provider === true,
@@ -200,6 +227,7 @@ function normalizePlaceContext(place) {
     bounds: normalizeBounds(place.bounds),
     region_terms: normalizeStringList(place.region_terms || place.regionTerms || place.terms),
     language_hints: normalizeStringList(place.language_hints || place.languages || place.language),
+    local_discovery_terms: normalizeStringList(place.local_discovery_terms || place.discovery_terms),
   };
 }
 
@@ -211,18 +239,15 @@ function normalizeTimeWindow(timeWindow) {
   };
 }
 
-function buildDiscoveryTerms(placeContext, intentHints) {
+function buildDiscoveryTerms(placeContext, intentHints, candidates = []) {
   const baseTerms = [
     placeContext.label,
     ...placeContext.region_terms,
     ...normalizeStringList(intentHints),
+    ...placeContext.local_discovery_terms,
+    ...candidates.flatMap((candidate) => candidate.local_discovery_terms || []),
     "events",
     "calendar",
-    "market",
-    "concert",
-    "loppis",
-    "marknad",
-    "konsert",
   ];
   return unionSorted(baseTerms);
 }
@@ -273,7 +298,18 @@ function hasCoreRuntimeCoverage(sourceFamilies) {
 }
 
 function isCommunityOrSocialFamily(family, candidates = []) {
-  return family === "community_social_listing" || candidates.some(isSocialExtraction);
+  return (
+    family === "community_social_listing" ||
+    candidates.some((candidate) => candidate.corroboration_required === true || isSocialExtraction(candidate))
+  );
+}
+
+function candidateRequiresCorroboration(family, candidate = {}) {
+  return (
+    family === "community_social_listing" ||
+    candidate.corroboration_required === true ||
+    isSocialExtraction(candidate)
+  );
 }
 
 function isSocialExtraction(candidate = {}) {

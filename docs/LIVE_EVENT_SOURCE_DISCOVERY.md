@@ -141,7 +141,15 @@ The graph is intentionally conservative:
   same local event layer;
 - missing families become acquisition-plan steps rather than silent absence;
 - local-language terms and source language are preserved so discovery is not
-  English-only;
+  English-only; place resolvers and source probes inject local discovery terms
+  rather than the graph guessing one region's vocabulary for every place;
+- source health and runtime policy are real gates, not display-only metadata;
+- coverage strength counts independent publisher identities, so one site cannot
+  appear as several independent source families;
+- source coverage means Parranda can collect/evaluate candidates. It never by
+  itself claims an event is happening now or is suitable for a route;
+- community/social source context is not event corroboration. Corroboration is
+  deferred until normalized event atoms can be matched across sources;
 - the graph does not fetch, scrape, promote Pulse cards, or create route stops.
 
 For regions like Österlen or southern Skåne, the graph should reveal whether
