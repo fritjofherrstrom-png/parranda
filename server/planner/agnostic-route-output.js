@@ -673,7 +673,10 @@ async function composeAgnosticRouteOutput({
       preferences,
       timezone,
       lang,
-      placeLabel: agnosticLabel || agnosticContext.label,
+      // Pass ONLY the resolver-attested label (may be null). The prose builder
+      // must fall back to neutral, never to agnosticContext.label — which is the
+      // "Nearby" geometry placeholder, not a real place name.
+      placeLabel: agnosticLabel,
     });
   }
 
@@ -882,7 +885,10 @@ async function composeAgnosticRouteViaEngine({
 
   const engineDay = sanitizeAgnosticEngineDay({
     day: (engineResult && Array.isArray(engineResult.days) && engineResult.days[0]) || null,
-    placeLabel: safeAgnosticPlaceLabel(placeLabel) || agnosticContext.label,
+    // Route PROSE uses the attested label or neutral fallback — never the
+    // "Nearby" geometry placeholder (which stays on the engine's start/end
+    // labels via the engineCityConfig `label` above).
+    placeLabel: safeAgnosticPlaceLabel(placeLabel),
     lang,
   });
   const engineRoute = (engineDay && engineDay.primary_route) || null;
@@ -983,13 +989,23 @@ function sanitizeAgnosticEngineRoute({ route, placeLabel, lang }) {
 
 function scrubAgnosticAppliedDay(result, engineDay) {
   if (!result || !Array.isArray(result.days) || !result.days[0]) return;
-  // applyRouteMutation preserves non-route fields from a baseline fallback day.
-  // On the any-place path those fields can belong to the fallback city, so the
-  // promoted agnostic day must not carry date-signals until the agnostic engine
-  // itself owns a trusted source for them.
-  result.days[0].date_signals = [];
+  const day = result.days[0];
+  // applyRouteMutation only REPLACES days[0].primary_route; every other day-level
+  // field survives from the baseline fallback day. On the any-place path those
+  // belong to the fallback CITY (e.g. a Malmö request whose baseline was Rome),
+  // so the promoted agnostic day must not carry them until the agnostic engine
+  // owns a trusted source for each:
+  //   - date_signals: fallback city's seasonal signals ("Sommarkväll i Rom").
+  //   - alternatives: fallback city's alternate routes (the engine emits ONE
+  //     route, never alternatives, so these are ALWAYS the baseline's).
+  //   - live_events: fallback city's per-day events. The CORRECT agnostic events
+  //     ride the top-level `live_events` sidecar (geo-keyed to the anchor); this
+  //     per-day copy is unconsumed leakage. Delete it, never the sidecar.
+  day.date_signals = [];
+  day.alternatives = [];
+  delete day.live_events;
   if (engineDay && engineDay.dayflow_context) {
-    result.days[0].dayflow_context = engineDay.dayflow_context;
+    day.dayflow_context = engineDay.dayflow_context;
   }
 }
 
@@ -1011,7 +1027,11 @@ function buildAgnosticRouteProse({ placeLabel, lang }) {
 
 function safeAgnosticPlaceLabel(value) {
   if (typeof value !== "string") return null;
-  const cleaned = value.replace(/\s+/g, " ").trim();
+  // A resolver label is often a full display name ("Malmö, Malmö kommun, Skåne
+  // län, Sverige"). Route prose reads as Parranda's own voice, so take just the
+  // primary locality (the first comma-segment) — "Plan för Malmö", not the whole
+  // administrative chain.
+  const cleaned = value.split(",")[0].replace(/\s+/g, " ").trim();
   if (!cleaned) return null;
   return cleaned.slice(0, 80);
 }

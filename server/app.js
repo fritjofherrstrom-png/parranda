@@ -2401,7 +2401,11 @@ function buildApp({
         weatherProvider,
         clock,
         trustedTimezone: intake.resolved?.timezone || null,
-        placeLabel: intake.resolved?.label || placeQuery || null,
+        // ONLY the resolver-attested label may drive route prose. The raw public
+        // placeQuery must never attest a place in Parranda's own voice — an
+        // unresolved place (or explicit coords with no trusted label) falls back
+        // to neutral "this place"/"platsen" inside the prose builder.
+        placeLabel: intake.resolved?.label || null,
         synthesizeVia: useEngineCompose ? "engine" : "legacy",
       });
       experiment.intake = intake;

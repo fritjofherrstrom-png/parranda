@@ -1307,3 +1307,69 @@ test("unit: engine composer scrubs fallback-city signals and placeholder route p
   assert.equal(publicBlob.includes("experimental route"), false);
   assert.equal(baseline.days[0].date_signals[0].title, "Sommarkväll i Rom", "baseline object remains untouched");
 });
+
+test("unit: the REPLACE branch scrubs every fallback-city day field, not just date_signals", async () => {
+  // Baseline HAS a primary_route → applyRouteMutation replaces only the route and
+  // keeps the other day fields, which belong to the fallback city (Rome). All of
+  // them must be scrubbed from the promoted any-place (Malmö) day.
+  const baseline = {
+    city: "rome",
+    days: [
+      {
+        date: DATE,
+        primary_route: { title: "Rome baseline route", main_stops: [{ id: "rome-1" }] },
+        alternatives: [{ title: "Ostiense to Trastevere", main_stops: [{ id: "rome-alt-1" }] }],
+        date_signals: [{ title: "Sommarkväll i Rom" }],
+        live_events: { tonight: [{ title: "Rome exhibition tonight" }], this_week: [] },
+      },
+    ],
+    readiness: { unsupported: true },
+  };
+  const { result } = await composeAgnosticRouteOutput({
+    coords: { lat: 55.6, lng: 13.0 },
+    baselineResult: baseline,
+    externalRequested: true,
+    openDataLoader: makeLoader(fixtureNear({ lat: 55.6, lng: 13.0 })),
+    preferences: ["food", "coffee", "scenic"],
+    date: DATE,
+    todayIsoDate: DATE,
+    synthesizeVia: "engine",
+    // A full resolver display name — prose must use just the primary locality.
+    placeLabel: "Malmö, Malmö kommun, Skåne län, Sverige",
+    lang: "sv",
+  });
+
+  const day = result.days[0];
+  assert.ok(day.primary_route, "the Malmö engine route replaced the baseline route");
+  assert.equal(day.primary_route.title, "Plan för Malmö", "label trimmed to the primary locality, not the whole admin chain");
+  assert.deepEqual(day.date_signals, [], "fallback date_signals scrubbed");
+  assert.deepEqual(day.alternatives, [], "fallback-city alternatives scrubbed");
+  assert.equal("live_events" in day, false, "fallback-city per-day live_events removed (the anchor's events ride the top-level sidecar)");
+
+  const publicBlob = JSON.stringify(result).toLowerCase();
+  for (const leak of ["rome baseline route", "ostiense to trastevere", "rome-alt-1", "sommarkväll i rom", "rome exhibition"]) {
+    assert.equal(publicBlob.includes(leak), false, `fallback-city text "${leak}" must not survive in the public blob`);
+  }
+  // The baseline object itself is never mutated.
+  assert.equal(baseline.days[0].alternatives[0].title, "Ostiense to Trastevere");
+  assert.ok(baseline.days[0].live_events);
+});
+
+test("unit: only a resolver-attested label drives prose; no label → neutral, never fabricated", async () => {
+  const baseline = { city: "atlantis", days: [{ date: DATE, primary_route: null, alternatives: [] }], readiness: { unsupported: true } };
+  const { result } = await composeAgnosticRouteOutput({
+    coords: { lat: 55.6, lng: 13.0 },
+    baselineResult: baseline,
+    externalRequested: true,
+    openDataLoader: makeLoader(fixtureNear({ lat: 55.6, lng: 13.0 })),
+    preferences: ["food", "coffee", "scenic"],
+    date: DATE,
+    todayIsoDate: DATE,
+    synthesizeVia: "engine",
+    placeLabel: null, // explicit coords / unresolved place → no attested label
+    lang: "en",
+  });
+  const route = result.days[0].primary_route;
+  assert.ok(route, "still composes a route from the trusted candidates");
+  assert.equal(route.title, "Plan for this place", "neutral fallback, never an unverified place name");
+});
