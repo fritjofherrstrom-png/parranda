@@ -576,6 +576,21 @@ function isAgnosticRouteOutputExperimentRequested(request) {
 // legacy in-module synthesizer and the prior always-return behavior unchanged,
 // and respects "no public flip without persistent cache" — production opts in
 // via PARRANDA_AGNOSTIC_ENGINE_COMPOSE only when ready.
+// EVENTS AS ROUTE STOPS: when the evening anchor is a genuinely walkable
+// extension of the AGNOSTIC day, weave it in as the walking-validated final
+// stop (see candidates/event-route-stop-weave). Fail-soft + honest: any error
+// or failed gate returns the inputs unchanged — the anchor card remains and no
+// walk is claimed. The module itself refuses non-agnostic days, so a fallback
+// city's route can never receive the typed place's event.
+async function weaveEventStopFailSoft({ result, placeStructure, walkingRouter, walkingConfig }) {
+  try {
+    const { weaveEveningEventRouteStop } = require("./candidates/event-route-stop-weave");
+    return await weaveEveningEventRouteStop({ result, placeStructure, walkingRouter, walkingConfig });
+  } catch (_error) {
+    return { result, placeStructure, applied: false, blockers: ["weave_error"] };
+  }
+}
+
 function isAgnosticEngineComposeRequested(request) {
   const query = request.query || {};
   const body = request.body || {};
@@ -1286,18 +1301,23 @@ function isDogfoodUiEnabled(env) {
   return flag === "enabled" || flag === "1" || flag === "true";
 }
 
-// NEW-frontend takeover of /anywhere (docs/FRONTEND_MIGRATION_CONTRACT.md).
-// Default OFF: unset env → the request falls through to the existing behavior.
+// PROMOTED (2026-07-12, docs/FRONTEND_MIGRATION_CONTRACT.md "Promoted
+// surfaces"): the NEW frontend owns /anywhere and the landing BY DEFAULT —
+// readiness was proven (parity checklists #328/#344, live verification, the
+// full suite) so the experiment flag flipped to an explicit OPT-OUT, per the
+// anti-drift rule that flags are for safe development, not a permanent excuse.
+// Rollback stays one env away: set PARRANDA_NEW_ANYWHERE=disabled (or
+// PARRANDA_NEW_LANDING=disabled) to return to the prior Express surface,
+// byte-stable. The build-present gates below still protect a deployment whose
+// frontend/dist is missing — the old surface then serves automatically.
 function isAnywhereV2Enabled(env = process.env) {
   const flag = String((env && env.PARRANDA_NEW_ANYWHERE) ?? "").trim().toLowerCase();
-  return flag === "enabled" || flag === "1" || flag === "true";
+  return !["disabled", "0", "false", "off"].includes(flag);
 }
 
-// NEW-frontend takeover of the LANDING (GET /). Default OFF: unset env → the
-// current server-rendered landing, byte-stable. See FRONTEND_MIGRATION_CONTRACT.
 function isNewLandingEnabled(env = process.env) {
   const flag = String((env && env.PARRANDA_NEW_LANDING) ?? "").trim().toLowerCase();
-  return flag === "enabled" || flag === "1" || flag === "true";
+  return !["disabled", "0", "false", "off"].includes(flag);
 }
 
 // Serve-time mutation of the prebuilt landing HTML: the request-time <html lang>
@@ -1643,21 +1663,33 @@ function buildApp({
   // engine request. Always available (not env-gated) — it is a product doorway,
   // not a diagnostics page. The agnostic *route* still needs the trusted loader to
   // be configured to compose anything; without it the surface honestly says so.
-  app.get("/labs/anywhere", (request, response) => {
-    const place = typeof request.query?.place === "string" ? request.query.place : "";
-    const plannerEntryRoute = String(request.query?.planner || "") === "open";
-    response.type("html").send(
-      renderAnywhereShell({ place, plannerEntryRoute, lang: normalizeLanguage(request.query?.lang) }),
-    );
-  });
-
-  // /anywhere — the NEW frontend's any-city planner (explicit route takeover per
-  // docs/FRONTEND_MIGRATION_CONTRACT.md). Served ONLY when the flag is on AND the
-  // built surface exists; otherwise the request falls through to the catch-all
-  // (today's behavior, byte-stable). Rollback = unset PARRANDA_NEW_ANYWHERE;
-  // /labs/anywhere above remains untouched as the fallback surface.
+  // /anywhere — the NEW frontend's any-city planner (route ownership per
+  // docs/FRONTEND_MIGRATION_CONTRACT.md "Promoted surfaces": DEFAULT since
+  // 2026-07-12). Served when not opted out AND the built surface exists;
+  // otherwise the request falls through to the catch-all (the prior behavior,
+  // byte-stable). Rollback = PARRANDA_NEW_ANYWHERE=disabled.
   const anywhereV2Html = path.join(anywhereV2Dir, "anywhere", "index.html");
   const anywhereV2Active = () => anywhereV2Enabled && fs.existsSync(anywhereV2Html);
+
+  // /labs/anywhere — the OLD any-place alpha doorway. Now that /anywhere is the
+  // promoted owner of this journey, the labs URL redirects there (same place/
+  // planner/lang inputs) so old links keep working with ONE canonical surface.
+  // When the new surface is opted out or unbuilt, the alpha shell still serves —
+  // it remains the rollback surface, deleted only after the default has soaked.
+  app.get("/labs/anywhere", (request, response) => {
+    const place = typeof request.query?.place === "string" ? request.query.place : "";
+    const lang = normalizeLanguage(request.query?.lang);
+    if (anywhereV2Active()) {
+      const params = new URLSearchParams();
+      if (place) params.set("place", place);
+      if (String(request.query?.planner || "") === "open") params.set("planner", "open");
+      params.set("lang", lang);
+      response.redirect(302, `/anywhere?${params.toString()}`);
+      return;
+    }
+    const plannerEntryRoute = String(request.query?.planner || "") === "open";
+    response.type("html").send(renderAnywhereShell({ place, plannerEntryRoute, lang }));
+  });
   app.get("/anywhere", (request, response, next) => {
     if (!anywhereV2Active()) {
       next();
@@ -2394,9 +2426,15 @@ function buildApp({
         // whether the engine path is ready to become the default synthesizer,
         // and if not, exactly what remains. Read-only; promotes nothing.
         experiment.engine_readiness = buildEngineReadinessVerdict(experiment);
+        const engineWoven = await weaveEventStopFailSoft({
+          result: promotion.promote ? experimentResult : baselineBody,
+          placeStructure: wovenPlaceStructure,
+          walkingRouter,
+          walkingConfig,
+        });
         response.json({
-          ...(promotion.promote ? experimentResult : baselineBody),
-          ...agnosticPlaceStructureSidecar,
+          ...engineWoven.result,
+          ...(engineWoven.placeStructure ? { place_structure: engineWoven.placeStructure } : {}),
           ...liveEventsSidecar,
           agnostic_route_output_experiment: experiment,
         });
@@ -2406,9 +2444,15 @@ function buildApp({
       // Legacy path: surface the same verdict so a tester can see they are NOT
       // on the engine path (engine_path_active: false) — no behavior change.
       experiment.engine_readiness = buildEngineReadinessVerdict(experiment);
+      const legacyWoven = await weaveEventStopFailSoft({
+        result: experimentResult,
+        placeStructure: wovenPlaceStructure,
+        walkingRouter,
+        walkingConfig,
+      });
       response.json({
-        ...experimentResult,
-        ...agnosticPlaceStructureSidecar,
+        ...legacyWoven.result,
+        ...(legacyWoven.placeStructure ? { place_structure: legacyWoven.placeStructure } : {}),
         ...liveEventsSidecar,
         agnostic_route_output_experiment: experiment,
       });

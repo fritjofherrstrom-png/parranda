@@ -41,34 +41,39 @@ const TONIGHT_TIMING = new Set(["now", "today", "tonight"]);
 // the deterministic tests (which inject payloads, not query params).
 const MAX_HAPPENING_DAYS = 14;
 
-// Geo-keyed registry of OPEN, key-free municipal event feeds running the Linked
-// Events platform (api.hel.fi and the many Nordic cities on the same open-source
-// API; CC-BY 4.0). Built-in entries are ones validated reachable without a
-// credential. The list is GENERIC and extensible: each entry is an honest
-// coverage bbox [west, south, east, north]; an anchor outside every bbox returns
-// coverage:"uncovered". Adding a new region is one data row, but only after the
-// endpoint is live-verified (do not add candidate feeds that 404, fail DNS, or
-// block JSON access).
-const BUILTIN_EVENT_FEEDS = [
-  {
-    id: "linkedevents-helsinki",
-    label: "Helsinki Region Linked Events",
-    base: "https://api.hel.fi/linkedevents/v1/event/",
-    bbox: [24.5, 60.0, 25.3, 60.45], // Helsinki, Espoo, Vantaa, Kauniainen (live-verified)
-    license: "CC-BY 4.0",
-    // The feed's region timezone — so a "tonight" time renders in the VENUE's
-    // local clock, not the viewer's. A feed is region-scoped (bbox), so a
-    // feed-level tz is accurate for its events. IANA name.
-    timezone: "Europe/Helsinki",
-  },
-];
+// A single open municipal feed, kept as a NAMED FIXTURE — not a product default.
+// It runs the Linked Events platform (api.hel.fi; CC-BY 4.0) and proves the
+// municipal-feed path end-to-end in tests and dogfood. It is deliberately NOT in
+// the built-in registry: baking one city in makes that city look arbitrarily
+// special (Helsinki has events; Lyon, a far bigger city, shows none), which reads
+// as a per-city hack. A deployment opts it in — like any region — via
+// PARRANDA_EVENT_FEEDS.
+const HELSINKI_LINKED_EVENTS_FEED = Object.freeze({
+  id: "linkedevents-helsinki",
+  label: "Helsinki Region Linked Events",
+  base: "https://api.hel.fi/linkedevents/v1/event/",
+  bbox: [24.5, 60.0, 25.3, 60.45], // Helsinki, Espoo, Vantaa, Kauniainen (live-verified)
+  license: "CC-BY 4.0",
+  // The feed's region timezone — so a "tonight" time renders in the VENUE's
+  // local clock, not the viewer's. A feed is region-scoped (bbox), so a
+  // feed-level tz is accurate for its events. IANA name.
+  timezone: "Europe/Helsinki",
+});
+
+// Product default: NO municipal feed is baked in, so no single city is special.
+// Every place gets live events the SAME way — from the coordinate-driven global
+// provider (key-gated) — or an honest "no events yet". A deployment adds the open
+// feed for its region as data via PARRANDA_EVENT_FEEDS; nothing here is per-city
+// code. Kept as a mutable array so the default param below stays a live reference.
+const BUILTIN_EVENT_FEEDS = [];
 
 /**
  * The registry is GENERIC and deploy-configurable: a city is a data row, never
  * code. `PARRANDA_EVENT_FEEDS` (a JSON array of {id,label,base,bbox,license})
  * lets any deployment add the open feed covering its region without touching the
- * engine — Helsinki is the built-in *fixture* that proves the path, not the
- * product scope. Malformed config is ignored (keep the built-in), never throws.
+ * engine. The default registry is EMPTY on purpose — no city is special out of
+ * the box; live events come uniformly from the global provider or not at all.
+ * Malformed config is ignored (keep whatever is built-in), never throws.
  */
 function resolveEventFeedRegistry(env = process.env) {
   const feeds = [...BUILTIN_EVENT_FEEDS];
@@ -426,6 +431,7 @@ module.exports = {
   buildAnchorEventEndpoint,
   eventCacheKey,
   BUILTIN_EVENT_FEEDS,
+  HELSINKI_LINKED_EVENTS_FEED,
   GLOBAL_FEED_DESCRIPTOR,
   DEFAULT_RADIUS_M,
 };

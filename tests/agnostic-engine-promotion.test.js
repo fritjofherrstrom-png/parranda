@@ -152,3 +152,84 @@ test(
     assert.ok(Array.isArray(r.body.days));
   }),
 );
+
+// EVENTS AS ROUTE STOPS (event-route-stop-weave): a genuine, walkable tonight-
+// event becomes the promoted day's real LAST stop; a distant one stays an
+// anchor with no walk claim. Full wiring through buildApp + injected supplies.
+function eventSupplyWith(event) {
+  return async () => ({ coverage: "covered", feed: { id: "test-feed", label: "Test feed" }, tonight: [event], this_week: [] });
+}
+
+function tonightEventAt(lng, extra = {}) {
+  return {
+    id: "ev-tonight",
+    title: "Jazz by the quay",
+    starts_at: `${DATE}T19:00:00Z`,
+    ends_at: `${DATE}T21:00:00Z`,
+    timezone: "Europe/Rome",
+    place: "The Quay",
+    source_label: "Test feed",
+    source_url: "https://example.org/ev-tonight",
+    license: "CC-BY 4.0",
+    cultural_tier: "cultural",
+    timing_relevance: "tonight",
+    salience_score: 8,
+    lat: 41.9,
+    lng,
+    ...extra,
+  };
+}
+
+test("a walkable tonight-event is woven into the promoted route as its last stop", async () => {
+  global.fetch = mockStableWeatherFetch();
+  const server = buildApp({
+    openDataLoader: makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })),
+    eventSupply: eventSupplyWith(tonightEventAt(12.5)), // ~0.8 km from the cluster
+  }).listen(0);
+  try {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody(),
+    });
+    assert.equal(r.body.agnostic_route_output_experiment.promotion.promote, true);
+    const route = r.body.days[0].primary_route;
+    const last = route.main_stops[route.main_stops.length - 1];
+    assert.equal(last.is_live_event, true, "the tonight-event is the route's real last stop");
+    assert.equal(last.event_id, "ev-tonight");
+    assert.equal(last.daypart, "evening");
+    assert.equal(last.timezone, "Europe/Rome");
+    // The walk to it is measured, short, and in the legs.
+    const lastLeg = route.legs[route.legs.length - 1];
+    assert.equal(lastLeg.to_label, "Jazz by the quay");
+    assert.ok(Number.isFinite(lastLeg.distance_km) && lastLeg.distance_km <= 2.5);
+    assert.equal(route.live_event_stop.event_id, "ev-tonight");
+    // The anchor card and the route agree.
+    assert.equal(r.body.place_structure.district_day.evening_event.woven_into_route, true);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    global.fetch = ORIGINAL_FETCH;
+  }
+});
+
+test("a distant tonight-event stays an anchor: no walk claimed, route unextended", async () => {
+  global.fetch = mockStableWeatherFetch();
+  const server = buildApp({
+    openDataLoader: makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })),
+    eventSupply: eventSupplyWith(tonightEventAt(12.55)), // ~5 km away
+  }).listen(0);
+  try {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody(),
+    });
+    const route = r.body.days[0].primary_route;
+    assert.ok(!route.main_stops.some((s) => s.is_live_event), "no event stop fabricated for a non-walkable event");
+    assert.equal(route.live_event_stop, undefined);
+    const evening = r.body.place_structure.district_day.evening_event;
+    assert.equal(evening.id, "ev-tonight", "the anchor itself remains — real, sourced, no walk claim");
+    assert.ok(!evening.woven_into_route);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    global.fetch = ORIGINAL_FETCH;
+  }
+});
