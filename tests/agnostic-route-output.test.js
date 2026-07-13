@@ -31,6 +31,7 @@ const {
   applyRouteMutation,
   buildExperimentBlock,
   composeAgnosticRouteOutput,
+  scrubAgnosticAppliedDay,
 } = require("../server/planner/agnostic-route-output");
 const { buildAgnosticCityContext } = require("../server/candidates/agnostic-context");
 const { buildEligibleCandidatePool, buildProviderSpecs } = require("../server/candidates/candidate-pool");
@@ -1321,6 +1322,9 @@ test("unit: the REPLACE branch scrubs every fallback-city day field, not just da
         alternatives: [{ title: "Ostiense to Trastevere", main_stops: [{ id: "rome-alt-1" }] }],
         date_signals: [{ title: "Sommarkväll i Rom" }],
         live_events: { tonight: [{ title: "Rome exhibition tonight" }], this_week: [] },
+        // Rome's weather read — would render as the WRONG city's "Dagens läsning"
+        // on a Malmö day if it survived (the engine-compose path produces none).
+        dayflow_context: { weather: { headline: "Stark värme i Rom – känns som 36°", apparent_temp_max: 36 } },
       },
     ],
     readiness: { unsupported: true },
@@ -1345,14 +1349,33 @@ test("unit: the REPLACE branch scrubs every fallback-city day field, not just da
   assert.deepEqual(day.date_signals, [], "fallback date_signals scrubbed");
   assert.deepEqual(day.alternatives, [], "fallback-city alternatives scrubbed");
   assert.equal("live_events" in day, false, "fallback-city per-day live_events removed (the anchor's events ride the top-level sidecar)");
+  assert.equal("dayflow_context" in day, false, "fallback-city weather read removed (engine produced none → honest absence, never Rome's weather)");
 
   const publicBlob = JSON.stringify(result).toLowerCase();
-  for (const leak of ["rome baseline route", "ostiense to trastevere", "rome-alt-1", "sommarkväll i rom", "rome exhibition"]) {
+  for (const leak of ["rome baseline route", "ostiense to trastevere", "rome-alt-1", "sommarkväll i rom", "rome exhibition", "värme i rom"]) {
     assert.equal(publicBlob.includes(leak), false, `fallback-city text "${leak}" must not survive in the public blob`);
   }
   // The baseline object itself is never mutated.
   assert.equal(baseline.days[0].alternatives[0].title, "Ostiense to Trastevere");
   assert.ok(baseline.days[0].live_events);
+  assert.ok(baseline.days[0].dayflow_context, "baseline dayflow_context untouched");
+});
+
+test("unit: scrubAgnosticAppliedDay deletes a fallback dayflow but keeps a genuine engine one", () => {
+  // No engine dayflow → the fallback city's weather read is DELETED (honest
+  // absence), never left to render as the wrong city's "Dagens läsning".
+  const leaked = { days: [{ dayflow_context: { weather: { headline: "Rome heat" } }, alternatives: [{ title: "Rome alt" }], live_events: { tonight: [] }, date_signals: [{ title: "Rome signal" }] }] };
+  scrubAgnosticAppliedDay(leaked, { primary_route: {} });
+  assert.equal("dayflow_context" in leaked.days[0], false, "fallback dayflow deleted when the engine produced none");
+  assert.deepEqual(leaked.days[0].alternatives, []);
+  assert.equal("live_events" in leaked.days[0], false);
+  assert.deepEqual(leaked.days[0].date_signals, []);
+
+  // Genuine engine-produced dayflow → survives verbatim.
+  const engineFlow = { weather: { headline: "Källstödd väderläsning" } };
+  const withEngine = { days: [{ dayflow_context: { weather: { headline: "Rome heat" } } }] };
+  scrubAgnosticAppliedDay(withEngine, { primary_route: {}, dayflow_context: engineFlow });
+  assert.deepEqual(withEngine.days[0].dayflow_context, engineFlow, "the engine's own dayflow read is preserved");
 });
 
 test("unit: only a resolver-attested label drives prose; no label → neutral, never fabricated", async () => {

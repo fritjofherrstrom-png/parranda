@@ -954,10 +954,9 @@ async function composeAgnosticRouteViaEngine({
   experiment.synthesized_via = "agnostic_compose_engine";
 
   const result = applyRouteMutation({ baselineResult, primaryRoute: engineRoute, date: effectiveDate });
+  // scrubAgnosticAppliedDay is the single owner of the promoted day's fallback-
+  // sensitive fields (date_signals, alternatives, live_events, dayflow_context).
   scrubAgnosticAppliedDay(result, engineDay);
-  if (engineDay.dayflow_context && Array.isArray(result.days) && result.days[0]) {
-    result.days[0].dayflow_context = engineDay.dayflow_context;
-  }
 
   return { result, experiment };
 }
@@ -1001,11 +1000,19 @@ function scrubAgnosticAppliedDay(result, engineDay) {
   //   - live_events: fallback city's per-day events. The CORRECT agnostic events
   //     ride the top-level `live_events` sidecar (geo-keyed to the anchor); this
   //     per-day copy is unconsumed leakage. Delete it, never the sidecar.
+  //   - dayflow_context: the fallback city's weather read. The engine-compose
+  //     path does not (yet) produce an anchor weather read, so a surviving
+  //     baseline dayflow would show the WRONG city's weather (e.g. Rome's "37°"
+  //     on a Helsinki day) — the frontend renders it as "Dagens läsning". Use
+  //     the engine's when it has one, otherwise DELETE it: an honest absence,
+  //     never another place's weather.
   day.date_signals = [];
   day.alternatives = [];
   delete day.live_events;
   if (engineDay && engineDay.dayflow_context) {
     day.dayflow_context = engineDay.dayflow_context;
+  } else {
+    delete day.dayflow_context;
   }
 }
 
@@ -1091,5 +1098,6 @@ module.exports = {
   buildExperimentBlock,
   buildBlockedAgnosticRouteOutputExperiment,
   admitExperimentalInferredExternalCandidate,
+  scrubAgnosticAppliedDay,
   MIN_VIABLE_GEOCODED_STOPS,
 };
