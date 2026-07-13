@@ -192,6 +192,22 @@ Local live intelligence requires the candidate spine to support:
 - honest confidence explanations
 - inspect mode for why an event/place was shown or hidden
 
+## Source graph v1
+
+`server/pulse-sources/local-live-source-graph.js` is the first repository
+contract for this idea. It does not fetch, scrape, render UI, or make events
+route stops. It evaluates the live-source coverage around a place/time window:
+
+- which source families are runtime-covered;
+- which are missing;
+- which are only needs-review;
+- which community/social hints need corroboration;
+- which local-language terms should be used next.
+
+This matters because local live quality is not only "did we find an event?"
+Parranda also needs to know whether it has broad enough source-family coverage
+to trust that it is not missing the important local rhythm.
+
 ## Non-goals for the immediate next PR
 
 This note does not mean the next PR should scrape every local source.
