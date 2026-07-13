@@ -70,7 +70,13 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
   function submit(e?: { preventDefault?: () => void }) {
     e?.preventDefault?.();
     const route = routeForInput(registry, value, lang);
-    if (route) window.location.href = route.href;
+    // Empty submit isn't a dead end: focus the field so the next keystroke lands
+    // where it should (the CTA stays visually live rather than reading as broken).
+    if (!route) {
+      inputRef.current?.focus();
+      return;
+    }
+    window.location.href = route.href;
   }
 
   function switchLang(next: Lang) {
@@ -105,7 +111,7 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
               onClick={() => switchLang(l)}
               aria-pressed={lang === l}
               className={
-                "rounded-full px-3 py-1 text-sm font-semibold transition " +
+                "inline-flex min-h-11 items-center rounded-full px-3.5 py-1 text-sm font-semibold transition " +
                 (lang === l ? "bg-parranda-accent/15 text-parranda-ink" : "text-parranda-ink/60")
               }
             >
@@ -138,12 +144,12 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
               onChange={onChange}
               placeholder={t("t.ex. Malmö, Lyon, Kyoto …", "e.g. Malmö, Lyon, Kyoto …")}
               autoComplete="off"
-              className="flex-1 rounded-parranda border border-parranda-ink/15 bg-parranda-ink/10 px-4 py-3 text-lg text-parranda-ink shadow-sm outline-none focus:border-parranda-accent"
+              autoFocus
+              className="min-h-11 flex-1 rounded-parranda border border-parranda-ink/15 bg-parranda-ink/10 px-4 py-3 text-lg text-parranda-ink shadow-sm outline-none focus:border-parranda-accent"
             />
             <button
               type="submit"
-              disabled={!value.trim()}
-              className="rounded-parranda bg-parranda-accent px-5 py-3 font-semibold text-white shadow-sm disabled:opacity-40"
+              className="min-h-11 whitespace-nowrap rounded-parranda bg-parranda-accent px-5 py-3 font-semibold text-white shadow-sm"
             >
               {t("Bygg min dag", "Build my day")}
             </button>
@@ -160,7 +166,7 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
                 <a
                   key={city.key}
                   href={`/${city.key}?planner=open&lang=${lang}`}
-                  className="rounded-full border border-parranda-ink/15 bg-parranda-ink/10 px-4 py-1.5 text-sm font-semibold text-parranda-ink hover:border-parranda-accent"
+                  className="inline-flex min-h-11 items-center rounded-full border border-parranda-ink/15 bg-parranda-ink/10 px-4 py-1.5 text-sm font-semibold text-parranda-ink hover:border-parranda-accent"
                 >
                   {city.label}
                 </a>

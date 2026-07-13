@@ -575,7 +575,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 setGeoHint(null);
               }}
               className={
-                "rounded-full border px-3 py-1 text-sm transition " +
+                "inline-flex min-h-11 items-center rounded-full border px-3.5 py-1 text-sm transition " +
                 (mode === m
                   ? "border-parranda-accent bg-parranda-accent/15 font-semibold text-parranda-ink"
                   : "border-parranda-ink/15 bg-parranda-ink/10 text-parranda-ink/70")
@@ -585,35 +585,40 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             </button>
           ))}
         </div>
-        <div className="flex gap-2">
+        {/* Below ~sm the input takes a full row and the two actions share the
+            next row (primary grows) — so "Build my day" never wraps to three
+            lines and Blitz never clips at the viewport edge. */}
+        <div className="flex flex-col gap-2 sm:flex-row">
           {mode === "typed" ? (
             <input
               value={place}
               onChange={(e) => setPlace(e.target.value)}
               placeholder={t("t.ex. Lyon, Tbilisi, Kyoto …", "e.g. Lyon, Tbilisi, Kyoto …")}
-              className="flex-1 rounded-parranda border border-parranda-ink/15 bg-parranda-ink/10 px-4 py-3 text-parranda-ink shadow-sm outline-none focus:border-parranda-accent"
+              className="w-full flex-1 rounded-parranda border border-parranda-ink/15 bg-parranda-ink/10 px-4 py-3 text-parranda-ink shadow-sm outline-none focus:border-parranda-accent"
             />
           ) : (
             <p className="flex-1 self-center text-sm text-parranda-ink/70">
               {t("Din position blir dagens startpunkt.", "Your position becomes the day's starting point.")}
             </p>
           )}
-          <button
-            type="submit"
-            disabled={phase === "loading" || (mode === "typed" && !place.trim())}
-            className="rounded-parranda bg-parranda-accent px-5 py-3 font-semibold text-white shadow-sm disabled:opacity-40"
-          >
-            {phase === "loading" ? t("Komponerar…", "Composing…") : t("Bygg min dag", "Build my day")}
-          </button>
-          <button
-            type="button"
-            onClick={blitz}
-            disabled={phase === "loading" || (mode === "typed" && !place.trim())}
-            title={t("Överraska mig — slumpade preferenser", "Surprise me — random preferences")}
-            className="rounded-parranda border border-parranda-accent/40 px-4 py-3 font-semibold text-parranda-accent shadow-sm disabled:opacity-40"
-          >
-            {t("⚡ Blitz", "⚡ Blitz")}
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={phase === "loading" || (mode === "typed" && !place.trim())}
+              className="min-h-11 flex-1 whitespace-nowrap rounded-parranda bg-parranda-accent px-5 py-3 font-semibold text-white shadow-sm disabled:opacity-40 sm:flex-none"
+            >
+              {phase === "loading" ? t("Komponerar…", "Composing…") : t("Bygg min dag", "Build my day")}
+            </button>
+            <button
+              type="button"
+              onClick={blitz}
+              disabled={phase === "loading" || (mode === "typed" && !place.trim())}
+              title={t("Överraska mig — slumpade preferenser", "Surprise me — random preferences")}
+              className="min-h-11 shrink-0 whitespace-nowrap rounded-parranda border border-parranda-accent/40 px-4 py-3 font-semibold text-parranda-accent shadow-sm disabled:opacity-40"
+            >
+              {t("⚡ Blitz", "⚡ Blitz")}
+            </button>
+          </div>
         </div>
         {geoHint && <p className="text-sm text-parranda-ink/70">{geoHint}</p>}
         <div className="flex flex-wrap gap-2">
@@ -625,7 +630,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 key={pref.key}
                 onClick={() => setSelected((cur) => (active ? cur.filter((k) => k !== pref.key) : [...cur, pref.key]))}
                 className={
-                  "rounded-full border px-3 py-1 text-sm transition " +
+                  "inline-flex min-h-11 items-center rounded-full border px-3.5 py-1 text-sm transition " +
                   (active
                     ? "border-parranda-accent bg-parranda-accent/15 font-semibold text-parranda-ink"
                     : "border-parranda-ink/15 bg-parranda-ink/10 text-parranda-ink/70")
@@ -645,7 +650,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 key={offset}
                 onClick={() => setDayOffset(offset)}
                 className={
-                  "rounded-full border px-3 py-1 text-sm transition " +
+                  "inline-flex min-h-11 items-center rounded-full border px-3.5 py-1 text-sm transition " +
                   (dayOffset === offset
                     ? "border-parranda-accent bg-parranda-accent/15 font-semibold text-parranda-ink"
                     : "border-parranda-ink/15 bg-parranda-ink/10 text-parranda-ink/70")
@@ -662,7 +667,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 key={preset.key}
                 onClick={() => setWalkKey(preset.key)}
                 className={
-                  "rounded-full border px-3 py-1 text-sm transition " +
+                  "inline-flex min-h-11 items-center rounded-full border px-3.5 py-1 text-sm transition " +
                   (walkKey === preset.key
                     ? "border-parranda-accent bg-parranda-accent/15 font-semibold text-parranda-ink"
                     : "border-parranda-ink/15 bg-parranda-ink/10 text-parranda-ink/70")
@@ -730,60 +735,146 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </p>
       )}
 
+      {/* Day header: honest provenance + day-level actions. The real route
+          ("Dagens stopp") and the supporting neighborhoods ("Dagens kvarter")
+          are their OWN sections below — the district panel is context, not the
+          route, so it must not wear the route's name. */}
+      {showStructure && structure && (
+        <section className="flex flex-col items-start gap-3 rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm sm:flex-row sm:justify-between">
+          <div className="min-w-0 flex-1">
+            {structure.provenance === "agnostic_anchor" && (
+              <p className="text-sm font-semibold text-parranda-accent">
+                {t(
+                  `Byggd från källstödda platser${typeof structure.area_count === "number" ? ` över ${structure.area_count} områden` : ""} — Parranda har inte full kurering här ännu`,
+                  `Built from source-backed places${typeof structure.area_count === "number" ? ` across ${structure.area_count} areas` : ""} — Parranda does not have full curation here yet`,
+                )}
+              </p>
+            )}
+            {restoredAt && (
+              <p className="mt-1 text-xs text-parranda-ink/60">
+                {t("Sparad dag", "Saved day")} · {new Date(restoredAt).toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE")} —{" "}
+                <button type="button" onClick={() => resolveAndRun()} className="underline underline-offset-2 hover:text-parranda-accent">
+                  {t("bygg om för färska events", "rebuild for fresh events")}
+                </button>
+              </p>
+            )}
+          </div>
+          <div className="flex shrink-0 gap-1.5">
+            {canShare && (
+              <button
+                type="button"
+                onClick={shareDay}
+                className="inline-flex min-h-11 items-center rounded-full border border-parranda-accent/40 px-3.5 py-1 text-sm font-semibold text-parranda-accent"
+              >
+                {shareCopied ? t("✓ Kopierad", "✓ Copied") : t("↗ Dela dagen", "↗ Share day")}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={saveDay}
+              disabled={isSaved}
+              className="inline-flex min-h-11 items-center rounded-full border border-parranda-accent/40 px-3.5 py-1 text-sm font-semibold text-parranda-accent disabled:opacity-50"
+            >
+              {isSaved ? t("★ Sparad", "★ Saved") : t("☆ Spara dagen", "☆ Save day")}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {phase === "done" && upgradePending && !structure && (
+        <p className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4 text-sm text-parranda-ink/70" aria-live="polite">
+          {t(
+            "Läser in distrikt & karta — uppdateras automatiskt strax.",
+            "Loading districts & map — updates automatically in a moment.",
+          )}
+        </p>
+      )}
+
+      {showDay && dayflow?.weather?.headline && (
+        <section className="rounded-parranda border border-parranda-accent/25 bg-parranda-accent/10 p-5 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-wider text-parranda-accent">{t("Dagens läsning", "Today's read")}</p>
+          <p className="mt-1 text-sm font-semibold text-parranda-ink">{dayflow.weather.headline}</p>
+          {dayflow.weather.reason && <p className="mt-1 text-sm text-parranda-ink/75">{dayflow.weather.reason}</p>}
+          {dayflow.weather.pitch && <p className="mt-1 text-sm font-medium text-parranda-ink">{dayflow.weather.pitch}</p>}
+        </section>
+      )}
+
+      {showDay && routeStops.length > 0 && (
+        <section className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">{t("Dagens stopp", "Today's stops")}</p>
+            {Number.isFinite(primaryRoute?.estimated_km) && (
+              <p className="text-xs text-parranda-ink/60">
+                ≈ {primaryRoute.estimated_km} km
+                {Number.isFinite(primaryRoute?.longest_leg_km) ? ` · ${t("längsta ben", "longest leg")} ${primaryRoute.longest_leg_km} km` : ""}
+              </p>
+            )}
+          </div>
+          <ol className="mt-2 flex flex-col">
+            {routeStops.map((stop: any, i: number) => {
+              const name = String(stop?.label || stop?.name || "").trim();
+              if (!name) return null;
+              const leg = legForStop(i);
+              const pin = mapsPlaceUrl(stop);
+              return (
+                <li key={stop?.id ?? i} className="flex flex-col">
+                  {leg && (leg.minutes != null || leg.km != null) && (
+                    <span className="ml-3 border-l border-dashed border-parranda-ink/25 py-1 pl-4 text-xs text-parranda-ink/55">
+                      ↓ {leg.minutes != null ? `${leg.minutes} min` : ""}
+                      {leg.minutes != null && leg.km != null ? " · " : ""}
+                      {leg.km != null ? `${leg.km} km` : ""}
+                    </span>
+                  )}
+                  <span className="flex flex-wrap items-center gap-2 py-0.5 text-sm text-parranda-ink">
+                    <span className="font-semibold text-parranda-accent">{i + 1}.</span>
+                    {pin ? (
+                      <a href={pin} target="_blank" rel="noopener noreferrer" className="underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
+                        {name}
+                      </a>
+                    ) : (
+                      name
+                    )}
+                    {stop?.type && (
+                      <span className="rounded-full border border-parranda-ink/15 bg-parranda-ink/10 px-2 py-0.5 text-xs text-parranda-ink/75">
+                        {label(TYPE_LABELS, stop.type, lang)}
+                      </span>
+                    )}
+                    {stop?.is_live_event && (
+                      <span className="rounded-full border border-parranda-accent bg-parranda-accent/15 px-2 py-0.5 text-xs font-bold text-parranda-accent">
+                        {t("Ikväll", "Tonight")}
+                        {stop?.starts_at ? ` · ${eventWhen(stop, lang)}` : ""}
+                      </span>
+                    )}
+                    {stop?.daypart && (
+                      <span className="rounded-full border border-parranda-accent/30 bg-parranda-accent/10 px-2 py-0.5 text-xs font-semibold text-parranda-ink">
+                        {label(DAYPART_LABELS, stop.daypart, lang)}
+                      </span>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      )}
+
+      {/* Dagens kvarter — the neighborhoods behind the route: supporting spatial
+          context (districts, the walk between them, the map, the woven evening
+          anchor). It reads AFTER the route because it explains it, not leads it. */}
       {showStructure && structure && (
         <section className="flex flex-col gap-4 rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm">
-          <div className="flex items-start gap-3">
-            <div className="flex-1">
-              <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">
-                {hasPrimaryRoute ? t("Din rutt genom staden", "Your route across the city") : t("Kandidater nära platsen", "Candidates near this place")}
-                {hasPrimaryRoute ? ` — ${routeStops.length} ${t("stopp", "stops")}` : ""}
-              </p>
-              {structure.provenance === "agnostic_anchor" && (
-                <p className="mt-1 text-sm font-semibold text-parranda-accent">
-                  {t(
-                    `Byggd från källstödda platser${typeof structure.area_count === "number" ? ` över ${structure.area_count} områden` : ""} — Parranda har inte full kurering här ännu`,
-                    `Built from source-backed places${typeof structure.area_count === "number" ? ` across ${structure.area_count} areas` : ""} — Parranda does not have full curation here yet`,
-                  )}
-                </p>
-              )}
-              {classification?.status === "structure_only" && (
-                <p className="mt-1 text-sm text-parranda-ink/70">
-                  {t(
-                    "Parranda hittade platskandidater, men inte en tillräckligt stark rutt ännu.",
-                    "Parranda found place candidates, but not a reliable route yet.",
-                  )}
-                </p>
-              )}
-              {restoredAt && (
-                <p className="mt-1 text-xs text-parranda-ink/60">
-                  {t("Sparad dag", "Saved day")} · {new Date(restoredAt).toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE")} —{" "}
-                  <button type="button" onClick={() => resolveAndRun()} className="underline underline-offset-2 hover:text-parranda-accent">
-                    {t("bygg om för färska events", "rebuild for fresh events")}
-                  </button>
-                </p>
-              )}
-            </div>
-            <div className="flex shrink-0 flex-col items-end gap-1.5">
-              <div className="flex gap-1.5">
-                {canShare && (
-                  <button
-                    type="button"
-                    onClick={shareDay}
-                    className="rounded-full border border-parranda-accent/40 px-3 py-1 text-sm font-semibold text-parranda-accent"
-                  >
-                    {shareCopied ? t("✓ Kopierad", "✓ Copied") : t("↗ Dela dagen", "↗ Share day")}
-                  </button>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">
+              {hasPrimaryRoute ? t("Dagens kvarter", "Today's neighborhoods") : t("Kandidater nära platsen", "Candidates near this place")}
+            </p>
+            {classification?.status === "structure_only" && (
+              <p className="mt-1 text-sm text-parranda-ink/70">
+                {t(
+                  "Parranda hittade platskandidater, men inte en tillräckligt stark rutt ännu.",
+                  "Parranda found place candidates, but not a reliable route yet.",
                 )}
-                <button
-                  type="button"
-                  onClick={saveDay}
-                  disabled={isSaved}
-                  className="rounded-full border border-parranda-accent/40 px-3 py-1 text-sm font-semibold text-parranda-accent disabled:opacity-50"
-                >
-                  {isSaved ? t("★ Sparad", "★ Saved") : t("☆ Spara dagen", "☆ Save day")}
-                </button>
-              </div>
-            </div>
+              </p>
+            )}
           </div>
 
           <ol className="flex flex-col gap-3">
@@ -869,7 +960,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               href={routeUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 self-start rounded-parranda border border-parranda-accent/40 px-4 py-2 text-sm font-semibold text-parranda-accent hover:bg-parranda-accent/10"
+              className="inline-flex min-h-11 items-center gap-2 self-start rounded-parranda border border-parranda-accent/40 px-4 py-2 text-sm font-semibold text-parranda-accent hover:bg-parranda-accent/10"
             >
               {t("Öppna rutten i Google Maps", "Open the route in Google Maps")}
               <span aria-hidden="true">↗</span>
@@ -884,83 +975,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               </div>
             )}
           </div>
-        </section>
-      )}
-
-      {phase === "done" && upgradePending && !structure && (
-        <p className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4 text-sm text-parranda-ink/70" aria-live="polite">
-          {t(
-            "Läser in distrikt & karta — uppdateras automatiskt strax.",
-            "Loading districts & map — updates automatically in a moment.",
-          )}
-        </p>
-      )}
-
-      {showDay && dayflow?.weather?.headline && (
-        <section className="rounded-parranda border border-parranda-accent/25 bg-parranda-accent/10 p-5 shadow-sm">
-          <p className="text-xs font-bold uppercase tracking-wider text-parranda-accent">{t("Dagens läsning", "Today's read")}</p>
-          <p className="mt-1 text-sm font-semibold text-parranda-ink">{dayflow.weather.headline}</p>
-          {dayflow.weather.reason && <p className="mt-1 text-sm text-parranda-ink/75">{dayflow.weather.reason}</p>}
-          {dayflow.weather.pitch && <p className="mt-1 text-sm font-medium text-parranda-ink">{dayflow.weather.pitch}</p>}
-        </section>
-      )}
-
-      {showDay && routeStops.length > 0 && (
-        <section className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm">
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">{t("Dagens stopp", "Today's stops")}</p>
-            {Number.isFinite(primaryRoute?.estimated_km) && (
-              <p className="text-xs text-parranda-ink/60">
-                ≈ {primaryRoute.estimated_km} km
-                {Number.isFinite(primaryRoute?.longest_leg_km) ? ` · ${t("längsta ben", "longest leg")} ${primaryRoute.longest_leg_km} km` : ""}
-              </p>
-            )}
-          </div>
-          <ol className="mt-2 flex flex-col">
-            {routeStops.map((stop: any, i: number) => {
-              const name = String(stop?.label || stop?.name || "").trim();
-              if (!name) return null;
-              const leg = legForStop(i);
-              const pin = mapsPlaceUrl(stop);
-              return (
-                <li key={stop?.id ?? i} className="flex flex-col">
-                  {leg && (leg.minutes != null || leg.km != null) && (
-                    <span className="ml-3 border-l border-dashed border-parranda-ink/25 py-1 pl-4 text-xs text-parranda-ink/55">
-                      ↓ {leg.minutes != null ? `${leg.minutes} min` : ""}
-                      {leg.minutes != null && leg.km != null ? " · " : ""}
-                      {leg.km != null ? `${leg.km} km` : ""}
-                    </span>
-                  )}
-                  <span className="flex flex-wrap items-center gap-2 py-0.5 text-sm text-parranda-ink">
-                    <span className="font-semibold text-parranda-accent">{i + 1}.</span>
-                    {pin ? (
-                      <a href={pin} target="_blank" rel="noopener noreferrer" className="underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
-                        {name}
-                      </a>
-                    ) : (
-                      name
-                    )}
-                    {stop?.type && (
-                      <span className="rounded-full border border-parranda-ink/15 bg-parranda-ink/10 px-2 py-0.5 text-xs text-parranda-ink/75">
-                        {label(TYPE_LABELS, stop.type, lang)}
-                      </span>
-                    )}
-                    {stop?.is_live_event && (
-                      <span className="rounded-full border border-parranda-accent bg-parranda-accent/15 px-2 py-0.5 text-xs font-bold text-parranda-accent">
-                        {t("Ikväll", "Tonight")}
-                        {stop?.starts_at ? ` · ${eventWhen(stop, lang)}` : ""}
-                      </span>
-                    )}
-                    {stop?.daypart && (
-                      <span className="rounded-full border border-parranda-accent/30 bg-parranda-accent/10 px-2 py-0.5 text-xs font-semibold text-parranda-ink">
-                        {label(DAYPART_LABELS, stop.daypart, lang)}
-                      </span>
-                    )}
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
         </section>
       )}
 
