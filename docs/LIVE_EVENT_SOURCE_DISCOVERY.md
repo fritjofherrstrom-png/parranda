@@ -56,8 +56,17 @@ Input can start from a place name, coordinates, or a resolved bounding box.
      salience, dedupe, and route/Pulse eligibility.
 
 The repo harness for step 4 is `server/pulse-sources/source-discovery.js`.
-It is pure, deterministic, and does not fetch the network. Local fixtures can be
-evaluated with:
+It is pure, deterministic, and does not fetch the network. The repo also has a
+source-coverage graph in `server/pulse-sources/local-live-source-graph.js`.
+That graph turns evaluated candidates into:
+
+- covered source families;
+- needs-review / needs-corroboration families;
+- missing family gaps;
+- social/community coverage status;
+- an acquisition plan for what source family to find next.
+
+Local fixtures can be evaluated with:
 
 ```bash
 node scripts/probe-live-event-sources.js source-candidates.json
@@ -77,22 +86,77 @@ node scripts/probe-live-event-sources.js source-candidates.json
 3. `cultural_institution_calendar`
    - Major venues, museums, festivals, and cultural institutions.
    - Useful for evening/culture anchors, but terms and page structure vary.
-4. `schema_org_event`
+4. `venue_owned_calendar`
+   - Venue, farm shop, gallery, club, museum, or local organizer calendar.
+   - Strong for small local happenings when the venue is authoritative.
+5. `market_listing`
+   - Markets, flea markets, seasonal producers, popups, and local fairs.
+   - Important in regions where the best day is not a permanent POI.
+6. `trusted_local_media`
+   - Local magazines, editorial calendars, newsletters, and town guides.
+   - Valuable for discovery and coverage, but runtime use depends on terms and
+     stable extraction.
+7. `community_social_listing`
+   - Public community/social listings.
+   - Discovery/corroboration source, not a strong standalone runtime source.
+8. `schema_org_event`
    - Generic, low-friction adapter when valid JSON-LD exists.
    - Page ownership/terms still matter.
-5. `open_data_event_api`
+9. `open_data_event_api`
    - Strong when official and openly licensed.
    - Needs mapper and freshness handling.
-6. `compatible_ticket_api`
+10. `compatible_ticket_api`
    - Only when API terms allow usage and attribution. Ticket platforms are not
      assumed usable; classify them by terms and extraction tier.
-7. `existing_provider_family`
+11. `existing_provider_family`
    - Use repo providers such as schema.org/Event and Linked Events when the
      source shape already matches.
-8. `unknown_source_family`
+12. `unknown_source_family`
    - Low-priority bucket for sources that do not match a known family yet.
    - Unknown sources must not be upgraded into official/tourism families by
      default; they stay probe-only until classified.
+
+## Local Live Source Graph
+
+The source graph answers a different question than a provider adapter.
+
+A provider asks:
+
+```text
+Can this one source produce normalized time_sensitive_events?
+```
+
+The source graph asks:
+
+```text
+For this place and time window, do we have enough independent source families
+to believe we are seeing the local live picture?
+```
+
+The graph is intentionally conservative:
+
+- official/tourism/cultural/venue/market sources can cover runtime families;
+- social/community sources are captured so Parranda does not ignore them, but
+  they remain `needs_corroboration` unless stronger source families support the
+  same local event layer;
+- missing families become acquisition-plan steps rather than silent absence;
+- local-language terms and source language are preserved so discovery is not
+  English-only; place resolvers and source probes inject local discovery terms
+  rather than the graph guessing one region's vocabulary for every place;
+- source health and runtime policy are real gates, not display-only metadata;
+- coverage strength counts independent publisher identities, so one site cannot
+  appear as several independent source families;
+- source coverage means Parranda can collect/evaluate candidates. It never by
+  itself claims an event is happening now or is suitable for a route;
+- community/social source context is not event corroboration. Corroboration is
+  deferred until normalized event atoms can be matched across sources;
+- the graph does not fetch, scrape, promote Pulse cards, or create route stops.
+
+For regions like Österlen or southern Skåne, the graph should reveal whether
+Parranda has municipal/tourism coverage, venue calendars, market/loppis
+coverage, trusted local media, and community/social hints. A route can then be
+honest about whether it is based on broad live coverage or only on a narrow
+slice of sources.
 
 ## Extraction Tiers
 

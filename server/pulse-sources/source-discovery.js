@@ -14,23 +14,43 @@ const SOURCE_FAMILIES = Object.freeze({
     label: "Cultural institution or major venue calendar",
     preferredAdapters: ["schema_org_event", "venue_calendar", "html_event_listing"],
   },
-  schema_org_event: {
+  venue_owned_calendar: {
     priority: 4,
+    label: "Venue-owned event calendar",
+    preferredAdapters: ["schema_org_event", "venue_calendar", "html_event_listing", "ical"],
+  },
+  market_listing: {
+    priority: 5,
+    label: "Market, flea market, and seasonal local listing",
+    preferredAdapters: ["schema_org_event", "html_event_listing", "ical", "needs_adapter"],
+  },
+  trusted_local_media: {
+    priority: 6,
+    label: "Trusted local media or editorial calendar",
+    preferredAdapters: ["rss", "schema_org_event", "html_event_listing"],
+  },
+  community_social_listing: {
+    priority: 7,
+    label: "Community or social listing",
+    preferredAdapters: ["needs_adapter", "html_event_listing"],
+  },
+  schema_org_event: {
+    priority: 8,
     label: "schema.org/Event JSON-LD",
     preferredAdapters: ["schema_org_event"],
   },
   open_data_event_api: {
-    priority: 5,
+    priority: 9,
     label: "Open-data event API",
     preferredAdapters: ["linked_events", "open_data_event_api", "the_events_calendar"],
   },
   compatible_ticket_api: {
-    priority: 6,
+    priority: 10,
     label: "Ticket/event API with compatible terms",
     preferredAdapters: ["ticket_event_api"],
   },
   existing_provider_family: {
-    priority: 7,
+    priority: 11,
     label: "Existing Parranda provider family",
     preferredAdapters: ["schema_org_event", "linked_events", "the_events_calendar", "ical"],
   },
@@ -130,16 +150,41 @@ function evaluateLiveEventSourceCandidate(candidate = {}) {
   if (normalized.terms_status === "permission_required") reasons.push("permission_required_before_runtime");
   if (normalized.terms_status === "unknown") reasons.push("terms_need_review");
   if (!tierInfo.runtimeEligible) reasons.push(`probe_only_${normalized.extraction_tier}`);
+  if (normalized.source_health === "blocked") blockers.push("source_health_blocked");
+  if (normalized.source_health === "stale") reasons.push("source_health_stale");
+  if (normalized.source_health === "fragile") reasons.push("source_health_fragile");
+  if (normalized.runtime_policy === "blocked") blockers.push("runtime_policy_blocked");
+  if (normalized.runtime_policy === "probe_only") reasons.push("runtime_policy_probe_only");
+  if (normalized.runtime_policy === "review_needed") reasons.push("runtime_policy_review_needed");
+  if (normalized.runtime_policy === "cache_only") reasons.push("runtime_policy_cache_only");
   if (!normalized.family_known) reasons.push("unknown_source_family");
   if (normalized.source_language && normalized.source_language !== "en") reasons.push("local_language_source");
   if (normalized.local_discovery_terms.length > 0) reasons.push("has_local_discovery_terms");
   if (normalized.translation_status === "provided") reasons.push("translation_available");
   if (normalized.translation_status === "needed") reasons.push("translation_needed_for_display");
 
+  const hardOperationalBlock =
+    normalized.source_health === "blocked" || normalized.runtime_policy === "blocked";
+  const operationalReviewRequired =
+    ["stale", "fragile"].includes(normalized.source_health) ||
+    ["probe_only", "review_needed"].includes(normalized.runtime_policy);
+
   let status = "rejected";
-  if (blockers.length === 0 && termsScore >= 2 && tierInfo.runtimeEligible) {
+  if (
+    !hardOperationalBlock &&
+    !operationalReviewRequired &&
+    blockers.length === 0 &&
+    termsScore >= 2 &&
+    tierInfo.runtimeEligible
+  ) {
     status = "viable_provider_probe";
-  } else if (blockers.length <= 1 && termsScore >= 0 && normalized.extractable.title && normalized.extractable.start) {
+  } else if (
+    !hardOperationalBlock &&
+    blockers.length <= 1 &&
+    termsScore >= 0 &&
+    normalized.extractable.title &&
+    normalized.extractable.start
+  ) {
     status = "needs_adapter_or_permission";
   }
 
@@ -159,15 +204,22 @@ function normalizeSourceCandidate(candidate = {}) {
   const family = familyInfo.family;
   const adapter = firstString(candidate.adapter, inferAdapter(candidate));
   const extractionTier = normalizeExtractionTier(candidate.extraction_tier || inferExtractionTier(candidate));
+  const sourceUrl = firstString(candidate.url, candidate.source_url);
+  const candidateId = firstString(candidate.id, sourceUrl, candidate.source_label);
   return {
-    id: firstString(candidate.id, candidate.url, candidate.source_label),
+    id: candidateId,
     place: firstString(candidate.place),
     raw_family: firstString(candidate.family),
     family,
     family_known: familyInfo.known,
     family_label: SOURCE_FAMILIES[family]?.label || family,
     source_label: firstString(candidate.source_label, candidate.label),
-    url: firstString(candidate.url, candidate.source_url),
+    url: sourceUrl,
+    source_identity: firstString(
+      candidate.source_identity,
+      candidate.publisher_id,
+      sourceIdentityFromUrl(sourceUrl),
+    ),
     discovery_method: firstString(candidate.discovery_method),
     adapter,
     extraction_tier: extractionTier,
@@ -180,6 +232,13 @@ function normalizeSourceCandidate(candidate = {}) {
       candidate.translation_confidence || candidate.translation?.confidence,
     ),
     translated_atoms: normalizeStringList(candidate.translated_atoms || candidate.translation?.atoms),
+    signal_roles: normalizeStringList(candidate.signal_roles || candidate.source_roles),
+    coverage_tags: normalizeStringList(candidate.coverage_tags || candidate.tags),
+    event_kinds: normalizeStringList(candidate.event_kinds || candidate.event_types),
+    region_scope: firstString(candidate.region_scope || candidate.scope),
+    source_health: normalizeSourceHealth(candidate.source_health),
+    runtime_policy: normalizeRuntimePolicy(candidate.runtime_policy),
+    corroboration_required: Boolean(candidate.corroboration_required),
     trust_tier: normalizeTrustTier(candidate.trust_tier || candidate.source_tier),
     terms_status: normalizeTermsStatus(candidate.terms_status),
     license: firstString(candidate.license),
@@ -277,6 +336,28 @@ function normalizeTranslationStatus(value) {
 function normalizeTranslationConfidence(value) {
   const raw = firstString(value).toLowerCase();
   return ["high", "medium", "low", "none", "unknown"].includes(raw) ? raw : "unknown";
+}
+
+function normalizeSourceHealth(value) {
+  const raw = firstString(value).toLowerCase();
+  return ["healthy", "unknown", "fragile", "stale", "blocked"].includes(raw) ? raw : "unknown";
+}
+
+function normalizeRuntimePolicy(value) {
+  const raw = firstString(value).toLowerCase();
+  return ["runtime_ok", "cache_only", "probe_only", "review_needed", "blocked", "unknown"].includes(raw)
+    ? raw
+    : "unknown";
+}
+
+function sourceIdentityFromUrl(value) {
+  if (!value) return "";
+  try {
+    const parsed = new URL(value);
+    return parsed.hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return "";
+  }
 }
 
 function normalizeStringList(value) {

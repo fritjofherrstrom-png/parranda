@@ -67,6 +67,10 @@ const {
   evaluateLiveEventSourceCandidate,
   normalizeSourceCandidate,
 } = require("./source-discovery");
+const {
+  DEFAULT_REQUIRED_FAMILIES,
+  buildLocalLiveSourceGraph,
+} = require("./local-live-source-graph");
 
 module.exports = {
   SourceProviderRegistry,
@@ -116,4 +120,6 @@ module.exports = {
   SOURCE_FAMILIES,
   evaluateLiveEventSourceCandidate,
   normalizeSourceCandidate,
+  DEFAULT_REQUIRED_FAMILIES,
+  buildLocalLiveSourceGraph,
 };
