@@ -49,6 +49,7 @@ function fixtureNear(base) {
 function agnosticBody(extra = {}) {
   return {
     city: "atlantis-unknown-place",
+    place: "Malmö",
     dates: [DATE],
     lat: 41.9,
     lng: 12.49,
@@ -91,6 +92,16 @@ test(
     assert.ok(route, "promoted route is returned as the day route");
     assert.equal(route.routing_source, "agnostic_compose");
     assert.equal(route.confidence, "low");
+    // No place resolver runs in this harness, so no attested label exists — the
+    // prose is neutral by contract (a typed place only names the route when the
+    // resolver attests it; the attested-label path is unit-tested separately in
+    // agnostic-route-output.test.js). It must NEVER fall back to the "Nearby"
+    // geometry placeholder.
+    assert.equal(route.title, "Plan for this place");
+    assert.ok(!/Nearby/.test(route.title), "prose never uses the geometry placeholder as a place name");
+    assert.match(route.summary, /this place/);
+    assert.match(route.why_recommended, /this place/);
+    assert.deepEqual(r.body.days[0].date_signals, [], "any-place route must not inherit fallback-city date signals");
     assert.ok(route.main_stops.length >= 2);
     // Stops are the trusted loader records, each honestly marked provisional.
     assert.ok(route.main_stops.every((s) => /^(food|cafe|view)-/.test(s.id)));

@@ -518,6 +518,7 @@ async function composeAgnosticRouteOutput({
   weatherProvider = null,
   clock = null,
   trustedTimezone = null,
+  placeLabel = null,
   // Synthesis backend. "engine" routes the admitted candidates through the
   // route engine's own agnostic_compose (the convergence path); "legacy" keeps
   // the in-module experimental synthesizer (default, so existing callers/tests
@@ -525,9 +526,11 @@ async function composeAgnosticRouteOutput({
   // path is proven in production.
   synthesizeVia = "legacy",
 }) {
+  const agnosticLabel = safeAgnosticPlaceLabel(placeLabel);
   const agnosticContext = buildAgnosticCityContext({
     lat: coords.lat,
     lng: coords.lng,
+    ...(agnosticLabel ? { label: agnosticLabel } : {}),
     timezone: timezone || "UTC",
     todayIsoDate: typeof todayIsoDate === "function" ? todayIsoDate : todayIsoDate || undefined,
   });
@@ -670,6 +673,10 @@ async function composeAgnosticRouteOutput({
       preferences,
       timezone,
       lang,
+      // Pass ONLY the resolver-attested label (may be null). The prose builder
+      // must fall back to neutral, never to agnosticContext.label — which is the
+      // "Nearby" geometry placeholder, not a real place name.
+      placeLabel: agnosticLabel,
     });
   }
 
@@ -849,6 +856,7 @@ async function composeAgnosticRouteViaEngine({
   preferences,
   timezone,
   lang,
+  placeLabel,
 }) {
   const sourceCandidates = mapAdmittedSelectionToSourceCandidates({
     selected: (candidateCombination && candidateCombination.selected) || [],
@@ -861,7 +869,7 @@ async function composeAgnosticRouteViaEngine({
     sourceCandidates,
     timezone: timezone || "UTC",
     todayIsoDate: agnosticContext.todayIsoDate,
-    label: agnosticContext.label,
+    label: safeAgnosticPlaceLabel(placeLabel) || agnosticContext.label,
     key: agnosticContext.key,
   });
 
@@ -875,7 +883,14 @@ async function composeAgnosticRouteViaEngine({
     lang,
   });
 
-  const engineDay = (engineResult && Array.isArray(engineResult.days) && engineResult.days[0]) || null;
+  const engineDay = sanitizeAgnosticEngineDay({
+    day: (engineResult && Array.isArray(engineResult.days) && engineResult.days[0]) || null,
+    // Route PROSE uses the attested label or neutral fallback — never the
+    // "Nearby" geometry placeholder (which stays on the engine's start/end
+    // labels via the engineCityConfig `label` above).
+    placeLabel: safeAgnosticPlaceLabel(placeLabel),
+    lang,
+  });
   const engineRoute = (engineDay && engineDay.primary_route) || null;
 
   // No coherent walk (engine returns < 2 viable stops → null route). Honest
@@ -939,11 +954,93 @@ async function composeAgnosticRouteViaEngine({
   experiment.synthesized_via = "agnostic_compose_engine";
 
   const result = applyRouteMutation({ baselineResult, primaryRoute: engineRoute, date: effectiveDate });
-  if (engineDay.dayflow_context && Array.isArray(result.days) && result.days[0]) {
-    result.days[0].dayflow_context = engineDay.dayflow_context;
-  }
+  // scrubAgnosticAppliedDay is the single owner of the promoted day's fallback-
+  // sensitive fields (date_signals, alternatives, live_events, dayflow_context).
+  scrubAgnosticAppliedDay(result, engineDay);
 
   return { result, experiment };
+}
+
+function sanitizeAgnosticEngineDay({ day, placeLabel, lang }) {
+  if (!day || typeof day !== "object") return day;
+  const cleaned = deepClone(day);
+  cleaned.date_signals = [];
+  if (cleaned.primary_route) {
+    cleaned.primary_route = sanitizeAgnosticEngineRoute({
+      route: cleaned.primary_route,
+      placeLabel,
+      lang,
+    });
+  }
+  return cleaned;
+}
+
+function sanitizeAgnosticEngineRoute({ route, placeLabel, lang }) {
+  if (!route || typeof route !== "object") return route;
+  const cleaned = deepClone(route);
+  const prose = buildAgnosticRouteProse({ placeLabel, lang });
+  cleaned.title = prose.title;
+  cleaned.summary = prose.summary;
+  cleaned.why_recommended = prose.why_recommended;
+  cleaned.agnostic_route_prose = true;
+  return cleaned;
+}
+
+function scrubAgnosticAppliedDay(result, engineDay) {
+  if (!result || !Array.isArray(result.days) || !result.days[0]) return;
+  const day = result.days[0];
+  // applyRouteMutation only REPLACES days[0].primary_route; every other day-level
+  // field survives from the baseline fallback day. On the any-place path those
+  // belong to the fallback CITY (e.g. a Malmö request whose baseline was Rome),
+  // so the promoted agnostic day must not carry them until the agnostic engine
+  // owns a trusted source for each:
+  //   - date_signals: fallback city's seasonal signals ("Sommarkväll i Rom").
+  //   - alternatives: fallback city's alternate routes (the engine emits ONE
+  //     route, never alternatives, so these are ALWAYS the baseline's).
+  //   - live_events: fallback city's per-day events. The CORRECT agnostic events
+  //     ride the top-level `live_events` sidecar (geo-keyed to the anchor); this
+  //     per-day copy is unconsumed leakage. Delete it, never the sidecar.
+  //   - dayflow_context: the fallback city's weather read. The engine-compose
+  //     path does not (yet) produce an anchor weather read, so a surviving
+  //     baseline dayflow would show the WRONG city's weather (e.g. Rome's "37°"
+  //     on a Helsinki day) — the frontend renders it as "Dagens läsning". Use
+  //     the engine's when it has one, otherwise DELETE it: an honest absence,
+  //     never another place's weather.
+  day.date_signals = [];
+  day.alternatives = [];
+  delete day.live_events;
+  if (engineDay && engineDay.dayflow_context) {
+    day.dayflow_context = engineDay.dayflow_context;
+  } else {
+    delete day.dayflow_context;
+  }
+}
+
+function buildAgnosticRouteProse({ placeLabel, lang }) {
+  const sv = String(lang || "").toLowerCase().startsWith("sv");
+  const label = safeAgnosticPlaceLabel(placeLabel) || (sv ? "platsen" : "this place");
+  return sv
+    ? {
+        title: `Plan för ${label}`,
+        summary: `Byggd från källstödda platser nära ${label}; täckningen kan vara tunnare än i en fullt kurerad Parranda-stad.`,
+        why_recommended: `Rutten använder källstödda stopp som matchar dina val nära ${label}, med provisorisk tillit där katalogen är tunn.`,
+      }
+    : {
+        title: `Plan for ${label}`,
+        summary: `Built from source-backed places near ${label}; coverage may be thinner than in a fully curated Parranda city.`,
+        why_recommended: `The route uses source-backed stops that match your choices near ${label}, with provisional trust where the catalog is thin.`,
+      };
+}
+
+function safeAgnosticPlaceLabel(value) {
+  if (typeof value !== "string") return null;
+  // A resolver label is often a full display name ("Malmö, Malmö kommun, Skåne
+  // län, Sverige"). Route prose reads as Parranda's own voice, so take just the
+  // primary locality (the first comma-segment) — "Plan för Malmö", not the whole
+  // administrative chain.
+  const cleaned = value.split(",")[0].replace(/\s+/g, " ").trim();
+  if (!cleaned) return null;
+  return cleaned.slice(0, 80);
 }
 
 function toWalkingStops(adaptedBody) {
@@ -1001,5 +1098,6 @@ module.exports = {
   buildExperimentBlock,
   buildBlockedAgnosticRouteOutputExperiment,
   admitExperimentalInferredExternalCandidate,
+  scrubAgnosticAppliedDay,
   MIN_VIABLE_GEOCODED_STOPS,
 };
