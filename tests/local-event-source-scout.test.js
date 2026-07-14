@@ -154,6 +154,64 @@ test("The Events Calendar endpoint is detected generically from a strong CMS sig
   assert.equal(result.manifest_candidates[0].status, "review-needed");
 });
 
+test("event-related data endpoints become reviewed generic calendar manifests", () => {
+  const result = inspectEventSourcePage({
+    seed: {
+      url: "https://region.example/events",
+      family: "official_tourism_calendar",
+      trust_tier: "institution",
+      source_language: "sv",
+    },
+    html:
+      '<div id="regional-events-overview" data-rest-url="/wp-json/region/v1/events-proxy"></div>',
+    context: context(),
+  });
+
+  assert.ok(result.detected.includes("event_json"));
+  assert.equal(result.manifest_candidates.length, 1);
+  assert.equal(result.manifest_candidates[0].adapter, "events_calendar");
+  assert.equal(
+    result.manifest_candidates[0].endpoint,
+    "https://region.example/wp-json/region/v1/events-proxy",
+  );
+  assert.equal(result.manifest_candidates[0].status, "review-needed");
+  assert.equal(result.manifest_candidates[0].runtime_policy, "review_required");
+});
+
+test("unrelated data endpoints are not promoted as event manifests", () => {
+  const result = inspectEventSourcePage({
+    seed: { url: "https://region.example/about" },
+    html: '<div id="weather-overview" data-rest-url="/wp-json/weather/v1/proxy"></div>',
+    context: context(),
+  });
+
+  assert.equal(result.manifest_candidates.length, 0);
+  assert.ok(!result.detected.includes("event_json"));
+});
+
+test("direct event JSON payloads are recognized without dumping or fetching rows", () => {
+  const result = inspectEventSourcePage({
+    seed: { url: "https://region.example/api/events" },
+    contentType: "application/json; charset=utf-8",
+    html: JSON.stringify({
+      count: 1,
+      events: [
+        {
+          id: 42,
+          title: "Local harvest evening",
+          start: "2026-09-12T18:00:00+02:00",
+        },
+      ],
+      internal_debug: { upstream: "must-not-be-preserved" },
+    }),
+    context: context(),
+  });
+
+  assert.equal(result.manifest_candidates.length, 1);
+  assert.equal(result.manifest_candidates[0].adapter, "events_calendar");
+  assert.ok(!JSON.stringify(result).includes("must-not-be-preserved"));
+});
+
 test("a rejected source may be reported but never becomes a manifest proposal", () => {
   const result = inspectEventSourcePage({
     seed: {
@@ -190,6 +248,23 @@ test("generic HTML is needs-adapter while only the exact existing signature gets
   });
   assert.equal(compatible.manifest_candidates.length, 1);
   assert.equal(compatible.manifest_candidates[0].adapter, "html_venue_calendar");
+});
+
+test("Sitevision-style event calendars are classified as needs-adapter only", () => {
+  const result = inspectEventSourcePage({
+    seed: { url: "https://municipality.example/events" },
+    html: [
+      '<div class="sv-ws-event-calendar">',
+      '<div class="eventsListContainer">',
+      '<article class="eventArticle"><h2>Local council event</h2></article>',
+      "</div></div>",
+    ].join(""),
+    context: context(),
+  });
+
+  assert.equal(result.candidates.length, 1);
+  assert.equal(result.candidates[0].adapter, "needs_adapter");
+  assert.equal(result.manifest_candidates.length, 0);
 });
 
 test("URL safety rejects private, loopback, credentialed, and non-http seeds", () => {

@@ -81,6 +81,7 @@ candidate evaluation:
 - supplied local-language terms produce a bounded search-query plan for a
   trusted background search integration;
 - one reviewed public page per seed is inspected for iCal, The Events Calendar,
+  event-related REST/JSON endpoints exposed in page attributes,
   schema.org/Event JSON-LD, compatible venue HTML, RSS, and social discovery
   hints;
 - private/loopback URLs, unsafe redirects, robots exclusions, oversized
@@ -90,7 +91,8 @@ candidate evaluation:
   not cached and may recover on the next bounded run;
 - discovered machine-readable interfaces become review-needed manifest
   candidates only. They never become active runtime providers automatically;
-- RSS and generic HTML remain adapter-review work, while social links remain
+- RSS and generic HTML calendars, including recognized Sitevision-style event
+  listings, remain adapter-review work, while social links remain
   discovery/corroboration hints rather than event truth.
 
 The operator harness is default-off. Without the live switch it emits only the

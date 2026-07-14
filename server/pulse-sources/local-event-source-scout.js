@@ -136,6 +136,14 @@ function inspectEventSourcePage({
     if (isTribeRestUrl(link.url)) addCandidate("events_calendar", link.url);
   }
 
+  for (const endpoint of extractEventJsonEndpoints(source, pageUrl)) {
+    addCandidate("event_json", endpoint);
+  }
+
+  if (looksLikeEventJsonPayload(source, contentType)) {
+    addCandidate("event_json", pageUrl);
+  }
+
   const schemaEvents = extractSchemaOrgEventsFromHtml(source);
   if (schemaEvents.length > 0) {
     addCandidate("schema_org_html", pageUrl, { schemaEventCount: schemaEvents.length });
@@ -353,7 +361,7 @@ function buildDetectedCandidate({
       extractable: baseExtractable({ end: true, recurrence: true, ical: true }),
     };
   }
-  if (kind === "events_calendar") {
+  if (kind === "events_calendar" || kind === "event_json") {
     return {
       ...common,
       adapter: "the_events_calendar",
@@ -365,6 +373,10 @@ function buildDetectedCandidate({
         recurrence: true,
         the_events_calendar: true,
       }),
+      notes:
+        kind === "event_json"
+          ? "generic_event_json_endpoint_requires_review"
+          : common.notes,
     };
   }
   if (kind === "schema_org_html") {
@@ -703,6 +715,86 @@ function firstTribeEndpoint(html, baseUrl) {
   return absolutizeUrl(match[0].replace(/\\\//g, "/"), baseUrl);
 }
 
+function extractEventJsonEndpoints(html, baseUrl) {
+  const endpoints = [];
+  const seen = new Set();
+  const tagPattern = /<([a-z][\w:-]*)\b([^>]*)>/gi;
+  const endpointAttributes = [
+    "data-rest-url",
+    "data-api-url",
+    "data-events-url",
+    "data-calendar-url",
+    "data-events-endpoint",
+    "data-calendar-endpoint",
+    "data-endpoint",
+  ];
+  let match;
+
+  while ((match = tagPattern.exec(String(html || ""))) !== null) {
+    const attributes = parseHeaderAttributes(match[2] || "");
+    const eventContext = [
+      match[1],
+      attributes.id,
+      attributes.class,
+      ...Object.keys(attributes),
+    ].join(" ");
+
+    for (const attribute of endpointAttributes) {
+      const rawEndpoint = attributes[attribute];
+      if (!rawEndpoint) continue;
+      if (!hasEventEndpointSignature(rawEndpoint, eventContext)) continue;
+      const endpoint = absolutizeUrl(rawEndpoint, baseUrl);
+      if (!endpoint || seen.has(endpoint)) continue;
+      seen.add(endpoint);
+      endpoints.push(endpoint);
+    }
+  }
+  return endpoints;
+}
+
+function hasEventEndpointSignature(endpoint, context) {
+  return /(?:event|calendar|agenda|programme|program)/i.test(
+    String(endpoint || "") + " " + String(context || ""),
+  );
+}
+
+function looksLikeEventJsonPayload(payload, contentType) {
+  const source = String(payload || "").trim();
+  if (!source) return false;
+  if (
+    !String(contentType || "").toLowerCase().includes("json") &&
+    !/^[\[{]/.test(source)
+  ) {
+    return false;
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(source);
+  } catch (_error) {
+    return false;
+  }
+  const rows = Array.isArray(parsed)
+    ? parsed
+    : Array.isArray(parsed?.events)
+      ? parsed.events
+      : Array.isArray(parsed?.data)
+        ? parsed.data
+        : [];
+  return rows.some((row) =>
+    row &&
+    typeof row === "object" &&
+    firstString(localizedValue(row.title), row.name) &&
+    firstString(row.start, row.start_date, row.startDate, row.starts_at)
+  );
+}
+
+function localizedValue(value) {
+  if (typeof value === "string") return value;
+  if (!value || typeof value !== "object") return null;
+  return firstString(value.rendered, value.text, value.name);
+}
+
 function hasStrongTribeSignature(html) {
   const source = String(html || "");
   return (
@@ -721,10 +813,13 @@ function hasCompatibleVenueCalendarSignature(html) {
 
 function hasGenericEventListingSignature(html) {
   const source = String(html || "");
+  const hasSitevisionCalendar =
+    /\bsv-ws-event-calendar\b/i.test(source) &&
+    /\b(?:eventsListContainer|eventArticle|eventCalendar)\b/i.test(source);
   const hasTime = /<time\b[^>]*datetime\s*=/i.test(source);
   const hasEventStructure =
     /\b(?:event-list|events-list|event-card|calendar-event|event-item)\b/i.test(source);
-  return hasTime && hasEventStructure;
+  return hasSitevisionCalendar || (hasTime && hasEventStructure);
 }
 
 function isIcalLink(link) {
