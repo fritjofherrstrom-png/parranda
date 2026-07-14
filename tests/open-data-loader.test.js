@@ -40,6 +40,34 @@ test("OSM element without wikidata stays single-family (will be gated out downst
   assert.deepEqual(record.sources.map((s) => s.family), ["map"]);
 });
 
+test("OSM place website is preserved only as source-owned scout metadata", () => {
+  const record = mapOsmElement({
+    type: "node",
+    id: 45,
+    lat: 41.9,
+    lon: 12.5,
+    tags: {
+      name: "Independent Gallery",
+      tourism: "gallery",
+      "contact:website": "https://gallery.example/program",
+    },
+  });
+  assert.equal(record.website, "https://gallery.example/program");
+
+  const invalid = mapOsmElement({
+    type: "node",
+    id: 46,
+    lat: 41.9,
+    lon: 12.5,
+    tags: {
+      name: "Broken Link Gallery",
+      tourism: "gallery",
+      website: "javascript:alert(1)",
+    },
+  });
+  assert.equal(invalid.website, undefined);
+});
+
 test("broadened OSM coverage maps to existing recognized types (no new vocab, generic for every city)", () => {
   const cases = [
     [{ shop: "bakery" }, "cafe", "fika"],

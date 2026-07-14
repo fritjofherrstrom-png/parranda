@@ -427,6 +427,7 @@ function mapOsmElement(element) {
   // downstream composition may prefer non-chain options, never ban them.
   const brandName = typeof tags.brand === "string" && tags.brand.trim() ? tags.brand.trim() : null;
   const brandWikidata = typeof tags["brand:wikidata"] === "string" && tags["brand:wikidata"].trim();
+  const website = firstHttpUrl(tags.website, tags["contact:website"]);
 
   return {
     id: `osm-${elementType}-${osmId}`,
@@ -438,7 +439,24 @@ function mapOsmElement(element) {
     sources,
     chain: Boolean(brandName || brandWikidata),
     brand: brandName,
+    // Source-owned operational metadata only. It does not affect place trust or
+    // ranking; the out-of-band local-event source scout may use it as a bounded
+    // website seed.
+    ...(website ? { website } : {}),
   };
+}
+
+function firstHttpUrl(...values) {
+  for (const value of values) {
+    if (typeof value !== "string" || !value.trim()) continue;
+    try {
+      const url = new URL(value.trim());
+      if (url.protocol === "http:" || url.protocol === "https:") return url.toString();
+    } catch (_error) {
+      // Invalid source-owned website atoms are ignored, never repaired.
+    }
+  }
+  return null;
 }
 
 function resolveElementCoords(element) {
