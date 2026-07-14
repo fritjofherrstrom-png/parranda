@@ -54,6 +54,10 @@ const HELSINKI_LINKED_EVENTS_FEED = Object.freeze({
   base: "https://api.hel.fi/linkedevents/v1/event/",
   bbox: [24.5, 60.0, 25.3, 60.45], // Helsinki, Espoo, Vantaa, Kauniainen (live-verified)
   license: "CC-BY 4.0",
+  source_tier: "official",
+  confidence: "medium",
+  source_family: "municipal_open",
+  source_identity: "hel.fi",
   // The feed's region timezone — so a "tonight" time renders in the VENUE's
   // local clock, not the viewer's. A feed is region-scoped (bbox), so a
   // feed-level tz is accurate for its events. IANA name.
@@ -91,6 +95,10 @@ function resolveEventFeedRegistry(env = process.env) {
             bbox: f.bbox.map(Number),
             license: f.license != null ? String(f.license) : null,
             timezone: f.timezone != null ? String(f.timezone) : null,
+            source_tier: f.source_tier != null ? String(f.source_tier) : "official",
+            confidence: f.confidence != null ? String(f.confidence) : "medium",
+            source_family: f.source_family != null ? String(f.source_family) : "municipal_open",
+            source_identity: f.source_identity != null ? String(f.source_identity) : sourceIdentityForUrl(f.base),
           });
         }
       }
@@ -122,6 +130,10 @@ const GLOBAL_FEED_DESCRIPTOR = Object.freeze({
   label: "Ticketmaster",
   license: null, // commercial listings — attribution + outbound link, no open license claimed
   family: "global_commercial",
+  source_tier: "verified",
+  confidence: "medium",
+  source_family: "global_commercial",
+  source_identity: "ticketmaster.com",
 });
 
 // First feed whose coverage bbox contains the anchor (deterministic by list
@@ -325,11 +337,18 @@ async function collectAnchorEvents({
   const tonight = [];
   const thisWeek = [];
   for (const rawEvent of raw) {
-    // Both families are primary sources for their listings (a municipal feed for
-    // its city's calendar; the global ticketing source for its own inventory):
-    // stamp descriptor-level trust so the #279 normalizer rates them honestly
-    // (medium / official) rather than defaulting to needs_review.
-    const enriched = { source_tier: "official", confidence: "medium", ...rawEvent };
+    // Provider trust remains source-specific. A municipal calendar may be
+    // official; a commercial discovery feed is verified source backing but is
+    // not relabelled as a public authority merely because it owns its listings.
+    const enriched = {
+      source_tier: activeFeed.source_tier || (feed ? "official" : "verified"),
+      confidence: activeFeed.confidence || "medium",
+      source_provider_id: activeFeed.id,
+      source_identity:
+        activeFeed.source_identity || sourceIdentityForUrl(activeFeed.base || activeFeed.source_url) || activeFeed.id,
+      source_family: activeFeed.source_family || activeFeed.family || (feed ? "municipal_open" : "global_commercial"),
+      ...rawEvent,
+    };
     const normalized = normalizeTimeSensitiveSourceEvent(enriched, nowDate ? { now: nowDate } : {});
     if (!normalized) continue;
     if (!isEphemeralHappening(normalized, nowDate)) continue; // drop permanent/malformed (both buckets)
@@ -373,6 +392,14 @@ function eventCacheKey(anchor, now) {
   const lng = Number(anchor.lng).toFixed(2);
   const hour = (now ? new Date(now) : new Date(0)).toISOString().slice(0, 13);
   return `${lat},${lng}:${hour}`;
+}
+
+function sourceIdentityForUrl(value) {
+  try {
+    return new URL(String(value || "").trim()).hostname.replace(/^www\./, "").toLowerCase();
+  } catch (_error) {
+    return null;
+  }
 }
 
 const EVENT_CACHE_TTL_MS = 20 * 60 * 1000; // 20 min — time-sensitive, but reusable

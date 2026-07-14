@@ -2,6 +2,7 @@ const { normalizeSourceDescriptor } = require("./source-descriptor");
 const { normalizeSourceEvent, normalizeSourceSignal } = require("./normalize-event");
 const { normalizeTimeSensitiveSourceEvent } = require("./time-sensitive-event");
 const { dedupeNormalizedEvents } = require("./dedupe");
+const { fuseTimeSensitiveEvents } = require("./event-fusion");
 
 const DEFAULT_ENABLED_STATUSES = new Set(["active"]);
 
@@ -131,7 +132,7 @@ async function collectPulseSourcesForCity(cityConfig, options = {}) {
     city: cityConfig.key,
     events: dedupeNormalizedEvents(events),
     signals,
-    time_sensitive_events: dedupeTimeSensitiveEvents(timeSensitiveEvents),
+    time_sensitive_events: fuseTimeSensitiveEvents(timeSensitiveEvents),
     source_status: sourceStatuses,
   };
 }
@@ -204,31 +205,24 @@ function withDescriptorSourceDefaults(event, descriptor) {
     source_type: firstNonEmpty(event.source_type, descriptor.sourceType),
     source_tier: firstNonEmpty(event.source_tier, descriptor.trust?.source_tier),
     confidence: firstNonEmpty(event.confidence, event.trust?.confidence, descriptor.trust?.confidence),
+    source_provider_id: firstNonEmpty(event.source_provider_id, descriptor.id),
+    source_identity: firstNonEmpty(
+      event.source_identity,
+      event.publisher_id,
+      descriptor.publisherId,
+      sourceHost(descriptor.sourceUrl),
+      descriptor.id,
+    ),
+    source_family: firstNonEmpty(event.source_family, descriptor.sourceFamily, descriptor.sourceType),
   };
 }
 
-// Conservative dedup for time-sensitive events: collapse only LITERAL duplicates
-// (same normalized identity from the same source/start), never distinct events.
-// The legacy event dedup keys on `source.id`/`source_owned`, a different shape,
-// so time-sensitive events need their own key.
-function dedupeTimeSensitiveEvents(events = []) {
-  const seen = new Set();
-  const out = [];
-  for (const event of events) {
-    if (!event) continue;
-    const key = [
-      event.city || "",
-      event.id || "",
-      event.source_url || event.source_label || "",
-      event.starts_at || "",
-    ]
-      .map((value) => String(value || "").trim().toLowerCase())
-      .join("|");
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(event);
+function sourceHost(value) {
+  try {
+    return new URL(String(value || "").trim()).hostname.replace(/^www\./, "").toLowerCase();
+  } catch (_error) {
+    return null;
   }
-  return out;
 }
 
 module.exports = {

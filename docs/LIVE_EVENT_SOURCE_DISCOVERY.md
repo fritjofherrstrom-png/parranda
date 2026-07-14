@@ -304,8 +304,17 @@ conservative:
 - Distinct performances in a recurring series should not collapse into one
   event unless the source explicitly models them that way.
 
-Merged events should keep `sources[]` later. V1 can dedupe conservatively and
-prefer the strongest provenance.
+The provider registry now runs conservative event-evidence fusion after
+normalization. Cross-publisher rows merge only when title, start time, and
+venue or nearby coordinates agree. The canonical event keeps compact
+`sources[]`, field-level provenance, publisher-independent source count, and
+conflict reasons while preferring the strongest source for missing fields.
+
+Two adapters from one publisher are not independent corroboration. Weak
+social/community evidence stays low-confidence on its own, while independent
+trusted evidence may lift the fused event to medium confidence. Title-only,
+untimed, geographically incompatible, stale, or conflicting rows are never
+silently promoted.
 
 ## Runtime Strategy
 

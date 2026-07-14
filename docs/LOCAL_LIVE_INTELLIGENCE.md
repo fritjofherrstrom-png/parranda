@@ -207,29 +207,37 @@ route stops. It evaluates the live-source coverage around a place/time window:
 The graph reports acquisition readiness only. `can_collect_pulse_candidates`
 and `can_evaluate_route_salience` mean the source mix is broad enough for later
 event evaluation; they do not claim that a current event exists. Event-level
-timing, fusion, and corroboration remain downstream gates.
+timing and corroboration remain downstream gates.
+
+`server/pulse-sources/event-fusion.js` provides the first conservative
+event-evidence fusion gate. It only joins cross-publisher rows when title,
+start time, and venue or nearby coordinates agree. It keeps compact
+`sources[]`, field provenance, publisher independence, and conflicts. A title
+alone is never enough, and two adapters from the same publisher do not become
+two independent confirmations.
 
 This matters because local live quality is not only "did we find an event?"
 Parranda also needs to know whether it has broad enough source-family coverage
 to trust that it is not missing the important local rhythm.
 
-## Non-goals for the immediate next PR
+## Immediate next acquisition step
 
 This note does not mean the next PR should scrape every local source.
 
 Do not jump straight into broad scraping or fragile social-source ingestion.
 
-The correct sequence is still:
+The correct sequence is now:
 
 ```txt
-Candidate Spine
-→ opt-in Blitz candidate path
-→ external/open evidence provider v1
-→ local source registry
-→ local live/event evidence
-→ this-week mode
-→ saved Almanac integration
+local source graph
+→ event evidence fusion
+→ bounded multi-source acquisition around the resolved anchor
+→ Pulse salience and later route eligibility
 ```
+
+Acquisition should still be bounded, cached, terms-aware, and fail-soft. Event
+fusion improves the trust interpretation of collected evidence; it does not
+create missing coverage or justify unbounded scraping.
 
 ## Product bar
 

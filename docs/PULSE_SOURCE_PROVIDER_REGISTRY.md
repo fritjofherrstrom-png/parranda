@@ -10,6 +10,8 @@ display gates, dedupe, and route/Pulse eligibility.
 
 - `id`
 - optional `label`
+- optional `publisherId` for the underlying publisher/evidence owner
+- optional `sourceFamily` for acquisition-family provenance
 - `city`
 - `role`
 - `sourceType`
@@ -58,6 +60,11 @@ of promoted.
 Providers may now return a separate `time_sensitive_events` list. The registry
 normalizes those rows through the time-sensitive source-event contract and keeps
 them separate from legacy live events, source signals, and route candidates.
+After normalization, conservative evidence fusion collapses literal duplicates
+and corroborated cross-provider representations of the same occurrence. Fused
+events preserve compact `sources[]`, field provenance, conflict reasons, and an
+independent publisher count. Different adapters from the same publisher or the
+same canonical event URL are not counted as independent confirmation.
 The Pulse engine may consume them as gated, salience-ranked context signals when
 they are source-backed, current/today/tonight, and at least medium confidence.
 They are still not route stops, route candidates, citypack candidates, or
@@ -99,8 +106,8 @@ city does not match the requested city. No cross-city fallback is allowed.
 - No full source registry UI.
 - No Planner, Blitz, route-engine, or citypack behavior changes.
 - No Barcelona/Rome/Athens special cases in the registry core.
-- No full cross-source merge layer. Dedupe is v1-lite and should not be treated
-  as canonical event identity across unrelated providers.
+- No fuzzy title-only event identity. Fusion is occurrence-scoped and requires
+  compatible time plus venue/geo evidence across unrelated providers.
 
 ## Active v1 wiring
 
@@ -177,6 +184,9 @@ For time-sensitive source-event providers it reports a capped event summary:
 - per-event `timing_relevance`, `starts_at`, `ends_at`, `confidence`,
   `route_role_hint`, `candidate_kind`, source label/URL, and coordinates when
   known
+- compact fusion status, independent source count, evidence sources,
+  field provenance, and conflicts when multiple provider rows describe one
+  occurrence
 
 It does not dump raw provider payloads by default. The inspect shape is meant to
 speed up provider review and failure diagnosis without turning `/api/city-pulse`

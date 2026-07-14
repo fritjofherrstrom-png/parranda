@@ -132,7 +132,31 @@ function compactInspectTimeSensitiveEvent(event) {
     ends_at: event?.ends_at || null,
     confidence: event?.confidence || null,
     route_role_hint: event?.route_role_hint || null,
+    fusion: {
+      id: event?.fusion_id || null,
+      status: event?.fusion_status || null,
+      source_count: Number(event?.source_count || 0),
+      independent_source_count: Number(event?.independent_source_count || 0),
+      reasons: Array.isArray(event?.fusion_reasons) ? event.fusion_reasons : [],
+      conflicts: Array.isArray(event?.conflicts) ? event.conflicts : [],
+      field_provenance:
+        event?.field_provenance && typeof event.field_provenance === "object"
+          ? event.field_provenance
+          : {},
+      sources: (Array.isArray(event?.sources) ? event.sources : []).map((source) => ({
+        identity: source?.identity || null,
+        provider_id: source?.provider_id || null,
+        family: source?.family || null,
+        label: source?.label || null,
+        url: source?.url || null,
+        tier: source?.tier || null,
+        confidence: source?.confidence || null,
+      })),
+    },
     source: {
+      provider_id: event?.source_provider_id || null,
+      identity: event?.source_identity || null,
+      family: event?.source_family || null,
       label: event?.source_label || event?.provenance?.source_label || null,
       url: event?.source_url || event?.provenance?.source_url || null,
       type: event?.source_type || null,
