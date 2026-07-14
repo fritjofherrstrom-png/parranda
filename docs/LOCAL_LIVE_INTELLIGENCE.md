@@ -239,6 +239,30 @@ Acquisition should still be bounded, cached, terms-aware, and fail-soft. Event
 fusion improves the trust interpretation of collected evidence; it does not
 create missing coverage or justify unbounded scraping.
 
+## Bounded anchor acquisition v1
+
+`server/place-candidates/anchor-event-acquisition.js` and
+`agnostic-event-supply.js` now implement the first runtime step after fusion:
+
+- start only from a resolver-attested coordinate anchor;
+- select at most four already-approved sources (up to three bbox-scoped local
+  feeds plus one key-gated global family);
+- run the selected sources concurrently in the background-warm cache path;
+- normalize and fuse occurrence evidence before salience ranking;
+- reject explicit coordinates outside the requested radius;
+- reject coordinate-less occurrences unless another matching source contributes
+  in-radius geometry;
+- preserve per-source status and compact acquisition/rejection summaries.
+
+This is not runtime web discovery. Public request data cannot add providers, and
+the engine does not crawl arbitrary pages per user request. Source discovery and
+terms review remain upstream; acquisition consumes only the approved env/server
+registry. This distinction keeps the network fan-out bounded while allowing
+independent source families to corroborate the same local happening.
+
+The next coverage work is to add reviewed source rows/adapters and source-health
+telemetry, not to weaken the anchor or geometry gates.
+
 ## Product bar
 
 Parranda should eventually feel like:

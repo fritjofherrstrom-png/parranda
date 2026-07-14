@@ -5,14 +5,13 @@
  *
  * Stable places (OSM / Wikidata / curated) say WHAT a place is. This says what is
  * HAPPENING there — tonight and this week — for an arbitrary anchor, with no
- * citypack. It resolves the anchor to an open, key-free municipal events feed that
- * geographically covers it (the geo-keyed registry below — Linked Events
- * instances; adding a city is DATA, not a per-city code hack), fetches events
- * NEAR the anchor (geo-filtered + soonest-first), normalizes them through the
- * generic #279 time-sensitive contract, and ranks them with the existing salience
- * scorer. It is pure orchestration over pieces that are already live-validated.
+ * citypack. It resolves a bounded set of approved source families around the
+ * trusted anchor (geo-keyed Linked Events rows plus the key-gated global family),
+ * collects them concurrently, normalizes + fuses their event evidence, and then
+ * requires real coordinates inside the anchor radius before salience ranking.
+ * Adding a municipal region is DATA, not a per-city code branch.
  *
- * HONEST BY CONSTRUCTION: where no open feed covers the anchor it returns
+ * HONEST BY CONSTRUCTION: where no approved source covers the anchor it returns
  * `coverage:"uncovered"` with no events — it never invents a happening. Events are
  * bucketed into `tonight` (now/today/tonight) and `this_week` (the next 7 days),
  * each ranked and capped. Output is DATA (ids, times, coords, source, trust),
@@ -25,6 +24,14 @@ const { normalizeTimeSensitiveSourceEvent } = require("../pulse-sources/time-sen
 const { scoreTimeSensitiveEventSalience } = require("../pulse-engine/time-sensitive-events");
 const { createSourceCache } = require("./source-cache");
 const { classifyCulturalSalience } = require("../pulse-engine/cultural-salience");
+const {
+  buildAnchorEventSourcePlan,
+  resolveEventFeedsForAnchor,
+  fuseAndBoundEventEvidence,
+  summarizeRejections,
+  DEFAULT_MAX_SOURCES,
+  DEFAULT_MAX_LOCAL_SOURCES,
+} = require("./anchor-event-acquisition");
 
 const DEFAULT_RADIUS_M = 3000;
 const MAX_PER_BUCKET = 6;
@@ -99,6 +106,9 @@ function resolveEventFeedRegistry(env = process.env) {
             confidence: f.confidence != null ? String(f.confidence) : "medium",
             source_family: f.source_family != null ? String(f.source_family) : "municipal_open",
             source_identity: f.source_identity != null ? String(f.source_identity) : sourceIdentityForUrl(f.base),
+            priority: Number.isFinite(Number(f.priority)) ? Number(f.priority) : 100,
+            status: f.status != null ? String(f.status) : "active",
+            runtime_policy: f.runtime_policy != null ? String(f.runtime_policy) : "bounded_refresh",
           });
         }
       }
@@ -134,19 +144,14 @@ const GLOBAL_FEED_DESCRIPTOR = Object.freeze({
   confidence: "medium",
   source_family: "global_commercial",
   source_identity: "ticketmaster.com",
+  status: "active",
+  runtime_policy: "credential_gated",
 });
 
-// First feed whose coverage bbox contains the anchor (deterministic by list
-// order). No match → null (honest "no feed reaches here").
+// Backward-compatible singular view. Runtime acquisition uses the bounded plural
+// resolver so overlapping approved feeds can corroborate one another.
 function resolveEventFeedForAnchor(anchor, registry = BUILTIN_EVENT_FEEDS) {
-  if (!hasAnchor(anchor)) return null;
-  for (const feed of Array.isArray(registry) ? registry : []) {
-    const b = feed && feed.bbox;
-    if (!Array.isArray(b) || b.length < 4) continue;
-    const [w, s, e, n] = b;
-    if (anchor.lng >= w && anchor.lng <= e && anchor.lat >= s && anchor.lat <= n) return feed;
-  }
-  return null;
+  return resolveEventFeedsForAnchor(anchor, registry, { limit: 1 })[0] || null;
 }
 
 // Geo-filter the feed to the anchor + return genuine CURRENT happenings.
@@ -244,6 +249,13 @@ function toEventView(event, feed, { eventTimezone = null } = {}) {
     trust_level: event.confidence || null,
     cultural_tier: cultural.tier,
     salience_score: score,
+    anchor_distance_km: Number.isFinite(event.anchor_distance_km) ? event.anchor_distance_km : null,
+    fusion_status: event.fusion_status || "single_source",
+    source_count: Number.isFinite(event.source_count) ? event.source_count : 1,
+    independent_source_count: Number.isFinite(event.independent_source_count)
+      ? event.independent_source_count
+      : 1,
+    sources: Array.isArray(event.sources) ? event.sources : [],
     // The venue-local timezone so the UI shows the real local start time.
     timezone: eventTimezone || feed.timezone || null,
   };
@@ -269,7 +281,7 @@ function rankAndCap(views) {
  * @param {string|null} [opts.date]              feed window start (default today)
  * @param {object[]} [opts.registry]             feed registry (default built-in)
  * @param {Function} [opts.fetcher]              injected fetch (tests)
- * @returns {Promise<{coverage:"covered"|"uncovered", feed:object|null, tonight:object[], this_week:object[]}>}
+ * @returns {Promise<{coverage:"covered"|"uncovered", feed:object|null, feeds:object[], tonight:object[], this_week:object[], acquisition:object}>}
  */
 async function collectAnchorEvents({
   anchor,
@@ -280,102 +292,193 @@ async function collectAnchorEvents({
   radiusM,
   timeoutMs = 15000,
   globalKey = null,
+  maxSources = DEFAULT_MAX_SOURCES,
+  maxLocalSources = DEFAULT_MAX_LOCAL_SOURCES,
 } = {}) {
-  // Family resolution: a municipal open feed covering the anchor wins (richest
-  // hyper-local data where it exists); otherwise the GLOBAL provider answers for
-  // ANY coordinate (key-gated); neither → honest absence. No per-city branches.
-  const feed = resolveEventFeedForAnchor(anchor, registry || resolveEventFeedRegistry());
-  if (!feed && !(globalKey && hasAnchor(anchor))) {
-    return { coverage: "uncovered", feed: null, tonight: [], this_week: [] };
+  const effectiveRadiusM = Math.max(100, Math.round(radiusM || DEFAULT_RADIUS_M));
+  const sourcePlan = buildAnchorEventSourcePlan({
+    anchor,
+    registry: registry || resolveEventFeedRegistry(),
+    globalSource: GLOBAL_FEED_DESCRIPTOR,
+    globalEnabled: Boolean(globalKey),
+    maxSources,
+    maxLocalSources,
+  });
+  if (sourcePlan.length === 0) {
+    return {
+      coverage: "uncovered",
+      feed: null,
+      feeds: [],
+      tonight: [],
+      this_week: [],
+      acquisition: emptyAcquisition(effectiveRadiusM),
+    };
   }
 
   const nowDate = now ? new Date(now) : null;
+  // Window each source from NOW forward so a late-evening request does not spend
+  // its bounded page on already-past rows. All selected sources run concurrently;
+  // the slowest timeout is the upper bound, not source_count × timeout.
+  const startParam = date || (nowDate ? nowDate.toISOString() : null);
+  const collectedSources = await Promise.all(
+    sourcePlan.map((source) =>
+      collectEventSource({
+        source,
+        anchor,
+        nowDate,
+        startParam,
+        fetcher,
+        radiusM: effectiveRadiusM,
+        timeoutMs,
+        globalKey,
+      }),
+    ),
+  );
+
+  const normalizedEvidence = [];
+  for (const collection of collectedSources) {
+    const source = collection.source;
+    for (const rawEvent of collection.raw) {
+      const enriched = {
+        source_tier: source.source_tier || (source.kind === "global" ? "verified" : "official"),
+        confidence: source.confidence || "medium",
+        source_provider_id: source.id,
+        source_identity:
+          source.source_identity || sourceIdentityForUrl(source.base || source.source_url) || source.id,
+        source_family:
+          source.source_family || source.family || (source.kind === "global" ? "global_commercial" : "municipal_open"),
+        ...rawEvent,
+      };
+      const normalized = normalizeTimeSensitiveSourceEvent(enriched, nowDate ? { now: nowDate } : {});
+      if (!normalized) continue;
+      if (rawEvent.timezone) normalized.timezone = rawEvent.timezone;
+      normalizedEvidence.push(normalized);
+    }
+  }
+
+  // Explicit outside-radius rows are rejected before fusion. A mapless row can
+  // only survive when another source describes the same occurrence with trusted
+  // coordinates, after which the fused occurrence is bounded again.
+  const bounded = fuseAndBoundEventEvidence(normalizedEvidence, {
+    anchor,
+    radiusM: effectiveRadiusM,
+  });
+  const rejected = [...bounded.rejected];
+  const sourceById = new Map(sourcePlan.map((source) => [source.id, source]));
+  const tonight = [];
+  const thisWeek = [];
+
+  for (const event of bounded.events) {
+    if (!isEphemeralHappening(event, nowDate)) {
+      rejected.push({
+        id: event.fusion_id || event.id || null,
+        source_provider_id: event.source_provider_id || null,
+        reason: "not_ephemeral_happening",
+      });
+      continue;
+    }
+    const source = sourceById.get(event.source_provider_id) || sourcePlan[0];
+    const view = toEventView(event, source, { eventTimezone: event.timezone || null });
+    if (!view) continue;
+    if (TONIGHT_TIMING.has(event.timing_relevance)) {
+      tonight.push(view);
+    } else if (
+      event.timing_relevance === "future" &&
+      withinHorizonDays(event.starts_at, nowDate, THIS_WEEK_HORIZON_DAYS)
+    ) {
+      thisWeek.push(view);
+    }
+  }
+
+  const feeds = collectedSources.map(compactSourceStatus);
+  return {
+    coverage: "covered",
+    feed: feeds[0] || null,
+    feeds,
+    tonight: rankAndCap(tonight),
+    this_week: rankAndCap(thisWeek),
+    acquisition: {
+      mode: "bounded_multi_source",
+      radius_m: effectiveRadiusM,
+      source_cap: Math.max(1, Math.min(Number(maxSources) || DEFAULT_MAX_SOURCES, DEFAULT_MAX_SOURCES)),
+      selected_source_count: sourcePlan.length,
+      normalized_event_count: normalizedEvidence.length,
+      fused_event_count: bounded.fused_count,
+      rejected_event_count: rejected.length,
+      rejection_summary: summarizeRejections(rejected),
+    },
+  };
+}
+
+async function collectEventSource({
+  source,
+  anchor,
+  nowDate,
+  startParam,
+  fetcher,
+  radiusM,
+  timeoutMs,
+  globalKey,
+}) {
   let provider;
-  let feedForView;
-  if (feed) {
-    const endpoint = buildAnchorEventEndpoint(feed.base, anchor, { radiusM });
-    provider = createLinkedEventsProvider({
-      endpoint,
-      fetcher: fetcher || undefined,
-      limit: FETCH_LIMIT,
-      // A geo `dwithin` page is slow and high-variance on the live feed; give it
-      // room. This runs out-of-band (background-warm), so a long timeout never
-      // blocks the route — see resolveDefaultEventSupply.
-      timeoutMs: Math.max(1000, Math.floor(timeoutMs) || 15000),
-      label: feed.label,
-      license: feed.license,
-    });
-  } else {
+  if (source.kind === "global") {
     provider = createTicketmasterProvider({
       key: globalKey,
       anchor,
-      radiusKm: Math.max(1, Math.round((radiusM || DEFAULT_RADIUS_M) / 1000)),
+      radiusKm: Math.max(1, Math.round(radiusM / 1000)),
       windowDays: THIS_WEEK_HORIZON_DAYS,
       now: nowDate || undefined,
       fetcher: fetcher || undefined,
       timeoutMs: Math.max(1000, Math.floor(timeoutMs) || 15000),
       pageSize: FETCH_LIMIT,
     });
-    feedForView = GLOBAL_FEED_DESCRIPTOR;
+  } else {
+    provider = createLinkedEventsProvider({
+      endpoint: buildAnchorEventEndpoint(source.base, anchor, { radiusM }),
+      fetcher: fetcher || undefined,
+      limit: FETCH_LIMIT,
+      timeoutMs: Math.max(1000, Math.floor(timeoutMs) || 15000),
+      label: source.label,
+      license: source.license,
+    });
   }
-  const activeFeed = feed || feedForView;
 
-  // Window the feed from NOW forward (a datetime, not "today") so a late-evening
-  // request doesn't waste the page on this-morning's already-past events — the
-  // bias that empties tonight/this_week. Ongoing multi-day events still overlap
-  // [now, …] and are returned.
-  const startParam = date || (nowDate ? nowDate.toISOString() : null);
-
-  let raw = [];
   try {
     const collected = await provider.create({ key: null }).collect({ date: startParam });
-    raw = Array.isArray(collected && collected.time_sensitive_events) ? collected.time_sensitive_events : [];
-  } catch (_e) {
-    raw = [];
-  }
-
-  const tonight = [];
-  const thisWeek = [];
-  for (const rawEvent of raw) {
-    // Provider trust remains source-specific. A municipal calendar may be
-    // official; a commercial discovery feed is verified source backing but is
-    // not relabelled as a public authority merely because it owns its listings.
-    const enriched = {
-      source_tier: activeFeed.source_tier || (feed ? "official" : "verified"),
-      confidence: activeFeed.confidence || "medium",
-      source_provider_id: activeFeed.id,
-      source_identity:
-        activeFeed.source_identity || sourceIdentityForUrl(activeFeed.base || activeFeed.source_url) || activeFeed.id,
-      source_family: activeFeed.source_family || activeFeed.family || (feed ? "municipal_open" : "global_commercial"),
-      ...rawEvent,
+    const raw = Array.isArray(collected && collected.time_sensitive_events) ? collected.time_sensitive_events : [];
+    return {
+      source,
+      raw,
+      status: raw.length > 0 ? "ok" : "empty_or_unavailable",
     };
-    const normalized = normalizeTimeSensitiveSourceEvent(enriched, nowDate ? { now: nowDate } : {});
-    if (!normalized) continue;
-    if (!isEphemeralHappening(normalized, nowDate)) continue; // drop permanent/malformed (both buckets)
-    // Event-level timezone (global provider carries one per event) beats the
-    // feed-level region timezone.
-    const view = toEventView(normalized, activeFeed, { eventTimezone: rawEvent.timezone || null });
-    if (!view) continue;
-    if (TONIGHT_TIMING.has(normalized.timing_relevance)) {
-      tonight.push(view);
-    } else if (
-      normalized.timing_relevance === "future" &&
-      withinHorizonDays(normalized.starts_at, nowDate, THIS_WEEK_HORIZON_DAYS)
-    ) {
-      thisWeek.push(view);
-    }
+  } catch (_error) {
+    return { source, raw: [], status: "failed" };
   }
+}
 
+function compactSourceStatus(collection) {
+  const source = collection.source;
   return {
-    coverage: "covered",
-    feed: {
-      id: activeFeed.id,
-      label: activeFeed.label,
-      license: activeFeed.license ?? null,
-      family: activeFeed.family || "municipal_open",
-    },
-    tonight: rankAndCap(tonight),
-    this_week: rankAndCap(thisWeek),
+    id: source.id,
+    label: source.label,
+    license: source.license ?? null,
+    family: source.source_family || source.family || (source.kind === "global" ? "global_commercial" : "municipal_open"),
+    source_identity: source.source_identity || sourceIdentityForUrl(source.base || source.source_url) || source.id,
+    status: collection.status,
+    event_rows: collection.raw.length,
+  };
+}
+
+function emptyAcquisition(radiusM) {
+  return {
+    mode: "bounded_multi_source",
+    radius_m: radiusM,
+    source_cap: DEFAULT_MAX_SOURCES,
+    selected_source_count: 0,
+    normalized_event_count: 0,
+    fused_event_count: 0,
+    rejected_event_count: 0,
+    rejection_summary: [],
   };
 }
 
@@ -387,11 +490,15 @@ async function collectAnchorEvents({
  */
 // Coarse cache key: ~1 km anchor bucket + hour bucket (events are time-sensitive,
 // so the window must not be stale, but a fresh request a minute later must hit).
-function eventCacheKey(anchor, now) {
+function eventCacheKey(anchor, now, sourceIds = []) {
   const lat = Number(anchor.lat).toFixed(2);
   const lng = Number(anchor.lng).toFixed(2);
   const hour = (now ? new Date(now) : new Date(0)).toISOString().slice(0, 13);
-  return `${lat},${lng}:${hour}`;
+  const sources = (Array.isArray(sourceIds) ? sourceIds : [])
+    .map(String)
+    .sort()
+    .join(",");
+  return `${lat},${lng}:${hour}:${sources}`;
 }
 
 function sourceIdentityForUrl(value) {
@@ -406,11 +513,11 @@ const EVENT_CACHE_TTL_MS = 20 * 60 * 1000; // 20 min — time-sensitive, but reu
 const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a route
 
 /**
- * Default event supply: env-gated + BACKGROUND-WARMED. The live municipal feed is
- * slow and high-variance (a geo query can take 8–25 s), so it must NEVER be
- * fetched inline on the route. On a cold anchor we kick an out-of-band warm and
- * return an honest `pending` (the route is instant); once warm, the next visit
- * serves cached events. An uncovered anchor returns honest absence immediately.
+ * Default event supply: env-gated + BACKGROUND-WARMED. Selected sources can be
+ * slow and high-variance, so they must NEVER be fetched inline on the route. On a
+ * cold anchor we kick one bounded concurrent warm and return honest `pending`;
+ * once warm, the next visit serves the cached fused result. Even a valid empty
+ * result is cached so "nothing on" never becomes an unbounded refresh loop.
  */
 function resolveDefaultEventSupply(env = process.env) {
   const flag = String((env && env.PARRANDA_AGNOSTIC_EVENTS) || "").trim().toLowerCase();
@@ -423,28 +530,49 @@ function resolveDefaultEventSupply(env = process.env) {
     dir: (env && env.PARRANDA_CACHE_DIR) || null,
   });
   return ({ anchor, now } = {}) => {
-    const feed = hasAnchor(anchor) ? resolveEventFeedForAnchor(anchor, registry) : null;
-    // Coverage = a municipal feed covering the anchor OR the global family (any
-    // coordinate). Neither → honest absence, never an invented happening.
-    if (!feed && !(globalKey && hasAnchor(anchor))) {
-      return Promise.resolve({ coverage: "uncovered", feed: null, tonight: [], this_week: [] });
+    const sourcePlan = buildAnchorEventSourcePlan({
+      anchor,
+      registry,
+      globalSource: GLOBAL_FEED_DESCRIPTOR,
+      globalEnabled: Boolean(globalKey),
+    });
+    if (sourcePlan.length === 0) {
+      return Promise.resolve({
+        coverage: "uncovered",
+        feed: null,
+        feeds: [],
+        tonight: [],
+        this_week: [],
+        acquisition: emptyAcquisition(DEFAULT_RADIUS_M),
+      });
     }
-    const descriptor = feed
-      ? { id: feed.id, label: feed.label, license: feed.license ?? null, family: "municipal_open" }
-      : { ...GLOBAL_FEED_DESCRIPTOR };
-    const key = eventCacheKey(anchor, now);
+    const descriptors = sourcePlan.map((source) => compactSourceStatus({ source, status: "pending", raw: [] }));
+    const key = eventCacheKey(anchor, now, sourcePlan.map((source) => source.id));
     const cached = cache.peek(key);
     if (cached) return Promise.resolve(cached);
     // Cold: warm out-of-band (long timeout, fire-and-forget), serve honest pending.
     cache.warm(key, () => collectAnchorEvents({ anchor, now, registry, timeoutMs: WARM_TIMEOUT_MS, globalKey }), {
-      shouldStore: (r) => r && r.coverage === "covered" && (r.tonight.length + r.this_week.length) > 0,
+      // A valid empty result is cacheable too. Otherwise every request would
+      // hammer every selected source merely because nothing is happening now.
+      shouldStore: (r) => r && r.coverage === "covered",
     });
     return Promise.resolve({
       coverage: "covered",
-      feed: descriptor,
+      feed: descriptors[0] || null,
+      feeds: descriptors,
       tonight: [],
       this_week: [],
       pending: true,
+      acquisition: {
+        mode: "bounded_multi_source",
+        radius_m: DEFAULT_RADIUS_M,
+        source_cap: DEFAULT_MAX_SOURCES,
+        selected_source_count: sourcePlan.length,
+        normalized_event_count: 0,
+        fused_event_count: 0,
+        rejected_event_count: 0,
+        rejection_summary: [],
+      },
     });
   };
 }
@@ -454,6 +582,7 @@ module.exports = {
   resolveDefaultEventSupply,
   resolveEventFeedRegistry,
   resolveEventFeedForAnchor,
+  resolveEventFeedsForAnchor,
   resolveGlobalEventKey,
   buildAnchorEventEndpoint,
   eventCacheKey,

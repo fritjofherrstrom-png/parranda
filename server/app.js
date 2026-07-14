@@ -2333,7 +2333,7 @@ function buildApp({
       // collected, so a genuine tonight-event can be woven into the day)
 
       // ANY-PLACE LIVE EVENTS: what is happening near the trusted anchor tonight /
-      // this week, from an open municipal feed that covers it. Env-gated +
+      // this week, from a bounded set of approved source families. Env-gated +
       // injectable (resolveDefaultEventSupply / buildApp). Additive + fail-soft +
       // NEVER required: an uncovered anchor returns honest absence and the route is
       // unaffected. Same generic shape regardless of place; the engine works
@@ -2347,6 +2347,10 @@ function buildApp({
             liveEvents = {
               coverage: collected.coverage,
               feed: collected.feed || null,
+              ...(Array.isArray(collected.feeds) ? { feeds: collected.feeds } : {}),
+              ...(collected.acquisition && typeof collected.acquisition === "object"
+                ? { acquisition: collected.acquisition }
+                : {}),
               tonight: Array.isArray(collected.tonight) ? collected.tonight : [],
               this_week: Array.isArray(collected.this_week) ? collected.this_week : [],
               // The live feed is background-warmed; `pending` means "covered, still

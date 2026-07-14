@@ -95,6 +95,7 @@ function buildFusedEvent(members) {
     "time_window",
     "recurrence",
     "route_role_hint",
+    "timezone",
     "source_language",
     "event_language",
     "translation_status",
