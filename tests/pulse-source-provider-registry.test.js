@@ -140,6 +140,8 @@ test("provider throw returns empty result and failed source_status", async () =>
   assert.deepEqual(result.time_sensitive_events, []);
   assert.equal(result.source_status.length, 1);
   assert.equal(result.source_status[0].status, "failed");
+  assert.equal(result.source_status[0].collection_status, "failed");
+  assert.equal(result.source_status[0].collection_reason, "provider boom");
   assert.equal(result.source_status[0].time_sensitive_events, 0);
   assert.match(result.source_status[0].reason, /provider boom/);
 });

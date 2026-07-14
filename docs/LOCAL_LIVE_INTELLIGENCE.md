@@ -263,6 +263,31 @@ independent source families to corroborate the same local happening.
 The next coverage work is to add reviewed source rows/adapters and source-health
 telemetry, not to weaken the anchor or geometry gates.
 
+## Runtime source-health snapshot
+
+The bounded acquisition path now distinguishes provider outcomes before it
+interprets event absence:
+
+```txt
+ok          source returned usable event rows
+empty       source responded successfully with no usable rows
+failed      source call or payload failed
+unavailable source could not run because a required trusted input was absent
+```
+
+`acquisition.source_health` summarizes only the current bounded collection. It
+is not a historical uptime score and does not claim comprehensive local
+coverage. A `healthy` + `empty` snapshot means the selected sources answered but
+had no current bounded events; `partial` means at least one selected source
+answered and at least one did not; `unavailable` means selected sources could
+not answer. `uncovered` means no approved source covered the anchor, while
+`pending` means the bounded background refresh has started but not completed.
+This keeps "nothing found" separate from "we could not check" without exposing
+provider payloads, endpoints, or credentials.
+
+The snapshot remains additive, fail-soft, and route-independent. It does not
+change event salience, source selection, Pulse cards, or route eligibility.
+
 ## Product bar
 
 Parranda should eventually feel like:

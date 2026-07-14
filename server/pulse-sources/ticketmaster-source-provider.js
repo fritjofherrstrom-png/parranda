@@ -1,5 +1,7 @@
 "use strict";
 
+const { buildProviderCollectionOutcome } = require("./provider-collection-outcome");
+
 /**
  * GLOBAL live-event source — Ticketmaster Discovery API.
  *
@@ -117,8 +119,14 @@ function createTicketmasterProvider({
     create() {
       return {
         async collect() {
-          if (!key || !anchor || !Number.isFinite(anchor.lat) || !Number.isFinite(anchor.lng) || typeof fetcher !== "function") {
-            return { time_sensitive_events: [] };
+          if (!key) {
+            return emptyCollection("unavailable", "source_credentials_unavailable");
+          }
+          if (!anchor || !Number.isFinite(anchor.lat) || !Number.isFinite(anchor.lng)) {
+            return emptyCollection("unavailable", "trusted_anchor_unavailable");
+          }
+          if (typeof fetcher !== "function") {
+            return emptyCollection("unavailable", "source_fetch_unavailable");
           }
           const nowDate = now ? new Date(now) : new Date();
           const url = buildDiscoveryUrl({
@@ -134,18 +142,39 @@ function createTicketmasterProvider({
           const timer = controller ? setTimeout(() => controller.abort(), Math.max(1000, timeoutMs)) : null;
           try {
             const response = await fetcher(url, controller ? { signal: controller.signal } : {});
-            if (!response || !response.ok) return { time_sensitive_events: [] };
-            const body = await response.json();
+            if (!response || !response.ok) {
+              return emptyCollection("failed", `source_http_${response?.status || "not_ok"}`);
+            }
+            let body;
+            try {
+              body = await response.json();
+            } catch (_error) {
+              return emptyCollection("failed", "source_payload_invalid");
+            }
             const events = body && body._embedded && Array.isArray(body._embedded.events) ? body._embedded.events : [];
-            return { time_sensitive_events: events.map(mapDiscoveryEvent).filter(Boolean) };
-          } catch (_error) {
-            return { time_sensitive_events: [] }; // fail closed — never fabricate
+            const mapped = events.map(mapDiscoveryEvent).filter(Boolean);
+            return {
+              time_sensitive_events: mapped,
+              collection_status: buildProviderCollectionOutcome(mapped.length ? "ok" : "empty", {
+                reason: mapped.length ? null : "source_empty",
+                eventRows: mapped.length,
+              }),
+            };
+          } catch (error) {
+            return emptyCollection("failed", error?.name === "AbortError" ? "source_timeout" : "source_fetch_failed");
           } finally {
             if (timer) clearTimeout(timer);
           }
         },
       };
     },
+  };
+}
+
+function emptyCollection(status, reason) {
+  return {
+    time_sensitive_events: [],
+    collection_status: buildProviderCollectionOutcome(status, { reason, eventRows: 0 }),
   };
 }
 

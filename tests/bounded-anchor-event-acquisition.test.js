@@ -190,7 +190,77 @@ test("one failed/empty source does not erase a healthy independent source", asyn
   assert.equal(out.coverage, "covered");
   assert.equal(out.tonight.length, 1);
   assert.equal(out.feeds.find((source) => source.id === "healthy").status, "ok");
-  assert.equal(out.feeds.find((source) => source.id === "broken").status, "empty_or_unavailable");
+  assert.equal(out.feeds.find((source) => source.id === "broken").status, "failed");
+  assert.equal(out.feeds.find((source) => source.id === "broken").reason, "source_fetch_failed");
+  assert.equal(out.acquisition.source_health.status, "partial");
+  assert.equal(out.acquisition.source_health.result, "events_found");
+  assert.equal(out.acquisition.source_health.failed_source_count, 1);
+  assert.ok(out.acquisition.source_health.reasons.includes("source_failures_present"));
+});
+
+test("successful empty sources report healthy empty coverage", async () => {
+  const registry = [feed("empty-a", { priority: 1 }), feed("empty-b", { priority: 2 })];
+  const out = await collectAnchorEvents({
+    anchor: ANCHOR,
+    now: NOW,
+    registry,
+    fetcher: async () => ({ ok: true, json: async () => ({ data: [] }) }),
+  });
+
+  assert.deepEqual(out.feeds.map((source) => source.status), ["empty", "empty"]);
+  assert.equal(out.acquisition.source_health.status, "healthy");
+  assert.equal(out.acquisition.source_health.result, "empty");
+  assert.equal(out.acquisition.source_health.responding_source_count, 2);
+  assert.equal(out.acquisition.source_health.failed_source_count, 0);
+  assert.ok(out.acquisition.source_health.reasons.includes("no_current_events_found"));
+});
+
+test("all failed sources report unavailable evidence instead of no events", async () => {
+  const registry = [feed("failed-a", { priority: 1 }), feed("failed-b", { priority: 2 })];
+  const out = await collectAnchorEvents({
+    anchor: ANCHOR,
+    now: NOW,
+    registry,
+    fetcher: async () => { throw new Error("network down"); },
+  });
+
+  assert.deepEqual(out.feeds.map((source) => source.status), ["failed", "failed"]);
+  assert.equal(out.acquisition.source_health.status, "unavailable");
+  assert.equal(out.acquisition.source_health.result, "unknown");
+  assert.equal(out.acquisition.source_health.failed_source_count, 2);
+  assert.ok(out.acquisition.source_health.reasons.includes("all_sources_unavailable"));
+  assert.ok(!out.acquisition.source_health.reasons.includes("no_current_events_found"));
+  assert.ok(!JSON.stringify(out.acquisition.source_health).includes("network down"), "raw provider errors stay internal");
+});
+
+test("bounded source health reports when all collected evidence is rejected", async () => {
+  const registry = [feed("far-source", { priority: 1 })];
+  const out = await collectAnchorEvents({
+    anchor: ANCHOR,
+    now: NOW,
+    registry,
+    fetcher: async () => ({
+      ok: true,
+      json: async () => ({
+        data: [
+          linkedEvent({
+            id: "far-only",
+            title: "Far-only event",
+            lat: 58.5,
+            lng: 17.5,
+            source: "far-source",
+          }),
+        ],
+      }),
+    }),
+  });
+
+  assert.equal(out.acquisition.source_health.status, "healthy", "the source itself answered successfully");
+  assert.equal(out.acquisition.source_health.result, "empty", "nothing bounded was safe to show");
+  assert.equal(out.acquisition.source_health.raw_event_count, 1);
+  assert.equal(out.acquisition.source_health.normalized_event_count, 1);
+  assert.equal(out.acquisition.source_health.accepted_event_count, 0);
+  assert.ok(out.acquisition.source_health.reasons.includes("all_event_evidence_rejected"));
 });
 
 test("bounded sources start concurrently rather than serially", { timeout: 1500 }, async () => {

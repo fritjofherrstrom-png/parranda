@@ -3,6 +3,10 @@ const { normalizeSourceEvent, normalizeSourceSignal } = require("./normalize-eve
 const { normalizeTimeSensitiveSourceEvent } = require("./time-sensitive-event");
 const { dedupeNormalizedEvents } = require("./dedupe");
 const { fuseTimeSensitiveEvents } = require("./event-fusion");
+const {
+  normalizeProviderCollectionOutcome,
+  registryStatusForCollectionOutcome,
+} = require("./provider-collection-outcome");
 
 const DEFAULT_ENABLED_STATUSES = new Set(["active"]);
 
@@ -93,6 +97,9 @@ async function collectPulseSourcesForCity(cityConfig, options = {}) {
       const rawTimeSensitiveEvents = Array.isArray(result?.time_sensitive_events)
         ? result.time_sensitive_events
         : [];
+      const collectionOutcome = normalizeProviderCollectionOutcome(result?.collection_status, {
+        eventRows: rawEvents.length + rawSignals.length + rawTimeSensitiveEvents.length,
+      });
       const normalizedEvents = rawEvents
         .map((event, index) => normalizeSourceEvent(event, descriptor, { index }))
         .filter(Boolean);
@@ -113,17 +120,26 @@ async function collectPulseSourcesForCity(cityConfig, options = {}) {
       signals.push(...normalizedSignals);
       timeSensitiveEvents.push(...normalizedTimeSensitiveEvents);
       sourceStatuses.push({
-        ...statusFor(descriptor, "ok"),
+        ...statusFor(
+          descriptor,
+          registryStatusForCollectionOutcome(collectionOutcome),
+          ["failed", "unavailable"].includes(collectionOutcome.status) ? collectionOutcome.reason : null,
+        ),
         events: normalizedEvents.length,
         signals: normalizedSignals.length,
         time_sensitive_events: normalizedTimeSensitiveEvents.length,
+        collection_status: collectionOutcome.status,
+        collection_reason: collectionOutcome.reason,
       });
     } catch (error) {
+      const reason = error?.message || "provider_failed";
       sourceStatuses.push({
-        ...statusFor(descriptor, "failed", error?.message || "provider_failed"),
+        ...statusFor(descriptor, "failed", reason),
         events: 0,
         signals: 0,
         time_sensitive_events: 0,
+        collection_status: "failed",
+        collection_reason: reason,
       });
     }
   }
