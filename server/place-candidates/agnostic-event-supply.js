@@ -20,6 +20,9 @@
 
 const { createLinkedEventsProvider } = require("../pulse-sources/linked-events-source-provider");
 const { createTicketmasterProvider } = require("../pulse-sources/ticketmaster-source-provider");
+const { createSchemaOrgEventProvider } = require("../pulse-sources/schema-org-event-provider");
+const { createEventsCalendarProvider } = require("../pulse-sources/events-calendar-source-provider");
+const { createHtmlVenueCalendarProvider } = require("../pulse-sources/html-venue-calendar-provider");
 const { normalizeTimeSensitiveSourceEvent } = require("../pulse-sources/time-sensitive-event");
 const { scoreTimeSensitiveEventSalience } = require("../pulse-engine/time-sensitive-events");
 const { createSourceCache } = require("./source-cache");
@@ -48,6 +51,14 @@ const TONIGHT_TIMING = new Set(["now", "today", "tonight"]);
 // a slow server-side max_duration), feed-agnostic so it protects ANY provider and
 // the deterministic tests (which inject payloads, not query params).
 const MAX_HAPPENING_DAYS = 14;
+const LOCAL_EVENT_ADAPTERS = new Set([
+  "linked_events",
+  "schema_org",
+  "schema_org_html",
+  "events_calendar",
+  "ical",
+  "html_venue_calendar",
+]);
 
 // A single open municipal feed, kept as a NAMED FIXTURE — not a product default.
 // It runs the Linked Events platform (api.hel.fi; CC-BY 4.0) and proves the
@@ -73,18 +84,19 @@ const HELSINKI_LINKED_EVENTS_FEED = Object.freeze({
 });
 
 // Product default: NO municipal feed is baked in, so no single city is special.
-// Every place gets live events the SAME way — from the coordinate-driven global
-// provider (key-gated) — or an honest "no events yet". A deployment adds the open
-// feed for its region as data via PARRANDA_EVENT_FEEDS; nothing here is per-city
-// code. Kept as a mutable array so the default param below stays a live reference.
+// Every place gets live events through the same coordinate-bounded acquisition.
+// A deployment adds reviewed regional feeds as data via PARRANDA_EVENT_FEEDS;
+// nothing here is per-city code. Optional global families may complement those
+// sources, but are not required. Kept mutable so the default param stays live.
 const BUILTIN_EVENT_FEEDS = [];
 
 /**
  * The registry is GENERIC and deploy-configurable: a city is a data row, never
- * code. `PARRANDA_EVENT_FEEDS` (a JSON array of {id,label,base,bbox,license})
- * lets any deployment add the open feed covering its region without touching the
- * engine. The default registry is EMPTY on purpose — no city is special out of
- * the box; live events come uniformly from the global provider or not at all.
+ * code. `PARRANDA_EVENT_FEEDS` accepts reviewed rows with
+ * {id,label,endpoint,adapter,bbox,license,...}; legacy `base` rows remain Linked
+ * Events. The allowlisted adapters cover Linked Events, schema.org JSON/HTML,
+ * The Events Calendar, iCal, and stable venue HTML without touching the engine.
+ * The default registry is EMPTY on purpose — no city is special out of the box.
  * Malformed config is ignored (keep whatever is built-in), never throws.
  */
 function resolveEventFeedRegistry(env = process.env) {
@@ -95,18 +107,29 @@ function resolveEventFeedRegistry(env = process.env) {
     const parsed = JSON.parse(extra);
     if (Array.isArray(parsed)) {
       for (const f of parsed) {
-        if (f && typeof f.base === "string" && Array.isArray(f.bbox) && f.bbox.length >= 4) {
+        const endpoint = firstString(f?.endpoint, f?.base);
+        const adapter = normalizeLocalEventAdapter(f?.adapter || f?.kind);
+        if (f && endpoint && adapter && Array.isArray(f.bbox) && f.bbox.length >= 4) {
           feeds.push({
             id: String(f.id || `feed-${feeds.length}`),
             label: String(f.label || f.id || "Events"),
-            base: f.base,
+            // `base` remains for backward compatibility with the original
+            // Linked Events rows. New reviewed source rows should use endpoint.
+            base: endpoint,
+            endpoint,
+            adapter,
+            format: firstString(f.format),
             bbox: f.bbox.map(Number),
             license: f.license != null ? String(f.license) : null,
             timezone: f.timezone != null ? String(f.timezone) : null,
+            timezone_offset: firstString(f.timezone_offset, f.timezoneOffset),
+            source_language: firstString(f.source_language, f.sourceLanguage),
+            route_role_hint: firstString(f.route_role_hint, f.routeRoleHint),
+            fetch_details: f.fetch_details !== false,
             source_tier: f.source_tier != null ? String(f.source_tier) : "official",
             confidence: f.confidence != null ? String(f.confidence) : "medium",
             source_family: f.source_family != null ? String(f.source_family) : "municipal_open",
-            source_identity: f.source_identity != null ? String(f.source_identity) : sourceIdentityForUrl(f.base),
+            source_identity: f.source_identity != null ? String(f.source_identity) : sourceIdentityForUrl(endpoint),
             priority: Number.isFinite(Number(f.priority)) ? Number(f.priority) : 100,
             status: f.status != null ? String(f.status) : "active",
             runtime_policy: f.runtime_policy != null ? String(f.runtime_policy) : "bounded_refresh",
@@ -443,14 +466,16 @@ async function collectEventSource({
       pageSize: FETCH_LIMIT,
     });
   } else {
-    provider = createLinkedEventsProvider({
-      endpoint: buildAnchorEventEndpoint(source.base, anchor, { radiusM }),
-      fetcher: fetcher || undefined,
-      limit: FETCH_LIMIT,
-      timeoutMs: Math.max(1000, Math.floor(timeoutMs) || 15000),
-      label: source.label,
-      license: source.license,
+    provider = createLocalEventProvider(source, {
+      anchor,
+      fetcher,
+      radiusM,
+      timeoutMs,
     });
+  }
+
+  if (!provider) {
+    return { source, raw: [], status: "unavailable", reason: "source_adapter_unsupported" };
   }
 
   try {
@@ -468,6 +493,53 @@ async function collectEventSource({
   }
 }
 
+function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs } = {}) {
+  const adapter = normalizeLocalEventAdapter(source?.adapter || source?.kind);
+  if (!adapter) return null;
+  const endpoint = firstString(source.endpoint, source.base);
+  const common = {
+    endpoint,
+    fetcher: fetcher || undefined,
+    limit: FETCH_LIMIT,
+    timeoutMs: Math.max(1000, Math.floor(timeoutMs) || 15000),
+    label: source.label,
+    sourceUrl: firstString(source.source_url, endpoint),
+    license: source.license,
+  };
+
+  if (adapter === "linked_events") {
+    return createLinkedEventsProvider({
+      ...common,
+      endpoint: buildAnchorEventEndpoint(endpoint, anchor, { radiusM }),
+    });
+  }
+  if (adapter === "schema_org" || adapter === "schema_org_html") {
+    return createSchemaOrgEventProvider({
+      ...common,
+      format: adapter === "schema_org_html" ? "html" : source.format,
+    });
+  }
+  if (adapter === "events_calendar" || adapter === "ical") {
+    return createEventsCalendarProvider({
+      ...common,
+      format: adapter === "ical" ? "ical" : source.format,
+      status: "active",
+    });
+  }
+  if (adapter === "html_venue_calendar") {
+    return createHtmlVenueCalendarProvider({
+      ...common,
+      status: "active",
+      baseUrl: endpoint,
+      timezoneOffset: source.timezone_offset || undefined,
+      sourceLanguage: source.source_language || undefined,
+      routeRoleHint: source.route_role_hint || undefined,
+      fetchDetails: source.fetch_details !== false,
+    });
+  }
+  return null;
+}
+
 function compactSourceStatus(collection) {
   const source = collection.source;
   return {
@@ -475,6 +547,7 @@ function compactSourceStatus(collection) {
     label: source.label,
     license: source.license ?? null,
     family: source.source_family || source.family || (source.kind === "global" ? "global_commercial" : "municipal_open"),
+    adapter: source.kind === "global" ? "global" : normalizeLocalEventAdapter(source.adapter || source.kind),
     source_identity: source.source_identity || sourceIdentityForUrl(source.base || source.source_url) || source.id,
     status: collection.status,
     reason: collection.reason || null,
@@ -537,6 +610,32 @@ function sourceIdentityForUrl(value) {
   } catch (_error) {
     return null;
   }
+}
+
+function normalizeLocalEventAdapter(value) {
+  const raw = String(value || "linked_events").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  const aliases = {
+    linked_event: "linked_events",
+    schema_org_event: "schema_org",
+    schema_org_json: "schema_org",
+    schema_org_jsonld: "schema_org",
+    schema_org_json_ld: "schema_org",
+    schema_org_html_jsonld: "schema_org_html",
+    the_events_calendar: "events_calendar",
+    events_calendar_rest: "events_calendar",
+    ics: "ical",
+    html_calendar: "html_venue_calendar",
+    venue_calendar: "html_venue_calendar",
+  };
+  const normalized = aliases[raw] || raw;
+  return LOCAL_EVENT_ADAPTERS.has(normalized) ? normalized : null;
+}
+
+function firstString(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
 }
 
 const EVENT_CACHE_TTL_MS = 20 * 60 * 1000; // 20 min — time-sensitive, but reusable
@@ -636,4 +735,7 @@ module.exports = {
   HELSINKI_LINKED_EVENTS_FEED,
   GLOBAL_FEED_DESCRIPTOR,
   DEFAULT_RADIUS_M,
+  LOCAL_EVENT_ADAPTERS,
+  normalizeLocalEventAdapter,
+  createLocalEventProvider,
 };

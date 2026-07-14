@@ -84,6 +84,24 @@ test("the feed registry is generic + deploy-configurable (a city is data, not co
   assert.equal(resolveEventFeedRegistry({ PARRANDA_EVENT_FEEDS: "{not json" }).length, 0);
 });
 
+test("the feed registry allowlists reusable local adapters and preserves legacy Linked Events rows", () => {
+  const configured = resolveEventFeedRegistry({
+    PARRANDA_EVENT_FEEDS: JSON.stringify([
+      { id: "legacy", base: "https://legacy.example/events", bbox: [10, 50, 20, 60] },
+      { id: "jsonld", adapter: "schema_org_html", endpoint: "https://venue.example/calendar", bbox: [10, 50, 20, 60] },
+      { id: "ics", adapter: "ics", endpoint: "https://city.example/calendar.ics", bbox: [10, 50, 20, 60] },
+      { id: "unknown", adapter: "arbitrary_scraper", endpoint: "https://unknown.example/events", bbox: [10, 50, 20, 60] },
+    ]),
+  });
+
+  assert.deepEqual(configured.map((row) => [row.id, row.adapter]), [
+    ["legacy", "linked_events"],
+    ["jsonld", "schema_org_html"],
+    ["ics", "ical"],
+  ]);
+  assert.ok(!configured.some((row) => row.id === "unknown"), "unknown parser code cannot enter bounded runtime");
+});
+
 test("an anchor inside an injected open feed resolves it; outside, it does not", () => {
   const feed = resolveEventFeedForAnchor(HELSINKI, FIXTURE_REGISTRY);
   assert.ok(feed && feed.id === "linkedevents-helsinki");

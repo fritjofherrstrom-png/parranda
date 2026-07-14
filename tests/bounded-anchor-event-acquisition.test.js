@@ -90,6 +90,81 @@ test("source planning skips review-only rows and prefers independent publishers"
   assert.deepEqual(plan.map((source) => source.id), ["publisher-a-first", "publisher-b"]);
 });
 
+test("reviewed schema.org HTML and iCal sources share the bounded acquisition path", async () => {
+  const registry = [
+    feed("venue-jsonld", {
+      adapter: "schema_org_html",
+      base: "https://venue.example/calendar",
+      source_identity: "venue.example",
+      source_family: "venue_calendar",
+      priority: 1,
+    }),
+    feed("municipal-ics", {
+      adapter: "ical",
+      base: "https://city.example/calendar.ics",
+      source_identity: "city.example",
+      source_family: "municipal_calendar",
+      priority: 2,
+    }),
+  ];
+  const schemaEvent = {
+    "@type": "Event",
+    "@id": "https://venue.example/events/courtyard-jazz",
+    name: "Courtyard jazz session",
+    startDate: "2026-07-14T19:00:00Z",
+    endDate: "2026-07-14T21:00:00Z",
+    url: "https://venue.example/events/courtyard-jazz",
+    location: {
+      name: "The Courtyard",
+      geo: { latitude: ANCHOR.lat + 0.001, longitude: ANCHOR.lng + 0.001 },
+    },
+  };
+  const ical = [
+    "BEGIN:VCALENDAR",
+    "BEGIN:VEVENT",
+    "UID:harbour-market",
+    "SUMMARY:Harbour makers market",
+    "DTSTART:20260714T180000Z",
+    "DTEND:20260714T200000Z",
+    `GEO:${ANCHOR.lat + 0.002};${ANCHOR.lng + 0.002}`,
+    "LOCATION:Harbour Hall",
+    "URL:https://city.example/events/harbour-market",
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+  const calls = [];
+  const fetcher = async (url) => {
+    calls.push(String(url));
+    if (String(url).includes("venue.example")) {
+      return {
+        ok: true,
+        text: async () => `<script type="application/ld+json">${JSON.stringify(schemaEvent)}</script>`,
+      };
+    }
+    return {
+      ok: true,
+      headers: { get: () => "text/calendar" },
+      text: async () => ical,
+    };
+  };
+
+  const out = await collectAnchorEvents({ anchor: ANCHOR, now: NOW, registry, fetcher });
+
+  assert.equal(calls.length, 2);
+  assert.deepEqual(out.feeds.map((row) => [row.id, row.status]), [
+    ["venue-jsonld", "ok"],
+    ["municipal-ics", "ok"],
+  ]);
+  assert.deepEqual(out.feeds.map((row) => row.adapter), ["schema_org_html", "ical"]);
+  assert.deepEqual(out.tonight.map((event) => event.title).sort(), [
+    "Courtyard jazz session",
+    "Harbour makers market",
+  ]);
+  assert.equal(out.acquisition.source_health.event_bearing_source_count, 2);
+  assert.equal(out.acquisition.source_health.result, "events_found");
+  assert.ok(out.tonight.every((event) => Number.isFinite(event.anchor_distance_km)));
+});
+
 test("multiple approved sources fuse corroborating evidence and reject unbounded rows", async () => {
   const registry = [
     feed("source-a", { priority: 1 }),
