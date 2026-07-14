@@ -2,7 +2,13 @@ const SOURCE_FAMILIES = Object.freeze({
   official_municipal_calendar: {
     priority: 1,
     label: "Official city/municipal events calendar",
-    preferredAdapters: ["linked_events", "the_events_calendar", "ical", "schema_org_event"],
+    preferredAdapters: [
+      "linked_events",
+      "the_events_calendar",
+      "ical",
+      "schema_org_event",
+      "sitevision_calendar",
+    ],
   },
   official_tourism_calendar: {
     priority: 2,
@@ -274,7 +280,8 @@ function mapsToExistingProvider(adapter) {
     adapter === "schema_org_event" ||
     adapter === "linked_events" ||
     adapter === "the_events_calendar" ||
-    adapter === "ical"
+    adapter === "ical" ||
+    adapter === "sitevision_calendar"
   );
 }
 

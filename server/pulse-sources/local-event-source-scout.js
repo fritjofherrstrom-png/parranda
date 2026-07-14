@@ -30,6 +30,7 @@ const MANIFEST_ADAPTERS = new Set([
   "ical",
   "schema_org_html",
   "html_venue_calendar",
+  "sitevision_calendar",
 ]);
 
 function buildLocalEventDiscoveryQueries({
@@ -160,7 +161,9 @@ function inspectEventSourcePage({
     );
   }
 
-  if (hasCompatibleVenueCalendarSignature(source)) {
+  if (hasSitevisionCalendarSignature(source)) {
+    addCandidate("sitevision_calendar", pageUrl);
+  } else if (hasCompatibleVenueCalendarSignature(source)) {
     addCandidate("html_venue_calendar", pageUrl);
   } else if (hasGenericEventListingSignature(source)) {
     addCandidate("stable_html_needs_adapter", pageUrl);
@@ -415,6 +418,21 @@ function buildDetectedCandidate({
       }),
     };
   }
+  if (kind === "sitevision_calendar") {
+    return {
+      ...common,
+      adapter: "sitevision_calendar",
+      extraction_tier: "stable_html_calendar",
+      extractable: baseExtractable({
+        end: true,
+        venue: true,
+        venue_geocodable: true,
+        recurrence: true,
+        stable_html: true,
+      }),
+      notes: "sitevision_calendar_signature_requires_manifest_review",
+    };
+  }
   return {
     ...common,
     adapter: "needs_adapter",
@@ -435,6 +453,7 @@ function buildReviewedManifestCandidate(candidate, { seed = {}, context = {} } =
     the_events_calendar: "events_calendar",
     schema_org_event: "schema_org_html",
     venue_calendar: "html_venue_calendar",
+    sitevision_calendar: "sitevision_calendar",
   };
   const adapter = adapterMap[candidate.adapter];
   if (!MANIFEST_ADAPTERS.has(adapter)) return null;
@@ -811,15 +830,20 @@ function hasCompatibleVenueCalendarSignature(html) {
   );
 }
 
+function hasSitevisionCalendarSignature(html) {
+  const source = String(html || "");
+  return (
+    /\bsv-ws-event-calendar\b/i.test(source) &&
+    /\b(?:eventsListContainer|eventArticle|eventCalendar)\b/i.test(source)
+  );
+}
+
 function hasGenericEventListingSignature(html) {
   const source = String(html || "");
-  const hasSitevisionCalendar =
-    /\bsv-ws-event-calendar\b/i.test(source) &&
-    /\b(?:eventsListContainer|eventArticle|eventCalendar)\b/i.test(source);
   const hasTime = /<time\b[^>]*datetime\s*=/i.test(source);
   const hasEventStructure =
     /\b(?:event-list|events-list|event-card|calendar-event|event-item)\b/i.test(source);
-  return hasSitevisionCalendar || (hasTime && hasEventStructure);
+  return hasTime && hasEventStructure;
 }
 
 function isIcalLink(link) {

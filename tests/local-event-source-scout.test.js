@@ -250,7 +250,7 @@ test("generic HTML is needs-adapter while only the exact existing signature gets
   assert.equal(compatible.manifest_candidates[0].adapter, "html_venue_calendar");
 });
 
-test("Sitevision-style event calendars are classified as needs-adapter only", () => {
+test("Sitevision-style calendars produce a review-needed bounded adapter manifest", () => {
   const result = inspectEventSourcePage({
     seed: { url: "https://municipality.example/events" },
     html: [
@@ -263,8 +263,11 @@ test("Sitevision-style event calendars are classified as needs-adapter only", ()
   });
 
   assert.equal(result.candidates.length, 1);
-  assert.equal(result.candidates[0].adapter, "needs_adapter");
-  assert.equal(result.manifest_candidates.length, 0);
+  assert.equal(result.candidates[0].adapter, "sitevision_calendar");
+  assert.equal(result.candidates[0].maps_to_existing_provider, true);
+  assert.equal(result.manifest_candidates.length, 1);
+  assert.equal(result.manifest_candidates[0].adapter, "sitevision_calendar");
+  assert.equal(result.manifest_candidates[0].status, "review-needed");
 });
 
 test("URL safety rejects private, loopback, credentialed, and non-http seeds", () => {
