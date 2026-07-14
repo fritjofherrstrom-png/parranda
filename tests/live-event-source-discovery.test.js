@@ -98,6 +98,27 @@ test("stable HTML scraping is a valid tier when constrained by terms and source 
   assert.ok(!result.reasons.includes("probe_only_stable_html_calendar"));
 });
 
+test("reviewed Sitevision calendars map to the bounded generic provider", () => {
+  const result = evaluateLiveEventSourceCandidate(
+    candidate({
+      adapter: "sitevision_calendar",
+      extraction_tier: "stable_html_calendar",
+      extractable: {
+        title: true,
+        start: true,
+        end: true,
+        venue: true,
+        source_url: true,
+        stable_html: true,
+        venue_geocodable: true,
+      },
+    }),
+  );
+
+  assert.equal(result.maps_to_existing_provider, true);
+  assert.equal(result.extraction_tier, "stable_html_calendar");
+});
+
 test("local-language sources are first-class and preserve translation metadata", () => {
   const result = evaluateLiveEventSourceCandidate(
     candidate({
