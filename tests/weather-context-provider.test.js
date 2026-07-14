@@ -373,6 +373,9 @@ test("boring weather produces no Pulse signal (no spam)", async () => {
   });
   assert.equal(weatherSignalsOf(pulse).length, 0);
   assert.equal(pulse.source_provider_inspect.normalized_signal_count, 0);
+  const weatherStatus = pulse.source_status.find((status) => status.id === WEATHER_CONTEXT_PROVIDER_ID);
+  assert.equal(weatherStatus.collection_status, "empty");
+  assert.equal(weatherStatus.collection_reason, "source_empty");
 });
 
 test("weather provider failure is fail-safe and does not break Pulse", async () => {
@@ -387,6 +390,9 @@ test("weather provider failure is fail-safe and does not break Pulse", async () 
   assert.equal(weatherSignalsOf(pulse).length, 0);
   assert.ok(Array.isArray(pulse.signals), "pulse.signals stays an array");
   assert.ok(Array.isArray(pulse.source_status), "source_status stays an array");
+  const weatherStatus = pulse.source_status.find((status) => status.id === WEATHER_CONTEXT_PROVIDER_ID);
+  assert.equal(weatherStatus.status, "failed");
+  assert.equal(weatherStatus.collection_reason, "source_fetch_failed");
   assert.equal(pulse.city, "rome");
   assert.equal(pulse.date, DATE);
 });

@@ -8,6 +8,7 @@
  */
 
 const { GENERIC_PROVIDER_CITY } = require("./provider-registry");
+const { buildProviderCollectionOutcome } = require("./provider-collection-outcome");
 
 const EVENTS_CALENDAR_PROVIDER_ID = "generic-events-calendar-ical";
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
@@ -72,9 +73,8 @@ function createEventsCalendarProvider(providerOptions = {}) {
           const fetcher =
             providerOptions.fetcher ||
             (typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null);
-          if (!endpoint || typeof fetcher !== "function") {
-            return { events: [], signals: [], time_sensitive_events: [] };
-          }
+          if (!endpoint) return emptyCollection("unavailable", "source_endpoint_unavailable");
+          if (typeof fetcher !== "function") return emptyCollection("unavailable", "source_fetch_unavailable");
 
           const limit = Math.max(1, Math.min(Math.floor(providerOptions.limit || DEFAULT_LIMIT), MAX_LIMIT));
           const userAgent = providerOptions.userAgent || DEFAULT_USER_AGENT;
@@ -95,21 +95,53 @@ function createEventsCalendarProvider(providerOptions = {}) {
             contentType = response.headers?.get?.("content-type") || "";
             body = await readResponseBody(response);
           } catch (error) {
-            throw new Error(error?.message || "source_fetch_failed");
+            const message = String(error?.message || "");
+            const reason = error?.name === "AbortError"
+              ? "source_timeout"
+              : /^source_http_(?:[1-5]\d{2}|not_ok)$/.test(message)
+                ? message
+                : "source_fetch_failed";
+            throw new Error(reason);
           } finally {
             clearTimeout(timer);
           }
 
           const format = normalizeFormat(providerOptions.format || collectionContext.format || context.format);
+          if (isInvalidJsonPayload(body, { format, contentType })) {
+            return emptyCollection("failed", "source_payload_invalid");
+          }
           const events = extractEventsCalendarSourceEvents(body, { format, contentType })
             .slice(0, limit)
             .map(mapEventsCalendarEventToRaw)
             .filter(Boolean);
-          return { events: [], signals: [], time_sensitive_events: events };
+          return {
+            events: [],
+            signals: [],
+            time_sensitive_events: events,
+            collection_status: buildProviderCollectionOutcome(events.length ? "ok" : "empty", {
+              reason: events.length ? null : "source_empty",
+              eventRows: events.length,
+            }),
+          };
         },
       };
     },
   };
+}
+
+function emptyCollection(status, reason) {
+  return {
+    events: [],
+    signals: [],
+    time_sensitive_events: [],
+    collection_status: buildProviderCollectionOutcome(status, { reason, eventRows: 0 }),
+  };
+}
+
+function isInvalidJsonPayload(payload, { format, contentType } = {}) {
+  if (typeof payload !== "string" || !payload.trim()) return false;
+  if (format === "ical" || looksLikeIcal(payload, contentType)) return false;
+  return safeJsonParse(payload) == null;
 }
 
 async function readResponseBody(response) {

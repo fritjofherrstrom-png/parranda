@@ -141,3 +141,26 @@ test("HTML venue provider yields normalized source-backed time-sensitive events"
   assert.equal(result.source_status[0].status, "ok");
   assert.equal(result.source_status[0].time_sensitive_events, 1);
 });
+
+test("HTML venue provider distinguishes unavailable configuration from a proven empty listing", async () => {
+  const unavailableProvider = createHtmlVenueCalendarProvider({
+    sourceUrl: "https://venue.test/calendar/",
+    status: "active",
+    fetcher: async () => textResponse(listingHtml()),
+  });
+  const unavailable = await collectPulseSourcesForCity(city, { providerSpecs: [unavailableProvider] });
+  assert.equal(unavailable.source_status[0].status, "skipped");
+  assert.equal(unavailable.source_status[0].collection_reason, "source_endpoint_unavailable");
+
+  const emptyProvider = createHtmlVenueCalendarProvider({
+    endpoint: "https://venue.test/calendar/",
+    sourceUrl: "https://venue.test/calendar/",
+    status: "active",
+    fetchDetails: false,
+    fetcher: async () => textResponse("<main><p>No current events</p></main>"),
+  });
+  const empty = await collectPulseSourcesForCity(city, { providerSpecs: [emptyProvider] });
+  assert.equal(empty.source_status[0].status, "ok");
+  assert.equal(empty.source_status[0].collection_status, "empty");
+  assert.equal(empty.source_status[0].collection_reason, "source_empty");
+});

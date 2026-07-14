@@ -125,31 +125,47 @@ test("an expired event is downgraded to stale even if it claims to be happening"
 
 // --- fail-soft + env gating ------------------------------------------------
 
-test("no endpoint, non-200, thrown error, and malformed payload all fail soft (empty)", async () => {
+test("no endpoint, non-200, thrown error, and malformed payload fail soft with honest outcomes", async () => {
   // endpoint omitted at construction → resolved as null at collect time → empty.
   // (sourceUrl is supplied so the descriptor still validates.)
   const noEndpoint = createSchemaOrgEventProvider({ sourceUrl: "https://feed.test/", fetcher: async () => jsonResponse([event()]) });
   const r0 = await collectPulseSourcesForCity(city, { providerSpecs: [noEndpoint], context: { now: NOW } });
   assert.deepEqual(r0.time_sensitive_events, []);
+  assert.equal(r0.source_status[0].status, "skipped");
+  assert.equal(r0.source_status[0].collection_status, "unavailable");
+  assert.equal(r0.source_status[0].collection_reason, "source_endpoint_unavailable");
 
   const r1 = await collectPulseSourcesForCity(city, {
     providerSpecs: [provider({ fetcher: async () => ({ ok: false, status: 503 }) })],
     context: { now: NOW },
   });
   assert.deepEqual(r1.time_sensitive_events, []);
+  assert.equal(r1.source_status[0].status, "failed");
+  assert.equal(r1.source_status[0].collection_reason, "source_http_503");
 
   const r2 = await collectPulseSourcesForCity(city, {
     providerSpecs: [provider({ fetcher: async () => { throw new Error("network down"); } })],
     context: { now: NOW },
   });
   assert.deepEqual(r2.time_sensitive_events, []);
-  assert.equal(r2.source_status[0].status, "ok", "fail-soft inside collect, not a provider failure");
+  assert.equal(r2.source_status[0].status, "failed");
+  assert.equal(r2.source_status[0].collection_reason, "source_fetch_failed");
 
   const r3 = await collectPulseSourcesForCity(city, {
     providerSpecs: [provider({ fetcher: async () => ({ ok: true, json: async () => { throw new Error("bad json"); } }) })],
     context: { now: NOW },
   });
   assert.deepEqual(r3.time_sensitive_events, []);
+  assert.equal(r3.source_status[0].status, "failed");
+  assert.equal(r3.source_status[0].collection_reason, "source_payload_invalid");
+
+  const empty = await collectPulseSourcesForCity(city, {
+    providerSpecs: [provider({ fetcher: async () => jsonResponse({ "@graph": [] }) })],
+    context: { now: NOW },
+  });
+  assert.equal(empty.source_status[0].status, "ok");
+  assert.equal(empty.source_status[0].collection_status, "empty");
+  assert.equal(empty.source_status[0].collection_reason, "source_empty");
 });
 
 test("resolveDefaultSchemaOrgEventProvider is null without an endpoint env and a provider with one", () => {

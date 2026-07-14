@@ -165,7 +165,7 @@ function summarizeRejections(rejected = []) {
 
 function buildAnchorEventSourceHealth(
   collections = [],
-  { acceptedEventCount = 0, normalizedEventCount = 0, rejected = [] } = {},
+  { acceptedEventCount = 0, surfacedEventCount = acceptedEventCount, normalizedEventCount = 0, rejected = [] } = {},
 ) {
   const rows = Array.isArray(collections) ? collections : [];
   const statusCounts = { ok: 0, empty: 0, failed: 0, unavailable: 0 };
@@ -187,6 +187,7 @@ function buildAnchorEventSourceHealth(
   else if (rows.length > 0) status = "unavailable";
 
   const accepted = Math.max(0, Math.floor(Number(acceptedEventCount) || 0));
+  const surfaced = Math.max(0, Math.floor(Number(surfacedEventCount) || 0));
   const normalized = Math.max(0, Math.floor(Number(normalizedEventCount) || 0));
   const rejectionCount = Array.isArray(rejected) ? rejected.length : 0;
   let result = "unknown";
@@ -218,6 +219,7 @@ function buildAnchorEventSourceHealth(
     raw_event_count: rawEventCount,
     normalized_event_count: normalized,
     accepted_event_count: accepted,
+    surfaced_event_count: surfaced,
     rejected_event_count: rejectionCount,
     reasons,
   };

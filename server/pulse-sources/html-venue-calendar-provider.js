@@ -8,6 +8,7 @@
  */
 
 const { GENERIC_PROVIDER_CITY } = require("./provider-registry");
+const { buildProviderCollectionOutcome } = require("./provider-collection-outcome");
 
 const HTML_VENUE_CALENDAR_PROVIDER_ID = "generic-html-venue-calendar";
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
@@ -74,9 +75,8 @@ function createHtmlVenueCalendarProvider(providerOptions = {}) {
           const fetcher =
             providerOptions.fetcher ||
             (typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null);
-          if (!endpoint || typeof fetcher !== "function") {
-            return { events: [], signals: [], time_sensitive_events: [] };
-          }
+          if (!endpoint) return emptyCollection("unavailable", "source_endpoint_unavailable");
+          if (typeof fetcher !== "function") return emptyCollection("unavailable", "source_fetch_unavailable");
 
           const limit = Math.max(1, Math.min(Math.floor(providerOptions.limit || DEFAULT_LIMIT), MAX_LIMIT));
           const html = await fetchText(fetcher, endpoint, providerOptions);
@@ -90,7 +90,16 @@ function createHtmlVenueCalendarProvider(providerOptions = {}) {
             await enrichEventsFromDetailPages(events, fetcher, providerOptions);
           }
 
-          return { events: [], signals: [], time_sensitive_events: events.map((event) => compact(event)).filter(Boolean) };
+          const normalizedEvents = events.map((event) => compact(event)).filter(Boolean);
+          return {
+            events: [],
+            signals: [],
+            time_sensitive_events: normalizedEvents,
+            collection_status: buildProviderCollectionOutcome(normalizedEvents.length ? "ok" : "empty", {
+              reason: normalizedEvents.length ? null : "source_empty",
+              eventRows: normalizedEvents.length,
+            }),
+          };
         },
       };
     },
@@ -112,10 +121,25 @@ async function fetchText(fetcher, url, options = {}) {
     }
     return typeof response.text === "function" ? response.text() : "";
   } catch (error) {
-    throw new Error(error?.message || "source_fetch_failed");
+    const message = String(error?.message || "");
+    const reason = error?.name === "AbortError"
+      ? "source_timeout"
+      : /^source_http_(?:[1-5]\d{2}|not_ok)$/.test(message)
+        ? message
+        : "source_fetch_failed";
+    throw new Error(reason);
   } finally {
     clearTimeout(timer);
   }
+}
+
+function emptyCollection(status, reason) {
+  return {
+    events: [],
+    signals: [],
+    time_sensitive_events: [],
+    collection_status: buildProviderCollectionOutcome(status, { reason, eventRows: 0 }),
+  };
 }
 
 async function enrichEventsFromDetailPages(events, fetcher, options = {}) {

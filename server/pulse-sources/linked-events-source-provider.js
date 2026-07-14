@@ -91,26 +91,27 @@ function createLinkedEventsProvider(providerOptions = {}) {
           const controller = new AbortController();
           const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-          let response;
+          let phase = "fetch";
+          let payload;
           try {
-            response = await fetcher(url, {
+            const response = await fetcher(url, {
               headers: { "User-Agent": userAgent, Accept: "application/json" },
               signal: controller.signal,
             });
             if (!response || response.ok !== true) {
               return emptyCollection("failed", `source_http_${response?.status || "not_ok"}`);
             }
+            phase = "payload";
+            payload = await response.json();
           } catch (error) {
-            return emptyCollection("failed", error?.name === "AbortError" ? "source_timeout" : "source_fetch_failed");
+            const reason = error?.name === "AbortError"
+              ? "source_timeout"
+              : phase === "payload"
+                ? "source_payload_invalid"
+                : "source_fetch_failed";
+            return emptyCollection("failed", reason);
           } finally {
             clearTimeout(timer);
-          }
-
-          let payload;
-          try {
-            payload = await response.json();
-          } catch (_error) {
-            return emptyCollection("failed", "source_payload_invalid");
           }
 
           const events = extractLinkedEvents(payload)

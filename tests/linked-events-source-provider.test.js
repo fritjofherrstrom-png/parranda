@@ -180,6 +180,37 @@ test("a successful empty feed remains healthy-empty rather than failed", async (
   assert.equal(result.source_status[0].collection_reason, "source_empty");
 });
 
+test("timeout remains active while the response body is being parsed", { timeout: 1000 }, async () => {
+  let bodyAbortObserved = false;
+  const result = await collectPulseSourcesForCity(city, {
+    providerSpecs: [
+      provider({
+        timeoutMs: 50,
+        fetcher: async (_url, { signal }) => ({
+          ok: true,
+          json: async () => new Promise((_resolve, reject) => {
+            const abort = () => {
+              bodyAbortObserved = true;
+              const error = new Error("body aborted");
+              error.name = "AbortError";
+              reject(error);
+            };
+            if (signal.aborted) abort();
+            else signal.addEventListener("abort", abort, { once: true });
+          }),
+        }),
+      }),
+    ],
+    context: { now: NOW },
+  });
+
+  assert.equal(bodyAbortObserved, true);
+  assert.deepEqual(result.time_sensitive_events, []);
+  assert.equal(result.source_status[0].status, "failed");
+  assert.equal(result.source_status[0].collection_status, "failed");
+  assert.equal(result.source_status[0].collection_reason, "source_timeout");
+});
+
 test("resolveDefaultLinkedEventsProvider is null without an endpoint env and a provider with one", () => {
   assert.equal(resolveDefaultLinkedEventsProvider({}), null);
   const built = resolveDefaultLinkedEventsProvider({

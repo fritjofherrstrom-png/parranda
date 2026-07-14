@@ -395,7 +395,8 @@ async function collectAnchorEvents({
   const rankedThisWeek = rankAndCap(thisWeek);
   const feeds = collectedSources.map(compactSourceStatus);
   const sourceHealth = buildAnchorEventSourceHealth(collectedSources, {
-    acceptedEventCount: rankedTonight.length + rankedThisWeek.length,
+    acceptedEventCount: tonight.length + thisWeek.length,
+    surfacedEventCount: rankedTonight.length + rankedThisWeek.length,
     normalizedEventCount: normalizedEvidence.length,
     rejected,
   });
@@ -613,6 +614,7 @@ function resolveDefaultEventSupply(env = process.env) {
           raw_event_count: 0,
           normalized_event_count: 0,
           accepted_event_count: 0,
+          surfaced_event_count: 0,
           rejected_event_count: 0,
           reasons: ["background_refresh_pending"],
         },

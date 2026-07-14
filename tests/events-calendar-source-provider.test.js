@@ -281,14 +281,14 @@ test("no endpoint, non-200, thrown error, and malformed payload fail soft", asyn
     sourceUrl: "https://calendar.test/",
     fetcher: async () => response(JSON.stringify({ events: [tecEvent()] })),
   });
-  assert.deepEqual(
-    (await collectPulseSourcesForCity(city, {
+  const unavailable = await collectPulseSourcesForCity(city, {
       providerSpecs: [noEndpoint],
       enabledStatuses: ["candidate"],
       context: { now: NOW },
-    })).time_sensitive_events,
-    [],
-  );
+    });
+  assert.deepEqual(unavailable.time_sensitive_events, []);
+  assert.equal(unavailable.source_status[0].status, "skipped");
+  assert.equal(unavailable.source_status[0].collection_reason, "source_endpoint_unavailable");
 
   const nonOk = await collectPulseSourcesForCity(city, {
     providerSpecs: [provider({ fetcher: async () => ({ ok: false, status: 503 }) })],
@@ -306,9 +306,17 @@ test("no endpoint, non-200, thrown error, and malformed payload fail soft", asyn
   });
   assert.deepEqual(thrown.time_sensitive_events, []);
   assert.equal(thrown.source_status[0].status, "failed", "fetch failure is reported honestly but fail-soft");
-  assert.equal(thrown.source_status[0].reason, "boom");
+  assert.equal(thrown.source_status[0].reason, "source_fetch_failed");
 
   assert.deepEqual(extractEventsCalendarSourceEvents("{not json", { format: "json" }), []);
+
+  const malformed = await collectPulseSourcesForCity(city, {
+    providerSpecs: [provider({ fetcher: async () => response("{not json") })],
+    enabledStatuses: ["candidate"],
+    context: { now: NOW },
+  });
+  assert.equal(malformed.source_status[0].status, "failed");
+  assert.equal(malformed.source_status[0].collection_reason, "source_payload_invalid");
 });
 
 test("resolveDefaultEventsCalendarProvider is null without env and candidate provider with env", () => {

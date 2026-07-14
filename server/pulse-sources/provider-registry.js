@@ -4,6 +4,7 @@ const { normalizeTimeSensitiveSourceEvent } = require("./time-sensitive-event");
 const { dedupeNormalizedEvents } = require("./dedupe");
 const { fuseTimeSensitiveEvents } = require("./event-fusion");
 const {
+  classifyProviderFailureReason,
   normalizeProviderCollectionOutcome,
   registryStatusForCollectionOutcome,
 } = require("./provider-collection-outcome");
@@ -132,7 +133,7 @@ async function collectPulseSourcesForCity(cityConfig, options = {}) {
         collection_reason: collectionOutcome.reason,
       });
     } catch (error) {
-      const reason = error?.message || "provider_failed";
+      const reason = classifyProviderFailureReason(error?.message);
       sourceStatuses.push({
         ...statusFor(descriptor, "failed", reason),
         events: 0,

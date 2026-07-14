@@ -35,6 +35,7 @@
  */
 
 const { GENERIC_PROVIDER_CITY } = require("./provider-registry");
+const { buildProviderCollectionOutcome } = require("./provider-collection-outcome");
 
 const WEATHER_CONTEXT_PROVIDER_ID = "generic-open-meteo-weather";
 
@@ -97,7 +98,7 @@ function createWeatherContextProvider(providerOptions = {}) {
           const date =
             collectionContext.date || context.date || providerOptions.date || null;
           if (!date) {
-            return { events: [], signals: [] };
+            return emptyCollection("unavailable", "collection_context_unavailable");
           }
 
           const fetchWeatherForDates =
@@ -107,7 +108,7 @@ function createWeatherContextProvider(providerOptions = {}) {
             cityConfig?.services?.fetchWeatherForDates;
 
           if (typeof fetchWeatherForDates !== "function") {
-            return { events: [], signals: [] };
+            return emptyCollection("unavailable", "source_fetch_unavailable");
           }
 
           let weather = null;
@@ -116,7 +117,7 @@ function createWeatherContextProvider(providerOptions = {}) {
             weather = byDate && typeof byDate === "object" ? byDate[date] || null : null;
           } catch (_error) {
             // Fail-safe: a weather fetch failure must never break Pulse.
-            return { events: [], signals: [] };
+            return emptyCollection("failed", "source_fetch_failed");
           }
 
           const lang = collectionContext.lang || context.lang || providerOptions.lang || "en";
@@ -124,10 +125,22 @@ function createWeatherContextProvider(providerOptions = {}) {
           return {
             events: [],
             signals: signal ? [signal] : [],
+            collection_status: buildProviderCollectionOutcome(signal ? "ok" : "empty", {
+              reason: signal ? null : "source_empty",
+              eventRows: signal ? 1 : 0,
+            }),
           };
         },
       };
     },
+  };
+}
+
+function emptyCollection(status, reason) {
+  return {
+    events: [],
+    signals: [],
+    collection_status: buildProviderCollectionOutcome(status, { reason, eventRows: 0 }),
   };
 }
 

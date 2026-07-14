@@ -263,6 +263,28 @@ test("bounded source health reports when all collected evidence is rejected", as
   assert.ok(out.acquisition.source_health.reasons.includes("all_event_evidence_rejected"));
 });
 
+test("source health distinguishes accepted pre-cap events from surfaced rows", async () => {
+  const registry = [feed("many-events", { priority: 1 })];
+  const events = Array.from({ length: 8 }, (_unused, index) => linkedEvent({
+    id: `event-${index}`,
+    title: `Distinct happening ${index}`,
+    lat: ANCHOR.lat + index * 0.0001,
+    lng: ANCHOR.lng + index * 0.0001,
+    place: `Venue ${index}`,
+    source: "many-events",
+  }));
+  const out = await collectAnchorEvents({
+    anchor: ANCHOR,
+    now: NOW,
+    registry,
+    fetcher: async () => ({ ok: true, json: async () => ({ data: events }) }),
+  });
+
+  assert.equal(out.tonight.length, 6, "public bucket stays capped");
+  assert.equal(out.acquisition.source_health.accepted_event_count, 8, "accepted count is measured before cap");
+  assert.equal(out.acquisition.source_health.surfaced_event_count, 6, "surfaced count describes capped output");
+});
+
 test("bounded sources start concurrently rather than serially", { timeout: 1500 }, async () => {
   const registry = [feed("parallel-a", { priority: 1 }), feed("parallel-b", { priority: 2 })];
   let started = 0;
