@@ -253,7 +253,7 @@ test("iCal all-day dates remain local calendar facts", () => {
   });
 });
 
-test("iCal Zulu date-times convert to ISO UTC, but floating/TZID date-times stay unknown", () => {
+test("iCal Zulu stays UTC while reviewed timezone resolves TZID and floating times", () => {
   const zulu = mapEventsCalendarEventToRaw(extractIcalEvents(icsFixture({
     dtstart: "DTSTART:20260912T180000Z",
     dtend: "DTEND:20260912T220000Z",
@@ -268,12 +268,54 @@ test("iCal Zulu date-times convert to ISO UTC, but floating/TZID date-times stay
   assert.equal(tzid.starts_at, undefined);
   assert.equal(tzid.ends_at, undefined);
 
+  const reviewedTzid = mapEventsCalendarEventToRaw(extractIcalEvents(icsFixture({
+    dtstart: "DTSTART;TZID=Europe/Athens:20260912T180000",
+    dtend: "DTEND;TZID=Europe/Athens:20260912T220000",
+  }))[0], { timezone: "Europe/Athens" });
+  assert.equal(reviewedTzid.starts_at, "2026-09-12T15:00:00.000Z");
+  assert.equal(reviewedTzid.ends_at, "2026-09-12T19:00:00.000Z");
+
   const floating = mapEventsCalendarEventToRaw(extractIcalEvents(icsFixture({
     dtstart: "DTSTART:20260912T180000",
     dtend: "DTEND:20260912T220000",
   }))[0]);
   assert.equal(floating.starts_at, undefined);
   assert.equal(floating.ends_at, undefined);
+
+  const reviewedFloating = mapEventsCalendarEventToRaw(extractIcalEvents(icsFixture({
+    dtstart: "DTSTART:20260912T180000",
+    dtend: "DTEND:20260912T220000",
+  }))[0], { timezone: "Europe/Athens" });
+  assert.equal(reviewedFloating.starts_at, "2026-09-12T15:00:00.000Z");
+  assert.equal(reviewedFloating.ends_at, "2026-09-12T19:00:00.000Z");
+
+  const mismatchedTzid = mapEventsCalendarEventToRaw(extractIcalEvents(icsFixture({
+    dtstart: "DTSTART;TZID=Europe/Stockholm:20260912T180000",
+    dtend: "DTEND;TZID=Europe/Stockholm:20260912T220000",
+  }))[0], { timezone: "Europe/Athens" });
+  assert.equal(mismatchedTzid.starts_at, undefined);
+  assert.equal(mismatchedTzid.ends_at, undefined);
+});
+
+test("reviewed iCal timezone follows DST and rejects nonexistent local time", () => {
+  const winter = mapEventsCalendarEventToRaw(extractIcalEvents(icsFixture({
+    dtstart: "DTSTART;TZID=Europe/Stockholm:20260115T180000",
+    dtend: "DTEND;TZID=Europe/Stockholm:20260115T200000",
+  }))[0], { timezone: "Europe/Stockholm" });
+  assert.equal(winter.starts_at, "2026-01-15T17:00:00.000Z");
+
+  const summer = mapEventsCalendarEventToRaw(extractIcalEvents(icsFixture({
+    dtstart: "DTSTART;TZID=Europe/Stockholm:20260715T180000",
+    dtend: "DTEND;TZID=Europe/Stockholm:20260715T200000",
+  }))[0], { timezone: "Europe/Stockholm" });
+  assert.equal(summer.starts_at, "2026-07-15T16:00:00.000Z");
+
+  const dstGap = mapEventsCalendarEventToRaw(extractIcalEvents(icsFixture({
+    dtstart: "DTSTART;TZID=Europe/Stockholm:20260329T023000",
+    dtend: "DTEND;TZID=Europe/Stockholm:20260329T033000",
+  }))[0], { timezone: "Europe/Stockholm" });
+  assert.equal(dstGap.starts_at, undefined);
+  assert.equal(dstGap.ends_at, "2026-03-29T01:30:00.000Z");
 });
 
 test("iCal floating date-times do not promote through registry when timezone is unresolved", async () => {
@@ -297,6 +339,27 @@ test("iCal floating date-times do not promote through registry when timezone is 
   assert.equal(event.starts_at, undefined);
   assert.equal(event.ends_at, undefined);
   assert.ok(!(event.timing_reasons || []).includes("timing_now"));
+});
+
+test("provider-level reviewed timezone resolves iCal TZID through the registry", async () => {
+  const result = await collectPulseSourcesForCity(city, {
+    providerSpecs: [
+      provider({
+        format: "ical",
+        timezone: "Europe/Athens",
+        fetcher: async () => response(icsFixture({
+          dtstart: "DTSTART;TZID=Europe/Athens:20260912T180000",
+          dtend: "DTEND;TZID=Europe/Athens:20260912T220000",
+        }), "text/calendar"),
+      }),
+    ],
+    enabledStatuses: ["candidate"],
+    context: { now: NOW },
+  });
+
+  assert.equal(result.time_sensitive_events.length, 1);
+  assert.equal(result.time_sensitive_events[0].starts_at, "2026-09-12T15:00:00.000Z");
+  assert.equal(result.time_sensitive_events[0].timing_relevance, "now");
 });
 
 test("floating REST date-times do not promote without reviewed timezone", async () => {

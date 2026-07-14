@@ -195,7 +195,7 @@ function extractTheEventsCalendarEvents(payload) {
 function mapEventsCalendarEventToRaw(event, options = {}) {
   if (!isObject(event)) return null;
   return event.__source_format === "ical"
-    ? mapIcalEventToRaw(event)
+    ? mapIcalEventToRaw(event, options)
     : mapTheEventsCalendarEventToRaw(event, options);
 }
 
@@ -313,7 +313,7 @@ function extractIcalEvents(text) {
   return events;
 }
 
-function mapIcalEventToRaw(event) {
+function mapIcalEventToRaw(event, options = {}) {
   const property = (name) => firstProperty(event, name);
   const summary = property("SUMMARY");
   const url = property("URL") || property("SOURCE") || property("X-ORIGINAL-URL");
@@ -322,6 +322,7 @@ function mapIcalEventToRaw(event) {
   const categories = property("CATEGORIES");
   const status = property("STATUS");
   const language = firstString(summary?.params?.LANGUAGE, property("LANGUAGE")?.value);
+  const timezone = normalizeIanaTimezone(options.timezone);
   const startsOn = parseIcalDateOnly(property("DTSTART"));
   const declaredEndOn = parseIcalDateOnly(property("DTEND"));
   const endsOn = startsOn && declaredEndOn
@@ -330,8 +331,8 @@ function mapIcalEventToRaw(event) {
   return compact({
     id: firstString(property("UID")?.value, url?.value),
     title: decodeIcalText(summary?.value),
-    starts_at: parseIcalDate(property("DTSTART")),
-    ends_at: parseIcalDate(property("DTEND")),
+    starts_at: parseIcalDate(property("DTSTART"), { timezone }),
+    ends_at: parseIcalDate(property("DTEND"), { timezone }),
     starts_on: startsOn,
     ends_on: endsOn,
     time_window: startsOn
@@ -344,7 +345,7 @@ function mapIcalEventToRaw(event) {
     tags: stringList(decodeIcalText(categories?.value)),
     recurrence: firstString(property("RRULE")?.value),
     freshness: isCancelled(status?.value) ? "stale" : null,
-    last_checked: parseIcalDate(property("DTSTAMP") || property("LAST-MODIFIED")),
+    last_checked: parseIcalDate(property("DTSTAMP") || property("LAST-MODIFIED"), { timezone }),
     source_language: normalizeLanguage(language),
     event_language: normalizeLanguage(language),
     translation_status: language && language !== "en" ? "needed" : null,
@@ -388,29 +389,39 @@ function firstProperty(event, name) {
   return (event?.properties || []).find((property) => property.name === wanted) || null;
 }
 
-function parseIcalDate(property) {
+function parseIcalDate(property, { timezone } = {}) {
   const value = firstString(property?.value);
   if (!value) return null;
   if (/^\d{8}$/.test(value)) {
     return null;
   }
-  if (property?.params?.TZID) {
-    return null;
-  }
   const match = value.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z?)$/);
   if (match) {
     const [, year, month, day, hour, minute, second, zulu] = match;
-    if (!zulu) return null;
-    const date = new Date(Date.UTC(
-      Number(year),
-      Number(month) - 1,
-      Number(day),
-      Number(hour),
-      Number(minute),
-      Number(second),
-    ));
-    if (!Number.isFinite(date.getTime())) return null;
-    return date.toISOString();
+    if (zulu) {
+      const date = new Date(Date.UTC(
+        Number(year),
+        Number(month) - 1,
+        Number(day),
+        Number(hour),
+        Number(minute),
+        Number(second),
+      ));
+      if (!Number.isFinite(date.getTime())) return null;
+      return date.toISOString();
+    }
+
+    const reviewedTimezone = normalizeIanaTimezone(timezone);
+    const declaredTimezone = normalizeIanaTimezone(property?.params?.TZID);
+    if (!reviewedTimezone) return null;
+    if (property?.params?.TZID && !declaredTimezone) return null;
+    if (declaredTimezone && declaredTimezone.toLowerCase() !== reviewedTimezone.toLowerCase()) {
+      return null;
+    }
+    return normalizeSourceEventDateTime(
+      `${year}-${month}-${day} ${hour}:${minute}:${second}`,
+      { timezone: reviewedTimezone },
+    );
   }
   const parsed = new Date(value);
   return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
