@@ -58,6 +58,20 @@ function normalizeSourceDescriptor(descriptor, label = "sourceDescriptor") {
     normalized.sourceUrl = httpUrl(descriptor.sourceUrl, `${label}.sourceUrl`);
   }
 
+  if (descriptor.publisherId !== undefined || descriptor.publisher_id !== undefined) {
+    normalized.publisherId = nonEmptyString(
+      descriptor.publisherId || descriptor.publisher_id,
+      `${label}.publisherId`,
+    );
+  }
+
+  if (descriptor.sourceFamily !== undefined || descriptor.source_family !== undefined) {
+    normalized.sourceFamily = nonEmptyString(
+      descriptor.sourceFamily || descriptor.source_family,
+      `${label}.sourceFamily`,
+    );
+  }
+
   return normalized;
 }
 

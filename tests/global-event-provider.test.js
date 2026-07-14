@@ -76,6 +76,8 @@ test("mapDiscoveryEvent keeps real coords + event-level timezone, drops coordles
 });
 
 test("an anchor with NO municipal feed gets live events via the global family (any coordinate)", async () => {
+  assert.equal(GLOBAL_FEED_DESCRIPTOR.source_tier, "verified", "commercial discovery is not official authority");
+  assert.equal(GLOBAL_FEED_DESCRIPTOR.source_family, "global_commercial");
   for (const anchor of [STOCKHOLM, NEW_YORK]) {
     const out = await collectAnchorEvents({
       anchor,

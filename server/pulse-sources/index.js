@@ -20,6 +20,12 @@ const {
 } = require("./inspect");
 const { dedupeNormalizedEvents } = require("./dedupe");
 const {
+  START_MATCH_TOLERANCE_MS,
+  LOCATION_MATCH_RADIUS_KM,
+  fuseTimeSensitiveEvents,
+  eventsRepresentSameOccurrence,
+} = require("./event-fusion");
+const {
   WEATHER_CONTEXT_PROVIDER_ID,
   weatherContextDescriptor,
   createWeatherContextProvider,
@@ -86,6 +92,10 @@ module.exports = {
   SOURCE_PROVIDER_INSPECT_TIME_SENSITIVE_EVENT_LIMIT,
   buildSourceProviderInspect,
   dedupeNormalizedEvents,
+  START_MATCH_TOLERANCE_MS,
+  LOCATION_MATCH_RADIUS_KM,
+  fuseTimeSensitiveEvents,
+  eventsRepresentSameOccurrence,
   WEATHER_CONTEXT_PROVIDER_ID,
   weatherContextDescriptor,
   createWeatherContextProvider,

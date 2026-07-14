@@ -800,6 +800,7 @@ test("pulse source registry core has no city-specific branches", () => {
     "server/pulse-sources/display-gates.js",
     "server/pulse-sources/dedupe.js",
     "server/pulse-sources/time-sensitive-event.js",
+    "server/pulse-sources/event-fusion.js",
   ];
   const source = files.map((file) => fs.readFileSync(path.join(root, file), "utf8")).join("\n");
   const stripped = source
