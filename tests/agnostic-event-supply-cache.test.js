@@ -61,3 +61,18 @@ test("eventCacheKey is deterministic and buckets by ~1 km + hour", () => {
   const k3 = eventCacheKey({ lat: 60.1699, lng: 24.9384 }, "2026-06-28T19:30:00Z");
   assert.notEqual(k1, k3, "a different hour → different key (freshness)");
 });
+
+test("eventCacheKey separates different approved source plans", () => {
+  const anchor = { lat: 60.1699, lng: 24.9384 };
+  const now = "2026-06-28T18:30:00Z";
+  const localOnly = eventCacheKey(anchor, now, ["municipal-local"]);
+  const localAndGlobal = eventCacheKey(anchor, now, ["municipal-local", "ticketmaster-global"]);
+  const samePlanDifferentInputOrder = eventCacheKey(anchor, now, ["ticketmaster-global", "municipal-local"]);
+
+  assert.notEqual(localOnly, localAndGlobal, "adding an approved source invalidates the old cache entry");
+  assert.equal(
+    localAndGlobal,
+    samePlanDifferentInputOrder,
+    "source-plan identity is stable regardless of caller ordering",
+  );
+});
