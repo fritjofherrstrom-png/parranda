@@ -1,4 +1,5 @@
 const { collectOpenDataAgendaEventsForDates } = require("./live");
+const { buildProviderCollectionOutcome } = require("../../pulse-sources/provider-collection-outcome");
 
 const OPEN_DATA_BCN_AGENDA_PROVIDER_ID = "barcelona-open-data-agenda";
 
@@ -57,7 +58,14 @@ function createOpenDataBcnAgendaProvider(cityConfig, providerOptions = {}) {
         async collect(collectionContext = {}) {
           const dates = normalizeDates(collectionContext.dates || context.dates || providerOptions.dates);
           if (!dates.length) {
-            return { events: [], signals: [] };
+            return {
+              events: [],
+              signals: [],
+              collection_status: buildProviderCollectionOutcome("unavailable", {
+                reason: "collection_context_unavailable",
+                eventRows: 0,
+              }),
+            };
           }
 
           const fetchForDates =
@@ -72,9 +80,14 @@ function createOpenDataBcnAgendaProvider(cityConfig, providerOptions = {}) {
             ...collectionContext,
           });
 
+          const events = flattenDateKeyedEvents(byDate).map(toSourceProviderEvent);
           return {
-            events: flattenDateKeyedEvents(byDate).map(toSourceProviderEvent),
+            events,
             signals: [],
+            collection_status: buildProviderCollectionOutcome(events.length ? "ok" : "empty", {
+              reason: events.length ? null : "source_empty",
+              eventRows: events.length,
+            }),
           };
         },
       };

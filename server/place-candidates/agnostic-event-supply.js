@@ -29,6 +29,7 @@ const {
   resolveEventFeedsForAnchor,
   fuseAndBoundEventEvidence,
   summarizeRejections,
+  buildAnchorEventSourceHealth,
   DEFAULT_MAX_SOURCES,
   DEFAULT_MAX_LOCAL_SOURCES,
 } = require("./anchor-event-acquisition");
@@ -390,13 +391,21 @@ async function collectAnchorEvents({
     }
   }
 
+  const rankedTonight = rankAndCap(tonight);
+  const rankedThisWeek = rankAndCap(thisWeek);
   const feeds = collectedSources.map(compactSourceStatus);
+  const sourceHealth = buildAnchorEventSourceHealth(collectedSources, {
+    acceptedEventCount: tonight.length + thisWeek.length,
+    surfacedEventCount: rankedTonight.length + rankedThisWeek.length,
+    normalizedEventCount: normalizedEvidence.length,
+    rejected,
+  });
   return {
     coverage: "covered",
     feed: feeds[0] || null,
     feeds,
-    tonight: rankAndCap(tonight),
-    this_week: rankAndCap(thisWeek),
+    tonight: rankedTonight,
+    this_week: rankedThisWeek,
     acquisition: {
       mode: "bounded_multi_source",
       radius_m: effectiveRadiusM,
@@ -406,6 +415,7 @@ async function collectAnchorEvents({
       fused_event_count: bounded.fused_count,
       rejected_event_count: rejected.length,
       rejection_summary: summarizeRejections(rejected),
+      source_health: sourceHealth,
     },
   };
 }
@@ -446,13 +456,15 @@ async function collectEventSource({
   try {
     const collected = await provider.create({ key: null }).collect({ date: startParam });
     const raw = Array.isArray(collected && collected.time_sensitive_events) ? collected.time_sensitive_events : [];
+    const outcome = normalizeDirectCollectionOutcome(collected?.collection_status, raw.length);
     return {
       source,
       raw,
-      status: raw.length > 0 ? "ok" : "empty_or_unavailable",
+      status: outcome.status,
+      reason: outcome.reason,
     };
   } catch (_error) {
-    return { source, raw: [], status: "failed" };
+    return { source, raw: [], status: "failed", reason: "source_collect_failed" };
   }
 }
 
@@ -465,6 +477,7 @@ function compactSourceStatus(collection) {
     family: source.source_family || source.family || (source.kind === "global" ? "global_commercial" : "municipal_open"),
     source_identity: source.source_identity || sourceIdentityForUrl(source.base || source.source_url) || source.id,
     status: collection.status,
+    reason: collection.reason || null,
     event_rows: collection.raw.length,
   };
 }
@@ -479,6 +492,23 @@ function emptyAcquisition(radiusM) {
     fused_event_count: 0,
     rejected_event_count: 0,
     rejection_summary: [],
+    source_health: buildAnchorEventSourceHealth([]),
+  };
+}
+
+function normalizeDirectCollectionOutcome(outcome, eventRows) {
+  const status = ["ok", "empty", "failed", "unavailable"].includes(outcome?.status)
+    ? outcome.status
+    : eventRows > 0
+      ? "ok"
+      : "empty";
+  return {
+    status,
+    reason: typeof outcome?.reason === "string" && outcome.reason.trim()
+      ? outcome.reason.trim()
+      : status === "empty"
+        ? "source_empty"
+        : null,
   };
 }
 
@@ -572,6 +602,22 @@ function resolveDefaultEventSupply(env = process.env) {
         fused_event_count: 0,
         rejected_event_count: 0,
         rejection_summary: [],
+        source_health: {
+          status: "pending",
+          result: "pending",
+          selected_source_count: sourcePlan.length,
+          responding_source_count: 0,
+          event_bearing_source_count: 0,
+          empty_source_count: 0,
+          failed_source_count: 0,
+          unavailable_source_count: 0,
+          raw_event_count: 0,
+          normalized_event_count: 0,
+          accepted_event_count: 0,
+          surfaced_event_count: 0,
+          rejected_event_count: 0,
+          reasons: ["background_refresh_pending"],
+        },
       },
     });
   };

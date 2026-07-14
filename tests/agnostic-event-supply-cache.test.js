@@ -37,6 +37,8 @@ test("a cold covered anchor returns pending immediately — does not await the s
     const out = await supply({ anchor: { lat: 60.17, lng: 24.94 }, now: "2026-06-28T18:00:00Z" });
     assert.equal(out.coverage, "covered");
     assert.equal(out.pending, true, "honest pending, not a fabricated empty");
+    assert.equal(out.acquisition.source_health.status, "pending");
+    assert.equal(out.acquisition.source_health.result, "pending");
     assert.deepEqual(out.tonight, []);
     assert.ok(out.feed && out.feed.id, "feed identified for the covered anchor");
   } finally {
@@ -50,6 +52,7 @@ test("an uncovered anchor returns honest absence immediately (no warm, no pendin
   const supply = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: "enabled" });
   const out = await supply({ anchor: { lat: 41.9, lng: 12.5 }, now: "2026-06-28T18:00:00Z" });
   assert.equal(out.coverage, "uncovered");
+  assert.equal(out.acquisition.source_health.status, "uncovered");
   assert.ok(!out.pending);
   assert.deepEqual(out.tonight, []);
 });

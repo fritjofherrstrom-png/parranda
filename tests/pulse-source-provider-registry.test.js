@@ -140,8 +140,45 @@ test("provider throw returns empty result and failed source_status", async () =>
   assert.deepEqual(result.time_sensitive_events, []);
   assert.equal(result.source_status.length, 1);
   assert.equal(result.source_status[0].status, "failed");
+  assert.equal(result.source_status[0].collection_status, "failed");
+  assert.equal(result.source_status[0].collection_reason, "provider_failed");
   assert.equal(result.source_status[0].time_sensitive_events, 0);
-  assert.match(result.source_status[0].reason, /provider boom/);
+  assert.equal(result.source_status[0].reason, "provider_failed");
+});
+
+test("provider exception details are reduced to a compact safe token", async () => {
+  const secret = "https://private.example/events?api_key=super-secret";
+  const result = await collectPulseSourcesForCity(city, {
+    providerSpecs: [
+      {
+        descriptor: descriptor(),
+        provider: {
+          async collect() {
+            throw new Error(`request failed for ${secret}`);
+          },
+        },
+      },
+    ],
+  });
+
+  assert.equal(result.source_status[0].reason, "provider_failed");
+  assert.equal(result.source_status[0].collection_reason, "provider_failed");
+  assert.doesNotMatch(JSON.stringify(result.source_status), /private\.example|super-secret|api_key/);
+});
+
+test("missing collection outcome cannot masquerade as a proven healthy-empty source", async () => {
+  const result = await collectPulseSourcesForCity(city, {
+    providerSpecs: [
+      {
+        descriptor: descriptor(),
+        provider: { async collect() { return { events: [], signals: [], time_sensitive_events: [] }; } },
+      },
+    ],
+  });
+
+  assert.equal(result.source_status[0].status, "skipped");
+  assert.equal(result.source_status[0].collection_status, "unavailable");
+  assert.equal(result.source_status[0].collection_reason, "collection_outcome_missing");
 });
 
 test("provider registry prevents cross-city leakage", async () => {

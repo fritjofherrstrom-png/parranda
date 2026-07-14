@@ -163,6 +163,68 @@ function summarizeRejections(rejected = []) {
     .map(([reason, count]) => ({ reason, count }));
 }
 
+function buildAnchorEventSourceHealth(
+  collections = [],
+  { acceptedEventCount = 0, surfacedEventCount = acceptedEventCount, normalizedEventCount = 0, rejected = [] } = {},
+) {
+  const rows = Array.isArray(collections) ? collections : [];
+  const statusCounts = { ok: 0, empty: 0, failed: 0, unavailable: 0 };
+  let eventBearingSourceCount = 0;
+  let rawEventCount = 0;
+
+  for (const row of rows) {
+    const status = Object.hasOwn(statusCounts, row?.status) ? row.status : "failed";
+    statusCounts[status] += 1;
+    const eventRows = Array.isArray(row?.raw) ? row.raw.length : 0;
+    rawEventCount += eventRows;
+    if (eventRows > 0) eventBearingSourceCount += 1;
+  }
+
+  const respondingSourceCount = statusCounts.ok + statusCounts.empty;
+  let status = "uncovered";
+  if (rows.length > 0 && respondingSourceCount === rows.length) status = "healthy";
+  else if (respondingSourceCount > 0) status = "partial";
+  else if (rows.length > 0) status = "unavailable";
+
+  const accepted = Math.max(0, Math.floor(Number(acceptedEventCount) || 0));
+  const surfaced = Math.max(0, Math.floor(Number(surfacedEventCount) || 0));
+  const normalized = Math.max(0, Math.floor(Number(normalizedEventCount) || 0));
+  const rejectionCount = Array.isArray(rejected) ? rejected.length : 0;
+  let result = "unknown";
+  if (accepted > 0) result = "events_found";
+  else if (respondingSourceCount > 0) result = "empty";
+
+  const reasons = [];
+  if (rows.length === 0) reasons.push("no_approved_sources");
+  if (statusCounts.failed > 0) reasons.push("source_failures_present");
+  if (statusCounts.unavailable > 0) reasons.push("source_unavailable_present");
+  if (status === "unavailable") reasons.push("all_sources_unavailable");
+  if (result === "events_found") reasons.push("bounded_events_found");
+  if (result === "empty" && rawEventCount === 0) reasons.push("no_current_events_found");
+  if (result === "empty" && rawEventCount > 0 && normalized === 0) {
+    reasons.push("all_event_rows_failed_normalization");
+  } else if (result === "empty" && normalized > 0) {
+    reasons.push("all_event_evidence_rejected");
+  }
+
+  return {
+    status,
+    result,
+    selected_source_count: rows.length,
+    responding_source_count: respondingSourceCount,
+    event_bearing_source_count: eventBearingSourceCount,
+    empty_source_count: statusCounts.empty,
+    failed_source_count: statusCounts.failed,
+    unavailable_source_count: statusCounts.unavailable,
+    raw_event_count: rawEventCount,
+    normalized_event_count: normalized,
+    accepted_event_count: accepted,
+    surfaced_event_count: surfaced,
+    rejected_event_count: rejectionCount,
+    reasons,
+  };
+}
+
 function feedCoversAnchor(feed, anchor) {
   const bbox = Array.isArray(feed && feed.bbox) ? feed.bbox.map(Number) : [];
   if (bbox.length < 4 || !bbox.every(Number.isFinite)) return false;
@@ -236,6 +298,7 @@ module.exports = {
   resolveEventFeedsForAnchor,
   fuseAndBoundEventEvidence,
   summarizeRejections,
+  buildAnchorEventSourceHealth,
   DEFAULT_MAX_SOURCES,
   DEFAULT_MAX_LOCAL_SOURCES,
 };

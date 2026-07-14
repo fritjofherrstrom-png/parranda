@@ -17,7 +17,11 @@ const {
   GLOBAL_FEED_DESCRIPTOR,
   HELSINKI_LINKED_EVENTS_FEED,
 } = require("../server/place-candidates/agnostic-event-supply");
-const { buildDiscoveryUrl, mapDiscoveryEvent } = require("../server/pulse-sources/ticketmaster-source-provider");
+const {
+  createTicketmasterProvider,
+  buildDiscoveryUrl,
+  mapDiscoveryEvent,
+} = require("../server/pulse-sources/ticketmaster-source-provider");
 
 const NOW = "2026-07-06T12:00:00Z";
 // Arbitrary anchors far outside every municipal bbox — the whole point.
@@ -135,6 +139,33 @@ test("resolveGlobalEventKey is env-gated and fail-closed", () => {
   assert.equal(resolveGlobalEventKey({}), null);
   assert.equal(resolveGlobalEventKey({ PARRANDA_TICKETMASTER_KEY: "  " }), null);
   assert.equal(resolveGlobalEventKey({ PARRANDA_TICKETMASTER_KEY: "abc" }), "abc");
+});
+
+test("global provider distinguishes unavailable, failed, and healthy-empty collection", async () => {
+  const unavailable = await createTicketmasterProvider({ anchor: STOCKHOLM }).create().collect();
+  assert.deepEqual(unavailable.collection_status, {
+    status: "unavailable",
+    reason: "source_credentials_unavailable",
+    event_rows: 0,
+  });
+
+  const failed = await createTicketmasterProvider({
+    key: "test-key",
+    anchor: STOCKHOLM,
+    now: NOW,
+    fetcher: async () => ({ ok: false, status: 503 }),
+  }).create().collect();
+  assert.equal(failed.collection_status.status, "failed");
+  assert.equal(failed.collection_status.reason, "source_http_503");
+
+  const empty = await createTicketmasterProvider({
+    key: "test-key",
+    anchor: STOCKHOLM,
+    now: NOW,
+    fetcher: async () => ({ ok: true, json: async () => ({ _embedded: { events: [] } }) }),
+  }).create().collect();
+  assert.equal(empty.collection_status.status, "empty");
+  assert.equal(empty.collection_status.reason, "source_empty");
 });
 
 test("default supply: key present → ANY anchor is covered (pending then cached); no key → unchanged behavior", async () => {

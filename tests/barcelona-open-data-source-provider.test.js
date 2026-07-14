@@ -88,7 +88,7 @@ test("Open Data BCN provider failure returns empty events and failed source_stat
   assert.equal(result.source_status.length, 1);
   assert.equal(result.source_status[0].id, "barcelona-open-data-agenda");
   assert.equal(result.source_status[0].status, "failed");
-  assert.equal(result.source_status[0].reason, "provider down");
+  assert.equal(result.source_status[0].reason, "provider_failed");
   assert.equal(result.source_status[0].events, 0);
 });
 

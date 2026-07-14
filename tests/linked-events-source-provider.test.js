@@ -117,6 +117,7 @@ test("a configured provider yields a normalized, geocoded, source-backed event",
   assert.equal(e.source_url, "https://hel.fi/event/1");
   assert.equal(e.source_label, "Helsinki Linked Events");
   assert.ok(!(e.timing_reasons || []).includes("missing_source_backing"));
+  assert.equal(result.source_status[0].collection_status, "ok");
 });
 
 test("an expired event is downgraded to stale, never trusted as happening now", async () => {
@@ -137,24 +138,77 @@ test("an expired event is downgraded to stale, never trusted as happening now", 
 
 test("no endpoint, non-200, thrown error, and malformed payload all fail soft", async () => {
   const noEndpoint = createLinkedEventsProvider({ sourceUrl: "https://api.hel.fi/linkedevents/v1/", fetcher: async () => jsonResponse({ data: [event()] }) });
-  assert.deepEqual((await collectPulseSourcesForCity(city, { providerSpecs: [noEndpoint], context: { now: NOW } })).time_sensitive_events, []);
+  const unavailable = await collectPulseSourcesForCity(city, { providerSpecs: [noEndpoint], context: { now: NOW } });
+  assert.deepEqual(unavailable.time_sensitive_events, []);
+  assert.equal(unavailable.source_status[0].status, "skipped");
+  assert.equal(unavailable.source_status[0].collection_status, "unavailable");
+  assert.equal(unavailable.source_status[0].reason, "source_endpoint_unavailable");
 
-  assert.deepEqual(
-    (await collectPulseSourcesForCity(city, { providerSpecs: [provider({ fetcher: async () => ({ ok: false, status: 500 }) })], context: { now: NOW } })).time_sensitive_events,
-    [],
-  );
+  const nonOk = await collectPulseSourcesForCity(city, {
+    providerSpecs: [provider({ fetcher: async () => ({ ok: false, status: 500 }) })],
+    context: { now: NOW },
+  });
+  assert.deepEqual(nonOk.time_sensitive_events, []);
+  assert.equal(nonOk.source_status[0].status, "failed");
+  assert.equal(nonOk.source_status[0].reason, "source_http_500");
 
   const thrown = await collectPulseSourcesForCity(city, {
     providerSpecs: [provider({ fetcher: async () => { throw new Error("boom"); } })],
     context: { now: NOW },
   });
   assert.deepEqual(thrown.time_sensitive_events, []);
-  assert.equal(thrown.source_status[0].status, "ok", "fail-soft inside collect, not a provider failure");
+  assert.equal(thrown.source_status[0].status, "failed", "fail-soft response still reports source failure honestly");
+  assert.equal(thrown.source_status[0].reason, "source_fetch_failed");
 
-  assert.deepEqual(
-    (await collectPulseSourcesForCity(city, { providerSpecs: [provider({ fetcher: async () => ({ ok: true, json: async () => { throw new Error("bad json"); } }) })], context: { now: NOW } })).time_sensitive_events,
-    [],
-  );
+  const malformed = await collectPulseSourcesForCity(city, {
+    providerSpecs: [provider({ fetcher: async () => ({ ok: true, json: async () => { throw new Error("bad json"); } }) })],
+    context: { now: NOW },
+  });
+  assert.deepEqual(malformed.time_sensitive_events, []);
+  assert.equal(malformed.source_status[0].status, "failed");
+  assert.equal(malformed.source_status[0].reason, "source_payload_invalid");
+});
+
+test("a successful empty feed remains healthy-empty rather than failed", async () => {
+  const result = await collectPulseSourcesForCity(city, {
+    providerSpecs: [provider({ fetcher: async () => jsonResponse({ meta: { count: 0 }, data: [] }) })],
+    context: { now: NOW },
+  });
+
+  assert.equal(result.source_status[0].status, "ok");
+  assert.equal(result.source_status[0].collection_status, "empty");
+  assert.equal(result.source_status[0].collection_reason, "source_empty");
+});
+
+test("timeout remains active while the response body is being parsed", { timeout: 1000 }, async () => {
+  let bodyAbortObserved = false;
+  const result = await collectPulseSourcesForCity(city, {
+    providerSpecs: [
+      provider({
+        timeoutMs: 50,
+        fetcher: async (_url, { signal }) => ({
+          ok: true,
+          json: async () => new Promise((_resolve, reject) => {
+            const abort = () => {
+              bodyAbortObserved = true;
+              const error = new Error("body aborted");
+              error.name = "AbortError";
+              reject(error);
+            };
+            if (signal.aborted) abort();
+            else signal.addEventListener("abort", abort, { once: true });
+          }),
+        }),
+      }),
+    ],
+    context: { now: NOW },
+  });
+
+  assert.equal(bodyAbortObserved, true);
+  assert.deepEqual(result.time_sensitive_events, []);
+  assert.equal(result.source_status[0].status, "failed");
+  assert.equal(result.source_status[0].collection_status, "failed");
+  assert.equal(result.source_status[0].collection_reason, "source_timeout");
 });
 
 test("resolveDefaultLinkedEventsProvider is null without an endpoint env and a provider with one", () => {

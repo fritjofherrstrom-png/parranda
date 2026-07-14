@@ -59,12 +59,13 @@ test("a covered anchor carries live_events (tonight + this_week) on the agnostic
       feed: { id: "linkedevents-helsinki", label: "Helsinki Linked Events", license: "CC-BY 4.0" },
       feeds: [
         { id: "linkedevents-helsinki", family: "municipal_open", status: "ok", event_rows: 2 },
-        { id: "ticketmaster-global", family: "global_commercial", status: "empty_or_unavailable", event_rows: 0 },
+        { id: "ticketmaster-global", family: "global_commercial", status: "empty", event_rows: 0 },
       ],
       acquisition: {
         mode: "bounded_multi_source",
         radius_m: 3000,
         selected_source_count: 2,
+        source_health: { status: "healthy", result: "events_found" },
       },
       tonight: [{ id: "t1", title: "Tonight gig", starts_at: "2026-06-28T19:00:00Z", source_url: "https://x/t1" }],
       this_week: [{ id: "w1", title: "Thursday concert", starts_at: "2026-07-01T18:00:00Z", source_url: "https://x/w1" }],
@@ -78,6 +79,7 @@ test("a covered anchor carries live_events (tonight + this_week) on the agnostic
     assert.equal(res.live_events.feed.id, "linkedevents-helsinki");
     assert.equal(res.live_events.feeds.length, 2);
     assert.equal(res.live_events.acquisition.mode, "bounded_multi_source");
+    assert.equal(res.live_events.acquisition.source_health.status, "healthy");
     assert.equal(res.live_events.tonight[0].id, "t1");
     assert.equal(res.live_events.this_week[0].id, "w1");
   });

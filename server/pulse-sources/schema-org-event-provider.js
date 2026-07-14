@@ -26,6 +26,7 @@
  */
 
 const { GENERIC_PROVIDER_CITY } = require("./provider-registry");
+const { buildProviderCollectionOutcome } = require("./provider-collection-outcome");
 
 const SCHEMA_ORG_EVENT_PROVIDER_ID = "generic-schema-org-events";
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
@@ -87,9 +88,8 @@ function createSchemaOrgEventProvider(providerOptions = {}) {
           const fetcher =
             providerOptions.fetcher ||
             (typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null);
-          if (!endpoint || typeof fetcher !== "function") {
-            return { events: [], signals: [], time_sensitive_events: [] };
-          }
+          if (!endpoint) return emptyCollection("unavailable", "source_endpoint_unavailable");
+          if (typeof fetcher !== "function") return emptyCollection("unavailable", "source_fetch_unavailable");
 
           const limit = Math.max(1, Math.min(Math.floor(providerOptions.limit || DEFAULT_LIMIT), MAX_LIMIT));
           const userAgent = providerOptions.userAgent || DEFAULT_USER_AGENT;
@@ -97,6 +97,7 @@ function createSchemaOrgEventProvider(providerOptions = {}) {
           const controller = new AbortController();
           const timer = setTimeout(() => controller.abort(), timeoutMs);
 
+          let phase = "fetch";
           let payload;
           try {
             const response = await fetcher(endpoint, {
@@ -104,11 +105,17 @@ function createSchemaOrgEventProvider(providerOptions = {}) {
               signal: controller.signal,
             });
             if (!response || response.ok !== true) {
-              return { events: [], signals: [], time_sensitive_events: [] };
+              return emptyCollection("failed", `source_http_${response?.status || "not_ok"}`);
             }
+            phase = "payload";
             payload = await response.json();
-          } catch (_error) {
-            return { events: [], signals: [], time_sensitive_events: [] };
+          } catch (error) {
+            const reason = error?.name === "AbortError"
+              ? "source_timeout"
+              : phase === "payload"
+                ? "source_payload_invalid"
+                : "source_fetch_failed";
+            return emptyCollection("failed", reason);
           } finally {
             clearTimeout(timer);
           }
@@ -117,10 +124,27 @@ function createSchemaOrgEventProvider(providerOptions = {}) {
             .slice(0, limit)
             .map(mapSchemaOrgEventToRaw)
             .filter(Boolean);
-          return { events: [], signals: [], time_sensitive_events: events };
+          return {
+            events: [],
+            signals: [],
+            time_sensitive_events: events,
+            collection_status: buildProviderCollectionOutcome(events.length ? "ok" : "empty", {
+              reason: events.length ? null : "source_empty",
+              eventRows: events.length,
+            }),
+          };
         },
       };
     },
+  };
+}
+
+function emptyCollection(status, reason) {
+  return {
+    events: [],
+    signals: [],
+    time_sensitive_events: [],
+    collection_status: buildProviderCollectionOutcome(status, { reason, eventRows: 0 }),
   };
 }
 
