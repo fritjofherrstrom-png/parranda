@@ -283,9 +283,12 @@ Every provider must preserve enough timing to let
 Provider output should include `last_checked` and source freshness where
 available. Expiry facts win over source-provided `timing_relevance`.
 
-Timezone handling belongs in the provider adapter or trusted context layer. If
-an event source only exposes local date strings, the adapter must either attach
-a trusted timezone or downgrade timing precision honestly.
+Timezone handling belongs in the provider adapter or trusted context layer. A
+reviewed source manifest may carry a validated IANA timezone for a known local
+calendar. Explicit UTC/offset timestamps remain source facts; floating local
+date-times are normalized only when that reviewed timezone is present. Missing,
+invalid, or nonexistent daylight-saving times stay unknown instead of being
+silently interpreted as server-local or UTC time.
 
 ## Local-Language And Translation
 

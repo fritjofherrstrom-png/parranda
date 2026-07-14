@@ -82,6 +82,37 @@ test("same-day daytime upcoming event is classified as today", () => {
   assert.equal(normalized.timing_relevance, "today");
 });
 
+test("reviewed timezone classifies evening by venue-local hour", () => {
+  const normalized = normalizeTimeSensitiveSourceEvent(
+    event({
+      starts_at: "2026-09-12T15:00:00.000Z",
+      ends_at: "2026-09-12T20:00:00.000Z",
+    }),
+    {
+      now: "2026-09-12T13:00:00.000Z",
+      timezone: "Europe/Athens",
+    },
+  );
+
+  assert.equal(normalized.timing_relevance, "tonight");
+  assert.equal(normalized.timezone, "Europe/Athens");
+});
+
+test("reviewed timezone prevents UTC date from masking a local next day", () => {
+  const normalized = normalizeTimeSensitiveSourceEvent(
+    event({
+      starts_at: "2026-07-14T22:30:00.000Z",
+      ends_at: "2026-07-14T23:30:00.000Z",
+    }),
+    {
+      now: "2026-07-14T21:30:00.000Z",
+      timezone: "Europe/Stockholm",
+    },
+  );
+
+  assert.equal(normalized.timing_relevance, "future");
+});
+
 test("expired or stale events are downgraded instead of promoted", () => {
   const expired = normalizeTimeSensitiveSourceEvent(
     event({

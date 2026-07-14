@@ -90,6 +90,11 @@ test("source descriptor validates role, trust and cache policy", () => {
   assert.equal(normalized.cachePolicy.kind, "memory");
   assert.equal(normalized.cachePolicy.ttlSeconds, 300);
 
+  const timezoneDescriptor = normalizeSourceDescriptor(
+    descriptor({ timezone: "Europe/Stockholm" }),
+  );
+  assert.equal(timezoneDescriptor.timezone, "Europe/Stockholm");
+
   assert.throws(
     () => normalizeSourceDescriptor(descriptor({ role: "barcelona_only_magic" })),
     /role has unsupported value/,
@@ -101,6 +106,10 @@ test("source descriptor validates role, trust and cache policy", () => {
   assert.throws(
     () => normalizeSourceDescriptor(descriptor({ cachePolicy: { kind: "forever" } })),
     /cachePolicy.kind has unsupported value/,
+  );
+  assert.throws(
+    () => normalizeSourceDescriptor(descriptor({ timezone: "Not/A_Timezone" })),
+    /timezone must be a valid IANA timezone/,
   );
 });
 

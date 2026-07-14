@@ -1,3 +1,5 @@
+const { normalizeIanaTimezone } = require("./source-event-time");
+
 const VALID_SOURCE_ROLES = new Set([
   "official_live_baseline",
   "market_rhythm",
@@ -70,6 +72,12 @@ function normalizeSourceDescriptor(descriptor, label = "sourceDescriptor") {
       descriptor.sourceFamily || descriptor.source_family,
       `${label}.sourceFamily`,
     );
+  }
+
+  if (descriptor.timezone !== undefined) {
+    const timezone = normalizeIanaTimezone(descriptor.timezone);
+    if (!timezone) throw new Error(`${label}.timezone must be a valid IANA timezone`);
+    normalized.timezone = timezone;
   }
 
   return normalized;

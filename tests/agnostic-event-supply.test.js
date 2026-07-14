@@ -11,6 +11,7 @@ const {
   resolveEventFeedRegistry,
   resolveEventFeedForAnchor,
   buildAnchorEventEndpoint,
+  createLocalEventProvider,
   BUILTIN_EVENT_FEEDS,
   HELSINKI_LINKED_EVENTS_FEED,
 } = require("../server/place-candidates/agnostic-event-supply");
@@ -100,6 +101,44 @@ test("the feed registry allowlists reusable local adapters and preserves legacy 
     ["ics", "ical"],
   ]);
   assert.ok(!configured.some((row) => row.id === "unknown"), "unknown parser code cannot enter bounded runtime");
+});
+
+test("reviewed feed timezone reaches the generic JSON calendar adapter", async () => {
+  const [source] = resolveEventFeedRegistry({
+    PARRANDA_EVENT_FEEDS: JSON.stringify([
+      {
+        id: "regional-json",
+        adapter: "events_calendar",
+        endpoint: "https://calendar.example/events.json",
+        bbox: [13, 55, 15, 56],
+        timezone: "Europe/Stockholm",
+      },
+    ]),
+  });
+  const provider = createLocalEventProvider(source, {
+    anchor: { lat: 55.55, lng: 14.35 },
+    fetcher: async () => ({
+      ok: true,
+      headers: { get: () => "application/json" },
+      text: async () => JSON.stringify({
+        events: [
+          {
+            id: "local-evening",
+            title: "Local evening",
+            start: "2026-07-15 18:00:00",
+            end: "2026-07-15 21:00:00",
+            url: "https://calendar.example/events/local-evening",
+          },
+        ],
+      }),
+    }),
+  });
+
+  const collected = await provider.create({ key: null }).collect({});
+  assert.equal(
+    collected.time_sensitive_events[0].starts_at,
+    "2026-07-15T16:00:00.000Z",
+  );
 });
 
 test("an anchor inside an injected open feed resolves it; outside, it does not", () => {

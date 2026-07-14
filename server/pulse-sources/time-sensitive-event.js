@@ -1,4 +1,8 @@
 const { normalizeConfidence } = require("./display-gates");
+const {
+  datePartsInTimezone,
+  normalizeIanaTimezone,
+} = require("./source-event-time");
 
 const VALID_TIMING_RELEVANCE = new Set(["now", "today", "tonight", "future", "stale", "unknown"]);
 const EVENING_START_HOUR = 17;
@@ -12,6 +16,7 @@ function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
   const startsAt = parseDate(rawEvent.starts_at || rawEvent.start_at || rawEvent.start_date);
   const endsAt = parseDate(rawEvent.ends_at || rawEvent.end_at || rawEvent.end_date);
   const lastChecked = parseDate(rawEvent.last_checked || rawEvent.fetched_at || rawEvent.checked_at);
+  const timezone = normalizeIanaTimezone(options.timezone);
   const sourceUrl = firstString(rawEvent.source_url, rawEvent.url);
   const sourceLabel = firstString(rawEvent.source_label, rawEvent.provider, rawEvent.source?.label);
   const provenance = normalizeProvenance(rawEvent.provenance, { sourceUrl, sourceLabel });
@@ -23,6 +28,7 @@ function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
       startsAt,
       endsAt,
       freshness: rawEvent.freshness,
+      timezone,
     },
   );
   const confidence = normalizeEventConfidence(rawEvent.confidence, {
@@ -67,6 +73,7 @@ function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
     intents: normalizeStringList(rawEvent.intents || rawEvent.match_tags),
     route_role_hint: firstString(rawEvent.route_role_hint, rawEvent.routeRoleHint),
     timing_relevance: timingRelevance,
+    timezone,
     timing_reasons: timingReasons(timingRelevance, {
       hasNow: Boolean(now),
       hasStartsAt: Boolean(startsAt),
@@ -98,7 +105,17 @@ function normalizeTimingRelevance(explicit, facts = {}) {
   if (startsAt <= now && (!endsAt || endsAt >= now)) {
     return "now";
   }
-  if (sameUtcDate(startsAt, now)) {
+  const localStart = facts.timezone
+    ? datePartsInTimezone(startsAt, facts.timezone)
+    : null;
+  const localNow = facts.timezone
+    ? datePartsInTimezone(now, facts.timezone)
+    : null;
+  if (localStart && localNow) {
+    if (sameDateParts(localStart, localNow)) {
+      return localStart.hour >= EVENING_START_HOUR ? "tonight" : "today";
+    }
+  } else if (sameUtcDate(startsAt, now)) {
     return startsAt.getUTCHours() >= EVENING_START_HOUR ? "tonight" : "today";
   }
   if (startsAt > now) {
@@ -240,6 +257,10 @@ function sameUtcDate(a, b) {
     a.getUTCMonth() === b.getUTCMonth() &&
     a.getUTCDate() === b.getUTCDate()
   );
+}
+
+function sameDateParts(a, b) {
+  return a.year === b.year && a.month === b.month && a.day === b.day;
 }
 
 function firstString(...values) {

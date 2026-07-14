@@ -9,6 +9,11 @@
 
 const { GENERIC_PROVIDER_CITY } = require("./provider-registry");
 const { buildProviderCollectionOutcome } = require("./provider-collection-outcome");
+const {
+  normalizeIanaTimezone,
+  normalizeSourceEventDateTime,
+  normalizeUtcEventDateTime,
+} = require("./source-event-time");
 
 const EVENTS_CALENDAR_PROVIDER_ID = "generic-events-calendar-ical";
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
@@ -27,6 +32,7 @@ function buildDescriptor({
   updateCadence,
   parsingRisk,
   trust,
+  timezone,
 } = {}) {
   const descriptor = {
     id: id || EVENTS_CALENDAR_PROVIDER_ID,
@@ -54,6 +60,7 @@ function buildDescriptor({
   };
   if (sourceUrl) descriptor.sourceUrl = sourceUrl;
   if (license) descriptor.license_label = license;
+  if (timezone) descriptor.timezone = timezone;
   return descriptor;
 }
 
@@ -112,7 +119,11 @@ function createEventsCalendarProvider(providerOptions = {}) {
           }
           const events = extractEventsCalendarSourceEvents(body, { format, contentType })
             .slice(0, limit)
-            .map(mapEventsCalendarEventToRaw)
+            .map((event) =>
+              mapEventsCalendarEventToRaw(event, {
+                timezone: normalizeIanaTimezone(providerOptions.timezone),
+              }),
+            )
             .filter(Boolean);
           return {
             events: [],
@@ -169,20 +180,47 @@ function extractTheEventsCalendarEvents(payload) {
   return [];
 }
 
-function mapEventsCalendarEventToRaw(event) {
+function mapEventsCalendarEventToRaw(event, options = {}) {
   if (!isObject(event)) return null;
-  return event.__source_format === "ical" ? mapIcalEventToRaw(event) : mapTheEventsCalendarEventToRaw(event);
+  return event.__source_format === "ical"
+    ? mapIcalEventToRaw(event)
+    : mapTheEventsCalendarEventToRaw(event, options);
 }
 
-function mapTheEventsCalendarEventToRaw(event) {
+function mapTheEventsCalendarEventToRaw(event, options = {}) {
   const venue = extractTecVenue(event);
   const coords = extractTecCoordinates(event, venue);
   const sourceUrl = firstString(event.url, event.website, event.link, event.rest_url, event.permalink);
+  const timezone = normalizeIanaTimezone(options.timezone);
   return compact({
     id: firstString(event.id, event.global_id, event.url, event.website, event.slug),
     title: htmlToText(localizedString(event.title || event.name)),
-    starts_at: firstString(event.start_date, event.startDate, event.start, event.start_date_utc),
-    ends_at: firstString(event.end_date, event.endDate, event.end, event.end_date_utc),
+    starts_at:
+      normalizeUtcEventDateTime(
+        firstString(
+          event.start_date_utc,
+          event.startDateUtc,
+          event.start_utc,
+          event.starts_at_utc,
+        ),
+      ) ||
+      normalizeSourceEventDateTime(
+        firstString(event.starts_at, event.start_at, event.start_date, event.startDate, event.start),
+        { timezone },
+      ),
+    ends_at:
+      normalizeUtcEventDateTime(
+        firstString(
+          event.end_date_utc,
+          event.endDateUtc,
+          event.end_utc,
+          event.ends_at_utc,
+        ),
+      ) ||
+      normalizeSourceEventDateTime(
+        firstString(event.ends_at, event.end_at, event.end_date, event.endDate, event.end),
+        { timezone },
+      ),
     source_url: sourceUrl,
     place_context: firstString(venue.name, venue.address),
     area: firstString(venue.city, venue.neighborhood),
@@ -404,7 +442,33 @@ function localizedString(value) {
 
 function htmlToText(value) {
   if (typeof value !== "string") return null;
-  return value.replace(/<[^>]+>/g, "").trim() || null;
+  return decodeHtml(value.replace(/<br\s*\/?>/gi, " ").replace(/<[^>]+>/g, " "))
+    .replace(/\s+/g, " ")
+    .trim() || null;
+}
+
+function decodeHtml(value) {
+  return String(value || "")
+    .replace(/&#(\d+);/g, (_match, code) => decodeCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_match, code) =>
+      decodeCodePoint(parseInt(code, 16)),
+    )
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+function decodeCodePoint(value) {
+  try {
+    return Number.isInteger(value) && value >= 0 && value <= 0x10ffff
+      ? String.fromCodePoint(value)
+      : "";
+  } catch (_error) {
+    return "";
+  }
 }
 
 function namedList(value) {
@@ -475,6 +539,7 @@ function resolveDefaultEventsCalendarProvider(env = process.env) {
     label: firstString(env?.PARRANDA_EVENTS_CALENDAR_LABEL) || undefined,
     sourceUrl: firstString(env?.PARRANDA_EVENTS_CALENDAR_SOURCE_URL) || undefined,
     license: firstString(env?.PARRANDA_EVENTS_CALENDAR_LICENSE) || undefined,
+    timezone: firstString(env?.PARRANDA_EVENTS_CALENDAR_TIMEZONE) || undefined,
     status: firstString(env?.PARRANDA_EVENTS_CALENDAR_STATUS) || "candidate",
   });
 }
