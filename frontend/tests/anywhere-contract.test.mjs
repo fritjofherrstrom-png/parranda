@@ -103,11 +103,11 @@ test("a cold-start thin compose schedules ONE silent structure upgrade (never lo
   // Cold first pass: composed route but no place_structure → one silent re-ask
   // after the warm window upgrades the day with districts/map/save/share.
   assert.match(anywherePlannerSource, /needsStructureUpgrade = cls\.status === "composed" && !safe\?\.place_structure/);
-  assert.match(anywherePlannerSource, /safe\?\.live_events\?\.pending \|\| needsStructureUpgrade/);
+  assert.match(anywherePlannerSource, /needsTransientSourceRetry = decision\.shouldRetryTransientSource\(body, cls\)/);
   // Scheduling only happens on non-silent runs → the silent retry can never re-schedule itself.
-  assert.match(anywherePlannerSource, /if \(!silent && \(safe\?\.live_events\?\.pending \|\| needsStructureUpgrade\)\)/);
+  assert.match(anywherePlannerSource, /if \(!silent && \(safe\?\.live_events\?\.pending \|\| needsStructureUpgrade \|\| needsTransientSourceRetry\)\)/);
   // The waiting state is honest and visible.
-  assert.match(anywherePlannerSource, /Läser in distrikt & karta — uppdateras automatiskt strax\./);
+  assert.match(anywherePlannerSource, /Läser in mer från källorna — uppdateras automatiskt strax\./);
   // A silent UPGRADE refreshes the stored entry so save/share use the full day.
   assert.match(anywherePlannerSource, /if \(!silent \|\| safe\?\.place_structure\)/);
 });

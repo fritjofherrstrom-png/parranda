@@ -218,6 +218,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     }: { silent?: boolean; langOverride?: Lang; preferencesOverride?: string[]; dayOffsetOverride?: 0 | 1; walkKeyOverride?: string } = {},
   ) {
     if (!silent) {
+      setUpgradePending(false);
       setPhase("loading");
       setClassification(null);
       setSafeResponse(null);
@@ -269,22 +270,24 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         writeLS(LAST_KEY, entry);
         if (!silent) setRestoredAt(null);
       }
-      // ONE silent re-ask after the warm window covers BOTH cold-start honesty
-      // gaps: (a) live events returned an honest `pending` (feed is background-
-      // warming), and (b) a COLD first pass composed a route but no district
-      // structure (the loader warmed during the request — the re-ask upgrades the
-      // day with districts/map/save/share). Everything is cached by then, so the
-      // retry is cheap. Never loops: scheduling only happens on non-silent runs.
+      // ONE silent re-ask after the warm window covers the bounded cold-start
+      // honesty gaps: (a) live events returned an honest `pending`, (b) a route
+      // composed before its district structure was warm, or (c) a RESOLVED
+      // place hit an explicit transient trusted-source failure. A proven empty
+      // source, ambiguity, or unresolved place never retries. Never loops:
+      // scheduling only happens on non-silent runs.
       const needsStructureUpgrade = cls.status === "composed" && !safe?.place_structure;
-      if (!silent && (safe?.live_events?.pending || needsStructureUpgrade)) {
-        if (needsStructureUpgrade) setUpgradePending(true);
+      const needsTransientSourceRetry = decision.shouldRetryTransientSource(body, cls);
+      if (!silent && (safe?.live_events?.pending || needsStructureUpgrade || needsTransientSourceRetry)) {
+        if (needsStructureUpgrade || needsTransientSourceRetry) setUpgradePending(true);
         if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
         pollTimerRef.current = setTimeout(() => {
           execute(anchor, { silent: true }).catch(() => {});
         }, 9000);
       }
     } catch {
-      if (!silent) setPhase("error");
+      if (silent) setUpgradePending(false);
+      else setPhase("error");
     }
   }
 
@@ -727,6 +730,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       )}
 
       {phase === "done" && classification?.status === "unavailable" && (
+        !upgradePending &&
         <p className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4 text-sm text-parranda-ink/80">
           {t(
             `Parranda kunde inte komponera en dag för ${classification.placeLabel || place} ännu — inget hittas på, inget fejkas.`,
@@ -784,8 +788,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {phase === "done" && upgradePending && !structure && (
         <p className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4 text-sm text-parranda-ink/70" aria-live="polite">
           {t(
-            "Läser in distrikt & karta — uppdateras automatiskt strax.",
-            "Loading districts & map — updates automatically in a moment.",
+            "Läser in mer från källorna — uppdateras automatiskt strax.",
+            "Reading more from the sources — updates automatically in a moment.",
           )}
         </p>
       )}
