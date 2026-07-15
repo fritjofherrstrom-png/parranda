@@ -133,6 +133,9 @@ function resolveEventFeedRegistry(env = process.env) {
             detail_limit: Number.isFinite(Number(f.detail_limit))
               ? Math.max(0, Math.floor(Number(f.detail_limit)))
               : null,
+            detail_budget: Number.isFinite(Number(f.detail_budget))
+              ? Math.max(1, Math.floor(Number(f.detail_budget)))
+              : null,
             sitemap_limit: Number.isFinite(Number(f.sitemap_limit))
               ? Math.max(1, Math.floor(Number(f.sitemap_limit)))
               : null,
@@ -615,6 +618,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs 
       sourceLanguage: source.source_language || undefined,
       routeRoleHint: source.route_role_hint || undefined,
       detailLimit: source.detail_limit || undefined,
+      detailBudget: source.detail_budget || undefined,
       sitemapLimit: source.sitemap_limit || undefined,
       eventPathPrefix: source.event_path_prefix || undefined,
     });

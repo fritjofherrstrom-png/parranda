@@ -611,16 +611,23 @@ stable-HTML source family, not as permission to call Wix's private CMS APIs.
 
 - discovery requires a strong Wix signature plus an event/calendar page signal
   and proposes a `wix_event_sitemap` manifest as `review-needed` only;
-- collection follows same-origin sitemap and detail URLs, with explicit caps on
-  sitemap files, detail pages, bytes, concurrency, and the complete fetch/body
-  timeout lifecycle;
-- a reviewed manifest owns terms, geographic bounds, source trust, language,
-  activation, optional event-path prefix, and IANA timezone;
+- collection manually follows only same-origin redirect chains and verifies the
+  final response origin, with explicit caps on sitemap files, accepted events,
+  total detail requests, bytes, concurrency, redirects, and the complete
+  fetch/body timeout lifecycle;
+- a reviewed manifest owns terms, geographic bounds, source trust, activation,
+  an explicit event-path prefix, a valid IANA timezone, and an explicit `sv` or
+  `en` source language. Missing prerequisites fail before any network request;
 - only factual atoms are retained: title, source URL, date/time, venue/address,
-  and explicitly published coordinates. Editorial descriptions and images are
-  not copied;
-- local clock times remain unresolved without the reviewed timezone, and an
-  explicit passed-event marker or past date remains stale;
+  and language/translation state. Page-global map coordinates are deliberately
+  ignored until reviewed geocoding or source fusion ties geometry to the venue.
+  Editorial descriptions and images are not copied;
+- date ranges preserve both their first and final day; an unresolved range
+  remains timing-unknown rather than silently collapsing to day one;
+- stale and unparseable detail rows do not consume the accepted-event limit,
+  but collection always stops at the reviewed total detail budget. Parser
+  failure is reported separately from a legitimate empty/current-free source;
+- an explicit passed-event marker or past final date remains stale;
 - events with address but no coordinates may inform Pulse after normal gates,
   but cannot silently become bounded route evidence. Later reviewed geocoding
   or place fusion must establish that geometry.
