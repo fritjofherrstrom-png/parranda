@@ -226,6 +226,9 @@ function buildDescriptor(options = {}) {
       "title",
       "starts_at",
       "ends_at",
+      "starts_on",
+      "ends_on",
+      "time_window",
       "source_url",
       "place_context",
       "area",
@@ -323,9 +326,11 @@ function extractWixEventDetail(html, options = {}) {
     title,
     starts_at: timing.starts_at,
     ends_at: timing.ends_at,
+    starts_on: timing.starts_on,
+    ends_on: timing.ends_on,
     listing_date: timing.date_key,
     listing_end_date: timing.end_date_key,
-    time_window: timing.label ? { label: timing.label } : null,
+    time_window: timing.time_window,
     source_url: sourceUrl,
     place_context: place?.text,
     area: place?.area,
@@ -351,16 +356,54 @@ function parseWixEventTiming(dateValue, timeValue, options = {}) {
   const time = parseTimeRange(timeLabel);
   if (!time) {
     return compact({
+      starts_on: dateKey,
+      ends_on: endDateKey,
       date_key: dateKey,
       end_date_key: endDateKey !== dateKey ? endDateKey : null,
+      time_window: {
+        kind: "all_day",
+        starts_on: dateKey,
+        ends_on: endDateKey,
+        label,
+      },
       label,
     }) || {};
   }
   const timezone = normalizeIanaTimezone(options.timezone);
+  const localStart = localClock(time.start);
+  const localEnd = localClock(time.end);
+  const isMultiDay = endDateKey !== dateKey;
+  if (isMultiDay) {
+    return compact({
+      starts_on: dateKey,
+      ends_on: endDateKey,
+      date_key: dateKey,
+      end_date_key: endDateKey,
+      time_window: {
+        kind: "daily",
+        starts_on: dateKey,
+        ends_on: endDateKey,
+        local_start: localStart,
+        local_end: localEnd,
+        timezone,
+        label,
+      },
+      label,
+    }) || {};
+  }
   if (!timezone) {
     return compact({
+      starts_on: dateKey,
+      ends_on: endDateKey,
       date_key: dateKey,
-      end_date_key: endDateKey !== dateKey ? endDateKey : null,
+      time_window: {
+        kind: "daily",
+        starts_on: dateKey,
+        ends_on: endDateKey,
+        local_start: localStart,
+        local_end: localEnd,
+        label,
+      },
       label,
     }) || {};
   }
@@ -378,8 +421,15 @@ function parseWixEventTiming(dateValue, timeValue, options = {}) {
   return compact({
     starts_at: startsAt,
     ends_at: endsAt,
+    starts_on: dateKey,
+    ends_on: endDateKey,
     date_key: dateKey,
-    end_date_key: endDateKey !== dateKey ? endDateKey : null,
+    time_window: {
+      kind: "continuous",
+      starts_at: startsAt,
+      ends_at: endsAt,
+      label,
+    },
     label,
   }) || {};
 }
@@ -574,10 +624,10 @@ async function collectWixDetailEvents({
           eventLanguage: providerOptions.eventLanguage,
           routeRoleHint: providerOptions.routeRoleHint,
         });
-        // A title and source URL alone do not make a time-sensitive event.
-        // Keep valid date-only/all-day rows, but continue past details whose
-        // date could not be resolved at all so they do not consume the yield.
-        if (!event || (!event.starts_at && !event.listing_date)) {
+        // Date-only rows remain truthful source facts, but the current Pulse
+        // contract cannot place them in a daypart. Do not let them consume the
+        // bounded accepted-event budget ahead of later timed rows.
+        if (!event || !hasUsableWixTiming(event)) {
           return { status: "parse_failed" };
         }
         if (event.freshness === "stale") return { status: "stale" };
@@ -835,6 +885,11 @@ function localDateTime(date, time) {
   return `${toDateKey(date)} ${String(time.hour).padStart(2, "0")}:${String(time.minute).padStart(2, "0")}:00`;
 }
 
+function localClock(time) {
+  if (!time) return null;
+  return `${String(time.hour).padStart(2, "0")}:${String(time.minute).padStart(2, "0")}`;
+}
+
 function addDays(parts, days) {
   const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + days));
   return {
@@ -846,6 +901,18 @@ function addDays(parts, days) {
 
 function minutesOfDay(time) {
   return time.hour * 60 + time.minute;
+}
+
+function hasUsableWixTiming(event) {
+  if (event?.starts_at) return true;
+  const window = event?.time_window;
+  return Boolean(
+    window?.kind === "daily" &&
+    event.starts_on &&
+    window.local_start &&
+    window.local_end &&
+    normalizeIanaTimezone(window.timezone),
+  );
 }
 
 function translationStatus(language) {
