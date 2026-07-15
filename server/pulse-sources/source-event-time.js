@@ -4,7 +4,7 @@ function normalizeUtcEventDateTime(value) {
   const raw = firstString(value);
   if (!raw) return null;
   if (hasExplicitOffset(raw)) return validDateTimeOrNull(raw);
-  if (isDateOnly(raw)) return validDateOnlyOrNull(raw);
+  if (isDateOnly(raw)) return null;
   const parts = parseFloatingDateTime(raw);
   return parts ? utcPartsToIso(parts) : null;
 }
@@ -13,11 +13,16 @@ function normalizeSourceEventDateTime(value, { timezone } = {}) {
   const raw = firstString(value);
   if (!raw) return null;
   if (hasExplicitOffset(raw)) return validDateTimeOrNull(raw);
-  if (isDateOnly(raw)) return validDateOnlyOrNull(raw);
+  if (isDateOnly(raw)) return null;
   const parts = parseFloatingDateTime(raw);
   const trustedTimezone = normalizeIanaTimezone(timezone);
   if (!parts || !trustedTimezone) return null;
   return zonedPartsToUtcIso(parts, trustedTimezone);
+}
+
+function normalizeSourceEventDate(value) {
+  const raw = firstString(value);
+  return raw && isDateOnly(raw) ? validDateOnlyOrNull(raw) : null;
 }
 
 function normalizeIanaTimezone(value) {
@@ -141,11 +146,14 @@ function zonedPartsToUtcIso(parts, timezone) {
     parts.minute,
     parts.second,
   );
-  let candidate = target;
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const rendered = datePartsInTimezone(candidate, timezone);
-    if (!rendered) return null;
-    const delta = target - Date.UTC(
+  const possibleOffsets = new Set();
+  const sampleStepMs = 3 * 60 * 60 * 1000;
+  const sampleRadiusMs = 36 * 60 * 60 * 1000;
+  for (let delta = -sampleRadiusMs; delta <= sampleRadiusMs; delta += sampleStepMs) {
+    const sample = target + delta;
+    const rendered = datePartsInTimezone(sample, timezone);
+    if (!rendered) continue;
+    const renderedAsUtc = Date.UTC(
       rendered.year,
       rendered.month - 1,
       rendered.day,
@@ -153,12 +161,21 @@ function zonedPartsToUtcIso(parts, timezone) {
       rendered.minute,
       rendered.second,
     );
-    candidate += delta;
-    if (delta === 0) break;
+    possibleOffsets.add(renderedAsUtc - sample);
   }
-  const rendered = datePartsInTimezone(candidate, timezone);
-  if (!rendered || !sameDateTimeParts(rendered, parts)) return null;
-  return new Date(candidate + parts.millisecond).toISOString();
+
+  const matches = [...possibleOffsets]
+    .map((offset) => target - offset)
+    .filter((candidate) => {
+      const rendered = datePartsInTimezone(candidate, timezone);
+      return rendered && sameDateTimeParts(rendered, parts);
+    });
+
+  // A gap has no matching instant and a DST fold has two. Both are unsafe
+  // without an explicit source offset, so floating local time fails closed.
+  const uniqueMatches = [...new Set(matches)];
+  if (uniqueMatches.length !== 1) return null;
+  return new Date(uniqueMatches[0] + parts.millisecond).toISOString();
 }
 
 function sameDateTimeParts(left, right) {
@@ -174,6 +191,7 @@ function firstString(value) {
 module.exports = {
   datePartsInTimezone,
   normalizeIanaTimezone,
+  normalizeSourceEventDate,
   normalizeSourceEventDateTime,
   normalizeUtcEventDateTime,
 };

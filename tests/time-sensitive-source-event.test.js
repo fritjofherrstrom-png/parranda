@@ -113,6 +113,79 @@ test("reviewed timezone prevents UTC date from masking a local next day", () => 
   assert.equal(normalized.timing_relevance, "future");
 });
 
+test("local date-only facts stay local and never become UTC midnight instants", () => {
+  const normalized = normalizeTimeSensitiveSourceEvent(
+    event({
+      starts_at: "2026-07-15",
+      ends_at: "2026-07-17",
+    }),
+    { now: NOW, timezone: "Europe/Stockholm" },
+  );
+
+  assert.equal(normalized.starts_at, undefined);
+  assert.equal(normalized.ends_at, undefined);
+  assert.equal(normalized.starts_on, "2026-07-15");
+  assert.equal(normalized.ends_on, "2026-07-17");
+  assert.deepEqual(normalized.time_window, {
+    kind: "all_day",
+    starts_on: "2026-07-15",
+    ends_on: "2026-07-17",
+  });
+  assert.equal(normalized.timing_relevance, "unknown");
+});
+
+test("daily windows do not become continuous multi-day events between openings", () => {
+  const dailyEvent = event({
+    starts_at: null,
+    ends_at: null,
+    starts_on: "2026-07-15",
+    ends_on: "2026-07-17",
+    time_window: {
+      kind: "daily",
+      local_start: "10:00",
+      local_end: "17:00",
+    },
+  });
+  const betweenOpenings = normalizeTimeSensitiveSourceEvent(dailyEvent, {
+    now: "2026-07-15T18:00:00.000Z",
+    timezone: "Europe/Stockholm",
+  });
+  const duringOpening = normalizeTimeSensitiveSourceEvent(dailyEvent, {
+    now: "2026-07-16T10:00:00.000Z",
+    timezone: "Europe/Stockholm",
+  });
+  const afterFinalOpening = normalizeTimeSensitiveSourceEvent(dailyEvent, {
+    now: "2026-07-17T16:00:00.000Z",
+    timezone: "Europe/Stockholm",
+  });
+
+  assert.equal(betweenOpenings.timing_relevance, "future");
+  assert.equal(duringOpening.timing_relevance, "now");
+  assert.equal(afterFinalOpening.timing_relevance, "stale");
+  assert.equal(duringOpening.starts_at, undefined);
+  assert.deepEqual(duringOpening.time_window, {
+    kind: "daily",
+    starts_on: "2026-07-15",
+    ends_on: "2026-07-17",
+    local_start: "10:00",
+    local_end: "17:00",
+    timezone: "Europe/Stockholm",
+  });
+});
+
+test("continuous multi-day events remain explicit instants", () => {
+  const normalized = normalizeTimeSensitiveSourceEvent(
+    event({
+      starts_at: "2026-07-15T08:00:00.000Z",
+      ends_at: "2026-07-17T15:00:00.000Z",
+    }),
+    { now: "2026-07-16T02:00:00.000Z", timezone: "Europe/Stockholm" },
+  );
+
+  assert.equal(normalized.timing_relevance, "now");
+  assert.equal(normalized.time_window.kind, "continuous");
+});
+
 test("expired or stale events are downgraded instead of promoted", () => {
   const expired = normalizeTimeSensitiveSourceEvent(
     event({

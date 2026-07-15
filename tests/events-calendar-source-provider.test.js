@@ -145,6 +145,21 @@ test("nonexistent local times fail closed across daylight-saving gaps", () => {
   assert.equal(raw.ends_at, "2026-03-29T01:30:00.000Z");
 });
 
+test("ambiguous local times fail closed across daylight-saving folds", () => {
+  const ambiguous = mapEventsCalendarEventToRaw(tecEvent({
+    start_date: "2026-10-25 02:30:00",
+    end_date: "2026-10-25 04:00:00",
+  }), { timezone: "Europe/Stockholm" });
+  const explicit = mapEventsCalendarEventToRaw(tecEvent({
+    start_date: "2026-10-25T02:30:00+02:00",
+    end_date: "2026-10-25T04:00:00+01:00",
+  }), { timezone: "Europe/Stockholm" });
+
+  assert.equal(ambiguous.starts_at, undefined);
+  assert.equal(ambiguous.ends_at, "2026-10-25T03:00:00.000Z");
+  assert.equal(explicit.starts_at, "2026-10-25T02:30:00+02:00");
+});
+
 test("explicit UTC fields win over ambiguous local REST fields", () => {
   const raw = mapEventsCalendarEventToRaw(tecEvent({
     start_date: "2026-09-12 18:00:00",
@@ -218,6 +233,24 @@ test("parses iCal VEVENT feeds and preserves local-language metadata", () => {
   assert.equal(raw.recurrence, "FREQ=WEEKLY;COUNT=4");
   assert.equal(raw.event_language, "el");
   assert.equal(raw.translation_status, "needed");
+});
+
+test("iCal all-day dates remain local calendar facts", () => {
+  const extracted = extractIcalEvents(icsFixture({
+    dtstart: "DTSTART;VALUE=DATE:20260912",
+    dtend: "DTEND;VALUE=DATE:20260915",
+  }));
+  const raw = mapEventsCalendarEventToRaw(extracted[0]);
+
+  assert.equal(raw.starts_at, undefined);
+  assert.equal(raw.ends_at, undefined);
+  assert.equal(raw.starts_on, "2026-09-12");
+  assert.equal(raw.ends_on, "2026-09-14", "iCal DTEND date is exclusive");
+  assert.deepEqual(raw.time_window, {
+    kind: "all_day",
+    starts_on: "2026-09-12",
+    ends_on: "2026-09-14",
+  });
 });
 
 test("iCal Zulu date-times convert to ISO UTC, but floating/TZID date-times stay unknown", () => {
