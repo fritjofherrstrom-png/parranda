@@ -128,6 +128,7 @@ test("the feed registry allowlists reusable local adapters and preserves legacy 
       { id: "jsonld", adapter: "schema_org_html", endpoint: "https://venue.example/calendar", bbox: [10, 50, 20, 60] },
       { id: "ics", adapter: "ics", endpoint: "https://city.example/calendar.ics", bbox: [10, 50, 20, 60] },
       { id: "sitevision", adapter: "sitevision", endpoint: "https://municipality.example/events", bbox: [10, 50, 20, 60] },
+      { id: "wix", adapter: "wix_sitemap", endpoint: "https://destination.example/sitemap.xml", bbox: [10, 50, 20, 60] },
       { id: "unknown", adapter: "arbitrary_scraper", endpoint: "https://unknown.example/events", bbox: [10, 50, 20, 60] },
     ]),
   });
@@ -137,6 +138,7 @@ test("the feed registry allowlists reusable local adapters and preserves legacy 
     ["jsonld", "schema_org_html"],
     ["ics", "ical"],
     ["sitevision", "sitevision_calendar"],
+    ["wix", "wix_event_sitemap"],
   ]);
   assert.ok(!configured.some((row) => row.id === "unknown"), "unknown parser code cannot enter bounded runtime");
 });

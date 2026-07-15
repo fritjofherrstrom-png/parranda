@@ -92,9 +92,9 @@ candidate evaluation:
 - discovered machine-readable interfaces become review-needed manifest
   candidates only. They never become active runtime providers automatically;
 - RSS and unrecognized generic HTML calendars remain adapter-review work, while
-  recognized Sitevision event calendars can now produce a review-needed
-  `sitevision_calendar` manifest for the bounded generic adapter. Social links remain
-  discovery/corroboration hints rather than event truth.
+  recognized Sitevision calendars and Wix event sites with public sitemaps can
+  produce review-needed manifests for their bounded generic adapters. Social
+  links remain discovery/corroboration hints rather than event truth.
 
 The operator harness is default-off. Without the live switch it emits only the
 query/seed plan:
@@ -601,3 +601,39 @@ This makes reviewed municipal and regional Sitevision calendars consumable
 through the same provider registry and `time_sensitive_events` path. It does
 not activate a municipality, promote an event into Pulse, or turn an event into
 a route stop by itself.
+
+## Reviewed Wix Event Sitemap Adapter
+
+Wix event sites can expose a public sitemap index, event-only dynamic sitemaps,
+and server-rendered event detail pages even when no public CMS API or Event
+JSON-LD is available. Parranda treats that declared public surface as a bounded
+stable-HTML source family, not as permission to call Wix's private CMS APIs.
+
+- discovery requires a strong Wix signature plus an event/calendar page signal
+  and proposes a `wix_event_sitemap` manifest as `review-needed` only;
+- collection follows same-origin sitemap and detail URLs, with explicit caps on
+  sitemap files, detail pages, bytes, concurrency, and the complete fetch/body
+  timeout lifecycle;
+- a reviewed manifest owns terms, geographic bounds, source trust, language,
+  activation, optional event-path prefix, and IANA timezone;
+- only factual atoms are retained: title, source URL, date/time, venue/address,
+  and explicitly published coordinates. Editorial descriptions and images are
+  not copied;
+- local clock times remain unresolved without the reviewed timezone, and an
+  explicit passed-event marker or past date remains stale;
+- events with address but no coordinates may inform Pulse after normal gates,
+  but cannot silently become bounded route evidence. Later reviewed geocoding
+  or place fusion must establish that geometry.
+
+This adapter makes destination and regional Wix calendars provider-consumable
+without introducing a destination branch. It is not active by default and does
+not claim complete source coverage: the bounded detail sample and source-health
+output must be evaluated before an operator promotes a reviewed manifest.
+
+Worked example, not runtime configuration: the public
+[Visit Ystad Österlen sitemap](https://www.visitystadosterlen.se/sitemap.xml)
+exposes Wix-generated event sitemaps whose public SSR detail pages contain short
+factual atoms such as title, date/time, venue/address, and canonical source URL.
+A bounded live probe normalized current rows through this adapter. The source
+still requires explicit terms, scope, timezone, yield, and source-health review
+before a deployment manifest may activate it.
