@@ -65,6 +65,18 @@ function normalizeQuery(raw) {
   return collapsed;
 }
 
+function normalizeNameForMatch(raw) {
+  if (typeof raw !== "string") return null;
+  const normalized = raw
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+  return normalized || null;
+}
+
 function toRawCandidate(result) {
   if (!result || typeof result !== "object") return null;
   const lat = Number(result.lat);
@@ -78,8 +90,9 @@ function toRawCandidate(result) {
       : typeof result.name === "string" && result.name.trim()
         ? result.name.trim()
         : null;
+  const name = typeof result.name === "string" && result.name.trim() ? result.name.trim() : null;
   const osmRef = result.osm_type && result.osm_id ? `${result.osm_type}/${result.osm_id}` : null;
-  return { lat, lng, importance, label, osm_ref: osmRef };
+  return { lat, lng, importance, label, name, osm_ref: osmRef };
 }
 
 /**
@@ -87,7 +100,7 @@ function toRawCandidate(result) {
  * a single clear match anchors; genuine near-ties stay strong so the intake
  * gate reports `ambiguous_place`; vague/junk matches drop to "low".
  */
-function classifyConfidences(rawCandidates) {
+function classifyConfidences(rawCandidates, query = null) {
   if (!rawCandidates.length) return [];
   const sorted = [...rawCandidates].sort((a, b) => (b.importance ?? -1) - (a.importance ?? -1));
 
@@ -108,6 +121,25 @@ function classifyConfidences(rawCandidates) {
   // both to "medium" and the intake would fire `ambiguous_place` on junk.
   if (topImportance < JUNK_IMPORTANCE_FLOOR) {
     return sorted.map((candidate) => ({ ...candidate, confidence: "low" }));
+  }
+
+  // Nominatim commonly returns both a settlement and its surrounding
+  // municipality as near-ties (for example `Simrishamn` and `Simrishamns
+  // kommun`). That is one user intent, not two competing places. When exactly
+  // one non-junk candidate's own name matches the complete query, prefer it and
+  // keep the administrative/container result weak. Multiple exact-name matches
+  // (for example distinct Springfields) remain ambiguous and fail closed in the
+  // intake layer.
+  const normalizedQuery = normalizeNameForMatch(query);
+  const exactNameMatches = normalizedQuery
+    ? sorted.filter((candidate) => normalizeNameForMatch(candidate.name) === normalizedQuery)
+    : [];
+  if (exactNameMatches.length === 1 && exactNameMatches[0].importance >= JUNK_IMPORTANCE_FLOOR) {
+    const exactMatch = exactNameMatches[0];
+    return sorted.map((candidate) => ({
+      ...candidate,
+      confidence: candidate === exactMatch ? "medium" : "low",
+    }));
   }
 
   const inAnchorTier = (candidate) =>
@@ -205,7 +237,7 @@ function createNominatimPlaceResolver({
       const data = await response.json();
       if (!Array.isArray(data)) return { ok: false, candidates: [] };
       const raw = data.map(toRawCandidate).filter(Boolean);
-      return { ok: true, candidates: classifyConfidences(raw).map(finalizeCandidate) };
+      return { ok: true, candidates: classifyConfidences(raw, query).map(finalizeCandidate) };
     } catch (_error) {
       return { ok: false, candidates: [] };
     } finally {
