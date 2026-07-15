@@ -26,6 +26,11 @@ const { createHtmlVenueCalendarProvider } = require("../pulse-sources/html-venue
 const { createSitevisionCalendarProvider } = require("../pulse-sources/sitevision-calendar-provider");
 const { createWixEventSitemapProvider } = require("../pulse-sources/wix-event-sitemap-provider");
 const { normalizeTimeSensitiveSourceEvent } = require("../pulse-sources/time-sensitive-event");
+const {
+  datePartsInTimezone,
+  normalizeIanaTimezone,
+  normalizeSourceEventDate,
+} = require("../pulse-sources/source-event-time");
 const { scoreTimeSensitiveEventSalience } = require("../pulse-engine/time-sensitive-events");
 const { createSourceCache } = require("./source-cache");
 const { classifyCulturalSalience } = require("../pulse-engine/cultural-salience");
@@ -230,6 +235,18 @@ function withinHorizonDays(startsAtIso, now, days) {
   return starts >= now && starts <= horizon;
 }
 
+function withinEventHorizon(event, now, days) {
+  if (event?.starts_at) return withinHorizonDays(event.starts_at, now, days);
+  const timezone = normalizeIanaTimezone(event?.timezone || event?.time_window?.timezone);
+  const localNow = now && timezone ? datePartsInTimezone(now, timezone) : null;
+  const startsOn = normalizeSourceEventDate(event?.starts_on || event?.time_window?.starts_on);
+  const endsOn = normalizeSourceEventDate(event?.ends_on || event?.time_window?.ends_on) || startsOn;
+  if (!localNow || !startsOn || !endsOn) return false;
+  const today = `${localNow.year}-${String(localNow.month).padStart(2, "0")}-${String(localNow.day).padStart(2, "0")}`;
+  const horizon = addDateOnlyDays(today, days);
+  return Boolean(horizon && startsOn <= horizon && endsOn >= today);
+}
+
 // A genuine happening is time-bounded — not permanent infrastructure. Excludes
 // always-open exhibitions (a 2001→2030 "event" the #279 normalizer rates `now`),
 // malformed ancient dates (the feed's occasional year-0026 row), and undated
@@ -237,6 +254,22 @@ function withinHorizonDays(startsAtIso, now, days) {
 // the feed-level max_duration query, and it is what the deterministic tests
 // exercise (they inject payloads, not query params).
 function isEphemeralHappening(event, now) {
+  const window = event?.time_window;
+  if (window?.kind === "daily") {
+    const startsOn = normalizeSourceEventDate(event.starts_on || window.starts_on);
+    const endsOn = normalizeSourceEventDate(event.ends_on || window.ends_on) || startsOn;
+    const timezone = normalizeIanaTimezone(event.timezone || window.timezone);
+    if (!startsOn || !endsOn || !timezone || !validLocalClock(window.local_start) || !validLocalClock(window.local_end)) {
+      return false;
+    }
+    return boundedDateOnlyRange(startsOn, endsOn);
+  }
+  if (window?.kind === "all_day") {
+    const startsOn = normalizeSourceEventDate(event.starts_on || window.starts_on);
+    const endsOn = normalizeSourceEventDate(event.ends_on || window.ends_on) || startsOn;
+    return Boolean(startsOn && endsOn && boundedDateOnlyRange(startsOn, endsOn));
+  }
+
   const start = event.starts_at ? new Date(event.starts_at) : null;
   if (!start || !Number.isFinite(start.getTime())) return false;
   if (start.getUTCFullYear() < 2000) return false; // malformed origin date
@@ -286,6 +319,9 @@ function toEventView(event, feed, { eventTimezone = null } = {}) {
     title,
     starts_at: event.starts_at || null,
     ends_at: event.ends_at || null,
+    starts_on: event.starts_on || null,
+    ends_on: event.ends_on || null,
+    time_window: event.time_window || null,
     timing_relevance: event.timing_relevance || null,
     place: event.place_context || event.area || null,
     lat: Number.isFinite(event.lat) ? event.lat : null,
@@ -314,7 +350,7 @@ function rankAndCap(views) {
     .sort(
       (a, b) =>
         (b.salience_score || 0) - (a.salience_score || 0) ||
-        String(a.starts_at || "").localeCompare(String(b.starts_at || "")) ||
+        String(a.starts_at || a.starts_on || "").localeCompare(String(b.starts_at || b.starts_on || "")) ||
         String(a.id || "").localeCompare(String(b.id || "")),
     );
   return dedupeViews(sorted).slice(0, MAX_PER_BUCKET);
@@ -425,7 +461,7 @@ async function collectAnchorEvents({
       tonight.push(view);
     } else if (
       event.timing_relevance === "future" &&
-      withinHorizonDays(event.starts_at, nowDate, THIS_WEEK_HORIZON_DAYS)
+      withinEventHorizon(event, nowDate, THIS_WEEK_HORIZON_DAYS)
     ) {
       thisWeek.push(view);
     }
@@ -458,6 +494,32 @@ async function collectAnchorEvents({
       source_health: sourceHealth,
     },
   };
+}
+
+function boundedDateOnlyRange(startsOn, endsOn) {
+  const startOrdinal = dateOnlyOrdinal(startsOn);
+  const endOrdinal = dateOnlyOrdinal(endsOn);
+  if (startOrdinal == null || endOrdinal == null || endOrdinal < startOrdinal) return false;
+  return endOrdinal - startOrdinal <= MAX_HAPPENING_DAYS;
+}
+
+function dateOnlyOrdinal(value) {
+  const normalized = normalizeSourceEventDate(value);
+  if (!normalized) return null;
+  const [year, month, day] = normalized.split("-").map(Number);
+  return Math.floor(Date.UTC(year, month - 1, day) / (24 * 60 * 60 * 1000));
+}
+
+function addDateOnlyDays(value, days) {
+  const ordinal = dateOnlyOrdinal(value);
+  if (ordinal == null) return null;
+  return new Date((ordinal + days) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function validLocalClock(value) {
+  const match = String(value || "").match(/^(\d{2}):(\d{2})(?::\d{2})?$/);
+  if (!match) return false;
+  return Number(match[1]) <= 23 && Number(match[2]) <= 59;
 }
 
 function applyReviewedSourceTrust(rawEvent = {}, source = {}) {
@@ -830,4 +892,6 @@ module.exports = {
   LOCAL_EVENT_ADAPTERS,
   normalizeLocalEventAdapter,
   createLocalEventProvider,
+  isEphemeralHappening,
+  toEventView,
 };
