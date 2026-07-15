@@ -31,6 +31,7 @@ const MANIFEST_ADAPTERS = new Set([
   "schema_org_html",
   "html_venue_calendar",
   "sitevision_calendar",
+  "wix_event_sitemap",
 ]);
 
 function buildLocalEventDiscoveryQueries({
@@ -163,6 +164,10 @@ function inspectEventSourcePage({
 
   if (hasSitevisionCalendarSignature(source)) {
     addCandidate("sitevision_calendar", pageUrl);
+  } else if (hasWixEventSitemapSignature(source, pageUrl)) {
+    addCandidate("wix_event_sitemap", new URL("/sitemap.xml", pageUrl).toString(), {
+      inferredEndpoint: true,
+    });
   } else if (hasCompatibleVenueCalendarSignature(source)) {
     addCandidate("html_venue_calendar", pageUrl);
   } else if (hasGenericEventListingSignature(source)) {
@@ -433,6 +438,20 @@ function buildDetectedCandidate({
       notes: "sitevision_calendar_signature_requires_manifest_review",
     };
   }
+  if (kind === "wix_event_sitemap") {
+    return {
+      ...common,
+      adapter: "wix_event_sitemap",
+      extraction_tier: "stable_html_calendar",
+      extractable: baseExtractable({
+        end: true,
+        venue: true,
+        venue_geocodable: true,
+        stable_html: true,
+      }),
+      notes: "wix_public_sitemap_and_ssr_details_require_manifest_review",
+    };
+  }
   return {
     ...common,
     adapter: "needs_adapter",
@@ -454,6 +473,7 @@ function buildReviewedManifestCandidate(candidate, { seed = {}, context = {} } =
     schema_org_event: "schema_org_html",
     venue_calendar: "html_venue_calendar",
     sitevision_calendar: "sitevision_calendar",
+    wix_event_sitemap: "wix_event_sitemap",
   };
   const adapter = adapterMap[candidate.adapter];
   if (!MANIFEST_ADAPTERS.has(adapter)) return null;
@@ -838,6 +858,20 @@ function hasSitevisionCalendarSignature(html) {
   );
 }
 
+function hasWixEventSitemapSignature(html, pageUrl) {
+  const source = String(html || "");
+  const wix =
+    /<meta\b[^>]*name=["']generator["'][^>]*content=["'][^"']*Wix/i.test(source) ||
+    /id=["']wix-warmup-data["']/i.test(source);
+  if (!wix) return false;
+  const pageSignals = [
+    String(pageUrl || ""),
+    firstMatch(source, /<title\b[^>]*>([\s\S]*?)<\/title>/i),
+    firstMatch(source, /<meta\b[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i),
+  ].filter(Boolean).join(" ");
+  return /(?:event|events|evenemang|kalender|calendar)/i.test(pageSignals);
+}
+
 function hasGenericEventListingSignature(html) {
   const source = String(html || "");
   const hasTime = /<time\b[^>]*datetime\s*=/i.test(source);
@@ -1159,6 +1193,11 @@ function uniqueStrings(values) {
     out.push(text);
   }
   return out;
+}
+
+function firstMatch(value, pattern) {
+  const match = String(value || "").match(pattern);
+  return match ? match[1] : null;
 }
 
 function firstString(...values) {

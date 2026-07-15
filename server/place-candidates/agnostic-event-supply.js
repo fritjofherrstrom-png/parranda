@@ -24,6 +24,7 @@ const { createSchemaOrgEventProvider } = require("../pulse-sources/schema-org-ev
 const { createEventsCalendarProvider } = require("../pulse-sources/events-calendar-source-provider");
 const { createHtmlVenueCalendarProvider } = require("../pulse-sources/html-venue-calendar-provider");
 const { createSitevisionCalendarProvider } = require("../pulse-sources/sitevision-calendar-provider");
+const { createWixEventSitemapProvider } = require("../pulse-sources/wix-event-sitemap-provider");
 const { normalizeTimeSensitiveSourceEvent } = require("../pulse-sources/time-sensitive-event");
 const { scoreTimeSensitiveEventSalience } = require("../pulse-engine/time-sensitive-events");
 const { createSourceCache } = require("./source-cache");
@@ -60,6 +61,7 @@ const LOCAL_EVENT_ADAPTERS = new Set([
   "ical",
   "html_venue_calendar",
   "sitevision_calendar",
+  "wix_event_sitemap",
 ]);
 
 // A single open municipal feed, kept as a NAMED FIXTURE — not a product default.
@@ -131,6 +133,10 @@ function resolveEventFeedRegistry(env = process.env) {
             detail_limit: Number.isFinite(Number(f.detail_limit))
               ? Math.max(0, Math.floor(Number(f.detail_limit)))
               : null,
+            sitemap_limit: Number.isFinite(Number(f.sitemap_limit))
+              ? Math.max(1, Math.floor(Number(f.sitemap_limit)))
+              : null,
+            event_path_prefix: firstString(f.event_path_prefix, f.eventPathPrefix),
             // Configuring an endpoint proves collection intent, not ownership
             // or official status. Missing review metadata stays conservative.
             source_tier: f.source_tier != null ? String(f.source_tier) : "unknown",
@@ -600,6 +606,19 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs 
       detailLimit: source.detail_limit || undefined,
     });
   }
+  if (adapter === "wix_event_sitemap") {
+    return createWixEventSitemapProvider({
+      ...common,
+      status: "active",
+      sitemapUrl: endpoint,
+      timezone: source.timezone || undefined,
+      sourceLanguage: source.source_language || undefined,
+      routeRoleHint: source.route_role_hint || undefined,
+      detailLimit: source.detail_limit || undefined,
+      sitemapLimit: source.sitemap_limit || undefined,
+      eventPathPrefix: source.event_path_prefix || undefined,
+    });
+  }
   return null;
 }
 
@@ -691,6 +710,9 @@ function normalizeLocalEventAdapter(value) {
     venue_calendar: "html_venue_calendar",
     sitevision: "sitevision_calendar",
     sitevision_event_calendar: "sitevision_calendar",
+    wix: "wix_event_sitemap",
+    wix_event_calendar: "wix_event_sitemap",
+    wix_sitemap: "wix_event_sitemap",
   };
   const normalized = aliases[raw] || raw;
   return LOCAL_EVENT_ADAPTERS.has(normalized) ? normalized : null;
