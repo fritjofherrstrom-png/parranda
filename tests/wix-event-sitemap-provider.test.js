@@ -9,6 +9,9 @@ const {
   extractWixSitemapDocument,
   parseWixEventTiming,
 } = require("../server/pulse-sources/wix-event-sitemap-provider");
+const {
+  normalizeTimeSensitiveSourceEvent,
+} = require("../server/pulse-sources/time-sensitive-event");
 const { collectPulseSourcesForCity } = require("../server/pulse-sources/provider-registry");
 const {
   collectAnchorEvents,
@@ -138,22 +141,56 @@ test("local Wix clock remains unresolved without a reviewed timezone", () => {
   assert.equal(event.starts_at, undefined);
 });
 
-test("multi-day ranges keep their final day and unresolved ranges never collapse", () => {
+test("multi-day daily windows never collapse into a continuous interval", () => {
   const range = parseWixEventTiming("15 juli - 17 juli", "10:00 - 17:00", {
     collectionDate: "2026-07-15",
     timezone: "Europe/Stockholm",
   });
-  assert.equal(range.starts_at, "2026-07-15T08:00:00.000Z");
-  assert.equal(range.ends_at, "2026-07-17T15:00:00.000Z");
+  assert.equal(range.starts_at, undefined);
+  assert.equal(range.ends_at, undefined);
+  assert.equal(range.starts_on, "2026-07-15");
+  assert.equal(range.ends_on, "2026-07-17");
   assert.equal(range.date_key, "2026-07-15");
   assert.equal(range.end_date_key, "2026-07-17");
+  assert.deepEqual(range.time_window, {
+    kind: "daily",
+    starts_on: "2026-07-15",
+    ends_on: "2026-07-17",
+    local_start: "10:00",
+    local_end: "17:00",
+    timezone: "Europe/Stockholm",
+    label: "15 juli - 17 juli · 10:00 - 17:00",
+  });
+
+  const betweenOpenings = normalizeTimeSensitiveSourceEvent({
+    id: "daily-market",
+    title: "Daily market",
+    source_url: EVENT_ONE,
+    ...range,
+  }, {
+    timezone: "Europe/Stockholm",
+    now: "2026-07-15T18:00:00.000Z",
+  });
+  assert.equal(betweenOpenings.timing_relevance, "future");
+
+  const duringOpening = normalizeTimeSensitiveSourceEvent({
+    id: "daily-market",
+    title: "Daily market",
+    source_url: EVENT_ONE,
+    ...range,
+  }, {
+    timezone: "Europe/Stockholm",
+    now: "2026-07-16T09:00:00.000Z",
+  });
+  assert.equal(duringOpening.timing_relevance, "now");
 
   const englishRange = parseWixEventTiming("July 15 - July 17", "10:00 - 17:00", {
     collectionDate: "2026-07-15",
     timezone: "Europe/Stockholm",
   });
-  assert.equal(englishRange.starts_at, "2026-07-15T08:00:00.000Z");
-  assert.equal(englishRange.ends_at, "2026-07-17T15:00:00.000Z");
+  assert.equal(englishRange.starts_on, "2026-07-15");
+  assert.equal(englishRange.ends_on, "2026-07-17");
+  assert.equal(englishRange.time_window.kind, "daily");
 
   const unresolved = parseWixEventTiming("15 juli - senare", "10:00 - 17:00", {
     collectionDate: "2026-07-15",
@@ -169,7 +206,10 @@ test("multi-day ranges keep their final day and unresolved ranges never collapse
     sourceLanguage: "sv",
   });
   assert.equal(ongoing.freshness, undefined, "an ongoing range is not stale from its first day");
-  assert.equal(ongoing.ends_at, "2026-07-17T19:00:00.000Z");
+  assert.equal(ongoing.starts_on, "2026-07-14");
+  assert.equal(ongoing.ends_on, "2026-07-17");
+  assert.equal(ongoing.ends_at, undefined);
+  assert.equal(ongoing.time_window.kind, "daily");
 });
 
 test("organizer contact text is not promoted as a venue address", () => {
@@ -416,6 +456,56 @@ test("unresolved event timing does not consume the accepted-event limit", async 
   assert.equal(result.time_sensitive_events.length, 1);
   assert.equal(result.time_sensitive_events[0].title, "Tonight");
   assert.equal(result.time_sensitive_events[0].timing_relevance, "tonight");
+});
+
+test("date-only facts stay local and do not consume the accepted-event limit", async () => {
+  const dateOnly = extractWixEventDetail(detailHtml({
+    title: "All-day listing",
+    date: "15 juli - 17 juli",
+    time: "Tider meddelas",
+  }), {
+    sourceUrl: EVENT_ONE,
+    collectionDate: "2026-07-15",
+    timezone: "Europe/Stockholm",
+    sourceLanguage: "sv",
+  });
+  assert.equal(dateOnly.starts_at, undefined);
+  assert.equal(dateOnly.ends_at, undefined);
+  assert.equal(dateOnly.starts_on, "2026-07-15");
+  assert.equal(dateOnly.ends_on, "2026-07-17");
+  assert.equal(dateOnly.time_window.kind, "all_day");
+
+  const detailCalls = [];
+  const provider = createWixEventSitemapProvider({
+    endpoint: ROOT,
+    status: "active",
+    timezone: "Europe/Stockholm",
+    sourceLanguage: "sv",
+    eventPathPrefix: "/events-1/",
+    detailLimit: 1,
+    detailBudget: 2,
+    detailConcurrency: 1,
+    fetcher: async (url) => {
+      if (String(url) === ROOT) return textResponse(sitemapIndex());
+      if (String(url) === CHILD) return textResponse(eventSitemap());
+      detailCalls.push(String(url));
+      if (String(url) === EVENT_ONE) {
+        return textResponse(detailHtml({
+          title: "All-day listing",
+          date: "15 juli - 17 juli",
+          time: "Tider meddelas",
+        }));
+      }
+      return textResponse(detailHtml({ title: "Tonight", date: "15 juli" }));
+    },
+  });
+  const result = await collectPulseSourcesForCity(city, {
+    providerSpecs: [provider],
+    context: { date: "2026-07-15", now: new Date("2026-07-15T15:30:00.000Z") },
+  });
+  assert.deepEqual(detailCalls, [EVENT_ONE, EVENT_TWO]);
+  assert.equal(result.time_sensitive_events.length, 1);
+  assert.equal(result.time_sensitive_events[0].title, "Tonight");
 });
 
 test("newer sitemap lastmod wins deterministically before the total detail budget", async () => {
