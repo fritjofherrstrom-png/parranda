@@ -3,6 +3,7 @@ const {
   datePartsInTimezone,
   normalizeIanaTimezone,
   normalizeSourceEventDate,
+  normalizeSourceEventDateTime,
 } = require("./source-event-time");
 
 const VALID_TIMING_RELEVANCE = new Set(["now", "today", "tonight", "future", "stale", "unknown"]);
@@ -13,15 +14,15 @@ function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
     return null;
   }
 
-  const now = parseInstantDate(options.now || rawEvent.now);
+  const timezone = normalizeIanaTimezone(options.timezone);
+  const now = parseDate(options.now || rawEvent.now);
   const rawStartsAt = firstString(rawEvent.starts_at, rawEvent.start_at, rawEvent.start_date);
   const rawEndsAt = firstString(rawEvent.ends_at, rawEvent.end_at, rawEvent.end_date);
-  const startsAt = parseInstantDate(rawStartsAt);
-  const endsAt = parseInstantDate(rawEndsAt);
+  const startsAt = parseSourceInstantDate(rawStartsAt, { timezone });
+  const endsAt = parseSourceInstantDate(rawEndsAt, { timezone });
   const startsOn = normalizeDateOnly(rawEvent.starts_on, rawEvent.listing_date, rawStartsAt);
   const endsOn = normalizeDateOnly(rawEvent.ends_on, rawEvent.listing_end_date, rawEndsAt);
   const lastChecked = parseDate(rawEvent.last_checked || rawEvent.fetched_at || rawEvent.checked_at);
-  const timezone = normalizeIanaTimezone(options.timezone);
   const timeWindow = normalizeTimeWindow(rawEvent.time_window, {
     startsAt,
     endsAt,
@@ -227,8 +228,12 @@ function normalizeTimeWindow(value, facts = {}) {
     return compactObject({
       kind: kind || "continuous",
       label: firstString(value.label),
-      starts_at: parseInstantDate(value.starts_at || value.start)?.toISOString() || (startsAt ? startsAt.toISOString() : null),
-      ends_at: parseInstantDate(value.ends_at || value.end)?.toISOString() || (endsAt ? endsAt.toISOString() : null),
+      starts_at:
+        parseSourceInstantDate(value.starts_at || value.start, { timezone })?.toISOString() ||
+        (startsAt ? startsAt.toISOString() : null),
+      ends_at:
+        parseSourceInstantDate(value.ends_at || value.end, { timezone })?.toISOString() ||
+        (endsAt ? endsAt.toISOString() : null),
     });
   }
   if (startsAt || endsAt) {
@@ -358,9 +363,10 @@ function parseDate(value) {
   return Number.isFinite(parsed.getTime()) ? parsed : null;
 }
 
-function parseInstantDate(value) {
-  if (typeof value === "string" && normalizeSourceEventDate(value)) return null;
-  return parseDate(value);
+function parseSourceInstantDate(value, { timezone } = {}) {
+  if (value instanceof Date) return parseDate(value);
+  const normalized = normalizeSourceEventDateTime(value, { timezone });
+  return normalized ? parseDate(normalized) : null;
 }
 
 function normalizeFiniteNumber(value) {

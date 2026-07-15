@@ -10,7 +10,10 @@ const {
 const {
   collectAnchorEvents,
   GLOBAL_FEED_DESCRIPTOR,
+  isEphemeralHappening,
+  toEventView,
 } = require("../server/place-candidates/agnostic-event-supply");
+const { normalizeTimeSensitiveSourceEvent } = require("../server/pulse-sources/time-sensitive-event");
 
 const ANCHOR = { lat: 59.3293, lng: 18.0686 };
 const NOW = "2026-07-14T12:00:00Z";
@@ -239,6 +242,105 @@ test("coordinate-less evidence alone cannot become an anchor event", () => {
 
   assert.deepEqual(bounded.events, []);
   assert.equal(bounded.rejected[0].reason, "missing_event_coordinates");
+});
+
+test("daily windows remain surfaceable during opening and future between openings", () => {
+  const raw = {
+    id: "daily-market",
+    title: "Daily makers market",
+    source_url: "https://calendar.example/daily-market",
+    source_label: "Reviewed calendar",
+    source_provider_id: "reviewed-calendar",
+    source_identity: "calendar.example",
+    source_family: "destination_calendar",
+    source_tier: "verified",
+    confidence: "medium",
+    place_context: "Market Hall",
+    lat: ANCHOR.lat + 0.001,
+    lng: ANCHOR.lng + 0.001,
+    starts_on: "2026-07-14",
+    ends_on: "2026-07-16",
+    time_window: {
+      kind: "daily",
+      starts_on: "2026-07-14",
+      ends_on: "2026-07-16",
+      local_start: "10:00",
+      local_end: "17:00",
+    },
+  };
+  const duringOpening = normalizeTimeSensitiveSourceEvent(raw, {
+    now: "2026-07-14T12:00:00.000Z",
+    timezone: "Europe/Stockholm",
+  });
+  const betweenOpenings = normalizeTimeSensitiveSourceEvent(raw, {
+    now: "2026-07-14T18:00:00.000Z",
+    timezone: "Europe/Stockholm",
+  });
+  const bounded = fuseAndBoundEventEvidence([duringOpening], { anchor: ANCHOR, radiusM: 3000 });
+  const view = toEventView(bounded.events[0], feed("reviewed-calendar"), {
+    eventTimezone: "Europe/Stockholm",
+  });
+
+  assert.equal(duringOpening.timing_relevance, "now");
+  assert.equal(betweenOpenings.timing_relevance, "future");
+  assert.equal(isEphemeralHappening(duringOpening, new Date("2026-07-14T12:00:00.000Z")), true);
+  assert.equal(view.starts_on, "2026-07-14");
+  assert.equal(view.ends_on, "2026-07-16");
+  assert.equal(view.time_window.kind, "daily");
+});
+
+test("coordinate-less daily evidence may corroborate matching geometry but never survives alone", () => {
+  const shared = {
+    title: "Daily harbour market",
+    starts_at: null,
+    ends_at: null,
+    starts_on: "2026-07-14",
+    ends_on: "2026-07-16",
+    time_window: {
+      kind: "daily",
+      starts_on: "2026-07-14",
+      ends_on: "2026-07-16",
+      local_start: "10:00",
+      local_end: "17:00",
+      timezone: "Europe/Stockholm",
+    },
+    timezone: "Europe/Stockholm",
+    timing_relevance: "now",
+    place_context: "Harbour Hall",
+  };
+  const wixEvidence = {
+    ...shared,
+    id: "wix-market",
+    source_provider_id: "destination-wix",
+    source_identity: "destination.example",
+    source_url: "https://destination.example/events-1/market",
+    source_tier: "verified",
+    confidence: "low",
+  };
+  const geometryEvidence = {
+    ...shared,
+    id: "official-market",
+    source_provider_id: "official-calendar",
+    source_identity: "city.example",
+    source_url: "https://city.example/events/market",
+    source_tier: "official",
+    confidence: "medium",
+    lat: ANCHOR.lat + 0.001,
+    lng: ANCHOR.lng + 0.001,
+  };
+
+  const alone = fuseAndBoundEventEvidence([wixEvidence], { anchor: ANCHOR, radiusM: 3000 });
+  const corroborated = fuseAndBoundEventEvidence(
+    [wixEvidence, geometryEvidence],
+    { anchor: ANCHOR, radiusM: 3000 },
+  );
+
+  assert.equal(alone.events.length, 0);
+  assert.equal(alone.rejected[0].reason, "missing_event_coordinates");
+  assert.equal(corroborated.events.length, 1);
+  assert.equal(corroborated.events[0].fusion_status, "corroborated");
+  assert.equal(corroborated.events[0].independent_source_count, 2);
+  assert.equal(corroborated.events[0].lat, geometryEvidence.lat);
 });
 
 test("one failed/empty source does not erase a healthy independent source", async () => {

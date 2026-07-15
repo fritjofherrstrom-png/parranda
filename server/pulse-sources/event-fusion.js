@@ -66,7 +66,7 @@ function eventsRepresentSameOccurrence(left, right) {
   const sameSourceUrl = Boolean(leftSourceUrl && leftSourceUrl === rightSourceUrl);
 
   if ((samePublisher && sameStableId) || sameSourceUrl) {
-    return startsCompatible(left.starts_at, right.starts_at, { allowBothMissing: true });
+    return temporalOccurrencesCompatible(left, right, { allowBothMissing: true });
   }
 
   if (
@@ -75,7 +75,7 @@ function eventsRepresentSameOccurrence(left, right) {
   ) {
     return false;
   }
-  if (!startsCompatible(left.starts_at, right.starts_at)) return false;
+  if (!temporalOccurrencesCompatible(left, right)) return false;
   return locationsMatch(left, right);
 }
 
@@ -90,6 +90,8 @@ function buildFusedEvent(members) {
     "name",
     "starts_at",
     "ends_at",
+    "starts_on",
+    "ends_on",
     "place_context",
     "area",
     "time_window",
@@ -317,6 +319,61 @@ function startsCompatible(leftValue, rightValue, { allowBothMissing = false } = 
   return Math.abs(left - right) <= START_MATCH_TOLERANCE_MS;
 }
 
+function temporalOccurrencesCompatible(left, right, { allowBothMissing = false } = {}) {
+  const leftKind = temporalKind(left);
+  const rightKind = temporalKind(right);
+  if (leftKind === "unknown" || rightKind === "unknown") {
+    return allowBothMissing && leftKind === "unknown" && rightKind === "unknown";
+  }
+  if (leftKind !== rightKind) return false;
+  if (leftKind === "continuous") {
+    return startsCompatible(left.starts_at, right.starts_at, { allowBothMissing });
+  }
+  if (leftKind === "daily") {
+    const leftSignature = dailyTemporalSignature(left);
+    return Boolean(leftSignature && leftSignature === dailyTemporalSignature(right));
+  }
+  const leftSignature = allDayTemporalSignature(left);
+  return Boolean(leftSignature && leftSignature === allDayTemporalSignature(right));
+}
+
+function temporalKind(event) {
+  const declared = nonEmpty(event?.time_window?.kind).toLowerCase();
+  if (["continuous", "daily", "all_day"].includes(declared)) return declared;
+  if (parseTimestamp(event?.starts_at) != null) return "continuous";
+  if (dateOnly(event?.starts_on)) return "all_day";
+  return "unknown";
+}
+
+function dateOnly(value) {
+  const raw = nonEmpty(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return "";
+  const parsed = new Date(`${raw}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === raw ? raw : "";
+}
+
+function localClock(value) {
+  const raw = nonEmpty(value);
+  return /^\d{2}:\d{2}(?::\d{2})?$/.test(raw) ? raw : "";
+}
+
+function dailyTemporalSignature(event) {
+  const startsOn = dateOnly(event?.starts_on || event?.time_window?.starts_on);
+  const endsOn = dateOnly(event?.ends_on || event?.time_window?.ends_on);
+  const startsAt = localClock(event?.time_window?.local_start);
+  const endsAt = localClock(event?.time_window?.local_end);
+  const timezone = nonEmpty(event?.timezone || event?.time_window?.timezone);
+  return startsOn && endsOn && startsAt && endsAt && timezone
+    ? [startsOn, endsOn, startsAt, endsAt, timezone].join("|")
+    : "";
+}
+
+function allDayTemporalSignature(event) {
+  const startsOn = dateOnly(event?.starts_on || event?.time_window?.starts_on);
+  const endsOn = dateOnly(event?.ends_on || event?.time_window?.ends_on);
+  return startsOn && endsOn ? `${startsOn}|${endsOn}` : "";
+}
+
 function dateSpread(values) {
   const timestamps = values.map(parseTimestamp).filter((value) => value != null);
   if (timestamps.length < 2) return 0;
@@ -350,7 +407,7 @@ function compareEventsForGrouping(left, right) {
 
 function eventSortKey(event) {
   return [
-    nonEmpty(event.starts_at),
+    temporalSortKey(event),
     normalizedText(event.title || event.name),
     normalizedPlace(event),
     sourceIdentity(event),
@@ -370,8 +427,8 @@ function comparePrimaryEvidence(left, right) {
 function evidenceCompleteness(event) {
   return [
     event.title || event.name,
-    event.starts_at,
-    event.ends_at,
+    event.starts_at || event.starts_on,
+    event.ends_at || event.ends_on,
     event.place_context,
     finiteCoordinates(event),
     event.source_url || event.provenance?.source_url,
@@ -399,11 +456,34 @@ function buildFusionId(events) {
   const raw = [
     normalizedText(primary.city),
     normalizedText(primary.title || primary.name),
-    nonEmpty(primary.starts_at),
+    temporalSortKey(primary),
     normalizedPlace(primary),
     finiteCoordinates(primary) ? `${Number(primary.lat).toFixed(4)},${Number(primary.lng).toFixed(4)}` : "",
   ].join("|");
   return `event-fusion-${crypto.createHash("sha256").update(raw).digest("hex").slice(0, 16)}`;
+}
+
+function temporalSortKey(event) {
+  const kind = temporalKind(event);
+  if (kind === "continuous") return `${kind}|${nonEmpty(event.starts_at)}`;
+  if (kind === "daily") {
+    return [
+      kind,
+      dateOnly(event.starts_on || event.time_window?.starts_on),
+      dateOnly(event.ends_on || event.time_window?.ends_on),
+      localClock(event.time_window?.local_start),
+      localClock(event.time_window?.local_end),
+      nonEmpty(event.timezone || event.time_window?.timezone),
+    ].join("|");
+  }
+  if (kind === "all_day") {
+    return [
+      kind,
+      dateOnly(event.starts_on || event.time_window?.starts_on),
+      dateOnly(event.ends_on || event.time_window?.ends_on),
+    ].join("|");
+  }
+  return "unknown";
 }
 
 function canonicalUrl(value) {

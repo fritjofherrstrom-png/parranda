@@ -298,8 +298,8 @@ an explicit offset. A multi-day listing with daily opening hours uses an
 explicit `time_window.kind: "daily"` with local start/end clocks; it must not be
 flattened into one continuous interval across nights. Truly continuous
 multi-day events may still use one bounded instant interval. Date-only rows are
-inspectable source facts but remain ineligible for current-time promotion until
-downstream all-day semantics are explicitly supported.
+valid inspectable and fusable source facts, but remain ineligible for
+current-time route promotion because they do not establish a daypart.
 
 ## Local-Language And Translation
 

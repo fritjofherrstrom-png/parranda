@@ -504,8 +504,46 @@ test("date-only facts stay local and do not consume the accepted-event limit", a
     context: { date: "2026-07-15", now: new Date("2026-07-15T15:30:00.000Z") },
   });
   assert.deepEqual(detailCalls, [EVENT_ONE, EVENT_TWO]);
+  assert.equal(result.time_sensitive_events.length, 2);
+  const allDay = result.time_sensitive_events.find((event) => event.title === "All-day listing");
+  const timed = result.time_sensitive_events.find((event) => event.title === "Tonight");
+  assert.equal(allDay.time_window.kind, "all_day");
+  assert.equal(allDay.timing_relevance, "unknown");
+  assert.equal(timed.timing_relevance, "tonight");
+  assert.equal(result.source_status[0].collection_status, "ok");
+});
+
+test("an all-date-only Wix source is healthy source evidence, not a parse failure", async () => {
+  const provider = createWixEventSitemapProvider({
+    endpoint: ROOT,
+    status: "active",
+    timezone: "Europe/Stockholm",
+    sourceLanguage: "sv",
+    eventPathPrefix: "/events-1/",
+    detailLimit: 1,
+    detailBudget: 1,
+    fetcher: async (url) => {
+      if (String(url) === ROOT) return textResponse(sitemapIndex());
+      if (String(url) === CHILD) return textResponse(eventSitemap());
+      return textResponse(detailHtml({
+        title: "All-day listing",
+        date: "15 juli - 17 juli",
+        time: "Tider meddelas",
+      }));
+    },
+  });
+
+  const result = await collectPulseSourcesForCity(city, {
+    providerSpecs: [provider],
+    context: { date: "2026-07-15", now: new Date("2026-07-15T12:00:00.000Z") },
+  });
+
+  assert.equal(result.source_status[0].collection_status, "ok");
+  assert.equal(result.source_status[0].collection_reason, null);
   assert.equal(result.time_sensitive_events.length, 1);
-  assert.equal(result.time_sensitive_events[0].title, "Tonight");
+  assert.equal(result.time_sensitive_events[0].time_window.kind, "all_day");
+  assert.equal(result.time_sensitive_events[0].starts_on, "2026-07-15");
+  assert.equal(result.time_sensitive_events[0].ends_on, "2026-07-17");
 });
 
 test("newer sitemap lastmod wins deterministically before the total detail budget", async () => {

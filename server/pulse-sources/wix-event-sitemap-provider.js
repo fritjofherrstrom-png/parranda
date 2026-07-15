@@ -600,12 +600,14 @@ async function collectWixDetailEvents({
   providerOptions,
 }) {
   const events = [];
+  let timedEventCount = 0;
+  let allDayEventCount = 0;
   let fetchFailures = 0;
   let parseFailures = 0;
   let staleRows = 0;
   let firstFailureReason = null;
 
-  for (let offset = 0; offset < rows.length && events.length < detailLimit; offset += concurrency) {
+  for (let offset = 0; offset < rows.length && timedEventCount < detailLimit; offset += concurrency) {
     const batch = rows.slice(offset, offset + concurrency);
     const outcomes = await Promise.all(batch.map(async (row) => {
       try {
@@ -624,14 +626,12 @@ async function collectWixDetailEvents({
           eventLanguage: providerOptions.eventLanguage,
           routeRoleHint: providerOptions.routeRoleHint,
         });
-        // Date-only rows remain truthful source facts, but the current Pulse
-        // contract cannot place them in a daypart. Do not let them consume the
-        // bounded accepted-event budget ahead of later timed rows.
-        if (!event || !hasUsableWixTiming(event)) {
+        const timingKind = wixTimingKind(event);
+        if (!event || !timingKind) {
           return { status: "parse_failed" };
         }
         if (event.freshness === "stale") return { status: "stale" };
-        return { status: "accepted", event };
+        return { status: "accepted", event, timingKind };
       } catch (error) {
         return {
           status: "fetch_failed",
@@ -641,8 +641,17 @@ async function collectWixDetailEvents({
     }));
 
     for (const outcome of outcomes) {
-      if (outcome.status === "accepted" && events.length < detailLimit) {
-        events.push(outcome.event);
+      if (outcome.status === "accepted") {
+        // All-day rows are valid source facts, but they do not consume the
+        // bounded timed-event quota. This lets a later routeable event survive
+        // without misreporting the all-day row as malformed.
+        if (outcome.timingKind === "all_day" && allDayEventCount < detailLimit) {
+          events.push(outcome.event);
+          allDayEventCount += 1;
+        } else if (timedEventCount < detailLimit) {
+          events.push(outcome.event);
+          timedEventCount += 1;
+        }
       } else if (outcome.status === "parse_failed") {
         parseFailures += 1;
       } else if (outcome.status === "stale") {
@@ -903,16 +912,22 @@ function minutesOfDay(time) {
   return time.hour * 60 + time.minute;
 }
 
-function hasUsableWixTiming(event) {
-  if (event?.starts_at) return true;
+function wixTimingKind(event) {
+  if (event?.starts_at) return "timed";
   const window = event?.time_window;
-  return Boolean(
+  if (
     window?.kind === "daily" &&
     event.starts_on &&
     window.local_start &&
     window.local_end &&
-    normalizeIanaTimezone(window.timezone),
-  );
+    normalizeIanaTimezone(window.timezone)
+  ) return "timed";
+  if (
+    window?.kind === "all_day" &&
+    event.starts_on &&
+    event.ends_on
+  ) return "all_day";
+  return null;
 }
 
 function translationStatus(language) {

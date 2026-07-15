@@ -186,6 +186,28 @@ test("continuous multi-day events remain explicit instants", () => {
   assert.equal(normalized.time_window.kind, "continuous");
 });
 
+test("ambiguous DST folds fail closed unless the source provides an explicit offset", () => {
+  const ambiguous = normalizeTimeSensitiveSourceEvent(
+    event({
+      starts_at: "2026-10-25 02:30:00",
+      ends_at: "2026-10-25 03:30:00",
+    }),
+    { now: "2026-10-24T12:00:00.000Z", timezone: "Europe/Stockholm" },
+  );
+  const explicit = normalizeTimeSensitiveSourceEvent(
+    event({
+      starts_at: "2026-10-25T02:30:00+02:00",
+      ends_at: "2026-10-25T03:30:00+01:00",
+    }),
+    { now: "2026-10-24T12:00:00.000Z", timezone: "Europe/Stockholm" },
+  );
+
+  assert.equal(ambiguous.starts_at, undefined);
+  assert.equal(ambiguous.timing_relevance, "unknown");
+  assert.equal(explicit.starts_at, "2026-10-25T00:30:00.000Z");
+  assert.equal(explicit.ends_at, "2026-10-25T02:30:00.000Z");
+});
+
 test("expired or stale events are downgraded instead of promoted", () => {
   const expired = normalizeTimeSensitiveSourceEvent(
     event({
