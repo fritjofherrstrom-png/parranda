@@ -52,6 +52,17 @@ Appen kör då på:
 http://localhost:8000
 ```
 
+För att utvärdera den fulla any-place-kedjan med platsresolver, OSM/Wikidata,
+agnostisk komposition, eventinsamling och de granskade lokala källmanifesten:
+
+```bash
+npm run dev:full
+```
+
+`dev:full` använder en skrivbar lokal source-cache och aktiverar endast den
+lokala utvärderingsprofilen. Vanliga `npm start` och produktionsdefault ändras
+inte.
+
 Hälsocheck:
 
 ```text
