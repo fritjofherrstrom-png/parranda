@@ -91,8 +91,9 @@ candidate evaluation:
   not cached and may recover on the next bounded run;
 - discovered machine-readable interfaces become review-needed manifest
   candidates only. They never become active runtime providers automatically;
-- RSS and generic HTML calendars, including recognized Sitevision-style event
-  listings, remain adapter-review work, while social links remain
+- RSS and unrecognized generic HTML calendars remain adapter-review work, while
+  recognized Sitevision event calendars can now produce a review-needed
+  `sitevision_calendar` manifest for the bounded generic adapter. Social links remain
   discovery/corroboration hints rather than event truth.
 
 The operator harness is default-off. Without the live switch it emits only the
@@ -576,3 +577,27 @@ low for a visitor route because it is civic/admin rather than cultural or
 experiential. It should remain inspectable and maybe city-contextual, but it
 should not masquerade as a culture stop or visitor route anchor. That is the
 point of separating source discovery from Pulse salience.
+
+## Reviewed Sitevision Calendar Adapter
+
+Parranda now recognizes the stable Sitevision event-calendar family as a
+bounded adapter target. This is a CMS/interface capability, not a claim that
+every Sitevision website is trusted or safe to collect.
+
+- source discovery may propose a `sitevision_calendar` manifest, but the
+  proposal remains `review-needed` and never activates itself;
+- reviewed manifest data owns source trust, terms, language, IANA timezone,
+  geographic bounds, and activation;
+- collection caps listing rows, detail-page requests, response size,
+  concurrency, and request time;
+- the adapter extracts factual atoms only: title, source URL, local date/time,
+  venue/address, coordinates when published, and recurrence text;
+- local clock times require a reviewed IANA timezone and otherwise remain
+  timing-unknown rather than being treated as UTC;
+- one failed detail page does not erase usable listing evidence, while listing
+  failure remains an explicit fail-soft provider outcome.
+
+This makes reviewed municipal and regional Sitevision calendars consumable
+through the same provider registry and `time_sensitive_events` path. It does
+not activate a municipality, promote an event into Pulse, or turn an event into
+a route stop by itself.

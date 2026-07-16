@@ -23,6 +23,7 @@ const { createTicketmasterProvider } = require("../pulse-sources/ticketmaster-so
 const { createSchemaOrgEventProvider } = require("../pulse-sources/schema-org-event-provider");
 const { createEventsCalendarProvider } = require("../pulse-sources/events-calendar-source-provider");
 const { createHtmlVenueCalendarProvider } = require("../pulse-sources/html-venue-calendar-provider");
+const { createSitevisionCalendarProvider } = require("../pulse-sources/sitevision-calendar-provider");
 const { normalizeTimeSensitiveSourceEvent } = require("../pulse-sources/time-sensitive-event");
 const { scoreTimeSensitiveEventSalience } = require("../pulse-engine/time-sensitive-events");
 const { createSourceCache } = require("./source-cache");
@@ -58,6 +59,7 @@ const LOCAL_EVENT_ADAPTERS = new Set([
   "events_calendar",
   "ical",
   "html_venue_calendar",
+  "sitevision_calendar",
 ]);
 
 // A single open municipal feed, kept as a NAMED FIXTURE — not a product default.
@@ -126,6 +128,9 @@ function resolveEventFeedRegistry(env = process.env) {
             source_language: firstString(f.source_language, f.sourceLanguage),
             route_role_hint: firstString(f.route_role_hint, f.routeRoleHint),
             fetch_details: f.fetch_details !== false,
+            detail_limit: Number.isFinite(Number(f.detail_limit))
+              ? Math.max(0, Math.floor(Number(f.detail_limit)))
+              : null,
             // Configuring an endpoint proves collection intent, not ownership
             // or official status. Missing review metadata stays conservative.
             source_tier: f.source_tier != null ? String(f.source_tier) : "unknown",
@@ -583,6 +588,18 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs 
       fetchDetails: source.fetch_details !== false,
     });
   }
+  if (adapter === "sitevision_calendar") {
+    return createSitevisionCalendarProvider({
+      ...common,
+      status: "active",
+      baseUrl: endpoint,
+      timezone: source.timezone || undefined,
+      sourceLanguage: source.source_language || undefined,
+      routeRoleHint: source.route_role_hint || undefined,
+      fetchDetails: source.fetch_details !== false,
+      detailLimit: source.detail_limit || undefined,
+    });
+  }
   return null;
 }
 
@@ -672,6 +689,8 @@ function normalizeLocalEventAdapter(value) {
     ics: "ical",
     html_calendar: "html_venue_calendar",
     venue_calendar: "html_venue_calendar",
+    sitevision: "sitevision_calendar",
+    sitevision_event_calendar: "sitevision_calendar",
   };
   const normalized = aliases[raw] || raw;
   return LOCAL_EVENT_ADAPTERS.has(normalized) ? normalized : null;
