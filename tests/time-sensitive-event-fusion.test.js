@@ -208,6 +208,89 @@ test("title alone never merges different times, places, or missing-time listings
   assert.equal(fuseTimeSensitiveEvents([base, nextDay, farAway, ...missingTimes]).length, 5);
 });
 
+test("daily occurrences fuse only when local range, window, timezone, title, and place agree", () => {
+  const daily = normalizedEvent({
+    id: "daily-market-city",
+    starts_at: null,
+    ends_at: null,
+    starts_on: "2026-07-15",
+    ends_on: "2026-07-17",
+    time_window: {
+      kind: "daily",
+      starts_on: "2026-07-15",
+      ends_on: "2026-07-17",
+      local_start: "10:00",
+      local_end: "17:00",
+      timezone: "Europe/Stockholm",
+    },
+    timezone: "Europe/Stockholm",
+  });
+  const venue = normalizedEvent({
+    ...daily,
+    id: "daily-market-venue",
+    source_provider_id: "venue-calendar",
+    source_identity: "venue.example",
+    source_url: "https://venue.example/daily-market",
+    source_tier: "verified",
+    lat: null,
+    lng: null,
+  });
+  const differentWindow = {
+    ...venue,
+    id: "daily-market-morning",
+    source_identity: "other.example",
+    source_url: "https://other.example/daily-market",
+    time_window: { ...venue.time_window, local_start: "09:00" },
+  };
+
+  assert.equal(eventsRepresentSameOccurrence(daily, venue), true);
+  assert.equal(eventsRepresentSameOccurrence(daily, differentWindow), false);
+  const [fused] = fuseTimeSensitiveEvents([venue, daily]);
+  assert.equal(fused.fusion_status, "corroborated");
+  assert.equal(fused.starts_on, "2026-07-15");
+  assert.equal(fused.ends_on, "2026-07-17");
+  assert.equal(fused.time_window.kind, "daily");
+  assert.equal(fused.lat, daily.lat);
+  assert.equal(fused.lng, daily.lng);
+});
+
+test("all-day occurrences match by local date range without inventing instants", () => {
+  const official = normalizedEvent({
+    starts_at: null,
+    ends_at: null,
+    starts_on: "2026-07-15",
+    ends_on: "2026-07-17",
+    time_window: {
+      kind: "all_day",
+      starts_on: "2026-07-15",
+      ends_on: "2026-07-17",
+    },
+  });
+  const venue = normalizedEvent({
+    ...official,
+    id: "all-day-venue",
+    source_provider_id: "venue-calendar",
+    source_identity: "venue.example",
+    source_url: "https://venue.example/all-day",
+  });
+  const otherDates = {
+    ...venue,
+    id: "all-day-other-dates",
+    source_identity: "other.example",
+    source_url: "https://other.example/all-day",
+    ends_on: "2026-07-18",
+    time_window: { ...venue.time_window, ends_on: "2026-07-18" },
+  };
+
+  assert.equal(eventsRepresentSameOccurrence(official, venue), true);
+  assert.equal(eventsRepresentSameOccurrence(official, otherDates), false);
+  const [fused] = fuseTimeSensitiveEvents([venue, official]);
+  assert.equal(fused.fusion_status, "corroborated");
+  assert.equal(fused.starts_at, null);
+  assert.equal(fused.starts_on, "2026-07-15");
+  assert.equal(fused.ends_on, "2026-07-17");
+});
+
 test("weak social evidence stays low until independently backed by a trusted source", () => {
   const social = normalizedEvent({
     source_provider_id: "community-listing",

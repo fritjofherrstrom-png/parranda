@@ -205,8 +205,10 @@ function buildAnchorEventSourceHealth(
   if (result === "empty" && rawEventCount === 0) reasons.push("no_current_events_found");
   if (result === "empty" && rawEventCount > 0 && normalized === 0) {
     reasons.push("all_event_rows_failed_normalization");
-  } else if (result === "empty" && normalized > 0) {
+  } else if (result === "empty" && normalized > 0 && rejectionCount > 0) {
     reasons.push("all_event_evidence_rejected");
+  } else if (result === "empty" && normalized > 0) {
+    reasons.push("no_routeable_timed_events");
   }
 
   return {

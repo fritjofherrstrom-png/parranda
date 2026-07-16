@@ -8,12 +8,13 @@ const SOURCE_FAMILIES = Object.freeze({
       "ical",
       "schema_org_event",
       "sitevision_calendar",
+      "wix_event_sitemap",
     ],
   },
   official_tourism_calendar: {
     priority: 2,
     label: "Official tourism/destination calendar",
-    preferredAdapters: ["schema_org_event", "html_event_listing", "ical"],
+    preferredAdapters: ["schema_org_event", "html_event_listing", "ical", "wix_event_sitemap"],
   },
   cultural_institution_calendar: {
     priority: 3,
@@ -28,7 +29,13 @@ const SOURCE_FAMILIES = Object.freeze({
   market_listing: {
     priority: 5,
     label: "Market, flea market, and seasonal local listing",
-    preferredAdapters: ["schema_org_event", "html_event_listing", "ical", "needs_adapter"],
+    preferredAdapters: [
+      "schema_org_event",
+      "html_event_listing",
+      "ical",
+      "wix_event_sitemap",
+      "needs_adapter",
+    ],
   },
   trusted_local_media: {
     priority: 6,
@@ -281,7 +288,8 @@ function mapsToExistingProvider(adapter) {
     adapter === "linked_events" ||
     adapter === "the_events_calendar" ||
     adapter === "ical" ||
-    adapter === "sitevision_calendar"
+    adapter === "sitevision_calendar" ||
+    adapter === "wix_event_sitemap"
   );
 }
 
