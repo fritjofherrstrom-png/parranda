@@ -43,7 +43,13 @@ function sparqlResponse(bindings) {
 // --- mapping + typing ------------------------------------------------------
 
 test("maps a typed binding into an open_knowledge record with the mapped engine type", () => {
-  const r = mapWikidataBinding(binding({ qid: "Q5264288", label: "Design Museum", classRoot: "Q33506" }));
+  const sourceBinding = binding({
+    qid: "Q5264288",
+    label: "Design Museum",
+    classRoot: "Q33506",
+  });
+  sourceBinding.website = { value: "https://museum.example/whats-on" };
+  const r = mapWikidataBinding(sourceBinding);
   assert.equal(r.id, "wikidata-Q5264288");
   assert.equal(r.name, "Design Museum");
   assert.equal(r.type, "museum");
@@ -52,6 +58,7 @@ test("maps a typed binding into an open_knowledge record with the mapped engine 
   assert.equal(r.sources[0].license, "CC0-1.0");
   assert.equal(r.city_pack_owned, false);
   assert.equal(r.human_verified, false);
+  assert.equal(r.website, "https://museum.example/whats-on");
 });
 
 test("each curated class maps to its engine type; an unmapped class is dropped", () => {
@@ -81,6 +88,7 @@ test("the query is typed (curated VALUES), centered, bounded, and label-language
   assert.match(q, /wikibase:around/);
   assert.match(q, /VALUES \?classRoot \{ wd:Q33506/);
   assert.match(q, /wdt:P31\/wdt:P279\* \?classRoot/);
+  assert.match(q, /OPTIONAL \{ \?item wdt:P856 \?website/);
   assert.match(q, /Point\(23\.72 37\.98\)/);
   assert.match(q, /wikibase:language "el,en"/);
   assert.match(q, /LIMIT 25/);

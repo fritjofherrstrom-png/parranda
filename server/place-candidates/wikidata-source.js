@@ -86,7 +86,7 @@ function buildWikidataQuery({ lat, lng, radiusKm, limit, labelLangs }) {
   const labelPriority = `${labelLangs.join(",")}`;
   // `?classRoot` is bound to the matched curated root so we can map type → engine
   // type deterministically (P279* may walk through many intermediate classes).
-  return `SELECT ?item ?itemLabel ?lat ?lng ?classRoot WHERE {
+  return `SELECT ?item ?itemLabel ?lat ?lng ?classRoot ?website WHERE {
   SERVICE wikibase:around {
     ?item wdt:P625 ?aroundLoc .
     bd:serviceParam wikibase:center "Point(${lng} ${lat})"^^geo:wktLiteral .
@@ -96,6 +96,7 @@ function buildWikidataQuery({ lat, lng, radiusKm, limit, labelLangs }) {
   VALUES ?classRoot { ${values} }
   ?item wdt:P31/wdt:P279* ?classRoot .
   ?item wdt:P625 ?pt .
+  OPTIONAL { ?item wdt:P856 ?website . }
   BIND(geof:latitude(?pt) AS ?lat)
   BIND(geof:longitude(?pt) AS ?lng)
   SERVICE wikibase:label { bd:serviceParam wikibase:language "${labelPriority}" . }
@@ -131,6 +132,7 @@ function mapWikidataBinding(binding) {
   const classRoot = qidFromUri(binding.classRoot && binding.classRoot.value);
   const type = classRoot ? CLASS_TYPE_BY_QID.get(classRoot) : null;
   if (!type) return null; // unmapped class → drop (defensive; query already filters)
+  const website = normalizePublicWebsite(binding.website && binding.website.value);
 
   return {
     id: `wikidata-${qid}`,
@@ -150,7 +152,20 @@ function mapWikidataBinding(binding) {
     ],
     city_pack_owned: false,
     human_verified: false,
+    // P856 is source-owned operational metadata. It never raises confidence;
+    // the background local-event scout may use it as a bounded website seed.
+    ...(website ? { website } : {}),
   };
+}
+
+function normalizePublicWebsite(value) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : null;
+  } catch (_error) {
+    return null;
+  }
 }
 
 function mapWikidataResponse(payload, limit) {

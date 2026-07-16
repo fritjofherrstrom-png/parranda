@@ -72,6 +72,47 @@ Local fixtures can be evaluated with:
 node scripts/probe-live-event-sources.js source-candidates.json
 ```
 
+The bounded website scout lives in
+server/pulse-sources/local-event-source-scout.js. It closes the step before
+candidate evaluation:
+
+- OSM website / contact:website and Wikidata P856 atoms can become trusted
+  website seeds without changing place confidence or route ranking;
+- supplied local-language terms produce a bounded search-query plan for a
+  trusted background search integration;
+- one reviewed public page per seed is inspected for iCal, The Events Calendar,
+  event-related REST/JSON endpoints exposed in page attributes,
+  schema.org/Event JSON-LD, compatible venue HTML, RSS, and social discovery
+  hints;
+- private/loopback URLs, unsafe redirects, robots exclusions, oversized
+  responses, timeouts, and source failures fail closed;
+- successful robots and source-page responses use the existing source cache;
+  `PARRANDA_CACHE_DIR` makes repeat operator runs persistent, while failures are
+  not cached and may recover on the next bounded run;
+- discovered machine-readable interfaces become review-needed manifest
+  candidates only. They never become active runtime providers automatically;
+- RSS and generic HTML calendars, including recognized Sitevision-style event
+  listings, remain adapter-review work, while social links remain
+  discovery/corroboration hints rather than event truth.
+
+The operator harness is default-off. Without the live switch it emits only the
+query/seed plan:
+
+    node scripts/scout-local-event-sources.js scout-input.json
+
+Explicit bounded probing of reviewed public seeds requires:
+
+    node scripts/scout-local-event-sources.js scout-input.json --live
+
+The live harness accepts the existing `PARRANDA_CACHE_DIR` and an optional
+`PARRANDA_EVENT_SOURCE_SCOUT_CACHE_TTL_MS`. It remains an operator/background
+job; no user request waits for this crawl.
+
+After terms, ownership, timezone, geography, and parser output have been
+reviewed, an operator may promote the proposed row into PARRANDA_EVENT_FEEDS.
+User requests never perform this discovery crawl; they continue to consume only
+approved, cache-backed sources through bounded acquisition.
+
 ## Source Family Priority
 
 1. `official_municipal_calendar`
