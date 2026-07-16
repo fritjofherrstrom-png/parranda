@@ -34,6 +34,19 @@ test("mapsPlaceUrl carries trusted address/area context without duplicating iden
   assert.equal(deduped.searchParams.get("query"), "Karins, Simrishamn");
 });
 
+test("mapsPlaceUrl applies the same place-search contract across arbitrary cities", () => {
+  const fixtures = [
+    { name: "Folkets park", context: "Malmö, Sverige" },
+    { name: "Museo Carducci", context: "Bologna, Italia" },
+    { name: "Archaeological Museum of Naxos", context: "Naxos, Greece" },
+  ];
+
+  for (const fixture of fixtures) {
+    const url = new URL(mapsPlaceUrl({ name: fixture.name, lat: 1, lng: 1 }, fixture.context));
+    assert.equal(url.searchParams.get("query"), `${fixture.name}, ${fixture.context}`);
+  }
+});
+
 test("mapsWalkingRouteUrl builds an ordered walking route; needs >= 2 coord stops", () => {
   assert.equal(mapsWalkingRouteUrl([{ lat: 1, lng: 1 }]), null);
   const url = mapsWalkingRouteUrl([
