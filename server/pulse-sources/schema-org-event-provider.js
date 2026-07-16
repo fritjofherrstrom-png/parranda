@@ -94,21 +94,37 @@ function createSchemaOrgEventProvider(providerOptions = {}) {
           const limit = Math.max(1, Math.min(Math.floor(providerOptions.limit || DEFAULT_LIMIT), MAX_LIMIT));
           const userAgent = providerOptions.userAgent || DEFAULT_USER_AGENT;
           const timeoutMs = Math.max(50, Math.floor(providerOptions.timeoutMs || DEFAULT_TIMEOUT_MS));
+          const format = normalizeFormat(providerOptions.format || context.format || collectionContext.format);
           const controller = new AbortController();
           const timer = setTimeout(() => controller.abort(), timeoutMs);
 
           let phase = "fetch";
-          let payload;
+          let events;
           try {
             const response = await fetcher(endpoint, {
-              headers: { "User-Agent": userAgent, Accept: "application/ld+json, application/json" },
+              headers: {
+                "User-Agent": userAgent,
+                Accept: format === "html"
+                  ? "text/html, application/xhtml+xml"
+                  : "application/ld+json, application/json",
+              },
               signal: controller.signal,
             });
             if (!response || response.ok !== true) {
               return emptyCollection("failed", `source_http_${response?.status || "not_ok"}`);
             }
             phase = "payload";
-            payload = await response.json();
+            if (format === "html") {
+              const html = typeof response.text === "function" ? await response.text() : "";
+              const parsed = parseSchemaOrgEventsFromHtml(html);
+              if (parsed.events.length === 0 && parsed.invalidScriptCount > 0) {
+                return emptyCollection("failed", "source_payload_invalid");
+              }
+              events = parsed.events;
+            } else {
+              const payload = await response.json();
+              events = extractSchemaOrgEvents(payload);
+            }
           } catch (error) {
             const reason = error?.name === "AbortError"
               ? "source_timeout"
@@ -120,23 +136,27 @@ function createSchemaOrgEventProvider(providerOptions = {}) {
             clearTimeout(timer);
           }
 
-          const events = extractSchemaOrgEvents(payload)
+          const normalizedEvents = (Array.isArray(events) ? events : [])
             .slice(0, limit)
             .map(mapSchemaOrgEventToRaw)
             .filter(Boolean);
           return {
             events: [],
             signals: [],
-            time_sensitive_events: events,
-            collection_status: buildProviderCollectionOutcome(events.length ? "ok" : "empty", {
-              reason: events.length ? null : "source_empty",
-              eventRows: events.length,
+            time_sensitive_events: normalizedEvents,
+            collection_status: buildProviderCollectionOutcome(normalizedEvents.length ? "ok" : "empty", {
+              reason: normalizedEvents.length ? null : "source_empty",
+              eventRows: normalizedEvents.length,
             }),
           };
         },
       };
     },
   };
+}
+
+function normalizeFormat(value) {
+  return String(value || "json").trim().toLowerCase() === "html" ? "html" : "json";
 }
 
 function emptyCollection(status, reason) {
@@ -158,6 +178,51 @@ function extractSchemaOrgEvents(payload) {
   else if (Array.isArray(payload.items)) records = payload.items; // common feed wrapper
   else if (typeof payload === "object") records = [payload];
   return records.filter((record) => record && typeof record === "object" && isEventType(record));
+}
+
+/**
+ * Extract factual schema.org/Event atoms from reviewed HTML calendar pages.
+ * This deliberately reads JSON-LD only; it does not copy editorial page copy,
+ * images, or attempt an unconstrained DOM scrape.
+ */
+function extractSchemaOrgEventsFromHtml(html) {
+  return parseSchemaOrgEventsFromHtml(html).events;
+}
+
+function parseSchemaOrgEventsFromHtml(html) {
+  const source = typeof html === "string" ? html : "";
+  const events = [];
+  let scriptCount = 0;
+  let validScriptCount = 0;
+  let invalidScriptCount = 0;
+  const scriptPattern = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
+  let match;
+  while ((match = scriptPattern.exec(source)) !== null) {
+    if (!isJsonLdScript(match[1])) continue;
+    scriptCount += 1;
+    const body = String(match[2] || "")
+      .replace(/^\s*<!--/, "")
+      .replace(/-->\s*$/, "")
+      .trim();
+    if (!body) continue;
+    try {
+      const payload = JSON.parse(body);
+      validScriptCount += 1;
+      events.push(...extractSchemaOrgEvents(payload));
+    } catch (_error) {
+      invalidScriptCount += 1;
+      // One malformed JSON-LD block must not hide valid event blocks elsewhere
+      // on the same reviewed page. If all JSON-LD is malformed, collect() marks
+      // the provider failed instead of falsely reporting a healthy empty source.
+    }
+  }
+  return { events, scriptCount, validScriptCount, invalidScriptCount };
+}
+
+function isJsonLdScript(attributes) {
+  const match = String(attributes || "").match(/\btype\s*=\s*(?:(["'])(.*?)\1|([^\s>]+))/i);
+  const value = String(match?.[2] || match?.[3] || "").trim().toLowerCase();
+  return value.split(";")[0].trim() === "application/ld+json";
 }
 
 function isEventType(record) {
@@ -280,5 +345,6 @@ module.exports = {
   resolveDefaultSchemaOrgEventProvider,
   // exported for tests / introspection
   extractSchemaOrgEvents,
+  extractSchemaOrgEventsFromHtml,
   mapSchemaOrgEventToRaw,
 };

@@ -34,7 +34,9 @@ function buildAnchorEventSourcePlan({
   );
   const localSources = selectPublisherDiverseFeeds(availableLocalSources, localCap).map((feed) => ({
     ...feed,
-    kind: "linked_events",
+    // Legacy rows are Linked Events. Reviewed source manifests can select one
+    // of the other allowlisted adapters without adding city branches here.
+    kind: feed.adapter || feed.kind || "linked_events",
   }));
   const sources = [...localSources];
 

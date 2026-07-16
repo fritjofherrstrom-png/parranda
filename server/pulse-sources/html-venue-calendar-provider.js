@@ -292,7 +292,7 @@ function parseDisplayDateTime(value, options = {}) {
     day: Number(match[1]),
     hour: Number(match[4]),
     minute: Number(match[5]),
-    timezoneOffset: options.timezoneOffset || "+03:00",
+    timezoneOffset: options.timezoneOffset,
   });
 }
 
@@ -306,11 +306,12 @@ function isBeforeCollectionDate(dateKey, collectionDate) {
   return Boolean(dateKey && wanted && dateKey < wanted);
 }
 
-function isoLocalDateTime({ year, month, day, hour = 0, minute = 0, timezoneOffset = "+00:00" }) {
+function isoLocalDateTime({ year, month, day, hour = 0, minute = 0, timezoneOffset = null }) {
   if (![year, month, day, hour, minute].every((value) => Number.isInteger(value))) return null;
   if (month < 1 || month > 12 || day < 1 || day > 31 || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
     return null;
   }
+  if (!/^[+-](?:0\d|1\d|2[0-3]):[0-5]\d$/.test(String(timezoneOffset || ""))) return null;
   return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00${timezoneOffset}`;
 }
 

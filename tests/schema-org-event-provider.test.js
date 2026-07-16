@@ -5,6 +5,7 @@ const {
   createSchemaOrgEventProvider,
   resolveDefaultSchemaOrgEventProvider,
   extractSchemaOrgEvents,
+  extractSchemaOrgEventsFromHtml,
   mapSchemaOrgEventToRaw,
 } = require("../server/pulse-sources/schema-org-event-provider");
 const { collectPulseSourcesForCity } = require("../server/pulse-sources/provider-registry");
@@ -27,6 +28,10 @@ function event(overrides = {}) {
 
 function jsonResponse(body) {
   return { ok: true, json: async () => body };
+}
+
+function htmlResponse(body) {
+  return { ok: true, text: async () => body };
 }
 
 function provider(overrides = {}) {
@@ -86,6 +91,17 @@ test("extracts events from bare object, array, @graph and items wrappers; filter
   assert.equal(extractSchemaOrgEvents(null).length, 0);
 });
 
+test("extracts schema.org/Event JSON-LD from a reviewed HTML calendar page", () => {
+  const html = `<!doctype html>
+    <script type="application/ld+json">${JSON.stringify({ "@type": "WebSite", name: "Calendar" })}</script>
+    <script data-source="calendar" type='application/ld+json; charset=utf-8'>
+      ${JSON.stringify({ "@graph": [event(), { "@type": "Place", name: "Riverside" }] })}
+    </script>`;
+  const events = extractSchemaOrgEventsFromHtml(html);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].name, "Night market by the river");
+});
+
 // --- end-to-end through the #280 registry bridge ---------------------------
 
 test("a configured provider yields a normalized, source-backed, timed event through the registry", async () => {
@@ -104,6 +120,46 @@ test("a configured provider yields a normalized, source-backed, timed event thro
   assert.equal(e.source_url, "https://feed.test/event/1");
   assert.equal(e.source_label, "Test City Calendar");
   assert.ok(!(e.timing_reasons || []).includes("missing_source_backing"));
+});
+
+test("HTML mode yields the same normalized source event without scraping editorial copy", async () => {
+  const html = `<!doctype html><main>Long editorial description that is not Parranda content.</main>
+    <script type="application/ld+json">${JSON.stringify(event())}</script>`;
+  const result = await collectPulseSourcesForCity(city, {
+    providerSpecs: [provider({ format: "html", endpoint: "https://feed.test/calendar", fetcher: async () => htmlResponse(html) })],
+    context: { now: NOW },
+  });
+  assert.equal(result.time_sensitive_events.length, 1);
+  assert.equal(result.time_sensitive_events[0].title, "Night market by the river");
+  assert.ok(!JSON.stringify(result.time_sensitive_events[0]).includes("Long editorial description"));
+});
+
+test("HTML mode distinguishes malformed JSON-LD from a proven empty calendar", async () => {
+  const malformed = await collectPulseSourcesForCity(city, {
+    providerSpecs: [provider({ format: "html", endpoint: "https://feed.test/calendar", fetcher: async () => htmlResponse(
+      '<script type="application/ld+json">{not json}</script>',
+    ) })],
+    context: { now: NOW },
+  });
+  assert.equal(malformed.source_status[0].collection_status, "failed");
+  assert.equal(malformed.source_status[0].collection_reason, "source_payload_invalid");
+
+  const mixedMalformed = await collectPulseSourcesForCity(city, {
+    providerSpecs: [provider({ format: "html", endpoint: "https://feed.test/calendar", fetcher: async () => htmlResponse(
+      '<script type="application/ld+json">{"@type":"WebSite"}</script><script type="application/ld+json">{not json}</script>',
+    ) })],
+    context: { now: NOW },
+  });
+  assert.equal(mixedMalformed.source_status[0].collection_status, "failed");
+
+  const empty = await collectPulseSourcesForCity(city, {
+    providerSpecs: [provider({ format: "html", endpoint: "https://feed.test/calendar", fetcher: async () => htmlResponse(
+      '<script type="application/ld+json">{"@type":"WebSite"}</script>',
+    ) })],
+    context: { now: NOW },
+  });
+  assert.equal(empty.source_status[0].collection_status, "empty");
+  assert.equal(empty.source_status[0].collection_reason, "source_empty");
 });
 
 test("an expired event is downgraded to stale even if it claims to be happening", async () => {

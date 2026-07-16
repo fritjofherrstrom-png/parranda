@@ -105,6 +105,10 @@ test("extracts exact event start time from a venue detail page", () => {
   });
 });
 
+test("HTML venue times remain unknown without an explicitly reviewed timezone offset", () => {
+  assert.deepEqual(extractHtmlVenueEventDetail(detailHtml()), {});
+});
+
 test("HTML venue provider yields normalized source-backed time-sensitive events", async () => {
   const calls = [];
   const provider = createHtmlVenueCalendarProvider({
