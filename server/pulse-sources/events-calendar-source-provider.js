@@ -9,6 +9,12 @@
 
 const { GENERIC_PROVIDER_CITY } = require("./provider-registry");
 const { buildProviderCollectionOutcome } = require("./provider-collection-outcome");
+const {
+  normalizeIanaTimezone,
+  normalizeSourceEventDate,
+  normalizeSourceEventDateTime,
+  normalizeUtcEventDateTime,
+} = require("./source-event-time");
 
 const EVENTS_CALENDAR_PROVIDER_ID = "generic-events-calendar-ical";
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
@@ -27,6 +33,7 @@ function buildDescriptor({
   updateCadence,
   parsingRisk,
   trust,
+  timezone,
 } = {}) {
   const descriptor = {
     id: id || EVENTS_CALENDAR_PROVIDER_ID,
@@ -49,11 +56,23 @@ function buildDescriptor({
       ...(trust && typeof trust === "object" ? trust : {}),
     },
     cachePolicy: { kind: "memory", ttlSeconds: 1800 },
-    sourceOwnedFields: ["title", "starts_at", "ends_at", "lat", "lng", "source_url", "place_context"],
+    sourceOwnedFields: [
+      "title",
+      "starts_at",
+      "ends_at",
+      "starts_on",
+      "ends_on",
+      "time_window",
+      "lat",
+      "lng",
+      "source_url",
+      "place_context",
+    ],
     parrandaOwnedFields: ["intents", "route_role_hint"],
   };
   if (sourceUrl) descriptor.sourceUrl = sourceUrl;
   if (license) descriptor.license_label = license;
+  if (timezone) descriptor.timezone = timezone;
   return descriptor;
 }
 
@@ -112,7 +131,11 @@ function createEventsCalendarProvider(providerOptions = {}) {
           }
           const events = extractEventsCalendarSourceEvents(body, { format, contentType })
             .slice(0, limit)
-            .map(mapEventsCalendarEventToRaw)
+            .map((event) =>
+              mapEventsCalendarEventToRaw(event, {
+                timezone: normalizeIanaTimezone(providerOptions.timezone),
+              }),
+            )
             .filter(Boolean);
           return {
             events: [],
@@ -169,20 +192,48 @@ function extractTheEventsCalendarEvents(payload) {
   return [];
 }
 
-function mapEventsCalendarEventToRaw(event) {
+function mapEventsCalendarEventToRaw(event, options = {}) {
   if (!isObject(event)) return null;
-  return event.__source_format === "ical" ? mapIcalEventToRaw(event) : mapTheEventsCalendarEventToRaw(event);
+  return event.__source_format === "ical"
+    ? mapIcalEventToRaw(event)
+    : mapTheEventsCalendarEventToRaw(event, options);
 }
 
-function mapTheEventsCalendarEventToRaw(event) {
+function mapTheEventsCalendarEventToRaw(event, options = {}) {
   const venue = extractTecVenue(event);
   const coords = extractTecCoordinates(event, venue);
   const sourceUrl = firstString(event.url, event.website, event.link, event.rest_url, event.permalink);
+  const timezone = normalizeIanaTimezone(options.timezone);
+  const utcStart = firstString(
+    event.start_date_utc,
+    event.startDateUtc,
+    event.start_utc,
+    event.starts_at_utc,
+  );
+  const localStart = firstString(event.starts_at, event.start_at, event.start_date, event.startDate, event.start);
+  const utcEnd = firstString(
+    event.end_date_utc,
+    event.endDateUtc,
+    event.end_utc,
+    event.ends_at_utc,
+  );
+  const localEnd = firstString(event.ends_at, event.end_at, event.end_date, event.endDate, event.end);
+  const startsOn = normalizeSourceEventDate(utcStart) || normalizeSourceEventDate(localStart);
+  const endsOn = normalizeSourceEventDate(utcEnd) || normalizeSourceEventDate(localEnd);
   return compact({
     id: firstString(event.id, event.global_id, event.url, event.website, event.slug),
     title: htmlToText(localizedString(event.title || event.name)),
-    starts_at: firstString(event.start_date, event.startDate, event.start, event.start_date_utc),
-    ends_at: firstString(event.end_date, event.endDate, event.end, event.end_date_utc),
+    starts_at:
+      normalizeUtcEventDateTime(utcStart) ||
+      normalizeSourceEventDateTime(localStart, { timezone }),
+    ends_at:
+      normalizeUtcEventDateTime(utcEnd) ||
+      normalizeSourceEventDateTime(localEnd, { timezone }),
+    starts_on: startsOn,
+    ends_on: endsOn,
+    time_window: startsOn
+      ? { kind: "all_day", starts_on: startsOn, ends_on: endsOn || startsOn }
+      : null,
     source_url: sourceUrl,
     place_context: firstString(venue.name, venue.address),
     area: firstString(venue.city, venue.neighborhood),
@@ -271,11 +322,21 @@ function mapIcalEventToRaw(event) {
   const categories = property("CATEGORIES");
   const status = property("STATUS");
   const language = firstString(summary?.params?.LANGUAGE, property("LANGUAGE")?.value);
+  const startsOn = parseIcalDateOnly(property("DTSTART"));
+  const declaredEndOn = parseIcalDateOnly(property("DTEND"));
+  const endsOn = startsOn && declaredEndOn
+    ? inclusiveIcalEndDate(startsOn, declaredEndOn)
+    : startsOn;
   return compact({
     id: firstString(property("UID")?.value, url?.value),
     title: decodeIcalText(summary?.value),
     starts_at: parseIcalDate(property("DTSTART")),
     ends_at: parseIcalDate(property("DTEND")),
+    starts_on: startsOn,
+    ends_on: endsOn,
+    time_window: startsOn
+      ? { kind: "all_day", starts_on: startsOn, ends_on: endsOn }
+      : null,
     source_url: firstString(url?.value),
     place_context: decodeIcalText(property("LOCATION")?.value),
     lat: coords.lat,
@@ -331,7 +392,7 @@ function parseIcalDate(property) {
   const value = firstString(property?.value);
   if (!value) return null;
   if (/^\d{8}$/.test(value)) {
-    return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}T00:00:00.000Z`;
+    return null;
   }
   if (property?.params?.TZID) {
     return null;
@@ -353,6 +414,21 @@ function parseIcalDate(property) {
   }
   const parsed = new Date(value);
   return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : null;
+}
+
+function parseIcalDateOnly(property) {
+  const value = firstString(property?.value);
+  if (!/^\d{8}$/.test(value)) return null;
+  return normalizeSourceEventDate(
+    `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`,
+  );
+}
+
+function inclusiveIcalEndDate(startsOn, declaredEndOn) {
+  const start = Date.parse(`${startsOn}T00:00:00.000Z`);
+  const end = Date.parse(`${declaredEndOn}T00:00:00.000Z`);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return startsOn;
+  return new Date(end - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
 function parseIcalGeo(value) {
@@ -404,7 +480,33 @@ function localizedString(value) {
 
 function htmlToText(value) {
   if (typeof value !== "string") return null;
-  return value.replace(/<[^>]+>/g, "").trim() || null;
+  return decodeHtml(value.replace(/<br\s*\/?>/gi, " ").replace(/<[^>]+>/g, " "))
+    .replace(/\s+/g, " ")
+    .trim() || null;
+}
+
+function decodeHtml(value) {
+  return String(value || "")
+    .replace(/&#(\d+);/g, (_match, code) => decodeCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_match, code) =>
+      decodeCodePoint(parseInt(code, 16)),
+    )
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+function decodeCodePoint(value) {
+  try {
+    return Number.isInteger(value) && value >= 0 && value <= 0x10ffff
+      ? String.fromCodePoint(value)
+      : "";
+  } catch (_error) {
+    return "";
+  }
 }
 
 function namedList(value) {
@@ -475,6 +577,7 @@ function resolveDefaultEventsCalendarProvider(env = process.env) {
     label: firstString(env?.PARRANDA_EVENTS_CALENDAR_LABEL) || undefined,
     sourceUrl: firstString(env?.PARRANDA_EVENTS_CALENDAR_SOURCE_URL) || undefined,
     license: firstString(env?.PARRANDA_EVENTS_CALENDAR_LICENSE) || undefined,
+    timezone: firstString(env?.PARRANDA_EVENTS_CALENDAR_TIMEZONE) || undefined,
     status: firstString(env?.PARRANDA_EVENTS_CALENDAR_STATUS) || "candidate",
   });
 }

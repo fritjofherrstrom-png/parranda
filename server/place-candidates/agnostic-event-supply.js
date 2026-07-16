@@ -373,7 +373,10 @@ async function collectAnchorEvents({
           source.source_family || source.family || (source.kind === "global" ? "global_commercial" : "municipal_open"),
         ...rawEvent,
       };
-      const normalized = normalizeTimeSensitiveSourceEvent(enriched, nowDate ? { now: nowDate } : {});
+      const normalized = normalizeTimeSensitiveSourceEvent(enriched, {
+        ...(nowDate ? { now: nowDate } : {}),
+        timezone: source.timezone || undefined,
+      });
       if (!normalized) continue;
       if (rawEvent.timezone) normalized.timezone = rawEvent.timezone;
       normalizedEvidence.push(normalized);
@@ -523,6 +526,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs 
     return createEventsCalendarProvider({
       ...common,
       format: adapter === "ical" ? "ical" : source.format,
+      timezone: source.timezone || undefined,
       status: "active",
     });
   }

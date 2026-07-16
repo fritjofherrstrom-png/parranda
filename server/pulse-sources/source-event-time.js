@@ -1,0 +1,197 @@
+"use strict";
+
+function normalizeUtcEventDateTime(value) {
+  const raw = firstString(value);
+  if (!raw) return null;
+  if (hasExplicitOffset(raw)) return validDateTimeOrNull(raw);
+  if (isDateOnly(raw)) return null;
+  const parts = parseFloatingDateTime(raw);
+  return parts ? utcPartsToIso(parts) : null;
+}
+
+function normalizeSourceEventDateTime(value, { timezone } = {}) {
+  const raw = firstString(value);
+  if (!raw) return null;
+  if (hasExplicitOffset(raw)) return validDateTimeOrNull(raw);
+  if (isDateOnly(raw)) return null;
+  const parts = parseFloatingDateTime(raw);
+  const trustedTimezone = normalizeIanaTimezone(timezone);
+  if (!parts || !trustedTimezone) return null;
+  return zonedPartsToUtcIso(parts, trustedTimezone);
+}
+
+function normalizeSourceEventDate(value) {
+  const raw = firstString(value);
+  return raw && isDateOnly(raw) ? validDateOnlyOrNull(raw) : null;
+}
+
+function normalizeIanaTimezone(value) {
+  const timezone = firstString(value);
+  if (!timezone) return null;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: timezone }).format(0);
+    return timezone;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function datePartsInTimezone(value, timezone) {
+  const trustedTimezone = normalizeIanaTimezone(timezone);
+  const date = value instanceof Date ? value : new Date(value);
+  if (!trustedTimezone || !Number.isFinite(date.getTime())) return null;
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: trustedTimezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(date);
+    const values = Object.fromEntries(
+      parts
+        .filter((part) => part.type !== "literal")
+        .map((part) => [part.type, Number(part.value)]),
+    );
+    return {
+      year: values.year,
+      month: values.month,
+      day: values.day,
+      hour: values.hour,
+      minute: values.minute,
+      second: values.second,
+    };
+  } catch (_error) {
+    return null;
+  }
+}
+
+function hasExplicitOffset(value) {
+  return /(?:z|[+-]\d{2}:?\d{2})$/i.test(String(value || "").trim());
+}
+
+function isDateOnly(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "").trim());
+}
+
+function validDateTimeOrNull(value) {
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? String(value).trim() : null;
+}
+
+function validDateOnlyOrNull(value) {
+  const raw = String(value || "").trim();
+  const parsed = new Date(raw + "T00:00:00.000Z");
+  if (!Number.isFinite(parsed.getTime())) return null;
+  return parsed.toISOString().slice(0, 10) === raw ? raw : null;
+}
+
+function parseFloatingDateTime(value) {
+  const match = String(value || "").trim().match(
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/,
+  );
+  if (!match) return null;
+  const parts = {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+    hour: Number(match[4]),
+    minute: Number(match[5]),
+    second: Number(match[6] || 0),
+    millisecond: Number(String(match[7] || "0").padEnd(3, "0")),
+  };
+  const check = new Date(Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second,
+    parts.millisecond,
+  ));
+  if (
+    check.getUTCFullYear() !== parts.year ||
+    check.getUTCMonth() + 1 !== parts.month ||
+    check.getUTCDate() !== parts.day ||
+    check.getUTCHours() !== parts.hour ||
+    check.getUTCMinutes() !== parts.minute ||
+    check.getUTCSeconds() !== parts.second
+  ) {
+    return null;
+  }
+  return parts;
+}
+
+function utcPartsToIso(parts) {
+  return new Date(Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second,
+    parts.millisecond,
+  )).toISOString();
+}
+
+function zonedPartsToUtcIso(parts, timezone) {
+  const target = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second,
+  );
+  const possibleOffsets = new Set();
+  const sampleStepMs = 3 * 60 * 60 * 1000;
+  const sampleRadiusMs = 36 * 60 * 60 * 1000;
+  for (let delta = -sampleRadiusMs; delta <= sampleRadiusMs; delta += sampleStepMs) {
+    const sample = target + delta;
+    const rendered = datePartsInTimezone(sample, timezone);
+    if (!rendered) continue;
+    const renderedAsUtc = Date.UTC(
+      rendered.year,
+      rendered.month - 1,
+      rendered.day,
+      rendered.hour,
+      rendered.minute,
+      rendered.second,
+    );
+    possibleOffsets.add(renderedAsUtc - sample);
+  }
+
+  const matches = [...possibleOffsets]
+    .map((offset) => target - offset)
+    .filter((candidate) => {
+      const rendered = datePartsInTimezone(candidate, timezone);
+      return rendered && sameDateTimeParts(rendered, parts);
+    });
+
+  // A gap has no matching instant and a DST fold has two. Both are unsafe
+  // without an explicit source offset, so floating local time fails closed.
+  const uniqueMatches = [...new Set(matches)];
+  if (uniqueMatches.length !== 1) return null;
+  return new Date(uniqueMatches[0] + parts.millisecond).toISOString();
+}
+
+function sameDateTimeParts(left, right) {
+  return ["year", "month", "day", "hour", "minute", "second"].every(
+    (key) => left[key] === right[key],
+  );
+}
+
+function firstString(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+module.exports = {
+  datePartsInTimezone,
+  normalizeIanaTimezone,
+  normalizeSourceEventDate,
+  normalizeSourceEventDateTime,
+  normalizeUtcEventDateTime,
+};

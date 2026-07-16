@@ -283,9 +283,22 @@ Every provider must preserve enough timing to let
 Provider output should include `last_checked` and source freshness where
 available. Expiry facts win over source-provided `timing_relevance`.
 
-Timezone handling belongs in the provider adapter or trusted context layer. If
-an event source only exposes local date strings, the adapter must either attach
-a trusted timezone or downgrade timing precision honestly.
+Timezone handling belongs in the provider adapter or trusted context layer. A
+reviewed source manifest may carry a validated IANA timezone for a known local
+calendar. Explicit UTC/offset timestamps remain source facts; floating local
+date-times are normalized only when that reviewed timezone is present. Missing,
+invalid, or nonexistent daylight-saving times stay unknown instead of being
+silently interpreted as server-local or UTC time.
+
+Local calendar dates are not UTC instants. Date-only/all-day sources preserve
+`starts_on` / `ends_on`, while actual instants use `starts_at` / `ends_at`.
+Ambiguous daylight-saving folds also stay unresolved unless the source supplies
+an explicit offset. A multi-day listing with daily opening hours uses an
+explicit `time_window.kind: "daily"` with local start/end clocks; it must not be
+flattened into one continuous interval across nights. Truly continuous
+multi-day events may still use one bounded instant interval. Date-only rows are
+inspectable source facts but remain ineligible for current-time promotion until
+downstream all-day semantics are explicitly supported.
 
 ## Local-Language And Translation
 

@@ -94,6 +94,84 @@ test("maps The Events Calendar REST event to the raw time-sensitive shape", () =
   assert.equal(raw.translation_status, "needed");
 });
 
+test("REST titles decode factual HTML entities without preserving markup", () => {
+  const raw = mapEventsCalendarEventToRaw(tecEvent({
+    title: { rendered: "&#8220;Snacka vin&#8221; &amp; cider <em>ikväll</em>" },
+  }));
+
+  assert.equal(raw.title, "“Snacka vin” & cider ikväll");
+});
+
+test("floating REST date-times require a reviewed IANA timezone", () => {
+  const event = tecEvent({
+    start_date: "2026-09-12 18:00:00",
+    end_date: "2026-09-12 23:00:00",
+  });
+
+  const unresolved = mapEventsCalendarEventToRaw(event);
+  assert.equal(unresolved.starts_at, undefined);
+  assert.equal(unresolved.ends_at, undefined);
+
+  const invalid = mapEventsCalendarEventToRaw(event, { timezone: "Not/A_Timezone" });
+  assert.equal(invalid.starts_at, undefined);
+  assert.equal(invalid.ends_at, undefined);
+
+  const resolved = mapEventsCalendarEventToRaw(event, { timezone: "Europe/Athens" });
+  assert.equal(resolved.starts_at, "2026-09-12T15:00:00.000Z");
+  assert.equal(resolved.ends_at, "2026-09-12T20:00:00.000Z");
+});
+
+test("reviewed IANA timezone conversion follows seasonal offsets", () => {
+  const summer = mapEventsCalendarEventToRaw(tecEvent({
+    start_date: "2026-07-15 18:00:00",
+    end_date: "2026-07-15 19:00:00",
+  }), { timezone: "Europe/Stockholm" });
+  const winter = mapEventsCalendarEventToRaw(tecEvent({
+    start_date: "2026-01-15 18:00:00",
+    end_date: "2026-01-15 19:00:00",
+  }), { timezone: "Europe/Stockholm" });
+
+  assert.equal(summer.starts_at, "2026-07-15T16:00:00.000Z");
+  assert.equal(winter.starts_at, "2026-01-15T17:00:00.000Z");
+});
+
+test("nonexistent local times fail closed across daylight-saving gaps", () => {
+  const raw = mapEventsCalendarEventToRaw(tecEvent({
+    start_date: "2026-03-29 02:30:00",
+    end_date: "2026-03-29 03:30:00",
+  }), { timezone: "Europe/Stockholm" });
+
+  assert.equal(raw.starts_at, undefined);
+  assert.equal(raw.ends_at, "2026-03-29T01:30:00.000Z");
+});
+
+test("ambiguous local times fail closed across daylight-saving folds", () => {
+  const ambiguous = mapEventsCalendarEventToRaw(tecEvent({
+    start_date: "2026-10-25 02:30:00",
+    end_date: "2026-10-25 04:00:00",
+  }), { timezone: "Europe/Stockholm" });
+  const explicit = mapEventsCalendarEventToRaw(tecEvent({
+    start_date: "2026-10-25T02:30:00+02:00",
+    end_date: "2026-10-25T04:00:00+01:00",
+  }), { timezone: "Europe/Stockholm" });
+
+  assert.equal(ambiguous.starts_at, undefined);
+  assert.equal(ambiguous.ends_at, "2026-10-25T03:00:00.000Z");
+  assert.equal(explicit.starts_at, "2026-10-25T02:30:00+02:00");
+});
+
+test("explicit UTC fields win over ambiguous local REST fields", () => {
+  const raw = mapEventsCalendarEventToRaw(tecEvent({
+    start_date: "2026-09-12 18:00:00",
+    end_date: "2026-09-12 23:00:00",
+    start_date_utc: "2026-09-12 15:00:00",
+    end_date_utc: "2026-09-12 20:00:00",
+  }));
+
+  assert.equal(raw.starts_at, "2026-09-12T15:00:00.000Z");
+  assert.equal(raw.ends_at, "2026-09-12T20:00:00.000Z");
+});
+
 test("extracts The Events Calendar events from common REST wrappers", () => {
   assert.equal(extractTheEventsCalendarEvents({ events: [tecEvent(), tecEvent({ id: 2 })] }).length, 2);
   assert.equal(extractTheEventsCalendarEvents([tecEvent()]).length, 1);
@@ -157,6 +235,24 @@ test("parses iCal VEVENT feeds and preserves local-language metadata", () => {
   assert.equal(raw.translation_status, "needed");
 });
 
+test("iCal all-day dates remain local calendar facts", () => {
+  const extracted = extractIcalEvents(icsFixture({
+    dtstart: "DTSTART;VALUE=DATE:20260912",
+    dtend: "DTEND;VALUE=DATE:20260915",
+  }));
+  const raw = mapEventsCalendarEventToRaw(extracted[0]);
+
+  assert.equal(raw.starts_at, undefined);
+  assert.equal(raw.ends_at, undefined);
+  assert.equal(raw.starts_on, "2026-09-12");
+  assert.equal(raw.ends_on, "2026-09-14", "iCal DTEND date is exclusive");
+  assert.deepEqual(raw.time_window, {
+    kind: "all_day",
+    starts_on: "2026-09-12",
+    ends_on: "2026-09-14",
+  });
+});
+
 test("iCal Zulu date-times convert to ISO UTC, but floating/TZID date-times stay unknown", () => {
   const zulu = mapEventsCalendarEventToRaw(extractIcalEvents(icsFixture({
     dtstart: "DTSTART:20260912T180000Z",
@@ -201,6 +297,50 @@ test("iCal floating date-times do not promote through registry when timezone is 
   assert.equal(event.starts_at, undefined);
   assert.equal(event.ends_at, undefined);
   assert.ok(!(event.timing_reasons || []).includes("timing_now"));
+});
+
+test("floating REST date-times do not promote without reviewed timezone", async () => {
+  const result = await collectPulseSourcesForCity(city, {
+    providerSpecs: [
+      provider({
+        fetcher: async () => response(JSON.stringify({
+          events: [tecEvent({
+            start_date: "2026-09-12 18:00:00",
+            end_date: "2026-09-12 23:00:00",
+          })],
+        })),
+      }),
+    ],
+    enabledStatuses: ["candidate"],
+    context: { now: NOW },
+  });
+
+  assert.equal(result.time_sensitive_events.length, 1);
+  assert.equal(result.time_sensitive_events[0].timing_relevance, "unknown");
+  assert.equal(result.time_sensitive_events[0].starts_at, undefined);
+  assert.ok(!(result.time_sensitive_events[0].timing_reasons || []).includes("timing_now"));
+});
+
+test("provider-level reviewed timezone resolves floating REST times", async () => {
+  const result = await collectPulseSourcesForCity(city, {
+    providerSpecs: [
+      provider({
+        timezone: "Europe/Athens",
+        fetcher: async () => response(JSON.stringify({
+          events: [tecEvent({
+            start_date: "2026-09-12 18:00:00",
+            end_date: "2026-09-12 23:00:00",
+          })],
+        })),
+      }),
+    ],
+    enabledStatuses: ["candidate"],
+    context: { now: NOW },
+  });
+
+  assert.equal(result.time_sensitive_events.length, 1);
+  assert.equal(result.time_sensitive_events[0].starts_at, "2026-09-12T15:00:00.000Z");
+  assert.equal(result.time_sensitive_events[0].timing_relevance, "now");
 });
 
 test("configured candidate provider normalizes iCal events through the registry when enabled", async () => {

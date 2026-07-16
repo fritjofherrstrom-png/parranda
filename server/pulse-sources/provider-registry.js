@@ -113,6 +113,7 @@ async function collectPulseSourcesForCity(cityConfig, options = {}) {
             index,
             city: descriptor.city,
             now: options.context?.now,
+            timezone: descriptor.timezone,
           }),
         )
         .filter(Boolean);
