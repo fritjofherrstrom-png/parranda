@@ -1,15 +1,48 @@
 /**
  * Pure builders for Google Maps deep links — testable without a DOM.
- * Coordinates are the source of truth (precise); names are for display only.
- * Nothing is ever fabricated: a stop without finite coords yields no link.
+ * Coordinates remain the trust gate. When a trusted stop also has a name, the
+ * consumer link searches for that real place in its city context instead of
+ * opening an anonymous coordinate pin.
  */
 
 const MAPS = "https://www.google.com/maps";
 
-// A single place pin at real coordinates.
-export function mapsPlaceUrl(stop) {
+// A single real-place search. Coordinates remain required so an unplaced name
+// can never become a fabricated product link; coordinate-only stops retain the
+// exact-pin fallback.
+export function mapsPlaceUrl(stop, placeContext = null) {
   if (!stop || !Number.isFinite(stop.lat) || !Number.isFinite(stop.lng)) return null;
-  return `${MAPS}/search/?api=1&query=${stop.lat},${stop.lng}`;
+  const name = firstText(stop.label, stop.name);
+  if (!name) return `${MAPS}/search/?api=1&query=${stop.lat},${stop.lng}`;
+
+  const queryParts = uniqueText([
+    name,
+    firstText(stop.address),
+    firstText(stop.area),
+    firstText(placeContext),
+  ]);
+  const params = new URLSearchParams();
+  params.set("api", "1");
+  params.set("query", queryParts.join(", "));
+  return `${MAPS}/search/?${params.toString()}`;
+}
+
+function firstText(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function uniqueText(values) {
+  const seen = new Set();
+  return values.filter((value) => {
+    if (!value) return false;
+    const key = value.toLocaleLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 // The consumer Maps directions URL supports a limited number of waypoints, so a

@@ -1,16 +1,50 @@
 /**
- * Google Maps deep-link builders — coords are the source of truth, nothing is
- * fabricated, and a long day samples down to a valid waypoint count.
+ * Google Maps deep-link builders — coords remain the trust gate, named stops
+ * search for their real listing, and long days keep a valid waypoint count.
  */
 
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mapsPlaceUrl, mapsWalkingRouteUrl, dayStops, primaryRouteStops } from "../src/lib/maps-links.mjs";
 
-test("mapsPlaceUrl pins real coords, and refuses a coordless stop (no fabrication)", () => {
+test("mapsPlaceUrl searches for a named real place in context and keeps a coordinate fallback", () => {
+  const named = new URL(
+    mapsPlaceUrl(
+      { name: "Bergengrenska Trädgården", lat: 55.5555171, lng: 14.3487202 },
+      "Simrishamn, Sverige",
+    ),
+  );
+  assert.equal(named.searchParams.get("query"), "Bergengrenska Trädgården, Simrishamn, Sverige");
+
   assert.equal(mapsPlaceUrl({ lat: 41.15, lng: -8.61 }), "https://www.google.com/maps/search/?api=1&query=41.15,-8.61");
   assert.equal(mapsPlaceUrl({ name: "Ghost" }), null);
   assert.equal(mapsPlaceUrl(null), null);
+});
+
+test("mapsPlaceUrl carries trusted address/area context without duplicating identical fields", () => {
+  const url = new URL(
+    mapsPlaceUrl(
+      { label: "Karins", address: "Storgatan 2", area: "Centrum", lat: 55.55, lng: 14.35 },
+      "Simrishamn",
+    ),
+  );
+  assert.equal(url.searchParams.get("query"), "Karins, Storgatan 2, Centrum, Simrishamn");
+
+  const deduped = new URL(mapsPlaceUrl({ name: "Karins", area: "Simrishamn", lat: 55.55, lng: 14.35 }, "simrishamn"));
+  assert.equal(deduped.searchParams.get("query"), "Karins, Simrishamn");
+});
+
+test("mapsPlaceUrl applies the same place-search contract across arbitrary cities", () => {
+  const fixtures = [
+    { name: "Folkets park", context: "Malmö, Sverige" },
+    { name: "Museo Carducci", context: "Bologna, Italia" },
+    { name: "Archaeological Museum of Naxos", context: "Naxos, Greece" },
+  ];
+
+  for (const fixture of fixtures) {
+    const url = new URL(mapsPlaceUrl({ name: fixture.name, lat: 1, lng: 1 }, fixture.context));
+    assert.equal(url.searchParams.get("query"), `${fixture.name}, ${fixture.context}`);
+  }
 });
 
 test("mapsWalkingRouteUrl builds an ordered walking route; needs >= 2 coord stops", () => {
