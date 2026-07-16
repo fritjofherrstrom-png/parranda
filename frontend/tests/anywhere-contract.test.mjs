@@ -171,7 +171,14 @@ test("Pulse section: place-titled, dedup-aware, honest states, no jargon", () =>
   assert.doesNotMatch(anywherePlannerSource, /Live Pulse|dogfood|citypack/i);
 });
 
-test("route result copy keeps route stops authoritative and district candidates contextual", () => {
+test("route result has one authoritative route and keeps broader candidates secondary", () => {
+  assert.match(anywherePlannerSource, /t\("Dagens rutt", "Today's route"\)/);
+  assert.match(anywherePlannerSource, /t\("Öppna den planerade rutten", "Open the planned route"\)/);
+  assert.match(anywherePlannerSource, /buildRouteContextSuggestions\(routeStops, day\?\.areas/);
+  assert.match(anywherePlannerSource, /t\("Fler nära rutten", "More near the route"\)/);
+  assert.match(anywherePlannerSource, /de ingår inte i dagens stopp eller Maps-rutten/);
+  assert.match(anywherePlannerSource, /mapsWalkingRouteUrl\(routeStops\)/);
+  assert.doesNotMatch(anywherePlannerSource, /t\("Dagens kvarter", "Today's neighborhoods"\)/);
   assert.match(anywherePlannerSource, /Candidates near this place/);
   assert.match(anywherePlannerSource, /Parranda found place candidates, but not a reliable route yet\./);
   assert.match(anywherePlannerSource, /t\("träffar", "places"\)/);
@@ -180,7 +187,20 @@ test("route result copy keeps route stops authoritative and district candidates 
     /area\.stop_ids\?\.length[\s\S]{0,120}t\("stopp", "stops"\)/,
     "district/context candidate counts must not be labelled as route stops",
   );
+  assert.match(anywherePlannerSource, /structure && !hasPrimaryRoute/);
   assert.doesNotMatch(anywherePlannerSource, /Structure found — but no finished route yet\./);
+});
+
+test("map hierarchy mirrors route authority instead of numbering two competing plans", () => {
+  assert.match(anywherePlannerSource, /className: `route-map-marker/);
+  assert.match(anywherePlannerSource, /routeContextSuggestions\.forEach/);
+  assert.match(anywherePlannerSource, /if \(hasPrimaryRoute\)/);
+  assert.match(anywherePlannerSource, /else \{[\s\S]*district-map-marker/);
+});
+
+test("walking leg copy uses the shared sub-100-metre formatter", () => {
+  assert.match(anywherePlannerSource, /walkingDistanceLabel\(leg\.km, lang\)/);
+  assert.doesNotMatch(anywherePlannerSource, /`\$\{leg\.km\} km`/);
 });
 
 test("planner surface consumes landing input instead of presenting a separate any-city product", () => {
