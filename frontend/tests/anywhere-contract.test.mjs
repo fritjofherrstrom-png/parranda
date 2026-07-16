@@ -128,15 +128,47 @@ test("the surface renders the engine's TRUSTWORTHY richness — and never the co
   assert.doesNotMatch(anywherePlannerSource, /primaryRoute\?\.title|primaryRoute\?\.summary|why_recommended|curator_voice/);
 });
 
-test("a woven live-event stop is marked, and the anchor card agrees with the route", () => {
-  // The event stop renders with an explicit live chip (never dressed as a
-  // stable place), and the "And tonight" card states when it was woven in as
-  // the route's last stop — the two surfaces must agree, not duplicate claims.
-  assert.match(anywherePlannerSource, /stop\?\.is_live_event && \(/);
-  assert.match(anywherePlannerSource, /t\("Ikväll", "Tonight"\)/);
-  assert.match(anywherePlannerSource, /day\.evening_event\.woven_into_route && \(/);
-  assert.match(anywherePlannerSource, /Vävd i rutten som sista stopp/);
-  assert.match(anywherePlannerSource, /Woven into the route as the last stop/);
+test("route/Pulse hierarchy: a woven event is a route EXTENSION with exactly one full presentation", () => {
+  // Core numbered stops render from the partition's core list — a woven live
+  // event is never an ordinary numbered POI...
+  assert.match(anywherePlannerSource, /split\.core\.map\(/);
+  // ...it renders once, as an attached route extension...
+  assert.match(anywherePlannerSource, /split\.woven\.map\(/);
+  assert.match(anywherePlannerSource, /Ikväll i din rutt/);
+  assert.match(anywherePlannerSource, /Tonight in your route/);
+  assert.match(anywherePlannerSource, /Tillagt till dagens rutt/);
+  assert.match(anywherePlannerSource, /Added to today's route/);
+  // ...stays in the complete Google Maps route (FULL stop order, not the split)...
+  assert.match(anywherePlannerSource, /mapsWalkingRouteUrl\(routeStops\)/);
+  // ...and the old duplicated presentations are gone (the "And tonight" card and
+  // the woven-claim line no longer exist anywhere).
+  assert.doesNotMatch(anywherePlannerSource, /Och ikväll|And tonight/);
+  assert.doesNotMatch(anywherePlannerSource, /Vävd i rutten som sista stopp/);
+});
+
+test("Pulse section: place-titled, dedup-aware, honest states, no jargon", () => {
+  // Editorial heading carries the place (or near-you mode).
+  assert.match(anywherePlannerSource, /Just nu i \$\{typedPlaceLabel\}/);
+  assert.match(anywherePlannerSource, /Now in \$\{typedPlaceLabel\}/);
+  assert.match(anywherePlannerSource, /t\("Just nu nära dig", "Now near you"\)/);
+  // Events render from the deduped buckets (woven event_ids excluded), never
+  // straight from liveEvents arrays.
+  assert.match(anywherePlannerSource, /pulseBuckets\.tonight/);
+  assert.match(anywherePlannerSource, /pulseBuckets\.thisWeek/);
+  assert.doesNotMatch(anywherePlannerSource, /liveEvents\[bucket\]/);
+  // Quiet reference for the woven event — a line, never a second full card.
+  assert.match(anywherePlannerSource, /Ingår i dagens rutt/);
+  assert.match(anywherePlannerSource, /Included in today's route/);
+  // Honest soft-empty state (covered, warm, nothing on).
+  assert.match(anywherePlannerSource, /Inga listade händelser just nu/);
+  assert.match(anywherePlannerSource, /Nothing listed right now/);
+  // Ambient clothing guidance is derived from the trusted observation and
+  // hidden without data (clothing && ...); attribution via the plural feeds line.
+  assert.match(anywherePlannerSource, /clothingAdvice\(dayflow\?\.weather\?\.provenance\?\.observed/);
+  assert.match(anywherePlannerSource, /\{clothing && \(/);
+  assert.match(anywherePlannerSource, /pulseSourceLine\(liveEvents\)/);
+  // No jargon on the surface.
+  assert.doesNotMatch(anywherePlannerSource, /Live Pulse|dogfood|citypack/i);
 });
 
 test("route result copy keeps route stops authoritative and district candidates contextual", () => {

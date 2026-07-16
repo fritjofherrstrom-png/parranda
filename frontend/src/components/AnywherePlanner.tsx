@@ -17,6 +17,16 @@ import {
   isoDateFromOffset,
 } from "../lib/anywhere-payload.mjs";
 import { mapsPlaceUrl, mapsWalkingRouteUrl, primaryRouteStops } from "../lib/maps-links.mjs";
+import {
+  splitRouteStops,
+  wovenEventIds,
+  pulseEventBuckets,
+  clothingAdvice,
+  pulseSourceLine,
+  eventTiming,
+  pulseHealthState,
+  type PulseTimeWindow,
+} from "../lib/pulse-view.mjs";
 import { buildShareUrl, decodeShareParams } from "../lib/anywhere-share.mjs";
 import {
   buildSavedEntry,
@@ -75,12 +85,28 @@ interface PlaceStructure {
   };
 }
 
+interface PulseEvent {
+  id?: string;
+  title?: string;
+  starts_at?: string;
+  ends_at?: string;
+  starts_on?: string;
+  ends_on?: string;
+  time_window?: PulseTimeWindow | null;
+  place?: string;
+  source_label?: string;
+  source_url?: string;
+  timezone?: string;
+}
+
 interface LiveEvents {
   coverage?: string;
   pending?: boolean;
   feed?: { label?: string; license?: string } | null;
-  tonight?: Array<{ id?: string; title?: string; starts_at?: string; place?: string; source_url?: string; timezone?: string }>;
-  this_week?: Array<{ id?: string; title?: string; starts_at?: string; place?: string; source_url?: string; timezone?: string }>;
+  feeds?: Array<{ label?: string; license?: string | null }>;
+  acquisition?: { source_health?: { status?: string; result?: string; reasons?: string[] } | null } | null;
+  tonight?: PulseEvent[];
+  this_week?: PulseEvent[];
 }
 
 const DAYPART_LABELS: Record<string, { sv: string; en: string }> = {
@@ -124,18 +150,10 @@ function label(map: Record<string, { sv: string; en: string }>, key: string | nu
   return map[key]?.[lang] ?? key;
 }
 
-function eventWhen(ev: { starts_at?: string; timezone?: string }, lang: Lang): string {
-  if (!ev.starts_at) return "";
-  const date = new Date(ev.starts_at);
-  if (Number.isNaN(date.getTime())) return "";
-  try {
-    const opts: Intl.DateTimeFormatOptions = { weekday: "short", hour: "2-digit", minute: "2-digit" };
-    if (ev.timezone) opts.timeZone = ev.timezone; // venue-local time, never the viewer's
-    return date.toLocaleString(lang === "en" ? "en-GB" : "sv-SE", opts);
-  } catch {
-    return "";
-  }
-}
+// Event timing renders through the pure `eventTiming` formatter (pulse-view.mjs),
+// which honors the FULL temporal contract: continuous instants in the venue
+// timezone, daily local windows, all-day local dates (never UTC-midnight
+// shifted), and omits copy entirely when timing is unresolved.
 
 export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: Lang }) {
   // Static output can't read query params at request time, so honor the
@@ -465,10 +483,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // surface: they can carry baseline-city phrasing and placeholder labels.
   const primaryRoute: any = safeResponse?.days?.[0]?.primary_route ?? null;
   const dayflow: any = safeResponse?.days?.[0]?.dayflow_context ?? null;
-  const legForStop = (index: number): { km: number | null; minutes: number | null } | null => {
-    if (index === 0 || !Array.isArray(primaryRoute?.legs)) return null;
-    const indexed: any = routeStops[index];
-    const stopLabel = String(indexed?.label ?? indexed?.name ?? "").trim();
+  const legForStop = (stop: any): { km: number | null; minutes: number | null } | null => {
+    if (!Array.isArray(primaryRoute?.legs)) return null;
+    const stopLabel = String(stop?.label ?? stop?.name ?? "").trim();
     if (!stopLabel) return null;
     const leg = primaryRoute.legs.find((l: any) => String(l?.to_label ?? "").trim() === stopLabel);
     if (!leg) return null;
@@ -477,6 +494,22 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       minutes: Number.isFinite(leg.estimated_walk_minutes) ? leg.estimated_walk_minutes : null,
     };
   };
+  // PULSE VIEW-MODEL: partition route reality from Pulse context. Core stops are
+  // numbered POIs; a WOVEN live event renders once, as a route extension; woven
+  // event ids are excluded from the general Pulse list. The Maps URL keeps the
+  // FULL stop order — the woven event is genuinely part of the walking route.
+  const split = useMemo(() => splitRouteStops(routeStops), [routeStops]);
+  const pulseBuckets = useMemo(
+    () => pulseEventBuckets(liveEvents, wovenEventIds(routeStops)),
+    [liveEvents, routeStops],
+  );
+  const pulseState = useMemo(() => pulseHealthState(liveEvents, pulseBuckets), [liveEvents, pulseBuckets]);
+  const clothing = useMemo(
+    () => clothingAdvice(dayflow?.weather?.provenance?.observed, lang),
+    [dayflow, lang],
+  );
+  const pulseSources = useMemo(() => pulseSourceLine(liveEvents), [liveEvents]);
+  const eveningEvent: any = day?.evening_event ?? null;
   // A single "open the whole day in Google Maps" walking route across every
   // coord-bearing primary-route stop, in the exact order the API returned.
   const routeUrl = useMemo(() => mapsWalkingRouteUrl(routeStops), [routeStops]);
@@ -796,11 +829,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       )}
 
       {showDay && dayflow?.weather?.headline && (
-        <section className="rounded-parranda border border-parranda-accent/25 bg-parranda-accent/10 p-5 shadow-sm">
-          <p className="text-xs font-bold uppercase tracking-wider text-parranda-accent">{t("Dagens läsning", "Today's read")}</p>
-          <p className="mt-1 text-sm font-semibold text-parranda-ink">{dayflow.weather.headline}</p>
-          {dayflow.weather.reason && <p className="mt-1 text-sm text-parranda-ink/75">{dayflow.weather.reason}</p>}
-          {dayflow.weather.pitch && <p className="mt-1 text-sm font-medium text-parranda-ink">{dayflow.weather.pitch}</p>}
+        <section className="rounded-parranda border border-parranda-accent/25 bg-parranda-accent/10 p-4 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-wider text-parranda-accent">{t("Dagens läsning", "Today's reading")}</p>
+          <p className="mt-1 text-sm font-semibold text-parranda-ink">
+            {dayflow.weather.headline}
+            {dayflow.weather.pitch ? <span className="font-medium"> — {dayflow.weather.pitch}</span> : null}
+          </p>
+          {dayflow.weather.reason && <p className="mt-0.5 text-xs text-parranda-ink/70">{dayflow.weather.reason}</p>}
         </section>
       )}
 
@@ -815,11 +850,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               </p>
             )}
           </div>
+          {/* Core stops only: stable places, numbered. A woven live event is NOT an
+              ordinary POI — it renders once below, as an attached route extension. */}
           <ol className="mt-2 flex flex-col">
-            {routeStops.map((stop: any, i: number) => {
+            {split.core.map((stop: any, i: number) => {
               const name = String(stop?.label || stop?.name || "").trim();
               if (!name) return null;
-              const leg = legForStop(i);
+              const leg = i === 0 ? null : legForStop(stop);
               const pin = mapsPlaceUrl(stop, mapsPlaceContext);
               return (
                 <li key={stop?.id ?? i} className="flex flex-col">
@@ -844,12 +881,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                         {label(TYPE_LABELS, stop.type, lang)}
                       </span>
                     )}
-                    {stop?.is_live_event && (
-                      <span className="rounded-full border border-parranda-accent bg-parranda-accent/15 px-2 py-0.5 text-xs font-bold text-parranda-accent">
-                        {t("Ikväll", "Tonight")}
-                        {stop?.starts_at ? ` · ${eventWhen(stop, lang)}` : ""}
-                      </span>
-                    )}
                     {stop?.daypart && (
                       <span className="rounded-full border border-parranda-accent/30 bg-parranda-accent/10 px-2 py-0.5 text-xs font-semibold text-parranda-ink">
                         {label(DAYPART_LABELS, stop.daypart, lang)}
@@ -860,12 +891,62 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               );
             })}
           </ol>
+          {/* Route extension: the walking-validated evening event. One full
+              presentation — attached to the route it genuinely extends (it stays
+              in the Google Maps route via the untouched full stop order). */}
+          {split.woven.map((stop: any) => {
+            const name = String(stop?.label || stop?.name || "").trim();
+            if (!name) return null;
+            const leg = legForStop(stop);
+            const legKm = Number.isFinite(eveningEvent?.route_leg_km) ? eveningEvent.route_leg_km : leg?.km;
+            const pin = mapsPlaceUrl(stop, mapsPlaceContext);
+            const venue = String(eveningEvent?.place || "").trim();
+            const sourceLabel = String(stop?.source?.label || eveningEvent?.source_label || "").trim();
+            const sourceUrl = stop?.source?.url || eveningEvent?.source_url || null;
+            return (
+              <div key={stop?.id} className="mt-3 rounded-parranda border border-parranda-accent/40 bg-parranda-accent/10 p-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-parranda-accent">{t("Ikväll i din rutt", "Tonight in your route")}</p>
+                <p className="mt-1 flex flex-wrap items-center gap-2 text-sm font-semibold text-parranda-ink">
+                  {pin ? (
+                    <a href={pin} target="_blank" rel="noopener noreferrer" className="underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
+                      {name}
+                    </a>
+                  ) : (
+                    name
+                  )}
+                  {stop?.starts_at && (
+                    <span className="rounded-full border border-parranda-accent bg-parranda-accent/15 px-2 py-0.5 text-xs font-bold text-parranda-accent">
+                      {eventTiming(stop, lang)}
+                    </span>
+                  )}
+                </p>
+                {venue && venue !== name && <p className="mt-0.5 text-xs text-parranda-ink/70">{venue}</p>}
+                {Number.isFinite(legKm) && (
+                  <p className="mt-1 text-xs text-parranda-ink/70">
+                    {t(`Tillagt till dagens rutt · ${legKm} km från föregående stopp`, `Added to today's route · ${legKm} km from the previous stop`)}
+                  </p>
+                )}
+                {sourceLabel && (
+                  <p className="mt-1 text-xs text-parranda-ink/55">
+                    {t("Källa", "Source")}:{" "}
+                    {sourceUrl ? (
+                      <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-parranda-accent">
+                        {sourceLabel}
+                      </a>
+                    ) : (
+                      sourceLabel
+                    )}
+                  </p>
+                )}
+              </div>
+            );
+          })}
         </section>
       )}
 
       {/* Dagens kvarter — the neighborhoods behind the route: supporting spatial
-          context (districts, the walk between them, the map, the woven evening
-          anchor). It reads AFTER the route because it explains it, not leads it. */}
+          context (districts, the walk between them, the map). It reads AFTER the
+          route because it explains it, not leads it. */}
       {showStructure && structure && (
         <section className="flex flex-col gap-4 rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm">
           <div>
@@ -940,19 +1021,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             ))}
           </ol>
 
-          {day?.evening_event?.title && (
-            <div className="rounded-parranda border border-parranda-accent/25 bg-parranda-accent/10 p-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-parranda-accent">{t("Och ikväll", "And tonight")}</p>
-              <p className="mt-1 text-sm font-semibold text-parranda-ink">{day.evening_event.title}</p>
-              {day.evening_event.place && <p className="text-xs text-parranda-ink/70">{day.evening_event.place}</p>}
-              {day.evening_event.woven_into_route && (
-                <p className="mt-1 text-xs text-parranda-ink/70">
-                  {t("Vävd i rutten som sista stopp", "Woven into the route as the last stop")}
-                  {Number.isFinite(day.evening_event.route_leg_km) ? ` · ↓ ${day.evening_event.route_leg_km} km` : ""}
-                </p>
-              )}
-            </div>
-          )}
+          {/* The evening event is NOT presented here: a woven event renders once,
+              as the route extension in "Dagens stopp"; a non-woven anchor event
+              surfaces in the Pulse section's tonight bucket. */}
 
           {(day?.missing_intents ?? []).length > 0 && (
             <p className="text-sm italic text-parranda-ink/60">
@@ -985,37 +1056,118 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
       {phase === "done" && liveEvents && (liveEvents.coverage === "covered" || liveEvents.coverage === "uncovered") && (
         <section className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">{t("Händer i närheten", "Happening near here")}</p>
-          {liveEvents.coverage === "uncovered" && (
+          {/* PULSE — the city's now-context. Renders independently of route
+              composition (live_events survives a blocked compose), so a failed
+              route never hides trusted events. Woven events are excluded here —
+              they own the route-extension presentation above. */}
+          <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">
+            {mode === "near_me"
+              ? t("Just nu nära dig", "Now near you")
+              : typedPlaceLabel
+                ? t(`Just nu i ${typedPlaceLabel}`, `Now in ${typedPlaceLabel}`)
+                : t("Just nu här", "Now here")}
+          </p>
+
+          {clothing && (
+            <p className="mt-2 text-sm text-parranda-ink">
+              <span className="font-semibold">{clothing.headline}</span>
+              <span className="text-parranda-ink/70"> — {clothing.advice}</span>
+            </p>
+          )}
+
+          {split.woven.length > 0 && (
+            <p className="mt-2 text-xs text-parranda-ink/60">
+              {split.woven
+                .map((s: any) => String(s?.label || s?.name || "").trim())
+                .filter(Boolean)
+                .map((n: string) => `${n} · ${t("Ingår i dagens rutt", "Included in today's route")}`)
+                .join(" · ")}
+            </p>
+          )}
+
+          {/* Honest source-health states — coverage only says sources exist HERE;
+              pulseHealthState says whether collection actually succeeded. Raw
+              backend reason tokens never reach product copy. */}
+          {pulseState === "uncovered" && (
             <p className="mt-2 text-sm text-parranda-ink/70">
               {t("Ingen live-eventkälla täcker den här platsen än — Parranda hittar inte på en.", "No live-events feed reaches this place yet — Parranda won't invent one.")}
             </p>
           )}
-          {liveEvents.coverage === "covered" && liveEvents.pending && (
-            <p className="mt-2 text-sm text-parranda-ink/70">{t("Kollar vad som händer — uppdateras automatiskt strax.", "Checking what's on — updates automatically in a moment.")}</p>
+          {pulseState === "pending" && (
+            <p className="mt-2 text-sm text-parranda-ink/70">{t("Kollar kalendrarna — uppdateras automatiskt strax.", "Checking the calendars — updates automatically in a moment.")}</p>
           )}
-          {(["tonight", "this_week"] as const).map((bucket) => {
-            const events = liveEvents[bucket] ?? [];
-            if (!events.length) return null;
-            return (
-              <div key={bucket} className="mt-3">
-                <p className="text-sm font-semibold text-parranda-ink">{bucket === "tonight" ? t("Ikväll", "Tonight") : t("Den här veckan", "This week")}</p>
-                <ul className="mt-1 flex flex-col gap-1">
-                  {events.slice(0, 4).map((ev, i) => (
-                    <li key={ev.id ?? i} className="text-sm text-parranda-ink/85">
-                      <span className="font-medium">{ev.title}</span>
-                      {eventWhen(ev, lang) && <span className="text-parranda-ink/60"> · {eventWhen(ev, lang)}</span>}
-                      {ev.place && <span className="text-parranda-ink/60"> · {ev.place}</span>}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
-          {liveEvents.feed?.label && (
+          {pulseState === "soft_empty" && (
+            <p className="mt-2 text-sm text-parranda-ink/70">
+              {t("Inga listade händelser just nu — lugn kväll i kalendern.", "Nothing listed right now — a quiet night on the calendar.")}
+            </p>
+          )}
+          {pulseState === "rejected_empty" && (
+            <p className="mt-2 text-sm text-parranda-ink/70">
+              {t(
+                "Det fanns listningar, men inga var pålitliga eller aktuella nog att visa.",
+                "Listings existed, but none were reliable or current enough to show.",
+              )}
+            </p>
+          )}
+          {pulseState === "unavailable" && (
+            <p className="mt-2 text-sm text-parranda-ink/70">
+              {t("Parranda kunde inte verifiera händelser just nu — försök igen om en stund.", "Parranda couldn't verify events right now — try again shortly.")}
+            </p>
+          )}
+
+          {pulseBuckets.tonight.length > 0 && (
+            <div className="mt-3">
+              <p className="text-sm font-semibold text-parranda-ink">{t("Ikväll", "Tonight")}</p>
+              <ul className="mt-1 flex flex-col gap-1.5">
+                {pulseBuckets.tonight.slice(0, 4).map((ev: PulseEvent, i: number) => (
+                  <li key={ev.id ?? i} className="text-sm text-parranda-ink/85">
+                    <span className="font-medium">{ev.title}</span>
+                    {eventTiming(ev, lang) && <span className="text-parranda-ink/60"> · {eventTiming(ev, lang)}</span>}
+                    {ev.place && <span className="text-parranda-ink/60"> · {ev.place}</span>}
+                    {ev.source_url && (
+                      <span className="text-parranda-ink/50">
+                        {" · "}
+                        <a href={ev.source_url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-parranda-accent">
+                          {ev.source_label || t("Källa", "Source")}
+                        </a>
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {pulseBuckets.thisWeek.length > 0 && (
+            <div className="mt-3">
+              <p className="text-sm font-semibold text-parranda-ink">{t("Senare i veckan", "Later this week")}</p>
+              <ul className="mt-1 flex flex-col gap-1">
+                {pulseBuckets.thisWeek.slice(0, 4).map((ev: PulseEvent, i: number) => (
+                  <li key={ev.id ?? i} className="text-sm text-parranda-ink/85">
+                    <span className="font-medium">{ev.title}</span>
+                    {eventTiming(ev, lang) && <span className="text-parranda-ink/60"> · {eventTiming(ev, lang)}</span>}
+                    {ev.place && <span className="text-parranda-ink/60"> · {ev.place}</span>}
+                    {ev.source_url && (
+                      <span className="text-parranda-ink/50">
+                        {" · "}
+                        <a href={ev.source_url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-parranda-accent">
+                          {ev.source_label || t("Källa", "Source")}
+                        </a>
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {pulseState === "partial" && (
+            <p className="mt-2 text-xs text-parranda-ink/55">
+              {t("Alla källor kunde inte nås just nu — listan kan vara ofullständig.", "Some sources couldn't be reached right now — the list may be incomplete.")}
+            </p>
+          )}
+
+          {pulseSources && (
             <p className="mt-3 text-xs text-parranda-ink/50">
-              {t("Källa", "Source")}: {liveEvents.feed.label}
-              {liveEvents.feed.license ? ` · ${liveEvents.feed.license}` : ""}
+              {t("Källa", "Source")}: {pulseSources}
             </p>
           )}
         </section>
