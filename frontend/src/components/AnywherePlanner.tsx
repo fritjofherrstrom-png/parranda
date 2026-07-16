@@ -4,8 +4,8 @@
  * Talks to the EXISTING Express API (same payload as the production anywhere
  * mode) and renders through the SHARED honesty module, so this surface can never
  * dress a fallback city's day up as the typed place:
- *   composed       → day stops + district panel + events + map
- *   structure_only → district panel only, honest "not a finished route" note
+ *   composed       → one authoritative route + optional nearby context + Pulse
+ *   structure_only → candidate areas only, honest "not a finished route" note
  *   unavailable    → honest empty state (never a crash)
  */
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -17,6 +17,7 @@ import {
   isoDateFromOffset,
 } from "../lib/anywhere-payload.mjs";
 import { mapsPlaceUrl, mapsWalkingRouteUrl, primaryRouteStops } from "../lib/maps-links.mjs";
+import { buildRouteContextSuggestions, walkingDistanceLabel } from "../lib/route-context-view.mjs";
 import {
   splitRouteStops,
   wovenEventIds,
@@ -62,7 +63,16 @@ interface DistrictArea {
   daypart_hint?: string | null;
   covers?: string[];
   stop_names?: string[];
-  stops?: Array<{ id?: string | null; name?: string | null; lat: number; lng: number }>;
+  stops?: Array<{
+    id?: string | null;
+    place_id?: string | null;
+    candidate_id?: string | null;
+    name?: string | null;
+    lat: number;
+    lng: number;
+    address?: string | null;
+    area?: string | null;
+  }>;
   stop_ids?: string[];
 }
 
@@ -513,16 +523,27 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // A single "open the whole day in Google Maps" walking route across every
   // coord-bearing primary-route stop, in the exact order the API returned.
   const routeUrl = useMemo(() => mapsWalkingRouteUrl(routeStops), [routeStops]);
+  // District composition deliberately sees a broader candidate universe than
+  // the route. Keep only a tiny, proximity-bounded, deduped slice as optional
+  // discovery context; these candidates never enter routeStops or routeUrl.
+  const routeContextSuggestions = useMemo(
+    () => buildRouteContextSuggestions(routeStops, day?.areas, { limit: 3, maxDistanceKm: 1.5 }),
+    [routeStops, day?.areas],
+  );
 
-  // Draw the day on the map (numbered districts + dashed arc + stop dots) —
-  // the same spatial story as the production Map tab.
+  // The map follows the same authority hierarchy as the copy. A composed day
+  // gets numbered primary-route markers and a solid route. Optional context is
+  // muted. Structure-only keeps district markers because no route exists yet.
   useEffect(() => {
     let cancelled = false;
     async function draw() {
       const areas = (day?.areas ?? []).filter(
         (a) => a?.center && Number.isFinite(a.center!.lat) && Number.isFinite(a.center!.lng),
       );
-      if (!mapRef.current || !areas.length) {
+      const drawableRouteStops = routeStops.filter(
+        (stop: any) => stop && Number.isFinite(stop.lat) && Number.isFinite(stop.lng),
+      );
+      if (!mapRef.current || (hasPrimaryRoute ? !drawableRouteStops.length : !areas.length)) {
         setMapDrawn(true); // nothing to draw — clear the placeholder
         return;
       }
@@ -549,25 +570,48 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       layer.clearLayers();
 
       const bounds: Array<[number, number]> = [];
-      // The REAL route geometry (the engine's actual stop order) as a solid line;
-      // the dashed inter-district arc stays as directional context beneath it.
-      const path = (Array.isArray(primaryRoute?.map_path_points) ? primaryRoute.map_path_points : [])
-        .filter((p: any) => p && Number.isFinite(p.lat) && Number.isFinite(p.lng))
-        .map((p: any) => [p.lat, p.lng] as [number, number]);
-      if (path.length > 1) {
-        layer.addLayer(L.polyline(path, { color: "#b6582f", weight: 4, opacity: 0.9 }));
-        for (const pt of path) bounds.push(pt);
-      }
-      const arc = areas.map((a) => [a.center!.lat, a.center!.lng] as [number, number]);
-      if (arc.length > 1) layer.addLayer(L.polyline(arc, { color: "#b6582f", weight: 3, dashArray: "6 8", opacity: 0.55 }));
-      areas.forEach((area, index) => {
-        bounds.push([area.center!.lat, area.center!.lng]);
-        const icon = L.divIcon({ className: "district-map-marker", html: String(index + 1), iconSize: [28, 28], iconAnchor: [14, 14] });
-        layer.addLayer(L.marker([area.center!.lat, area.center!.lng], { icon, zIndexOffset: 1000 }));
-        (area.stops ?? []).forEach((stop) => {
+      if (hasPrimaryRoute) {
+        const enginePath: Array<[number, number]> = (Array.isArray(primaryRoute?.map_path_points) ? primaryRoute.map_path_points : [])
+          .filter((point: any) => point && Number.isFinite(point.lat) && Number.isFinite(point.lng))
+          .map((point: any) => [point.lat, point.lng] as [number, number]);
+        const routePath = enginePath.length > 1
+          ? enginePath
+          : drawableRouteStops.map((stop: any) => [stop.lat, stop.lng] as [number, number]);
+        if (routePath.length > 1) {
+          layer.addLayer(L.polyline(routePath, { color: "#b6582f", weight: 4, opacity: 0.92 }));
+          routePath.forEach((point: [number, number]) => bounds.push(point));
+        }
+
+        routeStops.forEach((stop: any, index: number) => {
           if (!Number.isFinite(stop?.lat) || !Number.isFinite(stop?.lng)) return;
           bounds.push([stop.lat, stop.lng]);
-          const dot = L.circleMarker([stop.lat, stop.lng], { radius: 5, color: "#b6582f", weight: 2, fillColor: "#fffaf3", fillOpacity: 0.95 });
+          const icon = L.divIcon({
+            className: `route-map-marker${stop.is_live_event === true ? " route-map-marker--event" : ""}`,
+            html: String(index + 1),
+            iconSize: [30, 30],
+            iconAnchor: [15, 15],
+          });
+          const marker = L.marker([stop.lat, stop.lng], { icon, zIndexOffset: 1200 });
+          const markerName = String(stop.label || stop.name || "").trim();
+          if (markerName) {
+            const safe = document.createElement("div");
+            safe.textContent = markerName;
+            marker.bindTooltip(safe.innerHTML);
+          }
+          layer.addLayer(marker);
+        });
+
+        routeContextSuggestions.forEach((stop) => {
+          if (!Number.isFinite(stop.lat) || !Number.isFinite(stop.lng)) return;
+          bounds.push([stop.lat!, stop.lng!]);
+          const dot = L.circleMarker([stop.lat!, stop.lng!], {
+            radius: 5,
+            color: "#b6582f",
+            weight: 1.5,
+            fillColor: "#fffaf3",
+            fillOpacity: 0.25,
+            opacity: 0.7,
+          });
           if (stop.name) {
             const safe = document.createElement("div");
             safe.textContent = stop.name;
@@ -575,7 +619,26 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           }
           layer.addLayer(dot);
         });
-      });
+      } else {
+        const arc = areas.map((area) => [area.center!.lat, area.center!.lng] as [number, number]);
+        if (arc.length > 1) layer.addLayer(L.polyline(arc, { color: "#b6582f", weight: 3, dashArray: "6 8", opacity: 0.55 }));
+        areas.forEach((area, index) => {
+          bounds.push([area.center!.lat, area.center!.lng]);
+          const icon = L.divIcon({ className: "district-map-marker", html: String(index + 1), iconSize: [28, 28], iconAnchor: [14, 14] });
+          layer.addLayer(L.marker([area.center!.lat, area.center!.lng], { icon, zIndexOffset: 1000 }));
+          (area.stops ?? []).forEach((stop) => {
+            if (!Number.isFinite(stop?.lat) || !Number.isFinite(stop?.lng)) return;
+            bounds.push([stop.lat, stop.lng]);
+            const dot = L.circleMarker([stop.lat, stop.lng], { radius: 5, color: "#b6582f", weight: 2, fillColor: "#fffaf3", fillOpacity: 0.95 });
+            if (stop.name) {
+              const safe = document.createElement("div");
+              safe.textContent = stop.name;
+              dot.bindTooltip(safe.innerHTML);
+            }
+            layer.addLayer(dot);
+          });
+        });
+      }
       map.invalidateSize();
       if (bounds.length) map.fitBounds(bounds, { padding: [36, 36], maxZoom: 15 });
       setMapDrawn(true);
@@ -584,7 +647,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     return () => {
       cancelled = true;
     };
-  }, [day, primaryRoute]);
+  }, [day, primaryRoute, hasPrimaryRoute, routeStops, routeContextSuggestions]);
 
   const showDay = classification?.status === "composed";
   const showStructure = classification?.status === "composed" || classification?.status === "structure_only";
@@ -773,10 +836,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </p>
       )}
 
-      {/* Day header: honest provenance + day-level actions. The real route
-          ("Dagens stopp") and the supporting neighborhoods ("Dagens kvarter")
-          are their OWN sections below — the district panel is context, not the
-          route, so it must not wear the route's name. */}
+      {/* Day header: honest provenance + day-level actions. The primary route is
+          the only itinerary below; broader place structure is either secondary
+          discovery context or, without a route, an honest candidate surface. */}
       {showStructure && structure && (
         <section className="flex flex-col items-start gap-3 rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm sm:flex-row sm:justify-between">
           <div className="min-w-0 flex-1">
@@ -841,13 +903,28 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
       {showDay && routeStops.length > 0 && (
         <section className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm">
-          <div className="flex items-baseline justify-between gap-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">{t("Dagens stopp", "Today's stops")}</p>
-            {Number.isFinite(primaryRoute?.estimated_km) && (
-              <p className="text-xs text-parranda-ink/60">
-                ≈ {primaryRoute.estimated_km} km
-                {Number.isFinite(primaryRoute?.longest_leg_km) ? ` · ${t("längsta ben", "longest leg")} ${primaryRoute.longest_leg_km} km` : ""}
-              </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">{t("Dagens rutt", "Today's route")}</p>
+              {Number.isFinite(primaryRoute?.estimated_km) && (
+                <p className="mt-1 text-xs text-parranda-ink/60">
+                  ≈ {walkingDistanceLabel(primaryRoute.estimated_km, lang)}
+                  {Number.isFinite(primaryRoute?.longest_leg_km)
+                    ? ` · ${t("längsta ben", "longest leg")} ${walkingDistanceLabel(primaryRoute.longest_leg_km, lang)}`
+                    : ""}
+                </p>
+              )}
+            </div>
+            {routeUrl && (
+              <a
+                href={routeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-11 items-center gap-2 self-start rounded-parranda border border-parranda-accent/40 px-4 py-2 text-sm font-semibold text-parranda-accent hover:bg-parranda-accent/10"
+              >
+                {t("Öppna den planerade rutten", "Open the planned route")}
+                <span aria-hidden="true">↗</span>
+              </a>
             )}
           </div>
           {/* Core stops only: stable places, numbered. A woven live event is NOT an
@@ -856,7 +933,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             {split.core.map((stop: any, i: number) => {
               const name = String(stop?.label || stop?.name || "").trim();
               if (!name) return null;
-              const leg = i === 0 ? null : legForStop(stop);
+              const routeNumber = routeStops.indexOf(stop) + 1;
+              const leg = routeNumber === 1 ? null : legForStop(stop);
               const pin = mapsPlaceUrl(stop, mapsPlaceContext);
               return (
                 <li key={stop?.id ?? i} className="flex flex-col">
@@ -864,11 +942,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                     <span className="ml-3 border-l border-dashed border-parranda-ink/25 py-1 pl-4 text-xs text-parranda-ink/55">
                       ↓ {leg.minutes != null ? `${leg.minutes} min` : ""}
                       {leg.minutes != null && leg.km != null ? " · " : ""}
-                      {leg.km != null ? `${leg.km} km` : ""}
+                      {leg.km != null ? walkingDistanceLabel(leg.km, lang) : ""}
                     </span>
                   )}
                   <span className="flex flex-wrap items-center gap-2 py-0.5 text-sm text-parranda-ink">
-                    <span className="font-semibold text-parranda-accent">{i + 1}.</span>
+                    <span className="font-semibold text-parranda-accent">{routeNumber}.</span>
                     {pin ? (
                       <a href={pin} target="_blank" rel="noopener noreferrer" className="underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
                         {name}
@@ -903,10 +981,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             const venue = String(eveningEvent?.place || "").trim();
             const sourceLabel = String(stop?.source?.label || eveningEvent?.source_label || "").trim();
             const sourceUrl = stop?.source?.url || eveningEvent?.source_url || null;
+            const routeNumber = routeStops.indexOf(stop) + 1;
             return (
               <div key={stop?.id} className="mt-3 rounded-parranda border border-parranda-accent/40 bg-parranda-accent/10 p-4">
                 <p className="text-xs font-bold uppercase tracking-wider text-parranda-accent">{t("Ikväll i din rutt", "Tonight in your route")}</p>
                 <p className="mt-1 flex flex-wrap items-center gap-2 text-sm font-semibold text-parranda-ink">
+                  <span className="font-semibold text-parranda-accent">{routeNumber}.</span>
                   {pin ? (
                     <a href={pin} target="_blank" rel="noopener noreferrer" className="underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
                       {name}
@@ -923,7 +1003,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 {venue && venue !== name && <p className="mt-0.5 text-xs text-parranda-ink/70">{venue}</p>}
                 {Number.isFinite(legKm) && (
                   <p className="mt-1 text-xs text-parranda-ink/70">
-                    {t(`Tillagt till dagens rutt · ${legKm} km från föregående stopp`, `Added to today's route · ${legKm} km from the previous stop`)}
+                    {t(
+                      `Tillagt till dagens rutt · ${walkingDistanceLabel(legKm, "sv")} från föregående stopp`,
+                      `Added to today's route · ${walkingDistanceLabel(legKm, "en")} from the previous stop`,
+                    )}
                   </p>
                 )}
                 {sourceLabel && (
@@ -941,17 +1024,69 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               </div>
             );
           })}
+
+          <div className="relative mt-4 h-80 w-full overflow-hidden rounded-parranda border border-parranda-ink/10">
+            <div ref={mapRef} className="h-full w-full" />
+            {!mapDrawn && (
+              <div className="absolute inset-0 flex items-center justify-center bg-parranda-ink/10 text-sm text-parranda-ink/60">
+                {t("Ritar kartan …", "Drawing the map …")}
+              </div>
+            )}
+          </div>
+
+          {routeContextSuggestions.length > 0 && (
+            <div className="mt-4 border-t border-parranda-ink/10 pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">
+                {t("Fler nära rutten", "More near the route")}
+              </p>
+              <p className="mt-1 text-xs text-parranda-ink/60">
+                {t(
+                  "Valfria idéer från platsunderlaget — de ingår inte i dagens stopp eller Maps-rutten.",
+                  "Optional ideas from the place evidence — they are not part of today's stops or the Maps route.",
+                )}
+              </p>
+              <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                {routeContextSuggestions.map((stop) => {
+                  const name = String(stop.name || stop.label || "").trim();
+                  if (!name) return null;
+                  const url = mapsPlaceUrl(
+                    { ...stop, lat: stop.lat ?? undefined, lng: stop.lng ?? undefined },
+                    mapsPlaceContext,
+                  );
+                  return (
+                    <li key={stop.id || stop.candidate_id || stop.place_id || name} className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-3">
+                      <p className="text-sm font-semibold text-parranda-ink">
+                        {url ? (
+                          <a href={url} target="_blank" rel="noopener noreferrer" className="underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
+                            {name}
+                          </a>
+                        ) : name}
+                      </p>
+                      <p className="mt-1 text-xs text-parranda-ink/55">
+                        {walkingDistanceLabel(stop.distance_km, lang)} {t("från", "from")} {stop.route_stop_name}
+                      </p>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          {(day?.missing_intents ?? []).length > 0 && (
+            <p className="mt-4 text-sm italic text-parranda-ink/60">
+              {t("Saknas i dagens underlag:", "Not covered by today's evidence:")} {(day?.missing_intents ?? []).map((key) => label(INTENT_LABELS, key, lang)).join(", ")}
+            </p>
+          )}
         </section>
       )}
 
-      {/* Dagens kvarter — the neighborhoods behind the route: supporting spatial
-          context (districts, the walk between them, the map). It reads AFTER the
-          route because it explains it, not leads it. */}
-      {showStructure && structure && (
+      {/* Without a primary route, the broader place structure remains useful —
+          but it is explicitly candidates, never a second itinerary. */}
+      {showStructure && structure && !hasPrimaryRoute && (
         <section className="flex flex-col gap-4 rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">
-              {hasPrimaryRoute ? t("Dagens kvarter", "Today's neighborhoods") : t("Kandidater nära platsen", "Candidates near this place")}
+              {t("Kandidater nära platsen", "Candidates near this place")}
             </p>
             {classification?.status === "structure_only" && (
               <p className="mt-1 text-sm text-parranda-ink/70">
@@ -1022,25 +1157,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           </ol>
 
           {/* The evening event is NOT presented here: a woven event renders once,
-              as the route extension in "Dagens stopp"; a non-woven anchor event
+              as the route extension in "Dagens rutt"; a non-woven anchor event
               surfaces in the Pulse section's tonight bucket. */}
 
           {(day?.missing_intents ?? []).length > 0 && (
             <p className="text-sm italic text-parranda-ink/60">
               {t("Inget distrikt täckte:", "No district covered:")} {(day?.missing_intents ?? []).map((k) => label(INTENT_LABELS, k, lang)).join(", ")}
             </p>
-          )}
-
-          {routeUrl && (
-            <a
-              href={routeUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex min-h-11 items-center gap-2 self-start rounded-parranda border border-parranda-accent/40 px-4 py-2 text-sm font-semibold text-parranda-accent hover:bg-parranda-accent/10"
-            >
-              {t("Öppna rutten i Google Maps", "Open the route in Google Maps")}
-              <span aria-hidden="true">↗</span>
-            </a>
           )}
 
           <div className="relative h-80 w-full overflow-hidden rounded-parranda border border-parranda-ink/10">

@@ -2,9 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Numbered district marker on the Leaflet map — same visual as the current app
-   so the map reads as one product across old and new frontends. */
-.district-map-marker {
+/* Numbered map markers. A composed route owns the stronger marker; district
+   numbers remain only for the honest structure-only state. */
+.district-map-marker,
+.route-map-marker {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -17,4 +18,15 @@
   font-weight: 700;
   border: 2px solid #fffaf3;
   box-shadow: 0 1px 6px rgba(58, 33, 20, 0.35);
+}
+
+.route-map-marker {
+  width: 30px;
+  height: 30px;
+  box-shadow: 0 2px 8px rgba(58, 33, 20, 0.48);
+}
+
+.route-map-marker--event {
+  background: rgb(var(--p-color-glow));
+  color: rgb(var(--p-color-ink));
 }

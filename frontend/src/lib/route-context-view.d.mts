@@ -1,0 +1,35 @@
+export interface RouteContextStop {
+  id?: string | null;
+  place_id?: string | null;
+  candidate_id?: string | null;
+  name?: string | null;
+  label?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  address?: string | null;
+  area?: string | null;
+}
+
+export interface RouteContextArea {
+  daypart_hint?: string | null;
+  covers?: string[];
+  stops?: RouteContextStop[];
+}
+
+export interface RouteContextSuggestion extends RouteContextStop {
+  area_index: number;
+  source_index: number;
+  daypart_hint: string | null;
+  covers: string[];
+  route_stop_index: number;
+  route_stop_name: string | null;
+  distance_km: number;
+}
+
+export declare function buildRouteContextSuggestions(
+  routeStops: RouteContextStop[] | null | undefined,
+  areas: RouteContextArea[] | null | undefined,
+  options?: { limit?: number; maxDistanceKm?: number },
+): RouteContextSuggestion[];
+
+export declare function walkingDistanceLabel(km: number | null | undefined, lang?: "sv" | "en"): string;
