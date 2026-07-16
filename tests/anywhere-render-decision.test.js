@@ -7,7 +7,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { classifyAnywhereResult, safeResponseFor } = require("../anywhere-render-decision");
+const { classifyAnywhereResult, safeResponseFor, shouldRetryTransientSource } = require("../anywhere-render-decision");
 
 const agnosticStructure = (areaCount = 2) => ({
   provenance: "agnostic_anchor",
@@ -66,4 +66,42 @@ test("placeLabel prefers the resolved anchor label, falls back to the typed plac
   };
   assert.equal(classifyAnywhereResult(resolved, { place: "Porto" }).placeLabel, "Porto, Portugal");
   assert.equal(classifyAnywhereResult({ days: [] }, { place: "Porto" }).placeLabel, "Porto");
+});
+
+test("only an explicit transient source failure after resolved intake gets one retry", () => {
+  const transient = {
+    days: [],
+    agnostic_route_output_experiment: {
+      intake: { status: "resolved" },
+      source_status: { status: "error_failed_closed" },
+    },
+  };
+  assert.equal(shouldRetryTransientSource(transient), true);
+
+  const provenEmpty = {
+    days: [],
+    agnostic_route_output_experiment: {
+      intake: { status: "resolved" },
+      source_status: { status: "loaded:0" },
+    },
+  };
+  assert.equal(shouldRetryTransientSource(provenEmpty), false, "proven empty data must stay honest");
+
+  const ambiguous = {
+    days: [],
+    agnostic_route_output_experiment: {
+      intake: { status: "unresolved", blockers: ["ambiguous_place"] },
+      source_status: { status: "error_failed_closed" },
+    },
+  };
+  assert.equal(shouldRetryTransientSource(ambiguous), false, "an unresolved anchor must never be retried as trusted");
+
+  const composed = {
+    days: [{ experimental_agnostic_day: true }],
+    agnostic_route_output_experiment: {
+      intake: { status: "resolved" },
+      source_status: { status: "error_failed_closed" },
+    },
+  };
+  assert.equal(shouldRetryTransientSource(composed), false, "a composed result does not need source recovery");
 });

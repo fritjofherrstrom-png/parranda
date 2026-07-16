@@ -67,6 +67,10 @@ function nominatim(displayName, lat, lon, importance, osm) {
   };
 }
 
+function withNominatimName(candidate, name) {
+  return { ...candidate, name };
+}
+
 // === Pure: createNominatimPlaceResolver ====================================
 
 test("pure: maps a clear single result to a conservative 'medium' candidate with compact provenance only", async () => {
@@ -80,7 +84,7 @@ test("pure: maps a clear single result to a conservative 'medium' candidate with
   assert.equal(out[0].license, "ODbL");
   assert.equal(out[0].osm_ref, "relation/123");
   // No raw provider payload leaks.
-  for (const banned of ["boundingbox", "address", "place_rank", "display_name", "importance", "osm_type", "osm_id"]) {
+  for (const banned of ["boundingbox", "address", "place_rank", "display_name", "importance", "name", "osm_type", "osm_id"]) {
     assert.equal(banned in out[0], false, `must not expose ${banned}`);
   }
 });
@@ -92,9 +96,35 @@ test("pure: confidence is never 'high' (reserved for human-verified)", async () 
 });
 
 test("pure: near-tie results stay strong → both 'medium' (intake reports ambiguous)", async () => {
-  const r = createNominatimPlaceResolver({ fetcher: fetcherReturning([nominatim("Springfield IL", 39.8, -89.6, 0.6), nominatim("Springfield MA", 42.1, -72.5, 0.55)]), minIntervalMs: 0 });
+  const r = createNominatimPlaceResolver({
+    fetcher: fetcherReturning([
+      withNominatimName(nominatim("Springfield, Illinois", 39.8, -89.6, 0.6), "Springfield"),
+      withNominatimName(nominatim("Springfield, Massachusetts", 42.1, -72.5, 0.55), "Springfield"),
+    ]),
+    minIntervalMs: 0,
+  });
   const out = await r("Springfield");
   assert.deepEqual(out.map((c) => c.confidence), ["medium", "medium"]);
+});
+
+test("pure: exact place name wins a near-tie with its administrative container", async () => {
+  const r = createNominatimPlaceResolver({
+    fetcher: fetcherReturning([
+      withNominatimName(
+        nominatim("Simrishamns kommun, Skåne län, Sverige", 55.5667, 14.3, 0.481, ["relation", "935529"]),
+        "Simrishamns kommun",
+      ),
+      withNominatimName(
+        nominatim("Simrishamn, Simrishamns kommun, Skåne län, Sverige", 55.5566, 14.35, 0.474, ["node", "27374563"]),
+        "Simrishamn",
+      ),
+    ]),
+    minIntervalMs: 0,
+  });
+
+  const out = await r("Simrishamn");
+  assert.equal(out.find((candidate) => candidate.label.startsWith("Simrishamn,"))?.confidence, "medium");
+  assert.equal(out.find((candidate) => candidate.label.startsWith("Simrishamns kommun"))?.confidence, "low");
 });
 
 test("pure: a clear winner anchors; weaker matches drop to 'low'", async () => {

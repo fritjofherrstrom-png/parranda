@@ -103,9 +103,33 @@
     return safe;
   }
 
+  /**
+   * A resolved place can still hit a transient trusted-source failure (for
+   * example a cold Overpass request timing out). That is materially different
+   * from a proven empty source or an unresolved/ambiguous place: one bounded
+   * retry may recover the same request without weakening any honesty gate.
+   *
+   * Keep this decision in the shared module so every frontend uses the exact
+   * server evidence rather than guessing from an empty route.
+   */
+  function shouldRetryTransientSource(response, classification) {
+    var cls = classification || classifyAnywhereResult(response);
+    if (!response || cls.status !== "unavailable") return false;
+    var experiment = response.agnostic_route_output_experiment;
+    var intake = experiment && experiment.intake;
+    var sourceStatus = experiment && experiment.source_status;
+    return Boolean(
+      intake &&
+        intake.status === "resolved" &&
+        sourceStatus &&
+        sourceStatus.status === "error_failed_closed",
+    );
+  }
+
   var api = {
     classifyAnywhereResult: classifyAnywhereResult,
     safeResponseFor: safeResponseFor,
+    shouldRetryTransientSource: shouldRetryTransientSource,
     isAgnosticAppliedDay: isAgnosticAppliedDay,
     hasValidPlaceStructure: hasValidPlaceStructure,
   };

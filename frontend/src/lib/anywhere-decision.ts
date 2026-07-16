@@ -18,6 +18,7 @@ export interface AnywhereClassification {
 interface AnywhereDecisionApi {
   classifyAnywhereResult(response: unknown, opts?: { place?: string }): AnywhereClassification;
   safeResponseFor(response: unknown, classification?: AnywhereClassification): any;
+  shouldRetryTransientSource(response: unknown, classification?: AnywhereClassification): boolean;
 }
 
 export function anywhereDecision(): AnywhereDecisionApi {
