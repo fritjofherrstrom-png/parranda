@@ -454,6 +454,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const liveEvents: LiveEvents | null = safeResponse?.live_events ?? null;
   const routeStops = useMemo(() => primaryRouteStops(safeResponse), [safeResponse]);
   const hasPrimaryRoute = routeStops.length > 0;
+  const mapsPlaceContext = mode === "typed" ? classification?.placeLabel || typedPlaceLabel : null;
   const composedStops: string[] = useMemo(() => {
     return routeStops.map((s: any) => String(s?.name || s?.label || "").trim()).filter(Boolean);
   }, [routeStops]);
@@ -819,7 +820,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               const name = String(stop?.label || stop?.name || "").trim();
               if (!name) return null;
               const leg = legForStop(i);
-              const pin = mapsPlaceUrl(stop);
+              const pin = mapsPlaceUrl(stop, mapsPlaceContext);
               return (
                 <li key={stop?.id ?? i} className="flex flex-col">
                   {leg && (leg.minutes != null || leg.km != null) && (
@@ -907,7 +908,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 {Array.isArray(area.stops) && area.stops.length > 0 ? (
                   <p className="mt-2 text-sm text-parranda-ink">
                     {area.stops.map((stop, si) => {
-                      const url = mapsPlaceUrl(stop);
+                      const url = mapsPlaceUrl(stop, mapsPlaceContext);
                       const name = (stop.name || area.stop_names?.[si] || "").trim();
                       if (!name) return null;
                       return (
