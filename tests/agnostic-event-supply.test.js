@@ -7,6 +7,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
+  applyReviewedSourceTrust,
   collectAnchorEvents,
   resolveEventFeedRegistry,
   resolveEventFeedForAnchor,
@@ -80,9 +81,44 @@ test("the feed registry is generic + deploy-configurable (a city is data, not co
   // An anchor in central Stockholm now resolves to the configured feed.
   const feed = resolveEventFeedForAnchor({ lat: 59.33, lng: 18.06 }, extended);
   assert.ok(feed && feed.id === "se-stockholm");
+  assert.equal(feed.source_tier, "unknown");
+  assert.equal(feed.confidence, "low");
+  assert.equal(feed.source_family, "unknown_source_family");
 
   // Malformed config is ignored — keep whatever is built-in (empty), never throw.
   assert.equal(resolveEventFeedRegistry({ PARRANDA_EVENT_FEEDS: "{not json" }).length, 0);
+});
+
+test("reviewed source descriptors own trust and cap event-level confidence", () => {
+  const enriched = applyReviewedSourceTrust(
+    {
+      id: "raw-event",
+      source_tier: "official",
+      confidence: "strong",
+      source_family: "official_city_calendar",
+      source_provider_id: "payload-provider",
+    },
+    {
+      id: "reviewed-venue",
+      endpoint: "https://venue.example/events",
+      source_tier: "institution",
+      confidence: "low",
+      source_family: "venue_calendar",
+      source_identity: "venue.example",
+    },
+  );
+
+  assert.equal(enriched.source_tier, "institution");
+  assert.equal(enriched.confidence, "low");
+  assert.equal(enriched.source_family, "venue_calendar");
+  assert.equal(enriched.source_provider_id, "reviewed-venue");
+  assert.equal(enriched.source_identity, "venue.example");
+
+  const downgraded = applyReviewedSourceTrust(
+    { confidence: "low" },
+    { id: "reviewed-city", source_tier: "official", confidence: "medium" },
+  );
+  assert.equal(downgraded.confidence, "low", "event evidence may lower reviewed source trust");
 });
 
 test("the feed registry allowlists reusable local adapters and preserves legacy Linked Events rows", () => {

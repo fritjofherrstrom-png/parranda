@@ -126,9 +126,11 @@ function resolveEventFeedRegistry(env = process.env) {
             source_language: firstString(f.source_language, f.sourceLanguage),
             route_role_hint: firstString(f.route_role_hint, f.routeRoleHint),
             fetch_details: f.fetch_details !== false,
-            source_tier: f.source_tier != null ? String(f.source_tier) : "official",
-            confidence: f.confidence != null ? String(f.confidence) : "medium",
-            source_family: f.source_family != null ? String(f.source_family) : "municipal_open",
+            // Configuring an endpoint proves collection intent, not ownership
+            // or official status. Missing review metadata stays conservative.
+            source_tier: f.source_tier != null ? String(f.source_tier) : "unknown",
+            confidence: f.confidence != null ? String(f.confidence) : "low",
+            source_family: f.source_family != null ? String(f.source_family) : "unknown_source_family",
             source_identity: f.source_identity != null ? String(f.source_identity) : sourceIdentityForUrl(endpoint),
             priority: Number.isFinite(Number(f.priority)) ? Number(f.priority) : 100,
             status: f.status != null ? String(f.status) : "active",
@@ -170,6 +172,13 @@ const GLOBAL_FEED_DESCRIPTOR = Object.freeze({
   source_identity: "ticketmaster.com",
   status: "active",
   runtime_policy: "credential_gated",
+});
+
+const CONFIDENCE_RANK = Object.freeze({
+  needs_review: 0,
+  low: 1,
+  medium: 2,
+  strong: 3,
 });
 
 // Backward-compatible singular view. Runtime acquisition uses the bounded plural
@@ -363,16 +372,7 @@ async function collectAnchorEvents({
   for (const collection of collectedSources) {
     const source = collection.source;
     for (const rawEvent of collection.raw) {
-      const enriched = {
-        source_tier: source.source_tier || (source.kind === "global" ? "verified" : "official"),
-        confidence: source.confidence || "medium",
-        source_provider_id: source.id,
-        source_identity:
-          source.source_identity || sourceIdentityForUrl(source.base || source.source_url) || source.id,
-        source_family:
-          source.source_family || source.family || (source.kind === "global" ? "global_commercial" : "municipal_open"),
-        ...rawEvent,
-      };
+      const enriched = applyReviewedSourceTrust(rawEvent, source);
       const normalized = normalizeTimeSensitiveSourceEvent(enriched, {
         ...(nowDate ? { now: nowDate } : {}),
         timezone: source.timezone || undefined,
@@ -444,6 +444,48 @@ async function collectAnchorEvents({
       source_health: sourceHealth,
     },
   };
+}
+
+function applyReviewedSourceTrust(rawEvent = {}, source = {}) {
+  const globalSource = source.kind === "global";
+  const descriptorConfidence = normalizeEventConfidence(
+    source.confidence,
+    globalSource ? "medium" : "low",
+  );
+  const eventConfidence = rawEvent.confidence == null
+    ? descriptorConfidence
+    : normalizeEventConfidence(rawEvent.confidence, "needs_review");
+
+  return {
+    ...rawEvent,
+    // Trust and ownership are reviewed descriptor facts. Provider rows may
+    // lower per-event confidence, but may never upgrade or relabel the source.
+    source_tier: firstString(source.source_tier) || (globalSource ? "verified" : "unknown"),
+    confidence: lowerConfidence(descriptorConfidence, eventConfidence),
+    source_provider_id: firstString(source.id) || null,
+    source_identity:
+      firstString(source.source_identity) ||
+      sourceIdentityForUrl(source.base || source.source_url) ||
+      firstString(source.id),
+    source_family:
+      firstString(source.source_family, source.family) ||
+      (globalSource ? "global_commercial" : "unknown_source_family"),
+  };
+}
+
+function normalizeEventConfidence(value, fallback) {
+  const normalized = String(value || fallback || "needs_review").trim().toLowerCase();
+  if (normalized === "high") return "strong";
+  if (normalized === "weak") return "low";
+  return Object.hasOwn(CONFIDENCE_RANK, normalized) ? normalized : "needs_review";
+}
+
+function lowerConfidence(left, right) {
+  const normalizedLeft = normalizeEventConfidence(left, "needs_review");
+  const normalizedRight = normalizeEventConfidence(right, "needs_review");
+  return CONFIDENCE_RANK[normalizedLeft] <= CONFIDENCE_RANK[normalizedRight]
+    ? normalizedLeft
+    : normalizedRight;
 }
 
 async function collectEventSource({
@@ -727,6 +769,7 @@ function resolveDefaultEventSupply(env = process.env) {
 }
 
 module.exports = {
+  applyReviewedSourceTrust,
   collectAnchorEvents,
   resolveDefaultEventSupply,
   resolveEventFeedRegistry,
