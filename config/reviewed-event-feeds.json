@@ -1,0 +1,42 @@
+[
+  {
+    "id": "simrishamn-municipal-calendar",
+    "label": "Simrishamns kommuns evenemangskalender",
+    "adapter": "sitevision_calendar",
+    "endpoint": "https://www.simrishamn.se/evenemangskalender",
+    "bbox": [13.75, 55.35, 14.65, 55.85],
+    "timezone": "Europe/Stockholm",
+    "source_language": "sv",
+    "source_tier": "official",
+    "confidence": "medium",
+    "source_family": "official_municipal_calendar",
+    "source_identity": "simrishamn.se",
+    "fetch_details": true,
+    "detail_limit": 8,
+    "status": "active",
+    "runtime_policy": "bounded_refresh",
+    "reviewed_at": "2026-07-16",
+    "review_scope": "public factual event atoms with source attribution"
+  },
+  {
+    "id": "visit-ystad-osterlen-calendar",
+    "label": "Visit Ystad Österlen",
+    "adapter": "wix_event_sitemap",
+    "endpoint": "https://www.visitystadosterlen.se/sitemap.xml",
+    "bbox": [13.5, 55.3, 14.7, 55.85],
+    "timezone": "Europe/Stockholm",
+    "source_language": "sv",
+    "source_tier": "verified",
+    "confidence": "medium",
+    "source_family": "official_tourism_calendar",
+    "source_identity": "visitystadosterlen.se",
+    "event_path_prefix": "/evenemang-1/",
+    "sitemap_limit": 1,
+    "detail_limit": 8,
+    "detail_budget": 16,
+    "status": "active",
+    "runtime_policy": "bounded_refresh",
+    "reviewed_at": "2026-07-16",
+    "review_scope": "public sitemap and SSR factual event atoms with source attribution"
+  }
+]

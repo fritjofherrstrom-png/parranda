@@ -115,3 +115,25 @@ test("a throwing event supply never breaks the route (fail-soft)", async () => {
     assert.equal(res.live_events, undefined, "a feed error degrades to no live_events, never a 500");
   });
 });
+
+test("trusted live events remain available when route composition is blocked", async () => {
+  const supply = async () => ({
+    coverage: "covered",
+    feed: { id: "municipal-calendar", label: "Municipal calendar" },
+    feeds: [{ id: "municipal-calendar", status: "ok", event_rows: 1 }],
+    tonight: [{ id: "event-1", title: "Harbour concert", starts_at: "2026-06-28T19:00:00Z" }],
+    this_week: [],
+  });
+  global.fetch = mockStableWeatherFetch();
+  const server = buildApp({ openDataLoader: null, eventSupply: supply }).listen(0);
+  try {
+    const res = await post(server, HELSINKI_BODY);
+    assert.equal(res.agnostic_route_output_experiment.route_mutation, false);
+    assert.ok(res.agnostic_route_output_experiment.readiness_blockers.includes("no_trusted_loader"));
+    assert.equal(res.live_events.coverage, "covered");
+    assert.equal(res.live_events.tonight[0].id, "event-1");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    global.fetch = ORIGINAL_FETCH;
+  }
+});
