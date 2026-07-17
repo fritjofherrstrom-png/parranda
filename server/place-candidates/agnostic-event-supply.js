@@ -536,6 +536,10 @@ function applyReviewedSourceTrust(rawEvent = {}, source = {}) {
     ...rawEvent,
     // Trust and ownership are reviewed descriptor facts. Provider rows may
     // lower per-event confidence, but may never upgrade or relabel the source.
+    // That includes the DISPLAY label: the reviewed row's label ("Helsinki
+    // Region Linked Events") is the attribution unit the user can verify —
+    // never a provider-internal id like "helsinki"/"kulke".
+    source_label: firstString(source.label) || firstString(rawEvent.source_label) || null,
     source_tier: firstString(source.source_tier) || (globalSource ? "verified" : "unknown"),
     confidence: lowerConfidence(descriptorConfidence, eventConfidence),
     source_provider_id: firstString(source.id) || null,
