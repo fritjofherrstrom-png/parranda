@@ -1,12 +1,11 @@
+"use strict";
+
 /**
- * /anywhere route takeover (docs/FRONTEND_MIGRATION_CONTRACT.md) — explicit,
- * reversible, contract-gated:
- *   - flag OFF (default): /anywhere falls through to today's behavior, the
- *     landing declares anywhereV2=false → unknowns still go to /labs/anywhere;
- *   - flag ON + built surface present: /anywhere serves the NEW frontend page,
- *     /_astro assets serve, the landing declares anywhereV2=true;
- *   - flag ON but NO build: honest fall-through (never a broken page);
- *   - /labs/anywhere is untouched in every mode (the rollback surface).
+ * /anywhere route ownership after the old-stack retirement
+ * (docs/FRONTEND_MIGRATION_CONTRACT.md "Retired surfaces"): the new frontend is
+ * the SOLE owner — no flags, no fallback shell. A missing build fails loudly
+ * (503), never silently serves a wrong page. /labs/anywhere is an unconditional
+ * redirect that preserves its inputs.
  */
 
 const assert = require("node:assert/strict");
@@ -47,10 +46,10 @@ async function withServer(options, run) {
   }
 }
 
-test("flag ON + build present: /anywhere serves the new frontend, assets serve, landing declares v2", async () => {
+test("/anywhere serves the new frontend unconditionally — no flag, request-time lang honored", async () => {
   const dist = makeDist();
   try {
-    await withServer({ anywhereV2Enabled: true, anywhereV2Dir: dist }, async (server) => {
+    await withServer({ anywhereV2Dir: dist }, async (server) => {
       const page = await get(server, "/anywhere?place=Lyon&lang=sv");
       assert.equal(page.status, 200);
       assert.match(page.body, /NEW-FRONTEND-ANYWHERE/);
@@ -60,82 +59,41 @@ test("flag ON + build present: /anywhere serves the new frontend, assets serve, 
       assert.equal(asset.status, 200);
       assert.match(asset.body, /island/);
 
-      const landing = await get(server, "/?lang=en");
-      assert.match(landing.body, /window\.__PARRANDA_ANYWHERE_V2__ = true;/);
+      const defaultLang = await get(server, "/anywhere?place=Lyon");
+      assert.match(defaultLang.body, /<html lang="en">/, "EN default per the language contract");
+      const invalidLang = await get(server, "/anywhere?place=Lyon&lang=fr");
+      assert.match(invalidLang.body, /<html lang="en">/, "unknown lang falls back to EN");
+    });
+  } finally {
+    fs.rmSync(dist, { recursive: true, force: true });
+  }
+});
 
-      // Promoted default: the labs doorway funnels into the ONE canonical
-      // surface, inputs preserved.
+test("/labs/anywhere is an unconditional redirect that preserves place/planner/lang", async () => {
+  const dist = makeDist();
+  try {
+    await withServer({ anywhereV2Dir: dist }, async (server) => {
       const labs = await get(server, "/labs/anywhere?place=Lyon&planner=open&lang=sv");
       assert.equal(labs.status, 302);
       assert.equal(labs.headers.location, "/anywhere?place=Lyon&planner=open&lang=sv");
+
+      const bare = await get(server, "/labs/anywhere");
+      assert.equal(bare.status, 302);
+      assert.equal(bare.headers.location, "/anywhere?lang=en");
     });
   } finally {
     fs.rmSync(dist, { recursive: true, force: true });
   }
 });
 
-test("PROMOTED DEFAULT: no flag needed — /anywhere serves the new frontend when the build exists", async () => {
-  const dist = makeDist();
-  const priorEnv = process.env.PARRANDA_NEW_ANYWHERE;
-  delete process.env.PARRANDA_NEW_ANYWHERE;
-  try {
-    await withServer({ anywhereV2Dir: dist }, async (server) => {
-      const page = await get(server, "/anywhere?place=Lyon");
-      assert.equal(page.status, 200);
-      assert.match(page.body, /NEW-FRONTEND-ANYWHERE/, "default ownership: the promoted surface serves with no env set");
-    });
-  } finally {
-    if (priorEnv !== undefined) process.env.PARRANDA_NEW_ANYWHERE = priorEnv;
-    fs.rmSync(dist, { recursive: true, force: true });
-  }
-});
-
-test("flag ON + build present: /anywhere keeps English as default html lang", async () => {
-  const dist = makeDist();
-  try {
-    await withServer({ anywhereV2Enabled: true, anywhereV2Dir: dist }, async (server) => {
-      const defaultPage = await get(server, "/anywhere?place=Lyon");
-      assert.equal(defaultPage.status, 200);
-      assert.match(defaultPage.body, /<html lang="en">/);
-
-      const invalidLangPage = await get(server, "/anywhere?place=Lyon&lang=fr");
-      assert.equal(invalidLangPage.status, 200);
-      assert.match(invalidLangPage.body, /<html lang="en">/);
-    });
-  } finally {
-    fs.rmSync(dist, { recursive: true, force: true });
-  }
-});
-
-test("opt-out (PARRANDA_NEW_ANYWHERE=disabled): /anywhere falls back to the prior behavior; landing declares v2=false", async () => {
-  await withServer({ anywhereV2Enabled: false }, async (server) => {
-    const page = await get(server, "/anywhere");
-    assert.equal(page.status, 200);
-    // Today's behavior: the catch-all city shell (bootstrap present), NOT the new page.
-    assert.doesNotMatch(page.body, /NEW-FRONTEND-ANYWHERE/);
-    assert.match(page.body, /window\.__PARRANDA_CITY__/);
-
-    const landing = await get(server, "/");
-    assert.match(landing.body, /window\.__PARRANDA_ANYWHERE_V2__ = false;/);
-
-    // Today's behavior for unknown paths is the city-shell catch-all — the point
-    // is that the ISLAND ASSET is not served when the takeover is off.
-    const asset = await get(server, "/_astro/app.js");
-    assert.doesNotMatch(asset.body, /island/);
-  });
-});
-
-test("flag ON but NO build present: honest fall-through, never a broken page", async () => {
+test("a missing build fails LOUDLY (503) — never a silently wrong page", async () => {
   const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), "parranda-anywhere-empty-"));
   try {
-    await withServer({ anywhereV2Enabled: true, anywhereV2Dir: emptyDir }, async (server) => {
+    await withServer({ anywhereV2Dir: emptyDir }, async (server) => {
       const page = await get(server, "/anywhere");
-      assert.equal(page.status, 200);
-      assert.doesNotMatch(page.body, /NEW-FRONTEND-ANYWHERE/);
-      assert.match(page.body, /window\.__PARRANDA_CITY__/);
-
-      const landing = await get(server, "/");
-      assert.match(landing.body, /window\.__PARRANDA_ANYWHERE_V2__ = false;/, "landing must not point at a missing surface");
+      assert.equal(page.status, 503);
+      assert.match(page.body, /Frontend build missing/);
+      assert.doesNotMatch(page.body, /__PARRANDA_CITY__/, "no city-shell masquerading as the planner");
     });
   } finally {
     fs.rmSync(emptyDir, { recursive: true, force: true });

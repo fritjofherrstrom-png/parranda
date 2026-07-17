@@ -78,6 +78,27 @@ LATER, separate cleanup PR once the promoted default has soaked — not part of
 the promotion itself. The curated city shells (`/:city?planner=open`) are NOT
 migrated and remain owned by the current Express app.
 
+## Retired surfaces (2026-07-17)
+
+The promoted default (#350) soaked through #351–#370 with no rollback. The old
+surfaces are now DELETED, not just demoted:
+
+- The old server-rendered landing (`renderLandingShell`) and its client
+  (`landing.js`) are removed. **GET / is owned solely by the new frontend.**
+- The `/labs/anywhere` alpha shell (`renderAnywhereShell`) is removed. The URL
+  remains as an **unconditional 302 → `/anywhere`** with place/planner/lang
+  preserved, so old links keep working.
+- The opt-out env flags `PARRANDA_NEW_LANDING` / `PARRANDA_NEW_ANYWHERE` are
+  gone with the fallback they selected. **Rollback is now `git revert`**, not an
+  env var.
+- The committed `frontend/dist` makes the build always present; a deployment
+  that somehow lacks it gets a **loud 503** ("Frontend build missing"), never a
+  silently wrong page.
+- `script.js`'s `anywhereMode` branches are now dead code (no shell ever sets
+  the bootstrap flag); removing them is a separate script.js cleanup. The
+  curated city shells (`/:city?planner=open`) remain owned by the current
+  Express app — that migration has not begun.
+
 ## Surface migration rule
 
 Every later migrated surface must prove parity before takeover:

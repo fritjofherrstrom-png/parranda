@@ -80,23 +80,6 @@ test("promoted default: /labs/anywhere funnels to the canonical /anywhere surfac
   });
 });
 
-test("an unknown place serves the neutral alpha shell with an anywhere bootstrap (EN + SV) — opt-out fallback", async () => {
-  await withServer({ anywhereV2Enabled: false }, async (server) => {
-    for (const [lang, expectLead] of [["en", /open data/i], ["sv", /öppna data/i]]) {
-      const res = await get(server, `/labs/anywhere?place=Tbilisi&planner=open&lang=${lang}`);
-      assert.equal(res.status, 200);
-      const b = bootstrapOf(res.body);
-      assert.equal(b.anywhereMode, true);
-      assert.equal(b.key, "anywhere", "no recognized-city identity is assigned");
-      assert.equal(b.label, "Tbilisi", "the typed place is the visible label");
-      assert.equal(b.requestedKey, null, "no registered city key leaks in");
-      assert.match(res.body, expectLead, `${lang} alpha copy present`);
-      // No leftover shell template tokens.
-      assert.doesNotMatch(res.body, /__PARRANDA_(HERO|PLANNER|WILDCARD|TITLE)/, "all shell tokens filled");
-    }
-  });
-});
-
 test("a freeform place + agnostic flags (no city) engages the engine and tags place_structure provenance", async () => {
   // Two districts ~1.3 km apart around the resolved anchor; deterministic loader.
   const anchor = { lat: 41.15, lng: -8.61 };

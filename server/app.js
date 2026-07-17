@@ -53,7 +53,6 @@ const publicRootFiles = new Set([
   "script.js",
   "ux-pass1.js",
   "planner-trust.js",
-  "landing.js",
   "manifest.webmanifest",
   "sw.js",
   // #264 — dogfood UI assets (the page itself is env-gated; these two files are
@@ -1203,90 +1202,6 @@ function buildLandingCityRegistry() {
   return entries;
 }
 
-function renderLandingShell({ lang = "en", anywhereV2 = false } = {}) {
-  const uiLang = normalizeLanguage(lang);
-  const ogLocale = uiLang === "en" ? "en_US" : "sv_SE";
-  const tr = (key) => translate(uiLang, key);
-  const langSuffix = `?lang=${uiLang}`;
-  const tagsHtml = (key) =>
-    tr(key).split(",").map((t) => `<span class="lp-tag">${escapeHtml(t.trim())}</span>`).join("\n              ");
-  const replacements = {
-    "__PARRANDA_LANG__": escapeHtml(uiLang),
-    "__PARRANDA_UI_LANG__": escapeHtml(uiLang),
-    "__PARRANDA_OG_LOCALE__": ogLocale,
-    // True only when the NEW-frontend /anywhere surface is actively served
-    // (flag on + build present) — the landing then routes freeform places there.
-    "__PARRANDA_ANYWHERE_V2_FLAG__": anywhereV2 ? "true" : "false",
-    "__PARRANDA_LANDING_TITLE__": escapeHtml(tr("landing.title")),
-    "__PARRANDA_LANDING_META_DESC__": escapeHtml(tr("landing.meta.description")),
-    "__PARRANDA_LANDING_HEADLINE__": escapeHtml(tr("landing.hero.headline")),
-    "__PARRANDA_LANDING_SUBCOPY__": escapeHtml(tr("landing.hero.subcopy")),
-    "__PARRANDA_LANDING_SEARCH_PLACEHOLDER__": escapeHtml(tr("landing.search.placeholder")),
-    "__PARRANDA_LANDING_SEARCH_SUBMIT__": escapeHtml(tr("landing.search.submit")),
-    "__PARRANDA_LANDING_SEARCH_SUBMIT_DISABLED__": escapeHtml(tr("landing.search.submitDisabled")),
-    "__PARRANDA_LANDING_SEARCH_UNSUPPORTED__": escapeHtml(tr("landing.search.unsupported")),
-    "__PARRANDA_LANDING_SEARCH_LABEL__": escapeHtml(tr("landing.search.label")),
-    "__PARRANDA_LANDING_SKIP_LINK__": escapeHtml(tr("landing.search.skipLink")),
-    "__PARRANDA_LANDING_CITY_REGISTRY__": serializeInlineJson(buildLandingCityRegistry()),
-    "__PARRANDA_LANDING_NAV_ROME__": escapeHtml(tr("landing.nav.rome")),
-    "__PARRANDA_LANDING_NAV_LAYOUTS__": escapeHtml(tr("landing.nav.layouts")),
-    "__PARRANDA_LANDING_LINK_BCN__": `/barcelona${langSuffix}`,
-    "__PARRANDA_LANDING_LINK_ROME__": `/rome${langSuffix}`,
-    "__PARRANDA_LANDING_BLITZ_BUTTON__": escapeHtml(tr("landing.blitz.button")),
-    "__PARRANDA_LANDING_BLITZ_SUBTITLE__": escapeHtml(tr("landing.blitz.subtitle")),
-    "__PARRANDA_LANDING_BLITZ_USE__": escapeHtml(tr("landing.blitz.use")),
-    "__PARRANDA_LANDING_BLITZ_REBLITZ__": escapeHtml(tr("landing.blitz.reblitz")),
-    "__PARRANDA_LANDING_BLITZ_PLAN__": escapeHtml(tr("landing.blitz.plan")),
-    "__PARRANDA_LANDING_BLITZ_CLOSE__": escapeHtml(tr("landing.blitz.close")),
-    "__PARRANDA_LANDING_BLITZ_LOADING__": escapeHtml(tr("landing.blitz.loading")),
-    "__PARRANDA_LANDING_BLITZ_GEO_FALLBACK__": escapeHtml(tr("landing.blitz.geoFallback")),
-    "__PARRANDA_LANDING_BLITZ_NO_CITY__": escapeHtml(tr("landing.blitz.noCity")),
-    "__PARRANDA_LANDING_BLITZ_ERROR__": escapeHtml(tr("landing.blitz.error")),
-    "__PARRANDA_LANDING_BLITZ_INFO__": escapeHtml(tr("landing.blitz.info")),
-    "__PARRANDA_LANDING_BLITZ_EYEBROW__": escapeHtml(tr("landing.blitz.eyebrow")),
-    "__PARRANDA_LANDING_BLITZ_SECTION_TITLE__": escapeHtml(tr("landing.blitz.sectionTitle")),
-    "__PARRANDA_LANDING_BLITZ_SHUFFLE__": escapeHtml(tr("landing.blitz.shuffle")),
-    "__PARRANDA_LANDING_BLITZ_CARD1_TIME__": escapeHtml(tr("landing.blitz.card1.time")),
-    "__PARRANDA_LANDING_BLITZ_CARD1_META__": escapeHtml(tr("landing.blitz.card1.meta")),
-    "__PARRANDA_LANDING_BLITZ_CARD1_TITLE__": escapeHtml(tr("landing.blitz.card1.title")),
-    "__PARRANDA_LANDING_BLITZ_CARD1_DESC__": escapeHtml(tr("landing.blitz.card1.desc")),
-    "__PARRANDA_LANDING_BLITZ_CARD1_TAGS__": tagsHtml("landing.blitz.card1.tags"),
-    "__PARRANDA_LANDING_BLITZ_CARD2_TIME__": escapeHtml(tr("landing.blitz.card2.time")),
-    "__PARRANDA_LANDING_BLITZ_CARD2_META__": escapeHtml(tr("landing.blitz.card2.meta")),
-    "__PARRANDA_LANDING_BLITZ_CARD2_TITLE__": escapeHtml(tr("landing.blitz.card2.title")),
-    "__PARRANDA_LANDING_BLITZ_CARD2_DESC__": escapeHtml(tr("landing.blitz.card2.desc")),
-    "__PARRANDA_LANDING_BLITZ_CARD2_TAGS__": tagsHtml("landing.blitz.card2.tags"),
-    "__PARRANDA_LANDING_BLITZ_CARD3_TIME__": escapeHtml(tr("landing.blitz.card3.time")),
-    "__PARRANDA_LANDING_BLITZ_CARD3_META__": escapeHtml(tr("landing.blitz.card3.meta")),
-    "__PARRANDA_LANDING_BLITZ_CARD3_TITLE__": escapeHtml(tr("landing.blitz.card3.title")),
-    "__PARRANDA_LANDING_BLITZ_CARD3_DESC__": escapeHtml(tr("landing.blitz.card3.desc")),
-    "__PARRANDA_LANDING_BLITZ_CARD3_TAGS__": tagsHtml("landing.blitz.card3.tags"),
-    "__PARRANDA_LANDING_BLITZ_USE_ONE__": escapeHtml(tr("landing.blitz.useOne")),
-    "__PARRANDA_LANDING_BLITZ_SHUFFLE_ALL__": escapeHtml(tr("landing.blitz.shuffleAll")),
-    "__PARRANDA_LANDING_PULSE_HEADLINE__": escapeHtml(tr("landing.pulse.headline")),
-    "__PARRANDA_LANDING_PULSE_SHOW_ALL__": escapeHtml(tr("landing.pulse.showAll")),
-    "__PARRANDA_LANDING_PULSE_BCN_BORN__": escapeHtml(tr("landing.pulse.bcnBorn")),
-    "__PARRANDA_LANDING_PULSE_ROME_MONTI__": escapeHtml(tr("landing.pulse.romeMonti")),
-    "__PARRANDA_LANDING_PULSE_BCN_BARCELONETA__": escapeHtml(tr("landing.pulse.bcnBarceloneta")),
-    "__PARRANDA_LANDING_JOURNEYS_EYEBROW__": escapeHtml(tr("landing.journeys.eyebrow")),
-    "__PARRANDA_LANDING_JOURNEYS_TITLE__": escapeHtml(tr("landing.journeys.title")),
-    "__PARRANDA_LANDING_JOURNEYS_DESC__": escapeHtml(tr("landing.journeys.desc")),
-    "__PARRANDA_LANDING_JOURNEYS_BCN_EYEBROW__": escapeHtml(tr("landing.journeys.bcnEyebrow")),
-    "__PARRANDA_LANDING_JOURNEYS_BCN_LABEL__": escapeHtml(tr("landing.journeys.bcnLabel")),
-    "__PARRANDA_LANDING_JOURNEYS_BCN_STATUS__": escapeHtml(tr("landing.journeys.bcnStatus")),
-    "__PARRANDA_LANDING_JOURNEYS_ROME_EYEBROW__": escapeHtml(tr("landing.journeys.romeEyebrow")),
-    "__PARRANDA_LANDING_JOURNEYS_ROME_LABEL__": escapeHtml(tr("landing.journeys.romeLabel")),
-    "__PARRANDA_LANDING_JOURNEYS_ROME_STATUS__": escapeHtml(tr("landing.journeys.romeStatus")),
-    "__PARRANDA_LANDING_FOOTER_TAGLINE__": escapeHtml(tr("landing.footer.tagline")),
-    "__PARRANDA_LANDING_FOOTER_PHILOSOPHY__": escapeHtml(tr("landing.footer.philosophy")),
-    "__PARRANDA_LANDING_FOOTER_CONTACT__": escapeHtml(tr("landing.footer.contact")),
-  };
-  return Object.entries(replacements).reduce(
-    (h, [token, value]) => h.split(token).join(value),
-    landingShellTemplate,
-  );
-}
-
 function renderAnywhereV2Shell(html, { lang = "en" } = {}) {
   const uiLang = normalizeLanguage(lang);
   return String(html || "").replace(/<html\b([^>]*)>/i, (_match, attrs = "") => {
@@ -1302,24 +1217,14 @@ function isDogfoodUiEnabled(env) {
   return flag === "enabled" || flag === "1" || flag === "true";
 }
 
-// PROMOTED (2026-07-12, docs/FRONTEND_MIGRATION_CONTRACT.md "Promoted
-// surfaces"): the NEW frontend owns /anywhere and the landing BY DEFAULT —
-// readiness was proven (parity checklists #328/#344, live verification, the
-// full suite) so the experiment flag flipped to an explicit OPT-OUT, per the
-// anti-drift rule that flags are for safe development, not a permanent excuse.
-// Rollback stays one env away: set PARRANDA_NEW_ANYWHERE=disabled (or
-// PARRANDA_NEW_LANDING=disabled) to return to the prior Express surface,
-// byte-stable. The build-present gates below still protect a deployment whose
-// frontend/dist is missing — the old surface then serves automatically.
-function isAnywhereV2Enabled(env = process.env) {
-  const flag = String((env && env.PARRANDA_NEW_ANYWHERE) ?? "").trim().toLowerCase();
-  return !["disabled", "0", "false", "off"].includes(flag);
-}
-
-function isNewLandingEnabled(env = process.env) {
-  const flag = String((env && env.PARRANDA_NEW_LANDING) ?? "").trim().toLowerCase();
-  return !["disabled", "0", "false", "off"].includes(flag);
-}
+// RETIRED (2026-07-17, docs/FRONTEND_MIGRATION_CONTRACT.md "Retired surfaces"):
+// the old server-rendered landing and the /labs/anywhere alpha shell are
+// deleted after the promoted default (#350) soaked through #351–#370. The new
+// frontend is the ONLY owner of GET / and /anywhere; the opt-out env flags
+// (PARRANDA_NEW_LANDING / PARRANDA_NEW_ANYWHERE) are gone with the fallback
+// they selected. Rollback is now `git revert`, not an env var. The committed
+// frontend/dist makes the build always present; a deployment that somehow
+// lacks it gets a loud 503, never a silently wrong page.
 
 // Serve-time mutation of the prebuilt landing HTML: the request-time <html lang>
 // (static output cannot read query params) and the CITY REGISTRY injected by
@@ -1472,95 +1377,6 @@ function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed, lang = "e
 // place. This is a product surface, not a diagnostics shell — no citypack, no raw
 // tokens. The agnostic request itself is driven client-side (script.js anywhere
 // mode); this function only serves the shell.
-function renderAnywhereShell({ place = "", plannerEntryRoute = false, lang = "en" } = {}) {
-  const uiLang = normalizeLanguage(lang);
-  const placeLabel = String(place || "").trim();
-  const tr = (key, fallback) => translate(uiLang, key, { place: placeLabel }, fallback);
-
-  const bootstrap = {
-    anywhereMode: true,
-    place: placeLabel,
-    key: "anywhere",
-    label: placeLabel,
-    displayLabel: placeLabel,
-    searchLabel: placeLabel,
-    visibility: "alpha",
-    timezone: null,
-    locale: null,
-    currency: null,
-    center: null,
-    plannerAreas: [],
-    requestedKey: null,
-    fallbackUsed: false,
-    plannerEntryRoute,
-    lang: uiLang,
-    previewSurface: null,
-  };
-
-  const title = placeLabel
-    ? tr("anywhere.title", `${placeLabel} · Parranda (any-place alpha)`)
-    : tr("anywhere.titleEmpty", "Any place · Parranda (alpha)");
-  const heroHeadline = placeLabel
-    ? tr("anywhere.heroHeadline", `Your day in ${placeLabel}`)
-    : tr("anywhere.heroHeadlineEmpty", "Type any place");
-  const metaDescription = tr(
-    "anywhere.metaDescription",
-    "Parranda's any-place alpha: type any city and get a smart, walkable day composed from open data — honest about what it can and can't compose yet.",
-  );
-
-  const replacements = {
-    "__PARRANDA_LANG__": escapeHtml(uiLang),
-    "__PARRANDA_UI_LANG__": escapeHtml(uiLang),
-    "__PARRANDA_I18N_BOOTSTRAP__": serializeInlineJson(buildClientI18nPayload()),
-    "__PARRANDA_OG_LOCALE__": uiLang === "en" ? "en_US" : "sv_SE",
-    "__PARRANDA_TITLE__": escapeHtml(title),
-    "__PARRANDA_META_DESCRIPTION__": escapeHtml(metaDescription),
-    "__PARRANDA_OG_TITLE__": escapeHtml(title),
-    "__PARRANDA_OG_DESCRIPTION__": escapeHtml(metaDescription),
-    "__PARRANDA_TWITTER_TITLE__": escapeHtml(title),
-    "__PARRANDA_TWITTER_DESCRIPTION__": escapeHtml(metaDescription),
-    "__PARRANDA_CITY_KEY__": escapeHtml("anywhere"),
-    "__PARRANDA_CITY_LABEL__": escapeHtml(placeLabel),
-    "__PARRANDA_CITY_MAP_URL__": "",
-    "__PARRANDA_BRAND_SUBTITLE__": escapeHtml(tr("anywhere.brandSubtitle", "Any-place alpha")),
-    "__PARRANDA_CITY_EYEBROW__": escapeHtml(tr("anywhere.eyebrow", "Any-place alpha")),
-    "__PARRANDA_HERO_HEADLINE__": escapeHtml(heroHeadline),
-    "__PARRANDA_HERO_LEAD__": escapeHtml(
-      tr(
-        "anywhere.heroLead",
-        "Parranda composes a day from open data — no city pack required. It is honest when it can only read the place's shape, or can't compose a day yet.",
-      ),
-    ),
-    "__PARRANDA_HERO_LIVE_LABEL__": escapeHtml(tr("anywhere.heroLiveLabel", "Alpha")),
-    "__PARRANDA_PLANNER_TITLE__": escapeHtml(tr("anywhere.plannerTitle", "Plan a day anywhere")),
-    "__PARRANDA_PLANNER_SUMMARY__": escapeHtml(
-      tr("anywhere.plannerSummary", "Pick what you're in the mood for and Parranda composes a walkable day."),
-    ),
-    "__PARRANDA_PLANNER_CTA_LABEL__": escapeHtml(tr("anywhere.plannerCta", "Build my day")),
-    "__PARRANDA_PLANNER_MICROCOPY__": escapeHtml(
-      tr("anywhere.plannerMicrocopy", "Alpha — composed live from open data, honest about its limits."),
-    ),
-    // The Blitz/wildcard teaser is citypack-shaped; hide its actions on the alpha.
-    "__PARRANDA_WILDCARD_LABEL__": escapeHtml(tr("anywhere.wildcardLabel", "Alpha")),
-    "__PARRANDA_WILDCARD_TITLE__": escapeHtml(tr("anywhere.wildcardTitle", "Any-place engine")),
-    "__PARRANDA_WILDCARD_SUMMARY__": escapeHtml(
-      tr("anywhere.wildcardSummary", "Type any place above to see Parranda compose a day from open data."),
-    ),
-    "__PARRANDA_WILDCARD_META__": "",
-    "__PARRANDA_WILDCARD_TAG_1__": "",
-    "__PARRANDA_WILDCARD_TAG_2__": "",
-    "__PARRANDA_WILDCARD_TAG_3__": "",
-    "__PARRANDA_WILDCARD_ACTIONS_HIDDEN__": "hidden",
-    "__PARRANDA_CITY_BOOTSTRAP__": serializeInlineJson(bootstrap),
-    ...buildStaticShellI18nReplacements(uiLang),
-  };
-
-  return Object.entries(replacements).reduce(
-    (html, [token, replacement]) => html.split(token).join(replacement),
-    appShellTemplate,
-  );
-}
-
 function inferShellCity(request) {
   const pathSegments = String(request.path || "")
     .split("/")
@@ -1612,35 +1428,25 @@ function buildApp({
   // NEW-frontend /anywhere takeover (contract-gated): the flag decides serving,
   // the dir is injectable for deterministic tests. Both default to production
   // values (env flag + the frontend workspace's build output).
-  anywhereV2Enabled = isAnywhereV2Enabled(),
   anywhereV2Dir = path.join(appRoot, "frontend", "dist"),
-  newLandingEnabled = isNewLandingEnabled(),
 } = {}) {
   const app = express();
 
   app.use(express.json());
-  // GET / — the NEW-frontend landing takeover (explicit per the migration
-  // contract). Served ONLY when its flag is on, the built page exists AND the
-  // /anywhere surface is active (the new landing routes freeform places there —
-  // it must never point at a missing surface). Otherwise: today's landing,
-  // byte-stable. Rollback = unset PARRANDA_NEW_LANDING.
+  // GET / — the new frontend IS the landing (sole owner since the old shell was
+  // retired). The committed frontend/dist makes the build always present; if a
+  // deployment somehow lacks it, fail LOUDLY — never a silently wrong page.
   const landingV2Html = path.join(anywhereV2Dir, "index.html");
-  const landingV2Active = () =>
-    newLandingEnabled && anywhereV2Active() && fs.existsSync(landingV2Html);
   app.get(["/", "/index.html"], (request, response) => {
-    if (landingV2Active()) {
-      response.type("html").send(
-        renderLandingV2Shell(fs.readFileSync(landingV2Html, "utf8"), {
-          lang: request.query?.lang,
-          registryJson: serializeInlineJson(buildLandingCityRegistry()),
-        }),
-      );
+    if (!fs.existsSync(landingV2Html)) {
+      response.status(503).type("text/plain").send("Frontend build missing (frontend/dist). Run: npm --prefix frontend run build");
       return;
     }
     response.type("html").send(
-      // anywhereV2Active is defined below in this scope; handlers run at request
-      // time, so the closure reference is safe.
-      renderLandingShell({ lang: normalizeLanguage(request.query?.lang), anywhereV2: anywhereV2Active() })
+      renderLandingV2Shell(fs.readFileSync(landingV2Html, "utf8"), {
+        lang: request.query?.lang,
+        registryJson: serializeInlineJson(buildLandingCityRegistry()),
+      }),
     );
   });
 
@@ -1659,41 +1465,24 @@ function buildApp({
     );
   });
 
-  // Any-place ALPHA product surface. A freeform `place` (never a recognized city)
-  // gets the planner shell in `anywhereMode`; the client then drives the agnostic
-  // engine request. Always available (not env-gated) — it is a product doorway,
-  // not a diagnostics page. The agnostic *route* still needs the trusted loader to
-  // be configured to compose anything; without it the surface honestly says so.
-  // /anywhere — the NEW frontend's any-city planner (route ownership per
-  // docs/FRONTEND_MIGRATION_CONTRACT.md "Promoted surfaces": DEFAULT since
-  // 2026-07-12). Served when not opted out AND the built surface exists;
-  // otherwise the request falls through to the catch-all (the prior behavior,
-  // byte-stable). Rollback = PARRANDA_NEW_ANYWHERE=disabled.
+  // /anywhere — the new frontend's any-city planner, sole owner since the alpha
+  // shell was retired. Missing build → loud 503 (never the city-shell catch-all
+  // masquerading as the planner).
   const anywhereV2Html = path.join(anywhereV2Dir, "anywhere", "index.html");
-  const anywhereV2Active = () => anywhereV2Enabled && fs.existsSync(anywhereV2Html);
 
-  // /labs/anywhere — the OLD any-place alpha doorway. Now that /anywhere is the
-  // promoted owner of this journey, the labs URL redirects there (same place/
-  // planner/lang inputs) so old links keep working with ONE canonical surface.
-  // When the new surface is opted out or unbuilt, the alpha shell still serves —
-  // it remains the rollback surface, deleted only after the default has soaked.
+  // /labs/anywhere — the retired alpha doorway's URL. Old links keep working:
+  // one canonical surface, unconditional redirect with the inputs preserved.
   app.get("/labs/anywhere", (request, response) => {
     const place = typeof request.query?.place === "string" ? request.query.place : "";
-    const lang = normalizeLanguage(request.query?.lang);
-    if (anywhereV2Active()) {
-      const params = new URLSearchParams();
-      if (place) params.set("place", place);
-      if (String(request.query?.planner || "") === "open") params.set("planner", "open");
-      params.set("lang", lang);
-      response.redirect(302, `/anywhere?${params.toString()}`);
-      return;
-    }
-    const plannerEntryRoute = String(request.query?.planner || "") === "open";
-    response.type("html").send(renderAnywhereShell({ place, plannerEntryRoute, lang }));
+    const params = new URLSearchParams();
+    if (place) params.set("place", place);
+    if (String(request.query?.planner || "") === "open") params.set("planner", "open");
+    params.set("lang", normalizeLanguage(request.query?.lang));
+    response.redirect(302, `/anywhere?${params.toString()}`);
   });
-  app.get("/anywhere", (request, response, next) => {
-    if (!anywhereV2Active()) {
-      next();
+  app.get("/anywhere", (request, response) => {
+    if (!fs.existsSync(anywhereV2Html)) {
+      response.status(503).type("text/plain").send("Frontend build missing (frontend/dist). Run: npm --prefix frontend run build");
       return;
     }
     response.type("html").send(
@@ -1702,14 +1491,7 @@ function buildApp({
       }),
     );
   });
-  const anywhereV2Assets = express.static(path.join(anywhereV2Dir, "_astro"), { index: false, dotfiles: "ignore" });
-  app.use("/_astro", (request, response, next) => {
-    if (!anywhereV2Active()) {
-      next();
-      return;
-    }
-    anywhereV2Assets(request, response, next);
-  });
+  app.use("/_astro", express.static(path.join(anywhereV2Dir, "_astro"), { index: false, dotfiles: "ignore" }));
 
   app.get([...publicRootFiles].map((assetName) => `/${assetName}`), servePublicRootAsset);
   app.use("/assets", express.static(path.join(appRoot, "assets"), { index: false, dotfiles: "ignore" }));
