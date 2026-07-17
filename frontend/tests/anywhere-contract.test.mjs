@@ -195,7 +195,34 @@ test("map hierarchy mirrors route authority instead of numbering two competing p
   assert.match(anywherePlannerSource, /className: `route-map-marker/);
   assert.match(anywherePlannerSource, /routeContextSuggestions\.forEach/);
   assert.match(anywherePlannerSource, /if \(hasPrimaryRoute\)/);
-  assert.match(anywherePlannerSource, /else \{[\s\S]*district-map-marker/);
+  // Candidates are NEVER sequenced: the no-route branch draws plain dots only —
+  // no numbered markers, no connecting arc (only the route branch may polyline).
+  assert.doesNotMatch(anywherePlannerSource, /district-map-marker/);
+  const noRouteBranch = anywherePlannerSource.split("} else {")[1] ?? "";
+  assert.doesNotMatch(noRouteBranch.slice(0, 1200), /polyline|divIcon/);
+});
+
+test("route stops translate #369 candidate-spine metadata to product copy — never raw tokens", () => {
+  // WHY-chips from covered_preferences (translated + deduped vs the type chip)
+  // and an honest partial-match marker; unmapped axes are skipped, not exposed.
+  assert.match(anywherePlannerSource, /coveredPreferenceLabels\(stop, lang\)/);
+  assert.match(anywherePlannerSource, /t\("täcker", "covers"\)/);
+  assert.match(anywherePlannerSource, /candidate_status === "partial"/);
+  assert.match(anywherePlannerSource, /t\("delvis träff", "partial match"\)/);
+  // Raw engine reason tokens never render.
+  assert.doesNotMatch(anywherePlannerSource, /fit_reasons|time_reasons|lens_reasons|route_roles/);
+});
+
+test("candidate clusters read as candidates, not a second itinerary", () => {
+  assert.doesNotMatch(anywherePlannerSource, /till nästa distrikt|to the next district/);
+  assert.doesNotMatch(anywherePlannerSource, /Dagens kvarter|Today's neighborhoods/);
+});
+
+test("the weather read lives in Pulse (context), not as its own competing section", () => {
+  // The Pulse section carries the trusted weather read + clothing; it renders
+  // even when no event source exists (weather must not vanish with events).
+  assert.match(anywherePlannerSource, /\(showDay && dayflow\?\.weather\?\.headline\)\)/);
+  assert.doesNotMatch(anywherePlannerSource, /Dagens läsning|Today's reading/);
 });
 
 test("walking leg copy uses the shared sub-100-metre formatter", () => {

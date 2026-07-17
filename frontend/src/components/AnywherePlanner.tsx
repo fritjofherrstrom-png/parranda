@@ -135,6 +135,13 @@ const INTENT_LABELS: Record<string, { sv: string; en: string }> = {
   green: { sv: "Grönt", en: "Green" },
   second_hand: { sv: "Second hand", en: "Second hand" },
   market: { sv: "Marknad", en: "Market" },
+  // The candidate spine's preference axes (#369 covered_preferences) use the
+  // loader's category vocabulary — aliases so raw engine tokens never render.
+  scenic: { sv: "Utsikt", en: "Views" },
+  coffee: { sv: "Fika", en: "Coffee" },
+  bars: { sv: "Bar", en: "Bars" },
+  swimming: { sv: "Bad", en: "Swimming" },
+  vintage: { sv: "Second hand", en: "Vintage" },
 };
 
 // Per-stop TYPE chips ("what is this place") — the engine's vocabulary, localized.
@@ -158,6 +165,21 @@ const TYPE_LABELS: Record<string, { sv: string; en: string }> = {
 function label(map: Record<string, { sv: string; en: string }>, key: string | null | undefined, lang: Lang): string {
   if (!key) return "";
   return map[key]?.[lang] ?? key;
+}
+
+// #369 candidate-spine metadata → concise product copy. Only MAPPED preference
+// axes render (an unknown engine token is skipped, never exposed raw), and a
+// preference that repeats the type chip's text is deduped ("Utsikt" viewpoint
+// covering "scenic" would otherwise read twice).
+function coveredPreferenceLabels(stop: { covered_preferences?: string[]; type?: string | null }, lang: Lang): string[] {
+  const typeLabel = stop?.type ? label(TYPE_LABELS, stop.type, lang) : "";
+  const out: string[] = [];
+  for (const axis of Array.isArray(stop?.covered_preferences) ? stop.covered_preferences : []) {
+    const mapped = INTENT_LABELS[axis]?.[lang];
+    if (!mapped || mapped === typeLabel || out.includes(mapped)) continue;
+    out.push(mapped);
+  }
+  return out;
 }
 
 // Event timing renders through the pure `eventTiming` formatter (pulse-view.mjs),
@@ -620,12 +642,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           layer.addLayer(dot);
         });
       } else {
-        const arc = areas.map((area) => [area.center!.lat, area.center!.lng] as [number, number]);
-        if (arc.length > 1) layer.addLayer(L.polyline(arc, { color: "#b6582f", weight: 3, dashArray: "6 8", opacity: 0.55 }));
-        areas.forEach((area, index) => {
+        // No route exists: these are CANDIDATES, not an itinerary. No connecting
+        // arc, no sequence numbers — plain dots only, so nothing on the map can
+        // be mistaken for a walking order Parranda never claimed.
+        areas.forEach((area) => {
           bounds.push([area.center!.lat, area.center!.lng]);
-          const icon = L.divIcon({ className: "district-map-marker", html: String(index + 1), iconSize: [28, 28], iconAnchor: [14, 14] });
-          layer.addLayer(L.marker([area.center!.lat, area.center!.lng], { icon, zIndexOffset: 1000 }));
           (area.stops ?? []).forEach((stop) => {
             if (!Number.isFinite(stop?.lat) || !Number.isFinite(stop?.lng)) return;
             bounds.push([stop.lat, stop.lng]);
@@ -890,17 +911,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </p>
       )}
 
-      {showDay && dayflow?.weather?.headline && (
-        <section className="rounded-parranda border border-parranda-accent/25 bg-parranda-accent/10 p-4 shadow-sm">
-          <p className="text-xs font-bold uppercase tracking-wider text-parranda-accent">{t("Dagens läsning", "Today's reading")}</p>
-          <p className="mt-1 text-sm font-semibold text-parranda-ink">
-            {dayflow.weather.headline}
-            {dayflow.weather.pitch ? <span className="font-medium"> — {dayflow.weather.pitch}</span> : null}
-          </p>
-          {dayflow.weather.reason && <p className="mt-0.5 text-xs text-parranda-ink/70">{dayflow.weather.reason}</p>}
-        </section>
-      )}
-
       {showDay && routeStops.length > 0 && (
         <section className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -963,6 +973,18 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                       <span className="rounded-full border border-parranda-accent/30 bg-parranda-accent/10 px-2 py-0.5 text-xs font-semibold text-parranda-ink">
                         {label(DAYPART_LABELS, stop.daypart, lang)}
                       </span>
+                    )}
+                    {/* WHY this stop is in the route — the trusted candidate-spine
+                        preference fit (#369), translated to product copy and
+                        deduped against the type chip. Raw engine tokens never
+                        render; an unmapped axis is skipped, not exposed. */}
+                    {coveredPreferenceLabels(stop, lang).map((prefLabel) => (
+                      <span key={prefLabel} className="rounded-full border border-parranda-glow/40 bg-parranda-glow/10 px-2 py-0.5 text-xs text-parranda-ink/80">
+                        {t("täcker", "covers")} {prefLabel}
+                      </span>
+                    ))}
+                    {stop?.candidate_status === "partial" && (
+                      <span className="text-xs italic text-parranda-ink/50">{t("delvis träff", "partial match")}</span>
                     )}
                   </span>
                 </li>
@@ -1098,29 +1120,22 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             )}
           </div>
 
-          <ol className="flex flex-col gap-3">
+          {/* Candidate CLUSTERS, deliberately unnumbered and unsequenced: no rank
+              badges, no daypart headings, no inter-cluster walking legs — those
+              read as an itinerary, and only primary_route.main_stops is a route. */}
+          <ul className="flex flex-col gap-3">
             {(day?.areas ?? []).map((area, index) => (
               <li key={index} className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/10 p-4">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-parranda-accent text-sm font-bold text-white">
-                    {index + 1}
-                  </span>
-                  {area.daypart_hint && (
-                    <span className="text-sm font-semibold text-parranda-ink">{label(DAYPART_LABELS, area.daypart_hint, lang)}</span>
-                  )}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {(area.covers ?? []).map((axis) => (
+                    <span key={axis} className="rounded-full border border-parranda-accent/30 bg-parranda-accent/10 px-2.5 py-0.5 text-xs font-semibold text-parranda-ink">
+                      {label(INTENT_LABELS, axis, lang)}
+                    </span>
+                  ))}
                   <span className="ml-auto text-xs text-parranda-ink/60">
                     {(area.stop_ids?.length ?? area.stops?.length ?? 0)} {t("träffar", "places")}
                   </span>
                 </div>
-                {(area.covers ?? []).length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {(area.covers ?? []).map((axis) => (
-                      <span key={axis} className="rounded-full border border-parranda-accent/30 bg-parranda-accent/10 px-2.5 py-0.5 text-xs font-semibold text-parranda-ink">
-                        {label(INTENT_LABELS, axis, lang)}
-                      </span>
-                    ))}
-                  </div>
-                )}
                 {Array.isArray(area.stops) && area.stops.length > 0 ? (
                   <p className="mt-2 text-sm text-parranda-ink">
                     {area.stops.map((stop, si) => {
@@ -1149,12 +1164,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 ) : (area.stop_names ?? []).length > 0 ? (
                   <p className="mt-2 text-sm text-parranda-ink">{(area.stop_names ?? []).join(" · ")}</p>
                 ) : null}
-                {index < (day?.areas?.length ?? 0) - 1 && Number.isFinite(day?.legs?.[index]?.distance_km as number) && (
-                  <p className="mt-2 text-xs text-parranda-ink/60">≈ {day!.legs![index]!.distance_km} km {t("till nästa distrikt", "to the next district")}</p>
-                )}
               </li>
             ))}
-          </ol>
+          </ul>
 
           {/* The evening event is NOT presented here: a woven event renders once,
               as the route extension in "Dagens rutt"; a non-woven anchor event
@@ -1177,12 +1189,16 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </section>
       )}
 
-      {phase === "done" && liveEvents && (liveEvents.coverage === "covered" || liveEvents.coverage === "uncovered") && (
+      {phase === "done" &&
+        ((liveEvents && (liveEvents.coverage === "covered" || liveEvents.coverage === "uncovered")) ||
+          (showDay && dayflow?.weather?.headline)) && (
         <section className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm">
-          {/* PULSE — the city's now-context. Renders independently of route
-              composition (live_events survives a blocked compose), so a failed
-              route never hides trusted events. Woven events are excluded here —
-              they own the route-extension presentation above. */}
+          {/* PULSE — the city's now-context: weather read, rhythm advice, current
+              events. Renders independently of route composition (live_events
+              survives a blocked compose), so a failed route never hides trusted
+              context; and the trusted weather read shows even when no event
+              source exists. Woven events are excluded here — they own the
+              route-extension presentation above. */}
           <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">
             {mode === "near_me"
               ? t("Just nu nära dig", "Now near you")
@@ -1191,8 +1207,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 : t("Just nu här", "Now here")}
           </p>
 
+          {showDay && dayflow?.weather?.headline && (
+            <p className="mt-2 text-sm font-semibold text-parranda-ink">
+              {dayflow.weather.headline}
+              {dayflow.weather.pitch ? <span className="font-medium"> — {dayflow.weather.pitch}</span> : null}
+            </p>
+          )}
           {clothing && (
-            <p className="mt-2 text-sm text-parranda-ink">
+            <p className="mt-1 text-sm text-parranda-ink">
               <span className="font-semibold">{clothing.headline}</span>
               <span className="text-parranda-ink/70"> — {clothing.advice}</span>
             </p>
