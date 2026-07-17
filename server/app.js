@@ -2449,15 +2449,21 @@ function buildApp({
     const pathCityKey = pathSegments[0] || null;
     const cityResolution = resolveCityConfig(pathCityKey, { allowFallback: false });
 
-    // The city-shell catch-all is only for registered city roots and their
-    // deep links. Unknown paths must never borrow the default Rome config and
-    // masquerade as valid product pages.
+    const isCityRoot = pathSegments.length === 1;
+    const isPlannerEntry = pathSegments.length === 2 && pathSegments[1] === "plan";
+
+    // The city-shell catch-all is only for explicitly supported registered
+    // city routes. Unknown nested paths must never borrow a valid city shell
+    // and masquerade as product pages or assets.
     if (!cityResolution.found || !cityResolution.cityConfig) {
       response.status(404).type("text/plain").send("Not found");
       return;
     }
+    if (!isCityRoot && !isPlannerEntry) {
+      response.status(404).type("text/plain").send("Not found");
+      return;
+    }
 
-    const isPlannerEntry = pathSegments[1] === "plan";
     const shellResolution = {
       cityConfig: cityResolution.cityConfig,
       requestedCity: cityResolution.requestedKey,

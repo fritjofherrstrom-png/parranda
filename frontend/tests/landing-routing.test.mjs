@@ -6,7 +6,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolveEntryLoose, inlineCompletion, routeForInput } from "../src/lib/landing-routing.mjs";
+import { inlineCompletion, routeForInput } from "../src/lib/landing-routing.mjs";
 
 const REGISTRY = {
   barcelona: { key: "barcelona", label: "Barcelona", status: "beta" },
@@ -57,13 +57,19 @@ test("inline completion completes a label prefix in place ('Barc' → 'Barcelona
   assert.equal(inlineCompletion(REGISTRY, ""), null);
 });
 
-test("prefix resolution prefers label-prefix and higher status, deterministically", () => {
-  const both = {
+test("inline completion requires one unique matching city key", () => {
+  const aliasesForOneCity = {
     ...REGISTRY,
-    romaville: { key: "romaville", label: "Romaville", status: "preview" },
+    barceloneta: { key: "barcelona", label: "Barcelona", status: "beta" },
   };
-  // "rom" matches Rome (public, label prefix, shorter) over Romaville (preview).
-  assert.equal(resolveEntryLoose(both, "rom").key, "rome");
+  assert.equal(inlineCompletion(aliasesForOneCity, "Barc"), "Barcelona");
+
+  const ambiguous = {
+    ...REGISTRY,
+    barletta: { key: "barletta", label: "Barletta", status: "preview" },
+  };
+  assert.equal(inlineCompletion(ambiguous, "Bar"), null, "shared prefix across cities stays silent");
+  assert.equal(routeForInput(ambiguous, "Bar", "en").href, "/anywhere?place=Bar&planner=open&lang=en");
 });
 
 test("a null/absent registry treats everything as freeform (empty-registry dev mode)", () => {

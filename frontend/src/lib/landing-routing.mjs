@@ -20,31 +20,21 @@ export function resolveEntry(registry, raw) {
   return registry[String(raw || "").trim().toLowerCase()] || null;
 }
 
-// Best city whose alias starts with the typed text — so "Barc" finds Barcelona.
-// Deterministic: label-prefix beats alias-only, then status rank, then shortest.
+// Unique city whose alias starts with the typed text — so "Barc" finds Barcelona.
+// Ambiguous prefixes stay silent; submit routing remains exact-only.
 export function bestPrefixMatch(registry, raw) {
   const q = String(raw || "").trim().toLowerCase();
   if (q.length < MIN_PREFIX_LENGTH || !registry) return null;
-  let best = null;
-  let bestScore = Infinity;
+  const matches = new Map();
   for (const aliasKey of Object.keys(registry)) {
     if (aliasKey.indexOf(q) !== 0) continue;
     const entry = registry[aliasKey];
     if (!entry) continue;
-    const labelLc = String(entry.label || "").toLowerCase();
-    const labelIsPrefix = labelLc.indexOf(q) === 0 ? 0 : 1;
-    const rank = STATUS_RANK[entry.status] != null ? STATUS_RANK[entry.status] : 3;
-    const score = labelIsPrefix * 1000 + rank * 100 + labelLc.length;
-    if (score < bestScore) {
-      bestScore = score;
-      best = entry;
-    }
+    const key = entry.key || aliasKey;
+    if (!matches.has(key)) matches.set(key, entry);
   }
-  return best;
-}
-
-export function resolveEntryLoose(registry, raw) {
-  return resolveEntry(registry, raw) || bestPrefixMatch(registry, raw);
+  if (matches.size !== 1) return null;
+  return Array.from(matches.values())[0] || null;
 }
 
 // The inline completion suggestion ("Barc" → "Barcelona"), or null.

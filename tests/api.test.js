@@ -1038,18 +1038,37 @@ test("unknown top-level paths return 404 instead of borrowing the Rome city shel
   }
 });
 
-test("registered city roots and deep links still render after the catch-all is restricted", async () => {
+test("registered city roots and planner-entry routes still render after the catch-all is restricted", async () => {
   global.fetch = async (url) => {
-    throw new Error(`Unexpected fetch during registered city deep-link test: ${url}`);
+    throw new Error(`Unexpected fetch during registered city shell test: ${url}`);
   };
 
   const server = buildApp().listen(0);
 
   try {
-    for (const pathName of ["/barcelona", "/barcelona/plan", "/barcelona/gracia", "/rome", "/athens"]) {
+    for (const pathName of ["/barcelona", "/barcelona/plan", "/rome", "/rome/plan", "/athens", "/athens/plan"]) {
       const response = await requestText(server, { path: pathName });
       assert.equal(response.status, 200, `${pathName} should keep rendering its registered city shell`);
       assert.match(response.body, /window\.__PARRANDA_CITY__/);
+    }
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("unknown nested registered-city paths return 404 instead of a city shell", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during nested city 404 test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    for (const pathName of ["/barcelona/xyzzy", "/barcelona/missing.js", "/barcelona/plan/nonsense"]) {
+      const response = await requestText(server, { path: pathName });
+      assert.equal(response.status, 404, `${pathName} should not render a registered city shell`);
+      assert.equal(response.body, "Not found");
+      assert.doesNotMatch(response.body, /window\.__PARRANDA_CITY__/);
     }
   } finally {
     await new Promise((resolve) => server.close(resolve));
