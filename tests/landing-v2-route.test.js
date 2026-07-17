@@ -1,15 +1,11 @@
 "use strict";
 
 /**
- * GET / landing takeover (docs/FRONTEND_MIGRATION_CONTRACT.md) — explicit,
- * reversible, contract-gated:
- *   - flag OFF (default): today's server-rendered landing, byte-stable;
- *   - flag ON + built page + /anywhere active: the NEW landing serves, with the
- *     request-time <html lang> and the CITY REGISTRY injected at serve time;
- *   - flag ON but /anywhere NOT active: fall back to today's landing (the new
- *     landing routes freeform places to /anywhere — never point at a missing
- *     surface);
- *   - flag ON but NO build: fall back to today's landing.
+ * GET / route ownership after the old-stack retirement
+ * (docs/FRONTEND_MIGRATION_CONTRACT.md "Retired surfaces"): the new frontend is
+ * the ONLY landing — no flags, no fallback shell. The request-time <html lang>
+ * and the serve-time CITY REGISTRY injection are the landing's contract; a
+ * missing build fails loudly (503).
  */
 
 const assert = require("node:assert/strict");
@@ -55,10 +51,10 @@ async function withServer(options, run) {
   }
 }
 
-test("flag ON + build + anywhere active: the NEW landing serves with lang + injected registry", async () => {
+test("GET / serves the new landing unconditionally with lang + injected registry", async () => {
   const dist = makeDist();
   try {
-    await withServer({ newLandingEnabled: true, anywhereV2Enabled: true, anywhereV2Dir: dist }, async (server) => {
+    await withServer({ anywhereV2Dir: dist }, async (server) => {
       const page = await get(server, "/?lang=sv");
       assert.equal(page.status, 200);
       assert.match(page.body, /NEW-LANDING/);
@@ -76,54 +72,13 @@ test("flag ON + build + anywhere active: the NEW landing serves with lang + inje
   }
 });
 
-test("flag ON but /anywhere NOT active: falls back to today's landing (never point at a missing surface)", async () => {
-  const dist = makeDist();
-  try {
-    await withServer({ newLandingEnabled: true, anywhereV2Enabled: false, anywhereV2Dir: dist }, async (server) => {
-      const page = await get(server, "/");
-      assert.doesNotMatch(page.body, /NEW-LANDING/);
-      assert.match(page.body, /window\.__PARRANDA_ANYWHERE_V2__ = false;/, "today's landing, honest flag");
-    });
-  } finally {
-    fs.rmSync(dist, { recursive: true, force: true });
-  }
-});
-
-test("flag ON but NO landing build: falls back to today's landing", async () => {
+test("a missing landing build fails LOUDLY (503) — never a silently wrong page", async () => {
   const dist = makeDist({ withLanding: false });
   try {
-    await withServer({ newLandingEnabled: true, anywhereV2Enabled: true, anywhereV2Dir: dist }, async (server) => {
+    await withServer({ anywhereV2Dir: dist }, async (server) => {
       const page = await get(server, "/");
-      assert.doesNotMatch(page.body, /NEW-LANDING/);
-      assert.match(page.body, /window\.__PARRANDA_ANYWHERE_V2__ = true;/);
-    });
-  } finally {
-    fs.rmSync(dist, { recursive: true, force: true });
-  }
-});
-
-test("PROMOTED DEFAULT: no flag needed — the new landing serves when built + anywhere active", async () => {
-  const dist = makeDist();
-  const priorEnv = process.env.PARRANDA_NEW_LANDING;
-  delete process.env.PARRANDA_NEW_LANDING;
-  try {
-    await withServer({ anywhereV2Enabled: true, anywhereV2Dir: dist }, async (server) => {
-      const page = await get(server, "/?lang=en");
-      assert.match(page.body, /NEW-LANDING/, "default ownership: the promoted landing serves with no env set");
-    });
-  } finally {
-    if (priorEnv !== undefined) process.env.PARRANDA_NEW_LANDING = priorEnv;
-    fs.rmSync(dist, { recursive: true, force: true });
-  }
-});
-
-test("opt-out (PARRANDA_NEW_LANDING=disabled): the prior landing serves, byte-stable", async () => {
-  const dist = makeDist();
-  try {
-    await withServer({ newLandingEnabled: false, anywhereV2Enabled: true, anywhereV2Dir: dist }, async (server) => {
-      const page = await get(server, "/?lang=en");
-      assert.doesNotMatch(page.body, /NEW-LANDING/);
-      assert.match(page.body, /Next stop\?/, "the rollback landing hero");
+      assert.equal(page.status, 503);
+      assert.match(page.body, /Frontend build missing/);
     });
   } finally {
     fs.rmSync(dist, { recursive: true, force: true });

@@ -217,7 +217,6 @@ test("public browser assets are served from the explicit allowlist", async () =>
     "/script.js",
     "/ux-pass1.js",
     "/planner-trust.js",
-    "/landing.js",
     "/manifest.webmanifest",
     "/sw.js",
     "/assets/icons/icon-192.png",
@@ -418,66 +417,6 @@ test("public pages default to English while explicit Swedish stays available", a
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
-});
-
-test("landing handoff always preserves the active language explicitly", () => {
-  const source = fs.readFileSync(path.join(__dirname, "..", "landing.js"), "utf8");
-
-  assert.match(source, /params\.set\("lang", currentLang\(\)\)/);
-  assert.doesNotMatch(source, /if \(currentLang\(\) === "en"\) params\.set\("lang", "en"\)/);
-});
-
-test("shared shell template carries no Rome-specific DOM identifiers", () => {
-  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
-  // Issue #58: classes/template ids previously hard-coded Rome content into the
-  // shared shell. They are now city-neutral.
-  assert.doesNotMatch(html, /class="[^"]*trastevere-bars-grid/);
-  assert.doesNotMatch(html, /class="[^"]*trastevere-day/);
-  assert.doesNotMatch(html, /id="trastevereBarTemplate"/);
-  assert.doesNotMatch(html, /id="romeRouteTemplate"/);
-});
-
-test("place card JS render uses i18n for map link instead of hardcoded Swedish", () => {
-  const source = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
-  // PR #65 audit (Q5): the template tokenization of `.map-link` in
-  // placeCardTemplate is undone if JS rebinds `.textContent` to a hardcoded
-  // Swedish string when cloning. The place-card path must go through the i18n
-  // helper so EN users see "Show on map".
-  assert.match(
-    source,
-    /mapLink\.textContent\s*=\s*t\("template\.placeCard\.mapLink"/,
-  );
-  // The exact regression sentinel that was present before the fix.
-  assert.doesNotMatch(
-    source,
-    /mapLink\.textContent\s*=\s*"Visa på karta";/,
-  );
-});
-
-test("planner modal title uses city-time framing instead of trip framing", () => {
-  const source = fs.readFileSync(path.join(__dirname, "..", "script.js"), "utf8");
-
-  assert.match(source, /Plan your time in \$\{plannerDisplayCityLabel\}/);
-  assert.match(source, /Planera din tid i \$\{plannerDisplayCityLabel\}/);
-  assert.doesNotMatch(source, /Your trip to \$\{plannerDisplayCityLabel\}/);
-  assert.doesNotMatch(source, /Din resa till \$\{plannerDisplayCityLabel\}/);
-});
-
-test("landing city submit opens the city-shell embedded planner, not /plan", () => {
-  const source = fs.readFileSync(path.join(__dirname, "..", "landing.js"), "utf8");
-
-  assert.match(source, /params\.set\("planner", "open"\)/);
-  assert.match(source, /window\.location\.href = cityPath \+ "\?" \+ params\.toString\(\)/);
-  assert.doesNotMatch(source, /cityPath \+ "\/plan"/);
-  assert.doesNotMatch(source, /"\/" \+ city \+ "\/plan"/);
-});
-
-test("landing city input Enter submits the same planner handoff as the CTA", () => {
-  const source = fs.readFileSync(path.join(__dirname, "..", "landing.js"), "utf8");
-
-  assert.match(source, /cityInput\.addEventListener\("keydown"/);
-  assert.match(source, /e\.key !== "Enter"/);
-  assert.match(source, /plannerForm\.requestSubmit\(\)/);
 });
 
 test("planner-open city shell uses inline planner mount instead of modal path", () => {
@@ -755,97 +694,6 @@ test("GET /api/places/search för barcelona visar inte strukturella route anchor
       "structural Barcelona route anchors should not appear as ordinary place search results",
     );
     assert.ok(!response.body.items.some((item) => item.id === "gracia-route-anchor"));
-  } finally {
-    await new Promise((resolve) => server.close(resolve));
-  }
-});
-
-test("GET / renderar global landing page (inte city-shell) — opt-out-fallbacken intakt", async () => {
-  global.fetch = async (url) => {
-    throw new Error(`Unexpected fetch during landing page test: ${url}`);
-  };
-
-  // The OLD landing is the rollback surface behind PARRANDA_NEW_LANDING=disabled
-  // (FRONTEND_MIGRATION_CONTRACT "Promoted surfaces") — it must stay intact
-  // until the promoted default has soaked and a separate cleanup removes it.
-  const server = buildApp({ newLandingEnabled: false }).listen(0);
-
-  try {
-    const response = await requestText(server, { path: "/" });
-
-    assert.equal(response.status, 200);
-    // Landing page — no city bootstrap or city-specific tokens
-    assert.ok(!response.body.includes("__PARRANDA_CITY_BOOTSTRAP__"));
-    assert.ok(!response.body.includes("__PARRANDA_TITLE__"));
-    assert.ok(!response.body.includes('data-city-key="rome"'));
-    assert.ok(!response.body.includes('window.__PARRANDA_CITY__'));
-    // Landing v2: locked hero headline + ANY-CITY subcopy (default EN) — the
-    // landing must invite any city, never read as a two-city product.
-    assert.match(response.body, /Next stop\?/);
-    assert.match(response.body, /Type any city\. Parranda builds a day/);
-    assert.match(response.body, /Type a city — any city/);
-    assert.match(response.body, /lp-hero/);
-    assert.match(response.body, /<html lang="en">/);
-    // City registry server-rendered for JS-driven inline completion (Barcelona + Rom; aliases included)
-    assert.match(response.body, /"label"\s*:\s*"Barcelona"/);
-    assert.match(response.body, /"label"\s*:\s*"Rom"/);
-    assert.match(response.body, /window\.__PARRANDA_CITIES__/);
-    assert.match(response.body, /"roma"\s*:/);
-    assert.match(response.body, /"rome"\s*:/);
-    // Registry must include Barcelona with its key so resolveEntry("Barcelona") works
-    assert.match(response.body, /"barcelona"\s*:\s*\{[^}]*"key"\s*:\s*"barcelona"/);
-    // Registry must not be an empty object — that would silently break city resolution
-    assert.doesNotMatch(response.body, /window\.__PARRANDA_CITIES__\s*=\s*\{\s*\}/);
-    // Internal-visibility cities must never leak
-    assert.ok(!response.body.toLowerCase().includes("test city"));
-    assert.ok(!response.body.includes('"key":"test-city"'));
-    // Stale v1 copy is gone
-    assert.ok(!response.body.includes("Din stad. Din dag. Curated."));
-    assert.ok(!response.body.includes("Hitta din stad"));
-    assert.ok(!response.body.includes("Börja med en stad"));
-    // Blitz entry — button and sheet present
-    assert.ok(response.body.includes('id="lpBlitzCta"'), "Blitz button present");
-    assert.ok(response.body.includes('id="lpBlitzSheet"'), "Blitz sheet present");
-    assert.ok(response.body.includes('id="lpBlitzReblitz"'), "Reblitz button present");
-    // Autosuggest is JS-driven inline completion inside the field, not a native
-    // datalist popup (which floated over the Blitz / planner CTAs).
-    assert.match(response.body, /id="lpCity"[^>]*aria-autocomplete="inline"/s);
-    assert.ok(!response.body.includes("<datalist"), "No datalist popup over the CTA row");
-    // Registry includes center coordinates for geo detection (Blitz current-location)
-    assert.match(response.body, /"center"\s*:\s*\{/);
-    // Blitz i18n tokens resolved (not raw token strings left behind)
-    assert.ok(!response.body.includes("__PARRANDA_LANDING_BLITZ_"), "No unresolved Blitz tokens");
-  } finally {
-    await new Promise((resolve) => server.close(resolve));
-  }
-});
-
-test("GET /?lang=en renderar landing v2 med engelsk copy — opt-out-fallbacken intakt", async () => {
-  global.fetch = async (url) => {
-    throw new Error(`Unexpected fetch during EN landing test: ${url}`);
-  };
-
-  const server = buildApp({ newLandingEnabled: false }).listen(0);
-
-  try {
-    const response = await requestText(server, { path: "/?lang=en" });
-
-    assert.equal(response.status, 200);
-    // EN hero copy (any-city invitation)
-    assert.match(response.body, /Next stop\?/);
-    assert.match(response.body, /Type any city\. Parranda builds a day/);
-    assert.match(response.body, /Type a city — any city/);
-    assert.match(response.body, /<html lang="en">/);
-    // Registry still rendered, internal city still filtered
-    assert.match(response.body, /window\.__PARRANDA_CITIES__/);
-    assert.match(response.body, /"label"\s*:\s*"Barcelona"/);
-    assert.match(response.body, /"key"\s*:\s*"rome"/);
-    assert.ok(!response.body.toLowerCase().includes("test city"));
-    // Hero <h1> resolves to EN, not the SV token
-    assert.match(response.body, /<h1 class="lp-hero__headline">Next stop\?<\/h1>/);
-    assert.ok(!/<h1 class="lp-hero__headline">Nästa stopp\?<\/h1>/.test(response.body));
-    // Blitz sheet subtitle in EN
-    assert.ok(response.body.includes("Next move, right now."), "Blitz subtitle in EN");
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
