@@ -1,47 +1,40 @@
 /**
  * Landing search routing — pure + testable. Same product contract as the
  * current landing (landing.js):
- *   - a REGISTERED city (exact alias or best prefix match) → its curated city
+ *   - a REGISTERED city (exact name or alias) → its curated city
  *     shell `/:city?planner=open` (unchanged URL contract);
  *   - any other non-empty text → the any-city planner `/anywhere?place=…`
  *     (freeform place, never a recognized city key);
  *   - empty input → nothing.
- * The registry is a map of lowercased alias → { key, label, status } injected by
+ * Prefix matching only powers inline completion; it never promotes submitted
+ * freeform text by itself. The registry is a map of lowercased alias →
+ * { key, label, status } injected by
  * the server at serve time (a city is data, never code).
  */
 
 const STATUS_RANK = { public: 0, beta: 1, preview: 2 };
+const MIN_PREFIX_LENGTH = 3;
 
 export function resolveEntry(registry, raw) {
   if (!registry) return null;
   return registry[String(raw || "").trim().toLowerCase()] || null;
 }
 
-// Best city whose alias starts with the typed text — so "Barc" finds Barcelona.
-// Deterministic: label-prefix beats alias-only, then status rank, then shortest.
+// Unique city whose alias starts with the typed text — so "Barc" finds Barcelona.
+// Ambiguous prefixes stay silent; submit routing remains exact-only.
 export function bestPrefixMatch(registry, raw) {
   const q = String(raw || "").trim().toLowerCase();
-  if (!q || !registry) return null;
-  let best = null;
-  let bestScore = Infinity;
+  if (q.length < MIN_PREFIX_LENGTH || !registry) return null;
+  const matches = new Map();
   for (const aliasKey of Object.keys(registry)) {
     if (aliasKey.indexOf(q) !== 0) continue;
     const entry = registry[aliasKey];
     if (!entry) continue;
-    const labelLc = String(entry.label || "").toLowerCase();
-    const labelIsPrefix = labelLc.indexOf(q) === 0 ? 0 : 1;
-    const rank = STATUS_RANK[entry.status] != null ? STATUS_RANK[entry.status] : 3;
-    const score = labelIsPrefix * 1000 + rank * 100 + labelLc.length;
-    if (score < bestScore) {
-      bestScore = score;
-      best = entry;
-    }
+    const key = entry.key || aliasKey;
+    if (!matches.has(key)) matches.set(key, entry);
   }
-  return best;
-}
-
-export function resolveEntryLoose(registry, raw) {
-  return resolveEntry(registry, raw) || bestPrefixMatch(registry, raw);
+  if (matches.size !== 1) return null;
+  return Array.from(matches.values())[0] || null;
 }
 
 // The inline completion suggestion ("Barc" → "Barcelona"), or null.
@@ -64,7 +57,10 @@ export function routeForInput(registry, raw, lang = "en") {
   const value = String(raw || "").trim();
   if (!value) return null;
   const uiLang = lang === "sv" ? "sv" : "en";
-  const entry = resolveEntryLoose(registry, value);
+  // Submitting freeform text must never promote a loose prefix into a curated
+  // city. Inline completion may turn an accepted suggestion into an exact
+  // value, but otherwise the user's text belongs to the any-city planner.
+  const entry = resolveEntry(registry, value);
   if (entry && entry.key) {
     const params = new URLSearchParams();
     params.set("planner", "open");
