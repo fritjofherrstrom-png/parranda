@@ -25,6 +25,7 @@ const { buildAgnosticRouteCandidateDiagnostics } = require("./planner/agnostic-r
 const {
   composeAgnosticRouteOutput,
   buildBlockedAgnosticRouteOutputExperiment,
+  buildAgnosticPublicResult,
 } = require("./planner/agnostic-route-output");
 const { buildRegisteredCityCandidateFill } = require("./planner/registered-city-candidate-fill");
 const { buildPreviewPreferenceFit } = require("./planner/preview-preference-fit");
@@ -2278,7 +2279,13 @@ function buildApp({
           },
         });
         blockedExperiment.intake = intake;
-        response.json({ ...baselineBody, agnostic_route_output_experiment: blockedExperiment });
+        const publicResult = buildAgnosticPublicResult({
+          result: baselineBody,
+          routeApplied: false,
+          requestedCity,
+          cityFallbackUsed,
+        });
+        response.json({ ...publicResult, agnostic_route_output_experiment: blockedExperiment });
         return;
       }
 
@@ -2434,8 +2441,14 @@ function buildApp({
         // whether the engine path is ready to become the default synthesizer,
         // and if not, exactly what remains. Read-only; promotes nothing.
         experiment.engine_readiness = buildEngineReadinessVerdict(experiment);
-        const engineWoven = await weaveEventStopFailSoft({
+        const publicResult = buildAgnosticPublicResult({
           result: promotion.promote ? experimentResult : baselineBody,
+          routeApplied: promotion.promote,
+          requestedCity,
+          cityFallbackUsed,
+        });
+        const engineWoven = await weaveEventStopFailSoft({
+          result: publicResult,
           placeStructure: wovenPlaceStructure,
           walkingRouter,
           walkingConfig,
@@ -2452,8 +2465,14 @@ function buildApp({
       // Legacy path: surface the same verdict so a tester can see they are NOT
       // on the engine path (engine_path_active: false) — no behavior change.
       experiment.engine_readiness = buildEngineReadinessVerdict(experiment);
-      const legacyWoven = await weaveEventStopFailSoft({
+      const publicResult = buildAgnosticPublicResult({
         result: experimentResult,
+        routeApplied: experiment.route_mutation === true,
+        requestedCity,
+        cityFallbackUsed,
+      });
+      const legacyWoven = await weaveEventStopFailSoft({
+        result: publicResult,
         placeStructure: wovenPlaceStructure,
         walkingRouter,
         walkingConfig,

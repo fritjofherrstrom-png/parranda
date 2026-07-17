@@ -112,6 +112,23 @@ test("dense produced route with resolver timezone and no caps is usable", () => 
   assert.deepEqual(cappedBy(out), []);
 });
 
+test("source family count reads current provider report objects and legacy numeric counts", () => {
+  const out = calibrateAgnosticRouteReadiness(
+    producedInput({
+      candidateReadiness: readiness({
+        by_provider: {
+          osm: { provider_id: "osm", source_family: "map", count: 18 },
+          wikidata: { provider_id: "wikidata", source_family: "open_knowledge", count: 7 },
+          empty: { provider_id: "empty", source_family: "other", count: 0 },
+          legacy: 2,
+        },
+      }),
+    }),
+  );
+
+  assert.equal(out.inputs.source_family_count, 3);
+});
+
 test("usable never coexists with capped_by tokens and thin_usable always has one", () => {
   const usable = calibrateAgnosticRouteReadiness(producedInput());
   assert.equal(usable.status, "usable");

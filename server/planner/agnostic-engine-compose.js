@@ -170,7 +170,22 @@ function toSourceCandidate({ pick, rich, coords, city, role }) {
     lng: coords.lng,
     area: null,
     tags: [],
+    role: role || null,
     route_roles: role ? [role] : [],
+    candidate_status: (rich && rich.candidate_status) || pick.candidate_status || null,
+    planner_usable: rich ? rich.planner_usable === true : pick.planner_usable === true,
+    origin: (rich && rich.origin) || pick.origin || "external_open",
+    covered_preferences: Array.isArray(rich?.covered_preferences) ? [...rich.covered_preferences] : [],
+    partial_preferences: Array.isArray(rich?.partial_preferences) ? [...rich.partial_preferences] : [],
+    missing_preferences: Array.isArray(rich?.missing_preferences) ? [...rich.missing_preferences] : [],
+    fit_reasons: Array.isArray(rich?.fit_reasons) ? [...rich.fit_reasons] : [],
+    lens_reasons: Array.isArray(rich?.lens_reasons) ? [...rich.lens_reasons] : [],
+    weather_reasons: Array.isArray(rich?.weather_reasons) ? [...rich.weather_reasons] : [],
+    time_reasons: Array.isArray(rich?.time_reasons) ? [...rich.time_reasons] : [],
+    also_covers: Array.isArray(rich?.also_covers)
+      ? rich.also_covers.map((entry) => ({ ...entry }))
+      : [],
+    reconciliation: rich?.reconciliation || null,
     source: {
       kind: "open_geo_source",
       label: firstSource.label || provenance.source_family || "open data",

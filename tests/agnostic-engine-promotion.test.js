@@ -77,7 +77,11 @@ test(
   withServer(makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })), async (server) => {
     const r = await requestJson(server, {
       path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
-      body: agnosticBody(),
+      body: agnosticBody({
+        route_roles: ["payload_role"],
+        covered_preferences: ["payload_preference"],
+        fit_reasons: ["payload_reason"],
+      }),
     });
     const exp = r.body.agnostic_route_output_experiment;
     assert.equal(exp.synthesized_via, "agnostic_compose_engine", "synthesized through the engine, not the legacy composer");
@@ -106,6 +110,15 @@ test(
     // Stops are the trusted loader records, each honestly marked provisional.
     assert.ok(route.main_stops.every((s) => /^(food|cafe|view)-/.test(s.id)));
     assert.ok(route.main_stops.every((s) => s.provisional === true));
+    assert.ok(route.main_stops.every((s) => Array.isArray(s.route_roles) && s.route_roles.length === 1));
+    assert.ok(route.main_stops.every((s) => s.role === s.route_roles[0]));
+    assert.ok(route.main_stops.every((s) => Array.isArray(s.covered_preferences)));
+    assert.ok(route.main_stops.some((s) => s.covered_preferences.length > 0));
+    assert.ok(route.main_stops.every((s) => Array.isArray(s.fit_reasons)));
+    const publicStops = JSON.stringify(route.main_stops);
+    assert.equal(publicStops.includes("payload_role"), false, "public role metadata cannot enter trusted stops");
+    assert.equal(publicStops.includes("payload_preference"), false, "public preference claims cannot enter trusted stops");
+    assert.equal(publicStops.includes("payload_reason"), false, "public fit reasons cannot enter trusted stops");
     // Engine geometry owns order; daypart is staged as a label, not the sequencer.
     assert.equal(exp.route_ordering.source, "engine_geometry");
     assert.ok(exp.route_ordering.reasons.includes("daypart_promotion_pending"));
@@ -127,6 +140,46 @@ test(
     assert.equal(exp.promotion.promote, false, "thin supply must not promote");
     // Baseline returned (unknown city → no route), NOT a promoted experimental day.
     assert.equal(r.body.days[0]?.primary_route ?? null, null);
+  }),
+);
+
+test(
+  "a non-promoted no-city experiment returns no public fallback day",
+  withServer(makeLoader([
+    externalRecord("food-0", "Food 0", "restaurant", 41.9, 12.49, ["mat"]),
+    externalRecord("cafe-0", "Cafe 0", "cafe", 41.9008, 12.49, ["fika"]),
+  ]), async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: {
+        dates: [DATE],
+        place: "Malmö",
+        lat: 41.9,
+        lng: 12.49,
+        preferences: ["food", "coffee"],
+        include_external_candidates: 1,
+      },
+    });
+    const exp = r.body.agnostic_route_output_experiment;
+    assert.equal(exp.promotion.promote, false);
+    assert.equal(exp.baseline.had_primary_route, true, "fallback route remains inspectable only inside the experiment");
+    assert.deepEqual(r.body.days, [], "fallback Rome day must not survive at the public root");
+    assert.equal(r.body.city, null);
+    assert.equal(r.body.readiness, null);
+    assert.equal(JSON.stringify(r.body.days).toLowerCase().includes("rome"), false);
+  }),
+);
+
+test(
+  "no-city default Planner behavior remains unchanged without the experiment flag",
+  withServer(makeLoader([]), async (server) => {
+    const r = await requestJson(server, {
+      path: "/api/route-recommendations?lang=en",
+      body: { dates: [DATE], preferences: ["food"] },
+    });
+    assert.equal(r.body.agnostic_route_output_experiment, undefined);
+    assert.equal(r.body.city, "rome");
+    assert.ok(r.body.days[0]?.primary_route, "default Planner still owns the no-city fallback path");
   }),
 );
 

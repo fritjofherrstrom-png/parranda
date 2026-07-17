@@ -229,7 +229,10 @@ function blockerReasons(blockers) {
 function countSourceFamilies(candidateReadiness) {
   const byProvider = candidateReadiness?.by_provider;
   if (!byProvider || typeof byProvider !== "object") return null;
-  return Object.keys(byProvider).filter((key) => Number(byProvider[key]) > 0).length;
+  return Object.values(byProvider).filter((entry) => {
+    const count = entry && typeof entry === "object" ? entry.count : entry;
+    return Number(count) > 0;
+  }).length;
 }
 
 function finiteOrNull(value) {

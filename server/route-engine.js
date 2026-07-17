@@ -161,6 +161,22 @@ function buildProvisionalComposeStops() {
       source: candidate.source || null,
       trust: candidate.trust || null,
       provenance: candidate.provenance || null,
+      role: candidate.role || null,
+      routeRoles: Array.isArray(candidate.route_roles) ? [...candidate.route_roles] : [],
+      candidateStatus: candidate.candidate_status || null,
+      plannerUsable: candidate.planner_usable === true,
+      candidateOrigin: candidate.origin || null,
+      coveredPreferences: Array.isArray(candidate.covered_preferences) ? [...candidate.covered_preferences] : [],
+      partialPreferences: Array.isArray(candidate.partial_preferences) ? [...candidate.partial_preferences] : [],
+      missingPreferences: Array.isArray(candidate.missing_preferences) ? [...candidate.missing_preferences] : [],
+      fitReasons: Array.isArray(candidate.fit_reasons) ? [...candidate.fit_reasons] : [],
+      lensReasons: Array.isArray(candidate.lens_reasons) ? [...candidate.lens_reasons] : [],
+      weatherReasons: Array.isArray(candidate.weather_reasons) ? [...candidate.weather_reasons] : [],
+      timeReasons: Array.isArray(candidate.time_reasons) ? [...candidate.time_reasons] : [],
+      alsoCovers: Array.isArray(candidate.also_covers)
+        ? candidate.also_covers.map((entry) => ({ ...entry }))
+        : [],
+      reconciliation: candidate.reconciliation || null,
     }));
 }
 
@@ -4864,6 +4880,22 @@ function formatMainStop(stop) {
     formatted.provisional = true;
     formatted.source = stop.source || null;
     formatted.provenance = stop.provenance || null;
+    formatted.role = stop.role || stop.routeRoles?.[0] || null;
+    formatted.route_roles = Array.isArray(stop.routeRoles) ? [...stop.routeRoles] : [];
+    formatted.candidate_status = stop.candidateStatus || null;
+    formatted.planner_usable = stop.plannerUsable === true;
+    formatted.origin = stop.candidateOrigin || null;
+    formatted.covered_preferences = Array.isArray(stop.coveredPreferences) ? [...stop.coveredPreferences] : [];
+    formatted.partial_preferences = Array.isArray(stop.partialPreferences) ? [...stop.partialPreferences] : [];
+    formatted.missing_preferences = Array.isArray(stop.missingPreferences) ? [...stop.missingPreferences] : [];
+    formatted.fit_reasons = Array.isArray(stop.fitReasons) ? [...stop.fitReasons] : [];
+    formatted.lens_reasons = Array.isArray(stop.lensReasons) ? [...stop.lensReasons] : [];
+    formatted.weather_reasons = Array.isArray(stop.weatherReasons) ? [...stop.weatherReasons] : [];
+    formatted.time_reasons = Array.isArray(stop.timeReasons) ? [...stop.timeReasons] : [];
+    formatted.also_covers = Array.isArray(stop.alsoCovers)
+      ? stop.alsoCovers.map((entry) => ({ ...entry }))
+      : [];
+    formatted.reconciliation = stop.reconciliation || null;
   }
 
   return formatted;
