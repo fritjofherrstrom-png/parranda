@@ -432,6 +432,35 @@ function applyRouteMutation({ baselineResult, primaryRoute, date }) {
   return clone;
 }
 
+/**
+ * Build the public root for an engaged any-place experiment.
+ *
+ * The normal Planner baseline may come from the default city when no `city` was
+ * supplied. That baseline remains useful inside the experiment's comparison
+ * block, but it must never survive as the public any-place result. In
+ * particular, a non-promoted experiment has no public day, and a promoted route
+ * must not inherit the fallback city's identity, home base, or readiness.
+ */
+function buildAgnosticPublicResult({
+  result,
+  routeApplied = false,
+  requestedCity = null,
+  cityFallbackUsed = false,
+} = {}) {
+  const publicResult = deepClone(result || {});
+  publicResult.city = requestedCity || null;
+  publicResult.requested_city = requestedCity || null;
+  publicResult.city_fallback_used = Boolean(requestedCity && cityFallbackUsed);
+  publicResult.resolved_home_base = null;
+  publicResult.resolved_start = null;
+  publicResult.resolved_end = null;
+  publicResult.readiness = null;
+  if (!routeApplied) {
+    publicResult.days = [];
+  }
+  return publicResult;
+}
+
 function buildExperimentBlock({
   routeMutation,
   eligibility,
@@ -1095,6 +1124,7 @@ module.exports = {
   buildExperimentalPrimaryRoute,
   buildExperimentalDay,
   applyRouteMutation,
+  buildAgnosticPublicResult,
   buildExperimentBlock,
   buildBlockedAgnosticRouteOutputExperiment,
   admitExperimentalInferredExternalCandidate,

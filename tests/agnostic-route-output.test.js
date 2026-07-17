@@ -29,6 +29,7 @@ const {
   buildExperimentalPrimaryRoute,
   buildExperimentalDay,
   applyRouteMutation,
+  buildAgnosticPublicResult,
   buildExperimentBlock,
   composeAgnosticRouteOutput,
   scrubAgnosticAppliedDay,
@@ -380,6 +381,27 @@ test("unit: synthesize branch builds a minimal experimental day for empty baseli
   assert.equal("date_signals" in day, false);
   assert.equal("dayflow_context" in day, false);
   assert.deepEqual(baseline.days, [], "original baseline days untouched");
+});
+
+test("unit: engaged any-place root never exposes a fallback city's public truth", () => {
+  const baseline = {
+    city: "rome",
+    days: [{ primary_route: { id: "rome-route", main_stops: [{ id: "rome-stop" }] } }],
+    resolved_home_base: { label: "Rome" },
+    resolved_start: { label: "Rome" },
+    resolved_end: { label: "Rome" },
+    readiness: { status: "ready" },
+  };
+  const blocked = buildAgnosticPublicResult({ result: baseline, routeApplied: false });
+
+  assert.equal(blocked.city, null);
+  assert.deepEqual(blocked.days, []);
+  assert.equal(blocked.resolved_home_base, null);
+  assert.equal(blocked.resolved_start, null);
+  assert.equal(blocked.resolved_end, null);
+  assert.equal(blocked.readiness, null);
+  assert.equal(baseline.city, "rome", "comparison baseline remains untouched");
+  assert.equal(baseline.days[0].primary_route.id, "rome-route");
 });
 
 test("unit: experiment block preserves baseline primary_route + readiness", () => {
@@ -877,11 +899,10 @@ test(
     });
     const exp = r.body.agnostic_route_output_experiment;
     assert.equal(exp.route_mutation, true);
-    // Clarification: for the no-city + coords case the top-level `city` may
-    // remain the default baseline city — the baseline response shape is
-    // preserved. The agnostic nature is surfaced through the experiment block
-    // and the experimental route/day markers, not by relabeling top-level city.
-    assert.equal(r.body.city, "rome");
+    // The fallback route remains available for experiment comparison, but no
+    // fallback-city identity or readiness may survive in the public root.
+    assert.equal(r.body.city, null);
+    assert.equal(r.body.readiness, null);
     assert.equal(exp.baseline.had_primary_route, true, "no-city request fell back to the default city route");
     assert.ok(exp.readiness_calibration, "route mutation carries readiness calibration");
     assert.ok(exp.baseline.primary_route && exp.baseline.primary_route.id, "baseline route preserved for comparison");
