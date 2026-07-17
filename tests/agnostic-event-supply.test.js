@@ -97,10 +97,13 @@ test("reviewed source descriptors own trust and cap event-level confidence", () 
       confidence: "strong",
       source_family: "official_city_calendar",
       source_provider_id: "payload-provider",
+      // Provider-internal id — must never surface as the display attribution.
+      source_label: "helsinki",
     },
     {
       id: "reviewed-venue",
       endpoint: "https://venue.example/events",
+      label: "Venue Example Calendar",
       source_tier: "institution",
       confidence: "low",
       source_family: "venue_calendar",
@@ -113,12 +116,14 @@ test("reviewed source descriptors own trust and cap event-level confidence", () 
   assert.equal(enriched.source_family, "venue_calendar");
   assert.equal(enriched.source_provider_id, "reviewed-venue");
   assert.equal(enriched.source_identity, "venue.example");
+  assert.equal(enriched.source_label, "Venue Example Calendar", "the reviewed label owns display attribution");
 
   const downgraded = applyReviewedSourceTrust(
-    { confidence: "low" },
+    { confidence: "low", source_label: "raw-id" },
     { id: "reviewed-city", source_tier: "official", confidence: "medium" },
   );
   assert.equal(downgraded.confidence, "low", "event evidence may lower reviewed source trust");
+  assert.equal(downgraded.source_label, "raw-id", "a label-less descriptor keeps the event's own label");
 });
 
 test("the feed registry allowlists reusable local adapters and preserves legacy Linked Events rows", () => {
