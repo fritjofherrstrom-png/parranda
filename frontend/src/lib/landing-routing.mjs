@@ -1,16 +1,19 @@
 /**
  * Landing search routing — pure + testable. Same product contract as the
  * current landing (landing.js):
- *   - a REGISTERED city (exact alias or best prefix match) → its curated city
+ *   - a REGISTERED city (exact name or alias) → its curated city
  *     shell `/:city?planner=open` (unchanged URL contract);
  *   - any other non-empty text → the any-city planner `/anywhere?place=…`
  *     (freeform place, never a recognized city key);
  *   - empty input → nothing.
- * The registry is a map of lowercased alias → { key, label, status } injected by
+ * Prefix matching only powers inline completion; it never promotes submitted
+ * freeform text by itself. The registry is a map of lowercased alias →
+ * { key, label, status } injected by
  * the server at serve time (a city is data, never code).
  */
 
 const STATUS_RANK = { public: 0, beta: 1, preview: 2 };
+const MIN_PREFIX_LENGTH = 3;
 
 export function resolveEntry(registry, raw) {
   if (!registry) return null;
@@ -21,7 +24,7 @@ export function resolveEntry(registry, raw) {
 // Deterministic: label-prefix beats alias-only, then status rank, then shortest.
 export function bestPrefixMatch(registry, raw) {
   const q = String(raw || "").trim().toLowerCase();
-  if (!q || !registry) return null;
+  if (q.length < MIN_PREFIX_LENGTH || !registry) return null;
   let best = null;
   let bestScore = Infinity;
   for (const aliasKey of Object.keys(registry)) {
@@ -64,7 +67,10 @@ export function routeForInput(registry, raw, lang = "en") {
   const value = String(raw || "").trim();
   if (!value) return null;
   const uiLang = lang === "sv" ? "sv" : "en";
-  const entry = resolveEntryLoose(registry, value);
+  // Submitting freeform text must never promote a loose prefix into a curated
+  // city. Inline completion may turn an accepted suggestion into an exact
+  // value, but otherwise the user's text belongs to the any-city planner.
+  const entry = resolveEntry(registry, value);
   if (entry && entry.key) {
     const params = new URLSearchParams();
     params.set("planner", "open");

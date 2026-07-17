@@ -15,17 +15,21 @@ const REGISTRY = {
   rom: { key: "rome", label: "Rome", status: "public" },
 };
 
-test("a registered city (exact alias or prefix) routes to its curated shell — URL contract unchanged", () => {
+test("a registered city or exact alias routes to its curated shell — URL contract unchanged", () => {
   const exact = routeForInput(REGISTRY, "Barcelona", "sv");
   assert.equal(exact.type, "city");
   assert.equal(exact.href, "/barcelona?planner=open&lang=sv");
 
-  const prefix = routeForInput(REGISTRY, "Barc", "en");
-  assert.equal(prefix.type, "city");
-  assert.match(prefix.href, /^\/barcelona\?/);
-
   const alias = routeForInput(REGISTRY, "bcn", "en");
   assert.equal(alias.href.split("?")[0], "/barcelona");
+});
+
+test("loose and short prefixes stay freeform until an inline completion is accepted", () => {
+  for (const value of ["b", "ba", "Barc", "a", "at"]) {
+    const route = routeForInput(REGISTRY, value, "en");
+    assert.equal(route.type, "anywhere", `${value} must not be promoted to a curated city`);
+    assert.equal(new URL(`https://x${route.href}`).searchParams.get("place"), value);
+  }
 });
 
 test("any other place routes to the any-city planner as a freeform place (never a city key)", () => {
@@ -46,6 +50,8 @@ test("empty input routes nowhere; bad lang falls back to en", () => {
 
 test("inline completion completes a label prefix in place ('Barc' → 'Barcelona'), never shrinks", () => {
   assert.equal(inlineCompletion(REGISTRY, "Barc"), "Barcelona");
+  assert.equal(inlineCompletion(REGISTRY, "B"), null, "one character is too ambiguous");
+  assert.equal(inlineCompletion(REGISTRY, "Ba"), null, "two characters are too ambiguous");
   assert.equal(inlineCompletion(REGISTRY, "Barcelona"), null, "already complete");
   assert.equal(inlineCompletion(REGISTRY, "Malm"), null, "unknown place → no completion");
   assert.equal(inlineCompletion(REGISTRY, ""), null);
