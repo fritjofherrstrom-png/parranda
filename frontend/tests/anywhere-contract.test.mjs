@@ -230,13 +230,36 @@ test("walking leg copy uses the shared sub-100-metre formatter", () => {
   assert.doesNotMatch(anywherePlannerSource, /`\$\{leg\.km\} km`/);
 });
 
-test("planner surface consumes landing input instead of presenting a separate any-city product", () => {
-  assert.match(anywherePlannerSource, /Planerar \$\{typedPlaceLabel\}/);
-  assert.match(anywherePlannerSource, /Planning \$\{typedPlaceLabel\}/);
-  assert.match(anywherePlannerSource, /Justera känsla, dag och gånglängd/);
-  assert.match(anywherePlannerSource, /Adjust mood, day and walking length/);
-  assert.match(anywherePlannerSource, /t\("Plats", "Place"\)/);
+test("the anchor is chosen once: the planner shows it, and adjusts — never a second form", () => {
+  // The anchor from the landing is DISPLAYED (pill + "Change" back to landing),
+  // not re-asked. The old planner header/mode-toggle/place-form are gone.
+  assert.match(anywherePlannerSource, /hasAnchor && \(/);
+  assert.match(anywherePlannerSource, /\{anchorLabel\}/);
+  assert.match(anywherePlannerSource, /t\("Byt", "Change"\)/);
+  assert.match(anywherePlannerSource, /aria-label=\{t\("Byt plats", "Change place"\)\}/);
+  assert.doesNotMatch(anywherePlannerSource, /Planerar \$\{typedPlaceLabel\}|Planning \$\{typedPlaceLabel\}/);
+  assert.doesNotMatch(anywherePlannerSource, /Justera känsla, dag och gånglängd/);
+  assert.doesNotMatch(anywherePlannerSource, /t\("Skriv stad", "Type a city"\)/, "no start-context mode toggle past the landing");
   assert.doesNotMatch(anywherePlannerSource, /ANY-CITY PLANNER|Any-place Alpha|Experimental route|dogfood/i);
+});
+
+test("adjustments collapse to a summary and re-compose themselves — no submit past the landing", () => {
+  // Collapsed summary (mood · day · length) with an aria-expanded toggle...
+  assert.match(anywherePlannerSource, /!adjustOpen && \(/);
+  assert.match(anywherePlannerSource, /\{moodLabel \|\| t\("Inga val", "No moods"\)\}/);
+  assert.match(anywherePlannerSource, /t\("Justera", "Adjust"\)/);
+  assert.match(anywherePlannerSource, /aria-expanded=\{false\}/);
+  assert.match(anywherePlannerSource, /aria-expanded=\{true\}/);
+  // ...expanding gives the grouped panel...
+  assert.match(anywherePlannerSource, /t\("Känsla", "Mood"\)/);
+  assert.match(anywherePlannerSource, /t\("När", "When"\)/);
+  assert.match(anywherePlannerSource, /t\("Gånglängd", "Walking"\)/);
+  // ...and a settled change re-composes on its own (debounced), so the only
+  // submit left in the component is the no-anchor fallback input.
+  assert.match(anywherePlannerSource, /recomposeTimerRef\.current = setTimeout\(/);
+  assert.match(anywherePlannerSource, /\}, 400\);/);
+  assert.match(anywherePlannerSource, /Changes apply on their own/);
+  assert.equal((anywherePlannerSource.match(/type="submit"/g) || []).length, 1, "exactly one submit: the no-anchor fallback");
 });
 
 test("planner honesty copy avoids internal catalog/citypack language", () => {
@@ -244,4 +267,12 @@ test("planner honesty copy avoids internal catalog/citypack language", () => {
   assert.match(anywherePlannerSource, /Parranda does not have full curation here yet/);
   assert.match(anywherePlannerSource, /Reading the map and looking for real places/);
   assert.doesNotMatch(anywherePlannerSource, /citypack|city pack|no catalog|ingen katalog|fullt citypack/i);
+});
+
+test("the anchor pill shows the primary locality, never the full resolver chain", () => {
+  // A resolver label is "Lyon, Métropole de Lyon, Rhône, …, France" — the pill
+  // must read "Lyon", the same trim the engine applies to route prose.
+  assert.match(anywherePlannerSource, /const primaryLocality = \(value\?: string \| null\) =>/);
+  assert.match(anywherePlannerSource, /\.split\(","\)\[0\]\.trim\(\)/);
+  assert.match(anywherePlannerSource, /primaryLocality\(classification\?\.placeLabel\)/);
 });

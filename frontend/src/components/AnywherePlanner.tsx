@@ -211,6 +211,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [savedDays, setSavedDays] = useState<SavedEntry[]>([]);
   const [restoredAt, setRestoredAt] = useState<string | null>(null); // set when showing a SNAPSHOT
   const [shareCopied, setShareCopied] = useState(false);
+  // Adjustments are collapsed into a one-line summary by default (design
+  // handoff §2): past the landing there is no second form and no submit — the
+  // day re-composes on its own when an adjustment settles.
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const recomposeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipFirstAdjustRef = useRef(true);
   const mapRef = useRef<HTMLDivElement | null>(null);
   const leafletRef = useRef<{ map: any; layer: any } | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -218,27 +224,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
   const t = (sv: string, en: string) => (lang === "en" ? en : sv);
   const typedPlaceLabel = place.trim();
-  const plannerTitle =
-    mode === "near_me"
-      ? t("Planerar nära dig", "Planning near you")
-      : typedPlaceLabel
-        ? t(`Planerar ${typedPlaceLabel}`, `Planning ${typedPlaceLabel}`)
-        : t("Bygg din dag", "Build your day");
-  const plannerIntro =
-    mode === "near_me"
-      ? t(
-          "Parranda använder din position som startpunkt och bygger en dag med ärlig källtäckning.",
-          "Parranda uses your position as the starting point and builds a day with honest source coverage.",
-        )
-      : typedPlaceLabel
-        ? t(
-            "Justera känsla, dag och gånglängd — Parranda bygger från platsen du skrev.",
-            "Adjust mood, day and walking length — Parranda uses the place you typed.",
-          )
-        : t(
-            "Skriv en plats. Parranda försöker bygga en dag med rätt rytm, rätt kvarter och ärlig källtäckning.",
-            "Type a place. Parranda tries to build a day with the right rhythm, neighborhoods and honest source coverage.",
-          );
 
   // The page shell is static — keep the browser title aligned with the active planner subject.
   useEffect(() => {
@@ -515,6 +500,47 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     resolveAndRun({ preferencesOverride: picked });
   }
 
+  // An ANCHOR exists once the landing handed one over (typed place or the
+  // position it captured). Everything after that is adjustment.
+  const hasAnchor = mode === "near_me" || Boolean(place.trim());
+
+  // AUTO-RECOMPOSE: adjustments never need a submit. A settled change (400 ms)
+  // cancels any in-flight compose and re-composes. Skipped before the first
+  // compose and while showing a restored snapshot, so nothing fires unasked.
+  useEffect(() => {
+    if (skipFirstAdjustRef.current) {
+      skipFirstAdjustRef.current = false;
+      return;
+    }
+    if (!hasAnchor || phase === "idle" || restoredAt) return;
+    if (recomposeTimerRef.current) clearTimeout(recomposeTimerRef.current);
+    recomposeTimerRef.current = setTimeout(() => {
+      resolveAndRun().catch(() => {});
+    }, 400);
+    return () => {
+      if (recomposeTimerRef.current) clearTimeout(recomposeTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, dayOffset, walkKey]);
+
+  // The anchor's display label — never a faked place name: a coords anchor
+  // reads "Near you" until the engine attests a real one. A resolver label is a
+  // full display chain ("Lyon, Métropole de Lyon, Rhône, …, France"); the pill
+  // shows the primary locality only, the same rule the engine applies to route
+  // prose (server-side safeAgnosticPlaceLabel).
+  const primaryLocality = (value?: string | null) => String(value || "").split(",")[0].trim();
+  const anchorLabel =
+    mode === "near_me"
+      ? primaryLocality(classification?.placeLabel) || t("Nära dig", "Near you")
+      : primaryLocality(classification?.placeLabel) || typedPlaceLabel;
+  const walkLabel = (() => {
+    const preset = WALK_PRESETS.find((p: { key: string }) => p.key === walkKey);
+    return preset ? (lang === "en" ? preset.en : preset.sv) : "";
+  })();
+  const moodLabel = ANYWHERE_PREFERENCES.filter((p: { key: string }) => selected.includes(p.key))
+    .map((p: { sv: string; en: string }) => (lang === "en" ? p.en : p.sv))
+    .join(" · ");
+
   const structure: PlaceStructure | null = safeResponse?.place_structure ?? null;
   const day = structure?.district_day;
   const liveEvents: LiveEvents | null = safeResponse?.live_events ?? null;
@@ -691,143 +717,177 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-parranda-glow">
-          {t("Planerare", "Planner")}
-        </p>
-        <h1 className="font-display text-4xl font-bold text-parranda-ink">{plannerTitle}</h1>
-        <p className="max-w-prose text-parranda-ink/75">{plannerIntro}</p>
-      </header>
-      <form onSubmit={plan} className="flex flex-col gap-3">
-        <label className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">
-          {t("Plats", "Place")}
-        </label>
-        <div className="flex gap-1.5" role="group" aria-label={t("Startpunkt", "Starting point")}>
-          {(["typed", "near_me"] as const).map((m) => (
+      {/* ANCHOR — chosen once on the landing. "Change" goes back there to pick
+          a new one; it is never a second form here. */}
+      {hasAnchor && (
+        <div className="flex min-h-12 items-center gap-2.5 rounded-full border border-parranda-ink/14 bg-parranda-ink/5 py-1 pl-4 pr-1.5">
+          <span aria-hidden="true" className="text-parranda-ember">◉</span>
+          <span className="min-w-0 flex-1 truncate text-[15px] font-bold text-parranda-ink">
+            {anchorLabel}
+            <span className="font-medium text-parranda-ink/65">
+              {" · "}
+              {dayOffset === 0 ? t("idag", "today") : t("imorgon", "tomorrow")}
+            </span>
+          </span>
+          <a
+            href={`/?lang=${lang}`}
+            aria-label={t("Byt plats", "Change place")}
+            className="inline-flex min-h-9 shrink-0 items-center rounded-full bg-parranda-ink/10 px-3.5 text-xs font-bold text-parranda-ink/80 transition hover:bg-parranda-ink/15"
+          >
+            {t("Byt", "Change")}
+          </a>
+        </div>
+      )}
+
+      {/* No anchor (someone opened /anywhere directly): offer the one input that
+          sets it, then never again. */}
+      {!hasAnchor && (
+        <form onSubmit={plan} className="flex flex-col gap-2 sm:flex-row">
+          <input
+            value={place}
+            onChange={(e) => setPlace(e.target.value)}
+            placeholder={t("Var som helst — Lyon, Tbilisi, Kyoto …", "Anywhere — Lyon, Tbilisi, Kyoto …")}
+            aria-label={t("Plats", "Place")}
+            className="min-h-14 w-full flex-1 rounded-parranda border border-parranda-ink/16 bg-parranda-ink/6 px-5 text-parranda-ink outline-none focus:border-parranda-ember"
+          />
+          <button
+            type="submit"
+            className="min-h-14 whitespace-nowrap rounded-parranda bg-parranda-terracotta px-6 font-bold text-white shadow-sm transition hover:brightness-110"
+          >
+            {t("Bygg min dag", "Build my day")}
+          </button>
+        </form>
+      )}
+
+      {/* ADJUSTMENTS — collapsed to one line by default; expanding reveals the
+          grouped panel. Every change re-composes on its own (no submit). */}
+      {hasAnchor && !adjustOpen && (
+        <div className="flex min-h-12 items-center gap-2.5 rounded-parranda border border-parranda-ink/12 bg-parranda-ink/4 py-1.5 pl-4 pr-1.5">
+          <span className="min-w-0 flex-1 text-[13px] leading-snug text-parranda-ink/65">
+            <strong className="font-bold text-parranda-ink">{moodLabel || t("Inga val", "No moods")}</strong>
+            {` · ${dayOffset === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow")} · ${walkLabel}`}
+          </span>
+          <button
+            type="button"
+            aria-expanded={false}
+            onClick={() => setAdjustOpen(true)}
+            className="inline-flex min-h-9 shrink-0 items-center rounded-full border border-parranda-ink/16 px-3.5 text-xs font-bold text-parranda-ink/80 transition hover:border-parranda-ember"
+          >
+            {t("Justera", "Adjust")} ▾
+          </button>
+        </div>
+      )}
+
+      {hasAnchor && adjustOpen && (
+        <div className="flex flex-col gap-3 rounded-parranda border border-parranda-ink/12 bg-parranda-ink/4 p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-extrabold uppercase tracking-[0.16em] text-parranda-ink/65">
+              {t("Justera dagen", "Adjust the day")}
+            </span>
             <button
               type="button"
-              key={m}
-              onClick={() => {
-                setMode(m);
-                setGeoHint(null);
-              }}
-              className={
-                "inline-flex min-h-11 items-center rounded-full border px-3.5 py-1 text-sm transition " +
-                (mode === m
-                  ? "border-parranda-accent bg-parranda-accent/15 font-semibold text-parranda-ink"
-                  : "border-parranda-ink/15 bg-parranda-ink/10 text-parranda-ink/70")
-              }
+              aria-expanded={true}
+              onClick={() => setAdjustOpen(false)}
+              className="inline-flex min-h-9 items-center rounded-full border border-parranda-ink/16 px-3.5 text-xs font-bold text-parranda-ink/80 transition hover:border-parranda-ember"
             >
-              {m === "typed" ? t("Skriv stad", "Type a city") : t("Nära mig nu", "Near me now")}
+              {t("Klar", "Done")} ▴
             </button>
-          ))}
-        </div>
-        {/* Below ~sm the input takes a full row and the two actions share the
-            next row (primary grows) — so "Build my day" never wraps to three
-            lines and Blitz never clips at the viewport edge. */}
-        <div className="flex flex-col gap-2 sm:flex-row">
-          {mode === "typed" ? (
-            <input
-              value={place}
-              onChange={(e) => setPlace(e.target.value)}
-              placeholder={t("t.ex. Lyon, Tbilisi, Kyoto …", "e.g. Lyon, Tbilisi, Kyoto …")}
-              className="w-full flex-1 rounded-parranda border border-parranda-ink/15 bg-parranda-ink/10 px-4 py-3 text-parranda-ink shadow-sm outline-none focus:border-parranda-accent"
-            />
-          ) : (
-            <p className="flex-1 self-center text-sm text-parranda-ink/70">
-              {t("Din position blir dagens startpunkt.", "Your position becomes the day's starting point.")}
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-parranda-glow">{t("Känsla", "Mood")}</p>
+            <div className="flex flex-wrap gap-2">
+              {ANYWHERE_PREFERENCES.map((pref: { key: string; sv: string; en: string }) => {
+                const active = selected.includes(pref.key);
+                return (
+                  <button
+                    type="button"
+                    key={pref.key}
+                    aria-pressed={active}
+                    onClick={() => setSelected((cur) => (active ? cur.filter((k) => k !== pref.key) : [...cur, pref.key]))}
+                    className={
+                      "inline-flex min-h-11 items-center rounded-full border px-4 text-[13px] transition " +
+                      (active
+                        ? "border-parranda-ember/55 bg-parranda-ember/12 font-bold text-parranda-ink"
+                        : "border-parranda-ink/14 text-parranda-ink/65 hover:border-parranda-ink/30")
+                    }
+                  >
+                    {active ? "✓ " : ""}
+                    {lang === "en" ? pref.en : pref.sv}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 border-t border-parranda-ink/10 pt-3">
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-parranda-glow">{t("När", "When")}</p>
+            <div className="inline-flex self-start overflow-hidden rounded-full border border-parranda-ink/14" role="group" aria-label={t("Vilken dag", "Which day")}>
+              {([0, 1] as const).map((offset) => (
+                <button
+                  type="button"
+                  key={offset}
+                  aria-pressed={dayOffset === offset}
+                  onClick={() => setDayOffset(offset)}
+                  className={
+                    "inline-flex min-h-11 items-center px-[18px] text-[13px] transition " +
+                    (dayOffset === offset ? "bg-parranda-ember/16 font-bold text-parranda-ink" : "text-parranda-ink/65")
+                  }
+                >
+                  {offset === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow")}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 border-t border-parranda-ink/10 pt-3">
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-parranda-glow">{t("Gånglängd", "Walking")}</p>
+            <div className="inline-flex self-start overflow-hidden rounded-full border border-parranda-ink/14" role="group" aria-label={t("Gånglängd", "Walking length")}>
+              {WALK_PRESETS.map((preset: { key: string; km: number; sv: string; en: string }) => (
+                <button
+                  type="button"
+                  key={preset.key}
+                  aria-pressed={walkKey === preset.key}
+                  onClick={() => setWalkKey(preset.key)}
+                  className={
+                    "inline-flex min-h-11 items-center px-4 text-[13px] transition " +
+                    (walkKey === preset.key ? "bg-parranda-ember/16 font-bold text-parranda-ink" : "text-parranda-ink/65")
+                  }
+                >
+                  {lang === "en" ? preset.en : preset.sv}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[11px] text-parranda-ink/50">
+              {t("Ändringar gäller av sig själva — dagen komponeras om medan du justerar.", "Changes apply on their own — the day recomposes as you adjust.")}
             </p>
-          )}
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              disabled={phase === "loading" || (mode === "typed" && !place.trim())}
-              className="min-h-11 flex-1 whitespace-nowrap rounded-parranda bg-parranda-accent px-5 py-3 font-semibold text-white shadow-sm disabled:opacity-40 sm:flex-none"
-            >
-              {phase === "loading" ? t("Komponerar…", "Composing…") : t("Bygg min dag", "Build my day")}
-            </button>
             <button
               type="button"
               onClick={blitz}
-              disabled={phase === "loading" || (mode === "typed" && !place.trim())}
-              title={t("Överraska mig — slumpade preferenser", "Surprise me — random preferences")}
-              className="min-h-11 shrink-0 whitespace-nowrap rounded-parranda border border-parranda-accent/40 px-4 py-3 font-semibold text-parranda-accent shadow-sm disabled:opacity-40"
+              className="text-[11px] font-bold text-parranda-clay underline underline-offset-2 transition hover:text-parranda-ember"
             >
-              {t("⚡ Blitz", "⚡ Blitz")}
+              {t("⚡ Överraska mig", "⚡ Surprise me")}
             </button>
           </div>
         </div>
-        {geoHint && <p className="text-sm text-parranda-ink/70">{geoHint}</p>}
-        <div className="flex flex-wrap gap-2">
-          {ANYWHERE_PREFERENCES.map((pref: { key: string; sv: string; en: string }) => {
-            const active = selected.includes(pref.key);
-            return (
-              <button
-                type="button"
-                key={pref.key}
-                onClick={() => setSelected((cur) => (active ? cur.filter((k) => k !== pref.key) : [...cur, pref.key]))}
-                className={
-                  "inline-flex min-h-11 items-center rounded-full border px-3.5 py-1 text-sm transition " +
-                  (active
-                    ? "border-parranda-accent bg-parranda-accent/15 font-semibold text-parranda-ink"
-                    : "border-parranda-ink/15 bg-parranda-ink/10 text-parranda-ink/70")
-                }
-              >
-                {lang === "en" ? pref.en : pref.sv}
-              </button>
-            );
-          })}
-        </div>
+      )}
 
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex gap-1.5" role="group" aria-label={t("Vilken dag", "Which day")}>
-            {([0, 1] as const).map((offset) => (
-              <button
-                type="button"
-                key={offset}
-                onClick={() => setDayOffset(offset)}
-                className={
-                  "inline-flex min-h-11 items-center rounded-full border px-3.5 py-1 text-sm transition " +
-                  (dayOffset === offset
-                    ? "border-parranda-accent bg-parranda-accent/15 font-semibold text-parranda-ink"
-                    : "border-parranda-ink/15 bg-parranda-ink/10 text-parranda-ink/70")
-                }
-              >
-                {offset === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow")}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-1.5" role="group" aria-label={t("Gånglängd", "Walking length")}>
-            {WALK_PRESETS.map((preset: { key: string; km: number; sv: string; en: string }) => (
-              <button
-                type="button"
-                key={preset.key}
-                onClick={() => setWalkKey(preset.key)}
-                className={
-                  "inline-flex min-h-11 items-center rounded-full border px-3.5 py-1 text-sm transition " +
-                  (walkKey === preset.key
-                    ? "border-parranda-accent bg-parranda-accent/15 font-semibold text-parranda-ink"
-                    : "border-parranda-ink/15 bg-parranda-ink/10 text-parranda-ink/70")
-                }
-              >
-                {lang === "en" ? preset.en : preset.sv}
-              </button>
-            ))}
-          </div>
-        </div>
+      {geoHint && <p className="text-sm text-parranda-ink/70">{geoHint}</p>}
 
-        {phase === "loading" && (
-          <p className="text-sm text-parranda-ink/70" aria-live="polite">
-            {loadingStage === 0 && t("Hittar platsen …", "Finding the place …")}
-            {loadingStage === 1 && t("Läser kartan och letar efter riktiga platser …", "Reading the map and looking for real places …")}
-            {loadingStage === 2 &&
-              t(
-                "Komponerar dagen genom områdena — platser utan full kurering kan ta lite längre …",
-                "Composing the day across the areas — places without full curation can take a little longer …",
-              )}
-          </p>
-        )}
-      </form>
+      {phase === "loading" && (
+        <p className="text-sm text-parranda-ink/70" aria-live="polite">
+          {loadingStage === 0 && t("Hittar platsen …", "Finding the place …")}
+          {loadingStage === 1 && t("Läser kartan och letar efter riktiga platser …", "Reading the map and looking for real places …")}
+          {loadingStage === 2 &&
+            t(
+              "Komponerar dagen genom områdena — platser utan full kurering kan ta lite längre …",
+              "Composing the day across the areas — places without full curation can take a little longer …",
+            )}
+        </p>
+      )}
 
       {savedDays.length > 0 && (
         <section className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
