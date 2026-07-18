@@ -10,8 +10,6 @@ export declare function resolveEntry(registry: CityRegistry | null | undefined, 
 
 export declare function bestPrefixMatch(registry: CityRegistry | null | undefined, raw: string): CityEntry | null;
 
-export declare function resolveEntryLoose(registry: CityRegistry | null | undefined, raw: string): CityEntry | null;
-
 export declare function inlineCompletion(registry: CityRegistry | null | undefined, typed: string): string | null;
 
 export declare function routeForInput(

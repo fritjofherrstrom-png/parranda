@@ -1370,22 +1370,6 @@ function renderAppShell({ cityConfig, requestedCity, cityFallbackUsed, lang = "e
   return renderedShell;
 }
 
-// `/labs/anywhere` — the freeform any-place ALPHA surface. Reuses the planner app
-// shell (so the planner UI + district panel are present) but with neutral alpha
-// copy and an `anywhereMode` bootstrap. It assigns NO recognized-city identity to
-// the typed place: `key` stays "anywhere", only the visible label carries the
-// place. This is a product surface, not a diagnostics shell — no citypack, no raw
-// tokens. The agnostic request itself is driven client-side (script.js anywhere
-// mode); this function only serves the shell.
-function inferShellCity(request) {
-  const pathSegments = String(request.path || "")
-    .split("/")
-    .filter(Boolean);
-  const pathKey = pathSegments[0] && !pathSegments[0].includes(".") ? pathSegments[0] : null;
-
-  return request.query?.city || pathKey || null;
-}
-
 function servePublicRootAsset(request, response, next) {
   const assetName = path.basename(request.path);
 
@@ -2462,13 +2446,32 @@ function buildApp({
     }
 
     const pathSegments = String(request.path || "").split("/").filter(Boolean);
-    const isPlannerEntry = pathSegments[1] === "plan";
-    const cityResolution = {
-      ...resolveRequestCity(inferShellCity(request)),
+    const pathCityKey = pathSegments[0] || null;
+    const cityResolution = resolveCityConfig(pathCityKey, { allowFallback: false });
+
+    const isCityRoot = pathSegments.length === 1;
+    const isPlannerEntry = pathSegments.length === 2 && pathSegments[1] === "plan";
+
+    // The city-shell catch-all is only for explicitly supported registered
+    // city routes. Unknown nested paths must never borrow a valid city shell
+    // and masquerade as product pages or assets.
+    if (!cityResolution.found || !cityResolution.cityConfig) {
+      response.status(404).type("text/plain").send("Not found");
+      return;
+    }
+    if (!isCityRoot && !isPlannerEntry) {
+      response.status(404).type("text/plain").send("Not found");
+      return;
+    }
+
+    const shellResolution = {
+      cityConfig: cityResolution.cityConfig,
+      requestedCity: cityResolution.requestedKey,
+      cityFallbackUsed: false,
       lang: normalizeLanguage(request.query?.lang),
       plannerEntryRoute: isPlannerEntry,
     };
-    response.type("html").send(renderAppShell(cityResolution));
+    response.type("html").send(renderAppShell(shellResolution));
   });
 
   return app;

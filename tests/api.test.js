@@ -825,7 +825,7 @@ test("GET /athens?lang=en surfaces the field-test preview copy without pretendin
   }
 });
 
-test("GET /unknown-city/plan använder ärlig fallback med plannerEntryRoute", async () => {
+test("GET /unknown-city/plan does not borrow a registered city's planner shell", async () => {
   global.fetch = async (url) => {
     throw new Error(`Unexpected fetch during unknown-city planner-entry-route test: ${url}`);
   };
@@ -837,9 +837,10 @@ test("GET /unknown-city/plan använder ärlig fallback med plannerEntryRoute", a
       path: "/unknown-city/plan",
     });
 
-    assert.equal(response.status, 200);
-    assert.match(response.body, /"plannerEntryRoute":true/);
-    assert.match(response.body, /"fallbackUsed":true/);
+    assert.equal(response.status, 404);
+    assert.equal(response.body, "Not found");
+    assert.doesNotMatch(response.body, /"plannerEntryRoute":true/);
+    assert.doesNotMatch(response.body, /window\.__PARRANDA_CITY__/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
@@ -1018,7 +1019,7 @@ test("GET /test-city renderar en egen city shell utan Rome-fallback", async () =
   }
 });
 
-test("GET /unknown-city använder fortsatt ärlig fallback-preview", async () => {
+test("unknown top-level paths return 404 instead of borrowing the Rome city shell", async () => {
   global.fetch = async (url) => {
     throw new Error(`Unexpected fetch during unknown city shell test: ${url}`);
   };
@@ -1026,17 +1027,49 @@ test("GET /unknown-city använder fortsatt ärlig fallback-preview", async () =>
   const server = buildApp().listen(0);
 
   try {
-    const response = await requestText(server, {
-      path: "/unknown-city?lang=en",
-    });
+    for (const pathName of ["/unknown-city?lang=en", "/xyzzy", "/landing.js"]) {
+      const response = await requestText(server, { path: pathName });
+      assert.equal(response.status, 404, `${pathName} should not render a city shell`);
+      assert.equal(response.body, "Not found");
+      assert.doesNotMatch(response.body, /window\.__PARRANDA_CITY__/);
+    }
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
 
-    assert.equal(response.status, 200);
-    assert.match(response.body, /<body data-city-key="rome" data-city-label="Unknown City" data-lang="en">/);
-    assert.match(response.body, /"requestedKey":"unknown-city"/);
-    assert.match(response.body, /"fallbackUsed":true/);
-    assert.match(response.body, /"visibility":"public"/);
-    assert.match(response.body, /Unknown City is still being prepared/);
-    assert.doesNotMatch(response.body, /"key":"unknown-city"/);
+test("registered city roots and planner-entry routes still render after the catch-all is restricted", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during registered city shell test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    for (const pathName of ["/barcelona", "/barcelona/plan", "/rome", "/rome/plan", "/athens", "/athens/plan"]) {
+      const response = await requestText(server, { path: pathName });
+      assert.equal(response.status, 200, `${pathName} should keep rendering its registered city shell`);
+      assert.match(response.body, /window\.__PARRANDA_CITY__/);
+    }
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("unknown nested registered-city paths return 404 instead of a city shell", async () => {
+  global.fetch = async (url) => {
+    throw new Error(`Unexpected fetch during nested city 404 test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    for (const pathName of ["/barcelona/xyzzy", "/barcelona/missing.js", "/barcelona/plan/nonsense"]) {
+      const response = await requestText(server, { path: pathName });
+      assert.equal(response.status, 404, `${pathName} should not render a registered city shell`);
+      assert.equal(response.body, "Not found");
+      assert.doesNotMatch(response.body, /window\.__PARRANDA_CITY__/);
+    }
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
