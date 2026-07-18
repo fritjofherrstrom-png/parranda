@@ -1,11 +1,20 @@
 :root {
-  --p-color-ink: 248 241 229;
-  --p-color-paper: 22 18 16;
-  --p-color-accent: 255 111 80;
-  --p-color-glow: 252 194 126;
-  --p-radius-card: 28px;
-  --p-font-display: Inter Tight;
-  --p-font-body: Inter;
+  /* Handoff palette (Parranda — final design handoff).
+     Accent is split by ROLE: terracotta = filled primary action (#FFF text,
+     5.0:1 — the retired #C95B34 measured 4.18:1); ember = lines / live dot /
+     hover; clay = accent TEXT on dark (terracotta is never text on dark); glow
+     = eyebrows / honesty. Secondary text never below 65% ink on paper. */
+  --p-color-ink: 246 239 227; /* #F6EFE3 */
+  --p-color-paper: 23 18 15; /* #17120F */
+  --p-color-terracotta: 185 78 43; /* #B94E2B — primary action */
+  --p-color-ember: 224 122 78; /* #E07A4E — lines, live dot */
+  --p-color-clay: 232 161 132; /* #E8A184 — accent text on dark */
+  --p-color-glow: 252 194 126; /* #FCC27E — eyebrows, honesty */
+  --p-color-accent: var(--p-color-ember); /* legacy alias → ember */
+  --p-radius-card: 16px;
+  --p-radius-button: 14px;
+  --p-font-display: "Cormorant Garamond";
+  --p-font-body: Manrope;
 }
 
 * {
