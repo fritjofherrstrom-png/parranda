@@ -29,6 +29,7 @@ import {
   type PulseTimeWindow,
 } from "../lib/pulse-view.mjs";
 import { buildShareUrl, decodeShareParams } from "../lib/anywhere-share.mjs";
+import { consumeAnchorCoords } from "../lib/location-anchor.mjs";
 import {
   buildSavedEntry,
   upsertSaved,
@@ -390,6 +391,21 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           walkKeyOverride: shared.walkKey,
         },
       ).catch(() => {});
+      return;
+    }
+    // The landing chose a LOCATION anchor: coordinates were handed off via
+    // sessionStorage (never the URL). The permission was already granted there,
+    // so compose directly around the coords — never re-prompt on arrival.
+    if (new URLSearchParams(window.location.search).get("anchor") === "near") {
+      const coords = consumeAnchorCoords();
+      if (coords) {
+        setMode("near_me");
+        execute({ coords }, {}).catch(() => {});
+        return;
+      }
+      // Stored coords missing/expired (e.g. a reload consumed them): stay honest,
+      // show the near-me start context so the user can re-share position.
+      setMode("near_me");
       return;
     }
     const last = readLS<SavedEntry | null>(LAST_KEY, null);
