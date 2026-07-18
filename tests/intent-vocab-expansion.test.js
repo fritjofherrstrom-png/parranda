@@ -112,6 +112,14 @@ test("viewpoint / lookout records remain scenic (no regression)", () => {
   assert.equal(matchCandidateToIntent({ type: "lookout" }, "scenic").level, "strong");
 });
 
+test("green and walks is a real intent distinct from scenic", () => {
+  assert.deepEqual(normalizeUserIntents(["green"]).intents, ["green"]);
+  assert.deepEqual(normalizeUserIntents(["grönt"]).intents, ["green"]);
+  assert.equal(matchCandidateToIntent({ type: "park", tags: ["green"] }, "green").level, "strong");
+  assert.equal(matchCandidateToIntent({ type: "garden" }, "green").level, "strong");
+  assert.equal(matchCandidateToIntent({ type: "viewpoint" }, "green").level, "weak");
+});
+
 // --- 6. noise guards --------------------------------------------------------
 test("a pub reads as bars, not food (no cross-intent leakage)", () => {
   assert.equal(matchCandidateToIntent({ type: "pub" }, "bars").level, "strong");

@@ -2175,6 +2175,7 @@ function buildApp({
         lang,
         walkingRouter,
         walkingConfig,
+        walkingKmTarget: payload.walkingKmTarget,
         weatherProvider,
         clock,
         trustedTimezone: intake.resolved?.timezone || null,

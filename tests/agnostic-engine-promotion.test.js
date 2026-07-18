@@ -46,6 +46,14 @@ function fixtureNear(base) {
   return recs;
 }
 
+function greenFixtureNear(base) {
+  return Array.from({ length: 25 }, (_, i) => {
+    const lat = base.lat + (i % 5) * 0.0008;
+    const lng = base.lng + Math.floor(i / 5) * 0.0008;
+    return externalRecord(`park-${i}`, `Park ${i}`, "park", lat, lng, ["green", "park"]);
+  });
+}
+
 function agnosticBody(extra = {}) {
   return {
     city: "atlantis-unknown-place",
@@ -54,6 +62,7 @@ function agnosticBody(extra = {}) {
     lat: 41.9,
     lng: 12.49,
     preferences: ["food", "coffee", "scenic"],
+    walking_km_target: 6,
     include_external_candidates: 1,
     ...extra,
   };
@@ -106,7 +115,7 @@ test(
     assert.match(route.summary, /this place/);
     assert.match(route.why_recommended, /this place/);
     assert.deepEqual(r.body.days[0].date_signals, [], "any-place route must not inherit fallback-city date signals");
-    assert.ok(route.main_stops.length >= 2);
+    assert.equal(route.main_stops.length, 4, "a rich 6 km role reservoir is not artificially capped at three stops");
     // Stops are the trusted loader records, each honestly marked provisional.
     assert.ok(route.main_stops.every((s) => /^(food|cafe|view)-/.test(s.id)));
     assert.ok(route.main_stops.every((s) => s.provisional === true));
@@ -115,6 +124,11 @@ test(
     assert.ok(route.main_stops.every((s) => Array.isArray(s.covered_preferences)));
     assert.ok(route.main_stops.some((s) => s.covered_preferences.length > 0));
     assert.ok(route.main_stops.every((s) => Array.isArray(s.fit_reasons)));
+    assert.deepEqual(
+      [...new Set(route.main_stops.map((stop) => stop.role))].sort(),
+      ["coffee_fika_stop", "food_anchor", "scenic_anchor"],
+      "the selected role spine survives while reservoir depth adds a fourth stop",
+    );
     const publicStops = JSON.stringify(route.main_stops);
     assert.equal(publicStops.includes("payload_role"), false, "public role metadata cannot enter trusted stops");
     assert.equal(publicStops.includes("payload_preference"), false, "public preference claims cannot enter trusted stops");
@@ -122,6 +136,50 @@ test(
     // Engine geometry owns order; daypart is staged as a label, not the sequencer.
     assert.equal(exp.route_ordering.source, "engine_geometry");
     assert.ok(exp.route_ordering.reasons.includes("daypart_promotion_pending"));
+  }),
+);
+
+test(
+  "green and walks can compose a source-backed park route through the shared reservoir",
+  withServer(makeLoader(greenFixtureNear({ lat: 41.9, lng: 12.49 })), async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody({ preferences: ["green"] }),
+    });
+    const exp = r.body.agnostic_route_output_experiment;
+    assert.equal(exp.route_mutation, true);
+    assert.equal(exp.promotion.promote, false, "a two-stop single-intent route remains honestly thin");
+    const stops = exp.experimental_route.main_stops;
+    assert.equal(stops.length, 2, "one role gains bounded depth instead of failing with a one-stop non-route");
+    assert.ok(stops.every((stop) => stop.role === "green_walk_stop"));
+    assert.ok(stops.every((stop) => stop.covered_preferences.includes("green")));
+    assert.ok(stops.every((stop) => stop.daypart === "midday"));
+  }),
+);
+
+test(
+  "public payload cannot promote a short any-place day into the server-owned peak profile",
+  withServer(makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })), async (server) => {
+    const baseline = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody({ walking_km_target: 4 }),
+    });
+    const injected = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody({
+        walking_km_target: 4,
+        __agnosticDayProfile: "peak",
+        dayProfile: "peak",
+        day_profile: "peak",
+      }),
+    });
+    const baselineExperiment = baseline.body.agnostic_route_output_experiment;
+    const injectedExperiment = injected.body.agnostic_route_output_experiment;
+    assert.equal(injectedExperiment.route_mutation, true);
+    assert.deepEqual(
+      injectedExperiment.experimental_route.main_stops.map((stop) => stop.id),
+      baselineExperiment.experimental_route.main_stops.map((stop) => stop.id),
+    );
   }),
 );
 

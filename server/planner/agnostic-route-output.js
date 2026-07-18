@@ -40,7 +40,7 @@ const { calibrateAgnosticRouteReadiness } = require("./agnostic-route-readiness-
 const { generateAgnosticRecommendations } = require("../route-engine");
 const {
   buildAgnosticEngineCityConfig,
-  mapAdmittedSelectionToSourceCandidates,
+  mapPlannerReservoirToSourceCandidates,
 } = require("./agnostic-engine-compose");
 
 // A route needs at least an ordered pair of geocoded, stable-id stops. Fewer
@@ -156,7 +156,13 @@ function hasText(value) {
  * route. Readiness (#place-candidates/readiness thresholds) is surfaced as an
  * honest caveat, not a hard block — the produced route is always experimental.
  */
-function evaluateEligibility({ externalRequested, sourceStatus, adaptedBody, candidateReadiness }) {
+function evaluateEligibility({
+  externalRequested,
+  sourceStatus,
+  adaptedBody,
+  candidateReadiness,
+  engineSourceCandidates = null,
+}) {
   const blockers = [];
   // Walking-order honesty is decided downstream by the #261 walking-budget
   // validation step — not pre-asserted here.
@@ -178,7 +184,7 @@ function evaluateEligibility({ externalRequested, sourceStatus, adaptedBody, can
   }
 
   const stops = Array.isArray(adaptedBody?.stops) ? adaptedBody.stops : [];
-  const geocodedStops = stops.filter(
+  const combinationGeocodedStops = stops.filter(
     (stop) =>
       stop &&
       stop.candidate_id &&
@@ -186,9 +192,16 @@ function evaluateEligibility({ externalRequested, sourceStatus, adaptedBody, can
       Number.isFinite(stop.coordinates.lat) &&
       Number.isFinite(stop.coordinates.lng),
   );
+  const engineGeocodedStops = (Array.isArray(engineSourceCandidates) ? engineSourceCandidates : []).filter(
+    (candidate) =>
+      candidate && candidate.id && Number.isFinite(candidate.lat) && Number.isFinite(candidate.lng),
+  );
+  const geocodedStops = engineGeocodedStops.length ? engineGeocodedStops : combinationGeocodedStops;
   const geocodedCount = geocodedStops.length;
   const coherence = (adaptedBody?.geometry_summary && adaptedBody.geometry_summary.coherence) || "incomplete";
   checks.geocoded_stop_count = geocodedCount;
+  checks.combination_geocoded_stop_count = combinationGeocodedStops.length;
+  if (engineGeocodedStops.length) checks.engine_reservoir_geocoded_stop_count = engineGeocodedStops.length;
   checks.geometry_coherence = coherence;
   if (geocodedCount < MIN_VIABLE_GEOCODED_STOPS) {
     blockers.push("insufficient_geocoded_candidates");
@@ -542,6 +555,7 @@ async function composeAgnosticRouteOutput({
   walkingRouter = null,
   walkingConfig = null,
   walkingBudget = null,
+  walkingKmTarget = null,
   // #262 — trusted context seams. Public payload weather is NEVER trusted; the
   // weather/time context comes only from these server-injected sources.
   weatherProvider = null,
@@ -640,6 +654,13 @@ async function composeAgnosticRouteOutput({
     candidateCombination,
   });
   const adaptedBody = adapted && adapted.body ? adapted.body : {};
+  const engineSourceCandidates = synthesizeVia === "engine"
+    ? mapPlannerReservoirToSourceCandidates({
+        selected: (candidateCombination && candidateCombination.selected) || [],
+        plannerRoles,
+        city: agnosticContext.key,
+      })
+    : null;
 
   // #262 — the trusted-context surface (or a cheap "skipped" marker when a hard
   // blocker meant no trusted selection ran). When context ran, explain how it
@@ -663,6 +684,7 @@ async function composeAgnosticRouteOutput({
     sourceStatus,
     adaptedBody,
     candidateReadiness,
+    engineSourceCandidates,
   });
 
   if (!eligibility.eligible) {
@@ -692,13 +714,14 @@ async function composeAgnosticRouteOutput({
       effectiveDate,
       plannerRoles,
       candidateCombination,
+      sourceCandidates: engineSourceCandidates,
       eligibility,
       candidateReadiness,
       sourceStatus,
       contextBlock,
       ctx,
       baselineResult,
-      walkingKmTarget: Number.isFinite(walkingBudget?.targetKm) ? walkingBudget.targetKm : undefined,
+      walkingKmTarget: Number.isFinite(walkingKmTarget) ? walkingKmTarget : undefined,
       preferences,
       timezone,
       lang,
@@ -876,6 +899,7 @@ async function composeAgnosticRouteViaEngine({
   effectiveDate,
   plannerRoles,
   candidateCombination,
+  sourceCandidates: suppliedSourceCandidates,
   eligibility,
   candidateReadiness,
   sourceStatus,
@@ -887,11 +911,13 @@ async function composeAgnosticRouteViaEngine({
   lang,
   placeLabel,
 }) {
-  const sourceCandidates = mapAdmittedSelectionToSourceCandidates({
-    selected: (candidateCombination && candidateCombination.selected) || [],
-    plannerRoles,
-    city: agnosticContext.key,
-  });
+  const sourceCandidates = Array.isArray(suppliedSourceCandidates)
+    ? suppliedSourceCandidates
+    : mapPlannerReservoirToSourceCandidates({
+        selected: (candidateCombination && candidateCombination.selected) || [],
+        plannerRoles,
+        city: agnosticContext.key,
+      });
 
   const engineCityConfig = buildAgnosticEngineCityConfig({
     anchor: origin,
@@ -900,6 +926,7 @@ async function composeAgnosticRouteViaEngine({
     todayIsoDate: agnosticContext.todayIsoDate,
     label: safeAgnosticPlaceLabel(placeLabel) || agnosticContext.label,
     key: agnosticContext.key,
+    dayProfile: (Number.isFinite(walkingKmTarget) ? walkingKmTarget : 6) <= 4 ? "light" : "peak",
   });
 
   const engineResult = await generateAgnosticRecommendations({
