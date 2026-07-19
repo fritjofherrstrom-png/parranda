@@ -229,6 +229,10 @@ test("route stops translate #369 candidate-spine metadata to product copy — ne
 test("candidate clusters read as candidates, not a second itinerary", () => {
   assert.doesNotMatch(anywherePlannerSource, /till nästa distrikt|to the next district/);
   assert.doesNotMatch(anywherePlannerSource, /Dagens kvarter|Today's neighborhoods/);
+  const structureOnlyHeader = anywherePlannerSource
+    .split("{showStructure && structure && !(showDay && routeStops.length > 0) && (")[1]
+    ?.split('{phase === "done" && upgradePending')[0] ?? "";
+  assert.doesNotMatch(structureOnlyHeader, /shareDay|saveDay|Share day|Save day/);
 });
 
 test("the weather read lives in Pulse (context), not as its own competing section", () => {
