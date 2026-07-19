@@ -313,33 +313,54 @@ test("the Live sheet explores events only — it never touches the day's anchor 
   assert.match(anywherePlannerSource, /liveSheetCloseRef\.current/);
   assert.match(anywherePlannerSource, /e\.key !== "Tab"/);
   assert.match(anywherePlannerSource, /liveSheetTriggerRef\.current/);
-  // TIME is a real axis over the live_events buckets; the legacy `tonight` key
-  // is displayed as Today because it contains now/today/tonight. The sheet
-  // renders the active bucket in full (the card keeps its capped preview).
+  // TIME axis over the fetched scoped result; the legacy `tonight` key is shown
+  // as Today (it spans now/today/tonight). The sheet renders the active bucket
+  // in full (the card keeps its capped preview).
   assert.match(anywherePlannerSource, /\[liveSheetTime, setLiveSheetTime\] = useState/);
-  assert.match(anywherePlannerSource, /liveSheetTime === "tonight" \? pulseBuckets\.tonight : pulseBuckets\.thisWeek/);
+  assert.match(anywherePlannerSource, /liveSheetTime === "tonight" \? sheetBuckets\.tonight : sheetBuckets\.thisWeek/);
   assert.doesNotMatch(anywherePlannerSource, /sheetEvents\.slice\(/, "the sheet is the uncapped surface");
-  // SCOPE is the single scope events were actually collected under — a coords
-  // anchor collapses to one non-duplicated "near you" (semantic firewall: the
-  // landing consent anchors the DAY; the sheet never asks for a position and
-  // never re-runs the compose).
+
+  // SCOPE is a REAL axis now (#390 live_event_query_v1): contextual options from
+  // the pure module, a coords-anchored day collapsing to a single "Near you".
+  assert.match(anywherePlannerSource, /availableLiveScopes\(\{ coordsAnchoredDay, hasRoute: hasPrimaryRoute, routePointCount: liveRoutePoints\.length \}\)/);
+  assert.match(anywherePlannerSource, /liveScopeOptions\.map\(\(s\)/);
   assert.match(anywherePlannerSource, /Nära dig — dagen är redan förankrad här/);
   assert.match(anywherePlannerSource, /Near you — the day is already anchored here/);
   assert.match(anywherePlannerSource, /Runt \$\{anchorLabel\}/);
-  assert.doesNotMatch(anywherePlannerSource, /requestPosition/, "no position request outside the landing");
+
+  // Selecting a scope RE-QUERIES EVENTS via the dedicated endpoint, built by the
+  // pure module — it never composes a day.
+  assert.match(anywherePlannerSource, /buildLiveEventsQuery\(\{/);
+  assert.match(anywherePlannerSource, /fetch\("\/api\/live-events"/);
+  assert.match(anywherePlannerSource, /route-recommendations/, "compose endpoint still exists for the day");
+
+  // "Near me" is a SEPARATE, events-only position consent: it may request the
+  // position, but its coordinates live only in local state (never the URL, never
+  // sessionStorage) and it must not move the day anchor or route.
+  assert.match(anywherePlannerSource, /async function selectNearMeScope\(\)/);
+  assert.match(anywherePlannerSource, /const coords = await requestPosition\(\)/);
+  assert.match(anywherePlannerSource, /setLiveSheetNearMeCoords\(coords\)/);
+  assert.doesNotMatch(anywherePlannerSource, /storeAnchorCoords\(.*nearMe|nearMe.*storeAnchorCoords/i, "the sheet's position is never persisted as the day anchor");
+
+  // THE FIREWALL: the sheet's render block contains none of the day-anchor /
+  // route mutators — only the scope re-query can run from here.
   const sheetBlock = anywherePlannerSource.split("THE LIVE SHEET")[1] ?? "";
   assert.ok(sheetBlock.length > 0, "live sheet block present");
-  assert.doesNotMatch(sheetBlock, /resolveAndRun|execute\(|setPlace|setMode|storeAnchorCoords|consumeAnchorCoords/, "the sheet must not recompose or move the anchor");
-  // Empty copy names the ACTIVE scope×time cell, and counts come from the
-  // buckets, never from copy.
-  // The legacy backend key `tonight` contains now/today/tonight, so the visible
-  // label is the honest broader "Today" rather than claiming every row is evening.
+  assert.doesNotMatch(
+    sheetBlock,
+    /resolveAndRun|execute\(|setPlace\(|setMode\(|setDayOffset\(|setWalkKey\(|storeAnchorCoords|consumeAnchorCoords/,
+    "the sheet must not recompose or move the day anchor",
+  );
+
+  // Empty copy names the ACTIVE scope×time cell; counts come from the fetched
+  // buckets, never from copy. The visible label is the honest broader "Today".
   assert.match(anywherePlannerSource, /Inget verifierat idag \$\{scopePhrase\}/);
   assert.match(anywherePlannerSource, /Nothing verified today \$\{scopePhrase\}/);
   assert.doesNotMatch(anywherePlannerSource, /t\("Ikväll", "Tonight"\)/);
   assert.match(anywherePlannerSource, /Inget listat senare i veckan \$\{scopePhrase\}/);
   assert.match(anywherePlannerSource, /t\("Visa veckan", "Show this week"\)/);
-  assert.match(anywherePlannerSource, /pulseBuckets\.thisWeek\.length\}/);
-  // The card's week summary is a count, not a second list.
+  assert.match(anywherePlannerSource, /sheetBuckets\.thisWeek\.length\}/);
+  // The card's week summary is still a count off the compose buckets, not a list.
+  assert.match(anywherePlannerSource, /pulseBuckets\.thisWeek\.length/);
   assert.match(anywherePlannerSource, /händelser listade", "more listed"/);
 });
