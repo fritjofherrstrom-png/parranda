@@ -774,8 +774,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           const icon = L.divIcon({
             className: `route-map-marker${stop.is_live_event === true ? " route-map-marker--event" : ""}`,
             html: String(index + 1),
-            iconSize: [30, 30],
-            iconAnchor: [15, 15],
+            iconSize: [44, 44],
+            iconAnchor: [22, 22],
           });
           const marker = L.marker([stop.lat, stop.lng], { icon, zIndexOffset: 1200 });
           const markerName = String(stop.label || stop.name || "").trim();
@@ -854,7 +854,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           <a
             href={`/?lang=${lang}`}
             aria-label={t("Byt plats", "Change place")}
-            className="inline-flex min-h-9 shrink-0 items-center rounded-full bg-parranda-ink/10 px-3.5 text-xs font-bold text-parranda-ink/80 transition hover:bg-parranda-ink/15"
+            className="inline-flex min-h-11 shrink-0 items-center rounded-full bg-parranda-ink/10 px-3.5 text-xs font-bold text-parranda-ink/80 transition hover:bg-parranda-ink/15"
           >
             {t("Byt", "Change")}
           </a>
@@ -893,7 +893,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             type="button"
             aria-expanded={false}
             onClick={() => setAdjustOpen(true)}
-            className="inline-flex min-h-9 shrink-0 items-center rounded-full border border-parranda-ink/16 px-3.5 text-xs font-bold text-parranda-ink/80 transition hover:border-parranda-ember"
+            className="inline-flex min-h-11 shrink-0 items-center rounded-full border border-parranda-ink/16 px-3.5 text-xs font-bold text-parranda-ink/80 transition hover:border-parranda-ember"
           >
             {t("Justera", "Adjust")} ▾
           </button>
@@ -910,7 +910,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               type="button"
               aria-expanded={true}
               onClick={() => setAdjustOpen(false)}
-              className="inline-flex min-h-9 items-center rounded-full border border-parranda-ink/16 px-3.5 text-xs font-bold text-parranda-ink/80 transition hover:border-parranda-ember"
+              className="inline-flex min-h-11 items-center rounded-full border border-parranda-ink/16 px-3.5 text-xs font-bold text-parranda-ink/80 transition hover:border-parranda-ember"
             >
               {t("Klar", "Done")} ▴
             </button>
@@ -1206,7 +1206,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               type="button"
               onClick={() => setMapExpanded((cur) => !cur)}
               aria-expanded={mapExpanded}
-              className="absolute bottom-2.5 right-2.5 z-[1001] inline-flex min-h-9 items-center rounded-full border border-parranda-ink/20 bg-parranda-paper/85 px-3.5 text-xs font-bold text-parranda-ink/85"
+              className="absolute bottom-2.5 right-2.5 z-[1001] inline-flex min-h-11 items-center rounded-full border border-parranda-ink/20 bg-parranda-paper/85 px-3.5 text-xs font-bold text-parranda-ink/85"
             >
               {mapExpanded ? t("Förminska kartan", "Shrink map") : t("Förstora kartan", "Expand map")} <span aria-hidden="true" className="ml-1.5">⤢</span>
             </button>

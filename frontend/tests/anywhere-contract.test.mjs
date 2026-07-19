@@ -15,6 +15,7 @@ import { buildAnywherePayload, ANYWHERE_PREFERENCES, WALK_PRESETS, isoDateFromOf
 const require = createRequire(import.meta.url);
 const decision = require("../../anywhere-render-decision.js");
 const anywherePlannerSource = readFileSync(new URL("../src/components/AnywherePlanner.tsx", import.meta.url), "utf8");
+const anywhereStyles = readFileSync(new URL("../src/styles/tailwind.css", import.meta.url), "utf8");
 
 test("payload carries the freeform place + the three agnostic flags, never a city key", () => {
   const payload = buildAnywherePayload({ place: "Lyon", dates: ["2026-07-02"], preferences: ["food", "views"] });
@@ -254,6 +255,25 @@ test("the anchor is chosen once: the planner shows it, and adjusts — never a s
   assert.doesNotMatch(anywherePlannerSource, /Justera känsla, dag och gånglängd/);
   assert.doesNotMatch(anywherePlannerSource, /t\("Skriv stad", "Type a city"\)/, "no start-context mode toggle past the landing");
   assert.doesNotMatch(anywherePlannerSource, /ANY-CITY PLANNER|Any-place Alpha|Experimental route|dogfood/i);
+});
+
+test("compact planner and map controls keep a 44px mobile touch target", () => {
+  assert.match(
+    anywherePlannerSource,
+    /aria-label=\{t\("Byt plats", "Change place"\)\}[\s\S]{0,180}min-h-11/,
+  );
+  assert.match(
+    anywherePlannerSource,
+    /aria-expanded=\{false\}[\s\S]{0,180}min-h-11/,
+  );
+  assert.match(
+    anywherePlannerSource,
+    /aria-expanded=\{mapExpanded\}[\s\S]{0,180}min-h-11/,
+  );
+  assert.match(anywhereStyles, /\.leaflet-control-zoom a\s*\{[\s\S]*width: 44px !important;/);
+  assert.match(anywhereStyles, /\.leaflet-control-zoom a\s*\{[\s\S]*height: 44px !important;/);
+  assert.match(anywherePlannerSource, /iconSize: \[44, 44\]/);
+  assert.match(anywherePlannerSource, /iconAnchor: \[22, 22\]/);
 });
 
 test("adjustments collapse to a summary and re-compose themselves — no submit past the landing", () => {
