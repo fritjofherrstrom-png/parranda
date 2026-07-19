@@ -470,7 +470,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     const next = upsertSaved(savedDays, stamped);
     setSavedDays(next);
     writeLS(SAVED_KEY, next);
-    setRestoredAt(stamped.savedAt);
+    // Saving the live result must not turn it into a restored snapshot. Only
+    // restoreEntry() sets restoredAt; otherwise the still-visible adjustment
+    // controls would change while auto-recompose remained silently paused.
   }
 
   function removeSavedDay(id: string) {

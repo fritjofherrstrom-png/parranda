@@ -275,6 +275,13 @@ test("adjustments collapse to a summary and re-compose themselves — no submit 
   assert.equal((anywherePlannerSource.match(/type="submit"/g) || []).length, 1, "exactly one submit: the no-anchor fallback");
 });
 
+test("saving a live day does not freeze its adjustment controls as a restored snapshot", () => {
+  const saveBlock = anywherePlannerSource.split("function saveDay() {")[1]?.split("function removeSavedDay")[0] ?? "";
+  const restoreBlock = anywherePlannerSource.split("function restoreEntry(entry: SavedEntry) {")[1]?.split("const autoPlannedRef")[0] ?? "";
+  assert.doesNotMatch(saveBlock, /setRestoredAt/);
+  assert.match(restoreBlock, /setRestoredAt\(entry\.savedAt\)/);
+});
+
 test("latest compose wins and cancels stale network work", () => {
   assert.match(anywherePlannerSource, /activeRequestRef\.current\?\.abort\(\)/);
   assert.match(anywherePlannerSource, /const requestId = \+\+requestSequenceRef\.current/);
