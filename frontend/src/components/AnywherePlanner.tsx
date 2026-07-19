@@ -17,7 +17,11 @@ import {
   isoDateFromOffset,
 } from "../lib/anywhere-payload.mjs";
 import { mapsPlaceUrl, mapsWalkingRouteUrl, primaryRouteStops } from "../lib/maps-links.mjs";
-import { buildRouteContextSuggestions, walkingDistanceLabel } from "../lib/route-context-view.mjs";
+import {
+  buildRouteContextSuggestions,
+  routePreferenceCoverage,
+  walkingDistanceLabel,
+} from "../lib/route-context-view.mjs";
 import {
   splitRouteStops,
   wovenEventIds,
@@ -120,6 +124,8 @@ interface LiveEvents {
   this_week?: PulseEvent[];
 }
 
+const LIVE_REFRESH_DELAYS_MS = [9000, 12000, 18000] as const;
+
 const DAYPART_LABELS: Record<string, { sv: string; en: string }> = {
   morning: { sv: "Morgon", en: "Morning" },
   midday: { sv: "Mitt på dagen", en: "Midday" },
@@ -208,6 +214,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [safeResponse, setSafeResponse] = useState<any>(null);
   const [mapDrawn, setMapDrawn] = useState(false);
   const [upgradePending, setUpgradePending] = useState(false); // cold-start: structure upgrade in flight
+  const [liveRefreshExhausted, setLiveRefreshExhausted] = useState(false);
   const [savedDays, setSavedDays] = useState<SavedEntry[]>([]);
   const [restoredAt, setRestoredAt] = useState<string | null>(null); // set when showing a SNAPSHOT
   const [shareCopied, setShareCopied] = useState(false);
@@ -216,6 +223,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // day re-composes on its own when an adjustment settles.
   const [adjustOpen, setAdjustOpen] = useState(false);
   const recomposeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestSequenceRef = useRef(0);
+  const activeRequestRef = useRef<AbortController | null>(null);
   const skipFirstAdjustRef = useRef(true);
   // Result-screen chrome (design handoff §3): the map can expand in place, and
   // detours are collapsed by default — optional ideas must never read as part
@@ -223,7 +232,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [mapExpanded, setMapExpanded] = useState(false);
   const [detoursOpen, setDetoursOpen] = useState(false);
   // The Live sheet (design handoff §3B): an explorable events surface. TIME is
-  // a real axis (tonight / this week map to the live_events buckets). SCOPE is
+  // a real axis (today / this week; `tonight` is the legacy API key for the
+  // combined now/today/tonight bucket). SCOPE is
   // shown as the single scope events were actually collected under — the
   // multi-scope selector (near-route filtering, a separate "near me" consent)
   // is a NEXT CAPABILITY that needs an events re-query API; presenting it now
@@ -234,6 +244,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const mapRef = useRef<HTMLDivElement | null>(null);
   const leafletRef = useRef<{ map: any; layer: any } | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const liveSheetTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const liveSheetDialogRef = useRef<HTMLDivElement | null>(null);
+  const liveSheetCloseRef = useRef<HTMLButtonElement | null>(null);
   const lastEntryRef = useRef<SavedEntry | null>(null); // the latest composed day, for "save"
 
   const t = (sv: string, en: string) => (lang === "en" ? en : sv);
@@ -265,9 +278,26 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       preferencesOverride,
       dayOffsetOverride,
       walkKeyOverride,
-    }: { silent?: boolean; langOverride?: Lang; preferencesOverride?: string[]; dayOffsetOverride?: 0 | 1; walkKeyOverride?: string } = {},
+      pollAttempt = 0,
+    }: {
+      silent?: boolean;
+      langOverride?: Lang;
+      preferencesOverride?: string[];
+      dayOffsetOverride?: 0 | 1;
+      walkKeyOverride?: string;
+      pollAttempt?: number;
+    } = {},
   ) {
+    if (!silent && pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    activeRequestRef.current?.abort();
+    const controller = new AbortController();
+    const requestId = ++requestSequenceRef.current;
+    activeRequestRef.current = controller;
     if (!silent) {
+      setLiveRefreshExhausted(false);
       setUpgradePending(false);
       setPhase("loading");
       setClassification(null);
@@ -289,8 +319,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
       const body = await response.json();
+      if (controller.signal.aborted || requestId !== requestSequenceRef.current) return;
       const decision = anywhereDecision();
       // With a coords anchor there is no typed text — the label falls back to a
       // neutral "your position" (the engine's resolved label wins when present).
@@ -300,7 +332,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setClassification(cls);
       setSafeResponse(safe);
       setPhase("done");
-      if (silent) setUpgradePending(false); // the one silent re-ask has landed (better or not)
+      if (silent) setUpgradePending(false);
       // Retention: remember this composed day so a reload doesn't lose it, and
       // so the user can save it. A fresh compose is LIVE, so clear the snapshot
       // flag. A SILENT upgrade also refreshes the stored entry (so save/share use
@@ -320,29 +352,48 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         writeLS(LAST_KEY, entry);
         if (!silent) setRestoredAt(null);
       }
-      // ONE silent re-ask after the warm window covers the bounded cold-start
-      // honesty gaps: (a) live events returned an honest `pending`, (b) a route
-      // composed before its district structure was warm, or (c) a RESOLVED
-      // place hit an explicit transient trusted-source failure. A proven empty
-      // source, ambiguity, or unresolved place never retries. Never loops:
-      // scheduling only happens on non-silent runs.
+      // Bounded silent re-asks cover cold-start honesty gaps. Live acquisition
+      // gets three capped refresh opportunities; structure/source upgrades keep
+      // their existing one-shot behavior. A proven empty source, ambiguity, or
+      // unresolved place never retries, and a new user compose cancels the timer.
       const needsStructureUpgrade = cls.status === "composed" && !safe?.place_structure;
       const needsTransientSourceRetry = decision.shouldRetryTransientSource(body, cls);
-      if (!silent && (safe?.live_events?.pending || needsStructureUpgrade || needsTransientSourceRetry)) {
+      const livePending = safe?.live_events?.pending === true;
+      const canRefreshLive = livePending && pollAttempt < LIVE_REFRESH_DELAYS_MS.length;
+      const canRunOneShotUpgrade = !silent && (needsStructureUpgrade || needsTransientSourceRetry);
+      setLiveRefreshExhausted(livePending && !canRefreshLive);
+      if (canRefreshLive || canRunOneShotUpgrade) {
         if (needsStructureUpgrade || needsTransientSourceRetry) setUpgradePending(true);
         if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+        const delay = canRefreshLive ? LIVE_REFRESH_DELAYS_MS[pollAttempt] : LIVE_REFRESH_DELAYS_MS[0];
+        const effectivePreferences = preferencesOverride ?? selected;
         pollTimerRef.current = setTimeout(() => {
-          execute(anchor, { silent: true }).catch(() => {});
-        }, 9000);
+          execute(anchor, {
+            silent: true,
+            langOverride: langOverride ?? lang,
+            preferencesOverride: effectivePreferences,
+            dayOffsetOverride: effectiveDayOffset,
+            walkKeyOverride: effectiveWalkKey,
+            pollAttempt: canRefreshLive ? pollAttempt + 1 : LIVE_REFRESH_DELAYS_MS.length,
+          }).catch(() => {});
+        }, delay);
       }
     } catch {
-      if (silent) setUpgradePending(false);
-      else setPhase("error");
+      if (controller.signal.aborted || requestId !== requestSequenceRef.current) return;
+      if (silent) {
+        setUpgradePending(false);
+        setLiveRefreshExhausted(true);
+      } else {
+        setPhase("error");
+      }
+    } finally {
+      if (activeRequestRef.current === controller) activeRequestRef.current = null;
     }
   }
 
   useEffect(() => () => {
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    activeRequestRef.current?.abort();
   }, []);
 
   // Show a stored day WITHOUT re-fetching. A restored day is a snapshot (events /
@@ -519,7 +570,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const hasAnchor = mode === "near_me" || Boolean(place.trim());
 
   // AUTO-RECOMPOSE: adjustments never need a submit. A settled change (400 ms)
-  // cancels any in-flight compose and re-composes. Skipped before the first
+  // starts a latest-request-wins compose. Skipped before the first
   // compose and while showing a restored snapshot, so nothing fires unasked.
   useEffect(() => {
     if (skipFirstAdjustRef.current) {
@@ -544,19 +595,46 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     return () => clearTimeout(timer);
   }, [mapExpanded]);
 
-  // The Live sheet behaves like a modal: Escape closes it, and the page behind
-  // it does not scroll.
+  // The Live sheet behaves like a modal: focus enters it, stays inside while it
+  // is open, returns to the trigger on close, and the page behind does not scroll.
   useEffect(() => {
     if (!liveSheetOpen) return;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setLiveSheetOpen(false);
+      if (e.key === "Escape") {
+        setLiveSheetOpen(false);
+        return;
+      }
+      if (e.key !== "Tab" || !liveSheetDialogRef.current) return;
+      const focusable = Array.from(
+        liveSheetDialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      if (!focusable.length) {
+        e.preventDefault();
+        liveSheetDialogRef.current.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    const focusFrame = requestAnimationFrame(() => (liveSheetCloseRef.current ?? liveSheetDialogRef.current)?.focus());
     return () => {
+      cancelAnimationFrame(focusFrame);
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = previousOverflow;
+      (liveSheetTriggerRef.current ?? previouslyFocused)?.focus();
     };
   }, [liveSheetOpen]);
 
@@ -614,7 +692,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     () => pulseEventBuckets(liveEvents, wovenEventIds(routeStops)),
     [liveEvents, routeStops],
   );
-  const pulseState = useMemo(() => pulseHealthState(liveEvents, pulseBuckets), [liveEvents, pulseBuckets]);
+  const pulseState = useMemo(
+    () => (liveRefreshExhausted && liveEvents?.pending ? "unavailable" : pulseHealthState(liveEvents, pulseBuckets)),
+    [liveEvents, pulseBuckets, liveRefreshExhausted],
+  );
   const clothing = useMemo(
     () => clothingAdvice(dayflow?.weather?.provenance?.observed, lang),
     [dayflow, lang],
@@ -630,6 +711,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const routeContextSuggestions = useMemo(
     () => buildRouteContextSuggestions(routeStops, day?.areas, { limit: 3, maxDistanceKm: 1.5 }),
     [routeStops, day?.areas],
+  );
+  const routeCoverage = useMemo(
+    () => routePreferenceCoverage(routeStops, selected),
+    [routeStops, selected],
   );
 
   // The map follows the same authority hierarchy as the copy. A composed day
@@ -1205,7 +1290,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               <div key={stop?.id} className="mt-3 rounded-parranda border border-parranda-ember/50 bg-gradient-to-br from-parranda-terracotta/15 to-parranda-glow/5 p-4">
                 <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-parranda-clay">
                   <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-parranda-ember" />
-                  {t("Ikväll i din rutt", "Tonight in your route")}
+                  {t("Live i din rutt", "Live in your route")}
                 </p>
                 <p className="mt-1.5 flex flex-wrap items-center gap-2 text-sm font-semibold text-parranda-ink">
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-parranda-terracotta text-[13px] font-extrabold text-white">{routeNumber}</span>
@@ -1301,9 +1386,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             </div>
           )}
 
-          {(day?.missing_intents ?? []).length > 0 && (
+          {routeCoverage.has_coverage_evidence && routeCoverage.missing_preferences.length > 0 && (
             <p className="mt-4 text-sm italic text-parranda-ink/60">
-              {t("Saknas i dagens underlag:", "Not covered by today's evidence:")} {(day?.missing_intents ?? []).map((key) => label(INTENT_LABELS, key, lang)).join(", ")}
+              {t("Saknas i dagens rutt:", "Not covered by today's route:")} {routeCoverage.missing_preferences.map((key) => label(INTENT_LABELS, key, lang)).join(", ")}
             </p>
           )}
         </section>
@@ -1409,8 +1494,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">
             {mode === "near_me"
               ? t("Just nu nära dig", "Now near you")
-              : typedPlaceLabel
-                ? t(`Just nu i ${typedPlaceLabel}`, `Now in ${typedPlaceLabel}`)
+              : anchorLabel
+                ? t(`Just nu i ${anchorLabel}`, `Now in ${anchorLabel}`)
                 : t("Just nu här", "Now here")}
           </p>
 
@@ -1450,7 +1535,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           )}
           {pulseState === "soft_empty" && (
             <p className="mt-2 text-sm text-parranda-ink/70">
-              {t("Inga listade händelser just nu — lugn kväll i kalendern.", "Nothing listed right now — a quiet night on the calendar.")}
+              {t("Inga listade händelser just nu — lugnt i kalendern.", "Nothing listed right now — a quiet calendar.")}
             </p>
           )}
           {pulseState === "rejected_empty" && (
@@ -1469,7 +1554,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
           {pulseBuckets.tonight.length > 0 && (
             <div className="mt-3">
-              <p className="text-sm font-semibold text-parranda-ink">{t("Ikväll", "Tonight")}</p>
+              <p className="text-sm font-semibold text-parranda-ink">{t("Idag", "Today")}</p>
               <ul className="mt-1 flex flex-col gap-1.5">
                 {pulseBuckets.tonight.slice(0, 4).map((ev: PulseEvent, i: number) => (
                   <li key={ev.id ?? i} className="text-sm text-parranda-ink/85">
@@ -1503,6 +1588,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           {(pulseBuckets.tonight.length > 0 || pulseBuckets.thisWeek.length > 0) && (
             <button
               type="button"
+              ref={liveSheetTriggerRef}
               onClick={() => {
                 setLiveSheetTime(pulseBuckets.tonight.length > 0 ? "tonight" : "week");
                 setLiveSheetOpen(true);
@@ -1536,9 +1622,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           <div className="fixed inset-0 z-[1100]">
             <div aria-hidden="true" onClick={() => setLiveSheetOpen(false)} className="absolute inset-0 bg-black/55" />
             <div
+              ref={liveSheetDialogRef}
               role="dialog"
               aria-modal="true"
               aria-label={t("Live-händelser", "Live events")}
+              tabIndex={-1}
               className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl border-t border-parranda-ink/14 bg-parranda-paper px-6 pb-8 pt-4 shadow-2xl sm:inset-x-auto sm:left-1/2 sm:w-full sm:max-w-xl sm:-translate-x-1/2"
             >
               <div className="flex justify-center" aria-hidden="true">
@@ -1557,6 +1645,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                   )}
                 </h3>
                 <button
+                  ref={liveSheetCloseRef}
                   type="button"
                   aria-label={t("Stäng live", "Close live")}
                   onClick={() => setLiveSheetOpen(false)}
@@ -1598,7 +1687,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                         (liveSheetTime === key ? "bg-parranda-ember/16 font-bold text-parranda-ink" : "text-parranda-ink/65")
                       }
                     >
-                      {key === "tonight" ? t("Ikväll", "Tonight") : t("Denna vecka", "This week")}
+                      {key === "tonight" ? t("Idag", "Today") : t("Denna vecka", "This week")}
                     </button>
                   ))}
                 </div>
@@ -1607,7 +1696,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               {/* The ACTIVE scope×time cell — heading, list or honest emptiness. */}
               <div className="mt-4 flex flex-col gap-2.5 border-t border-parranda-ink/10 pt-4">
                 <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-parranda-ink/55">
-                  {liveSheetTime === "tonight" ? t("Ikväll", "Tonight") : t("Senare i veckan", "Later this week")} · {scopePhrase}
+                  {liveSheetTime === "tonight" ? t("Idag", "Today") : t("Senare i veckan", "Later this week")} · {scopePhrase}
                 </p>
                 {liveSheetTime === "tonight" && split.woven.length > 0 && (
                   <p className="text-xs text-parranda-ink/60">
@@ -1642,7 +1731,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                   <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
                     <p className="text-sm leading-relaxed text-parranda-ink/80">
                       {liveSheetTime === "tonight"
-                        ? t(`Inget verifierat ikväll ${scopePhrase}.`, `Nothing verified tonight ${scopePhrase}.`)
+                        ? t(`Inget verifierat idag ${scopePhrase}.`, `Nothing verified today ${scopePhrase}.`)
                         : t(`Inget listat senare i veckan ${scopePhrase}.`, `Nothing listed later this week ${scopePhrase}.`)}
                       {liveSheetTime === "tonight" && pulseBuckets.thisWeek.length > 0 && (
                         <strong className="text-parranda-ink">
@@ -1671,7 +1760,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                         onClick={() => setLiveSheetTime("tonight")}
                         className="mt-3 inline-flex min-h-11 items-center rounded-parranda-btn border border-parranda-ember/50 bg-parranda-ember/10 px-4 text-[13px] font-bold text-parranda-clay"
                       >
-                        {t("Visa ikväll", "Show tonight")}
+                        {t("Visa idag", "Show today")}
                       </button>
                     )}
                   </div>
