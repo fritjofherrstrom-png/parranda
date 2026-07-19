@@ -11,6 +11,7 @@ const {
   collectAnchorEvents,
   resolveEventFeedRegistry,
   resolveEventFeedForAnchor,
+  rankCollectedEventsForPreferences,
   buildAnchorEventEndpoint,
   createLocalEventProvider,
   BUILTIN_EVENT_FEEDS,
@@ -262,6 +263,60 @@ test("tonight ranks by salience: an ongoing 'now' event outranks a later-today o
   });
   // 'now' timing scores highest in the shared salience scorer.
   assert.equal(out.tonight[0].id, "now1");
+});
+
+test("preferences rerank the accepted event pool without another source collection", async () => {
+  const ev = (id, name, keywords) => ({
+    id,
+    name: { en: name },
+    start_time: "2026-06-28T18:00:00Z",
+    end_time: "2026-06-28T20:00:00Z",
+    location: { position: { coordinates: [24.94, 60.17] }, name: { en: `Venue ${id}` } },
+    info_url: { en: `https://example.org/${id}` },
+    data_source: "fixture",
+    keywords: keywords.map((keyword) => ({ name: { en: keyword } })),
+  });
+  const payload = {
+    data: [
+      ev("a-concert", "Jazz concert", ["music"]),
+      ev("z-loppis", "Loppis by the harbour", ["second hand"]),
+      {
+        ...ev("future-loppis", "Vintage fair tomorrow", ["second hand"]),
+        start_time: "2026-06-29T18:00:00Z",
+        end_time: "2026-06-29T20:00:00Z",
+      },
+      {
+        ...ev("no-geo-loppis", "Perfect preference match without a place", ["second hand"]),
+        location: { name: { en: "Unresolved venue" } },
+      },
+      {
+        ...ev("stale-loppis", "Yesterday's vintage fair", ["second hand"]),
+        start_time: "2026-06-27T18:00:00Z",
+        end_time: "2026-06-27T20:00:00Z",
+      },
+    ],
+  };
+  const neutral = await collectAnchorEvents({
+    anchor: HELSINKI,
+    now: NOW,
+    registry: FIXTURE_REGISTRY,
+    fetcher: fetcherFor(payload),
+  });
+
+  assert.deepEqual(neutral.tonight.map((event) => event.id), ["a-concert", "z-loppis"]);
+  const secondHand = rankCollectedEventsForPreferences(neutral, ["second_hand"]);
+  assert.deepEqual(secondHand.tonight.map((event) => event.id), ["z-loppis", "a-concert"]);
+  assert.deepEqual(secondHand.this_week.map((event) => event.id), ["future-loppis"]);
+  assert.ok(!secondHand.tonight.some((event) => event.id === "future-loppis"), "preferences never weaken date truth");
+  assert.ok(!secondHand.tonight.some((event) => event.id === "no-geo-loppis"), "preferences never weaken geo trust");
+  assert.ok(!secondHand.tonight.some((event) => event.id === "stale-loppis"), "preferences never revive stale events");
+  assert.equal(secondHand.tonight[0].preference_match, "strong");
+  assert.deepEqual(secondHand.tonight[0].matched_preferences, ["second_hand"]);
+  assert.equal(secondHand._rankable_events, undefined, "the internal cache pool is never returned publicly");
+
+  const culture = rankCollectedEventsForPreferences(neutral, ["culture"]);
+  assert.equal(culture.tonight[0].id, "a-concert");
+  assert.deepEqual(culture.tonight[0].matched_preferences, ["museums"]);
 });
 
 test("cultural events outrank civic/admin notices in the same bucket (smart, not just timely)", async () => {

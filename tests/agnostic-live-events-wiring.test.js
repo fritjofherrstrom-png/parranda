@@ -52,8 +52,9 @@ async function withServer(eventSupply, run) {
 const HELSINKI_BODY = { lat: 60.17, lng: 24.94, dates: ["2026-06-28"], preferences: ["food"], include_external_candidates: 1 };
 
 test("a covered anchor carries live_events (tonight + this_week) on the agnostic response", async () => {
-  const supply = async ({ anchor }) => {
+  const supply = async ({ anchor, preferences }) => {
     assert.ok(anchor && Number.isFinite(anchor.lat), "supply receives the trusted anchor");
+    assert.deepEqual(preferences, ["food"], "planner preferences reach ranking but not source trust");
     return {
       coverage: "covered",
       feed: { id: "linkedevents-helsinki", label: "Helsinki Linked Events", license: "CC-BY 4.0" },

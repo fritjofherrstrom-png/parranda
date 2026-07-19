@@ -32,6 +32,7 @@ const {
   normalizeSourceEventDate,
 } = require("../pulse-sources/source-event-time");
 const { scoreTimeSensitiveEventSalience } = require("../pulse-engine/time-sensitive-events");
+const { scoreEventPreferenceFit } = require("../pulse-engine/event-preference-fit");
 const { createSourceCache } = require("./source-cache");
 const { classifyCulturalSalience } = require("../pulse-engine/cultural-salience");
 const {
@@ -332,6 +333,11 @@ function toEventView(event, feed, { eventTimezone = null } = {}) {
     trust_level: event.confidence || null,
     cultural_tier: cultural.tier,
     salience_score: score,
+    tags: Array.isArray(event.tags) ? event.tags : [],
+    intents: Array.isArray(event.intents) ? event.intents : [],
+    route_role_hint: event.route_role_hint || null,
+    source_language: event.source_language || null,
+    event_language: event.event_language || null,
     anchor_distance_km: Number.isFinite(event.anchor_distance_km) ? event.anchor_distance_km : null,
     fusion_status: event.fusion_status || "single_source",
     source_count: Number.isFinite(event.source_count) ? event.source_count : 1,
@@ -344,16 +350,50 @@ function toEventView(event, feed, { eventTimezone = null } = {}) {
   };
 }
 
-function rankAndCap(views) {
+function rankAndCap(views, preferences = []) {
   const sorted = views
     .filter(Boolean)
+    .map((view) => withEventPreferenceFit(view, preferences))
     .sort(
       (a, b) =>
+        eventRankingScore(b) - eventRankingScore(a) ||
         (b.salience_score || 0) - (a.salience_score || 0) ||
         String(a.starts_at || a.starts_on || "").localeCompare(String(b.starts_at || b.starts_on || "")) ||
         String(a.id || "").localeCompare(String(b.id || "")),
     );
   return dedupeViews(sorted).slice(0, MAX_PER_BUCKET);
+}
+
+function withEventPreferenceFit(view, preferences = []) {
+  const fit = scoreEventPreferenceFit(view, preferences);
+  if (fit.requested_preferences.length === 0) return view;
+  return {
+    ...view,
+    preference_match: fit.level,
+    preference_score: fit.score,
+    requested_preferences: fit.requested_preferences,
+    matched_preferences: fit.matched_preferences,
+    partial_preferences: fit.partial_preferences,
+    missing_preferences: fit.missing_preferences,
+    preference_reasons: fit.reasons,
+  };
+}
+
+function eventRankingScore(view) {
+  return Number(view?.salience_score || 0) + Number(view?.preference_score || 0);
+}
+
+function rankCollectedEventsForPreferences(collected, preferences = []) {
+  if (!collected || typeof collected !== "object") return collected;
+  const pool = collected._rankable_events;
+  const tonightPool = Array.isArray(pool?.tonight) ? pool.tonight : collected.tonight;
+  const thisWeekPool = Array.isArray(pool?.this_week) ? pool.this_week : collected.this_week;
+  const { _rankable_events: _internalPool, ...publicResult } = collected;
+  return {
+    ...publicResult,
+    tonight: rankAndCap(Array.isArray(tonightPool) ? tonightPool : [], preferences),
+    this_week: rankAndCap(Array.isArray(thisWeekPool) ? thisWeekPool : [], preferences),
+  };
 }
 
 /**
@@ -362,6 +402,7 @@ function rankAndCap(views) {
  * @param {{lat:number,lng:number}} opts.anchor  trusted coordinate anchor
  * @param {string|Date|null} [opts.now]          trusted clock (tests inject)
  * @param {string|null} [opts.date]              feed window start (default today)
+ * @param {string[]} [opts.preferences]          rank context only; never source evidence
  * @param {object[]} [opts.registry]             feed registry (default built-in)
  * @param {Function} [opts.fetcher]              injected fetch (tests)
  * @returns {Promise<{coverage:"covered"|"uncovered", feed:object|null, feeds:object[], tonight:object[], this_week:object[], acquisition:object}>}
@@ -370,6 +411,7 @@ async function collectAnchorEvents({
   anchor,
   now = null,
   date = null,
+  preferences = [],
   registry,
   fetcher,
   radiusM,
@@ -467,8 +509,8 @@ async function collectAnchorEvents({
     }
   }
 
-  const rankedTonight = rankAndCap(tonight);
-  const rankedThisWeek = rankAndCap(thisWeek);
+  const rankedTonight = rankAndCap(tonight, preferences);
+  const rankedThisWeek = rankAndCap(thisWeek, preferences);
   const feeds = collectedSources.map(compactSourceStatus);
   const sourceHealth = buildAnchorEventSourceHealth(collectedSources, {
     acceptedEventCount: tonight.length + thisWeek.length,
@@ -482,6 +524,14 @@ async function collectAnchorEvents({
     feeds,
     tonight: rankedTonight,
     this_week: rankedThisWeek,
+    // The normalized, geo/timing-gated pool is cached independently of user
+    // preferences. A warm cache can therefore be reranked instantly without a
+    // second provider request, while the public route response receives only
+    // the capped `tonight` / `this_week` views.
+    _rankable_events: {
+      tonight,
+      this_week: thisWeek,
+    },
     acquisition: {
       mode: "bounded_multi_source",
       radius_m: effectiveRadiusM,
@@ -740,7 +790,8 @@ function normalizeDirectCollectionOutcome(outcome, eventRows) {
 /**
  * Env-gated default supply, mirroring the loader/resolver: a no-arg deploy gets
  * `null` (no live-event calls — production opts in explicitly via
- * PARRANDA_AGNOSTIC_EVENTS). Returns an `({anchor, now}) => Promise<result>`
+ * PARRANDA_AGNOSTIC_EVENTS). Returns an
+ * `({anchor, now, preferences}) => Promise<result>`
  * bound to the env-resolved registry, using global fetch.
  */
 // Coarse cache key: ~1 km anchor bucket + hour bucket (events are time-sensitive,
@@ -828,7 +879,7 @@ function resolveDefaultEventSupply(env = process.env) {
     ttlMs: EVENT_CACHE_TTL_MS,
     dir: (env && env.PARRANDA_CACHE_DIR) || null,
   });
-  return ({ anchor, now } = {}) => {
+  return ({ anchor, now, preferences = [] } = {}) => {
     const sourcePlan = buildAnchorEventSourcePlan({
       anchor,
       registry,
@@ -848,7 +899,7 @@ function resolveDefaultEventSupply(env = process.env) {
     const descriptors = sourcePlan.map((source) => compactSourceStatus({ source, status: "pending", raw: [] }));
     const key = eventCacheKey(anchor, now, sourcePlan.map((source) => source.id));
     const cached = cache.peek(key);
-    if (cached) return Promise.resolve(cached);
+    if (cached) return Promise.resolve(rankCollectedEventsForPreferences(cached, preferences));
     // Cold: warm out-of-band (long timeout, fire-and-forget), serve honest pending.
     cache.warm(key, () => collectAnchorEvents({ anchor, now, registry, timeoutMs: WARM_TIMEOUT_MS, globalKey }), {
       // A proven healthy empty result is cacheable so a quiet calendar does not
@@ -911,5 +962,6 @@ module.exports = {
   normalizeLocalEventAdapter,
   createLocalEventProvider,
   isEphemeralHappening,
+  rankCollectedEventsForPreferences,
   toEventView,
 };

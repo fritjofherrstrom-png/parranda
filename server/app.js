@@ -2115,7 +2115,14 @@ function buildApp({
       if (typeof eventSupply === "function" && anchor) {
         try {
           const eventsNow = clock && typeof clock.now === "function" ? clock.now() : new Date().toISOString();
-          const collected = await eventSupply({ anchor, now: eventsNow });
+          const collected = await eventSupply({
+            anchor,
+            now: eventsNow,
+            // Preferences may reorder only the already trusted, normalized
+            // event pool. They never become event evidence or relax time/geo
+            // gates inside the supply.
+            preferences,
+          });
           if (collected && (collected.coverage === "covered" || collected.coverage === "uncovered")) {
             liveEvents = {
               coverage: collected.coverage,
