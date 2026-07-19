@@ -133,6 +133,7 @@ test("around_place query reuses trusted supply, preference ranking and source he
     assertCompleteSourceHealth(response.body.live_events.acquisition.source_health);
     assert.ok(Array.isArray(response.body.live_events.tonight));
     assert.ok(Array.isArray(response.body.live_events.this_week));
+    assert.deepEqual(response.body.live_events.this_week.map((event) => event.id), ["week"]);
     assert.doesNotMatch(JSON.stringify(response.body), /evil/);
     assert.equal("days" in response.body, false, "an events query never composes or returns a route");
   });
