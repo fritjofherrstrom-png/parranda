@@ -172,10 +172,21 @@ test("Pulse section: place-titled, dedup-aware, honest states, no jargon", () =>
 });
 
 test("route result has one authoritative route and keeps broader candidates secondary", () => {
-  assert.match(anywherePlannerSource, /t\("Dagens rutt", "Today's route"\)/);
-  assert.match(anywherePlannerSource, /t\("Öppna den planerade rutten", "Open the planned route"\)/);
+  // The day header (§3): "A day in {place}" + honest counts, and the Maps CTA
+  // over the FULL stop order (woven event included).
+  assert.match(anywherePlannerSource, /t\("Din dag", "Your day"\)/);
+  assert.match(anywherePlannerSource, /t\("En dag i", "A day in"\)/);
+  assert.match(anywherePlannerSource, /t\("En dag", "A day"\)[\s\S]{0,120}t\("nära dig", "near you"\)/);
+  assert.match(anywherePlannerSource, /t\("till fots", "on foot"\)/);
+  assert.match(anywherePlannerSource, /t\("Öppna rutten i Maps", "Open route in Maps"\)/);
+  // Daypart group headings come from stop.daypart and render only when the
+  // engine emitted one — grouping never reorders the route.
+  assert.match(anywherePlannerSource, /daypart && daypart !== previousDaypart/);
+  // Detours are collapsed by default with the caption always visible.
+  assert.match(anywherePlannerSource, /aria-expanded=\{detoursOpen\}/);
+  assert.match(anywherePlannerSource, /\[detoursOpen, setDetoursOpen\] = useState\(false\)/);
   assert.match(anywherePlannerSource, /buildRouteContextSuggestions\(routeStops, day\?\.areas/);
-  assert.match(anywherePlannerSource, /t\("Fler nära rutten", "More near the route"\)/);
+  assert.match(anywherePlannerSource, /detour idea near your route/);
   assert.match(anywherePlannerSource, /de ingår inte i dagens stopp eller Maps-rutten/);
   assert.match(anywherePlannerSource, /mapsWalkingRouteUrl\(routeStops\)/);
   assert.doesNotMatch(anywherePlannerSource, /t\("Dagens kvarter", "Today's neighborhoods"\)/);
