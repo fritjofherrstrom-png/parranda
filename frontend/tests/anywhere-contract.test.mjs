@@ -276,6 +276,14 @@ test("compact planner and map controls keep a 44px mobile touch target", () => {
   assert.match(anywherePlannerSource, /iconAnchor: \[22, 22\]/);
 });
 
+test("route, saved-day, Blitz, and source actions keep a 44px mobile touch target", () => {
+  assert.match(anywherePlannerSource, /onClick=\{blitz\}[\s\S]{0,180}min-h-11/);
+  assert.match(anywherePlannerSource, /onClick=\{\(\) => restoreEntry\(entry\)\}[\s\S]{0,180}min-h-11/);
+  assert.match(anywherePlannerSource, /aria-label=\{t\("Ta bort", "Remove"\)\}[\s\S]{0,180}min-h-11 min-w-11/);
+  assert.match(anywherePlannerSource, /href=\{pin\}[\s\S]{0,180}min-h-11/);
+  assert.match(anywherePlannerSource, /href=\{ev\.source_url\}[\s\S]{0,180}min-h-11/);
+});
+
 test("keyboard-reachable controls have one visible focus contract", () => {
   assert.match(anywhereStyles, /:where\([\s\S]*a\[href\][\s\S]*button[\s\S]*input[\s\S]*\):focus-visible/);
   assert.match(anywhereStyles, /outline: 3px solid rgb\(var\(--p-color-glow\)\)/);

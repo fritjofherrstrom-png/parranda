@@ -989,7 +989,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             <button
               type="button"
               onClick={blitz}
-              className="text-[11px] font-bold text-parranda-clay underline underline-offset-2 transition hover:text-parranda-ember"
+              className="inline-flex min-h-11 items-center text-[11px] font-bold text-parranda-clay underline underline-offset-2 transition hover:text-parranda-ember"
             >
               {t("⚡ Överraska mig", "⚡ Surprise me")}
             </button>
@@ -1020,7 +1020,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 <button
                   type="button"
                   onClick={() => restoreEntry(entry)}
-                  className="flex-1 text-left text-sm text-parranda-ink hover:text-parranda-accent"
+                  className="inline-flex min-h-11 flex-1 items-center text-left text-sm text-parranda-ink hover:text-parranda-accent"
                 >
                   <span className="font-semibold">{entry.label}</span>
                   {entry.dateIso && <span className="text-parranda-ink/60"> · {entry.dateIso}</span>}
@@ -1029,7 +1029,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                   type="button"
                   onClick={() => removeSavedDay(entry.id)}
                   aria-label={t("Ta bort", "Remove")}
-                  className="shrink-0 rounded-full px-2 text-parranda-ink/40 hover:text-parranda-accent"
+                  className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full text-parranda-ink/40 hover:text-parranda-accent"
                 >
                   ✕
                 </button>
@@ -1097,7 +1097,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           {restoredAt && (
             <p className="text-xs text-parranda-ink/60">
               {t("Sparad dag", "Saved day")} · {new Date(restoredAt).toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE")} —{" "}
-              <button type="button" onClick={() => resolveAndRun()} className="underline underline-offset-2 hover:text-parranda-accent">
+              <button type="button" onClick={() => resolveAndRun()} className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-parranda-accent">
                 {t("bygg om för färska events", "rebuild for fresh events")}
               </button>
             </p>
@@ -1154,7 +1154,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             {restoredAt && (
               <p className="mt-1 text-xs text-parranda-ink/60">
                 {t("Sparad dag", "Saved day")} · {new Date(restoredAt).toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE")} —{" "}
-                <button type="button" onClick={() => resolveAndRun()} className="underline underline-offset-2 hover:text-parranda-accent">
+                <button type="button" onClick={() => resolveAndRun()} className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-parranda-accent">
                   {t("bygg om för färska events", "rebuild for fresh events")}
                 </button>
               </p>
@@ -1244,7 +1244,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                     </span>
                     <span className="flex flex-wrap items-center gap-2 pt-1 text-sm text-parranda-ink">
                       {pin ? (
-                        <a href={pin} target="_blank" rel="noopener noreferrer" className="font-bold underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
+                        <a href={pin} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center font-bold underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
                           {name}
                         </a>
                       ) : (
@@ -1295,7 +1295,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 <p className="mt-1.5 flex flex-wrap items-center gap-2 text-sm font-semibold text-parranda-ink">
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-parranda-terracotta text-[13px] font-extrabold text-white">{routeNumber}</span>
                   {pin ? (
-                    <a href={pin} target="_blank" rel="noopener noreferrer" className="underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
+                    <a href={pin} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
                       {name}
                     </a>
                   ) : (
@@ -1320,7 +1320,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                   <p className="mt-1 text-xs text-parranda-ink/55">
                     {t("Källa", "Source")}:{" "}
                     {sourceUrl ? (
-                      <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-parranda-accent">
+                      <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-parranda-accent">
                         {sourceLabel}
                       </a>
                     ) : (
@@ -1370,7 +1370,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                       <li key={stop.id || stop.candidate_id || stop.place_id || name} className="rounded-parranda border border-dashed border-parranda-ink/20 p-3">
                         <p className="text-sm font-semibold text-parranda-ink">
                           {url ? (
-                            <a href={url} target="_blank" rel="noopener noreferrer" className="underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
+                            <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
                               {name}
                             </a>
                           ) : name}
@@ -1442,7 +1442,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                               href={url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent"
+                              className="inline-flex min-h-11 items-center underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent"
                             >
                               {name}
                             </a>
@@ -1564,7 +1564,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                     {ev.source_url && (
                       <span className="text-parranda-ink/50">
                         {" · "}
-                        <a href={ev.source_url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-parranda-accent">
+                        <a href={ev.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-parranda-accent">
                           {ev.source_label || t("Källa", "Source")}
                         </a>
                       </span>
@@ -1718,7 +1718,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                           {ev.source_url && (
                             <span className="text-parranda-ink/50">
                               {" · "}
-                              <a href={ev.source_url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-parranda-accent">
+                              <a href={ev.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-parranda-accent">
                                 {ev.source_label || t("Källa", "Source")}
                               </a>
                             </span>
