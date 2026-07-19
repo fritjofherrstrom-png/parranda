@@ -1244,7 +1244,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                     </span>
                     <span className="flex flex-wrap items-center gap-2 pt-1 text-sm text-parranda-ink">
                       {pin ? (
-                        <a href={pin} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center font-bold underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
+                        <a href={pin} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 min-w-11 items-center font-bold underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
                           {name}
                         </a>
                       ) : (
@@ -1295,7 +1295,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 <p className="mt-1.5 flex flex-wrap items-center gap-2 text-sm font-semibold text-parranda-ink">
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-parranda-terracotta text-[13px] font-extrabold text-white">{routeNumber}</span>
                   {pin ? (
-                    <a href={pin} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
+                    <a href={pin} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 min-w-11 items-center underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
                       {name}
                     </a>
                   ) : (
@@ -1320,7 +1320,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                   <p className="mt-1 text-xs text-parranda-ink/55">
                     {t("Källa", "Source")}:{" "}
                     {sourceUrl ? (
-                      <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-parranda-accent">
+                      <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 min-w-11 items-center underline underline-offset-2 hover:text-parranda-accent">
                         {sourceLabel}
                       </a>
                     ) : (
@@ -1370,7 +1370,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                       <li key={stop.id || stop.candidate_id || stop.place_id || name} className="rounded-parranda border border-dashed border-parranda-ink/20 p-3">
                         <p className="text-sm font-semibold text-parranda-ink">
                           {url ? (
-                            <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
+                            <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 min-w-11 items-center underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
                               {name}
                             </a>
                           ) : name}
@@ -1442,7 +1442,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                               href={url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex min-h-11 items-center underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent"
+                              className="inline-flex min-h-11 min-w-11 items-center underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent"
                             >
                               {name}
                             </a>
@@ -1564,7 +1564,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                     {ev.source_url && (
                       <span className="text-parranda-ink/50">
                         {" · "}
-                        <a href={ev.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-parranda-accent">
+                        <a href={ev.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 min-w-11 items-center underline underline-offset-2 hover:text-parranda-accent">
                           {ev.source_label || t("Källa", "Source")}
                         </a>
                       </span>
@@ -1718,7 +1718,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                           {ev.source_url && (
                             <span className="text-parranda-ink/50">
                               {" · "}
-                              <a href={ev.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-parranda-accent">
+                              <a href={ev.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 min-w-11 items-center underline underline-offset-2 hover:text-parranda-accent">
                                 {ev.source_label || t("Källa", "Source")}
                               </a>
                             </span>
