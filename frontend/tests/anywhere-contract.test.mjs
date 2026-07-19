@@ -276,6 +276,12 @@ test("compact planner and map controls keep a 44px mobile touch target", () => {
   assert.match(anywherePlannerSource, /iconAnchor: \[22, 22\]/);
 });
 
+test("keyboard-reachable controls have one visible focus contract", () => {
+  assert.match(anywhereStyles, /:where\([\s\S]*a\[href\][\s\S]*button[\s\S]*input[\s\S]*\):focus-visible/);
+  assert.match(anywhereStyles, /outline: 3px solid rgb\(var\(--p-color-glow\)\)/);
+  assert.match(anywhereStyles, /outline-offset: 3px/);
+});
+
 test("adjustments collapse to a summary and re-compose themselves — no submit past the landing", () => {
   // Collapsed summary (mood · day · length) with an aria-expanded toggle...
   assert.match(anywherePlannerSource, /!adjustOpen && \(/);

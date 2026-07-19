@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Tailwind's reset leaves keyboard focus dependent on browser defaults, which
+   are not visible against Parranda's dark surface in every browser. Keep the
+   indicator modality-aware so pointer interactions stay visually quiet while
+   every keyboard-reachable control gets the same high-contrast contract. */
+:where(
+  a[href],
+  button,
+  input,
+  select,
+  textarea,
+  [tabindex]:not([tabindex="-1"])
+):focus-visible {
+  outline: 3px solid rgb(var(--p-color-glow));
+  outline-offset: 3px;
+}
+
 /* Numbered map markers. A composed route owns the stronger marker; district
    numbers remain only for the honest structure-only state. */
 .district-map-marker,
