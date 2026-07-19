@@ -148,11 +148,20 @@ test(
     });
     const exp = r.body.agnostic_route_output_experiment;
     assert.equal(exp.route_mutation, true);
-    assert.equal(exp.promotion.promote, false, "a two-stop single-intent route remains honestly thin");
-    const stops = exp.experimental_route.main_stops;
-    assert.equal(stops.length, 2, "one role gains bounded depth instead of failing with a one-stop non-route");
-    assert.ok(stops.every((stop) => stop.role === "green_walk_stop"));
-    assert.ok(stops.every((stop) => stop.covered_preferences.includes("green")));
+    assert.equal(exp.promotion.promote, true, "safe support turns the green spine into a minimum complete day");
+    const stops = r.body.days[0].primary_route.main_stops;
+    assert.equal(stops.length, 3);
+    assert.equal(
+      stops.filter((stop) => stop.role === "green_walk_stop").length,
+      2,
+      "the requested green role remains the route spine",
+    );
+    assert.equal(
+      stops.filter((stop) => stop.covered_preferences.includes("green")).length,
+      2,
+      "the supporting scenic role does not invent green preference coverage",
+    );
+    assert.ok(stops.every((stop) => stop.type === "park"));
     assert.ok(stops.every((stop) => stop.daypart === "midday"));
   }),
 );

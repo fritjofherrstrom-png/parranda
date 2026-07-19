@@ -45,7 +45,11 @@ function selectedPick(overrides = {}) {
 function plannerRoles(candidatesByRole) {
   return {
     city: "agnostic-engine-area",
-    roles: Object.entries(candidatesByRole).map(([role, candidates]) => ({ role, candidates })),
+    roles: Object.entries(candidatesByRole).map(([role, candidates]) => ({
+      role,
+      slot: role.includes("anchor") ? "anchor" : "stop",
+      candidates,
+    })),
   };
 }
 
@@ -202,4 +206,87 @@ test("bounded reservoir honors its total and per-role caps without dropping sele
     perRole: 3,
   });
   assert.deepEqual(result.map((entry) => entry.id), ["food-a", "food-b"]);
+});
+
+test("single requested role gains bounded planner-safe day support without false preference coverage", () => {
+  const make = (id, role, type, covered) => richCandidate({
+    candidate_id: id,
+    label: id,
+    type,
+    coordinates: { lat: 43.51 + id.length * 0.0001, lng: 16.44 },
+    candidate_status: "filled",
+    planner_usable: true,
+    origin: "external_open",
+    covered_preferences: [covered],
+    partial_preferences: [],
+    missing_preferences: [],
+    local_feel_rank: 0,
+  });
+  const foodWinner = make("food-a", "food_anchor", "restaurant", "food");
+  const foodDepth = make("food-b", "food_anchor", "restaurant", "food");
+  const scenicSupport = make("view-a", "scenic_anchor", "viewpoint", "scenic");
+  const coffeeSupport = make("coffee-a", "coffee_fika_stop", "cafe", "coffee");
+  const eveningOption = make("bar-a", "evening_bar_option", "bar", "bars");
+  const roles = {
+    city: "agnostic-engine-area",
+    requested_preferences: ["food"],
+    roles: [
+      { role: "food_anchor", slot: "anchor", requested: true, candidates: [foodWinner, foodDepth] },
+      { role: "scenic_anchor", slot: "anchor", requested: false, candidates: [scenicSupport] },
+      { role: "coffee_fika_stop", slot: "stop", requested: false, candidates: [coffeeSupport] },
+      { role: "evening_bar_option", slot: "option", requested: false, candidates: [eveningOption] },
+    ],
+  };
+
+  const result = mapPlannerReservoirToSourceCandidates({
+    selected: [
+      selectedPick({
+        role: "food_anchor",
+        candidate_id: foodWinner.candidate_id,
+        coordinates: foodWinner.coordinates,
+      }),
+    ],
+    plannerRoles: roles,
+  });
+
+  assert.deepEqual(result.map((entry) => entry.id), ["food-a", "food-b", "view-a", "coffee-a"]);
+  assert.deepEqual(result.map((entry) => entry.reservoir_support), [false, false, true, true]);
+  assert.equal(result.some((entry) => entry.id === "bar-a"), false, "unrequested option roles do not pad the day");
+  assert.deepEqual(result.find((entry) => entry.id === "view-a").tags, ["scenic"]);
+  assert.deepEqual(result.find((entry) => entry.id === "view-a").covered_preferences, []);
+  assert.deepEqual(result.find((entry) => entry.id === "view-a").missing_preferences, ["food"]);
+  assert.deepEqual(result.find((entry) => entry.id === "food-a").covered_preferences, ["food"]);
+});
+
+test("sparse single-role supply stays sparse instead of fabricating support", () => {
+  const food = richCandidate({
+    candidate_id: "food-only",
+    type: "restaurant",
+    candidate_status: "partial",
+    planner_usable: true,
+    covered_preferences: ["food"],
+    partial_preferences: [],
+  });
+  const fallbackScenic = richCandidate({
+    candidate_id: "weak-view",
+    type: "viewpoint",
+    candidate_status: "fallback",
+    planner_usable: false,
+    covered_preferences: ["scenic"],
+  });
+  const roles = {
+    city: "agnostic-engine-area",
+    requested_preferences: ["food"],
+    roles: [
+      { role: "food_anchor", slot: "anchor", requested: true, candidates: [food] },
+      { role: "scenic_anchor", slot: "anchor", requested: false, candidates: [fallbackScenic] },
+    ],
+  };
+
+  const result = mapPlannerReservoirToSourceCandidates({
+    selected: [selectedPick({ role: "food_anchor", candidate_id: "food-only", coordinates: food.coordinates })],
+    plannerRoles: roles,
+  });
+
+  assert.deepEqual(result.map((entry) => entry.id), ["food-only"]);
 });
