@@ -222,6 +222,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // of the route.
   const [mapExpanded, setMapExpanded] = useState(false);
   const [detoursOpen, setDetoursOpen] = useState(false);
+  // The Live sheet (design handoff §3B): an explorable events surface. TIME is
+  // a real axis (tonight / this week map to the live_events buckets). SCOPE is
+  // shown as the single scope events were actually collected under — the
+  // multi-scope selector (near-route filtering, a separate "near me" consent)
+  // is a NEXT CAPABILITY that needs an events re-query API; presenting it now
+  // would fake a capability. The sheet only ever changes what events are shown —
+  // never the day's anchor or route.
+  const [liveSheetOpen, setLiveSheetOpen] = useState(false);
+  const [liveSheetTime, setLiveSheetTime] = useState<"tonight" | "week">("tonight");
   const mapRef = useRef<HTMLDivElement | null>(null);
   const leafletRef = useRef<{ map: any; layer: any } | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -534,6 +543,22 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     const timer = setTimeout(() => leafletRef.current?.map.invalidateSize(), 250);
     return () => clearTimeout(timer);
   }, [mapExpanded]);
+
+  // The Live sheet behaves like a modal: Escape closes it, and the page behind
+  // it does not scroll.
+  useEffect(() => {
+    if (!liveSheetOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLiveSheetOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [liveSheetOpen]);
 
   // The anchor's display label — never a faked place name: a coords anchor
   // reads "Near you" until the engine attests a real one. A resolver label is a
@@ -1464,27 +1489,28 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               </ul>
             </div>
           )}
+          {/* The card keeps a one-line summary for the week — the full list
+              lives in the Live sheet. The count comes from the bucket, never
+              from copy. */}
           {pulseBuckets.thisWeek.length > 0 && (
-            <div className="mt-3">
-              <p className="text-sm font-semibold text-parranda-ink">{t("Senare i veckan", "Later this week")}</p>
-              <ul className="mt-1 flex flex-col gap-1">
-                {pulseBuckets.thisWeek.slice(0, 4).map((ev: PulseEvent, i: number) => (
-                  <li key={ev.id ?? i} className="text-sm text-parranda-ink/85">
-                    <span className="font-medium">{ev.title}</span>
-                    {eventTiming(ev, lang) && <span className="text-parranda-ink/60"> · {eventTiming(ev, lang)}</span>}
-                    {ev.place && <span className="text-parranda-ink/60"> · {ev.place}</span>}
-                    {ev.source_url && (
-                      <span className="text-parranda-ink/50">
-                        {" · "}
-                        <a href={ev.source_url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-parranda-accent">
-                          {ev.source_label || t("Källa", "Source")}
-                        </a>
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <p className="mt-3 border-t border-parranda-ink/10 pt-3 text-sm text-parranda-ink/70">
+              <span className="font-semibold text-parranda-ink">{t("Senare i veckan", "Later this week")}</span>
+              {" · "}
+              {pulseBuckets.thisWeek.length}{" "}
+              {pulseBuckets.thisWeek.length === 1 ? t("händelse listad", "more listed") : t("händelser listade", "more listed")}
+            </p>
+          )}
+          {(pulseBuckets.tonight.length > 0 || pulseBuckets.thisWeek.length > 0) && (
+            <button
+              type="button"
+              onClick={() => {
+                setLiveSheetTime(pulseBuckets.tonight.length > 0 ? "tonight" : "week");
+                setLiveSheetOpen(true);
+              }}
+              className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-parranda-btn border border-parranda-ember/50 bg-parranda-ember/10 text-[13px] font-bold text-parranda-clay transition hover:bg-parranda-ember/15"
+            >
+              {t("Se allt live", "See all live")} <span aria-hidden="true" className="ml-1.5">↗</span>
+            </button>
           )}
           {pulseState === "partial" && (
             <p className="mt-2 text-xs text-parranda-ink/55">
@@ -1499,6 +1525,172 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           )}
         </section>
       )}
+
+      {/* THE LIVE SHEET (§3B) — explores the live_events buckets only. It never
+          changes the day's anchor or the route: the landing's location consent
+          anchors the DAY; nothing in here asks for or applies a position. */}
+      {liveSheetOpen && (() => {
+        const sheetEvents: PulseEvent[] = liveSheetTime === "tonight" ? pulseBuckets.tonight : pulseBuckets.thisWeek;
+        const scopePhrase = mode === "near_me" ? t("nära dig", "near you") : t(`runt ${anchorLabel}`, `around ${anchorLabel}`);
+        return (
+          <div className="fixed inset-0 z-[1100]">
+            <div aria-hidden="true" onClick={() => setLiveSheetOpen(false)} className="absolute inset-0 bg-black/55" />
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={t("Live-händelser", "Live events")}
+              className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl border-t border-parranda-ink/14 bg-parranda-paper px-6 pb-8 pt-4 shadow-2xl sm:inset-x-auto sm:left-1/2 sm:w-full sm:max-w-xl sm:-translate-x-1/2"
+            >
+              <div className="flex justify-center" aria-hidden="true">
+                <span className="h-1 w-11 rounded-full bg-parranda-ink/20" />
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <h3 className="font-display text-3xl font-semibold leading-none text-parranda-ink">
+                  {mode === "near_me" && !classification?.placeLabel ? (
+                    <>
+                      Live <em className="text-parranda-ember">{t("nära dig", "near you")}</em>
+                    </>
+                  ) : (
+                    <>
+                      {t("Live i", "Live in")} <em className="text-parranda-ember">{anchorLabel}</em>
+                    </>
+                  )}
+                </h3>
+                <button
+                  type="button"
+                  aria-label={t("Stäng live", "Close live")}
+                  onClick={() => setLiveSheetOpen(false)}
+                  className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full border border-parranda-ink/16 text-parranda-ink/80 transition hover:border-parranda-ember"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* WHERE — the one scope events were actually collected under.
+                  A scope selector (near-route filtering, a separate "near me"
+                  events consent) needs an events re-query API first. */}
+              <div className="mt-4 flex flex-col gap-2">
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-parranda-glow">{t("Var", "Where")}</p>
+                <span className="inline-flex min-h-11 items-center gap-2 self-start rounded-full border border-parranda-ember/55 bg-parranda-ember/10 px-4 text-[13px] font-bold text-parranda-ink">
+                  {mode === "near_me" ? (
+                    <>
+                      <span aria-hidden="true" className="text-parranda-ember">◉</span>
+                      {t("Nära dig — dagen är redan förankrad här", "Near you — the day is already anchored here")}
+                    </>
+                  ) : (
+                    t(`Runt ${anchorLabel}`, `Around ${anchorLabel}`)
+                  )}
+                </span>
+              </div>
+
+              {/* WHEN — a real axis over the live_events buckets. */}
+              <div className="mt-4 flex flex-col gap-2">
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-parranda-glow">{t("När", "When")}</p>
+                <div className="inline-flex self-start overflow-hidden rounded-full border border-parranda-ink/14" role="group" aria-label={t("Vilken tid", "Which time")}>
+                  {(["tonight", "week"] as const).map((key) => (
+                    <button
+                      type="button"
+                      key={key}
+                      aria-pressed={liveSheetTime === key}
+                      onClick={() => setLiveSheetTime(key)}
+                      className={
+                        "inline-flex min-h-11 items-center px-[18px] text-[13px] transition " +
+                        (liveSheetTime === key ? "bg-parranda-ember/16 font-bold text-parranda-ink" : "text-parranda-ink/65")
+                      }
+                    >
+                      {key === "tonight" ? t("Ikväll", "Tonight") : t("Denna vecka", "This week")}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* The ACTIVE scope×time cell — heading, list or honest emptiness. */}
+              <div className="mt-4 flex flex-col gap-2.5 border-t border-parranda-ink/10 pt-4">
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-parranda-ink/55">
+                  {liveSheetTime === "tonight" ? t("Ikväll", "Tonight") : t("Senare i veckan", "Later this week")} · {scopePhrase}
+                </p>
+                {liveSheetTime === "tonight" && split.woven.length > 0 && (
+                  <p className="text-xs text-parranda-ink/60">
+                    {split.woven
+                      .map((s: any) => String(s?.label || s?.name || "").trim())
+                      .filter(Boolean)
+                      .map((n: string) => `${n} · ${t("Ingår i dagens rutt", "Included in today's route")}`)
+                      .join(" · ")}
+                  </p>
+                )}
+                {sheetEvents.length > 0 ? (
+                  <ul className="flex flex-col gap-2.5">
+                    {sheetEvents.map((ev: PulseEvent, i: number) => (
+                      <li key={ev.id ?? i} className="flex items-baseline gap-3">
+                        <span className="min-w-[44px] shrink-0 text-xs font-extrabold text-parranda-clay">{eventTiming(ev, lang)}</span>
+                        <span className="text-sm text-parranda-ink/90">
+                          <span className="font-bold">{ev.title}</span>
+                          {ev.place && <span className="text-parranda-ink/60"> · {ev.place}</span>}
+                          {ev.source_url && (
+                            <span className="text-parranda-ink/50">
+                              {" · "}
+                              <a href={ev.source_url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-parranda-accent">
+                                {ev.source_label || t("Källa", "Source")}
+                              </a>
+                            </span>
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
+                    <p className="text-sm leading-relaxed text-parranda-ink/80">
+                      {liveSheetTime === "tonight"
+                        ? t(`Inget verifierat ikväll ${scopePhrase}.`, `Nothing verified tonight ${scopePhrase}.`)
+                        : t(`Inget listat senare i veckan ${scopePhrase}.`, `Nothing listed later this week ${scopePhrase}.`)}
+                      {liveSheetTime === "tonight" && pulseBuckets.thisWeek.length > 0 && (
+                        <strong className="text-parranda-ink">
+                          {" "}
+                          {pulseBuckets.thisWeek.length === 1
+                            ? t("1 händelse är listad senare i veckan.", "One event is listed later this week.")
+                            : t(
+                                `${pulseBuckets.thisWeek.length} händelser är listade senare i veckan.`,
+                                `${pulseBuckets.thisWeek.length} events are listed later this week.`,
+                              )}
+                        </strong>
+                      )}
+                    </p>
+                    {liveSheetTime === "tonight" && pulseBuckets.thisWeek.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setLiveSheetTime("week")}
+                        className="mt-3 inline-flex min-h-11 items-center rounded-parranda-btn border border-parranda-ember/50 bg-parranda-ember/10 px-4 text-[13px] font-bold text-parranda-clay"
+                      >
+                        {t("Visa veckan", "Show this week")}
+                      </button>
+                    )}
+                    {liveSheetTime === "week" && pulseBuckets.tonight.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setLiveSheetTime("tonight")}
+                        className="mt-3 inline-flex min-h-11 items-center rounded-parranda-btn border border-parranda-ember/50 bg-parranda-ember/10 px-4 text-[13px] font-bold text-parranda-clay"
+                      >
+                        {t("Visa ikväll", "Show tonight")}
+                      </button>
+                    )}
+                  </div>
+                )}
+                {pulseState === "partial" && (
+                  <p className="text-xs text-parranda-ink/55">
+                    {t("Alla källor kunde inte nås just nu — listan kan vara ofullständig.", "Some sources couldn't be reached right now — the list may be incomplete.")}
+                  </p>
+                )}
+                {pulseSources && (
+                  <p className="text-xs text-parranda-ink/50">
+                    {t("Källa", "Source")}: {pulseSources}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

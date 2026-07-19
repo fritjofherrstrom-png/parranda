@@ -287,3 +287,36 @@ test("the anchor pill shows the primary locality, never the full resolver chain"
   assert.match(anywherePlannerSource, /\.split\(","\)\[0\]\.trim\(\)/);
   assert.match(anywherePlannerSource, /primaryLocality\(classification\?\.placeLabel\)/);
 });
+
+test("the Live sheet explores events only — it never touches the day's anchor or route", () => {
+  // Trigger + modal chrome.
+  assert.match(anywherePlannerSource, /t\("Se allt live", "See all live"\)/);
+  assert.match(anywherePlannerSource, /role="dialog"/);
+  assert.match(anywherePlannerSource, /aria-modal="true"/);
+  assert.match(anywherePlannerSource, /aria-label=\{t\("Stäng live", "Close live"\)\}/);
+  // TIME is a real axis over the live_events buckets; the sheet renders the
+  // active bucket in full (the card keeps its capped preview).
+  assert.match(anywherePlannerSource, /\[liveSheetTime, setLiveSheetTime\] = useState/);
+  assert.match(anywherePlannerSource, /liveSheetTime === "tonight" \? pulseBuckets\.tonight : pulseBuckets\.thisWeek/);
+  assert.doesNotMatch(anywherePlannerSource, /sheetEvents\.slice\(/, "the sheet is the uncapped surface");
+  // SCOPE is the single scope events were actually collected under — a coords
+  // anchor collapses to one non-duplicated "near you" (semantic firewall: the
+  // landing consent anchors the DAY; the sheet never asks for a position and
+  // never re-runs the compose).
+  assert.match(anywherePlannerSource, /Nära dig — dagen är redan förankrad här/);
+  assert.match(anywherePlannerSource, /Near you — the day is already anchored here/);
+  assert.match(anywherePlannerSource, /Runt \$\{anchorLabel\}/);
+  assert.doesNotMatch(anywherePlannerSource, /requestPosition/, "no position request outside the landing");
+  const sheetBlock = anywherePlannerSource.split("THE LIVE SHEET")[1] ?? "";
+  assert.ok(sheetBlock.length > 0, "live sheet block present");
+  assert.doesNotMatch(sheetBlock, /resolveAndRun|execute\(|setPlace|setMode|storeAnchorCoords|consumeAnchorCoords/, "the sheet must not recompose or move the anchor");
+  // Empty copy names the ACTIVE scope×time cell, and counts come from the
+  // buckets, never from copy.
+  assert.match(anywherePlannerSource, /Inget verifierat ikväll \$\{scopePhrase\}/);
+  assert.match(anywherePlannerSource, /Nothing verified tonight \$\{scopePhrase\}/);
+  assert.match(anywherePlannerSource, /Inget listat senare i veckan \$\{scopePhrase\}/);
+  assert.match(anywherePlannerSource, /t\("Visa veckan", "Show this week"\)/);
+  assert.match(anywherePlannerSource, /pulseBuckets\.thisWeek\.length\}/);
+  // The card's week summary is a count, not a second list.
+  assert.match(anywherePlannerSource, /händelser listade", "more listed"/);
+});
