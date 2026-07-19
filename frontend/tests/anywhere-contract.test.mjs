@@ -99,13 +99,15 @@ test("classification flows through the SHARED honesty module (no duplicated rule
   assert.equal(unavailable.status, "unavailable");
 });
 
-test("a cold-start thin compose schedules ONE silent structure upgrade (never loops)", () => {
-  // Cold first pass: composed route but no place_structure → one silent re-ask
-  // after the warm window upgrades the day with districts/map/save/share.
+test("cold-start refresh is bounded: live may retry three times, structure remains one-shot", () => {
+  // Cold first pass: composed route but no place_structure keeps its one-shot
+  // upgrade, while pending live acquisition gets a small bounded backoff window.
   assert.match(anywherePlannerSource, /needsStructureUpgrade = cls\.status === "composed" && !safe\?\.place_structure/);
   assert.match(anywherePlannerSource, /needsTransientSourceRetry = decision\.shouldRetryTransientSource\(body, cls\)/);
-  // Scheduling only happens on non-silent runs → the silent retry can never re-schedule itself.
-  assert.match(anywherePlannerSource, /if \(!silent && \(safe\?\.live_events\?\.pending \|\| needsStructureUpgrade \|\| needsTransientSourceRetry\)\)/);
+  assert.match(anywherePlannerSource, /LIVE_REFRESH_DELAYS_MS = \[9000, 12000, 18000\]/);
+  assert.match(anywherePlannerSource, /livePending && pollAttempt < LIVE_REFRESH_DELAYS_MS\.length/);
+  assert.match(anywherePlannerSource, /!silent && \(needsStructureUpgrade \|\| needsTransientSourceRetry\)/);
+  assert.match(anywherePlannerSource, /setLiveRefreshExhausted\(livePending && !canRefreshLive\)/);
   // The waiting state is honest and visible.
   assert.match(anywherePlannerSource, /Läser in mer från källorna — uppdateras automatiskt strax\./);
   // A silent UPGRADE refreshes the stored entry so save/share use the full day.
@@ -134,8 +136,8 @@ test("route/Pulse hierarchy: a woven event is a route EXTENSION with exactly one
   assert.match(anywherePlannerSource, /split\.core\.map\(/);
   // ...it renders once, as an attached route extension...
   assert.match(anywherePlannerSource, /split\.woven\.map\(/);
-  assert.match(anywherePlannerSource, /Ikväll i din rutt/);
-  assert.match(anywherePlannerSource, /Tonight in your route/);
+  assert.match(anywherePlannerSource, /Live i din rutt/);
+  assert.match(anywherePlannerSource, /Live in your route/);
   assert.match(anywherePlannerSource, /Tillagt till dagens rutt/);
   assert.match(anywherePlannerSource, /Added to today's route/);
   // ...stays in the complete Google Maps route (FULL stop order, not the split)...
@@ -148,8 +150,8 @@ test("route/Pulse hierarchy: a woven event is a route EXTENSION with exactly one
 
 test("Pulse section: place-titled, dedup-aware, honest states, no jargon", () => {
   // Editorial heading carries the place (or near-you mode).
-  assert.match(anywherePlannerSource, /Just nu i \$\{typedPlaceLabel\}/);
-  assert.match(anywherePlannerSource, /Now in \$\{typedPlaceLabel\}/);
+  assert.match(anywherePlannerSource, /Just nu i \$\{anchorLabel\}/);
+  assert.match(anywherePlannerSource, /Now in \$\{anchorLabel\}/);
   assert.match(anywherePlannerSource, /t\("Just nu nära dig", "Now near you"\)/);
   // Events render from the deduped buckets (woven event_ids excluded), never
   // straight from liveEvents arrays.
@@ -273,6 +275,20 @@ test("adjustments collapse to a summary and re-compose themselves — no submit 
   assert.equal((anywherePlannerSource.match(/type="submit"/g) || []).length, 1, "exactly one submit: the no-anchor fallback");
 });
 
+test("latest compose wins and cancels stale network work", () => {
+  assert.match(anywherePlannerSource, /activeRequestRef\.current\?\.abort\(\)/);
+  assert.match(anywherePlannerSource, /const requestId = \+\+requestSequenceRef\.current/);
+  assert.match(anywherePlannerSource, /signal: controller\.signal/);
+  assert.match(anywherePlannerSource, /requestId !== requestSequenceRef\.current/);
+});
+
+test("composed coverage comes from the route, never the broader district structure", () => {
+  assert.match(anywherePlannerSource, /routePreferenceCoverage\(routeStops, selected\)/);
+  assert.match(anywherePlannerSource, /routeCoverage\.missing_preferences/);
+  const composedRouteBlock = anywherePlannerSource.split("Without a primary route")[0] ?? "";
+  assert.doesNotMatch(composedRouteBlock, /day\?\.missing_intents/);
+});
+
 test("planner honesty copy avoids internal catalog/citypack language", () => {
   assert.match(anywherePlannerSource, /Parranda har inte full kurering här ännu/);
   assert.match(anywherePlannerSource, /Parranda does not have full curation here yet/);
@@ -294,8 +310,12 @@ test("the Live sheet explores events only — it never touches the day's anchor 
   assert.match(anywherePlannerSource, /role="dialog"/);
   assert.match(anywherePlannerSource, /aria-modal="true"/);
   assert.match(anywherePlannerSource, /aria-label=\{t\("Stäng live", "Close live"\)\}/);
-  // TIME is a real axis over the live_events buckets; the sheet renders the
-  // active bucket in full (the card keeps its capped preview).
+  assert.match(anywherePlannerSource, /liveSheetCloseRef\.current/);
+  assert.match(anywherePlannerSource, /e\.key !== "Tab"/);
+  assert.match(anywherePlannerSource, /liveSheetTriggerRef\.current/);
+  // TIME is a real axis over the live_events buckets; the legacy `tonight` key
+  // is displayed as Today because it contains now/today/tonight. The sheet
+  // renders the active bucket in full (the card keeps its capped preview).
   assert.match(anywherePlannerSource, /\[liveSheetTime, setLiveSheetTime\] = useState/);
   assert.match(anywherePlannerSource, /liveSheetTime === "tonight" \? pulseBuckets\.tonight : pulseBuckets\.thisWeek/);
   assert.doesNotMatch(anywherePlannerSource, /sheetEvents\.slice\(/, "the sheet is the uncapped surface");
@@ -312,8 +332,11 @@ test("the Live sheet explores events only — it never touches the day's anchor 
   assert.doesNotMatch(sheetBlock, /resolveAndRun|execute\(|setPlace|setMode|storeAnchorCoords|consumeAnchorCoords/, "the sheet must not recompose or move the anchor");
   // Empty copy names the ACTIVE scope×time cell, and counts come from the
   // buckets, never from copy.
-  assert.match(anywherePlannerSource, /Inget verifierat ikväll \$\{scopePhrase\}/);
-  assert.match(anywherePlannerSource, /Nothing verified tonight \$\{scopePhrase\}/);
+  // The legacy backend key `tonight` contains now/today/tonight, so the visible
+  // label is the honest broader "Today" rather than claiming every row is evening.
+  assert.match(anywherePlannerSource, /Inget verifierat idag \$\{scopePhrase\}/);
+  assert.match(anywherePlannerSource, /Nothing verified today \$\{scopePhrase\}/);
+  assert.doesNotMatch(anywherePlannerSource, /t\("Ikväll", "Tonight"\)/);
   assert.match(anywherePlannerSource, /Inget listat senare i veckan \$\{scopePhrase\}/);
   assert.match(anywherePlannerSource, /t\("Visa veckan", "Show this week"\)/);
   assert.match(anywherePlannerSource, /pulseBuckets\.thisWeek\.length\}/);

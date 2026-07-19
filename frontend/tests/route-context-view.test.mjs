@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildRouteContextSuggestions, walkingDistanceLabel } from "../src/lib/route-context-view.mjs";
+import {
+  buildRouteContextSuggestions,
+  routePreferenceCoverage,
+  walkingDistanceLabel,
+} from "../src/lib/route-context-view.mjs";
 
 test("route context excludes route stops by stable id and normalized name", () => {
   const route = [
@@ -60,4 +64,26 @@ test("walking distances never render a broken zero-kilometre leg", () => {
   assert.equal(walkingDistanceLabel(0.84, "sv"), "0,8 km");
   assert.equal(walkingDistanceLabel(1.26, "en"), "1.3 km");
   assert.equal(walkingDistanceLabel(null, "sv"), "");
+});
+
+test("composed-route coverage uses route stop evidence and normalizes planner aliases", () => {
+  const coverage = routePreferenceCoverage(
+    [
+      { covered_preferences: ["scenic"] },
+      { covered_preferences: ["food", "bars"] },
+    ],
+    ["views", "food", "nightlife", "green"],
+  );
+
+  assert.equal(coverage.has_coverage_evidence, true);
+  assert.deepEqual(coverage.covered_preferences, ["views", "food", "nightlife"]);
+  assert.deepEqual(coverage.missing_preferences, ["green"]);
+});
+
+test("missing route metadata is unknown rather than fabricated missing coverage", () => {
+  assert.deepEqual(routePreferenceCoverage([{ id: "route-a" }], ["food", "views"]), {
+    has_coverage_evidence: false,
+    covered_preferences: [],
+    missing_preferences: [],
+  });
 });

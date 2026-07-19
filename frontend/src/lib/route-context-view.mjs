@@ -7,6 +7,13 @@
 
 const EARTH_RADIUS_KM = 6371;
 
+const PLANNER_INTENT_ALIASES = Object.freeze({
+  scenic: "views",
+  coffee: "fika",
+  bars: "nightlife",
+  vintage: "second_hand",
+});
+
 function text(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
@@ -120,4 +127,35 @@ export function walkingDistanceLabel(km, lang = "en") {
   if (km < 0.1) return lang === "sv" ? "< 0,1 km" : "< 0.1 km";
   const rounded = Math.round(km * 10) / 10;
   return `${lang === "sv" ? String(rounded).replace(".", ",") : rounded} km`;
+}
+
+/**
+ * Coverage truth for a composed route. District/place structure is a broader
+ * candidate universe and must not be used to claim what the selected route
+ * covers or misses.
+ */
+export function routePreferenceCoverage(routeStops, requestedPreferences) {
+  const requested = [];
+  for (const value of Array.isArray(requestedPreferences) ? requestedPreferences : []) {
+    if (typeof value !== "string" || !value.trim()) continue;
+    const normalized = PLANNER_INTENT_ALIASES[value.trim()] || value.trim();
+    if (!requested.includes(normalized)) requested.push(normalized);
+  }
+
+  const covered = new Set();
+  let hasCoverageEvidence = false;
+  for (const stop of Array.isArray(routeStops) ? routeStops : []) {
+    if (!Array.isArray(stop && stop.covered_preferences)) continue;
+    hasCoverageEvidence = true;
+    for (const value of stop.covered_preferences) {
+      if (typeof value !== "string" || !value.trim()) continue;
+      covered.add(PLANNER_INTENT_ALIASES[value.trim()] || value.trim());
+    }
+  }
+
+  return {
+    has_coverage_evidence: hasCoverageEvidence,
+    covered_preferences: requested.filter((value) => covered.has(value)),
+    missing_preferences: hasCoverageEvidence ? requested.filter((value) => !covered.has(value)) : [],
+  };
 }

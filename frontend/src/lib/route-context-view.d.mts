@@ -8,6 +8,7 @@ export interface RouteContextStop {
   lng?: number | null;
   address?: string | null;
   area?: string | null;
+  covered_preferences?: string[];
 }
 
 export interface RouteContextArea {
@@ -33,3 +34,14 @@ export declare function buildRouteContextSuggestions(
 ): RouteContextSuggestion[];
 
 export declare function walkingDistanceLabel(km: number | null | undefined, lang?: "sv" | "en"): string;
+
+export interface RoutePreferenceCoverage {
+  has_coverage_evidence: boolean;
+  covered_preferences: string[];
+  missing_preferences: string[];
+}
+
+export declare function routePreferenceCoverage(
+  routeStops: RouteContextStop[] | null | undefined,
+  requestedPreferences: string[] | null | undefined,
+): RoutePreferenceCoverage;
