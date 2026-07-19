@@ -148,6 +148,25 @@ interface LiveEvents {
 }
 
 const LIVE_REFRESH_DELAYS_MS = [9000, 12000, 18000] as const;
+const LIVE_QUERY_REFRESH_DELAYS_MS = [1500, 3000, 5000] as const;
+
+function waitForLiveQueryRetry(delayMs: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new Error("live_event_query_aborted"));
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new Error("live_event_query_aborted"));
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, delayMs);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
 
 const DAYPART_LABELS: Record<string, { sv: string; en: string }> = {
   morning: { sv: "Morgon", en: "Morning" },
@@ -792,16 +811,22 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setLiveQueryPending(true);
     setLiveQueryError(null);
     try {
-      const response = await fetch(`/api/live-events?lang=${lang}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-      const body = await response.json();
-      const accepted = response.ok ? acceptedLiveEventQuery(body) : null;
-      if (!accepted) throw new Error("live_event_query_contract_rejected");
-      setLiveQueryEvents(accepted as LiveEvents);
+      for (let attempt = 0; attempt <= LIVE_QUERY_REFRESH_DELAYS_MS.length; attempt += 1) {
+        if (attempt > 0) {
+          await waitForLiveQueryRetry(LIVE_QUERY_REFRESH_DELAYS_MS[attempt - 1], controller.signal);
+        }
+        const response = await fetch(`/api/live-events?lang=${lang}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+        const body = await response.json();
+        const accepted = response.ok ? acceptedLiveEventQuery(body) : null;
+        if (!accepted) throw new Error("live_event_query_contract_rejected");
+        setLiveQueryEvents(accepted as LiveEvents);
+        if (!(accepted as LiveEvents).pending) break;
+      }
     } catch {
       if (controller.signal.aborted) return;
       setLiveQueryError(
@@ -1881,6 +1906,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 ) : liveQueryError ? (
                   <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
                     <p className="text-sm leading-relaxed text-parranda-ink/80">{liveQueryError}</p>
+                  </div>
+                ) : sheetPulseState === "pending" ? (
+                  <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
+                    <p className="text-sm leading-relaxed text-parranda-ink/75">
+                      {t(
+                        "Kalendrarna uppdateras fortfarande — prova området igen om en stund.",
+                        "The calendars are still updating — try this area again shortly.",
+                      )}
+                    </p>
                   </div>
                 ) : sheetEvents.length > 0 ? (
                   <ul className="flex flex-col gap-2.5">

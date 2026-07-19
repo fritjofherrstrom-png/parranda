@@ -333,6 +333,9 @@ test("the Live sheet explores events only — it never touches the day's anchor 
   assert.match(anywherePlannerSource, /preferences: selected/);
   assert.match(anywherePlannerSource, /response: safeResponse/);
   assert.match(anywherePlannerSource, /routeStops/);
+  assert.match(anywherePlannerSource, /LIVE_QUERY_REFRESH_DELAYS_MS = \[1500, 3000, 5000\]/);
+  assert.match(anywherePlannerSource, /attempt <= LIVE_QUERY_REFRESH_DELAYS_MS\.length/);
+  assert.match(anywherePlannerSource, /sheetPulseState === "pending"/);
   const sheetBlock = anywherePlannerSource.split("THE LIVE SHEET")[1] ?? "";
   assert.ok(sheetBlock.length > 0, "live sheet block present");
   assert.doesNotMatch(
