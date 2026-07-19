@@ -24,6 +24,7 @@ const DAYPART_SLOT = {
   scenic_anchor: 1, // daytime walk (park / viewpoint / waterfront)
   culture_stop: 1, // daytime museum / gallery (#277)
   market_stop: 1, // daytime market / flea market (#278)
+  green_walk_stop: 1,
   swimming_coast_option: 1,
   vintage_second_hand_option: 1,
   food_anchor: 2, // the day's main meal (lunch / dinner)

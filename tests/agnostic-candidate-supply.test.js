@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const {
   mapAdmittedSelectionToSourceCandidates,
+  mapPlannerReservoirToSourceCandidates,
 } = require("../server/planner/agnostic-engine-compose");
 
 // A rich planner-role candidate, shaped like formatRoleCandidate() output:
@@ -137,4 +138,68 @@ test("empty / malformed input returns an empty list, never throws", () => {
   assert.deepEqual(mapAdmittedSelectionToSourceCandidates({}), []);
   assert.deepEqual(mapAdmittedSelectionToSourceCandidates({ selected: null, plannerRoles: null }), []);
   assert.deepEqual(mapAdmittedSelectionToSourceCandidates({ selected: [{}], plannerRoles: {} }), []);
+});
+
+test("bounded reservoir keeps combination winners first and adds only the same safe local-feel tier", () => {
+  const candidate = (id, role, over = {}) => richCandidate({
+    candidate_id: id,
+    label: id,
+    type: role === "food_anchor" ? "restaurant" : "park",
+    coordinates: { lat: 43.51 + id.length * 0.0001, lng: 16.44 },
+    candidate_status: "filled",
+    planner_usable: true,
+    origin: "external_open",
+    covered_preferences: [role === "food_anchor" ? "food" : "green"],
+    partial_preferences: [],
+    local_feel_rank: 0,
+    ...over,
+  });
+  const foodWinner = candidate("food-local-a", "food_anchor");
+  const foodDepth = candidate("food-local-b", "food_anchor");
+  const foodChain = candidate("food-chain", "food_anchor", { local_feel_rank: 2, chain: true, brand: "Chain" });
+  const greenWinner = candidate("green-local-a", "green_walk_stop");
+  const greenDepth = candidate("green-local-b", "green_walk_stop");
+  const greenFallback = candidate("green-fallback", "green_walk_stop", {
+    candidate_status: "fallback",
+    planner_usable: false,
+  });
+  const roles = {
+    city: "agnostic-engine-area",
+    roles: [
+      { role: "food_anchor", requested: true, candidates: [foodWinner, foodDepth, foodChain] },
+      { role: "green_walk_stop", requested: true, candidates: [greenWinner, greenDepth, greenFallback] },
+    ],
+  };
+
+  const result = mapPlannerReservoirToSourceCandidates({
+    selected: [
+      selectedPick({ role: "food_anchor", candidate_id: foodWinner.candidate_id, coordinates: foodWinner.coordinates }),
+      selectedPick({ role: "green_walk_stop", candidate_id: greenWinner.candidate_id, coordinates: greenWinner.coordinates }),
+    ],
+    plannerRoles: roles,
+  });
+
+  assert.deepEqual(result.map((entry) => entry.id), ["food-local-a", "green-local-a", "food-local-b", "green-local-b"]);
+  assert.deepEqual(result.map((entry) => entry.reservoir_selected), [true, true, false, false]);
+  assert.equal(result.some((entry) => entry.id === "food-chain"), false);
+  assert.equal(result.some((entry) => entry.id === "green-fallback"), false);
+  assert.deepEqual(result.find((entry) => entry.id === "green-local-a").tags, ["green"]);
+});
+
+test("bounded reservoir honors its total and per-role caps without dropping selected winners", () => {
+  const make = (id) => richCandidate({
+    candidate_id: id,
+    coordinates: { lat: 43.51, lng: 16.44 + id.length * 0.0001 },
+    candidate_status: "filled",
+    planner_usable: true,
+    covered_preferences: ["food"],
+  });
+  const candidates = [make("food-a"), make("food-b"), make("food-c")];
+  const result = mapPlannerReservoirToSourceCandidates({
+    selected: [selectedPick({ role: "food_anchor", candidate_id: "food-a", coordinates: candidates[0].coordinates })],
+    plannerRoles: plannerRoles({ food_anchor: candidates }),
+    limit: 2,
+    perRole: 3,
+  });
+  assert.deepEqual(result.map((entry) => entry.id), ["food-a", "food-b"]);
 });

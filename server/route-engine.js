@@ -157,6 +157,7 @@ function buildProvisionalComposeStops() {
         : [],
       searchTerms: [],
       anchorWeight: 1,
+      reservoirSpine: candidate.reservoir_selected === true,
       provisional: true,
       source: candidate.source || null,
       trust: candidate.trust || null,
@@ -3626,6 +3627,10 @@ function scoreStopCandidate({
   const usedStopContext = buildUsedStopContext(usedRoutes);
   const repeatMultiplier = repeatDepthMultiplier(usedRoutes) * (manualAnchorsLocked ? 0.35 : 1);
   let score = (item.anchorWeight || 1) + Math.max(0, 1.2 - index * 0.08);
+  // Candidate Combination already selected one coherent, trust-tier-safe
+  // winner per role. Reservoir alternatives improve depth and geometry, but a
+  // small distance delta must not casually displace that selected spine.
+  if (item.reservoirSpine === true) score += 4;
 
   score += preferenceBoostForStop(item, preferences, optimizerMode, modifier, strictTags);
   score += previewPreferenceBoostForStop(item);
@@ -6719,6 +6724,8 @@ async function generateRecommendations({
     const usedTemplateIds = new Set();
     const usedPrimaryRoutes = [];
     const truthPassCount = Math.max(1, getWalkingConfig().truthPassTopCandidates || 5);
+    const cityRouteTemplates = getRouteTemplates();
+    const usingAgnosticCompose = cityRouteTemplates.length === 0;
 
     const days = [];
 
@@ -6793,14 +6800,19 @@ async function generateRecommendations({
             resolvedEnd = dayResolvedEnd;
           }
         }
-        const primaryDayProfile = choosePrimaryDayProfile({
-          dateIndex,
-          totalDates: normalizedDates.length,
-          targetKm: walkingKmTarget,
-          distanceMode,
-          preferences,
-          optimizerMode,
-        });
+        const agnosticDayProfile = usingAgnosticCompose
+          ? getActiveCityConfig().__agnosticDayProfile
+          : null;
+        const primaryDayProfile = agnosticDayProfile
+          ? normalizeDayProfile(agnosticDayProfile)
+          : choosePrimaryDayProfile({
+              dateIndex,
+              totalDates: normalizedDates.length,
+              targetKm: walkingKmTarget,
+              distanceMode,
+              preferences,
+              optimizerMode,
+            });
         const alternativeDayProfiles = buildAlternativeDayProfiles(primaryDayProfile);
         const candidateDayProfiles = [...new Set([primaryDayProfile, ...alternativeDayProfiles])];
 
@@ -6906,8 +6918,6 @@ async function generateRecommendations({
           };
         };
 
-        const cityRouteTemplates = getRouteTemplates();
-        const usingAgnosticCompose = cityRouteTemplates.length === 0;
         const effectiveTemplates = usingAgnosticCompose
           ? [buildAgnosticComposeTemplate(walkingKmTarget)]
           : cityRouteTemplates;

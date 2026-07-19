@@ -59,33 +59,7 @@ function buildCandidateCombination(plannerRoles = {}, dayflowHonesty = {}, optio
   const usableByRole = [];
   const unresolved = cappedOut.map((role) => ({ role: role.role, reason: "capped_out" }));
   for (const role of targetRoles) {
-    const usableAll = (role.candidates || [])
-      .filter((candidate) => candidate.planner_usable === true && candidate.candidate_status !== "fallback");
-    // #270 contract: experimentally admitted candidates fill a role ONLY when no
-    // gate-passing candidate fills it. When one exists, admitted entries are not
-    // even options — geometry optimization must not trade trust for distance.
-    const gatePassing = usableAll.filter(
-      (candidate) => !(candidate.experimental_admission && candidate.experimental_admission.allowed === true),
-    );
-    const trustTier = gatePassing.length ? gatePassing : usableAll;
-    // #272 contract (same shape as #270, one layer down): within the chosen
-    // trust tier — coverage first (an option that covers the role's intent
-    // always beats adjacent-only), then only the best non-empty local-feel
-    // tier becomes options. Geometry must not trade local feel for distance.
-    // Active ONLY when the agnostic experiment seam computed ranks (field
-    // present); every other flow keeps today's options verbatim. Chains are
-    // never banned: when the best tier IS chains (sparse case), they are the
-    // options.
-    let usablePool = trustTier;
-    if (trustTier.some((candidate) => Number.isFinite(candidate.local_feel_rank))) {
-      const covers = (candidate) => Array.isArray(candidate.covered_preferences) && candidate.covered_preferences.length > 0;
-      const covering = trustTier.filter(covers);
-      const coveragePool = covering.length ? covering : trustTier;
-      const feelRank = (candidate) => (Number.isFinite(candidate.local_feel_rank) ? candidate.local_feel_rank : 0);
-      const bestFeel = coveragePool.reduce((best, candidate) => Math.min(best, feelRank(candidate)), 3);
-      usablePool = coveragePool.filter((candidate) => feelRank(candidate) === bestFeel);
-    }
-    const usable = usablePool.slice(0, topK);
+    const usable = plannerUsableOptionsForRole(role).slice(0, topK);
     if (usable.length) {
       usableByRole.push({ role: role.role, slot: role.slot, options: usable });
     } else {
@@ -114,6 +88,33 @@ function buildCandidateCombination(plannerRoles = {}, dayflowHonesty = {}, optio
     quality_flags: qualityFlags,
     reasons: buildReasons({ status, usableByRole, unresolved, geometry, duplicateRoleCoverage }),
   };
+}
+
+// Shared trust-tier primitive for every consumer of the role reservoir. The
+// combination picker and the engine-depth bridge must agree: weaker admitted,
+// adjacent, or chain candidates cannot re-enter merely because a consumer asks
+// for more than one option.
+function plannerUsableOptionsForRole(role = {}) {
+  const usableAll = (Array.isArray(role.candidates) ? role.candidates : []).filter(
+    (candidate) => candidate.planner_usable === true && candidate.candidate_status !== "fallback",
+  );
+  const gatePassing = usableAll.filter(
+    (candidate) => !(candidate.experimental_admission && candidate.experimental_admission.allowed === true),
+  );
+  const trustTier = gatePassing.length ? gatePassing : usableAll;
+
+  if (!trustTier.some((candidate) => Number.isFinite(candidate.local_feel_rank))) {
+    return trustTier;
+  }
+
+  const covers = (candidate) =>
+    Array.isArray(candidate.covered_preferences) && candidate.covered_preferences.length > 0;
+  const covering = trustTier.filter(covers);
+  const coveragePool = covering.length ? covering : trustTier;
+  const feelRank = (candidate) =>
+    Number.isFinite(candidate.local_feel_rank) ? candidate.local_feel_rank : 0;
+  const bestFeel = coveragePool.reduce((best, candidate) => Math.min(best, feelRank(candidate)), 3);
+  return coveragePool.filter((candidate) => feelRank(candidate) === bestFeel);
 }
 
 // --- combination search ----------------------------------------------------
@@ -413,4 +414,5 @@ module.exports = {
   STRONG_KM,
   OK_KM,
   buildCandidateCombination,
+  plannerUsableOptionsForRole,
 };

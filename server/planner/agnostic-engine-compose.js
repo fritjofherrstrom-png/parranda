@@ -27,6 +27,7 @@
  */
 
 const { buildAgnosticCityContext } = require("../candidates/agnostic-context");
+const { plannerUsableOptionsForRole } = require("./candidate-combination");
 
 const AGNOSTIC_ENGINE_CITY_KEY = "agnostic-engine-area";
 
@@ -69,6 +70,7 @@ function buildAgnosticNoopServices() {
  * @param {(string|function)} [params.todayIsoDate]
  * @param {string} [params.label]
  * @param {string} [params.key]
+ * @param {"light"|"peak"} [params.dayProfile]
  * @returns {object} cityConfig accepted by generateAgnosticRecommendations
  */
 function buildAgnosticEngineCityConfig({
@@ -78,6 +80,7 @@ function buildAgnosticEngineCityConfig({
   todayIsoDate,
   label = "Nearby",
   key = AGNOSTIC_ENGINE_CITY_KEY,
+  dayProfile = null,
 } = {}) {
   if (!anchor || !Number.isFinite(anchor.lat) || !Number.isFinite(anchor.lng)) {
     throw new Error("buildAgnosticEngineCityConfig requires a finite anchor lat/lng");
@@ -116,6 +119,9 @@ function buildAgnosticEngineCityConfig({
     // The provisional pool the engine's agnostic_compose orders into a walk.
     // Never part of the verified spine — each carries its own low trust.
     sourceCandidates: usableCandidates,
+    // Server-owned any-place depth policy. This sits on the constructed config,
+    // not the public request payload, so callers cannot promote their own route.
+    __agnosticDayProfile: dayProfile === "light" || dayProfile === "peak" ? dayProfile : null,
     services: buildAgnosticNoopServices(),
   };
 }
@@ -153,7 +159,7 @@ function buildRichCandidateIndex(plannerRoles) {
 // these are never curated/human-verified, so the route built from them stays
 // honestly low-confidence. Source attribution (provider label/url) is preserved
 // from the rich candidate's provenance so provenance survives to the stop.
-function toSourceCandidate({ pick, rich, coords, city, role }) {
+function toSourceCandidate({ pick, rich, coords, city, role, reservoirSelected = false }) {
   const provenance = (rich && rich.provenance) || {};
   const attribution = Array.isArray(provenance.attribution) ? provenance.attribution : [];
   const firstSource = attribution[0] || {};
@@ -169,7 +175,7 @@ function toSourceCandidate({ pick, rich, coords, city, role }) {
     lat: coords.lat,
     lng: coords.lng,
     area: null,
-    tags: [],
+    tags: Array.isArray(rich?.covered_preferences) ? [...rich.covered_preferences] : [],
     role: role || null,
     route_roles: role ? [role] : [],
     candidate_status: (rich && rich.candidate_status) || pick.candidate_status || null,
@@ -199,6 +205,9 @@ function toSourceCandidate({ pick, rich, coords, city, role }) {
     },
     confidence,
     freshness: "unknown",
+    reservoir_selected: reservoirSelected === true,
+    chain: rich?.chain === true,
+    brand: typeof rich?.brand === "string" ? rich.brand : null,
     provenance: {
       why_included: "Source-backed candidate admitted to the agnostic route.",
       provider_id: provenance.provider_id || null,
@@ -207,6 +216,57 @@ function toSourceCandidate({ pick, rich, coords, city, role }) {
       weatherTags: [],
     },
   };
+}
+
+/**
+ * Project a bounded, role-safe candidate reservoir into the route engine.
+ * Candidate Combination winners remain the trusted spine; at most one extra
+ * candidate per selected role adds geometric choice. Extras use the exact same
+ * gate/admission/coverage/local-feel tier as Candidate Combination.
+ */
+function mapPlannerReservoirToSourceCandidates({
+  selected = [],
+  plannerRoles = null,
+  city = AGNOSTIC_ENGINE_CITY_KEY,
+  limit = 8,
+  perRole = 2,
+} = {}) {
+  const richIndex = buildRichCandidateIndex(plannerRoles);
+  const selectedPicks = Array.isArray(selected) ? selected : [];
+  const out = mapAdmittedSelectionToSourceCandidates({ selected: selectedPicks, plannerRoles, city }).map(
+    (candidate) => ({ ...candidate, reservoir_selected: true }),
+  );
+  const seen = new Set(out.map((candidate) => candidate.id));
+  const selectedRoles = new Set(selectedPicks.map((pick) => pick?.role).filter(Boolean));
+  const boundedLimit = Math.max(out.length, Math.min(12, Math.max(1, Math.trunc(Number(limit) || 8))));
+  const boundedPerRole = Math.min(3, Math.max(1, Math.trunc(Number(perRole) || 2)));
+
+  for (const roleEntry of Array.isArray(plannerRoles?.roles) ? plannerRoles.roles : []) {
+    const role = roleEntry?.role;
+    if (!role || !selectedRoles.has(role)) continue;
+    let roleCount = 1;
+    for (const rich of plannerUsableOptionsForRole(roleEntry)) {
+      if (roleCount >= boundedPerRole || out.length >= boundedLimit) break;
+      const id = rich?.candidate_id;
+      if (!id || seen.has(id)) continue;
+      const coords = finiteCoords(rich.coordinates);
+      if (!coords) continue;
+      seen.add(id);
+      roleCount += 1;
+      out.push(
+        toSourceCandidate({
+          pick: { role, candidate_id: id, coordinates: coords },
+          rich: richIndex.get(`${role}::${id}`) || rich,
+          coords,
+          city,
+          role,
+        }),
+      );
+    }
+    if (out.length >= boundedLimit) break;
+  }
+
+  return out;
 }
 
 /**
@@ -243,4 +303,5 @@ module.exports = {
   buildAgnosticEngineCityConfig,
   buildAgnosticNoopServices,
   mapAdmittedSelectionToSourceCandidates,
+  mapPlannerReservoirToSourceCandidates,
 };

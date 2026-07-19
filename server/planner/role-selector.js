@@ -33,6 +33,7 @@ const ROLE_SPEC = Object.freeze({
 const EXPERIMENT_ROLE_SPEC = Object.freeze({
   culture_stop: { intents: ["museums"], slot: "stop", gate: "may_influence_routes", primaryTypes: ["museum", "gallery"] },
   market_stop: { intents: ["markets"], slot: "stop", gate: "may_influence_routes", primaryTypes: ["market", "event_market"] },
+  green_walk_stop: { intents: ["green"], slot: "stop", gate: "may_influence_routes", primaryTypes: ["park", "garden", "promenade"] },
 });
 
 // #272 — generic local-feel preference (agnostic experiment only). Within a
