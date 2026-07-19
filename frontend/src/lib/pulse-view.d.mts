@@ -32,6 +32,7 @@ export declare function eventTiming(
   ev:
     | {
         starts_at?: string | null;
+        ends_at?: string | null;
         starts_on?: string | null;
         ends_on?: string | null;
         timezone?: string | null;
@@ -40,6 +41,7 @@ export declare function eventTiming(
     | null
     | undefined,
   lang: "sv" | "en",
+  now?: Date,
 ): string;
 
 export declare function pulseHealthState(
