@@ -9,6 +9,7 @@ const EARTH_RADIUS_KM = 6371;
 
 const PLANNER_INTENT_ALIASES = Object.freeze({
   scenic: "views",
+  museums: "culture",
   coffee: "fika",
   bars: "nightlife",
   vintage: "second_hand",

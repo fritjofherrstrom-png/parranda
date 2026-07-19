@@ -219,6 +219,7 @@ test("route stops translate #369 candidate-spine metadata to product copy — ne
   // WHY-chips from covered_preferences (translated + deduped vs the type chip)
   // and an honest partial-match marker; unmapped axes are skipped, not exposed.
   assert.match(anywherePlannerSource, /coveredPreferenceLabels\(stop, lang\)/);
+  assert.match(anywherePlannerSource, /museums: \{ sv: "Kultur", en: "Culture" \}/);
   assert.match(anywherePlannerSource, /t\("täcker", "covers"\)/);
   assert.match(anywherePlannerSource, /candidate_status === "partial"/);
   assert.match(anywherePlannerSource, /t\("delvis träff", "partial match"\)/);

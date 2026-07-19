@@ -112,13 +112,13 @@ test("composed-route coverage uses route stop evidence and normalizes planner al
   const coverage = routePreferenceCoverage(
     [
       { covered_preferences: ["scenic"] },
-      { covered_preferences: ["food", "bars"] },
+      { covered_preferences: ["food", "bars", "museums"] },
     ],
-    ["views", "food", "nightlife", "green"],
+    ["views", "food", "culture", "nightlife", "green"],
   );
 
   assert.equal(coverage.has_coverage_evidence, true);
-  assert.deepEqual(coverage.covered_preferences, ["views", "food", "nightlife"]);
+  assert.deepEqual(coverage.covered_preferences, ["views", "food", "culture", "nightlife"]);
   assert.deepEqual(coverage.missing_preferences, ["green"]);
 });
 

@@ -145,6 +145,7 @@ const INTENT_LABELS: Record<string, { sv: string; en: string }> = {
   // The candidate spine's preference axes (#369 covered_preferences) use the
   // loader's category vocabulary — aliases so raw engine tokens never render.
   scenic: { sv: "Utsikt", en: "Views" },
+  museums: { sv: "Kultur", en: "Culture" },
   coffee: { sv: "Fika", en: "Coffee" },
   bars: { sv: "Bar", en: "Bars" },
   swimming: { sv: "Bad", en: "Swimming" },
