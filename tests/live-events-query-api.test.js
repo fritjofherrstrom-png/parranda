@@ -1,10 +1,17 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const http = require("node:http");
+const os = require("node:os");
+const path = require("node:path");
 const test = require("node:test");
 
 const { buildApp } = require("../server/app");
+const {
+  HELSINKI_LINKED_EVENTS_FEED,
+  resolveDefaultEventSupply,
+} = require("../server/place-candidates/agnostic-event-supply");
 const { mockStableWeatherFetch } = require("./helpers/planner-reservoir-compare");
 
 const ORIGINAL_FETCH = global.fetch;
@@ -64,6 +71,26 @@ function collectedEvents(overrides = {}) {
   };
 }
 
+function assertCompleteSourceHealth(health) {
+  const countFields = [
+    "selected_source_count",
+    "responding_source_count",
+    "event_bearing_source_count",
+    "empty_source_count",
+    "failed_source_count",
+    "unavailable_source_count",
+    "raw_event_count",
+    "normalized_event_count",
+    "accepted_event_count",
+    "surfaced_event_count",
+    "rejected_event_count",
+  ];
+  assert.equal(typeof health.status, "string");
+  assert.equal(typeof health.result, "string");
+  assert.ok(Array.isArray(health.reasons));
+  for (const field of countFields) assert.equal(Number.isInteger(health[field]), true, `${field} is explicit`);
+}
+
 test("around_place query reuses trusted supply, preference ranking and source health", async () => {
   let captured = null;
   let loaderCalls = 0;
@@ -94,6 +121,7 @@ test("around_place query reuses trusted supply, preference ranking and source he
       live_events: { tonight: [{ id: "evil" }] },
     });
     assert.equal(response.status, 200);
+    assert.equal(response.body.contract, "live_event_query_v1");
     assert.equal(response.body.query.scope, "around_place");
     assert.equal(response.body.query.time, "tonight");
     assert.deepEqual(response.body.query.preferences, ["nightlife"]);
@@ -102,6 +130,9 @@ test("around_place query reuses trusted supply, preference ranking and source he
     assert.deepEqual(response.body.live_events.tonight.map((event) => event.id), ["near"]);
     assert.equal(response.body.live_events.feed.id, "municipal-calendar");
     assert.equal(response.body.live_events.acquisition.source_health.status, "healthy");
+    assertCompleteSourceHealth(response.body.live_events.acquisition.source_health);
+    assert.ok(Array.isArray(response.body.live_events.tonight));
+    assert.ok(Array.isArray(response.body.live_events.this_week));
     assert.doesNotMatch(JSON.stringify(response.body), /evil/);
     assert.equal("days" in response.body, false, "an events query never composes or returns a route");
   });
@@ -152,19 +183,151 @@ test("near_route passes bounded discovery points and removes events outside the 
 });
 
 test("near_me stays an event scope and never becomes a day-anchor mutation", async () => {
-  await withServer({ eventSupply: async () => collectedEvents() }, async (server) => {
+  let suppliedAnchor = null;
+  await withServer({ eventSupply: async ({ anchor }) => { suppliedAnchor = anchor; return collectedEvents(); } }, async (server) => {
     const response = await postJson(server, "/api/live-events", {
       scope: "near_me",
       lat: 55.605,
       lng: 13.003,
       time: "tonight",
+      route_mutation: true,
+      day_anchor_mutation: true,
+      days: [{ primary_route: { id: "payload-route" } }],
     });
     assert.equal(response.status, 200);
     assert.equal(response.body.query.scope, "near_me");
     assert.equal(response.body.query.radius_m, 2000);
     assert.equal(response.body.day_anchor_mutation, false);
     assert.equal(response.body.route_mutation, false);
+    assert.equal("days" in response.body, false);
+    assert.deepEqual(suppliedAnchor, { lat: 55.605, lng: 13.003 });
   });
+});
+
+test("one trusted event pool stays isolated across around_place, near_route and near_me", async () => {
+  const supply = async () => collectedEvents({
+    tonight: [
+      { id: "place-only", lat: 55.605, lng: 13.003 },
+      { id: "route-only", lat: 55.64, lng: 13.06 },
+      { id: "me-only", lat: 55.69, lng: 13.15 },
+    ],
+    this_week: [],
+  });
+  await withServer({ eventSupply: supply }, async (server) => {
+    const aroundPlace = await postJson(server, "/api/live-events", {
+      scope: "around_place",
+      anchor: { lat: 55.605, lng: 13.003 },
+    });
+    const nearRoute = await postJson(server, "/api/live-events", {
+      scope: "near_route",
+      route_points: [{ lat: 55.635, lng: 13.055 }, { lat: 55.645, lng: 13.065 }],
+    });
+    const nearMe = await postJson(server, "/api/live-events", {
+      scope: "near_me",
+      anchor: { lat: 55.69, lng: 13.15 },
+    });
+    assert.deepEqual(aroundPlace.body.live_events.tonight.map((event) => event.id), ["place-only"]);
+    assert.deepEqual(nearRoute.body.live_events.tonight.map((event) => event.id), ["route-only"]);
+    assert.deepEqual(nearMe.body.live_events.tonight.map((event) => event.id), ["me-only"]);
+  });
+});
+
+test("partial provider failure preserves events and a complete honest source-health contract", async () => {
+  const partial = collectedEvents({
+    acquisition: {
+      mode: "bounded_multi_source",
+      source_health: {
+        status: "partial",
+        result: "events_found",
+        selected_source_count: 2,
+        responding_source_count: 1,
+        event_bearing_source_count: 1,
+        failed_source_count: 1,
+        accepted_event_count: 2,
+        reasons: ["source_failures_present"],
+      },
+    },
+  });
+  await withServer({ eventSupply: async () => partial }, async (server) => {
+    const response = await postJson(server, "/api/live-events", {
+      scope: "around_place",
+      anchor: { lat: 55.605, lng: 13.003 },
+    });
+    const health = response.body.live_events.acquisition.source_health;
+    assert.equal(health.status, "partial");
+    assert.equal(health.result, "events_found");
+    assert.equal(health.failed_source_count, 1);
+    assert.equal(health.surfaced_event_count, 2);
+    assert.deepEqual(health.reasons, ["source_failures_present"]);
+    assertCompleteSourceHealth(health);
+    assert.equal(response.body.live_events.tonight.length, 1);
+    assert.equal(response.body.live_events.this_week.length, 1);
+  });
+});
+
+test("cold cache is explicit, then one warm pool reranks preferences without provider refetch", async () => {
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), "parranda-live-query-cache-"));
+  let fetchCount = 0;
+  const event = (id, title, keyword) => ({
+    id,
+    name: { en: title },
+    start_time: "2026-06-28T18:00:00Z",
+    end_time: "2026-06-28T20:00:00Z",
+    location: { position: { coordinates: [24.94, 60.17] }, name: { en: `Venue ${id}` } },
+    info_url: { en: `https://example.org/${id}` },
+    data_source: "fixture",
+    keywords: [{ name: { en: keyword } }],
+  });
+  global.fetch = async () => {
+    fetchCount += 1;
+    return {
+      ok: true,
+      json: async () => ({
+        data: [
+          event("a-concert", "Jazz concert", "music"),
+          event("z-loppis", "Harbour loppis", "second hand"),
+        ],
+      }),
+    };
+  };
+
+  try {
+    const eventSupply = resolveDefaultEventSupply({
+      PARRANDA_AGNOSTIC_EVENTS: "enabled",
+      PARRANDA_EVENT_FEEDS: JSON.stringify([HELSINKI_LINKED_EVENTS_FEED]),
+      PARRANDA_CACHE_DIR: cacheDir,
+    });
+    await withServer({ eventSupply, clock: { now: () => "2026-06-28T12:00:00Z" } }, async (server) => {
+      const request = {
+        scope: "around_place",
+        anchor: { lat: 60.17, lng: 24.94 },
+        time: "tonight",
+        preferences: ["culture"],
+      };
+      const cold = await postJson(server, "/api/live-events", request);
+      assert.equal(cold.body.live_events.pending, true);
+      assert.equal(cold.body.live_events.acquisition.source_health.status, "pending");
+      assertCompleteSourceHealth(cold.body.live_events.acquisition.source_health);
+
+      let culture = cold;
+      for (let attempt = 0; attempt < 50 && culture.body.live_events.pending; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        culture = await postJson(server, "/api/live-events", request);
+      }
+      assert.equal(culture.body.live_events.pending, undefined);
+      assert.equal(culture.body.live_events.tonight[0].id, "a-concert");
+
+      const secondHand = await postJson(server, "/api/live-events", {
+        ...request,
+        preferences: ["second_hand"],
+      });
+      assert.equal(secondHand.body.live_events.tonight[0].id, "z-loppis");
+      assert.equal(fetchCount, 1, "preference changes rerank the trusted warm pool without recollection");
+    });
+  } finally {
+    global.fetch = ORIGINAL_FETCH;
+    fs.rmSync(cacheDir, { recursive: true, force: true });
+  }
 });
 
 test("disabled, throwing and malformed supply outcomes remain distinct and fail soft", async () => {

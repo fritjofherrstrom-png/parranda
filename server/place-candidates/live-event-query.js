@@ -4,6 +4,7 @@ const { haversineKm } = require("../candidates/area-intelligence");
 
 const LIVE_EVENT_SCOPES = new Set(["around_place", "near_route", "near_me"]);
 const LIVE_EVENT_TIME_WINDOWS = new Set(["tonight", "this_week"]);
+const LIVE_EVENT_QUERY_CONTRACT = "live_event_query_v1";
 const AROUND_PLACE_RADIUS_M = 3000;
 const NEAR_ME_RADIUS_M = 2000;
 const ROUTE_CORRIDOR_RADIUS_M = 1200;
@@ -11,6 +12,28 @@ const MAX_ROUTE_POINTS = 24;
 const MAX_COLLECTION_RADIUS_M = 10000;
 const MAX_PREFERENCES = 12;
 const MAX_PREFERENCE_LENGTH = 64;
+const SOURCE_HEALTH_STATUSES = new Set([
+  "failed",
+  "healthy",
+  "partial",
+  "pending",
+  "unavailable",
+  "uncovered",
+]);
+const SOURCE_HEALTH_RESULTS = new Set(["empty", "events_found", "pending", "unavailable", "unknown"]);
+const SOURCE_HEALTH_COUNT_FIELDS = Object.freeze([
+  "selected_source_count",
+  "responding_source_count",
+  "event_bearing_source_count",
+  "empty_source_count",
+  "failed_source_count",
+  "unavailable_source_count",
+  "raw_event_count",
+  "normalized_event_count",
+  "accepted_event_count",
+  "surfaced_event_count",
+  "rejected_event_count",
+]);
 
 function coordinatePart(value) {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
@@ -174,28 +197,51 @@ function filterEventsForLiveScope(events, scope) {
   return (Array.isArray(events) ? events : []).filter((event) => eventMatchesLiveScope(event, scope));
 }
 
+function nonNegativeInteger(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0;
+}
+
+function compactReasonTokens(value) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value
+    .map((reason) => String(reason || "").trim())
+    .filter((reason) => /^[a-z][a-z0-9_]{0,63}$/.test(reason)))];
+}
+
+function normalizeLiveEventSourceHealth(sourceHealth, { coverage, pending, surfacedEventCount } = {}) {
+  const input = sourceHealth && typeof sourceHealth === "object" ? sourceHealth : {};
+  const fallbackStatus = pending ? "pending" : coverage === "uncovered" ? "uncovered" : "unavailable";
+  const status = SOURCE_HEALTH_STATUSES.has(input.status) ? input.status : fallbackStatus;
+  const fallbackResult = status === "pending" ? "pending" : status === "failed" ? "unavailable" : "unknown";
+  const result = SOURCE_HEALTH_RESULTS.has(input.result) ? input.result : fallbackResult;
+  const normalized = { status, result };
+  for (const field of SOURCE_HEALTH_COUNT_FIELDS) normalized[field] = nonNegativeInteger(input[field]);
+  normalized.surfaced_event_count = nonNegativeInteger(surfacedEventCount);
+  normalized.reasons = compactReasonTokens(input.reasons);
+  return normalized;
+}
+
 function shapeCollectedLiveEvents(collected, { scope = null } = {}) {
   if (!collected || !["covered", "uncovered"].includes(collected.coverage)) return null;
   const tonight = filterEventsForLiveScope(collected.tonight, scope);
   const thisWeek = filterEventsForLiveScope(collected.this_week, scope);
-  const acquisition = collected.acquisition && typeof collected.acquisition === "object"
-    ? {
-        ...collected.acquisition,
-        ...(collected.acquisition.source_health && typeof collected.acquisition.source_health === "object"
-          ? {
-              source_health: {
-                ...collected.acquisition.source_health,
-                surfaced_event_count: tonight.length + thisWeek.length,
-              },
-            }
-          : {}),
-      }
-    : null;
+  const acquisitionInput = collected.acquisition && typeof collected.acquisition === "object"
+    ? collected.acquisition
+    : {};
+  const acquisition = {
+    ...acquisitionInput,
+    source_health: normalizeLiveEventSourceHealth(acquisitionInput.source_health, {
+      coverage: collected.coverage,
+      pending: Boolean(collected.pending),
+      surfacedEventCount: tonight.length + thisWeek.length,
+    }),
+  };
   return {
     coverage: collected.coverage,
     feed: collected.feed || null,
     ...(Array.isArray(collected.feeds) ? { feeds: collected.feeds } : {}),
-    ...(acquisition ? { acquisition } : {}),
+    acquisition,
     tonight,
     this_week: thisWeek,
     ...(collected.pending ? { pending: true } : {}),
@@ -237,6 +283,7 @@ function unavailableLiveEvents(reason, status = "unavailable") {
 
 function liveEventQueryBody(normalized, liveEvents) {
   return {
+    contract: LIVE_EVENT_QUERY_CONTRACT,
     query: normalized.public,
     route_mutation: false,
     day_anchor_mutation: false,
@@ -285,6 +332,7 @@ async function executeLiveEventQuery({ payload, eventSupply, now } = {}) {
 module.exports = {
   AROUND_PLACE_RADIUS_M,
   LIVE_EVENT_SCOPES,
+  LIVE_EVENT_QUERY_CONTRACT,
   LIVE_EVENT_TIME_WINDOWS,
   MAX_COLLECTION_RADIUS_M,
   MAX_ROUTE_POINTS,
@@ -294,6 +342,7 @@ module.exports = {
   executeLiveEventQuery,
   filterEventsForLiveScope,
   normalizeLiveEventQuery,
+  normalizeLiveEventSourceHealth,
   shapeCollectedLiveEvents,
   unavailableLiveEvents,
 };
