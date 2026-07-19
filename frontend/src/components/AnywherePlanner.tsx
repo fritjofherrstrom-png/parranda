@@ -217,6 +217,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [adjustOpen, setAdjustOpen] = useState(false);
   const recomposeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipFirstAdjustRef = useRef(true);
+  // Result-screen chrome (design handoff §3): the map can expand in place, and
+  // detours are collapsed by default — optional ideas must never read as part
+  // of the route.
+  const [mapExpanded, setMapExpanded] = useState(false);
+  const [detoursOpen, setDetoursOpen] = useState(false);
   const mapRef = useRef<HTMLDivElement | null>(null);
   const leafletRef = useRef<{ map: any; layer: any } | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -522,6 +527,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, dayOffset, walkKey]);
+
+  // Leaflet does not observe container resizes — after the expand/collapse
+  // transition settles, tell it the viewport changed.
+  useEffect(() => {
+    const timer = setTimeout(() => leafletRef.current?.map.invalidateSize(), 250);
+    return () => clearTimeout(timer);
+  }, [mapExpanded]);
 
   // The anchor's display label — never a faked place name: a coords anchor
   // reads "Near you" until the engine attests a real one. A resolver label is a
@@ -933,10 +945,92 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </p>
       )}
 
-      {/* Day header: honest provenance + day-level actions. The primary route is
-          the only itinerary below; broader place structure is either secondary
-          discovery context or, without a route, an honest candidate surface. */}
-      {showStructure && structure && (
+      {/* THE DAY HEADER (design handoff §3): title, honest counts, provenance,
+          and the day-level actions in one row. The timeline below binds to
+          primary_route only. */}
+      {showDay && routeStops.length > 0 && (
+        <header className="flex flex-col gap-2">
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-parranda-glow">{t("Din dag", "Your day")}</p>
+          <h2 className="font-display text-4xl font-semibold leading-none text-parranda-ink sm:text-5xl">
+            {mode === "near_me" && !classification?.placeLabel ? (
+              <>
+                {t("En dag", "A day")} <em className="text-parranda-ember">{t("nära dig", "near you")}</em>
+              </>
+            ) : (
+              <>
+                {t("En dag i", "A day in")} <em className="text-parranda-ember">{anchorLabel}</em>
+              </>
+            )}
+          </h2>
+          <p className="text-[13px] text-parranda-ink/65">
+            {dayOffset === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow")}
+            {Number.isFinite(primaryRoute?.estimated_km)
+              ? ` · ≈ ${walkingDistanceLabel(primaryRoute.estimated_km, lang)} ${t("till fots", "on foot")}`
+              : ""}
+            {Number.isFinite(primaryRoute?.longest_leg_km)
+              ? ` · ${t("längsta ben", "longest leg")} ${walkingDistanceLabel(primaryRoute.longest_leg_km, lang)}`
+              : ""}
+            {` · ${split.core.length} ${split.core.length === 1 ? t("stopp", "stop") : t("stopp", "stops")}`}
+            {split.woven.length > 0 ? ` + ${split.woven.length} live${lang === "en" ? " event" : "-event"}` : ""}
+          </p>
+          {structure?.provenance === "agnostic_anchor" && (
+            <p className="flex items-start gap-2 text-[13px] leading-relaxed text-parranda-ink/65">
+              <span aria-hidden="true" className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-parranda-glow" />
+              <span>
+                {t(
+                  `Byggd från källstödda platser${typeof structure.area_count === "number" ? ` över ${structure.area_count} områden` : ""} — Parranda har inte full kurering här ännu`,
+                  `Built from source-backed places${typeof structure.area_count === "number" ? ` across ${structure.area_count} areas` : ""} — Parranda does not have full curation here yet`,
+                )}
+              </span>
+            </p>
+          )}
+          {restoredAt && (
+            <p className="text-xs text-parranda-ink/60">
+              {t("Sparad dag", "Saved day")} · {new Date(restoredAt).toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE")} —{" "}
+              <button type="button" onClick={() => resolveAndRun()} className="underline underline-offset-2 hover:text-parranda-accent">
+                {t("bygg om för färska events", "rebuild for fresh events")}
+              </button>
+            </p>
+          )}
+          <div className="mt-1 flex gap-2">
+            {routeUrl && (
+              <a
+                href={routeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-12 flex-1 items-center justify-center rounded-parranda-btn bg-parranda-terracotta px-5 text-sm font-bold text-white shadow-sm transition hover:brightness-110 sm:flex-none sm:px-6"
+              >
+                {t("Öppna rutten i Maps", "Open route in Maps")}
+                <span aria-hidden="true" className="ml-2">↗</span>
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={saveDay}
+              disabled={isSaved}
+              aria-label={isSaved ? t("Dagen är sparad", "Day is saved") : t("Spara dagen", "Save this day")}
+              className="inline-flex min-h-12 min-w-12 items-center justify-center rounded-parranda-btn border border-parranda-ink/16 text-parranda-ink/80 transition hover:border-parranda-ember disabled:opacity-50"
+            >
+              {isSaved ? "★" : "☆"}
+            </button>
+            {canShare && (
+              <button
+                type="button"
+                onClick={shareDay}
+                aria-label={t("Dela dagen", "Share this day")}
+                className="inline-flex min-h-12 min-w-12 items-center justify-center rounded-parranda-btn border border-parranda-ink/16 text-parranda-ink/80 transition hover:border-parranda-ember"
+              >
+                {shareCopied ? "✓" : "↗"}
+              </button>
+            )}
+          </div>
+        </header>
+      )}
+
+      {/* Without a composed day, honest provenance + day-level actions live in
+          this card instead; broader place structure below is an honest candidate
+          surface, never an itinerary. */}
+      {showStructure && structure && !(showDay && routeStops.length > 0) && (
         <section className="flex flex-col items-start gap-3 rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm sm:flex-row sm:justify-between">
           <div className="min-w-0 flex-1">
             {structure.provenance === "agnostic_anchor" && (
@@ -989,32 +1083,29 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
       {showDay && routeStops.length > 0 && (
         <section className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">{t("Dagens rutt", "Today's route")}</p>
-              {Number.isFinite(primaryRoute?.estimated_km) && (
-                <p className="mt-1 text-xs text-parranda-ink/60">
-                  ≈ {walkingDistanceLabel(primaryRoute.estimated_km, lang)}
-                  {Number.isFinite(primaryRoute?.longest_leg_km)
-                    ? ` · ${t("längsta ben", "longest leg")} ${walkingDistanceLabel(primaryRoute.longest_leg_km, lang)}`
-                    : ""}
-                </p>
-              )}
-            </div>
-            {routeUrl && (
-              <a
-                href={routeUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex min-h-11 items-center gap-2 self-start rounded-parranda border border-parranda-accent/40 px-4 py-2 text-sm font-semibold text-parranda-accent hover:bg-parranda-accent/10"
-              >
-                {t("Öppna den planerade rutten", "Open the planned route")}
-                <span aria-hidden="true">↗</span>
-              </a>
+          {/* Map first (design handoff §3) — it orients the whole timeline and
+              can expand in place. */}
+          <div className={"relative w-full overflow-hidden rounded-parranda border border-parranda-ink/10 transition-all " + (mapExpanded ? "h-96" : "h-44")}>
+            <div ref={mapRef} className="h-full w-full" />
+            {!mapDrawn && (
+              <div className="absolute inset-0 flex items-center justify-center bg-parranda-ink/10 text-sm text-parranda-ink/60">
+                {t("Ritar kartan …", "Drawing the map …")}
+              </div>
             )}
+            <button
+              type="button"
+              onClick={() => setMapExpanded((cur) => !cur)}
+              aria-expanded={mapExpanded}
+              className="absolute bottom-2.5 right-2.5 z-[1001] inline-flex min-h-9 items-center rounded-full border border-parranda-ink/20 bg-parranda-paper/85 px-3.5 text-xs font-bold text-parranda-ink/85"
+            >
+              {mapExpanded ? t("Förminska kartan", "Shrink map") : t("Förstora kartan", "Expand map")} <span aria-hidden="true" className="ml-1.5">⤢</span>
+            </button>
           </div>
-          {/* Core stops only: stable places, numbered. A woven live event is NOT an
-              ordinary POI — it renders once below, as an attached route extension. */}
+          {/* Core stops only, grouped under daypart headings taken from
+              stop.daypart — only groups that exist render, and the engine's
+              order is never changed to force a grouping. A woven live event is
+              NOT an ordinary POI — it renders once below, as an attached route
+              extension. */}
           <ol className="mt-2 flex flex-col">
             {split.core.map((stop: any, i: number) => {
               const name = String(stop?.label || stop?.name || "").trim();
@@ -1022,46 +1113,51 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               const routeNumber = routeStops.indexOf(stop) + 1;
               const leg = routeNumber === 1 ? null : legForStop(stop);
               const pin = mapsPlaceUrl(stop, mapsPlaceContext);
+              const daypart = String(stop?.daypart || "");
+              const previousDaypart = i > 0 ? String((split.core[i - 1] as any)?.daypart || "") : "";
+              const daypartHeading = daypart && daypart !== previousDaypart ? label(DAYPART_LABELS, stop.daypart, lang) : null;
               return (
                 <li key={stop?.id ?? i} className="flex flex-col">
+                  {daypartHeading && (
+                    <p className="mb-1.5 mt-3.5 text-[10px] font-extrabold uppercase tracking-[0.2em] text-parranda-glow">{daypartHeading}</p>
+                  )}
                   {leg && (leg.minutes != null || leg.km != null) && (
-                    <span className="ml-3 border-l border-dashed border-parranda-ink/25 py-1 pl-4 text-xs text-parranda-ink/55">
+                    <span className="ml-4 border-l border-dashed border-parranda-ink/25 py-1.5 pl-5 text-xs text-parranda-ink/55">
                       ↓ {leg.minutes != null ? `${leg.minutes} min` : ""}
                       {leg.minutes != null && leg.km != null ? " · " : ""}
                       {leg.km != null ? walkingDistanceLabel(leg.km, lang) : ""}
                     </span>
                   )}
-                  <span className="flex flex-wrap items-center gap-2 py-0.5 text-sm text-parranda-ink">
-                    <span className="font-semibold text-parranda-accent">{routeNumber}.</span>
-                    {pin ? (
-                      <a href={pin} target="_blank" rel="noopener noreferrer" className="underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
-                        {name}
-                      </a>
-                    ) : (
-                      name
-                    )}
-                    {stop?.type && (
-                      <span className="rounded-full border border-parranda-ink/15 bg-parranda-ink/10 px-2 py-0.5 text-xs text-parranda-ink/75">
-                        {label(TYPE_LABELS, stop.type, lang)}
-                      </span>
-                    )}
-                    {stop?.daypart && (
-                      <span className="rounded-full border border-parranda-accent/30 bg-parranda-accent/10 px-2 py-0.5 text-xs font-semibold text-parranda-ink">
-                        {label(DAYPART_LABELS, stop.daypart, lang)}
-                      </span>
-                    )}
-                    {/* WHY this stop is in the route — the trusted candidate-spine
-                        preference fit (#369), translated to product copy and
-                        deduped against the type chip. Raw engine tokens never
-                        render; an unmapped axis is skipped, not exposed. */}
-                    {coveredPreferenceLabels(stop, lang).map((prefLabel) => (
-                      <span key={prefLabel} className="rounded-full border border-parranda-glow/40 bg-parranda-glow/10 px-2 py-0.5 text-xs text-parranda-ink/80">
-                        {t("täcker", "covers")} {prefLabel}
-                      </span>
-                    ))}
-                    {stop?.candidate_status === "partial" && (
-                      <span className="text-xs italic text-parranda-ink/50">{t("delvis träff", "partial match")}</span>
-                    )}
+                  <span className="flex items-start gap-3 py-0.5">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-parranda-ember/55 bg-parranda-terracotta/20 text-[13px] font-extrabold text-parranda-clay">
+                      {routeNumber}
+                    </span>
+                    <span className="flex flex-wrap items-center gap-2 pt-1 text-sm text-parranda-ink">
+                      {pin ? (
+                        <a href={pin} target="_blank" rel="noopener noreferrer" className="font-bold underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
+                          {name}
+                        </a>
+                      ) : (
+                        <span className="font-bold">{name}</span>
+                      )}
+                      {stop?.type && (
+                        <span className="rounded-full border border-parranda-ink/15 bg-parranda-ink/10 px-2 py-0.5 text-xs text-parranda-ink/75">
+                          {label(TYPE_LABELS, stop.type, lang)}
+                        </span>
+                      )}
+                      {/* WHY this stop is in the route — the trusted candidate-spine
+                          preference fit (#369), translated to product copy and
+                          deduped against the type chip. Raw engine tokens never
+                          render; an unmapped axis is skipped, not exposed. */}
+                      {coveredPreferenceLabels(stop, lang).map((prefLabel) => (
+                        <span key={prefLabel} className="rounded-full border border-parranda-glow/40 bg-parranda-glow/10 px-2 py-0.5 text-xs text-parranda-ink/80">
+                          {t("täcker", "covers")} {prefLabel}
+                        </span>
+                      ))}
+                      {stop?.candidate_status === "partial" && (
+                        <span className="text-xs italic text-parranda-ink/50">{t("delvis träff", "partial match")}</span>
+                      )}
+                    </span>
                   </span>
                 </li>
               );
@@ -1081,10 +1177,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             const sourceUrl = stop?.source?.url || eveningEvent?.source_url || null;
             const routeNumber = routeStops.indexOf(stop) + 1;
             return (
-              <div key={stop?.id} className="mt-3 rounded-parranda border border-parranda-accent/40 bg-parranda-accent/10 p-4">
-                <p className="text-xs font-bold uppercase tracking-wider text-parranda-accent">{t("Ikväll i din rutt", "Tonight in your route")}</p>
-                <p className="mt-1 flex flex-wrap items-center gap-2 text-sm font-semibold text-parranda-ink">
-                  <span className="font-semibold text-parranda-accent">{routeNumber}.</span>
+              <div key={stop?.id} className="mt-3 rounded-parranda border border-parranda-ember/50 bg-gradient-to-br from-parranda-terracotta/15 to-parranda-glow/5 p-4">
+                <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-parranda-clay">
+                  <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-parranda-ember" />
+                  {t("Ikväll i din rutt", "Tonight in your route")}
+                </p>
+                <p className="mt-1.5 flex flex-wrap items-center gap-2 text-sm font-semibold text-parranda-ink">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-parranda-terracotta text-[13px] font-extrabold text-white">{routeNumber}</span>
                   {pin ? (
                     <a href={pin} target="_blank" rel="noopener noreferrer" className="underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
                       {name}
@@ -1123,50 +1222,57 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             );
           })}
 
-          <div className="relative mt-4 h-80 w-full overflow-hidden rounded-parranda border border-parranda-ink/10">
-            <div ref={mapRef} className="h-full w-full" />
-            {!mapDrawn && (
-              <div className="absolute inset-0 flex items-center justify-center bg-parranda-ink/10 text-sm text-parranda-ink/60">
-                {t("Ritar kartan …", "Drawing the map …")}
-              </div>
-            )}
-          </div>
-
+          {/* Detours — collapsed by default (design handoff §3): optional ideas
+              must never read as part of the route, and the caption stays visible
+              even while collapsed. */}
           {routeContextSuggestions.length > 0 && (
             <div className="mt-4 border-t border-parranda-ink/10 pt-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">
-                {t("Fler nära rutten", "More near the route")}
-              </p>
-              <p className="mt-1 text-xs text-parranda-ink/60">
+              <button
+                type="button"
+                aria-expanded={detoursOpen}
+                onClick={() => setDetoursOpen((cur) => !cur)}
+                className="flex min-h-12 w-full items-center justify-between rounded-parranda-btn border border-dashed border-parranda-ink/20 px-4 text-[13px] font-bold text-parranda-ink/75 transition hover:border-parranda-ink/35"
+              >
+                <span>
+                  {routeContextSuggestions.length}{" "}
+                  {routeContextSuggestions.length === 1
+                    ? t("idé nära din rutt", "detour idea near your route")
+                    : t("idéer nära din rutt", "detour ideas near your route")}
+                </span>
+                <span aria-hidden="true">{detoursOpen ? "▾" : "▸"}</span>
+              </button>
+              <p className="mt-2 text-xs text-parranda-ink/60">
                 {t(
                   "Valfria idéer från platsunderlaget — de ingår inte i dagens stopp eller Maps-rutten.",
                   "Optional ideas from the place evidence — they are not part of today's stops or the Maps route.",
                 )}
               </p>
-              <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-                {routeContextSuggestions.map((stop) => {
-                  const name = String(stop.name || stop.label || "").trim();
-                  if (!name) return null;
-                  const url = mapsPlaceUrl(
-                    { ...stop, lat: stop.lat ?? undefined, lng: stop.lng ?? undefined },
-                    mapsPlaceContext,
-                  );
-                  return (
-                    <li key={stop.id || stop.candidate_id || stop.place_id || name} className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-3">
-                      <p className="text-sm font-semibold text-parranda-ink">
-                        {url ? (
-                          <a href={url} target="_blank" rel="noopener noreferrer" className="underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
-                            {name}
-                          </a>
-                        ) : name}
-                      </p>
-                      <p className="mt-1 text-xs text-parranda-ink/55">
-                        {walkingDistanceLabel(stop.distance_km, lang)} {t("från", "from")} {stop.route_stop_name}
-                      </p>
-                    </li>
-                  );
-                })}
-              </ul>
+              {detoursOpen && (
+                <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {routeContextSuggestions.map((stop) => {
+                    const name = String(stop.name || stop.label || "").trim();
+                    if (!name) return null;
+                    const url = mapsPlaceUrl(
+                      { ...stop, lat: stop.lat ?? undefined, lng: stop.lng ?? undefined },
+                      mapsPlaceContext,
+                    );
+                    return (
+                      <li key={stop.id || stop.candidate_id || stop.place_id || name} className="rounded-parranda border border-dashed border-parranda-ink/20 p-3">
+                        <p className="text-sm font-semibold text-parranda-ink">
+                          {url ? (
+                            <a href={url} target="_blank" rel="noopener noreferrer" className="underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
+                              {name}
+                            </a>
+                          ) : name}
+                        </p>
+                        <p className="mt-1 text-xs text-parranda-ink/55">
+                          {walkingDistanceLabel(stop.distance_km, lang)} {t("från", "from")} {stop.route_stop_name}
+                        </p>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
           )}
 
