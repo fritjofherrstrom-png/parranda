@@ -37,6 +37,10 @@ const { collectPlaceCandidatesForCity } = require("./place-candidates/provider-r
 const { resolveDefaultOpenDataLoader } = require("./place-candidates/open-data-loader");
 const { resolveDefaultPlaceResolver } = require("./place-candidates/place-resolver");
 const { resolveDefaultEventSupply } = require("./place-candidates/agnostic-event-supply");
+const {
+  executeLiveEventQuery,
+  shapeCollectedLiveEvents,
+} = require("./place-candidates/live-event-query");
 const { EXTERNAL_OPEN_PROVIDER_META } = require("./place-candidates/external-open-provider");
 const { buildMasthead } = require("./pulse-engine/masthead");
 const { classifySignalQuality } = require("./pulse-engine/signal-quality");
@@ -1714,6 +1718,16 @@ function buildApp({
     }
   });
 
+  // Live exploration is an events-only query. Public coordinates define the
+  // requested event scope, never a trusted place identity or a new day anchor.
+  // Provider selection, normalization, fusion, gates and cache behavior remain
+  // inside the trusted eventSupply seam used by route composition.
+  app.post("/api/live-events", async (request, response) => {
+    const eventsNow = clock && typeof clock.now === "function" ? clock.now() : new Date().toISOString();
+    const result = await executeLiveEventQuery({ payload: request.body, eventSupply, now: eventsNow });
+    response.status(result.status).json(result.body);
+  });
+
   app.post("/api/geocode", async (request, response) => {
     try {
       const { cityConfig, requestedCity, cityFallbackUsed } = resolveRequestCity(request.body?.city);
@@ -2123,21 +2137,7 @@ function buildApp({
             // gates inside the supply.
             preferences,
           });
-          if (collected && (collected.coverage === "covered" || collected.coverage === "uncovered")) {
-            liveEvents = {
-              coverage: collected.coverage,
-              feed: collected.feed || null,
-              ...(Array.isArray(collected.feeds) ? { feeds: collected.feeds } : {}),
-              ...(collected.acquisition && typeof collected.acquisition === "object"
-                ? { acquisition: collected.acquisition }
-                : {}),
-              tonight: Array.isArray(collected.tonight) ? collected.tonight : [],
-              this_week: Array.isArray(collected.this_week) ? collected.this_week : [],
-              // The live feed is background-warmed; `pending` means "covered, still
-              // checking" so the UI never reads an empty warm as "nothing on".
-              ...(collected.pending ? { pending: true } : {}),
-            };
-          }
+          liveEvents = shapeCollectedLiveEvents(collected);
         } catch (_error) {
           liveEvents = null; // fail soft: live events never block the route
         }

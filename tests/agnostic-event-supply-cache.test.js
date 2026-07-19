@@ -15,6 +15,7 @@ const {
   resolveDefaultEventSupply,
   eventCacheKey,
   HELSINKI_LINKED_EVENTS_FEED,
+  rankCollectedEventsForPreferences,
   shouldCacheEventSupplyResult,
 } = require("../server/place-candidates/agnostic-event-supply");
 
@@ -118,6 +119,37 @@ test("event supply cache may serve bounded events despite another source failing
   );
   assert.equal(shouldCacheEventSupplyResult({ coverage: "covered" }), false);
   assert.equal(shouldCacheEventSupplyResult({ coverage: "uncovered" }), false);
+});
+
+test("eventCacheKey separates collection radii for place and route scopes", () => {
+  const anchor = { lat: 60.1699, lng: 24.9384 };
+  const now = "2026-06-28T18:30:00Z";
+  assert.notEqual(
+    eventCacheKey(anchor, now, ["municipal-local"], 3000),
+    eventCacheKey(anchor, now, ["municipal-local"], 7000),
+    "a wider route corridor must not reuse a narrower place acquisition",
+  );
+});
+
+test("a warm neutral pool is scope-filtered before its six-row surface cap", () => {
+  const scope = { kind: "around_place", anchor: { lat: 55.605, lng: 13.003 }, radius_m: 3000 };
+  const offScope = Array.from({ length: 7 }, (_, index) => ({
+    id: `off-${index}`,
+    lat: 55.7 + index / 1000,
+    lng: 13.2,
+    salience_score: 100 - index,
+  }));
+  const onScope = { id: "on-scope", lat: 55.606, lng: 13.004, salience_score: 1 };
+  const ranked = rankCollectedEventsForPreferences({
+    coverage: "covered",
+    tonight: offScope.slice(0, 6),
+    this_week: [],
+    acquisition: { source_health: { accepted_event_count: 8, surfaced_event_count: 6 } },
+    _rankable_events: { tonight: [...offScope, onScope], this_week: [] },
+  }, [], scope);
+  assert.deepEqual(ranked.tonight.map((event) => event.id), ["on-scope"]);
+  assert.equal(ranked.acquisition.source_health.accepted_event_count, 8);
+  assert.equal(ranked.acquisition.source_health.surfaced_event_count, 1);
 });
 
 test("one neutral warm cache reranks for different preferences without refetching", async () => {
