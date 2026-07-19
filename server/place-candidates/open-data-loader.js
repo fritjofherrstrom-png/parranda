@@ -31,6 +31,7 @@
 
 const { createSourceCache } = require("./source-cache");
 const { createWikidataSource } = require("./wikidata-source");
+const { normalizeOpeningHours } = require("./opening-hours");
 
 const DEFAULT_OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
 // Mirror failover is a MECHANISM, not a free fix. The loader can try several
@@ -428,6 +429,7 @@ function mapOsmElement(element) {
   const brandName = typeof tags.brand === "string" && tags.brand.trim() ? tags.brand.trim() : null;
   const brandWikidata = typeof tags["brand:wikidata"] === "string" && tags["brand:wikidata"].trim();
   const website = firstHttpUrl(tags.website, tags["contact:website"]);
+  const openingHours = normalizeOpeningHours(tags.opening_hours);
 
   return {
     id: `osm-${elementType}-${osmId}`,
@@ -439,10 +441,11 @@ function mapOsmElement(element) {
     sources,
     chain: Boolean(brandName || brandWikidata),
     brand: brandName,
-    // Source-owned operational metadata only. It does not affect place trust or
-    // ranking; the out-of-band local-event source scout may use it as a bounded
-    // website seed.
+    // Source-owned operational metadata only. It does not raise place trust.
+    // The website may seed bounded source discovery; opening hours may only
+    // exclude a candidate when trusted local-time evaluation proves no overlap.
     ...(website ? { website } : {}),
+    ...(openingHours ? { opening_hours: openingHours } : {}),
   };
 }
 

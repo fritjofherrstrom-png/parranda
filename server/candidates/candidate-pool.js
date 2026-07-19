@@ -84,16 +84,34 @@ function buildEligibleCandidatePool(cityConfig, payload = {}, helpers = {}) {
 
   const pool = [];
   const rejected = [];
+  const availabilitySummary = typeof helpers.evaluateCandidateAvailability === "function"
+    ? { evaluated_candidate_count: 0, excluded_candidate_count: 0, unresolved_candidate_count: 0 }
+    : null;
   for (const candidate of allCandidates) {
     const { eligible, derived, gates, evidence } = evaluateCandidateEligibility(candidate, {
       now: nowContext.date,
     });
+    const availability = safeEvaluateAvailability(helpers.evaluateCandidateAvailability, candidate, context);
+    if (availabilitySummary && availability) {
+      if (availability.status === "unknown") availabilitySummary.unresolved_candidate_count += 1;
+      else availabilitySummary.evaluated_candidate_count += 1;
+    }
+    if (availability && availability.eligible === false) {
+      if (availabilitySummary) availabilitySummary.excluded_candidate_count += 1;
+      rejected.push({
+        id: candidate.id,
+        label: candidate.label,
+        origin: candidateOrigin(candidate),
+        reason: availability.reason || "candidate_unavailable",
+      });
+      continue;
+    }
     if (!eligible) {
       const experimentalAdmission = typeof helpers.experimentalAdmitCandidate === "function"
         ? helpers.experimentalAdmitCandidate({ candidate, derived, gates, evidence })
         : null;
       if (experimentalAdmission && experimentalAdmission.allowed === true) {
-        pool.push({ candidate, derived, gates, evidence, experimental_admission: experimentalAdmission });
+        pool.push({ candidate, derived, gates, evidence, availability, experimental_admission: experimentalAdmission });
         continue;
       }
       rejected.push({
@@ -104,7 +122,7 @@ function buildEligibleCandidatePool(cityConfig, payload = {}, helpers = {}) {
       });
       continue;
     }
-    pool.push({ candidate, derived, gates, evidence });
+    pool.push({ candidate, derived, gates, evidence, availability });
   }
 
   return {
@@ -117,7 +135,31 @@ function buildEligibleCandidatePool(cityConfig, payload = {}, helpers = {}) {
     normalized,
     allCandidates,
     externalEnabled,
+    ...(availabilitySummary && (availabilitySummary.evaluated_candidate_count > 0 || availabilitySummary.unresolved_candidate_count > 0)
+      ? { availability_summary: availabilitySummary }
+      : {}),
   };
+}
+
+function safeEvaluateAvailability(evaluator, candidate, context) {
+  if (typeof evaluator !== "function") return null;
+  try {
+    const result = evaluator({ candidate, context });
+    if (!result || typeof result !== "object") return null;
+    return {
+      eligible: result.eligible !== false,
+      status: normalizeAvailabilityToken(result.status, "unknown"),
+      reason: normalizeAvailabilityToken(result.reason, "candidate_availability_unresolved"),
+    };
+  } catch (_error) {
+    return { eligible: true, status: "unknown", reason: "candidate_availability_evaluation_failed" };
+  }
+}
+
+function normalizeAvailabilityToken(value, fallback) {
+  if (typeof value !== "string") return fallback;
+  const token = value.trim().toLowerCase();
+  return /^[a-z0-9_:-]{1,80}$/.test(token) ? token : fallback;
 }
 
 function resolveCatalogDensity(cityConfig, curatedRealPlaceCount) {
