@@ -58,6 +58,85 @@ test("each district carries map-drawable stops (id + name + real coords, never f
   assert.ok(!stops.some((s) => s.id === "m3"), "a stop without coords is never fabricated onto the map");
 });
 
+test("district stops preserve explicit local-quality facts for optional route context", () => {
+  const candidates = [
+    {
+      id: "local-cafe",
+      name: "Independent Cafe",
+      type: "cafe",
+      tags: ["coffee"],
+      lat: 60,
+      lng: 24,
+      chain: false,
+      brand: null,
+      local_feel_rank: 0,
+      candidate_origin: "external_open",
+    },
+    {
+      id: "brand-cafe",
+      name: "Branded Cafe",
+      type: "cafe",
+      tags: ["coffee"],
+      lat: 60.0004,
+      lng: 24,
+      chain: true,
+      brand: "Brand",
+      local_feel_rank: 2,
+      candidate_origin: "external_open",
+    },
+    {
+      id: "local-bakery",
+      name: "Independent Bakery",
+      type: "bakery",
+      tags: ["coffee"],
+      lat: 60.0002,
+      lng: 24.0002,
+      chain: false,
+      local_feel_rank: 0,
+      candidate_origin: "external_open",
+    },
+  ];
+  const before = structuredClone(candidates);
+  const day = composeDistrictDay(candidates, { intents: ["fika"], maxAreas: 1 });
+  const stops = day.areas.flatMap((area) => area.stops);
+
+  assert.deepEqual(candidates, before, "composition never mutates candidate evidence");
+  assert.deepEqual(
+    stops
+      .filter((stop) => stop.id !== "local-bakery")
+      .map(({ id, type, tags, chain, brand, local_feel_rank, candidate_origin }) => ({
+        id,
+        type,
+        tags,
+        chain,
+        brand,
+        local_feel_rank,
+        candidate_origin,
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id)),
+    [
+      {
+        id: "brand-cafe",
+        type: "cafe",
+        tags: ["coffee"],
+        chain: true,
+        brand: "Brand",
+        local_feel_rank: 2,
+        candidate_origin: "external_open",
+      },
+      {
+        id: "local-cafe",
+        type: "cafe",
+        tags: ["coffee"],
+        chain: false,
+        brand: null,
+        local_feel_rank: 0,
+        candidate_origin: "external_open",
+      },
+    ],
+  );
+});
+
 test("composes complementary districts that cover the requested intents", () => {
   const day = composeDistrictDay(fourDistrictCity(), { intents: ["second_hand", "fika"], maxAreas: 3 });
   assert.deepEqual(day.covered_intents.slice().sort(), ["fika", "second_hand"]);
