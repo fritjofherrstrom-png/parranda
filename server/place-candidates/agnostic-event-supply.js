@@ -797,6 +797,18 @@ function firstString(...values) {
 
 const EVENT_CACHE_TTL_MS = 20 * 60 * 1000; // 20 min — time-sensitive, but reusable
 const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a route
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v2";
+
+function shouldCacheEventSupplyResult(result) {
+  if (!result || result.coverage !== "covered") return false;
+  const health = result.acquisition && result.acquisition.source_health;
+  if (!health || typeof health !== "object") return false;
+
+  // Keep useful partial results and proven healthy empties. A partial/unavailable
+  // empty result may be a transient provider failure and must remain retryable.
+  if (health.result === "events_found") return true;
+  return health.status === "healthy" && health.result === "empty";
+}
 
 /**
  * Default event supply: env-gated + BACKGROUND-WARMED. Selected sources can be
@@ -811,7 +823,8 @@ function resolveDefaultEventSupply(env = process.env) {
   const registry = resolveEventFeedRegistry(env);
   const globalKey = resolveGlobalEventKey(env);
   const cache = createSourceCache({
-    namespace: "agnostic-events",
+    // v2 excludes transient partial-empty acquisitions that v1 could persist.
+    namespace: EVENT_CACHE_NAMESPACE,
     ttlMs: EVENT_CACHE_TTL_MS,
     dir: (env && env.PARRANDA_CACHE_DIR) || null,
   });
@@ -838,9 +851,9 @@ function resolveDefaultEventSupply(env = process.env) {
     if (cached) return Promise.resolve(cached);
     // Cold: warm out-of-band (long timeout, fire-and-forget), serve honest pending.
     cache.warm(key, () => collectAnchorEvents({ anchor, now, registry, timeoutMs: WARM_TIMEOUT_MS, globalKey }), {
-      // A valid empty result is cacheable too. Otherwise every request would
-      // hammer every selected source merely because nothing is happening now.
-      shouldStore: (r) => r && r.coverage === "covered",
+      // A proven healthy empty result is cacheable so a quiet calendar does not
+      // cause refresh loops. Empty results with source failures stay retryable.
+      shouldStore: shouldCacheEventSupplyResult,
     });
     return Promise.resolve({
       coverage: "covered",
@@ -882,6 +895,7 @@ function resolveDefaultEventSupply(env = process.env) {
 module.exports = {
   applyReviewedSourceTrust,
   collectAnchorEvents,
+  shouldCacheEventSupplyResult,
   resolveDefaultEventSupply,
   resolveEventFeedRegistry,
   resolveEventFeedForAnchor,

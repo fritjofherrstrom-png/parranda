@@ -12,6 +12,7 @@ const {
   resolveDefaultEventSupply,
   eventCacheKey,
   HELSINKI_LINKED_EVENTS_FEED,
+  shouldCacheEventSupplyResult,
 } = require("../server/place-candidates/agnostic-event-supply");
 
 const ORIGINAL_FETCH = global.fetch;
@@ -78,4 +79,40 @@ test("eventCacheKey separates different approved source plans", () => {
     samePlanDifferentInputOrder,
     "source-plan identity is stable regardless of caller ordering",
   );
+});
+
+test("event supply cache keeps healthy empties but retries partial empty acquisition", () => {
+  const result = (status, outcome) => ({
+    coverage: "covered",
+    acquisition: { source_health: { status, result: outcome } },
+  });
+
+  assert.equal(
+    shouldCacheEventSupplyResult(result("healthy", "empty")),
+    true,
+    "a responding calendar with no current events is a proven cacheable empty",
+  );
+  assert.equal(
+    shouldCacheEventSupplyResult(result("partial", "empty")),
+    false,
+    "an empty result with a failed source remains retryable",
+  );
+  assert.equal(
+    shouldCacheEventSupplyResult(result("unavailable", "unknown")),
+    false,
+    "an unavailable source result is never frozen into the event cache",
+  );
+});
+
+test("event supply cache may serve bounded events despite another source failing", () => {
+  assert.equal(
+    shouldCacheEventSupplyResult({
+      coverage: "covered",
+      acquisition: { source_health: { status: "partial", result: "events_found" } },
+    }),
+    true,
+    "real surfaced events remain useful while source health stays visibly partial",
+  );
+  assert.equal(shouldCacheEventSupplyResult({ coverage: "covered" }), false);
+  assert.equal(shouldCacheEventSupplyResult({ coverage: "uncovered" }), false);
 });
