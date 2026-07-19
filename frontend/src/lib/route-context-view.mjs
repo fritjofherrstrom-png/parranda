@@ -49,6 +49,13 @@ function distanceKm(a, b) {
   return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(h));
 }
 
+function localFeelRank(stop) {
+  if (Number.isFinite(stop && stop.local_feel_rank)) {
+    return Math.max(0, Math.min(3, stop.local_feel_rank));
+  }
+  return stop && stop.chain === true ? 2 : 0;
+}
+
 /**
  * Returns optional context near the route, never route stops.
  *
@@ -56,7 +63,9 @@ function distanceKm(a, b) {
  * - candidates must have coordinates and be within maxDistanceKm of a route stop;
  * - at most one suggestion is shown per route stop, preventing one dense area
  *   from taking over the day;
- * - output order follows route order, then proximity, then stable source order.
+ * - explicit local-feel evidence is preferred before proximity; branded chains
+ *   remain available as sparse fallback rather than being banned;
+ * - final output order follows route order, then stable source order.
  */
 export function buildRouteContextSuggestions(routeStops, areas, options = {}) {
   const route = (Array.isArray(routeStops) ? routeStops : []).filter((stop) => coordinates(stop));
@@ -104,6 +113,7 @@ export function buildRouteContextSuggestions(routeStops, areas, options = {}) {
   });
 
   candidates.sort((a, b) =>
+    localFeelRank(a) - localFeelRank(b) ||
     a.route_stop_index - b.route_stop_index ||
     a.distance_km - b.distance_km ||
     a.area_index - b.area_index ||
@@ -119,7 +129,13 @@ export function buildRouteContextSuggestions(routeStops, areas, options = {}) {
     selected.push(candidate);
     if (selected.length >= limit) break;
   }
-  return selected;
+  return selected.sort((a, b) =>
+    a.route_stop_index - b.route_stop_index ||
+    a.distance_km - b.distance_km ||
+    a.area_index - b.area_index ||
+    a.source_index - b.source_index ||
+    String(a.id || a.name).localeCompare(String(b.id || b.name)),
+  );
 }
 
 export function walkingDistanceLabel(km, lang = "en") {

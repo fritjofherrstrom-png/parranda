@@ -47,6 +47,48 @@ test("route context stays bounded, deterministic and at most one suggestion per 
   assert.deepEqual(result[1].covers, ["food"]);
 });
 
+test("route context prefers source-backed local options over closer branded chains", () => {
+  const route = [
+    { id: "r1", name: "A", lat: 55.55, lng: 14.34 },
+    { id: "r2", name: "B", lat: 55.56, lng: 14.36 },
+    { id: "r3", name: "C", lat: 55.57, lng: 14.38 },
+  ];
+  const areas = [{ stops: [
+    { id: "chain-nearest", name: "Branded Food", lat: 55.5501, lng: 14.34, chain: true, brand: "Brand" },
+    { id: "local-a", name: "Local Food", lat: 55.551, lng: 14.34, chain: false },
+    { id: "chain-b", name: "Branded Coffee", lat: 55.5601, lng: 14.36, chain: true, brand: "Brand" },
+    { id: "local-c", name: "Local Shop", lat: 55.5705, lng: 14.38, chain: false },
+  ] }];
+
+  const result = buildRouteContextSuggestions(route, areas, { limit: 2 });
+  assert.deepEqual(result.map((candidate) => candidate.id), ["local-a", "local-c"]);
+  assert.deepEqual(result.map((candidate) => candidate.route_stop_index), [0, 2]);
+});
+
+test("route context keeps a chain as a sparse fallback when no local option exists", () => {
+  const route = [{ id: "r1", name: "A", lat: 55.55, lng: 14.34 }];
+  const areas = [{ stops: [
+    { id: "only-nearby", name: "Branded Food", lat: 55.5501, lng: 14.34, chain: true, brand: "Brand" },
+  ] }];
+
+  const result = buildRouteContextSuggestions(route, areas, { limit: 3 });
+  assert.deepEqual(result.map((candidate) => candidate.id), ["only-nearby"]);
+  assert.equal(result[0].chain, true);
+});
+
+test("explicit candidate-spine local-feel rank is reused without name-based rules", () => {
+  const route = [{ id: "r1", name: "A", lat: 55.55, lng: 14.34 }];
+  const areas = [{ stops: [
+    { id: "rank-two", name: "First", lat: 55.5501, lng: 14.34, local_feel_rank: 2 },
+    { id: "rank-zero", name: "Second", lat: 55.551, lng: 14.34, local_feel_rank: 0 },
+  ] }];
+
+  assert.deepEqual(
+    buildRouteContextSuggestions(route, areas, { limit: 1 }).map((candidate) => candidate.id),
+    ["rank-zero"],
+  );
+});
+
 test("route context rejects distant candidates and never mutates route or area inputs", () => {
   const route = [{ id: "r1", name: "A", lat: 55.55, lng: 14.34 }];
   const areas = [{ stops: [{ id: "distant", name: "Distant", lat: 55.9, lng: 14.9 }] }];

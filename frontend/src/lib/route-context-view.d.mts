@@ -9,6 +9,12 @@ export interface RouteContextStop {
   address?: string | null;
   area?: string | null;
   covered_preferences?: string[];
+  type?: string | null;
+  tags?: string[];
+  chain?: boolean;
+  brand?: string | null;
+  local_feel_rank?: number | null;
+  candidate_origin?: string | null;
 }
 
 export interface RouteContextArea {

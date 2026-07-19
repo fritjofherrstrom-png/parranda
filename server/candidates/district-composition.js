@@ -187,8 +187,8 @@ function composeDistrictDay(candidates, { intents = [], maxAreas = 2, linkKm, mi
         .map((m) => String((m && (m.name || m.label || m.title)) || "").trim())
         .filter(Boolean)
         .slice(0, 4),
-      // The stops as map-drawable points (id + name + coords) so the UI can put
-      // the day ON the map — real positions only, never fabricated.
+      // Map-drawable points plus source-owned quality facts used by optional
+      // route context. These facts never promote a candidate into the route.
       stops: stopsSource
         .filter((m) => m && Number.isFinite(m.lat) && Number.isFinite(m.lng))
         .map((m) => ({
@@ -196,6 +196,12 @@ function composeDistrictDay(candidates, { intents = [], maxAreas = 2, linkKm, mi
           name: String((m.name || m.label || m.title) || "").trim() || null,
           lat: m.lat,
           lng: m.lng,
+          type: String(m.type || "").trim() || null,
+          tags: Array.isArray(m.tags) ? m.tags.slice() : [],
+          chain: m.chain === true,
+          brand: String(m.brand || "").trim() || null,
+          local_feel_rank: Number.isFinite(m.local_feel_rank) ? m.local_feel_rank : null,
+          candidate_origin: String(m.candidate_origin || "").trim() || null,
         })),
     };
   });
