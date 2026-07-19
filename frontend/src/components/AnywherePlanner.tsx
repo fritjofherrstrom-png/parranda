@@ -16,6 +16,7 @@ import {
   WALK_PRESETS,
   isoDateFromOffset,
 } from "../lib/anywhere-payload.mjs";
+import { chooseBlitzPreferences } from "../lib/blitz-preferences.mjs";
 import { mapsPlaceUrl, mapsWalkingRouteUrl, primaryRouteStops } from "../lib/maps-links.mjs";
 import {
   buildRouteContextSuggestions,
@@ -554,13 +555,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     await resolveAndRun();
   }
 
-  // Blitz — a quick, unplanned start: pick 2–4 preference axes at random and
-  // compose immediately (still an honest, source-backed day; only the choosing
-  // is done for you). Works from a typed city or the current position.
+  // Blitz chooses one reviewed, coherent preference profile and composes through
+  // the same honest source-backed path. The current profile is excluded so a
+  // reroll cannot immediately repeat itself.
   function blitz() {
-    const keys = ANYWHERE_PREFERENCES.map((p: { key: string }) => p.key);
-    const shuffled = keys.slice().sort(() => Math.random() - 0.5);
-    const picked = shuffled.slice(0, 2 + Math.floor(Math.random() * 3));
+    const picked = chooseBlitzPreferences({ previous: selected });
     setSelected(picked);
     resolveAndRun({ preferencesOverride: picked });
   }
