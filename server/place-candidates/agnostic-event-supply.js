@@ -34,6 +34,10 @@ const {
 const { scoreTimeSensitiveEventSalience } = require("../pulse-engine/time-sensitive-events");
 const { scoreEventPreferenceFit } = require("../pulse-engine/event-preference-fit");
 const { createSourceCache } = require("./source-cache");
+const {
+  MAX_COLLECTION_RADIUS_M,
+  filterEventsForLiveScope,
+} = require("./live-event-query");
 const { classifyCulturalSalience } = require("../pulse-engine/cultural-salience");
 const {
   buildAnchorEventSourcePlan,
@@ -383,17 +387,80 @@ function eventRankingScore(view) {
   return Number(view?.salience_score || 0) + Number(view?.preference_score || 0);
 }
 
-function rankCollectedEventsForPreferences(collected, preferences = []) {
+function rankCollectedEventsForPreferences(collected, preferences = [], scope = null) {
   if (!collected || typeof collected !== "object") return collected;
   const pool = collected._rankable_events;
   const tonightPool = Array.isArray(pool?.tonight) ? pool.tonight : collected.tonight;
   const thisWeekPool = Array.isArray(pool?.this_week) ? pool.this_week : collected.this_week;
   const { _rankable_events: _internalPool, ...publicResult } = collected;
+  const tonight = rankAndCap(filterEventsForLiveScope(tonightPool, scope), preferences);
+  const thisWeek = rankAndCap(filterEventsForLiveScope(thisWeekPool, scope), preferences);
+  const acquisition = publicResult.acquisition && typeof publicResult.acquisition === "object"
+    ? {
+        ...publicResult.acquisition,
+        ...(publicResult.acquisition.source_health && typeof publicResult.acquisition.source_health === "object"
+          ? {
+              source_health: {
+                ...publicResult.acquisition.source_health,
+                surfaced_event_count: tonight.length + thisWeek.length,
+              },
+            }
+          : {}),
+      }
+    : null;
   return {
     ...publicResult,
-    tonight: rankAndCap(Array.isArray(tonightPool) ? tonightPool : [], preferences),
-    this_week: rankAndCap(Array.isArray(thisWeekPool) ? thisWeekPool : [], preferences),
+    ...(acquisition ? { acquisition } : {}),
+    tonight,
+    this_week: thisWeek,
   };
+}
+
+function buildScopedEventSourcePlan({
+  anchor,
+  sourceAnchors = [],
+  registry,
+  globalSource = null,
+  globalEnabled = false,
+  maxSources = DEFAULT_MAX_SOURCES,
+  maxLocalSources = DEFAULT_MAX_LOCAL_SOURCES,
+} = {}) {
+  const sourceCap = Math.max(1, Math.min(Number(maxSources) || DEFAULT_MAX_SOURCES, DEFAULT_MAX_SOURCES));
+  const reserveGlobal = globalEnabled && globalSource ? 1 : 0;
+  const requestedLocalCap = Number(maxLocalSources);
+  const localCap = Math.max(0, Math.min(
+    Number.isFinite(requestedLocalCap) ? requestedLocalCap : DEFAULT_MAX_LOCAL_SOURCES,
+    sourceCap - reserveGlobal,
+  ));
+  const anchors = [anchor, ...(Array.isArray(sourceAnchors) ? sourceAnchors : [])]
+    .filter((point) => point && Number.isFinite(point.lat) && Number.isFinite(point.lng))
+    .filter((point, index, rows) => rows.findIndex(
+      (candidate) => candidate.lat.toFixed(5) === point.lat.toFixed(5) && candidate.lng.toFixed(5) === point.lng.toFixed(5),
+    ) === index);
+  const selected = [];
+  const seen = new Set();
+
+  for (const sourceAnchor of anchors) {
+    const localSources = buildAnchorEventSourcePlan({
+      anchor: sourceAnchor,
+      registry,
+      globalSource: null,
+      globalEnabled: false,
+      maxSources: DEFAULT_MAX_SOURCES,
+      maxLocalSources: DEFAULT_MAX_LOCAL_SOURCES,
+    });
+    for (const source of localSources) {
+      const identity = String(source.id || source.endpoint || source.base || "");
+      if (!identity || seen.has(identity)) continue;
+      seen.add(identity);
+      selected.push(source);
+      if (selected.length >= localCap) break;
+    }
+    if (selected.length >= localCap) break;
+  }
+
+  if (reserveGlobal && selected.length < sourceCap) selected.push({ ...globalSource, kind: "global" });
+  return selected.slice(0, sourceCap);
 }
 
 /**
@@ -403,15 +470,19 @@ function rankCollectedEventsForPreferences(collected, preferences = []) {
  * @param {string|Date|null} [opts.now]          trusted clock (tests inject)
  * @param {string|null} [opts.date]              feed window start (default today)
  * @param {string[]} [opts.preferences]          rank context only; never source evidence
+ * @param {object|null} [opts.scope]              trusted query geometry; filters cached evidence before ranking
+ * @param {object[]} [opts.sourceAnchors]         reviewed-source discovery points for a bounded route corridor
  * @param {object[]} [opts.registry]             feed registry (default built-in)
  * @param {Function} [opts.fetcher]              injected fetch (tests)
  * @returns {Promise<{coverage:"covered"|"uncovered", feed:object|null, feeds:object[], tonight:object[], this_week:object[], acquisition:object}>}
  */
 async function collectAnchorEvents({
   anchor,
+  sourceAnchors = [],
   now = null,
   date = null,
   preferences = [],
+  scope = null,
   registry,
   fetcher,
   radiusM,
@@ -420,9 +491,13 @@ async function collectAnchorEvents({
   maxSources = DEFAULT_MAX_SOURCES,
   maxLocalSources = DEFAULT_MAX_LOCAL_SOURCES,
 } = {}) {
-  const effectiveRadiusM = Math.max(100, Math.round(radiusM || DEFAULT_RADIUS_M));
-  const sourcePlan = buildAnchorEventSourcePlan({
+  const effectiveRadiusM = Math.min(
+    MAX_COLLECTION_RADIUS_M,
+    Math.max(100, Math.round(radiusM || DEFAULT_RADIUS_M)),
+  );
+  const sourcePlan = buildScopedEventSourcePlan({
     anchor,
+    sourceAnchors,
     registry: registry || resolveEventFeedRegistry(),
     globalSource: GLOBAL_FEED_DESCRIPTOR,
     globalEnabled: Boolean(globalKey),
@@ -509,8 +584,8 @@ async function collectAnchorEvents({
     }
   }
 
-  const rankedTonight = rankAndCap(tonight, preferences);
-  const rankedThisWeek = rankAndCap(thisWeek, preferences);
+  const rankedTonight = rankAndCap(filterEventsForLiveScope(tonight, scope), preferences);
+  const rankedThisWeek = rankAndCap(filterEventsForLiveScope(thisWeek, scope), preferences);
   const feeds = collectedSources.map(compactSourceStatus);
   const sourceHealth = buildAnchorEventSourceHealth(collectedSources, {
     acceptedEventCount: tonight.length + thisWeek.length,
@@ -796,7 +871,7 @@ function normalizeDirectCollectionOutcome(outcome, eventRows) {
  */
 // Coarse cache key: ~1 km anchor bucket + hour bucket (events are time-sensitive,
 // so the window must not be stale, but a fresh request a minute later must hit).
-function eventCacheKey(anchor, now, sourceIds = []) {
+function eventCacheKey(anchor, now, sourceIds = [], radiusM = DEFAULT_RADIUS_M) {
   const lat = Number(anchor.lat).toFixed(2);
   const lng = Number(anchor.lng).toFixed(2);
   const hour = (now ? new Date(now) : new Date(0)).toISOString().slice(0, 13);
@@ -804,7 +879,8 @@ function eventCacheKey(anchor, now, sourceIds = []) {
     .map(String)
     .sort()
     .join(",");
-  return `${lat},${lng}:${hour}:${sources}`;
+  const radius = Math.min(MAX_COLLECTION_RADIUS_M, Math.max(100, Math.round(Number(radiusM) || DEFAULT_RADIUS_M)));
+  return `${lat},${lng}:${hour}:${radius}:${sources}`;
 }
 
 function sourceIdentityForUrl(value) {
@@ -879,9 +955,14 @@ function resolveDefaultEventSupply(env = process.env) {
     ttlMs: EVENT_CACHE_TTL_MS,
     dir: (env && env.PARRANDA_CACHE_DIR) || null,
   });
-  return ({ anchor, now, preferences = [] } = {}) => {
-    const sourcePlan = buildAnchorEventSourcePlan({
+  return ({ anchor, sourceAnchors = [], now, preferences = [], radiusM, scope = null } = {}) => {
+    const effectiveRadiusM = Math.min(
+      MAX_COLLECTION_RADIUS_M,
+      Math.max(100, Math.round(Number(radiusM) || DEFAULT_RADIUS_M)),
+    );
+    const sourcePlan = buildScopedEventSourcePlan({
       anchor,
+      sourceAnchors,
       registry,
       globalSource: GLOBAL_FEED_DESCRIPTOR,
       globalEnabled: Boolean(globalKey),
@@ -893,15 +974,23 @@ function resolveDefaultEventSupply(env = process.env) {
         feeds: [],
         tonight: [],
         this_week: [],
-        acquisition: emptyAcquisition(DEFAULT_RADIUS_M),
+        acquisition: emptyAcquisition(effectiveRadiusM),
       });
     }
     const descriptors = sourcePlan.map((source) => compactSourceStatus({ source, status: "pending", raw: [] }));
-    const key = eventCacheKey(anchor, now, sourcePlan.map((source) => source.id));
+    const key = eventCacheKey(anchor, now, sourcePlan.map((source) => source.id), effectiveRadiusM);
     const cached = cache.peek(key);
-    if (cached) return Promise.resolve(rankCollectedEventsForPreferences(cached, preferences));
+    if (cached) return Promise.resolve(rankCollectedEventsForPreferences(cached, preferences, scope));
     // Cold: warm out-of-band (long timeout, fire-and-forget), serve honest pending.
-    cache.warm(key, () => collectAnchorEvents({ anchor, now, registry, timeoutMs: WARM_TIMEOUT_MS, globalKey }), {
+    cache.warm(key, () => collectAnchorEvents({
+      anchor,
+      sourceAnchors,
+      now,
+      registry,
+      radiusM: effectiveRadiusM,
+      timeoutMs: WARM_TIMEOUT_MS,
+      globalKey,
+    }), {
       // A proven healthy empty result is cacheable so a quiet calendar does not
       // cause refresh loops. Empty results with source failures stay retryable.
       shouldStore: shouldCacheEventSupplyResult,
@@ -915,7 +1004,7 @@ function resolveDefaultEventSupply(env = process.env) {
       pending: true,
       acquisition: {
         mode: "bounded_multi_source",
-        radius_m: DEFAULT_RADIUS_M,
+        radius_m: effectiveRadiusM,
         source_cap: DEFAULT_MAX_SOURCES,
         selected_source_count: sourcePlan.length,
         normalized_event_count: 0,
@@ -945,6 +1034,7 @@ function resolveDefaultEventSupply(env = process.env) {
 
 module.exports = {
   applyReviewedSourceTrust,
+  buildScopedEventSourcePlan,
   collectAnchorEvents,
   shouldCacheEventSupplyResult,
   resolveDefaultEventSupply,
