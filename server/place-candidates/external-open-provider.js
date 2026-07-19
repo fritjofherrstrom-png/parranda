@@ -26,6 +26,7 @@
  */
 
 const { normalizePlaceCandidate, validatePlaceCandidate } = require("./contract");
+const { normalizeOpeningHours } = require("./opening-hours");
 const { createEvidence, SOURCE_FAMILIES } = require("../candidates/evidence");
 
 const EXTERNAL_OPEN_PROVIDER_META = Object.freeze({
@@ -147,6 +148,8 @@ function mapRecordToCandidate(cityConfig, record, observedAt, index) {
   // valid sparse fallbacks.
   base.chain = record.chain === true;
   base.brand = typeof record.brand === "string" && record.brand.trim() ? record.brand.trim() : null;
+  const openingHours = normalizeOpeningHours(record.opening_hours);
+  if (openingHours) base.opening_hours = openingHours;
 
   return validatePlaceCandidate(base, `externalOpenCandidate[${index}]`);
 }

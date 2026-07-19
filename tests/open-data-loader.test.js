@@ -68,6 +68,30 @@ test("OSM place website is preserved only as source-owned scout metadata", () =>
   assert.equal(invalid.website, undefined);
 });
 
+test("OSM opening_hours is preserved as bounded source-owned operational metadata", () => {
+  const record = mapOsmElement({
+    type: "node",
+    id: 47,
+    lat: 41.9,
+    lon: 12.5,
+    tags: {
+      name: "Evening Gallery",
+      tourism: "gallery",
+      opening_hours: "  Tu-Su  10:00-22:00  ",
+    },
+  });
+  assert.equal(record.opening_hours, "Tu-Su 10:00-22:00");
+
+  const oversized = mapOsmElement({
+    type: "node",
+    id: 48,
+    lat: 41.9,
+    lon: 12.5,
+    tags: { name: "Unbounded Hours", tourism: "gallery", opening_hours: "x".repeat(513) },
+  });
+  assert.equal(oversized.opening_hours, undefined);
+});
+
 test("broadened OSM coverage maps to existing recognized types (no new vocab, generic for every city)", () => {
   const cases = [
     [{ shop: "bakery" }, "cafe", "fika"],
