@@ -142,7 +142,7 @@ test("route/Pulse hierarchy: a woven event is a route EXTENSION with exactly one
   assert.match(anywherePlannerSource, /Tillagt till dagens rutt/);
   assert.match(anywherePlannerSource, /Added to today's route/);
   // ...stays in the complete Google Maps route (FULL stop order, not the split)...
-  assert.match(anywherePlannerSource, /mapsWalkingRouteUrl\(routeStops\)/);
+  assert.match(anywherePlannerSource, /mapsWalkingRouteUrl\([\s\S]{0,80}routeStops,[\s\S]{0,180}origin: routeAnchorCoords/);
   // ...and the old duplicated presentations are gone (the "And tonight" card and
   // the woven-claim line no longer exist anywhere).
   assert.doesNotMatch(anywherePlannerSource, /Och ikväll|And tonight/);
@@ -191,7 +191,7 @@ test("route result has one authoritative route and keeps broader candidates seco
   assert.match(anywherePlannerSource, /buildRouteContextSuggestions\(routeStops, day\?\.areas/);
   assert.match(anywherePlannerSource, /detour idea near your route/);
   assert.match(anywherePlannerSource, /de ingår inte i dagens stopp eller Maps-rutten/);
-  assert.match(anywherePlannerSource, /mapsWalkingRouteUrl\(routeStops\)/);
+  assert.match(anywherePlannerSource, /destination: routeAnchorCoords/);
   assert.doesNotMatch(anywherePlannerSource, /t\("Dagens kvarter", "Today's neighborhoods"\)/);
   assert.match(anywherePlannerSource, /Candidates near this place/);
   assert.match(anywherePlannerSource, /Parranda found place candidates, but not a reliable route yet\./);

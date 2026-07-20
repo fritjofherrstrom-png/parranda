@@ -49,28 +49,44 @@ function uniqueText(values) {
 // long day is sampled down (keeping first + last) rather than truncated.
 const MAX_WAYPOINTS = 8; // origin + 8 waypoints + destination = 10 stops
 
-// A walking-directions URL across the day's stops in visit order. Returns null
-// when there are fewer than 2 coord-bearing stops.
-export function mapsWalkingRouteUrl(stops) {
+function validCoord(value) {
+  return value && Number.isFinite(value.lat) && Number.isFinite(value.lng);
+}
+
+function sameCoord(a, b) {
+  return validCoord(a) && validCoord(b) && a.lat === b.lat && a.lng === b.lng;
+}
+
+function sampleWaypoints(points) {
+  if (points.length <= MAX_WAYPOINTS) return points;
+  const first = points[0];
+  const last = points[points.length - 1];
+  const middle = points.slice(1, -1);
+  const middleLimit = MAX_WAYPOINTS - 2;
+  const step = middle.length / middleLimit;
+  const sampled = Array.from({ length: middleLimit }, (_, index) => middle[Math.floor(index * step)]);
+  return [first, ...sampled, last];
+}
+
+// A walking-directions URL across the day's stops in visit order. A trusted
+// explicit origin/destination may frame the stop sequence (near-me uses the
+// same anchor for both), while the default path remains first stop -> last stop.
+export function mapsWalkingRouteUrl(stops, options = {}) {
   const pts = (Array.isArray(stops) ? stops : []).filter(
-    (s) => s && Number.isFinite(s.lat) && Number.isFinite(s.lng),
+    (s) => validCoord(s),
   );
-  if (pts.length < 2) return null;
+  const explicitOrigin = validCoord(options.origin) ? options.origin : null;
+  const explicitDestination = validCoord(options.destination) ? options.destination : null;
+  if ((!explicitOrigin || !explicitDestination) && pts.length < 2) return null;
+  if (explicitOrigin && explicitDestination && pts.length < 1) return null;
 
-  let chosen = pts;
-  if (pts.length > MAX_WAYPOINTS + 2) {
-    const first = pts[0];
-    const last = pts[pts.length - 1];
-    const middle = pts.slice(1, -1);
-    const step = middle.length / MAX_WAYPOINTS;
-    const sampled = [];
-    for (let i = 0; i < MAX_WAYPOINTS; i += 1) sampled.push(middle[Math.floor(i * step)]);
-    chosen = [first, ...sampled, last];
-  }
-
-  const origin = chosen[0];
-  const destination = chosen[chosen.length - 1];
-  const waypoints = chosen.slice(1, -1);
+  const origin = explicitOrigin ?? pts[0];
+  const destination = explicitDestination ?? pts[pts.length - 1];
+  const stopWaypoints = pts.slice(explicitOrigin ? 0 : 1, explicitDestination ? pts.length : -1);
+  const waypoints = sampleWaypoints(
+    stopWaypoints.filter((point) => !sameCoord(point, origin) && !sameCoord(point, destination)),
+  );
+  if (sameCoord(origin, destination) && waypoints.length === 0) return null;
   const params = new URLSearchParams();
   params.set("api", "1");
   params.set("origin", `${origin.lat},${origin.lng}`);

@@ -241,6 +241,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [loadingStage, setLoadingStage] = useState(0);
   const [classification, setClassification] = useState<AnywhereClassification | null>(null);
   const [safeResponse, setSafeResponse] = useState<any>(null);
+  // Memory-only copy of the trusted coordinate anchor used for this response.
+  // It frames the consumer Maps route but is never persisted or put in a URL.
+  const [routeAnchorCoords, setRouteAnchorCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [mapDrawn, setMapDrawn] = useState(false);
   const [upgradePending, setUpgradePending] = useState(false); // cold-start: structure upgrade in flight
   const [liveRefreshExhausted, setLiveRefreshExhausted] = useState(false);
@@ -374,6 +377,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       const safe = decision.safeResponseFor(body, cls);
       setClassification(cls);
       setSafeResponse(safe);
+      setRouteAnchorCoords(anchor.coords ?? null);
       setPhase("done");
       if (silent) setUpgradePending(false);
       // Retention: remember this composed day so a reload doesn't lose it, and
@@ -454,6 +458,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     lastEntryRef.current = entry;
     setClassification(entry.classification);
     setSafeResponse(entry.safeResponse);
+    setRouteAnchorCoords(null);
     setMapDrawn(false);
     setPhase("done");
     setRestoredAt(entry.savedAt);
@@ -836,7 +841,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const eveningEvent: any = day?.evening_event ?? null;
   // A single "open the whole day in Google Maps" walking route across every
   // coord-bearing primary-route stop, in the exact order the API returned.
-  const routeUrl = useMemo(() => mapsWalkingRouteUrl(routeStops), [routeStops]);
+  // Near-me plans preserve the engine's loop from/to the user's trusted anchor;
+  // typed-place plans retain the existing first-stop -> last-stop contract.
+  const routeUrl = useMemo(
+    () => mapsWalkingRouteUrl(
+      routeStops,
+      routeAnchorCoords ? { origin: routeAnchorCoords, destination: routeAnchorCoords } : undefined,
+    ),
+    [routeStops, routeAnchorCoords],
+  );
   // District composition deliberately sees a broader candidate universe than
   // the route. Keep only a tiny, proximity-bounded, deduped slice as optional
   // discovery context; these candidates never enter routeStops or routeUrl.
