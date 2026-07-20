@@ -15,6 +15,7 @@ import { buildAnywherePayload, ANYWHERE_PREFERENCES, WALK_PRESETS, isoDateFromOf
 const require = createRequire(import.meta.url);
 const decision = require("../../anywhere-render-decision.js");
 const anywherePlannerSource = readFileSync(new URL("../src/components/AnywherePlanner.tsx", import.meta.url), "utf8");
+const anywhereStyles = readFileSync(new URL("../src/styles/tailwind.css", import.meta.url), "utf8");
 
 test("payload carries the freeform place + the three agnostic flags, never a city key", () => {
   const payload = buildAnywherePayload({ place: "Lyon", dates: ["2026-07-02"], preferences: ["food", "views"] });
@@ -219,6 +220,7 @@ test("route stops translate #369 candidate-spine metadata to product copy — ne
   // WHY-chips from covered_preferences (translated + deduped vs the type chip)
   // and an honest partial-match marker; unmapped axes are skipped, not exposed.
   assert.match(anywherePlannerSource, /coveredPreferenceLabels\(stop, lang\)/);
+  assert.match(anywherePlannerSource, /museums: \{ sv: "Kultur", en: "Culture" \}/);
   assert.match(anywherePlannerSource, /t\("täcker", "covers"\)/);
   assert.match(anywherePlannerSource, /candidate_status === "partial"/);
   assert.match(anywherePlannerSource, /t\("delvis träff", "partial match"\)/);
@@ -229,12 +231,16 @@ test("route stops translate #369 candidate-spine metadata to product copy — ne
 test("candidate clusters read as candidates, not a second itinerary", () => {
   assert.doesNotMatch(anywherePlannerSource, /till nästa distrikt|to the next district/);
   assert.doesNotMatch(anywherePlannerSource, /Dagens kvarter|Today's neighborhoods/);
+  const structureOnlyHeader = anywherePlannerSource
+    .split("{showStructure && structure && !(showDay && routeStops.length > 0) && (")[1]
+    ?.split('{phase === "done" && upgradePending')[0] ?? "";
+  assert.doesNotMatch(structureOnlyHeader, /shareDay|saveDay|Share day|Save day/);
 });
 
 test("the weather read lives in Pulse (context), not as its own competing section", () => {
   // The Pulse section carries the trusted weather read + clothing; it renders
   // even when no event source exists (weather must not vanish with events).
-  assert.match(anywherePlannerSource, /\(showDay && dayflow\?\.weather\?\.headline\)\)/);
+  assert.match(anywherePlannerSource, /\{showDay && dayflow\?\.weather\?\.headline && \(/);
   assert.doesNotMatch(anywherePlannerSource, /Dagens läsning|Today's reading/);
 });
 
@@ -256,6 +262,39 @@ test("the anchor is chosen once: the planner shows it, and adjusts — never a s
   assert.doesNotMatch(anywherePlannerSource, /ANY-CITY PLANNER|Any-place Alpha|Experimental route|dogfood/i);
 });
 
+test("compact planner and map controls keep a 44px mobile touch target", () => {
+  assert.match(
+    anywherePlannerSource,
+    /aria-label=\{t\("Byt plats", "Change place"\)\}[\s\S]{0,180}min-h-11/,
+  );
+  assert.match(
+    anywherePlannerSource,
+    /aria-expanded=\{false\}[\s\S]{0,180}min-h-11/,
+  );
+  assert.match(
+    anywherePlannerSource,
+    /aria-expanded=\{mapExpanded\}[\s\S]{0,180}min-h-11/,
+  );
+  assert.match(anywhereStyles, /\.leaflet-control-zoom a\s*\{[\s\S]*width: 44px !important;/);
+  assert.match(anywhereStyles, /\.leaflet-control-zoom a\s*\{[\s\S]*height: 44px !important;/);
+  assert.match(anywherePlannerSource, /iconSize: \[44, 44\]/);
+  assert.match(anywherePlannerSource, /iconAnchor: \[22, 22\]/);
+});
+
+test("route, saved-day, Blitz, and source actions keep a 44px mobile touch target", () => {
+  assert.match(anywherePlannerSource, /onClick=\{blitz\}[\s\S]{0,180}min-h-11/);
+  assert.match(anywherePlannerSource, /onClick=\{\(\) => restoreEntry\(entry\)\}[\s\S]{0,180}min-h-11/);
+  assert.match(anywherePlannerSource, /aria-label=\{t\("Ta bort", "Remove"\)\}[\s\S]{0,180}min-h-11 min-w-11/);
+  assert.match(anywherePlannerSource, /href=\{pin\}[\s\S]{0,180}min-h-11 min-w-11/);
+  assert.match(anywherePlannerSource, /href=\{ev\.source_url\}[\s\S]{0,180}min-h-11 min-w-11/);
+});
+
+test("keyboard-reachable controls have one visible focus contract", () => {
+  assert.match(anywhereStyles, /:where\([\s\S]*a\[href\][\s\S]*button[\s\S]*input[\s\S]*\):focus-visible/);
+  assert.match(anywhereStyles, /outline: 3px solid rgb\(var\(--p-color-glow\)\)/);
+  assert.match(anywhereStyles, /outline-offset: 3px/);
+});
+
 test("adjustments collapse to a summary and re-compose themselves — no submit past the landing", () => {
   // Collapsed summary (mood · day · length) with an aria-expanded toggle...
   assert.match(anywherePlannerSource, /!adjustOpen && \(/);
@@ -273,6 +312,13 @@ test("adjustments collapse to a summary and re-compose themselves — no submit 
   assert.match(anywherePlannerSource, /\}, 400\);/);
   assert.match(anywherePlannerSource, /Changes apply on their own/);
   assert.equal((anywherePlannerSource.match(/type="submit"/g) || []).length, 1, "exactly one submit: the no-anchor fallback");
+});
+
+test("saving a live day does not freeze its adjustment controls as a restored snapshot", () => {
+  const saveBlock = anywherePlannerSource.split("function saveDay() {")[1]?.split("function removeSavedDay")[0] ?? "";
+  const restoreBlock = anywherePlannerSource.split("function restoreEntry(entry: SavedEntry) {")[1]?.split("const autoPlannedRef")[0] ?? "";
+  assert.doesNotMatch(saveBlock, /setRestoredAt/);
+  assert.match(restoreBlock, /setRestoredAt\(entry\.savedAt\)/);
 });
 
 test("latest compose wins and cancels stale network work", () => {
@@ -313,23 +359,37 @@ test("the Live sheet explores events only — it never touches the day's anchor 
   assert.match(anywherePlannerSource, /liveSheetCloseRef\.current/);
   assert.match(anywherePlannerSource, /e\.key !== "Tab"/);
   assert.match(anywherePlannerSource, /liveSheetTriggerRef\.current/);
-  // TIME is a real axis over the live_events buckets; the legacy `tonight` key
-  // is displayed as Today because it contains now/today/tonight. The sheet
-  // renders the active bucket in full (the card keeps its capped preview).
+  // TIME is a real axis over the scoped live_events buckets; the legacy
+  // `tonight` key is displayed as Today because it contains now/today/tonight.
+  // The sheet renders the active bucket in full (the card keeps its capped
+  // preview).
   assert.match(anywherePlannerSource, /\[liveSheetTime, setLiveSheetTime\] = useState/);
-  assert.match(anywherePlannerSource, /liveSheetTime === "tonight" \? pulseBuckets\.tonight : pulseBuckets\.thisWeek/);
+  assert.match(anywherePlannerSource, /liveSheetTime === "tonight" \? sheetBuckets\.tonight : sheetBuckets\.thisWeek/);
   assert.doesNotMatch(anywherePlannerSource, /sheetEvents\.slice\(/, "the sheet is the uncapped surface");
-  // SCOPE is the single scope events were actually collected under — a coords
-  // anchor collapses to one non-duplicated "near you" (semantic firewall: the
-  // landing consent anchors the DAY; the sheet never asks for a position and
-  // never re-runs the compose).
-  assert.match(anywherePlannerSource, /Nära dig — dagen är redan förankrad här/);
-  assert.match(anywherePlannerSource, /Near you — the day is already anchored here/);
-  assert.match(anywherePlannerSource, /Runt \$\{anchorLabel\}/);
-  assert.doesNotMatch(anywherePlannerSource, /requestPosition/, "no position request outside the landing");
+  // SCOPE now calls the explicit non-mutating API contract. Around-place reads
+  // the trusted response anchor, near-route sends bounded primary-route points,
+  // and near-me obtains separate coordinates for Live only.
+  assert.match(anywherePlannerSource, /buildLiveEventQueryPayload/);
+  assert.match(anywherePlannerSource, /acceptedLiveEventQuery/);
+  assert.match(anywherePlannerSource, /fetch\(`\/api\/live-events\?lang=\$\{lang\}`/);
+  assert.match(anywherePlannerSource, /requestLiveSheetScope\("around_place"\)/);
+  assert.match(anywherePlannerSource, /requestLiveSheetScope\("near_route"\)/);
+  assert.match(anywherePlannerSource, /requestLiveSheetScope\("near_me"\)/);
+  assert.match(anywherePlannerSource, /time: liveSheetTime === "week" \? "this_week" : "tonight"/);
+  assert.match(anywherePlannerSource, /preferences: selected/);
+  assert.match(anywherePlannerSource, /response: safeResponse/);
+  assert.match(anywherePlannerSource, /routeStops/);
+  assert.match(anywherePlannerSource, /LIVE_QUERY_REFRESH_DELAYS_MS = \[1500, 3000, 5000\]/);
+  assert.match(anywherePlannerSource, /attempt <= LIVE_QUERY_REFRESH_DELAYS_MS\.length/);
+  assert.match(anywherePlannerSource, /sheetPulseState === "pending"/);
   const sheetBlock = anywherePlannerSource.split("THE LIVE SHEET")[1] ?? "";
   assert.ok(sheetBlock.length > 0, "live sheet block present");
-  assert.doesNotMatch(sheetBlock, /resolveAndRun|execute\(|setPlace|setMode|storeAnchorCoords|consumeAnchorCoords/, "the sheet must not recompose or move the anchor");
+  assert.doesNotMatch(
+    sheetBlock,
+    /resolveAndRun|execute\(|setSafeResponse|setClassification|setPlace|setMode|storeAnchorCoords|consumeAnchorCoords/,
+    "the sheet must not recompose, replace route data or move the day anchor",
+  );
+  assert.match(anywherePlannerSource, /day's place and route are unchanged/);
   // Empty copy names the ACTIVE scope×time cell, and counts come from the
   // buckets, never from copy.
   // The legacy backend key `tonight` contains now/today/tonight, so the visible
@@ -339,7 +399,9 @@ test("the Live sheet explores events only — it never touches the day's anchor 
   assert.doesNotMatch(anywherePlannerSource, /t\("Ikväll", "Tonight"\)/);
   assert.match(anywherePlannerSource, /Inget listat senare i veckan \$\{scopePhrase\}/);
   assert.match(anywherePlannerSource, /t\("Visa veckan", "Show this week"\)/);
-  assert.match(anywherePlannerSource, /pulseBuckets\.thisWeek\.length\}/);
+  assert.match(anywherePlannerSource, /sheetBuckets\.thisWeek\.length\}/);
+  assert.match(anywherePlannerSource, /sheetSourceHealth\.responding_source_count/);
+  assert.match(anywherePlannerSource, /sheetSourceHealth\.event_bearing_source_count/);
   // The card's week summary is a count, not a second list.
   assert.match(anywherePlannerSource, /händelser listade", "more listed"/);
 });

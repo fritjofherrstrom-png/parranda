@@ -5171,6 +5171,33 @@ function buildRouteFromTemplate(
     selectedStops = sortedPool.slice(0, Math.min(rawPool.length, 3)).map((entry) => entry.item);
   }
 
+  // A strict single-interest request (currently most visible for second hand)
+  // can yield one or two strong matching stops even though the agnostic
+  // reservoir also contains safe day-support candidates. Returning only the
+  // strict family makes an otherwise useful any-place day fail the thin-day
+  // promotion gate. Complete ONLY the agnostic-compose route to the minimum
+  // three-stop day from its already planner-gated reservoir. Registered-city
+  // templates keep their strict behavior byte-identical; sparse pools still
+  // remain sparse, and the requested candidates always stay in the route.
+  if (
+    template.id === AGNOSTIC_COMPOSE_TEMPLATE_ID &&
+    strictTags.length &&
+    selectedStops.length > 0 &&
+    selectedStops.length < Math.min(3, rawPool.length)
+  ) {
+    const selectedIds = new Set(selectedStops.map((stop) => stop.id));
+    const supportCount = Math.min(3, rawPool.length) - selectedStops.length;
+    const support = sortedPool
+      .filter(
+        (entry) =>
+          !selectedIds.has(entry.item.id) &&
+          !itemMatchesStrictPreference(entry.item, strictTags),
+      )
+      .slice(0, supportCount)
+      .map((entry) => entry.item);
+    selectedStops = [...selectedStops, ...support];
+  }
+
   // Preview-city beta: verified curated items always rank first (the higher-trust
   // spine), so for a thin preview citypack they crowd out every source-backed
   // candidate and the day never changes. Reserve a few slots for the top-scoring

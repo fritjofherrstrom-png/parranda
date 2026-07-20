@@ -32,6 +32,10 @@ const { summarizeDayflowHonesty } = require("./dayflow-honesty");
 const { buildCandidateCombinationInspect } = require("./candidate-combination-inspect");
 const { buildRouteCandidateFromCandidateCombination } = require("./candidate-combination-route-adapter");
 const { assessCityCandidateReadiness } = require("../place-candidates/readiness");
+const {
+  buildLocalDayAvailabilityWindow,
+  evaluateOpeningHoursForWindow,
+} = require("../place-candidates/opening-hours");
 const { validateAgnosticWalkingOrder } = require("./agnostic-route-walking-validation");
 const { buildAgnosticRouteOrdering, daypartForRole, timeBandRank } = require("./agnostic-route-ordering");
 const { resolveAgnosticContext, collectInfluenceReasons } = require("./agnostic-route-context");
@@ -627,8 +631,23 @@ async function composeAgnosticRouteOutput({
   // applies only to this flag-gated agnostic path (default citypack/blitz flows
   // never pass through here, so their time behavior is untouched).
   const trustedTimeKnown = Boolean(ctx && ctx.timezoneKnown);
+  const availabilityWindow = trustedTimeKnown
+    ? buildLocalDayAvailabilityWindow({ requestedDate: effectiveDate, nowLocalIso: ctx.now })
+    : null;
+  const availabilityHelpers = availabilityWindow
+    ? {
+        evaluateCandidateAvailability: ({ candidate }) =>
+          typeof candidate?.opening_hours === "string"
+            ? evaluateOpeningHoursForWindow(candidate.opening_hours, availabilityWindow)
+            : null,
+      }
+    : {};
   const selectionHelpers = trustedTimeKnown
-    ? { ...helpers, experimentalAdmitCandidate: admitExperimentalInferredExternalCandidate }
+    ? {
+        ...helpers,
+        ...availabilityHelpers,
+        experimentalAdmitCandidate: admitExperimentalInferredExternalCandidate,
+      }
     : {
         ...helpers,
         experimentalAdmitCandidate: admitExperimentalInferredExternalCandidate,
@@ -670,6 +689,12 @@ async function composeAgnosticRouteOutput({
     const influence = collectInfluenceReasons(plannerRoles, candidateCombination);
     contextBlock.influence.weather_fit_reasons = influence.weather;
     contextBlock.influence.time_fit_reasons = influence.time;
+    if (plannerRoles.availability_summary) {
+      const summary = plannerRoles.availability_summary;
+      contextBlock.influence.opening_hours_fed_into_selection = summary.evaluated_candidate_count > 0;
+      contextBlock.influence.opening_hours_excluded_candidate_count = summary.excluded_candidate_count;
+      contextBlock.influence.opening_hours_unresolved_candidate_count = summary.unresolved_candidate_count;
+    }
   }
 
   const providerSpecs = buildProviderSpecs({
@@ -723,7 +748,7 @@ async function composeAgnosticRouteOutput({
       baselineResult,
       walkingKmTarget: Number.isFinite(walkingKmTarget) ? walkingKmTarget : undefined,
       preferences,
-      timezone,
+      timezone: contextBlock?.time?.timezone || timezone,
       lang,
       // Pass ONLY the resolver-attested label (may be null). The prose builder
       // must fall back to neutral, never to agnosticContext.label — which is the

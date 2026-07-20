@@ -88,14 +88,19 @@ export function clothingAdvice(observed, lang) {
 
 /**
  * Venue-local event timing across the FULL temporal contract:
- *   continuous → weekday + clock from starts_at in the event timezone
+ *   continuous → weekday + clock from starts_at in the event timezone; once the
+ *                window is UNDERWAY the start weekday is no longer the truth
+ *                (a run that began Thursday reads as a Thursday event in a
+ *                "tonight" list), so an ongoing window says so instead
  *   daily      → "dagligen HH–HH" from local_start/local_end (already local —
  *                never re-converted through a timezone)
  *   all_day    → local date or date range from starts_on/ends_on, formatted in
  *                UTC so a date-only value never shifts across midnight
  *   unresolved → "" (timing copy is omitted, never invented)
+ *
+ * `now` is injectable so tests never depend on the real clock.
  */
-export function eventTiming(ev, lang) {
+export function eventTiming(ev, lang, now = new Date()) {
   if (!ev || typeof ev !== "object") return "";
   const en = lang === "en";
   const locale = en ? "en-GB" : "sv-SE";
@@ -128,9 +133,35 @@ export function eventTiming(ev, lang) {
   if (!startsAt) return "";
   const date = new Date(startsAt);
   if (Number.isNaN(date.getTime())) return "";
+  const timezone = ev.timezone || win?.timezone || null;
+
+  // ONGOING: a run that started earlier and has not ended yet. Its start
+  // weekday is history — printing it under "tonight" claims the wrong day. Say
+  // it is on now, and add the end clock only when the run actually ends on the
+  // viewer-relevant venue-local day (otherwise "until 22:00" would imply a
+  // same-day close that isn't real).
+  const endsAtRaw = (win && win.ends_at) || ev.ends_at || null;
+  const endsAt = endsAtRaw ? new Date(endsAtRaw) : null;
+  const nowDate = now instanceof Date ? now : new Date(now);
+  const nowValid = !Number.isNaN(nowDate.getTime());
+  const endValid = endsAt && !Number.isNaN(endsAt.getTime());
+  if (nowValid && endValid && date.getTime() <= nowDate.getTime() && endsAt.getTime() > nowDate.getTime()) {
+    const onNow = en ? "on now" : "pågår nu";
+    try {
+      const dayOpts = timezone ? { timeZone: timezone } : {};
+      const sameDay =
+        endsAt.toLocaleDateString(locale, dayOpts) === nowDate.toLocaleDateString(locale, dayOpts);
+      if (!sameDay) return onNow;
+      const clockOpts = { hour: "2-digit", minute: "2-digit", ...(timezone ? { timeZone: timezone } : {}) };
+      return `${onNow} · ${en ? "until" : "till"} ${endsAt.toLocaleTimeString(locale, clockOpts)}`;
+    } catch {
+      return onNow;
+    }
+  }
+
   try {
     const opts = { weekday: "short", hour: "2-digit", minute: "2-digit" };
-    if (ev.timezone || win?.timezone) opts.timeZone = ev.timezone || win.timezone; // venue-local, never the viewer's
+    if (timezone) opts.timeZone = timezone; // venue-local, never the viewer's
     return date.toLocaleString(locale, opts);
   } catch {
     return "";
