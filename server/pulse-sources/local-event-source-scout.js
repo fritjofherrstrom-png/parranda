@@ -55,7 +55,9 @@ function buildLocalEventDiscoveryQueries({
     ...(Array.isArray(place.local_discovery_terms) ? place.local_discovery_terms : []),
     ...intentHints,
   ]);
-  const terms = (suppliedTerms.length ? suppliedTerms : ["events", "calendar"]).slice(0, 8);
+  // Intent narrows ranking later; it must not erase the generic calendar
+  // discovery baseline. Keep both within the same fixed query budget.
+  const terms = uniqueStrings(["events", "calendar", ...suppliedTerms]).slice(0, 8);
   const queries = [];
 
   for (const label of labels) {
