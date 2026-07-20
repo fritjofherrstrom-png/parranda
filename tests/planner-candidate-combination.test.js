@@ -251,6 +251,59 @@ test("origin_distance_km is exposed when an origin is provided", () => {
   );
   assert.ok(Number.isFinite(out.geometry_summary.origin_distance_km));
   assert.ok(out.geometry_summary.origin_distance_km > 0);
+  assert.ok(["near", "reachable", "extended"].includes(out.geometry_summary.origin_reach));
+});
+
+test("an anchored selection prefers the nearby coherent cluster over a tighter remote cluster", () => {
+  const origin = { lat: 41.9, lng: 12.49 };
+  const out = buildCandidateCombination(
+    plannerRoles([
+      role("scenic_anchor", {
+        candidates: [
+          candidate("scenic-remote", { coordinates: { lat: 41.94, lng: 12.54 } }),
+          candidate("scenic-near", { coordinates: { lat: 41.902, lng: 12.492 } }),
+        ],
+      }),
+      role("food_anchor", {
+        candidates: [
+          candidate("food-remote", { coordinates: { lat: 41.9402, lng: 12.5402 } }),
+          candidate("food-near", { coordinates: { lat: 41.909, lng: 12.499 } }),
+        ],
+      }),
+    ]),
+    {},
+    { origin },
+  );
+
+  assert.deepEqual(
+    out.selected.map((entry) => entry.candidate_id).sort(),
+    ["food-near", "scenic-near"],
+  );
+  assert.equal(out.geometry_summary.origin_reach, "near");
+});
+
+test("without an origin, compactness keeps the existing deterministic behavior", () => {
+  const out = buildCandidateCombination(
+    plannerRoles([
+      role("scenic_anchor", {
+        candidates: [
+          candidate("scenic-remote", { coordinates: { lat: 41.94, lng: 12.54 } }),
+          candidate("scenic-near", { coordinates: { lat: 41.902, lng: 12.492 } }),
+        ],
+      }),
+      role("food_anchor", {
+        candidates: [
+          candidate("food-remote", { coordinates: { lat: 41.9402, lng: 12.5402 } }),
+          candidate("food-near", { coordinates: { lat: 41.909, lng: 12.499 } }),
+        ],
+      }),
+    ]),
+  );
+  assert.deepEqual(
+    out.selected.map((entry) => entry.candidate_id).sort(),
+    ["food-remote", "scenic-remote"],
+  );
+  assert.equal("origin_reach" in out.geometry_summary, false);
 });
 
 // --- regression: requested roles must never be silently dropped by the cap --

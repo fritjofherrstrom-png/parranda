@@ -433,3 +433,48 @@ test("weak, popularity-only, and structural candidates do not fill user-facing r
   assert.equal(evening.status, "missing");
   assert.equal(evening.candidates.length, 0);
 });
+
+test("a chain-only role stays inspectable but is not auto-composed when local role breadth is rich", () => {
+  const records = [
+    { ...record("chain-food", "Chain Food", "street-food", 41.9, 12.49, { tags: ["mat"] }), chain: true, brand: "Chain Food" },
+    record("local-view", "Belvedere Panorama", "viewpoint", 41.91, 12.5, { tags: ["utsikt"] }),
+    record("local-cafe", "Caffe Aurora", "cafe", 41.92, 12.51, { tags: ["coffee", "fika"] }),
+    record("local-park", "Giardino Verde", "park", 41.93, 12.52, { tags: ["park", "green"] }),
+    record("local-museum", "Museo Civico", "museum", 41.94, 12.53, { tags: ["museum", "culture"] }),
+  ];
+  const out = selectPlannerRoleCandidates(
+    city([]),
+    { date: DATE, preferences: ["food"], include_external_candidates: 1 },
+    {
+      external_provider: { dataset: loaderOf(records) },
+      experimentalAdmitCandidate: () => ({ allowed: true, policy: "test_admission" }),
+    },
+  );
+  const food = role(out, "food_anchor");
+  assert.equal(food.status, "partial");
+  assert.equal(food.planner_usable, true);
+  assert.equal(food.candidates[0].candidate_id, "local-cafe");
+  const chain = food.candidates.find((candidate) => candidate.candidate_id === "chain-food");
+  assert.equal(chain.candidate_status, "fallback");
+  assert.equal(chain.planner_usable, false);
+  assert.ok(chain.local_feel_reasons.includes("chain_not_auto_composed_with_broad_local_reservoir"));
+});
+
+test("a chain remains an honest planner-usable fallback when the whole reservoir is sparse", () => {
+  const records = [
+    { ...record("chain-food", "Chain Food", "street-food", 41.9, 12.49, { tags: ["mat"] }), chain: true, brand: "Chain Food" },
+    record("local-cafe", "Local Cafe", "cafe", 41.902, 12.492, { tags: ["coffee", "fika"] }),
+  ];
+  const out = selectPlannerRoleCandidates(
+    city([]),
+    { date: DATE, preferences: ["food", "coffee"], include_external_candidates: 1 },
+    {
+      external_provider: { dataset: loaderOf(records) },
+      experimentalAdmitCandidate: () => ({ allowed: true, policy: "test_admission" }),
+    },
+  );
+  const food = role(out, "food_anchor");
+  assert.equal(food.status, "partial");
+  assert.equal(food.planner_usable, true);
+  assert.equal(food.candidates[0].candidate_id, "chain-food");
+});
