@@ -138,3 +138,46 @@ test("trusted live events remain available when route composition is blocked", a
     global.fetch = ORIGINAL_FETCH;
   }
 });
+
+test("resolved place context reaches only the trusted event supply seam", async () => {
+  let suppliedContext = null;
+  const eventSupply = async ({ placeContext }) => {
+    suppliedContext = placeContext;
+    return { coverage: "uncovered", feed: null, tonight: [], this_week: [] };
+  };
+  const placeResolver = async () => [{
+    label: "Stockholm, Sverige",
+    lat: 59.3293,
+    lng: 18.0686,
+    confidence: "medium",
+    provenance: "trusted_test_resolver",
+    admin_context: {
+      locality: "Stockholm",
+      municipality: "Stockholms kommun",
+      country: "Sverige",
+      country_code: "se",
+    },
+  }];
+  global.fetch = mockStableWeatherFetch();
+  const server = buildApp({ openDataLoader: null, eventSupply, placeResolver }).listen(0);
+  try {
+    const res = await post(server, {
+      place: "Stockholm",
+      place_context: { locality: "Injected", country_code: "xx" },
+      dates: ["2026-06-28"],
+      preferences: ["culture"],
+      include_external_candidates: 1,
+    });
+    assert.deepEqual(suppliedContext, {
+      locality: "Stockholm",
+      municipality: "Stockholms kommun",
+      country: "Sverige",
+      country_code: "se",
+    });
+    assert.equal("admin_context" in res.agnostic_route_output_experiment.intake.resolved, false);
+    assert.doesNotMatch(JSON.stringify(res), /Injected|"xx"/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    global.fetch = ORIGINAL_FETCH;
+  }
+});

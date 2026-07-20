@@ -77,6 +77,26 @@ function normalizeNameForMatch(raw) {
   return normalized || null;
 }
 
+function compactAdminText(value) {
+  if (typeof value !== "string") return null;
+  const text = value.trim().replace(/\s+/g, " ");
+  return text && text.length <= 160 ? text : null;
+}
+
+function normalizeAdminContext(address) {
+  if (!address || typeof address !== "object") return null;
+  const countryCode = compactAdminText(address.country_code)?.toLowerCase();
+  const context = {
+    locality: compactAdminText(address.city || address.town || address.village || address.hamlet),
+    municipality: compactAdminText(address.municipality || address.city_district),
+    county: compactAdminText(address.county),
+    region: compactAdminText(address.state || address.region),
+    country: compactAdminText(address.country),
+    country_code: countryCode && /^[a-z]{2}$/.test(countryCode) ? countryCode : null,
+  };
+  return Object.values(context).some(Boolean) ? context : null;
+}
+
 function toRawCandidate(result) {
   if (!result || typeof result !== "object") return null;
   const lat = Number(result.lat);
@@ -92,7 +112,15 @@ function toRawCandidate(result) {
         : null;
   const name = typeof result.name === "string" && result.name.trim() ? result.name.trim() : null;
   const osmRef = result.osm_type && result.osm_id ? `${result.osm_type}/${result.osm_id}` : null;
-  return { lat, lng, importance, label, name, osm_ref: osmRef };
+  return {
+    lat,
+    lng,
+    importance,
+    label,
+    name,
+    osm_ref: osmRef,
+    admin_context: normalizeAdminContext(result.address),
+  };
 }
 
 /**
@@ -157,7 +185,7 @@ function classifyConfidences(rawCandidates, query = null) {
 }
 
 function finalizeCandidate(candidate) {
-  return {
+  const out = {
     label: candidate.label,
     lat: candidate.lat,
     lng: candidate.lng,
@@ -171,6 +199,8 @@ function finalizeCandidate(candidate) {
     osm_ref: candidate.osm_ref,
     // Deliberately NO timezone — the resolver does not do coordinate→timezone lookup.
   };
+  if (candidate.admin_context) out.admin_context = candidate.admin_context;
+  return out;
 }
 
 /**
@@ -226,7 +256,9 @@ function createNominatimPlaceResolver({
       const url = new URL(endpoint);
       url.searchParams.set("q", query);
       url.searchParams.set("format", "jsonv2");
-      url.searchParams.set("addressdetails", "0");
+      // A compact allowlisted subset becomes trusted server-side place context
+      // for source-family discovery. The raw address never leaves this module.
+      url.searchParams.set("addressdetails", "1");
       url.searchParams.set("limit", String(clampedLimit));
 
       const response = await fetcher(url.toString(), {
