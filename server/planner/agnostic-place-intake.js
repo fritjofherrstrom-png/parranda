@@ -27,6 +27,7 @@
 // this set (or a number below the threshold) is treated as too weak to anchor.
 const STRONG_CONFIDENCE = new Set(["high", "medium"]);
 const STRONG_NUMERIC_THRESHOLD = 0.5;
+const PLACE_CONTEXT_FIELDS = ["locality", "municipality", "county", "region", "country", "country_code"];
 
 /**
  * Read the freeform place query from the public request. ONLY the query string
@@ -84,6 +85,20 @@ function intake(mode, query, fields = {}) {
   };
 }
 
+function trustedPlaceContext(value) {
+  if (!value || typeof value !== "object") return null;
+  const out = {};
+  for (const field of PLACE_CONTEXT_FIELDS) {
+    const raw = value[field];
+    if (typeof raw !== "string") continue;
+    const text = raw.trim().replace(/\s+/g, " ");
+    if (!text || text.length > 160) continue;
+    if (field === "country_code" && !/^[a-z]{2}$/i.test(text)) continue;
+    out[field] = field === "country_code" ? text.toLowerCase() : text;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 /**
  * Resolve the trusted coordinate anchor for the agnostic route experiment.
  *
@@ -94,6 +109,7 @@ async function resolveAgnosticIntake({ coords = null, placeQuery = null, placeRe
   if (coords && isValidCoordinate(coords.lat, coords.lng)) {
     return {
       anchor: { lat: coords.lat, lng: coords.lng },
+      placeContext: null,
       intake: intake("coordinates", placeQuery, {
         status: "resolved",
         resolved: {
@@ -110,24 +126,24 @@ async function resolveAgnosticIntake({ coords = null, placeQuery = null, placeRe
   // 2. No coordinates and no place — nothing to anchor on. Aligns with the
   //    #259 "no usable coordinates" outcome.
   if (!placeQuery) {
-    return { anchor: null, intake: intake("none", null, { blockers: ["missing_or_invalid_coordinates"] }) };
+    return { anchor: null, placeContext: null, intake: intake("none", null, { blockers: ["missing_or_invalid_coordinates"] }) };
   }
 
   // 3. Freeform place → trusted server resolver ONLY.
   if (typeof placeResolver !== "function") {
-    return { anchor: null, intake: intake("place", placeQuery, { blockers: ["place_resolver_unavailable"] }) };
+    return { anchor: null, placeContext: null, intake: intake("place", placeQuery, { blockers: ["place_resolver_unavailable"] }) };
   }
 
   let resolved;
   try {
     resolved = await placeResolver(placeQuery);
   } catch (_error) {
-    return { anchor: null, intake: intake("place", placeQuery, { blockers: ["place_resolver_error"] }) };
+    return { anchor: null, placeContext: null, intake: intake("place", placeQuery, { blockers: ["place_resolver_error"] }) };
   }
 
   const candidates = Array.isArray(resolved) ? resolved : resolved && typeof resolved === "object" ? [resolved] : [];
   if (!candidates.length) {
-    return { anchor: null, intake: intake("place", placeQuery, { blockers: ["place_not_resolved"] }) };
+    return { anchor: null, placeContext: null, intake: intake("place", placeQuery, { blockers: ["place_not_resolved"] }) };
   }
 
   const strong = candidates.filter((candidate) => candidate && isStrongConfidence(candidate.confidence));
@@ -136,6 +152,7 @@ async function resolveAgnosticIntake({ coords = null, placeQuery = null, placeRe
   if (!strong.length) {
     return {
       anchor: null,
+      placeContext: null,
       intake: intake("place", placeQuery, {
         candidates_considered: candidates.length,
         blockers: ["low_confidence_place_resolution"],
@@ -147,6 +164,7 @@ async function resolveAgnosticIntake({ coords = null, placeQuery = null, placeRe
   if (strong.length > 1) {
     return {
       anchor: null,
+      placeContext: null,
       intake: intake("place", placeQuery, {
         candidates_considered: candidates.length,
         candidates: strong.slice(0, 5).map((candidate) => ({
@@ -166,6 +184,7 @@ async function resolveAgnosticIntake({ coords = null, placeQuery = null, placeRe
   if (!isValidCoordinate(lat, lng)) {
     return {
       anchor: null,
+      placeContext: null,
       intake: intake("place", placeQuery, {
         candidates_considered: candidates.length,
         blockers: ["invalid_resolved_coordinates"],
@@ -175,6 +194,9 @@ async function resolveAgnosticIntake({ coords = null, placeQuery = null, placeRe
 
   return {
     anchor: { lat, lng },
+    // Private server-side discovery context. It is deliberately adjacent to,
+    // not nested inside, the public intake block attached to API responses.
+    placeContext: trustedPlaceContext(best.admin_context),
     intake: intake("place", placeQuery, {
       status: "resolved",
       candidates_considered: candidates.length,

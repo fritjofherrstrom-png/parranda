@@ -52,7 +52,7 @@ function fetcherReturning(body, calls = []) {
   };
 }
 
-function nominatim(displayName, lat, lon, importance, osm) {
+function nominatim(displayName, lat, lon, importance, osm, address = { city: "X", country: "Y" }) {
   return {
     display_name: displayName,
     lat: String(lat),
@@ -62,7 +62,7 @@ function nominatim(displayName, lat, lon, importance, osm) {
     osm_id: osm && osm[1],
     // raw payload that must NOT be exposed:
     boundingbox: ["1", "2", "3", "4"],
-    address: { city: "X", country: "Y" },
+    address,
     place_rank: 16,
   };
 }
@@ -77,7 +77,7 @@ test("pure: maps a clear single result to a conservative 'medium' candidate with
   const r = createNominatimPlaceResolver({ fetcher: fetcherReturning([nominatim("Trastevere, Rome", 41.9, 12.47, 0.55, ["relation", "123"])]), minIntervalMs: 0 });
   const out = await r("Trastevere");
   assert.equal(out.length, 1);
-  assert.deepEqual(Object.keys(out[0]).sort(), ["attribution", "confidence", "label", "lat", "license", "lng", "osm_ref", "provenance", "source_tier"]);
+  assert.deepEqual(Object.keys(out[0]).sort(), ["admin_context", "attribution", "confidence", "label", "lat", "license", "lng", "osm_ref", "provenance", "source_tier"]);
   assert.equal(out[0].confidence, "medium");
   assert.equal(out[0].provenance, "nominatim_osm");
   assert.equal(out[0].attribution, "© OpenStreetMap contributors");
@@ -87,6 +87,37 @@ test("pure: maps a clear single result to a conservative 'medium' candidate with
   for (const banned of ["boundingbox", "address", "place_rank", "display_name", "importance", "name", "osm_type", "osm_id"]) {
     assert.equal(banned in out[0], false, `must not expose ${banned}`);
   }
+});
+
+test("pure: preserves only compact administrative identity for trusted source discovery", async () => {
+  const calls = [];
+  const r = createNominatimPlaceResolver({
+    fetcher: fetcherReturning([
+      nominatim("Stockholm, Stockholms kommun, Sverige", 59.3293, 18.0686, 0.8, ["relation", "175242"], {
+        city: "Stockholm",
+        municipality: "Stockholms kommun",
+        county: "Stockholms län",
+        state: "Stockholms län",
+        country: "Sverige",
+        country_code: "SE",
+        postcode: "111 29",
+        road: "Private street atom",
+      }),
+    ], calls),
+    minIntervalMs: 0,
+  });
+  const [candidate] = await r("Stockholm");
+
+  assert.deepEqual(candidate.admin_context, {
+    locality: "Stockholm",
+    municipality: "Stockholms kommun",
+    county: "Stockholms län",
+    region: "Stockholms län",
+    country: "Sverige",
+    country_code: "se",
+  });
+  assert.equal(new URL(calls[0].url).searchParams.get("addressdetails"), "1");
+  assert.doesNotMatch(JSON.stringify(candidate), /postcode|Private street atom|road/);
 });
 
 test("pure: confidence is never 'high' (reserved for human-verified)", async () => {

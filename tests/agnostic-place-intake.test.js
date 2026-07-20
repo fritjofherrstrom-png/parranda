@@ -108,11 +108,12 @@ test("unit: explicit valid coords win — resolver is never called", async () =>
     called = true;
     return [{ lat: 1, lng: 1, confidence: "high" }];
   };
-  const { anchor, intake } = await resolveAgnosticIntake({ coords: { lat: 41.9, lng: 12.49 }, placeQuery: "Trastevere", placeResolver: resolver });
+  const { anchor, intake, placeContext } = await resolveAgnosticIntake({ coords: { lat: 41.9, lng: 12.49 }, placeQuery: "Trastevere", placeResolver: resolver });
   assert.equal(called, false);
   assert.deepEqual(anchor, { lat: 41.9, lng: 12.49 });
   assert.equal(intake.mode, "coordinates");
   assert.equal(intake.resolved.provenance, "explicit_request_coordinates");
+  assert.equal(placeContext, null);
 });
 
 test("unit: no coords + no place → missing_or_invalid_coordinates", async () => {
@@ -171,6 +172,36 @@ test("unit: single strong valid candidate → trusted anchor with resolver prove
   assert.equal(intake.status, "resolved");
   assert.equal(intake.resolved.label, "Resolved Trastevere");
   assert.equal(intake.resolved.provenance, "test_geocoder");
+});
+
+test("unit: resolver admin context stays private and allowlisted beside public intake", async () => {
+  const { anchor, intake, placeContext } = await resolveAgnosticIntake({
+    placeQuery: "Stockholm",
+    placeResolver: resolverTo({ lat: 59.3293, lng: 18.0686 }, {
+      admin_context: {
+        locality: "Stockholm",
+        municipality: "Stockholms kommun",
+        county: "Stockholms län",
+        region: "Stockholms län",
+        country: "Sverige",
+        country_code: "SE",
+        postcode: "111 29",
+        secret: "must-not-leak",
+      },
+    }),
+  });
+
+  assert.deepEqual(anchor, { lat: 59.3293, lng: 18.0686 });
+  assert.deepEqual(placeContext, {
+    locality: "Stockholm",
+    municipality: "Stockholms kommun",
+    county: "Stockholms län",
+    region: "Stockholms län",
+    country: "Sverige",
+    country_code: "se",
+  });
+  assert.equal("admin_context" in intake.resolved, false);
+  assert.doesNotMatch(JSON.stringify(intake), /must-not-leak|postcode|secret/);
 });
 
 test("unit: resolver may return one trusted candidate object, not only an array", async () => {

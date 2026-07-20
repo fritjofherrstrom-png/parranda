@@ -2040,7 +2040,7 @@ function buildApp({
       // can supply only the query string — resolved coordinates/confidence/
       // provenance come solely from the trusted resolver. Any missing/invalid/
       // ambiguous/low-confidence outcome fails closed with an explicit blocker.
-      const { anchor, intake } = await resolveAgnosticIntake({
+      const { anchor, intake, placeContext } = await resolveAgnosticIntake({
         coords: experimentCoords,
         placeQuery,
         placeResolver,
@@ -2131,6 +2131,10 @@ function buildApp({
           const eventsNow = clock && typeof clock.now === "function" ? clock.now() : new Date().toISOString();
           const collected = await eventSupply({
             anchor,
+            // Resolver-attested administrative identity is server-owned input
+            // for future regional source discovery. Public payload context is
+            // never read or forwarded.
+            placeContext,
             now: eventsNow,
             // Preferences may reorder only the already trusted, normalized
             // event pool. They never become event evidence or relax time/geo
