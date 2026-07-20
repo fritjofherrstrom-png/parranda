@@ -216,6 +216,12 @@ test("trusted administrative identity produces a generic regional source profile
   ]);
   assert.ok(result.discovery_queries.includes("Stockholms kommun events"));
   assert.match(result.source_profile.profile_key, /^place-source-profile-v1:[a-f0-9]{16}$/);
+  assert.deepEqual(result.source_profile.runtime_review, {
+    status: "unreviewed",
+    reviewed_at: null,
+    expires_at: null,
+    feeds: [],
+  });
   assert.equal(result.source_profile.place_context.label, "Stockholm, Sverige");
   assert.deepEqual(result.source_profile.place_context.region_terms, [
     "Stockholms kommun",

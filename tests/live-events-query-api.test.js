@@ -119,6 +119,8 @@ test("around_place query reuses trusted supply, preference ranking and source he
       eventSupply: { feeds: [{ id: "evil" }] },
       feeds: [{ id: "evil" }],
       live_events: { tonight: [{ id: "evil" }] },
+      reviewed_event_source_profiles: [{ profile_key: "evil" }],
+      source_profile: { runtime_review: { status: "approved" } },
     });
     assert.equal(response.status, 200);
     assert.equal(response.body.contract, "live_event_query_v1");

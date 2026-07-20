@@ -36,6 +36,9 @@ const { scoreTimeSensitiveEventSalience } = require("../pulse-engine/time-sensit
 const { scoreEventPreferenceFit } = require("../pulse-engine/event-preference-fit");
 const { createSourceCache } = require("./source-cache");
 const {
+  resolveReviewedEventSourceProfileFeeds,
+} = require("./reviewed-event-source-profile");
+const {
   MAX_COLLECTION_RADIUS_M,
   filterEventsForLiveScope,
 } = require("./live-event-query");
@@ -114,69 +117,115 @@ const BUILTIN_EVENT_FEEDS = [];
  * {id,label,endpoint,adapter,bbox,license,...}; legacy `base` rows remain Linked
  * Events. The allowlisted adapters cover Linked Events, schema.org JSON/HTML,
  * The Events Calendar, iCal, and stable venue HTML without touching the engine.
+ * Fresh operator-approved source profiles may add the same rows through
+ * PARRANDA_REVIEWED_EVENT_SOURCE_PROFILES; discovery output alone is ignored.
  * The default registry is EMPTY on purpose — no city is special out of the box.
  * Malformed config is ignored (keep whatever is built-in), never throws.
  */
 function resolveEventFeedRegistry(env = process.env) {
   const feeds = [...BUILTIN_EVENT_FEEDS];
   const extra = String((env && env.PARRANDA_EVENT_FEEDS) || "").trim();
-  if (!extra) return feeds;
-  try {
-    const parsed = JSON.parse(extra);
-    if (Array.isArray(parsed)) {
-      for (const f of parsed) {
-        const endpoint = firstString(f?.endpoint, f?.base);
-        const adapter = normalizeLocalEventAdapter(f?.adapter || f?.kind);
-        if (f && endpoint && adapter && Array.isArray(f.bbox) && f.bbox.length >= 4) {
-          feeds.push({
-            id: String(f.id || `feed-${feeds.length}`),
-            label: String(f.label || f.id || "Events"),
-            // `base` remains for backward compatibility with the original
-            // Linked Events rows. New reviewed source rows should use endpoint.
-            base: endpoint,
-            endpoint,
-            adapter,
-            format: firstString(f.format),
-            bbox: f.bbox.map(Number),
-            license: f.license != null ? String(f.license) : null,
-            timezone: f.timezone != null ? String(f.timezone) : null,
-            timezone_offset: firstString(f.timezone_offset, f.timezoneOffset),
-            source_language: firstString(f.source_language, f.sourceLanguage),
-            supported_languages: Array.isArray(f.supported_languages)
-              ? f.supported_languages.map(String).filter(Boolean)
-              : null,
-            route_role_hint: firstString(f.route_role_hint, f.routeRoleHint),
-            fetch_details: f.fetch_details !== false,
-            detail_limit: Number.isFinite(Number(f.detail_limit))
-              ? Math.max(0, Math.floor(Number(f.detail_limit)))
-              : null,
-            detail_budget: Number.isFinite(Number(f.detail_budget))
-              ? Math.max(1, Math.floor(Number(f.detail_budget)))
-              : null,
-            sitemap_limit: Number.isFinite(Number(f.sitemap_limit))
-              ? Math.max(1, Math.floor(Number(f.sitemap_limit)))
-              : null,
-            page_size: Number.isFinite(Number(f.page_size))
-              ? Math.max(1, Math.floor(Number(f.page_size)))
-              : null,
-            event_path_prefix: firstString(f.event_path_prefix, f.eventPathPrefix),
-            // Configuring an endpoint proves collection intent, not ownership
-            // or official status. Missing review metadata stays conservative.
-            source_tier: f.source_tier != null ? String(f.source_tier) : "unknown",
-            confidence: f.confidence != null ? String(f.confidence) : "low",
-            source_family: f.source_family != null ? String(f.source_family) : "unknown_source_family",
-            source_identity: f.source_identity != null ? String(f.source_identity) : sourceIdentityForUrl(endpoint),
-            priority: Number.isFinite(Number(f.priority)) ? Number(f.priority) : 100,
-            status: f.status != null ? String(f.status) : "active",
-            runtime_policy: f.runtime_policy != null ? String(f.runtime_policy) : "bounded_refresh",
-          });
+  if (extra) {
+    try {
+      const parsed = JSON.parse(extra);
+      if (Array.isArray(parsed)) {
+        for (const f of parsed) {
+          const normalized = normalizeEventFeedRow(f, feeds.length);
+          if (normalized) feeds.push(normalized);
         }
       }
+    } catch (_e) {
+      // malformed PARRANDA_EVENT_FEEDS -> keep trusted rows already loaded
     }
-  } catch (_e) {
-    // malformed PARRANDA_EVENT_FEEDS → keep the built-in registry, never throw
+  }
+
+  // Reviewed profiles are trusted deploy configuration, never public payload.
+  // Direct feed rows keep precedence so a deployment can override or disable a
+  // profiled source without editing the cached discovery artifact.
+  const identities = new Set(feeds.flatMap(feedIdentities));
+  for (const f of resolveReviewedEventSourceProfileFeeds(env)) {
+    const normalized = normalizeEventFeedRow(f, feeds.length);
+    if (!normalized) continue;
+    const rowIdentities = feedIdentities(normalized);
+    if (rowIdentities.some((identity) => identities.has(identity))) continue;
+    feeds.push(normalized);
+    rowIdentities.forEach((identity) => identities.add(identity));
   }
   return feeds;
+}
+
+function normalizeEventFeedRow(f, index = 0) {
+  const endpoint = firstString(f?.endpoint, f?.base);
+  const adapter = normalizeLocalEventAdapter(f?.adapter || f?.kind);
+  if (!f || !endpoint || !adapter || !Array.isArray(f.bbox) || f.bbox.length < 4) return null;
+  const bbox = f.bbox.map(Number);
+  if (!bbox.every(Number.isFinite)) return null;
+  return {
+    id: String(f.id || `feed-${index}`),
+    label: String(f.label || f.id || "Events"),
+    // `base` remains for backward compatibility with the original Linked
+    // Events rows. New reviewed source rows should use endpoint.
+    base: endpoint,
+    endpoint,
+    adapter,
+    format: firstString(f.format),
+    bbox,
+    license: f.license != null ? String(f.license) : null,
+    timezone: f.timezone != null ? String(f.timezone) : null,
+    timezone_offset: firstString(f.timezone_offset, f.timezoneOffset),
+    source_language: firstString(f.source_language, f.sourceLanguage),
+    supported_languages: Array.isArray(f.supported_languages)
+      ? f.supported_languages.map(String).filter(Boolean)
+      : null,
+    route_role_hint: firstString(f.route_role_hint, f.routeRoleHint),
+    fetch_details: f.fetch_details !== false,
+    detail_limit: Number.isFinite(Number(f.detail_limit))
+      ? Math.max(0, Math.floor(Number(f.detail_limit)))
+      : null,
+    detail_budget: Number.isFinite(Number(f.detail_budget))
+      ? Math.max(1, Math.floor(Number(f.detail_budget)))
+      : null,
+    sitemap_limit: Number.isFinite(Number(f.sitemap_limit))
+      ? Math.max(1, Math.floor(Number(f.sitemap_limit)))
+      : null,
+    page_size: Number.isFinite(Number(f.page_size))
+      ? Math.max(1, Math.floor(Number(f.page_size)))
+      : null,
+    event_path_prefix: firstString(f.event_path_prefix, f.eventPathPrefix),
+    // Configuring an endpoint proves collection intent, not ownership or
+    // official status. Missing review metadata stays conservative.
+    source_tier: f.source_tier != null ? String(f.source_tier) : "unknown",
+    confidence: f.confidence != null ? String(f.confidence) : "low",
+    source_family: f.source_family != null
+      ? String(f.source_family)
+      : "unknown_source_family",
+    source_identity: f.source_identity != null
+      ? String(f.source_identity)
+      : sourceIdentityForUrl(endpoint),
+    priority: Number.isFinite(Number(f.priority)) ? Number(f.priority) : 100,
+    status: f.status != null ? String(f.status) : "active",
+    runtime_policy: f.runtime_policy != null
+      ? String(f.runtime_policy)
+      : "bounded_refresh",
+    terms_status: f.terms_status != null ? String(f.terms_status) : null,
+    source_health: f.source_health != null ? String(f.source_health) : null,
+    profile_key: f.profile_key != null ? String(f.profile_key) : null,
+    profile_reviewed_at: f.profile_reviewed_at != null
+      ? String(f.profile_reviewed_at)
+      : null,
+    profile_expires_at: f.profile_expires_at != null
+      ? String(f.profile_expires_at)
+      : null,
+  };
+}
+
+function feedIdentities(feed) {
+  return [
+    feed?.id ? `id:${String(feed.id).trim().toLowerCase()}` : null,
+    firstString(feed?.endpoint, feed?.base)
+      ? `endpoint:${String(firstString(feed.endpoint, feed.base)).trim().toLowerCase()}`
+      : null,
+  ].filter(Boolean);
 }
 
 function hasAnchor(anchor) {
@@ -910,6 +959,17 @@ function compactSourceStatus(collection) {
     status: collection.status,
     reason: collection.reason || null,
     event_rows: collection.raw.length,
+    ...(source.terms_status ? { terms_status: source.terms_status } : {}),
+    ...(source.source_health ? { reviewed_source_health: source.source_health } : {}),
+    ...(source.profile_key
+      ? {
+          source_profile: {
+            profile_key: source.profile_key,
+            reviewed_at: source.profile_reviewed_at || null,
+            expires_at: source.profile_expires_at || null,
+          },
+        }
+      : {}),
   };
 }
 

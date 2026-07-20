@@ -243,6 +243,10 @@ function sourceRuntimeEnabled(feed) {
   const policy = String(feed.runtime_policy || feed.runtimePolicy || "bounded_refresh").trim().toLowerCase();
   if (["candidate", "review-needed", "needs_review", "disabled", "paused"].includes(status)) return false;
   if (["probe_only", "review_required", "inspect_only", "disabled"].includes(policy)) return false;
+  if (feed.profile_key) {
+    const expiresAt = Date.parse(String(feed.profile_expires_at || ""));
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return false;
+  }
   return true;
 }
 
