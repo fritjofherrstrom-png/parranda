@@ -65,6 +65,22 @@ test("route context prefers source-backed local options over closer branded chai
   assert.deepEqual(result.map((candidate) => candidate.route_stop_index), [0, 2]);
 });
 
+test("route context never pads local discovery with a chain just to fill the limit", () => {
+  const route = [
+    { id: "r1", name: "A", lat: 59.32, lng: 18.05 },
+    { id: "r2", name: "B", lat: 59.33, lng: 18.07 },
+    { id: "r3", name: "C", lat: 59.34, lng: 18.09 },
+  ];
+  const areas = [{ stops: [
+    { id: "local-one", name: "Independent place", lat: 59.3204, lng: 18.05, chain: false },
+    { id: "chain-two", name: "Branded food", lat: 59.3301, lng: 18.07, chain: true, brand: "Brand" },
+    { id: "chain-three", name: "Branded coffee", lat: 59.3401, lng: 18.09, local_feel_rank: 2 },
+  ] }];
+
+  const result = buildRouteContextSuggestions(route, areas, { limit: 3 });
+  assert.deepEqual(result.map((candidate) => candidate.id), ["local-one"]);
+});
+
 test("route context keeps a chain as a sparse fallback when no local option exists", () => {
   const route = [{ id: "r1", name: "A", lat: 55.55, lng: 14.34 }];
   const areas = [{ stops: [
