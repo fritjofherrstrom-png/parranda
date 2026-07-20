@@ -114,6 +114,30 @@ reviewed, an operator may promote the proposed row into PARRANDA_EVENT_FEEDS.
 User requests never perform this discovery crawl; they continue to consume only
 approved, cache-backed sources through bounded acquisition.
 
+### Reviewed source-profile runtime bridge
+
+A place source profile may alternatively carry an explicit `runtime_review`
+after operator review and be supplied through the trusted deployment variable
+`PARRANDA_REVIEWED_EVENT_SOURCE_PROFILES`. Discovery output starts as
+`unreviewed` with no feeds, so a scout result can never activate itself.
+
+The runtime bridge accepts a reviewed feed only when:
+
+- the approval is fresh and has a future expiry;
+- the row binds to an exact discovered candidate id, HTTPS endpoint, compatible
+  existing adapter, and publisher identity;
+- terms are `open_license` or `api_terms_compatible`, source health is
+  `healthy`, and runtime policy is bounded;
+- social/corroboration-only evidence is excluded from standalone collection;
+- floating-time adapters have a reviewed valid IANA timezone;
+- the trusted profile bounds remain the collection-selection bounds.
+
+Direct `PARRANDA_EVENT_FEEDS` rows retain precedence over matching profile
+feeds. Public request payload cannot provide either source registry. Once
+accepted, a profiled source enters the existing bounded cache, normalization,
+fusion, source-health, browse, and personalized-highlight path; it does not
+create a parallel event engine or alter a route/day anchor.
+
 ## Source Family Priority
 
 1. `official_municipal_calendar`

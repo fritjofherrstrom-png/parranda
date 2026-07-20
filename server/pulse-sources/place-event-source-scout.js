@@ -291,6 +291,15 @@ function buildSourceProfile({
   });
   return {
     profile_key: sourceProfileKey(place, anchor),
+    // Discovery never activates a provider. An operator may later attach a
+    // fresh approved review that binds exact discovered candidates to runtime
+    // feed rows; the runtime bridge fails closed without it.
+    runtime_review: {
+      status: "unreviewed",
+      reviewed_at: null,
+      expires_at: null,
+      feeds: [],
+    },
     place_context: graph.place_context,
     time_window: graph.time_window,
     intent_hints: graph.intent_hints,
