@@ -22,6 +22,7 @@ const {
 
 const {
   validateAgnosticWalkingOrder,
+  resolveAgnosticWalkingBudget,
   DEFAULT_TOTAL_WALK_BUDGET_KM,
   DEFAULT_MAX_LEG_BUDGET_KM,
 } = require("../server/planner/agnostic-route-walking-validation");
@@ -223,6 +224,60 @@ test("pure: default budgets are exposed in checks", async () => {
   const out = await validateAgnosticWalkingOrder({ stops: STOPS3, walkingRouter: routerPerLeg() });
   assert.equal(out.checks.total_budget_km, DEFAULT_TOTAL_WALK_BUDGET_KM);
   assert.equal(out.checks.max_leg_budget_km, DEFAULT_MAX_LEG_BUDGET_KM);
+  assert.equal(out.checks.budget_source, "default_safety_budget");
+  assert.equal(out.checks.target_walk_km, null);
+});
+
+test("pure: walking target gets bounded tolerance instead of the unrelated 25 km ceiling", async () => {
+  const budget = resolveAgnosticWalkingBudget({ targetKm: 6 });
+  assert.equal(budget.totalKm, 8.1);
+  assert.equal(budget.targetKm, 6);
+  assert.equal(budget.source, "walking_target_tolerance");
+
+  const withinTolerance = await validateAgnosticWalkingOrder({
+    stops: STOPS3,
+    walkingRouter: async (points) => ({
+      source: "heuristic",
+      estimatedKm: 8,
+      legs: [
+        { distance_km: 4, estimated_walk_minutes: 48 },
+        { distance_km: 4, estimated_walk_minutes: 48 },
+      ],
+      pathPoints: points,
+      fallbackUsed: false,
+    }),
+    targetKm: 6,
+  });
+  assert.equal(withinTolerance.valid, true);
+  assert.equal(withinTolerance.checks.total_budget_km, 8.1);
+
+  const tooFarForProfile = await validateAgnosticWalkingOrder({
+    stops: STOPS3,
+    walkingRouter: async (points) => ({
+      source: "heuristic",
+      estimatedKm: 9.2,
+      legs: [
+        { distance_km: 4.6, estimated_walk_minutes: 55 },
+        { distance_km: 4.6, estimated_walk_minutes: 55 },
+      ],
+      pathPoints: points,
+      fallbackUsed: false,
+    }),
+    targetKm: 6,
+  });
+  assert.equal(tooFarForProfile.valid, false);
+  assert.deepEqual(tooFarForProfile.blockers, ["walking_budget_exceeded"]);
+  assert.equal(tooFarForProfile.checks.budget_source, "walking_target_tolerance");
+});
+
+test("pure: explicit total budget remains authoritative over a walking target", () => {
+  const budget = resolveAgnosticWalkingBudget({
+    targetKm: 6,
+    budget: { totalKm: 12, maxLegKm: 4 },
+  });
+  assert.equal(budget.totalKm, 12);
+  assert.equal(budget.maxLegKm, 4);
+  assert.equal(budget.source, "explicit_budget");
 });
 
 // =====================================================================
@@ -315,6 +370,35 @@ test(
     const exp = r.body.agnostic_route_output_experiment;
     assert.equal(exp.route_mutation, false);
     assert.ok(exp.readiness_blockers.includes("walking_budget_exceeded"));
+    assert.deepEqual(r.body.days, []);
+  }),
+);
+
+test(
+  "api: selected walking profile bounds validation below the generic safety ceiling",
+  withServer({
+    openDataLoader: makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })),
+    walkingRouter: async (points) => ({
+      source: "heuristic",
+      estimatedKm: 9.2,
+      legs: points.slice(1).map(() => ({
+        distance_km: Number((9.2 / (points.length - 1)).toFixed(2)),
+        estimated_walk_minutes: 55,
+      })),
+      pathPoints: points,
+      fallbackUsed: false,
+    }),
+  }, async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}`,
+      body: agnosticBody({ walking_km_target: 6 }),
+    });
+    const exp = r.body.agnostic_route_output_experiment;
+    assert.equal(exp.route_mutation, false);
+    assert.ok(exp.readiness_blockers.includes("walking_budget_exceeded"));
+    assert.equal(exp.walking_validation.checks.target_walk_km, 6);
+    assert.equal(exp.walking_validation.checks.total_budget_km, 8.1);
+    assert.equal(exp.walking_validation.checks.budget_source, "walking_target_tolerance");
     assert.deepEqual(r.body.days, []);
   }),
 );
