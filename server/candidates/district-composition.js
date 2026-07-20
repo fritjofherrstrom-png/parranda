@@ -102,6 +102,37 @@ function tokensToAxes(tokens) {
   return out;
 }
 
+function contextLocalFeelRank(candidate) {
+  if (Number.isFinite(candidate?.local_feel_rank)) {
+    return Math.max(0, Math.min(3, candidate.local_feel_rank));
+  }
+  return candidate?.chain === true ? 2 : 0;
+}
+
+// District candidates are secondary place evidence, not route stops. Prefer
+// independent local evidence without erasing an honestly sparse fallback: a
+// chain remains only when it contributes an intent axis no local candidate in
+// the same area covers (or when the area has no local candidates at all).
+function preferLocalContextCandidates(candidates) {
+  const rows = Array.isArray(candidates) ? candidates : [];
+  const localRows = rows.filter((candidate) => contextLocalFeelRank(candidate) < 2);
+  if (!localRows.length) return rows;
+
+  const localAxes = new Set(
+    localRows.flatMap((candidate) => [
+      ...tokensToAxes([candidate?.type, ...(Array.isArray(candidate?.tags) ? candidate.tags : [])]),
+    ]),
+  );
+  return rows.filter((candidate) => {
+    if (contextLocalFeelRank(candidate) < 2) return true;
+    const axes = tokensToAxes([
+      candidate?.type,
+      ...(Array.isArray(candidate?.tags) ? candidate.tags : []),
+    ]);
+    return [...axes].some((axis) => !localAxes.has(axis));
+  });
+}
+
 /**
  * Compose a day across a place's districts.
  * @param {object[]} candidates  any candidate set (curated + open-data), each {id,lat,lng,type,tags,time_fit}
@@ -170,7 +201,8 @@ function composeDistrictDay(candidates, { intents = [], maxAreas = 2, linkKm, mi
       const ax = tokensToAxes([m.type, ...(Array.isArray(m.tags) ? m.tags : [])]);
       return [...ax].some((a) => wantedSet.has(a));
     });
-    const stopsSource = wantedAxes.length && onIntent.length ? onIntent : members;
+    const matchedStops = wantedAxes.length && onIntent.length ? onIntent : members;
+    const stopsSource = preferLocalContextCandidates(matchedStops);
     return {
       center: s.area.center,
       // The coherent arc daypart (distinct across the day), not the raw per-district

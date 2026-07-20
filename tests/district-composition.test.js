@@ -102,9 +102,7 @@ test("district stops preserve explicit local-quality facts for optional route co
 
   assert.deepEqual(candidates, before, "composition never mutates candidate evidence");
   assert.deepEqual(
-    stops
-      .filter((stop) => stop.id !== "local-bakery")
-      .map(({ id, type, tags, chain, brand, local_feel_rank, candidate_origin }) => ({
+    stops.map(({ id, type, tags, chain, brand, local_feel_rank, candidate_origin }) => ({
         id,
         type,
         tags,
@@ -116,12 +114,12 @@ test("district stops preserve explicit local-quality facts for optional route co
       .sort((a, b) => a.id.localeCompare(b.id)),
     [
       {
-        id: "brand-cafe",
-        type: "cafe",
+        id: "local-bakery",
+        type: "bakery",
         tags: ["coffee"],
-        chain: true,
-        brand: "Brand",
-        local_feel_rank: 2,
+        chain: false,
+        brand: null,
+        local_feel_rank: 0,
         candidate_origin: "external_open",
       },
       {
@@ -134,7 +132,77 @@ test("district stops preserve explicit local-quality facts for optional route co
         candidate_origin: "external_open",
       },
     ],
+    "a chain is not surfaced beside local candidates covering the same axis",
   );
+});
+
+test("district context keeps a chain only as an axis-specific sparse fallback", () => {
+  const candidates = [
+    {
+      id: "local-gallery",
+      name: "Independent Gallery",
+      type: "gallery",
+      tags: ["culture"],
+      lat: 50,
+      lng: 14,
+      chain: false,
+      candidate_origin: "external_open",
+    },
+    {
+      id: "chain-food",
+      name: "Chain Food",
+      type: "fast_food",
+      tags: ["food"],
+      lat: 50.0002,
+      lng: 14.0002,
+      chain: true,
+      brand: "Chain Food",
+      candidate_origin: "external_open",
+    },
+    {
+      id: "chain-coffee",
+      name: "Chain Coffee",
+      type: "cafe",
+      tags: ["coffee"],
+      lat: 50.0003,
+      lng: 14.0003,
+      chain: true,
+      brand: "Chain Coffee",
+      candidate_origin: "external_open",
+    },
+    {
+      id: "local-cafe",
+      name: "Local Cafe",
+      type: "cafe",
+      tags: ["coffee"],
+      lat: 50.0004,
+      lng: 14.0004,
+      chain: false,
+      candidate_origin: "external_open",
+    },
+  ];
+
+  const day = composeDistrictDay(candidates, {
+    intents: ["culture", "food", "fika"],
+    maxAreas: 1,
+  });
+  const ids = day.areas.flatMap((area) => area.stop_ids);
+
+  assert.ok(ids.includes("local-gallery"));
+  assert.ok(ids.includes("local-cafe"));
+  assert.ok(ids.includes("chain-food"), "the only food evidence remains an honest sparse fallback");
+  assert.ok(!ids.includes("chain-coffee"), "local coffee evidence suppresses the same-axis chain");
+});
+
+test("a chain-only district remains inspectable instead of becoming a fabricated empty", () => {
+  const candidates = [
+    { id: "chain-a", name: "Chain A", type: "restaurant", tags: ["food"], lat: 48, lng: 11, chain: true },
+    { id: "chain-b", name: "Chain B", type: "cafe", tags: ["coffee"], lat: 48.0002, lng: 11.0002, chain: true },
+    { id: "chain-c", name: "Chain C", type: "restaurant", tags: ["food"], lat: 48.0004, lng: 11.0004, chain: true },
+  ];
+  const day = composeDistrictDay(candidates, { intents: ["food", "fika"], maxAreas: 1 });
+
+  assert.deepEqual(day.areas.flatMap((area) => area.stop_ids).sort(), ["chain-a", "chain-b", "chain-c"]);
 });
 
 test("composes complementary districts that cover the requested intents", () => {
