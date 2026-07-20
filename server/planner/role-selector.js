@@ -118,12 +118,15 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
     requested_preferences: candidatePool.normalized.intents || [],
     roles,
     summary: summarizeRoles(roles),
+    ...(candidatePool.availability_summary
+      ? { availability_summary: { ...candidatePool.availability_summary } }
+      : {}),
   };
 }
 
 function buildRankedEntriesForRole(spec, candidatePool, localFeelActive = false) {
   const entries = candidatePool.pool
-    .map(({ candidate, derived, gates, evidence, experimental_admission }) => {
+    .map(({ candidate, derived, gates, evidence, availability, experimental_admission }) => {
       const fit = scoreCandidateFit({
         candidate,
         userIntents: spec.intents,
@@ -151,6 +154,7 @@ function buildRankedEntriesForRole(spec, candidatePool, localFeelActive = false)
         evidence,
         fit,
         calibration,
+        availability,
         experimental_admission,
         candidate_status: candidateStatusForRole({ fit, gates, spec, experimentalAdmission: experimental_admission }),
         ...(localFeelActive
@@ -217,7 +221,7 @@ function candidateStatusForRole({ fit, gates, spec, experimentalAdmission = null
 }
 
 function formatRoleCandidate(entry, role, roleEntries, roleSpec = ROLE_SPEC) {
-  const { candidate, derived, fit, gates, calibration, candidate_status, experimental_admission } = entry;
+  const { candidate, derived, fit, gates, calibration, candidate_status, experimental_admission, availability } = entry;
   const provenance = candidateProvenance(candidate, derived);
   return {
     candidate_id: candidate.id,
@@ -264,6 +268,7 @@ function formatRoleCandidate(entry, role, roleEntries, roleSpec = ROLE_SPEC) {
     calibration: calibration
       ? { level: calibration.level, influence: calibration.influence, reasons: calibration.reasons }
       : null,
+    ...(availability ? { availability: { ...availability } } : {}),
     also_covers: alsoCovers(candidate.id, role, roleEntries, roleSpec),
   };
 }

@@ -16,6 +16,12 @@ import {
   WALK_PRESETS,
   isoDateFromOffset,
 } from "../lib/anywhere-payload.mjs";
+import {
+  acceptedLiveEventQuery,
+  boundedRoutePoints,
+  buildLiveEventQueryPayload,
+  type LiveEventScope,
+} from "../lib/live-event-query.mjs";
 import { mapsPlaceUrl, mapsWalkingRouteUrl, primaryRouteStops } from "../lib/maps-links.mjs";
 import {
   buildRouteContextSuggestions,
@@ -114,17 +120,53 @@ interface PulseEvent {
   timezone?: string;
 }
 
+interface LiveSourceHealth {
+  status?: string;
+  result?: string;
+  reasons?: string[];
+  selected_source_count?: number;
+  responding_source_count?: number;
+  event_bearing_source_count?: number;
+  empty_source_count?: number;
+  failed_source_count?: number;
+  unavailable_source_count?: number;
+  raw_event_count?: number;
+  normalized_event_count?: number;
+  accepted_event_count?: number;
+  surfaced_event_count?: number;
+  rejected_event_count?: number;
+}
+
 interface LiveEvents {
   coverage?: string;
   pending?: boolean;
   feed?: { label?: string; license?: string } | null;
   feeds?: Array<{ label?: string; license?: string | null }>;
-  acquisition?: { source_health?: { status?: string; result?: string; reasons?: string[] } | null } | null;
+  acquisition?: { source_health?: LiveSourceHealth | null } | null;
   tonight?: PulseEvent[];
   this_week?: PulseEvent[];
 }
 
 const LIVE_REFRESH_DELAYS_MS = [9000, 12000, 18000] as const;
+const LIVE_QUERY_REFRESH_DELAYS_MS = [1500, 3000, 5000] as const;
+
+function waitForLiveQueryRetry(delayMs: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new Error("live_event_query_aborted"));
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new Error("live_event_query_aborted"));
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, delayMs);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
 
 const DAYPART_LABELS: Record<string, { sv: string; en: string }> = {
   morning: { sv: "Morgon", en: "Morning" },
@@ -145,6 +187,7 @@ const INTENT_LABELS: Record<string, { sv: string; en: string }> = {
   // The candidate spine's preference axes (#369 covered_preferences) use the
   // loader's category vocabulary — aliases so raw engine tokens never render.
   scenic: { sv: "Utsikt", en: "Views" },
+  museums: { sv: "Kultur", en: "Culture" },
   coffee: { sv: "Fika", en: "Coffee" },
   bars: { sv: "Bar", en: "Bars" },
   swimming: { sv: "Bad", en: "Swimming" },
@@ -232,21 +275,24 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [mapExpanded, setMapExpanded] = useState(false);
   const [detoursOpen, setDetoursOpen] = useState(false);
   // The Live sheet (design handoff §3B): an explorable events surface. TIME is
-  // a real axis (today / this week; `tonight` is the legacy API key for the
-  // combined now/today/tonight bucket). SCOPE is
-  // shown as the single scope events were actually collected under — the
-  // multi-scope selector (near-route filtering, a separate "near me" consent)
-  // is a NEXT CAPABILITY that needs an events re-query API; presenting it now
-  // would fake a capability. The sheet only ever changes what events are shown —
-  // never the day's anchor or route.
+  // a real axis over the two server buckets. SCOPE uses the separate
+  // live_event_query_v1 contract: route geometry and the trusted day anchor are
+  // read-only inputs, while a fresh near-me consent supplies coordinates for
+  // Live only. Nothing here re-composes or changes the day anchor.
   const [liveSheetOpen, setLiveSheetOpen] = useState(false);
   const [liveSheetTime, setLiveSheetTime] = useState<"tonight" | "week">("tonight");
+  const [liveSheetScope, setLiveSheetScope] = useState<LiveEventScope>("around_place");
+  const [liveQueryEvents, setLiveQueryEvents] = useState<LiveEvents | null>(null);
+  const [liveQueryPending, setLiveQueryPending] = useState(false);
+  const [liveQueryError, setLiveQueryError] = useState<string | null>(null);
+  const [liveQueryGeoHint, setLiveQueryGeoHint] = useState<string | null>(null);
   const mapRef = useRef<HTMLDivElement | null>(null);
   const leafletRef = useRef<{ map: any; layer: any } | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const liveSheetTriggerRef = useRef<HTMLButtonElement | null>(null);
   const liveSheetDialogRef = useRef<HTMLDivElement | null>(null);
   const liveSheetCloseRef = useRef<HTMLButtonElement | null>(null);
+  const liveQueryAbortRef = useRef<AbortController | null>(null);
   const lastEntryRef = useRef<SavedEntry | null>(null); // the latest composed day, for "save"
 
   const t = (sv: string, en: string) => (lang === "en" ? en : sv);
@@ -297,12 +343,19 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     const requestId = ++requestSequenceRef.current;
     activeRequestRef.current = controller;
     if (!silent) {
+      liveQueryAbortRef.current?.abort();
+      liveQueryAbortRef.current = null;
       setLiveRefreshExhausted(false);
       setUpgradePending(false);
       setPhase("loading");
       setClassification(null);
       setSafeResponse(null);
       setMapDrawn(false);
+      setLiveSheetScope("around_place");
+      setLiveQueryEvents(null);
+      setLiveQueryPending(false);
+      setLiveQueryError(null);
+      setLiveQueryGeoHint(null);
     }
     try {
       const effectiveWalkKey = walkKeyOverride ?? walkKey;
@@ -394,6 +447,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   useEffect(() => () => {
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     activeRequestRef.current?.abort();
+    liveQueryAbortRef.current?.abort();
   }, []);
 
   // Show a stored day WITHOUT re-fetching. A restored day is a snapshot (events /
@@ -470,7 +524,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     const next = upsertSaved(savedDays, stamped);
     setSavedDays(next);
     writeLS(SAVED_KEY, next);
-    setRestoredAt(stamped.savedAt);
+    // Saving the live result must not turn it into a restored snapshot. Only
+    // restoreEntry() sets restoredAt; otherwise the still-visible adjustment
+    // controls would change while auto-recompose remained silently paused.
   }
 
   function removeSavedDay(id: string) {
@@ -701,6 +757,94 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     [dayflow, lang],
   );
   const pulseSources = useMemo(() => pulseSourceLine(liveEvents), [liveEvents]);
+  const sheetLiveEvents = liveQueryEvents ?? liveEvents;
+  const sheetBuckets = useMemo(
+    () => pulseEventBuckets(sheetLiveEvents, wovenEventIds(routeStops)),
+    [sheetLiveEvents, routeStops],
+  );
+  const sheetPulseState = useMemo(
+    () => pulseHealthState(sheetLiveEvents, sheetBuckets),
+    [sheetLiveEvents, sheetBuckets],
+  );
+  const sheetSources = useMemo(() => pulseSourceLine(sheetLiveEvents), [sheetLiveEvents]);
+  const sheetSourceHealth = sheetLiveEvents?.acquisition?.source_health ?? null;
+  const routeScopeAvailable = boundedRoutePoints(routeStops).length >= 2;
+  const aroundPlaceScopeAvailable = Boolean(
+    buildLiveEventQueryPayload({ scope: "around_place", response: safeResponse }),
+  );
+
+  async function requestLiveSheetScope(nextScope: LiveEventScope) {
+    setLiveQueryGeoHint(null);
+    let nearMeCoords: { lat: number; lng: number } | null = null;
+    if (nextScope === "near_me") {
+      try {
+        nearMeCoords = await currentPosition();
+      } catch {
+        setLiveQueryGeoHint(
+          t(
+            "Platsdelning nekades — dagens plats och rutt är oförändrade.",
+            "Location sharing was denied — the day's place and route are unchanged.",
+          ),
+        );
+        return;
+      }
+    }
+
+    const payload = buildLiveEventQueryPayload({
+      scope: nextScope,
+      time: liveSheetTime === "week" ? "this_week" : "tonight",
+      preferences: selected,
+      response: safeResponse,
+      routeStops,
+      nearMeCoords,
+    });
+    if (!payload) {
+      setLiveQueryError(
+        nextScope === "near_route"
+          ? t("En färdig rutt behövs för att söka längs rutten.", "A composed route is needed to search near the route.")
+          : t("Platsens betrodda ankare saknas.", "The trusted place anchor is unavailable."),
+      );
+      return;
+    }
+
+    liveQueryAbortRef.current?.abort();
+    const controller = new AbortController();
+    liveQueryAbortRef.current = controller;
+    setLiveSheetScope(nextScope);
+    setLiveQueryPending(true);
+    setLiveQueryError(null);
+    try {
+      for (let attempt = 0; attempt <= LIVE_QUERY_REFRESH_DELAYS_MS.length; attempt += 1) {
+        if (attempt > 0) {
+          await waitForLiveQueryRetry(LIVE_QUERY_REFRESH_DELAYS_MS[attempt - 1], controller.signal);
+        }
+        const response = await fetch(`/api/live-events?lang=${lang}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+        const body = await response.json();
+        const accepted = response.ok ? acceptedLiveEventQuery(body) : null;
+        if (!accepted) throw new Error("live_event_query_contract_rejected");
+        setLiveQueryEvents(accepted as LiveEvents);
+        if (!(accepted as LiveEvents).pending) break;
+      }
+    } catch {
+      if (controller.signal.aborted) return;
+      setLiveQueryError(
+        t(
+          "Live-vyn kunde inte uppdateras — dagens plats och rutt är oförändrade.",
+          "The Live view couldn't update — the day's place and route are unchanged.",
+        ),
+      );
+    } finally {
+      if (liveQueryAbortRef.current === controller) {
+        liveQueryAbortRef.current = null;
+        setLiveQueryPending(false);
+      }
+    }
+  }
   const eveningEvent: any = day?.evening_event ?? null;
   // A single "open the whole day in Google Maps" walking route across every
   // coord-bearing primary-route stop, in the exact order the API returned.
@@ -1137,11 +1281,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </header>
       )}
 
-      {/* Without a composed day, honest provenance + day-level actions live in
-          this card instead; broader place structure below is an honest candidate
-          surface, never an itinerary. */}
+      {/* Without a composed day, this card carries provenance only. Save/share
+          remain route actions: offering them here would call an unsequenced
+          candidate surface a day. */}
       {showStructure && structure && !(showDay && routeStops.length > 0) && (
-        <section className="flex flex-col items-start gap-3 rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm sm:flex-row sm:justify-between">
+        <section className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm">
           <div className="min-w-0 flex-1">
             {structure.provenance === "agnostic_anchor" && (
               <p className="text-sm font-semibold text-parranda-accent">
@@ -1159,25 +1303,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 </button>
               </p>
             )}
-          </div>
-          <div className="flex shrink-0 gap-1.5">
-            {canShare && (
-              <button
-                type="button"
-                onClick={shareDay}
-                className="inline-flex min-h-11 items-center rounded-full border border-parranda-accent/40 px-3.5 py-1 text-sm font-semibold text-parranda-accent"
-              >
-                {shareCopied ? t("✓ Kopierad", "✓ Copied") : t("↗ Dela dagen", "↗ Share day")}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={saveDay}
-              disabled={isSaved}
-              className="inline-flex min-h-11 items-center rounded-full border border-parranda-accent/40 px-3.5 py-1 text-sm font-semibold text-parranda-accent disabled:opacity-50"
-            >
-              {isSaved ? t("★ Sparad", "★ Saved") : t("☆ Spara dagen", "☆ Save day")}
-            </button>
           </div>
         </section>
       )}
@@ -1483,7 +1608,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
       {phase === "done" &&
         ((liveEvents && (liveEvents.coverage === "covered" || liveEvents.coverage === "uncovered")) ||
-          (showDay && dayflow?.weather?.headline)) && (
+          (showDay && dayflow?.weather?.headline) ||
+          aroundPlaceScopeAvailable) && (
         <section className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm">
           {/* PULSE — the city's now-context: weather read, rhythm advice, current
               events. Renders independently of route composition (live_events
@@ -1585,7 +1711,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               {pulseBuckets.thisWeek.length === 1 ? t("händelse listad", "more listed") : t("händelser listade", "more listed")}
             </p>
           )}
-          {(pulseBuckets.tonight.length > 0 || pulseBuckets.thisWeek.length > 0) && (
+          {(pulseBuckets.tonight.length > 0 || pulseBuckets.thisWeek.length > 0 || aroundPlaceScopeAvailable) && (
             <button
               type="button"
               ref={liveSheetTriggerRef}
@@ -1595,7 +1721,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               }}
               className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-parranda-btn border border-parranda-ember/50 bg-parranda-ember/10 text-[13px] font-bold text-parranda-clay transition hover:bg-parranda-ember/15"
             >
-              {t("Se allt live", "See all live")} <span aria-hidden="true" className="ml-1.5">↗</span>
+              {pulseBuckets.tonight.length > 0 || pulseBuckets.thisWeek.length > 0
+                ? t("Se allt live", "See all live")
+                : t("Utforska live", "Explore live")} <span aria-hidden="true" className="ml-1.5">↗</span>
             </button>
           )}
           {pulseState === "partial" && (
@@ -1614,10 +1742,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
       {/* THE LIVE SHEET (§3B) — explores the live_events buckets only. It never
           changes the day's anchor or the route: the landing's location consent
-          anchors the DAY; nothing in here asks for or applies a position. */}
+          anchors the DAY; a separate near-me consent applies only to this query. */}
       {liveSheetOpen && (() => {
-        const sheetEvents: PulseEvent[] = liveSheetTime === "tonight" ? pulseBuckets.tonight : pulseBuckets.thisWeek;
-        const scopePhrase = mode === "near_me" ? t("nära dig", "near you") : t(`runt ${anchorLabel}`, `around ${anchorLabel}`);
+        const sheetEvents: PulseEvent[] = liveSheetTime === "tonight" ? sheetBuckets.tonight : sheetBuckets.thisWeek;
+        const scopePhrase =
+          liveSheetScope === "near_route"
+            ? t("nära rutten", "near the route")
+            : liveSheetScope === "near_me"
+              ? t("nära dig", "near you")
+              : t(`runt ${anchorLabel}`, `around ${anchorLabel}`);
         return (
           <div className="fixed inset-0 z-[1100]">
             <div aria-hidden="true" onClick={() => setLiveSheetOpen(false)} className="absolute inset-0 bg-black/55" />
@@ -1634,7 +1767,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               </div>
               <div className="mt-3 flex items-center justify-between gap-3">
                 <h3 className="font-display text-3xl font-semibold leading-none text-parranda-ink">
-                  {mode === "near_me" && !classification?.placeLabel ? (
+                  {liveSheetScope === "near_me" ? (
                     <>
                       Live <em className="text-parranda-ember">{t("nära dig", "near you")}</em>
                     </>
@@ -1655,21 +1788,62 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 </button>
               </div>
 
-              {/* WHERE — the one scope events were actually collected under.
-                  A scope selector (near-route filtering, a separate "near me"
-                  events consent) needs an events re-query API first. */}
+              {/* WHERE — a real axis over live_event_query_v1. It reads trusted
+                  route/anchor geometry, while near_me requests fresh permission
+                  for this Live query only. */}
               <div className="mt-4 flex flex-col gap-2">
                 <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-parranda-glow">{t("Var", "Where")}</p>
-                <span className="inline-flex min-h-11 items-center gap-2 self-start rounded-full border border-parranda-ember/55 bg-parranda-ember/10 px-4 text-[13px] font-bold text-parranda-ink">
-                  {mode === "near_me" ? (
-                    <>
-                      <span aria-hidden="true" className="text-parranda-ember">◉</span>
-                      {t("Nära dig — dagen är redan förankrad här", "Near you — the day is already anchored here")}
-                    </>
-                  ) : (
-                    t(`Runt ${anchorLabel}`, `Around ${anchorLabel}`)
-                  )}
-                </span>
+                <div className="flex flex-wrap gap-2" role="group" aria-label={t("Live-område", "Live area")}>
+                  <button
+                    type="button"
+                    aria-pressed={liveSheetScope === "around_place"}
+                    disabled={!aroundPlaceScopeAvailable || liveQueryPending}
+                    onClick={() => requestLiveSheetScope("around_place")}
+                    className={
+                      "inline-flex min-h-11 items-center rounded-full border px-4 text-[13px] transition disabled:cursor-not-allowed disabled:opacity-40 " +
+                      (liveSheetScope === "around_place"
+                        ? "border-parranda-ember/55 bg-parranda-ember/10 font-bold text-parranda-ink"
+                        : "border-parranda-ink/14 text-parranda-ink/65")
+                    }
+                  >
+                    {t(`Runt ${anchorLabel}`, `Around ${anchorLabel}`)}
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={liveSheetScope === "near_route"}
+                    disabled={!routeScopeAvailable || liveQueryPending}
+                    onClick={() => requestLiveSheetScope("near_route")}
+                    className={
+                      "inline-flex min-h-11 items-center rounded-full border px-4 text-[13px] transition disabled:cursor-not-allowed disabled:opacity-40 " +
+                      (liveSheetScope === "near_route"
+                        ? "border-parranda-ember/55 bg-parranda-ember/10 font-bold text-parranda-ink"
+                        : "border-parranda-ink/14 text-parranda-ink/65")
+                    }
+                  >
+                    {t("Nära rutten", "Near the route")}
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={liveSheetScope === "near_me"}
+                    disabled={liveQueryPending}
+                    onClick={() => requestLiveSheetScope("near_me")}
+                    className={
+                      "inline-flex min-h-11 items-center gap-2 rounded-full border px-4 text-[13px] transition disabled:cursor-not-allowed disabled:opacity-40 " +
+                      (liveSheetScope === "near_me"
+                        ? "border-parranda-ember/55 bg-parranda-ember/10 font-bold text-parranda-ink"
+                        : "border-parranda-ink/14 text-parranda-ink/65")
+                    }
+                  >
+                    <span aria-hidden="true" className="text-parranda-ember">◉</span>
+                    {t("Nära mig", "Near me")}
+                  </button>
+                </div>
+                {!routeScopeAvailable && (
+                  <p className="text-xs text-parranda-ink/50">
+                    {t("Nära rutten blir tillgängligt när en rutt finns.", "Near the route becomes available when a route exists.")}
+                  </p>
+                )}
+                {liveQueryGeoHint && <p className="text-xs text-parranda-ink/65">{liveQueryGeoHint}</p>}
               </div>
 
               {/* WHEN — a real axis over the live_events buckets. */}
@@ -1698,7 +1872,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-parranda-ink/55">
                   {liveSheetTime === "tonight" ? t("Idag", "Today") : t("Senare i veckan", "Later this week")} · {scopePhrase}
                 </p>
-                {liveSheetTime === "tonight" && split.woven.length > 0 && (
+                {liveSheetScope !== "near_me" && liveSheetTime === "tonight" && split.woven.length > 0 && (
                   <p className="text-xs text-parranda-ink/60">
                     {split.woven
                       .map((s: any) => String(s?.label || s?.name || "").trim())
@@ -1707,7 +1881,26 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                       .join(" · ")}
                   </p>
                 )}
-                {sheetEvents.length > 0 ? (
+                {liveQueryPending ? (
+                  <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4" aria-live="polite">
+                    <p className="text-sm text-parranda-ink/75">
+                      {t("Uppdaterar verifierade källor för det här området …", "Refreshing verified sources for this area …")}
+                    </p>
+                  </div>
+                ) : liveQueryError ? (
+                  <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
+                    <p className="text-sm leading-relaxed text-parranda-ink/80">{liveQueryError}</p>
+                  </div>
+                ) : sheetPulseState === "pending" ? (
+                  <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
+                    <p className="text-sm leading-relaxed text-parranda-ink/75">
+                      {t(
+                        "Kalendrarna uppdateras fortfarande — prova området igen om en stund.",
+                        "The calendars are still updating — try this area again shortly.",
+                      )}
+                    </p>
+                  </div>
+                ) : sheetEvents.length > 0 ? (
                   <ul className="flex flex-col gap-2.5">
                     {sheetEvents.map((ev: PulseEvent, i: number) => (
                       <li key={ev.id ?? i} className="flex items-baseline gap-3">
@@ -1733,19 +1926,19 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                       {liveSheetTime === "tonight"
                         ? t(`Inget verifierat idag ${scopePhrase}.`, `Nothing verified today ${scopePhrase}.`)
                         : t(`Inget listat senare i veckan ${scopePhrase}.`, `Nothing listed later this week ${scopePhrase}.`)}
-                      {liveSheetTime === "tonight" && pulseBuckets.thisWeek.length > 0 && (
+                      {liveSheetTime === "tonight" && sheetBuckets.thisWeek.length > 0 && (
                         <strong className="text-parranda-ink">
                           {" "}
-                          {pulseBuckets.thisWeek.length === 1
+                          {sheetBuckets.thisWeek.length === 1
                             ? t("1 händelse är listad senare i veckan.", "One event is listed later this week.")
                             : t(
-                                `${pulseBuckets.thisWeek.length} händelser är listade senare i veckan.`,
-                                `${pulseBuckets.thisWeek.length} events are listed later this week.`,
+                                `${sheetBuckets.thisWeek.length} händelser är listade senare i veckan.`,
+                                `${sheetBuckets.thisWeek.length} events are listed later this week.`,
                               )}
                         </strong>
                       )}
                     </p>
-                    {liveSheetTime === "tonight" && pulseBuckets.thisWeek.length > 0 && (
+                    {liveSheetTime === "tonight" && sheetBuckets.thisWeek.length > 0 && (
                       <button
                         type="button"
                         onClick={() => setLiveSheetTime("week")}
@@ -1754,7 +1947,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                         {t("Visa veckan", "Show this week")}
                       </button>
                     )}
-                    {liveSheetTime === "week" && pulseBuckets.tonight.length > 0 && (
+                    {liveSheetTime === "week" && sheetBuckets.tonight.length > 0 && (
                       <button
                         type="button"
                         onClick={() => setLiveSheetTime("tonight")}
@@ -1765,14 +1958,19 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                     )}
                   </div>
                 )}
-                {pulseState === "partial" && (
+                {sheetPulseState === "partial" && (
                   <p className="text-xs text-parranda-ink/55">
                     {t("Alla källor kunde inte nås just nu — listan kan vara ofullständig.", "Some sources couldn't be reached right now — the list may be incomplete.")}
                   </p>
                 )}
-                {pulseSources && (
+                {sheetSourceHealth && Number.isInteger(sheetSourceHealth.selected_source_count) && (
                   <p className="text-xs text-parranda-ink/50">
-                    {t("Källa", "Source")}: {pulseSources}
+                    {t("Källstatus", "Source health")}: {sheetSourceHealth.responding_source_count ?? 0}/{sheetSourceHealth.selected_source_count ?? 0} {t("svarade", "responded")} · {sheetSourceHealth.event_bearing_source_count ?? 0} {t("med träffar", "with events")}
+                  </p>
+                )}
+                {sheetSources && (
+                  <p className="text-xs text-parranda-ink/50">
+                    {t("Källa", "Source")}: {sheetSources}
                   </p>
                 )}
               </div>

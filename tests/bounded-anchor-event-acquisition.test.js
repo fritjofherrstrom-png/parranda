@@ -9,6 +9,7 @@ const {
 } = require("../server/place-candidates/anchor-event-acquisition");
 const {
   collectAnchorEvents,
+  buildScopedEventSourcePlan,
   GLOBAL_FEED_DESCRIPTOR,
   isEphemeralHappening,
   toEventView,
@@ -91,6 +92,16 @@ test("source planning skips review-only rows and prefers independent publishers"
   });
 
   assert.deepEqual(plan.map((source) => source.id), ["publisher-a-first", "publisher-b"]);
+});
+
+test("route-scoped source planning can find a reviewed feed at a route edge", () => {
+  const routeCenterOutsideFeed = { lat: 59.5, lng: 18.3 };
+  const plan = buildScopedEventSourcePlan({
+    anchor: routeCenterOutsideFeed,
+    sourceAnchors: [routeCenterOutsideFeed, ANCHOR],
+    registry: [feed("edge-municipal")],
+  });
+  assert.deepEqual(plan.map((source) => source.id), ["edge-municipal"]);
 });
 
 test("reviewed schema.org HTML and iCal sources share the bounded acquisition path", async () => {
