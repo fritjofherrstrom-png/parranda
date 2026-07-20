@@ -138,6 +138,10 @@ function isExplicitlyUnavailable(candidate) {
   return candidate?.availability?.eligible === false;
 }
 
+function isExperimentallyAdmitted(candidate) {
+  return candidate?.experimental_admission?.allowed === true;
+}
+
 // Index the RICH role candidates (from formatRoleCandidate) by role+id and by
 // bare id. The combination's `selected[]` (formatSelected) is intentionally
 // lossy — it drops type/provenance/attribution — so to build honestly-attributed
@@ -323,16 +327,32 @@ function mapPlannerReservoirToSourceCandidates({
       !selectedRoles.has(roleEntry.role) &&
       (roleEntry.slot === "anchor" || roleEntry.slot === "stop"),
   );
+  const deferredExperimentalSupport = [];
+  let gatePassingSupportCount = 0;
   for (const roleEntry of supportRoles) {
     if (out.length >= boundedLimit) break;
     const role = roleEntry.role;
-    const rich = plannerUsableOptionsForRole(roleEntry).find(
-      (candidate) => candidate?.candidate_id && !seen.has(candidate.candidate_id),
+    const options = plannerUsableOptionsForRole(roleEntry);
+    const rich = options.find(
+      (candidate) =>
+        candidate?.candidate_id &&
+        !seen.has(candidate.candidate_id) &&
+        !isExperimentallyAdmitted(candidate),
     );
-    if (!rich) continue;
+    if (!rich) {
+      const admitted = options.find(
+        (candidate) =>
+          candidate?.candidate_id &&
+          !seen.has(candidate.candidate_id) &&
+          isExperimentallyAdmitted(candidate),
+      );
+      if (admitted) deferredExperimentalSupport.push({ role, rich: admitted });
+      continue;
+    }
     const coords = finiteCoords(rich.coordinates);
     if (!coords) continue;
     seen.add(rich.candidate_id);
+    gatePassingSupportCount += 1;
     out.push(
       toSourceCandidate({
         pick: { role, candidate_id: rich.candidate_id, coordinates: coords },
@@ -344,6 +364,36 @@ function mapPlannerReservoirToSourceCandidates({
         requestedIntents,
       }),
     );
+  }
+
+  // Experimental admission remains available for a role the user explicitly
+  // requested. For unrequested day breadth it is only a bounded bridge: all
+  // shared-gate support is admitted first, and at most one lower-trust option
+  // may extend an already supported spine. This keeps a useful three-stop thin
+  // day possible without padding it with several uncorroborated places.
+  if (gatePassingSupportCount > 0 && out.length < boundedLimit) {
+    const deferred = deferredExperimentalSupport.find(
+      ({ rich }) => rich?.candidate_id && !seen.has(rich.candidate_id) && finiteCoords(rich.coordinates),
+    );
+    if (deferred) {
+      const coords = finiteCoords(deferred.rich.coordinates);
+      seen.add(deferred.rich.candidate_id);
+      out.push(
+        toSourceCandidate({
+          pick: {
+            role: deferred.role,
+            candidate_id: deferred.rich.candidate_id,
+            coordinates: coords,
+          },
+          rich: richIndex.get(`${deferred.role}::${deferred.rich.candidate_id}`) || deferred.rich,
+          coords,
+          city,
+          role: deferred.role,
+          reservoirSupport: true,
+          requestedIntents,
+        }),
+      );
+    }
   }
 
   return out;
