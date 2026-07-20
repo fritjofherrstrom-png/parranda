@@ -10,6 +10,7 @@ import {
   splitRouteStops,
   wovenEventIds,
   pulseEventBuckets,
+  pulseBrowseBuckets,
   clothingAdvice,
   pulseSourceLine,
   eventTiming,
@@ -49,6 +50,19 @@ test("a woven event is excluded from Pulse buckets; non-woven events pass throug
   // No woven stops → nothing excluded.
   const all = pulseEventBuckets(liveEvents, wovenEventIds([CORE_A, CORE_B]));
   assert.equal(all.tonight.length, 2);
+});
+
+test("browse buckets preserve remaining accepted events and exclude woven occurrences", () => {
+  const liveEvents = {
+    browse: {
+      tonight: { more: [{ id: "ev1" }, { id: "ev4", source_url: "https://x/ev4" }] },
+      this_week: { more: [{ id: "ev5" }] },
+    },
+  };
+  const buckets = pulseBrowseBuckets(liveEvents, wovenEventIds([WOVEN]));
+  assert.deepEqual(buckets.tonight.map((event) => event.id), ["ev4"]);
+  assert.deepEqual(buckets.thisWeek.map((event) => event.id), ["ev5"]);
+  assert.equal(buckets.tonight[0].source_url, "https://x/ev4");
 });
 
 test("ambient helpers derive context — they never produce stop-shaped objects", () => {

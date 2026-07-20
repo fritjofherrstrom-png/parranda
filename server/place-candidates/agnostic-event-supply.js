@@ -52,6 +52,8 @@ const {
 
 const DEFAULT_RADIUS_M = 3000;
 const MAX_PER_BUCKET = 6;
+const MAX_BROWSE_PER_BUCKET = 24;
+const LIVE_EVENT_BROWSE_CONTRACT = "live_event_browse_v1";
 // Wide enough that today's later (evening) events and the next days both fit in
 // one chronological page after permanent infrastructure is excluded.
 const FETCH_LIMIT = 40;
@@ -362,8 +364,9 @@ function toEventView(event, feed, { eventTimezone = null } = {}) {
   };
 }
 
-function rankAndCap(views, preferences = []) {
-  const sorted = views
+function rankEventViews(views, preferences = []) {
+  return dedupeViews(
+    views
     .filter(Boolean)
     .map((view) => withEventPreferenceFit(view, preferences))
     .sort(
@@ -372,8 +375,49 @@ function rankAndCap(views, preferences = []) {
         (b.salience_score || 0) - (a.salience_score || 0) ||
         String(a.starts_at || a.starts_on || "").localeCompare(String(b.starts_at || b.starts_on || "")) ||
         String(a.id || "").localeCompare(String(b.id || "")),
-    );
-  return dedupeViews(sorted).slice(0, MAX_PER_BUCKET);
+    ),
+  );
+}
+
+function buildEventBucketSurface(views, preferences = []) {
+  const ranked = rankEventViews(views, preferences);
+  const highlights = ranked.slice(0, MAX_PER_BUCKET);
+  const more = ranked.slice(MAX_PER_BUCKET, MAX_BROWSE_PER_BUCKET);
+  return {
+    highlights,
+    browse: {
+      ranked_event_count: ranked.length,
+      highlight_count: highlights.length,
+      more_count: more.length,
+      hidden_count: Math.max(0, ranked.length - highlights.length - more.length),
+      more,
+    },
+  };
+}
+
+function emptyEventBrowse() {
+  const emptyBucket = () => ({
+    ranked_event_count: 0,
+    highlight_count: 0,
+    more_count: 0,
+    hidden_count: 0,
+    more: [],
+  });
+  return {
+    contract: LIVE_EVENT_BROWSE_CONTRACT,
+    max_rows_per_bucket: MAX_BROWSE_PER_BUCKET,
+    tonight: emptyBucket(),
+    this_week: emptyBucket(),
+  };
+}
+
+function buildEventBrowse(tonightSurface, thisWeekSurface) {
+  return {
+    contract: LIVE_EVENT_BROWSE_CONTRACT,
+    max_rows_per_bucket: MAX_BROWSE_PER_BUCKET,
+    tonight: tonightSurface.browse,
+    this_week: thisWeekSurface.browse,
+  };
 }
 
 function withEventPreferenceFit(view, preferences = []) {
@@ -401,8 +445,16 @@ function rankCollectedEventsForPreferences(collected, preferences = [], scope = 
   const tonightPool = Array.isArray(pool?.tonight) ? pool.tonight : collected.tonight;
   const thisWeekPool = Array.isArray(pool?.this_week) ? pool.this_week : collected.this_week;
   const { _rankable_events: _internalPool, ...publicResult } = collected;
-  const tonight = rankAndCap(filterEventsForLiveScope(tonightPool, scope), preferences);
-  const thisWeek = rankAndCap(filterEventsForLiveScope(thisWeekPool, scope), preferences);
+  const tonightSurface = buildEventBucketSurface(
+    filterEventsForLiveScope(tonightPool, scope),
+    preferences,
+  );
+  const thisWeekSurface = buildEventBucketSurface(
+    filterEventsForLiveScope(thisWeekPool, scope),
+    preferences,
+  );
+  const tonight = tonightSurface.highlights;
+  const thisWeek = thisWeekSurface.highlights;
   const acquisition = publicResult.acquisition && typeof publicResult.acquisition === "object"
     ? {
         ...publicResult.acquisition,
@@ -421,6 +473,7 @@ function rankCollectedEventsForPreferences(collected, preferences = [], scope = 
     ...(acquisition ? { acquisition } : {}),
     tonight,
     this_week: thisWeek,
+    browse: buildEventBrowse(tonightSurface, thisWeekSurface),
   };
 }
 
@@ -519,6 +572,7 @@ async function collectAnchorEvents({
       feeds: [],
       tonight: [],
       this_week: [],
+      browse: emptyEventBrowse(),
       acquisition: emptyAcquisition(effectiveRadiusM),
     };
   }
@@ -592,8 +646,16 @@ async function collectAnchorEvents({
     }
   }
 
-  const rankedTonight = rankAndCap(filterEventsForLiveScope(tonight, scope), preferences);
-  const rankedThisWeek = rankAndCap(filterEventsForLiveScope(thisWeek, scope), preferences);
+  const tonightSurface = buildEventBucketSurface(
+    filterEventsForLiveScope(tonight, scope),
+    preferences,
+  );
+  const thisWeekSurface = buildEventBucketSurface(
+    filterEventsForLiveScope(thisWeek, scope),
+    preferences,
+  );
+  const rankedTonight = tonightSurface.highlights;
+  const rankedThisWeek = thisWeekSurface.highlights;
   const feeds = collectedSources.map(compactSourceStatus);
   const sourceHealth = buildAnchorEventSourceHealth(collectedSources, {
     acceptedEventCount: tonight.length + thisWeek.length,
@@ -607,6 +669,7 @@ async function collectAnchorEvents({
     feeds,
     tonight: rankedTonight,
     this_week: rankedThisWeek,
+    browse: buildEventBrowse(tonightSurface, thisWeekSurface),
     // The normalized, geo/timing-gated pool is cached independently of user
     // preferences. A warm cache can therefore be reranked instantly without a
     // second provider request, while the public route response receives only
@@ -995,6 +1058,7 @@ function resolveDefaultEventSupply(env = process.env) {
         feeds: [],
         tonight: [],
         this_week: [],
+        browse: emptyEventBrowse(),
         acquisition: emptyAcquisition(effectiveRadiusM),
       });
     }
@@ -1022,6 +1086,7 @@ function resolveDefaultEventSupply(env = process.env) {
       feeds: descriptors,
       tonight: [],
       this_week: [],
+      browse: emptyEventBrowse(),
       pending: true,
       acquisition: {
         mode: "bounded_multi_source",
@@ -1069,6 +1134,9 @@ module.exports = {
   HELSINKI_LINKED_EVENTS_FEED,
   GLOBAL_FEED_DESCRIPTOR,
   DEFAULT_RADIUS_M,
+  MAX_PER_BUCKET,
+  MAX_BROWSE_PER_BUCKET,
+  LIVE_EVENT_BROWSE_CONTRACT,
   LOCAL_EVENT_ADAPTERS,
   normalizeLocalEventAdapter,
   createLocalEventProvider,

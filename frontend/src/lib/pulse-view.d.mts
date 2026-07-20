@@ -28,6 +28,19 @@ export declare function pulseEventBuckets<E extends object>(
   wovenIds?: Set<string>,
 ): { tonight: E[]; thisWeek: E[] };
 
+export declare function pulseBrowseBuckets<E extends object>(
+  liveEvents:
+    | {
+        browse?: {
+          tonight?: { more?: E[] };
+          this_week?: { more?: E[] };
+        };
+      }
+    | null
+    | undefined,
+  wovenIds?: Set<string>,
+): { tonight: E[]; thisWeek: E[] };
+
 export declare function eventTiming(
   ev:
     | {

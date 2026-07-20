@@ -384,6 +384,10 @@ test("the Live sheet explores events only — it never touches the day's anchor 
   // preview).
   assert.match(anywherePlannerSource, /\[liveSheetTime, setLiveSheetTime\] = useState/);
   assert.match(anywherePlannerSource, /liveSheetTime === "tonight" \? sheetBuckets\.tonight : sheetBuckets\.thisWeek/);
+  assert.match(anywherePlannerSource, /pulseBrowseBuckets\(sheetLiveEvents, wovenEventIds\(routeStops\)\)/);
+  assert.match(anywherePlannerSource, /Höjdpunkter för dina val/);
+  assert.match(anywherePlannerSource, /Show \$\{sheetMoreEvents\.length\} more events/);
+  assert.match(anywherePlannerSource, /<details className=/);
   assert.doesNotMatch(anywherePlannerSource, /sheetEvents\.slice\(/, "the sheet is the uncapped surface");
   // SCOPE now calls the explicit non-mutating API contract. Around-place reads
   // the trusted response anchor, near-route sends bounded primary-route points,

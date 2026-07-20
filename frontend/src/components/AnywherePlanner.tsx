@@ -33,6 +33,7 @@ import {
   splitRouteStops,
   wovenEventIds,
   pulseEventBuckets,
+  pulseBrowseBuckets,
   clothingAdvice,
   pulseSourceLine,
   eventTiming,
@@ -146,6 +147,12 @@ interface LiveEvents {
   acquisition?: { source_health?: LiveSourceHealth | null } | null;
   tonight?: PulseEvent[];
   this_week?: PulseEvent[];
+  browse?: {
+    contract?: string;
+    max_rows_per_bucket?: number;
+    tonight?: { ranked_event_count?: number; highlight_count?: number; more_count?: number; hidden_count?: number; more?: PulseEvent[] };
+    this_week?: { ranked_event_count?: number; highlight_count?: number; more_count?: number; hidden_count?: number; more?: PulseEvent[] };
+  };
 }
 
 const LIVE_REFRESH_DELAYS_MS = [9000, 12000, 18000] as const;
@@ -753,6 +760,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const sheetLiveEvents = liveQueryEvents ?? liveEvents;
   const sheetBuckets = useMemo(
     () => pulseEventBuckets(sheetLiveEvents, wovenEventIds(routeStops)),
+    [sheetLiveEvents, routeStops],
+  );
+  const sheetBrowseBuckets = useMemo(
+    () => pulseBrowseBuckets(sheetLiveEvents, wovenEventIds(routeStops)),
     [sheetLiveEvents, routeStops],
   );
   const sheetPulseState = useMemo(
@@ -1784,6 +1795,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           anchors the DAY; a separate near-me consent applies only to this query. */}
       {liveSheetOpen && (() => {
         const sheetEvents: PulseEvent[] = liveSheetTime === "tonight" ? sheetBuckets.tonight : sheetBuckets.thisWeek;
+        const sheetMoreEvents: PulseEvent[] = liveSheetTime === "tonight" ? sheetBrowseBuckets.tonight : sheetBrowseBuckets.thisWeek;
         const scopePhrase =
           liveSheetScope === "near_route"
             ? t("nära rutten", "near the route")
@@ -1939,26 +1951,61 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                       )}
                     </p>
                   </div>
-                ) : sheetEvents.length > 0 ? (
-                  <ul className="flex flex-col gap-2.5">
-                    {sheetEvents.map((ev: PulseEvent, i: number) => (
-                      <li key={ev.id ?? i} className="flex items-baseline gap-3">
-                        <span className="min-w-[44px] shrink-0 text-xs font-extrabold text-parranda-clay">{eventTiming(ev, lang)}</span>
-                        <span className="text-sm text-parranda-ink/90">
-                          <span className="font-bold">{ev.title}</span>
-                          {ev.place && <span className="text-parranda-ink/60"> · {ev.place}</span>}
-                          {ev.source_url && (
-                            <span className="text-parranda-ink/50">
-                              {" · "}
-                              <a href={ev.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 min-w-11 items-center underline underline-offset-2 hover:text-parranda-accent">
-                                {ev.source_label || t("Källa", "Source")}
-                              </a>
-                            </span>
-                          )}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                ) : sheetEvents.length > 0 || sheetMoreEvents.length > 0 ? (
+                  <div className="flex flex-col gap-3">
+                    {sheetEvents.length > 0 && (
+                      <>
+                        <p className="text-xs font-bold text-parranda-ink/65">
+                          {selected.length > 0 ? t("Höjdpunkter för dina val", "Highlights for your picks") : t("Höjdpunkter", "Highlights")}
+                        </p>
+                        <ul className="flex flex-col gap-2.5">
+                          {sheetEvents.map((ev: PulseEvent, i: number) => (
+                            <li key={ev.id ?? i} className="flex items-baseline gap-3">
+                              <span className="min-w-[44px] shrink-0 text-xs font-extrabold text-parranda-clay">{eventTiming(ev, lang)}</span>
+                              <span className="text-sm text-parranda-ink/90">
+                                <span className="font-bold">{ev.title}</span>
+                                {ev.place && <span className="text-parranda-ink/60"> · {ev.place}</span>}
+                                {ev.source_url && (
+                                  <span className="text-parranda-ink/50">
+                                    {" · "}
+                                    <a href={ev.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 min-w-11 items-center underline underline-offset-2 hover:text-parranda-accent">
+                                      {ev.source_label || t("Källa", "Source")}
+                                    </a>
+                                  </span>
+                                )}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                    {sheetMoreEvents.length > 0 && (
+                      <details className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 px-4 py-2">
+                        <summary className="flex min-h-11 cursor-pointer items-center text-sm font-bold text-parranda-ink">
+                          {t(`Visa ${sheetMoreEvents.length} fler händelser`, `Show ${sheetMoreEvents.length} more events`)}
+                        </summary>
+                        <ul className="flex flex-col gap-2.5 border-t border-parranda-ink/10 pb-2 pt-3">
+                          {sheetMoreEvents.map((ev: PulseEvent, i: number) => (
+                            <li key={ev.id ?? i} className="flex items-baseline gap-3">
+                              <span className="min-w-[44px] shrink-0 text-xs font-extrabold text-parranda-clay">{eventTiming(ev, lang)}</span>
+                              <span className="text-sm text-parranda-ink/90">
+                                <span className="font-semibold">{ev.title}</span>
+                                {ev.place && <span className="text-parranda-ink/60"> · {ev.place}</span>}
+                                {ev.source_url && (
+                                  <span className="text-parranda-ink/50">
+                                    {" · "}
+                                    <a href={ev.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 min-w-11 items-center underline underline-offset-2 hover:text-parranda-accent">
+                                      {ev.source_label || t("Källa", "Source")}
+                                    </a>
+                                  </span>
+                                )}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                  </div>
                 ) : (
                   <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
                     <p className="text-sm leading-relaxed text-parranda-ink/80">
