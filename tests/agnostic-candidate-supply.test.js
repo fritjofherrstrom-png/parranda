@@ -108,6 +108,22 @@ test("a pick with no coordinates (and no rich coords) is dropped — a stop must
   assert.deepEqual(result, []);
 });
 
+test("a stale selected pick cannot restore a rich candidate proven unavailable", () => {
+  const unavailable = richCandidate({
+    availability: {
+      eligible: false,
+      status: "closed_for_window",
+      reason: "opening_hours_closed_for_query_window",
+    },
+  });
+  const result = mapAdmittedSelectionToSourceCandidates({
+    selected: [selectedPick()],
+    plannerRoles: plannerRoles({ coffee_start: [unavailable] }),
+  });
+
+  assert.deepEqual(result, []);
+});
+
 test("falls back to bare-id join when the role does not match", () => {
   const result = mapAdmittedSelectionToSourceCandidates({
     selected: [selectedPick({ role: "mismatched_role" })],
@@ -256,6 +272,95 @@ test("single requested role gains bounded planner-safe day support without false
   assert.deepEqual(result.find((entry) => entry.id === "view-a").covered_preferences, []);
   assert.deepEqual(result.find((entry) => entry.id === "view-a").missing_preferences, ["food"]);
   assert.deepEqual(result.find((entry) => entry.id === "food-a").covered_preferences, ["food"]);
+});
+
+test("a proven-closed supporting stop cannot re-enter after role selection", () => {
+  const food = richCandidate({
+    candidate_id: "food-a",
+    type: "restaurant",
+    candidate_status: "filled",
+    planner_usable: true,
+    covered_preferences: ["food"],
+    local_feel_rank: 0,
+  });
+  const closedCoffee = richCandidate({
+    candidate_id: "closed-coffee",
+    type: "cafe",
+    candidate_status: "filled",
+    planner_usable: true,
+    covered_preferences: ["coffee"],
+    local_feel_rank: 0,
+    availability: {
+      eligible: false,
+      status: "closed_for_window",
+      reason: "opening_hours_closed_for_query_window",
+    },
+  });
+  const roles = {
+    city: "agnostic-engine-area",
+    requested_preferences: ["food"],
+    roles: [
+      { role: "food_anchor", slot: "anchor", requested: true, candidates: [food] },
+      { role: "coffee_fika_stop", slot: "stop", requested: false, candidates: [closedCoffee] },
+    ],
+  };
+
+  const result = mapPlannerReservoirToSourceCandidates({
+    selected: [selectedPick({ role: "food_anchor", candidate_id: "food-a", coordinates: food.coordinates })],
+    plannerRoles: roles,
+  });
+
+  assert.deepEqual(result.map((entry) => entry.id), ["food-a"]);
+});
+
+test("local independent support beats a chain in the same role", () => {
+  const food = richCandidate({
+    candidate_id: "food-a",
+    type: "restaurant",
+    candidate_status: "filled",
+    planner_usable: true,
+    covered_preferences: ["food"],
+    local_feel_rank: 0,
+  });
+  const chainCoffee = richCandidate({
+    candidate_id: "chain-coffee",
+    type: "cafe",
+    candidate_status: "filled",
+    planner_usable: true,
+    covered_preferences: ["coffee"],
+    local_feel_rank: 2,
+    chain: true,
+    brand: "Global Coffee",
+  });
+  const localCoffee = richCandidate({
+    candidate_id: "local-coffee",
+    type: "cafe",
+    candidate_status: "filled",
+    planner_usable: true,
+    covered_preferences: ["coffee"],
+    local_feel_rank: 0,
+  });
+  const roles = {
+    city: "agnostic-engine-area",
+    requested_preferences: ["food"],
+    roles: [
+      { role: "food_anchor", slot: "anchor", requested: true, candidates: [food] },
+      {
+        role: "coffee_fika_stop",
+        slot: "stop",
+        requested: false,
+        candidates: [chainCoffee, localCoffee],
+      },
+    ],
+  };
+
+  const result = mapPlannerReservoirToSourceCandidates({
+    selected: [selectedPick({ role: "food_anchor", candidate_id: "food-a", coordinates: food.coordinates })],
+    plannerRoles: roles,
+  });
+
+  assert.deepEqual(result.map((entry) => entry.id), ["food-a", "local-coffee"]);
+  assert.equal(result.some((entry) => entry.chain === true), false);
 });
 
 test("sparse single-role supply stays sparse instead of fabricating support", () => {

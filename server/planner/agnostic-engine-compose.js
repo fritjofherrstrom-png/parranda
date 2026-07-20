@@ -134,6 +134,10 @@ function finiteCoords(coordinates) {
   return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
 }
 
+function isExplicitlyUnavailable(candidate) {
+  return candidate?.availability?.eligible === false;
+}
+
 // Index the RICH role candidates (from formatRoleCandidate) by role+id and by
 // bare id. The combination's `selected[]` (formatSelected) is intentionally
 // lossy — it drops type/provenance/attribution — so to build honestly-attributed
@@ -371,6 +375,10 @@ function mapAdmittedSelectionToSourceCandidates({
     if (!id || seen.has(id)) continue;
     const role = pick.role || null;
     const rich = (role && index.get(`${role}::${id}`)) || index.get(`*::${id}`) || null;
+    // Availability is computed from trusted server time/opening-hours facts.
+    // Do not let a stale pre-combination selection reintroduce a candidate
+    // which the shared role reservoir now knows is closed for the day window.
+    if (isExplicitlyUnavailable(rich)) continue;
     const coords = finiteCoords(pick.coordinates) || (rich && finiteCoords(rich.coordinates));
     if (!coords) continue; // no geo → cannot honestly be a stop
     seen.add(id);

@@ -1,7 +1,10 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { buildCandidateCombination } = require("../server/planner/candidate-combination");
+const {
+  buildCandidateCombination,
+  plannerUsableOptionsForRole,
+} = require("../server/planner/candidate-combination");
 
 // --- builders (mirror role-selector output shape) --------------------------
 
@@ -182,6 +185,23 @@ test("a fallback-only role is unresolved and the combination is not ready", () =
   assert.ok(out.unresolved_roles.some((r) => r.role === "food_anchor" && r.reason === "fallback_only"));
   assert.ok(!out.selected.some((s) => s.candidate_id === "fb")); // fallback never selected
   assert.ok(out.quality_flags.includes("fallback_only_food_anchor"));
+});
+
+test("a proven-unavailable candidate cannot re-enter the shared planner reservoir", () => {
+  const open = candidate("open-local");
+  const closed = candidate("closed-local");
+  closed.availability = {
+    eligible: false,
+    status: "closed_for_window",
+    reason: "opening_hours_closed_for_query_window",
+  };
+
+  assert.deepEqual(
+    plannerUsableOptionsForRole(role("food_anchor", { candidates: [closed, open] })).map(
+      (entry) => entry.candidate_id,
+    ),
+    ["open-local"],
+  );
 });
 
 // --- 10. determinism --------------------------------------------------------
