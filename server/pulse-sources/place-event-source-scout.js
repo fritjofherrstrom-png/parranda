@@ -236,23 +236,31 @@ function compactScoutSummary(result) {
     inspected_source_count: finiteCount(result.inspected_source_count),
     blocked_source_count: finiteCount(result.blocked_source_count),
     failed_source_count: finiteCount(result.failed_source_count),
+    linked_page_attempt_count: finiteCount(result.linked_page_attempt_count),
+    linked_source_count: finiteCount(result.linked_source_count),
   };
 }
 
 function compactSourceResults(results) {
-  return (Array.isArray(results) ? results : []).map((result) => ({
-    source_url: publicString(result?.source_url),
-    source_identity: publicString(result?.source_identity),
-    status: publicString(result?.status) || "unknown",
-    detected: compactTokens(result?.detected),
-    reasons: compactTokens(result?.reasons),
-    manifest_candidate_count: Array.isArray(result?.manifest_candidates)
-      ? result.manifest_candidates.length
-      : 0,
-    social_hint_count: Array.isArray(result?.social_hints)
-      ? result.social_hints.length
-      : 0,
-  }));
+  return (Array.isArray(results) ? results : []).map((result) => {
+    const discoveryMethod = publicString(result?.discovery_method);
+    const discoveredFrom = publicString(result?.discovered_from);
+    return {
+      source_url: publicString(result?.source_url),
+      source_identity: publicString(result?.source_identity),
+      status: publicString(result?.status) || "unknown",
+      detected: compactTokens(result?.detected),
+      reasons: compactTokens(result?.reasons),
+      ...(discoveryMethod ? { discovery_method: discoveryMethod } : {}),
+      ...(discoveredFrom ? { discovered_from: discoveredFrom } : {}),
+      manifest_candidate_count: Array.isArray(result?.manifest_candidates)
+        ? result.manifest_candidates.length
+        : 0,
+      social_hint_count: Array.isArray(result?.social_hints)
+        ? result.social_hints.length
+        : 0,
+    };
+  });
 }
 
 function compactSocialHints(hints) {
@@ -293,7 +301,16 @@ function reviewOnlyManifests(manifests) {
 function sanitizeScoutOptions(options) {
   if (!options || typeof options !== "object") return {};
   const allowed = {};
-  for (const key of ["fetcher", "maxSeeds", "maxBytes", "timeoutMs", "userAgent"]) {
+  for (const key of [
+    "fetcher",
+    "maxSeeds",
+    "maxBytes",
+    "maxLinkedPagesPerSeed",
+    "maxLinkedPages",
+    "calendarLinkTerms",
+    "timeoutMs",
+    "userAgent",
+  ]) {
     if (Object.prototype.hasOwnProperty.call(options, key)) allowed[key] = options[key];
   }
   return allowed;

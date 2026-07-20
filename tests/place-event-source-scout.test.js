@@ -57,6 +57,8 @@ test("trusted place records become bounded scout seeds and review-only manifests
         inspected_source_count: 1,
         blocked_source_count: 0,
         failed_source_count: 0,
+        linked_page_attempt_count: 1,
+        linked_source_count: 1,
         results: [
           {
             source_url: "https://venue.example/program",
@@ -89,6 +91,8 @@ test("trusted place records become bounded scout seeds and review-only manifests
   assert.equal(result.activation_performed, false);
   assert.equal(result.loader.trusted_record_count, 2);
   assert.equal(result.loader.website_seed_count, 1);
+  assert.equal(result.source_scout.linked_page_attempt_count, 1);
+  assert.equal(result.source_scout.linked_source_count, 1);
   assert.equal(scoutInput.seeds.length, 1);
   assert.equal(scoutInput.seeds[0].url, "https://venue.example/program");
   assert.deepEqual(scoutInput.anchor, { lat: 55.6, lng: 13 });
