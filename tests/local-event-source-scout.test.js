@@ -271,6 +271,28 @@ test("Sitevision-style calendars produce a review-needed bounded adapter manifes
   assert.equal(result.manifest_candidates[0].status, "review-needed");
 });
 
+test("Sitevision Soleil listings reuse the review-needed generic adapter", () => {
+  const result = inspectEventSourcePage({
+    seed: { url: "https://municipality.example/program" },
+    html: [
+      '<main class="sv-custom-module sv-se-soleil-eventListingLocal">',
+      '<article class="item-program">',
+      '<a href="/program/item"><h2>Open workshop</h2></a>',
+      '<time class="dates-kempox" datetime="2026-07-20">20 July</time>',
+      "</article></main>",
+    ].join(""),
+    context: context(),
+  });
+
+  assert.equal(result.detected.length, 1);
+  assert.equal(result.candidates[0].adapter, "sitevision_calendar");
+  assert.equal(result.candidates[0].maps_to_existing_provider, true);
+  assert.equal(result.manifest_candidates.length, 1);
+  assert.equal(result.manifest_candidates[0].adapter, "sitevision_calendar");
+  assert.equal(result.manifest_candidates[0].status, "review-needed");
+  assert.equal(result.manifest_candidates[0].runtime_policy, "review_required");
+});
+
 test("calendar-page discovery is multilingual, same-origin, and listing-only", () => {
   const links = extractCalendarPageLinks({
     pageUrl: "https://venue.example/start",
@@ -687,6 +709,7 @@ test("scout code is city-agnostic and cannot activate discovered sources", () =>
   const source = [
     "../server/pulse-sources/local-event-source-scout",
     "../server/pulse-sources/calendar-page-locator",
+    "../server/pulse-sources/sitevision-calendar-provider",
   ].map((modulePath) => fs.readFileSync(require.resolve(modulePath), "utf8")).join("\n");
   assert.ok(!/athens|rome|barcelona|helsinki|österlen|skåne|malm[oö]/i.test(source));
   assert.ok(!/status:\s*"active"/.test(source));

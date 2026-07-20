@@ -36,6 +36,37 @@ function listingHtml(rows = [eventArticle({ slug: "summer-market", title: "Summe
   `;
 }
 
+function soleilArticle({
+  id = "program-1",
+  title = "Open workshop",
+  date = "20 juli",
+  datetime = "2026-07-20",
+  time = "14:00 – 15:00",
+  category = "Workshop",
+  venue = "City museum",
+} = {}) {
+  return `
+    <article class="item-${id}">
+      <a href="/calendar/Programpunkt.html?id=${id}"><h2>${title}</h2></a>
+      <time class="dates-kempox" datetime="${datetime}">Datum ${date}</time>
+      <dl>
+        <dt class="sr-only">Tid</dt><dd>${time}</dd>
+        <dt class="sr-only">Kategori</dt><dd>${category}</dd>
+        <dt class="sr-only">Lokal</dt><dd>${venue}</dd>
+      </dl>
+      <p class="description">Editorial description must not enter factual timing atoms.</p>
+    </article>
+  `;
+}
+
+function soleilListingHtml(rows = [soleilArticle()]) {
+  return `
+    <main class="sv-custom-module sv-se-soleil-eventListingLocal">
+      <section>${rows.join("")}</section>
+    </main>
+  `;
+}
+
 function detailHtml() {
   return `
     <h1>Summer market</h1>
@@ -76,6 +107,79 @@ test("extracts factual Sitevision listing atoms with reviewed local timezone", (
   assert.equal(events[0].translation_status, "needed");
 });
 
+test("extracts factual atoms from the generic Sitevision Soleil listing layout", () => {
+  const events = extractSitevisionCalendarEvents(soleilListingHtml(), {
+    baseUrl: "https://municipality.example/program",
+    date: "2026-07-20",
+    timezone: "Europe/Stockholm",
+    sourceLanguage: "sv",
+  });
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0].title, "Open workshop");
+  assert.equal(
+    events[0].source_url,
+    "https://municipality.example/calendar/Programpunkt.html?id=program-1",
+  );
+  assert.equal(events[0].starts_at, "2026-07-20T12:00:00.000Z");
+  assert.equal(events[0].ends_at, "2026-07-20T13:00:00.000Z");
+  assert.equal(events[0].place_context, "City museum");
+  assert.deepEqual(events[0].tags, ["Workshop"]);
+  assert.equal(events[0].time_window.kind, "continuous");
+  assert.doesNotMatch(events[0].time_window.label, /Editorial description/);
+});
+
+test("Sitevision date ranges preserve daily windows instead of becoming continuous events", () => {
+  const events = extractSitevisionCalendarEvents(soleilListingHtml([
+    soleilArticle({
+      id: "summer-program",
+      title: "Summer studio",
+      date: "20 juli – 7 augusti",
+      time: "10:00 – 17:00",
+    }),
+  ]), {
+    baseUrl: "https://municipality.example/program",
+    date: "2026-07-20",
+    timezone: "Europe/Stockholm",
+    sourceLanguage: "sv",
+  });
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0].starts_at, undefined);
+  assert.equal(events[0].ends_at, undefined);
+  assert.equal(events[0].starts_on, "2026-07-20");
+  assert.equal(events[0].ends_on, "2026-08-07");
+  assert.equal(events[0].time_window.kind, "daily");
+  assert.equal(events[0].time_window.starts_on, "2026-07-20");
+  assert.equal(events[0].time_window.ends_on, "2026-08-07");
+  assert.equal(events[0].time_window.local_start, "10:00");
+  assert.equal(events[0].time_window.local_end, "17:00");
+  assert.equal(events[0].time_window.timezone, "Europe/Stockholm");
+  assert.match(events[0].time_window.label, /20 juli .* 7 augusti/i);
+});
+
+test("Sitevision date-only ranges stay local all-day facts", () => {
+  const events = extractSitevisionCalendarEvents(soleilListingHtml([
+    soleilArticle({
+      id: "exhibition",
+      title: "Local exhibition",
+      date: "20 juli – 7 augusti",
+      time: "",
+      category: "Exhibition",
+    }),
+  ]), {
+    baseUrl: "https://municipality.example/program",
+    date: "2026-07-20",
+    timezone: "Europe/Stockholm",
+  });
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0].starts_at, undefined);
+  assert.equal(events[0].starts_on, "2026-07-20");
+  assert.equal(events[0].ends_on, "2026-08-07");
+  assert.equal(events[0].time_window.kind, "all_day");
+});
+
 test("extracts bounded detail facts including recurrence and coordinates", () => {
   const detail = extractSitevisionEventDetail(detailHtml(), {
     expectedDate: "2026-07-15",
@@ -98,12 +202,15 @@ test("local clock times fail closed without a reviewed IANA timezone", () => {
   assert.equal(unresolved.date_key, "2026-07-15");
   assert.equal(unresolved.starts_at, undefined);
   assert.equal(unresolved.ends_at, undefined);
+  assert.equal(unresolved.time_window.kind, "daily");
+  assert.equal(unresolved.time_window.timezone, undefined);
 
   const result = extractSitevisionCalendarEvents(listingHtml(), {
     baseUrl: "https://municipality.example/calendar",
     date: "2026-07-15",
   });
   assert.equal(result[0].starts_at, undefined);
+  assert.equal(result[0].time_window.kind, "daily");
 });
 
 test("provider bounds detail fetches and keeps listing rows when detail enrichment fails", async () => {

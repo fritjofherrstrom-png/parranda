@@ -76,6 +76,9 @@ function buildDescriptor(options = {}) {
       "title",
       "starts_at",
       "ends_at",
+      "starts_on",
+      "ends_on",
+      "time_window",
       "source_url",
       "place_context",
       "lat",
@@ -200,23 +203,40 @@ function extractSitevisionCalendarEvents(html, options = {}) {
     );
     if (!title || !link) continue;
 
-    const timingText = extractSitevisionTimingText(article) || htmlToText(article);
-    const timing = parseSitevisionDateTime(timingText, options);
-    if (isBeforeCollectionDate(timing.date_key, options.date)) continue;
+    const listingDate = firstMatch(
+      article,
+      /<time\b[^>]*datetime=["'](\d{4}-\d{2}-\d{2})["'][^>]*>/i,
+    );
+    const timingText =
+      extractSitevisionTimingText(article) ||
+      extractSoleilTimingText(article) ||
+      htmlToText(article);
+    const timing = parseSitevisionDateTime(timingText, {
+      ...options,
+      fallbackDate: listingDate,
+    });
+    if (isBeforeCollectionDate(timing.end_date_key || timing.date_key, options.date)) continue;
     const venue = htmlToText(
       firstMatch(article, /<div\b[^>]*class=["'][^"']*\bfooterText\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/i),
-    );
+    ) || extractDefinitionValue(article, ["lokal", "plats", "venue", "location"]);
+    const category = extractDefinitionValue(article, ["kategori", "category"]);
     const communityEvent = /\bexternalOrganizerBadge\b/i.test(article);
     events.push(compact({
       id: link,
       title,
       starts_at: timing.starts_at,
       ends_at: timing.ends_at,
+      starts_on: timing.starts_on,
+      ends_on: timing.ends_on,
       listing_date: timing.date_key,
-      time_window: timing.label ? { label: timing.label } : null,
+      listing_end_date: timing.end_date_key,
+      time_window: timing.time_window,
       source_url: link,
       place_context: venue,
-      tags: communityEvent ? ["community_event"] : [],
+      tags: uniqueStrings([
+        communityEvent ? "community_event" : null,
+        category,
+      ]),
       source_language: options.sourceLanguage || null,
       event_language: options.eventLanguage || options.sourceLanguage || null,
       translation_status: translationStatus(options.sourceLanguage),
@@ -244,7 +264,9 @@ function extractSitevisionEventDetail(html, options = {}) {
   return compact({
     starts_at: timing.starts_at,
     ends_at: timing.ends_at,
-    time_window: timing.label ? { label: timing.label } : null,
+    starts_on: timing.starts_on,
+    ends_on: timing.ends_on,
+    time_window: timing.time_window,
     place_context: venue,
     address,
     lat: coordinates.lat,
@@ -277,6 +299,8 @@ async function enrichFromDetailPages(events, fetcher, options = {}) {
       for (const key of [
         "starts_at",
         "ends_at",
+        "starts_on",
+        "ends_on",
         "time_window",
         "place_context",
         "address",
@@ -297,19 +321,56 @@ function parseSitevisionDateTime(value, options = {}) {
   if (!label) return {};
   const normalized = label.toLocaleLowerCase("sv-SE").replace(/[–—]/g, "-");
   const expectedDate = validDateKey(options.expectedDate);
-  const year = expectedDate ? Number(expectedDate.slice(0, 4)) : inferYear(options.date);
+  const fallbackDate = validDateKey(options.fallbackDate);
+  const year = inferYear(expectedDate || fallbackDate || options.date);
   const range = expectedDate
     ? { start: datePartsFromKey(expectedDate), end: datePartsFromKey(expectedDate) }
-    : parseDateRange(normalized, year);
+    : parseDateRange(normalized, year) ||
+      (fallbackDate
+        ? { start: datePartsFromKey(fallbackDate), end: datePartsFromKey(fallbackDate) }
+        : null);
   if (!range?.start) return { label };
 
   const time = parseTimeRange(normalized);
   const timezone = normalizeIanaTimezone(options.timezone);
   const startDateKey = dateKey(range.start);
+  const endDateKey = dateKey(range.end || range.start);
   if (!time) {
-    return { starts_at: startDateKey, date_key: startDateKey, label };
+    return {
+      starts_on: startDateKey,
+      ends_on: endDateKey,
+      date_key: startDateKey,
+      end_date_key: endDateKey !== startDateKey ? endDateKey : null,
+      time_window: compact({
+        kind: "all_day",
+        starts_on: startDateKey,
+        ends_on: endDateKey,
+        label,
+      }),
+      label,
+    };
   }
-  if (!timezone) return { date_key: startDateKey, label };
+
+  const localStart = localClock(time.start);
+  const localEnd = localClock(time.end);
+  if (endDateKey !== startDateKey || !timezone) {
+    return compact({
+      starts_on: startDateKey,
+      ends_on: endDateKey,
+      date_key: startDateKey,
+      end_date_key: endDateKey !== startDateKey ? endDateKey : null,
+      time_window: compact({
+        kind: "daily",
+        starts_on: startDateKey,
+        ends_on: endDateKey,
+        local_start: localStart,
+        local_end: localEnd,
+        timezone,
+        label,
+      }),
+      label,
+    }) || {};
+  }
 
   const startsAt = normalizeSourceEventDateTime(
     localDateTime(range.start, time.start),
@@ -322,7 +383,20 @@ function parseSitevisionDateTime(value, options = {}) {
   const endsAt = time.end
     ? normalizeSourceEventDateTime(localDateTime(endDate, time.end), { timezone })
     : null;
-  return compact({ starts_at: startsAt, ends_at: endsAt, date_key: startDateKey, label }) || {};
+  return compact({
+    starts_at: startsAt,
+    ends_at: endsAt,
+    starts_on: startDateKey,
+    ends_on: endDateKey,
+    date_key: startDateKey,
+    time_window: compact({
+      kind: "continuous",
+      starts_at: startsAt,
+      ends_at: endsAt,
+      label,
+    }),
+    label,
+  }) || {};
 }
 
 function parseDateRange(value, year) {
@@ -376,16 +450,46 @@ function extractCoordinates(value) {
 
 function hasSitevisionCalendarSignature(html) {
   const source = String(html || "");
-  return (
+  const classicLayout = (
     /\bsv-ws-event-calendar\b/i.test(source) &&
     /\b(?:eventsListContainer|eventArticle|eventCalendar)\b/i.test(source)
   );
+  const soleilLayout = (
+    /\bsv-se-soleil-eventListingLocal\b/i.test(source) &&
+    /\bdates-kempox\b/i.test(source) &&
+    /<article\b/i.test(source)
+  );
+  return classicLayout || soleilLayout;
 }
 
 function extractArticles(html) {
-  return [...String(html || "").matchAll(
-    /<article\b[^>]*class=["'][^"']*\beventArticle\b[^"']*["'][^>]*>[\s\S]*?<\/article>/gi,
+  const source = String(html || "");
+  const articles = [...source.matchAll(
+    /<article\b[^>]*>[\s\S]*?<\/article>/gi,
   )].map((match) => match[0]);
+  return articles.filter((article) =>
+    /\beventArticle\b/i.test(article) ||
+    (/\bdates-kempox\b/i.test(article) && /<h[1-4]\b/i.test(article))
+  );
+}
+
+function extractDefinitionValue(html, acceptedLabels) {
+  const labels = new Set(acceptedLabels.map((label) => normalizeDefinitionLabel(label)));
+  for (const match of String(html || "").matchAll(
+    /<dt\b[^>]*>([\s\S]*?)<\/dt>\s*<dd\b[^>]*>([\s\S]*?)<\/dd>/gi,
+  )) {
+    if (labels.has(normalizeDefinitionLabel(htmlToText(match[1])))) {
+      return htmlToText(match[2]);
+    }
+  }
+  return null;
+}
+
+function normalizeDefinitionLabel(value) {
+  return String(value || "")
+    .toLocaleLowerCase("sv-SE")
+    .replace(/[:\s]+/g, " ")
+    .trim();
 }
 
 function extractSitevisionTimingText(article) {
@@ -393,6 +497,16 @@ function extractSitevisionTimingText(article) {
   const match = marker.exec(String(article || ""));
   if (!match) return null;
   return htmlToText(String(article).slice(match.index + match[0].length));
+}
+
+function extractSoleilTimingText(article) {
+  if (!/\bdates-kempox\b/i.test(String(article || ""))) return null;
+  const date = htmlToText(firstMatch(
+    article,
+    /<time\b[^>]*class=["'][^"']*\bdates-kempox\b[^"']*["'][^>]*>([\s\S]*?)<\/time>/i,
+  ));
+  const time = extractDefinitionValue(article, ["tid", "time"]);
+  return [date, time].filter(Boolean).join(" · ") || null;
 }
 
 function textAfterMarker(html, markerId) {
@@ -454,6 +568,12 @@ function dateKey(parts) {
 
 function localDateTime(date, time) {
   return `${dateKey(date)} ${String(time.hour).padStart(2, "0")}:${String(time.minute).padStart(2, "0")}:00`;
+}
+
+function localClock(time) {
+  return time
+    ? `${String(time.hour).padStart(2, "0")}:${String(time.minute).padStart(2, "0")}`
+    : null;
 }
 
 function addDays(parts, days) {
@@ -568,10 +688,19 @@ function compact(value) {
   return Object.keys(out).length ? out : null;
 }
 
+function uniqueStrings(values) {
+  return [...new Set(
+    (Array.isArray(values) ? values : [])
+      .filter((value) => typeof value === "string" && value.trim())
+      .map((value) => value.trim()),
+  )];
+}
+
 module.exports = {
   SITEVISION_CALENDAR_PROVIDER_ID,
   createSitevisionCalendarProvider,
   extractSitevisionCalendarEvents,
   extractSitevisionEventDetail,
+  hasSitevisionCalendarSignature,
   parseSitevisionDateTime,
 };
