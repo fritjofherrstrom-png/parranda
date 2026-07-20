@@ -222,16 +222,21 @@ test("a tapped stop discloses HUMAN copy — the trusted signal, said like a loc
   assert.match(anywherePlannerSource, /\[expandedStopKey, setExpandedStopKey\] = useState/);
   assert.match(anywherePlannerSource, /aria-controls=\{`stop-panel-\$\{stopKey\}`\}/);
   assert.match(anywherePlannerSource, /t\("Öppna i Maps", "Open in Maps"\)/);
-  // The "why it's here" line is warm role-clause copy from covered_preferences —
-  // NOT the internal "covers {axis}" token, and NOT "partial match / lead".
-  assert.match(anywherePlannerSource, /stopWhyLine\(stop, lang\)/);
-  assert.match(anywherePlannerSource, /Here for \$\{joined\}/);
-  assert.match(anywherePlannerSource, /green: \{ sv: "en grön paus", en: "a green breather" \}/);
+  // The panel does NOT lecture the user about the obvious ("a museum is for
+  // culture"). No "why it's here" prose, no per-axis role sentence.
+  assert.doesNotMatch(anywherePlannerSource, /Why it's here|Varför här/, "no explain-the-obvious heading");
+  assert.doesNotMatch(anywherePlannerSource, /stopWhyLine|WHY_ROLES|Here for \$\{/, "no generic why-sentence generator");
+  // The only soft touch is a NON-OBVIOUS matched preference (a restaurant that
+  // also has a view), suppressed when it just repeats the type's own family.
+  assert.match(anywherePlannerSource, /nonObviousAxisLabels\(stop, lang\)/);
+  assert.match(anywherePlannerSource, /family === typeFamily/);
+  assert.match(anywherePlannerSource, /t\("Även bra för", "Also good for"\)/);
   assert.doesNotMatch(anywherePlannerSource, /t\("täcker", "covers"\)/, "no internal 'covers {axis}' token in the UI");
   assert.doesNotMatch(anywherePlannerSource, /t\("delvis träff", "partial match"\)/, "no 'partial match' jargon");
   assert.doesNotMatch(anywherePlannerSource, /treat it as a lead|behandla.*lead/i, "no PM-speak");
-  // The honest partial qualifier is human, not a token.
-  assert.match(anywherePlannerSource, /A looser match — worth a look/);
+  // The partial qualifier states the fact without instructing.
+  assert.match(anywherePlannerSource, /A looser match for your picks/);
+  assert.doesNotMatch(anywherePlannerSource, /worth a look before you go/, "no hand-holding instruction");
   // Routing jargon "leg" is gone from the header too.
   assert.doesNotMatch(anywherePlannerSource, /t\("längsta ben", "longest leg"\)/);
   assert.match(anywherePlannerSource, /t\("längsta sträcka", "longest stretch"\)/);

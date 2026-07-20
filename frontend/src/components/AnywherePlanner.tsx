@@ -222,45 +222,49 @@ function label(map: Record<string, { sv: string; en: string }>, key: string | nu
 // axes render (an unknown engine token is skipped, never exposed raw), and a
 // preference that repeats the type chip's text is deduped ("Utsikt" viewpoint
 // covering "scenic" would otherwise read twice).
-// Human "why this stop is here" phrasing, keyed by the matched preference axis.
-// Replaces the internal "covers {axis}" token with a warm role clause — same
-// trusted signal (#369 covered_preferences), said the way a local would.
-const WHY_ROLES: Record<string, { sv: string; en: string }> = {
-  food: { sv: "något gott att äta", en: "a bite to eat" },
-  "street-food": { sv: "något gott att äta", en: "a bite to eat" },
-  culture: { sv: "en dos kultur", en: "a dose of culture" },
-  museums: { sv: "en dos kultur", en: "a dose of culture" },
-  views: { sv: "en utsikt värd stoppet", en: "a view worth the stop" },
-  scenic: { sv: "en utsikt värd stoppet", en: "a view worth the stop" },
-  fika: { sv: "en fika", en: "a coffee break" },
-  coffee: { sv: "en fika", en: "a coffee break" },
-  nightlife: { sv: "kvällen", en: "somewhere for the evening" },
-  bars: { sv: "kvällen", en: "somewhere for the evening" },
-  green: { sv: "en grön paus", en: "a green breather" },
-  second_hand: { sv: "en loppis-stund", en: "a spot to browse" },
-  vintage: { sv: "en loppis-stund", en: "a spot to browse" },
-  market: { sv: "en marknad att strosa i", en: "a market to wander" },
-  swimming: { sv: "ett dopp", en: "a place to swim" },
+// A stop's panel should never tell you the obvious ("a museum is for culture").
+// The only preference worth surfacing is a NON-OBVIOUS one — a restaurant that
+// also has a view, a park that's also good for a swim. We map each type to the
+// axis it self-evidently covers, and each axis to a family; a matched axis is
+// worth mentioning only when its family isn't the one the type already implies.
+const AXIS_FAMILY: Record<string, string> = {
+  food: "food", "street-food": "food",
+  culture: "culture", museums: "culture",
+  views: "views", scenic: "views",
+  fika: "fika", coffee: "fika",
+  nightlife: "nightlife", bars: "nightlife",
+  green: "green",
+  second_hand: "secondhand", vintage: "secondhand",
+  market: "market",
+  swimming: "swimming",
+};
+const TYPE_FAMILY: Record<string, string> = {
+  museum: "culture", gallery: "culture", castle: "culture",
+  park: "green", garden: "green",
+  restaurant: "food", "street-food": "food",
+  cafe: "fika",
+  bar: "nightlife",
+  viewpoint: "views",
+  market: "market",
+  "vintage-shop": "secondhand",
+  beach: "swimming",
 };
 
-// The warm one-liner for a stop's disclosure panel. Built only from trusted
-// signal (matched axes + type); never invents specifics we don't have. Falls
-// back to a plain "on today's route" when no axis maps.
-function stopWhyLine(stop: { covered_preferences?: string[]; type?: string | null }, lang: Lang): string {
-  const en = lang === "en";
-  const roles: string[] = [];
+// The non-obvious matched preferences for a stop (labels), deduped by family and
+// with the type's own implied family removed. Empty for the common obvious case.
+function nonObviousAxisLabels(stop: { covered_preferences?: string[]; type?: string | null }, lang: Lang): string[] {
+  const typeFamily = stop?.type ? TYPE_FAMILY[stop.type] ?? null : null;
+  const seen = new Set<string>();
+  const out: string[] = [];
   for (const axis of Array.isArray(stop?.covered_preferences) ? stop.covered_preferences : []) {
-    const role = WHY_ROLES[axis]?.[lang];
-    if (role && !roles.includes(role)) roles.push(role);
-    if (roles.length >= 2) break;
+    const family = AXIS_FAMILY[axis];
+    const lbl = INTENT_LABELS[axis]?.[lang];
+    if (!family || !lbl || family === typeFamily || seen.has(family)) continue;
+    seen.add(family);
+    out.push(lbl);
+    if (out.length >= 2) break;
   }
-  if (roles.length) {
-    const joined = roles.length === 2 ? `${roles[0]} ${en ? "and" : "och"} ${roles[1]}` : roles[0];
-    return en ? `Here for ${joined}.` : `Här för ${joined}.`;
-  }
-  const typeLabel = stop?.type ? label(TYPE_LABELS, stop.type, lang) : "";
-  if (typeLabel) return en ? `${typeLabel} on today's route.` : `${typeLabel} på dagens rutt.`;
-  return en ? "A stop on today's route." : "Ett stopp på dagens rutt.";
+  return out;
 }
 
 // Event timing renders through the pure `eventTiming` formatter (pulse-view.mjs),
@@ -1398,6 +1402,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                     ? t(`Öppet till ${availability.closes_at_local}`, `Open until ${availability.closes_at_local}`)
                     : t("Öppet under ditt besök", "Open during your visit")
                   : "";
+              // Only a NON-OBVIOUS matched preference is worth mentioning (a
+              // restaurant that also has a view); the obvious case says nothing.
+              const extras = nonObviousAxisLabels(stop, lang);
               return (
                 <li key={stopKey} className="flex flex-col">
                   {daypartHeading && (
@@ -1443,14 +1450,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                       id={`stop-panel-${stopKey}`}
                       className="ml-11 mb-1 mt-1 flex flex-col rounded-parranda border border-parranda-ember/35 bg-parranda-ink/[0.03] p-4"
                     >
-                      <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-parranda-clay">{t("Varför här", "Why it's here")}</p>
-                      <p className="mt-1 text-sm leading-relaxed text-parranda-ink/85">{stopWhyLine(stop, lang)}</p>
-                      {stop?.candidate_status === "partial" && (
-                        <p className="mt-1 text-xs text-parranda-ink/55">
-                          {t("Löst matchad — värd en titt innan du går.", "A looser match — worth a look before you go.")}
-                        </p>
-                      )}
-                      <div className="mt-3 flex flex-col gap-1.5 text-xs text-parranda-ink/65">
+                      {/* Facts, not a lecture: the walk, the address, the hours.
+                          No "why it's here" — the day already answers that. */}
+                      <div className="flex flex-col gap-1.5 text-xs text-parranda-ink/65">
                         {leg && (leg.minutes != null || leg.km != null) && (
                           <span>
                             {leg.minutes != null ? `${leg.minutes} min` : ""}
@@ -1462,6 +1464,18 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                         {stop?.address && <span>{stop.address}</span>}
                         {hoursNote && <span>{hoursNote}</span>}
                       </div>
+                      {/* The one soft touch, and only when it adds something the
+                          type doesn't already say. */}
+                      {extras.length > 0 && (
+                        <p className="mt-2 text-xs text-parranda-clay">
+                          {t("Även bra för", "Also good for")} {extras.join(t(" och ", " and "))}.
+                        </p>
+                      )}
+                      {stop?.candidate_status === "partial" && (
+                        <p className="mt-2 text-xs text-parranda-ink/50">
+                          {t("Lösare matchning mot dina önskemål.", "A looser match for your picks.")}
+                        </p>
+                      )}
                       {pin && (
                         <a
                           href={pin}
