@@ -224,6 +224,49 @@ test("bounded reservoir honors its total and per-role caps without dropping sele
   assert.deepEqual(result.map((entry) => entry.id), ["food-a", "food-b"]);
 });
 
+test("a requested experimental winner does not multiply lower-trust role depth", () => {
+  const admitted = (id) => richCandidate({
+    candidate_id: id,
+    coordinates: { lat: 43.51, lng: 16.44 + id.length * 0.0001 },
+    candidate_status: "partial",
+    planner_usable: true,
+    covered_preferences: ["food"],
+    experimental_admission: {
+      allowed: true,
+      policy: "experimental_inferred_external",
+    },
+  });
+  const winner = admitted("food-low-a");
+  const duplicateDepth = admitted("food-low-b");
+  const roles = {
+    city: "agnostic-engine-area",
+    requested_preferences: ["food"],
+    roles: [
+      {
+        role: "food_anchor",
+        slot: "anchor",
+        requested: true,
+        candidates: [winner, duplicateDepth],
+      },
+    ],
+  };
+
+  const result = mapPlannerReservoirToSourceCandidates({
+    selected: [
+      selectedPick({
+        role: "food_anchor",
+        candidate_id: winner.candidate_id,
+        coordinates: winner.coordinates,
+      }),
+    ],
+    plannerRoles: roles,
+    perRole: 2,
+  });
+
+  assert.deepEqual(result.map((entry) => entry.id), ["food-low-a"]);
+  assert.equal(result[0].reservoir_selected, true, "the requested role representative remains available");
+});
+
 test("single requested role gains bounded planner-safe day support without false preference coverage", () => {
   const make = (id, role, type, covered) => richCandidate({
     candidate_id: id,

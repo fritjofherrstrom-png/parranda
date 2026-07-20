@@ -199,7 +199,7 @@ test(
 );
 
 test(
-  "single-interest route bounds unrequested low-trust support after corroborated breadth",
+  "single-interest route bounds requested low-trust depth and unrequested support",
   withServer(makeLoader(mixedTrustSingleInterestFixture({ lat: 41.9, lng: 12.49 })), async (server) => {
     const r = await requestJson(server, {
       path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
@@ -212,11 +212,18 @@ test(
     const stops = r.body.days[0].primary_route.main_stops;
     const support = stops.filter((stop) => !stop.covered_preferences.includes("food"));
     const lowTrustSupport = support.filter((stop) => stop.trust?.confidence === "low");
+    const lowTrustRequested = stops.filter(
+      (stop) => stop.covered_preferences.includes("food") && stop.trust?.confidence === "low",
+    );
     assert.ok(
       support.some((stop) => stop.trust?.confidence === "medium"),
       "corroborated support is admitted before any experimental bridge",
     );
     assert.ok(lowTrustSupport.length <= 1, "at most one unrequested low-trust bridge may reach the route");
+    assert.ok(
+      lowTrustRequested.length <= 1,
+      "one admitted candidate may represent the requested role but cannot multiply its depth",
+    );
     assert.ok(
       stops.filter((stop) => stop.covered_preferences.includes("food")).length >= 1,
       "the requested role remains represented",
