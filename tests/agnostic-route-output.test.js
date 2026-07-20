@@ -1352,10 +1352,16 @@ test(
 // --- API: no named-city hardcoding -----------------------------------------
 
 test(
-  "api: capability is coordinate-driven — two different places both work",
+  "api: capability is coordinate-driven across central and peripheral anchors",
   async () => {
     global.fetch = mockStableWeatherFetch();
-    for (const base of [{ lat: 41.9, lng: 12.49 }, { lat: 55.6, lng: 13.0 }]) {
+    const anchors = [
+      { lat: 41.9, lng: 12.49 },
+      { lat: 55.6, lng: 13.0 },
+      { lat: 59.367, lng: 17.886 },
+      { lat: 35.174, lng: 33.364 },
+    ];
+    for (const base of anchors) {
       const server = buildApp({ openDataLoader: makeLoader(fixtureNear(base)) }).listen(0);
       try {
         const r = await requestJson(server, {
@@ -1367,6 +1373,11 @@ test(
         assert.ok(route.main_stops.length >= 2);
         assert.deepEqual(route.map_path_points[0], base, "the route path must begin at the explicit anchor");
         assert.deepEqual(route.map_path_points.at(-1), base, "the route path must return to the explicit anchor");
+        const firstStop = route.main_stops[0];
+        assert.ok(
+          Math.abs(firstStop.lat - base.lat) < 0.02 && Math.abs(firstStop.lng - base.lng) < 0.02,
+          `first stop must stay local to anchor ${base.lat},${base.lng}`,
+        );
       } finally {
         await new Promise((resolve) => server.close(resolve));
       }

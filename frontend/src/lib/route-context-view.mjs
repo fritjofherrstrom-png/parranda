@@ -122,9 +122,17 @@ export function buildRouteContextSuggestions(routeStops, areas, options = {}) {
     String(a.id || a.name).localeCompare(String(b.id || b.name)),
   );
 
+  // Optional context is editorial discovery, not route coverage: never pad a
+  // local set with a branded-chain suggestion merely to fill the display limit.
+  // A chain remains an honest sparse fallback when it is the ONLY nearby
+  // evidence, matching the route reservoir's fail-soft policy without making a
+  // generic chain look like an extra Parranda recommendation in a rich place.
+  const localCandidates = candidates.filter((candidate) => localFeelRank(candidate) < 2);
+  const selectableCandidates = localCandidates.length ? localCandidates : candidates;
+
   const usedRouteStops = new Set();
   const selected = [];
-  for (const candidate of candidates) {
+  for (const candidate of selectableCandidates) {
     if (usedRouteStops.has(candidate.route_stop_index)) continue;
     usedRouteStops.add(candidate.route_stop_index);
     selected.push(candidate);
