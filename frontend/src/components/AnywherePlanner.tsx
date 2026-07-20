@@ -1279,11 +1279,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </header>
       )}
 
-      {/* Without a composed day, honest provenance + day-level actions live in
-          this card instead; broader place structure below is an honest candidate
-          surface, never an itinerary. */}
+      {/* Without a composed day, this card carries provenance only. Save/share
+          remain route actions: offering them here would call an unsequenced
+          candidate surface a day. */}
       {showStructure && structure && !(showDay && routeStops.length > 0) && (
-        <section className="flex flex-col items-start gap-3 rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm sm:flex-row sm:justify-between">
+        <section className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm">
           <div className="min-w-0 flex-1">
             {structure.provenance === "agnostic_anchor" && (
               <p className="text-sm font-semibold text-parranda-accent">
@@ -1301,25 +1301,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 </button>
               </p>
             )}
-          </div>
-          <div className="flex shrink-0 gap-1.5">
-            {canShare && (
-              <button
-                type="button"
-                onClick={shareDay}
-                className="inline-flex min-h-11 items-center rounded-full border border-parranda-accent/40 px-3.5 py-1 text-sm font-semibold text-parranda-accent"
-              >
-                {shareCopied ? t("✓ Kopierad", "✓ Copied") : t("↗ Dela dagen", "↗ Share day")}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={saveDay}
-              disabled={isSaved}
-              className="inline-flex min-h-11 items-center rounded-full border border-parranda-accent/40 px-3.5 py-1 text-sm font-semibold text-parranda-accent disabled:opacity-50"
-            >
-              {isSaved ? t("★ Sparad", "★ Saved") : t("☆ Spara dagen", "☆ Save day")}
-            </button>
           </div>
         </section>
       )}
