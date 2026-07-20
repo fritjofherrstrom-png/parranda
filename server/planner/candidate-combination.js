@@ -16,11 +16,13 @@
  * Selection philosophy (lexicographic — role safety before geometry):
  *   1. role coverage (which target roles can be filled at all)
  *   2. status tier (filled > partial) — geometry can NEVER override this
- *   3. geometric coherence (compact cluster preferred)
- *   4. source confidence
- *   5. curated-first when otherwise comparable
- *   6. fewer duplicated venues across roles
- *   7. stable deterministic tie-break by candidate id
+ *   3. usable geometry
+ *   4. anchor reach when an origin exists
+ *   5. compactness within the same anchor-reach tier
+ *   6. source confidence
+ *   7. curated-first when otherwise comparable
+ *   8. fewer duplicated venues across roles
+ *   9. stable deterministic tie-break by candidate id
  *
  * `selected[]` only ever contains planner-usable (filled/partial) candidates;
  * fallback-only or empty roles surface in `unresolved_roles` so a `ready`
@@ -38,6 +40,8 @@ const DEFAULT_MAX_TARGET_ROLES = 6;
 // Conservative, documented coherence thresholds (km, max pairwise distance).
 const STRONG_KM = 1.2; // compact, easily-walkable cluster
 const OK_KM = 2.5; // plausible city-scale cluster
+const NEAR_ORIGIN_KM = 1.5;
+const REACHABLE_ORIGIN_KM = 3;
 const GEO_PRECISION = 3; // round km before any comparison → cross-platform determinism
 const STATUS_WEIGHT = { filled: 2, partial: 1 };
 
@@ -142,7 +146,7 @@ function chooseBestCombination(usableByRole, geoOpts) {
     if (cmp > 0) {
       best = { picks: combo, geometry, score, idKey: comboIdKey(combo) };
     } else if (cmp === 0) {
-      // 7. deterministic final tie-break: lexicographic by sorted candidate ids
+      // 9. deterministic final tie-break: lexicographic by sorted candidate ids
       // so caller order can never change the winner.
       const idKey = comboIdKey(combo);
       if (idKey < best.idKey) {
@@ -183,12 +187,18 @@ function scoreCombination(combo, geometry) {
   const confidence = combo.reduce((sum, p) => sum + confidenceRank(p.candidate.confidence), 0);
   const curated = combo.filter((p) => p.candidate.origin === "curated_catalog").length;
   const distinctVenues = new Set(combo.map((p) => p.candidate.candidate_id)).size;
+  const geometryUsable = geometry.coherence === "strong" || geometry.coherence === "ok" ? 1 : 0;
+  const originReach = originReachRank(geometry.origin_reach);
+  const originDistance = Number.isFinite(geometry.origin_distance_km) ? geometry.origin_distance_km : 0;
   return [
     statusTier, // 2. status tier (geometry can never override this)
-    -geometry.max_pairwise_km, // 3. geometry: smaller spread is better (rounded → deterministic)
-    confidence, // 4. confidence
-    curated, // 5. curated-first
-    distinctVenues, // 6. fewer duplicate venues = more distinct = higher
+    geometryUsable, // 3. never trade an honest cluster for weak/incomplete geometry
+    originReach, // 4. when anchored, prefer a cluster that starts near the user
+    -originDistance,
+    -geometry.max_pairwise_km, // 5. then prefer the more compact cluster
+    confidence, // 6. confidence
+    curated, // 7. curated-first
+    distinctVenues, // 8. fewer duplicate venues = more distinct = higher
   ];
 }
 
@@ -196,7 +206,7 @@ function compareScore(a, b) {
   for (let i = 0; i < a.length; i += 1) {
     if (a[i] !== b[i]) return a[i] - b[i];
   }
-  // 7. Final candidate-id tie-break is handled by chooseBestCombination().
+  // 9. Final candidate-id tie-break is handled by chooseBestCombination().
   return 0;
 }
 
@@ -247,10 +257,13 @@ function summarizeGeometry(combo, { origin, strongKm, okKm }) {
     coherence,
     reasons,
   };
-  // Addition: expose origin→centroid distance when an origin is known. Not a
-  // gate in v0 — a cluster can be compact yet far from the user.
+  // The anchor is part of route truth. A compact cluster several kilometres
+  // away is not equivalent to one around the user's actual start position.
+  // This remains a selection signal rather than a hard gate; the route engine
+  // still owns the final walking-budget decision.
   if (origin && centroid) {
     summary.origin_distance_km = round(haversineKm(origin, centroid));
+    summary.origin_reach = classifyOriginReach(summary.origin_distance_km);
   }
   return summary;
 }
@@ -281,6 +294,7 @@ function buildQualityFlags({ unresolved, geometry, duplicateRoleCoverage, picks 
   const flags = new Set();
   if (geometry.coherence === "weak") flags.add("weak_geometry");
   if (geometry.coherence === "incomplete") flags.add("incomplete_geometry_missing_coordinates");
+  if (geometry.origin_reach === "extended") flags.add("extended_from_origin");
   for (const role of unresolved) {
     if (role.reason === "fallback_only") flags.add(`fallback_only_${role.role}`);
     else if (role.reason === "capped_out") flags.add(`capped_out_${role.role}`);
@@ -382,6 +396,17 @@ function confidenceRank(value) {
   return { high: 3, medium: 2, low: 1, needs_review: 0 }[String(value)] ?? 0;
 }
 
+function classifyOriginReach(distanceKm) {
+  if (!Number.isFinite(distanceKm)) return null;
+  if (distanceKm <= NEAR_ORIGIN_KM) return "near";
+  if (distanceKm <= REACHABLE_ORIGIN_KM) return "reachable";
+  return "extended";
+}
+
+function originReachRank(value) {
+  return { near: 2, reachable: 1, extended: 0 }[value] ?? 0;
+}
+
 function resolveCoords(value) {
   if (!value || typeof value !== "object") return null;
   if (Number.isFinite(value.lat) && Number.isFinite(value.lng)) return { lat: value.lat, lng: value.lng };
@@ -423,6 +448,8 @@ module.exports = {
   DEFAULT_MAX_TARGET_ROLES,
   STRONG_KM,
   OK_KM,
+  NEAR_ORIGIN_KM,
+  REACHABLE_ORIGIN_KM,
   buildCandidateCombination,
   plannerUsableOptionsForRole,
 };

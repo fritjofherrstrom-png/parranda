@@ -789,6 +789,34 @@ test(
 );
 
 test(
+  "api: a broad local reservoir does not auto-compose its chain-only food match",
+  withServer(
+    makeLoader([
+      singleFamilyExternalRecord("chain-food", "Chain Food", "street-food", 59.3293, 18.0686, ["mat"], { chain: true, brand: "Chain Food" }),
+      singleFamilyExternalRecord("local-cafe", "Konditori Aurora", "cafe", 59.3302, 18.0694, ["fika"]),
+      singleFamilyExternalRecord("local-view", "Utsiktsplats Höjden", "viewpoint", 59.331, 18.0702, ["utsikt"]),
+      singleFamilyExternalRecord("local-park", "Parkallén", "park", 59.3318, 18.071, ["park", "green"]),
+      singleFamilyExternalRecord("local-museum", "Stadsmuseet", "museum", 59.3326, 18.0718, ["kultur", "museum"]),
+    ]),
+    async (server) => {
+      const r = await requestJson(server, {
+        path: `/api/route-recommendations?lang=en&${FLAG}`,
+        body: agnosticBody({
+          lat: 59.3293,
+          lng: 18.0686,
+          preferences: ["food", "coffee", "scenic", "museums"],
+        }),
+      });
+      const exp = r.body.agnostic_route_output_experiment;
+      assert.equal(exp.route_mutation, true);
+      const stopIds = r.body.days[0].primary_route.main_stops.map((stop) => stop.id);
+      assert.equal(stopIds.includes("chain-food"), false, "a chain must not pad an otherwise broad local day");
+      assert.ok(stopIds.includes("local-cafe"), "the honest adjacent local option remains available");
+    },
+  ),
+);
+
+test(
   "api: #272 role-type preference — restaurant beats street-food for the food role; street-food wins alone",
   withServer(
     makeLoader([
@@ -1331,11 +1359,14 @@ test(
       const server = buildApp({ openDataLoader: makeLoader(fixtureNear(base)) }).listen(0);
       try {
         const r = await requestJson(server, {
-          path: `/api/route-recommendations?lang=en&${FLAG}`,
+          path: `/api/route-recommendations?lang=en&${FLAG}&agnostic_engine_compose=1`,
           body: { city: "nowhere-pack", dates: [DATE], lat: base.lat, lng: base.lng, preferences: ["food", "coffee", "scenic"], include_external_candidates: 1 },
         });
         assert.equal(r.body.agnostic_route_output_experiment.route_mutation, true, `coords ${base.lat},${base.lng} should produce a route`);
-        assert.ok(r.body.days[0].primary_route.main_stops.length >= 2);
+        const route = r.body.days[0].primary_route;
+        assert.ok(route.main_stops.length >= 2);
+        assert.deepEqual(route.map_path_points[0], base, "the route path must begin at the explicit anchor");
+        assert.deepEqual(route.map_path_points.at(-1), base, "the route path must return to the explicit anchor");
       } finally {
         await new Promise((resolve) => server.close(resolve));
       }

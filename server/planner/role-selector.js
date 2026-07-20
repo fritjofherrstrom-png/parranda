@@ -68,6 +68,10 @@ const ROLE_ORDER = Object.freeze(Object.keys(ROLE_SPEC));
 const STATUS_RANK = Object.freeze({ missing: 0, fallback: 1, partial: 2, filled: 3 });
 const DEFAULT_LIMIT_PER_ROLE = 3;
 const MAX_LIMIT_PER_ROLE = 5;
+// Once the trusted reservoir can cover several different planner roles with
+// non-chain places, a chain-only role is no longer a genuine sparse-context
+// fallback. Keep it inspectable, but do not auto-compose it into the day.
+const LOCAL_BREADTH_FOR_CHAIN_FALLBACK = 3;
 
 function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
   const limitPerRole = clampLimit(payload.limitPerRole ?? payload.limit_per_role);
@@ -87,6 +91,9 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
   const roleEntries = {};
   for (const [role, spec] of Object.entries(activeRoleSpec)) {
     roleEntries[role] = buildRankedEntriesForRole(spec, candidatePool, localFeelActive);
+  }
+  if (localFeelActive) {
+    applyReservoirChainFallbackPolicy(roleEntries);
   }
 
   const roles = activeRoleOrder.map((role) => {
@@ -123,6 +130,57 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
       ? { availability_summary: { ...candidatePool.availability_summary } }
       : {}),
   };
+}
+
+function applyReservoirChainFallbackPolicy(roleEntries = {}) {
+  const hasUsableNonChain = (entry) =>
+    entry &&
+    entry.candidate_status !== "fallback" &&
+    entry.candidate_status !== "missing" &&
+    entry.availability?.eligible !== false &&
+    Number(entry.local_feel_rank) < 2;
+  const rolesWithLocalOptions = Object.values(roleEntries).filter((entries) =>
+    Array.isArray(entries) && entries.some(hasUsableNonChain),
+  );
+  const distinctLocalCandidateIds = new Set(
+    rolesWithLocalOptions.flatMap((entries) =>
+      entries.filter(hasUsableNonChain).map((entry) => entry.candidate?.id).filter(Boolean),
+    ),
+  );
+  if (
+    rolesWithLocalOptions.length < LOCAL_BREADTH_FOR_CHAIN_FALLBACK ||
+    distinctLocalCandidateIds.size < LOCAL_BREADTH_FOR_CHAIN_FALLBACK
+  ) {
+    return;
+  }
+
+  for (const entries of Object.values(roleEntries)) {
+    if (!Array.isArray(entries)) continue;
+    const hasStrongLocalOption = entries.some(
+      (entry) =>
+        hasUsableNonChain(entry) &&
+        Array.isArray(entry.fit?.covered_preferences) &&
+        entry.fit.covered_preferences.length > 0,
+    );
+    if (hasStrongLocalOption) continue;
+    for (const entry of entries) {
+      if (
+        Number(entry.local_feel_rank) >= 2 &&
+        entry.candidate_status !== "fallback" &&
+        entry.candidate_status !== "missing"
+      ) {
+        entry.candidate_status = "fallback";
+        entry.local_feel_reasons = [
+          ...(Array.isArray(entry.local_feel_reasons) ? entry.local_feel_reasons : []),
+          "chain_not_auto_composed_with_broad_local_reservoir",
+        ];
+      }
+    }
+    // buildRankedEntriesForRole sorted before this cross-role policy had the
+    // reservoir breadth needed to act. Restore the public status-tier contract
+    // after demotion while preserving the existing order within each tier.
+    entries.sort((a, b) => STATUS_RANK[b.candidate_status] - STATUS_RANK[a.candidate_status]);
+  }
 }
 
 function buildRankedEntriesForRole(spec, candidatePool, localFeelActive = false) {
@@ -352,6 +410,7 @@ module.exports = {
   MAX_LIMIT_PER_ROLE,
   ROLE_ORDER,
   ROLE_SPEC,
+  LOCAL_BREADTH_FOR_CHAIN_FALLBACK,
   candidateStatusForRole,
   selectPlannerRoleCandidates,
 };
