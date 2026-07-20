@@ -216,14 +216,33 @@ test("map hierarchy mirrors route authority instead of numbering two competing p
   assert.doesNotMatch(noRouteBranch.slice(0, 1200), /polyline|divIcon/);
 });
 
-test("route stops translate #369 candidate-spine metadata to product copy — never raw tokens", () => {
-  // WHY-chips from covered_preferences (translated + deduped vs the type chip)
-  // and an honest partial-match marker; unmapped axes are skipped, not exposed.
-  assert.match(anywherePlannerSource, /coveredPreferenceLabels\(stop, lang\)/);
-  assert.match(anywherePlannerSource, /museums: \{ sv: "Kultur", en: "Culture" \}/);
-  assert.match(anywherePlannerSource, /t\("täcker", "covers"\)/);
-  assert.match(anywherePlannerSource, /candidate_status === "partial"/);
-  assert.match(anywherePlannerSource, /t\("delvis träff", "partial match"\)/);
+test("a tapped stop discloses route facts before an explicit Maps action", () => {
+  // The stop row is a disclosure (aria-expanded), not an external link: the Maps
+  // jump moves INTO the panel as a deliberate action.
+  assert.match(anywherePlannerSource, /\[expandedStopKey, setExpandedStopKey\] = useState/);
+  assert.match(anywherePlannerSource, /const panelId = `route-stop-panel-\$\{i\}`/);
+  assert.match(anywherePlannerSource, /aria-controls=\{panelId\}/);
+  assert.match(anywherePlannerSource, /id=\{panelId\}/);
+  assert.match(anywherePlannerSource, /t\("Öppna i Maps", "Open in Maps"\)/);
+  // The panel does not lecture the user or create a parallel type-to-intent
+  // interpretation layer in the frontend.
+  assert.doesNotMatch(anywherePlannerSource, /Why it's here|Varför här/, "no explain-the-obvious heading");
+  assert.doesNotMatch(anywherePlannerSource, /stopWhyLine|WHY_ROLES|Here for \$\{/, "no generic why-sentence generator");
+  assert.doesNotMatch(anywherePlannerSource, /AXIS_FAMILY|TYPE_FAMILY|nonObviousAxisLabels/);
+  assert.doesNotMatch(anywherePlannerSource, /t\("Även bra för", "Also good for"\)/);
+  assert.doesNotMatch(anywherePlannerSource, /t\("täcker", "covers"\)/, "no internal 'covers {axis}' token in the UI");
+  assert.doesNotMatch(anywherePlannerSource, /t\("delvis träff", "partial match"\)/, "no 'partial match' jargon");
+  assert.doesNotMatch(anywherePlannerSource, /treat it as a lead|behandla.*lead/i, "no PM-speak");
+  // The partial qualifier states the server-owned fact without exposing the
+  // internal candidate-status token.
+  assert.match(anywherePlannerSource, /Matches some, but not all, of what you chose/);
+  assert.doesNotMatch(anywherePlannerSource, /worth a look before you go/, "no hand-holding instruction");
+  // Routing jargon "leg" is gone from the header too.
+  assert.doesNotMatch(anywherePlannerSource, /t\("längsta ben", "longest leg"\)/);
+  assert.match(anywherePlannerSource, /t\("längsta sträcka", "longest stretch"\)/);
+  // Do not invent a future availability payload in the view. Hours can render
+  // only after the route-stop contract exposes reviewed availability facts.
+  assert.doesNotMatch(anywherePlannerSource, /stop\?\.availability|closes_at_local|Open during your visit/);
   // Raw engine reason tokens never render.
   assert.doesNotMatch(anywherePlannerSource, /fit_reasons|time_reasons|lens_reasons|route_roles/);
 });
