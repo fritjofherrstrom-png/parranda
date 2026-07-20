@@ -142,6 +142,16 @@ test("the feed registry allowlists reusable local adapters and preserves legacy 
         detail_limit: 4,
         detail_budget: 9,
       },
+      {
+        id: "localized-api",
+        adapter: "localized_api",
+        endpoint: "https://events.example/api/events/",
+        bbox: [10, 50, 20, 60],
+        timezone: "Europe/Stockholm",
+        source_language: "sv",
+        supported_languages: ["sv", "en"],
+        page_size: 75,
+      },
       { id: "unknown", adapter: "arbitrary_scraper", endpoint: "https://unknown.example/events", bbox: [10, 50, 20, 60] },
     ]),
   });
@@ -152,9 +162,12 @@ test("the feed registry allowlists reusable local adapters and preserves legacy 
     ["ics", "ical"],
     ["sitevision", "sitevision_calendar"],
     ["wix", "wix_event_sitemap"],
+    ["localized-api", "localized_events_api"],
   ]);
   assert.equal(configured.find((row) => row.id === "wix").detail_limit, 4);
   assert.equal(configured.find((row) => row.id === "wix").detail_budget, 9);
+  assert.equal(configured.find((row) => row.id === "localized-api").page_size, 75);
+  assert.deepEqual(configured.find((row) => row.id === "localized-api").supported_languages, ["sv", "en"]);
   assert.ok(!configured.some((row) => row.id === "unknown"), "unknown parser code cannot enter bounded runtime");
 });
 
@@ -252,6 +265,57 @@ test("covered anchor buckets events into tonight (now/today/tonight) and this_we
   // The feed's region timezone rides along so the UI shows the VENUE-local time,
   // not the viewer's (the built-in Helsinki feed is Europe/Helsinki).
   assert.equal(tonightGig.timezone, "Europe/Helsinki");
+});
+
+test("a bounded all-day occurrence is valid this-week evidence without becoming tonight", async () => {
+  const registry = [{
+    id: "localized-api",
+    label: "Localized API",
+    adapter: "localized_events_api",
+    endpoint: "https://events.example/api/events/",
+    bbox: [24.8, 60.0, 25.1, 60.3],
+    timezone: "Europe/Helsinki",
+    source_language: "en",
+    source_tier: "official",
+    confidence: "medium",
+    source_family: "official_tourism_open_api",
+    source_identity: "events.example",
+    license: "CC-BY 4.0",
+    status: "active",
+  }];
+  const out = await collectAnchorEvents({
+    anchor: HELSINKI,
+    now: NOW,
+    registry,
+    fetcher: async (url) => ({
+      ok: true,
+      status: 200,
+      url: String(url),
+      text: async () => JSON.stringify({
+        count: 1,
+        results: [{
+          id: "all-day-market",
+          title: { en: "Neighbourhood market" },
+          external_website_url: "https://organizer.example/market",
+          venue_name: "Market square",
+          address: "Square 1",
+          location: { latitude: 60.171, longitude: 24.941 },
+          start_date: "2026-06-29",
+          end_date: "2026-06-29",
+          start_time: null,
+          end_time: null,
+          modified_at: "2026-06-27T12:00:00Z",
+          categories: [{ title: "Markets", slug: "markets", subcategories: [] }],
+        }],
+      }),
+    }),
+  });
+
+  assert.deepEqual(out.tonight, []);
+  assert.equal(out.this_week.length, 1);
+  assert.equal(out.this_week[0].id, "all-day-market");
+  assert.equal(out.this_week[0].time_window.kind, "all_day");
+  assert.equal(out.acquisition.source_health.result, "events_found");
 });
 
 test("tonight ranks by salience: an ongoing 'now' event outranks a later-today one", async () => {
