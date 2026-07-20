@@ -15,6 +15,7 @@ import { buildAnywherePayload, ANYWHERE_PREFERENCES, WALK_PRESETS, isoDateFromOf
 const require = createRequire(import.meta.url);
 const decision = require("../../anywhere-render-decision.js");
 const anywherePlannerSource = readFileSync(new URL("../src/components/AnywherePlanner.tsx", import.meta.url), "utf8");
+const anywhereStyles = readFileSync(new URL("../src/styles/tailwind.css", import.meta.url), "utf8");
 
 test("payload carries the freeform place + the three agnostic flags, never a city key", () => {
   const payload = buildAnywherePayload({ place: "Lyon", dates: ["2026-07-02"], preferences: ["food", "views"] });
@@ -259,6 +260,39 @@ test("the anchor is chosen once: the planner shows it, and adjusts — never a s
   assert.doesNotMatch(anywherePlannerSource, /Justera känsla, dag och gånglängd/);
   assert.doesNotMatch(anywherePlannerSource, /t\("Skriv stad", "Type a city"\)/, "no start-context mode toggle past the landing");
   assert.doesNotMatch(anywherePlannerSource, /ANY-CITY PLANNER|Any-place Alpha|Experimental route|dogfood/i);
+});
+
+test("compact planner and map controls keep a 44px mobile touch target", () => {
+  assert.match(
+    anywherePlannerSource,
+    /aria-label=\{t\("Byt plats", "Change place"\)\}[\s\S]{0,180}min-h-11/,
+  );
+  assert.match(
+    anywherePlannerSource,
+    /aria-expanded=\{false\}[\s\S]{0,180}min-h-11/,
+  );
+  assert.match(
+    anywherePlannerSource,
+    /aria-expanded=\{mapExpanded\}[\s\S]{0,180}min-h-11/,
+  );
+  assert.match(anywhereStyles, /\.leaflet-control-zoom a\s*\{[\s\S]*width: 44px !important;/);
+  assert.match(anywhereStyles, /\.leaflet-control-zoom a\s*\{[\s\S]*height: 44px !important;/);
+  assert.match(anywherePlannerSource, /iconSize: \[44, 44\]/);
+  assert.match(anywherePlannerSource, /iconAnchor: \[22, 22\]/);
+});
+
+test("route, saved-day, Blitz, and source actions keep a 44px mobile touch target", () => {
+  assert.match(anywherePlannerSource, /onClick=\{blitz\}[\s\S]{0,180}min-h-11/);
+  assert.match(anywherePlannerSource, /onClick=\{\(\) => restoreEntry\(entry\)\}[\s\S]{0,180}min-h-11/);
+  assert.match(anywherePlannerSource, /aria-label=\{t\("Ta bort", "Remove"\)\}[\s\S]{0,180}min-h-11 min-w-11/);
+  assert.match(anywherePlannerSource, /href=\{pin\}[\s\S]{0,180}min-h-11 min-w-11/);
+  assert.match(anywherePlannerSource, /href=\{ev\.source_url\}[\s\S]{0,180}min-h-11 min-w-11/);
+});
+
+test("keyboard-reachable controls have one visible focus contract", () => {
+  assert.match(anywhereStyles, /:where\([\s\S]*a\[href\][\s\S]*button[\s\S]*input[\s\S]*\):focus-visible/);
+  assert.match(anywhereStyles, /outline: 3px solid rgb\(var\(--p-color-glow\)\)/);
+  assert.match(anywhereStyles, /outline-offset: 3px/);
 });
 
 test("adjustments collapse to a summary and re-compose themselves — no submit past the landing", () => {

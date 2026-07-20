@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Tailwind's reset leaves keyboard focus dependent on browser defaults, which
+   are not visible against Parranda's dark surface in every browser. Keep the
+   indicator modality-aware so pointer interactions stay visually quiet while
+   every keyboard-reachable control gets the same high-contrast contract. */
+:where(
+  a[href],
+  button,
+  input,
+  select,
+  textarea,
+  [tabindex]:not([tabindex="-1"])
+):focus-visible {
+  outline: 3px solid rgb(var(--p-color-glow));
+  outline-offset: 3px;
+}
+
 /* Numbered map markers. A composed route owns the stronger marker; district
    numbers remain only for the honest structure-only state. */
 .district-map-marker,
@@ -21,12 +37,40 @@
 }
 
 .route-map-marker {
-  width: 30px;
-  height: 30px;
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  /* The number is anonymous inline content; isolation keeps it above the
+     smaller visual pin while the full 44px marker remains clickable. */
+  isolation: isolate;
+}
+
+.route-map-marker::before {
+  position: absolute;
+  inset: 7px;
+  border: 2px solid #fffaf3;
+  border-radius: 999px;
+  background: rgb(var(--p-color-accent));
   box-shadow: 0 2px 8px rgba(58, 33, 20, 0.48);
+  content: "";
+  z-index: -1;
+}
+
+.route-map-marker--event::before {
+  background: rgb(var(--p-color-glow));
 }
 
 .route-map-marker--event {
-  background: rgb(var(--p-color-glow));
   color: rgb(var(--p-color-ink));
+}
+
+/* Leaflet defaults to 30px controls. Keep map zoom usable with a thumb without
+   changing the route/map contract or hiding the provider attribution. */
+.leaflet-control-zoom a {
+  width: 44px !important;
+  height: 44px !important;
+  line-height: 44px !important;
 }
