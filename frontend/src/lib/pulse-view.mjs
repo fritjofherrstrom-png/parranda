@@ -52,6 +52,17 @@ export function pulseEventBuckets(liveEvents, wovenIds) {
   };
 }
 
+/** Remaining accepted events after the six highlighted rows in each bucket. */
+export function pulseBrowseBuckets(liveEvents, wovenIds) {
+  const exclude = wovenIds instanceof Set ? wovenIds : new Set();
+  const keep = (list) =>
+    (Array.isArray(list) ? list : []).filter((ev) => ev && !(ev.id != null && exclude.has(String(ev.id))));
+  return {
+    tonight: keep(liveEvents?.browse?.tonight?.more),
+    thisWeek: keep(liveEvents?.browse?.this_week?.more),
+  };
+}
+
 /**
  * Clothing guidance derived from the TRUSTED weather observation the day already
  * carries (dayflow_context.weather.provenance.observed). Same product rules as

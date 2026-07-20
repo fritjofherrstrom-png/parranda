@@ -16,6 +16,9 @@ const {
   createLocalEventProvider,
   BUILTIN_EVENT_FEEDS,
   HELSINKI_LINKED_EVENTS_FEED,
+  MAX_PER_BUCKET,
+  MAX_BROWSE_PER_BUCKET,
+  LIVE_EVENT_BROWSE_CONTRACT,
 } = require("../server/place-candidates/agnostic-event-supply");
 
 // The municipal-feed path is exercised by INJECTING the Helsinki fixture as a
@@ -381,6 +384,40 @@ test("preferences rerank the accepted event pool without another source collecti
   const culture = rankCollectedEventsForPreferences(neutral, ["culture"]);
   assert.equal(culture.tonight[0].id, "a-concert");
   assert.deepEqual(culture.tonight[0].matched_preferences, ["museums"]);
+});
+
+test("Live keeps six ranked highlights and exposes the remaining accepted events separately", () => {
+  const views = Array.from({ length: 30 }, (_, index) => ({
+    id: `event-${String(index).padStart(2, "0")}`,
+    title: index === 29 ? "Loppis by the harbour" : `Local event ${index}`,
+    starts_at: "2026-06-28T18:00:00Z",
+    ends_at: "2026-06-28T20:00:00Z",
+    salience_score: 0,
+    tags: index === 29 ? ["second hand"] : [],
+  }));
+  const ranked = rankCollectedEventsForPreferences({
+    coverage: "covered",
+    tonight: views.slice(0, MAX_PER_BUCKET),
+    this_week: [],
+    _rankable_events: { tonight: views, this_week: [] },
+  }, ["second_hand"]);
+
+  assert.equal(ranked.browse.contract, LIVE_EVENT_BROWSE_CONTRACT);
+  assert.equal(ranked.browse.max_rows_per_bucket, MAX_BROWSE_PER_BUCKET);
+  assert.equal(ranked.tonight.length, MAX_PER_BUCKET);
+  assert.equal(ranked.tonight[0].id, "event-29", "a personal match may enter the highlight tier");
+  assert.equal(ranked.browse.tonight.ranked_event_count, 30);
+  assert.equal(ranked.browse.tonight.highlight_count, MAX_PER_BUCKET);
+  assert.equal(ranked.browse.tonight.more_count, MAX_BROWSE_PER_BUCKET - MAX_PER_BUCKET);
+  assert.equal(ranked.browse.tonight.hidden_count, 30 - MAX_BROWSE_PER_BUCKET);
+  assert.equal(ranked.browse.tonight.more.length, MAX_BROWSE_PER_BUCKET - MAX_PER_BUCKET);
+  assert.equal(ranked.browse.tonight.more.some((event) => event.id === "event-29"), false);
+  assert.equal(
+    new Set([...ranked.tonight, ...ranked.browse.tonight.more].map((event) => event.id)).size,
+    MAX_BROWSE_PER_BUCKET,
+    "highlights and browse rows never duplicate one occurrence",
+  );
+  assert.equal(ranked._rankable_events, undefined, "the wider internal pool remains private");
 });
 
 test("cultural events outrank civic/admin notices in the same bucket (smart, not just timely)", async () => {

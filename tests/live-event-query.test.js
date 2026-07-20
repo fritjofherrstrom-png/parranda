@@ -120,10 +120,28 @@ test("shared live-event shaping preserves health, hides internal pools and appli
       { id: "far", lat: 55.7, lng: 13.2 },
     ],
     this_week: [],
+    browse: {
+      contract: "live_event_browse_v1",
+      max_rows_per_bucket: 24,
+      tonight: {
+        ranked_event_count: 4,
+        highlight_count: 2,
+        more_count: 2,
+        hidden_count: 0,
+        more: [
+          { id: "browse-near", lat: 55.607, lng: 13.005 },
+          { id: "browse-far", lat: 55.7, lng: 13.2 },
+        ],
+      },
+      this_week: { ranked_event_count: 0, highlight_count: 0, more_count: 0, hidden_count: 0, more: [] },
+    },
     _rankable_events: { tonight: [{ id: "internal" }], this_week: [] },
   };
   const shaped = shapeCollectedLiveEvents(collected, { scope });
   assert.deepEqual(shaped.tonight.map((event) => event.id), ["near"]);
+  assert.deepEqual(shaped.browse.tonight.more.map((event) => event.id), ["browse-near"]);
+  assert.equal(shaped.browse.tonight.more_count, 1);
+  assert.equal(shaped.browse.tonight.hidden_count, 1, "scope-filtered rows remain honestly counted as hidden");
   assert.equal(shaped.acquisition.source_health.status, "partial");
   assert.equal(shaped.acquisition.source_health.surfaced_event_count, 1);
   assert.equal("_rankable_events" in shaped, false);
@@ -132,6 +150,8 @@ test("shared live-event shaping preserves health, hides internal pools and appli
 test("unavailable source health uses compact allowlisted reasons", () => {
   const disabled = unavailableLiveEvents("event_supply_not_configured");
   assert.equal(disabled.coverage, "unavailable");
+  assert.equal(disabled.browse.contract, "live_event_browse_v1");
+  assert.deepEqual(disabled.browse.tonight.more, []);
   assert.equal(disabled.acquisition.source_health.status, "unavailable");
   assert.deepEqual(disabled.acquisition.source_health.reasons, ["event_supply_not_configured"]);
   const unknown = unavailableLiveEvents("https://secret.example/token=abc", "failed");

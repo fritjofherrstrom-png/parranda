@@ -226,6 +226,7 @@ function shapeCollectedLiveEvents(collected, { scope = null } = {}) {
   if (!collected || !["covered", "uncovered"].includes(collected.coverage)) return null;
   const tonight = filterEventsForLiveScope(collected.tonight, scope);
   const thisWeek = filterEventsForLiveScope(collected.this_week, scope);
+  const browse = shapeLiveEventBrowse(collected.browse, { scope });
   const acquisitionInput = collected.acquisition && typeof collected.acquisition === "object"
     ? collected.acquisition
     : {};
@@ -244,7 +245,34 @@ function shapeCollectedLiveEvents(collected, { scope = null } = {}) {
     acquisition,
     tonight,
     this_week: thisWeek,
+    browse,
     ...(collected.pending ? { pending: true } : {}),
+  };
+}
+
+function shapeLiveEventBrowse(value, { scope = null } = {}) {
+  const input = value && typeof value === "object" ? value : {};
+  const shapeBucket = (bucket) => {
+    const source = bucket && typeof bucket === "object" ? bucket : {};
+    const more = filterEventsForLiveScope(source.more, scope).slice(0, 18);
+    const rankedEventCount = nonNegativeInteger(source.ranked_event_count);
+    const highlightCount = nonNegativeInteger(source.highlight_count);
+    return {
+      ranked_event_count: rankedEventCount,
+      highlight_count: highlightCount,
+      more_count: more.length,
+      hidden_count: Math.max(
+        nonNegativeInteger(source.hidden_count),
+        rankedEventCount - highlightCount - more.length,
+      ),
+      more,
+    };
+  };
+  return {
+    contract: "live_event_browse_v1",
+    max_rows_per_bucket: 24,
+    tonight: shapeBucket(input.tonight),
+    this_week: shapeBucket(input.this_week),
   };
 }
 
@@ -259,6 +287,7 @@ function unavailableLiveEvents(reason, status = "unavailable") {
     feeds: [],
     tonight: [],
     this_week: [],
+    browse: shapeLiveEventBrowse(null),
     acquisition: {
       mode: "bounded_multi_source",
       source_health: {
@@ -344,5 +373,6 @@ module.exports = {
   normalizeLiveEventQuery,
   normalizeLiveEventSourceHealth,
   shapeCollectedLiveEvents,
+  shapeLiveEventBrowse,
   unavailableLiveEvents,
 };
