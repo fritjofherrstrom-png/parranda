@@ -61,6 +61,34 @@ test("mapsWalkingRouteUrl builds an ordered walking route; needs >= 2 coord stop
   assert.equal(u.searchParams.get("travelmode"), "walking");
 });
 
+test("a trusted near-me anchor frames the route without changing stop order", () => {
+  const anchor = { lat: 59.3293, lng: 18.0686 };
+  const u = new URL(
+    mapsWalkingRouteUrl(
+      [
+        { lat: 59.332, lng: 18.064 },
+        { lat: 59.337, lng: 18.075 },
+      ],
+      { origin: anchor, destination: anchor },
+    ),
+  );
+
+  assert.equal(u.searchParams.get("origin"), "59.3293,18.0686");
+  assert.equal(u.searchParams.get("destination"), "59.3293,18.0686");
+  assert.equal(u.searchParams.get("waypoints"), "59.332,18.064|59.337,18.075");
+  assert.equal(u.searchParams.get("travelmode"), "walking");
+});
+
+test("an anchored one-stop route stays useful while empty or anchor-only routes fail closed", () => {
+  const anchor = { lat: 59.3293, lng: 18.0686 };
+  const oneStop = new URL(
+    mapsWalkingRouteUrl([{ lat: 59.332, lng: 18.064 }], { origin: anchor, destination: anchor }),
+  );
+  assert.equal(oneStop.searchParams.get("waypoints"), "59.332,18.064");
+  assert.equal(mapsWalkingRouteUrl([], { origin: anchor, destination: anchor }), null);
+  assert.equal(mapsWalkingRouteUrl([anchor], { origin: anchor, destination: anchor }), null);
+});
+
 test("a long day samples down to <= 8 waypoints but keeps first + last", () => {
   const stops = Array.from({ length: 20 }, (_, i) => ({ lat: i, lng: i }));
   const u = new URL(mapsWalkingRouteUrl(stops));
@@ -68,6 +96,18 @@ test("a long day samples down to <= 8 waypoints but keeps first + last", () => {
   assert.equal(u.searchParams.get("destination"), "19,19");
   const waypoints = u.searchParams.get("waypoints").split("|");
   assert.ok(waypoints.length <= 8, "waypoints capped for the consumer Maps URL");
+});
+
+test("an anchored long day also respects the consumer waypoint cap", () => {
+  const stops = Array.from({ length: 20 }, (_, i) => ({ lat: 59 + i / 100, lng: 18 + i / 100 }));
+  const anchor = { lat: 59.3293, lng: 18.0686 };
+  const u = new URL(mapsWalkingRouteUrl(stops, { origin: anchor, destination: anchor }));
+  assert.equal(u.searchParams.get("origin"), "59.3293,18.0686");
+  assert.equal(u.searchParams.get("destination"), "59.3293,18.0686");
+  const waypoints = u.searchParams.get("waypoints").split("|");
+  assert.ok(waypoints.length <= 8);
+  assert.equal(waypoints[0], "59,18");
+  assert.equal(waypoints[waypoints.length - 1], "59.19,18.19");
 });
 
 test("dayStops flattens districts in visit order, coordless stops included as-is for filtering downstream", () => {
