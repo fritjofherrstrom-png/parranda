@@ -50,13 +50,18 @@ services:
         value: el,en
       # Live events near the anchor — "what's on tonight / this week" from open,
       # key-free municipal feeds (Linked Events; CC-BY). GENERIC + deploy-
-      # configurable: a city is a data row, never code. The built-in registry has
-      # the validated Helsinki instance; add more regions via PARRANDA_EVENT_FEEDS
-      # (a JSON array of {id,label,base,bbox,license}) without touching the engine.
+      # configurable: a region is a reviewed data row, never code. The registry
+      # loads the versioned manifest below; deployments may still override rows
+      # through PARRANDA_EVENT_FEEDS without touching the engine.
       # Honest + never required: an anchor no feed covers returns honest absence
       # and the route/districts still compose. Off by default; enabled here.
       - key: PARRANDA_AGNOSTIC_EVENTS
         value: enabled
+      # Reviewed regional event sources are versioned as data in the repo. The
+      # server reads this file only through trusted deployment configuration;
+      # request payloads cannot inject files, endpoints or provider rows.
+      - key: PARRANDA_EVENT_FEEDS_FILE
+        value: config/reviewed-event-feeds.json
       # NEW-frontend /anywhere takeover (docs/FRONTEND_MIGRATION_CONTRACT.md). The
       # prebuilt surface is committed at frontend/dist and served when this is
       # enabled. Rollback = unset; /labs/anywhere always remains as the fallback.

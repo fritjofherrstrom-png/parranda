@@ -4,6 +4,9 @@
  */
 
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const test = require("node:test");
 
 const {
@@ -91,6 +94,37 @@ test("the feed registry is generic + deploy-configurable (a city is data, not co
 
   // Malformed config is ignored — keep whatever is built-in (empty), never throw.
   assert.equal(resolveEventFeedRegistry({ PARRANDA_EVENT_FEEDS: "{not json" }).length, 0);
+});
+
+test("a trusted deploy manifest activates reviewed feeds without request-time injection", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "parranda-event-manifest-"));
+  const manifestPath = path.join(dir, "feeds.json");
+  const fileRow = {
+    id: "reviewed-region",
+    label: "Reviewed region calendar",
+    adapter: "localized_events_api",
+    endpoint: "https://events.example/api/",
+    bbox: [10, 50, 11, 51],
+    status: "active",
+    runtime_policy: "bounded_refresh",
+  };
+  fs.writeFileSync(manifestPath, JSON.stringify([fileRow]));
+
+  try {
+    const registry = resolveEventFeedRegistry({
+      PARRANDA_EVENT_FEEDS_FILE: manifestPath,
+      // Direct trusted deploy rows own matching identities and remain first.
+      PARRANDA_EVENT_FEEDS: JSON.stringify([{ ...fileRow, label: "Deploy override" }]),
+      // Public-looking fields are deliberately irrelevant to this function.
+      event_feeds_file: "/tmp/public-payload.json",
+    });
+
+    assert.equal(registry.length, 1);
+    assert.equal(registry[0].label, "Deploy override");
+    assert.equal(resolveEventFeedRegistry({ PARRANDA_EVENT_FEEDS_FILE: path.join(dir, "missing.json") }).length, 0);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("reviewed source descriptors own trust and cap event-level confidence", () => {

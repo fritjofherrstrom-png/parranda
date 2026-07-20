@@ -1,5 +1,8 @@
 "use strict";
 
+const fs = require("node:fs");
+const path = require("node:path");
+
 /**
  * Agnostic live-event supply — "what's alive near here, right now".
  *
@@ -70,6 +73,7 @@ const TONIGHT_TIMING = new Set(["now", "today", "tonight"]);
 // a slow server-side max_duration), feed-agnostic so it protects ANY provider and
 // the deterministic tests (which inject payloads, not query params).
 const MAX_HAPPENING_DAYS = 14;
+const MAX_EVENT_FEED_MANIFEST_BYTES = 1024 * 1024;
 const LOCAL_EVENT_ADAPTERS = new Set([
   "linked_events",
   "schema_org",
@@ -117,8 +121,12 @@ const BUILTIN_EVENT_FEEDS = [];
  * The registry is GENERIC and deploy-configurable: a city is a data row, never
  * code. `PARRANDA_EVENT_FEEDS` accepts reviewed rows with
  * {id,label,endpoint,adapter,bbox,license,...}; legacy `base` rows remain Linked
- * Events. The allowlisted adapters cover Linked Events, schema.org JSON/HTML,
- * The Events Calendar, iCal, and stable venue HTML without touching the engine.
+ * Events. A deploy may point `PARRANDA_EVENT_FEEDS_FILE` at the same reviewed,
+ * versioned JSON manifest used by `dev:full`. Direct JSON env rows retain
+ * precedence over matching file rows. Both seams are trusted server config and
+ * are never read from a request. The allowlisted adapters cover Linked Events,
+ * schema.org JSON/HTML, The Events Calendar, iCal, and stable venue HTML without
+ * touching the engine.
  * Fresh operator-approved source profiles may add the same rows through
  * PARRANDA_REVIEWED_EVENT_SOURCE_PROFILES; discovery output alone is ignored.
  * The default registry is EMPTY on purpose — no city is special out of the box.
@@ -126,20 +134,16 @@ const BUILTIN_EVENT_FEEDS = [];
  */
 function resolveEventFeedRegistry(env = process.env) {
   const feeds = [...BUILTIN_EVENT_FEEDS];
-  const extra = String((env && env.PARRANDA_EVENT_FEEDS) || "").trim();
-  if (extra) {
-    try {
-      const parsed = JSON.parse(extra);
-      if (Array.isArray(parsed)) {
-        for (const f of parsed) {
-          const normalized = normalizeEventFeedRow(f, feeds.length);
-          if (normalized) feeds.push(normalized);
-        }
-      }
-    } catch (_e) {
-      // malformed PARRANDA_EVENT_FEEDS -> keep trusted rows already loaded
-    }
-  }
+  const directRows = parseEventFeedRows((env && env.PARRANDA_EVENT_FEEDS) || "");
+  appendUniqueEventFeeds(feeds, directRows);
+
+  // The file path is deployment-owned configuration. Missing, oversized or
+  // malformed manifests fail soft to the already trusted rows; they can never
+  // make route/Pulse requests fail.
+  const manifestRows = loadEventFeedRowsFromFile(
+    (env && env.PARRANDA_EVENT_FEEDS_FILE) || "",
+  );
+  appendUniqueEventFeeds(feeds, manifestRows);
 
   // Reviewed profiles are trusted deploy configuration, never public payload.
   // Direct feed rows keep precedence so a deployment can override or disable a
@@ -154,6 +158,42 @@ function resolveEventFeedRegistry(env = process.env) {
     rowIdentities.forEach((identity) => identities.add(identity));
   }
   return feeds;
+}
+
+function parseEventFeedRows(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_error) {
+    return [];
+  }
+}
+
+function loadEventFeedRowsFromFile(value) {
+  const manifestPath = String(value || "").trim();
+  if (!manifestPath) return [];
+  try {
+    const absolutePath = path.resolve(manifestPath);
+    const stat = fs.statSync(absolutePath);
+    if (!stat.isFile() || stat.size > MAX_EVENT_FEED_MANIFEST_BYTES) return [];
+    return parseEventFeedRows(fs.readFileSync(absolutePath, "utf8"));
+  } catch (_error) {
+    return [];
+  }
+}
+
+function appendUniqueEventFeeds(feeds, rows) {
+  const identities = new Set(feeds.flatMap(feedIdentities));
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const normalized = normalizeEventFeedRow(row, feeds.length);
+    if (!normalized) continue;
+    const rowIdentities = feedIdentities(normalized);
+    if (rowIdentities.some((identity) => identities.has(identity))) continue;
+    feeds.push(normalized);
+    rowIdentities.forEach((identity) => identities.add(identity));
+  }
 }
 
 function normalizeEventFeedRow(f, index = 0) {
