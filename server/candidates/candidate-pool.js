@@ -18,6 +18,10 @@ const { normalizeUserIntents } = require("./intent-vocabulary");
 const { classifyCatalogDensity } = require("./source-calibration");
 const { resolveCandidateIdentity } = require("./entity-resolution");
 const { normalizeLens } = require("./lens");
+const {
+  evaluateOperationalViability,
+  operationalViabilityRank,
+} = require("../place-candidates/operational-viability");
 
 // Curated/verified Parranda candidates keep priority when fit is comparable.
 const CURATED_SOURCE_PRIORITY = 100;
@@ -91,6 +95,16 @@ function buildEligibleCandidatePool(cityConfig, payload = {}, helpers = {}) {
     const { eligible, derived, gates, evidence } = evaluateCandidateEligibility(candidate, {
       now: nowContext.date,
     });
+    const operational = evaluateOperationalViability({ candidate, derived });
+    if (operational.route_eligible === false) {
+      rejected.push({
+        id: candidate.id,
+        label: candidate.label,
+        origin: candidateOrigin(candidate),
+        reason: "operational_place_inactive",
+      });
+      continue;
+    }
     const availability = safeEvaluateAvailability(helpers.evaluateCandidateAvailability, candidate, context);
     if (availabilitySummary && availability) {
       if (availability.status === "unknown") availabilitySummary.unresolved_candidate_count += 1;
@@ -111,7 +125,7 @@ function buildEligibleCandidatePool(cityConfig, payload = {}, helpers = {}) {
         ? helpers.experimentalAdmitCandidate({ candidate, derived, gates, evidence })
         : null;
       if (experimentalAdmission && experimentalAdmission.allowed === true) {
-        pool.push({ candidate, derived, gates, evidence, availability, experimental_admission: experimentalAdmission });
+        pool.push({ candidate, derived, gates, evidence, availability, operational, experimental_admission: experimentalAdmission });
         continue;
       }
       rejected.push({
@@ -122,7 +136,7 @@ function buildEligibleCandidatePool(cityConfig, payload = {}, helpers = {}) {
       });
       continue;
     }
-    pool.push({ candidate, derived, gates, evidence, availability });
+    pool.push({ candidate, derived, gates, evidence, availability, operational });
   }
 
   return {
@@ -186,6 +200,8 @@ function rankEligible(eligible) {
     if (cov) return cov;
     const part = b.fit.coverage_rank[1] - a.fit.coverage_rank[1];
     if (part) return part;
+    const operational = operationalViabilityRank(a) - operationalViabilityRank(b);
+    if (operational) return operational;
     const score = b.fit.primary_score - a.fit.primary_score;
     if (Math.abs(score) > 1e-9) return score;
     const sp = sourcePriority(b) - sourcePriority(a);
@@ -338,6 +354,7 @@ module.exports = {
   isExternalCandidatesEnabled,
   matchTier,
   rankEligible,
+  operationalViabilityRank,
   resolveTimeBandFromHour,
   sourcePriority,
 };

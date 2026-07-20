@@ -114,10 +114,17 @@ function plannerUsableOptionsForRole(role = {}) {
     Array.isArray(candidate.covered_preferences) && candidate.covered_preferences.length > 0;
   const covering = trustTier.filter(covers);
   const coveragePool = covering.length ? covering : trustTier;
+  const operationalRanks = coveragePool
+    .map((candidate) => candidate?.operational_viability?.rank)
+    .filter(Number.isFinite);
+  const bestOperationalRank = operationalRanks.length ? Math.min(...operationalRanks) : null;
+  const operationalPool = bestOperationalRank === null
+    ? coveragePool
+    : coveragePool.filter((candidate) => candidate?.operational_viability?.rank === bestOperationalRank);
   const feelRank = (candidate) =>
     Number.isFinite(candidate.local_feel_rank) ? candidate.local_feel_rank : 0;
-  const bestFeel = coveragePool.reduce((best, candidate) => Math.min(best, feelRank(candidate)), 3);
-  return coveragePool.filter((candidate) => feelRank(candidate) === bestFeel);
+  const bestFeel = operationalPool.reduce((best, candidate) => Math.min(best, feelRank(candidate)), 3);
+  return operationalPool.filter((candidate) => feelRank(candidate) === bestFeel);
 }
 
 // --- combination search ----------------------------------------------------

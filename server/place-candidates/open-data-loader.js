@@ -430,6 +430,7 @@ function mapOsmElement(element) {
   const brandWikidata = typeof tags["brand:wikidata"] === "string" && tags["brand:wikidata"].trim();
   const website = firstHttpUrl(tags.website, tags["contact:website"]);
   const openingHours = normalizeOpeningHours(tags.opening_hours);
+  const operational = extractOsmOperationalMetadata(tags, { website, openingHours });
 
   return {
     id: `osm-${elementType}-${osmId}`,
@@ -441,11 +442,44 @@ function mapOsmElement(element) {
     sources,
     chain: Boolean(brandName || brandWikidata),
     brand: brandName,
+    operational_status: operational.status,
+    operational_reasons: operational.reasons,
     // Source-owned operational metadata only. It does not raise place trust.
     // The website may seed bounded source discovery; opening hours may only
     // exclude a candidate when trusted local-time evaluation proves no overlap.
     ...(website ? { website } : {}),
     ...(openingHours ? { opening_hours: openingHours } : {}),
+  };
+}
+
+function extractOsmOperationalMetadata(tags, { website = null, openingHours = null } = {}) {
+  const reasons = [];
+  const lifecyclePrefixes = ["disused", "abandoned", "demolished", "removed", "razed"];
+  for (const [key, rawValue] of Object.entries(tags || {})) {
+    const normalizedKey = String(key || "").trim().toLowerCase();
+    const value = String(rawValue || "").trim().toLowerCase();
+    if (!value || ["no", "false", "0"].includes(value)) continue;
+    if (lifecyclePrefixes.some((prefix) => normalizedKey === prefix || normalizedKey.startsWith(`${prefix}:`))) {
+      reasons.push(`osm_lifecycle_${normalizedKey.split(":", 1)[0]}`);
+    }
+  }
+  const construction = String(tags?.construction || "").trim().toLowerCase();
+  if (construction && !["no", "false", "0"].includes(construction)) {
+    reasons.push("osm_lifecycle_construction");
+  }
+  if (/^(?:closed|off)$/i.test(String(openingHours || "").trim())) {
+    reasons.push("osm_opening_hours_explicitly_closed");
+  }
+  if (reasons.length) {
+    return { status: "inactive", reasons: [...new Set(reasons)] };
+  }
+
+  const activeSignals = [];
+  if (openingHours) activeSignals.push("operational_opening_hours_present");
+  if (website) activeSignals.push("operational_website_present");
+  return {
+    status: activeSignals.length ? "source_indicated_active" : "unknown",
+    reasons: activeSignals,
   };
 }
 
@@ -590,4 +624,5 @@ module.exports = {
   buildOverpassQuery,
   mapOverpassResponse,
   mapOsmElement,
+  extractOsmOperationalMetadata,
 };

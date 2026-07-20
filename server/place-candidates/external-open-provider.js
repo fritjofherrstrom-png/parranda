@@ -148,10 +148,40 @@ function mapRecordToCandidate(cityConfig, record, observedAt, index) {
   // valid sparse fallbacks.
   base.chain = record.chain === true;
   base.brand = typeof record.brand === "string" && record.brand.trim() ? record.brand.trim() : null;
+  const website = safeHttpUrl(record.website);
+  if (website) base.website = website;
   const openingHours = normalizeOpeningHours(record.opening_hours);
   if (openingHours) base.opening_hours = openingHours;
+  const operationalStatus = normalizeOperationalStatus(record.operational_status);
+  if (operationalStatus) base.operational_status = operationalStatus;
+  const operationalReasons = normalizeOperationalReasons(record.operational_reasons);
+  if (operationalReasons.length) base.operational_reasons = operationalReasons;
 
   return validatePlaceCandidate(base, `externalOpenCandidate[${index}]`);
+}
+
+function normalizeOperationalStatus(value) {
+  const token = firstString(value).toLowerCase();
+  return ["inactive", "source_indicated_active", "unknown"].includes(token) ? token : "";
+}
+
+function normalizeOperationalReasons(values) {
+  return [...new Set(
+    (Array.isArray(values) ? values : [])
+      .map((value) => firstString(value).toLowerCase())
+      .filter((value) => /^[a-z0-9_:-]{1,80}$/.test(value)),
+  )];
+}
+
+function safeHttpUrl(value) {
+  const raw = firstString(value);
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    return ["http:", "https:"].includes(url.protocol) ? url.toString() : "";
+  } catch (_error) {
+    return "";
+  }
 }
 
 function buildEvidence(record, sources, hasCoords, type, observedAt) {
