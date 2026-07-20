@@ -222,15 +222,45 @@ function label(map: Record<string, { sv: string; en: string }>, key: string | nu
 // axes render (an unknown engine token is skipped, never exposed raw), and a
 // preference that repeats the type chip's text is deduped ("Utsikt" viewpoint
 // covering "scenic" would otherwise read twice).
-function coveredPreferenceLabels(stop: { covered_preferences?: string[]; type?: string | null }, lang: Lang): string[] {
-  const typeLabel = stop?.type ? label(TYPE_LABELS, stop.type, lang) : "";
-  const out: string[] = [];
+// Human "why this stop is here" phrasing, keyed by the matched preference axis.
+// Replaces the internal "covers {axis}" token with a warm role clause — same
+// trusted signal (#369 covered_preferences), said the way a local would.
+const WHY_ROLES: Record<string, { sv: string; en: string }> = {
+  food: { sv: "något gott att äta", en: "a bite to eat" },
+  "street-food": { sv: "något gott att äta", en: "a bite to eat" },
+  culture: { sv: "en dos kultur", en: "a dose of culture" },
+  museums: { sv: "en dos kultur", en: "a dose of culture" },
+  views: { sv: "en utsikt värd stoppet", en: "a view worth the stop" },
+  scenic: { sv: "en utsikt värd stoppet", en: "a view worth the stop" },
+  fika: { sv: "en fika", en: "a coffee break" },
+  coffee: { sv: "en fika", en: "a coffee break" },
+  nightlife: { sv: "kvällen", en: "somewhere for the evening" },
+  bars: { sv: "kvällen", en: "somewhere for the evening" },
+  green: { sv: "en grön paus", en: "a green breather" },
+  second_hand: { sv: "en loppis-stund", en: "a spot to browse" },
+  vintage: { sv: "en loppis-stund", en: "a spot to browse" },
+  market: { sv: "en marknad att strosa i", en: "a market to wander" },
+  swimming: { sv: "ett dopp", en: "a place to swim" },
+};
+
+// The warm one-liner for a stop's disclosure panel. Built only from trusted
+// signal (matched axes + type); never invents specifics we don't have. Falls
+// back to a plain "on today's route" when no axis maps.
+function stopWhyLine(stop: { covered_preferences?: string[]; type?: string | null }, lang: Lang): string {
+  const en = lang === "en";
+  const roles: string[] = [];
   for (const axis of Array.isArray(stop?.covered_preferences) ? stop.covered_preferences : []) {
-    const mapped = INTENT_LABELS[axis]?.[lang];
-    if (!mapped || mapped === typeLabel || out.includes(mapped)) continue;
-    out.push(mapped);
+    const role = WHY_ROLES[axis]?.[lang];
+    if (role && !roles.includes(role)) roles.push(role);
+    if (roles.length >= 2) break;
   }
-  return out;
+  if (roles.length) {
+    const joined = roles.length === 2 ? `${roles[0]} ${en ? "and" : "och"} ${roles[1]}` : roles[0];
+    return en ? `Here for ${joined}.` : `Här för ${joined}.`;
+  }
+  const typeLabel = stop?.type ? label(TYPE_LABELS, stop.type, lang) : "";
+  if (typeLabel) return en ? `${typeLabel} on today's route.` : `${typeLabel} på dagens rutt.`;
+  return en ? "A stop on today's route." : "Ett stopp på dagens rutt.";
 }
 
 // Event timing renders through the pure `eventTiming` formatter (pulse-view.mjs),
@@ -275,6 +305,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // of the route.
   const [mapExpanded, setMapExpanded] = useState(false);
   const [detoursOpen, setDetoursOpen] = useState(false);
+  // A tapped stop expands an inline panel (why it's here, the walk, hours when
+  // known, an explicit Maps action) instead of ejecting straight to Google Maps.
+  // Single-open accordion: opening one closes the others.
+  const [expandedStopKey, setExpandedStopKey] = useState<string | null>(null);
   // The Live sheet (design handoff §3B): an explorable events surface. TIME is
   // a real axis over the two server buckets. SCOPE uses the separate
   // live_event_query_v1 contract: route geometry and the trusted day anchor are
@@ -1221,7 +1255,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               ? ` · ≈ ${walkingDistanceLabel(primaryRoute.estimated_km, lang)} ${t("till fots", "on foot")}`
               : ""}
             {Number.isFinite(primaryRoute?.longest_leg_km)
-              ? ` · ${t("längsta ben", "longest leg")} ${walkingDistanceLabel(primaryRoute.longest_leg_km, lang)}`
+              ? ` · ${t("längsta sträcka", "longest stretch")} ${walkingDistanceLabel(primaryRoute.longest_leg_km, lang)}`
               : ""}
             {` · ${split.core.length} ${split.core.length === 1 ? t("stopp", "stop") : t("stopp", "stops")}`}
             {split.woven.length > 0 ? ` + ${split.woven.length} live${lang === "en" ? " event" : "-event"}` : ""}
@@ -1350,8 +1384,22 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               const daypart = String(stop?.daypart || "");
               const previousDaypart = i > 0 ? String((split.core[i - 1] as any)?.daypart || "") : "";
               const daypartHeading = daypart && daypart !== previousDaypart ? label(DAYPART_LABELS, stop.daypart, lang) : null;
+              const stopKey = stop?.id ?? String(i);
+              const expanded = expandedStopKey === stopKey;
+              const prevName = routeNumber > 1 ? String((split.core[i - 1] as any)?.label || (split.core[i - 1] as any)?.name || "").trim() : "";
+              // Availability is computed server-side (opening-hours.js) but only
+              // used as a gate today; render it only if a status is actually
+              // present, so absence stays honest and this is forward-compatible
+              // when the engine surfaces it onto the stop.
+              const availability = stop?.availability && typeof stop.availability === "object" ? stop.availability : null;
+              const hoursNote =
+                availability?.status === "available"
+                  ? availability.closes_at_local
+                    ? t(`Öppet till ${availability.closes_at_local}`, `Open until ${availability.closes_at_local}`)
+                    : t("Öppet under ditt besök", "Open during your visit")
+                  : "";
               return (
-                <li key={stop?.id ?? i} className="flex flex-col">
+                <li key={stopKey} className="flex flex-col">
                   {daypartHeading && (
                     <p className="mb-1.5 mt-3.5 text-[10px] font-extrabold uppercase tracking-[0.2em] text-parranda-glow">{daypartHeading}</p>
                   )}
@@ -1362,37 +1410,71 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                       {leg.km != null ? walkingDistanceLabel(leg.km, lang) : ""}
                     </span>
                   )}
-                  <span className="flex items-start gap-3 py-0.5">
+                  {/* The stop row is a DISCLOSURE, not an external link: tapping
+                      it opens an inline panel instead of ejecting to Google Maps.
+                      The Maps jump becomes a deliberate action inside the panel. */}
+                  <button
+                    type="button"
+                    aria-expanded={expanded}
+                    aria-controls={`stop-panel-${stopKey}`}
+                    onClick={() => setExpandedStopKey(expanded ? null : stopKey)}
+                    className="flex w-full items-start gap-3 py-1 text-left"
+                  >
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-parranda-ember/55 bg-parranda-terracotta/20 text-[13px] font-extrabold text-parranda-clay">
                       {routeNumber}
                     </span>
-                    <span className="flex flex-wrap items-center gap-2 pt-1 text-sm text-parranda-ink">
-                      {pin ? (
-                        <a href={pin} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 min-w-11 items-center font-bold underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
-                          {name}
-                        </a>
-                      ) : (
-                        <span className="font-bold">{name}</span>
-                      )}
+                    <span className="flex flex-1 flex-wrap items-center gap-2 pt-1 text-sm text-parranda-ink">
+                      <span className="font-bold">{name}</span>
                       {stop?.type && (
                         <span className="rounded-full border border-parranda-ink/15 bg-parranda-ink/10 px-2 py-0.5 text-xs text-parranda-ink/75">
                           {label(TYPE_LABELS, stop.type, lang)}
                         </span>
                       )}
-                      {/* WHY this stop is in the route — the trusted candidate-spine
-                          preference fit (#369), translated to product copy and
-                          deduped against the type chip. Raw engine tokens never
-                          render; an unmapped axis is skipped, not exposed. */}
-                      {coveredPreferenceLabels(stop, lang).map((prefLabel) => (
-                        <span key={prefLabel} className="rounded-full border border-parranda-glow/40 bg-parranda-glow/10 px-2 py-0.5 text-xs text-parranda-ink/80">
-                          {t("täcker", "covers")} {prefLabel}
-                        </span>
-                      ))}
-                      {stop?.candidate_status === "partial" && (
-                        <span className="text-xs italic text-parranda-ink/50">{t("delvis träff", "partial match")}</span>
-                      )}
                     </span>
-                  </span>
+                    <span
+                      aria-hidden="true"
+                      className={"shrink-0 pt-1.5 text-lg leading-none transition " + (expanded ? "text-parranda-ember" : "text-parranda-ink/40")}
+                    >
+                      {expanded ? "▾" : "▸"}
+                    </span>
+                  </button>
+                  {expanded && (
+                    <div
+                      id={`stop-panel-${stopKey}`}
+                      className="ml-11 mb-1 mt-1 flex flex-col rounded-parranda border border-parranda-ember/35 bg-parranda-ink/[0.03] p-4"
+                    >
+                      <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-parranda-clay">{t("Varför här", "Why it's here")}</p>
+                      <p className="mt-1 text-sm leading-relaxed text-parranda-ink/85">{stopWhyLine(stop, lang)}</p>
+                      {stop?.candidate_status === "partial" && (
+                        <p className="mt-1 text-xs text-parranda-ink/55">
+                          {t("Löst matchad — värd en titt innan du går.", "A looser match — worth a look before you go.")}
+                        </p>
+                      )}
+                      <div className="mt-3 flex flex-col gap-1.5 text-xs text-parranda-ink/65">
+                        {leg && (leg.minutes != null || leg.km != null) && (
+                          <span>
+                            {leg.minutes != null ? `${leg.minutes} min` : ""}
+                            {leg.minutes != null && leg.km != null ? " · " : ""}
+                            {leg.km != null ? walkingDistanceLabel(leg.km, lang) : ""}
+                            {prevName ? ` ${t("till fots från", "walk from")} ${prevName}` : ` ${t("till fots", "on foot")}`}
+                          </span>
+                        )}
+                        {stop?.address && <span>{stop.address}</span>}
+                        {hoursNote && <span>{hoursNote}</span>}
+                      </div>
+                      {pin && (
+                        <a
+                          href={pin}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-parranda-btn bg-parranda-terracotta px-4 text-sm font-bold text-white transition hover:brightness-110 sm:w-auto sm:self-start sm:px-5"
+                        >
+                          {t("Öppna i Maps", "Open in Maps")}
+                          <span aria-hidden="true" className="ml-2">↗</span>
+                        </a>
+                      )}
+                    </div>
+                  )}
                 </li>
               );
             })}

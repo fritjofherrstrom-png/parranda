@@ -216,14 +216,28 @@ test("map hierarchy mirrors route authority instead of numbering two competing p
   assert.doesNotMatch(noRouteBranch.slice(0, 1200), /polyline|divIcon/);
 });
 
-test("route stops translate #369 candidate-spine metadata to product copy — never raw tokens", () => {
-  // WHY-chips from covered_preferences (translated + deduped vs the type chip)
-  // and an honest partial-match marker; unmapped axes are skipped, not exposed.
-  assert.match(anywherePlannerSource, /coveredPreferenceLabels\(stop, lang\)/);
-  assert.match(anywherePlannerSource, /museums: \{ sv: "Kultur", en: "Culture" \}/);
-  assert.match(anywherePlannerSource, /t\("täcker", "covers"\)/);
-  assert.match(anywherePlannerSource, /candidate_status === "partial"/);
-  assert.match(anywherePlannerSource, /t\("delvis träff", "partial match"\)/);
+test("a tapped stop discloses HUMAN copy — the trusted signal, said like a local, never raw tokens", () => {
+  // The stop row is a disclosure (aria-expanded), not an external link: the Maps
+  // jump moves INTO the panel as a deliberate action.
+  assert.match(anywherePlannerSource, /\[expandedStopKey, setExpandedStopKey\] = useState/);
+  assert.match(anywherePlannerSource, /aria-controls=\{`stop-panel-\$\{stopKey\}`\}/);
+  assert.match(anywherePlannerSource, /t\("Öppna i Maps", "Open in Maps"\)/);
+  // The "why it's here" line is warm role-clause copy from covered_preferences —
+  // NOT the internal "covers {axis}" token, and NOT "partial match / lead".
+  assert.match(anywherePlannerSource, /stopWhyLine\(stop, lang\)/);
+  assert.match(anywherePlannerSource, /Here for \$\{joined\}/);
+  assert.match(anywherePlannerSource, /green: \{ sv: "en grön paus", en: "a green breather" \}/);
+  assert.doesNotMatch(anywherePlannerSource, /t\("täcker", "covers"\)/, "no internal 'covers {axis}' token in the UI");
+  assert.doesNotMatch(anywherePlannerSource, /t\("delvis träff", "partial match"\)/, "no 'partial match' jargon");
+  assert.doesNotMatch(anywherePlannerSource, /treat it as a lead|behandla.*lead/i, "no PM-speak");
+  // The honest partial qualifier is human, not a token.
+  assert.match(anywherePlannerSource, /A looser match — worth a look/);
+  // Routing jargon "leg" is gone from the header too.
+  assert.doesNotMatch(anywherePlannerSource, /t\("längsta ben", "longest leg"\)/);
+  assert.match(anywherePlannerSource, /t\("längsta sträcka", "longest stretch"\)/);
+  // Opening-hours slot is forward-compatible + honest-by-absence (renders only
+  // when the engine surfaces availability onto the stop).
+  assert.match(anywherePlannerSource, /availability\?\.status === "available"/);
   // Raw engine reason tokens never render.
   assert.doesNotMatch(anywherePlannerSource, /fit_reasons|time_reasons|lens_reasons|route_roles/);
 });
