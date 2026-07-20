@@ -14,6 +14,7 @@ const { createHash } = require("node:crypto");
 
 const { evaluateLiveEventSourceCandidate } = require("./source-discovery");
 const { extractSchemaOrgEventsFromHtml } = require("./schema-org-event-provider");
+const { extractCalendarPageLinks } = require("./calendar-page-locator");
 
 const DEFAULT_USER_AGENT =
   "Parranda-Source-Scout/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
@@ -22,6 +23,10 @@ const DEFAULT_MAX_SEEDS = 12;
 const MAX_SEEDS = 30;
 const DEFAULT_MAX_BYTES = 512 * 1024;
 const MAX_BYTES = 2 * 1024 * 1024;
+const DEFAULT_MAX_LINKED_PAGES_PER_SEED = 2;
+const MAX_LINKED_PAGES_PER_SEED = 4;
+const DEFAULT_MAX_LINKED_PAGES = 12;
+const MAX_LINKED_PAGES = 30;
 const DEFAULT_MANIFEST_RADIUS_KM = 20;
 const MAX_DISCOVERY_QUERIES = 18;
 
@@ -205,6 +210,9 @@ async function scoutLocalEventSources({
     : null,
   maxSeeds = DEFAULT_MAX_SEEDS,
   maxBytes = DEFAULT_MAX_BYTES,
+  maxLinkedPagesPerSeed = DEFAULT_MAX_LINKED_PAGES_PER_SEED,
+  maxLinkedPages = DEFAULT_MAX_LINKED_PAGES,
+  calendarLinkTerms = [],
   timeoutMs = DEFAULT_TIMEOUT_MS,
   userAgent = DEFAULT_USER_AGENT,
   cache = null,
@@ -232,6 +240,14 @@ async function scoutLocalEventSources({
   }
 
   const robotsByOrigin = new Map();
+  const visitedPages = new Set(normalizedSeeds.map((seed) => normalizeHttpUrl(seed.url)));
+  const linkedPageLimit = clampInteger(maxLinkedPages, 0, MAX_LINKED_PAGES);
+  const perSeedLinkedPageLimit = clampInteger(
+    maxLinkedPagesPerSeed,
+    0,
+    MAX_LINKED_PAGES_PER_SEED,
+  );
+  let linkedPageAttempts = 0;
   const results = [];
   for (const seed of normalizedSeeds) {
     const url = normalizeHttpUrl(seed.url);
@@ -267,6 +283,7 @@ async function scoutLocalEventSources({
 
     const page = await fetchScoutPageWithCache({
       url,
+      requiredOrigin: parsed.origin,
       fetcher,
       timeoutMs,
       maxBytes,
@@ -292,12 +309,103 @@ async function scoutLocalEventSources({
       contentType: page.content_type,
       context,
     });
-    results.push({
+    const sourceResult = {
       ...inspection,
       status: "inspected",
       robots: compactRobots(robots),
       fetched_bytes: page.bytes,
+      discovery_method: firstString(seed.discovery_method, "trusted_website_seed"),
+      discovered_from: firstString(seed.discovered_from),
+    };
+    results.push(sourceResult);
+
+    if (
+      sourceResult.manifest_candidates.length > 0 ||
+      linkedPageAttempts >= linkedPageLimit ||
+      perSeedLinkedPageLimit === 0
+    ) {
+      continue;
+    }
+
+    const linkedPages = extractCalendarPageLinks({
+      html: page.body,
+      pageUrl: url,
+      calendarLinkTerms: uniqueStrings([
+        ...(Array.isArray(localDiscoveryTerms) ? localDiscoveryTerms : []),
+        ...(Array.isArray(calendarLinkTerms) ? calendarLinkTerms : []),
+      ]),
     });
+    let seedLinkedPageAttempts = 0;
+    for (const link of linkedPages) {
+      if (
+        seedLinkedPageAttempts >= perSeedLinkedPageLimit ||
+        linkedPageAttempts >= linkedPageLimit
+      ) {
+        break;
+      }
+      if (visitedPages.has(link.url)) continue;
+      visitedPages.add(link.url);
+      seedLinkedPageAttempts += 1;
+      linkedPageAttempts += 1;
+
+      const linkedUrl = new URL(link.url);
+      const linkedRobots = applyRobotsPolicy(
+        robots.raw,
+        linkedUrl.pathname || "/",
+      );
+      if (linkedRobots.status === "disallowed") {
+        results.push(linkedPageResult({
+          seed,
+          link,
+          status: "blocked",
+          robots: linkedRobots,
+          reason: "robots_disallowed",
+        }));
+        continue;
+      }
+
+      const linkedPage = await fetchScoutPageWithCache({
+        url: link.url,
+        requiredOrigin: parsed.origin,
+        fetcher,
+        timeoutMs,
+        maxBytes,
+        userAgent,
+        cache,
+      });
+      if (linkedPage.status !== "ok") {
+        results.push(linkedPageResult({
+          seed,
+          link,
+          status: linkedPage.status,
+          robots: linkedRobots,
+          reason: linkedPage.reason,
+        }));
+        continue;
+      }
+
+      const linkedSeed = {
+        ...seed,
+        url: link.url,
+        discovery_method: "same_origin_calendar_link",
+        discovered_from: url,
+      };
+      const linkedInspection = inspectEventSourcePage({
+        seed: linkedSeed,
+        html: linkedPage.body,
+        contentType: linkedPage.content_type,
+        context,
+      });
+      results.push({
+        ...linkedInspection,
+        status: "inspected",
+        robots: compactRobots(linkedRobots),
+        fetched_bytes: linkedPage.bytes,
+        discovery_method: "same_origin_calendar_link",
+        discovered_from: url,
+        discovery_link_reasons: link.reasons,
+      });
+    }
   }
 
   const manifestCandidates = dedupeManifests(
@@ -317,6 +425,10 @@ async function scoutLocalEventSources({
     blocked_source_count: results.filter((result) => result.status === "blocked").length,
     failed_source_count: results.filter((result) =>
       ["failed", "unavailable"].includes(result.status),
+    ).length,
+    linked_page_attempt_count: linkedPageAttempts,
+    linked_source_count: results.filter(
+      (result) => result.discovery_method === "same_origin_calendar_link",
     ).length,
     results,
     manifest_candidates: manifestCandidates,
@@ -507,7 +619,7 @@ function buildReviewedManifestCandidate(candidate, { seed = {}, context = {} } =
     review: {
       terms_status: candidate.terms_status,
       robots_status: "review_at_activation",
-      discovered_from: firstString(seed.url),
+      discovered_from: firstString(seed.discovered_from, seed.url),
       reasons: uniqueStrings(candidate.reasons),
     },
   });
@@ -530,6 +642,7 @@ async function fetchRobotsPolicy({
     maxBytes,
     userAgent,
     accept: "text/plain",
+    requiredOrigin: origin,
     cache,
   });
   if (result.status !== "ok") {
@@ -554,6 +667,7 @@ async function fetchScoutPageWithCache({ cache = null, ...options }) {
         normalizeHttpUrl(options.url),
         String(options.accept || ""),
         String(options.maxBytes || DEFAULT_MAX_BYTES),
+        String(normalizeOrigin(options.requiredOrigin) || ""),
       ].join("|"),
     ),
   ].join(":");
@@ -638,12 +752,20 @@ async function fetchScoutPage({
   maxBytes = DEFAULT_MAX_BYTES,
   userAgent = DEFAULT_USER_AGENT,
   accept = "text/html, application/xhtml+xml, text/plain",
+  requiredOrigin = null,
 }) {
   if (!isScoutablePublicUrl(url)) {
     return { status: "blocked", reason: "unsafe_or_invalid_source_url" };
   }
   const boundedTimeout = clampInteger(timeoutMs, 50, 30000);
   const boundedBytes = clampInteger(maxBytes, 1024, MAX_BYTES);
+  const constrainedOrigin = normalizeOrigin(requiredOrigin);
+  if (requiredOrigin && !constrainedOrigin) {
+    return { status: "blocked", reason: "invalid_required_source_origin" };
+  }
+  if (constrainedOrigin && new URL(url).origin !== constrainedOrigin) {
+    return { status: "blocked", reason: "cross_origin_source_url" };
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), boundedTimeout);
   let phase = "fetch";
@@ -667,7 +789,18 @@ async function fetchScoutPage({
       if (!nextUrl || !isScoutablePublicUrl(nextUrl)) {
         return { status: "blocked", reason: "unsafe_source_redirect" };
       }
+      if (constrainedOrigin && new URL(nextUrl).origin !== constrainedOrigin) {
+        return { status: "blocked", reason: "cross_origin_source_redirect" };
+      }
       currentUrl = nextUrl;
+    }
+    const responseUrl = normalizeHttpUrl(response?.url);
+    if (
+      constrainedOrigin &&
+      responseUrl &&
+      new URL(responseUrl).origin !== constrainedOrigin
+    ) {
+      return { status: "blocked", reason: "cross_origin_source_redirect" };
     }
     if (!response || response.ok !== true) {
       return {
@@ -989,6 +1122,16 @@ function normalizeHttpUrl(value) {
   }
 }
 
+function normalizeOrigin(value) {
+  const normalized = normalizeHttpUrl(value);
+  if (!normalized) return null;
+  try {
+    return new URL(normalized).origin;
+  } catch (_error) {
+    return null;
+  }
+}
+
 function normalizeWebcalUrl(value) {
   return normalizeHttpUrl(String(value || "").replace(/^webcal:/i, "https:"));
 }
@@ -1173,6 +1316,22 @@ function emptyInspection(seed, reason) {
   };
 }
 
+function linkedPageResult({ seed, link, status, robots, reason }) {
+  return {
+    source_url: link.url,
+    source_identity: sourceIdentity(link.url),
+    status,
+    robots: compactRobots(robots),
+    candidates: [],
+    manifest_candidates: [],
+    social_hints: [],
+    reasons: [reason],
+    discovery_method: "same_origin_calendar_link",
+    discovered_from: firstString(seed.url),
+    discovery_link_reasons: link.reasons,
+  };
+}
+
 function compactRobots(robots) {
   return {
     status: robots.status,
@@ -1239,10 +1398,13 @@ module.exports = {
   fetchScoutPage,
   readBoundedText,
   extractHtmlLinks,
+  extractCalendarPageLinks,
   isScoutablePublicUrl,
   normalizeHttpUrl,
   DEFAULT_USER_AGENT,
   DEFAULT_TIMEOUT_MS,
   DEFAULT_MAX_SEEDS,
   DEFAULT_MAX_BYTES,
+  DEFAULT_MAX_LINKED_PAGES_PER_SEED,
+  DEFAULT_MAX_LINKED_PAGES,
 };

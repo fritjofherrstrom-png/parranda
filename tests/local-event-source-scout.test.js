@@ -10,6 +10,7 @@ const {
   applyRobotsPolicy,
   buildLocalEventDiscoveryQueries,
   extractEventWebsiteSeeds,
+  extractCalendarPageLinks,
   fetchScoutPage,
   inspectEventSourcePage,
   isScoutablePublicUrl,
@@ -270,6 +271,214 @@ test("Sitevision-style calendars produce a review-needed bounded adapter manifes
   assert.equal(result.manifest_candidates[0].status, "review-needed");
 });
 
+test("calendar-page discovery is multilingual, same-origin, and listing-only", () => {
+  const links = extractCalendarPageLinks({
+    pageUrl: "https://venue.example/start",
+    html: [
+      '<a href="/evenemangskalender">Evenemangskalender</a>',
+      '<a href="/events/summer-concert">Events</a>',
+      '<a href="https://other.example/events">Events elsewhere</a>',
+      '<a href="/about">About us</a>',
+    ].join(""),
+  });
+
+  assert.deepEqual(links.map((link) => link.url), [
+    "https://venue.example/evenemangskalender",
+  ]);
+  assert.ok(links[0].reasons.includes("calendar_link_label_match"));
+  assert.ok(links[0].reasons.includes("calendar_link_path_match"));
+});
+
+test("reviewed local-language terms can locate a calendar without leaking raw terms", () => {
+  const links = extractCalendarPageLinks({
+    pageUrl: "https://venue.example/start",
+    html: '<a href="/vad-hander">Vad händer</a>',
+    calendarLinkTerms: ["vad händer"],
+  });
+
+  assert.equal(links.length, 1);
+  assert.equal(links[0].url, "https://venue.example/vad-hander");
+  assert.deepEqual(links[0].reasons, [
+    "calendar_link_label_match",
+    "calendar_link_path_match",
+  ]);
+  assert.ok(!JSON.stringify(links[0].reasons).includes("vad händer"));
+});
+
+test("bounded scout follows a strong same-origin calendar link for review", async () => {
+  const calls = [];
+  const fetcher = async (url) => {
+    calls.push(String(url));
+    if (String(url).endsWith("/robots.txt")) {
+      return response("User-agent: *\nAllow: /\n", { contentType: "text/plain" });
+    }
+    if (String(url).endsWith("/start")) {
+      return response('<nav><a href="/evenemangskalender">Evenemang</a></nav>');
+    }
+    if (String(url).endsWith("/evenemangskalender")) {
+      return response(
+        '<div class="sv-ws-event-calendar"><div class="eventsListContainer"><article class="eventArticle"></article></div></div>',
+      );
+    }
+    throw new Error("unexpected request");
+  };
+
+  const result = await scoutLocalEventSources({
+    ...context(),
+    seeds: [{
+      url: "https://venue.example/start",
+      family: "venue_owned_calendar",
+    }],
+    fetcher,
+  });
+
+  assert.equal(result.linked_page_attempt_count, 1);
+  assert.equal(result.linked_source_count, 1);
+  assert.equal(result.manifest_candidates.length, 1);
+  assert.equal(result.manifest_candidates[0].adapter, "sitevision_calendar");
+  assert.equal(
+    result.manifest_candidates[0].review.discovered_from,
+    "https://venue.example/start",
+  );
+  assert.deepEqual(calls, [
+    "https://venue.example/robots.txt",
+    "https://venue.example/start",
+    "https://venue.example/evenemangskalender",
+  ]);
+});
+
+test("linked calendar redirects cannot leave the reviewed seed origin", async () => {
+  const calls = [];
+  const fetcher = async (url) => {
+    calls.push(String(url));
+    if (String(url).endsWith("/robots.txt")) {
+      return response("User-agent: *\nAllow: /\n", { contentType: "text/plain" });
+    }
+    if (String(url).endsWith("/start")) {
+      return response('<a href="/events">Events</a>');
+    }
+    if (String(url).endsWith("/events")) {
+      return {
+        ok: false,
+        status: 302,
+        headers: {
+          get(name) {
+            return String(name).toLowerCase() === "location"
+              ? "https://calendar-vendor.example/events"
+              : null;
+          },
+        },
+      };
+    }
+    throw new Error("cross-origin target must not be fetched");
+  };
+
+  const result = await scoutLocalEventSources({
+    ...context(),
+    seeds: [{ url: "https://venue.example/start" }],
+    fetcher,
+  });
+  const linked = result.results.find(
+    (item) => item.discovery_method === "same_origin_calendar_link",
+  );
+
+  assert.deepEqual(linked.reasons, ["cross_origin_source_redirect"]);
+  assert.ok(!calls.includes("https://calendar-vendor.example/events"));
+});
+
+test("linked calendar pages obey path-specific robots rules", async () => {
+  const calls = [];
+  const fetcher = async (url) => {
+    calls.push(String(url));
+    if (String(url).endsWith("/robots.txt")) {
+      return response(
+        "User-agent: *\nDisallow: /evenemang\nAllow: /\n",
+        { contentType: "text/plain" },
+      );
+    }
+    if (String(url).endsWith("/start")) {
+      return response('<a href="/evenemang">Evenemang</a>');
+    }
+    throw new Error("robots-blocked linked page must not be fetched");
+  };
+
+  const result = await scoutLocalEventSources({
+    ...context(),
+    seeds: [{ url: "https://venue.example/start" }],
+    fetcher,
+  });
+
+  assert.equal(result.blocked_source_count, 1);
+  assert.equal(result.manifest_candidates.length, 0);
+  assert.deepEqual(calls, [
+    "https://venue.example/robots.txt",
+    "https://venue.example/start",
+  ]);
+});
+
+test("a failed linked page does not starve the next calendar within the cap", async () => {
+  const calls = [];
+  const fetcher = async (url) => {
+    calls.push(String(url));
+    if (String(url).endsWith("/robots.txt")) {
+      return response("User-agent: *\nAllow: /\n", { contentType: "text/plain" });
+    }
+    if (String(url).endsWith("/start")) {
+      return response([
+        '<a href="/calendar" title="Events calendar">Calendar</a>',
+        '<a href="/events">Events</a>',
+        '<a href="/programme">Programme</a>',
+      ].join(""));
+    }
+    if (String(url).endsWith("/calendar")) return response("failed", { status: 503 });
+    if (String(url).endsWith("/events")) {
+      return response(
+        '<div class="sv-ws-event-calendar"><div class="eventsListContainer"><article class="eventArticle"></article></div></div>',
+      );
+    }
+    throw new Error("linked-page budget exceeded");
+  };
+
+  const result = await scoutLocalEventSources({
+    ...context(),
+    seeds: [{ url: "https://venue.example/start" }],
+    fetcher,
+    maxLinkedPagesPerSeed: 2,
+  });
+
+  assert.equal(result.linked_page_attempt_count, 2);
+  assert.equal(result.failed_source_count, 1);
+  assert.equal(result.manifest_candidates.length, 1);
+  assert.ok(!calls.includes("https://venue.example/programme"));
+});
+
+test("the global linked-page budget is shared across all website seeds", async () => {
+  const linkedCalls = [];
+  const fetcher = async (url) => {
+    if (String(url).endsWith("/robots.txt")) {
+      return response("User-agent: *\nAllow: /\n", { contentType: "text/plain" });
+    }
+    if (String(url).endsWith("/one") || String(url).endsWith("/two")) {
+      return response('<a href="/events">Events</a>');
+    }
+    linkedCalls.push(String(url));
+    return response("<main>No machine-readable interface</main>");
+  };
+
+  const result = await scoutLocalEventSources({
+    ...context(),
+    seeds: [
+      { url: "https://one.example/one" },
+      { url: "https://two.example/two" },
+    ],
+    fetcher,
+    maxLinkedPages: 1,
+  });
+
+  assert.equal(result.linked_page_attempt_count, 1);
+  assert.equal(linkedCalls.length, 1);
+});
+
 test("URL safety rejects private, loopback, credentialed, and non-http seeds", () => {
   for (const url of [
     "http://127.0.0.1/events",
@@ -475,10 +684,10 @@ test("redirects are bounded and cannot cross into private network targets", asyn
 });
 
 test("scout code is city-agnostic and cannot activate discovered sources", () => {
-  const source = fs.readFileSync(
-    require.resolve("../server/pulse-sources/local-event-source-scout"),
-    "utf8",
-  );
+  const source = [
+    "../server/pulse-sources/local-event-source-scout",
+    "../server/pulse-sources/calendar-page-locator",
+  ].map((modulePath) => fs.readFileSync(require.resolve(modulePath), "utf8")).join("\n");
   assert.ok(!/athens|rome|barcelona|helsinki|österlen|skåne|malm[oö]/i.test(source));
   assert.ok(!/status:\s*"active"/.test(source));
 });
