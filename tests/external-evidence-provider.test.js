@@ -141,6 +141,23 @@ test("external candidates carry provider / source provenance and are not verifie
   assert.ok(kinds.includes("category"));
 });
 
+test("trusted external records preserve bounded opening-hours facts without promoting trust", () => {
+  const [candidate] = externalCandidates([
+    {
+      id: "hours-1",
+      name: "Timed Gallery",
+      type: "gallery",
+      lat: 41.9,
+      lng: 12.46,
+      opening_hours: "Tu-Su 10:00-18:00",
+      sources: TWO_FAMILIES,
+    },
+  ]);
+  assert.equal(candidate.opening_hours, "Tu-Su 10:00-18:00");
+  assert.equal(candidate.trust.confidence, "needs_review");
+  assert.equal(candidate.city_pack_owned, false);
+});
+
 // --- gates -----------------------------------------------------------------
 test("a weak single-family external candidate fails the gates", () => {
   const [weak] = externalCandidates([

@@ -150,6 +150,80 @@ test("any-place config with source-backed candidates composes through agnostic_c
   });
 });
 
+test("strict single-interest agnostic route keeps its matches and adds safe day support", async () => {
+  const sourceCandidates = [
+    sourceCandidate({
+      id: "vintage-1",
+      label: "Reuse Market",
+      type: "vintage-shop",
+      lat: 43.5098,
+      lng: 16.4399,
+      tags: ["second_hand"],
+      route_roles: ["vintage_second_hand_option"],
+      covered_preferences: ["second_hand"],
+    }),
+    sourceCandidate({
+      id: "vintage-2",
+      label: "Old Town Vintage",
+      type: "vintage-shop",
+      lat: 43.5102,
+      lng: 16.4404,
+      tags: ["second_hand"],
+      route_roles: ["vintage_second_hand_option"],
+      covered_preferences: ["second_hand"],
+    }),
+    sourceCandidate({
+      id: "support-view",
+      label: "Harbour View",
+      type: "viewpoint",
+      lat: 43.5105,
+      lng: 16.4408,
+      tags: ["scenic"],
+      route_roles: ["scenic_anchor"],
+      covered_preferences: [],
+      missing_preferences: ["second_hand"],
+    }),
+    sourceCandidate({
+      id: "support-cafe",
+      label: "Harbour Café",
+      type: "cafe",
+      lat: 43.5094,
+      lng: 16.4406,
+      tags: ["coffee"],
+      route_roles: ["coffee_fika_stop"],
+      covered_preferences: [],
+      missing_preferences: ["second_hand"],
+    }),
+  ];
+  const cityConfig = buildAgnosticEngineCityConfig({
+    anchor: ANCHOR,
+    sourceCandidates,
+    timezone: "Europe/Zagreb",
+    todayIsoDate: "2026-06-20",
+    label: "Old Town",
+    dayProfile: "peak",
+  });
+
+  const result = await generateAgnosticRecommendations({
+    ...basePayload,
+    cityConfig,
+    preferences: ["second_hand"],
+  });
+  const route = result.days[0].primary_route;
+
+  assert.ok(route, "the safe reservoir can form a minimum complete day");
+  assert.equal(route.main_stops.length, 3);
+  const ids = route.main_stops.map((stop) => stop.id);
+  assert.ok(ids.includes("vintage-1"));
+  assert.ok(ids.includes("vintage-2"));
+  assert.equal(
+    route.main_stops.filter((stop) => stop.tags.includes("second_hand")).length,
+    2,
+    "strict intent matches remain the route majority",
+  );
+  assert.ok(ids.includes("support-view") || ids.includes("support-cafe"));
+});
+
 test("fewer than two viable candidates degrades to an honest null route, never invented", async () => {
   const cityConfig = buildAgnosticEngineCityConfig({
     anchor: ANCHOR,

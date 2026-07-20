@@ -69,6 +69,11 @@ function middayClock() {
   return new Date("2026-05-25T10:00:00Z");
 }
 
+// 21:30Z = 23:30 Europe/Rome on the selected date.
+function lateEveningClock() {
+  return new Date("2026-05-25T21:30:00Z");
+}
+
 // A role-diverse, >=25 geocoded, tightly-clustered trusted fixture near an
 // anchor — enough to fill multiple roles AND clear the planner readiness bar.
 function fixtureNear(base) {
@@ -101,6 +106,7 @@ function singleFamilyExternalRecord(id, name, type, lat, lng, tags = [], opts = 
       { provider: "osm", family: "map", tier: "inferred", url: `https://www.openstreetmap.org/node/${id}` },
     ],
     ...(opts.chain !== undefined ? { chain: opts.chain, brand: opts.brand || null } : {}),
+    ...(typeof opts.opening_hours === "string" ? { opening_hours: opts.opening_hours } : {}),
   };
 }
 
@@ -121,6 +127,45 @@ function singleFamilyFixtureNear(base) {
   for (let i = 0; i < 5; i += 1) {
     const c = j(i + 1);
     recs.push(singleFamilyExternalRecord(`osm-view-${i}`, `OSM View ${i}`, "viewpoint", c.lat, c.lng, ["utsikt"]));
+  }
+  return recs;
+}
+
+function openingHoursFixtureNear(base) {
+  const recs = [];
+  const point = (i) => ({
+    lat: base.lat + (i % 5) * 0.0005,
+    lng: base.lng + Math.floor(i / 5) * 0.0005,
+  });
+  for (let i = 0; i < 5; i += 1) {
+    const c = point(i);
+    recs.push(singleFamilyExternalRecord(`closed-food-${i}`, `Closed Food ${i}`, "restaurant", c.lat, c.lng, ["mat"], {
+      opening_hours: "Mo 09:00-18:00",
+    }));
+  }
+  for (let i = 0; i < 5; i += 1) {
+    const c = point(i + 5);
+    recs.push(singleFamilyExternalRecord(`late-food-${i}`, `Late Food ${i}`, "restaurant", c.lat, c.lng, ["mat"], {
+      opening_hours: "Mo 18:00-02:00",
+    }));
+  }
+  for (let i = 0; i < 5; i += 1) {
+    const c = point(i + 10);
+    recs.push(singleFamilyExternalRecord(`closed-cafe-${i}`, `Closed Cafe ${i}`, "cafe", c.lat, c.lng, ["fika"], {
+      opening_hours: "Mo 07:00-17:00",
+    }));
+  }
+  for (let i = 0; i < 5; i += 1) {
+    const c = point(i + 15);
+    recs.push(singleFamilyExternalRecord(`unknown-cafe-${i}`, `Unknown Cafe ${i}`, "cafe", c.lat, c.lng, ["fika"], {
+      opening_hours: "sunrise-sunset",
+    }));
+  }
+  for (let i = 0; i < 5; i += 1) {
+    const c = point(i + 20);
+    recs.push(singleFamilyExternalRecord(`late-bar-${i}`, `Late Bar ${i}`, "bar", c.lat, c.lng, ["bar"], {
+      opening_hours: "Mo 18:00-02:00",
+    }));
   }
   return recs;
 }
@@ -1056,7 +1101,12 @@ test(
     const injected = fixtureNear({ lat: 41.9, lng: 12.49 });
     const r = await requestJson(server, {
       path: `/api/route-recommendations?lang=en&${FLAG}`,
-      body: agnosticBody({ external_provider: { dataset: injected } }),
+      body: agnosticBody({
+        external_provider: { dataset: injected },
+        opening_hours: "payload_opening_hours",
+        availability: { eligible: true, status: "available" },
+        evaluateCandidateAvailability: "payload_evaluator",
+      }),
     });
     const exp = r.body.agnostic_route_output_experiment;
     assert.equal(exp.route_mutation, false, "injected payload must not enable a route");
@@ -1064,6 +1114,8 @@ test(
     assert.equal(exp.readiness_calibration.status, "blocked");
     assert.notEqual(exp.readiness_calibration.status, "usable");
     assert.deepEqual(r.body.days, []);
+    assert.equal(JSON.stringify(r.body).includes("payload_opening_hours"), false);
+    assert.equal(JSON.stringify(r.body).includes("payload_evaluator"), false);
   }),
 );
 
@@ -1143,6 +1195,65 @@ test(
       assert.equal(calibration.inputs.timezone_source, "weather_provider_auto");
       assert.equal(calibration.inputs.timezone_trust, "derived_from_weather_provider");
       assert.equal(calibration.inputs.time_fed_into_selection, true);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+      global.fetch = ORIGINAL_FETCH;
+    }
+  },
+);
+
+test(
+  "api: trusted local opening hours exclude proven-closed candidates and fail open on unresolved schedules",
+  async () => {
+    global.fetch = mockStableWeatherFetch();
+    const server = buildApp({
+      openDataLoader: makeLoader(openingHoursFixtureNear({ lat: 41.9, lng: 12.49 })),
+      weatherProvider: async () => ({
+        condition: "sun",
+        maxTemp: 24,
+        minTemp: 14,
+        apparentTempMax: 23,
+        precipitationProbabilityMax: 5,
+        precipitationSum: 0,
+        windSpeedMax: 8,
+        source: "test",
+        stale: false,
+      }),
+      clock: lateEveningClock,
+      placeResolver: async () => [{
+        label: "Resolver place",
+        lat: 41.9,
+        lng: 12.49,
+        confidence: "high",
+        provenance: "test_resolver",
+        timezone: "Europe/Rome",
+      }],
+    }).listen(0);
+    try {
+      const r = await requestJson(server, {
+        path: `/api/route-recommendations?lang=en&${FLAG}`,
+        body: {
+          city: "unknown-place",
+          dates: [DATE],
+          place: "Resolver place",
+          preferences: ["food", "coffee", "bars"],
+          include_external_candidates: 1,
+        },
+      });
+      const experiment = r.body.agnostic_route_output_experiment;
+      const route = r.body.days[0].primary_route;
+      const stopIds = route.main_stops.map((stop) => stop.id);
+
+      assert.equal(experiment.route_mutation, true);
+      assert.ok(stopIds.some((id) => id.startsWith("late-")), "late-local candidates remain eligible");
+      assert.ok(stopIds.some((id) => id.startsWith("unknown-cafe-")), "unresolved schedules fail open");
+      assert.equal(stopIds.some((id) => id.startsWith("closed-")), false, "proven-closed candidates never reach the route");
+      assert.equal(experiment.context.time.timezone_source, "resolver_attested");
+      assert.equal(experiment.context.influence.opening_hours_fed_into_selection, true);
+      assert.ok(experiment.context.influence.opening_hours_excluded_candidate_count > 0);
+      assert.ok(experiment.context.influence.opening_hours_unresolved_candidate_count > 0);
+      assert.equal("opening_hours" in route, false, "raw opening-hours fields stay off the public route");
+      assert.equal(JSON.stringify(r.body).includes("Mo 09:00-18:00"), false, "raw schedule values stay internal");
     } finally {
       await new Promise((resolve) => server.close(resolve));
       global.fetch = ORIGINAL_FETCH;

@@ -6,12 +6,17 @@
  */
 
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 const test = require("node:test");
 
 const {
   resolveDefaultEventSupply,
   eventCacheKey,
   HELSINKI_LINKED_EVENTS_FEED,
+  rankCollectedEventsForPreferences,
+  shouldCacheEventSupplyResult,
 } = require("../server/place-candidates/agnostic-event-supply");
 
 const ORIGINAL_FETCH = global.fetch;
@@ -78,4 +83,122 @@ test("eventCacheKey separates different approved source plans", () => {
     samePlanDifferentInputOrder,
     "source-plan identity is stable regardless of caller ordering",
   );
+});
+
+test("event supply cache keeps healthy empties but retries partial empty acquisition", () => {
+  const result = (status, outcome) => ({
+    coverage: "covered",
+    acquisition: { source_health: { status, result: outcome } },
+  });
+
+  assert.equal(
+    shouldCacheEventSupplyResult(result("healthy", "empty")),
+    true,
+    "a responding calendar with no current events is a proven cacheable empty",
+  );
+  assert.equal(
+    shouldCacheEventSupplyResult(result("partial", "empty")),
+    false,
+    "an empty result with a failed source remains retryable",
+  );
+  assert.equal(
+    shouldCacheEventSupplyResult(result("unavailable", "unknown")),
+    false,
+    "an unavailable source result is never frozen into the event cache",
+  );
+});
+
+test("event supply cache may serve bounded events despite another source failing", () => {
+  assert.equal(
+    shouldCacheEventSupplyResult({
+      coverage: "covered",
+      acquisition: { source_health: { status: "partial", result: "events_found" } },
+    }),
+    true,
+    "real surfaced events remain useful while source health stays visibly partial",
+  );
+  assert.equal(shouldCacheEventSupplyResult({ coverage: "covered" }), false);
+  assert.equal(shouldCacheEventSupplyResult({ coverage: "uncovered" }), false);
+});
+
+test("eventCacheKey separates collection radii for place and route scopes", () => {
+  const anchor = { lat: 60.1699, lng: 24.9384 };
+  const now = "2026-06-28T18:30:00Z";
+  assert.notEqual(
+    eventCacheKey(anchor, now, ["municipal-local"], 3000),
+    eventCacheKey(anchor, now, ["municipal-local"], 7000),
+    "a wider route corridor must not reuse a narrower place acquisition",
+  );
+});
+
+test("a warm neutral pool is scope-filtered before its six-row surface cap", () => {
+  const scope = { kind: "around_place", anchor: { lat: 55.605, lng: 13.003 }, radius_m: 3000 };
+  const offScope = Array.from({ length: 7 }, (_, index) => ({
+    id: `off-${index}`,
+    lat: 55.7 + index / 1000,
+    lng: 13.2,
+    salience_score: 100 - index,
+  }));
+  const onScope = { id: "on-scope", lat: 55.606, lng: 13.004, salience_score: 1 };
+  const ranked = rankCollectedEventsForPreferences({
+    coverage: "covered",
+    tonight: offScope.slice(0, 6),
+    this_week: [],
+    acquisition: { source_health: { accepted_event_count: 8, surfaced_event_count: 6 } },
+    _rankable_events: { tonight: [...offScope, onScope], this_week: [] },
+  }, [], scope);
+  assert.deepEqual(ranked.tonight.map((event) => event.id), ["on-scope"]);
+  assert.equal(ranked.acquisition.source_health.accepted_event_count, 8);
+  assert.equal(ranked.acquisition.source_health.surfaced_event_count, 1);
+});
+
+test("one neutral warm cache reranks for different preferences without refetching", async () => {
+  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), "parranda-event-preferences-"));
+  let fetchCount = 0;
+  const event = (id, title, keyword) => ({
+    id,
+    name: { en: title },
+    start_time: "2026-06-28T18:00:00Z",
+    end_time: "2026-06-28T20:00:00Z",
+    location: { position: { coordinates: [24.94, 60.17] }, name: { en: `Venue ${id}` } },
+    info_url: { en: `https://example.org/${id}` },
+    data_source: "fixture",
+    keywords: [{ name: { en: keyword } }],
+  });
+  global.fetch = async () => {
+    fetchCount += 1;
+    return {
+      ok: true,
+      json: async () => ({
+        data: [
+          event("a-concert", "Jazz concert", "music"),
+          event("z-loppis", "Harbour loppis", "second hand"),
+        ],
+      }),
+    };
+  };
+
+  try {
+    const supply = resolveDefaultEventSupply({
+      PARRANDA_AGNOSTIC_EVENTS: "enabled",
+      PARRANDA_EVENT_FEEDS: FEEDS_ENV,
+      PARRANDA_CACHE_DIR: cacheDir,
+    });
+    const request = { anchor: { lat: 60.17, lng: 24.94 }, now: "2026-06-28T12:00:00Z" };
+    const cold = await supply({ ...request, preferences: ["culture"] });
+    assert.equal(cold.pending, true);
+    let culture = cold;
+    for (let attempt = 0; attempt < 50 && culture.pending; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      culture = await supply({ ...request, preferences: ["culture"] });
+    }
+    assert.equal(culture.pending, undefined, "the bounded background warm completed");
+    const secondHand = await supply({ ...request, preferences: ["second_hand"] });
+    assert.equal(culture.tonight[0].id, "a-concert");
+    assert.equal(secondHand.tonight[0].id, "z-loppis");
+    assert.equal(fetchCount, 1, "preference changes rerank cached evidence instead of recollecting providers");
+  } finally {
+    global.fetch = ORIGINAL_FETCH;
+    fs.rmSync(cacheDir, { recursive: true, force: true });
+  }
 });
