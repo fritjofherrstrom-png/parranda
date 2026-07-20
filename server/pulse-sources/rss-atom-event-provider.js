@@ -127,14 +127,24 @@ function createRssAtomEventProvider(providerOptions = {}) {
             if (!parsed.recognized) {
               return emptyCollection("failed", "source_payload_invalid");
             }
-            if (parsed.links.length === 0) return emptyCollection("empty", "source_empty");
+            if (parsed.links.length === 0) {
+              return parsed.itemCount === 0
+                ? emptyCollection("empty", "source_empty")
+                : emptyCollection("failed", "source_payload_invalid");
+            }
 
             const rawEvents = [];
+            const referenceNow = parseDate(
+              collectionContext.now || collectionContext.date || context.now,
+            );
+            let detailAttempts = 0;
             let fetchFailures = 0;
             let parseFailures = 0;
+            let staleRows = 0;
             let firstFetchFailureReason = null;
             for (const detailUrl of parsed.links.slice(0, detailBudget)) {
               if (rawEvents.length >= detailLimit) break;
+              detailAttempts += 1;
               const detail = await fetchReviewedText({
                 url: detailUrl,
                 requiredOrigin,
@@ -159,10 +169,18 @@ function createRssAtomEventProvider(providerOptions = {}) {
                 parseFailures += 1;
                 continue;
               }
-              rawEvents.push(...mapped.slice(0, detailLimit - rawEvents.length));
+              const current = mapped.filter((event) => {
+                const stale = isExplicitlyExpired(event, referenceNow);
+                if (stale) staleRows += 1;
+                return !stale;
+              });
+              rawEvents.push(...current.slice(0, detailLimit - rawEvents.length));
             }
 
             if (rawEvents.length === 0) {
+              if (staleRows > 0 && parseFailures === 0 && fetchFailures === 0) {
+                return emptyCollection("empty", "source_empty");
+              }
               return emptyCollection(
                 "failed",
                 parseFailures > 0
@@ -179,9 +197,10 @@ function createRssAtomEventProvider(providerOptions = {}) {
               }),
               collection_diagnostics: {
                 feed_item_count: parsed.itemCount,
-                detail_attempt_count: Math.min(parsed.links.length, detailBudget),
+                detail_attempt_count: detailAttempts,
                 detail_fetch_failure_count: fetchFailures,
                 detail_parse_failure_count: parseFailures,
+                stale_event_count: staleRows,
               },
             };
           } catch (error) {
@@ -317,6 +336,23 @@ function withReviewedLanguage(event, options, detailUrl) {
 
 function hasExplicitEventTiming(event) {
   return Boolean(event?.title && (event.starts_at || event.starts_on || event.time_window));
+}
+
+function isExplicitlyExpired(event, now) {
+  if (event?.freshness === "stale") return true;
+  if (!now || !hasExplicitOffsetInstant(event?.ends_at)) return false;
+  const endsAt = new Date(event.ends_at);
+  return Number.isFinite(endsAt.getTime()) && endsAt < now;
+}
+
+function hasExplicitOffsetInstant(value) {
+  return typeof value === "string" && /T[0-9:.]+(?:Z|[+-]\d{2}:?\d{2})$/i.test(value.trim());
+}
+
+function parseDate(value) {
+  if (value instanceof Date) return Number.isFinite(value.getTime()) ? value : null;
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? parsed : null;
 }
 
 function addSameOriginLink(output, value, baseUrl, requiredOrigin) {

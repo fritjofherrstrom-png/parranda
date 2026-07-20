@@ -180,22 +180,30 @@ test("pubDate and Atom updated never become event timing", async () => {
 });
 
 test("continues past stale or unparseable feed rows within a strict detail budget", async () => {
-  const invalidUrl = "https://calendar.example/events/not-structured";
+  const staleUrl = "https://calendar.example/events/stale";
   const validUrl = "https://calendar.example/events/current";
   const result = await directCollect({
     detailLimit: 1,
     detailBudget: 2,
     fetcher: async (url) => {
       if (url === ENDPOINT) {
-        return response(rss([rssItem(invalidUrl), rssItem(validUrl)]), { url });
+        return response(rss([rssItem(staleUrl), rssItem(validUrl)]), { url });
       }
-      return response(url === invalidUrl ? "<html>No event data</html>" : eventHtml(), { url });
+      return response(url === staleUrl
+        ? eventHtml({
+            "@id": staleUrl,
+            url: staleUrl,
+            startDate: "2025-07-20T19:00:00+02:00",
+            endDate: "2025-07-20T21:00:00+02:00",
+          })
+        : eventHtml(), { url });
     },
   });
 
   assert.equal(result.collection_status.status, "ok");
   assert.equal(result.time_sensitive_events.length, 1);
-  assert.equal(result.collection_diagnostics.detail_parse_failure_count, 1);
+  assert.equal(result.collection_diagnostics.detail_parse_failure_count, 0);
+  assert.equal(result.collection_diagnostics.stale_event_count, 1);
   assert.equal(result.collection_diagnostics.detail_attempt_count, 2);
 });
 
@@ -215,8 +223,8 @@ test("rejects cross-origin feed redirects and cross-origin item links", async ()
       rssItem("https://syndicated.example/events/not-reviewed"),
     ]), { url }),
   });
-  assert.equal(externalOnly.collection_status.status, "empty");
-  assert.equal(externalOnly.collection_status.reason, "source_empty");
+  assert.equal(externalOnly.collection_status.status, "failed");
+  assert.equal(externalOnly.collection_status.reason, "source_payload_invalid");
 });
 
 test("allows bounded same-origin redirects but rejects an off-origin detail redirect", async () => {
