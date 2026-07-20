@@ -24,6 +24,12 @@ const { routeWalkingPath } = require("../walking-router");
 // not an honest "walk between stops". Overridable for tests via `budget`.
 const DEFAULT_TOTAL_WALK_BUDGET_KM = 25;
 const DEFAULT_MAX_LEG_BUDGET_KM = 6;
+// The product's 4/6/9 km choices are approximate targets, not exact caps. Let a
+// coherent day run modestly long, but do not let the independent 25 km safety
+// ceiling make the selected profile meaningless. This mirrors the route
+// engine's bounded daypart-order tolerance.
+const TARGET_WALK_TOLERANCE_RATIO = 1.35;
+const MIN_TARGET_WALK_TOLERANCE_KM = 0.8;
 
 function isFiniteCoordinate(lat, lng) {
   return (
@@ -50,11 +56,13 @@ function isValidPathPoint(point) {
  * @param {Function} [params.walkingRouter]  injected router (defaults to routeWalkingPath)
  * @param {object} [params.walkingConfig]    passed through to the router
  * @param {{totalKm?:number,maxLegKm?:number}} [params.budget]
+ * @param {number|null} [params.targetKm] approximate user-selected walking profile
  * @returns {Promise<{valid:boolean, blockers:string[], checks:object, result:object|null}>}
  */
-async function validateAgnosticWalkingOrder({ stops, walkingRouter, walkingConfig = {}, budget = {} } = {}) {
-  const totalBudgetKm = Number.isFinite(budget.totalKm) ? budget.totalKm : DEFAULT_TOTAL_WALK_BUDGET_KM;
-  const maxLegBudgetKm = Number.isFinite(budget.maxLegKm) ? budget.maxLegKm : DEFAULT_MAX_LEG_BUDGET_KM;
+async function validateAgnosticWalkingOrder({ stops, walkingRouter, walkingConfig = {}, budget = {}, targetKm = null } = {}) {
+  const resolvedBudget = resolveAgnosticWalkingBudget({ budget, targetKm });
+  const totalBudgetKm = resolvedBudget.totalKm;
+  const maxLegBudgetKm = resolvedBudget.maxLegKm;
   const router = typeof walkingRouter === "function" ? walkingRouter : routeWalkingPath;
 
   const orderedStops = Array.isArray(stops) ? stops : [];
@@ -62,6 +70,8 @@ async function validateAgnosticWalkingOrder({ stops, walkingRouter, walkingConfi
     stop_count: orderedStops.length,
     total_budget_km: totalBudgetKm,
     max_leg_budget_km: maxLegBudgetKm,
+    budget_source: resolvedBudget.source,
+    target_walk_km: resolvedBudget.targetKm,
   };
 
   // 1. Need at least an ordered pair, each with finite in-range coordinates.
@@ -155,8 +165,44 @@ async function validateAgnosticWalkingOrder({ stops, walkingRouter, walkingConfi
   };
 }
 
+function resolveAgnosticWalkingBudget({ budget = {}, targetKm = null } = {}) {
+  const explicitTotalKm = Number.isFinite(budget.totalKm) && budget.totalKm > 0
+    ? budget.totalKm
+    : null;
+  const normalizedTargetKm = Number.isFinite(targetKm) && targetKm > 0
+    ? targetKm
+    : null;
+  const targetAwareTotalKm = normalizedTargetKm === null
+    ? null
+    : Number(
+        Math.min(
+          DEFAULT_TOTAL_WALK_BUDGET_KM,
+          Math.max(
+            normalizedTargetKm * TARGET_WALK_TOLERANCE_RATIO,
+            normalizedTargetKm + MIN_TARGET_WALK_TOLERANCE_KM,
+          ),
+        ).toFixed(1),
+      );
+
+  return {
+    totalKm: explicitTotalKm ?? targetAwareTotalKm ?? DEFAULT_TOTAL_WALK_BUDGET_KM,
+    maxLegKm: Number.isFinite(budget.maxLegKm) && budget.maxLegKm > 0
+      ? budget.maxLegKm
+      : DEFAULT_MAX_LEG_BUDGET_KM,
+    targetKm: normalizedTargetKm,
+    source: explicitTotalKm !== null
+      ? "explicit_budget"
+      : targetAwareTotalKm !== null
+        ? "walking_target_tolerance"
+        : "default_safety_budget",
+  };
+}
+
 module.exports = {
   validateAgnosticWalkingOrder,
+  resolveAgnosticWalkingBudget,
   DEFAULT_TOTAL_WALK_BUDGET_KM,
   DEFAULT_MAX_LEG_BUDGET_KM,
+  TARGET_WALK_TOLERANCE_RATIO,
+  MIN_TARGET_WALK_TOLERANCE_KM,
 };

@@ -794,6 +794,7 @@ async function composeAgnosticRouteOutput({
     walkingRouter,
     walkingConfig: walkingConfig || {},
     budget: walkingBudget || {},
+    targetKm: walkingKmTarget,
   });
 
   if (!walking.valid && routeOrdering && routeOrdering.applied) {
@@ -804,6 +805,7 @@ async function composeAgnosticRouteOutput({
       walkingRouter,
       walkingConfig: walkingConfig || {},
       budget: walkingBudget || {},
+      targetKm: walkingKmTarget,
     });
     if (originalWalking.valid) {
       finalAdaptedBody = workingBody;
