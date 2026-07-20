@@ -259,8 +259,10 @@ function toSourceCandidate({
 /**
  * Project a bounded, role-safe candidate reservoir into the route engine.
  * Candidate Combination winners remain the trusted spine; at most one extra
- * candidate per selected role adds geometric choice. Extras use the exact same
- * gate/admission/coverage/local-feel tier as Candidate Combination.
+ * candidate per selected role adds geometric choice. A selected winner may use
+ * the explicit experimental-admission seam, but role-depth extras must clear
+ * the shared gates; coverage and local-feel tiers remain shared with Candidate
+ * Combination.
  */
 function mapPlannerReservoirToSourceCandidates({
   selected = [],
@@ -293,6 +295,12 @@ function mapPlannerReservoirToSourceCandidates({
     let roleCount = 1;
     for (const rich of plannerUsableOptionsForRole(roleEntry)) {
       if (roleCount >= boundedPerRole || out.length >= boundedLimit) break;
+      // Candidate Combination may honestly use one experimentally admitted
+      // candidate to represent an explicitly requested role. Do not multiply
+      // that lower-trust exception into role depth: extra candidates must have
+      // cleared the shared gates. A long day should grow because evidence is
+      // richer, not merely because more inferred rows exist for the same role.
+      if (isExperimentallyAdmitted(rich)) continue;
       const id = rich?.candidate_id;
       if (!id || seen.has(id)) continue;
       const coords = finiteCoords(rich.coordinates);
