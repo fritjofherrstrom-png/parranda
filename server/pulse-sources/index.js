@@ -68,6 +68,11 @@ const {
   extractHtmlVenueEventDetail,
 } = require("./html-venue-calendar-provider");
 const {
+  LOCALIZED_EVENTS_API_PROVIDER_ID,
+  createLocalizedEventsApiProvider,
+  mapLocalizedEventApiRecord,
+} = require("./localized-events-api-provider");
+const {
   EXTRACTION_TIERS,
   SOURCE_FAMILIES,
   evaluateLiveEventSourceCandidate,
@@ -126,6 +131,9 @@ module.exports = {
   createHtmlVenueCalendarProvider,
   extractHtmlVenueCalendarEvents,
   extractHtmlVenueEventDetail,
+  LOCALIZED_EVENTS_API_PROVIDER_ID,
+  createLocalizedEventsApiProvider,
+  mapLocalizedEventApiRecord,
   EXTRACTION_TIERS,
   SOURCE_FAMILIES,
   evaluateLiveEventSourceCandidate,

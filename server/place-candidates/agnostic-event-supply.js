@@ -25,6 +25,7 @@ const { createEventsCalendarProvider } = require("../pulse-sources/events-calend
 const { createHtmlVenueCalendarProvider } = require("../pulse-sources/html-venue-calendar-provider");
 const { createSitevisionCalendarProvider } = require("../pulse-sources/sitevision-calendar-provider");
 const { createWixEventSitemapProvider } = require("../pulse-sources/wix-event-sitemap-provider");
+const { createLocalizedEventsApiProvider } = require("../pulse-sources/localized-events-api-provider");
 const { normalizeTimeSensitiveSourceEvent } = require("../pulse-sources/time-sensitive-event");
 const {
   datePartsInTimezone,
@@ -72,6 +73,7 @@ const LOCAL_EVENT_ADAPTERS = new Set([
   "html_venue_calendar",
   "sitevision_calendar",
   "wix_event_sitemap",
+  "localized_events_api",
 ]);
 
 // A single open municipal feed, kept as a NAMED FIXTURE — not a product default.
@@ -138,6 +140,9 @@ function resolveEventFeedRegistry(env = process.env) {
             timezone: f.timezone != null ? String(f.timezone) : null,
             timezone_offset: firstString(f.timezone_offset, f.timezoneOffset),
             source_language: firstString(f.source_language, f.sourceLanguage),
+            supported_languages: Array.isArray(f.supported_languages)
+              ? f.supported_languages.map(String).filter(Boolean)
+              : null,
             route_role_hint: firstString(f.route_role_hint, f.routeRoleHint),
             fetch_details: f.fetch_details !== false,
             detail_limit: Number.isFinite(Number(f.detail_limit))
@@ -148,6 +153,9 @@ function resolveEventFeedRegistry(env = process.env) {
               : null,
             sitemap_limit: Number.isFinite(Number(f.sitemap_limit))
               ? Math.max(1, Math.floor(Number(f.sitemap_limit)))
+              : null,
+            page_size: Number.isFinite(Number(f.page_size))
+              ? Math.max(1, Math.floor(Number(f.page_size)))
               : null,
             event_path_prefix: firstString(f.event_path_prefix, f.eventPathPrefix),
             // Configuring an endpoint proves collection intent, not ownership
@@ -577,7 +585,7 @@ async function collectAnchorEvents({
     if (TONIGHT_TIMING.has(event.timing_relevance)) {
       tonight.push(view);
     } else if (
-      event.timing_relevance === "future" &&
+      (event.timing_relevance === "future" || event.time_window?.kind === "all_day") &&
       withinEventHorizon(event, nowDate, THIS_WEEK_HORIZON_DAYS)
     ) {
       thisWeek.push(view);
@@ -814,6 +822,16 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs 
       eventPathPrefix: source.event_path_prefix || undefined,
     });
   }
+  if (adapter === "localized_events_api") {
+    return createLocalizedEventsApiProvider({
+      ...common,
+      status: "active",
+      timezone: source.timezone || undefined,
+      sourceLanguage: source.source_language || undefined,
+      supportedLanguages: source.supported_languages || undefined,
+      limit: source.page_size || undefined,
+    });
+  }
   return null;
 }
 
@@ -910,6 +928,9 @@ function normalizeLocalEventAdapter(value) {
     wix: "wix_event_sitemap",
     wix_event_calendar: "wix_event_sitemap",
     wix_sitemap: "wix_event_sitemap",
+    localized_api: "localized_events_api",
+    localized_event_api: "localized_events_api",
+    localized_public_events: "localized_events_api",
   };
   const normalized = aliases[raw] || raw;
   return LOCAL_EVENT_ADAPTERS.has(normalized) ? normalized : null;

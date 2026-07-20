@@ -53,9 +53,13 @@ test("reviewed local profile selects two independent event publishers around Sim
   const feeds = loadReviewedEventFeeds();
   assert.deepEqual(
     feeds.map((feed) => feed.id),
-    ["simrishamn-municipal-calendar", "visit-ystad-osterlen-calendar"],
+    [
+      "simrishamn-municipal-calendar",
+      "visit-ystad-osterlen-calendar",
+      "visit-stockholm-open-api",
+    ],
   );
-  assert.equal(new Set(feeds.map((feed) => feed.source_identity)).size, 2);
+  assert.equal(new Set(feeds.map((feed) => feed.source_identity)).size, 3);
   assert.ok(feeds.every((feed) => feed.status === "active"));
   assert.ok(feeds.every((feed) => feed.timezone === "Europe/Stockholm"));
   assert.equal(feeds.find((feed) => feed.adapter === "wix_event_sitemap")?.event_path_prefix, "/evenemang-1/");
@@ -75,6 +79,20 @@ test("reviewed local profile selects two independent event publishers around Sim
     plan.map((source) => source.kind),
     ["sitevision_calendar", "wix_event_sitemap"],
   );
+});
+
+test("reviewed local profile selects the official Stockholm API without a city branch", () => {
+  const env = buildFullDevEnvironment({}, { cacheDir: os.tmpdir() });
+  const registry = resolveEventFeedRegistry(env);
+  const plan = buildAnchorEventSourcePlan({
+    anchor: { lat: 59.3293, lng: 18.0686 },
+    registry,
+  });
+
+  assert.deepEqual(plan.map((source) => source.id), ["visit-stockholm-open-api"]);
+  assert.equal(plan[0].kind, "localized_events_api");
+  assert.equal(plan[0].source_tier, "official");
+  assert.equal(plan[0].license, "CC-BY 4.0");
 });
 
 test("both reviewed manifests collect normalized evidence through their generic adapters", async () => {

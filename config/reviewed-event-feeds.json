@@ -38,5 +38,25 @@
     "runtime_policy": "bounded_refresh",
     "reviewed_at": "2026-07-16",
     "review_scope": "public sitemap and SSR factual event atoms with source attribution"
+  },
+  {
+    "id": "visit-stockholm-open-api",
+    "label": "Visit Stockholm",
+    "adapter": "localized_events_api",
+    "endpoint": "https://api.visitstockholm.com/api/public-v1/events/",
+    "bbox": [17.6, 59.15, 18.45, 59.6],
+    "timezone": "Europe/Stockholm",
+    "source_language": "sv",
+    "supported_languages": ["sv", "en"],
+    "source_tier": "official",
+    "confidence": "medium",
+    "source_family": "official_tourism_open_api",
+    "source_identity": "visitstockholm.com",
+    "license": "CC-BY 4.0",
+    "page_size": 100,
+    "status": "active",
+    "runtime_policy": "bounded_refresh",
+    "reviewed_at": "2026-07-20",
+    "review_scope": "public editor-reviewed factual event atoms with source attribution under CC BY 4.0"
   }
 ]
