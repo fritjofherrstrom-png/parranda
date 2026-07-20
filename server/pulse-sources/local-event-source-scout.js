@@ -15,6 +15,7 @@ const { createHash } = require("node:crypto");
 const { evaluateLiveEventSourceCandidate } = require("./source-discovery");
 const { extractSchemaOrgEventsFromHtml } = require("./schema-org-event-provider");
 const { extractCalendarPageLinks } = require("./calendar-page-locator");
+const { hasSitevisionCalendarSignature } = require("./sitevision-calendar-provider");
 
 const DEFAULT_USER_AGENT =
   "Parranda-Source-Scout/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
@@ -980,14 +981,6 @@ function hasCompatibleVenueCalendarSignature(html) {
   return (
     /\bdate-container\b/i.test(source) &&
     /\btease--event-calendar\b/i.test(source)
-  );
-}
-
-function hasSitevisionCalendarSignature(html) {
-  const source = String(html || "");
-  return (
-    /\bsv-ws-event-calendar\b/i.test(source) &&
-    /\b(?:eventsListContainer|eventArticle|eventCalendar)\b/i.test(source)
   );
 }
 
