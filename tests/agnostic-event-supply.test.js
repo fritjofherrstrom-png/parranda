@@ -136,6 +136,14 @@ test("the feed registry allowlists reusable local adapters and preserves legacy 
       { id: "legacy", base: "https://legacy.example/events", bbox: [10, 50, 20, 60] },
       { id: "jsonld", adapter: "schema_org_html", endpoint: "https://venue.example/calendar", bbox: [10, 50, 20, 60] },
       { id: "ics", adapter: "ics", endpoint: "https://city.example/calendar.ics", bbox: [10, 50, 20, 60] },
+      {
+        id: "rss-detail",
+        adapter: "rss_atom",
+        endpoint: "https://culture.example/events/feed.xml",
+        bbox: [10, 50, 20, 60],
+        detail_limit: 7,
+        detail_budget: 11,
+      },
       { id: "sitevision", adapter: "sitevision", endpoint: "https://municipality.example/events", bbox: [10, 50, 20, 60] },
       {
         id: "wix",
@@ -163,11 +171,14 @@ test("the feed registry allowlists reusable local adapters and preserves legacy 
     ["legacy", "linked_events"],
     ["jsonld", "schema_org_html"],
     ["ics", "ical"],
+    ["rss-detail", "rss_atom_event_detail"],
     ["sitevision", "sitevision_calendar"],
     ["wix", "wix_event_sitemap"],
     ["localized-api", "localized_events_api"],
   ]);
   assert.equal(configured.find((row) => row.id === "wix").detail_limit, 4);
+  assert.equal(configured.find((row) => row.id === "rss-detail").detail_limit, 7);
+  assert.equal(configured.find((row) => row.id === "rss-detail").detail_budget, 11);
   assert.equal(configured.find((row) => row.id === "wix").detail_budget, 9);
   assert.equal(configured.find((row) => row.id === "localized-api").page_size, 75);
   assert.deepEqual(configured.find((row) => row.id === "localized-api").supported_languages, ["sv", "en"]);

@@ -34,6 +34,7 @@ const MAX_DISCOVERY_QUERIES = 18;
 const MANIFEST_ADAPTERS = new Set([
   "events_calendar",
   "ical",
+  "rss_atom_event_detail",
   "schema_org_html",
   "html_venue_calendar",
   "sitevision_calendar",
@@ -519,10 +520,12 @@ function buildDetectedCandidate({
   if (kind === "rss") {
     return {
       ...common,
-      adapter: "needs_adapter",
+      adapter: "rss_atom_event_detail",
       extraction_tier: "ics_rss_feed",
-      extractable: baseExtractable({ rss: true }),
-      notes: "rss_event_mapping_requires_review",
+      // RSS/Atom is an index only. Event facts must come from structured
+      // schema.org/Event atoms on bounded, same-origin detail pages.
+      extractable: baseExtractable({ rss: true, schema_org_event: true }),
+      notes: "rss_atom_links_require_reviewed_schema_event_details",
     };
   }
   if (kind === "html_venue_calendar") {
@@ -584,6 +587,7 @@ function buildReviewedManifestCandidate(candidate, { seed = {}, context = {} } =
   if (!candidate || candidate.status === "rejected") return null;
   const adapterMap = {
     ical: "ical",
+    rss_atom_event_detail: "rss_atom_event_detail",
     the_events_calendar: "events_calendar",
     schema_org_event: "schema_org_html",
     venue_calendar: "html_venue_calendar",

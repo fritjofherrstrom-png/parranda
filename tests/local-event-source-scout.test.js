@@ -114,14 +114,14 @@ test("one reviewed page can reveal structured feeds and social discovery without
   assert.deepEqual(result.detected.sort(), ["ical", "rss", "schema_org_html"]);
   assert.ok(result.candidates.some((candidate) => candidate.adapter === "ical"));
   assert.ok(result.candidates.some((candidate) => candidate.adapter === "schema_org_event"));
-  assert.ok(result.candidates.some((candidate) => candidate.adapter === "needs_adapter"));
+  assert.ok(result.candidates.some((candidate) => candidate.adapter === "rss_atom_event_detail"));
   assert.equal(result.social_hints.length, 1);
   assert.equal(result.social_hints[0].runtime_policy, "probe_only");
   assert.equal(result.social_hints[0].corroboration_required, true);
 
   assert.deepEqual(
     result.manifest_candidates.map((manifest) => manifest.adapter).sort(),
-    ["ical", "schema_org_html"],
+    ["ical", "rss_atom_event_detail", "schema_org_html"],
   );
   for (const manifest of result.manifest_candidates) {
     assert.equal(manifest.status, "review-needed");

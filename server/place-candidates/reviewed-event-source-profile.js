@@ -11,6 +11,8 @@ const ADAPTER_MAP = Object.freeze({
   the_events_calendar: "events_calendar",
   events_calendar: "events_calendar",
   ical: "ical",
+  rss_atom_event_detail: "rss_atom_event_detail",
+  rss_atom: "rss_atom_event_detail",
   venue_calendar: "html_venue_calendar",
   html_venue_calendar: "html_venue_calendar",
   sitevision_calendar: "sitevision_calendar",

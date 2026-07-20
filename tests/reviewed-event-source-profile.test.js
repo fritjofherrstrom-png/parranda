@@ -169,6 +169,27 @@ test("floating-time adapters require a reviewed valid timezone", () => {
   assert.deepEqual(eventFeedsFromReviewedSourceProfiles([ical], { now: NOW }), []);
 });
 
+test("reviewed RSS/Atom detail feeds activate without trusting feed publication dates", () => {
+  const rss = profile();
+  const candidate = rss.source_families[0].candidates[0];
+  const feed = rss.runtime_review.feeds[0];
+  candidate.source_label = "Stockholm culture feed";
+  candidate.url = "https://events.example/calendar/feed.xml";
+  candidate.adapter = "rss_atom_event_detail";
+  candidate.status = "needs_adapter_or_permission";
+  candidate.maps_to_existing_provider = true;
+  feed.endpoint = candidate.url;
+  feed.adapter = "rss_atom_event_detail";
+  feed.detail_limit = 8;
+  feed.detail_budget = 12;
+
+  const [resolved] = eventFeedsFromReviewedSourceProfiles([rss], { now: NOW });
+  assert.equal(resolved.adapter, "rss_atom_event_detail");
+  assert.equal(resolved.detail_limit, 8);
+  assert.equal(resolved.detail_budget, 12);
+  assert.equal(resolved.confidence, "medium");
+});
+
 test("trusted profile env is fail-closed and direct reviewed feed rows keep precedence", () => {
   assert.deepEqual(resolveReviewedEventSourceProfileFeeds({
     PARRANDA_REVIEWED_EVENT_SOURCE_PROFILES: "{bad json",
