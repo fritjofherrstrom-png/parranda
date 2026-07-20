@@ -1,5 +1,7 @@
 "use strict";
 
+const { createHash } = require("node:crypto");
+
 /**
  * Trusted place -> local-event source discovery bridge.
  *
@@ -16,6 +18,7 @@ const {
   extractEventWebsiteSeeds,
   scoutLocalEventSources,
 } = require("./local-event-source-scout");
+const { buildLocalLiveSourceGraph } = require("./local-live-source-graph");
 
 const SAFE_LOADER_ERRORS = new Set([
   "fetch_error",
@@ -33,6 +36,7 @@ async function discoverLocalEventSourcesForPlace({
   bounds = null,
   intentHints = [],
   localDiscoveryTerms = [],
+  timeWindow = {},
   cache = null,
   scoutOptions = {},
 } = {}) {
@@ -57,12 +61,34 @@ async function discoverLocalEventSourcesForPlace({
     });
   }
 
+  const place = buildTrustedScoutPlace({
+    query,
+    intake: resolution.intake,
+    placeContext: resolution.placeContext,
+    anchor: resolution.anchor,
+    bounds,
+    localDiscoveryTerms,
+  });
+  const discoveryQueries = buildLocalEventDiscoveryQueries({
+    place,
+    intentHints,
+    localDiscoveryTerms,
+  });
+  const emptySourceProfile = buildSourceProfile({
+    place,
+    anchor: resolution.anchor,
+    timeWindow,
+    intentHints,
+  });
+
   if (typeof openDataLoader !== "function") {
     return baseOutcome({
       status: "unavailable",
       reasons: ["trusted_place_loader_unavailable"],
       intake: resolution.intake,
       anchor: resolution.anchor,
+      discoveryQueries,
+      sourceProfile: emptySourceProfile,
     });
   }
 
@@ -76,6 +102,8 @@ async function discoverLocalEventSourcesForPlace({
       intake: resolution.intake,
       anchor: resolution.anchor,
       loader: loaderSummary(null, "error_failed_closed", null),
+      discoveryQueries,
+      sourceProfile: emptySourceProfile,
     });
   }
 
@@ -86,6 +114,8 @@ async function discoverLocalEventSourcesForPlace({
       intake: resolution.intake,
       anchor: resolution.anchor,
       loader: loaderSummary(null, "error_failed_closed", null),
+      discoveryQueries,
+      sourceProfile: emptySourceProfile,
     });
   }
 
@@ -99,20 +129,13 @@ async function discoverLocalEventSourcesForPlace({
       intake: resolution.intake,
       anchor: resolution.anchor,
       loader,
+      discoveryQueries,
+      sourceProfile: emptySourceProfile,
     });
   }
 
   const seeds = extractEventWebsiteSeeds(records);
   loader.website_seed_count = seeds.length;
-  const place = {
-    label: resolution.intake?.resolved?.label || query,
-    name: query,
-  };
-  const discoveryQueries = buildLocalEventDiscoveryQueries({
-    place,
-    intentHints,
-    localDiscoveryTerms,
-  });
 
   if (!seeds.length) {
     return baseOutcome({
@@ -124,6 +147,7 @@ async function discoverLocalEventSourcesForPlace({
       anchor: resolution.anchor,
       loader,
       discoveryQueries,
+      sourceProfile: emptySourceProfile,
     });
   }
 
@@ -136,6 +160,7 @@ async function discoverLocalEventSourcesForPlace({
       loader,
       discoveryQueries,
       seeds,
+      sourceProfile: emptySourceProfile,
     });
   }
 
@@ -160,10 +185,18 @@ async function discoverLocalEventSourcesForPlace({
       loader,
       discoveryQueries,
       seeds,
+      sourceProfile: emptySourceProfile,
     });
   }
 
   const scout = compactScoutSummary(scouted);
+  const sourceProfile = buildSourceProfile({
+    place,
+    anchor: resolution.anchor,
+    timeWindow,
+    intentHints,
+    sourceCandidates: sourceCandidatesForProfile(scouted),
+  });
   return baseOutcome({
     status: normalizeScoutStatus(scouted?.status),
     reasons: compactTokens(scouted?.reasons).length
@@ -181,6 +214,7 @@ async function discoverLocalEventSourcesForPlace({
     manifestCandidates: reviewOnlyManifests(scouted?.manifest_candidates),
     sourceResults: compactSourceResults(scouted?.results),
     socialHints: compactSocialHints(scouted?.social_hints),
+    sourceProfile,
   });
 }
 
@@ -196,6 +230,7 @@ function baseOutcome({
   manifestCandidates = [],
   sourceResults = [],
   socialHints = [],
+  sourceProfile = null,
 }) {
   return {
     status,
@@ -209,8 +244,82 @@ function baseOutcome({
     manifest_candidates: manifestCandidates,
     source_results: sourceResults,
     social_hints: socialHints,
+    source_profile: sourceProfile,
     activation_performed: false,
   };
+}
+
+function buildTrustedScoutPlace({
+  query,
+  intake,
+  placeContext,
+  anchor,
+  bounds,
+  localDiscoveryTerms,
+}) {
+  const context = placeContext && typeof placeContext === "object" ? placeContext : {};
+  const locality = publicString(context.locality);
+  const regionTerms = uniqueStrings([
+    context.municipality,
+    context.county,
+    context.region,
+    context.country,
+  ]).filter((value) => value !== locality);
+  return {
+    label: publicString(intake?.resolved?.label) || locality || query,
+    name: locality || query,
+    lat: Number.isFinite(Number(anchor?.lat)) ? Number(anchor.lat) : null,
+    lng: Number.isFinite(Number(anchor?.lng)) ? Number(anchor.lng) : null,
+    bounds: normalizeGraphBounds(bounds),
+    region_terms: regionTerms,
+    local_discovery_terms: uniqueStrings(localDiscoveryTerms),
+  };
+}
+
+function buildSourceProfile({
+  place,
+  anchor,
+  timeWindow = {},
+  intentHints = [],
+  sourceCandidates = [],
+}) {
+  const graph = buildLocalLiveSourceGraph({
+    place,
+    timeWindow,
+    intentHints,
+    sourceCandidates,
+  });
+  return {
+    profile_key: sourceProfileKey(place, anchor),
+    place_context: graph.place_context,
+    time_window: graph.time_window,
+    intent_hints: graph.intent_hints,
+    discovery_terms: graph.discovery_terms,
+    coverage: graph.coverage,
+    source_families: graph.source_families,
+    social_coverage: graph.social_coverage,
+    acquisition_plan: graph.acquisition_plan,
+  };
+}
+
+function sourceCandidatesForProfile(result) {
+  if (!result || typeof result !== "object") return [];
+  const detected = (Array.isArray(result.results) ? result.results : [])
+    .flatMap((source) => (Array.isArray(source?.candidates) ? source.candidates : []));
+  const social = Array.isArray(result.social_hints) ? result.social_hints : [];
+  return [...detected, ...social];
+}
+
+function sourceProfileKey(place, anchor) {
+  const identity = [
+    place?.name,
+    ...(Array.isArray(place?.region_terms) ? place.region_terms : []),
+    Number.isFinite(Number(anchor?.lat)) ? Number(anchor.lat).toFixed(2) : "",
+    Number.isFinite(Number(anchor?.lng)) ? Number(anchor.lng).toFixed(2) : "",
+  ]
+    .map((value) => publicString(value)?.toLocaleLowerCase("en-US") || "")
+    .join("|");
+  return `place-source-profile-v1:${createHash("sha256").update(identity).digest("hex").slice(0, 16)}`;
 }
 
 function loaderSummary(records, status, error) {
@@ -358,6 +467,23 @@ function normalizeBounds(value) {
   return numbers.every(Number.isFinite) ? numbers : null;
 }
 
+function normalizeGraphBounds(value) {
+  if (Array.isArray(value) && value.length === 4) {
+    const [west, south, east, north] = value.map(Number);
+    return [south, west, north, east].every(Number.isFinite)
+      ? { north, south, east, west }
+      : null;
+  }
+  if (!value || typeof value !== "object") return null;
+  const normalized = {
+    north: Number(value.north),
+    south: Number(value.south),
+    east: Number(value.east),
+    west: Number(value.west),
+  };
+  return Object.values(normalized).every(Number.isFinite) ? normalized : null;
+}
+
 function compactTokens(values) {
   return (Array.isArray(values) ? values : [])
     .filter((value) => typeof value === "string" && /^[a-z0-9_:-]+$/i.test(value))
@@ -366,6 +492,10 @@ function compactTokens(values) {
 
 function publicString(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function uniqueStrings(values) {
+  return [...new Set((Array.isArray(values) ? values : []).map(publicString).filter(Boolean))];
 }
 
 function finiteCount(value) {

@@ -8,7 +8,7 @@ const {
   discoverLocalEventSourcesForPlace,
 } = require("../server/pulse-sources/place-event-source-scout");
 
-function resolverFor(label, lat = 55.6, lng = 13) {
+function resolverFor(label, lat = 55.6, lng = 13, adminContext = null) {
   return async () => [
     {
       label,
@@ -16,6 +16,7 @@ function resolverFor(label, lat = 55.6, lng = 13) {
       lng,
       confidence: "medium",
       provenance: "trusted_test_resolver",
+      ...(adminContext ? { admin_context: adminContext } : {}),
     },
   ];
 }
@@ -114,6 +115,136 @@ test("trusted place records become bounded scout seeds and review-only manifests
     JSON.stringify(result),
     /raw_private_payload|raw_html|raw_secret|must-not-leak/,
   );
+});
+
+test("trusted administrative identity produces a generic regional source profile", async () => {
+  let scoutInput = null;
+  const result = await discoverLocalEventSourcesForPlace({
+    placeQuery: "Stockholm",
+    placeResolver: resolverFor("Stockholm, Sverige", 59.3293, 18.0686, {
+      locality: "Stockholm",
+      municipality: "Stockholms kommun",
+      county: "Stockholms län",
+      region: "Stockholms län",
+      country: "Sverige",
+      country_code: "se",
+      postcode: "must-not-leak",
+    }),
+    openDataLoader: async () =>
+      loaded([
+        {
+          id: "venue-1",
+          name: "Independent venue",
+          type: "gallery",
+          website: "https://venue.example/events",
+        },
+      ]),
+    bounds: [17.8, 59.1, 18.3, 59.5],
+    intentHints: ["culture"],
+    localDiscoveryTerms: ["evenemang"],
+    timeWindow: {
+      label: "this_week",
+      starts_at: "2026-07-20",
+      ends_at: "2026-07-27",
+    },
+    sourceScout: async (input) => {
+      scoutInput = input;
+      return {
+        status: "complete",
+        reasons: ["bounded_source_scout_complete"],
+        inspected_source_count: 1,
+        results: [
+          {
+            source_url: "https://venue.example/events",
+            source_identity: "venue.example",
+            status: "inspected",
+            detected: ["schema_org_html"],
+            reasons: ["source_interfaces_detected"],
+            candidates: [
+              {
+                id: "schema-source",
+                place: "Stockholm",
+                family: "cultural_institution_calendar",
+                source_label: "Independent venue",
+                url: "https://venue.example/events",
+                source_identity: "venue.example",
+                adapter: "schema_org_event",
+                extraction_tier: "schema_org_json_ld",
+                source_language: "sv",
+                trust_tier: "institution",
+                terms_status: "api_terms_compatible",
+                source_health: "healthy",
+                runtime_policy: "review_needed",
+                extractable: {
+                  title: true,
+                  start: true,
+                  end: true,
+                  venue: true,
+                  source_url: true,
+                  venue_geocodable: true,
+                  schema_org_event: true,
+                },
+                raw_html: "must-not-leak",
+              },
+            ],
+            manifest_candidates: [],
+            social_hints: [],
+          },
+        ],
+        manifest_candidates: [],
+        social_hints: [
+          {
+            id: "social-source",
+            url: "https://social.example/events",
+            source_identity: "social.example",
+            source_label: "Community listings",
+            family: "community_social_listing",
+            extraction_tier: "weak_social_manual",
+            runtime_policy: "probe_only",
+            corroboration_required: true,
+          },
+        ],
+      };
+    },
+  });
+
+  assert.equal(scoutInput.place.name, "Stockholm");
+  assert.deepEqual(scoutInput.place.region_terms, [
+    "Stockholms kommun",
+    "Stockholms län",
+    "Sverige",
+  ]);
+  assert.ok(result.discovery_queries.includes("Stockholms kommun events"));
+  assert.match(result.source_profile.profile_key, /^place-source-profile-v1:[a-f0-9]{16}$/);
+  assert.equal(result.source_profile.place_context.label, "Stockholm, Sverige");
+  assert.deepEqual(result.source_profile.place_context.region_terms, [
+    "Stockholms kommun",
+    "Stockholms län",
+    "Sverige",
+  ]);
+  assert.deepEqual(result.source_profile.place_context.bounds, {
+    north: 59.5,
+    south: 59.1,
+    east: 18.3,
+    west: 17.8,
+  });
+  assert.equal(result.source_profile.time_window.label, "this_week");
+  assert.ok(result.source_profile.discovery_terms.includes("evenemang"));
+  assert.ok(result.source_profile.discovery_terms.includes("culture"));
+  assert.equal(result.source_profile.coverage.status, "thin");
+  assert.deepEqual(result.source_profile.coverage.needs_review_families, [
+    "cultural_institution_calendar",
+  ]);
+  assert.equal(result.source_profile.coverage.can_collect_pulse_candidates, false);
+  assert.equal(
+    result.source_profile.source_families.find(
+      (family) => family.family === "cultural_institution_calendar",
+    ).status,
+    "needs_review",
+  );
+  assert.equal(result.source_profile.social_coverage.status, "needs_corroboration");
+  assert.equal(result.activation_performed, false);
+  assert.doesNotMatch(JSON.stringify(result), /postcode|raw_html|must-not-leak/);
 });
 
 test("ambiguous or weak place resolution fails closed before loading records", async () => {
@@ -275,6 +406,9 @@ test("the same place-driven bridge works for unrelated place labels", async () =
   assert.notEqual(first.anchor.lat, second.anchor.lat);
   assert.match(first.trusted_website_seeds[0].url, /northport/);
   assert.match(second.trusted_website_seeds[0].url, /southbay/);
+  assert.notEqual(first.source_profile.profile_key, second.source_profile.profile_key);
+  assert.deepEqual(first.source_profile.coverage.covered_families, []);
+  assert.equal(first.source_profile.coverage.can_collect_pulse_candidates, false);
 });
 
 test("place-event source bridge contains no city branches or activation path", () => {
