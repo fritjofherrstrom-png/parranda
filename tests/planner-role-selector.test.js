@@ -48,8 +48,8 @@ function item(overrides = {}) {
   };
 }
 
-function record(id, name, type, lat, lng, { tags = [], sources = TWO_FAMILIES, time_fit = [] } = {}) {
-  return { id, name, type, lat, lng, tags, sources, time_fit };
+function record(id, name, type, lat, lng, { tags = [], sources = TWO_FAMILIES, time_fit = [], opening_hours } = {}) {
+  return { id, name, type, lat, lng, tags, sources, time_fit, ...(opening_hours ? { opening_hours } : {}) };
 }
 
 function loaderOf(records) {
@@ -104,6 +104,65 @@ test("shared pool extraction preserves Blitz candidate-mode behavior and helper-
   const withoutTrustedHelper = buildCandidateBlitzDecision(thin, payload);
   assert.equal(withoutTrustedHelper.best_move, null);
   assert.equal(withoutTrustedHelper.reason, "no_candidates");
+});
+
+test("trusted availability can reject a closed source candidate before role admission", () => {
+  const records = [
+    record("closed-food", "Closed Food", "restaurant", 41.901, 12.491, {
+      tags: ["mat"],
+      opening_hours: "Mo-Fr 09:00-17:00",
+    }),
+  ];
+  const out = selectPlannerRoleCandidates(
+    city([]),
+    { date: DATE, preferences: ["food"], include_external_candidates: 1 },
+    {
+      external_provider: { dataset: loaderOf(records) },
+      evaluateCandidateAvailability: ({ candidate }) =>
+        candidate.opening_hours
+          ? { eligible: false, status: "closed_for_window", reason: "opening_hours_closed_for_query_window" }
+          : null,
+      experimentalAdmitCandidate: () => ({ allowed: true, policy: "test_admission" }),
+    },
+  );
+  assert.equal(role(out, "food_anchor").status, "missing");
+  assert.deepEqual(role(out, "food_anchor").candidates, []);
+  assert.deepEqual(out.availability_summary, {
+    evaluated_candidate_count: 1,
+    excluded_candidate_count: 1,
+    unresolved_candidate_count: 0,
+  });
+});
+
+test("unresolved opening-hours syntax fails open and remains inspectable", () => {
+  const records = [
+    record("unknown-food", "Unknown Food", "restaurant", 41.901, 12.491, {
+      tags: ["mat"],
+      opening_hours: "sunrise-sunset",
+    }),
+  ];
+  const out = selectPlannerRoleCandidates(
+    city([]),
+    { date: DATE, preferences: ["food"], include_external_candidates: 1 },
+    {
+      external_provider: { dataset: loaderOf(records) },
+      evaluateCandidateAvailability: ({ candidate }) =>
+        candidate.opening_hours
+          ? {
+              eligible: true,
+              status: "unknown",
+              reason: "opening_hours_unresolved",
+              raw_schedule: candidate.opening_hours,
+            }
+          : null,
+    },
+  );
+  const food = role(out, "food_anchor");
+  assert.ok(food.candidates.length > 0);
+  assert.equal(food.candidates[0].availability.status, "unknown");
+  assert.equal("raw_schedule" in food.candidates[0].availability, false);
+  assert.equal(out.availability_summary.excluded_candidate_count, 0);
+  assert.equal(out.availability_summary.unresolved_candidate_count, 1);
 });
 
 test("anchor roles require may_anchor_route; medium external scenic is partial, not filled", () => {

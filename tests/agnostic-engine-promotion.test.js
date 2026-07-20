@@ -46,6 +46,38 @@ function fixtureNear(base) {
   return recs;
 }
 
+function mixedTrustSingleInterestFixture(base) {
+  const records = [];
+  const point = (i) => ({
+    lat: base.lat + (i % 5) * 0.0007,
+    lng: base.lng + Math.floor(i / 5) * 0.0007,
+  });
+  const singleFamily = (id, name, type, coords, tags) => ({
+    ...externalRecord(id, name, type, coords.lat, coords.lng, tags),
+    sources: [
+      {
+        provider: "osm",
+        family: "map",
+        tier: "inferred",
+        url: `https://www.openstreetmap.org/node/${id}`,
+      },
+    ],
+  });
+
+  for (let i = 0; i < 10; i += 1) {
+    records.push(singleFamily(`food-low-${i}`, `Food ${i}`, "restaurant", point(i), ["mat"]));
+  }
+  for (let i = 0; i < 5; i += 1) {
+    const coords = point(i + 2);
+    records.push(externalRecord(`view-safe-${i}`, `View ${i}`, "viewpoint", coords.lat, coords.lng, ["utsikt"]));
+  }
+  for (let i = 0; i < 5; i += 1) {
+    records.push(singleFamily(`coffee-low-${i}`, `Coffee ${i}`, "cafe", point(i + 1), ["fika"]));
+    records.push(singleFamily(`museum-low-${i}`, `Museum ${i}`, "museum", point(i + 3), ["kultur"]));
+  }
+  return records;
+}
+
 function greenFixtureNear(base) {
   return Array.from({ length: 25 }, (_, i) => {
     const lat = base.lat + (i % 5) * 0.0008;
@@ -148,12 +180,54 @@ test(
     });
     const exp = r.body.agnostic_route_output_experiment;
     assert.equal(exp.route_mutation, true);
-    assert.equal(exp.promotion.promote, false, "a two-stop single-intent route remains honestly thin");
-    const stops = exp.experimental_route.main_stops;
-    assert.equal(stops.length, 2, "one role gains bounded depth instead of failing with a one-stop non-route");
-    assert.ok(stops.every((stop) => stop.role === "green_walk_stop"));
-    assert.ok(stops.every((stop) => stop.covered_preferences.includes("green")));
+    assert.equal(exp.promotion.promote, true, "safe support turns the green spine into a minimum complete day");
+    const stops = r.body.days[0].primary_route.main_stops;
+    assert.equal(stops.length, 3);
+    assert.equal(
+      stops.filter((stop) => stop.role === "green_walk_stop").length,
+      2,
+      "the requested green role remains the route spine",
+    );
+    assert.equal(
+      stops.filter((stop) => stop.covered_preferences.includes("green")).length,
+      2,
+      "the supporting scenic role does not invent green preference coverage",
+    );
+    assert.ok(stops.every((stop) => stop.type === "park"));
     assert.ok(stops.every((stop) => stop.daypart === "midday"));
+  }),
+);
+
+test(
+  "single-interest route bounds requested low-trust depth and unrequested support",
+  withServer(makeLoader(mixedTrustSingleInterestFixture({ lat: 41.9, lng: 12.49 })), async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody({ preferences: ["food"] }),
+    });
+    const exp = r.body.agnostic_route_output_experiment;
+    assert.equal(exp.route_mutation, true);
+    assert.equal(exp.promotion.promote, true);
+
+    const stops = r.body.days[0].primary_route.main_stops;
+    const support = stops.filter((stop) => !stop.covered_preferences.includes("food"));
+    const lowTrustSupport = support.filter((stop) => stop.trust?.confidence === "low");
+    const lowTrustRequested = stops.filter(
+      (stop) => stop.covered_preferences.includes("food") && stop.trust?.confidence === "low",
+    );
+    assert.ok(
+      support.some((stop) => stop.trust?.confidence === "medium"),
+      "corroborated support is admitted before any experimental bridge",
+    );
+    assert.ok(lowTrustSupport.length <= 1, "at most one unrequested low-trust bridge may reach the route");
+    assert.ok(
+      lowTrustRequested.length <= 1,
+      "one admitted candidate may represent the requested role but cannot multiply its depth",
+    );
+    assert.ok(
+      stops.filter((stop) => stop.covered_preferences.includes("food")).length >= 1,
+      "the requested role remains represented",
+    );
   }),
 );
 

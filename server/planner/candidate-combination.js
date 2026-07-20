@@ -96,7 +96,10 @@ function buildCandidateCombination(plannerRoles = {}, dayflowHonesty = {}, optio
 // for more than one option.
 function plannerUsableOptionsForRole(role = {}) {
   const usableAll = (Array.isArray(role.candidates) ? role.candidates : []).filter(
-    (candidate) => candidate.planner_usable === true && candidate.candidate_status !== "fallback",
+    (candidate) =>
+      candidate.planner_usable === true &&
+      candidate.candidate_status !== "fallback" &&
+      candidate.availability?.eligible !== false,
   );
   const gatePassing = usableAll.filter(
     (candidate) => !(candidate.experimental_admission && candidate.experimental_admission.allowed === true),

@@ -32,7 +32,12 @@ const {
   normalizeSourceEventDate,
 } = require("../pulse-sources/source-event-time");
 const { scoreTimeSensitiveEventSalience } = require("../pulse-engine/time-sensitive-events");
+const { scoreEventPreferenceFit } = require("../pulse-engine/event-preference-fit");
 const { createSourceCache } = require("./source-cache");
+const {
+  MAX_COLLECTION_RADIUS_M,
+  filterEventsForLiveScope,
+} = require("./live-event-query");
 const { classifyCulturalSalience } = require("../pulse-engine/cultural-salience");
 const {
   buildAnchorEventSourcePlan,
@@ -332,6 +337,11 @@ function toEventView(event, feed, { eventTimezone = null } = {}) {
     trust_level: event.confidence || null,
     cultural_tier: cultural.tier,
     salience_score: score,
+    tags: Array.isArray(event.tags) ? event.tags : [],
+    intents: Array.isArray(event.intents) ? event.intents : [],
+    route_role_hint: event.route_role_hint || null,
+    source_language: event.source_language || null,
+    event_language: event.event_language || null,
     anchor_distance_km: Number.isFinite(event.anchor_distance_km) ? event.anchor_distance_km : null,
     fusion_status: event.fusion_status || "single_source",
     source_count: Number.isFinite(event.source_count) ? event.source_count : 1,
@@ -344,16 +354,113 @@ function toEventView(event, feed, { eventTimezone = null } = {}) {
   };
 }
 
-function rankAndCap(views) {
+function rankAndCap(views, preferences = []) {
   const sorted = views
     .filter(Boolean)
+    .map((view) => withEventPreferenceFit(view, preferences))
     .sort(
       (a, b) =>
+        eventRankingScore(b) - eventRankingScore(a) ||
         (b.salience_score || 0) - (a.salience_score || 0) ||
         String(a.starts_at || a.starts_on || "").localeCompare(String(b.starts_at || b.starts_on || "")) ||
         String(a.id || "").localeCompare(String(b.id || "")),
     );
   return dedupeViews(sorted).slice(0, MAX_PER_BUCKET);
+}
+
+function withEventPreferenceFit(view, preferences = []) {
+  const fit = scoreEventPreferenceFit(view, preferences);
+  if (fit.requested_preferences.length === 0) return view;
+  return {
+    ...view,
+    preference_match: fit.level,
+    preference_score: fit.score,
+    requested_preferences: fit.requested_preferences,
+    matched_preferences: fit.matched_preferences,
+    partial_preferences: fit.partial_preferences,
+    missing_preferences: fit.missing_preferences,
+    preference_reasons: fit.reasons,
+  };
+}
+
+function eventRankingScore(view) {
+  return Number(view?.salience_score || 0) + Number(view?.preference_score || 0);
+}
+
+function rankCollectedEventsForPreferences(collected, preferences = [], scope = null) {
+  if (!collected || typeof collected !== "object") return collected;
+  const pool = collected._rankable_events;
+  const tonightPool = Array.isArray(pool?.tonight) ? pool.tonight : collected.tonight;
+  const thisWeekPool = Array.isArray(pool?.this_week) ? pool.this_week : collected.this_week;
+  const { _rankable_events: _internalPool, ...publicResult } = collected;
+  const tonight = rankAndCap(filterEventsForLiveScope(tonightPool, scope), preferences);
+  const thisWeek = rankAndCap(filterEventsForLiveScope(thisWeekPool, scope), preferences);
+  const acquisition = publicResult.acquisition && typeof publicResult.acquisition === "object"
+    ? {
+        ...publicResult.acquisition,
+        ...(publicResult.acquisition.source_health && typeof publicResult.acquisition.source_health === "object"
+          ? {
+              source_health: {
+                ...publicResult.acquisition.source_health,
+                surfaced_event_count: tonight.length + thisWeek.length,
+              },
+            }
+          : {}),
+      }
+    : null;
+  return {
+    ...publicResult,
+    ...(acquisition ? { acquisition } : {}),
+    tonight,
+    this_week: thisWeek,
+  };
+}
+
+function buildScopedEventSourcePlan({
+  anchor,
+  sourceAnchors = [],
+  registry,
+  globalSource = null,
+  globalEnabled = false,
+  maxSources = DEFAULT_MAX_SOURCES,
+  maxLocalSources = DEFAULT_MAX_LOCAL_SOURCES,
+} = {}) {
+  const sourceCap = Math.max(1, Math.min(Number(maxSources) || DEFAULT_MAX_SOURCES, DEFAULT_MAX_SOURCES));
+  const reserveGlobal = globalEnabled && globalSource ? 1 : 0;
+  const requestedLocalCap = Number(maxLocalSources);
+  const localCap = Math.max(0, Math.min(
+    Number.isFinite(requestedLocalCap) ? requestedLocalCap : DEFAULT_MAX_LOCAL_SOURCES,
+    sourceCap - reserveGlobal,
+  ));
+  const anchors = [anchor, ...(Array.isArray(sourceAnchors) ? sourceAnchors : [])]
+    .filter((point) => point && Number.isFinite(point.lat) && Number.isFinite(point.lng))
+    .filter((point, index, rows) => rows.findIndex(
+      (candidate) => candidate.lat.toFixed(5) === point.lat.toFixed(5) && candidate.lng.toFixed(5) === point.lng.toFixed(5),
+    ) === index);
+  const selected = [];
+  const seen = new Set();
+
+  for (const sourceAnchor of anchors) {
+    const localSources = buildAnchorEventSourcePlan({
+      anchor: sourceAnchor,
+      registry,
+      globalSource: null,
+      globalEnabled: false,
+      maxSources: DEFAULT_MAX_SOURCES,
+      maxLocalSources: DEFAULT_MAX_LOCAL_SOURCES,
+    });
+    for (const source of localSources) {
+      const identity = String(source.id || source.endpoint || source.base || "");
+      if (!identity || seen.has(identity)) continue;
+      seen.add(identity);
+      selected.push(source);
+      if (selected.length >= localCap) break;
+    }
+    if (selected.length >= localCap) break;
+  }
+
+  if (reserveGlobal && selected.length < sourceCap) selected.push({ ...globalSource, kind: "global" });
+  return selected.slice(0, sourceCap);
 }
 
 /**
@@ -362,14 +469,20 @@ function rankAndCap(views) {
  * @param {{lat:number,lng:number}} opts.anchor  trusted coordinate anchor
  * @param {string|Date|null} [opts.now]          trusted clock (tests inject)
  * @param {string|null} [opts.date]              feed window start (default today)
+ * @param {string[]} [opts.preferences]          rank context only; never source evidence
+ * @param {object|null} [opts.scope]              trusted query geometry; filters cached evidence before ranking
+ * @param {object[]} [opts.sourceAnchors]         reviewed-source discovery points for a bounded route corridor
  * @param {object[]} [opts.registry]             feed registry (default built-in)
  * @param {Function} [opts.fetcher]              injected fetch (tests)
  * @returns {Promise<{coverage:"covered"|"uncovered", feed:object|null, feeds:object[], tonight:object[], this_week:object[], acquisition:object}>}
  */
 async function collectAnchorEvents({
   anchor,
+  sourceAnchors = [],
   now = null,
   date = null,
+  preferences = [],
+  scope = null,
   registry,
   fetcher,
   radiusM,
@@ -378,9 +491,13 @@ async function collectAnchorEvents({
   maxSources = DEFAULT_MAX_SOURCES,
   maxLocalSources = DEFAULT_MAX_LOCAL_SOURCES,
 } = {}) {
-  const effectiveRadiusM = Math.max(100, Math.round(radiusM || DEFAULT_RADIUS_M));
-  const sourcePlan = buildAnchorEventSourcePlan({
+  const effectiveRadiusM = Math.min(
+    MAX_COLLECTION_RADIUS_M,
+    Math.max(100, Math.round(radiusM || DEFAULT_RADIUS_M)),
+  );
+  const sourcePlan = buildScopedEventSourcePlan({
     anchor,
+    sourceAnchors,
     registry: registry || resolveEventFeedRegistry(),
     globalSource: GLOBAL_FEED_DESCRIPTOR,
     globalEnabled: Boolean(globalKey),
@@ -467,8 +584,8 @@ async function collectAnchorEvents({
     }
   }
 
-  const rankedTonight = rankAndCap(tonight);
-  const rankedThisWeek = rankAndCap(thisWeek);
+  const rankedTonight = rankAndCap(filterEventsForLiveScope(tonight, scope), preferences);
+  const rankedThisWeek = rankAndCap(filterEventsForLiveScope(thisWeek, scope), preferences);
   const feeds = collectedSources.map(compactSourceStatus);
   const sourceHealth = buildAnchorEventSourceHealth(collectedSources, {
     acceptedEventCount: tonight.length + thisWeek.length,
@@ -482,6 +599,14 @@ async function collectAnchorEvents({
     feeds,
     tonight: rankedTonight,
     this_week: rankedThisWeek,
+    // The normalized, geo/timing-gated pool is cached independently of user
+    // preferences. A warm cache can therefore be reranked instantly without a
+    // second provider request, while the public route response receives only
+    // the capped `tonight` / `this_week` views.
+    _rankable_events: {
+      tonight,
+      this_week: thisWeek,
+    },
     acquisition: {
       mode: "bounded_multi_source",
       radius_m: effectiveRadiusM,
@@ -740,12 +865,13 @@ function normalizeDirectCollectionOutcome(outcome, eventRows) {
 /**
  * Env-gated default supply, mirroring the loader/resolver: a no-arg deploy gets
  * `null` (no live-event calls — production opts in explicitly via
- * PARRANDA_AGNOSTIC_EVENTS). Returns an `({anchor, now}) => Promise<result>`
+ * PARRANDA_AGNOSTIC_EVENTS). Returns an
+ * `({anchor, now, preferences}) => Promise<result>`
  * bound to the env-resolved registry, using global fetch.
  */
 // Coarse cache key: ~1 km anchor bucket + hour bucket (events are time-sensitive,
 // so the window must not be stale, but a fresh request a minute later must hit).
-function eventCacheKey(anchor, now, sourceIds = []) {
+function eventCacheKey(anchor, now, sourceIds = [], radiusM = DEFAULT_RADIUS_M) {
   const lat = Number(anchor.lat).toFixed(2);
   const lng = Number(anchor.lng).toFixed(2);
   const hour = (now ? new Date(now) : new Date(0)).toISOString().slice(0, 13);
@@ -753,7 +879,8 @@ function eventCacheKey(anchor, now, sourceIds = []) {
     .map(String)
     .sort()
     .join(",");
-  return `${lat},${lng}:${hour}:${sources}`;
+  const radius = Math.min(MAX_COLLECTION_RADIUS_M, Math.max(100, Math.round(Number(radiusM) || DEFAULT_RADIUS_M)));
+  return `${lat},${lng}:${hour}:${radius}:${sources}`;
 }
 
 function sourceIdentityForUrl(value) {
@@ -797,6 +924,18 @@ function firstString(...values) {
 
 const EVENT_CACHE_TTL_MS = 20 * 60 * 1000; // 20 min — time-sensitive, but reusable
 const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a route
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v2";
+
+function shouldCacheEventSupplyResult(result) {
+  if (!result || result.coverage !== "covered") return false;
+  const health = result.acquisition && result.acquisition.source_health;
+  if (!health || typeof health !== "object") return false;
+
+  // Keep useful partial results and proven healthy empties. A partial/unavailable
+  // empty result may be a transient provider failure and must remain retryable.
+  if (health.result === "events_found") return true;
+  return health.status === "healthy" && health.result === "empty";
+}
 
 /**
  * Default event supply: env-gated + BACKGROUND-WARMED. Selected sources can be
@@ -811,13 +950,19 @@ function resolveDefaultEventSupply(env = process.env) {
   const registry = resolveEventFeedRegistry(env);
   const globalKey = resolveGlobalEventKey(env);
   const cache = createSourceCache({
-    namespace: "agnostic-events",
+    // v2 excludes transient partial-empty acquisitions that v1 could persist.
+    namespace: EVENT_CACHE_NAMESPACE,
     ttlMs: EVENT_CACHE_TTL_MS,
     dir: (env && env.PARRANDA_CACHE_DIR) || null,
   });
-  return ({ anchor, now } = {}) => {
-    const sourcePlan = buildAnchorEventSourcePlan({
+  return ({ anchor, sourceAnchors = [], now, preferences = [], radiusM, scope = null } = {}) => {
+    const effectiveRadiusM = Math.min(
+      MAX_COLLECTION_RADIUS_M,
+      Math.max(100, Math.round(Number(radiusM) || DEFAULT_RADIUS_M)),
+    );
+    const sourcePlan = buildScopedEventSourcePlan({
       anchor,
+      sourceAnchors,
       registry,
       globalSource: GLOBAL_FEED_DESCRIPTOR,
       globalEnabled: Boolean(globalKey),
@@ -829,18 +974,26 @@ function resolveDefaultEventSupply(env = process.env) {
         feeds: [],
         tonight: [],
         this_week: [],
-        acquisition: emptyAcquisition(DEFAULT_RADIUS_M),
+        acquisition: emptyAcquisition(effectiveRadiusM),
       });
     }
     const descriptors = sourcePlan.map((source) => compactSourceStatus({ source, status: "pending", raw: [] }));
-    const key = eventCacheKey(anchor, now, sourcePlan.map((source) => source.id));
+    const key = eventCacheKey(anchor, now, sourcePlan.map((source) => source.id), effectiveRadiusM);
     const cached = cache.peek(key);
-    if (cached) return Promise.resolve(cached);
+    if (cached) return Promise.resolve(rankCollectedEventsForPreferences(cached, preferences, scope));
     // Cold: warm out-of-band (long timeout, fire-and-forget), serve honest pending.
-    cache.warm(key, () => collectAnchorEvents({ anchor, now, registry, timeoutMs: WARM_TIMEOUT_MS, globalKey }), {
-      // A valid empty result is cacheable too. Otherwise every request would
-      // hammer every selected source merely because nothing is happening now.
-      shouldStore: (r) => r && r.coverage === "covered",
+    cache.warm(key, () => collectAnchorEvents({
+      anchor,
+      sourceAnchors,
+      now,
+      registry,
+      radiusM: effectiveRadiusM,
+      timeoutMs: WARM_TIMEOUT_MS,
+      globalKey,
+    }), {
+      // A proven healthy empty result is cacheable so a quiet calendar does not
+      // cause refresh loops. Empty results with source failures stay retryable.
+      shouldStore: shouldCacheEventSupplyResult,
     });
     return Promise.resolve({
       coverage: "covered",
@@ -851,7 +1004,7 @@ function resolveDefaultEventSupply(env = process.env) {
       pending: true,
       acquisition: {
         mode: "bounded_multi_source",
-        radius_m: DEFAULT_RADIUS_M,
+        radius_m: effectiveRadiusM,
         source_cap: DEFAULT_MAX_SOURCES,
         selected_source_count: sourcePlan.length,
         normalized_event_count: 0,
@@ -881,7 +1034,9 @@ function resolveDefaultEventSupply(env = process.env) {
 
 module.exports = {
   applyReviewedSourceTrust,
+  buildScopedEventSourcePlan,
   collectAnchorEvents,
+  shouldCacheEventSupplyResult,
   resolveDefaultEventSupply,
   resolveEventFeedRegistry,
   resolveEventFeedForAnchor,
@@ -897,5 +1052,6 @@ module.exports = {
   normalizeLocalEventAdapter,
   createLocalEventProvider,
   isEphemeralHappening,
+  rankCollectedEventsForPreferences,
   toEventView,
 };

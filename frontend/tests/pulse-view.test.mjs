@@ -150,3 +150,49 @@ test("pulseHealthState maps acquisition health to honest UI states — no raw to
   // Legacy response without acquisition: empty-but-covered stays honest soft-empty.
   assert.equal(pulseHealthState({ coverage: "covered" }, empty), "soft_empty");
 });
+
+test("an ONGOING continuous run says it is on now — never its past start weekday", () => {
+  // The live-QA bug: an exhibition that opened Thursday 17:00 and runs for days
+  // rendered "Thu 17:00" inside a TONIGHT list, which reads as a Thursday event.
+  const now = new Date("2026-07-19T18:00:00Z"); // Sunday evening
+  const running = {
+    title: "Nature of Sound",
+    timezone: "Europe/Helsinki",
+    time_window: { kind: "continuous", starts_at: "2026-07-16T14:00:00Z", ends_at: "2026-07-26T15:00:00Z" },
+  };
+  assert.equal(eventTiming(running, "en", now), "on now");
+  assert.equal(eventTiming(running, "sv", now), "pågår nu");
+
+  // A run ending on the venue-local day the viewer is in keeps the closing clock
+  // — that is a real same-day close, not an implied one.
+  const closingToday = {
+    timezone: "Europe/Helsinki",
+    time_window: { kind: "continuous", starts_at: "2026-07-16T14:00:00Z", ends_at: "2026-07-19T19:00:00Z" },
+  };
+  const en = eventTiming(closingToday, "en", now);
+  assert.match(en, /^on now · until \d{2}:\d{2}$/, `same-day close keeps the clock, got ${en}`);
+  assert.match(eventTiming(closingToday, "sv", now), /^pågår nu · till \d{2}:\d{2}$/);
+});
+
+test("a continuous run that has NOT started keeps its venue-local start weekday", () => {
+  const now = new Date("2026-07-19T18:00:00Z");
+  const upcoming = {
+    timezone: "Europe/Helsinki",
+    time_window: { kind: "continuous", starts_at: "2026-07-23T14:00:00Z", ends_at: "2026-07-26T15:00:00Z" },
+  };
+  const label = eventTiming(upcoming, "en", now);
+  assert.match(label, /Thu/, `an unstarted run still announces its start day, got ${label}`);
+  assert.doesNotMatch(label, /on now/);
+  // An open-ended run (no end) cannot be proven ongoing → unchanged behaviour.
+  const openEnded = { timezone: "Europe/Helsinki", starts_at: "2026-07-16T14:00:00Z" };
+  assert.doesNotMatch(eventTiming(openEnded, "en", now), /on now/);
+});
+
+test("the ongoing rule never touches the daily / all_day / unresolved branches", () => {
+  const now = new Date("2026-07-19T18:00:00Z");
+  const daily = { time_window: { kind: "daily", local_start: "10:00", local_end: "18:00" } };
+  assert.equal(eventTiming(daily, "en", now), "daily 10:00–18:00");
+  const allDay = { time_window: { kind: "all_day", starts_on: "2026-07-19", ends_on: "2026-07-19" } };
+  assert.match(eventTiming(allDay, "en", now), /Sun/);
+  assert.equal(eventTiming({}, "en", now), "");
+});
