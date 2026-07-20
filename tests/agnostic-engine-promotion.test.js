@@ -46,6 +46,38 @@ function fixtureNear(base) {
   return recs;
 }
 
+function mixedTrustSingleInterestFixture(base) {
+  const records = [];
+  const point = (i) => ({
+    lat: base.lat + (i % 5) * 0.0007,
+    lng: base.lng + Math.floor(i / 5) * 0.0007,
+  });
+  const singleFamily = (id, name, type, coords, tags) => ({
+    ...externalRecord(id, name, type, coords.lat, coords.lng, tags),
+    sources: [
+      {
+        provider: "osm",
+        family: "map",
+        tier: "inferred",
+        url: `https://www.openstreetmap.org/node/${id}`,
+      },
+    ],
+  });
+
+  for (let i = 0; i < 10; i += 1) {
+    records.push(singleFamily(`food-low-${i}`, `Food ${i}`, "restaurant", point(i), ["mat"]));
+  }
+  for (let i = 0; i < 5; i += 1) {
+    const coords = point(i + 2);
+    records.push(externalRecord(`view-safe-${i}`, `View ${i}`, "viewpoint", coords.lat, coords.lng, ["utsikt"]));
+  }
+  for (let i = 0; i < 5; i += 1) {
+    records.push(singleFamily(`coffee-low-${i}`, `Coffee ${i}`, "cafe", point(i + 1), ["fika"]));
+    records.push(singleFamily(`museum-low-${i}`, `Museum ${i}`, "museum", point(i + 3), ["kultur"]));
+  }
+  return records;
+}
+
 function greenFixtureNear(base) {
   return Array.from({ length: 25 }, (_, i) => {
     const lat = base.lat + (i % 5) * 0.0008;
@@ -163,6 +195,32 @@ test(
     );
     assert.ok(stops.every((stop) => stop.type === "park"));
     assert.ok(stops.every((stop) => stop.daypart === "midday"));
+  }),
+);
+
+test(
+  "single-interest route bounds unrequested low-trust support after corroborated breadth",
+  withServer(makeLoader(mixedTrustSingleInterestFixture({ lat: 41.9, lng: 12.49 })), async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody({ preferences: ["food"] }),
+    });
+    const exp = r.body.agnostic_route_output_experiment;
+    assert.equal(exp.route_mutation, true);
+    assert.equal(exp.promotion.promote, true);
+
+    const stops = r.body.days[0].primary_route.main_stops;
+    const support = stops.filter((stop) => !stop.covered_preferences.includes("food"));
+    const lowTrustSupport = support.filter((stop) => stop.trust?.confidence === "low");
+    assert.ok(
+      support.some((stop) => stop.trust?.confidence === "medium"),
+      "corroborated support is admitted before any experimental bridge",
+    );
+    assert.ok(lowTrustSupport.length <= 1, "at most one unrequested low-trust bridge may reach the route");
+    assert.ok(
+      stops.filter((stop) => stop.covered_preferences.includes("food")).length >= 1,
+      "the requested role remains represented",
+    );
   }),
 );
 

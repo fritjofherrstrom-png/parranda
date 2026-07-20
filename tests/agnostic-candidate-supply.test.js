@@ -313,6 +313,116 @@ test("a proven-closed supporting stop cannot re-enter after role selection", () 
   assert.deepEqual(result.map((entry) => entry.id), ["food-a"]);
 });
 
+test("unrequested day support admits at most one experimental bridge after gate-passing support", () => {
+  const requestedFood = richCandidate({
+    candidate_id: "requested-food",
+    type: "restaurant",
+    candidate_status: "partial",
+    planner_usable: true,
+    covered_preferences: ["food"],
+    experimental_admission: {
+      allowed: true,
+      policy: "experimental_inferred_external",
+    },
+  });
+  const safeScenic = richCandidate({
+    candidate_id: "safe-view",
+    type: "viewpoint",
+    candidate_status: "partial",
+    planner_usable: true,
+    covered_preferences: ["scenic"],
+  });
+  const admittedCoffee = richCandidate({
+    candidate_id: "admitted-coffee",
+    type: "cafe",
+    candidate_status: "partial",
+    planner_usable: true,
+    covered_preferences: ["coffee"],
+    experimental_admission: {
+      allowed: true,
+      policy: "experimental_inferred_external",
+    },
+  });
+  const admittedMarket = richCandidate({
+    candidate_id: "admitted-market",
+    type: "market",
+    candidate_status: "partial",
+    planner_usable: true,
+    covered_preferences: ["markets"],
+    experimental_admission: {
+      allowed: true,
+      policy: "experimental_inferred_external",
+    },
+  });
+  const roles = {
+    city: "agnostic-engine-area",
+    requested_preferences: ["food"],
+    roles: [
+      { role: "food_anchor", slot: "anchor", requested: true, candidates: [requestedFood] },
+      { role: "scenic_anchor", slot: "anchor", requested: false, candidates: [safeScenic] },
+      { role: "coffee_fika_stop", slot: "stop", requested: false, candidates: [admittedCoffee] },
+      { role: "market_stop", slot: "stop", requested: false, candidates: [admittedMarket] },
+    ],
+  };
+
+  const result = mapPlannerReservoirToSourceCandidates({
+    selected: [
+      selectedPick({
+        role: "food_anchor",
+        candidate_id: requestedFood.candidate_id,
+        coordinates: requestedFood.coordinates,
+      }),
+    ],
+    plannerRoles: roles,
+  });
+
+  assert.deepEqual(result.map((entry) => entry.id), ["requested-food", "safe-view", "admitted-coffee"]);
+  assert.equal(result[0].reservoir_selected, true, "requested experimental admission remains available");
+  assert.equal(result[1].reservoir_support, true, "gate-passing support remains available");
+  assert.equal(result[2].reservoir_support, true, "one bounded experimental bridge may complete the thin day");
+  assert.equal(result.some((entry) => entry.id === "admitted-market"), false);
+});
+
+test("unrequested experimental candidates cannot create support without a gate-passing spine", () => {
+  const requestedFood = richCandidate({
+    candidate_id: "requested-food",
+    type: "restaurant",
+    candidate_status: "partial",
+    planner_usable: true,
+    covered_preferences: ["food"],
+    experimental_admission: { allowed: true, policy: "experimental_inferred_external" },
+  });
+  const admittedCoffee = richCandidate({
+    candidate_id: "admitted-coffee",
+    type: "cafe",
+    candidate_status: "partial",
+    planner_usable: true,
+    covered_preferences: ["coffee"],
+    experimental_admission: { allowed: true, policy: "experimental_inferred_external" },
+  });
+  const roles = {
+    city: "agnostic-engine-area",
+    requested_preferences: ["food"],
+    roles: [
+      { role: "food_anchor", slot: "anchor", requested: true, candidates: [requestedFood] },
+      { role: "coffee_fika_stop", slot: "stop", requested: false, candidates: [admittedCoffee] },
+    ],
+  };
+
+  const result = mapPlannerReservoirToSourceCandidates({
+    selected: [
+      selectedPick({
+        role: "food_anchor",
+        candidate_id: requestedFood.candidate_id,
+        coordinates: requestedFood.coordinates,
+      }),
+    ],
+    plannerRoles: roles,
+  });
+
+  assert.deepEqual(result.map((entry) => entry.id), ["requested-food"]);
+});
+
 test("local independent support beats a chain in the same role", () => {
   const food = richCandidate({
     candidate_id: "food-a",
