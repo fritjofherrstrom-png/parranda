@@ -6,6 +6,7 @@ const SOURCE_FAMILIES = Object.freeze({
       "linked_events",
       "the_events_calendar",
       "ical",
+      "rss_atom_event_detail",
       "schema_org_event",
       "sitevision_calendar",
       "wix_event_sitemap",
@@ -14,17 +15,17 @@ const SOURCE_FAMILIES = Object.freeze({
   official_tourism_calendar: {
     priority: 2,
     label: "Official tourism/destination calendar",
-    preferredAdapters: ["schema_org_event", "html_event_listing", "ical", "wix_event_sitemap"],
+    preferredAdapters: ["schema_org_event", "html_event_listing", "ical", "rss_atom_event_detail", "wix_event_sitemap"],
   },
   cultural_institution_calendar: {
     priority: 3,
     label: "Cultural institution or major venue calendar",
-    preferredAdapters: ["schema_org_event", "venue_calendar", "html_event_listing"],
+    preferredAdapters: ["schema_org_event", "venue_calendar", "html_event_listing", "rss_atom_event_detail"],
   },
   venue_owned_calendar: {
     priority: 4,
     label: "Venue-owned event calendar",
-    preferredAdapters: ["schema_org_event", "venue_calendar", "html_event_listing", "ical"],
+    preferredAdapters: ["schema_org_event", "venue_calendar", "html_event_listing", "ical", "rss_atom_event_detail"],
   },
   market_listing: {
     priority: 5,
@@ -40,7 +41,7 @@ const SOURCE_FAMILIES = Object.freeze({
   trusted_local_media: {
     priority: 6,
     label: "Trusted local media or editorial calendar",
-    preferredAdapters: ["rss", "schema_org_event", "html_event_listing"],
+    preferredAdapters: ["rss_atom_event_detail", "schema_org_event", "html_event_listing"],
   },
   community_social_listing: {
     priority: 7,
@@ -288,6 +289,7 @@ function mapsToExistingProvider(adapter) {
     adapter === "linked_events" ||
     adapter === "the_events_calendar" ||
     adapter === "ical" ||
+    adapter === "rss_atom_event_detail" ||
     adapter === "sitevision_calendar" ||
     adapter === "wix_event_sitemap"
   );
@@ -297,6 +299,7 @@ function inferAdapter(candidate = {}) {
   if (candidate.extractable?.schema_org_event) return "schema_org_event";
   if (candidate.extractable?.linked_events) return "linked_events";
   if (candidate.extractable?.ical) return "ical";
+  if (candidate.extractable?.rss) return "rss_atom_event_detail";
   if (candidate.extractable?.the_events_calendar) return "the_events_calendar";
   return "needs_adapter";
 }

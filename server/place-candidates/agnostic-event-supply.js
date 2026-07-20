@@ -22,6 +22,7 @@ const { createLinkedEventsProvider } = require("../pulse-sources/linked-events-s
 const { createTicketmasterProvider } = require("../pulse-sources/ticketmaster-source-provider");
 const { createSchemaOrgEventProvider } = require("../pulse-sources/schema-org-event-provider");
 const { createEventsCalendarProvider } = require("../pulse-sources/events-calendar-source-provider");
+const { createRssAtomEventProvider } = require("../pulse-sources/rss-atom-event-provider");
 const { createHtmlVenueCalendarProvider } = require("../pulse-sources/html-venue-calendar-provider");
 const { createSitevisionCalendarProvider } = require("../pulse-sources/sitevision-calendar-provider");
 const { createWixEventSitemapProvider } = require("../pulse-sources/wix-event-sitemap-provider");
@@ -75,6 +76,7 @@ const LOCAL_EVENT_ADAPTERS = new Set([
   "schema_org_html",
   "events_calendar",
   "ical",
+  "rss_atom_event_detail",
   "html_venue_calendar",
   "sitevision_calendar",
   "wix_event_sitemap",
@@ -897,6 +899,17 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs 
       status: "active",
     });
   }
+  if (adapter === "rss_atom_event_detail") {
+    return createRssAtomEventProvider({
+      ...common,
+      sourceLanguage: source.source_language || undefined,
+      supportedLanguages: source.supported_languages || undefined,
+      sourceTier: source.source_tier || undefined,
+      confidence: source.confidence || undefined,
+      detailLimit: source.detail_limit || undefined,
+      detailBudget: source.detail_budget || undefined,
+    });
+  }
   if (adapter === "html_venue_calendar") {
     return createHtmlVenueCalendarProvider({
       ...common,
@@ -1044,6 +1057,9 @@ function normalizeLocalEventAdapter(value) {
     the_events_calendar: "events_calendar",
     events_calendar_rest: "events_calendar",
     ics: "ical",
+    rss: "rss_atom_event_detail",
+    atom: "rss_atom_event_detail",
+    rss_atom: "rss_atom_event_detail",
     html_calendar: "html_venue_calendar",
     venue_calendar: "html_venue_calendar",
     sitevision: "sitevision_calendar",

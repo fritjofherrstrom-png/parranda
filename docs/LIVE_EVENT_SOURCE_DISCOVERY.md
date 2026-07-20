@@ -91,10 +91,15 @@ candidate evaluation:
   not cached and may recover on the next bounded run;
 - discovered machine-readable interfaces become review-needed manifest
   candidates only. They never become active runtime providers automatically;
-- RSS and unrecognized generic HTML calendars remain adapter-review work, while
-  recognized Sitevision calendars and Wix event sites with public sitemaps can
-  produce review-needed manifests for their bounded generic adapters. Social
-  links remain discovery/corroboration hints rather than event truth.
+- RSS/Atom feeds can now produce review-needed manifests for a bounded generic
+  detail adapter. The feed is only an index: Parranda never treats `pubDate`,
+  Atom `updated`, feed descriptions, or feed titles as event facts. The adapter
+  follows bounded same-origin item links and accepts event timing only from
+  schema.org/Event JSON-LD on the detail page. Unrecognized generic HTML still
+  remains adapter-review work. Recognized Sitevision calendars and Wix event
+  sites with public sitemaps can likewise produce review-needed manifests for
+  their bounded generic adapters. Social links remain discovery/corroboration
+  hints rather than event truth.
 
 The operator harness is default-off. Without the live switch it emits only the
 query/seed plan:
@@ -236,7 +241,9 @@ content.
    - Preferred runtime source when terms and source health are acceptable.
 2. `ics_rss_feed`
    - ICS, RSS, calendar feed, or similar structured feed.
-   - Good for title/start/end/source URL and recurrence.
+   - ICS may own explicit calendar timing. Generic RSS/Atom is discovery-only
+     until a reviewed detail page provides structured event timing; publication
+     timestamps are never promoted into event start/end facts.
 3. `schema_org_json_ld`
    - `schema.org/Event` / JSON-LD structured data on listing or detail pages.
    - Uses existing provider family when the page exposes real Event objects.
