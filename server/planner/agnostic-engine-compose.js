@@ -134,6 +134,10 @@ function finiteCoords(coordinates) {
   return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
 }
 
+function isExplicitlyUnavailable(candidate) {
+  return candidate?.availability?.eligible === false;
+}
+
 // Index the RICH role candidates (from formatRoleCandidate) by role+id and by
 // bare id. The combination's `selected[]` (formatSelected) is intentionally
 // lossy — it drops type/provenance/attribution — so to build honestly-attributed
@@ -159,11 +163,36 @@ function buildRichCandidateIndex(plannerRoles) {
 // these are never curated/human-verified, so the route built from them stays
 // honestly low-confidence. Source attribution (provider label/url) is preserved
 // from the rich candidate's provenance so provenance survives to the stop.
-function toSourceCandidate({ pick, rich, coords, city, role, reservoirSelected = false }) {
+function toSourceCandidate({
+  pick,
+  rich,
+  coords,
+  city,
+  role,
+  reservoirSelected = false,
+  reservoirSupport = false,
+  requestedIntents = null,
+}) {
   const provenance = (rich && rich.provenance) || {};
   const attribution = Array.isArray(provenance.attribution) ? provenance.attribution : [];
   const firstSource = attribution[0] || {};
   const confidence = (rich && rich.confidence) || pick.confidence || "needs_review";
+  const roleCovered = Array.isArray(rich?.covered_preferences) ? [...rich.covered_preferences] : [];
+  const rolePartial = Array.isArray(rich?.partial_preferences) ? [...rich.partial_preferences] : [];
+  const requested = Array.isArray(requestedIntents) ? [...new Set(requestedIntents)] : null;
+  const coveredPreferences = requested
+    ? roleCovered.filter((intent) => requested.includes(intent))
+    : roleCovered;
+  const partialPreferences = requested
+    ? rolePartial.filter((intent) => requested.includes(intent))
+    : rolePartial;
+  const missingPreferences = requested
+    ? requested.filter(
+        (intent) => !coveredPreferences.includes(intent) && !partialPreferences.includes(intent),
+      )
+    : Array.isArray(rich?.missing_preferences)
+      ? [...rich.missing_preferences]
+      : [];
   return {
     id: pick.candidate_id,
     city,
@@ -175,15 +204,19 @@ function toSourceCandidate({ pick, rich, coords, city, role, reservoirSelected =
     lat: coords.lat,
     lng: coords.lng,
     area: null,
-    tags: Array.isArray(rich?.covered_preferences) ? [...rich.covered_preferences] : [],
+    // Role semantics remain available to the route engine even when this is a
+    // supporting stop. User-facing coverage below is narrowed to what the user
+    // actually requested, so a scenic support stop cannot claim to cover
+    // "views" in a food-only request.
+    tags: roleCovered,
     role: role || null,
     route_roles: role ? [role] : [],
     candidate_status: (rich && rich.candidate_status) || pick.candidate_status || null,
     planner_usable: rich ? rich.planner_usable === true : pick.planner_usable === true,
     origin: (rich && rich.origin) || pick.origin || "external_open",
-    covered_preferences: Array.isArray(rich?.covered_preferences) ? [...rich.covered_preferences] : [],
-    partial_preferences: Array.isArray(rich?.partial_preferences) ? [...rich.partial_preferences] : [],
-    missing_preferences: Array.isArray(rich?.missing_preferences) ? [...rich.missing_preferences] : [],
+    covered_preferences: coveredPreferences,
+    partial_preferences: partialPreferences,
+    missing_preferences: missingPreferences,
     fit_reasons: Array.isArray(rich?.fit_reasons) ? [...rich.fit_reasons] : [],
     lens_reasons: Array.isArray(rich?.lens_reasons) ? [...rich.lens_reasons] : [],
     weather_reasons: Array.isArray(rich?.weather_reasons) ? [...rich.weather_reasons] : [],
@@ -206,6 +239,7 @@ function toSourceCandidate({ pick, rich, coords, city, role, reservoirSelected =
     confidence,
     freshness: "unknown",
     reservoir_selected: reservoirSelected === true,
+    reservoir_support: reservoirSupport === true,
     chain: rich?.chain === true,
     brand: typeof rich?.brand === "string" ? rich.brand : null,
     provenance: {
@@ -233,7 +267,15 @@ function mapPlannerReservoirToSourceCandidates({
 } = {}) {
   const richIndex = buildRichCandidateIndex(plannerRoles);
   const selectedPicks = Array.isArray(selected) ? selected : [];
-  const out = mapAdmittedSelectionToSourceCandidates({ selected: selectedPicks, plannerRoles, city }).map(
+  const requestedIntents = Array.isArray(plannerRoles?.requested_preferences)
+    ? plannerRoles.requested_preferences
+    : null;
+  const out = mapAdmittedSelectionToSourceCandidates({
+    selected: selectedPicks,
+    plannerRoles,
+    city,
+    requestedIntents,
+  }).map(
     (candidate) => ({ ...candidate, reservoir_selected: true }),
   );
   const seen = new Set(out.map((candidate) => candidate.id));
@@ -260,10 +302,48 @@ function mapPlannerReservoirToSourceCandidates({
           coords,
           city,
           role,
+          requestedIntents,
         }),
       );
     }
     if (out.length >= boundedLimit) break;
+  }
+
+  // A target-role combination answers "what best matches the request", not
+  // "what makes a complete day". A single selected intent therefore often
+  // yields only one candidate family (for example two restaurants), which the
+  // honest promotion gate correctly rejects as a thin day. Give the route
+  // engine bounded breadth from the SAME planner-safe reservoir: one candidate
+  // from each unrequested anchor/stop role. The engine still owns geometry,
+  // distance, ordering and final selection; fallback/option candidates never
+  // enter through this seam, and sparse contexts remain sparse.
+  const supportRoles = (Array.isArray(plannerRoles?.roles) ? plannerRoles.roles : []).filter(
+    (roleEntry) =>
+      roleEntry &&
+      !selectedRoles.has(roleEntry.role) &&
+      (roleEntry.slot === "anchor" || roleEntry.slot === "stop"),
+  );
+  for (const roleEntry of supportRoles) {
+    if (out.length >= boundedLimit) break;
+    const role = roleEntry.role;
+    const rich = plannerUsableOptionsForRole(roleEntry).find(
+      (candidate) => candidate?.candidate_id && !seen.has(candidate.candidate_id),
+    );
+    if (!rich) continue;
+    const coords = finiteCoords(rich.coordinates);
+    if (!coords) continue;
+    seen.add(rich.candidate_id);
+    out.push(
+      toSourceCandidate({
+        pick: { role, candidate_id: rich.candidate_id, coordinates: coords },
+        rich: richIndex.get(`${role}::${rich.candidate_id}`) || rich,
+        coords,
+        city,
+        role,
+        reservoirSupport: true,
+        requestedIntents,
+      }),
+    );
   }
 
   return out;
@@ -281,7 +361,12 @@ function mapPlannerReservoirToSourceCandidates({
  * @param {string} [params.city]               cityConfig.key the candidates bind to
  * @returns {Array<object>} sourceCandidate[]
  */
-function mapAdmittedSelectionToSourceCandidates({ selected = [], plannerRoles = null, city = AGNOSTIC_ENGINE_CITY_KEY } = {}) {
+function mapAdmittedSelectionToSourceCandidates({
+  selected = [],
+  plannerRoles = null,
+  city = AGNOSTIC_ENGINE_CITY_KEY,
+  requestedIntents = null,
+} = {}) {
   const index = buildRichCandidateIndex(plannerRoles);
   const out = [];
   const seen = new Set();
@@ -290,10 +375,14 @@ function mapAdmittedSelectionToSourceCandidates({ selected = [], plannerRoles = 
     if (!id || seen.has(id)) continue;
     const role = pick.role || null;
     const rich = (role && index.get(`${role}::${id}`)) || index.get(`*::${id}`) || null;
+    // Availability is computed from trusted server time/opening-hours facts.
+    // Do not let a stale pre-combination selection reintroduce a candidate
+    // which the shared role reservoir now knows is closed for the day window.
+    if (isExplicitlyUnavailable(rich)) continue;
     const coords = finiteCoords(pick.coordinates) || (rich && finiteCoords(rich.coordinates));
     if (!coords) continue; // no geo → cannot honestly be a stop
     seen.add(id);
-    out.push(toSourceCandidate({ pick, rich, coords, city, role }));
+    out.push(toSourceCandidate({ pick, rich, coords, city, role, requestedIntents }));
   }
   return out;
 }
