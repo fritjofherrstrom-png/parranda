@@ -10,6 +10,7 @@ const {
   buildEligibleCandidatePool,
   candidateOrigin,
   candidateProvenance,
+  operationalViabilityRank,
   rankEligible,
 } = require("../candidates/candidate-pool");
 const { scoreCandidateFit } = require("../candidates/fit-scorer");
@@ -126,7 +127,7 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
 
 function buildRankedEntriesForRole(spec, candidatePool, localFeelActive = false) {
   const entries = candidatePool.pool
-    .map(({ candidate, derived, gates, evidence, availability, experimental_admission }) => {
+    .map(({ candidate, derived, gates, evidence, availability, operational, experimental_admission }) => {
       const fit = scoreCandidateFit({
         candidate,
         userIntents: spec.intents,
@@ -155,6 +156,7 @@ function buildRankedEntriesForRole(spec, candidatePool, localFeelActive = false)
         fit,
         calibration,
         availability,
+        operational,
         experimental_admission,
         candidate_status: candidateStatusForRole({ fit, gates, spec, experimentalAdmission: experimental_admission }),
         ...(localFeelActive
@@ -183,12 +185,17 @@ function buildRankedEntriesForRole(spec, candidatePool, localFeelActive = false)
   const rankByLocalFeel = (bucket) => {
     if (!localFeelActive) return rankEligible(bucket);
     const covers = (entry) => Array.isArray(entry.fit.covered_preferences) && entry.fit.covered_preferences.length > 0;
-    const groups = [[], [], [], [], [], [], [], []];
+    const groups = new Map();
     for (const entry of bucket) {
       const feel = Number.isFinite(entry.local_feel_rank) ? entry.local_feel_rank : 0;
-      groups[(covers(entry) ? 0 : 4) + feel].push(entry);
+      const key = `${covers(entry) ? 0 : 1}:${operationalViabilityRank(entry)}:${feel}`;
+      const group = groups.get(key) || [];
+      group.push(entry);
+      groups.set(key, group);
     }
-    return groups.flatMap((group) => rankEligible(group));
+    return [...groups.entries()]
+      .sort(([a], [b]) => compareRankKey(a, b))
+      .flatMap(([, group]) => rankEligible(group));
   };
 
   return [
@@ -221,7 +228,7 @@ function candidateStatusForRole({ fit, gates, spec, experimentalAdmission = null
 }
 
 function formatRoleCandidate(entry, role, roleEntries, roleSpec = ROLE_SPEC) {
-  const { candidate, derived, fit, gates, calibration, candidate_status, experimental_admission, availability } = entry;
+  const { candidate, derived, fit, gates, calibration, candidate_status, experimental_admission, availability, operational } = entry;
   const provenance = candidateProvenance(candidate, derived);
   return {
     candidate_id: candidate.id,
@@ -269,8 +276,19 @@ function formatRoleCandidate(entry, role, roleEntries, roleSpec = ROLE_SPEC) {
       ? { level: calibration.level, influence: calibration.influence, reasons: calibration.reasons }
       : null,
     ...(availability ? { availability: { ...availability } } : {}),
+    ...(operational ? { operational_viability: { ...operational, reasons: [...operational.reasons] } } : {}),
     also_covers: alsoCovers(candidate.id, role, roleEntries, roleSpec),
   };
+}
+
+function compareRankKey(a, b) {
+  const left = a.split(":").map(Number);
+  const right = b.split(":").map(Number);
+  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+    const diff = (left[index] || 0) - (right[index] || 0);
+    if (diff) return diff;
+  }
+  return 0;
 }
 
 function alsoCovers(candidateId, currentRole, roleEntries, roleSpec = ROLE_SPEC) {

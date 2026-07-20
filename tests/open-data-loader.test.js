@@ -92,6 +92,62 @@ test("OSM opening_hours is preserved as bounded source-owned operational metadat
   assert.equal(oversized.opening_hours, undefined);
 });
 
+test("OSM lifecycle and explicit closed schedules remain hard operational evidence", () => {
+  const disused = mapOsmElement({
+    type: "node",
+    id: 49,
+    lat: 41.9,
+    lon: 12.5,
+    tags: {
+      name: "Former restaurant fixture",
+      amenity: "restaurant",
+      "disused:amenity": "restaurant",
+    },
+  });
+  assert.equal(disused.operational_status, "inactive");
+  assert.ok(disused.operational_reasons.includes("osm_lifecycle_disused"));
+
+  const closed = mapOsmElement({
+    type: "node",
+    id: 54,
+    lat: 41.9,
+    lon: 12.5,
+    tags: {
+      name: "Explicitly closed fixture",
+      amenity: "cafe",
+      opening_hours: "closed",
+    },
+  });
+  assert.equal(closed.operational_status, "inactive");
+  assert.ok(closed.operational_reasons.includes("osm_opening_hours_explicitly_closed"));
+});
+
+test("OSM operational signals are generic and do not turn public spaces into businesses", () => {
+  const active = mapOsmElement({
+    type: "node",
+    id: 55,
+    lat: 41.9,
+    lon: 12.5,
+    tags: {
+      name: "Independent cafe fixture",
+      amenity: "cafe",
+      website: "https://cafe.example/",
+    },
+  });
+  assert.equal(active.operational_status, "source_indicated_active");
+  assert.ok(active.operational_reasons.includes("operational_website_present"));
+
+  const park = mapOsmElement({
+    type: "node",
+    id: 56,
+    lat: 41.9,
+    lon: 12.5,
+    tags: { name: "Public park fixture", leisure: "park" },
+  });
+  assert.equal(park.operational_status, "unknown");
+  assert.equal(park.type, "park");
+});
+
 test("broadened OSM coverage maps to existing recognized types (no new vocab, generic for every city)", () => {
   const cases = [
     [{ shop: "bakery" }, "cafe", "fika"],
