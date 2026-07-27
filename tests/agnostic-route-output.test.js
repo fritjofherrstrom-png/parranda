@@ -259,6 +259,53 @@ test("unit: viable trusted pair is eligible; thin readiness is a caveat, not a b
   assert.ok(e.caveats.includes("below_planner_candidate_threshold"));
 });
 
+test("unit: candidate pipeline diagnostics distinguish raw readiness from role-selected stops", () => {
+  const e = evaluateEligibility({
+    externalRequested: true,
+    sourceStatus: { status: "loaded:25" },
+    adaptedBody: adaptedBody(),
+    candidateReadiness: {
+      can_support_planner: true,
+      real_place_count: 25,
+      coordinate_ready_real_place_count: 25,
+      coordinate_coverage: 1,
+    },
+    plannerRoles: {
+      pipeline_summary: {
+        identity_resolved_candidate_count: 25,
+        eligible_pool_candidate_count: 7,
+        rejected_candidate_count: 18,
+        availability_evaluated_candidate_count: 6,
+        availability_excluded_candidate_count: 3,
+        availability_unresolved_candidate_count: 1,
+        role_relevant_candidate_count: 4,
+        role_surface_candidate_count: 3,
+      },
+    },
+    candidateCombination: { selected: [{ candidate_id: "a" }, { candidate_id: "b" }] },
+    engineSourceCandidates: [
+      { id: "a", lat: 41.9, lng: 12.49 },
+      { id: "b", lat: 41.91, lng: 12.5 },
+    ],
+  });
+
+  assert.deepEqual(e.checks.candidate_pipeline, {
+    coordinate_ready_real_place_count: 25,
+    identity_resolved_candidate_count: 25,
+    eligible_pool_candidate_count: 7,
+    rejected_candidate_count: 18,
+    availability_evaluated_candidate_count: 6,
+    availability_excluded_candidate_count: 3,
+    availability_unresolved_candidate_count: 1,
+    role_relevant_candidate_count: 4,
+    role_surface_candidate_count: 3,
+    combination_selected_candidate_count: 2,
+    combination_geocoded_stop_count: 2,
+    engine_reservoir_geocoded_stop_count: 2,
+  });
+  assert.equal(e.eligible, true, "diagnostic counts never change the existing eligibility verdict");
+});
+
 // --- unit: experimental route is honest ------------------------------------
 
 test("unit: experimental route omits ETA/walking/opening-hours and marks order unvalidated", () => {
@@ -645,6 +692,19 @@ test(
     assert.equal(exp.readiness_calibration.level, "low");
     assert.ok(exp.readiness_calibration.reasons.includes("walking_validated"));
     assert.ok(exp.readiness_calibration.caps.includes("capped_by_partial_context"));
+    const pipeline = exp.eligibility.checks.candidate_pipeline;
+    for (const [field, value] of Object.entries(pipeline)) {
+      assert.equal(Number.isInteger(value), true, `${field} is an explicit stage count`);
+    }
+    assert.ok(pipeline.identity_resolved_candidate_count >= pipeline.eligible_pool_candidate_count);
+    assert.ok(pipeline.eligible_pool_candidate_count >= pipeline.role_relevant_candidate_count);
+    assert.ok(pipeline.role_relevant_candidate_count >= pipeline.role_surface_candidate_count);
+    assert.ok(pipeline.role_surface_candidate_count >= pipeline.combination_selected_candidate_count);
+    assert.equal(
+      pipeline.combination_selected_candidate_count,
+      pipeline.combination_geocoded_stop_count,
+      "the fixture's selected route candidates all carry coordinates",
+    );
     const day = r.body.days[0];
     assert.equal(day.experimental_agnostic_day, true);
     assert.equal(day.primary_route.experimental, true);

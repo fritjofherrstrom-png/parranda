@@ -132,6 +132,16 @@ test("trusted availability can reject a closed source candidate before role admi
     excluded_candidate_count: 1,
     unresolved_candidate_count: 0,
   });
+  assert.deepEqual(out.pipeline_summary, {
+    identity_resolved_candidate_count: 1,
+    eligible_pool_candidate_count: 0,
+    rejected_candidate_count: 1,
+    availability_evaluated_candidate_count: 1,
+    availability_excluded_candidate_count: 1,
+    availability_unresolved_candidate_count: 0,
+    role_relevant_candidate_count: 0,
+    role_surface_candidate_count: 0,
+  });
 });
 
 test("unresolved opening-hours syntax fails open and remains inspectable", () => {

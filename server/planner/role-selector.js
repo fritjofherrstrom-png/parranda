@@ -96,6 +96,8 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
     applyReservoirChainFallbackPolicy(roleEntries);
   }
 
+  const roleRelevantCandidateCount = uniqueEntryCandidateCount(Object.values(roleEntries).flat());
+
   const roles = activeRoleOrder.map((role) => {
     const spec = activeRoleSpec[role];
     const entries = roleEntries[role];
@@ -113,6 +115,10 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
       candidates,
     };
   });
+  const roleSurfaceCandidateCount = new Set(
+    roles.flatMap((entry) => entry.candidates.map((candidate) => candidate.candidate_id).filter(Boolean)),
+  ).size;
+  const availabilitySummary = candidatePool.availability_summary || null;
 
   return {
     city: cityConfig.key,
@@ -126,10 +132,28 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
     requested_preferences: candidatePool.normalized.intents || [],
     roles,
     summary: summarizeRoles(roles),
-    ...(candidatePool.availability_summary
-      ? { availability_summary: { ...candidatePool.availability_summary } }
+    pipeline_summary: {
+      identity_resolved_candidate_count: candidatePool.allCandidates.length,
+      eligible_pool_candidate_count: candidatePool.pool.length,
+      rejected_candidate_count: candidatePool.rejected.length,
+      availability_evaluated_candidate_count: availabilitySummary?.evaluated_candidate_count || 0,
+      availability_excluded_candidate_count: availabilitySummary?.excluded_candidate_count || 0,
+      availability_unresolved_candidate_count: availabilitySummary?.unresolved_candidate_count || 0,
+      role_relevant_candidate_count: roleRelevantCandidateCount,
+      role_surface_candidate_count: roleSurfaceCandidateCount,
+    },
+    ...(availabilitySummary
+      ? { availability_summary: { ...availabilitySummary } }
       : {}),
   };
+}
+
+function uniqueEntryCandidateCount(entries) {
+  return new Set(
+    (Array.isArray(entries) ? entries : [])
+      .map((entry) => entry?.candidate?.id)
+      .filter(Boolean),
+  ).size;
 }
 
 function applyReservoirChainFallbackPolicy(roleEntries = {}) {
