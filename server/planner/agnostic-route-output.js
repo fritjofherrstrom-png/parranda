@@ -524,6 +524,7 @@ function buildExperimentBlock({
   routeOrdering = null,
   context = null,
   dayflowContextPresent = false,
+  requestedDate = null,
 }) {
   const baselineDay = baselineResult && Array.isArray(baselineResult.days) ? baselineResult.days[0] : null;
   const block = {
@@ -553,6 +554,7 @@ function buildExperimentBlock({
     routeOrdering,
     context,
     dayflowContextPresent,
+    requestedDate,
   });
   return block;
 }
@@ -758,6 +760,7 @@ async function composeAgnosticRouteOutput({
       experimentalRoute: null,
       sourceStatus,
       context: contextBlock,
+      requestedDate: effectiveDate,
     });
     experiment.context = contextBlock;
     return { result: baselineResult, experiment };
@@ -891,6 +894,7 @@ async function composeAgnosticRouteOutput({
       walkingValidation: walkingSummary,
       routeOrdering: sanitizeRouteOrdering(routeOrdering),
       context: contextBlock,
+      requestedDate: effectiveDate,
     });
     experiment.walking_validation = walkingSummary;
     experiment.route_ordering = sanitizeRouteOrdering(routeOrdering);
@@ -941,6 +945,7 @@ async function composeAgnosticRouteOutput({
     routeOrdering: sanitizeRouteOrdering(routeOrdering),
     context: contextBlock,
     dayflowContextPresent,
+    requestedDate: effectiveDate,
   });
   experiment.walking_validation = walkingSummary;
   experiment.route_ordering = sanitizeRouteOrdering(routeOrdering);
@@ -1029,6 +1034,7 @@ async function composeAgnosticRouteViaEngine({
       experimentalRoute: null,
       sourceStatus,
       context: contextBlock,
+      requestedDate: effectiveDate,
     });
     experiment.context = contextBlock;
     experiment.synthesized_via = "agnostic_compose_engine";
@@ -1067,6 +1073,7 @@ async function composeAgnosticRouteViaEngine({
     routeOrdering,
     context: contextBlock,
     dayflowContextPresent,
+    requestedDate: effectiveDate,
   });
   experiment.walking_validation = walkingSummary;
   experiment.route_ordering = routeOrdering;

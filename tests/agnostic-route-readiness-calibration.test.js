@@ -174,6 +174,101 @@ test("#281 — a 2-stop day is capped thin even with strong sources and full con
   assert.equal(full.caps.includes("capped_by_thin_day"), false);
 });
 
+test("a trusted same-day evening route uses the remaining-day cap instead of pretending to be a full day", () => {
+  const remainingDay = calibrateAgnosticRouteReadiness(
+    producedInput({
+      requestedDate: "2026-05-25",
+      context: context({
+        time: {
+          timezone_source: "resolver_attested",
+          timezone_trust: "resolver_attested",
+          time_band: "evening",
+          now: "2026-05-25T19:30:00",
+        },
+      }),
+      experimentalRoute: baseRoute({
+        main_stops: [
+          { id: "food-1", origin: "trusted_curated" },
+          { id: "bar-1", origin: "trusted_curated" },
+        ],
+      }),
+    }),
+  );
+
+  assert.equal(remainingDay.status, "thin_usable");
+  assert.ok(remainingDay.reasons.includes("remaining_day_short_route"));
+  assert.ok(remainingDay.caps.includes("capped_by_remaining_day_short_route"));
+  assert.equal(remainingDay.caps.includes("capped_by_thin_day"), false);
+  assert.equal(remainingDay.inputs.requested_date, "2026-05-25");
+  assert.equal(remainingDay.inputs.current_local_date, "2026-05-25");
+});
+
+test("two stops remain thin-day blocked outside a trusted same-day evening", () => {
+  const cases = [
+    {
+      name: "future date",
+      requestedDate: "2026-05-26",
+      time: {
+        timezone_source: "resolver_attested",
+        timezone_trust: "resolver_attested",
+        time_band: "evening",
+        now: "2026-05-25T19:30:00",
+      },
+    },
+    {
+      name: "same-day afternoon",
+      requestedDate: "2026-05-25",
+      time: {
+        timezone_source: "resolver_attested",
+        timezone_trust: "resolver_attested",
+        time_band: "afternoon",
+        now: "2026-05-25T16:30:00",
+      },
+    },
+    {
+      name: "untrusted time",
+      requestedDate: "2026-05-25",
+      time: {
+        timezone_source: null,
+        timezone_trust: "unavailable",
+        time_band: "evening",
+        now: "2026-05-25T19:30:00",
+      },
+      influence: { weather_fed_into_selection: true, time_fed_into_selection: false },
+    },
+    {
+      name: "late-night band",
+      requestedDate: "2026-05-25",
+      time: {
+        timezone_source: "resolver_attested",
+        timezone_trust: "resolver_attested",
+        time_band: "late",
+        now: "2026-05-25T23:30:00",
+      },
+    },
+  ];
+
+  for (const entry of cases) {
+    const out = calibrateAgnosticRouteReadiness(
+      producedInput({
+        requestedDate: entry.requestedDate,
+        context: context({
+          time: entry.time,
+          ...(entry.influence ? { influence: entry.influence } : {}),
+        }),
+        experimentalRoute: baseRoute({
+          main_stops: [
+            { id: "food-1", origin: "trusted_curated" },
+            { id: "bar-1", origin: "trusted_curated" },
+          ],
+        }),
+      }),
+    );
+    assert.ok(out.caps.includes("capped_by_thin_day"), entry.name);
+    assert.equal(out.caps.includes("capped_by_remaining_day_short_route"), false, entry.name);
+  }
+});
+
 test("weather-provider timezone is surfaced as derived and capped", () => {
   const out = calibrateAgnosticRouteReadiness(
     producedInput({
