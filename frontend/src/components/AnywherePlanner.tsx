@@ -274,6 +274,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // known, an explicit Maps action) instead of ejecting straight to Google Maps.
   // Single-open accordion: opening one closes the others.
   const [expandedStopKey, setExpandedStopKey] = useState<string | null>(null);
+  // Candidate ideas use the same disclosure-first interaction without sharing
+  // route-stop state. They remain unsequenced evidence, never route stops.
+  const [expandedCandidateKey, setExpandedCandidateKey] = useState<string | null>(null);
   // The Live sheet (design handoff §3B): an explorable events surface. TIME is
   // a real axis over the two server buckets. SCOPE uses the separate
   // live_event_query_v1 contract: route geometry and the trusted day anchor are
@@ -351,6 +354,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setClassification(null);
       setSafeResponse(null);
       setMapDrawn(false);
+      setExpandedStopKey(null);
+      setExpandedCandidateKey(null);
       setLiveSheetScope("around_place");
       setLiveQueryEvents(null);
       setLiveQueryPending(false);
@@ -1534,25 +1539,46 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               </p>
               {detoursOpen && (
                 <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {routeContextSuggestions.map((stop) => {
+                  {routeContextSuggestions.map((stop, index) => {
                     const name = String(stop.name || stop.label || "").trim();
                     if (!name) return null;
                     const url = mapsPlaceUrl(
                       { ...stop, lat: stop.lat ?? undefined, lng: stop.lng ?? undefined },
                       mapsPlaceContext,
                     );
+                    const candidateKey = `detour:${stop.id || stop.candidate_id || stop.place_id || index}`;
+                    const candidatePanelId = `candidate-panel-detour-${index}`;
+                    const expanded = expandedCandidateKey === candidateKey;
                     return (
                       <li key={stop.id || stop.candidate_id || stop.place_id || name} className="rounded-parranda border border-dashed border-parranda-ink/20 p-3">
-                        <p className="text-sm font-semibold text-parranda-ink">
-                          {url ? (
-                            <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 min-w-11 items-center underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent">
-                              {name}
-                            </a>
-                          ) : name}
-                        </p>
+                        <button
+                          type="button"
+                          aria-expanded={expanded}
+                          aria-controls={candidatePanelId}
+                          onClick={() => setExpandedCandidateKey(expanded ? null : candidateKey)}
+                          className="flex min-h-11 w-full items-center justify-between gap-3 text-left text-sm font-semibold text-parranda-ink underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent"
+                        >
+                          <span>{name}</span>
+                          <span aria-hidden="true">{expanded ? "−" : "+"}</span>
+                        </button>
                         <p className="mt-1 text-xs text-parranda-ink/55">
                           {walkingDistanceLabel(stop.distance_km, lang)} {t("från", "from")} {stop.route_stop_name}
                         </p>
+                        {expanded && (
+                          <div id={candidatePanelId} className="mt-3 border-t border-parranda-ink/10 pt-3">
+                            {url && (
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex min-h-11 w-full items-center justify-center rounded-parranda-btn bg-parranda-terracotta px-4 text-sm font-bold text-white transition hover:brightness-110"
+                              >
+                                {t("Öppna platsen i Maps", "Open place in Maps")}
+                                <span aria-hidden="true" className="ml-2">↗</span>
+                              </a>
+                            )}
+                          </div>
+                        )}
                       </li>
                     );
                   })}
@@ -1604,30 +1630,47 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                   </span>
                 </div>
                 {Array.isArray(area.stops) && area.stops.length > 0 ? (
-                  <p className="mt-2 text-sm text-parranda-ink">
+                  <ul className="mt-2 flex flex-col gap-1 text-sm text-parranda-ink">
                     {area.stops.map((stop, si) => {
                       const url = mapsPlaceUrl(stop, mapsPlaceContext);
                       const name = (stop.name || area.stop_names?.[si] || "").trim();
                       if (!name) return null;
+                      const candidateKey = `cluster:${index}:${stop.id || stop.candidate_id || stop.place_id || si}`;
+                      const candidatePanelId = `candidate-panel-cluster-${index}-${si}`;
+                      const expanded = expandedCandidateKey === candidateKey;
+                      const facts = [...new Set([stop.address, stop.area].map((value) => String(value || "").trim()).filter(Boolean))];
                       return (
-                        <span key={stop.id ?? si}>
-                          {si > 0 && " · "}
-                          {url ? (
-                            <a
-                              href={url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex min-h-11 min-w-11 items-center underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent"
-                            >
-                              {name}
-                            </a>
-                          ) : (
-                            name
+                        <li key={stop.id ?? si} className="rounded-parranda-btn border border-parranda-ink/10 px-3 py-1.5">
+                          <button
+                            type="button"
+                            aria-expanded={expanded}
+                            aria-controls={candidatePanelId}
+                            onClick={() => setExpandedCandidateKey(expanded ? null : candidateKey)}
+                            className="flex min-h-11 w-full items-center justify-between gap-3 text-left font-semibold underline decoration-parranda-accent/50 underline-offset-2 hover:text-parranda-accent"
+                          >
+                            <span>{name}</span>
+                            <span aria-hidden="true">{expanded ? "−" : "+"}</span>
+                          </button>
+                          {expanded && (
+                            <div id={candidatePanelId} className="border-t border-parranda-ink/10 pb-2 pt-2">
+                              {facts.length > 0 && <p className="text-xs text-parranda-ink/60">{facts.join(" · ")}</p>}
+                              {url && (
+                                <a
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="mt-2 inline-flex min-h-11 w-full items-center justify-center rounded-parranda-btn bg-parranda-terracotta px-4 text-sm font-bold text-white transition hover:brightness-110 sm:w-auto"
+                                >
+                                  {t("Öppna platsen i Maps", "Open place in Maps")}
+                                  <span aria-hidden="true" className="ml-2">↗</span>
+                                </a>
+                              )}
+                            </div>
                           )}
-                        </span>
+                        </li>
                       );
                     })}
-                  </p>
+                  </ul>
                 ) : (area.stop_names ?? []).length > 0 ? (
                   <p className="mt-2 text-sm text-parranda-ink">{(area.stop_names ?? []).join(" · ")}</p>
                 ) : null}
