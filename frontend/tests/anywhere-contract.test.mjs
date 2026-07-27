@@ -256,6 +256,24 @@ test("candidate clusters read as candidates, not a second itinerary", () => {
   assert.doesNotMatch(structureOnlyHeader, /shareDay|saveDay|Share day|Save day/);
 });
 
+test("secondary candidates disclose in Parranda before offering an explicit Maps action", () => {
+  assert.match(anywherePlannerSource, /\[expandedCandidateKey, setExpandedCandidateKey\] = useState/);
+  assert.match(anywherePlannerSource, /candidate-panel-detour-/);
+  assert.match(anywherePlannerSource, /candidate-panel-cluster-/);
+  assert.match(anywherePlannerSource, /aria-controls=\{candidatePanelId\}/);
+  assert.match(anywherePlannerSource, /setExpandedCandidateKey\(expanded \? null : candidateKey\)/);
+  assert.match(anywherePlannerSource, /t\("Öppna platsen i Maps", "Open place in Maps"\)/);
+
+  const detourSurface = anywherePlannerSource
+    .split("{routeContextSuggestions.map((stop, index) => {")[1]
+    ?.split("{routeCoverage.has_coverage_evidence")[0] ?? "";
+  const structureSurface = anywherePlannerSource
+    .split("{(day?.areas ?? []).map((area, index) => (")[1]
+    ?.split("{/* The evening event is NOT presented here")[0] ?? "";
+  assert.doesNotMatch(detourSurface, /<a[^>]*>\s*\{name\}\s*<\/a>/s, "detour names must not eject directly");
+  assert.doesNotMatch(structureSurface, /<a[^>]*>\s*\{name\}\s*<\/a>/s, "cluster names must not eject directly");
+});
+
 test("the weather read lives in Pulse (context), not as its own competing section", () => {
   // The Pulse section carries the trusted weather read + clothing; it renders
   // even when no event source exists (weather must not vanish with events).
