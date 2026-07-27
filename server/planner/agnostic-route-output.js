@@ -166,6 +166,8 @@ function evaluateEligibility({
   adaptedBody,
   candidateReadiness,
   engineSourceCandidates = null,
+  plannerRoles = null,
+  candidateCombination = null,
 }) {
   const blockers = [];
   // Walking-order honesty is decided downstream by the #261 walking-budget
@@ -220,6 +222,13 @@ function evaluateEligibility({
   checks.can_support_planner = candidateReadiness ? Boolean(candidateReadiness.can_support_planner) : null;
   checks.real_place_count = candidateReadiness ? candidateReadiness.real_place_count ?? null : null;
   checks.coordinate_coverage = candidateReadiness ? candidateReadiness.coordinate_coverage ?? null : null;
+  checks.candidate_pipeline = buildCandidatePipelineChecks({
+    candidateReadiness,
+    plannerRoles,
+    candidateCombination,
+    combinationGeocodedCount: combinationGeocodedStops.length,
+    engineGeocodedCount: engineGeocodedStops.length,
+  });
   if (candidateReadiness && candidateReadiness.can_support_planner === false) {
     caveats.push("below_planner_candidate_threshold");
   }
@@ -229,6 +238,32 @@ function evaluateEligibility({
     blockers: dedupe(blockers),
     caveats: dedupe(caveats),
     checks,
+  };
+}
+
+function buildCandidatePipelineChecks({
+  candidateReadiness,
+  plannerRoles,
+  candidateCombination,
+  combinationGeocodedCount,
+  engineGeocodedCount,
+}) {
+  const pipeline = plannerRoles?.pipeline_summary || {};
+  return {
+    coordinate_ready_real_place_count: candidateReadiness?.coordinate_ready_real_place_count ?? null,
+    identity_resolved_candidate_count: pipeline.identity_resolved_candidate_count ?? null,
+    eligible_pool_candidate_count: pipeline.eligible_pool_candidate_count ?? null,
+    rejected_candidate_count: pipeline.rejected_candidate_count ?? null,
+    availability_evaluated_candidate_count: pipeline.availability_evaluated_candidate_count ?? null,
+    availability_excluded_candidate_count: pipeline.availability_excluded_candidate_count ?? null,
+    availability_unresolved_candidate_count: pipeline.availability_unresolved_candidate_count ?? null,
+    role_relevant_candidate_count: pipeline.role_relevant_candidate_count ?? null,
+    role_surface_candidate_count: pipeline.role_surface_candidate_count ?? null,
+    combination_selected_candidate_count: Array.isArray(candidateCombination?.selected)
+      ? candidateCombination.selected.length
+      : null,
+    combination_geocoded_stop_count: combinationGeocodedCount,
+    engine_reservoir_geocoded_stop_count: engineGeocodedCount || 0,
   };
 }
 
@@ -710,6 +745,8 @@ async function composeAgnosticRouteOutput({
     adaptedBody,
     candidateReadiness,
     engineSourceCandidates,
+    plannerRoles,
+    candidateCombination,
   });
 
   if (!eligibility.eligible) {
