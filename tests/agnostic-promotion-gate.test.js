@@ -50,6 +50,18 @@ test("thin_day cap blocks promotion (not in v1 allowlist)", () => {
   assert.ok(verdict.reasons.includes("capped_by_non_promotable"));
 });
 
+test("a trusted remaining-day short route can promote while the generic thin-day cap stays blocked", () => {
+  const verdict = evaluateAgnosticPromotion({
+    calibration: calibration({
+      caps: ["capped_by_external_only_sources", "capped_by_remaining_day_short_route"],
+    }),
+    strongAnchor: true,
+  });
+
+  assert.equal(verdict.promote, true);
+  assert.deepEqual(verdict.blocked_caps, []);
+});
+
 test("below_planner_threshold and unresolved_roles and role_order_fallback all block", () => {
   for (const cap of [
     "capped_by_below_planner_candidate_threshold",

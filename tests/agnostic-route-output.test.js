@@ -498,12 +498,21 @@ test("unit: engaged any-place root never exposes a fallback city's public truth"
 
 test("unit: experiment block preserves baseline primary_route + readiness", () => {
   const baseline = { days: [{ primary_route: { id: "real-route" } }], readiness: { tag: "rich" } };
-  const block = buildExperimentBlock({ routeMutation: true, eligibility: { blockers: [], caveats: ["walking_order_unvalidated"] }, baselineResult: baseline, candidateReadiness: { real_place_count: 30 }, experimentalRoute: { id: "exp" }, sourceStatus: { status: "loaded:30" } });
+  const block = buildExperimentBlock({
+    routeMutation: true,
+    eligibility: { blockers: [], caveats: ["walking_order_unvalidated"] },
+    baselineResult: baseline,
+    candidateReadiness: { real_place_count: 30 },
+    experimentalRoute: { id: "exp" },
+    sourceStatus: { status: "loaded:30" },
+    requestedDate: DATE,
+  });
   assert.equal(block.baseline.had_primary_route, true);
   assert.equal(block.baseline.primary_route.id, "real-route");
   assert.deepEqual(block.baseline.readiness, { tag: "rich" });
   assert.equal(block.selected_variant, "experimental_agnostic");
   assert.equal(block.experimental_route.id, "exp");
+  assert.equal(block.readiness_calibration.inputs.requested_date, DATE);
 });
 
 // --- #270: inferred external candidate guardrails --------------------------

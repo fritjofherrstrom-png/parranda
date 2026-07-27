@@ -29,6 +29,7 @@ const CAP_TOKENS = {
   externalOnlySources: "capped_by_external_only_sources",
   belowPlannerCandidateThreshold: "capped_by_below_planner_candidate_threshold",
   thinDay: "capped_by_thin_day",
+  remainingDayShortRoute: "capped_by_remaining_day_short_route",
 };
 
 // A produced route with this few stops is a minimal day, not a full one — even
@@ -47,6 +48,7 @@ function calibrateAgnosticRouteReadiness({
   routeOrdering = null,
   context = null,
   dayflowContextPresent = false,
+  requestedDate = null,
 } = {}) {
   const blockers = unique([
     ...(Array.isArray(eligibility?.blockers) ? eligibility.blockers : []),
@@ -87,6 +89,11 @@ function calibrateAgnosticRouteReadiness({
     weather_fed_into_selection: Boolean(contextInfluence.weather_fed_into_selection),
     time_fed_into_selection: Boolean(contextInfluence.time_fed_into_selection),
     dayflow_context_present: Boolean(dayflowContextPresent),
+    requested_date: typeof requestedDate === "string" ? requestedDate : null,
+    current_local_date:
+      typeof contextTime.now === "string" && /^\d{4}-\d{2}-\d{2}T/.test(contextTime.now)
+        ? contextTime.now.slice(0, 10)
+        : null,
   };
 
   const reasons = [];
@@ -195,8 +202,13 @@ function calibrateAgnosticRouteReadiness({
     caps.push(CAP_TOKENS.unresolvedRoles);
   }
   if (Number.isFinite(inputs.selected_stop_count) && inputs.selected_stop_count <= THIN_DAY_STOP_THRESHOLD) {
-    reasons.push("thin_day_few_stops");
-    caps.push(CAP_TOKENS.thinDay);
+    if (isTrustedRemainingDayRoute(inputs)) {
+      reasons.push("remaining_day_short_route");
+      caps.push(CAP_TOKENS.remainingDayShortRoute);
+    } else {
+      reasons.push("thin_day_few_stops");
+      caps.push(CAP_TOKENS.thinDay);
+    }
   }
 
   const cappedByTokens = unique(caps.filter((cap) => cap.startsWith("capped_by_")));
@@ -212,6 +224,18 @@ function calibrateAgnosticRouteReadiness({
     caps: unique(caps),
     inputs,
   };
+}
+
+function isTrustedRemainingDayRoute(inputs) {
+  return Boolean(
+    inputs.selected_stop_count === THIN_DAY_STOP_THRESHOLD &&
+      inputs.requested_date &&
+      inputs.requested_date === inputs.current_local_date &&
+      inputs.time_band === "evening" &&
+      inputs.timezone_trust !== "unavailable" &&
+      inputs.time_fed_into_selection === true &&
+      inputs.walking_valid === true,
+  );
 }
 
 function isEnvironmentNotWired({ sourceStatus, blockers }) {

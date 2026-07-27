@@ -106,6 +106,7 @@
     capped_by_external_only_sources: "dogfood.calibration.cap.capped_by_external_only_sources",
     capped_by_below_planner_candidate_threshold: "dogfood.calibration.cap.capped_by_below_planner_candidate_threshold",
     capped_by_thin_day: "dogfood.calibration.cap.capped_by_thin_day",
+    capped_by_remaining_day_short_route: "dogfood.calibration.cap.capped_by_remaining_day_short_route",
   };
 
   // Engine-path retirement-readiness observability (#engine-readiness). Maps the
