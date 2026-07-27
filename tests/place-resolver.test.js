@@ -33,10 +33,14 @@ const FLAG = "experimental_agnostic_route_output=1";
 const DATE = "2026-05-25";
 
 // A minimal fake Response.
-function jsonResponse(status, body) {
+function jsonResponse(status, body, headers = {}) {
+  const normalizedHeaders = new Map(
+    Object.entries(headers).map(([key, value]) => [String(key).toLowerCase(), String(value)]),
+  );
   return {
     ok: status >= 200 && status < 300,
     status,
+    headers: { get: (name) => normalizedHeaders.get(String(name).toLowerCase()) || null },
     async json() {
       if (typeof body === "string") throw new Error("invalid json");
       return body;
@@ -278,6 +282,55 @@ test("pure: GLOBAL per-instance rate gate spaces DISTINCT queries by minInterval
   await Promise.all([r("q1"), r("q2"), r("q3")]);
   // First runs immediately; each subsequent distinct query waits one interval.
   assert.deepEqual(slept, [1000, 1000]);
+});
+
+test("pure: a queued distinct query honors Retry-After after a 429 without retrying the failed query", async () => {
+  let clock = 0;
+  const slept = [];
+  const calls = [];
+  const r = createNominatimPlaceResolver({
+    fetcher: async (url) => {
+      calls.push(new URL(url).searchParams.get("q"));
+      return calls.length === 1
+        ? jsonResponse(429, [], { "Retry-After": "3" })
+        : jsonResponse(200, [nominatim("Recovered", 1, 1, 0.5)]);
+    },
+    minIntervalMs: 0,
+    now: () => clock,
+    sleep: async (ms) => { slept.push(ms); clock += ms; },
+  });
+
+  const [limited, recovered] = await Promise.all([r("first"), r("second")]);
+  assert.deepEqual(limited, []);
+  assert.equal(recovered.length, 1);
+  assert.deepEqual(calls, ["first", "second"], "the failed query is not retried automatically");
+  assert.deepEqual(slept, [3000], "the already-queued query waits out the provider cooldown");
+});
+
+test("pure: provider cooldown falls back safely and clamps an excessive Retry-After", async () => {
+  for (const testCase of [
+    { status: 503, headers: {}, expected: 5000 },
+    { status: 429, headers: { "Retry-After": "999" }, expected: 60000 },
+  ]) {
+    let clock = 0;
+    const slept = [];
+    let calls = 0;
+    const r = createNominatimPlaceResolver({
+      fetcher: async () => {
+        calls += 1;
+        return calls === 1
+          ? jsonResponse(testCase.status, [], testCase.headers)
+          : jsonResponse(200, [nominatim("Recovered", 1, 1, 0.5)]);
+      },
+      minIntervalMs: 0,
+      now: () => clock,
+      sleep: async (ms) => { slept.push(ms); clock += ms; },
+    });
+
+    await r("first");
+    await r("second");
+    assert.deepEqual(slept, [testCase.expected]);
+  }
 });
 
 test("pure: User-Agent header is sent and is deploy-configurable", async () => {
