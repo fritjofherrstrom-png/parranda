@@ -124,6 +124,52 @@ test("a stale selected pick cannot restore a rich candidate proven unavailable",
   assert.deepEqual(result, []);
 });
 
+test("selected-day source hours survive as a bounded fact without raw schedule data", () => {
+  const rich = richCandidate({
+    availability: {
+      eligible: true,
+      status: "available_in_window",
+      reason: "opening_hours_overlap_query_window",
+      selected_day_hours: {
+        status: "known",
+        all_day: false,
+        windows: [{ opens: "10:00", closes: "18:00" }],
+        raw_schedule: "Mo-Fr 10:00-18:00",
+      },
+    },
+  });
+  const result = mapAdmittedSelectionToSourceCandidates({
+    selected: [selectedPick()],
+    plannerRoles: plannerRoles({ coffee_start: [rich] }),
+  });
+
+  assert.deepEqual(result[0].selected_day_hours, {
+    status: "known",
+    all_day: false,
+    windows: [{ opens: "10:00", closes: "18:00" }],
+  });
+  assert.equal(JSON.stringify(result[0]).includes("Mo-Fr"), false);
+});
+
+test("malformed selected-day hours never enter engine source candidates", () => {
+  const rich = richCandidate({
+    availability: {
+      eligible: true,
+      status: "unknown",
+      selected_day_hours: {
+        status: "known",
+        windows: [{ opens: "payload", closes: "18:00" }],
+      },
+    },
+  });
+  const result = mapAdmittedSelectionToSourceCandidates({
+    selected: [selectedPick()],
+    plannerRoles: plannerRoles({ coffee_start: [rich] }),
+  });
+
+  assert.equal(result[0].selected_day_hours, undefined);
+});
+
 test("falls back to bare-id join when the role does not match", () => {
   const result = mapAdmittedSelectionToSourceCandidates({
     selected: [selectedPick({ role: "mismatched_role" })],

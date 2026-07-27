@@ -47,6 +47,67 @@ function evaluateOpeningHoursForWindow(value, { weekday, startMinute = 0, endMin
 }
 
 /**
+ * Convert a supported source-owned weekly schedule into a bounded local-day
+ * fact suitable for a route-stop contract. This deliberately does not answer
+ * "open now": it only reports the source's windows for the already-trusted
+ * selected local day. Unsupported syntax stays null and raw schedules never
+ * leave the candidate pipeline.
+ */
+function buildSelectedDayHoursFact(value, { weekday } = {}) {
+  const openingHours = normalizeOpeningHours(value);
+  if (!openingHours || !Number.isInteger(weekday) || weekday < 0 || weekday > 6) return null;
+
+  if (openingHours === "24/7") {
+    return {
+      status: "known",
+      all_day: true,
+      windows: [],
+    };
+  }
+
+  const schedule = parseWeeklySchedule(openingHours);
+  if (!schedule) return null;
+  const windows = intervalsForLocalDay(schedule, weekday)
+    .sort(([left], [right]) => left - right)
+    .map(([start, end]) => ({
+      opens: formatLocalMinute(start),
+      closes: formatLocalMinute(end),
+    }));
+  return {
+    status: windows.length ? "known" : "closed",
+    all_day: false,
+    windows,
+  };
+}
+
+function normalizeSelectedDayHoursFact(value) {
+  if (!value || typeof value !== "object" || !["known", "closed"].includes(value.status)) return null;
+  if (value.status === "closed") {
+    return { status: "closed", all_day: false, windows: [] };
+  }
+  if (value.all_day === true) {
+    return { status: "known", all_day: true, windows: [] };
+  }
+  const windows = Array.isArray(value.windows)
+    ? value.windows
+        .map((window) => ({
+          startMinute: parseClock(String(window?.opens || ""), { allowEndOfDay: false }),
+          endMinute: parseClock(String(window?.closes || ""), { allowEndOfDay: true }),
+        }))
+        .filter(({ startMinute, endMinute }) =>
+          startMinute !== null && endMinute !== null && startMinute < endMinute,
+        )
+        .sort((left, right) => left.startMinute - right.startMinute || left.endMinute - right.endMinute)
+        .slice(0, 4)
+        .map(({ startMinute, endMinute }) => ({
+          opens: formatLocalMinute(startMinute),
+          closes: formatLocalMinute(endMinute),
+        }))
+    : [];
+  return windows.length ? { status: "known", all_day: false, windows } : null;
+}
+
+/**
  * Build the local window used by same-day Planner eligibility. Today starts at
  * the trusted local clock; a future day evaluates the whole local date.
  */
@@ -154,6 +215,14 @@ function parseClock(value, { allowEndOfDay }) {
   return hour * 60 + minute;
 }
 
+function formatLocalMinute(value) {
+  if (!Number.isFinite(value) || value < 0 || value > 1440) return null;
+  if (value === 1440) return "24:00";
+  const hour = Math.floor(value / 60);
+  const minute = value % 60;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
 function intervalsForLocalDay(schedule, weekday) {
   const intervals = [];
   for (const interval of schedule[weekday].intervals) {
@@ -192,7 +261,9 @@ function unknown(reason) {
 }
 
 module.exports = {
+  buildSelectedDayHoursFact,
   buildLocalDayAvailabilityWindow,
   evaluateOpeningHoursForWindow,
   normalizeOpeningHours,
+  normalizeSelectedDayHoursFact,
 };

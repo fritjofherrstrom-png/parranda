@@ -18,8 +18,9 @@
  *   - The experimental route is honest: candidate role order can seed a small
  *     proximity sequence, but only inside this flag-gated experiment and only
  *     when the produced order passes walking-budget validation. It still
- *     surfaces walking distance/minute ESTIMATES — never a live arrival time,
- *     opening hours, or "better/optimal/fastest/shortest" claims.
+ *     surfaces walking distance/minute ESTIMATES and may carry a bounded
+ *     selected-local-day source-hours fact — never raw schedules, current-open
+ *     state, a live arrival time, or "better/optimal/fastest/shortest" claims.
  *
  * Pure except for the awaited trusted loader + injectable walking router.
  * Deterministic given its inputs.
@@ -33,8 +34,10 @@ const { buildCandidateCombinationInspect } = require("./candidate-combination-in
 const { buildRouteCandidateFromCandidateCombination } = require("./candidate-combination-route-adapter");
 const { assessCityCandidateReadiness } = require("../place-candidates/readiness");
 const {
+  buildSelectedDayHoursFact,
   buildLocalDayAvailabilityWindow,
   evaluateOpeningHoursForWindow,
+  normalizeSelectedDayHoursFact,
 } = require("../place-candidates/opening-hours");
 const { validateAgnosticWalkingOrder } = require("./agnostic-route-walking-validation");
 const { buildAgnosticRouteOrdering, daypartForRole, timeBandRank } = require("./agnostic-route-ordering");
@@ -271,23 +274,28 @@ function buildCandidatePipelineChecks({
  * Build the experimental primary_route from the adapted candidate body. It stays
  * clearly experimental. Without #261 walking validation it omits geometry/timing;
  * after validation it uses the existing route-result walking fields (`legs`,
- * `map_path_points`) while still avoiding opening-hours/live-arrival claims.
+ * `map_path_points`) and bounded selected-day source hours while still avoiding
+ * raw schedules, current-open-state, or live-arrival claims.
  */
 function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation = null, routeOrdering = null, currentTimeBand = null, anchoredToLocalTime = false, trimmedDayparts = [] }) {
   const inputStops = Array.isArray(adaptedBody?.stops) ? adaptedBody.stops : [];
-  const stops = inputStops.map((stop) => ({
-    id: stop.candidate_id || null,
-    label: stop.label || null,
-    role: stop.role || null,
-    origin: stop.origin || null,
-    confidence: stop.confidence || null,
-    // #275 — honest daypart label (morning…evening), approximate arc position,
-    // NOT a scheduled clock time. Derived from the same role→slot map ordering
-    // uses, so the label always matches the sequence.
-    daypart: daypartForRole(stop.role || null),
-    lat: stop.coordinates && Number.isFinite(stop.coordinates.lat) ? stop.coordinates.lat : null,
-    lng: stop.coordinates && Number.isFinite(stop.coordinates.lng) ? stop.coordinates.lng : null,
-  }));
+  const stops = inputStops.map((stop) => {
+    const selectedDayHours = normalizeSelectedDayHoursFact(stop.selected_day_hours);
+    return {
+      id: stop.candidate_id || null,
+      label: stop.label || null,
+      role: stop.role || null,
+      origin: stop.origin || null,
+      confidence: stop.confidence || null,
+      // #275 — honest daypart label (morning…evening), approximate arc position,
+      // NOT a scheduled clock time. Derived from the same role→slot map ordering
+      // uses, so the label always matches the sequence.
+      daypart: daypartForRole(stop.role || null),
+      lat: stop.coordinates && Number.isFinite(stop.coordinates.lat) ? stop.coordinates.lat : null,
+      lng: stop.coordinates && Number.isFinite(stop.coordinates.lng) ? stop.coordinates.lng : null,
+      ...(selectedDayHours?.status === "known" ? { selected_day_hours: selectedDayHours } : {}),
+    };
+  });
   const stopIds = stops.map((stop) => stop.id).filter(Boolean);
   const gateDiagnostics = inputStops
     .map((stop) => buildGateDiagnostic(stop))
@@ -366,14 +374,20 @@ function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation
   }
 
   // Fallback (no validation supplied): the pre-#261 unvalidated shape.
+  const hasSelectedDayHours = stops.some((stop) => Boolean(stop.selected_day_hours));
   return {
     ...base,
     summary:
-      "Experimental route composed from trusted source-backed candidates. Stop order is unvalidated; no walking time or opening hours are implied.",
+      "Experimental route composed from trusted source-backed candidates. Stop order is unvalidated; no walking time or current opening state is implied.",
     order_source: "candidate_role_order",
     order_confidence: "unvalidated",
     routing_source: "none",
-    caveats: ["walking_order_unvalidated", "no_walking_time", "no_opening_hours", "experimental"],
+    caveats: [
+      "walking_order_unvalidated",
+      "no_walking_time",
+      hasSelectedDayHours ? "selected_day_hours_not_live" : "no_opening_hours",
+      "experimental",
+    ],
   };
 }
 
@@ -673,10 +687,14 @@ async function composeAgnosticRouteOutput({
     : null;
   const availabilityHelpers = availabilityWindow
     ? {
-        evaluateCandidateAvailability: ({ candidate }) =>
-          typeof candidate?.opening_hours === "string"
-            ? evaluateOpeningHoursForWindow(candidate.opening_hours, availabilityWindow)
-            : null,
+        evaluateCandidateAvailability: ({ candidate }) => {
+          if (typeof candidate?.opening_hours !== "string") return null;
+          const availability = evaluateOpeningHoursForWindow(candidate.opening_hours, availabilityWindow);
+          const selectedDayHours = buildSelectedDayHoursFact(candidate.opening_hours, availabilityWindow);
+          return selectedDayHours
+            ? { ...availability, selected_day_hours: selectedDayHours }
+            : availability;
+        },
       }
     : {};
   const selectionHelpers = trustedTimeKnown

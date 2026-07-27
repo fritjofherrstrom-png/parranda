@@ -13,6 +13,7 @@ const {
 } = require("./route-diversity");
 const { routeWalkingPath } = require("./walking-router");
 const { normalizeTrust } = require("./place-candidates/contract");
+const { normalizeSelectedDayHoursFact } = require("./place-candidates/opening-hours");
 const { normalizeTrustSummary } = require("./route-candidates/contract");
 const { buildDayflowContext } = require("./planner/dayflow-context");
 const { daypartSlotForRole, SLOT_DAYPART } = require("./planner/agnostic-route-ordering");
@@ -178,6 +179,7 @@ function buildProvisionalComposeStops() {
         ? candidate.also_covers.map((entry) => ({ ...entry }))
         : [],
       reconciliation: candidate.reconciliation || null,
+      selectedDayHours: normalizeSelectedDayHoursFact(candidate.selected_day_hours),
     }));
 }
 
@@ -4901,6 +4903,10 @@ function formatMainStop(stop) {
       ? stop.alsoCovers.map((entry) => ({ ...entry }))
       : [];
     formatted.reconciliation = stop.reconciliation || null;
+    const selectedDayHours = normalizeSelectedDayHoursFact(stop.selectedDayHours);
+    if (selectedDayHours && selectedDayHours.status === "known") {
+      formatted.selected_day_hours = selectedDayHours;
+    }
   }
 
   return formatted;

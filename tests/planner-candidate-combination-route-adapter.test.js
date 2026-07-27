@@ -35,6 +35,7 @@ function sel(role, id, over = {}) {
     coordinates: "coordinates" in over ? over.coordinates : { lat: 41.9, lng: 12.49 },
     also_covers: over.also_covers || [],
     reasons: over.reasons || ["covers:scenic"],
+    ...(over.selected_day_hours ? { selected_day_hours: over.selected_day_hours } : {}),
   };
 }
 
@@ -75,6 +76,36 @@ test("2. preserves selected stable ids", () => {
 test("3. preserves role mapping", () => {
   const out = adapt(combo(), route(["x"]));
   assert.deepEqual(out.candidate.target_roles, ["scenic_anchor", "food_anchor"]);
+});
+
+test("3b. preserves only normalized selected-day source hours", () => {
+  const out = adapt(combo({
+    selected: [
+      sel("scenic_anchor", "v1", {
+        selected_day_hours: {
+          status: "known",
+          all_day: false,
+          windows: [{ opens: "10:00", closes: "18:00" }],
+          raw_schedule: "Mo 10:00-18:00",
+        },
+      }),
+      sel("food_anchor", "r1", {
+        selected_day_hours: {
+          status: "known",
+          all_day: false,
+          windows: [{ opens: "soon", closes: "later" }],
+        },
+      }),
+    ],
+  }), route(["x"]));
+
+  assert.deepEqual(out.candidate.stops[0].selected_day_hours, {
+    status: "known",
+    all_day: false,
+    windows: [{ opens: "10:00", closes: "18:00" }],
+  });
+  assert.equal(out.candidate.stops[1].selected_day_hours, undefined);
+  assert.equal(JSON.stringify(out).includes("raw_schedule"), false);
 });
 
 test("4. preserves unresolved roles", () => {

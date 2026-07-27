@@ -175,6 +175,43 @@ test("unresolved opening-hours syntax fails open and remains inspectable", () =>
   assert.equal(out.availability_summary.unresolved_candidate_count, 1);
 });
 
+test("selected-day hours pass through availability only as a normalized bounded fact", () => {
+  const records = [
+    record("known-food", "Known Food", "restaurant", 41.901, 12.491, {
+      tags: ["mat"],
+      opening_hours: "Mo-Fr 10:00-18:00",
+    }),
+  ];
+  const out = selectPlannerRoleCandidates(
+    city([]),
+    { date: DATE, preferences: ["food"], include_external_candidates: 1 },
+    {
+      external_provider: { dataset: loaderOf(records) },
+      evaluateCandidateAvailability: () => ({
+        eligible: true,
+        status: "available_in_window",
+        reason: "opening_hours_overlap_query_window",
+        selected_day_hours: {
+          status: "known",
+          all_day: false,
+          windows: [
+            { opens: "10:00", closes: "18:00" },
+            { opens: "payload", closes: "22:00" },
+          ],
+          raw_schedule: "must not survive",
+        },
+      }),
+    },
+  );
+  const availability = role(out, "food_anchor").candidates[0].availability;
+  assert.deepEqual(availability.selected_day_hours, {
+    status: "known",
+    all_day: false,
+    windows: [{ opens: "10:00", closes: "18:00" }],
+  });
+  assert.equal("raw_schedule" in availability.selected_day_hours, false);
+});
+
 test("anchor roles require may_anchor_route; medium external scenic is partial, not filled", () => {
   const out = decide(
     city([]),

@@ -2,9 +2,11 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
+  buildSelectedDayHoursFact,
   buildLocalDayAvailabilityWindow,
   evaluateOpeningHoursForWindow,
   normalizeOpeningHours,
+  normalizeSelectedDayHoursFact,
 } = require("../server/place-candidates/opening-hours");
 
 test("normalizes bounded source-owned opening-hours text", () => {
@@ -48,6 +50,67 @@ test("overnight hours remain available on both sides of local midnight", () => {
     evaluateOpeningHoursForWindow(hours, { weekday: 6, startMinute: 30, endMinute: 90 }).eligible,
     true,
   );
+});
+
+test("selected-day facts expose bounded local windows without raw schedule syntax", () => {
+  assert.deepEqual(
+    buildSelectedDayHoursFact("Mo-Fr 09:00-18:00; Sa 10:00-14:00; Su off", { weekday: 1 }),
+    {
+      status: "known",
+      all_day: false,
+      windows: [{ opens: "09:00", closes: "18:00" }],
+    },
+  );
+  assert.deepEqual(buildSelectedDayHoursFact("24/7", { weekday: 4 }), {
+    status: "known",
+    all_day: true,
+    windows: [],
+  });
+  assert.deepEqual(buildSelectedDayHoursFact("Su off", { weekday: 0 }), {
+    status: "closed",
+    all_day: false,
+    windows: [],
+  });
+});
+
+test("selected-day facts keep overnight windows local and fail closed on unsupported syntax", () => {
+  assert.deepEqual(buildSelectedDayHoursFact("Fr-Sa 18:00-02:00; Su-Th off", { weekday: 5 }), {
+    status: "known",
+    all_day: false,
+    windows: [{ opens: "18:00", closes: "24:00" }],
+  });
+  assert.deepEqual(buildSelectedDayHoursFact("Fr-Sa 18:00-02:00; Su-Th off", { weekday: 6 }), {
+    status: "known",
+    all_day: false,
+    windows: [
+      { opens: "00:00", closes: "02:00" },
+      { opens: "18:00", closes: "24:00" },
+    ],
+  });
+  assert.equal(buildSelectedDayHoursFact("sunrise-sunset", { weekday: 2 }), null);
+  assert.equal(buildSelectedDayHoursFact("Mo 09:00-18:00", { weekday: null }), null);
+});
+
+test("public selected-day facts accept only the closed bounded shape", () => {
+  assert.deepEqual(
+    normalizeSelectedDayHoursFact({
+      status: "known",
+      all_day: false,
+      windows: [
+        { opens: "9:00", closes: "18:00" },
+        { opens: "bad", closes: "22:00" },
+        { opens: "20:00", closes: "10:00" },
+      ],
+      raw_schedule: "must not survive",
+    }),
+    {
+      status: "known",
+      all_day: false,
+      windows: [{ opens: "09:00", closes: "18:00" }],
+    },
+  );
+  assert.equal(normalizeSelectedDayHoursFact({ status: "known", windows: [] }), null);
+  assert.equal(normalizeSelectedDayHoursFact({ status: "unknown", all_day: true }), null);
 });
 
 test("unsupported or precedence-sensitive syntax fails open as unknown", () => {

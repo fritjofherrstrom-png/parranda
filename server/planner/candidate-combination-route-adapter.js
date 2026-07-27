@@ -9,7 +9,7 @@
  *
  * THIS IS NOT A ROUTE. It must never:
  *   - mutate the route result, planner roles, or any input object
- *   - claim walking time, route-order confidence, opening hours, or day-plan quality
+ *   - claim walking time, route-order confidence, current opening state, or day-plan quality
  *   - be presented as default / user-facing route output
  *   - assert that the candidate combination is "better" than the route engine
  *
@@ -18,6 +18,8 @@
  *
  * Pure / deterministic. No network.
  */
+
+const { normalizeSelectedDayHoursFact } = require("../place-candidates/opening-hours");
 
 function buildRouteCandidateAdapterInspect({ city, candidateCombination, route, context } = {}) {
   const candidate = buildRouteCandidateFromCandidateCombination({ city, candidateCombination, context });
@@ -40,20 +42,26 @@ function buildRouteCandidateFromCandidateCombination({ city, candidateCombinatio
 
   // stops preserve the combination's role order — explicitly NOT a walking
   // sequence. order_confidence is diagnostic_only.
-  const stops = selected.map((s) => ({
-    role: s.role,
-    candidate_id: s.candidate_id || null,
-    label: s.label || null,
-    coordinates: resolveCoords(s.coordinates),
-    origin: s.origin || null,
-    confidence: s.confidence || null,
-    // #272 — present only when the agnostic experiment seam computed the rank;
-    // every other adapter consumer keeps today's stop shape verbatim.
-    ...(Number.isFinite(s.local_feel_rank)
-      ? { local_feel_rank: s.local_feel_rank, local_feel_reasons: Array.isArray(s.local_feel_reasons) ? s.local_feel_reasons : [] }
-      : {}),
-    experimental_admission: s.experimental_admission || null,
-  }));
+  const stops = selected.map((s) => {
+    const selectedDayHours = normalizeSelectedDayHoursFact(s.selected_day_hours);
+    return {
+      role: s.role,
+      candidate_id: s.candidate_id || null,
+      label: s.label || null,
+      coordinates: resolveCoords(s.coordinates),
+      origin: s.origin || null,
+      confidence: s.confidence || null,
+      // A bounded fact for the selected local date, never the raw source
+      // schedule and never a claim about whether the venue is open now.
+      ...(selectedDayHours ? { selected_day_hours: selectedDayHours } : {}),
+      // #272 — present only when the agnostic experiment seam computed the rank;
+      // every other adapter consumer keeps today's stop shape verbatim.
+      ...(Number.isFinite(s.local_feel_rank)
+        ? { local_feel_rank: s.local_feel_rank, local_feel_reasons: Array.isArray(s.local_feel_reasons) ? s.local_feel_reasons : [] }
+        : {}),
+      experimental_admission: s.experimental_admission || null,
+    };
+  });
   const stopIds = stops.map((s) => s.candidate_id).filter(Boolean);
   const targetRoles = stops.map((s) => s.role);
 
