@@ -44,6 +44,7 @@ const TOKEN_TO_AXIS = (() => {
 
 const DAYPART_ORDER = { morning: 0, midday: 1, afternoon: 2, evening: 3 };
 const RANK_DAYPART = ["morning", "midday", "afternoon", "evening"];
+const CONTEXT_DUPLICATE_RADIUS_KM = 0.25;
 
 // A district's daypart lean as a CONTINUOUS score (0=morning .. 3=evening) from
 // its full daypart distribution — not a single argmax. This is what stops a
@@ -107,6 +108,62 @@ function contextLocalFeelRank(candidate) {
     return Math.max(0, Math.min(3, candidate.local_feel_rank));
   }
   return candidate?.chain === true ? 2 : 0;
+}
+
+function normalizedContextName(candidate) {
+  return String(candidate?.name || candidate?.label || candidate?.title || "")
+    .normalize("NFKD")
+    .replace(/\p{M}+/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+function sharesContextFunction(left, right) {
+  const leftType = norm(left?.type);
+  const rightType = norm(right?.type);
+  if (leftType && leftType === rightType) return true;
+
+  const leftAxes = tokensToAxes([left?.type, ...(Array.isArray(left?.tags) ? left.tags : [])]);
+  const rightAxes = tokensToAxes([right?.type, ...(Array.isArray(right?.tags) ? right.tags : [])]);
+  return [...leftAxes].some((axis) => rightAxes.has(axis));
+}
+
+function compareContextEvidence(left, right) {
+  const leftVerified = left?.trust?.human_verified === true || left?.human_verified === true ? 0 : 1;
+  const rightVerified = right?.trust?.human_verified === true || right?.human_verified === true ? 0 : 1;
+  return (
+    leftVerified - rightVerified ||
+    Number(right?.city_pack_owned === true) - Number(left?.city_pack_owned === true) ||
+    contextLocalFeelRank(left) - contextLocalFeelRank(right) ||
+    String(left?.id || "").localeCompare(String(right?.id || ""))
+  );
+}
+
+// Open data often represents one named place as several nearby nodes (entrances,
+// viewpoints or map details). Context cards should not repeat that evidence as
+// separate suggestions. Keep this deliberately narrower than entity resolution:
+// same normalized name + same function + close coordinates, context-only.
+function dedupeNearbyContextCandidates(candidates) {
+  const kept = [];
+  for (const candidate of Array.isArray(candidates) ? candidates : []) {
+    const name = normalizedContextName(candidate);
+    const duplicateIndex = name && Number.isFinite(candidate?.lat) && Number.isFinite(candidate?.lng)
+      ? kept.findIndex((existing) => {
+          if (normalizedContextName(existing) !== name || !sharesContextFunction(existing, candidate)) return false;
+          if (!Number.isFinite(existing?.lat) || !Number.isFinite(existing?.lng)) return false;
+          return haversineKm(existing, candidate) <= CONTEXT_DUPLICATE_RADIUS_KM;
+        })
+      : -1;
+    if (duplicateIndex < 0) {
+      kept.push(candidate);
+      continue;
+    }
+    if (compareContextEvidence(candidate, kept[duplicateIndex]) < 0) {
+      kept[duplicateIndex] = candidate;
+    }
+  }
+  return kept;
 }
 
 // District candidates are secondary place evidence, not route stops. Prefer
@@ -202,7 +259,7 @@ function composeDistrictDay(candidates, { intents = [], maxAreas = 2, linkKm, mi
       return [...ax].some((a) => wantedSet.has(a));
     });
     const matchedStops = wantedAxes.length && onIntent.length ? onIntent : members;
-    const stopsSource = preferLocalContextCandidates(matchedStops);
+    const stopsSource = dedupeNearbyContextCandidates(preferLocalContextCandidates(matchedStops));
     return {
       center: s.area.center,
       // The coherent arc daypart (distinct across the day), not the raw per-district
