@@ -58,6 +58,57 @@ test("each district carries map-drawable stops (id + name + real coords, never f
   assert.ok(!stops.some((s) => s.id === "m3"), "a stop without coords is never fabricated onto the map");
 });
 
+test("nearby same-name source features become one context suggestion", () => {
+  const candidates = [
+    {
+      id: "viewpoint-b",
+      name: "Harbour Walk",
+      type: "viewpoint",
+      tags: ["views"],
+      lat: 57,
+      lng: 12,
+    },
+    {
+      id: "viewpoint-a",
+      name: "harbour  walk",
+      type: "viewpoint",
+      tags: ["scenic"],
+      lat: 57.0005,
+      lng: 12.001,
+    },
+    {
+      id: "museum",
+      name: "Local Museum",
+      type: "museum",
+      tags: ["culture"],
+      lat: 57.0002,
+      lng: 12.0002,
+    },
+  ];
+
+  const day = composeDistrictDay(candidates, { intents: ["views", "culture"], maxAreas: 1 });
+  const reversed = composeDistrictDay([...candidates].reverse(), { intents: ["views", "culture"], maxAreas: 1 });
+  const area = day.areas[0];
+
+  assert.deepEqual(reversed, day, "duplicate evidence resolves independently of provider row order");
+  assert.deepEqual([...area.stop_ids].sort(), ["museum", "viewpoint-a"], "the deterministic stronger representative remains");
+  assert.deepEqual([...area.stop_names].sort(), ["Local Museum", "harbour  walk"]);
+  assert.deepEqual(area.stops.map((stop) => stop.id).sort(), ["museum", "viewpoint-a"]);
+});
+
+test("same-name context evidence remains separate when far apart or functionally different", () => {
+  const candidates = [
+    { id: "near-cafe", name: "River House", type: "cafe", tags: ["coffee"], lat: 48, lng: 11 },
+    { id: "near-gallery", name: "River House", type: "gallery", tags: ["culture"], lat: 48.0002, lng: 11.0002 },
+    { id: "far-cafe", name: "River House", type: "cafe", tags: ["coffee"], lat: 48.003, lng: 11 },
+  ];
+
+  const day = composeDistrictDay(candidates, { intents: ["fika", "culture"], maxAreas: 2 });
+  const ids = day.areas.flatMap((area) => area.stop_ids);
+
+  assert.deepEqual(ids.sort(), ["far-cafe", "near-cafe", "near-gallery"]);
+});
+
 test("district stops preserve explicit local-quality facts for optional route context", () => {
   const candidates = [
     {
