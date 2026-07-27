@@ -39,6 +39,8 @@ const DEFAULT_LIMIT = 5;
 const MAX_LIMIT = 10;
 const DEFAULT_CACHE_TTL_MS = 30 * 60 * 1000; // in-memory only; lost on restart
 const DEFAULT_MIN_INTERVAL_MS = 1100; // honor Nominatim's ~1 req/sec, per instance
+const DEFAULT_PROVIDER_COOLDOWN_MS = 5000;
+const MAX_PROVIDER_COOLDOWN_MS = 60 * 1000;
 const MAX_QUERY_LEN = 200;
 
 // Conservative confidence thresholds (tunable). Importance is OSM's popularity-ish
@@ -63,6 +65,22 @@ function normalizeQuery(raw) {
   const collapsed = raw.trim().replace(/\s+/g, " ");
   if (!collapsed || collapsed.length > MAX_QUERY_LEN) return null;
   return collapsed;
+}
+
+function providerCooldownMs(response, nowMs, fallbackMs, maxMs) {
+  if (![429, 503].includes(Number(response?.status))) return 0;
+  const raw = response?.headers && typeof response.headers.get === "function"
+    ? response.headers.get("retry-after")
+    : null;
+  let requestedMs = null;
+  if (typeof raw === "string" && /^\d+(?:\.\d+)?$/.test(raw.trim())) {
+    requestedMs = Number(raw.trim()) * 1000;
+  } else if (typeof raw === "string" && raw.trim()) {
+    const retryAt = Date.parse(raw);
+    if (Number.isFinite(retryAt)) requestedMs = retryAt - nowMs;
+  }
+  const selected = Number.isFinite(requestedMs) && requestedMs > 0 ? requestedMs : fallbackMs;
+  return Math.min(maxMs, Math.max(0, selected));
 }
 
 function normalizeNameForMatch(raw) {
@@ -214,6 +232,8 @@ function createNominatimPlaceResolver({
   limit = DEFAULT_LIMIT,
   cacheTtlMs = DEFAULT_CACHE_TTL_MS,
   minIntervalMs = DEFAULT_MIN_INTERVAL_MS,
+  providerCooldownMs: fallbackProviderCooldownMs = DEFAULT_PROVIDER_COOLDOWN_MS,
+  maxProviderCooldownMs = MAX_PROVIDER_COOLDOWN_MS,
   now = () => Date.now(),
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 } = {}) {
@@ -232,19 +252,21 @@ function createNominatimPlaceResolver({
   const cache = new Map();
   const inFlight = new Map();
   let nextSlot = 0;
+  let cooldownUntil = 0;
+  let requestQueue = Promise.resolve();
 
   // fetchAndMap distinguishes provider SUCCESS from FAILURE so the caller only
   // caches successes. A successful 200 (including a legitimate empty array) is
   // cacheable; any http-non-ok / network / timeout / parse / malformed failure is
   // NOT cacheable (so a transient blip never poison-caches `[]` for the TTL).
   // The public contract still returns `candidates[]` and fails closed.
-  async function fetchAndMap(query) {
+  async function fetchAndMapQueued(query) {
     if (typeof fetcher !== "function") return { ok: false, candidates: [] };
 
-    // Global rate gate: reserve the next slot synchronously (so concurrent
-    // distinct queries serialize), then wait out the spacing.
+    // Global rate gate: distinct queries are serialized so a provider cooldown
+    // learned from one response also protects queries that were already queued.
     const current = now();
-    const start = Math.max(current, nextSlot);
+    const start = Math.max(current, nextSlot, cooldownUntil);
     nextSlot = start + minIntervalMs;
     const wait = start - current;
     if (wait > 0) await sleep(wait);
@@ -265,7 +287,16 @@ function createNominatimPlaceResolver({
         signal: controller.signal,
         headers: { "User-Agent": userAgent, Accept: "application/json" },
       });
-      if (!response || !response.ok) return { ok: false, candidates: [] };
+      if (!response || !response.ok) {
+        const cooldownMs = providerCooldownMs(
+          response,
+          now(),
+          clampInt(fallbackProviderCooldownMs, 0, MAX_PROVIDER_COOLDOWN_MS, DEFAULT_PROVIDER_COOLDOWN_MS),
+          clampInt(maxProviderCooldownMs, 0, MAX_PROVIDER_COOLDOWN_MS, MAX_PROVIDER_COOLDOWN_MS),
+        );
+        if (cooldownMs > 0) cooldownUntil = Math.max(cooldownUntil, now() + cooldownMs);
+        return { ok: false, candidates: [] };
+      }
       const data = await response.json();
       if (!Array.isArray(data)) return { ok: false, candidates: [] };
       const raw = data.map(toRawCandidate).filter(Boolean);
@@ -275,6 +306,12 @@ function createNominatimPlaceResolver({
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  function fetchAndMap(query) {
+    const run = requestQueue.then(() => fetchAndMapQueued(query));
+    requestQueue = run.catch(() => undefined);
+    return run;
   }
 
   return async function resolvePlace(rawQuery) {
