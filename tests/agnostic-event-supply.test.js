@@ -366,6 +366,70 @@ test("a bounded all-day occurrence is valid this-week evidence without becoming 
   assert.equal(out.acquisition.source_health.result, "events_found");
 });
 
+test("trusted venue resolution can recover one source-backed mapless occurrence", async () => {
+  const registry = [{
+    id: "localized-api",
+    label: "Localized API",
+    adapter: "localized_events_api",
+    endpoint: "https://events.example/api/events/",
+    bbox: [24.8, 60.0, 25.1, 60.3],
+    timezone: "Europe/Helsinki",
+    source_language: "en",
+    source_tier: "official",
+    confidence: "medium",
+    source_family: "official_tourism_open_api",
+    source_identity: "events.example",
+    license: "CC-BY 4.0",
+    status: "active",
+  }];
+  const queries = [];
+  const out = await collectAnchorEvents({
+    anchor: HELSINKI,
+    now: NOW,
+    registry,
+    venueResolver: async (query) => {
+      queries.push(query);
+      return [{
+        lat: 60.171,
+        lng: 24.941,
+        confidence: "medium",
+        provenance: "nominatim_osm",
+        attribution: "OpenStreetMap contributors",
+        license: "ODbL",
+      }];
+    },
+    fetcher: async (url) => ({
+      ok: true,
+      status: 200,
+      url: String(url),
+      text: async () => JSON.stringify({
+        count: 1,
+        results: [{
+          id: "venue-market",
+          title: { en: "Evening makers market" },
+          external_website_url: "https://organizer.example/market",
+          venue_name: "Market Hall",
+          address: "Square 1",
+          location: null,
+          start_date: "2026-06-28",
+          end_date: "2026-06-28",
+          start_time: "18:00",
+          end_time: "21:00",
+          categories: [{ title: "Markets", slug: "markets", subcategories: [] }],
+        }],
+      }),
+    }),
+  });
+
+  assert.deepEqual(queries, ["Square 1, Market Hall"]);
+  assert.equal(out.tonight.length, 1);
+  assert.equal(out.tonight[0].id, "venue-market");
+  assert.equal(out.tonight[0].address, "Square 1");
+  assert.equal(out.tonight[0].venue_resolution.source, "trusted_place_resolver");
+  assert.equal(out.tonight[0].route_eligible, true);
+  assert.equal(out.acquisition.venue_resolution.resolved_count, 1);
+});
+
 test("tonight ranks by salience: an ongoing 'now' event outranks a later-today one", async () => {
   const out = await collectAnchorEvents({
     anchor: HELSINKI,

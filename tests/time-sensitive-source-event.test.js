@@ -20,6 +20,7 @@ function event(overrides = {}) {
     lat: "41.9",
     lng: "12.49",
     area: "riverfront",
+    address: "River Street 7",
     starts_at: "2026-07-10T17:00:00.000Z",
     ends_at: "2026-07-10T22:00:00.000Z",
     last_checked: "2026-07-10T09:00:00.000Z",
@@ -40,6 +41,7 @@ test("current time-sensitive source event is normalized as relevant now", () => 
   assert.equal(normalized.lat, 41.9);
   assert.equal(normalized.lng, 12.49);
   assert.equal(normalized.route_role_hint, "market_stop");
+  assert.equal(normalized.address, "River Street 7");
   assert.deepEqual(normalized.intents, ["markets", "nightlife"]);
   assert.ok(normalized.timing_reasons.includes("has_source_backing"));
 });

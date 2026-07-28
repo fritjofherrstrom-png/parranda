@@ -214,6 +214,7 @@ function weaveEveningEvent(placeStructure, liveEvents, { selectedDate = null } =
 
 function isEligibleEveningAnchor(event) {
   if (!event || typeof event !== "object") return false;
+  if (event.route_eligible === false) return false;
   if (!Number.isFinite(event.lat) || !Number.isFinite(event.lng)) return false;
   if (!(event.title || event.id)) return false;
   if (!event.source_url && !event.source_label) return false;

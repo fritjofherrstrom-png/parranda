@@ -66,6 +66,7 @@ function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
     source_family: firstString(rawEvent.source_family, rawEvent.sourceFamily, rawEvent.source?.family),
     city: firstString(rawEvent.city, options.city),
     place_context: firstString(rawEvent.place_context, rawEvent.place, rawEvent.venue),
+    address: firstString(rawEvent.address, rawEvent.venue_address, rawEvent.location_address),
     lat: coordinates.lat,
     lng: coordinates.lng,
     area: firstString(rawEvent.area, rawEvent.neighborhood, rawEvent.district),

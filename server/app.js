@@ -1408,7 +1408,7 @@ function blockPrivateRepoPaths(request, response, next) {
 function buildApp({
   openDataLoader = resolveDefaultOpenDataLoader(),
   placeResolver = resolveDefaultPlaceResolver(),
-  eventSupply = resolveDefaultEventSupply(),
+  eventSupply,
   walkingRouter = null,
   walkingConfig = null,
   weatherProvider = null,
@@ -1418,6 +1418,12 @@ function buildApp({
   // values (env flag + the frontend workspace's build output).
   anywhereV2Dir = path.join(appRoot, "frontend", "dist"),
 } = {}) {
+  // Event venue recovery reuses the same trusted, rate-limited server resolver
+  // as freeform place intake. Explicit test injections still win, including
+  // `null`; no public payload can provide either seam.
+  if (eventSupply === undefined) {
+    eventSupply = resolveDefaultEventSupply(process.env, { venueResolver: placeResolver });
+  }
   const app = express();
 
   app.use(express.json());

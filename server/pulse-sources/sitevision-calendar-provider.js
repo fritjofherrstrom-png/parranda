@@ -81,6 +81,7 @@ function buildDescriptor(options = {}) {
       "time_window",
       "source_url",
       "place_context",
+      "address",
       "lat",
       "lng",
       "recurrence",

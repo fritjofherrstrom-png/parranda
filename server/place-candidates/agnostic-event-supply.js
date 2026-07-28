@@ -47,6 +47,7 @@ const {
   filterEventsForLiveScope,
 } = require("./live-event-query");
 const { classifyCulturalSalience } = require("../pulse-engine/cultural-salience");
+const { resolveEventVenueGeometry } = require("./event-venue-resolution");
 const {
   buildAnchorEventSourcePlan,
   resolveEventFeedsForAnchor,
@@ -73,6 +74,7 @@ const TONIGHT_TIMING = new Set(["now", "today", "tonight"]);
 // a slow server-side max_duration), feed-agnostic so it protects ANY provider and
 // the deterministic tests (which inject payloads, not query params).
 const MAX_HAPPENING_DAYS = 14;
+const MAX_PULSE_DAILY_RANGE_DAYS = 120;
 const MAX_EVENT_FEED_MANIFEST_BYTES = 1024 * 1024;
 const LOCAL_EVENT_ADAPTERS = new Set([
   "linked_events",
@@ -368,12 +370,12 @@ function isEphemeralHappening(event, now) {
     if (!startsOn || !endsOn || !timezone || !validLocalClock(window.local_start) || !validLocalClock(window.local_end)) {
       return false;
     }
-    return boundedDateOnlyRange(startsOn, endsOn);
+    return boundedDateOnlyRange(startsOn, endsOn, MAX_HAPPENING_DAYS);
   }
   if (window?.kind === "all_day") {
     const startsOn = normalizeSourceEventDate(event.starts_on || window.starts_on);
     const endsOn = normalizeSourceEventDate(event.ends_on || window.ends_on) || startsOn;
-    return Boolean(startsOn && endsOn && boundedDateOnlyRange(startsOn, endsOn));
+    return Boolean(startsOn && endsOn && boundedDateOnlyRange(startsOn, endsOn, MAX_HAPPENING_DAYS));
   }
 
   const start = event.starts_at ? new Date(event.starts_at) : null;
@@ -387,6 +389,22 @@ function isEphemeralHappening(event, now) {
     return false; // undated and already started long ago → not a live happening
   }
   return true;
+}
+
+// Pulse can honestly show a longer reviewed daily calendar window (for example
+// a seasonal exhibition with explicit daily hours) without implying that it is
+// a one-off route anchor. Continuous and all-day rows keep the stricter
+// happening limit; only explicit daily windows get the wider display bound.
+function isPulseDisplayEvent(event, now) {
+  const window = event?.time_window;
+  if (window?.kind !== "daily") return isEphemeralHappening(event, now);
+  const startsOn = normalizeSourceEventDate(event.starts_on || window.starts_on);
+  const endsOn = normalizeSourceEventDate(event.ends_on || window.ends_on) || startsOn;
+  const timezone = normalizeIanaTimezone(event.timezone || window.timezone);
+  if (!startsOn || !endsOn || !timezone || !validLocalClock(window.local_start) || !validLocalClock(window.local_end)) {
+    return false;
+  }
+  return boundedDateOnlyRange(startsOn, endsOn, MAX_PULSE_DAILY_RANGE_DAYS);
 }
 
 // Collapse duplicate occurrences (recurring series surface the same title/venue
@@ -410,7 +428,7 @@ function dedupeViews(views) {
 // this stays data (ids, ISO times, coords, source, trust). `eventTimezone` (from
 // sources that carry an EVENT-level tz, e.g. the global provider) beats the
 // feed-level region timezone — the truest venue-local clock wins.
-function toEventView(event, feed, { eventTimezone = null } = {}) {
+function toEventView(event, feed, { eventTimezone = null, routeEligible = null } = {}) {
   const title = String(event.title || event.name || "").trim();
   if (!title) return null;
   const salience = scoreTimeSensitiveEventSalience(event);
@@ -430,6 +448,7 @@ function toEventView(event, feed, { eventTimezone = null } = {}) {
     time_window: event.time_window || null,
     timing_relevance: event.timing_relevance || null,
     place: event.place_context || event.area || null,
+    address: event.address || null,
     lat: Number.isFinite(event.lat) ? event.lat : null,
     lng: Number.isFinite(event.lng) ? event.lng : null,
     source_label: event.source_label || event.provenance?.source_label || feed.label || null,
@@ -450,6 +469,11 @@ function toEventView(event, feed, { eventTimezone = null } = {}) {
       ? event.independent_source_count
       : 1,
     sources: Array.isArray(event.sources) ? event.sources : [],
+    venue_resolution: event.venue_resolution || null,
+    pulse_display_eligible: true,
+    route_eligible: routeEligible == null
+      ? isEphemeralHappening(event, null)
+      : Boolean(routeEligible),
     // The venue-local timezone so the UI shows the real local start time.
     timezone: eventTimezone || feed.timezone || null,
   };
@@ -626,6 +650,8 @@ function buildScopedEventSourcePlan({
  * @param {object[]} [opts.sourceAnchors]         reviewed-source discovery points for a bounded route corridor
  * @param {object[]} [opts.registry]             feed registry (default built-in)
  * @param {Function} [opts.fetcher]              injected fetch (tests)
+ * @param {Function|null} [opts.venueResolver]    trusted server-only place resolver
+ * @param {number} [opts.venueResolutionLimit]    bounded unique venue lookups
  * @returns {Promise<{coverage:"covered"|"uncovered", feed:object|null, feeds:object[], tonight:object[], this_week:object[], acquisition:object}>}
  */
 async function collectAnchorEvents({
@@ -642,6 +668,8 @@ async function collectAnchorEvents({
   globalKey = null,
   maxSources = DEFAULT_MAX_SOURCES,
   maxLocalSources = DEFAULT_MAX_LOCAL_SOURCES,
+  venueResolver = null,
+  venueResolutionLimit = 4,
 } = {}) {
   const effectiveRadiusM = Math.min(
     MAX_COLLECTION_RADIUS_M,
@@ -703,10 +731,23 @@ async function collectAnchorEvents({
     }
   }
 
+  // A bounded server-owned resolver may recover source-backed venue geometry.
+  // Public payload cannot inject this seam; ambiguous, weak or out-of-radius
+  // results remain mapless and are rejected by the unchanged fusion gate below.
+  const venueResolution = await resolveEventVenueGeometry(
+    normalizedEvidence.slice().sort(compareVenueResolutionPriority),
+    {
+      resolver: venueResolver,
+      anchor,
+      radiusM: effectiveRadiusM,
+      limit: venueResolutionLimit,
+    },
+  );
+
   // Explicit outside-radius rows are rejected before fusion. A mapless row can
   // only survive when another source describes the same occurrence with trusted
   // coordinates, after which the fused occurrence is bounded again.
-  const bounded = fuseAndBoundEventEvidence(normalizedEvidence, {
+  const bounded = fuseAndBoundEventEvidence(venueResolution.events, {
     anchor,
     radiusM: effectiveRadiusM,
   });
@@ -716,7 +757,7 @@ async function collectAnchorEvents({
   const thisWeek = [];
 
   for (const event of bounded.events) {
-    if (!isEphemeralHappening(event, nowDate)) {
+    if (!isPulseDisplayEvent(event, nowDate)) {
       rejected.push({
         id: event.fusion_id || event.id || null,
         source_provider_id: event.source_provider_id || null,
@@ -725,7 +766,10 @@ async function collectAnchorEvents({
       continue;
     }
     const source = sourceById.get(event.source_provider_id) || sourcePlan[0];
-    const view = toEventView(event, source, { eventTimezone: event.timezone || null });
+    const view = toEventView(event, source, {
+      eventTimezone: event.timezone || null,
+      routeEligible: isEphemeralHappening(event, nowDate),
+    });
     if (!view) continue;
     if (TONIGHT_TIMING.has(event.timing_relevance)) {
       tonight.push(view);
@@ -779,15 +823,27 @@ async function collectAnchorEvents({
       rejected_event_count: rejected.length,
       rejection_summary: summarizeRejections(rejected),
       source_health: sourceHealth,
+      venue_resolution: venueResolution.summary,
     },
   };
 }
 
-function boundedDateOnlyRange(startsOn, endsOn) {
+function boundedDateOnlyRange(startsOn, endsOn, maxDays = MAX_HAPPENING_DAYS) {
   const startOrdinal = dateOnlyOrdinal(startsOn);
   const endOrdinal = dateOnlyOrdinal(endsOn);
   if (startOrdinal == null || endOrdinal == null || endOrdinal < startOrdinal) return false;
-  return endOrdinal - startOrdinal <= MAX_HAPPENING_DAYS;
+  return endOrdinal - startOrdinal <= maxDays;
+}
+
+function compareVenueResolutionPriority(left, right) {
+  const rank = { now: 0, tonight: 1, today: 2, future: 3, unknown: 4, stale: 5 };
+  return (
+    (rank[left?.timing_relevance] ?? 6) - (rank[right?.timing_relevance] ?? 6) ||
+    String(left?.starts_at || left?.starts_on || "").localeCompare(
+      String(right?.starts_at || right?.starts_on || ""),
+    ) ||
+    String(left?.id || "").localeCompare(String(right?.id || ""))
+  );
 }
 
 function dateOnlyOrdinal(value) {
@@ -1124,7 +1180,7 @@ function firstString(...values) {
 
 const EVENT_CACHE_TTL_MS = 20 * 60 * 1000; // 20 min — time-sensitive, but reusable
 const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a route
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v2";
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v3";
 
 function shouldCacheEventSupplyResult(result) {
   if (!result || result.coverage !== "covered") return false;
@@ -1144,7 +1200,7 @@ function shouldCacheEventSupplyResult(result) {
  * once warm, the next visit serves the cached fused result. Even a valid empty
  * result is cached so "nothing on" never becomes an unbounded refresh loop.
  */
-function resolveDefaultEventSupply(env = process.env) {
+function resolveDefaultEventSupply(env = process.env, { venueResolver = null } = {}) {
   const flag = String((env && env.PARRANDA_AGNOSTIC_EVENTS) || "").trim().toLowerCase();
   if (!["enabled", "1", "true", "on", "yes"].includes(flag)) return null;
   const registry = resolveEventFeedRegistry(env);
@@ -1191,6 +1247,7 @@ function resolveDefaultEventSupply(env = process.env) {
       radiusM: effectiveRadiusM,
       timeoutMs: WARM_TIMEOUT_MS,
       globalKey,
+      venueResolver,
     }), {
       // A proven healthy empty result is cacheable so a quiet calendar does not
       // cause refresh loops. Empty results with source failures stay retryable.
@@ -1257,6 +1314,7 @@ module.exports = {
   normalizeLocalEventAdapter,
   createLocalEventProvider,
   isEphemeralHappening,
+  isPulseDisplayEvent,
   rankCollectedEventsForPreferences,
   toEventView,
 };

@@ -12,6 +12,7 @@ const {
   buildScopedEventSourcePlan,
   GLOBAL_FEED_DESCRIPTOR,
   isEphemeralHappening,
+  isPulseDisplayEvent,
   toEventView,
 } = require("../server/place-candidates/agnostic-event-supply");
 const { normalizeTimeSensitiveSourceEvent } = require("../server/pulse-sources/time-sensitive-event");
@@ -298,6 +299,83 @@ test("daily windows remain surfaceable during opening and future between opening
   assert.equal(view.starts_on, "2026-07-14");
   assert.equal(view.ends_on, "2026-07-16");
   assert.equal(view.time_window.kind, "daily");
+});
+
+test("a longer reviewed daily window may inform Pulse without becoming a route event", () => {
+  const longDaily = normalizeTimeSensitiveSourceEvent({
+    id: "summer-exhibition",
+    title: "Summer exhibition",
+    source_url: "https://calendar.example/summer-exhibition",
+    source_label: "Reviewed calendar",
+    source_provider_id: "reviewed-calendar",
+    source_identity: "calendar.example",
+    source_tier: "verified",
+    confidence: "medium",
+    place_context: "Gallery Hall",
+    lat: ANCHOR.lat + 0.001,
+    lng: ANCHOR.lng + 0.001,
+    starts_on: "2026-06-01",
+    ends_on: "2026-09-15",
+    time_window: {
+      kind: "daily",
+      local_start: "10:00",
+      local_end: "17:00",
+    },
+  }, {
+    now: NOW,
+    timezone: "Europe/Stockholm",
+  });
+
+  assert.equal(isPulseDisplayEvent(longDaily, new Date(NOW)), true);
+  assert.equal(isEphemeralHappening(longDaily, new Date(NOW)), false);
+  const view = toEventView(longDaily, feed("reviewed-calendar"), {
+    eventTimezone: "Europe/Stockholm",
+    routeEligible: false,
+  });
+  assert.equal(view.pulse_display_eligible, true);
+  assert.equal(view.route_eligible, false);
+});
+
+test("provider collection surfaces a longer daily window as Pulse-only", async () => {
+  const registry = [feed("seasonal-calendar", {
+    adapter: "localized_events_api",
+    endpoint: "https://seasonal-calendar.example/events/",
+    timezone: "Europe/Stockholm",
+    source_language: "en",
+  })];
+  const out = await collectAnchorEvents({
+    anchor: ANCHOR,
+    now: NOW,
+    registry,
+    fetcher: async (url) => ({
+      ok: true,
+      status: 200,
+      url: String(url),
+      text: async () => JSON.stringify({
+        count: 1,
+        results: [{
+          id: "summer-exhibition",
+          title: { en: "Summer exhibition" },
+          external_website_url: "https://seasonal-calendar.example/events/exhibition",
+          venue_name: "Gallery Hall",
+          address: "Gallery Street 4",
+          location: { latitude: ANCHOR.lat + 0.001, longitude: ANCHOR.lng + 0.001 },
+          start_date: "2026-06-01",
+          end_date: "2026-09-15",
+          start_time: "10:00",
+          end_time: "17:00",
+          categories: [{ title: "Exhibitions", slug: "exhibitions", subcategories: [] }],
+        }],
+      }),
+    }),
+  });
+
+  assert.equal(out.tonight.length, 1);
+  assert.equal(out.tonight[0].id, "summer-exhibition");
+  assert.equal(out.tonight[0].pulse_display_eligible, true);
+  assert.equal(out.tonight[0].route_eligible, false);
+  assert.equal(out.acquisition.source_health.accepted_event_count, 1);
+  assert.equal(out.acquisition.rejection_summary.some((row) => row.reason === "not_ephemeral_happening"), false);
 });
 
 test("coordinate-less daily evidence may corroborate matching geometry but never survives alone", () => {
