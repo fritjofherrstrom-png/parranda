@@ -24,6 +24,7 @@ const {
 
 const {
   createNominatimPlaceResolver,
+  composePlaceResolvers,
   resolveDefaultPlaceResolver,
   DEFAULT_USER_AGENT,
 } = require("../server/place-candidates/place-resolver");
@@ -372,6 +373,77 @@ test("env factory: User-Agent flows from env (verified via injected fetcher over
   assert.equal(calls[0].headers["User-Agent"], "Deploy/9.9 (+https://deploy.test)");
 });
 
+test("resolver chain: a strong or ambiguous primary result remains authoritative", async () => {
+  let fallbackCalls = 0;
+  const fallback = async () => {
+    fallbackCalls += 1;
+    return [{ label: "Fallback", lat: 1, lng: 1, confidence: "medium" }];
+  };
+  const strong = composePlaceResolvers(
+    async () => [{ label: "Primary", lat: 2, lng: 2, confidence: "medium" }],
+    fallback,
+  );
+  const ambiguous = composePlaceResolvers(
+    async () => [
+      { label: "Primary A", lat: 2, lng: 2, confidence: "medium" },
+      { label: "Primary B", lat: 3, lng: 3, confidence: "medium" },
+    ],
+    fallback,
+  );
+
+  assert.equal((await strong("Place"))[0].label, "Primary");
+  assert.equal((await ambiguous("Place")).length, 2);
+  assert.equal(fallbackCalls, 0, "fallback must not override or disambiguate strong primary evidence");
+});
+
+test("resolver chain: fallback may replace only an empty or low-confidence primary result", async () => {
+  const contextSeen = [];
+  const fallback = async (_query, context) => {
+    contextSeen.push(context);
+    return [{ label: "Open knowledge region", lat: 55.6, lng: 14.2, confidence: "medium" }];
+  };
+  const empty = composePlaceResolvers(async () => [], fallback);
+  const low = composePlaceResolvers(
+    async () => [{ label: "Weak street hit", lat: 55.5, lng: 14.1, confidence: "low" }],
+    fallback,
+  );
+
+  assert.equal((await empty("Region", { language: "sv" }))[0].label, "Open knowledge region");
+  assert.equal((await low("Region", { language: "en" }))[0].label, "Open knowledge region");
+  assert.deepEqual(contextSeen, [{ language: "sv" }, { language: "en" }]);
+});
+
+test("resolver chain: fallback errors fail soft and preserve primary low-confidence evidence", async () => {
+  const resolver = composePlaceResolvers(
+    async () => [{ label: "Weak", lat: 1, lng: 1, confidence: "low" }],
+    async () => { throw new Error("provider unavailable"); },
+  );
+  assert.equal((await resolver("Place"))[0].label, "Weak");
+});
+
+test("env factory: Wikidata fallback is separately gated and receives configured request language", async () => {
+  let fallbackCalls = 0;
+  const fallbackResolver = async (_query, context) => {
+    fallbackCalls += 1;
+    assert.equal(context.language, "sv");
+    return [{ label: "Region", lat: 55.6, lng: 14.2, confidence: "medium" }];
+  };
+  const primaryFetcher = fetcherReturning([]);
+  const disabled = resolveDefaultPlaceResolver(
+    { PARRANDA_PLACE_RESOLVER: "enabled" },
+    { fetcher: primaryFetcher, minIntervalMs: 0, fallbackResolver },
+  );
+  assert.deepEqual(await disabled("Region", { language: "sv" }), []);
+  assert.equal(fallbackCalls, 0);
+
+  const enabled = resolveDefaultPlaceResolver(
+    { PARRANDA_PLACE_RESOLVER: "enabled", PARRANDA_WIKIDATA_PLACE_RESOLVER: "enabled" },
+    { fetcher: primaryFetcher, minIntervalMs: 0, fallbackResolver },
+  );
+  assert.equal((await enabled("Region", { language: "sv" }))[0].label, "Region");
+  assert.equal(fallbackCalls, 1);
+});
+
 // === End-to-end via buildApp ================================================
 
 function fixtureNear(base) {
@@ -413,6 +485,46 @@ test(
     assert.equal(exp.intake.resolved.attribution, "© OpenStreetMap contributors");
     assert.equal(exp.intake.resolved.license, "ODbL");
     assert.equal(exp.intake.resolved.timezone, null, "no timezone supplied → stays null");
+    assert.ok(r.body.days[0].primary_route.main_stops.length >= 2);
+  }),
+);
+
+test(
+  "api: a generic open-knowledge fallback anchors a named region through the existing route engine",
+  withServer({
+    openDataLoader: makeLoader(fixtureNear({ lat: 55.626388, lng: 14.184722 })),
+    placeResolver: composePlaceResolvers(
+      async () => [],
+      async (_query, context) => {
+        assert.equal(
+          context.language,
+          "sv",
+          "normalized query lang, not a public body field, selects source labels",
+        );
+        return [{
+          label: "Österlen",
+          lat: 55.626388,
+          lng: 14.184722,
+          confidence: "medium",
+          provenance: "wikidata_open_knowledge",
+          attribution: "Wikidata contributors",
+          license: "CC0-1.0",
+          source_tier: "inferred",
+        }];
+      },
+    ),
+  }, async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=sv&${FLAG}`,
+      body: placeBody({ place: "Österlen", lang: "en", placeLanguage: "en" }),
+    });
+    const exp = r.body.agnostic_route_output_experiment;
+    assert.equal(exp.route_mutation, true);
+    assert.equal(exp.intake.resolved.label, "Österlen");
+    assert.equal(exp.intake.resolved.provenance, "wikidata_open_knowledge");
+    assert.equal(exp.intake.resolved.attribution, "Wikidata contributors");
+    assert.equal(exp.intake.resolved.license, "CC0-1.0");
+    assert.equal(exp.intake.resolved.spatial_scope, undefined, "a fallback point must not fabricate region bounds");
     assert.ok(r.body.days[0].primary_route.main_stops.length >= 2);
   }),
 );
