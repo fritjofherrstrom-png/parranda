@@ -69,6 +69,9 @@ async function weaveEveningEventRouteStop({ result, placeStructure, walkingRoute
   const route = day.primary_route;
   const event = placeStructure && placeStructure.district_day ? placeStructure.district_day.evening_event : null;
   if (!event || !finiteCoord(event) || !(event.title || event.id)) return unchanged(["no_geocoded_evening_event"]);
+  if (event.occurrence_date && day.date && event.occurrence_date !== day.date) {
+    return unchanged(["event_date_mismatch"]);
+  }
   if (!route || !Array.isArray(route.main_stops)) return unchanged(["no_route"]);
 
   const coordStops = route.main_stops.filter(finiteCoord);
@@ -127,13 +130,17 @@ async function weaveEveningEventRouteStop({ result, placeStructure, walkingRoute
     event_id: event.id || null,
     starts_at: event.starts_at || null,
     ends_at: event.ends_at || null,
+    starts_on: event.starts_on || null,
+    ends_on: event.ends_on || null,
+    time_window: event.time_window || null,
+    occurrence_date: event.occurrence_date || null,
     timezone: event.timezone || null,
     anchor_weight: 1,
     trust: { source_tier: "official", confidence: "medium", human_verified: false, freshness: "fresh" },
     provisional: false,
     source: { kind: "live_event_feed", label: event.source_label || null, url: event.source_url || null },
     provenance: {
-      why_included: "Genuine tonight-event near the day's end — woven as the evening stop after walking validation.",
+      why_included: "Genuine selected-day event near the day's end — woven as the evening stop after walking validation.",
       attribution: [{ label: event.source_label || null, url: event.source_url || null, license: event.license || null }],
     },
   });

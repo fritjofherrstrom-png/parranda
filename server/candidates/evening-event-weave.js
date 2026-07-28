@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * Weave a genuine "tonight" event INTO the composed day.
+ * Weave a genuine selected-day evening event INTO the composed day.
  *
  * The district day (place_structure.district_day) says WHERE to go. Stable places
  * tell you what a place IS; this gives the day an honest EVENING ANCHOR — a real
@@ -15,12 +15,152 @@
  */
 
 const { haversineKm } = require("./area-intelligence");
+const {
+  datePartsInTimezone,
+  normalizeIanaTimezone,
+  normalizeSourceEventDate,
+  normalizeSourceEventDateTime,
+} = require("../pulse-sources/source-event-time");
 
-function weaveEveningEvent(placeStructure, liveEvents) {
+const EVENING_START_MINUTES = 17 * 60;
+
+function dateKeyFromParts(parts) {
+  if (!parts) return null;
+  return [parts.year, parts.month, parts.day]
+    .map((value, index) => String(value).padStart(index === 0 ? 4 : 2, "0"))
+    .join("-");
+}
+
+function addDateDays(dateKey, days) {
+  const date = normalizeSourceEventDate(dateKey);
+  if (!date) return null;
+  const [year, month, day] = date.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
+function clockMinutes(value) {
+  const match = String(value || "").match(/^(\d{2}):(\d{2})(?::\d{2})?$/);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour > 23 || minute > 59) return null;
+  return hour * 60 + minute;
+}
+
+function localDateTime(date, value) {
+  const match = String(value || "").match(/^(\d{2}):(\d{2})(?::(\d{2}))?$/);
+  return match ? `${date}T${match[1]}:${match[2]}:${match[3] || "00"}` : null;
+}
+
+function eventKey(event) {
+  return event?.id || event?.source_url || [event?.title, event?.starts_at, event?.starts_on]
+    .filter(Boolean)
+    .join("|");
+}
+
+function selectedDayCandidates(liveEvents) {
+  const browse = liveEvents?.browse || {};
+  const buckets = [
+    liveEvents?.tonight,
+    liveEvents?.this_week,
+    browse.tonight?.more,
+    browse.this_week?.more,
+  ];
+  const seen = new Set();
+  const candidates = [];
+  for (const bucket of buckets) {
+    for (const event of Array.isArray(bucket) ? bucket : []) {
+      const key = eventKey(event);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      candidates.push(event);
+    }
+  }
+  return candidates;
+}
+
+function materializeDailyOccurrence(event, selectedDate) {
+  const window = event?.time_window;
+  const timezone = normalizeIanaTimezone(event?.timezone || window?.timezone);
+  const startsOn = normalizeSourceEventDate(event?.starts_on || window?.starts_on);
+  const endsOn = normalizeSourceEventDate(event?.ends_on || window?.ends_on) || startsOn;
+  const startMinutes = clockMinutes(window?.local_start);
+  const endMinutes = clockMinutes(window?.local_end);
+  if (
+    window?.kind !== "daily" ||
+    !timezone ||
+    !startsOn ||
+    !endsOn ||
+    selectedDate < startsOn ||
+    selectedDate > endsOn ||
+    startMinutes == null ||
+    startMinutes < EVENING_START_MINUTES
+  ) {
+    return null;
+  }
+
+  const localStartsAt = localDateTime(selectedDate, window.local_start);
+  const startsAt = normalizeSourceEventDateTime(localStartsAt, { timezone });
+  if (!startsAt) return null;
+  const endDate = endMinutes != null && endMinutes <= startMinutes
+    ? addDateDays(selectedDate, 1)
+    : selectedDate;
+  const localEndsAt = endDate ? localDateTime(endDate, window.local_end) : null;
+  const endsAt = endMinutes == null || !localEndsAt
+    ? null
+    : normalizeSourceEventDateTime(localEndsAt, { timezone });
+  if (endMinutes != null && !endsAt) return null;
+
+  return {
+    ...event,
+    starts_at: startsAt,
+    ends_at: endsAt,
+    starts_on: selectedDate,
+    ends_on: endDate || selectedDate,
+    timezone,
+    timing_relevance: "tonight",
+    occurrence_date: selectedDate,
+  };
+}
+
+function materializeContinuousOccurrence(event, selectedDate) {
+  if (!event?.starts_at) return null;
+  const timezone = normalizeIanaTimezone(event.timezone || event.time_window?.timezone);
+  if (!timezone) return null;
+  const starts = datePartsInTimezone(event.starts_at, timezone);
+  if (!starts || dateKeyFromParts(starts) !== selectedDate) return null;
+  const timing = String(event.timing_relevance || "").toLowerCase();
+  if (timing === "stale") return null;
+  if (starts.hour * 60 + starts.minute < EVENING_START_MINUTES && timing !== "now") return null;
+  const ends = event.ends_at ? datePartsInTimezone(event.ends_at, timezone) : null;
+  return {
+    ...event,
+    starts_on: selectedDate,
+    ends_on: dateKeyFromParts(ends) || selectedDate,
+    timezone,
+    timing_relevance: timing === "now" ? "now" : "tonight",
+    occurrence_date: selectedDate,
+  };
+}
+
+function eventOccurrenceForDate(event, selectedDate) {
+  const date = normalizeSourceEventDate(selectedDate);
+  if (!event || !date) return null;
+  if (event.time_window?.kind === "daily") return materializeDailyOccurrence(event, date);
+  if (event.time_window?.kind === "all_day") return null;
+  return materializeContinuousOccurrence(event, date);
+}
+
+function weaveEveningEvent(placeStructure, liveEvents, { selectedDate = null } = {}) {
   if (!placeStructure || typeof placeStructure !== "object" || !placeStructure.district_day) {
     return placeStructure;
   }
-  const tonight = liveEvents && Array.isArray(liveEvents.tonight) ? liveEvents.tonight : [];
+  const requestedDate = normalizeSourceEventDate(selectedDate);
+  const tonight = requestedDate
+    ? selectedDayCandidates(liveEvents)
+      .map((event) => eventOccurrenceForDate(event, requestedDate))
+      .filter(Boolean)
+    : liveEvents && Array.isArray(liveEvents.tonight) ? liveEvents.tonight : [];
   // The list is already salience-ranked; take the top event that has real
   // coordinates AND is salient enough to shape a visitor-facing day. Civic/admin
   // notices can stay in Pulse/source inspect, but must not become an evening
@@ -47,6 +187,10 @@ function weaveEveningEvent(placeStructure, liveEvents) {
     title: event.title || null,
     starts_at: event.starts_at || null,
     ends_at: event.ends_at || null,
+    starts_on: event.starts_on || null,
+    ends_on: event.ends_on || null,
+    time_window: event.time_window || null,
+    occurrence_date: event.occurrence_date || null,
     place: event.place || null,
     source_label: event.source_label || null,
     source_url: event.source_url || null,
@@ -87,4 +231,8 @@ function isEligibleEveningAnchor(event) {
   return true;
 }
 
-module.exports = { weaveEveningEvent, isEligibleEveningAnchor };
+module.exports = {
+  eventOccurrenceForDate,
+  isEligibleEveningAnchor,
+  weaveEveningEvent,
+};

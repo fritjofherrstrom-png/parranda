@@ -323,10 +323,14 @@ function parseSitevisionDateTime(value, options = {}) {
   const expectedDate = validDateKey(options.expectedDate);
   const fallbackDate = validDateKey(options.fallbackDate);
   const year = inferYear(expectedDate || fallbackDate || options.date);
-  const range = expectedDate
-    ? { start: datePartsFromKey(expectedDate), end: datePartsFromKey(expectedDate) }
-    : parseDateRange(normalized, year) ||
-      (fallbackDate
+  // The listing date is only a fallback for detail pages that omit their own
+  // date. An explicit detail range is stronger source evidence and must not be
+  // collapsed into the one listing occurrence we happened to follow.
+  const explicitRange = parseDateRange(normalized, year);
+  const range = explicitRange ||
+    (expectedDate
+      ? { start: datePartsFromKey(expectedDate), end: datePartsFromKey(expectedDate) }
+      : fallbackDate
         ? { start: datePartsFromKey(fallbackDate), end: datePartsFromKey(fallbackDate) }
         : null);
   if (!range?.start) return { label };

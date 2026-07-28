@@ -6,7 +6,10 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { weaveEveningEvent } = require("../server/candidates/evening-event-weave");
+const {
+  eventOccurrenceForDate,
+  weaveEveningEvent,
+} = require("../server/candidates/evening-event-weave");
 
 function dayWithDistricts() {
   return {
@@ -146,6 +149,115 @@ test("future events are not woven as tonight anchors", () => {
   );
   assert.equal(out.district_day.evening_event, undefined);
   assert.deepEqual(out, base);
+});
+
+test("selected route date excludes a one-day event from another day", () => {
+  const base = dayWithDistricts();
+  const out = weaveEveningEvent(
+    base,
+    liveEvents([
+      {
+        id: "today-only",
+        title: "Tonight only",
+        starts_at: "2026-07-28T18:00:00.000Z",
+        ends_at: "2026-07-28T20:00:00.000Z",
+        timezone: "Europe/Stockholm",
+        source_url: "https://x/today-only",
+        source_label: "Official calendar",
+        lat: 60.189,
+        lng: 24.979,
+        cultural_tier: "cultural",
+      },
+    ]),
+    { selectedDate: "2026-07-29" },
+  );
+  assert.equal(out.district_day.evening_event, undefined);
+  assert.deepEqual(out, base);
+});
+
+test("selected route date can choose a real future evening occurrence from this_week", () => {
+  const out = weaveEveningEvent(
+    dayWithDistricts(),
+    {
+      ...liveEvents([
+        {
+          id: "today-only",
+          title: "Tonight only",
+          starts_at: "2026-07-28T18:00:00.000Z",
+          timezone: "Europe/Stockholm",
+          source_url: "https://x/today-only",
+          source_label: "Official calendar",
+          lat: 60.189,
+          lng: 24.979,
+          cultural_tier: "cultural",
+        },
+      ]),
+      this_week: [
+        {
+          id: "tomorrow-evening",
+          title: "Tomorrow concert",
+          starts_at: "2026-07-29T18:30:00.000Z",
+          timezone: "Europe/Stockholm",
+          timing_relevance: "future",
+          source_url: "https://x/tomorrow-evening",
+          source_label: "Official calendar",
+          lat: 60.189,
+          lng: 24.979,
+          cultural_tier: "cultural",
+        },
+      ],
+    },
+    { selectedDate: "2026-07-29" },
+  );
+  assert.equal(out.district_day.evening_event.id, "tomorrow-evening");
+  assert.equal(out.district_day.evening_event.occurrence_date, "2026-07-29");
+  assert.equal(out.district_day.evening_event.starts_at, "2026-07-29T18:30:00.000Z");
+});
+
+test("daily windows materialize only the selected evening occurrence", () => {
+  const event = {
+    id: "night-market-series",
+    title: "Night market",
+    starts_on: "2026-07-20",
+    ends_on: "2026-08-07",
+    timezone: "Europe/Stockholm",
+    time_window: {
+      kind: "daily",
+      starts_on: "2026-07-20",
+      ends_on: "2026-08-07",
+      local_start: "18:00",
+      local_end: "21:00",
+      timezone: "Europe/Stockholm",
+    },
+  };
+  const occurrence = eventOccurrenceForDate(event, "2026-07-29");
+  assert.equal(occurrence.starts_at, "2026-07-29T16:00:00.000Z");
+  assert.equal(occurrence.ends_at, "2026-07-29T19:00:00.000Z");
+  assert.equal(occurrence.starts_on, "2026-07-29");
+  assert.equal(occurrence.occurrence_date, "2026-07-29");
+  assert.deepEqual(occurrence.time_window, event.time_window);
+});
+
+test("daytime daily windows and all-day rows remain Pulse-only, not evening route anchors", () => {
+  const daytime = eventOccurrenceForDate({
+    starts_on: "2026-07-20",
+    ends_on: "2026-08-07",
+    time_window: {
+      kind: "daily",
+      starts_on: "2026-07-20",
+      ends_on: "2026-08-07",
+      local_start: "11:00",
+      local_end: "15:00",
+      timezone: "Europe/Stockholm",
+    },
+  }, "2026-07-29");
+  const allDay = eventOccurrenceForDate({
+    starts_on: "2026-07-29",
+    ends_on: "2026-07-29",
+    time_window: { kind: "all_day", starts_on: "2026-07-29", ends_on: "2026-07-29" },
+  }, "2026-07-29");
+  assert.equal(daytime, null);
+  assert.equal(allDay, null);
 });
 
 test("no geocoded tonight-event → the day is returned UNCHANGED (no fabricated happening)", () => {

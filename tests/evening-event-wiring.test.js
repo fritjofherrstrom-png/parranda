@@ -68,7 +68,7 @@ test("a geocoded tonight-event is woven into the day as the evening anchor, tied
     coverage: "covered",
     feed: { id: "linkedevents-helsinki", label: "Helsinki Linked Events", license: "CC-BY 4.0" },
     tonight: [
-      { id: "gig", title: "Rooftop set", starts_at: "2026-06-28T19:00:00Z", source_url: "https://x/gig", source_label: "Feed", lat: 60.1706, lng: 24.9408, salience_score: 9 },
+      { id: "gig", title: "Rooftop set", starts_at: "2026-06-28T19:00:00Z", timezone: "Europe/Helsinki", source_url: "https://x/gig", source_label: "Feed", lat: 60.1706, lng: 24.9408, salience_score: 9 },
     ],
     this_week: [],
   });
@@ -112,6 +112,7 @@ test("administrative live events do not become evening anchors when a cultural e
         id: "admin",
         title: "Municipal committee session",
         starts_at: "2026-06-28T18:00:00Z",
+        timezone: "Europe/Helsinki",
         source_url: "https://x/admin",
         source_label: "Official calendar",
         lat: 60.1706,
@@ -123,6 +124,7 @@ test("administrative live events do not become evening anchors when a cultural e
         id: "culture",
         title: "Evening courtyard concert",
         starts_at: "2026-06-28T20:00:00Z",
+        timezone: "Europe/Helsinki",
         source_url: "https://x/culture",
         source_label: "Official calendar",
         lat: 60.1707,
