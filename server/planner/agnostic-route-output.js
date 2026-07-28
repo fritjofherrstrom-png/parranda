@@ -78,6 +78,7 @@ async function resolveTrustedHelpers({
   anchor,
   requestedIntents = [],
   anchorMode = "unknown",
+  spatialScope = null,
 }) {
   const baseStatus = {
     status: "skipped",
@@ -98,6 +99,7 @@ async function resolveTrustedHelpers({
       ...anchor,
       requestedIntents: Array.isArray(requestedIntents) ? requestedIntents : [],
       anchorMode: normalizeAnchorMode(anchorMode),
+      spatialScope,
     });
     const loaderStatus = typeof records?.loader_status === "string" ? records.loader_status : null;
     const loaderError = records?.loader_error || null;
@@ -157,6 +159,35 @@ function sanitizeLoaderCollectionMetadata(value) {
     expansion_query_intents: sanitizeTokens(value.expansion_query_intents),
     initial_profile: profile(value.initial_profile),
     selected_profile: profile(value.selected_profile),
+    spatial_scope: sanitizeSpatialScopeSummary(value.spatial_scope),
+    regional_scout: sanitizeRegionalScout(value.regional_scout),
+  };
+}
+
+function sanitizeSpatialScopeSummary(value) {
+  if (!value || typeof value !== "object") return null;
+  return {
+    source: safeToken(value.source),
+    kind: safeToken(value.kind),
+    collection_mode: safeToken(value.collection_mode),
+    diagonal_km: finiteOrNull(value.diagonal_km),
+  };
+}
+
+function sanitizeRegionalScout(value) {
+  if (!value || typeof value !== "object") return null;
+  return {
+    attempted: value.attempted === true,
+    status: safeToken(value.status),
+    reason: safeToken(value.reason),
+    selected_anchor: safeToken(value.selected_anchor),
+    cluster_count: Number.isFinite(value.cluster_count) ? value.cluster_count : 0,
+    clusters: (Array.isArray(value.clusters) ? value.clusters : []).slice(0, 2).map((cluster) => ({
+      id: safeToken(cluster?.id),
+      record_count: Number.isFinite(cluster?.record_count) ? cluster.record_count : 0,
+      requested_intents_covered: sanitizeTokens(cluster?.requested_intents_covered),
+      requested_intents_missing: sanitizeTokens(cluster?.requested_intents_missing),
+    })),
   };
 }
 
@@ -687,6 +718,7 @@ async function composeAgnosticRouteOutput({
   trustedTimezone = null,
   placeLabel = null,
   anchorMode = "unknown",
+  spatialScope = null,
   // Synthesis backend. "engine" routes the admitted candidates through the
   // route engine's own agnostic_compose (the convergence path); "legacy" keeps
   // the in-module experimental synthesizer (default, so existing callers/tests
@@ -711,6 +743,7 @@ async function composeAgnosticRouteOutput({
     anchor: origin,
     requestedIntents: preferences,
     anchorMode,
+    spatialScope,
   });
 
   // #262 / correction #5 — only resolve trusted context (which may fetch weather)

@@ -23,6 +23,8 @@
  * Pure except for the awaited injected resolver. Deterministic given its inputs.
  */
 
+const { sanitizeTrustedSpatialScope } = require("../place-candidates/spatial-scope");
+
 // Confidence labels the resolver may return for a candidate. Anything outside
 // this set (or a number below the threshold) is treated as too weak to anchor.
 const STRONG_CONFIDENCE = new Set(["high", "medium"]);
@@ -110,6 +112,7 @@ async function resolveAgnosticIntake({ coords = null, placeQuery = null, placeRe
     return {
       anchor: { lat: coords.lat, lng: coords.lng },
       placeContext: null,
+      spatialScope: null,
       intake: intake("coordinates", placeQuery, {
         status: "resolved",
         resolved: {
@@ -197,6 +200,9 @@ async function resolveAgnosticIntake({ coords = null, placeQuery = null, placeRe
     // Private server-side discovery context. It is deliberately adjacent to,
     // not nested inside, the public intake block attached to API responses.
     placeContext: trustedPlaceContext(best.admin_context),
+    // Private server-side collection scope. Only the injected resolver can mint
+    // it; public request fields are never consulted.
+    spatialScope: sanitizeTrustedSpatialScope(best.spatial_scope),
     intake: intake("place", placeQuery, {
       status: "resolved",
       candidates_considered: candidates.length,

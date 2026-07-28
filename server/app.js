@@ -2046,7 +2046,7 @@ function buildApp({
       // can supply only the query string — resolved coordinates/confidence/
       // provenance come solely from the trusted resolver. Any missing/invalid/
       // ambiguous/low-confidence outcome fails closed with an explicit blocker.
-      const { anchor, intake, placeContext } = await resolveAgnosticIntake({
+      const { anchor, intake, placeContext, spatialScope } = await resolveAgnosticIntake({
         coords: experimentCoords,
         placeQuery,
         placeResolver,
@@ -2093,6 +2093,7 @@ function buildApp({
             ...anchor,
             requestedIntents: Array.isArray(preferences) ? preferences : [],
             anchorMode: intake.mode,
+            spatialScope,
           });
           const structureCandidates = (Array.isArray(records) ? records : []).filter(
             (c) => c && Number.isFinite(c.lat) && Number.isFinite(c.lng),
@@ -2209,6 +2210,7 @@ function buildApp({
         // to neutral "this place"/"platsen" inside the prose builder.
         placeLabel: intake.resolved?.label || null,
         anchorMode: intake.mode,
+        spatialScope,
         synthesizeVia: useEngineCompose ? "engine" : "legacy",
       });
       experiment.intake = intake;

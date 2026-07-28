@@ -31,6 +31,7 @@
  */
 
 const { isValidCoordinate } = require("../planner/agnostic-place-intake");
+const { normalizeNominatimSpatialScope } = require("./spatial-scope");
 
 const NOMINATIM_ENDPOINT = "https://nominatim.openstreetmap.org/search";
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
@@ -138,6 +139,7 @@ function toRawCandidate(result) {
     name,
     osm_ref: osmRef,
     admin_context: normalizeAdminContext(result.address),
+    spatial_scope: normalizeNominatimSpatialScope(result),
   };
 }
 
@@ -209,7 +211,8 @@ function finalizeCandidate(candidate) {
     lng: candidate.lng,
     confidence: candidate.confidence,
     // Compact provenance/attribution/license — sufficient for downstream trust;
-    // the raw provider payload (address components, bbox, place_rank…) is dropped.
+    // raw provider fields are dropped. A separately normalized spatial scope may
+    // preserve validated bounds without exposing the Nominatim response shape.
     provenance: "nominatim_osm",
     attribution: "© OpenStreetMap contributors",
     license: "ODbL",
@@ -218,6 +221,7 @@ function finalizeCandidate(candidate) {
     // Deliberately NO timezone — the resolver does not do coordinate→timezone lookup.
   };
   if (candidate.admin_context) out.admin_context = candidate.admin_context;
+  if (candidate.spatial_scope) out.spatial_scope = candidate.spatial_scope;
   return out;
 }
 

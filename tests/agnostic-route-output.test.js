@@ -1275,6 +1275,85 @@ test(
   },
 );
 
+test("api: only resolver-attested spatial scope can reach regional collection", async () => {
+  global.fetch = mockStableWeatherFetch();
+  const calls = [];
+  const trustedScope = {
+    source: "test_resolver",
+    kind: "region",
+    bounds: { south: 55.3, north: 55.9, west: 14, east: 14.3 },
+  };
+  const loader = async (request) => {
+    calls.push(structuredClone(request));
+    const records = fixtureNear({ lat: 55.6, lng: 14.15 });
+    Object.defineProperty(records, "loader_status", { value: `loaded:${records.length}`, configurable: true });
+    Object.defineProperty(records, "loader_metadata", {
+      value: {
+        base_radius_km: 1.5,
+        selected_radius_km: 3,
+        expansion_applied: true,
+        expansion_trigger: "regional_scope_gap",
+        selection_reason: "richer_regional_cluster",
+        anchor_mode: request.anchorMode,
+        requested_intents: ["food", "scenic"],
+        spatial_scope: {
+          source: "test_resolver",
+          kind: "region",
+          collection_mode: "regional_bounded",
+          diagonal_km: 69,
+        },
+        regional_scout: {
+          attempted: true,
+          status: `loaded:${records.length}`,
+          reason: "richer_regional_cluster",
+          selected_anchor: "scope_axis_low",
+          selected_anchor_coords: { lat: 55.45, lng: 14.15 },
+          cluster_count: 3,
+          clusters: [],
+        },
+      },
+      configurable: true,
+    });
+    return records;
+  };
+  const server = buildApp({
+    openDataLoader: loader,
+    placeResolver: async () => [{
+      label: "Resolved region",
+      lat: 55.6,
+      lng: 14.15,
+      confidence: "medium",
+      provenance: "test_resolver",
+      spatial_scope: trustedScope,
+    }],
+  }).listen(0);
+  try {
+    const response = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}`,
+      body: agnosticBody({
+        lat: undefined,
+        lng: undefined,
+        place: "A region",
+        preferences: ["food", "views"],
+        spatialScope: { bounds: { south: -90, north: 90, west: -180, east: 180 } },
+        spatial_scope: { collection_mode: "regional_bounded", bounds: { south: 0, north: 1, west: 0, east: 1 } },
+      }),
+    });
+
+    assert.ok(calls.length >= 1);
+    assert.ok(calls.every((call) => call.anchorMode === "place"));
+    assert.ok(calls.every((call) => call.spatialScope?.bounds?.south === 55.3));
+    const collection = response.body.agnostic_route_output_experiment.source_status.collection;
+    assert.equal(collection.spatial_scope.collection_mode, "regional_bounded");
+    assert.equal(collection.regional_scout.selected_anchor, "scope_axis_low");
+    assert.equal("selected_anchor_coords" in collection.regional_scout, false);
+    assert.equal(JSON.stringify(response.body).includes('"south":-90'), false);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    global.fetch = ORIGINAL_FETCH;
+  }
+});
+
 test(
   "api: public payload cannot inject readiness calibration",
   withServer(makeLoader([]), async (server) => {

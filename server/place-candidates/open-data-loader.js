@@ -33,6 +33,11 @@ const { createSourceCache } = require("./source-cache");
 const { createWikidataSource } = require("./wikidata-source");
 const { normalizeOpeningHours } = require("./opening-hours");
 const { normalizeUserIntents, matchCandidateToIntent } = require("../candidates/intent-vocabulary");
+const {
+  sanitizeTrustedSpatialScope,
+  deriveSecondaryAnchors,
+  spatialScopeCacheKey,
+} = require("./spatial-scope");
 
 const DEFAULT_OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
 // Mirror failover is a MECHANISM, not a free fix. The loader can try several
@@ -72,6 +77,7 @@ const REGIONAL_EXPANSION_RADIUS_KM = 5.0;
 const THIN_RECORD_COUNT = 12; // < ~half the default limit → thin
 const THIN_CATEGORY_COUNT = 3; // fewer distinct place types than a real day needs
 const SEVERELY_THIN_RECORD_COUNT = 5;
+const REGIONAL_CLUSTER_RADIUS_KM = 3;
 
 const LOADER_SUPPORTED_INTENTS = new Set([
   "scenic",
@@ -308,7 +314,60 @@ function createOpenDataLoader({
     return withLoaderStatus([], last.status, last.error);
   }
 
-  const loadOpenDataAround = async function loadOpenDataAround({
+  async function fetchAcrossAnchors(anchors, radiusM) {
+    const boundedAnchors = (Array.isArray(anchors) ? anchors : [])
+      .filter((anchor) => Number.isFinite(anchor?.lat) && Number.isFinite(anchor?.lng))
+      .slice(0, 2);
+    if (!boundedAnchors.length) return { status: "loaded:0", error: null, clusters: [] };
+    const fetchBreadth = Math.min(boundedLimit * 6 * boundedAnchors.length, OVERPASS_FETCH_CAP);
+    const query = buildOverpassQueryForAnchors({
+      anchors: boundedAnchors,
+      radiusM,
+      limit: fetchBreadth,
+      mappings: OSM_TAG_MAP,
+    });
+    let last = { status: "error_failed_closed", error: "no_endpoint" };
+    for (const targetEndpoint of resolvedEndpoints) {
+      const attempt = await attemptOverpass(targetEndpoint, query);
+      if (!attempt.ok) {
+        last = attempt;
+        continue;
+      }
+      const mapped = mapOverpassResponse(
+        attempt.payload,
+        // Keep the complete, already provider-capped response until it has been
+        // partitioned. A dense first anchor must not crowd a better second
+        // cluster out of the global candidate limit before comparison.
+        OVERPASS_FETCH_CAP,
+        { origin: boundedAnchors[0] },
+      );
+      const buckets = boundedAnchors.map(() => []);
+      for (const record of mapped) {
+        let nearestIndex = -1;
+        let nearestKm = Number.POSITIVE_INFINITY;
+        for (let index = 0; index < boundedAnchors.length; index += 1) {
+          const km = distanceKm(boundedAnchors[index], record);
+          if (km < nearestKm) {
+            nearestKm = km;
+            nearestIndex = index;
+          }
+        }
+        if (nearestIndex >= 0 && nearestKm <= radiusM / 1000 + 0.05) buckets[nearestIndex].push(record);
+      }
+      const clusters = boundedAnchors.map((anchor, index) => ({
+        anchor,
+        records: withLoaderStatus(
+          balanceMappedRecords(buckets[index], boundedLimit, anchor),
+          buckets[index].length ? `loaded:${Math.min(buckets[index].length, boundedLimit)}` : "loaded:0",
+          null,
+        ),
+      }));
+      return { status: `loaded:${mapped.length}`, error: null, clusters };
+    }
+    return { status: last.status, error: last.error, clusters: [] };
+  }
+
+  const loadPrimaryOpenDataAround = async function loadPrimaryOpenDataAround({
     lat,
     lng,
     requestedIntents = [],
@@ -378,6 +437,83 @@ function createOpenDataLoader({
     });
   };
 
+  const loadOpenDataAround = async function loadOpenDataAround(request = {}) {
+    const primary = await loadPrimaryOpenDataAround(request);
+    const anchorMode = normalizeAnchorMode(request.anchorMode);
+    const scope = anchorMode === "place" ? sanitizeTrustedSpatialScope(request.spatialScope) : null;
+    const primaryMetadata = primary.loader_metadata || null;
+    const baseMetadata = {
+      ...(primaryMetadata || {}),
+      spatial_scope: scope ? summarizeSpatialScope(scope) : null,
+    };
+    if (!scope) return withLoaderMetadata(primary, baseMetadata);
+
+    const secondaryAnchors = deriveSecondaryAnchors(scope, { lat: request.lat, lng: request.lng });
+    const selectedProfile = primaryMetadata?.selected_profile || supplyProfile(primary, normalizeRequestedIntents(request.requestedIntents));
+    const hasRequestedGap = selectedProfile.requested_intents_covered.length < selectedProfile.requested_intent_count;
+    const needsRegionalScout =
+      scope.collection_mode === "regional_bounded" &&
+      secondaryAnchors.length > 0 &&
+      !String(primary.loader_status || "").startsWith("error") &&
+      (selectedProfile.record_count < THIN_RECORD_COUNT || hasRequestedGap);
+    if (!needsRegionalScout) {
+      return withLoaderMetadata(primary, {
+        ...baseMetadata,
+        regional_scout: {
+          attempted: false,
+          reason: scope.collection_mode === "regional_bounded" ? "primary_supply_sufficient" : "scope_not_bounded_regional",
+          selected_anchor: "primary",
+          cluster_count: 1,
+        },
+      });
+    }
+
+    const regional = await fetchAcrossAnchors(secondaryAnchors, REGIONAL_CLUSTER_RADIUS_KM * 1000);
+    const requestedIntents = normalizeRequestedIntents(request.requestedIntents);
+    let selected = primary;
+    let selectedAnchor = { id: "primary", lat: request.lat, lng: request.lng };
+    let bestScore = supplyScore(primary, requestedIntents);
+    const clusterProfiles = [];
+    for (const cluster of regional.clusters) {
+      const profile = supplyProfile(cluster.records, requestedIntents);
+      const score = supplyScore(cluster.records, requestedIntents);
+      clusterProfiles.push({
+        id: cluster.anchor.id,
+        record_count: profile.record_count,
+        requested_intents_covered: profile.requested_intents_covered,
+        requested_intents_missing: profile.requested_intents_missing,
+      });
+      if (score > bestScore) {
+        selected = cluster.records;
+        selectedAnchor = cluster.anchor;
+        bestScore = score;
+      }
+    }
+    const selectedRegional = selectedAnchor.id !== "primary";
+    return withLoaderMetadata(selected, {
+      ...baseMetadata,
+      ...(selectedRegional
+        ? {
+            selected_radius_km: REGIONAL_CLUSTER_RADIUS_KM,
+            attempted_radius_km: REGIONAL_CLUSTER_RADIUS_KM,
+            expansion_applied: true,
+            expansion_trigger: "regional_scope_gap",
+            selection_reason: "richer_regional_cluster",
+            selected_profile: supplyProfile(selected, requestedIntents),
+          }
+        : {}),
+      regional_scout: {
+        attempted: true,
+        status: safeLoaderToken(regional.status),
+        reason: selectedRegional ? "richer_regional_cluster" : "primary_cluster_retained",
+        selected_anchor: selectedAnchor.id,
+        selected_anchor_coords: { lat: selectedAnchor.lat, lng: selectedAnchor.lng },
+        cluster_count: 1 + regional.clusters.length,
+        clusters: clusterProfiles,
+      },
+    });
+  };
+
   if (!cache || typeof cache.get !== "function") {
     return loadOpenDataAround;
   }
@@ -389,12 +525,12 @@ function createOpenDataLoader({
   // survives across requests. Only non-error results are stored, so a transient
   // outage is never frozen in.
   return async function cachedLoadOpenDataAround(request = {}) {
-    const { lat, lng, requestedIntents = [], anchorMode = "unknown" } = request;
+    const { lat, lng, requestedIntents = [], anchorMode = "unknown", spatialScope = null } = request;
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
       return loadOpenDataAround(request);
     }
     const normalizedRequestedIntents = normalizeRequestedIntents(requestedIntents);
-    const key = `v3:${lat.toFixed(3)},${lng.toFixed(3)}:r${boundedRadiusKm}:l${boundedLimit}:m${normalizeAnchorMode(anchorMode)}:i${normalizedRequestedIntents.join(".") || "all"}`;
+    const key = `v4:${lat.toFixed(3)},${lng.toFixed(3)}:r${boundedRadiusKm}:l${boundedLimit}:m${normalizeAnchorMode(anchorMode)}:i${normalizedRequestedIntents.join(".") || "all"}:s${spatialScopeCacheKey(spatialScope)}`;
     const entry = await cache.get(
       key,
       async () => {
@@ -416,6 +552,15 @@ function createOpenDataLoader({
 }
 
 function buildOverpassQuery({ lat, lng, radiusM, limit, mappings = OSM_TAG_MAP }) {
+  return buildOverpassQueryForAnchors({
+    anchors: [{ lat, lng }],
+    radiusM,
+    limit,
+    mappings,
+  });
+}
+
+function buildOverpassQueryForAnchors({ anchors, radiusM, limit, mappings = OSM_TAG_MAP }) {
   // Per-category `out` budgets. Overpass outputs nodes before ways, so a single
   // combined `out center N` lets food/bar/cafe NODES exhaust N before park/
   // castle WAYS are ever emitted — scarce area-typed scenic places vanished
@@ -433,10 +578,10 @@ function buildOverpassQuery({ lat, lng, radiusM, limit, mappings = OSM_TAG_MAP }
   for (const [category, entries] of groups) {
     const setName = `c${i}`;
     const filters = entries
-      .flatMap(({ key, value }) => [
+      .flatMap(({ key, value }) => anchors.flatMap(({ lat, lng }) => [
         `node["${key}"="${value}"](around:${radiusM},${lat},${lng});`,
         `way["${key}"="${value}"](around:${radiusM},${lat},${lng});`,
-      ])
+      ]))
       .join("");
     blocks.push(`(${filters})->.${setName};.${setName} out center ${perCategory};`);
     i += 1;
@@ -569,6 +714,19 @@ function withLoaderMetadata(records, metadata) {
     configurable: true,
   });
   return output;
+}
+
+function summarizeSpatialScope(scope) {
+  return {
+    source: scope.source,
+    kind: scope.kind,
+    collection_mode: scope.collection_mode,
+    diagonal_km: scope.diagonal_km,
+  };
+}
+
+function safeLoaderToken(value) {
+  return typeof value === "string" && /^[a-z0-9_:-]{1,80}$/.test(value) ? value : "provider_failed";
 }
 
 function normalizeAnchorMode(value) {
@@ -803,15 +961,23 @@ function resolveDefaultOpenDataLoader(env = process.env) {
 }
 
 // Compose the OSM loader (returns a `withLoaderStatus` array) with the Wikidata
-// source (returns a plain array). Both run concurrently and fail soft on their
-// own; the combined result is a `withLoaderStatus` array carrying every record.
+// source (returns a plain array). OSM runs first so a selected regional cluster
+// can also anchor Wikidata; both fail soft and the combined result preserves
+// loader status and collection metadata.
 function composeOpenDataLoaders(osmLoader, wikiSource) {
   return async function loadComposedOpenData(request = {}) {
-    const { lat, lng } = request;
-    const [osm, wiki] = await Promise.all([
-      Promise.resolve(osmLoader(request)).catch(() => withLoaderStatus([], "error_failed_closed", "osm_threw")),
-      Promise.resolve(wikiSource({ lat, lng })).catch(() => []),
-    ]);
+    const osm = await Promise.resolve(osmLoader(request))
+      .catch(() => withLoaderStatus([], "error_failed_closed", "osm_threw"));
+    // If bounded regional scouting selected a richer sub-anchor, warm/read the
+    // independent knowledge source around that SAME cluster. Mixing primary-
+    // anchor Wikidata rows into a remote selected cluster would fabricate one
+    // walkable reservoir from two places.
+    const selectedCoords = osm?.loader_metadata?.regional_scout?.selected_anchor_coords;
+    const wikiAnchor =
+      selectedCoords && Number.isFinite(selectedCoords.lat) && Number.isFinite(selectedCoords.lng)
+        ? selectedCoords
+        : { lat: request.lat, lng: request.lng };
+    const wiki = await Promise.resolve(wikiSource(wikiAnchor)).catch(() => []);
     const osmRecords = Array.isArray(osm) ? osm : [];
     const wikiRecords = Array.isArray(wiki) ? wiki : [];
     const records = [...osmRecords, ...wikiRecords];
@@ -849,6 +1015,7 @@ module.exports = {
   OSM_TAG_MAP,
   createOpenDataLoader,
   resolveDefaultOpenDataLoader,
+  composeOpenDataLoaders,
   // exported for tests / introspection
   buildOverpassQuery,
   mapOverpassResponse,

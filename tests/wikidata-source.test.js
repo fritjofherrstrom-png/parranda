@@ -20,7 +20,11 @@ const {
   mapWikidataResponse,
   mapWikidataBinding,
 } = require("../server/place-candidates/wikidata-source");
-const { resolveDefaultOpenDataLoader, mapOsmElement } = require("../server/place-candidates/open-data-loader");
+const {
+  resolveDefaultOpenDataLoader,
+  composeOpenDataLoaders,
+  mapOsmElement,
+} = require("../server/place-candidates/open-data-loader");
 const { mapRecordToCandidate } = require("../server/place-candidates/external-open-provider");
 const { resolveCandidateIdentity } = require("../server/candidates/entity-resolution");
 
@@ -157,6 +161,32 @@ test("composed loader serves OSM immediately and adds the Wikidata family on the
   } finally {
     global.fetch = ORIGINAL_FETCH;
   }
+});
+
+test("composed loader anchors Wikidata to the one selected regional cluster", async () => {
+  const selectedAnchor = { lat: 55.45, lng: 14.15 };
+  const osmRecords = [{ id: "osm-selected", label: "Selected", lat: selectedAnchor.lat, lng: selectedAnchor.lng }];
+  Object.defineProperty(osmRecords, "loader_status", { value: "loaded:1" });
+  Object.defineProperty(osmRecords, "loader_metadata", {
+    value: {
+      regional_scout: {
+        selected_anchor: "scope_axis_low",
+        selected_anchor_coords: selectedAnchor,
+      },
+    },
+  });
+  const wikiCalls = [];
+  const loader = composeOpenDataLoaders(
+    async () => osmRecords,
+    async (anchor) => {
+      wikiCalls.push(anchor);
+      return [];
+    },
+  );
+
+  await loader({ lat: 55.6, lng: 14.15 });
+
+  assert.deepEqual(wikiCalls, [selectedAnchor]);
 });
 
 // --- consensus: the whole point ---------------------------------------------

@@ -13,6 +13,7 @@ const {
   normalizeRequestedIntents,
   supplyProfile,
 } = require("../server/place-candidates/open-data-loader");
+const { deriveSecondaryAnchors } = require("../server/place-candidates/spatial-scope");
 
 // --- OSM element mapping ---------------------------------------------------
 
@@ -702,6 +703,150 @@ test("requested intent normalization is canonical and source-location agnostic",
     requested_intents_partial: ["scenic"],
     requested_intents_missing: ["second_hand"],
   });
+});
+
+test("a thin regional place may select one richer secondary cluster without merging distant records", async () => {
+  const scope = {
+    source: "test_resolver",
+    kind: "region",
+    bounds: { south: 55.3, north: 55.9, west: 14.0, east: 14.3 },
+  };
+  const primary = { lat: 55.6, lng: 14.15 };
+  const secondary = deriveSecondaryAnchors(scope, primary)[0];
+  const queries = [];
+  const fetcher = async (_url, options) => {
+    const query = decodeURIComponent(options.body);
+    queries.push(query);
+    const regional = (query.match(/around:3000/g) || []).length > 10;
+    const center = regional ? secondary : primary;
+    const count = regional ? 18 : 3;
+    const kinds = regional
+      ? [{ amenity: "restaurant" }, { tourism: "viewpoint" }, { tourism: "museum" }]
+      : [{ amenity: "cafe" }];
+    return {
+      ok: true,
+      json: async () => ({
+        elements: Array.from({ length: count }, (_, index) => ({
+          type: "node",
+          id: index + 1 + (regional ? 100 : 0),
+          lat: center.lat + index * 0.0001,
+          lon: center.lng,
+          tags: { name: `P${index}`, ...kinds[index % kinds.length] },
+        })),
+      }),
+    };
+  };
+  const loader = createOpenDataLoader({ fetcher, endpoint: "https://x/overpass" });
+  const records = await loader({
+    ...primary,
+    requestedIntents: ["food", "views"],
+    anchorMode: "place",
+    spatialScope: scope,
+  });
+
+  assert.equal(queries.length, 3, "base + one adaptive query + one combined regional query");
+  assert.equal(records.loader_metadata.regional_scout.attempted, true);
+  assert.equal(records.loader_metadata.regional_scout.selected_anchor, secondary.id);
+  assert.equal(records.loader_metadata.selection_reason, "richer_regional_cluster");
+  assert.ok(records.every((record) => Math.abs(record.lat - secondary.lat) < 0.01));
+  assert.equal(records.some((record) => Math.abs(record.lat - primary.lat) < 0.01), false, "primary and regional clusters are never merged");
+});
+
+test("rich primary supply skips regional scouting even when resolver bounds are available", async () => {
+  let calls = 0;
+  const fetcher = async () => {
+    calls += 1;
+    return {
+      ok: true,
+      json: async () => ({
+        elements: Array.from({ length: 18 }, (_, index) => ({
+          type: "node",
+          id: index + 1,
+          lat: 43.7 + index * 0.0001,
+          lon: 4.8,
+          tags: { name: `P${index}`, ...[{ amenity: "restaurant" }, { tourism: "viewpoint" }, { tourism: "museum" }][index % 3] },
+        })),
+      }),
+    };
+  };
+  const loader = createOpenDataLoader({ fetcher, endpoint: "https://x/overpass" });
+  const records = await loader({
+    lat: 43.7,
+    lng: 4.8,
+    requestedIntents: ["food", "views"],
+    anchorMode: "place",
+    spatialScope: { kind: "region", bounds: { south: 43.5, north: 43.9, west: 4.6, east: 5.0 } },
+  });
+
+  assert.equal(calls, 1);
+  assert.equal(records.loader_metadata.regional_scout.attempted, false);
+  assert.equal(records.loader_metadata.regional_scout.reason, "primary_supply_sufficient");
+});
+
+test("exact coordinates ignore even resolver-shaped regional scope", async () => {
+  let calls = 0;
+  const fetcher = async () => {
+    calls += 1;
+    return {
+      ok: true,
+      json: async () => ({
+        elements: Array.from({ length: 3 }, (_, index) => ({
+          type: "node",
+          id: index + 1,
+          lat: 55.6 + index * 0.0001,
+          lon: 14.15,
+          tags: { name: `P${index}`, amenity: "cafe" },
+        })),
+      }),
+    };
+  };
+  const loader = createOpenDataLoader({ fetcher, endpoint: "https://x/overpass" });
+  const records = await loader({
+    lat: 55.6,
+    lng: 14.15,
+    requestedIntents: ["food"],
+    anchorMode: "coordinates",
+    spatialScope: { kind: "region", bounds: { south: 55.3, north: 55.9, west: 14, east: 14.3 } },
+  });
+
+  assert.equal(calls, 2, "only the normal exact-anchor adaptive query may run");
+  assert.equal(records.loader_metadata.spatial_scope, null);
+  assert.equal(records.loader_metadata.regional_scout, undefined);
+});
+
+test("a failed regional scout keeps the honest primary cluster", async () => {
+  let calls = 0;
+  const fetcher = async () => {
+    calls += 1;
+    if (calls === 3) return { ok: false, status: 503 };
+    return {
+      ok: true,
+      json: async () => ({
+        elements: Array.from({ length: 3 }, (_, index) => ({
+          type: "node",
+          id: index + 1,
+          lat: 55.6 + index * 0.0001,
+          lon: 14.15,
+          tags: { name: `Primary ${index}`, amenity: "cafe" },
+        })),
+      }),
+    };
+  };
+  const loader = createOpenDataLoader({ fetcher, endpoint: "https://x/overpass" });
+  const records = await loader({
+    lat: 55.6,
+    lng: 14.15,
+    requestedIntents: ["food", "views"],
+    anchorMode: "place",
+    spatialScope: { kind: "region", bounds: { south: 55.3, north: 55.9, west: 14, east: 14.3 } },
+  });
+
+  assert.equal(calls, 3);
+  assert.equal(records.loader_metadata.regional_scout.attempted, true);
+  assert.equal(records.loader_metadata.regional_scout.status, "error_failed_closed");
+  assert.equal(records.loader_metadata.regional_scout.reason, "primary_cluster_retained");
+  assert.equal(records.loader_metadata.regional_scout.selected_anchor, "primary");
+  assert.ok(records.every((record) => Math.abs(record.lat - 55.6) < 0.01));
 });
 
 // --- bounded query ---------------------------------------------------------
