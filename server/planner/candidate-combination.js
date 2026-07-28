@@ -18,9 +18,9 @@
  *   2. status tier (filled > partial) — geometry can NEVER override this
  *   3. usable geometry
  *   4. anchor reach when an origin exists
- *   5. compactness within the same anchor-reach tier
- *   6. source confidence
- *   7. curated-first when otherwise comparable
+ *   5. source confidence within the same safe anchor-reach tier
+ *   6. curated-first when otherwise comparable
+ *   7. fine distance / compactness only after trust is comparable
  *   8. fewer duplicated venues across roles
  *   9. stable deterministic tie-break by candidate id
  *
@@ -195,10 +195,10 @@ function scoreCombination(combo, geometry) {
     statusTier, // 2. status tier (geometry can never override this)
     geometryUsable, // 3. never trade an honest cluster for weak/incomplete geometry
     originReach, // 4. when anchored, prefer a cluster that starts near the user
+    confidence, // 5. trust beats marginal distance gains within the same reach tier
+    curated, // 6. curated-first when trust is otherwise comparable
     -originDistance,
-    -geometry.max_pairwise_km, // 5. then prefer the more compact cluster
-    confidence, // 6. confidence
-    curated, // 7. curated-first
+    -geometry.max_pairwise_km, // 7. then prefer the closer, more compact cluster
     distinctVenues, // 8. fewer duplicate venues = more distinct = higher
   ];
 }

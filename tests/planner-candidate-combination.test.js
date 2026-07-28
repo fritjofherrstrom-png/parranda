@@ -202,6 +202,35 @@ test("within the same status tier, proximity prefers the more coherent candidate
   assert.equal(out.status, "ready");
 });
 
+test("within the same safe anchor tier, stronger source trust beats a marginally tighter cluster", () => {
+  const out = buildCandidateCombination(
+    plannerRoles([
+      role("scenic_anchor", { candidates: [candidate("v1", { coordinates: NEAR_A })] }),
+      role("food_anchor", {
+        candidates: [
+          candidate("low-near", {
+            confidence: "low",
+            origin: "external_open",
+            coordinates: NEAR_B,
+          }),
+          candidate("medium-near", {
+            confidence: "medium",
+            origin: "external_open",
+            coordinates: { lat: 41.906, lng: 12.496 },
+          }),
+        ],
+      }),
+    ]),
+    {},
+    { origin: NEAR_A },
+  );
+
+  const foodPick = out.selected.find((entry) => entry.role === "food_anchor");
+  assert.equal(out.geometry_summary.coherence, "strong");
+  assert.equal(out.geometry_summary.origin_reach, "near");
+  assert.equal(foodPick.candidate_id, "medium-near");
+});
+
 test("proximity never lets a partial candidate beat a filled one (status tier first)", () => {
   const out = buildCandidateCombination(
     plannerRoles([

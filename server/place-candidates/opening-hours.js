@@ -143,7 +143,7 @@ function isValidIsoDate(value) {
 
 function parseWeeklySchedule(value) {
   const schedule = Array.from({ length: 7 }, () => ({ seen: false, intervals: [] }));
-  const rules = value.split(";").map((rule) => rule.trim()).filter(Boolean);
+  const rules = splitWeeklyRules(value);
   if (!rules.length) return null;
 
   for (const rule of rules) {
@@ -157,6 +157,37 @@ function parseWeeklySchedule(value) {
     }
   }
   return schedule;
+}
+
+// OSM schedules commonly separate complete day rules with either semicolons
+// or commas. A comma is also valid inside a day selector ("Sa,Su") and between
+// two time windows, so split only when the text before it already has a rule
+// body and the suffix starts another complete day selector + body.
+function splitWeeklyRules(value) {
+  const rules = [];
+  for (const semicolonRule of value.split(";")) {
+    let start = 0;
+    for (let index = 0; index < semicolonRule.length; index += 1) {
+      if (semicolonRule[index] !== ",") continue;
+      const prefix = semicolonRule.slice(start, index).trim();
+      const suffix = semicolonRule.slice(index + 1);
+      if (hasRuleBody(prefix) && startsCompleteDayRule(suffix)) {
+        rules.push(prefix);
+        start = index + 1;
+      }
+    }
+    const tail = semicolonRule.slice(start).trim();
+    if (tail) rules.push(tail);
+  }
+  return rules;
+}
+
+function hasRuleBody(value) {
+  return /\b(?:off|closed|\d{1,2}:\d{2})\b/i.test(value);
+}
+
+function startsCompleteDayRule(value) {
+  return /^\s*(?:Su|Mo|Tu|We|Th|Fr|Sa)(?:-(?:Su|Mo|Tu|We|Th|Fr|Sa))?(?:\s*,\s*(?:Su|Mo|Tu|We|Th|Fr|Sa)(?:-(?:Su|Mo|Tu|We|Th|Fr|Sa))?)*\s+(?:off\b|closed\b|\d{1,2}:\d{2})/i.test(value);
 }
 
 function parseRule(rule) {
