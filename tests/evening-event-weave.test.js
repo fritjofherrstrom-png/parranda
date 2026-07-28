@@ -73,6 +73,29 @@ test("administrative/civic events stay out of the evening anchor, even with coor
   assert.deepEqual(out, base);
 });
 
+test("a Pulse-only event never becomes an evening route anchor", () => {
+  const base = dayWithDistricts();
+  const out = weaveEveningEvent(
+    base,
+    liveEvents([{
+      id: "seasonal-exhibition",
+      title: "Seasonal exhibition",
+      source_url: "https://x/exhibition",
+      source_label: "Reviewed calendar",
+      lat: 60.189,
+      lng: 24.979,
+      timing_relevance: "tonight",
+      cultural_tier: "cultural",
+      salience_score: 9,
+      pulse_display_eligible: true,
+      route_eligible: false,
+    }]),
+  );
+
+  assert.equal(out.district_day.evening_event, undefined);
+  assert.deepEqual(out, base);
+});
+
 test("cultural events can become evening anchors and preserve salience metadata", () => {
   const out = weaveEveningEvent(
     dayWithDistricts(),

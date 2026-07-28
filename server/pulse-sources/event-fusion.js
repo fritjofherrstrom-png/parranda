@@ -93,6 +93,7 @@ function buildFusedEvent(members) {
     "starts_on",
     "ends_on",
     "place_context",
+    "address",
     "area",
     "time_window",
     "recurrence",
@@ -116,6 +117,10 @@ function buildFusedEvent(members) {
   if (coordinateOwner) {
     fieldProvenance.lat = sourceIdentity(coordinateOwner);
     fieldProvenance.lng = sourceIdentity(coordinateOwner);
+    if (coordinateOwner.venue_resolution) {
+      merged.venue_resolution = coordinateOwner.venue_resolution;
+      fieldProvenance.venue_resolution = sourceIdentity(coordinateOwner);
+    }
   }
 
   merged.tags = unionValues(ranked.flatMap((event) => event.tags || []));
@@ -430,6 +435,7 @@ function evidenceCompleteness(event) {
     event.starts_at || event.starts_on,
     event.ends_at || event.ends_on,
     event.place_context,
+    event.address,
     finiteCoordinates(event),
     event.source_url || event.provenance?.source_url,
   ].filter(Boolean).length;

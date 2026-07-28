@@ -141,8 +141,10 @@ test("trusted live events remain available when route composition is blocked", a
 
 test("resolved place context reaches only the trusted event supply seam", async () => {
   let suppliedContext = null;
-  const eventSupply = async ({ placeContext }) => {
+  let suppliedVenueResolver = "not-called";
+  const eventSupply = async ({ placeContext, venueResolver }) => {
     suppliedContext = placeContext;
+    suppliedVenueResolver = venueResolver;
     return { coverage: "uncovered", feed: null, tonight: [], this_week: [] };
   };
   const placeResolver = async () => [{
@@ -164,6 +166,8 @@ test("resolved place context reaches only the trusted event supply seam", async 
     const res = await post(server, {
       place: "Stockholm",
       place_context: { locality: "Injected", country_code: "xx" },
+      venueResolver: { results: [{ lat: 0, lng: 0 }] },
+      venue_resolution: { resolved_count: 999 },
       dates: ["2026-06-28"],
       preferences: ["culture"],
       include_external_candidates: 1,
@@ -174,8 +178,9 @@ test("resolved place context reaches only the trusted event supply seam", async 
       country: "Sverige",
       country_code: "se",
     });
+    assert.equal(suppliedVenueResolver, undefined, "public payload cannot inject the trusted venue resolver seam");
     assert.equal("admin_context" in res.agnostic_route_output_experiment.intake.resolved, false);
-    assert.doesNotMatch(JSON.stringify(res), /Injected|"xx"/);
+    assert.doesNotMatch(JSON.stringify(res), /Injected|"xx"|resolved_count":999/);
   } finally {
     await new Promise((resolve) => server.close(resolve));
     global.fetch = ORIGINAL_FETCH;
