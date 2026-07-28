@@ -184,3 +184,24 @@ export function routePreferenceCoverage(routeStops, requestedPreferences) {
     missing_preferences: hasCoverageEvidence ? requested.filter((value) => !covered.has(value)) : [],
   };
 }
+
+/**
+ * Local-time anchoring truth for a composed route (#429 engine contract, same
+ * vocabulary as the legacy #275/#276 path):
+ *   "full_arc_not_now"  → the day leads with dayparts already past in the
+ *                         trusted local time (caveat daypart_arc_precedes_local_time)
+ *   "anchored_trimmed"  → the day was anchored to now and already-past dayparts
+ *                         were dropped (caveat day_anchored_to_current_time)
+ *   null                → no time-anchoring claim (unknown timezone, future
+ *                         plan, or no caveat) — render nothing, never guess.
+ * Only these two known caveat tokens are consulted; anything else is ignored
+ * so raw engine tokens can never leak into product copy.
+ */
+export function routeTimeAnchoring(primaryRoute) {
+  const caveats = Array.isArray(primaryRoute && primaryRoute.caveats) ? primaryRoute.caveats : [];
+  if (caveats.includes("daypart_arc_precedes_local_time")) return "full_arc_not_now";
+  if (caveats.includes("day_anchored_to_current_time") || primaryRoute?.anchored_to_local_time === true) {
+    return "anchored_trimmed";
+  }
+  return null;
+}

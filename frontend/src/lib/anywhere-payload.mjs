@@ -19,10 +19,16 @@ export const ANYWHERE_PREFERENCES = [
 
 // ISO date (YYYY-MM-DD) offset by N days from a base date — pure + injectable so
 // "tomorrow" is unit-testable without a real clock.
+// The VIEWER-LOCAL calendar date, never the UTC one: toISOString() would hand a
+// viewer ahead of UTC yesterday's date as "Today" until their UTC offset o'clock
+// (Kyoto: the whole morning), and that date drives selected-day opening hours
+// and the event-weave day alignment.
 export function isoDateFromOffset(offsetDays = 0, from = new Date()) {
   const d = new Date(from.getTime());
   d.setDate(d.getDate() + offsetDays);
-  return d.toISOString().slice(0, 10);
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
 }
 
 // Walking-length presets → the same walking_km_target the production planner sends.

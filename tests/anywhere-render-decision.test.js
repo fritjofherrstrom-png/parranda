@@ -68,6 +68,95 @@ test("placeLabel prefers the resolved anchor label, falls back to the typed plac
   assert.equal(classifyAnywhereResult({ days: [] }, { place: "Porto" }).placeLabel, "Porto");
 });
 
+test("a RESOLVED place with real loaded places below the route threshold reads as sparse supply", () => {
+  // Shape from a live capture: remote coordinates resolve (explicit), the
+  // trusted loader finds 3 real places, and the calibration/promotion carry the
+  // below-threshold cap. The classifier surfaces the trusted evidence so the UI
+  // can say "found 3 real places — not enough" instead of implying nothing was
+  // found.
+  const sparse = {
+    days: [],
+    agnostic_route_output_experiment: {
+      intake: { status: "resolved", resolved: { label: null, lat: 57.99, lng: 16.31, confidence: "explicit" } },
+      candidate_readiness: { real_place_count: 3, coordinate_ready_real_place_count: 3 },
+      readiness_calibration: {
+        status: "thin_usable",
+        level: "low",
+        caps: ["experimental_agnostic_route", "capped_by_below_planner_candidate_threshold"],
+      },
+      promotion: { promote: false, blocked_caps: ["capped_by_below_planner_candidate_threshold"] },
+    },
+  };
+  const cls = classifyAnywhereResult(sparse, { place: "your position" });
+  assert.equal(cls.status, "unavailable");
+  assert.equal(cls.unavailableReason, "sparse_supply");
+  assert.equal(cls.realPlaceCount, 3);
+
+  // The explicit blocker token is equally valid scarcity evidence on its own.
+  const viaBlocker = {
+    days: [],
+    agnostic_route_output_experiment: {
+      intake: { status: "resolved" },
+      candidate_readiness: { real_place_count: 2 },
+      readiness_blockers: ["insufficient_geocoded_candidates"],
+    },
+  };
+  assert.equal(classifyAnywhereResult(viaBlocker, { place: "Nowhere" }).unavailableReason, "sparse_supply");
+});
+
+test("a resolved place blocked on WALKING/GEOMETRY is never described as sparse supply", () => {
+  // Codex review note on this branch: plenty of candidates + a walking or
+  // geometry failure must keep the default honest-absence copy — calling it
+  // "too few places" would misdescribe the failure. No scarcity token → no
+  // sparse claim, regardless of the positive count.
+  const walkingBlocked = {
+    days: [],
+    agnostic_route_output_experiment: {
+      intake: { status: "resolved", resolved: { label: "Genoa", confidence: "medium" } },
+      candidate_readiness: { real_place_count: 10, coordinate_ready_real_place_count: 10 },
+      readiness_blockers: ["walking_route_unavailable", "walking_budget_exceeded"],
+      eligibility: { eligible: false, blockers: ["incomplete_geometry"] },
+      readiness_calibration: { status: "blocked", level: "unavailable", caps: ["experimental_agnostic_route"] },
+      promotion: { promote: false, blocked_caps: [] },
+    },
+  };
+  const cls = classifyAnywhereResult(walkingBlocked, { place: "Genoa" });
+  assert.equal(cls.status, "unavailable");
+  assert.equal(cls.unavailableReason, undefined);
+  assert.equal(cls.realPlaceCount, undefined);
+});
+
+test("sparse supply is NEVER claimed without resolved intake + a positive trusted count", () => {
+  const unresolved = {
+    days: [],
+    agnostic_route_output_experiment: {
+      intake: { status: "unresolved", blockers: ["unresolved_place"] },
+      candidate_readiness: { real_place_count: 3 },
+    },
+  };
+  assert.equal(classifyAnywhereResult(unresolved, { place: "Nowhere" }).unavailableReason, undefined, "unresolved places keep the default honest-absence copy");
+
+  const loaderFailed = {
+    days: [],
+    agnostic_route_output_experiment: {
+      intake: { status: "resolved" },
+      source_status: { status: "error_failed_closed" },
+      candidate_readiness: { real_place_count: 0 },
+    },
+  };
+  assert.equal(classifyAnywhereResult(loaderFailed, { place: "Berlin" }).unavailableReason, undefined, "a loader failure is the transient-retry path, not sparse evidence");
+
+  const composed = {
+    days: [{ experimental_agnostic_route_applied: true }],
+    place_structure: agnosticStructure(),
+    agnostic_route_output_experiment: {
+      intake: { status: "resolved" },
+      candidate_readiness: { real_place_count: 25 },
+    },
+  };
+  assert.equal(classifyAnywhereResult(composed, { place: "Lyon" }).unavailableReason, undefined, "composed days never carry an unavailable reason");
+});
+
 test("only an explicit transient source failure after resolved intake gets one retry", () => {
   const transient = {
     days: [],

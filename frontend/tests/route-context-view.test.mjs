@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildRouteContextSuggestions,
   routePreferenceCoverage,
+  routeTimeAnchoring,
   walkingDistanceLabel,
 } from "../src/lib/route-context-view.mjs";
 
@@ -144,4 +145,25 @@ test("missing route metadata is unknown rather than fabricated missing coverage"
     covered_preferences: [],
     missing_preferences: [],
   });
+});
+
+test("routeTimeAnchoring maps the #429 caveat vocabulary and nothing else", () => {
+  // A full-day arc leading with already-past dayparts must be sayable.
+  assert.equal(
+    routeTimeAnchoring({ caveats: ["daypart_arc_precedes_local_time"], current_local_time_band: "evening" }),
+    "full_arc_not_now",
+  );
+  // A now-anchored, trimmed day announces itself via caveat or flag.
+  assert.equal(routeTimeAnchoring({ caveats: ["day_anchored_to_current_time"] }), "anchored_trimmed");
+  assert.equal(routeTimeAnchoring({ anchored_to_local_time: true, caveats: [] }), "anchored_trimmed");
+  // The precedes-caveat is the stronger truth when both somehow appear.
+  assert.equal(
+    routeTimeAnchoring({ caveats: ["day_anchored_to_current_time", "daypart_arc_precedes_local_time"] }),
+    "full_arc_not_now",
+  );
+  // Unknown tokens, empty caveats, or no route → nothing is claimed.
+  assert.equal(routeTimeAnchoring({ caveats: ["heuristic_walking_estimate", "made_up_token"] }), null);
+  assert.equal(routeTimeAnchoring({ caveats: [] }), null);
+  assert.equal(routeTimeAnchoring({}), null);
+  assert.equal(routeTimeAnchoring(null), null);
 });
