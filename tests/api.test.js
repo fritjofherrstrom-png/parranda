@@ -4,7 +4,7 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const { buildApp, buildPlannerAreas } = require("../server/app");
+const { buildApp, buildPlannerAreas, resolveSelectedRouteDate } = require("../server/app");
 const { routeTemplates, allItems } = require("../server/catalog");
 const { resetBarcelonaLiveEventsCache } = require("../server/cities/barcelona/live");
 const { resetLiveEventsCache } = require("../server/live-events");
@@ -12,6 +12,20 @@ const { SOURCE_PROVIDER_INSPECT_EVENT_LIMIT } = require("../server/pulse-sources
 const { buildRouteFromTemplate, routeSimilarity } = require("../server/route-engine");
 
 const originalFetch = global.fetch;
+
+test("selected route date calls the configured today provider instead of passing the function", () => {
+  let calls = 0;
+  const cityConfig = {
+    todayIsoDate() {
+      calls += 1;
+      return "2026-07-28";
+    },
+  };
+  assert.equal(resolveSelectedRouteDate({ dates: [] }, { days: [] }, cityConfig), "2026-07-28");
+  assert.equal(calls, 1);
+  assert.equal(resolveSelectedRouteDate({ dates: ["2026-07-29"] }, { days: [] }, cityConfig), "2026-07-29");
+  assert.equal(calls, 1, "an explicit date does not call the fallback provider");
+});
 
 function assertLocalTruthShape(localTruth) {
   assert.ok(localTruth && typeof localTruth === "object");

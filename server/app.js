@@ -655,6 +655,17 @@ function buildPlannerRolePayload(cityConfig, request, routePayload, roleOrigin) 
   };
 }
 
+function resolveSelectedRouteDate(payload, baselineBody, cityConfig) {
+  const explicitDate = Array.isArray(payload?.dates) ? payload.dates[0] : null;
+  if (explicitDate) return explicitDate;
+  const baselineDate = Array.isArray(baselineBody?.days) ? baselineBody.days[0]?.date : null;
+  if (baselineDate) return baselineDate;
+  const configuredToday = typeof cityConfig?.todayIsoDate === "function"
+    ? cityConfig.todayIsoDate()
+    : cityConfig?.todayIsoDate;
+  return configuredToday || null;
+}
+
 async function buildPlannerCandidateInspectSidecar({ cityConfig, request, routePayload, routeResult, openDataLoader }) {
   const roleOrigin = resolvePlannerRoleOrigin(cityConfig, request.body || {});
   const externalRequested = isExternalCandidatesRequested(request);
@@ -2168,7 +2179,7 @@ function buildApp({
       let wovenPlaceStructure = agnosticPlaceStructure;
       try {
         const { weaveEveningEvent } = require("./candidates/evening-event-weave");
-        const selectedRouteDate = payload.dates[0] || baselineBody?.days?.[0]?.date || cityConfig.todayIsoDate || null;
+        const selectedRouteDate = resolveSelectedRouteDate(payload, baselineBody, cityConfig);
         wovenPlaceStructure = weaveEveningEvent(agnosticPlaceStructure, liveEvents, {
           selectedDate: selectedRouteDate,
         });
@@ -2510,4 +2521,5 @@ module.exports = {
   buildApp,
   buildPlannerAreas,
   isDogfoodUiEnabled,
+  resolveSelectedRouteDate,
 };

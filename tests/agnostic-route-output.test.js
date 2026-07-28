@@ -1570,6 +1570,93 @@ test(
   },
 );
 
+test("engine compose anchors a today route before geometry and exposes the shared time truth", async () => {
+  global.fetch = mockStableWeatherFetch();
+  try {
+    const { result } = await composeAgnosticRouteOutput({
+      coords: { lat: 41.9, lng: 12.49 },
+      baselineResult: { city: "rome", days: [{ date: DATE, primary_route: null, alternatives: [] }] },
+      externalRequested: true,
+      openDataLoader: makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })),
+      preferences: ["food", "coffee", "scenic"],
+      date: DATE,
+      todayIsoDate: DATE,
+      synthesizeVia: "engine",
+      weatherProvider: async () => SUN_AUTO_TZ,
+      clock: middayClock,
+      placeLabel: "Rome",
+      lang: "en",
+    });
+    const route = result.days[0].primary_route;
+    assert.ok(route);
+    assert.equal(route.current_local_time_band, "midday");
+    assert.equal(route.anchored_to_local_time, true);
+    assert.ok(route.trimmed_dayparts.includes("morning"));
+    assert.equal(route.daypart_arc[0], "midday");
+    assert.ok(route.caveats.includes("day_anchored_to_current_time"));
+    assert.equal(route.caveats.includes("daypart_arc_precedes_local_time"), false);
+  } finally {
+    global.fetch = ORIGINAL_FETCH;
+  }
+});
+
+test("engine compose keeps a viable full-day arc with an explicit caveat when evening anchoring would be too thin", async () => {
+  global.fetch = mockStableWeatherFetch();
+  try {
+    const { result } = await composeAgnosticRouteOutput({
+      coords: { lat: 41.9, lng: 12.49 },
+      baselineResult: { city: "rome", days: [{ date: DATE, primary_route: null, alternatives: [] }] },
+      externalRequested: true,
+      openDataLoader: makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })),
+      preferences: ["food", "coffee", "scenic"],
+      date: DATE,
+      todayIsoDate: DATE,
+      synthesizeVia: "engine",
+      weatherProvider: async () => SUN_AUTO_TZ,
+      clock: eveningClock,
+      placeLabel: "Rome",
+      lang: "en",
+    });
+    const route = result.days[0].primary_route;
+    assert.ok(route, "the viable full-day route remains available");
+    assert.equal(route.current_local_time_band, "evening");
+    assert.equal(route.anchored_to_local_time, false);
+    assert.deepEqual(route.trimmed_dayparts, []);
+    assert.ok(route.caveats.includes("daypart_arc_precedes_local_time"));
+    assert.equal(route.caveats.includes("day_anchored_to_current_time"), false);
+  } finally {
+    global.fetch = ORIGINAL_FETCH;
+  }
+});
+
+test("engine compose does not apply current-time truth to a future date", async () => {
+  global.fetch = mockStableWeatherFetch();
+  try {
+    const { result } = await composeAgnosticRouteOutput({
+      coords: { lat: 41.9, lng: 12.49 },
+      baselineResult: { city: "rome", days: [{ date: "2026-05-30", primary_route: null, alternatives: [] }] },
+      externalRequested: true,
+      openDataLoader: makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })),
+      preferences: ["food", "coffee", "scenic"],
+      date: "2026-05-30",
+      todayIsoDate: DATE,
+      synthesizeVia: "engine",
+      weatherProvider: async () => SUN_AUTO_TZ,
+      clock: middayClock,
+      placeLabel: "Rome",
+      lang: "en",
+    });
+    const route = result.days[0].primary_route;
+    assert.ok(route);
+    assert.equal(route.current_local_time_band, null);
+    assert.equal(route.anchored_to_local_time, false);
+    assert.deepEqual(route.trimmed_dayparts, []);
+    assert.equal(route.caveats.includes("daypart_arc_precedes_local_time"), false);
+  } finally {
+    global.fetch = ORIGINAL_FETCH;
+  }
+});
+
 // --- API: no named-city hardcoding -----------------------------------------
 
 test(
