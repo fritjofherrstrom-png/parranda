@@ -380,6 +380,68 @@ test("without an origin, compactness keeps the existing deterministic behavior",
   assert.equal("origin_reach" in out.geometry_summary, false);
 });
 
+test("an explicit origin reach ceiling selects a reachable cluster over a remote compact cluster", () => {
+  const origin = { lat: 41.9, lng: 12.49 };
+  const out = buildCandidateCombination(
+    plannerRoles([
+      role("scenic_anchor", {
+        candidates: [
+          candidate("scenic-remote", { coordinates: { lat: 41.95, lng: 12.55 } }),
+          candidate("scenic-reachable", { coordinates: { lat: 41.91, lng: 12.5 } }),
+        ],
+      }),
+      role("food_anchor", {
+        candidates: [
+          candidate("food-remote", { coordinates: { lat: 41.9502, lng: 12.5502 } }),
+          candidate("food-reachable", { coordinates: { lat: 41.911, lng: 12.501 } }),
+        ],
+      }),
+    ]),
+    {},
+    { origin, maxOriginDistanceKm: 3 },
+  );
+
+  assert.deepEqual(out.selected.map((entry) => entry.candidate_id).sort(), [
+    "food-reachable",
+    "scenic-reachable",
+  ]);
+  assert.notEqual(out.geometry_summary.origin_reach, "extended");
+});
+
+test("an explicit origin reach ceiling fails honestly when every coherent cluster is remote", () => {
+  const out = buildCandidateCombination(
+    plannerRoles([
+      role("scenic_anchor", { candidates: [candidate("scenic-remote", { coordinates: { lat: 41.95, lng: 12.55 } })] }),
+      role("food_anchor", { candidates: [candidate("food-remote", { coordinates: { lat: 41.951, lng: 12.551 } })] }),
+    ]),
+    {},
+    { origin: { lat: 41.9, lng: 12.49 }, maxOriginDistanceKm: 3 },
+  );
+
+  assert.equal(out.status, "insufficient");
+  assert.deepEqual(out.selected, []);
+  assert.ok(out.reasons.includes("no_combination_within_origin_reach"));
+  assert.ok(out.unresolved_roles.every((entry) => entry.reason === "outside_origin_reach"));
+});
+
+test("an exact-origin ceiling checks the farthest selected stop, not only the cluster centroid", () => {
+  const out = buildCandidateCombination(
+    plannerRoles([
+      role("scenic_anchor", {
+        candidates: [candidate("scenic-near", { coordinates: { lat: 41.9135, lng: 12.49 } })],
+      }),
+      role("food_anchor", {
+        candidates: [candidate("food-too-far", { coordinates: { lat: 41.935, lng: 12.49 } })],
+      }),
+    ]),
+    {},
+    { origin: { lat: 41.9, lng: 12.49 }, maxOriginDistanceKm: 3 },
+  );
+
+  assert.equal(out.status, "insufficient");
+  assert.ok(out.reasons.includes("no_combination_within_origin_reach"));
+});
+
 // --- regression: requested roles must never be silently dropped by the cap --
 test("six requested roles all surface — none are silently dropped by the role cap", () => {
   const roles = [

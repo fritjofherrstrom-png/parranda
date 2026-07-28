@@ -53,6 +53,9 @@ function buildCandidateCombination(plannerRoles = {}, dayflowHonesty = {}, optio
   const origin = resolveCoords(options.origin) || resolveCoords(plannerRoles.context?.origin);
   const strongKm = Number.isFinite(options.strongKm) ? options.strongKm : STRONG_KM;
   const okKm = Number.isFinite(options.okKm) ? options.okKm : OK_KM;
+  const maxOriginDistanceKm = Number.isFinite(options.maxOriginDistanceKm) && options.maxOriginDistanceKm > 0
+    ? options.maxOriginDistanceKm
+    : null;
 
   const { kept: targetRoles, dropped: cappedOut } = capTargetRoles(
     resolveHonestyTargetRoles(roles),
@@ -77,7 +80,22 @@ function buildCandidateCombination(plannerRoles = {}, dayflowHonesty = {}, optio
     return emptyResult({ status: "insufficient", unresolved, reason: "no_usable_target_role" });
   }
 
-  const best = chooseBestCombination(usableByRole, { origin, strongKm, okKm });
+  const best = chooseBestCombination(usableByRole, {
+    origin,
+    strongKm,
+    okKm,
+    maxOriginDistanceKm,
+  });
+  if (!best) {
+    return emptyResult({
+      status: "insufficient",
+      unresolved: [
+        ...unresolved,
+        ...usableByRole.map((entry) => ({ role: entry.role, reason: "outside_origin_reach" })),
+      ],
+      reason: "no_combination_within_origin_reach",
+    });
+  }
   const geometry = best.geometry;
   const duplicateRoleCoverage = findDuplicateRoleCoverage(best.picks);
 
@@ -138,6 +156,13 @@ function chooseBestCombination(usableByRole, geoOpts) {
   let best = null;
   for (const combo of cartesian(usableByRole)) {
     const geometry = summarizeGeometry(combo, geoOpts);
+    if (
+      Number.isFinite(geoOpts.maxOriginDistanceKm) &&
+      Number.isFinite(geometry.max_origin_distance_km) &&
+      geometry.max_origin_distance_km > geoOpts.maxOriginDistanceKm
+    ) {
+      continue;
+    }
     const score = scoreCombination(combo, geometry);
     if (!best) {
       best = { picks: combo, geometry, score, idKey: comboIdKey(combo) };
@@ -263,7 +288,9 @@ function summarizeGeometry(combo, { origin, strongKm, okKm }) {
   // This remains a selection signal rather than a hard gate; the route engine
   // still owns the final walking-budget decision.
   if (origin && centroid) {
+    const distancesFromOrigin = geocoded.map((coords) => haversineKm(origin, coords));
     summary.origin_distance_km = round(haversineKm(origin, centroid));
+    summary.max_origin_distance_km = round(Math.max(...distancesFromOrigin));
     summary.origin_reach = classifyOriginReach(summary.origin_distance_km);
   }
   return summary;
@@ -369,12 +396,13 @@ function emptyResult({ status, unresolved, reason }) {
       average_pairwise_km: 0,
       centroid: null,
       coherence: "incomplete",
-      reasons: ["no_selection"],
+      reasons: ["no_selection", reason].filter(Boolean),
     },
     quality_flags: unresolved
       .map((r) => {
         if (r.reason === "fallback_only") return `fallback_only_${r.role}`;
         if (r.reason === "capped_out") return `capped_out_${r.role}`;
+        if (r.reason === "outside_origin_reach") return `outside_origin_reach_${r.role}`;
         return `missing_${r.role}`;
       })
       .sort(),

@@ -8,7 +8,10 @@ const {
   mapOverpassResponse,
   mapOsmElement,
   MAX_RADIUS_KM,
+  REGIONAL_EXPANSION_RADIUS_KM,
   DEFAULT_USER_AGENT,
+  normalizeRequestedIntents,
+  supplyProfile,
 } = require("../server/place-candidates/open-data-loader");
 
 // --- OSM element mapping ---------------------------------------------------
@@ -269,6 +272,16 @@ test("balancing is a no-op when the response already fits the limit (#273)", () 
   assert.deepEqual(out.map((r) => r.id), ["osm-node-1", "osm-node-2"]); // order preserved
 });
 
+test("runtime mapping prefers active local non-chains and proximity within a category", () => {
+  const elements = [
+    { type: "node", id: 1, lat: 55.64, lon: 13.0, tags: { name: "Far chain", amenity: "restaurant", brand: "Chain", website: "https://chain.example" } },
+    { type: "node", id: 2, lat: 55.601, lon: 13.0, tags: { name: "Near local", amenity: "restaurant", website: "https://local.example" } },
+    { type: "node", id: 3, lat: 55.62, lon: 13.0, tags: { name: "Mid local", amenity: "restaurant", website: "https://mid.example" } },
+  ];
+  const out = mapOverpassResponse({ elements }, 2, { origin: { lat: 55.6, lng: 13.0 } });
+  assert.deepEqual(out.map((record) => record.name), ["Near local", "Mid local"]);
+});
+
 test("records without a name or coordinates are dropped", () => {
   assert.equal(mapOsmElement({ type: "node", id: 1, lat: 1, lon: 1, tags: { tourism: "viewpoint" } }), null);
   assert.equal(mapOsmElement({ type: "node", id: 1, tags: { name: "X", tourism: "viewpoint" } }), null);
@@ -499,13 +512,196 @@ test("a thin pass caused by few CATEGORIES (not few records) still expands", asy
     const wide = /around:3000/.test(decodeURIComponent(opts.body));
     const n = wide ? 8 : 15;
     const tag = wide ? (i) => [{ amenity: "cafe" }, { amenity: "bar" }, { tourism: "museum" }][i % 3] : () => ({ amenity: "cafe" });
-    const els = Array.from({ length: n }, (_, i) => ({ type: "node", id: i + 1, lat: 1 + i * 0.001, lon: 1, tags: { name: `P${i}`, ...tag(i) } }));
+    const els = Array.from({ length: n }, (_, i) => ({
+      type: "node",
+      id: i + 1 + (wide ? 100 : 0),
+      lat: 1 + i * 0.001,
+      lon: 1,
+      tags: { name: `P${i}`, ...tag(i) },
+    }));
     return { ok: true, json: async () => ({ elements: els }) };
   };
   const loader = createOpenDataLoader({ fetcher, endpoint: "https://x/overpass" });
   const records = await loader({ lat: 1, lng: 1 });
   assert.equal(calls, 2, "single-category first pass is thin → expands for variety");
   assert.ok(records.some((r) => r.type === "bar") && records.some((r) => r.type === "museum"), "the wider pass added variety");
+});
+
+test("requested preference gaps trigger one bounded regional query and prefer newly covered supply", async () => {
+  const radii = [];
+  const queries = [];
+  const fetcher = async (_url, opts) => {
+    const body = decodeURIComponent(opts.body);
+    queries.push(body);
+    const radius = Number(body.match(/around:(\d+)/)?.[1]);
+    radii.push(radius);
+    const kinds = radius === REGIONAL_EXPANSION_RADIUS_KM * 1000
+      ? [{ amenity: "restaurant" }, { shop: "second_hand" }, { tourism: "museum" }]
+      : [{ amenity: "restaurant" }, { amenity: "cafe" }, { tourism: "museum" }];
+    return {
+      ok: true,
+      json: async () => ({
+        elements: Array.from({ length: 18 }, (_, index) => ({
+          type: "node",
+          id: index + 1 + (radius === REGIONAL_EXPANSION_RADIUS_KM * 1000 ? 100 : 0),
+          lat: 55.6 + index * 0.001,
+          lon: 13,
+          tags: { name: `P${index}`, ...kinds[index % kinds.length] },
+        })),
+      }),
+    };
+  };
+  const loader = createOpenDataLoader({ fetcher, endpoint: "https://x/overpass" });
+  const records = await loader({
+    lat: 55.6,
+    lng: 13,
+    requestedIntents: ["second hand"],
+    anchorMode: "place",
+  });
+
+  assert.deepEqual(radii, [1500, 5000]);
+  assert.match(queries[1], /shop"="second_hand/);
+  assert.doesNotMatch(queries[1], /amenity"="restaurant/);
+  assert.ok(records.some((record) => record.type === "restaurant"), "local food supply survives the targeted wider merge");
+  assert.ok(records.some((record) => record.type === "vintage-shop"));
+  assert.equal(records.loader_metadata.expansion_trigger, "requested_intent_gap");
+  assert.equal(records.loader_metadata.selected_radius_km, 5);
+  assert.deepEqual(records.loader_metadata.expansion_query_intents, ["second_hand"]);
+  assert.deepEqual(records.loader_metadata.selected_profile.requested_intents_missing, []);
+});
+
+test("an adjacent intent match does not stop discovery of a stronger requested role match", async () => {
+  const radii = [];
+  const fetcher = async (_url, opts) => {
+    const radius = Number(decodeURIComponent(opts.body).match(/around:(\d+)/)?.[1]);
+    radii.push(radius);
+    const tags = radius === 1500 ? { tourism: "viewpoint" } : { leisure: "park" };
+    return {
+      ok: true,
+      json: async () => ({
+        elements: Array.from({ length: 15 }, (_, index) => ({
+          type: "node",
+          id: index + 1 + (radius === 1500 ? 0 : 100),
+          lat: 59.3 + index * 0.001,
+          lon: 18,
+          tags: { name: `P${index}`, ...tags },
+        })),
+      }),
+    };
+  };
+  const loader = createOpenDataLoader({ fetcher, endpoint: "https://x/overpass" });
+  const records = await loader({ lat: 59.3, lng: 18, requestedIntents: ["green"] });
+
+  assert.deepEqual(radii, [1500, 5000]);
+  assert.ok(records.some((record) => record.type === "park"));
+  assert.deepEqual(records.loader_metadata.initial_profile.requested_intents_partial, ["green"]);
+  assert.deepEqual(records.loader_metadata.selected_profile.requested_intents_covered, ["green"]);
+});
+
+test("severely sparse supply reaches 5 km, while ordinary thin supply stays at 3 km", async () => {
+  const run = async (firstCount) => {
+    const radii = [];
+    const fetcher = async (_url, opts) => {
+      const radius = Number(decodeURIComponent(opts.body).match(/around:(\d+)/)?.[1]);
+      radii.push(radius);
+      const count = radius === 1500 ? firstCount : 10;
+      return {
+        ok: true,
+        json: async () => ({
+          elements: Array.from({ length: count }, (_, index) => ({
+            type: "node",
+            id: index + 1,
+            lat: 43.7 + index * 0.001,
+            lon: 4.8,
+            tags: { name: `P${index}`, ...(index % 2 ? { amenity: "cafe" } : { tourism: "museum" }) },
+          })),
+        }),
+      };
+    };
+    const loader = createOpenDataLoader({ fetcher, endpoint: "https://x/overpass" });
+    const records = await loader({ lat: 43.7, lng: 4.8 });
+    return { radii, records };
+  };
+
+  const severe = await run(3);
+  assert.deepEqual(severe.radii, [1500, 5000]);
+  assert.equal(severe.records.loader_metadata.expansion_trigger, "severely_sparse_supply");
+
+  const thin = await run(6);
+  assert.deepEqual(thin.radii, [1500, 3000]);
+  assert.equal(thin.records.loader_metadata.expansion_trigger, "thin_supply");
+});
+
+test("adaptive expansion never repeats a custom base-radius query", async () => {
+  const radii = [];
+  const fetcher = async (_url, options) => {
+    const query = decodeURIComponent(String(options.body || ""));
+    radii.push(Number(query.match(/around:(\d+)/)?.[1]));
+    return {
+      ok: true,
+      json: async () => ({
+        elements: Array.from({ length: 6 }, (_, index) => ({
+          type: "node",
+          id: index + 1,
+          lat: 48.8 + index * 0.001,
+          lon: 2.3,
+          tags: { name: `P${index}`, amenity: "cafe" },
+        })),
+      }),
+    };
+  };
+  const loader = createOpenDataLoader({ fetcher, endpoint: "https://x/overpass", radiusKm: 4 });
+
+  const records = await loader({ lat: 48.8, lng: 2.3 });
+
+  assert.deepEqual(radii, [4000, 5000]);
+  assert.equal(records.loader_metadata.attempted_radius_km, 5);
+});
+
+test("loader cache keys include normalized requested intents and preserve collection metadata", async () => {
+  const keys = [];
+  const cache = {
+    async get(key, load) {
+      keys.push(key);
+      return load();
+    },
+  };
+  const fetcher = async () => ({
+    ok: true,
+    json: async () => ({
+      elements: Array.from({ length: 15 }, (_, index) => ({
+        type: "node",
+        id: index + 1,
+        lat: 59.3 + index * 0.001,
+        lon: 18,
+        tags: { name: `P${index}`, ...(index % 2 ? { amenity: "restaurant" } : { tourism: "museum" }) },
+      })),
+    }),
+  });
+  const loader = createOpenDataLoader({ fetcher, endpoint: "https://x/overpass", cache });
+  const food = await loader({ lat: 59.3, lng: 18, requestedIntents: ["food"] });
+  await loader({ lat: 59.3, lng: 18, requestedIntents: ["second_hand"] });
+
+  assert.equal(keys.length, 2);
+  assert.notEqual(keys[0], keys[1]);
+  assert.equal(food.loader_metadata.requested_intents[0], "food");
+});
+
+test("requested intent normalization is canonical and source-location agnostic", () => {
+  assert.deepEqual(normalizeRequestedIntents(["views", "grönt", "second hand", "culture"]), [
+    "green",
+    "museums",
+    "scenic",
+    "second_hand",
+  ]);
+  assert.deepEqual(supplyProfile([{ type: "park", tags: ["green"] }, { type: "restaurant", tags: ["mat"] }], ["scenic", "second_hand"]), {
+    record_count: 2,
+    category_count: 2,
+    requested_intent_count: 2,
+    requested_intents_covered: [],
+    requested_intents_partial: ["scenic"],
+    requested_intents_missing: ["second_hand"],
+  });
 });
 
 // --- bounded query ---------------------------------------------------------

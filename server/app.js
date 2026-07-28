@@ -2089,7 +2089,11 @@ function buildApp({
       let agnosticPlaceStructure = null;
       if (isExternalCandidatesRequested(request) && typeof openDataLoader === "function") {
         try {
-          const records = await openDataLoader(anchor);
+          const records = await openDataLoader({
+            ...anchor,
+            requestedIntents: Array.isArray(preferences) ? preferences : [],
+            anchorMode: intake.mode,
+          });
           const structureCandidates = (Array.isArray(records) ? records : []).filter(
             (c) => c && Number.isFinite(c.lat) && Number.isFinite(c.lng),
           );
@@ -2204,6 +2208,7 @@ function buildApp({
         // unresolved place (or explicit coords with no trusted label) falls back
         // to neutral "this place"/"platsen" inside the prose builder.
         placeLabel: intake.resolved?.label || null,
+        anchorMode: intake.mode,
         synthesizeVia: useEngineCompose ? "engine" : "legacy",
       });
       experiment.intake = intake;
