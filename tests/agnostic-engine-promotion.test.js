@@ -402,6 +402,28 @@ test("a walkable tonight-event is woven into the promoted route as its last stop
   }
 });
 
+test("a route for another selected date never inherits today's live event", async () => {
+  global.fetch = mockStableWeatherFetch();
+  const server = buildApp({
+    openDataLoader: makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })),
+    eventSupply: eventSupplyWith(tonightEventAt(12.5)),
+  }).listen(0);
+  try {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody({ dates: ["2026-05-26"] }),
+    });
+    const route = r.body.days[0].primary_route;
+    assert.equal(route.main_stops.some((stop) => stop.is_live_event), false);
+    assert.equal(route.live_event_stop, undefined);
+    assert.equal(r.body.place_structure.district_day.evening_event, undefined);
+    assert.equal(r.body.live_events.tonight[0].id, "ev-tonight", "Pulse discovery remains independent of route use");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    global.fetch = ORIGINAL_FETCH;
+  }
+});
+
 test("a distant tonight-event stays an anchor: no walk claimed, route unextended", async () => {
   global.fetch = mockStableWeatherFetch();
   const server = buildApp({

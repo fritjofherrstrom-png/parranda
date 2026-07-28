@@ -19,6 +19,17 @@ const NEAR_EVENT = {
   title: "Jazz på kajen",
   starts_at: "2026-07-12T19:00:00Z",
   ends_at: "2026-07-12T21:00:00Z",
+  starts_on: "2026-07-12",
+  ends_on: "2026-07-12",
+  occurrence_date: "2026-07-12",
+  time_window: {
+    kind: "daily",
+    starts_on: "2026-07-01",
+    ends_on: "2026-07-31",
+    local_start: "21:00",
+    local_end: "23:00",
+    timezone: "Europe/Stockholm",
+  },
   timezone: "Europe/Stockholm",
   source_label: "Open feed",
   source_url: "https://example.org/ev-tonight",
@@ -90,6 +101,9 @@ test("a walkable evening event becomes the route's real last stop with truthful 
   assert.equal(last.event_id, "ev-tonight");
   assert.equal(last.daypart, "evening");
   assert.equal(last.starts_at, NEAR_EVENT.starts_at);
+  assert.equal(last.starts_on, "2026-07-12");
+  assert.equal(last.occurrence_date, "2026-07-12");
+  assert.deepEqual(last.time_window, NEAR_EVENT.time_window);
   assert.equal(last.timezone, "Europe/Stockholm");
   assert.equal(last.source.url, NEAR_EVENT.source_url);
 
@@ -152,6 +166,16 @@ test("a non-agnostic (fallback) day NEVER receives the typed place's event", asy
   assert.equal(woven.applied, false);
   assert.ok(woven.blockers.includes("day_not_agnostic"));
   assert.equal(woven.result, result);
+});
+
+test("a selected-day occurrence cannot be woven into a different route date", async () => {
+  const event = { ...NEAR_EVENT, occurrence_date: "2026-07-13" };
+  const woven = await weaveEveningEventRouteStop({
+    result: agnosticResult(),
+    placeStructure: structureWith(event),
+  });
+  assert.equal(woven.applied, false);
+  assert.ok(woven.blockers.includes("event_date_mismatch"));
 });
 
 test("no geocoded evening event, coordless stops, or missing route → unchanged", async () => {

@@ -67,11 +67,11 @@ function soleilListingHtml(rows = [soleilArticle()]) {
   `;
 }
 
-function detailHtml() {
+function detailHtml(dateText = "25 juni–16 juli, 18.00–21.00") {
   return `
     <h1>Summer market</h1>
     <span id="Datumochtid">Date and time</span>
-    <p>25 juni–16 juli, 18.00–21.00</p>
+    <p>${dateText}</p>
     <span id="Aterkommandetillfallen">Recurring occasions</span>
     <p>Every Thursday</p>
     <p><strong>Evenemangsplats:</strong><br>Town museum</p>
@@ -186,8 +186,14 @@ test("extracts bounded detail facts including recurrence and coordinates", () =>
     timezone: "Europe/Stockholm",
   });
 
-  assert.equal(detail.starts_at, "2026-07-15T16:00:00.000Z");
-  assert.equal(detail.ends_at, "2026-07-15T19:00:00.000Z");
+  assert.equal(detail.starts_at, undefined);
+  assert.equal(detail.ends_at, undefined);
+  assert.equal(detail.starts_on, "2026-06-25");
+  assert.equal(detail.ends_on, "2026-07-16");
+  assert.equal(detail.time_window.kind, "daily");
+  assert.equal(detail.time_window.local_start, "18:00");
+  assert.equal(detail.time_window.local_end, "21:00");
+  assert.equal(detail.time_window.timezone, "Europe/Stockholm");
   assert.equal(detail.place_context, "Town museum");
   assert.equal(detail.address, "Example street 1");
   assert.equal(detail.lat, 55.556437);
@@ -254,6 +260,9 @@ test("provider bounds detail fetches and keeps listing rows when detail enrichme
   assert.equal(enriched.lat, 55.556437);
   assert.equal(enriched.timing_relevance, "tonight");
   assert.equal(enriched.source_label, "Municipal calendar");
+  assert.equal(enriched.starts_on, "2026-06-25");
+  assert.equal(enriched.ends_on, "2026-07-16");
+  assert.equal(enriched.time_window.kind, "daily");
 });
 
 test("candidate Sitevision providers stay default-off until explicitly enabled", async () => {
@@ -354,11 +363,13 @@ test("reviewed Sitevision manifest joins the bounded anchor acquisition path", a
   });
   const result = await collectAnchorEvents({
     anchor: { lat: 55.556437, lng: 14.347752 },
-    now: "2026-07-15T15:30:00.000Z",
+    now: "2026-07-15T16:30:00.000Z",
     registry: [source],
     fetcher: async (url) => {
       if (String(url).endsWith("/calendar")) return textResponse(listingHtml());
-      if (String(url).endsWith("/events/summer-market")) return textResponse(detailHtml());
+      if (String(url).endsWith("/events/summer-market")) {
+        return textResponse(detailHtml("15 juli, 18.00–21.00"));
+      }
       throw new Error("unexpected source URL");
     },
   });

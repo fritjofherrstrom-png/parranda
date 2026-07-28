@@ -2148,15 +2148,18 @@ function buildApp({
       }
       const liveEventsSidecar = liveEvents ? { live_events: liveEvents } : {};
 
-      // EVENTS INTO THE DAY: weave the top genuine tonight-event (with real
-      // coordinates) into the composed day as an honest EVENING ANCHOR — a real
-      // happening with its time window + source, tied to the nearest district. It
-      // is an anchor, not a walking-validated stop (no ETA/geometry claim).
+      // EVENTS INTO THE DAY: materialize and weave the top genuine event for the
+      // SELECTED route date into the composed day as an honest EVENING ANCHOR.
+      // Pulse remains free to show broader live discovery; route composition may
+      // use only a verified selected-day occurrence with real time + coordinates.
       // Additive + fail-soft: no suitable event → the day is unchanged.
       let wovenPlaceStructure = agnosticPlaceStructure;
       try {
         const { weaveEveningEvent } = require("./candidates/evening-event-weave");
-        wovenPlaceStructure = weaveEveningEvent(agnosticPlaceStructure, liveEvents);
+        const selectedRouteDate = payload.dates[0] || baselineBody?.days?.[0]?.date || cityConfig.todayIsoDate || null;
+        wovenPlaceStructure = weaveEveningEvent(agnosticPlaceStructure, liveEvents, {
+          selectedDate: selectedRouteDate,
+        });
       } catch (_error) {
         wovenPlaceStructure = agnosticPlaceStructure;
       }
