@@ -2050,6 +2050,7 @@ function buildApp({
         coords: experimentCoords,
         placeQuery,
         placeResolver,
+        placeLanguage: lang,
       });
 
       if (!anchor) {

@@ -175,6 +175,21 @@ test("unit: single strong valid candidate → trusted anchor with resolver prove
   assert.equal(intake.resolved.provenance, "test_geocoder");
 });
 
+test("unit: trusted request language is forwarded as resolver context", async () => {
+  let receivedContext = null;
+  const { anchor } = await resolveAgnosticIntake({
+    placeQuery: "Österlen",
+    placeLanguage: "sv",
+    placeResolver: async (_query, context) => {
+      receivedContext = context;
+      return [{ label: "Österlen", lat: 55.6, lng: 14.2, confidence: "medium" }];
+    },
+  });
+
+  assert.deepEqual(receivedContext, { language: "sv" });
+  assert.deepEqual(anchor, { lat: 55.6, lng: 14.2 });
+});
+
 test("unit: resolver admin context stays private and allowlisted beside public intake", async () => {
   const { anchor, intake, placeContext } = await resolveAgnosticIntake({
     placeQuery: "Stockholm",

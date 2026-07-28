@@ -28,6 +28,11 @@ services:
       # carries its own UA + 1 req/s gate + in-memory cache; fail-closed.
       - key: PARRANDA_PLACE_RESOLVER
         value: enabled
+      # Exact coordinate-bearing Wikidata labels/aliases are a conservative
+      # fallback for named areas the primary street geocoder does not index.
+      # It never overrides a strong Nominatim result or invents region bounds.
+      - key: PARRANDA_WIKIDATA_PLACE_RESOLVER
+        value: enabled
       # Source-cache directory — ephemeral /tmp (writable on Render, per-instance,
       # survives across requests within an instance). Point this at a mounted
       # disk's path once on a paid instance for cross-redeploy durability.

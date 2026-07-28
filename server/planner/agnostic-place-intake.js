@@ -106,7 +106,12 @@ function trustedPlaceContext(value) {
  *
  * @returns {Promise<{ anchor: {lat:number,lng:number}|null, intake: object }>}
  */
-async function resolveAgnosticIntake({ coords = null, placeQuery = null, placeResolver = null } = {}) {
+async function resolveAgnosticIntake({
+  coords = null,
+  placeQuery = null,
+  placeResolver = null,
+  placeLanguage = null,
+} = {}) {
   // 1. Explicit valid coordinates always win — the resolver is never called.
   if (coords && isValidCoordinate(coords.lat, coords.lng)) {
     return {
@@ -139,7 +144,7 @@ async function resolveAgnosticIntake({ coords = null, placeQuery = null, placeRe
 
   let resolved;
   try {
-    resolved = await placeResolver(placeQuery);
+    resolved = await placeResolver(placeQuery, { language: placeLanguage });
   } catch (_error) {
     return { anchor: null, placeContext: null, intake: intake("place", placeQuery, { blockers: ["place_resolver_error"] }) };
   }

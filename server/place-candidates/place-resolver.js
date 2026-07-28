@@ -1,6 +1,8 @@
 /**
  * Production trusted place resolver (#263) — freeform place query → coordinate
- * anchor candidates, behind the existing #260 `placeResolver` seam.
+ * anchor candidates, behind the existing #260 `placeResolver` seam. Nominatim
+ * remains primary; an independently gated open-knowledge fallback can recover
+ * exact named regions/areas that the street geocoder does not index.
  *
  * Posture (mirrors the repo's Open-Meteo / Overpass wiring):
  *   - DEFAULT-OFF. `resolveDefaultPlaceResolver(env)` returns null unless the
@@ -19,6 +21,9 @@
  *     supplies only the query string (enforced upstream in agnostic-place-intake).
  *   - Fail-closed: every empty/garbage/HTTP-error/timeout/parse-error path returns
  *     [] — never throws, never guesses, never fabricates a coordinate.
+ *   - A strong or ambiguous primary result is authoritative. The fallback runs
+ *     only after empty/low evidence and never invents regional bounds from a
+ *     coordinate point.
  *   - Conservative confidence: we never label a result "high" (reserved for
  *     human-verified), prefer ambiguity / low-confidence over anchoring a vague
  *     match, and never use provider popularity to overstate certainty.
@@ -32,6 +37,7 @@
 
 const { isValidCoordinate } = require("../planner/agnostic-place-intake");
 const { normalizeNominatimSpatialScope } = require("./spatial-scope");
+const { createWikidataPlaceResolver } = require("./wikidata-place-resolver");
 
 const NOMINATIM_ENDPOINT = "https://nominatim.openstreetmap.org/search";
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
@@ -351,8 +357,9 @@ function createNominatimPlaceResolver({
 
 /**
  * Env-gated default factory (mirrors resolveDefaultOpenDataLoader). Returns null
- * unless the deploy opts in via PARRANDA_PLACE_RESOLVER. `overrides` is a small
- * test seam (e.g. inject a deterministic `fetcher`).
+ * unless the deploy opts in via PARRANDA_PLACE_RESOLVER. The Wikidata fallback
+ * has its own PARRANDA_WIKIDATA_PLACE_RESOLVER gate. `overrides` is a small test
+ * seam (e.g. inject deterministic provider functions).
  */
 function resolveDefaultPlaceResolver(env = process.env, overrides = {}) {
   const flag = String((env && env.PARRANDA_PLACE_RESOLVER) ?? "").trim().toLowerCase();
@@ -364,11 +371,81 @@ function resolveDefaultPlaceResolver(env = process.env, overrides = {}) {
     (env && typeof env.PARRANDA_PLACE_RESOLVER_ENDPOINT === "string" && env.PARRANDA_PLACE_RESOLVER_ENDPOINT.trim()) ||
     NOMINATIM_ENDPOINT;
   const timeoutMs = clampInt(env && env.PARRANDA_PLACE_RESOLVER_TIMEOUT_MS, 50, 30000, DEFAULT_TIMEOUT_MS);
-  return createNominatimPlaceResolver({ userAgent, endpoint, timeoutMs, ...overrides });
+  const {
+    fallbackResolver: injectedFallbackResolver,
+    wikidataFetcher,
+    wikidataEndpoint,
+    wikidataLanguages,
+    ...nominatimOverrides
+  } = overrides;
+  const primaryResolver = createNominatimPlaceResolver({
+    userAgent,
+    endpoint,
+    timeoutMs,
+    ...nominatimOverrides,
+  });
+  const fallbackFlag = String((env && env.PARRANDA_WIKIDATA_PLACE_RESOLVER) ?? "").trim().toLowerCase();
+  if (!["enabled", "1", "true"].includes(fallbackFlag)) return primaryResolver;
+  const configuredLanguages = wikidataLanguages || String(
+    (env && env.PARRANDA_PLACE_RESOLVER_LANGS) || "en,sv",
+  ).split(",");
+  const fallbackResolver = typeof injectedFallbackResolver === "function"
+    ? injectedFallbackResolver
+    : createWikidataPlaceResolver({
+        fetcher: wikidataFetcher,
+        endpoint: wikidataEndpoint,
+        userAgent,
+        timeoutMs: clampInt(
+          env && env.PARRANDA_WIKIDATA_PLACE_RESOLVER_TIMEOUT_MS,
+          50,
+          30000,
+          DEFAULT_TIMEOUT_MS,
+        ),
+        languages: configuredLanguages,
+        cacheDir: env && env.PARRANDA_CACHE_DIR,
+      });
+  return composePlaceResolvers(primaryResolver, fallbackResolver);
+}
+
+function composePlaceResolvers(primaryResolver, fallbackResolver) {
+  if (typeof primaryResolver !== "function") return typeof fallbackResolver === "function" ? fallbackResolver : null;
+  if (typeof fallbackResolver !== "function") return primaryResolver;
+  return async function resolveAcrossSources(query, context = {}) {
+    let primary = [];
+    try {
+      const result = await primaryResolver(query, context);
+      primary = normalizeResolverCandidates(result);
+    } catch (_error) {
+      primary = [];
+    }
+    // A strong primary set includes intentional ambiguity. Keep it intact so
+    // the shared intake can fail closed instead of asking a fallback to choose.
+    if (primary.some(hasAnchorConfidence)) return primary;
+
+    let fallback = [];
+    try {
+      const result = await fallbackResolver(query, context);
+      fallback = normalizeResolverCandidates(result);
+    } catch (_error) {
+      fallback = [];
+    }
+    if (fallback.some(hasAnchorConfidence)) return fallback;
+    return primary.length ? primary : fallback;
+  };
+}
+
+function normalizeResolverCandidates(value) {
+  if (Array.isArray(value)) return value.filter((candidate) => candidate && typeof candidate === "object");
+  return value && typeof value === "object" ? [value] : [];
+}
+
+function hasAnchorConfidence(candidate) {
+  return ["high", "medium"].includes(String(candidate?.confidence || "").toLowerCase());
 }
 
 module.exports = {
   createNominatimPlaceResolver,
+  composePlaceResolvers,
   resolveDefaultPlaceResolver,
   DEFAULT_USER_AGENT,
 };
