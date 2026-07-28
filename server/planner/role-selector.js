@@ -15,6 +15,10 @@ const {
 } = require("../candidates/candidate-pool");
 const { scoreCandidateFit } = require("../candidates/fit-scorer");
 const { calibrateSource } = require("../candidates/source-calibration");
+const {
+  distanceKm,
+  sanitizeCandidateReachPolicy,
+} = require("./candidate-reach-policy");
 
 const ROLE_SPEC = Object.freeze({
   scenic_anchor: { intents: ["scenic"], slot: "anchor", gate: "may_anchor_route", primaryTypes: ["viewpoint", "lookout", "overlook"] },
@@ -76,6 +80,8 @@ const LOCAL_BREADTH_FOR_CHAIN_FALLBACK = 3;
 function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
   const limitPerRole = clampLimit(payload.limitPerRole ?? payload.limit_per_role);
   const candidatePool = buildEligibleCandidatePool(cityConfig, payload, helpers);
+  const reachSelection = applyCandidateReachPolicy(candidatePool, helpers.candidateReachPolicy);
+  const roleCandidatePool = reachSelection.candidatePool;
   const requestedIntents = new Set(candidatePool.normalized.intents || []);
 
   // Local-feel preference activates through the same seam as #270 admission:
@@ -90,7 +96,7 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
 
   const roleEntries = {};
   for (const [role, spec] of Object.entries(activeRoleSpec)) {
-    roleEntries[role] = buildRankedEntriesForRole(spec, candidatePool, localFeelActive);
+    roleEntries[role] = buildRankedEntriesForRole(spec, roleCandidatePool, localFeelActive);
   }
   if (localFeelActive) {
     applyReservoirChainFallbackPolicy(roleEntries);
@@ -145,7 +151,41 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
     ...(availabilitySummary
       ? { availability_summary: { ...availabilitySummary } }
       : {}),
+    ...(reachSelection.summary ? { reach_policy: reachSelection.summary } : {}),
   };
+}
+
+function applyCandidateReachPolicy(candidatePool, value) {
+  const policy = sanitizeCandidateReachPolicy(value);
+  const origin = candidatePool?.context?.origin;
+  if (!policy || !validCoordinates(origin)) {
+    return { candidatePool, summary: null };
+  }
+
+  const excluded = [];
+  const pool = candidatePool.pool.filter((entry) => {
+    const candidate = entry?.candidate;
+    const candidateCoords = validCoordinates(candidate)
+      ? { lat: candidate.lat, lng: candidate.lng }
+      : null;
+    const withinReach =
+      candidateCoords && distanceKm(origin, candidateCoords) <= policy.max_origin_distance_km;
+    if (!withinReach) excluded.push(candidate?.id || null);
+    return withinReach;
+  });
+  return {
+    candidatePool: { ...candidatePool, pool },
+    summary: {
+      ...policy,
+      applied: true,
+      eligible_candidate_count: pool.length,
+      excluded_candidate_count: excluded.length,
+    },
+  };
+}
+
+function validCoordinates(value) {
+  return Boolean(value) && Number.isFinite(value.lat) && Number.isFinite(value.lng);
 }
 
 function uniqueEntryCandidateCount(entries) {

@@ -83,6 +83,69 @@ test("role selector always returns the full v0 role spec and marks requested rol
   assert.equal(role(out, "scenic_anchor").requested, false);
 });
 
+test("trusted local-anchor reach removes remote role candidates before ranking and overlap", () => {
+  const records = [
+    record("local-food", "Local Food", "restaurant", 41.901, 12.491, { tags: ["mat"] }),
+    record("remote-view", "Remote View", "viewpoint", 41.95, 12.49, { tags: ["utsikt"] }),
+  ];
+  const out = selectPlannerRoleCandidates(
+    city([]),
+    {
+      date: DATE,
+      preferences: ["food", "scenic"],
+      include_external_candidates: 1,
+      origin: { lat: 41.9, lng: 12.49 },
+    },
+    {
+      external_provider: { dataset: loaderOf(records) },
+      candidateReachPolicy: {
+        policy: "local_place_anchor",
+        max_origin_distance_km: 3,
+        scope_kind: "settlement",
+      },
+    },
+  );
+
+  assert.equal(role(out, "scenic_anchor").status, "missing");
+  assert.deepEqual(role(out, "scenic_anchor").candidates, []);
+  assert.ok(role(out, "food_anchor").candidates.some((candidate) => candidate.candidate_id === "local-food"));
+  assert.equal(
+    out.roles.flatMap((entry) => entry.candidates).some((candidate) => candidate.candidate_id === "remote-view"),
+    false,
+  );
+  assert.deepEqual(out.reach_policy, {
+    policy: "local_place_anchor",
+    max_origin_distance_km: 3,
+    scope_kind: "settlement",
+    applied: true,
+    eligible_candidate_count: 1,
+    excluded_candidate_count: 1,
+  });
+});
+
+test("public payload cannot inject candidate reach policy", () => {
+  const records = [
+    record("remote-view", "Remote View", "viewpoint", 41.95, 12.49, { tags: ["utsikt"] }),
+  ];
+  const out = selectPlannerRoleCandidates(
+    city([]),
+    {
+      date: DATE,
+      preferences: ["scenic"],
+      include_external_candidates: 1,
+      origin: { lat: 41.9, lng: 12.49 },
+      candidateReachPolicy: {
+        policy: "local_place_anchor",
+        max_origin_distance_km: 1,
+      },
+    },
+    { external_provider: { dataset: loaderOf(records) } },
+  );
+
+  assert.ok(role(out, "scenic_anchor").candidates.some((candidate) => candidate.candidate_id === "remote-view"));
+  assert.equal("reach_policy" in out, false);
+});
+
 test("shared pool extraction preserves Blitz candidate-mode behavior and helper-only external injection", () => {
   const thin = city([]);
   const records = [

@@ -1778,7 +1778,83 @@ test("unit: wider discovery cannot turn a remote cluster into a near-me walking 
     date: DATE,
     anchorMode: "place",
   });
-  assert.equal(area.experiment.route_mutation, true, "a resolved place centroid may compose within its wider area");
+  assert.equal(area.experiment.route_mutation, false, "missing scope cannot silently grant regional reach");
+  assert.ok(area.experiment.readiness_blockers.includes("candidate_cluster_outside_origin_reach"));
+
+  const settlement = await composeAgnosticRouteOutput({
+    coords: origin,
+    baselineResult: baseline,
+    externalRequested: true,
+    openDataLoader: makeLoader(remote),
+    preferences: ["food", "coffee", "scenic"],
+    date: DATE,
+    anchorMode: "place",
+    spatialScope: {
+      kind: "settlement",
+      bounds: { south: 41.6, north: 42.2, west: 12.3, east: 12.7 },
+    },
+  });
+  assert.equal(settlement.experiment.route_mutation, false);
+  assert.ok(settlement.experiment.readiness_blockers.includes("candidate_cluster_outside_origin_reach"));
+  assert.deepEqual(
+    settlement.experiment.eligibility.checks.candidate_reach_policy,
+    {
+      policy: "local_place_anchor",
+      max_origin_distance_km: 3,
+      scope_kind: "settlement",
+    },
+  );
+  assert.equal(
+    settlement.experiment.eligibility.checks.candidate_pipeline.reach_eligible_candidate_count,
+    0,
+  );
+  assert.equal(
+    settlement.experiment.eligibility.checks.candidate_pipeline.reach_excluded_candidate_count,
+    settlement.experiment.eligibility.checks.candidate_pipeline.eligible_pool_candidate_count,
+  );
+
+  const mixed = fixtureNear(origin).map((candidate) =>
+    candidate.id.startsWith("view-")
+      ? { ...candidate, lat: candidate.lat + 0.05, lng: candidate.lng + 0.06 }
+      : candidate,
+  );
+  const localDay = await composeAgnosticRouteOutput({
+    coords: origin,
+    baselineResult: baseline,
+    externalRequested: true,
+    openDataLoader: makeLoader(mixed),
+    preferences: ["food", "coffee", "scenic"],
+    date: DATE,
+    anchorMode: "place",
+    spatialScope: {
+      kind: "settlement",
+      bounds: { south: 41.6, north: 42.2, west: 12.3, east: 12.7 },
+    },
+  });
+  assert.equal(localDay.experiment.route_mutation, true, "missing scenic stays unresolved instead of relocating the day");
+  assert.equal(
+    localDay.experiment.experimental_route.main_stops.some((stop) => stop.id.startsWith("view-")),
+    false,
+  );
+  assert.ok(
+    localDay.experiment.experimental_route.unresolved_roles.some((entry) => entry.role === "scenic_anchor"),
+  );
+
+  const region = await composeAgnosticRouteOutput({
+    coords: origin,
+    baselineResult: baseline,
+    externalRequested: true,
+    openDataLoader: makeLoader(remote),
+    preferences: ["food", "coffee", "scenic"],
+    date: DATE,
+    anchorMode: "place",
+    spatialScope: {
+      kind: "region",
+      bounds: { south: 41.6, north: 42.2, west: 12.3, east: 12.7 },
+    },
+  });
+  assert.equal(region.experiment.route_mutation, true, "a broad regional anchor may use a coherent farther cluster");
+  assert.equal("candidate_reach_policy" in region.experiment.eligibility.checks, false);
 });
 
 test("unit: engine composer scrubs fallback-city signals and placeholder route prose", async () => {

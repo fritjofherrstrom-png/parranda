@@ -114,6 +114,15 @@ function deriveSecondaryAnchors(spatialScope, primaryAnchor) {
   return kept;
 }
 
+function allowsRegionalClusterSelection(value) {
+  const scope = sanitizeTrustedSpatialScope(value);
+  return Boolean(
+    scope &&
+      scope.collection_mode === "regional_bounded" &&
+      (scope.kind === "municipality" || scope.kind === "region"),
+  );
+}
+
 function spatialScopeCacheKey(value) {
   const scope = sanitizeTrustedSpatialScope(value);
   if (!scope) return "none";
@@ -187,5 +196,6 @@ module.exports = {
   normalizeNominatimSpatialScope,
   sanitizeTrustedSpatialScope,
   deriveSecondaryAnchors,
+  allowsRegionalClusterSelection,
   spatialScopeCacheKey,
 };

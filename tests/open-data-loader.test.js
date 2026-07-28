@@ -760,6 +760,42 @@ test("a thin regional place may select one richer secondary cluster without merg
   assert.equal(records.some((record) => Math.abs(record.lat - primary.lat) < 0.01), false, "primary and regional clusters are never merged");
 });
 
+test("a settlement keeps its primary zone even when resolver bounds are region-sized", async () => {
+  const queries = [];
+  const fetcher = async (_url, options) => {
+    queries.push(decodeURIComponent(options.body));
+    return {
+      ok: true,
+      json: async () => ({
+        elements: Array.from({ length: 3 }, (_, index) => ({
+          type: "node",
+          id: index + 1,
+          lat: 48.1 + index * 0.0001,
+          lon: 11.5,
+          tags: { name: `Local ${index}`, amenity: "cafe" },
+        })),
+      }),
+    };
+  };
+  const loader = createOpenDataLoader({ fetcher, endpoint: "https://x/overpass" });
+  const records = await loader({
+    lat: 48.1,
+    lng: 11.5,
+    requestedIntents: ["food", "views"],
+    anchorMode: "place",
+    spatialScope: {
+      kind: "settlement",
+      bounds: { south: 47.8, north: 48.4, west: 11.35, east: 11.65 },
+    },
+  });
+
+  assert.equal(queries.length, 2, "base plus normal same-anchor adaptive query only");
+  assert.equal(records.loader_metadata.regional_scout.attempted, false);
+  assert.equal(records.loader_metadata.regional_scout.reason, "primary_zone_preserved");
+  assert.equal(records.loader_metadata.regional_scout.selected_anchor, "primary");
+  assert.ok(records.every((record) => Math.abs(record.lat - 48.1) < 0.01));
+});
+
 test("rich primary supply skips regional scouting even when resolver bounds are available", async () => {
   let calls = 0;
   const fetcher = async () => {
