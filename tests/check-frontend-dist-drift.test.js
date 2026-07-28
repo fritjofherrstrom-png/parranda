@@ -30,6 +30,25 @@ test("island uid differences are normalized away; real content is not", () => {
   assert.equal(normalizeAstroBuildNoise("plain text"), "plain text");
 });
 
+test("the allowlist is exact: uid OUTSIDE an astro-island tag is real content, not noise", () => {
+  // A uid attribute on any other element must compare literally…
+  const otherTag = '<div uid="AAA">x</div>';
+  const otherTagChanged = '<div uid="BBB">x</div>';
+  assert.notEqual(normalizeAstroBuildNoise(otherTag), normalizeAstroBuildNoise(otherTagChanged));
+
+  // …and uid-looking text in page content likewise.
+  const content = '<p>token uid="AAA"</p>';
+  const contentChanged = '<p>token uid="BBB"</p>';
+  assert.notEqual(normalizeAstroBuildNoise(content), normalizeAstroBuildNoise(contentChanged));
+
+  // Mixed line: the island's uid is normalized, the sibling's is preserved.
+  const mixed = '<astro-island uid="AAA"></astro-island><div uid="KEEP"></div>';
+  assert.equal(
+    normalizeAstroBuildNoise(mixed),
+    '<astro-island uid=""></astro-island><div uid="KEEP"></div>',
+  );
+});
+
 test("the guard's verdict against a real repo: clean, uid-only, modified, untracked, deleted", (t) => {
   const cwd = mkdtempSync(path.join(os.tmpdir(), "dist-drift-"));
   t.after(() => rmSync(cwd, { recursive: true, force: true }));

@@ -24,10 +24,15 @@ const path = require("node:path");
 const DIST_PREFIX = "frontend/dist";
 
 // Astro stamps a fresh random island uid into every build's HTML. It is the
-// ONLY known nondeterminism in the output; normalize it on both sides so real
-// content drift still fails. Scoped to the attribute shape Astro emits.
+// ONLY tolerated nondeterminism — an exact allowlist, not a broad rewrite:
+// normalization applies solely to the `uid` attribute INSIDE an
+// `<astro-island …>` opening tag, so a `uid="…"` appearing anywhere else in
+// the output (page content, other markup) still compares literally and real
+// drift fails.
 function normalizeAstroBuildNoise(content) {
-  return String(content).replace(/\buid="[^"]*"/g, 'uid=""');
+  return String(content).replace(/<astro-island\b[^>]*>/g, (tag) =>
+    tag.replace(/\buid="[^"]*"/, 'uid=""'),
+  );
 }
 
 function git(args, options = {}) {
