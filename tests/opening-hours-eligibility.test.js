@@ -40,6 +40,36 @@ test("simple weekly schedules distinguish remaining-day overlap from closure", (
   );
 });
 
+test("common comma-separated OSM day rules stay distinct from day lists and time windows", () => {
+  const hours = "Mo-Fr 09:30-18:00, Sa,Su 10:00-17:00";
+  assert.deepEqual(
+    evaluateOpeningHoursForWindow(hours, { weekday: 1, startMinute: 19 * 60 + 2, endMinute: 1440 }),
+    {
+      eligible: false,
+      status: "closed_for_window",
+      reason: "opening_hours_closed_for_query_window",
+    },
+  );
+  assert.equal(
+    evaluateOpeningHoursForWindow(hours, { weekday: 0, startMinute: 12 * 60, endMinute: 1440 }).eligible,
+    true,
+  );
+  assert.deepEqual(buildSelectedDayHoursFact(hours, { weekday: 6 }), {
+    status: "known",
+    all_day: false,
+    windows: [{ opens: "10:00", closes: "17:00" }],
+  });
+
+  assert.deepEqual(buildSelectedDayHoursFact("Mo,Tu 09:00-12:00,13:00-18:00", { weekday: 2 }), {
+    status: "known",
+    all_day: false,
+    windows: [
+      { opens: "09:00", closes: "12:00" },
+      { opens: "13:00", closes: "18:00" },
+    ],
+  });
+});
+
 test("overnight hours remain available on both sides of local midnight", () => {
   const hours = "Fr-Sa 18:00-02:00; Su-Th off";
   assert.equal(
