@@ -31,6 +31,7 @@ const { buildProviderSpecs } = require("../candidates/candidate-pool");
 const { selectPlannerRoleCandidates } = require("./role-selector");
 const { summarizeDayflowHonesty } = require("./dayflow-honesty");
 const { buildCandidateCombinationInspect } = require("./candidate-combination-inspect");
+const { REACHABLE_ORIGIN_KM } = require("./candidate-combination");
 const { buildRouteCandidateFromCandidateCombination } = require("./candidate-combination-route-adapter");
 const { assessCityCandidateReadiness } = require("../place-candidates/readiness");
 const {
@@ -71,7 +72,13 @@ const LOADER_BLOCKERS = Object.freeze({
  * consulted here — only the injected openDataLoader. Fail-closed: any
  * missing/empty/error state becomes an explicit status, never a throw.
  */
-async function resolveTrustedHelpers({ externalRequested, openDataLoader, anchor }) {
+async function resolveTrustedHelpers({
+  externalRequested,
+  openDataLoader,
+  anchor,
+  requestedIntents = [],
+  anchorMode = "unknown",
+}) {
   const baseStatus = {
     status: "skipped",
     external_candidates_requested: Boolean(externalRequested),
@@ -87,25 +94,82 @@ async function resolveTrustedHelpers({ externalRequested, openDataLoader, anchor
     return { helpers: {}, sourceStatus: { ...baseStatus, status: "no_anchor" } };
   }
   try {
-    const records = await openDataLoader(anchor);
+    const records = await openDataLoader({
+      ...anchor,
+      requestedIntents: Array.isArray(requestedIntents) ? requestedIntents : [],
+      anchorMode: normalizeAnchorMode(anchorMode),
+    });
     const loaderStatus = typeof records?.loader_status === "string" ? records.loader_status : null;
     const loaderError = records?.loader_error || null;
+    const collection = sanitizeLoaderCollectionMetadata(records?.loader_metadata);
     if (loaderStatus === "error_failed_closed") {
       return {
         helpers: {},
-        sourceStatus: { ...baseStatus, status: "error_failed_closed", error: loaderError },
+        sourceStatus: { ...baseStatus, status: "error_failed_closed", error: loaderError, ...(collection ? { collection } : {}) },
       };
     }
     if (!Array.isArray(records) || records.length === 0) {
-      return { helpers: {}, sourceStatus: { ...baseStatus, status: "loaded:0", error: loaderError } };
+      return {
+        helpers: {},
+        sourceStatus: { ...baseStatus, status: "loaded:0", error: loaderError, ...(collection ? { collection } : {}) },
+      };
     }
     return {
       helpers: { external_provider: { dataset: records } },
-      sourceStatus: { ...baseStatus, status: `loaded:${records.length}`, error: loaderError },
+      sourceStatus: {
+        ...baseStatus,
+        status: `loaded:${records.length}`,
+        error: loaderError,
+        ...(collection ? { collection } : {}),
+      },
     };
   } catch (_error) {
     return { helpers: {}, sourceStatus: { ...baseStatus, status: "error_failed_closed", error: "fetch_error" } };
   }
+}
+
+function normalizeAnchorMode(value) {
+  return ["coordinates", "place"].includes(String(value)) ? String(value) : "unknown";
+}
+
+function sanitizeLoaderCollectionMetadata(value) {
+  if (!value || typeof value !== "object") return null;
+  const profile = (input) => {
+    if (!input || typeof input !== "object") return null;
+    return {
+      record_count: Number.isFinite(input.record_count) ? input.record_count : 0,
+      category_count: Number.isFinite(input.category_count) ? input.category_count : 0,
+      requested_intent_count: Number.isFinite(input.requested_intent_count) ? input.requested_intent_count : 0,
+      requested_intents_covered: sanitizeTokens(input.requested_intents_covered),
+      requested_intents_partial: sanitizeTokens(input.requested_intents_partial),
+      requested_intents_missing: sanitizeTokens(input.requested_intents_missing),
+    };
+  };
+  return {
+    base_radius_km: finiteOrNull(value.base_radius_km),
+    selected_radius_km: finiteOrNull(value.selected_radius_km),
+    attempted_radius_km: finiteOrNull(value.attempted_radius_km),
+    expansion_applied: value.expansion_applied === true,
+    expansion_trigger: safeToken(value.expansion_trigger),
+    selection_reason: safeToken(value.selection_reason),
+    anchor_mode: normalizeAnchorMode(value.anchor_mode),
+    requested_intents: sanitizeTokens(value.requested_intents),
+    expansion_query_intents: sanitizeTokens(value.expansion_query_intents),
+    initial_profile: profile(value.initial_profile),
+    selected_profile: profile(value.selected_profile),
+  };
+}
+
+function finiteOrNull(value) {
+  return Number.isFinite(value) ? value : null;
+}
+
+function safeToken(value) {
+  return typeof value === "string" && /^[a-z0-9_:-]{1,80}$/.test(value) ? value : null;
+}
+
+function sanitizeTokens(values) {
+  return [...new Set((Array.isArray(values) ? values : []).map(safeToken).filter(Boolean))].slice(0, 12);
 }
 
 function safeAssessReadiness(cityConfig, options) {
@@ -208,14 +272,19 @@ function evaluateEligibility({
   const geocodedStops = engineGeocodedStops.length ? engineGeocodedStops : combinationGeocodedStops;
   const geocodedCount = geocodedStops.length;
   const coherence = (adaptedBody?.geometry_summary && adaptedBody.geometry_summary.coherence) || "incomplete";
+  const outsideOriginReach = Array.isArray(candidateCombination?.reasons) &&
+    candidateCombination.reasons.includes("no_combination_within_origin_reach");
   checks.geocoded_stop_count = geocodedCount;
   checks.combination_geocoded_stop_count = combinationGeocodedStops.length;
   if (engineGeocodedStops.length) checks.engine_reservoir_geocoded_stop_count = engineGeocodedStops.length;
   checks.geometry_coherence = coherence;
+  if (outsideOriginReach) checks.candidate_cluster_within_origin_reach = false;
   if (geocodedCount < MIN_VIABLE_GEOCODED_STOPS) {
     blockers.push("insufficient_geocoded_candidates");
   }
-  if (!ACCEPTABLE_COHERENCE.has(coherence)) {
+  if (outsideOriginReach) {
+    blockers.push("candidate_cluster_outside_origin_reach");
+  } else if (!ACCEPTABLE_COHERENCE.has(coherence)) {
     blockers.push(coherence === "incomplete" ? "incomplete_geometry" : "weak_geometry");
   }
 
@@ -617,6 +686,7 @@ async function composeAgnosticRouteOutput({
   clock = null,
   trustedTimezone = null,
   placeLabel = null,
+  anchorMode = "unknown",
   // Synthesis backend. "engine" routes the admitted candidates through the
   // route engine's own agnostic_compose (the convergence path); "legacy" keeps
   // the in-module experimental synthesizer (default, so existing callers/tests
@@ -639,6 +709,8 @@ async function composeAgnosticRouteOutput({
     externalRequested,
     openDataLoader,
     anchor: origin,
+    requestedIntents: preferences,
+    anchorMode,
   });
 
   // #262 / correction #5 — only resolve trusted context (which may fetch weather)
@@ -721,7 +793,17 @@ async function composeAgnosticRouteOutput({
     plannerRoles,
     dayflowHonesty,
     route: null,
-    options: { origin },
+    options: {
+      origin,
+      // Explicit coordinates mean "start where I am". Wider collection may
+      // improve discovery/structure, but an extended remote cluster must not be
+      // promoted as a walking route whose access leg is invisible. A resolved
+      // place is an area anchor rather than an attested start point, so it keeps
+      // the existing preference-only reach semantics.
+      ...(normalizeAnchorMode(anchorMode) === "coordinates"
+        ? { maxOriginDistanceKm: REACHABLE_ORIGIN_KM }
+        : {}),
+    },
   });
   const adapted = buildRouteCandidateFromCandidateCombination({
     city: agnosticContext.key,

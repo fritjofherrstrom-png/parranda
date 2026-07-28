@@ -32,6 +32,7 @@
 const { createSourceCache } = require("./source-cache");
 const { createWikidataSource } = require("./wikidata-source");
 const { normalizeOpeningHours } = require("./opening-hours");
+const { normalizeUserIntents, matchCandidateToIntent } = require("../candidates/intent-vocabulary");
 
 const DEFAULT_OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
 // Mirror failover is a MECHANISM, not a free fix. The loader can try several
@@ -63,14 +64,26 @@ const OVERPASS_FETCH_CAP = 150;
 const DEFAULT_TIMEOUT_MS = 12000;
 const MAX_RADIUS_KM = 5.0;
 const MAX_LIMIT = 100;
-// Thin-city aperture expansion. A tight centre in a sparse city legitimately
-// holds few mapped places within the default radius, so the day starves while
-// MAX_RADIUS_KM is left unused. If the first pass is thin — few records OR few
-// distinct categories — reach WIDER once before declaring scarcity. Response-
-// driven, bounded (one extra query), and generic for every city (no place logic).
+// Adaptive aperture expansion. The first query stays cheap and local. A single
+// wider query is allowed when supply is sparse or misses a requested intent;
+// its 3/5 km target is response-driven and generic (never place-specific).
 const EXPANSION_RADIUS_KM = 3.0;
+const REGIONAL_EXPANSION_RADIUS_KM = 5.0;
 const THIN_RECORD_COUNT = 12; // < ~half the default limit → thin
 const THIN_CATEGORY_COUNT = 3; // fewer distinct place types than a real day needs
+const SEVERELY_THIN_RECORD_COUNT = 5;
+
+const LOADER_SUPPORTED_INTENTS = new Set([
+  "scenic",
+  "green",
+  "food",
+  "coffee",
+  "bars",
+  "markets",
+  "museums",
+  "swimming",
+  "second_hand",
+]);
 
 // Small, intent-mapped OSM tag → Parranda type table. Kept conservative so
 // every entry maps cleanly into the canonical intent vocabulary. Add lines
@@ -132,6 +145,44 @@ function distinctCategoryCount(records) {
   return cats.size;
 }
 
+function normalizeRequestedIntents(values = []) {
+  const normalized = normalizeUserIntents(Array.isArray(values) ? values : []);
+  return [...new Set(normalized.intents.filter((intent) => LOADER_SUPPORTED_INTENTS.has(intent)))].sort();
+}
+
+function supplyProfile(records, requestedIntents = []) {
+  const categories = new Set();
+  for (const record of Array.isArray(records) ? records : []) {
+    const category = TYPE_CATEGORY[record?.type];
+    if (category) categories.add(category);
+  }
+  const requested = [...new Set(requestedIntents)].sort();
+  const levels = new Map(
+    requested.map((intent) => {
+      let level = "none";
+      for (const record of Array.isArray(records) ? records : []) {
+        const candidateLevel = matchCandidateToIntent(record, intent).level;
+        if (candidateLevel === "strong") {
+          level = "strong";
+          break;
+        }
+        if (candidateLevel === "weak") level = "weak";
+      }
+      return [intent, level];
+    }),
+  );
+  const covered = requested.filter((intent) => levels.get(intent) === "strong");
+  const partial = requested.filter((intent) => levels.get(intent) === "weak");
+  return {
+    record_count: Array.isArray(records) ? records.length : 0,
+    category_count: categories.size,
+    requested_intent_count: requested.length,
+    requested_intents_covered: covered,
+    requested_intents_partial: partial,
+    requested_intents_missing: requested.filter((intent) => levels.get(intent) === "none"),
+  };
+}
+
 // A first pass is "thin" when it holds too few records OR too few distinct types
 // to compose a varied day. An error result is NOT thin (expanding the radius
 // won't fix a down mirror), and a genuinely rich pass is never expanded.
@@ -146,8 +197,32 @@ function isThinSupply(records) {
 // records but more distinct types (8 across 3 categories) beats a thin one with
 // more records of one type (15 cafés), while a wider pass that adds neither is
 // discarded. This is what "richer" means for the expansion.
-function supplyScore(records) {
-  return distinctCategoryCount(records) * 1000 + (Array.isArray(records) ? records.length : 0);
+function supplyScore(records, requestedIntents = []) {
+  const profile = supplyProfile(records, requestedIntents);
+  return (
+    profile.requested_intents_covered.length * 10_000_000 +
+    profile.requested_intents_partial.length * 1_000_000 +
+    profile.category_count * 1000 +
+    profile.record_count
+  );
+}
+
+function chooseExpansion(first, { baseRadiusKm, requestedIntents }) {
+  const profile = supplyProfile(first, requestedIntents);
+  const requestedGap = profile.requested_intents_covered.length < profile.requested_intent_count;
+  if (!isThinSupply(first) && !requestedGap) {
+    return null;
+  }
+  if (typeof first?.loader_status === "string" && first.loader_status.startsWith("error")) return null;
+  if (baseRadiusKm >= MAX_RADIUS_KM) return null;
+
+  if (requestedGap) {
+    return { radius_km: REGIONAL_EXPANSION_RADIUS_KM, trigger: "requested_intent_gap" };
+  }
+  if (profile.record_count < SEVERELY_THIN_RECORD_COUNT) {
+    return { radius_km: REGIONAL_EXPANSION_RADIUS_KM, trigger: "severely_sparse_supply" };
+  }
+  return { radius_km: EXPANSION_RADIUS_KM, trigger: "thin_supply" };
 }
 
 function createOpenDataLoader({
@@ -210,16 +285,22 @@ function createOpenDataLoader({
   // One geocoded query at a given radius, with mirror failover. Fetch wider than
   // the final limit so scarce-but-important categories (scenic in a food-dense
   // centre) survive, then balance down to `boundedLimit` client-side.
-  async function fetchAtRadius(lat, lng, radiusM) {
+  async function fetchAtRadius(lat, lng, radiusM, { queryIntents = [] } = {}) {
     const fetchBreadth = Math.min(boundedLimit * 6, OVERPASS_FETCH_CAP);
-    const query = buildOverpassQuery({ lat, lng, radiusM, limit: fetchBreadth });
+    const query = buildOverpassQuery({
+      lat,
+      lng,
+      radiusM,
+      limit: fetchBreadth,
+      mappings: mappingsForRequestedIntents(queryIntents),
+    });
     // Try each mirror in order; fail over ONLY on a transport/parse error — a
     // genuine 200 (even with zero elements) is a real answer, not a failure.
     let last = { status: "error_failed_closed", error: "no_endpoint" };
     for (const targetEndpoint of resolvedEndpoints) {
       const attempt = await attemptOverpass(targetEndpoint, query);
       if (attempt.ok) {
-        const records = mapOverpassResponse(attempt.payload, boundedLimit);
+        const records = mapOverpassResponse(attempt.payload, boundedLimit, { origin: { lat, lng } });
         return withLoaderStatus(records, records.length > 0 ? `loaded:${records.length}` : "loaded:0", null);
       }
       last = attempt;
@@ -227,21 +308,74 @@ function createOpenDataLoader({
     return withLoaderStatus([], last.status, last.error);
   }
 
-  const loadOpenDataAround = async function loadOpenDataAround({ lat, lng } = {}) {
+  const loadOpenDataAround = async function loadOpenDataAround({
+    lat,
+    lng,
+    requestedIntents = [],
+    anchorMode = "unknown",
+  } = {}) {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return withLoaderStatus([], "loaded:0", null);
 
-    const first = await fetchAtRadius(lat, lng, Math.round(boundedRadiusKm * 1000));
+    const normalizedRequestedIntents = normalizeRequestedIntents(requestedIntents);
 
-    // Thin-city aperture expansion (see EXPANSION_RADIUS_KM): reach wider once
-    // when the first pass is genuinely sparse, and keep the wider result only if
-    // it is actually richer. Never expands on a rich city, an error, or when
-    // already at MAX_RADIUS_KM.
-    if (isThinSupply(first) && boundedRadiusKm < MAX_RADIUS_KM) {
-      const widerKm = Math.min(EXPANSION_RADIUS_KM, MAX_RADIUS_KM);
-      const wider = await fetchAtRadius(lat, lng, Math.round(widerKm * 1000));
-      if (supplyScore(wider) > supplyScore(first)) return wider;
+    const first = await fetchAtRadius(lat, lng, Math.round(boundedRadiusKm * 1000));
+    const initialProfile = supplyProfile(first, normalizedRequestedIntents);
+    const expansion = chooseExpansion(first, {
+      baseRadiusKm: boundedRadiusKm,
+      requestedIntents: normalizedRequestedIntents,
+    });
+    let selected = first;
+    let selectedRadiusKm = boundedRadiusKm;
+    let selectionReason = expansion
+      ? "wider_supply_not_richer"
+      : typeof first.loader_status === "string" && first.loader_status.startsWith("error")
+        ? "loader_error"
+        : "expansion_not_needed";
+
+    // Adaptive aperture: one bounded wider query when total supply is thin OR
+    // the requested intent family is absent. Very sparse/request-gap contexts
+    // may use the full reviewed 5 km ceiling; ordinary thin supply uses 3 km.
+    // The wider result wins only when it improves requested coverage or variety.
+    if (expansion) {
+      // A custom base can sit above the ordinary 3 km expansion target. In that
+      // case use the regional ceiling rather than repeating the same query.
+      const widerKm = Math.min(
+        expansion.radius_km > boundedRadiusKm ? expansion.radius_km : MAX_RADIUS_KM,
+        MAX_RADIUS_KM,
+      );
+      const expansionQueryIntents = expansion.trigger === "requested_intent_gap"
+        ? [
+            ...initialProfile.requested_intents_partial,
+            ...initialProfile.requested_intents_missing,
+          ]
+        : [];
+      const wider = await fetchAtRadius(lat, lng, Math.round(widerKm * 1000), {
+        queryIntents: expansionQueryIntents,
+      });
+      const combined = mergeLoaderRecords(first, wider, boundedLimit, { lat, lng });
+      if (supplyScore(combined, normalizedRequestedIntents) > supplyScore(first, normalizedRequestedIntents)) {
+        selected = combined;
+        selectedRadiusKm = widerKm;
+        selectionReason = "richer_wider_supply";
+      }
     }
-    return first;
+    return withLoaderMetadata(selected, {
+      base_radius_km: boundedRadiusKm,
+      selected_radius_km: selectedRadiusKm,
+      attempted_radius_km: expansion
+        ? Math.min(expansion.radius_km > boundedRadiusKm ? expansion.radius_km : MAX_RADIUS_KM, MAX_RADIUS_KM)
+        : null,
+      expansion_applied: selectedRadiusKm > boundedRadiusKm,
+      expansion_trigger: expansion?.trigger || null,
+      selection_reason: selectionReason,
+      anchor_mode: normalizeAnchorMode(anchorMode),
+      requested_intents: normalizedRequestedIntents,
+      expansion_query_intents: expansion?.trigger === "requested_intent_gap"
+        ? [...initialProfile.requested_intents_partial, ...initialProfile.requested_intents_missing]
+        : [],
+      initial_profile: initialProfile,
+      selected_profile: supplyProfile(selected, normalizedRequestedIntents),
+    });
   };
 
   if (!cache || typeof cache.get !== "function") {
@@ -254,31 +388,41 @@ function createOpenDataLoader({
   // query; the cache coalesces concurrent identical lookups and (when file-backed)
   // survives across requests. Only non-error results are stored, so a transient
   // outage is never frozen in.
-  return async function cachedLoadOpenDataAround({ lat, lng } = {}) {
+  return async function cachedLoadOpenDataAround(request = {}) {
+    const { lat, lng, requestedIntents = [], anchorMode = "unknown" } = request;
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      return loadOpenDataAround({ lat, lng });
+      return loadOpenDataAround(request);
     }
-    const key = `${lat.toFixed(3)},${lng.toFixed(3)}:r${boundedRadiusKm}:l${boundedLimit}`;
+    const normalizedRequestedIntents = normalizeRequestedIntents(requestedIntents);
+    const key = `v3:${lat.toFixed(3)},${lng.toFixed(3)}:r${boundedRadiusKm}:l${boundedLimit}:m${normalizeAnchorMode(anchorMode)}:i${normalizedRequestedIntents.join(".") || "all"}`;
     const entry = await cache.get(
       key,
       async () => {
-        const result = await loadOpenDataAround({ lat, lng });
-        return { records: Array.from(result), status: result.loader_status, error: result.loader_error };
+        const result = await loadOpenDataAround(request);
+        return {
+          records: Array.from(result),
+          status: result.loader_status,
+          error: result.loader_error,
+          metadata: result.loader_metadata || null,
+        };
       },
       { shouldStore: (value) => value && typeof value.status === "string" && !value.status.startsWith("error") },
     );
-    return withLoaderStatus(entry.records, entry.status, entry.error);
+    return withLoaderMetadata(
+      withLoaderStatus(entry.records, entry.status, entry.error),
+      entry.metadata || null,
+    );
   };
 }
 
-function buildOverpassQuery({ lat, lng, radiusM, limit }) {
+function buildOverpassQuery({ lat, lng, radiusM, limit, mappings = OSM_TAG_MAP }) {
   // Per-category `out` budgets. Overpass outputs nodes before ways, so a single
   // combined `out center N` lets food/bar/cafe NODES exhaust N before park/
   // castle WAYS are ever emitted — scarce area-typed scenic places vanished
   // server-side (#273). Grouping by category with its own `out` guarantees each
   // category contributes regardless of node/way ordering. Still one request.
   const groups = new Map();
-  for (const { key, value, type } of OSM_TAG_MAP) {
+  for (const { key, value, type } of mappings) {
     const category = TYPE_CATEGORY[type] || "other";
     if (!groups.has(category)) groups.set(category, []);
     groups.get(category).push({ key, value });
@@ -312,7 +456,7 @@ const TYPE_CATEGORY = {
   "vintage-shop": "vintage",
 };
 
-function mapOverpassResponse(payload, limit) {
+function mapOverpassResponse(payload, limit, { origin = null } = {}) {
   if (!payload || !Array.isArray(payload.elements)) return [];
   // Map + dedupe everything Overpass returned (already bounded by the fetch
   // cap), preserving response order.
@@ -325,13 +469,17 @@ function mapOverpassResponse(payload, limit) {
     seenIds.add(record.id);
     mapped.push(record);
   }
-  if (mapped.length <= limit) return mapped;
+  return balanceMappedRecords(mapped, limit, origin);
+}
+
+function balanceMappedRecords(mapped, limit, origin) {
+  if (mapped.length <= limit) return rankMappedRecords(mapped, origin);
 
   // Category-balanced round-robin: a food-dense centre must not crowd out the
   // single scenic anchor. Buckets keep response order; we take one per category
   // per round until the limit is reached. Deterministic given the input order.
   const buckets = new Map();
-  for (const record of mapped) {
+  for (const record of rankMappedRecords(mapped, origin)) {
     const category = TYPE_CATEGORY[record.type] || "other";
     if (!buckets.has(category)) buckets.set(category, []);
     buckets.get(category).push(record);
@@ -355,6 +503,49 @@ function mapOverpassResponse(payload, limit) {
   return balanced;
 }
 
+function mappingsForRequestedIntents(requestedIntents = []) {
+  if (!requestedIntents.length) return OSM_TAG_MAP;
+  const requested = new Set(requestedIntents);
+  const mappings = OSM_TAG_MAP.filter((mapping) =>
+    [...requested].some(
+      (intent) => matchCandidateToIntent({ type: mapping.type, tags: mapping.tags }, intent).level === "strong",
+    ),
+  );
+  return mappings.length ? mappings : OSM_TAG_MAP;
+}
+
+function mergeLoaderRecords(first, wider, limit, origin) {
+  const deduped = [];
+  const ids = new Set();
+  for (const record of [...(Array.isArray(first) ? first : []), ...(Array.isArray(wider) ? wider : [])]) {
+    if (!record || ids.has(record.id)) continue;
+    ids.add(record.id);
+    deduped.push(record);
+  }
+  const selected = balanceMappedRecords(deduped, limit, origin);
+  return withLoaderStatus(
+    selected,
+    selected.length ? `loaded:${selected.length}` : first?.loader_status || wider?.loader_status || "loaded:0",
+    first?.loader_error || wider?.loader_error || null,
+  );
+}
+
+function rankMappedRecords(records, origin) {
+  if (!origin || !Number.isFinite(origin.lat) || !Number.isFinite(origin.lng)) return records;
+  return [...records].sort((a, b) =>
+    operationalRecordRank(a) - operationalRecordRank(b) ||
+    Number(a.chain === true) - Number(b.chain === true) ||
+    distanceKm(origin, a) - distanceKm(origin, b) ||
+    String(a.id).localeCompare(String(b.id)),
+  );
+}
+
+function operationalRecordRank(record) {
+  if (record?.operational_status === "source_indicated_active") return 0;
+  if (record?.operational_status === "unknown") return 1;
+  return 2;
+}
+
 function withLoaderStatus(records, status, error) {
   const output = Array.isArray(records) ? records : [];
   Object.defineProperty(output, "loader_status", {
@@ -368,6 +559,31 @@ function withLoaderStatus(records, status, error) {
     configurable: true,
   });
   return output;
+}
+
+function withLoaderMetadata(records, metadata) {
+  const output = Array.isArray(records) ? records : [];
+  Object.defineProperty(output, "loader_metadata", {
+    value: metadata && typeof metadata === "object" ? metadata : null,
+    enumerable: false,
+    configurable: true,
+  });
+  return output;
+}
+
+function normalizeAnchorMode(value) {
+  return ["coordinates", "place"].includes(String(value)) ? String(value) : "unknown";
+}
+
+function distanceKm(a, b) {
+  if (![a?.lat, a?.lng, b?.lat, b?.lng].every(Number.isFinite)) return Number.POSITIVE_INFINITY;
+  const toRad = (degrees) => (degrees * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
 function classifyFetchError(error) {
@@ -590,16 +806,27 @@ function resolveDefaultOpenDataLoader(env = process.env) {
 // source (returns a plain array). Both run concurrently and fail soft on their
 // own; the combined result is a `withLoaderStatus` array carrying every record.
 function composeOpenDataLoaders(osmLoader, wikiSource) {
-  return async function loadComposedOpenData({ lat, lng } = {}) {
+  return async function loadComposedOpenData(request = {}) {
+    const { lat, lng } = request;
     const [osm, wiki] = await Promise.all([
-      Promise.resolve(osmLoader({ lat, lng })).catch(() => withLoaderStatus([], "error_failed_closed", "osm_threw")),
+      Promise.resolve(osmLoader(request)).catch(() => withLoaderStatus([], "error_failed_closed", "osm_threw")),
       Promise.resolve(wikiSource({ lat, lng })).catch(() => []),
     ]);
     const osmRecords = Array.isArray(osm) ? osm : [];
     const wikiRecords = Array.isArray(wiki) ? wiki : [];
     const records = [...osmRecords, ...wikiRecords];
     const status = records.length > 0 ? `loaded:${records.length}` : (osm.loader_status || "loaded:0");
-    return withLoaderStatus(records, status, osm.loader_error || null);
+    const requestedIntents = normalizeRequestedIntents(request.requestedIntents);
+    const metadata = osm.loader_metadata
+      ? {
+          ...osm.loader_metadata,
+          selected_profile: supplyProfile(records, requestedIntents),
+        }
+      : null;
+    return withLoaderMetadata(
+      withLoaderStatus(records, status, osm.loader_error || null),
+      metadata,
+    );
   };
 }
 
@@ -617,6 +844,8 @@ module.exports = {
   DEFAULT_TIMEOUT_MS,
   MAX_RADIUS_KM,
   MAX_LIMIT,
+  EXPANSION_RADIUS_KM,
+  REGIONAL_EXPANSION_RADIUS_KM,
   OSM_TAG_MAP,
   createOpenDataLoader,
   resolveDefaultOpenDataLoader,
@@ -625,4 +854,6 @@ module.exports = {
   mapOverpassResponse,
   mapOsmElement,
   extractOsmOperationalMetadata,
+  normalizeRequestedIntents,
+  supplyProfile,
 };

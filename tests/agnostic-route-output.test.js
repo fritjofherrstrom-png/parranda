@@ -1224,6 +1224,58 @@ test(
 );
 
 test(
+  "api: trusted loader context comes from resolved intake and normalized planner preferences, never payload control fields",
+  async () => {
+    global.fetch = mockStableWeatherFetch();
+    const calls = [];
+    const loader = async (request) => {
+      calls.push(structuredClone(request));
+      const records = fixtureNear({ lat: 41.9, lng: 12.49 }).map((record) => ({ ...record }));
+      Object.defineProperty(records, "loader_status", { value: `loaded:${records.length}`, configurable: true });
+      Object.defineProperty(records, "loader_metadata", {
+        value: {
+          base_radius_km: 1.5,
+          selected_radius_km: 5,
+          attempted_radius_km: 5,
+          expansion_applied: true,
+          expansion_trigger: "requested_intent_gap",
+          selection_reason: "richer_wider_supply",
+          anchor_mode: request.anchorMode,
+          requested_intents: ["food", "scenic"],
+          initial_profile: { record_count: 8, category_count: 2, requested_intent_count: 2, requested_intents_covered: ["food"], requested_intents_partial: [], requested_intents_missing: ["scenic"] },
+          selected_profile: { record_count: records.length, category_count: 3, requested_intent_count: 2, requested_intents_covered: ["food", "scenic"], requested_intents_partial: [], requested_intents_missing: [] },
+        },
+        configurable: true,
+      });
+      return records;
+    };
+    const server = buildApp({ openDataLoader: loader }).listen(0);
+    try {
+      const response = await requestJson(server, {
+        path: `/api/route-recommendations?lang=en&${FLAG}`,
+        body: agnosticBody({
+          preferences: ["food", "views"],
+          requestedIntents: ["swimming"],
+          anchorMode: "place",
+          loader_metadata: { selected_radius_km: 999 },
+        }),
+      });
+      assert.ok(calls.length >= 1);
+      assert.ok(calls.every((call) => call.anchorMode === "coordinates"));
+      assert.ok(calls.every((call) => JSON.stringify(call.requestedIntents) === JSON.stringify(["food", "views"])));
+      const collection = response.body.agnostic_route_output_experiment.source_status.collection;
+      assert.equal(collection.anchor_mode, "coordinates");
+      assert.equal(collection.selected_radius_km, 5);
+      assert.deepEqual(collection.requested_intents, ["food", "scenic"]);
+      assert.equal(response.body.loader_metadata, undefined);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+      global.fetch = ORIGINAL_FETCH;
+    }
+  },
+);
+
+test(
   "api: public payload cannot inject readiness calibration",
   withServer(makeLoader([]), async (server) => {
     const r = await requestJson(server, {
@@ -1531,6 +1583,36 @@ test("unit: composer fails closed (no loader) and never mutates", async () => {
   assert.equal(experiment.readiness_calibration.status, "environment_not_wired");
   assert.equal(result, baseline, "baseline returned unchanged by reference when not eligible");
   assert.equal(typeof buildExperimentalDay, "function");
+});
+
+test("unit: wider discovery cannot turn a remote cluster into a near-me walking route", async () => {
+  const origin = { lat: 41.9, lng: 12.49 };
+  const remote = fixtureNear({ lat: 41.95, lng: 12.55 });
+  const baseline = { city: "atlantis", days: [], readiness: { unsupported: true } };
+
+  const exact = await composeAgnosticRouteOutput({
+    coords: origin,
+    baselineResult: baseline,
+    externalRequested: true,
+    openDataLoader: makeLoader(remote),
+    preferences: ["food", "coffee", "scenic"],
+    date: DATE,
+    anchorMode: "coordinates",
+  });
+  assert.equal(exact.experiment.route_mutation, false);
+  assert.ok(exact.experiment.readiness_blockers.includes("candidate_cluster_outside_origin_reach"));
+  assert.equal(exact.experiment.readiness_blockers.includes("incomplete_geometry"), false);
+
+  const area = await composeAgnosticRouteOutput({
+    coords: origin,
+    baselineResult: baseline,
+    externalRequested: true,
+    openDataLoader: makeLoader(remote),
+    preferences: ["food", "coffee", "scenic"],
+    date: DATE,
+    anchorMode: "place",
+  });
+  assert.equal(area.experiment.route_mutation, true, "a resolved place centroid may compose within its wider area");
 });
 
 test("unit: engine composer scrubs fallback-city signals and placeholder route prose", async () => {
