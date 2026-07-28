@@ -51,3 +51,9 @@ export declare function routePreferenceCoverage(
   routeStops: RouteContextStop[] | null | undefined,
   requestedPreferences: string[] | null | undefined,
 ): RoutePreferenceCoverage;
+
+export type RouteTimeAnchoring = "full_arc_not_now" | "anchored_trimmed" | null;
+
+export declare function routeTimeAnchoring(
+  primaryRoute: { caveats?: string[]; anchored_to_local_time?: boolean } | null | undefined,
+): RouteTimeAnchoring;

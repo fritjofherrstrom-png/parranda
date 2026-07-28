@@ -28,6 +28,7 @@ import { selectedDayHoursLabel } from "../lib/selected-day-hours.mjs";
 import {
   buildRouteContextSuggestions,
   routePreferenceCoverage,
+  routeTimeAnchoring,
   walkingDistanceLabel,
 } from "../lib/route-context-view.mjs";
 import {
@@ -880,6 +881,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     () => routePreferenceCoverage(routeStops, selected),
     [routeStops, selected],
   );
+  // Local-time anchoring truth from the engine's caveat vocabulary (#429):
+  // "this is a full-day arc, not now" vs "anchored to now, earlier dayparts
+  // trimmed". Unknown/absent → no line, never a guess.
+  const timeAnchoring = useMemo(() => routeTimeAnchoring(primaryRoute), [primaryRoute]);
 
   // The map follows the same authority hierarchy as the copy. A composed day
   // gets numbered primary-route markers and a solid route. Optional context is
@@ -1267,6 +1272,31 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 {t(
                   `Byggd från källstödda platser${typeof structure.area_count === "number" ? ` över ${structure.area_count} områden` : ""} — Parranda har inte full kurering här ännu`,
                   `Built from source-backed places${typeof structure.area_count === "number" ? ` across ${structure.area_count} areas` : ""} — Parranda does not have full curation here yet`,
+                )}
+              </span>
+            </p>
+          )}
+          {/* Time-anchoring truth (#429): say when the arc is not anchored to
+              the local clock — a today request at 22:00 must not read as a
+              doable midday plan. Quietly note the trimmed variant too. */}
+          {timeAnchoring === "full_arc_not_now" && (
+            <p className="flex items-start gap-2 text-[13px] leading-relaxed text-parranda-ink/65">
+              <span aria-hidden="true" className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-parranda-glow" />
+              <span>
+                {t(
+                  "En hel dags båge — inte förankrad till klockan just nu",
+                  "A full-day arc — not anchored to right now",
+                )}
+              </span>
+            </p>
+          )}
+          {timeAnchoring === "anchored_trimmed" && (
+            <p className="flex items-start gap-2 text-[13px] leading-relaxed text-parranda-ink/65">
+              <span aria-hidden="true" className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-parranda-glow" />
+              <span>
+                {t(
+                  "Förankrad till nu — tidigare dagdelar borttagna",
+                  "Anchored to now — earlier dayparts trimmed",
                 )}
               </span>
             </p>

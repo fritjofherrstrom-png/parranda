@@ -77,15 +77,42 @@
   // found real places — just too few for a reliable day (the promotion gate's
   // below-threshold cap). The second deserves copy that reports the evidence
   // instead of implying nothing was found. Only trusted server evidence counts:
-  // the resolver-attested intake plus the trusted loader's real-place tally.
+  // the resolver-attested intake, the trusted loader's real-place tally, AND an
+  // explicit candidate-scarcity verdict from the engine. The last part matters:
+  // a resolved place with plenty of candidates can still block on walking or
+  // geometry — that is NOT "too few places" and must keep the default copy.
   // A loader failure (error_failed_closed) reports count 0 and stays on the
-  // transient-retry path, so the two never overlap.
+  // transient-retry path, so the paths never overlap.
+  var SPARSE_SUPPLY_CAPS = ["capped_by_below_planner_candidate_threshold"];
+  var SPARSE_SUPPLY_BLOCKERS = ["insufficient_geocoded_candidates"];
+
+  function anyTokenPresent(list, tokens) {
+    if (!Array.isArray(list)) return false;
+    for (var i = 0; i < list.length; i++) {
+      if (tokens.indexOf(list[i]) !== -1) return true;
+    }
+    return false;
+  }
+
+  function hasCandidateScarcityVerdict(experiment) {
+    var calibration = experiment.readiness_calibration;
+    var promotion = experiment.promotion;
+    var eligibility = experiment.eligibility;
+    return (
+      anyTokenPresent(calibration && calibration.caps, SPARSE_SUPPLY_CAPS) ||
+      anyTokenPresent(promotion && promotion.blocked_caps, SPARSE_SUPPLY_CAPS) ||
+      anyTokenPresent(experiment.readiness_blockers, SPARSE_SUPPLY_BLOCKERS) ||
+      anyTokenPresent(eligibility && eligibility.blockers, SPARSE_SUPPLY_BLOCKERS)
+    );
+  }
+
   function sparseSupplyEvidence(response) {
     var experiment = response && response.agnostic_route_output_experiment;
     if (!experiment || !experiment.intake || experiment.intake.status !== "resolved") return null;
     var readiness = experiment.candidate_readiness;
     var count = readiness && typeof readiness.real_place_count === "number" ? readiness.real_place_count : 0;
     if (!(count > 0)) return null;
+    if (!hasCandidateScarcityVerdict(experiment)) return null;
     return { count: count };
   }
 
