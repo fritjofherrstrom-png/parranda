@@ -361,10 +361,18 @@ test("loader UA is identical to the resolver UA (one app identity, no ad-hoc str
   assert.equal(DEFAULT_USER_AGENT, resolver.DEFAULT_USER_AGENT);
 });
 
-test("default timeout stays realistic for live Overpass latency (4-6s observed)", () => {
-  const { DEFAULT_TIMEOUT_MS } = require("../server/place-candidates/open-data-loader");
-  // 5s silently turned dense areas into loaded:0; keep headroom above real latency.
-  assert.ok(DEFAULT_TIMEOUT_MS >= 10000, `DEFAULT_TIMEOUT_MS ${DEFAULT_TIMEOUT_MS} < 10000`);
+test("client deadline stays above the declared Overpass query budget", () => {
+  const {
+    DEFAULT_TIMEOUT_MS,
+    OVERPASS_QUERY_TIMEOUT_SECONDS,
+  } = require("../server/place-candidates/open-data-loader");
+  const query = buildOverpassQuery({ lat: 59.33, lng: 18.07, radiusM: 1500, limit: 25 });
+
+  assert.match(query, new RegExp(`\\[timeout:${OVERPASS_QUERY_TIMEOUT_SECONDS}\\]`));
+  assert.ok(
+    DEFAULT_TIMEOUT_MS >= OVERPASS_QUERY_TIMEOUT_SECONDS * 1000 + 1000,
+    `client deadline ${DEFAULT_TIMEOUT_MS}ms must exceed query budget ${OVERPASS_QUERY_TIMEOUT_SECONDS}s`,
+  );
 });
 
 test("non-200 response fails closed with inspectable loader_error status", async () => {

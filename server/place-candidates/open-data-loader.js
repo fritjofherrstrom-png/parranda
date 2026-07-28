@@ -63,10 +63,11 @@ const DEFAULT_LIMIT = 25;
 // limit. Wider than the limit so scarce categories survive a dense centre;
 // still small and bounded (one query).
 const OVERPASS_FETCH_CAP = 150;
-// Live Overpass responses for this query routinely take 4–6s (the query itself
-// declares a 25s server budget); a 5s client abort silently turned dense areas
-// into fake "no data". Still a hard bound via AbortController.
-const DEFAULT_TIMEOUT_MS = 12000;
+// Keep the client deadline above the bounded server-side query budget. A
+// shorter client deadline turns a valid cold response into fake "no data"
+// before Overpass has exhausted the budget we explicitly gave it.
+const OVERPASS_QUERY_TIMEOUT_SECONDS = 25;
+const DEFAULT_TIMEOUT_MS = 30000;
 const MAX_RADIUS_KM = 5.0;
 const MAX_LIMIT = 100;
 // Adaptive aperture expansion. The first query stays cheap and local. A single
@@ -586,7 +587,7 @@ function buildOverpassQueryForAnchors({ anchors, radiusM, limit, mappings = OSM_
     blocks.push(`(${filters})->.${setName};.${setName} out center ${perCategory};`);
     i += 1;
   }
-  return `[out:json][timeout:25];${blocks.join("")}`;
+  return `[out:json][timeout:${OVERPASS_QUERY_TIMEOUT_SECONDS}];${blocks.join("")}`;
 }
 
 // Parranda type → coarse intent category, for category-balanced selection.
@@ -1008,6 +1009,7 @@ module.exports = {
   DEFAULT_RADIUS_KM,
   DEFAULT_LIMIT,
   DEFAULT_TIMEOUT_MS,
+  OVERPASS_QUERY_TIMEOUT_SECONDS,
   MAX_RADIUS_KM,
   MAX_LIMIT,
   EXPANSION_RADIUS_KM,
