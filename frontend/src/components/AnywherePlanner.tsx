@@ -41,6 +41,7 @@ import {
   pulseHealthState,
   type PulseTimeWindow,
 } from "../lib/pulse-view.mjs";
+import { planComposeFollowup } from "../lib/compose-followup.mjs";
 import { buildShareUrl, decodeShareParams } from "../lib/anywhere-share.mjs";
 import { consumeAnchorCoords } from "../lib/location-anchor.mjs";
 import {
@@ -156,7 +157,6 @@ interface LiveEvents {
   };
 }
 
-const LIVE_REFRESH_DELAYS_MS = [9000, 12000, 18000] as const;
 const LIVE_QUERY_REFRESH_DELAYS_MS = [1500, 3000, 5000] as const;
 
 function waitForLiveQueryRetry(delayMs: number, signal: AbortSignal): Promise<void> {
@@ -412,20 +412,22 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         writeLS(LAST_KEY, entry);
         if (!silent) setRestoredAt(null);
       }
-      // Bounded silent re-asks cover cold-start honesty gaps. Live acquisition
-      // gets three capped refresh opportunities; structure/source upgrades keep
-      // their existing one-shot behavior. A proven empty source, ambiguity, or
-      // unresolved place never retries, and a new user compose cancels the timer.
-      const needsStructureUpgrade = cls.status === "composed" && !safe?.place_structure;
-      const needsTransientSourceRetry = decision.shouldRetryTransientSource(body, cls);
-      const livePending = safe?.live_events?.pending === true;
-      const canRefreshLive = livePending && pollAttempt < LIVE_REFRESH_DELAYS_MS.length;
-      const canRunOneShotUpgrade = !silent && (needsStructureUpgrade || needsTransientSourceRetry);
-      setLiveRefreshExhausted(livePending && !canRefreshLive);
-      if (canRefreshLive || canRunOneShotUpgrade) {
-        if (needsStructureUpgrade || needsTransientSourceRetry) setUpgradePending(true);
+      // Bounded silent re-asks cover cold-start honesty gaps. The POLICY —
+      // which composes re-ask, with what delay, and when the live ladder is
+      // exhausted — is the pure, unit-tested planComposeFollowup; this block
+      // only owns the timer and state.
+      const followup = planComposeFollowup({
+        composed: cls.status === "composed",
+        hasStructure: Boolean(safe?.place_structure),
+        transientSourceRetry: decision.shouldRetryTransientSource(body, cls),
+        livePending: safe?.live_events?.pending === true,
+        silent,
+        pollAttempt,
+      });
+      setLiveRefreshExhausted(followup.liveRefreshExhausted);
+      if (followup.schedule) {
+        if (followup.upgradePending) setUpgradePending(true);
         if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
-        const delay = canRefreshLive ? LIVE_REFRESH_DELAYS_MS[pollAttempt] : LIVE_REFRESH_DELAYS_MS[0];
         const effectivePreferences = preferencesOverride ?? selected;
         pollTimerRef.current = setTimeout(() => {
           execute(anchor, {
@@ -434,9 +436,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             preferencesOverride: effectivePreferences,
             dayOffsetOverride: effectiveDayOffset,
             walkKeyOverride: effectiveWalkKey,
-            pollAttempt: canRefreshLive ? pollAttempt + 1 : LIVE_REFRESH_DELAYS_MS.length,
+            pollAttempt: followup.nextPollAttempt,
           }).catch(() => {});
-        }, delay);
+        }, followup.delayMs ?? 0);
       }
     } catch {
       if (controller.signal.aborted || requestId !== requestSequenceRef.current) return;
@@ -1210,9 +1212,22 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {phase === "done" && classification?.status === "unavailable" && (
         !upgradePending &&
         <p className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4 text-sm text-parranda-ink/80">
-          {t(
-            `Parranda kunde inte komponera en dag för ${classification.placeLabel || place} ännu — inget hittas på, inget fejkas.`,
-            `Parranda couldn't compose a day for ${classification.placeLabel || place} yet — nothing is invented in its place.`,
+          {/* Two honestly different absences: a place Parranda couldn't
+              understand, and a resolved place whose trusted sources hold real
+              places — just too few for a reliable day. The count comes from
+              the classifier's trusted-loader evidence, never from copy. The
+              label follows the pill rule: primary locality, not the resolver's
+              full admin chain. */}
+          {classification.unavailableReason === "sparse_supply" && classification.realPlaceCount ? (
+            t(
+              `Parranda hittade ${classification.realPlaceCount === 1 ? "1 riktig plats" : `${classification.realPlaceCount} riktiga platser`} nära ${primaryLocality(classification.placeLabel) || place}, men inte tillräckligt för en pålitlig dag ännu — inget hittas på.`,
+              `Parranda found ${classification.realPlaceCount === 1 ? "1 real place" : `${classification.realPlaceCount} real places`} near ${primaryLocality(classification.placeLabel) || place}, but not enough for a reliable day yet — nothing is invented in its place.`,
+            )
+          ) : (
+            t(
+              `Parranda kunde inte komponera en dag för ${primaryLocality(classification.placeLabel) || place} ännu — inget hittas på, inget fejkas.`,
+              `Parranda couldn't compose a day for ${primaryLocality(classification.placeLabel) || place} yet — nothing is invented in its place.`,
+            )
           )}
         </p>
       )}
@@ -1814,6 +1829,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               onClick={() => {
                 setLiveSheetTime(pulseBuckets.tonight.length > 0 ? "tonight" : "week");
                 setLiveSheetOpen(true);
+                // "Couldn't verify" + an available anchor: opening the sheet IS
+                // the "check again" — fire a fresh around-place query (its own
+                // bounded retries) instead of showing the same stale emptiness.
+                if (pulseState === "unavailable" && aroundPlaceScopeAvailable && !liveQueryPending) {
+                  requestLiveSheetScope("around_place").catch(() => {});
+                }
               }}
               className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-parranda-btn border border-parranda-ember/50 bg-parranda-ember/10 text-[13px] font-bold text-parranda-clay transition hover:bg-parranda-ember/15"
             >

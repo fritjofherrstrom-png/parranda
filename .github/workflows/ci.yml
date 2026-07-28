@@ -38,3 +38,10 @@ jobs:
 
       - name: Build frontend foundation
         run: npm run build:frontend
+
+      # The serving contract commits frontend/dist as build-output-of-record. A
+      # source change without the rebuild-and-commit step would ship stale UI
+      # silently — compare the fresh build to the committed dist (Astro's
+      # nondeterministic island uid is the one tolerated difference).
+      - name: Check committed frontend/dist matches the build
+        run: node scripts/check-frontend-dist-drift.js

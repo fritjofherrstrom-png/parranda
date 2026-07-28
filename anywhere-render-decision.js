@@ -72,10 +72,28 @@
     return typeof fallbackPlace === "string" ? fallbackPlace.trim() : "";
   }
 
+  // "Unavailable" hides two honestly different situations: a place Parranda
+  // could not understand at all, and a RESOLVED place whose trusted loader
+  // found real places — just too few for a reliable day (the promotion gate's
+  // below-threshold cap). The second deserves copy that reports the evidence
+  // instead of implying nothing was found. Only trusted server evidence counts:
+  // the resolver-attested intake plus the trusted loader's real-place tally.
+  // A loader failure (error_failed_closed) reports count 0 and stays on the
+  // transient-retry path, so the two never overlap.
+  function sparseSupplyEvidence(response) {
+    var experiment = response && response.agnostic_route_output_experiment;
+    if (!experiment || !experiment.intake || experiment.intake.status !== "resolved") return null;
+    var readiness = experiment.candidate_readiness;
+    var count = readiness && typeof readiness.real_place_count === "number" ? readiness.real_place_count : 0;
+    if (!(count > 0)) return null;
+    return { count: count };
+  }
+
   /**
    * @param {object} response  the /api/route-recommendations response
    * @param {object} [opts]    { place } the raw typed place, used only as a label fallback
-   * @returns {{ status: "composed"|"structure_only"|"unavailable", hasStructure: boolean, placeLabel: string }}
+   * @returns {{ status: "composed"|"structure_only"|"unavailable", hasStructure: boolean, placeLabel: string,
+   *             unavailableReason?: "sparse_supply", realPlaceCount?: number }}
    */
   function classifyAnywhereResult(response, opts) {
     var place = opts && typeof opts.place === "string" ? opts.place : "";
@@ -83,7 +101,15 @@
     var composed = days.length > 0 && isAgnosticAppliedDay(days[0]);
     var hasStructure = hasValidPlaceStructure(response);
     var status = composed ? "composed" : hasStructure ? "structure_only" : "unavailable";
-    return { status: status, hasStructure: hasStructure, placeLabel: resolvePlaceLabel(response, place) };
+    var classification = { status: status, hasStructure: hasStructure, placeLabel: resolvePlaceLabel(response, place) };
+    if (status === "unavailable") {
+      var sparse = sparseSupplyEvidence(response);
+      if (sparse) {
+        classification.unavailableReason = "sparse_supply";
+        classification.realPlaceCount = sparse.count;
+      }
+    }
+    return classification;
   }
 
   /**

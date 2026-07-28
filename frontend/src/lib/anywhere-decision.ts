@@ -13,6 +13,11 @@ export interface AnywhereClassification {
   status: AnywhereStatus;
   hasStructure: boolean;
   placeLabel: string;
+  /** Set on "unavailable" when the resolved place's trusted loader found real
+   *  places — just too few for a reliable day. Never set on unresolved places
+   *  or loader failures, so honest-absence copy stays the default. */
+  unavailableReason?: "sparse_supply";
+  realPlaceCount?: number;
 }
 
 interface AnywhereDecisionApi {
