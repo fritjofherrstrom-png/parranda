@@ -22,6 +22,7 @@ const {
   evaluateOperationalViability,
   operationalViabilityRank,
 } = require("../place-candidates/operational-viability");
+const { normalizeSelectedDayHoursFact } = require("../place-candidates/opening-hours");
 
 // Curated/verified Parranda candidates keep priority when fit is comparable.
 const CURATED_SOURCE_PRIORITY = 100;
@@ -160,10 +161,12 @@ function safeEvaluateAvailability(evaluator, candidate, context) {
   try {
     const result = evaluator({ candidate, context });
     if (!result || typeof result !== "object") return null;
+    const selectedDayHours = normalizeSelectedDayHoursFact(result.selected_day_hours);
     return {
       eligible: result.eligible !== false,
       status: normalizeAvailabilityToken(result.status, "unknown"),
       reason: normalizeAvailabilityToken(result.reason, "candidate_availability_unresolved"),
+      ...(selectedDayHours ? { selected_day_hours: selectedDayHours } : {}),
     };
   } catch (_error) {
     return { eligible: true, status: "unknown", reason: "candidate_availability_evaluation_failed" };

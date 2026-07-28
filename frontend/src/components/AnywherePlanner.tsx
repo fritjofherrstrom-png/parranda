@@ -24,6 +24,7 @@ import {
   type LiveEventScope,
 } from "../lib/live-event-query.mjs";
 import { mapsPlaceUrl, mapsWalkingRouteUrl, primaryRouteStops } from "../lib/maps-links.mjs";
+import { selectedDayHoursLabel } from "../lib/selected-day-hours.mjs";
 import {
   buildRouteContextSuggestions,
   routePreferenceCoverage,
@@ -1373,6 +1374,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               const panelId = `route-stop-panel-${i}`;
               const expanded = expandedStopKey === stopKey;
               const prevName = routeNumber > 1 ? String((split.core[i - 1] as any)?.label || (split.core[i - 1] as any)?.name || "").trim() : "";
+              const hoursLabel = selectedDayHoursLabel(stop?.selected_day_hours, lang);
               return (
                 <li key={stopKey} className="flex flex-col">
                   {daypartHeading && (
@@ -1418,8 +1420,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                       id={panelId}
                       className="ml-11 mb-1 mt-1 flex flex-col rounded-parranda border border-parranda-ember/35 bg-parranda-ink/[0.03] p-4"
                     >
-                      {/* Facts only. Opening-hours copy belongs here once the
-                          route-stop contract carries reviewed availability. */}
+                      {/* Facts only. The schedule row is a bounded source fact
+                          for the selected local day, never an "open now" claim. */}
                       <div className="flex flex-col gap-1.5 text-xs text-parranda-ink/65">
                         {leg && (leg.minutes != null || leg.km != null) && (
                           <span>
@@ -1429,6 +1431,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                             {prevName ? ` ${t("till fots från", "walk from")} ${prevName}` : ` ${t("till fots", "on foot")}`}
                           </span>
                         )}
+                        {hoursLabel && <span>{hoursLabel}</span>}
                         {stop?.address && <span>{stop.address}</span>}
                       </div>
                       {stop?.candidate_status === "partial" && (

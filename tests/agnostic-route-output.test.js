@@ -1202,6 +1202,12 @@ test(
         external_provider: { dataset: injected },
         opening_hours: "payload_opening_hours",
         availability: { eligible: true, status: "available" },
+        selected_day_hours: {
+          status: "known",
+          all_day: true,
+          windows: [],
+          marker: "payload_selected_day_hours",
+        },
         evaluateCandidateAvailability: "payload_evaluator",
       }),
     });
@@ -1212,6 +1218,7 @@ test(
     assert.notEqual(exp.readiness_calibration.status, "usable");
     assert.deepEqual(r.body.days, []);
     assert.equal(JSON.stringify(r.body).includes("payload_opening_hours"), false);
+    assert.equal(JSON.stringify(r.body).includes("payload_selected_day_hours"), false);
     assert.equal(JSON.stringify(r.body).includes("payload_evaluator"), false);
   }),
 );
@@ -1345,12 +1352,26 @@ test(
       assert.ok(stopIds.some((id) => id.startsWith("late-")), "late-local candidates remain eligible");
       assert.ok(stopIds.some((id) => id.startsWith("unknown-cafe-")), "unresolved schedules fail open");
       assert.equal(stopIds.some((id) => id.startsWith("closed-")), false, "proven-closed candidates never reach the route");
+      const stopsWithSelectedDayHours = route.main_stops.filter((stop) => stop.selected_day_hours);
+      assert.ok(stopsWithSelectedDayHours.length > 0, "supported source hours reach selected route stops");
+      assert.ok(stopsWithSelectedDayHours.every((stop) => stop.selected_day_hours.status === "known"));
+      assert.ok(
+        stopsWithSelectedDayHours.every((stop) =>
+          stop.selected_day_hours.windows.every((window) => /^\d{2}:\d{2}$/.test(window.opens) && /^\d{2}:\d{2}$/.test(window.closes)),
+        ),
+      );
+      assert.equal(
+        route.main_stops.some((stop) => stop.id.startsWith("unknown-cafe-") && stop.selected_day_hours),
+        false,
+        "unresolved schedules stay off the public stop contract",
+      );
       assert.equal(experiment.context.time.timezone_source, "resolver_attested");
       assert.equal(experiment.context.influence.opening_hours_fed_into_selection, true);
       assert.ok(experiment.context.influence.opening_hours_excluded_candidate_count > 0);
       assert.ok(experiment.context.influence.opening_hours_unresolved_candidate_count > 0);
       assert.equal("opening_hours" in route, false, "raw opening-hours fields stay off the public route");
       assert.equal(JSON.stringify(r.body).includes("Mo 09:00-18:00"), false, "raw schedule values stay internal");
+      assert.equal(JSON.stringify(r.body).includes("raw_schedule"), false);
     } finally {
       await new Promise((resolve) => server.close(resolve));
       global.fetch = ORIGINAL_FETCH;

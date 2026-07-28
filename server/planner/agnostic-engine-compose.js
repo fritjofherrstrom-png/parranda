@@ -27,6 +27,7 @@
  */
 
 const { buildAgnosticCityContext } = require("../candidates/agnostic-context");
+const { normalizeSelectedDayHoursFact } = require("../place-candidates/opening-hours");
 const { plannerUsableOptionsForRole } = require("./candidate-combination");
 
 const AGNOSTIC_ENGINE_CITY_KEY = "agnostic-engine-area";
@@ -197,6 +198,7 @@ function toSourceCandidate({
     : Array.isArray(rich?.missing_preferences)
       ? [...rich.missing_preferences]
       : [];
+  const selectedDayHours = normalizeSelectedDayHoursFact(rich?.availability?.selected_day_hours);
   return {
     id: pick.candidate_id,
     city,
@@ -229,6 +231,7 @@ function toSourceCandidate({
       ? rich.also_covers.map((entry) => ({ ...entry }))
       : [],
     reconciliation: rich?.reconciliation || null,
+    ...(selectedDayHours ? { selected_day_hours: selectedDayHours } : {}),
     source: {
       kind: "open_geo_source",
       label: firstSource.label || provenance.source_family || "open data",

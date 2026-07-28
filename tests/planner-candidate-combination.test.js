@@ -21,6 +21,7 @@ function candidate(id, over = {}) {
     coordinates: "coordinates" in over ? over.coordinates : { lat: over.lat ?? 41.9, lng: over.lng ?? 12.49 },
     also_covers: over.also_covers || [],
     fit_reasons: over.fit_reasons || ["covers:scenic(type:viewpoint)"],
+    ...(over.availability ? { availability: over.availability } : {}),
   };
 }
 
@@ -54,6 +55,50 @@ test("compact filled anchors produce status ready", () => {
   assert.ok(["strong", "ok"].includes(out.geometry_summary.coherence));
   assert.equal(out.selected.length, 2);
   assert.deepEqual(out.unresolved_roles, []);
+});
+
+test("selected-day source hours survive as a bounded fact while malformed values are dropped", () => {
+  const out = buildCandidateCombination(
+    plannerRoles([
+      role("scenic_anchor", {
+        candidates: [candidate("v1", {
+          coordinates: NEAR_A,
+          availability: {
+            eligible: true,
+            selected_day_hours: {
+              status: "known",
+              all_day: false,
+              windows: [{ opens: "10:00", closes: "18:00" }],
+              raw_schedule: "Mo 10:00-18:00",
+            },
+          },
+        })],
+      }),
+      role("food_anchor", {
+        candidates: [candidate("r1", {
+          coordinates: NEAR_B,
+          availability: {
+            eligible: true,
+            selected_day_hours: {
+              status: "known",
+              all_day: false,
+              windows: [{ opens: "invalid", closes: "18:00" }],
+            },
+          },
+        })],
+      }),
+    ]),
+  );
+
+  const scenic = out.selected.find((entry) => entry.candidate_id === "v1");
+  const food = out.selected.find((entry) => entry.candidate_id === "r1");
+  assert.deepEqual(scenic.selected_day_hours, {
+    status: "known",
+    all_day: false,
+    windows: [{ opens: "10:00", closes: "18:00" }],
+  });
+  assert.equal(food.selected_day_hours, undefined);
+  assert.equal(JSON.stringify(out).includes("raw_schedule"), false);
 });
 
 // --- 2. spread-out → weak_geometry -----------------------------------------

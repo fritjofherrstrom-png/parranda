@@ -224,6 +224,8 @@ test("a tapped stop discloses route facts before an explicit Maps action", () =>
   assert.match(anywherePlannerSource, /aria-controls=\{panelId\}/);
   assert.match(anywherePlannerSource, /id=\{panelId\}/);
   assert.match(anywherePlannerSource, /t\("Öppna i Maps", "Open in Maps"\)/);
+  assert.match(anywherePlannerSource, /selectedDayHoursLabel\(stop\?\.selected_day_hours, lang\)/);
+  assert.match(anywherePlannerSource, /\{hoursLabel && <span>\{hoursLabel\}<\/span>\}/);
   // The panel does not lecture the user or create a parallel type-to-intent
   // interpretation layer in the frontend.
   assert.doesNotMatch(anywherePlannerSource, /Why it's here|Varför här/, "no explain-the-obvious heading");
