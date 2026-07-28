@@ -439,14 +439,13 @@ function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation
     // When the trusted current local band is known and sits AFTER the arc's
     // earliest daypart, the day leads with an already-past part of the day —
     // surface that honestly rather than pretending it is anchored to "now".
-    const daypartArc = stops.map((stop) => stop.daypart).filter(Boolean);
-    const currentRank = timeBandRank(currentTimeBand);
-    const earliestRank = daypartArc.length ? timeBandRank(daypartArc[0]) : null;
-    const precedesLocalTime =
-      currentRank !== null && earliestRank !== null && earliestRank < currentRank;
-    // #276 — when the day was anchored to "now" it cannot also precede it.
-    if (precedesLocalTime && !anchoredToLocalTime) caveats.push("daypart_arc_precedes_local_time");
-    if (anchoredToLocalTime) caveats.push("day_anchored_to_current_time");
+    const daypartHonesty = buildRouteDaypartHonesty({
+      daypartArc: stops.map((stop) => stop.daypart),
+      currentTimeBand,
+      anchoredToLocalTime,
+      trimmedDayparts,
+    });
+    caveats.push(...daypartHonesty.caveats);
     return {
       ...base,
       summary:
@@ -461,14 +460,7 @@ function buildExperimentalPrimaryRoute({ cityKey, adaptedBody, walkingValidation
       estimated_walk_minutes: totalWalkMinutes,
       legs: wr.legs,
       map_path_points: wr.pathPoints,
-      daypart_arc: daypartArc,
-      // The trusted current local band, only when known (tz resolved) AND the
-      // request is today-dated. Null otherwise — no fabricated time.
-      current_local_time_band: currentRank !== null ? currentTimeBand : null,
-      // #276 — true when the day was trimmed to start at the current local band;
-      // trimmed_dayparts lists the already-past parts of the day that were dropped.
-      anchored_to_local_time: Boolean(anchoredToLocalTime),
-      trimmed_dayparts: Array.isArray(trimmedDayparts) ? trimmedDayparts : [],
+      ...daypartHonesty,
       caveats,
     };
   }
@@ -537,6 +529,54 @@ function anchorAdaptedBodyToCurrentBand(adaptedBody, currentRank) {
       stop_ids: kept.map((s) => s.candidate_id || s.id || s.place_id).filter(Boolean),
       target_roles: kept.map((s) => s.role).filter(Boolean),
     },
+  };
+}
+
+// Engine-compose equivalent of #276. Trim the trusted source reservoir BEFORE
+// route composition so geometry, legs, and walking truth are recomputed over the
+// actual time-appropriate stops. If fewer than two candidates remain, keep the
+// full reservoir and let the shared honesty fields explain that the full-day arc
+// precedes local time rather than fabricating a thin route.
+function anchorSourceCandidatesToCurrentBand(sourceCandidates, currentRank) {
+  const candidates = Array.isArray(sourceCandidates) ? sourceCandidates : [];
+  const kept = [];
+  const trimmedDayparts = [];
+  for (const candidate of candidates) {
+    const role = candidate?.role || (Array.isArray(candidate?.route_roles) ? candidate.route_roles[0] : null);
+    const daypart = daypartForRole(role || null);
+    const rank = timeBandRank(daypart);
+    if (rank !== null && rank < currentRank) {
+      if (!trimmedDayparts.includes(daypart)) trimmedDayparts.push(daypart);
+    } else {
+      kept.push(candidate);
+    }
+  }
+  if (kept.length < 2 || kept.length === candidates.length) {
+    return { anchored: false, candidates, trimmedDayparts: [] };
+  }
+  return { anchored: true, candidates: kept, trimmedDayparts };
+}
+
+function buildRouteDaypartHonesty({
+  daypartArc,
+  currentTimeBand = null,
+  anchoredToLocalTime = false,
+  trimmedDayparts = [],
+} = {}) {
+  const arc = (Array.isArray(daypartArc) ? daypartArc : []).filter(Boolean);
+  const currentRank = timeBandRank(currentTimeBand);
+  const earliestRank = arc.length ? timeBandRank(arc[0]) : null;
+  const caveats = [];
+  if (anchoredToLocalTime) caveats.push("day_anchored_to_current_time");
+  if (!anchoredToLocalTime && currentRank !== null && earliestRank !== null && earliestRank < currentRank) {
+    caveats.push("daypart_arc_precedes_local_time");
+  }
+  return {
+    daypart_arc: arc,
+    current_local_time_band: currentRank !== null ? currentTimeBand : null,
+    anchored_to_local_time: Boolean(anchoredToLocalTime),
+    trimmed_dayparts: Array.isArray(trimmedDayparts) ? [...new Set(trimmedDayparts.filter(Boolean))] : [],
+    caveats,
   };
 }
 
@@ -899,6 +939,16 @@ async function composeAgnosticRouteOutput({
     return { result: baselineResult, experiment };
   }
 
+  // Local-time comparison is meaningful only for a today-dated request with a
+  // trusted timezone. The same context drives both synthesis backends so the
+  // promoted engine route cannot lose the legacy path's honesty contract.
+  const trustedBand = ctx && ctx.timezoneKnown ? ctx.timeBand : null;
+  const trustedBandRank = timeBandRank(trustedBand);
+  const isTodayRequest = Boolean(
+    ctx && ctx.timezoneKnown && typeof ctx.now === "string" && effectiveDate === ctx.now.slice(0, 10),
+  );
+  const routeCurrentBand = isTodayRequest ? trustedBand : null;
+
   // Convergence path: synthesize the route through the engine's own
   // agnostic_compose instead of the in-module experimental synthesizer. The
   // admitted candidates become the engine's source candidates; the engine owns
@@ -923,6 +973,8 @@ async function composeAgnosticRouteOutput({
       preferences,
       timezone: contextBlock?.time?.timezone || timezone,
       lang,
+      currentTimeBand: routeCurrentBand,
+      currentTimeBandRank: isTodayRequest ? trustedBandRank : null,
       // Pass ONLY the resolver-attested label (may be null). The prose builder
       // must fall back to neutral, never to agnosticContext.label — which is the
       // "Nearby" geometry placeholder, not a real place name.
@@ -935,11 +987,6 @@ async function composeAgnosticRouteOutput({
   // starts at "now" instead of always at the morning. A future-dated request is
   // a plan — keep the full arc untouched. Conservative: anchoring never thins
   // the day below two stops (else the full arc is kept + the #275 caveat stands).
-  const trustedBand = ctx && ctx.timezoneKnown ? ctx.timeBand : null;
-  const trustedBandRank = timeBandRank(trustedBand);
-  const isTodayRequest = Boolean(
-    ctx && ctx.timezoneKnown && typeof ctx.now === "string" && effectiveDate === ctx.now.slice(0, 10),
-  );
   let workingBody = adaptedBody;
   let anchoredToLocalTime = false;
   let trimmedDayparts = [];
@@ -953,8 +1000,6 @@ async function composeAgnosticRouteOutput({
   }
   // The arc-vs-now caveat (#275) is only meaningful for a today-dated request:
   // for a future plan, leading with the morning is correct, not "already past".
-  const routeCurrentBand = isTodayRequest ? trustedBand : null;
-
   // The route candidate arrives in role order. For the flag-gated experiment we
   // may apply a conservative daypart-rhythm sequence, then validate that produced
   // order against walking budgets before any mutation. If the sequence fails
@@ -1111,6 +1156,8 @@ async function composeAgnosticRouteViaEngine({
   preferences,
   timezone,
   lang,
+  currentTimeBand = null,
+  currentTimeBandRank = null,
   placeLabel,
 }) {
   const sourceCandidates = Array.isArray(suppliedSourceCandidates)
@@ -1120,36 +1167,63 @@ async function composeAgnosticRouteViaEngine({
         plannerRoles,
         city: agnosticContext.key,
       });
+  const timeAnchoring = Number.isInteger(currentTimeBandRank)
+    ? anchorSourceCandidatesToCurrentBand(sourceCandidates, currentTimeBandRank)
+    : { anchored: false, candidates: sourceCandidates, trimmedDayparts: [] };
 
-  const engineCityConfig = buildAgnosticEngineCityConfig({
-    anchor: origin,
-    sourceCandidates,
-    timezone: timezone || "UTC",
-    todayIsoDate: agnosticContext.todayIsoDate,
-    label: safeAgnosticPlaceLabel(placeLabel) || agnosticContext.label,
-    key: agnosticContext.key,
-    dayProfile: (Number.isFinite(walkingKmTarget) ? walkingKmTarget : 6) <= 4 ? "light" : "peak",
-  });
+  async function runEngine(candidates) {
+    const engineCityConfig = buildAgnosticEngineCityConfig({
+      anchor: origin,
+      sourceCandidates: candidates,
+      timezone: timezone || "UTC",
+      todayIsoDate: agnosticContext.todayIsoDate,
+      label: safeAgnosticPlaceLabel(placeLabel) || agnosticContext.label,
+      key: agnosticContext.key,
+      dayProfile: (Number.isFinite(walkingKmTarget) ? walkingKmTarget : 6) <= 4 ? "light" : "peak",
+    });
+    const engineResult = await generateAgnosticRecommendations({
+      cityConfig: engineCityConfig,
+      dates: [effectiveDate],
+      start: { type: "auto" },
+      end: { type: "auto" },
+      walkingKmTarget: Number.isFinite(walkingKmTarget) ? walkingKmTarget : 6,
+      preferences: Array.isArray(preferences) ? preferences : [],
+      lang,
+    });
+    return sanitizeAgnosticEngineDay({
+      day: (engineResult && Array.isArray(engineResult.days) && engineResult.days[0]) || null,
+      // Route PROSE uses the attested label or neutral fallback — never the
+      // "Nearby" geometry placeholder from the coordinates-only config.
+      placeLabel: safeAgnosticPlaceLabel(placeLabel),
+      lang,
+    });
+  }
 
-  const engineResult = await generateAgnosticRecommendations({
-    cityConfig: engineCityConfig,
-    dates: [effectiveDate],
-    start: { type: "auto" },
-    end: { type: "auto" },
-    walkingKmTarget: Number.isFinite(walkingKmTarget) ? walkingKmTarget : 6,
-    preferences: Array.isArray(preferences) ? preferences : [],
-    lang,
-  });
+  let anchoredToLocalTime = timeAnchoring.anchored;
+  let trimmedDayparts = timeAnchoring.trimmedDayparts;
+  let engineDay = await runEngine(timeAnchoring.candidates);
+  let engineRoute = (engineDay && engineDay.primary_route) || null;
+  if (!engineRoute && anchoredToLocalTime) {
+    // A smaller time-anchored reservoir may still fail the engine's independent
+    // geometry/readiness checks. Keep the full-day route if it is viable, but do
+    // not claim it is anchored; the caveat below makes that limitation explicit.
+    engineDay = await runEngine(sourceCandidates);
+    engineRoute = (engineDay && engineDay.primary_route) || null;
+    anchoredToLocalTime = false;
+    trimmedDayparts = [];
+  }
 
-  const engineDay = sanitizeAgnosticEngineDay({
-    day: (engineResult && Array.isArray(engineResult.days) && engineResult.days[0]) || null,
-    // Route PROSE uses the attested label or neutral fallback — never the
-    // "Nearby" geometry placeholder (which stays on the engine's start/end
-    // labels via the engineCityConfig `label` above).
-    placeLabel: safeAgnosticPlaceLabel(placeLabel),
-    lang,
-  });
-  const engineRoute = (engineDay && engineDay.primary_route) || null;
+  if (engineRoute) {
+    const daypartHonesty = buildRouteDaypartHonesty({
+      daypartArc: engineRoute.daypart_arc,
+      currentTimeBand,
+      anchoredToLocalTime,
+      trimmedDayparts,
+    });
+    Object.assign(engineRoute, daypartHonesty, {
+      caveats: dedupe([...(Array.isArray(engineRoute.caveats) ? engineRoute.caveats : []), ...daypartHonesty.caveats]),
+    });
+  }
 
   // No coherent walk (engine returns < 2 viable stops → null route). Honest
   // empty; baseline unchanged, explicit thin blocker.
