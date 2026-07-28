@@ -81,12 +81,14 @@ test("pure: maps a clear single result to a conservative 'medium' candidate with
   const r = createNominatimPlaceResolver({ fetcher: fetcherReturning([nominatim("Trastevere, Rome", 41.9, 12.47, 0.55, ["relation", "123"])]), minIntervalMs: 0 });
   const out = await r("Trastevere");
   assert.equal(out.length, 1);
-  assert.deepEqual(Object.keys(out[0]).sort(), ["admin_context", "attribution", "confidence", "label", "lat", "license", "lng", "osm_ref", "provenance", "source_tier"]);
+  assert.deepEqual(Object.keys(out[0]).sort(), ["admin_context", "attribution", "confidence", "label", "lat", "license", "lng", "osm_ref", "provenance", "source_tier", "spatial_scope"]);
   assert.equal(out[0].confidence, "medium");
   assert.equal(out[0].provenance, "nominatim_osm");
   assert.equal(out[0].attribution, "© OpenStreetMap contributors");
   assert.equal(out[0].license, "ODbL");
   assert.equal(out[0].osm_ref, "relation/123");
+  assert.equal(out[0].spatial_scope.source, "nominatim_bounds");
+  assert.equal(out[0].spatial_scope.collection_mode, "broad_anchor_only");
   // No raw provider payload leaks.
   for (const banned of ["boundingbox", "address", "place_rank", "display_name", "importance", "name", "osm_type", "osm_id"]) {
     assert.equal(banned in out[0], false, `must not expose ${banned}`);
@@ -121,7 +123,7 @@ test("pure: preserves only compact administrative identity for trusted source di
     country_code: "se",
   });
   assert.equal(new URL(calls[0].url).searchParams.get("addressdetails"), "1");
-  assert.doesNotMatch(JSON.stringify(candidate), /postcode|Private street atom|road/);
+  assert.doesNotMatch(JSON.stringify(candidate), /postcode|Private street atom|"road"/);
 });
 
 test("pure: confidence is never 'high' (reserved for human-verified)", async () => {

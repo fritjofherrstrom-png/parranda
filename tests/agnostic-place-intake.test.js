@@ -108,12 +108,13 @@ test("unit: explicit valid coords win — resolver is never called", async () =>
     called = true;
     return [{ lat: 1, lng: 1, confidence: "high" }];
   };
-  const { anchor, intake, placeContext } = await resolveAgnosticIntake({ coords: { lat: 41.9, lng: 12.49 }, placeQuery: "Trastevere", placeResolver: resolver });
+  const { anchor, intake, placeContext, spatialScope } = await resolveAgnosticIntake({ coords: { lat: 41.9, lng: 12.49 }, placeQuery: "Trastevere", placeResolver: resolver });
   assert.equal(called, false);
   assert.deepEqual(anchor, { lat: 41.9, lng: 12.49 });
   assert.equal(intake.mode, "coordinates");
   assert.equal(intake.resolved.provenance, "explicit_request_coordinates");
   assert.equal(placeContext, null);
+  assert.equal(spatialScope, null);
 });
 
 test("unit: no coords + no place → missing_or_invalid_coordinates", async () => {
@@ -202,6 +203,28 @@ test("unit: resolver admin context stays private and allowlisted beside public i
   });
   assert.equal("admin_context" in intake.resolved, false);
   assert.doesNotMatch(JSON.stringify(intake), /must-not-leak|postcode|secret/);
+});
+
+test("unit: trusted resolver bounds become private spatial scope", async () => {
+  const { spatialScope, intake } = await resolveAgnosticIntake({
+    placeQuery: "A region",
+    placeResolver: async () => [{
+      label: "A region",
+      lat: 55.6,
+      lng: 14.15,
+      confidence: "medium",
+      provenance: "test_resolver",
+      spatial_scope: {
+        source: "test_resolver",
+        kind: "region",
+        bounds: { south: 55.3, north: 55.9, west: 14.0, east: 14.3 },
+      },
+    }],
+  });
+
+  assert.equal(spatialScope.collection_mode, "regional_bounded");
+  assert.deepEqual(spatialScope.bounds, { south: 55.3, north: 55.9, west: 14, east: 14.3 });
+  assert.equal("spatial_scope" in intake.resolved, false, "private collection bounds are not echoed through intake");
 });
 
 test("unit: resolver may return one trusted candidate object, not only an array", async () => {
