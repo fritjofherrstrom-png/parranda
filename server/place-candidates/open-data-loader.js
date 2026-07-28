@@ -36,6 +36,7 @@ const { normalizeUserIntents, matchCandidateToIntent } = require("../candidates/
 const {
   sanitizeTrustedSpatialScope,
   deriveSecondaryAnchors,
+  allowsRegionalClusterSelection,
   spatialScopeCacheKey,
 } = require("./spatial-scope");
 
@@ -449,6 +450,21 @@ function createOpenDataLoader({
     };
     if (!scope) return withLoaderMetadata(primary, baseMetadata);
 
+    if (
+      scope.collection_mode === "regional_bounded" &&
+      !allowsRegionalClusterSelection(scope)
+    ) {
+      return withLoaderMetadata(primary, {
+        ...baseMetadata,
+        regional_scout: {
+          attempted: false,
+          reason: "primary_zone_preserved",
+          selected_anchor: "primary",
+          cluster_count: 1,
+        },
+      });
+    }
+
     const secondaryAnchors = deriveSecondaryAnchors(scope, { lat: request.lat, lng: request.lng });
     const selectedProfile = primaryMetadata?.selected_profile || supplyProfile(primary, normalizeRequestedIntents(request.requestedIntents));
     const hasRequestedGap = selectedProfile.requested_intents_covered.length < selectedProfile.requested_intent_count;
@@ -531,7 +547,7 @@ function createOpenDataLoader({
       return loadOpenDataAround(request);
     }
     const normalizedRequestedIntents = normalizeRequestedIntents(requestedIntents);
-    const key = `v4:${lat.toFixed(3)},${lng.toFixed(3)}:r${boundedRadiusKm}:l${boundedLimit}:m${normalizeAnchorMode(anchorMode)}:i${normalizedRequestedIntents.join(".") || "all"}:s${spatialScopeCacheKey(spatialScope)}`;
+    const key = `v5:${lat.toFixed(3)},${lng.toFixed(3)}:r${boundedRadiusKm}:l${boundedLimit}:m${normalizeAnchorMode(anchorMode)}:i${normalizedRequestedIntents.join(".") || "all"}:s${spatialScopeCacheKey(spatialScope)}`;
     const entry = await cache.get(
       key,
       async () => {

@@ -9,6 +9,7 @@ const {
   normalizeNominatimSpatialScope,
   sanitizeTrustedSpatialScope,
   deriveSecondaryAnchors,
+  allowsRegionalClusterSelection,
   spatialScopeCacheKey,
 } = require("../server/place-candidates/spatial-scope");
 
@@ -52,6 +53,18 @@ test("bounded elongated regions yield at most two deterministic anchors on their
   assert.ok(anchors.length > 0 && anchors.length <= MAX_SECONDARY_ANCHORS);
   assert.ok(anchors.every((anchor) => anchor.lng === 14.15));
   assert.deepEqual(anchors, deriveSecondaryAnchors(scope, { lat: 55.6, lng: 14.15 }));
+});
+
+test("only bounded municipality and region scopes may relocate collection to another cluster", () => {
+  const bounds = { south: 55.3, north: 55.9, west: 14.0, east: 14.3 };
+  assert.equal(allowsRegionalClusterSelection({ kind: "region", bounds }), true);
+  assert.equal(allowsRegionalClusterSelection({ kind: "municipality", bounds }), true);
+  assert.equal(allowsRegionalClusterSelection({ kind: "settlement", bounds }), false);
+  assert.equal(allowsRegionalClusterSelection({ kind: "district", bounds }), false);
+  assert.equal(
+    allowsRegionalClusterSelection({ kind: "region", bounds: { south: 42, north: 46, west: 2, east: 8 } }),
+    false,
+  );
 });
 
 test("scope cache keys are stable, bounded and differ across reviewed bounds", () => {

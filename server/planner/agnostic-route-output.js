@@ -31,7 +31,7 @@ const { buildProviderSpecs } = require("../candidates/candidate-pool");
 const { selectPlannerRoleCandidates } = require("./role-selector");
 const { summarizeDayflowHonesty } = require("./dayflow-honesty");
 const { buildCandidateCombinationInspect } = require("./candidate-combination-inspect");
-const { REACHABLE_ORIGIN_KM } = require("./candidate-combination");
+const { resolveAgnosticCandidateReachPolicy } = require("./candidate-reach-policy");
 const { buildRouteCandidateFromCandidateCombination } = require("./candidate-combination-route-adapter");
 const { assessCityCandidateReadiness } = require("../place-candidates/readiness");
 const {
@@ -303,8 +303,11 @@ function evaluateEligibility({
   const geocodedStops = engineGeocodedStops.length ? engineGeocodedStops : combinationGeocodedStops;
   const geocodedCount = geocodedStops.length;
   const coherence = (adaptedBody?.geometry_summary && adaptedBody.geometry_summary.coherence) || "incomplete";
-  const outsideOriginReach = Array.isArray(candidateCombination?.reasons) &&
-    candidateCombination.reasons.includes("no_combination_within_origin_reach");
+  const reachExcludedCount = Number(plannerRoles?.reach_policy?.excluded_candidate_count) || 0;
+  const outsideOriginReach =
+    (Array.isArray(candidateCombination?.reasons) &&
+      candidateCombination.reasons.includes("no_combination_within_origin_reach")) ||
+    (reachExcludedCount > 0 && geocodedCount < MIN_VIABLE_GEOCODED_STOPS);
   checks.geocoded_stop_count = geocodedCount;
   checks.combination_geocoded_stop_count = combinationGeocodedStops.length;
   if (engineGeocodedStops.length) checks.engine_reservoir_geocoded_stop_count = engineGeocodedStops.length;
@@ -332,6 +335,13 @@ function evaluateEligibility({
     combinationGeocodedCount: combinationGeocodedStops.length,
     engineGeocodedCount: engineGeocodedStops.length,
   });
+  if (plannerRoles?.reach_policy) {
+    checks.candidate_reach_policy = {
+      policy: plannerRoles.reach_policy.policy,
+      max_origin_distance_km: plannerRoles.reach_policy.max_origin_distance_km,
+      scope_kind: plannerRoles.reach_policy.scope_kind,
+    };
+  }
   if (candidateReadiness && candidateReadiness.can_support_planner === false) {
     caveats.push("below_planner_candidate_threshold");
   }
@@ -362,6 +372,12 @@ function buildCandidatePipelineChecks({
     availability_unresolved_candidate_count: pipeline.availability_unresolved_candidate_count ?? null,
     role_relevant_candidate_count: pipeline.role_relevant_candidate_count ?? null,
     role_surface_candidate_count: pipeline.role_surface_candidate_count ?? null,
+    ...(plannerRoles?.reach_policy
+      ? {
+          reach_eligible_candidate_count: plannerRoles.reach_policy.eligible_candidate_count,
+          reach_excluded_candidate_count: plannerRoles.reach_policy.excluded_candidate_count,
+        }
+      : {}),
     combination_selected_candidate_count: Array.isArray(candidateCombination?.selected)
       ? candidateCombination.selected.length
       : null,
@@ -842,14 +858,17 @@ async function composeAgnosticRouteOutput({
         },
       }
     : {};
+  const candidateReachPolicy = resolveAgnosticCandidateReachPolicy({ anchorMode, spatialScope });
   const selectionHelpers = trustedTimeKnown
     ? {
         ...helpers,
         ...availabilityHelpers,
+        ...(candidateReachPolicy ? { candidateReachPolicy } : {}),
         experimentalAdmitCandidate: admitExperimentalInferredExternalCandidate,
       }
     : {
         ...helpers,
+        ...(candidateReachPolicy ? { candidateReachPolicy } : {}),
         experimentalAdmitCandidate: admitExperimentalInferredExternalCandidate,
         resolveNowContext: (cfg, pl) => ({
           date: (pl && pl.date) || cfg.todayIsoDate(),
@@ -868,13 +887,12 @@ async function composeAgnosticRouteOutput({
     route: null,
     options: {
       origin,
-      // Explicit coordinates mean "start where I am". Wider collection may
-      // improve discovery/structure, but an extended remote cluster must not be
-      // promoted as a walking route whose access leg is invisible. A resolved
-      // place is an area anchor rather than an attested start point, so it keeps
-      // the existing preference-only reach semantics.
-      ...(normalizeAnchorMode(anchorMode) === "coordinates"
-        ? { maxOriginDistanceKm: REACHABLE_ORIGIN_KM }
+      // Exact coordinates and local place scopes keep the composed day within
+      // walking reach of the trusted anchor. Resolver-attested municipality or
+      // region scopes deliberately retain wider flexibility for rural/regional
+      // discovery where a useful day need not sit in one town centre.
+      ...(candidateReachPolicy
+        ? { maxOriginDistanceKm: candidateReachPolicy.max_origin_distance_km }
         : {}),
     },
   });
