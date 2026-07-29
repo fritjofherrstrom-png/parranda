@@ -4275,3 +4275,37 @@ test("POST /api/route-recommendations stays honestly empty for an unregistered c
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test("the debug inspect projection is not served on a public deployment", async () => {
+  // /api/candidate-inspect exposes internal engine shape and raw error detail.
+  // It is gated like /dogfood so a shared public link never serves it, while a
+  // local dogfood run still gets it.
+  const previous = process.env.PARRANDA_DOGFOOD_UI;
+  delete process.env.PARRANDA_DOGFOOD_UI;
+  const server = buildApp().listen(0);
+  try {
+    const closed = await requestText(server, { path: "/api/candidate-inspect?city=rome" });
+    assert.equal(closed.status, 404, "strangers must not reach the debug projection");
+
+    process.env.PARRANDA_DOGFOOD_UI = "enabled";
+    const opened = await requestText(server, { path: "/api/candidate-inspect?city=rome" });
+    assert.equal(opened.status, 200, "a dogfood run still gets the inspect projection");
+    assert.ok(JSON.parse(opened.body).requested_city, "and it is the real projection, not an empty stub");
+  } finally {
+    if (previous === undefined) delete process.env.PARRANDA_DOGFOOD_UI;
+    else process.env.PARRANDA_DOGFOOD_UI = previous;
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("a shared link asks crawlers to stay out of the upstream-touching surface", async () => {
+  const server = buildApp().listen(0);
+  try {
+    const response = await requestText(server, { path: "/robots.txt" });
+    assert.equal(response.status, 200);
+    assert.match(response.body, /User-agent: \*/);
+    assert.match(response.body, /Disallow: \//);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

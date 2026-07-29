@@ -12,6 +12,7 @@ const { diversifyRecommendationDays } = require("./route-diversity");
 const { buildClientI18nPayload, normalizeLanguage, translate } = require("./ui-i18n");
 const { buildCityPulse } = require("./pulse-engine");
 const { buildCandidateIntelligenceInspect } = require("./candidates");
+const { createPublicAccessGuard } = require("./lib/public-access-guard");
 const { buildAgnosticCityContext } = require("./candidates/agnostic-context");
 const { isExternalCandidatesEnabled } = require("./candidates/blitz-candidate-mode");
 const { classifyCatalogDensity } = require("./candidates/source-calibration");
@@ -1438,6 +1439,12 @@ function buildApp({
   const app = express();
 
   app.use(express.json());
+  // Inbound half of the politeness contract Parranda already keeps outbound.
+  // On a public URL an unbounded inbound side would turn one crawler into
+  // thousands of distinct upstream lookups and get the operator's IP banned
+  // from the open data the whole app depends on. On by default, generous
+  // enough that a person planning days never notices it.
+  app.use(createPublicAccessGuard({ env: process.env }));
   // GET / — the new frontend IS the landing (sole owner since the old shell was
   // retired). The committed frontend/dist makes the build always present; if a
   // deployment somehow lacks it, fail LOUDLY — never a silently wrong page.
@@ -1506,10 +1513,23 @@ function buildApp({
     response.json({ ok: true });
   });
 
+  // A shared link is public infrastructure the moment it exists. Crawlers that
+  // index it would fan out into distinct upstream lookups on every request —
+  // exactly the traffic Nominatim/Overpass ask clients not to generate.
+  app.get("/robots.txt", (_request, response) => {
+    response.type("text/plain").send("User-agent: *\nDisallow: /\n");
+  });
+
   // Candidate Intelligence Spine — read-only inspect/debug projection.
   // Runs the spine (evidence → reducer → gates → fit shape) over the city's
   // existing place candidates. Debug-only; changes no user-facing output.
+  // Gated like /dogfood: it exposes internal engine shape and raw error detail,
+  // which a shared public link has no business serving to strangers.
   app.get("/api/candidate-inspect", (request, response) => {
+    if (!isDogfoodUiEnabled(process.env)) {
+      response.status(404).json({ error: "Not found" });
+      return;
+    }
     try {
       const { cityConfig, requestedCity, cityFallbackUsed } = resolveRequestCity(request.query.city);
       const now = String(request.query.date || "").trim() || cityConfig.todayIsoDate();
