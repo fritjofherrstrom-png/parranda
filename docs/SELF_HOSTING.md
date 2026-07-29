@@ -19,7 +19,26 @@ The trade is that the app is reachable while your machine is awake.
 npm run share
 ```
 
-That command is not the same as `npm run dev`. It:
+For a dedicated checkout that should follow every merged `origin/main`, use:
+
+```bash
+npm run share:latest
+```
+
+`share:latest` is deliberately stricter than development mode. It only starts
+from a clean checkout on the `main` branch, polls `origin/main` once a minute,
+accepts fast-forward descendants only, and restarts the app behind the same
+local port. It never switches branches, resets files, or overwrites local work.
+If GitHub is temporarily unreachable, the current clean build stays online. A
+dirty or diverged checkout is reported and left untouched.
+
+Use a separate clone for this process rather than a checkout used for coding.
+The committed frontend build has already passed CI's source/dist parity check;
+the updater refreshes runtime dependencies only when the root package manifest
+changes.
+
+Both share commands use the same runtime profile, which is not the same as
+`npm run dev`. It:
 
 - binds to **127.0.0.1 only** — the tunnel becomes the sole way in;
 - explicitly enables the inbound public guard;
@@ -70,8 +89,14 @@ tailscale funnel --https=443 off
 
 **Alternative, no account at all:** `cloudflared tunnel --url http://localhost:8000`
 gives an instant `trycloudflare.com` link with no signup — but the URL changes
-every restart and it is capped at 200 concurrent requests, so it suits a quick
+every tunnel restart and it is capped at 200 concurrent requests, so it suits a quick
 demo rather than a link you hand to friends.
+
+Restarting the Parranda app behind port 8000 does **not** restart `cloudflared`,
+so `share:latest` can deploy new main builds without changing the current quick
+tunnel URL. The URL is still temporary: if the `cloudflared` process or machine
+stops, the next quick tunnel gets a different address. Use Tailscale Funnel or a
+named Cloudflare Tunnel when the public address itself must be durable.
 
 Cloudflare Tunnel supplies a reviewed `CF-Connecting-IP` visitor header. To use
 per-visitor limits instead of the conservative shared tunnel identity, start:
@@ -98,7 +123,7 @@ For a link that survives reboots, run the server as a launchd service. Create
     <array>
       <string>/usr/local/bin/npm</string>
       <string>run</string>
-      <string>share</string>
+      <string>share:latest</string>
     </array>
     <key>WorkingDirectory</key><string>REPLACE_WITH_REPO_PATH</string>
     <key>RunAtLoad</key><true/>
