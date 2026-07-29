@@ -686,3 +686,58 @@ test(
     assert.ok(exp.readiness_blockers.includes("place_not_resolved"));
   }),
 );
+
+test("the same place indexed twice by the provider is one candidate, not a near-tie", async () => {
+  // Real Nominatim shape for "Paris": the city comes back TWICE with an
+  // identical display name and identical importance (indexed as both an
+  // administrative relation and a place node), then the Texas namesake.
+  // Counting the duplicate as a competing place made every famous city with a
+  // duplicated index entry fail closed as ambiguous_place.
+  const resolver = createNominatimPlaceResolver({
+    fetcher: fetcherReturning([
+      nominatim("Paris, Île-de-France, France métropolitaine, France", 48.8535, 2.3484, 0.897098092136026, ["relation", "7444"]),
+      nominatim("Paris, Île-de-France, France métropolitaine, France", 48.8535, 2.3484, 0.897098092136026, ["node", "17807753"]),
+      nominatim("Paris, Lamar County, Texas, United States", 33.6618, -95.5555, 0.5298648354283636, ["relation", "115357"]),
+    ]),
+    minIntervalMs: 0,
+  });
+
+  const out = await resolver("Paris");
+  assert.equal(out.length, 2, "the duplicate collapses; the genuine namesake remains");
+  const strong = out.filter((candidate) => candidate.confidence === "medium");
+  assert.equal(strong.length, 1, "exactly one anchor — not an ambiguous near-tie");
+  assert.match(strong[0].label, /France/);
+  assert.equal(out.find((c) => /Texas/.test(c.label)).confidence, "low");
+});
+
+test("a genuinely contested name stays ambiguous after dedupe", async () => {
+  // Two distinct places, comparable importance, different admin chains: this is
+  // real ambiguity and must still fail closed rather than pick a winner.
+  const resolver = createNominatimPlaceResolver({
+    fetcher: fetcherReturning([
+      nominatim("Springfield, Illinois, United States", 39.8, -89.65, 0.62, ["relation", "1"]),
+      nominatim("Springfield, Missouri, United States", 37.21, -93.29, 0.6, ["relation", "2"]),
+    ]),
+    minIntervalMs: 0,
+  });
+
+  const out = await resolver("Springfield");
+  assert.equal(out.length, 2);
+  assert.equal(out.filter((c) => c.confidence === "medium").length, 2, "near-ties stay ambiguous");
+});
+
+test("nearly-identical coordinates for one name collapse even without an identical label", async () => {
+  // The Wikidata-style duplicate: same city, same name, coordinates differing
+  // only by float rounding, but labels that are not byte-identical.
+  const resolver = createNominatimPlaceResolver({
+    fetcher: fetcherReturning([
+      { ...nominatim("Amsterdam, North Holland, Netherlands", 52.36666666666667, 4.9, 0.82, ["relation", "1"]), name: "Amsterdam" },
+      { ...nominatim("Amsterdam, Noord-Holland, Nederland", 52.366666666663, 4.9000001, 0.81, ["node", "2"]), name: "Amsterdam" },
+    ]),
+    minIntervalMs: 0,
+  });
+
+  const out = await resolver("Amsterdam");
+  assert.equal(out.length, 1, "one place, one candidate");
+  assert.equal(out[0].confidence, "medium");
+});

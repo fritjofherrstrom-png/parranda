@@ -161,9 +161,56 @@ function toRawCandidate(result) {
  * a single clear match anchors; genuine near-ties stay strong so the intake
  * gate reports `ambiguous_place`; vague/junk matches drop to "low".
  */
+// Roughly 150 m at the equator — tight enough that two genuinely different
+// places never collapse, loose enough to catch the same place indexed at
+// slightly different representative points.
+const SAME_PLACE_DEGREES = 0.0015;
+
+/**
+ * One place, one candidate.
+ *
+ * Providers routinely return the SAME place more than once — Nominatim indexes
+ * a city as both an administrative relation and a place node, so "Paris" comes
+ * back twice with an identical display name and identical importance. Those
+ * duplicates are not competing places, but the near-tie test below counts them
+ * as if they were, so every famous city with a duplicated index entry failed
+ * closed as `ambiguous_place` while genuinely unique names resolved fine.
+ *
+ * Two entries are the same place when they carry an identical full label (the
+ * label includes the whole admin chain, so distinct places cannot collide), or
+ * when they share a name AND sit within a rounding error of each other. The
+ * highest-importance entry represents the group, so provider ranking is kept.
+ * Genuine namesakes — Paris, France vs Paris, Texas — differ in both label and
+ * position, and stay separate to be judged on their merits.
+ */
+function dedupeSamePlace(rawCandidates) {
+  const kept = [];
+  for (const candidate of rawCandidates) {
+    const label = normalizeNameForMatch(candidate.label);
+    const name = normalizeNameForMatch(candidate.name);
+    const duplicateOf = kept.find((existing) => {
+      if (label && normalizeNameForMatch(existing.label) === label) return true;
+      if (!name || normalizeNameForMatch(existing.name) !== name) return false;
+      return (
+        Math.abs(existing.lat - candidate.lat) <= SAME_PLACE_DEGREES &&
+        Math.abs(existing.lng - candidate.lng) <= SAME_PLACE_DEGREES
+      );
+    });
+    if (!duplicateOf) {
+      kept.push(candidate);
+      continue;
+    }
+    // Keep the strongest representative of the group rather than the first seen.
+    if ((candidate.importance ?? -1) > (duplicateOf.importance ?? -1)) {
+      kept[kept.indexOf(duplicateOf)] = candidate;
+    }
+  }
+  return kept;
+}
+
 function classifyConfidences(rawCandidates, query = null) {
   if (!rawCandidates.length) return [];
-  const sorted = [...rawCandidates].sort((a, b) => (b.importance ?? -1) - (a.importance ?? -1));
+  const sorted = [...dedupeSamePlace(rawCandidates)].sort((a, b) => (b.importance ?? -1) - (a.importance ?? -1));
 
   if (sorted.length === 1) {
     const only = sorted[0];
