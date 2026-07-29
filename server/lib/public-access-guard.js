@@ -38,7 +38,12 @@ const UPSTREAM_COST_PATHS = new Set([
 
 const DEFAULT_WINDOW_MS = 60 * 1000;
 const DEFAULT_MAX_PER_WINDOW = 20;
-const DEFAULT_MAX_CONCURRENT = 3;
+// Headroom for a shared link: a handful of friends opening the app at the same
+// moment must all get a day, not a refusal. Upstream stays protected without a
+// tight cap here — the place resolver keeps its own serial ~1.1 s gate, Overpass
+// results are cached and de-duped, and the per-visitor limit above still bounds
+// any single caller.
+const DEFAULT_MAX_CONCURRENT = 8;
 // Bound the key table so a spoofed-header flood cannot grow it without limit.
 // Far above the plausible number of distinct real clients on a shared link.
 const MAX_TRACKED_CLIENTS = 5000;

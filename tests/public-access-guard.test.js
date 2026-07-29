@@ -217,7 +217,7 @@ test("the guard is on by default and only an explicit opt-out disables it", () =
     PARRANDA_TRUST_PROXY_HOPS: "-2",
   });
   assert.equal(settings.max, 20);
-  assert.equal(settings.maxConcurrent, 3);
+  assert.equal(settings.maxConcurrent, 8);
   assert.equal(settings.trustedHops, 0);
 });
 
