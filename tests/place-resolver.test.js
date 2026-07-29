@@ -741,3 +741,17 @@ test("nearly-identical coordinates for one name collapse even without an identic
   assert.equal(out.length, 1, "one place, one candidate");
   assert.equal(out[0].confidence, "medium");
 });
+
+test("identical provider labels at distant coordinates never collapse", async () => {
+  const resolver = createNominatimPlaceResolver({
+    fetcher: fetcherReturning([
+      nominatim("Shared label, Example", 10, 10, 0.62, ["relation", "1"]),
+      nominatim("Shared label, Example", 20, 20, 0.6, ["relation", "2"]),
+    ]),
+    minIntervalMs: 0,
+  });
+
+  const out = await resolver("Shared label");
+  assert.equal(out.length, 2, "provider text is not a stable place identity");
+  assert.equal(out.filter((candidate) => candidate.confidence === "medium").length, 2, "the distant namesakes remain honestly ambiguous");
+});

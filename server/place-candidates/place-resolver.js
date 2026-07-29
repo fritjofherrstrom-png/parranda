@@ -176,12 +176,10 @@ const SAME_PLACE_DEGREES = 0.0015;
  * as if they were, so every famous city with a duplicated index entry failed
  * closed as `ambiguous_place` while genuinely unique names resolved fine.
  *
- * Two entries are the same place when they carry an identical full label (the
- * label includes the whole admin chain, so distinct places cannot collide), or
- * when they share a name AND sit within a rounding error of each other. The
- * highest-importance entry represents the group, so provider ranking is kept.
- * Genuine namesakes — Paris, France vs Paris, Texas — differ in both label and
- * position, and stay separate to be judged on their merits.
+ * Two entries are the same place only when they share a full label or name AND
+ * sit within a rounding error of each other. Labels are provider text, not
+ * stable place identities: the same full label can exist in distinct datasets
+ * or synthetic seams, so text alone must never collapse distant anchors.
  */
 function dedupeSamePlace(rawCandidates) {
   const kept = [];
@@ -189,8 +187,9 @@ function dedupeSamePlace(rawCandidates) {
     const label = normalizeNameForMatch(candidate.label);
     const name = normalizeNameForMatch(candidate.name);
     const duplicateOf = kept.find((existing) => {
-      if (label && normalizeNameForMatch(existing.label) === label) return true;
-      if (!name || normalizeNameForMatch(existing.name) !== name) return false;
+      const sameLabel = Boolean(label && normalizeNameForMatch(existing.label) === label);
+      const sameName = Boolean(name && normalizeNameForMatch(existing.name) === name);
+      if (!sameLabel && !sameName) return false;
       return (
         Math.abs(existing.lat - candidate.lat) <= SAME_PLACE_DEGREES &&
         Math.abs(existing.lng - candidate.lng) <= SAME_PLACE_DEGREES

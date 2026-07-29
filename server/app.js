@@ -1510,7 +1510,15 @@ function buildApp({
   app.use("/vendor", express.static(path.join(appRoot, "vendor"), { index: false, dotfiles: "ignore" }));
 
   app.get("/api/health", (_request, response) => {
-    response.json({ ok: true });
+    const rawBuildSha = process.env.PARRANDA_BUILD_SHA || process.env.RENDER_GIT_COMMIT || "";
+    const buildSha = /^[0-9a-f]{7,40}$/i.test(String(rawBuildSha).trim())
+      ? String(rawBuildSha).trim()
+      : null;
+    response.json({
+      ok: true,
+      runtime_profile: process.env.PARRANDA_RUNTIME_PROFILE || "default",
+      build_sha: buildSha,
+    });
   });
 
   // A shared link is public infrastructure the moment it exists. Crawlers that

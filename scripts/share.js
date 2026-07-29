@@ -4,27 +4,25 @@
  * `npm run share` — run Parranda as a real, shareable server on this machine.
  *
  * The hosting model is deliberately local-first: THIS machine is the server, and
- * a tunnel gives it a public HTTPS address. No hosting company holds the app, no
- * account is required to run it, and the cache lives on a real disk instead of a
- * host's ephemeral /tmp — so a place looked up once stays fast for everyone.
+ * a tunnel gives it a public HTTPS address. The application and cache remain on
+ * this machine; the tunnel provider only carries encrypted traffic to it.
  *
  * Two differences from `npm run dev:full` matter, and both are security:
  *
  *  1. It binds to LOOPBACK, not 0.0.0.0. The tunnel is then the only way in,
- *     which is what makes the forwarded client address trustworthy —
- *  2. ...so PARRANDA_TRUST_PROXY_HOPS=1 is set, letting the public-access guard
- *     count its per-client limits against the real visitor instead of lumping
- *     every request under the tunnel's own address.
+ *     which makes an explicitly reviewed tunnel identity seam possible —
+ *  2. ...and the inbound public guard is explicitly enabled. Its safe default
+ *     identity is the direct tunnel peer; Cloudflare visitor identity is only
+ *     trusted when the operator selects that documented mode.
  *
- * Reversing that pair (public bind + trusted header) would let anyone forge the
- * header and evade the limits, so they are set together, here, and not left to
- * be remembered.
+ * Never pair a public bind with a trusted visitor header: callers could forge
+ * the identity and evade the limits. Share mode owns the safe loopback bind.
  */
 
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { spawn } = require("node:child_process");
+const { execFileSync, spawn } = require("node:child_process");
 
 const { buildFullDevEnvironment } = require("./dev-full");
 const { guardSettings } = require("../server/lib/public-access-guard");
@@ -69,10 +67,27 @@ function buildShareEnvironment(baseEnv = process.env, options = {}) {
     ...env,
     HOST: "127.0.0.1",
     PORT: String(options.port || baseEnv.PORT || DEFAULT_PORT),
-    // See the header: loopback bind and trusted-hop count are one decision.
-    PARRANDA_TRUST_PROXY_HOPS: "1",
+    PARRANDA_PUBLIC_GUARD: "enabled",
+    // Direct is intentionally conservative for Tailscale/custom tunnels. Set
+    // PARRANDA_PUBLIC_CLIENT_IDENTITY=cloudflare only behind Cloudflare Tunnel.
+    PARRANDA_PUBLIC_CLIENT_IDENTITY: baseEnv.PARRANDA_PUBLIC_CLIENT_IDENTITY || "direct",
+    PARRANDA_TRUST_PROXY_HOPS: baseEnv.PARRANDA_TRUST_PROXY_HOPS || "0",
     PARRANDA_CACHE_DIR: cacheDir,
+    PARRANDA_RUNTIME_PROFILE: "share",
+    PARRANDA_BUILD_SHA: baseEnv.PARRANDA_BUILD_SHA || currentBuildSha(),
   };
+}
+
+function currentBuildSha() {
+  try {
+    return execFileSync("git", ["rev-parse", "--short=12", "HEAD"], {
+      cwd: APP_ROOT,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch (_error) {
+    return "unknown";
+  }
 }
 
 function describeTunnel(port = DEFAULT_PORT) {
@@ -119,6 +134,7 @@ function banner(env) {
     "  ────────────────────────────────────",
     `  Local:        http://127.0.0.1:${env.PORT}  (loopback only, by design)`,
     `  Cache:        ${env.PARRANDA_CACHE_DIR}  (durable across restarts)`,
+    `  Build:        ${env.PARRANDA_BUILD_SHA}`,
     `  Live sources: open data loader, place resolvers, Wikidata, events — all on`,
     settings.enabled
       ? `  Guard:        ${settings.max} upstream requests/client per ${Math.round(settings.windowMs / 1000)}s, ${settings.maxConcurrent} concurrent`
@@ -172,6 +188,7 @@ if (require.main === module) runShareServer();
 module.exports = {
   DEFAULT_CACHE_DIR,
   buildShareEnvironment,
+  currentBuildSha,
   describeTunnel,
   runShareServer,
 };

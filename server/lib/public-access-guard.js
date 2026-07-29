@@ -14,19 +14,21 @@
  *   - a global concurrency gate, so a burst can never queue more upstream work
  *     than the machine (and the upstream's patience) can absorb.
  *
- * The gate is the load-bearing one: the resolver's serial ~1.1 s rate gate has
- * an unbounded queue, so N concurrent composes mean the last caller waits N×1.1 s.
- * Capping concurrency bounds that queue at the door instead.
+ * The gate is the load-bearing one: even bounded upstream queues become slow
+ * under a public burst. Capping concurrency rejects excess work at the door
+ * instead of moving that pressure into the resolver/loader queues.
  *
  * Defaults are far above real human use — a person planning days never trips
- * them — and the guard is ON by default, so a deployment is safe before anyone
- * remembers to configure it. Cheap surfaces (health, static, catalog search)
- * are deliberately not limited.
+ * them. The guard is explicit rather than global: `npm run share` enables it,
+ * while normal deployments retain their existing traffic contract. Cheap
+ * surfaces (health, static, catalog search) are deliberately not limited.
  */
 
 // Endpoints whose work reaches donated upstream infrastructure (Nominatim,
 // Overpass, Wikidata, municipal feeds) or costs real CPU. Exact paths only —
 // a prefix match would quietly cover future routes nobody weighed.
+const { isIP } = require("node:net");
+
 const UPSTREAM_COST_PATHS = new Set([
   "/api/route-recommendations",
   "/api/geocode",
@@ -70,9 +72,20 @@ function nonNegativeInt(raw, fallback) {
  * Pair a non-zero hop count with binding the server to loopback, so the trusted
  * tunnel is genuinely the only way in.
  */
-function clientKey(request, trustedHops = 0) {
+function validHeaderIp(raw) {
+  const value = String(Array.isArray(raw) ? raw[0] : raw || "").trim();
+  return isIP(value) ? value : null;
+}
+
+function clientKey(request, identity = {}) {
   const direct = (request?.socket?.remoteAddress || "").trim() || "unknown";
-  if (trustedHops <= 0) return direct;
+  const options = typeof identity === "number"
+    ? { mode: identity > 0 ? "xff" : "direct", trustedHops: identity }
+    : identity || {};
+  if (options.mode === "cloudflare") {
+    return validHeaderIp(request?.headers?.["cf-connecting-ip"]) || direct;
+  }
+  if (options.mode !== "xff" || options.trustedHops <= 0) return direct;
   const raw = request?.headers?.["x-forwarded-for"];
   const chain = String(Array.isArray(raw) ? raw.join(",") : raw || "")
     .split(",")
@@ -81,8 +94,8 @@ function clientKey(request, trustedHops = 0) {
   if (!chain.length) return direct;
   // The right-most entry was appended by the nearest proxy; walking `trustedHops`
   // in from the right lands on the address that proxy observed.
-  const index = chain.length - trustedHops;
-  return chain[Math.max(0, Math.min(index, chain.length - 1))] || direct;
+  const index = chain.length - options.trustedHops;
+  return validHeaderIp(chain[Math.max(0, Math.min(index, chain.length - 1))]) || direct;
 }
 
 /**
@@ -90,12 +103,22 @@ function clientKey(request, trustedHops = 0) {
  * "when may I retry?" is exact here — the window's own end — so Retry-After is
  * a fact rather than an estimate.
  */
-function createFixedWindowLimiter({ windowMs = DEFAULT_WINDOW_MS, max = DEFAULT_MAX_PER_WINDOW, now = () => Date.now() } = {}) {
+function createFixedWindowLimiter({
+  windowMs = DEFAULT_WINDOW_MS,
+  max = DEFAULT_MAX_PER_WINDOW,
+  maxTrackedClients = MAX_TRACKED_CLIENTS,
+  now = () => Date.now(),
+} = {}) {
   const windows = new Map();
+  const trackedLimit = positiveInt(maxTrackedClients, MAX_TRACKED_CLIENTS);
+  let nextSweepAt = Infinity;
 
   function sweep(current) {
+    if (current < nextSweepAt) return;
+    nextSweepAt = Infinity;
     for (const [key, entry] of windows) {
       if (entry.resetAt <= current) windows.delete(key);
+      else nextSweepAt = Math.min(nextSweepAt, entry.resetAt);
     }
   }
 
@@ -104,10 +127,18 @@ function createFixedWindowLimiter({ windowMs = DEFAULT_WINDOW_MS, max = DEFAULT_
       const current = now();
       let entry = windows.get(key);
       if (!entry || entry.resetAt <= current) {
-        // Sweeping only when a window rolls keeps this O(1) amortized per call.
-        if (windows.size >= MAX_TRACKED_CLIENTS) sweep(current);
+        if (entry) windows.delete(key);
+        // Expired windows leave first. If every tracked window is still live,
+        // evict the oldest inserted window. The next-expiry marker avoids an
+        // O(n) full-table scan for every new identity in an address flood.
+        sweep(current);
+        if (windows.size >= trackedLimit && !windows.has(key)) {
+          const evictionKey = windows.keys().next().value;
+          if (evictionKey !== undefined) windows.delete(evictionKey);
+        }
         entry = { count: 0, resetAt: current + windowMs };
         windows.set(key, entry);
+        nextSweepAt = Math.min(nextSweepAt, entry.resetAt);
       }
       entry.count += 1;
       if (entry.count > max) {
@@ -145,15 +176,17 @@ function createConcurrencyGate({ max = DEFAULT_MAX_CONCURRENT } = {}) {
 }
 
 function guardSettings(env = {}) {
-  const disabled = String(env.PARRANDA_PUBLIC_GUARD ?? "").trim().toLowerCase();
+  const enabled = String(env.PARRANDA_PUBLIC_GUARD ?? "").trim().toLowerCase();
+  const requestedIdentity = String(env.PARRANDA_PUBLIC_CLIENT_IDENTITY ?? "direct").trim().toLowerCase();
+  const identityMode = ["cloudflare", "xff"].includes(requestedIdentity) ? requestedIdentity : "direct";
   return {
-    // Secure by default: only an explicit opt-out turns the guard off, and that
-    // exists for single-user local runs and deterministic tests.
-    enabled: !(disabled === "disabled" || disabled === "0" || disabled === "false"),
+    // This is a share-profile capability, not a silent change to every deploy.
+    enabled: enabled === "enabled" || enabled === "1" || enabled === "true",
     windowMs: positiveInt(env.PARRANDA_PUBLIC_GUARD_WINDOW_MS, DEFAULT_WINDOW_MS),
     max: positiveInt(env.PARRANDA_PUBLIC_GUARD_MAX, DEFAULT_MAX_PER_WINDOW),
     maxConcurrent: positiveInt(env.PARRANDA_PUBLIC_GUARD_CONCURRENCY, DEFAULT_MAX_CONCURRENT),
     trustedHops: nonNegativeInt(env.PARRANDA_TRUST_PROXY_HOPS, 0),
+    identityMode,
   };
 }
 
@@ -173,19 +206,6 @@ function createPublicAccessGuard({ env = process.env, now = () => Date.now() } =
       return;
     }
 
-    const verdict = limiter.check(clientKey(request, settings.trustedHops));
-    if (!verdict.allowed) {
-      response
-        .status(429)
-        .set("Retry-After", String(verdict.retryAfterSec))
-        .json({
-          error: "rate_limited",
-          detail: "Too many requests from this client. Parranda paces itself to stay a good citizen of the open data it depends on.",
-          retry_after_seconds: verdict.retryAfterSec,
-        });
-      return;
-    }
-
     if (!gate.tryAcquire()) {
       response
         .status(429)
@@ -194,6 +214,23 @@ function createPublicAccessGuard({ env = process.env, now = () => Date.now() } =
           error: "busy",
           detail: "Parranda is composing as many days as it safely can right now. Try again in a moment.",
           retry_after_seconds: 5,
+        });
+      return;
+    }
+
+    const verdict = limiter.check(clientKey(request, {
+      mode: settings.identityMode,
+      trustedHops: settings.trustedHops,
+    }));
+    if (!verdict.allowed) {
+      gate.release();
+      response
+        .status(429)
+        .set("Retry-After", String(verdict.retryAfterSec))
+        .json({
+          error: "rate_limited",
+          detail: "Too many requests from this client. Parranda paces itself to stay a good citizen of the open data it depends on.",
+          retry_after_seconds: verdict.retryAfterSec,
         });
       return;
     }

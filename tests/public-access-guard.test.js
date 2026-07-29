@@ -98,6 +98,28 @@ test("the client key ignores forwarded headers unless trusted hops are declared"
   assert.equal(clientKey(requestFrom("/api/geocode", { ip: "203.0.113.1" }), 1), "203.0.113.1");
 });
 
+test("Cloudflare identity uses only its reviewed visitor header", () => {
+  const request = requestFrom("/api/geocode", {
+    ip: "127.0.0.1",
+    headers: {
+      "cf-connecting-ip": "203.0.113.44",
+      "x-forwarded-for": "1.2.3.4, 5.6.7.8",
+    },
+  });
+  assert.equal(clientKey(request, { mode: "cloudflare" }), "203.0.113.44");
+  assert.equal(
+    clientKey(requestFrom("/api/geocode", { ip: "127.0.0.1", headers: { "cf-connecting-ip": "not-an-ip" } }), { mode: "cloudflare" }),
+    "127.0.0.1",
+    "invalid headers fail back to the direct tunnel peer",
+  );
+});
+
+test("the fixed-window identity table has a hard memory bound", () => {
+  const limiter = createFixedWindowLimiter({ windowMs: 60_000, max: 20, maxTrackedClients: 3, now: () => 1_000 });
+  for (const key of ["a", "b", "c", "d", "e"]) limiter.check(key);
+  assert.equal(limiter.size(), 3, "live windows cannot grow past the configured cap");
+});
+
 test("the concurrency gate caps in-flight work and never queues", () => {
   const gate = createConcurrencyGate({ max: 2 });
   assert.equal(gate.tryAcquire(), true);
@@ -109,7 +131,7 @@ test("the concurrency gate caps in-flight work and never queues", () => {
 });
 
 test("only upstream-touching endpoints are limited; cheap surfaces pass freely", () => {
-  const guard = createPublicAccessGuard({ env: { PARRANDA_PUBLIC_GUARD_MAX: "1" } });
+  const guard = createPublicAccessGuard({ env: { PARRANDA_PUBLIC_GUARD: "enabled", PARRANDA_PUBLIC_GUARD_MAX: "1" } });
 
   let passed = 0;
   const next = () => {
@@ -129,7 +151,7 @@ test("only upstream-touching endpoints are limited; cheap surfaces pass freely",
 
 test("an over-limit caller gets an honest 429 with Retry-After, not an empty result", () => {
   const guard = createPublicAccessGuard({
-    env: { PARRANDA_PUBLIC_GUARD_MAX: "1", PARRANDA_PUBLIC_GUARD_WINDOW_MS: "60000" },
+    env: { PARRANDA_PUBLIC_GUARD: "enabled", PARRANDA_PUBLIC_GUARD_MAX: "1", PARRANDA_PUBLIC_GUARD_WINDOW_MS: "60000" },
   });
 
   let passed = 0;
@@ -154,7 +176,7 @@ test("an over-limit caller gets an honest 429 with Retry-After, not an empty res
 
 test("a full concurrency gate refuses with 'busy' and recovers when responses end", () => {
   const guard = createPublicAccessGuard({
-    env: { PARRANDA_PUBLIC_GUARD_MAX: "100", PARRANDA_PUBLIC_GUARD_CONCURRENCY: "1" },
+    env: { PARRANDA_PUBLIC_GUARD: "enabled", PARRANDA_PUBLIC_GUARD_MAX: "100", PARRANDA_PUBLIC_GUARD_CONCURRENCY: "1" },
   });
 
   const held = responseSpy();
@@ -182,9 +204,36 @@ test("a full concurrency gate refuses with 'busy' and recovers when responses en
   assert.equal(passed, 2);
 });
 
+test("a busy refusal does not consume the caller's rate-limit budget", () => {
+  const guard = createPublicAccessGuard({
+    env: {
+      PARRANDA_PUBLIC_GUARD: "enabled",
+      PARRANDA_PUBLIC_GUARD_MAX: "1",
+      PARRANDA_PUBLIC_GUARD_CONCURRENCY: "1",
+    },
+  });
+  const held = responseSpy();
+  guard(requestFrom("/api/route-recommendations", { ip: "a" }), held, () => {});
+
+  const busy = responseSpy();
+  guard(requestFrom("/api/route-recommendations", { ip: "b" }), busy, () => {});
+  assert.equal(busy.sent.body.error, "busy");
+
+  held.emit("finish");
+  const firstAdmitted = responseSpy();
+  let admitted = 0;
+  guard(requestFrom("/api/route-recommendations", { ip: "b" }), firstAdmitted, () => { admitted += 1; });
+  assert.equal(admitted, 1, "the busy attempt did not spend b's only allowed request");
+  firstAdmitted.emit("finish");
+
+  const rateLimited = responseSpy();
+  guard(requestFrom("/api/route-recommendations", { ip: "b" }), rateLimited, () => { admitted += 1; });
+  assert.equal(rateLimited.sent.body.error, "rate_limited");
+});
+
 test("a slot is released exactly once even when a response both closes and finishes", () => {
   const guard = createPublicAccessGuard({
-    env: { PARRANDA_PUBLIC_GUARD_MAX: "100", PARRANDA_PUBLIC_GUARD_CONCURRENCY: "2" },
+    env: { PARRANDA_PUBLIC_GUARD: "enabled", PARRANDA_PUBLIC_GUARD_MAX: "100", PARRANDA_PUBLIC_GUARD_CONCURRENCY: "2" },
   });
 
   const response = responseSpy();
@@ -202,13 +251,13 @@ test("a slot is released exactly once even when a response both closes and finis
   assert.equal(guard.gate.active(), 1, "capacity is unchanged after the double signal");
 });
 
-test("the guard is on by default and only an explicit opt-out disables it", () => {
-  assert.equal(guardSettings({}).enabled, true, "a deployment is safe before anyone configures it");
+test("the guard is share-profile explicit and normal deployments stay unchanged", () => {
+  assert.equal(guardSettings({}).enabled, false);
   assert.equal(guardSettings({ PARRANDA_PUBLIC_GUARD: "disabled" }).enabled, false);
   assert.equal(guardSettings({ PARRANDA_PUBLIC_GUARD: "0" }).enabled, false);
   assert.equal(guardSettings({ PARRANDA_PUBLIC_GUARD: "enabled" }).enabled, true);
-  // Junk values must not silently disable protection.
-  assert.equal(guardSettings({ PARRANDA_PUBLIC_GUARD: "yes-please" }).enabled, true);
+  assert.equal(guardSettings({ PARRANDA_PUBLIC_GUARD: "1" }).enabled, true);
+  assert.equal(guardSettings({ PARRANDA_PUBLIC_GUARD: "yes-please" }).enabled, false);
 
   // Malformed numeric config falls back to the safe defaults rather than 0/NaN.
   const settings = guardSettings({
@@ -219,6 +268,7 @@ test("the guard is on by default and only an explicit opt-out disables it", () =
   assert.equal(settings.max, 20);
   assert.equal(settings.maxConcurrent, 8);
   assert.equal(settings.trustedHops, 0);
+  assert.equal(settings.identityMode, "direct");
 });
 
 test("a disabled guard passes everything through (single-user local runs)", () => {
@@ -228,6 +278,15 @@ test("a disabled guard passes everything through (single-user local runs)", () =
     guard(requestFrom("/api/route-recommendations"), responseSpy(), () => {
       passed += 1;
     });
+  }
+  assert.equal(passed, 25);
+});
+
+test("an unconfigured normal deployment is not silently moved onto share limits", () => {
+  const guard = createPublicAccessGuard({ env: { PARRANDA_PUBLIC_GUARD_MAX: "1" } });
+  let passed = 0;
+  for (let i = 0; i < 25; i += 1) {
+    guard(requestFrom("/api/route-recommendations"), responseSpy(), () => { passed += 1; });
   }
   assert.equal(passed, 25);
 });

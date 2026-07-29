@@ -6,8 +6,9 @@ no secret to manage, so the honest hosting model is the simple one:
 
 **your machine is the server, and a tunnel gives it a public HTTPS address.**
 
-No hosting company holds the app, nothing is deployed, and the cache lives on a
-real disk — so a place looked up once stays fast for everyone who asks later.
+The application and cache remain on your machine; the tunnel provider carries
+encrypted traffic to it. A place looked up once therefore stays fast for later
+visitors without moving Parranda's cache to a hosted runtime.
 The trade is that the app is reachable while your machine is awake.
 
 ---
@@ -21,9 +22,8 @@ npm run share
 That command is not the same as `npm run dev`. It:
 
 - binds to **127.0.0.1 only** — the tunnel becomes the sole way in;
-- sets `PARRANDA_TRUST_PROXY_HOPS=1`, so per-visitor limits count the real
-  visitor instead of lumping everyone under the tunnel's own address (safe
-  *because* of the loopback bind above — the two belong together);
+- explicitly enables the inbound public guard;
+- uses the direct tunnel peer as the conservative default identity;
 - turns on the live sources (loader, place resolvers, Wikidata, events);
 - points the cache at `~/.parranda/source-cache`, durable across restarts;
 - holds the Mac awake for as long as it runs (Ctrl-C restores normal sleep).
@@ -73,6 +73,16 @@ gives an instant `trycloudflare.com` link with no signup — but the URL changes
 every restart and it is capped at 200 concurrent requests, so it suits a quick
 demo rather than a link you hand to friends.
 
+Cloudflare Tunnel supplies a reviewed `CF-Connecting-IP` visitor header. To use
+per-visitor limits instead of the conservative shared tunnel identity, start:
+
+```bash
+PARRANDA_PUBLIC_CLIENT_IDENTITY=cloudflare npm run share
+```
+
+Do not use that mode with another proxy. Tailscale/custom tunnels stay on the
+safe direct identity until their client-IP transport is explicitly configured.
+
 ## 3. Keep it up (optional)
 
 For a link that survives reboots, run the server as a launchd service. Create
@@ -109,12 +119,13 @@ Then `launchctl load ~/Library/LaunchAgents/com.parranda.share.plist`. Check
 A public URL is an open door to the open-data services Parranda depends on, and
 those services ask for restraint: Nominatim wants roughly one request per second
 per client, Overpass wants clients not to hammer it. Parranda already honors
-that **outbound**. Share mode adds the **inbound** half, on by default:
+that **outbound**. `npm run share` explicitly adds the **inbound** half; normal
+`npm start` and Render behavior remain unchanged:
 
 | Guard | Default | Why |
 | --- | --- | --- |
-| Per-visitor rate limit | 20 upstream requests / 60 s | One crawler could otherwise fan out into thousands of distinct lookups and get your IP banned |
-| Global concurrency | 3 in flight | The place resolver's queue is serial at ~1.1 s; capping the door bounds the wait instead of letting it pile up |
+| Per-client identity limit | 20 upstream requests / 60 s | One crawler could otherwise fan out into thousands of distinct lookups and get your IP banned; the conservative tunnel-peer identity is shared unless a reviewed mode is selected |
+| Global concurrency | 8 in flight | Bounds public bursts before they enter the resolver/loader queues |
 | `robots.txt` | `Disallow: /` | Keeps search engines from crawling the expensive surface |
 | `/api/candidate-inspect` | 404 unless dogfood | Debug projection with internal engine shape, not for strangers |
 
@@ -129,8 +140,8 @@ PARRANDA_PUBLIC_GUARD_WINDOW_MS=60000 # window length
 PARRANDA_PUBLIC_GUARD_CONCURRENCY=4   # simultaneous upstream-touching requests
 ```
 
-`PARRANDA_PUBLIC_GUARD=disabled` exists for single-user local runs. Do not use
-it on a public link.
+`PARRANDA_PUBLIC_GUARD=enabled` is set by `npm run share`. Do not enable it on a
+normal deployment without deliberately accepting the public-share limits.
 
 ## Being a good neighbour
 

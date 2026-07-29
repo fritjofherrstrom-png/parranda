@@ -1,9 +1,7 @@
 /**
  * The share profile is a security decision expressed as configuration: the
- * server binds to loopback SO THAT the forwarded client address can be trusted
- * for per-client limits. These tests pin that pair together — splitting them
- * (public bind + trusted header) is what would let anyone forge the header and
- * evade the guard entirely.
+ * server binds to loopback and explicitly enables the inbound guard. Tunnel
+ * identity remains conservative unless the operator selects a reviewed mode.
  */
 
 const assert = require("node:assert/strict");
@@ -16,22 +14,34 @@ const { guardSettings } = require("../server/lib/public-access-guard");
 
 const baseEnv = () => ({ PATH: process.env.PATH, HOME: os.homedir() });
 
-test("sharing binds to loopback and only then trusts one forwarded hop", () => {
+test("sharing binds to loopback and defaults to the safe direct tunnel identity", () => {
   const env = buildShareEnvironment(baseEnv(), { cacheDir: path.join(os.tmpdir(), "parranda-share-test") });
 
   assert.equal(env.HOST, "127.0.0.1", "the tunnel must be the only way in");
-  assert.equal(env.PARRANDA_TRUST_PROXY_HOPS, "1");
-  assert.equal(
-    guardSettings(env).trustedHops,
-    1,
-    "the guard reads the hop count, so limits count against the real visitor",
+  assert.equal(env.PARRANDA_PUBLIC_GUARD, "enabled");
+  assert.equal(env.PARRANDA_PUBLIC_CLIENT_IDENTITY, "direct");
+  assert.equal(guardSettings(env).trustedHops, 0);
+  assert.equal(guardSettings(env).identityMode, "direct");
+});
+
+test("Cloudflare visitor identity is explicit rather than inferred for every tunnel", () => {
+  const env = buildShareEnvironment(
+    { ...baseEnv(), PARRANDA_PUBLIC_CLIENT_IDENTITY: "cloudflare" },
+    { cacheDir: path.join(os.tmpdir(), "p-share-cf") },
   );
+  assert.equal(guardSettings(env).identityMode, "cloudflare");
 });
 
 test("the shared profile keeps the public guard on", () => {
   const settings = guardSettings(buildShareEnvironment(baseEnv(), { cacheDir: path.join(os.tmpdir(), "p-share-2") }));
   assert.equal(settings.enabled, true);
   assert.ok(settings.max > 0 && settings.maxConcurrent > 0);
+});
+
+test("the shared profile identifies its build and runtime profile", () => {
+  const env = buildShareEnvironment(baseEnv(), { cacheDir: path.join(os.tmpdir(), "p-share-build") });
+  assert.equal(env.PARRANDA_RUNTIME_PROFILE, "share");
+  assert.match(env.PARRANDA_BUILD_SHA, /^(?:[0-9a-f]{7,40}|unknown)$/i);
 });
 
 test("the cache lives on durable disk, not a temp dir wiped on restart", () => {
