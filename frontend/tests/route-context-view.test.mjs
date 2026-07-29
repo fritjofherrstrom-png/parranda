@@ -129,20 +129,40 @@ test("composed-route coverage uses route stop evidence and normalizes planner al
   const coverage = routePreferenceCoverage(
     [
       { covered_preferences: ["scenic"] },
-      { covered_preferences: ["food", "bars", "museums"] },
+      { covered_preferences: ["food", "bars", "museums"], partial_preferences: ["green"] },
     ],
     ["views", "food", "nightlife", "culture", "green"],
   );
 
   assert.equal(coverage.has_coverage_evidence, true);
   assert.deepEqual(coverage.covered_preferences, ["views", "food", "nightlife", "culture"]);
-  assert.deepEqual(coverage.missing_preferences, ["green"]);
+  assert.deepEqual(coverage.partial_preferences, ["green"]);
+  assert.deepEqual(coverage.missing_preferences, []);
+});
+
+test("exact route coverage wins over a partial match and missing remains distinct", () => {
+  assert.deepEqual(
+    routePreferenceCoverage(
+      [
+        { covered_preferences: ["food"], partial_preferences: ["scenic"] },
+        { covered_preferences: ["scenic"], partial_preferences: ["bars"] },
+      ],
+      ["food", "views", "nightlife", "culture"],
+    ),
+    {
+      has_coverage_evidence: true,
+      covered_preferences: ["food", "views"],
+      partial_preferences: ["nightlife"],
+      missing_preferences: ["culture"],
+    },
+  );
 });
 
 test("missing route metadata is unknown rather than fabricated missing coverage", () => {
   assert.deepEqual(routePreferenceCoverage([{ id: "route-a" }], ["food", "views"]), {
     has_coverage_evidence: false,
     covered_preferences: [],
+    partial_preferences: [],
     missing_preferences: [],
   });
 });

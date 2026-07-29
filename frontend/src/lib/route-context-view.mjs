@@ -168,20 +168,31 @@ export function routePreferenceCoverage(routeStops, requestedPreferences) {
   }
 
   const covered = new Set();
+  const partial = new Set();
   let hasCoverageEvidence = false;
   for (const stop of Array.isArray(routeStops) ? routeStops : []) {
-    if (!Array.isArray(stop && stop.covered_preferences)) continue;
-    hasCoverageEvidence = true;
-    for (const value of stop.covered_preferences) {
-      if (typeof value !== "string" || !value.trim()) continue;
-      covered.add(PLANNER_INTENT_ALIASES[value.trim()] || value.trim());
+    const coveredValues = Array.isArray(stop && stop.covered_preferences) ? stop.covered_preferences : [];
+    const partialValues = Array.isArray(stop && stop.partial_preferences) ? stop.partial_preferences : [];
+    if (coveredValues.length || partialValues.length) hasCoverageEvidence = true;
+    for (const value of coveredValues) {
+      if (typeof value === "string" && value.trim()) {
+        covered.add(PLANNER_INTENT_ALIASES[value.trim()] || value.trim());
+      }
+    }
+    for (const value of partialValues) {
+      if (typeof value === "string" && value.trim()) {
+        partial.add(PLANNER_INTENT_ALIASES[value.trim()] || value.trim());
+      }
     }
   }
 
   return {
     has_coverage_evidence: hasCoverageEvidence,
     covered_preferences: requested.filter((value) => covered.has(value)),
-    missing_preferences: hasCoverageEvidence ? requested.filter((value) => !covered.has(value)) : [],
+    partial_preferences: requested.filter((value) => !covered.has(value) && partial.has(value)),
+    missing_preferences: hasCoverageEvidence
+      ? requested.filter((value) => !covered.has(value) && !partial.has(value))
+      : [],
   };
 }
 

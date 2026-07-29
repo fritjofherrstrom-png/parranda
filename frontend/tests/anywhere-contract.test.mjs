@@ -247,9 +247,13 @@ test("a tapped stop discloses route facts before an explicit Maps action", () =>
   assert.doesNotMatch(anywherePlannerSource, /t\("täcker", "covers"\)/, "no internal 'covers {axis}' token in the UI");
   assert.doesNotMatch(anywherePlannerSource, /t\("delvis träff", "partial match"\)/, "no 'partial match' jargon");
   assert.doesNotMatch(anywherePlannerSource, /treat it as a lead|behandla.*lead/i, "no PM-speak");
-  // The partial qualifier states the server-owned fact without exposing the
-  // internal candidate-status token.
-  assert.match(anywherePlannerSource, /Matches some, but not all, of what you chose/);
+  // Preference fit and source trust are separate truths: an adjacent match is
+  // named only from partial_preferences, while candidate_status describes
+  // provisional evidence rather than pretending an exact match is partial.
+  assert.match(anywherePlannerSource, /partialPreferenceLabels\(stop, selected, lang\)/);
+  assert.match(anywherePlannerSource, /A looser match for:/);
+  assert.match(anywherePlannerSource, /Source evidence is still provisional/);
+  assert.doesNotMatch(anywherePlannerSource, /Matches some, but not all, of what you chose/);
   assert.doesNotMatch(anywherePlannerSource, /worth a look before you go/, "no hand-holding instruction");
   // Routing jargon "leg" is gone from the header too.
   assert.doesNotMatch(anywherePlannerSource, /t\("längsta ben", "longest leg"\)/);
@@ -257,6 +261,7 @@ test("a tapped stop discloses route facts before an explicit Maps action", () =>
   // Do not invent a future availability payload in the view. Hours can render
   // only after the route-stop contract exposes reviewed availability facts.
   assert.doesNotMatch(anywherePlannerSource, /stop\?\.availability|closes_at_local|Open during your visit/);
+  assert.match(anywherePlannerSource, /Source hours unavailable for the selected day/);
   // Raw engine reason tokens never render.
   assert.doesNotMatch(anywherePlannerSource, /fit_reasons|time_reasons|lens_reasons|route_roles/);
 });
@@ -381,6 +386,7 @@ test("latest compose wins and cancels stale network work", () => {
 
 test("composed coverage comes from the route, never the broader district structure", () => {
   assert.match(anywherePlannerSource, /routePreferenceCoverage\(routeStops, selected\)/);
+  assert.match(anywherePlannerSource, /routeCoverage\.partial_preferences/);
   assert.match(anywherePlannerSource, /routeCoverage\.missing_preferences/);
   const composedRouteBlock = anywherePlannerSource.split("Without a primary route")[0] ?? "";
   assert.doesNotMatch(composedRouteBlock, /day\?\.missing_intents/);

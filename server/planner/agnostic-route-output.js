@@ -46,6 +46,7 @@ const { resolveAgnosticContext, collectInfluenceReasons } = require("./agnostic-
 const { buildDayflowContext } = require("./dayflow-context");
 const { calibrateAgnosticRouteReadiness } = require("./agnostic-route-readiness-calibration");
 const { generateAgnosticRecommendations } = require("../route-engine");
+const { projectRouteToSelectedStopChain } = require("./route-public-geometry");
 const {
   buildAgnosticEngineCityConfig,
   mapPlannerReservoirToSourceCandidates,
@@ -993,6 +994,7 @@ async function composeAgnosticRouteOutput({
       lang,
       currentTimeBand: routeCurrentBand,
       currentTimeBandRank: isTodayRequest ? trustedBandRank : null,
+      anchorMode,
       // Pass ONLY the resolver-attested label (may be null). The prose builder
       // must fall back to neutral, never to agnosticContext.label — which is the
       // "Nearby" geometry placeholder, not a real place name.
@@ -1176,6 +1178,7 @@ async function composeAgnosticRouteViaEngine({
   lang,
   currentTimeBand = null,
   currentTimeBandRank = null,
+  anchorMode = "unknown",
   placeLabel,
 }) {
   const sourceCandidates = Array.isArray(suppliedSourceCandidates)
@@ -1214,6 +1217,7 @@ async function composeAgnosticRouteViaEngine({
       // "Nearby" geometry placeholder from the coordinates-only config.
       placeLabel: safeAgnosticPlaceLabel(placeLabel),
       lang,
+      anchorMode,
     });
   }
 
@@ -1313,7 +1317,7 @@ async function composeAgnosticRouteViaEngine({
   return { result, experiment };
 }
 
-function sanitizeAgnosticEngineDay({ day, placeLabel, lang }) {
+function sanitizeAgnosticEngineDay({ day, placeLabel, lang, anchorMode = "unknown" }) {
   if (!day || typeof day !== "object") return day;
   const cleaned = deepClone(day);
   cleaned.date_signals = [];
@@ -1322,14 +1326,18 @@ function sanitizeAgnosticEngineDay({ day, placeLabel, lang }) {
       route: cleaned.primary_route,
       placeLabel,
       lang,
+      anchorMode,
     });
   }
   return cleaned;
 }
 
-function sanitizeAgnosticEngineRoute({ route, placeLabel, lang }) {
+function sanitizeAgnosticEngineRoute({ route, placeLabel, lang, anchorMode = "unknown" }) {
   if (!route || typeof route !== "object") return route;
-  const cleaned = deepClone(route);
+  let cleaned = deepClone(route);
+  if (normalizeAnchorMode(anchorMode) === "place") {
+    cleaned = projectRouteToSelectedStopChain(cleaned);
+  }
   const prose = buildAgnosticRouteProse({ placeLabel, lang });
   cleaned.title = prose.title;
   cleaned.summary = prose.summary;
