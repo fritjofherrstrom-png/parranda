@@ -143,3 +143,43 @@ test("a new main stops one app and starts one replacement behind the same tunnel
 
   await controller.shutdown("SIGTERM");
 });
+
+test("an app crash during a no-op fetch still restarts the current build", async () => {
+  const children = [];
+  let inspections = 0;
+  const spawnImpl = () => {
+    const child = new EventEmitter();
+    child.exitCode = null;
+    child.signalCode = null;
+    child.kill = (signal) => {
+      child.signalCode = signal;
+      queueMicrotask(() => child.emit("exit", 0, signal));
+      return true;
+    };
+    children.push(child);
+    return child;
+  };
+  const inspect = async () => {
+    inspections += 1;
+    if (inspections === 2) {
+      children[0].exitCode = 1;
+      children[0].emit("exit", 1, null);
+    }
+    return { status: "up_to_date", reason: "origin_main_current" };
+  };
+  const controller = await runShareLatest({
+    cwd: "/deploy",
+    pollMs: 15_000,
+    restartDelayMs: 0,
+    registerSignals: false,
+    setExitCode: false,
+    inspect,
+    spawnImpl,
+    env: {},
+  });
+
+  await controller.check();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(children.length, 2, "fetch activity must not suppress crash recovery");
+  await controller.shutdown("SIGTERM");
+});

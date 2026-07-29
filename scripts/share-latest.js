@@ -112,17 +112,19 @@ async function runShareLatest(options = {}) {
   const inspect = options.inspect || (() => inspectLatestMain({ run, cwd }));
   const apply = options.apply || ((state) => applyLatestMain(state, { run, cwd }));
   const pollMs = normalizePollMs(options.pollMs ?? process.env.PARRANDA_SHARE_POLL_MS);
+  const restartDelayMs = Number.isFinite(options.restartDelayMs) ? Math.max(0, options.restartDelayMs) : 2_000;
   let child = null;
   let updating = false;
+  let stoppingForUpdate = false;
   let shuttingDown = false;
 
   const start = () => {
     child = spawnShare({ spawnImpl, cwd, env: options.env || process.env });
     child.once("exit", (code, signal) => {
       child = null;
-      if (shuttingDown || updating) return;
-      console.error(`[share:latest] app exited (${signal || code}); restarting in 2s`);
-      setTimeout(start, 2_000);
+      if (shuttingDown || stoppingForUpdate) return;
+      console.error(`[share:latest] app exited (${signal || code}); restarting`);
+      setTimeout(start, restartDelayMs);
     });
   };
 
@@ -146,12 +148,15 @@ async function runShareLatest(options = {}) {
       }
       if (state.status !== "update_ready") return;
       console.log(`[share:latest] updating ${state.from.slice(0, 12)} -> ${state.to.slice(0, 12)}`);
+      stoppingForUpdate = true;
       await stopShare(child);
       child = null;
       await apply(state);
+      stoppingForUpdate = false;
       start();
     } catch (error) {
       console.error(`[share:latest] update failed: ${error?.code || "update_failed"}`);
+      stoppingForUpdate = false;
       if (!child && !shuttingDown) start();
     } finally {
       updating = false;
