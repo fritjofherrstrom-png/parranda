@@ -4416,6 +4416,19 @@ function applyAgnosticDaypartOrder(orderedStops, geometry, geomFor, roleById = n
   return { stops: reordered, geometry: daypartGeometry, applied: true, fallback: false, reason: "daypart_rhythm" };
 }
 
+// Daypart labels describe the sequence the engine actually accepted, not the
+// role order it considered and rejected. When geometry fallback wins, emitting
+// the original role labels can create a backwards public arc (afternoon before
+// midday). Keep the better walk, but withhold those approximate labels.
+function composeRouteDaypartArc(stops, roleById = null, ordering = null) {
+  const ordered = Array.isArray(stops) ? stops : [];
+  if (ordering?.fallback === true) return ordered.map(() => null);
+  return ordered.map((stop) => {
+    const slot = composeStopDaypartSlot(stop, roleById);
+    return slot === null ? null : SLOT_DAYPART[slot] || null;
+  });
+}
+
 function buildRouteLegs(points) {
   const legs = [];
 
@@ -5483,12 +5496,10 @@ function buildRouteFromTemplate(
   // engine geometry + daypart post-pass already set the actual sequence. Null
   // labels are honest for role-less stops (e.g. inserted bridge stops).
   if (agnosticDaypartOrdering) {
-    const dayparts = finalOrderedStops.map((stop) => {
-      const slot = composeStopDaypartSlot(stop, composeRoleById);
-      return slot === null ? null : SLOT_DAYPART[slot] || null;
-    });
+    const dayparts = composeRouteDaypartArc(finalOrderedStops, composeRoleById, agnosticDaypartOrdering);
     mainStops.forEach((stop, index) => {
       if (dayparts[index]) stop.daypart = dayparts[index];
+      else delete stop.daypart;
     });
     route.daypart_arc = dayparts;
     route.agnostic_daypart_ordering = agnosticDaypartOrdering;
@@ -7111,6 +7122,7 @@ module.exports = {
   // Exported for focused testing of the agnostic_compose daypart post-pass.
   composeStopDaypartSlot,
   applyAgnosticDaypartOrder,
+  composeRouteDaypartArc,
   selectedStopChainKm,
   resolvePoint,
   expandDateRange,
