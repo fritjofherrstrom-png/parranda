@@ -39,13 +39,28 @@ already use for this repo.
 
 ```bash
 brew install --cask tailscale
-tailscale up
+```
+
+Then open the Tailscale app and sign in (GitHub works). The `tailscale` command
+is **not** on your PATH until you ask for it: in the app's settings, find the
+CLI integration section, choose "Install Now" and enter your admin password —
+that creates `/usr/local/bin/tailscale`. (If you installed the App Store version
+instead, there is no launcher; either use the full path
+`/Applications/Tailscale.app/Contents/MacOS/Tailscale` or alias it.)
+
+With the CLI available:
+
+```bash
 tailscale funnel 8000
 ```
 
-`tailscale funnel` prints the public address — something like
+That prints the public address — something like
 `https://your-mac.your-tailnet.ts.net`. That link is what you send to friends.
 It stays the same every time, so it is worth saving.
+
+Prefer no GUI at all? `brew install tailscale` installs the CLI and daemon
+instead, but the daemon needs to be started with admin rights
+(`sudo brew services start tailscale`) before `tailscale up`.
 
 Stop sharing at any time:
 

@@ -24,7 +24,7 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { spawn, spawnSync } = require("node:child_process");
+const { spawn } = require("node:child_process");
 
 const { buildFullDevEnvironment } = require("./dev-full");
 const { guardSettings } = require("../server/lib/public-access-guard");
@@ -35,8 +35,31 @@ const DEFAULT_PORT = 8000;
 // a free cloud tier, where the cache is wiped on every restart.
 const DEFAULT_CACHE_DIR = path.join(os.homedir(), ".parranda", "source-cache");
 
+// PATH lookup rather than a shell probe: spawning a shell to ask "do you have
+// this?" both costs a process per check and trips Node's shell-argument
+// deprecation warning, which would print on every single `npm run share`.
 function has(command) {
-  return spawnSync("command", ["-v", command], { shell: true, stdio: "ignore" }).status === 0;
+  return String(process.env.PATH || "")
+    .split(path.delimiter)
+    .filter(Boolean)
+    .some((dir) => {
+      try {
+        fs.accessSync(path.join(dir, command), fs.constants.X_OK);
+        return true;
+      } catch (_error) {
+        return false;
+      }
+    });
+}
+
+// The Mac app ships the CLI inside its bundle and only puts a launcher on PATH
+// if you enable CLI integration, so "not on PATH" does not mean "not installed".
+const MAC_APP_TAILSCALE = "/Applications/Tailscale.app/Contents/MacOS/Tailscale";
+
+function findTailscale() {
+  if (has("tailscale")) return "tailscale";
+  if (fs.existsSync(MAC_APP_TAILSCALE)) return MAC_APP_TAILSCALE;
+  return null;
 }
 
 function buildShareEnvironment(baseEnv = process.env, options = {}) {
@@ -52,19 +75,20 @@ function buildShareEnvironment(baseEnv = process.env, options = {}) {
   };
 }
 
-function describeTunnel() {
-  if (has("tailscale")) {
+function describeTunnel(port = DEFAULT_PORT) {
+  const tailscale = findTailscale();
+  if (tailscale) {
     return {
       ready: true,
       lines: [
         "Tailscale is installed. In a SECOND terminal, publish this server:",
         "",
-        "    tailscale funnel 8000",
+        `    ${tailscale} funnel ${port}`,
         "",
         "That prints your public https://<machine>.<tailnet>.ts.net address —",
         "a stable link you can send to friends. Stop sharing with:",
         "",
-        "    tailscale funnel --https=443 off",
+        `    ${tailscale} funnel --https=443 off`,
       ],
     };
   }
@@ -75,8 +99,11 @@ function describeTunnel() {
       "install Tailscale and turn on Funnel (free, no card, sign in with GitHub):",
       "",
       "    brew install --cask tailscale",
-      "    tailscale up",
-      "    tailscale funnel 8000",
+      "",
+      "Then open the app, sign in, and enable CLI integration in its settings",
+      "(that creates /usr/local/bin/tailscale). Finally:",
+      "",
+      `    tailscale funnel ${port}`,
       "",
       "See docs/SELF_HOSTING.md for the full walkthrough and the always-on setup.",
     ],
@@ -85,7 +112,7 @@ function describeTunnel() {
 
 function banner(env) {
   const settings = guardSettings(env);
-  const tunnel = describeTunnel();
+  const tunnel = describeTunnel(env.PORT);
   const lines = [
     "",
     "  Parranda — sharing from this machine",

@@ -11,7 +11,7 @@ const test = require("node:test");
 const os = require("node:os");
 const path = require("node:path");
 
-const { buildShareEnvironment, DEFAULT_CACHE_DIR } = require("../scripts/share");
+const { buildShareEnvironment, describeTunnel, DEFAULT_CACHE_DIR } = require("../scripts/share");
 const { guardSettings } = require("../server/lib/public-access-guard");
 
 const baseEnv = () => ({ PATH: process.env.PATH, HOME: os.homedir() });
@@ -58,4 +58,15 @@ test("sharing turns on the live sources, otherwise friends get the catalog-only 
     assert.equal(env[flag], "enabled", `${flag} must be on for a real any-place app`);
   }
   assert.ok(env.PARRANDA_EVENT_FEEDS, "reviewed event feeds are loaded from the versioned manifest");
+});
+
+test("the tunnel hint names the port actually being shared", () => {
+  // A copy-pasteable command is the whole point of the banner; hardcoding 8000
+  // while the server listens elsewhere would hand out a broken instruction.
+  const { lines } = describeTunnel("9100");
+  assert.ok(
+    lines.some((line) => line.includes("9100")),
+    "the funnel command must match the port in use",
+  );
+  assert.ok(!lines.some((line) => line.includes("funnel 8000")), "no stale default port");
 });
