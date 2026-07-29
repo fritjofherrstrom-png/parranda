@@ -8,6 +8,7 @@
     "dev": "node server.js",
     "dev:full": "node scripts/dev-full.js",
     "dev:dogfood": "PARRANDA_DOGFOOD_UI=enabled node server.js",
+    "share": "node scripts/share.js",
     "start": "node server.js",
     "test": "node --test",
     "build:frontend": "npm --prefix frontend run build",

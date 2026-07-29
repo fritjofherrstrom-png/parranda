@@ -101,6 +101,12 @@ test("classification flows through the SHARED honesty module (no duplicated rule
   assert.equal(unavailable.status, "unavailable");
 });
 
+test("public share capacity refusals render as capacity, never false place absence", () => {
+  assert.match(anywherePlannerSource, /composeServiceRefusal\(response\.status, body\)/);
+  assert.match(anywherePlannerSource, /Parranda is composing as many days as it safely can right now/);
+  assert.match(anywherePlannerSource, /try again in about/);
+});
+
 test("cold-start refresh is bounded: the component delegates to the tested follow-up policy", () => {
   // The POLICY (one-shot upgrade, 9/12/18 live ladder, exhaustion) lives in the
   // pure planComposeFollowup — behavior-pinned by compose-followup.test.mjs.

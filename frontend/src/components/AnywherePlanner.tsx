@@ -43,6 +43,7 @@ import {
   type PulseTimeWindow,
 } from "../lib/pulse-view.mjs";
 import { planComposeFollowup } from "../lib/compose-followup.mjs";
+import { composeServiceRefusal, type ComposeServiceRefusal } from "../lib/compose-service-refusal.mjs";
 import { buildShareUrl, decodeShareParams } from "../lib/anywhere-share.mjs";
 import { consumeAnchorCoords } from "../lib/location-anchor.mjs";
 import {
@@ -250,6 +251,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [loadingStage, setLoadingStage] = useState(0);
   const [classification, setClassification] = useState<AnywhereClassification | null>(null);
   const [safeResponse, setSafeResponse] = useState<any>(null);
+  const [serviceRefusal, setServiceRefusal] = useState<ComposeServiceRefusal | null>(null);
   // Memory-only copy of the trusted coordinate anchor used for this response.
   // It frames the consumer Maps route but is never persisted or put in a URL.
   const [routeAnchorCoords, setRouteAnchorCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -355,6 +357,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setPhase("loading");
       setClassification(null);
       setSafeResponse(null);
+      setServiceRefusal(null);
       setMapDrawn(false);
       setExpandedStopKey(null);
       setExpandedCandidateKey(null);
@@ -383,6 +386,16 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       });
       const body = await response.json();
       if (controller.signal.aborted || requestId !== requestSequenceRef.current) return;
+      const refusal = composeServiceRefusal(response.status, body);
+      if (refusal) {
+        setServiceRefusal(refusal);
+        setClassification(null);
+        setSafeResponse(null);
+        setUpgradePending(false);
+        setPhase("done");
+        return;
+      }
+      if (!response.ok) throw new Error(`compose_http_${response.status}`);
       const decision = anywhereDecision();
       // With a coords anchor there is no typed text — the label falls back to a
       // neutral "your position" (the engine's resolved label wins when present).
@@ -391,6 +404,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       const safe = decision.safeResponseFor(body, cls);
       setClassification(cls);
       setSafeResponse(safe);
+      setServiceRefusal(null);
       setRouteAnchorCoords(anchor.coords ?? null);
       setPhase("done");
       if (silent) setUpgradePending(false);
@@ -1211,6 +1225,20 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {phase === "error" && (
         <p className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4 text-sm text-parranda-ink/80">
           {t("Motorn svarar inte just nu. Försök igen om en stund.", "The engine isn't answering right now. Try again shortly.")}
+        </p>
+      )}
+
+      {phase === "done" && serviceRefusal && (
+        <p className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4 text-sm text-parranda-ink/80" role="status">
+          {serviceRefusal.kind === "busy"
+            ? t(
+                "Parranda bygger så många dagar som är säkert just nu. Försök igen om en liten stund.",
+                "Parranda is composing as many days as it safely can right now. Try again shortly.",
+              )
+            : t(
+                `Parranda behöver pausa nya anrop en stund${serviceRefusal.retry_after_seconds ? ` — försök igen om cirka ${serviceRefusal.retry_after_seconds} sekunder` : ""}.`,
+                `Parranda needs to pause new requests briefly${serviceRefusal.retry_after_seconds ? ` — try again in about ${serviceRefusal.retry_after_seconds} seconds` : ""}.`,
+              )}
         </p>
       )}
 

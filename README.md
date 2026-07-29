@@ -129,22 +129,32 @@ Det enklaste alpha-flödet är:
 
 Det ger både kodgranskning och riktig produktfeedback.
 
-## Staging med Render
+## Dela appen — din maskin är servern
 
-Repot innehåller en `render.yaml`, så du kan köra som Blueprint på Render.
+Parranda behöver ingen databas och inga hemligheter, så hostingen får vara lika
+enkel som appen: **din egen maskin kör servern, och en tunnel ger den en publik
+HTTPS-adress.** Inget hostingbolag håller appen, och cachen ligger på en riktig
+disk — en plats som slagits upp en gång förblir snabb för alla som frågar sedan.
 
-Snabb väg:
+```bash
+npm run share
+```
 
-1. Pusha repot till GitHub.
-2. Gå till Render och skapa en ny Blueprint från repot.
-3. Render läser `render.yaml` och sätter upp webbtjänsten.
-4. Startkommando blir `npm start`.
-5. Health check körs mot `/api/health`.
+Det läget binder till loopback (tunneln blir enda vägen in), slår på live-
+källorna, lägger cachen i `~/.parranda/source-cache` och håller Macen vaken så
+länge den kör. Sedan ger `tailscale funnel 8000` en stabil publik länk att
+skicka till vänner — gratis, utan kort, inloggning med GitHub.
 
-Render-dokumentation:
+Full genomgång, inklusive alltid-på via launchd och hur skydden ställs in:
+[`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md).
 
-- Blueprint-spec: https://render.com/docs/blueprint-spec
-- Health checks: https://render.com/docs/health-checks
+Delningsläget skyddar också den öppna data appen lever på: 20 uppströms-
+förfrågningar per besökare och minut, tre samtidiga, `robots.txt` som håller
+crawlers borta och debug-projektionen stängd. Avslag är ärliga 429-svar, aldrig
+ett tyst tomt resultat.
+
+`render.yaml` finns kvar i repot för den som hellre kör som Blueprint någon
+annanstans, men självhosting är den rekommenderade vägen.
 
 ## Vad alpha-testare ska titta på
 
