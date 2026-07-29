@@ -218,7 +218,9 @@ test("route result has one authoritative route and keeps broader candidates seco
 });
 
 test("map hierarchy mirrors route authority instead of numbering two competing plans", () => {
-  assert.match(anywherePlannerSource, /className: `route-map-marker/);
+  assert.match(anywherePlannerSource, /routeMarkerPresentation\(routeStops\)/);
+  assert.match(anywherePlannerSource, /className: `route-map-marker-shell/);
+  assert.match(anywherePlannerSource, /--route-marker-x:\$\{shiftX\}px/);
   assert.match(anywherePlannerSource, /routeContextSuggestions\.forEach/);
   assert.match(anywherePlannerSource, /if \(hasPrimaryRoute\)/);
   // Candidates are NEVER sequenced: the no-route branch draws plain dots only —
@@ -226,6 +228,11 @@ test("map hierarchy mirrors route authority instead of numbering two competing p
   assert.doesNotMatch(anywherePlannerSource, /district-map-marker/);
   const noRouteBranch = anywherePlannerSource.split("} else {")[1] ?? "";
   assert.doesNotMatch(noRouteBranch.slice(0, 1200), /polyline|divIcon/);
+});
+
+test("map controls preserve provider attribution space", () => {
+  assert.match(anywherePlannerSource, /absolute right-2\.5 top-2\.5/);
+  assert.doesNotMatch(anywherePlannerSource, /absolute bottom-2\.5 right-2\.5/);
 });
 
 test("a tapped stop discloses route facts before an explicit Maps action", () => {
@@ -333,8 +340,10 @@ test("compact planner and map controls keep a 44px mobile touch target", () => {
   );
   assert.match(anywhereStyles, /\.leaflet-control-zoom a\s*\{[\s\S]*width: 44px !important;/);
   assert.match(anywhereStyles, /\.leaflet-control-zoom a\s*\{[\s\S]*height: 44px !important;/);
-  assert.match(anywherePlannerSource, /iconSize: \[44, 44\]/);
-  assert.match(anywherePlannerSource, /iconAnchor: \[22, 22\]/);
+  assert.match(anywherePlannerSource, /iconSize: \[72, 72\]/);
+  assert.match(anywherePlannerSource, /iconAnchor: \[36, 36\]/);
+  assert.match(anywhereStyles, /\.route-map-marker\s*\{[\s\S]*width: 44px;/);
+  assert.match(anywhereStyles, /\.route-map-marker\s*\{[\s\S]*height: 44px;/);
 });
 
 test("route, saved-day, Blitz, and source actions keep a 44px mobile touch target", () => {
