@@ -17,6 +17,7 @@ const { normalizeSelectedDayHoursFact } = require("./place-candidates/opening-ho
 const { normalizeTrustSummary } = require("./route-candidates/contract");
 const { buildDayflowContext } = require("./planner/dayflow-context");
 const { daypartSlotForRole, SLOT_DAYPART } = require("./planner/agnostic-route-ordering");
+const { selectAgnosticCandidateSet } = require("./planner/agnostic-candidate-set");
 
 const defaultCityConfig = getCityConfig("rome");
 
@@ -159,6 +160,13 @@ function buildProvisionalComposeStops() {
       searchTerms: [],
       anchorWeight: 1,
       reservoirSpine: candidate.reservoir_selected === true,
+      reservoirSupport: candidate.reservoir_support === true,
+      chain: candidate.chain === true,
+      brand: candidate.brand || null,
+      localFeelRank: Number.isFinite(candidate.local_feel_rank) ? candidate.local_feel_rank : null,
+      operationalViabilityRank: Number.isFinite(candidate.operational_viability_rank)
+        ? candidate.operational_viability_rank
+        : null,
       provisional: true,
       source: candidate.source || null,
       trust: candidate.trust || null,
@@ -5313,6 +5321,33 @@ function buildRouteFromTemplate(
         legPacing,
       },
     );
+  }
+
+  // Agnostic compose evaluates the bounded reservoir as complete candidate
+  // sets before sequencing. The shared role spine and requested coverage stay
+  // primary, while daypart breadth, local/source quality and approximate
+  // geometry decide between otherwise-safe alternatives. This replaces the
+  // legacy independent top-N slice only for agnostic compose; the route engine
+  // below still owns ordering and walking truth.
+  if (
+    template.id === AGNOSTIC_COMPOSE_TEMPLATE_ID &&
+    getAllItems().length === 0 &&
+    sortedPool.length
+  ) {
+    const strictCandidateCount = strictTags.length ? Math.min(strictPool.length, selectedCount) : 0;
+    const constrainedCount = strictCandidateCount >= 2
+      ? Math.min(selectedCount, Math.floor(strictCandidateCount / 0.6))
+      : selectedCount;
+    const constrained = selectAgnosticCandidateSet({
+      rankedCandidates: sortedPool,
+      desiredCount: constrainedCount,
+      requestedPreferences: preferences,
+      start,
+      end,
+      shape,
+      targetKm,
+    });
+    if (constrained.selected.length) selectedStops = constrained.selected;
   }
 
   const { orderedStops, geometry } = optimizeStopOrder(

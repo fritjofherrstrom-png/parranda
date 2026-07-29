@@ -249,6 +249,10 @@ function toSourceCandidate({
     reservoir_support: reservoirSupport === true,
     chain: rich?.chain === true,
     brand: typeof rich?.brand === "string" ? rich.brand : null,
+    local_feel_rank: Number.isFinite(rich?.local_feel_rank) ? rich.local_feel_rank : null,
+    operational_viability_rank: Number.isFinite(rich?.operational_viability?.rank)
+      ? rich.operational_viability.rank
+      : null,
     provenance: {
       why_included: "Source-backed candidate admitted to the agnostic route.",
       provider_id: provenance.provider_id || null,
