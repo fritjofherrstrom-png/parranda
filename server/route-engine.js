@@ -4368,11 +4368,21 @@ function composeStopDaypartSlot(stop, roleById = null) {
   return min;
 }
 
-// Accept up to ~35% more walking (or +0.8km) for a coherent day-arc; beyond that
-// the geometry order wins. Mirrors the legacy ordering's "trade a little walking
-// for a day that makes sense, walking budget stays the final gate".
-const DAYPART_WALK_TOLERANCE = 1.35;
+// Daypart rhythm is allowed to break a geometry tie, not to manufacture a
+// visibly worse walk. Compare the ACTUAL selected-stop chain (without an auto
+// city-centre anchor) and allow only rounding-scale drift. This keeps useful
+// morning→evening rhythm while preventing a role sort from legitimising a
+// backtracking route merely because the hidden anchor loop still fit a broad
+// walking target.
+const DAYPART_STOP_CHAIN_TOLERANCE = 1.08;
+const DAYPART_STOP_CHAIN_SLACK_KM = 0.25;
 const NEUTRAL_DAYPART_SLOT = 2; // midday — where role-less stops sit in the arc
+
+function selectedStopChainKm(stops) {
+  return walkingKm((Array.isArray(stops) ? stops : []).filter(
+    (stop) => stop && Number.isFinite(stop.lat) && Number.isFinite(stop.lng),
+  ));
+}
 
 // Reorder geometry-optimal stops into a morning→evening daypart arc, preserving
 // proximity WITHIN a slot (stable sort keeps the geometry order). Falls back to
@@ -4394,11 +4404,12 @@ function applyAgnosticDaypartOrder(orderedStops, geometry, geomFor, roleById = n
     return { stops: orderedStops, geometry, applied: true, fallback: false, reason: "already_daypart_ordered" };
   }
   const daypartGeometry = geomFor(reordered);
-  const baseKm = Number.isFinite(geometry?.estimatedKm) ? geometry.estimatedKm : null;
-  const newKm = Number.isFinite(daypartGeometry?.estimatedKm) ? daypartGeometry.estimatedKm : null;
-  const walkable = baseKm === null || newKm === null
-    ? true
-    : newKm <= Math.max(baseKm * DAYPART_WALK_TOLERANCE, baseKm + 0.8);
+  const baseKm = selectedStopChainKm(orderedStops);
+  const newKm = selectedStopChainKm(reordered);
+  const walkable = newKm <= Math.max(
+    baseKm * DAYPART_STOP_CHAIN_TOLERANCE,
+    baseKm + DAYPART_STOP_CHAIN_SLACK_KM,
+  );
   if (!walkable) {
     return { stops: orderedStops, geometry, applied: false, fallback: true, reason: "daypart_order_exceeded_walk_budget" };
   }
@@ -7100,6 +7111,7 @@ module.exports = {
   // Exported for focused testing of the agnostic_compose daypart post-pass.
   composeStopDaypartSlot,
   applyAgnosticDaypartOrder,
+  selectedStopChainKm,
   resolvePoint,
   expandDateRange,
   buildRouteFromTemplate,

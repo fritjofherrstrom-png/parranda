@@ -9,6 +9,7 @@ export interface RouteContextStop {
   address?: string | null;
   area?: string | null;
   covered_preferences?: string[];
+  partial_preferences?: string[];
   type?: string | null;
   tags?: string[];
   chain?: boolean;
@@ -44,6 +45,7 @@ export declare function walkingDistanceLabel(km: number | null | undefined, lang
 export interface RoutePreferenceCoverage {
   has_coverage_evidence: boolean;
   covered_preferences: string[];
+  partial_preferences: string[];
   missing_preferences: string[];
 }
 

@@ -34,6 +34,7 @@ const {
   composeAgnosticRouteOutput,
   scrubAgnosticAppliedDay,
 } = require("../server/planner/agnostic-route-output");
+const { projectRouteToSelectedStopChain } = require("../server/planner/route-public-geometry");
 const { buildAgnosticCityContext } = require("../server/candidates/agnostic-context");
 const { buildEligibleCandidatePool, buildProviderSpecs } = require("../server/candidates/candidate-pool");
 const { evaluateCandidateGates, targetFromPlaceCandidate } = require("../server/candidates/gates");
@@ -68,6 +69,55 @@ function eveningClock() {
 function middayClock() {
   return new Date("2026-05-25T10:00:00Z");
 }
+
+test("typed-place public geometry projects the hidden anchor loop onto the selected stop chain", () => {
+  const route = {
+    estimated_km: 19.2,
+    route_shape: "loop",
+    start_label: "City centroid",
+    end_label: "City centroid",
+    main_stops: [
+      { id: "a", label: "A", lat: 55.6, lng: 13.0 },
+      { id: "b", label: "B", lat: 55.601, lng: 13.004 },
+      { id: "c", label: "C", lat: 55.604, lng: 13.008 },
+    ],
+    map_route_points: [
+      { label: "City centroid", lat: 55.58, lng: 12.98 },
+      { label: "A", lat: 55.6, lng: 13.0 },
+      { label: "B", lat: 55.601, lng: 13.004 },
+      { label: "C", lat: 55.604, lng: 13.008 },
+      { label: "City centroid", lat: 55.58, lng: 12.98 },
+    ],
+    map_path_points: [
+      { lat: 55.58, lng: 12.98 },
+      { lat: 55.6, lng: 13.0 },
+      { lat: 55.6005, lng: 13.002 },
+      { lat: 55.601, lng: 13.004 },
+      { lat: 55.604, lng: 13.008 },
+      { lat: 55.58, lng: 12.98 },
+    ],
+    legs: [
+      { distance_km: 9, estimated_walk_minutes: 108 },
+      { distance_km: 0.5, estimated_walk_minutes: 6 },
+      { distance_km: 0.7, estimated_walk_minutes: 8 },
+      { distance_km: 9, estimated_walk_minutes: 108 },
+    ],
+  };
+  const before = structuredClone(route);
+  const projected = projectRouteToSelectedStopChain(route);
+
+  assert.deepEqual(route, before, "projection never mutates engine evidence");
+  assert.equal(projected.public_route_scope, "selected_stop_chain");
+  assert.equal(projected.route_shape, "arc");
+  assert.equal(projected.estimated_km, 1.2);
+  assert.equal(projected.longest_leg_km, 0.7);
+  assert.equal(projected.start_label, "A");
+  assert.equal(projected.end_label, "C");
+  assert.equal(projected.legs.length, 2);
+  assert.deepEqual(projected.map_route_points.map((point) => point.label), ["A", "B", "C"]);
+  assert.deepEqual(projected.map_path_points[0], { lat: 55.6, lng: 13.0 });
+  assert.deepEqual(projected.map_path_points.at(-1), { lat: 55.604, lng: 13.008 });
+});
 
 // 21:30Z = 23:30 Europe/Rome on the selected date.
 function lateEveningClock() {
@@ -1595,6 +1645,40 @@ test("engine compose anchors a today route before geometry and exposes the share
     assert.equal(route.daypart_arc[0], "midday");
     assert.ok(route.caveats.includes("day_anchored_to_current_time"));
     assert.equal(route.caveats.includes("daypart_arc_precedes_local_time"), false);
+  } finally {
+    global.fetch = ORIGINAL_FETCH;
+  }
+});
+
+test("engine compose exposes a typed place as one public stop chain, not a hidden centroid loop", async () => {
+  global.fetch = mockStableWeatherFetch();
+  try {
+    const { result } = await composeAgnosticRouteOutput({
+      coords: { lat: 55.6, lng: 13.0 },
+      baselineResult: { city: "rome", days: [{ date: DATE, primary_route: null, alternatives: [] }] },
+      externalRequested: true,
+      openDataLoader: makeLoader(fixtureNear({ lat: 55.6, lng: 13.0 })),
+      preferences: ["food", "coffee", "scenic"],
+      date: DATE,
+      todayIsoDate: DATE,
+      synthesizeVia: "engine",
+      anchorMode: "place",
+      placeLabel: "Malmö",
+      lang: "en",
+    });
+    const route = result.days[0].primary_route;
+    assert.ok(route);
+    assert.equal(route.public_route_scope, "selected_stop_chain");
+    assert.equal(route.map_route_points.length, route.main_stops.length);
+    assert.equal(route.legs.length, route.main_stops.length - 1);
+    assert.deepEqual(
+      route.map_route_points.map((point) => point.label),
+      route.main_stops.map((stop) => stop.label),
+    );
+    assert.equal(
+      route.estimated_km,
+      Number(route.legs.reduce((sum, leg) => sum + leg.distance_km, 0).toFixed(1)),
+    );
   } finally {
     global.fetch = ORIGINAL_FETCH;
   }

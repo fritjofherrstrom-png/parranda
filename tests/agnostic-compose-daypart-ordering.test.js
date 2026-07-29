@@ -32,8 +32,8 @@ const flatGeom = () => ({ estimatedKm: 3 });
 // geomFor that always reports the SAME cheap distance → daypart order is walkable
 const cheapGeomFor = () => ({ estimatedKm: 3 });
 
-function stop(id, roles) {
-  return { id, name: id, route_roles: roles, lat: 0, lng: 0 };
+function stop(id, roles, lat = 0, lng = 0) {
+  return { id, name: id, route_roles: roles, lat, lng };
 }
 
 test("reorders geometry-optimal stops into a morning→evening daypart arc", () => {
@@ -54,14 +54,21 @@ test("preserves geometry order WITHIN a slot (stable sort = proximity kept)", ()
 });
 
 test("falls back to geometry order when the daypart order breaks the walk budget", () => {
-  const ordered = [stop("bar", ["evening_bar_option"]), stop("coffee", ["coffee_fika_stop"]), stop("food", ["food_anchor"])];
-  // daypart order is reported much longer than the geometry order → not walkable
-  const geomFor = () => ({ estimatedKm: 99 });
+  // The geometry chain walks west→east. A hard role sort would jump east,
+  // double back, then jump west again. The hidden anchor-loop geometry supplied
+  // by geomFor claims it is cheap; the selected-stop chain must still veto it.
+  const ordered = [
+    stop("bar", ["evening_bar_option"], 55.6, 13.0),
+    stop("coffee", ["coffee_fika_stop"], 55.6, 13.01),
+    stop("food", ["food_anchor"], 55.6, 13.02),
+    stop("scenic", ["scenic_anchor"], 55.6, 13.03),
+  ];
+  const geomFor = () => ({ estimatedKm: 3 });
   const out = applyAgnosticDaypartOrder(ordered, { estimatedKm: 3 }, geomFor);
   assert.equal(out.applied, false);
   assert.equal(out.fallback, true);
   assert.equal(out.reason, "daypart_order_exceeded_walk_budget");
-  assert.deepEqual(out.stops.map((s) => s.id), ["bar", "coffee", "food"], "geometry order preserved");
+  assert.deepEqual(out.stops.map((s) => s.id), ["bar", "coffee", "food", "scenic"], "geometry order preserved");
 });
 
 test("no role metadata anywhere → geometry order stands, no reorder", () => {
@@ -72,13 +79,16 @@ test("no role metadata anywhere → geometry order stands, no reorder", () => {
   assert.deepEqual(out.stops.map((s) => s.id), ["a", "b"]);
 });
 
-test("accepts a small walking increase for coherence (within tolerance)", () => {
-  const ordered = [stop("bar", ["evening_bar_option"]), stop("coffee", ["coffee_fika_stop"])];
-  // 3.0 → 3.6km = +20%, under the ~35% / +0.8km tolerance → applied
-  const geomFor = () => ({ estimatedKm: 3.6 });
-  const out = applyAgnosticDaypartOrder(ordered, { estimatedKm: 3.0 }, geomFor);
+test("accepts a geometry-neutral daypart tie-break", () => {
+  const ordered = [
+    stop("bar", ["evening_bar_option"], 55.6, 13.0),
+    stop("coffee", ["coffee_fika_stop"], 55.6, 13.001),
+    stop("food", ["food_anchor"], 55.6, 13.0005),
+  ];
+  const geomFor = () => ({ estimatedKm: 0.2 });
+  const out = applyAgnosticDaypartOrder(ordered, { estimatedKm: 0.2 }, geomFor);
   assert.equal(out.applied, true);
-  assert.deepEqual(out.stops.map((s) => s.id), ["coffee", "bar"]);
+  assert.deepEqual(out.stops.map((s) => s.id), ["coffee", "food", "bar"]);
 });
 
 // --- integration: through the engine ---------------------------------------

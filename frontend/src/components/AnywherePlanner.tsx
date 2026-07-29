@@ -228,6 +228,36 @@ function label(map: Record<string, { sv: string; en: string }>, key: string | nu
   return map[key]?.[lang] ?? key;
 }
 
+const PLANNER_INTENT_ALIASES: Record<string, string> = {
+  scenic: "views",
+  museums: "culture",
+  coffee: "fika",
+  bars: "nightlife",
+  vintage: "second_hand",
+};
+
+const HOURS_RELEVANT_TYPES = new Set([
+  "museum",
+  "gallery",
+  "restaurant",
+  "cafe",
+  "bar",
+  "market",
+  "vintage-shop",
+  "street-food",
+  "castle",
+]);
+
+function partialPreferenceLabels(stop: any, selected: string[], lang: Lang): string[] {
+  const requested = new Set(selected.map((value) => PLANNER_INTENT_ALIASES[value] || value));
+  const labels: string[] =
+    (Array.isArray(stop?.partial_preferences) ? stop.partial_preferences : [])
+      .map((value: string) => PLANNER_INTENT_ALIASES[value] || value)
+      .filter((value: string) => requested.has(value))
+      .map((value: string) => label(INTENT_LABELS, value, lang));
+  return [...new Set<string>(labels)];
+}
+
 // Event timing renders through the pure `eventTiming` formatter (pulse-view.mjs),
 // which honors the FULL temporal contract: continuous instants in the venue
 // timezone, daily local windows, all-day local dates (never UTC-midnight
@@ -1070,7 +1100,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         <div className="flex min-h-12 items-center gap-2.5 rounded-parranda border border-parranda-ink/12 bg-parranda-ink/4 py-1.5 pl-4 pr-1.5">
           <span className="min-w-0 flex-1 text-[13px] leading-snug text-parranda-ink/65">
             <strong className="font-bold text-parranda-ink">{moodLabel || t("Inga val", "No moods")}</strong>
-            {` · ${dayOffset === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow")} · ${walkLabel}`}
+            {` · ${dayOffset === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow")} · ${t("Gångmål", "Walking target")}: ${walkLabel}`}
           </span>
           <button
             type="button"
@@ -1298,8 +1328,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               <span aria-hidden="true" className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-parranda-glow" />
               <span>
                 {t(
-                  `Byggd från källstödda platser${typeof structure.area_count === "number" ? ` över ${structure.area_count} områden` : ""} — Parranda har inte full kurering här ännu`,
-                  `Built from source-backed places${typeof structure.area_count === "number" ? ` across ${structure.area_count} areas` : ""} — Parranda does not have full curation here yet`,
+                  "Byggd från källstödda platser — Parranda har inte full kurering här ännu",
+                  "Built from source-backed places — Parranda does not have full curation here yet",
                 )}
               </span>
             </p>
@@ -1381,8 +1411,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             {structure.provenance === "agnostic_anchor" && (
               <p className="text-sm font-semibold text-parranda-accent">
                 {t(
-                  `Byggd från källstödda platser${typeof structure.area_count === "number" ? ` över ${structure.area_count} områden` : ""} — Parranda har inte full kurering här ännu`,
-                  `Built from source-backed places${typeof structure.area_count === "number" ? ` across ${structure.area_count} areas` : ""} — Parranda does not have full curation here yet`,
+                  "Källstödda platskandidater — inte en komponerad rutt ännu",
+                  "Source-backed place candidates — not a composed route yet",
                 )}
               </p>
             )}
@@ -1448,6 +1478,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               const expanded = expandedStopKey === stopKey;
               const prevName = routeNumber > 1 ? String((split.core[i - 1] as any)?.label || (split.core[i - 1] as any)?.name || "").trim() : "";
               const hoursLabel = selectedDayHoursLabel(stop?.selected_day_hours, lang);
+              const partialLabels = partialPreferenceLabels(stop, selected, lang);
+              const hoursRelevant = HOURS_RELEVANT_TYPES.has(String(stop?.type || ""));
+              const sourceLabel = String(stop?.source?.label || "").trim();
               return (
                 <li key={stopKey} className="flex flex-col">
                   {daypartHeading && (
@@ -1505,11 +1538,21 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                           </span>
                         )}
                         {hoursLabel && <span>{hoursLabel}</span>}
+                        {!hoursLabel && hoursRelevant && (
+                          <span>{t("Källtider saknas för den valda dagen", "Source hours unavailable for the selected day")}</span>
+                        )}
                         {stop?.address && <span>{stop.address}</span>}
                       </div>
+                      {partialLabels.length > 0 && (
+                        <p className="mt-2 text-xs text-parranda-ink/50">
+                          {t("Lösare träff för:", "A looser match for:")} {partialLabels.join(", ")}
+                        </p>
+                      )}
                       {stop?.candidate_status === "partial" && (
                         <p className="mt-2 text-xs text-parranda-ink/50">
-                          {t("Matchar delar, men inte allt, av det du valde.", "Matches some, but not all, of what you chose.")}
+                          {sourceLabel
+                            ? t(`Källstöd: ${sourceLabel} · underlaget är fortfarande provisoriskt`, `Source-backed by ${sourceLabel} · evidence is still provisional`)
+                            : t("Källunderlaget är fortfarande provisoriskt", "Source evidence is still provisional")}
                         </p>
                       )}
                       {pin && (
@@ -1663,6 +1706,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             </div>
           )}
 
+          {routeCoverage.has_coverage_evidence && routeCoverage.partial_preferences.length > 0 && (
+            <p className="mt-4 text-sm italic text-parranda-ink/60">
+              {t("Delvis täckt i dagens rutt:", "Partly covered by today's route:")} {routeCoverage.partial_preferences.map((key) => label(INTENT_LABELS, key, lang)).join(", ")}
+            </p>
+          )}
           {routeCoverage.has_coverage_evidence && routeCoverage.missing_preferences.length > 0 && (
             <p className="mt-4 text-sm italic text-parranda-ink/60">
               {t("Saknas i dagens rutt:", "Not covered by today's route:")} {routeCoverage.missing_preferences.map((key) => label(INTENT_LABELS, key, lang)).join(", ")}

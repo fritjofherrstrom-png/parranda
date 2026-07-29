@@ -16,27 +16,11 @@
         "uses_provisional_sources": true,
         "provisional_stop_count": 3,
         "credibility_tier": "low",
-        "estimated_km": 8.1,
-        "longest_leg_km": 2.2,
-        "longest_leg_minutes": 26,
-        "average_leg_minutes": 14,
+        "estimated_km": 6.1,
+        "longest_leg_km": 1.3,
+        "longest_leg_minutes": 16,
+        "average_leg_minutes": 10,
         "stops": [
-          {
-            "label": "Kilo Shop",
-            "area": "monastiraki-psyrri",
-            "live": false,
-            "provisional": true,
-            "source_tier": "inferred",
-            "confidence": "needs_review"
-          },
-          {
-            "label": "Palaiopoleion ton Athinon",
-            "area": "monastiraki-psyrri",
-            "live": false,
-            "provisional": true,
-            "source_tier": "inferred",
-            "confidence": "needs_review"
-          },
           {
             "label": "Ama Lachei stis Nefelis",
             "area": "exarchia",
@@ -53,8 +37,24 @@
             "live": false
           },
           {
+            "label": "Kilo Shop",
+            "area": "monastiraki-psyrri",
+            "live": false,
+            "provisional": true,
+            "source_tier": "inferred",
+            "confidence": "needs_review"
+          },
+          {
             "label": "Pnyx",
             "area": "koukaki-makrygianni",
+            "live": false,
+            "provisional": true,
+            "source_tier": "inferred",
+            "confidence": "needs_review"
+          },
+          {
+            "label": "Palaiopoleion ton Athinon",
+            "area": "monastiraki-psyrri",
             "live": false,
             "provisional": true,
             "source_tier": "inferred",
@@ -64,21 +64,9 @@
         "legs": [
           {
             "from": "Athens",
-            "to": "Kilo Shop",
-            "km": 1.1,
-            "minutes": 13
-          },
-          {
-            "from": "Kilo Shop",
-            "to": "Palaiopoleion ton Athinon",
-            "km": 0,
-            "minutes": 2
-          },
-          {
-            "from": "Palaiopoleion ton Athinon",
             "to": "Ama Lachei stis Nefelis",
-            "km": 2.2,
-            "minutes": 26
+            "km": 1.2,
+            "minutes": 14
           },
           {
             "from": "Ama Lachei stis Nefelis",
@@ -94,15 +82,27 @@
           },
           {
             "from": "Klimataria",
+            "to": "Kilo Shop",
+            "km": 0.6,
+            "minutes": 7
+          },
+          {
+            "from": "Kilo Shop",
             "to": "Pnyx",
-            "km": 1.4,
-            "minutes": 17
+            "km": 0.8,
+            "minutes": 10
           },
           {
             "from": "Pnyx",
+            "to": "Palaiopoleion ton Athinon",
+            "km": 0.8,
+            "minutes": 10
+          },
+          {
+            "from": "Palaiopoleion ton Athinon",
             "to": "Athens",
-            "km": 1.8,
-            "minutes": 22
+            "km": 1.1,
+            "minutes": 13
           }
         ]
       },
