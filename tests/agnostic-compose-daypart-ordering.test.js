@@ -6,6 +6,7 @@ const {
   generateRecommendations,
   composeStopDaypartSlot,
   applyAgnosticDaypartOrder,
+  composeRouteDaypartArc,
 } = require("../server/route-engine");
 const { getCityConfig } = require("../server/cities");
 const { resetLiveEventsCache } = require("../server/live-events");
@@ -69,6 +70,32 @@ test("falls back to geometry order when the daypart order breaks the walk budget
   assert.equal(out.fallback, true);
   assert.equal(out.reason, "daypart_order_exceeded_walk_budget");
   assert.deepEqual(out.stops.map((s) => s.id), ["bar", "coffee", "food", "scenic"], "geometry order preserved");
+});
+
+test("geometry fallback withholds a backwards public daypart arc", () => {
+  const ordered = [
+    stop("food", ["food_anchor"]),
+    stop("culture", ["culture_stop"]),
+    stop("scenic", ["scenic_anchor"]),
+  ];
+  const dayparts = composeRouteDaypartArc(ordered, null, {
+    applied: false,
+    fallback: true,
+    reason: "daypart_order_exceeded_walk_budget",
+  });
+  assert.deepEqual(dayparts, [null, null, null]);
+});
+
+test("accepted daypart order still exposes its honest monotonic arc", () => {
+  const ordered = [
+    stop("coffee", ["coffee_fika_stop"]),
+    stop("culture", ["culture_stop"]),
+    stop("food", ["food_anchor"]),
+  ];
+  assert.deepEqual(
+    composeRouteDaypartArc(ordered, null, { applied: true, fallback: false, reason: "daypart_rhythm" }),
+    ["morning", "midday", "afternoon"],
+  );
 });
 
 test("no role metadata anywhere → geometry order stands, no reorder", () => {
