@@ -24,8 +24,9 @@ services:
       # for the same anchor never re-hit Overpass.
       - key: PARRANDA_OPEN_DATA_LOADER
         value: enabled
-      # Freeform place-name → trusted coordinate anchor (Nominatim). Already
-      # carries its own UA + 1 req/s gate + in-memory cache; fail-closed.
+      # Freeform place-name → trusted coordinate anchor (Nominatim). Carries its
+      # own UA + 1 req/s gate + bounded queue and shares the persistent-capable
+      # cache below; fail-closed.
       - key: PARRANDA_PLACE_RESOLVER
         value: enabled
       # Exact coordinate-bearing Wikidata labels/aliases are a conservative

@@ -11,8 +11,10 @@
  *   - This is LOW-VOLUME, user-triggered dogfood/MVP wiring. It is NOT
  *     commercial-production-cleared: OSM Nominatim's usage policy requires a
  *     valid identifying User-Agent, ~1 request/second, and client-side caching,
- *     and asks geocoding-PRIMARY services to self-host. Higher-volume or
- *     commercial use needs PERSISTENT caching and/or a paid or self-hosted
+ *     and asks geocoding-PRIMARY services to self-host. This resolver shares the
+ *     persistent-capable source cache and bounds its serial provider queue;
+ *     cross-redeploy durability requires a mounted `PARRANDA_CACHE_DIR`.
+ *     Higher-volume or commercial use still needs a paid or self-hosted
  *     provider. Data is © OpenStreetMap contributors under ODbL — a UI that
  *     displays it must show that attribution.
  *
@@ -31,21 +33,26 @@
  *     Agnostic route context may derive a lower-trust timezone separately from
  *     trusted weather-provider auto metadata.
  *
- * Deterministic given its injected `fetcher` / `now` / `sleep` (tests inject
- * these; nothing here touches the network unless a real fetcher is configured).
+ * Deterministic given its injected `fetcher` / `now` / `sleep` / cache seams
+ * (tests inject these; nothing here touches the network unless a real fetcher
+ * is configured).
  */
 
 const { isValidCoordinate } = require("../planner/agnostic-place-intake");
 const { normalizeNominatimSpatialScope } = require("./spatial-scope");
 const { createWikidataPlaceResolver } = require("./wikidata-place-resolver");
+const { createSourceCache } = require("./source-cache");
+const { createHash } = require("node:crypto");
 
 const NOMINATIM_ENDPOINT = "https://nominatim.openstreetmap.org/search";
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
 const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_LIMIT = 5;
 const MAX_LIMIT = 10;
-const DEFAULT_CACHE_TTL_MS = 30 * 60 * 1000; // in-memory only; lost on restart
+const DEFAULT_CACHE_TTL_MS = 30 * 60 * 1000;
 const DEFAULT_MIN_INTERVAL_MS = 1100; // honor Nominatim's ~1 req/sec, per instance
+const DEFAULT_MAX_PENDING_REQUESTS = 8;
+const MAX_PENDING_REQUESTS = 100;
 const DEFAULT_PROVIDER_COOLDOWN_MS = 5000;
 const MAX_PROVIDER_COOLDOWN_MS = 60 * 1000;
 const MAX_QUERY_LEN = 200;
@@ -241,13 +248,22 @@ function createNominatimPlaceResolver({
   timeoutMs = DEFAULT_TIMEOUT_MS,
   limit = DEFAULT_LIMIT,
   cacheTtlMs = DEFAULT_CACHE_TTL_MS,
+  cacheDir = null,
+  sourceCache = null,
   minIntervalMs = DEFAULT_MIN_INTERVAL_MS,
+  maxPendingRequests = DEFAULT_MAX_PENDING_REQUESTS,
   providerCooldownMs: fallbackProviderCooldownMs = DEFAULT_PROVIDER_COOLDOWN_MS,
   maxProviderCooldownMs = MAX_PROVIDER_COOLDOWN_MS,
   now = () => Date.now(),
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 } = {}) {
   const clampedLimit = clampInt(limit, 1, MAX_LIMIT, DEFAULT_LIMIT);
+  const clampedMaxPending = clampInt(
+    maxPendingRequests,
+    1,
+    MAX_PENDING_REQUESTS,
+    DEFAULT_MAX_PENDING_REQUESTS,
+  );
   // Pre-validate the configured endpoint ONCE. An invalid endpoint makes the
   // resolver fail closed (return []) without ever calling fetch — never throws.
   let endpointValid = true;
@@ -257,13 +273,22 @@ function createNominatimPlaceResolver({
   } catch (_error) {
     endpointValid = false;
   }
-  // Per-instance state: in-memory TTL cache, in-flight dedupe, and a single
-  // global rate gate (spacing applies across ALL queries on this instance).
-  const cache = new Map();
-  const inFlight = new Map();
+  const endpointIdentity = createHash("sha256")
+    .update(`${endpoint}|limit:${clampedLimit}`)
+    .digest("hex")
+    .slice(0, 16);
+  const cache = sourceCache || createSourceCache({
+    namespace: "place-resolver-nominatim-v1",
+    ttlMs: cacheTtlMs,
+    dir: cacheDir,
+    now,
+  });
+  // Per-instance provider state: a single global rate gate plus a bounded FIFO.
+  // The cache coalesces identical misses before they reach this queue.
   let nextSlot = 0;
   let cooldownUntil = 0;
-  let requestQueue = Promise.resolve();
+  let queueActive = false;
+  const requestQueue = [];
 
   // fetchAndMap distinguishes provider SUCCESS from FAILURE so the caller only
   // caches successes. A successful 200 (including a legitimate empty array) is
@@ -318,10 +343,36 @@ function createNominatimPlaceResolver({
     }
   }
 
+  async function drainQueue() {
+    if (queueActive) return;
+    queueActive = true;
+    try {
+      while (requestQueue.length) {
+        const entry = requestQueue.shift();
+        let result;
+        try {
+          result = await fetchAndMapQueued(entry.query);
+        } catch (_error) {
+          result = { ok: false, candidates: [] };
+        }
+        entry.resolve(result);
+      }
+    } finally {
+      queueActive = false;
+      // A producer may enqueue between the final length check and this finally.
+      if (requestQueue.length) void drainQueue();
+    }
+  }
+
   function fetchAndMap(query) {
-    const run = requestQueue.then(() => fetchAndMapQueued(query));
-    requestQueue = run.catch(() => undefined);
-    return run;
+    const pendingCount = requestQueue.length + (queueActive ? 1 : 0);
+    if (pendingCount >= clampedMaxPending) {
+      return Promise.resolve({ ok: false, candidates: [] });
+    }
+    return new Promise((resolve) => {
+      requestQueue.push({ query, resolve });
+      void drainQueue();
+    });
   }
 
   return async function resolvePlace(rawQuery) {
@@ -329,29 +380,14 @@ function createNominatimPlaceResolver({
     if (!query) return [];
     // An invalid configured endpoint fails closed without ever calling fetch.
     if (!endpointValid) return [];
-    const key = query.toLowerCase();
-
-    const cached = cache.get(key);
-    if (cached) {
-      if (now() - cached.at < cacheTtlMs) return clone(cached.value);
-      cache.delete(key);
-    }
-
-    if (inFlight.has(key)) {
-      const inflight = await inFlight.get(key);
-      return clone(inflight.candidates);
-    }
-
-    const promise = fetchAndMap(query);
-    inFlight.set(key, promise);
-    try {
-      const result = await promise;
-      // Only cache SUCCESSFUL provider responses — never transient failures.
-      if (result.ok) cache.set(key, { at: now(), value: result.candidates });
-      return clone(result.candidates);
-    } finally {
-      inFlight.delete(key);
-    }
+    const queryIdentity = createHash("sha256").update(query.toLowerCase()).digest("hex");
+    const key = `v1:${endpointIdentity}:${queryIdentity}`;
+    const result = await cache.get(
+      key,
+      () => fetchAndMap(query),
+      { shouldStore: (value) => value && value.ok === true },
+    );
+    return clone(Array.isArray(result?.candidates) ? result.candidates : []);
   };
 }
 
@@ -371,6 +407,18 @@ function resolveDefaultPlaceResolver(env = process.env, overrides = {}) {
     (env && typeof env.PARRANDA_PLACE_RESOLVER_ENDPOINT === "string" && env.PARRANDA_PLACE_RESOLVER_ENDPOINT.trim()) ||
     NOMINATIM_ENDPOINT;
   const timeoutMs = clampInt(env && env.PARRANDA_PLACE_RESOLVER_TIMEOUT_MS, 50, 30000, DEFAULT_TIMEOUT_MS);
+  const cacheTtlMs = clampInt(
+    env && env.PARRANDA_PLACE_RESOLVER_CACHE_TTL_MS,
+    0,
+    7 * 24 * 60 * 60 * 1000,
+    DEFAULT_CACHE_TTL_MS,
+  );
+  const maxPendingRequests = clampInt(
+    env && env.PARRANDA_PLACE_RESOLVER_MAX_PENDING_REQUESTS,
+    1,
+    MAX_PENDING_REQUESTS,
+    DEFAULT_MAX_PENDING_REQUESTS,
+  );
   const {
     fallbackResolver: injectedFallbackResolver,
     wikidataFetcher,
@@ -382,6 +430,9 @@ function resolveDefaultPlaceResolver(env = process.env, overrides = {}) {
     userAgent,
     endpoint,
     timeoutMs,
+    cacheTtlMs,
+    cacheDir: env && env.PARRANDA_CACHE_DIR,
+    maxPendingRequests,
     ...nominatimOverrides,
   });
   const fallbackFlag = String((env && env.PARRANDA_WIKIDATA_PLACE_RESOLVER) ?? "").trim().toLowerCase();
@@ -448,4 +499,5 @@ module.exports = {
   composePlaceResolvers,
   resolveDefaultPlaceResolver,
   DEFAULT_USER_AGENT,
+  DEFAULT_MAX_PENDING_REQUESTS,
 };

@@ -4,8 +4,8 @@
  * Default-off, low-volume dogfood/MVP wiring. Proves: honest Nominatim mapping,
  * conservative confidence (clear single anchors; near-ties → ambiguous; junk →
  * low), normalization + reject-without-fetch, clamped limit, fail-closed on
- * http/network/parse errors, in-memory TTL cache, in-flight dedupe, GLOBAL
- * per-instance rate spacing, deploy-configurable User-Agent, env-gated default
+ * http/network/parse errors, persistent-capable TTL cache, in-flight dedupe,
+ * bounded GLOBAL per-instance queue/rate spacing, deploy-configurable User-Agent, env-gated default
  * factory tested with explicit env objects, and end-to-end via buildApp.
  *
  * Fully deterministic: injected fetcher / now / sleep — no live network.
@@ -13,6 +13,9 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const { mkdtempSync, rmSync } = require("node:fs");
+const { tmpdir } = require("node:os");
+const { join } = require("node:path");
 
 const { buildApp } = require("../server/app");
 const {
@@ -273,6 +276,109 @@ test("pure: concurrent identical queries dedupe in-flight (one fetch)", async ()
   assert.equal(calls.length, 1);
 });
 
+test("pure: a successful place resolution survives a new resolver instance via disk cache", async (t) => {
+  const cacheDir = mkdtempSync(join(tmpdir(), "parranda-place-resolver-"));
+  t.after(() => rmSync(cacheDir, { recursive: true, force: true }));
+  const firstCalls = [];
+  const first = createNominatimPlaceResolver({
+    fetcher: fetcherReturning([nominatim("Cached Place", 48.1, 11.5, 0.7)], firstCalls),
+    cacheDir,
+    minIntervalMs: 0,
+  });
+  assert.equal((await first("Cached Place")).length, 1);
+  assert.equal(firstCalls.length, 1);
+
+  const secondCalls = [];
+  const afterRestart = createNominatimPlaceResolver({
+    fetcher: fetcherReturning([], secondCalls),
+    cacheDir,
+    minIntervalMs: 0,
+  });
+  const restored = await afterRestart("  cached   place ");
+  assert.equal(secondCalls.length, 0, "a fresh resolver instance reads the persistent result");
+  assert.equal(restored[0].label, "Cached Place");
+});
+
+test("pure: transient provider failure is never persisted across resolver instances", async (t) => {
+  const cacheDir = mkdtempSync(join(tmpdir(), "parranda-place-resolver-failure-"));
+  t.after(() => rmSync(cacheDir, { recursive: true, force: true }));
+  const failed = createNominatimPlaceResolver({
+    fetcher: async () => jsonResponse(503, []),
+    cacheDir,
+    minIntervalMs: 0,
+  });
+  assert.deepEqual(await failed("Retry Place"), []);
+
+  const retryCalls = [];
+  const retry = createNominatimPlaceResolver({
+    fetcher: fetcherReturning([nominatim("Retry Place", 48.1, 11.5, 0.7)], retryCalls),
+    cacheDir,
+    minIntervalMs: 0,
+  });
+  assert.equal((await retry("Retry Place")).length, 1);
+  assert.equal(retryCalls.length, 1, "the new instance retries instead of reading a cached failure");
+});
+
+test("pure: resolver queue is bounded and an overflow miss remains retryable", async () => {
+  let releaseFirst;
+  let markFirstStarted;
+  const firstStarted = new Promise((resolve) => { markFirstStarted = resolve; });
+  const firstGate = new Promise((resolve) => { releaseFirst = resolve; });
+  const calls = [];
+  const resolver = createNominatimPlaceResolver({
+    fetcher: async (url) => {
+      const query = new URL(url).searchParams.get("q");
+      calls.push(query);
+      if (query === "one") {
+        markFirstStarted();
+        await firstGate;
+      }
+      return jsonResponse(200, [nominatim(query, 48.1, 11.5, 0.7)]);
+    },
+    minIntervalMs: 0,
+    maxPendingRequests: 2,
+  });
+
+  const first = resolver("one");
+  await firstStarted;
+  const second = resolver("two");
+  const overflow = resolver("three");
+  assert.deepEqual(await overflow, [], "the extra cache miss fails soft instead of growing the queue");
+  assert.deepEqual(calls, ["one"], "only the active request has reached the provider");
+
+  releaseFirst();
+  const [one, two] = await Promise.all([first, second]);
+  assert.equal(one.length, 1);
+  assert.equal(two.length, 1);
+  assert.deepEqual(calls, ["one", "two"]);
+
+  const retried = await resolver("three");
+  assert.equal(retried.length, 1);
+  assert.deepEqual(calls, ["one", "two", "three"], "overflow is not poison-cached");
+});
+
+test("pure: identical in-flight queries share one bounded queue slot", async () => {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  let calls = 0;
+  const resolver = createNominatimPlaceResolver({
+    fetcher: async () => {
+      calls += 1;
+      await gate;
+      return jsonResponse(200, [nominatim("Shared", 48.1, 11.5, 0.7)]);
+    },
+    minIntervalMs: 0,
+    maxPendingRequests: 1,
+  });
+  const a = resolver("shared");
+  const b = resolver(" shared ");
+  release();
+  const [left, right] = await Promise.all([a, b]);
+  assert.equal(calls, 1);
+  assert.equal(left.length, 1);
+  assert.deepEqual(left, right);
+});
+
 test("pure: GLOBAL per-instance rate gate spaces DISTINCT queries by minIntervalMs", async () => {
   let clock = 0;
   const slept = [];
@@ -371,6 +477,31 @@ test("env factory: User-Agent flows from env (verified via injected fetcher over
   );
   await r("x");
   assert.equal(calls[0].headers["User-Agent"], "Deploy/9.9 (+https://deploy.test)");
+});
+
+test("env factory: PARRANDA_CACHE_DIR persists primary resolver results across instances", async (t) => {
+  const cacheDir = mkdtempSync(join(tmpdir(), "parranda-default-resolver-"));
+  t.after(() => rmSync(cacheDir, { recursive: true, force: true }));
+  const env = {
+    PARRANDA_PLACE_RESOLVER: "1",
+    PARRANDA_CACHE_DIR: cacheDir,
+  };
+  const firstCalls = [];
+  const first = resolveDefaultPlaceResolver(env, {
+    fetcher: fetcherReturning([nominatim("Persistent", 48.1, 11.5, 0.7)], firstCalls),
+    minIntervalMs: 0,
+  });
+  await first("Persistent");
+
+  const secondCalls = [];
+  const second = resolveDefaultPlaceResolver(env, {
+    fetcher: fetcherReturning([], secondCalls),
+    minIntervalMs: 0,
+  });
+  const restored = await second("Persistent");
+  assert.equal(firstCalls.length, 1);
+  assert.equal(secondCalls.length, 0);
+  assert.equal(restored[0].label, "Persistent");
 });
 
 test("resolver chain: a strong or ambiguous primary result remains authoritative", async () => {
