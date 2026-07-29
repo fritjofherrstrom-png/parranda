@@ -114,6 +114,7 @@ test("cold-start refresh is bounded: the component delegates to the tested follo
   // inputs and consumes every output instead of re-deriving any of it inline.
   assert.match(anywherePlannerSource, /planComposeFollowup\(\{/);
   assert.match(anywherePlannerSource, /composed: cls\.status === "composed"/);
+  assert.match(anywherePlannerSource, /structureOnly: cls\.status === "structure_only"/);
   assert.match(anywherePlannerSource, /hasStructure: Boolean\(safe\?\.place_structure\)/);
   assert.match(anywherePlannerSource, /transientSourceRetry: decision\.shouldRetryTransientSource\(body, cls\)/);
   assert.match(anywherePlannerSource, /livePending: safe\?\.live_events\?\.pending === true/);

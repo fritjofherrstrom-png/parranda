@@ -7,9 +7,10 @@
  *     capped refreshes (9/12/18 s). Exhaustion is reported so the UI can say
  *     "couldn't verify" instead of spinning forever.
  *   - ONE-SHOT UPGRADE: a USER-initiated compose (never a silent one) that
- *     composed without structure, or hit an explicit transient trusted-source
- *     failure, gets exactly one silent retry. A proven empty source, ambiguity,
- *     or an unresolved place never retries — those are honest results.
+ *     returned structure while corroboration was still warming, composed
+ *     without structure, or hit an explicit transient trusted-source failure,
+ *     gets exactly one silent retry. A proven empty source, ambiguity, or an
+ *     unresolved place never retries — those are honest results.
  *
  * Pure + deterministic; the caller owns timers, aborts and state.
  */
@@ -19,6 +20,7 @@ export const LIVE_REFRESH_DELAYS_MS = [9000, 12000, 18000];
 /**
  * @param {object} input
  * @param {boolean} input.composed              classification.status === "composed"
+ * @param {boolean} input.structureOnly         classification.status === "structure_only"
  * @param {boolean} input.hasStructure          the safe response carries place_structure
  * @param {boolean} input.transientSourceRetry  shared-module verdict (shouldRetryTransientSource)
  * @param {boolean} input.livePending           safe.live_events?.pending === true
@@ -30,6 +32,7 @@ export const LIVE_REFRESH_DELAYS_MS = [9000, 12000, 18000];
  */
 export function planComposeFollowup({
   composed = false,
+  structureOnly = false,
   hasStructure = false,
   transientSourceRetry = false,
   livePending = false,
@@ -37,7 +40,7 @@ export function planComposeFollowup({
   pollAttempt = 0,
   delays = LIVE_REFRESH_DELAYS_MS,
 } = {}) {
-  const needsStructureUpgrade = composed && !hasStructure;
+  const needsStructureUpgrade = structureOnly || (composed && !hasStructure);
   const canRefreshLive = livePending && pollAttempt < delays.length;
   const canRunOneShotUpgrade = !silent && (needsStructureUpgrade || transientSourceRetry);
   // Exhaustion is a fact about the LIVE ladder alone — it can be true while a

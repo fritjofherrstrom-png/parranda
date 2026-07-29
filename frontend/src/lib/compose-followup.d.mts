@@ -2,6 +2,7 @@ export declare const LIVE_REFRESH_DELAYS_MS: number[];
 
 export interface ComposeFollowupInput {
   composed?: boolean;
+  structureOnly?: boolean;
   hasStructure?: boolean;
   transientSourceRetry?: boolean;
   livePending?: boolean;

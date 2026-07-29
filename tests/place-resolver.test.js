@@ -632,16 +632,25 @@ test(
           "sv",
           "normalized query lang, not a public body field, selects source labels",
         );
-        return [{
-          label: "Österlen",
-          lat: 55.626388,
-          lng: 14.184722,
-          confidence: "medium",
-          provenance: "wikidata_open_knowledge",
-          attribution: "Wikidata contributors",
-          license: "CC0-1.0",
-          source_tier: "inferred",
-        }];
+        return [
+          {
+            label: "Österlen",
+            lat: 55.626388,
+            lng: 14.184722,
+            confidence: "medium",
+            provenance: "wikidata_open_knowledge",
+            attribution: "Wikidata contributors",
+            license: "CC0-1.0",
+            source_tier: "inferred",
+          },
+          {
+            label: "Österlen namesake",
+            lat: 40,
+            lng: -90,
+            confidence: "low",
+            provenance: "wikidata_open_knowledge",
+          },
+        ];
       },
     ),
   }, async (server) => {
@@ -696,14 +705,14 @@ test("the same place indexed twice by the provider is one candidate, not a near-
   const resolver = createNominatimPlaceResolver({
     fetcher: fetcherReturning([
       nominatim("Paris, Île-de-France, France métropolitaine, France", 48.8535, 2.3484, 0.897098092136026, ["relation", "7444"]),
-      nominatim("Paris, Île-de-France, France métropolitaine, France", 48.8535, 2.3484, 0.897098092136026, ["node", "17807753"]),
+      nominatim("Paris, Île-de-France, France métropolitaine, France", 48.8589, 2.3200, 0.897098092136026, ["relation", "71525"]),
       nominatim("Paris, Lamar County, Texas, United States", 33.6618, -95.5555, 0.5298648354283636, ["relation", "115357"]),
     ]),
     minIntervalMs: 0,
   });
 
   const out = await resolver("Paris");
-  assert.equal(out.length, 2, "the duplicate collapses; the genuine namesake remains");
+  assert.equal(out.length, 2, "city/boundary points collapse; the distant namesake remains");
   const strong = out.filter((candidate) => candidate.confidence === "medium");
   assert.equal(strong.length, 1, "exactly one anchor — not an ambiguous near-tie");
   assert.match(strong[0].label, /France/);
