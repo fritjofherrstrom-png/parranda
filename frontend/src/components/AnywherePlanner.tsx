@@ -24,6 +24,7 @@ import {
   type LiveEventScope,
 } from "../lib/live-event-query.mjs";
 import { mapsPlaceUrl, mapsWalkingRouteUrl, primaryRouteStops } from "../lib/maps-links.mjs";
+import { routeMarkerPresentation } from "../lib/route-map-presentation.mjs";
 import { selectedDayHoursLabel } from "../lib/selected-day-hours.mjs";
 import {
   buildRouteContextSuggestions,
@@ -981,16 +982,22 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           routePath.forEach((point: [number, number]) => bounds.push(point));
         }
 
+        const markerPresentation = routeMarkerPresentation(routeStops);
         routeStops.forEach((stop: any, index: number) => {
           if (!Number.isFinite(stop?.lat) || !Number.isFinite(stop?.lng)) return;
           bounds.push([stop.lat, stop.lng]);
+          const presentation = markerPresentation[index];
+          const eventClass = stop.is_live_event === true ? " route-map-marker--event" : "";
+          const clusteredClass = presentation?.clustered ? " route-map-marker-shell--clustered" : "";
+          const shiftX = Number(presentation?.shift_x_px) || 0;
+          const shiftY = Number(presentation?.shift_y_px) || 0;
           const icon = L.divIcon({
-            className: `route-map-marker${stop.is_live_event === true ? " route-map-marker--event" : ""}`,
-            html: String(index + 1),
-            iconSize: [44, 44],
-            iconAnchor: [22, 22],
+            className: `route-map-marker-shell${clusteredClass}`,
+            html: `<span class="route-map-marker${eventClass}" style="--route-marker-x:${shiftX}px;--route-marker-y:${shiftY}px">${index + 1}</span>`,
+            iconSize: [72, 72],
+            iconAnchor: [36, 36],
           });
-          const marker = L.marker([stop.lat, stop.lng], { icon, zIndexOffset: 1200 });
+          const marker = L.marker([stop.lat, stop.lng], { icon, zIndexOffset: 1200 + index });
           const markerName = String(stop.label || stop.name || "").trim();
           if (markerName) {
             const safe = document.createElement("div");
@@ -1452,7 +1459,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               type="button"
               onClick={() => setMapExpanded((cur) => !cur)}
               aria-expanded={mapExpanded}
-              className="absolute bottom-2.5 right-2.5 z-[1001] inline-flex min-h-11 items-center rounded-full border border-parranda-ink/20 bg-parranda-paper/85 px-3.5 text-xs font-bold text-parranda-ink/85"
+              className="absolute right-2.5 top-2.5 z-[1001] inline-flex min-h-11 items-center rounded-full border border-parranda-ink/20 bg-parranda-paper/90 px-3.5 text-xs font-bold text-parranda-ink/85 shadow-sm"
             >
               {mapExpanded ? t("Förminska kartan", "Shrink map") : t("Förstora kartan", "Expand map")} <span aria-hidden="true" className="ml-1.5">⤢</span>
             </button>

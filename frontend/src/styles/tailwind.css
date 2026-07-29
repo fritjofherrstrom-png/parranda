@@ -20,8 +20,7 @@
 
 /* Numbered map markers. A composed route owns the stronger marker; district
    numbers remain only for the honest structure-only state. */
-.district-map-marker,
-.route-map-marker {
+.district-map-marker {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -36,13 +35,45 @@
   box-shadow: 0 1px 6px rgba(58, 33, 20, 0.35);
 }
 
+.route-map-marker-shell {
+  overflow: visible;
+  border: 0;
+  background: transparent;
+}
+
+.route-map-marker-shell--clustered::after {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid #fffaf3;
+  border-radius: 999px;
+  background: rgb(var(--p-color-accent));
+  content: "";
+  transform: translate(-50%, -50%);
+  box-shadow: 0 1px 4px rgba(58, 33, 20, 0.35);
+}
+
 .route-map-marker {
-  position: relative;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 44px;
   height: 44px;
   border: 0;
   background: transparent;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
   box-shadow: none;
+  transform: translate(
+    calc(-50% + var(--route-marker-x, 0px)),
+    calc(-50% + var(--route-marker-y, 0px))
+  );
   /* The number is anonymous inline content; isolation keeps it above the
      smaller visual pin while the full 44px marker remains clickable. */
   isolation: isolate;
