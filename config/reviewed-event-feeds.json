@@ -58,5 +58,24 @@
     "runtime_policy": "bounded_refresh",
     "reviewed_at": "2026-07-20",
     "review_scope": "public editor-reviewed factual event atoms with source attribution under CC BY 4.0"
+  },
+  {
+    "id": "malmo-municipal-calendar",
+    "label": "Malmö stads evenemangskalender",
+    "adapter": "sitevision_calendar",
+    "endpoint": "https://malmo.se/evenemangskalender",
+    "bbox": [12.7171426, 55.4805867, 13.151762, 55.6797699],
+    "timezone": "Europe/Stockholm",
+    "source_language": "sv",
+    "source_tier": "official",
+    "confidence": "medium",
+    "source_family": "official_municipal_calendar",
+    "source_identity": "malmo.se",
+    "fetch_details": true,
+    "detail_limit": 8,
+    "status": "active",
+    "runtime_policy": "bounded_refresh",
+    "reviewed_at": "2026-07-28",
+    "review_scope": "official public calendar factual event atoms with source attribution; no editorial descriptions or images"
   }
 ]

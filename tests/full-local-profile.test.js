@@ -58,9 +58,10 @@ test("reviewed local profile selects two independent event publishers around Sim
       "simrishamn-municipal-calendar",
       "visit-ystad-osterlen-calendar",
       "visit-stockholm-open-api",
+      "malmo-municipal-calendar",
     ],
   );
-  assert.equal(new Set(feeds.map((feed) => feed.source_identity)).size, 3);
+  assert.equal(new Set(feeds.map((feed) => feed.source_identity)).size, 4);
   assert.ok(feeds.every((feed) => feed.status === "active"));
   assert.ok(feeds.every((feed) => feed.timezone === "Europe/Stockholm"));
   assert.equal(feeds.find((feed) => feed.adapter === "wix_event_sitemap")?.event_path_prefix, "/evenemang-1/");
@@ -94,6 +95,68 @@ test("reviewed local profile selects the official Stockholm API without a city b
   assert.equal(plan[0].kind, "localized_events_api");
   assert.equal(plan[0].source_tier, "official");
   assert.equal(plan[0].license, "CC-BY 4.0");
+});
+
+test("reviewed local profile selects Malmö's official calendar by bounds, not city code", () => {
+  const env = buildFullDevEnvironment({}, { cacheDir: os.tmpdir() });
+  const registry = resolveEventFeedRegistry(env);
+  const malmoPlan = buildAnchorEventSourcePlan({
+    anchor: { lat: 55.6053, lng: 13.0002 },
+    registry,
+  });
+  const lundPlan = buildAnchorEventSourcePlan({
+    anchor: { lat: 55.7029, lng: 13.1929 },
+    registry,
+  });
+
+  assert.deepEqual(malmoPlan.map((source) => source.id), ["malmo-municipal-calendar"]);
+  assert.equal(malmoPlan[0].kind, "sitevision_calendar");
+  assert.equal(malmoPlan[0].source_tier, "official");
+  assert.equal(lundPlan.some((source) => source.id === "malmo-municipal-calendar"), false);
+});
+
+test("Malmö's reviewed calendar produces bounded source-backed events through the generic adapter", async () => {
+  const env = buildFullDevEnvironment({}, { cacheDir: os.tmpdir() });
+  const registry = resolveEventFeedRegistry(env);
+  const listingUrl = "https://malmo.se/evenemangskalender";
+  const eventUrl = "https://malmo.se/events/folkets-park-workshop";
+  const result = await collectAnchorEvents({
+    anchor: { lat: 55.5934, lng: 13.0139 },
+    now: "2026-07-28T12:00:00.000Z",
+    registry,
+    fetcher: async (url) => {
+      if (String(url) === listingUrl) {
+        return textResponse(url, `
+          <main class="sv-ws-event-calendar"><div class="eventsListContainer">
+            <article class="eventArticle">
+              <a class="eventArticleHeading" href="${eventUrl}"><h3>Open workshop in the park</h3></a>
+              <div class="eventInfo"><div class="timeIcon"></div>28 juli<div>18:00–20:00</div></div>
+              <div class="footerText">Folkets Park</div>
+            </article>
+          </div></main>
+        `);
+      }
+      if (String(url) === eventUrl) {
+        return textResponse(url, `
+          <h1>Open workshop in the park</h1>
+          <span id="Datumochtid">Datum och tid</span><p>28 juli, 18.00–20.00</p>
+          <p><strong>Evenemangsplats:</strong><br>Folkets Park</p>
+          <p><strong>Adress:</strong><br>Amiralsgatan 35</p>
+          <a href="https://www.google.com/maps/@55.5933696,13.0138606,200m">Map</a>
+        `);
+      }
+      throw new Error(`unexpected fixture URL: ${url}`);
+    },
+  });
+
+  assert.deepEqual(result.feeds.map((feed) => feed.id), ["malmo-municipal-calendar"]);
+  assert.equal(result.acquisition.source_health.status, "healthy");
+  assert.equal(result.acquisition.source_health.event_bearing_source_count, 1);
+  assert.equal(result.tonight.length, 1);
+  assert.equal(result.tonight[0].title, "Open workshop in the park");
+  assert.equal(result.tonight[0].source_label, "Malmö stads evenemangskalender");
+  assert.equal(result.tonight[0].lat, 55.5933696);
+  assert.equal(result.tonight[0].lng, 13.0138606);
 });
 
 test("both reviewed manifests collect normalized evidence through their generic adapters", async () => {
