@@ -8,6 +8,9 @@
     "dev": "node server.js",
     "dev:full": "node scripts/dev-full.js",
     "dev:dogfood": "PARRANDA_DOGFOOD_UI=enabled node server.js",
+    "migrate:source-catalog": "node scripts/migrate-source-catalog.js",
+    "review:source-profile": "node scripts/review-source-profile.js",
+    "scout:events": "node scripts/scout-local-event-sources.js",
     "share": "node scripts/share.js",
     "share:latest": "node scripts/share-latest.js",
     "validate:self-hosted": "node scripts/validate-self-hosted-stack.js",
@@ -37,6 +40,7 @@
     "node": ">=22"
   },
   "dependencies": {
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "pg": "^8.22.0"
   }
 }

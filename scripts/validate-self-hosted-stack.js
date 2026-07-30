@@ -22,6 +22,7 @@ function validateSelfHostedStack() {
   const compose = read("compose.production.yml");
   const caddy = read("deploy/Caddyfile");
   const deploy = read("scripts/deploy-self-hosted.sh");
+  const ci = read(".github/workflows/ci.yml");
   const workflow = read(".github/workflows/deploy-self-hosted.yml");
 
   requireText(dockerfile, /FROM node:22-[^\s]+ AS build/, "docker_build_stage_missing");
@@ -33,6 +34,11 @@ function validateSelfHostedStack() {
   requireText(compose, /PARRANDA_IMAGE:\?Set PARRANDA_IMAGE/, "immutable_image_required_missing");
   requireText(compose, /PARRANDA_BUILD_SHA:\?Set PARRANDA_BUILD_SHA/, "build_sha_required_missing");
   requireText(compose, /source-cache:\/var\/lib\/parranda\/source-cache/, "persistent_cache_missing");
+  requireText(compose, /image: postgres:\d+\.\d+-alpine/, "pinned_source_catalog_database_missing");
+  requireText(compose, /source-catalog-data:\/var\/lib\/postgresql\/data/, "persistent_source_catalog_missing");
+  requireText(compose, /source-catalog-migrate:/, "source_catalog_migration_service_missing");
+  requireText(deploy, /run --rm source-catalog-migrate/, "source_catalog_migration_step_missing");
+  requireText(ci, /--profile source-catalog[\s\S]*run --rm source-catalog-migrate/, "source_catalog_ci_smoke_missing");
   requireText(compose, /PARRANDA_PUBLIC_CLIENT_IDENTITY: xff/, "proxy_identity_missing");
   requireText(compose, /PARRANDA_TRUST_PROXY_HOPS: "1"/, "proxy_hop_contract_missing");
   requireText(compose, /condition: service_healthy/, "proxy_health_dependency_missing");

@@ -40,7 +40,24 @@ test("self-hosted deployment restores the prior image and contract after failed 
   assert.match(result.stderr, /rollback healthy/);
 });
 
-function deploymentFixture({ withPrevious = false } = {}) {
+test("self-hosted deployment migrates an explicitly enabled source catalog", () => {
+  const fixture = deploymentFixture({ withCatalog: true });
+  const result = runDeployment(fixture, fixture.newSha);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.realpathSync(path.join(fixture.root, "current")), fs.realpathSync(fixture.newContract));
+});
+
+test("self-hosted deployment rejects an enabled catalog without database credentials", () => {
+  const fixture = deploymentFixture();
+  fs.appendFileSync(path.join(fixture.root, ".env.production"), "PARRANDA_SOURCE_CATALOG=enabled\n");
+  const result = runDeployment(fixture, fixture.newSha);
+
+  assert.equal(result.status, 65);
+  assert.match(result.stderr, /source catalog enabled without database credentials/);
+});
+
+function deploymentFixture({ withPrevious = false, withCatalog = false } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "parranda-deploy-test-"));
   const bin = path.join(root, "bin");
   const releases = path.join(root, "releases");
@@ -57,10 +74,18 @@ function deploymentFixture({ withPrevious = false } = {}) {
     path.join(newContract, "scripts/deploy-self-hosted.sh"),
   );
   fs.chmodSync(path.join(newContract, "scripts/deploy-self-hosted.sh"), 0o755);
-  fs.writeFileSync(
-    path.join(root, ".env.production"),
-    "PARRANDA_IMAGE_REPOSITORY=ghcr.io/example/parranda\nPARRANDA_SITE_ADDRESS=example.test\n",
-  );
+  const environment = [
+    "PARRANDA_IMAGE_REPOSITORY=ghcr.io/example/parranda",
+    "PARRANDA_SITE_ADDRESS=example.test",
+  ];
+  if (withCatalog) {
+    environment.push(
+      "PARRANDA_SOURCE_CATALOG=enabled",
+      "PARRANDA_SOURCE_CATALOG_PASSWORD=test-password",
+      "PARRANDA_SOURCE_CATALOG_DATABASE_URL=postgresql://parranda:test-password@postgres:5432/parranda",
+    );
+  }
+  fs.writeFileSync(path.join(root, ".env.production"), `${environment.join("\n")}\n`);
   fs.writeFileSync(
     path.join(bin, "docker"),
     `#!/usr/bin/env bash

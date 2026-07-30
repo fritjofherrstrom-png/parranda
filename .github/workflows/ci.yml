@@ -55,9 +55,33 @@ jobs:
           PARRANDA_BUILD_SHA: 0000000000000000000000000000000000000000
         run: docker compose -f compose.production.yml config --quiet
 
+      - name: Validate self-hosted Source Catalog profile
+        env:
+          PARRANDA_IMAGE: parranda:self-hosted-ci
+          PARRANDA_BUILD_SHA: 0000000000000000000000000000000000000000
+          PARRANDA_SOURCE_CATALOG: enabled
+          PARRANDA_SOURCE_CATALOG_PASSWORD: ci-source-catalog-password
+          PARRANDA_SOURCE_CATALOG_DATABASE_URL: postgresql://parranda:ci-source-catalog-password@postgres:5432/parranda
+        run: docker compose --profile source-catalog -f compose.production.yml config --quiet
+
       - name: Build self-hosted image
         run: >-
           docker build
           --build-arg PARRANDA_BUILD_SHA=0000000000000000000000000000000000000000
           --tag parranda:self-hosted-ci
           .
+
+      - name: Smoke-test Source Catalog migration
+        env:
+          PARRANDA_IMAGE: parranda:self-hosted-ci
+          PARRANDA_BUILD_SHA: 0000000000000000000000000000000000000000
+          PARRANDA_SOURCE_CATALOG: enabled
+          PARRANDA_SOURCE_CATALOG_PASSWORD: ci-source-catalog-password
+          PARRANDA_SOURCE_CATALOG_DATABASE_URL: postgresql://parranda:ci-source-catalog-password@postgres:5432/parranda
+        run: |
+          cleanup() {
+            docker compose --profile source-catalog -f compose.production.yml down --volumes
+          }
+          trap cleanup EXIT
+          docker compose --profile source-catalog -f compose.production.yml up --detach postgres
+          docker compose --profile source-catalog -f compose.production.yml run --rm source-catalog-migrate

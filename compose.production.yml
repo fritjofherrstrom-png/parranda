@@ -20,6 +20,8 @@ services:
       PARRANDA_AGNOSTIC_ENGINE_COMPOSE: enabled
       PARRANDA_AGNOSTIC_EVENTS: enabled
       PARRANDA_EVENT_FEEDS_FILE: /app/config/reviewed-event-feeds.json
+      PARRANDA_SOURCE_CATALOG: ${PARRANDA_SOURCE_CATALOG:-disabled}
+      PARRANDA_SOURCE_CATALOG_DATABASE_URL: ${PARRANDA_SOURCE_CATALOG_DATABASE_URL:-}
       PARRANDA_CACHE_DIR: /var/lib/parranda/source-cache
       PARRANDA_PLACE_RESOLVER_USER_AGENT: ${PARRANDA_PLACE_RESOLVER_USER_AGENT:-Parranda self-hosted operator}
       PARRANDA_PUBLIC_GUARD: enabled
@@ -52,6 +54,47 @@ services:
       options:
         max-size: 10m
         max-file: "3"
+
+  postgres:
+    profiles:
+      - source-catalog
+    image: postgres:17.5-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: parranda
+      POSTGRES_USER: parranda
+      POSTGRES_PASSWORD: ${PARRANDA_SOURCE_CATALOG_PASSWORD:-catalog-disabled}
+    volumes:
+      - source-catalog-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U parranda -d parranda
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - private
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  source-catalog-migrate:
+    profiles:
+      - source-catalog
+    image: ${PARRANDA_IMAGE:?Set PARRANDA_IMAGE to an immutable image tag}
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PARRANDA_SOURCE_CATALOG_DATABASE_URL: ${PARRANDA_SOURCE_CATALOG_DATABASE_URL:-postgresql://parranda:catalog-disabled@postgres:5432/parranda}
+    command:
+      - node
+      - scripts/migrate-source-catalog.js
+    networks:
+      - private
 
   caddy:
     image: caddy:2.11.4-alpine
@@ -88,3 +131,4 @@ volumes:
   source-cache:
   caddy-data:
   caddy-config:
+  source-catalog-data:

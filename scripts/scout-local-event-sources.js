@@ -35,11 +35,14 @@ const {
 const {
   discoverLocalEventSourcesForPlace,
 } = require("../server/pulse-sources/place-event-source-scout");
+const {
+  resolveDefaultSourceProfileCatalog,
+} = require("../server/pulse-sources/source-profile-catalog");
 
 const USAGE = [
   "Usage:",
   "  node scripts/scout-local-event-sources.js input.json [--live]",
-  '  node scripts/scout-local-event-sources.js --place "Place name" --live [--term local-term] [--intent intent]',
+  '  node scripts/scout-local-event-sources.js --place "Place name" --live [--catalog] [--term local-term] [--intent intent]',
   "",
 ].join("\n");
 
@@ -81,8 +84,15 @@ async function main(argv = process.argv.slice(2), options = {}) {
       cache: runtime.scoutCache,
       scoutOptions: runtime.scoutOptions,
     });
-    writeJson(output, { ...result, live_network_used: true });
-    return 0;
+    const catalogWrite = parsed.catalog
+      ? await recordDiscoveryInCatalog(result, runtime.sourceCatalog)
+      : null;
+    writeJson(output, {
+      ...result,
+      live_network_used: true,
+      ...(catalogWrite ? { catalog_write: catalogWrite } : {}),
+    });
+    return catalogWrite?.status === "failed" || catalogWrite?.status === "unavailable" ? 1 : 0;
   }
 
   let input;
@@ -135,6 +145,7 @@ async function main(argv = process.argv.slice(2), options = {}) {
 function parseArguments(argv = []) {
   const parsed = {
     live: false,
+    catalog: false,
     place: null,
     inputPath: null,
     intentHints: [],
@@ -145,6 +156,10 @@ function parseArguments(argv = []) {
     const argument = argv[index];
     if (argument === "--live") {
       parsed.live = true;
+      continue;
+    }
+    if (argument === "--catalog") {
+      parsed.catalog = true;
       continue;
     }
     if (["--place", "--term", "--intent"].includes(argument)) {
@@ -170,6 +185,9 @@ function parseArguments(argv = []) {
     }
   }
   if (parsed.place && parsed.inputPath) parsed.errors.push("place_and_input_file_conflict");
+  if (parsed.catalog && (!parsed.place || !parsed.live)) {
+    parsed.errors.push("catalog_requires_live_place_mode");
+  }
   return parsed;
 }
 
@@ -248,7 +266,18 @@ function createOperatorRuntime(env = process.env) {
         : null,
     sourceScout: scoutLocalEventSources,
     scoutCache,
+    sourceCatalog: resolveDefaultSourceProfileCatalog(env),
   };
+}
+
+async function recordDiscoveryInCatalog(result, catalog) {
+  if (!catalog || typeof catalog.recordDiscovery !== "function") {
+    return { status: "unavailable", reason: "source_catalog_unavailable" };
+  }
+  if (!result?.source_profile) {
+    return { status: "failed", reason: "source_profile_unavailable" };
+  }
+  return catalog.recordDiscovery(result.source_profile);
 }
 
 function composeOperatorLoaders(osmLoader, wikiLoader) {
@@ -296,4 +325,5 @@ module.exports = {
   createOperatorRuntime,
   main,
   parseArguments,
+  recordDiscoveryInCatalog,
 };

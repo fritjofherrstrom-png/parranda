@@ -35,6 +35,9 @@ RUN npm ci --omit=dev \
 COPY --chown=node:node server.js ./
 COPY --chown=node:node server ./server
 COPY --chown=node:node config ./config
+COPY --chown=node:node migrations ./migrations
+COPY --chown=node:node scripts/migrate-source-catalog.js ./scripts/migrate-source-catalog.js
+COPY --chown=node:node scripts/review-source-profile.js ./scripts/review-source-profile.js
 COPY --chown=node:node assets ./assets
 COPY --chown=node:node vendor ./vendor
 COPY --from=build --chown=node:node /app/frontend/dist ./frontend/dist

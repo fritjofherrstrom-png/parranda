@@ -110,21 +110,30 @@ Explicit bounded probing of reviewed public seeds requires:
 
     node scripts/scout-local-event-sources.js scout-input.json --live
 
+On a self-hosted deployment with the geo Source Catalog enabled, a trusted
+place-mode scout can persist its normalized source profile for review:
+
+    node scripts/scout-local-event-sources.js --place "Place name" --live --catalog
+
 The live harness accepts the existing `PARRANDA_CACHE_DIR` and an optional
 `PARRANDA_EVENT_SOURCE_SCOUT_CACHE_TTL_MS`. It remains an operator/background
 job; no user request waits for this crawl.
 
-After terms, ownership, timezone, geography, and parser output have been
-reviewed, an operator may promote the proposed row into PARRANDA_EVENT_FEEDS.
-User requests never perform this discovery crawl; they continue to consume only
-approved, cache-backed sources through bounded acquisition.
+The catalog write is forced to `review_needed`, even if upstream scout data
+claims otherwise. Re-running discovery cannot overwrite an approved, rejected,
+or disabled profile. After terms, ownership, timezone, geography, and parser
+output have been reviewed, an operator may approve the exact profile or retain
+the existing versioned `PARRANDA_EVENT_FEEDS` path. User requests never perform
+this discovery crawl; they consume only approved, cache-backed sources through
+bounded acquisition.
 
 ### Reviewed source-profile runtime bridge
 
-A place source profile may alternatively carry an explicit `runtime_review`
-after operator review and be supplied through the trusted deployment variable
-`PARRANDA_REVIEWED_EVENT_SOURCE_PROFILES`. Discovery output starts as
-`unreviewed` with no feeds, so a scout result can never activate itself.
+A place source profile may carry an explicit `runtime_review` after operator
+review and be supplied through the trusted deployment variable
+`PARRANDA_REVIEWED_EVENT_SOURCE_PROFILES` or the Postgres-backed geo Source
+Catalog. Discovery output starts as `unreviewed` with no feeds, so a scout
+result can never activate itself.
 
 The runtime bridge accepts a reviewed feed only when:
 
@@ -138,10 +147,12 @@ The runtime bridge accepts a reviewed feed only when:
 - the trusted profile bounds remain the collection-selection bounds.
 
 Direct `PARRANDA_EVENT_FEEDS` rows retain precedence over matching profile
-feeds. Public request payload cannot provide either source registry. Once
-accepted, a profiled source enters the existing bounded cache, normalization,
-fusion, source-health, browse, and personalized-highlight path; it does not
-create a parallel event engine or alter a route/day anchor.
+feeds. Catalog rows are selected by reviewed bounds, approval expiry, and the
+request's trusted server-resolved anchor; public request payload cannot provide
+a source registry or catalog connection. Once accepted, a profiled source
+enters the existing bounded cache, normalization, fusion, source-health,
+browse, and personalized-highlight path; it does not create a parallel event
+engine or alter a route/day anchor.
 
 ## Source Family Priority
 
@@ -404,12 +415,13 @@ silently promoted.
 
 ## Runtime Strategy
 
-The future runtime path should be a-la-minute but bounded:
+The runtime path is a-la-minute but bounded:
 
 1. Resolve place/bounds.
 2. Load cached source-discovery profile for that place or nearby region.
-3. If missing/stale, run low-volume discovery against known search surfaces and
-   source-family heuristics.
+3. If missing/stale, queue low-volume background discovery against known search
+   surfaces and source-family heuristics. The queue/scheduler is the next
+   capability after the persistent catalog; it must not run inside the request.
 4. Run only approved provider adapters. Do not fetch arbitrary user URLs.
 5. Normalize into `time_sensitive_events`.
 6. Feed normalized events into Pulse salience and, later, dayflow/route gates.

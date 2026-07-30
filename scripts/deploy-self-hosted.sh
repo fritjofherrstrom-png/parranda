@@ -38,6 +38,15 @@ if [[ ! "$image_repository" =~ ^[a-z0-9][a-z0-9._/-]*$ ]]; then
   exit 65
 fi
 
+if [[ "$(env_value PARRANDA_SOURCE_CATALOG "$production_env")" == "enabled" ]]; then
+  catalog_password="$(env_value PARRANDA_SOURCE_CATALOG_PASSWORD "$production_env")"
+  catalog_url="$(env_value PARRANDA_SOURCE_CATALOG_DATABASE_URL "$production_env")"
+  if [[ -z "$catalog_password" || -z "$catalog_url" || "$catalog_url" == *"catalog-disabled"* ]]; then
+    echo "source catalog enabled without database credentials" >&2
+    exit 65
+  fi
+fi
+
 previous_image=""
 previous_sha=""
 previous_contract=""
@@ -50,6 +59,15 @@ fi
 compose() {
   local selected_contract="$1"
   shift
+  if [[ "$(env_value PARRANDA_SOURCE_CATALOG "$production_env")" == "enabled" ]]; then
+    docker compose \
+      --env-file "$production_env" \
+      --env-file "$release_env" \
+      -f "$selected_contract/compose.production.yml" \
+      --profile source-catalog \
+      "$@"
+    return
+  fi
   docker compose \
     --env-file "$production_env" \
     --env-file "$release_env" \
@@ -94,6 +112,11 @@ activate_release() {
   write_release "$image" "$sha" "$selected_contract"
   compose "$selected_contract" config --quiet
   compose "$selected_contract" pull web caddy
+  if [[ "$(env_value PARRANDA_SOURCE_CATALOG "$production_env")" == "enabled" ]]; then
+    compose "$selected_contract" pull postgres source-catalog-migrate
+    compose "$selected_contract" up -d postgres
+    compose "$selected_contract" run --rm source-catalog-migrate
+  fi
   compose "$selected_contract" up -d --remove-orphans
   verify_release "$sha" "$selected_contract"
 }

@@ -16,11 +16,11 @@ internet -> Caddy -> Parranda web -> trusted upstream sources
                          +-> persistent source cache volume
 ```
 
-The current application has no Source Catalog database or scout worker. This
-stack deliberately does not create placeholder services that would suggest
-otherwise. The future geo Source Catalog can add Postgres plus a queue/worker to
-the private Compose network while leaving the web/Caddy deployment contract
-unchanged.
+The stack includes an optional Postgres-backed geo Source Catalog. It persists
+discovered source profiles as review-needed records and lets the web runtime
+read only fresh, operator-approved profiles. It is disabled by default. The
+background scout scheduler/queue is still a later capability; no public request
+performs source discovery.
 
 ## Host prerequisites
 
@@ -93,6 +93,50 @@ Manual runs use the same workflow and never deploy an uncommitted worktree.
   verification compares it with the requested release SHA.
 - `config/reviewed-event-feeds.json` remains trusted image-owned configuration.
   Public payloads cannot inject source endpoints or provider rows.
+- The optional Source Catalog is enabled only through host-owned environment
+  configuration. Scout writes are forced to `review_needed`; only profiles with
+  a fresh approved runtime review can supplement event acquisition.
+
+## Optional geo Source Catalog
+
+Set these host-owned values in `.env.production`:
+
+```text
+PARRANDA_SOURCE_CATALOG=enabled
+PARRANDA_SOURCE_CATALOG_PASSWORD=a-long-url-safe-secret
+PARRANDA_SOURCE_CATALOG_DATABASE_URL=postgresql://parranda:a-long-url-safe-secret@postgres:5432/parranda
+```
+
+The deploy script then starts the private Postgres service and runs the
+versioned migration before activating the web release. The database is not
+published on a host port. A migration or database-start failure aborts the new
+release before health verification.
+
+The operator scout can persist a bounded discovery result for review:
+
+```bash
+PARRANDA_SOURCE_CATALOG=enabled \
+PARRANDA_SOURCE_CATALOG_DATABASE_URL="$DATABASE_URL" \
+npm run scout:events -- --place "Place name" --live --catalog
+```
+
+This command never activates a source. It records the normalized place profile,
+geographic scope, source-family evidence and candidates as `review_needed`.
+Approval remains a separate trusted operator action and the shared reviewed-
+profile validator is applied again on every catalog read.
+
+After editing the scout output's `source_profile.runtime_review` to bind exact
+candidates, reviewed endpoints, health, terms, timezone and an expiry, apply it
+through the trusted operator CLI:
+
+```bash
+PARRANDA_SOURCE_CATALOG=enabled \
+PARRANDA_SOURCE_CATALOG_DATABASE_URL="$DATABASE_URL" \
+npm run review:source-profile -- --approve reviewed-profile.json
+```
+
+The command rejects unreviewed, expired, endpoint-swapped, adapter-swapped,
+unhealthy, social-only or otherwise invalid profiles. It is not an HTTP API.
 
 ## Manual deployment and rollback
 
@@ -113,10 +157,10 @@ release, and only then exits with failure.
 ## Data durability
 
 The `source-cache` volume avoids cold upstream lookups after application
-restarts. It is rebuildable cache, not the future system of record. Back up
-`caddy-data` if preserving certificate state matters.
+restarts. It is rebuildable cache, not a system of record. Back up `caddy-data`
+if preserving certificate state matters.
 
-When the dynamic Live Source Catalog lands, its Postgres data will be the system
-of record and must receive scheduled, tested backups. Event scouting belongs in
-a persistent worker/queue on this host, never inside the deploy workflow or the
+When enabled, `source-catalog-data` is the Source Catalog system of record and
+must receive scheduled, tested backups. Event scouting still belongs in a
+persistent worker/queue on this host, never inside the deploy workflow or the
 public request path.

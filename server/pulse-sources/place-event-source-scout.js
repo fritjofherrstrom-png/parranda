@@ -61,12 +61,13 @@ async function discoverLocalEventSourcesForPlace({
     });
   }
 
+  const trustedBounds = bounds || resolution.spatialScope?.bounds || null;
   const place = buildTrustedScoutPlace({
     query,
     intake: resolution.intake,
     placeContext: resolution.placeContext,
     anchor: resolution.anchor,
-    bounds,
+    bounds: trustedBounds,
     localDiscoveryTerms,
   });
   const discoveryQueries = buildLocalEventDiscoveryQueries({
@@ -169,7 +170,7 @@ async function discoverLocalEventSourcesForPlace({
     scouted = await sourceScout({
       place,
       anchor: resolution.anchor,
-      bounds,
+      bounds: trustedBounds,
       seeds,
       intentHints,
       localDiscoveryTerms,
