@@ -45,3 +45,19 @@ jobs:
       # nondeterministic island uid is the one tolerated difference).
       - name: Check committed frontend/dist matches the build
         run: node scripts/check-frontend-dist-drift.js
+
+      - name: Validate self-hosted production contract
+        run: npm run validate:self-hosted
+
+      - name: Validate self-hosted Compose configuration
+        env:
+          PARRANDA_IMAGE: ghcr.io/example/parranda:ci
+          PARRANDA_BUILD_SHA: 0000000000000000000000000000000000000000
+        run: docker compose -f compose.production.yml config --quiet
+
+      - name: Build self-hosted image
+        run: >-
+          docker build
+          --build-arg PARRANDA_BUILD_SHA=0000000000000000000000000000000000000000
+          --tag parranda:self-hosted-ci
+          .

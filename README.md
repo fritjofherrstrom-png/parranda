@@ -148,8 +148,13 @@ skicka till vänner — gratis, utan kort, inloggning med GitHub.
 Full genomgång, inklusive alltid-på via launchd och hur skydden ställs in:
 [`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md).
 
+För en alltid-på Linux-server utan Render finns även en immutable
+Docker/Compose-profil med Caddy, persistent source-cache, exakt build-SHA,
+health-verifierad deploy och automatisk rollback:
+[`docs/SELF_HOSTED_PRODUCTION.md`](docs/SELF_HOSTED_PRODUCTION.md).
+
 Delningsläget skyddar också den öppna data appen lever på: 20 uppströms-
-förfrågningar per besökare och minut, tre samtidiga, `robots.txt` som håller
+förfrågningar per besökare och minut, åtta samtidiga, `robots.txt` som håller
 crawlers borta och debug-projektionen stängd. Avslag är ärliga 429-svar, aldrig
 ett tyst tomt resultat.
 

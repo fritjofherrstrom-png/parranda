@@ -1,0 +1,90 @@
+name: parranda
+
+services:
+  web:
+    image: ${PARRANDA_IMAGE:?Set PARRANDA_IMAGE to an immutable image tag}
+    init: true
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 8000
+      PARRANDA_BUILD_SHA: ${PARRANDA_BUILD_SHA:?Set PARRANDA_BUILD_SHA}
+      PARRANDA_RUNTIME_PROFILE: self_hosted
+      PARRANDA_NEW_ANYWHERE: enabled
+      PARRANDA_PLACE_RESOLVER: enabled
+      PARRANDA_WIKIDATA_PLACE_RESOLVER: enabled
+      PARRANDA_OPEN_DATA_LOADER: enabled
+      PARRANDA_WIKIDATA_SOURCE: enabled
+      PARRANDA_WIKIDATA_LABEL_LANGS: ${PARRANDA_WIKIDATA_LABEL_LANGS:-en}
+      PARRANDA_AGNOSTIC_ENGINE_COMPOSE: enabled
+      PARRANDA_AGNOSTIC_EVENTS: enabled
+      PARRANDA_EVENT_FEEDS_FILE: /app/config/reviewed-event-feeds.json
+      PARRANDA_CACHE_DIR: /var/lib/parranda/source-cache
+      PARRANDA_PLACE_RESOLVER_USER_AGENT: ${PARRANDA_PLACE_RESOLVER_USER_AGENT:-Parranda self-hosted operator}
+      PARRANDA_PUBLIC_GUARD: enabled
+      PARRANDA_PUBLIC_CLIENT_IDENTITY: xff
+      PARRANDA_TRUST_PROXY_HOPS: "1"
+      PARRANDA_PUBLIC_GUARD_MAX: ${PARRANDA_PUBLIC_GUARD_MAX:-20}
+      PARRANDA_PUBLIC_GUARD_WINDOW_MS: ${PARRANDA_PUBLIC_GUARD_WINDOW_MS:-60000}
+      PARRANDA_PUBLIC_GUARD_CONCURRENCY: ${PARRANDA_PUBLIC_GUARD_CONCURRENCY:-8}
+    volumes:
+      - source-cache:/var/lib/parranda/source-cache
+    expose:
+      - "8000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8000/api/health').then((response)=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 4
+    stop_grace_period: 20s
+    networks:
+      - private
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  caddy:
+    image: caddy:2.11.4-alpine
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+        restart: true
+    environment:
+      PARRANDA_SITE_ADDRESS: ${PARRANDA_SITE_ADDRESS:-http://localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    networks:
+      - private
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  private:
+    driver: bridge
+
+volumes:
+  source-cache:
+  caddy-data:
+  caddy-config:
