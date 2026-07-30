@@ -165,6 +165,7 @@ function toRawCandidate(result) {
 // places never collapse, loose enough to catch the same place indexed at
 // slightly different representative points.
 const SAME_PLACE_DEGREES = 0.0015;
+const SAME_FULL_LABEL_CLUSTER_KM = 5;
 
 /**
  * One place, one candidate.
@@ -176,10 +177,10 @@ const SAME_PLACE_DEGREES = 0.0015;
  * as if they were, so every famous city with a duplicated index entry failed
  * closed as `ambiguous_place` while genuinely unique names resolved fine.
  *
- * Two entries are the same place only when they share a full label or name AND
- * sit within a rounding error of each other. Labels are provider text, not
- * stable place identities: the same full label can exist in distinct datasets
- * or synthetic seams, so text alone must never collapse distant anchors.
+ * An identical full administrative label may use different representative
+ * points for the city and its boundary, so it gets a small city-scale radius.
+ * A shared short name with different labels keeps the much tighter rounding
+ * tolerance. Provider text alone never collapses distant anchors.
  */
 function dedupeSamePlace(rawCandidates) {
   const kept = [];
@@ -189,11 +190,10 @@ function dedupeSamePlace(rawCandidates) {
     const duplicateOf = kept.find((existing) => {
       const sameLabel = Boolean(label && normalizeNameForMatch(existing.label) === label);
       const sameName = Boolean(name && normalizeNameForMatch(existing.name) === name);
-      if (!sameLabel && !sameName) return false;
-      return (
-        Math.abs(existing.lat - candidate.lat) <= SAME_PLACE_DEGREES &&
-        Math.abs(existing.lng - candidate.lng) <= SAME_PLACE_DEGREES
-      );
+      if (sameLabel) return coordinateDistanceKm(existing, candidate) <= SAME_FULL_LABEL_CLUSTER_KM;
+      if (!sameName) return false;
+      return Math.abs(existing.lat - candidate.lat) <= SAME_PLACE_DEGREES &&
+        Math.abs(existing.lng - candidate.lng) <= SAME_PLACE_DEGREES;
     });
     if (!duplicateOf) {
       kept.push(candidate);
@@ -205,6 +205,18 @@ function dedupeSamePlace(rawCandidates) {
     }
   }
   return kept;
+}
+
+function coordinateDistanceKm(a, b) {
+  const toRadians = (value) => (value * Math.PI) / 180;
+  const lat1 = toRadians(a.lat);
+  const lat2 = toRadians(b.lat);
+  const deltaLat = lat2 - lat1;
+  const deltaLng = toRadians(b.lng - a.lng);
+  const h =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
 function classifyConfidences(rawCandidates, query = null) {
@@ -324,7 +336,7 @@ function createNominatimPlaceResolver({
     .digest("hex")
     .slice(0, 16);
   const cache = sourceCache || createSourceCache({
-    namespace: "place-resolver-nominatim-v1",
+    namespace: "place-resolver-nominatim-v2",
     ttlMs: cacheTtlMs,
     dir: cacheDir,
     now,
@@ -427,7 +439,7 @@ function createNominatimPlaceResolver({
     // An invalid configured endpoint fails closed without ever calling fetch.
     if (!endpointValid) return [];
     const queryIdentity = createHash("sha256").update(query.toLowerCase()).digest("hex");
-    const key = `v1:${endpointIdentity}:${queryIdentity}`;
+    const key = `v2:${endpointIdentity}:${queryIdentity}`;
     const result = await cache.get(
       key,
       () => fetchAndMap(query),

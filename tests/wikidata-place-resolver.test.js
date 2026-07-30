@@ -20,11 +20,21 @@ function coordinateClaim(lat, lng, globe = "http://www.wikidata.org/entity/Q2") 
   };
 }
 
-function entity(id, label, lat, lng, language = "sv") {
+function populationClaim(amount) {
+  return {
+    rank: "preferred",
+    mainsnak: { datavalue: { value: { amount: `+${amount}`, unit: "1" } } },
+  };
+}
+
+function entity(id, label, lat, lng, language = "sv", population = null) {
   return {
     id,
     labels: { [language]: { language, value: label }, en: { language: "en", value: label } },
-    claims: { P625: [coordinateClaim(lat, lng)] },
+    claims: {
+      P625: [coordinateClaim(lat, lng)],
+      ...(population ? { P1082: [populationClaim(population)] } : {}),
+    },
   };
 }
 
@@ -97,6 +107,102 @@ test("multiple exact coordinate-bearing entities remain ambiguous instead of sel
 
   assert.equal(result.length, 2);
   assert.deepEqual(result.map((candidate) => candidate.confidence), ["medium", "medium"]);
+});
+
+test("one nearby same-label cluster disambiguates distant namesakes without losing provider rank", async () => {
+  const resolver = createWikidataPlaceResolver({
+    fetcher: wikidataFetcher({
+      searches: {
+        en: [
+          { id: "Q727", label: "Amsterdam", match: { language: "en", text: "Amsterdam" } },
+          { id: "Q3152900", label: "Amsterdam", match: { language: "en", text: "Amsterdam" } },
+          { id: "Q9899", label: "Amsterdam", match: { language: "en", text: "Amsterdam" } },
+        ],
+      },
+      entities: {
+        Q727: entity("Q727", "Amsterdam", 52.36667, 4.88333, "en"),
+        Q3152900: entity("Q3152900", "Amsterdam", -26.617, 30.667, "en"),
+        Q9899: entity("Q9899", "Amsterdam", 52.36666, 4.88334, "en"),
+      },
+    }),
+    languages: ["en"],
+  });
+
+  const result = await resolver("Amsterdam", { language: "en" });
+
+  assert.deepEqual(result.map((candidate) => candidate.wikidata_ref), ["Q727", "Q3152900"]);
+  assert.deepEqual(result.map((candidate) => candidate.confidence), ["medium", "low"]);
+});
+
+test("an extreme population difference can disambiguate exact distant namesakes conservatively", async () => {
+  const resolver = createWikidataPlaceResolver({
+    fetcher: wikidataFetcher({
+      searches: {
+        en: [
+          { id: "Q90", label: "Paris", match: { language: "en", text: "Paris" } },
+          { id: "Q830149", label: "Paris", match: { language: "en", text: "Paris" } },
+        ],
+      },
+      entities: {
+        Q90: entity("Q90", "Paris", 48.8566, 2.3522, "en", 2100000),
+        Q830149: entity("Q830149", "Paris", 33.6609, -95.5555, "en", 25000),
+      },
+    }),
+    languages: ["en"],
+  });
+
+  const result = await resolver("Paris", { language: "en" });
+
+  assert.deepEqual(result.map((candidate) => candidate.confidence), ["medium", "low"]);
+  assert.equal(result[0].wikidata_ref, "Q90");
+  assert.equal("population" in result[0], false, "population stays private resolution evidence");
+});
+
+test("similarly sized distant namesakes remain ambiguous even with population evidence", async () => {
+  const resolver = createWikidataPlaceResolver({
+    fetcher: wikidataFetcher({
+      searches: {
+        en: [
+          { id: "Q10", label: "Shared", match: { language: "en", text: "Shared" } },
+          { id: "Q20", label: "Shared", match: { language: "en", text: "Shared" } },
+        ],
+      },
+      entities: {
+        Q10: entity("Q10", "Shared", 39.8, -89.6, "en", 170000),
+        Q20: entity("Q20", "Shared", 42.1, -72.5, "en", 120000),
+      },
+    }),
+    languages: ["en"],
+  });
+
+  const result = await resolver("Shared", { language: "en" });
+
+  assert.deepEqual(result.map((candidate) => candidate.confidence), ["medium", "medium"]);
+});
+
+test("extreme population evidence outranks a duplicated but much smaller namesake", async () => {
+  const resolver = createWikidataPlaceResolver({
+    fetcher: wikidataFetcher({
+      searches: {
+        en: [
+          { id: "Q1", label: "Example", match: { language: "en", text: "Example" } },
+          { id: "Q2", label: "Example", match: { language: "en", text: "Example" } },
+          { id: "Q3", label: "Example", match: { language: "en", text: "Example" } },
+        ],
+      },
+      entities: {
+        Q1: entity("Q1", "Example", 10, 10, "en", 9000),
+        Q2: entity("Q2", "Example", 10.01, 10.01, "en", 10000),
+        Q3: entity("Q3", "Example", 50, 20, "en", 500000),
+      },
+    }),
+    languages: ["en"],
+  });
+
+  const result = await resolver("Example", { language: "en" });
+
+  assert.deepEqual(result.map((candidate) => candidate.wikidata_ref), ["Q1", "Q3"]);
+  assert.deepEqual(result.map((candidate) => candidate.confidence), ["low", "medium"]);
 });
 
 test("fuzzy coordinate-bearing hits stay low and never fabricate regional bounds", async () => {

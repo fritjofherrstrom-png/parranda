@@ -6,8 +6,9 @@
  * Wikidata is useful for colloquial regions and named areas that a street-
  * geocoder may not index. It is deliberately a FALLBACK, not a replacement for
  * Nominatim: only an exact label/alias match with a valid Earth coordinate may
- * become medium-confidence. Multiple exact coordinate-bearing entities remain
- * ambiguous; fuzzy hits stay low. A point never invents regional bounds.
+ * become medium-confidence. Distant exact namesakes remain ambiguous unless
+ * open-knowledge evidence clearly identifies one geographic cluster; fuzzy
+ * hits stay low. A point never invents regional bounds.
  */
 
 const { createSourceCache } = require("./source-cache");
@@ -20,6 +21,9 @@ const MAX_LIMIT = 8;
 const MAX_LANGUAGES = 3;
 const MAX_QUERY_LEN = 200;
 const EARTH_GLOBE = "http://www.wikidata.org/entity/Q2";
+const SAME_PLACE_CLUSTER_KM = 5;
+const DOMINANT_POPULATION_RATIO = 12;
+const MIN_DOMINANT_POPULATION = 50000;
 
 function createWikidataPlaceResolver({
   fetcher = typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null,
@@ -37,7 +41,7 @@ function createWikidataPlaceResolver({
   const boundedTimeoutMs = clampInt(timeoutMs, 50, 30000, DEFAULT_TIMEOUT_MS);
   const configuredLanguages = normalizeLanguages(languages);
   const cache = createSourceCache({
-    namespace: "wikidata-place-resolver",
+    namespace: "wikidata-place-resolver-v2",
     dir: cacheDir,
     ...(Number.isFinite(cacheTtlMs) ? { ttlMs: cacheTtlMs } : {}),
   });
@@ -101,18 +105,10 @@ async function fetchCandidates({ query, searchLanguages, fetcher, endpoint, user
     clearTimeout(timer);
   }
 
-  const mapped = [...byId.values()];
-  const exact = mapped.filter((candidate) => candidate.exact_match);
-  const candidates = mapped
-    .sort((a, b) => Number(b.exact_match) - Number(a.exact_match) || a.wikidata_ref.localeCompare(b.wikidata_ref))
-    .map(({ exact_match: exactMatch, ...candidate }) => ({
-      ...candidate,
-      confidence: exactMatch ? "medium" : "low",
-    }));
-  // Several exact coordinate-bearing entities intentionally stay medium so the
-  // shared intake reports ambiguity instead of guessing between them.
-  if (exact.length > 1) return { ok: true, candidates };
-  return { ok: successfulResolutionRound, candidates };
+  return {
+    ok: successfulResolutionRound,
+    candidates: classifyMappedCandidates([...byId.values()]),
+  };
 }
 
 async function searchEntities({ query, language, fetcher, endpoint, userAgent, signal, limit }) {
@@ -128,7 +124,7 @@ async function searchEntities({ query, language, fetcher, endpoint, userAgent, s
   const payload = await fetchJson(fetcher, url, userAgent, signal);
   if (!payload.ok || !Array.isArray(payload.data?.search)) return { ok: false, rows: [] };
   const rows = payload.data.search
-    .map((row) => normalizeSearchHit(row, language))
+    .map((row, index) => normalizeSearchHit(row, language, index))
     .filter(Boolean)
     .slice(0, limit);
   return { ok: true, rows };
@@ -166,12 +162,18 @@ async function fetchJson(fetcher, url, userAgent, signal) {
   }
 }
 
-function normalizeSearchHit(row, language) {
+function normalizeSearchHit(row, language, searchRank) {
   if (!row || !isQid(row.id)) return null;
   const label = compactText(row.label);
   const matchText = compactText(row.match?.text);
   if (!label && !matchText) return null;
-  return { id: row.id, label, matchText, language: safeLanguage(row.match?.language) || language };
+  return {
+    id: row.id,
+    label,
+    matchText,
+    language: safeLanguage(row.match?.language) || language,
+    searchRank,
+  };
 }
 
 function mapEntity(entity, hit, query, languages) {
@@ -187,12 +189,115 @@ function mapEntity(entity, hit, query, languages) {
     lat: coordinate.lat,
     lng: coordinate.lng,
     exact_match: exactMatch,
+    search_rank: hit.searchRank,
+    population: latestPopulation(entity.claims?.P1082),
     provenance: "wikidata_open_knowledge",
     attribution: "Wikidata contributors",
     license: "CC0-1.0",
     source_tier: "inferred",
     wikidata_ref: entity.id,
   };
+}
+
+function classifyMappedCandidates(mapped) {
+  const ranked = [...mapped].sort((a, b) => a.search_rank - b.search_rank);
+  const exactGroups = groupExactCandidates(ranked.filter((candidate) => candidate.exact_match));
+  const preferredGroup = preferredExactGroup(exactGroups);
+  const ambiguous = exactGroups.length > 1 && !preferredGroup;
+  const exactRepresentatives = exactGroups.map((group) => ({
+    candidate: group[0],
+    confidence: ambiguous || preferredGroup === group || exactGroups.length === 1 ? "medium" : "low",
+  }));
+  const fuzzy = ranked
+    .filter((candidate) => !candidate.exact_match)
+    .map((candidate) => ({ candidate, confidence: "low" }));
+
+  return [...exactRepresentatives, ...fuzzy]
+    .sort((a, b) => a.candidate.search_rank - b.candidate.search_rank)
+    .map(({ candidate, confidence }) => {
+      const {
+        exact_match: _exactMatch,
+        search_rank: _searchRank,
+        population: _population,
+        ...publicCandidate
+      } = candidate;
+      return { ...publicCandidate, confidence };
+    });
+}
+
+function groupExactCandidates(candidates) {
+  const groups = [];
+  for (const candidate of candidates) {
+    const label = normalizeName(candidate.label);
+    const group = groups.find((members) => {
+      const representative = members[0];
+      return (
+        label &&
+        normalizeName(representative.label) === label &&
+        distanceKm(representative, candidate) <= SAME_PLACE_CLUSTER_KM
+      );
+    });
+    if (group) group.push(candidate);
+    else groups.push([candidate]);
+  }
+  return groups;
+}
+
+function preferredExactGroup(groups) {
+  if (groups.length <= 1) return groups[0] || null;
+
+  // Population is used only for an extreme place-resolution distinction. It
+  // never ranks route candidates, and the selected anchor stays medium-trust.
+  const populations = groups.map((group) => Math.max(...group.map((candidate) => candidate.population || 0)));
+  if (populations.every((population) => population > 0)) {
+    const ordered = populations
+      .map((population, index) => ({ population, index }))
+      .sort((a, b) => b.population - a.population || a.index - b.index);
+    const [largest, runnerUp] = ordered;
+    if (
+      largest.population >= MIN_DOMINANT_POPULATION &&
+      largest.population / runnerUp.population >= DOMINANT_POPULATION_RATIO
+    ) {
+      return groups[largest.index];
+    }
+  }
+
+  // A city and its urban/administrative representation can share one exact
+  // label and nearby points. Exactly one such independently represented cluster
+  // can disambiguate that physical anchor from distant namesakes.
+  const corroborated = groups.filter((group) => group.length > 1);
+  if (corroborated.length === 1) return corroborated[0];
+  return null;
+}
+
+function latestPopulation(claims) {
+  const candidates = [];
+  for (const claim of Array.isArray(claims) ? claims : []) {
+    if (claim?.rank === "deprecated") continue;
+    const amount = Number(claim?.mainsnak?.datavalue?.value?.amount);
+    if (!Number.isFinite(amount) || amount <= 0) continue;
+    const pointInTime = claim?.qualifiers?.P585?.[0]?.datavalue?.value?.time;
+    const yearMatch = typeof pointInTime === "string" ? pointInTime.match(/^[+-](\d{4,})/) : null;
+    candidates.push({
+      amount,
+      year: yearMatch ? Number(yearMatch[1]) : -Infinity,
+      preferred: claim.rank === "preferred" ? 1 : 0,
+    });
+  }
+  candidates.sort((a, b) => b.year - a.year || b.preferred - a.preferred || b.amount - a.amount);
+  return candidates[0]?.amount || null;
+}
+
+function distanceKm(a, b) {
+  const toRadians = (value) => (value * Math.PI) / 180;
+  const lat1 = toRadians(a.lat);
+  const lat2 = toRadians(b.lat);
+  const deltaLat = lat2 - lat1;
+  const deltaLng = toRadians(b.lng - a.lng);
+  const h =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
 function firstEarthCoordinate(claims) {

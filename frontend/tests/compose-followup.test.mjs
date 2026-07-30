@@ -36,6 +36,22 @@ test("a user compose that composed WITHOUT structure gets exactly one silent upg
   assert.equal(followup.schedule, false);
 });
 
+test("a user structure-only result gets one bounded chance to become a route", () => {
+  const plan = planComposeFollowup({ structureOnly: true, hasStructure: true, silent: false });
+  assert.equal(plan.schedule, true);
+  assert.equal(plan.delayMs, LIVE_REFRESH_DELAYS_MS[0]);
+  assert.equal(plan.upgradePending, true);
+  assert.equal(plan.nextPollAttempt, LIVE_REFRESH_DELAYS_MS.length);
+
+  const followup = planComposeFollowup({
+    structureOnly: true,
+    hasStructure: true,
+    silent: true,
+    pollAttempt: plan.nextPollAttempt,
+  });
+  assert.equal(followup.schedule, false, "a persistent thin result never loops");
+});
+
 test("an explicit transient trusted-source failure retries once — silently composed retries never chain", () => {
   const plan = planComposeFollowup({ transientSourceRetry: true, silent: false });
   assert.equal(plan.schedule, true);

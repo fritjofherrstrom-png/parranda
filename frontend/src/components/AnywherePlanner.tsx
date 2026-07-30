@@ -464,6 +464,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       // only owns the timer and state.
       const followup = planComposeFollowup({
         composed: cls.status === "composed",
+        structureOnly: cls.status === "structure_only",
         hasStructure: Boolean(safe?.place_structure),
         transientSourceRetry: decision.shouldRetryTransientSource(body, cls),
         livePending: safe?.live_events?.pending === true,
