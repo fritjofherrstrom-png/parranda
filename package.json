@@ -10,6 +10,7 @@
     "dev:dogfood": "PARRANDA_DOGFOOD_UI=enabled node server.js",
     "share": "node scripts/share.js",
     "share:latest": "node scripts/share-latest.js",
+    "validate:self-hosted": "node scripts/validate-self-hosted-stack.js",
     "start": "node server.js",
     "test": "node --test",
     "build:frontend": "npm --prefix frontend run build",

@@ -1,0 +1,13 @@
+.git
+.github
+.cache
+.claude
+.env
+.env.*
+node_modules
+frontend/node_modules
+coverage
+docs
+issues
+tests
+*.log

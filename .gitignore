@@ -9,4 +9,5 @@ pnpm-debug.log*
 .env.*.local
 .render
 coverage/
-
+.release.env
+.deploy.lock/

@@ -1,5 +1,9 @@
 # Self-hosting Parranda — your machine, a public link
 
+This guide is the lightweight Mac/tunnel profile. For an immutable, always-on
+Linux deployment with Caddy, Compose, health verification and rollback, see
+[`SELF_HOSTED_PRODUCTION.md`](SELF_HOSTED_PRODUCTION.md).
+
 Parranda runs as a small Node server that talks to open data (OpenStreetMap via
 Overpass, Nominatim, Wikidata, municipal event feeds). There is no database and
 no secret to manage, so the honest hosting model is the simple one:
