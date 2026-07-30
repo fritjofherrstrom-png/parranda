@@ -25,6 +25,7 @@ function validateSelfHostedStack() {
   const workflow = read(".github/workflows/deploy-self-hosted.yml");
 
   requireText(dockerfile, /FROM node:22-[^\s]+ AS build/, "docker_build_stage_missing");
+  requireText(dockerfile, /COPY anywhere-render-decision\.js \.\//, "shared_honesty_build_input_missing");
   requireText(dockerfile, /npm run check:frontend && npm run build:frontend/, "frontend_build_missing");
   requireText(dockerfile, /USER node/, "non_root_runtime_missing");
   requireText(dockerfile, /HEALTHCHECK[\s\S]*\/api\/health/, "image_healthcheck_missing");

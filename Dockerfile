@@ -10,6 +10,7 @@ RUN npm ci
 COPY frontend/package.json frontend/package-lock.json ./frontend/
 RUN npm ci --prefix frontend
 
+COPY anywhere-render-decision.js ./
 COPY frontend ./frontend
 RUN npm run check:frontend && npm run build:frontend
 
