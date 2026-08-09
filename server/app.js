@@ -39,6 +39,9 @@ const { resolveDefaultOpenDataLoader } = require("./place-candidates/open-data-l
 const { resolveDefaultPlaceResolver } = require("./place-candidates/place-resolver");
 const { resolveDefaultEventSupply } = require("./place-candidates/agnostic-event-supply");
 const {
+  resolveDefaultSourceProfileCatalog,
+} = require("./pulse-sources/source-profile-catalog");
+const {
   executeLiveEventQuery,
   shapeCollectedLiveEvents,
 } = require("./place-candidates/live-event-query");
@@ -1421,6 +1424,7 @@ function buildApp({
   openDataLoader = resolveDefaultOpenDataLoader(),
   placeResolver = resolveDefaultPlaceResolver(),
   eventSupply,
+  sourceCatalog,
   walkingRouter = null,
   walkingConfig = null,
   weatherProvider = null,
@@ -1434,7 +1438,13 @@ function buildApp({
   // as freeform place intake. Explicit test injections still win, including
   // `null`; no public payload can provide either seam.
   if (eventSupply === undefined) {
-    eventSupply = resolveDefaultEventSupply(process.env, { venueResolver: placeResolver });
+    if (sourceCatalog === undefined) {
+      sourceCatalog = resolveDefaultSourceProfileCatalog(process.env);
+    }
+    eventSupply = resolveDefaultEventSupply(process.env, {
+      venueResolver: placeResolver,
+      sourceCatalog,
+    });
   }
   const app = express();
 

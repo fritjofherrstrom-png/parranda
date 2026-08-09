@@ -24,6 +24,7 @@ test("CLI parses place mode without mistaking the place value for an input file"
     "--place",
     "Test Place",
     "--live",
+    "--catalog",
     "--term",
     "local market",
     "--intent",
@@ -33,9 +34,89 @@ test("CLI parses place mode without mistaking the place value for an input file"
   assert.equal(parsed.place, "Test Place");
   assert.equal(parsed.inputPath, null);
   assert.equal(parsed.live, true);
+  assert.equal(parsed.catalog, true);
   assert.deepEqual(parsed.localDiscoveryTerms, ["local market"]);
   assert.deepEqual(parsed.intentHints, ["music"]);
   assert.deepEqual(parsed.errors, []);
+});
+
+test("catalog persistence is explicit and records only the scout source profile", async () => {
+  const output = capture();
+  let recorded = null;
+  const records = [{ name: "Venue", type: "museum", website: "https://venue.example/events" }];
+  Object.defineProperty(records, "loader_status", { value: "loaded:1" });
+  Object.defineProperty(records, "loader_error", { value: null });
+
+  const code = await main(["--place", "Test Place", "--live", "--catalog"], {
+    output: output.stream,
+    errorOutput: capture().stream,
+    runtime: {
+      placeResolver: async () => [
+        {
+          label: "Test Place",
+          lat: 50,
+          lng: 10,
+          confidence: "medium",
+          provenance: "trusted_test_resolver",
+          spatial_scope: {
+            source: "test_bounds",
+            kind: "settlement",
+            bounds: { south: 49.8, north: 50.2, west: 9.8, east: 10.2 },
+          },
+        },
+      ],
+      openDataLoader: async () => records,
+      sourceScout: async () => ({
+        status: "complete",
+        reasons: ["bounded_source_scout_complete"],
+        inspected_source_count: 1,
+        manifest_candidates: [],
+      }),
+      scoutCache: null,
+      sourceCatalog: {
+        async recordDiscovery(profile) {
+          recorded = profile;
+          return {
+            status: "recorded",
+            profile_key: profile.profile_key,
+            catalog_status: "review_needed",
+          };
+        },
+      },
+    },
+  });
+  const result = JSON.parse(output.value());
+
+  assert.equal(code, 0);
+  assert.equal(recorded.place_context.bounds.west, 9.8);
+  assert.equal(recorded.runtime_review.status, "unreviewed");
+  assert.equal(result.catalog_write.catalog_status, "review_needed");
+  assert.equal(result.activation_performed, false);
+});
+
+test("catalog mode fails visibly when the trusted catalog is not configured", async () => {
+  const output = capture();
+  const records = [];
+  Object.defineProperty(records, "loader_status", { value: "loaded:0" });
+  Object.defineProperty(records, "loader_error", { value: null });
+  const code = await main(["--place", "Test Place", "--live", "--catalog"], {
+    output: output.stream,
+    errorOutput: capture().stream,
+    runtime: {
+      placeResolver: async () => [{ label: "Test Place", lat: 50, lng: 10, confidence: "medium" }],
+      openDataLoader: async () => records,
+      sourceScout: async () => ({ status: "empty" }),
+      scoutCache: null,
+      sourceCatalog: null,
+    },
+  });
+  const result = JSON.parse(output.value());
+
+  assert.equal(code, 1);
+  assert.deepEqual(result.catalog_write, {
+    status: "unavailable",
+    reason: "source_catalog_unavailable",
+  });
 });
 
 test("place mode without --live is network-free and explains the gate", async () => {

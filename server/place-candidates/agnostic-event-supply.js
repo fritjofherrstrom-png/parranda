@@ -1200,18 +1200,36 @@ function shouldCacheEventSupplyResult(result) {
  * once warm, the next visit serves the cached fused result. Even a valid empty
  * result is cached so "nothing on" never becomes an unbounded refresh loop.
  */
-function resolveDefaultEventSupply(env = process.env, { venueResolver = null } = {}) {
+function resolveDefaultEventSupply(
+  env = process.env,
+  {
+    venueResolver = null,
+    sourceCatalog = null,
+    eventCache = null,
+    collectEvents = collectAnchorEvents,
+  } = {},
+) {
   const flag = String((env && env.PARRANDA_AGNOSTIC_EVENTS) || "").trim().toLowerCase();
   if (!["enabled", "1", "true", "on", "yes"].includes(flag)) return null;
   const registry = resolveEventFeedRegistry(env);
   const globalKey = resolveGlobalEventKey(env);
-  const cache = createSourceCache({
+  const cache = eventCache || createSourceCache({
     // v2 excludes transient partial-empty acquisitions that v1 could persist.
     namespace: EVENT_CACHE_NAMESPACE,
     ttlMs: EVENT_CACHE_TTL_MS,
     dir: (env && env.PARRANDA_CACHE_DIR) || null,
   });
-  return ({ anchor, sourceAnchors = [], now, preferences = [], radiusM, scope = null } = {}) => {
+  return async ({ anchor, sourceAnchors = [], now, preferences = [], radiusM, scope = null } = {}) => {
+    const requestRegistry = [...registry];
+    if (sourceCatalog && typeof sourceCatalog.listApprovedEventFeedsForAnchor === "function") {
+      try {
+        const catalogFeeds = await sourceCatalog.listApprovedEventFeedsForAnchor({ anchor, now });
+        appendUniqueEventFeeds(requestRegistry, catalogFeeds);
+      } catch (_error) {
+        // The catalog is supplemental. A database outage must not take down
+        // reviewed file/env feeds or the route request using this supply seam.
+      }
+    }
     const effectiveRadiusM = Math.min(
       MAX_COLLECTION_RADIUS_M,
       Math.max(100, Math.round(Number(radiusM) || DEFAULT_RADIUS_M)),
@@ -1219,12 +1237,12 @@ function resolveDefaultEventSupply(env = process.env, { venueResolver = null } =
     const sourcePlan = buildScopedEventSourcePlan({
       anchor,
       sourceAnchors,
-      registry,
+      registry: requestRegistry,
       globalSource: GLOBAL_FEED_DESCRIPTOR,
       globalEnabled: Boolean(globalKey),
     });
     if (sourcePlan.length === 0) {
-      return Promise.resolve({
+      return {
         coverage: "uncovered",
         feed: null,
         feeds: [],
@@ -1232,18 +1250,18 @@ function resolveDefaultEventSupply(env = process.env, { venueResolver = null } =
         this_week: [],
         browse: emptyEventBrowse(),
         acquisition: emptyAcquisition(effectiveRadiusM),
-      });
+      };
     }
     const descriptors = sourcePlan.map((source) => compactSourceStatus({ source, status: "pending", raw: [] }));
     const key = eventCacheKey(anchor, now, sourcePlan.map((source) => source.id), effectiveRadiusM);
     const cached = cache.peek(key);
-    if (cached) return Promise.resolve(rankCollectedEventsForPreferences(cached, preferences, scope));
+    if (cached) return rankCollectedEventsForPreferences(cached, preferences, scope);
     // Cold: warm out-of-band (long timeout, fire-and-forget), serve honest pending.
-    cache.warm(key, () => collectAnchorEvents({
+    cache.warm(key, () => collectEvents({
       anchor,
       sourceAnchors,
       now,
-      registry,
+      registry: requestRegistry,
       radiusM: effectiveRadiusM,
       timeoutMs: WARM_TIMEOUT_MS,
       globalKey,
@@ -1253,7 +1271,7 @@ function resolveDefaultEventSupply(env = process.env, { venueResolver = null } =
       // cause refresh loops. Empty results with source failures stay retryable.
       shouldStore: shouldCacheEventSupplyResult,
     });
-    return Promise.resolve({
+    return {
       coverage: "covered",
       feed: descriptors[0] || null,
       feeds: descriptors,
@@ -1287,7 +1305,7 @@ function resolveDefaultEventSupply(env = process.env, { venueResolver = null } =
           reasons: ["background_refresh_pending"],
         },
       },
-    });
+    };
   };
 }
 
