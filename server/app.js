@@ -2196,6 +2196,8 @@ function buildApp({
             // for future regional source discovery. Public payload context is
             // never read or forwarded.
             placeContext,
+            placeLabel: intake?.resolved?.label || null,
+            spatialScope,
             now: eventsNow,
             // Preferences may reorder only the already trusted, normalized
             // event pool. They never become event evidence or relax time/geo

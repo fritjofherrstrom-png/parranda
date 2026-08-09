@@ -7,16 +7,22 @@ const { Pool } = require("pg");
 
 async function migrateSourceCatalog({
   connectionString = process.env.PARRANDA_SOURCE_CATALOG_DATABASE_URL,
-  migrationPath = path.resolve(__dirname, "../migrations/001-pulse-source-profile-catalog.sql"),
+  migrationsDir = path.resolve(__dirname, "../migrations"),
   PoolClass = Pool,
 } = {}) {
   if (typeof connectionString !== "string" || !connectionString.trim()) {
     throw new Error("source_catalog_database_url_missing");
   }
-  const sql = fs.readFileSync(migrationPath, "utf8");
+  const migrationPaths = fs.readdirSync(migrationsDir)
+    .filter((name) => /^\d{3}-[a-z0-9-]+\.sql$/.test(name))
+    .sort()
+    .map((name) => path.join(migrationsDir, name));
+  if (!migrationPaths.length) throw new Error("source_catalog_migrations_missing");
   const pool = new PoolClass({ connectionString: connectionString.trim(), max: 1 });
   try {
-    await pool.query(sql);
+    for (const migrationPath of migrationPaths) {
+      await pool.query(fs.readFileSync(migrationPath, "utf8"));
+    }
   } finally {
     await pool.end();
   }

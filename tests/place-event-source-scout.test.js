@@ -253,6 +253,37 @@ test("trusted administrative identity produces a generic regional source profile
   assert.doesNotMatch(JSON.stringify(result), /postcode|raw_html|must-not-leak/);
 });
 
+test("trusted regional bounds reach the seed loader without changing the anchor", async () => {
+  let loaderInput = null;
+  const spatialScope = {
+    source: "resolver_bounds",
+    kind: "region",
+    bounds: { west: 12.8, south: 55.4, east: 13.3, north: 55.8 },
+  };
+  const result = await discoverLocalEventSourcesForPlace({
+    placeQuery: "Test Region",
+    placeResolver: async () => [{
+      label: "Test Region, Test Country",
+      lat: 55.6,
+      lng: 13,
+      confidence: "high",
+      provenance: "trusted_test_resolver",
+      admin_context: { region: "Test Region", country_code: "tc" },
+      spatial_scope: spatialScope,
+    }],
+    openDataLoader: async (input) => {
+      loaderInput = input;
+      return loaded([]);
+    },
+  });
+
+  assert.equal(result.status, "empty");
+  assert.deepEqual({ lat: loaderInput.lat, lng: loaderInput.lng }, { lat: 55.6, lng: 13 });
+  assert.equal(loaderInput.anchorMode, "place");
+  assert.equal(loaderInput.spatialScope.collection_mode, "regional_bounded");
+  assert.deepEqual(loaderInput.spatialScope.bounds, spatialScope.bounds);
+});
+
 test("ambiguous or weak place resolution fails closed before loading records", async () => {
   let loaderCalls = 0;
   let scoutCalls = 0;

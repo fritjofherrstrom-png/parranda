@@ -16,11 +16,11 @@ internet -> Caddy -> Parranda web -> trusted upstream sources
                          +-> persistent source cache volume
 ```
 
-The stack includes an optional Postgres-backed geo Source Catalog. It persists
-discovered source profiles as review-needed records and lets the web runtime
-read only fresh, operator-approved profiles. It is disabled by default. The
-background scout scheduler/queue is still a later capability; no public request
-performs source discovery.
+The stack includes an optional Postgres-backed geo Source Catalog and bounded
+source-scout worker. It persists discovered source profiles as review-needed
+records and lets the web runtime read only fresh, operator-approved profiles.
+It is disabled by default. Public requests may record a deduplicated demand for
+a resolver-attested bounded place, but never perform or wait for discovery.
 
 ## Host prerequisites
 
@@ -110,7 +110,10 @@ PARRANDA_SOURCE_CATALOG_DATABASE_URL=postgresql://parranda:a-long-url-safe-secre
 The deploy script then starts the private Postgres service and runs the
 versioned migration before activating the web release. The database is not
 published on a host port. A migration or database-start failure aborts the new
-release before health verification.
+release before health verification. The same optional Compose profile runs one
+background worker with a default five-minute polling interval and a maximum
+batch of one target. Override the interval with
+`PARRANDA_EVENT_SOURCE_SCOUT_INTERVAL_MS` (minimum 30 seconds).
 
 The operator scout can persist a bounded discovery result for review:
 
@@ -161,6 +164,7 @@ restarts. It is rebuildable cache, not a system of record. Back up `caddy-data`
 if preserving certificate state matters.
 
 When enabled, `source-catalog-data` is the Source Catalog system of record and
-must receive scheduled, tested backups. Event scouting still belongs in a
-persistent worker/queue on this host, never inside the deploy workflow or the
-public request path.
+must receive scheduled, tested backups. Event scouting runs in the dedicated
+worker, never inside the deploy workflow or public request path. Discovery
+results remain `review_needed`; only the separate trusted review action can
+activate a source.

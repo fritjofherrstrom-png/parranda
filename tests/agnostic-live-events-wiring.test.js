@@ -141,9 +141,13 @@ test("trusted live events remain available when route composition is blocked", a
 
 test("resolved place context reaches only the trusted event supply seam", async () => {
   let suppliedContext = null;
+  let suppliedLabel = null;
+  let suppliedScope = null;
   let suppliedVenueResolver = "not-called";
-  const eventSupply = async ({ placeContext, venueResolver }) => {
+  const eventSupply = async ({ placeContext, placeLabel, spatialScope, venueResolver }) => {
     suppliedContext = placeContext;
+    suppliedLabel = placeLabel;
+    suppliedScope = spatialScope;
     suppliedVenueResolver = venueResolver;
     return { coverage: "uncovered", feed: null, tonight: [], this_week: [] };
   };
@@ -159,6 +163,11 @@ test("resolved place context reaches only the trusted event supply seam", async 
       country: "Sverige",
       country_code: "se",
     },
+    spatial_scope: {
+      source: "test_resolver_bounds",
+      kind: "city",
+      bounds: { west: 17.8, south: 59.1, east: 18.3, north: 59.5 },
+    },
   }];
   global.fetch = mockStableWeatherFetch();
   const server = buildApp({ openDataLoader: null, eventSupply, placeResolver }).listen(0);
@@ -166,6 +175,8 @@ test("resolved place context reaches only the trusted event supply seam", async 
     const res = await post(server, {
       place: "Stockholm",
       place_context: { locality: "Injected", country_code: "xx" },
+      place_label: "Injected Label",
+      spatial_scope: { kind: "region", bounds: { west: 0, south: 0, east: 1, north: 1 } },
       venueResolver: { results: [{ lat: 0, lng: 0 }] },
       venue_resolution: { resolved_count: 999 },
       dates: ["2026-06-28"],
@@ -177,6 +188,16 @@ test("resolved place context reaches only the trusted event supply seam", async 
       municipality: "Stockholms kommun",
       country: "Sverige",
       country_code: "se",
+    });
+    assert.equal(suppliedLabel, "Stockholm, Sverige");
+    assert.deepEqual(suppliedScope, {
+      source: "test_resolver_bounds",
+      kind: "settlement",
+      bounds: { west: 17.8, south: 59.1, east: 18.3, north: 59.5 },
+      width_km: 28.38,
+      height_km: 44.48,
+      diagonal_km: 52.76,
+      collection_mode: "regional_bounded",
     });
     assert.equal(suppliedVenueResolver, undefined, "public payload cannot inject the trusted venue resolver seam");
     assert.equal("admin_context" in res.agnostic_route_output_experiment.intake.resolved, false);
