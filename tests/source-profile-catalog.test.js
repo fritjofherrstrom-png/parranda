@@ -9,6 +9,8 @@ const {
   COMPLETE_SCOUT_TARGET_SQL,
   FAIL_SCOUT_TARGET_SQL,
   MAX_SCOUT_TARGETS,
+  MAX_QUALIFICATION_BYTES,
+  SOURCE_QUALIFICATION_SQL,
   UPSERT_SCOUT_TARGET_SQL,
   UPSERT_DISCOVERY_PROFILE_SQL,
   createSourceProfileCatalog,
@@ -105,7 +107,14 @@ test("discovery writes only review-needed profiles and strips attempted activati
       return { rows: [{ profile_key: values[0], catalog_status: values[1] }] };
     },
   });
-  const result = await catalog.recordDiscovery(sourceProfile({ approved: true }));
+  const discovered = sourceProfile({ approved: true });
+  discovered.source_qualification = {
+    schema_version: 1,
+    status: "observing",
+    candidates: [],
+    activation_performed: false,
+  };
+  const result = await catalog.recordDiscovery(discovered);
 
   assert.equal(result.status, "recorded");
   assert.equal(result.catalog_status, "review_needed");
@@ -118,6 +127,7 @@ test("discovery writes only review-needed profiles and strips attempted activati
     expires_at: null,
     feeds: [],
   });
+  assert.deepEqual(stored.source_qualification, discovered.source_qualification);
   assert.match(calls[0].sql, /catalog_status = 'review_needed'/);
   assert.match(calls[0].sql, /ELSE pulse_source_profiles\.profile/);
 });
@@ -184,6 +194,47 @@ test("catalog read/write failures fail soft with compact outcomes", async () => 
     await catalog.listApprovedEventFeedsForAnchor({ anchor: { lat: 55.6, lng: 13 }, now: NOW }),
     [],
   );
+  assert.equal(await catalog.loadSourceQualification(sourceProfile().profile_key), null);
+});
+
+test("qualification history is read only from review-needed profiles and stays bounded", async () => {
+  const qualification = {
+    schema_version: 1,
+    status: "observing",
+    candidates: [],
+    activation_performed: false,
+  };
+  const calls = [];
+  const catalog = createSourceProfileCatalog({
+    now: () => NOW,
+    query: async (sql, values) => {
+      calls.push({ sql, values });
+      return { rows: [{ source_qualification: qualification }] };
+    },
+  });
+
+  assert.deepEqual(await catalog.loadSourceQualification(sourceProfile().profile_key), qualification);
+  assert.equal(calls[0].sql, SOURCE_QUALIFICATION_SQL);
+  assert.deepEqual(calls[0].values, [sourceProfile().profile_key]);
+  assert.match(SOURCE_QUALIFICATION_SQL, /catalog_status = 'review_needed'/);
+  assert.equal(await catalog.loadSourceQualification("not-a-profile-key"), null);
+  assert.equal(calls.length, 1);
+
+  const rejectedCatalog = createSourceProfileCatalog({
+    now: () => NOW,
+    query: async (_sql, values) => ({
+      rows: [{
+        source_qualification: values[0].endsWith("activation")
+          ? { ...qualification, activation_performed: true }
+          : values[0].endsWith("oversize")
+            ? { ...qualification, padding: "x".repeat(MAX_QUALIFICATION_BYTES) }
+            : { ...qualification, schema_version: 2 },
+      }],
+    }),
+  });
+  assert.equal(await rejectedCatalog.loadSourceQualification("place-source-profile-v1:schema"), null);
+  assert.equal(await rejectedCatalog.loadSourceQualification("place-source-profile-v1:activation"), null);
+  assert.equal(await rejectedCatalog.loadSourceQualification("place-source-profile-v1:oversize"), null);
 });
 
 test("only resolver-attested bounded place demand enters the scout queue", async () => {

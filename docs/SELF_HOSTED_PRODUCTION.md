@@ -128,6 +128,13 @@ geographic scope, source-family evidence and candidates as `review_needed`.
 Approval remains a separate trusted operator action and the shared reviewed-
 profile validator is applied again on every catalog read.
 
+Scheduled worker runs additionally probe at most two exact manifest candidates
+through the existing bounded event adapters and keep compact, rolling
+qualification evidence in the same review-needed profile. Two healthy days
+within 30 days plus real accepted event yield may mark a candidate
+`qualified_for_review`; this is an operator-review aid only. It never changes
+the catalog status or creates an active feed.
+
 After editing the scout output's `source_profile.runtime_review` to bind exact
 candidates, reviewed endpoints, health, terms, timezone and an expiry, apply it
 through the trusted operator CLI:

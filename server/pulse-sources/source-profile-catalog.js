@@ -7,6 +7,7 @@ const { sanitizeTrustedSpatialScope } = require("../place-candidates/spatial-sco
 const CATALOG_FLAG_ENV_KEY = "PARRANDA_SOURCE_CATALOG";
 const CATALOG_DATABASE_ENV_KEY = "PARRANDA_SOURCE_CATALOG_DATABASE_URL";
 const MAX_PROFILE_BYTES = 512 * 1024;
+const MAX_QUALIFICATION_BYTES = 128 * 1024;
 const MAX_SCOUT_TARGETS = 10_000;
 const SCOUT_LEASE_MS = 15 * 60 * 1000;
 const SCOUT_REFRESH_MS = 7 * 24 * 60 * 60 * 1000;
@@ -225,6 +226,14 @@ ORDER BY reviewed_at DESC NULLS LAST, profile_key ASC
 LIMIT 64
 `;
 
+const SOURCE_QUALIFICATION_SQL = `
+SELECT profile -> 'source_qualification' AS source_qualification
+FROM pulse_source_profiles
+WHERE profile_key = $1
+  AND catalog_status = 'review_needed'
+LIMIT 1
+`;
+
 function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
   if (typeof query !== "function") return null;
 
@@ -282,6 +291,17 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
       return eventFeedsFromReviewedSourceProfiles(profiles, { now: at });
     } catch (_error) {
       return [];
+    }
+  }
+
+  async function loadSourceQualification(profileKey) {
+    const key = publicString(profileKey);
+    if (!key?.startsWith("place-source-profile-v1:")) return null;
+    try {
+      const result = await query(SOURCE_QUALIFICATION_SQL, [key]);
+      return normalizeStoredQualification(result?.rows?.[0]?.source_qualification);
+    } catch (_error) {
+      return null;
     }
   }
 
@@ -387,6 +407,7 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
     recordDiscovery,
     recordApprovedProfile,
     listApprovedEventFeedsForAnchor,
+    loadSourceQualification,
     recordScoutDemand,
     claimScoutTarget,
     completeScoutTarget,
@@ -611,6 +632,13 @@ function parseProfile(value) {
   }
 }
 
+function normalizeStoredQualification(value) {
+  const parsed = parseProfile(value);
+  if (!parsed || parsed.schema_version !== 1 || parsed.activation_performed !== false) return null;
+  const serialized = JSON.stringify(parsed);
+  return Buffer.byteLength(serialized, "utf8") <= MAX_QUALIFICATION_BYTES ? parsed : null;
+}
+
 function normalizeDate(value) {
   if (!value) return null;
   const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
@@ -644,8 +672,10 @@ module.exports = {
   FAIL_SCOUT_TARGET_SQL,
   MAX_SCOUT_TARGETS,
   MAX_PROFILE_BYTES,
+  MAX_QUALIFICATION_BYTES,
   SCOUT_LEASE_MS,
   SCOUT_REFRESH_MS,
+  SOURCE_QUALIFICATION_SQL,
   UPSERT_APPROVED_PROFILE_SQL,
   UPSERT_DISCOVERY_PROFILE_SQL,
   UPSERT_SCOUT_TARGET_SQL,

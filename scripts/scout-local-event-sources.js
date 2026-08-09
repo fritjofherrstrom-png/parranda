@@ -38,6 +38,9 @@ const {
 const {
   resolveDefaultSourceProfileCatalog,
 } = require("../server/pulse-sources/source-profile-catalog");
+const {
+  qualifyDiscoveredSourceProfile,
+} = require("../server/pulse-sources/source-qualification");
 
 const USAGE = [
   "Usage:",
@@ -265,6 +268,7 @@ function createOperatorRuntime(env = process.env) {
         ? composeOperatorLoaders(osmLoader, wikiLoader)
         : null,
     sourceScout: scoutLocalEventSources,
+    sourceQualifier: qualifyDiscoveredSourceProfile,
     scoutCache,
     sourceCatalog: resolveDefaultSourceProfileCatalog(env),
   };
