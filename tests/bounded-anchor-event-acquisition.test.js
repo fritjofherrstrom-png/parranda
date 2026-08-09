@@ -256,6 +256,88 @@ test("coordinate-less evidence alone cannot become an anchor event", () => {
   assert.equal(bounded.rejected[0].reason, "missing_event_coordinates");
 });
 
+test("resolver-attested regional bounds admit relevant regional events without changing local radius behavior", () => {
+  const regionalScope = {
+    kind: "region",
+    bounds: { south: 59.2, north: 59.7, west: 17.9, east: 18.3 },
+  };
+  const regionalEvent = {
+    id: "regional-market",
+    title: "Regional makers market",
+    starts_at: "2026-07-14T19:00:00Z",
+    ends_at: "2026-07-14T21:00:00Z",
+    lat: 59.5,
+    lng: 18.1,
+    source_provider_id: "regional-calendar",
+    source_identity: "regional.example",
+    source_url: "https://regional.example/market",
+  };
+  const local = fuseAndBoundEventEvidence([regionalEvent], { anchor: ANCHOR, radiusM: 3000 });
+  const regional = fuseAndBoundEventEvidence([regionalEvent], {
+    anchor: ANCHOR,
+    radiusM: 3000,
+    spatialScope: regionalScope,
+  });
+  const outside = fuseAndBoundEventEvidence([
+    { ...regionalEvent, id: "outside", lat: 59.8 },
+  ], {
+    anchor: ANCHOR,
+    radiusM: 3000,
+    spatialScope: regionalScope,
+  });
+
+  assert.equal(local.events.length, 0);
+  assert.equal(local.rejected[0].reason, "outside_anchor_radius");
+  assert.equal(regional.events.length, 1);
+  assert.equal(regional.geometry_scope, "resolver_attested_region");
+  assert.ok(regional.events[0].anchor_distance_km > 3);
+  assert.equal(outside.events.length, 0);
+  assert.equal(outside.rejected[0].reason, "outside_trusted_spatial_scope");
+
+  const detachedScope = fuseAndBoundEventEvidence([regionalEvent], {
+    anchor: ANCHOR,
+    radiusM: 3000,
+    spatialScope: {
+      kind: "region",
+      bounds: { south: 59.45, north: 59.65, west: 18.0, east: 18.2 },
+    },
+  });
+  assert.equal(detachedScope.events.length, 0, "bounds that do not contain the anchor cannot widen trust");
+  assert.equal(detachedScope.geometry_scope, "anchor_radius");
+});
+
+test("regional collection threads trusted scope through normalization and fusion", async () => {
+  const regionalScope = {
+    kind: "region",
+    bounds: { south: 59.2, north: 59.7, west: 17.9, east: 18.3 },
+  };
+  const registry = [feed("regional-source", {
+    bbox: [17.9, 59.2, 18.3, 59.7],
+  })];
+  const out = await collectAnchorEvents({
+    anchor: ANCHOR,
+    now: NOW,
+    registry,
+    spatialScope: regionalScope,
+    fetcher: async () => ({
+      ok: true,
+      json: async () => ({
+        data: [linkedEvent({
+          id: "regional-evening",
+          title: "Regional evening market",
+          lat: 59.5,
+          lng: 18.1,
+          source: "regional-source",
+        })],
+      }),
+    }),
+  });
+
+  assert.equal(out.tonight.length, 1);
+  assert.equal(out.tonight[0].id, "regional-evening");
+  assert.equal(out.acquisition.geometry_scope, "resolver_attested_region");
+});
+
 test("daily windows remain surfaceable during opening and future between openings", () => {
   const raw = {
     id: "daily-market",

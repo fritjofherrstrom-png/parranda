@@ -115,11 +115,28 @@ function deriveSecondaryAnchors(spatialScope, primaryAnchor) {
 }
 
 function allowsRegionalClusterSelection(value) {
+  return Boolean(resolveTrustedRegionalSpatialScope(value));
+}
+
+function resolveTrustedRegionalSpatialScope(value) {
   const scope = sanitizeTrustedSpatialScope(value);
-  return Boolean(
-    scope &&
-      scope.collection_mode === "regional_bounded" &&
-      (scope.kind === "municipality" || scope.kind === "region"),
+  if (
+    !scope ||
+    scope.collection_mode !== "regional_bounded" ||
+    (scope.kind !== "municipality" && scope.kind !== "region")
+  ) return null;
+  return scope;
+}
+
+function pointWithinTrustedSpatialScope(point, value) {
+  const scope = sanitizeTrustedSpatialScope(value);
+  if (!scope || !validPoint(point)) return false;
+  const { bounds } = scope;
+  return (
+    point.lat >= bounds.south &&
+    point.lat <= bounds.north &&
+    point.lng >= bounds.west &&
+    point.lng <= bounds.east
   );
 }
 
@@ -197,5 +214,7 @@ module.exports = {
   sanitizeTrustedSpatialScope,
   deriveSecondaryAnchors,
   allowsRegionalClusterSelection,
+  resolveTrustedRegionalSpatialScope,
+  pointWithinTrustedSpatialScope,
   spatialScopeCacheKey,
 };

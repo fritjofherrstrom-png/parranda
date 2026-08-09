@@ -2,6 +2,10 @@
 
 const { haversineKm } = require("../candidates/area-intelligence");
 const { fuseTimeSensitiveEvents } = require("../pulse-sources/event-fusion");
+const {
+  pointWithinTrustedSpatialScope,
+  resolveTrustedRegionalSpatialScope,
+} = require("./spatial-scope");
 
 const DEFAULT_MAX_SOURCES = 4;
 const DEFAULT_MAX_LOCAL_SOURCES = 3;
@@ -92,7 +96,7 @@ function selectPublisherDiverseFeeds(feeds, limit) {
  * still corroborate the same occurrence when another source supplies trusted
  * geometry; standalone coordinate-less rows remain rejected.
  */
-function fuseAndBoundEventEvidence(events = [], { anchor, radiusM } = {}) {
+function fuseAndBoundEventEvidence(events = [], { anchor, radiusM, spatialScope = null } = {}) {
   if (!hasCoordinates(anchor)) {
     return {
       events: [],
@@ -105,6 +109,10 @@ function fuseAndBoundEventEvidence(events = [], { anchor, radiusM } = {}) {
   }
 
   const radiusKm = Math.max(0.1, Number(radiusM || 0) / 1000);
+  const candidateRegionalScope = resolveTrustedRegionalSpatialScope(spatialScope);
+  const regionalScope = candidateRegionalScope && pointWithinTrustedSpatialScope(anchor, candidateRegionalScope)
+    ? candidateRegionalScope
+    : null;
   const fusable = [];
   const rejected = [];
 
@@ -115,11 +123,11 @@ function fuseAndBoundEventEvidence(events = [], { anchor, radiusM } = {}) {
       continue;
     }
     const distanceKm = haversineKm(anchor, event);
-    if (!Number.isFinite(distanceKm) || distanceKm > radiusKm) {
+    if (!eventWithinGeometryPolicy(event, { anchor, radiusKm, regionalScope })) {
       rejected.push({
         id: stableEventId(event),
         source_provider_id: event.source_provider_id || null,
-        reason: "outside_anchor_radius",
+        reason: regionalScope ? "outside_trusted_spatial_scope" : "outside_anchor_radius",
         distance_km: Number.isFinite(distanceKm) ? Number(distanceKm.toFixed(2)) : null,
       });
       continue;
@@ -139,11 +147,11 @@ function fuseAndBoundEventEvidence(events = [], { anchor, radiusM } = {}) {
       continue;
     }
     const distanceKm = haversineKm(anchor, event);
-    if (!Number.isFinite(distanceKm) || distanceKm > radiusKm) {
+    if (!eventWithinGeometryPolicy(event, { anchor, radiusKm, regionalScope })) {
       rejected.push({
         id: stableEventId(event),
         source_provider_id: event.source_provider_id || null,
-        reason: "outside_anchor_radius",
+        reason: regionalScope ? "outside_trusted_spatial_scope" : "outside_anchor_radius",
         distance_km: Number.isFinite(distanceKm) ? Number(distanceKm.toFixed(2)) : null,
       });
       continue;
@@ -151,7 +159,18 @@ function fuseAndBoundEventEvidence(events = [], { anchor, radiusM } = {}) {
     accepted.push({ ...event, anchor_distance_km: Number(distanceKm.toFixed(2)) });
   }
 
-  return { events: accepted, fused_count: fused.length, rejected };
+  return {
+    events: accepted,
+    fused_count: fused.length,
+    rejected,
+    geometry_scope: regionalScope ? "resolver_attested_region" : "anchor_radius",
+  };
+}
+
+function eventWithinGeometryPolicy(event, { anchor, radiusKm, regionalScope }) {
+  if (regionalScope) return pointWithinTrustedSpatialScope(event, regionalScope);
+  const distanceKm = haversineKm(anchor, event);
+  return Number.isFinite(distanceKm) && distanceKm <= radiusKm;
 }
 
 function summarizeRejections(rejected = []) {

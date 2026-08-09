@@ -48,6 +48,7 @@ const {
 } = require("./live-event-query");
 const { classifyCulturalSalience } = require("../pulse-engine/cultural-salience");
 const { resolveEventVenueGeometry } = require("./event-venue-resolution");
+const { spatialScopeCacheKey } = require("./spatial-scope");
 const {
   buildAnchorEventSourcePlan,
   resolveEventFeedsForAnchor,
@@ -652,6 +653,8 @@ function buildScopedEventSourcePlan({
  * @param {Function} [opts.fetcher]              injected fetch (tests)
  * @param {Function|null} [opts.venueResolver]    trusted server-only place resolver
  * @param {number} [opts.venueResolutionLimit]    bounded unique venue lookups
+ * @param {object|null} [opts.spatialScope]        resolver-attested regional bounds, never public payload
+ * @param {object|null} [opts.placeContext]        resolver-attested administrative context
  * @returns {Promise<{coverage:"covered"|"uncovered", feed:object|null, feeds:object[], tonight:object[], this_week:object[], acquisition:object}>}
  */
 async function collectAnchorEvents({
@@ -670,6 +673,8 @@ async function collectAnchorEvents({
   maxLocalSources = DEFAULT_MAX_LOCAL_SOURCES,
   venueResolver = null,
   venueResolutionLimit = 4,
+  spatialScope = null,
+  placeContext = null,
 } = {}) {
   const effectiveRadiusM = Math.min(
     MAX_COLLECTION_RADIUS_M,
@@ -740,6 +745,8 @@ async function collectAnchorEvents({
       resolver: venueResolver,
       anchor,
       radiusM: effectiveRadiusM,
+      spatialScope,
+      placeContext,
       limit: venueResolutionLimit,
     },
   );
@@ -750,6 +757,7 @@ async function collectAnchorEvents({
   const bounded = fuseAndBoundEventEvidence(venueResolution.events, {
     anchor,
     radiusM: effectiveRadiusM,
+    spatialScope,
   });
   const rejected = [...bounded.rejected];
   const sourceById = new Map(sourcePlan.map((source) => [source.id, source]));
@@ -824,6 +832,7 @@ async function collectAnchorEvents({
       rejection_summary: summarizeRejections(rejected),
       source_health: sourceHealth,
       venue_resolution: venueResolution.summary,
+      geometry_scope: bounded.geometry_scope,
     },
   };
 }
@@ -1121,7 +1130,13 @@ function normalizeDirectCollectionOutcome(outcome, eventRows) {
  */
 // Coarse cache key: ~1 km anchor bucket + hour bucket (events are time-sensitive,
 // so the window must not be stale, but a fresh request a minute later must hit).
-function eventCacheKey(anchor, now, sourceIds = [], radiusM = DEFAULT_RADIUS_M) {
+function eventCacheKey(
+  anchor,
+  now,
+  sourceIds = [],
+  radiusM = DEFAULT_RADIUS_M,
+  spatialScope = null,
+) {
   const lat = Number(anchor.lat).toFixed(2);
   const lng = Number(anchor.lng).toFixed(2);
   const hour = (now ? new Date(now) : new Date(0)).toISOString().slice(0, 13);
@@ -1130,7 +1145,7 @@ function eventCacheKey(anchor, now, sourceIds = [], radiusM = DEFAULT_RADIUS_M) 
     .sort()
     .join(",");
   const radius = Math.min(MAX_COLLECTION_RADIUS_M, Math.max(100, Math.round(Number(radiusM) || DEFAULT_RADIUS_M)));
-  return `${lat},${lng}:${hour}:${radius}:${sources}`;
+  return `${lat},${lng}:${hour}:${radius}:${spatialScopeCacheKey(spatialScope)}:${sources}`;
 }
 
 function sourceIdentityForUrl(value) {
@@ -1279,7 +1294,13 @@ function resolveDefaultEventSupply(
       };
     }
     const descriptors = sourcePlan.map((source) => compactSourceStatus({ source, status: "pending", raw: [] }));
-    const key = eventCacheKey(anchor, now, sourcePlan.map((source) => source.id), effectiveRadiusM);
+    const key = eventCacheKey(
+      anchor,
+      now,
+      sourcePlan.map((source) => source.id),
+      effectiveRadiusM,
+      spatialScope,
+    );
     const cached = cache.peek(key);
     if (cached) return rankCollectedEventsForPreferences(cached, preferences, scope);
     // Cold: warm out-of-band (long timeout, fire-and-forget), serve honest pending.
@@ -1292,6 +1313,8 @@ function resolveDefaultEventSupply(
       timeoutMs: WARM_TIMEOUT_MS,
       globalKey,
       venueResolver,
+      spatialScope,
+      placeContext,
     }), {
       // A proven healthy empty result is cacheable so a quiet calendar does not
       // cause refresh loops. Empty results with source failures stay retryable.

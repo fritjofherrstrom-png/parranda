@@ -10,6 +10,8 @@ const {
   sanitizeTrustedSpatialScope,
   deriveSecondaryAnchors,
   allowsRegionalClusterSelection,
+  pointWithinTrustedSpatialScope,
+  resolveTrustedRegionalSpatialScope,
   spatialScopeCacheKey,
 } = require("../server/place-candidates/spatial-scope");
 
@@ -65,6 +67,17 @@ test("only bounded municipality and region scopes may relocate collection to ano
     allowsRegionalClusterSelection({ kind: "region", bounds: { south: 42, north: 46, west: 2, east: 8 } }),
     false,
   );
+});
+
+test("trusted regional scope accepts only coordinates inside resolver-attested bounds", () => {
+  const scope = {
+    kind: "region",
+    bounds: { south: 55.3, north: 55.9, west: 14.0, east: 14.3 },
+  };
+  assert.equal(resolveTrustedRegionalSpatialScope(scope).collection_mode, "regional_bounded");
+  assert.equal(pointWithinTrustedSpatialScope({ lat: 55.6, lng: 14.15 }, scope), true);
+  assert.equal(pointWithinTrustedSpatialScope({ lat: 56.0, lng: 14.15 }, scope), false);
+  assert.equal(resolveTrustedRegionalSpatialScope({ ...scope, kind: "settlement" }), null);
 });
 
 test("scope cache keys are stable, bounded and differ across reviewed bounds", () => {
