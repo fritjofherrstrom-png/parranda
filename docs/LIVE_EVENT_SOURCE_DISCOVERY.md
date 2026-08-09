@@ -629,6 +629,26 @@ experiential. It should remain inspectable and maybe city-contextual, but it
 should not masquerade as a culture stop or visitor route anchor. That is the
 point of separating source discovery from Pulse salience.
 
+## Trusted Event Geometry
+
+Event acquisition uses the resolved place scope rather than assuming every
+request is a city-centre circle:
+
+- local settlements and coordinate anchors keep the bounded anchor radius;
+- only resolver-attested, bounded `municipality` or `region` scopes may accept
+  event or resolved-venue geometry elsewhere inside their exact bounds;
+- the request anchor must itself be inside those bounds, and broad/detached
+  scopes cannot widen the gate;
+- venue resolution still requires exactly one medium-or-better trusted match;
+- the geometry scope participates in cache identity so local and regional
+  evidence cannot be confused.
+
+This allows a regional request to surface a worthwhile event outside the town
+centre without fabricating proximity. The real anchor distance remains
+visible, and route eligibility is unchanged: a far regional event still needs
+the existing walking validation and final-leg distance gate before it can
+become a route stop.
+
 ## Reviewed Sitevision Calendar Adapter
 
 Parranda now recognizes the stable Sitevision event-calendar family as a

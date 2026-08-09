@@ -131,6 +131,62 @@ test("eventCacheKey separates collection radii for place and route scopes", () =
   );
 });
 
+test("eventCacheKey separates local radius evidence from trusted regional evidence", () => {
+  const anchor = { lat: 55.6, lng: 14.15 };
+  const now = "2026-06-28T18:30:00Z";
+  const regionalScope = {
+    kind: "region",
+    bounds: { south: 55.3, north: 55.9, west: 14.0, east: 14.3 },
+  };
+  assert.notEqual(
+    eventCacheKey(anchor, now, ["regional-calendar"], 3000),
+    eventCacheKey(anchor, now, ["regional-calendar"], 3000, regionalScope),
+    "regional acceptance must not reuse a radius-only cache entry",
+  );
+});
+
+test("default background warm forwards only its trusted regional context to collection", async () => {
+  const regionalScope = {
+    kind: "region",
+    bounds: { south: 59.9, north: 60.3, west: 24.7, east: 25.1 },
+  };
+  const placeContext = { region: "Trusted Region", country: "Trusted Country", country_code: "tc" };
+  let collectedInput = null;
+  let warmPromise = null;
+  const supply = resolveDefaultEventSupply({
+    PARRANDA_AGNOSTIC_EVENTS: "enabled",
+    PARRANDA_EVENT_FEEDS: FEEDS_ENV,
+  }, {
+    eventCache: {
+      peek: () => null,
+      warm: (_key, factory) => {
+        warmPromise = Promise.resolve().then(factory);
+      },
+    },
+    collectEvents: async (input) => {
+      collectedInput = input;
+      return {
+        coverage: "covered",
+        tonight: [],
+        this_week: [],
+        acquisition: { source_health: { status: "healthy", result: "empty" } },
+      };
+    },
+  });
+
+  const out = await supply({
+    anchor: { lat: 60.17, lng: 24.94 },
+    now: "2026-06-28T18:30:00Z",
+    spatialScope: regionalScope,
+    placeContext,
+  });
+  await warmPromise;
+
+  assert.equal(out.pending, true);
+  assert.deepEqual(collectedInput.spatialScope, regionalScope);
+  assert.deepEqual(collectedInput.placeContext, placeContext);
+});
+
 test("a warm neutral pool is scope-filtered before its six-row surface cap", () => {
   const scope = { kind: "around_place", anchor: { lat: 55.605, lng: 13.003 }, radius_m: 3000 };
   const offScope = Array.from({ length: 7 }, (_, index) => ({

@@ -61,6 +61,50 @@ test("one trusted in-radius match adds compact derived geometry", async () => {
   assert.equal(input.lat, undefined, "input remains unchanged");
 });
 
+test("resolver-attested regional bounds recover a distant venue without weakening local radius rules", async () => {
+  const regionalScope = {
+    kind: "region",
+    bounds: { south: 59.2, north: 59.7, west: 17.9, east: 18.3 },
+  };
+  const regionalCandidate = candidate({ lat: 59.5, lng: 18.1 });
+  let query = null;
+  const out = await resolveEventVenueGeometry([
+    event({ city: null, address: null, place_context: "Regional market hall" }),
+  ], {
+    anchor: ANCHOR,
+    radiusM: 3000,
+    spatialScope: regionalScope,
+    placeContext: { region: "Trusted Region", country: "Trusted Country" },
+    resolver: async (value) => {
+      query = value;
+      return [regionalCandidate];
+    },
+  });
+  const local = await resolveEventVenueGeometry([event()], {
+    anchor: ANCHOR,
+    radiusM: 3000,
+    resolver: async () => [regionalCandidate],
+  });
+
+  assert.equal(query, "Regional market hall, Trusted Region, Trusted Country");
+  assert.equal(out.events[0].lat, regionalCandidate.lat);
+  assert.equal(out.events[0].venue_resolution.geometry_scope, "resolver_attested_region");
+  assert.equal(local.events[0].lat, undefined, "the same point stays outside the local radius");
+});
+
+test("regional venue resolution still rejects candidates outside trusted bounds", async () => {
+  const out = await resolveEventVenueGeometry([event()], {
+    anchor: ANCHOR,
+    spatialScope: {
+      kind: "region",
+      bounds: { south: 59.2, north: 59.7, west: 17.9, east: 18.3 },
+    },
+    resolver: async () => [candidate({ lat: 59.8, lng: 18.1 })],
+  });
+  assert.equal(out.events[0].lat, undefined);
+  assert.equal(out.summary.not_found_count, 1);
+});
+
 test("ambiguous, weak and out-of-radius results fail closed", async () => {
   const cases = [
     [candidate(), candidate({ lat: ANCHOR.lat + 0.002 })],
