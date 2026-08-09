@@ -1219,7 +1219,17 @@ function resolveDefaultEventSupply(
     ttlMs: EVENT_CACHE_TTL_MS,
     dir: (env && env.PARRANDA_CACHE_DIR) || null,
   });
-  return async ({ anchor, sourceAnchors = [], now, preferences = [], radiusM, scope = null } = {}) => {
+  return async ({
+    anchor,
+    sourceAnchors = [],
+    placeLabel = null,
+    placeContext = null,
+    spatialScope = null,
+    now,
+    preferences = [],
+    radiusM,
+    scope = null,
+  } = {}) => {
     const requestRegistry = [...registry];
     if (sourceCatalog && typeof sourceCatalog.listApprovedEventFeedsForAnchor === "function") {
       try {
@@ -1241,6 +1251,22 @@ function resolveDefaultEventSupply(
       globalSource: GLOBAL_FEED_DESCRIPTOR,
       globalEnabled: Boolean(globalKey),
     });
+    const hasApprovedLocalSource = sourcePlan.some((source) => source?.kind !== "global");
+    if (
+      !hasApprovedLocalSource &&
+      sourceCatalog &&
+      typeof sourceCatalog.recordScoutDemand === "function"
+    ) {
+      // Demand recording is a bounded database write only. Discovery/network
+      // work remains exclusively in the background worker, and this promise is
+      // intentionally detached so catalog latency cannot delay route/Pulse.
+      Promise.resolve(sourceCatalog.recordScoutDemand({
+        anchor,
+        placeLabel,
+        placeContext,
+        spatialScope,
+      })).catch(() => {});
+    }
     if (sourcePlan.length === 0) {
       return {
         coverage: "uncovered",

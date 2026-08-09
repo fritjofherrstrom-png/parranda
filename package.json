@@ -11,6 +11,7 @@
     "migrate:source-catalog": "node scripts/migrate-source-catalog.js",
     "review:source-profile": "node scripts/review-source-profile.js",
     "scout:events": "node scripts/scout-local-event-sources.js",
+    "worker:source-scout": "node scripts/run-source-scout-worker.js",
     "share": "node scripts/share.js",
     "share:latest": "node scripts/share-latest.js",
     "validate:self-hosted": "node scripts/validate-self-hosted-stack.js",

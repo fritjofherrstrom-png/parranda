@@ -95,7 +95,11 @@ async function discoverLocalEventSourcesForPlace({
 
   let records;
   try {
-    records = await openDataLoader(resolution.anchor);
+    records = await openDataLoader({
+      ...resolution.anchor,
+      anchorMode: "place",
+      spatialScope: resolution.spatialScope || null,
+    });
   } catch (_error) {
     return baseOutcome({
       status: "failed",

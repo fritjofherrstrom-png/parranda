@@ -96,6 +96,44 @@ services:
     networks:
       - private
 
+  source-scout-worker:
+    profiles:
+      - source-catalog
+    image: ${PARRANDA_IMAGE:?Set PARRANDA_IMAGE to an immutable image tag}
+    init: true
+    restart: unless-stopped
+    depends_on:
+      source-catalog-migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      PARRANDA_SOURCE_CATALOG: enabled
+      PARRANDA_SOURCE_CATALOG_DATABASE_URL: ${PARRANDA_SOURCE_CATALOG_DATABASE_URL:-postgresql://parranda:catalog-disabled@postgres:5432/parranda}
+      PARRANDA_CACHE_DIR: /var/lib/parranda/source-cache
+      PARRANDA_PLACE_RESOLVER_USER_AGENT: ${PARRANDA_PLACE_RESOLVER_USER_AGENT:-Parranda self-hosted source scout}
+      PARRANDA_WIKIDATA_LABEL_LANGS: ${PARRANDA_WIKIDATA_LABEL_LANGS:-en}
+      PARRANDA_EVENT_SOURCE_SCOUT_INTERVAL_MS: ${PARRANDA_EVENT_SOURCE_SCOUT_INTERVAL_MS:-300000}
+    command:
+      - node
+      - scripts/run-source-scout-worker.js
+      - --watch
+      - --limit
+      - "1"
+      - --interval-ms
+      - ${PARRANDA_EVENT_SOURCE_SCOUT_INTERVAL_MS:-300000}
+    volumes:
+      - source-cache:/var/lib/parranda/source-cache
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    stop_grace_period: 20s
+    networks:
+      - private
+    logging:
+      options:
+        max-size: 10m
+        max-file: "3"
+
   caddy:
     image: caddy:2.11.4-alpine
     restart: unless-stopped

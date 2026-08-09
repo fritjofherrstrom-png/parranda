@@ -1,10 +1,109 @@
 "use strict";
 
+const { createHash, randomUUID } = require("node:crypto");
 const { eventFeedsFromReviewedSourceProfiles } = require("../place-candidates/reviewed-event-source-profile");
+const { sanitizeTrustedSpatialScope } = require("../place-candidates/spatial-scope");
 
 const CATALOG_FLAG_ENV_KEY = "PARRANDA_SOURCE_CATALOG";
 const CATALOG_DATABASE_ENV_KEY = "PARRANDA_SOURCE_CATALOG_DATABASE_URL";
 const MAX_PROFILE_BYTES = 512 * 1024;
+const MAX_SCOUT_TARGETS = 10_000;
+const SCOUT_LEASE_MS = 15 * 60 * 1000;
+const SCOUT_REFRESH_MS = 7 * 24 * 60 * 60 * 1000;
+
+const UPSERT_SCOUT_TARGET_SQL = `
+INSERT INTO pulse_source_scout_targets (
+  target_key,
+  status,
+  place_label,
+  anchor_lat,
+  anchor_lng,
+  bbox_west,
+  bbox_south,
+  bbox_east,
+  bbox_north,
+  place_context,
+  spatial_scope,
+  observed_at,
+  next_attempt_at,
+  updated_at
+)
+SELECT
+  $1, 'pending', $2, $3, $4, $5, $6, $7, $8,
+  $9::jsonb, $10::jsonb, $11::timestamptz, $11::timestamptz, NOW()
+WHERE
+  EXISTS (SELECT 1 FROM pulse_source_scout_targets WHERE target_key = $1)
+  OR (
+    SELECT COUNT(*)
+    FROM pulse_source_scout_targets
+    WHERE status <> 'disabled'
+  ) < $12
+ON CONFLICT (target_key) DO UPDATE SET
+  place_label = EXCLUDED.place_label,
+  anchor_lat = EXCLUDED.anchor_lat,
+  anchor_lng = EXCLUDED.anchor_lng,
+  bbox_west = EXCLUDED.bbox_west,
+  bbox_south = EXCLUDED.bbox_south,
+  bbox_east = EXCLUDED.bbox_east,
+  bbox_north = EXCLUDED.bbox_north,
+  place_context = EXCLUDED.place_context,
+  spatial_scope = EXCLUDED.spatial_scope,
+  observation_count = LEAST(pulse_source_scout_targets.observation_count + 1, 1000000),
+  observed_at = GREATEST(pulse_source_scout_targets.observed_at, EXCLUDED.observed_at),
+  updated_at = NOW()
+RETURNING target_key, status, observation_count
+`;
+
+const CLAIM_SCOUT_TARGET_SQL = `
+WITH candidate AS (
+  SELECT target_key
+  FROM pulse_source_scout_targets
+  WHERE
+    (status IN ('pending', 'retry_wait') AND next_attempt_at <= $1::timestamptz)
+    OR (status = 'completed' AND completed_at <= $2::timestamptz)
+    OR (status = 'leased' AND lease_until <= $1::timestamptz)
+  ORDER BY observation_count DESC, observed_at DESC, target_key ASC
+  LIMIT 1
+  FOR UPDATE SKIP LOCKED
+)
+UPDATE pulse_source_scout_targets AS target
+SET
+  status = 'leased',
+  lease_token = $3,
+  lease_until = $4::timestamptz,
+  attempt_count = target.attempt_count + 1,
+  updated_at = NOW()
+FROM candidate
+WHERE target.target_key = candidate.target_key
+RETURNING target.*
+`;
+
+const COMPLETE_SCOUT_TARGET_SQL = `
+UPDATE pulse_source_scout_targets
+SET
+  status = 'completed',
+  completed_at = $3::timestamptz,
+  next_attempt_at = $4::timestamptz,
+  lease_token = NULL,
+  lease_until = NULL,
+  last_reason = $5,
+  updated_at = NOW()
+WHERE target_key = $1 AND status = 'leased' AND lease_token = $2
+RETURNING target_key, status
+`;
+
+const FAIL_SCOUT_TARGET_SQL = `
+UPDATE pulse_source_scout_targets
+SET
+  status = 'retry_wait',
+  next_attempt_at = $3::timestamptz,
+  lease_token = NULL,
+  lease_until = NULL,
+  last_reason = $4,
+  updated_at = NOW()
+WHERE target_key = $1 AND status = 'leased' AND lease_token = $2
+RETURNING target_key, status
+`;
 
 const UPSERT_APPROVED_PROFILE_SQL = `
 INSERT INTO pulse_source_profiles (
@@ -186,10 +285,112 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
     }
   }
 
+  async function recordScoutDemand({ anchor, placeLabel, placeContext, spatialScope } = {}) {
+    const normalized = normalizeScoutDemand({
+      anchor,
+      placeLabel,
+      placeContext,
+      spatialScope,
+      observedAt: now(),
+    });
+    if (!normalized) return { status: "ignored", reason: "untrusted_or_unbounded_scout_demand" };
+
+    try {
+      const result = await query(UPSERT_SCOUT_TARGET_SQL, [
+        normalized.targetKey,
+        normalized.placeLabel,
+        normalized.anchor.lat,
+        normalized.anchor.lng,
+        normalized.bounds.west,
+        normalized.bounds.south,
+        normalized.bounds.east,
+        normalized.bounds.north,
+        JSON.stringify(normalized.placeContext),
+        JSON.stringify(normalized.spatialScope),
+        normalized.observedAt.toISOString(),
+        MAX_SCOUT_TARGETS,
+      ]);
+      const row = result?.rows?.[0];
+      return row
+        ? {
+            status: "recorded",
+            target_key: publicString(row.target_key) || normalized.targetKey,
+            target_status: publicString(row.status) || "pending",
+          }
+        : { status: "ignored", reason: "source_scout_queue_capacity" };
+    } catch (_error) {
+      return { status: "failed", reason: "source_scout_demand_write_failed" };
+    }
+  }
+
+  async function claimScoutTarget() {
+    const claimedAt = normalizeDate(now());
+    if (!claimedAt) return null;
+    const leaseToken = randomUUID();
+    const staleCompletedAt = new Date(claimedAt.getTime() - SCOUT_REFRESH_MS);
+    const leaseUntil = new Date(claimedAt.getTime() + SCOUT_LEASE_MS);
+    try {
+      const result = await query(CLAIM_SCOUT_TARGET_SQL, [
+        claimedAt.toISOString(),
+        staleCompletedAt.toISOString(),
+        leaseToken,
+        leaseUntil.toISOString(),
+      ]);
+      return normalizeClaimedScoutTarget(result?.rows?.[0], leaseToken);
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  async function completeScoutTarget(target, reason = "source_scout_completed") {
+    const normalized = normalizeLeasedScoutTarget(target);
+    const completedAt = normalizeDate(now());
+    if (!normalized || !completedAt) return { status: "ignored", reason: "invalid_source_scout_lease" };
+    const refreshAt = new Date(completedAt.getTime() + SCOUT_REFRESH_MS);
+    try {
+      const result = await query(COMPLETE_SCOUT_TARGET_SQL, [
+        normalized.targetKey,
+        normalized.leaseToken,
+        completedAt.toISOString(),
+        refreshAt.toISOString(),
+        safeReason(reason, "source_scout_completed"),
+      ]);
+      return result?.rows?.[0]
+        ? { status: "completed", target_key: normalized.targetKey }
+        : { status: "ignored", reason: "source_scout_lease_lost" };
+    } catch (_error) {
+      return { status: "failed", reason: "source_scout_completion_write_failed" };
+    }
+  }
+
+  async function failScoutTarget(target, reason = "source_scout_failed") {
+    const normalized = normalizeLeasedScoutTarget(target);
+    const failedAt = normalizeDate(now());
+    if (!normalized || !failedAt) return { status: "ignored", reason: "invalid_source_scout_lease" };
+    const retryAt = new Date(failedAt.getTime() + scoutRetryDelayMs(normalized.attemptCount));
+    try {
+      const result = await query(FAIL_SCOUT_TARGET_SQL, [
+        normalized.targetKey,
+        normalized.leaseToken,
+        retryAt.toISOString(),
+        safeReason(reason, "source_scout_failed"),
+      ]);
+      return result?.rows?.[0]
+        ? { status: "retry_wait", target_key: normalized.targetKey, retry_at: retryAt.toISOString() }
+        : { status: "ignored", reason: "source_scout_lease_lost" };
+    } catch (_error) {
+      return { status: "failed", reason: "source_scout_failure_write_failed" };
+    }
+  }
+
   return {
     recordDiscovery,
     recordApprovedProfile,
     listApprovedEventFeedsForAnchor,
+    recordScoutDemand,
+    claimScoutTarget,
+    completeScoutTarget,
+    failScoutTarget,
   };
 }
 
@@ -298,6 +499,109 @@ function normalizeBounds(value) {
   return bounds;
 }
 
+function normalizeScoutDemand({ anchor, placeLabel, placeContext, spatialScope, observedAt } = {}) {
+  const lat = finiteCoordinate(anchor?.lat, -90, 90);
+  const lng = finiteCoordinate(anchor?.lng, -180, 180);
+  const label = boundedString(placeLabel, 160);
+  const context = normalizePlaceContext(placeContext);
+  const scope = sanitizeTrustedSpatialScope(spatialScope);
+  const at = normalizeDate(observedAt);
+  if (
+    lat == null ||
+    lng == null ||
+    !label ||
+    !context ||
+    !scope?.bounds ||
+    !["local_anchor", "regional_bounded"].includes(scope.collection_mode) ||
+    !at
+  ) return null;
+  const identity = [
+    scope.kind,
+    context.country_code,
+    context.locality,
+    context.municipality,
+    context.region,
+    scope.bounds.west.toFixed(3),
+    scope.bounds.south.toFixed(3),
+    scope.bounds.east.toFixed(3),
+    scope.bounds.north.toFixed(3),
+  ].filter(Boolean).join("|").toLocaleLowerCase("en-US");
+  if (!identity) return null;
+  return {
+    targetKey: `source-scout-target-v1:${createHash("sha256").update(identity).digest("hex").slice(0, 20)}`,
+    placeLabel: label,
+    anchor: { lat, lng },
+    bounds: scope.bounds,
+    placeContext: context,
+    spatialScope: scope,
+    observedAt: at,
+  };
+}
+
+function normalizePlaceContext(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const fields = ["locality", "municipality", "county", "region", "country", "country_code"];
+  const context = {};
+  for (const field of fields) {
+    const text = boundedString(value[field], 160);
+    if (!text) continue;
+    if (field === "country_code" && !/^[a-z]{2}$/i.test(text)) continue;
+    context[field] = field === "country_code" ? text.toLowerCase() : text;
+  }
+  return Object.keys(context).length ? context : null;
+}
+
+function normalizeClaimedScoutTarget(row, leaseToken) {
+  if (!row || typeof row !== "object") return null;
+  const targetKey = publicString(row.target_key);
+  const placeLabel = boundedString(row.place_label, 160);
+  const anchor = {
+    lat: finiteCoordinate(row.anchor_lat, -90, 90),
+    lng: finiteCoordinate(row.anchor_lng, -180, 180),
+  };
+  const placeContext = parseProfile(row.place_context);
+  const spatialScope = sanitizeTrustedSpatialScope(parseProfile(row.spatial_scope));
+  const attemptCount = positiveInteger(row.attempt_count) || 1;
+  if (!targetKey || !placeLabel || anchor.lat == null || anchor.lng == null || !placeContext || !spatialScope) {
+    return null;
+  }
+  return {
+    target_key: targetKey,
+    lease_token: leaseToken,
+    place_label: placeLabel,
+    anchor,
+    place_context: placeContext,
+    spatial_scope: spatialScope,
+    attempt_count: attemptCount,
+  };
+}
+
+function normalizeLeasedScoutTarget(value) {
+  const targetKey = publicString(value?.target_key);
+  const leaseToken = publicString(value?.lease_token);
+  if (!targetKey || !leaseToken) return null;
+  return {
+    targetKey,
+    leaseToken,
+    attemptCount: positiveInteger(value?.attempt_count) || 1,
+  };
+}
+
+function scoutRetryDelayMs(attemptCount) {
+  const exponent = Math.min(8, Math.max(0, (positiveInteger(attemptCount) || 1) - 1));
+  return Math.min(24 * 60 * 60 * 1000, 5 * 60 * 1000 * (2 ** exponent));
+}
+
+function safeReason(value, fallback) {
+  const token = publicString(value).toLowerCase();
+  return /^[a-z0-9_:-]{1,120}$/.test(token) ? token : fallback;
+}
+
+function boundedString(value, maxLength) {
+  const text = publicString(value);
+  return text && text.length <= maxLength ? text : null;
+}
+
 function parseProfile(value) {
   try {
     const parsed = typeof value === "string" ? JSON.parse(value) : structuredClone(value);
@@ -333,11 +637,20 @@ function enabled(value) {
 
 module.exports = {
   ACTIVE_PROFILES_FOR_ANCHOR_SQL,
+  CLAIM_SCOUT_TARGET_SQL,
+  COMPLETE_SCOUT_TARGET_SQL,
   CATALOG_DATABASE_ENV_KEY,
   CATALOG_FLAG_ENV_KEY,
+  FAIL_SCOUT_TARGET_SQL,
+  MAX_SCOUT_TARGETS,
   MAX_PROFILE_BYTES,
+  SCOUT_LEASE_MS,
+  SCOUT_REFRESH_MS,
   UPSERT_APPROVED_PROFILE_SQL,
   UPSERT_DISCOVERY_PROFILE_SQL,
+  UPSERT_SCOUT_TARGET_SQL,
   createSourceProfileCatalog,
+  normalizeScoutDemand,
   resolveDefaultSourceProfileCatalog,
+  scoutRetryDelayMs,
 };

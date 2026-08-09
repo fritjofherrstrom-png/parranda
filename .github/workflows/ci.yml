@@ -85,3 +85,4 @@ jobs:
           trap cleanup EXIT
           docker compose --profile source-catalog -f compose.production.yml up --detach postgres
           docker compose --profile source-catalog -f compose.production.yml run --rm source-catalog-migrate
+          docker compose --profile source-catalog -f compose.production.yml run --rm source-scout-worker node scripts/run-source-scout-worker.js --limit 1

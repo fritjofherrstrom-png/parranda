@@ -419,12 +419,20 @@ The runtime path is a-la-minute but bounded:
 
 1. Resolve place/bounds.
 2. Load cached source-discovery profile for that place or nearby region.
-3. If missing/stale, queue low-volume background discovery against known search
-   surfaces and source-family heuristics. The queue/scheduler is the next
-   capability after the persistent catalog; it must not run inside the request.
-4. Run only approved provider adapters. Do not fetch arbitrary user URLs.
-5. Normalize into `time_sensitive_events`.
-6. Feed normalized events into Pulse salience and, later, dayflow/route gates.
+3. If a resolver-attested bounded place has no approved local source, record one
+   deduplicated geographic demand row. The public request never waits for or
+   performs discovery.
+4. A bounded background worker claims demand with a lease, runs the existing
+   low-volume scout, and writes findings as `review_needed`. Failures back off;
+   stale completed targets become eligible for a later refresh.
+5. Run only approved provider adapters. Do not fetch arbitrary user URLs.
+6. Normalize into `time_sensitive_events`.
+7. Feed normalized events into Pulse salience and, later, dayflow/route gates.
+
+The worker does not auto-approve discoveries. This preserves source trust while
+removing city-specific scouting and request-path crawling. Automated promotion,
+if introduced later, needs a separate evidence policy with parser health,
+ownership, terms, freshness and repeated-success gates.
 7. Fail soft with source status instead of blocking Planner/Pulse.
 
 Runtime discovery should be opt-in/gated until source families are proven. City
