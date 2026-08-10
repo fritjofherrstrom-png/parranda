@@ -62,6 +62,7 @@ const {
 const DEFAULT_RADIUS_M = 3000;
 const MAX_PER_BUCKET = 6;
 const MAX_BROWSE_PER_BUCKET = 24;
+const SERENDIPITY_MIN_SALIENCE = 7;
 const LIVE_EVENT_BROWSE_CONTRACT = "live_event_browse_v1";
 // Wide enough that today's later (evening) events and the next days both fit in
 // one chronological page after permanent infrastructure is excluded.
@@ -420,7 +421,7 @@ function dedupeViews(views) {
   const seen = new Set();
   const out = [];
   for (const v of views) {
-    const key = v.id || `${(v.title || "").toLowerCase()}|${v.place || ""}`;
+    const key = eventViewIdentity(v);
     const titleKey = `${(v.title || "").toLowerCase()}|${v.place || ""}`;
     if (seen.has(key) || seen.has(titleKey)) continue;
     seen.add(key);
@@ -502,8 +503,10 @@ function rankEventViews(views, preferences = []) {
 
 function buildEventBucketSurface(views, preferences = []) {
   const ranked = rankEventViews(views, preferences);
-  const highlights = ranked.slice(0, MAX_PER_BUCKET);
-  const more = ranked.slice(MAX_PER_BUCKET, MAX_BROWSE_PER_BUCKET);
+  const highlights = selectEventHighlights(ranked, preferences);
+  const highlighted = new Set(highlights.map(eventViewIdentity));
+  const remaining = ranked.filter((view) => !highlighted.has(eventViewIdentity(view)));
+  const more = remaining.slice(0, Math.max(0, MAX_BROWSE_PER_BUCKET - highlights.length));
   return {
     highlights,
     browse: {
@@ -514,6 +517,43 @@ function buildEventBucketSurface(views, preferences = []) {
       more,
     },
   };
+}
+
+// Preference fit should personalize Live without turning it into a filter
+// bubble. When all highlight slots are occupied by requested matches, reserve
+// at most one slot for a genuinely salient local happening. The candidate has
+// already passed the same source, timing, geometry and display gates as every
+// other row; administrative notices and weak background rows never enter this
+// bounded discovery lane.
+function selectEventHighlights(ranked, preferences = []) {
+  const highlights = ranked.slice(0, MAX_PER_BUCKET);
+  if (
+    highlights.length < MAX_PER_BUCKET ||
+    !Array.isArray(preferences) ||
+    preferences.length === 0 ||
+    highlights.some(isSerendipityCandidate)
+  ) {
+    return highlights;
+  }
+
+  const discovery = ranked.slice(MAX_PER_BUCKET).find(isSerendipityCandidate);
+  if (!discovery) return highlights;
+  return [
+    ...highlights.slice(0, -1),
+    { ...discovery, highlight_reason: "local_serendipity" },
+  ];
+}
+
+function isSerendipityCandidate(view) {
+  return (
+    view?.preference_match === "none" &&
+    view?.cultural_tier !== "administrative" &&
+    Number(view?.salience_score || 0) >= SERENDIPITY_MIN_SALIENCE
+  );
+}
+
+function eventViewIdentity(view) {
+  return view?.id || `${String(view?.title || "").toLowerCase()}|${view?.place || ""}`;
 }
 
 function emptyEventBrowse() {
@@ -1402,6 +1442,7 @@ module.exports = {
   DEFAULT_RADIUS_M,
   MAX_PER_BUCKET,
   MAX_BROWSE_PER_BUCKET,
+  SERENDIPITY_MIN_SALIENCE,
   LIVE_EVENT_BROWSE_CONTRACT,
   LOCAL_EVENT_ADAPTERS,
   normalizeLocalEventAdapter,

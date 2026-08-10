@@ -121,6 +121,57 @@ test("cultural events can become evening anchors and preserve salience metadata"
   assert.equal(ev.salience_score, 8.5);
 });
 
+test("a display-only serendipity slot does not reorder the evening route evidence", () => {
+  const hiddenFromRoute = Array.from({ length: 5 }, (_, index) => ({
+    id: `display-${index}`,
+    title: `Display row ${index}`,
+    route_eligible: false,
+  }));
+  const eventSurface = {
+    ...liveEvents([
+      ...hiddenFromRoute,
+      {
+        id: "serendipity",
+        title: "Unexpected performance",
+        starts_at: "2026-07-29T18:30:00.000Z",
+        timezone: "Europe/Stockholm",
+        source_url: "https://x/serendipity",
+        source_label: "Feed",
+        lat: 60.189,
+        lng: 24.979,
+        timing_relevance: "tonight",
+        cultural_tier: "cultural",
+        salience_score: 8,
+        highlight_reason: "local_serendipity",
+      },
+    ]),
+    browse: {
+      tonight: {
+        more: [{
+          id: "original-sixth",
+          title: "Original sixth-ranked event",
+          starts_at: "2026-07-29T18:00:00.000Z",
+          timezone: "Europe/Stockholm",
+          source_url: "https://x/original-sixth",
+          source_label: "Feed",
+          lat: 60.1706,
+          lng: 24.9408,
+          timing_relevance: "tonight",
+          cultural_tier: "cultural",
+          salience_score: 7.5,
+        }],
+      },
+    },
+  };
+  const out = weaveEveningEvent(dayWithDistricts(), eventSurface);
+  const selectedDateOut = weaveEveningEvent(dayWithDistricts(), eventSurface, {
+    selectedDate: "2026-07-29",
+  });
+
+  assert.equal(out.district_day.evening_event.id, "original-sixth");
+  assert.equal(selectedDateOut.district_day.evening_event.id, "original-sixth");
+});
+
 test("cultural event outranks an administrative notice as the day anchor", () => {
   const out = weaveEveningEvent(
     dayWithDistricts(),

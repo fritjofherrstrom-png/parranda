@@ -21,6 +21,7 @@ const {
   HELSINKI_LINKED_EVENTS_FEED,
   MAX_PER_BUCKET,
   MAX_BROWSE_PER_BUCKET,
+  SERENDIPITY_MIN_SALIENCE,
   LIVE_EVENT_BROWSE_CONTRACT,
 } = require("../server/place-candidates/agnostic-event-supply");
 
@@ -552,6 +553,97 @@ test("Live keeps six ranked highlights and exposes the remaining accepted events
     "highlights and browse rows never duplicate one occurrence",
   );
   assert.equal(ranked._rankable_events, undefined, "the wider internal pool remains private");
+});
+
+test("preference ranking reserves one bounded highlight for a strong local discovery", () => {
+  const requestedMatches = Array.from({ length: MAX_PER_BUCKET }, (_, index) => ({
+    id: `matched-${index}`,
+    title: `Vintage market ${index}`,
+    starts_at: "2026-06-28T18:00:00Z",
+    salience_score: 6,
+    cultural_tier: "cultural",
+    tags: ["second hand"],
+  }));
+  const discovery = {
+    id: "local-discovery",
+    title: "One-night harbour performance",
+    starts_at: "2026-06-28T18:00:00Z",
+    salience_score: SERENDIPITY_MIN_SALIENCE + 1,
+    cultural_tier: "cultural",
+    tags: ["performance"],
+  };
+  const ranked = rankCollectedEventsForPreferences({
+    coverage: "covered",
+    tonight: [],
+    this_week: [],
+    _rankable_events: { tonight: [...requestedMatches, discovery], this_week: [] },
+  }, ["second_hand"]);
+
+  assert.equal(ranked.tonight.length, MAX_PER_BUCKET);
+  assert.equal(ranked.tonight.filter((event) => event.preference_match === "strong").length, MAX_PER_BUCKET - 1);
+  assert.equal(ranked.tonight.at(-1).id, "local-discovery");
+  assert.equal(ranked.tonight.at(-1).preference_match, "none");
+  assert.equal(ranked.tonight.at(-1).highlight_reason, "local_serendipity");
+  assert.equal(ranked.browse.tonight.more[0].id, "matched-5", "the displaced match remains browsable");
+});
+
+test("the discovery slot never promotes administrative or weak unrelated rows", () => {
+  const requestedMatches = Array.from({ length: MAX_PER_BUCKET }, (_, index) => ({
+    id: `matched-${index}`,
+    title: `Culture pick ${index}`,
+    starts_at: "2026-06-28T18:00:00Z",
+    salience_score: 6,
+    cultural_tier: "cultural",
+    tags: ["culture"],
+  }));
+  const ranked = rankCollectedEventsForPreferences({
+    coverage: "covered",
+    tonight: [],
+    this_week: [],
+    _rankable_events: {
+      tonight: [
+        ...requestedMatches,
+        {
+          id: "admin",
+          title: "Council meeting",
+          starts_at: "2026-06-28T18:00:00Z",
+          salience_score: SERENDIPITY_MIN_SALIENCE + 1,
+          cultural_tier: "administrative",
+        },
+        {
+          id: "weak",
+          title: "Generic listing",
+          starts_at: "2026-06-28T18:00:00Z",
+          salience_score: SERENDIPITY_MIN_SALIENCE - 0.01,
+          cultural_tier: "neutral",
+        },
+      ],
+      this_week: [],
+    },
+  }, ["culture"]);
+
+  assert.equal(ranked.tonight.every((event) => event.preference_match === "strong"), true);
+  assert.equal(ranked.tonight.some((event) => event.highlight_reason === "local_serendipity"), false);
+  assert.deepEqual(ranked.browse.tonight.more.map((event) => event.id).slice(0, 2), ["admin", "weak"]);
+});
+
+test("without requested preferences the neutral salience order stays unchanged", () => {
+  const rows = Array.from({ length: MAX_PER_BUCKET + 1 }, (_, index) => ({
+    id: `neutral-${index}`,
+    title: `Neutral event ${index}`,
+    starts_at: "2026-06-28T18:00:00Z",
+    salience_score: 10 - index,
+    cultural_tier: "neutral",
+  }));
+  const ranked = rankCollectedEventsForPreferences({
+    coverage: "covered",
+    tonight: [],
+    this_week: [],
+    _rankable_events: { tonight: rows, this_week: [] },
+  }, []);
+
+  assert.deepEqual(ranked.tonight.map((event) => event.id), rows.slice(0, MAX_PER_BUCKET).map((event) => event.id));
+  assert.equal(ranked.tonight.some((event) => "highlight_reason" in event), false);
 });
 
 test("cultural events outrank civic/admin notices in the same bucket (smart, not just timely)", async () => {
