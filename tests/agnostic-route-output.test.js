@@ -1263,6 +1263,13 @@ test(
           windows: [],
           marker: "payload_selected_day_hours",
         },
+        walkable_micro_base: {
+          applied: true,
+          mode: "payload_override",
+          anchor: { lat: 55.636, lng: 14.1 },
+        },
+        selection_origin: { lat: 55.636, lng: 14.1 },
+        route_anchor: { lat: 55.636, lng: 14.1 },
         evaluateCandidateAvailability: "payload_evaluator",
       }),
     });
@@ -1275,6 +1282,7 @@ test(
     assert.equal(JSON.stringify(r.body).includes("payload_opening_hours"), false);
     assert.equal(JSON.stringify(r.body).includes("payload_selected_day_hours"), false);
     assert.equal(JSON.stringify(r.body).includes("payload_evaluator"), false);
+    assert.equal(JSON.stringify(r.body).includes("payload_override"), false);
   }),
 );
 
@@ -1957,6 +1965,70 @@ test("unit: wider discovery cannot turn a remote cluster into a near-me walking 
   });
   assert.equal(region.experiment.route_mutation, true, "a broad regional anchor may use a coherent farther cluster");
   assert.equal("candidate_reach_policy" in region.experiment.eligibility.checks, false);
+});
+
+test("unit: a typed place may compose around one bounded walkable micro-base", async () => {
+  const origin = { lat: 55.6, lng: 14.1 };
+  const compactCluster = fixtureNear({ lat: 55.636, lng: 14.1 });
+  const baseline = { city: "fallback", days: [], readiness: { unsupported: true } };
+
+  const exact = await composeAgnosticRouteOutput({
+    coords: origin,
+    baselineResult: baseline,
+    externalRequested: true,
+    openDataLoader: makeLoader(compactCluster),
+    preferences: ["food", "coffee", "scenic"],
+    date: DATE,
+    anchorMode: "coordinates",
+  });
+  assert.equal(exact.experiment.route_mutation, false, "explicit coordinates remain a hard origin");
+  assert.ok(exact.experiment.readiness_blockers.includes("candidate_cluster_outside_origin_reach"));
+
+  const place = await composeAgnosticRouteOutput({
+    coords: origin,
+    baselineResult: baseline,
+    externalRequested: true,
+    openDataLoader: makeLoader(compactCluster),
+    preferences: ["food", "coffee", "scenic"],
+    date: DATE,
+    anchorMode: "place",
+  });
+  assert.equal(place.experiment.route_mutation, true);
+  assert.equal(place.experiment.source_status.anchor.lat, origin.lat, "the resolver discovery anchor remains truthful");
+  const summary = place.experiment.source_status.collection.walkable_micro_base;
+  assert.equal(summary.applied, true);
+  assert.equal(summary.mode, "trusted_candidate_cluster");
+  assert.equal(summary.reason, "insufficient_relevant_supply_at_resolved_anchor");
+  assert.ok(summary.shift_km > 3 && summary.shift_km <= 5.5);
+  assert.equal(summary.cluster_candidate_count, compactCluster.length);
+  assert.deepEqual(summary.covered_intents, ["food", "fika", "views"]);
+  assert.equal(summary.local_relevant_candidate_count, 0);
+  assert.equal("anchor" in summary, false);
+  assert.equal(place.experiment.experimental_route.walkable_micro_base.mode, "trusted_candidate_cluster");
+  assert.ok(place.experiment.experimental_route.caveats.includes("walkable_micro_base_selected"));
+});
+
+test("unit: engine synthesis uses the selected micro-base without exposing internal coordinates", async () => {
+  const origin = { lat: 55.6, lng: 14.1 };
+  const compactCluster = fixtureNear({ lat: 55.636, lng: 14.1 });
+  const baseline = { city: "fallback", days: [], readiness: { unsupported: true } };
+  const output = await composeAgnosticRouteOutput({
+    coords: origin,
+    baselineResult: baseline,
+    externalRequested: true,
+    openDataLoader: makeLoader(compactCluster),
+    preferences: ["food", "coffee", "scenic"],
+    date: DATE,
+    anchorMode: "place",
+    placeLabel: "A region",
+    synthesizeVia: "engine",
+  });
+
+  assert.equal(output.experiment.route_mutation, true);
+  const route = output.result.days[0].primary_route;
+  assert.equal(route.walkable_micro_base.mode, "trusted_candidate_cluster");
+  assert.ok(route.caveats.includes("walkable_micro_base_selected"));
+  assert.equal(JSON.stringify(route.walkable_micro_base).includes("55.636"), false);
 });
 
 test("unit: engine composer scrubs fallback-city signals and placeholder route prose", async () => {
