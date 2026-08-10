@@ -335,6 +335,23 @@ Exit criteria:
 - obvious landmarks and local finds can both win when appropriate
 - weak candidates are hidden or downgraded
 
+Current explicit contract:
+
+- `anywhere_blitz=1` resolves a freeform place or explicit coordinates through
+  the same trusted any-place intake used by Planner;
+- local time comes only from resolver-attested or weather-provider-derived
+  timezone evidence, with no fabricated midday fallback;
+- the shared candidate spine supplies the place move and the existing bounded
+  Live acquisition supplies source health plus a possible event option;
+- a Live event may interrupt the place move only when it has already passed the
+  event gates, is salient, within 2 km, and is happening now or starts within
+  90 minutes;
+- the contract never mutates a route or changes the day anchor. Public payload
+  fields cannot inject resolved context, candidates, weather, time, or events.
+
+The product UI must consume this contract deliberately. A random preference
+bundle is not equivalent to Blitz's “smart move right now” promise.
+
 ### Step 7 — Candidate-driven Your Day
 
 **Goal:** Generated `Your Day` can compose from the candidate spine, not only legacy templates.

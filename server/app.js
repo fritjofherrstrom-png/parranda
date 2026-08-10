@@ -3,6 +3,7 @@ const express = require("express");
 const path = require("path");
 const { resolveCityConfig, cityConfigs } = require("./cities");
 const { buildBlitzDecision } = require("./blitz-engine");
+const { buildAnywhereBlitzDecision } = require("./blitz-anywhere");
 const { generateRecommendations } = require("./route-engine");
 const {
   classifyRuntimeReadiness,
@@ -2370,6 +2371,31 @@ function buildApp({
 
   app.post("/api/blitz", async (request, response) => {
     try {
+      const anywhereBlitzRaw =
+        request.query?.anywhere_blitz ??
+        request.query?.anywhereBlitz ??
+        request.body?.anywhere_blitz ??
+        request.body?.anywhereBlitz;
+      const anywhereBlitzRequested = TRUTHY_INSPECT_FLAGS.has(anywhereBlitzRaw);
+      if (anywhereBlitzRequested) {
+        const lang = normalizeLanguage(request.query?.lang || request.body?.lang);
+        const result = await buildAnywhereBlitzDecision({
+          coords: parseBlitzCoordinates(request),
+          placeQuery: parsePlaceQuery(request),
+          placeResolver,
+          openDataLoader,
+          eventSupply,
+          weatherProvider,
+          clock,
+          preferences: Array.isArray(request.body?.preferences) ? request.body.preferences : [],
+          intentKeys: Array.isArray(request.body?.intent_keys) ? request.body.intent_keys : [],
+          memory: request.body?.memory,
+          lang,
+        });
+        response.json(result);
+        return;
+      }
+
       const { cityConfig: resolvedCity, requestedCity, cityFallbackUsed } = resolveRequestCity(request.body?.city);
       const lang = normalizeLanguage(request.query?.lang || request.body?.lang);
 
