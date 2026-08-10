@@ -671,10 +671,11 @@ function applyRouteMutation({ baselineResult, primaryRoute, date }) {
  * Build the public root for an engaged any-place experiment.
  *
  * The normal Planner baseline may come from the default city when no `city` was
- * supplied. That baseline remains useful inside the experiment's comparison
- * block, but it must never survive as the public any-place result. In
- * particular, a non-promoted experiment has no public day, and a promoted route
- * must not inherit the fallback city's identity, home base, or readiness.
+ * supplied. Only compact presence facts may survive in experiment diagnostics;
+ * the fallback route and city truth must never survive as the public any-place
+ * result. In particular, a non-promoted experiment has no public day, and a
+ * promoted route must not inherit the fallback city's identity, home base, or
+ * readiness.
  */
 function buildAgnosticPublicResult({
   result,
@@ -719,8 +720,7 @@ function buildExperimentBlock({
     eligibility,
     baseline: {
       had_primary_route: Boolean(baselineDay && baselineDay.primary_route),
-      primary_route: (baselineDay && baselineDay.primary_route) || null,
-      readiness: (baselineResult && baselineResult.readiness) || null,
+      had_readiness: Boolean(baselineResult && baselineResult.readiness),
     },
     candidate_readiness: candidateReadiness || null,
     experimental_route: routeMutation ? experimentalRoute : null,

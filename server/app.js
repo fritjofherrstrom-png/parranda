@@ -1977,7 +1977,11 @@ function buildApp({
           ...payload,
           ...(generationCityConfig !== cityConfig ? { cityConfigOverride: generationCityConfig } : {}),
         }));
-        const plannerInspectSidecar = isPlannerCandidateInspectRequested(request)
+        // Legacy inspect helpers operate on the selected city config and route
+        // result. For a freeform/no-city request those values are only fallback
+        // scaffolding, not evidence about the requested place. Never serialize
+        // fallback-city diagnostics as if they described the agnostic anchor.
+        const plannerInspectSidecar = !noRecognizedCity && isPlannerCandidateInspectRequested(request)
           ? await buildPlannerCandidateInspectSidecar({
               cityConfig: generationCityConfig,
               request,
@@ -1986,7 +1990,7 @@ function buildApp({
               openDataLoader,
             })
           : null;
-        const routeOutputDiagnosticsSidecar = isRouteOutputInspectRequested(request)
+        const routeOutputDiagnosticsSidecar = !noRecognizedCity && isRouteOutputInspectRequested(request)
           ? {
               route_output_diagnostics: buildRouteOutputDiagnostics({
                 city,
@@ -1995,7 +1999,7 @@ function buildApp({
               }),
             }
           : null;
-        const agnosticRouteCandidateSidecar = isAgnosticRouteCandidateInspectRequested(request)
+        const agnosticRouteCandidateSidecar = !noRecognizedCity && isAgnosticRouteCandidateInspectRequested(request)
           ? await buildAgnosticRouteCandidateSidecar({
               cityConfig: generationCityConfig,
               request,
