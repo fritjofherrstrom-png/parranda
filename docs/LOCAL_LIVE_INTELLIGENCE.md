@@ -298,6 +298,19 @@ timing, geometry and display gates as every other event; weak or civic/admin
 noise cannot use the slot. The displaced preference match remains available in
 the capped browse list, and the rule never changes route composition.
 
+## Pulse route interrupt contract
+
+The top route-eligible evening event can produce one bounded
+`pulse_route_interrupt_v1` result after the day already exists. A short extension
+inside the existing 2.5 km auto-weave limit is marked `applied` only after the
+full stop order passes walking validation. A longer extension that still passes
+the engine's independent leg/day safety budgets is marked `suggested`: the
+route, stop order, and geographic anchor remain unchanged until a user-facing
+consumer explicitly asks to recompose. Events whose geometry cannot be
+validated produce no suggestion. The compact interrupt preserves event timing,
+source attribution, and measured walking impact; public payload fields cannot
+mint one.
+
 ## Product bar
 
 Parranda should eventually feel like:

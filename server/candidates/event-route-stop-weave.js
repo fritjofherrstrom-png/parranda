@@ -58,11 +58,17 @@ function deepClone(value) {
 }
 
 /**
- * @returns {Promise<{result: object, placeStructure: object|null, applied: boolean, blockers: string[]}>}
+ * @returns {Promise<{result: object, placeStructure: object|null, applied: boolean, blockers: string[], interrupt?: object}>}
  *   `result`/`placeStructure` are the inputs when not applied, clones when applied.
  */
 async function weaveEveningEventRouteStop({ result, placeStructure, walkingRouter, walkingConfig } = {}) {
-  const unchanged = (blockers) => ({ result, placeStructure, applied: false, blockers });
+  const unchanged = (blockers, interrupt = null) => ({
+    result,
+    placeStructure,
+    applied: false,
+    blockers,
+    ...(interrupt ? { interrupt } : {}),
+  });
 
   const day = result && Array.isArray(result.days) ? result.days[0] : null;
   if (!isAgnosticDay(day)) return unchanged(["day_not_agnostic"]);
@@ -108,7 +114,12 @@ async function weaveEveningEventRouteStop({ result, placeStructure, walkingRoute
   const legKm = Number(eventLeg && eventLeg.distance_km);
   const legMinutes = Number(eventLeg && eventLeg.estimated_walk_minutes);
   if (!Number.isFinite(legKm) || !Number.isFinite(legMinutes)) return unchanged(["event_leg_unmeasurable"]);
-  if (legKm > MAX_EVENT_LEG_KM) return unchanged(["event_leg_too_long"]);
+  if (legKm > MAX_EVENT_LEG_KM) {
+    return unchanged(
+      ["event_leg_too_long"],
+      buildPulseRouteInterrupt({ status: "suggested", event, lastStop, legKm, legMinutes }),
+    );
+  }
 
   // Apply — on clones, never on the caller's objects.
   const nextResult = deepClone(result);
@@ -205,7 +216,46 @@ async function weaveEveningEventRouteStop({ result, placeStructure, walkingRoute
     route_leg_minutes: Math.round(legMinutes),
   };
 
-  return { result: nextResult, placeStructure: nextStructure, applied: true, blockers: [] };
+  return {
+    result: nextResult,
+    placeStructure: nextStructure,
+    applied: true,
+    blockers: [],
+    interrupt: buildPulseRouteInterrupt({ status: "applied", event, lastStop, legKm, legMinutes }),
+  };
+}
+
+function buildPulseRouteInterrupt({ status, event, lastStop, legKm, legMinutes }) {
+  const applied = status === "applied";
+  return {
+    contract: "pulse_route_interrupt_v1",
+    status,
+    route_mutation: applied,
+    route_anchor_unchanged: true,
+    requires_user_action: !applied,
+    action: applied ? "evening_extension_applied" : "consider_recomposing_around_event",
+    proposed_position: "after_final_stop",
+    event: {
+      id: event.id || null,
+      title: event.title || null,
+      lat: event.lat,
+      lng: event.lng,
+      starts_at: event.starts_at || null,
+      ends_at: event.ends_at || null,
+      occurrence_date: event.occurrence_date || null,
+      timezone: event.timezone || null,
+      source_label: event.source_label || null,
+      source_url: event.source_url || null,
+    },
+    walking_impact: {
+      from_stop_id: lastStop.id || null,
+      from_stop_label: lastStop.label || null,
+      leg_km: round1(legKm),
+      leg_minutes: Math.round(legMinutes),
+      auto_weave_limit_km: MAX_EVENT_LEG_KM,
+    },
+    reasons: [applied ? "walking_validated_evening_extension" : "outside_auto_weave_limit"],
+  };
 }
 
 module.exports = { weaveEveningEventRouteStop, MAX_EVENT_LEG_KM };

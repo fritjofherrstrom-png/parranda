@@ -2326,6 +2326,7 @@ function buildApp({
         response.json({
           ...engineWoven.result,
           ...(engineWoven.placeStructure ? { place_structure: engineWoven.placeStructure } : {}),
+          ...(engineWoven.interrupt ? { pulse_route_interrupt: engineWoven.interrupt } : {}),
           ...liveEventsSidecar,
           agnostic_route_output_experiment: experiment,
         });
@@ -2355,6 +2356,7 @@ function buildApp({
       response.json({
         ...legacyWoven.result,
         ...(legacyWoven.placeStructure ? { place_structure: legacyWoven.placeStructure } : {}),
+        ...(legacyWoven.interrupt ? { pulse_route_interrupt: legacyWoven.interrupt } : {}),
         ...liveEventsSidecar,
         agnostic_route_output_experiment: experiment,
       });
