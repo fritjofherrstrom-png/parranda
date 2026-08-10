@@ -1397,7 +1397,10 @@ function servePublicRootAsset(request, response, next) {
     return;
   }
 
-  response.sendFile(path.join(appRoot, assetName));
+  // Use an explicit root instead of an absolute path. Express 5 treats any
+  // dot-prefixed parent segment as a hidden file, so an otherwise valid
+  // checkout such as ~/.parranda would make every allowlisted asset 404.
+  response.sendFile(assetName, { root: appRoot });
 }
 
 function blockPrivateRepoPaths(request, response, next) {
