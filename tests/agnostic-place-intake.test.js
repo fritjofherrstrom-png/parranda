@@ -117,6 +117,83 @@ test("unit: explicit valid coords win — resolver is never called", async () =>
   assert.equal(spatialScope, null);
 });
 
+test("unit: explicit coordinates may receive trusted reverse context without moving the anchor", async () => {
+  let searchCalled = false;
+  let reverseInput = null;
+  const resolver = async () => {
+    searchCalled = true;
+    return [];
+  };
+  resolver.resolveCoordinates = async (coordinates, context) => {
+    reverseInput = { coordinates, context };
+    return {
+      label: "Cannes",
+      provenance: "nominatim_reverse_context",
+      attribution: "© OpenStreetMap contributors",
+      license: "ODbL",
+      admin_context: {
+        locality: "Cannes",
+        municipality: "Cannes",
+        region: "Provence-Alpes-Côte d’Azur",
+        country: "France",
+        country_code: "fr",
+        secret: "drop-me",
+      },
+      spatial_scope: {
+        source: "nominatim_bounds",
+        kind: "municipality",
+        bounds: { south: 43.5, north: 43.6, west: 6.95, east: 7.08 },
+      },
+    };
+  };
+
+  const result = await resolveAgnosticIntake({
+    coords: { lat: 43.5528, lng: 7.0174 },
+    placeQuery: "Injected public label",
+    placeResolver: resolver,
+    placeLanguage: "fr",
+  });
+
+  assert.equal(searchCalled, false);
+  assert.deepEqual(reverseInput, {
+    coordinates: { lat: 43.5528, lng: 7.0174 },
+    context: { language: "fr" },
+  });
+  assert.deepEqual(result.anchor, { lat: 43.5528, lng: 7.0174 });
+  assert.equal(result.intake.resolved.label, "Cannes");
+  assert.equal(result.intake.resolved.provenance, "explicit_request_coordinates");
+  assert.equal(result.intake.resolved.context_provenance, "nominatim_reverse_context");
+  assert.equal(result.intake.resolved.confidence, "explicit");
+  assert.deepEqual(result.placeContext, {
+    locality: "Cannes",
+    municipality: "Cannes",
+    region: "Provence-Alpes-Côte d’Azur",
+    country: "France",
+    country_code: "fr",
+  });
+  assert.equal(result.spatialScope.kind, "municipality");
+  assert.equal(result.intake.query, "Injected public label", "public text remains inspectable only as the query");
+  assert.notEqual(result.intake.resolved.label, result.intake.query);
+  assert.doesNotMatch(JSON.stringify(result), /drop-me|secret/);
+});
+
+test("unit: reverse context failure never blocks or weakens an explicit coordinate anchor", async () => {
+  const resolver = async () => { throw new Error("search must not run"); };
+  resolver.resolveCoordinates = async () => { throw new Error("reverse down"); };
+
+  const { anchor, intake, placeContext, spatialScope } = await resolveAgnosticIntake({
+    coords: { lat: 35.1856, lng: 33.3823 },
+    placeResolver: resolver,
+  });
+
+  assert.deepEqual(anchor, { lat: 35.1856, lng: 33.3823 });
+  assert.equal(intake.status, "resolved");
+  assert.deepEqual(intake.blockers, []);
+  assert.equal(intake.resolved.label, null);
+  assert.equal(placeContext, null);
+  assert.equal(spatialScope, null);
+});
+
 test("unit: no coords + no place → missing_or_invalid_coordinates", async () => {
   const { anchor, intake } = await resolveAgnosticIntake({ coords: null, placeQuery: null, placeResolver: async () => [] });
   assert.equal(anchor, null);

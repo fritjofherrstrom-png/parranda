@@ -45,8 +45,10 @@ const { createSourceCache } = require("./source-cache");
 const { createHash } = require("node:crypto");
 
 const NOMINATIM_ENDPOINT = "https://nominatim.openstreetmap.org/search";
+const NOMINATIM_REVERSE_ENDPOINT = "https://nominatim.openstreetmap.org/reverse";
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
 const DEFAULT_TIMEOUT_MS = 5000;
+const DEFAULT_REVERSE_TIMEOUT_MS = 2500;
 const DEFAULT_LIMIT = 5;
 const MAX_LIMIT = 10;
 const DEFAULT_CACHE_TTL_MS = 30 * 60 * 1000;
@@ -56,6 +58,7 @@ const MAX_PENDING_REQUESTS = 100;
 const DEFAULT_PROVIDER_COOLDOWN_MS = 5000;
 const MAX_PROVIDER_COOLDOWN_MS = 60 * 1000;
 const MAX_QUERY_LEN = 200;
+const REVERSE_ZOOM = 10;
 
 // Conservative confidence thresholds (tunable). Importance is OSM's popularity-ish
 // score; we use it ONLY to reject clearly-junk single matches and to detect
@@ -154,6 +157,36 @@ function toRawCandidate(result) {
     admin_context: normalizeAdminContext(result.address),
     spatial_scope: normalizeNominatimSpatialScope(result),
   };
+}
+
+function normalizeLanguage(value) {
+  const language = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return /^[a-z]{2}(?:-[a-z]{2})?$/.test(language) ? language : null;
+}
+
+function toCoordinateContext(result) {
+  if (!result || typeof result !== "object" || Array.isArray(result)) return null;
+  const adminContext = normalizeAdminContext(result.address);
+  if (!adminContext) return null;
+  const label =
+    adminContext.locality ||
+    adminContext.municipality ||
+    adminContext.county ||
+    adminContext.region ||
+    adminContext.country ||
+    null;
+  if (!label) return null;
+  const context = {
+    label,
+    provenance: "nominatim_reverse_context",
+    attribution: "© OpenStreetMap contributors",
+    license: "ODbL",
+    source_tier: "inferred",
+    admin_context: adminContext,
+  };
+  const spatialScope = normalizeNominatimSpatialScope(result);
+  if (spatialScope) context.spatial_scope = spatialScope;
+  return context;
 }
 
 /**
@@ -302,8 +335,10 @@ function finalizeCandidate(candidate) {
 function createNominatimPlaceResolver({
   fetcher = typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null,
   endpoint = NOMINATIM_ENDPOINT,
+  reverseEndpoint = NOMINATIM_REVERSE_ENDPOINT,
   userAgent = DEFAULT_USER_AGENT,
   timeoutMs = DEFAULT_TIMEOUT_MS,
+  reverseTimeoutMs = DEFAULT_REVERSE_TIMEOUT_MS,
   limit = DEFAULT_LIMIT,
   cacheTtlMs = DEFAULT_CACHE_TTL_MS,
   cacheDir = null,
@@ -325,14 +360,25 @@ function createNominatimPlaceResolver({
   // Pre-validate the configured endpoint ONCE. An invalid endpoint makes the
   // resolver fail closed (return []) without ever calling fetch — never throws.
   let endpointValid = true;
+  let reverseEndpointValid = true;
   try {
     // eslint-disable-next-line no-new
     new URL(endpoint);
   } catch (_error) {
     endpointValid = false;
   }
+  try {
+    // eslint-disable-next-line no-new
+    new URL(reverseEndpoint);
+  } catch (_error) {
+    reverseEndpointValid = false;
+  }
   const endpointIdentity = createHash("sha256")
     .update(`${endpoint}|limit:${clampedLimit}`)
+    .digest("hex")
+    .slice(0, 16);
+  const reverseEndpointIdentity = createHash("sha256")
+    .update(`${reverseEndpoint}|zoom:${REVERSE_ZOOM}`)
     .digest("hex")
     .slice(0, 16);
   const cache = sourceCache || createSourceCache({
@@ -353,8 +399,8 @@ function createNominatimPlaceResolver({
   // cacheable; any http-non-ok / network / timeout / parse / malformed failure is
   // NOT cacheable (so a transient blip never poison-caches `[]` for the TTL).
   // The public contract still returns `candidates[]` and fails closed.
-  async function fetchAndMapQueued(query) {
-    if (typeof fetcher !== "function") return { ok: false, candidates: [] };
+  async function fetchJsonQueued(buildUrl, requestTimeoutMs = timeoutMs) {
+    if (typeof fetcher !== "function") return { ok: false, data: null };
 
     // Global rate gate: distinct queries are serialized so a provider cooldown
     // learned from one response also protects queries that were already queued.
@@ -365,16 +411,9 @@ function createNominatimPlaceResolver({
     if (wait > 0) await sleep(wait);
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
     try {
-      // URL construction is inside the try so a bad endpoint fails closed too.
-      const url = new URL(endpoint);
-      url.searchParams.set("q", query);
-      url.searchParams.set("format", "jsonv2");
-      // A compact allowlisted subset becomes trusted server-side place context
-      // for source-family discovery. The raw address never leaves this module.
-      url.searchParams.set("addressdetails", "1");
-      url.searchParams.set("limit", String(clampedLimit));
+      const url = buildUrl();
 
       const response = await fetcher(url.toString(), {
         signal: controller.signal,
@@ -388,17 +427,46 @@ function createNominatimPlaceResolver({
           clampInt(maxProviderCooldownMs, 0, MAX_PROVIDER_COOLDOWN_MS, MAX_PROVIDER_COOLDOWN_MS),
         );
         if (cooldownMs > 0) cooldownUntil = Math.max(cooldownUntil, now() + cooldownMs);
-        return { ok: false, candidates: [] };
+        return { ok: false, data: null };
       }
-      const data = await response.json();
-      if (!Array.isArray(data)) return { ok: false, candidates: [] };
-      const raw = data.map(toRawCandidate).filter(Boolean);
-      return { ok: true, candidates: classifyConfidences(raw, query).map(finalizeCandidate) };
+      return { ok: true, data: await response.json() };
     } catch (_error) {
-      return { ok: false, candidates: [] };
+      return { ok: false, data: null };
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  async function fetchAndMapQueued(query) {
+    const result = await fetchJsonQueued(() => {
+      const url = new URL(endpoint);
+      url.searchParams.set("q", query);
+      url.searchParams.set("format", "jsonv2");
+      // A compact allowlisted subset becomes trusted server-side place context
+      // for source-family discovery. The raw address never leaves this module.
+      url.searchParams.set("addressdetails", "1");
+      url.searchParams.set("limit", String(clampedLimit));
+      return url;
+    });
+    if (!result.ok || !Array.isArray(result.data)) return { ok: false, candidates: [] };
+    const raw = result.data.map(toRawCandidate).filter(Boolean);
+    return { ok: true, candidates: classifyConfidences(raw, query).map(finalizeCandidate) };
+  }
+
+  async function fetchCoordinateContextQueued(coords, language) {
+    const result = await fetchJsonQueued(() => {
+      const url = new URL(reverseEndpoint);
+      url.searchParams.set("lat", String(coords.lat));
+      url.searchParams.set("lon", String(coords.lng));
+      url.searchParams.set("format", "jsonv2");
+      url.searchParams.set("addressdetails", "1");
+      url.searchParams.set("zoom", String(REVERSE_ZOOM));
+      if (language) url.searchParams.set("accept-language", language);
+      return url;
+    }, reverseTimeoutMs);
+    if (!result.ok) return { ok: false, context: null };
+    const context = toCoordinateContext(result.data);
+    return context ? { ok: true, context } : { ok: false, context: null };
   }
 
   async function drainQueue() {
@@ -409,7 +477,7 @@ function createNominatimPlaceResolver({
         const entry = requestQueue.shift();
         let result;
         try {
-          result = await fetchAndMapQueued(entry.query);
+          result = await entry.task();
         } catch (_error) {
           result = { ok: false, candidates: [] };
         }
@@ -422,18 +490,18 @@ function createNominatimPlaceResolver({
     }
   }
 
-  function fetchAndMap(query) {
+  function enqueueProviderTask(task) {
     const pendingCount = requestQueue.length + (queueActive ? 1 : 0);
     if (pendingCount >= clampedMaxPending) {
       return Promise.resolve({ ok: false, candidates: [] });
     }
     return new Promise((resolve) => {
-      requestQueue.push({ query, resolve });
+      requestQueue.push({ task, resolve });
       void drainQueue();
     });
   }
 
-  return async function resolvePlace(rawQuery) {
+  async function resolvePlace(rawQuery) {
     const query = normalizeQuery(rawQuery);
     if (!query) return [];
     // An invalid configured endpoint fails closed without ever calling fetch.
@@ -442,11 +510,30 @@ function createNominatimPlaceResolver({
     const key = `v2:${endpointIdentity}:${queryIdentity}`;
     const result = await cache.get(
       key,
-      () => fetchAndMap(query),
+      () => enqueueProviderTask(() => fetchAndMapQueued(query)),
       { shouldStore: (value) => value && value.ok === true },
     );
     return clone(Array.isArray(result?.candidates) ? result.candidates : []);
+  }
+
+  resolvePlace.resolveCoordinates = async function resolveCoordinates(rawCoordinates, context = {}) {
+    const lat = Number(rawCoordinates?.lat);
+    const lng = Number(rawCoordinates?.lng);
+    if (!isValidCoordinate(lat, lng) || !reverseEndpointValid || typeof fetcher !== "function") return null;
+    const language = normalizeLanguage(context.language);
+    const coordinateIdentity = createHash("sha256")
+      .update(`${lat.toFixed(5)},${lng.toFixed(5)}:${language || "default"}`)
+      .digest("hex");
+    const key = `reverse-v1:${reverseEndpointIdentity}:${coordinateIdentity}`;
+    const result = await cache.get(
+      key,
+      () => enqueueProviderTask(() => fetchCoordinateContextQueued({ lat, lng }, language)),
+      { shouldStore: (value) => value && value.ok === true },
+    );
+    return clone(result?.context || null);
   };
+
+  return resolvePlace;
 }
 
 /**
@@ -464,7 +551,16 @@ function resolveDefaultPlaceResolver(env = process.env, overrides = {}) {
   const endpoint =
     (env && typeof env.PARRANDA_PLACE_RESOLVER_ENDPOINT === "string" && env.PARRANDA_PLACE_RESOLVER_ENDPOINT.trim()) ||
     NOMINATIM_ENDPOINT;
+  const reverseEndpoint =
+    (env && typeof env.PARRANDA_PLACE_REVERSE_ENDPOINT === "string" && env.PARRANDA_PLACE_REVERSE_ENDPOINT.trim()) ||
+    NOMINATIM_REVERSE_ENDPOINT;
   const timeoutMs = clampInt(env && env.PARRANDA_PLACE_RESOLVER_TIMEOUT_MS, 50, 30000, DEFAULT_TIMEOUT_MS);
+  const reverseTimeoutMs = clampInt(
+    env && env.PARRANDA_PLACE_REVERSE_TIMEOUT_MS,
+    50,
+    10000,
+    DEFAULT_REVERSE_TIMEOUT_MS,
+  );
   const cacheTtlMs = clampInt(
     env && env.PARRANDA_PLACE_RESOLVER_CACHE_TTL_MS,
     0,
@@ -487,7 +583,9 @@ function resolveDefaultPlaceResolver(env = process.env, overrides = {}) {
   const primaryResolver = createNominatimPlaceResolver({
     userAgent,
     endpoint,
+    reverseEndpoint,
     timeoutMs,
+    reverseTimeoutMs,
     cacheTtlMs,
     cacheDir: env && env.PARRANDA_CACHE_DIR,
     maxPendingRequests,
@@ -519,7 +617,7 @@ function resolveDefaultPlaceResolver(env = process.env, overrides = {}) {
 function composePlaceResolvers(primaryResolver, fallbackResolver) {
   if (typeof primaryResolver !== "function") return typeof fallbackResolver === "function" ? fallbackResolver : null;
   if (typeof fallbackResolver !== "function") return primaryResolver;
-  return async function resolveAcrossSources(query, context = {}) {
+  const resolveAcrossSources = async function resolveAcrossSources(query, context = {}) {
     let primary = [];
     try {
       const result = await primaryResolver(query, context);
@@ -541,6 +639,10 @@ function composePlaceResolvers(primaryResolver, fallbackResolver) {
     if (fallback.some(hasAnchorConfidence)) return fallback;
     return primary.length ? primary : fallback;
   };
+  if (typeof primaryResolver.resolveCoordinates === "function") {
+    resolveAcrossSources.resolveCoordinates = (...args) => primaryResolver.resolveCoordinates(...args);
+  }
+  return resolveAcrossSources;
 }
 
 function normalizeResolverCandidates(value) {

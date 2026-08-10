@@ -207,3 +207,59 @@ test("resolved place context reaches only the trusted event supply seam", async 
     global.fetch = ORIGINAL_FETCH;
   }
 });
+
+test("coordinate reverse context reaches Live while public context fields remain untrusted", async () => {
+  let supplied = null;
+  const eventSupply = async (input) => {
+    supplied = input;
+    return { coverage: "uncovered", feed: null, tonight: [], this_week: [] };
+  };
+  const placeResolver = async () => { throw new Error("place search must not run for coordinates"); };
+  placeResolver.resolveCoordinates = async () => ({
+    label: "Cannes",
+    provenance: "trusted_reverse_fixture",
+    admin_context: {
+      locality: "Cannes",
+      region: "Provence-Alpes-Côte d’Azur",
+      country: "France",
+      country_code: "fr",
+    },
+    spatial_scope: {
+      source: "trusted_reverse_fixture",
+      kind: "municipality",
+      bounds: { south: 43.5, north: 43.6, west: 6.95, east: 7.08 },
+    },
+  });
+  global.fetch = mockStableWeatherFetch();
+  const server = buildApp({ openDataLoader: null, eventSupply, placeResolver }).listen(0);
+  try {
+    const res = await post(server, {
+      lat: 43.5528,
+      lng: 7.0174,
+      place: "Injected place",
+      place_context: { locality: "Injected", country_code: "xx" },
+      spatial_scope: { kind: "region", bounds: { west: 0, south: 0, east: 1, north: 1 } },
+      dates: ["2026-06-28"],
+      preferences: ["markets"],
+      include_external_candidates: 1,
+    });
+
+    assert.deepEqual(supplied.anchor, { lat: 43.5528, lng: 7.0174 });
+    assert.deepEqual(supplied.placeContext, {
+      locality: "Cannes",
+      region: "Provence-Alpes-Côte d’Azur",
+      country: "France",
+      country_code: "fr",
+    });
+    assert.equal(supplied.placeLabel, "Cannes");
+    assert.equal(supplied.spatialScope.kind, "municipality");
+    assert.equal(res.agnostic_route_output_experiment.intake.resolved.provenance, "explicit_request_coordinates");
+    assert.equal(res.agnostic_route_output_experiment.intake.resolved.context_provenance, "trusted_reverse_fixture");
+    assert.equal(res.agnostic_route_output_experiment.intake.query, "Injected place");
+    assert.notEqual(res.agnostic_route_output_experiment.intake.resolved.label, "Injected place");
+    assert.doesNotMatch(JSON.stringify(res), /"xx"/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    global.fetch = ORIGINAL_FETCH;
+  }
+});
