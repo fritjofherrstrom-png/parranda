@@ -18,7 +18,8 @@
  *     With no dir it is an in-memory cache — still coalesces and de-dupes within
  *     the running instance, just not across restarts.
  *   - Only successful values are stored (`shouldStore`), so a transient error is
- *     never frozen into the cache.
+ *     never frozen into the cache. Callers may explicitly allow a bounded stale
+ *     success after refresh failure; that fallback never extends its own expiry.
  *
  * It is GENERIC (key → JSON-serializable value); the loader/resolver own how they
  * shape and re-hydrate their own results. Fail-open: any filesystem error
@@ -67,12 +68,12 @@ function createSourceCache(options = {}) {
     return entry && typeof entry.expiresAt === "number" && entry.expiresAt > now();
   }
 
-  function readFile(key) {
+  function readFile(key, { allowExpired = false } = {}) {
     if (!ensureFileDir()) return null;
     try {
       const raw = fs.readFileSync(path.join(fileDir, safeFileName(key)), "utf8");
       const entry = JSON.parse(raw);
-      return fresh(entry) ? entry : null;
+      return fresh(entry) || allowExpired ? entry : null;
     } catch (_error) {
       return null; // missing / unreadable / stale-parse → treat as miss
     }
@@ -98,10 +99,16 @@ function createSourceCache(options = {}) {
    * Return the cached value for `key`, or produce + store it.
    * @param {string} key
    * @param {() => Promise<any>} producer  computes the value on a miss
-   * @param {{ shouldStore?: (value:any) => boolean }} [opts]
+   * @param {{
+   *   shouldStore?: (value:any) => boolean,
+   *   staleIfErrorMs?: number,
+   *   onStale?: (value:any, info:object) => any
+   * }} [opts]
    */
   async function get(key, producer, opts = {}) {
     const shouldStore = typeof opts.shouldStore === "function" ? opts.shouldStore : () => true;
+    const staleIfErrorMs = Math.max(0, Math.floor(Number(opts.staleIfErrorMs) || 0));
+    const onStale = typeof opts.onStale === "function" ? opts.onStale : (value) => value;
 
     const memEntry = mem.get(key);
     if (fresh(memEntry)) return memEntry.value;
@@ -112,17 +119,46 @@ function createSourceCache(options = {}) {
       return fileEntry.value;
     }
 
+    // Keep an expired, previously accepted value only as a bounded safety net.
+    // It is never returned on a healthy refresh and never extends its own age.
+    const staleEntry = staleIfErrorMs > 0
+      ? memEntry || readFile(key, { allowExpired: true })
+      : null;
+    const staleAgeMs = staleEntry && Number.isFinite(staleEntry.expiresAt)
+      ? Math.max(0, now() - staleEntry.expiresAt)
+      : Number.POSITIVE_INFINITY;
+    const canServeStale = Boolean(staleEntry && staleAgeMs <= staleIfErrorMs);
+
     // Coalesce concurrent identical lookups onto one producer call.
     if (inFlight.has(key)) return inFlight.get(key);
 
     const promise = (async () => {
-      const value = await producer();
-      if (shouldStore(value)) {
-        const entry = { value, expiresAt: now() + boundedTtlMs };
-        mem.set(key, entry);
-        writeFile(key, entry);
+      try {
+        const value = await producer();
+        if (shouldStore(value)) {
+          const entry = { value, expiresAt: now() + boundedTtlMs };
+          mem.set(key, entry);
+          writeFile(key, entry);
+          return value;
+        }
+        if (canServeStale) {
+          return onStale(staleEntry.value, {
+            staleAgeMs,
+            refreshValue: value,
+            refreshError: null,
+          });
+        }
+        return value;
+      } catch (refreshError) {
+        if (canServeStale) {
+          return onStale(staleEntry.value, {
+            staleAgeMs,
+            refreshValue: null,
+            refreshError,
+          });
+        }
+        throw refreshError;
       }
-      return value;
     })();
 
     inFlight.set(key, promise);

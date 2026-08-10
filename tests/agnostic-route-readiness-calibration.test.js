@@ -149,6 +149,31 @@ test("usable never coexists with capped_by tokens and thin_usable always has one
   assert.ok(cappedBy(thin).length > 0);
 });
 
+test("a route composed from bounded stale candidate cache is usable but explicitly capped", () => {
+  const out = calibrateAgnosticRouteReadiness(
+    producedInput({
+      sourceStatus: {
+        status: "loaded:30",
+        collection: {
+          cache: {
+            served_stale: true,
+            stale_age_seconds: 900,
+            refresh_reason: "timeout_or_abort",
+          },
+        },
+      },
+    }),
+  );
+
+  assert.equal(out.status, "thin_usable");
+  assert.equal(out.level, "low");
+  assert.ok(out.reasons.includes("stale_candidate_cache_used"));
+  assert.ok(out.caps.includes("capped_by_stale_candidate_cache"));
+  assert.equal(out.inputs.stale_candidate_cache, true);
+  assert.equal(out.inputs.stale_candidate_cache_age_seconds, 900);
+  assert.equal(out.inputs.stale_candidate_refresh_reason, "timeout_or_abort");
+});
+
 test("#281 — a 2-stop day is capped thin even with strong sources and full context", () => {
   // Same strong inputs that otherwise produce `usable`, but only two stops
   // (e.g. a time-anchored evening day trimmed to food + bar). It must read

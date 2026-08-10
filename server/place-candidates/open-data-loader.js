@@ -69,6 +69,9 @@ const OVERPASS_FETCH_CAP = 150;
 // before Overpass has exhausted the budget we explicitly gave it.
 const OVERPASS_QUERY_TIMEOUT_SECONDS = 25;
 const DEFAULT_TIMEOUT_MS = 30000;
+// Stable map/place facts can safely bridge a short provider outage, but stale
+// data must stay bounded and visible in source/readiness metadata.
+const DEFAULT_STALE_IF_ERROR_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_RADIUS_KM = 5.0;
 const MAX_LIMIT = 100;
 // Adaptive aperture expansion. The first query stays cheap and local. A single
@@ -242,6 +245,7 @@ function createOpenDataLoader({
   timeoutMs = DEFAULT_TIMEOUT_MS,
   userAgent = DEFAULT_USER_AGENT,
   cache = null,
+  staleIfErrorMs = 0,
 } = {}) {
   if (typeof fetcher !== "function") {
     return null; // honest fail closed: no fetcher → no loader
@@ -249,6 +253,7 @@ function createOpenDataLoader({
   const boundedRadiusKm = clamp(radiusKm, 0.1, MAX_RADIUS_KM);
   const boundedLimit = Math.max(1, Math.min(Math.floor(limit), MAX_LIMIT));
   const boundedTimeoutMs = Math.max(50, Math.floor(timeoutMs));
+  const boundedStaleIfErrorMs = Math.max(0, Math.floor(Number(staleIfErrorMs) || 0));
   // Resolve the endpoint set. An explicit single `endpoint` (e.g. an injected
   // test) stays single-shot; otherwise the default primary + fallback mirror(s)
   // give cold-load failover. `endpoints` (array) overrides both.
@@ -559,7 +564,28 @@ function createOpenDataLoader({
           metadata: result.loader_metadata || null,
         };
       },
-      { shouldStore: (value) => value && typeof value.status === "string" && !value.status.startsWith("error") },
+      {
+        shouldStore: (value) => value && typeof value.status === "string" && !value.status.startsWith("error"),
+        staleIfErrorMs: boundedStaleIfErrorMs,
+        onStale: (stale, info) => {
+          const refreshReason = safeLoaderToken(
+            info?.refreshValue?.error ||
+              (info?.refreshError ? classifyFetchError(info.refreshError) : "provider_failed"),
+          );
+          return {
+            ...stale,
+            error: "stale_cache_refresh_failed",
+            metadata: {
+              ...(stale?.metadata && typeof stale.metadata === "object" ? stale.metadata : {}),
+              cache: {
+                served_stale: true,
+                stale_age_seconds: Math.max(0, Math.floor(Number(info?.staleAgeMs) / 1000) || 0),
+                refresh_reason: refreshReason,
+              },
+            },
+          };
+        },
+      },
     );
     return withLoaderMetadata(
       withLoaderStatus(entry.records, entry.status, entry.error),
@@ -919,6 +945,11 @@ function resolveDefaultOpenDataLoader(env = process.env) {
   // PARRANDA_CACHE_DIR is set (point it at a mounted disk to survive redeploys);
   // in-memory + de-duping otherwise.
   const ttlMs = Number(env?.PARRANDA_SOURCE_CACHE_TTL_MS);
+  const staleRaw = env?.PARRANDA_SOURCE_CACHE_STALE_IF_ERROR_MS;
+  const parsedStaleMs = staleRaw === undefined || staleRaw === null || staleRaw === "" ? null : Number(staleRaw);
+  const staleIfErrorMs = Number.isFinite(parsedStaleMs) && parsedStaleMs >= 0
+    ? parsedStaleMs
+    : DEFAULT_STALE_IF_ERROR_MS;
   const cache = createSourceCache({
     namespace: "overpass",
     dir: env?.PARRANDA_CACHE_DIR || null,
@@ -932,6 +963,7 @@ function resolveDefaultOpenDataLoader(env = process.env) {
     .filter(Boolean);
   const osmLoader = createOpenDataLoader({
     cache,
+    staleIfErrorMs,
     ...(endpointsRaw.length ? { endpoints: endpointsRaw } : {}),
   });
 

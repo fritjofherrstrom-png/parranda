@@ -30,6 +30,7 @@ const CAP_TOKENS = {
   belowPlannerCandidateThreshold: "capped_by_below_planner_candidate_threshold",
   thinDay: "capped_by_thin_day",
   remainingDayShortRoute: "capped_by_remaining_day_short_route",
+  staleCandidateCache: "capped_by_stale_candidate_cache",
 };
 
 // A produced route with this few stops is a minimal day, not a full one — even
@@ -89,6 +90,9 @@ function calibrateAgnosticRouteReadiness({
     weather_fed_into_selection: Boolean(contextInfluence.weather_fed_into_selection),
     time_fed_into_selection: Boolean(contextInfluence.time_fed_into_selection),
     dayflow_context_present: Boolean(dayflowContextPresent),
+    stale_candidate_cache: sourceStatus?.collection?.cache?.served_stale === true,
+    stale_candidate_cache_age_seconds: finiteOrNull(sourceStatus?.collection?.cache?.stale_age_seconds),
+    stale_candidate_refresh_reason: sourceStatus?.collection?.cache?.refresh_reason || null,
     requested_date: typeof requestedDate === "string" ? requestedDate : null,
     current_local_date:
       typeof contextTime.now === "string" && /^\d{4}-\d{2}-\d{2}T/.test(contextTime.now)
@@ -193,6 +197,10 @@ function calibrateAgnosticRouteReadiness({
   if (inputs.all_external_stops) {
     reasons.push("source_backed_external_candidates");
     caps.push(CAP_TOKENS.externalOnlySources);
+  }
+  if (inputs.stale_candidate_cache) {
+    reasons.push("stale_candidate_cache_used");
+    caps.push(CAP_TOKENS.staleCandidateCache);
   }
   if (inputs.can_support_planner === false) {
     reasons.push("below_planner_candidate_threshold");

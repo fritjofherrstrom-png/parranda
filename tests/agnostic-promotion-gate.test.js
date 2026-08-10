@@ -62,6 +62,18 @@ test("a trusted remaining-day short route can promote while the generic thin-day
   assert.deepEqual(verdict.blocked_caps, []);
 });
 
+test("bounded stale candidate cache remains promotable with an explicit readiness cap", () => {
+  const verdict = evaluateAgnosticPromotion({
+    calibration: calibration({
+      caps: ["capped_by_external_only_sources", "capped_by_stale_candidate_cache"],
+    }),
+    strongAnchor: true,
+  });
+
+  assert.equal(verdict.promote, true);
+  assert.deepEqual(verdict.blocked_caps, []);
+});
+
 test("below_planner_threshold and unresolved_roles and role_order_fallback all block", () => {
   for (const cap of [
     "capped_by_below_planner_candidate_threshold",
