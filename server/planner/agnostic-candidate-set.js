@@ -13,6 +13,9 @@ const { daypartSlotForRole } = require("./agnostic-route-ordering");
 const DEFAULT_POOL_LIMIT = 12;
 const MAX_SET_SIZE = 6;
 const WALKING_DISTANCE_FACTOR = 1.22;
+// A walking preset is a product target, not only a ceiling. Below 60% the
+// selected day is honestly under-filled unless stronger request coverage wins.
+const TARGET_FLOOR_RATIO = 0.6;
 
 function selectAgnosticCandidateSet({
   rankedCandidates = [],
@@ -24,16 +27,22 @@ function selectAgnosticCandidateSet({
   targetKm = null,
   poolLimit = DEFAULT_POOL_LIMIT,
 } = {}) {
-  const pool = uniqueRankedCandidates(rankedCandidates)
+  const preferences = normalizePreferences(requestedPreferences);
+  const rankedPool = uniqueRankedCandidates(rankedCandidates)
     .filter(({ item }) => finitePoint(item))
-    .slice(0, clampInteger(poolLimit, DEFAULT_POOL_LIMIT, DEFAULT_POOL_LIMIT));
+    .sort(compareRankedCandidates);
+  const pool = buildEvaluationPool(
+    rankedPool,
+    preferences,
+    clampInteger(poolLimit, DEFAULT_POOL_LIMIT, DEFAULT_POOL_LIMIT),
+  );
   const count = Math.min(pool.length, clampInteger(desiredCount, pool.length, MAX_SET_SIZE));
   if (!count) return { selected: [], diagnostics: emptyDiagnostics() };
   if (pool.length <= count) {
     const selected = pool.map(({ item }) => item);
     return {
       selected,
-      diagnostics: describeSet(pool, normalizePreferences(requestedPreferences), {
+      diagnostics: describeSet(pool, preferences, {
         start,
         end,
         shape,
@@ -42,7 +51,6 @@ function selectAgnosticCandidateSet({
     };
   }
 
-  const preferences = normalizePreferences(requestedPreferences);
   let best = null;
   for (const subset of combinations(pool, count)) {
     const diagnostics = describeSet(subset, preferences, { start, end, shape, targetKm });
@@ -65,6 +73,7 @@ function describeSet(entries, preferences, { start, end, shape, targetKm }) {
   const spineRoles = new Set();
   const roles = new Set();
   const dayparts = new Set();
+  const families = new Map();
   let spineCount = 0;
   let chainCount = 0;
   let localQuality = 0;
@@ -88,6 +97,8 @@ function describeSet(entries, preferences, { start, end, shape, targetKm }) {
     }
     if (item.reservoirSpine === true) spineCount += 1;
     if (item.chain === true) chainCount += 1;
+    const family = candidateFamily(item);
+    if (family) families.set(family, (families.get(family) || 0) + 1);
     const feelRank = Number.isFinite(item.localFeelRank) ? item.localFeelRank : item.chain === true ? 2 : 0;
     localQuality += Math.max(0, 3 - feelRank);
     trustQuality += candidateTrustRank(item);
@@ -103,8 +114,23 @@ function describeSet(entries, preferences, { start, end, shape, targetKm }) {
   const geometry = approximateDayGeometry(entries.map(({ item }) => item), { start, end, shape });
   const target = Number.isFinite(targetKm) && targetKm > 0 ? targetKm : null;
   const budgetLimit = target ? target * 1.18 : null;
+  const targetFloor = target ? target * TARGET_FLOOR_RATIO : null;
   const withinBudget = budgetLimit === null || geometry.estimated_km <= budgetLimit;
+  const withinTargetBand =
+    targetFloor === null || (geometry.estimated_km >= targetFloor && geometry.estimated_km <= budgetLimit);
   const overBudgetKm = budgetLimit === null ? 0 : Math.max(0, geometry.estimated_km - budgetLimit);
+  const underTargetKm = targetFloor === null ? 0 : Math.max(0, targetFloor - geometry.estimated_km);
+  // Preserve compactness when no target exists; with a target, prefer the
+  // closest coherent set rather than automatically collapsing to the shortest.
+  const targetDistanceKm = target === null ? geometry.estimated_km : Math.abs(target - geometry.estimated_km);
+  const duplicateFamilyCount = [...families.values()].reduce((sum, count) => sum + Math.max(0, count - 1), 0);
+  const coveredPreferences = preferences.filter((preference) => exactByPreference.get(preference) > 0);
+  const partialPreferences = preferences.filter(
+    (preference) => exactByPreference.get(preference) === 0 && partialByPreference.get(preference) > 0,
+  );
+  const missingPreferences = preferences.filter(
+    (preference) => exactByPreference.get(preference) === 0 && partialByPreference.get(preference) === 0,
+  );
 
   return {
     exact_preference_count: exactPreferenceCount,
@@ -114,16 +140,25 @@ function describeSet(entries, preferences, { start, end, shape, targetKm }) {
     spine_candidate_count: spineCount,
     role_count: roles.size,
     daypart_count: dayparts.size,
+    unique_family_count: families.size,
+    duplicate_family_count: duplicateFamilyCount,
     chain_count: chainCount,
     local_quality: localQuality,
     trust_quality: trustQuality,
     operational_quality: operationalQuality,
     within_budget: withinBudget,
+    within_target_band: withinTargetBand,
+    target_floor_km: round(targetFloor),
     over_budget_km: round(overBudgetKm),
+    under_target_km: round(underTargetKm),
+    target_distance_km: round(targetDistanceKm),
     estimated_km: geometry.estimated_km,
     longest_leg_km: geometry.longest_leg_km,
     individual_score: round(individualScore),
     ordered_candidate_ids: geometry.ordered_candidate_ids,
+    covered_preferences: coveredPreferences,
+    partial_preferences: partialPreferences,
+    missing_preferences: missingPreferences,
   };
 }
 
@@ -138,15 +173,19 @@ function scoreSet(diagnostics) {
     diagnostics.partial_preference_count,
     diagnostics.within_budget ? 1 : 0,
     diagnostics.daypart_count,
+    diagnostics.within_target_band ? 1 : 0,
     diagnostics.bounded_exact_hits,
     diagnostics.role_count,
+    diagnostics.unique_family_count,
     diagnostics.local_quality,
     diagnostics.operational_quality,
     diagnostics.trust_quality,
+    -diagnostics.duplicate_family_count,
     -diagnostics.chain_count,
     -diagnostics.over_budget_km,
+    -diagnostics.under_target_km,
+    -diagnostics.target_distance_km,
     -diagnostics.longest_leg_km,
-    -diagnostics.estimated_km,
     diagnostics.individual_score,
     diagnostics.spine_candidate_count,
   ];
@@ -216,6 +255,40 @@ function candidatePreferences(item, camelKey, snakeKey) {
         ? item.tags
         : [];
   return values.map(normalizeToken).filter(Boolean);
+}
+
+function buildEvaluationPool(ranked, preferences, limit) {
+  const requestedRepresentatives = [];
+  for (const preference of preferences) {
+    const exact = ranked.find(({ item }) =>
+      candidatePreferences(item, "coveredPreferences", "covered_preferences").includes(preference),
+    );
+    const adjacent = exact
+      ? null
+      : ranked.find(({ item }) =>
+          candidatePreferences(item, "partialPreferences", "partial_preferences").includes(preference),
+        );
+    if (exact || adjacent) requestedRepresentatives.push(exact || adjacent);
+  }
+
+  const selected = [];
+  const seen = new Set();
+  for (const entry of [...requestedRepresentatives, ...ranked]) {
+    const id = stableId(entry.item);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    selected.push(entry);
+    if (selected.length >= limit) break;
+  }
+  return selected;
+}
+
+function compareRankedCandidates(left, right) {
+  return right.score - left.score || stableId(left.item).localeCompare(stableId(right.item));
+}
+
+function candidateFamily(item) {
+  return normalizeToken(item?.type || item?.candidateKind || item?.candidate_kind || routeRoles(item)[0]);
 }
 
 function routeRoles(item) {
@@ -323,16 +396,25 @@ function emptyDiagnostics() {
     spine_candidate_count: 0,
     role_count: 0,
     daypart_count: 0,
+    unique_family_count: 0,
+    duplicate_family_count: 0,
     chain_count: 0,
     local_quality: 0,
     trust_quality: 0,
     operational_quality: 0,
     within_budget: true,
+    within_target_band: true,
+    target_floor_km: 0,
     over_budget_km: 0,
+    under_target_km: 0,
+    target_distance_km: 0,
     estimated_km: 0,
     longest_leg_km: 0,
     individual_score: 0,
     ordered_candidate_ids: [],
+    covered_preferences: [],
+    partial_preferences: [],
+    missing_preferences: [],
   };
 }
 
