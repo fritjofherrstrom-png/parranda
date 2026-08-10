@@ -38,6 +38,56 @@ function buildAgnosticConstraintNegotiation({
     walkingValidation?.checks?.total_walk_km,
   );
   const walking = describeAgnosticWalkingTarget({ estimatedKm, targetKm: walkingKmTarget });
+  return formatNegotiation({
+    routePresent: routeStops.length > 0,
+    requested,
+    covered,
+    partial,
+    missing,
+    walking,
+    walkingValidation,
+    blockers,
+  });
+}
+
+function reconcileAgnosticConstraintNegotiation({
+  negotiation,
+  experimentalRoute,
+  walkingKmTarget = null,
+  walkingValidated = false,
+} = {}) {
+  if (!negotiation || typeof negotiation !== "object") return negotiation;
+  const coverage = negotiation.preference_coverage || {};
+  const routeStops = Array.isArray(experimentalRoute?.main_stops) ? experimentalRoute.main_stops : [];
+  const targetKm = Number.isFinite(walkingKmTarget)
+    ? walkingKmTarget
+    : negotiation.walking?.target_km;
+  const walking = describeAgnosticWalkingTarget({
+    estimatedKm: experimentalRoute?.estimated_km,
+    targetKm,
+  });
+  return formatNegotiation({
+    routePresent: routeStops.length > 0,
+    requested: uniqueStrings(coverage.requested_preferences),
+    covered: uniqueStrings(coverage.covered_preferences),
+    partial: uniqueStrings(coverage.partial_preferences),
+    missing: uniqueStrings(coverage.missing_preferences),
+    walking,
+    walkingValidation: walkingValidated ? { valid: true } : null,
+    blockers: [],
+  });
+}
+
+function formatNegotiation({
+  routePresent,
+  requested,
+  covered,
+  partial,
+  missing,
+  walking,
+  walkingValidation,
+  blockers,
+}) {
   const tradeoffs = [
     ...partial.map((preference) => `partial_preference:${preference}`),
     ...missing.map((preference) => `missing_preference:${preference}`),
@@ -46,7 +96,7 @@ function buildAgnosticConstraintNegotiation({
   if (walking.status === "longer_than_requested_band") tradeoffs.push("walking_longer_than_requested_band");
   if (walking.status === "unavailable") tradeoffs.push("walking_distance_unavailable");
 
-  const status = !routeMutation || routeStops.length === 0
+  const status = !routePresent
     ? "unresolved"
     : tradeoffs.length > 0
       ? "tradeoffs"
@@ -59,7 +109,7 @@ function buildAgnosticConstraintNegotiation({
 
   return {
     status,
-    route_present: routeStops.length > 0,
+    route_present: routePresent,
     preference_coverage: {
       requested_preferences: requested,
       covered_preferences: covered,
@@ -130,4 +180,5 @@ function firstFinite(...values) {
 
 module.exports = {
   buildAgnosticConstraintNegotiation,
+  reconcileAgnosticConstraintNegotiation,
 };

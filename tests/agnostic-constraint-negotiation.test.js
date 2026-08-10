@@ -3,6 +3,7 @@ const test = require("node:test");
 
 const {
   buildAgnosticConstraintNegotiation,
+  reconcileAgnosticConstraintNegotiation,
 } = require("../server/planner/agnostic-constraint-negotiation");
 const {
   describeAgnosticWalkingTarget,
@@ -108,4 +109,32 @@ test("blocked experiments are unresolved without inventing route or walking fact
   assert.equal(result.walking.status, "unavailable");
   assert.equal(result.walking.estimated_km, null);
   assert.deepEqual(result.reasons, ["insufficient_geocoded_candidates", "no_composed_route"]);
+});
+
+test("a walking-validated event extension reconciles distance without changing preference truth", () => {
+  const initial = buildAgnosticConstraintNegotiation({
+    routeMutation: true,
+    experimentalRoute: {
+      estimated_km: 3.2,
+      main_stops: [{ id: "food" }, { id: "view" }],
+    },
+    plannerRoles: plannerRoles(),
+    walkingKmTarget: 6,
+    walkingValidation: { valid: true },
+  });
+  const before = structuredClone(initial);
+  const reconciled = reconcileAgnosticConstraintNegotiation({
+    negotiation: initial,
+    experimentalRoute: {
+      estimated_km: 4.4,
+      main_stops: [{ id: "food" }, { id: "view" }, { id: "live-event-tonight", is_live_event: true }],
+    },
+    walkingKmTarget: 6,
+    walkingValidated: true,
+  });
+
+  assert.deepEqual(initial, before, "reconciliation never mutates the pre-weave verdict");
+  assert.equal(reconciled.walking.estimated_km, 4.4);
+  assert.equal(reconciled.walking.status, "within_requested_band");
+  assert.deepEqual(reconciled.preference_coverage, initial.preference_coverage);
 });
