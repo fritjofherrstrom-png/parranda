@@ -657,6 +657,12 @@ test(
     const withFlag = await requestJson(server, { path: `/api/route-recommendations?lang=en&${FLAG}`, body: agnosticBody() });
     assert.ok(withFlag.body.agnostic_route_output_experiment, "flag adds the experiment block");
     assert.equal(withFlag.body.agnostic_route_output_experiment.route_mutation, true);
+    const negotiation = withFlag.body.agnostic_route_output_experiment.constraint_negotiation;
+    assert.equal(negotiation.status, "tradeoffs");
+    assert.deepEqual(negotiation.preference_coverage.covered_preferences, ["food", "coffee", "scenic"]);
+    assert.deepEqual(negotiation.preference_coverage.missing_preferences, []);
+    assert.equal(negotiation.walking.status, "shorter_than_requested_band");
+    assert.ok(negotiation.tradeoffs.includes("walking_shorter_than_requested_band"));
   }),
 );
 
@@ -1271,6 +1277,10 @@ test(
         selection_origin: { lat: 55.636, lng: 14.1 },
         route_anchor: { lat: 55.636, lng: 14.1 },
         evaluateCandidateAvailability: "payload_evaluator",
+        constraint_negotiation: {
+          status: "satisfied",
+          tradeoffs: ["payload_tradeoff"],
+        },
       }),
     });
     const exp = r.body.agnostic_route_output_experiment;
@@ -1283,6 +1293,8 @@ test(
     assert.equal(JSON.stringify(r.body).includes("payload_selected_day_hours"), false);
     assert.equal(JSON.stringify(r.body).includes("payload_evaluator"), false);
     assert.equal(JSON.stringify(r.body).includes("payload_override"), false);
+    assert.equal(JSON.stringify(r.body).includes("payload_tradeoff"), false);
+    assert.equal(exp.constraint_negotiation.status, "unresolved");
   }),
 );
 
