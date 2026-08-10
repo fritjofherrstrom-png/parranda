@@ -89,12 +89,17 @@ function loaderResult(records) {
   return { dataset: records, status: `loaded:${records.length}` };
 }
 
-async function loadTrustedCandidates(openDataLoader, anchor) {
+async function loadTrustedCandidates(openDataLoader, { anchor, anchorMode, spatialScope, requestedIntents }) {
   if (typeof openDataLoader !== "function") {
     return { dataset: null, status: "no_trusted_loader" };
   }
   try {
-    return loaderResult(await openDataLoader(anchor));
+    return loaderResult(await openDataLoader({
+      ...anchor,
+      requestedIntents,
+      anchorMode,
+      spatialScope,
+    }));
   } catch (_error) {
     return { dataset: null, status: "trusted_loader_failed" };
   }
@@ -236,7 +241,12 @@ async function buildAnywhereBlitzDecision({
     instant,
     lang,
   });
-  const candidateLoad = await loadTrustedCandidates(openDataLoader, resolved.anchor);
+  const candidateLoad = await loadTrustedCandidates(openDataLoader, {
+    anchor: resolved.anchor,
+    anchorMode: resolved.intake?.mode || "unknown",
+    spatialScope: resolved.spatialScope,
+    requestedIntents: [...preferences, ...intentKeys],
+  });
   const cityConfig = buildAgnosticCityContext({
     label: resolved.intake?.resolved?.label || placeQuery || "Nearby",
     lat: resolved.anchor.lat,

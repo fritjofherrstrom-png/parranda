@@ -114,12 +114,14 @@ function requestJson(server, path, body) {
 }
 
 test("freeform any-place Blitz resolves one trusted anchor and returns a source-backed move", async () => {
+  let loaderRequest = null;
   const out = await buildAnywhereBlitzDecision({
     placeQuery: "Stockholm",
     placeResolver: resolverAt(),
-    openDataLoader: loader([
-      externalRecord("node/1", "Independent coffee bar", "cafe", 59.3295, 18.0688, ["coffee", "fika"]),
-    ]),
+    openDataLoader: async (request) => {
+      loaderRequest = request;
+      return [externalRecord("node/1", "Independent coffee bar", "cafe", 59.3295, 18.0688, ["coffee", "fika"])];
+    },
     eventSupply: async () => collected([]),
     weatherProvider: weatherAt(),
     clock: { now: () => "2026-08-10T14:00:00Z" },
@@ -134,6 +136,42 @@ test("freeform any-place Blitz resolves one trusted anchor and returns a source-
   assert.equal(out.route_mutation, false);
   assert.equal(out.day_anchor_mutation, false);
   assert.equal(out.context.source_health.status, "healthy");
+  assert.equal(loaderRequest.anchorMode, "place");
+  assert.deepEqual(loaderRequest.requestedIntents, ["fika"]);
+  assert.equal(loaderRequest.lat, STOCKHOLM.lat);
+});
+
+test("resolver-attested regional scope reaches the generic loader without becoming a city branch", async () => {
+  let loaderRequest = null;
+  const regionScope = {
+    source: "test_resolver",
+    kind: "region",
+    bounds: { south: 55.3, north: 55.8, west: 13.8, east: 14.2 },
+  };
+  const out = await buildAnywhereBlitzDecision({
+    placeQuery: "Coastal region",
+    placeResolver: async () => [{
+      label: "Coastal region",
+      lat: 55.55,
+      lng: 14,
+      confidence: "medium",
+      provenance: "test_resolver",
+      timezone: "Europe/Stockholm",
+      spatial_scope: regionScope,
+    }],
+    openDataLoader: async (request) => {
+      loaderRequest = request;
+      return [externalRecord("node/7", "Regional craft market", "market", 55.56, 14.01, ["market", "culture"])];
+    },
+    weatherProvider: weatherAt(),
+    clock: { now: () => "2026-08-10T14:00:00Z" },
+    preferences: ["culture"],
+  });
+
+  assert.equal(out.status, "available");
+  assert.deepEqual(loaderRequest.spatialScope.bounds, regionScope.bounds);
+  assert.equal(loaderRequest.spatialScope.collection_mode, "regional_bounded");
+  assert.equal(loaderRequest.anchorMode, "place");
 });
 
 test("a close salient event happening now interrupts the place move but keeps it as backup", async () => {
