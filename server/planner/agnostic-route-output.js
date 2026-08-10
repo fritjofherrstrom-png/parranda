@@ -42,6 +42,7 @@ const {
 } = require("../place-candidates/opening-hours");
 const { validateAgnosticWalkingOrder } = require("./agnostic-route-walking-validation");
 const { buildAgnosticRouteOrdering, daypartForRole, timeBandRank } = require("./agnostic-route-ordering");
+const { resolveWalkableMicroBase } = require("./walkable-micro-base");
 const { resolveAgnosticContext, collectInfluenceReasons } = require("./agnostic-route-context");
 const { buildDayflowContext } = require("./dayflow-context");
 const { calibrateAgnosticRouteReadiness } = require("./agnostic-route-readiness-calibration");
@@ -87,13 +88,13 @@ async function resolveTrustedHelpers({
     anchor: anchor || null,
   };
   if (!externalRequested) {
-    return { helpers: {}, sourceStatus: baseStatus };
+    return { helpers: {}, sourceStatus: baseStatus, trustedRecords: [] };
   }
   if (typeof openDataLoader !== "function") {
-    return { helpers: {}, sourceStatus: { ...baseStatus, status: "no_loader_configured" } };
+    return { helpers: {}, sourceStatus: { ...baseStatus, status: "no_loader_configured" }, trustedRecords: [] };
   }
   if (!anchor) {
-    return { helpers: {}, sourceStatus: { ...baseStatus, status: "no_anchor" } };
+    return { helpers: {}, sourceStatus: { ...baseStatus, status: "no_anchor" }, trustedRecords: [] };
   }
   try {
     const records = await openDataLoader({
@@ -109,12 +110,14 @@ async function resolveTrustedHelpers({
       return {
         helpers: {},
         sourceStatus: { ...baseStatus, status: "error_failed_closed", error: loaderError, ...(collection ? { collection } : {}) },
+        trustedRecords: [],
       };
     }
     if (!Array.isArray(records) || records.length === 0) {
       return {
         helpers: {},
         sourceStatus: { ...baseStatus, status: "loaded:0", error: loaderError, ...(collection ? { collection } : {}) },
+        trustedRecords: [],
       };
     }
     return {
@@ -125,9 +128,14 @@ async function resolveTrustedHelpers({
         error: loaderError,
         ...(collection ? { collection } : {}),
       },
+      trustedRecords: records,
     };
   } catch (_error) {
-    return { helpers: {}, sourceStatus: { ...baseStatus, status: "error_failed_closed", error: "fetch_error" } };
+    return {
+      helpers: {},
+      sourceStatus: { ...baseStatus, status: "error_failed_closed", error: "fetch_error" },
+      trustedRecords: [],
+    };
   }
 }
 
@@ -202,6 +210,33 @@ function sanitizeRegionalScout(value) {
       requested_intents_missing: sanitizeTokens(cluster?.requested_intents_missing),
     })),
   };
+}
+
+function attachMicroBaseSummary(sourceStatus, summary) {
+  if (!summary || !sourceStatus || typeof sourceStatus !== "object") return sourceStatus;
+  return {
+    ...sourceStatus,
+    collection: {
+      ...(sourceStatus.collection || {}),
+      walkable_micro_base: summary,
+    },
+  };
+}
+
+function attachWalkableMicroBaseToRoute(route, summary) {
+  if (!route || !summary?.applied) return route;
+  route.walkable_micro_base = {
+    mode: summary.mode,
+    reason: summary.reason,
+    shift_km: summary.shift_km,
+    cluster_candidate_count: summary.cluster_candidate_count,
+    covered_intents: sanitizeTokens(summary.covered_intents),
+  };
+  route.caveats = dedupe([
+    ...(Array.isArray(route.caveats) ? route.caveats : []),
+    "walkable_micro_base_selected",
+  ]);
+  return route;
 }
 
 function finiteOrNull(value) {
@@ -806,7 +841,7 @@ async function composeAgnosticRouteOutput({
   const origin = { lat: coords.lat, lng: coords.lng };
   const effectiveDate = date || agnosticContext.todayIsoDate();
 
-  const { helpers, sourceStatus } = await resolveTrustedHelpers({
+  const resolvedTrusted = await resolveTrustedHelpers({
     externalRequested,
     openDataLoader,
     anchor: origin,
@@ -814,6 +849,17 @@ async function composeAgnosticRouteOutput({
     anchorMode,
     spatialScope,
   });
+  const helpers = resolvedTrusted.helpers;
+  const microBase = resolveWalkableMicroBase({
+    origin,
+    records: resolvedTrusted.trustedRecords,
+    requestedIntents: preferences,
+    anchorMode,
+    spatialScope,
+    loaderMetadata: resolvedTrusted.trustedRecords?.loader_metadata || null,
+  });
+  const selectionOrigin = microBase.anchor || origin;
+  const sourceStatus = attachMicroBaseSummary(resolvedTrusted.sourceStatus, microBase.summary);
 
   // #262 / correction #5 — only resolve trusted context (which may fetch weather)
   // when we will actually run trusted candidate selection. When a hard blocker is
@@ -824,7 +870,7 @@ async function composeAgnosticRouteOutput({
     Boolean(externalRequested) && typeof loaderStatus === "string" && loaderStatus.startsWith("loaded:") && loaderStatus !== "loaded:0";
   const ctx = willRunTrustedSelection
     ? await resolveAgnosticContext({
-        coords,
+        coords: selectionOrigin,
         date: effectiveDate,
         trustedTimezone,
         weatherProvider,
@@ -841,7 +887,7 @@ async function composeAgnosticRouteOutput({
     lens: lens || null,
     // Trusted weather only — payload weather is never consulted.
     weather: ctx ? ctx.weather || null : null,
-    origin,
+    origin: selectionOrigin,
     // Trusted time only, in the candidate-pool's expected payload format
     // (`hour` number + ISO `now`), and only when the timezone is known.
     ...(ctx && ctx.timezoneKnown ? { hour: ctx.hour, now: ctx.now } : {}),
@@ -899,7 +945,7 @@ async function composeAgnosticRouteOutput({
     dayflowHonesty,
     route: null,
     options: {
-      origin,
+      origin: selectionOrigin,
       // Exact coordinates and local place scopes keep the composed day within
       // walking reach of the trusted anchor. Resolver-attested municipality or
       // region scopes deliberately retain wider flexibility for rural/regional
@@ -989,7 +1035,7 @@ async function composeAgnosticRouteOutput({
   if (synthesizeVia === "engine") {
     return composeAgnosticRouteViaEngine({
       agnosticContext,
-      origin,
+      origin: selectionOrigin,
       effectiveDate,
       plannerRoles,
       candidateCombination,
@@ -1007,6 +1053,7 @@ async function composeAgnosticRouteOutput({
       currentTimeBand: routeCurrentBand,
       currentTimeBandRank: isTodayRequest ? trustedBandRank : null,
       anchorMode,
+      microBaseSummary: microBase.summary,
       // Pass ONLY the resolver-attested label (may be null). The prose builder
       // must fall back to neutral, never to agnosticContext.label — which is the
       // "Nearby" geometry placeholder, not a real place name.
@@ -1124,6 +1171,7 @@ async function composeAgnosticRouteOutput({
     anchoredToLocalTime,
     trimmedDayparts,
   });
+  attachWalkableMicroBaseToRoute(experimentalRoute, microBase.summary);
   const mutated = applyRouteMutation({ baselineResult, primaryRoute: experimentalRoute, date: effectiveDate });
 
   // #262 — attach an honest day-level dayflow read when the trusted weather is
@@ -1191,6 +1239,7 @@ async function composeAgnosticRouteViaEngine({
   currentTimeBand = null,
   currentTimeBandRank = null,
   anchorMode = "unknown",
+  microBaseSummary = null,
   placeLabel,
 }) {
   const sourceCandidates = Array.isArray(suppliedSourceCandidates)
@@ -1257,6 +1306,7 @@ async function composeAgnosticRouteViaEngine({
     Object.assign(engineRoute, daypartHonesty, {
       caveats: dedupe([...(Array.isArray(engineRoute.caveats) ? engineRoute.caveats : []), ...daypartHonesty.caveats]),
     });
+    attachWalkableMicroBaseToRoute(engineRoute, microBaseSummary);
   }
 
   // No coherent walk (engine returns < 2 viable stops → null route). Honest
