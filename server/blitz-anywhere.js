@@ -27,6 +27,7 @@ const CONTRACT = "anywhere_contextual_blitz_v1";
 const MAX_IMMEDIATE_EVENT_KM = 2;
 const MAX_EVENT_START_MINUTES = 90;
 const MIN_EVENT_SALIENCE = 6;
+const NO_PREFERENCE_MATCH = "no_preference_match_offering_general";
 
 function serverInstant(clock) {
   let raw = null;
@@ -304,8 +305,13 @@ async function buildAnywhereBlitzDecision({
 
   const eventOptions = liveOptions(liveEvents, resolved.anchor, instant);
   const immediateEvent = selectImmediateLiveMove(eventOptions);
-  const candidateMove = formatCandidateMove(candidateDecision.best_move);
-  const candidateBackup = formatCandidateMove(candidateDecision.backup_option);
+  const candidateMatchesPreferences = candidateDecision.reason !== NO_PREFERENCE_MATCH;
+  const candidateMove = candidateMatchesPreferences
+    ? formatCandidateMove(candidateDecision.best_move)
+    : null;
+  const candidateBackup = candidateMatchesPreferences
+    ? formatCandidateMove(candidateDecision.backup_option)
+    : null;
   const bestMove = immediateEvent || candidateMove;
   const backupOption = immediateEvent ? candidateMove : candidateBackup;
 
@@ -326,7 +332,8 @@ async function buildAnywhereBlitzDecision({
       : candidateDecision.confidence,
     reasons: uniqueTokens([
       immediateEvent ? "live_event_interrupt" : candidateMove ? "candidate_spine_move" : null,
-      !candidateMove ? candidateDecision.reason : null,
+      !candidateMatchesPreferences ? "no_preference_match" : null,
+      candidateMatchesPreferences && !candidateMove ? candidateDecision.reason : null,
       candidateLoad.status,
     ]),
   };

@@ -162,11 +162,11 @@ test("resolver-attested regional scope reaches the generic loader without becomi
     }],
     openDataLoader: async (request) => {
       loaderRequest = request;
-      return [externalRecord("node/7", "Regional craft market", "market", 55.56, 14.01, ["market", "culture"])];
+      return [externalRecord("node/7", "Regional coffee roastery", "cafe", 55.56, 14.01, ["coffee", "fika"])];
     },
     weatherProvider: weatherAt(),
     clock: { now: () => "2026-08-10T14:00:00Z" },
-    preferences: ["culture"],
+    preferences: ["fika"],
   });
 
   assert.equal(out.status, "available");
@@ -198,19 +198,57 @@ test("a later or distant event remains visible but does not displace the immedia
   const out = await buildAnywhereBlitzDecision({
     coords: STOCKHOLM,
     openDataLoader: loader([
-      externalRecord("node/3", "Local bookshop", "shop", 59.3295, 18.0687, ["culture"]),
+      externalRecord("node/3", "Local coffee bar", "cafe", 59.3295, 18.0687, ["coffee", "fika"]),
     ]),
     eventSupply: async () => collected([
       eventAt({ startsAt: "2026-08-10T20:00:00Z", timing: "tonight", distance: 0.03 }),
     ]),
     weatherProvider: weatherAt(),
     clock: { now: () => "2026-08-10T14:00:00Z" },
-    preferences: ["culture"],
+    preferences: ["fika"],
   });
 
   assert.equal(out.best_move.kind, "place");
   assert.equal(out.live_option.kind, "live_event");
   assert.equal(out.live_option.event_id, "live-1");
+});
+
+test("an off-intent general candidate cannot masquerade as a personalized next move", async () => {
+  const out = await buildAnywhereBlitzDecision({
+    coords: STOCKHOLM,
+    openDataLoader: loader([
+      externalRecord("node/31", "Well documented museum", "museum", 59.3295, 18.0687, ["museum", "culture"]),
+    ]),
+    eventSupply: async () => collected([]),
+    weatherProvider: weatherAt(),
+    clock: { now: () => "2026-08-10T14:00:00Z" },
+    preferences: ["fika", "nightlife", "second_hand"],
+  });
+
+  assert.equal(out.status, "blocked");
+  assert.equal(out.best_move, null);
+  assert.equal(out.backup_option, null);
+  assert.ok(out.reasons.includes("no_preference_match"));
+  assert.equal(out.reasons.includes("candidate_spine_move"), false);
+});
+
+test("a trusted immediate Live event may still interrupt when place candidates are off-intent", async () => {
+  const out = await buildAnywhereBlitzDecision({
+    coords: STOCKHOLM,
+    openDataLoader: loader([
+      externalRecord("node/32", "Well documented museum", "museum", 59.3295, 18.0687, ["museum", "culture"]),
+    ]),
+    eventSupply: async () => collected([eventAt({ timing: "now", startsAt: "2026-08-10T13:30:00Z" })]),
+    weatherProvider: weatherAt(),
+    clock: { now: () => "2026-08-10T14:00:00Z" },
+    preferences: ["fika", "nightlife", "second_hand"],
+  });
+
+  assert.equal(out.status, "available");
+  assert.equal(out.best_move.kind, "live_event");
+  assert.equal(out.backup_option, null);
+  assert.ok(out.reasons.includes("live_event_interrupt"));
+  assert.ok(out.reasons.includes("no_preference_match"));
 });
 
 test("unknown timezone never falls back to fabricated midday context", async () => {
