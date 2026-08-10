@@ -10,7 +10,9 @@ const MAX_PROBES_PER_RUN = 2;
 const MAX_OBSERVATIONS_PER_SOURCE = 6;
 const MAX_OBSERVATION_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const DEFAULT_PROBE_TIMEOUT_MS = 10_000;
+const QUALIFIED_RUNTIME_MAX_AGE_MS = 8 * 24 * 60 * 60 * 1000;
 const PROBEABLE_STATUSES = new Set(["viable_provider_probe"]);
+const PROBATIONARY_TERMS_STATUSES = new Set(["open_license", "api_terms_compatible"]);
 
 async function qualifyDiscoveredSourceProfile({
   profile,
@@ -220,8 +222,79 @@ function buildCandidateQualification({ binding, observation, previous, observedA
     event_bearing_probe_count: eventBearingCount,
     last_observed_at: latest?.observed_at || null,
     observations,
+    runtime_candidate: sourceRowForBinding(binding),
     activation_performed: false,
   };
+}
+
+// A repeatedly proven machine-readable source may enter a short-lived,
+// globally gated Pulse probation lane. This is NOT approval: confidence stays
+// low, route use is disabled, and expiry follows the latest healthy probe.
+function eventFeedsFromQualifiedSourceProfiles(
+  profiles = [],
+  { now = Date.now(), maxAgeMs = QUALIFIED_RUNTIME_MAX_AGE_MS } = {},
+) {
+  const at = normalizeDate(now);
+  const boundedMaxAgeMs = Math.max(1, Math.min(Number(maxAgeMs) || 0, QUALIFIED_RUNTIME_MAX_AGE_MS));
+  if (!at) return [];
+  const feeds = [];
+  const seen = new Set();
+
+  for (const profile of Array.isArray(profiles) ? profiles : []) {
+    const profileKey = publicString(profile?.profile_key);
+    const qualification = profile?.source_qualification;
+    if (
+      !profileKey.startsWith("place-source-profile-v1:") ||
+      qualification?.schema_version !== QUALIFICATION_SCHEMA_VERSION ||
+      qualification?.status !== "qualified_for_review" ||
+      qualification?.activation_performed !== false
+    ) continue;
+    const candidates = candidateIndex(profile.source_families);
+    for (const state of Array.isArray(qualification.candidates) ? qualification.candidates : []) {
+      if (
+        state?.status !== "qualified_for_review" ||
+        finiteCount(state.healthy_probe_count) < 2 ||
+        finiteCount(state.event_bearing_probe_count) < 1 ||
+        state.activation_performed !== false
+      ) continue;
+      const candidate = candidates.get(publicString(state.candidate_id));
+      const binding = bindManifestCandidate(state.runtime_candidate, candidate);
+      if (
+        !binding ||
+        qualificationIdentity(state) !== qualificationIdentity(binding) ||
+        !PROBATIONARY_TERMS_STATUSES.has(binding.termsStatus)
+      ) continue;
+      const latest = (Array.isArray(state.observations) ? state.observations : [])
+        .map((item) => normalizeObservation(item, {
+          candidate_id: binding.candidateId,
+          endpoint: binding.endpoint,
+          adapter: binding.adapter,
+          source_identity: binding.sourceIdentity,
+        }))
+        .filter(Boolean)
+        .sort((left, right) => right.observed_at.localeCompare(left.observed_at))[0];
+      const observedAt = latest ? Date.parse(latest.observed_at) : NaN;
+      const ageMs = at.getTime() - observedAt;
+      if (latest?.status !== "healthy" || !Number.isFinite(ageMs) || ageMs < 0 || ageMs > boundedMaxAgeMs) continue;
+      const expiresAt = new Date(observedAt + boundedMaxAgeMs).toISOString();
+      const feed = {
+        ...sourceRowForBinding(binding),
+        priority: 180,
+        status: "probationary",
+        source_health: "qualified_probationary",
+        runtime_trust: "qualified_probationary",
+        pulse_only: true,
+        profile_key: profileKey,
+        profile_qualified_at: latest.observed_at,
+        profile_expires_at: expiresAt,
+      };
+      const identity = `${feed.id.toLowerCase()}|${feed.endpoint.toLowerCase()}`;
+      if (seen.has(identity)) continue;
+      seen.add(identity);
+      feeds.push(feed);
+    }
+  }
+  return feeds.sort((left, right) => left.priority - right.priority || left.id.localeCompare(right.id));
 }
 
 function buildProfileQualification(candidateStates, observedAt) {
@@ -448,6 +521,8 @@ module.exports = {
   MAX_OBSERVATIONS_PER_SOURCE,
   MAX_PROBES_PER_RUN,
   QUALIFICATION_SCHEMA_VERSION,
+  QUALIFIED_RUNTIME_MAX_AGE_MS,
   buildCandidateQualification,
+  eventFeedsFromQualifiedSourceProfiles,
   qualifyDiscoveredSourceProfile,
 };

@@ -258,9 +258,14 @@ function normalizeEventFeedRow(f, index = 0) {
     profile_reviewed_at: f.profile_reviewed_at != null
       ? String(f.profile_reviewed_at)
       : null,
+    profile_qualified_at: f.profile_qualified_at != null
+      ? String(f.profile_qualified_at)
+      : null,
     profile_expires_at: f.profile_expires_at != null
       ? String(f.profile_expires_at)
       : null,
+    runtime_trust: f.runtime_trust != null ? String(f.runtime_trust) : null,
+    pulse_only: f.pulse_only === true,
   };
 }
 
@@ -776,7 +781,7 @@ async function collectAnchorEvents({
     const source = sourceById.get(event.source_provider_id) || sourcePlan[0];
     const view = toEventView(event, source, {
       eventTimezone: event.timezone || null,
-      routeEligible: isEphemeralHappening(event, nowDate),
+      routeEligible: source?.pulse_only === true ? false : isEphemeralHappening(event, nowDate),
     });
     if (!view) continue;
     if (TONIGHT_TIMING.has(event.timing_relevance)) {
@@ -1067,6 +1072,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs 
 
 function compactSourceStatus(collection) {
   const source = collection.source;
+  const probationary = source.runtime_trust === "qualified_probationary";
   return {
     id: source.id,
     label: source.label,
@@ -1078,12 +1084,16 @@ function compactSourceStatus(collection) {
     reason: collection.reason || null,
     event_rows: collection.raw.length,
     ...(source.terms_status ? { terms_status: source.terms_status } : {}),
-    ...(source.source_health ? { reviewed_source_health: source.source_health } : {}),
+    ...(source.source_health && !probationary ? { reviewed_source_health: source.source_health } : {}),
+    ...(source.source_health && probationary ? { qualified_source_health: source.source_health } : {}),
+    ...(source.runtime_trust ? { runtime_trust: source.runtime_trust } : {}),
+    ...(source.pulse_only === true ? { pulse_only: true } : {}),
     ...(source.profile_key
       ? {
           source_profile: {
             profile_key: source.profile_key,
             reviewed_at: source.profile_reviewed_at || null,
+            qualified_at: source.profile_qualified_at || null,
             expires_at: source.profile_expires_at || null,
           },
         }
@@ -1228,6 +1238,9 @@ function resolveDefaultEventSupply(
   if (!["enabled", "1", "true", "on", "yes"].includes(flag)) return null;
   const registry = resolveEventFeedRegistry(env);
   const globalKey = resolveGlobalEventKey(env);
+  const qualifiedRuntimeEnabled = ["enabled", "1", "true", "on", "yes"].includes(
+    String((env && env.PARRANDA_QUALIFIED_SOURCE_RUNTIME) || "").trim().toLowerCase(),
+  );
   const cache = eventCache || createSourceCache({
     // v2 excludes transient partial-empty acquisitions that v1 could persist.
     namespace: EVENT_CACHE_NAMESPACE,
@@ -1253,6 +1266,19 @@ function resolveDefaultEventSupply(
       } catch (_error) {
         // The catalog is supplemental. A database outage must not take down
         // reviewed file/env feeds or the route request using this supply seam.
+      }
+    }
+    if (
+      qualifiedRuntimeEnabled &&
+      sourceCatalog &&
+      typeof sourceCatalog.listQualifiedEventFeedsForAnchor === "function"
+    ) {
+      try {
+        const qualifiedFeeds = await sourceCatalog.listQualifiedEventFeedsForAnchor({ anchor, now });
+        appendUniqueEventFeeds(requestRegistry, qualifiedFeeds);
+      } catch (_error) {
+        // Probationary sources are supplemental and Pulse-only. Catalog failure
+        // cannot remove approved feeds or affect route composition.
       }
     }
     const effectiveRadiusM = Math.min(

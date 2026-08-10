@@ -3,6 +3,7 @@
 const { createHash, randomUUID } = require("node:crypto");
 const { eventFeedsFromReviewedSourceProfiles } = require("../place-candidates/reviewed-event-source-profile");
 const { sanitizeTrustedSpatialScope } = require("../place-candidates/spatial-scope");
+const { eventFeedsFromQualifiedSourceProfiles } = require("./source-qualification");
 
 const CATALOG_FLAG_ENV_KEY = "PARRANDA_SOURCE_CATALOG";
 const CATALOG_DATABASE_ENV_KEY = "PARRANDA_SOURCE_CATALOG_DATABASE_URL";
@@ -226,6 +227,19 @@ ORDER BY reviewed_at DESC NULLS LAST, profile_key ASC
 LIMIT 64
 `;
 
+const QUALIFIED_PROFILES_FOR_ANCHOR_SQL = `
+SELECT profile
+FROM pulse_source_profiles
+WHERE catalog_status = 'review_needed'
+  AND profile -> 'source_qualification' ->> 'status' = 'qualified_for_review'
+  AND bbox_west <= $2
+  AND bbox_east >= $2
+  AND bbox_south <= $1
+  AND bbox_north >= $1
+ORDER BY updated_at DESC, profile_key ASC
+LIMIT 64
+`;
+
 const SOURCE_QUALIFICATION_SQL = `
 SELECT profile -> 'source_qualification' AS source_qualification
 FROM pulse_source_profiles
@@ -289,6 +303,22 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
         .map((row) => parseProfile(row?.profile))
         .filter(Boolean);
       return eventFeedsFromReviewedSourceProfiles(profiles, { now: at });
+    } catch (_error) {
+      return [];
+    }
+  }
+
+  async function listQualifiedEventFeedsForAnchor({ anchor, now: requestedNow = now() } = {}) {
+    const lat = finiteCoordinate(anchor?.lat, -90, 90);
+    const lng = finiteCoordinate(anchor?.lng, -180, 180);
+    const at = normalizeDate(requestedNow);
+    if (lat == null || lng == null || !at) return [];
+    try {
+      const result = await query(QUALIFIED_PROFILES_FOR_ANCHOR_SQL, [lat, lng]);
+      const profiles = (Array.isArray(result?.rows) ? result.rows : [])
+        .map((row) => parseProfile(row?.profile))
+        .filter(Boolean);
+      return eventFeedsFromQualifiedSourceProfiles(profiles, { now: at });
     } catch (_error) {
       return [];
     }
@@ -407,6 +437,7 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
     recordDiscovery,
     recordApprovedProfile,
     listApprovedEventFeedsForAnchor,
+    listQualifiedEventFeedsForAnchor,
     loadSourceQualification,
     recordScoutDemand,
     claimScoutTarget,
@@ -665,6 +696,7 @@ function enabled(value) {
 
 module.exports = {
   ACTIVE_PROFILES_FOR_ANCHOR_SQL,
+  QUALIFIED_PROFILES_FOR_ANCHOR_SQL,
   CLAIM_SCOUT_TARGET_SQL,
   COMPLETE_SCOUT_TARGET_SQL,
   CATALOG_DATABASE_ENV_KEY,

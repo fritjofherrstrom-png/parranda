@@ -17,6 +17,7 @@ const FULL_PROFILE_FLAGS = Object.freeze({
   PARRANDA_WIKIDATA_SOURCE: "enabled",
   PARRANDA_AGNOSTIC_ENGINE_COMPOSE: "enabled",
   PARRANDA_AGNOSTIC_EVENTS: "enabled",
+  PARRANDA_QUALIFIED_SOURCE_RUNTIME: "enabled",
 });
 
 function loadReviewedEventFeeds(manifestPath = DEFAULT_MANIFEST_PATH) {
