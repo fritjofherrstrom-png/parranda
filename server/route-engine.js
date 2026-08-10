@@ -5346,6 +5346,7 @@ function buildRouteFromTemplate(
       end,
       shape,
       targetKm,
+      allowExpansion: true,
     });
     if (constrained.selected.length) selectedStops = constrained.selected;
   }

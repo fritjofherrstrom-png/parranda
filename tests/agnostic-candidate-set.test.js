@@ -289,3 +289,154 @@ test("an equally useful independent family beats a duplicate family with a highe
   assert.ok(!result.selected.some((entry) => entry.id === "museum-2"));
   assert.equal(result.diagnostics.duplicate_family_count, 0);
 });
+
+test("day-value repair adds a distinct useful stop when the fixed set under-fills the walking band", () => {
+  const anchor = { lat: 48.8566, lng: 2.3522 };
+  const food = candidate("food", {
+    ...anchor,
+    role: "food_anchor",
+    covered: ["food"],
+    spine: true,
+    type: "restaurant",
+  });
+  const culture = candidate("culture", {
+    lat: 48.861,
+    lng: 2.353,
+    role: "culture_stop",
+    covered: ["culture"],
+    spine: true,
+    type: "museum",
+  });
+  const view = candidate("view", {
+    lat: 48.858,
+    lng: 2.361,
+    role: "scenic_anchor",
+    covered: ["scenic"],
+    spine: true,
+    type: "viewpoint",
+  });
+  const independentCoffee = candidate("coffee", {
+    lat: 48.8536,
+    lng: 2.3522,
+    role: "coffee_fika_stop",
+    type: "cafe",
+  });
+
+  const result = selectAgnosticCandidateSet({
+    rankedCandidates: [ranked(food), ranked(culture), ranked(view), ranked(independentCoffee, 4)],
+    desiredCount: 3,
+    requestedPreferences: ["food", "culture", "scenic"],
+    start: anchor,
+    shape: "loop",
+    targetKm: 6,
+    allowExpansion: true,
+  });
+
+  assert.deepEqual(result.selected.map((entry) => entry.id).sort(), ["coffee", "culture", "food", "view"]);
+  assert.equal(result.diagnostics.repair_applied, true);
+  assert.equal(result.diagnostics.base_candidate_count, 3);
+  assert.equal(result.diagnostics.selected_candidate_count, 4);
+  assert.ok(result.diagnostics.repair_reasons.includes("adds_daypart"));
+  assert.ok(result.diagnostics.repair_reasons.includes("uses_walking_target"));
+  assert.equal(result.diagnostics.within_budget, true);
+});
+
+test("day-value repair does not add an over-budget candidate", () => {
+  const anchor = { lat: 41.9028, lng: 12.4964 };
+  const entries = [
+    ranked(candidate("food", { ...anchor, role: "food_anchor", covered: ["food"], spine: true, type: "restaurant" })),
+    ranked(candidate("culture", { lat: 41.906, lng: 12.498, role: "culture_stop", covered: ["culture"], spine: true, type: "museum" })),
+    ranked(candidate("view", { lat: 41.904, lng: 12.502, role: "scenic_anchor", covered: ["scenic"], spine: true, type: "viewpoint" })),
+    ranked(candidate("far-coffee", { lat: 42.03, lng: 12.62, role: "coffee_fika_stop", type: "cafe" }), 50),
+  ];
+
+  const result = selectAgnosticCandidateSet({
+    rankedCandidates: entries,
+    desiredCount: 3,
+    requestedPreferences: ["food", "culture", "scenic"],
+    start: anchor,
+    shape: "loop",
+    targetKm: 6,
+    allowExpansion: true,
+  });
+
+  assert.equal(result.selected.length, 3);
+  assert.equal(result.diagnostics.repair_applied, false);
+  assert.ok(!result.selected.some((entry) => entry.id === "far-coffee"));
+});
+
+test("day-value repair may add one independent second hit for a requested preference", () => {
+  const anchor = { lat: 59.3293, lng: 18.0686 };
+  const entries = [
+    ranked(candidate("food", { ...anchor, role: "food_anchor", covered: ["food"], spine: true, type: "restaurant" })),
+    ranked(candidate("culture", { lat: 59.333, lng: 18.069, role: "culture_stop", covered: ["culture"], spine: true, type: "museum" })),
+    ranked(candidate("view", { lat: 59.33, lng: 18.078, role: "scenic_anchor", covered: ["scenic"], spine: true, type: "viewpoint" })),
+    ranked(candidate("independent-museum", { lat: 59.3243, lng: 18.0686, role: "culture_stop", covered: ["culture"], type: "museum" }), 5),
+  ];
+
+  const result = selectAgnosticCandidateSet({
+    rankedCandidates: entries,
+    desiredCount: 3,
+    requestedPreferences: ["food", "culture", "scenic"],
+    start: anchor,
+    shape: "loop",
+    targetKm: 6,
+    allowExpansion: true,
+  });
+
+  assert.equal(result.selected.length, 4);
+  assert.ok(result.selected.some((entry) => entry.id === "independent-museum"));
+  assert.ok(result.diagnostics.repair_reasons.includes("adds_requested_depth"));
+  assert.ok(result.diagnostics.repair_reasons.includes("uses_walking_target"));
+  assert.equal(result.diagnostics.chain_count, 0);
+});
+
+test("day-value repair will not stretch a day with chain or duplicate filler", () => {
+  const anchor = { lat: 52.52, lng: 13.405 };
+  const entries = [
+    ranked(candidate("food", { ...anchor, role: "food_anchor", covered: ["food"], spine: true, type: "restaurant" })),
+    ranked(candidate("culture", { lat: 52.524, lng: 13.406, role: "culture_stop", covered: ["culture"], spine: true, type: "museum" })),
+    ranked(candidate("view", { lat: 52.521, lng: 13.414, role: "scenic_anchor", covered: ["scenic"], spine: true, type: "viewpoint" })),
+    ranked(candidate("chain-food", { lat: 52.508, lng: 13.42, role: "food_anchor", chain: true, type: "restaurant" }), 40),
+    ranked(candidate("duplicate-museum", { lat: 52.507, lng: 13.419, role: "culture_stop", type: "museum" }), 30),
+  ];
+
+  const result = selectAgnosticCandidateSet({
+    rankedCandidates: entries,
+    desiredCount: 3,
+    requestedPreferences: ["food", "culture", "scenic"],
+    start: anchor,
+    shape: "loop",
+    targetKm: 6,
+    allowExpansion: true,
+  });
+
+  assert.equal(result.selected.length, 3);
+  assert.equal(result.diagnostics.repair_applied, false);
+  assert.equal(result.diagnostics.chain_count, 0);
+  assert.equal(result.diagnostics.duplicate_family_count, 0);
+});
+
+test("day-value repair cannot turn a coherent base into a backtracking daypart route", () => {
+  const anchor = { lat: 59.3293, lng: 18.0686 };
+  const entries = [
+    ranked(candidate("view", { ...anchor, role: "scenic_anchor", covered: ["scenic"], spine: true, type: "viewpoint" })),
+    ranked(candidate("food", { lat: anchor.lat, lng: anchor.lng + 0.01, role: "food_anchor", covered: ["food"], spine: true, type: "restaurant" })),
+    ranked(candidate("bar", { lat: anchor.lat, lng: anchor.lng + 0.02, role: "evening_bar_option", covered: ["bars"], spine: true, type: "bar" })),
+    ranked(candidate("backtracking-coffee", { lat: anchor.lat, lng: anchor.lng + 0.019, role: "coffee_fika_stop", type: "cafe" }), 5),
+  ];
+
+  const result = selectAgnosticCandidateSet({
+    rankedCandidates: entries,
+    desiredCount: 3,
+    requestedPreferences: ["scenic", "food", "bars"],
+    start: anchor,
+    shape: "loop",
+    targetKm: 6,
+    allowExpansion: true,
+  });
+
+  assert.deepEqual(result.selected.map((entry) => entry.id).sort(), ["bar", "food", "view"]);
+  assert.equal(result.diagnostics.repair_applied, false);
+  assert.equal(result.diagnostics.daypart_walkable, true);
+});
