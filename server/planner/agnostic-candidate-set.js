@@ -13,7 +13,11 @@ const { resolveAgnosticWalkingTargetBand } = require("./agnostic-walking-target"
 
 const DEFAULT_POOL_LIMIT = 12;
 const MAX_SET_SIZE = 6;
+const MAX_REPAIR_ADDITIONS = 2;
+const MIN_WALKING_GAIN_KM = 0.2;
 const WALKING_DISTANCE_FACTOR = 1.22;
+const DAYPART_STOP_CHAIN_TOLERANCE = 1.08;
+const DAYPART_STOP_CHAIN_SLACK_KM = 0.25;
 // A walking preset is a product target, not only a ceiling. Below 60% the
 // selected day is honestly under-filled unless stronger request coverage wins.
 
@@ -26,6 +30,7 @@ function selectAgnosticCandidateSet({
   shape = "loop",
   targetKm = null,
   poolLimit = DEFAULT_POOL_LIMIT,
+  allowExpansion = false,
 } = {}) {
   const preferences = normalizePreferences(requestedPreferences);
   const rankedPool = uniqueRankedCandidates(rankedCandidates)
@@ -37,23 +42,37 @@ function selectAgnosticCandidateSet({
     clampInteger(poolLimit, DEFAULT_POOL_LIMIT, DEFAULT_POOL_LIMIT),
   );
   const count = Math.min(pool.length, clampInteger(desiredCount, pool.length, MAX_SET_SIZE));
-  if (!count) return { selected: [], diagnostics: emptyDiagnostics() };
-  if (pool.length <= count) {
-    const selected = pool.map(({ item }) => item);
-    return {
-      selected,
-      diagnostics: describeSet(pool, preferences, {
-        start,
-        end,
-        shape,
-        targetKm,
-      }),
-    };
+  if (!count) return { selected: [], diagnostics: withRepairDiagnostics(emptyDiagnostics()) };
+
+  const base = selectBestSet(pool, count, preferences, { start, end, shape, targetKm });
+  if (!allowExpansion || pool.length <= count) {
+    return withSelectedItems(base, count);
   }
 
+  let repaired = null;
+  const maxRepairSize = Math.min(pool.length, MAX_SET_SIZE, count + MAX_REPAIR_ADDITIONS);
+  for (let size = count + 1; size <= maxRepairSize; size += 1) {
+    const candidate = selectBestSet(pool, size, preferences, { start, end, shape, targetKm });
+    if (!isSafeDayValueRepair(base.diagnostics, candidate.diagnostics)) continue;
+    if (!repaired || compareTuple(scoreRepair(candidate.diagnostics), scoreRepair(repaired.diagnostics)) > 0) {
+      repaired = candidate;
+    }
+  }
+
+  if (!repaired) return withSelectedItems(base, count);
+  return withSelectedItems(repaired, count, repairReasons(base.diagnostics, repaired.diagnostics));
+}
+
+function selectBestSet(pool, count, preferences, context) {
+  if (pool.length <= count) {
+    return {
+      subset: pool,
+      diagnostics: describeSet(pool, preferences, context),
+    };
+  }
   let best = null;
   for (const subset of combinations(pool, count)) {
-    const diagnostics = describeSet(subset, preferences, { start, end, shape, targetKm });
+    const diagnostics = describeSet(subset, preferences, context);
     const score = scoreSet(diagnostics);
     const idKey = subset.map(({ item }) => stableId(item)).sort().join("|");
     if (!best || compareTuple(score, best.score) > 0 || (compareTuple(score, best.score) === 0 && idKey < best.idKey)) {
@@ -61,10 +80,91 @@ function selectAgnosticCandidateSet({
     }
   }
 
+  return best || { subset: [], diagnostics: emptyDiagnostics() };
+}
+
+function withSelectedItems(result, baseCount, reasons = []) {
   return {
-    selected: best ? best.subset.map(({ item }) => item) : [],
-    diagnostics: best ? best.diagnostics : emptyDiagnostics(),
+    selected: result.subset.map(({ item }) => item),
+    diagnostics: withRepairDiagnostics(result.diagnostics, {
+      applied: reasons.length > 0,
+      baseCount,
+      reasons,
+    }),
   };
+}
+
+function withRepairDiagnostics(diagnostics, { applied = false, baseCount = 0, reasons = [] } = {}) {
+  return {
+    ...diagnostics,
+    repair_applied: applied,
+    base_candidate_count: baseCount,
+    selected_candidate_count: diagnostics.candidate_count || 0,
+    repair_reasons: [...reasons],
+  };
+}
+
+function isSafeDayValueRepair(base, candidate) {
+  if (!candidate.within_budget) return false;
+  if (!candidate.daypart_walkable) return false;
+  if (candidate.exact_preference_count < base.exact_preference_count) return false;
+  if (candidate.spine_role_count < base.spine_role_count) return false;
+  if (candidate.missing_preferences.length > base.missing_preferences.length) return false;
+
+  const coverageGain =
+    candidate.exact_preference_count > base.exact_preference_count ||
+    candidate.missing_preferences.length < base.missing_preferences.length;
+  const partialGain = candidate.partial_preference_count > base.partial_preference_count;
+  const preferenceDepthGain = candidate.bounded_exact_hits > base.bounded_exact_hits;
+  const structuralGain =
+    candidate.daypart_count > base.daypart_count ||
+    candidate.role_count > base.role_count ||
+    candidate.unique_family_count > base.unique_family_count ||
+    preferenceDepthGain;
+  const walkingGain =
+    base.under_target_km > 0 &&
+    candidate.under_target_km <= base.under_target_km - MIN_WALKING_GAIN_KM;
+
+  if (!coverageGain && !((partialGain || structuralGain) && walkingGain)) return false;
+  if (!coverageGain && candidate.chain_count > base.chain_count) return false;
+  if (
+    !coverageGain &&
+    candidate.duplicate_family_count > base.duplicate_family_count &&
+    !preferenceDepthGain
+  ) return false;
+  return true;
+}
+
+function scoreRepair(diagnostics) {
+  return [
+    diagnostics.exact_preference_count,
+    diagnostics.spine_role_count,
+    diagnostics.partial_preference_count,
+    diagnostics.within_budget ? 1 : 0,
+    diagnostics.daypart_walkable ? 1 : 0,
+    diagnostics.within_target_band ? 1 : 0,
+    -diagnostics.missing_preferences.length,
+    -diagnostics.candidate_count,
+    -diagnostics.under_target_km,
+    diagnostics.daypart_count,
+    diagnostics.role_count,
+    diagnostics.unique_family_count,
+    -diagnostics.chain_count,
+    -diagnostics.duplicate_family_count,
+    -diagnostics.longest_leg_km,
+  ];
+}
+
+function repairReasons(base, repaired) {
+  const reasons = [];
+  if (repaired.exact_preference_count > base.exact_preference_count) reasons.push("adds_requested_coverage");
+  if (repaired.partial_preference_count > base.partial_preference_count) reasons.push("adds_partial_coverage");
+  if (repaired.bounded_exact_hits > base.bounded_exact_hits) reasons.push("adds_requested_depth");
+  if (repaired.daypart_count > base.daypart_count) reasons.push("adds_daypart");
+  if (repaired.role_count > base.role_count) reasons.push("adds_route_role");
+  if (repaired.unique_family_count > base.unique_family_count) reasons.push("adds_candidate_family");
+  if (repaired.under_target_km <= base.under_target_km - MIN_WALKING_GAIN_KM) reasons.push("uses_walking_target");
+  return reasons;
 }
 
 function describeSet(entries, preferences, { start, end, shape, targetKm }) {
@@ -111,7 +211,16 @@ function describeSet(entries, preferences, { start, end, shape, targetKm }) {
     ([preference, count]) => count > 0 && exactByPreference.get(preference) === 0,
   ).length;
   const boundedExactHits = [...exactByPreference.values()].reduce((sum, count) => sum + Math.min(2, count), 0);
-  const geometry = approximateDayGeometry(entries.map(({ item }) => item), { start, end, shape });
+  const items = entries.map(({ item }) => item);
+  const geometry = approximateDayGeometry(items, { start, end, shape });
+  const proximityOrder = approximateProximityOrder(items, { start });
+  const daypartOrder = approximateDaypartPostPass(proximityOrder);
+  const proximityChainKm = approximateSelectedChainKm(proximityOrder);
+  const daypartChainKm = approximateSelectedChainKm(daypartOrder);
+  const daypartWalkable = daypartChainKm <= Math.max(
+    proximityChainKm * DAYPART_STOP_CHAIN_TOLERANCE,
+    proximityChainKm + DAYPART_STOP_CHAIN_SLACK_KM,
+  );
   const target = Number.isFinite(targetKm) && targetKm > 0 ? targetKm : null;
   const targetBand = resolveAgnosticWalkingTargetBand(target);
   const budgetLimit = targetBand?.ceilingKm ?? null;
@@ -134,6 +243,7 @@ function describeSet(entries, preferences, { start, end, shape, targetKm }) {
   );
 
   return {
+    candidate_count: entries.length,
     exact_preference_count: exactPreferenceCount,
     partial_preference_count: partialPreferenceCount,
     bounded_exact_hits: boundedExactHits,
@@ -148,6 +258,8 @@ function describeSet(entries, preferences, { start, end, shape, targetKm }) {
     trust_quality: trustQuality,
     operational_quality: operationalQuality,
     within_budget: withinBudget,
+    daypart_walkable: daypartWalkable,
+    daypart_drift_km: round(Math.max(0, daypartChainKm - proximityChainKm)),
     within_target_band: withinTargetBand,
     target_floor_km: round(targetFloor),
     over_budget_km: round(overBudgetKm),
@@ -173,6 +285,7 @@ function scoreSet(diagnostics) {
     diagnostics.spine_role_count,
     diagnostics.partial_preference_count,
     diagnostics.within_budget ? 1 : 0,
+    diagnostics.daypart_walkable ? 1 : 0,
     diagnostics.daypart_count,
     diagnostics.within_target_band ? 1 : 0,
     diagnostics.bounded_exact_hits,
@@ -242,8 +355,58 @@ function approximateDayGeometry(items, { start, end, shape }) {
   return {
     estimated_km: round(total),
     longest_leg_km: round(longest),
+    selected_chain_km: approximateSelectedChainKm(ordered),
     ordered_candidate_ids: ordered.map(stableId),
   };
+}
+
+function approximateProximityOrder(items, { start }) {
+  const remaining = items.slice();
+  const ordered = [];
+  let cursor = finitePoint(start);
+
+  while (remaining.length) {
+    let index = 0;
+    if (cursor) {
+      for (let candidateIndex = 1; candidateIndex < remaining.length; candidateIndex += 1) {
+        const candidateDistance = haversineKm(cursor, remaining[candidateIndex]);
+        const currentDistance = haversineKm(cursor, remaining[index]);
+        if (
+          candidateDistance < currentDistance ||
+          (candidateDistance === currentDistance && stableId(remaining[candidateIndex]) < stableId(remaining[index]))
+        ) {
+          index = candidateIndex;
+        }
+      }
+    } else {
+      remaining.sort((left, right) => stableId(left).localeCompare(stableId(right)));
+    }
+    const [next] = remaining.splice(index, 1);
+    ordered.push(next);
+    cursor = next;
+  }
+
+  return ordered;
+}
+
+function approximateDaypartPostPass(items) {
+  return items
+    .map((item, index) => ({ item, index, slot: candidateDaypartSlot(item) }))
+    .sort((left, right) => left.slot - right.slot || left.index - right.index)
+    .map(({ item }) => item);
+}
+
+function candidateDaypartSlot(item) {
+  const slots = routeRoles(item).map(daypartSlotForRole).filter(Number.isFinite);
+  return slots.length ? Math.min(...slots) : 2;
+}
+
+function approximateSelectedChainKm(items) {
+  let total = 0;
+  for (let index = 1; index < items.length; index += 1) {
+    total += haversineKm(items[index - 1], items[index]) * WALKING_DISTANCE_FACTOR;
+  }
+  return Number(total.toFixed(1));
 }
 
 function candidatePreferences(item, camelKey, snakeKey) {
@@ -390,6 +553,7 @@ function round(value) {
 
 function emptyDiagnostics() {
   return {
+    candidate_count: 0,
     exact_preference_count: 0,
     partial_preference_count: 0,
     bounded_exact_hits: 0,
@@ -404,6 +568,8 @@ function emptyDiagnostics() {
     trust_quality: 0,
     operational_quality: 0,
     within_budget: true,
+    daypart_walkable: true,
+    daypart_drift_km: 0,
     within_target_band: true,
     target_floor_km: 0,
     over_budget_km: 0,

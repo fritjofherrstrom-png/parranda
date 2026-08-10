@@ -46,6 +46,28 @@ function fixtureNear(base) {
   return recs;
 }
 
+function broadIntentFixture(base) {
+  const specs = [
+    ["food", "restaurant", ["mat"], 0.004],
+    ["coffee", "cafe", ["fika"], 0.001],
+    ["view", "viewpoint", ["utsikt"], 0.002],
+    ["museum", "museum", ["kultur"], 0.003],
+    ["bar", "bar", ["bars", "nattliv"], 0.005],
+  ];
+  return specs.flatMap(([prefix, type, tags, dayArcOffset]) =>
+    Array.from({ length: 5 }, (_, index) => {
+      return externalRecord(
+        `${prefix}-${index}`,
+        `${prefix} ${index}`,
+        type,
+        base.lat + dayArcOffset + index * 0.00005,
+        base.lng + (index % 2) * 0.00005,
+        tags,
+      );
+    }),
+  );
+}
+
 function mixedTrustSingleInterestFixture(base) {
   const records = [];
   const point = (i) => ({
@@ -195,6 +217,29 @@ test(
     );
     assert.ok(stops.every((stop) => stop.type === "park"));
     assert.ok(stops.every((stop) => stop.daypart === "midday"));
+  }),
+);
+
+test(
+  "day-value repair expands the agnostic set when a fifth stop adds requested coverage",
+  withServer(makeLoader(broadIntentFixture({ lat: 41.9, lng: 12.49 })), async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody({
+        preferences: ["food", "coffee", "scenic", "museums", "bars"],
+      }),
+    });
+
+    const exp = r.body.agnostic_route_output_experiment;
+    assert.equal(exp.route_mutation, true);
+    assert.equal(exp.promotion.promote, true);
+    const stops = r.body.days[0].primary_route.main_stops;
+    assert.equal(stops.length, 5, "the fixed four-stop budget expands only to retain real fifth-intent value");
+    const covered = new Set(stops.flatMap((stop) => stop.covered_preferences));
+    for (const preference of ["food", "coffee", "scenic", "museums", "bars"]) {
+      assert.ok(covered.has(preference), `${preference} remains represented in the repaired route`);
+    }
+    assert.ok(stops.every((stop) => stop.provisional === true));
   }),
 );
 
