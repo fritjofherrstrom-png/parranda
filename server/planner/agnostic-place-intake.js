@@ -112,20 +112,49 @@ async function resolveAgnosticIntake({
   placeResolver = null,
   placeLanguage = null,
 } = {}) {
-  // 1. Explicit valid coordinates always win — the resolver is never called.
+  // 1. Explicit valid coordinates always win. The place-search function is
+  // never called. A separately trusted reverse-context method may enrich only
+  // locality/region metadata; it cannot move or invalidate the explicit anchor.
   if (coords && isValidCoordinate(coords.lat, coords.lng)) {
+    let coordinateContext = null;
+    if (typeof placeResolver?.resolveCoordinates === "function") {
+      try {
+        coordinateContext = await placeResolver.resolveCoordinates(
+          { lat: coords.lat, lng: coords.lng },
+          { language: placeLanguage },
+        );
+      } catch (_error) {
+        coordinateContext = null;
+      }
+    }
+    const placeContext = trustedPlaceContext(coordinateContext?.admin_context);
+    const spatialScope = sanitizeTrustedSpatialScope(coordinateContext?.spatial_scope);
     return {
       anchor: { lat: coords.lat, lng: coords.lng },
-      placeContext: null,
-      spatialScope: null,
+      placeContext,
+      spatialScope,
       intake: intake("coordinates", placeQuery, {
         status: "resolved",
         resolved: {
-          label: null,
+          label: typeof coordinateContext?.label === "string" && coordinateContext.label.trim()
+            ? coordinateContext.label.trim()
+            : null,
           lat: coords.lat,
           lng: coords.lng,
           confidence: "explicit",
           provenance: "explicit_request_coordinates",
+          context_provenance: typeof coordinateContext?.provenance === "string"
+            ? coordinateContext.provenance
+            : null,
+          attribution: typeof coordinateContext?.attribution === "string"
+            ? coordinateContext.attribution
+            : null,
+          license: typeof coordinateContext?.license === "string"
+            ? coordinateContext.license
+            : null,
+          timezone: typeof coordinateContext?.timezone === "string" && coordinateContext.timezone.trim()
+            ? coordinateContext.timezone.trim()
+            : null,
         },
       }),
     };

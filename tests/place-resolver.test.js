@@ -130,6 +130,132 @@ test("pure: preserves only compact administrative identity for trusted source di
   assert.doesNotMatch(JSON.stringify(candidate), /postcode|Private street atom|"road"/);
 });
 
+test("pure: reverse coordinate context preserves only locality metadata and reviewed bounds", async () => {
+  const calls = [];
+  const resolver = createNominatimPlaceResolver({
+    fetcher: async (url, opts) => {
+      calls.push({ url, headers: opts?.headers });
+      return jsonResponse(200, {
+        display_name: "Gamla staden, Malmö, Skåne län, Sverige",
+        lat: "55.605",
+        lon: "13.003",
+        type: "administrative",
+        addresstype: "city",
+        boundingbox: ["55.52", "55.66", "12.88", "13.15"],
+        address: {
+          city: "Malmö",
+          municipality: "Malmö kommun",
+          county: "Skåne län",
+          state: "Skåne län",
+          country: "Sverige",
+          country_code: "SE",
+          road: "Must not escape",
+          postcode: "211 00",
+        },
+      });
+    },
+    minIntervalMs: 0,
+  });
+
+  const context = await resolver.resolveCoordinates(
+    { lat: 55.604981, lng: 13.003822 },
+    { language: "sv" },
+  );
+
+  const url = new URL(calls[0].url);
+  assert.equal(url.pathname, "/reverse");
+  assert.equal(url.searchParams.get("lat"), "55.604981");
+  assert.equal(url.searchParams.get("lon"), "13.003822");
+  assert.equal(url.searchParams.get("zoom"), "10");
+  assert.equal(url.searchParams.get("accept-language"), "sv");
+  assert.equal(context.label, "Malmö");
+  assert.equal(context.provenance, "nominatim_reverse_context");
+  assert.deepEqual(context.admin_context, {
+    locality: "Malmö",
+    municipality: "Malmö kommun",
+    county: "Skåne län",
+    region: "Skåne län",
+    country: "Sverige",
+    country_code: "se",
+  });
+  assert.equal(context.spatial_scope.kind, "settlement");
+  assert.equal(context.spatial_scope.collection_mode, "regional_bounded");
+  assert.doesNotMatch(JSON.stringify(context), /Must not escape|211 00|display_name/);
+});
+
+test("pure: search and reverse context share one provider queue and rate gate", async () => {
+  let clock = 0;
+  const slept = [];
+  const calls = [];
+  const resolver = createNominatimPlaceResolver({
+    fetcher: async (url) => {
+      const parsed = new URL(url);
+      calls.push(parsed.pathname);
+      if (parsed.pathname === "/reverse") {
+        return jsonResponse(200, {
+          type: "city",
+          boundingbox: ["59.2", "59.4", "17.9", "18.2"],
+          address: { city: "Stockholm", country: "Sverige", country_code: "se" },
+        });
+      }
+      return jsonResponse(200, [nominatim("Stockholm", 59.3293, 18.0686, 0.8)]);
+    },
+    minIntervalMs: 1000,
+    now: () => clock,
+    sleep: async (ms) => { slept.push(ms); clock += ms; },
+  });
+
+  const [search, context] = await Promise.all([
+    resolver("Stockholm"),
+    resolver.resolveCoordinates({ lat: 59.3293, lng: 18.0686 }),
+  ]);
+
+  assert.equal(search.length, 1);
+  assert.equal(context.label, "Stockholm");
+  assert.deepEqual(calls, ["/search", "/reverse"]);
+  assert.deepEqual(slept, [1000], "both operations honor one global Nominatim interval");
+});
+
+test("pure: reverse failures are fail-soft and are not cached as trusted context", async () => {
+  let calls = 0;
+  const resolver = createNominatimPlaceResolver({
+    fetcher: async () => {
+      calls += 1;
+      return calls === 1
+        ? jsonResponse(503, {})
+        : jsonResponse(200, {
+            type: "city",
+            boundingbox: ["48.8", "48.9", "2.2", "2.5"],
+            address: { city: "Paris", country: "France", country_code: "fr" },
+          });
+    },
+    minIntervalMs: 0,
+    providerCooldownMs: 0,
+  });
+
+  assert.equal(await resolver.resolveCoordinates({ lat: 48.8566, lng: 2.3522 }), null);
+  assert.equal((await resolver.resolveCoordinates({ lat: 48.8566, lng: 2.3522 })).label, "Paris");
+  assert.equal(calls, 2, "a transient reverse failure never poison-caches absence");
+});
+
+test("pure: reverse context has its own short abort budget and remains fail-soft", async () => {
+  let aborted = false;
+  const resolver = createNominatimPlaceResolver({
+    fetcher: async (_url, options) => new Promise((_resolve, reject) => {
+      options.signal.addEventListener("abort", () => {
+        aborted = true;
+        reject(new Error("aborted"));
+      });
+    }),
+    timeoutMs: 5000,
+    reverseTimeoutMs: 20,
+    minIntervalMs: 0,
+  });
+
+  assert.equal(await resolver.resolveCoordinates({ lat: 59.3293, lng: 18.0686 }), null);
+  assert.equal(aborted, true);
+});
+
 test("pure: confidence is never 'high' (reserved for human-verified)", async () => {
   const r = createNominatimPlaceResolver({ fetcher: fetcherReturning([nominatim("Big City", 40, 10, 0.98)]), minIntervalMs: 0 });
   const out = await r("Big City");
@@ -542,6 +668,23 @@ test("resolver chain: fallback may replace only an empty or low-confidence prima
   assert.equal((await empty("Region", { language: "sv" }))[0].label, "Open knowledge region");
   assert.equal((await low("Region", { language: "en" }))[0].label, "Open knowledge region");
   assert.deepEqual(contextSeen, [{ language: "sv" }, { language: "en" }]);
+});
+
+test("resolver chain preserves the primary trusted coordinate-context seam", async () => {
+  const primary = async () => [];
+  primary.resolveCoordinates = async ({ lat, lng }) => ({
+    label: "Resolved locality",
+    provenance: "trusted_reverse",
+    requested: { lat, lng },
+  });
+  const resolver = composePlaceResolvers(primary, async () => []);
+
+  assert.equal(typeof resolver.resolveCoordinates, "function");
+  assert.deepEqual(await resolver.resolveCoordinates({ lat: 1, lng: 2 }), {
+    label: "Resolved locality",
+    provenance: "trusted_reverse",
+    requested: { lat: 1, lng: 2 },
+  });
 });
 
 test("resolver chain: fallback errors fail soft and preserve primary low-confidence evidence", async () => {
