@@ -294,7 +294,7 @@ test(
     });
     const exp = r.body.agnostic_route_output_experiment;
     assert.equal(exp.promotion.promote, false);
-    assert.equal(exp.baseline.had_primary_route, true, "fallback route remains inspectable only inside the experiment");
+    assert.equal(exp.baseline.had_primary_route, true, "only fallback route presence remains in experiment diagnostics");
     assert.deepEqual(r.body.days, [], "fallback Rome day must not survive at the public root");
     assert.equal(r.body.city, null);
     assert.equal(r.body.readiness, null);

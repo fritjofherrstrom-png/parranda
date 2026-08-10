@@ -546,7 +546,7 @@ test("unit: engaged any-place root never exposes a fallback city's public truth"
   assert.equal(baseline.days[0].primary_route.id, "rome-route");
 });
 
-test("unit: experiment block preserves baseline primary_route + readiness", () => {
+test("unit: experiment block keeps only compact baseline-presence facts", () => {
   const baseline = { days: [{ primary_route: { id: "real-route" } }], readiness: { tag: "rich" } };
   const block = buildExperimentBlock({
     routeMutation: true,
@@ -558,8 +558,9 @@ test("unit: experiment block preserves baseline primary_route + readiness", () =
     requestedDate: DATE,
   });
   assert.equal(block.baseline.had_primary_route, true);
-  assert.equal(block.baseline.primary_route.id, "real-route");
-  assert.deepEqual(block.baseline.readiness, { tag: "rich" });
+  assert.equal(block.baseline.had_readiness, true);
+  assert.equal("primary_route" in block.baseline, false);
+  assert.equal("readiness" in block.baseline, false);
   assert.equal(block.selected_variant, "experimental_agnostic");
   assert.equal(block.experimental_route.id, "exp");
   assert.equal(block.readiness_calibration.inputs.requested_date, DATE);
@@ -1083,22 +1084,26 @@ test(
 );
 
 test(
-  "api: mutation — no city sent + coords + flag replaces the baseline route, preserving it",
+  "api: mutation keeps fallback diagnostics compact and never exposes fallback inspect sidecars",
   withServer(makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })), async (server) => {
     const r = await requestJson(server, {
-      path: `/api/route-recommendations?lang=en&${FLAG}`,
+      path: `/api/route-recommendations?lang=en&${FLAG}&planner_inspect=1&inspect_route_output=1&inspect_agnostic_route_candidate=1`,
       body: { dates: [DATE], lat: 41.9, lng: 12.49, preferences: ["food", "coffee"], include_external_candidates: 1 },
     });
     const exp = r.body.agnostic_route_output_experiment;
     assert.equal(exp.route_mutation, true);
-    // The fallback route remains available for experiment comparison, but no
-    // fallback-city identity or readiness may survive in the public root.
+    // A fallback route may exist internally, but neither its route object nor
+    // its city-config inspect sidecars may survive into the any-place response.
     assert.equal(r.body.city, null);
     assert.equal(r.body.readiness, null);
     assert.equal(exp.baseline.had_primary_route, true, "no-city request fell back to the default city route");
     assert.ok(exp.readiness_calibration, "route mutation carries readiness calibration");
-    assert.ok(exp.baseline.primary_route && exp.baseline.primary_route.id, "baseline route preserved for comparison");
-    assert.notEqual(exp.baseline.primary_route.id, r.body.days[0].primary_route.id, "returned route is the experimental one");
+    assert.equal("primary_route" in exp.baseline, false);
+    assert.equal("readiness" in exp.baseline, false);
+    assert.equal(r.body.planner_roles, undefined);
+    assert.equal(r.body.dayflow_honesty, undefined);
+    assert.equal(r.body.route_output_diagnostics, undefined);
+    assert.equal(r.body.agnostic_route_candidate, undefined);
     assert.equal(r.body.days[0].experimental_agnostic_route_applied, true);
     assert.equal(r.body.days[0].primary_route.experimental, true);
   }),
