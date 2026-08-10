@@ -136,6 +136,7 @@ test("freeform any-place Blitz resolves one trusted anchor and returns a source-
   assert.equal(out.route_mutation, false);
   assert.equal(out.day_anchor_mutation, false);
   assert.equal(out.context.source_health.status, "healthy");
+  assert.equal(out.reasons.includes("null"), false);
   assert.equal(loaderRequest.anchorMode, "place");
   assert.deepEqual(loaderRequest.requestedIntents, ["fika"]);
   assert.equal(loaderRequest.lat, STOCKHOLM.lat);

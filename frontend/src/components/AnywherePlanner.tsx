@@ -16,7 +16,7 @@ import {
   WALK_PRESETS,
   isoDateFromOffset,
 } from "../lib/anywhere-payload.mjs";
-import { chooseBlitzPreferences } from "../lib/blitz-preferences.mjs";
+import { anywhereBlitzView, type AnywhereBlitzView } from "../lib/blitz-view.mjs";
 import {
   acceptedLiveEventQuery,
   boundedRoutePoints,
@@ -286,6 +286,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // Memory-only copy of the trusted coordinate anchor used for this response.
   // It frames the consumer Maps route but is never persisted or put in a URL.
   const [routeAnchorCoords, setRouteAnchorCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [blitzPhase, setBlitzPhase] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [blitzResult, setBlitzResult] = useState<AnywhereBlitzView | null>(null);
   const [mapDrawn, setMapDrawn] = useState(false);
   const [upgradePending, setUpgradePending] = useState(false); // cold-start: structure upgrade in flight
   const [liveRefreshExhausted, setLiveRefreshExhausted] = useState(false);
@@ -299,6 +301,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const recomposeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestSequenceRef = useRef(0);
   const activeRequestRef = useRef<AbortController | null>(null);
+  const blitzRequestRef = useRef<AbortController | null>(null);
+  const blitzRequestSequenceRef = useRef(0);
   const skipFirstAdjustRef = useRef(true);
   // Result-screen chrome (design handoff §3): the map can expand in place, and
   // detours are collapsed by default — optional ideas must never read as part
@@ -381,6 +385,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     const requestId = ++requestSequenceRef.current;
     activeRequestRef.current = controller;
     if (!silent) {
+      blitzRequestRef.current?.abort();
+      blitzRequestRef.current = null;
+      setBlitzPhase("idle");
+      setBlitzResult(null);
       liveQueryAbortRef.current?.abort();
       liveQueryAbortRef.current = null;
       setLiveRefreshExhausted(false);
@@ -503,6 +511,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   useEffect(() => () => {
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     activeRequestRef.current?.abort();
+    blitzRequestRef.current?.abort();
     liveQueryAbortRef.current?.abort();
   }, []);
 
@@ -638,7 +647,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   }
 
   // Resolve the anchor (typed place or the user's real position) and compose.
-  // Shared by "Build my day" and "Blitz" (which only overrides the preferences).
   async function resolveAndRun(opts: { preferencesOverride?: string[] } = {}) {
     setGeoHint(null);
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
@@ -667,13 +675,47 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     await resolveAndRun();
   }
 
-  // Blitz chooses one reviewed, coherent preference profile and composes through
-  // the same honest source-backed path. The current profile is excluded so a
-  // reroll cannot immediately repeat itself.
-  function blitz() {
-    const picked = chooseBlitzPreferences({ previous: selected });
-    setSelected(picked);
-    resolveAndRun({ preferencesOverride: picked });
+  // Blitz is one trusted next move beside the day. It reads the current anchor
+  // and preferences but never mutates them, re-composes the route, or changes
+  // stop order. Near-me coordinates remain memory-only.
+  async function blitz() {
+    const typedAnchor = place.trim();
+    const nearMeAnchor = mode === "near_me" ? routeAnchorCoords : null;
+    if (!nearMeAnchor && !typedAnchor) {
+      setBlitzPhase("error");
+      setBlitzResult(null);
+      return;
+    }
+    blitzRequestRef.current?.abort();
+    const controller = new AbortController();
+    const requestId = ++blitzRequestSequenceRef.current;
+    blitzRequestRef.current = controller;
+    setBlitzPhase("loading");
+    setBlitzResult(null);
+    try {
+      const anchor = nearMeAnchor
+        ? { lat: nearMeAnchor.lat, lng: nearMeAnchor.lng }
+        : { place: typedAnchor };
+      const response = await fetch(`/api/blitz?anywhere_blitz=1&lang=${lang}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...anchor, preferences: selected }),
+        signal: controller.signal,
+      });
+      const body = await response.json();
+      if (controller.signal.aborted || requestId !== blitzRequestSequenceRef.current) return;
+      if (!response.ok) throw new Error(`blitz_http_${response.status}`);
+      const view = anywhereBlitzView(body);
+      if (view.state === "invalid") throw new Error("blitz_invalid_contract");
+      setBlitzResult(view);
+      setBlitzPhase("done");
+    } catch {
+      if (controller.signal.aborted || requestId !== blitzRequestSequenceRef.current) return;
+      setBlitzResult(null);
+      setBlitzPhase("error");
+    } finally {
+      if (blitzRequestRef.current === controller) blitzRequestRef.current = null;
+    }
   }
 
   // An ANCHOR exists once the landing handed one over (typed place or the
@@ -1210,12 +1252,82 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             <button
               type="button"
               onClick={blitz}
+              disabled={blitzPhase === "loading"}
               className="inline-flex min-h-11 items-center text-[11px] font-bold text-parranda-clay underline underline-offset-2 transition hover:text-parranda-ember"
             >
-              {t("⚡ Överraska mig", "⚡ Surprise me")}
+              {blitzPhase === "loading" ? t("⚡ Läser läget …", "⚡ Reading the moment …") : t("⚡ Blitz just nu", "⚡ Blitz right now")}
             </button>
           </div>
         </div>
+      )}
+
+      {blitzPhase !== "idle" && (
+        <section className="rounded-parranda border border-parranda-ember/35 bg-gradient-to-br from-parranda-terracotta/12 to-parranda-glow/5 p-4" aria-live="polite">
+          <div className="flex items-center gap-2">
+            <span aria-hidden="true" className="h-2 w-2 rounded-full bg-parranda-glow" />
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-parranda-glow">
+              {t("Blitz just nu", "Blitz right now")}
+            </p>
+          </div>
+          {blitzPhase === "loading" && (
+            <p className="mt-2 text-sm text-parranda-ink/70">
+              {t("Läser tiden, platsen och vad som händer nära dig …", "Reading the time, place and what is happening nearby …")}
+            </p>
+          )}
+          {blitzPhase === "error" && (
+            <p className="mt-2 text-sm text-parranda-ink/75">
+              {t("Blitz kunde inte läsa läget just nu. Din plan är oförändrad.", "Blitz could not read the moment right now. Your day is unchanged.")}
+            </p>
+          )}
+          {blitzPhase === "done" && blitzResult?.state === "blocked" && (
+            <p className="mt-2 text-sm text-parranda-ink/75">
+              {t("Inget tillräckligt pålitligt nästa drag hittades nära dig just nu. Din plan är oförändrad.", "No sufficiently reliable next move was found nearby right now. Your day is unchanged.")}
+            </p>
+          )}
+          {blitzPhase === "done" && blitzResult?.state === "available" && blitzResult.best && (() => {
+            const move = blitzResult.best;
+            const timing = move.kind === "live_event" ? eventTiming(move, lang) : "";
+            const mapsUrl = mapsPlaceUrl(
+              { name: move.title, lat: move.lat ?? undefined, lng: move.lng ?? undefined },
+              typedPlaceLabel || undefined,
+            );
+            const secondary = blitzResult.live_option || blitzResult.backup;
+            return (
+              <div className="mt-2 flex flex-col gap-3">
+                <div>
+                  <p className="font-display text-2xl leading-tight text-parranda-ink">{move.title}</p>
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-parranda-ink/65">
+                    {move.kind === "live_event" && <span>{t("Live-händelse", "Live event")}</span>}
+                    {timing && <span>{timing}</span>}
+                    {Number.isFinite(move.walking_minutes) && <span>{move.walking_minutes} {t("min till fots", "min walk")}</span>}
+                    {move.source.label && <span>{move.source.label}</span>}
+                  </div>
+                </div>
+                <p className="text-xs text-parranda-ink/55">
+                  {t("Ett källstött nästa drag utifrån platsen, tiden och dina val. Det ändrar inte dagens rutt.", "A source-backed next move from your place, time and picks. It does not change today's route.")}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {mapsUrl && (
+                    <a href={mapsUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center rounded-parranda-btn bg-parranda-terracotta px-4 text-sm font-bold text-white transition hover:brightness-110">
+                      {t("Öppna i Maps ↗", "Open in Maps ↗")}
+                    </a>
+                  )}
+                  {move.source.url && (
+                    <a href={move.source.url} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center rounded-parranda-btn border border-parranda-ink/16 px-4 text-sm font-bold text-parranda-ink/75">
+                      {t("Källa ↗", "Source ↗")}
+                    </a>
+                  )}
+                </div>
+                {secondary && (
+                  <p className="border-t border-parranda-ink/10 pt-2 text-xs text-parranda-ink/60">
+                    {secondary.kind === "live_event" ? t("Senare nära dig: ", "Later nearby: ") : t("Annars nära dig: ", "Otherwise nearby: ")}
+                    <span className="font-semibold text-parranda-ink/80">{secondary.title}</span>
+                  </p>
+                )}
+              </div>
+            );
+          })()}
+        </section>
       )}
 
       {geoHint && <p className="text-sm text-parranda-ink/70">{geoHint}</p>}

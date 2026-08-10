@@ -44,7 +44,12 @@ function serverInstant(clock) {
 }
 
 function uniqueTokens(values) {
-  return [...new Set((Array.isArray(values) ? values : []).map(String).filter(Boolean))];
+  return [...new Set(
+    (Array.isArray(values) ? values : [])
+      .filter((value) => value != null)
+      .map((value) => String(value).trim())
+      .filter(Boolean),
+  )];
 }
 
 function localDateFromContext(context, fallbackDate) {
