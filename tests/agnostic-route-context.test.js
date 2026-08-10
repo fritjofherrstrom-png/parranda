@@ -136,6 +136,27 @@ test("pure: timezone known → time band + ISO now + computed signals", async ()
   assert.ok(ctx.contextBlock.computed_signals.every((s) => s.source === "computed_pulse"));
 });
 
+test("pure: a different selected date keeps timezone truth but does not reuse today's local moment", async () => {
+  const ctx = await resolveAgnosticContext({
+    coords: { lat: 41.9, lng: 12.49 },
+    date: "2026-05-26",
+    weatherProvider: async () => SUN,
+    trustedTimezone: "Europe/Rome",
+    clock: eveningClock,
+  });
+
+  assert.equal(ctx.timezoneKnown, true);
+  assert.equal(ctx.timeAppliesToRequestedDate, false);
+  assert.equal(ctx.hour, null);
+  assert.equal(ctx.timeBand, null);
+  assert.equal(ctx.contextBlock.time.status, "selected_date_unanchored");
+  assert.equal(ctx.contextBlock.time.requested_date_is_today, false);
+  assert.equal(ctx.contextBlock.time.now, "2026-05-25T19:30:00");
+  assert.equal(ctx.contextBlock.time.time_band, null);
+  assert.deepEqual(ctx.contextBlock.computed_signals, []);
+  assert.equal(ctx.contextBlock.influence.time_fed_into_selection, false);
+});
+
 test("pure: trusted weather auto timezone enables time context with lower trust tier", async () => {
   const ctx = await resolveAgnosticContext({
     coords: { lat: 41.9, lng: 12.49 },
@@ -327,6 +348,28 @@ test(
     assert.ok(ctx.computed_signals.length >= 1, "golden-hour/city-rhythm signals can run");
     assert.equal(ctx.influence.time_fed_into_selection, true);
     assert.ok(ctx.influence.time_fit_reasons.some((reason) => reason.startsWith("time_") || reason.startsWith("golden_hour")));
+  }),
+);
+
+test(
+  "api: a future selected date never inherits the current local time band in candidate scoring",
+  withServer({
+    openDataLoader: makeLoader(fixtureMiddayNear({ lat: 41.9, lng: 12.49 })),
+    weatherProvider: async () => SUN_WITH_AUTO_TZ,
+    clock: eveningClock,
+  }, async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}`,
+      body: agnosticBody({ dates: ["2026-05-26"] }),
+    });
+    const ctx = r.body.agnostic_route_output_experiment.context;
+    assert.equal(r.body.agnostic_route_output_experiment.route_mutation, true);
+    assert.equal(ctx.time.timezone, "Europe/Rome");
+    assert.equal(ctx.time.status, "selected_date_unanchored");
+    assert.equal(ctx.time.time_band, null);
+    assert.equal(ctx.influence.time_fed_into_selection, false);
+    assert.deepEqual(ctx.influence.time_fit_reasons, []);
+    assert.deepEqual(ctx.computed_signals, []);
   }),
 );
 

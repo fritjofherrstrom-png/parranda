@@ -1633,12 +1633,19 @@ test(
         body: { city: "unknown-place", dates: ["2026-05-30"], lat: 41.9, lng: 12.49, preferences: ["food", "coffee", "scenic"], include_external_candidates: 1 },
       });
       const route = r.body.days[0].primary_route;
+      const context = r.body.agnostic_route_output_experiment.context;
       assert.equal(route.anchored_to_local_time, false, "a future plan is not trimmed");
       assert.deepEqual(route.trimmed_dayparts, []);
       assert.equal(route.current_local_time_band, null, "the current band is irrelevant to a future day");
       assert.equal(route.caveats.includes("daypart_arc_precedes_local_time"), false, "a future morning is not 'past'");
       assert.equal(route.caveats.includes("day_anchored_to_current_time"), false);
       assert.ok(route.daypart_arc.includes("morning"), "the full arc is kept");
+      assert.equal(context.time.status, "selected_date_unanchored");
+      assert.equal(context.time.requested_date_is_today, false);
+      assert.equal(context.time.time_band, null);
+      assert.equal(context.influence.time_fed_into_selection, false);
+      assert.deepEqual(context.influence.time_fit_reasons, []);
+      assert.deepEqual(context.computed_signals, []);
     } finally {
       await new Promise((resolve) => server.close(resolve));
       global.fetch = ORIGINAL_FETCH;

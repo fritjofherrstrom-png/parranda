@@ -208,6 +208,7 @@ async function resolveAgnosticContext({
   let cityNow = null;
   let timeBand = null;
   let nowIso = null;
+  let requestedDateIsToday = null;
   let computedSignals = [];
   if (timezoneKnown && date) {
     try {
@@ -222,17 +223,23 @@ async function resolveAgnosticContext({
         lang,
       });
       cityNow = engineContext.cityNow;
-      timeBand = resolveTimeBandFromHour(cityNow.hour);
       nowIso = `${cityNow.isoDate}T${pad2(cityNow.hour)}:${pad2(cityNow.minute)}:00`;
-      // PURE coordinate+time signals — no scraping, no citypack.
-      computedSignals = [
-        ...safeGenerate(goldenHourGenerator, engineContext),
-        ...safeGenerate(cityRhythmGenerator, engineContext),
-      ].map(summarizeComputedSignal);
+      requestedDateIsToday = cityNow.isoDate === date;
+      if (requestedDateIsToday) {
+        timeBand = resolveTimeBandFromHour(cityNow.hour);
+        // These signals describe the current local moment. A future/past
+        // selected date has no requested clock time, so applying today's hour
+        // would be fabricated context rather than useful planning evidence.
+        computedSignals = [
+          ...safeGenerate(goldenHourGenerator, engineContext),
+          ...safeGenerate(cityRhythmGenerator, engineContext),
+        ].map(summarizeComputedSignal);
+      }
     } catch (_error) {
       cityNow = null;
       timeBand = null;
       nowIso = null;
+      requestedDateIsToday = null;
       computedSignals = [];
     }
   }
@@ -255,16 +262,21 @@ async function resolveAgnosticContext({
       timezone_known: timezoneKnown,
       timezone_source: timezoneSource,
       timezone_trust: timezoneTrust,
-      status: timezoneKnown ? "resolved" : "timezone_unavailable",
+      status: timezoneKnown
+        ? requestedDateIsToday
+          ? "resolved"
+          : "selected_date_unanchored"
+        : "timezone_unavailable",
       now: nowIso,
       time_band: timeBand,
+      requested_date_is_today: timezoneKnown ? requestedDateIsToday : null,
     },
     weather: { status: weatherStatus, read: weatherRead },
     computed_signals: computedSignals,
     live: { available: false, reason: "no_any_place_live_source" },
     influence: {
       weather_fed_into_selection: Boolean(weather),
-      time_fed_into_selection: timezoneKnown,
+      time_fed_into_selection: requestedDateIsToday === true,
       // Populated by the caller from the SELECTED candidates' fit reasons, so the
       // output explains exactly how the trusted context influenced composition.
       weather_fit_reasons: [],
@@ -274,10 +286,11 @@ async function resolveAgnosticContext({
 
   return {
     weather,
-    hour: cityNow ? cityNow.hour : null,
+    hour: requestedDateIsToday && cityNow ? cityNow.hour : null,
     now: nowIso,
     timeBand,
     timezoneKnown,
+    timeAppliesToRequestedDate: requestedDateIsToday === true,
     contextBlock,
   };
 }

@@ -890,7 +890,7 @@ async function composeAgnosticRouteOutput({
     origin: selectionOrigin,
     // Trusted time only, in the candidate-pool's expected payload format
     // (`hour` number + ISO `now`), and only when the timezone is known.
-    ...(ctx && ctx.timezoneKnown ? { hour: ctx.hour, now: ctx.now } : {}),
+    ...(ctx && ctx.timeAppliesToRequestedDate ? { hour: ctx.hour, now: ctx.now } : {}),
     // Signal the engine's external opt-in so the source-backed provider runs.
     include_external_candidates: externalRequested ? 1 : undefined,
     candidate_sources: externalRequested ? "open" : undefined,
@@ -901,8 +901,9 @@ async function composeAgnosticRouteOutput({
   // context so it never synthesizes a midday band that would tilt scoring. This
   // applies only to this flag-gated agnostic path (default citypack/blitz flows
   // never pass through here, so their time behavior is untouched).
-  const trustedTimeKnown = Boolean(ctx && ctx.timezoneKnown);
-  const availabilityWindow = trustedTimeKnown
+  const trustedTimezoneKnown = Boolean(ctx && ctx.timezoneKnown);
+  const trustedTimeAppliesToRequestedDate = Boolean(ctx && ctx.timeAppliesToRequestedDate);
+  const availabilityWindow = trustedTimezoneKnown
     ? buildLocalDayAvailabilityWindow({ requestedDate: effectiveDate, nowLocalIso: ctx.now })
     : null;
   const availabilityHelpers = availabilityWindow
@@ -918,17 +919,18 @@ async function composeAgnosticRouteOutput({
       }
     : {};
   const candidateReachPolicy = resolveAgnosticCandidateReachPolicy({ anchorMode, spatialScope });
-  const selectionHelpers = trustedTimeKnown
+  const selectionBaseHelpers = {
+    ...helpers,
+    ...availabilityHelpers,
+    ...(candidateReachPolicy ? { candidateReachPolicy } : {}),
+    experimentalAdmitCandidate: admitExperimentalInferredExternalCandidate,
+  };
+  const selectionHelpers = trustedTimeAppliesToRequestedDate
     ? {
-        ...helpers,
-        ...availabilityHelpers,
-        ...(candidateReachPolicy ? { candidateReachPolicy } : {}),
-        experimentalAdmitCandidate: admitExperimentalInferredExternalCandidate,
+        ...selectionBaseHelpers,
       }
     : {
-        ...helpers,
-        ...(candidateReachPolicy ? { candidateReachPolicy } : {}),
-        experimentalAdmitCandidate: admitExperimentalInferredExternalCandidate,
+        ...selectionBaseHelpers,
         resolveNowContext: (cfg, pl) => ({
           date: (pl && pl.date) || cfg.todayIsoDate(),
           hour: null,
@@ -1019,10 +1021,10 @@ async function composeAgnosticRouteOutput({
   // Local-time comparison is meaningful only for a today-dated request with a
   // trusted timezone. The same context drives both synthesis backends so the
   // promoted engine route cannot lose the legacy path's honesty contract.
-  const trustedBand = ctx && ctx.timezoneKnown ? ctx.timeBand : null;
+  const trustedBand = ctx && ctx.timeAppliesToRequestedDate ? ctx.timeBand : null;
   const trustedBandRank = timeBandRank(trustedBand);
   const isTodayRequest = Boolean(
-    ctx && ctx.timezoneKnown && typeof ctx.now === "string" && effectiveDate === ctx.now.slice(0, 10),
+    ctx && ctx.timeAppliesToRequestedDate && typeof ctx.now === "string" && effectiveDate === ctx.now.slice(0, 10),
   );
   const routeCurrentBand = isTodayRequest ? trustedBand : null;
 
