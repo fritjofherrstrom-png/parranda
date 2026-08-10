@@ -33,6 +33,7 @@ const { buildPreviewPreferenceFit } = require("./planner/preview-preference-fit"
 const { buildPreviewBetaEngineStatus } = require("./planner/preview-beta-engine-status");
 const { evaluateAgnosticPromotion } = require("./planner/agnostic-promotion-gate");
 const { buildEngineReadinessVerdict } = require("./planner/agnostic-engine-readiness");
+const { reconcileAgnosticConstraintNegotiation } = require("./planner/agnostic-constraint-negotiation");
 const { resolveAgnosticIntake, parsePlaceQuery } = require("./planner/agnostic-place-intake");
 const { collectPlaceCandidatesForCity } = require("./place-candidates/provider-registry");
 const { resolveDefaultOpenDataLoader } = require("./place-candidates/open-data-loader");
@@ -597,6 +598,17 @@ async function weaveEventStopFailSoft({ result, placeStructure, walkingRouter, w
   } catch (_error) {
     return { result, placeStructure, applied: false, blockers: ["weave_error"] };
   }
+}
+
+function reconcileConstraintAfterEventWeave({ experiment, woven, walkingKmTarget }) {
+  if (!woven?.applied || !experiment?.constraint_negotiation) return;
+  const finalRoute = woven.result?.days?.[0]?.primary_route || null;
+  experiment.constraint_negotiation = reconcileAgnosticConstraintNegotiation({
+    negotiation: experiment.constraint_negotiation,
+    experimentalRoute: finalRoute,
+    walkingKmTarget,
+    walkingValidated: true,
+  });
 }
 
 function isAgnosticEngineComposeRequested(request) {
@@ -2306,6 +2318,11 @@ function buildApp({
           walkingRouter,
           walkingConfig,
         });
+        reconcileConstraintAfterEventWeave({
+          experiment,
+          woven: engineWoven,
+          walkingKmTarget: payload.walkingKmTarget,
+        });
         response.json({
           ...engineWoven.result,
           ...(engineWoven.placeStructure ? { place_structure: engineWoven.placeStructure } : {}),
@@ -2329,6 +2346,11 @@ function buildApp({
         placeStructure: wovenPlaceStructure,
         walkingRouter,
         walkingConfig,
+      });
+      reconcileConstraintAfterEventWeave({
+        experiment,
+        woven: legacyWoven,
+        walkingKmTarget: payload.walkingKmTarget,
       });
       response.json({
         ...legacyWoven.result,

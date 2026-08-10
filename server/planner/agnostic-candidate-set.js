@@ -9,13 +9,13 @@
  */
 
 const { daypartSlotForRole } = require("./agnostic-route-ordering");
+const { resolveAgnosticWalkingTargetBand } = require("./agnostic-walking-target");
 
 const DEFAULT_POOL_LIMIT = 12;
 const MAX_SET_SIZE = 6;
 const WALKING_DISTANCE_FACTOR = 1.22;
 // A walking preset is a product target, not only a ceiling. Below 60% the
 // selected day is honestly under-filled unless stronger request coverage wins.
-const TARGET_FLOOR_RATIO = 0.6;
 
 function selectAgnosticCandidateSet({
   rankedCandidates = [],
@@ -113,8 +113,9 @@ function describeSet(entries, preferences, { start, end, shape, targetKm }) {
   const boundedExactHits = [...exactByPreference.values()].reduce((sum, count) => sum + Math.min(2, count), 0);
   const geometry = approximateDayGeometry(entries.map(({ item }) => item), { start, end, shape });
   const target = Number.isFinite(targetKm) && targetKm > 0 ? targetKm : null;
-  const budgetLimit = target ? target * 1.18 : null;
-  const targetFloor = target ? target * TARGET_FLOOR_RATIO : null;
+  const targetBand = resolveAgnosticWalkingTargetBand(target);
+  const budgetLimit = targetBand?.ceilingKm ?? null;
+  const targetFloor = targetBand?.floorKm ?? null;
   const withinBudget = budgetLimit === null || geometry.estimated_km <= budgetLimit;
   const withinTargetBand =
     targetFloor === null || (geometry.estimated_km >= targetFloor && geometry.estimated_km <= budgetLimit);

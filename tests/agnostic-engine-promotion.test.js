@@ -394,6 +394,11 @@ test("a walkable tonight-event is woven into the promoted route as its last stop
     assert.equal(lastLeg.to_label, "Jazz by the quay");
     assert.ok(Number.isFinite(lastLeg.distance_km) && lastLeg.distance_km <= 2.5);
     assert.equal(route.live_event_stop.event_id, "ev-tonight");
+    assert.equal(
+      r.body.agnostic_route_output_experiment.constraint_negotiation.walking.estimated_km,
+      route.estimated_km,
+      "post-hoc negotiation describes the final event-extended route",
+    );
     // The anchor card and the route agree.
     assert.equal(r.body.place_structure.district_day.evening_event.woven_into_route, true);
   } finally {

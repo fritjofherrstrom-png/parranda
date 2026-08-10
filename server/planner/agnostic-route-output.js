@@ -46,6 +46,7 @@ const { resolveWalkableMicroBase } = require("./walkable-micro-base");
 const { resolveAgnosticContext, collectInfluenceReasons } = require("./agnostic-route-context");
 const { buildDayflowContext } = require("./dayflow-context");
 const { calibrateAgnosticRouteReadiness } = require("./agnostic-route-readiness-calibration");
+const { buildAgnosticConstraintNegotiation } = require("./agnostic-constraint-negotiation");
 const { generateAgnosticRecommendations } = require("../route-engine");
 const { projectRouteToSelectedStopChain } = require("./route-public-geometry");
 const {
@@ -744,6 +745,8 @@ function buildExperimentBlock({
   context = null,
   dayflowContextPresent = false,
   requestedDate = null,
+  plannerRoles = null,
+  walkingKmTarget = null,
 }) {
   const baselineDay = baselineResult && Array.isArray(baselineResult.days) ? baselineResult.days[0] : null;
   const block = {
@@ -773,6 +776,14 @@ function buildExperimentBlock({
     context,
     dayflowContextPresent,
     requestedDate,
+  });
+  block.constraint_negotiation = buildAgnosticConstraintNegotiation({
+    routeMutation,
+    experimentalRoute,
+    plannerRoles,
+    walkingKmTarget,
+    walkingValidation,
+    blockers: eligibility.blockers,
   });
   return block;
 }
@@ -1013,6 +1024,8 @@ async function composeAgnosticRouteOutput({
       sourceStatus,
       context: contextBlock,
       requestedDate: effectiveDate,
+      plannerRoles,
+      walkingKmTarget,
     });
     experiment.context = contextBlock;
     return { result: baselineResult, experiment };
@@ -1154,6 +1167,8 @@ async function composeAgnosticRouteOutput({
       routeOrdering: sanitizeRouteOrdering(routeOrdering),
       context: contextBlock,
       requestedDate: effectiveDate,
+      plannerRoles,
+      walkingKmTarget,
     });
     experiment.walking_validation = walkingSummary;
     experiment.route_ordering = sanitizeRouteOrdering(routeOrdering);
@@ -1206,6 +1221,8 @@ async function composeAgnosticRouteOutput({
     context: contextBlock,
     dayflowContextPresent,
     requestedDate: effectiveDate,
+    plannerRoles,
+    walkingKmTarget,
   });
   experiment.walking_validation = walkingSummary;
   experiment.route_ordering = sanitizeRouteOrdering(routeOrdering);
@@ -1328,6 +1345,8 @@ async function composeAgnosticRouteViaEngine({
       sourceStatus,
       context: contextBlock,
       requestedDate: effectiveDate,
+      plannerRoles,
+      walkingKmTarget,
     });
     experiment.context = contextBlock;
     experiment.synthesized_via = "agnostic_compose_engine";
@@ -1367,6 +1386,8 @@ async function composeAgnosticRouteViaEngine({
     context: contextBlock,
     dayflowContextPresent,
     requestedDate: effectiveDate,
+    plannerRoles,
+    walkingKmTarget,
   });
   experiment.walking_validation = walkingSummary;
   experiment.route_ordering = routeOrdering;
