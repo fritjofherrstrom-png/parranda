@@ -92,6 +92,10 @@ test("a walkable evening event becomes the route's real last stop with truthful 
   const woven = await weaveEveningEventRouteStop({ result, placeStructure });
 
   assert.equal(woven.applied, true, `blockers: ${woven.blockers}`);
+  assert.equal(woven.interrupt.contract, "pulse_route_interrupt_v1");
+  assert.equal(woven.interrupt.status, "applied");
+  assert.equal(woven.interrupt.route_mutation, true);
+  assert.equal(woven.interrupt.requires_user_action, false);
   const route = woven.result.days[0].primary_route;
 
   // The event is the LAST stop, marked, sourced, timed — never a stable place.
@@ -149,6 +153,13 @@ test("an event beyond the evening-hop bound stays an anchor — route unchanged 
   assert.ok(woven.blockers.includes("event_leg_too_long"), `blockers: ${woven.blockers}`);
   assert.equal(woven.result, result, "unchanged input returned by reference");
   assert.equal(woven.placeStructure, placeStructure);
+  assert.equal(woven.interrupt.status, "suggested");
+  assert.equal(woven.interrupt.route_mutation, false);
+  assert.equal(woven.interrupt.route_anchor_unchanged, true);
+  assert.equal(woven.interrupt.requires_user_action, true);
+  assert.equal(woven.interrupt.action, "consider_recomposing_around_event");
+  assert.ok(woven.interrupt.walking_impact.leg_km > MAX_EVENT_LEG_KM);
+  assert.equal(woven.interrupt.event.source_url, NEAR_EVENT.source_url);
 });
 
 test("an event the walking validator itself refuses (over leg budget) also stays an anchor", async () => {
@@ -158,6 +169,7 @@ test("an event the walking validator itself refuses (over leg budget) also stays
   assert.equal(woven.applied, false);
   assert.ok(woven.blockers.includes("walking_validation_failed"), `blockers: ${woven.blockers}`);
   assert.equal(woven.result, result);
+  assert.equal(woven.interrupt, undefined, "unvalidated geometry never becomes a route suggestion");
 });
 
 test("a non-agnostic (fallback) day NEVER receives the typed place's event", async () => {

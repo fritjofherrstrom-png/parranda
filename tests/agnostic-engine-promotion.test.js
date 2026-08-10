@@ -307,9 +307,14 @@ test(
   withServer(makeLoader([]), async (server) => {
     const r = await requestJson(server, {
       path: "/api/route-recommendations?lang=en",
-      body: { dates: [DATE], preferences: ["food"] },
+      body: {
+        dates: [DATE],
+        preferences: ["food"],
+        pulse_route_interrupt: { status: "applied", event: { id: "payload-event" } },
+      },
     });
     assert.equal(r.body.agnostic_route_output_experiment, undefined);
+    assert.equal(r.body.pulse_route_interrupt, undefined, "public payload cannot mint an interrupt");
     assert.equal(r.body.city, "rome");
     assert.ok(r.body.days[0]?.primary_route, "default Planner still owns the no-city fallback path");
   }),
@@ -394,6 +399,8 @@ test("a walkable tonight-event is woven into the promoted route as its last stop
     assert.equal(lastLeg.to_label, "Jazz by the quay");
     assert.ok(Number.isFinite(lastLeg.distance_km) && lastLeg.distance_km <= 2.5);
     assert.equal(route.live_event_stop.event_id, "ev-tonight");
+    assert.equal(r.body.pulse_route_interrupt.status, "applied");
+    assert.equal(r.body.pulse_route_interrupt.route_mutation, true);
     assert.equal(
       r.body.agnostic_route_output_experiment.constraint_negotiation.walking.estimated_km,
       route.estimated_km,
@@ -421,6 +428,7 @@ test("a route for another selected date never inherits today's live event", asyn
     const route = r.body.days[0].primary_route;
     assert.equal(route.main_stops.some((stop) => stop.is_live_event), false);
     assert.equal(route.live_event_stop, undefined);
+    assert.equal(r.body.pulse_route_interrupt, undefined);
     assert.equal(r.body.place_structure.district_day.evening_event, undefined);
     assert.equal(r.body.live_events.tonight[0].id, "ev-tonight", "Pulse discovery remains independent of route use");
   } finally {
@@ -433,7 +441,7 @@ test("a distant tonight-event stays an anchor: no walk claimed, route unextended
   global.fetch = mockStableWeatherFetch();
   const server = buildApp({
     openDataLoader: makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })),
-    eventSupply: eventSupplyWith(tonightEventAt(12.55)), // ~5 km away
+    eventSupply: eventSupplyWith(tonightEventAt(12.53)), // ~3 km away: valid, but outside auto-weave
   }).listen(0);
   try {
     const r = await requestJson(server, {
@@ -443,6 +451,9 @@ test("a distant tonight-event stays an anchor: no walk claimed, route unextended
     const route = r.body.days[0].primary_route;
     assert.ok(!route.main_stops.some((s) => s.is_live_event), "no event stop fabricated for a non-walkable event");
     assert.equal(route.live_event_stop, undefined);
+    assert.equal(r.body.pulse_route_interrupt.status, "suggested");
+    assert.equal(r.body.pulse_route_interrupt.route_mutation, false);
+    assert.equal(r.body.pulse_route_interrupt.requires_user_action, true);
     const evening = r.body.place_structure.district_day.evening_event;
     assert.equal(evening.id, "ev-tonight", "the anchor itself remains — real, sourced, no walk claim");
     assert.ok(!evening.woven_into_route);
