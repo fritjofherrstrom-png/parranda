@@ -100,6 +100,98 @@ test("worker claims a target, discovers through trusted seams, and writes review
   assert.deepEqual(calls[1].slice(0, 1), ["complete"]);
 });
 
+test("worker carries prior probe evidence through the bounded qualifier without activating it", async () => {
+  const claimed = [target(), null];
+  const priorQualification = {
+    schema_version: 1,
+    status: "observing",
+    candidates: [],
+    activation_performed: false,
+  };
+  let qualificationInput = null;
+  let recordedProfile = null;
+  const catalog = {
+    claimScoutTarget: async () => claimed.shift(),
+    loadSourceQualification: async (key) => {
+      assert.equal(key, profile().profile_key);
+      return priorQualification;
+    },
+    recordDiscovery: async (value) => {
+      recordedProfile = value;
+      return { status: "recorded", profile_key: value.profile_key, catalog_status: "review_needed" };
+    },
+    completeScoutTarget: async () => ({ status: "completed" }),
+    failScoutTarget: async () => { throw new Error("should not fail"); },
+  };
+  const result = await runScoutWorkerBatch({
+    catalog,
+    runtime: {
+      now: () => new Date("2026-08-01T10:00:00Z"),
+      fetcher: async () => { throw new Error("qualifier controls this seam"); },
+      sourceQualifier: async (input) => {
+        qualificationInput = input;
+        return {
+          profile: {
+            ...input.profile,
+            source_qualification: {
+              schema_version: 1,
+              status: "qualified_for_review",
+              activation_performed: false,
+            },
+          },
+          qualification: { status: "qualified_for_review" },
+        };
+      },
+    },
+    discover: async () => ({
+      status: "complete",
+      reasons: ["bounded_source_scout_complete"],
+      source_profile: profile(),
+      manifest_candidates: [{ id: "candidate-one" }],
+    }),
+  });
+
+  assert.equal(result.results[0].qualification_status, "qualified_for_review");
+  assert.equal(recordedProfile.source_qualification.activation_performed, false);
+  assert.equal(recordedProfile.runtime_review.status, "unreviewed");
+  assert.equal(qualificationInput.previousQualification, priorQualification);
+  assert.deepEqual(qualificationInput.anchor, target().anchor);
+  assert.deepEqual(qualificationInput.spatialScope, target().spatial_scope);
+  assert.deepEqual(qualificationInput.manifests, [{ id: "candidate-one" }]);
+});
+
+test("qualifier failure stays fail-soft and stores discovery without forged evidence", async () => {
+  const claimed = [target(), null];
+  let recordedProfile = null;
+  const catalog = {
+    claimScoutTarget: async () => claimed.shift(),
+    loadSourceQualification: async () => null,
+    recordDiscovery: async (value) => {
+      recordedProfile = value;
+      return { status: "recorded", profile_key: value.profile_key, catalog_status: "review_needed" };
+    },
+    completeScoutTarget: async () => ({ status: "completed" }),
+    failScoutTarget: async () => { throw new Error("should not fail"); },
+  };
+  const result = await runScoutWorkerBatch({
+    catalog,
+    runtime: {
+      sourceQualifier: async () => { throw new Error("https://secret.example/token"); },
+    },
+    discover: async () => ({
+      status: "complete",
+      reasons: ["bounded_source_scout_complete"],
+      source_profile: profile(),
+      manifest_candidates: [],
+    }),
+  });
+
+  assert.equal(result.status, "ok");
+  assert.equal(result.results[0].qualification_status, "failed");
+  assert.equal(recordedProfile.source_qualification, undefined);
+  assert.doesNotMatch(JSON.stringify(result), /secret\.example|token/);
+});
+
 test("worker failures back off through the lease and never fabricate a profile", async () => {
   const claimed = [target(), null];
   const calls = [];

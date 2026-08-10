@@ -127,6 +127,25 @@ the existing versioned `PARRANDA_EVENT_FEEDS` path. User requests never perform
 this discovery crawl; they consume only approved, cache-backed sources through
 bounded acquisition.
 
+The background worker also performs a bounded post-scout qualification pass for
+manifest candidates that bind exactly to the discovered HTTPS endpoint,
+adapter, publisher identity, and trusted bounds. It runs at most two candidates
+per scout cycle through the existing provider, normalization, time, geometry,
+and source-health path. Unprobed and least-recently probed candidates are chosen
+first, so a larger source profile cannot starve behind the same two rows.
+Only candidates already classified as `viable_provider_probe` are fetched;
+permission-required, restricted, probe-only, and adapter-review sources remain
+unprobed until their prerequisites are resolved.
+
+Qualification stores compact status/count evidence only; provider payloads are
+never persisted. One healthy probe remains `observing`. A source becomes
+`qualified_for_review` only after healthy observations on two distinct days
+within 30 days and at least one accepted current event. Healthy-empty results,
+same-day retries, stale history, parser/geometry rejection, and a latest failed
+probe cannot manufacture readiness. This verdict never changes
+`runtime_review`, approves terms, or activates a provider. It reduces operator
+guesswork while preserving the separate trusted review gate.
+
 ### Reviewed source-profile runtime bridge
 
 A place source profile may carry an explicit `runtime_review` after operator
@@ -423,17 +442,20 @@ The runtime path is a-la-minute but bounded:
    deduplicated geographic demand row. The public request never waits for or
    performs discovery.
 4. A bounded background worker claims demand with a lease, runs the existing
-   low-volume scout, and writes findings as `review_needed`. Failures back off;
-   stale completed targets become eligible for a later refresh.
+   low-volume scout, probes at most two exact manifest candidates through the
+   real acquisition gates, and writes findings plus compact qualification
+   evidence as `review_needed`. Failures back off; stale completed targets
+   become eligible for a later refresh.
 5. Run only approved provider adapters. Do not fetch arbitrary user URLs.
 6. Normalize into `time_sensitive_events`.
 7. Feed normalized events into Pulse salience and, later, dayflow/route gates.
 
-The worker does not auto-approve discoveries. This preserves source trust while
-removing city-specific scouting and request-path crawling. Automated promotion,
-if introduced later, needs a separate evidence policy with parser health,
-ownership, terms, freshness and repeated-success gates.
-7. Fail soft with source status instead of blocking Planner/Pulse.
+The worker does not auto-approve discoveries. `qualified_for_review` proves
+repeated bounded parser yield, not ownership, terms approval, or production
+readiness. This preserves source trust while removing city-specific scouting
+and request-path crawling. Any later automated promotion needs a separate,
+explicit policy for ownership, terms, freshness, and trust.
+8. Fail soft with source status instead of blocking Planner/Pulse.
 
 Runtime discovery should be opt-in/gated until source families are proven. City
 packs may add curated source descriptors, but they should accelerate discovery,

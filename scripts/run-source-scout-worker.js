@@ -89,7 +89,31 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
     };
   }
 
-  const recorded = await catalog.recordDiscovery(result.source_profile);
+  let profile = result.source_profile;
+  let qualificationStatus = "not_run";
+  if (typeof runtime?.sourceQualifier === "function") {
+    try {
+      const previousQualification = typeof catalog.loadSourceQualification === "function"
+        ? await catalog.loadSourceQualification(profile.profile_key)
+        : null;
+      const qualified = await runtime.sourceQualifier({
+        profile,
+        manifests: result.manifest_candidates,
+        previousQualification,
+        anchor: target.anchor,
+        spatialScope: target.spatial_scope,
+        placeContext: target.place_context,
+        now: runtime.now ? runtime.now() : new Date(),
+        fetcher: runtime.fetcher,
+      });
+      if (qualified?.profile) profile = qualified.profile;
+      qualificationStatus = qualified?.qualification?.status || "unavailable";
+    } catch (_error) {
+      qualificationStatus = "failed";
+    }
+  }
+
+  const recorded = await catalog.recordDiscovery(profile);
   if (recorded?.status !== "recorded") {
     const failed = await catalog.failScoutTarget(target, recorded?.reason || "source_catalog_write_failed");
     return {
@@ -106,6 +130,7 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
     reason,
     profile_key: recorded.profile_key,
     catalog_status: completed?.status || "failed",
+    qualification_status: qualificationStatus,
   };
 }
 
