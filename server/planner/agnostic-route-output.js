@@ -160,8 +160,20 @@ function sanitizeLoaderCollectionMetadata(value) {
     expansion_query_intents: sanitizeTokens(value.expansion_query_intents),
     initial_profile: profile(value.initial_profile),
     selected_profile: profile(value.selected_profile),
+    cache: sanitizeLoaderCacheSummary(value.cache),
     spatial_scope: sanitizeSpatialScopeSummary(value.spatial_scope),
     regional_scout: sanitizeRegionalScout(value.regional_scout),
+  };
+}
+
+function sanitizeLoaderCacheSummary(value) {
+  if (!value || typeof value !== "object" || value.served_stale !== true) return null;
+  return {
+    served_stale: true,
+    stale_age_seconds: Number.isFinite(value.stale_age_seconds)
+      ? Math.max(0, Math.floor(value.stale_age_seconds))
+      : null,
+    refresh_reason: safeToken(value.refresh_reason),
   };
 }
 

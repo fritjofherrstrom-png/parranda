@@ -75,6 +75,46 @@ test("shouldStore=false values are never cached (transient errors re-produce)", 
   assert.equal(calls, 2);
 });
 
+test("an expired accepted value can bridge a failed refresh within a bounded stale window", async () => {
+  const now = mutableClock();
+  const cache = createSourceCache({ namespace: "t", ttlMs: 1000, now });
+  await cache.get("k", async () => ({ ok: true, n: 1 }), { shouldStore: (value) => value.ok });
+  now.advance(1500);
+
+  const value = await cache.get(
+    "k",
+    async () => ({ ok: false, reason: "timeout" }),
+    {
+      shouldStore: (candidate) => candidate.ok,
+      staleIfErrorMs: 2000,
+      onStale: (stale, info) => ({ ...stale, stale: true, age: info.staleAgeMs, reason: info.refreshValue.reason }),
+    },
+  );
+
+  assert.deepEqual(value, { ok: true, n: 1, stale: true, age: 500, reason: "timeout" });
+});
+
+test("stale fallback handles thrown refreshes but never serves beyond its age bound", async () => {
+  const now = mutableClock();
+  const cache = createSourceCache({ namespace: "t", ttlMs: 1000, now });
+  await cache.get("k", async () => ({ ok: true }), { shouldStore: (value) => value.ok });
+  now.advance(2001);
+
+  await assert.rejects(
+    cache.get("k", async () => { throw new Error("offline"); }, { staleIfErrorMs: 1000 }),
+    /offline/,
+  );
+});
+
+test("a healthy refresh replaces stale state instead of extending the old value", async () => {
+  const now = mutableClock();
+  const cache = createSourceCache({ namespace: "t", ttlMs: 1000, now });
+  await cache.get("k", async () => ({ n: 1 }));
+  now.advance(1500);
+  assert.deepEqual(await cache.get("k", async () => ({ n: 2 }), { staleIfErrorMs: 5000 }), { n: 2 });
+  assert.deepEqual(await cache.get("k", async () => ({ n: 3 })), { n: 2 });
+});
+
 test("file backing persists a value across separate cache instances", async () => {
   const dir = path.join(os.tmpdir(), "parranda-source-cache-test", String(process.pid));
   fs.rmSync(dir, { recursive: true, force: true });
@@ -91,6 +131,38 @@ test("file backing persists a value across separate cache instances", async () =
     const value = await second.get("place-x", async () => ({ n: (secondCalls += 1) }));
     assert.deepEqual(value, { n: 1 });
     assert.equal(secondCalls, 0);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("file backing can serve a bounded stale value after restart without refreshing its expiry", async () => {
+  const dir = path.join(os.tmpdir(), "parranda-source-cache-stale-test", String(process.pid));
+  fs.rmSync(dir, { recursive: true, force: true });
+  const now = mutableClock();
+  try {
+    const first = createSourceCache({ namespace: "geo", ttlMs: 1000, dir, now });
+    await first.get("place-x", async () => ({ ok: true, n: 1 }));
+    now.advance(1500);
+
+    const second = createSourceCache({ namespace: "geo", ttlMs: 1000, dir, now });
+    const value = await second.get(
+      "place-x",
+      async () => ({ ok: false }),
+      { shouldStore: (candidate) => candidate.ok, staleIfErrorMs: 2000 },
+    );
+    assert.deepEqual(value, { ok: true, n: 1 });
+
+    now.advance(1600);
+    const third = createSourceCache({ namespace: "geo", ttlMs: 1000, dir, now });
+    assert.deepEqual(
+      await third.get("place-x", async () => ({ ok: false, n: 2 }), {
+        shouldStore: (candidate) => candidate.ok,
+        staleIfErrorMs: 2000,
+      }),
+      { ok: false, n: 2 },
+      "serving stale must not reset the persisted expiry",
+    );
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -171,6 +243,36 @@ test("a failed Overpass response is not cached (the next lookup retries)", async
   const second = await loader({ lat: 1, lng: 1 });
   assert.equal(first.loader_status, "error_failed_closed");
   assert.equal(calls, 2, "an error must not be frozen into the cache");
+});
+
+test("a cached loader serves prior trusted records with explicit stale metadata after a refresh failure", async () => {
+  const now = mutableClock();
+  let calls = 0;
+  const fetcher = async () => {
+    calls += 1;
+    return calls === 1 ? richLoaderPayload() : { ok: false, status: 503 };
+  };
+  const loader = createOpenDataLoader({
+    fetcher,
+    endpoint: "https://example.org/overpass",
+    cache: createSourceCache({ namespace: "overpass", ttlMs: 1000, now }),
+    staleIfErrorMs: 5000,
+  });
+
+  const first = await loader({ lat: 41.9, lng: 12.5 });
+  now.advance(1500);
+  const stale = await loader({ lat: 41.9, lng: 12.5 });
+
+  assert.equal(calls, 2);
+  assert.equal(first.loader_status, "loaded:14");
+  assert.equal(stale.loader_status, "loaded:14");
+  assert.equal(stale.loader_error, "stale_cache_refresh_failed");
+  assert.deepEqual(stale.loader_metadata.cache, {
+    served_stale: true,
+    stale_age_seconds: 0,
+    refresh_reason: "http_non_200",
+  });
+  assert.equal(stale.length, first.length);
 });
 
 test("an uncached loader (no cache option) is byte-for-byte the prior behavior", async () => {

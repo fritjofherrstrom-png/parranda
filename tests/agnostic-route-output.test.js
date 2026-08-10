@@ -1292,6 +1292,12 @@ test(
           selection_reason: "richer_wider_supply",
           anchor_mode: request.anchorMode,
           requested_intents: ["food", "scenic"],
+          cache: {
+            served_stale: true,
+            stale_age_seconds: 731,
+            refresh_reason: "timeout_or_abort",
+            endpoint: "https://must-not-leak.example/key=secret",
+          },
           initial_profile: { record_count: 8, category_count: 2, requested_intent_count: 2, requested_intents_covered: ["food"], requested_intents_partial: [], requested_intents_missing: ["scenic"] },
           selected_profile: { record_count: records.length, category_count: 3, requested_intent_count: 2, requested_intents_covered: ["food", "scenic"], requested_intents_partial: [], requested_intents_missing: [] },
         },
@@ -1317,6 +1323,13 @@ test(
       assert.equal(collection.anchor_mode, "coordinates");
       assert.equal(collection.selected_radius_km, 5);
       assert.deepEqual(collection.requested_intents, ["food", "scenic"]);
+      assert.deepEqual(collection.cache, {
+        served_stale: true,
+        stale_age_seconds: 731,
+        refresh_reason: "timeout_or_abort",
+      });
+      assert.ok(response.body.agnostic_route_output_experiment.readiness_calibration.caps.includes("capped_by_stale_candidate_cache"));
+      assert.equal(JSON.stringify(response.body).includes("must-not-leak"), false);
       assert.equal(response.body.loader_metadata, undefined);
     } finally {
       await new Promise((resolve) => server.close(resolve));

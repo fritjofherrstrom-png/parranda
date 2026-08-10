@@ -34,6 +34,7 @@ const ALLOWED_CAPS = new Set([
   "capped_by_partial_context",
   "capped_by_heuristic_walking",
   "capped_by_remaining_day_short_route",
+  "capped_by_stale_candidate_cache",
 ]);
 
 /**

@@ -94,6 +94,7 @@
     walking_validation_blocked_route: "dogfood.calibration.reason.walking_validation_blocked_route",
     geometry_coherence_blocked_route: "dogfood.calibration.reason.geometry_coherence_blocked_route",
     candidate_supply_blocked_route: "dogfood.calibration.reason.candidate_supply_blocked_route",
+    stale_candidate_cache_used: "dogfood.calibration.reason.stale_candidate_cache_used",
   };
 
   var CALIBRATION_CAP_KEYS = {
@@ -107,6 +108,7 @@
     capped_by_below_planner_candidate_threshold: "dogfood.calibration.cap.capped_by_below_planner_candidate_threshold",
     capped_by_thin_day: "dogfood.calibration.cap.capped_by_thin_day",
     capped_by_remaining_day_short_route: "dogfood.calibration.cap.capped_by_remaining_day_short_route",
+    capped_by_stale_candidate_cache: "dogfood.calibration.cap.capped_by_stale_candidate_cache",
   };
 
   // Engine-path retirement-readiness observability (#engine-readiness). Maps the
