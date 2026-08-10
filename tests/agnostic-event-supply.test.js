@@ -441,6 +441,31 @@ test("tonight ranks by salience: an ongoing 'now' event outranks a later-today o
   assert.equal(out.tonight[0].id, "now1");
 });
 
+test("qualified probationary sources can inform Pulse but never route composition", async () => {
+  const registry = [{
+    ...HELSINKI_LINKED_EVENTS_FEED,
+    id: "qualified-probationary",
+    confidence: "low",
+    status: "probationary",
+    source_health: "qualified_probationary",
+    runtime_trust: "qualified_probationary",
+    pulse_only: true,
+  }];
+  const out = await collectAnchorEvents({
+    anchor: HELSINKI,
+    now: NOW,
+    registry,
+    fetcher: fetcherFor(linkedEventsPayload()),
+  });
+
+  assert.ok(out.tonight.length > 0);
+  assert.ok(out.tonight.every((event) => event.route_eligible === false));
+  assert.equal(out.feeds[0].pulse_only, true);
+  assert.equal(out.feeds[0].runtime_trust, "qualified_probationary");
+  assert.equal(out.feeds[0].qualified_source_health, "qualified_probationary");
+  assert.equal("reviewed_source_health" in out.feeds[0], false);
+});
+
 test("preferences rerank the accepted event pool without another source collection", async () => {
   const ev = (id, name, keywords) => ({
     id,

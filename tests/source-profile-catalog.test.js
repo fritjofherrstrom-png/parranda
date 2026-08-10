@@ -5,6 +5,7 @@ const test = require("node:test");
 
 const {
   ACTIVE_PROFILES_FOR_ANCHOR_SQL,
+  QUALIFIED_PROFILES_FOR_ANCHOR_SQL,
   CLAIM_SCOUT_TARGET_SQL,
   COMPLETE_SCOUT_TARGET_SQL,
   FAIL_SCOUT_TARGET_SQL,
@@ -51,6 +52,7 @@ function sourceProfile({ approved = false, expiresAt = "2026-08-20T00:00:00.000Z
     trust_tier: "official",
     source_identity: "events.example",
     source_language: "sv",
+    terms_status: "open_license",
   };
   return {
     profile_key: "place-source-profile-v1:test-region",
@@ -96,6 +98,64 @@ function sourceProfile({ approved = false, expiresAt = "2026-08-20T00:00:00.000Z
       },
     ],
   };
+}
+
+function qualifiedSourceProfile() {
+  const profile = sourceProfile();
+  profile.source_qualification = {
+    schema_version: 1,
+    status: "qualified_for_review",
+    updated_at: NOW.toISOString(),
+    qualified_candidate_count: 1,
+    candidate_count: 1,
+    activation_performed: false,
+    candidates: [{
+      candidate_id: "regional-events",
+      endpoint: "https://events.example/api/events",
+      adapter: "linked_events",
+      source_identity: "events.example",
+      status: "qualified_for_review",
+      healthy_probe_count: 2,
+      event_bearing_probe_count: 1,
+      activation_performed: false,
+      observations: [
+        {
+          candidate_id: "regional-events",
+          endpoint: "https://events.example/api/events",
+          adapter: "linked_events",
+          source_identity: "events.example",
+          observed_at: "2026-07-30T10:00:00.000Z",
+          status: "healthy",
+          accepted_event_count: 1,
+        },
+        {
+          candidate_id: "regional-events",
+          endpoint: "https://events.example/api/events",
+          adapter: "linked_events",
+          source_identity: "events.example",
+          observed_at: "2026-07-28T10:00:00.000Z",
+          status: "healthy",
+          accepted_event_count: 1,
+        },
+      ],
+      runtime_candidate: {
+        id: "regional-events",
+        label: "Regional Events",
+        endpoint: "https://events.example/api/events",
+        adapter: "linked_events",
+        bbox: [12.8, 55.4, 13.3, 55.8],
+        source_language: "sv",
+        source_tier: "official",
+        confidence: "low",
+        source_family: "official_municipal_calendar",
+        source_identity: "events.example",
+        status: "active",
+        runtime_policy: "bounded_refresh",
+        terms_status: "open_license",
+      },
+    }],
+  };
+  return profile;
 }
 
 test("discovery writes only review-needed profiles and strips attempted activation", async () => {
@@ -178,6 +238,30 @@ test("geo reads return only profiles that still pass the shared review contract"
   assert.deepEqual(calls[0].values, [55.6, 13, NOW.toISOString()]);
 });
 
+test("geo reads expose only fresh qualified profiles as Pulse-only probation feeds", async () => {
+  const calls = [];
+  const catalog = createSourceProfileCatalog({
+    now: () => NOW,
+    query: async (sql, values) => {
+      calls.push({ sql, values });
+      return { rows: [{ profile: qualifiedSourceProfile() }] };
+    },
+  });
+
+  const feeds = await catalog.listQualifiedEventFeedsForAnchor({
+    anchor: { lat: 55.6, lng: 13 },
+    now: NOW,
+  });
+
+  assert.equal(feeds.length, 1);
+  assert.equal(feeds[0].status, "probationary");
+  assert.equal(feeds[0].confidence, "low");
+  assert.equal(feeds[0].pulse_only, true);
+  assert.equal(feeds[0].runtime_trust, "qualified_probationary");
+  assert.equal(calls[0].sql, QUALIFIED_PROFILES_FOR_ANCHOR_SQL);
+  assert.deepEqual(calls[0].values, [55.6, 13]);
+});
+
 test("catalog read/write failures fail soft with compact outcomes", async () => {
   const catalog = createSourceProfileCatalog({
     now: () => NOW,
@@ -192,6 +276,10 @@ test("catalog read/write failures fail soft with compact outcomes", async () => 
   });
   assert.deepEqual(
     await catalog.listApprovedEventFeedsForAnchor({ anchor: { lat: 55.6, lng: 13 }, now: NOW }),
+    [],
+  );
+  assert.deepEqual(
+    await catalog.listQualifiedEventFeedsForAnchor({ anchor: { lat: 55.6, lng: 13 }, now: NOW }),
     [],
   );
   assert.equal(await catalog.loadSourceQualification(sourceProfile().profile_key), null);
@@ -338,7 +426,103 @@ test("default catalog is explicit server config and never connects while disable
     now: () => NOW,
   });
   assert.equal(typeof catalog.listApprovedEventFeedsForAnchor, "function");
+  assert.equal(typeof catalog.listQualifiedEventFeedsForAnchor, "function");
   await catalog.close();
+});
+
+test("qualified-source runtime is one global opt-in and stays Pulse-only", async () => {
+  let qualifiedReads = 0;
+  let warmed = 0;
+  const qualifiedFeed = {
+    id: "qualified-feed",
+    label: "Qualified Feed",
+    endpoint: "https://events.example/api/events",
+    adapter: "linked_events",
+    bbox: [12.8, 55.4, 13.3, 55.8],
+    source_tier: "official",
+    confidence: "low",
+    source_family: "official_municipal_calendar",
+    source_identity: "events.example",
+    terms_status: "open_license",
+    status: "probationary",
+    runtime_policy: "bounded_refresh",
+    runtime_trust: "qualified_probationary",
+    source_health: "qualified_probationary",
+    pulse_only: true,
+    profile_key: "place-source-profile-v1:test-region",
+    profile_qualified_at: "2026-08-08T10:00:00.000Z",
+    profile_expires_at: "2026-08-18T10:00:00.000Z",
+  };
+  const sourceCatalog = {
+    listApprovedEventFeedsForAnchor: async () => [],
+    listQualifiedEventFeedsForAnchor: async () => {
+      qualifiedReads += 1;
+      return [qualifiedFeed];
+    },
+  };
+  const eventCache = { peek: () => null, warm: () => { warmed += 1; } };
+
+  const disabled = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: "enabled" }, {
+    sourceCatalog,
+    eventCache,
+  });
+  assert.equal((await disabled({ anchor: { lat: 55.6, lng: 13 }, now: NOW })).coverage, "uncovered");
+  assert.equal(qualifiedReads, 0);
+
+  const enabled = resolveDefaultEventSupply({
+    PARRANDA_AGNOSTIC_EVENTS: "enabled",
+    PARRANDA_QUALIFIED_SOURCE_RUNTIME: "enabled",
+  }, { sourceCatalog, eventCache });
+  const result = await enabled({ anchor: { lat: 55.6, lng: 13 }, now: NOW });
+  assert.equal(result.coverage, "covered");
+  assert.equal(result.pending, true);
+  assert.equal(result.feeds[0].id, "qualified-feed");
+  assert.equal(result.feeds[0].pulse_only, true);
+  assert.equal(result.feeds[0].runtime_trust, "qualified_probationary");
+  assert.equal(result.feeds[0].qualified_source_health, "qualified_probationary");
+  assert.equal("reviewed_source_health" in result.feeds[0], false);
+  assert.equal(qualifiedReads, 1);
+  assert.equal(warmed, 1);
+});
+
+test("an approved source wins exact identity dedupe over probationary evidence", async () => {
+  const approvedFeed = {
+    id: "approved-feed",
+    label: "Approved Feed",
+    endpoint: "https://events.example/api/events",
+    adapter: "linked_events",
+    bbox: [12.8, 55.4, 13.3, 55.8],
+    source_tier: "official",
+    confidence: "medium",
+    source_family: "official_municipal_calendar",
+    source_identity: "events.example",
+    terms_status: "open_license",
+    source_health: "healthy",
+    status: "active",
+    runtime_policy: "bounded_refresh",
+  };
+  const supply = resolveDefaultEventSupply({
+    PARRANDA_AGNOSTIC_EVENTS: "enabled",
+    PARRANDA_QUALIFIED_SOURCE_RUNTIME: "enabled",
+  }, {
+    sourceCatalog: {
+      listApprovedEventFeedsForAnchor: async () => [approvedFeed],
+      listQualifiedEventFeedsForAnchor: async () => [{
+        ...approvedFeed,
+        id: "probationary-feed",
+        confidence: "low",
+        status: "probationary",
+        runtime_trust: "qualified_probationary",
+        pulse_only: true,
+      }],
+    },
+    eventCache: { peek: () => null, warm: () => {} },
+  });
+
+  const result = await supply({ anchor: { lat: 55.6, lng: 13 }, now: NOW });
+  assert.deepEqual(result.feeds.map((feed) => feed.id), ["approved-feed"]);
+  assert.notEqual(result.feeds[0].pulse_only, true);
+  assert.equal(result.feeds[0].reviewed_source_health, "healthy");
 });
 
 test("approved catalog feeds supplement runtime acquisition without changing static feed trust", async () => {

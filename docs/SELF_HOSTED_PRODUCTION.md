@@ -103,6 +103,7 @@ Set these host-owned values in `.env.production`:
 
 ```text
 PARRANDA_SOURCE_CATALOG=enabled
+PARRANDA_QUALIFIED_SOURCE_RUNTIME=disabled
 PARRANDA_SOURCE_CATALOG_PASSWORD=a-long-url-safe-secret
 PARRANDA_SOURCE_CATALOG_DATABASE_URL=postgresql://parranda:a-long-url-safe-secret@postgres:5432/parranda
 ```
@@ -132,8 +133,17 @@ Scheduled worker runs additionally probe at most two exact manifest candidates
 through the existing bounded event adapters and keep compact, rolling
 qualification evidence in the same review-needed profile. Two healthy days
 within 30 days plus real accepted event yield may mark a candidate
-`qualified_for_review`; this is an operator-review aid only. It never changes
-the catalog status or creates an active feed.
+`qualified_for_review`. This never changes catalog status or creates an
+approved feed.
+
+An operator may set `PARRANDA_QUALIFIED_SOURCE_RUNTIME=enabled` to let a fresh
+qualified candidate enter a bounded probation lane. The binding is revalidated
+against the current discovered endpoint, adapter, source identity, terms and
+scope on every read. Its latest healthy probe must be at most eight days old;
+the resulting source stays low-trust and Pulse-only, expires automatically and
+cannot anchor or mutate a route. Approved/static sources retain precedence over
+the same endpoint. Leave the flag disabled when only manually approved sources
+should reach runtime.
 
 After editing the scout output's `source_profile.runtime_review` to bind exact
 candidates, reviewed endpoints, health, terms, timezone and an expiry, apply it

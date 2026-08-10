@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
+  eventFeedsFromQualifiedSourceProfiles,
   qualifyDiscoveredSourceProfile,
 } = require("../server/pulse-sources/source-qualification");
 
@@ -171,6 +172,78 @@ test("two distinct healthy probe days with accepted evidence qualify only for re
   assert.equal(second.qualification.candidates[0].observation_count, 2);
   assert.equal(second.qualification.activation_performed, false);
   assert.equal(second.profile.runtime_review.status, "unreviewed");
+});
+
+test("fresh qualification can become a low-trust Pulse-only probation feed", async () => {
+  const first = await qualifyDiscoveredSourceProfile({
+    ...baseInput,
+    profile: profile(),
+    manifests: [manifest()],
+    now: "2026-08-01T10:00:00Z",
+    collectEvents: async () => collection(),
+  });
+  const second = await qualifyDiscoveredSourceProfile({
+    ...baseInput,
+    profile: profile(),
+    manifests: [manifest()],
+    previousQualification: first.qualification,
+    now: "2026-08-08T10:00:00Z",
+    collectEvents: async () => collection({ accepted: 2 }),
+  });
+
+  const feeds = eventFeedsFromQualifiedSourceProfiles([second.profile], {
+    now: "2026-08-10T10:00:00Z",
+  });
+  assert.equal(feeds.length, 1);
+  assert.equal(feeds[0].id, "regional-events");
+  assert.equal(feeds[0].confidence, "low");
+  assert.equal(feeds[0].status, "probationary");
+  assert.equal(feeds[0].runtime_trust, "qualified_probationary");
+  assert.equal(feeds[0].pulse_only, true);
+  assert.equal(feeds[0].profile_qualified_at, "2026-08-08T10:00:00.000Z");
+  assert.equal(feeds[0].profile_expires_at, "2026-08-16T10:00:00.000Z");
+  assert.equal(second.qualification.activation_performed, false, "probation is not source approval");
+});
+
+test("probation rejects stale, drifted, unclear-terms and activated qualification data", async () => {
+  const first = await qualifyDiscoveredSourceProfile({
+    ...baseInput,
+    profile: profile(),
+    manifests: [manifest()],
+    now: "2026-08-01T10:00:00Z",
+    collectEvents: async () => collection(),
+  });
+  const second = await qualifyDiscoveredSourceProfile({
+    ...baseInput,
+    profile: profile(),
+    manifests: [manifest()],
+    previousQualification: first.qualification,
+    now: "2026-08-08T10:00:00Z",
+    collectEvents: async () => collection(),
+  });
+
+  assert.deepEqual(eventFeedsFromQualifiedSourceProfiles([second.profile], {
+    now: "2026-08-17T10:00:00Z",
+  }), [], "expired probe evidence cannot remain live");
+
+  const drifted = structuredClone(second.profile);
+  drifted.source_families[0].candidates[0].url = "https://other.example/api/events";
+  assert.deepEqual(eventFeedsFromQualifiedSourceProfiles([drifted], {
+    now: "2026-08-10T10:00:00Z",
+  }), [], "candidate identity drift invalidates probation");
+
+  const unclearTerms = structuredClone(second.profile);
+  unclearTerms.source_families[0].candidates[0].terms_status = "needs_review";
+  unclearTerms.source_qualification.candidates[0].runtime_candidate.terms_status = "needs_review";
+  assert.deepEqual(eventFeedsFromQualifiedSourceProfiles([unclearTerms], {
+    now: "2026-08-10T10:00:00Z",
+  }), [], "probation requires open or API-compatible terms");
+
+  const activated = structuredClone(second.profile);
+  activated.source_qualification.activation_performed = true;
+  assert.deepEqual(eventFeedsFromQualifiedSourceProfiles([activated], {
+    now: "2026-08-10T10:00:00Z",
+  }), [], "review activation and probation are separate states");
 });
 
 test("retries on one UTC day replace evidence instead of manufacturing repetition", async () => {
