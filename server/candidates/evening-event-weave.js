@@ -61,10 +61,8 @@ function eventKey(event) {
 function selectedDayCandidates(liveEvents) {
   const browse = liveEvents?.browse || {};
   const buckets = [
-    liveEvents?.tonight,
-    liveEvents?.this_week,
-    browse.tonight?.more,
-    browse.this_week?.more,
+    restoreEventRanking(liveEvents?.tonight, browse.tonight?.more),
+    restoreEventRanking(liveEvents?.this_week, browse.this_week?.more),
   ];
   const seen = new Set();
   const candidates = [];
@@ -77,6 +75,22 @@ function selectedDayCandidates(liveEvents) {
     }
   }
   return candidates;
+}
+
+// Live may reserve its final highlight slot for a strong local discovery. Route
+// composition must remain independent of that presentation choice, so put the
+// displaced sixth ranked row back before the promoted discovery when rebuilding
+// the selected-day evidence order.
+function restoreEventRanking(highlights, more) {
+  const visible = Array.isArray(highlights) ? highlights : [];
+  const browse = Array.isArray(more) ? more : [];
+  const discoveryIndex = visible.findIndex((event) => event?.highlight_reason === "local_serendipity");
+  if (discoveryIndex < 0) return [...visible, ...browse];
+  const discovery = visible[discoveryIndex];
+  const ordinary = visible.filter((_, index) => index !== discoveryIndex);
+  return browse.length > 0
+    ? [...ordinary, browse[0], discovery, ...browse.slice(1)]
+    : [...ordinary, discovery];
 }
 
 function materializeDailyOccurrence(event, selectedDate) {
@@ -160,7 +174,7 @@ function weaveEveningEvent(placeStructure, liveEvents, { selectedDate = null } =
     ? selectedDayCandidates(liveEvents)
       .map((event) => eventOccurrenceForDate(event, requestedDate))
       .filter(Boolean)
-    : liveEvents && Array.isArray(liveEvents.tonight) ? liveEvents.tonight : [];
+    : restoreOriginalHighlights(liveEvents?.tonight, liveEvents?.browse?.tonight?.more);
   // The list is already salience-ranked; take the top event that has real
   // coordinates AND is salient enough to shape a visitor-facing day. Civic/admin
   // notices can stay in Pulse/source inspect, but must not become an evening
@@ -210,6 +224,15 @@ function weaveEveningEvent(placeStructure, liveEvents, { selectedDate = null } =
     ...placeStructure,
     district_day: { ...placeStructure.district_day, evening_event: eveningEvent },
   };
+}
+
+function restoreOriginalHighlights(highlights, more) {
+  const visible = Array.isArray(highlights) ? highlights : [];
+  const discoveryIndex = visible.findIndex((event) => event?.highlight_reason === "local_serendipity");
+  if (discoveryIndex < 0) return visible;
+  const displaced = Array.isArray(more) ? more[0] : null;
+  const ordinary = visible.filter((_, index) => index !== discoveryIndex);
+  return displaced ? [...ordinary, displaced] : [...ordinary, visible[discoveryIndex]];
 }
 
 function isEligibleEveningAnchor(event) {

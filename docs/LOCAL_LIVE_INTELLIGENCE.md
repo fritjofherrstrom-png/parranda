@@ -288,6 +288,16 @@ provider payloads, endpoints, or credentials.
 The snapshot remains additive, fail-soft, and route-independent. It does not
 change event salience, source selection, Pulse cards, or route eligibility.
 
+## Preference fit without a filter bubble
+
+Live highlights are preference-shaped, not preference-filtered. Requested
+interests can lift matching events, while one bounded highlight slot may be
+reserved for a strong, non-administrative local happening that the user did not
+explicitly ask for. That discovery row has already passed the same source,
+timing, geometry and display gates as every other event; weak or civic/admin
+noise cannot use the slot. The displaced preference match remains available in
+the capped browse list, and the rule never changes route composition.
+
 ## Product bar
 
 Parranda should eventually feel like:
