@@ -39,6 +39,13 @@ const {
   allowsRegionalClusterSelection,
   spatialScopeCacheKey,
 } = require("./spatial-scope");
+const {
+  TYPE_CATEGORY,
+  MIN_CAPACITY_SPAN_IMPROVEMENT_KM,
+  dayCapacityProfile,
+  normalizeWalkingTargetBand,
+  preserveCapacityFrontier,
+} = require("./day-capacity");
 
 const DEFAULT_OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
 // Mirror failover is a MECHANISM, not a free fix. The loader can try several
@@ -218,22 +225,36 @@ function supplyScore(records, requestedIntents = []) {
   );
 }
 
-function chooseExpansion(first, { baseRadiusKm, requestedIntents }) {
+function chooseExpansion(first, { baseRadiusKm, requestedIntents, origin = null, walkingTargetBand = null }) {
   const profile = supplyProfile(first, requestedIntents);
+  const capacity = dayCapacityProfile(first, { origin, walkingTargetBand });
   const requestedGap = profile.requested_intents_covered.length < profile.requested_intent_count;
-  if (!isThinSupply(first) && !requestedGap) {
+  const capacityGap = capacity.can_support_target === false;
+  if (!isThinSupply(first) && !requestedGap && !capacityGap) {
     return null;
   }
   if (typeof first?.loader_status === "string" && first.loader_status.startsWith("error")) return null;
   if (baseRadiusKm >= MAX_RADIUS_KM) return null;
 
+  if (requestedGap && capacityGap) {
+    return { radius_km: REGIONAL_EXPANSION_RADIUS_KM, trigger: "requested_intent_and_capacity_gap" };
+  }
   if (requestedGap) {
     return { radius_km: REGIONAL_EXPANSION_RADIUS_KM, trigger: "requested_intent_gap" };
   }
   if (profile.record_count < SEVERELY_THIN_RECORD_COUNT) {
     return { radius_km: REGIONAL_EXPANSION_RADIUS_KM, trigger: "severely_sparse_supply" };
   }
-  return { radius_km: EXPANSION_RADIUS_KM, trigger: "thin_supply" };
+  if (isThinSupply(first)) {
+    return { radius_km: EXPANSION_RADIUS_KM, trigger: "thin_supply" };
+  }
+  if (capacityGap) {
+    return {
+      radius_km: capacity.target_km > 6 ? REGIONAL_EXPANSION_RADIUS_KM : EXPANSION_RADIUS_KM,
+      trigger: "walking_target_capacity_gap",
+    };
+  }
+  return null;
 }
 
 function createOpenDataLoader({
@@ -298,7 +319,7 @@ function createOpenDataLoader({
   // One geocoded query at a given radius, with mirror failover. Fetch wider than
   // the final limit so scarce-but-important categories (scenic in a food-dense
   // centre) survive, then balance down to `boundedLimit` client-side.
-  async function fetchAtRadius(lat, lng, radiusM, { queryIntents = [] } = {}) {
+  async function fetchAtRadius(lat, lng, radiusM, { queryIntents = [], walkingTargetBand = null } = {}) {
     const fetchBreadth = Math.min(boundedLimit * 6, OVERPASS_FETCH_CAP);
     const query = buildOverpassQuery({
       lat,
@@ -313,7 +334,10 @@ function createOpenDataLoader({
     for (const targetEndpoint of resolvedEndpoints) {
       const attempt = await attemptOverpass(targetEndpoint, query);
       if (attempt.ok) {
-        const records = mapOverpassResponse(attempt.payload, boundedLimit, { origin: { lat, lng } });
+        const records = mapOverpassResponse(attempt.payload, boundedLimit, {
+          origin: { lat, lng },
+          walkingTargetBand,
+        });
         return withLoaderStatus(records, records.length > 0 ? `loaded:${records.length}` : "loaded:0", null);
       }
       last = attempt;
@@ -379,16 +403,27 @@ function createOpenDataLoader({
     lng,
     requestedIntents = [],
     anchorMode = "unknown",
+    walkingTargetBand = null,
   } = {}) {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return withLoaderStatus([], "loaded:0", null);
 
     const normalizedRequestedIntents = normalizeRequestedIntents(requestedIntents);
+    const normalizedWalkingTargetBand = normalizeWalkingTargetBand(walkingTargetBand);
+    const origin = { lat, lng };
 
-    const first = await fetchAtRadius(lat, lng, Math.round(boundedRadiusKm * 1000));
+    const first = await fetchAtRadius(lat, lng, Math.round(boundedRadiusKm * 1000), {
+      walkingTargetBand: normalizedWalkingTargetBand,
+    });
     const initialProfile = supplyProfile(first, normalizedRequestedIntents);
+    const initialDayCapacity = dayCapacityProfile(first, {
+      origin,
+      walkingTargetBand: normalizedWalkingTargetBand,
+    });
     const expansion = chooseExpansion(first, {
       baseRadiusKm: boundedRadiusKm,
       requestedIntents: normalizedRequestedIntents,
+      origin,
+      walkingTargetBand: normalizedWalkingTargetBand,
     });
     let selected = first;
     let selectedRadiusKm = boundedRadiusKm;
@@ -417,9 +452,17 @@ function createOpenDataLoader({
         : [];
       const wider = await fetchAtRadius(lat, lng, Math.round(widerKm * 1000), {
         queryIntents: expansionQueryIntents,
+        walkingTargetBand: normalizedWalkingTargetBand,
       });
-      const combined = mergeLoaderRecords(first, wider, boundedLimit, { lat, lng });
-      if (supplyScore(combined, normalizedRequestedIntents) > supplyScore(first, normalizedRequestedIntents)) {
+      const combined = mergeLoaderRecords(first, wider, boundedLimit, origin, {
+        walkingTargetBand: normalizedWalkingTargetBand,
+      });
+      if (isWiderSupplyBetter(first, combined, {
+        requestedIntents: normalizedRequestedIntents,
+        origin,
+        walkingTargetBand: normalizedWalkingTargetBand,
+        trigger: expansion.trigger,
+      })) {
         selected = combined;
         selectedRadiusKm = widerKm;
         selectionReason = "richer_wider_supply";
@@ -441,6 +484,12 @@ function createOpenDataLoader({
         : [],
       initial_profile: initialProfile,
       selected_profile: supplyProfile(selected, normalizedRequestedIntents),
+      walking_target: normalizedWalkingTargetBand,
+      initial_day_capacity: initialDayCapacity,
+      selected_day_capacity: dayCapacityProfile(selected, {
+        origin,
+        walkingTargetBand: normalizedWalkingTargetBand,
+      }),
     });
   };
 
@@ -522,6 +571,10 @@ function createOpenDataLoader({
             expansion_trigger: "regional_scope_gap",
             selection_reason: "richer_regional_cluster",
             selected_profile: supplyProfile(selected, requestedIntents),
+            selected_day_capacity: dayCapacityProfile(selected, {
+              origin: selectedAnchor,
+              walkingTargetBand: request.walkingTargetBand,
+            }),
           }
         : {}),
       regional_scout: {
@@ -552,7 +605,9 @@ function createOpenDataLoader({
       return loadOpenDataAround(request);
     }
     const normalizedRequestedIntents = normalizeRequestedIntents(requestedIntents);
-    const key = `v5:${lat.toFixed(3)},${lng.toFixed(3)}:r${boundedRadiusKm}:l${boundedLimit}:m${normalizeAnchorMode(anchorMode)}:i${normalizedRequestedIntents.join(".") || "all"}:s${spatialScopeCacheKey(spatialScope)}`;
+    const normalizedWalkingTargetBand = normalizeWalkingTargetBand(request.walkingTargetBand);
+    const targetKey = normalizedWalkingTargetBand ? normalizedWalkingTargetBand.targetKm : "none";
+    const key = `v7:${lat.toFixed(3)},${lng.toFixed(3)}:r${boundedRadiusKm}:l${boundedLimit}:m${normalizeAnchorMode(anchorMode)}:i${normalizedRequestedIntents.join(".") || "all"}:t${targetKey}:s${spatialScopeCacheKey(spatialScope)}`;
     const entry = await cache.get(
       key,
       async () => {
@@ -632,19 +687,7 @@ function buildOverpassQueryForAnchors({ anchors, radiusM, limit, mappings = OSM_
   return `[out:json][timeout:${OVERPASS_QUERY_TIMEOUT_SECONDS}];${blocks.join("")}`;
 }
 
-// Parranda type → coarse intent category, for category-balanced selection.
-const TYPE_CATEGORY = {
-  viewpoint: "scenic", park: "scenic", garden: "scenic", promenade: "scenic", castle: "scenic",
-  restaurant: "food", "street-food": "food",
-  cafe: "coffee",
-  bar: "bars",
-  market: "market",
-  museum: "culture", gallery: "culture",
-  beach: "swimming",
-  "vintage-shop": "vintage",
-};
-
-function mapOverpassResponse(payload, limit, { origin = null } = {}) {
+function mapOverpassResponse(payload, limit, { origin = null, walkingTargetBand = null } = {}) {
   if (!payload || !Array.isArray(payload.elements)) return [];
   // Map + dedupe everything Overpass returned (already bounded by the fetch
   // cap), preserving response order.
@@ -657,17 +700,18 @@ function mapOverpassResponse(payload, limit, { origin = null } = {}) {
     seenIds.add(record.id);
     mapped.push(record);
   }
-  return balanceMappedRecords(mapped, limit, origin);
+  return balanceMappedRecords(mapped, limit, origin, { walkingTargetBand });
 }
 
-function balanceMappedRecords(mapped, limit, origin) {
-  if (mapped.length <= limit) return rankMappedRecords(mapped, origin);
+function balanceMappedRecords(mapped, limit, origin, { walkingTargetBand = null } = {}) {
+  const ranked = rankMappedRecords(mapped, origin);
+  if (mapped.length <= limit) return ranked;
 
   // Category-balanced round-robin: a food-dense centre must not crowd out the
   // single scenic anchor. Buckets keep response order; we take one per category
   // per round until the limit is reached. Deterministic given the input order.
   const buckets = new Map();
-  for (const record of rankMappedRecords(mapped, origin)) {
+  for (const record of ranked) {
     const category = TYPE_CATEGORY[record.type] || "other";
     if (!buckets.has(category)) buckets.set(category, []);
     buckets.get(category).push(record);
@@ -688,7 +732,7 @@ function balanceMappedRecords(mapped, limit, origin) {
     if (!tookOne) break; // all buckets exhausted
     round += 1;
   }
-  return balanced;
+  return preserveCapacityFrontier(balanced, ranked, limit, origin, walkingTargetBand);
 }
 
 function mappingsForRequestedIntents(requestedIntents = []) {
@@ -702,7 +746,7 @@ function mappingsForRequestedIntents(requestedIntents = []) {
   return mappings.length ? mappings : OSM_TAG_MAP;
 }
 
-function mergeLoaderRecords(first, wider, limit, origin) {
+function mergeLoaderRecords(first, wider, limit, origin, { walkingTargetBand = null } = {}) {
   const deduped = [];
   const ids = new Set();
   for (const record of [...(Array.isArray(first) ? first : []), ...(Array.isArray(wider) ? wider : [])]) {
@@ -710,12 +754,45 @@ function mergeLoaderRecords(first, wider, limit, origin) {
     ids.add(record.id);
     deduped.push(record);
   }
-  const selected = balanceMappedRecords(deduped, limit, origin);
+  const selected = balanceMappedRecords(deduped, limit, origin, { walkingTargetBand });
   return withLoaderStatus(
     selected,
     selected.length ? `loaded:${selected.length}` : first?.loader_status || wider?.loader_status || "loaded:0",
     first?.loader_error || wider?.loader_error || null,
   );
+}
+
+function isWiderSupplyBetter(first, combined, {
+  requestedIntents = [],
+  origin = null,
+  walkingTargetBand = null,
+  trigger = null,
+} = {}) {
+  if (!["walking_target_capacity_gap", "requested_intent_and_capacity_gap"].includes(trigger)) {
+    return supplyScore(combined, requestedIntents) > supplyScore(first, requestedIntents);
+  }
+
+  const initialSupply = supplyProfile(first, requestedIntents);
+  const combinedSupply = supplyProfile(combined, requestedIntents);
+  const coverageNotWorse =
+    combinedSupply.requested_intents_covered.length >= initialSupply.requested_intents_covered.length &&
+    combinedSupply.requested_intents_partial.length >= initialSupply.requested_intents_partial.length &&
+    combinedSupply.category_count >= initialSupply.category_count;
+  if (!coverageNotWorse) return false;
+
+  const initial = dayCapacityProfile(first, { origin, walkingTargetBand });
+  const expanded = dayCapacityProfile(combined, { origin, walkingTargetBand });
+  const capacityImproved = (
+    (expanded.can_support_target === true && initial.can_support_target !== true) ||
+    expanded.candidate_span_km >= initial.candidate_span_km + MIN_CAPACITY_SPAN_IMPROVEMENT_KM
+  );
+  if (trigger === "walking_target_capacity_gap") return capacityImproved;
+
+  return capacityImproved || requestedCoverageRank(combinedSupply) > requestedCoverageRank(initialSupply);
+}
+
+function requestedCoverageRank(profile) {
+  return profile.requested_intents_covered.length * 2 + profile.requested_intents_partial.length;
 }
 
 function rankMappedRecords(records, origin) {
@@ -1036,6 +1113,10 @@ function composeOpenDataLoaders(osmLoader, wikiSource) {
       ? {
           ...osm.loader_metadata,
           selected_profile: supplyProfile(records, requestedIntents),
+          selected_day_capacity: dayCapacityProfile(records, {
+            origin: wikiAnchor,
+            walkingTargetBand: request.walkingTargetBand,
+          }),
         }
       : null;
     return withLoaderMetadata(
@@ -1073,4 +1154,5 @@ module.exports = {
   extractOsmOperationalMetadata,
   normalizeRequestedIntents,
   supplyProfile,
+  dayCapacityProfile,
 };

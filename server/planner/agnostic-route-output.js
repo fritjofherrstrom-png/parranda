@@ -47,6 +47,7 @@ const { resolveAgnosticContext, collectInfluenceReasons } = require("./agnostic-
 const { buildDayflowContext } = require("./dayflow-context");
 const { calibrateAgnosticRouteReadiness } = require("./agnostic-route-readiness-calibration");
 const { buildAgnosticConstraintNegotiation } = require("./agnostic-constraint-negotiation");
+const { resolveAgnosticWalkingTargetBand } = require("./agnostic-walking-target");
 const { generateAgnosticRecommendations } = require("../route-engine");
 const { projectRouteToSelectedStopChain } = require("./route-public-geometry");
 const {
@@ -82,6 +83,7 @@ async function resolveTrustedHelpers({
   requestedIntents = [],
   anchorMode = "unknown",
   spatialScope = null,
+  walkingTargetBand = null,
 }) {
   const baseStatus = {
     status: "skipped",
@@ -103,6 +105,7 @@ async function resolveTrustedHelpers({
       requestedIntents: Array.isArray(requestedIntents) ? requestedIntents : [],
       anchorMode: normalizeAnchorMode(anchorMode),
       spatialScope,
+      walkingTargetBand,
     });
     const loaderStatus = typeof records?.loader_status === "string" ? records.loader_status : null;
     const loaderError = records?.loader_error || null;
@@ -157,6 +160,20 @@ function sanitizeLoaderCollectionMetadata(value) {
       requested_intents_missing: sanitizeTokens(input.requested_intents_missing),
     };
   };
+  const capacity = (input) => {
+    if (!input || typeof input !== "object") return null;
+    return {
+      target_km: finiteOrNull(input.target_km),
+      target_floor_km: finiteOrNull(input.target_floor_km),
+      independent_candidate_count: Number.isFinite(input.independent_candidate_count)
+        ? input.independent_candidate_count
+        : 0,
+      category_count: Number.isFinite(input.category_count) ? input.category_count : 0,
+      candidate_span_km: finiteOrNull(input.candidate_span_km),
+      anchor_reach_km: finiteOrNull(input.anchor_reach_km),
+      can_support_target: typeof input.can_support_target === "boolean" ? input.can_support_target : null,
+    };
+  };
   return {
     base_radius_km: finiteOrNull(value.base_radius_km),
     selected_radius_km: finiteOrNull(value.selected_radius_km),
@@ -169,6 +186,8 @@ function sanitizeLoaderCollectionMetadata(value) {
     expansion_query_intents: sanitizeTokens(value.expansion_query_intents),
     initial_profile: profile(value.initial_profile),
     selected_profile: profile(value.selected_profile),
+    initial_day_capacity: capacity(value.initial_day_capacity),
+    selected_day_capacity: capacity(value.selected_day_capacity),
     cache: sanitizeLoaderCacheSummary(value.cache),
     spatial_scope: sanitizeSpatialScopeSummary(value.spatial_scope),
     regional_scout: sanitizeRegionalScout(value.regional_scout),
@@ -859,6 +878,7 @@ async function composeAgnosticRouteOutput({
     requestedIntents: preferences,
     anchorMode,
     spatialScope,
+    walkingTargetBand: resolveAgnosticWalkingTargetBand(walkingKmTarget),
   });
   const helpers = resolvedTrusted.helpers;
   const microBase = resolveWalkableMicroBase({
