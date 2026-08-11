@@ -18,6 +18,10 @@ const ADAPTER_MAP = Object.freeze({
   sitevision_calendar: "sitevision_calendar",
   wix_event_sitemap: "wix_event_sitemap",
   localized_events_api: "localized_events_api",
+  embedded_program_rsc: "embedded_program_rsc",
+  embedded_program: "embedded_program_rsc",
+  next_rsc_program: "embedded_program_rsc",
+  nextjs_program: "embedded_program_rsc",
 });
 
 const RUNTIME_POLICIES = new Set(["active", "bounded_refresh"]);
@@ -31,6 +35,7 @@ const TIMEZONE_REQUIRED_ADAPTERS = new Set([
   "ical",
   "sitevision_calendar",
   "wix_event_sitemap",
+  "embedded_program_rsc",
 ]);
 
 /**
@@ -149,6 +154,7 @@ function reviewedFeedRow({ row, candidate, bbox, profileKey, review }) {
     detail_budget: positiveInteger(row.detail_budget),
     sitemap_limit: positiveInteger(row.sitemap_limit),
     page_size: positiveInteger(row.page_size),
+    horizon_days: positiveInteger(row.horizon_days),
     event_path_prefix: eventPathPrefix || null,
     source_tier: normalizeSourceTier(row.source_tier, candidate.trust_tier),
     confidence: normalizeConfidence(row.confidence),

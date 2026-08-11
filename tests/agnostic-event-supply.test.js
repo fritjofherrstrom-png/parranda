@@ -198,6 +198,16 @@ test("the feed registry allowlists reusable local adapters and preserves legacy 
         supported_languages: ["sv", "en"],
         page_size: 75,
       },
+      {
+        id: "embedded-program",
+        adapter: "next_rsc_program",
+        endpoint: "https://festival.example/program",
+        bbox: [10, 50, 20, 60],
+        timezone: "Europe/Stockholm",
+        source_language: "sv",
+        page_size: 250,
+        horizon_days: 7,
+      },
       { id: "unknown", adapter: "arbitrary_scraper", endpoint: "https://unknown.example/events", bbox: [10, 50, 20, 60] },
     ]),
   });
@@ -210,12 +220,15 @@ test("the feed registry allowlists reusable local adapters and preserves legacy 
     ["sitevision", "sitevision_calendar"],
     ["wix", "wix_event_sitemap"],
     ["localized-api", "localized_events_api"],
+    ["embedded-program", "embedded_program_rsc"],
   ]);
   assert.equal(configured.find((row) => row.id === "wix").detail_limit, 4);
   assert.equal(configured.find((row) => row.id === "rss-detail").detail_limit, 7);
   assert.equal(configured.find((row) => row.id === "rss-detail").detail_budget, 11);
   assert.equal(configured.find((row) => row.id === "wix").detail_budget, 9);
   assert.equal(configured.find((row) => row.id === "localized-api").page_size, 75);
+  assert.equal(configured.find((row) => row.id === "embedded-program").page_size, 250);
+  assert.equal(configured.find((row) => row.id === "embedded-program").horizon_days, 7);
   assert.deepEqual(configured.find((row) => row.id === "localized-api").supported_languages, ["sv", "en"]);
   assert.ok(!configured.some((row) => row.id === "unknown"), "unknown parser code cannot enter bounded runtime");
 });

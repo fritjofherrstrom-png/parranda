@@ -73,6 +73,12 @@ const {
   mapLocalizedEventApiRecord,
 } = require("./localized-events-api-provider");
 const {
+  EMBEDDED_PROGRAM_RSC_PROVIDER_ID,
+  createEmbeddedProgramRscProvider,
+  extractEmbeddedProgramRsc,
+  hasEmbeddedProgramRscSignature,
+} = require("./embedded-program-rsc-provider");
+const {
   EXTRACTION_TIERS,
   SOURCE_FAMILIES,
   evaluateLiveEventSourceCandidate,
@@ -134,6 +140,10 @@ module.exports = {
   LOCALIZED_EVENTS_API_PROVIDER_ID,
   createLocalizedEventsApiProvider,
   mapLocalizedEventApiRecord,
+  EMBEDDED_PROGRAM_RSC_PROVIDER_ID,
+  createEmbeddedProgramRscProvider,
+  extractEmbeddedProgramRsc,
+  hasEmbeddedProgramRscSignature,
   EXTRACTION_TIERS,
   SOURCE_FAMILIES,
   evaluateLiveEventSourceCandidate,

@@ -59,6 +59,7 @@ test("local-language terms produce bounded place-aware discovery queries", () =>
 
   assert.ok(queries.includes("Test Region loppis"));
   assert.ok(queries.includes("Coastal District bakluckeloppis"));
+  assert.ok(queries.includes("Test Region festival"));
   assert.ok(queries.includes("Test Region vernissage"));
   assert.ok(queries.length <= 18);
 });
@@ -268,6 +269,42 @@ test("Sitevision-style calendars produce a review-needed bounded adapter manifes
   assert.equal(result.candidates[0].maps_to_existing_provider, true);
   assert.equal(result.manifest_candidates.length, 1);
   assert.equal(result.manifest_candidates[0].adapter, "sitevision_calendar");
+  assert.equal(result.manifest_candidates[0].status, "review-needed");
+});
+
+test("server-rendered structured programs produce a review-needed generic manifest", () => {
+  const payload = JSON.stringify({
+    stages: [{
+      id: 1,
+      title: "Town square stage",
+      address: "1 Square Road",
+      gpsCoordinates: { lat: 51.5, lng: -0.1 },
+    }],
+    bookings: [{
+      id: 2,
+      title: "Neighbourhood summer concert",
+      dates: [{
+        scene: { id: 1, title: "Town square stage" },
+        startDate: "2026-08-11T18:00:00Z",
+        endDate: "2026-08-11T19:00:00Z",
+      }],
+    }],
+  });
+  const result = inspectEventSourcePage({
+    seed: {
+      url: "https://festival.example/program",
+      family: "official_municipal_calendar",
+      trust_tier: "official",
+      source_language: "en",
+    },
+    html: `<script>self.__next_f.push(${JSON.stringify([1, payload])})</script>`,
+    context: context(),
+  });
+
+  assert.deepEqual(result.detected, ["embedded_program_rsc"]);
+  assert.equal(result.candidates[0].adapter, "embedded_program_rsc");
+  assert.equal(result.candidates[0].maps_to_existing_provider, true);
+  assert.equal(result.manifest_candidates[0].adapter, "embedded_program_rsc");
   assert.equal(result.manifest_candidates[0].status, "review-needed");
 });
 

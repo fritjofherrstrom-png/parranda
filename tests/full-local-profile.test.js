@@ -60,9 +60,10 @@ test("reviewed local profile selects two independent event publishers around Sim
       "visit-ystad-osterlen-calendar",
       "visit-stockholm-open-api",
       "malmo-municipal-calendar",
+      "malmofestivalen-program",
     ],
   );
-  assert.equal(new Set(feeds.map((feed) => feed.source_identity)).size, 4);
+  assert.equal(new Set(feeds.map((feed) => feed.source_identity)).size, 5);
   assert.ok(feeds.every((feed) => feed.status === "active"));
   assert.ok(feeds.every((feed) => feed.timezone === "Europe/Stockholm"));
   assert.equal(feeds.find((feed) => feed.adapter === "wix_event_sitemap")?.event_path_prefix, "/evenemang-1/");
@@ -98,7 +99,7 @@ test("reviewed local profile selects the official Stockholm API without a city b
   assert.equal(plan[0].license, "CC-BY 4.0");
 });
 
-test("reviewed local profile selects Malmö's official calendar by bounds, not city code", () => {
+test("reviewed local profile selects Malmö's independent official calendars by bounds, not city code", () => {
   const env = buildFullDevEnvironment({}, { cacheDir: os.tmpdir() });
   const registry = resolveEventFeedRegistry(env);
   const malmoPlan = buildAnchorEventSourcePlan({
@@ -110,15 +111,26 @@ test("reviewed local profile selects Malmö's official calendar by bounds, not c
     registry,
   });
 
-  assert.deepEqual(malmoPlan.map((source) => source.id), ["malmo-municipal-calendar"]);
-  assert.equal(malmoPlan[0].kind, "sitevision_calendar");
-  assert.equal(malmoPlan[0].source_tier, "official");
-  assert.equal(lundPlan.some((source) => source.id === "malmo-municipal-calendar"), false);
+  assert.deepEqual(malmoPlan.map((source) => source.id), [
+    "malmo-municipal-calendar",
+    "malmofestivalen-program",
+  ]);
+  assert.deepEqual(malmoPlan.map((source) => source.kind), [
+    "sitevision_calendar",
+    "embedded_program_rsc",
+  ]);
+  assert.ok(malmoPlan.every((source) => source.source_tier === "official"));
+  assert.equal(
+    lundPlan.some((source) => ["malmo-municipal-calendar", "malmofestivalen-program"].includes(source.id)),
+    false,
+  );
 });
 
 test("Malmö's reviewed calendar produces bounded source-backed events through the generic adapter", async () => {
   const env = buildFullDevEnvironment({}, { cacheDir: os.tmpdir() });
-  const registry = resolveEventFeedRegistry(env);
+  const registry = resolveEventFeedRegistry(env).filter(
+    (source) => source.id === "malmo-municipal-calendar",
+  );
   const listingUrl = "https://malmo.se/evenemangskalender";
   const eventUrl = "https://malmo.se/events/folkets-park-workshop";
   const result = await collectAnchorEvents({

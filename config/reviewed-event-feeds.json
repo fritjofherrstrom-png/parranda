@@ -77,5 +77,25 @@
     "runtime_policy": "bounded_refresh",
     "reviewed_at": "2026-07-28",
     "review_scope": "official public calendar factual event atoms with source attribution; no editorial descriptions or images"
+  },
+  {
+    "id": "malmofestivalen-program",
+    "label": "Malmöfestivalens officiella program",
+    "adapter": "embedded_program_rsc",
+    "endpoint": "https://www.malmofestivalen.se/program",
+    "bbox": [12.7171426, 55.4805867, 13.151762, 55.6797699],
+    "timezone": "Europe/Stockholm",
+    "source_language": "sv",
+    "source_tier": "official",
+    "confidence": "medium",
+    "source_family": "official_municipal_calendar",
+    "source_identity": "malmofestivalen.se",
+    "event_path_prefix": "/program/",
+    "page_size": 250,
+    "horizon_days": 7,
+    "status": "active",
+    "runtime_policy": "bounded_refresh",
+    "reviewed_at": "2026-08-11",
+    "review_scope": "official public server-rendered program atoms with source attribution; no editorial descriptions or images"
   }
 ]
