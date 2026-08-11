@@ -12,6 +12,7 @@ const {
   DEFAULT_USER_AGENT,
   normalizeRequestedIntents,
   supplyProfile,
+  dayCapacityProfile,
 } = require("../server/place-candidates/open-data-loader");
 const { deriveSecondaryAnchors } = require("../server/place-candidates/spatial-scope");
 
@@ -505,6 +506,130 @@ test("a RICH first pass never expands (no wasted second query)", async () => {
   void records;
 });
 
+test("a rich but geographically compressed pool expands once for the requested walking-day capacity", async () => {
+  const radii = [];
+  const kinds = [
+    { tourism: "museum" },
+    { amenity: "restaurant" },
+    { leisure: "park" },
+    { amenity: "bar" },
+  ];
+  const fetcher = async (_url, options) => {
+    const radius = Number(decodeURIComponent(options.body).match(/around:(\d+)/)?.[1]);
+    radii.push(radius);
+    const wide = radius === 3000;
+    const elements = Array.from({ length: 25 }, (_, index) => ({
+      type: "node",
+      id: index + 1 + (wide ? 100 : 0),
+      lat: wide
+        ? 59.3 + (index === 0 ? -0.018 : index === 1 ? 0.018 : (index % 5) * 0.001)
+        : 59.3 + (index % 5) * 0.0002,
+      lon: 18 + (wide ? (index % 3) * 0.002 : (index % 3) * 0.0002),
+      tags: { name: `P${index}`, ...kinds[index % kinds.length] },
+    }));
+    return { ok: true, json: async () => ({ elements }) };
+  };
+  const loader = createOpenDataLoader({ fetcher, endpoint: "https://x/overpass" });
+  const records = await loader({
+    lat: 59.3,
+    lng: 18,
+    walkingTargetBand: { targetKm: 6, floorKm: 3.6, ceilingKm: 7.08 },
+  });
+
+  assert.deepEqual(radii, [1500, 3000]);
+  assert.equal(records.loader_metadata.expansion_trigger, "walking_target_capacity_gap");
+  assert.equal(records.loader_metadata.expansion_applied, true);
+  assert.equal(records.loader_metadata.initial_day_capacity.can_support_target, false);
+  assert.equal(records.loader_metadata.selected_day_capacity.can_support_target, true);
+  assert.ok(records.loader_metadata.selected_day_capacity.candidate_span_km >= 3.6);
+});
+
+test("a rich pool with enough independent span does not expand for a short walking day", async () => {
+  let calls = 0;
+  const kinds = [{ tourism: "museum" }, { amenity: "restaurant" }, { leisure: "park" }];
+  const fetcher = async () => {
+    calls += 1;
+    return {
+      ok: true,
+      json: async () => ({
+        elements: Array.from({ length: 25 }, (_, index) => ({
+          type: "node",
+          id: index + 1,
+          lat: 59.3 + (index === 0 ? -0.012 : index === 1 ? 0.012 : 0),
+          lon: 18 + (index % 4) * 0.001,
+          tags: { name: `P${index}`, ...kinds[index % kinds.length] },
+        })),
+      }),
+    };
+  };
+  const loader = createOpenDataLoader({ fetcher, endpoint: "https://x/overpass" });
+  const records = await loader({
+    lat: 59.3,
+    lng: 18,
+    walkingTargetBand: { targetKm: 4, floorKm: 2.4, ceilingKm: 4.72 },
+  });
+
+  assert.equal(calls, 1);
+  assert.equal(records.loader_metadata.expansion_trigger, null);
+  assert.equal(records.loader_metadata.selection_reason, "expansion_not_needed");
+  assert.equal(records.loader_metadata.selected_day_capacity.can_support_target, true);
+});
+
+test("a far chain does not prove walking-day capacity or make a wider pool win", async () => {
+  const radii = [];
+  const kinds = [{ tourism: "museum" }, { amenity: "restaurant" }, { leisure: "park" }];
+  const fetcher = async (_url, options) => {
+    const radius = Number(decodeURIComponent(options.body).match(/around:(\d+)/)?.[1]);
+    radii.push(radius);
+    const wide = radius === 3000;
+    return {
+      ok: true,
+      json: async () => ({
+        elements: Array.from({ length: wide ? 25 : 18 }, (_, index) => ({
+          type: "node",
+          id: index + 1 + (wide ? 100 : 0),
+          lat: 59.3 + (wide && index === 0 ? 0.04 : (index % 5) * 0.0002),
+          lon: 18 + (index % 3) * 0.0002,
+          tags: {
+            name: `P${index}`,
+            ...kinds[index % kinds.length],
+            ...(wide && index === 0 ? { brand: "Far Chain" } : {}),
+          },
+        })),
+      }),
+    };
+  };
+  const loader = createOpenDataLoader({ fetcher, endpoint: "https://x/overpass" });
+  const records = await loader({
+    lat: 59.3,
+    lng: 18,
+    walkingTargetBand: { targetKm: 6, floorKm: 3.6, ceilingKm: 7.08 },
+  });
+
+  assert.deepEqual(radii, [1500, 3000]);
+  assert.equal(records.loader_metadata.expansion_trigger, "walking_target_capacity_gap");
+  assert.equal(records.loader_metadata.expansion_applied, false);
+  assert.equal(records.loader_metadata.selection_reason, "wider_supply_not_richer");
+  assert.equal(records.loader_metadata.selected_day_capacity.can_support_target, false);
+});
+
+test("day capacity is coordinate- and category-based, not record-count or chain-based", () => {
+  const records = [
+    { id: "museum", type: "museum", lat: 1, lng: 1, chain: false, operational_status: "unknown" },
+    { id: "food", type: "restaurant", lat: 1.03, lng: 1, chain: false, operational_status: "unknown" },
+    { id: "park", type: "park", lat: 1.015, lng: 1.01, chain: false, operational_status: "unknown" },
+    { id: "chain", type: "bar", lat: 1.2, lng: 1, chain: true, operational_status: "unknown" },
+  ];
+  const profile = dayCapacityProfile(records, {
+    origin: { lat: 1, lng: 1 },
+    walkingTargetBand: { targetKm: 6, floorKm: 3.6, ceilingKm: 7.08 },
+  });
+
+  assert.equal(profile.independent_candidate_count, 3);
+  assert.equal(profile.category_count, 3);
+  assert.equal(profile.can_support_target, false, "the remote chain cannot mint capacity");
+});
+
 test("expansion is kept ONLY when actually richer — else the first pass stands", async () => {
   const fetcher = radiusVaryingFetcher({ thin: 4, rich: 3 }); // wider is NOT richer
   const loader = createOpenDataLoader({ fetcher, endpoint: "https://x/overpass" });
@@ -577,6 +702,46 @@ test("requested preference gaps trigger one bounded regional query and prefer ne
   assert.equal(records.loader_metadata.selected_radius_km, 5);
   assert.deepEqual(records.loader_metadata.expansion_query_intents, ["second_hand"]);
   assert.deepEqual(records.loader_metadata.selected_profile.requested_intents_missing, []);
+});
+
+test("a simultaneous intent and walking-capacity gap uses one broad query and requires real improvement", async () => {
+  const queries = [];
+  const fetcher = async (_url, options) => {
+    const query = decodeURIComponent(options.body);
+    queries.push(query);
+    const radius = Number(query.match(/around:(\d+)/)?.[1]);
+    const wide = radius === 5000;
+    const kinds = wide
+      ? [{ tourism: "viewpoint" }, { amenity: "restaurant" }, { tourism: "museum" }, { amenity: "bar" }]
+      : [{ amenity: "restaurant" }, { tourism: "museum" }, { amenity: "bar" }];
+    return {
+      ok: true,
+      json: async () => ({
+        elements: Array.from({ length: 25 }, (_, index) => ({
+          type: "node",
+          id: index + 1 + (wide ? 100 : 0),
+          lat: 59.3 + (wide && index === 0 ? -0.02 : wide && index === 1 ? 0.02 : (index % 5) * 0.0002),
+          lon: 18 + (index % 3) * 0.0002,
+          tags: { name: `P${index}`, ...kinds[index % kinds.length] },
+        })),
+      }),
+    };
+  };
+  const loader = createOpenDataLoader({ fetcher, endpoint: "https://x/overpass" });
+  const records = await loader({
+    lat: 59.3,
+    lng: 18,
+    requestedIntents: ["views"],
+    walkingTargetBand: { targetKm: 6, floorKm: 3.6, ceilingKm: 7.08 },
+  });
+
+  assert.equal(queries.length, 2);
+  assert.match(queries[1], /amenity"="restaurant/, "combined repair keeps broad day-building families");
+  assert.match(queries[1], /leisure"="park/);
+  assert.equal(records.loader_metadata.expansion_trigger, "requested_intent_and_capacity_gap");
+  assert.deepEqual(records.loader_metadata.expansion_query_intents, []);
+  assert.equal(records.loader_metadata.selected_day_capacity.can_support_target, true);
+  assert.ok(records.loader_metadata.selected_profile.requested_intents_covered.includes("scenic"));
 });
 
 test("an adjacent intent match does not stop discovery of a stronger requested role match", async () => {
@@ -690,9 +855,16 @@ test("loader cache keys include normalized requested intents and preserve collec
   const loader = createOpenDataLoader({ fetcher, endpoint: "https://x/overpass", cache });
   const food = await loader({ lat: 59.3, lng: 18, requestedIntents: ["food"] });
   await loader({ lat: 59.3, lng: 18, requestedIntents: ["second_hand"] });
+  await loader({
+    lat: 59.3,
+    lng: 18,
+    requestedIntents: ["food"],
+    walkingTargetBand: { targetKm: 6, floorKm: 3.6, ceilingKm: 7.08 },
+  });
 
-  assert.equal(keys.length, 2);
+  assert.equal(keys.length, 3);
   assert.notEqual(keys[0], keys[1]);
+  assert.notEqual(keys[0], keys[2], "walking-day capacity is part of the loader cache contract");
   assert.equal(food.loader_metadata.requested_intents[0], "food");
 });
 

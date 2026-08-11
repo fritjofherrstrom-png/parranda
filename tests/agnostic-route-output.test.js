@@ -1336,14 +1336,19 @@ test(
         path: `/api/route-recommendations?lang=en&${FLAG}`,
         body: agnosticBody({
           preferences: ["food", "views"],
+          walking_km_target: 6,
           requestedIntents: ["swimming"],
           anchorMode: "place",
+          walkingTargetBand: { targetKm: 12, floorKm: 12, ceilingKm: 12 },
           loader_metadata: { selected_radius_km: 999 },
         }),
       });
       assert.ok(calls.length >= 1);
       assert.ok(calls.every((call) => call.anchorMode === "coordinates"));
       assert.ok(calls.every((call) => JSON.stringify(call.requestedIntents) === JSON.stringify(["food", "views"])));
+      assert.ok(calls.every((call) => call.walkingTargetBand.targetKm === 6));
+      assert.ok(calls.every((call) => Math.abs(call.walkingTargetBand.floorKm - 3.6) < 0.001));
+      assert.ok(calls.every((call) => Math.abs(call.walkingTargetBand.ceilingKm - 7.08) < 0.001));
       const collection = response.body.agnostic_route_output_experiment.source_status.collection;
       assert.equal(collection.anchor_mode, "coordinates");
       assert.equal(collection.selected_radius_km, 5);

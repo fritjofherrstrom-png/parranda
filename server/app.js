@@ -35,6 +35,7 @@ const { buildPreviewBetaEngineStatus } = require("./planner/preview-beta-engine-
 const { evaluateAgnosticPromotion } = require("./planner/agnostic-promotion-gate");
 const { buildEngineReadinessVerdict } = require("./planner/agnostic-engine-readiness");
 const { reconcileAgnosticConstraintNegotiation } = require("./planner/agnostic-constraint-negotiation");
+const { resolveAgnosticWalkingTargetBand } = require("./planner/agnostic-walking-target");
 const { resolveAgnosticIntake, parsePlaceQuery } = require("./planner/agnostic-place-intake");
 const { collectPlaceCandidatesForCity } = require("./place-candidates/provider-registry");
 const { resolveDefaultOpenDataLoader } = require("./place-candidates/open-data-loader");
@@ -2171,6 +2172,7 @@ function buildApp({
             requestedIntents: Array.isArray(preferences) ? preferences : [],
             anchorMode: intake.mode,
             spatialScope,
+            walkingTargetBand: resolveAgnosticWalkingTargetBand(payload.walkingKmTarget),
           });
           const structureCandidates = (Array.isArray(records) ? records : []).filter(
             (c) => c && Number.isFinite(c.lat) && Number.isFinite(c.lng),
