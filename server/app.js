@@ -616,11 +616,18 @@ function isAgnosticEngineComposeRequested(request) {
   const query = request.query || {};
   const body = request.body || {};
   return (
-    isTruthyInspectFlag(process.env.PARRANDA_AGNOSTIC_ENGINE_COMPOSE) ||
+    isEnabledRuntimeFlag(process.env.PARRANDA_AGNOSTIC_ENGINE_COMPOSE) ||
     isTruthyInspectFlag(query.agnostic_engine_compose) ||
     isTruthyInspectFlag(query.agnosticEngineCompose) ||
     isTruthyInspectFlag(body.agnostic_engine_compose) ||
     isTruthyInspectFlag(body.agnosticEngineCompose)
+  );
+}
+
+function isEnabledRuntimeFlag(value) {
+  return (
+    String(value ?? "").trim().toLowerCase() === "enabled" ||
+    isTruthyInspectFlag(value)
   );
 }
 

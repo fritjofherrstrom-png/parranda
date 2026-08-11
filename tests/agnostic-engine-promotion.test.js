@@ -194,6 +194,33 @@ test(
 );
 
 test(
+  "the deployed enabled env value activates engine compose and scrubs fallback-city truth",
+  withServer(makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })), async (server) => {
+    const previous = process.env.PARRANDA_AGNOSTIC_ENGINE_COMPOSE;
+    process.env.PARRANDA_AGNOSTIC_ENGINE_COMPOSE = "enabled";
+    try {
+      const r = await requestJson(server, {
+        path: `/api/route-recommendations?lang=en&${FLAG}`,
+        body: agnosticBody(),
+      });
+      const exp = r.body.agnostic_route_output_experiment;
+      const day = r.body.days[0];
+
+      assert.equal(exp.synthesized_via, "agnostic_compose_engine");
+      assert.equal(exp.promotion.promote, true);
+      assert.equal(day.primary_route.routing_source, "agnostic_compose");
+      assert.deepEqual(day.date_signals, []);
+      assert.deepEqual(day.alternatives, []);
+      assert.equal("live_events" in day, false);
+      assert.equal(JSON.stringify(day).toLowerCase().includes("rome"), false);
+    } finally {
+      if (previous === undefined) delete process.env.PARRANDA_AGNOSTIC_ENGINE_COMPOSE;
+      else process.env.PARRANDA_AGNOSTIC_ENGINE_COMPOSE = previous;
+    }
+  }),
+);
+
+test(
   "green and walks can compose a source-backed park route through the shared reservoir",
   withServer(makeLoader(greenFixtureNear({ lat: 41.9, lng: 12.49 })), async (server) => {
     const r = await requestJson(server, {
