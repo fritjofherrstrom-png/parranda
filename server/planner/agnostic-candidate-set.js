@@ -10,6 +10,7 @@
 
 const { daypartSlotForRole } = require("./agnostic-route-ordering");
 const { resolveAgnosticWalkingTargetBand } = require("./agnostic-walking-target");
+const { normalizeUserIntents } = require("../candidates/intent-vocabulary");
 
 const DEFAULT_POOL_LIMIT = 12;
 const MAX_SET_SIZE = 6;
@@ -418,7 +419,7 @@ function candidatePreferences(item, camelKey, snakeKey) {
       : camelKey === "coveredPreferences" && !hasExplicitFit && Array.isArray(item?.tags)
         ? item.tags
         : [];
-  return values.map(normalizeToken).filter(Boolean);
+  return normalizePreferences(values);
 }
 
 function buildEvaluationPool(ranked, preferences, limit) {
@@ -512,7 +513,11 @@ function compareTuple(left, right) {
 }
 
 function normalizePreferences(values) {
-  return [...new Set((Array.isArray(values) ? values : []).map(normalizeToken).filter(Boolean))];
+  const normalized = normalizeUserIntents(Array.isArray(values) ? values : []);
+  // Keep unknown tokens visible as missing evidence instead of silently
+  // dropping them, while comparing every known alias in the spine's canonical
+  // intent space (culture -> museums, views -> scenic, nightlife -> bars).
+  return [...new Set([...normalized.intents, ...normalized.unmapped])];
 }
 
 function normalizeToken(value) {

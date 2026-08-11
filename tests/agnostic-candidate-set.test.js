@@ -61,6 +61,89 @@ test("urban set keeps requested spine and adds a new daypart instead of another 
   assert.equal(result.diagnostics.daypart_count, 3);
 });
 
+test("whole-day selection compares UI aliases with canonical candidate-spine intents", () => {
+  const anchor = { lat: 59.3293, lng: 18.0686 };
+  const food = candidate("food", {
+    lat: 59.3353,
+    lng: 18.0686,
+    role: "food_anchor",
+    covered: ["food"],
+    spine: true,
+    type: "restaurant",
+  });
+  const museum = candidate("museum", {
+    lat: 59.332,
+    lng: 18.0686,
+    role: "culture_stop",
+    covered: ["museums"],
+    spine: true,
+    type: "museum",
+  });
+  const view = candidate("view", {
+    ...anchor,
+    role: "scenic_anchor",
+    covered: ["scenic"],
+    spine: true,
+    type: "viewpoint",
+  });
+
+  const result = selectAgnosticCandidateSet({
+    rankedCandidates: [ranked(food), ranked(museum), ranked(view)],
+    desiredCount: 2,
+    requestedPreferences: ["food", "culture", "views"],
+    start: anchor,
+    shape: "loop",
+    targetKm: 4,
+    allowExpansion: true,
+  });
+
+  assert.deepEqual(result.selected.map((entry) => entry.id).sort(), ["food", "museum", "view"]);
+  assert.deepEqual(result.diagnostics.covered_preferences, ["food", "museums", "scenic"]);
+  assert.deepEqual(result.diagnostics.missing_preferences, []);
+  assert.equal(result.diagnostics.repair_applied, true);
+  assert.ok(result.diagnostics.repair_reasons.includes("adds_requested_coverage"));
+});
+
+test("nightlife and fika aliases retain canonical bars and coffee representatives", () => {
+  const anchor = { lat: 50.0755, lng: 14.4378 };
+  const museum = candidate("museum", {
+    ...anchor,
+    role: "culture_stop",
+    covered: ["museums"],
+    spine: true,
+    type: "museum",
+  });
+  const coffee = candidate("coffee", {
+    lat: 50.078,
+    lng: 14.44,
+    role: "coffee_fika_stop",
+    covered: ["coffee"],
+    spine: true,
+    type: "cafe",
+  });
+  const bar = candidate("bar", {
+    lat: 50.08,
+    lng: 14.442,
+    role: "evening_bar_option",
+    covered: ["bars"],
+    spine: true,
+    type: "bar",
+  });
+
+  const result = selectAgnosticCandidateSet({
+    rankedCandidates: [ranked(museum, 30), ranked(coffee, 5), ranked(bar, 4)],
+    desiredCount: 2,
+    requestedPreferences: ["fika", "nightlife"],
+    start: anchor,
+    shape: "loop",
+    targetKm: 4,
+  });
+
+  assert.deepEqual(result.selected.map((entry) => entry.id).sort(), ["bar", "coffee"]);
+  assert.deepEqual(result.diagnostics.covered_preferences, ["coffee", "bars"]);
+  assert.deepEqual(result.diagnostics.missing_preferences, []);
+});
+
 test("local independent candidate beats a marginally closer chain without a city name rule", () => {
   const anchor = { lat: 48.8566, lng: 2.3522 };
   const spine = candidate("museum", { ...anchor, role: "culture_stop", covered: ["culture"], spine: true });
