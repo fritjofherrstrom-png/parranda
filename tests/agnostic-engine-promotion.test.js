@@ -248,12 +248,12 @@ test(
 );
 
 test(
-  "day-value repair expands the agnostic set when a fifth stop adds requested coverage",
+  "day-value repair normalizes UI aliases before retaining fifth-intent coverage",
   withServer(makeLoader(broadIntentFixture({ lat: 41.9, lng: 12.49 })), async (server) => {
     const r = await requestJson(server, {
       path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
       body: agnosticBody({
-        preferences: ["food", "coffee", "scenic", "museums", "bars"],
+        preferences: ["food", "fika", "views", "culture", "nightlife"],
       }),
     });
 
