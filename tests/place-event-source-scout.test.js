@@ -353,6 +353,173 @@ test("healthy records without websites return an honest empty result", async () 
   assert.equal(scoutCalled, false);
 });
 
+test("bounded source search can supply review-only seeds without a place loader", async () => {
+  let searchInput = null;
+  let scoutInput = null;
+  const result = await discoverLocalEventSourcesForPlace({
+    placeQuery: "Northport",
+    placeResolver: resolverFor("Northport, Sverige", 59, 18, {
+      locality: "Northport",
+      country: "Sverige",
+      country_code: "se",
+    }),
+    sourceSearch: async (input) => {
+      searchInput = input;
+      return {
+        contract: "bounded_source_search_v1",
+        status: "complete",
+        reasons: ["bounded_source_search_complete"],
+        queried_count: 6,
+        responding_query_count: 6,
+        failed_query_count: 0,
+        result_count: 1,
+        seed_count: 1,
+        seeds: [{
+          url: "https://northport-events.example/calendar",
+          label: "Northport calendar",
+          family: "official_city_calendar",
+          trust_tier: "official",
+          status: "active",
+          runtime_policy: "active",
+          source_language: "sv",
+          discovered_from: "Northport evenemang",
+        }],
+        query_outcomes: [{
+          query_key: "abcdef123456",
+          status: "ok",
+          reason: "source_search_results_found",
+          result_count: 1,
+          raw_payload: "must-not-leak",
+        }],
+        activation_performed: true,
+        raw_payload: "must-not-leak",
+      };
+    },
+    sourceScout: async (input) => {
+      scoutInput = input;
+      return {
+        status: "complete",
+        reasons: ["bounded_source_scout_complete"],
+        inspected_source_count: 1,
+        results: [],
+        manifest_candidates: [],
+      };
+    },
+  });
+
+  assert.ok(searchInput.queries.includes("Northport evenemang"));
+  assert.deepEqual(searchInput.place.language_hints, ["sv"]);
+  assert.ok(searchInput.place.local_discovery_terms.includes("loppis"));
+  assert.equal(scoutInput.seeds.length, 1);
+  assert.deepEqual(scoutInput.seeds[0], {
+    url: "https://northport-events.example/calendar",
+    label: "Northport calendar",
+    place: "Northport, Sverige",
+    family: "unknown_source_family",
+    trust_tier: "unknown",
+    source_language: null,
+    discovery_method: "bounded_source_search",
+    discovered_from: "Northport evenemang",
+  });
+  assert.equal(result.status, "complete");
+  assert.equal(result.loader.status, "unavailable");
+  assert.equal(result.source_search.status, "complete");
+  assert.equal(result.source_search.activation_performed, false);
+  assert.equal(result.activation_performed, false);
+  assert.doesNotMatch(JSON.stringify(result), /must-not-leak|runtime_policy|official_city_calendar/);
+});
+
+test("search failure does not discard a trusted venue website seed", async () => {
+  let scoutInput = null;
+  const result = await discoverLocalEventSourcesForPlace({
+    placeQuery: "Southbay",
+    placeResolver: resolverFor("Southbay"),
+    openDataLoader: async () => loaded([{
+      name: "Independent venue",
+      website: "https://venue.example/program",
+    }]),
+    sourceSearch: async () => {
+      throw new Error("https://secret.example?credential=hidden");
+    },
+    sourceScout: async (input) => {
+      scoutInput = input;
+      return {
+        status: "complete",
+        reasons: ["bounded_source_scout_complete"],
+        inspected_source_count: 1,
+        manifest_candidates: [],
+      };
+    },
+  });
+
+  assert.equal(result.status, "complete");
+  assert.equal(result.source_search.status, "failed");
+  assert.deepEqual(scoutInput.seeds.map((seed) => seed.url), [
+    "https://venue.example/program",
+  ]);
+  assert.doesNotMatch(JSON.stringify(result), /secret|credential|hidden/);
+});
+
+test("bounded search empty cannot disguise a missing trusted loader as proven empty", async () => {
+  const result = await discoverLocalEventSourcesForPlace({
+    placeQuery: "Northport",
+    placeResolver: resolverFor("Northport"),
+    sourceSearch: async () => ({
+      status: "empty",
+      reasons: ["source_search_no_public_results"],
+      queried_count: 6,
+      responding_query_count: 6,
+      seed_count: 0,
+      seeds: [],
+    }),
+  });
+
+  assert.equal(result.status, "unavailable");
+  assert.deepEqual(result.reasons, [
+    "trusted_place_loader_unavailable",
+    "source_search_no_public_results",
+  ]);
+  assert.equal(result.source_search.status, "empty");
+  assert.equal(result.source_search.accepted_seed_count, 0);
+});
+
+test("bounded source search remains isolated across unrelated place contexts", async () => {
+  const searched = [];
+  async function run(placeQuery, countryCode, url) {
+    return discoverLocalEventSourcesForPlace({
+      placeQuery,
+      placeResolver: resolverFor(placeQuery, 48, 2, {
+        locality: placeQuery,
+        country_code: countryCode,
+      }),
+      openDataLoader: async () => loaded([]),
+      sourceSearch: async (input) => {
+        searched.push(input);
+        return {
+          status: "complete",
+          reasons: ["bounded_source_search_complete"],
+          seeds: [{ url }],
+          seed_count: 1,
+        };
+      },
+      sourceScout: async () => ({
+        status: "complete",
+        reasons: ["bounded_source_scout_complete"],
+        manifest_candidates: [],
+      }),
+    });
+  }
+
+  const first = await run("Northport", "fr", "https://north.example/agenda");
+  const second = await run("Southbay", "cz", "https://south.example/akce");
+  assert.ok(searched[0].queries.includes("Northport vide-greniers"));
+  assert.ok(searched[1].queries.includes("Southbay akce"));
+  assert.doesNotMatch(searched[0].queries.join("|"), /Southbay|akce/);
+  assert.doesNotMatch(searched[1].queries.join("|"), /Northport|vide-greniers/);
+  assert.match(first.trusted_website_seeds[0].url, /north\.example/);
+  assert.match(second.trusted_website_seeds[0].url, /south\.example/);
+});
+
 test("public-looking records cannot bypass the trusted loader", async () => {
   let scoutCalled = false;
   const result = await discoverLocalEventSourcesForPlace({
@@ -364,6 +531,10 @@ test("public-looking records cannot bypass the trusted loader", async () => {
         website: "https://injected.example/events",
       },
     ],
+    source_search: async () => ({
+      status: "complete",
+      seeds: [{ url: "https://injected-search.example/events" }],
+    }),
     openDataLoader: async () => loaded([]),
     sourceScout: async () => {
       scoutCalled = true;

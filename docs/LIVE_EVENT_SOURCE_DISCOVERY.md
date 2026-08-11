@@ -80,6 +80,8 @@ candidate evaluation:
   website seeds without changing place confidence or route ranking;
 - supplied local-language terms produce a bounded search-query plan for a
   trusted background search integration;
+- an optional operator-owned SearXNG integration can execute a capped subset of
+  that plan in the background and return only low-trust public website seeds;
 - one reviewed public page per seed is inspected for iCal, The Events Calendar,
   event-related REST/JSON endpoints exposed in page attributes,
   schema.org/Event JSON-LD, compatible venue HTML, RSS, and social discovery

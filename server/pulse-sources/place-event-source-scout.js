@@ -6,19 +6,25 @@ const { createHash } = require("node:crypto");
  * Trusted place -> local-event source discovery bridge.
  *
  * This is an operator/background capability, never a request-path collector.
- * It resolves one place through the trusted resolver seam, asks the trusted
- * open-data loader for source-owned venue websites, then hands only those
- * public website atoms to the bounded source scout. Discovery can propose a
- * manifest for review; it can never activate one.
+ * It resolves one place through the trusted resolver seam, combines source-
+ * owned venue websites with optional bounded background-search seeds, then
+ * hands only public website atoms to the source scout. Search results remain
+ * untrusted; discovery can propose a manifest for review but never activate it.
  */
 
 const { resolveAgnosticIntake } = require("../planner/agnostic-place-intake");
 const {
   buildLocalEventDiscoveryQueries,
   extractEventWebsiteSeeds,
+  isScoutablePublicUrl,
+  normalizeHttpUrl,
   scoutLocalEventSources,
 } = require("./local-event-source-scout");
 const { buildLocalLiveSourceGraph } = require("./local-live-source-graph");
+const { discoveryLocaleForCountryCode } = require("./source-discovery-locales");
+
+const MAX_SEARCH_SEEDS = 18;
+const MAX_SEARCH_SEEDS_PER_ORIGIN = 2;
 
 const SAFE_LOADER_ERRORS = new Set([
   "fetch_error",
@@ -32,6 +38,7 @@ async function discoverLocalEventSourcesForPlace({
   placeQuery,
   placeResolver = null,
   openDataLoader = null,
+  sourceSearch = null,
   sourceScout = scoutLocalEventSources,
   bounds = null,
   intentHints = [],
@@ -82,7 +89,7 @@ async function discoverLocalEventSourcesForPlace({
     intentHints,
   });
 
-  if (typeof openDataLoader !== "function") {
+  if (typeof openDataLoader !== "function" && typeof sourceSearch !== "function") {
     return baseOutcome({
       status: "unavailable",
       reasons: ["trusted_place_loader_unavailable"],
@@ -93,64 +100,69 @@ async function discoverLocalEventSourcesForPlace({
     });
   }
 
-  let records;
-  try {
-    records = await openDataLoader({
-      ...resolution.anchor,
-      anchorMode: "place",
-      spatialScope: resolution.spatialScope || null,
-    });
-  } catch (_error) {
+  const loaded = await loadTrustedPlaceRecords({
+    openDataLoader,
+    anchor: resolution.anchor,
+    spatialScope: resolution.spatialScope,
+  });
+  if (loaded.failed && typeof sourceSearch !== "function") {
     return baseOutcome({
       status: "failed",
-      reasons: ["trusted_place_loader_failed"],
+      reasons: [loaded.invalid ? "trusted_place_loader_invalid" : "trusted_place_loader_failed"],
       intake: resolution.intake,
       anchor: resolution.anchor,
-      loader: loaderSummary(null, "error_failed_closed", null),
+      loader: loaded.summary,
       discoveryQueries,
       sourceProfile: emptySourceProfile,
     });
   }
 
-  if (!Array.isArray(records)) {
-    return baseOutcome({
-      status: "failed",
-      reasons: ["trusted_place_loader_invalid"],
-      intake: resolution.intake,
-      anchor: resolution.anchor,
-      loader: loaderSummary(null, "error_failed_closed", null),
-      discoveryQueries,
-      sourceProfile: emptySourceProfile,
-    });
-  }
-
-  const loaderStatus = normalizeLoaderStatus(records.loader_status, records.length);
-  const loaderError = normalizeLoaderError(records.loader_error);
-  const loader = loaderSummary(records, loaderStatus, loaderError);
-  if (loaderStatus.startsWith("error")) {
-    return baseOutcome({
-      status: "failed",
-      reasons: ["trusted_place_loader_failed"],
-      intake: resolution.intake,
-      anchor: resolution.anchor,
-      loader,
-      discoveryQueries,
-      sourceProfile: emptySourceProfile,
-    });
-  }
-
-  const seeds = extractEventWebsiteSeeds(records);
-  loader.website_seed_count = seeds.length;
+  const trustedSeeds = loaded.failed ? [] : extractEventWebsiteSeeds(loaded.records);
+  loaded.summary.website_seed_count = trustedSeeds.length;
+  const searched = await searchForSourceSeeds({
+    sourceSearch,
+    discoveryQueries,
+    place,
+    anchor: resolution.anchor,
+    bounds: trustedBounds,
+  });
+  const searchedSeeds = sanitizeSearchSeeds(searched.raw?.seeds, place);
+  if (searched.summary) searched.summary.accepted_seed_count = searchedSeeds.length;
+  const seeds = combineSeeds(trustedSeeds, searchedSeeds);
+  const loader = loaded.summary;
 
   if (!seeds.length) {
+    if (loaded.failed) {
+      return baseOutcome({
+        status: loader.status === "unavailable" ? "unavailable" : "failed",
+        reasons: [
+          loaded.invalid
+            ? "trusted_place_loader_invalid"
+            : loader.status === "unavailable"
+              ? "trusted_place_loader_unavailable"
+              : "trusted_place_loader_failed",
+          searched.summary?.status === "failed"
+            ? "source_search_failed"
+            : "source_search_no_public_results",
+        ],
+        intake: resolution.intake,
+        anchor: resolution.anchor,
+        loader,
+        sourceSearch: searched.summary,
+        discoveryQueries,
+        sourceProfile: emptySourceProfile,
+      });
+    }
     return baseOutcome({
       status: "empty",
-      reasons: records.length
-        ? ["no_trusted_website_seeds"]
-        : ["no_trusted_place_records"],
+      reasons: emptySeedReasons({
+        records: loaded.records,
+        searched: searched.summary,
+      }),
       intake: resolution.intake,
       anchor: resolution.anchor,
       loader,
+      sourceSearch: searched.summary,
       discoveryQueries,
       sourceProfile: emptySourceProfile,
     });
@@ -163,6 +175,7 @@ async function discoverLocalEventSourcesForPlace({
       intake: resolution.intake,
       anchor: resolution.anchor,
       loader,
+      sourceSearch: searched.summary,
       discoveryQueries,
       seeds,
       sourceProfile: emptySourceProfile,
@@ -188,6 +201,7 @@ async function discoverLocalEventSourcesForPlace({
       intake: resolution.intake,
       anchor: resolution.anchor,
       loader,
+      sourceSearch: searched.summary,
       discoveryQueries,
       seeds,
       sourceProfile: emptySourceProfile,
@@ -210,6 +224,7 @@ async function discoverLocalEventSourcesForPlace({
     intake: resolution.intake,
     anchor: resolution.anchor,
     loader,
+    sourceSearch: searched.summary,
     discoveryQueries:
       Array.isArray(scouted?.discovery_queries) && scouted.discovery_queries.length
         ? scouted.discovery_queries
@@ -229,6 +244,7 @@ function baseOutcome({
   intake = null,
   anchor = null,
   loader = null,
+  sourceSearch = null,
   discoveryQueries = [],
   seeds = [],
   scout = null,
@@ -243,6 +259,7 @@ function baseOutcome({
     intake,
     anchor,
     loader,
+    source_search: sourceSearch,
     discovery_queries: discoveryQueries,
     trusted_website_seeds: seeds,
     source_scout: scout,
@@ -263,6 +280,7 @@ function buildTrustedScoutPlace({
   localDiscoveryTerms,
 }) {
   const context = placeContext && typeof placeContext === "object" ? placeContext : {};
+  const locale = discoveryLocaleForCountryCode(context.country_code);
   const locality = publicString(context.locality);
   const regionTerms = uniqueStrings([
     context.municipality,
@@ -277,8 +295,174 @@ function buildTrustedScoutPlace({
     lng: Number.isFinite(Number(anchor?.lng)) ? Number(anchor.lng) : null,
     bounds: normalizeGraphBounds(bounds),
     region_terms: regionTerms,
-    local_discovery_terms: uniqueStrings(localDiscoveryTerms),
+    language_hints: locale.language_hints,
+    local_discovery_terms: uniqueStrings([
+      ...locale.local_discovery_terms,
+      ...localDiscoveryTerms,
+    ]),
   };
+}
+
+async function loadTrustedPlaceRecords({ openDataLoader, anchor, spatialScope }) {
+  if (typeof openDataLoader !== "function") {
+    return {
+      records: [],
+      failed: true,
+      invalid: false,
+      summary: loaderSummary(null, "unavailable", null),
+    };
+  }
+  let records;
+  try {
+    records = await openDataLoader({
+      ...anchor,
+      anchorMode: "place",
+      spatialScope: spatialScope || null,
+    });
+  } catch (_error) {
+    return {
+      records: [],
+      failed: true,
+      invalid: false,
+      summary: loaderSummary(null, "error_failed_closed", null),
+    };
+  }
+  if (!Array.isArray(records)) {
+    return {
+      records: [],
+      failed: true,
+      invalid: true,
+      summary: loaderSummary(null, "error_failed_closed", null),
+    };
+  }
+  const status = normalizeLoaderStatus(records.loader_status, records.length);
+  const error = normalizeLoaderError(records.loader_error);
+  return {
+    records,
+    failed: status.startsWith("error"),
+    invalid: false,
+    summary: loaderSummary(records, status, error),
+  };
+}
+
+async function searchForSourceSeeds({
+  sourceSearch,
+  discoveryQueries,
+  place,
+  anchor,
+  bounds,
+}) {
+  if (typeof sourceSearch !== "function") return { raw: null, summary: null };
+  try {
+    const raw = await sourceSearch({
+      queries: discoveryQueries,
+      place,
+      anchor,
+      bounds,
+    });
+    return { raw, summary: compactSourceSearchSummary(raw) };
+  } catch (_error) {
+    return {
+      raw: null,
+      summary: compactSourceSearchSummary({
+        status: "failed",
+        reasons: ["source_search_failed"],
+      }),
+    };
+  }
+}
+
+function compactSourceSearchSummary(result) {
+  if (!result || typeof result !== "object") {
+    return {
+      status: "failed",
+      reasons: ["source_search_failed"],
+      queried_count: 0,
+      responding_query_count: 0,
+      failed_query_count: 0,
+      result_count: 0,
+      seed_count: 0,
+      activation_performed: false,
+    };
+  }
+  const status = ["complete", "partial", "empty", "failed"].includes(result.status)
+    ? result.status
+    : "failed";
+  return {
+    status,
+    reasons: compactTokens(result.reasons).length
+      ? compactTokens(result.reasons)
+      : [status === "failed" ? "source_search_failed" : "source_search_completed"],
+    queried_count: finiteCount(result.queried_count),
+    responding_query_count: finiteCount(result.responding_query_count),
+    failed_query_count: finiteCount(result.failed_query_count),
+    result_count: finiteCount(result.result_count),
+    seed_count: finiteCount(result.seed_count),
+    accepted_seed_count: 0,
+    query_outcomes: (Array.isArray(result.query_outcomes) ? result.query_outcomes : [])
+      .slice(0, 10)
+      .map((item) => ({
+        query_key: /^[a-f0-9]{12}$/.test(String(item?.query_key || ""))
+          ? item.query_key
+          : null,
+        status: ["ok", "empty", "failed"].includes(item?.status)
+          ? item.status
+          : "failed",
+        reason: compactTokens([item?.reason])[0] || "source_search_failed",
+        result_count: finiteCount(item?.result_count),
+      })),
+    activation_performed: false,
+  };
+}
+
+function sanitizeSearchSeeds(input, place) {
+  const out = [];
+  const seen = new Set();
+  const originCounts = new Map();
+  for (const item of Array.isArray(input) ? input : []) {
+    const url = normalizeHttpUrl(item?.url);
+    if (!url || !isScoutablePublicUrl(url) || seen.has(url)) continue;
+    const origin = new URL(url).origin;
+    const originCount = originCounts.get(origin) || 0;
+    if (originCount >= MAX_SEARCH_SEEDS_PER_ORIGIN) continue;
+    seen.add(url);
+    originCounts.set(origin, originCount + 1);
+    out.push({
+      url,
+      label: publicString(item?.label) || new URL(url).hostname.replace(/^www\./, ""),
+      place: publicString(place?.label) || publicString(place?.name),
+      family: "unknown_source_family",
+      trust_tier: "unknown",
+      source_language: null,
+      discovery_method: "bounded_source_search",
+      discovered_from: publicString(item?.discovered_from),
+    });
+    if (out.length >= MAX_SEARCH_SEEDS) break;
+  }
+  return out;
+}
+
+function combineSeeds(trustedSeeds, searchedSeeds) {
+  const out = [];
+  const seen = new Set();
+  for (const seed of [...trustedSeeds, ...searchedSeeds]) {
+    const url = normalizeHttpUrl(seed?.url);
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    out.push({ ...seed, url });
+  }
+  return out;
+}
+
+function emptySeedReasons({ records, searched }) {
+  const reasons = [];
+  reasons.push(records.length ? "no_trusted_website_seeds" : "no_trusted_place_records");
+  if (searched) {
+    reasons.push(searched.status === "failed"
+      ? "source_search_failed"
+      : "source_search_no_public_results");
+  }
+  return uniqueStrings(reasons);
 }
 
 function buildSourceProfile({

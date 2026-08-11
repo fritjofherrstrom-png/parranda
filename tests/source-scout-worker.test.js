@@ -73,6 +73,7 @@ test("worker claims a target, discovers through trusted seams, and writes review
   const runtime = {
     placeResolver: async () => [],
     openDataLoader: async () => [],
+    sourceSearch: async () => ({ status: "empty", seeds: [] }),
     sourceScout: async () => ({}),
   };
   let discoveryInput = null;
@@ -94,6 +95,7 @@ test("worker claims a target, discovers through trusted seams, and writes review
   assert.equal(result.claimed, 1);
   assert.equal(result.completed, 1);
   assert.equal(discoveryInput.placeQuery, "Test Region, Test Country");
+  assert.equal(discoveryInput.sourceSearch, runtime.sourceSearch);
   assert.deepEqual(discoveryInput.bounds, target().spatial_scope.bounds);
   assert.equal(calls[0][0], "record");
   assert.equal(calls[0][1].runtime_review.status, "unreviewed");

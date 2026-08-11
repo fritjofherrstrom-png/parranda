@@ -239,6 +239,21 @@ Acquisition should still be bounded, cached, terms-aware, and fail-soft. Event
 fusion improves the trust interpretation of collected evidence; it does not
 create missing coverage or justify unbounded scraping.
 
+The background source-scout worker may optionally execute the already-bounded
+discovery-query plan through an operator-configured SearXNG JSON endpoint. The
+resolver-attested country context contributes a small local-language vocabulary
+so discovery is not English-only. Search runs outside the user request, is
+sequential and capped, and stores only public source-page seeds plus compact
+health. It does not collect event rows.
+
+Every search result starts as `unknown_source_family` / `unknown` trust. It must
+still pass the existing public-URL, robots, terms, interface-detection, review,
+and qualification gates. Search cannot activate a provider, change a route, or
+claim that a place has no events merely because the bounded result set was
+empty. Self-hosters can enable this worker seam with
+`PARRANDA_SOURCE_SEARCH=enabled` and an operator-owned
+`PARRANDA_SOURCE_SEARCH_ENDPOINT`; it remains disabled by default.
+
 ## Bounded anchor acquisition v1
 
 `server/place-candidates/anchor-event-acquisition.js` and
