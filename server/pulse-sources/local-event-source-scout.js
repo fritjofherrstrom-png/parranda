@@ -16,13 +16,17 @@ const { evaluateLiveEventSourceCandidate } = require("./source-discovery");
 const { extractSchemaOrgEventsFromHtml } = require("./schema-org-event-provider");
 const { extractCalendarPageLinks } = require("./calendar-page-locator");
 const { hasSitevisionCalendarSignature } = require("./sitevision-calendar-provider");
+const { hasEmbeddedProgramRscSignature } = require("./embedded-program-rsc-provider");
 
 const DEFAULT_USER_AGENT =
   "Parranda-Source-Scout/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
 const DEFAULT_TIMEOUT_MS = 8000;
 const DEFAULT_MAX_SEEDS = 12;
 const MAX_SEEDS = 30;
-const DEFAULT_MAX_BYTES = 512 * 1024;
+// Modern server-rendered calendars can carry factual program data in a larger
+// HTML shell. Keep the probe bounded, but large enough to inspect a reviewed
+// public program before classifying it as unsupported.
+const DEFAULT_MAX_BYTES = 1024 * 1024;
 const MAX_BYTES = 2 * 1024 * 1024;
 const DEFAULT_MAX_LINKED_PAGES_PER_SEED = 2;
 const MAX_LINKED_PAGES_PER_SEED = 4;
@@ -39,6 +43,7 @@ const MANIFEST_ADAPTERS = new Set([
   "html_venue_calendar",
   "sitevision_calendar",
   "wix_event_sitemap",
+  "embedded_program_rsc",
 ]);
 
 function buildLocalEventDiscoveryQueries({
@@ -58,7 +63,7 @@ function buildLocalEventDiscoveryQueries({
   ]);
   // Intent narrows ranking later; it must not erase the generic calendar
   // discovery baseline. Keep both within the same fixed query budget.
-  const terms = uniqueStrings(["events", "calendar", ...suppliedTerms]).slice(0, 8);
+  const terms = uniqueStrings(["events", "calendar", "festival", ...suppliedTerms]).slice(0, 8);
   const queries = [];
 
   for (const label of labels) {
@@ -171,7 +176,9 @@ function inspectEventSourcePage({
     );
   }
 
-  if (hasSitevisionCalendarSignature(source)) {
+  if (hasEmbeddedProgramRscSignature(source)) {
+    addCandidate("embedded_program_rsc", pageUrl);
+  } else if (hasSitevisionCalendarSignature(source)) {
     addCandidate("sitevision_calendar", pageUrl);
   } else if (hasWixEventSitemapSignature(source, pageUrl)) {
     addCandidate("wix_event_sitemap", new URL("/sitemap.xml", pageUrl).toString(), {
@@ -570,6 +577,20 @@ function buildDetectedCandidate({
       notes: "wix_public_sitemap_and_ssr_details_require_manifest_review",
     };
   }
+  if (kind === "embedded_program_rsc") {
+    return {
+      ...common,
+      adapter: "embedded_program_rsc",
+      extraction_tier: "stable_html_calendar",
+      extractable: baseExtractable({
+        end: true,
+        venue: true,
+        venue_geocodable: true,
+        stable_html: true,
+      }),
+      notes: "server_rendered_program_atoms_require_manifest_review",
+    };
+  }
   return {
     ...common,
     adapter: "needs_adapter",
@@ -593,6 +614,7 @@ function buildReviewedManifestCandidate(candidate, { seed = {}, context = {} } =
     venue_calendar: "html_venue_calendar",
     sitevision_calendar: "sitevision_calendar",
     wix_event_sitemap: "wix_event_sitemap",
+    embedded_program_rsc: "embedded_program_rsc",
   };
   const adapter = adapterMap[candidate.adapter];
   if (!MANIFEST_ADAPTERS.has(adapter)) return null;

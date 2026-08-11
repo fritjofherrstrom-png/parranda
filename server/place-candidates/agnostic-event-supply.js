@@ -30,6 +30,7 @@ const { createHtmlVenueCalendarProvider } = require("../pulse-sources/html-venue
 const { createSitevisionCalendarProvider } = require("../pulse-sources/sitevision-calendar-provider");
 const { createWixEventSitemapProvider } = require("../pulse-sources/wix-event-sitemap-provider");
 const { createLocalizedEventsApiProvider } = require("../pulse-sources/localized-events-api-provider");
+const { createEmbeddedProgramRscProvider } = require("../pulse-sources/embedded-program-rsc-provider");
 const { normalizeTimeSensitiveSourceEvent } = require("../pulse-sources/time-sensitive-event");
 const {
   datePartsInTimezone,
@@ -89,6 +90,7 @@ const LOCAL_EVENT_ADAPTERS = new Set([
   "sitevision_calendar",
   "wix_event_sitemap",
   "localized_events_api",
+  "embedded_program_rsc",
 ]);
 
 // A single open municipal feed, kept as a NAMED FIXTURE — not a product default.
@@ -236,6 +238,9 @@ function normalizeEventFeedRow(f, index = 0) {
       : null,
     page_size: Number.isFinite(Number(f.page_size))
       ? Math.max(1, Math.floor(Number(f.page_size)))
+      : null,
+    horizon_days: Number.isFinite(Number(f.horizon_days))
+      ? Math.max(1, Math.floor(Number(f.horizon_days)))
       : null,
     event_path_prefix: firstString(f.event_path_prefix, f.eventPathPrefix),
     // Configuring an endpoint proves collection intent, not ownership or
@@ -1107,6 +1112,20 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs 
       limit: source.page_size || undefined,
     });
   }
+  if (adapter === "embedded_program_rsc") {
+    return createEmbeddedProgramRscProvider({
+      ...common,
+      status: "active",
+      timezone: source.timezone || undefined,
+      sourceLanguage: source.source_language || undefined,
+      sourceTier: source.source_tier || undefined,
+      confidence: source.confidence || undefined,
+      sourceFamily: source.source_family || undefined,
+      detailPathPrefix: source.event_path_prefix || undefined,
+      limit: source.page_size || undefined,
+      horizonDays: source.horizon_days || undefined,
+    });
+  }
   return null;
 }
 
@@ -1231,6 +1250,9 @@ function normalizeLocalEventAdapter(value) {
     localized_api: "localized_events_api",
     localized_event_api: "localized_events_api",
     localized_public_events: "localized_events_api",
+    embedded_program: "embedded_program_rsc",
+    next_rsc_program: "embedded_program_rsc",
+    nextjs_program: "embedded_program_rsc",
   };
   const normalized = aliases[raw] || raw;
   return LOCAL_EVENT_ADAPTERS.has(normalized) ? normalized : null;
