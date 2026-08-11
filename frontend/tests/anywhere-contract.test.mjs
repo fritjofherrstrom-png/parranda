@@ -108,7 +108,7 @@ test("public share capacity refusals render as capacity, never false place absen
 });
 
 test("cold-start refresh is bounded: the component delegates to the tested follow-up policy", () => {
-  // The POLICY (one-shot upgrade, 9/12/18 live ladder, exhaustion) lives in the
+  // The POLICY (one-shot upgrade, bounded live ladder, exhaustion) lives in the
   // pure planComposeFollowup — behavior-pinned by compose-followup.test.mjs.
   // Here we pin the WIRING: the component consults the policy with the real
   // inputs and consumes every output instead of re-deriving any of it inline.
@@ -121,7 +121,11 @@ test("cold-start refresh is bounded: the component delegates to the tested follo
   assert.match(anywherePlannerSource, /setLiveRefreshExhausted\(followup\.liveRefreshExhausted\)/);
   assert.match(anywherePlannerSource, /pollAttempt: followup\.nextPollAttempt/);
   // The ladder itself is the lib's contract.
-  assert.deepEqual([...LIVE_REFRESH_DELAYS_MS], [9000, 12000, 18000]);
+  assert.deepEqual([...LIVE_REFRESH_DELAYS_MS], [9000, 12000, 18000, 24000]);
+  assert.ok(
+    LIVE_REFRESH_DELAYS_MS.reduce((sum, delay) => sum + delay, 0) >= 60_000,
+    "the UI must keep listening through two bounded provider attempts",
+  );
   // The waiting state is honest and visible.
   assert.match(anywherePlannerSource, /Läser in mer från källorna — uppdateras automatiskt strax\./);
   // A silent UPGRADE refreshes the stored entry so save/share use the full day.

@@ -59,7 +59,11 @@ test("an explicit transient trusted-source failure retries once — silently com
   assert.equal(planComposeFollowup({ transientSourceRetry: true, silent: true }).schedule, false);
 });
 
-test("live pending walks the 9/12/18 ladder then reports exhaustion", () => {
+test("live pending outlives bounded provider warming, then reports exhaustion", () => {
+  assert.ok(
+    LIVE_REFRESH_DELAYS_MS.reduce((sum, delay) => sum + delay, 0) >= 60_000,
+    "the bounded UI ladder must not expire before two sequential 30 s provider attempts",
+  );
   let attempt = 0;
   for (const expected of LIVE_REFRESH_DELAYS_MS) {
     const plan = planComposeFollowup({ livePending: true, silent: attempt > 0, pollAttempt: attempt });

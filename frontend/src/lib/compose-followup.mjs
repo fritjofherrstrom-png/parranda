@@ -3,8 +3,10 @@
  * compose schedules a silent re-ask, and with what budget. Extracted from the
  * planner component so the regression-prone sequencing rules are unit-tested:
  *
- *   - LIVE REFRESH: while live acquisition reports `pending`, up to three
- *     capped refreshes (9/12/18 s). Exhaustion is reported so the UI can say
+ *   - LIVE REFRESH: while live acquisition reports `pending`, up to four
+ *     capped refreshes (9/12/18/24 s). The 63 s total budget outlives two
+ *     bounded provider attempts without turning into an unbounded poll loop.
+ *     Exhaustion is reported so the UI can say
  *     "couldn't verify" instead of spinning forever.
  *   - ONE-SHOT UPGRADE: a USER-initiated compose (never a silent one) that
  *     returned structure while corroboration was still warming, composed
@@ -15,7 +17,7 @@
  * Pure + deterministic; the caller owns timers, aborts and state.
  */
 
-export const LIVE_REFRESH_DELAYS_MS = [9000, 12000, 18000];
+export const LIVE_REFRESH_DELAYS_MS = [9000, 12000, 18000, 24000];
 
 /**
  * @param {object} input
