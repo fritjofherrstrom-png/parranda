@@ -29,8 +29,10 @@
 const { buildAgnosticCityContext } = require("../candidates/agnostic-context");
 const { normalizeSelectedDayHoursFact } = require("../place-candidates/opening-hours");
 const { plannerUsableOptionsForRole } = require("./candidate-combination");
+const { resolveAgnosticWalkingTargetBand } = require("./agnostic-walking-target");
 
 const AGNOSTIC_ENGINE_CITY_KEY = "agnostic-engine-area";
+const MAX_CAPACITY_FRONTIER_CANDIDATES = 2;
 
 // Honest no-op services. The engine reaches city services for pulse/weather/
 // signals/live/geocode; an any-place context has no curated source for any of
@@ -176,6 +178,7 @@ function toSourceCandidate({
   role,
   reservoirSelected = false,
   reservoirSupport = false,
+  reservoirFrontier = false,
   requestedIntents = null,
 }) {
   const provenance = (rich && rich.provenance) || {};
@@ -247,6 +250,7 @@ function toSourceCandidate({
     freshness: "unknown",
     reservoir_selected: reservoirSelected === true,
     reservoir_support: reservoirSupport === true,
+    reservoir_frontier: reservoirFrontier === true,
     chain: rich?.chain === true,
     brand: typeof rich?.brand === "string" ? rich.brand : null,
     local_feel_rank: Number.isFinite(rich?.local_feel_rank) ? rich.local_feel_rank : null,
@@ -277,6 +281,8 @@ function mapPlannerReservoirToSourceCandidates({
   city = AGNOSTIC_ENGINE_CITY_KEY,
   limit = 8,
   perRole = 2,
+  walkingKmTarget = null,
+  includeCapacityFrontier = true,
 } = {}) {
   const richIndex = buildRichCandidateIndex(plannerRoles);
   const selectedPicks = Array.isArray(selected) ? selected : [];
@@ -411,7 +417,70 @@ function mapPlannerReservoirToSourceCandidates({
     }
   }
 
+  if (includeCapacityFrontier) {
+    appendWalkingCapacityFrontier({
+      out,
+      seen,
+      plannerRoles,
+      richIndex,
+      city,
+      requestedIntents,
+      boundedLimit,
+      walkingKmTarget,
+    });
+  }
+
   return out;
+}
+
+// The role selector is the single owner of capacity-frontier choice because it
+// can see every already-gated role entry before public top-N truncation. This
+// adapter only projects that explicit trusted frontier into engine candidates;
+// it never derives a second, potentially divergent frontier from role lists.
+function appendWalkingCapacityFrontier({
+  out,
+  seen,
+  plannerRoles,
+  richIndex,
+  city,
+  requestedIntents,
+  boundedLimit,
+  walkingKmTarget,
+}) {
+  const band = resolveAgnosticWalkingTargetBand(walkingKmTarget);
+  if (!band || out.length >= boundedLimit) return;
+  let added = 0;
+  const frontier = Array.isArray(plannerRoles?.capacity_frontier_candidates)
+    ? plannerRoles.capacity_frontier_candidates
+    : [];
+  for (const rich of frontier) {
+    if (out.length >= boundedLimit || added >= MAX_CAPACITY_FRONTIER_CANDIDATES) break;
+    const id = rich?.candidate_id;
+    const coords = finiteCoords(rich?.coordinates);
+    const role = rich?.role;
+    if (
+      !id || !coords || !role || seen.has(id) ||
+      isExperimentallyAdmitted(rich) || isExplicitlyUnavailable(rich) || rich.chain === true
+    ) continue;
+    seen.add(id);
+    added += 1;
+    out.push(
+      toSourceCandidate({
+        pick: {
+          role,
+          candidate_id: id,
+          coordinates: coords,
+        },
+        rich: richIndex.get(`${role}::${id}`) || rich,
+        coords,
+        city,
+        role,
+        reservoirSupport: true,
+        reservoirFrontier: true,
+        requestedIntents,
+      }),
+    );
+  }
 }
 
 /**

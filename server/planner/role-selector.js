@@ -15,6 +15,7 @@ const {
 } = require("../candidates/candidate-pool");
 const { scoreCandidateFit } = require("../candidates/fit-scorer");
 const { calibrateSource } = require("../candidates/source-calibration");
+const { normalizeWalkingTargetBand } = require("../place-candidates/day-capacity");
 const {
   distanceKm,
   sanitizeCandidateReachPolicy,
@@ -76,6 +77,9 @@ const MAX_LIMIT_PER_ROLE = 5;
 // non-chain places, a chain-only role is no longer a genuine sparse-context
 // fallback. Keep it inspectable, but do not auto-compose it into the day.
 const LOCAL_BREADTH_FOR_CHAIN_FALLBACK = 3;
+const MAX_CAPACITY_FRONTIER_CANDIDATES = 2;
+const MIN_CAPACITY_FRONTIER_GAIN_KM = 0.3;
+const WALKING_TARGET_TO_SPREAD_FACTOR = 0.55;
 
 function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
   const limitPerRole = clampLimit(payload.limitPerRole ?? payload.limit_per_role);
@@ -124,6 +128,16 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
   const roleSurfaceCandidateCount = new Set(
     roles.flatMap((entry) => entry.candidates.map((candidate) => candidate.candidate_id).filter(Boolean)),
   ).size;
+  const capacityFrontierActive = localFeelActive && Boolean(normalizeWalkingTargetBand(helpers.walkingTargetBand));
+  const capacityFrontierCandidates = capacityFrontierActive
+    ? buildCapacityFrontierCandidates({
+        roles,
+        roleEntries,
+        roleSpec: activeRoleSpec,
+        origin: candidatePool.context.origin,
+        walkingTargetBand: helpers.walkingTargetBand,
+      })
+    : [];
   const availabilitySummary = candidatePool.availability_summary || null;
 
   return {
@@ -147,12 +161,146 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
       availability_unresolved_candidate_count: availabilitySummary?.unresolved_candidate_count || 0,
       role_relevant_candidate_count: roleRelevantCandidateCount,
       role_surface_candidate_count: roleSurfaceCandidateCount,
+      ...(capacityFrontierActive
+        ? { capacity_frontier_candidate_count: capacityFrontierCandidates.length }
+        : {}),
     },
     ...(availabilitySummary
       ? { availability_summary: { ...availabilitySummary } }
       : {}),
     ...(reachSelection.summary ? { reach_policy: reachSelection.summary } : {}),
+    ...(capacityFrontierCandidates.length
+      ? { capacity_frontier_candidates: capacityFrontierCandidates }
+      : {}),
   };
+}
+
+// The public role lists remain strict top-N by status and shared ranking. For
+// the agnostic engine only, retain a separate bounded frontier from the full
+// already-gated role entries when those top-N lists are too geographically
+// compressed for the trusted walking target. These candidates never change a
+// role winner and never bypass status, local-feel, availability or admission
+// gates; the route engine may still reject them as incoherent or unnecessary.
+function buildCapacityFrontierCandidates({
+  roles,
+  roleEntries,
+  roleSpec,
+  origin,
+  walkingTargetBand,
+}) {
+  const band = normalizeWalkingTargetBand(walkingTargetBand);
+  if (!band || !validCoordinates(origin)) return [];
+  const spreadBand = walkingTargetSpreadBand(band);
+  const surfacedIds = new Set(
+    roles.flatMap((role) => role.candidates.map((candidate) => candidate.candidate_id).filter(Boolean)),
+  );
+  const points = roles
+    .flatMap((role) => role.candidates.map((candidate) => candidate.coordinates))
+    .filter(validCoordinates);
+  if (points.length < 2 || candidateSpanKm(points) >= spreadBand.floorKm) return [];
+
+  const eligible = [];
+  const seen = new Set();
+  for (const [role, entries] of Object.entries(roleEntries)) {
+    const spec = roleSpec[role];
+    if (!spec || (spec.slot !== "anchor" && spec.slot !== "stop")) continue;
+    const strongest = strongestFrontierEntries(entries);
+    for (const entry of strongest) {
+      const id = entry?.candidate?.id;
+      if (!id || surfacedIds.has(id) || seen.has(id) || !validCoordinates(entry.candidate)) continue;
+      seen.add(id);
+      eligible.push({ role, entry, coordinates: { lat: entry.candidate.lat, lng: entry.candidate.lng } });
+    }
+  }
+
+  const selected = [];
+  while (
+    eligible.length &&
+    selected.length < MAX_CAPACITY_FRONTIER_CANDIDATES &&
+    candidateSpanKm(points) < spreadBand.floorKm
+  ) {
+    const currentSpan = candidateSpanKm(points);
+    eligible.sort((left, right) => compareCapacityFrontier(left, right, points, spreadBand));
+    const next = eligible.shift();
+    const nextSpan = candidateSpanKm([...points, next.coordinates]);
+    if (nextSpan < currentSpan + MIN_CAPACITY_FRONTIER_GAIN_KM) break;
+    points.push(next.coordinates);
+    selected.push({
+      role: next.role,
+      ...formatRoleCandidate(next.entry, next.role, roleEntries, roleSpec),
+      capacity_reason: "walking_target_frontier",
+    });
+  }
+  return selected;
+}
+
+function walkingTargetSpreadBand(band) {
+  return {
+    targetKm: band.targetKm * WALKING_TARGET_TO_SPREAD_FACTOR,
+    floorKm: band.floorKm * WALKING_TARGET_TO_SPREAD_FACTOR,
+    ceilingKm: band.ceilingKm * WALKING_TARGET_TO_SPREAD_FACTOR,
+  };
+}
+
+function strongestFrontierEntries(entries) {
+  const eligible = (Array.isArray(entries) ? entries : []).filter(
+    (entry) =>
+      (entry.candidate_status === "filled" || entry.candidate_status === "partial") &&
+      entry.availability?.eligible !== false &&
+      entry.candidate?.chain !== true &&
+      !(entry.experimental_admission && entry.experimental_admission.allowed === true),
+  );
+  const strongestStatus = eligible.reduce(
+    (rank, entry) => Math.max(rank, STATUS_RANK[entry.candidate_status] || 0),
+    0,
+  );
+  let tier = eligible.filter((entry) => (STATUS_RANK[entry.candidate_status] || 0) === strongestStatus);
+  const covering = tier.filter(
+    (entry) => Array.isArray(entry.fit?.covered_preferences) && entry.fit.covered_preferences.length > 0,
+  );
+  if (covering.length) tier = covering;
+  const operationalRank = tier.reduce(
+    (best, entry) => Math.min(best, operationalViabilityRank(entry)),
+    Number.POSITIVE_INFINITY,
+  );
+  tier = tier.filter((entry) => operationalViabilityRank(entry) === operationalRank);
+  const localRank = tier.reduce(
+    (best, entry) => Math.min(best, Number.isFinite(entry.local_feel_rank) ? entry.local_feel_rank : 0),
+    Number.POSITIVE_INFINITY,
+  );
+  return tier.filter(
+    (entry) => (Number.isFinite(entry.local_feel_rank) ? entry.local_feel_rank : 0) === localRank,
+  );
+}
+
+function compareCapacityFrontier(left, right, points, band) {
+  const rank = (candidate) => {
+    const span = candidateSpanKm([...points, candidate.coordinates]);
+    const reachesFloor = span >= band.floorKm;
+    return [
+      reachesFloor ? 0 : 1,
+      reachesFloor && span <= band.ceilingKm ? 0 : 1,
+      reachesFloor ? Math.abs(span - band.targetKm) : -span,
+      String(candidate.entry.candidate.id),
+    ];
+  };
+  const leftRank = rank(left);
+  const rightRank = rank(right);
+  for (let index = 0; index < leftRank.length; index += 1) {
+    if (leftRank[index] === rightRank[index]) continue;
+    return leftRank[index] < rightRank[index] ? -1 : 1;
+  }
+  return 0;
+}
+
+function candidateSpanKm(points) {
+  let span = 0;
+  for (let left = 0; left < points.length; left += 1) {
+    for (let right = left + 1; right < points.length; right += 1) {
+      span = Math.max(span, distanceKm(points[left], points[right]));
+    }
+  }
+  return span;
 }
 
 function applyCandidateReachPolicy(candidatePool, value) {

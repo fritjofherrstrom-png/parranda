@@ -270,6 +270,173 @@ test("bounded reservoir honors its total and per-role caps without dropping sele
   assert.deepEqual(result.map((entry) => entry.id), ["food-a", "food-b"]);
 });
 
+test("walking target retains a bounded geographic frontier from the strongest planner-safe tier", () => {
+  const make = (id, role, type, lng, over = {}) => richCandidate({
+    candidate_id: id,
+    label: id,
+    type,
+    coordinates: { lat: 50, lng },
+    candidate_status: "filled",
+    planner_usable: true,
+    origin: "external_open",
+    covered_preferences: [role === "food_anchor" ? "food" : role === "scenic_anchor" ? "scenic" : "coffee"],
+    partial_preferences: [],
+    local_feel_rank: 0,
+    ...over,
+  });
+  const food = make("food-centre", "food_anchor", "restaurant", 14.4);
+  const scenic = make("view-centre", "scenic_anchor", "viewpoint", 14.405);
+  const scenicFrontier = make("view-frontier", "scenic_anchor", "viewpoint", 14.47);
+  const coffee = make("coffee-centre", "coffee_fika_stop", "cafe", 14.41);
+  const roles = {
+    city: "agnostic-engine-area",
+    requested_preferences: ["food", "scenic", "coffee"],
+    capacity_frontier_candidates: [{ ...scenicFrontier, role: "scenic_anchor" }],
+    roles: [
+      { role: "food_anchor", slot: "anchor", requested: true, candidates: [food] },
+      { role: "scenic_anchor", slot: "anchor", requested: true, candidates: [scenic, scenicFrontier] },
+      { role: "coffee_fika_stop", slot: "stop", requested: true, candidates: [coffee] },
+    ],
+  };
+
+  const result = mapPlannerReservoirToSourceCandidates({
+    selected: [
+      selectedPick({ role: "food_anchor", candidate_id: food.candidate_id, coordinates: food.coordinates }),
+      selectedPick({ role: "scenic_anchor", candidate_id: scenic.candidate_id, coordinates: scenic.coordinates }),
+      selectedPick({ role: "coffee_fika_stop", candidate_id: coffee.candidate_id, coordinates: coffee.coordinates }),
+    ],
+    plannerRoles: roles,
+    perRole: 1,
+    walkingKmTarget: 6,
+    origin: { lat: 50, lng: 14.4 },
+  });
+
+  assert.deepEqual(result.map((entry) => entry.id), [
+    "food-centre",
+    "view-centre",
+    "coffee-centre",
+    "view-frontier",
+  ]);
+  assert.equal(result.at(-1).reservoir_frontier, true);
+  assert.equal(result.at(-1).reservoir_support, true);
+  assert.equal(result.at(-1).reservoir_selected, false);
+});
+
+test("walking frontier stays inactive when the safe reservoir already supports the target floor", () => {
+  const make = (id, role, type, lng) => richCandidate({
+    candidate_id: id,
+    label: id,
+    type,
+    coordinates: { lat: 50, lng },
+    candidate_status: "filled",
+    planner_usable: true,
+    covered_preferences: [role === "food_anchor" ? "food" : "scenic"],
+    partial_preferences: [],
+    local_feel_rank: 0,
+  });
+  const food = make("food-a", "food_anchor", "restaurant", 14.4);
+  const scenic = make("view-a", "scenic_anchor", "viewpoint", 14.44);
+  const farther = make("view-b", "scenic_anchor", "viewpoint", 14.48);
+  const roles = {
+    city: "agnostic-engine-area",
+    roles: [
+      { role: "food_anchor", slot: "anchor", requested: true, candidates: [food] },
+      { role: "scenic_anchor", slot: "anchor", requested: true, candidates: [scenic, farther] },
+    ],
+  };
+
+  const result = mapPlannerReservoirToSourceCandidates({
+    selected: [
+      selectedPick({ role: "food_anchor", candidate_id: food.candidate_id, coordinates: food.coordinates }),
+      selectedPick({ role: "scenic_anchor", candidate_id: scenic.candidate_id, coordinates: scenic.coordinates }),
+    ],
+    plannerRoles: roles,
+    perRole: 1,
+    walkingKmTarget: 4,
+  });
+
+  assert.deepEqual(result.map((entry) => entry.id), ["food-a", "view-a"]);
+  assert.equal(result.some((entry) => entry.reservoir_frontier), false);
+});
+
+test("walking frontier rechecks chains and experimental admission at the engine boundary", () => {
+  const winner = richCandidate({
+    candidate_id: "safe-winner",
+    type: "viewpoint",
+    coordinates: { lat: 50, lng: 14.4 },
+    candidate_status: "filled",
+    planner_usable: true,
+    covered_preferences: ["scenic"],
+    local_feel_rank: 0,
+  });
+  const partial = richCandidate({
+    candidate_id: "partial-frontier",
+    type: "viewpoint",
+    coordinates: { lat: 50, lng: 14.49 },
+    candidate_status: "partial",
+    planner_usable: true,
+    covered_preferences: ["scenic"],
+    local_feel_rank: 0,
+  });
+  const chain = richCandidate({
+    candidate_id: "chain-frontier",
+    type: "restaurant",
+    coordinates: { lat: 50, lng: 14.5 },
+    candidate_status: "filled",
+    planner_usable: true,
+    covered_preferences: ["food"],
+    local_feel_rank: 0,
+    chain: true,
+  });
+  const experimental = richCandidate({
+    candidate_id: "experimental-frontier",
+    type: "cafe",
+    coordinates: { lat: 50, lng: 14.51 },
+    candidate_status: "partial",
+    planner_usable: true,
+    covered_preferences: ["coffee"],
+    local_feel_rank: 0,
+    experimental_admission: { allowed: true, policy: "experimental_inferred_external" },
+  });
+  const food = richCandidate({
+    candidate_id: "safe-food",
+    type: "restaurant",
+    coordinates: { lat: 50, lng: 14.405 },
+    candidate_status: "filled",
+    planner_usable: true,
+    covered_preferences: ["food"],
+    local_feel_rank: 0,
+  });
+  const roles = {
+    city: "agnostic-engine-area",
+    capacity_frontier_candidates: [
+      { ...partial, role: "scenic_anchor" },
+      { ...chain, role: "food_anchor" },
+      { ...experimental, role: "coffee_fika_stop" },
+    ],
+    roles: [
+      { role: "scenic_anchor", slot: "anchor", requested: true, candidates: [winner, partial] },
+      { role: "food_anchor", slot: "anchor", requested: true, candidates: [food, chain] },
+      { role: "coffee_fika_stop", slot: "stop", requested: false, candidates: [experimental] },
+    ],
+  };
+
+  const result = mapPlannerReservoirToSourceCandidates({
+    selected: [
+      selectedPick({ role: "scenic_anchor", candidate_id: winner.candidate_id, coordinates: winner.coordinates }),
+      selectedPick({ role: "food_anchor", candidate_id: food.candidate_id, coordinates: food.coordinates }),
+    ],
+    plannerRoles: roles,
+    perRole: 1,
+    walkingKmTarget: 9,
+  });
+
+  assert.deepEqual(result.map((entry) => entry.id), ["safe-winner", "safe-food", "partial-frontier"]);
+  assert.equal(result.at(-1).reservoir_frontier, true);
+  assert.equal(result.some((entry) => entry.id === "chain-frontier"), false);
+  assert.equal(result.some((entry) => entry.id === "experimental-frontier"), false);
+});
+
 test("a requested experimental winner does not multiply lower-trust role depth", () => {
   const admitted = (id) => richCandidate({
     candidate_id: id,
