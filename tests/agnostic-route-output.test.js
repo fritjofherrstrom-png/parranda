@@ -32,6 +32,7 @@ const {
   buildAgnosticPublicResult,
   buildExperimentBlock,
   composeAgnosticRouteOutput,
+  shouldUseCapacityRepair,
   scrubAgnosticAppliedDay,
 } = require("../server/planner/agnostic-route-output");
 const { projectRouteToSelectedStopChain } = require("../server/planner/route-public-geometry");
@@ -123,6 +124,70 @@ test("typed-place public geometry projects the hidden anchor loop onto the selec
 function lateEveningClock() {
   return new Date("2026-05-25T21:30:00Z");
 }
+
+test("capacity repair accepts a real in-band engine route without losing requested coverage", () => {
+  const stop = (id, covered, partial = []) => ({
+    id,
+    covered_preferences: covered,
+    partial_preferences: partial,
+  });
+  const baseRoute = {
+    estimated_km: 2.8,
+    main_stops: [stop("food", [], ["food"]), stop("museum", ["museums"]), stop("view", ["scenic"])],
+    route_quality_warnings: [],
+  };
+  const repairedRoute = {
+    estimated_km: 5.4,
+    main_stops: [...baseRoute.main_stops, stop("garden", ["scenic"])],
+    route_quality_warnings: [],
+  };
+
+  assert.equal(shouldUseCapacityRepair({
+    baseRoute,
+    repairedRoute,
+    walkingKmTarget: 6,
+    preferences: ["food", "culture", "views"],
+  }), true);
+});
+
+test("capacity repair rejects an over-band or preference-weaker engine route", () => {
+  const baseRoute = {
+    estimated_km: 2.8,
+    main_stops: [
+      { id: "food", covered_preferences: ["food"], partial_preferences: [] },
+      { id: "museum", covered_preferences: ["museums"], partial_preferences: [] },
+      { id: "view", covered_preferences: ["scenic"], partial_preferences: [] },
+    ],
+    route_quality_warnings: [],
+  };
+  const overBand = {
+    estimated_km: 7.2,
+    main_stops: [...baseRoute.main_stops, { id: "park", covered_preferences: [], partial_preferences: [] }],
+    route_quality_warnings: [],
+  };
+  const weaker = {
+    estimated_km: 5.2,
+    main_stops: [
+      { id: "food", covered_preferences: ["food"], partial_preferences: [] },
+      { id: "museum", covered_preferences: ["museums"], partial_preferences: [] },
+      { id: "park", covered_preferences: [], partial_preferences: [] },
+    ],
+    route_quality_warnings: [],
+  };
+
+  assert.equal(shouldUseCapacityRepair({
+    baseRoute,
+    repairedRoute: overBand,
+    walkingKmTarget: 6,
+    preferences: ["food", "culture", "views"],
+  }), false);
+  assert.equal(shouldUseCapacityRepair({
+    baseRoute,
+    repairedRoute: weaker,
+    walkingKmTarget: 6,
+    preferences: ["food", "culture", "views"],
+  }), false);
+});
 
 // A role-diverse, >=25 geocoded, tightly-clustered trusted fixture near an
 // anchor — enough to fill multiple roles AND clear the planner readiness bar.

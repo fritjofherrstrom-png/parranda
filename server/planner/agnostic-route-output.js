@@ -27,6 +27,7 @@
  */
 
 const { buildAgnosticCityContext } = require("../candidates/agnostic-context");
+const { normalizeUserIntents } = require("../candidates/intent-vocabulary");
 const { buildProviderSpecs } = require("../candidates/candidate-pool");
 const { selectPlannerRoleCandidates } = require("./role-selector");
 const { summarizeDayflowHonesty } = require("./dayflow-honesty");
@@ -954,6 +955,7 @@ async function composeAgnosticRouteOutput({
     ...helpers,
     ...availabilityHelpers,
     ...(candidateReachPolicy ? { candidateReachPolicy } : {}),
+    walkingTargetBand: resolveAgnosticWalkingTargetBand(walkingKmTarget),
     experimentalAdmitCandidate: admitExperimentalInferredExternalCandidate,
   };
   const selectionHelpers = trustedTimeAppliesToRequestedDate
@@ -998,6 +1000,17 @@ async function composeAgnosticRouteOutput({
         selected: (candidateCombination && candidateCombination.selected) || [],
         plannerRoles,
         city: agnosticContext.key,
+        walkingKmTarget,
+        includeCapacityFrontier: false,
+      })
+    : null;
+  const capacitySourceCandidates = synthesizeVia === "engine"
+    ? mapPlannerReservoirToSourceCandidates({
+        selected: (candidateCombination && candidateCombination.selected) || [],
+        plannerRoles,
+        city: agnosticContext.key,
+        walkingKmTarget,
+        includeCapacityFrontier: true,
       })
     : null;
 
@@ -1075,6 +1088,7 @@ async function composeAgnosticRouteOutput({
       plannerRoles,
       candidateCombination,
       sourceCandidates: engineSourceCandidates,
+      capacitySourceCandidates,
       eligibility,
       candidateReadiness,
       sourceStatus,
@@ -1266,6 +1280,7 @@ async function composeAgnosticRouteViaEngine({
   plannerRoles,
   candidateCombination,
   sourceCandidates: suppliedSourceCandidates,
+  capacitySourceCandidates: suppliedCapacitySourceCandidates,
   eligibility,
   candidateReadiness,
   sourceStatus,
@@ -1287,6 +1302,17 @@ async function composeAgnosticRouteViaEngine({
         selected: (candidateCombination && candidateCombination.selected) || [],
         plannerRoles,
         city: agnosticContext.key,
+        walkingKmTarget,
+        includeCapacityFrontier: false,
+      });
+  const capacitySourceCandidates = Array.isArray(suppliedCapacitySourceCandidates)
+    ? suppliedCapacitySourceCandidates
+    : mapPlannerReservoirToSourceCandidates({
+        selected: (candidateCombination && candidateCombination.selected) || [],
+        plannerRoles,
+        city: agnosticContext.key,
+        walkingKmTarget,
+        includeCapacityFrontier: true,
       });
   const timeAnchoring = Number.isInteger(currentTimeBandRank)
     ? anchorSourceCandidatesToCurrentBand(sourceCandidates, currentTimeBandRank)
@@ -1323,6 +1349,7 @@ async function composeAgnosticRouteViaEngine({
 
   let anchoredToLocalTime = timeAnchoring.anchored;
   let trimmedDayparts = timeAnchoring.trimmedDayparts;
+  let capacityRepairApplied = false;
   let engineDay = await runEngine(timeAnchoring.candidates);
   let engineRoute = (engineDay && engineDay.primary_route) || null;
   if (!engineRoute && anchoredToLocalTime) {
@@ -1333,6 +1360,34 @@ async function composeAgnosticRouteViaEngine({
     engineRoute = (engineDay && engineDay.primary_route) || null;
     anchoredToLocalTime = false;
     trimmedDayparts = [];
+  }
+
+  if (
+    hasAdditionalCandidateIds(sourceCandidates, capacitySourceCandidates) &&
+    shouldTryCapacityRepair(engineRoute, walkingKmTarget)
+  ) {
+    let capacityAnchoring = anchoredToLocalTime && Number.isInteger(currentTimeBandRank)
+      ? anchorSourceCandidatesToCurrentBand(capacitySourceCandidates, currentTimeBandRank)
+      : { anchored: false, candidates: capacitySourceCandidates, trimmedDayparts: [] };
+    let repairedDay = await runEngine(capacityAnchoring.candidates);
+    let repairedRoute = repairedDay?.primary_route || null;
+    if (!repairedRoute && capacityAnchoring.anchored) {
+      repairedDay = await runEngine(capacitySourceCandidates);
+      repairedRoute = repairedDay?.primary_route || null;
+      capacityAnchoring = { anchored: false, candidates: capacitySourceCandidates, trimmedDayparts: [] };
+    }
+    if (shouldUseCapacityRepair({
+      baseRoute: engineRoute,
+      repairedRoute,
+      walkingKmTarget,
+      preferences,
+    })) {
+      engineDay = repairedDay;
+      engineRoute = repairedRoute;
+      anchoredToLocalTime = capacityAnchoring.anchored;
+      trimmedDayparts = capacityAnchoring.trimmedDayparts;
+      capacityRepairApplied = true;
+    }
   }
 
   if (engineRoute) {
@@ -1382,7 +1437,12 @@ async function composeAgnosticRouteViaEngine({
     changed: false,
     confidence: "engine_compose",
     daypart_arc: null,
-    reasons: ["engine_geometry_ordering", "daypart_promotion_pending"],
+    capacity_repair_applied: capacityRepairApplied,
+    reasons: dedupe([
+      "engine_geometry_ordering",
+      "daypart_promotion_pending",
+      ...(capacityRepairApplied ? ["walking_target_capacity_repair"] : []),
+    ]),
   };
   // The engine only returns a route after its own walking-truth pass, so a
   // present route is walking-coherent. We do not claim a budget check the engine
@@ -1420,6 +1480,69 @@ async function composeAgnosticRouteViaEngine({
   scrubAgnosticAppliedDay(result, engineDay);
 
   return { result, experiment };
+}
+
+function hasAdditionalCandidateIds(baseCandidates, expandedCandidates) {
+  const baseIds = new Set((Array.isArray(baseCandidates) ? baseCandidates : []).map((candidate) => candidate?.id).filter(Boolean));
+  return (Array.isArray(expandedCandidates) ? expandedCandidates : []).some(
+    (candidate) => candidate?.id && !baseIds.has(candidate.id),
+  );
+}
+
+function shouldTryCapacityRepair(route, walkingKmTarget) {
+  const band = resolveAgnosticWalkingTargetBand(walkingKmTarget);
+  if (!band) return false;
+  if (!route) return true;
+  return Number.isFinite(route.estimated_km) && route.estimated_km < band.floorKm;
+}
+
+function shouldUseCapacityRepair({ baseRoute, repairedRoute, walkingKmTarget, preferences }) {
+  const band = resolveAgnosticWalkingTargetBand(walkingKmTarget);
+  if (!band || !repairedRoute || !Number.isFinite(repairedRoute.estimated_km)) return false;
+  if (repairedRoute.estimated_km > band.ceilingKm) return false;
+  if ((repairedRoute.main_stops || []).length < 2) return false;
+  if (!baseRoute) return true;
+  if (!Number.isFinite(baseRoute.estimated_km) || baseRoute.estimated_km >= band.floorKm) return false;
+  if (repairedRoute.estimated_km < baseRoute.estimated_km + 0.3) return false;
+  if (
+    Math.abs(band.targetKm - repairedRoute.estimated_km) >=
+    Math.abs(band.targetKm - baseRoute.estimated_km)
+  ) {
+    return false;
+  }
+  if ((repairedRoute.main_stops || []).length < (baseRoute.main_stops || []).length) return false;
+  if ((repairedRoute.route_quality_warnings || []).length > (baseRoute.route_quality_warnings || []).length) return false;
+
+  const baseCoverage = routePreferenceCoverage(baseRoute, preferences);
+  const repairedCoverage = routePreferenceCoverage(repairedRoute, preferences);
+  return (
+    repairedCoverage.exact >= baseCoverage.exact &&
+    repairedCoverage.supported >= baseCoverage.supported &&
+    repairedCoverage.missing <= baseCoverage.missing
+  );
+}
+
+function routePreferenceCoverage(route, preferences) {
+  const normalized = normalizeUserIntents(Array.isArray(preferences) ? preferences : []);
+  const requested = [...new Set([...(normalized.intents || []), ...(normalized.unmapped || [])])];
+  const stops = Array.isArray(route?.main_stops) ? route.main_stops : [];
+  let exact = 0;
+  let partial = 0;
+  for (const preference of requested) {
+    const covered = stops.some((stop) =>
+      Array.isArray(stop.covered_preferences) && stop.covered_preferences.includes(preference),
+    );
+    const adjacent = !covered && stops.some((stop) =>
+      Array.isArray(stop.partial_preferences) && stop.partial_preferences.includes(preference),
+    );
+    if (covered) exact += 1;
+    else if (adjacent) partial += 1;
+  }
+  return {
+    exact,
+    supported: exact + partial,
+    missing: Math.max(0, requested.length - exact - partial),
+  };
 }
 
 function sanitizeAgnosticEngineDay({ day, placeLabel, lang, anchorMode = "unknown" }) {
@@ -1564,6 +1687,7 @@ module.exports = {
   buildExperimentBlock,
   buildBlockedAgnosticRouteOutputExperiment,
   admitExperimentalInferredExternalCandidate,
+  shouldUseCapacityRepair,
   scrubAgnosticAppliedDay,
   MIN_VIABLE_GEOCODED_STOPS,
 };

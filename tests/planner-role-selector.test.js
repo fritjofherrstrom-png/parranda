@@ -146,6 +146,75 @@ test("public payload cannot inject candidate reach policy", () => {
   assert.equal("reach_policy" in out, false);
 });
 
+test("trusted walking target retains a separate safe frontier without changing role top-N ordering", () => {
+  const officialSources = (id) => OFFICIAL_TWO_FAMILIES.map((source) => ({
+    ...source,
+    url: `${source.url}/${id}`,
+  }));
+  const records = [
+    record("food-centre", "Food Centre", "restaurant", 41.895, 12.49, { tags: ["mat"], sources: officialSources("food-centre") }),
+    record("view-a", "View A", "viewpoint", 41.901, 12.49, { tags: ["utsikt"], sources: officialSources("view-a") }),
+    record("view-b", "View B", "viewpoint", 41.902, 12.50, { tags: ["utsikt"], sources: officialSources("view-b") }),
+    record("view-c", "View C", "viewpoint", 41.903, 12.51, { tags: ["utsikt"], sources: officialSources("view-c") }),
+    record("view-y", "View Y", "viewpoint", 41.9, 12.56, { tags: ["utsikt"], sources: officialSources("view-y") }),
+    record("view-z", "View Z", "viewpoint", 41.9, 12.565, { tags: ["utsikt"], sources: officialSources("view-z") }),
+    record("view-weak", "Weak View", "viewpoint", 41.9, 12.58, { tags: ["utsikt"], sources: TWO_FAMILIES }),
+  ];
+  const out = selectPlannerRoleCandidates(
+    city([]),
+    {
+      date: DATE,
+      preferences: ["food", "scenic"],
+      include_external_candidates: 1,
+      origin: { lat: 41.9, lng: 12.49 },
+    },
+    {
+      external_provider: { dataset: loaderOf(records) },
+      experimentalAdmitCandidate: () => ({ allowed: true, policy: "test_admission" }),
+      walkingTargetBand: { targetKm: 6, floorKm: 3.6, ceilingKm: 7.1 },
+    },
+  );
+
+  assert.deepEqual(
+    role(out, "scenic_anchor").candidates.map((candidate) => candidate.candidate_id),
+    ["view-a", "view-b", "view-c"],
+    "the public role surface remains strict shared-ranking top-N",
+  );
+  assert.deepEqual(
+    out.capacity_frontier_candidates.map((candidate) => candidate.candidate_id),
+    ["view-y"],
+  );
+  assert.equal(out.capacity_frontier_candidates[0].role, "scenic_anchor");
+  assert.equal(out.capacity_frontier_candidates[0].capacity_reason, "walking_target_frontier");
+  assert.equal(out.capacity_frontier_candidates.some((candidate) => candidate.candidate_id === "view-weak"), false);
+  assert.equal(out.pipeline_summary.capacity_frontier_candidate_count, 1);
+});
+
+test("public walking target policy cannot mint an internal capacity frontier", () => {
+  const records = [
+    record("food-centre", "Food Centre", "restaurant", 41.9, 12.49, { tags: ["mat"] }),
+    record("view-a", "View A", "viewpoint", 41.901, 12.49, { tags: ["utsikt"] }),
+    record("view-b", "View B", "viewpoint", 41.9, 12.56, { tags: ["utsikt"] }),
+  ];
+  const out = selectPlannerRoleCandidates(
+    city([]),
+    {
+      date: DATE,
+      preferences: ["food", "scenic"],
+      include_external_candidates: 1,
+      origin: { lat: 41.9, lng: 12.49 },
+      walkingTargetBand: { targetKm: 9, floorKm: 5.4, ceilingKm: 10.6 },
+    },
+    {
+      external_provider: { dataset: loaderOf(records) },
+      experimentalAdmitCandidate: () => ({ allowed: true, policy: "test_admission" }),
+    },
+  );
+
+  assert.equal("capacity_frontier_candidates" in out, false);
+  assert.equal("capacity_frontier_candidate_count" in out.pipeline_summary, false);
+});
+
 test("shared pool extraction preserves Blitz candidate-mode behavior and helper-only external injection", () => {
   const thin = city([]);
   const records = [
