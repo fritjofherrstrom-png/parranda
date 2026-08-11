@@ -39,6 +39,11 @@ function validateSelfHostedStack() {
   requireText(compose, /source-catalog-migrate:/, "source_catalog_migration_service_missing");
   requireText(compose, /source-scout-worker:[\s\S]*run-source-scout-worker\.js[\s\S]*--watch/, "source_scout_worker_missing");
   requireText(compose, /source-scout-worker:[\s\S]*condition: service_completed_successfully/, "source_scout_migration_dependency_missing");
+  requireText(
+    compose,
+    /source-scout-worker:[\s\S]*PARRANDA_SOURCE_SEARCH: \$\{PARRANDA_SOURCE_SEARCH:-disabled\}/,
+    "source_search_default_off_missing",
+  );
   requireText(deploy, /run --rm source-catalog-migrate/, "source_catalog_migration_step_missing");
   requireText(ci, /--profile source-catalog[\s\S]*run --rm source-catalog-migrate/, "source_catalog_ci_smoke_missing");
   requireText(ci, /run --rm source-scout-worker[\s\S]*--limit 1/, "source_scout_worker_ci_smoke_missing");

@@ -55,6 +55,7 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
         spatial_scope: target.spatial_scope,
       }],
       openDataLoader: runtime?.openDataLoader,
+      sourceSearch: runtime?.sourceSearch,
       sourceScout: runtime?.sourceScout,
       bounds: target.spatial_scope?.bounds || null,
       cache: runtime?.scoutCache || null,

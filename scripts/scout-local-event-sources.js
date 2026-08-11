@@ -41,6 +41,9 @@ const {
 const {
   qualifyDiscoveredSourceProfile,
 } = require("../server/pulse-sources/source-qualification");
+const {
+  resolveDefaultSourceSearch,
+} = require("../server/pulse-sources/source-search-provider");
 
 const USAGE = [
   "Usage:",
@@ -81,6 +84,7 @@ async function main(argv = process.argv.slice(2), options = {}) {
       placeQuery: parsed.place,
       placeResolver: runtime.placeResolver,
       openDataLoader: runtime.openDataLoader,
+      sourceSearch: runtime.sourceSearch,
       sourceScout: runtime.sourceScout || scoutLocalEventSources,
       intentHints: parsed.intentHints,
       localDiscoveryTerms: parsed.localDiscoveryTerms,
@@ -261,6 +265,11 @@ function createOperatorRuntime(env = process.env) {
     dir: cacheDir,
     ttlMs: Number(env.PARRANDA_EVENT_SOURCE_SCOUT_CACHE_TTL_MS) || undefined,
   });
+  const sourceSearchCache = createSourceCache({
+    namespace: "source-search-searxng",
+    dir: cacheDir,
+    ttlMs: Number(env.PARRANDA_SOURCE_SEARCH_CACHE_TTL_MS) || ttlMs,
+  });
   return {
     placeResolver,
     openDataLoader:
@@ -268,6 +277,7 @@ function createOperatorRuntime(env = process.env) {
         ? composeOperatorLoaders(osmLoader, wikiLoader)
         : null,
     sourceScout: scoutLocalEventSources,
+    sourceSearch: resolveDefaultSourceSearch(env, { cache: sourceSearchCache }),
     sourceQualifier: qualifyDiscoveredSourceProfile,
     scoutCache,
     sourceCatalog: resolveDefaultSourceProfileCatalog(env),
