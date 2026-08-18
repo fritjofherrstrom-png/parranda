@@ -17,6 +17,9 @@ const { extractSchemaOrgEventsFromHtml } = require("./schema-org-event-provider"
 const { extractCalendarPageLinks } = require("./calendar-page-locator");
 const { hasSitevisionCalendarSignature } = require("./sitevision-calendar-provider");
 const { hasEmbeddedProgramRscSignature } = require("./embedded-program-rsc-provider");
+const {
+  hasOfficialProgramArticleSignature,
+} = require("./official-program-article-provider");
 
 const DEFAULT_USER_AGENT =
   "Parranda-Source-Scout/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
@@ -44,6 +47,7 @@ const MANIFEST_ADAPTERS = new Set([
   "sitevision_calendar",
   "wix_event_sitemap",
   "embedded_program_rsc",
+  "official_program_article",
 ]);
 
 function buildLocalEventDiscoveryQueries({
@@ -119,6 +123,14 @@ function inspectEventSourcePage({
 
   const source = String(html || "");
   const links = extractHtmlLinks(source, pageUrl);
+  const declaredLicense = extractDeclaredOpenLicense(links);
+  const effectiveSeed = {
+    ...seed,
+    source_language: firstString(seed.source_language, extractHtmlLanguage(source)),
+    ...(declaredLicense
+      ? { license: declaredLicense, terms_status: "open_license" }
+      : {}),
+  };
   const candidates = [];
   const socialHints = [];
   const evidence = [];
@@ -134,7 +146,7 @@ function inspectEventSourcePage({
       kind,
       endpoint: normalizedEndpoint,
       pageUrl,
-      seed,
+      seed: effectiveSeed,
       context,
       ...overrides,
     });
@@ -178,6 +190,8 @@ function inspectEventSourcePage({
 
   if (hasEmbeddedProgramRscSignature(source)) {
     addCandidate("embedded_program_rsc", pageUrl);
+  } else if (hasOfficialProgramArticleSignature(source)) {
+    addCandidate("official_program_article", pageUrl);
   } else if (hasSitevisionCalendarSignature(source)) {
     addCandidate("sitevision_calendar", pageUrl);
   } else if (hasWixEventSitemapSignature(source, pageUrl)) {
@@ -198,7 +212,7 @@ function inspectEventSourcePage({
     candidates: dedupeCandidates(candidates),
     manifest_candidates: dedupeManifests(
       candidates
-        .map((candidate) => buildReviewedManifestCandidate(candidate, { seed, context }))
+        .map((candidate) => buildReviewedManifestCandidate(candidate, { seed: effectiveSeed, context }))
         .filter(Boolean),
     ),
     social_hints: dedupeSocialHints(socialHints),
@@ -322,6 +336,7 @@ async function scoutLocalEventSources({
     });
     const sourceResult = {
       ...inspection,
+      manifest_candidates: withManifestRobotsStatus(inspection.manifest_candidates, robots),
       status: "inspected",
       robots: compactRobots(robots),
       fetched_bytes: page.bytes,
@@ -409,6 +424,10 @@ async function scoutLocalEventSources({
       });
       results.push({
         ...linkedInspection,
+        manifest_candidates: withManifestRobotsStatus(
+          linkedInspection.manifest_candidates,
+          linkedRobots,
+        ),
         status: "inspected",
         robots: compactRobots(linkedRobots),
         fetched_bytes: linkedPage.bytes,
@@ -591,6 +610,21 @@ function buildDetectedCandidate({
       notes: "server_rendered_program_atoms_require_manifest_review",
     };
   }
+  if (kind === "official_program_article") {
+    return {
+      ...common,
+      adapter: "official_program_article",
+      extraction_tier: "stable_html_calendar",
+      extractable: baseExtractable({
+        end: true,
+        venue: true,
+        venue_geocodable: true,
+        recurrence: true,
+        stable_html: true,
+      }),
+      notes: "official_program_section_atoms_require_manifest_review",
+    };
+  }
   return {
     ...common,
     adapter: "needs_adapter",
@@ -615,6 +649,7 @@ function buildReviewedManifestCandidate(candidate, { seed = {}, context = {} } =
     sitevision_calendar: "sitevision_calendar",
     wix_event_sitemap: "wix_event_sitemap",
     embedded_program_rsc: "embedded_program_rsc",
+    official_program_article: "official_program_article",
   };
   const adapter = adapterMap[candidate.adapter];
   if (!MANIFEST_ADAPTERS.has(adapter)) return null;
@@ -652,6 +687,26 @@ function buildReviewedManifestCandidate(candidate, { seed = {}, context = {} } =
       reasons: uniqueStrings(candidate.reasons),
     },
   });
+}
+
+function withManifestRobotsStatus(manifests, robots) {
+  const status = firstString(robots?.status, "unknown");
+  return (Array.isArray(manifests) ? manifests : []).map((manifest) => ({
+    ...manifest,
+    review: {
+      ...(manifest.review || {}),
+      robots_status: status,
+      ...(robots?.reason ? { robots_reason: robots.reason } : {}),
+    },
+  }));
+}
+
+function extractHtmlLanguage(html) {
+  const match = String(html || "").match(/<html\b[^>]*\blang\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i);
+  const raw = firstString(match?.[1], match?.[2], match?.[3]);
+  if (!raw) return null;
+  const language = raw.toLowerCase().split(/[-_]/)[0];
+  return /^[a-z]{2,3}$/.test(language) ? language : null;
 }
 
 async function fetchRobotsPolicy({
@@ -906,6 +961,30 @@ function extractHtmlLinks(html, baseUrl) {
     });
   }
   return links;
+}
+
+function extractDeclaredOpenLicense(links) {
+  for (const link of Array.isArray(links) ? links : []) {
+    const rel = String(link?.rel || "").toLowerCase().split(/\s+/).filter(Boolean);
+    if (!rel.includes("license")) continue;
+    const url = normalizeHttpUrl(link?.url);
+    if (!url) continue;
+    try {
+      const parsed = new URL(url);
+      const host = parsed.hostname.toLowerCase();
+      const path = parsed.pathname.toLowerCase();
+      if (
+        host === "creativecommons.org" &&
+        (/^\/licenses\/(?:by|by-sa)\/\d+(?:\.\d+)?\/?$/.test(path) ||
+          /^\/publicdomain\/(?:zero|mark)\/\d+(?:\.\d+)?\/?$/.test(path))
+      ) {
+        return parsed.toString();
+      }
+    } catch (_error) {
+      // A malformed declaration is not evidence.
+    }
+  }
+  return null;
 }
 
 function firstTribeEndpoint(html, baseUrl) {
@@ -1412,6 +1491,7 @@ module.exports = {
   buildLocalEventDiscoveryQueries,
   extractEventWebsiteSeeds,
   inspectEventSourcePage,
+  extractDeclaredOpenLicense,
   scoutLocalEventSources,
   buildReviewedManifestCandidate,
   applyRobotsPolicy,

@@ -4,9 +4,37 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
+  attachTrustedTimezone,
+  nextQualificationProbeAt,
   parseArguments,
   runScoutWorkerBatch,
 } = require("../scripts/run-source-scout-worker");
+
+test("worker manifests accept only a valid weather-provider-attested timezone", async () => {
+  const manifest = { id: "program", timezone: null, review: { robots_status: "allowed" } };
+  const trusted = await attachTrustedTimezone([manifest], {
+    anchor: { lat: 55.6, lng: 13 },
+    now: new Date("2026-08-01T10:00:00Z"),
+    timezoneResolver: async () => ({
+      timezone: "Europe/Stockholm",
+      timezone_source: "weather_provider_auto",
+    }),
+  });
+  assert.equal(trusted[0].timezone, "Europe/Stockholm");
+  assert.equal(trusted[0].review.timezone_source, "weather_provider_auto");
+
+  const payloadClaim = await attachTrustedTimezone([manifest], {
+    anchor: { lat: 55.6, lng: 13 },
+    timezoneResolver: async () => ({ timezone: "Europe/Stockholm", timezone_source: "request_payload" }),
+  });
+  assert.equal(payloadClaim[0].timezone, null);
+
+  const invalid = await attachTrustedTimezone([manifest], {
+    anchor: { lat: 55.6, lng: 13 },
+    timezoneResolver: async () => ({ timezone: "Not/AZone", timezone_source: "weather_provider_auto" }),
+  });
+  assert.equal(invalid[0].timezone, null);
+});
 
 function target(id = "one") {
   return {
@@ -51,6 +79,80 @@ test("worker CLI stays bounded and watch polling cannot be configured aggressive
   });
   assert.deepEqual(parseArguments(["--limit", "6"]).errors, ["invalid_limit"]);
   assert.deepEqual(parseArguments(["--interval-ms", "1000"]).errors, ["invalid_interval_ms"]);
+});
+
+test("observing qualification schedules the next proof on a distinct UTC day", async () => {
+  assert.equal(
+    nextQualificationProbeAt(new Date("2026-08-01T23:59:00Z")).toISOString(),
+    "2026-08-02T00:05:00.000Z",
+  );
+  const completionCalls = [];
+  const catalog = {
+    claimScoutTarget: async () => target("reprobe"),
+    loadSourceQualification: async () => null,
+    recordDiscovery: async (value) => ({ status: "recorded", profile_key: value.profile_key }),
+    completeScoutTarget: async (_target, _reason, options) => {
+      completionCalls.push(options);
+      return { status: "completed" };
+    },
+    failScoutTarget: async () => { throw new Error("should not fail"); },
+  };
+  let claims = 0;
+  catalog.claimScoutTarget = async () => (claims++ === 0 ? target("reprobe") : null);
+
+  const result = await runScoutWorkerBatch({
+    catalog,
+    runtime: {
+      now: () => new Date("2026-08-01T23:59:00Z"),
+      sourceQualifier: async ({ profile: value }) => ({
+        profile: { ...value, source_qualification: { schema_version: 1, status: "observing" } },
+        qualification: { status: "observing" },
+      }),
+    },
+    discover: async () => ({
+      status: "complete",
+      reasons: ["bounded_source_scout_complete"],
+      source_profile: profile("reprobe"),
+      manifest_candidates: [],
+    }),
+  });
+
+  assert.equal(result.status, "ok");
+  assert.equal(completionCalls.length, 1);
+  assert.equal(completionCalls[0].nextAttemptAt.toISOString(), "2026-08-02T00:05:00.000Z");
+});
+
+test("qualified evidence returns to the ordinary bounded refresh cadence", async () => {
+  let completionOptions = "not-called";
+  let claims = 0;
+  const result = await runScoutWorkerBatch({
+    catalog: {
+      claimScoutTarget: async () => (claims++ === 0 ? target("qualified") : null),
+      loadSourceQualification: async () => null,
+      recordDiscovery: async (value) => ({ status: "recorded", profile_key: value.profile_key }),
+      completeScoutTarget: async (_target, _reason, options) => {
+        completionOptions = options;
+        return { status: "completed" };
+      },
+      failScoutTarget: async () => { throw new Error("should not fail"); },
+    },
+    runtime: {
+      now: () => new Date("2026-08-02T10:00:00Z"),
+      sourceQualifier: async ({ profile: value }) => ({
+        profile: value,
+        qualification: { status: "qualified_for_review" },
+      }),
+    },
+    discover: async () => ({
+      status: "complete",
+      reasons: ["bounded_source_scout_complete"],
+      source_profile: profile("qualified"),
+      manifest_candidates: [],
+    }),
+  });
+
+  assert.equal(result.status, "ok");
+  assert.equal(completionOptions, undefined);
 });
 
 test("worker claims a target, discovers through trusted seams, and writes review-needed evidence", async () => {

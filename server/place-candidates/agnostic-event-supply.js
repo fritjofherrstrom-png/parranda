@@ -31,6 +31,9 @@ const { createSitevisionCalendarProvider } = require("../pulse-sources/sitevisio
 const { createWixEventSitemapProvider } = require("../pulse-sources/wix-event-sitemap-provider");
 const { createLocalizedEventsApiProvider } = require("../pulse-sources/localized-events-api-provider");
 const { createEmbeddedProgramRscProvider } = require("../pulse-sources/embedded-program-rsc-provider");
+const {
+  createOfficialProgramArticleProvider,
+} = require("../pulse-sources/official-program-article-provider");
 const { normalizeTimeSensitiveSourceEvent } = require("../pulse-sources/time-sensitive-event");
 const {
   datePartsInTimezone,
@@ -91,6 +94,7 @@ const LOCAL_EVENT_ADAPTERS = new Set([
   "wix_event_sitemap",
   "localized_events_api",
   "embedded_program_rsc",
+  "official_program_article",
 ]);
 
 // A single open municipal feed, kept as a NAMED FIXTURE — not a product default.
@@ -272,6 +276,7 @@ function normalizeEventFeedRow(f, index = 0) {
       : null,
     runtime_trust: f.runtime_trust != null ? String(f.runtime_trust) : null,
     pulse_only: f.pulse_only === true,
+    source_scoped_pulse: f.source_scoped_pulse === true,
   };
 }
 
@@ -486,6 +491,12 @@ function toEventView(event, feed, { eventTimezone = null, routeEligible = null }
     route_eligible: routeEligible == null
       ? isEphemeralHappening(event, null)
       : Boolean(routeEligible),
+    geometry_status: event.geometry_status || (Number.isFinite(event.lat) && Number.isFinite(event.lng)
+      ? "resolved"
+      : "unresolved"),
+    geographic_relevance: event.geographic_relevance || null,
+    source_scope_verified: event.source_scope_verified === true,
+    local_significance: event.local_significance || null,
     // The venue-local timezone so the UI shows the real local start time.
     timezone: eventTimezone || feed.timezone || null,
   };
@@ -647,6 +658,7 @@ function buildScopedEventSourcePlan({
   anchor,
   sourceAnchors = [],
   registry,
+  now = Date.now(),
   globalSource = null,
   globalEnabled = false,
   maxSources = DEFAULT_MAX_SOURCES,
@@ -672,6 +684,7 @@ function buildScopedEventSourcePlan({
     const localSources = buildAnchorEventSourcePlan({
       anchor: sourceAnchor,
       registry,
+      now,
       globalSource: null,
       globalEnabled: false,
       maxSources: DEFAULT_MAX_SOURCES,
@@ -736,6 +749,7 @@ async function collectAnchorEvents({
     anchor,
     sourceAnchors,
     registry: registry || resolveEventFeedRegistry(),
+    now,
     globalSource: GLOBAL_FEED_DESCRIPTOR,
     globalEnabled: Boolean(globalKey),
     maxSources,
@@ -815,13 +829,16 @@ async function collectAnchorEvents({
     anchor,
     radiusM: effectiveRadiusM,
     spatialScope,
+    sourceScopedPulseIds: sourcePlan
+      .filter((source) => source.source_scoped_pulse === true)
+      .map((source) => source.id),
   });
   const rejected = [...bounded.rejected];
   const sourceById = new Map(sourcePlan.map((source) => [source.id, source]));
   const tonight = [];
   const thisWeek = [];
 
-  for (const event of bounded.events) {
+  for (const event of [...bounded.events, ...(bounded.pulse_only_events || [])]) {
     if (!isPulseDisplayEvent(event, nowDate)) {
       rejected.push({
         id: event.fusion_id || event.id || null,
@@ -833,7 +850,11 @@ async function collectAnchorEvents({
     const source = sourceById.get(event.source_provider_id) || sourcePlan[0];
     const view = toEventView(event, source, {
       eventTimezone: event.timezone || null,
-      routeEligible: source?.pulse_only === true ? false : isEphemeralHappening(event, nowDate),
+      routeEligible:
+        event.geographic_relevance === "source_scope" ||
+        source?.pulse_only === true
+          ? false
+          : isEphemeralHappening(event, nowDate),
     });
     if (!view) continue;
     if (TONIGHT_TIMING.has(event.timing_relevance)) {
@@ -1133,6 +1154,20 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs 
       horizonDays: source.horizon_days || undefined,
     });
   }
+  if (adapter === "official_program_article") {
+    return createOfficialProgramArticleProvider({
+      ...common,
+      status: "active",
+      timezone: source.timezone || undefined,
+      sourceLanguage: source.source_language || undefined,
+      sourceTier: source.source_tier || undefined,
+      confidence: source.confidence || undefined,
+      sourceFamily: source.source_family || undefined,
+      limit: source.page_size || undefined,
+      horizonDays: source.horizon_days || undefined,
+      allDayLimit: source.all_day_limit || undefined,
+    });
+  }
   return null;
 }
 
@@ -1154,6 +1189,7 @@ function compactSourceStatus(collection) {
     ...(source.source_health && probationary ? { qualified_source_health: source.source_health } : {}),
     ...(source.runtime_trust ? { runtime_trust: source.runtime_trust } : {}),
     ...(source.pulse_only === true ? { pulse_only: true } : {}),
+    ...(source.source_scoped_pulse === true ? { source_scoped_pulse: true } : {}),
     ...(source.profile_key
       ? {
           source_profile: {
@@ -1260,6 +1296,8 @@ function normalizeLocalEventAdapter(value) {
     embedded_program: "embedded_program_rsc",
     next_rsc_program: "embedded_program_rsc",
     nextjs_program: "embedded_program_rsc",
+    official_article_program: "official_program_article",
+    public_program_article: "official_program_article",
   };
   const normalized = aliases[raw] || raw;
   return LOCAL_EVENT_ADAPTERS.has(normalized) ? normalized : null;
@@ -1358,6 +1396,7 @@ function resolveDefaultEventSupply(
       anchor,
       sourceAnchors,
       registry: requestRegistry,
+      now,
       globalSource: GLOBAL_FEED_DESCRIPTOR,
       globalEnabled: Boolean(globalKey),
       now,

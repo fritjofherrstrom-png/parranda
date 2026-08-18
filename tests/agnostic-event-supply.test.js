@@ -444,6 +444,124 @@ test("trusted venue resolution can recover one source-backed mapless occurrence"
   assert.equal(out.acquisition.venue_resolution.resolved_count, 1);
 });
 
+test("a reviewed official program article reaches normalized Pulse through trusted venue resolution", async () => {
+  const anchor = { lat: 45, lng: 9 };
+  const registry = [{
+    id: "reviewed-civic-program",
+    label: "Reviewed civic programme",
+    adapter: "official_program_article",
+    endpoint: "https://city.example/news/summer-program",
+    bbox: [8.8, 44.8, 9.2, 45.2],
+    timezone: "Europe/Rome",
+    source_language: "en",
+    source_tier: "official",
+    confidence: "low",
+    source_family: "official_municipal_calendar",
+    source_identity: "city.example",
+    terms_status: "api_terms_compatible",
+    source_health: "healthy",
+    status: "active",
+  }];
+  const html = [
+    '<html lang="en"><body>',
+    "<h1>River Festival 2026</h1>",
+    "<h2>Programme at Civic Garden</h2>",
+    "<p>21 August 20:00 Local orchestra</p>",
+    "<p>21 August 22:00 Night market</p>",
+    "</body></html>",
+  ].join("");
+  const queries = [];
+  const out = await collectAnchorEvents({
+    anchor,
+    now: "2026-08-21T17:00:00Z",
+    registry,
+    placeContext: { locality: "River City", country: "Italy" },
+    venueResolver: async (query) => {
+      queries.push(query);
+      return [{
+        lat: 45.001,
+        lng: 9.001,
+        confidence: "medium",
+        provenance: "trusted_test_resolver",
+        attribution: "Test fixture",
+      }];
+    },
+    fetcher: async (url) => ({
+      ok: true,
+      status: 200,
+      url: String(url),
+      headers: { get: () => null },
+      text: async () => html,
+    }),
+  });
+
+  assert.equal(out.coverage, "covered");
+  assert.deepEqual(queries, ["Civic Garden, River City, Italy"]);
+  assert.deepEqual(out.tonight.map((event) => event.title), [
+    "Local orchestra",
+    "Night market",
+  ]);
+  assert.ok(out.tonight.every((event) => event.venue_resolution?.source === "trusted_place_resolver"));
+  assert.ok(out.tonight.every((event) => event.source_url === registry[0].endpoint));
+  assert.ok(out.tonight.every((event) => event.route_eligible === true));
+  assert.equal(out.acquisition.source_health.status, "healthy");
+});
+
+test("a reviewed bounded programme remains Pulse-only when trusted venue geometry is unresolved", async () => {
+  const anchor = { lat: 45, lng: 9 };
+  const registry = [{
+    id: "reviewed-mapless-program",
+    label: "Reviewed civic programme",
+    adapter: "official_program_article",
+    endpoint: "https://city.example/news/summer-program",
+    bbox: [8.8, 44.8, 9.2, 45.2],
+    timezone: "Europe/Rome",
+    source_language: "en",
+    source_tier: "official",
+    confidence: "low",
+    source_family: "official_municipal_calendar",
+    source_identity: "city.example",
+    terms_status: "api_terms_compatible",
+    source_health: "healthy",
+    source_scoped_pulse: true,
+    status: "active",
+  }];
+  const html = [
+    '<html lang="en"><body>',
+    "<h1>River Festival 2026</h1>",
+    "<h2>Programme at Civic Garden</h2>",
+    "<p>21 August 20:00 Local orchestra</p>",
+    "<p>21 August 22:00 Night market</p>",
+    "</body></html>",
+  ].join("");
+  const out = await collectAnchorEvents({
+    anchor,
+    now: "2026-08-21T17:00:00Z",
+    registry,
+    placeContext: { locality: "River City", country: "Italy" },
+    venueResolver: async () => [{
+      lat: 45.001,
+      lng: 9.001,
+      confidence: "low",
+      provenance: "trusted_test_resolver",
+    }],
+    fetcher: async (url) => ({
+      ok: true,
+      status: 200,
+      url: String(url),
+      headers: { get: () => null },
+      text: async () => html,
+    }),
+  });
+
+  assert.deepEqual(out.tonight.map((event) => event.title), ["Local orchestra", "Night market"]);
+  assert.ok(out.tonight.every((event) => event.lat === null && event.lng === null));
+  assert.ok(out.tonight.every((event) => event.route_eligible === false));
+  assert.ok(out.tonight.every((event) => event.geographic_relevance === "source_scope"));
+  assert.ok(out.tonight.every((event) => event.venue_resolution?.status === "not_found"));
+  assert.equal(out.acquisition.source_health.accepted_event_count, 2);
+});
+
 test("tonight ranks by salience: an ongoing 'now' event outranks a later-today one", async () => {
   const out = await collectAnchorEvents({
     anchor: HELSINKI,

@@ -44,6 +44,7 @@ const {
 const {
   resolveDefaultSourceSearch,
 } = require("../server/pulse-sources/source-search-provider");
+const { fetchWeatherForDates } = require("../server/weather");
 
 const USAGE = [
   "Usage:",
@@ -279,8 +280,32 @@ function createOperatorRuntime(env = process.env) {
     sourceScout: scoutLocalEventSources,
     sourceSearch: resolveDefaultSourceSearch(env, { cache: sourceSearchCache }),
     sourceQualifier: qualifyDiscoveredSourceProfile,
+    timezoneResolver: createWeatherTimezoneResolver(),
     scoutCache,
     sourceCatalog: resolveDefaultSourceProfileCatalog(env),
+  };
+}
+
+function createWeatherTimezoneResolver({ fetchWeather = fetchWeatherForDates } = {}) {
+  return async function resolveTrustedTimezone(anchor, now = new Date()) {
+    if (!Number.isFinite(anchor?.lat) || !Number.isFinite(anchor?.lng)) return null;
+    const date = now instanceof Date && Number.isFinite(now.getTime())
+      ? now.toISOString().slice(0, 10)
+      : new Date(now).toISOString().slice(0, 10);
+    try {
+      const weather = await fetchWeather([date], anchor, { timezone: "auto" });
+      const resolution = weather?.[date]?.timezone_resolution;
+      return resolution?.timezone_source === "weather_provider_auto" &&
+        typeof resolution.timezone === "string"
+        ? {
+            timezone: resolution.timezone,
+            timezone_source: "weather_provider_auto",
+            timezone_trust: "derived_from_weather_provider",
+          }
+        : null;
+    } catch (_error) {
+      return null;
+    }
   };
 }
 
@@ -337,6 +362,7 @@ if (require.main === module) {
 module.exports = {
   composeOperatorLoaders,
   createOperatorRuntime,
+  createWeatherTimezoneResolver,
   main,
   parseArguments,
   recordDiscoveryInCatalog,

@@ -188,6 +188,12 @@ function eventDistanceKm(event, scope) {
 }
 
 function eventMatchesLiveScope(event, scope) {
+  if (
+    event?.source_scope_verified === true &&
+    event?.geographic_relevance === "source_scope"
+  ) {
+    return scope?.kind === "around_place";
+  }
   const distanceKm = eventDistanceKm(event, scope);
   return Number.isFinite(distanceKm) && distanceKm * 1000 <= Number(scope?.radius_m || 0);
 }

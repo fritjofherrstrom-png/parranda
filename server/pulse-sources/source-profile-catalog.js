@@ -11,6 +11,7 @@ const MAX_PROFILE_BYTES = 512 * 1024;
 const MAX_QUALIFICATION_BYTES = 128 * 1024;
 const MAX_SCOUT_TARGETS = 10_000;
 const SCOUT_LEASE_MS = 15 * 60 * 1000;
+const SCOUT_REPROBE_MIN_MS = 5 * 60 * 1000;
 const SCOUT_REFRESH_MS = 7 * 24 * 60 * 60 * 1000;
 
 const UPSERT_SCOUT_TARGET_SQL = `
@@ -61,8 +62,7 @@ WITH candidate AS (
   SELECT target_key
   FROM pulse_source_scout_targets
   WHERE
-    (status IN ('pending', 'retry_wait') AND next_attempt_at <= $1::timestamptz)
-    OR (status = 'completed' AND completed_at <= $2::timestamptz)
+    (status IN ('pending', 'retry_wait', 'completed') AND next_attempt_at <= $1::timestamptz)
     OR (status = 'leased' AND lease_until <= $1::timestamptz)
   ORDER BY observation_count DESC, observed_at DESC, target_key ASC
   LIMIT 1
@@ -71,8 +71,8 @@ WITH candidate AS (
 UPDATE pulse_source_scout_targets AS target
 SET
   status = 'leased',
-  lease_token = $3,
-  lease_until = $4::timestamptz,
+  lease_token = $2,
+  lease_until = $3::timestamptz,
   attempt_count = target.attempt_count + 1,
   updated_at = NOW()
 FROM candidate
@@ -377,12 +377,10 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
     const claimedAt = normalizeDate(now());
     if (!claimedAt) return null;
     const leaseToken = randomUUID();
-    const staleCompletedAt = new Date(claimedAt.getTime() - SCOUT_REFRESH_MS);
     const leaseUntil = new Date(claimedAt.getTime() + SCOUT_LEASE_MS);
     try {
       const result = await query(CLAIM_SCOUT_TARGET_SQL, [
         claimedAt.toISOString(),
-        staleCompletedAt.toISOString(),
         leaseToken,
         leaseUntil.toISOString(),
       ]);
@@ -392,11 +390,11 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
     }
   }
 
-  async function completeScoutTarget(target, reason = "source_scout_completed") {
+  async function completeScoutTarget(target, reason = "source_scout_completed", options = {}) {
     const normalized = normalizeLeasedScoutTarget(target);
     const completedAt = normalizeDate(now());
     if (!normalized || !completedAt) return { status: "ignored", reason: "invalid_source_scout_lease" };
-    const refreshAt = new Date(completedAt.getTime() + SCOUT_REFRESH_MS);
+    const refreshAt = boundedScoutRefreshAt(completedAt, options?.nextAttemptAt);
     try {
       const result = await query(COMPLETE_SCOUT_TARGET_SQL, [
         normalized.targetKey,
@@ -444,6 +442,16 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
     completeScoutTarget,
     failScoutTarget,
   };
+}
+
+function boundedScoutRefreshAt(completedAt, requestedAt) {
+  const earliestAt = new Date(completedAt.getTime() + SCOUT_REPROBE_MIN_MS);
+  const defaultAt = new Date(completedAt.getTime() + SCOUT_REFRESH_MS);
+  const requested = normalizeDate(requestedAt);
+  if (!requested) return defaultAt;
+  if (requested < earliestAt) return earliestAt;
+  if (requested > defaultAt) return defaultAt;
+  return requested;
 }
 
 function resolveDefaultSourceProfileCatalog(env = process.env, options = {}) {
@@ -706,12 +714,14 @@ module.exports = {
   MAX_PROFILE_BYTES,
   MAX_QUALIFICATION_BYTES,
   SCOUT_LEASE_MS,
+  SCOUT_REPROBE_MIN_MS,
   SCOUT_REFRESH_MS,
   SOURCE_QUALIFICATION_SQL,
   UPSERT_APPROVED_PROFILE_SQL,
   UPSERT_DISCOVERY_PROFILE_SQL,
   UPSERT_SCOUT_TARGET_SQL,
   createSourceProfileCatalog,
+  boundedScoutRefreshAt,
   normalizeScoutDemand,
   resolveDefaultSourceProfileCatalog,
   scoutRetryDelayMs,

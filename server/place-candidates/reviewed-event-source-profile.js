@@ -22,6 +22,9 @@ const ADAPTER_MAP = Object.freeze({
   embedded_program: "embedded_program_rsc",
   next_rsc_program: "embedded_program_rsc",
   nextjs_program: "embedded_program_rsc",
+  official_program_article: "official_program_article",
+  official_article_program: "official_program_article",
+  public_program_article: "official_program_article",
 });
 
 const RUNTIME_POLICIES = new Set(["active", "bounded_refresh"]);
@@ -36,6 +39,7 @@ const TIMEZONE_REQUIRED_ADAPTERS = new Set([
   "sitevision_calendar",
   "wix_event_sitemap",
   "embedded_program_rsc",
+  "official_program_article",
 ]);
 
 /**
@@ -165,6 +169,7 @@ function reviewedFeedRow({ row, candidate, bbox, profileKey, review }) {
     runtime_policy: runtimePolicy,
     terms_status: termsStatus,
     source_health: sourceHealth,
+    source_scoped_pulse: true,
     profile_key: profileKey,
     profile_reviewed_at: review.reviewed_at,
     profile_expires_at: review.expires_at,

@@ -92,20 +92,31 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
 
   let profile = result.source_profile;
   let qualificationStatus = "not_run";
+  let qualificationNow = null;
   if (typeof runtime?.sourceQualifier === "function") {
     try {
+      qualificationNow = runtime.now ? runtime.now() : new Date();
+      const manifests = await attachTrustedTimezone(
+        result.manifest_candidates,
+        {
+          timezoneResolver: runtime.timezoneResolver,
+          anchor: target.anchor,
+          now: qualificationNow,
+        },
+      );
       const previousQualification = typeof catalog.loadSourceQualification === "function"
         ? await catalog.loadSourceQualification(profile.profile_key)
         : null;
       const qualified = await runtime.sourceQualifier({
         profile,
-        manifests: result.manifest_candidates,
+        manifests,
         previousQualification,
         anchor: target.anchor,
         spatialScope: target.spatial_scope,
         placeContext: target.place_context,
-        now: runtime.now ? runtime.now() : new Date(),
+        now: qualificationNow,
         fetcher: runtime.fetcher,
+        venueResolver: runtime.placeResolver,
       });
       if (qualified?.profile) profile = qualified.profile;
       qualificationStatus = qualified?.qualification?.status || "unavailable";
@@ -124,7 +135,10 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
       catalog_status: failed.status,
     };
   }
-  const completed = await catalog.completeScoutTarget(target, reason);
+  const completionOptions = qualificationStatus === "observing"
+    ? { nextAttemptAt: nextQualificationProbeAt(qualificationNow) }
+    : undefined;
+  const completed = await catalog.completeScoutTarget(target, reason, completionOptions);
   return {
     target_key: target.target_key,
     status: completed?.status === "completed" ? "completed" : "failed",
@@ -133,6 +147,54 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
     catalog_status: completed?.status || "failed",
     qualification_status: qualificationStatus,
   };
+}
+
+function nextQualificationProbeAt(value) {
+  const observedAt = value instanceof Date ? new Date(value.getTime()) : new Date(value);
+  if (!Number.isFinite(observedAt.getTime())) return null;
+  return new Date(Date.UTC(
+    observedAt.getUTCFullYear(),
+    observedAt.getUTCMonth(),
+    observedAt.getUTCDate() + 1,
+    0,
+    5,
+  ));
+}
+
+async function attachTrustedTimezone(manifests, { timezoneResolver, anchor, now } = {}) {
+  const rows = Array.isArray(manifests) ? manifests : [];
+  if (!rows.some((manifest) => !manifest?.timezone) || typeof timezoneResolver !== "function") {
+    return rows;
+  }
+  let resolution;
+  try {
+    resolution = await timezoneResolver(anchor, now);
+  } catch (_error) {
+    return rows;
+  }
+  const timezone = validIanaTimezone(resolution?.timezone);
+  if (!timezone || resolution?.timezone_source !== "weather_provider_auto") return rows;
+  return rows.map((manifest) => manifest?.timezone
+    ? manifest
+    : {
+        ...manifest,
+        timezone,
+        review: {
+          ...(manifest?.review || {}),
+          timezone_source: "weather_provider_auto",
+          timezone_trust: "derived_from_weather_provider",
+        },
+      });
+}
+
+function validIanaTimezone(value) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value.trim() }).format(0);
+    return value.trim();
+  } catch (_error) {
+    return null;
+  }
 }
 
 async function main(argv = process.argv.slice(2), options = {}) {
@@ -244,4 +306,6 @@ module.exports = {
   parseArguments,
   runScoutWorkerBatch,
   scoutTarget,
+  attachTrustedTimezone,
+  nextQualificationProbeAt,
 };

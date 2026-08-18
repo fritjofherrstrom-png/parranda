@@ -185,3 +185,18 @@ must receive scheduled, tested backups. Event scouting runs in the dedicated
 worker, never inside the deploy workflow or public request path. Discovery
 results remain `review_needed`; only the separate trusted review action can
 activate a source.
+
+Proactive unknown-place source discovery is not enabled by the base deployment.
+It additionally requires the `source-catalog` Compose profile, an operator-owned
+SearXNG JSON endpoint, and:
+
+```bash
+PARRANDA_SOURCE_SEARCH=enabled
+PARRANDA_SOURCE_SEARCH_ENDPOINT=https://search.example/search
+```
+
+If either the worker/profile or endpoint is absent, the application may record
+source demand but cannot enumerate unknown source pages in the background. That
+is an environment-not-wired state, not a healthy-empty verdict for the place.
+The endpoint and its cache/rate policy remain an operator responsibility; the
+public request path never accepts a search endpoint or source URL.

@@ -46,6 +46,27 @@ test("current time-sensitive source event is normalized as relevant now", () => 
   assert.ok(normalized.timing_reasons.includes("has_source_backing"));
 });
 
+test("local significance evidence is bounded and preserves only the closed contract", () => {
+  const normalized = normalizeTimeSensitiveSourceEvent(event({
+    local_significance: {
+      source_prominence: "dedicated_programme",
+      programme_event_count: 12,
+      programme_day_count: 4,
+      current_year_evidence: true,
+      popularity: 999999,
+    },
+  }), { now: NOW });
+  assert.deepEqual(normalized.local_significance, {
+    source_prominence: "dedicated_programme",
+    programme_event_count: 12,
+    programme_day_count: 4,
+    current_year_evidence: true,
+  });
+  assert.equal(normalizeTimeSensitiveSourceEvent(event({
+    local_significance: { source_prominence: "search_result", programme_event_count: 9999 },
+  }), { now: NOW }).local_significance, undefined);
+});
+
 test("future event is not classified as now", () => {
   const normalized = normalizeTimeSensitiveSourceEvent(
     event({

@@ -11,9 +11,12 @@ const {
   FAIL_SCOUT_TARGET_SQL,
   MAX_SCOUT_TARGETS,
   MAX_QUALIFICATION_BYTES,
+  SCOUT_REFRESH_MS,
+  SCOUT_REPROBE_MIN_MS,
   SOURCE_QUALIFICATION_SQL,
   UPSERT_SCOUT_TARGET_SQL,
   UPSERT_DISCOVERY_PROFILE_SQL,
+  boundedScoutRefreshAt,
   createSourceProfileCatalog,
   resolveDefaultSourceProfileCatalog,
 } = require("../server/pulse-sources/source-profile-catalog");
@@ -392,11 +395,26 @@ test("scout claims use leases and completion/failure cannot expose raw errors", 
   const completed = await catalog.completeScoutTarget(target, "bounded_source_scout_complete");
   assert.equal(completed.status, "completed");
   assert.equal(calls[1].sql, COMPLETE_SCOUT_TARGET_SQL);
+  assert.equal(calls[1].values[3], new Date(NOW.getTime() + SCOUT_REFRESH_MS).toISOString());
 
   const failed = await catalog.failScoutTarget(target, "postgresql://secret@private-host/db");
   assert.equal(failed.status, "retry_wait");
   assert.equal(calls[2].sql, FAIL_SCOUT_TARGET_SQL);
   assert.equal(calls[2].values[3], "source_scout_failed");
+});
+
+test("scout completion accepts only a bounded early re-probe", async () => {
+  const earliest = new Date(NOW.getTime() + SCOUT_REPROBE_MIN_MS);
+  const defaultRefresh = new Date(NOW.getTime() + SCOUT_REFRESH_MS);
+  const nextDay = new Date("2026-07-31T00:05:00.000Z");
+
+  assert.equal(boundedScoutRefreshAt(NOW, nextDay).toISOString(), nextDay.toISOString());
+  assert.equal(boundedScoutRefreshAt(NOW, NOW).toISOString(), earliest.toISOString());
+  assert.equal(
+    boundedScoutRefreshAt(NOW, new Date("2026-09-01T00:00:00.000Z")).toISOString(),
+    defaultRefresh.toISOString(),
+  );
+  assert.equal(boundedScoutRefreshAt(NOW, "not-a-date").toISOString(), defaultRefresh.toISOString());
 });
 
 test("default catalog is explicit server config and never connects while disabled", async () => {

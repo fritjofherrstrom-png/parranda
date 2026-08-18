@@ -91,6 +91,7 @@ function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
     tags: normalizeStringList(rawEvent.tags),
     intents: normalizeStringList(rawEvent.intents || rawEvent.match_tags),
     route_role_hint: firstString(rawEvent.route_role_hint, rawEvent.routeRoleHint),
+    local_significance: normalizeLocalSignificance(rawEvent.local_significance),
     timing_relevance: timingRelevance,
     timezone,
     timing_reasons: timingReasons(timingRelevance, {
@@ -104,6 +105,26 @@ function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
       confidence,
     }),
   });
+}
+
+function normalizeLocalSignificance(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const sourceProminence = firstString(value.source_prominence);
+  const programmeEventCount = boundedInteger(value.programme_event_count, 1, 300);
+  const programmeDayCount = boundedInteger(value.programme_day_count, 1, 45);
+  return compactObject({
+    source_prominence: sourceProminence === "dedicated_programme" ? sourceProminence : null,
+    programme_event_count: programmeEventCount,
+    programme_day_count: programmeDayCount,
+    current_year_evidence: value.current_year_evidence === true || null,
+  });
+}
+
+function boundedInteger(value, min, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  const integer = Math.floor(number);
+  return integer >= min && integer <= max ? integer : null;
 }
 
 function normalizeTimingRelevance(explicit, facts = {}) {

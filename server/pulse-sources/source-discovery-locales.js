@@ -10,7 +10,9 @@ const COUNTRY_DISCOVERY_LOCALES = Object.freeze({
   cz: locale("cs", ["akce", "kalendář akcí", "bleší trh", "trhy", "koncert"]),
   de: locale("de", ["veranstaltungen", "veranstaltungskalender", "flohmarkt", "markt", "konzert"]),
   dk: locale("da", ["arrangementer", "kalender", "loppemarked", "marked", "koncert"]),
-  es: locale("es", ["eventos", "agenda", "mercadillo", "mercado", "concierto"]),
+  // Spain-wide discovery includes high-value co-official-language programme
+  // terms. Page language is still detected from the source itself.
+  es: locale("es", ["eventos", "agenda", "festes", "programació", "mercadillo"]),
   fi: locale("fi", ["tapahtumat", "tapahtumakalenteri", "kirpputori", "markkinat", "konsertti"]),
   fr: locale("fr", ["événements", "agenda", "vide-greniers", "marché", "concert"]),
   gr: locale("el", ["εκδηλώσεις", "ημερολόγιο εκδηλώσεων", "υπαίθρια αγορά", "αγορά", "συναυλία"]),

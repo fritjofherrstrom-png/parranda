@@ -132,6 +132,33 @@ test("one reviewed page can reveal structured feeds and social discovery without
   }
 });
 
+test("only an explicit recognized rel=license declaration can attest open terms", () => {
+  const licensed = inspectEventSourcePage({
+    seed: { url: "https://calendar.example/program" },
+    html: [
+      '<link rel="license" href="https://creativecommons.org/licenses/by/4.0/">',
+      '<link rel="alternate" type="text/calendar" href="/events.ics">',
+    ].join(""),
+    context: context(),
+  });
+  assert.equal(licensed.candidates[0].terms_status, "open_license");
+  assert.equal(licensed.manifest_candidates[0].review.terms_status, "open_license");
+  assert.equal(licensed.manifest_candidates[0].license, "https://creativecommons.org/licenses/by/4.0/");
+
+  for (const html of [
+    '<p>Creative Commons calendar</p><link rel="alternate" type="text/calendar" href="/events.ics">',
+    '<link rel="license" href="https://terms.example/custom"><link rel="alternate" type="text/calendar" href="/events.ics">',
+  ]) {
+    const unproven = inspectEventSourcePage({
+      seed: { url: "https://calendar.example/program" },
+      html,
+      context: context(),
+    });
+    assert.equal(unproven.candidates[0].terms_status, "unknown");
+    assert.equal(unproven.manifest_candidates[0].review.terms_status, "unknown");
+  }
+});
+
 test("The Events Calendar endpoint is detected generically from a strong CMS signature", () => {
   const result = inspectEventSourcePage({
     seed: {
@@ -305,6 +332,63 @@ test("server-rendered structured programs produce a review-needed generic manife
   assert.equal(result.candidates[0].adapter, "embedded_program_rsc");
   assert.equal(result.candidates[0].maps_to_existing_provider, true);
   assert.equal(result.manifest_candidates[0].adapter, "embedded_program_rsc");
+  assert.equal(result.manifest_candidates[0].status, "review-needed");
+});
+
+test("official program articles are detected generically and preserve the page language", () => {
+  const result = inspectEventSourcePage({
+    seed: {
+      url: "https://civic.example/news/summer-program",
+      family: "official_municipal_calendar",
+      trust_tier: "official",
+      timezone: "Europe/Madrid",
+    },
+    html: [
+      '<html lang="ca"><body>',
+      "<h1>Festes del Port 2026</h1>",
+      "<h2><strong>Programa al Parc Central</strong></h2>",
+      "<p><strong>21 agost 20.00 Concert local</strong></p>",
+      "<p><strong>22 agost 21.00 Nit de dansa</strong></p>",
+      "</body></html>",
+    ].join(""),
+    context: context(),
+  });
+
+  assert.deepEqual(result.detected, ["official_program_article"]);
+  assert.equal(result.candidates[0].adapter, "official_program_article");
+  assert.equal(result.candidates[0].source_language, "ca");
+  assert.equal(result.candidates[0].status, "needs_adapter_or_permission");
+  assert.equal(result.manifest_candidates[0].adapter, "official_program_article");
+  assert.equal(result.manifest_candidates[0].source_language, "ca");
+  assert.equal(result.manifest_candidates[0].timezone, "Europe/Madrid");
+  assert.equal(result.manifest_candidates[0].runtime_policy, "review_required");
+});
+
+test("bounded scouting carries the actual robots verdict into reviewed manifests", async () => {
+  const page = [
+    '<html lang="en"><body>',
+    "<h1>River Festival 2026</h1>",
+    "<h2>Program at Harbour Stage</h2>",
+    "<p>5 June 18:00 Local orchestra</p>",
+    "<p>5 June 20:00 Evening concert</p>",
+    "</body></html>",
+  ].join("");
+  const result = await scoutLocalEventSources({
+    ...context(),
+    seeds: [{
+      url: "https://city.example/festival",
+      timezone: "Europe/Stockholm",
+      source_language: "en",
+    }],
+    fetcher: async (url) => response(
+      String(url).endsWith("/robots.txt") ? "User-agent: *\nAllow: /" : page,
+      { contentType: String(url).endsWith("/robots.txt") ? "text/plain" : "text/html" },
+    ),
+  });
+
+  assert.equal(result.manifest_candidates.length, 1);
+  assert.equal(result.manifest_candidates[0].adapter, "official_program_article");
+  assert.equal(result.manifest_candidates[0].review.robots_status, "allowed");
   assert.equal(result.manifest_candidates[0].status, "review-needed");
 });
 

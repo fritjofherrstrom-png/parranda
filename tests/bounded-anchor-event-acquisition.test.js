@@ -256,6 +256,79 @@ test("coordinate-less evidence alone cannot become an anchor event", () => {
   assert.equal(bounded.rejected[0].reason, "missing_event_coordinates");
 });
 
+test("reviewed source-scoped evidence stays Pulse-only when venue geometry is unresolved", () => {
+  const sourceScoped = fuseAndBoundEventEvidence(
+    [
+      {
+        id: "mapless-reviewed",
+        title: "Official town programme",
+        starts_at: "2026-07-14T19:00:00Z",
+        place_context: "Municipal park",
+        source_provider_id: "reviewed-program",
+        source_identity: "town.example",
+        source_url: "https://town.example/programme",
+      },
+    ],
+    {
+      anchor: ANCHOR,
+      radiusM: 3000,
+      sourceScopedPulseIds: ["reviewed-program"],
+    },
+  );
+
+  assert.deepEqual(sourceScoped.events, [], "routeable evidence still requires trusted geometry");
+  assert.equal(sourceScoped.pulse_only_events.length, 1);
+  assert.equal(sourceScoped.pulse_only_events[0].geographic_relevance, "source_scope");
+  assert.equal(sourceScoped.pulse_only_events[0].source_scope_verified, true);
+  assert.equal(sourceScoped.pulse_only_events[0].route_eligible, false);
+  assert.equal(sourceScoped.pulse_only_events[0].lat, undefined);
+  assert.deepEqual(sourceScoped.rejected, []);
+
+  const outside = fuseAndBoundEventEvidence(
+    [{
+      ...sourceScoped.pulse_only_events[0],
+      id: "explicitly-outside",
+      lat: 57.7,
+      lng: 11.97,
+    }],
+    {
+      anchor: ANCHOR,
+      radiusM: 3000,
+      sourceScopedPulseIds: ["reviewed-program"],
+    },
+  );
+  assert.deepEqual(outside.events, []);
+  assert.deepEqual(outside.pulse_only_events, []);
+  assert.equal(outside.rejected[0].reason, "outside_anchor_radius");
+});
+
+test("reviewed source-scoped collection surfaces mapless events without route eligibility", async () => {
+  const registry = [feed("reviewed-program", { source_scoped_pulse: true })];
+  const out = await collectAnchorEvents({
+    anchor: ANCHOR,
+    now: NOW,
+    registry,
+    fetcher: async () => ({
+      ok: true,
+      json: async () => ({
+        data: [linkedEvent({
+          id: "mapless-live",
+          title: "Official evening programme",
+          source: "reviewed-program",
+        })],
+      }),
+    }),
+  });
+
+  assert.equal(out.tonight.length, 1);
+  assert.equal(out.tonight[0].route_eligible, false);
+  assert.equal(out.tonight[0].source_scope_verified, true);
+  assert.equal(out.tonight[0].geometry_status, "unresolved");
+  assert.equal(out.tonight[0].lat, null);
+  assert.equal(out.acquisition.source_health.accepted_event_count, 1);
+  assert.deepEqual(out.acquisition.rejection_summary, []);
+});
+
 test("resolver-attested regional bounds admit relevant regional events without changing local radius behavior", () => {
   const regionalScope = {
     kind: "region",

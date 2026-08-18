@@ -147,6 +147,28 @@ test("shared live-event shaping preserves health, hides internal pools and appli
   assert.equal("_rankable_events" in shaped, false);
 });
 
+test("source-scoped Pulse evidence is only eligible around the resolved place", () => {
+  const event = {
+    id: "source-scoped",
+    lat: null,
+    lng: null,
+    geographic_relevance: "source_scope",
+    source_scope_verified: true,
+    route_eligible: false,
+  };
+  assert.equal(eventMatchesLiveScope(event, { kind: "around_place", radius_m: 3000 }), true);
+  assert.equal(eventMatchesLiveScope(event, {
+    kind: "near_me",
+    anchor: { lat: 55.6, lng: 13 },
+    radius_m: 2000,
+  }), false);
+  assert.equal(eventMatchesLiveScope(event, {
+    kind: "near_route",
+    points: [{ lat: 55.6, lng: 13 }, { lat: 55.61, lng: 13.01 }],
+    radius_m: 1200,
+  }), false);
+});
+
 test("unavailable source health uses compact allowlisted reasons", () => {
   const disabled = unavailableLiveEvents("event_supply_not_configured");
   assert.equal(disabled.coverage, "unavailable");
