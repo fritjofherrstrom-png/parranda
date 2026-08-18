@@ -330,7 +330,7 @@ test("qualification history is read only from review-needed profiles and stays b
   assert.equal(await rejectedCatalog.loadSourceQualification("place-source-profile-v1:oversize"), null);
 });
 
-test("only resolver-attested bounded place demand enters the scout queue", async () => {
+test("only resolver-attested demand enters the queue and broad scopes become local apertures", async () => {
   const calls = [];
   const catalog = createSourceProfileCatalog({
     now: () => NOW,
@@ -341,23 +341,27 @@ test("only resolver-attested bounded place demand enters the scout queue", async
   });
 
   assert.equal((await catalog.recordScoutDemand({ anchor: { lat: 55.6, lng: 13 } })).status, "ignored");
-  assert.equal((await catalog.recordScoutDemand({
+  const broad = await catalog.recordScoutDemand({
     ...scoutDemand(),
     spatialScope: {
       source: "resolver_bounds",
       kind: "region",
       bounds: { west: 5, south: 45, east: 25, north: 65 },
     },
-  })).status, "ignored", "broad scopes never become crawl targets");
-  assert.equal(calls.length, 0);
+  });
+  assert.equal(broad.status, "recorded");
+  const broadScope = JSON.parse(calls[0].values[9]);
+  assert.equal(broadScope.collection_mode, "local_anchor");
+  assert.equal(broadScope.source, "resolver_anchor_aperture");
+  assert.ok(broadScope.diagonal_km <= 15, "the original broad bounds never become a crawl target");
   const first = await catalog.recordScoutDemand(scoutDemand());
   const second = await catalog.recordScoutDemand(scoutDemand());
 
   assert.equal(first.status, "recorded");
   assert.equal(first.target_key, second.target_key, "the same trusted scope deduplicates deterministically");
-  assert.equal(calls[0].sql, UPSERT_SCOUT_TARGET_SQL);
-  assert.equal(calls[0].values[11], MAX_SCOUT_TARGETS);
-  assert.deepEqual(JSON.parse(calls[0].values[8]), {
+  assert.equal(calls[1].sql, UPSERT_SCOUT_TARGET_SQL);
+  assert.equal(calls[1].values[11], MAX_SCOUT_TARGETS);
+  assert.deepEqual(JSON.parse(calls[1].values[8]), {
     region: "Test Region",
     country: "Test Country",
     country_code: "tc",
@@ -616,12 +620,15 @@ test("approved catalog feeds supplement runtime acquisition without changing sta
   assert.equal(warmed, 1);
 });
 
-test("an uncovered trusted place records demand without delaying or mutating Live output", async () => {
+test("an uncovered trusted place confirms demand before reporting discovery pending", async () => {
   let demand = null;
   const supply = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: "enabled" }, {
     sourceCatalog: {
       listApprovedEventFeedsForAnchor: async () => [],
-      recordScoutDemand: async (value) => { demand = value; },
+      recordScoutDemand: async (value) => {
+        demand = value;
+        return { status: "recorded", target_status: "pending" };
+      },
     },
     eventCache: { peek: () => null, warm: () => {} },
   });
@@ -633,12 +640,28 @@ test("an uncovered trusted place records demand without delaying or mutating Liv
     spatialScope: input.spatialScope,
     now: NOW,
   });
-  await new Promise((resolve) => setImmediate(resolve));
-
   assert.equal(result.coverage, "uncovered");
   assert.equal(result.acquisition.discovery_health.status, "pending");
   assert.ok(result.acquisition.source_health.reasons.includes("source_discovery_pending"));
   assert.deepEqual(demand, input);
+});
+
+test("an unaccepted scout demand is unavailable rather than falsely pending", async () => {
+  const supply = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: "enabled" }, {
+    sourceCatalog: {
+      listApprovedEventFeedsForAnchor: async () => [],
+      recordScoutDemand: async () => ({
+        status: "ignored",
+        reason: "untrusted_or_unbounded_scout_demand",
+      }),
+    },
+    eventCache: { peek: () => null, warm: () => {} },
+  });
+  const input = scoutDemand();
+  const result = await supply({ ...input, now: NOW });
+
+  assert.equal(result.acquisition.discovery_health.status, "unavailable");
+  assert.deepEqual(result.acquisition.discovery_health.reasons, ["source_discovery_demand_rejected"]);
 });
 
 test("uncovered Live preserves a stored observing discovery state", async () => {

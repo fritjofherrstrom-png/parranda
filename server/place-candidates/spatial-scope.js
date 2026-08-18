@@ -4,6 +4,7 @@ const LOCAL_SCOPE_DIAGONAL_KM = 15;
 const MAX_BOUNDED_SCOPE_DIAGONAL_KM = 80;
 const MAX_SECONDARY_ANCHORS = 2;
 const MIN_SECONDARY_ANCHOR_DISTANCE_KM = 4;
+const LOCAL_ANCHOR_HALF_SIDE_KM = 5;
 
 const PLACE_KIND_MAP = Object.freeze({
   city: "settlement",
@@ -140,6 +141,26 @@ function pointWithinTrustedSpatialScope(point, value) {
   );
 }
 
+function deriveLocalAnchorSpatialScope(value, anchor) {
+  const scope = sanitizeTrustedSpatialScope(value);
+  if (!scope || !validPoint(anchor) || !pointWithinTrustedSpatialScope(anchor, scope)) return null;
+  if (scope.collection_mode !== "broad_anchor_only") return scope;
+
+  const latDelta = LOCAL_ANCHOR_HALF_SIDE_KM / 111.32;
+  const longitudeScale = Math.max(0.05, Math.abs(Math.cos((anchor.lat * Math.PI) / 180)));
+  const lngDelta = LOCAL_ANCHOR_HALF_SIDE_KM / (111.32 * longitudeScale);
+  return sanitizeTrustedSpatialScope({
+    source: "resolver_anchor_aperture",
+    kind: scope.kind,
+    bounds: {
+      south: Math.max(scope.bounds.south, anchor.lat - latDelta),
+      north: Math.min(scope.bounds.north, anchor.lat + latDelta),
+      west: Math.max(scope.bounds.west, anchor.lng - lngDelta),
+      east: Math.min(scope.bounds.east, anchor.lng + lngDelta),
+    },
+  });
+}
+
 function spatialScopeCacheKey(value) {
   const scope = sanitizeTrustedSpatialScope(value);
   if (!scope) return "none";
@@ -210,6 +231,7 @@ module.exports = {
   MAX_BOUNDED_SCOPE_DIAGONAL_KM,
   MAX_SECONDARY_ANCHORS,
   MIN_SECONDARY_ANCHOR_DISTANCE_KM,
+  deriveLocalAnchorSpatialScope,
   normalizeNominatimSpatialScope,
   sanitizeTrustedSpatialScope,
   deriveSecondaryAnchors,

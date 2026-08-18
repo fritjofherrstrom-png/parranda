@@ -1424,18 +1424,15 @@ function resolveDefaultEventSupply(
       sourceCatalog &&
       typeof sourceCatalog.recordScoutDemand === "function"
     ) {
-      // Demand recording is a bounded database write only. Discovery/network
-      // work remains exclusively in the background worker, and this promise is
-      // intentionally detached so catalog latency cannot delay route/Pulse.
-      Promise.resolve(sourceCatalog.recordScoutDemand({
+      // This is one bounded catalog write, never discovery/network work. Await
+      // its compact outcome so `pending` means the worker really has a target.
+      const demandHealth = await recordUncoveredScoutDemand(sourceCatalog, {
         anchor,
         placeLabel,
         placeContext,
         spatialScope,
-      })).catch(() => {});
-      if (!discoveryHealth) {
-        discoveryHealth = pendingSourceDiscoveryHealth("source_discovery_pending");
-      }
+      });
+      if (!discoveryHealth) discoveryHealth = demandHealth;
     }
     if (sourcePlan.length === 0) {
       return {
@@ -1540,6 +1537,23 @@ async function resolveUncoveredDiscoveryHealth(sourceCatalog, anchor) {
     "environment_not_wired",
     "source_discovery_environment_not_wired",
   );
+}
+
+async function recordUncoveredScoutDemand(sourceCatalog, demand) {
+  try {
+    const outcome = await sourceCatalog.recordScoutDemand(demand);
+    if (outcome?.status === "recorded") {
+      return pendingSourceDiscoveryHealth("source_discovery_pending");
+    }
+    return unavailableSourceDiscoveryHealth(
+      "unavailable",
+      outcome?.reason === "source_scout_queue_capacity"
+        ? "source_discovery_queue_unavailable"
+        : "source_discovery_demand_rejected",
+    );
+  } catch (_error) {
+    return unavailableSourceDiscoveryHealth("unavailable", "source_catalog_unavailable");
+  }
 }
 
 module.exports = {

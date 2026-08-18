@@ -2,7 +2,10 @@
 
 const { createHash, randomUUID } = require("node:crypto");
 const { eventFeedsFromReviewedSourceProfiles } = require("../place-candidates/reviewed-event-source-profile");
-const { sanitizeTrustedSpatialScope } = require("../place-candidates/spatial-scope");
+const {
+  deriveLocalAnchorSpatialScope,
+  sanitizeTrustedSpatialScope,
+} = require("../place-candidates/spatial-scope");
 const { eventFeedsFromQualifiedSourceProfiles } = require("./source-qualification");
 const {
   normalizeSourceDiscoveryHealth,
@@ -610,7 +613,7 @@ function normalizeScoutDemand({ anchor, placeLabel, placeContext, spatialScope, 
   const lng = finiteCoordinate(anchor?.lng, -180, 180);
   const label = boundedString(placeLabel, 160);
   const context = normalizePlaceContext(placeContext);
-  const scope = sanitizeTrustedSpatialScope(spatialScope);
+  const scope = deriveLocalAnchorSpatialScope(spatialScope, { lat, lng });
   const at = normalizeDate(observedAt);
   if (
     lat == null ||
