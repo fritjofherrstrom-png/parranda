@@ -7,6 +7,9 @@ const {
 const {
   createOperatorRuntime,
 } = require("./scout-local-event-sources");
+const {
+  buildSourceDiscoveryHealth,
+} = require("../server/pulse-sources/source-discovery-health");
 
 const MAX_BATCH_SIZE = 5;
 const MIN_INTERVAL_MS = 30_000;
@@ -39,6 +42,7 @@ async function runScoutWorkerBatch({
 }
 
 async function scoutTarget({ target, catalog, runtime, discover }) {
+  const observedAt = runtime?.now ? runtime.now() : new Date();
   let result;
   try {
     result = await discover({
@@ -67,26 +71,40 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
 
   const reason = compactReason(result);
   if (["blocked", "failed", "unavailable"].includes(result?.status)) {
-    const failed = await catalog.failScoutTarget(target, reason);
-    return { target_key: target.target_key, status: "failed", reason, catalog_status: failed.status };
+    const discoveryHealth = buildSourceDiscoveryHealth({ result, observedAt });
+    const failed = await catalog.failScoutTarget(target, reason, { discoveryHealth });
+    return {
+      target_key: target.target_key,
+      status: "failed",
+      reason,
+      catalog_status: failed.status,
+      discovery_status: discoveryHealth.status,
+    };
   }
   if (result?.status === "empty") {
-    const completed = await catalog.completeScoutTarget(target, reason);
+    const discoveryHealth = buildSourceDiscoveryHealth({ result, observedAt });
+    const completed = await catalog.completeScoutTarget(target, reason, { discoveryHealth });
     return {
       target_key: target.target_key,
       status: completed?.status === "completed" ? "completed" : "failed",
       reason,
       profile_key: null,
       catalog_status: completed?.status || "failed",
+      discovery_status: discoveryHealth.status,
     };
   }
   if (!result?.source_profile) {
-    const failed = await catalog.failScoutTarget(target, "source_profile_unavailable");
+    const discoveryHealth = buildSourceDiscoveryHealth({
+      result: { ...result, status: "failed", reasons: ["source_profile_unavailable"] },
+      observedAt,
+    });
+    const failed = await catalog.failScoutTarget(target, "source_profile_unavailable", { discoveryHealth });
     return {
       target_key: target.target_key,
       status: "failed",
       reason: "source_profile_unavailable",
       catalog_status: failed.status,
+      discovery_status: discoveryHealth.status,
     };
   }
 
@@ -95,7 +113,7 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
   let qualificationNow = null;
   if (typeof runtime?.sourceQualifier === "function") {
     try {
-      qualificationNow = runtime.now ? runtime.now() : new Date();
+      qualificationNow = observedAt;
       const manifests = await attachTrustedTimezone(
         result.manifest_candidates,
         {
@@ -125,9 +143,20 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
     }
   }
 
+  const discoveryHealth = buildSourceDiscoveryHealth({
+    result: { ...result, source_profile: profile },
+    qualificationStatus,
+    observedAt: qualificationNow || observedAt,
+  });
+  profile = { ...profile, discovery_health: discoveryHealth };
+
   const recorded = await catalog.recordDiscovery(profile);
   if (recorded?.status !== "recorded") {
-    const failed = await catalog.failScoutTarget(target, recorded?.reason || "source_catalog_write_failed");
+    const failed = await catalog.failScoutTarget(
+      target,
+      recorded?.reason || "source_catalog_write_failed",
+      { discoveryHealth },
+    );
     return {
       target_key: target.target_key,
       status: "failed",
@@ -136,8 +165,8 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
     };
   }
   const completionOptions = qualificationStatus === "observing"
-    ? { nextAttemptAt: nextQualificationProbeAt(qualificationNow) }
-    : undefined;
+    ? { nextAttemptAt: nextQualificationProbeAt(qualificationNow), discoveryHealth }
+    : { discoveryHealth };
   const completed = await catalog.completeScoutTarget(target, reason, completionOptions);
   return {
     target_key: target.target_key,
@@ -146,6 +175,7 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
     profile_key: recorded.profile_key,
     catalog_status: completed?.status || "failed",
     qualification_status: qualificationStatus,
+    discovery_status: discoveryHealth.status,
   };
 }
 

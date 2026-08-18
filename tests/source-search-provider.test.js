@@ -165,6 +165,33 @@ test("malformed and hanging response bodies fail soft", async () => {
   assert.ok(Date.now() - started < 1000);
 });
 
+test("SearXNG engine failures never masquerade as a healthy empty search", async () => {
+  const unavailable = createSearxngSourceSearch({
+    endpoint: "https://search.example/search",
+    fetcher: async () => response(JSON.stringify({
+      results: [],
+      unresponsive_engines: [["bing", "timeout"]],
+    }), { url: "https://search.example/search" }),
+  });
+  const failed = await unavailable({ queries: ["Test events"] });
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.query_outcomes[0].status, "failed");
+  assert.equal(failed.query_outcomes[0].reason, "source_search_engines_unavailable");
+  assert.equal(failed.query_outcomes[0].engine_failure_count, 1);
+
+  const partial = createSearxngSourceSearch({
+    endpoint: "https://search.example/search",
+    fetcher: async () => response(JSON.stringify({
+      results: [{ url: "https://calendar.example/events", title: "Calendar" }],
+      unresponsive_engines: [["qwant", "captcha"]],
+    }), { url: "https://search.example/search" }),
+  });
+  const partialResult = await partial({ queries: ["Test events"] });
+  assert.equal(partialResult.status, "partial");
+  assert.equal(partialResult.query_outcomes[0].status, "partial");
+  assert.equal(partialResult.seed_count, 1);
+});
+
 test("the env factory supports a private self-hosted endpoint", async () => {
   let called = false;
   const search = resolveDefaultSourceSearch({

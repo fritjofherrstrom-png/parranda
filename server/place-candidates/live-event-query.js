@@ -1,6 +1,9 @@
 "use strict";
 
 const { haversineKm } = require("../candidates/area-intelligence");
+const {
+  normalizeSourceDiscoveryHealth,
+} = require("../pulse-sources/source-discovery-health");
 
 const LIVE_EVENT_SCOPES = new Set(["around_place", "near_route", "near_me"]);
 const LIVE_EVENT_TIME_WINDOWS = new Set(["tonight", "this_week"]);
@@ -236,14 +239,17 @@ function shapeCollectedLiveEvents(collected, { scope = null } = {}) {
   const acquisitionInput = collected.acquisition && typeof collected.acquisition === "object"
     ? collected.acquisition
     : {};
+  const { discovery_health: rawDiscoveryHealth, ...safeAcquisitionInput } = acquisitionInput;
   const acquisition = {
-    ...acquisitionInput,
+    ...safeAcquisitionInput,
     source_health: normalizeLiveEventSourceHealth(acquisitionInput.source_health, {
       coverage: collected.coverage,
       pending: Boolean(collected.pending),
       surfacedEventCount: tonight.length + thisWeek.length,
     }),
   };
+  const discoveryHealth = normalizeSourceDiscoveryHealth(rawDiscoveryHealth);
+  if (discoveryHealth) acquisition.discovery_health = discoveryHealth;
   return {
     coverage: collected.coverage,
     feed: collected.feed || null,

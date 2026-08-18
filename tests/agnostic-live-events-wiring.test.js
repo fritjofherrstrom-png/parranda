@@ -9,6 +9,7 @@ const http = require("node:http");
 const test = require("node:test");
 
 const { buildApp } = require("../server/app");
+const { resolveDefaultEventSupply } = require("../server/place-candidates/agnostic-event-supply");
 const { mockStableWeatherFetch } = require("./helpers/planner-reservoir-compare");
 
 const ORIGINAL_FETCH = global.fetch;
@@ -133,6 +134,58 @@ test("trusted live events remain available when route composition is blocked", a
     assert.ok(res.agnostic_route_output_experiment.readiness_blockers.includes("no_trusted_loader"));
     assert.equal(res.live_events.coverage, "covered");
     assert.equal(res.live_events.tonight[0].id, "event-1");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    global.fetch = ORIGINAL_FETCH;
+  }
+});
+
+test("a resolved but route-blocked place still records independent Live source demand", async () => {
+  let demand = null;
+  const sourceCatalog = {
+    listApprovedEventFeedsForAnchor: async () => [],
+    getDiscoveryHealthForAnchor: async () => null,
+    recordScoutDemand: async (value) => {
+      demand = value;
+      return { status: "recorded", target_status: "pending" };
+    },
+  };
+  const supply = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: "enabled" }, {
+    sourceCatalog,
+    eventCache: { peek: () => null, warm: () => {} },
+  });
+  const placeResolver = async () => [{
+    label: "Northport, Testland",
+    lat: 58.1,
+    lng: 12.2,
+    confidence: "medium",
+    provenance: "trusted_test_resolver",
+    admin_context: { locality: "Northport", country: "Testland", country_code: "se" },
+    spatial_scope: {
+      source: "trusted_test_bounds",
+      kind: "city",
+      bounds: { west: 12.0, south: 57.95, east: 12.4, north: 58.25 },
+    },
+  }];
+  global.fetch = mockStableWeatherFetch();
+  const server = buildApp({ openDataLoader: null, eventSupply: supply, placeResolver }).listen(0);
+  try {
+    const res = await post(server, {
+      place: "Northport",
+      dates: ["2026-06-28"],
+      preferences: ["culture"],
+      include_external_candidates: 1,
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.equal(res.agnostic_route_output_experiment.route_mutation, false);
+    assert.ok(res.agnostic_route_output_experiment.readiness_blockers.includes("no_trusted_loader"));
+    assert.equal(res.live_events.coverage, "uncovered");
+    assert.equal(res.live_events.acquisition.discovery_health.status, "pending");
+    assert.deepEqual(demand.anchor, { lat: 58.1, lng: 12.2 });
+    assert.equal(demand.placeLabel, "Northport, Testland");
+    assert.equal(demand.placeContext.locality, "Northport");
+    assert.equal(demand.spatialScope.collection_mode, "regional_bounded");
   } finally {
     await new Promise((resolve) => server.close(resolve));
     global.fetch = ORIGINAL_FETCH;

@@ -64,6 +64,46 @@ test("local-language terms produce bounded place-aware discovery queries", () =>
   assert.ok(queries.length <= 18);
 });
 
+test("the effective search budget favors simple locality and local terms over verbose resolver labels", () => {
+  const queries = buildLocalEventDiscoveryQueries({
+    place: {
+      name: "Northport",
+      label: "Northport, Coastal Municipality, Large Administrative Region, Country",
+      region_terms: ["Coastal Municipality"],
+      local_discovery_terms: ["evenemang", "loppis", "konsert"],
+    },
+  });
+
+  assert.deepEqual(queries.slice(0, 4), [
+    "Northport evenemang",
+    "Northport events",
+    "Northport loppis",
+    "Northport calendar",
+  ]);
+  assert.ok(queries.slice(0, 6).includes("Coastal Municipality evenemang"));
+  assert.equal(
+    queries.slice(0, 6).filter((query) => query.startsWith("Northport, Coastal Municipality")).length,
+    1,
+    "the verbose resolver label cannot monopolize SearXNG's default six-query budget",
+  );
+});
+
+test("discovery still schedules the first trusted label when locality metadata is absent", () => {
+  const queries = buildLocalEventDiscoveryQueries({
+    place: {
+      region_terms: ["Coastal District"],
+      local_discovery_terms: ["evenemang"],
+    },
+  });
+
+  assert.deepEqual(queries.slice(0, 4), [
+    "Coastal District evenemang",
+    "Coastal District events",
+    "Coastal District calendar",
+    "Coastal District festival",
+  ]);
+});
+
 test("trusted place records expose public venue websites as scout seeds", () => {
   const seeds = extractEventWebsiteSeeds([
     {

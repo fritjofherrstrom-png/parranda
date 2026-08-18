@@ -4,6 +4,11 @@ const { createHash, randomUUID } = require("node:crypto");
 const { eventFeedsFromReviewedSourceProfiles } = require("../place-candidates/reviewed-event-source-profile");
 const { sanitizeTrustedSpatialScope } = require("../place-candidates/spatial-scope");
 const { eventFeedsFromQualifiedSourceProfiles } = require("./source-qualification");
+const {
+  normalizeSourceDiscoveryHealth,
+  pendingSourceDiscoveryHealth,
+  unavailableSourceDiscoveryHealth,
+} = require("./source-discovery-health");
 
 const CATALOG_FLAG_ENV_KEY = "PARRANDA_SOURCE_CATALOG";
 const CATALOG_DATABASE_ENV_KEY = "PARRANDA_SOURCE_CATALOG_DATABASE_URL";
@@ -89,6 +94,7 @@ SET
   lease_token = NULL,
   lease_until = NULL,
   last_reason = $5,
+  discovery_health = COALESCE($6::jsonb, discovery_health),
   updated_at = NOW()
 WHERE target_key = $1 AND status = 'leased' AND lease_token = $2
 RETURNING target_key, status
@@ -102,6 +108,7 @@ SET
   lease_token = NULL,
   lease_until = NULL,
   last_reason = $4,
+  discovery_health = COALESCE($5::jsonb, discovery_health),
   updated_at = NOW()
 WHERE target_key = $1 AND status = 'leased' AND lease_token = $2
 RETURNING target_key, status
@@ -248,6 +255,17 @@ WHERE profile_key = $1
 LIMIT 1
 `;
 
+const DISCOVERY_HEALTH_FOR_ANCHOR_SQL = `
+SELECT status, last_reason, discovery_health, updated_at
+FROM pulse_source_scout_targets
+WHERE bbox_west <= $2
+  AND bbox_east >= $2
+  AND bbox_south <= $1
+  AND bbox_north >= $1
+ORDER BY observed_at DESC, updated_at DESC, target_key ASC
+LIMIT 1
+`;
+
 function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
   if (typeof query !== "function") return null;
 
@@ -335,6 +353,29 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
     }
   }
 
+  async function getDiscoveryHealthForAnchor({ anchor } = {}) {
+    const lat = finiteCoordinate(anchor?.lat, -90, 90);
+    const lng = finiteCoordinate(anchor?.lng, -180, 180);
+    if (lat == null || lng == null) return null;
+    try {
+      const result = await query(DISCOVERY_HEALTH_FOR_ANCHOR_SQL, [lat, lng]);
+      const row = result?.rows?.[0];
+      if (!row) return null;
+      const stored = normalizeSourceDiscoveryHealth(parseProfile(row.discovery_health));
+      if (stored) return stored;
+      const targetStatus = publicString(row.status)?.toLowerCase();
+      if (["pending", "leased"].includes(targetStatus)) {
+        return pendingSourceDiscoveryHealth("source_discovery_pending");
+      }
+      return unavailableSourceDiscoveryHealth(
+        "unavailable",
+        targetStatus === "retry_wait" ? "source_discovery_retry_wait" : "source_discovery_state_unavailable",
+      );
+    } catch (_error) {
+      return unavailableSourceDiscoveryHealth("unavailable", "source_catalog_unavailable");
+    }
+  }
+
   async function recordScoutDemand({ anchor, placeLabel, placeContext, spatialScope } = {}) {
     const normalized = normalizeScoutDemand({
       anchor,
@@ -395,6 +436,7 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
     const completedAt = normalizeDate(now());
     if (!normalized || !completedAt) return { status: "ignored", reason: "invalid_source_scout_lease" };
     const refreshAt = boundedScoutRefreshAt(completedAt, options?.nextAttemptAt);
+    const discoveryHealth = normalizeSourceDiscoveryHealth(options?.discoveryHealth);
     try {
       const result = await query(COMPLETE_SCOUT_TARGET_SQL, [
         normalized.targetKey,
@@ -402,6 +444,7 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
         completedAt.toISOString(),
         refreshAt.toISOString(),
         safeReason(reason, "source_scout_completed"),
+        discoveryHealth ? JSON.stringify(discoveryHealth) : null,
       ]);
       return result?.rows?.[0]
         ? { status: "completed", target_key: normalized.targetKey }
@@ -411,17 +454,19 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
     }
   }
 
-  async function failScoutTarget(target, reason = "source_scout_failed") {
+  async function failScoutTarget(target, reason = "source_scout_failed", options = {}) {
     const normalized = normalizeLeasedScoutTarget(target);
     const failedAt = normalizeDate(now());
     if (!normalized || !failedAt) return { status: "ignored", reason: "invalid_source_scout_lease" };
     const retryAt = new Date(failedAt.getTime() + scoutRetryDelayMs(normalized.attemptCount));
+    const discoveryHealth = normalizeSourceDiscoveryHealth(options?.discoveryHealth);
     try {
       const result = await query(FAIL_SCOUT_TARGET_SQL, [
         normalized.targetKey,
         normalized.leaseToken,
         retryAt.toISOString(),
         safeReason(reason, "source_scout_failed"),
+        discoveryHealth ? JSON.stringify(discoveryHealth) : null,
       ]);
       return result?.rows?.[0]
         ? { status: "retry_wait", target_key: normalized.targetKey, retry_at: retryAt.toISOString() }
@@ -437,6 +482,7 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
     listApprovedEventFeedsForAnchor,
     listQualifiedEventFeedsForAnchor,
     loadSourceQualification,
+    getDiscoveryHealthForAnchor,
     recordScoutDemand,
     claimScoutTarget,
     completeScoutTarget,
@@ -709,6 +755,7 @@ module.exports = {
   COMPLETE_SCOUT_TARGET_SQL,
   CATALOG_DATABASE_ENV_KEY,
   CATALOG_FLAG_ENV_KEY,
+  DISCOVERY_HEALTH_FOR_ANCHOR_SQL,
   FAIL_SCOUT_TARGET_SQL,
   MAX_SCOUT_TARGETS,
   MAX_PROFILE_BYTES,

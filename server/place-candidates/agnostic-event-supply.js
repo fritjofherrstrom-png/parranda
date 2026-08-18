@@ -54,6 +54,11 @@ const { classifyCulturalSalience } = require("../pulse-engine/cultural-salience"
 const { resolveEventVenueGeometry } = require("./event-venue-resolution");
 const { spatialScopeCacheKey } = require("./spatial-scope");
 const {
+  normalizeSourceDiscoveryHealth,
+  pendingSourceDiscoveryHealth,
+  unavailableSourceDiscoveryHealth,
+} = require("../pulse-sources/source-discovery-health");
+const {
   buildAnchorEventSourcePlan,
   resolveEventFeedsForAnchor,
   fuseAndBoundEventEvidence,
@@ -1203,7 +1208,14 @@ function compactSourceStatus(collection) {
   };
 }
 
-function emptyAcquisition(radiusM) {
+function emptyAcquisition(radiusM, discoveryHealth = null) {
+  const normalizedDiscoveryHealth = normalizeSourceDiscoveryHealth(discoveryHealth) ||
+    unavailableSourceDiscoveryHealth("unavailable", "source_discovery_unavailable");
+  const sourceHealth = buildAnchorEventSourceHealth([]);
+  sourceHealth.reasons = [...new Set([
+    ...sourceHealth.reasons,
+    ...normalizedDiscoveryHealth.reasons,
+  ])];
   return {
     mode: "bounded_multi_source",
     radius_m: radiusM,
@@ -1213,7 +1225,8 @@ function emptyAcquisition(radiusM) {
     fused_event_count: 0,
     rejected_event_count: 0,
     rejection_summary: [],
-    source_health: buildAnchorEventSourceHealth([]),
+    source_health: sourceHealth,
+    discovery_health: normalizedDiscoveryHealth,
   };
 }
 
@@ -1402,6 +1415,10 @@ function resolveDefaultEventSupply(
       now,
     });
     const hasApprovedLocalSource = sourcePlan.some((source) => source?.kind !== "global");
+    let discoveryHealth = null;
+    if (!hasApprovedLocalSource) {
+      discoveryHealth = await resolveUncoveredDiscoveryHealth(sourceCatalog, anchor);
+    }
     if (
       !hasApprovedLocalSource &&
       sourceCatalog &&
@@ -1416,6 +1433,9 @@ function resolveDefaultEventSupply(
         placeContext,
         spatialScope,
       })).catch(() => {});
+      if (!discoveryHealth) {
+        discoveryHealth = pendingSourceDiscoveryHealth("source_discovery_pending");
+      }
     }
     if (sourcePlan.length === 0) {
       return {
@@ -1425,7 +1445,13 @@ function resolveDefaultEventSupply(
         tonight: [],
         this_week: [],
         browse: emptyEventBrowse(),
-        acquisition: emptyAcquisition(effectiveRadiusM),
+        acquisition: emptyAcquisition(
+          effectiveRadiusM,
+          discoveryHealth || unavailableSourceDiscoveryHealth(
+            "environment_not_wired",
+            "source_discovery_environment_not_wired",
+          ),
+        ),
       };
     }
     const descriptors = sourcePlan.map((source) => compactSourceStatus({ source, status: "pending", raw: [] }));
@@ -1491,6 +1517,29 @@ function resolveDefaultEventSupply(
       },
     };
   };
+}
+
+async function resolveUncoveredDiscoveryHealth(sourceCatalog, anchor) {
+  if (!sourceCatalog) {
+    return unavailableSourceDiscoveryHealth(
+      "environment_not_wired",
+      "source_discovery_environment_not_wired",
+    );
+  }
+  if (typeof sourceCatalog.getDiscoveryHealthForAnchor === "function") {
+    try {
+      return normalizeSourceDiscoveryHealth(
+        await sourceCatalog.getDiscoveryHealthForAnchor({ anchor }),
+      );
+    } catch (_error) {
+      return unavailableSourceDiscoveryHealth("unavailable", "source_catalog_unavailable");
+    }
+  }
+  if (typeof sourceCatalog.recordScoutDemand === "function") return null;
+  return unavailableSourceDiscoveryHealth(
+    "environment_not_wired",
+    "source_discovery_environment_not_wired",
+  );
 }
 
 module.exports = {

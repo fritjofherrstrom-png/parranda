@@ -147,6 +147,41 @@ test("shared live-event shaping preserves health, hides internal pools and appli
   assert.equal("_rankable_events" in shaped, false);
 });
 
+test("Live preserves every compact source-discovery state instead of collapsing to no sources", () => {
+  const statuses = [
+    "pending",
+    "observing",
+    "review_required",
+    "healthy_empty",
+    "search_failed",
+    "environment_not_wired",
+    "unavailable",
+  ];
+
+  for (const status of statuses) {
+    const shaped = shapeCollectedLiveEvents({
+      coverage: "uncovered",
+      tonight: [],
+      this_week: [],
+      acquisition: {
+        source_health: { status: "unavailable", reasons: ["no_approved_sources"] },
+        discovery_health: {
+          contract: "source_discovery_health_v1",
+          status,
+          search: { status: status === "search_failed" ? "failed" : "not_configured" },
+          scout: { status: "not_run" },
+          qualification: { status: "not_run" },
+          reasons: [`source_discovery_${status}`],
+          raw_endpoint: "https://secret.invalid/search",
+        },
+      },
+    });
+
+    assert.equal(shaped.acquisition.discovery_health.status, status);
+    assert.equal(shaped.acquisition.discovery_health.raw_endpoint, undefined);
+  }
+});
+
 test("source-scoped Pulse evidence is only eligible around the resolved place", () => {
   const event = {
     id: "source-scoped",

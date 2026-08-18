@@ -8,6 +8,7 @@ const {
   QUALIFIED_PROFILES_FOR_ANCHOR_SQL,
   CLAIM_SCOUT_TARGET_SQL,
   COMPLETE_SCOUT_TARGET_SQL,
+  DISCOVERY_HEALTH_FOR_ANCHOR_SQL,
   FAIL_SCOUT_TARGET_SQL,
   MAX_SCOUT_TARGETS,
   MAX_QUALIFICATION_BYTES,
@@ -363,6 +364,42 @@ test("only resolver-attested bounded place demand enters the scout queue", async
   });
 });
 
+test("catalog returns persisted discovery health and preserves pending queue truth", async () => {
+  const persisted = {
+    contract: "source_discovery_health_v1",
+    status: "search_failed",
+    search: {
+      status: "failed",
+      queried_count: 6,
+      responding_query_count: 0,
+      failed_query_count: 6,
+      result_count: 0,
+      seed_count: 0,
+    },
+    scout: { status: "not_run" },
+    qualification: { status: "not_run" },
+    reasons: ["source_discovery_search_failed"],
+  };
+  const catalog = createSourceProfileCatalog({
+    now: () => NOW,
+    query: async (sql, values) => {
+      assert.equal(sql, DISCOVERY_HEALTH_FOR_ANCHOR_SQL);
+      assert.deepEqual(values, [55.6, 13]);
+      return { rows: [{ status: "retry_wait", discovery_health: persisted }] };
+    },
+  });
+  const health = await catalog.getDiscoveryHealthForAnchor({ anchor: { lat: 55.6, lng: 13 } });
+  assert.equal(health.status, "search_failed");
+  assert.equal(health.search.failed_query_count, 6);
+
+  const pendingCatalog = createSourceProfileCatalog({
+    now: () => NOW,
+    query: async () => ({ rows: [{ status: "pending", discovery_health: null }] }),
+  });
+  const pending = await pendingCatalog.getDiscoveryHealthForAnchor({ anchor: { lat: 55.6, lng: 13 } });
+  assert.equal(pending.status, "pending");
+});
+
 test("scout claims use leases and completion/failure cannot expose raw errors", async () => {
   const calls = [];
   const catalog = createSourceProfileCatalog({
@@ -599,7 +636,34 @@ test("an uncovered trusted place records demand without delaying or mutating Liv
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.equal(result.coverage, "uncovered");
+  assert.equal(result.acquisition.discovery_health.status, "pending");
+  assert.ok(result.acquisition.source_health.reasons.includes("source_discovery_pending"));
   assert.deepEqual(demand, input);
+});
+
+test("uncovered Live preserves a stored observing discovery state", async () => {
+  const supply = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: "enabled" }, {
+    sourceCatalog: {
+      listApprovedEventFeedsForAnchor: async () => [],
+      getDiscoveryHealthForAnchor: async () => ({
+        contract: "source_discovery_health_v1",
+        status: "observing",
+        search: { status: "complete", queried_count: 6, responding_query_count: 6 },
+        scout: { status: "complete", inspected_source_count: 2 },
+        qualification: { status: "observing", candidate_count: 1 },
+        reasons: ["source_discovery_observing"],
+      }),
+      recordScoutDemand: async () => ({ status: "recorded" }),
+    },
+    eventCache: { peek: () => null, warm: () => {} },
+  });
+  const input = scoutDemand();
+  const result = await supply({ anchor: input.anchor, ...input, now: NOW });
+
+  assert.equal(result.coverage, "uncovered");
+  assert.equal(result.acquisition.discovery_health.status, "observing");
+  assert.equal(result.acquisition.discovery_health.qualification.candidate_count, 1);
+  assert.ok(result.acquisition.source_health.reasons.includes("source_discovery_observing"));
 });
 
 test("an approved local source suppresses redundant scout demand", async () => {
@@ -675,7 +739,8 @@ test("migration runs the versioned SQL and always closes its pool", async () => 
   assert.equal(calls[0][1], "postgresql://catalog.invalid/parranda");
   assert.match(calls[1][1], /CREATE TABLE IF NOT EXISTS pulse_source_profiles/);
   assert.match(calls[2][1], /CREATE TABLE IF NOT EXISTS pulse_source_scout_targets/);
-  assert.deepEqual(calls[3], ["end"]);
+  assert.match(calls[3][1], /ADD COLUMN IF NOT EXISTS discovery_health JSONB/);
+  assert.deepEqual(calls[4], ["end"]);
 });
 
 test("discovery upsert cannot overwrite an approved, rejected or disabled row", () => {

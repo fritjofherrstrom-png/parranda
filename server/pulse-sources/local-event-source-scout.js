@@ -55,28 +55,51 @@ function buildLocalEventDiscoveryQueries({
   intentHints = [],
   localDiscoveryTerms = [],
 } = {}) {
+  const verboseLabel = firstString(place.label);
+  const localityLabel = firstString(place.name, localityFromLabel(verboseLabel));
   const labels = uniqueStrings([
-    place.label,
-    place.name,
+    localityLabel,
     ...(Array.isArray(place.region_terms) ? place.region_terms : []),
+    verboseLabel,
   ]).slice(0, 4);
+  const primaryLabel = localityLabel || labels[0] || null;
+  const secondaryLabels = labels.filter((label) => label !== primaryLabel);
   const suppliedTerms = uniqueStrings([
     ...localDiscoveryTerms,
     ...(Array.isArray(place.local_discovery_terms) ? place.local_discovery_terms : []),
     ...intentHints,
   ]);
   // Intent narrows ranking later; it must not erase the generic calendar
-  // discovery baseline. Keep both within the same fixed query budget.
-  const terms = uniqueStrings(["events", "calendar", "festival", ...suppliedTerms]).slice(0, 8);
+  // discovery baseline. Local-language terms lead the bounded budget, while
+  // generic terms remain present for sites that expose English interfaces.
+  const terms = uniqueStrings([
+    suppliedTerms[0],
+    "events",
+    suppliedTerms[1],
+    "calendar",
+    suppliedTerms[2],
+    "festival",
+    ...suppliedTerms.slice(3),
+  ]).slice(0, 8);
   const queries = [];
 
-  for (const label of labels) {
-    for (const term of terms) {
-      queries.push(label + " " + term);
-      if (queries.length >= MAX_DISCOVERY_QUERIES) return uniqueStrings(queries);
-    }
+  // The runtime search adapter normally executes only the first six queries.
+  // Give the simple locality several high-value local terms before interleaving
+  // regional and verbose resolver labels; a long Nominatim label must never
+  // consume the whole effective search budget.
+  for (const term of terms.slice(0, 4)) {
+    if (primaryLabel) queries.push(primaryLabel + " " + term);
+  }
+  for (const term of terms) {
+    for (const label of secondaryLabels) queries.push(label + " " + term);
+    if (primaryLabel) queries.push(primaryLabel + " " + term);
   }
   return uniqueStrings(queries).slice(0, MAX_DISCOVERY_QUERIES);
+}
+
+function localityFromLabel(value) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  return value.split(",")[0].trim() || null;
 }
 
 function extractEventWebsiteSeeds(records = []) {

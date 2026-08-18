@@ -152,7 +152,8 @@ test("qualified evidence returns to the ordinary bounded refresh cadence", async
   });
 
   assert.equal(result.status, "ok");
-  assert.equal(completionOptions, undefined);
+  assert.equal(completionOptions.nextAttemptAt, undefined);
+  assert.equal(completionOptions.discoveryHealth.status, "review_required");
 });
 
 test("worker claims a target, discovers through trusted seams, and writes review-needed evidence", async () => {
@@ -257,6 +258,8 @@ test("worker carries prior probe evidence through the bounded qualifier without 
 
   assert.equal(result.results[0].qualification_status, "qualified_for_review");
   assert.equal(recordedProfile.source_qualification.activation_performed, false);
+  assert.equal(recordedProfile.discovery_health.status, "review_required");
+  assert.equal(recordedProfile.discovery_health.qualification.status, "qualified_for_review");
   assert.equal(recordedProfile.runtime_review.status, "unreviewed");
   assert.equal(qualificationInput.previousQualification, priorQualification);
   assert.deepEqual(qualificationInput.anchor, target().anchor);
@@ -323,7 +326,7 @@ test("worker failures back off through the lease and never fabricate a profile",
   assert.equal(calls[0][1], "trusted_place_loader_failed");
 });
 
-test("a proven empty scout completes without storing an empty review profile", async () => {
+test("a proven empty scout persists health without storing an empty review profile", async () => {
   const claimed = [target(), null];
   const calls = [];
   const catalog = {
@@ -331,8 +334,8 @@ test("a proven empty scout completes without storing an empty review profile", a
     recordDiscovery: async () => {
       throw new Error("empty discovery must not create a review profile");
     },
-    completeScoutTarget: async (value, reason) => {
-      calls.push([value, reason]);
+    completeScoutTarget: async (value, reason, options) => {
+      calls.push([value, reason, options]);
       return { status: "completed" };
     },
     failScoutTarget: async () => {
@@ -345,6 +348,15 @@ test("a proven empty scout completes without storing an empty review profile", a
     discover: async () => ({
       status: "empty",
       reasons: ["no_trusted_website_seeds"],
+      source_search: {
+        status: "empty",
+        queried_count: 6,
+        responding_query_count: 6,
+        failed_query_count: 0,
+        result_count: 0,
+        accepted_seed_count: 0,
+      },
+      source_scout: null,
       source_profile: profile(),
     }),
   });
@@ -352,7 +364,9 @@ test("a proven empty scout completes without storing an empty review profile", a
   assert.equal(result.status, "ok");
   assert.equal(result.completed, 1);
   assert.equal(result.results[0].profile_key, null);
+  assert.equal(result.results[0].discovery_status, "healthy_empty");
   assert.equal(calls[0][1], "no_trusted_website_seeds");
+  assert.equal(calls[0][2].discoveryHealth.status, "healthy_empty");
 });
 
 test("an idle worker performs no discovery and reports a compact state", async () => {

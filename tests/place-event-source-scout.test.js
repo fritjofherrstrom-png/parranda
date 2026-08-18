@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const test = require("node:test");
 
 const {
+  combineSeeds,
   discoverLocalEventSourcesForPlace,
 } = require("../server/pulse-sources/place-event-source-scout");
 
@@ -40,6 +41,32 @@ function response(body, { status = 200, contentType = "text/html" } = {}) {
     text: async () => body,
   };
 }
+
+test("source-class interleaving keeps search and trusted websites inside the scout prefix", () => {
+  const trusted = [
+    { url: "https://city.example/events", trust_tier: "official", family: "official_municipal_calendar" },
+    ...Array.from({ length: 14 }, (_, index) => ({
+      url: `https://venue-${index}.example/program`,
+      trust_tier: "unknown",
+      family: "venue_owned_calendar",
+    })),
+  ];
+  const searched = Array.from({ length: 4 }, (_, index) => ({
+    url: `https://search-${index}.example/calendar`,
+    trust_tier: "unknown",
+    family: "unknown_source_family",
+    discovery_method: "bounded_source_search",
+  }));
+
+  const prefix = combineSeeds(trusted, searched).slice(0, 12);
+  assert.equal(prefix[0].url, "https://city.example/events");
+  assert.ok(prefix.some((seed) => seed.discovery_method === "bounded_source_search"));
+  assert.ok(prefix.some((seed) => seed.family === "venue_owned_calendar"));
+  assert.ok(
+    prefix.filter((seed) => seed.discovery_method === "bounded_source_search").length >= 3,
+    "venue websites cannot starve real search seeds before the scout cap",
+  );
+});
 
 test("trusted place records become bounded scout seeds and review-only manifests", async () => {
   let scoutInput = null;
