@@ -21,12 +21,26 @@
  *   event context     - is there a positive, source-owned reason to believe
  *                       this index lists events?
  *
- * Eligibility = transport AND NOT negative AND event context.
+ * Discovery is optimized for RECALL, not for a clean detector. Only the
+ * interfaces we can positively identify as irrelevant are rejected. Absence of
+ * event evidence is NOT evidence of absence: a generic feed on a village
+ * cultural association may be exactly where the annual festival appears, so it
+ * is retained as exploratory discovery evidence instead of being discarded.
+ *
+ *   event_interface - transport + positive event context. Enters the bounded
+ *                     qualification probe lane.
+ *   exploratory     - transport, nothing known against it, no positive event
+ *                     context yet. Retained as a discovery hint, never runtime
+ *                     eligible, and deliberately kept OUT of the probe lane so
+ *                     it cannot starve real candidates (the qualification
+ *                     rotation probes 2 per run, oldest-first, with no notion
+ *                     of candidate strength).
+ *   non_event       - positively identified as a non-event interface. Rejected.
  *
  * The rule is pure and deterministic: no network, no clock, no publisher,
- * place, city or domain rules. It decides only whether an interface is
- * plausibly an event interface. Whether Parranda may activate it stays a
- * separate question owned by terms, robots, geometry and qualification.
+ * place, city or domain rules. It decides only what kind of interface this is.
+ * Whether Parranda may activate it stays a separate question owned by terms,
+ * robots, geometry and qualification.
  */
 
 const { CALENDAR_LINK_TERMS } = require("./calendar-page-locator");
@@ -66,10 +80,6 @@ const SITE_METADATA_FILENAME_PATTERN =
 // Wayback-style snapshot prefixes: /web/20080518005902/http://...
 const ARCHIVE_SNAPSHOT_PATTERN = /\/web\/\d{8,14}(?:[a-z_]{2,3})?\//;
 const DATED_SLUG_PATTERN = /\b(?:19|20)\d{2}\b|\b\d{1,2}[-/]\d{1,2}\b/;
-
-// Syndication plumbing segments. `/feed/atom/` is still the site feed, so
-// these never make a feed look scoped to one entry.
-const FEED_SEGMENT_PATTERN = /^(?:feed|feeds|atom|rss|rss2|rdf)$/i;
 
 const MAX_REASONS = 8;
 
@@ -124,12 +134,14 @@ function buildRssPageEventContext({
 }
 
 /**
- * Classify one discovered link as an event interface, or explain why not.
+ * Classify one discovered link.
  *
  * Returns `{ transport, decision, reasons }` where decision is one of:
- *   "eligible"                   - feed transport with positive event context
- *   "insufficient_event_context" - feed transport, no event context found
- *   "ineligible"                 - not feed transport, or recognized non-event
+ *   "event_interface" - feed transport with positive event context
+ *   "exploratory"     - feed transport, nothing known against it, no event
+ *                       context yet. Worth keeping, not worth probing yet.
+ *   "non_event"       - positively identified as a non-event interface
+ *   "not_feed_shaped" - not a syndication interface at all
  */
 function classifyRssEventInterface({ link = {}, page = null } = {}) {
   const url = safeUrl(link.url);
@@ -141,17 +153,16 @@ function classifyRssEventInterface({ link = {}, page = null } = {}) {
 
   const transport = detectFeedTransport({ url, type });
   if (!transport) {
-    return decision("ineligible", ["transport_not_feed_shaped"], null);
+    return decision("not_feed_shaped", ["transport_not_feed_shaped"], null);
   }
   if (!url) {
-    // A feed MIME with no usable http(s) locator cannot be probed. Page
-    // context must never promote an interface we cannot even address.
-    return decision("ineligible", ["transport_locator_unusable"], null);
+    // A feed MIME with no usable http(s) locator cannot be reached at all.
+    return decision("non_event", ["transport_locator_unusable"], null);
   }
 
-  const negatives = detectNonEventEvidence({ url, type, rels, terms });
+  const negatives = detectNonEventEvidence({ url, type, rels });
   if (negatives.length > 0) {
-    return decision("ineligible", [transport.token, ...negatives], transport.kind);
+    return decision("non_event", [transport.token, ...negatives], transport.kind);
   }
 
   const positives = [];
@@ -167,13 +178,15 @@ function classifyRssEventInterface({ link = {}, page = null } = {}) {
   positives.push(...(Array.isArray(context.reasons) ? context.reasons : []));
 
   if (positives.length === 0) {
+    // Unknown stays unknown. Poorly structured local ecosystems surface their
+    // programme through exactly these generic interfaces.
     return decision(
-      "insufficient_event_context",
-      [transport.token, "no_event_context_evidence"],
+      "exploratory",
+      [transport.token, "no_event_context_evidence_yet"],
       transport.kind,
     );
   }
-  return decision("eligible", [transport.token, ...positives], transport.kind);
+  return decision("event_interface", [transport.token, ...positives], transport.kind);
 }
 
 function detectFeedTransport({ url, type }) {
@@ -203,7 +216,7 @@ function detectFeedTransport({ url, type }) {
   return null;
 }
 
-function detectNonEventEvidence({ url, type, rels, terms = [] }) {
+function detectNonEventEvidence({ url, type, rels }) {
   const reasons = [];
   if (OPENSEARCH_MIME_PATTERN.test(type)) {
     reasons.push("non_event_opensearch_descriptor");
@@ -238,9 +251,6 @@ function detectNonEventEvidence({ url, type, rels, terms = [] }) {
   if (isSearchFeed(url, segments)) {
     reasons.push("non_event_search_feed");
   }
-  if (isEntryScopedFeed(segments, terms)) {
-    reasons.push("non_event_entry_scoped_feed");
-  }
   return uniqueTokens(reasons);
 }
 
@@ -259,21 +269,6 @@ function isSearchFeed(url, segments) {
     if (url.searchParams.get(key)) return true;
   }
   return false;
-}
-
-/**
- * `/{entry-slug}/feed` is the feed *of one entry*, which on common publishing
- * platforms is that entry's comment feed. It indexes one article, not a
- * programme. A feed scoped to an event-shaped section (`/events/feed`,
- * `/kalender/feed`) is not entry scoped and stays available to the positive
- * path.
- */
-function isEntryScopedFeed(segments, terms) {
-  const scope = segments.filter((segment) => !FEED_SEGMENT_PATTERN.test(segment));
-  if (scope.length === 0 || scope.length === segments.length) return false;
-  const last = scope[scope.length - 1];
-  if (DATED_SLUG_PATTERN.test(last)) return true;
-  return !matchesEventTerms(slugText(last), terms);
 }
 
 // A page whose own URL is a dated or nested entry slug is an article, not a

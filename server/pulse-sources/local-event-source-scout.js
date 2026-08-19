@@ -42,6 +42,7 @@ const MAX_LINKED_PAGES = 30;
 const DEFAULT_MANIFEST_RADIUS_KM = 20;
 const MAX_DISCOVERY_QUERIES = 18;
 const MAX_RSS_INTERFACE_DECISIONS = 24;
+const MAX_EXPLORATORY_INTERFACES = 12;
 
 const MANIFEST_ADAPTERS = new Set([
   "events_calendar",
@@ -163,6 +164,7 @@ function inspectEventSourcePage({
   const socialHints = [];
   const evidence = [];
   const rssDecisions = [];
+  const exploratoryInterfaces = [];
   const seen = new Set();
 
   // RSS/Atom transport is not event evidence. Resolve this page's event
@@ -217,16 +219,24 @@ function inspectEventSourcePage({
     if (isIcalLink(link)) addCandidate("ical", normalizeWebcalUrl(link.url));
     const rss = classifyRssEventInterface({ link, page: rssPageContext });
     if (rss.transport) {
-      // Every feed-shaped link is recorded with its verdict so an operator can
-      // see what discovery kept, what it declined, and why. Internal review
-      // evidence only; no public payload carries these tokens.
+      // Every feed-shaped link keeps its verdict so an operator, and later the
+      // Pi cohort measurements, can see all three populations.
       rssDecisions.push({
         url: link.url,
         decision: rss.decision,
         reasons: rss.reasons,
       });
     }
-    if (rss.decision === "eligible") addCandidate("rss", link.url);
+    if (rss.decision === "event_interface") {
+      addCandidate("rss", link.url);
+    } else if (rss.decision === "exploratory") {
+      // Retained, never activated, and deliberately not a manifest: the
+      // qualification rotation probes two candidates per run with no notion of
+      // strength, so admitting uncertain feeds there would starve the real
+      // ones. This is the same lane social discovery hints already use.
+      const hint = buildExploratoryInterfaceHint(link.url, rss, effectiveSeed, context);
+      if (hint) exploratoryInterfaces.push(hint);
+    }
     if (isTribeRestUrl(link.url)) addCandidate("events_calendar", link.url);
   }
 
@@ -282,6 +292,7 @@ function inspectEventSourcePage({
     ),
     social_hints: dedupeSocialHints(socialHints),
     rss_interface_decisions: dedupeRssDecisions(rssDecisions),
+    exploratory_interfaces: dedupeExploratoryInterfaces(exploratoryInterfaces),
     reasons:
       candidates.length || socialHints.length
         ? ["source_interfaces_detected"]
@@ -510,6 +521,9 @@ async function scoutLocalEventSources({
   const socialHints = dedupeSocialHints(
     results.flatMap((result) => result.social_hints || []),
   );
+  const exploratoryInterfaces = dedupeExploratoryInterfaces(
+    results.flatMap((result) => result.exploratory_interfaces || []),
+  );
   return {
     status: normalizedSeeds.length ? "complete" : "empty",
     reasons: normalizedSeeds.length
@@ -530,6 +544,7 @@ async function scoutLocalEventSources({
     results,
     manifest_candidates: manifestCandidates,
     social_hints: socialHints,
+    exploratory_interfaces: exploratoryInterfaces,
   };
 }
 
@@ -1242,6 +1257,30 @@ function buildSocialHint(url, seed, context) {
   };
 }
 
+// An uncertain feed interface. Discovery evidence only: it names something
+// worth exploring later, never an event source and never a runtime provider.
+function buildExploratoryInterfaceHint(url, classification, seed, context) {
+  const normalized = normalizeHttpUrl(url);
+  if (!normalized || !isScoutablePublicUrl(normalized)) return null;
+  return {
+    id: "explore-" + stableHash(normalized),
+    url: normalized,
+    source_identity: sourceIdentity(normalized),
+    source_label: firstString(seed.label, sourceIdentity(normalized)),
+    place: firstString(seed.place, context.place?.label),
+    family: firstString(seed.family, "unknown_source_family"),
+    interface: "rss_atom",
+    transport: firstString(classification?.transport, "feed"),
+    discovered_from: firstString(seed.url),
+    runtime_policy: "probe_only",
+    corroboration_required: true,
+    reasons: uniqueStrings([
+      ...(Array.isArray(classification?.reasons) ? classification.reasons : []),
+      "exploratory_interface_not_yet_event_attested",
+    ]),
+  };
+}
+
 function isScoutablePublicUrl(value) {
   const normalized = normalizeHttpUrl(value);
   if (!normalized) return false;
@@ -1485,9 +1524,22 @@ function rssInterfaceCounts(results) {
   );
   return {
     rss_transport_link_count: decisions.length,
-    rss_event_interface_count: decisions.filter((d) => d.decision === "eligible").length,
-    rss_rejected_interface_count: decisions.filter((d) => d.decision !== "eligible").length,
+    rss_event_interface_count: decisions.filter((d) => d.decision === "event_interface").length,
+    rss_exploratory_interface_count: decisions.filter((d) => d.decision === "exploratory").length,
+    rss_rejected_interface_count: decisions.filter((d) => d.decision === "non_event").length,
   };
+}
+
+function dedupeExploratoryInterfaces(hints) {
+  const out = [];
+  const seen = new Set();
+  for (const hint of Array.isArray(hints) ? hints : []) {
+    if (!hint?.url || seen.has(hint.url)) continue;
+    seen.add(hint.url);
+    out.push(hint);
+    if (out.length >= MAX_EXPLORATORY_INTERFACES) break;
+  }
+  return out;
 }
 
 function dedupeRssDecisions(decisions) {

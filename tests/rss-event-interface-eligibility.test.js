@@ -60,7 +60,7 @@ test("a comments feed is not an event interface even on an event venue's calenda
     page: calendarPage(),
   });
 
-  assert.equal(result.decision, "ineligible");
+  assert.equal(result.decision, "non_event");
   assert.ok(result.reasons.includes("non_event_comment_feed"));
   // The venue and the page are both event-shaped. Only the interface is not.
   assert.ok(calendarPage().event_surface);
@@ -72,7 +72,7 @@ test("query-form comment feeds are rejected the same way as path-form ones", () 
     page: calendarPage(),
   });
 
-  assert.equal(result.decision, "ineligible");
+  assert.equal(result.decision, "non_event");
   assert.ok(result.reasons.includes("non_event_comment_feed"));
 });
 
@@ -85,7 +85,7 @@ test("OpenSearch descriptors are search plumbing, not event interfaces", () => {
       link: link(url, { rel: "search", type: "application/opensearchdescription+xml" }),
       page: calendarPage(),
     });
-    assert.equal(result.decision, "ineligible", url);
+    assert.equal(result.decision, "non_event", url);
     assert.ok(result.reasons.includes("non_event_opensearch_descriptor"), url);
   }
 });
@@ -100,7 +100,7 @@ test("sitemap XML is a crawl index, not an event index", () => {
       link: link(url, { type: "application/xml" }),
       page: calendarPage(),
     });
-    assert.equal(result.decision, "ineligible", url);
+    assert.equal(result.decision, "non_event", url);
     assert.ok(result.reasons.includes("non_event_sitemap"), url);
   }
 });
@@ -111,40 +111,52 @@ test("archived historical XML snapshots are never a live event interface", () =>
     page: calendarPage(),
   });
 
-  assert.equal(result.decision, "ineligible");
+  assert.equal(result.decision, "non_event");
   assert.ok(result.reasons.includes("non_event_archive_snapshot"));
 });
 
-test("author, tag and category archive feeds carry no event context", () => {
+test("section and archive feeds stay explorable rather than being written off", () => {
+  // A section feed is exactly where a small publisher's programme tends to
+  // live. We have no evidence it lists events, and no evidence it does not.
   for (const url of [
     "https://reseblogg.example/author/maria/feed/",
     "https://reseblogg.example/tag/resor/feed/",
-    "https://reseblogg.example/category/mat/feed/",
+    "https://forening.example/musik/feed/",
+    "https://forening.example/kultur/feed/",
   ]) {
-    const result = classifyRssEventInterface({ link: link(url), page: calendarPage() });
-    assert.equal(result.decision, "ineligible", url);
-    assert.ok(result.reasons.includes("non_event_entry_scoped_feed"), url);
+    const result = classifyRssEventInterface({ link: link(url), page: page() });
+    assert.equal(result.decision, "exploratory", url);
   }
 });
 
-test("a per-article feed indexes one article's discussion, not a programme", () => {
+test("a per-article feed is uncertain, not condemned", () => {
   const result = classifyRssEventInterface({
     link: link("https://reseblogg.example/att-uppleva-gamla-hamnen/feed/"),
     page: contentPage(),
   });
 
-  assert.equal(result.decision, "ineligible");
-  assert.ok(result.reasons.includes("non_event_entry_scoped_feed"));
+  // Probably an entry discussion feed. "Probably" is not "known", so it is
+  // kept out of the probe lane without being discarded.
+  assert.equal(result.decision, "exploratory");
 });
 
-test("an event detail page's own feed is not the programme index", () => {
-  const result = classifyRssEventInterface({
-    link: link("https://kajscenen.example/kalender/sommarfest-2026/feed/"),
-    page: calendarPage(),
-  });
-
-  assert.equal(result.decision, "ineligible");
-  assert.ok(result.reasons.includes("non_event_entry_scoped_feed"));
+test("only an explicit comments marker condemns a nested feed", () => {
+  // Nested under a calendar section: uncertain, kept.
+  assert.equal(
+    classifyRssEventInterface({
+      link: link("https://kajscenen.example/kalender/sommarfest-2026/feed/"),
+      page: page(),
+    }).decision,
+    "event_interface",
+  );
+  // Same shape, explicit comments marker: rejected.
+  assert.equal(
+    classifyRssEventInterface({
+      link: link("https://kajscenen.example/kalender/sommarfest-2026/comments/feed/"),
+      page: calendarPage(),
+    }).decision,
+    "non_event",
+  );
 });
 
 test("search result feeds and site metadata XML are rejected", () => {
@@ -152,14 +164,14 @@ test("search result feeds and site metadata XML are rejected", () => {
     link: link("https://reseblogg.example/?s=konsert&feed=rss2"),
     page: calendarPage(),
   });
-  assert.equal(search.decision, "ineligible");
+  assert.equal(search.decision, "non_event");
   assert.ok(search.reasons.includes("non_event_search_feed"));
 
   const rsd = classifyRssEventInterface({
     link: link("https://reseblogg.example/xmlrpc/rsd.xml", { rel: "EditURI", type: "" }),
     page: calendarPage(),
   });
-  assert.equal(rsd.decision, "ineligible");
+  assert.equal(rsd.decision, "non_event");
   assert.ok(rsd.reasons.includes("non_event_site_metadata"));
 });
 
@@ -173,9 +185,9 @@ test("a generic homepage site feed stays out of the event lane rather than being
     page: page(),
   });
 
-  assert.equal(result.decision, "insufficient_event_context");
+  assert.equal(result.decision, "exploratory");
   assert.equal(result.transport, "feed");
-  assert.ok(result.reasons.includes("no_event_context_evidence"));
+  assert.ok(result.reasons.includes("no_event_context_evidence_yet"));
 });
 
 test("an ordinary content page exposing a generic feed proves nothing about events", () => {
@@ -184,7 +196,7 @@ test("an ordinary content page exposing a generic feed proves nothing about even
     page: contentPage(),
   });
 
-  assert.equal(result.decision, "insufficient_event_context");
+  assert.equal(result.decision, "exploratory");
 });
 
 test("a bare .xml file with no event context is transport only", () => {
@@ -193,7 +205,7 @@ test("a bare .xml file with no event context is transport only", () => {
     page: contentPage(),
   });
 
-  assert.equal(result.decision, "insufficient_event_context");
+  assert.equal(result.decision, "exploratory");
   assert.equal(result.transport, "xml");
 });
 
@@ -207,7 +219,7 @@ test("an article about events does not qualify a site-wide feed", () => {
   assert.equal(
     classifyRssEventInterface({ link: link("https://reseblogg.example/feed/"), page: article })
       .decision,
-    "insufficient_event_context",
+    "exploratory",
   );
 });
 
@@ -221,7 +233,7 @@ test("an event calendar page linking a bare /feed stays discoverable", () => {
     page: calendarPage(),
   });
 
-  assert.equal(result.decision, "eligible");
+  assert.equal(result.decision, "event_interface");
   assert.ok(result.reasons.includes("event_page_calendar_link_origin"));
 });
 
@@ -231,7 +243,7 @@ test("an event calendar page linking a generic .xml stays discoverable", () => {
     page: calendarPage(),
   });
 
-  assert.equal(result.decision, "eligible");
+  assert.equal(result.decision, "event_interface");
   assert.equal(result.transport, "xml");
 });
 
@@ -249,7 +261,7 @@ test("a localized non-English calendar page qualifies its feed without English w
     link: link("https://kulturhus.example/feed/"),
     page: danish,
   });
-  assert.equal(result.decision, "eligible");
+  assert.equal(result.decision, "event_interface");
   assert.ok(result.reasons.includes("event_page_path_terms"));
 });
 
@@ -265,7 +277,7 @@ test("a localized section feed survives when only the local term marks it", () =
     page: danish,
   });
 
-  assert.equal(result.decision, "eligible");
+  assert.equal(result.decision, "event_interface");
   assert.ok(result.reasons.includes("event_feed_path_terms"));
 });
 
@@ -278,7 +290,7 @@ test("an accessible feed name carrying event semantics is positive evidence", ()
     page: page(),
   });
 
-  assert.equal(result.decision, "eligible");
+  assert.equal(result.decision, "event_interface");
   assert.ok(result.reasons.includes("event_link_label_terms"));
 });
 
@@ -293,7 +305,7 @@ test("schema.org event rows on the page qualify a generic feed", () => {
     page: schemaPage,
   });
 
-  assert.equal(result.decision, "eligible");
+  assert.equal(result.decision, "event_interface");
   assert.ok(result.reasons.includes("event_page_schema_event_rows"));
 });
 
@@ -304,7 +316,7 @@ test("an existing event-listing signature qualifies a generic feed", () => {
   assert.equal(
     classifyRssEventInterface({ link: link("https://kajscenen.example/feed/"), page: listing })
       .decision,
-    "eligible",
+    "event_interface",
   );
 });
 
@@ -315,14 +327,14 @@ test("Atom MIME is recognized transport, and /feed/atom/ is still the site feed"
     }),
     page: calendarPage(),
   });
-  assert.equal(atom.decision, "eligible");
+  assert.equal(atom.decision, "event_interface");
   assert.equal(atom.transport, "feed");
 
   const variant = classifyRssEventInterface({
     link: link("https://kajscenen.example/feed/atom/"),
     page: calendarPage(),
   });
-  assert.equal(variant.decision, "eligible");
+  assert.equal(variant.decision, "event_interface");
 });
 
 test("links that are not feed shaped are never event interfaces", () => {
@@ -331,7 +343,7 @@ test("links that are not feed shaped are never event interfaces", () => {
     page: calendarPage(),
   });
 
-  assert.equal(result.decision, "ineligible");
+  assert.equal(result.decision, "not_feed_shaped");
   assert.equal(result.transport, null);
   assert.deepEqual(result.reasons, ["transport_not_feed_shaped"]);
 });
@@ -339,10 +351,10 @@ test("links that are not feed shaped are never event interfaces", () => {
 test("malformed and non-http locators fail closed", () => {
   for (const url of ["", "not a url", "javascript:alert(1)", "ftp://x.example/feed"]) {
     const result = classifyRssEventInterface({ link: link(url), page: calendarPage() });
-    assert.equal(result.decision, "ineligible", JSON.stringify(url));
+    assert.equal(result.decision, "non_event", JSON.stringify(url));
+    assert.ok(result.reasons.includes("transport_locator_unusable"), JSON.stringify(url));
   }
-  // A declared feed MIME with no usable locator must not become eligible.
-  assert.equal(classifyRssEventInterface({}).decision, "ineligible");
+  assert.equal(classifyRssEventInterface({}).decision, "not_feed_shaped");
 });
 
 // --------------------------------------------------------------------------
@@ -393,7 +405,7 @@ test("discovery no longer proposes non-event feeds as event sources", () => {
   // Every declined interface is explainable, with bounded reason tokens.
   const declined = result.rss_interface_decisions;
   assert.equal(declined.length, 5);
-  assert.equal(declined.every((row) => row.decision !== "eligible"), true);
+  assert.equal(declined.every((row) => row.decision !== "event_interface"), true);
   assert.equal(
     declined.every((row) => row.reasons.every((token) => /^[a-z0-9_]{1,64}$/.test(token))),
     true,
@@ -432,7 +444,7 @@ test("discovery still proposes a bare /feed from a real calendar surface", () =>
   // The comments feed on the very same calendar page is still declined.
   assert.deepEqual(
     result.rss_interface_decisions
-      .filter((row) => row.decision !== "eligible")
+      .filter((row) => row.decision === "non_event")
       .map((row) => row.url),
     ["https://kajscenen.example/comments/feed/"],
   );
@@ -546,4 +558,159 @@ test("a junk feed no longer blocks the scout from reaching the real calendar pag
   );
   assert.equal(result.rss_event_interface_count, 0);
   assert.equal(result.rss_rejected_interface_count, 1);
+});
+
+// --------------------------------------------------------------------------
+// Small and poorly structured places.
+//
+// A village, island or seasonal destination rarely publishes /events, iCal or
+// schema.org. Its programme shows up on a cultural association's generic feed,
+// a municipal news feed or a venue blog. Discovery must not write those off:
+// none of the cases below is asserted to BE an event feed, only to survive.
+// --------------------------------------------------------------------------
+
+const MESSY_PLACES = [
+  {
+    what: "village cultural association, generic feed only",
+    pageUrl: "https://bygdeforening.example/",
+    html: '<html lang="sv"><head><title>Bygdeföreningen</title></head><body></body></html>',
+    feed: "https://bygdeforening.example/feed/",
+  },
+  {
+    what: "local venue with a section feed we cannot classify",
+    pageUrl: "https://spelstallet.example/",
+    html: '<html lang="sv"><head><title>Spelstället</title></head><body></body></html>',
+    feed: "https://spelstallet.example/musik/feed/",
+  },
+  {
+    what: "municipality publishing through ordinary news",
+    pageUrl: "https://litenkommun.example/",
+    html: '<html lang="sv"><head><title>Liten kommun</title></head><body></body></html>',
+    feed: "https://litenkommun.example/nyheter/feed/",
+  },
+  {
+    what: "seasonal festival site with an undated generic feed",
+    pageUrl: "https://sommarfest.example/",
+    html: '<html lang="sv"><head><title>Sommarfest</title></head><body></body></html>',
+    feed: "https://sommarfest.example/feed/",
+  },
+  {
+    what: "weakly structured local-language source",
+    pageUrl: "https://otok.example/",
+    html: '<html lang="hr"><head><title>Otok</title></head><body></body></html>',
+    feed: "https://otok.example/index.xml",
+  },
+  {
+    what: "island association exposing only a bare .xml",
+    pageUrl: "https://skargard.example/om-oss",
+    html: '<html lang="sv"><head><title>Om oss</title></head><body></body></html>',
+    feed: "https://skargard.example/data/export.xml",
+  },
+];
+
+test("messy small-place sources are retained for exploration, never discarded", () => {
+  for (const entry of MESSY_PLACES) {
+    const result = classifyRssEventInterface({
+      link: link(entry.feed),
+      page: page({ pageUrl: entry.pageUrl, html: entry.html }),
+    });
+
+    // The claim is NOT that these are event feeds. The claim is that discovery
+    // has no evidence against them and must keep them reachable.
+    assert.equal(result.decision, "exploratory", entry.what);
+    assert.ok(result.transport, entry.what);
+  }
+});
+
+test("a small place with no event structure still yields exploratory discovery", () => {
+  const html = [
+    '<html lang="sv"><head><title>Bygdeföreningen</title>',
+    '<link rel="alternate" type="application/rss+xml" href="/feed/">',
+    '<link rel="alternate" type="application/rss+xml" href="/comments/feed/">',
+    "</head><body></body></html>",
+  ].join("\n");
+
+  const result = inspect(html, { url: "https://bygdeforening.example/", family: "unknown_source_family" });
+
+  // Nothing is promoted to an event source on this evidence...
+  assert.deepEqual(result.manifest_candidates, []);
+  assert.equal(result.detected.includes("rss"), false);
+
+  // ...but the generic feed survives as discovery evidence, while the comments
+  // feed does not. That is the whole distinction.
+  assert.deepEqual(
+    result.exploratory_interfaces.map((hint) => hint.url),
+    ["https://bygdeforening.example/feed/"],
+  );
+  const [hint] = result.exploratory_interfaces;
+  assert.equal(hint.runtime_policy, "probe_only");
+  assert.equal(hint.corroboration_required, true);
+  assert.ok(hint.reasons.includes("exploratory_interface_not_yet_event_attested"));
+});
+
+test("exploratory interfaces never enter the bounded qualification probe lane", () => {
+  // The qualification rotation probes two candidates per run, oldest-first,
+  // with no notion of candidate strength. Uncertain feeds must therefore stay
+  // out of the manifest lane or they would starve real event candidates.
+  const html = [
+    '<html lang="sv"><head><title>Bygdeföreningen</title>',
+    '<link rel="alternate" type="application/rss+xml" href="/feed/">',
+    '<link rel="alternate" type="application/rss+xml" href="/musik/feed/">',
+    '<link rel="alternate" type="application/rss+xml" href="/nyheter/feed/">',
+    '<link rel="alternate" type="text/calendar" href="/kalender.ics">',
+    "</head><body></body></html>",
+  ].join("\n");
+
+  const result = inspect(html, { url: "https://bygdeforening.example/" });
+
+  assert.equal(result.exploratory_interfaces.length, 3);
+  assert.deepEqual(
+    result.manifest_candidates.map((manifest) => manifest.adapter),
+    ["ical"],
+  );
+  for (const hint of result.exploratory_interfaces) {
+    assert.equal(hint.runtime_policy, "probe_only");
+  }
+});
+
+test("scout results report all four interface populations", async () => {
+  const {
+    scoutLocalEventSources,
+  } = require("../server/pulse-sources/local-event-source-scout");
+
+  // Deliberately NOT an event surface, so each feed is judged on its own
+  // evidence rather than inheriting the page's.
+  const html = [
+    '<html lang="sv"><head><title>Bygdeföreningen</title>',
+    '<link rel="alternate" type="application/rss+xml" href="/evenemang/feed/">',
+    '<link rel="alternate" type="application/rss+xml" href="/musik/feed/">',
+    '<link rel="alternate" type="application/rss+xml" href="/comments/feed/">',
+    '<link rel="search" href="/opensearch.xml">',
+    "</head><body></body></html>",
+  ].join("\n");
+
+  const result = await scoutLocalEventSources({
+    place: { label: "Test Region" },
+    bounds: [12.5, 55.2, 14.7, 56.0],
+    seeds: [{ url: "https://bygdeforening.example/", label: "Bygdeföreningen" }],
+    fetcher: async (url) => ({
+      ok: true,
+      status: 200,
+      headers: {
+        get: (name) =>
+          String(name).toLowerCase() === "content-type"
+            ? String(url).endsWith("robots.txt")
+              ? "text/plain"
+              : "text/html"
+            : null,
+      },
+      text: async () => (String(url).endsWith("robots.txt") ? "" : html),
+    }),
+  });
+
+  assert.equal(result.rss_transport_link_count, 4);
+  assert.equal(result.rss_event_interface_count, 1);
+  assert.equal(result.rss_exploratory_interface_count, 1);
+  assert.equal(result.rss_rejected_interface_count, 2);
+  assert.equal(result.exploratory_interfaces.length, 1);
 });

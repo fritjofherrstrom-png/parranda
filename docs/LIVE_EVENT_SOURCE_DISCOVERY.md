@@ -231,22 +231,42 @@ XML pages all became `rss_atom_event_detail` candidates. They were probed on
 rotation and never carried a single event row, because the interface itself was
 never an event interface.
 
-Eligibility now separates three kinds of evidence:
+Discovery is optimized for **recall**, not for a clean detector. The goal is a
+rich local knowledge reservoir; relevance filtering happens later, downstream.
+So only interfaces we can positively identify as irrelevant are rejected.
+Absence of event evidence is not evidence of absence.
+
+A large city exposes `/events`, iCal, schema.org and JSON APIs. A village,
+island or seasonal destination often exposes its programme through a generic
+WordPress feed, a municipal news post, a cultural association site or a venue
+blog. Requiring strong event semantics too early would systematically lose the
+smaller and less structured places, which is the opposite of the product goal.
+
+Interfaces are therefore sorted into three populations, not two:
 
 ```txt
-RSS/Atom transport evidence
-+ positive event-context evidence
-- strong non-event evidence
-  -> event-interface eligibility
+known non-event evidence        -> non_event      (rejected, fail-closed)
+transport, nothing known        -> exploratory    (retained, not probed)
+transport + event context       -> event_interface (probe lane)
 ```
 
-A feed becomes an event-source candidate only when transport is present, no
-non-event evidence applies, and at least one positive event-context signal
-holds. The verdict is one of `eligible`, `ineligible`, or
-`insufficient_event_context`, with bounded machine-readable reason tokens.
+`event_interface` candidates enter the bounded qualification probe lane as
+before. `exploratory` interfaces are retained as discovery hints in the same
+architectural lane as social discovery hints: persisted, `probe_only`,
+`corroboration_required`, never runtime eligible.
 
-Non-event evidence (rejects regardless of context, because an event venue's
-comments feed is still a comments feed):
+Exploratory interfaces are deliberately kept **out** of the manifest lane. The
+qualification rotation probes two candidates per run, oldest-first, with no
+notion of candidate strength (`source-qualification.js`), so admitting
+uncertain feeds there would starve real event candidates of the scarce probe
+budget — which is the mechanism that produced zero event-bearing evidence in
+the first place. Curiosity belongs in discovery; scarcity belongs in
+qualification.
+
+Non-event evidence — the only grounds for rejection. Each is a positive
+identification of a non-event interface, not merely missing evidence. These
+reject regardless of page context, because an event venue's comments feed is
+still a comments feed:
 
 - comment feeds, in path (`/comments/feed`) and query (`?feed=comments-rss2`) form;
 - OpenSearch descriptors, by filename, MIME, or `rel=search`;
@@ -254,9 +274,13 @@ comments feed is still a comments feed):
 - site-plumbing XML such as RSD and editor manifests, and non-feed `rel` values;
 - archived/snapshot XML paths;
 - search-result feeds;
-- entry-scoped feeds — `/{entry-slug}/feed` is one article's discussion, not a
-  programme. A feed scoped to an event-shaped section (`/events/feed`,
-  `/arrangementer/feed`) is not entry scoped.
+- feed MIME with no reachable http(s) locator.
+
+Notably **not** rejected: generic `/feed`, `/{slug}/feed`, `/music/feed`,
+section and archive feeds, and bare `.xml`. A nested feed is only rejected on
+an explicit comments marker, never on the shape of its parent slug. These are
+exactly the interfaces a small publisher's programme hides behind, so they stay
+exploratory rather than being written off.
 
 Positive event-context evidence is source-owned page or link semantics, never
 publisher identity — being an event venue is not evidence that a given feed
@@ -281,9 +305,13 @@ event interface?"*. Whether Parranda may activate it stays a separate question
 owned by terms, robots, geometry and qualification. Unknown terms still require
 review, and eligibility never shortens the qualification path.
 
-Feed-shaped links that are declined are recorded per inspected page as internal
-review evidence with their reason tokens, so an operator can see what discovery
-kept, what it declined, and why. No public payload carries these tokens.
+Every feed-shaped link keeps its verdict per inspected page, so all three
+populations stay measurable: `rss_transport_link_count`,
+`rss_event_interface_count`, `rss_exploratory_interface_count` and
+`rss_rejected_interface_count` on the scout result, with per-link reasons in
+`rss_interface_decisions`. Retained uncertainty is a feature to measure, not a
+precision number to maximize — a high rejection rate with a suspiciously clean
+candidate list would hide false negatives.
 
 ## Source Family Priority
 

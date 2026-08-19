@@ -149,6 +149,7 @@ test("trusted place records become bounded scout seeds and review-only manifests
       detected: ["ical"],
       reasons: ["source_interfaces_detected"],
       manifest_candidate_count: 1,
+      exploratory_interface_count: 0,
       social_hint_count: 0,
     },
   ]);
