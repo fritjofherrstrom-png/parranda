@@ -15,6 +15,10 @@ const { createHash } = require("node:crypto");
 const { evaluateLiveEventSourceCandidate } = require("./source-discovery");
 const { extractSchemaOrgEventsFromHtml } = require("./schema-org-event-provider");
 const { extractCalendarPageLinks } = require("./calendar-page-locator");
+const {
+  buildRssPageEventContext,
+  classifyRssEventInterface,
+} = require("./rss-event-interface");
 const { hasSitevisionCalendarSignature } = require("./sitevision-calendar-provider");
 const { hasEmbeddedProgramRscSignature } = require("./embedded-program-rsc-provider");
 const {
@@ -37,6 +41,7 @@ const DEFAULT_MAX_LINKED_PAGES = 12;
 const MAX_LINKED_PAGES = 30;
 const DEFAULT_MANIFEST_RADIUS_KM = 20;
 const MAX_DISCOVERY_QUERIES = 18;
+const MAX_RSS_INTERFACE_DECISIONS = 24;
 
 const MANIFEST_ADAPTERS = new Set([
   "events_calendar",
@@ -157,7 +162,34 @@ function inspectEventSourcePage({
   const candidates = [];
   const socialHints = [];
   const evidence = [];
+  const rssDecisions = [];
   const seen = new Set();
+
+  // RSS/Atom transport is not event evidence. Resolve this page's event
+  // context once, then let every discovered feed be judged against it.
+  const schemaEvents = extractSchemaOrgEventsFromHtml(source);
+  const rssPageContext = buildRssPageEventContext({
+    pageUrl,
+    seed: effectiveSeed,
+    html: source,
+    eventTerms: uniqueStrings([
+      ...(Array.isArray(context.localDiscoveryTerms) ? context.localDiscoveryTerms : []),
+      ...(Array.isArray(context.place?.local_discovery_terms)
+        ? context.place.local_discovery_terms
+        : []),
+    ]),
+    signatures: {
+      schemaEventCount: schemaEvents.length,
+      eventListingSignature:
+        hasStrongTribeSignature(source) ||
+        hasCompatibleVenueCalendarSignature(source) ||
+        hasGenericEventListingSignature(source) ||
+        hasWixEventSitemapSignature(source, pageUrl) ||
+        hasSitevisionCalendarSignature(source) ||
+        hasEmbeddedProgramRscSignature(source) ||
+        hasOfficialProgramArticleSignature(source),
+    },
+  });
 
   const addCandidate = (kind, endpoint, overrides = {}) => {
     const normalizedEndpoint = normalizeHttpUrl(endpoint);
@@ -183,7 +215,18 @@ function inspectEventSourcePage({
       continue;
     }
     if (isIcalLink(link)) addCandidate("ical", normalizeWebcalUrl(link.url));
-    if (isRssLink(link)) addCandidate("rss", link.url);
+    const rss = classifyRssEventInterface({ link, page: rssPageContext });
+    if (rss.transport) {
+      // Every feed-shaped link is recorded with its verdict so an operator can
+      // see what discovery kept, what it declined, and why. Internal review
+      // evidence only; no public payload carries these tokens.
+      rssDecisions.push({
+        url: link.url,
+        decision: rss.decision,
+        reasons: rss.reasons,
+      });
+    }
+    if (rss.decision === "eligible") addCandidate("rss", link.url);
     if (isTribeRestUrl(link.url)) addCandidate("events_calendar", link.url);
   }
 
@@ -195,7 +238,6 @@ function inspectEventSourcePage({
     addCandidate("event_json", pageUrl);
   }
 
-  const schemaEvents = extractSchemaOrgEventsFromHtml(source);
   if (schemaEvents.length > 0) {
     addCandidate("schema_org_html", pageUrl, { schemaEventCount: schemaEvents.length });
   }
@@ -239,6 +281,7 @@ function inspectEventSourcePage({
         .filter(Boolean),
     ),
     social_hints: dedupeSocialHints(socialHints),
+    rss_interface_decisions: dedupeRssDecisions(rssDecisions),
     reasons:
       candidates.length || socialHints.length
         ? ["source_interfaces_detected"]
@@ -483,6 +526,7 @@ async function scoutLocalEventSources({
     linked_source_count: results.filter(
       (result) => result.discovery_method === "same_origin_calendar_link",
     ).length,
+    ...rssInterfaceCounts(results),
     results,
     manifest_candidates: manifestCandidates,
     social_hints: socialHints,
@@ -967,10 +1011,14 @@ async function readBoundedText(response, maxBytes) {
 }
 
 function extractHtmlLinks(html, baseUrl) {
+  const source = String(html || "");
+  // A feed's accessible name is source-owned evidence about what the feed is.
+  // `<link>` carries it in `title`; `<a>` carries it as element text.
+  const anchorText = extractAnchorText(source, baseUrl);
   const links = [];
   const pattern = /<(a|link)\b([^>]*)>/gi;
   let match;
-  while ((match = pattern.exec(String(html || ""))) !== null) {
+  while ((match = pattern.exec(source)) !== null) {
     const attrs = match[2] || "";
     const href = attributeValue(attrs, "href");
     if (!href) continue;
@@ -981,9 +1029,30 @@ function extractHtmlLinks(html, baseUrl) {
       url,
       rel: attributeValue(attrs, "rel").toLowerCase(),
       type: attributeValue(attrs, "type").toLowerCase(),
+      title: attributeValue(attrs, "title"),
+      aria_label: attributeValue(attrs, "aria-label"),
+      label: anchorText.get(url) || "",
     });
   }
   return links;
+}
+
+function extractAnchorText(html, baseUrl) {
+  const labels = new Map();
+  const pattern = /<a\b([^>]*)>([\s\S]*?)<\/a\s*>/gi;
+  let match;
+  while ((match = pattern.exec(String(html || ""))) !== null) {
+    const href = attributeValue(match[1] || "", "href");
+    if (!href) continue;
+    const url = absolutizeUrl(href, baseUrl);
+    if (!url || labels.has(url)) continue;
+    const text = String(match[2] || "")
+      .replace(/<[^>]*>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (text) labels.set(url, text);
+  }
+  return labels;
 }
 
 function extractDeclaredOpenLicense(links) {
@@ -1141,13 +1210,6 @@ function isIcalLink(link) {
   return (
     link?.type.includes("text/calendar") ||
     /(?:\.ics(?:[?#]|$)|^webcal:)/i.test(url)
-  );
-}
-
-function isRssLink(link) {
-  return (
-    link?.type.includes("rss+xml") ||
-    /(?:\/feed\/?|\.rss|\.xml)(?:[?#]|$)/i.test(String(link?.url || ""))
   );
 }
 
@@ -1413,6 +1475,36 @@ function dedupeManifests(manifests) {
     out.push(manifest);
   }
   return out;
+}
+
+// Discovery precision is only measurable if we count what feed transport was
+// seen against what actually qualified as an event interface.
+function rssInterfaceCounts(results) {
+  const decisions = (Array.isArray(results) ? results : []).flatMap((result) =>
+    Array.isArray(result?.rss_interface_decisions) ? result.rss_interface_decisions : [],
+  );
+  return {
+    rss_transport_link_count: decisions.length,
+    rss_event_interface_count: decisions.filter((d) => d.decision === "eligible").length,
+    rss_rejected_interface_count: decisions.filter((d) => d.decision !== "eligible").length,
+  };
+}
+
+function dedupeRssDecisions(decisions) {
+  const output = [];
+  const seen = new Set();
+  for (const decision of Array.isArray(decisions) ? decisions : []) {
+    const url = normalizeHttpUrl(decision?.url);
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    output.push({
+      url,
+      decision: firstString(decision?.decision, "ineligible"),
+      reasons: uniqueStrings(decision?.reasons),
+    });
+    if (output.length >= MAX_RSS_INTERFACE_DECISIONS) break;
+  }
+  return output;
 }
 
 function dedupeSocialHints(hints) {

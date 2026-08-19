@@ -95,10 +95,11 @@ candidate evaluation:
 - discovered machine-readable interfaces become review-needed manifest
   candidates only. They never become active runtime providers automatically;
 - RSS/Atom feeds can now produce review-needed manifests for a bounded generic
-  detail adapter. The feed is only an index: Parranda never treats `pubDate`,
-  Atom `updated`, feed descriptions, or feed titles as event facts. The adapter
-  follows bounded same-origin item links and accepts event timing only from
-  schema.org/Event JSON-LD on the detail page. Unrecognized generic HTML still
+  detail adapter, but only when the interface is plausibly an *event* interface
+  (see "RSS/Atom event-interface eligibility"). The feed is only an index:
+  Parranda never treats `pubDate`, Atom `updated`, feed descriptions, or feed
+  titles as event facts. The adapter follows bounded same-origin item links and
+  accepts event timing only from schema.org/Event JSON-LD on the detail page. Unrecognized generic HTML still
   remains adapter-review work. Recognized Sitevision calendars and Wix event
   sites with public sitemaps can likewise produce review-needed manifests for
   their bounded generic adapters. Social links remain discovery/corroboration
@@ -217,6 +218,72 @@ a source registry or catalog connection. Once accepted, a profiled source
 enters the existing bounded cache, normalization, fusion, source-health,
 browse, and personalized-highlight path; it does not create a parallel event
 engine or alter a route/day anchor.
+
+## RSS/Atom event-interface eligibility
+
+RSS/Atom shape is *transport* evidence, not event evidence. A feed MIME type, a
+`/feed` path, a `.rss` suffix or a `.xml` suffix only says a document might be a
+syndication index. It says nothing about whether that index lists events.
+
+Discovery used to treat transport shape alone as an event-source interface, so
+comment feeds, OpenSearch descriptors, sitemaps, per-article feeds and archived
+XML pages all became `rss_atom_event_detail` candidates. They were probed on
+rotation and never carried a single event row, because the interface itself was
+never an event interface.
+
+Eligibility now separates three kinds of evidence:
+
+```txt
+RSS/Atom transport evidence
++ positive event-context evidence
+- strong non-event evidence
+  -> event-interface eligibility
+```
+
+A feed becomes an event-source candidate only when transport is present, no
+non-event evidence applies, and at least one positive event-context signal
+holds. The verdict is one of `eligible`, `ineligible`, or
+`insufficient_event_context`, with bounded machine-readable reason tokens.
+
+Non-event evidence (rejects regardless of context, because an event venue's
+comments feed is still a comments feed):
+
+- comment feeds, in path (`/comments/feed`) and query (`?feed=comments-rss2`) form;
+- OpenSearch descriptors, by filename, MIME, or `rel=search`;
+- sitemap XML, including indexed and CMS-generated variants;
+- site-plumbing XML such as RSD and editor manifests, and non-feed `rel` values;
+- archived/snapshot XML paths;
+- search-result feeds;
+- entry-scoped feeds — `/{entry-slug}/feed` is one article's discussion, not a
+  programme. A feed scoped to an event-shaped section (`/events/feed`,
+  `/arrangementer/feed`) is not entry scoped.
+
+Positive event-context evidence is source-owned page or link semantics, never
+publisher identity — being an event venue is not evidence that a given feed
+indexes events:
+
+- the feed's accessible name (`<a>` text, `title`, `aria-label`) carries
+  event/calendar vocabulary;
+- the feed's own path carries event/calendar vocabulary;
+- the page was reached as an attested same-origin calendar link;
+- the page carries schema.org/Event rows;
+- the page matched an existing event-surface signature (programme article,
+  Sitevision, Wix, The Events Calendar, generic listing markup);
+- the page's own path or heading carries event/calendar vocabulary, unless the
+  page URL is itself a dated or entry-shaped article path.
+
+Vocabulary is the existing multilingual `CALENDAR_LINK_TERMS` list plus the
+resolver-attested local discovery terms for the place, so a localized calendar
+needs no English word. There is no publisher, domain, or city rule.
+
+The rule is pure and deterministic, and it answers only *"is this plausibly an
+event interface?"*. Whether Parranda may activate it stays a separate question
+owned by terms, robots, geometry and qualification. Unknown terms still require
+review, and eligibility never shortens the qualification path.
+
+Feed-shaped links that are declined are recorded per inspected page as internal
+review evidence with their reason tokens, so an operator can see what discovery
+kept, what it declined, and why. No public payload carries these tokens.
 
 ## Source Family Priority
 
