@@ -40,6 +40,7 @@ test("source search is default-off and requires an operator endpoint", () => {
 test("SearXNG search stays bounded and returns only low-trust public seeds", async () => {
   const requests = [];
   const search = createSearxngSourceSearch({
+    delay: async () => {},
     endpoint: "http://searxng:8080/search",
     maxQueries: 1,
     maxResultsPerQuery: 8,
@@ -100,6 +101,7 @@ test("source search caches successful query outcomes", async () => {
     },
   };
   const search = createSearxngSourceSearch({
+    delay: async () => {},
     endpoint: "https://search.example/search",
     cache,
     fetcher: async () => {
@@ -117,6 +119,7 @@ test("source search caches successful query outcomes", async () => {
 
 test("source search rejects cross-origin redirects and sanitizes failures", async () => {
   const redirected = createSearxngSourceSearch({
+    delay: async () => {},
     endpoint: "https://search.example/search",
     fetcher: async () => response("", {
       status: 302,
@@ -130,6 +133,7 @@ test("source search rejects cross-origin redirects and sanitizes failures", asyn
   assert.doesNotMatch(JSON.stringify(redirectResult), /secret|credential|hidden/);
 
   const throws = createSearxngSourceSearch({
+    delay: async () => {},
     endpoint: "https://search.example/search",
     fetcher: async () => {
       throw new Error("https://secret.example?token=credential");
@@ -143,6 +147,7 @@ test("source search rejects cross-origin redirects and sanitizes failures", asyn
 
 test("malformed and hanging response bodies fail soft", async () => {
   const malformed = createSearxngSourceSearch({
+    delay: async () => {},
     endpoint: "https://search.example/search",
     fetcher: async () => response("not-json", { url: "https://search.example/search" }),
   });
@@ -151,6 +156,7 @@ test("malformed and hanging response bodies fail soft", async () => {
   assert.equal(malformedResult.query_outcomes[0].reason, "source_search_payload_invalid");
 
   const hanging = createSearxngSourceSearch({
+    delay: async () => {},
     endpoint: "https://search.example/search",
     timeoutMs: 50,
     fetcher: async () => response("", {
@@ -162,11 +168,15 @@ test("malformed and hanging response bodies fail soft", async () => {
   const hangingResult = await hanging({ queries: ["Test events"] });
   assert.equal(hangingResult.status, "failed");
   assert.equal(hangingResult.query_outcomes[0].reason, "source_search_timeout");
-  assert.ok(Date.now() - started < 1000);
+  // A timeout is retryable, so the bounded in-run retry applies. The point of
+  // the bound is that it stays bounded: two attempts, not a loop.
+  assert.equal(hangingResult.query_outcomes[0].attempt_count, 2);
+  assert.ok(Date.now() - started < 4000);
 });
 
 test("SearXNG engine failures never masquerade as a healthy empty search", async () => {
   const unavailable = createSearxngSourceSearch({
+    delay: async () => {},
     endpoint: "https://search.example/search",
     fetcher: async () => response(JSON.stringify({
       results: [],
@@ -175,11 +185,18 @@ test("SearXNG engine failures never masquerade as a healthy empty search", async
   });
   const failed = await unavailable({ queries: ["Test events"] });
   assert.equal(failed.status, "failed");
-  assert.equal(failed.query_outcomes[0].status, "failed");
+  // Still not a healthy empty. It is now typed as "degraded" rather than a
+  // transport failure, because the provider answered but nothing it said can
+  // be trusted — and that is precisely what makes it retryable.
+  assert.equal(failed.query_outcomes[0].status, "degraded");
   assert.equal(failed.query_outcomes[0].reason, "source_search_engines_unavailable");
   assert.equal(failed.query_outcomes[0].engine_failure_count, 1);
+  assert.deepEqual(failed.query_outcomes[0].unresponsive_engines, ["bing"]);
+  assert.equal(failed.query_outcomes[0].retryable, true);
+  assert.equal(failed.retry_recommended, true);
 
   const partial = createSearxngSourceSearch({
+    delay: async () => {},
     endpoint: "https://search.example/search",
     fetcher: async () => response(JSON.stringify({
       results: [{ url: "https://calendar.example/events", title: "Calendar" }],

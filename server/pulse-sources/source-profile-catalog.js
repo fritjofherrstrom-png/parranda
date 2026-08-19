@@ -96,6 +96,7 @@ SET
   next_attempt_at = $4::timestamptz,
   lease_token = NULL,
   lease_until = NULL,
+  attempt_count = 0,
   last_reason = $5,
   discovery_health = COALESCE($6::jsonb, discovery_health),
   updated_at = NOW()

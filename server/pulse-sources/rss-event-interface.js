@@ -76,7 +76,10 @@ const FEED_FILENAME_PATTERN = /^(?:feed|rss|atom|index)\.(?:rss|atom|xml|rdf)$/;
 const OPENSEARCH_FILENAME_PATTERN = /^(?:opensearch|osd|opensearchdescription)\b/;
 const SITEMAP_FILENAME_PATTERN = /^(?:wp-)?sitemap(?:[-_].*)?\.xml(?:\.gz)?$/;
 const SITE_METADATA_FILENAME_PATTERN =
-  /^(?:rsd|wlwmanifest|browserconfig|crossdomain|manifest|opensearch)\.xml$/;
+  /^(?:rsd|wlwmanifest|browserconfig|crossdomain|manifest|opensearch|p3p|policy)\.xml$/;
+// A P3P privacy policy is a W3C protocol document served from a well-known
+// path. It is machine-readable and XML, and it is never a local programme.
+const W3C_POLICY_PATH_PATTERN = /(?:^|\/)w3c\//i;
 // Wayback-style snapshot prefixes: /web/20080518005902/http://...
 const ARCHIVE_SNAPSHOT_PATTERN = /\/web\/\d{8,14}(?:[a-z_]{2,3})?\//;
 const DATED_SLUG_PATTERN = /\b(?:19|20)\d{2}\b|\b\d{1,2}[-/]\d{1,2}\b/;
@@ -239,7 +242,7 @@ function detectNonEventEvidence({ url, type, rels }) {
   if (SITEMAP_FILENAME_PATTERN.test(filename) || segments.some((s) => s.toLowerCase() === "sitemap")) {
     reasons.push("non_event_sitemap");
   }
-  if (SITE_METADATA_FILENAME_PATTERN.test(filename)) {
+  if (SITE_METADATA_FILENAME_PATTERN.test(filename) || W3C_POLICY_PATH_PATTERN.test(path)) {
     reasons.push("non_event_site_metadata");
   }
   if (ARCHIVE_SNAPSHOT_PATTERN.test(path) || url.hostname.toLowerCase() === "web.archive.org") {

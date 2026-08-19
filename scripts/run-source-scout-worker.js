@@ -83,6 +83,23 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
   }
   if (result?.status === "empty") {
     const discoveryHealth = buildSourceDiscoveryHealth({ result, observedAt });
+    // An empty run has two very different causes. A clean search that found
+    // nothing is an answer, and the target waits out the normal refresh. A
+    // degraded or failed search answered nothing we can believe, so completing
+    // the target here would park the place for a full refresh cycle over one
+    // bad provider window. Retry it on the existing bounded backoff instead.
+    if (searchAnswerless(result?.source_search)) {
+      const retried = await catalog.failScoutTarget(target, reason, { discoveryHealth });
+      return {
+        target_key: target.target_key,
+        status: "retry_scheduled",
+        reason,
+        profile_key: null,
+        catalog_status: retried.status,
+        discovery_status: discoveryHealth.status,
+        ...(retried.retry_at ? { retry_at: retried.retry_at } : {}),
+      };
+    }
     const completed = await catalog.completeScoutTarget(target, reason, { discoveryHealth });
     return {
       target_key: target.target_key,
@@ -177,6 +194,15 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
     qualification_status: qualificationStatus,
     discovery_status: discoveryHealth.status,
   };
+}
+
+// A search outcome we cannot believe: the provider failed, its engines were
+// degraded with no trustworthy result set, or it explicitly asked for a retry.
+// This is not the same as a search that ran cleanly and found nothing.
+function searchAnswerless(search) {
+  if (!search || typeof search !== "object") return false;
+  const status = typeof search.status === "string" ? search.status : "";
+  return ["failed", "degraded"].includes(status) || search.retry_recommended === true;
 }
 
 function nextQualificationProbeAt(value) {
