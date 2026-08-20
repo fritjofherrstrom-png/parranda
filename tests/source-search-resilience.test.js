@@ -399,3 +399,191 @@ test("search resilience introduces no place, publisher or engine rules", () => {
   // which upstream engine happened to fail.
   assert.ok(!/"google"|"bing"|"duckduckgo"|"qwant"/i.test(source));
 });
+
+// --------------------------------------------------------------------------
+// The lifecycle shape the Pi falsified.
+//
+// Every test above drove the worker through `result.status === "empty"`. Real
+// runs do not look like that: trusted place records produce website seeds, so
+// the run builds a profile, qualifies, records, and reads as complete-like —
+// while the source search separately failed and returned nothing. The retry
+// truth was preserved in discovery_health but never reached the target.
+// --------------------------------------------------------------------------
+
+const {
+  createSourceProfileCatalog,
+  FAIL_SCOUT_TARGET_SQL,
+  COMPLETE_SCOUT_TARGET_SQL,
+  SCOUT_REPROBE_MIN_MS,
+} = require("../server/pulse-sources/source-profile-catalog");
+
+const RUN_AT = new Date("2026-08-20T12:00:00Z");
+
+function discoveredProfile() {
+  return {
+    profile_key: "source-profile-v1:generic",
+    runtime_review: { status: "unreviewed", reviewed_at: null, expires_at: null, feeds: [] },
+    source_families: [],
+    coverage: {},
+  };
+}
+
+// A run where unrelated scout work succeeded: a profile exists, qualification
+// ran, the catalog write succeeded. Only the source search is missing.
+async function runCompleteLikeWorker(sourceSearch, { qualification = "observing" } = {}) {
+  const calls = { completed: [], failed: [] };
+  let claims = 0;
+  const result = await runScoutWorkerBatch({
+    catalog: {
+      claimScoutTarget: async () => (claims++ === 0 ? scoutTarget() : null),
+      loadSourceQualification: async () => null,
+      recordDiscovery: async (value) => ({ status: "recorded", profile_key: value.profile_key }),
+      completeScoutTarget: async (_t, reason, options) => {
+        calls.completed.push({ reason, options });
+        return { status: "completed" };
+      },
+      failScoutTarget: async (_t, reason, options) => {
+        calls.failed.push({ reason, options });
+        return { status: "retry_wait", retry_at: "2026-08-20T12:05:00.000Z" };
+      },
+    },
+    runtime: {
+      now: () => RUN_AT,
+      sourceQualifier: async ({ profile }) => ({
+        profile,
+        qualification: { status: qualification },
+      }),
+    },
+    discover: async () => ({
+      status: "complete",
+      reasons: ["bounded_source_scout_complete"],
+      source_profile: discoveredProfile(),
+      manifest_candidates: [],
+      source_search: sourceSearch,
+    }),
+  });
+  return { result, calls };
+}
+
+test("a failed search still retries the target when unrelated scout work succeeded", async () => {
+  const { result, calls } = await runCompleteLikeWorker({
+    status: "degraded",
+    queried_count: 10,
+    responding_query_count: 0,
+    degraded_query_count: 10,
+    seed_count: 0,
+    accepted_seed_count: 0,
+    retry_recommended: true,
+  });
+
+  // The run is complete-like in every other respect, and the profile is kept.
+  assert.equal(result.results[0].profile_key, "source-profile-v1:generic");
+  assert.equal(result.results[0].qualification_status, "observing");
+
+  // But the open search must not be absorbed into the ordinary refresh.
+  assert.equal(calls.completed.length, 0);
+  assert.equal(calls.failed.length, 1);
+  assert.equal(result.results[0].status, "retry_scheduled");
+  assert.equal(result.results[0].retry_at, "2026-08-20T12:05:00.000Z");
+});
+
+test("a provider outage retries the target even when qualification reached review", async () => {
+  const { calls, result } = await runCompleteLikeWorker(
+    {
+      status: "failed",
+      queried_count: 10,
+      responding_query_count: 0,
+      seed_count: 0,
+      accepted_seed_count: 0,
+      retry_recommended: true,
+    },
+    { qualification: "qualified_for_review" },
+  );
+
+  assert.equal(calls.completed.length, 0);
+  assert.equal(calls.failed.length, 1);
+  assert.equal(result.results[0].qualification_status, "qualified_for_review");
+});
+
+test("a degraded search that kept usable seeds continues the ordinary lifecycle", async () => {
+  const { calls, result } = await runCompleteLikeWorker({
+    status: "partial",
+    queried_count: 10,
+    responding_query_count: 6,
+    degraded_query_count: 4,
+    seed_count: 3,
+    accepted_seed_count: 3,
+    retry_recommended: false,
+  });
+
+  // Degradation without loss is not a reason to redo the whole target.
+  assert.equal(calls.failed.length, 0);
+  assert.equal(calls.completed.length, 1);
+  assert.equal(result.results[0].status, "completed");
+});
+
+test("retained seeds win even if the provider still flagged a retry", async () => {
+  const { calls } = await runCompleteLikeWorker({
+    status: "partial",
+    seed_count: 2,
+    accepted_seed_count: 2,
+    retry_recommended: true,
+  });
+
+  assert.equal(calls.failed.length, 0);
+  assert.equal(calls.completed.length, 1);
+});
+
+test("a clean zero-result search keeps the ordinary refresh cadence", async () => {
+  const { calls } = await runCompleteLikeWorker({
+    status: "empty",
+    queried_count: 10,
+    responding_query_count: 10,
+    degraded_query_count: 0,
+    seed_count: 0,
+    accepted_seed_count: 0,
+    retry_recommended: false,
+  });
+
+  assert.equal(calls.failed.length, 0);
+  assert.equal(calls.completed.length, 1);
+});
+
+test("an unwired search never forces a retry", async () => {
+  for (const search of [null, undefined, { status: "not_configured" }]) {
+    const { calls } = await runCompleteLikeWorker(search);
+    assert.equal(calls.failed.length, 0, JSON.stringify(search));
+    assert.equal(calls.completed.length, 1, JSON.stringify(search));
+  }
+});
+
+test("the retry reaches the stored target as retry_wait on bounded backoff", async () => {
+  const executed = [];
+  const catalog = createSourceProfileCatalog({
+    now: () => RUN_AT,
+    query: async (sql, values) => {
+      executed.push({ sql, values });
+      return { rows: [{ target_key: values[0], status: "retry_wait" }] };
+    },
+  });
+
+  const stored = await catalog.failScoutTarget(
+    {
+      target_key: "source-scout-target-v1:generic",
+      lease_token: "lease-generic",
+      attempt_count: 1,
+    },
+    "source_search_degraded",
+    { discoveryHealth: { status: "search_failed", observed_at: RUN_AT.toISOString() } },
+  );
+
+  // The row really transitions to the retry lifecycle, not to completed.
+  assert.equal(executed[0].sql, FAIL_SCOUT_TARGET_SQL);
+  assert.notEqual(executed[0].sql, COMPLETE_SCOUT_TARGET_SQL);
+  assert.equal(stored.status, "retry_wait");
+
+  // Bounded minutes, not a multi-day refresh.
+  const nextAttemptMs = Date.parse(executed[0].values[2]) - RUN_AT.getTime();
+  assert.equal(nextAttemptMs, SCOUT_REPROBE_MIN_MS);
+  assert.ok(nextAttemptMs < 60 * 60 * 1000);
+});
