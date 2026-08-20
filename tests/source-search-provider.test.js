@@ -43,6 +43,7 @@ test("SearXNG search stays bounded and returns only low-trust public seeds", asy
     delay: async () => {},
     endpoint: "http://searxng:8080/search",
     maxQueries: 1,
+    hardQueryLimit: 1,
     maxResultsPerQuery: 8,
     maxSeeds: 4,
     maxResultsPerOrigin: 2,
@@ -78,8 +79,8 @@ test("SearXNG search stays bounded and returns only low-trust public seeds", asy
   assert.equal(result.status, "complete");
   assert.deepEqual(result.seeds.map((seed) => seed.url), [
     "https://calendar.example/events/one",
-    "https://calendar.example/events/two",
     "https://venue.example/program",
+    "https://calendar.example/events/two",
   ]);
   assert.equal(result.seeds[0].label, "Local calendar");
   assert.equal(result.seeds[0].family, "unknown_source_family");
@@ -210,18 +211,22 @@ test("SearXNG engine failures never masquerade as a healthy empty search", async
 });
 
 test("the env factory supports a private self-hosted endpoint", async () => {
-  let called = false;
+  let calls = 0;
   const search = resolveDefaultSourceSearch({
     PARRANDA_SOURCE_SEARCH: "enabled",
     PARRANDA_SOURCE_SEARCH_ENDPOINT: "http://searxng:8080/search",
     PARRANDA_SOURCE_SEARCH_MAX_QUERIES: "1",
+    PARRANDA_SOURCE_SEARCH_HARD_QUERY_LIMIT: "2",
+    PARRANDA_SOURCE_SEARCH_EXPANSION_TRANCHE_SIZE: "1",
+    PARRANDA_SOURCE_SEARCH_PACE_MS: "0",
   }, {
     fetcher: async () => {
-      called = true;
+      calls += 1;
       return response(JSON.stringify({ results: [] }));
     },
   });
-  const result = await search({ queries: ["Test events"] });
-  assert.equal(called, true);
+  const result = await search({ queries: ["Test events", "Test calendar", "Test festival"] });
+  assert.equal(calls, 2);
   assert.equal(result.status, "empty");
+  assert.equal(result.stop_reason, "hard_safety_ceiling");
 });

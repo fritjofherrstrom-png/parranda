@@ -203,9 +203,28 @@ Per-query evidence is persisted, bounded: query text, status, reason, raw and
 accepted result counts, unresponsive engine names, whether useful results
 existed despite degraded engines, attempt count, and whether a retry is
 warranted. Raw provider payloads and engine error strings are not persisted.
-Query-budget truncation is reported as `generated_query_count` /
-`skipped_query_count` so a low seed count is never mistaken for "this place has
-nothing".
+Source search treats the configured `PARRANDA_SOURCE_SEARCH_MAX_QUERIES` as its
+diverse initial tranche, not as the total discovery ambition. Query generation
+preserves locality/region/resolved-label scope and the existing local discovery
+terms, then round-robins term families so an early prefix cannot monopolize the
+run. Healthy expansion proceeds in small paced tranches while those tranches add
+new source host identities. Two expansion tranches with no new identity stop the
+run; broadly degraded tranches without trustworthy novelty stop immediately.
+Partial responses keep their useful results and may continue.
+
+The separate `PARRANDA_SOURCE_SEARCH_HARD_QUERY_LIMIT` defaults to 24. The normal
+generic query universe is at most 18, so this is a runaway safety ceiling rather
+than the expected stopping mechanism. `PARRANDA_SOURCE_SEARCH_EXPANSION_TRANCHE_SIZE`
+defaults to 4. Seed selection takes one page from each source identity before a
+second page from any identity, preventing early same-domain duplicates from
+crowding out later sources.
+
+Adaptive proof remains compact: `generated_query_count`, `queried_count`,
+`skipped_query_count`, `expansion_round_count`, `novel_source_identity_count`,
+bounded tranche counts and one of `query_space_exhausted`,
+`marginal_novelty_exhausted`, `provider_health_degraded`, or
+`hard_safety_ceiling`. A low seed count is therefore never mistaken for "this
+place has nothing", and no raw provider payload is persisted.
 
 The catalog write is forced to `review_needed`, even if upstream scout data
 claims otherwise. Re-running discovery cannot overwrite an approved, rejected,

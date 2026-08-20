@@ -98,3 +98,42 @@ test("missing source-search wiring is explicit and health normalization drops un
   assert.equal(normalized.raw_results, undefined);
   assert.doesNotMatch(JSON.stringify(normalized), /secret|token|hidden/);
 });
+
+test("adaptive breadth persists only compact yield and stop evidence", () => {
+  const health = buildSourceDiscoveryHealth({
+    result: discovery({
+      source_search: {
+        status: "complete",
+        generated_query_count: 18,
+        queried_count: 14,
+        skipped_query_count: 4,
+        expansion_round_count: 2,
+        novel_source_identity_count: 7,
+        stop_reason: "marginal_novelty_exhausted",
+        responding_query_count: 14,
+        result_count: 30,
+        accepted_seed_count: 12,
+        query_outcomes: [
+          { query_family: "local_discovery", query: "must-not-persist" },
+          { query_family: "generic_calendar" },
+        ],
+        query_tranches: [
+          { query_count: 6, novel_source_identity_count: 5, untrustworthy_query_count: 0 },
+          { query_count: 4, novel_source_identity_count: 2, untrustworthy_query_count: 1 },
+          { query_count: 4, novel_source_identity_count: 0, untrustworthy_query_count: 0 },
+        ],
+      },
+    }),
+    observedAt: NOW,
+  });
+
+  assert.equal(health.search.generated_query_count, 18);
+  assert.equal(health.search.queried_count, 14);
+  assert.equal(health.search.stop_reason, "marginal_novelty_exhausted");
+  assert.deepEqual(health.search.represented_query_families, [
+    "local_discovery",
+    "generic_calendar",
+  ]);
+  assert.equal(health.search.query_tranches.length, 3);
+  assert.doesNotMatch(JSON.stringify(health), /must-not-persist/);
+});

@@ -8,6 +8,7 @@ const { createSourceCache } = require("../server/place-candidates/source-cache")
 
 const {
   applyRobotsPolicy,
+  buildLocalEventDiscoveryQueryPlan,
   buildLocalEventDiscoveryQueries,
   extractEventWebsiteSeeds,
   extractCalendarPageLinks,
@@ -61,31 +62,33 @@ test("local-language terms produce bounded place-aware discovery queries", () =>
   assert.ok(queries.includes("Coastal District bakluckeloppis"));
   assert.ok(queries.includes("Test Region festival"));
   assert.ok(queries.includes("Test Region vernissage"));
+  assert.ok(queries.length > 10, "the real generator exceeds the old fixed search ceiling");
   assert.ok(queries.length <= 18);
 });
 
-test("the effective search budget favors simple locality and local terms over verbose resolver labels", () => {
-  const queries = buildLocalEventDiscoveryQueries({
+test("the initial query tranche rotates term families across locality, region and resolved labels", () => {
+  const options = {
     place: {
       name: "Northport",
       label: "Northport, Coastal Municipality, Large Administrative Region, Country",
       region_terms: ["Coastal Municipality"],
       local_discovery_terms: ["evenemang", "loppis", "konsert"],
     },
-  });
+  };
+  const queries = buildLocalEventDiscoveryQueries(options);
+  const plan = buildLocalEventDiscoveryQueryPlan(options);
 
-  assert.deepEqual(queries.slice(0, 4), [
+  assert.deepEqual(queries.slice(0, 6), [
     "Northport evenemang",
-    "Northport events",
-    "Northport loppis",
+    "Coastal Municipality events",
+    "Northport, Coastal Municipality, Large Administrative Region, Country loppis",
     "Northport calendar",
+    "Coastal Municipality konsert",
+    "Northport, Coastal Municipality, Large Administrative Region, Country festival",
   ]);
-  assert.ok(queries.slice(0, 6).includes("Coastal Municipality evenemang"));
-  assert.equal(
-    queries.slice(0, 6).filter((query) => query.startsWith("Northport, Coastal Municipality")).length,
-    1,
-    "the verbose resolver label cannot monopolize SearXNG's default six-query budget",
-  );
+  assert.deepEqual(new Set(plan.slice(0, 6).map((item) => item.label_scope)),
+    new Set(["locality", "region", "resolved_label"]));
+  assert.equal(new Set(plan.slice(0, 6).map((item) => item.term_key)).size, 6);
 });
 
 test("discovery still schedules the first trusted label when locality metadata is absent", () => {

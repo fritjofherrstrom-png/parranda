@@ -16,8 +16,17 @@ const {
   readBoundedText,
 } = require("./local-event-source-scout");
 
+// Kept as the legacy option name because operators already configure it. It is
+// now the initial diverse tranche, not the total ambition ceiling.
 const DEFAULT_MAX_QUERIES = 6;
-const MAX_QUERIES = 10;
+const MAX_INITIAL_QUERIES = 10;
+const DEFAULT_EXPANSION_TRANCHE_SIZE = 4;
+const MAX_EXPANSION_TRANCHE_SIZE = 8;
+// The normal generator emits at most 18 queries. Twenty-four leaves room for
+// modest generic growth while remaining a true runaway guard.
+const DEFAULT_HARD_QUERY_LIMIT = 24;
+const MAX_HARD_QUERY_LIMIT = 30;
+const MAX_EMPTY_EXPANSION_ROUNDS = 2;
 const DEFAULT_MAX_RESULTS_PER_QUERY = 5;
 const MAX_RESULTS_PER_QUERY = 8;
 const DEFAULT_MAX_SEEDS = 18;
@@ -74,6 +83,8 @@ function createSearxngSourceSearch({
   fetcher = typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null,
   cache = null,
   maxQueries = DEFAULT_MAX_QUERIES,
+  hardQueryLimit = DEFAULT_HARD_QUERY_LIMIT,
+  expansionTrancheSize = DEFAULT_EXPANSION_TRANCHE_SIZE,
   maxResultsPerQuery = DEFAULT_MAX_RESULTS_PER_QUERY,
   maxSeeds = DEFAULT_MAX_SEEDS,
   maxResultsPerOrigin = DEFAULT_MAX_RESULTS_PER_ORIGIN,
@@ -90,7 +101,13 @@ function createSearxngSourceSearch({
   if (!normalizedEndpoint || typeof fetcher !== "function") return null;
 
   const endpointOrigin = new URL(normalizedEndpoint).origin;
-  const queryLimit = clampInteger(maxQueries, 1, MAX_QUERIES);
+  const initialQueryCount = clampInteger(maxQueries, 1, MAX_INITIAL_QUERIES);
+  const hardLimit = clampInteger(hardQueryLimit, initialQueryCount, MAX_HARD_QUERY_LIMIT);
+  const expansionSize = clampInteger(
+    expansionTrancheSize,
+    1,
+    MAX_EXPANSION_TRANCHE_SIZE,
+  );
   const perQueryLimit = clampInteger(maxResultsPerQuery, 1, MAX_RESULTS_PER_QUERY);
   const seedLimit = clampInteger(maxSeeds, 1, MAX_SEEDS);
   const perOriginLimit = clampInteger(maxResultsPerOrigin, 1, 4);
@@ -100,58 +117,99 @@ function createSearxngSourceSearch({
   const runRetryBudget = clampInteger(retryBudget, 0, MAX_RETRY_BUDGET);
   const wait = typeof delay === "function" ? delay : defaultDelay;
 
-  return async function searchSourceSeeds({ queries = [], place = {} } = {}) {
-    const generatedQueries = uniqueStrings(queries);
-    const boundedQueries = generatedQueries.slice(0, queryLimit);
-    if (!boundedQueries.length) return emptyOutcome("source_search_queries_missing");
-    const skippedQueryCount = generatedQueries.length - boundedQueries.length;
+  return async function searchSourceSeeds({ queries = [], query_plan: queryPlan = [], place = {} } = {}) {
+    const generatedPlan = normalizeQueryPlan(queries, queryPlan);
+    const scheduledPlan = diversityFirstQueryPlan(generatedPlan);
+    const boundedPlan = scheduledPlan.slice(0, hardLimit);
+    if (!boundedPlan.length) return emptyOutcome("source_search_queries_missing");
 
     const language = firstString(place?.language_hints?.[0], "auto");
     const queryOutcomes = [];
+    const queryTranches = [];
     const found = [];
     const budget = { remaining: runRetryBudget };
+    const seenSourceIdentities = new Set();
+    let queryIndex = 0;
+    let cursor = 0;
+    let expansionRoundCount = 0;
+    let emptyExpansionRounds = 0;
+    let stopReason = null;
 
     // Sequential by design: the worker is off-request and must stay polite to
     // a shared/self-hosted metasearch service.
-    let queryIndex = 0;
-    for (const query of boundedQueries) {
-      // Pace the burst. Firing the whole budget back-to-back is what trips the
-      // proxied engines into rate limiting, which then reads as "no results".
-      if (queryIndex > 0 && paceMs > 0) await wait(paceMs);
-      queryIndex += 1;
+    while (cursor < boundedPlan.length) {
+      const isExpansion = cursor > 0;
+      const trancheSize = isExpansion ? expansionSize : initialQueryCount;
+      const tranche = boundedPlan.slice(cursor, cursor + trancheSize);
+      const beforeIdentityCount = seenSourceIdentities.size;
+      const trancheOutcomes = [];
 
-      const key = searchCacheKey(normalizedEndpoint, query, language, perQueryLimit);
-      const producer = () => runQueryWithRetry({
-        endpoint: normalizedEndpoint,
-        endpointOrigin,
-        query,
-        language,
-        fetcher,
-        timeoutMs,
-        maxBytes,
-        userAgent,
-        limit: perQueryLimit,
-        attemptLimit,
-        backoffMs,
-        wait,
-        budget,
-      });
-      let outcome;
-      try {
-        outcome = cache && typeof cache.get === "function"
-          ? await cache.get(key, producer, {
-              // Only trustworthy answers may be cached. A degraded or failed
-              // query must stay re-askable, or one bad window would be frozen
-              // in for the whole cache TTL.
-              shouldStore: (value) => ["ok", "partial"].includes(value?.status),
-            })
-          : await producer();
-      } catch (_error) {
-        outcome = { status: "failed", reason: "source_search_failed", results: [] };
+      for (const item of tranche) {
+        // Pace the burst. Firing the whole budget back-to-back is what trips the
+        // proxied engines into rate limiting, which then reads as "no results".
+        if (queryIndex > 0 && paceMs > 0) await wait(paceMs);
+        queryIndex += 1;
+
+        const outcome = await executeSourceSearchQuery({
+          item,
+          normalizedEndpoint,
+          endpointOrigin,
+          language,
+          perQueryLimit,
+          fetcher,
+          timeoutMs,
+          maxBytes,
+          userAgent,
+          attemptLimit,
+          backoffMs,
+          wait,
+          budget,
+          cache,
+        });
+        let novelForQuery = 0;
+        for (const result of Array.isArray(outcome?.results) ? outcome.results : []) {
+          found.push({ ...result, discovered_from: item.query });
+          const identity = sourceIdentityForResult(result, endpointOrigin);
+          if (identity && !seenSourceIdentities.has(identity)) {
+            seenSourceIdentities.add(identity);
+            novelForQuery += 1;
+          }
+        }
+        const compactOutcome = compactQueryOutcome(item.query, outcome, {
+          ...item,
+          novel_source_identity_count: novelForQuery,
+        });
+        queryOutcomes.push(compactOutcome);
+        trancheOutcomes.push(compactOutcome);
       }
-      queryOutcomes.push(compactQueryOutcome(query, outcome));
-      for (const result of Array.isArray(outcome?.results) ? outcome.results : []) {
-        found.push({ ...result, discovered_from: query });
+
+      cursor += tranche.length;
+      const novelCount = seenSourceIdentities.size - beforeIdentityCount;
+      const untrustworthyCount = trancheOutcomes.filter((item) =>
+        ["failed", "degraded"].includes(item.status)).length;
+      queryTranches.push({
+        query_count: tranche.length,
+        novel_source_identity_count: novelCount,
+        untrustworthy_query_count: untrustworthyCount,
+      });
+      if (isExpansion) {
+        expansionRoundCount += 1;
+        emptyExpansionRounds = novelCount > 0 ? 0 : emptyExpansionRounds + 1;
+      }
+
+      if (cursor >= boundedPlan.length) {
+        stopReason = scheduledPlan.length > hardLimit
+          ? "hard_safety_ceiling"
+          : "query_space_exhausted";
+        break;
+      }
+      if (providerHealthStopsExpansion(trancheOutcomes, novelCount)) {
+        stopReason = "provider_health_degraded";
+        break;
+      }
+      if (isExpansion && emptyExpansionRounds >= MAX_EMPTY_EXPANSION_ROUNDS) {
+        stopReason = "marginal_novelty_exhausted";
+        break;
       }
     }
 
@@ -184,11 +242,13 @@ function createSearxngSourceSearch({
       contract: "bounded_source_search_v1",
       status,
       reasons: [SEARCH_STATUS_REASONS[status] || "source_search_failed"],
-      generated_query_count: generatedQueries.length,
-      queried_count: boundedQueries.length,
-      // The budget silently discarded these. Recorded so a low seed count is
-      // never mistaken for "this place has nothing".
-      skipped_query_count: skippedQueryCount,
+      generated_query_count: generatedPlan.length,
+      queried_count: queryOutcomes.length,
+      skipped_query_count: generatedPlan.length - queryOutcomes.length,
+      expansion_round_count: expansionRoundCount,
+      novel_source_identity_count: seenSourceIdentities.size,
+      stop_reason: stopReason || "query_space_exhausted",
+      query_tranches: queryTranches,
       responding_query_count: responding,
       failed_query_count: failed,
       degraded_query_count: degraded,
@@ -203,6 +263,114 @@ function createSearxngSourceSearch({
       activation_performed: false,
     };
   };
+}
+
+async function executeSourceSearchQuery({
+  item,
+  normalizedEndpoint,
+  endpointOrigin,
+  language,
+  perQueryLimit,
+  fetcher,
+  timeoutMs,
+  maxBytes,
+  userAgent,
+  attemptLimit,
+  backoffMs,
+  wait,
+  budget,
+  cache,
+}) {
+  const query = item.query;
+  const key = searchCacheKey(normalizedEndpoint, query, language, perQueryLimit);
+  const producer = () => runQueryWithRetry({
+    endpoint: normalizedEndpoint,
+    endpointOrigin,
+    query,
+    language,
+    fetcher,
+    timeoutMs,
+    maxBytes,
+    userAgent,
+    limit: perQueryLimit,
+    attemptLimit,
+    backoffMs,
+    wait,
+    budget,
+  });
+  try {
+    return cache && typeof cache.get === "function"
+      ? await cache.get(key, producer, {
+          // Only trustworthy answers may be cached. A degraded or failed
+          // query must stay re-askable, or one bad window would be frozen in.
+          shouldStore: (value) => ["ok", "partial"].includes(value?.status),
+        })
+      : await producer();
+  } catch (_error) {
+    return { status: "failed", reason: "source_search_failed", results: [] };
+  }
+}
+
+function normalizeQueryPlan(queries, queryPlan) {
+  const generatedQueries = uniqueStrings(queries);
+  const metadata = new Map();
+  for (const item of Array.isArray(queryPlan) ? queryPlan : []) {
+    const query = firstString(item?.query);
+    if (!query || !generatedQueries.includes(query) || metadata.has(query)) continue;
+    metadata.set(query, {
+      query_family: compactPlanToken(item?.query_family, "unclassified"),
+      term_key: /^[a-f0-9]{12}$/.test(String(item?.term_key || ""))
+        ? item.term_key
+        : createHash("sha256").update(query).digest("hex").slice(0, 12),
+      label_scope: compactPlanToken(item?.label_scope, "unclassified"),
+    });
+  }
+  return generatedQueries.map((query) => ({
+    query,
+    ...(metadata.get(query) || {
+      query_family: "unclassified",
+      term_key: createHash("sha256").update(query).digest("hex").slice(0, 12),
+      label_scope: "unclassified",
+    }),
+  }));
+}
+
+function diversityFirstQueryPlan(plan) {
+  const groups = new Map();
+  for (const item of Array.isArray(plan) ? plan : []) {
+    const key = item.term_key || item.query_family || item.query;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  }
+  const lanes = [...groups.values()];
+  const out = [];
+  while (lanes.some((lane) => lane.length > 0)) {
+    for (const lane of lanes) {
+      const item = lane.shift();
+      if (item) out.push(item);
+    }
+  }
+  return out;
+}
+
+function providerHealthStopsExpansion(outcomes, novelSourceCount) {
+  if (novelSourceCount > 0 || !Array.isArray(outcomes) || !outcomes.length) return false;
+  const untrustworthy = outcomes.filter((item) =>
+    ["failed", "degraded"].includes(item?.status)).length;
+  return untrustworthy >= Math.ceil(outcomes.length / 2);
+}
+
+function sourceIdentityForResult(result, endpointOrigin) {
+  const url = normalizeHttpUrl(result?.url);
+  if (!url || !isScoutablePublicUrl(url)) return null;
+  const parsed = new URL(url);
+  if (parsed.origin === endpointOrigin) return null;
+  return parsed.hostname.toLowerCase().replace(/^www\./, "") || null;
+}
+
+function compactPlanToken(value, fallback) {
+  const token = String(value || "").trim().toLowerCase();
+  return /^[a-z0-9_]{1,40}$/.test(token) ? token : fallback;
 }
 
 // One bounded retry for provider trouble a later attempt may resolve. This is
@@ -320,17 +488,18 @@ function unresponsiveEngineCount(value) {
 function boundSearchSeeds(results, { endpointOrigin, place, limit, perOriginLimit }) {
   const out = [];
   const seenUrls = new Set();
-  const originCounts = new Map();
+  const byIdentity = new Map();
   for (const result of Array.isArray(results) ? results : []) {
     const url = normalizeHttpUrl(result?.url);
     if (!url || !isScoutablePublicUrl(url)) continue;
     const parsed = new URL(url);
     if (parsed.origin === endpointOrigin || seenUrls.has(url)) continue;
-    const originCount = originCounts.get(parsed.origin) || 0;
-    if (originCount >= perOriginLimit) continue;
     seenUrls.add(url);
-    originCounts.set(parsed.origin, originCount + 1);
-    out.push({
+    const identity = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    if (!byIdentity.has(identity)) byIdentity.set(identity, []);
+    const lane = byIdentity.get(identity);
+    if (lane.length >= perOriginLimit) continue;
+    lane.push({
       url,
       label: safeResultLabel(result?.title) || parsed.hostname.replace(/^www\./, ""),
       place: firstString(place?.label, place?.name),
@@ -340,7 +509,16 @@ function boundSearchSeeds(results, { endpointOrigin, place, limit, perOriginLimi
       discovery_method: "bounded_source_search",
       discovered_from: firstString(result?.discovered_from),
     });
-    if (out.length >= limit) break;
+  }
+  // One candidate from every source identity precedes a second page from any
+  // identity. Later query families can therefore add genuinely new sources
+  // instead of losing to early same-domain duplicates at the seed cap.
+  const lanes = [...byIdentity.values()];
+  for (let depth = 0; depth < perOriginLimit; depth += 1) {
+    for (const lane of lanes) {
+      if (lane[depth]) out.push(lane[depth]);
+      if (out.length >= limit) return out;
+    }
   }
   return out;
 }
@@ -492,7 +670,7 @@ function safeResultLabel(value) {
 // Bounded per-query evidence. Enough for an operator to answer "did useful
 // results exist despite degraded engines, and is a retry warranted?" without
 // shell access, and without dumping raw provider payloads into the catalog.
-function compactQueryOutcome(query, outcome) {
+function compactQueryOutcome(query, outcome, metadata = {}) {
   const status = ["ok", "empty", "partial", "degraded", "failed"].includes(outcome?.status)
     ? outcome.status
     : "failed";
@@ -501,12 +679,19 @@ function compactQueryOutcome(query, outcome) {
   return {
     query: boundedQueryText(query),
     query_key: createHash("sha256").update(query).digest("hex").slice(0, 12),
+    query_family: compactPlanToken(metadata.query_family, "unclassified"),
+    label_scope: compactPlanToken(metadata.label_scope, "unclassified"),
     status,
     reason: normalizeSearchFailure(outcome?.reason),
     // Raw vs accepted separates "the provider found nothing" from "the
     // provider found things we filtered out".
     raw_result_count: Math.max(rawCount, acceptedCount),
     result_count: acceptedCount,
+    novel_source_identity_count: clampInteger(
+      metadata.novel_source_identity_count,
+      0,
+      MAX_SEEDS,
+    ),
     engine_failure_count: clampInteger(outcome?.engine_failure_count, 0, 32),
     unresponsive_engines: Array.isArray(outcome?.unresponsive_engines)
       ? outcome.unresponsive_engines.slice(0, MAX_ENGINE_NAMES)
@@ -534,6 +719,10 @@ function emptyOutcome(reason) {
     generated_query_count: 0,
     queried_count: 0,
     skipped_query_count: 0,
+    expansion_round_count: 0,
+    novel_source_identity_count: 0,
+    stop_reason: "query_space_exhausted",
+    query_tranches: [],
     responding_query_count: 0,
     failed_query_count: 0,
     degraded_query_count: 0,
@@ -554,6 +743,8 @@ function resolveDefaultSourceSearch(env = process.env, options = {}) {
     fetcher: options.fetcher,
     cache: options.cache,
     maxQueries: env?.PARRANDA_SOURCE_SEARCH_MAX_QUERIES,
+    hardQueryLimit: env?.PARRANDA_SOURCE_SEARCH_HARD_QUERY_LIMIT,
+    expansionTrancheSize: env?.PARRANDA_SOURCE_SEARCH_EXPANSION_TRANCHE_SIZE,
     maxResultsPerQuery: env?.PARRANDA_SOURCE_SEARCH_RESULTS_PER_QUERY,
     maxSeeds: env?.PARRANDA_SOURCE_SEARCH_MAX_SEEDS,
     maxResultsPerOrigin: env?.PARRANDA_SOURCE_SEARCH_RESULTS_PER_ORIGIN,
@@ -620,6 +811,8 @@ function clampInteger(value, min, max) {
 
 module.exports = {
   DEFAULT_MAX_QUERIES,
+  DEFAULT_HARD_QUERY_LIMIT,
+  DEFAULT_EXPANSION_TRANCHE_SIZE,
   DEFAULT_MAX_RESULTS_PER_QUERY,
   DEFAULT_MAX_SEEDS,
   createSearxngSourceSearch,

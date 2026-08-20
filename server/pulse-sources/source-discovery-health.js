@@ -18,6 +18,12 @@ const SEARCH_STATUSES = new Set([
   "failed",
   "not_configured",
 ]);
+const SEARCH_STOP_REASONS = new Set([
+  "query_space_exhausted",
+  "marginal_novelty_exhausted",
+  "provider_health_degraded",
+  "hard_safety_ceiling",
+]);
 const SCOUT_STATUSES = new Set(["complete", "empty", "failed", "unavailable", "not_run"]);
 const QUALIFICATION_STATUSES = new Set([
   "qualified_for_review",
@@ -127,8 +133,24 @@ function classifyDiscoveryHealth({ resultStatus, search, scout, qualification, c
 function normalizeSearchStage(value) {
   const input = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   const status = SEARCH_STATUSES.has(input.status) ? input.status : "not_configured";
+  const hasAdaptiveEvidence = Number.isFinite(Number(input.generated_query_count)) ||
+    SEARCH_STOP_REASONS.has(input.stop_reason);
   return {
     status,
+    ...(hasAdaptiveEvidence ? {
+      generated_query_count: count(input.generated_query_count),
+      skipped_query_count: count(input.skipped_query_count),
+      expansion_round_count: count(input.expansion_round_count),
+      novel_source_identity_count: count(input.novel_source_identity_count),
+      stop_reason: SEARCH_STOP_REASONS.has(input.stop_reason)
+        ? input.stop_reason
+        : "query_space_exhausted",
+      represented_query_families: compactTokens(
+        (Array.isArray(input.query_outcomes) ? input.query_outcomes : [])
+          .map((item) => item?.query_family),
+      ).slice(0, 8),
+      query_tranches: normalizeQueryTranches(input.query_tranches),
+    } : {}),
     queried_count: count(input.queried_count),
     responding_query_count: count(input.responding_query_count),
     failed_query_count: count(input.failed_query_count),
@@ -137,6 +159,14 @@ function normalizeSearchStage(value) {
     seed_count: count(input.accepted_seed_count ?? input.seed_count),
     retry_recommended: input.retry_recommended === true,
   };
+}
+
+function normalizeQueryTranches(value) {
+  return (Array.isArray(value) ? value : []).slice(0, 8).map((item) => ({
+    query_count: count(item?.query_count),
+    novel_source_identity_count: count(item?.novel_source_identity_count),
+    untrustworthy_query_count: count(item?.untrustworthy_query_count),
+  }));
 }
 
 function normalizeScoutStage(value) {
