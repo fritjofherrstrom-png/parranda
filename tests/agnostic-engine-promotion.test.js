@@ -330,7 +330,7 @@ test(
 );
 
 test(
-  "a thin / insufficient supply does NOT promote — baseline returned, honest diagnostic",
+  "a minimal supply that still answers the request is published as a limited day",
   withServer(makeLoader([
     externalRecord("food-0", "Food 0", "restaurant", 41.9, 12.49, ["mat"]),
     externalRecord("cafe-0", "Cafe 0", "cafe", 41.9008, 12.49, ["fika"]),
@@ -341,14 +341,18 @@ test(
     });
     const exp = r.body.agnostic_route_output_experiment;
     assert.ok(exp, "diagnostic experiment block is always present");
-    assert.equal(exp.promotion.promote, false, "thin supply must not promote");
-    // Baseline returned (unknown city → no route), NOT a promoted experimental day.
-    assert.equal(r.body.days[0]?.primary_route ?? null, null);
+    // Two real, walk-validated stops covering the requested food and coffee is
+    // a short day, not a false one. Only the missing scenic intent is thin.
+    assert.equal(exp.promotion.promote, true, "a minimal but valid day must publish");
+    assert.equal(exp.promotion.readiness, "promotable_limited");
+    assert.ok(exp.promotion.qualifying_caps.includes("capped_by_thin_day"));
+    assert.deepEqual(exp.promotion.unmet_requested_intents, ["scenic"]);
+    assert.equal((r.body.days[0]?.primary_route?.main_stops ?? []).length, 2);
   }),
 );
 
 test(
-  "a non-promoted no-city experiment returns no public fallback day",
+  "a promoted limited day carries no fallback-city truth at the public root",
   withServer(makeLoader([
     externalRecord("food-0", "Food 0", "restaurant", 41.9, 12.49, ["mat"]),
     externalRecord("cafe-0", "Cafe 0", "cafe", 41.9008, 12.49, ["fika"]),
@@ -365,12 +369,17 @@ test(
       },
     });
     const exp = r.body.agnostic_route_output_experiment;
-    assert.equal(exp.promotion.promote, false);
+    assert.equal(exp.promotion.promote, true);
     assert.equal(exp.baseline.had_primary_route, true, "only fallback route presence remains in experiment diagnostics");
-    assert.deepEqual(r.body.days, [], "fallback Rome day must not survive at the public root");
+    // The published day is the composed one, scrubbed of the fallback city it
+    // was carried on. Publishing more days must never publish more Rome.
+    assert.equal(r.body.days.length, 1);
+    assert.equal(r.body.days[0].experimental_agnostic_route_applied, true);
+    assert.deepEqual(r.body.days[0].alternatives, []);
+    assert.deepEqual(r.body.days[0].date_signals, []);
     assert.equal(r.body.city, null);
     assert.equal(r.body.readiness, null);
-    assert.equal(JSON.stringify(r.body.days).toLowerCase().includes("rome"), false);
+    assert.equal(JSON.stringify(r.body).toLowerCase().includes("rome"), false);
   }),
 );
 
@@ -534,3 +543,46 @@ test("a distant tonight-event stays an anchor: no walk claimed, route unextended
     global.fetch = ORIGINAL_FETCH;
   }
 });
+
+// --------------------------------------------------------------------------
+// NEGATIVE CONTROLS for the graded gate. Publishing limited days must not
+// become publishing every day.
+// --------------------------------------------------------------------------
+
+test(
+  "a day that answers none of the request is still withheld",
+  withServer(makeLoader([
+    externalRecord("food-0", "Food 0", "restaurant", 41.9, 12.49, ["mat"]),
+    externalRecord("cafe-0", "Cafe 0", "cafe", 41.9008, 12.49, ["fika"]),
+  ]), async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      // Only museums requested; the supply has none.
+      body: agnosticBody({ preferences: ["museums"] }),
+    });
+    const exp = r.body.agnostic_route_output_experiment;
+
+    assert.equal(exp.promotion.promote, false, "a day covering no requested intent must not publish");
+    assert.equal(exp.promotion.readiness, "non_promotable");
+    assert.ok(exp.promotion.disqualifying_caps.includes("capped_by_requested_intent_unmet"));
+    assert.deepEqual(r.body.days, [], "nothing is published");
+  }),
+);
+
+test(
+  "a supply too thin to compose a route is still withheld",
+  withServer(makeLoader([
+    externalRecord("food-0", "Food 0", "restaurant", 41.9, 12.49, ["mat"]),
+  ]), async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody({ preferences: ["food"] }),
+    });
+    const exp = r.body.agnostic_route_output_experiment;
+
+    // The engine itself refuses below two coherent stops; grading never
+    // resurrects a route that was never composed.
+    assert.equal(exp.promotion.promote, false, "a route that does not exist must not publish");
+    assert.deepEqual(r.body.days[0]?.primary_route ?? null, null);
+  }),
+);

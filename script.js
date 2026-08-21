@@ -12132,8 +12132,14 @@ function renderRouteResults() {
 // finished route (no day cards, no "your day is ready"); `unavailable` is honest.
 function renderAnywhereResults(classification) {
   const placeLabel = classification.placeLabel || anywherePlace;
+  // A limited day is still a day. Share the composed-family test with the
+  // React island so the two clients cannot drift on what counts as a route.
+  const renderDecision = window.AnywhereRenderDecision;
+  const composed = renderDecision
+    ? renderDecision.isComposedStatus(classification.status)
+    : classification.status === "composed";
 
-  if (classification.status === "composed") {
+  if (composed) {
     // A real composed day for the typed place → the normal day + district panel.
     renderRouteResults();
     setPlannerStatusMessage(

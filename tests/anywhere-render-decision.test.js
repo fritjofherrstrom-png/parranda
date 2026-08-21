@@ -7,7 +7,12 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { classifyAnywhereResult, safeResponseFor, shouldRetryTransientSource } = require("../anywhere-render-decision");
+const {
+  classifyAnywhereResult,
+  isComposedStatus,
+  safeResponseFor,
+  shouldRetryTransientSource,
+} = require("../anywhere-render-decision");
 
 const agnosticStructure = (areaCount = 2) => ({
   provenance: "agnostic_anchor",
@@ -193,4 +198,69 @@ test("only an explicit transient source failure after resolved intake gets one r
     },
   };
   assert.equal(shouldRetryTransientSource(composed), false, "a composed result does not need source recovery");
+});
+
+// --------------------------------------------------------------------------
+// Slice 01 — a day the server published WITH limitations is still a day.
+//
+// The data gate used to pass only status "composed". A limited day must reach
+// the render contract with its stops intact; only the label differs.
+// --------------------------------------------------------------------------
+
+function limitedResponse(caps) {
+  return {
+    days: [{
+      experimental_agnostic_route_applied: true,
+      primary_route: { main_stops: [{ id: "a" }, { id: "b" }] },
+    }],
+    agnostic_route_output_experiment: {
+      promotion: { readiness: "promotable_limited", qualifying_caps: caps },
+    },
+  };
+}
+
+test("a limited day classifies as composed_limited and keeps its stops", () => {
+  const response = limitedResponse(["capped_by_thin_day"]);
+  const classification = classifyAnywhereResult(response, { place: "Somewhere" });
+
+  assert.equal(classification.status, "composed_limited");
+  assert.deepEqual(classification.limitations, ["capped_by_thin_day"]);
+
+  // The data gate must not empty it.
+  const safe = safeResponseFor(response, classification);
+  assert.equal(safe.days.length, 1);
+  assert.equal(safe.days[0].primary_route.main_stops.length, 2);
+});
+
+test("an unlimited promoted day still classifies as composed", () => {
+  const response = {
+    days: [{ experimental_agnostic_route_applied: true, primary_route: { main_stops: [{ id: "a" }] } }],
+    agnostic_route_output_experiment: { promotion: { readiness: "promotable", qualifying_caps: [] } },
+  };
+  const classification = classifyAnywhereResult(response, { place: "Somewhere" });
+
+  assert.equal(classification.status, "composed");
+  assert.deepEqual(classification.limitations, []);
+  assert.equal(safeResponseFor(response, classification).days.length, 1);
+});
+
+test("a withheld day is still emptied — grading never publishes a refused route", () => {
+  const response = {
+    days: [],
+    agnostic_route_output_experiment: {
+      promotion: { readiness: "non_promotable", disqualifying_caps: ["capped_by_requested_intent_unmet"] },
+    },
+  };
+  const classification = classifyAnywhereResult(response, { place: "Somewhere" });
+
+  assert.notEqual(classification.status, "composed");
+  assert.notEqual(classification.status, "composed_limited");
+  assert.deepEqual(safeResponseFor(response, classification).days, []);
+});
+
+test("both composed statuses are recognised by the shared composed-family test", () => {
+  assert.equal(isComposedStatus("composed"), true);
+  assert.equal(isComposedStatus("composed_limited"), true);
+  assert.equal(isComposedStatus("structure_only"), false);
+  assert.equal(isComposedStatus("unavailable"), false);
 });
