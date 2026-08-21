@@ -141,8 +141,10 @@ async function discoverLocalEventSourcesForPlace({
             : loader.status === "unavailable"
               ? "trusted_place_loader_unavailable"
               : "trusted_place_loader_failed",
-          searched.summary?.status === "failed"
-            ? "source_search_failed"
+          searchAnswerless(searched.summary)
+            ? searched.summary?.status === "degraded"
+              ? "source_search_degraded"
+              : "source_search_failed"
             : "source_search_no_public_results",
         ],
         intake: resolution.intake,
@@ -385,12 +387,14 @@ function compactSourceSearchSummary(result) {
       queried_count: 0,
       responding_query_count: 0,
       failed_query_count: 0,
+      degraded_query_count: 0,
       result_count: 0,
       seed_count: 0,
+      retry_recommended: true,
       activation_performed: false,
     };
   }
-  const status = ["complete", "partial", "empty", "failed"].includes(result.status)
+  const status = ["complete", "partial", "empty", "degraded", "failed"].includes(result.status)
     ? result.status
     : "failed";
   return {
@@ -401,21 +405,33 @@ function compactSourceSearchSummary(result) {
     queried_count: finiteCount(result.queried_count),
     responding_query_count: finiteCount(result.responding_query_count),
     failed_query_count: finiteCount(result.failed_query_count),
+    degraded_query_count: finiteCount(result.degraded_query_count),
     result_count: finiteCount(result.result_count),
     seed_count: finiteCount(result.seed_count),
     accepted_seed_count: 0,
+    // Whether the provider gave us an answer worth believing. A clean
+    // zero-result search is an answer; a degraded one is not.
+    retry_recommended: result.retry_recommended === true,
     query_outcomes: (Array.isArray(result.query_outcomes) ? result.query_outcomes : [])
       .slice(0, 10)
       .map((item) => ({
+        // Parranda-generated queries about public places. Bounded, and kept so
+        // an operator can tell which query degraded without shell access.
+        query: publicString(item?.query)?.slice(0, 120) || null,
         query_key: /^[a-f0-9]{12}$/.test(String(item?.query_key || ""))
           ? item.query_key
           : null,
-        status: ["ok", "empty", "partial", "failed"].includes(item?.status)
+        status: ["ok", "empty", "partial", "degraded", "failed"].includes(item?.status)
           ? item.status
           : "failed",
         reason: compactTokens([item?.reason])[0] || "source_search_failed",
+        raw_result_count: finiteCount(item?.raw_result_count),
         result_count: finiteCount(item?.result_count),
         engine_failure_count: finiteCount(item?.engine_failure_count),
+        unresponsive_engines: compactTokens(item?.unresponsive_engines).slice(0, 6),
+        results_despite_degraded_engines: item?.results_despite_degraded_engines === true,
+        attempt_count: finiteCount(item?.attempt_count),
+        retryable: item?.retryable === true,
       })),
     activation_performed: false,
   };
@@ -487,15 +503,29 @@ function isInstitutionalSeed(seed) {
     /official|municipal|tourism|institution/.test(family || "");
 }
 
+// True when the search gave us nothing we can believe, as opposed to a clean
+// "there is nothing here". The difference decides whether the place keeps its
+// discovery opportunity.
+function searchAnswerless(searched) {
+  return ["failed", "degraded"].includes(publicString(searched?.status)) ||
+    searched?.retry_recommended === true;
+}
+
 function emptySeedReasons({ records, searched }) {
-  const reasons = [];
-  reasons.push(records.length ? "no_trusted_website_seeds" : "no_trusted_place_records");
-  if (searched) {
-    reasons.push(searched.status === "failed"
-      ? "source_search_failed"
-      : "source_search_no_public_results");
+  const seedReason = records.length ? "no_trusted_website_seeds" : "no_trusted_place_records";
+  if (!searched) return [seedReason];
+  // "no public results" is a claim about the world. Only make it when the
+  // provider actually answered.
+  if (!searchAnswerless(searched)) {
+    return uniqueStrings([seedReason, "source_search_no_public_results"]);
   }
-  return uniqueStrings(reasons);
+  // The persisted last_reason is the first token. When the search is why we
+  // have nothing, say so first rather than reporting a healthy-looking
+  // "no seeds found".
+  return uniqueStrings([
+    searched.status === "degraded" ? "source_search_degraded" : "source_search_failed",
+    seedReason,
+  ]);
 }
 
 function buildSourceProfile({

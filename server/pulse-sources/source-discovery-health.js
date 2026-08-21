@@ -10,7 +10,14 @@ const DISCOVERY_HEALTH_STATUSES = new Set([
   "environment_not_wired",
   "unavailable",
 ]);
-const SEARCH_STATUSES = new Set(["complete", "partial", "empty", "failed", "not_configured"]);
+const SEARCH_STATUSES = new Set([
+  "complete",
+  "partial",
+  "empty",
+  "degraded",
+  "failed",
+  "not_configured",
+]);
 const SCOUT_STATUSES = new Set(["complete", "empty", "failed", "unavailable", "not_run"]);
 const QUALIFICATION_STATUSES = new Set([
   "qualified_for_review",
@@ -100,7 +107,9 @@ function classifyDiscoveryHealth({ resultStatus, search, scout, qualification, c
   if (qualification.status === "observing") return "observing";
   if (candidateCount > 0) return "review_required";
 
-  const searchIncomplete = search.status === "failed" || search.status === "partial";
+  // "degraded" means the provider answered but nothing it said can be trusted.
+  // It is emphatically not healthy_empty: there may well be sources here.
+  const searchIncomplete = ["failed", "degraded", "partial"].includes(search.status);
   if (searchIncomplete) return "search_failed";
   if (search.status === "not_configured" || scout.status === "unavailable") {
     return "environment_not_wired";
@@ -123,8 +132,10 @@ function normalizeSearchStage(value) {
     queried_count: count(input.queried_count),
     responding_query_count: count(input.responding_query_count),
     failed_query_count: count(input.failed_query_count),
+    degraded_query_count: count(input.degraded_query_count),
     result_count: count(input.result_count),
     seed_count: count(input.accepted_seed_count ?? input.seed_count),
+    retry_recommended: input.retry_recommended === true,
   };
 }
 

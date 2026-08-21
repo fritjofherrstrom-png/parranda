@@ -25,6 +25,47 @@ const MAX_SEEDS = 30;
 const DEFAULT_MAX_RESULTS_PER_ORIGIN = 2;
 const DEFAULT_TIMEOUT_MS = 7000;
 const DEFAULT_MAX_BYTES = 512 * 1024;
+// A metasearch proxies engines that rate-limit and CAPTCHA automated bursts.
+// Pacing the bounded query budget costs seconds and protects the whole run.
+const DEFAULT_QUERY_PACE_MS = 250;
+const MAX_QUERY_PACE_MS = 5000;
+// One in-run retry only. It recovers a single flaky request; a genuinely
+// degraded provider is recovered by the scout target's own bounded retry,
+// not by hammering the endpoint inside one run.
+const DEFAULT_QUERY_ATTEMPTS = 2;
+const MAX_QUERY_ATTEMPTS = 3;
+// Retries are drawn from one budget for the whole run. An isolated flaky
+// request recovers; a provider that is genuinely down cannot double the
+// worst-case wall clock of every query in the budget.
+const DEFAULT_RETRY_BUDGET = 3;
+const MAX_RETRY_BUDGET = 10;
+const DEFAULT_RETRY_BACKOFF_MS = 1000;
+const MAX_RETRY_BACKOFF_MS = 15000;
+const MAX_ENGINE_NAMES = 6;
+
+// Provider trouble that a later attempt may genuinely resolve. Contract and
+// configuration errors are NOT here: retrying those just burns budget.
+const QUERY_STATUS_REASONS = Object.freeze({
+  ok: "source_search_results_found",
+  partial: "source_search_results_partial",
+  empty: "source_search_query_empty",
+  degraded: "source_search_engines_unavailable",
+});
+
+const SEARCH_STATUS_REASONS = Object.freeze({
+  complete: "bounded_source_search_complete",
+  partial: "source_search_partial",
+  empty: "source_search_no_public_results",
+  degraded: "source_search_degraded",
+  failed: "source_search_failed",
+});
+
+const RETRYABLE_FAILURE_REASONS = new Set([
+  "source_search_engines_unavailable",
+  "source_search_timeout",
+  "source_search_fetch_failed",
+  "source_search_body_failed",
+]);
 const DEFAULT_USER_AGENT =
   "Parranda-Source-Search/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
 
@@ -39,6 +80,11 @@ function createSearxngSourceSearch({
   timeoutMs = DEFAULT_TIMEOUT_MS,
   maxBytes = DEFAULT_MAX_BYTES,
   userAgent = DEFAULT_USER_AGENT,
+  queryPaceMs = DEFAULT_QUERY_PACE_MS,
+  queryAttempts = DEFAULT_QUERY_ATTEMPTS,
+  retryBudget = DEFAULT_RETRY_BUDGET,
+  retryBackoffMs = DEFAULT_RETRY_BACKOFF_MS,
+  delay = defaultDelay,
 } = {}) {
   const normalizedEndpoint = normalizeOperatorEndpoint(endpoint);
   if (!normalizedEndpoint || typeof fetcher !== "function") return null;
@@ -48,20 +94,34 @@ function createSearxngSourceSearch({
   const perQueryLimit = clampInteger(maxResultsPerQuery, 1, MAX_RESULTS_PER_QUERY);
   const seedLimit = clampInteger(maxSeeds, 1, MAX_SEEDS);
   const perOriginLimit = clampInteger(maxResultsPerOrigin, 1, 4);
+  const paceMs = clampInteger(queryPaceMs, 0, MAX_QUERY_PACE_MS);
+  const attemptLimit = clampInteger(queryAttempts, 1, MAX_QUERY_ATTEMPTS);
+  const backoffMs = clampInteger(retryBackoffMs, 0, MAX_RETRY_BACKOFF_MS);
+  const runRetryBudget = clampInteger(retryBudget, 0, MAX_RETRY_BUDGET);
+  const wait = typeof delay === "function" ? delay : defaultDelay;
 
   return async function searchSourceSeeds({ queries = [], place = {} } = {}) {
-    const boundedQueries = uniqueStrings(queries).slice(0, queryLimit);
+    const generatedQueries = uniqueStrings(queries);
+    const boundedQueries = generatedQueries.slice(0, queryLimit);
     if (!boundedQueries.length) return emptyOutcome("source_search_queries_missing");
+    const skippedQueryCount = generatedQueries.length - boundedQueries.length;
 
     const language = firstString(place?.language_hints?.[0], "auto");
     const queryOutcomes = [];
     const found = [];
+    const budget = { remaining: runRetryBudget };
 
     // Sequential by design: the worker is off-request and must stay polite to
     // a shared/self-hosted metasearch service.
+    let queryIndex = 0;
     for (const query of boundedQueries) {
-      const key = searchCacheKey(normalizedEndpoint, query, language);
-      const producer = () => fetchSearxngQuery({
+      // Pace the burst. Firing the whole budget back-to-back is what trips the
+      // proxied engines into rate limiting, which then reads as "no results".
+      if (queryIndex > 0 && paceMs > 0) await wait(paceMs);
+      queryIndex += 1;
+
+      const key = searchCacheKey(normalizedEndpoint, query, language, perQueryLimit);
+      const producer = () => runQueryWithRetry({
         endpoint: normalizedEndpoint,
         endpointOrigin,
         query,
@@ -71,12 +131,19 @@ function createSearxngSourceSearch({
         maxBytes,
         userAgent,
         limit: perQueryLimit,
+        attemptLimit,
+        backoffMs,
+        wait,
+        budget,
       });
       let outcome;
       try {
         outcome = cache && typeof cache.get === "function"
           ? await cache.get(key, producer, {
-              shouldStore: (value) => ["ok", "empty"].includes(value?.status),
+              // Only trustworthy answers may be cached. A degraded or failed
+              // query must stay re-askable, or one bad window would be frozen
+              // in for the whole cache TTL.
+              shouldStore: (value) => ["ok", "partial"].includes(value?.status),
             })
           : await producer();
       } catch (_error) {
@@ -94,35 +161,77 @@ function createSearxngSourceSearch({
       limit: seedLimit,
       perOriginLimit,
     });
-    const responding = queryOutcomes.filter((item) => ["ok", "empty", "partial"].includes(item.status)).length;
+    // A query "responded" only when it produced a trustworthy answer: results,
+    // or a clean zero-result. Degraded and failed queries answered nothing we
+    // can believe, which is a different thing from "there is nothing there".
+    const responding = queryOutcomes.filter((item) =>
+      ["ok", "empty", "partial"].includes(item.status)).length;
     const failed = queryOutcomes.filter((item) => item.status === "failed").length;
+    const degraded = queryOutcomes.filter((item) => item.status === "degraded").length;
     const partial = queryOutcomes.filter((item) => item.status === "partial").length;
+    const untrustworthy = failed + degraded;
+    const retryable = queryOutcomes.some((item) => item.retryable === true);
+
     const status = seeds.length
-      ? failed || partial ? "partial" : "complete"
+      // Useful results exist. Engine trouble downgrades confidence, it never
+      // discards what the search actually found.
+      ? untrustworthy || partial ? "partial" : "complete"
       : responding
-        ? failed || partial ? "partial" : "empty"
+        ? untrustworthy ? "degraded" : "empty"
         : "failed";
 
     return {
       contract: "bounded_source_search_v1",
       status,
-      reasons: status === "failed"
-        ? ["source_search_failed"]
-        : status === "partial"
-          ? ["source_search_partial"]
-          : seeds.length
-          ? ["bounded_source_search_complete"]
-          : ["source_search_no_public_results"],
+      reasons: [SEARCH_STATUS_REASONS[status] || "source_search_failed"],
+      generated_query_count: generatedQueries.length,
       queried_count: boundedQueries.length,
+      // The budget silently discarded these. Recorded so a low seed count is
+      // never mistaken for "this place has nothing".
+      skipped_query_count: skippedQueryCount,
       responding_query_count: responding,
       failed_query_count: failed,
+      degraded_query_count: degraded,
+      partial_query_count: partial,
       result_count: found.length,
       seed_count: seeds.length,
+      // Whether a later attempt is worth making. A clean zero-result search is
+      // an answer; a degraded one is not.
+      retry_recommended: !seeds.length && retryable,
       seeds,
       query_outcomes: queryOutcomes,
       activation_performed: false,
     };
   };
+}
+
+// One bounded retry for provider trouble a later attempt may resolve. This is
+// not a polling loop: the real recovery for a degraded provider is the scout
+// target's own bounded retry, minutes later.
+async function runQueryWithRetry({ attemptLimit, backoffMs, wait, budget, ...options }) {
+  let outcome = null;
+  let attempts = 0;
+  for (let attempt = 1; attempt <= attemptLimit; attempt += 1) {
+    attempts = attempt;
+    outcome = await fetchSearxngQuery(options);
+    if (!isRetryableOutcome(outcome) || attempt === attemptLimit) break;
+    if (!budget || budget.remaining <= 0) break;
+    budget.remaining -= 1;
+    if (backoffMs > 0) await wait(backoffMs * attempt);
+  }
+  return { ...outcome, attempt_count: attempts };
+}
+
+function isRetryableOutcome(outcome) {
+  if (!outcome || !["failed", "degraded"].includes(outcome.status)) return false;
+  const reason = typeof outcome.reason === "string" ? outcome.reason : "";
+  if (RETRYABLE_FAILURE_REASONS.has(reason)) return true;
+  const match = /^source_search_http_(\d{3})$/.exec(reason);
+  if (!match) return false;
+  const code = Number(match[1]);
+  // Rate limiting and server-side trouble may pass. Other 4xx are contract or
+  // configuration errors and retrying them only burns the budget.
+  return code === 429 || code >= 500;
 }
 
 async function fetchSearxngQuery({
@@ -166,20 +275,42 @@ async function fetchSearxngQuery({
   }
 
   const engineFailureCount = unresponsiveEngineCount(payload.unresponsive_engines);
+  const engineNames = unresponsiveEngineNames(payload.unresponsive_engines);
+  const rawResultCount = payload.results.length;
   const results = payload.results
     .map((row) => normalizeSearchResult(row))
     .filter(Boolean)
     .slice(0, limit);
+
+  // Four distinct truths, deliberately not collapsed:
+  //   results + healthy engines        -> ok
+  //   results + degraded engines       -> partial, and the results are KEPT
+  //   no results + healthy engines     -> empty, a real answer
+  //   no results + degraded engines    -> degraded, no trustworthy answer
+  const degraded = engineFailureCount > 0;
+  const status = results.length
+    ? degraded ? "partial" : "ok"
+    : degraded ? "degraded" : "empty";
   return {
-    status: engineFailureCount > 0
-      ? results.length ? "partial" : "failed"
-      : results.length ? "ok" : "empty",
-    reason: engineFailureCount > 0
-      ? results.length ? "source_search_results_partial" : "source_search_engines_unavailable"
-      : results.length ? "source_search_results_found" : "source_search_query_empty",
+    status,
+    reason: QUERY_STATUS_REASONS[status],
     engine_failure_count: engineFailureCount,
+    unresponsive_engines: engineNames,
+    raw_result_count: rawResultCount,
     results,
   };
+}
+
+function unresponsiveEngineNames(value) {
+  const names = [];
+  for (const entry of Array.isArray(value) ? value : []) {
+    const name = Array.isArray(entry) ? entry[0] : entry;
+    const text = typeof name === "string" ? name.trim().toLowerCase() : "";
+    if (!text || names.includes(text)) continue;
+    names.push(text.slice(0, 32));
+    if (names.length >= MAX_ENGINE_NAMES) break;
+  }
+  return names;
 }
 
 function unresponsiveEngineCount(value) {
@@ -358,17 +489,41 @@ function safeResultLabel(value) {
   return normalized ? normalized.slice(0, 120) : null;
 }
 
+// Bounded per-query evidence. Enough for an operator to answer "did useful
+// results exist despite degraded engines, and is a retry warranted?" without
+// shell access, and without dumping raw provider payloads into the catalog.
 function compactQueryOutcome(query, outcome) {
-  const status = ["ok", "empty", "partial", "failed"].includes(outcome?.status)
+  const status = ["ok", "empty", "partial", "degraded", "failed"].includes(outcome?.status)
     ? outcome.status
     : "failed";
+  const acceptedCount = Array.isArray(outcome?.results) ? outcome.results.length : 0;
+  const rawCount = clampInteger(outcome?.raw_result_count, 0, 1000);
   return {
+    query: boundedQueryText(query),
     query_key: createHash("sha256").update(query).digest("hex").slice(0, 12),
     status,
     reason: normalizeSearchFailure(outcome?.reason),
-    result_count: Array.isArray(outcome?.results) ? outcome.results.length : 0,
+    // Raw vs accepted separates "the provider found nothing" from "the
+    // provider found things we filtered out".
+    raw_result_count: Math.max(rawCount, acceptedCount),
+    result_count: acceptedCount,
     engine_failure_count: clampInteger(outcome?.engine_failure_count, 0, 32),
+    unresponsive_engines: Array.isArray(outcome?.unresponsive_engines)
+      ? outcome.unresponsive_engines.slice(0, MAX_ENGINE_NAMES)
+      : [],
+    results_despite_degraded_engines: status === "partial",
+    attempt_count: clampInteger(outcome?.attempt_count, 1, MAX_QUERY_ATTEMPTS),
+    retryable: isRetryableOutcome({ status, reason: outcome?.reason }),
   };
+}
+
+function boundedQueryText(value) {
+  const text = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+  return text ? text.slice(0, 120) : null;
+}
+
+function defaultDelay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function emptyOutcome(reason) {
@@ -376,11 +531,16 @@ function emptyOutcome(reason) {
     contract: "bounded_source_search_v1",
     status: "empty",
     reasons: [reason],
+    generated_query_count: 0,
     queried_count: 0,
+    skipped_query_count: 0,
     responding_query_count: 0,
     failed_query_count: 0,
+    degraded_query_count: 0,
+    partial_query_count: 0,
     result_count: 0,
     seed_count: 0,
+    retry_recommended: false,
     seeds: [],
     query_outcomes: [],
     activation_performed: false,
@@ -396,7 +556,13 @@ function resolveDefaultSourceSearch(env = process.env, options = {}) {
     maxQueries: env?.PARRANDA_SOURCE_SEARCH_MAX_QUERIES,
     maxResultsPerQuery: env?.PARRANDA_SOURCE_SEARCH_RESULTS_PER_QUERY,
     maxSeeds: env?.PARRANDA_SOURCE_SEARCH_MAX_SEEDS,
+    maxResultsPerOrigin: env?.PARRANDA_SOURCE_SEARCH_RESULTS_PER_ORIGIN,
     timeoutMs: env?.PARRANDA_SOURCE_SEARCH_TIMEOUT_MS,
+    queryPaceMs: env?.PARRANDA_SOURCE_SEARCH_PACE_MS,
+    queryAttempts: env?.PARRANDA_SOURCE_SEARCH_QUERY_ATTEMPTS,
+    retryBudget: env?.PARRANDA_SOURCE_SEARCH_RETRY_BUDGET,
+    retryBackoffMs: env?.PARRANDA_SOURCE_SEARCH_RETRY_BACKOFF_MS,
+    delay: options.delay,
     userAgent: env?.PARRANDA_SOURCE_SEARCH_USER_AGENT || DEFAULT_USER_AGENT,
   });
 }
@@ -414,9 +580,12 @@ function normalizeSearchFailure(value) {
   return "source_search_failed";
 }
 
-function searchCacheKey(endpoint, query, language) {
+function searchCacheKey(endpoint, query, language, limit) {
+  // Key on the request Parranda actually sends. The raw hint and the
+  // normalized language differ ("cs-CZ" vs "cs-cz"), and a raised per-query
+  // limit is a different request, not a cache hit.
   return createHash("sha256")
-    .update(`${endpoint}|${language}|${query.trim().toLowerCase()}`)
+    .update(`${endpoint}|${normalizeSearchLanguage(language)}|${limit}|${query.trim().toLowerCase()}`)
     .digest("hex");
 }
 

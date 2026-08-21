@@ -83,6 +83,21 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
   }
   if (result?.status === "empty") {
     const discoveryHealth = buildSourceDiscoveryHealth({ result, observedAt });
+    // An empty run has two very different causes. A clean search that found
+    // nothing is an answer, and the target waits out the normal refresh. A
+    // search that asked to be retried and found nothing is not an answer.
+    if (searchRetryRequired(result?.source_search)) {
+      const retried = await catalog.failScoutTarget(target, reason, { discoveryHealth });
+      return {
+        target_key: target.target_key,
+        status: "retry_scheduled",
+        reason,
+        profile_key: null,
+        catalog_status: retried.status,
+        discovery_status: discoveryHealth.status,
+        ...(retried.retry_at ? { retry_at: retried.retry_at } : {}),
+      };
+    }
     const completed = await catalog.completeScoutTarget(target, reason, { discoveryHealth });
     return {
       target_key: target.target_key,
@@ -164,6 +179,23 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
       catalog_status: failed.status,
     };
   }
+  // The discovery evidence is already recorded above and is kept. What is
+  // still open is the source search, so the target returns on bounded backoff
+  // rather than the ordinary refresh. Completing here would let unrelated
+  // scout success hide a search that never ran.
+  if (searchRetryRequired(result?.source_search)) {
+    const retried = await catalog.failScoutTarget(target, reason, { discoveryHealth });
+    return {
+      target_key: target.target_key,
+      status: "retry_scheduled",
+      reason,
+      profile_key: recorded.profile_key,
+      catalog_status: retried.status,
+      qualification_status: qualificationStatus,
+      discovery_status: discoveryHealth.status,
+      ...(retried.retry_at ? { retry_at: retried.retry_at } : {}),
+    };
+  }
   const completionOptions = qualificationStatus === "observing"
     ? { nextAttemptAt: nextQualificationProbeAt(qualificationNow), discoveryHealth }
     : { discoveryHealth };
@@ -177,6 +209,33 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
     qualification_status: qualificationStatus,
     discovery_status: discoveryHealth.status,
   };
+}
+
+/**
+ * The source-search retry invariant.
+ *
+ * A search that asked to be retried and produced no usable seed is a hole in
+ * this target's evidence, whatever else the run achieved. Unrelated scout work
+ * succeeding — trusted place records, a recorded profile, review state — does
+ * not fill that hole, so it must not silently absorb it into the ordinary
+ * multi-day refresh.
+ *
+ * Deliberately narrow: a search that retained usable seeds has already given
+ * us something to work with, and a clean zero-result search is a real
+ * observation rather than provider trouble. Neither retries.
+ */
+function searchRetryRequired(search) {
+  if (!search || typeof search !== "object") return false;
+  if (search.retry_recommended !== true) return false;
+  return usableSearchSeedCount(search) === 0;
+}
+
+function usableSearchSeedCount(search) {
+  for (const value of [search.accepted_seed_count, search.seed_count]) {
+    const count = Number(value);
+    if (Number.isFinite(count)) return Math.max(0, count);
+  }
+  return 0;
 }
 
 function nextQualificationProbeAt(value) {

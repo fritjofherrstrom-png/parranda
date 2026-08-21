@@ -157,6 +157,56 @@ evidence that a place has no events. A manually supplied URL or one-off scout
 run is useful operator evidence but does not satisfy the proactive cold-loop
 product claim.
 
+### Degraded search is not an answer
+
+A metasearch proxies engines that rate-limit, CAPTCHA, suspend and time out
+independently. Parranda therefore keeps four distinct per-query truths, and
+never collapses them:
+
+| results | engines | status | meaning |
+| --- | --- | --- | --- |
+| yes | healthy | `ok` | clean success |
+| yes | degraded | `partial` | **results are kept**; only confidence drops |
+| no | healthy | `empty` | a real answer: nothing found |
+| no | degraded | `degraded` | no trustworthy answer; retryable |
+
+A run is `complete` or `partial` when it produced seeds, `empty` when every
+query answered cleanly and found nothing, `degraded` when some query answered
+nothing we can believe, and `failed` when nothing answered at all. Only the
+last two set `retry_recommended`.
+
+This distinction matters because "no seeds" reaches the scout target lifecycle.
+A clean empty is an answer, and the target waits out the ordinary refresh. A
+degraded or failed search is not an answer, so the target is retried on the
+existing bounded backoff instead of being completed — otherwise one bad
+provider window would cost an arbitrary cold place a full refresh cycle of
+discovery opportunity.
+
+Supporting behaviour, all bounded and city-agnostic:
+
+- **Pacing.** The bounded query budget is paced rather than fired as a burst.
+  Bursting is itself what trips proxied engines into rate limiting, so the
+  unpaced version helped cause the failure it then reported.
+- **Retry.** Retries are drawn from one budget for the whole run, so an
+  isolated flaky request recovers while a provider that is genuinely down
+  cannot double the wall clock of every query. Rate limiting, server errors,
+  timeouts and engine degradation are retryable; contract and configuration
+  errors (4xx other than 429, invalid payloads) are not.
+- **Caching.** Only outcomes that carried results are cached. Caching a
+  zero-result verdict would let the TTL replay it straight through the retry,
+  making the retry a no-op for exactly the queries most worth re-asking.
+- **Backoff.** Scout-target `attempt_count` resets on completion, so the
+  exponential delay reflects consecutive failures rather than a target's
+  lifetime claim count.
+
+Per-query evidence is persisted, bounded: query text, status, reason, raw and
+accepted result counts, unresponsive engine names, whether useful results
+existed despite degraded engines, attempt count, and whether a retry is
+warranted. Raw provider payloads and engine error strings are not persisted.
+Query-budget truncation is reported as `generated_query_count` /
+`skipped_query_count` so a low seed count is never mistaken for "this place has
+nothing".
+
 The catalog write is forced to `review_needed`, even if upstream scout data
 claims otherwise. Re-running discovery cannot overwrite an approved, rejected,
 or disabled profile. After terms, ownership, timezone, geography, and parser
