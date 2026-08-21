@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "parranda-slice01",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["-e", "process.env.PORT='8011'; process.env.HOST='127.0.0.1'; require('/private/tmp/claude-501/-Users-fritjof-Documents-parranda-branches/48281f87-14fd-4a50-b649-c84094fc5fb3/scratchpad/planner-slice/server.js');"],
+      "port": 8011
+    }
+  ]
+}

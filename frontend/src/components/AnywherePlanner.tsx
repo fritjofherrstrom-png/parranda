@@ -1104,6 +1104,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     classification?.status === "composed" || classification?.status === "composed_limited";
   const showStructure = showDay || classification?.status === "structure_only";
   const dayLimitations = classification?.limitations ?? [];
+  // Some caps have no sentence of their own because a more specific surface
+  // already states them (see day-limitations.mjs). Guard on the rendered note,
+  // never on the cap count, or those days render an empty bullet.
+  const dayLimitationNote = limitationNote(dayLimitations, split.core.length, t);
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
@@ -1448,10 +1452,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             {` · ${split.core.length} ${split.core.length === 1 ? t("stopp", "stop") : t("stopp", "stops")}`}
             {split.woven.length > 0 ? ` + ${split.woven.length} live${lang === "en" ? " event" : "-event"}` : ""}
           </p>
-          {dayLimitations.length > 0 && (
+          {dayLimitationNote && (
             <p className="flex items-start gap-2 text-[13px] leading-relaxed text-parranda-ink/65">
               <span aria-hidden="true" className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-parranda-ink/30" />
-              <span>{limitationNote(dayLimitations, split.core.length, t)}</span>
+              <span>{dayLimitationNote}</span>
             </p>
           )}
           {structure?.provenance === "agnostic_anchor" && (

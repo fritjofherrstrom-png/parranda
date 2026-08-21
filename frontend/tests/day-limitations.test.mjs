@@ -46,3 +46,14 @@ test("an unknown cap is ignored rather than rendered raw", () => {
   assert.equal(limitationNote(["capped_by_something_new", "capped_by_thin_day"], 3, en),
     "A shorter day — 3 stops we can stand behind.");
 });
+
+test("the partial-intent cap yields no sentence — a specific surface owns that message", () => {
+  // The route section already names the missing intents by label. Repeating a
+  // vague version beside a specific one is worse than silence.
+  assert.equal(limitationNote(["capped_by_requested_intent_partial"], 3, en), "");
+  // It also must not suppress a genuine caveat that shares the day.
+  assert.equal(
+    limitationNote(["capped_by_requested_intent_partial", "capped_by_thin_day"], 2, en),
+    "A shorter day — 2 stops we can stand behind.",
+  );
+});

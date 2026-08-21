@@ -9,6 +9,12 @@
 // Ordered by how much the limitation actually changes what the reader sees.
 // Only the leading one or two are shown; a stack of caveats reads as a broken
 // product rather than an honest one.
+//
+// `capped_by_requested_intent_partial` is DELIBERATELY absent. The route
+// section already names the exact intents by their own labels — "Not covered by
+// today's route: Views" — from stop-level covered_preferences. A vague second
+// sentence next to a specific one is worse than no sentence, so that cap
+// intentionally renders nothing here.
 const LIMITATION_ORDER = [
   "capped_by_thin_day",
   "capped_by_below_planner_candidate_threshold",

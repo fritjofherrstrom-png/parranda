@@ -12,6 +12,8 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { buildAnywherePayload, ANYWHERE_PREFERENCES, WALK_PRESETS, isoDateFromOffset } from "../src/lib/anywhere-payload.mjs";
 import { LIVE_REFRESH_DELAYS_MS } from "../src/lib/compose-followup.mjs";
+import { routePreferenceCoverage } from "../src/lib/route-context-view.mjs";
+import { limitationNote } from "../src/lib/day-limitations.mjs";
 
 const require = createRequire(import.meta.url);
 const decision = require("../../anywhere-render-decision.js");
@@ -479,4 +481,56 @@ test("the Live sheet explores events only — it never touches the day's anchor 
   assert.match(anywherePlannerSource, /sheetSourceHealth\.event_bearing_source_count/);
   // The card's week summary is a count, not a second list.
   assert.match(anywherePlannerSource, /händelser listade", "more listed"/);
+});
+
+// --------------------------------------------------------------------------
+// Slice 01 — a partially satisfied explicit request must stay visibly honest.
+//
+// requested [food, coffee, scenic] / covered [food, coffee] / missing [scenic]
+// The day publishes as composed_limited, and the rendered coverage model names
+// the missing intent specifically rather than only generically.
+// --------------------------------------------------------------------------
+
+test("a partially covered request stays composed_limited and names the missing intent", () => {
+  const response = {
+    days: [{
+      experimental_agnostic_route_applied: true,
+      primary_route: {
+        main_stops: [
+          { id: "cafe-0", label: "Cafe 0", covered_preferences: ["coffee"], partial_preferences: [] },
+          { id: "food-0", label: "Food 0", covered_preferences: ["food"], partial_preferences: [] },
+        ],
+      },
+    }],
+    agnostic_route_output_experiment: {
+      promotion: {
+        readiness: "promotable_limited",
+        qualifying_caps: ["capped_by_thin_day", "capped_by_requested_intent_partial"],
+        unmet_requested_intents: ["scenic"],
+      },
+    },
+  };
+
+  // 1. The day survives as a first-class limited day.
+  const classification = decision.classifyAnywhereResult(response, { place: "Somewhere" });
+  assert.equal(classification.status, "composed_limited");
+  assert.ok(classification.limitations.includes("capped_by_requested_intent_partial"));
+
+  const safe = decision.safeResponseFor(response, classification);
+  assert.equal(safe.days.length, 1);
+
+  // 2. The visible coverage model names the missing intent, from the same stop
+  //    metadata the route section renders.
+  const stops = safe.days[0].primary_route.main_stops;
+  //    Coverage speaks the planner vocabulary: coffee -> fika, scenic -> views.
+  const coverage = routePreferenceCoverage(stops, ["food", "coffee", "scenic"]);
+  assert.equal(coverage.has_coverage_evidence, true);
+  assert.deepEqual(coverage.covered_preferences, ["food", "fika"]);
+  assert.deepEqual(coverage.missing_preferences, ["views"], "the missing intent must be visible");
+
+  // 3. The generic caveat does not duplicate it; the thin-day caveat still shows.
+  const note = limitationNote(classification.limitations, stops.length, (_sv, en) => en);
+  assert.equal(note, "A shorter day — 2 stops we can stand behind.");
+  assert.ok(!note.toLowerCase().includes("scenic"));
+  assert.ok(!note.toLowerCase().includes("views"));
 });
