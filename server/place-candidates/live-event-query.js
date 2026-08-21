@@ -1,6 +1,9 @@
 "use strict";
 
 const { haversineKm } = require("../candidates/area-intelligence");
+const {
+  normalizeSourceDiscoveryHealth,
+} = require("../pulse-sources/source-discovery-health");
 
 const LIVE_EVENT_SCOPES = new Set(["around_place", "near_route", "near_me"]);
 const LIVE_EVENT_TIME_WINDOWS = new Set(["tonight", "this_week"]);
@@ -188,6 +191,12 @@ function eventDistanceKm(event, scope) {
 }
 
 function eventMatchesLiveScope(event, scope) {
+  if (
+    event?.source_scope_verified === true &&
+    event?.geographic_relevance === "source_scope"
+  ) {
+    return scope?.kind === "around_place";
+  }
   const distanceKm = eventDistanceKm(event, scope);
   return Number.isFinite(distanceKm) && distanceKm * 1000 <= Number(scope?.radius_m || 0);
 }
@@ -230,14 +239,17 @@ function shapeCollectedLiveEvents(collected, { scope = null } = {}) {
   const acquisitionInput = collected.acquisition && typeof collected.acquisition === "object"
     ? collected.acquisition
     : {};
+  const { discovery_health: rawDiscoveryHealth, ...safeAcquisitionInput } = acquisitionInput;
   const acquisition = {
-    ...acquisitionInput,
+    ...safeAcquisitionInput,
     source_health: normalizeLiveEventSourceHealth(acquisitionInput.source_health, {
       coverage: collected.coverage,
       pending: Boolean(collected.pending),
       surfacedEventCount: tonight.length + thisWeek.length,
     }),
   };
+  const discoveryHealth = normalizeSourceDiscoveryHealth(rawDiscoveryHealth);
+  if (discoveryHealth) acquisition.discovery_health = discoveryHealth;
   return {
     coverage: collected.coverage,
     feed: collected.feed || null,

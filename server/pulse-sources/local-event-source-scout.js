@@ -17,6 +17,9 @@ const { extractSchemaOrgEventsFromHtml } = require("./schema-org-event-provider"
 const { extractCalendarPageLinks } = require("./calendar-page-locator");
 const { hasSitevisionCalendarSignature } = require("./sitevision-calendar-provider");
 const { hasEmbeddedProgramRscSignature } = require("./embedded-program-rsc-provider");
+const {
+  hasOfficialProgramArticleSignature,
+} = require("./official-program-article-provider");
 
 const DEFAULT_USER_AGENT =
   "Parranda-Source-Scout/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
@@ -44,6 +47,7 @@ const MANIFEST_ADAPTERS = new Set([
   "sitevision_calendar",
   "wix_event_sitemap",
   "embedded_program_rsc",
+  "official_program_article",
 ]);
 
 function buildLocalEventDiscoveryQueries({
@@ -51,28 +55,51 @@ function buildLocalEventDiscoveryQueries({
   intentHints = [],
   localDiscoveryTerms = [],
 } = {}) {
+  const verboseLabel = firstString(place.label);
+  const localityLabel = firstString(place.name, localityFromLabel(verboseLabel));
   const labels = uniqueStrings([
-    place.label,
-    place.name,
+    localityLabel,
     ...(Array.isArray(place.region_terms) ? place.region_terms : []),
+    verboseLabel,
   ]).slice(0, 4);
+  const primaryLabel = localityLabel || labels[0] || null;
+  const secondaryLabels = labels.filter((label) => label !== primaryLabel);
   const suppliedTerms = uniqueStrings([
     ...localDiscoveryTerms,
     ...(Array.isArray(place.local_discovery_terms) ? place.local_discovery_terms : []),
     ...intentHints,
   ]);
   // Intent narrows ranking later; it must not erase the generic calendar
-  // discovery baseline. Keep both within the same fixed query budget.
-  const terms = uniqueStrings(["events", "calendar", "festival", ...suppliedTerms]).slice(0, 8);
+  // discovery baseline. Local-language terms lead the bounded budget, while
+  // generic terms remain present for sites that expose English interfaces.
+  const terms = uniqueStrings([
+    suppliedTerms[0],
+    "events",
+    suppliedTerms[1],
+    "calendar",
+    suppliedTerms[2],
+    "festival",
+    ...suppliedTerms.slice(3),
+  ]).slice(0, 8);
   const queries = [];
 
-  for (const label of labels) {
-    for (const term of terms) {
-      queries.push(label + " " + term);
-      if (queries.length >= MAX_DISCOVERY_QUERIES) return uniqueStrings(queries);
-    }
+  // The runtime search adapter normally executes only the first six queries.
+  // Give the simple locality several high-value local terms before interleaving
+  // regional and verbose resolver labels; a long Nominatim label must never
+  // consume the whole effective search budget.
+  for (const term of terms.slice(0, 4)) {
+    if (primaryLabel) queries.push(primaryLabel + " " + term);
+  }
+  for (const term of terms) {
+    for (const label of secondaryLabels) queries.push(label + " " + term);
+    if (primaryLabel) queries.push(primaryLabel + " " + term);
   }
   return uniqueStrings(queries).slice(0, MAX_DISCOVERY_QUERIES);
+}
+
+function localityFromLabel(value) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  return value.split(",")[0].trim() || null;
 }
 
 function extractEventWebsiteSeeds(records = []) {
@@ -119,6 +146,14 @@ function inspectEventSourcePage({
 
   const source = String(html || "");
   const links = extractHtmlLinks(source, pageUrl);
+  const declaredLicense = extractDeclaredOpenLicense(links);
+  const effectiveSeed = {
+    ...seed,
+    source_language: firstString(seed.source_language, extractHtmlLanguage(source)),
+    ...(declaredLicense
+      ? { license: declaredLicense, terms_status: "open_license" }
+      : {}),
+  };
   const candidates = [];
   const socialHints = [];
   const evidence = [];
@@ -134,7 +169,7 @@ function inspectEventSourcePage({
       kind,
       endpoint: normalizedEndpoint,
       pageUrl,
-      seed,
+      seed: effectiveSeed,
       context,
       ...overrides,
     });
@@ -178,6 +213,8 @@ function inspectEventSourcePage({
 
   if (hasEmbeddedProgramRscSignature(source)) {
     addCandidate("embedded_program_rsc", pageUrl);
+  } else if (hasOfficialProgramArticleSignature(source)) {
+    addCandidate("official_program_article", pageUrl);
   } else if (hasSitevisionCalendarSignature(source)) {
     addCandidate("sitevision_calendar", pageUrl);
   } else if (hasWixEventSitemapSignature(source, pageUrl)) {
@@ -198,7 +235,7 @@ function inspectEventSourcePage({
     candidates: dedupeCandidates(candidates),
     manifest_candidates: dedupeManifests(
       candidates
-        .map((candidate) => buildReviewedManifestCandidate(candidate, { seed, context }))
+        .map((candidate) => buildReviewedManifestCandidate(candidate, { seed: effectiveSeed, context }))
         .filter(Boolean),
     ),
     social_hints: dedupeSocialHints(socialHints),
@@ -322,6 +359,7 @@ async function scoutLocalEventSources({
     });
     const sourceResult = {
       ...inspection,
+      manifest_candidates: withManifestRobotsStatus(inspection.manifest_candidates, robots),
       status: "inspected",
       robots: compactRobots(robots),
       fetched_bytes: page.bytes,
@@ -409,6 +447,10 @@ async function scoutLocalEventSources({
       });
       results.push({
         ...linkedInspection,
+        manifest_candidates: withManifestRobotsStatus(
+          linkedInspection.manifest_candidates,
+          linkedRobots,
+        ),
         status: "inspected",
         robots: compactRobots(linkedRobots),
         fetched_bytes: linkedPage.bytes,
@@ -591,6 +633,21 @@ function buildDetectedCandidate({
       notes: "server_rendered_program_atoms_require_manifest_review",
     };
   }
+  if (kind === "official_program_article") {
+    return {
+      ...common,
+      adapter: "official_program_article",
+      extraction_tier: "stable_html_calendar",
+      extractable: baseExtractable({
+        end: true,
+        venue: true,
+        venue_geocodable: true,
+        recurrence: true,
+        stable_html: true,
+      }),
+      notes: "official_program_section_atoms_require_manifest_review",
+    };
+  }
   return {
     ...common,
     adapter: "needs_adapter",
@@ -615,6 +672,7 @@ function buildReviewedManifestCandidate(candidate, { seed = {}, context = {} } =
     sitevision_calendar: "sitevision_calendar",
     wix_event_sitemap: "wix_event_sitemap",
     embedded_program_rsc: "embedded_program_rsc",
+    official_program_article: "official_program_article",
   };
   const adapter = adapterMap[candidate.adapter];
   if (!MANIFEST_ADAPTERS.has(adapter)) return null;
@@ -652,6 +710,26 @@ function buildReviewedManifestCandidate(candidate, { seed = {}, context = {} } =
       reasons: uniqueStrings(candidate.reasons),
     },
   });
+}
+
+function withManifestRobotsStatus(manifests, robots) {
+  const status = firstString(robots?.status, "unknown");
+  return (Array.isArray(manifests) ? manifests : []).map((manifest) => ({
+    ...manifest,
+    review: {
+      ...(manifest.review || {}),
+      robots_status: status,
+      ...(robots?.reason ? { robots_reason: robots.reason } : {}),
+    },
+  }));
+}
+
+function extractHtmlLanguage(html) {
+  const match = String(html || "").match(/<html\b[^>]*\blang\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i);
+  const raw = firstString(match?.[1], match?.[2], match?.[3]);
+  if (!raw) return null;
+  const language = raw.toLowerCase().split(/[-_]/)[0];
+  return /^[a-z]{2,3}$/.test(language) ? language : null;
 }
 
 async function fetchRobotsPolicy({
@@ -906,6 +984,30 @@ function extractHtmlLinks(html, baseUrl) {
     });
   }
   return links;
+}
+
+function extractDeclaredOpenLicense(links) {
+  for (const link of Array.isArray(links) ? links : []) {
+    const rel = String(link?.rel || "").toLowerCase().split(/\s+/).filter(Boolean);
+    if (!rel.includes("license")) continue;
+    const url = normalizeHttpUrl(link?.url);
+    if (!url) continue;
+    try {
+      const parsed = new URL(url);
+      const host = parsed.hostname.toLowerCase();
+      const path = parsed.pathname.toLowerCase();
+      if (
+        host === "creativecommons.org" &&
+        (/^\/licenses\/(?:by|by-sa)\/\d+(?:\.\d+)?\/?$/.test(path) ||
+          /^\/publicdomain\/(?:zero|mark)\/\d+(?:\.\d+)?\/?$/.test(path))
+      ) {
+        return parsed.toString();
+      }
+    } catch (_error) {
+      // A malformed declaration is not evidence.
+    }
+  }
+  return null;
 }
 
 function firstTribeEndpoint(html, baseUrl) {
@@ -1412,6 +1514,7 @@ module.exports = {
   buildLocalEventDiscoveryQueries,
   extractEventWebsiteSeeds,
   inspectEventSourcePage,
+  extractDeclaredOpenLicense,
   scoutLocalEventSources,
   buildReviewedManifestCandidate,
   applyRobotsPolicy,

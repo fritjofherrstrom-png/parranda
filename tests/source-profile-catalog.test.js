@@ -8,12 +8,16 @@ const {
   QUALIFIED_PROFILES_FOR_ANCHOR_SQL,
   CLAIM_SCOUT_TARGET_SQL,
   COMPLETE_SCOUT_TARGET_SQL,
+  DISCOVERY_HEALTH_FOR_ANCHOR_SQL,
   FAIL_SCOUT_TARGET_SQL,
   MAX_SCOUT_TARGETS,
   MAX_QUALIFICATION_BYTES,
+  SCOUT_REFRESH_MS,
+  SCOUT_REPROBE_MIN_MS,
   SOURCE_QUALIFICATION_SQL,
   UPSERT_SCOUT_TARGET_SQL,
   UPSERT_DISCOVERY_PROFILE_SQL,
+  boundedScoutRefreshAt,
   createSourceProfileCatalog,
   resolveDefaultSourceProfileCatalog,
 } = require("../server/pulse-sources/source-profile-catalog");
@@ -326,7 +330,7 @@ test("qualification history is read only from review-needed profiles and stays b
   assert.equal(await rejectedCatalog.loadSourceQualification("place-source-profile-v1:oversize"), null);
 });
 
-test("only resolver-attested bounded place demand enters the scout queue", async () => {
+test("only resolver-attested demand enters the queue and broad scopes become local apertures", async () => {
   const calls = [];
   const catalog = createSourceProfileCatalog({
     now: () => NOW,
@@ -337,27 +341,67 @@ test("only resolver-attested bounded place demand enters the scout queue", async
   });
 
   assert.equal((await catalog.recordScoutDemand({ anchor: { lat: 55.6, lng: 13 } })).status, "ignored");
-  assert.equal((await catalog.recordScoutDemand({
+  const broad = await catalog.recordScoutDemand({
     ...scoutDemand(),
     spatialScope: {
       source: "resolver_bounds",
       kind: "region",
       bounds: { west: 5, south: 45, east: 25, north: 65 },
     },
-  })).status, "ignored", "broad scopes never become crawl targets");
-  assert.equal(calls.length, 0);
+  });
+  assert.equal(broad.status, "recorded");
+  const broadScope = JSON.parse(calls[0].values[9]);
+  assert.equal(broadScope.collection_mode, "local_anchor");
+  assert.equal(broadScope.source, "resolver_anchor_aperture");
+  assert.ok(broadScope.diagonal_km <= 15, "the original broad bounds never become a crawl target");
   const first = await catalog.recordScoutDemand(scoutDemand());
   const second = await catalog.recordScoutDemand(scoutDemand());
 
   assert.equal(first.status, "recorded");
   assert.equal(first.target_key, second.target_key, "the same trusted scope deduplicates deterministically");
-  assert.equal(calls[0].sql, UPSERT_SCOUT_TARGET_SQL);
-  assert.equal(calls[0].values[11], MAX_SCOUT_TARGETS);
-  assert.deepEqual(JSON.parse(calls[0].values[8]), {
+  assert.equal(calls[1].sql, UPSERT_SCOUT_TARGET_SQL);
+  assert.equal(calls[1].values[11], MAX_SCOUT_TARGETS);
+  assert.deepEqual(JSON.parse(calls[1].values[8]), {
     region: "Test Region",
     country: "Test Country",
     country_code: "tc",
   });
+});
+
+test("catalog returns persisted discovery health and preserves pending queue truth", async () => {
+  const persisted = {
+    contract: "source_discovery_health_v1",
+    status: "search_failed",
+    search: {
+      status: "failed",
+      queried_count: 6,
+      responding_query_count: 0,
+      failed_query_count: 6,
+      result_count: 0,
+      seed_count: 0,
+    },
+    scout: { status: "not_run" },
+    qualification: { status: "not_run" },
+    reasons: ["source_discovery_search_failed"],
+  };
+  const catalog = createSourceProfileCatalog({
+    now: () => NOW,
+    query: async (sql, values) => {
+      assert.equal(sql, DISCOVERY_HEALTH_FOR_ANCHOR_SQL);
+      assert.deepEqual(values, [55.6, 13]);
+      return { rows: [{ status: "retry_wait", discovery_health: persisted }] };
+    },
+  });
+  const health = await catalog.getDiscoveryHealthForAnchor({ anchor: { lat: 55.6, lng: 13 } });
+  assert.equal(health.status, "search_failed");
+  assert.equal(health.search.failed_query_count, 6);
+
+  const pendingCatalog = createSourceProfileCatalog({
+    now: () => NOW,
+    query: async () => ({ rows: [{ status: "pending", discovery_health: null }] }),
+  });
+  const pending = await pendingCatalog.getDiscoveryHealthForAnchor({ anchor: { lat: 55.6, lng: 13 } });
+  assert.equal(pending.status, "pending");
 });
 
 test("scout claims use leases and completion/failure cannot expose raw errors", async () => {
@@ -392,11 +436,26 @@ test("scout claims use leases and completion/failure cannot expose raw errors", 
   const completed = await catalog.completeScoutTarget(target, "bounded_source_scout_complete");
   assert.equal(completed.status, "completed");
   assert.equal(calls[1].sql, COMPLETE_SCOUT_TARGET_SQL);
+  assert.equal(calls[1].values[3], new Date(NOW.getTime() + SCOUT_REFRESH_MS).toISOString());
 
   const failed = await catalog.failScoutTarget(target, "postgresql://secret@private-host/db");
   assert.equal(failed.status, "retry_wait");
   assert.equal(calls[2].sql, FAIL_SCOUT_TARGET_SQL);
   assert.equal(calls[2].values[3], "source_scout_failed");
+});
+
+test("scout completion accepts only a bounded early re-probe", async () => {
+  const earliest = new Date(NOW.getTime() + SCOUT_REPROBE_MIN_MS);
+  const defaultRefresh = new Date(NOW.getTime() + SCOUT_REFRESH_MS);
+  const nextDay = new Date("2026-07-31T00:05:00.000Z");
+
+  assert.equal(boundedScoutRefreshAt(NOW, nextDay).toISOString(), nextDay.toISOString());
+  assert.equal(boundedScoutRefreshAt(NOW, NOW).toISOString(), earliest.toISOString());
+  assert.equal(
+    boundedScoutRefreshAt(NOW, new Date("2026-09-01T00:00:00.000Z")).toISOString(),
+    defaultRefresh.toISOString(),
+  );
+  assert.equal(boundedScoutRefreshAt(NOW, "not-a-date").toISOString(), defaultRefresh.toISOString());
 });
 
 test("default catalog is explicit server config and never connects while disabled", async () => {
@@ -561,12 +620,15 @@ test("approved catalog feeds supplement runtime acquisition without changing sta
   assert.equal(warmed, 1);
 });
 
-test("an uncovered trusted place records demand without delaying or mutating Live output", async () => {
+test("an uncovered trusted place confirms demand before reporting discovery pending", async () => {
   let demand = null;
   const supply = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: "enabled" }, {
     sourceCatalog: {
       listApprovedEventFeedsForAnchor: async () => [],
-      recordScoutDemand: async (value) => { demand = value; },
+      recordScoutDemand: async (value) => {
+        demand = value;
+        return { status: "recorded", target_status: "pending" };
+      },
     },
     eventCache: { peek: () => null, warm: () => {} },
   });
@@ -578,10 +640,53 @@ test("an uncovered trusted place records demand without delaying or mutating Liv
     spatialScope: input.spatialScope,
     now: NOW,
   });
-  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(result.coverage, "uncovered");
+  assert.equal(result.acquisition.discovery_health.status, "pending");
+  assert.ok(result.acquisition.source_health.reasons.includes("source_discovery_pending"));
+  assert.deepEqual(demand, input);
+});
+
+test("an unaccepted scout demand is unavailable rather than falsely pending", async () => {
+  const supply = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: "enabled" }, {
+    sourceCatalog: {
+      listApprovedEventFeedsForAnchor: async () => [],
+      recordScoutDemand: async () => ({
+        status: "ignored",
+        reason: "untrusted_or_unbounded_scout_demand",
+      }),
+    },
+    eventCache: { peek: () => null, warm: () => {} },
+  });
+  const input = scoutDemand();
+  const result = await supply({ ...input, now: NOW });
+
+  assert.equal(result.acquisition.discovery_health.status, "unavailable");
+  assert.deepEqual(result.acquisition.discovery_health.reasons, ["source_discovery_demand_rejected"]);
+});
+
+test("uncovered Live preserves a stored observing discovery state", async () => {
+  const supply = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: "enabled" }, {
+    sourceCatalog: {
+      listApprovedEventFeedsForAnchor: async () => [],
+      getDiscoveryHealthForAnchor: async () => ({
+        contract: "source_discovery_health_v1",
+        status: "observing",
+        search: { status: "complete", queried_count: 6, responding_query_count: 6 },
+        scout: { status: "complete", inspected_source_count: 2 },
+        qualification: { status: "observing", candidate_count: 1 },
+        reasons: ["source_discovery_observing"],
+      }),
+      recordScoutDemand: async () => ({ status: "recorded" }),
+    },
+    eventCache: { peek: () => null, warm: () => {} },
+  });
+  const input = scoutDemand();
+  const result = await supply({ anchor: input.anchor, ...input, now: NOW });
 
   assert.equal(result.coverage, "uncovered");
-  assert.deepEqual(demand, input);
+  assert.equal(result.acquisition.discovery_health.status, "observing");
+  assert.equal(result.acquisition.discovery_health.qualification.candidate_count, 1);
+  assert.ok(result.acquisition.source_health.reasons.includes("source_discovery_observing"));
 });
 
 test("an approved local source suppresses redundant scout demand", async () => {
@@ -657,7 +762,8 @@ test("migration runs the versioned SQL and always closes its pool", async () => 
   assert.equal(calls[0][1], "postgresql://catalog.invalid/parranda");
   assert.match(calls[1][1], /CREATE TABLE IF NOT EXISTS pulse_source_profiles/);
   assert.match(calls[2][1], /CREATE TABLE IF NOT EXISTS pulse_source_scout_targets/);
-  assert.deepEqual(calls[3], ["end"]);
+  assert.match(calls[3][1], /ADD COLUMN IF NOT EXISTS discovery_health JSONB/);
+  assert.deepEqual(calls[4], ["end"]);
 });
 
 test("discovery upsert cannot overwrite an approved, rejected or disabled row", () => {

@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const test = require("node:test");
 
 const {
+  combineSeeds,
   discoverLocalEventSourcesForPlace,
 } = require("../server/pulse-sources/place-event-source-scout");
 
@@ -26,6 +27,46 @@ function loaded(records, status = `loaded:${records.length}`, error = null) {
   Object.defineProperty(records, "loader_error", { value: error });
   return records;
 }
+
+function response(body, { status = 200, contentType = "text/html" } = {}) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: {
+      get(name) {
+        if (String(name).toLowerCase() === "content-type") return contentType;
+        return null;
+      },
+    },
+    text: async () => body,
+  };
+}
+
+test("source-class interleaving keeps search and trusted websites inside the scout prefix", () => {
+  const trusted = [
+    { url: "https://city.example/events", trust_tier: "official", family: "official_municipal_calendar" },
+    ...Array.from({ length: 14 }, (_, index) => ({
+      url: `https://venue-${index}.example/program`,
+      trust_tier: "unknown",
+      family: "venue_owned_calendar",
+    })),
+  ];
+  const searched = Array.from({ length: 4 }, (_, index) => ({
+    url: `https://search-${index}.example/calendar`,
+    trust_tier: "unknown",
+    family: "unknown_source_family",
+    discovery_method: "bounded_source_search",
+  }));
+
+  const prefix = combineSeeds(trusted, searched).slice(0, 12);
+  assert.equal(prefix[0].url, "https://city.example/events");
+  assert.ok(prefix.some((seed) => seed.discovery_method === "bounded_source_search"));
+  assert.ok(prefix.some((seed) => seed.family === "venue_owned_calendar"));
+  assert.ok(
+    prefix.filter((seed) => seed.discovery_method === "bounded_source_search").length >= 3,
+    "venue websites cannot starve real search seeds before the scout cap",
+  );
+});
 
 test("trusted place records become bounded scout seeds and review-only manifests", async () => {
   let scoutInput = null;
@@ -429,6 +470,86 @@ test("bounded source search can supply review-only seeds without a place loader"
   assert.doesNotMatch(JSON.stringify(result), /must-not-leak|runtime_policy|official_city_calendar/);
 });
 
+test("cold source search discovers official program articles across unrelated place contexts", async () => {
+  const fixtures = [
+    {
+      place: "Harbourton",
+      countryCode: "se",
+      language: "sv",
+      url: "https://harbourton.example/nyheter/sommarprogram",
+      heading: "Program vid Hamnscenen",
+      rows: ["5 juni 18.00 Lokal orkester", "5 juni 20.00 Kvällskonsert"],
+      expectedTerm: "evenemang",
+    },
+    {
+      place: "Ville-sur-Rive",
+      countryCode: "fr",
+      language: "fr",
+      url: "https://ville-sur-rive.example/actualites/programme-ete",
+      heading: "Programme au Jardin civique",
+      rows: ["6 juillet 18.00 Concert local", "6 juillet 21.00 Cinéma en plein air"],
+      expectedTerm: "événements",
+    },
+    {
+      place: "Porto Novo",
+      countryCode: "pt",
+      language: "pt",
+      url: "https://porto-novo.example/noticias/programa-verao",
+      heading: "Programa no Parque municipal",
+      rows: ["7 agosto 18.00 Mercado local", "7 agosto 21.00 Concerto noturno"],
+      expectedTerm: "eventos",
+    },
+  ];
+
+  const results = [];
+  for (let index = 0; index < fixtures.length; index += 1) {
+    const fixture = fixtures[index];
+    const html = [
+      `<html lang="${fixture.language}"><body>`,
+      "<h1>Summer programme 2026</h1>",
+      `<h2>${fixture.heading}</h2>`,
+      ...fixture.rows.map((row) => `<p>${row}</p>`),
+      "</body></html>",
+    ].join("");
+    const result = await discoverLocalEventSourcesForPlace({
+      placeQuery: fixture.place,
+      placeResolver: resolverFor(fixture.place, 45 + index, 8 + index, {
+        locality: fixture.place,
+        country_code: fixture.countryCode,
+      }),
+      openDataLoader: async () => loaded([]),
+      bounds: [7 + index, 44 + index, 9 + index, 46 + index],
+      sourceSearch: async () => ({
+        status: "complete",
+        reasons: ["bounded_source_search_complete"],
+        queried_count: 8,
+        responding_query_count: 8,
+        result_count: 1,
+        seed_count: 1,
+        seeds: [{ url: fixture.url, discovered_from: `${fixture.place} ${fixture.expectedTerm}` }],
+      }),
+      scoutOptions: {
+        fetcher: async (url) => response(
+          String(url).endsWith("/robots.txt") ? "User-agent: *\nAllow: /" : html,
+          { contentType: String(url).endsWith("/robots.txt") ? "text/plain" : "text/html" },
+        ),
+      },
+    });
+
+    assert.ok(result.discovery_queries.includes(`${fixture.place} ${fixture.expectedTerm}`));
+    assert.equal(result.source_search.accepted_seed_count, 1);
+    assert.equal(result.source_results[0].detected[0], "official_program_article");
+    assert.equal(result.manifest_candidates[0].adapter, "official_program_article");
+    assert.equal(result.manifest_candidates[0].source_language, fixture.language);
+    assert.equal(result.manifest_candidates[0].review.robots_status, "allowed");
+    assert.equal(result.manifest_candidates[0].status, "review-needed");
+    assert.equal(result.activation_performed, false);
+    results.push(result);
+  }
+
+  assert.equal(new Set(results.map((result) => result.source_profile.profile_key)).size, fixtures.length);
+});
+
 test("search failure does not discard a trusted venue website seed", async () => {
   let scoutInput = null;
   const result = await discoverLocalEventSourcesForPlace({
@@ -627,3 +748,21 @@ test("place-event source bridge contains no city branches or activation path", (
   assert.doesNotMatch(source, /athens|rome|barcelona|helsinki|österlen|skåne|malm[oö]/i);
   assert.doesNotMatch(source, /status:\s*["']active["']/);
 });
+
+test("production discovery and provider code contains no cold-canary special cases", () => {
+  const roots = [
+    require("node:path").join(__dirname, "..", "server"),
+    require("node:path").join(__dirname, "..", "scripts"),
+  ];
+  const files = roots.flatMap(walkJavaScriptFiles);
+  const source = files.map((file) => fs.readFileSync(file, "utf8")).join("\n");
+  assert.doesNotMatch(source, /felanitx|sant[ -]agust[ií]|felanitx\.org/i);
+});
+
+function walkJavaScriptFiles(directory) {
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = require("node:path").join(directory, entry.name);
+    if (entry.isDirectory()) return walkJavaScriptFiles(path);
+    return entry.isFile() && /\.m?js$/.test(entry.name) ? [path] : [];
+  });
+}

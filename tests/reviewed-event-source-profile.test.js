@@ -190,6 +190,30 @@ test("reviewed RSS/Atom detail feeds activate without trusting feed publication 
   assert.equal(resolved.confidence, "medium");
 });
 
+test("a reviewed official program article requires a timezone and reuses the generic runtime adapter", () => {
+  const article = profile();
+  const candidate = article.source_families[0].candidates[0];
+  const feed = article.runtime_review.feeds[0];
+  candidate.source_label = "Reviewed civic programme";
+  candidate.url = "https://city.example/news/summer-program";
+  candidate.adapter = "official_program_article";
+  candidate.status = "needs_adapter_or_permission";
+  candidate.maps_to_existing_provider = true;
+  feed.endpoint = candidate.url;
+  feed.adapter = "official_program_article";
+  feed.source_language = "en";
+  delete feed.timezone;
+
+  assert.deepEqual(eventFeedsFromReviewedSourceProfiles([article], { now: NOW }), []);
+
+  feed.timezone = "Europe/Stockholm";
+  const [resolved] = eventFeedsFromReviewedSourceProfiles([article], { now: NOW });
+  assert.equal(resolved.adapter, "official_program_article");
+  assert.equal(resolved.timezone, "Europe/Stockholm");
+  assert.equal(resolved.source_language, "en");
+  assert.equal(resolved.source_scoped_pulse, true);
+});
+
 test("trusted profile env is fail-closed and direct reviewed feed rows keep precedence", () => {
   assert.deepEqual(resolveReviewedEventSourceProfileFeeds({
     PARRANDA_REVIEWED_EVENT_SOURCE_PROFILES: "{bad json",

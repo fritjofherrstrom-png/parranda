@@ -38,6 +38,11 @@ function validateSelfHostedStack() {
   requireText(compose, /source-catalog-data:\/var\/lib\/postgresql\/data/, "persistent_source_catalog_missing");
   requireText(compose, /source-catalog-migrate:/, "source_catalog_migration_service_missing");
   requireText(compose, /source-scout-worker:[\s\S]*run-source-scout-worker\.js[\s\S]*--watch/, "source_scout_worker_missing");
+  requireText(
+    compose,
+    /source-scout-worker:[\s\S]*healthcheck:\s*\n\s+disable: true[\s\S]*run-source-scout-worker\.js/,
+    "source_scout_worker_healthcheck_override_missing",
+  );
   requireText(compose, /source-scout-worker:[\s\S]*condition: service_completed_successfully/, "source_scout_migration_dependency_missing");
   requireText(
     compose,

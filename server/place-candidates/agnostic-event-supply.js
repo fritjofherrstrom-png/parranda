@@ -31,6 +31,9 @@ const { createSitevisionCalendarProvider } = require("../pulse-sources/sitevisio
 const { createWixEventSitemapProvider } = require("../pulse-sources/wix-event-sitemap-provider");
 const { createLocalizedEventsApiProvider } = require("../pulse-sources/localized-events-api-provider");
 const { createEmbeddedProgramRscProvider } = require("../pulse-sources/embedded-program-rsc-provider");
+const {
+  createOfficialProgramArticleProvider,
+} = require("../pulse-sources/official-program-article-provider");
 const { normalizeTimeSensitiveSourceEvent } = require("../pulse-sources/time-sensitive-event");
 const {
   datePartsInTimezone,
@@ -50,6 +53,11 @@ const {
 const { classifyCulturalSalience } = require("../pulse-engine/cultural-salience");
 const { resolveEventVenueGeometry } = require("./event-venue-resolution");
 const { spatialScopeCacheKey } = require("./spatial-scope");
+const {
+  normalizeSourceDiscoveryHealth,
+  pendingSourceDiscoveryHealth,
+  unavailableSourceDiscoveryHealth,
+} = require("../pulse-sources/source-discovery-health");
 const {
   buildAnchorEventSourcePlan,
   resolveEventFeedsForAnchor,
@@ -91,6 +99,7 @@ const LOCAL_EVENT_ADAPTERS = new Set([
   "wix_event_sitemap",
   "localized_events_api",
   "embedded_program_rsc",
+  "official_program_article",
 ]);
 
 // A single open municipal feed, kept as a NAMED FIXTURE — not a product default.
@@ -272,6 +281,7 @@ function normalizeEventFeedRow(f, index = 0) {
       : null,
     runtime_trust: f.runtime_trust != null ? String(f.runtime_trust) : null,
     pulse_only: f.pulse_only === true,
+    source_scoped_pulse: f.source_scoped_pulse === true,
   };
 }
 
@@ -486,6 +496,12 @@ function toEventView(event, feed, { eventTimezone = null, routeEligible = null }
     route_eligible: routeEligible == null
       ? isEphemeralHappening(event, null)
       : Boolean(routeEligible),
+    geometry_status: event.geometry_status || (Number.isFinite(event.lat) && Number.isFinite(event.lng)
+      ? "resolved"
+      : "unresolved"),
+    geographic_relevance: event.geographic_relevance || null,
+    source_scope_verified: event.source_scope_verified === true,
+    local_significance: event.local_significance || null,
     // The venue-local timezone so the UI shows the real local start time.
     timezone: eventTimezone || feed.timezone || null,
   };
@@ -672,11 +688,11 @@ function buildScopedEventSourcePlan({
     const localSources = buildAnchorEventSourcePlan({
       anchor: sourceAnchor,
       registry,
+      now,
       globalSource: null,
       globalEnabled: false,
       maxSources: DEFAULT_MAX_SOURCES,
       maxLocalSources: DEFAULT_MAX_LOCAL_SOURCES,
-      now,
     });
     for (const source of localSources) {
       const identity = String(source.id || source.endpoint || source.base || "");
@@ -736,6 +752,7 @@ async function collectAnchorEvents({
     anchor,
     sourceAnchors,
     registry: registry || resolveEventFeedRegistry(),
+    now,
     globalSource: GLOBAL_FEED_DESCRIPTOR,
     globalEnabled: Boolean(globalKey),
     maxSources,
@@ -815,13 +832,16 @@ async function collectAnchorEvents({
     anchor,
     radiusM: effectiveRadiusM,
     spatialScope,
+    sourceScopedPulseIds: sourcePlan
+      .filter((source) => source.source_scoped_pulse === true)
+      .map((source) => source.id),
   });
   const rejected = [...bounded.rejected];
   const sourceById = new Map(sourcePlan.map((source) => [source.id, source]));
   const tonight = [];
   const thisWeek = [];
 
-  for (const event of bounded.events) {
+  for (const event of [...bounded.events, ...(bounded.pulse_only_events || [])]) {
     if (!isPulseDisplayEvent(event, nowDate)) {
       rejected.push({
         id: event.fusion_id || event.id || null,
@@ -833,7 +853,11 @@ async function collectAnchorEvents({
     const source = sourceById.get(event.source_provider_id) || sourcePlan[0];
     const view = toEventView(event, source, {
       eventTimezone: event.timezone || null,
-      routeEligible: source?.pulse_only === true ? false : isEphemeralHappening(event, nowDate),
+      routeEligible:
+        event.geographic_relevance === "source_scope" ||
+        source?.pulse_only === true
+          ? false
+          : isEphemeralHappening(event, nowDate),
     });
     if (!view) continue;
     if (TONIGHT_TIMING.has(event.timing_relevance)) {
@@ -1133,6 +1157,20 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs 
       horizonDays: source.horizon_days || undefined,
     });
   }
+  if (adapter === "official_program_article") {
+    return createOfficialProgramArticleProvider({
+      ...common,
+      status: "active",
+      timezone: source.timezone || undefined,
+      sourceLanguage: source.source_language || undefined,
+      sourceTier: source.source_tier || undefined,
+      confidence: source.confidence || undefined,
+      sourceFamily: source.source_family || undefined,
+      limit: source.page_size || undefined,
+      horizonDays: source.horizon_days || undefined,
+      allDayLimit: source.all_day_limit || undefined,
+    });
+  }
   return null;
 }
 
@@ -1154,6 +1192,7 @@ function compactSourceStatus(collection) {
     ...(source.source_health && probationary ? { qualified_source_health: source.source_health } : {}),
     ...(source.runtime_trust ? { runtime_trust: source.runtime_trust } : {}),
     ...(source.pulse_only === true ? { pulse_only: true } : {}),
+    ...(source.source_scoped_pulse === true ? { source_scoped_pulse: true } : {}),
     ...(source.profile_key
       ? {
           source_profile: {
@@ -1167,7 +1206,14 @@ function compactSourceStatus(collection) {
   };
 }
 
-function emptyAcquisition(radiusM) {
+function emptyAcquisition(radiusM, discoveryHealth = null) {
+  const normalizedDiscoveryHealth = normalizeSourceDiscoveryHealth(discoveryHealth) ||
+    unavailableSourceDiscoveryHealth("unavailable", "source_discovery_unavailable");
+  const sourceHealth = buildAnchorEventSourceHealth([]);
+  sourceHealth.reasons = [...new Set([
+    ...sourceHealth.reasons,
+    ...normalizedDiscoveryHealth.reasons,
+  ])];
   return {
     mode: "bounded_multi_source",
     radius_m: radiusM,
@@ -1177,7 +1223,8 @@ function emptyAcquisition(radiusM) {
     fused_event_count: 0,
     rejected_event_count: 0,
     rejection_summary: [],
-    source_health: buildAnchorEventSourceHealth([]),
+    source_health: sourceHealth,
+    discovery_health: normalizedDiscoveryHealth,
   };
 }
 
@@ -1260,6 +1307,8 @@ function normalizeLocalEventAdapter(value) {
     embedded_program: "embedded_program_rsc",
     next_rsc_program: "embedded_program_rsc",
     nextjs_program: "embedded_program_rsc",
+    official_article_program: "official_program_article",
+    public_program_article: "official_program_article",
   };
   const normalized = aliases[raw] || raw;
   return LOCAL_EVENT_ADAPTERS.has(normalized) ? normalized : null;
@@ -1358,25 +1407,30 @@ function resolveDefaultEventSupply(
       anchor,
       sourceAnchors,
       registry: requestRegistry,
+      now,
       globalSource: GLOBAL_FEED_DESCRIPTOR,
       globalEnabled: Boolean(globalKey),
       now,
     });
     const hasApprovedLocalSource = sourcePlan.some((source) => source?.kind !== "global");
+    let discoveryHealth = null;
+    if (!hasApprovedLocalSource) {
+      discoveryHealth = await resolveUncoveredDiscoveryHealth(sourceCatalog, anchor);
+    }
     if (
       !hasApprovedLocalSource &&
       sourceCatalog &&
       typeof sourceCatalog.recordScoutDemand === "function"
     ) {
-      // Demand recording is a bounded database write only. Discovery/network
-      // work remains exclusively in the background worker, and this promise is
-      // intentionally detached so catalog latency cannot delay route/Pulse.
-      Promise.resolve(sourceCatalog.recordScoutDemand({
+      // This is one bounded catalog write, never discovery/network work. Await
+      // its compact outcome so `pending` means the worker really has a target.
+      const demandHealth = await recordUncoveredScoutDemand(sourceCatalog, {
         anchor,
         placeLabel,
         placeContext,
         spatialScope,
-      })).catch(() => {});
+      });
+      if (!discoveryHealth) discoveryHealth = demandHealth;
     }
     if (sourcePlan.length === 0) {
       return {
@@ -1386,7 +1440,13 @@ function resolveDefaultEventSupply(
         tonight: [],
         this_week: [],
         browse: emptyEventBrowse(),
-        acquisition: emptyAcquisition(effectiveRadiusM),
+        acquisition: emptyAcquisition(
+          effectiveRadiusM,
+          discoveryHealth || unavailableSourceDiscoveryHealth(
+            "environment_not_wired",
+            "source_discovery_environment_not_wired",
+          ),
+        ),
       };
     }
     const descriptors = sourcePlan.map((source) => compactSourceStatus({ source, status: "pending", raw: [] }));
@@ -1452,6 +1512,46 @@ function resolveDefaultEventSupply(
       },
     };
   };
+}
+
+async function resolveUncoveredDiscoveryHealth(sourceCatalog, anchor) {
+  if (!sourceCatalog) {
+    return unavailableSourceDiscoveryHealth(
+      "environment_not_wired",
+      "source_discovery_environment_not_wired",
+    );
+  }
+  if (typeof sourceCatalog.getDiscoveryHealthForAnchor === "function") {
+    try {
+      return normalizeSourceDiscoveryHealth(
+        await sourceCatalog.getDiscoveryHealthForAnchor({ anchor }),
+      );
+    } catch (_error) {
+      return unavailableSourceDiscoveryHealth("unavailable", "source_catalog_unavailable");
+    }
+  }
+  if (typeof sourceCatalog.recordScoutDemand === "function") return null;
+  return unavailableSourceDiscoveryHealth(
+    "environment_not_wired",
+    "source_discovery_environment_not_wired",
+  );
+}
+
+async function recordUncoveredScoutDemand(sourceCatalog, demand) {
+  try {
+    const outcome = await sourceCatalog.recordScoutDemand(demand);
+    if (outcome?.status === "recorded") {
+      return pendingSourceDiscoveryHealth("source_discovery_pending");
+    }
+    return unavailableSourceDiscoveryHealth(
+      "unavailable",
+      outcome?.reason === "source_scout_queue_capacity"
+        ? "source_discovery_queue_unavailable"
+        : "source_discovery_demand_rejected",
+    );
+  } catch (_error) {
+    return unavailableSourceDiscoveryHealth("unavailable", "source_catalog_unavailable");
+  }
 }
 
 module.exports = {

@@ -94,12 +94,13 @@ function createSearxngSourceSearch({
       limit: seedLimit,
       perOriginLimit,
     });
-    const responding = queryOutcomes.filter((item) => ["ok", "empty"].includes(item.status)).length;
-    const failed = queryOutcomes.length - responding;
+    const responding = queryOutcomes.filter((item) => ["ok", "empty", "partial"].includes(item.status)).length;
+    const failed = queryOutcomes.filter((item) => item.status === "failed").length;
+    const partial = queryOutcomes.filter((item) => item.status === "partial").length;
     const status = seeds.length
-      ? failed ? "partial" : "complete"
+      ? failed || partial ? "partial" : "complete"
       : responding
-        ? failed ? "partial" : "empty"
+        ? failed || partial ? "partial" : "empty"
         : "failed";
 
     return {
@@ -107,7 +108,9 @@ function createSearxngSourceSearch({
       status,
       reasons: status === "failed"
         ? ["source_search_failed"]
-        : seeds.length
+        : status === "partial"
+          ? ["source_search_partial"]
+          : seeds.length
           ? ["bounded_source_search_complete"]
           : ["source_search_no_public_results"],
       queried_count: boundedQueries.length,
@@ -162,15 +165,25 @@ async function fetchSearxngQuery({
     return { status: "failed", reason: "source_search_payload_invalid", results: [] };
   }
 
+  const engineFailureCount = unresponsiveEngineCount(payload.unresponsive_engines);
   const results = payload.results
     .map((row) => normalizeSearchResult(row))
     .filter(Boolean)
     .slice(0, limit);
   return {
-    status: results.length ? "ok" : "empty",
-    reason: results.length ? "source_search_results_found" : "source_search_query_empty",
+    status: engineFailureCount > 0
+      ? results.length ? "partial" : "failed"
+      : results.length ? "ok" : "empty",
+    reason: engineFailureCount > 0
+      ? results.length ? "source_search_results_partial" : "source_search_engines_unavailable"
+      : results.length ? "source_search_results_found" : "source_search_query_empty",
+    engine_failure_count: engineFailureCount,
     results,
   };
+}
+
+function unresponsiveEngineCount(value) {
+  return Array.isArray(value) ? value.filter(Boolean).length : 0;
 }
 
 function boundSearchSeeds(results, { endpointOrigin, place, limit, perOriginLimit }) {
@@ -346,7 +359,7 @@ function safeResultLabel(value) {
 }
 
 function compactQueryOutcome(query, outcome) {
-  const status = ["ok", "empty", "failed"].includes(outcome?.status)
+  const status = ["ok", "empty", "partial", "failed"].includes(outcome?.status)
     ? outcome.status
     : "failed";
   return {
@@ -354,6 +367,7 @@ function compactQueryOutcome(query, outcome) {
     status,
     reason: normalizeSearchFailure(outcome?.reason),
     result_count: Array.isArray(outcome?.results) ? outcome.results.length : 0,
+    engine_failure_count: clampInteger(outcome?.engine_failure_count, 0, 32),
   };
 }
 

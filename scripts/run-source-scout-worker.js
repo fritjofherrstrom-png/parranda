@@ -7,6 +7,9 @@ const {
 const {
   createOperatorRuntime,
 } = require("./scout-local-event-sources");
+const {
+  buildSourceDiscoveryHealth,
+} = require("../server/pulse-sources/source-discovery-health");
 
 const MAX_BATCH_SIZE = 5;
 const MIN_INTERVAL_MS = 30_000;
@@ -39,6 +42,7 @@ async function runScoutWorkerBatch({
 }
 
 async function scoutTarget({ target, catalog, runtime, discover }) {
+  const observedAt = runtime?.now ? runtime.now() : new Date();
   let result;
   try {
     result = await discover({
@@ -67,45 +71,70 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
 
   const reason = compactReason(result);
   if (["blocked", "failed", "unavailable"].includes(result?.status)) {
-    const failed = await catalog.failScoutTarget(target, reason);
-    return { target_key: target.target_key, status: "failed", reason, catalog_status: failed.status };
+    const discoveryHealth = buildSourceDiscoveryHealth({ result, observedAt });
+    const failed = await catalog.failScoutTarget(target, reason, { discoveryHealth });
+    return {
+      target_key: target.target_key,
+      status: "failed",
+      reason,
+      catalog_status: failed.status,
+      discovery_status: discoveryHealth.status,
+    };
   }
   if (result?.status === "empty") {
-    const completed = await catalog.completeScoutTarget(target, reason);
+    const discoveryHealth = buildSourceDiscoveryHealth({ result, observedAt });
+    const completed = await catalog.completeScoutTarget(target, reason, { discoveryHealth });
     return {
       target_key: target.target_key,
       status: completed?.status === "completed" ? "completed" : "failed",
       reason,
       profile_key: null,
       catalog_status: completed?.status || "failed",
+      discovery_status: discoveryHealth.status,
     };
   }
   if (!result?.source_profile) {
-    const failed = await catalog.failScoutTarget(target, "source_profile_unavailable");
+    const discoveryHealth = buildSourceDiscoveryHealth({
+      result: { ...result, status: "failed", reasons: ["source_profile_unavailable"] },
+      observedAt,
+    });
+    const failed = await catalog.failScoutTarget(target, "source_profile_unavailable", { discoveryHealth });
     return {
       target_key: target.target_key,
       status: "failed",
       reason: "source_profile_unavailable",
       catalog_status: failed.status,
+      discovery_status: discoveryHealth.status,
     };
   }
 
   let profile = result.source_profile;
   let qualificationStatus = "not_run";
+  let qualificationNow = null;
   if (typeof runtime?.sourceQualifier === "function") {
     try {
+      qualificationNow = observedAt;
+      const manifests = await attachTrustedTimezone(
+        result.manifest_candidates,
+        {
+          timezoneResolver: runtime.timezoneResolver,
+          anchor: target.anchor,
+          now: qualificationNow,
+        },
+      );
       const previousQualification = typeof catalog.loadSourceQualification === "function"
         ? await catalog.loadSourceQualification(profile.profile_key)
         : null;
       const qualified = await runtime.sourceQualifier({
         profile,
-        manifests: result.manifest_candidates,
+        manifests,
         previousQualification,
         anchor: target.anchor,
         spatialScope: target.spatial_scope,
         placeContext: target.place_context,
-        now: runtime.now ? runtime.now() : new Date(),
+        now: qualificationNow,
         fetcher: runtime.fetcher,
+        venueResolver: runtime.placeResolver,
       });
       if (qualified?.profile) profile = qualified.profile;
       qualificationStatus = qualified?.qualification?.status || "unavailable";
@@ -114,9 +143,20 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
     }
   }
 
+  const discoveryHealth = buildSourceDiscoveryHealth({
+    result: { ...result, source_profile: profile },
+    qualificationStatus,
+    observedAt: qualificationNow || observedAt,
+  });
+  profile = { ...profile, discovery_health: discoveryHealth };
+
   const recorded = await catalog.recordDiscovery(profile);
   if (recorded?.status !== "recorded") {
-    const failed = await catalog.failScoutTarget(target, recorded?.reason || "source_catalog_write_failed");
+    const failed = await catalog.failScoutTarget(
+      target,
+      recorded?.reason || "source_catalog_write_failed",
+      { discoveryHealth },
+    );
     return {
       target_key: target.target_key,
       status: "failed",
@@ -124,7 +164,10 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
       catalog_status: failed.status,
     };
   }
-  const completed = await catalog.completeScoutTarget(target, reason);
+  const completionOptions = qualificationStatus === "observing"
+    ? { nextAttemptAt: nextQualificationProbeAt(qualificationNow), discoveryHealth }
+    : { discoveryHealth };
+  const completed = await catalog.completeScoutTarget(target, reason, completionOptions);
   return {
     target_key: target.target_key,
     status: completed?.status === "completed" ? "completed" : "failed",
@@ -132,7 +175,56 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
     profile_key: recorded.profile_key,
     catalog_status: completed?.status || "failed",
     qualification_status: qualificationStatus,
+    discovery_status: discoveryHealth.status,
   };
+}
+
+function nextQualificationProbeAt(value) {
+  const observedAt = value instanceof Date ? new Date(value.getTime()) : new Date(value);
+  if (!Number.isFinite(observedAt.getTime())) return null;
+  return new Date(Date.UTC(
+    observedAt.getUTCFullYear(),
+    observedAt.getUTCMonth(),
+    observedAt.getUTCDate() + 1,
+    0,
+    5,
+  ));
+}
+
+async function attachTrustedTimezone(manifests, { timezoneResolver, anchor, now } = {}) {
+  const rows = Array.isArray(manifests) ? manifests : [];
+  if (!rows.some((manifest) => !manifest?.timezone) || typeof timezoneResolver !== "function") {
+    return rows;
+  }
+  let resolution;
+  try {
+    resolution = await timezoneResolver(anchor, now);
+  } catch (_error) {
+    return rows;
+  }
+  const timezone = validIanaTimezone(resolution?.timezone);
+  if (!timezone || resolution?.timezone_source !== "weather_provider_auto") return rows;
+  return rows.map((manifest) => manifest?.timezone
+    ? manifest
+    : {
+        ...manifest,
+        timezone,
+        review: {
+          ...(manifest?.review || {}),
+          timezone_source: "weather_provider_auto",
+          timezone_trust: "derived_from_weather_provider",
+        },
+      });
+}
+
+function validIanaTimezone(value) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value.trim() }).format(0);
+    return value.trim();
+  } catch (_error) {
+    return null;
+  }
 }
 
 async function main(argv = process.argv.slice(2), options = {}) {
@@ -244,4 +336,6 @@ module.exports = {
   parseArguments,
   runScoutWorkerBatch,
   scoutTarget,
+  attachTrustedTimezone,
+  nextQualificationProbeAt,
 };

@@ -8,6 +8,7 @@ const { createLinkedEventsProvider } = require("../server/pulse-sources/linked-e
 const { createSchemaOrgEventProvider } = require("../server/pulse-sources/schema-org-event-provider");
 const {
   buildTimeSensitiveEventSignal,
+  scoreTimeSensitiveEventSalience,
   timeSensitiveEventsToPulseSignals,
 } = require("../server/pulse-engine/time-sensitive-events");
 
@@ -115,6 +116,35 @@ test("time-sensitive event salience can outrank generic rhythm context", async (
 
   assert.equal(pulse.signals[0].id, "source-event-event-1");
   assert.ok(pulse.signals[0].score > 0);
+});
+
+test("major-programme salience uses generic evidence rather than a festival name", () => {
+  const scored = scoreTimeSensitiveEventSalience(event({
+    title: "Programme item 4",
+    source_tier: "official",
+    independent_source_count: 2,
+    local_significance: {
+      source_prominence: "dedicated_programme",
+      programme_event_count: 8,
+      programme_day_count: 3,
+      current_year_evidence: true,
+    },
+  }));
+  assert.ok(scored.reasons.includes("dedicated_programme_prominence"));
+  assert.ok(scored.reasons.includes("multi_day_programme_evidence"));
+  assert.ok(scored.reasons.includes("independent_source_corroboration"));
+  assert.ok(scored.score >= 7);
+
+  const untrusted = scoreTimeSensitiveEventSalience(event({
+    source_tier: "unknown",
+    local_significance: {
+      source_prominence: "dedicated_programme",
+      programme_event_count: 8,
+      programme_day_count: 1,
+      current_year_evidence: true,
+    },
+  }));
+  assert.equal(untrusted.reasons.includes("dedicated_programme_prominence"), false);
 });
 
 test("Linked Events provider descriptor confidence lets real provider events enter Pulse", async () => {

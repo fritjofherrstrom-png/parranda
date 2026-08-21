@@ -2,8 +2,16 @@
 
 const { createHash, randomUUID } = require("node:crypto");
 const { eventFeedsFromReviewedSourceProfiles } = require("../place-candidates/reviewed-event-source-profile");
-const { sanitizeTrustedSpatialScope } = require("../place-candidates/spatial-scope");
+const {
+  deriveLocalAnchorSpatialScope,
+  sanitizeTrustedSpatialScope,
+} = require("../place-candidates/spatial-scope");
 const { eventFeedsFromQualifiedSourceProfiles } = require("./source-qualification");
+const {
+  normalizeSourceDiscoveryHealth,
+  pendingSourceDiscoveryHealth,
+  unavailableSourceDiscoveryHealth,
+} = require("./source-discovery-health");
 
 const CATALOG_FLAG_ENV_KEY = "PARRANDA_SOURCE_CATALOG";
 const CATALOG_DATABASE_ENV_KEY = "PARRANDA_SOURCE_CATALOG_DATABASE_URL";
@@ -11,6 +19,7 @@ const MAX_PROFILE_BYTES = 512 * 1024;
 const MAX_QUALIFICATION_BYTES = 128 * 1024;
 const MAX_SCOUT_TARGETS = 10_000;
 const SCOUT_LEASE_MS = 15 * 60 * 1000;
+const SCOUT_REPROBE_MIN_MS = 5 * 60 * 1000;
 const SCOUT_REFRESH_MS = 7 * 24 * 60 * 60 * 1000;
 
 const UPSERT_SCOUT_TARGET_SQL = `
@@ -61,8 +70,7 @@ WITH candidate AS (
   SELECT target_key
   FROM pulse_source_scout_targets
   WHERE
-    (status IN ('pending', 'retry_wait') AND next_attempt_at <= $1::timestamptz)
-    OR (status = 'completed' AND completed_at <= $2::timestamptz)
+    (status IN ('pending', 'retry_wait', 'completed') AND next_attempt_at <= $1::timestamptz)
     OR (status = 'leased' AND lease_until <= $1::timestamptz)
   ORDER BY observation_count DESC, observed_at DESC, target_key ASC
   LIMIT 1
@@ -71,8 +79,8 @@ WITH candidate AS (
 UPDATE pulse_source_scout_targets AS target
 SET
   status = 'leased',
-  lease_token = $3,
-  lease_until = $4::timestamptz,
+  lease_token = $2,
+  lease_until = $3::timestamptz,
   attempt_count = target.attempt_count + 1,
   updated_at = NOW()
 FROM candidate
@@ -89,6 +97,7 @@ SET
   lease_token = NULL,
   lease_until = NULL,
   last_reason = $5,
+  discovery_health = COALESCE($6::jsonb, discovery_health),
   updated_at = NOW()
 WHERE target_key = $1 AND status = 'leased' AND lease_token = $2
 RETURNING target_key, status
@@ -102,6 +111,7 @@ SET
   lease_token = NULL,
   lease_until = NULL,
   last_reason = $4,
+  discovery_health = COALESCE($5::jsonb, discovery_health),
   updated_at = NOW()
 WHERE target_key = $1 AND status = 'leased' AND lease_token = $2
 RETURNING target_key, status
@@ -248,6 +258,17 @@ WHERE profile_key = $1
 LIMIT 1
 `;
 
+const DISCOVERY_HEALTH_FOR_ANCHOR_SQL = `
+SELECT status, last_reason, discovery_health, updated_at
+FROM pulse_source_scout_targets
+WHERE bbox_west <= $2
+  AND bbox_east >= $2
+  AND bbox_south <= $1
+  AND bbox_north >= $1
+ORDER BY observed_at DESC, updated_at DESC, target_key ASC
+LIMIT 1
+`;
+
 function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
   if (typeof query !== "function") return null;
 
@@ -335,6 +356,29 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
     }
   }
 
+  async function getDiscoveryHealthForAnchor({ anchor } = {}) {
+    const lat = finiteCoordinate(anchor?.lat, -90, 90);
+    const lng = finiteCoordinate(anchor?.lng, -180, 180);
+    if (lat == null || lng == null) return null;
+    try {
+      const result = await query(DISCOVERY_HEALTH_FOR_ANCHOR_SQL, [lat, lng]);
+      const row = result?.rows?.[0];
+      if (!row) return null;
+      const stored = normalizeSourceDiscoveryHealth(parseProfile(row.discovery_health));
+      if (stored) return stored;
+      const targetStatus = publicString(row.status)?.toLowerCase();
+      if (["pending", "leased"].includes(targetStatus)) {
+        return pendingSourceDiscoveryHealth("source_discovery_pending");
+      }
+      return unavailableSourceDiscoveryHealth(
+        "unavailable",
+        targetStatus === "retry_wait" ? "source_discovery_retry_wait" : "source_discovery_state_unavailable",
+      );
+    } catch (_error) {
+      return unavailableSourceDiscoveryHealth("unavailable", "source_catalog_unavailable");
+    }
+  }
+
   async function recordScoutDemand({ anchor, placeLabel, placeContext, spatialScope } = {}) {
     const normalized = normalizeScoutDemand({
       anchor,
@@ -377,12 +421,10 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
     const claimedAt = normalizeDate(now());
     if (!claimedAt) return null;
     const leaseToken = randomUUID();
-    const staleCompletedAt = new Date(claimedAt.getTime() - SCOUT_REFRESH_MS);
     const leaseUntil = new Date(claimedAt.getTime() + SCOUT_LEASE_MS);
     try {
       const result = await query(CLAIM_SCOUT_TARGET_SQL, [
         claimedAt.toISOString(),
-        staleCompletedAt.toISOString(),
         leaseToken,
         leaseUntil.toISOString(),
       ]);
@@ -392,11 +434,12 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
     }
   }
 
-  async function completeScoutTarget(target, reason = "source_scout_completed") {
+  async function completeScoutTarget(target, reason = "source_scout_completed", options = {}) {
     const normalized = normalizeLeasedScoutTarget(target);
     const completedAt = normalizeDate(now());
     if (!normalized || !completedAt) return { status: "ignored", reason: "invalid_source_scout_lease" };
-    const refreshAt = new Date(completedAt.getTime() + SCOUT_REFRESH_MS);
+    const refreshAt = boundedScoutRefreshAt(completedAt, options?.nextAttemptAt);
+    const discoveryHealth = normalizeSourceDiscoveryHealth(options?.discoveryHealth);
     try {
       const result = await query(COMPLETE_SCOUT_TARGET_SQL, [
         normalized.targetKey,
@@ -404,6 +447,7 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
         completedAt.toISOString(),
         refreshAt.toISOString(),
         safeReason(reason, "source_scout_completed"),
+        discoveryHealth ? JSON.stringify(discoveryHealth) : null,
       ]);
       return result?.rows?.[0]
         ? { status: "completed", target_key: normalized.targetKey }
@@ -413,17 +457,19 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
     }
   }
 
-  async function failScoutTarget(target, reason = "source_scout_failed") {
+  async function failScoutTarget(target, reason = "source_scout_failed", options = {}) {
     const normalized = normalizeLeasedScoutTarget(target);
     const failedAt = normalizeDate(now());
     if (!normalized || !failedAt) return { status: "ignored", reason: "invalid_source_scout_lease" };
     const retryAt = new Date(failedAt.getTime() + scoutRetryDelayMs(normalized.attemptCount));
+    const discoveryHealth = normalizeSourceDiscoveryHealth(options?.discoveryHealth);
     try {
       const result = await query(FAIL_SCOUT_TARGET_SQL, [
         normalized.targetKey,
         normalized.leaseToken,
         retryAt.toISOString(),
         safeReason(reason, "source_scout_failed"),
+        discoveryHealth ? JSON.stringify(discoveryHealth) : null,
       ]);
       return result?.rows?.[0]
         ? { status: "retry_wait", target_key: normalized.targetKey, retry_at: retryAt.toISOString() }
@@ -439,11 +485,22 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
     listApprovedEventFeedsForAnchor,
     listQualifiedEventFeedsForAnchor,
     loadSourceQualification,
+    getDiscoveryHealthForAnchor,
     recordScoutDemand,
     claimScoutTarget,
     completeScoutTarget,
     failScoutTarget,
   };
+}
+
+function boundedScoutRefreshAt(completedAt, requestedAt) {
+  const earliestAt = new Date(completedAt.getTime() + SCOUT_REPROBE_MIN_MS);
+  const defaultAt = new Date(completedAt.getTime() + SCOUT_REFRESH_MS);
+  const requested = normalizeDate(requestedAt);
+  if (!requested) return defaultAt;
+  if (requested < earliestAt) return earliestAt;
+  if (requested > defaultAt) return defaultAt;
+  return requested;
 }
 
 function resolveDefaultSourceProfileCatalog(env = process.env, options = {}) {
@@ -556,7 +613,7 @@ function normalizeScoutDemand({ anchor, placeLabel, placeContext, spatialScope, 
   const lng = finiteCoordinate(anchor?.lng, -180, 180);
   const label = boundedString(placeLabel, 160);
   const context = normalizePlaceContext(placeContext);
-  const scope = sanitizeTrustedSpatialScope(spatialScope);
+  const scope = deriveLocalAnchorSpatialScope(spatialScope, { lat, lng });
   const at = normalizeDate(observedAt);
   if (
     lat == null ||
@@ -701,17 +758,20 @@ module.exports = {
   COMPLETE_SCOUT_TARGET_SQL,
   CATALOG_DATABASE_ENV_KEY,
   CATALOG_FLAG_ENV_KEY,
+  DISCOVERY_HEALTH_FOR_ANCHOR_SQL,
   FAIL_SCOUT_TARGET_SQL,
   MAX_SCOUT_TARGETS,
   MAX_PROFILE_BYTES,
   MAX_QUALIFICATION_BYTES,
   SCOUT_LEASE_MS,
+  SCOUT_REPROBE_MIN_MS,
   SCOUT_REFRESH_MS,
   SOURCE_QUALIFICATION_SQL,
   UPSERT_APPROVED_PROFILE_SQL,
   UPSERT_DISCOVERY_PROFILE_SQL,
   UPSERT_SCOUT_TARGET_SQL,
   createSourceProfileCatalog,
+  boundedScoutRefreshAt,
   normalizeScoutDemand,
   resolveDefaultSourceProfileCatalog,
   scoutRetryDelayMs,

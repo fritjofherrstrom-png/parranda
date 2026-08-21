@@ -149,6 +149,58 @@ test("qualification probes the discovered source through the real provider and e
   assert.equal(result.qualification.activation_performed, false);
 });
 
+test("an exact known review-needed adapter may be probed with allowed robots but is never activated", async () => {
+  let probeInput = null;
+  const candidateOverrides = {
+    url: "https://civic.example/news/program",
+    adapter: "official_program_article",
+    status: "needs_adapter_or_permission",
+    runtime_policy: "review_needed",
+    blockers: [],
+    terms_status: "unknown",
+    maps_to_existing_provider: true,
+  };
+  const reviewedManifest = manifest({
+    endpoint: "https://civic.example/news/program",
+    adapter: "official_program_article",
+    timezone: "Europe/Stockholm",
+    status: "review-needed",
+    runtime_policy: "review_required",
+    review: { terms_status: "unknown", robots_status: "allowed" },
+  });
+  const venueResolver = async () => [];
+  const result = await qualifyDiscoveredSourceProfile({
+    ...baseInput,
+    profile: profile(candidateOverrides),
+    manifests: [reviewedManifest],
+    now: "2026-08-01T10:00:00Z",
+    venueResolver,
+    collectEvents: async (input) => {
+      probeInput = input;
+      return collection();
+    },
+  });
+
+  assert.equal(result.qualification.status, "observing");
+  assert.equal(result.qualification.activation_performed, false);
+  assert.equal(probeInput.registry[0].adapter, "official_program_article");
+  assert.equal(probeInput.venueResolver, venueResolver);
+
+  let calls = 0;
+  const unknownRobots = await qualifyDiscoveredSourceProfile({
+    ...baseInput,
+    profile: profile(candidateOverrides),
+    manifests: [{
+      ...reviewedManifest,
+      review: { terms_status: "unknown", robots_status: "unknown" },
+    }],
+    now: "2026-08-01T10:00:00Z",
+    collectEvents: async () => { calls += 1; return collection(); },
+  });
+  assert.equal(unknownRobots.qualification.status, "unavailable");
+  assert.equal(calls, 0);
+});
+
 test("two distinct healthy probe days with accepted evidence qualify only for review", async () => {
   const first = await qualifyDiscoveredSourceProfile({
     ...baseInput,
@@ -175,17 +227,18 @@ test("two distinct healthy probe days with accepted evidence qualify only for re
 });
 
 test("fresh qualification can become a low-trust Pulse-only probation feed", async () => {
+  const licensedManifest = manifest({ license: "https://creativecommons.org/licenses/by/4.0/" });
   const first = await qualifyDiscoveredSourceProfile({
     ...baseInput,
     profile: profile(),
-    manifests: [manifest()],
+    manifests: [licensedManifest],
     now: "2026-08-01T10:00:00Z",
     collectEvents: async () => collection(),
   });
   const second = await qualifyDiscoveredSourceProfile({
     ...baseInput,
     profile: profile(),
-    manifests: [manifest()],
+    manifests: [licensedManifest],
     previousQualification: first.qualification,
     now: "2026-08-08T10:00:00Z",
     collectEvents: async () => collection({ accepted: 2 }),
@@ -200,9 +253,62 @@ test("fresh qualification can become a low-trust Pulse-only probation feed", asy
   assert.equal(feeds[0].status, "probationary");
   assert.equal(feeds[0].runtime_trust, "qualified_probationary");
   assert.equal(feeds[0].pulse_only, true);
+  assert.equal(feeds[0].source_scoped_pulse, true);
+  assert.equal(feeds[0].license, "https://creativecommons.org/licenses/by/4.0/");
   assert.equal(feeds[0].profile_qualified_at, "2026-08-08T10:00:00.000Z");
   assert.equal(feeds[0].profile_expires_at, "2026-08-16T10:00:00.000Z");
   assert.equal(second.qualification.activation_performed, false, "probation is not source approval");
+});
+
+test("a repeatedly proven reviewed-adapter candidate may enter probation only with compatible terms", async () => {
+  const candidateOverrides = {
+    url: "https://civic.example/news/program",
+    adapter: "official_program_article",
+    status: "needs_adapter_or_permission",
+    runtime_policy: "review_needed",
+    blockers: [],
+    terms_status: "api_terms_compatible",
+    maps_to_existing_provider: true,
+  };
+  const reviewedManifest = manifest({
+    endpoint: "https://civic.example/news/program",
+    adapter: "official_program_article",
+    timezone: "Europe/Stockholm",
+    status: "review-needed",
+    runtime_policy: "review_required",
+    review: { terms_status: "api_terms_compatible", robots_status: "allowed" },
+  });
+  const first = await qualifyDiscoveredSourceProfile({
+    ...baseInput,
+    profile: profile(candidateOverrides),
+    manifests: [reviewedManifest],
+    now: "2026-08-01T10:00:00Z",
+    collectEvents: async () => collection(),
+  });
+  const second = await qualifyDiscoveredSourceProfile({
+    ...baseInput,
+    profile: profile(candidateOverrides),
+    manifests: [reviewedManifest],
+    previousQualification: first.qualification,
+    now: "2026-08-08T10:00:00Z",
+    collectEvents: async () => collection({ accepted: 3 }),
+  });
+
+  const [feed] = eventFeedsFromQualifiedSourceProfiles([second.profile], {
+    now: "2026-08-10T10:00:00Z",
+  });
+  assert.equal(feed.adapter, "official_program_article");
+  assert.equal(feed.status, "probationary");
+  assert.equal(feed.confidence, "low");
+  assert.equal(feed.pulse_only, true);
+  assert.equal(feed.source_scoped_pulse, true);
+
+  const unclear = structuredClone(second.profile);
+  unclear.source_families[0].candidates[0].terms_status = "unknown";
+  unclear.source_qualification.candidates[0].runtime_candidate.terms_status = "unknown";
+  assert.deepEqual(eventFeedsFromQualifiedSourceProfiles([unclear], {
+    now: "2026-08-10T10:00:00Z",
+  }), []);
 });
 
 test("probation rejects stale, drifted, unclear-terms and activated qualification data", async () => {

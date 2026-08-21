@@ -21,6 +21,10 @@ test("resolver country context adds bounded local-language discovery vocabulary"
     language_hints: ["cs"],
     local_discovery_terms: ["akce", "kalendář akcí", "bleší trh", "trhy", "koncert"],
   });
+  assert.deepEqual(discoveryLocaleForCountryCode("es"), {
+    language_hints: ["es"],
+    local_discovery_terms: ["eventos", "agenda", "festes", "programació", "mercadillo"],
+  });
 });
 
 test("unknown country context stays neutral instead of inventing a locale", () => {

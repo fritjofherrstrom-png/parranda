@@ -11,22 +11,23 @@ const SOURCE_FAMILIES = Object.freeze({
       "sitevision_calendar",
       "wix_event_sitemap",
       "embedded_program_rsc",
+      "official_program_article",
     ],
   },
   official_tourism_calendar: {
     priority: 2,
     label: "Official tourism/destination calendar",
-    preferredAdapters: ["schema_org_event", "html_event_listing", "ical", "rss_atom_event_detail", "wix_event_sitemap", "embedded_program_rsc"],
+    preferredAdapters: ["schema_org_event", "html_event_listing", "ical", "rss_atom_event_detail", "wix_event_sitemap", "embedded_program_rsc", "official_program_article"],
   },
   cultural_institution_calendar: {
     priority: 3,
     label: "Cultural institution or major venue calendar",
-    preferredAdapters: ["schema_org_event", "venue_calendar", "html_event_listing", "rss_atom_event_detail", "embedded_program_rsc"],
+    preferredAdapters: ["schema_org_event", "venue_calendar", "html_event_listing", "rss_atom_event_detail", "embedded_program_rsc", "official_program_article"],
   },
   venue_owned_calendar: {
     priority: 4,
     label: "Venue-owned event calendar",
-    preferredAdapters: ["schema_org_event", "venue_calendar", "html_event_listing", "ical", "rss_atom_event_detail", "embedded_program_rsc"],
+    preferredAdapters: ["schema_org_event", "venue_calendar", "html_event_listing", "ical", "rss_atom_event_detail", "embedded_program_rsc", "official_program_article"],
   },
   market_listing: {
     priority: 5,
@@ -37,6 +38,7 @@ const SOURCE_FAMILIES = Object.freeze({
       "ical",
       "wix_event_sitemap",
       "embedded_program_rsc",
+      "official_program_article",
       "needs_adapter",
     ],
   },
@@ -294,7 +296,8 @@ function mapsToExistingProvider(adapter) {
     adapter === "rss_atom_event_detail" ||
     adapter === "sitevision_calendar" ||
     adapter === "wix_event_sitemap" ||
-    adapter === "embedded_program_rsc"
+    adapter === "embedded_program_rsc" ||
+    adapter === "official_program_article"
   );
 }
 

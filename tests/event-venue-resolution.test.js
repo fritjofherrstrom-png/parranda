@@ -90,6 +90,7 @@ test("resolver-attested regional bounds recover a distant venue without weakenin
   assert.equal(out.events[0].lat, regionalCandidate.lat);
   assert.equal(out.events[0].venue_resolution.geometry_scope, "resolver_attested_region");
   assert.equal(local.events[0].lat, undefined, "the same point stays outside the local radius");
+  assert.equal(local.events[0].venue_resolution.status, "not_found");
 });
 
 test("regional venue resolution still rejects candidates outside trusted bounds", async () => {
@@ -102,6 +103,7 @@ test("regional venue resolution still rejects candidates outside trusted bounds"
     resolver: async () => [candidate({ lat: 59.8, lng: 18.1 })],
   });
   assert.equal(out.events[0].lat, undefined);
+  assert.equal(out.events[0].venue_resolution.status, "not_found");
   assert.equal(out.summary.not_found_count, 1);
 });
 
@@ -111,14 +113,14 @@ test("ambiguous, weak and out-of-radius results fail closed", async () => {
     [candidate({ confidence: "low" })],
     [candidate({ lat: 57.7, lng: 11.97 })],
   ];
-  for (const candidates of cases) {
+  for (const [index, candidates] of cases.entries()) {
     const out = await resolveEventVenueGeometry([event()], {
       anchor: ANCHOR,
       radiusM: 3000,
       resolver: async () => candidates,
     });
     assert.equal(out.events[0].lat, undefined);
-    assert.equal(out.events[0].venue_resolution, undefined);
+    assert.equal(out.events[0].venue_resolution.status, index === 0 ? "ambiguous" : "not_found");
   }
 });
 
@@ -143,7 +145,9 @@ test("resolution is bounded, reuses duplicate venue queries and fails soft", asy
   assert.equal(out.events[0].venue_resolution.status, "resolved");
   assert.equal(out.events[1].venue_resolution.status, "resolved", "same venue reuses the result");
   assert.equal(out.events[2].lat, undefined, "resolver failure stays mapless");
+  assert.equal(out.events[2].venue_resolution.status, "failed");
   assert.equal(out.events[3].lat, undefined, "rows beyond the cap stay mapless");
+  assert.equal(out.events[3].venue_resolution, undefined, "unattempted rows make no resolver claim");
   assert.deepEqual(out.summary, {
     limit: 2,
     attempted_count: 2,

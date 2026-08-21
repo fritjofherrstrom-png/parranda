@@ -85,7 +85,8 @@ candidate evaluation:
 - one reviewed public page per seed is inspected for iCal, The Events Calendar,
   event-related REST/JSON endpoints exposed in page attributes,
   schema.org/Event JSON-LD, compatible venue HTML, RSS, and social discovery
-  hints;
+  hints. A strict `official_program_article` grammar also recognizes subordinate
+  public programme sections with explicit dates/times and shared venue context;
 - private/loopback URLs, unsafe redirects, robots exclusions, oversized
   responses, timeouts, and source failures fail closed;
 - successful robots and source-page responses use the existing source cache;
@@ -121,6 +122,40 @@ The live harness accepts the existing `PARRANDA_CACHE_DIR` and an optional
 `PARRANDA_EVENT_SOURCE_SCOUT_CACHE_TTL_MS`. It remains an operator/background
 job; no user request waits for this crawl.
 
+### Cold discovery proof and deployment gate
+
+The engine contract is covered by a deterministic cold-loop test across three
+unrelated places and source languages. Each request contains only a
+resolver-attested place/anchor. A background search seam returns a previously
+unknown public source, the worker detects and qualifies its declared calendar
+interface on separate UTC days, persists the geographic profile, and a later
+request collects and surfaces its normalized event in Live. The same suite
+proves that an incidental-date news page does not become a source. The proof
+keeps these states separate:
+
+```txt
+DISCOVERED -> PARSED -> QUALIFIED -> RUNTIME-ELIGIBLE
+           -> COLLECTED -> SALIENT -> SHOWN IN LIVE
+                                      ROUTE-ELIGIBLE (separate, false by default)
+```
+
+This deterministic proof injects the bounded search provider; it is not proof
+that a deployment is proactively searching. The production Compose contract
+starts `source-scout-worker` only with the `source-catalog` profile, and source
+search remains disabled unless the operator explicitly supplies both:
+
+```txt
+PARRANDA_SOURCE_SEARCH=enabled
+PARRANDA_SOURCE_SEARCH_ENDPOINT=https://operator-owned-searxng.example/search
+```
+
+The endpoint must expose the reviewed SearXNG JSON contract. Without that
+worker profile and endpoint, demand can be recorded but unknown sources cannot
+be enumerated automatically. That deployment is `environment_not_wired`, not
+evidence that a place has no events. A manually supplied URL or one-off scout
+run is useful operator evidence but does not satisfy the proactive cold-loop
+product claim.
+
 The catalog write is forced to `review_needed`, even if upstream scout data
 claims otherwise. Re-running discovery cannot overwrite an approved, rejected,
 or disabled profile. After terms, ownership, timezone, geography, and parser
@@ -135,9 +170,12 @@ adapter, publisher identity, and trusted bounds. It runs at most two candidates
 per scout cycle through the existing provider, normalization, time, geometry,
 and source-health path. Unprobed and least-recently probed candidates are chosen
 first, so a larger source profile cannot starve behind the same two rows.
-Only candidates already classified as `viable_provider_probe` are fetched;
-permission-required, restricted, probe-only, and adapter-review sources remain
-unprobed until their prerequisites are resolved.
+Candidates classified as `viable_provider_probe` may be fetched. A discovered
+`needs_adapter_or_permission` candidate may also be probed only when it binds to
+an already-tested adapter, has no candidate blockers, carries an exact reviewed
+manifest identity, and the scout's actual robots verdict is `allowed`.
+Restricted, social/corroboration-only, unknown-adapter, and robots-unknown rows
+remain unprobed. Probing is evidence collection, not source approval.
 
 Qualification stores compact status/count evidence only; provider payloads are
 never persisted. One healthy probe remains `observing`. A source becomes
@@ -145,8 +183,13 @@ never persisted. One healthy probe remains `observing`. A source becomes
 within 30 days and at least one accepted current event. Healthy-empty results,
 same-day retries, stale history, parser/geometry rejection, and a latest failed
 probe cannot manufacture readiness. This verdict never changes
-`runtime_review`, approves terms, or activates a provider. It reduces operator
-guesswork while preserving the separate trusted review gate.
+`runtime_review` or approves terms. When the separate
+`PARRANDA_QUALIFIED_SOURCE_RUNTIME` gate is enabled, a repeatedly healthy exact
+source with mechanically compatible `open_license` or
+`api_terms_compatible` terms may enter a short-lived, low-confidence,
+Pulse-only probation feed. Unknown terms still require operator review, and a
+probation feed is never route eligible. This reduces operator guesswork while
+preserving the stronger trusted review gate.
 
 ### Reviewed source-profile runtime bridge
 
@@ -739,3 +782,44 @@ factual atoms such as title, date/time, venue/address, and canonical source URL.
 A bounded live probe normalized current rows through this adapter. The source
 still requires explicit terms, scope, timezone, yield, and source-health review
 before a deployment manifest may activate it.
+
+## Reviewed Official Programme Article Adapter
+
+Important local happenings are often published as an official news or festival
+programme rather than a calendar feed. The generic
+`official_program_article` adapter recognizes a document grammar, never a
+publisher or place:
+
+- a subordinate heading or emphasized row explicitly labels a programme;
+- at least two rows carry explicit local dates and times;
+- a shared venue is stated by the programme section or a dated venue heading;
+- article introductions, ticket/practical sections, descriptions, images, and
+  unrelated clock mentions are excluded;
+- date-only rows remain honest all-day evidence and use a separate cap, while
+  multi-day daily windows remain daily rather than becoming continuous nights;
+- floating local times require a trusted IANA timezone, ambiguous DST folds fail
+  closed, and no geometry is inferred from the page;
+- fetches retain one timeout through body parsing, enforce byte and redirect
+  caps, and never follow a redirect off the reviewed origin.
+
+Discovery proposes this adapter as `review-needed`. An actual `robots: allowed`
+verdict permits bounded qualification through the real normalization, venue,
+time, geometry, and source-health gates, but unknown ownership or terms still
+blocks runtime. After explicit review, the adapter enters the existing
+`time_sensitive_events` pipeline; it creates neither a city branch nor a second
+Pulse engine.
+
+The implementation is intentionally split by reusable responsibility:
+bounded HTTP collection, document/block extraction, programme-row grouping,
+locale/time parsing, and event normalization. It must not grow publisher-name
+branches. Historical recaps, incidental-date municipal news, ticket/practical
+sections, yearly history, ordinary opening-hours pages, and mixed-year prose
+are retained as negative corpus tests because false events are more damaging
+than declining a weak page.
+
+When a reviewed source is geographically scoped to the resolved place but an
+event venue cannot be resolved uniquely, its factual event atoms may remain a
+source-scoped Pulse-only signal. Such evidence keeps no coordinates and is
+always `route_eligible: false`. Unique trusted in-scope venue resolution may add
+geometry; ambiguous, weak, or out-of-scope results never do, and the place
+anchor is never substituted as event geometry.

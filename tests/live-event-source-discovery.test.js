@@ -73,6 +73,35 @@ test("schema.org/Event discovery maps to the existing generic provider family", 
   assert.equal(mapsToExistingProvider(result.adapter), true);
 });
 
+test("official program articles map to a known stable-html adapter without becoming approved", () => {
+  const result = evaluateLiveEventSourceCandidate({
+    id: "official-program",
+    family: "official_municipal_calendar",
+    source_label: "Municipal summer program",
+    url: "https://city.example/news/program",
+    adapter: "official_program_article",
+    extraction_tier: "stable_html_calendar",
+    trust_tier: "official",
+    terms_status: "unknown",
+    source_health: "healthy",
+    runtime_policy: "review_needed",
+    extractable: {
+      title: true,
+      start: true,
+      end: true,
+      venue: true,
+      venue_geocodable: true,
+      source_url: true,
+      stable_html: true,
+    },
+  });
+
+  assert.equal(result.maps_to_existing_provider, true);
+  assert.equal(result.status, "needs_adapter_or_permission");
+  assert.ok(result.reasons.includes("terms_need_review"));
+  assert.ok(result.reasons.includes("runtime_policy_review_needed"));
+});
+
 test("stable HTML scraping is a valid tier when constrained by terms and source atoms", () => {
   const result = evaluateLiveEventSourceCandidate(
     candidate({

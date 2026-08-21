@@ -8,6 +8,7 @@ const {
   MAX_SECONDARY_ANCHORS,
   normalizeNominatimSpatialScope,
   sanitizeTrustedSpatialScope,
+  deriveLocalAnchorSpatialScope,
   deriveSecondaryAnchors,
   allowsRegionalClusterSelection,
   pointWithinTrustedSpatialScope,
@@ -42,6 +43,21 @@ test("small places stay local and broad regions never mint secondary collection 
   assert.deepEqual(deriveSecondaryAnchors(local, { lat: 55.56, lng: 14.35 }), []);
   assert.equal(broad.collection_mode, "broad_anchor_only");
   assert.deepEqual(deriveSecondaryAnchors(broad, { lat: 44, lng: 5 }), []);
+});
+
+test("a broad trusted scope can yield only a bounded local scout aperture around its anchor", () => {
+  const broad = {
+    source: "nominatim_bounds",
+    kind: "municipality",
+    bounds: { south: 66.8, north: 70.2, west: 11.5, east: 20.5 },
+  };
+  const local = deriveLocalAnchorSpatialScope(broad, { lat: 69.65, lng: 18.96 });
+
+  assert.equal(local.source, "resolver_anchor_aperture");
+  assert.equal(local.collection_mode, "local_anchor");
+  assert.ok(local.diagonal_km <= 15);
+  assert.equal(pointWithinTrustedSpatialScope({ lat: 69.65, lng: 18.96 }, local), true);
+  assert.equal(deriveLocalAnchorSpatialScope(broad, { lat: 60, lng: 18.96 }), null);
 });
 
 test("bounded elongated regions yield at most two deterministic anchors on their longest axis", () => {

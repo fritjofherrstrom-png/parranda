@@ -109,7 +109,15 @@ async function resolveEventVenueGeometry(
     if (resolution.status === "ambiguous") summary.ambiguous_count += 1;
     else if (resolution.status === "failed") summary.failed_count += 1;
     else summary.not_found_count += 1;
-    output.push(event);
+    output.push({
+      ...event,
+      venue_resolution: {
+        status: resolution.status,
+        source: "trusted_place_resolver",
+        query_basis: event.address ? "source_address" : "source_venue",
+        geometry_scope: regionalScope ? "resolver_attested_region" : "anchor_radius",
+      },
+    });
   }
 
   return { events: output, summary };

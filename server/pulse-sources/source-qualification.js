@@ -23,6 +23,7 @@ async function qualifyDiscoveredSourceProfile({
   placeContext = null,
   now = new Date(),
   fetcher,
+  venueResolver = null,
   collectEvents = collectAnchorEvents,
   maxProbes = MAX_PROBES_PER_RUN,
   timeoutMs = DEFAULT_PROBE_TIMEOUT_MS,
@@ -58,6 +59,7 @@ async function qualifyDiscoveredSourceProfile({
     placeContext,
     observedAt,
     fetcher,
+    venueResolver,
     collectEvents,
     timeoutMs,
   })));
@@ -74,7 +76,7 @@ async function qualifyDiscoveredSourceProfile({
   return { profile: clonedProfile, qualification };
 }
 
-function bindManifestCandidate(manifest, candidate) {
+function bindManifestCandidate(manifest, candidate, { qualifiedRuntime = false } = {}) {
   if (!manifest || typeof manifest !== "object" || !candidate) return null;
   const candidateId = publicString(candidate.id);
   const endpoint = safeHttpsUrl(manifest.endpoint);
@@ -84,6 +86,21 @@ function bindManifestCandidate(manifest, candidate) {
   const sourceIdentity = publicString(manifest.source_identity);
   const candidateIdentity = publicString(candidate.source_identity);
   const bbox = normalizeBounds(manifest.bbox);
+  const candidateStatus = publicString(candidate.status);
+  const reviewedAdapterProbe =
+    candidateStatus === "needs_adapter_or_permission" &&
+    publicString(candidate.runtime_policy) === "review_needed" &&
+    publicString(manifest.status) === "review-needed" &&
+    publicString(manifest.runtime_policy) === "review_required" &&
+    publicString(manifest.review?.robots_status) === "allowed" &&
+    (!Array.isArray(candidate.blockers) || candidate.blockers.length === 0);
+  const provenProbationCandidate =
+    qualifiedRuntime === true &&
+    candidateStatus === "needs_adapter_or_permission" &&
+    publicString(candidate.runtime_policy) === "review_needed" &&
+    publicString(manifest.status) === "active" &&
+    publicString(manifest.runtime_policy) === "bounded_refresh" &&
+    (!Array.isArray(candidate.blockers) || candidate.blockers.length === 0);
   if (
     !candidateId ||
     !endpoint ||
@@ -94,7 +111,7 @@ function bindManifestCandidate(manifest, candidate) {
     sourceIdentity.toLowerCase() !== candidateIdentity.toLowerCase() ||
     !bbox ||
     candidate.maps_to_existing_provider !== true ||
-    !PROBEABLE_STATUSES.has(publicString(candidate.status)) ||
+    (!PROBEABLE_STATUSES.has(candidateStatus) && !reviewedAdapterProbe && !provenProbationCandidate) ||
     candidate.corroboration_required === true ||
     publicString(candidate.family) === "community_social_listing"
   ) return null;
@@ -113,6 +130,7 @@ function bindManifestCandidate(manifest, candidate) {
     timezoneOffset: publicString(manifest.timezone_offset),
     eventPathPrefix: publicString(manifest.event_path_prefix),
     format: publicString(manifest.format),
+    license: safeHttpsUrl(manifest.license),
     bbox,
   };
 }
@@ -123,6 +141,7 @@ async function probeBinding(binding, {
   placeContext,
   observedAt,
   fetcher,
+  venueResolver,
   collectEvents,
   timeoutMs,
 }) {
@@ -138,6 +157,7 @@ async function probeBinding(binding, {
       maxLocalSources: 1,
       spatialScope,
       placeContext,
+      venueResolver,
     });
     return observationFromCollection(binding, result, observedAt);
   } catch (_error) {
@@ -258,7 +278,9 @@ function eventFeedsFromQualifiedSourceProfiles(
         state.activation_performed !== false
       ) continue;
       const candidate = candidates.get(publicString(state.candidate_id));
-      const binding = bindManifestCandidate(state.runtime_candidate, candidate);
+      const binding = bindManifestCandidate(state.runtime_candidate, candidate, {
+        qualifiedRuntime: true,
+      });
       if (
         !binding ||
         qualificationIdentity(state) !== qualificationIdentity(binding) ||
@@ -284,6 +306,7 @@ function eventFeedsFromQualifiedSourceProfiles(
         source_health: "qualified_probationary",
         runtime_trust: "qualified_probationary",
         pulse_only: true,
+        source_scoped_pulse: true,
         profile_key: profileKey,
         profile_qualified_at: latest.observed_at,
         profile_expires_at: expiresAt,
@@ -380,10 +403,19 @@ function sourceRowForBinding(binding) {
     confidence: "low",
     source_family: binding.sourceFamily,
     source_identity: binding.sourceIdentity,
+    license: binding.license,
     status: "active",
     runtime_policy: "bounded_refresh",
     terms_status: binding.termsStatus,
+    source_scoped_pulse: bindingAllowsSourceScopedPulse(binding),
   });
+}
+
+function bindingAllowsSourceScopedPulse(binding) {
+  return (
+    ["official", "verified", "curated"].includes((publicString(binding?.sourceTier) || "").toLowerCase()) &&
+    ["open_license", "api_terms_compatible"].includes((publicString(binding?.termsStatus) || "").toLowerCase())
+  );
 }
 
 function candidateIndex(sourceFamilies) {

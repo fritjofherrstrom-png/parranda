@@ -103,6 +103,11 @@ services:
     image: ${PARRANDA_IMAGE:?Set PARRANDA_IMAGE to an immutable image tag}
     init: true
     restart: unless-stopped
+    # The image healthcheck probes the web-only /api/health endpoint. This
+    # service is a bounded polling process with no HTTP listener, so inheriting
+    # that check would mark a healthy worker unhealthy.
+    healthcheck:
+      disable: true
     depends_on:
       source-catalog-migrate:
         condition: service_completed_successfully

@@ -150,6 +150,25 @@ function scoreTimeSensitiveEventSalience(event) {
     score += 0.5;
     reasons.push(`role_hint_${slugify(event.route_role_hint)}`);
   }
+
+  const significance = event.local_significance;
+  if (
+    significance?.source_prominence === "dedicated_programme" &&
+    significance.current_year_evidence === true &&
+    ["official", "verified"].includes(compactText(event.source_tier).toLowerCase()) &&
+    Number(significance.programme_event_count) >= 4
+  ) {
+    score += 0.75;
+    reasons.push("dedicated_programme_prominence");
+  }
+  if (Number(significance?.programme_day_count) >= 2) {
+    score += 0.5;
+    reasons.push("multi_day_programme_evidence");
+  }
+  if (Number(event.independent_source_count) >= 2) {
+    score += 1;
+    reasons.push("independent_source_corroboration");
+  }
   if (!event.recurrence) {
     score += 0.5;
     reasons.push("non_recurring_or_specific");

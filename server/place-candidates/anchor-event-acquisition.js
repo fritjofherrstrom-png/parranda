@@ -97,12 +97,22 @@ function selectPublisherDiverseFeeds(feeds, limit) {
 /**
  * Reject explicit out-of-bound evidence before fusion. Coordinate-less rows may
  * still corroborate the same occurrence when another source supplies trusted
- * geometry; standalone coordinate-less rows remain rejected.
+ * geometry. A separately reviewed source may opt into source-scoped Pulse
+ * display, but those rows remain outside the routeable event bucket.
  */
-function fuseAndBoundEventEvidence(events = [], { anchor, radiusM, spatialScope = null } = {}) {
+function fuseAndBoundEventEvidence(
+  events = [],
+  {
+    anchor,
+    radiusM,
+    spatialScope = null,
+    sourceScopedPulseIds = [],
+  } = {},
+) {
   if (!hasCoordinates(anchor)) {
     return {
       events: [],
+      pulse_only_events: [],
       fused_count: 0,
       rejected: (Array.isArray(events) ? events : []).map((event) => ({
         id: stableEventId(event),
@@ -116,6 +126,11 @@ function fuseAndBoundEventEvidence(events = [], { anchor, radiusM, spatialScope 
   const regionalScope = candidateRegionalScope && pointWithinTrustedSpatialScope(anchor, candidateRegionalScope)
     ? candidateRegionalScope
     : null;
+  const scopedPulseSources = new Set(
+    (Array.isArray(sourceScopedPulseIds) ? sourceScopedPulseIds : [])
+      .map((value) => String(value || "").trim())
+      .filter(Boolean),
+  );
   const fusable = [];
   const rejected = [];
 
@@ -140,8 +155,19 @@ function fuseAndBoundEventEvidence(events = [], { anchor, radiusM, spatialScope 
 
   const fused = fuseTimeSensitiveEvents(fusable);
   const accepted = [];
+  const pulseOnly = [];
   for (const event of fused) {
     if (!hasCoordinates(event)) {
+      if (scopedPulseSources.has(String(event.source_provider_id || "").trim())) {
+        pulseOnly.push({
+          ...event,
+          geometry_status: "unresolved",
+          geographic_relevance: "source_scope",
+          source_scope_verified: true,
+          route_eligible: false,
+        });
+        continue;
+      }
       rejected.push({
         id: stableEventId(event),
         source_provider_id: event.source_provider_id || null,
@@ -164,6 +190,7 @@ function fuseAndBoundEventEvidence(events = [], { anchor, radiusM, spatialScope 
 
   return {
     events: accepted,
+    pulse_only_events: pulseOnly,
     fused_count: fused.length,
     rejected,
     geometry_scope: regionalScope ? "resolver_attested_region" : "anchor_radius",

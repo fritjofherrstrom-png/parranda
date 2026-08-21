@@ -405,11 +405,12 @@ function compactSourceSearchSummary(result) {
         query_key: /^[a-f0-9]{12}$/.test(String(item?.query_key || ""))
           ? item.query_key
           : null,
-        status: ["ok", "empty", "failed"].includes(item?.status)
+        status: ["ok", "empty", "partial", "failed"].includes(item?.status)
           ? item.status
           : "failed",
         reason: compactTokens([item?.reason])[0] || "source_search_failed",
         result_count: finiteCount(item?.result_count),
+        engine_failure_count: finiteCount(item?.engine_failure_count),
       })),
     activation_performed: false,
   };
@@ -445,13 +446,40 @@ function sanitizeSearchSeeds(input, place) {
 function combineSeeds(trustedSeeds, searchedSeeds) {
   const out = [];
   const seen = new Set();
-  for (const seed of [...trustedSeeds, ...searchedSeeds]) {
-    const url = normalizeHttpUrl(seed?.url);
-    if (!url || seen.has(url)) continue;
-    seen.add(url);
-    out.push({ ...seed, url });
+  const trusted = normalizedSeedLane(trustedSeeds);
+  const searched = normalizedSeedLane(searchedSeeds);
+  const institutional = trusted.filter(isInstitutionalSeed);
+  const otherTrusted = trusted.filter((seed) => !isInstitutionalSeed(seed));
+  const lanes = [institutional, searched, otherTrusted];
+
+  // The scout inspects a bounded prefix. Interleave source classes so neither a
+  // venue-heavy place loader nor noisy web search can monopolize that prefix.
+  while (lanes.some((lane) => lane.length > 0)) {
+    for (const lane of lanes) {
+      let seed = lane.shift();
+      while (seed && seen.has(seed.url)) seed = lane.shift();
+      if (!seed) continue;
+      seen.add(seed.url);
+      out.push(seed);
+    }
   }
   return out;
+}
+
+function normalizedSeedLane(seeds) {
+  return (Array.isArray(seeds) ? seeds : [])
+    .map((seed) => {
+      const url = normalizeHttpUrl(seed?.url);
+      return url ? { ...seed, url } : null;
+    })
+    .filter(Boolean);
+}
+
+function isInstitutionalSeed(seed) {
+  const trust = publicString(seed?.trust_tier)?.toLowerCase();
+  const family = publicString(seed?.family)?.toLowerCase();
+  return ["official", "civic", "institution", "municipal"].includes(trust) ||
+    /official|municipal|tourism|institution/.test(family || "");
 }
 
 function emptySeedReasons({ records, searched }) {
@@ -702,6 +730,7 @@ function finiteCount(value) {
 }
 
 module.exports = {
+  combineSeeds,
   discoverLocalEventSourcesForPlace,
   reviewOnlyManifests,
 };
