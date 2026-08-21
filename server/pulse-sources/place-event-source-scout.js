@@ -14,7 +14,7 @@ const { createHash } = require("node:crypto");
 
 const { resolveAgnosticIntake } = require("../planner/agnostic-place-intake");
 const {
-  buildLocalEventDiscoveryQueries,
+  buildLocalEventDiscoveryQueryPlan,
   extractEventWebsiteSeeds,
   isScoutablePublicUrl,
   normalizeHttpUrl,
@@ -77,11 +77,13 @@ async function discoverLocalEventSourcesForPlace({
     bounds: trustedBounds,
     localDiscoveryTerms,
   });
-  const discoveryQueries = buildLocalEventDiscoveryQueries({
+  const discoveryQueryOptions = {
     place,
     intentHints,
     localDiscoveryTerms,
-  });
+  };
+  const discoveryQueryPlan = buildLocalEventDiscoveryQueryPlan(discoveryQueryOptions);
+  const discoveryQueries = discoveryQueryPlan.map((item) => item.query);
   const emptySourceProfile = buildSourceProfile({
     place,
     anchor: resolution.anchor,
@@ -122,6 +124,7 @@ async function discoverLocalEventSourcesForPlace({
   const searched = await searchForSourceSeeds({
     sourceSearch,
     discoveryQueries,
+    discoveryQueryPlan,
     place,
     anchor: resolution.anchor,
     bounds: trustedBounds,
@@ -355,6 +358,7 @@ async function loadTrustedPlaceRecords({ openDataLoader, anchor, spatialScope })
 async function searchForSourceSeeds({
   sourceSearch,
   discoveryQueries,
+  discoveryQueryPlan,
   place,
   anchor,
   bounds,
@@ -363,6 +367,7 @@ async function searchForSourceSeeds({
   try {
     const raw = await sourceSearch({
       queries: discoveryQueries,
+      query_plan: discoveryQueryPlan,
       place,
       anchor,
       bounds,
@@ -385,9 +390,15 @@ function compactSourceSearchSummary(result) {
       status: "failed",
       reasons: ["source_search_failed"],
       queried_count: 0,
+      generated_query_count: 0,
+      skipped_query_count: 0,
       responding_query_count: 0,
       failed_query_count: 0,
       degraded_query_count: 0,
+      expansion_round_count: 0,
+      novel_source_identity_count: 0,
+      stop_reason: "query_space_exhausted",
+      query_tranches: [],
       result_count: 0,
       seed_count: 0,
       retry_recommended: true,
@@ -403,9 +414,21 @@ function compactSourceSearchSummary(result) {
       ? compactTokens(result.reasons)
       : [status === "failed" ? "source_search_failed" : "source_search_completed"],
     queried_count: finiteCount(result.queried_count),
+    generated_query_count: finiteCount(result.generated_query_count),
+    skipped_query_count: finiteCount(result.skipped_query_count),
     responding_query_count: finiteCount(result.responding_query_count),
     failed_query_count: finiteCount(result.failed_query_count),
     degraded_query_count: finiteCount(result.degraded_query_count),
+    expansion_round_count: finiteCount(result.expansion_round_count),
+    novel_source_identity_count: finiteCount(result.novel_source_identity_count),
+    stop_reason: compactTokens([result.stop_reason])[0] || "query_space_exhausted",
+    query_tranches: (Array.isArray(result.query_tranches) ? result.query_tranches : [])
+      .slice(0, 8)
+      .map((item) => ({
+        query_count: finiteCount(item?.query_count),
+        novel_source_identity_count: finiteCount(item?.novel_source_identity_count),
+        untrustworthy_query_count: finiteCount(item?.untrustworthy_query_count),
+      })),
     result_count: finiteCount(result.result_count),
     seed_count: finiteCount(result.seed_count),
     accepted_seed_count: 0,
@@ -413,7 +436,7 @@ function compactSourceSearchSummary(result) {
     // zero-result search is an answer; a degraded one is not.
     retry_recommended: result.retry_recommended === true,
     query_outcomes: (Array.isArray(result.query_outcomes) ? result.query_outcomes : [])
-      .slice(0, 10)
+      .slice(0, 24)
       .map((item) => ({
         // Parranda-generated queries about public places. Bounded, and kept so
         // an operator can tell which query degraded without shell access.
@@ -421,12 +444,15 @@ function compactSourceSearchSummary(result) {
         query_key: /^[a-f0-9]{12}$/.test(String(item?.query_key || ""))
           ? item.query_key
           : null,
+        query_family: compactTokens([item?.query_family])[0] || "unclassified",
+        label_scope: compactTokens([item?.label_scope])[0] || "unclassified",
         status: ["ok", "empty", "partial", "degraded", "failed"].includes(item?.status)
           ? item.status
           : "failed",
         reason: compactTokens([item?.reason])[0] || "source_search_failed",
         raw_result_count: finiteCount(item?.raw_result_count),
         result_count: finiteCount(item?.result_count),
+        novel_source_identity_count: finiteCount(item?.novel_source_identity_count),
         engine_failure_count: finiteCount(item?.engine_failure_count),
         unresponsive_engines: compactTokens(item?.unresponsive_engines).slice(0, 6),
         results_despite_degraded_engines: item?.results_despite_degraded_engines === true,

@@ -56,20 +56,20 @@ const MANIFEST_ADAPTERS = new Set([
   "official_program_article",
 ]);
 
-function buildLocalEventDiscoveryQueries({
+function buildLocalEventDiscoveryQueryPlan({
   place = {},
   intentHints = [],
   localDiscoveryTerms = [],
 } = {}) {
   const verboseLabel = firstString(place.label);
   const localityLabel = firstString(place.name, localityFromLabel(verboseLabel));
-  const labels = uniqueStrings([
-    localityLabel,
-    ...(Array.isArray(place.region_terms) ? place.region_terms : []),
-    verboseLabel,
+  const labels = uniqueQueryLabels([
+    { value: localityLabel, scope: "locality" },
+    ...(Array.isArray(place.region_terms)
+      ? place.region_terms.map((value) => ({ value, scope: "region" }))
+      : []),
+    { value: verboseLabel, scope: "resolved_label" },
   ]).slice(0, 4);
-  const primaryLabel = localityLabel || labels[0] || null;
-  const secondaryLabels = labels.filter((label) => label !== primaryLabel);
   const suppliedTerms = uniqueStrings([
     ...localDiscoveryTerms,
     ...(Array.isArray(place.local_discovery_terms) ? place.local_discovery_terms : []),
@@ -87,20 +87,58 @@ function buildLocalEventDiscoveryQueries({
     "festival",
     ...suppliedTerms.slice(3),
   ]).slice(0, 8);
-  const queries = [];
+  if (!labels.length || !terms.length) return [];
 
-  // The runtime search adapter normally executes only the first six queries.
-  // Give the simple locality several high-value local terms before interleaving
-  // regional and verbose resolver labels; a long Nominatim label must never
-  // consume the whole effective search budget.
-  for (const term of terms.slice(0, 4)) {
-    if (primaryLabel) queries.push(primaryLabel + " " + term);
+  const plan = [];
+  const seen = new Set();
+  // Walk the label/term matrix diagonally. The first cycle samples every term
+  // while rotating locality, regional and resolved-label scopes; later cycles
+  // deepen those same families. A bounded prefix therefore represents the
+  // query space instead of inheriting whichever nested loop happened to lead.
+  for (let depth = 0; depth < labels.length; depth += 1) {
+    for (let termIndex = 0; termIndex < terms.length; termIndex += 1) {
+      const label = labels[(termIndex + depth) % labels.length];
+      const term = terms[termIndex];
+      const query = `${label.value} ${term}`;
+      const key = query.toLocaleLowerCase("en-US");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      plan.push({
+        query,
+        query_family: discoveryQueryFamily(term),
+        term_key: stableHash(term).slice(0, 12),
+        label_scope: label.scope,
+      });
+      if (plan.length >= MAX_DISCOVERY_QUERIES) return plan;
+    }
   }
-  for (const term of terms) {
-    for (const label of secondaryLabels) queries.push(label + " " + term);
-    if (primaryLabel) queries.push(primaryLabel + " " + term);
+  return plan;
+}
+
+function buildLocalEventDiscoveryQueries(options = {}) {
+  return buildLocalEventDiscoveryQueryPlan(options).map((item) => item.query);
+}
+
+function uniqueQueryLabels(values) {
+  const out = [];
+  const seen = new Set();
+  for (const item of Array.isArray(values) ? values : []) {
+    const value = firstString(item?.value);
+    if (!value) continue;
+    const key = value.toLocaleLowerCase("en-US");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ value, scope: firstString(item?.scope, "resolved_label") });
   }
-  return uniqueStrings(queries).slice(0, MAX_DISCOVERY_QUERIES);
+  return out;
+}
+
+function discoveryQueryFamily(term) {
+  const normalized = String(term || "").trim().toLocaleLowerCase("en-US");
+  if (["events", "calendar", "festival"].includes(normalized)) {
+    return `generic_${normalized}`;
+  }
+  return "local_discovery";
 }
 
 function localityFromLabel(value) {
@@ -1655,6 +1693,7 @@ function compact(value) {
 }
 
 module.exports = {
+  buildLocalEventDiscoveryQueryPlan,
   buildLocalEventDiscoveryQueries,
   extractEventWebsiteSeeds,
   inspectEventSourcePage,

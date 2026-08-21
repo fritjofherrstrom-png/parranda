@@ -315,9 +315,10 @@ test("per-query evidence explains the run without raw provider payloads", async 
   assert.ok(serialized.length < 2000);
 });
 
-test("a truncated query budget is reported, never silent", async () => {
+test("the hard safety ceiling is reported, never silent", async () => {
   const run = search({
     maxQueries: 2,
+    hardQueryLimit: 2,
     fetcher: async () => response(payload({ results: [] })),
   });
 
@@ -326,6 +327,7 @@ test("a truncated query budget is reported, never silent", async () => {
   assert.equal(result.generated_query_count, 5);
   assert.equal(result.queried_count, 2);
   assert.equal(result.skipped_query_count, 3);
+  assert.equal(result.stop_reason, "hard_safety_ceiling");
 });
 
 test("degraded search health is search_failed, never healthy_empty", async () => {
