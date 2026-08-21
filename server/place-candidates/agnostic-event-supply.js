@@ -663,7 +663,6 @@ function buildScopedEventSourcePlan({
   anchor,
   sourceAnchors = [],
   registry,
-  now = Date.now(),
   globalSource = null,
   globalEnabled = false,
   maxSources = DEFAULT_MAX_SOURCES,
@@ -694,7 +693,6 @@ function buildScopedEventSourcePlan({
       globalEnabled: false,
       maxSources: DEFAULT_MAX_SOURCES,
       maxLocalSources: DEFAULT_MAX_LOCAL_SOURCES,
-      now,
     });
     for (const source of localSources) {
       const identity = String(source.id || source.endpoint || source.base || "");
