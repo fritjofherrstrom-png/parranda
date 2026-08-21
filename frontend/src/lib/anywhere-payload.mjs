@@ -38,7 +38,14 @@ export const WALK_PRESETS = [
   { key: "long", km: 9, sv: "Lång · ~9 km", en: "Long · ~9 km" },
 ];
 
-export function buildAnywherePayload({ place, coords, dates, preferences = [], walkingKmTarget = 6 } = {}) {
+export function buildAnywherePayload({
+  place,
+  coords,
+  dates,
+  preferences = [],
+  walkingKmTarget = 6,
+  excludedCandidateIds = [],
+} = {}) {
   const autoPoint = { type: "auto", label: "Parranda väljer" };
   // Two exclusive anchor modes, mirroring the engine's intake precedence:
   //  - coords ("near me now"): top-level lat/lng — explicit coords WIN in the
@@ -62,5 +69,11 @@ export function buildAnywherePayload({ place, coords, dates, preferences = [], w
     experimental_agnostic_route_output: 1,
     include_external_candidates: 1,
     agnostic_engine_compose: 1,
+    // "Not this" — the commitment ledger, v1. Subtractive only: it can remove a
+    // place from consideration, never add or vouch for one. Omitted entirely
+    // when empty so the default request is unchanged.
+    ...(Array.isArray(excludedCandidateIds) && excludedCandidateIds.length
+      ? { excluded_candidate_ids: [...excludedCandidateIds] }
+      : {}),
   };
 }

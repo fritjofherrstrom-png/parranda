@@ -287,6 +287,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // The day on screen was composed for an earlier request and a newer one is in
   // flight. It stays visible, labelled, until the next verdict replaces it.
   const [dayIsStale, setDayIsStale] = useState(false);
+  // "Not this" — the day's commitment ledger, v1. One verb: the user can remove
+  // a place from consideration. Held here and sent with the next compose.
+  const [excludedIds, setExcludedIds] = useState<string[]>([]);
   // Which anchor the visible day belongs to. A day for another place is never
   // held over, not even for a second.
   const displayedAnchorKeyRef = useRef<string | null>(null);
@@ -374,6 +377,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       preferencesOverride,
       dayOffsetOverride,
       walkKeyOverride,
+      excludedOverride,
       pollAttempt = 0,
     }: {
       silent?: boolean;
@@ -381,6 +385,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       preferencesOverride?: string[];
       dayOffsetOverride?: 0 | 1;
       walkKeyOverride?: string;
+      excludedOverride?: string[];
       pollAttempt?: number;
     } = {},
   ) {
@@ -436,6 +441,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         dates: [isoDateFromOffset(effectiveDayOffset)],
         preferences: preferencesOverride ?? selected,
         walkingKmTarget: preset.km,
+        excludedCandidateIds: excludedOverride ?? excludedIds,
       });
       const response = await fetch(`/api/route-recommendations?lang=${langOverride ?? lang}`, {
         method: "POST",
@@ -510,6 +516,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         if (followup.upgradePending) setUpgradePending(true);
         if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
         const effectivePreferences = preferencesOverride ?? selected;
+        const effectiveExcluded = excludedOverride ?? excludedIds;
         pollTimerRef.current = setTimeout(() => {
           execute(anchor, {
             silent: true,
@@ -517,6 +524,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             preferencesOverride: effectivePreferences,
             dayOffsetOverride: effectiveDayOffset,
             walkKeyOverride: effectiveWalkKey,
+            excludedOverride: effectiveExcluded,
             pollAttempt: followup.nextPollAttempt,
           }).catch(() => {});
         }, followup.delayMs ?? 0);
@@ -771,7 +779,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       if (recomposeTimerRef.current) clearTimeout(recomposeTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, dayOffset, walkKey]);
+  }, [selected, dayOffset, walkKey, excludedIds]);
 
   // Leaflet does not observe container resizes — after the expand/collapse
   // transition settles, tell it the viewport changed.
@@ -1138,6 +1146,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // "updating" while the next verdict computes, "update_failed" if it never
   // arrived. Either way the day on screen is explicitly not current.
   const staleNotice = staleDayNotice({ isStale: dayIsStale, phase });
+  // Dismissing is only offered where we have a real id to dismiss BY — never on
+  // an index fallback, which would remove whatever happens to sit there next.
+  const dismissStop = (identity: string) => {
+    if (!identity || excludedIds.includes(identity)) return;
+    setExpandedStopKey(null);
+    setExpandedCandidateKey(null);
+    setExcludedIds([...excludedIds, identity]);
+  };
   // Some caps have no sentence of their own because a more specific surface
   // already states them (see day-limitations.mjs). Guard on the rendered note,
   // never on the cap count, or those days render an empty bullet.
@@ -1292,6 +1308,22 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             <p className="text-[11px] text-parranda-ink/50">
               {t("Ändringar gäller av sig själva — dagen komponeras om medan du justerar.", "Changes apply on their own — the day recomposes as you adjust.")}
             </p>
+            {excludedIds.length > 0 && (
+              <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-parranda-ink/60">
+                <span>
+                  {excludedIds.length === 1
+                    ? t("1 plats bortvald", "1 place dismissed")
+                    : t(`${excludedIds.length} platser bortvalda`, `${excludedIds.length} places dismissed`)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setExcludedIds([])}
+                  className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-parranda-accent"
+                >
+                  {t("Ta tillbaka alla", "Bring them all back")}
+                </button>
+              </p>
+            )}
             <button
               type="button"
               onClick={blitz}
@@ -1662,7 +1694,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               const daypart = String(stop?.daypart || "");
               const previousDaypart = i > 0 ? String((split.core[i - 1] as any)?.daypart || "") : "";
               const daypartHeading = daypart && daypart !== previousDaypart ? label(DAYPART_LABELS, stop.daypart, lang) : null;
-              const stopIdentity = String(stop?.id ?? stop?.place_id ?? stop?.candidate_id ?? i);
+              const realId = String(stop?.id ?? stop?.place_id ?? stop?.candidate_id ?? "").trim();
+              const hasRealId = realId.length > 0;
+              const stopIdentity = hasRealId ? realId : String(i);
               const stopKey = `${stopIdentity}:${i}`;
               const panelId = `route-stop-panel-${i}`;
               const expanded = expandedStopKey === stopKey;
@@ -1745,17 +1779,32 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                             : t("Källunderlaget är fortfarande provisoriskt", "Source evidence is still provisional")}
                         </p>
                       )}
-                      {pin && (
-                        <a
-                          href={pin}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-parranda-btn bg-parranda-terracotta px-4 text-sm font-bold text-white transition hover:brightness-110 sm:w-auto sm:self-start sm:px-5"
-                        >
-                          {t("Öppna i Maps", "Open in Maps")}
-                          <span aria-hidden="true" className="ml-2">↗</span>
-                        </a>
-                      )}
+                      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                        {pin && (
+                          <a
+                            href={pin}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex min-h-11 w-full items-center justify-center rounded-parranda-btn bg-parranda-terracotta px-4 text-sm font-bold text-white transition hover:brightness-110 sm:w-auto sm:px-5"
+                          >
+                            {t("Öppna i Maps", "Open in Maps")}
+                            <span aria-hidden="true" className="ml-2">↗</span>
+                          </a>
+                        )}
+                        {/* One verb: remove this place from consideration. The
+                            day recomposes without it — nothing is put in its
+                            place that the evidence does not support. */}
+                        {hasRealId && (
+                          <button
+                            type="button"
+                            onClick={() => dismissStop(stopIdentity)}
+                            className="inline-flex min-h-11 w-full items-center justify-center rounded-parranda-btn border border-parranda-ink/20 px-4 text-sm font-semibold text-parranda-ink/75 transition hover:border-parranda-ink/40 hover:text-parranda-ink sm:w-auto sm:px-5"
+                          >
+                            <span aria-hidden="true" className="mr-2">−</span>
+                            {t("Inte den här", "Not this one")}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </li>
