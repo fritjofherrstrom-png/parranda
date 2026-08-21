@@ -117,9 +117,34 @@
   }
 
   /**
+   * The server publishes a day either unlimited or with honest limitations. Both
+   * are real days and both must survive the data gate; only the label differs.
+   */
+  function isComposedStatus(status) {
+    return status === "composed" || status === "composed_limited";
+  }
+
+  /**
+   * The qualifying caps the server attached when it promoted a limited day.
+   * Absent for an unlimited day, and never read for a withheld one.
+   */
+  function dayLimitations(response) {
+    var experiment = response && response.agnostic_route_output_experiment;
+    var promotion = experiment && experiment.promotion;
+    if (!promotion || promotion.readiness !== "promotable_limited") return [];
+    var caps = Array.isArray(promotion.qualifying_caps) ? promotion.qualifying_caps : [];
+    var out = [];
+    for (var i = 0; i < caps.length; i += 1) {
+      if (typeof caps[i] === "string" && caps[i] && out.indexOf(caps[i]) === -1) out.push(caps[i]);
+    }
+    return out;
+  }
+
+  /**
    * @param {object} response  the /api/route-recommendations response
    * @param {object} [opts]    { place } the raw typed place, used only as a label fallback
-   * @returns {{ status: "composed"|"structure_only"|"unavailable", hasStructure: boolean, placeLabel: string,
+   * @returns {{ status: "composed"|"composed_limited"|"structure_only"|"unavailable", hasStructure: boolean,
+   *             placeLabel: string, limitations: string[],
    *             unavailableReason?: "sparse_supply", realPlaceCount?: number }}
    */
   function classifyAnywhereResult(response, opts) {
@@ -127,8 +152,16 @@
     var days = response && Array.isArray(response.days) ? response.days : [];
     var composed = days.length > 0 && isAgnosticAppliedDay(days[0]);
     var hasStructure = hasValidPlaceStructure(response);
-    var status = composed ? "composed" : hasStructure ? "structure_only" : "unavailable";
-    var classification = { status: status, hasStructure: hasStructure, placeLabel: resolvePlaceLabel(response, place) };
+    var limitations = composed ? dayLimitations(response) : [];
+    var status = composed
+      ? (limitations.length ? "composed_limited" : "composed")
+      : hasStructure ? "structure_only" : "unavailable";
+    var classification = {
+      status: status,
+      hasStructure: hasStructure,
+      placeLabel: resolvePlaceLabel(response, place),
+      limitations: limitations,
+    };
     if (status === "unavailable") {
       var sparse = sparseSupplyEvidence(response);
       if (sparse) {
@@ -147,7 +180,7 @@
    */
   function safeResponseFor(response, classification) {
     var cls = classification || classifyAnywhereResult(response);
-    if (cls.status === "composed") return response;
+    if (isComposedStatus(cls.status)) return response;
     var safe = {};
     for (var key in response) {
       if (Object.prototype.hasOwnProperty.call(response, key)) safe[key] = response[key];
@@ -181,6 +214,7 @@
 
   var api = {
     classifyAnywhereResult: classifyAnywhereResult,
+    isComposedStatus: isComposedStatus,
     safeResponseFor: safeResponseFor,
     shouldRetryTransientSource: shouldRetryTransientSource,
     isAgnosticAppliedDay: isAgnosticAppliedDay,

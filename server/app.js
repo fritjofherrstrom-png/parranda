@@ -32,7 +32,8 @@ const {
 const { buildRegisteredCityCandidateFill } = require("./planner/registered-city-candidate-fill");
 const { buildPreviewPreferenceFit } = require("./planner/preview-preference-fit");
 const { buildPreviewBetaEngineStatus } = require("./planner/preview-beta-engine-status");
-const { evaluateAgnosticPromotion } = require("./planner/agnostic-promotion-gate");
+const { classifyPromotionReadiness } = require("./planner/agnostic-promotion-gate");
+const { normalizeUserIntents } = require("./candidates/intent-vocabulary");
 const { buildEngineReadinessVerdict } = require("./planner/agnostic-engine-readiness");
 const { reconcileAgnosticConstraintNegotiation } = require("./planner/agnostic-constraint-negotiation");
 const { resolveAgnosticWalkingTargetBand } = require("./planner/agnostic-walking-target");
@@ -2307,9 +2308,16 @@ function buildApp({
         const strongAnchor =
           intake.resolved?.confidence === "explicit" ||
           ["high", "medium"].includes(String(intake.resolved?.confidence ?? "").toLowerCase());
-        const promotion = evaluateAgnosticPromotion({
+        // Grading needs two things the calibration score cannot express: which
+        // roles went unresolved, and which intents the user actually asked for.
+        // A role nobody requested is breadth we did not reach; a requested one
+        // is a question the day fails to answer.
+        const promotion = classifyPromotionReadiness({
           calibration: experiment.readiness_calibration,
           strongAnchor,
+          unresolvedRoles: experiment.experimental_route?.unresolved_roles,
+          requestedIntents: normalizeUserIntents(preferences).intents,
+          preferenceCoverage: experiment.constraint_negotiation?.preference_coverage,
         });
         experiment.promotion = promotion;
         // Retirement-readiness observability: a consolidated, honest verdict on

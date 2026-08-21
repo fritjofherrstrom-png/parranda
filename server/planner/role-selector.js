@@ -617,6 +617,19 @@ function clampLimit(value) {
   return Math.max(1, Math.min(MAX_LIMIT_PER_ROLE, Math.trunc(parsed)));
 }
 
+/**
+ * The intents a planner role exists to satisfy, across both the shared spec and
+ * the experiment-only roles. One vocabulary, so a caller can ask "was this
+ * unresolved role something the user actually requested?" without re-deriving
+ * the mapping.
+ */
+function intentsForRole(role) {
+  const key = typeof role === "string" ? role.trim() : "";
+  if (!key) return [];
+  const spec = ROLE_SPEC[key] || EXPERIMENT_ROLE_SPEC[key];
+  return Array.isArray(spec?.intents) ? [...spec.intents] : [];
+}
+
 module.exports = {
   DEFAULT_LIMIT_PER_ROLE,
   MAX_LIMIT_PER_ROLE,
@@ -624,5 +637,6 @@ module.exports = {
   ROLE_SPEC,
   LOCAL_BREADTH_FOR_CHAIN_FALLBACK,
   candidateStatusForRole,
+  intentsForRole,
   selectPlannerRoleCandidates,
 };

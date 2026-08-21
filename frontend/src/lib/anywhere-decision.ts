@@ -7,12 +7,19 @@
 // @ts-ignore — UMD side-effect module outside the workspace root (fs.allow: '..')
 import "../../../anywhere-render-decision.js";
 
-export type AnywhereStatus = "composed" | "structure_only" | "unavailable";
+export type AnywhereStatus =
+  | "composed"
+  | "composed_limited"
+  | "structure_only"
+  | "unavailable";
 
 export interface AnywhereClassification {
   status: AnywhereStatus;
   hasStructure: boolean;
   placeLabel: string;
+  /** Qualifying readiness caps the server attached when it promoted a day that
+   *  is real but smaller or less certain than ideal. Empty for a full day. */
+  limitations?: string[];
   /** Set on "unavailable" when the resolved place's trusted loader found real
    *  places — just too few for a reliable day. Never set on unresolved places
    *  or loader failures, so honest-absence copy stays the default. */
@@ -22,6 +29,7 @@ export interface AnywhereClassification {
 
 interface AnywhereDecisionApi {
   classifyAnywhereResult(response: unknown, opts?: { place?: string }): AnywhereClassification;
+  isComposedStatus(status: string): boolean;
   safeResponseFor(response: unknown, classification?: AnywhereClassification): any;
   shouldRetryTransientSource(response: unknown, classification?: AnywhereClassification): boolean;
 }
