@@ -18,6 +18,7 @@ import {
 } from "../lib/anywhere-payload.mjs";
 import { anywhereBlitzView, type AnywhereBlitzView } from "../lib/blitz-view.mjs";
 import { limitationNote } from "../lib/day-limitations.mjs";
+import { anchorKey, planRecomposeRetention, staleDayNotice } from "../lib/recompose-retention.mjs";
 import {
   acceptedLiveEventQuery,
   boundedRoutePoints,
@@ -283,6 +284,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [loadingStage, setLoadingStage] = useState(0);
   const [classification, setClassification] = useState<AnywhereClassification | null>(null);
   const [safeResponse, setSafeResponse] = useState<any>(null);
+  // The day on screen was composed for an earlier request and a newer one is in
+  // flight. It stays visible, labelled, until the next verdict replaces it.
+  const [dayIsStale, setDayIsStale] = useState(false);
+  // Which anchor the visible day belongs to. A day for another place is never
+  // held over, not even for a second.
+  const displayedAnchorKeyRef = useRef<string | null>(null);
   const [serviceRefusal, setServiceRefusal] = useState<ComposeServiceRefusal | null>(null);
   // Memory-only copy of the trusted coordinate anchor used for this response.
   // It frames the consumer Maps route but is never persisted or put in a URL.
@@ -385,6 +392,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     const controller = new AbortController();
     const requestId = ++requestSequenceRef.current;
     activeRequestRef.current = controller;
+    // A valid day for the SAME anchor is held on screen while the next one
+    // composes, instead of being destroyed for the 5-20 s the compose takes.
+    const retention = planRecomposeRetention({
+      silent,
+      previousStatus: classification?.status ?? null,
+      previousAnchorKey: displayedAnchorKeyRef.current,
+      nextAnchorKey: anchorKey(anchor),
+    });
     if (!silent) {
       blitzRequestRef.current?.abort();
       blitzRequestRef.current = null;
@@ -395,8 +410,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setLiveRefreshExhausted(false);
       setUpgradePending(false);
       setPhase("loading");
-      setClassification(null);
-      setSafeResponse(null);
+      setDayIsStale(retention.keepPrevious);
+      if (!retention.keepPrevious) {
+        setClassification(null);
+        setSafeResponse(null);
+        displayedAnchorKeyRef.current = null;
+      }
       setServiceRefusal(null);
       setMapDrawn(false);
       setExpandedStopKey(null);
@@ -431,6 +450,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         setServiceRefusal(refusal);
         setClassification(null);
         setSafeResponse(null);
+        displayedAnchorKeyRef.current = null;
+        setDayIsStale(false);
         setUpgradePending(false);
         setPhase("done");
         return;
@@ -442,8 +463,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       const fallbackLabel = anchor.place ?? t("din position", "your position");
       const cls = decision.classifyAnywhereResult(body, { place: fallbackLabel });
       const safe = decision.safeResponseFor(body, cls);
+      // Atomic replacement. If the new verdict is structure_only/unavailable,
+      // the held day disappears here — it no longer answers the request.
       setClassification(cls);
       setSafeResponse(safe);
+      displayedAnchorKeyRef.current = anchorKey(anchor);
+      setDayIsStale(false);
       setServiceRefusal(null);
       setRouteAnchorCoords(anchor.coords ?? null);
       setPhase("done");
@@ -530,6 +555,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     lastEntryRef.current = entry;
     setClassification(entry.classification);
     setSafeResponse(entry.safeResponse);
+    // A restored snapshot owns the screen outright; it is labelled by
+    // restoredAt, never by the recompose "updating" state.
+    displayedAnchorKeyRef.current = anchorKey({
+      place: typeof i?.place === "string" ? i.place : undefined,
+    });
+    setDayIsStale(false);
     setRouteAnchorCoords(null);
     setMapDrawn(false);
     setPhase("done");
@@ -1104,6 +1135,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     classification?.status === "composed" || classification?.status === "composed_limited";
   const showStructure = showDay || classification?.status === "structure_only";
   const dayLimitations = classification?.limitations ?? [];
+  // "updating" while the next verdict computes, "update_failed" if it never
+  // arrived. Either way the day on screen is explicitly not current.
+  const staleNotice = staleDayNotice({ isStale: dayIsStale, phase });
   // Some caps have no sentence of their own because a more specific surface
   // already states them (see day-limitations.mjs). Guard on the rendered note,
   // never on the cap count, or those days render an empty bullet.
@@ -1341,7 +1375,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
       {geoHint && <p className="text-sm text-parranda-ink/70">{geoHint}</p>}
 
-      {phase === "loading" && (
+      {phase === "loading" && !staleNotice && (
         <p className="text-sm text-parranda-ink/70" aria-live="polite">
           {loadingStage === 0 && t("Hittar platsen …", "Finding the place …")}
           {loadingStage === 1 && t("Läser kartan och letar efter riktiga platser …", "Reading the map and looking for real places …")}
@@ -1381,7 +1415,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </section>
       )}
 
-      {phase === "error" && (
+      {phase === "error" && staleNotice !== "update_failed" && (
         <p className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4 text-sm text-parranda-ink/80">
           {t("Motorn svarar inte just nu. Försök igen om en stund.", "The engine isn't answering right now. Try again shortly.")}
         </p>
@@ -1428,8 +1462,29 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           and the day-level actions in one row. The timeline below binds to
           primary_route only. */}
       {showDay && routeStops.length > 0 && (
-        <header className="flex flex-col gap-2">
-          <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-parranda-glow">{t("Din dag", "Your day")}</p>
+        <header className="flex flex-col gap-2" aria-busy={staleNotice === "updating"}>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-parranda-glow">{t("Din dag", "Your day")}</p>
+            {/* The day on screen is deliberately still here, and deliberately
+                marked as not current. Never a silent swap. */}
+            {staleNotice === "updating" && (
+              <span
+                aria-live="polite"
+                className="inline-flex items-center gap-1.5 rounded-full bg-parranda-ink/10 px-2.5 py-0.5 text-[11px] font-semibold text-parranda-ink/70"
+              >
+                <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-parranda-glow motion-safe:animate-pulse" />
+                {t("Uppdaterar dagen …", "Updating your day …")}
+              </span>
+            )}
+            {staleNotice === "update_failed" && (
+              <span
+                aria-live="polite"
+                className="inline-flex items-center gap-1.5 rounded-full bg-parranda-ember/12 px-2.5 py-0.5 text-[11px] font-semibold text-parranda-clay"
+              >
+                {t("Kunde inte uppdatera — visar din förra dag", "Couldn't update — showing your previous day")}
+              </span>
+            )}
+          </div>
           <h2 className="font-display text-4xl font-semibold leading-none text-parranda-ink sm:text-5xl">
             {mode === "near_me" && !classification?.placeLabel ? (
               <>
@@ -1573,7 +1628,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       )}
 
       {showDay && routeStops.length > 0 && (
-        <section className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm">
+        <section className={`${staleNotice === "updating" ? "opacity-60 motion-safe:transition-opacity" : ""} rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-5 shadow-sm`}>
           {/* Map first (design handoff §3) — it orients the whole timeline and
               can expand in place. */}
           <div className={"relative w-full overflow-hidden rounded-parranda border border-parranda-ink/10 transition-all " + (mapExpanded ? "h-96" : "h-44")}>
