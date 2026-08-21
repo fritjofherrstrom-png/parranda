@@ -651,6 +651,7 @@ function buildScopedEventSourcePlan({
   globalEnabled = false,
   maxSources = DEFAULT_MAX_SOURCES,
   maxLocalSources = DEFAULT_MAX_LOCAL_SOURCES,
+  now,
 } = {}) {
   const sourceCap = Math.max(1, Math.min(Number(maxSources) || DEFAULT_MAX_SOURCES, DEFAULT_MAX_SOURCES));
   const reserveGlobal = globalEnabled && globalSource ? 1 : 0;
@@ -675,6 +676,7 @@ function buildScopedEventSourcePlan({
       globalEnabled: false,
       maxSources: DEFAULT_MAX_SOURCES,
       maxLocalSources: DEFAULT_MAX_LOCAL_SOURCES,
+      now,
     });
     for (const source of localSources) {
       const identity = String(source.id || source.endpoint || source.base || "");
@@ -738,6 +740,11 @@ async function collectAnchorEvents({
     globalEnabled: Boolean(globalKey),
     maxSources,
     maxLocalSources,
+    // The same server-owned instant the rest of this collection reasons with.
+    // Without it this plan expired qualifications against the real clock while
+    // the caller's plan used the injected one, so one request could hold two
+    // time bases and the warm result could disagree with the first.
+    now,
   });
   if (sourcePlan.length === 0) {
     return {
@@ -1353,6 +1360,7 @@ function resolveDefaultEventSupply(
       registry: requestRegistry,
       globalSource: GLOBAL_FEED_DESCRIPTOR,
       globalEnabled: Boolean(globalKey),
+      now,
     });
     const hasApprovedLocalSource = sourcePlan.some((source) => source?.kind !== "global");
     if (
