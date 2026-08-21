@@ -234,6 +234,7 @@ async function discoverLocalEventSourcesForPlace({
     manifestCandidates: reviewOnlyManifests(scouted?.manifest_candidates),
     sourceResults: compactSourceResults(scouted?.results),
     socialHints: compactSocialHints(scouted?.social_hints),
+    exploratoryInterfaces: compactExploratoryInterfaces(scouted?.exploratory_interfaces),
     sourceProfile,
   });
 }
@@ -251,6 +252,7 @@ function baseOutcome({
   manifestCandidates = [],
   sourceResults = [],
   socialHints = [],
+  exploratoryInterfaces = [],
   sourceProfile = null,
 }) {
   return {
@@ -266,6 +268,9 @@ function baseOutcome({
     manifest_candidates: manifestCandidates,
     source_results: sourceResults,
     social_hints: socialHints,
+    // Uncertain feed interfaces. Retained so a poorly structured local web
+    // ecosystem is not silently written off; never a runtime source.
+    exploratory_interfaces: exploratoryInterfaces,
     source_profile: sourceProfile,
     activation_performed: false,
   };
@@ -591,6 +596,9 @@ function compactSourceResults(results) {
       manifest_candidate_count: Array.isArray(result?.manifest_candidates)
         ? result.manifest_candidates.length
         : 0,
+      exploratory_interface_count: Array.isArray(result?.exploratory_interfaces)
+        ? result.exploratory_interfaces.length
+        : 0,
       social_hint_count: Array.isArray(result?.social_hints)
         ? result.social_hints.length
         : 0,
@@ -604,6 +612,20 @@ function compactSocialHints(hints) {
     source_identity: publicString(hint?.source_identity),
     source_label: publicString(hint?.source_label),
     family: publicString(hint?.family) || "community_social_listing",
+    runtime_policy: "probe_only",
+    corroboration_required: true,
+    reasons: compactTokens(hint?.reasons),
+  }));
+}
+
+function compactExploratoryInterfaces(hints) {
+  return (Array.isArray(hints) ? hints : []).map((hint) => ({
+    url: publicString(hint?.url),
+    source_identity: publicString(hint?.source_identity),
+    source_label: publicString(hint?.source_label),
+    family: publicString(hint?.family) || "unknown_source_family",
+    interface: publicString(hint?.interface) || "rss_atom",
+    transport: publicString(hint?.transport) || "feed",
     runtime_policy: "probe_only",
     corroboration_required: true,
     reasons: compactTokens(hint?.reasons),

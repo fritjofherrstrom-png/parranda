@@ -870,6 +870,7 @@ test("scout code is city-agnostic and cannot activate discovered sources", () =>
   const source = [
     "../server/pulse-sources/local-event-source-scout",
     "../server/pulse-sources/calendar-page-locator",
+    "../server/pulse-sources/rss-event-interface",
     "../server/pulse-sources/sitevision-calendar-provider",
   ].map((modulePath) => fs.readFileSync(require.resolve(modulePath), "utf8")).join("\n");
   assert.ok(!/athens|rome|barcelona|helsinki|österlen|skåne|malm[oö]/i.test(source));

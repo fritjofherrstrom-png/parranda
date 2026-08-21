@@ -230,5 +230,6 @@ function uniqueStrings(values) {
 }
 
 module.exports = {
+  CALENDAR_LINK_TERMS,
   extractCalendarPageLinks,
 };

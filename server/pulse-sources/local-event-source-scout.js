@@ -15,6 +15,10 @@ const { createHash } = require("node:crypto");
 const { evaluateLiveEventSourceCandidate } = require("./source-discovery");
 const { extractSchemaOrgEventsFromHtml } = require("./schema-org-event-provider");
 const { extractCalendarPageLinks } = require("./calendar-page-locator");
+const {
+  buildRssPageEventContext,
+  classifyRssEventInterface,
+} = require("./rss-event-interface");
 const { hasSitevisionCalendarSignature } = require("./sitevision-calendar-provider");
 const { hasEmbeddedProgramRscSignature } = require("./embedded-program-rsc-provider");
 const {
@@ -37,6 +41,8 @@ const DEFAULT_MAX_LINKED_PAGES = 12;
 const MAX_LINKED_PAGES = 30;
 const DEFAULT_MANIFEST_RADIUS_KM = 20;
 const MAX_DISCOVERY_QUERIES = 18;
+const MAX_RSS_INTERFACE_DECISIONS = 24;
+const MAX_EXPLORATORY_INTERFACES = 12;
 
 const MANIFEST_ADAPTERS = new Set([
   "events_calendar",
@@ -157,7 +163,35 @@ function inspectEventSourcePage({
   const candidates = [];
   const socialHints = [];
   const evidence = [];
+  const rssDecisions = [];
+  const exploratoryInterfaces = [];
   const seen = new Set();
+
+  // RSS/Atom transport is not event evidence. Resolve this page's event
+  // context once, then let every discovered feed be judged against it.
+  const schemaEvents = extractSchemaOrgEventsFromHtml(source);
+  const rssPageContext = buildRssPageEventContext({
+    pageUrl,
+    seed: effectiveSeed,
+    html: source,
+    eventTerms: uniqueStrings([
+      ...(Array.isArray(context.localDiscoveryTerms) ? context.localDiscoveryTerms : []),
+      ...(Array.isArray(context.place?.local_discovery_terms)
+        ? context.place.local_discovery_terms
+        : []),
+    ]),
+    signatures: {
+      schemaEventCount: schemaEvents.length,
+      eventListingSignature:
+        hasStrongTribeSignature(source) ||
+        hasCompatibleVenueCalendarSignature(source) ||
+        hasGenericEventListingSignature(source) ||
+        hasWixEventSitemapSignature(source, pageUrl) ||
+        hasSitevisionCalendarSignature(source) ||
+        hasEmbeddedProgramRscSignature(source) ||
+        hasOfficialProgramArticleSignature(source),
+    },
+  });
 
   const addCandidate = (kind, endpoint, overrides = {}) => {
     const normalizedEndpoint = normalizeHttpUrl(endpoint);
@@ -183,7 +217,26 @@ function inspectEventSourcePage({
       continue;
     }
     if (isIcalLink(link)) addCandidate("ical", normalizeWebcalUrl(link.url));
-    if (isRssLink(link)) addCandidate("rss", link.url);
+    const rss = classifyRssEventInterface({ link, page: rssPageContext });
+    if (rss.transport) {
+      // Every feed-shaped link keeps its verdict so an operator, and later the
+      // Pi cohort measurements, can see all three populations.
+      rssDecisions.push({
+        url: link.url,
+        decision: rss.decision,
+        reasons: rss.reasons,
+      });
+    }
+    if (rss.decision === "event_interface") {
+      addCandidate("rss", link.url);
+    } else if (rss.decision === "exploratory") {
+      // Retained, never activated, and deliberately not a manifest: the
+      // qualification rotation probes two candidates per run with no notion of
+      // strength, so admitting uncertain feeds there would starve the real
+      // ones. This is the same lane social discovery hints already use.
+      const hint = buildExploratoryInterfaceHint(link.url, rss, effectiveSeed, context);
+      if (hint) exploratoryInterfaces.push(hint);
+    }
     if (isTribeRestUrl(link.url)) addCandidate("events_calendar", link.url);
   }
 
@@ -195,7 +248,6 @@ function inspectEventSourcePage({
     addCandidate("event_json", pageUrl);
   }
 
-  const schemaEvents = extractSchemaOrgEventsFromHtml(source);
   if (schemaEvents.length > 0) {
     addCandidate("schema_org_html", pageUrl, { schemaEventCount: schemaEvents.length });
   }
@@ -239,6 +291,8 @@ function inspectEventSourcePage({
         .filter(Boolean),
     ),
     social_hints: dedupeSocialHints(socialHints),
+    rss_interface_decisions: dedupeRssDecisions(rssDecisions),
+    exploratory_interfaces: dedupeExploratoryInterfaces(exploratoryInterfaces),
     reasons:
       candidates.length || socialHints.length
         ? ["source_interfaces_detected"]
@@ -467,6 +521,9 @@ async function scoutLocalEventSources({
   const socialHints = dedupeSocialHints(
     results.flatMap((result) => result.social_hints || []),
   );
+  const exploratoryInterfaces = dedupeExploratoryInterfaces(
+    results.flatMap((result) => result.exploratory_interfaces || []),
+  );
   return {
     status: normalizedSeeds.length ? "complete" : "empty",
     reasons: normalizedSeeds.length
@@ -483,9 +540,11 @@ async function scoutLocalEventSources({
     linked_source_count: results.filter(
       (result) => result.discovery_method === "same_origin_calendar_link",
     ).length,
+    ...rssInterfaceCounts(results),
     results,
     manifest_candidates: manifestCandidates,
     social_hints: socialHints,
+    exploratory_interfaces: exploratoryInterfaces,
   };
 }
 
@@ -967,10 +1026,14 @@ async function readBoundedText(response, maxBytes) {
 }
 
 function extractHtmlLinks(html, baseUrl) {
+  const source = String(html || "");
+  // A feed's accessible name is source-owned evidence about what the feed is.
+  // `<link>` carries it in `title`; `<a>` carries it as element text.
+  const anchorText = extractAnchorText(source, baseUrl);
   const links = [];
   const pattern = /<(a|link)\b([^>]*)>/gi;
   let match;
-  while ((match = pattern.exec(String(html || ""))) !== null) {
+  while ((match = pattern.exec(source)) !== null) {
     const attrs = match[2] || "";
     const href = attributeValue(attrs, "href");
     if (!href) continue;
@@ -981,9 +1044,30 @@ function extractHtmlLinks(html, baseUrl) {
       url,
       rel: attributeValue(attrs, "rel").toLowerCase(),
       type: attributeValue(attrs, "type").toLowerCase(),
+      title: attributeValue(attrs, "title"),
+      aria_label: attributeValue(attrs, "aria-label"),
+      label: anchorText.get(url) || "",
     });
   }
   return links;
+}
+
+function extractAnchorText(html, baseUrl) {
+  const labels = new Map();
+  const pattern = /<a\b([^>]*)>([\s\S]*?)<\/a\s*>/gi;
+  let match;
+  while ((match = pattern.exec(String(html || ""))) !== null) {
+    const href = attributeValue(match[1] || "", "href");
+    if (!href) continue;
+    const url = absolutizeUrl(href, baseUrl);
+    if (!url || labels.has(url)) continue;
+    const text = String(match[2] || "")
+      .replace(/<[^>]*>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (text) labels.set(url, text);
+  }
+  return labels;
 }
 
 function extractDeclaredOpenLicense(links) {
@@ -1144,13 +1228,6 @@ function isIcalLink(link) {
   );
 }
 
-function isRssLink(link) {
-  return (
-    link?.type.includes("rss+xml") ||
-    /(?:\/feed\/?|\.rss|\.xml)(?:[?#]|$)/i.test(String(link?.url || ""))
-  );
-}
-
 function isTribeRestUrl(value) {
   return /\/wp-json\/tribe\/events\/v1\/events(?:[/?#]|$)/i.test(
     String(value || ""),
@@ -1177,6 +1254,30 @@ function buildSocialHint(url, seed, context) {
       "social_discovery_hint_only",
       "event_atoms_require_corroboration_or_manual_review",
     ],
+  };
+}
+
+// An uncertain feed interface. Discovery evidence only: it names something
+// worth exploring later, never an event source and never a runtime provider.
+function buildExploratoryInterfaceHint(url, classification, seed, context) {
+  const normalized = normalizeHttpUrl(url);
+  if (!normalized || !isScoutablePublicUrl(normalized)) return null;
+  return {
+    id: "explore-" + stableHash(normalized),
+    url: normalized,
+    source_identity: sourceIdentity(normalized),
+    source_label: firstString(seed.label, sourceIdentity(normalized)),
+    place: firstString(seed.place, context.place?.label),
+    family: firstString(seed.family, "unknown_source_family"),
+    interface: "rss_atom",
+    transport: firstString(classification?.transport, "feed"),
+    discovered_from: firstString(seed.url),
+    runtime_policy: "probe_only",
+    corroboration_required: true,
+    reasons: uniqueStrings([
+      ...(Array.isArray(classification?.reasons) ? classification.reasons : []),
+      "exploratory_interface_not_yet_event_attested",
+    ]),
   };
 }
 
@@ -1413,6 +1514,49 @@ function dedupeManifests(manifests) {
     out.push(manifest);
   }
   return out;
+}
+
+// Discovery precision is only measurable if we count what feed transport was
+// seen against what actually qualified as an event interface.
+function rssInterfaceCounts(results) {
+  const decisions = (Array.isArray(results) ? results : []).flatMap((result) =>
+    Array.isArray(result?.rss_interface_decisions) ? result.rss_interface_decisions : [],
+  );
+  return {
+    rss_transport_link_count: decisions.length,
+    rss_event_interface_count: decisions.filter((d) => d.decision === "event_interface").length,
+    rss_exploratory_interface_count: decisions.filter((d) => d.decision === "exploratory").length,
+    rss_rejected_interface_count: decisions.filter((d) => d.decision === "non_event").length,
+  };
+}
+
+function dedupeExploratoryInterfaces(hints) {
+  const out = [];
+  const seen = new Set();
+  for (const hint of Array.isArray(hints) ? hints : []) {
+    if (!hint?.url || seen.has(hint.url)) continue;
+    seen.add(hint.url);
+    out.push(hint);
+    if (out.length >= MAX_EXPLORATORY_INTERFACES) break;
+  }
+  return out;
+}
+
+function dedupeRssDecisions(decisions) {
+  const output = [];
+  const seen = new Set();
+  for (const decision of Array.isArray(decisions) ? decisions : []) {
+    const url = normalizeHttpUrl(decision?.url);
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    output.push({
+      url,
+      decision: firstString(decision?.decision, "ineligible"),
+      reasons: uniqueStrings(decision?.reasons),
+    });
+    if (output.length >= MAX_RSS_INTERFACE_DECISIONS) break;
+  }
+  return output;
 }
 
 function dedupeSocialHints(hints) {
