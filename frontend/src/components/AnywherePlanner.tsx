@@ -1308,22 +1308,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             <p className="text-[11px] text-parranda-ink/50">
               {t("Ändringar gäller av sig själva — dagen komponeras om medan du justerar.", "Changes apply on their own — the day recomposes as you adjust.")}
             </p>
-            {excludedIds.length > 0 && (
-              <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-parranda-ink/60">
-                <span>
-                  {excludedIds.length === 1
-                    ? t("1 plats bortvald", "1 place dismissed")
-                    : t(`${excludedIds.length} platser bortvalda`, `${excludedIds.length} places dismissed`)}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setExcludedIds([])}
-                  className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-parranda-accent"
-                >
-                  {t("Ta tillbaka alla", "Bring them all back")}
-                </button>
-              </p>
-            )}
             <button
               type="button"
               onClick={blitz}
@@ -1406,6 +1390,28 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       )}
 
       {geoHint && <p className="text-sm text-parranda-ink/70">{geoHint}</p>}
+
+      {/* The ledger is stated where the user can always see it — including when
+          dismissing left no day at all, which is exactly when a way back
+          matters most. Hiding it behind a collapsed panel made the dismissal
+          effectively irreversible. */}
+      {excludedIds.length > 0 && (
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-parranda-ink/60" role="status">
+          <span aria-hidden="true">−</span>
+          <span>
+            {excludedIds.length === 1
+              ? t("1 plats bortvald", "1 place dismissed")
+              : t(`${excludedIds.length} platser bortvalda`, `${excludedIds.length} places dismissed`)}
+          </span>
+          <button
+            type="button"
+            onClick={() => setExcludedIds([])}
+            className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-parranda-accent"
+          >
+            {t("Ta tillbaka alla", "Bring them all back")}
+          </button>
+        </p>
+      )}
 
       {phase === "loading" && !staleNotice && (
         <p className="text-sm text-parranda-ink/70" aria-live="polite">
