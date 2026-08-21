@@ -18,6 +18,7 @@ const {
   resolveDefaultSourceProfileCatalog,
 } = require("../server/pulse-sources/source-profile-catalog");
 const {
+  collectAnchorEvents,
   resolveDefaultEventSupply,
 } = require("../server/place-candidates/agnostic-event-supply");
 const { migrateSourceCatalog } = require("../scripts/migrate-source-catalog");
@@ -736,4 +737,97 @@ test("expiry does not drift with the real wall clock", async () => {
 
   assert.equal(first.coverage, "covered");
   assert.equal(second.coverage, first.coverage);
+});
+
+// --------------------------------------------------------------------------
+// The warm/background collection path plans its own sources. It must expire
+// qualifications against the SAME server-owned instant the request used, or one
+// request holds two time bases and the warm result can contradict the first
+// purely because the wall clock moved.
+//
+// These drive collectAnchorEvents directly — the function whose source plan was
+// the leak — instead of stubbing eventCache.warm, which never reached it.
+// --------------------------------------------------------------------------
+
+const WARM_ANCHOR = { lat: 55.6, lng: 13 };
+
+function warmQualifiedRegistry(expiresAt) {
+  return [{
+    id: "qualified-warm-feed",
+    label: "Qualified Warm Feed",
+    endpoint: "https://events.example/api/events",
+    base: "https://events.example/api/events",
+    adapter: "linked_events",
+    bbox: [12.8, 55.4, 13.3, 55.8],
+    source_tier: "official",
+    terms_status: "open_license",
+    status: "probationary",
+    runtime_policy: "bounded_refresh",
+    pulse_only: true,
+    profile_key: "place-source-profile-v1:test-region",
+    profile_qualified_at: new Date(NOW.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    profile_expires_at: expiresAt.toISOString(),
+  }];
+}
+
+async function warmPlanFor(expiresAt) {
+  return collectAnchorEvents({
+    anchor: WARM_ANCHOR,
+    now: NOW,
+    registry: warmQualifiedRegistry(expiresAt),
+    fetcher: async () => ({ ok: true, json: async () => ({ data: [] }) }),
+  });
+}
+
+test("warm collection keeps a qualification that expires after the injected now", async () => {
+  const out = await warmPlanFor(new Date(NOW.getTime() + 24 * 60 * 60 * 1000));
+
+  // The plan was built, so the source survived the runtime gate. Before the
+  // fix this expired against the real clock and the plan came back empty.
+  assert.notEqual(out.coverage, "uncovered");
+  assert.equal(out.feeds.some((feed) => feed.id === "qualified-warm-feed"), true);
+});
+
+test("warm collection excludes a qualification that expired before the injected now", async () => {
+  const out = await warmPlanFor(new Date(NOW.getTime() - 60 * 1000));
+
+  assert.equal(out.coverage, "uncovered");
+  assert.deepEqual(out.feeds, []);
+});
+
+test("warm collection treats expiry exactly at the injected now as expired", async () => {
+  // Matches the existing `expiresAt <= now` contract — the boundary is closed.
+  const out = await warmPlanFor(new Date(NOW.getTime()));
+
+  assert.equal(out.coverage, "uncovered");
+  assert.deepEqual(out.feeds, []);
+});
+
+test("warm collection cannot disagree with the request plan over wall-clock drift", async () => {
+  // NOW is fixed in the real past, so a qualification valid relative to it is
+  // already expired in real time. Both entry points must still agree, because
+  // both reason from the same injected instant.
+  const expiresAt = new Date(NOW.getTime() + 24 * 60 * 60 * 1000);
+  assert.ok(expiresAt.getTime() < Date.now(), "fixture must be real-clock expired for this to prove anything");
+
+  const requestSide = await resolveDefaultEventSupply({
+    PARRANDA_AGNOSTIC_EVENTS: "enabled",
+    PARRANDA_QUALIFIED_SOURCE_RUNTIME: "enabled",
+  }, {
+    sourceCatalog: {
+      listApprovedEventFeedsForAnchor: async () => [],
+      listQualifiedEventFeedsForAnchor: async () => warmQualifiedRegistry(expiresAt),
+    },
+    eventCache: { peek: () => null, warm: () => {} },
+  })({ anchor: WARM_ANCHOR, now: NOW });
+
+  const warmSide = await warmPlanFor(expiresAt);
+
+  assert.equal(requestSide.coverage, "covered");
+  assert.notEqual(warmSide.coverage, "uncovered");
+  assert.equal(
+    warmSide.feeds.some((feed) => feed.id === "qualified-warm-feed"),
+    requestSide.feeds.some((feed) => feed.id === "qualified-warm-feed"),
+    "the two plans must reach the same verdict",
+  );
 });

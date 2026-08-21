@@ -740,6 +740,11 @@ async function collectAnchorEvents({
     globalEnabled: Boolean(globalKey),
     maxSources,
     maxLocalSources,
+    // The same server-owned instant the rest of this collection reasons with.
+    // Without it this plan expired qualifications against the real clock while
+    // the caller's plan used the injected one, so one request could hold two
+    // time bases and the warm result could disagree with the first.
+    now,
   });
   if (sourcePlan.length === 0) {
     return {
