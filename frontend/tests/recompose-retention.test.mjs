@@ -108,7 +108,9 @@ test("the compose teardown only clears the day when retention says so", () => {
   // And the guard must be computed from the policy, not re-implemented inline.
   assert.match(component, /planRecomposeRetention\(\{/);
   assert.match(component, /previousAnchorKey: displayedAnchorKeyRef\.current/);
-  assert.match(component, /nextAnchorKey: anchorKey\(anchor\)/);
+  // The key is computed once and shared with the ledger scoping below it.
+  assert.match(component, /const nextAnchorKey = anchorKey\(anchor\);/);
+  assert.match(component, /nextAnchorKey,\n\s*\}\);/);
 });
 
 test("a landed verdict replaces the held day atomically", () => {

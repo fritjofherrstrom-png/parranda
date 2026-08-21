@@ -18,7 +18,12 @@ import {
 } from "../lib/anywhere-payload.mjs";
 import { anywhereBlitzView, type AnywhereBlitzView } from "../lib/blitz-view.mjs";
 import { limitationNote } from "../lib/day-limitations.mjs";
-import { anchorKey, planRecomposeRetention, staleDayNotice } from "../lib/recompose-retention.mjs";
+import {
+  anchorKey,
+  planRecomposeRetention,
+  scopeExcludedToAnchor,
+  staleDayNotice,
+} from "../lib/recompose-retention.mjs";
 import {
   acceptedLiveEventQuery,
   boundedRoutePoints,
@@ -290,6 +295,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // "Not this" — the day's commitment ledger, v1. One verb: the user can remove
   // a place from consideration. Held here and sent with the next compose.
   const [excludedIds, setExcludedIds] = useState<string[]>([]);
+  // A dismissal belongs to the day it was made on. Stamped with that day's
+  // anchor so it cannot follow the user to another place.
+  const excludedAnchorKeyRef = useRef<string | null>(null);
   // Which anchor the visible day belongs to. A day for another place is never
   // held over, not even for a second.
   const displayedAnchorKeyRef = useRef<string | null>(null);
@@ -399,11 +407,22 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     activeRequestRef.current = controller;
     // A valid day for the SAME anchor is held on screen while the next one
     // composes, instead of being destroyed for the 5-20 s the compose takes.
+    const nextAnchorKey = anchorKey(anchor);
+    // Genuinely new geography drops the ledger; the same anchor keeps it.
+    const scopedLedger = scopeExcludedToAnchor({
+      ids: excludedIds,
+      ledgerAnchorKey: excludedAnchorKeyRef.current,
+      nextAnchorKey,
+    });
+    if (!scopedLedger.applies) {
+      excludedAnchorKeyRef.current = null;
+      if (excludedIds.length) setExcludedIds([]);
+    }
     const retention = planRecomposeRetention({
       silent,
       previousStatus: classification?.status ?? null,
       previousAnchorKey: displayedAnchorKeyRef.current,
-      nextAnchorKey: anchorKey(anchor),
+      nextAnchorKey,
     });
     if (!silent) {
       blitzRequestRef.current?.abort();
@@ -441,7 +460,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         dates: [isoDateFromOffset(effectiveDayOffset)],
         preferences: preferencesOverride ?? selected,
         walkingKmTarget: preset.km,
-        excludedCandidateIds: excludedOverride ?? excludedIds,
+        excludedCandidateIds: excludedOverride ?? scopedLedger.ids,
       });
       const response = await fetch(`/api/route-recommendations?lang=${langOverride ?? lang}`, {
         method: "POST",
@@ -516,7 +535,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         if (followup.upgradePending) setUpgradePending(true);
         if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
         const effectivePreferences = preferencesOverride ?? selected;
-        const effectiveExcluded = excludedOverride ?? excludedIds;
+        const effectiveExcluded = excludedOverride ?? scopedLedger.ids;
         pollTimerRef.current = setTimeout(() => {
           execute(anchor, {
             silent: true,
@@ -1152,6 +1171,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     if (!identity || excludedIds.includes(identity)) return;
     setExpandedStopKey(null);
     setExpandedCandidateKey(null);
+    // The anchor of the day on screen — the geography this dismissal is about.
+    excludedAnchorKeyRef.current = displayedAnchorKeyRef.current;
     setExcludedIds([...excludedIds, identity]);
   };
   // Some caps have no sentence of their own because a more specific surface

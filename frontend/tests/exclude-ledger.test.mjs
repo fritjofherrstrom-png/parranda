@@ -34,8 +34,8 @@ test("a ledger travels as its own field and is copied, not aliased", () => {
 // working are all in the component.
 // --------------------------------------------------------------------------
 
-test("the ledger reaches the request", () => {
-  assert.match(component, /excludedCandidateIds: excludedOverride \?\? excludedIds/);
+test("the ledger reaches the request, scoped to the anchor", () => {
+  assert.match(component, /excludedCandidateIds: excludedOverride \?\? scopedLedger\.ids,/);
 });
 
 test("changing the ledger recomposes the day", () => {
@@ -45,7 +45,7 @@ test("changing the ledger recomposes the day", () => {
 });
 
 test("a silent upgrade carries the ledger, so dismissed places cannot return", () => {
-  assert.match(component, /const effectiveExcluded = excludedOverride \?\? excludedIds;/);
+  assert.match(component, /const effectiveExcluded = excludedOverride \?\? scopedLedger\.ids;/);
   assert.match(component, /excludedOverride: effectiveExcluded,/);
 });
 
@@ -73,4 +73,62 @@ test("the way back is visible without opening anything", () => {
   // It must not sit inside the day block either: dismissing everything removes
   // the day, and that is exactly when the user needs the way back.
   assert.ok(!/showDay[\s\S]{0,200}excludedIds\.length > 0/.test(component));
+});
+
+// --------------------------------------------------------------------------
+// A dismissal belongs to the geography it was made in.
+//
+// The ledger was component-global, so "not this one" in one place followed the
+// user to the next. Candidate ids are loader-issued and not guaranteed unique
+// across providers, so that could silently filter an unrelated candidate — and
+// even when it matched nothing, the UI still claimed a dismissal the user never
+// made there.
+// --------------------------------------------------------------------------
+
+import { anchorKey, scopeExcludedToAnchor } from "../src/lib/recompose-retention.mjs";
+
+test("the ledger survives a recompose of the same place", () => {
+  const key = anchorKey({ place: "Trogir" });
+  const scoped = scopeExcludedToAnchor({ ids: ["osm-way-1"], ledgerAnchorKey: key, nextAnchorKey: key });
+
+  assert.equal(scoped.applies, true);
+  assert.deepEqual(scoped.ids, ["osm-way-1"]);
+});
+
+test("the ledger does not follow the user to another place", () => {
+  const scoped = scopeExcludedToAnchor({
+    ids: ["cafe-0"],
+    ledgerAnchorKey: anchorKey({ place: "Trogir" }),
+    nextAnchorKey: anchorKey({ place: "Kotor" }),
+  });
+
+  assert.equal(scoped.applies, false);
+  assert.deepEqual(scoped.ids, [], "a generic id must not filter an unrelated candidate elsewhere");
+});
+
+test("GPS jitter is still the same place, real movement is not", () => {
+  const here = anchorKey({ coords: { lat: 43.51730, lng: 16.25064 } });
+  const jitter = anchorKey({ coords: { lat: 43.51742, lng: 16.25091 } });
+  const elsewhere = anchorKey({ coords: { lat: 42.42440, lng: 18.77120 } });
+
+  assert.equal(scopeExcludedToAnchor({ ids: ["a"], ledgerAnchorKey: here, nextAnchorKey: jitter }).applies, true);
+  assert.equal(scopeExcludedToAnchor({ ids: ["a"], ledgerAnchorKey: here, nextAnchorKey: elsewhere }).applies, false);
+});
+
+test("an unstamped ledger is never applied", () => {
+  // No anchor recorded means we cannot say which geography it belongs to.
+  const scoped = scopeExcludedToAnchor({ ids: ["a"], ledgerAnchorKey: null, nextAnchorKey: anchorKey({ place: "X" }) });
+  assert.equal(scoped.applies, false);
+  assert.deepEqual(scoped.ids, []);
+});
+
+test("the component scopes the ledger and clears it on a new place", () => {
+  assert.match(component, /excludedAnchorKeyRef\.current = displayedAnchorKeyRef\.current;/);
+  assert.match(component, /const scopedLedger = scopeExcludedToAnchor\(\{/);
+  // The request must send the SCOPED list, never the raw component state.
+  assert.match(component, /excludedCandidateIds: excludedOverride \?\? scopedLedger\.ids,/);
+  assert.match(component, /excludedOverride \?\? scopedLedger\.ids;/);
+  // And the visible "N dismissed" line must follow, not linger for a place
+  // where nothing was dismissed.
+  assert.match(component, /if \(!scopedLedger\.applies\) \{[\s\S]{0,160}setExcludedIds\(\[\]\);/);
 });
