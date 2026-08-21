@@ -132,3 +132,14 @@ test("the component scopes the ledger and clears it on a new place", () => {
   // where nothing was dismissed.
   assert.match(component, /if \(!scopedLedger\.applies\) \{[\s\S]{0,160}setExcludedIds\(\[\]\);/);
 });
+
+test("restoring another place's saved day drops the ledger", () => {
+  // Restoring is the one in-session path that changes geography WITHOUT a
+  // compose, so the clear in execute() never runs for it. Found by trying to
+  // exercise a real place change on staging.
+  const restore = component.slice(component.indexOf("function restoreEntry"));
+  const body = restore.slice(0, restore.indexOf("setPhase(\"done\")"));
+  assert.match(body, /scopeExcludedToAnchor\(\{/, "restore must scope the ledger");
+  assert.match(body, /nextAnchorKey: restoredAnchorKey/);
+  assert.match(body, /setExcludedIds\(\[\]\)/);
+});

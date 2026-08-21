@@ -584,9 +584,21 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setSafeResponse(entry.safeResponse);
     // A restored snapshot owns the screen outright; it is labelled by
     // restoredAt, never by the recompose "updating" state.
-    displayedAnchorKeyRef.current = anchorKey({
+    const restoredAnchorKey = anchorKey({
       place: typeof i?.place === "string" ? i.place : undefined,
     });
+    displayedAnchorKeyRef.current = restoredAnchorKey;
+    // Restoring is the one in-session path that changes geography without a
+    // compose, so the ledger has to be scoped here too — otherwise another
+    // place's dismissals stay visible and armed over the restored day.
+    if (!scopeExcludedToAnchor({
+      ids: excludedIds,
+      ledgerAnchorKey: excludedAnchorKeyRef.current,
+      nextAnchorKey: restoredAnchorKey,
+    }).applies) {
+      excludedAnchorKeyRef.current = null;
+      if (excludedIds.length) setExcludedIds([]);
+    }
     setDayIsStale(false);
     setRouteAnchorCoords(null);
     setMapDrawn(false);
