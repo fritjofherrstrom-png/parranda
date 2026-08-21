@@ -22,6 +22,7 @@ function buildAnchorEventSourcePlan({
   globalEnabled = false,
   maxSources = DEFAULT_MAX_SOURCES,
   maxLocalSources = DEFAULT_MAX_LOCAL_SOURCES,
+  now,
 } = {}) {
   if (!hasCoordinates(anchor)) return [];
 
@@ -30,6 +31,7 @@ function buildAnchorEventSourcePlan({
     // Inspect the approved local registry before applying the network cap so
     // several rows from one publisher cannot hide an independent source.
     limit: Array.isArray(registry) ? registry.length : 0,
+    now,
   });
   const reserveGlobal = globalEnabled && globalSource && (cap > 1 || availableLocalSources.length === 0) ? 1 : 0;
   const localCap = Math.min(
@@ -50,12 +52,13 @@ function buildAnchorEventSourcePlan({
   return sources.slice(0, cap);
 }
 
-function resolveEventFeedsForAnchor(anchor, registry = [], { limit = DEFAULT_MAX_LOCAL_SOURCES } = {}) {
+function resolveEventFeedsForAnchor(anchor, registry = [], { limit = DEFAULT_MAX_LOCAL_SOURCES, now } = {}) {
   if (!hasCoordinates(anchor)) return [];
   const cap = Number.isFinite(Number(limit)) ? Math.max(0, Math.floor(Number(limit))) : DEFAULT_MAX_LOCAL_SOURCES;
+  const nowMs = resolveNowMs(now);
   const seen = new Set();
   return (Array.isArray(registry) ? registry : [])
-    .filter((feed) => sourceRuntimeEnabled(feed) && feedCoversAnchor(feed, anchor))
+    .filter((feed) => sourceRuntimeEnabled(feed, nowMs) && feedCoversAnchor(feed, anchor))
     .slice()
     .sort(compareFeeds)
     .filter((feed) => {
@@ -256,17 +259,35 @@ function feedCoversAnchor(feed, anchor) {
   return anchor.lng >= west && anchor.lng <= east && anchor.lat >= south && anchor.lat <= north;
 }
 
-function sourceRuntimeEnabled(feed) {
+function sourceRuntimeEnabled(feed, nowMs) {
   if (!feed || typeof feed !== "object") return false;
   const status = String(feed.status || "active").trim().toLowerCase();
   const policy = String(feed.runtime_policy || feed.runtimePolicy || "bounded_refresh").trim().toLowerCase();
   if (["candidate", "review-needed", "needs_review", "disabled", "paused"].includes(status)) return false;
   if (["probe_only", "review_required", "inspect_only", "disabled"].includes(policy)) return false;
   if (feed.profile_key) {
+    // A qualification expires against the SAME clock the rest of the request
+    // uses. `now` here is server-owned and injected (app.js reads it from the
+    // deployment clock, never from request payload), so reading the real clock
+    // instead made this one gate disagree with every other time decision in
+    // the request — and made the expiry boundary untestable.
     const expiresAt = Date.parse(String(feed.profile_expires_at || ""));
-    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return false;
+    if (!Number.isFinite(expiresAt) || expiresAt <= resolveNowMs(nowMs)) return false;
   }
   return true;
+}
+
+function resolveNowMs(value) {
+  if (value instanceof Date) {
+    const time = value.getTime();
+    if (Number.isFinite(time)) return time;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return Date.now();
 }
 
 function exactFeedIdentity(feed) {

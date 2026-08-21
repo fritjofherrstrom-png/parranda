@@ -663,3 +663,77 @@ test("discovery upsert cannot overwrite an approved, rejected or disabled row", 
   assert.match(UPSERT_DISCOVERY_PROFILE_SQL, /WHEN pulse_source_profiles\.catalog_status = 'review_needed'/);
   assert.match(UPSERT_DISCOVERY_PROFILE_SQL, /ELSE pulse_source_profiles\.catalog_status/);
 });
+
+// --------------------------------------------------------------------------
+// Qualification expiry is evaluated against the SAME clock as the rest of the
+// request. `now` reaching the supply is server-owned and injected (app.js takes
+// it from the deployment clock, never from request payload), so a real-clock
+// read here made this one gate disagree with every other time decision — and
+// made the boundary untestable, since the verdict drifted with the wall clock.
+//
+// Both directions are pinned relative to the injected clock, so this cannot rot
+// with the calendar the way the fixed-date case did.
+// --------------------------------------------------------------------------
+
+function qualifiedFeedExpiring(expiresAt) {
+  return {
+    id: "qualified-feed",
+    label: "Qualified Feed",
+    endpoint: "https://events.example/api/events",
+    adapter: "linked_events",
+    bbox: [12.8, 55.4, 13.3, 55.8],
+    source_tier: "official",
+    confidence: "low",
+    source_family: "official_municipal_calendar",
+    source_identity: "events.example",
+    terms_status: "open_license",
+    status: "probationary",
+    runtime_policy: "bounded_refresh",
+    runtime_trust: "qualified_probationary",
+    source_health: "qualified_probationary",
+    pulse_only: true,
+    profile_key: "place-source-profile-v1:test-region",
+    profile_qualified_at: new Date(NOW.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    profile_expires_at: expiresAt.toISOString(),
+  };
+}
+
+async function qualifiedCoverageAt(expiresAt) {
+  const supply = resolveDefaultEventSupply({
+    PARRANDA_AGNOSTIC_EVENTS: "enabled",
+    PARRANDA_QUALIFIED_SOURCE_RUNTIME: "enabled",
+  }, {
+    sourceCatalog: {
+      listApprovedEventFeedsForAnchor: async () => [],
+      listQualifiedEventFeedsForAnchor: async () => [qualifiedFeedExpiring(expiresAt)],
+    },
+    eventCache: { peek: () => null, warm: () => {} },
+  });
+  return supply({ anchor: { lat: 55.6, lng: 13 }, now: NOW });
+}
+
+test("a qualification expiring after the injected now is still runtime eligible", async () => {
+  const result = await qualifiedCoverageAt(new Date(NOW.getTime() + 24 * 60 * 60 * 1000));
+
+  assert.equal(result.coverage, "covered");
+  assert.equal(result.feeds[0].id, "qualified-feed");
+});
+
+test("a qualification expiring before the injected now is refused, not resurrected", async () => {
+  const result = await qualifiedCoverageAt(new Date(NOW.getTime() - 60 * 1000));
+
+  assert.equal(result.coverage, "uncovered");
+  assert.deepEqual(result.feeds, []);
+});
+
+test("expiry does not drift with the real wall clock", async () => {
+  // The whole failure mode: a fixture minted long before the run stayed valid
+  // relative to its own injected clock, yet the gate consulted the real one.
+  // Anchoring far in the real past must not change the verdict.
+  const longPast = new Date(NOW.getTime() + 24 * 60 * 60 * 1000);
+  const first = await qualifiedCoverageAt(longPast);
+  const second = await qualifiedCoverageAt(longPast);
+
+  assert.equal(first.coverage, "covered");
+  assert.equal(second.coverage, first.coverage);
+});
