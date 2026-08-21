@@ -586,3 +586,95 @@ test(
     assert.deepEqual(r.body.days[0]?.primary_route ?? null, null);
   }),
 );
+
+// --------------------------------------------------------------------------
+// Slice 03 — "Not this", the commitment ledger's first verb.
+//
+// The composed day and the candidate panel derive from SEPARATE loader calls.
+// A dismissal has to reach both, or the user removes a place from their day and
+// keeps staring at it in the list underneath.
+// --------------------------------------------------------------------------
+
+function ledgerLoader() {
+  return makeLoader([
+    externalRecord("food-0", "Food 0", "restaurant", 41.9, 12.49, ["mat"]),
+    externalRecord("cafe-0", "Cafe 0", "cafe", 41.9008, 12.49, ["fika"]),
+    externalRecord("museum-0", "Museum 0", "museum", 41.9012, 12.4906, ["kultur"]),
+  ]);
+}
+
+test(
+  "a dismissed place leaves both the composed day and the candidate panel",
+  withServer(ledgerLoader(), async (server) => {
+    const body = agnosticBody({ preferences: ["food", "coffee"], excluded_candidate_ids: ["cafe-0"] });
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body,
+    });
+
+    const serialized = JSON.stringify(r.body);
+    assert.equal(serialized.includes("Cafe 0"), false, "the dismissed place must not appear anywhere");
+    assert.equal(serialized.includes("cafe-0"), false, "not by id either");
+
+    // The rest of the day is untouched and still real.
+    assert.ok(serialized.includes("Food 0"));
+    // And the request is honestly echoed as a count, never as the ids.
+    assert.deepEqual(r.body.agnostic_route_output_experiment.excluded_candidates, { requested_count: 1 });
+  }),
+);
+
+test(
+  "dismissing everything yields an honest absent day, never a substitute",
+  withServer(ledgerLoader(), async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody({
+        preferences: ["food", "coffee"],
+        excluded_candidate_ids: ["food-0", "cafe-0", "museum-0"],
+      }),
+    });
+
+    // Supply shrinks, and the SAME honesty gates report it. Nothing is invented
+    // to fill the gap the user created.
+    assert.equal(r.body.agnostic_route_output_experiment.promotion.promote, false);
+    assert.deepEqual(r.body.days, []);
+  }),
+);
+
+test(
+  "a request with no ledger is unchanged",
+  withServer(ledgerLoader(), async (server) => {
+    const withField = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody({ preferences: ["food", "coffee"], excluded_candidate_ids: [] }),
+    });
+    const without = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody({ preferences: ["food", "coffee"] }),
+    });
+
+    const stops = (r) => (r.body.days?.[0]?.primary_route?.main_stops ?? []).map((s) => s.id);
+    assert.deepEqual(stops(withField), stops(without));
+    assert.deepEqual(
+      withField.body.agnostic_route_output_experiment.excluded_candidates,
+      { requested_count: 0 },
+    );
+  }),
+);
+
+test(
+  "a malformed ledger is ignored rather than trusted",
+  withServer(ledgerLoader(), async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody({
+        preferences: ["food", "coffee"],
+        excluded_candidate_ids: ["../etc/passwd", "cafe 0", "<script>", { id: "cafe-0" }],
+      }),
+    });
+
+    // None of those are ids we issued, so nothing is dismissed and the day stands.
+    assert.equal(r.body.agnostic_route_output_experiment.excluded_candidates.requested_count, 0);
+    assert.ok(JSON.stringify(r.body).includes("Cafe 0"));
+  }),
+);

@@ -34,6 +34,11 @@ const { buildPreviewPreferenceFit } = require("./planner/preview-preference-fit"
 const { buildPreviewBetaEngineStatus } = require("./planner/preview-beta-engine-status");
 const { classifyPromotionReadiness } = require("./planner/agnostic-promotion-gate");
 const { normalizeUserIntents } = require("./candidates/intent-vocabulary");
+const {
+  excludedCandidateSummary,
+  parseExcludedCandidateIds,
+  withoutExcludedCandidates,
+} = require("./planner/excluded-candidates");
 const { buildEngineReadinessVerdict } = require("./planner/agnostic-engine-readiness");
 const { reconcileAgnosticConstraintNegotiation } = require("./planner/agnostic-constraint-negotiation");
 const { resolveAgnosticWalkingTargetBand } = require("./planner/agnostic-walking-target");
@@ -1850,6 +1855,14 @@ function buildApp({
         lang,
         includeLiveEvents: Boolean(request.body?.include_live_events),
       };
+      // "Not this" — the day's commitment ledger, v1. Subtractive only: a public
+      // payload may remove a place from consideration and nothing else. One
+      // filter on the loader itself, so the composed day and the candidate panel
+      // cannot disagree about what the user dismissed.
+      const excludedCandidateIds = parseExcludedCandidateIds(
+        request.body?.excluded_candidate_ids ?? request.body?.excludedCandidateIds,
+      );
+      const scopedOpenDataLoader = withoutExcludedCandidates(openDataLoader, excludedCandidateIds);
 
       // #259 — the explicit experiment flag is the ONLY thing that may mutate or
       // synthesize route output. It is parsed independently of `inspect`. The
@@ -2166,9 +2179,9 @@ function buildApp({
       // untouched (structure surfaces even while the synthesized route stays in the
       // diagnostic block, so the intelligence is visible before any deploy flip).
       let agnosticPlaceStructure = null;
-      if (isExternalCandidatesRequested(request) && typeof openDataLoader === "function") {
+      if (isExternalCandidatesRequested(request) && typeof scopedOpenDataLoader === "function") {
         try {
-          const records = await openDataLoader({
+          const records = await scopedOpenDataLoader({
             ...anchor,
             requestedIntents: Array.isArray(preferences) ? preferences : [],
             anchorMode: intake.mode,
@@ -2269,7 +2282,7 @@ function buildApp({
         coords: anchor,
         baselineResult: baselineBody,
         externalRequested: isExternalCandidatesRequested(request),
-        openDataLoader,
+        openDataLoader: scopedOpenDataLoader,
         preferences,
         lens: request.body?.lens || request.query?.lens || null,
         // #262 — payload weather is NOT trusted; trusted weather/time come only
@@ -2320,6 +2333,10 @@ function buildApp({
           preferenceCoverage: experiment.constraint_negotiation?.preference_coverage,
         });
         experiment.promotion = promotion;
+        // Bounded, count-only echo so an operator can see the day was composed
+        // against a reduced reservoir. The ids are the user's own input and are
+        // never re-published as evidence.
+        experiment.excluded_candidates = excludedCandidateSummary(excludedCandidateIds);
         // Retirement-readiness observability: a consolidated, honest verdict on
         // whether the engine path is ready to become the default synthesizer,
         // and if not, exactly what remains. Read-only; promotes nothing.
