@@ -59,3 +59,18 @@ test("the dismissal is reversible", () => {
   assert.match(component, /setExcludedIds\(\[\]\)/);
   assert.match(component, /Ta tillbaka alla|Bring them all back/);
 });
+
+test("the way back is visible without opening anything", () => {
+  // Found in a real browser run: nested inside the collapsed Adjust panel, the
+  // ledger was invisible and the undo unreachable — a dismissal you cannot see
+  // is effectively irreversible.
+  const ledgerBlock = component.slice(
+    component.indexOf("{excludedIds.length > 0 && ("),
+    component.indexOf("{phase === \"loading\" && !staleNotice && ("),
+  );
+  assert.ok(ledgerBlock.includes("Bring them all back"), "the ledger renders above the day, not inside Adjust");
+  assert.ok(ledgerBlock.includes('role="status"'));
+  // It must not sit inside the day block either: dismissing everything removes
+  // the day, and that is exactly when the user needs the way back.
+  assert.ok(!/showDay[\s\S]{0,200}excludedIds\.length > 0/.test(component));
+});
