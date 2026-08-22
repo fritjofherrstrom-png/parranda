@@ -283,6 +283,7 @@ function mapPlannerReservoirToSourceCandidates({
   perRole = 2,
   walkingKmTarget = null,
   includeCapacityFrontier = true,
+  pinnedIds = [],
 } = {}) {
   const richIndex = buildRichCandidateIndex(plannerRoles);
   const selectedPicks = Array.isArray(selected) ? selected : [];
@@ -298,6 +299,39 @@ function mapPlannerReservoirToSourceCandidates({
     (candidate) => ({ ...candidate, reservoir_selected: true }),
   );
   const seen = new Set(out.map((candidate) => candidate.id));
+
+  // A pinned candidate must reach the engine even when role selection did not
+  // choose it: an explicit "keep this" is a stronger signal than the ranking
+  // that left it out. It is still drawn ONLY from the gated role reservoir, so
+  // pinning can never introduce a place or revive one the gates rejected — and
+  // a pin nowhere in that reservoir simply finds nothing and is reported
+  // unhonoured by the caller.
+  const pins = new Set(Array.isArray(pinnedIds) ? pinnedIds : []);
+  if (pins.size > 0) {
+    for (const roleEntry of Array.isArray(plannerRoles?.roles) ? plannerRoles.roles : []) {
+      const role = roleEntry?.role;
+      if (!role) continue;
+      for (const rich of plannerUsableOptionsForRole(roleEntry)) {
+        const id = rich?.candidate_id;
+        if (!id || !pins.has(String(id)) || seen.has(id)) continue;
+        if (isExperimentallyAdmitted(rich)) continue;
+        const coords = finiteCoords(rich.coordinates);
+        if (!coords) continue;
+        seen.add(id);
+        out.push(
+          toSourceCandidate({
+            pick: { role, candidate_id: id, coordinates: coords },
+            rich: richIndex.get(`${role}::${id}`) || rich,
+            coords,
+            city,
+            role,
+            requestedIntents,
+          }),
+        );
+      }
+    }
+  }
+
   const selectedRoles = new Set(selectedPicks.map((pick) => pick?.role).filter(Boolean));
   const boundedLimit = Math.max(out.length, Math.min(12, Math.max(1, Math.trunc(Number(limit) || 8))));
   const boundedPerRole = Math.min(3, Math.max(1, Math.trunc(Number(perRole) || 2)));

@@ -45,6 +45,7 @@ export function buildAnywherePayload({
   preferences = [],
   walkingKmTarget = 6,
   excludedCandidateIds = [],
+  pinnedCandidateIds = [],
 } = {}) {
   const autoPoint = { type: "auto", label: "Parranda väljer" };
   // Two exclusive anchor modes, mirroring the engine's intake precedence:
@@ -74,6 +75,11 @@ export function buildAnywherePayload({
     // when empty so the default request is unchanged.
     ...(Array.isArray(excludedCandidateIds) && excludedCandidateIds.length
       ? { excluded_candidate_ids: [...excludedCandidateIds] }
+      : {}),
+    // "Keep this one" — selection-only, and omitted entirely when empty so the
+    // default request is unchanged.
+    ...(Array.isArray(pinnedCandidateIds) && pinnedCandidateIds.length
+      ? { pinned_candidate_ids: [...pinnedCandidateIds] }
       : {}),
   };
 }

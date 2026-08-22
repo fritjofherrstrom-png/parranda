@@ -24,10 +24,12 @@ export declare function buildAnywherePayload(options?: {
   preferences?: string[];
   walkingKmTarget?: number;
   excludedCandidateIds?: string[];
+  pinnedCandidateIds?: string[];
 }): {
   place?: string;
   place_query?: string;
   excluded_candidate_ids?: string[];
+  pinned_candidate_ids?: string[];
   lat?: number;
   lng?: number;
   dates: string[] | undefined;
