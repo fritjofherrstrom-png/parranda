@@ -23,9 +23,11 @@ export declare function buildAnywherePayload(options?: {
   dates?: string[];
   preferences?: string[];
   walkingKmTarget?: number;
+  excludedCandidateIds?: string[];
 }): {
   place?: string;
   place_query?: string;
+  excluded_candidate_ids?: string[];
   lat?: number;
   lng?: number;
   dates: string[] | undefined;

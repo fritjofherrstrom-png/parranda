@@ -66,6 +66,26 @@ export function planRecomposeRetention({
 }
 
 /**
+ * A dismissal belongs to the day it was made on.
+ *
+ * "Not this one" is a statement about a place in a specific geography. Carried
+ * into a different place it is at best meaningless — the ledger would claim a
+ * dismissal the user never made there — and at worst wrong, since not every
+ * candidate id is guaranteed globally unique across providers.
+ *
+ * Same anchor keeps it; genuinely new geography drops it. Anchor identity is
+ * the same notion the day itself uses, so the two can never disagree.
+ *
+ * @returns {{ ids: string[], applies: boolean }}
+ */
+export function scopeExcludedToAnchor({ ids = [], ledgerAnchorKey = null, nextAnchorKey = null } = {}) {
+  const list = Array.isArray(ids) ? ids : [];
+  if (list.length === 0) return { ids: [], applies: true };
+  const applies = Boolean(ledgerAnchorKey) && ledgerAnchorKey === nextAnchorKey;
+  return { ids: applies ? list : [], applies };
+}
+
+/**
  * What the user is told about a day that is no longer current.
  * @returns {"updating"|"update_failed"|null}
  */
