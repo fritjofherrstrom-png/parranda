@@ -302,6 +302,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // A dismissal belongs to the day it was made on. Stamped with that day's
   // anchor so it cannot follow the user to another place.
   const commitmentAnchorKeyRef = useRef<string | null>(null);
+  // The commitments the day ON SCREEN actually answered — set only when an
+  // authoritative compose comes back, never when the user clicks. The editable
+  // ledger above runs ahead of the day by design (a click, then 400ms of
+  // debounce, then a request), so judging the rendered stops against it accuses
+  // a day that was never asked the question. A refusal or a failed request
+  // leaves this untouched for the same reason.
+  const [appliedPinnedIds, setAppliedPinnedIds] = useState<string[]>([]);
   // Which anchor the visible day belongs to. A day for another place is never
   // held over, not even for a second.
   const displayedAnchorKeyRef = useRef<string | null>(null);
@@ -483,6 +490,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         setClassification(null);
         setSafeResponse(null);
         displayedAnchorKeyRef.current = null;
+        // A transport or capacity refusal composed no day at all, so there is
+        // no evidence that any commitment could not be met. Reporting one here
+        // would invent a verdict out of a network failure.
+        setAppliedPinnedIds([]);
         setDayIsStale(false);
         setUpgradePending(false);
         setPhase("done");
@@ -500,6 +511,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setClassification(cls);
       setSafeResponse(safe);
       displayedAnchorKeyRef.current = anchorKey(anchor);
+      // This day answered exactly the pins this request carried. Recording them
+      // here — beside the classification, not beside the click — is what ties
+      // the unhonoured verdict to a day that was actually asked.
+      setAppliedPinnedIds(pinnedOverride ?? scopedLedger.pinnedIds);
       setDayIsStale(false);
       setServiceRefusal(null);
       setRouteAnchorCoords(anchor.coords ?? null);
@@ -591,23 +606,27 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     lastEntryRef.current = entry;
     setClassification(entry.classification);
     setSafeResponse(entry.safeResponse);
+    // Saved days do not carry the commitments they were composed under, so a
+    // restored snapshot cannot answer for any of them — not even when the
+    // anchor happens to match and the ledger survives scoping below.
+    setAppliedPinnedIds([]);
     // A restored snapshot owns the screen outright; it is labelled by
     // restoredAt, never by the recompose "updating" state.
     const restoredAnchorKey = anchorKey({
       place: typeof i?.place === "string" ? i.place : undefined,
     });
     displayedAnchorKeyRef.current = restoredAnchorKey;
-    // Restoring is the one in-session path that changes geography without a
-    // compose, so the ledger has to be scoped here too — otherwise another
-    // place's dismissals stay visible and armed over the restored day.
-    if (!scopeCommitmentsToAnchor({
-      entries: commitments,
-      ledgerAnchorKey: commitmentAnchorKeyRef.current,
-      nextAnchorKey: restoredAnchorKey,
-    }).applies) {
-      commitmentAnchorKeyRef.current = null;
-      if (Object.keys(commitments).length) setCommitments({});
-    }
+    // Restoring is the one in-session path that puts a day on screen without a
+    // compose, so the ledger is dropped outright rather than scoped.
+    //
+    // Scoping by anchor was not enough: saved days do not persist the
+    // commitments they were composed under, so a snapshot of the same place
+    // cannot be assumed to have answered the ones held right now. Keeping them
+    // left the restored day carrying a ledger it never saw — armed, and
+    // claiming choices the stops on screen may not reflect. Matching geography
+    // is not evidence of a matching day.
+    commitmentAnchorKeyRef.current = null;
+    if (Object.keys(commitments).length) setCommitments({});
     setDayIsStale(false);
     setRouteAnchorCoords(null);
     setMapDrawn(false);
@@ -1217,7 +1236,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // one — so this is reported, never swallowed.
   const unkept = unhonouredPins({
     entries: commitments,
-    pinnedIds: Object.keys(commitments).filter((id) => commitments[id].kind === "pin"),
+    pinnedIds: appliedPinnedIds,
     stopIds: split.core.map((stop: any) => String(stop?.id ?? stop?.place_id ?? stop?.candidate_id ?? "")),
     isStale: dayIsStale,
   });

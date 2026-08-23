@@ -189,6 +189,74 @@ test("capacity repair rejects an over-band or preference-weaker engine route", (
   }), false);
 });
 
+test("capacity repair never trades an explicit commitment for a better walking target", () => {
+  // Repair exists to move a too-short day toward the requested band. Every one
+  // of its other tests is about route quality, which the user did not ask
+  // about; "keep this one" is the thing they did ask for. A repaired route that
+  // drops a kept place is the one improvement that is not an improvement.
+  const kept = { id: "kept", covered_preferences: ["food"], partial_preferences: [] };
+  const baseRoute = {
+    estimated_km: 2.8,
+    main_stops: [
+      kept,
+      { id: "museum", covered_preferences: ["museums"], partial_preferences: [] },
+      { id: "view", covered_preferences: ["scenic"], partial_preferences: [] },
+    ],
+    route_quality_warnings: [],
+  };
+  // Strictly better on every axis repair actually measures: closer to the
+  // target, more stops, no new warnings, same coverage. It differs only in
+  // having swapped the kept place out.
+  const repairedWithoutPin = {
+    estimated_km: 5.4,
+    main_stops: [
+      { id: "other-food", covered_preferences: ["food"], partial_preferences: [] },
+      { id: "museum", covered_preferences: ["museums"], partial_preferences: [] },
+      { id: "view", covered_preferences: ["scenic"], partial_preferences: [] },
+      { id: "garden", covered_preferences: ["scenic"], partial_preferences: [] },
+    ],
+    route_quality_warnings: [],
+  };
+  const args = {
+    baseRoute,
+    repairedRoute: repairedWithoutPin,
+    walkingKmTarget: 6,
+    preferences: ["food", "culture", "views"],
+  };
+
+  // Without commitments this is exactly the repair the feature is for.
+  assert.equal(shouldUseCapacityRepair(args), true);
+  // With one, the same swap is refused.
+  assert.equal(shouldUseCapacityRepair({ ...args, pinnedIds: ["kept"] }), false);
+
+  // And a repair that KEEPS the commitment is still allowed — the guard must
+  // not become a blanket veto on repair whenever a pin exists.
+  const repairedWithPin = {
+    ...repairedWithoutPin,
+    main_stops: [kept, ...repairedWithoutPin.main_stops.slice(1)],
+  };
+  assert.equal(
+    shouldUseCapacityRepair({ ...args, repairedRoute: repairedWithPin, pinnedIds: ["kept"] }),
+    true,
+  );
+});
+
+test("the capacity reservoir is built with the same commitments as the base one", () => {
+  // The repaired route can REPLACE the base one, so a capacity reservoir that
+  // never saw the pins can only produce a replacement that cannot honour them.
+  const { readFileSync } = require("node:fs");
+  const source = readFileSync(require.resolve("../server/planner/agnostic-route-output.js"), "utf8");
+  const capacitySites = source.split("includeCapacityFrontier: true").slice(1);
+  assert.equal(capacitySites.length, 2, "both capacity reservoirs are under test");
+  for (const site of capacitySites) {
+    assert.match(
+      site.slice(0, 400),
+      /pinnedIds: Array\.isArray\(pinnedStopIds\) \? pinnedStopIds : \[\],/,
+    );
+  }
+  assert.match(source, /pinnedIds: pinnedStopIds,/, "and the repair decision receives them too");
+});
+
 // A role-diverse, >=25 geocoded, tightly-clustered trusted fixture near an
 // anchor — enough to fill multiple roles AND clear the planner readiness bar.
 function fixtureNear(base) {
