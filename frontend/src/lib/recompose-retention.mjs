@@ -66,23 +66,39 @@ export function planRecomposeRetention({
 }
 
 /**
- * A dismissal belongs to the day it was made on.
+ * A commitment belongs to the geography it was made in.
  *
- * "Not this one" is a statement about a place in a specific geography. Carried
- * into a different place it is at best meaningless — the ledger would claim a
- * dismissal the user never made there — and at worst wrong, since not every
- * candidate id is guaranteed globally unique across providers.
+ * "Not this one" and "keep this one" are statements about a place in a
+ * specific geography. Carried into a different place they are at best
+ * meaningless — the ledger would claim choices the user never made there — and
+ * at worst wrong, since candidate ids are loader-issued and not guaranteed
+ * unique across providers. Same anchor keeps them; genuinely new geography
+ * drops them. Anchor identity is the same notion the day itself uses, so the
+ * two can never disagree.
  *
- * Same anchor keeps it; genuinely new geography drops it. Anchor identity is
- * the same notion the day itself uses, so the two can never disagree.
+ * Commitments are held as one map of candidate id -> "exclude" | "pin" rather
+ * than as two lists. A candidate therefore has exactly one commitment at a
+ * time, and the newest explicit action replaces the previous one — the server
+ * can never be handed "must include X" and "exclude X" together, because that
+ * state cannot be represented.
  *
- * @returns {{ ids: string[], applies: boolean }}
+ * @returns {{ entries: Record<string, string>, excludedIds: string[], pinnedIds: string[], applies: boolean }}
  */
-export function scopeExcludedToAnchor({ ids = [], ledgerAnchorKey = null, nextAnchorKey = null } = {}) {
-  const list = Array.isArray(ids) ? ids : [];
-  if (list.length === 0) return { ids: [], applies: true };
-  const applies = Boolean(ledgerAnchorKey) && ledgerAnchorKey === nextAnchorKey;
-  return { ids: applies ? list : [], applies };
+export function scopeCommitmentsToAnchor({ entries = {}, ledgerAnchorKey = null, nextAnchorKey = null } = {}) {
+  const source = entries && typeof entries === "object" ? entries : {};
+  const keys = Object.keys(source);
+  const applies = keys.length === 0 ? true : anchorsMatch(ledgerAnchorKey, nextAnchorKey);
+  const scoped = applies ? source : {};
+  return {
+    entries: scoped,
+    excludedIds: Object.keys(scoped).filter((id) => scoped[id] === "exclude"),
+    pinnedIds: Object.keys(scoped).filter((id) => scoped[id] === "pin"),
+    applies,
+  };
+}
+
+function anchorsMatch(ledgerAnchorKey, nextAnchorKey) {
+  return Boolean(ledgerAnchorKey) && ledgerAnchorKey === nextAnchorKey;
 }
 
 /**

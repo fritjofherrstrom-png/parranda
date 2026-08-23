@@ -7,11 +7,16 @@ export function planRecomposeRetention(params: {
   nextAnchorKey?: string | null;
 }): { keepPrevious: boolean; reason: string };
 
-export function scopeExcludedToAnchor(params: {
-  ids?: string[];
+export function scopeCommitmentsToAnchor(params: {
+  entries?: Record<string, string>;
   ledgerAnchorKey?: string | null;
   nextAnchorKey?: string | null;
-}): { ids: string[]; applies: boolean };
+}): {
+  entries: Record<string, string>;
+  excludedIds: string[];
+  pinnedIds: string[];
+  applies: boolean;
+};
 
 export function staleDayNotice(params: {
   isStale?: boolean;
