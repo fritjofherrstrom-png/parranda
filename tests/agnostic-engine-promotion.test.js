@@ -697,6 +697,33 @@ function pinLoader() {
   ]);
 }
 
+// A pool deep enough that the per-role ranking cut actually bites. Every point
+// is distinct, so nothing is lost to identity dedup and the only bound left on
+// a role's options is the ranking itself.
+function deepPinLoader() {
+  const base = { lat: 41.9, lng: 12.49 };
+  const recs = [];
+  let n = 0;
+  const pt = () => {
+    const c = { lat: base.lat + n * 0.00035, lng: base.lng + (n % 3) * 0.00035 };
+    n += 1;
+    return c;
+  };
+  for (let i = 0; i < 8; i += 1) {
+    const c = pt();
+    recs.push(externalRecord(`food-${i}`, `Food ${i}`, "restaurant", c.lat, c.lng, ["mat"]));
+  }
+  for (let i = 0; i < 4; i += 1) {
+    const c = pt();
+    recs.push(externalRecord(`cafe-${i}`, `Cafe ${i}`, "cafe", c.lat, c.lng, ["fika"]));
+  }
+  for (let i = 0; i < 4; i += 1) {
+    const c = pt();
+    recs.push(externalRecord(`view-${i}`, `View ${i}`, "viewpoint", c.lat, c.lng, ["utsikt"]));
+  }
+  return makeLoader(recs);
+}
+
 const stopIdsOf = (r) => (r.body.days?.[0]?.primary_route?.main_stops ?? []).map((s) => s.id);
 
 test(
@@ -827,5 +854,57 @@ test(
     assert.equal(summary.requested_count, 1);
     assert.equal(summary.honored_count, 0);
     assert.equal(summary.unhonored_count, 1, "an infeasible pin gets an honest verdict");
+  }),
+);
+
+test(
+  "a pin survives the per-role ranking cut in a deep pool",
+  withServer(deepPinLoader(), async (server) => {
+    // The failure this locks down was found on staging and reproduced here:
+    // the candidate was loaded, gated and RANKED for its role, but two better-
+    // scoring places filled the role's top-N and the cut removed it before any
+    // downstream stage could hoist it. The pin then read as unhonoured against
+    // a pool that contained it.
+    const plain = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body: agnosticBody(),
+    });
+    const outsider = "food-6";
+    assert.ok(
+      !stopIdsOf(plain).includes(outsider),
+      "precondition: the default day does not choose it, so the assertion means something",
+    );
+
+    const pinned = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body: agnosticBody({ pinned_candidate_ids: [outsider] }),
+    });
+    assert.ok(stopIdsOf(pinned).includes(outsider), `${outsider} must be kept once pinned`);
+    assert.equal(
+      pinned.body.agnostic_route_output_experiment.pinned_candidates.honored_count,
+      1,
+    );
+    // The day is still composed AROUND it — the pin names one stop, it does not
+    // become the day.
+    assert.ok(stopIdsOf(pinned).length > 1, "the rest of the day still composes");
+  }),
+);
+
+test(
+  "a deep pool with no pin is unchanged by the rescue",
+  withServer(deepPinLoader(), async (server) => {
+    const a = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body: agnosticBody(),
+    });
+    const b = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body: agnosticBody({ pinned_candidate_ids: [] }),
+    });
+    assert.deepEqual(stopIdsOf(a), stopIdsOf(b), "an empty pin list is a no-op");
   }),
 );
