@@ -314,7 +314,14 @@ function mapPlannerReservoirToSourceCandidates({
       for (const rich of plannerUsableOptionsForRole(roleEntry)) {
         const id = rich?.candidate_id;
         if (!id || !pins.has(String(id)) || seen.has(id)) continue;
-        if (isExperimentallyAdmitted(rich)) continue;
+        // Experimentally admitted candidates are NOT skipped here, unlike the
+        // role-depth fill below. That rule exists to stop a lower-trust
+        // exception from inflating breadth; a pin is not breadth, it is the
+        // user naming one place. And this path already routes to admitted
+        // candidates whenever the combination selects them — refusing the same
+        // candidate only because the USER chose it rather than the ranking
+        // would make the verb fail on nearly every real open-data place. The
+        // lower-trust label travels with the stop, so the day stays honest.
         const coords = finiteCoords(rich.coordinates);
         if (!coords) continue;
         seen.add(id);

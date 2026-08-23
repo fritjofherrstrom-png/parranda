@@ -761,3 +761,90 @@ test("sparse single-role supply stays sparse instead of fabricating support", ()
 
   assert.deepEqual(result.map((entry) => entry.id), ["food-only"]);
 });
+
+test("a pin reaches an experimentally admitted candidate the ranking left out", () => {
+  // Found on staging: nearly every real open-data place on this path is
+  // experimentally admitted (the shared gates reject it; the agnostic
+  // experiment admits it anyway), and the composed day routes to those
+  // candidates whenever the combination selects them. The pin hoist copied the
+  // role-DEPTH guard, so the very same candidate became unpinnable — the verb
+  // worked only for the rare candidate that cleared the shared gates outright.
+  const admitted = (id) => richCandidate({
+    candidate_id: id,
+    coordinates: { lat: 43.51, lng: 16.44 + id.length * 0.0001 },
+    candidate_status: "partial",
+    planner_usable: true,
+    covered_preferences: ["food"],
+    experimental_admission: { allowed: true, policy: "experimental_inferred_external" },
+  });
+  const chosen = admitted("food-chosen");
+  const wanted = admitted("food-wanted");
+  const roles = {
+    city: "agnostic-engine-area",
+    requested_preferences: ["food"],
+    roles: [
+      { role: "food_anchor", slot: "anchor", requested: true, candidates: [chosen, wanted] },
+    ],
+  };
+  const selected = [
+    selectedPick({
+      role: "food_anchor",
+      candidate_id: chosen.candidate_id,
+      coordinates: chosen.coordinates,
+    }),
+  ];
+
+  // Without a pin, role depth is still not multiplied by admitted candidates.
+  assert.deepEqual(
+    mapPlannerReservoirToSourceCandidates({ selected, plannerRoles: roles, perRole: 2 })
+      .map((entry) => entry.id),
+    ["food-chosen"],
+  );
+
+  // With a pin, the named place reaches the engine.
+  const pinned = mapPlannerReservoirToSourceCandidates({
+    selected,
+    plannerRoles: roles,
+    perRole: 2,
+    pinnedIds: ["food-wanted"],
+  });
+  assert.ok(
+    pinned.map((entry) => entry.id).includes("food-wanted"),
+    "an explicit keep must reach the engine even when the candidate is admitted rather than gate-passing",
+  );
+  assert.ok(
+    pinned.map((entry) => entry.id).includes("food-chosen"),
+    "and it does not displace the role's own choice",
+  );
+});
+
+test("a pin still cannot reach outside the role reservoir", () => {
+  const roles = {
+    city: "agnostic-engine-area",
+    requested_preferences: ["food"],
+    roles: [
+      {
+        role: "food_anchor",
+        slot: "anchor",
+        requested: true,
+        candidates: [
+          richCandidate({
+            candidate_id: "food-chosen",
+            coordinates: { lat: 43.51, lng: 16.44 },
+            candidate_status: "partial",
+            planner_usable: true,
+            covered_preferences: ["food"],
+          }),
+        ],
+      },
+    ],
+  };
+  const result = mapPlannerReservoirToSourceCandidates({
+    selected: [
+      selectedPick({ role: "food_anchor", candidate_id: "food-chosen", coordinates: { lat: 43.51, lng: 16.44 } }),
+    ],
+    plannerRoles: roles,
+    pinnedIds: ["never-loaded"],
+  });
+  assert.deepEqual(result.map((entry) => entry.id), ["food-chosen"]);
+});
