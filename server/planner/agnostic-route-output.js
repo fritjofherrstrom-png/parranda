@@ -931,6 +931,9 @@ async function composeAgnosticRouteOutput({
     // Signal the engine's external opt-in so the source-backed provider runs.
     include_external_candidates: externalRequested ? 1 : undefined,
     candidate_sources: externalRequested ? "open" : undefined,
+    // An explicit "keep this one" must not be voided by the per-role ranking
+    // cut. Selection is otherwise unchanged, and an empty list is a no-op.
+    pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
   };
 
   // #262 — time-of-day may influence selection ONLY when a trusted timezone is

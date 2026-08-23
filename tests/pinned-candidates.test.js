@@ -77,3 +77,74 @@ test("the module is pure: no network, no clock, no place rules", () => {
   assert.ok(!/\bfetch\b|Date\.now|new Date\b/.test(source));
   assert.ok(!/athens|rome|barcelona/i.test(source));
 });
+
+// --------------------------------------------------------------------------
+// The per-role ranking cut.
+//
+// Found on staging: a pinned place that WAS loaded, gated and ranked for its
+// role still could not be kept, because two better-scoring places filled the
+// role's top-N and the cut removed it before anything downstream could hoist
+// it. The engine reported it honestly as unhonoured — but the reason was a
+// ranking bound, not a trust one, and nothing the user could see or act on.
+// --------------------------------------------------------------------------
+
+const { keepPinnedEntriesInRole } = require("../server/planner/role-selector");
+
+const entry = (id) => ({ candidate: { id } });
+
+test("an unpinned role keeps exactly its top-N, unchanged", () => {
+  const entries = [entry("a"), entry("b"), entry("c"), entry("d")];
+  assert.deepStrictEqual(
+    keepPinnedEntriesInRole(entries, 3, new Set()).map((e) => e.candidate.id),
+    ["a", "b", "c"],
+  );
+  // No pins at all must be byte-identical to the old slice.
+  assert.deepStrictEqual(keepPinnedEntriesInRole(entries, 3, null), entries.slice(0, 3));
+});
+
+test("a pinned entry below the cut is re-admitted", () => {
+  const entries = [entry("a"), entry("b"), entry("c"), entry("d")];
+  assert.deepStrictEqual(
+    keepPinnedEntriesInRole(entries, 3, new Set(["d"])).map((e) => e.candidate.id),
+    ["a", "b", "c", "d"],
+  );
+});
+
+test("re-admission never reorders or displaces the ranking", () => {
+  // The pin joins the role's options; it does not become the role's choice.
+  const entries = [entry("a"), entry("b"), entry("c"), entry("d")];
+  const kept = keepPinnedEntriesInRole(entries, 3, new Set(["d"]));
+  assert.deepStrictEqual(kept.slice(0, 3), entries.slice(0, 3));
+  assert.strictEqual(kept[3], entries[3], "the rescued entry is the ranked one, not a copy");
+});
+
+test("a pin already above the cut adds nothing", () => {
+  const entries = [entry("a"), entry("b"), entry("c"), entry("d")];
+  assert.deepStrictEqual(
+    keepPinnedEntriesInRole(entries, 3, new Set(["b"])).map((e) => e.candidate.id),
+    ["a", "b", "c"],
+  );
+});
+
+test("a pin this role never ranked stays out", () => {
+  // Re-admission draws ONLY from the entries the gates already ranked for the
+  // role — a pin cannot introduce a place or move it into a role it fails.
+  const entries = [entry("a"), entry("b"), entry("c"), entry("d")];
+  assert.deepStrictEqual(
+    keepPinnedEntriesInRole(entries, 3, new Set(["zzz"])).map((e) => e.candidate.id),
+    ["a", "b", "c"],
+  );
+});
+
+test("a role shorter than the cut is returned untouched", () => {
+  const entries = [entry("a"), entry("b")];
+  assert.deepStrictEqual(keepPinnedEntriesInRole(entries, 3, new Set(["a"])), entries.slice(0, 3));
+});
+
+test("the agnostic role payload carries the pins", () => {
+  const fs = require("node:fs");
+  const source = fs.readFileSync(require.resolve("../server/planner/agnostic-route-output.js"), "utf8");
+  assert.match(source, /pinnedIds: Array\.isArray\(pinnedStopIds\) \? pinnedStopIds : \[\],/);
+  const roleSource = fs.readFileSync(require.resolve("../server/planner/role-selector.js"), "utf8");
+  assert.match(roleSource, /keepPinnedEntriesInRole\(entries, limitPerRole, pinnedIds\)/);
+});
