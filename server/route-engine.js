@@ -202,6 +202,7 @@ const AGNOSTIC_COMPOSE_TEMPLATE_ID = "__agnostic_compose__";
 // The template carries no stops of its own; every real stop comes from the
 // active catalog.
 const { applyPinnedSelection } = require("./planner/pinned-candidates");
+const { resolveAgnosticWalkingTargetBand } = require("./planner/agnostic-walking-target");
 
 function buildAgnosticComposeTemplate(targetKm) {
   return {
@@ -4175,7 +4176,27 @@ function buildStopPool(
   return uniqueStops([...hybridBasePool, ...supplemental]);
 }
 
+// Exhaustive ordering is factorial in the number of stops, and permuteStops
+// MATERIALISES every permutation, so memory binds before time: 8 stops is 40k
+// orders (~40ms), 10 is 3.6M (~3s), and 11 exhausts the Node heap and kills the
+// process outright. Composed days sat well inside that range until commitments
+// arrived — a pin joins the selection on top of whatever the chooser already
+// picked, so the optimizer's input is no longer bounded by the stop budget
+// alone. The guarantee therefore belongs on the optimizer's ACTUAL input rather
+// than on any one contributor to it: capping the pin count would leave the same
+// cliff reachable by other means.
+const MAX_EXHAUSTIVE_STOP_ORDER = 8;
+// Bounded refinement above that range. Each pass is O(n^2) objective
+// evaluations, so the total stays far below the exhaustive cost at n = 9.
+const MAX_STOP_ORDER_REFINEMENT_PASSES = 4;
+
 function permuteStops(items) {
+  if (items.length > MAX_EXHAUSTIVE_STOP_ORDER) {
+    // Unreachable via optimizeStopOrder, which routes larger inputs to the
+    // deterministic ordering below. Fail loudly rather than let a future caller
+    // reintroduce the heap crash silently.
+    throw new Error(`permuteStops_refused_above_${MAX_EXHAUSTIVE_STOP_ORDER}`);
+  }
   if (items.length <= 1) {
     return [items];
   }
@@ -4303,6 +4324,66 @@ function summarizeArcGeometry(orderedStops, start, end, startProfile, endProfile
   };
 }
 
+
+// Re-admit pins the authoritative chooser dropped, one at a time, keeping only
+// those the requested walk can still absorb.
+//
+// Order of admission is the pool order, which is already deterministic, so the
+// same request always keeps the same pins. A pin is refused ONLY when the set
+// was within the ceiling without it and is over the ceiling with it — that way
+// a day which is already over budget for reasons of its own does not start
+// blaming commitments, and a request with no walking ceiling (no_limit, or no
+// finite target) behaves exactly as before.
+//
+// Nothing is silently discarded: a refused pin is simply absent from the
+// composed day, which is what summarizePinnedOutcome reads, so it surfaces as
+// unhonoured rather than disappearing.
+function readmitPinsWithinWalkingBudget({
+  selected,
+  pool,
+  pinnedStopIds,
+  shape,
+  start,
+  end,
+  startProfile,
+  endProfile,
+  targetKm,
+  distanceMode,
+  legPacing,
+  lang,
+}) {
+  const current = Array.isArray(selected) ? selected : [];
+  const withPins = applyPinnedSelection(current, pool, pinnedStopIds);
+  if (withPins === current || withPins.length === current.length) return withPins;
+
+  const band = distanceMode === "no_limit" ? null : resolveAgnosticWalkingTargetBand(targetKm);
+  if (!band || !Number.isFinite(band.ceilingKm)) return withPins;
+
+  const estimateKm = (stops) => {
+    const geometry =
+      shape === "loop"
+        ? summarizeLoopGeometry(stops, start, end, startProfile, targetKm, distanceMode, legPacing, lang)
+        : summarizeArcGeometry(stops, start, end, startProfile, endProfile, targetKm, distanceMode, legPacing, lang);
+    return Number.isFinite(geometry?.estimatedKm) ? geometry.estimatedKm : null;
+  };
+
+  const baseKm = estimateKm(current);
+  // Already over budget without any pin — the ceiling is not what is
+  // discriminating here, so do not hold the commitments responsible for it.
+  if (baseKm === null || baseKm > band.ceilingKm) return withPins;
+
+  const presentIds = new Set(current.map((stop) => stop && stop.id).filter((id) => id != null));
+  const readded = withPins.filter((stop) => stop && !presentIds.has(stop.id));
+  let kept = current;
+  for (const stop of readded) {
+    const candidate = [stop, ...kept];
+    const km = estimateKm(candidate);
+    if (km === null || km > band.ceilingKm) continue;
+    kept = candidate;
+  }
+  return kept;
+}
+
 function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endProfile, targetKm, distanceMode, legPacing = "balanced", lang = "sv") {
   if (selectedStops.length <= 1) {
     const summary =
@@ -4326,24 +4407,32 @@ function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endPr
     };
   }
 
+  const geometryFor = (candidate) =>
+    shape === "loop"
+      ? summarizeLoopGeometry(candidate, start, end, startProfile, targetKm, distanceMode, legPacing, lang)
+      : summarizeArcGeometry(
+          candidate,
+          start,
+          end,
+          startProfile,
+          endProfile,
+          targetKm,
+          distanceMode,
+          legPacing,
+          lang,
+        );
+
+  // Same objective either way — only the SEARCH changes. Inside the safe range
+  // the exhaustive order is byte-identical to before.
+  if (selectedStops.length > MAX_EXHAUSTIVE_STOP_ORDER) {
+    return refineStopOrder(selectedStops, start, geometryFor);
+  }
+
   let bestOrder = selectedStops;
   let bestGeometry = null;
 
   permuteStops(selectedStops).forEach((candidate) => {
-    const geometry =
-      shape === "loop"
-        ? summarizeLoopGeometry(candidate, start, end, startProfile, targetKm, distanceMode, legPacing, lang)
-        : summarizeArcGeometry(
-            candidate,
-            start,
-            end,
-            startProfile,
-            endProfile,
-            targetKm,
-            distanceMode,
-            legPacing,
-            lang,
-          );
+    const geometry = geometryFor(candidate);
 
     if (!bestGeometry || geometry.objective < bestGeometry.objective) {
       bestGeometry = geometry;
@@ -4355,6 +4444,57 @@ function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endPr
     orderedStops: bestOrder,
     geometry: bestGeometry,
   };
+}
+
+// Deterministic ordering for stop sets too large to enumerate: nearest-neighbour
+// from the start point, then bounded 2-opt on the SAME objective the exhaustive
+// search minimises. No randomness and no clock, so the same input always yields
+// the same day. It drops nothing — every stop handed in comes back out, so an
+// oversized day stays honest about its own size instead of quietly shrinking to
+// fit the optimizer.
+function refineStopOrder(selectedStops, start, geometryFor) {
+  const remaining = [...selectedStops];
+  const ordered = [];
+  let cursor = start;
+  while (remaining.length) {
+    let bestIndex = 0;
+    let bestDistance = Infinity;
+    remaining.forEach((stop, index) => {
+      // Strict <, so equal distances keep the earlier index — a stable tie-break
+      // is what makes the result reproducible.
+      const distance = haversineKm(cursor, stop);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = index;
+      }
+    });
+    cursor = remaining[bestIndex];
+    ordered.push(remaining.splice(bestIndex, 1)[0]);
+  }
+
+  let bestOrder = ordered;
+  let bestGeometry = geometryFor(ordered);
+  for (let pass = 0; pass < MAX_STOP_ORDER_REFINEMENT_PASSES; pass += 1) {
+    let improved = false;
+    for (let i = 0; i < bestOrder.length - 1; i += 1) {
+      for (let j = i + 1; j < bestOrder.length; j += 1) {
+        const candidate = [
+          ...bestOrder.slice(0, i),
+          ...bestOrder.slice(i, j + 1).reverse(),
+          ...bestOrder.slice(j + 1),
+        ];
+        const geometry = geometryFor(candidate);
+        if (geometry.objective < bestGeometry.objective) {
+          bestGeometry = geometry;
+          bestOrder = candidate;
+          improved = true;
+        }
+      }
+    }
+    if (!improved) break;
+  }
+
+  return { orderedStops: bestOrder, geometry: bestGeometry };
 }
 
 // The earliest daypart slot a stop can fill, from its planner role(s). Null when
@@ -5376,7 +5516,30 @@ function buildRouteFromTemplate(
   // after it. Applying it only before would leave the pin at the mercy of the
   // scorer — it would appear to work whenever the pin happened to score well
   // and silently vanish when it did not.
-  selectedStops = applyPinnedSelection(selectedStops, pinnableStops, options.pinnedStopIds);
+  //
+  // But that chooser drops stops for TWO different reasons, and only one of
+  // them should be overridden. Losing to the ranking is a soft preference, and
+  // an explicit "keep this" outranks it. Being dropped because the set no
+  // longer fits the requested walk is not a preference at all, and re-adding
+  // over it produced a day that answered a 4 km request with a 7.6 km route
+  // while still reporting the pin as honoured and the walk as valid. So the
+  // re-application is feasibility-aware: a pin that pushes the day past the
+  // walking ceiling is left out and reported unhonoured, exactly as if the
+  // chooser had had the last word.
+  selectedStops = readmitPinsWithinWalkingBudget({
+    selected: selectedStops,
+    pool: pinnableStops,
+    pinnedStopIds: options.pinnedStopIds,
+    shape,
+    start,
+    end,
+    startProfile,
+    endProfile,
+    targetKm,
+    distanceMode,
+    legPacing,
+    lang,
+  });
 
   const { orderedStops, geometry } = optimizeStopOrder(
     selectedStops,
@@ -7185,6 +7348,12 @@ async function generateAgnosticRecommendations({ cityConfig, ...routeParams } = 
 
 module.exports = {
   generateRecommendations,
+  // Exported so the complexity guarantee on the optimizer's actual input can be
+  // asserted directly rather than inferred from a request that would take the
+  // whole process down with it when it regresses.
+  MAX_EXHAUSTIVE_STOP_ORDER,
+  optimizeStopOrder,
+  permuteStops,
   generateAgnosticRecommendations,
   // Exported for focused testing of the agnostic_compose daypart post-pass.
   composeStopDaypartSlot,

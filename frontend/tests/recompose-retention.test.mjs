@@ -114,16 +114,23 @@ test("the compose teardown only clears the day when retention says so", () => {
 });
 
 test("a landed verdict replaces the held day atomically", () => {
-  // setClassification + setSafeResponse + anchor + un-stale, in one commit.
+  // setClassification + setSafeResponse + anchor + the commitments this day
+  // answered + un-stale, in one commit. The applied ledger belongs inside the
+  // swap: it is the record of WHICH commitments the new day was asked about,
+  // and it is only ever true of a day that actually came back.
   const replacement =
-    /setClassification\(cls\);\s*\n\s*setSafeResponse\(safe\);\s*\n\s*displayedAnchorKeyRef\.current = anchorKey\(anchor\);\s*\n\s*setDayIsStale\(false\);/;
+    /setClassification\(cls\);\s*\n\s*setSafeResponse\(safe\);\s*\n\s*displayedAnchorKeyRef\.current = anchorKey\(anchor\);[\s\S]{0,320}?setAppliedPinnedIds\(pinnedOverride \?\? scopedLedger\.pinnedIds\);\s*\n\s*setDayIsStale\(false\);/;
   assert.match(component, replacement, "the new verdict must land as one atomic swap");
 });
 
 test("a refusal drops the held day rather than leaving it answering", () => {
   const refusal =
-    /if \(refusal\) \{[\s\S]{0,320}?setClassification\(null\);[\s\S]{0,200}?displayedAnchorKeyRef\.current = null;[\s\S]{0,80}?setDayIsStale\(false\);/;
+    /if \(refusal\) \{[\s\S]{0,320}?setClassification\(null\);[\s\S]{0,200}?displayedAnchorKeyRef\.current = null;[\s\S]{0,400}?setDayIsStale\(false\);/;
   assert.match(component, refusal, "a service refusal must clear the held day");
+  // ...and it must clear what the day answered too, or the pins from the
+  // request that never landed get judged against zero stops.
+  const block = component.slice(component.indexOf("if (refusal) {"), component.indexOf("if (!response.ok) throw"));
+  assert.match(block, /setAppliedPinnedIds\(\[\]\);/);
 });
 
 test("the full-page loader never doubles up with a held day", () => {

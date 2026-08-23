@@ -908,3 +908,126 @@ test(
     assert.deepEqual(stopIdsOf(a), stopIdsOf(b), "an empty pin list is a no-op");
   }),
 );
+
+// --------------------------------------------------------------------------
+// A pin the requested walk cannot absorb.
+//
+// The existing "infeasible pin" coverage exercises UPSTREAM rejection: a
+// candidate the reach policy or the reservoir never admitted. That is a
+// different failure from the one below, where the candidate is admitted,
+// reachable and pinnable — and the day still cannot afford it.
+// --------------------------------------------------------------------------
+
+function walkBudgetLoader() {
+  const base = { lat: 41.9, lng: 12.49 };
+  const recs = [];
+  let n = 0;
+  const pt = () => {
+    const c = { lat: base.lat + n * 0.0004, lng: base.lng + (n % 3) * 0.0004 };
+    n += 1;
+    return c;
+  };
+  for (let i = 0; i < 4; i += 1) {
+    const c = pt();
+    recs.push(externalRecord(`food-${i}`, `Food ${i}`, "restaurant", c.lat, c.lng, ["mat"]));
+  }
+  for (let i = 0; i < 3; i += 1) {
+    const c = pt();
+    recs.push(externalRecord(`cafe-${i}`, `Cafe ${i}`, "cafe", c.lat, c.lng, ["fika"]));
+  }
+  for (let i = 0; i < 3; i += 1) {
+    const c = pt();
+    recs.push(externalRecord(`view-${i}`, `View ${i}`, "viewpoint", c.lat, c.lng, ["utsikt"]));
+  }
+  // ~2.8 km out: inside the 3 km reach policy, so it is loaded, gated and
+  // genuinely pinnable — but a day that visits it walks far past the ceiling of
+  // a 4 km request.
+  recs.push(externalRecord("food-far", "Food Far", "restaurant", base.lat + 0.025, base.lng, ["mat"]));
+  return makeLoader(recs);
+}
+
+const walkBudgetBody = (extra = {}) => ({
+  city: "atlantis-unknown-place",
+  place: "Malmö",
+  dates: [DATE],
+  lat: 41.9,
+  lng: 12.49,
+  preferences: ["food", "coffee", "scenic"],
+  walking_km_target: 4,
+  distance_mode: "soft_target",
+  include_external_candidates: 1,
+  ...extra,
+});
+
+test(
+  "a pin the requested walk cannot absorb is refused, not resurrected",
+  withServer(walkBudgetLoader(), async (server) => {
+    const plain = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body: walkBudgetBody(),
+    });
+    const baseKm = plain.body.days[0].primary_route.estimated_km;
+
+    const pinned = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body: walkBudgetBody({ pinned_candidate_ids: ["food-far"] }),
+    });
+    const route = pinned.body.days[0].primary_route;
+    const verdict = pinned.body.agnostic_route_output_experiment.pinned_candidates;
+
+    // PRECONDITION, and the whole point of the case: the very same pin IS
+    // honoured once the walk can afford it. So the candidate is loaded, gated
+    // and pinnable, and the only thing refusing it below is the walking budget
+    // — not an upstream reach or reservoir rejection, which is what the older
+    // infeasible-pin coverage exercises.
+    const roomy = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body: walkBudgetBody({ walking_km_target: 12, pinned_candidate_ids: ["food-far"] }),
+    });
+    assert.ok(
+      stopIdsOf(roomy).includes("food-far"),
+      "precondition: the candidate is genuinely pinnable when the walk can afford it",
+    );
+
+    assert.ok(
+      !stopIdsOf(pinned).includes("food-far"),
+      "the walking constraint had the last word; the final hoist must not put it back",
+    );
+    // 4 km requested, ceiling 4.72. Before this guard the same request returned
+    // a 7.6 km day and still called the pin honoured.
+    assert.ok(route.estimated_km <= 4.72, `day must stay inside the requested band, got ${route.estimated_km}`);
+    assert.equal(route.estimated_km, baseKm, "and it is the same day the request would have produced anyway");
+
+    // Refused, never silently dropped.
+    assert.deepEqual(verdict, { requested_count: 1, honored_count: 0, unhonored_count: 1 });
+  }),
+);
+
+test(
+  "a pin the walk CAN absorb is still kept",
+  withServer(walkBudgetLoader(), async (server) => {
+    // The budget guard must refuse only what the budget actually refuses — it
+    // must not become a blanket excuse to ignore commitments.
+    const plain = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body: walkBudgetBody(),
+    });
+    const outsider = ["food-3", "cafe-2", "view-2"].find((id) => !stopIdsOf(plain).includes(id));
+    assert.ok(outsider, "precondition: a nearby candidate the default day did not choose");
+
+    const pinned = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body: walkBudgetBody({ pinned_candidate_ids: [outsider] }),
+    });
+    assert.ok(stopIdsOf(pinned).includes(outsider), `${outsider} is affordable and must be kept`);
+    assert.equal(
+      pinned.body.agnostic_route_output_experiment.pinned_candidates.honored_count,
+      1,
+    );
+  }),
+);

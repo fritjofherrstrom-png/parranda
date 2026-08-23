@@ -1020,6 +1020,11 @@ async function composeAgnosticRouteOutput({
         city: agnosticContext.key,
         walkingKmTarget,
         includeCapacityFrontier: true,
+        // The repaired route can REPLACE the base one, so the capacity
+        // reservoir has to be able to honour the same commitments. Without the
+        // pins here, repair composes from a reservoir that never saw them and
+        // the replacement silently drops what the user kept.
+        pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
       })
     : null;
 
@@ -1325,6 +1330,7 @@ async function composeAgnosticRouteViaEngine({
         city: agnosticContext.key,
         walkingKmTarget,
         includeCapacityFrontier: true,
+        pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
       });
   const timeAnchoring = Number.isInteger(currentTimeBandRank)
     ? anchorSourceCandidatesToCurrentBand(sourceCandidates, currentTimeBandRank, pinnedStopIds)
@@ -1394,6 +1400,7 @@ async function composeAgnosticRouteViaEngine({
       repairedRoute,
       walkingKmTarget,
       preferences,
+      pinnedIds: pinnedStopIds,
     })) {
       engineDay = repairedDay;
       engineRoute = repairedRoute;
@@ -1509,11 +1516,22 @@ function shouldTryCapacityRepair(route, walkingKmTarget) {
   return Number.isFinite(route.estimated_km) && route.estimated_km < band.floorKm;
 }
 
-function shouldUseCapacityRepair({ baseRoute, repairedRoute, walkingKmTarget, preferences }) {
+function honouredPinCount(route, pinnedIds) {
+  const pins = new Set(Array.isArray(pinnedIds) ? pinnedIds.map((id) => String(id)) : []);
+  if (pins.size === 0) return 0;
+  return (route?.main_stops || []).filter((stop) => pins.has(String(stop?.id))).length;
+}
+
+function shouldUseCapacityRepair({ baseRoute, repairedRoute, walkingKmTarget, preferences, pinnedIds = [] }) {
   const band = resolveAgnosticWalkingTargetBand(walkingKmTarget);
   if (!band || !repairedRoute || !Number.isFinite(repairedRoute.estimated_km)) return false;
   if (repairedRoute.estimated_km > band.ceilingKm) return false;
   if ((repairedRoute.main_stops || []).length < 2) return false;
+  // A better walking target never justifies honouring fewer explicit
+  // commitments. Every other test here is about route quality, which the user
+  // did not ask about; "keep this one" is the thing they did ask for, so it
+  // outranks the repair's own reason for existing.
+  if (honouredPinCount(repairedRoute, pinnedIds) < honouredPinCount(baseRoute, pinnedIds)) return false;
   if (!baseRoute) return true;
   if (!Number.isFinite(baseRoute.estimated_km) || baseRoute.estimated_km >= band.floorKm) return false;
   if (repairedRoute.estimated_km < baseRoute.estimated_km + 0.3) return false;

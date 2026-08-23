@@ -144,14 +144,18 @@ test("the component scopes the ledger and clears it on a new place", () => {
   assert.match(component, /if \(!scopedLedger\.applies\) \{[\s\S]{0,160}setCommitments\(\{\}\);/);
 });
 
-test("restoring another place's saved day drops the ledger", () => {
-  // Restoring is the one in-session path that changes geography WITHOUT a
-  // compose, so the clear in execute() never runs for it. Found by trying to
-  // exercise a real place change on staging.
+test("restoring a saved day drops the ledger outright", () => {
+  // Restoring is the one in-session path that puts a day on screen WITHOUT a
+  // compose, so the clear in execute() never runs for it.
+  //
+  // Scoping by anchor was the first answer and it was not enough: saved days do
+  // not persist the commitments they were composed under, so a snapshot of the
+  // SAME place would inherit whatever the live ledger happened to hold. The
+  // ledger is therefore dropped, not scoped — see the restore test further
+  // down for the applied-ledger half of the same rule.
   const restore = component.slice(component.indexOf("function restoreEntry"));
   const body = restore.slice(0, restore.indexOf("setPhase(\"done\")"));
-  assert.match(body, /scopeCommitmentsToAnchor\(\{/, "restore must scope the ledger");
-  assert.match(body, /nextAnchorKey: restoredAnchorKey/);
+  assert.match(body, /commitmentAnchorKeyRef\.current = null;/);
   assert.match(body, /setCommitments\(\{\}\)/);
 });
 
@@ -295,4 +299,82 @@ test("the notice degrades to a count when a label is missing", () => {
   assert.equal(out.count, 1);
   assert.deepEqual(out.labels, [], "no invented name");
   assert.match(component, /One place you kept could not fit in this day\./);
+});
+
+// --------------------------------------------------------------------------
+// The editable ledger runs AHEAD of the day.
+//
+// A click writes commitments immediately; the request goes out 400ms later and
+// the answer arrives later still. Judging the rendered stops against the live
+// ledger therefore accuses a day that was never asked the question — and the
+// same mistake turns a transport refusal, which composed no day at all, into a
+// verdict about the user's choices.
+// --------------------------------------------------------------------------
+
+test("the verdict is read from the ledger the rendered day answered", () => {
+  // Not from `commitments`: that is the editable one, and it changes on click.
+  assert.match(component, /pinnedIds: appliedPinnedIds,/);
+  // Recorded beside the classification — i.e. only when an authoritative
+  // compose actually came back.
+  const applied = component.slice(component.indexOf("setAppliedPinnedIds(pinnedOverride"));
+  assert.ok(applied.length > 0, "the applied ledger is set from the response path");
+  const install = component.slice(
+    component.indexOf("const cls = decision.classifyAnywhereResult"),
+    component.indexOf("setServiceRefusal(null);\n      setRouteAnchorCoords"),
+  );
+  assert.match(install, /setAppliedPinnedIds\(pinnedOverride \?\? scopedLedger\.pinnedIds\);/);
+});
+
+test("a click alone can never produce a verdict", () => {
+  // commit() writes the ledger and nothing else. If it also touched the applied
+  // ledger, the debounce window would paint "could not fit" over a day that had
+  // not yet been asked.
+  const body = component.slice(
+    component.indexOf("const commit = (identity: string"),
+    component.indexOf("const dismissStop ="),
+  );
+  assert.ok(!body.includes("setAppliedPinnedIds"), "commit() must not touch the applied ledger");
+  assert.ok(!body.includes("setClassification"), "nor the rendered day");
+});
+
+test("a refusal does not manufacture an unhonoured pin", () => {
+  // A transport/capacity refusal composes no day, so there is no evidence that
+  // any commitment could not be met. Before this, the refusal path nulled the
+  // classification — leaving zero stops — while the live ledger still held the
+  // pins, so every one of them read as unhonoured.
+  const refusal = component.slice(
+    component.indexOf("if (refusal) {"),
+    component.indexOf("if (!response.ok) throw"),
+  );
+  assert.match(refusal, /setAppliedPinnedIds\(\[\]\);/);
+});
+
+test("a restored snapshot answers for no commitments at all", () => {
+  // Saved days do not persist the commitments they were composed under, so a
+  // snapshot cannot be assumed to have answered the ones held right now —
+  // matching geography is not evidence of a matching day.
+  const restore = component.slice(component.indexOf("function restoreEntry"));
+  const body = restore.slice(0, restore.indexOf('setPhase("done")'));
+  assert.match(body, /setAppliedPinnedIds\(\[\]\);/);
+  // And the ledger itself is dropped rather than scoped: scoping by anchor
+  // would let a same-place snapshot inherit an unrelated live ledger.
+  assert.match(body, /commitmentAnchorKeyRef\.current = null;/);
+  assert.match(body, /if \(Object\.keys\(commitments\)\.length\) setCommitments\(\{\}\);/);
+  assert.ok(
+    !body.includes("scopeCommitmentsToAnchor"),
+    "restore no longer scopes the ledger — it drops it",
+  );
+});
+
+test("an unanswered pin says nothing, whatever the ledger holds", () => {
+  // The pure half of the same rule: the verdict is a function of the applied
+  // ledger and the rendered stops, so an empty applied ledger is silent even
+  // when the user has just clicked Keep on everything in sight.
+  const out = unhonouredPins({
+    entries: { "a": { kind: "pin", label: "A" }, "b": { kind: "pin", label: "B" } },
+    pinnedIds: [],
+    stopIds: [],
+  });
+  assert.equal(out.count, 0);
+  assert.deepEqual(out.labels, []);
 });
