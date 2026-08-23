@@ -24,11 +24,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests
-        run: npm test
-
+      # Before the root test run, not after: `node --test` recurses from the
+      # repo root and therefore sweeps frontend/tests too, and those now mount
+      # the real component against jsdom rather than reading its source text.
       - name: Install frontend dependencies
         run: npm ci --prefix frontend
+
+      - name: Run tests
+        run: npm test
 
       - name: Typecheck frontend foundation
         run: npm run check:frontend
