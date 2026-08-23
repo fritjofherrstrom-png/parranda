@@ -189,7 +189,7 @@ test("both halves of the ledger reach the request", () => {
 });
 
 test("the pinned half of the ledger is wired into the request and the retry", () => {
-  assert.match(component, /pinnedCandidateIds: pinnedOverride \?\? scopedLedger\.pinnedIds,/);
+  assert.match(component, /pinnedCandidateIds: sentPinIds,/);
   // A silent upgrade must carry the pins too, or a kept place quietly drops
   // out of the day the moment a better verdict arrives.
   assert.match(component, /const effectivePinned = pinnedOverride \?\? scopedLedger\.pinnedIds;/);
@@ -311,18 +311,19 @@ test("the notice degrades to a count when a label is missing", () => {
 // verdict about the user's choices.
 // --------------------------------------------------------------------------
 
-test("the verdict is read from the ledger the rendered day answered", () => {
-  // Not from `commitments`: that is the editable one, and it changes on click.
-  assert.match(component, /pinnedIds: appliedPinnedIds,/);
-  // Recorded beside the classification — i.e. only when an authoritative
-  // compose actually came back.
-  const applied = component.slice(component.indexOf("setAppliedPinnedIds(pinnedOverride"));
-  assert.ok(applied.length > 0, "the applied ledger is set from the response path");
-  const install = component.slice(
-    component.indexOf("const cls = decision.classifyAnywhereResult"),
-    component.indexOf("setServiceRefusal(null);\n      setRouteAnchorCoords"),
-  );
-  assert.match(install, /setAppliedPinnedIds\(pinnedOverride \?\? scopedLedger\.pinnedIds\);/);
+test("the verdict is read from the snapshot the rendered day answered", () => {
+  // The BEHAVIOUR is covered by planner-commitment-races.test.mjs, which drives
+  // the real component through the debounce, the in-flight window, refusals and
+  // restore. What is asserted here is the structural invariant those tests
+  // cannot see: that the two ledgers stay separate at all.
+  assert.match(component, /const \[appliedPins, setAppliedPins\]/);
+  assert.match(component, /pinnedIds: stillHeld\.map\(\(pin\) => pin\.id\)/);
+  // Frozen at request time and carrying its own labels, so the day and its
+  // verdict cannot describe different moments.
+  assert.match(component, /const sentPins = sentPinIds\.map\(/);
+  assert.match(component, /label: String\(scopedLedger\.entries\[id\]\?\.label/);
+  // Installed only where a day exists to have failed to fit into.
+  assert.match(component, /setAppliedPins\(decision\.isComposedStatus\(cls\.status\) \? sentPins : \[\]\);/);
 });
 
 test("a click alone can never produce a verdict", () => {
@@ -333,37 +334,30 @@ test("a click alone can never produce a verdict", () => {
     component.indexOf("const commit = (identity: string"),
     component.indexOf("const dismissStop ="),
   );
-  assert.ok(!body.includes("setAppliedPinnedIds"), "commit() must not touch the applied ledger");
+  assert.ok(!body.includes("setAppliedPins"), "commit() must not touch the applied ledger");
   assert.ok(!body.includes("setClassification"), "nor the rendered day");
 });
 
 test("a refusal does not manufacture an unhonoured pin", () => {
-  // A transport/capacity refusal composes no day, so there is no evidence that
-  // any commitment could not be met. Before this, the refusal path nulled the
-  // classification — leaving zero stops — while the live ledger still held the
-  // pins, so every one of them read as unhonoured.
   const refusal = component.slice(
     component.indexOf("if (refusal) {"),
     component.indexOf("if (!response.ok) throw"),
   );
-  assert.match(refusal, /setAppliedPinnedIds\(\[\]\);/);
+  assert.match(refusal, /setAppliedPins\(\[\]\);/);
 });
 
-test("a restored snapshot answers for no commitments at all", () => {
-  // Saved days do not persist the commitments they were composed under, so a
-  // snapshot cannot be assumed to have answered the ones held right now —
-  // matching geography is not evidence of a matching day.
+test("restore is a new generation that invalidates everything older", () => {
   const restore = component.slice(component.indexOf("function restoreEntry"));
   const body = restore.slice(0, restore.indexOf('setPhase("done")'));
-  assert.match(body, /setAppliedPinnedIds\(\[\]\);/);
-  // And the ledger itself is dropped rather than scoped: scoping by anchor
-  // would let a same-place snapshot inherit an unrelated live ledger.
+  // A compose already in flight, a debounce not yet fired, and a silent
+  // follow-up already scheduled can all land after the snapshot is installed
+  // and replace it with a different generation's day.
+  assert.match(body, /activeRequestRef\.current\?\.abort\(\);/);
+  assert.match(body, /requestSequenceRef\.current \+= 1;/);
+  assert.match(body, /clearTimeout\(recomposeTimerRef\.current\)/);
+  assert.match(body, /clearTimeout\(pollTimerRef\.current\)/);
+  assert.match(body, /setAppliedPins\(\[\]\);/);
   assert.match(body, /commitmentAnchorKeyRef\.current = null;/);
-  assert.match(body, /if \(Object\.keys\(commitments\)\.length\) setCommitments\(\{\}\);/);
-  assert.ok(
-    !body.includes("scopeCommitmentsToAnchor"),
-    "restore no longer scopes the ledger — it drops it",
-  );
 });
 
 test("an unanswered pin says nothing, whatever the ledger holds", () => {
