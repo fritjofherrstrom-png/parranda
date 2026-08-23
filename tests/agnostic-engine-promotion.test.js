@@ -678,3 +678,233 @@ test(
     assert.ok(JSON.stringify(r.body).includes("Cafe 0"));
   }),
 );
+
+// --------------------------------------------------------------------------
+// Slice 04 — "Keep this one", the ledger's second verb.
+//
+// The point of these is that the pin bites on the LIVE engine-compose path.
+// Slice 01 taught that a constraint wired to a diagnostic sidecar looks correct
+// and does nothing, so every assertion here reads main_stops.
+// --------------------------------------------------------------------------
+
+function pinLoader() {
+  return makeLoader([
+    externalRecord("food-0", "Food 0", "restaurant", 41.9, 12.49, ["mat"]),
+    externalRecord("cafe-0", "Cafe 0", "cafe", 41.9008, 12.49, ["fika"]),
+    externalRecord("museum-0", "Museum 0", "museum", 41.9012, 12.4906, ["kultur"]),
+    externalRecord("museum-1", "Museum 1", "museum", 41.9016, 12.4911, ["kultur"]),
+    externalRecord("park-0", "Park 0", "park", 41.902, 12.4915, ["gront"]),
+  ]);
+}
+
+// A pool deep enough that the per-role ranking cut actually bites. Every point
+// is distinct, so nothing is lost to identity dedup and the only bound left on
+// a role's options is the ranking itself.
+function deepPinLoader() {
+  const base = { lat: 41.9, lng: 12.49 };
+  const recs = [];
+  let n = 0;
+  const pt = () => {
+    const c = { lat: base.lat + n * 0.00035, lng: base.lng + (n % 3) * 0.00035 };
+    n += 1;
+    return c;
+  };
+  for (let i = 0; i < 8; i += 1) {
+    const c = pt();
+    recs.push(externalRecord(`food-${i}`, `Food ${i}`, "restaurant", c.lat, c.lng, ["mat"]));
+  }
+  for (let i = 0; i < 4; i += 1) {
+    const c = pt();
+    recs.push(externalRecord(`cafe-${i}`, `Cafe ${i}`, "cafe", c.lat, c.lng, ["fika"]));
+  }
+  for (let i = 0; i < 4; i += 1) {
+    const c = pt();
+    recs.push(externalRecord(`view-${i}`, `View ${i}`, "viewpoint", c.lat, c.lng, ["utsikt"]));
+  }
+  return makeLoader(recs);
+}
+
+const stopIdsOf = (r) => (r.body.days?.[0]?.primary_route?.main_stops ?? []).map((s) => s.id);
+
+test(
+  "a pinned candidate is kept in the composed day",
+  withServer(pinLoader(), async (server) => {
+    const plain = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody({ preferences: ["food", "coffee"] }),
+    });
+    const unpinned = stopIdsOf(plain);
+
+    // Pick something the unpinned day did NOT choose, so the assertion means
+    // something rather than restating the default.
+    const outsider = ["park-0", "museum-1", "museum-0"].find((id) => !unpinned.includes(id));
+    assert.ok(outsider, "need a candidate the default day leaves out");
+
+    const pinned = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody({ preferences: ["food", "coffee"], pinned_candidate_ids: [outsider] }),
+    });
+
+    assert.ok(stopIdsOf(pinned).includes(outsider), `${outsider} must appear once pinned`);
+    assert.equal(
+      pinned.body.agnostic_route_output_experiment.pinned_candidates.honored_count,
+      1,
+    );
+  }),
+);
+
+test(
+  "a pin names a candidate; it does not dictate what the rest of the day is",
+  withServer(pinLoader(), async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody({ preferences: ["food", "coffee"], pinned_candidate_ids: ["park-0"] }),
+    });
+
+    const ids = stopIdsOf(r);
+    assert.ok(ids.includes("park-0"));
+    // The day still composes around it rather than collapsing to the pin alone.
+    assert.ok(ids.length >= 2, "the rest of the day is still composed");
+  }),
+);
+
+test(
+  "a pin can never elevate a candidate the server never loaded",
+  withServer(pinLoader(), async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody({
+        preferences: ["food", "coffee"],
+        pinned_candidate_ids: ["not-a-real-place", "osm-way-999999"],
+      }),
+    });
+
+    // Selection-only: there is nothing in the pool to force, so nothing appears.
+    assert.equal(JSON.stringify(r.body).includes("not-a-real-place"), false);
+    const summary = r.body.agnostic_route_output_experiment.pinned_candidates;
+    assert.equal(summary.requested_count, 2);
+    assert.equal(summary.honored_count, 0);
+    // Reported, never silently dropped.
+    assert.equal(summary.unhonored_count, 2);
+  }),
+);
+
+test(
+  "an excluded candidate cannot be resurrected by pinning it",
+  withServer(pinLoader(), async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody({
+        preferences: ["food", "coffee"],
+        excluded_candidate_ids: ["cafe-0"],
+        pinned_candidate_ids: ["cafe-0"],
+      }),
+    });
+
+    // Exclusion removes it from the pool; pinning only selects within the pool.
+    // The subtractive verb wins, which is the fail-closed direction.
+    assert.equal(stopIdsOf(r).includes("cafe-0"), false);
+    assert.equal(r.body.agnostic_route_output_experiment.pinned_candidates.honored_count, 0);
+  }),
+);
+
+test(
+  "no pin leaves the request byte-identical",
+  withServer(pinLoader(), async (server) => {
+    const withField = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody({ preferences: ["food", "coffee"], pinned_candidate_ids: [] }),
+    });
+    const without = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody({ preferences: ["food", "coffee"] }),
+    });
+
+    assert.deepEqual(stopIdsOf(withField), stopIdsOf(without));
+  }),
+);
+
+test(
+  "a pin the day genuinely cannot reach is reported, never silently dropped",
+  withServer(makeLoader([
+    externalRecord("food-0", "Food 0", "restaurant", 41.9, 12.49, ["mat"]),
+    externalRecord("cafe-0", "Cafe 0", "cafe", 41.9008, 12.49, ["fika"]),
+    externalRecord("museum-0", "Museum 0", "museum", 41.9012, 12.4906, ["kultur"]),
+    externalRecord("park-9", "Park 9", "park", 41.9068, 12.4977, ["gront"]),
+    // Far from the cluster and off-intent: the scorer has every reason to drop
+    // it, which is exactly why it must still be kept when pinned.
+    externalRecord("far-0", "Far 0", "viewpoint", 41.9250, 12.5180, ["utsikt"]),
+  ]), async (server) => {
+    const plain = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody({ preferences: ["food", "coffee"] }),
+    });
+    assert.equal(stopIdsOf(plain).includes("far-0"), false, "the scorer leaves it out on its own");
+
+    const pinned = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody({ preferences: ["food", "coffee"], pinned_candidate_ids: ["far-0"] }),
+    });
+
+    // Out of walking reach, so the reach policy removes it from the reservoir
+    // before composition. A pin cannot reach past that gate — and the point is
+    // that the refusal is REPORTED rather than silently swallowed.
+    assert.equal(stopIdsOf(pinned).includes("far-0"), false);
+    const summary = pinned.body.agnostic_route_output_experiment.pinned_candidates;
+    assert.equal(summary.requested_count, 1);
+    assert.equal(summary.honored_count, 0);
+    assert.equal(summary.unhonored_count, 1, "an infeasible pin gets an honest verdict");
+  }),
+);
+
+test(
+  "a pin survives the per-role ranking cut in a deep pool",
+  withServer(deepPinLoader(), async (server) => {
+    // The failure this locks down was found on staging and reproduced here:
+    // the candidate was loaded, gated and RANKED for its role, but two better-
+    // scoring places filled the role's top-N and the cut removed it before any
+    // downstream stage could hoist it. The pin then read as unhonoured against
+    // a pool that contained it.
+    const plain = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body: agnosticBody(),
+    });
+    const outsider = "food-6";
+    assert.ok(
+      !stopIdsOf(plain).includes(outsider),
+      "precondition: the default day does not choose it, so the assertion means something",
+    );
+
+    const pinned = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body: agnosticBody({ pinned_candidate_ids: [outsider] }),
+    });
+    assert.ok(stopIdsOf(pinned).includes(outsider), `${outsider} must be kept once pinned`);
+    assert.equal(
+      pinned.body.agnostic_route_output_experiment.pinned_candidates.honored_count,
+      1,
+    );
+    // The day is still composed AROUND it — the pin names one stop, it does not
+    // become the day.
+    assert.ok(stopIdsOf(pinned).length > 1, "the rest of the day still composes");
+  }),
+);
+
+test(
+  "a deep pool with no pin is unchanged by the rescue",
+  withServer(deepPinLoader(), async (server) => {
+    const a = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body: agnosticBody(),
+    });
+    const b = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body: agnosticBody({ pinned_candidate_ids: [] }),
+    });
+    assert.deepEqual(stopIdsOf(a), stopIdsOf(b), "an empty pin list is a no-op");
+  }),
+);

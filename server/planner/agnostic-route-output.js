@@ -622,15 +622,19 @@ function anchorAdaptedBodyToCurrentBand(adaptedBody, currentRank) {
 // actual time-appropriate stops. If fewer than two candidates remain, keep the
 // full reservoir and let the shared honesty fields explain that the full-day arc
 // precedes local time rather than fabricating a thin route.
-function anchorSourceCandidatesToCurrentBand(sourceCandidates, currentRank) {
+function anchorSourceCandidatesToCurrentBand(sourceCandidates, currentRank, pinnedIds = []) {
   const candidates = Array.isArray(sourceCandidates) ? sourceCandidates : [];
+  // An explicit "keep this" outranks the typical-timing heuristic. Trimming a
+  // pinned place because its role usually happens earlier in the day would drop
+  // exactly what the user asked to keep.
+  const pins = new Set(Array.isArray(pinnedIds) ? pinnedIds : []);
   const kept = [];
   const trimmedDayparts = [];
   for (const candidate of candidates) {
     const role = candidate?.role || (Array.isArray(candidate?.route_roles) ? candidate.route_roles[0] : null);
     const daypart = daypartForRole(role || null);
     const rank = timeBandRank(daypart);
-    if (rank !== null && rank < currentRank) {
+    if (rank !== null && rank < currentRank && !pins.has(String(candidate?.id ?? ""))) {
       if (!trimmedDayparts.includes(daypart)) trimmedDayparts.push(daypart);
     } else {
       kept.push(candidate);
@@ -837,6 +841,7 @@ async function composeAgnosticRouteOutput({
   externalRequested = false,
   openDataLoader = null,
   preferences = [],
+  pinnedStopIds = [],
   lens = null,
   date = null,
   todayIsoDate = null,
@@ -926,6 +931,9 @@ async function composeAgnosticRouteOutput({
     // Signal the engine's external opt-in so the source-backed provider runs.
     include_external_candidates: externalRequested ? 1 : undefined,
     candidate_sources: externalRequested ? "open" : undefined,
+    // An explicit "keep this one" must not be voided by the per-role ranking
+    // cut. Selection is otherwise unchanged, and an empty list is a no-op.
+    pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
   };
 
   // #262 — time-of-day may influence selection ONLY when a trusted timezone is
@@ -1002,6 +1010,7 @@ async function composeAgnosticRouteOutput({
         city: agnosticContext.key,
         walkingKmTarget,
         includeCapacityFrontier: false,
+        pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
       })
     : null;
   const capacitySourceCandidates = synthesizeVia === "engine"
@@ -1097,6 +1106,7 @@ async function composeAgnosticRouteOutput({
       baselineResult,
       walkingKmTarget: Number.isFinite(walkingKmTarget) ? walkingKmTarget : undefined,
       preferences,
+      pinnedStopIds,
       timezone: contextBlock?.time?.timezone || timezone,
       lang,
       currentTimeBand: routeCurrentBand,
@@ -1288,6 +1298,7 @@ async function composeAgnosticRouteViaEngine({
   baselineResult,
   walkingKmTarget,
   preferences,
+  pinnedStopIds,
   timezone,
   lang,
   currentTimeBand = null,
@@ -1304,6 +1315,7 @@ async function composeAgnosticRouteViaEngine({
         city: agnosticContext.key,
         walkingKmTarget,
         includeCapacityFrontier: false,
+        pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
       });
   const capacitySourceCandidates = Array.isArray(suppliedCapacitySourceCandidates)
     ? suppliedCapacitySourceCandidates
@@ -1315,7 +1327,7 @@ async function composeAgnosticRouteViaEngine({
         includeCapacityFrontier: true,
       });
   const timeAnchoring = Number.isInteger(currentTimeBandRank)
-    ? anchorSourceCandidatesToCurrentBand(sourceCandidates, currentTimeBandRank)
+    ? anchorSourceCandidatesToCurrentBand(sourceCandidates, currentTimeBandRank, pinnedStopIds)
     : { anchored: false, candidates: sourceCandidates, trimmedDayparts: [] };
 
   async function runEngine(candidates) {
@@ -1336,6 +1348,7 @@ async function composeAgnosticRouteViaEngine({
       walkingKmTarget: Number.isFinite(walkingKmTarget) ? walkingKmTarget : 6,
       preferences: Array.isArray(preferences) ? preferences : [],
       lang,
+      pinnedStopIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
     });
     return sanitizeAgnosticEngineDay({
       day: (engineResult && Array.isArray(engineResult.days) && engineResult.days[0]) || null,
@@ -1367,7 +1380,7 @@ async function composeAgnosticRouteViaEngine({
     shouldTryCapacityRepair(engineRoute, walkingKmTarget)
   ) {
     let capacityAnchoring = anchoredToLocalTime && Number.isInteger(currentTimeBandRank)
-      ? anchorSourceCandidatesToCurrentBand(capacitySourceCandidates, currentTimeBandRank)
+      ? anchorSourceCandidatesToCurrentBand(capacitySourceCandidates, currentTimeBandRank, pinnedStopIds)
       : { anchored: false, candidates: capacitySourceCandidates, trimmedDayparts: [] };
     let repairedDay = await runEngine(capacityAnchoring.candidates);
     let repairedRoute = repairedDay?.primary_route || null;

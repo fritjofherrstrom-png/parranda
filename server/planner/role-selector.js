@@ -81,8 +81,38 @@ const MAX_CAPACITY_FRONTIER_CANDIDATES = 2;
 const MIN_CAPACITY_FRONTIER_GAIN_KM = 0.3;
 const WALKING_TARGET_TO_SPREAD_FACTOR = 0.55;
 
+// A pinned candidate must survive the per-role ranking cut.
+//
+// Each role keeps only its top `limitPerRole` ranked entries. That is a
+// RANKING bound, not a trust one: a place the gates already accepted for the
+// role can fall out of it simply because two better-scoring places exist. When
+// the user has explicitly said "keep this one", losing it to that cut makes
+// the commitment unresolvable for reasons the user cannot see or act on.
+//
+// So a pinned entry is re-admitted after the cut — and only ever from the
+// entries this role already ranked. Pinning still cannot introduce a place,
+// revive one the gates rejected, or move a place into a role it does not fit;
+// it only prevents a ranking cut from silently voiding an explicit choice.
+function keepPinnedEntriesInRole(entries, limit, pins) {
+  const kept = entries.slice(0, limit);
+  if (!pins || pins.size === 0 || kept.length === entries.length) return kept;
+  const keptIds = new Set(kept.map((entry) => String(entry?.candidate?.id ?? "")));
+  const rescued = entries
+    .slice(limit)
+    .filter((entry) => {
+      const id = String(entry?.candidate?.id ?? "");
+      return id && pins.has(id) && !keptIds.has(id);
+    });
+  return rescued.length ? [...kept, ...rescued] : kept;
+}
+
 function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
   const limitPerRole = clampLimit(payload.limitPerRole ?? payload.limit_per_role);
+  const pinnedIds = new Set(
+    (Array.isArray(payload.pinnedIds) ? payload.pinnedIds : [])
+      .map((id) => String(id || "").trim())
+      .filter(Boolean),
+  );
   const candidatePool = buildEligibleCandidatePool(cityConfig, payload, helpers);
   const reachSelection = applyCandidateReachPolicy(candidatePool, helpers.candidateReachPolicy);
   const roleCandidatePool = reachSelection.candidatePool;
@@ -111,7 +141,7 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
   const roles = activeRoleOrder.map((role) => {
     const spec = activeRoleSpec[role];
     const entries = roleEntries[role];
-    const candidates = entries.slice(0, limitPerRole).map((entry) =>
+    const candidates = keepPinnedEntriesInRole(entries, limitPerRole, pinnedIds).map((entry) =>
       formatRoleCandidate(entry, role, roleEntries, activeRoleSpec),
     );
     const status = strongestStatus(candidates);
@@ -638,5 +668,6 @@ module.exports = {
   LOCAL_BREADTH_FOR_CHAIN_FALLBACK,
   candidateStatusForRole,
   intentsForRole,
+  keepPinnedEntriesInRole,
   selectPlannerRoleCandidates,
 };

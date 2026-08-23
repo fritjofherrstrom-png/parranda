@@ -39,6 +39,10 @@ const {
   parseExcludedCandidateIds,
   withoutExcludedCandidates,
 } = require("./planner/excluded-candidates");
+const {
+  parsePinnedCandidateIds,
+  summarizePinnedOutcome,
+} = require("./planner/pinned-candidates");
 const { buildEngineReadinessVerdict } = require("./planner/agnostic-engine-readiness");
 const { reconcileAgnosticConstraintNegotiation } = require("./planner/agnostic-constraint-negotiation");
 const { resolveAgnosticWalkingTargetBand } = require("./planner/agnostic-walking-target");
@@ -1863,6 +1867,11 @@ function buildApp({
         request.body?.excluded_candidate_ids ?? request.body?.excludedCandidateIds,
       );
       const scopedOpenDataLoader = withoutExcludedCandidates(openDataLoader, excludedCandidateIds);
+      // Ledger v2: "keep this one". Selection-only — a pin can name a candidate
+      // the server already loaded and gated, never introduce one.
+      const pinnedCandidateIds = parsePinnedCandidateIds(
+        request.body?.pinned_candidate_ids ?? request.body?.pinnedCandidateIds,
+      );
 
       // #259 — the explicit experiment flag is the ONLY thing that may mutate or
       // synthesize route output. It is parsed independently of `inspect`. The
@@ -2284,6 +2293,7 @@ function buildApp({
         externalRequested: isExternalCandidatesRequested(request),
         openDataLoader: scopedOpenDataLoader,
         preferences,
+        pinnedStopIds: pinnedCandidateIds,
         lens: request.body?.lens || request.query?.lens || null,
         // #262 — payload weather is NOT trusted; trusted weather/time come only
         // from the server-injected seams. `trustedTimezone` is taken from the
@@ -2337,6 +2347,12 @@ function buildApp({
         // against a reduced reservoir. The ids are the user's own input and are
         // never re-published as evidence.
         experiment.excluded_candidates = excludedCandidateSummary(excludedCandidateIds);
+        // Derived from the day that was actually composed, not from the request:
+        // an unhonoured pin is a fact about the output, never an intention.
+        experiment.pinned_candidates = summarizePinnedOutcome(
+          pinnedCandidateIds,
+          (promotion.promote ? experimentResult : baselineBody)?.days?.[0]?.primary_route?.main_stops,
+        );
         // Retirement-readiness observability: a consolidated, honest verdict on
         // whether the engine path is ready to become the default synthesizer,
         // and if not, exactly what remains. Read-only; promotes nothing.

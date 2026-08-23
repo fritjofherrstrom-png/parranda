@@ -201,6 +201,8 @@ const AGNOSTIC_COMPOSE_TEMPLATE_ID = "__agnostic_compose__";
 // place-less template is enough to drive the existing pipeline generically.
 // The template carries no stops of its own; every real stop comes from the
 // active catalog.
+const { applyPinnedSelection } = require("./planner/pinned-candidates");
+
 function buildAgnosticComposeTemplate(targetKm) {
   return {
     id: AGNOSTIC_COMPOSE_TEMPLATE_ID,
@@ -5296,6 +5298,24 @@ function buildRouteFromTemplate(
     }
   }
 
+  // A pinned candidate must appear in the day, but the day is still composed
+  // AROUND it: pins join the selection here, before ordering, repair and the
+  // walking constraint, so they are ordinary members from that point on. Only
+  // pool members can be pinned — a candidate the gates removed is not here to
+  // force — and a pin the walking budget genuinely cannot fit is dropped by the
+  // same constraint as any other stop and reported as unhonoured rather than
+  // forced into an unwalkable route.
+  // The pool is a BOUNDED seed selection, not the whole gated reservoir, so a
+  // place the preference ranking left out would otherwise be unpinnable. An
+  // explicit "keep this" outranks a soft preference, so pins may also be drawn
+  // from the trusted source candidates the loader already gated — and from
+  // nowhere else. Agnostic path only; registered-city templates are unchanged.
+  const pinnableStops =
+    template.id === AGNOSTIC_COMPOSE_TEMPLATE_ID
+      ? [...sortedPool.map((entry) => entry.item), ...buildProvisionalComposeStops()]
+      : sortedPool.map((entry) => entry.item);
+  selectedStops = applyPinnedSelection(selectedStops, pinnableStops, options.pinnedStopIds);
+
   if (options.manualAnchorsLocked && shape === "arc") {
     selectedStops = ensureLockedArcCoverage(
       selectedStops,
@@ -5350,6 +5370,13 @@ function buildRouteFromTemplate(
     });
     if (constrained.selected.length) selectedStops = constrained.selected;
   }
+
+  // selectAgnosticCandidateSet is the authoritative chooser on this path and
+  // overwrites the selection outright, so a commitment has to be re-applied
+  // after it. Applying it only before would leave the pin at the mercy of the
+  // scorer — it would appear to work whenever the pin happened to score well
+  // and silently vanish when it did not.
+  selectedStops = applyPinnedSelection(selectedStops, pinnableStops, options.pinnedStopIds);
 
   const { orderedStops, geometry } = optimizeStopOrder(
     selectedStops,
@@ -6770,6 +6797,9 @@ async function generateRecommendations({
   // pass no override, so resolveCityConfig — and every downstream behavior — is
   // byte-for-byte unchanged. See generateAgnosticRecommendations.
   cityConfigOverride = null,
+  // Ledger v2: candidate ids the day must keep. Selection-only — see
+  // planner/pinned-candidates.js for why this cannot elevate a gated-out place.
+  pinnedStopIds = [],
 }) {
   const routeResultLang = normalizeRouteResultLanguage(lang);
   const cityResolution = cityConfigOverride
@@ -6929,6 +6959,7 @@ async function generateRecommendations({
                 lang: routeResultLang,
                 includeLiveEvents,
                 usedRoutes: usedPrimaryRoutes,
+                pinnedStopIds,
               },
             );
           const routeStops = route.main_stops
