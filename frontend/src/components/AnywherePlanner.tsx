@@ -302,13 +302,20 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // A dismissal belongs to the day it was made on. Stamped with that day's
   // anchor so it cannot follow the user to another place.
   const commitmentAnchorKeyRef = useRef<string | null>(null);
-  // The commitments the day ON SCREEN actually answered — set only when an
-  // authoritative compose comes back, never when the user clicks. The editable
-  // ledger above runs ahead of the day by design (a click, then 400ms of
+  // The commitments the day ON SCREEN actually answered — an immutable snapshot
+  // taken when an authoritative compose comes back, never when the user clicks.
+  //
+  // It carries the LABELS as well as the ids, because reading ids from here and
+  // labels from the live ledger lets the two drift: release X mid-request and
+  // the day would still name X while the user no longer keeps it. One frozen
+  // record per generation is the only way the day and its verdict can be
+  // guaranteed to describe the same moment.
+  //
+  // The editable ledger runs ahead of the day by design (a click, then 400ms of
   // debounce, then a request), so judging the rendered stops against it accuses
   // a day that was never asked the question. A refusal or a failed request
   // leaves this untouched for the same reason.
-  const [appliedPinnedIds, setAppliedPinnedIds] = useState<string[]>([]);
+  const [appliedPins, setAppliedPins] = useState<Array<{ id: string; kind: "pin"; label: string }>>([]);
   // Which anchor the visible day belongs to. A day for another place is never
   // held over, not even for a second.
   const displayedAnchorKeyRef = useRef<string | null>(null);
@@ -467,6 +474,16 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       const effectiveWalkKey = walkKeyOverride ?? walkKey;
       const effectiveDayOffset = dayOffsetOverride ?? dayOffset;
       const preset = WALK_PRESETS.find((p: { key: string }) => p.key === effectiveWalkKey) ?? WALK_PRESETS[1];
+      // Frozen here, beside the request that carries them: whatever the ledger
+      // does while this is in flight, THIS is what the answer will have
+      // answered. Labels travel with the ids so the verdict can name a place
+      // the user has since released.
+      const sentPinIds = pinnedOverride ?? scopedLedger.pinnedIds;
+      const sentPins = sentPinIds.map((id: string) => ({
+        id,
+        kind: "pin" as const,
+        label: String(scopedLedger.entries[id]?.label ?? commitments[id]?.label ?? ""),
+      }));
       const payload = buildAnywherePayload({
         place: anchor.place,
         coords: anchor.coords ?? null,
@@ -474,7 +491,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         preferences: preferencesOverride ?? selected,
         walkingKmTarget: preset.km,
         excludedCandidateIds: excludedOverride ?? scopedLedger.excludedIds,
-        pinnedCandidateIds: pinnedOverride ?? scopedLedger.pinnedIds,
+        pinnedCandidateIds: sentPinIds,
       });
       const response = await fetch(`/api/route-recommendations?lang=${langOverride ?? lang}`, {
         method: "POST",
@@ -493,7 +510,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         // A transport or capacity refusal composed no day at all, so there is
         // no evidence that any commitment could not be met. Reporting one here
         // would invent a verdict out of a network failure.
-        setAppliedPinnedIds([]);
+        setAppliedPins([]);
         setDayIsStale(false);
         setUpgradePending(false);
         setPhase("done");
@@ -513,8 +530,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       displayedAnchorKeyRef.current = anchorKey(anchor);
       // This day answered exactly the pins this request carried. Recording them
       // here — beside the classification, not beside the click — is what ties
-      // the unhonoured verdict to a day that was actually asked.
-      setAppliedPinnedIds(pinnedOverride ?? scopedLedger.pinnedIds);
+      // the unhonoured verdict to a day that was actually asked. Only a verdict
+      // that CONTAINS a day can leave a commitment unmet by it: structure_only
+      // and unavailable composed no day, so there is nothing for a pin to have
+      // failed to fit into and the snapshot stays empty.
+      setAppliedPins(decision.isComposedStatus(cls.status) ? sentPins : []);
       setDayIsStale(false);
       setServiceRefusal(null);
       setRouteAnchorCoords(anchor.coords ?? null);
@@ -603,13 +623,34 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       if (typeof i.walkKey === "string") setWalkKey(i.walkKey);
       if (Array.isArray(i.selected)) setSelected(i.selected);
     }
+    // A restored snapshot is a NEW authoritative generation, so everything
+    // older has to stop before it is installed. Otherwise a compose that
+    // started first — or a debounce that has not fired yet, or a silent
+    // follow-up already scheduled — lands afterwards and quietly replaces the
+    // snapshot with a different generation's day. With a matching anchor the
+    // result looks entirely plausible, which is what makes it dangerous.
+    if (recomposeTimerRef.current) {
+      clearTimeout(recomposeTimerRef.current);
+      recomposeTimerRef.current = null;
+    }
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    activeRequestRef.current?.abort();
+    activeRequestRef.current = null;
+    // Bumping the sequence invalidates any response already past its abort
+    // check but not yet applied.
+    requestSequenceRef.current += 1;
+    setUpgradePending(false);
+
     lastEntryRef.current = entry;
     setClassification(entry.classification);
     setSafeResponse(entry.safeResponse);
     // Saved days do not carry the commitments they were composed under, so a
     // restored snapshot cannot answer for any of them — not even when the
     // anchor happens to match and the ledger survives scoping below.
-    setAppliedPinnedIds([]);
+    setAppliedPins([]);
     // A restored snapshot owns the screen outright; it is labelled by
     // restoredAt, never by the recompose "updating" state.
     const restoredAnchorKey = anchorKey({
@@ -1234,9 +1275,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // A pin the composed day does not contain. The server resolves pins against
   // the candidates it loaded itself and will not invent a place to satisfy
   // one — so this is reported, never swallowed.
+  // Reported only where the two ledgers AGREE: the day answered for it, and
+  // the user still holds it. A commitment withdrawn while its request was in
+  // flight is not worth a sentence — the user has already moved on, the ledger
+  // no longer lists it, and a fresh compose is on its way. The label still
+  // comes from the snapshot, so what is named is what was actually asked.
+  const stillHeld = appliedPins.filter((pin) => commitments[pin.id]?.kind === "pin");
   const unkept = unhonouredPins({
-    entries: commitments,
-    pinnedIds: appliedPinnedIds,
+    entries: Object.fromEntries(stillHeld.map((pin) => [pin.id, pin])),
+    pinnedIds: stillHeld.map((pin) => pin.id),
     stopIds: split.core.map((stop: any) => String(stop?.id ?? stop?.place_id ?? stop?.candidate_id ?? "")),
     isStale: dayIsStale,
   });

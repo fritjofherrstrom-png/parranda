@@ -11,3 +11,6 @@ pnpm-debug.log*
 coverage/
 .release.env
 .deploy.lock/
+
+# Build artifact of the jsdom planner harness (regenerated per test run).
+frontend/tests/helpers/.planner-harness-bundle.mjs

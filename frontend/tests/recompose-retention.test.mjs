@@ -114,13 +114,30 @@ test("the compose teardown only clears the day when retention says so", () => {
 });
 
 test("a landed verdict replaces the held day atomically", () => {
-  // setClassification + setSafeResponse + anchor + the commitments this day
-  // answered + un-stale, in one commit. The applied ledger belongs inside the
-  // swap: it is the record of WHICH commitments the new day was asked about,
-  // and it is only ever true of a day that actually came back.
-  const replacement =
-    /setClassification\(cls\);\s*\n\s*setSafeResponse\(safe\);\s*\n\s*displayedAnchorKeyRef\.current = anchorKey\(anchor\);[\s\S]{0,320}?setAppliedPinnedIds\(pinnedOverride \?\? scopedLedger\.pinnedIds\);\s*\n\s*setDayIsStale\(false\);/;
-  assert.match(component, replacement, "the new verdict must land as one atomic swap");
+  // classification + response + anchor + the commitments this day answered +
+  // un-stale, with nothing else interleaved. The applied snapshot belongs
+  // inside the swap: it is the record of WHICH commitments the new day was
+  // asked about, and it is only ever true of a day that actually came back.
+  //
+  // Asserted as an ORDER of statements rather than one long regex, so a
+  // clarifying comment between two of them cannot fail the test.
+  const block = component.slice(
+    component.indexOf("setClassification(cls);"),
+    component.indexOf('setPhase("done");', component.indexOf("setClassification(cls);")),
+  );
+  const order = [
+    "setClassification(cls);",
+    "setSafeResponse(safe);",
+    "displayedAnchorKeyRef.current = anchorKey(anchor);",
+    "setAppliedPins(decision.isComposedStatus(cls.status) ? sentPins : []);",
+    "setDayIsStale(false);",
+  ];
+  let cursor = -1;
+  for (const statement of order) {
+    const at = block.indexOf(statement, cursor + 1);
+    assert.ok(at > cursor, `${statement} must land in the swap, after the statement before it`);
+    cursor = at;
+  }
 });
 
 test("a refusal drops the held day rather than leaving it answering", () => {
@@ -130,7 +147,7 @@ test("a refusal drops the held day rather than leaving it answering", () => {
   // ...and it must clear what the day answered too, or the pins from the
   // request that never landed get judged against zero stops.
   const block = component.slice(component.indexOf("if (refusal) {"), component.indexOf("if (!response.ok) throw"));
-  assert.match(block, /setAppliedPinnedIds\(\[\]\);/);
+  assert.match(block, /setAppliedPins\(\[\]\);/);
 });
 
 test("the full-page loader never doubles up with a held day", () => {

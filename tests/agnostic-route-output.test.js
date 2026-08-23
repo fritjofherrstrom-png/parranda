@@ -241,6 +241,42 @@ test("capacity repair never trades an explicit commitment for a better walking t
   );
 });
 
+test("capacity repair may add commitments but never swap one for another", () => {
+  // Counting was not enough. With A and B both pinned, a base honouring A and a
+  // repair honouring B score the same, so the repair was accepted and the user
+  // silently traded one commitment for another. The invariant is containment.
+  const s = (id, cov = []) => ({ id, covered_preferences: cov, partial_preferences: [] });
+  const baseRoute = {
+    estimated_km: 2.8,
+    main_stops: [s("A", ["food"]), s("m", ["museums"]), s("v", ["scenic"])],
+    route_quality_warnings: [],
+  };
+  const args = {
+    baseRoute,
+    walkingKmTarget: 6,
+    preferences: ["food", "culture", "views"],
+    pinnedIds: ["A", "B"],
+  };
+  // Same honoured COUNT, different honoured SET.
+  const swap = {
+    estimated_km: 5.4,
+    main_stops: [s("B", ["food"]), s("m", ["museums"]), s("v", ["scenic"]), s("g", ["scenic"])],
+    route_quality_warnings: [],
+  };
+  assert.equal(shouldUseCapacityRepair({ ...args, repairedRoute: swap }), false);
+
+  // A strict superset is exactly what repair is for, and is still allowed.
+  const superset = {
+    estimated_km: 5.4,
+    main_stops: [s("A", ["food"]), s("B", ["food"]), s("m", ["museums"]), s("v", ["scenic"])],
+    route_quality_warnings: [],
+  };
+  assert.equal(shouldUseCapacityRepair({ ...args, repairedRoute: superset }), true);
+
+  // And with nothing pinned the guard is inert — the same swap is fine.
+  assert.equal(shouldUseCapacityRepair({ ...args, repairedRoute: swap, pinnedIds: [] }), true);
+});
+
 test("the capacity reservoir is built with the same commitments as the base one", () => {
   // The repaired route can REPLACE the base one, so a capacity reservoir that
   // never saw the pins can only produce a replacement that cannot honour them.
@@ -254,7 +290,14 @@ test("the capacity reservoir is built with the same commitments as the base one"
       /pinnedIds: Array\.isArray\(pinnedStopIds\) \? pinnedStopIds : \[\],/,
     );
   }
-  assert.match(source, /pinnedIds: pinnedStopIds,/, "and the repair decision receives them too");
+  // The repair decision must see the SAME pin set the finalisation ran with,
+  // not the request's — a settling pass finalises reduced sets too.
+  assert.match(source, /pinnedIds: pins,/, "the repair decision receives the set being finalised");
+  assert.match(
+    source,
+    /async function finalize\(pins\)/,
+    "compose + repair are one pipeline, so a pin is judged on what gets published",
+  );
 });
 
 // A role-diverse, >=25 geocoded, tightly-clustered trusted fixture near an
