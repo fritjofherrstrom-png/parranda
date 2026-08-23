@@ -43,6 +43,7 @@ const {
   parsePinnedCandidateIds,
   summarizePinnedOutcome,
 } = require("./planner/pinned-candidates");
+const { parseRequestedDates } = require("./planner/requested-dates");
 const { buildEngineReadinessVerdict } = require("./planner/agnostic-engine-readiness");
 const { reconcileAgnosticConstraintNegotiation } = require("./planner/agnostic-constraint-negotiation");
 const { resolveAgnosticWalkingTargetBand } = require("./planner/agnostic-walking-target");
@@ -1837,6 +1838,15 @@ function buildApp({
 
   app.post("/api/route-recommendations", async (request, response) => {
     try {
+      // Bound the request BEFORE any work: every date runs the whole
+      // recommendation flow once, so an unbounded list is a public work
+      // multiplier. Refused openly rather than trimmed — silently returning
+      // fewer days than were asked for would be its own dishonesty.
+      const requestedDates = parseRequestedDates(request.body?.dates);
+      if (!requestedDates.ok) {
+        response.status(400).json({ error: requestedDates.error, detail: requestedDates.detail });
+        return;
+      }
       const { cityConfig, requestedCity, cityFallbackUsed } = resolveRequestCity(request.body?.city);
       const city = cityConfig.key;
       const lang = normalizeLanguage(request.query?.lang);
@@ -1845,7 +1855,7 @@ function buildApp({
         : [];
       const payload = {
         city,
-        dates: Array.isArray(request.body?.dates) ? request.body.dates : [],
+        dates: requestedDates.dates,
         homeBase: request.body?.home_base,
         start: request.body?.start,
         end: request.body?.end,

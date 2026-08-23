@@ -49,6 +49,7 @@ const { buildDayflowContext } = require("./dayflow-context");
 const { calibrateAgnosticRouteReadiness } = require("./agnostic-route-readiness-calibration");
 const { buildAgnosticConstraintNegotiation } = require("./agnostic-constraint-negotiation");
 const { resolveAgnosticWalkingTargetBand } = require("./agnostic-walking-target");
+const { settlePinsWithinWalkingBudget } = require("./pin-walking-budget");
 const { generateAgnosticRecommendations } = require("../route-engine");
 const { projectRouteToSelectedStopChain } = require("./route-public-geometry");
 const {
@@ -1336,7 +1337,7 @@ async function composeAgnosticRouteViaEngine({
     ? anchorSourceCandidatesToCurrentBand(sourceCandidates, currentTimeBandRank, pinnedStopIds)
     : { anchored: false, candidates: sourceCandidates, trimmedDayparts: [] };
 
-  async function runEngine(candidates) {
+  async function runEngine(candidates, pins = pinnedStopIds) {
     const engineCityConfig = buildAgnosticEngineCityConfig({
       anchor: origin,
       sourceCandidates: candidates,
@@ -1354,7 +1355,7 @@ async function composeAgnosticRouteViaEngine({
       walkingKmTarget: Number.isFinite(walkingKmTarget) ? walkingKmTarget : 6,
       preferences: Array.isArray(preferences) ? preferences : [],
       lang,
-      pinnedStopIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
+      pinnedStopIds: Array.isArray(pins) ? pins : [],
     });
     return sanitizeAgnosticEngineDay({
       day: (engineResult && Array.isArray(engineResult.days) && engineResult.days[0]) || null,
@@ -1366,49 +1367,77 @@ async function composeAgnosticRouteViaEngine({
     });
   }
 
-  let anchoredToLocalTime = timeAnchoring.anchored;
-  let trimmedDayparts = timeAnchoring.trimmedDayparts;
-  let capacityRepairApplied = false;
-  let engineDay = await runEngine(timeAnchoring.candidates);
-  let engineRoute = (engineDay && engineDay.primary_route) || null;
-  if (!engineRoute && anchoredToLocalTime) {
-    // A smaller time-anchored reservoir may still fail the engine's independent
-    // geometry/readiness checks. Keep the full-day route if it is viable, but do
-    // not claim it is anchored; the caveat below makes that limitation explicit.
-    engineDay = await runEngine(sourceCandidates);
-    engineRoute = (engineDay && engineDay.primary_route) || null;
-    anchoredToLocalTime = false;
-    trimmedDayparts = [];
+  // ONE finalisation pipeline, used for every candidate pin set and for the
+  // published day alike: compose, the engine's own ordering and bridge
+  // insertion, then capacity repair. Judging a pin on anything less than this
+  // measures a route that is never published — the previous guard scored an
+  // unordered array before bridge insertion, so it could refuse a pin the
+  // finished route would have absorbed and accept one that ended over the
+  // ceiling anyway.
+  async function finalize(pins) {
+    let anchored = timeAnchoring.anchored;
+    let trimmed = timeAnchoring.trimmedDayparts;
+    let repairApplied = false;
+    let day = await runEngine(timeAnchoring.candidates, pins);
+    let route = (day && day.primary_route) || null;
+    if (!route && anchored) {
+      // A smaller time-anchored reservoir may still fail the engine's independent
+      // geometry/readiness checks. Keep the full-day route if it is viable, but do
+      // not claim it is anchored; the caveat below makes that limitation explicit.
+      day = await runEngine(sourceCandidates, pins);
+      route = (day && day.primary_route) || null;
+      anchored = false;
+      trimmed = [];
+    }
+
+    if (
+      hasAdditionalCandidateIds(sourceCandidates, capacitySourceCandidates) &&
+      shouldTryCapacityRepair(route, walkingKmTarget)
+    ) {
+      let capacityAnchoring = anchored && Number.isInteger(currentTimeBandRank)
+        ? anchorSourceCandidatesToCurrentBand(capacitySourceCandidates, currentTimeBandRank, pins)
+        : { anchored: false, candidates: capacitySourceCandidates, trimmedDayparts: [] };
+      let repairedDay = await runEngine(capacityAnchoring.candidates, pins);
+      let repairedRoute = repairedDay?.primary_route || null;
+      if (!repairedRoute && capacityAnchoring.anchored) {
+        repairedDay = await runEngine(capacitySourceCandidates, pins);
+        repairedRoute = repairedDay?.primary_route || null;
+        capacityAnchoring = { anchored: false, candidates: capacitySourceCandidates, trimmedDayparts: [] };
+      }
+      if (shouldUseCapacityRepair({
+        baseRoute: route,
+        repairedRoute,
+        walkingKmTarget,
+        preferences,
+        pinnedIds: pins,
+      })) {
+        day = repairedDay;
+        route = repairedRoute;
+        anchored = capacityAnchoring.anchored;
+        trimmed = capacityAnchoring.trimmedDayparts;
+        repairApplied = true;
+      }
+    }
+    return { day, route, anchored, trimmed, repairApplied };
   }
 
-  if (
-    hasAdditionalCandidateIds(sourceCandidates, capacitySourceCandidates) &&
-    shouldTryCapacityRepair(engineRoute, walkingKmTarget)
-  ) {
-    let capacityAnchoring = anchoredToLocalTime && Number.isInteger(currentTimeBandRank)
-      ? anchorSourceCandidatesToCurrentBand(capacitySourceCandidates, currentTimeBandRank, pinnedStopIds)
-      : { anchored: false, candidates: capacitySourceCandidates, trimmedDayparts: [] };
-    let repairedDay = await runEngine(capacityAnchoring.candidates);
-    let repairedRoute = repairedDay?.primary_route || null;
-    if (!repairedRoute && capacityAnchoring.anchored) {
-      repairedDay = await runEngine(capacitySourceCandidates);
-      repairedRoute = repairedDay?.primary_route || null;
-      capacityAnchoring = { anchored: false, candidates: capacitySourceCandidates, trimmedDayparts: [] };
-    }
-    if (shouldUseCapacityRepair({
-      baseRoute: engineRoute,
-      repairedRoute,
+  const requestedPins = Array.isArray(pinnedStopIds) ? [...pinnedStopIds] : [];
+  let finalized = await finalize(requestedPins);
+  if (requestedPins.length) {
+    finalized = await settlePinsWithinWalkingBudget({
+      finalize,
+      withPins: finalized,
+      pins: requestedPins,
       walkingKmTarget,
-      preferences,
-      pinnedIds: pinnedStopIds,
-    })) {
-      engineDay = repairedDay;
-      engineRoute = repairedRoute;
-      anchoredToLocalTime = capacityAnchoring.anchored;
-      trimmedDayparts = capacityAnchoring.trimmedDayparts;
-      capacityRepairApplied = true;
-    }
+      origin,
+      sourceCandidates,
+    });
   }
+  let engineDay = finalized.day;
+  let engineRoute = finalized.route;
+  let anchoredToLocalTime = finalized.anchored;
+  let trimmedDayparts = finalized.trimmed;
+  const capacityRepairApplied = finalized.repairApplied;
 
   if (engineRoute) {
     const daypartHonesty = buildRouteDaypartHonesty({
@@ -1516,10 +1545,30 @@ function shouldTryCapacityRepair(route, walkingKmTarget) {
   return Number.isFinite(route.estimated_km) && route.estimated_km < band.floorKm;
 }
 
-function honouredPinCount(route, pinnedIds) {
+function honouredPins(route, pinnedIds) {
   const pins = new Set(Array.isArray(pinnedIds) ? pinnedIds.map((id) => String(id)) : []);
-  if (pins.size === 0) return 0;
-  return (route?.main_stops || []).filter((stop) => pins.has(String(stop?.id))).length;
+  if (pins.size === 0) return new Set();
+  return new Set(
+    (route?.main_stops || []).map((stop) => String(stop?.id)).filter((id) => pins.has(id)),
+  );
+}
+
+/**
+ * Repair may only ever ADD to what the base route already kept.
+ *
+ * Counting was not enough: with A and B both pinned, a base honouring A and a
+ * repair honouring B score the same, so the repair was accepted and the user
+ * silently traded one commitment for another. The invariant is containment —
+ * baseHonoured ⊆ repairedHonoured — not arithmetic.
+ */
+function repairKeepsEveryHonouredPin(baseRoute, repairedRoute, pinnedIds) {
+  const base = honouredPins(baseRoute, pinnedIds);
+  if (base.size === 0) return true;
+  const repaired = honouredPins(repairedRoute, pinnedIds);
+  for (const id of base) {
+    if (!repaired.has(id)) return false;
+  }
+  return true;
 }
 
 function shouldUseCapacityRepair({ baseRoute, repairedRoute, walkingKmTarget, preferences, pinnedIds = [] }) {
@@ -1527,11 +1576,11 @@ function shouldUseCapacityRepair({ baseRoute, repairedRoute, walkingKmTarget, pr
   if (!band || !repairedRoute || !Number.isFinite(repairedRoute.estimated_km)) return false;
   if (repairedRoute.estimated_km > band.ceilingKm) return false;
   if ((repairedRoute.main_stops || []).length < 2) return false;
-  // A better walking target never justifies honouring fewer explicit
-  // commitments. Every other test here is about route quality, which the user
-  // did not ask about; "keep this one" is the thing they did ask for, so it
-  // outranks the repair's own reason for existing.
-  if (honouredPinCount(repairedRoute, pinnedIds) < honouredPinCount(baseRoute, pinnedIds)) return false;
+  // A better walking target never justifies dropping an explicit commitment.
+  // Every other test here is about route quality, which the user did not ask
+  // about; "keep this one" is the thing they did ask for, so it outranks the
+  // repair's own reason for existing.
+  if (!repairKeepsEveryHonouredPin(baseRoute, repairedRoute, pinnedIds)) return false;
   if (!baseRoute) return true;
   if (!Number.isFinite(baseRoute.estimated_km) || baseRoute.estimated_km >= band.floorKm) return false;
   if (repairedRoute.estimated_km < baseRoute.estimated_km + 0.3) return false;

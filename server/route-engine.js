@@ -202,7 +202,6 @@ const AGNOSTIC_COMPOSE_TEMPLATE_ID = "__agnostic_compose__";
 // The template carries no stops of its own; every real stop comes from the
 // active catalog.
 const { applyPinnedSelection } = require("./planner/pinned-candidates");
-const { resolveAgnosticWalkingTargetBand } = require("./planner/agnostic-walking-target");
 
 function buildAgnosticComposeTemplate(targetKm) {
   return {
@@ -4325,65 +4324,6 @@ function summarizeArcGeometry(orderedStops, start, end, startProfile, endProfile
 }
 
 
-// Re-admit pins the authoritative chooser dropped, one at a time, keeping only
-// those the requested walk can still absorb.
-//
-// Order of admission is the pool order, which is already deterministic, so the
-// same request always keeps the same pins. A pin is refused ONLY when the set
-// was within the ceiling without it and is over the ceiling with it — that way
-// a day which is already over budget for reasons of its own does not start
-// blaming commitments, and a request with no walking ceiling (no_limit, or no
-// finite target) behaves exactly as before.
-//
-// Nothing is silently discarded: a refused pin is simply absent from the
-// composed day, which is what summarizePinnedOutcome reads, so it surfaces as
-// unhonoured rather than disappearing.
-function readmitPinsWithinWalkingBudget({
-  selected,
-  pool,
-  pinnedStopIds,
-  shape,
-  start,
-  end,
-  startProfile,
-  endProfile,
-  targetKm,
-  distanceMode,
-  legPacing,
-  lang,
-}) {
-  const current = Array.isArray(selected) ? selected : [];
-  const withPins = applyPinnedSelection(current, pool, pinnedStopIds);
-  if (withPins === current || withPins.length === current.length) return withPins;
-
-  const band = distanceMode === "no_limit" ? null : resolveAgnosticWalkingTargetBand(targetKm);
-  if (!band || !Number.isFinite(band.ceilingKm)) return withPins;
-
-  const estimateKm = (stops) => {
-    const geometry =
-      shape === "loop"
-        ? summarizeLoopGeometry(stops, start, end, startProfile, targetKm, distanceMode, legPacing, lang)
-        : summarizeArcGeometry(stops, start, end, startProfile, endProfile, targetKm, distanceMode, legPacing, lang);
-    return Number.isFinite(geometry?.estimatedKm) ? geometry.estimatedKm : null;
-  };
-
-  const baseKm = estimateKm(current);
-  // Already over budget without any pin — the ceiling is not what is
-  // discriminating here, so do not hold the commitments responsible for it.
-  if (baseKm === null || baseKm > band.ceilingKm) return withPins;
-
-  const presentIds = new Set(current.map((stop) => stop && stop.id).filter((id) => id != null));
-  const readded = withPins.filter((stop) => stop && !presentIds.has(stop.id));
-  let kept = current;
-  for (const stop of readded) {
-    const candidate = [stop, ...kept];
-    const km = estimateKm(candidate);
-    if (km === null || km > band.ceilingKm) continue;
-    kept = candidate;
-  }
-  return kept;
-}
-
 function optimizeStopOrder(selectedStops, shape, start, end, startProfile, endProfile, targetKm, distanceMode, legPacing = "balanced", lang = "sv") {
   if (selectedStops.length <= 1) {
     const summary =
@@ -5442,9 +5382,8 @@ function buildRouteFromTemplate(
   // AROUND it: pins join the selection here, before ordering, repair and the
   // walking constraint, so they are ordinary members from that point on. Only
   // pool members can be pinned — a candidate the gates removed is not here to
-  // force — and a pin the walking budget genuinely cannot fit is dropped by the
-  // same constraint as any other stop and reported as unhonoured rather than
-  // forced into an unwalkable route.
+  // force. Affordability against the requested walk is settled above this
+  // layer, against the finished route rather than this provisional selection.
   // The pool is a BOUNDED seed selection, not the whole gated reservoir, so a
   // place the preference ranking left out would otherwise be unpinnable. An
   // explicit "keep this" outranks a soft preference, so pins may also be drawn
@@ -5517,29 +5456,13 @@ function buildRouteFromTemplate(
   // scorer — it would appear to work whenever the pin happened to score well
   // and silently vanish when it did not.
   //
-  // But that chooser drops stops for TWO different reasons, and only one of
-  // them should be overridden. Losing to the ranking is a soft preference, and
-  // an explicit "keep this" outranks it. Being dropped because the set no
-  // longer fits the requested walk is not a preference at all, and re-adding
-  // over it produced a day that answered a 4 km request with a 7.6 km route
-  // while still reporting the pin as honoured and the walk as valid. So the
-  // re-application is feasibility-aware: a pin that pushes the day past the
-  // walking ceiling is left out and reported unhonoured, exactly as if the
-  // chooser had had the last word.
-  selectedStops = readmitPinsWithinWalkingBudget({
-    selected: selectedStops,
-    pool: pinnableStops,
-    pinnedStopIds: options.pinnedStopIds,
-    shape,
-    start,
-    end,
-    startProfile,
-    endProfile,
-    targetKm,
-    distanceMode,
-    legPacing,
-    lang,
-  });
+  // Losing to the ranking is a soft preference and an explicit "keep this"
+  // outranks it, so the pin goes back in unconditionally HERE. Whether the
+  // finished day can afford it is a different question, and one this layer
+  // cannot answer: ordering, bridge insertion and capacity repair all still lie
+  // ahead, and each changes the distance. That decision therefore belongs to
+  // whoever can see the published route — see settlePinsWithinWalkingBudget.
+  selectedStops = applyPinnedSelection(selectedStops, pinnableStops, options.pinnedStopIds);
 
   const { orderedStops, geometry } = optimizeStopOrder(
     selectedStops,
