@@ -23,6 +23,7 @@ import {
   planRecomposeRetention,
   scopeCommitmentsToAnchor,
   staleDayNotice,
+  unhonouredPins,
 } from "../lib/recompose-retention.mjs";
 import {
   acceptedLiveEventQuery,
@@ -297,7 +298,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // ONE ledger: candidate id -> the single commitment that applies to it. A
   // candidate cannot be both kept and dismissed, because that state cannot be
   // represented — the newest explicit action replaces the previous one.
-  const [commitments, setCommitments] = useState<Record<string, "exclude" | "pin">>({});
+  const [commitments, setCommitments] = useState<Record<string, { kind: "exclude" | "pin"; label: string }>>({});
   // A dismissal belongs to the day it was made on. Stamped with that day's
   // anchor so it cannot follow the user to another place.
   const commitmentAnchorKeyRef = useRef<string | null>(null);
@@ -1191,24 +1192,35 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // candidate the day did not choose) are the same commitment — "this must be
   // in the day" — reached from two places. Writing the map by key is what makes
   // exclude and pin unable to contradict each other: the newest action wins.
-  const commit = (identity: string, kind: "exclude" | "pin") => {
-    if (!identity || commitments[identity] === kind) return;
+  const commit = (identity: string, kind: "exclude" | "pin", commitLabel: string) => {
+    if (!identity || commitments[identity]?.kind === kind) return;
     setExpandedStopKey(null);
     setExpandedCandidateKey(null);
     // The anchor of the day on screen — the geography this commitment is about.
     commitmentAnchorKeyRef.current = displayedAnchorKeyRef.current;
-    setCommitments({ ...commitments, [identity]: kind });
+    // The label travels with the commitment so a day that could not keep a
+    // place can name it, without a second map to fall out of sync.
+    setCommitments({ ...commitments, [identity]: { kind, label: commitLabel } });
   };
-  const dismissStop = (identity: string) => commit(identity, "exclude");
-  const keepStop = (identity: string) => commit(identity, "pin");
+  const dismissStop = (identity: string, stopLabel: string) => commit(identity, "exclude", stopLabel);
+  const keepStop = (identity: string, stopLabel: string) => commit(identity, "pin", stopLabel);
   const releaseCommitment = (identity: string) => {
     if (!identity || !commitments[identity]) return;
     const next = { ...commitments };
     delete next[identity];
     setCommitments(next);
   };
-  const excludedCount = Object.values(commitments).filter((kind) => kind === "exclude").length;
-  const pinnedCount = Object.values(commitments).filter((kind) => kind === "pin").length;
+  const excludedCount = Object.values(commitments).filter((entry) => entry.kind === "exclude").length;
+  const pinnedCount = Object.values(commitments).filter((entry) => entry.kind === "pin").length;
+  // A pin the composed day does not contain. The server resolves pins against
+  // the candidates it loaded itself and will not invent a place to satisfy
+  // one — so this is reported, never swallowed.
+  const unkept = unhonouredPins({
+    entries: commitments,
+    pinnedIds: Object.keys(commitments).filter((id) => commitments[id].kind === "pin"),
+    stopIds: split.core.map((stop: any) => String(stop?.id ?? stop?.place_id ?? stop?.candidate_id ?? "")),
+    isStale: dayIsStale,
+  });
   // Some caps have no sentence of their own because a more specific surface
   // already states them (see day-limitations.mjs). Guard on the rendered note,
   // never on the cap count, or those days render an empty bullet.
@@ -1475,6 +1487,30 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           >
             {t("Börja om utan mina val", "Start over without my choices")}
           </button>
+        </p>
+      )}
+
+      {/* A pin is a request, not a promise. When the day that came back does
+          not contain a kept place, say so plainly and name it — the day on
+          screen is the evidence. Silently dropping it would let the ledger
+          claim something the day does not show. */}
+      {unkept.count > 0 && (
+        <p className="text-[13px] text-parranda-ink/70" role="status">
+          <span aria-hidden="true" className="mr-1.5">!</span>
+          {unkept.labels.length === unkept.count && unkept.labels.length > 0
+            ? t(
+                `Kunde inte få plats i dagen: ${unkept.labels.join(", ")}. Parranda hittar ingen väg dit med det underlag som finns här.`,
+                `Could not fit in this day: ${unkept.labels.join(", ")}. Parranda has no way to place it with the evidence it has here.`,
+              )
+            : unkept.count === 1
+              ? t(
+                  "En plats du valde kunde inte få plats i dagen.",
+                  "One place you kept could not fit in this day.",
+                )
+              : t(
+                  `${unkept.count} platser du valde kunde inte få plats i dagen.`,
+                  `${unkept.count} places you kept could not fit in this day.`,
+                )}
         </p>
       )}
 
@@ -1868,7 +1904,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                             mutually exclusive by construction — the ledger
                             holds one commitment per candidate — so a kept stop
                             offers release rather than the opposite verb. */}
-                        {hasRealId && (commitments[stopIdentity] === "pin" ? (
+                        {hasRealId && (commitments[stopIdentity]?.kind === "pin" ? (
                           <button
                             type="button"
                             onClick={() => releaseCommitment(stopIdentity)}
@@ -1880,17 +1916,17 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                         ) : (
                           <button
                             type="button"
-                            onClick={() => keepStop(stopIdentity)}
+                            onClick={() => keepStop(stopIdentity, name)}
                             className="inline-flex min-h-11 w-full items-center justify-center rounded-parranda-btn border border-parranda-ink/20 px-4 text-sm font-semibold text-parranda-ink/75 transition hover:border-parranda-ember hover:text-parranda-ink sm:w-auto sm:px-5"
                           >
                             <span aria-hidden="true" className="mr-2">✦</span>
                             {t("Behåll den här", "Keep this one")}
                           </button>
                         ))}
-                        {hasRealId && commitments[stopIdentity] !== "pin" && (
+                        {hasRealId && commitments[stopIdentity]?.kind !== "pin" && (
                           <button
                             type="button"
-                            onClick={() => dismissStop(stopIdentity)}
+                            onClick={() => dismissStop(stopIdentity, name)}
                             className="inline-flex min-h-11 w-full items-center justify-center rounded-parranda-btn border border-parranda-ink/20 px-4 text-sm font-semibold text-parranda-ink/75 transition hover:border-parranda-ink/40 hover:text-parranda-ink sm:w-auto sm:px-5"
                           >
                             <span aria-hidden="true" className="mr-2">−</span>
@@ -2039,18 +2075,18 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                                 <button
                                   type="button"
                                   onClick={() =>
-                                    commitments[candidateId] === "pin"
+                                    commitments[candidateId]?.kind === "pin"
                                       ? releaseCommitment(candidateId)
-                                      : commit(candidateId, "pin")
+                                      : commit(candidateId, "pin", name)
                                   }
                                   className={`mt-2 inline-flex min-h-11 w-full items-center justify-center rounded-parranda-btn border px-4 text-sm font-semibold transition sm:w-auto ${
-                                    commitments[candidateId] === "pin"
+                                    commitments[candidateId]?.kind === "pin"
                                       ? "border-parranda-ember/45 bg-parranda-ember/10 text-parranda-ink hover:border-parranda-ember"
                                       : "border-parranda-ink/20 text-parranda-ink/75 hover:border-parranda-ember hover:text-parranda-ink"
                                   }`}
                                 >
                                   <span aria-hidden="true" className="mr-2 text-parranda-ember">✦</span>
-                                  {commitments[candidateId] === "pin"
+                                  {commitments[candidateId]?.kind === "pin"
                                     ? t("Med i dagen — släpp", "In my day — release")
                                     : t("Lägg till i min dag", "Add to my day")}
                                 </button>
@@ -2153,18 +2189,18 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                               <button
                                 type="button"
                                 onClick={() =>
-                                  commitments[candidateId] === "pin"
+                                  commitments[candidateId]?.kind === "pin"
                                     ? releaseCommitment(candidateId)
-                                    : commit(candidateId, "pin")
+                                    : commit(candidateId, "pin", name)
                                 }
                                 className={`mt-2 inline-flex min-h-11 w-full items-center justify-center rounded-parranda-btn border px-4 text-sm font-semibold transition sm:w-auto ${
-                                  commitments[candidateId] === "pin"
+                                  commitments[candidateId]?.kind === "pin"
                                     ? "border-parranda-ember/45 bg-parranda-ember/10 text-parranda-ink hover:border-parranda-ember"
                                     : "border-parranda-ink/20 text-parranda-ink/75 hover:border-parranda-ember hover:text-parranda-ink"
                                 }`}
                               >
                                 <span aria-hidden="true" className="mr-2 text-parranda-ember">✦</span>
-                                {commitments[candidateId] === "pin"
+                                {commitments[candidateId]?.kind === "pin"
                                   ? t("Med i dagen — släpp", "In my day — release")
                                   : t("Lägg till i min dag", "Add to my day")}
                               </button>

@@ -76,13 +76,15 @@ export function planRecomposeRetention({
  * drops them. Anchor identity is the same notion the day itself uses, so the
  * two can never disagree.
  *
- * Commitments are held as one map of candidate id -> "exclude" | "pin" rather
+ * Commitments are held as one map of candidate id -> { kind, label } rather
  * than as two lists. A candidate therefore has exactly one commitment at a
  * time, and the newest explicit action replaces the previous one — the server
  * can never be handed "must include X" and "exclude X" together, because that
- * state cannot be represented.
+ * state cannot be represented. The label is display-only: it lets the day say
+ * WHICH place it could not keep, and it travels with the commitment so the two
+ * cannot fall out of sync.
  *
- * @returns {{ entries: Record<string, string>, excludedIds: string[], pinnedIds: string[], applies: boolean }}
+ * @returns {{ entries: Record<string, {kind: string, label: string}>, excludedIds: string[], pinnedIds: string[], applies: boolean }}
  */
 export function scopeCommitmentsToAnchor({ entries = {}, ledgerAnchorKey = null, nextAnchorKey = null } = {}) {
   const source = entries && typeof entries === "object" ? entries : {};
@@ -91,9 +93,33 @@ export function scopeCommitmentsToAnchor({ entries = {}, ledgerAnchorKey = null,
   const scoped = applies ? source : {};
   return {
     entries: scoped,
-    excludedIds: Object.keys(scoped).filter((id) => scoped[id] === "exclude"),
-    pinnedIds: Object.keys(scoped).filter((id) => scoped[id] === "pin"),
+    excludedIds: Object.keys(scoped).filter((id) => scoped[id]?.kind === "exclude"),
+    pinnedIds: Object.keys(scoped).filter((id) => scoped[id]?.kind === "pin"),
     applies,
+  };
+}
+
+/**
+ * Which kept places the composed day does NOT contain.
+ *
+ * A pin is a request, not a guarantee: the server resolves it against the
+ * candidates it loaded itself, and it will not invent a place to satisfy one.
+ * When it cannot honour a pin it says so — and the day on screen is the proof.
+ * Deriving the answer from the RENDERED stops rather than from the request is
+ * what keeps the notice honest: it can only ever claim what the user can see.
+ *
+ * Silent while the day is stale, because the stops on screen belong to the
+ * previous request and would accuse the wrong day.
+ *
+ * @returns {{ labels: string[], count: number }}
+ */
+export function unhonouredPins({ entries = {}, pinnedIds = [], stopIds = [], isStale = false } = {}) {
+  if (isStale) return { labels: [], count: 0 };
+  const present = new Set((Array.isArray(stopIds) ? stopIds : []).filter(Boolean));
+  const missing = (Array.isArray(pinnedIds) ? pinnedIds : []).filter((id) => id && !present.has(id));
+  return {
+    labels: missing.map((id) => String(entries?.[id]?.label || "").trim()).filter(Boolean),
+    count: missing.length,
   };
 }
 

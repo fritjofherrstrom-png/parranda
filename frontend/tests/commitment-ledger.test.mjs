@@ -85,12 +85,12 @@ test("the way back is visible without opening anything", () => {
 // made there.
 // --------------------------------------------------------------------------
 
-import { anchorKey, scopeCommitmentsToAnchor } from "../src/lib/recompose-retention.mjs";
+import { anchorKey, scopeCommitmentsToAnchor, unhonouredPins } from "../src/lib/recompose-retention.mjs";
 
 test("the ledger survives a recompose of the same place", () => {
   const key = anchorKey({ place: "Trogir" });
   const scoped = scopeCommitmentsToAnchor({
-    entries: { "osm-way-1": "exclude", "osm-node-7": "pin" },
+    entries: { "osm-way-1": { kind: "exclude", label: "A" }, "osm-node-7": { kind: "pin", label: "B" } },
     ledgerAnchorKey: key,
     nextAnchorKey: key,
   });
@@ -102,7 +102,7 @@ test("the ledger survives a recompose of the same place", () => {
 
 test("the ledger does not follow the user to another place", () => {
   const scoped = scopeCommitmentsToAnchor({
-    entries: { "cafe-0": "exclude", "museum-2": "pin" },
+    entries: { "cafe-0": { kind: "exclude", label: "A" }, "museum-2": { kind: "pin", label: "B" } },
     ledgerAnchorKey: anchorKey({ place: "Trogir" }),
     nextAnchorKey: anchorKey({ place: "Kotor" }),
   });
@@ -117,7 +117,7 @@ test("GPS jitter is still the same place, real movement is not", () => {
   const jitter = anchorKey({ coords: { lat: 43.51742, lng: 16.25091 } });
   const elsewhere = anchorKey({ coords: { lat: 42.42440, lng: 18.77120 } });
 
-  const entries = { a: "pin" };
+  const entries = { a: { kind: "pin", label: "A" } };
   assert.equal(scopeCommitmentsToAnchor({ entries, ledgerAnchorKey: here, nextAnchorKey: jitter }).applies, true);
   assert.equal(scopeCommitmentsToAnchor({ entries, ledgerAnchorKey: here, nextAnchorKey: elsewhere }).applies, false);
 });
@@ -125,7 +125,7 @@ test("GPS jitter is still the same place, real movement is not", () => {
 test("an unstamped ledger is never applied", () => {
   // No anchor recorded means we cannot say which geography it belongs to.
   const scoped = scopeCommitmentsToAnchor({
-    entries: { a: "exclude" },
+    entries: { a: { kind: "exclude", label: "A" } },
     ledgerAnchorKey: null,
     nextAnchorKey: anchorKey({ place: "X" }),
   });
@@ -196,11 +196,11 @@ test("exclude and pin cannot contradict each other for the same candidate", () =
   // Not a runtime check but a representation choice: one map keyed by
   // candidate id holds exactly one commitment, so the newest action replaces
   // the previous one and the server is never handed both at once.
-  assert.match(component, /useState<Record<string, "exclude" \| "pin">>\(\{\}\)/);
-  assert.match(component, /setCommitments\(\{ \.\.\.commitments, \[identity\]: kind \}\)/);
+  assert.match(component, /useState<Record<string, \{ kind: "exclude" \| "pin"; label: string \}>>\(\{\}\)/);
+  assert.match(component, /setCommitments\(\{ \.\.\.commitments, \[identity\]: \{ kind, label: commitLabel \} \}\)/);
 
   const both = scopeCommitmentsToAnchor({
-    entries: { "museum-2": "pin" },
+    entries: { "museum-2": { kind: "pin", label: "Museum" } },
     ledgerAnchorKey: "place:x",
     nextAnchorKey: "place:x",
   });
@@ -209,10 +209,10 @@ test("exclude and pin cannot contradict each other for the same candidate", () =
 });
 
 test("Keep and Add are the same primitive reached from two places", () => {
-  assert.match(component, /const dismissStop = \(identity: string\) => commit\(identity, "exclude"\);/);
-  assert.match(component, /const keepStop = \(identity: string\) => commit\(identity, "pin"\);/);
+  assert.match(component, /const dismissStop = \(identity: string, stopLabel: string\) => commit\(identity, "exclude", stopLabel\);/);
+  assert.match(component, /const keepStop = \(identity: string, stopLabel: string\) => commit\(identity, "pin", stopLabel\);/);
   // Add, on a candidate the day did not choose, writes the identical commitment.
-  assert.match(component, /commit\(candidateId, "pin"\)/);
+  assert.match(component, /commit\(candidateId, "pin", name\)/);
 });
 
 test("a commitment can be released without starting over", () => {
@@ -227,7 +227,7 @@ test("a commitment can be released without starting over", () => {
 test("a kept stop is not also offered as dismissable", () => {
   // The two verbs are mutually exclusive, so the panel must not present the
   // contradiction as if it were available.
-  assert.match(component, /\{hasRealId && commitments\[stopIdentity\] !== "pin" && \(/);
+  assert.match(component, /\{hasRealId && commitments\[stopIdentity\]\?\.kind !== "pin" && \(/);
 });
 
 test("Add is offered only against a real candidate id", () => {
@@ -235,4 +235,64 @@ test("Add is offered only against a real candidate id", () => {
   // an index fallback would pin whatever later happens to sit in that slot.
   assert.match(component, /const candidateId = String\(stop\?\.id \?\? stop\?\.place_id \?\? stop\?\.candidate_id \?\? ""\)\.trim\(\);/);
   assert.match(component, /\{candidateId && \(/);
+});
+
+// --------------------------------------------------------------------------
+// A pin is a request, not a promise.
+//
+// Found on staging: two pins went out, the day came back containing neither,
+// and the ledger still said "kept" with no explanation. The server had already
+// reported unhonored_count honestly — the day on screen was the one lying.
+// --------------------------------------------------------------------------
+
+test("a kept place the day does not contain is reported, and named", () => {
+  const out = unhonouredPins({
+    entries: { "osm-node-1": { kind: "pin", label: "Sokol" }, "osm-node-2": { kind: "pin", label: "Sushimama" } },
+    pinnedIds: ["osm-node-1", "osm-node-2"],
+    stopIds: ["osm-node-1", "osm-way-9"],
+  });
+  assert.equal(out.count, 1);
+  assert.deepEqual(out.labels, ["Sushimama"]);
+});
+
+test("an honoured pin says nothing at all", () => {
+  const out = unhonouredPins({
+    entries: { "osm-node-1": { kind: "pin", label: "Sokol" } },
+    pinnedIds: ["osm-node-1"],
+    stopIds: ["osm-node-1", "osm-way-9"],
+  });
+  assert.equal(out.count, 0);
+  assert.deepEqual(out.labels, []);
+});
+
+test("a stale day accuses nobody", () => {
+  // The stops on screen belong to the previous request; judging a new pin
+  // against them would report a failure that has not happened yet.
+  const out = unhonouredPins({
+    entries: { "osm-node-2": { kind: "pin", label: "Sushimama" } },
+    pinnedIds: ["osm-node-2"],
+    stopIds: ["osm-way-9"],
+    isStale: true,
+  });
+  assert.equal(out.count, 0);
+});
+
+test("the verdict is derived from the rendered day, never from the request", () => {
+  // Counting what was asked for would let the notice claim a failure the user
+  // cannot see. It must only ever describe the stops on screen.
+  assert.match(component, /stopIds: split\.core\.map\(/);
+  assert.match(component, /isStale: dayIsStale,/);
+  assert.match(component, /\{unkept\.count > 0 && \(/);
+  assert.match(component, /Kunde inte få plats i dagen|Could not fit in this day/);
+});
+
+test("the notice degrades to a count when a label is missing", () => {
+  const out = unhonouredPins({
+    entries: {},
+    pinnedIds: ["osm-node-2"],
+    stopIds: [],
+  });
+  assert.equal(out.count, 1);
+  assert.deepEqual(out.labels, [], "no invented name");
+  assert.match(component, /One place you kept could not fit in this day\./);
 });
