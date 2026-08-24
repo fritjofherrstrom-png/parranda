@@ -2,6 +2,8 @@ export declare const LAST_KEY: string;
 export declare const SAVED_KEY: string;
 export declare const SAVED_CAP: number;
 
+import type { CommitmentSnapshot } from "./commitment-snapshot.mjs";
+
 export interface SavedInputs {
   place?: string | null;
   mode?: string;
@@ -19,6 +21,8 @@ export interface SavedEntry {
   safeResponse: any;
   classification: any;
   inputs: SavedInputs | null;
+  /** The commitments this day answered. Null for days saved before this existed. */
+  commitments: CommitmentSnapshot | null;
 }
 
 export declare function buildSavedEntry(options?: {
@@ -29,6 +33,7 @@ export declare function buildSavedEntry(options?: {
   safeResponse?: any;
   classification?: any;
   inputs?: SavedInputs;
+  commitments?: CommitmentSnapshot | null;
 }): SavedEntry;
 
 export declare function upsertSaved(list: SavedEntry[] | null | undefined, entry: SavedEntry): SavedEntry[];
