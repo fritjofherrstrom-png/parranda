@@ -27,6 +27,14 @@ function createClock(window) {
   let now = 0;
   let seq = 0;
   const pending = new Map();
+  // Replacing the global timers leaks into every later test file in the same
+  // process, so the originals are handed back on teardown.
+  const realGlobals = {
+    setTimeout: globalThis.setTimeout,
+    clearTimeout: globalThis.clearTimeout,
+    setInterval: globalThis.setInterval,
+    clearInterval: globalThis.clearInterval,
+  };
 
   window.setTimeout = (fn, delay = 0) => {
     const id = ++seq;
@@ -61,6 +69,10 @@ function createClock(window) {
       await flushMicrotasks();
     },
     pendingCount: () => pending.size,
+    restore() {
+      for (const [key, value] of Object.entries(realGlobals)) globalThis[key] = value;
+      pending.clear();
+    },
   };
 }
 
@@ -98,12 +110,24 @@ export function createDeferredFetch() {
     calls,
     /** The most recent request that has not been answered yet. */
     pending: () => queue.filter((c) => !c.answered && !c.aborted),
-    respond(call, payload, status = 200) {
+    /**
+     * Resolve the fetch. `json()` is deferred separately, because the component
+     * awaits the headers and the body at two different moments and a race can
+     * live in the gap between them.
+     */
+    respond(call, payload, status = 200, { deferBody = false } = {}) {
       call.answered = true;
+      let releaseBody = null;
+      const bodyPromise = deferBody
+        ? new Promise((resolveBody) => {
+            releaseBody = () => resolveBody(payload);
+          })
+        : Promise.resolve(payload);
+      call.releaseBody = releaseBody;
       call.resolveResponse({
         ok: status >= 200 && status < 300,
         status,
-        json: async () => payload,
+        json: () => bodyPromise,
       });
       return flushMicrotasks();
     },
@@ -247,7 +271,10 @@ export async function mountPlanner({ url = "http://localhost/anywhere?lang=en", 
     },
     fetchMock: {
       ...fetchMock,
-      respond: (call, payload, status) => run(() => fetchMock.respond(call, payload, status)),
+      respond: (call, payload, status, opts) =>
+        run(() => fetchMock.respond(call, payload, status, opts)),
+      /** Release a body held back by respond(..., { deferBody: true }). */
+      releaseBody: (call) => run(() => { call.releaseBody?.(); }),
     },
     container,
     act: run,
@@ -260,6 +287,7 @@ export async function mountPlanner({ url = "http://localhost/anywhere?lang=en", 
       // frame. Restoring globals before it does would pull window out from
       // under work already queued.
       await new Promise((r) => setImmediate(r));
+      clock.restore();
       for (const [key, descriptor] of priorGlobals) {
         if (descriptor) Object.defineProperty(globalThis, key, descriptor);
         else delete globalThis[key];

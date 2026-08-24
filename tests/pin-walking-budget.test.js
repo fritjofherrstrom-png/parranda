@@ -18,6 +18,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  MAX_SHED_ATTEMPTS,
   pinDropOrder,
   settlePinsWithinWalkingBudget,
   withinBudget,
@@ -45,10 +46,15 @@ test("an already-over-budget baseline is not blamed on the pins", () => {
   assert.equal(withinBudget({ withPins: day(21.1), baseline: day(16.3), ceilingKm: CEILING }), false);
 });
 
-test("no route at all is not a budget question", () => {
-  // Dropping further pins cannot conjure a route, and the caller reports them
-  // unhonoured either way.
-  assert.equal(withinBudget({ withPins: day(null), baseline: day(4.0), ceilingKm: CEILING }), true);
+test("losing the route entirely is not an acceptable settlement", () => {
+  // The first version of this rule accepted any pin set that produced no route,
+  // on the reasoning that shedding cannot conjure one. That is only true when
+  // the request composes nothing WITHOUT the pins either. When the baseline
+  // does compose, the commitments are what broke it, and a smaller set of them
+  // would still have left the user with a day.
+  assert.equal(withinBudget({ withPins: day(null), baseline: day(4.0), ceilingKm: CEILING }), false);
+  // Nothing either way: that is the day, and the pins are not to blame.
+  assert.equal(withinBudget({ withPins: day(null), baseline: day(null), ceilingKm: CEILING }), true);
 });
 
 // --------------------------------------------------------------------------
@@ -103,8 +109,13 @@ test("the loop shrinks the pin set and terminates within pins + 1 finalisations"
   assert.ok(calls.some((c) => c.length === 0), "the pin-less baseline is finalised for comparison");
 });
 
-test("it settles on the largest affordable pin set, not the first one tried", async () => {
-  // Only the far pin is unaffordable. The near ones must survive.
+test("shedding stops as soon as the set is affordable", async () => {
+  // Only the far pin is unaffordable, and it is shed first, so the near ones
+  // survive. Note what this does NOT claim: the result is the first affordable
+  // set reached by dropping farthest-first, not a search for the largest
+  // affordable subset. Dropping a nearer pin might occasionally retain one
+  // more, but finding that would mean finalising combinations rather than a
+  // chain, and every finalisation is a full compose.
   const finalize = async (pins) => (pins.includes("far") ? day(9.9, pins) : day(4.1, pins));
   const pins = ["near", "mid", "far"];
   const settled = await settlePinsWithinWalkingBudget({
@@ -147,4 +158,101 @@ test("no walking ceiling means no budget rule at all", async () => {
     });
     assert.equal(settled, first);
   }
+});
+
+test("a pin set that composes no route at all keeps shedding", async () => {
+  // A day is worth more than a commitment. If the pins break composition
+  // outright while a smaller set would still have produced something, handing
+  // back the empty result gives the user nothing — and it reports every pin
+  // unhonoured anyway, so nothing is gained by stopping early.
+  const finalize = async (pins) => {
+    if (pins.includes("far")) return { route: null };
+    return day(4.1, pins);
+  };
+  const pins = ["near", "mid", "far"];
+  const settled = await settlePinsWithinWalkingBudget({
+    finalize,
+    withPins: await finalize(pins),
+    pins,
+    walkingKmTarget: 4,
+    origin: ORIGIN,
+    sourceCandidates: CANDIDATES,
+  });
+  assert.deepEqual(
+    settled.route.main_stops.map((s) => s.id),
+    ["near", "mid"],
+    "the commitments that still leave a day standing are kept",
+  );
+});
+
+test("a request that composes nothing either way is not blamed on the pins", async () => {
+  // No route with them and no route without them: shedding cannot conjure one,
+  // and the honest outcome is the empty day the request would have produced
+  // anyway.
+  let calls = 0;
+  const finalize = async () => { calls += 1; return { route: null }; };
+  const withPins = await finalize();
+  calls = 0;
+  const settled = await settlePinsWithinWalkingBudget({
+    finalize,
+    withPins,
+    pins: ["near", "mid", "far"],
+    walkingKmTarget: 4,
+    origin: ORIGIN,
+    sourceCandidates: CANDIDATES,
+  });
+  assert.equal(settled.route, null);
+  assert.equal(calls, 1, "only the baseline is finalised — no pointless shedding");
+});
+
+test("shedding is bounded, however many commitments a request carries", async () => {
+  // Every finalisation is a full compose — ordering, bridge insertion, capacity
+  // repair, event weave — and can reach the engine several times. Measured
+  // end-to-end before this ceiling: twelve unaffordable pins cost 13 engine
+  // runs and ~2s of event-loop time, against 2 runs and ~54ms for the same
+  // request with none. That is reachable from one public request, so the chain
+  // is bounded independently of the pin limit.
+  const calls = [];
+  const finalize = async (pins) => {
+    calls.push([...pins]);
+    return day(pins.length ? 99 : 4.0, pins);
+  };
+  const pins = Array.from({ length: 12 }, (_, i) => `far-${i}`);
+  const candidates = pins.map((id, i) => ({ id, lat: 41.9 + 0.02 + i * 0.0006, lng: 12.49 }));
+
+  const first = await finalize(pins);
+  calls.length = 0;
+  const settled = await settlePinsWithinWalkingBudget({
+    finalize,
+    withPins: first,
+    pins,
+    walkingKmTarget: 4,
+    origin: { lat: 41.9, lng: 12.49 },
+    sourceCandidates: candidates,
+  });
+
+  assert.ok(
+    calls.length <= MAX_SHED_ATTEMPTS + 1,
+    `at most ${MAX_SHED_ATTEMPTS} sheds plus the baseline, got ${calls.length}`,
+  );
+  // Giving up returns the pin-less day, so every commitment reports unhonoured
+  // — the same answer shedding to the end would have produced, at a fraction of
+  // the cost.
+  assert.deepEqual(settled.route.main_stops, [], "the pin-less baseline is what is published");
+});
+
+test("the bound does not fire for a set that settles quickly", async () => {
+  // A near-affordable day must not be penalised by a ceiling meant for
+  // wholesale-unaffordable ones.
+  const finalize = async (pins) => (pins.includes("far") ? day(99, pins) : day(4.1, pins));
+  const pins = ["near", "mid", "far"];
+  const settled = await settlePinsWithinWalkingBudget({
+    finalize,
+    withPins: await finalize(pins),
+    pins,
+    walkingKmTarget: 4,
+    origin: ORIGIN,
+    sourceCandidates: CANDIDATES,
+  });
+  assert.deepEqual(settled.route.main_stops.map((s) => s.id), ["near", "mid"]);
 });

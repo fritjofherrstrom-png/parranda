@@ -155,27 +155,26 @@ async function addOutsider(h) {
 
 // --------------------------------------------------------------------------
 
-test("the debounce window never accuses the day on screen", async (t) => {
+test("the debounce boundary is exactly where it claims to be", async (t) => {
   const h = await plannerWithDay();
   t.after(() => h.unmount());
 
   assert.ok(!NOTICE.test(h.text()), "precondition: a clean composed day");
+  const before = h.fetchMock.calls.length;
 
   await addOutsider(h);
-
-  // The ledger updates immediately — that is the user's own action echoed back.
   assert.match(h.text(), KEPT_LEDGER, "the commitment is acknowledged at once");
 
-  // ...but for the whole 400ms debounce, no request has even been sent, so the
-  // day on screen has not been asked about this pin and must not be judged
-  // against it. Step right up to the edge.
-  for (const step of [0, 100, 200, 399]) {
-    await h.clock.advance(step === 0 ? 0 : 1);
-    await h.clock.advance(step === 0 ? 0 : 0);
-    assert.ok(!NOTICE.test(h.text()), `no verdict at t=${step}ms, before the request exists`);
-  }
+  // 399ms: the debounce has NOT fired. No request exists, so the day on screen
+  // has not been asked about this commitment and cannot answer for it.
   await h.clock.advance(399);
-  assert.ok(!NOTICE.test(h.text()), "still silent at the end of the debounce");
+  assert.equal(h.fetchMock.calls.length, before, "no request at 399ms");
+  assert.ok(!NOTICE.test(h.text()), "and therefore no verdict at 399ms");
+
+  // 400ms: it fires. Still no verdict — now because the answer is outstanding.
+  await h.clock.advance(1);
+  assert.equal(h.fetchMock.calls.length, before + 1, "the request leaves at 400ms");
+  assert.ok(!NOTICE.test(h.text()), "no verdict while the answer is outstanding");
 });
 
 test("an in-flight request never accuses the day on screen", async (t) => {
@@ -345,4 +344,48 @@ test("releasing a pin mid-flight does not leave the day naming it", async (t) =>
       "a released commitment must not be named as unmet",
     );
   }
+});
+
+test("an answer to a superseded intent cannot install its day", async (t) => {
+  const h = await plannerWithDay(["a", "b", "c"]);
+  t.after(() => h.unmount());
+
+  // Commit, let the request leave, and hold it open.
+  await addOutsider(h);
+  await h.clock.advance(500);
+  const inFlight = h.fetchMock.pending()[0];
+  assert.deepEqual(inFlight.body.pinned_candidate_ids, ["outsider"]);
+
+  // The user changes their mind while it is in flight. Everything outstanding
+  // is now answering a question they have moved past.
+  await keepFirstStop(h);
+
+  // The older answer arrives anyway, carrying a day composed for the older
+  // intent. The immutable verdict snapshot would keep it from SAYING anything
+  // false — but it must not install its route either.
+  await h.fetchMock.respond(inFlight, composedDay(["q", "r", "s"])).catch(() => {});
+  await h.clock.advance(50);
+
+  assert.ok(!/Place q/.test(h.text()), "a superseded intent's day cannot take the screen");
+  assert.match(h.text(), /Place a/, "the day the user is looking at is still theirs");
+});
+
+test("a body released after the intent moved on is still refused", async (t) => {
+  const h = await plannerWithDay(["a", "b", "c"]);
+  t.after(() => h.unmount());
+
+  await addOutsider(h);
+  await h.clock.advance(500);
+  const inFlight = h.fetchMock.pending()[0];
+
+  // Headers land while the intent is still current...
+  await h.fetchMock.respond(inFlight, composedDay(["q", "r", "s"]), 200, { deferBody: true });
+
+  // ...and the user changes their mind in the gap before the body arrives.
+  // Reading the response is two awaits, and a race can live between them.
+  await keepFirstStop(h);
+  await h.fetchMock.releaseBody(inFlight);
+  await h.clock.advance(50);
+
+  assert.ok(!/Place q/.test(h.text()), "the generation check must survive the body await");
 });

@@ -2297,7 +2297,7 @@ function buildApp({
       // candidate opt-in + the trusted server openDataLoader are still required
       // inside composeAgnosticRouteOutput. Public payload never becomes trusted.
       const useEngineCompose = isAgnosticEngineComposeRequested(request);
-      const { result: experimentResult, experiment } = await composeAgnosticRouteOutput({
+      const { result: experimentResult, experiment, eventWeave } = await composeAgnosticRouteOutput({
         coords: anchor,
         baselineResult: baselineBody,
         externalRequested: isExternalCandidatesRequested(request),
@@ -2316,6 +2316,11 @@ function buildApp({
         walkingRouter,
         walkingConfig,
         walkingKmTarget: payload.walkingKmTarget,
+        distanceMode: payload.distanceMode,
+        // So the authoritative finalisation can weave the same evening event
+        // the response will carry, rather than settling on a route that is
+        // then extended underneath it.
+        eveningEventStructure: wovenPlaceStructure,
         weatherProvider,
         clock,
         trustedTimezone: intake.resolved?.timezone || null,
@@ -2373,12 +2378,17 @@ function buildApp({
           requestedCity,
           cityFallbackUsed,
         });
-        const engineWoven = await weaveEventStopFailSoft({
-          result: publicResult,
-          placeStructure: wovenPlaceStructure,
-          walkingRouter,
-          walkingConfig,
-        });
+        // Compose already applied this weave INSIDE its authoritative
+        // finalisation, so the route it settled on is the route below. Weaving
+        // again here would either be a no-op or a second, unjudged mutation.
+        const engineWoven = eventWeave && eventWeave.applied
+          ? { ...eventWeave, result: publicResult }
+          : await weaveEventStopFailSoft({
+              result: publicResult,
+              placeStructure: wovenPlaceStructure,
+              walkingRouter,
+              walkingConfig,
+            });
         reconcileConstraintAfterEventWeave({
           experiment,
           woven: engineWoven,

@@ -918,6 +918,38 @@ test(
 // reachable and pinnable — and the day still cannot afford it.
 // --------------------------------------------------------------------------
 
+const { MAX_SHED_ATTEMPTS } = require("../server/planner/pin-walking-budget");
+
+/** walkBudgetLoader, plus twelve far-but-reachable places to pin at once. */
+function manyFarLoader() {
+  const base = { lat: 41.9, lng: 12.49 };
+  const recs = [];
+  let n = 0;
+  const pt = () => {
+    const c = { lat: base.lat + n * 0.0004, lng: base.lng + (n % 3) * 0.0004 };
+    n += 1;
+    return c;
+  };
+  for (let i = 0; i < 6; i += 1) {
+    const c = pt();
+    recs.push(externalRecord(`food-${i}`, `Food ${i}`, "restaurant", c.lat, c.lng, ["mat"]));
+  }
+  for (let i = 0; i < 4; i += 1) {
+    const c = pt();
+    recs.push(externalRecord(`cafe-${i}`, `Cafe ${i}`, "cafe", c.lat, c.lng, ["fika"]));
+  }
+  for (let i = 0; i < 4; i += 1) {
+    const c = pt();
+    recs.push(externalRecord(`view-${i}`, `View ${i}`, "viewpoint", c.lat, c.lng, ["utsikt"]));
+  }
+  for (let i = 0; i < 12; i += 1) {
+    recs.push(
+      externalRecord(`far-${i}`, `Far ${i}`, "restaurant", base.lat + 0.02 + i * 0.0006, base.lng + i * 0.0004, ["mat"]),
+    );
+  }
+  return makeLoader(recs);
+}
+
 function walkBudgetLoader() {
   const base = { lat: 41.9, lng: 12.49 };
   const recs = [];
@@ -1029,5 +1061,147 @@ test(
       pinned.body.agnostic_route_output_experiment.pinned_candidates.honored_count,
       1,
     );
+  }),
+);
+
+// --------------------------------------------------------------------------
+// The route that gets EMITTED is the one a commitment has to be affordable
+// against — including the evening-event weave, which extends it by up to
+// MAX_EVENT_LEG_KM after composition.
+// --------------------------------------------------------------------------
+
+/**
+ * A cluster, one mid-distance place to pin, and a tonight-event positioned so
+ * the weave adds real distance while staying inside MAX_EVENT_LEG_KM.
+ *
+ * The geometry is tuned so the pinned day lands just inside the 4.72km ceiling
+ * BEFORE the weave and outside it after — which is exactly the gap the weave
+ * used to fall into.
+ */
+function wovenBudgetLoader() {
+  const base = { lat: 41.9, lng: 12.49 };
+  const recs = [];
+  let n = 0;
+  const pt = () => {
+    const c = { lat: base.lat + n * 0.0004, lng: base.lng + (n % 3) * 0.0004 };
+    n += 1;
+    return c;
+  };
+  for (let i = 0; i < 4; i += 1) {
+    const c = pt();
+    recs.push(externalRecord(`food-${i}`, `Food ${i}`, "restaurant", c.lat, c.lng, ["mat"]));
+  }
+  for (let i = 0; i < 3; i += 1) {
+    const c = pt();
+    recs.push(externalRecord(`cafe-${i}`, `Cafe ${i}`, "cafe", c.lat, c.lng, ["fika"]));
+  }
+  for (let i = 0; i < 3; i += 1) {
+    const c = pt();
+    recs.push(externalRecord(`view-${i}`, `View ${i}`, "viewpoint", c.lat, c.lng, ["utsikt"]));
+  }
+  recs.push(externalRecord("mid-far", "Mid Far", "restaurant", base.lat + 0.013, base.lng, ["mat"]));
+  return makeLoader(recs);
+}
+
+test(
+  "a pin is judged against the woven route, not the route before the weave",
+  async () => {
+    global.fetch = mockStableWeatherFetch();
+    const server = buildApp({
+      openDataLoader: wovenBudgetLoader(),
+      eventSupply: eventSupplyWith(tonightEventAt(12.505)),
+    }).listen(0);
+    try {
+      const plain = await requestJson(server, {
+        path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+        method: "POST",
+        body: walkBudgetBody(),
+      });
+      const baseline = plain.body.days[0].primary_route;
+      assert.ok(
+        (baseline.main_stops || []).some((stop) => stop.is_live_event),
+        "precondition: the event really is woven into the emitted route",
+      );
+
+      const pinned = await requestJson(server, {
+        path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+        method: "POST",
+        body: walkBudgetBody({ pinned_candidate_ids: ["mid-far"] }),
+      });
+      const route = pinned.body.days[0].primary_route;
+      const verdict = pinned.body.agnostic_route_output_experiment.pinned_candidates;
+
+      // With the weave applied only after settling, this exact request came
+      // back at 4.9km against a 4.72 ceiling, with the pin reported honoured
+      // and nothing but the diagnostics reconciled. The number the settling
+      // decides on has to be the number the client receives.
+      assert.ok(
+        route.estimated_km <= 4.72,
+        `the EMITTED route must respect the ceiling, got ${route.estimated_km}`,
+      );
+      assert.deepEqual(verdict, { requested_count: 1, honored_count: 0, unhonored_count: 1 });
+      assert.ok(!stopIdsOf(pinned).includes("mid-far"));
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+      global.fetch = ORIGINAL_FETCH;
+    }
+  },
+);
+
+test(
+  "no_limit means no ceiling, so a far commitment is honoured",
+  withServer(walkBudgetLoader(), async (server) => {
+    // The same pin the soft_target request refuses. A user who asked for no
+    // walking limit did not agree to a ceiling invented on their behalf.
+    const capped = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body: walkBudgetBody({ pinned_candidate_ids: ["food-far"] }),
+    });
+    assert.equal(
+      capped.body.agnostic_route_output_experiment.pinned_candidates.honored_count,
+      0,
+      "precondition: soft_target refuses it",
+    );
+
+    const unlimited = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body: walkBudgetBody({ distance_mode: "no_limit", pinned_candidate_ids: ["food-far"] }),
+    });
+    assert.ok(
+      stopIdsOf(unlimited).includes("food-far"),
+      "with no limit requested, the commitment stands",
+    );
+    assert.equal(
+      unlimited.body.agnostic_route_output_experiment.pinned_candidates.honored_count,
+      1,
+    );
+  }),
+);
+
+test(
+  "twelve unaffordable commitments still yield an honest, composed day",
+  withServer(manyFarLoader(), async (server) => {
+    // The COST bound lives in tests/pin-walking-budget.test.js, where the
+    // number of finalisations is directly observable. What matters here is that
+    // capping the shedding chain did not cost honesty: the day still composes,
+    // and every unmet commitment is still reported.
+    const pins = Array.from({ length: 12 }, (_, i) => `far-${i}`);
+    const pinned = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body: walkBudgetBody({ pinned_candidate_ids: pins }),
+    });
+
+    assert.ok(pinned.body.days[0].primary_route, "a day is still composed");
+    assert.deepEqual(pinned.body.agnostic_route_output_experiment.pinned_candidates, {
+      requested_count: 12,
+      honored_count: 0,
+      unhonored_count: 12,
+    });
+    for (const id of pins) {
+      assert.ok(!stopIdsOf(pinned).includes(id), `${id} is genuinely absent, not quietly counted`);
+    }
   }),
 );
