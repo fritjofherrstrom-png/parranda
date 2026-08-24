@@ -63,6 +63,10 @@ import {
   SAVED_KEY,
   type SavedEntry,
 } from "../lib/anywhere-storage.mjs";
+import {
+  buildCommitmentSnapshot,
+  readCommitmentSnapshot,
+} from "../lib/commitment-snapshot.mjs";
 import { anywhereDecision, type AnywhereClassification } from "../lib/anywhere-decision";
 
 function readLS<T>(key: string, fallback: T): T {
@@ -572,6 +576,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           safeResponse: safe,
           classification: cls,
           inputs: { place: anchor.place ?? null, mode, dayOffset: effectiveDayOffset, walkKey: effectiveWalkKey, selected: prefs },
+          // Frozen from the SAME request that produced this day: the ledger it
+          // carried and the verdict that came back. Recorded here rather than
+          // at save time, because by then the live ledger may have moved on
+          // and would no longer describe what these stops answered.
+          commitments: buildCommitmentSnapshot({
+            anchorKey: anchorKey(anchor),
+            entries: scopedLedger.entries,
+            appliedPins: decision.isComposedStatus(cls.status) ? sentPins : [],
+          }),
         });
         lastEntryRef.current = entry;
         writeLS(LAST_KEY, entry);
@@ -683,17 +696,28 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       place: typeof i?.place === "string" ? i.place : undefined,
     });
     displayedAnchorKeyRef.current = restoredAnchorKey;
-    // Restoring is the one in-session path that puts a day on screen without a
-    // compose, so the ledger is dropped outright rather than scoped.
+    // Restoring puts a day on screen without a compose, so the ledger cannot
+    // simply carry over: the live one may describe choices these stops were
+    // never asked about, and matching geography is not evidence of a matching
+    // day.
     //
-    // Scoping by anchor was not enough: saved days do not persist the
-    // commitments they were composed under, so a snapshot of the same place
-    // cannot be assumed to have answered the ones held right now. Keeping them
-    // left the restored day carrying a ledger it never saw — armed, and
-    // claiming choices the stops on screen may not reflect. Matching geography
-    // is not evidence of a matching day.
-    commitmentAnchorKeyRef.current = null;
-    if (Object.keys(commitments).length) setCommitments({});
+    // What the day CAN answer with is its own record — the ledger the request
+    // carried and the verdict that came back, frozen when it was composed. When
+    // that record is present, intact, of a version this build understands, and
+    // belongs to this anchor, the restored day carries exactly it. Otherwise
+    // the ledger is dropped, which is the behaviour every day saved before this
+    // existed still gets.
+    const restoredCommitments = readCommitmentSnapshot(entry.commitments, {
+      anchorKey: restoredAnchorKey,
+    });
+    if (restoredCommitments.applies) {
+      commitmentAnchorKeyRef.current = restoredAnchorKey;
+      setCommitments(restoredCommitments.entries);
+      setAppliedPins(restoredCommitments.appliedPins);
+    } else {
+      commitmentAnchorKeyRef.current = null;
+      if (Object.keys(commitments).length) setCommitments({});
+    }
     setDayIsStale(false);
     setRouteAnchorCoords(null);
     setMapDrawn(false);

@@ -6,6 +6,11 @@
  * that produced it, keyed by place + date + preferences so re-saving the same
  * query replaces (never duplicates) it. Events / "today" may be stale on restore,
  * so the UI labels it and offers a rebuild.
+ *
+ * It also stores the commitments that day answered (see commitment-snapshot),
+ * so a restore can carry them without inferring anything. The id is what keeps
+ * days isolated from one another: two saved days for the same place on
+ * different dates are different entries and each carries its own record.
  */
 
 export const LAST_KEY = "parranda:anywhere:last";
@@ -16,7 +21,18 @@ function prefsKey(prefs) {
   return (Array.isArray(prefs) ? prefs.slice().sort() : []).join(",");
 }
 
-export function buildSavedEntry({ place, label, dateIso, savedAt, safeResponse, classification, inputs } = {}) {
+export function buildSavedEntry({
+  place,
+  label,
+  dateIso,
+  savedAt,
+  safeResponse,
+  classification,
+  inputs,
+  // The immutable, versioned record of what this day was composed under. Null
+  // for a day with no commitments, and for every day saved before this existed.
+  commitments = null,
+} = {}) {
   const p = (place || "").trim();
   return {
     id: `${p || "pos"}::${dateIso || ""}::${prefsKey(inputs && inputs.selected)}`,
@@ -27,6 +43,7 @@ export function buildSavedEntry({ place, label, dateIso, savedAt, safeResponse, 
     safeResponse,
     classification,
     inputs: inputs || null,
+    commitments: commitments || null,
   };
 }
 

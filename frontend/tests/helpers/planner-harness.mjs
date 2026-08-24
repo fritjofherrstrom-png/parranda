@@ -279,6 +279,15 @@ export async function mountPlanner({ url = "http://localhost/anywhere?lang=en", 
     container,
     act: run,
     text: () => container.textContent || "",
+    /** Read what the component has written to localStorage. */
+    readStorage(key) {
+      const raw = window.localStorage.getItem(key);
+      try {
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    },
     async unmount() {
       await run(() => {
         root.unmount();
