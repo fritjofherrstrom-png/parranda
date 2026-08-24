@@ -21,6 +21,19 @@ function prefsKey(prefs) {
   return (Array.isArray(prefs) ? prefs.slice().sort() : []).join(",");
 }
 
+/**
+ * The identity of one saved day: place, date and preferences.
+ *
+ * Exported so the commitment snapshot can bind itself to the SAME key the
+ * entry is stored under. Two days for the same place on different dates, or
+ * with different preferences, are different days — and a record written for
+ * one must not be readable by the other.
+ */
+export function savedEntryId({ place, dateIso, selected } = {}) {
+  const p = (place || "").trim();
+  return `${p || "pos"}::${dateIso || ""}::${prefsKey(selected)}`;
+}
+
 export function buildSavedEntry({
   place,
   label,
@@ -35,7 +48,7 @@ export function buildSavedEntry({
 } = {}) {
   const p = (place || "").trim();
   return {
-    id: `${p || "pos"}::${dateIso || ""}::${prefsKey(inputs && inputs.selected)}`,
+    id: savedEntryId({ place: p, dateIso, selected: inputs && inputs.selected }),
     label: (label || p || "Min position").trim(),
     place: p || null,
     dateIso: dateIso || null,

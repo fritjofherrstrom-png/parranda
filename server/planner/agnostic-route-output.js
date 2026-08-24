@@ -50,6 +50,7 @@ const { calibrateAgnosticRouteReadiness } = require("./agnostic-route-readiness-
 const { buildAgnosticConstraintNegotiation } = require("./agnostic-constraint-negotiation");
 const { resolveAgnosticWalkingTargetBand } = require("./agnostic-walking-target");
 const { settlePinsWithinWalkingBudget } = require("./pin-walking-budget");
+const { classifyUnhonouredPins } = require("./pin-refusal-reasons");
 const { weaveEveningEventRouteStop } = require("../candidates/event-route-stop-weave");
 const { generateAgnosticRecommendations } = require("../route-engine");
 const { projectRouteToSelectedStopChain } = require("./route-public-geometry");
@@ -1499,6 +1500,18 @@ async function composeAgnosticRouteViaEngine({
   let anchoredToLocalTime = finalized.anchored;
   let trimmedDayparts = finalized.trimmed;
   const capacityRepairApplied = finalized.repairApplied;
+  // WHY each unmet commitment went unmet, named at the only layer that can tell
+  // the causes apart: the reservoir, what reached the composer, and what the
+  // walking budget shed are all visible here and nowhere downstream.
+  const pinnedRefusals = requestedPins.length
+    ? classifyUnhonouredPins({
+        pinnedIds: requestedPins,
+        stops: finalized.route?.main_stops,
+        plannerRoles,
+        sourceCandidates,
+        shedForBudget: finalized.shedForBudget,
+      })
+    : [];
   // The weave that was applied to the day being returned. The response path
   // uses this instead of weaving again, so the route the settling judged and
   // the route the client receives are the same object.
@@ -1593,7 +1606,7 @@ async function composeAgnosticRouteViaEngine({
   // sensitive fields (date_signals, alternatives, live_events, dayflow_context).
   scrubAgnosticAppliedDay(result, engineDay);
 
-  return { result, experiment, eventWeave };
+  return { result, experiment, eventWeave, pinnedRefusals };
 }
 
 function hasAdditionalCandidateIds(baseCandidates, expandedCandidates) {

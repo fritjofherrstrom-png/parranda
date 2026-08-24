@@ -25,6 +25,12 @@ export interface SavedEntry {
   commitments: CommitmentSnapshot | null;
 }
 
+export declare function savedEntryId(options?: {
+  place?: string | null;
+  dateIso?: string | null;
+  selected?: string[];
+}): string;
+
 export declare function buildSavedEntry(options?: {
   place?: string;
   label?: string;

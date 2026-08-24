@@ -9,19 +9,21 @@ export const MAX_SNAPSHOT_EXCLUSIONS: number;
 export interface CommitmentSnapshot {
   version: number;
   anchorKey: string;
+  dayKey: string;
   entries: Record<string, CommitmentEntry>;
   appliedPins: AppliedPin[];
 }
 
 export function buildCommitmentSnapshot(params: {
   anchorKey?: string | null;
+  dayKey?: string | null;
   entries?: Record<string, CommitmentEntry>;
   appliedPins?: AppliedPin[];
 }): CommitmentSnapshot | null;
 
 export function readCommitmentSnapshot(
   snapshot: unknown,
-  params: { anchorKey?: string | null },
+  params: { anchorKey?: string | null; dayKey?: string | null },
 ): {
   applies: boolean;
   reason: string;

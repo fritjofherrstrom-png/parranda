@@ -63,12 +63,29 @@ test("the outcome is derived from the day, not from the intention", () => {
     requested_count: 2,
     honored_count: 1,
     unhonored_count: 1,
+    // Listed as well as counted, so the caller can say WHICH one. A reason of
+    // null is honest: this layer only knows the day, not why the day is what
+    // it is.
+    unhonored: [{ id: "b", reason: null }],
   });
   assert.deepEqual(summarizePinnedOutcome([], [{ id: "a" }]), {
     requested_count: 0,
     honored_count: 0,
     unhonored_count: 0,
+    unhonored: [],
   });
+});
+
+test("the reasons and the counts can never disagree about which pins went unmet", () => {
+  // Both are derived from the same published day, so a reason supplied for a
+  // pin the day DOES contain is simply not carried.
+  const summary = summarizePinnedOutcome(
+    ["a", "b"],
+    [{ id: "a" }],
+    [{ id: "a", reason: "walking_budget" }, { id: "b", reason: "not_selected" }],
+  );
+  assert.equal(summary.unhonored_count, 1);
+  assert.deepEqual(summary.unhonored, [{ id: "b", reason: "not_selected" }]);
 });
 
 test("the module is pure: no network, no clock, no place rules", () => {

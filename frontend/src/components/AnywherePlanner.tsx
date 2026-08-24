@@ -61,6 +61,7 @@ import {
   removeSaved,
   LAST_KEY,
   SAVED_KEY,
+  savedEntryId,
   type SavedEntry,
 } from "../lib/anywhere-storage.mjs";
 import {
@@ -276,6 +277,63 @@ function partialPreferenceLabels(stop: any, selected: string[], lang: Lang): str
 // timezone, daily local windows, all-day local dates (never UTC-midnight
 // shifted), and omits copy entirely when timing is unresolved.
 
+/**
+ * WHY a kept place did not make it, in the user's language.
+ *
+ * The reason is READ from the server, never derived here. A client can see that
+ * a stop is absent; it cannot see whether the reservoir ever held the place, or
+ * whether the walking budget shed it — and guessing between those would be a
+ * fabrication dressed as an explanation.
+ *
+ * Anything unrecognised — a reason from a newer server, or none at all — falls
+ * back to the plain sentence this surface has always shown. A day is allowed to
+ * say only that it could not fit something; it is never allowed to invent why.
+ */
+function unkeptReasonSentence(
+  entry: { label: string; reason: string | null },
+  t: (sv: string, en: string) => string,
+): string {
+  const name = entry.label || t("En plats du valde", "A place you kept");
+  switch (entry.reason) {
+    case "walking_budget":
+      return t(
+        `${name} ligger för långt bort för den promenad du bad om.`,
+        `${name} is too far for the walk you asked for.`,
+      );
+    case "unknown_candidate":
+      // Deliberately says what the server actually knows — that nothing
+      // routable matched the id — rather than guessing WHY nothing did. Seen
+      // on staging: a place still listed as a nearby idea, whose id is another
+      // provider's name for a stop already in the day. "No longer in the
+      // evidence" contradicted the list the user was looking at.
+      return t(
+        `${name} är inget Parranda kan lägga in i rutten här.`,
+        `${name} isn't something Parranda can route to here.`,
+      );
+    case "not_offered_to_route":
+      return t(
+        `${name} finns här, men passade ingen roll i den här dagen.`,
+        `${name} is here, but did not fit any role in this day.`,
+      );
+    case "not_selected":
+      return t(
+        `${name} kunde ha varit med, men dagen byggdes utan den.`,
+        `${name} could have been included, but the day was built without it.`,
+      );
+    case "day_not_published":
+      return t(
+        `${name} kom inte med — Parranda kunde inte stå för den dag som höll den.`,
+        `${name} did not make it — Parranda could not stand behind the day that held it.`,
+      );
+    default:
+      // No reason given, or one this build does not know.
+      return t(
+        `${name} kunde inte få plats i dagen.`,
+        `${name} could not fit in this day.`,
+      );
+  }
+}
+
 export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: Lang }) {
   // Static output can't read query params at request time, so honor the
   // production language contract (?lang=sv) client-side: EN default, SV explicit.
@@ -320,6 +378,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // a day that was never asked the question. A refusal or a failed request
   // leaves this untouched for the same reason.
   const [appliedPins, setAppliedPins] = useState<Array<{ id: string; kind: "pin"; label: string }>>([]);
+  // The server's own reason per unmet commitment, from the SAME response that
+  // produced the day on screen. Read, never derived.
+  const [appliedRefusals, setAppliedRefusals] = useState<Array<{ id: string; reason: string | null }>>([]);
   // Which anchor the visible day belongs to. A day for another place is never
   // held over, not even for a second.
   const displayedAnchorKeyRef = useRef<string | null>(null);
@@ -533,6 +594,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         // no evidence that any commitment could not be met. Reporting one here
         // would invent a verdict out of a network failure.
         setAppliedPins([]);
+        setAppliedRefusals([]);
         setDayIsStale(false);
         setUpgradePending(false);
         setPhase("done");
@@ -556,7 +618,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       // that CONTAINS a day can leave a commitment unmet by it: structure_only
       // and unavailable composed no day, so there is nothing for a pin to have
       // failed to fit into and the snapshot stays empty.
-      setAppliedPins(decision.isComposedStatus(cls.status) ? sentPins : []);
+      const composedNow = decision.isComposedStatus(cls.status);
+      setAppliedPins(composedNow ? sentPins : []);
+      setAppliedRefusals(
+        composedNow
+          ? (body?.agnostic_route_output_experiment?.pinned_candidates?.unhonored ?? [])
+          : [],
+      );
       setDayIsStale(false);
       setServiceRefusal(null);
       setRouteAnchorCoords(anchor.coords ?? null);
@@ -582,6 +650,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           // and would no longer describe what these stops answered.
           commitments: buildCommitmentSnapshot({
             anchorKey: anchorKey(anchor),
+            // Bound to the SAME identity the entry is stored under. An anchor
+            // alone is not enough: two saved days can share a place and differ
+            // in date or preferences, and each answered its own question.
+            dayKey: savedEntryId({
+              place: anchor.place ?? null,
+              dateIso: isoDateFromOffset(effectiveDayOffset),
+              selected: prefs,
+            }),
             entries: scopedLedger.entries,
             appliedPins: decision.isComposedStatus(cls.status) ? sentPins : [],
           }),
@@ -709,6 +785,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     // existed still gets.
     const restoredCommitments = readCommitmentSnapshot(entry.commitments, {
       anchorKey: restoredAnchorKey,
+      dayKey: entry.id,
     });
     if (restoredCommitments.applies) {
       commitmentAnchorKeyRef.current = restoredAnchorKey;
@@ -1359,6 +1436,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     pinnedIds: stillHeld.map((pin) => pin.id),
     stopIds: split.core.map((stop: any) => String(stop?.id ?? stop?.place_id ?? stop?.candidate_id ?? "")),
     isStale: dayIsStale,
+    serverReasons: appliedRefusals,
   });
   // Some caps have no sentence of their own because a more specific surface
   // already states them (see day-limitations.mjs). Guard on the rendered note,
@@ -1634,23 +1712,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           screen is the evidence. Silently dropping it would let the ledger
           claim something the day does not show. */}
       {unkept.count > 0 && (
-        <p className="text-[13px] text-parranda-ink/70" role="status">
-          <span aria-hidden="true" className="mr-1.5">!</span>
-          {unkept.labels.length === unkept.count && unkept.labels.length > 0
-            ? t(
-                `Kunde inte få plats i dagen: ${unkept.labels.join(", ")}. Parranda hittar ingen väg dit med det underlag som finns här.`,
-                `Could not fit in this day: ${unkept.labels.join(", ")}. Parranda has no way to place it with the evidence it has here.`,
-              )
-            : unkept.count === 1
-              ? t(
-                  "En plats du valde kunde inte få plats i dagen.",
-                  "One place you kept could not fit in this day.",
-                )
-              : t(
-                  `${unkept.count} platser du valde kunde inte få plats i dagen.`,
-                  `${unkept.count} places you kept could not fit in this day.`,
-                )}
-        </p>
+        <div className="flex flex-col gap-1 text-[13px] text-parranda-ink/70" role="status">
+          {unkept.reasons.map((entry: { id: string; label: string; reason: string | null }) => (
+            <p key={entry.id}>
+              <span aria-hidden="true" className="mr-1.5">!</span>
+              {unkeptReasonSentence(entry, t)}
+            </p>
+          ))}
+        </div>
       )}
 
       {phase === "loading" && !staleNotice && (

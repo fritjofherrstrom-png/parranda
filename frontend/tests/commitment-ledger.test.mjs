@@ -287,10 +287,14 @@ test("the verdict is derived from the rendered day, never from the request", () 
   assert.match(component, /stopIds: split\.core\.map\(/);
   assert.match(component, /isStale: dayIsStale,/);
   assert.match(component, /\{unkept\.count > 0 && \(/);
-  assert.match(component, /Kunde inte få plats i dagen|Could not fit in this day/);
+  // And the REASON comes from the server's verdict, never from the absence.
+  assert.match(component, /serverReasons: appliedRefusals,/);
 });
 
-test("the notice degrades to a count when a label is missing", () => {
+test("a commitment with no stored label still gets its own sentence", () => {
+  // The verdict is per-place now, so a missing label cannot collapse the whole
+  // notice into a bare count — it falls back to naming the commitment
+  // generically, and still says nothing about why.
   const out = unhonouredPins({
     entries: {},
     pinnedIds: ["osm-node-2"],
@@ -298,7 +302,8 @@ test("the notice degrades to a count when a label is missing", () => {
   });
   assert.equal(out.count, 1);
   assert.deepEqual(out.labels, [], "no invented name");
-  assert.match(component, /One place you kept could not fit in this day\./);
+  assert.deepEqual(out.reasons, [{ id: "osm-node-2", label: "", reason: null }]);
+  assert.match(component, /A place you kept/, "and the copy has a neutral stand-in");
 });
 
 // --------------------------------------------------------------------------
@@ -323,7 +328,10 @@ test("the verdict is read from the snapshot the rendered day answered", () => {
   assert.match(component, /const sentPins = sentPinIds\.map\(/);
   assert.match(component, /label: String\(scopedLedger\.entries\[id\]\?\.label/);
   // Installed only where a day exists to have failed to fit into.
-  assert.match(component, /setAppliedPins\(decision\.isComposedStatus\(cls\.status\) \? sentPins : \[\]\);/);
+  assert.match(component, /const composedNow = decision\.isComposedStatus\(cls\.status\);/);
+  assert.match(component, /setAppliedPins\(composedNow \? sentPins : \[\]\);/);
+  // The server's reasons install in the same commit, from the same response.
+  assert.match(component, /setAppliedRefusals\(/);
 });
 
 test("a click alone can never produce a verdict", () => {

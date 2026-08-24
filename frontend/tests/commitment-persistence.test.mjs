@@ -15,7 +15,7 @@ import { mountPlanner } from "./helpers/planner-harness.mjs";
 import { LAST_KEY, SAVED_KEY } from "../src/lib/anywhere-storage.mjs";
 import { COMMITMENT_SNAPSHOT_VERSION } from "../src/lib/commitment-snapshot.mjs";
 
-const NOTICE = /Could not fit in this day/;
+const NOTICE = /could not fit in this day/i;
 const KEPT_LEDGER = /\d+ places? kept/;
 
 function stop(id) {
@@ -279,4 +279,42 @@ test("rebuilding a restored day recomposes with the commitments it carried", asy
     ["a"],
     "the rebuild asks the same question the restored day was answering",
   );
+});
+
+test("two days at the SAME place cannot lend each other their commitments", async (t) => {
+  // The isolation test above used two different PLACES, so anchor scoping alone
+  // was enough to pass it. This is the case that scoping cannot see: same
+  // anchor, different day — a record written for one date arriving on another,
+  // both perfectly valid and intact.
+  const today = await plannerWithDay("Testville");
+  await keepAndSettle(today);
+  const todayEntry = today.readStorage(LAST_KEY);
+  assert.ok(todayEntry.commitments, "precondition: today recorded its commitments");
+  await today.unmount();
+
+  // A second saved day at the same place, differing only in date.
+  const tomorrowEntry = {
+    ...todayEntry,
+    id: todayEntry.id.replace("2026-08-23", "2026-08-24").replace(/::[^:]*$/, "::tomorrow"),
+    dateIso: "2026-08-24",
+    label: "Testville",
+    // Its OWN record is absent — so anything it shows came from somewhere else.
+    commitments: null,
+  };
+  // ...and the swap: today's intact record, handed to tomorrow's entry.
+  const swapped = { ...tomorrowEntry, commitments: todayEntry.commitments };
+
+  const h = await mountPlanner({
+    url: "http://localhost/anywhere?lang=en",
+    storage: { [LAST_KEY]: swapped },
+  });
+  t.after(() => h.unmount());
+  await h.clock.advance(100);
+
+  assert.match(h.text(), /Place a/, "the day itself restores");
+  assert.ok(
+    !KEPT_LEDGER.test(h.text()),
+    "a record written for another day at the same place carries nothing",
+  );
+  assert.ok(!NOTICE.test(h.text()), "and claims nothing about it");
 });
