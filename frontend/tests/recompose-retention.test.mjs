@@ -129,7 +129,7 @@ test("a landed verdict replaces the held day atomically", () => {
     "setClassification(cls);",
     "setSafeResponse(safe);",
     "displayedAnchorKeyRef.current = anchorKey(anchor);",
-    "setAppliedPins(decision.isComposedStatus(cls.status) ? sentPins : []);",
+    "setAppliedPins(composedNow ? sentPins : []);",
     "setDayIsStale(false);",
   ];
   let cursor = -1;

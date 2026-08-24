@@ -142,7 +142,8 @@ test("an affordable set is published untouched, with no extra work beyond the ba
   const settled = await settlePinsWithinWalkingBudget({
     finalize, withPins: first, pins, walkingKmTarget: 4, origin: ORIGIN, sourceCandidates: CANDIDATES,
   });
-  assert.equal(settled, first, "the already-finalised day is returned as-is");
+  assert.deepEqual(settled.route, first.route, "the already-finalised day is what is published");
+  assert.deepEqual(settled.shedForBudget, [], "and the walk refused nothing");
   assert.deepEqual(calls, [[]], "only the pin-less baseline is finalised, nothing re-run");
 });
 
@@ -156,7 +157,9 @@ test("no walking ceiling means no budget rule at all", async () => {
     const settled = await settlePinsWithinWalkingBudget({
       finalize, withPins: first, pins: ["far"], origin: ORIGIN, sourceCandidates: CANDIDATES, ...args,
     });
-    assert.equal(settled, first);
+    assert.deepEqual(settled.route, first.route);
+    // Nothing was asked of the walk, so the walk cannot be blamed for anything.
+    assert.deepEqual(settled.shedForBudget, []);
   }
 });
 
@@ -255,4 +258,39 @@ test("the bound does not fire for a set that settles quickly", async () => {
     sourceCandidates: CANDIDATES,
   });
   assert.deepEqual(settled.route.main_stops.map((s) => s.id), ["near", "mid"]);
+});
+
+test("the walk names exactly the commitments it refused", async () => {
+  // The caller reports WHY a pin went unmet, and only this rule knows which
+  // refusals were the walk's doing rather than the composer's.
+  const finalize = async (pins) => (pins.includes("far") ? day(99, pins) : day(4.1, pins));
+  const pins = ["near", "mid", "far"];
+  const settled = await settlePinsWithinWalkingBudget({
+    finalize,
+    withPins: await finalize(pins),
+    pins,
+    walkingKmTarget: 4,
+    origin: ORIGIN,
+    sourceCandidates: CANDIDATES,
+  });
+  assert.deepEqual(settled.shedForBudget, ["far"], "only the one the walk could not absorb");
+  assert.deepEqual(settled.route.main_stops.map((s) => s.id), ["near", "mid"]);
+});
+
+test("giving up attributes every surviving pin to the walk as well", async () => {
+  // The pin-less day is published, so the pins still standing were refused by
+  // the walk just as surely as the ones already shed. Saying otherwise would
+  // blame the composer for a decision the budget made.
+  const finalize = async (pins) => day(pins.length ? 99 : 4.0, pins);
+  const pins = Array.from({ length: 12 }, (_, i) => `far-${i}`);
+  const candidates = pins.map((id, i) => ({ id, lat: 41.9 + 0.02 + i * 0.0006, lng: 12.49 }));
+  const settled = await settlePinsWithinWalkingBudget({
+    finalize,
+    withPins: await finalize(pins),
+    pins,
+    walkingKmTarget: 4,
+    origin: { lat: 41.9, lng: 12.49 },
+    sourceCandidates: candidates,
+  });
+  assert.deepEqual([...settled.shedForBudget].sort(), [...pins].sort());
 });

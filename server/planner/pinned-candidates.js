@@ -80,14 +80,24 @@ function applyPinnedSelection(selected, pool, pinnedIds) {
  * user has to be told, so it is derived from the real output rather than from
  * an intention recorded earlier.
  */
-function summarizePinnedOutcome(pinnedIds, stops) {
+function summarizePinnedOutcome(pinnedIds, stops, refusals = []) {
   const requested = Array.isArray(pinnedIds) ? pinnedIds : [];
   const present = new Set((Array.isArray(stops) ? stops : []).map((stop) => stopId(stop)));
   const honored = requested.filter((id) => present.has(id));
+  // The reason each unmet commitment went unmet, keyed by the id the client
+  // asked for. Derived from the published day like the counts above, so the
+  // list and the counts can never disagree about which pins went unmet.
+  const byId = new Map(
+    (Array.isArray(refusals) ? refusals : []).map((entry) => [String(entry?.id), entry?.reason]),
+  );
+  const unhonored = requested
+    .filter((id) => !present.has(id))
+    .map((id) => ({ id, reason: byId.get(String(id)) || null }));
   return {
     requested_count: requested.length,
     honored_count: honored.length,
     unhonored_count: requested.length - honored.length,
+    unhonored,
   };
 }
 

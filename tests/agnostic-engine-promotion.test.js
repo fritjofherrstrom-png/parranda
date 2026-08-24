@@ -780,13 +780,28 @@ test(
       }),
     });
 
-    // Selection-only: there is nothing in the pool to force, so nothing appears.
-    assert.equal(JSON.stringify(r.body).includes("not-a-real-place"), false);
     const summary = r.body.agnostic_route_output_experiment.pinned_candidates;
     assert.equal(summary.requested_count, 2);
     assert.equal(summary.honored_count, 0);
     // Reported, never silently dropped.
     assert.equal(summary.unhonored_count, 2);
+    // ...and named for what they are: ids the server never loaded anything for.
+    assert.deepEqual(summary.unhonored, [
+      { id: "not-a-real-place", reason: "unknown_candidate" },
+      { id: "osm-way-999999", reason: "unknown_candidate" },
+    ]);
+
+    // Selection-only. The ids come back solely as the caller's own correlation
+    // key on its own request; they must appear NOWHERE that would present them
+    // as something the server stands behind — not as a stop, not in the place
+    // structure, not as evidence of a place existing.
+    const withoutVerdict = { ...r.body };
+    withoutVerdict.agnostic_route_output_experiment = {
+      ...withoutVerdict.agnostic_route_output_experiment,
+      pinned_candidates: null,
+    };
+    assert.equal(JSON.stringify(withoutVerdict).includes("not-a-real-place"), false);
+    assert.equal(JSON.stringify(withoutVerdict).includes("osm-way-999999"), false);
   }),
 );
 
@@ -1035,7 +1050,14 @@ test(
     assert.equal(route.estimated_km, baseKm, "and it is the same day the request would have produced anyway");
 
     // Refused, never silently dropped.
-    assert.deepEqual(verdict, { requested_count: 1, honored_count: 0, unhonored_count: 1 });
+    assert.deepEqual(verdict, {
+      requested_count: 1,
+      honored_count: 0,
+      unhonored_count: 1,
+      // Named by the server, from the only layer that can tell the causes
+      // apart. The walk is what refused it here.
+      unhonored: [{ id: "food-far", reason: "walking_budget" }],
+    });
   }),
 );
 
@@ -1140,7 +1162,12 @@ test(
         route.estimated_km <= 4.72,
         `the EMITTED route must respect the ceiling, got ${route.estimated_km}`,
       );
-      assert.deepEqual(verdict, { requested_count: 1, honored_count: 0, unhonored_count: 1 });
+      assert.deepEqual(verdict, {
+        requested_count: 1,
+        honored_count: 0,
+        unhonored_count: 1,
+        unhonored: [{ id: "mid-far", reason: "walking_budget" }],
+      });
       assert.ok(!stopIdsOf(pinned).includes("mid-far"));
     } finally {
       await new Promise((resolve) => server.close(resolve));
@@ -1225,13 +1252,75 @@ test(
     });
 
     assert.ok(pinned.body.days[0].primary_route, "a day is still composed");
-    assert.deepEqual(pinned.body.agnostic_route_output_experiment.pinned_candidates, {
-      requested_count: 12,
-      honored_count: 0,
-      unhonored_count: 12,
-    });
+    const verdict12 = pinned.body.agnostic_route_output_experiment.pinned_candidates;
+    assert.equal(verdict12.requested_count, 12);
+    assert.equal(verdict12.honored_count, 0);
+    assert.equal(verdict12.unhonored_count, 12);
+    // Publishing the pin-less day means the walk refused all of them, not that
+    // the composer declined to choose them.
+    assert.deepEqual(
+      [...new Set(verdict12.unhonored.map((entry) => entry.reason))],
+      ["walking_budget"],
+    );
     for (const id of pins) {
       assert.ok(!stopIdsOf(pinned).includes(id), `${id} is genuinely absent, not quietly counted`);
     }
   }),
+);
+
+test(
+  "no_limit can never be told the walk was the reason",
+  withServer(walkBudgetLoader(), async (server) => {
+    // The shedding rule does not run without a ceiling, so walking_budget is
+    // structurally unreachable here. Whatever refuses a commitment under
+    // no_limit, it is not a limit the user declined to set.
+    const unlimited = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body: walkBudgetBody({
+        distance_mode: "no_limit",
+        pinned_candidate_ids: ["food-far", "not-a-real-place"],
+      }),
+    });
+    const verdict = unlimited.body.agnostic_route_output_experiment.pinned_candidates;
+    for (const entry of verdict.unhonored) {
+      assert.notEqual(entry.reason, "walking_budget", `${entry.id} must not blame a ceiling nobody set`);
+    }
+    // The unknown id is still named honestly, so this is not vacuous.
+    assert.deepEqual(
+      verdict.unhonored.find((entry) => entry.id === "not-a-real-place"),
+      { id: "not-a-real-place", reason: "unknown_candidate" },
+    );
+  }),
+);
+
+test(
+  "a withheld experiment attributes every unmet commitment to the withholding",
+  withServer(
+    // Too thin to promote: the baseline is published, and the baseline never
+    // had a commitment applied to it.
+    makeLoader([
+      externalRecord("food-0", "Food 0", "restaurant", 41.9, 12.49, ["mat"]),
+      externalRecord("cafe-0", "Cafe 0", "cafe", 41.9008, 12.49, ["fika"]),
+    ]),
+    async (server) => {
+      const r = await requestJson(server, {
+        path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+        method: "POST",
+        body: walkBudgetBody({
+          // Nothing in the pool can answer either request, so the gate withholds.
+          preferences: ["nightlife", "swimming"],
+          pinned_candidate_ids: ["food-0"],
+        }),
+      });
+      const experiment = r.body.agnostic_route_output_experiment;
+      assert.equal(experiment.promotion?.promote, false, "precondition: promotion really is withheld");
+
+      const verdict = experiment.pinned_candidates;
+      assert.equal(verdict.unhonored_count, 1);
+      // NOT "not_selected" or "not_offered_to_route": those describe what the
+      // engine did with a day nobody received.
+      assert.deepEqual(verdict.unhonored, [{ id: "food-0", reason: "day_not_published" }]);
+    },
+  ),
 );

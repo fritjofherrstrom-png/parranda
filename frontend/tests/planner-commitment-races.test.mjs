@@ -16,7 +16,7 @@ import test from "node:test";
 
 import { mountPlanner } from "./helpers/planner-harness.mjs";
 
-const NOTICE = /Could not fit in this day/;
+const NOTICE = /could not fit in this day/i;
 const KEPT_LEDGER = /\d+ places? kept/;
 
 function stop(id) {
@@ -79,6 +79,18 @@ function composedDay(stopIds) {
     },
     agnostic_route_output_experiment: { promotion: { promote: true } },
   };
+}
+
+/** A composed day plus the server's own verdict on the commitments it carried. */
+function composedDayWithRefusals(stopIds, unhonored) {
+  const day = composedDay(stopIds);
+  day.agnostic_route_output_experiment.pinned_candidates = {
+    requested_count: unhonored.length,
+    honored_count: 0,
+    unhonored_count: unhonored.length,
+    unhonored,
+  };
+  return day;
 }
 
 /** A response with candidates but no route: structure_only. */
@@ -425,4 +437,85 @@ test("a scheduled silent refresh cannot wake under a newer ledger intent", async
 
   const staleSilent = h.fetchMock.pending()[0];
   assert.equal(staleSilent, undefined, "the old timer is cancelled before it can send its frozen ledger");
+});
+
+// --------------------------------------------------------------------------
+// WHY a commitment went unmet is the server's to say.
+// --------------------------------------------------------------------------
+
+test("the day renders the reason the server gave", async (t) => {
+  const h = await plannerWithDay();
+  t.after(() => h.unmount());
+
+  await addOutsider(h);
+  await h.clock.advance(500);
+  await h.fetchMock.respond(
+    h.fetchMock.pending()[0],
+    composedDayWithRefusals(["a", "b", "c"], [{ id: "outsider", reason: "walking_budget" }]),
+  );
+  await h.clock.advance(50);
+
+  assert.match(h.text(), /too far for the walk you asked for/, "the specific cause is shown");
+  assert.match(h.text(), /Place outsider/, "attached to the place it is about");
+});
+
+test("each named reason gets its own sentence", async (t) => {
+  const h = await plannerWithDay();
+  t.after(() => h.unmount());
+
+  await addOutsider(h);
+  await h.clock.advance(500);
+  await h.fetchMock.respond(
+    h.fetchMock.pending()[0],
+    composedDayWithRefusals(["a", "b", "c"], [{ id: "outsider", reason: "unknown_candidate" }]),
+  );
+  await h.clock.advance(50);
+
+  assert.match(h.text(), /no longer in the evidence for this place/);
+  assert.ok(
+    !/too far for the walk/.test(h.text()),
+    "one reason at a time — the day does not offer a menu of possible causes",
+  );
+});
+
+test("an unrecognised reason falls back rather than inventing one", async (t) => {
+  // A newer server, or one that named no reason at all. The day may say it
+  // could not fit something; it may never guess why.
+  const h = await plannerWithDay();
+  t.after(() => h.unmount());
+
+  await addOutsider(h);
+  await h.clock.advance(500);
+  await h.fetchMock.respond(
+    h.fetchMock.pending()[0],
+    composedDayWithRefusals(["a", "b", "c"], [{ id: "outsider", reason: "some_future_reason" }]),
+  );
+  await h.clock.advance(50);
+
+  assert.match(h.text(), /could not fit in this day/i, "the plain sentence still appears");
+  assert.ok(!/too far for the walk/.test(h.text()));
+  assert.ok(!/no longer in the evidence/.test(h.text()));
+  assert.ok(!/some_future_reason/.test(h.text()), "and the raw token is never shown to a user");
+});
+
+test("no server verdict means no cause is claimed", async (t) => {
+  // The absence of a stop is visible to the client; the reason for it is not.
+  // Deriving one from route absence is the fabrication this avoids.
+  const h = await plannerWithDay();
+  t.after(() => h.unmount());
+
+  await addOutsider(h);
+  await h.clock.advance(500);
+  await h.fetchMock.respond(h.fetchMock.pending()[0], composedDay(["a", "b", "c"]));
+  await h.clock.advance(50);
+
+  assert.match(h.text(), /could not fit in this day/i);
+  for (const invented of [
+    /too far for the walk/,
+    /no longer in the evidence/,
+    /did not fit any role/,
+    /the day was built without it/,
+  ]) {
+    assert.ok(!invented.test(h.text()), `must not infer: ${invented}`);
+  }
 });

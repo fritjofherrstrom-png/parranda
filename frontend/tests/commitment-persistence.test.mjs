@@ -15,7 +15,7 @@ import { mountPlanner } from "./helpers/planner-harness.mjs";
 import { LAST_KEY, SAVED_KEY } from "../src/lib/anywhere-storage.mjs";
 import { COMMITMENT_SNAPSHOT_VERSION } from "../src/lib/commitment-snapshot.mjs";
 
-const NOTICE = /Could not fit in this day/;
+const NOTICE = /could not fit in this day/i;
 const KEPT_LEDGER = /\d+ places? kept/;
 
 function stop(id) {

@@ -125,7 +125,9 @@ function withinBudget({ withPins, baseline, ceilingKm }) {
  * @param {(pins: string[]) => Promise<object>} params.finalize full publish pipeline
  * @param {object} params.withPins already-finalised day for the full pin set
  * @param {string[]} params.pins requested pin ids
- * @returns {Promise<object>} the finalised day to publish
+ * @returns {Promise<object>} the finalised day to publish, with `shedForBudget`
+ *   naming the pins this rule dropped — the caller reports WHY, and only this
+ *   function knows which refusals were the walk's doing.
  */
 async function settlePinsWithinWalkingBudget({
   finalize,
@@ -137,10 +139,12 @@ async function settlePinsWithinWalkingBudget({
   distanceMode = null,
 }) {
   const requested = Array.isArray(pins) ? pins.filter(Boolean).map(String) : [];
-  if (!requested.length) return withPins;
+  if (!requested.length) return { ...withPins, shedForBudget: [] };
 
   const band = distanceMode === "no_limit" ? null : resolveAgnosticWalkingTargetBand(walkingKmTarget);
-  if (!band || !Number.isFinite(band.ceilingKm)) return withPins;
+  // No ceiling was asked for, so nothing here can refuse anything. A
+  // no_limit request must never be told the walk was the reason.
+  if (!band || !Number.isFinite(band.ceilingKm)) return { ...withPins, shedForBudget: [] };
 
   const baseline = await finalize([]);
   let current = withPins;
@@ -149,20 +153,29 @@ async function settlePinsWithinWalkingBudget({
   // the reason the day does not fit.
   const dropOrder = pinDropOrder(requested, origin, sourceCandidates);
 
+  const shedForBudget = [];
   let sheds = 0;
   for (const drop of dropOrder) {
-    if (withinBudget({ withPins: current, baseline, ceilingKm: band.ceilingKm })) return current;
-    if (sheds >= MAX_SHED_ATTEMPTS) return baseline;
+    if (withinBudget({ withPins: current, baseline, ceilingKm: band.ceilingKm })) {
+      return { ...current, shedForBudget };
+    }
+    if (sheds >= MAX_SHED_ATTEMPTS) {
+      // Giving up publishes the pin-less day, so every pin still standing was
+      // refused by the walk just as surely as the ones already shed.
+      return { ...baseline, shedForBudget: [...new Set([...shedForBudget, ...remaining])] };
+    }
     // Strictly shrinks: `drop` is in `remaining` on every pass, so the set loses
     // one member each time and the loop cannot run more than requested.length
     // times after the first attempt — and no more than MAX_SHED_ATTEMPTS.
     remaining = remaining.filter((id) => id !== drop);
+    shedForBudget.push(drop);
     current = remaining.length ? await finalize(remaining) : baseline;
     sheds += 1;
   }
   // Every pin shed. `current` is the pin-less baseline, and each unhonoured pin
   // surfaces through the composed day exactly as before.
-  return withinBudget({ withPins: current, baseline, ceilingKm: band.ceilingKm }) ? current : baseline;
+  const settled = withinBudget({ withPins: current, baseline, ceilingKm: band.ceilingKm }) ? current : baseline;
+  return { ...settled, shedForBudget };
 }
 
 module.exports = {

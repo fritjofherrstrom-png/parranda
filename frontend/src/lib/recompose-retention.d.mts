@@ -25,7 +25,12 @@ export function unhonouredPins(params: {
   pinnedIds?: string[];
   stopIds?: string[];
   isStale?: boolean;
-}): { labels: string[]; count: number };
+  serverReasons?: Array<{ id: string; reason: string | null }>;
+}): {
+  labels: string[];
+  count: number;
+  reasons: Array<{ id: string; label: string; reason: string | null }>;
+};
 
 export function staleDayNotice(params: {
   isStale?: boolean;

@@ -44,6 +44,7 @@ const {
   summarizePinnedOutcome,
 } = require("./planner/pinned-candidates");
 const { parseRequestedDates } = require("./planner/requested-dates");
+const { attributeToWithheldDay } = require("./planner/pin-refusal-reasons");
 const { buildEngineReadinessVerdict } = require("./planner/agnostic-engine-readiness");
 const { reconcileAgnosticConstraintNegotiation } = require("./planner/agnostic-constraint-negotiation");
 const { resolveAgnosticWalkingTargetBand } = require("./planner/agnostic-walking-target");
@@ -2302,7 +2303,7 @@ function buildApp({
       // candidate opt-in + the trusted server openDataLoader are still required
       // inside composeAgnosticRouteOutput. Public payload never becomes trusted.
       const useEngineCompose = isAgnosticEngineComposeRequested(request);
-      const { result: experimentResult, experiment, eventWeave } = await composeAgnosticRouteOutput({
+      const { result: experimentResult, experiment, eventWeave, pinnedRefusals } = await composeAgnosticRouteOutput({
         coords: anchor,
         baselineResult: baselineBody,
         externalRequested: isExternalCandidatesRequested(request),
@@ -2369,9 +2370,18 @@ function buildApp({
         experiment.excluded_candidates = excludedCandidateSummary(excludedCandidateIds);
         // Derived from the day that was actually composed, not from the request:
         // an unhonoured pin is a fact about the output, never an intention.
+        // The reasons compose produced describe the ENGINE's day. When
+        // promotion is withheld the baseline is published instead, and that day
+        // never had a commitment applied to it — so attributing a refusal to
+        // the reservoir or the walk would describe a day nobody received.
+        const publishedStops = (promotion.promote ? experimentResult : baselineBody)
+          ?.days?.[0]?.primary_route?.main_stops;
         experiment.pinned_candidates = summarizePinnedOutcome(
           pinnedCandidateIds,
-          (promotion.promote ? experimentResult : baselineBody)?.days?.[0]?.primary_route?.main_stops,
+          publishedStops,
+          promotion.promote
+            ? pinnedRefusals
+            : attributeToWithheldDay(pinnedCandidateIds, publishedStops),
         );
         // Retirement-readiness observability: a consolidated, honest verdict on
         // whether the engine path is ready to become the default synthesizer,

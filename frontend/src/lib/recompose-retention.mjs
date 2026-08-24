@@ -113,13 +113,36 @@ export function scopeCommitmentsToAnchor({ entries = {}, ledgerAnchorKey = null,
  *
  * @returns {{ labels: string[], count: number }}
  */
-export function unhonouredPins({ entries = {}, pinnedIds = [], stopIds = [], isStale = false } = {}) {
-  if (isStale) return { labels: [], count: 0 };
+export function unhonouredPins({
+  entries = {},
+  pinnedIds = [],
+  stopIds = [],
+  isStale = false,
+  // The server's own verdict: [{ id, reason }] for each commitment the
+  // published day did not contain. Reasons are read, never derived — a client
+  // can see that a stop is absent, but not whether the reservoir ever held it,
+  // and guessing between those is the fabrication this avoids.
+  serverReasons = [],
+} = {}) {
+  if (isStale) return { labels: [], count: 0, reasons: [] };
   const present = new Set((Array.isArray(stopIds) ? stopIds : []).filter(Boolean));
   const missing = (Array.isArray(pinnedIds) ? pinnedIds : []).filter((id) => id && !present.has(id));
+  const byId = new Map(
+    (Array.isArray(serverReasons) ? serverReasons : [])
+      .filter((entry) => entry && entry.id != null)
+      .map((entry) => [String(entry.id), entry.reason]),
+  );
   return {
     labels: missing.map((id) => String(entries?.[id]?.label || "").trim()).filter(Boolean),
     count: missing.length,
+    // One per missing commitment, in the order the day lists them. A reason of
+    // null means the server did not name one, and the caller must fall back to
+    // the plain sentence rather than inventing a cause.
+    reasons: missing.map((id) => ({
+      id,
+      label: String(entries?.[id]?.label || "").trim(),
+      reason: byId.get(String(id)) ?? null,
+    })),
   };
 }
 
