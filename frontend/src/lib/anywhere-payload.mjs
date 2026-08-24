@@ -31,6 +31,19 @@ export function isoDateFromOffset(offsetDays = 0, from = new Date()) {
   return `${d.getFullYear()}-${month}-${day}`;
 }
 
+/**
+ * Freeze the local calendar date for one compose intent.
+ *
+ * Silent cold-cache/live follow-ups may run after midnight. They still answer
+ * the original question, so an internal override wins over a newly-read clock.
+ */
+export function freezeComposeDateIso({ dayOffset = 0, dateIsoOverride = null, now = new Date() } = {}) {
+  const override = typeof dateIsoOverride === "string" ? dateIsoOverride.trim() : "";
+  return /^\d{4}-\d{2}-\d{2}$/.test(override)
+    ? override
+    : isoDateFromOffset(dayOffset, now);
+}
+
 // Walking-length presets → the same walking_km_target the production planner sends.
 export const WALK_PRESETS = [
   { key: "short", km: 4, sv: "Kort · ~4 km", en: "Short · ~4 km" },

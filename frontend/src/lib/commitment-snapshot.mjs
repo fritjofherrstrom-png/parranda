@@ -18,9 +18,9 @@
  * BOTH keys are required, because neither is sufficient alone. The anchor says
  * where; the day key says which day at that anchor. v1 bound only the anchor,
  * so a record written for Thursday was accepted on Friday's day for the same
- * place, and a record written under one set of preferences was accepted under
- * another — same geography, different question, and the stops on screen had
- * never answered it.
+ * place, and a record written under one set of preferences or walking limits
+ * was accepted under another — same geography, different question, and the
+ * stops on screen had never answered it.
  *
  * Bounded on write as well as read: this lives in localStorage alongside up to
  * SAVED_CAP days, and a ledger is user input.

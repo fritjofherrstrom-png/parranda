@@ -16,6 +16,11 @@ export interface WalkPreset {
 export declare const WALK_PRESETS: WalkPreset[];
 
 export declare function isoDateFromOffset(offsetDays?: number, from?: Date): string;
+export declare function freezeComposeDateIso(options?: {
+  dayOffset?: number;
+  dateIsoOverride?: string | null;
+  now?: Date;
+}): string;
 
 export declare function buildAnywherePayload(options?: {
   place?: string;

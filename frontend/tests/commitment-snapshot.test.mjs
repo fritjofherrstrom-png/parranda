@@ -179,11 +179,13 @@ test("storage stays bounded, in the same shape the server would accept", () => {
 import { savedEntryId } from "../src/lib/anywhere-storage.mjs";
 
 test("a record does not carry between two days at the same anchor", () => {
-  const thursday = savedEntryId({ place: "Trogir", dateIso: "2026-08-24", selected: ["food", "culture"] });
-  const friday = savedEntryId({ place: "Trogir", dateIso: "2026-08-25", selected: ["food", "culture"] });
-  const otherPrefs = savedEntryId({ place: "Trogir", dateIso: "2026-08-24", selected: ["views"] });
+  const thursday = savedEntryId({ place: "Trogir", dateIso: "2026-08-24", selected: ["food", "culture"], walkKey: "balanced" });
+  const friday = savedEntryId({ place: "Trogir", dateIso: "2026-08-25", selected: ["food", "culture"], walkKey: "balanced" });
+  const otherPrefs = savedEntryId({ place: "Trogir", dateIso: "2026-08-24", selected: ["views"], walkKey: "balanced" });
+  const otherWalk = savedEntryId({ place: "Trogir", dateIso: "2026-08-24", selected: ["food", "culture"], walkKey: "long" });
   assert.notEqual(thursday, friday);
   assert.notEqual(thursday, otherPrefs);
+  assert.notEqual(thursday, otherWalk, "the same question under another walking contract is another day");
 
   const forThursday = buildCommitmentSnapshot({ anchorKey: KEY, dayKey: thursday, entries, appliedPins });
   const forFriday = buildCommitmentSnapshot({ anchorKey: KEY, dayKey: friday, entries, appliedPins });
@@ -202,6 +204,7 @@ test("a record does not carry between two days at the same anchor", () => {
 
   // Same place, same date, different preferences is also a different day.
   assert.equal(readCommitmentSnapshot(forThursday, { anchorKey: KEY, dayKey: otherPrefs }).reason, "day_changed");
+  assert.equal(readCommitmentSnapshot(forThursday, { anchorKey: KEY, dayKey: otherWalk }).reason, "day_changed");
 });
 
 test("a v1 record cannot say which day it belongs to, so it carries nothing", () => {

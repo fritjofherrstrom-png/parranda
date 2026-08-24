@@ -12,12 +12,36 @@
  */
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { mountPlanner } from "./helpers/planner-harness.mjs";
+import { freezeComposeDateIso } from "../src/lib/anywhere-payload.mjs";
 
 const NOTICE = /could not fit in this day/i;
 const KEPT_LEDGER = /\d+ places? kept/;
+
+test("one compose intent keeps its local date when a follow-up crosses midnight", () => {
+  const beforeMidnight = new Date("2026-08-24T23:59:59");
+  const afterMidnight = new Date("2026-08-25T00:00:01");
+  const frozen = freezeComposeDateIso({ dayOffset: 0, now: beforeMidnight });
+
+  assert.equal(frozen, "2026-08-24");
+  assert.equal(
+    freezeComposeDateIso({ dayOffset: 0, now: afterMidnight, dateIsoOverride: frozen }),
+    frozen,
+    "a silent follow-up answers the original day rather than silently becoming tomorrow",
+  );
+});
+
+test("request, saved entry, snapshot key and silent follow-up share the frozen date", () => {
+  const source = readFileSync(new URL("../src/components/AnywherePlanner.tsx", import.meta.url), "utf8");
+  assert.match(source, /const effectiveDateIso = freezeComposeDateIso\(/);
+  assert.match(source, /dates: \[effectiveDateIso\]/);
+  assert.match(source, /dateIso: effectiveDateIso/);
+  assert.match(source, /dayKey: savedEntryId\(\{[\s\S]*?dateIso: effectiveDateIso,[\s\S]*?walkKey: effectiveWalkKey/);
+  assert.match(source, /dateIsoOverride: effectiveDateIso/);
+});
 
 function stop(id) {
   return {

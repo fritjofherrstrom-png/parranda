@@ -79,7 +79,8 @@ test("pins with no coordinates sort first, and ties break on id", () => {
   const withUnknown = [...CANDIDATES, { id: "ghost" }];
   assert.equal(pinDropOrder(["near", "ghost"], ORIGIN, withUnknown)[0], "ghost");
   const twins = [{ id: "b", lat: 41.905, lng: 12.49 }, { id: "a", lat: 41.905, lng: 12.49 }];
-  assert.deepEqual(pinDropOrder(["b", "a"], ORIGIN, twins), pinDropOrder(["a", "b"], ORIGIN, twins));
+  assert.deepEqual(pinDropOrder(["b", "a"], ORIGIN, twins), ["a", "b"]);
+  assert.deepEqual(pinDropOrder(["a", "b"], ORIGIN, twins), ["a", "b"]);
 });
 
 test("the loop shrinks the pin set and terminates within pins + 1 finalisations", async () => {
@@ -275,6 +276,24 @@ test("the walk names exactly the commitments it refused", async () => {
   });
   assert.deepEqual(settled.shedForBudget, ["far"], "only the one the walk could not absorb");
   assert.deepEqual(settled.route.main_stops.map((s) => s.id), ["near", "mid"]);
+});
+
+test("the walk never claims an unknown pin as a budget refusal", async () => {
+  const finalize = async (pins) => (pins.includes("far") ? day(99, pins) : day(4.1, pins));
+  const settled = await settlePinsWithinWalkingBudget({
+    finalize,
+    withPins: await finalize(["ghost", "far"]),
+    pins: ["ghost", "far"],
+    walkingKmTarget: 4,
+    origin: ORIGIN,
+    sourceCandidates: CANDIDATES,
+  });
+
+  assert.deepEqual(
+    settled.shedForBudget,
+    ["far"],
+    "only a candidate actually offered to composition can be refused by its walking budget",
+  );
 });
 
 test("giving up attributes every surviving pin to the walk as well", async () => {

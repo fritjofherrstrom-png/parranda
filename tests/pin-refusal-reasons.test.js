@@ -52,6 +52,7 @@ test("a loaded candidate the composer never saw is distinct from an unknown one"
     stops: [stop("a")],
     plannerRoles: roles("a", "known"),
     sourceCandidates: [candidate("a")],
+    loadedCandidateIds: ["a", "known"],
   });
   assert.deepEqual(out, [{ id: "known", reason: PIN_REFUSAL_REASONS.NOT_OFFERED_TO_ROUTE }]);
 });
@@ -131,19 +132,17 @@ test("every unmet commitment gets exactly one reason, in request order", () => {
   ]);
 });
 
-test("a refusal the walk made stays the walk's, whatever the reservoir looks like", () => {
-  // Shedding only ever happens to a pin that reached finalisation, so in
-  // practice a shed pin is always among the offered candidates and the ordering
-  // never has to break a tie. This pins the invariant anyway: if the reservoir
-  // view and the shed list ever disagree, the stage that actually acted on the
-  // candidate wins. Blaming the reservoir for a decision the budget made would
-  // send the user to fix the wrong thing.
+test("a stale shed token cannot turn an unknown pin into a walking refusal", () => {
+  // The budget layer may only shed ids that actually reached composition. The
+  // classifier still fails closed if an inconsistent caller supplies a stale
+  // shed token: unknown server evidence wins over the later-stage claim.
   const out = classifyUnhonouredPins({
     pinnedIds: ["far"],
     stops: [stop("a")],
     plannerRoles: roles("a"),
     sourceCandidates: [candidate("a")],
+    loadedCandidateIds: ["a"],
     shedForBudget: ["far"],
   });
-  assert.deepEqual(out, [{ id: "far", reason: PIN_REFUSAL_REASONS.WALKING_BUDGET }]);
+  assert.deepEqual(out, [{ id: "far", reason: PIN_REFUSAL_REASONS.UNKNOWN_CANDIDATE }]);
 });
