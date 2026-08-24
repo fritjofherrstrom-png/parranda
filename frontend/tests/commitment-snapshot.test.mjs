@@ -137,6 +137,7 @@ test("a record that has been tampered with is re-normalised, not trusted", () =>
   assert.equal(read.applies, true);
   assert.deepEqual(Object.keys(read.entries), ["good"], "the unknown kind is dropped, not honoured");
   assert.deepEqual(read.appliedPins.map((p) => p.id), ["good"]);
+  assert.deepEqual(read.refusals, [], "an older v2 record without refusal reasons normalizes to silence");
 });
 
 test("storage stays bounded, in the same shape the server would accept", () => {
@@ -176,7 +177,7 @@ test("storage stays bounded, in the same shape the server would accept", () => {
 // and the stops on screen had never answered it.
 // --------------------------------------------------------------------------
 
-import { savedEntryId } from "../src/lib/anywhere-storage.mjs";
+import { buildSavedEntry, savedEntryId } from "../src/lib/anywhere-storage.mjs";
 
 test("a record does not carry between two days at the same anchor", () => {
   const thursday = savedEntryId({ place: "Trogir", dateIso: "2026-08-24", selected: ["food", "culture"], walkKey: "balanced" });
@@ -205,6 +206,43 @@ test("a record does not carry between two days at the same anchor", () => {
   // Same place, same date, different preferences is also a different day.
   assert.equal(readCommitmentSnapshot(forThursday, { anchorKey: KEY, dayKey: otherPrefs }).reason, "day_changed");
   assert.equal(readCommitmentSnapshot(forThursday, { anchorKey: KEY, dayKey: otherWalk }).reason, "day_changed");
+});
+
+test("two built walking variants cannot borrow one commitment snapshot", () => {
+  const common = {
+    place: "Trogir",
+    dateIso: "2026-08-24",
+    safeResponse: { days: [] },
+    classification: { status: "composed" },
+  };
+  const short = buildSavedEntry({
+    ...common,
+    inputs: { selected: ["culture", "food"], walkKey: "short" },
+  });
+  const long = buildSavedEntry({
+    ...common,
+    inputs: { selected: ["food", "culture"], walkKey: "long" },
+  });
+  assert.notEqual(short.id, long.id);
+
+  const shortSnapshot = buildCommitmentSnapshot({
+    anchorKey: KEY,
+    dayKey: short.id,
+    entries,
+    appliedPins,
+    refusals,
+  });
+  const longSnapshot = buildCommitmentSnapshot({
+    anchorKey: KEY,
+    dayKey: long.id,
+    entries,
+    appliedPins,
+  });
+
+  assert.equal(readCommitmentSnapshot(shortSnapshot, { anchorKey: KEY, dayKey: short.id }).applies, true);
+  assert.equal(readCommitmentSnapshot(longSnapshot, { anchorKey: KEY, dayKey: long.id }).applies, true);
+  assert.equal(readCommitmentSnapshot(shortSnapshot, { anchorKey: KEY, dayKey: long.id }).reason, "day_changed");
+  assert.equal(readCommitmentSnapshot(longSnapshot, { anchorKey: KEY, dayKey: short.id }).reason, "day_changed");
 });
 
 test("a v1 record cannot say which day it belongs to, so it carries nothing", () => {

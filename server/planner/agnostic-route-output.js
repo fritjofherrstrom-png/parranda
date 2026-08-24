@@ -1091,6 +1091,24 @@ async function composeAgnosticRouteOutput({
   });
 
   if (!eligibility.eligible) {
+    // No engine day exists to be withheld here: eligibility stopped before
+    // composition. Preserve the furthest truthful stage each requested pin
+    // reached instead of letting the response layer blanket them as
+    // day_not_published. This matters especially when exclusion filtered the
+    // trusted array to zero records while its private loaded-id evidence
+    // remains attached.
+    const precompositionPinnedRefusals = loaderStatus === "loaded:0"
+      && Array.isArray(pinnedStopIds)
+      && pinnedStopIds.length
+      ? classifyUnhonouredPins({
+          pinnedIds: pinnedStopIds,
+          stops: [],
+          plannerRoles,
+          sourceCandidates: Array.isArray(engineSourceCandidates) ? engineSourceCandidates : [],
+          loadedCandidateIds,
+          shedForBudget: [],
+        })
+      : null;
     const experiment = buildExperimentBlock({
       routeMutation: false,
       eligibility,
@@ -1104,7 +1122,11 @@ async function composeAgnosticRouteOutput({
       walkingKmTarget,
     });
     experiment.context = contextBlock;
-    return { result: baselineResult, experiment };
+    return {
+      result: baselineResult,
+      experiment,
+      ...(Array.isArray(precompositionPinnedRefusals) ? { precompositionPinnedRefusals } : {}),
+    };
   }
 
   // Local-time comparison is meaningful only for a today-dated request with a

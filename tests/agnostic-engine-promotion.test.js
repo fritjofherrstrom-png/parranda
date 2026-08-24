@@ -834,6 +834,34 @@ test(
 );
 
 test(
+  "excluding the entire trusted supply still preserves truthful pin identity",
+  withServer(makeLoader([
+    externalRecord("cafe-0", "Cafe 0", "cafe", 41.9008, 12.49, ["fika"]),
+  ]), async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody({
+        preferences: ["coffee"],
+        excluded_candidate_ids: ["cafe-0"],
+        pinned_candidate_ids: ["cafe-0", "ghost-cafe"],
+      }),
+    });
+
+    const verdict = r.body.agnostic_route_output_experiment.pinned_candidates;
+    assert.deepEqual(verdict.unhonored, [
+      { id: "cafe-0", reason: "not_offered_to_route" },
+      { id: "ghost-cafe", reason: "unknown_candidate" },
+    ]);
+
+    const withoutVerdict = structuredClone(r.body);
+    withoutVerdict.agnostic_route_output_experiment.pinned_candidates = null;
+    const serialized = JSON.stringify(withoutVerdict);
+    assert.equal(serialized.includes("cafe-0"), false, "private loaded identity never becomes evidence");
+    assert.equal(serialized.includes("ghost-cafe"), false, "the caller's ghost remains correlation-only");
+  }),
+);
+
+test(
   "no pin leaves the request byte-identical",
   withServer(pinLoader(), async (server) => {
     const withField = await requestJson(server, {

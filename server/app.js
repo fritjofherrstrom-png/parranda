@@ -2303,7 +2303,13 @@ function buildApp({
       // candidate opt-in + the trusted server openDataLoader are still required
       // inside composeAgnosticRouteOutput. Public payload never becomes trusted.
       const useEngineCompose = isAgnosticEngineComposeRequested(request);
-      const { result: experimentResult, experiment, eventWeave, pinnedRefusals } = await composeAgnosticRouteOutput({
+      const {
+        result: experimentResult,
+        experiment,
+        eventWeave,
+        pinnedRefusals,
+        precompositionPinnedRefusals,
+      } = await composeAgnosticRouteOutput({
         coords: anchor,
         baselineResult: baselineBody,
         externalRequested: isExternalCandidatesRequested(request),
@@ -2381,7 +2387,9 @@ function buildApp({
           publishedStops,
           promotion.promote
             ? pinnedRefusals
-            : attributeToWithheldDay(pinnedCandidateIds, publishedStops),
+            : Array.isArray(precompositionPinnedRefusals)
+              ? precompositionPinnedRefusals
+              : attributeToWithheldDay(pinnedCandidateIds, publishedStops),
         );
         // Retirement-readiness observability: a consolidated, honest verdict on
         // whether the engine path is ready to become the default synthesizer,

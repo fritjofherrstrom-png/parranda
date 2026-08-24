@@ -296,6 +296,25 @@ test("the walk never claims an unknown pin as a budget refusal", async () => {
   );
 });
 
+test("unknown pins cannot consume the bounded shed attempts before an offered pin", async () => {
+  const ghosts = Array.from({ length: MAX_SHED_ATTEMPTS }, (_, index) => `ghost-${index}`);
+  const pins = [...ghosts, "far"];
+  const finalize = async (activePins) => (
+    activePins.includes("far") ? day(99, ["far"]) : day(4.0, [])
+  );
+  const settled = await settlePinsWithinWalkingBudget({
+    finalize,
+    withPins: await finalize(pins),
+    pins,
+    walkingKmTarget: 4,
+    origin: ORIGIN,
+    sourceCandidates: [CANDIDATES.find((candidate) => candidate.id === "far")],
+  });
+
+  assert.deepEqual(settled.shedForBudget, ["far"]);
+  assert.deepEqual(settled.route.main_stops, [], "the affordable pin-less route is published");
+});
+
 test("giving up attributes every surviving pin to the walk as well", async () => {
   // The pin-less day is published, so the pins still standing were refused by
   // the walk just as surely as the ones already shed. Saying otherwise would

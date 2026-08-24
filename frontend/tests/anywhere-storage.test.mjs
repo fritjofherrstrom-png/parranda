@@ -51,6 +51,10 @@ test("walking preset is part of saved-day identity and normalizes fail-closed", 
     inputs: { selected: base.selected, walkKey: "long" },
   });
   assert.notEqual(short.id, long.id, "the entry builder and identity helper share the same effective walk key");
+
+  const variants = upsertSaved(upsertSaved([], short), long);
+  assert.equal(variants.length, 2, "short and long variants are retained as separate saved days");
+  assert.deepEqual(new Set(variants.map((saved) => saved.id)), new Set([short.id, long.id]));
 });
 
 test("legacy saved entries remain readable without rewriting their old id", () => {
