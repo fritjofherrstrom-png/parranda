@@ -389,3 +389,40 @@ test("a body released after the intent moved on is still refused", async (t) => 
 
   assert.ok(!/Place q/.test(h.text()), "the generation check must survive the body await");
 });
+
+test("starting over invalidates the commitment request already in flight", async (t) => {
+  const h = await plannerWithDay();
+  t.after(() => h.unmount());
+
+  await addOutsider(h);
+  await h.clock.advance(500);
+  const inFlight = h.fetchMock.pending()[0];
+  assert.deepEqual(inFlight.body.pinned_candidate_ids, ["outsider"]);
+
+  await click(h, buttonMatching(h, /Start over without my choices/));
+  await h.fetchMock.respond(inFlight, composedDay(["q", "r", "s"])).catch(() => {});
+  await h.clock.advance(50);
+
+  assert.ok(!/Place q/.test(h.text()), "the cleared ledger's old answer cannot take the screen");
+});
+
+test("a scheduled silent refresh cannot wake under a newer ledger intent", async (t) => {
+  const h = await mountPlanner({ url: "http://localhost/anywhere?place=Testville&lang=en" });
+  t.after(() => h.unmount());
+
+  await h.clock.advance(500);
+  const first = h.fetchMock.pending()[0];
+  const pendingLive = composedDay(["a", "b", "c"]);
+  pendingLive.live_events = { pending: true };
+  await h.fetchMock.respond(first, pendingLive);
+  await h.clock.advance(50);
+
+  // The old follow-up is due at t=9500. Change intent 100ms before it wakes;
+  // the new debounced request is not due until t=9800.
+  await h.clock.advance(8850);
+  await addOutsider(h);
+  await h.clock.advance(100);
+
+  const staleSilent = h.fetchMock.pending()[0];
+  assert.equal(staleSilent, undefined, "the old timer is cancelled before it can send its frozen ledger");
+});

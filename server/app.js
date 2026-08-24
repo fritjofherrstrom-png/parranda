@@ -1447,6 +1447,11 @@ function blockPrivateRepoPaths(request, response, next) {
   next();
 }
 
+function selectPublishedEventWeave({ promotionPromote, eventWeave, publicResult }) {
+  if (!promotionPromote || !eventWeave?.applied) return null;
+  return { ...eventWeave, result: publicResult };
+}
+
 /**
  * @param {object} [options]
  * @param {Function|null} [options.openDataLoader]  Trusted server-side loader
@@ -2381,14 +2386,16 @@ function buildApp({
         // Compose already applied this weave INSIDE its authoritative
         // finalisation, so the route it settled on is the route below. Weaving
         // again here would either be a no-op or a second, unjudged mutation.
-        const engineWoven = eventWeave && eventWeave.applied
-          ? { ...eventWeave, result: publicResult }
-          : await weaveEventStopFailSoft({
-              result: publicResult,
-              placeStructure: wovenPlaceStructure,
-              walkingRouter,
-              walkingConfig,
-            });
+        const engineWoven = selectPublishedEventWeave({
+          promotionPromote: promotion.promote,
+          eventWeave,
+          publicResult,
+        }) ?? await weaveEventStopFailSoft({
+          result: publicResult,
+          placeStructure: wovenPlaceStructure,
+          walkingRouter,
+          walkingConfig,
+        });
         reconcileConstraintAfterEventWeave({
           experiment,
           woven: engineWoven,
@@ -2689,4 +2696,5 @@ module.exports = {
   buildPlannerAreas,
   isDogfoodUiEnabled,
   resolveSelectedRouteDate,
+  selectPublishedEventWeave,
 };

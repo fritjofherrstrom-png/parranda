@@ -1369,6 +1369,7 @@ async function composeAgnosticRouteViaEngine({
       start: { type: "auto" },
       end: { type: "auto" },
       walkingKmTarget: Number.isFinite(walkingKmTarget) ? walkingKmTarget : 6,
+      distanceMode,
       preferences: Array.isArray(preferences) ? preferences : [],
       lang,
       pinnedStopIds: Array.isArray(pins) ? pins : [],

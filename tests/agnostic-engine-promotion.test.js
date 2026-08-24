@@ -12,9 +12,10 @@
  */
 
 const assert = require("node:assert/strict");
+const { readFileSync } = require("node:fs");
 const test = require("node:test");
 
-const { buildApp } = require("../server/app");
+const { buildApp, selectPublishedEventWeave } = require("../server/app");
 const {
   externalRecord,
   makeLoader,
@@ -1179,6 +1180,35 @@ test(
     );
   }),
 );
+
+test("engine compose forwards no_limit into the route engine itself", () => {
+  const source = readFileSync(require.resolve("../server/planner/agnostic-route-output"), "utf8");
+  const runEngine = source.slice(
+    source.indexOf("async function runEngine"),
+    source.indexOf("// ONE finalisation pipeline"),
+  );
+  assert.match(
+    runEngine,
+    /generateAgnosticRecommendations\(\{[\s\S]*?\bdistanceMode,/,
+    "no_limit must shape engine scoring/route form, not only disable pin shedding",
+  );
+});
+
+test("an experimental event weave is reused only when that experiment is published", () => {
+  const experimentalWeave = { applied: true, interrupt: { status: "applied" } };
+  const publicResult = { days: [] };
+
+  assert.equal(
+    selectPublishedEventWeave({ promotionPromote: false, eventWeave: experimentalWeave, publicResult }),
+    null,
+    "a withheld experiment cannot donate weave sidecars to the baseline",
+  );
+  assert.deepEqual(
+    selectPublishedEventWeave({ promotionPromote: true, eventWeave: experimentalWeave, publicResult }),
+    { ...experimentalWeave, result: publicResult },
+    "the finalized weave is reused when its route is the one being published",
+  );
+});
 
 test(
   "twelve unaffordable commitments still yield an honest, composed day",

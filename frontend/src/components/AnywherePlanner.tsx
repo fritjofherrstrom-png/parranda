@@ -597,7 +597,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         const effectivePreferences = preferencesOverride ?? selected;
         const effectiveExcluded = excludedOverride ?? scopedLedger.excludedIds;
         const effectivePinned = pinnedOverride ?? scopedLedger.pinnedIds;
+        const followupIntentId = intentSequenceRef.current;
         pollTimerRef.current = setTimeout(() => {
+          pollTimerRef.current = null;
+          if (followupIntentId !== intentSequenceRef.current) return;
           execute(anchor, {
             silent: true,
             langOverride: langOverride ?? lang,
@@ -1275,14 +1278,29 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // candidate the day did not choose) are the same commitment — "this must be
   // in the day" — reached from two places. Writing the map by key is what makes
   // exclude and pin unable to contradict each other: the newest action wins.
+  const invalidateCommitmentIntent = () => {
+    intentSequenceRef.current += 1;
+    if (recomposeTimerRef.current) {
+      clearTimeout(recomposeTimerRef.current);
+      recomposeTimerRef.current = null;
+    }
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    activeRequestRef.current?.abort();
+    activeRequestRef.current = null;
+    setUpgradePending(false);
+  };
   const commit = (identity: string, kind: "exclude" | "pin", commitLabel: string) => {
     if (!identity || commitments[identity]?.kind === kind) return;
     setExpandedStopKey(null);
     setExpandedCandidateKey(null);
     // The anchor of the day on screen — the geography this commitment is about.
     commitmentAnchorKeyRef.current = displayedAnchorKeyRef.current;
-    // Anything in flight is now answering a question the user has moved past.
-    intentSequenceRef.current += 1;
+    // Anything in flight or already scheduled is now answering a question the
+    // user has moved past.
+    invalidateCommitmentIntent();
     // The label travels with the commitment so a day that could not keep a
     // place can name it, without a second map to fall out of sync.
     setCommitments({ ...commitments, [identity]: { kind, label: commitLabel } });
@@ -1291,10 +1309,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const keepStop = (identity: string, stopLabel: string) => commit(identity, "pin", stopLabel);
   const releaseCommitment = (identity: string) => {
     if (!identity || !commitments[identity]) return;
-    intentSequenceRef.current += 1;
+    invalidateCommitmentIntent();
     const next = { ...commitments };
     delete next[identity];
     setCommitments(next);
+  };
+  const clearCommitments = () => {
+    if (!Object.keys(commitments).length) return;
+    invalidateCommitmentIntent();
+    setCommitments({});
   };
   const excludedCount = Object.values(commitments).filter((entry) => entry.kind === "exclude").length;
   const pinnedCount = Object.values(commitments).filter((entry) => entry.kind === "pin").length;
@@ -1574,7 +1597,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           )}
           <button
             type="button"
-            onClick={() => setCommitments({})}
+            onClick={clearCommitments}
             className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-parranda-accent"
           >
             {t("Börja om utan mina val", "Start over without my choices")}
