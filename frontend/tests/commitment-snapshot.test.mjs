@@ -23,13 +23,18 @@ const KEY = "place:trogir";
 const DAY = "Trogir::2026-08-24::culture,food";
 const entries = { a: { kind: "pin", label: "Alpha" }, b: { kind: "exclude", label: "Beta" } };
 const appliedPins = [{ id: "a", kind: "pin", label: "Alpha" }];
+const refusals = [{ id: "a", reason: "walking_budget" }];
 
 test("a day records the ledger it carried and the verdict it got back", () => {
-  const snapshot = buildCommitmentSnapshot({ anchorKey: KEY, dayKey: DAY, entries, appliedPins });
+  const snapshot = buildCommitmentSnapshot({ anchorKey: KEY, dayKey: DAY, entries, appliedPins, refusals });
   assert.equal(snapshot.version, COMMITMENT_SNAPSHOT_VERSION);
   assert.equal(snapshot.anchorKey, KEY);
   assert.deepEqual(snapshot.entries, entries);
   assert.deepEqual(snapshot.appliedPins, appliedPins);
+  assert.deepEqual(snapshot.refusals, refusals, "the server-owned reason is part of the same frozen verdict");
+
+  const restored = readCommitmentSnapshot(snapshot, { anchorKey: KEY, dayKey: DAY });
+  assert.deepEqual(restored.refusals, refusals, "the reason round-trips with its day");
 });
 
 test("the record is a copy, not a view of the live ledger", () => {
@@ -46,6 +51,26 @@ test("a day with nothing to say records nothing", () => {
   assert.equal(buildCommitmentSnapshot({ anchorKey: KEY, dayKey: DAY, entries: {}, appliedPins: [] }), null);
   // And without an anchor there is no scope to record it against.
   assert.equal(buildCommitmentSnapshot({ anchorKey: null, dayKey: DAY, entries, appliedPins }), null);
+});
+
+test("refusal storage is bounded to this day's applied pins and safe tokens", () => {
+  const snapshot = buildCommitmentSnapshot({
+    anchorKey: KEY,
+    dayKey: DAY,
+    entries,
+    appliedPins,
+    refusals: [
+      { id: "other", reason: "walking_budget" },
+      { id: "a", reason: "future_reason" },
+      { id: "a", reason: "not_selected" },
+      { id: "a", reason: "free text is not a token" },
+      { id: "a", reason: `x${"_".repeat(80)}` },
+    ],
+  });
+
+  assert.deepEqual(snapshot.refusals, [
+    { id: "a", reason: "future_reason" },
+  ], "the first safe server token wins and unrelated or unsafe records are discarded");
 });
 
 test("a record only speaks for its own anchor", () => {

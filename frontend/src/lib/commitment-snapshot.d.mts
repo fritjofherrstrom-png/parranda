@@ -1,6 +1,7 @@
 export type CommitmentKind = "exclude" | "pin";
 export type CommitmentEntry = { kind: CommitmentKind; label: string };
 export type AppliedPin = { id: string; kind: "pin"; label: string };
+export type AppliedRefusal = { id: string; reason: string };
 
 export const COMMITMENT_SNAPSHOT_VERSION: number;
 export const MAX_SNAPSHOT_PINS: number;
@@ -12,6 +13,7 @@ export interface CommitmentSnapshot {
   dayKey: string;
   entries: Record<string, CommitmentEntry>;
   appliedPins: AppliedPin[];
+  refusals: AppliedRefusal[];
 }
 
 export function buildCommitmentSnapshot(params: {
@@ -19,6 +21,7 @@ export function buildCommitmentSnapshot(params: {
   dayKey?: string | null;
   entries?: Record<string, CommitmentEntry>;
   appliedPins?: AppliedPin[];
+  refusals?: Array<{ id: string; reason: string | null }>;
 }): CommitmentSnapshot | null;
 
 export function readCommitmentSnapshot(
@@ -29,4 +32,5 @@ export function readCommitmentSnapshot(
   reason: string;
   entries: Record<string, CommitmentEntry>;
   appliedPins: AppliedPin[];
+  refusals: AppliedRefusal[];
 };

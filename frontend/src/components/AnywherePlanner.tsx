@@ -619,12 +619,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       // and unavailable composed no day, so there is nothing for a pin to have
       // failed to fit into and the snapshot stays empty.
       const composedNow = decision.isComposedStatus(cls.status);
+      const refusalsNow: Array<{ id: string; reason: string | null }> = composedNow
+        && Array.isArray(body?.agnostic_route_output_experiment?.pinned_candidates?.unhonored)
+        ? body.agnostic_route_output_experiment.pinned_candidates.unhonored
+        : [];
       setAppliedPins(composedNow ? sentPins : []);
-      setAppliedRefusals(
-        composedNow
-          ? (body?.agnostic_route_output_experiment?.pinned_candidates?.unhonored ?? [])
-          : [],
-      );
+      setAppliedRefusals(refusalsNow);
       setDayIsStale(false);
       setServiceRefusal(null);
       setRouteAnchorCoords(anchor.coords ?? null);
@@ -660,6 +660,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             }),
             entries: scopedLedger.entries,
             appliedPins: decision.isComposedStatus(cls.status) ? sentPins : [],
+            refusals: refusalsNow,
           }),
         });
         lastEntryRef.current = entry;
@@ -791,9 +792,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       commitmentAnchorKeyRef.current = restoredAnchorKey;
       setCommitments(restoredCommitments.entries);
       setAppliedPins(restoredCommitments.appliedPins);
+      setAppliedRefusals(restoredCommitments.refusals);
     } else {
       commitmentAnchorKeyRef.current = null;
       if (Object.keys(commitments).length) setCommitments({});
+      setAppliedRefusals([]);
     }
     setDayIsStale(false);
     setRouteAnchorCoords(null);

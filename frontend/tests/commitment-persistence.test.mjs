@@ -31,7 +31,7 @@ function stop(id) {
   };
 }
 
-function composedDay(stopIds) {
+function composedDay(stopIds, refusals = []) {
   return {
     days: [
       {
@@ -69,7 +69,15 @@ function composedDay(stopIds) {
         ],
       },
     },
-    agnostic_route_output_experiment: { promotion: { promote: true } },
+    agnostic_route_output_experiment: {
+      promotion: { promote: true },
+      pinned_candidates: {
+        requested_count: refusals.length,
+        honored_count: 0,
+        unhonored_count: refusals.length,
+        unhonored: refusals,
+      },
+    },
   };
 }
 
@@ -101,11 +109,11 @@ async function keepFirstStop(h) {
 }
 
 /** Commit, let the recompose land, and return the day that answered it. */
-async function keepAndSettle(h, answer = ["a", "b", "c"]) {
+async function keepAndSettle(h, answer = ["a", "b", "c"], refusals = []) {
   await keepFirstStop(h);
   await h.clock.advance(500);
   const inFlight = h.fetchMock.pending()[0];
-  await h.fetchMock.respond(inFlight, composedDay(answer));
+  await h.fetchMock.respond(inFlight, composedDay(answer, refusals));
   await h.clock.advance(50);
   return inFlight;
 }
@@ -158,6 +166,29 @@ test("a restored day answers with its own verdict, not a recomputed one", async 
 
   assert.match(h.text(), NOTICE, "the restored day reports what it actually answered");
   assert.match(h.text(), /Place a/, "and names it");
+});
+
+test("a restored day carries the server reason that belongs to its verdict", async (t) => {
+  const first = await plannerWithDay();
+  await keepAndSettle(
+    first,
+    ["b", "c", "d"],
+    [{ id: "a", reason: "walking_budget" }],
+  );
+  assert.match(first.text(), /too far for the walk you asked for/i, "precondition: the live day renders the server reason");
+  const persisted = first.readStorage(LAST_KEY);
+  await first.unmount();
+
+  const h = await mountPlanner({ url: "http://localhost/anywhere?lang=en", storage: { [LAST_KEY]: persisted } });
+  t.after(() => h.unmount());
+  await h.clock.advance(100);
+
+  assert.match(
+    h.text(),
+    /too far for the walk you asked for/i,
+    "reload restores the exact reason from the same frozen verdict",
+  );
+  assert.ok(!NOTICE.test(h.text()), "it does not silently degrade to the generic sentence");
 });
 
 test("a day saved before this existed still carries no commitments", async (t) => {
