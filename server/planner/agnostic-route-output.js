@@ -50,6 +50,7 @@ const { calibrateAgnosticRouteReadiness } = require("./agnostic-route-readiness-
 const { buildAgnosticConstraintNegotiation } = require("./agnostic-constraint-negotiation");
 const { resolveAgnosticWalkingTargetBand } = require("./agnostic-walking-target");
 const { settlePinsWithinWalkingBudget } = require("./pin-walking-budget");
+const { weaveEveningEventRouteStop } = require("../candidates/event-route-stop-weave");
 const { generateAgnosticRecommendations } = require("../route-engine");
 const { projectRouteToSelectedStopChain } = require("./route-public-geometry");
 const {
@@ -850,6 +851,13 @@ async function composeAgnosticRouteOutput({
   lang = "en",
   walkingRouter = null,
   walkingConfig = null,
+  // The request's own distance mode. "no_limit" means the user asked for no
+  // walking ceiling at all, and a ceiling the settling rule invents on their
+  // behalf is not a ceiling they agreed to.
+  distanceMode = null,
+  // The place structure the evening event was woven into, so the authoritative
+  // finalisation can apply the SAME weave the response will carry.
+  eveningEventStructure = null,
   walkingBudget = null,
   walkingKmTarget = null,
   // #262 — trusted context seams. Public payload weather is NEVER trusted; the
@@ -1111,8 +1119,12 @@ async function composeAgnosticRouteOutput({
       ctx,
       baselineResult,
       walkingKmTarget: Number.isFinite(walkingKmTarget) ? walkingKmTarget : undefined,
+      distanceMode,
       preferences,
       pinnedStopIds,
+      walkingRouter,
+      walkingConfig,
+      eveningEventStructure,
       timezone: contextBlock?.time?.timezone || timezone,
       lang,
       currentTimeBand: routeCurrentBand,
@@ -1303,8 +1315,12 @@ async function composeAgnosticRouteViaEngine({
   contextBlock,
   baselineResult,
   walkingKmTarget,
+  distanceMode = null,
   preferences,
   pinnedStopIds,
+  walkingRouter = null,
+  walkingConfig = null,
+  eveningEventStructure = null,
   timezone,
   lang,
   currentTimeBand = null,
@@ -1418,7 +1434,50 @@ async function composeAgnosticRouteViaEngine({
         repairApplied = true;
       }
     }
-    return { day, route, anchored, trimmed, repairApplied };
+    // The event weave is part of what gets EMITTED, and it extends the route by
+    // up to MAX_EVENT_LEG_KM. Settling against the pre-weave geometry therefore
+    // judged a route the response would not carry: a day settled just inside
+    // the ceiling could be published well outside it, with only the diagnostics
+    // reconciled afterwards. So the weave runs here, and what this function
+    // returns is the day as it will actually be sent.
+    const weave = await applyEveningEventWeave({ day, route });
+    return {
+      day: weave.day,
+      route: weave.route,
+      anchored,
+      trimmed,
+      repairApplied,
+      weave: weave.outcome,
+    };
+  }
+
+  /**
+   * Apply the evening-event weave to a candidate day, fail-soft.
+   *
+   * Returns the inputs unchanged when there is nothing to weave, when the
+   * gates refuse, or on any error — the same contract the response path has
+   * always had, so this can never turn a composable day into a failure.
+   */
+  async function applyEveningEventWeave({ day, route }) {
+    if (!route || !eveningEventStructure) return { day, route, outcome: null };
+    let woven;
+    try {
+      woven = await weaveEveningEventRouteStop({
+        result: { days: [{ ...day, experimental_agnostic_route_applied: true, primary_route: route }] },
+        placeStructure: eveningEventStructure,
+        walkingRouter: typeof walkingRouter === "function" ? walkingRouter : undefined,
+        walkingConfig: walkingConfig || undefined,
+      });
+    } catch (_error) {
+      return { day, route, outcome: null };
+    }
+    if (!woven || !woven.applied) {
+      return { day, route, outcome: woven || null };
+    }
+    const wovenDay = woven.result?.days?.[0] || null;
+    const wovenRoute = wovenDay?.primary_route || null;
+    if (!wovenRoute) return { day, route, outcome: woven };
+    return { day: { ...day, primary_route: wovenRoute }, route: wovenRoute, outcome: woven };
   }
 
   const requestedPins = Array.isArray(pinnedStopIds) ? [...pinnedStopIds] : [];
@@ -1431,6 +1490,7 @@ async function composeAgnosticRouteViaEngine({
       walkingKmTarget,
       origin,
       sourceCandidates,
+      distanceMode,
     });
   }
   let engineDay = finalized.day;
@@ -1438,6 +1498,10 @@ async function composeAgnosticRouteViaEngine({
   let anchoredToLocalTime = finalized.anchored;
   let trimmedDayparts = finalized.trimmed;
   const capacityRepairApplied = finalized.repairApplied;
+  // The weave that was applied to the day being returned. The response path
+  // uses this instead of weaving again, so the route the settling judged and
+  // the route the client receives are the same object.
+  const eventWeave = finalized.weave || null;
 
   if (engineRoute) {
     const daypartHonesty = buildRouteDaypartHonesty({
@@ -1528,7 +1592,7 @@ async function composeAgnosticRouteViaEngine({
   // sensitive fields (date_signals, alternatives, live_events, dayflow_context).
   scrubAgnosticAppliedDay(result, engineDay);
 
-  return { result, experiment };
+  return { result, experiment, eventWeave };
 }
 
 function hasAdditionalCandidateIds(baseCandidates, expandedCandidates) {

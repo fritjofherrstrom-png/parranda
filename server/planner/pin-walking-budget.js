@@ -26,7 +26,34 @@ const { resolveAgnosticWalkingTargetBand } = require("./agnostic-walking-target"
  * When a set does not settle, the lowest-priority pin is dropped and the day is
  * finalised again. The set strictly shrinks every iteration, so the loop runs at
  * most `pins.length + 1` times including the first attempt.
+ *
+ * This is a single shedding pass in a fixed order, NOT a search: it returns the
+ * first affordable set reached by dropping farthest-first, which is not
+ * necessarily the largest affordable subset. Dropping a nearer pin instead
+ * might sometimes retain one more commitment, but finding that would mean
+ * finalising combinations rather than a chain, and each finalisation is a full
+ * compose. The fixed order is the deliberate trade: predictable cost, an
+ * outcome the user can predict from the map, and a rule that fits in a
+ * sentence.
  */
+
+/**
+ * How many times shedding may re-finalise before giving up.
+ *
+ * Every finalisation is a full compose — ordering, bridge insertion, capacity
+ * repair, event weave — and can reach the engine several times. Measured with
+ * twelve unaffordable pins against a modest fixture: 13 engine runs and ~2s of
+ * event-loop time, against 2 runs and ~54ms for the same request with none.
+ * That amplification is reachable from one public request, so the shedding
+ * chain gets its own ceiling rather than inheriting the pin limit.
+ *
+ * Farthest-first converges quickly when a day is nearly affordable; a request
+ * still unaffordable after this many sheds is one whose commitments do not fit
+ * at all, and the honest answer there is the pin-less day with every pin
+ * reported unhonoured — which is what the user would have got by shedding to
+ * the end anyway, at several times the cost.
+ */
+const MAX_SHED_ATTEMPTS = 4;
 
 /**
  * Deterministic drop order: farthest from the anchor goes first.
@@ -78,9 +105,14 @@ function routeKm(finalized) {
 function withinBudget({ withPins, baseline, ceilingKm }) {
   const pinnedKm = routeKm(withPins);
   const baselineKm = routeKm(baseline);
-  // No pinned route at all is not a budget question — the caller reports the
-  // pins unhonoured either way, and dropping more cannot conjure a route.
-  if (pinnedKm === null) return true;
+  if (pinnedKm === null) {
+    // The pins produced no route at all. If the request has no route WITHOUT
+    // them either, that is the day, and no amount of shedding changes it. But
+    // if the baseline does compose, the commitments are what broke it, and
+    // accepting the empty result would hand the user nothing when a smaller
+    // set of their choices would still have given them a day.
+    return baselineKm === null;
+  }
   if (baselineKm === null) return pinnedKm <= ceilingKm;
   if (baselineKm <= ceilingKm) return pinnedKm <= ceilingKm;
   // Already over the ceiling without any pin: do not blame the commitments for
@@ -117,20 +149,24 @@ async function settlePinsWithinWalkingBudget({
   // the reason the day does not fit.
   const dropOrder = pinDropOrder(requested, origin, sourceCandidates);
 
+  let sheds = 0;
   for (const drop of dropOrder) {
     if (withinBudget({ withPins: current, baseline, ceilingKm: band.ceilingKm })) return current;
+    if (sheds >= MAX_SHED_ATTEMPTS) return baseline;
     // Strictly shrinks: `drop` is in `remaining` on every pass, so the set loses
     // one member each time and the loop cannot run more than requested.length
-    // times after the first attempt.
+    // times after the first attempt — and no more than MAX_SHED_ATTEMPTS.
     remaining = remaining.filter((id) => id !== drop);
     current = remaining.length ? await finalize(remaining) : baseline;
+    sheds += 1;
   }
-  // Every pin dropped. `current` is the pin-less baseline, and each unhonoured
-  // pin surfaces through the composed day exactly as before.
+  // Every pin shed. `current` is the pin-less baseline, and each unhonoured pin
+  // surfaces through the composed day exactly as before.
   return withinBudget({ withPins: current, baseline, ceilingKm: band.ceilingKm }) ? current : baseline;
 }
 
 module.exports = {
+  MAX_SHED_ATTEMPTS,
   pinDropOrder,
   settlePinsWithinWalkingBudget,
   withinBudget,

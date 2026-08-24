@@ -337,6 +337,16 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [adjustOpen, setAdjustOpen] = useState(false);
   const recomposeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestSequenceRef = useRef(0);
+  // The user's INTENT generation, as distinct from the request generation
+  // above. Intent changes the instant they click; a request does not leave for
+  // another 400ms, and one already in flight is answering an older intent.
+  //
+  // The immutable verdict snapshot keeps the day from SAYING anything false in
+  // that window, but it does not stop an older answer from installing its
+  // route — a day composed without the pin, landing after the pin was made,
+  // and looking entirely legitimate. A response has to match both generations
+  // to be allowed on screen.
+  const intentSequenceRef = useRef(0);
   const activeRequestRef = useRef<AbortController | null>(null);
   const blitzRequestRef = useRef<AbortController | null>(null);
   const blitzRequestSequenceRef = useRef(0);
@@ -424,6 +434,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     activeRequestRef.current?.abort();
     const controller = new AbortController();
     const requestId = ++requestSequenceRef.current;
+    // The intent this request is going out to answer. If the user changes a
+    // commitment while it is in flight, this no longer matches and the answer
+    // is stale however new the request itself was.
+    const intentId = intentSequenceRef.current;
     activeRequestRef.current = controller;
     // A valid day for the SAME anchor is held on screen while the next one
     // composes, instead of being destroyed for the 5-20 s the compose takes.
@@ -500,7 +514,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         signal: controller.signal,
       });
       const body = await response.json();
-      if (controller.signal.aborted || requestId !== requestSequenceRef.current) return;
+      if (
+        controller.signal.aborted ||
+        requestId !== requestSequenceRef.current ||
+        intentId !== intentSequenceRef.current
+      ) return;
       const refusal = composeServiceRefusal(response.status, body);
       if (refusal) {
         setServiceRefusal(refusal);
@@ -593,7 +611,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         }, followup.delayMs ?? 0);
       }
     } catch {
-      if (controller.signal.aborted || requestId !== requestSequenceRef.current) return;
+      if (
+        controller.signal.aborted ||
+        requestId !== requestSequenceRef.current ||
+        intentId !== intentSequenceRef.current
+      ) return;
       if (silent) {
         setUpgradePending(false);
         setLiveRefreshExhausted(true);
@@ -642,6 +664,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     // Bumping the sequence invalidates any response already past its abort
     // check but not yet applied.
     requestSequenceRef.current += 1;
+    intentSequenceRef.current += 1;
     setUpgradePending(false);
 
     lastEntryRef.current = entry;
@@ -1258,6 +1281,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setExpandedCandidateKey(null);
     // The anchor of the day on screen — the geography this commitment is about.
     commitmentAnchorKeyRef.current = displayedAnchorKeyRef.current;
+    // Anything in flight is now answering a question the user has moved past.
+    intentSequenceRef.current += 1;
     // The label travels with the commitment so a day that could not keep a
     // place can name it, without a second map to fall out of sync.
     setCommitments({ ...commitments, [identity]: { kind, label: commitLabel } });
@@ -1266,6 +1291,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const keepStop = (identity: string, stopLabel: string) => commit(identity, "pin", stopLabel);
   const releaseCommitment = (identity: string) => {
     if (!identity || !commitments[identity]) return;
+    intentSequenceRef.current += 1;
     const next = { ...commitments };
     delete next[identity];
     setCommitments(next);
