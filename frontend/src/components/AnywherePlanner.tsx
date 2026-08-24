@@ -61,6 +61,7 @@ import {
   removeSaved,
   LAST_KEY,
   SAVED_KEY,
+  savedEntryId,
   type SavedEntry,
 } from "../lib/anywhere-storage.mjs";
 import {
@@ -582,6 +583,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           // and would no longer describe what these stops answered.
           commitments: buildCommitmentSnapshot({
             anchorKey: anchorKey(anchor),
+            // Bound to the SAME identity the entry is stored under. An anchor
+            // alone is not enough: two saved days can share a place and differ
+            // in date or preferences, and each answered its own question.
+            dayKey: savedEntryId({
+              place: anchor.place ?? null,
+              dateIso: isoDateFromOffset(effectiveDayOffset),
+              selected: prefs,
+            }),
             entries: scopedLedger.entries,
             appliedPins: decision.isComposedStatus(cls.status) ? sentPins : [],
           }),
@@ -709,6 +718,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     // existed still gets.
     const restoredCommitments = readCommitmentSnapshot(entry.commitments, {
       anchorKey: restoredAnchorKey,
+      dayKey: entry.id,
     });
     if (restoredCommitments.applies) {
       commitmentAnchorKeyRef.current = restoredAnchorKey;

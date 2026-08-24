@@ -12,8 +12,15 @@
  * commitments only when that record is present, intact, of a version this build
  * understands, and belongs to this day and this geography. Anything else — a
  * day saved by an older build, a hand-edited localStorage, a snapshot from
- * another place — fails closed to no commitments, which is exactly the previous
- * behaviour.
+ * another place or another day — fails closed to no commitments, which is
+ * exactly the previous behaviour.
+ *
+ * BOTH keys are required, because neither is sufficient alone. The anchor says
+ * where; the day key says which day at that anchor. v1 bound only the anchor,
+ * so a record written for Thursday was accepted on Friday's day for the same
+ * place, and a record written under one set of preferences was accepted under
+ * another — same geography, different question, and the stops on screen had
+ * never answered it.
  *
  * Bounded on write as well as read: this lives in localStorage alongside up to
  * SAVED_CAP days, and a ledger is user input.
@@ -23,8 +30,12 @@
  * Bumped whenever the stored shape changes meaning. An unknown version is not
  * upgraded in place — it is refused, because guessing what an older or newer
  * build meant is precisely the kind of inference this module exists to prevent.
+ *
+ * v1 carried no day key. Rather than infer one for it, v1 records fail closed
+ * to no ledger: a v1 snapshot cannot prove which day it belongs to, and that
+ * is the whole question.
  */
-export const COMMITMENT_SNAPSHOT_VERSION = 1;
+export const COMMITMENT_SNAPSHOT_VERSION = 2;
 
 // Mirrors the server's own ledger limits (MAX_PINNED_IDS / MAX_EXCLUDED_IDS).
 // Storing more than the server would ever accept is storage spent on something
@@ -50,11 +61,14 @@ function cleanLabel(value) {
  * referenced, so later edits to the live ledger cannot reach back into a day
  * that has already been answered.
  *
- * @returns {{version: number, anchorKey: string, entries: object, appliedPins: object[]}|null}
+ * @returns {{version: number, anchorKey: string, dayKey: string, entries: object, appliedPins: object[]}|null}
  */
-export function buildCommitmentSnapshot({ anchorKey = null, entries = {}, appliedPins = [] } = {}) {
+export function buildCommitmentSnapshot({ anchorKey = null, dayKey = null, entries = {}, appliedPins = [] } = {}) {
   const key = typeof anchorKey === "string" ? anchorKey.trim() : "";
-  if (!key) return null;
+  const day = typeof dayKey === "string" ? dayKey.trim() : "";
+  // No day key, no record. A snapshot that cannot say which day it belongs to
+  // is the exact ambiguity this exists to remove.
+  if (!key || !day) return null;
 
   const source = entries && typeof entries === "object" ? entries : {};
   const kept = {};
@@ -80,7 +94,7 @@ export function buildCommitmentSnapshot({ anchorKey = null, entries = {}, applie
     .slice(0, MAX_SNAPSHOT_PINS);
 
   if (!Object.keys(kept).length && !verdict.length) return null;
-  return { version: COMMITMENT_SNAPSHOT_VERSION, anchorKey: key, entries: kept, appliedPins: verdict };
+  return { version: COMMITMENT_SNAPSHOT_VERSION, anchorKey: key, dayKey: day, entries: kept, appliedPins: verdict };
 }
 
 /**
@@ -91,7 +105,7 @@ export function buildCommitmentSnapshot({ anchorKey = null, entries = {}, applie
  *
  * @returns {{applies: boolean, reason: string, entries: object, appliedPins: object[]}}
  */
-export function readCommitmentSnapshot(snapshot, { anchorKey = null } = {}) {
+export function readCommitmentSnapshot(snapshot, { anchorKey = null, dayKey = null } = {}) {
   const empty = (reason) => ({ applies: false, reason, entries: {}, appliedPins: [] });
 
   if (!snapshot || typeof snapshot !== "object") return empty("absent");
@@ -102,13 +116,19 @@ export function readCommitmentSnapshot(snapshot, { anchorKey = null } = {}) {
   const storedKey = typeof snapshot.anchorKey === "string" ? snapshot.anchorKey.trim() : "";
   const wantedKey = typeof anchorKey === "string" ? anchorKey.trim() : "";
   if (!storedKey || !wantedKey) return empty("anchor_unknown");
-  // Matching geography is necessary, and the snapshot travelling with the day
-  // is what makes it sufficient — a different saved day for the same place
-  // carries its own record and cannot lend this one.
+  // Matching geography is necessary but NOT sufficient: two saved days can
+  // share an anchor and differ in date or preferences, and each answered its
+  // own question.
   if (storedKey !== wantedKey) return empty("anchor_changed");
+
+  const storedDay = typeof snapshot.dayKey === "string" ? snapshot.dayKey.trim() : "";
+  const wantedDay = typeof dayKey === "string" ? dayKey.trim() : "";
+  if (!storedDay || !wantedDay) return empty("day_unknown");
+  if (storedDay !== wantedDay) return empty("day_changed");
 
   const rebuilt = buildCommitmentSnapshot({
     anchorKey: storedKey,
+    dayKey: storedDay,
     entries: snapshot.entries,
     appliedPins: snapshot.appliedPins,
   });

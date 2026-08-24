@@ -20,11 +20,12 @@ import {
 } from "../src/lib/commitment-snapshot.mjs";
 
 const KEY = "place:trogir";
+const DAY = "Trogir::2026-08-24::culture,food";
 const entries = { a: { kind: "pin", label: "Alpha" }, b: { kind: "exclude", label: "Beta" } };
 const appliedPins = [{ id: "a", kind: "pin", label: "Alpha" }];
 
 test("a day records the ledger it carried and the verdict it got back", () => {
-  const snapshot = buildCommitmentSnapshot({ anchorKey: KEY, entries, appliedPins });
+  const snapshot = buildCommitmentSnapshot({ anchorKey: KEY, dayKey: DAY, entries, appliedPins });
   assert.equal(snapshot.version, COMMITMENT_SNAPSHOT_VERSION);
   assert.equal(snapshot.anchorKey, KEY);
   assert.deepEqual(snapshot.entries, entries);
@@ -35,26 +36,26 @@ test("the record is a copy, not a view of the live ledger", () => {
   // A day that has already been answered must not change afterwards because
   // the user edited something else.
   const live = { a: { kind: "pin", label: "Alpha" } };
-  const snapshot = buildCommitmentSnapshot({ anchorKey: KEY, entries: live, appliedPins: [] });
+  const snapshot = buildCommitmentSnapshot({ anchorKey: KEY, dayKey: DAY, entries: live, appliedPins: [] });
   live.a.label = "Renamed";
   live.c = { kind: "pin", label: "Later" };
   assert.deepEqual(snapshot.entries, { a: { kind: "pin", label: "Alpha" } });
 });
 
 test("a day with nothing to say records nothing", () => {
-  assert.equal(buildCommitmentSnapshot({ anchorKey: KEY, entries: {}, appliedPins: [] }), null);
+  assert.equal(buildCommitmentSnapshot({ anchorKey: KEY, dayKey: DAY, entries: {}, appliedPins: [] }), null);
   // And without an anchor there is no scope to record it against.
-  assert.equal(buildCommitmentSnapshot({ anchorKey: null, entries, appliedPins }), null);
+  assert.equal(buildCommitmentSnapshot({ anchorKey: null, dayKey: DAY, entries, appliedPins }), null);
 });
 
 test("a record only speaks for its own anchor", () => {
-  const snapshot = buildCommitmentSnapshot({ anchorKey: KEY, entries, appliedPins });
-  const same = readCommitmentSnapshot(snapshot, { anchorKey: KEY });
+  const snapshot = buildCommitmentSnapshot({ anchorKey: KEY, dayKey: DAY, entries, appliedPins });
+  const same = readCommitmentSnapshot(snapshot, { anchorKey: KEY, dayKey: DAY });
   assert.equal(same.applies, true);
   assert.deepEqual(same.entries, entries);
   assert.deepEqual(same.appliedPins, appliedPins);
 
-  const elsewhere = readCommitmentSnapshot(snapshot, { anchorKey: "place:kotor" });
+  const elsewhere = readCommitmentSnapshot(snapshot, { anchorKey: "place:kotor", dayKey: DAY });
   assert.equal(elsewhere.applies, false);
   assert.equal(elsewhere.reason, "anchor_changed");
   assert.deepEqual(elsewhere.entries, {});
@@ -65,13 +66,13 @@ test("a day saved before this existed carries no commitments", () => {
   // The whole installed base, and the reason failing closed had to be the
   // default rather than an error case.
   for (const legacy of [null, undefined, {}, { entries, appliedPins }]) {
-    const read = readCommitmentSnapshot(legacy, { anchorKey: KEY });
+    const read = readCommitmentSnapshot(legacy, { anchorKey: KEY, dayKey: DAY });
     assert.equal(read.applies, false, `${JSON.stringify(legacy)} must not apply`);
     assert.deepEqual(read.entries, {});
   }
-  assert.equal(readCommitmentSnapshot(null, { anchorKey: KEY }).reason, "absent");
+  assert.equal(readCommitmentSnapshot(null, { anchorKey: KEY, dayKey: DAY }).reason, "absent");
   assert.equal(
-    readCommitmentSnapshot({ version: 999, anchorKey: KEY, entries, appliedPins }, { anchorKey: KEY }).reason,
+    readCommitmentSnapshot({ version: 999, anchorKey: KEY, dayKey: DAY, entries, appliedPins }, { anchorKey: KEY, dayKey: DAY }).reason,
     "version_mismatch",
     "an unknown version is refused, never guessed at",
   );
@@ -84,12 +85,13 @@ test("malformed storage fails closed rather than part-way", () => {
     "not an object",
     42,
     { version: COMMITMENT_SNAPSHOT_VERSION },
-    { version: COMMITMENT_SNAPSHOT_VERSION, anchorKey: "", entries, appliedPins },
-    { version: COMMITMENT_SNAPSHOT_VERSION, anchorKey: KEY, entries: "nope", appliedPins: "nope" },
-    { version: COMMITMENT_SNAPSHOT_VERSION, anchorKey: KEY, entries: { a: { kind: "sudo" } }, appliedPins: [] },
+    { version: COMMITMENT_SNAPSHOT_VERSION, anchorKey: "", dayKey: DAY, entries, appliedPins },
+    { version: COMMITMENT_SNAPSHOT_VERSION, anchorKey: KEY, dayKey: "", entries, appliedPins },
+    { version: COMMITMENT_SNAPSHOT_VERSION, anchorKey: KEY, dayKey: DAY, entries: "nope", appliedPins: "nope" },
+    { version: COMMITMENT_SNAPSHOT_VERSION, anchorKey: KEY, dayKey: DAY, entries: { a: { kind: "sudo" } }, appliedPins: [] },
   ];
   for (const bad of cases) {
-    const read = readCommitmentSnapshot(bad, { anchorKey: KEY });
+    const read = readCommitmentSnapshot(bad, { anchorKey: KEY, dayKey: DAY });
     assert.equal(read.applies, false, `${JSON.stringify(bad)} must not apply`);
     assert.deepEqual(read.entries, {});
     assert.deepEqual(read.appliedPins, []);
@@ -102,10 +104,11 @@ test("a record that has been tampered with is re-normalised, not trusted", () =>
   const tampered = {
     version: COMMITMENT_SNAPSHOT_VERSION,
     anchorKey: KEY,
+    dayKey: DAY,
     entries: { good: { kind: "pin", label: "Good" }, bad: { kind: "elevate", label: "Bad" } },
     appliedPins: [{ id: "good", kind: "pin", label: "Good" }, { id: "", kind: "pin", label: "Ghost" }],
   };
-  const read = readCommitmentSnapshot(tampered, { anchorKey: KEY });
+  const read = readCommitmentSnapshot(tampered, { anchorKey: KEY, dayKey: DAY });
   assert.equal(read.applies, true);
   assert.deepEqual(Object.keys(read.entries), ["good"], "the unknown kind is dropped, not honoured");
   assert.deepEqual(read.appliedPins.map((p) => p.id), ["good"]);
@@ -120,6 +123,7 @@ test("storage stays bounded, in the same shape the server would accept", () => {
   for (let i = 0; i < MAX_SNAPSHOT_EXCLUSIONS + 20; i += 1) many[`ex-${i}`] = { kind: "exclude", label: `E${i}` };
   const snapshot = buildCommitmentSnapshot({
     anchorKey: KEY,
+    dayKey: DAY,
     entries: many,
     appliedPins: Array.from({ length: MAX_SNAPSHOT_PINS + 20 }, (_, i) => ({ id: `pin-${i}`, kind: "pin", label: "x" })),
   });
@@ -131,8 +135,61 @@ test("storage stays bounded, in the same shape the server would accept", () => {
 
   const longLabel = buildCommitmentSnapshot({
     anchorKey: KEY,
+    dayKey: DAY,
     entries: { a: { kind: "pin", label: "x".repeat(5000) } },
     appliedPins: [],
   });
   assert.ok(longLabel.entries.a.label.length <= 120, "labels cannot grow without bound either");
+});
+
+// --------------------------------------------------------------------------
+// The anchor says WHERE. The day key says WHICH DAY at that anchor.
+//
+// v1 bound only the anchor, so an intact record written for Thursday was
+// accepted on Friday's day for the same place, and one written under one set of
+// preferences was accepted under another. Same geography, different question —
+// and the stops on screen had never answered it.
+// --------------------------------------------------------------------------
+
+import { savedEntryId } from "../src/lib/anywhere-storage.mjs";
+
+test("a record does not carry between two days at the same anchor", () => {
+  const thursday = savedEntryId({ place: "Trogir", dateIso: "2026-08-24", selected: ["food", "culture"] });
+  const friday = savedEntryId({ place: "Trogir", dateIso: "2026-08-25", selected: ["food", "culture"] });
+  const otherPrefs = savedEntryId({ place: "Trogir", dateIso: "2026-08-24", selected: ["views"] });
+  assert.notEqual(thursday, friday);
+  assert.notEqual(thursday, otherPrefs);
+
+  const forThursday = buildCommitmentSnapshot({ anchorKey: KEY, dayKey: thursday, entries, appliedPins });
+  const forFriday = buildCommitmentSnapshot({ anchorKey: KEY, dayKey: friday, entries, appliedPins });
+
+  // Each on its own day: fine.
+  assert.equal(readCommitmentSnapshot(forThursday, { anchorKey: KEY, dayKey: thursday }).applies, true);
+  assert.equal(readCommitmentSnapshot(forFriday, { anchorKey: KEY, dayKey: friday }).applies, true);
+
+  // Swapped between two perfectly valid, same-anchor days: refused both ways.
+  const swappedForward = readCommitmentSnapshot(forThursday, { anchorKey: KEY, dayKey: friday });
+  assert.equal(swappedForward.applies, false);
+  assert.equal(swappedForward.reason, "day_changed");
+  assert.deepEqual(swappedForward.entries, {});
+  assert.deepEqual(swappedForward.appliedPins, []);
+  assert.equal(readCommitmentSnapshot(forFriday, { anchorKey: KEY, dayKey: thursday }).applies, false);
+
+  // Same place, same date, different preferences is also a different day.
+  assert.equal(readCommitmentSnapshot(forThursday, { anchorKey: KEY, dayKey: otherPrefs }).reason, "day_changed");
+});
+
+test("a v1 record cannot say which day it belongs to, so it carries nothing", () => {
+  // Rather than infer a day key for it — which is exactly the inference this
+  // module exists to prevent — a v1 snapshot fails closed to no ledger.
+  const v1 = { version: 1, anchorKey: KEY, entries, appliedPins };
+  const read = readCommitmentSnapshot(v1, { anchorKey: KEY, dayKey: DAY });
+  assert.equal(read.applies, false);
+  assert.equal(read.reason, "version_mismatch");
+  assert.deepEqual(read.entries, {});
+});
+
+test("a record without a day key is never written in the first place", () => {
+  assert.equal(buildCommitmentSnapshot({ anchorKey: KEY, dayKey: null, entries, appliedPins }), null);
+  assert.equal(buildCommitmentSnapshot({ anchorKey: KEY, dayKey: "  ", entries, appliedPins }), null);
 });
