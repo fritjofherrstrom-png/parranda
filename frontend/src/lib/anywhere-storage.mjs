@@ -3,8 +3,8 @@
  * rules are unit-testable; the component does the actual read/write.
  *
  * A saved day is a SNAPSHOT: it stores the composed result + the exact inputs
- * that produced it, keyed by place + date + preferences so re-saving the same
- * query replaces (never duplicates) it. Events / "today" may be stale on restore,
+ * that produced it, keyed by place + date + preferences + walking preset so
+ * re-saving the same query replaces (never duplicates) it. Events / "today" may be stale on restore,
  * so the UI labels it and offers a rebuild.
  *
  * It also stores the commitments that day answered (see commitment-snapshot),
@@ -21,17 +21,24 @@ function prefsKey(prefs) {
   return (Array.isArray(prefs) ? prefs.slice().sort() : []).join(",");
 }
 
+export const DEFAULT_SAVED_WALK_KEY = "balanced";
+const SAVED_WALK_KEYS = new Set(["short", DEFAULT_SAVED_WALK_KEY, "long"]);
+
+export function normalizeSavedWalkKey(value) {
+  return SAVED_WALK_KEYS.has(value) ? value : DEFAULT_SAVED_WALK_KEY;
+}
+
 /**
- * The identity of one saved day: place, date and preferences.
+ * The identity of one saved day: place, date, preferences and walking preset.
  *
  * Exported so the commitment snapshot can bind itself to the SAME key the
  * entry is stored under. Two days for the same place on different dates, or
- * with different preferences, are different days — and a record written for
- * one must not be readable by the other.
+ * with different preferences or walking contracts, are different days — and a
+ * record written for one must not be readable by the other.
  */
-export function savedEntryId({ place, dateIso, selected } = {}) {
+export function savedEntryId({ place, dateIso, selected, walkKey } = {}) {
   const p = (place || "").trim();
-  return `${p || "pos"}::${dateIso || ""}::${prefsKey(selected)}`;
+  return `${p || "pos"}::${dateIso || ""}::${prefsKey(selected)}::walk=${normalizeSavedWalkKey(walkKey)}`;
 }
 
 export function buildSavedEntry({
@@ -48,7 +55,12 @@ export function buildSavedEntry({
 } = {}) {
   const p = (place || "").trim();
   return {
-    id: savedEntryId({ place: p, dateIso, selected: inputs && inputs.selected }),
+    id: savedEntryId({
+      place: p,
+      dateIso,
+      selected: inputs && inputs.selected,
+      walkKey: inputs && inputs.walkKey,
+    }),
     label: (label || p || "Min position").trim(),
     place: p || null,
     dateIso: dateIso || null,

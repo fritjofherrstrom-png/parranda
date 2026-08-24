@@ -30,6 +30,11 @@ const ID_PATTERN = /^[a-z0-9][a-z0-9_:.-]{0,63}$/i;
 // silently drop the status the honesty layer reads.
 const LOADER_METADATA_KEYS = ["loader_status", "loader_error", "loader_metadata"];
 
+// Private request-local evidence for the refusal classifier. A Symbol keeps
+// removed ids off JSON/public evidence while still letting downstream server
+// code distinguish "loaded then excluded" from "never loaded".
+const EXCLUDED_LOADED_IDS = Symbol("parranda.excludedLoadedIds");
+
 /**
  * @param {unknown} value  raw request field
  * @returns {string[]} validated, deduped, bounded ids
@@ -62,10 +67,22 @@ function withoutExcludedCandidates(loader, excludedIds) {
     // A loader failure shape is passed through untouched: an exclusion must
     // never turn an error into an empty success.
     if (!Array.isArray(records)) return records;
-    const kept = records.filter((record) => !excluded.has(String(record?.id ?? "")));
+    const removedIds = [];
+    const kept = records.filter((record) => {
+      const id = record?.id == null ? "" : String(record.id);
+      if (!id || !excluded.has(id)) return true;
+      removedIds.push(id);
+      return false;
+    });
     for (const key of LOADER_METADATA_KEYS) {
       if (Object.prototype.hasOwnProperty.call(records, key)) kept[key] = records[key];
     }
+    Object.defineProperty(kept, EXCLUDED_LOADED_IDS, {
+      value: Object.freeze([...new Set(removedIds)]),
+      enumerable: false,
+      configurable: false,
+      writable: false,
+    });
     return kept;
   };
 }
@@ -80,6 +97,7 @@ function excludedCandidateSummary(excludedIds) {
 }
 
 module.exports = {
+  EXCLUDED_LOADED_IDS,
   MAX_EXCLUDED_IDS,
   excludedCandidateSummary,
   parseExcludedCandidateIds,

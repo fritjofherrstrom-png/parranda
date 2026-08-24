@@ -63,6 +63,7 @@ function idSet(items, read) {
  * @param {object[]} params.stops            main_stops of the PUBLISHED day
  * @param {object} [params.plannerRoles]     the gated role reservoir
  * @param {object[]} [params.sourceCandidates] what was offered to the composer
+ * @param {string[]} [params.loadedCandidateIds] ids the trusted loader actually resolved
  * @param {string[]} [params.shedForBudget]  pins the walking budget dropped
  * @returns {Array<{id: string, reason: string}>} one entry per unmet pin
  */
@@ -71,6 +72,7 @@ function classifyUnhonouredPins({
   stops = [],
   plannerRoles = null,
   sourceCandidates = [],
+  loadedCandidateIds = null,
   shedForBudget = [],
 } = {}) {
   const requested = (Array.isArray(pinnedIds) ? pinnedIds : []).map(String);
@@ -84,23 +86,23 @@ function classifyUnhonouredPins({
       if (candidate?.candidate_id != null) reservoir.add(String(candidate.candidate_id));
     }
   }
+  const loaded = Array.isArray(loadedCandidateIds)
+    ? new Set(loadedCandidateIds.filter((id) => id != null && id !== "").map(String))
+    : reservoir;
 
   const out = [];
   for (const id of requested) {
     if (present.has(id)) continue;
-    // The walking budget is checked before the reservoir questions because it
-    // is the one stage that acts on a candidate the composer definitely had:
-    // shedding only ever happens to a pin that reached finalisation.
-    if (shed.has(id)) {
-      out.push({ id, reason: PIN_REFUSAL_REASONS.WALKING_BUDGET });
-      continue;
-    }
-    if (!reservoir.has(id) && !offered.has(id)) {
+    if (!loaded.has(id) && !offered.has(id)) {
       out.push({ id, reason: PIN_REFUSAL_REASONS.UNKNOWN_CANDIDATE });
       continue;
     }
     if (!offered.has(id)) {
       out.push({ id, reason: PIN_REFUSAL_REASONS.NOT_OFFERED_TO_ROUTE });
+      continue;
+    }
+    if (shed.has(id)) {
+      out.push({ id, reason: PIN_REFUSAL_REASONS.WALKING_BUDGET });
       continue;
     }
     out.push({ id, reason: PIN_REFUSAL_REASONS.NOT_SELECTED });

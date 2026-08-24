@@ -90,7 +90,9 @@ function pinDropOrder(pins, origin, sourceCandidates) {
   return [...pins].sort((a, b) => {
     const delta = distance(b) - distance(a);
     if (delta !== 0) return delta;
-    return String(a).localeCompare(String(b));
+    const aId = String(a);
+    const bId = String(b);
+    return aId < bId ? -1 : aId > bId ? 1 : 0;
   });
 }
 
@@ -149,9 +151,16 @@ async function settlePinsWithinWalkingBudget({
   const baseline = await finalize([]);
   let current = withPins;
   let remaining = requested;
+  const offeredIds = new Set(
+    (Array.isArray(sourceCandidates) ? sourceCandidates : [])
+      .map((candidate) => candidate?.id)
+      .filter((id) => id != null && id !== "")
+      .map(String),
+  );
   // Most-droppable first, so each iteration removes the pin most likely to be
-  // the reason the day does not fit.
-  const dropOrder = pinDropOrder(requested, origin, sourceCandidates);
+  // the reason the day does not fit. Unknown ids never reached composition and
+  // therefore cannot truthfully be attributed to the walking budget.
+  const dropOrder = pinDropOrder(requested.filter((id) => offeredIds.has(id)), origin, sourceCandidates);
 
   const shedForBudget = [];
   let sheds = 0;
@@ -161,8 +170,10 @@ async function settlePinsWithinWalkingBudget({
     }
     if (sheds >= MAX_SHED_ATTEMPTS) {
       // Giving up publishes the pin-less day, so every pin still standing was
-      // refused by the walk just as surely as the ones already shed.
-      return { ...baseline, shedForBudget: [...new Set([...shedForBudget, ...remaining])] };
+      // refused by the walk just as surely as the ones already shed — provided
+      // it was genuinely in the offered candidate set.
+      const offeredRemaining = remaining.filter((id) => offeredIds.has(id));
+      return { ...baseline, shedForBudget: [...new Set([...shedForBudget, ...offeredRemaining])] };
     }
     // Strictly shrinks: `drop` is in `remaining` on every pass, so the set loses
     // one member each time and the loop cannot run more than requested.length

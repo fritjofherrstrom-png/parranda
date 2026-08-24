@@ -32,9 +32,14 @@ const {
   buildAgnosticPublicResult,
   buildExperimentBlock,
   composeAgnosticRouteOutput,
+  resolveTrustedHelpers,
   shouldUseCapacityRepair,
   scrubAgnosticAppliedDay,
 } = require("../server/planner/agnostic-route-output");
+const {
+  EXCLUDED_LOADED_IDS,
+  withoutExcludedCandidates,
+} = require("../server/planner/excluded-candidates");
 const { projectRouteToSelectedStopChain } = require("../server/planner/route-public-geometry");
 const { buildAgnosticCityContext } = require("../server/candidates/agnostic-context");
 const { buildEligibleCandidatePool, buildProviderSpecs } = require("../server/candidates/candidate-pool");
@@ -70,6 +75,23 @@ function eveningClock() {
 function middayClock() {
   return new Date("2026-05-25T10:00:00Z");
 }
+
+test("an empty post-exclusion loader result keeps private loaded identity", async () => {
+  const loader = withoutExcludedCandidates(
+    async () => [{ id: "loaded-then-excluded", lat: 55.6, lng: 13 }],
+    ["loaded-then-excluded"],
+  );
+  const resolved = await resolveTrustedHelpers({
+    externalRequested: true,
+    openDataLoader: loader,
+    anchor: { lat: 55.6, lng: 13 },
+  });
+
+  assert.equal(resolved.sourceStatus.status, "loaded:0");
+  assert.deepEqual(resolved.trustedRecords, []);
+  assert.deepEqual(resolved.trustedRecords[EXCLUDED_LOADED_IDS], ["loaded-then-excluded"]);
+  assert.equal(JSON.stringify(resolved.trustedRecords), "[]", "private identity never enters public evidence");
+});
 
 test("typed-place public geometry projects the hidden anchor loop onto the selected stop chain", () => {
   const route = {

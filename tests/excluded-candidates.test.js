@@ -4,6 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  EXCLUDED_LOADED_IDS,
   MAX_EXCLUDED_IDS,
   excludedCandidateSummary,
   parseExcludedCandidateIds,
@@ -67,6 +68,20 @@ test("dismissed records never reach the caller, and metadata survives", async ()
   // The honesty layer reads these off the array; filtering must not drop them.
   assert.equal(records.loader_status, "ok");
   assert.deepEqual(records.loader_metadata, { cache: { served_stale: false } });
+  assert.deepEqual(records[EXCLUDED_LOADED_IDS], ["cafe-0", "way:9"]);
+  assert.equal(
+    JSON.stringify(records).includes("cafe-0"),
+    false,
+    "private loaded identity never leaks through JSON evidence",
+  );
+});
+
+test("only ids that were really loaded and removed enter private exclusion metadata", async () => {
+  const loader = withoutExcludedCandidates(loaderOf([{ id: "real" }, { id: "kept" }]), ["real", "ghost"]);
+  const records = await loader({});
+
+  assert.deepEqual(records.map((record) => record.id), ["kept"]);
+  assert.deepEqual(records[EXCLUDED_LOADED_IDS], ["real"]);
 });
 
 test("exclusion can only subtract — it never adds or reorders", async () => {

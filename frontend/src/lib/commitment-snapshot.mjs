@@ -18,9 +18,9 @@
  * BOTH keys are required, because neither is sufficient alone. The anchor says
  * where; the day key says which day at that anchor. v1 bound only the anchor,
  * so a record written for Thursday was accepted on Friday's day for the same
- * place, and a record written under one set of preferences was accepted under
- * another — same geography, different question, and the stops on screen had
- * never answered it.
+ * place, and a record written under one set of preferences or walking limits
+ * was accepted under another — same geography, different question, and the
+ * stops on screen had never answered it.
  *
  * Bounded on write as well as read: this lives in localStorage alongside up to
  * SAVED_CAP days, and a ledger is user input.
@@ -43,6 +43,8 @@ export const COMMITMENT_SNAPSHOT_VERSION = 2;
 export const MAX_SNAPSHOT_PINS = 12;
 export const MAX_SNAPSHOT_EXCLUSIONS = 40;
 const MAX_LABEL_LENGTH = 120;
+const MAX_REASON_LENGTH = 64;
+const REASON_PATTERN = /^[a-z][a-z_]*$/;
 
 function cleanId(value) {
   const id = typeof value === "string" ? value.trim() : "";
@@ -53,6 +55,11 @@ function cleanLabel(value) {
   return typeof value === "string" ? value.trim().slice(0, MAX_LABEL_LENGTH) : "";
 }
 
+function cleanReason(value) {
+  const reason = typeof value === "string" ? value.trim() : "";
+  return reason.length <= MAX_REASON_LENGTH && REASON_PATTERN.test(reason) ? reason : "";
+}
+
 /**
  * Freeze the ledger and verdict a composed day answered.
  *
@@ -61,9 +68,15 @@ function cleanLabel(value) {
  * referenced, so later edits to the live ledger cannot reach back into a day
  * that has already been answered.
  *
- * @returns {{version: number, anchorKey: string, dayKey: string, entries: object, appliedPins: object[]}|null}
+ * @returns {{version: number, anchorKey: string, dayKey: string, entries: object, appliedPins: object[], refusals: object[]}|null}
  */
-export function buildCommitmentSnapshot({ anchorKey = null, dayKey = null, entries = {}, appliedPins = [] } = {}) {
+export function buildCommitmentSnapshot({
+  anchorKey = null,
+  dayKey = null,
+  entries = {},
+  appliedPins = [],
+  refusals = [],
+} = {}) {
   const key = typeof anchorKey === "string" ? anchorKey.trim() : "";
   const day = typeof dayKey === "string" ? dayKey.trim() : "";
   // No day key, no record. A snapshot that cannot say which day it belongs to
@@ -93,8 +106,30 @@ export function buildCommitmentSnapshot({ anchorKey = null, dayKey = null, entri
     .filter((pin) => pin.id)
     .slice(0, MAX_SNAPSHOT_PINS);
 
+  // Reasons are part of the same verdict snapshot. Keep only one bounded token
+  // for a pin this day actually answered; raw/free-text server output and
+  // unrelated ids never become durable localStorage state.
+  const appliedIds = new Set(verdict.map((pin) => pin.id));
+  const seenRefusals = new Set();
+  const keptRefusals = [];
+  for (const refusal of Array.isArray(refusals) ? refusals : []) {
+    const id = cleanId(refusal?.id);
+    const reason = cleanReason(refusal?.reason);
+    if (!id || !reason || !appliedIds.has(id) || seenRefusals.has(id)) continue;
+    seenRefusals.add(id);
+    keptRefusals.push({ id, reason });
+    if (keptRefusals.length >= MAX_SNAPSHOT_PINS) break;
+  }
+
   if (!Object.keys(kept).length && !verdict.length) return null;
-  return { version: COMMITMENT_SNAPSHOT_VERSION, anchorKey: key, dayKey: day, entries: kept, appliedPins: verdict };
+  return {
+    version: COMMITMENT_SNAPSHOT_VERSION,
+    anchorKey: key,
+    dayKey: day,
+    entries: kept,
+    appliedPins: verdict,
+    refusals: keptRefusals,
+  };
 }
 
 /**
@@ -103,10 +138,10 @@ export function buildCommitmentSnapshot({ anchorKey = null, dayKey = null, entri
  * Every refusal is named rather than silently swallowed, so a day that declines
  * to carry its commitments can say which rule declined it.
  *
- * @returns {{applies: boolean, reason: string, entries: object, appliedPins: object[]}}
+ * @returns {{applies: boolean, reason: string, entries: object, appliedPins: object[], refusals: object[]}}
  */
 export function readCommitmentSnapshot(snapshot, { anchorKey = null, dayKey = null } = {}) {
-  const empty = (reason) => ({ applies: false, reason, entries: {}, appliedPins: [] });
+  const empty = (reason) => ({ applies: false, reason, entries: {}, appliedPins: [], refusals: [] });
 
   if (!snapshot || typeof snapshot !== "object") return empty("absent");
   // A day saved before commitments were stored at all. Not a fault — just
@@ -131,11 +166,18 @@ export function readCommitmentSnapshot(snapshot, { anchorKey = null, dayKey = nu
     dayKey: storedDay,
     entries: snapshot.entries,
     appliedPins: snapshot.appliedPins,
+    refusals: snapshot.refusals,
   });
   // Re-normalising on read is what makes hand-edited or truncated storage safe:
   // anything that does not survive the same rules it was written under is not
   // trusted back in.
   if (!rebuilt) return empty("empty_or_malformed");
 
-  return { applies: true, reason: "same_day_same_anchor", entries: rebuilt.entries, appliedPins: rebuilt.appliedPins };
+  return {
+    applies: true,
+    reason: "same_day_same_anchor",
+    entries: rebuilt.entries,
+    appliedPins: rebuilt.appliedPins,
+    refusals: rebuilt.refusals,
+  };
 }

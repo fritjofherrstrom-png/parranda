@@ -806,14 +806,14 @@ test(
 );
 
 test(
-  "an excluded candidate cannot be resurrected by pinning it",
+  "excluded loaded candidates remain known while payload ghosts remain unknown",
   withServer(pinLoader(), async (server) => {
     const r = await requestJson(server, {
       path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
       body: agnosticBody({
         preferences: ["food", "coffee"],
         excluded_candidate_ids: ["cafe-0"],
-        pinned_candidate_ids: ["cafe-0"],
+        pinned_candidate_ids: ["cafe-0", "ghost-cafe"],
       }),
     });
 
@@ -821,6 +821,43 @@ test(
     // The subtractive verb wins, which is the fail-closed direction.
     assert.equal(stopIdsOf(r).includes("cafe-0"), false);
     assert.equal(r.body.agnostic_route_output_experiment.pinned_candidates.honored_count, 0);
+    assert.deepEqual(r.body.agnostic_route_output_experiment.pinned_candidates.unhonored, [
+      { id: "cafe-0", reason: "not_offered_to_route" },
+      { id: "ghost-cafe", reason: "unknown_candidate" },
+    ]);
+    const withoutVerdict = structuredClone(r.body);
+    withoutVerdict.agnostic_route_output_experiment.pinned_candidates = null;
+    const serialized = JSON.stringify(withoutVerdict);
+    assert.equal(serialized.includes("cafe-0"), false, "removed loaded ids remain private metadata");
+    assert.equal(serialized.includes("ghost-cafe"), false, "payload ghosts remain correlation-only");
+  }),
+);
+
+test(
+  "excluding the entire trusted supply still preserves truthful pin identity",
+  withServer(makeLoader([
+    externalRecord("cafe-0", "Cafe 0", "cafe", 41.9008, 12.49, ["fika"]),
+  ]), async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+      body: agnosticBody({
+        preferences: ["coffee"],
+        excluded_candidate_ids: ["cafe-0"],
+        pinned_candidate_ids: ["cafe-0", "ghost-cafe"],
+      }),
+    });
+
+    const verdict = r.body.agnostic_route_output_experiment.pinned_candidates;
+    assert.deepEqual(verdict.unhonored, [
+      { id: "cafe-0", reason: "not_offered_to_route" },
+      { id: "ghost-cafe", reason: "unknown_candidate" },
+    ]);
+
+    const withoutVerdict = structuredClone(r.body);
+    withoutVerdict.agnostic_route_output_experiment.pinned_candidates = null;
+    const serialized = JSON.stringify(withoutVerdict);
+    assert.equal(serialized.includes("cafe-0"), false, "private loaded identity never becomes evidence");
+    assert.equal(serialized.includes("ghost-cafe"), false, "the caller's ghost remains correlation-only");
   }),
 );
 
@@ -1256,12 +1293,14 @@ test(
     assert.equal(verdict12.requested_count, 12);
     assert.equal(verdict12.honored_count, 0);
     assert.equal(verdict12.unhonored_count, 12);
-    // Publishing the pin-less day means the walk refused all of them, not that
-    // the composer declined to choose them.
-    assert.deepEqual(
-      [...new Set(verdict12.unhonored.map((entry) => entry.reason))],
-      ["walking_budget"],
-    );
+    // Only pins that reached the bounded composer can be attributed to its
+    // walking budget. Loaded candidates outside that offered frontier remain
+    // honestly not_offered rather than being upgraded into a stage they never
+    // reached.
+    const reasons = new Set(verdict12.unhonored.map((entry) => entry.reason));
+    assert.equal(reasons.has("walking_budget"), true);
+    assert.equal(reasons.has("not_offered_to_route"), true);
+    assert.equal(reasons.has("unknown_candidate"), false, "all twelve were genuinely loader-known");
     for (const id of pins) {
       assert.ok(!stopIdsOf(pinned).includes(id), `${id} is genuinely absent, not quietly counted`);
     }

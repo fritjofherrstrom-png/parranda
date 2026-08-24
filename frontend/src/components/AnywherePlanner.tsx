@@ -14,7 +14,7 @@ import {
   buildAnywherePayload,
   ANYWHERE_PREFERENCES,
   WALK_PRESETS,
-  isoDateFromOffset,
+  freezeComposeDateIso,
 } from "../lib/anywhere-payload.mjs";
 import { anywhereBlitzView, type AnywhereBlitzView } from "../lib/blitz-view.mjs";
 import { limitationNote } from "../lib/day-limitations.mjs";
@@ -477,6 +477,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       langOverride,
       preferencesOverride,
       dayOffsetOverride,
+      dateIsoOverride,
       walkKeyOverride,
       excludedOverride,
       pinnedOverride,
@@ -486,6 +487,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       langOverride?: Lang;
       preferencesOverride?: string[];
       dayOffsetOverride?: 0 | 1;
+      dateIsoOverride?: string;
       walkKeyOverride?: string;
       excludedOverride?: string[];
       pinnedOverride?: string[];
@@ -552,6 +554,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     try {
       const effectiveWalkKey = walkKeyOverride ?? walkKey;
       const effectiveDayOffset = dayOffsetOverride ?? dayOffset;
+      const effectiveDateIso = freezeComposeDateIso({
+        dayOffset: effectiveDayOffset,
+        dateIsoOverride,
+      });
       const preset = WALK_PRESETS.find((p: { key: string }) => p.key === effectiveWalkKey) ?? WALK_PRESETS[1];
       // Frozen here, beside the request that carries them: whatever the ledger
       // does while this is in flight, THIS is what the answer will have
@@ -566,7 +572,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       const payload = buildAnywherePayload({
         place: anchor.place,
         coords: anchor.coords ?? null,
-        dates: [isoDateFromOffset(effectiveDayOffset)],
+        dates: [effectiveDateIso],
         preferences: preferencesOverride ?? selected,
         walkingKmTarget: preset.km,
         excludedCandidateIds: excludedOverride ?? scopedLedger.excludedIds,
@@ -619,12 +625,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       // and unavailable composed no day, so there is nothing for a pin to have
       // failed to fit into and the snapshot stays empty.
       const composedNow = decision.isComposedStatus(cls.status);
+      const refusalsNow: Array<{ id: string; reason: string | null }> = composedNow
+        && Array.isArray(body?.agnostic_route_output_experiment?.pinned_candidates?.unhonored)
+        ? body.agnostic_route_output_experiment.pinned_candidates.unhonored
+        : [];
       setAppliedPins(composedNow ? sentPins : []);
-      setAppliedRefusals(
-        composedNow
-          ? (body?.agnostic_route_output_experiment?.pinned_candidates?.unhonored ?? [])
-          : [],
-      );
+      setAppliedRefusals(refusalsNow);
       setDayIsStale(false);
       setServiceRefusal(null);
       setRouteAnchorCoords(anchor.coords ?? null);
@@ -639,7 +645,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         const entry = buildSavedEntry({
           place: anchor.place,
           label: anchor.place || t("Min position", "My position"),
-          dateIso: isoDateFromOffset(effectiveDayOffset),
+          dateIso: effectiveDateIso,
           savedAt: new Date().toISOString(),
           safeResponse: safe,
           classification: cls,
@@ -652,14 +658,17 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             anchorKey: anchorKey(anchor),
             // Bound to the SAME identity the entry is stored under. An anchor
             // alone is not enough: two saved days can share a place and differ
-            // in date or preferences, and each answered its own question.
+            // in date, preferences, or walking contract, and each answered its
+            // own question.
             dayKey: savedEntryId({
               place: anchor.place ?? null,
-              dateIso: isoDateFromOffset(effectiveDayOffset),
+              dateIso: effectiveDateIso,
               selected: prefs,
+              walkKey: effectiveWalkKey,
             }),
             entries: scopedLedger.entries,
             appliedPins: decision.isComposedStatus(cls.status) ? sentPins : [],
+            refusals: refusalsNow,
           }),
         });
         lastEntryRef.current = entry;
@@ -695,6 +704,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             langOverride: langOverride ?? lang,
             preferencesOverride: effectivePreferences,
             dayOffsetOverride: effectiveDayOffset,
+            dateIsoOverride: effectiveDateIso,
             walkKeyOverride: effectiveWalkKey,
             excludedOverride: effectiveExcluded,
             pinnedOverride: effectivePinned,
@@ -791,9 +801,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       commitmentAnchorKeyRef.current = restoredAnchorKey;
       setCommitments(restoredCommitments.entries);
       setAppliedPins(restoredCommitments.appliedPins);
+      setAppliedRefusals(restoredCommitments.refusals);
     } else {
       commitmentAnchorKeyRef.current = null;
       if (Object.keys(commitments).length) setCommitments({});
+      setAppliedRefusals([]);
     }
     setDayIsStale(false);
     setRouteAnchorCoords(null);

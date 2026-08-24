@@ -23,13 +23,18 @@ const KEY = "place:trogir";
 const DAY = "Trogir::2026-08-24::culture,food";
 const entries = { a: { kind: "pin", label: "Alpha" }, b: { kind: "exclude", label: "Beta" } };
 const appliedPins = [{ id: "a", kind: "pin", label: "Alpha" }];
+const refusals = [{ id: "a", reason: "walking_budget" }];
 
 test("a day records the ledger it carried and the verdict it got back", () => {
-  const snapshot = buildCommitmentSnapshot({ anchorKey: KEY, dayKey: DAY, entries, appliedPins });
+  const snapshot = buildCommitmentSnapshot({ anchorKey: KEY, dayKey: DAY, entries, appliedPins, refusals });
   assert.equal(snapshot.version, COMMITMENT_SNAPSHOT_VERSION);
   assert.equal(snapshot.anchorKey, KEY);
   assert.deepEqual(snapshot.entries, entries);
   assert.deepEqual(snapshot.appliedPins, appliedPins);
+  assert.deepEqual(snapshot.refusals, refusals, "the server-owned reason is part of the same frozen verdict");
+
+  const restored = readCommitmentSnapshot(snapshot, { anchorKey: KEY, dayKey: DAY });
+  assert.deepEqual(restored.refusals, refusals, "the reason round-trips with its day");
 });
 
 test("the record is a copy, not a view of the live ledger", () => {
@@ -46,6 +51,26 @@ test("a day with nothing to say records nothing", () => {
   assert.equal(buildCommitmentSnapshot({ anchorKey: KEY, dayKey: DAY, entries: {}, appliedPins: [] }), null);
   // And without an anchor there is no scope to record it against.
   assert.equal(buildCommitmentSnapshot({ anchorKey: null, dayKey: DAY, entries, appliedPins }), null);
+});
+
+test("refusal storage is bounded to this day's applied pins and safe tokens", () => {
+  const snapshot = buildCommitmentSnapshot({
+    anchorKey: KEY,
+    dayKey: DAY,
+    entries,
+    appliedPins,
+    refusals: [
+      { id: "other", reason: "walking_budget" },
+      { id: "a", reason: "future_reason" },
+      { id: "a", reason: "not_selected" },
+      { id: "a", reason: "free text is not a token" },
+      { id: "a", reason: `x${"_".repeat(80)}` },
+    ],
+  });
+
+  assert.deepEqual(snapshot.refusals, [
+    { id: "a", reason: "future_reason" },
+  ], "the first safe server token wins and unrelated or unsafe records are discarded");
 });
 
 test("a record only speaks for its own anchor", () => {
@@ -112,6 +137,7 @@ test("a record that has been tampered with is re-normalised, not trusted", () =>
   assert.equal(read.applies, true);
   assert.deepEqual(Object.keys(read.entries), ["good"], "the unknown kind is dropped, not honoured");
   assert.deepEqual(read.appliedPins.map((p) => p.id), ["good"]);
+  assert.deepEqual(read.refusals, [], "an older v2 record without refusal reasons normalizes to silence");
 });
 
 test("storage stays bounded, in the same shape the server would accept", () => {
@@ -151,14 +177,16 @@ test("storage stays bounded, in the same shape the server would accept", () => {
 // and the stops on screen had never answered it.
 // --------------------------------------------------------------------------
 
-import { savedEntryId } from "../src/lib/anywhere-storage.mjs";
+import { buildSavedEntry, savedEntryId } from "../src/lib/anywhere-storage.mjs";
 
 test("a record does not carry between two days at the same anchor", () => {
-  const thursday = savedEntryId({ place: "Trogir", dateIso: "2026-08-24", selected: ["food", "culture"] });
-  const friday = savedEntryId({ place: "Trogir", dateIso: "2026-08-25", selected: ["food", "culture"] });
-  const otherPrefs = savedEntryId({ place: "Trogir", dateIso: "2026-08-24", selected: ["views"] });
+  const thursday = savedEntryId({ place: "Trogir", dateIso: "2026-08-24", selected: ["food", "culture"], walkKey: "balanced" });
+  const friday = savedEntryId({ place: "Trogir", dateIso: "2026-08-25", selected: ["food", "culture"], walkKey: "balanced" });
+  const otherPrefs = savedEntryId({ place: "Trogir", dateIso: "2026-08-24", selected: ["views"], walkKey: "balanced" });
+  const otherWalk = savedEntryId({ place: "Trogir", dateIso: "2026-08-24", selected: ["food", "culture"], walkKey: "long" });
   assert.notEqual(thursday, friday);
   assert.notEqual(thursday, otherPrefs);
+  assert.notEqual(thursday, otherWalk, "the same question under another walking contract is another day");
 
   const forThursday = buildCommitmentSnapshot({ anchorKey: KEY, dayKey: thursday, entries, appliedPins });
   const forFriday = buildCommitmentSnapshot({ anchorKey: KEY, dayKey: friday, entries, appliedPins });
@@ -177,6 +205,44 @@ test("a record does not carry between two days at the same anchor", () => {
 
   // Same place, same date, different preferences is also a different day.
   assert.equal(readCommitmentSnapshot(forThursday, { anchorKey: KEY, dayKey: otherPrefs }).reason, "day_changed");
+  assert.equal(readCommitmentSnapshot(forThursday, { anchorKey: KEY, dayKey: otherWalk }).reason, "day_changed");
+});
+
+test("two built walking variants cannot borrow one commitment snapshot", () => {
+  const common = {
+    place: "Trogir",
+    dateIso: "2026-08-24",
+    safeResponse: { days: [] },
+    classification: { status: "composed" },
+  };
+  const short = buildSavedEntry({
+    ...common,
+    inputs: { selected: ["culture", "food"], walkKey: "short" },
+  });
+  const long = buildSavedEntry({
+    ...common,
+    inputs: { selected: ["food", "culture"], walkKey: "long" },
+  });
+  assert.notEqual(short.id, long.id);
+
+  const shortSnapshot = buildCommitmentSnapshot({
+    anchorKey: KEY,
+    dayKey: short.id,
+    entries,
+    appliedPins,
+    refusals,
+  });
+  const longSnapshot = buildCommitmentSnapshot({
+    anchorKey: KEY,
+    dayKey: long.id,
+    entries,
+    appliedPins,
+  });
+
+  assert.equal(readCommitmentSnapshot(shortSnapshot, { anchorKey: KEY, dayKey: short.id }).applies, true);
+  assert.equal(readCommitmentSnapshot(longSnapshot, { anchorKey: KEY, dayKey: long.id }).applies, true);
+  assert.equal(readCommitmentSnapshot(shortSnapshot, { anchorKey: KEY, dayKey: long.id }).reason, "day_changed");
+  assert.equal(readCommitmentSnapshot(longSnapshot, { anchorKey: KEY, dayKey: short.id }).reason, "day_changed");
 });
 
 test("a v1 record cannot say which day it belongs to, so it carries nothing", () => {

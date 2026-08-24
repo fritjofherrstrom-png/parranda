@@ -51,6 +51,7 @@ const { buildAgnosticConstraintNegotiation } = require("./agnostic-constraint-ne
 const { resolveAgnosticWalkingTargetBand } = require("./agnostic-walking-target");
 const { settlePinsWithinWalkingBudget } = require("./pin-walking-budget");
 const { classifyUnhonouredPins } = require("./pin-refusal-reasons");
+const { EXCLUDED_LOADED_IDS } = require("./excluded-candidates");
 const { weaveEveningEventRouteStop } = require("../candidates/event-route-stop-weave");
 const { generateAgnosticRecommendations } = require("../route-engine");
 const { projectRouteToSelectedStopChain } = require("./route-public-geometry");
@@ -121,11 +122,21 @@ async function resolveTrustedHelpers({
         trustedRecords: [],
       };
     }
-    if (!Array.isArray(records) || records.length === 0) {
+    if (!Array.isArray(records)) {
       return {
         helpers: {},
         sourceStatus: { ...baseStatus, status: "loaded:0", error: loaderError, ...(collection ? { collection } : {}) },
         trustedRecords: [],
+      };
+    }
+    if (records.length === 0) {
+      return {
+        helpers: {},
+        sourceStatus: { ...baseStatus, status: "loaded:0", error: loaderError, ...(collection ? { collection } : {}) },
+        // A filtered empty array can still carry private server-owned identity
+        // for records that were loaded and then excluded. Preserve the exact
+        // array without treating it as usable candidate supply.
+        trustedRecords: records,
       };
     }
     return {
@@ -897,6 +908,14 @@ async function composeAgnosticRouteOutput({
     walkingTargetBand: resolveAgnosticWalkingTargetBand(walkingKmTarget),
   });
   const helpers = resolvedTrusted.helpers;
+  const loadedCandidateIds = [
+    ...(Array.isArray(resolvedTrusted.trustedRecords)
+      ? resolvedTrusted.trustedRecords.map((record) => record?.id)
+      : []),
+    ...(Array.isArray(resolvedTrusted.trustedRecords?.[EXCLUDED_LOADED_IDS])
+      ? resolvedTrusted.trustedRecords[EXCLUDED_LOADED_IDS]
+      : []),
+  ].filter((id) => id != null && id !== "").map(String);
   const microBase = resolveWalkableMicroBase({
     origin,
     records: resolvedTrusted.trustedRecords,
@@ -1072,6 +1091,24 @@ async function composeAgnosticRouteOutput({
   });
 
   if (!eligibility.eligible) {
+    // No engine day exists to be withheld here: eligibility stopped before
+    // composition. Preserve the furthest truthful stage each requested pin
+    // reached instead of letting the response layer blanket them as
+    // day_not_published. This matters especially when exclusion filtered the
+    // trusted array to zero records while its private loaded-id evidence
+    // remains attached.
+    const precompositionPinnedRefusals = loaderStatus === "loaded:0"
+      && Array.isArray(pinnedStopIds)
+      && pinnedStopIds.length
+      ? classifyUnhonouredPins({
+          pinnedIds: pinnedStopIds,
+          stops: [],
+          plannerRoles,
+          sourceCandidates: Array.isArray(engineSourceCandidates) ? engineSourceCandidates : [],
+          loadedCandidateIds,
+          shedForBudget: [],
+        })
+      : null;
     const experiment = buildExperimentBlock({
       routeMutation: false,
       eligibility,
@@ -1085,7 +1122,11 @@ async function composeAgnosticRouteOutput({
       walkingKmTarget,
     });
     experiment.context = contextBlock;
-    return { result: baselineResult, experiment };
+    return {
+      result: baselineResult,
+      experiment,
+      ...(Array.isArray(precompositionPinnedRefusals) ? { precompositionPinnedRefusals } : {}),
+    };
   }
 
   // Local-time comparison is meaningful only for a today-dated request with a
@@ -1123,6 +1164,7 @@ async function composeAgnosticRouteOutput({
       distanceMode,
       preferences,
       pinnedStopIds,
+      loadedCandidateIds,
       walkingRouter,
       walkingConfig,
       eveningEventStructure,
@@ -1319,6 +1361,7 @@ async function composeAgnosticRouteViaEngine({
   distanceMode = null,
   preferences,
   pinnedStopIds,
+  loadedCandidateIds = [],
   walkingRouter = null,
   walkingConfig = null,
   eveningEventStructure = null,
@@ -1509,6 +1552,7 @@ async function composeAgnosticRouteViaEngine({
         stops: finalized.route?.main_stops,
         plannerRoles,
         sourceCandidates,
+        loadedCandidateIds,
         shedForBudget: finalized.shedForBudget,
       })
     : [];
