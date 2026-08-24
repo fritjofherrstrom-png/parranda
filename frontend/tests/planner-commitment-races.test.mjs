@@ -471,7 +471,7 @@ test("each named reason gets its own sentence", async (t) => {
   );
   await h.clock.advance(50);
 
-  assert.match(h.text(), /no longer in the evidence for this place/);
+  assert.match(h.text(), /isn't something Parranda can route to here/);
   assert.ok(
     !/too far for the walk/.test(h.text()),
     "one reason at a time — the day does not offer a menu of possible causes",
@@ -494,7 +494,7 @@ test("an unrecognised reason falls back rather than inventing one", async (t) =>
 
   assert.match(h.text(), /could not fit in this day/i, "the plain sentence still appears");
   assert.ok(!/too far for the walk/.test(h.text()));
-  assert.ok(!/no longer in the evidence/.test(h.text()));
+  assert.ok(!/can route to here/.test(h.text()));
   assert.ok(!/some_future_reason/.test(h.text()), "and the raw token is never shown to a user");
 });
 
@@ -512,7 +512,7 @@ test("no server verdict means no cause is claimed", async (t) => {
   assert.match(h.text(), /could not fit in this day/i);
   for (const invented of [
     /too far for the walk/,
-    /no longer in the evidence/,
+    /can route to here/,
     /did not fit any role/,
     /the day was built without it/,
   ]) {

@@ -301,9 +301,14 @@ function unkeptReasonSentence(
         `${name} is too far for the walk you asked for.`,
       );
     case "unknown_candidate":
+      // Deliberately says what the server actually knows — that nothing
+      // routable matched the id — rather than guessing WHY nothing did. Seen
+      // on staging: a place still listed as a nearby idea, whose id is another
+      // provider's name for a stop already in the day. "No longer in the
+      // evidence" contradicted the list the user was looking at.
       return t(
-        `${name} finns inte längre i underlaget för den här platsen.`,
-        `${name} is no longer in the evidence for this place.`,
+        `${name} är inget Parranda kan lägga in i rutten här.`,
+        `${name} isn't something Parranda can route to here.`,
       );
     case "not_offered_to_route":
       return t(
