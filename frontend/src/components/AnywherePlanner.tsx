@@ -103,6 +103,11 @@ interface DistrictArea {
     lng: number;
     address?: string | null;
     area?: string | null;
+    /**
+     * Whether the trusted routing path will accept a commitment to this exact
+     * identity. Server-declared; absent means no.
+     */
+    commitment_eligible?: boolean;
   }>;
   stop_ids?: string[];
 }
@@ -332,6 +337,26 @@ function unkeptReasonSentence(
         `${name} could not fit in this day.`,
       );
   }
+}
+
+/**
+ * May this exact candidate identity be committed to?
+ *
+ * Read from the server, never inferred. Coordinates, an id shape, a label, and
+ * absence from the route are equally true of a place the routing path can
+ * accept and one it cannot — these lists render from place-structure
+ * candidates, which the composer documents as never promoting into the route.
+ *
+ * Only an explicit `true` is permission. A missing field, an older server, or a
+ * value of another type all mean the candidate stays visible as an idea and
+ * offers no way to commit to it.
+ *
+ * A commitment ALREADY held keeps its control regardless, so a place that
+ * became ineligible after it was added can still be withdrawn from the card it
+ * was added on.
+ */
+function canCommitTo(stop: { commitment_eligible?: unknown } | null | undefined): boolean {
+  return stop?.commitment_eligible === true;
 }
 
 export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: Lang }) {
@@ -2291,7 +2316,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                                 a candidate the day did not choose. The server
                                 still has to resolve it against its own loaded
                                 pool — an unhonoured pin is reported, not faked. */}
-                            {candidateId && (
+                            {candidateId && (commitments[candidateId]?.kind === "pin" || canCommitTo(stop)) && (
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -2405,7 +2430,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                                   <span aria-hidden="true" className="ml-2">↗</span>
                                 </a>
                               )}
-                              {candidateId && (
+                              {candidateId && (commitments[candidateId]?.kind === "pin" || canCommitTo(stop)) && (
                               <button
                                 type="button"
                                 onClick={() =>

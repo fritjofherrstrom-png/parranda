@@ -13,6 +13,7 @@ const {
   operationalViabilityRank,
   rankEligible,
 } = require("../candidates/candidate-pool");
+const { plannerUsableOptionsForRole } = require("./candidate-combination");
 const { scoreCandidateFit } = require("../candidates/fit-scorer");
 const { calibrateSource } = require("../candidates/source-calibration");
 const { normalizeWalkingTargetBand } = require("../place-candidates/day-capacity");
@@ -138,12 +139,50 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
 
   const roleRelevantCandidateCount = uniqueEntryCandidateCount(Object.values(roleEntries).flat());
 
+  // Collected across roles and returned as a SIBLING of `roles`, never on a
+  // role entry: buildPlannerCandidateInspectSidecar emits `roles` verbatim, so
+  // anything hung on a role entry becomes public payload.
+  const rescuableByRole = [];
   const roles = activeRoleOrder.map((role) => {
     const spec = activeRoleSpec[role];
     const entries = roleEntries[role];
     const candidates = keepPinnedEntriesInRole(entries, limitPerRole, pinnedIds).map((entry) =>
       formatRoleCandidate(entry, role, roleEntries, activeRoleSpec),
     );
+    // The ids beyond the ranking cut that a pin would re-admit AND the hoist
+    // would then accept — an ADMISSION answer, not a promise the finished day
+    // can afford the detour. The walking budget can still refuse afterwards,
+    // and reports that honestly on its own.
+    //
+    // keepPinnedEntriesInRole makes this role's candidate list depend on which
+    // pins the request happened to carry — right for composing, wrong for
+    // answering "could this be committed to?", because the answer is no right
+    // up until the user pins it and then yes. This records the counterfactual
+    // so that question has a stable answer.
+    //
+    // Rescue alone is not enough: the tail is where the rejected statuses live
+    // (entries are sorted filled -> partial -> admitted -> fallback), and the
+    // hoist runs plannerUsableOptionsForRole over the re-admitted list. So each
+    // candidate is asked the question the hoist would ask — would it survive
+    // admission once rescued — rather than being declared eligible for having a
+    // rank. Answering otherwise re-creates the exact round-trip refusal this
+    // whole slice exists to remove.
+    const pinRescuableCandidateIds = [];
+    for (const entry of entries.slice(limitPerRole)) {
+      // Cheap reject before formatting: a fallback entry can never pass the
+      // hoist's own filter, and formatting the whole tail of a dense role is
+      // work no answer depends on.
+      if (entry?.candidate_status === "fallback") continue;
+      const formatted = formatRoleCandidate(entry, role, roleEntries, activeRoleSpec);
+      const id = formatted?.candidate_id;
+      if (id == null || id === "") continue;
+      if (candidates.some((existing) => existing?.candidate_id === id)) continue;
+      const asIfRescued = { candidates: [...candidates, formatted] };
+      if (plannerUsableOptionsForRole(asIfRescued).some((option) => option?.candidate_id === id)) {
+        pinRescuableCandidateIds.push(String(id));
+      }
+    }
+    for (const id of pinRescuableCandidateIds) rescuableByRole.push(id);
     const status = strongestStatus(candidates);
     return {
       role,
@@ -181,6 +220,10 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
     },
     requested_preferences: candidatePool.normalized.intents || [],
     roles,
+    // Sibling of `roles`, deliberately: the inspect sidecar emits role entries
+    // verbatim, and this is internal bookkeeping about the ranked tail — not
+    // something the public payload should carry.
+    commitment_rescuable_ids: [...new Set(rescuableByRole)],
     summary: summarizeRoles(roles),
     pipeline_summary: {
       identity_resolved_candidate_count: candidatePool.allCandidates.length,

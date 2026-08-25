@@ -95,7 +95,18 @@ function composedDay(stopIds) {
             stop_ids: ["outsider"],
             stop_names: ["Place outsider"],
             stops: [
-              { id: "outsider", name: "Place outsider", lat: 41.9002, lng: 12.49, type: "cafe", tags: [] },
+              // Declared committable by the server, which is now what makes Add
+              // appear at all — these tests are about WHEN a verdict may be
+              // shown, so the commitment has to be offerable in the first place.
+              {
+                id: "outsider",
+                name: "Place outsider",
+                lat: 41.9002,
+                lng: 12.49,
+                type: "cafe",
+                tags: [],
+                commitment_eligible: true,
+              },
             ],
           },
         ],
@@ -133,9 +144,14 @@ function structureOnly() {
             size: 2,
             stop_ids: ["x", "y"],
             stop_names: ["Place x", "Place y"],
+            // No commitment_eligible: true here, deliberately. structure_only
+            // means promotion was withheld, and a withheld day authorises
+            // nothing — a pin in that state comes back day_not_published every
+            // time. A fixture declaring otherwise is a payload the server
+            // cannot produce.
             stops: [
-              { id: "x", name: "Place x", lat: 41.9, lng: 12.49, type: "restaurant", tags: [] },
-              { id: "y", name: "Place y", lat: 41.9001, lng: 12.49, type: "cafe", tags: [] },
+              { id: "x", name: "Place x", lat: 41.9, lng: 12.49, type: "restaurant", tags: [], commitment_eligible: false },
+              { id: "y", name: "Place y", lat: 41.9001, lng: 12.49, type: "cafe", tags: [], commitment_eligible: false },
             ],
           },
         ],
@@ -275,28 +291,38 @@ test("a failed request produces no verdict at all", async (t) => {
   assert.ok(!NOTICE.test(h.text()), "a transport failure is not evidence about the user's choices");
 });
 
-test("structure_only composes no day, so no pin can have failed to fit in one", async (t) => {
+test("structure_only offers nothing to commit to, and claims nothing either", async (t) => {
   const h = await mountPlanner({ url: "http://localhost/anywhere?place=Testville&lang=en" });
   t.after(() => h.unmount());
   await h.clock.advance(500);
   await h.fetchMock.respond(h.fetchMock.pending()[0], structureOnly());
   await h.clock.advance(50);
 
-  const add = buttonMatching(h, /Place x/);
-  await click(h, add);
-  await click(h, buttonMatching(h, /Add to my day/));
-  await h.clock.advance(500);
+  // The candidates are real and stay visible as ideas...
+  await click(h, buttonMatching(h, /^Place x/));
+  assert.match(h.text(), /Place x/);
+  // ...but promotion was withheld, so nothing here can accept a commitment. A
+  // pin in this state is refused with day_not_published every time, so offering
+  // the verb would be offering a guaranteed round trip to a refusal.
+  assert.ok(!buttonMatching(h, /Add to my day/), "no commitment is offered where none can be honoured");
+  assert.ok(!NOTICE.test(h.text()), "and with no day, nothing is claimed about fitting into one");
+});
 
-  const inFlight = h.fetchMock.pending()[0];
-  assert.ok(inFlight, "the request goes out");
-  await h.fetchMock.respond(inFlight, structureOnly());
+test("a commitment made on a real day is not judged by a later dayless one", async (t) => {
+  // The case the old version of the test above was reaching for, now that a
+  // commitment can no longer be created from structure_only itself: carry one
+  // in from a composed day and let the next answer arrive without a day.
+  const h = await plannerWithDay();
+  t.after(() => h.unmount());
+
+  await addOutsider(h);
+  await h.clock.advance(500);
+  await h.fetchMock.respond(h.fetchMock.pending()[0], structureOnly());
   await h.clock.advance(50);
 
-  // There is no day here — there never was one. "Could not fit in this day"
-  // would be describing something that does not exist.
   assert.ok(
     !NOTICE.test(h.text()),
-    "a verdict about fitting into a day requires a day",
+    "a verdict about fitting into a day requires a day to have been composed",
   );
 });
 
