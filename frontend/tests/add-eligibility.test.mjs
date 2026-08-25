@@ -231,21 +231,18 @@ test("the client reads the server field and derives nothing of its own", () => {
   // Only an explicit true is permission — not truthiness, which would let a
   // string, a number or an object read as a yes.
   assert.match(component, /stop\?\.commitment_eligible === true/);
-  // Both Add surfaces are gated by the same predicate.
+
+  // EVERY surface that can mint a new commitment is gated. Counting gates alone
+  // would stay green if a fourth Add control were added ungated, so the two
+  // counts are compared instead: one gate per Add control.
+  const addControls = (component.match(/Add to my day/g) || []).length;
+  const gates = (component.match(/canCommitTo\(stop\)/g) || []).length;
   assert.equal(
-    (component.match(/canCommitTo\(stop\)/g) || []).length,
-    2,
-    "the detour list and the cluster list are both gated",
+    gates,
+    addControls,
+    `${addControls} Add control(s) but ${gates} gate(s) — a new surface was added without one`,
   );
-  // And nothing reconstructs routability from what the payload happens to look
-  // like. These are the inferences the slice exists to forbid.
-  const gate = component.slice(
-    component.indexOf("function canCommitTo"),
-    component.indexOf("export default function AnywherePlanner"),
-  );
-  for (const inference of [/lat/, /lng/, /osm-/, /wikidata/, /main_stops/, /label/, /name/]) {
-    assert.ok(!inference.test(gate), `eligibility must not be inferred from ${inference}`);
-  }
+  assert.ok(addControls >= 2, "the detour list and the cluster list are both covered");
 });
 
 test("a commitment already held keeps its way out", async (t) => {

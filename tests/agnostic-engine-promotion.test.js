@@ -1397,56 +1397,49 @@ test(
 );
 
 test(
-  "a candidate the trusted path holds is eligible; one it does not is not",
+  "every eligibility verdict matches what pinning that identity actually does",
   withServer(walkBudgetLoader(), async (server) => {
-    const r = await requestJson(server, {
-      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
-      method: "POST",
-      body: walkBudgetBody(),
-    });
-    const stops = districtStops(r.body);
-    const eligible = stops.filter((stop) => stop.commitment_eligible);
-    assert.ok(eligible.length > 0, "a real reservoir yields at least one committable idea");
-
-    // ...and the verdict is usable: pinning one is honoured rather than refused.
-    const pinned = await requestJson(server, {
-      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
-      method: "POST",
-      body: walkBudgetBody({ pinned_candidate_ids: [eligible[0].id] }),
-    });
-    const verdict = pinned.body.agnostic_route_output_experiment.pinned_candidates;
-    const refusal = (verdict.unhonored ?? []).find((entry) => entry.id === eligible[0].id);
-    assert.notEqual(
-      refusal?.reason,
-      "unknown_candidate",
-      "an identity declared eligible must not come back unknown",
-    );
-  }),
-);
-
-test(
-  "an excluded candidate is neither eligible nor in the trusted supply",
-  withServer(walkBudgetLoader(), async (server) => {
+    // The property that matters in BOTH directions, and the one the first
+    // implementation failed: a candidate declared eligible must be routable,
+    // and one declared ineligible must not be. Review showed the suite could
+    // not catch over-broad eligibility — declaring everything eligible left it
+    // green — so this asks the server to make good on each verdict.
     const plain = await requestJson(server, {
       path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
       method: "POST",
       body: walkBudgetBody(),
     });
-    const target = districtStops(plain.body).find((stop) => stop.commitment_eligible);
-    assert.ok(target, "precondition: something is eligible to begin with");
+    const inDay = new Set(
+      (plain.body.days?.[0]?.primary_route?.main_stops ?? []).map((stop) => stop.id),
+    );
+    const candidates = districtStops(plain.body).filter((stop) => !inDay.has(stop.id));
+    assert.ok(candidates.length > 0, "precondition: there are nearby ideas not already in the day");
+    assert.ok(
+      candidates.some((stop) => stop.commitment_eligible),
+      "precondition: at least one is declared committable, or this proves nothing",
+    );
 
-    const excluded = await requestJson(server, {
-      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
-      method: "POST",
-      body: walkBudgetBody({ excluded_candidate_ids: [target.id] }),
-    });
-    const stillOffered = districtStops(excluded.body).find((stop) => stop.id === target.id);
-    if (stillOffered) {
-      assert.equal(
-        stillOffered.commitment_eligible,
-        false,
-        "a dismissed place must never read as committable",
-      );
+    for (const candidate of candidates) {
+      const pinned = await requestJson(server, {
+        path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+        method: "POST",
+        body: walkBudgetBody({ pinned_candidate_ids: [candidate.id] }),
+      });
+      const verdict = pinned.body.agnostic_route_output_experiment.pinned_candidates;
+      const honoured = verdict.honored_count === 1;
+      if (candidate.commitment_eligible) {
+        assert.ok(
+          honoured,
+          `${candidate.id} was declared committable and then refused: ` +
+            `${JSON.stringify(verdict.unhonored)}`,
+        );
+      } else {
+        assert.ok(
+          !honoured,
+          `${candidate.id} was declared uncommittable and then honoured — ` +
+            "the control would have been hidden for something that works",
+        );
+      }
     }
   }),
 );
@@ -1496,5 +1489,85 @@ test(
     // The boolean is the whole contract — no free-text engine explanation.
     const serialized = JSON.stringify(r.body.place_structure ?? {});
     assert.ok(!/because|rejected_by|gate_/i.test(serialized));
+  }),
+);
+
+/**
+ * Chain-branded cafés against enough local breadth to trigger the reservoir's
+ * chain-fallback policy, which demotes them to `fallback` status.
+ *
+ * That is precisely where the ranked tail lives: entries sort filled ->
+ * partial -> admitted -> fallback, so the tail below a role's cut is full of
+ * candidates the hoist will refuse. A rescue list built from rank alone
+ * declares them committable.
+ */
+function chainFallbackLoader() {
+  const base = { lat: 41.9, lng: 12.49 };
+  const recs = [];
+  let n = 0;
+  const pt = () => {
+    const c = { lat: base.lat + n * 0.0004, lng: base.lng + (n % 3) * 0.0004 };
+    n += 1;
+    return c;
+  };
+  const local = (id, name, type, tags) => {
+    const c = pt();
+    return externalRecord(id, name, type, c.lat, c.lng, tags);
+  };
+  const chain = (id, name, type, tags) => ({ ...local(id, name, type, tags), brand: "BigChain", chain: true });
+  for (let i = 0; i < 3; i += 1) recs.push(local(`food-${i}`, `Food ${i}`, "restaurant", ["mat"]));
+  for (let i = 0; i < 3; i += 1) recs.push(local(`view-${i}`, `View ${i}`, "viewpoint", ["utsikt"]));
+  for (let i = 0; i < 3; i += 1) recs.push(local(`muse-${i}`, `Muse ${i}`, "museum", ["kultur"]));
+  for (let i = 0; i < 6; i += 1) recs.push(chain(`cafe-${i}`, `Cafe ${i}`, "cafe", ["fika"]));
+  return makeLoader(recs);
+}
+
+test(
+  "a demoted tail candidate is not declared committable on rank alone",
+  withServer(chainFallbackLoader(), async (server) => {
+    // Review caught this as a regression in the first fix: the rescue list was
+    // built from `entries.slice(limit)` with no filter, so fallback-status
+    // candidates were declared eligible and then refused when pinned — exactly
+    // the round-trip refusal this slice removes, while the payload asserted the
+    // opposite.
+    const body = {
+      city: "atlantis-unknown-place",
+      place: "Malmö",
+      dates: [DATE],
+      lat: 41.9,
+      lng: 12.49,
+      preferences: ["food", "coffee", "scenic", "culture"],
+      walking_km_target: 6,
+      distance_mode: "soft_target",
+      include_external_candidates: 1,
+    };
+    const plain = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body,
+    });
+    const stops = districtStops(plain.body);
+    assert.ok(
+      stops.some((stop) => stop.commitment_eligible),
+      "precondition: something is committable, or this proves nothing",
+    );
+    const demoted = stops.filter((stop) => /^cafe-/.test(String(stop.id)));
+    assert.ok(demoted.length > 0, "precondition: the demoted chain candidates are on offer as ideas");
+
+    for (const candidate of demoted) {
+      const pinned = await requestJson(server, {
+        path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+        method: "POST",
+        body: { ...body, pinned_candidate_ids: [candidate.id] },
+      });
+      const verdict = pinned.body.agnostic_route_output_experiment.pinned_candidates;
+      if (candidate.commitment_eligible) {
+        assert.equal(
+          verdict.honored_count,
+          1,
+          `${candidate.id} was declared committable and then refused: ${JSON.stringify(verdict.unhonored)}`,
+        );
+      }
+    }
   }),
 );

@@ -63,12 +63,15 @@ function collectCommitmentEligibleIds({ plannerRoles = null, sourceCandidates = 
       const id = option?.candidate_id;
       if (id != null && id !== "") eligible.add(String(id));
     }
-    // Below the ranking cut, but a pin would bring it back.
-    for (const id of Array.isArray(roleEntry?.pin_rescuable_candidate_ids)
-      ? roleEntry.pin_rescuable_candidate_ids
-      : []) {
-      if (id != null && id !== "") eligible.add(String(id));
-    }
+  }
+
+  // Below the ranking cut, but a pin would re-admit it AND the hoist would then
+  // accept it. Collected by the role selector, which is the only place that can
+  // see the tail the cut removed.
+  for (const id of Array.isArray(plannerRoles?.commitment_rescuable_ids)
+    ? plannerRoles.commitment_rescuable_ids
+    : []) {
+    if (id != null && id !== "") eligible.add(String(id));
   }
 
   return eligible;
@@ -77,14 +80,22 @@ function collectCommitmentEligibleIds({ plannerRoles = null, sourceCandidates = 
 /**
  * Stamp the verdict onto the public place structure.
  *
- * Every candidate gets an explicit boolean rather than only the eligible ones
- * getting a marker. A missing field already means "no" to the client, so
- * marking only the yeses would work by accident; saying both out loud is what
- * makes the contract readable from the payload alone.
+ * Every candidate in a structure THIS FUNCTION MARKS gets an explicit boolean
+ * rather than only the eligible ones getting a marker. A missing field already
+ * means "no" to the client, so marking only the yeses would work by accident;
+ * saying both out loud is what makes the contract readable.
  *
- * Copies rather than mutates: the structure is also used for the map and the
- * district panel, and a routing verdict must not leak backwards into the
- * display data it is describing.
+ * Only the engine-compose response path marks. The legacy synthesizer and the
+ * recognized-city path publish district candidates with no field at all, and
+ * that is correct rather than an omission: neither honours pins, so there is
+ * nothing they could truthfully declare committable. The client fails closed on
+ * the absent field, so Add simply never appears there.
+ *
+ * Copies rather than mutates when it marks anything: the structure is also used
+ * for the map and the district panel, and a routing verdict must not leak
+ * backwards into the display data it is describing. With nothing to mark the
+ * input is handed straight back, so callers must not rely on always receiving a
+ * new object.
  *
  * @param {object|null} placeStructure
  * @param {Set<string>} eligibleIds
@@ -127,7 +138,9 @@ function markCommitmentEligibility(placeStructure, eligibleIds) {
  */
 function publishedEligibleIds({ promotionPromote = false, commitmentEligibleIds = null } = {}) {
   if (!promotionPromote) return new Set();
-  return commitmentEligibleIds instanceof Set ? commitmentEligibleIds : new Set();
+  // A copy, so a caller cannot widen the published verdict by mutating the set
+  // it was handed.
+  return commitmentEligibleIds instanceof Set ? new Set(commitmentEligibleIds) : new Set();
 }
 
 module.exports = {

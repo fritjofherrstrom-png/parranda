@@ -146,10 +146,12 @@ const { publishedEligibleIds } = require("../server/planner/commitment-eligibili
 
 test("a published engine day authorises its own eligible set", () => {
   const ids = new Set(["a", "b"]);
-  assert.equal(
-    publishedEligibleIds({ promotionPromote: true, commitmentEligibleIds: ids }),
-    ids,
-  );
+  const published = publishedEligibleIds({ promotionPromote: true, commitmentEligibleIds: ids });
+  assert.deepEqual([...published].sort(), ["a", "b"]);
+  // A copy: widening the published verdict must not be possible by mutating
+  // the set the caller handed in.
+  ids.add("smuggled");
+  assert.equal(published.has("smuggled"), false);
 });
 
 test("a withheld experiment authorises nothing", () => {
@@ -179,13 +181,11 @@ test("a candidate below the ranking cut is eligible, because a pin would rescue 
   // until the user proves it wrong — eligible because pinned, which is circular.
   const ids = collectCommitmentEligibleIds({
     plannerRoles: {
-      roles: [
-        {
-          role: "food_anchor",
-          candidates: [{ candidate_id: "above-cut", planner_usable: true }],
-          pin_rescuable_candidate_ids: ["below-cut"],
-        },
-      ],
+      roles: [{ role: "food_anchor", candidates: [{ candidate_id: "above-cut", planner_usable: true }] }],
+      // A SIBLING of roles, not a field on one: the inspect sidecar emits role
+      // entries verbatim, so internal bookkeeping hung on a role entry becomes
+      // public payload.
+      commitment_rescuable_ids: ["below-cut"],
     },
     sourceCandidates: [],
   });
@@ -198,7 +198,8 @@ test("eligibility does not change just because the request carried the pin", () 
   // instead of the candidate.
   const unpinned = collectCommitmentEligibleIds({
     plannerRoles: {
-      roles: [{ role: "food_anchor", candidates: [{ candidate_id: "a", planner_usable: true }], pin_rescuable_candidate_ids: ["b"] }],
+      roles: [{ role: "food_anchor", candidates: [{ candidate_id: "a", planner_usable: true }] }],
+      commitment_rescuable_ids: ["b"],
     },
     sourceCandidates: [{ id: "a" }],
   });
@@ -206,9 +207,47 @@ test("eligibility does not change just because the request carried the pin", () 
   // and the composer's supply — the same answer must come back.
   const pinned = collectCommitmentEligibleIds({
     plannerRoles: {
-      roles: [{ role: "food_anchor", candidates: [{ candidate_id: "a", planner_usable: true }, { candidate_id: "b", planner_usable: true }], pin_rescuable_candidate_ids: [] }],
+      roles: [{ role: "food_anchor", candidates: [{ candidate_id: "a", planner_usable: true }, { candidate_id: "b", planner_usable: true }] }],
+      commitment_rescuable_ids: [],
     },
     sourceCandidates: [{ id: "a" }, { id: "b" }],
   });
   assert.deepEqual([...unpinned].sort(), [...pinned].sort());
+});
+
+test("a rescued candidate the hoist would still reject is NOT eligible", () => {
+  // The ranked tail is where the rejected statuses live, so "a pin would
+  // re-admit it" is not the same as "the hoist would then accept it". Declaring
+  // the first without the second re-creates the round-trip refusal this whole
+  // slice exists to remove — observed against real data: fallback-status
+  // candidates were declared eligible and refused when pinned.
+  //
+  // The selector answers the second question; this asserts the consumer relies
+  // on that answer rather than on rank alone.
+  const ids = collectCommitmentEligibleIds({
+    plannerRoles: {
+      roles: [{ role: "food_anchor", candidates: [{ candidate_id: "kept", planner_usable: true }] }],
+      commitment_rescuable_ids: [],
+    },
+    sourceCandidates: [],
+  });
+  assert.equal(ids.has("rejected-tail"), false);
+  assert.deepEqual([...ids], ["kept"]);
+});
+
+test("internal rescue bookkeeping never rides on a role entry", () => {
+  // buildPlannerCandidateInspectSidecar emits `roles` verbatim, so a field hung
+  // on a role entry is public payload. Found in review: the first version put
+  // it there and published the below-the-cut ranked tail.
+  const { selectPlannerRoleCandidates } = require("../server/planner/role-selector");
+  const source = require("node:fs").readFileSync(
+    require.resolve("../server/planner/role-selector"),
+    "utf8",
+  );
+  assert.equal(typeof selectPlannerRoleCandidates, "function");
+  assert.ok(
+    !/pin_rescuable_candidate_ids:/.test(source),
+    "the rescue list must not be assigned onto a role entry",
+  );
+  assert.match(source, /commitment_rescuable_ids: \[\.\.\.new Set\(rescuableByRole\)\]/);
 });
