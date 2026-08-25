@@ -1363,3 +1363,138 @@ test(
     },
   ),
 );
+
+// --------------------------------------------------------------------------
+// Add is offered only where the routing path will accept a commitment.
+//
+// District composition is explicit that its facts "never promote a candidate
+// into the route", yet the Add lists render from exactly those candidates. The
+// server now says, per exact identity, whether a commitment to it can be
+// accepted — so the client stops guessing.
+// --------------------------------------------------------------------------
+
+const districtStops = (body) =>
+  ((body.place_structure?.district_day?.areas ?? []).flatMap((area) => area.stops ?? []));
+
+test(
+  "every public nearby candidate carries an explicit eligibility verdict",
+  withServer(walkBudgetLoader(), async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body: walkBudgetBody(),
+    });
+    const stops = districtStops(r.body);
+    assert.ok(stops.length > 0, "precondition: the response offers nearby ideas at all");
+    for (const stop of stops) {
+      assert.equal(
+        typeof stop.commitment_eligible,
+        "boolean",
+        `${stop.id} must say yes or no, never leave the client to guess`,
+      );
+    }
+  }),
+);
+
+test(
+  "a candidate the trusted path holds is eligible; one it does not is not",
+  withServer(walkBudgetLoader(), async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body: walkBudgetBody(),
+    });
+    const stops = districtStops(r.body);
+    const eligible = stops.filter((stop) => stop.commitment_eligible);
+    assert.ok(eligible.length > 0, "a real reservoir yields at least one committable idea");
+
+    // ...and the verdict is usable: pinning one is honoured rather than refused.
+    const pinned = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body: walkBudgetBody({ pinned_candidate_ids: [eligible[0].id] }),
+    });
+    const verdict = pinned.body.agnostic_route_output_experiment.pinned_candidates;
+    const refusal = (verdict.unhonored ?? []).find((entry) => entry.id === eligible[0].id);
+    assert.notEqual(
+      refusal?.reason,
+      "unknown_candidate",
+      "an identity declared eligible must not come back unknown",
+    );
+  }),
+);
+
+test(
+  "an excluded candidate is neither eligible nor in the trusted supply",
+  withServer(walkBudgetLoader(), async (server) => {
+    const plain = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body: walkBudgetBody(),
+    });
+    const target = districtStops(plain.body).find((stop) => stop.commitment_eligible);
+    assert.ok(target, "precondition: something is eligible to begin with");
+
+    const excluded = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body: walkBudgetBody({ excluded_candidate_ids: [target.id] }),
+    });
+    const stillOffered = districtStops(excluded.body).find((stop) => stop.id === target.id);
+    if (stillOffered) {
+      assert.equal(
+        stillOffered.commitment_eligible,
+        false,
+        "a dismissed place must never read as committable",
+      );
+    }
+  }),
+);
+
+test(
+  "a withheld experiment lends no eligibility to the published baseline",
+  withServer(walkBudgetLoader(), async (server) => {
+    // Nothing in the pool answers either request, so the gate withholds and the
+    // baseline is published. Whatever the engine's candidate context held, it
+    // is not the context the user received.
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body: walkBudgetBody({ preferences: ["nightlife", "swimming"] }),
+    });
+    assert.equal(
+      r.body.agnostic_route_output_experiment.promotion?.promote,
+      false,
+      "precondition: promotion really is withheld",
+    );
+    for (const stop of districtStops(r.body)) {
+      assert.equal(
+        stop.commitment_eligible,
+        false,
+        `${stop.id} cannot be declared committable by a day nobody received`,
+      );
+    }
+  }),
+);
+
+test(
+  "eligibility carries no private bookkeeping into the public payload",
+  withServer(walkBudgetLoader(), async (server) => {
+    const r = await requestJson(server, {
+      path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      method: "POST",
+      body: walkBudgetBody(),
+    });
+    for (const stop of districtStops(r.body)) {
+      for (const key of Object.keys(stop)) {
+        assert.ok(
+          !/reservoir|loaded|admission|eligib(le|ility)_reason|private|internal/i.test(key),
+          `${key} exposes how the verdict was reached, not the verdict`,
+        );
+      }
+    }
+    // The boolean is the whole contract — no free-text engine explanation.
+    const serialized = JSON.stringify(r.body.place_structure ?? {});
+    assert.ok(!/because|rejected_by|gate_/i.test(serialized));
+  }),
+);

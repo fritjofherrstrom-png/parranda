@@ -51,6 +51,7 @@ const { buildAgnosticConstraintNegotiation } = require("./agnostic-constraint-ne
 const { resolveAgnosticWalkingTargetBand } = require("./agnostic-walking-target");
 const { settlePinsWithinWalkingBudget } = require("./pin-walking-budget");
 const { classifyUnhonouredPins } = require("./pin-refusal-reasons");
+const { collectCommitmentEligibleIds } = require("./commitment-eligibility");
 const { EXCLUDED_LOADED_IDS } = require("./excluded-candidates");
 const { weaveEveningEventRouteStop } = require("../candidates/event-route-stop-weave");
 const { generateAgnosticRecommendations } = require("../route-engine");
@@ -1650,7 +1651,12 @@ async function composeAgnosticRouteViaEngine({
   // sensitive fields (date_signals, alternatives, live_events, dayflow_context).
   scrubAgnosticAppliedDay(result, engineDay);
 
-  return { result, experiment, eventWeave, pinnedRefusals };
+  // Which exact identities this request's trusted routing path would accept a
+  // commitment to. Declared from the reservoir and the composer's own supply —
+  // never from what the finished route happened to select.
+  const commitmentEligibleIds = collectCommitmentEligibleIds({ plannerRoles, sourceCandidates });
+
+  return { result, experiment, eventWeave, pinnedRefusals, commitmentEligibleIds };
 }
 
 function hasAdditionalCandidateIds(baseCandidates, expandedCandidates) {

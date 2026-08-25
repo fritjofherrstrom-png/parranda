@@ -95,7 +95,18 @@ function composedDay(stopIds) {
             stop_ids: ["outsider"],
             stop_names: ["Place outsider"],
             stops: [
-              { id: "outsider", name: "Place outsider", lat: 41.9002, lng: 12.49, type: "cafe", tags: [] },
+              // Declared committable by the server, which is now what makes Add
+              // appear at all — these tests are about WHEN a verdict may be
+              // shown, so the commitment has to be offerable in the first place.
+              {
+                id: "outsider",
+                name: "Place outsider",
+                lat: 41.9002,
+                lng: 12.49,
+                type: "cafe",
+                tags: [],
+                commitment_eligible: true,
+              },
             ],
           },
         ],
@@ -134,8 +145,8 @@ function structureOnly() {
             stop_ids: ["x", "y"],
             stop_names: ["Place x", "Place y"],
             stops: [
-              { id: "x", name: "Place x", lat: 41.9, lng: 12.49, type: "restaurant", tags: [] },
-              { id: "y", name: "Place y", lat: 41.9001, lng: 12.49, type: "cafe", tags: [] },
+              { id: "x", name: "Place x", lat: 41.9, lng: 12.49, type: "restaurant", tags: [], commitment_eligible: true },
+              { id: "y", name: "Place y", lat: 41.9001, lng: 12.49, type: "cafe", tags: [], commitment_eligible: true },
             ],
           },
         ],

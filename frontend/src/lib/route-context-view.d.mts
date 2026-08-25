@@ -25,6 +25,11 @@ export interface RouteContextArea {
 }
 
 export interface RouteContextSuggestion extends RouteContextStop {
+  /**
+   * Whether the trusted routing path will accept a commitment to this exact
+   * identity. Server-declared; absent means no.
+   */
+  commitment_eligible?: boolean;
   area_index: number;
   source_index: number;
   daypart_hint: string | null;

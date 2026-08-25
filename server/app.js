@@ -45,6 +45,10 @@ const {
 } = require("./planner/pinned-candidates");
 const { parseRequestedDates } = require("./planner/requested-dates");
 const { attributeToWithheldDay } = require("./planner/pin-refusal-reasons");
+const {
+  markCommitmentEligibility,
+  publishedEligibleIds,
+} = require("./planner/commitment-eligibility");
 const { buildEngineReadinessVerdict } = require("./planner/agnostic-engine-readiness");
 const { reconcileAgnosticConstraintNegotiation } = require("./planner/agnostic-constraint-negotiation");
 const { resolveAgnosticWalkingTargetBand } = require("./planner/agnostic-walking-target");
@@ -2309,6 +2313,7 @@ function buildApp({
         eventWeave,
         pinnedRefusals,
         precompositionPinnedRefusals,
+        commitmentEligibleIds,
       } = await composeAgnosticRouteOutput({
         coords: anchor,
         baselineResult: baselineBody,
@@ -2419,9 +2424,17 @@ function buildApp({
           woven: engineWoven,
           walkingKmTarget: payload.walkingKmTarget,
         });
+        // The eligibility verdict belongs to the candidate context that was
+        // actually PUBLISHED. When the gate withholds the engine's day, the
+        // baseline goes out instead and the engine's reservoir describes a day
+        // nobody received — so nothing may be declared committable from it.
+        const publishedPlaceStructure = markCommitmentEligibility(
+          engineWoven.placeStructure,
+          publishedEligibleIds({ promotionPromote: promotion.promote, commitmentEligibleIds }),
+        );
         response.json({
           ...engineWoven.result,
-          ...(engineWoven.placeStructure ? { place_structure: engineWoven.placeStructure } : {}),
+          ...(publishedPlaceStructure ? { place_structure: publishedPlaceStructure } : {}),
           ...(engineWoven.interrupt ? { pulse_route_interrupt: engineWoven.interrupt } : {}),
           ...liveEventsSidecar,
           agnostic_route_output_experiment: experiment,
