@@ -13,6 +13,7 @@ const {
   operationalViabilityRank,
   rankEligible,
 } = require("../candidates/candidate-pool");
+const { plannerUsableOptionsForRole } = require("./candidate-combination");
 const { scoreCandidateFit } = require("../candidates/fit-scorer");
 const { calibrateSource } = require("../candidates/source-calibration");
 const { normalizeWalkingTargetBand } = require("../place-candidates/day-capacity");
@@ -71,8 +72,6 @@ function localFeelReasons(spec, candidate) {
 
 const ROLE_ORDER = Object.freeze(Object.keys(ROLE_SPEC));
 const STATUS_RANK = Object.freeze({ missing: 0, fallback: 1, partial: 2, filled: 3 });
-const { plannerUsableOptionsForRole } = require("./candidate-combination");
-
 const DEFAULT_LIMIT_PER_ROLE = 3;
 const MAX_LIMIT_PER_ROLE = 5;
 // Once the trusted reservoir can cover several different planner roles with
@@ -151,7 +150,9 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
       formatRoleCandidate(entry, role, roleEntries, activeRoleSpec),
     );
     // The ids beyond the ranking cut that a pin would re-admit AND the hoist
-    // would then accept.
+    // would then accept — an ADMISSION answer, not a promise the finished day
+    // can afford the detour. The walking budget can still refuse afterwards,
+    // and reports that honestly on its own.
     //
     // keepPinnedEntriesInRole makes this role's candidate list depend on which
     // pins the request happened to carry — right for composing, wrong for
@@ -181,7 +182,7 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
         pinRescuableCandidateIds.push(String(id));
       }
     }
-    rescuableByRole.push(...pinRescuableCandidateIds);
+    for (const id of pinRescuableCandidateIds) rescuableByRole.push(id);
     const status = strongestStatus(candidates);
     return {
       role,

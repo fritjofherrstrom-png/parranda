@@ -15,9 +15,14 @@ const { plannerUsableOptionsForRole } = require("./candidate-combination");
  * label, and absence from the route are all equally true of both. So the side
  * that knows says so, once, per exact identity.
  *
- * ELIGIBLE MEANS: this exact public identity is accepted by the trusted
- * routing/commitment path and may be sent back as a pin. It deliberately does
- * NOT mean the candidate was selected — a perfectly routable place the composer
+ * ELIGIBLE MEANS: this exact public identity is ADMITTED by the trusted
+ * routing/commitment path and may be sent back as a pin. It is a statement
+ * about admission, not about affordability: the walking budget can still refuse
+ * an admitted pin once the finished day is measured, and says so itself
+ * (see pin-walking-budget). Nothing cheaper is possible — affordability needs a
+ * full re-finalisation, which is not something a candidate list can precompute.
+ *
+ * It also deliberately does NOT mean the candidate was selected — a perfectly routable place the composer
  * did not pick this time is still something the user may commit to, and
  * deriving the field from route membership would make every unselected place
  * look unroutable.
@@ -46,12 +51,22 @@ const { plannerUsableOptionsForRole } = require("./candidate-combination");
  */
 
 /**
+ * The UPSTREAM answer: what the trusted routing path would accept, before any
+ * question of which day was published.
+ *
+ * Deliberately distinct from publishedEligibleIds below, which takes this set
+ * and decides whether the day that actually went out is entitled to vouch for
+ * it. Upstream says "the routing path would take this"; published says "and the
+ * day on screen is the one that judged it". Both are needed, and conflating
+ * them is how a withheld experiment would end up authorising commitments
+ * against a baseline nobody composed.
+ *
  * @param {object} params
  * @param {object} [params.plannerRoles]       the gated role reservoir
  * @param {object[]} [params.sourceCandidates] what was offered to the composer
  * @returns {Set<string>} exact identities a commitment may name
  */
-function collectCommitmentEligibleIds({ plannerRoles = null, sourceCandidates = null } = {}) {
+function collectCommitmentUpstreamEligibleIds({ plannerRoles = null, sourceCandidates = null } = {}) {
   const eligible = new Set();
 
   for (const candidate of Array.isArray(sourceCandidates) ? sourceCandidates : []) {
@@ -115,12 +130,18 @@ function markCommitmentEligibility(placeStructure, eligibleIds) {
         if (!area || !Array.isArray(area.stops)) return area;
         return {
           ...area,
-          stops: area.stops.map((stop) => ({
-            ...stop,
-            // The whole contract: one boolean, per exact identity. Never a
-            // reason, never the reservoir, never why.
-            commitment_eligible: Boolean(stop && stop.id != null && eligible.has(String(stop.id))),
-          })),
+          stops: area.stops.map((stop) => {
+            // A malformed entry is left exactly as found rather than being
+            // turned into an object that exists only to carry a verdict about
+            // nothing — the sibling guard above sets the same precedent.
+            if (!stop || typeof stop !== "object") return stop;
+            return {
+              ...stop,
+              // The whole contract: one boolean, per exact identity. Never a
+              // reason, never the reservoir, never why.
+              commitment_eligible: Boolean(stop.id != null && eligible.has(String(stop.id))),
+            };
+          }),
         };
       }),
     },
@@ -144,7 +165,7 @@ function publishedEligibleIds({ promotionPromote = false, commitmentEligibleIds 
 }
 
 module.exports = {
-  collectCommitmentEligibleIds,
+  collectCommitmentUpstreamEligibleIds,
   markCommitmentEligibility,
   publishedEligibleIds,
 };

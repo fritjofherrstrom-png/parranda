@@ -20,7 +20,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
-  collectCommitmentEligibleIds,
+  collectCommitmentUpstreamEligibleIds,
   markCommitmentEligibility,
 } = require("../server/planner/commitment-eligibility");
 
@@ -30,14 +30,14 @@ const roles = (...ids) => ({
 const offered = (...ids) => ids.map((id) => ({ id }));
 
 test("a candidate offered to the composer is eligible", () => {
-  const ids = collectCommitmentEligibleIds({ plannerRoles: roles(), sourceCandidates: offered("a") });
+  const ids = collectCommitmentUpstreamEligibleIds({ plannerRoles: roles(), sourceCandidates: offered("a") });
   assert.deepEqual([...ids], ["a"]);
 });
 
 test("a gated reservoir candidate is eligible even when the composer never saw it", () => {
   // This is the case route membership cannot express: the reservoir holds it,
   // a pin would hoist it, and the day simply did not choose it.
-  const ids = collectCommitmentEligibleIds({ plannerRoles: roles("reservoir-only"), sourceCandidates: [] });
+  const ids = collectCommitmentUpstreamEligibleIds({ plannerRoles: roles("reservoir-only"), sourceCandidates: [] });
   assert.ok(ids.has("reservoir-only"));
 });
 
@@ -45,7 +45,7 @@ test("eligibility is not route membership", () => {
   // A candidate is eligible because the routing path would accept it, not
   // because it won a slot. Deriving the field from the final route would make
   // every unselected place look unroutable.
-  const ids = collectCommitmentEligibleIds({
+  const ids = collectCommitmentUpstreamEligibleIds({
     plannerRoles: roles("not-chosen"),
     sourceCandidates: offered("chosen"),
   });
@@ -53,14 +53,14 @@ test("eligibility is not route membership", () => {
 });
 
 test("a candidate nothing trusted holds is not eligible", () => {
-  const ids = collectCommitmentEligibleIds({ plannerRoles: roles("a"), sourceCandidates: offered("b") });
+  const ids = collectCommitmentUpstreamEligibleIds({ plannerRoles: roles("a"), sourceCandidates: offered("b") });
   assert.equal(ids.has("ghost"), false);
 });
 
 test("a role candidate the gates did not find planner-usable is not eligible", () => {
   // Reservoir membership alone is not admission: an entry the gates rejected
   // for every role cannot be hoisted by a pin either.
-  const ids = collectCommitmentEligibleIds({
+  const ids = collectCommitmentUpstreamEligibleIds({
     plannerRoles: { roles: [{ role: "food_anchor", candidates: [{ candidate_id: "rejected", planner_usable: false }] }] },
     sourceCandidates: [],
   });
@@ -69,7 +69,7 @@ test("a role candidate the gates did not find planner-usable is not eligible", (
 
 test("missing inputs yield an empty set, never a permissive one", () => {
   for (const args of [{}, { plannerRoles: null, sourceCandidates: null }, { plannerRoles: {} }]) {
-    assert.equal(collectCommitmentEligibleIds(args).size, 0);
+    assert.equal(collectCommitmentUpstreamEligibleIds(args).size, 0);
   }
 });
 
@@ -179,7 +179,7 @@ test("a candidate below the ranking cut is eligible, because a pin would rescue 
   // and then honoured the moment it was pinned. The per-role ranking cut is
   // pin-aware, so reading only the current request's sets answers "no" right up
   // until the user proves it wrong — eligible because pinned, which is circular.
-  const ids = collectCommitmentEligibleIds({
+  const ids = collectCommitmentUpstreamEligibleIds({
     plannerRoles: {
       roles: [{ role: "food_anchor", candidates: [{ candidate_id: "above-cut", planner_usable: true }] }],
       // A SIBLING of roles, not a field on one: the inspect sidecar emits role
@@ -196,7 +196,7 @@ test("eligibility does not change just because the request carried the pin", () 
   // The same identity must get the same answer whether or not this particular
   // request pinned it. Anything else makes the field describe the request
   // instead of the candidate.
-  const unpinned = collectCommitmentEligibleIds({
+  const unpinned = collectCommitmentUpstreamEligibleIds({
     plannerRoles: {
       roles: [{ role: "food_anchor", candidates: [{ candidate_id: "a", planner_usable: true }] }],
       commitment_rescuable_ids: ["b"],
@@ -205,7 +205,7 @@ test("eligibility does not change just because the request carried the pin", () 
   });
   // With the pin, the rescue has already moved "b" into the role's candidates
   // and the composer's supply — the same answer must come back.
-  const pinned = collectCommitmentEligibleIds({
+  const pinned = collectCommitmentUpstreamEligibleIds({
     plannerRoles: {
       roles: [{ role: "food_anchor", candidates: [{ candidate_id: "a", planner_usable: true }, { candidate_id: "b", planner_usable: true }] }],
       commitment_rescuable_ids: [],
@@ -216,15 +216,11 @@ test("eligibility does not change just because the request carried the pin", () 
 });
 
 test("a rescued candidate the hoist would still reject is NOT eligible", () => {
-  // The ranked tail is where the rejected statuses live, so "a pin would
-  // re-admit it" is not the same as "the hoist would then accept it". Declaring
-  // the first without the second re-creates the round-trip refusal this whole
-  // slice exists to remove — observed against real data: fallback-status
-  // candidates were declared eligible and refused when pinned.
-  //
-  // The selector answers the second question; this asserts the consumer relies
-  // on that answer rather than on rank alone.
-  const ids = collectCommitmentEligibleIds({
+  // The consumer trusts the selector's answer rather than rank. Whether the
+  // selector answers correctly is asserted behaviourally in
+  // tests/role-selector-commitment-rescue.test.js, which drives the real
+  // selector rather than a hand-built list.
+  const ids = collectCommitmentUpstreamEligibleIds({
     plannerRoles: {
       roles: [{ role: "food_anchor", candidates: [{ candidate_id: "kept", planner_usable: true }] }],
       commitment_rescuable_ids: [],

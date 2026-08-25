@@ -1397,13 +1397,21 @@ test(
 );
 
 test(
-  "every eligibility verdict matches what pinning that identity actually does",
+  "every eligibility verdict matches whether the routing path admits that identity",
   withServer(walkBudgetLoader(), async (server) => {
     // The property that matters in BOTH directions, and the one the first
-    // implementation failed: a candidate declared eligible must be routable,
-    // and one declared ineligible must not be. Review showed the suite could
-    // not catch over-broad eligibility — declaring everything eligible left it
-    // green — so this asks the server to make good on each verdict.
+    // implementation failed: a candidate declared eligible must be admitted by
+    // the routing path, and one declared ineligible must not be. Review showed
+    // the suite could not catch over-broad eligibility — declaring everything
+    // eligible left it green — so this asks the server to make good on each
+    // verdict.
+    //
+    // ADMISSION, not affordability. A declared-eligible pin can still be
+    // refused afterwards by the walking budget once the finished day is
+    // measured; that is a different stage with its own honest reason, and no
+    // candidate list can precompute it without a full re-finalisation. This
+    // fixture keeps every candidate inside the walk so the two are not
+    // conflated.
     const plain = await requestJson(server, {
       path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
       method: "POST",
@@ -1555,19 +1563,24 @@ test(
     assert.ok(demoted.length > 0, "precondition: the demoted chain candidates are on offer as ideas");
 
     for (const candidate of demoted) {
+      // Say what is expected rather than only guarding against the wrong
+      // answer: these are demoted to fallback, so the honest verdict is false.
+      assert.equal(
+        candidate.commitment_eligible,
+        false,
+        `${candidate.id} is chain-demoted and must not read as committable`,
+      );
       const pinned = await requestJson(server, {
         path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
         method: "POST",
         body: { ...body, pinned_candidate_ids: [candidate.id] },
       });
       const verdict = pinned.body.agnostic_route_output_experiment.pinned_candidates;
-      if (candidate.commitment_eligible) {
-        assert.equal(
-          verdict.honored_count,
-          1,
-          `${candidate.id} was declared committable and then refused: ${JSON.stringify(verdict.unhonored)}`,
-        );
-      }
+      assert.equal(
+        verdict.honored_count,
+        0,
+        `${candidate.id} was declared uncommittable and then honoured`,
+      );
     }
   }),
 );
