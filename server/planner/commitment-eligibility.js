@@ -22,11 +22,21 @@ const { plannerUsableOptionsForRole } = require("./candidate-combination");
  * deriving the field from route membership would make every unselected place
  * look unroutable.
  *
- * The set is drawn from the same two places a pin is resolved against: the
- * candidates actually offered to the composer, and the gated role reservoir a
- * pin can hoist from. Reusing plannerUsableOptionsForRole rather than
+ * The set is drawn from the three places a pin is resolved against: the
+ * candidates actually offered to the composer, the gated role reservoir a pin
+ * can hoist from, and the ranked entries just below each role's cut that the
+ * pin rescue would re-admit. Reusing plannerUsableOptionsForRole rather than
  * re-deciding admission here is what keeps "eligible" and "pinnable" the same
  * question — if the hoist's rule changes, this changes with it.
+ *
+ * That third source is not an optimisation, it is the difference between an
+ * honest answer and a circular one. The per-role ranking cut is pin-aware, so a
+ * candidate below the cut is absent from the reservoir until it is pinned — and
+ * then present. Reading only the current request's sets therefore says "no"
+ * right up until the moment the user proves it wrong, which was observed on
+ * real data: a nearby place declared ineligible was honoured as soon as it was
+ * pinned. Eligibility has to be the counterfactual — would a pin naming this
+ * identity be accepted — not a description of the set as it happens to stand.
  *
  * Exclusion needs no special case: dismissing a candidate wraps the loader, so
  * an excluded place never reaches the reservoir and is ineligible by
@@ -51,6 +61,12 @@ function collectCommitmentEligibleIds({ plannerRoles = null, sourceCandidates = 
   for (const roleEntry of Array.isArray(plannerRoles?.roles) ? plannerRoles.roles : []) {
     for (const option of plannerUsableOptionsForRole(roleEntry)) {
       const id = option?.candidate_id;
+      if (id != null && id !== "") eligible.add(String(id));
+    }
+    // Below the ranking cut, but a pin would bring it back.
+    for (const id of Array.isArray(roleEntry?.pin_rescuable_candidate_ids)
+      ? roleEntry.pin_rescuable_candidate_ids
+      : []) {
       if (id != null && id !== "") eligible.add(String(id));
     }
   }

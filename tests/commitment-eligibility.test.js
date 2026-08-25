@@ -171,3 +171,44 @@ test("an absent or malformed set authorises nothing either", () => {
     );
   }
 });
+
+test("a candidate below the ranking cut is eligible, because a pin would rescue it", () => {
+  // Observed on real data before this: a nearby place was declared ineligible
+  // and then honoured the moment it was pinned. The per-role ranking cut is
+  // pin-aware, so reading only the current request's sets answers "no" right up
+  // until the user proves it wrong — eligible because pinned, which is circular.
+  const ids = collectCommitmentEligibleIds({
+    plannerRoles: {
+      roles: [
+        {
+          role: "food_anchor",
+          candidates: [{ candidate_id: "above-cut", planner_usable: true }],
+          pin_rescuable_candidate_ids: ["below-cut"],
+        },
+      ],
+    },
+    sourceCandidates: [],
+  });
+  assert.deepEqual([...ids].sort(), ["above-cut", "below-cut"]);
+});
+
+test("eligibility does not change just because the request carried the pin", () => {
+  // The same identity must get the same answer whether or not this particular
+  // request pinned it. Anything else makes the field describe the request
+  // instead of the candidate.
+  const unpinned = collectCommitmentEligibleIds({
+    plannerRoles: {
+      roles: [{ role: "food_anchor", candidates: [{ candidate_id: "a", planner_usable: true }], pin_rescuable_candidate_ids: ["b"] }],
+    },
+    sourceCandidates: [{ id: "a" }],
+  });
+  // With the pin, the rescue has already moved "b" into the role's candidates
+  // and the composer's supply — the same answer must come back.
+  const pinned = collectCommitmentEligibleIds({
+    plannerRoles: {
+      roles: [{ role: "food_anchor", candidates: [{ candidate_id: "a", planner_usable: true }, { candidate_id: "b", planner_usable: true }], pin_rescuable_candidate_ids: [] }],
+    },
+    sourceCandidates: [{ id: "a" }, { id: "b" }],
+  });
+  assert.deepEqual([...unpinned].sort(), [...pinned].sort());
+});
