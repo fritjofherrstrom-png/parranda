@@ -142,7 +142,11 @@ function mapRecordToCandidate(cityConfig, record, observedAt, index) {
   base.candidate_origin = CANDIDATE_ORIGIN;
   base.provider_id = EXTERNAL_OPEN_PROVIDER_META.provider_id;
   base.source_family = primaryFamily;
-  base.source_policy = EXTERNAL_OPEN_PROVIDER_META.source_policy;
+  base.source_policy = firstString(record.source_policy, EXTERNAL_OPEN_PROVIDER_META.source_policy);
+  // Source review is deliberately distinct from place-level human verification.
+  // The shared gates only honor this bit for an official source under the exact
+  // bounded reviewed-profile policy; arbitrary external rows cannot promote it.
+  base.operator_reviewed_source = record.operator_reviewed_source === true;
   // Chain signal (#272): carried verbatim from the loader record (OSM brand tag,
   // never name matching). Composition may prefer non-chain options; chains stay
   // valid sparse fallbacks.

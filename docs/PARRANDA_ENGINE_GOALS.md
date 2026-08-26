@@ -191,6 +191,17 @@ event sources remain review/probation gated, and the next source work should
 improve independent local/editorial/official corroboration and entity resolution
 instead of adding more synthesis diagnostics.
 
+The reviewed-place bridge now lets a fresh, geo-bounded Source Catalog profile
+feed an approved official/editorial schema.org place list into that same
+reservoir. It accepts only a closed type vocabulary plus exact source-owned
+coordinates and stable identities; prose, ratings, images, generic businesses,
+unknown adapters and off-origin redirects never enter. Official reviewed-source
+rows can route without pretending the individual place was human-verified;
+editorial-only rows remain display/corroboration evidence. This is generic for
+any approved geography. The next gating slice is proactive discovery and
+qualification of place-list candidates, followed by additional structured
+adapters and conservative cross-provider aliases—not more route synthesis.
+
 ## Immediate roadmap
 
 ### #244 Candidate Reservoir role selector v0

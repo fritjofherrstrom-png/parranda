@@ -13,6 +13,7 @@ const {
 } = require("../server/place-candidates/external-open-provider");
 const { matchCandidateToIntent } = require("../server/candidates/intent-vocabulary");
 const { scoreCandidateFit } = require("../server/candidates/fit-scorer");
+const { resolveCandidateIdentity } = require("../server/candidates/entity-resolution");
 
 const rome = require("../server/cities/rome.js");
 const DATE = "2026-06-03";
@@ -156,6 +157,56 @@ test("trusted external records preserve bounded opening-hours facts without prom
   assert.equal(candidate.opening_hours, "Tu-Su 10:00-18:00");
   assert.equal(candidate.trust.confidence, "needs_review");
   assert.equal(candidate.city_pack_owned, false);
+});
+
+test("reviewed place records preserve the server-only source policy without claiming human verification", () => {
+  const [candidate] = externalCandidates([{
+    id: "reviewed-1",
+    name: "Official Museum",
+    type: "museum",
+    lat: 41.9,
+    lng: 12.46,
+    operator_reviewed_source: true,
+    source_policy: "reviewed_profile_bounded_refresh",
+    sources: [{ provider: "official-guide", family: "official", tier: "official" }],
+  }]);
+  assert.equal(candidate.operator_reviewed_source, true);
+  assert.equal(candidate.source_policy, "reviewed_profile_bounded_refresh");
+  assert.equal(candidate.source_family, "official");
+  assert.equal(candidate.provider_id, EXTERNAL_OPEN_PROVIDER_META.provider_id);
+  assert.equal(candidate.trust.human_verified, false);
+  const eligibility = evaluateCandidateEligibility(candidate, { now: DATE });
+  assert.equal(eligibility.gates.may_influence_routes, true);
+});
+
+test("reviewed editorial evidence routes only after conservative merge with an independent map identity", () => {
+  const candidates = externalCandidates([
+    {
+      id: "reviewed-editorial-museum",
+      name: "Distinctive Local Museum",
+      type: "museum",
+      lat: 41.9,
+      lng: 12.46,
+      operator_reviewed_source: true,
+      source_policy: "reviewed_profile_bounded_refresh",
+      sources: [{ provider: "editorial-guide", family: "editorial", tier: "editorial" }],
+    },
+    {
+      id: "osm-local-museum",
+      name: "Distinctive Local Museum",
+      type: "museum",
+      lat: 41.90001,
+      lng: 12.46001,
+      sources: [{ provider: "osm", family: "map", tier: "inferred" }],
+    },
+  ]);
+  const editorialOnly = evaluateCandidateEligibility(candidates[0], { now: DATE });
+  assert.equal(editorialOnly.gates.may_influence_routes, false);
+
+  const [merged] = resolveCandidateIdentity(candidates, { now: DATE }).candidates;
+  const eligibility = evaluateCandidateEligibility(merged, { now: DATE });
+  assert.equal(eligibility.derived.provenance_diversity, 2);
+  assert.equal(eligibility.gates.may_influence_routes, true);
 });
 
 // --- gates -----------------------------------------------------------------

@@ -2,6 +2,7 @@
 
 const { createHash, randomUUID } = require("node:crypto");
 const { eventFeedsFromReviewedSourceProfiles } = require("../place-candidates/reviewed-event-source-profile");
+const { placeFeedsFromReviewedSourceProfiles } = require("../place-candidates/reviewed-place-source-profile");
 const {
   deriveLocalAnchorSpatialScope,
   sanitizeTrustedSpatialScope,
@@ -330,6 +331,23 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
     }
   }
 
+  async function listApprovedPlaceFeedsForAnchor({ anchor, now: requestedNow = now() } = {}) {
+    const lat = finiteCoordinate(anchor?.lat, -90, 90);
+    const lng = finiteCoordinate(anchor?.lng, -180, 180);
+    const at = normalizeDate(requestedNow);
+    if (lat == null || lng == null || !at) return [];
+
+    try {
+      const result = await query(ACTIVE_PROFILES_FOR_ANCHOR_SQL, [lat, lng, at.toISOString()]);
+      const profiles = (Array.isArray(result?.rows) ? result.rows : [])
+        .map((row) => parseProfile(row?.profile))
+        .filter(Boolean);
+      return placeFeedsFromReviewedSourceProfiles(profiles, { now: at });
+    } catch (_error) {
+      return [];
+    }
+  }
+
   async function listQualifiedEventFeedsForAnchor({ anchor, now: requestedNow = now() } = {}) {
     const lat = finiteCoordinate(anchor?.lat, -90, 90);
     const lng = finiteCoordinate(anchor?.lng, -180, 180);
@@ -484,6 +502,7 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
     recordDiscovery,
     recordApprovedProfile,
     listApprovedEventFeedsForAnchor,
+    listApprovedPlaceFeedsForAnchor,
     listQualifiedEventFeedsForAnchor,
     loadSourceQualification,
     getDiscoveryHealthForAnchor,
@@ -553,10 +572,12 @@ function normalizeCatalogProfile(profile, { forcedStatus, now } = {}) {
       reviewed_at: null,
       expires_at: null,
       feeds: [],
+      place_sources: [],
     };
   } else if (forcedStatus === "approved") {
-    const feeds = eventFeedsFromReviewedSourceProfiles([cloned], { now: at });
-    if (!feeds.length) return null;
+    const eventFeeds = eventFeedsFromReviewedSourceProfiles([cloned], { now: at });
+    const placeFeeds = placeFeedsFromReviewedSourceProfiles([cloned], { now: at });
+    if (!eventFeeds.length && !placeFeeds.length) return null;
   } else {
     return null;
   }

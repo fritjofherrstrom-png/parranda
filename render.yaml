@@ -50,6 +50,12 @@ services:
       # request and rescue cold locations when public Overpass is unavailable.
       - key: PARRANDA_OVERTURE_SOURCE
         value: enabled
+      # Operator-reviewed local official/editorial place lists may supplement
+      # the same candidate reservoir through bounded schema.org JSON-LD. With
+      # no reviewed profile configured this is a no-op; discovery alone never
+      # activates an endpoint.
+      - key: PARRANDA_REVIEWED_PLACE_SOURCES
+        value: enabled
       # TEMPORARY field-deploy setting, NOT the agnostic model. Wikidata label
       # language priority (local first) so names match local OSM names for
       # entity-resolution; `el,en` only because the current field test is Athens.

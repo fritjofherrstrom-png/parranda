@@ -115,6 +115,58 @@ test("coordinate agnostic path WITH a trusted loader produces an eligible source
   });
 });
 
+test("a server-injected reviewed official place source reaches the same candidate and route contract", async () => {
+  let sourceCalled = false;
+  const reviewedPlaceSource = {
+    async load({ lat, lng }) {
+      sourceCalled = true;
+      return [{
+        id: "reviewed-place:official-guide:museum",
+        name: "Official Local Museum",
+        type: "museum",
+        lat,
+        lng,
+        operator_reviewed_source: true,
+        source_policy: "reviewed_profile_bounded_refresh",
+        sources: [{
+          provider: "official-guide",
+          family: "official",
+          tier: "official",
+          url: "https://guide.example/places/museum",
+        }],
+      }];
+    },
+  };
+  await withServer({ openDataLoader: null, reviewedPlaceSource }, async (server) => {
+    const res = await postJson(server, "/api/blitz?candidate_mode=1&include_external_candidates=1", {
+      lat: 55.5,
+      lng: 13.5,
+      preferences: ["museums"],
+    });
+    assert.equal(sourceCalled, true);
+    assert.equal(res.body.agnostic_context.open_data_loader, "loaded:1");
+    assert.equal(res.body.best_move.candidate_id, "reviewed-place:official-guide:museum");
+    assert.equal(res.body.best_move.provenance.human_verified, false);
+    assert.equal(res.body.best_move.provenance.source_family, "official");
+  });
+});
+
+test("a public payload cannot inject reviewed place records or source endpoints", async () => {
+  await withServer({ openDataLoader: null, reviewedPlaceSource: null }, async (server) => {
+    const res = await postJson(server, "/api/blitz?candidate_mode=1&include_external_candidates=1", {
+      lat: 55.5,
+      lng: 13.5,
+      preferences: ["museums"],
+      reviewedPlaceSource: {
+        endpoint: "https://attacker.example/places",
+        records: [{ id: "payload-reviewed-place", name: "Injected", lat: 55.5, lng: 13.5 }],
+      },
+    });
+    assert.equal(res.body.best_move, null);
+    assert.equal(res.body.agnostic_context.open_data_loader, "no_loader_configured");
+  });
+});
+
 test("loader requires include_external_candidates — agnostic alone does not fetch", async () => {
   let loaderCalled = false;
   const loader = async (args) => {

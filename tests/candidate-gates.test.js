@@ -70,6 +70,48 @@ test("cross-family corroboration unlocks route influence without human verificat
   assert.equal(gates.may_create_place_candidate, true);
 });
 
+test("an official source under the exact reviewed-profile policy can route without pretending place verification", () => {
+  const { gates } = gatesFor({
+    target: {
+      label: "Official local museum",
+      lat: 55.5,
+      lng: 13.5,
+      human_verified: false,
+      operator_reviewed_source: true,
+      source_family: "official",
+      source_tier: "official",
+      source_policy: "reviewed_profile_bounded_refresh",
+    },
+    evidence: [existence("official", "official")],
+  });
+  assert.equal(gates.may_influence_routes, true);
+  assert.equal(gates.may_create_place_candidate, true);
+  assert.ok(gates.reasons.includes("operator_reviewed_official_source"));
+  assert.equal(gates.reasons.includes("human_verified"), false);
+});
+
+test("editorial, client-shaped or wrong-policy review flags cannot self-promote", () => {
+  for (const target of [
+    { source_family: "editorial", source_tier: "editorial", source_policy: "reviewed_profile_bounded_refresh" },
+    { source_family: "official", source_tier: "official", source_policy: "open_data_attribution_required" },
+    { source_family: "official", source_tier: "editorial", source_policy: "reviewed_profile_bounded_refresh" },
+  ]) {
+    const { gates } = gatesFor({
+      target: {
+        label: "Untrusted promotion",
+        lat: 55.5,
+        lng: 13.5,
+        human_verified: false,
+        operator_reviewed_source: true,
+        ...target,
+      },
+      evidence: [existence(target.source_family, target.source_tier)],
+    });
+    assert.equal(gates.may_influence_routes, false);
+    assert.equal(gates.may_create_place_candidate, false);
+  }
+});
+
 test("source-url-only event (no coordinates / no known place) is not a place target", () => {
   // Title + a source URL, but nothing locatable. Reducer may even believe it
   // exists, but with no reliable place target it cannot become a place/route.
