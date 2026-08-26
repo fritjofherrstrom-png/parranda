@@ -7,18 +7,18 @@ import {
   landingProofCards,
 } from '../src/landing-contract.mjs';
 
-test('Astro landing contract exposes production city choices without changing route ownership', () => {
+test('Astro landing contract points city choices at the modern planner', () => {
   assert.deepEqual(
     featuredLandingCities.map((city) => city.key),
     ['barcelona', 'rome', 'athens'],
   );
 
-  assert.equal(buildPlannerHref('barcelona'), '/barcelona?planner=open');
-  assert.equal(buildPlannerHref('rome', 'en'), '/rome?planner=open');
-  assert.equal(buildPlannerHref('barcelona', 'sv'), '/barcelona?planner=open&lang=sv');
-  assert.equal(buildPlannerHref('athens', 'sv'), '/athens?planner=open&lang=sv');
+  assert.equal(buildPlannerHref('barcelona'), '/anywhere?city=barcelona&place=Barcelona&planner=open&lang=en');
+  assert.equal(buildPlannerHref('rome', 'en'), '/anywhere?city=rome&place=Rome&planner=open&lang=en');
+  assert.equal(buildPlannerHref('barcelona', 'sv'), '/anywhere?city=barcelona&place=Barcelona&planner=open&lang=sv');
+  assert.equal(buildPlannerHref('athens', 'sv'), '/anywhere?city=athens&place=Athens&planner=open&lang=sv');
 
   assert.equal(landingCityAliases.roma, 'rome');
   assert.equal(landingCityAliases.barcelone, 'barcelona');
-  assert.equal(landingProofCards.some((card) => /No production route takeover/i.test(card.body)), true);
+  assert.equal(landingProofCards.some((card) => /modern planner/i.test(card.body)), true);
 });

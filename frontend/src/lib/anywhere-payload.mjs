@@ -2,8 +2,8 @@
  * Pure payload builder for the any-city planner — mirrors the production
  * anywhere-mode request (script.js planRoutesAnywhere) so the new frontend and
  * the current app speak the SAME API contract:
- *   - freeform `place` only, NEVER a recognized `city` key;
- *   - the three agnostic flags engage the engine path.
+ *   - freeform `place` + agnostic flags for any-place intake;
+ *   - exact `city` only for a server-registered citypack using the same modern UI.
  * Kept as a pure .mjs module so node --test can assert the contract without a DOM.
  */
 
@@ -52,6 +52,7 @@ export const WALK_PRESETS = [
 ];
 
 export function buildAnywherePayload({
+  city,
   place,
   coords,
   dates,
@@ -65,8 +66,10 @@ export function buildAnywherePayload({
   //  - coords ("near me now"): top-level lat/lng — explicit coords WIN in the
   //    agnostic intake (parseBlitzCoordinates), and no place text is sent;
   //  - place (typed city): freeform text only, never a recognized city key.
-  const anchor =
-    coords && Number.isFinite(coords.lat) && Number.isFinite(coords.lng)
+  const cityKey = typeof city === "string" ? city.trim() : "";
+  const anchor = cityKey
+    ? { city: cityKey }
+    : coords && Number.isFinite(coords.lat) && Number.isFinite(coords.lng)
       ? { lat: coords.lat, lng: coords.lng }
       : { place, place_query: place };
   return {
@@ -80,9 +83,13 @@ export function buildAnywherePayload({
     preferences,
     distance_mode: "soft_target",
     budget_tier: "standard",
-    experimental_agnostic_route_output: 1,
-    include_external_candidates: 1,
-    agnostic_engine_compose: 1,
+    ...(!cityKey
+      ? {
+          experimental_agnostic_route_output: 1,
+          include_external_candidates: 1,
+          agnostic_engine_compose: 1,
+        }
+      : {}),
     // "Not this" — the commitment ledger, v1. Subtractive only: it can remove a
     // place from consideration, never add or vouch for one. Omitted entirely
     // when empty so the default request is unchanged.

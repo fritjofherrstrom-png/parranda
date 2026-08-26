@@ -7,8 +7,10 @@
  * (honest: events / "today" reflect when THEY open it, not when it was shared).
  */
 
-export function encodeShareParams({ place, preferences = [], dayOffset = 0, walkKey = "balanced", lang = "en" } = {}) {
+export function encodeShareParams({ city, place, preferences = [], dayOffset = 0, walkKey = "balanced", lang = "en" } = {}) {
   const params = new URLSearchParams();
+  const cityKey = String(city || "").trim().toLowerCase();
+  if (/^[a-z0-9-]{1,64}$/.test(cityKey)) params.set("city", cityKey);
   const p = String(place || "").trim();
   if (p) params.set("place", p);
   params.set("planner", "open");
@@ -29,6 +31,8 @@ export function buildShareUrl(origin, inputs) {
 // params fall back to sensible defaults; only whitelisted preference keys survive.
 export function decodeShareParams(search, allowedPrefKeys = null) {
   const params = typeof search === "string" ? new URLSearchParams(search) : search;
+  const rawCity = (params.get("city") || "").trim().toLowerCase();
+  const city = /^[a-z0-9-]{1,64}$/.test(rawCity) ? rawCity : null;
   const place = (params.get("place") || "").trim();
   const rawPrefs = (params.get("prefs") || "").split(",").map((s) => s.trim()).filter(Boolean);
   const preferences = allowedPrefKeys ? rawPrefs.filter((k) => allowedPrefKeys.includes(k)) : rawPrefs;
@@ -37,5 +41,5 @@ export function decodeShareParams(search, allowedPrefKeys = null) {
   const walkKey = kmRaw === "short" || kmRaw === "long" ? kmRaw : "balanced";
   const langRaw = params.get("lang");
   const lang = langRaw === "sv" ? "sv" : langRaw === "en" ? "en" : null;
-  return { place, preferences, dayOffset, walkKey, lang };
+  return { city, place, preferences, dayOffset, walkKey, lang };
 }

@@ -1,12 +1,15 @@
 /**
  * Landing search routing — the same product contract as the current landing:
- * registered city → curated shell (URL contract unchanged); anything else →
- * the any-city planner; empty → nothing. Pure + deterministic.
+ * registered city → modern planner with citypack identity; anything else →
+ * freeform any-city intake; empty → nothing. Pure + deterministic.
  */
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { inlineCompletion, routeForInput } from "../src/lib/landing-routing.mjs";
+import { readFileSync } from "node:fs";
+import { curatedCityHref, inlineCompletion, routeForInput } from "../src/lib/landing-routing.mjs";
+
+const landingSource = readFileSync(new URL("../src/components/LandingHero.tsx", import.meta.url), "utf8");
 
 const REGISTRY = {
   barcelona: { key: "barcelona", label: "Barcelona", status: "beta" },
@@ -15,13 +18,19 @@ const REGISTRY = {
   rom: { key: "rome", label: "Rome", status: "public" },
 };
 
-test("a registered city or exact alias routes to its curated shell — URL contract unchanged", () => {
+test("a registered city or exact alias keeps citypack curation on the modern planner", () => {
   const exact = routeForInput(REGISTRY, "Barcelona", "sv");
   assert.equal(exact.type, "city");
-  assert.equal(exact.href, "/barcelona?planner=open&lang=sv");
+  assert.equal(exact.href, "/anywhere?city=barcelona&place=Barcelona&planner=open&lang=sv");
 
   const alias = routeForInput(REGISTRY, "bcn", "en");
-  assert.equal(alias.href.split("?")[0], "/barcelona");
+  assert.equal(alias.href, "/anywhere?city=barcelona&place=Barcelona&planner=open&lang=en");
+  assert.equal(curatedCityHref(REGISTRY.rome, "en"), "/anywhere?city=rome&place=Rome&planner=open&lang=en");
+});
+
+test("the frontpage Extra curated chips cannot link back into a legacy city shell", () => {
+  assert.match(landingSource, /href=\{curatedCityHref\(city, lang\)/);
+  assert.doesNotMatch(landingSource, /href=\{`\/\$\{city\.key\}/);
 });
 
 test("loose and short prefixes stay freeform until an inline completion is accepted", () => {

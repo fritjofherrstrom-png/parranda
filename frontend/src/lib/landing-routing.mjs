@@ -1,8 +1,8 @@
 /**
  * Landing search routing — pure + testable. Same product contract as the
  * current landing (landing.js):
- *   - a REGISTERED city (exact name or alias) → its curated city
- *     shell `/:city?planner=open` (unchanged URL contract);
+ *   - a REGISTERED city (exact name or alias) → the modern planner carrying
+ *     the exact server-owned citypack identity;
  *   - any other non-empty text → the any-city planner `/anywhere?place=…`
  *     (freeform place, never a recognized city key);
  *   - empty input → nothing.
@@ -49,6 +49,16 @@ export function inlineCompletion(registry, typed) {
   return raw + label.slice(raw.length);
 }
 
+export function curatedCityHref(entry, lang = "en") {
+  if (!entry || !entry.key) return null;
+  const params = new URLSearchParams();
+  params.set("city", String(entry.key));
+  params.set("place", String(entry.label || entry.key));
+  params.set("planner", "open");
+  params.set("lang", lang === "sv" ? "sv" : "en");
+  return `/anywhere?${params.toString()}`;
+}
+
 /**
  * The submit decision: where does this input take the user?
  * @returns {{ type: "city"|"anywhere", href: string } | null}
@@ -62,10 +72,7 @@ export function routeForInput(registry, raw, lang = "en") {
   // value, but otherwise the user's text belongs to the any-city planner.
   const entry = resolveEntry(registry, value);
   if (entry && entry.key) {
-    const params = new URLSearchParams();
-    params.set("planner", "open");
-    params.set("lang", uiLang);
-    return { type: "city", href: `/${entry.key}?${params.toString()}` };
+    return { type: "city", href: curatedCityHref(entry, uiLang) };
   }
   const params = new URLSearchParams();
   params.set("place", value);

@@ -52,7 +52,7 @@ test("a silent upgrade carries the ledger, so dismissed places cannot return", (
 test("dismissal is offered only where a real id exists", () => {
   // An index fallback would dismiss whatever later happens to sit in that slot.
   assert.match(component, /const hasRealId = realId\.length > 0;/);
-  assert.match(component, /\{hasRealId && \(/);
+  assert.match(component, /\{!cityKey && hasRealId && \(/);
 });
 
 test("the dismissal is reversible", () => {
@@ -231,14 +231,14 @@ test("a commitment can be released without starting over", () => {
 test("a kept stop is not also offered as dismissable", () => {
   // The two verbs are mutually exclusive, so the panel must not present the
   // contradiction as if it were available.
-  assert.match(component, /\{hasRealId && commitments\[stopIdentity\]\?\.kind !== "pin" && \(/);
+  assert.match(component, /\{!cityKey && hasRealId && commitments\[stopIdentity\]\?\.kind !== "pin" && \(/);
 });
 
 test("Add is offered only against a real candidate id", () => {
   // Pins resolve server-side against the candidates the server itself loaded;
   // an index fallback would pin whatever later happens to sit in that slot.
   assert.match(component, /const candidateId = String\(stop\?\.id \?\? stop\?\.place_id \?\? stop\?\.candidate_id \?\? ""\)\.trim\(\);/);
-  assert.match(component, /\{candidateId && \(/);
+  assert.match(component, /\{!cityKey && candidateId && \(/);
 });
 
 // --------------------------------------------------------------------------
