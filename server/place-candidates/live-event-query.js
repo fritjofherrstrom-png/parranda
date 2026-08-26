@@ -1,6 +1,7 @@
 "use strict";
 
 const { haversineKm } = require("../candidates/area-intelligence");
+const { resolveAgnosticIntake } = require("../planner/agnostic-place-intake");
 const {
   normalizeSourceDiscoveryHealth,
 } = require("../pulse-sources/source-discovery-health");
@@ -13,6 +14,12 @@ const NEAR_ME_RADIUS_M = 2000;
 const ROUTE_CORRIDOR_RADIUS_M = 1200;
 const MAX_ROUTE_POINTS = 24;
 const MAX_COLLECTION_RADIUS_M = 10000;
+// A small, resolver-attested settlement may fall back to explicitly nearby
+// events when its local 3 km bucket is empty. This never applies to near_me,
+// route corridors, untrusted coordinates or broad city/region bounds.
+const NEARBY_SETTLEMENT_RADIUS_M = 25000;
+const MAX_PLACE_QUERY_LENGTH = 200;
+const MAX_ATTESTED_ANCHOR_DRIFT_KM = 1;
 const MAX_PREFERENCES = 12;
 const MAX_PREFERENCE_LENGTH = 64;
 const SOURCE_HEALTH_STATUSES = new Set([
@@ -153,6 +160,10 @@ function normalizeLiveEventQuery(payload = {}) {
       radius_m: radiusM,
     },
   };
+  if (scopeKind === "around_place" && typeof payload.place_query === "string") {
+    const placeQuery = payload.place_query.trim().replace(/\s+/g, " ");
+    if (placeQuery && placeQuery.length <= MAX_PLACE_QUERY_LENGTH) query.place_query = placeQuery;
+  }
   return { value: query, public: publicQueryShape(query) };
 }
 
@@ -195,7 +206,11 @@ function eventMatchesLiveScope(event, scope) {
     event?.source_scope_verified === true &&
     event?.geographic_relevance === "source_scope"
   ) {
-    return scope?.kind === "around_place";
+    // Source-bounds are sufficient for the ordinary local around-place view,
+    // but not for a 25 km settlement fallback. A regional result must have a
+    // point so Parranda can prove it is inside the fallback and state exactly
+    // how far away it is.
+    return scope?.kind === "around_place" && !scope?.trusted_nearby_fallback_m;
   }
   const distanceKm = eventDistanceKm(event, scope);
   return Number.isFinite(distanceKm) && distanceKm * 1000 <= Number(scope?.radius_m || 0);
@@ -203,7 +218,21 @@ function eventMatchesLiveScope(event, scope) {
 
 function filterEventsForLiveScope(events, scope) {
   if (!scope) return Array.isArray(events) ? events : [];
-  return (Array.isArray(events) ? events : []).filter((event) => eventMatchesLiveScope(event, scope));
+  const input = Array.isArray(events) ? events : [];
+  const local = input.filter((event) => eventMatchesLiveScope(event, scope));
+  const fallbackRadiusM = Number(scope?.trusted_nearby_fallback_m || 0);
+  if (local.length > 0 || scope?.kind !== "around_place" || fallbackRadiusM <= Number(scope.radius_m || 0)) {
+    return local;
+  }
+  return input.flatMap((event) => {
+    const distanceKm = eventDistanceKm(event, scope);
+    if (!Number.isFinite(distanceKm) || distanceKm * 1000 > fallbackRadiusM) return [];
+    return [{
+      ...event,
+      live_proximity: "nearby",
+      anchor_distance_km: Number(distanceKm.toFixed(2)),
+    }];
+  });
 }
 
 function nonNegativeInteger(value) {
@@ -323,16 +352,56 @@ function unavailableLiveEvents(reason, status = "unavailable") {
 }
 
 function liveEventQueryBody(normalized, liveEvents) {
+  const nearbyFallbackM = normalized.value?.scope?.trusted_nearby_fallback_m;
+  const query = {
+    ...normalized.public,
+    // Describe the server-owned collection scope, not whether this particular
+    // response happened to contain a nearby row. Pending and honest-empty
+    // responses still searched the regional fallback.
+    discovery_scope: nearbyFallbackM ? "regional_nearby" : "local",
+  };
+  if (nearbyFallbackM) {
+    query.nearby_fallback_radius_m = nearbyFallbackM;
+  }
   return {
     contract: LIVE_EVENT_QUERY_CONTRACT,
-    query: normalized.public,
+    query,
     route_mutation: false,
     day_anchor_mutation: false,
     live_events: liveEvents,
   };
 }
 
-async function executeLiveEventQuery({ payload, eventSupply, now } = {}) {
+async function attestSmallSettlementScope(query, placeResolver, placeLanguage) {
+  if (
+    query?.scope?.kind !== "around_place" ||
+    !query.place_query ||
+    typeof placeResolver !== "function"
+  ) return null;
+  const resolved = await resolveAgnosticIntake({
+    placeQuery: query.place_query,
+    placeResolver,
+    placeLanguage,
+  });
+  if (!resolved.anchor || !resolved.spatialScope) return null;
+  const driftKm = haversineKm(query.collection_anchor, resolved.anchor);
+  const scope = resolved.spatialScope;
+  if (
+    !Number.isFinite(driftKm) ||
+    driftKm > MAX_ATTESTED_ANCHOR_DRIFT_KM ||
+    scope.kind !== "settlement" ||
+    scope.collection_mode !== "local_anchor" ||
+    !Number.isFinite(scope.diagonal_km) ||
+    scope.diagonal_km > 15
+  ) return null;
+  return {
+    placeContext: resolved.placeContext,
+    spatialScope: scope,
+    placeLabel: resolved.intake?.resolved?.label || null,
+  };
+}
+
+async function executeLiveEventQuery({ payload, eventSupply, now, placeResolver = null, placeLanguage = null } = {}) {
   const normalized = normalizeLiveEventQuery(payload);
   if (normalized.error) {
     return { status: 400, body: { error: normalized.error } };
@@ -346,6 +415,14 @@ async function executeLiveEventQuery({ payload, eventSupply, now } = {}) {
 
   const query = normalized.value;
   try {
+    const attested = await attestSmallSettlementScope(query, placeResolver, placeLanguage).catch(() => null);
+    if (attested) {
+      query.collection_radius_m = NEARBY_SETTLEMENT_RADIUS_M;
+      query.scope = {
+        ...query.scope,
+        trusted_nearby_fallback_m: NEARBY_SETTLEMENT_RADIUS_M,
+      };
+    }
     const collected = await eventSupply({
       anchor: query.collection_anchor,
       sourceAnchors: query.source_anchors,
@@ -353,6 +430,11 @@ async function executeLiveEventQuery({ payload, eventSupply, now } = {}) {
       scope: query.scope,
       now,
       preferences: query.preferences,
+      ...(attested ? {
+        placeLabel: attested.placeLabel,
+        placeContext: attested.placeContext,
+        spatialScope: attested.spatialScope,
+      } : {}),
     });
     const liveEvents = shapeCollectedLiveEvents(collected, { scope: query.scope });
     return {
@@ -376,6 +458,7 @@ module.exports = {
   LIVE_EVENT_QUERY_CONTRACT,
   LIVE_EVENT_TIME_WINDOWS,
   MAX_COLLECTION_RADIUS_M,
+  NEARBY_SETTLEMENT_RADIUS_M,
   MAX_ROUTE_POINTS,
   NEAR_ME_RADIUS_M,
   ROUTE_CORRIDOR_RADIUS_M,

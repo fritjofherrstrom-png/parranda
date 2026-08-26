@@ -46,6 +46,7 @@ const SOURCE_FAMILIES = new Set([
   "catalog", // Parranda's own curated catalog
   "official", // official open data / APIs / city sources
   "map", // map/search public geodata (OSM and similar)
+  "open_directory", // global open place directories (for example Overture)
   "open_knowledge", // linked open knowledge graphs (Wikidata/Wikipedia) — NOT
   // community/social. Kept distinct so it adds provenance diversity without
   // inheriting community/local lens calibration. See source-calibration.js.

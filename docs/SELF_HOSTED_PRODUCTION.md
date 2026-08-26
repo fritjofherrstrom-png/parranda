@@ -16,6 +16,12 @@ internet -> Caddy -> Parranda web -> trusted upstream sources
                          +-> persistent source cache volume
 ```
 
+The web profile enables OSM/Overpass, Wikidata and Overture Places. Overture is
+read as a bounded GeoParquet window with DuckDB and warmed outside the route
+request; DuckDB's `httpfs` extension and accepted rows live under the same
+persistent cache volume. The source is a fallback/reservoir family, not a review
+or popularity service, and a directory-only place remains provisional.
+
 The stack includes an optional Postgres-backed geo Source Catalog and bounded
 source-scout worker. It persists discovered source profiles as review-needed
 records and lets the web runtime read only fresh, operator-approved profiles.

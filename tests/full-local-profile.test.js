@@ -38,6 +38,7 @@ test("dev:full enables every trusted any-place seam with a writable cache", () =
     assert.equal(env.PARRANDA_WIKIDATA_PLACE_RESOLVER, "enabled");
     assert.equal(env.PARRANDA_OPEN_DATA_LOADER, "enabled");
     assert.equal(env.PARRANDA_WIKIDATA_SOURCE, "enabled");
+    assert.equal(env.PARRANDA_OVERTURE_SOURCE, "enabled");
     assert.equal(env.PARRANDA_AGNOSTIC_ENGINE_COMPOSE, "enabled");
     assert.equal(env.PARRANDA_AGNOSTIC_EVENTS, "enabled");
     assert.equal(env.PARRANDA_QUALIFIED_SOURCE_RUNTIME, "enabled");

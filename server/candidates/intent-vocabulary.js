@@ -40,7 +40,7 @@ const CANONICAL_INTENTS = {
     route_role: "viewpoint_anchor",
     strong_types: ["viewpoint", "lookout", "overlook"],
     strong_tags: ["utsikt", "panorama", "vista"],
-    weak_types: ["rooftop-bar", "promenade", "park", "garden", "bridge", "castle"],
+    weak_types: ["rooftop-bar", "promenade", "park", "garden", "bridge", "castle", "historic-site", "monument", "lighthouse"],
     weak_tags: ["coast", "dolce-vita"],
     aliases: ["scenic", "viewpoint", "viewpoints", "view", "views", "utsikt", "panorama", "vista", "lookout", "overlook"],
   },

@@ -45,6 +45,11 @@ services:
       # single-family `map` ceiling. Cached like Overpass.
       - key: PARRANDA_WIKIDATA_SOURCE
         value: enabled
+      # Second broad global place family: Overture's monthly open Places
+      # GeoParquet. Bounded bbox reads warm into the same cache outside the route
+      # request and rescue cold locations when public Overpass is unavailable.
+      - key: PARRANDA_OVERTURE_SOURCE
+        value: enabled
       # TEMPORARY field-deploy setting, NOT the agnostic model. Wikidata label
       # language priority (local first) so names match local OSM names for
       # entity-resolution; `el,en` only because the current field test is Athens.

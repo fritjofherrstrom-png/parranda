@@ -31,6 +31,7 @@
 
 const { createSourceCache } = require("./source-cache");
 const { createWikidataSource } = require("./wikidata-source");
+const { createOvertureSource } = require("./overture-source");
 const { normalizeOpeningHours } = require("./opening-hours");
 const { normalizeUserIntents, matchCandidateToIntent } = require("../candidates/intent-vocabulary");
 const {
@@ -1050,9 +1051,7 @@ function resolveDefaultOpenDataLoader(env = process.env) {
   // sources know carries two families (`map` + `open_knowledge`) → real
   // cross-source consensus past the single-family ceiling the reducer enforces.
   const wikiFlag = String(env?.PARRANDA_WIKIDATA_SOURCE || "").toLowerCase();
-  if (wikiFlag !== "enabled" && wikiFlag !== "1" && wikiFlag !== "true") {
-    return osmLoader;
-  }
+  const wikiEnabled = wikiFlag === "enabled" || wikiFlag === "1" || wikiFlag === "true";
   // Label-language priority (local first) so Wikidata names match local OSM
   // names for entity-resolution. Configurable per deploy; multi-city per-request
   // locale resolution is a follow-up.
@@ -1060,40 +1059,121 @@ function resolveDefaultOpenDataLoader(env = process.env) {
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
-  const wikiRaw = createWikidataSource({ labelLanguages });
-  if (typeof wikiRaw !== "function") return osmLoader;
-  const wikiCache = createSourceCache({
-    namespace: "wikidata",
-    dir: env?.PARRANDA_CACHE_DIR || null,
-    ttlMs: Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : undefined,
-  });
   const storeNonEmpty = { shouldStore: (value) => Array.isArray(value) && value.length > 0 };
-  const wikiSource = ({ lat, lng } = {}) => {
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];
-    const key = `${lat.toFixed(3)},${lng.toFixed(3)}`;
-    const cached = wikiCache.peek(key);
-    if (cached) return cached;
-    // WDQS cold queries are slow (~10-20s) and must NOT block the route. On a
-    // cache miss, warm Wikidata out-of-band and serve OSM-only this time; the
-    // next request for this anchor includes the Wikidata family from cache.
-    // (Field testing revisits the same city, so cross-source consensus appears
-    // on the repeat visit — without ever making a route request wait on WDQS.)
-    // Only non-empty results are cached, so a transient SPARQL failure is not
-    // frozen for the TTL.
-    wikiCache.warm(key, () => wikiRaw({ lat, lng }), storeNonEmpty);
-    return [];
-  };
-  return composeOpenDataLoaders(osmLoader, wikiSource);
+  let wikiSource = null;
+  if (wikiEnabled) {
+    const wikiRaw = createWikidataSource({ labelLanguages });
+    if (typeof wikiRaw === "function") {
+      const wikiCache = createSourceCache({
+        namespace: "wikidata",
+        dir: env?.PARRANDA_CACHE_DIR || null,
+        ttlMs: Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : undefined,
+      });
+      wikiSource = ({ lat, lng } = {}) => {
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];
+        const key = `${lat.toFixed(3)},${lng.toFixed(3)}`;
+        const cached = wikiCache.peek(key);
+        if (cached) return cached;
+        // WDQS cold queries are slow (~10-20s) and must NOT block the route. On
+        // a cache miss, warm out-of-band and serve the other sources this time.
+        wikiCache.warm(key, () => wikiRaw({ lat, lng }), storeNonEmpty);
+        return [];
+      };
+    }
+  }
+
+  // Overture is a global structured place directory, independent from the OSM
+  // map family. Its cold GeoParquet read also stays out of the route request:
+  // first visit starts a bounded warm; a repeat receives the cached rows. This
+  // removes Overpass as a single point of failure without pretending Overture's
+  // internal contributing datasets are multiple independent Parranda sources.
+  const overtureFlag = String(env?.PARRANDA_OVERTURE_SOURCE || "").toLowerCase();
+  const overtureEnabled = overtureFlag === "enabled" || overtureFlag === "1" || overtureFlag === "true";
+  let overtureSource = null;
+  if (overtureEnabled) {
+    const overtureRaw = createOvertureSource({
+      cacheDir: env?.PARRANDA_CACHE_DIR || null,
+      radiusKm: Number(env?.PARRANDA_OVERTURE_RADIUS_KM) || undefined,
+      limit: Number(env?.PARRANDA_OVERTURE_LIMIT) || undefined,
+      minConfidence: Number(env?.PARRANDA_OVERTURE_MIN_CONFIDENCE) || undefined,
+    });
+    const overtureCache = createSourceCache({
+      namespace: "overture",
+      dir: env?.PARRANDA_CACHE_DIR || null,
+      ttlMs: Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : undefined,
+    });
+    overtureSource = {
+      eager: true,
+      load(anchor = {}, request = {}) {
+        const { lat, lng } = anchor;
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];
+        const requestedIntents = normalizeRequestedIntents(request.requestedIntents);
+        const key = `${lat.toFixed(3)},${lng.toFixed(3)}:${requestedIntents.join("+") || "all"}`;
+        const cached = overtureCache.peek(key);
+        if (cached) return cached;
+        overtureCache.warm(
+          key,
+          () => overtureRaw({ lat, lng, requestedIntents }),
+          storeNonEmpty,
+        );
+        return [];
+      },
+    };
+  }
+
+  if (!wikiSource && !overtureSource) return osmLoader;
+  return composeOpenDataLoaders(osmLoader, wikiSource, overtureSource);
 }
 
-// Compose the OSM loader (returns a `withLoaderStatus` array) with the Wikidata
-// source (returns a plain array). OSM runs first so a selected regional cluster
-// can also anchor Wikidata; both fail soft and the combined result preserves
-// loader status and collection metadata.
-function composeOpenDataLoaders(osmLoader, wikiSource) {
+// Compose the OSM loader (returns a `withLoaderStatus` array) with bounded
+// background sources (plain arrays). OSM runs first so a selected regional
+// cluster anchors every other source to the SAME place. A legacy function gets
+// only the anchor; a descriptor's `load(anchor, request)` may also use bounded
+// private request context (for example requested intents).
+function composeOpenDataLoaders(osmLoader, wikiSource = null, overtureSource = null) {
   return async function loadComposedOpenData(request = {}) {
-    const osm = await Promise.resolve(osmLoader(request))
+    const sources = [wikiSource, overtureSource].filter(Boolean);
+    const primaryAnchor = { lat: request.lat, lng: request.lng };
+    // Eager cache-only sources are read before waiting on the live primary. On
+    // a miss their wrapper starts an out-of-band warm and returns []; on a hit a
+    // sufficiently varied global directory can satisfy this request immediately
+    // while Overpass continues in the background. This is the latency rescue,
+    // not just a second source that still waits behind a 30-second outage.
+    const eagerLoads = new Map();
+    for (const source of sources.filter((candidate) => candidate?.eager === true)) {
+      eagerLoads.set(
+        source,
+        Promise.resolve(source.load(primaryAnchor, request)).catch(() => []),
+      );
+    }
+    const osmPromise = Promise.resolve(osmLoader(request))
       .catch(() => withLoaderStatus([], "error_failed_closed", "osm_threw"));
+    const eagerRecords = [];
+    for (const pending of eagerLoads.values()) {
+      const loaded = await pending;
+      if (Array.isArray(loaded)) eagerRecords.push(...loaded);
+    }
+    const requestedIntents = normalizeRequestedIntents(request.requestedIntents);
+    const eagerProfile = supplyProfile(eagerRecords, requestedIntents);
+    if (eagerProfile.record_count >= THIN_RECORD_COUNT && eagerProfile.category_count >= THIN_CATEGORY_COUNT) {
+      // Keep the primary promise observed so a background failure can never
+      // become an unhandled rejection. Its own loader/cache side effects remain
+      // useful for later cross-source corroboration.
+      osmPromise.catch(() => {});
+      return withLoaderMetadata(
+        withLoaderStatus(eagerRecords, `loaded:${eagerRecords.length}`, null),
+        {
+          selected_profile: eagerProfile,
+          selected_day_capacity: dayCapacityProfile(eagerRecords, {
+            origin: primaryAnchor,
+            walkingTargetBand: request.walkingTargetBand,
+          }),
+          primary_collection: "background_refresh",
+        },
+      );
+    }
+
+    const osm = await osmPromise;
     // If bounded regional scouting selected a richer sub-anchor, warm/read the
     // independent knowledge source around that SAME cluster. Mixing primary-
     // anchor Wikidata rows into a remote selected cluster would fabricate one
@@ -1103,12 +1183,20 @@ function composeOpenDataLoaders(osmLoader, wikiSource) {
       selectedCoords && Number.isFinite(selectedCoords.lat) && Number.isFinite(selectedCoords.lng)
         ? selectedCoords
         : { lat: request.lat, lng: request.lng };
-    const wiki = await Promise.resolve(wikiSource(wikiAnchor)).catch(() => []);
     const osmRecords = Array.isArray(osm) ? osm : [];
-    const wikiRecords = Array.isArray(wiki) ? wiki : [];
-    const records = [...osmRecords, ...wikiRecords];
+    const backgroundRecords = [];
+    for (const source of sources) {
+      const sameAsPrimary =
+        Number(wikiAnchor.lat).toFixed(6) === Number(primaryAnchor.lat).toFixed(6) &&
+        Number(wikiAnchor.lng).toFixed(6) === Number(primaryAnchor.lng).toFixed(6);
+      const alreadyLoaded = sameAsPrimary ? eagerLoads.get(source) : null;
+      const loaded = await Promise.resolve(
+        alreadyLoaded || (typeof source === "function" ? source(wikiAnchor) : source.load(wikiAnchor, request)),
+      ).catch(() => []);
+      if (Array.isArray(loaded)) backgroundRecords.push(...loaded);
+    }
+    const records = [...osmRecords, ...backgroundRecords];
     const status = records.length > 0 ? `loaded:${records.length}` : (osm.loader_status || "loaded:0");
-    const requestedIntents = normalizeRequestedIntents(request.requestedIntents);
     const metadata = osm.loader_metadata
       ? {
           ...osm.loader_metadata,

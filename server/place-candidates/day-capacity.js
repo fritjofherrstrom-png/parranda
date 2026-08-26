@@ -6,6 +6,7 @@ const MIN_CAPACITY_SPAN_IMPROVEMENT_KM = 0.3;
 // source balancing and day-capacity checks share one vocabulary.
 const TYPE_CATEGORY = Object.freeze({
   viewpoint: "scenic", park: "scenic", garden: "scenic", promenade: "scenic", castle: "scenic",
+  "historic-site": "scenic", monument: "scenic", lighthouse: "scenic",
   restaurant: "food", "street-food": "food",
   cafe: "coffee",
   bar: "bars",

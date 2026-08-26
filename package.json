@@ -41,6 +41,7 @@
     "node": ">=22"
   },
   "dependencies": {
+    "@duckdb/node-api": "^1.5.5-r.4",
     "express": "^5.2.1",
     "pg": "^8.22.0"
   }

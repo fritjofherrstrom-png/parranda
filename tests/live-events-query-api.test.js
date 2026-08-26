@@ -207,6 +207,95 @@ test("near_me stays an event scope and never becomes a day-anchor mutation", asy
   });
 });
 
+test("an exact server-resolved small settlement falls back to source-backed nearby events", async () => {
+  let captured = null;
+  let includeNearbyEvent = true;
+  const placeResolver = async (query) => [{
+    label: "Kivik, Simrishamns kommun, Sverige",
+    lat: 55.685,
+    lng: 14.225,
+    confidence: "medium",
+    provenance: "nominatim_osm",
+    admin_context: {
+      locality: "Kivik",
+      municipality: "Simrishamns kommun",
+      country: "Sverige",
+      country_code: "se",
+    },
+    spatial_scope: {
+      source: "nominatim_bounds",
+      kind: "settlement",
+      bounds: { south: 55.66, north: 55.71, west: 14.18, east: 14.27 },
+    },
+    query,
+  }];
+  const eventSupply = async (input) => {
+    captured = input;
+    return collectedEvents({
+      tonight: includeNearbyEvent
+        ? [{ id: "simrishamn-event", title: "Local harvest night", lat: 55.5566, lng: 14.35 }]
+        : [],
+      this_week: [],
+    });
+  };
+
+  await withServer({ eventSupply, placeResolver }, async (server) => {
+    const response = await postJson(server, "/api/live-events?lang=sv", {
+      scope: "around_place",
+      anchor: { lat: 55.685, lng: 14.225 },
+      place_query: "Kivik",
+      spatial_scope: { kind: "region", bounds: { south: -90, north: 90, west: -180, east: 180 } },
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.body.query.discovery_scope, "regional_nearby");
+    assert.equal(response.body.query.radius_m, 3000);
+    assert.equal(response.body.query.nearby_fallback_radius_m, 25000);
+    assert.deepEqual(response.body.live_events.tonight.map((event) => event.id), ["simrishamn-event"]);
+    assert.equal(response.body.live_events.tonight[0].live_proximity, "nearby");
+    assert.ok(response.body.live_events.tonight[0].anchor_distance_km > 10);
+
+    includeNearbyEvent = false;
+    const emptyResponse = await postJson(server, "/api/live-events?lang=sv", {
+      scope: "around_place",
+      anchor: { lat: 55.685, lng: 14.225 },
+      place_query: "Kivik",
+    });
+    assert.equal(emptyResponse.body.query.discovery_scope, "regional_nearby");
+    assert.deepEqual(emptyResponse.body.live_events.tonight, []);
+  });
+
+  assert.equal(captured.radiusM, 25000);
+  assert.equal(captured.placeContext.locality, "Kivik");
+  assert.equal(captured.spatialScope.kind, "settlement");
+  assert.equal(captured.scope.trusted_nearby_fallback_m, 25000);
+});
+
+test("client-supplied regional fields never activate the nearby fallback", async () => {
+  let captured = null;
+  await withServer({
+    eventSupply: async (input) => {
+      captured = input;
+      return collectedEvents({
+        tonight: [{ id: "far", lat: 55.5566, lng: 14.35 }],
+        this_week: [],
+      });
+    },
+    placeResolver: async () => { throw new Error("must not run without a bounded place query"); },
+  }, async (server) => {
+    const response = await postJson(server, "/api/live-events", {
+      scope: "around_place",
+      anchor: { lat: 55.685, lng: 14.225 },
+      spatial_scope: { kind: "settlement" },
+      nearby_fallback_radius_m: 100000,
+    });
+    assert.deepEqual(response.body.live_events.tonight, []);
+    assert.equal(response.body.query.discovery_scope, "local");
+    assert.equal("nearby_fallback_radius_m" in response.body.query, false);
+  });
+  assert.equal(captured.radiusM, 3000);
+  assert.equal(captured.spatialScope, undefined);
+});
+
 test("one trusted event pool stays isolated across around_place, near_route and near_me", async () => {
   const supply = async () => collectedEvents({
     tonight: [

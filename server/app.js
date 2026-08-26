@@ -1824,7 +1824,13 @@ function buildApp({
   // inside the trusted eventSupply seam used by route composition.
   app.post("/api/live-events", async (request, response) => {
     const eventsNow = clock && typeof clock.now === "function" ? clock.now() : new Date().toISOString();
-    const result = await executeLiveEventQuery({ payload: request.body, eventSupply, now: eventsNow });
+    const result = await executeLiveEventQuery({
+      payload: request.body,
+      eventSupply,
+      now: eventsNow,
+      placeResolver,
+      placeLanguage: normalizeLanguage(request.query?.lang),
+    });
     response.status(result.status).json(result.body);
   });
 

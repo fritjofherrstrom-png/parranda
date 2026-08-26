@@ -7,8 +7,10 @@ const {
   AROUND_PLACE_RADIUS_M,
   MAX_ROUTE_POINTS,
   NEAR_ME_RADIUS_M,
+  NEARBY_SETTLEMENT_RADIUS_M,
   ROUTE_CORRIDOR_RADIUS_M,
   eventMatchesLiveScope,
+  filterEventsForLiveScope,
   normalizeLiveEventQuery,
   shapeCollectedLiveEvents,
   unavailableLiveEvents,
@@ -202,6 +204,35 @@ test("source-scoped Pulse evidence is only eligible around the resolved place", 
     points: [{ lat: 55.6, lng: 13 }, { lat: 55.61, lng: 13.01 }],
     radius_m: 1200,
   }), false);
+});
+
+test("a trusted nearby fallback is local-first and labels distance only when local is empty", () => {
+  const scope = {
+    kind: "around_place",
+    anchor: { lat: 55.685, lng: 14.225 },
+    radius_m: AROUND_PLACE_RADIUS_M,
+    trusted_nearby_fallback_m: NEARBY_SETTLEMENT_RADIUS_M,
+  };
+  const local = { id: "local", lat: 55.69, lng: 14.23 };
+  const regional = { id: "regional", lat: 55.5566, lng: 14.35 };
+  const localFirst = filterEventsForLiveScope([local, regional], scope);
+  assert.deepEqual(localFirst.map((event) => event.id), ["local"]);
+
+  const fallback = filterEventsForLiveScope([regional], scope);
+  assert.equal(fallback[0].id, "regional");
+  assert.equal(fallback[0].live_proximity, "nearby");
+  assert.ok(fallback[0].anchor_distance_km > 10);
+
+  const unlocatedRegional = {
+    id: "source-scoped-only",
+    geographic_relevance: "source_scope",
+    source_scope_verified: true,
+  };
+  assert.deepEqual(
+    filterEventsForLiveScope([unlocatedRegional], scope),
+    [],
+    "a regional fallback cannot claim nearby without coordinates and a measurable distance",
+  );
 });
 
 test("unavailable source health uses compact allowlisted reasons", () => {

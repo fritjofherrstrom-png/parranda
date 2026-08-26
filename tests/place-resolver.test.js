@@ -306,6 +306,59 @@ test("pure: a vague/junk single match (low importance) → 'low'", async () => {
   assert.equal(out[0].confidence, "low");
 });
 
+test("pure: a unique exact small settlement anchors from structural identity, not popularity", async () => {
+  const kivik = {
+    ...withNominatimName(
+      nominatim("Kivik, Simrishamns kommun, Skåne län, Sverige", 55.685, 14.225, 0.08, ["relation", "935530"], {
+        village: "Kivik",
+        municipality: "Simrishamns kommun",
+        state: "Skåne län",
+        country: "Sverige",
+        country_code: "se",
+      }),
+      "Kivik",
+    ),
+    type: "administrative",
+    addresstype: "village",
+    boundingbox: ["55.66", "55.71", "14.18", "14.27"],
+  };
+  const resolver = createNominatimPlaceResolver({
+    fetcher: fetcherReturning([kivik]),
+    minIntervalMs: 0,
+  });
+
+  const [candidate] = await resolver("Kivik");
+  assert.equal(candidate.confidence, "medium");
+  assert.equal(candidate.spatial_scope.kind, "settlement");
+  assert.equal(candidate.admin_context.municipality, "Simrishamns kommun");
+});
+
+test("pure: low-importance exact namesakes remain ambiguous instead of popularity-picked", async () => {
+  const namedVillage = (label, lat, lng, osmId) => ({
+    ...withNominatimName(
+      nominatim(label, lat, lng, 0.08, ["relation", osmId], {
+        village: "Ås",
+        country: "Sverige",
+        country_code: "se",
+      }),
+      "Ås",
+    ),
+    type: "administrative",
+    addresstype: "village",
+    boundingbox: [String(lat - 0.01), String(lat + 0.01), String(lng - 0.01), String(lng + 0.01)],
+  });
+  const resolver = createNominatimPlaceResolver({
+    fetcher: fetcherReturning([
+      namedVillage("Ås, Jämtland, Sverige", 63.2, 14.5, "1"),
+      namedVillage("Ås, Halland, Sverige", 57.1, 12.3, "2"),
+    ]),
+    minIntervalMs: 0,
+  });
+
+  const candidates = await resolver("Ås");
+  assert.deepEqual(candidates.map((candidate) => candidate.confidence), ["medium", "medium"]);
+});
+
 test("pure: multiple low-importance near-ties remain low, not medium", async () => {
   const r = createNominatimPlaceResolver({
     fetcher: fetcherReturning([

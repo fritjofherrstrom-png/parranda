@@ -6,6 +6,7 @@ export declare const LIVE_EVENT_SCOPES: LiveEventScope[];
 export declare const LIVE_EVENT_TIMES: LiveEventTime[];
 
 export declare function trustedDayAnchor(response: unknown): { lat: number; lng: number } | null;
+export declare function trustedPlaceQuery(response: unknown): string | null;
 export declare function boundedRoutePoints(
   stops: unknown,
   limit?: number,
@@ -23,6 +24,7 @@ export declare function buildLiveEventQueryPayload(options?: {
       time: LiveEventTime;
       preferences: string[];
       anchor?: { lat: number; lng: number };
+      place_query?: string;
       route_points?: Array<{ lat: number; lng: number }>;
     }
   | null;

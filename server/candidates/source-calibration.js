@@ -61,6 +61,10 @@ const FAMILY_BASELINE = {
   // explicitly so the family is never a silent 0; note it is deliberately NOT
   // matched by the community/local lens rules below.
   open_knowledge: 0.2,
+  // Global structured place directories are useful supply, but remain inferred
+  // until an independent family corroborates them. Existence confidence from
+  // the source is a quality gate, never a popularity/ranking signal.
+  open_directory: 0.0,
   editorial: 0.2,
   community: 0.1,
   live: 0.1,
