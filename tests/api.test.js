@@ -2083,6 +2083,10 @@ test("POST /api/route-recommendations exponerar anchor_weight på main_stops fö
     });
 
     assert.equal(response.status, 200);
+    assert.equal(response.body.city, "rome");
+    assert.equal(response.body.city_label, "Rom", "modern planner gets the server-owned display label");
+    assert.equal(response.body.requested_city, "rome");
+    assert.equal(response.body.city_fallback_used, false);
     const stops = response.body.days[0].primary_route.main_stops;
     assert.ok(stops.length > 0, "expected at least one main stop");
 

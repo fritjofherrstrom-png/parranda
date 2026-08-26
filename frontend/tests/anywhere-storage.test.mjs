@@ -57,6 +57,12 @@ test("walking preset is part of saved-day identity and normalizes fail-closed", 
   assert.deepEqual(new Set(variants.map((saved) => saved.id)), new Set([short.id, long.id]));
 });
 
+test("curated and freeform days with the same label cannot overwrite each other", () => {
+  const common = { place: "Rom", dateIso: "2026-08-26", selected: ["food"], walkKey: "balanced" };
+  assert.notEqual(savedEntryId(common), savedEntryId({ ...common, city: "rome" }));
+  assert.match(savedEntryId({ ...common, city: "rome" }), /^city:rome::/);
+});
+
 test("legacy saved entries remain readable without rewriting their old id", () => {
   const legacy = { id: "Lyon::2026-07-03::food", place: "Lyon", inputs: { selected: ["food"] } };
   assert.deepEqual(upsertSaved([], legacy), [legacy]);

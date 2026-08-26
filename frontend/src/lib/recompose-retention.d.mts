@@ -1,4 +1,4 @@
-export function anchorKey(anchor: { place?: string; coords?: { lat: number; lng: number } | null } | null): string | null;
+export function anchorKey(anchor: { city?: string; place?: string; coords?: { lat: number; lng: number } | null } | null): string | null;
 
 export function planRecomposeRetention(params: {
   silent?: boolean;

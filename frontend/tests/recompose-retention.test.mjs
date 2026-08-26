@@ -67,6 +67,12 @@ test("GPS jitter is the same anchor; real movement is not", () => {
   );
 });
 
+test("a curated city and identical freeform label are different anchors", () => {
+  assert.equal(anchorKey({ city: "rome", place: "Rom" }), "city:rome");
+  assert.equal(anchorKey({ place: "Rom" }), "place:rom");
+  assert.notEqual(anchorKey({ city: "rome", place: "Rom" }), anchorKey({ place: "Rom" }));
+});
+
 test("an unusable anchor never matches, in either direction", () => {
   assert.equal(anchorKey(null), null);
   assert.equal(anchorKey({ place: "   " }), null);
