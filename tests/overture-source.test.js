@@ -26,6 +26,7 @@ function row(overrides = {}) {
     operating_status: "open",
     websites: ["https://buhres.se/"],
     brand: null,
+    licenses: ["CDLA-Permissive-2.0"],
     lat: 55.684,
     lng: 14.228,
     ...overrides,
@@ -70,6 +71,19 @@ test("drops low-confidence, closed, unlocated, unnamed and unsupported rows", ()
   assert.equal(mapOvertureRow(row({ lat: null })), null);
   assert.equal(mapOvertureRow(row({ name: "" })), null);
   assert.equal(mapOvertureRow(row({ category: "pharmacy", alternate: [] })), null);
+  assert.equal(mapOvertureRow(row({ licenses: [] })), null);
+  assert.equal(mapOvertureRow(row({ licenses: ["future-unreviewed-license"] })), null);
+});
+
+test("preserves the closed per-row Overture license set without raw source metadata", () => {
+  assert.equal(
+    mapOvertureRow(row({ licenses: ["Apache-2.0"] })).sources[0].license,
+    "Apache-2.0",
+  );
+  assert.equal(
+    mapOvertureRow(row({ licenses: ["CDLA-Permissive-2.0", "Apache-2.0", "Apache-2.0"] })).sources[0].license,
+    "Apache-2.0 + CDLA-Permissive-2.0",
+  );
 });
 
 test("the GeoParquet query is release-validated, bbox-bounded, filtered and capped", () => {
@@ -85,6 +99,7 @@ test("the GeoParquet query is release-validated, bbox-bounded, filtered and capp
   assert.match(sql, /bbox\.xmin BETWEEN/);
   assert.match(sql, /confidence >= 0\.950/);
   assert.match(sql, /regexp_matches/);
+  assert.match(sql, /source -> source\.license/);
   assert.match(sql, /LIMIT 600$/);
   assert.equal(buildOvertureQuery({ release: "latest; DROP TABLE x", lat: 1, lng: 1 }), null);
   assert.equal(buildOvertureQuery({ release: "2026-08-19.0", lat: 91, lng: 1 }), null);

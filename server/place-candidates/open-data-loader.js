@@ -1098,7 +1098,9 @@ function resolveDefaultOpenDataLoader(env = process.env) {
       minConfidence: Number(env?.PARRANDA_OVERTURE_MIN_CONFIDENCE) || undefined,
     });
     const overtureCache = createSourceCache({
-      namespace: "overture",
+      // v2 invalidates rows cached before per-record Overture licenses were
+      // selected from the source schema; those rows cannot be relabeled safely.
+      namespace: "overture-v2",
       dir: env?.PARRANDA_CACHE_DIR || null,
       ttlMs: Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : undefined,
     });

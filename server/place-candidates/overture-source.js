@@ -40,6 +40,11 @@ const QUERY_ROW_LIMIT = 600;
 const DEFAULT_MIN_CONFIDENCE = 0.95;
 const DEFAULT_STAC_TIMEOUT_MS = 5000;
 const RELEASE_PATTERN = /^\d{4}-\d{2}-\d{2}\.\d+$/;
+const OVERTURE_PLACE_LICENSES = Object.freeze([
+  "Apache-2.0",
+  "CC0-1.0",
+  "CDLA-Permissive-2.0",
+]);
 
 // Broad enough for SQL pushdown, while the exact mapper below remains the
 // authority. Keeping this in the query avoids downloading hundreds of nearby
@@ -169,6 +174,14 @@ function normalizeOperationalStatus(value) {
   return { status: "unknown", reasons: [] };
 }
 
+function normalizeOvertureLicenses(values) {
+  const allowed = new Set(OVERTURE_PLACE_LICENSES);
+  const licenses = [...new Set((Array.isArray(values) ? values : [])
+    .map((value) => String(value || "").trim())
+    .filter((value) => allowed.has(value)))];
+  return OVERTURE_PLACE_LICENSES.filter((license) => licenses.includes(license));
+}
+
 function mapOvertureRow(row, { minConfidence = DEFAULT_MIN_CONFIDENCE } = {}) {
   if (!row || typeof row !== "object") return null;
   const id = String(row.id || "").trim();
@@ -183,6 +196,11 @@ function mapOvertureRow(row, { minConfidence = DEFAULT_MIN_CONFIDENCE } = {}) {
   if (operational.status === "inactive") return null;
   const mapping = categoryMapping(row.category, row.alternate);
   if (!mapping) return null;
+  // Places is a multi-license dataset and each row's `sources` atoms own the
+  // applicable license. Keep only the closed official set selected in SQL;
+  // missing or newly unknown terms fail closed instead of being mislabeled.
+  const licenses = normalizeOvertureLicenses(row.licenses);
+  if (!licenses.length) return null;
   const brand = String(row.brand || "").trim() || null;
   const website = firstHttpUrl(row.websites);
   return {
@@ -197,7 +215,7 @@ function mapOvertureRow(row, { minConfidence = DEFAULT_MIN_CONFIDENCE } = {}) {
       family: "open_directory",
       tier: "inferred",
       url: OVERTURE_ATTRIBUTION_URL,
-      license: "CDLA-Permissive-2.0",
+      license: licenses.join(" + "),
     }],
     chain: Boolean(brand),
     brand,
@@ -233,6 +251,7 @@ function buildOvertureQuery({ release, lat, lng, radiusKm = DEFAULT_RADIUS_KM, r
   operating_status,
   websites,
   brand.names.primary AS brand,
+  list_distinct(list_transform(sources, source -> source.license)) AS licenses,
   bbox.xmin AS lng,
   bbox.ymin AS lat
 FROM read_parquet('${path}', hive_partitioning=1)
@@ -390,7 +409,9 @@ module.exports = {
   DEFAULT_LIMIT,
   DEFAULT_MIN_CONFIDENCE,
   QUERY_ROW_LIMIT,
+  OVERTURE_PLACE_LICENSES,
   categoryMapping,
+  normalizeOvertureLicenses,
   mapOvertureRow,
   buildOvertureQuery,
   resolveLatestOvertureRelease,
