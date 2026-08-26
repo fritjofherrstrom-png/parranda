@@ -2143,6 +2143,7 @@ function buildApp({
         }
         baselineBody = {
           ...result,
+          city_label: cityConfig.label,
           requested_city: requestedCity,
           city_fallback_used: cityFallbackUsed,
           ...(previewEngineStatus ? { preview_engine: previewEngineStatus } : {}),

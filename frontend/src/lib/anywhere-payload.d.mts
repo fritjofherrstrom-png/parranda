@@ -23,6 +23,7 @@ export declare function freezeComposeDateIso(options?: {
 }): string;
 
 export declare function buildAnywherePayload(options?: {
+  city?: string;
   place?: string;
   coords?: { lat: number; lng: number } | null;
   dates?: string[];
@@ -31,6 +32,7 @@ export declare function buildAnywherePayload(options?: {
   excludedCandidateIds?: string[];
   pinnedCandidateIds?: string[];
 }): {
+  city?: string;
   place?: string;
   place_query?: string;
   excluded_candidate_ids?: string[];
@@ -46,7 +48,7 @@ export declare function buildAnywherePayload(options?: {
   preferences: string[];
   distance_mode: string;
   budget_tier: string;
-  experimental_agnostic_route_output: number;
-  include_external_candidates: number;
-  agnostic_engine_compose: number;
+  experimental_agnostic_route_output?: number;
+  include_external_candidates?: number;
+  agnostic_engine_compose?: number;
 };

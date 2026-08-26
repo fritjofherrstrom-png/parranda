@@ -32,6 +32,8 @@ const COORD_PRECISION = 3;
  */
 export function anchorKey(anchor) {
   if (!anchor || typeof anchor !== "object") return null;
+  const city = typeof anchor.city === "string" ? anchor.city.trim().toLowerCase() : "";
+  if (city) return `city:${city}`;
   const coords = anchor.coords;
   if (coords && Number.isFinite(coords.lat) && Number.isFinite(coords.lng)) {
     return `coords:${coords.lat.toFixed(COORD_PRECISION)},${coords.lng.toFixed(COORD_PRECISION)}`;

@@ -31,6 +31,33 @@ test("payload carries the freeform place + the three agnostic flags, never a cit
   assert.deepEqual(payload.preferences, ["food", "views"]);
 });
 
+test("recognized curated cities use the same modern planner with the server-owned citypack key", () => {
+  const payload = buildAnywherePayload({
+    city: "barcelona",
+    place: "Barcelona",
+    dates: ["2026-08-26"],
+    preferences: ["food", "views"],
+  });
+  assert.equal(payload.city, "barcelona");
+  assert.ok(!("place" in payload) && !("place_query" in payload), "citypack mode must not be demoted to freeform intake");
+  assert.ok(!("experimental_agnostic_route_output" in payload), "rich citypack mode uses the recognized-city route path");
+  assert.deepEqual(payload.preferences, ["food", "views"]);
+});
+
+test("the modern planner owns curated city links and sends their citypack identity", () => {
+  assert.match(anywherePlannerSource, /shared\.city/);
+  assert.match(anywherePlannerSource, /city: anchor\.city/);
+  assert.match(anywherePlannerSource, /const authoritativePlace = anchor\.city \? cls\.placeLabel : anchor\.place/);
+  assert.match(anywherePlannerSource, /place: authoritativePlace/);
+  assert.match(anywherePlannerSource, /const restoredAnchorKey = anchorKey\(\{[\s\S]{0,100}city: typeof i\?\.city === "string" \? i\.city : undefined/);
+});
+
+test("curated mode hides actions whose current APIs would silently lose citypack identity", () => {
+  assert.match(anywherePlannerSource, /\{!cityKey && \([\s\S]{0,120}onClick=\{blitz\}/);
+  assert.match(anywherePlannerSource, /!cityKey && hasRealId/);
+  assert.match(anywherePlannerSource, /!cityKey && candidateId/);
+});
+
 test("planner depth: walking presets map to walking_km_target; tomorrow is a real date", () => {
   const preset = WALK_PRESETS.find((p) => p.key === "long");
   const payload = buildAnywherePayload({ place: "Lyon", dates: ["2026-07-03"], walkingKmTarget: preset.km });
@@ -118,7 +145,7 @@ test("cold-start refresh is bounded: the component delegates to the tested follo
   assert.match(anywherePlannerSource, /composed: cls\.status === "composed"/);
   assert.match(anywherePlannerSource, /structureOnly: cls\.status === "structure_only"/);
   assert.match(anywherePlannerSource, /hasStructure: Boolean\(safe\?\.place_structure\)/);
-  assert.match(anywherePlannerSource, /transientSourceRetry: decision\.shouldRetryTransientSource\(body, cls\)/);
+  assert.match(anywherePlannerSource, /transientSourceRetry: anchor\.city \? false : decision\.shouldRetryTransientSource\(body, cls\)/);
   assert.match(anywherePlannerSource, /livePending: safe\?\.live_events\?\.pending === true/);
   assert.match(anywherePlannerSource, /setLiveRefreshExhausted\(followup\.liveRefreshExhausted\)/);
   assert.match(anywherePlannerSource, /pollAttempt: followup\.nextPollAttempt/);

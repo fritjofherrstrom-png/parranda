@@ -10,8 +10,8 @@ test('Astro landing proof keeps the migration contract explicit', async () => {
 
   assert.match(source, /Astro landing proof/);
   assert.match(source, /routeProofs/);
-  assert.equal(buildPlannerHref('barcelona'), '/barcelona?planner=open');
-  assert.equal(buildPlannerHref('rome'), '/rome?planner=open');
+  assert.equal(buildPlannerHref('barcelona'), '/anywhere?city=barcelona&place=Barcelona&planner=open&lang=en');
+  assert.equal(buildPlannerHref('rome'), '/anywhere?city=rome&place=Rome&planner=open&lang=en');
   assert.doesNotMatch(source, /from ['"]@astrojs\/preact['"]/);
   assert.doesNotMatch(source, /client:(load|idle|visible|only)/);
 });

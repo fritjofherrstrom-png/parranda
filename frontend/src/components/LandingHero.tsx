@@ -4,13 +4,13 @@
  *   - type a city or place → the planner composes around it;
  *   - "Use my location" → position becomes the day's anchor (coords handed to
  *     the planner via sessionStorage, never the URL).
- * A registered city routes to its curated shell (unchanged URL contract);
- * anything else goes to the any-city planner. The city registry is injected by
+ * A registered city routes to the modern planner with its server-owned citypack
+ * identity; anything else goes to freeform any-city intake. The registry is injected by
  * the server at serve time (a city is data, never code). No fake-live teaser,
  * no static Blitz cards — the surface promises only what it does.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { routeForInput, inlineCompletion, type CityRegistry } from "../lib/landing-routing.mjs";
+import { curatedCityHref, routeForInput, inlineCompletion, type CityRegistry } from "../lib/landing-routing.mjs";
 import { storeAnchorCoords, requestPosition } from "../lib/location-anchor.mjs";
 
 type Lang = "sv" | "en";
@@ -222,7 +222,7 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
             {curated.map((city) => (
               <a
                 key={city.key}
-                href={`/${city.key}?planner=open&lang=${lang}`}
+                href={curatedCityHref(city, lang) ?? "/anywhere"}
                 className="inline-flex min-h-11 items-center rounded-full border border-parranda-ink/16 px-4 text-sm font-semibold text-parranda-ink transition hover:border-parranda-ember"
               >
                 {city.label}

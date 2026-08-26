@@ -17,6 +17,14 @@ test("encode → decode round-trips the day inputs", () => {
   assert.equal(decoded.lang, "sv");
 });
 
+test("a curated city share preserves its bounded citypack identity", () => {
+  const query = encodeShareParams({ city: "barcelona", place: "Barcelona", lang: "en" });
+  const decoded = decodeShareParams(query);
+  assert.equal(decoded.city, "barcelona");
+  assert.equal(decoded.place, "Barcelona");
+  assert.equal(decodeShareParams("?city=../../rome&place=Rome").city, null);
+});
+
 test("defaults are omitted from the URL and restored on decode", () => {
   const qs = encodeShareParams({ place: "Porto", preferences: [], dayOffset: 0, walkKey: "balanced", lang: "en" });
   assert.ok(!qs.includes("day="), "today is the default → no day param");
