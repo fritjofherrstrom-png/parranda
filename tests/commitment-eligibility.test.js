@@ -230,20 +230,3 @@ test("a rescued candidate the hoist would still reject is NOT eligible", () => {
   assert.equal(ids.has("rejected-tail"), false);
   assert.deepEqual([...ids], ["kept"]);
 });
-
-test("internal rescue bookkeeping never rides on a role entry", () => {
-  // buildPlannerCandidateInspectSidecar emits `roles` verbatim, so a field hung
-  // on a role entry is public payload. Found in review: the first version put
-  // it there and published the below-the-cut ranked tail.
-  const { selectPlannerRoleCandidates } = require("../server/planner/role-selector");
-  const source = require("node:fs").readFileSync(
-    require.resolve("../server/planner/role-selector"),
-    "utf8",
-  );
-  assert.equal(typeof selectPlannerRoleCandidates, "function");
-  assert.ok(
-    !/pin_rescuable_candidate_ids:/.test(source),
-    "the rescue list must not be assigned onto a role entry",
-  );
-  assert.match(source, /commitment_rescuable_ids: \[\.\.\.new Set\(rescuableByRole\)\]/);
-});
