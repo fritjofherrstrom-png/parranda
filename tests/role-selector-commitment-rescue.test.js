@@ -117,6 +117,38 @@ test("the answer is the same whether or not this request carried the pin", () =>
   );
 });
 
+test("a second Add is evaluated with the commitments the request already carries", () => {
+  // The UI submits one new Add at a time. On the following response, earlier
+  // commitments are already pins, so the next counterfactual must be evaluated
+  // alongside them rather than against the original unpinned role surface.
+  const multiPinDeep = Array.from(
+    { length: DEFAULT_LIMIT_PER_ROLE + 10 },
+    (_, i) => source(`multi-food-${i}`, i),
+  );
+  const unpinned = select(multiPinDeep, { limitPerRole: 2 });
+  const [first, second] = unpinned.commitment_rescuable_ids;
+  assert.ok(first && second, "precondition: the fixture has at least two rescuable tail entries");
+
+  const afterFirstAdd = select(multiPinDeep, { limitPerRole: 2, pinnedIds: [first] });
+  const afterFirstFood = afterFirstAdd.roles.find((role) => role.role === "food_anchor");
+  assert.ok(
+    afterFirstFood.candidates.some((candidate) => candidate.candidate_id === first),
+    "precondition: the existing commitment is present in the role surface",
+  );
+  assert.ok(
+    afterFirstAdd.commitment_rescuable_ids.includes(second),
+    "the next Add remains eligible when evaluated alongside the existing commitment",
+  );
+
+  const afterSecondAdd = select(multiPinDeep, { limitPerRole: 2, pinnedIds: [first, second] });
+  const afterSecondFood = afterSecondAdd.roles.find((role) => role.role === "food_anchor");
+  const admittedIds = new Set(
+    plannerUsableOptionsForRole(afterSecondFood).map((candidate) => candidate.candidate_id),
+  );
+  assert.ok(admittedIds.has(first), "the existing commitment remains admitted");
+  assert.ok(admittedIds.has(second), "the newly added commitment is admitted by the real joint request");
+});
+
 test("only a tail entry the hoist would accept is reported", () => {
   // The tail is where the rejected statuses live — entries sort filled ->
   // partial -> admitted -> fallback. Reporting on rank alone declared

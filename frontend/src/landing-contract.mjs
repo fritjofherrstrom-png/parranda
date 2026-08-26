@@ -37,15 +37,20 @@ export function normalizeLandingLanguage(language = 'en') {
 export function buildPlannerHref(cityKey, language = 'en') {
   const normalizedCity = String(cityKey || '').trim().toLowerCase();
   const languageKey = normalizeLandingLanguage(language);
-  const suffix = languageKey === 'sv' ? '&lang=sv' : '';
-  return `/${normalizedCity}?planner=open${suffix}`;
+  const city = featuredLandingCities.find((entry) => entry.key === normalizedCity);
+  const params = new URLSearchParams();
+  params.set('city', normalizedCity);
+  params.set('place', city?.label || normalizedCity);
+  params.set('planner', 'open');
+  params.set('lang', languageKey);
+  return `/anywhere?${params.toString()}`;
 }
 
 export const landingProofCards = [
   {
-    kicker: 'City shell first',
-    title: 'No detached planner world',
-    body: 'The proof keeps /:city?planner=open as the canonical handoff so migration work does not revive a separate route-first product model.',
+    kicker: 'One modern planner',
+    title: 'Citypack depth, modern surface',
+    body: 'Registered cities enter the modern planner with their exact citypack identity; freeform places keep the agnostic intake.',
   },
   {
     kicker: 'Pulse as product surface',

@@ -12,6 +12,8 @@ export declare function bestPrefixMatch(registry: CityRegistry | null | undefine
 
 export declare function inlineCompletion(registry: CityRegistry | null | undefined, typed: string): string | null;
 
+export declare function curatedCityHref(entry: CityEntry | null | undefined, lang?: string): string | null;
+
 export declare function routeForInput(
   registry: CityRegistry | null | undefined,
   raw: string,

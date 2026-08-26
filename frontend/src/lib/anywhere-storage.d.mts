@@ -7,6 +7,7 @@ export declare function normalizeSavedWalkKey(value?: unknown): "short" | "balan
 import type { CommitmentSnapshot } from "./commitment-snapshot.mjs";
 
 export interface SavedInputs {
+  city?: string | null;
   place?: string | null;
   mode?: string;
   dayOffset?: number;
@@ -28,6 +29,7 @@ export interface SavedEntry {
 }
 
 export declare function savedEntryId(options?: {
+  city?: string | null;
   place?: string | null;
   dateIso?: string | null;
   selected?: string[];
@@ -35,6 +37,7 @@ export declare function savedEntryId(options?: {
 }): string;
 
 export declare function buildSavedEntry(options?: {
+  city?: string | null;
   place?: string;
   label?: string;
   dateIso?: string;

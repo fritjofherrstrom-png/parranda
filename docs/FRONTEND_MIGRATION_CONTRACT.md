@@ -95,9 +95,27 @@ surfaces are now DELETED, not just demoted:
   that somehow lacks it gets a **loud 503** ("Frontend build missing"), never a
   silently wrong page.
 - `script.js`'s `anywhereMode` branches are now dead code (no shell ever sets
-  the bootstrap flag); removing them is a separate script.js cleanup. The
-  curated city shells (`/:city?planner=open`) remain owned by the current
-  Express app — that migration has not begun.
+  the bootstrap flag); removing them is a separate script.js cleanup.
+
+## Modern curated planner entry (2026-08-26)
+
+The landing no longer sends its own “Extra curated” links, or an exact
+registered-city search, into the legacy `/:city` shell. Rome and Barcelona now
+open the promoted `/anywhere` React planner with both a display label and the
+exact server-owned `city` key. The planner sends that key to the existing
+`/api/route-recommendations` recognized-city path, so the modern surface renders
+the rich citypack route rather than demoting it to ordinary freeform/agnostic
+intake.
+
+The browser accepts a curated response only when the server returns the same
+`city`, the same `requested_city`, `city_fallback_used: false`, a server-owned
+`city_label`, and a non-empty primary route. Mismatch, fallback, missing label,
+or empty output fails closed. Save, restore, recompose, and share preserve the
+bounded city key. Direct legacy `/:city` URLs remain available for compatibility,
+but the frontpage no longer advertises or routes into them. Until the modern
+surface has a citypack-aware Blitz adapter and recognized-city commitment
+handling, it hides those actions in curated mode rather than silently invoking
+the freeform contracts.
 
 ## Surface migration rule
 

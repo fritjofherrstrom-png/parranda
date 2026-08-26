@@ -1,4 +1,5 @@
 export interface ShareInputs {
+  city?: string | null;
   place?: string;
   preferences?: string[];
   dayOffset?: number;
@@ -13,4 +14,4 @@ export declare function buildShareUrl(origin: string, inputs: ShareInputs): stri
 export declare function decodeShareParams(
   search: string | URLSearchParams,
   allowedPrefKeys?: string[] | null,
-): { place: string; preferences: string[]; dayOffset: 0 | 1; walkKey: string; lang: "sv" | "en" | null };
+): { city: string | null; place: string; preferences: string[]; dayOffset: 0 | 1; walkKey: string; lang: "sv" | "en" | null };

@@ -172,6 +172,12 @@ test("inspect flag adds plan-scoped role coverage and honesty without changing r
     assert.equal(inspected.body.planner_roles.context.date, "2026-05-25");
     assert.ok(inspected.body.planner_roles.roles.every((role) => "planner_usable" in role));
     assert.ok(["full", "partial", "sparse", "fallback_heavy"].includes(inspected.body.dayflow_honesty.day_status));
+    const publicInspectJson = JSON.stringify(inspected.body.planner_roles);
+    assert.doesNotMatch(
+      publicInspectJson,
+      /commitment_rescuable_ids|pin_rescuable_candidate_ids/,
+      "private ranked-tail rescue bookkeeping must not cross the inspect API boundary",
+    );
     assert.deepEqual(primaryRouteShape(inspected.body), primaryRouteShape(base.body));
   } finally {
     await new Promise((resolve) => server.close(resolve));
