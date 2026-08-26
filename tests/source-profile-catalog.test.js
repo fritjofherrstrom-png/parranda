@@ -163,6 +163,32 @@ function qualifiedSourceProfile() {
   return profile;
 }
 
+function placeSourceProfile() {
+  const profile = sourceProfile({ approved: true });
+  const candidate = profile.source_families[0].candidates[0];
+  candidate.id = "regional-places";
+  candidate.source_label = "Regional places";
+  candidate.url = "https://guide.example/places";
+  candidate.status = "viable_place_provider_probe";
+  candidate.adapter = "schema_org_place_html";
+  candidate.source_identity = "guide.example";
+  profile.runtime_review.feeds = [];
+  profile.runtime_review.place_sources = [{
+    candidate_id: candidate.id,
+    id: "regional-place-feed",
+    label: candidate.source_label,
+    endpoint: candidate.url,
+    adapter: candidate.adapter,
+    evidence_family: "official",
+    source_tier: "official",
+    source_identity: candidate.source_identity,
+    terms_status: "open_license",
+    source_health: "healthy",
+    runtime_policy: "bounded_refresh",
+  }];
+  return profile;
+}
+
 test("discovery writes only review-needed profiles and strips attempted activation", async () => {
   const calls = [];
   const catalog = createSourceProfileCatalog({
@@ -191,6 +217,7 @@ test("discovery writes only review-needed profiles and strips attempted activati
     reviewed_at: null,
     expires_at: null,
     feeds: [],
+    place_sources: [],
   });
   assert.deepEqual(stored.source_qualification, discovered.source_qualification);
   assert.match(calls[0].sql, /catalog_status = 'review_needed'/);
@@ -241,6 +268,30 @@ test("geo reads return only profiles that still pass the shared review contract"
   assert.equal(feeds[0].id, "regional-events-feed");
   assert.equal(calls[0].sql, ACTIVE_PROFILES_FOR_ANCHOR_SQL);
   assert.deepEqual(calls[0].values, [55.6, 13, NOW.toISOString()]);
+});
+
+test("place-only profiles can be approved and geo-read through the same catalog boundary", async () => {
+  const calls = [];
+  const profile = placeSourceProfile();
+  const catalog = createSourceProfileCatalog({
+    now: () => NOW,
+    query: async (sql, values) => {
+      calls.push({ sql, values });
+      if (sql === ACTIVE_PROFILES_FOR_ANCHOR_SQL) return { rows: [{ profile }] };
+      return { rows: [{ profile_key: values[0], catalog_status: values[1] }] };
+    },
+  });
+
+  const approved = await catalog.recordApprovedProfile(profile);
+  assert.equal(approved.status, "recorded");
+  const feeds = await catalog.listApprovedPlaceFeedsForAnchor({
+    anchor: { lat: 55.6, lng: 13 },
+    now: NOW,
+  });
+  assert.equal(feeds.length, 1);
+  assert.equal(feeds[0].id, "regional-place-feed");
+  assert.equal(calls[1].sql, ACTIVE_PROFILES_FOR_ANCHOR_SQL);
+  assert.deepEqual(calls[1].values, [55.6, 13, NOW.toISOString()]);
 });
 
 test("geo reads expose only fresh qualified profiles as Pulse-only probation feeds", async () => {

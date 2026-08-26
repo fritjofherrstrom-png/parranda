@@ -10,8 +10,9 @@
  *   - a source-url-only event cannot become a place/route target
  *   - weak candidates remain inspectable but hidden from users
  *   - PROMOTION (anchor/create) requires a reliable place target plus either
- *     human verification OR provenance diversity — popularity alone never
- *     promotes. This is the anti-"review product" invariant.
+ *     human verification, an exact operator-reviewed official source policy,
+ *     OR provenance diversity — popularity alone never promotes. This is the
+ *     anti-"review product" invariant.
  *
  * NOTE: this module is additive. It does NOT replace display-gates.js; Pulse
  * keeps using that for its event stream this release. The gate names here are a
@@ -53,13 +54,19 @@ function evaluateCandidateGates({ target = {}, derived = {}, context = {} } = {}
   // but they must never be offered to a user as a place/nearby/now suggestion.
   const isStructural = target.is_structural === true;
   const humanVerified = target.human_verified === true;
+  const reviewedOfficialSource =
+    target.operator_reviewed_source === true &&
+    target.source_family === "official" &&
+    target.source_tier === "official" &&
+    target.source_policy === "reviewed_profile_bounded_refresh";
   const hasReliablePlaceTarget = resolvePlaceTarget(target, reasons);
 
   // Promotion gate: good enough to materialize or steer a route. Popularity is
-  // intentionally absent here — only verification or cross-family corroboration
-  // (diversity >= 2) can unlock it.
-  const corroborated = humanVerified || diversity >= 2;
+  // intentionally absent here — only place verification, an exact server-owned
+  // official source review, or cross-family corroboration can unlock it.
+  const corroborated = humanVerified || reviewedOfficialSource || diversity >= 2;
   if (humanVerified) reasons.push("human_verified");
+  if (reviewedOfficialSource) reasons.push("operator_reviewed_official_source");
   if (diversity >= 2) reasons.push("provenance_diversity_ok");
 
   // A place must clear a low existence bar to show; a context signal (weather)
@@ -163,6 +170,10 @@ function targetFromPlaceCandidate(candidate = {}) {
       candidate.is_structural === true ||
       ["area_preset", "structural_anchor"].includes(candidateKind),
     human_verified: trust.human_verified === true,
+    operator_reviewed_source: candidate.operator_reviewed_source === true,
+    source_family: candidate.source_family || "",
+    source_tier: trust.source_tier || "",
+    source_policy: candidate.source_policy || "",
     is_context: false,
   };
 }

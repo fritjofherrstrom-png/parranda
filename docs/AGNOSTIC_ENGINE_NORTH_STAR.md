@@ -124,6 +124,20 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 
   **Still honest/missing:** Overture alone is inferred low-trust supply, not proof that a place is “the best”; OSM/Wikidata/curated corroboration and preference/route fit remain the promotion currency. The event scout still discovers and qualifies event sources in the background only; it does not feed stable place candidates, and unreviewed source profiles do not become trusted route inputs. A location with no approved/probationary event source still reports uncovered. Cross-provider aliases remain a separate entity-resolution problem.
 
+- **Reviewed local place-source bridge (2026-08).** A Source Catalog profile can
+  now bind an exact, fresh, geo-bounded official/editorial place-list endpoint
+  to the closed `schema_org_place_html`/`schema_org_place_json` adapter. The
+  adapter extracts only allowlisted place types, stable source identities and
+  exact coordinates from JSON-LD, caps bytes/items/radius, blocks off-origin
+  redirects and warms the persistent cache outside the request path. The rows
+  join the existing external candidate reservoir; there is no parallel crawler
+  or city branch. An official operator-reviewed source can pass route gates
+  while remaining explicitly `human_verified:false`; editorial-only evidence
+  still cannot self-promote. **Still missing:** the scout does not yet discover
+  and qualify these place-list candidates automatically, only schema.org is
+  supported, and conservative alias resolution beyond geo+name/hard ids remains
+  separate work.
+
 - **Next Pulse consumption step:** normalized `time_sensitive_events` can now become gated Pulse signals through the shared Pulse quality/ranking/masthead path. Only source-backed, non-stale, current/today/tonight events with at least medium confidence are eligible; stale/future/source-thin rows stay out. Salience is generic (timing relevance, source confidence/tier, place/coordinate evidence, route-role hint, recurrence/specificity) so unusually relevant happenings can rise above passive context without city-specific hacks. These signals remain Pulse context only: they do not become route stops, route candidates, dayflow composition inputs, or Planner mutations in this step.
 
 - **Pulse display eligibility is broader than route eligibility:** a reviewed, bounded daily calendar window may be useful local context even when it is too long-lived to shape the route. Such rows can be marked `pulse_display_eligible:true` and `route_eligible:false`; the evening weave must honor the latter. Coordinate-less source events remain rejected unless the trusted server resolver finds exactly one medium-or-better venue match inside the applicable trusted geometry: the local anchor radius by default, or exact resolver-attested municipality/region bounds for bounded regional requests. Settlement, coordinate, detached, and broad-anchor scopes cannot widen this gate. Venue lookups are capped, cached by the shared resolver, source-address/venue-derived, fail-closed, and never public-payload-controlled. Regional Pulse eligibility does not loosen the existing walking-validated route-stop distance gate.
@@ -135,7 +149,7 @@ Still missing before a true any-place Planner (now the next steps): stronger gen
 Audited 2026-06-19 from real Athens dogfooding (the felt experience was unchanged despite the convergence work). "Agnostic feel" has **three independent halves**; shipping one does not move the product on its own:
 
 1. **Synthesis** — compose an honest day from whatever candidates exist (route-engine `agnostic_compose` + daypart ordering #293 + readiness gate/observability #290/#292/#295). **Built and proven.** The #295 probe shows the engine path is promotion-`eligible` under adequate supply and `blocked` only by supply-driven caps. Deliberately gated/unpromoted per the guardrail.
-2. **Supply** — enough trusted source-backed candidates that even a thin city composes a *rich* day. **This is the gating lever, and it has not landed.** It is the candidate-reservoir / registered-thin-city fill work (Codex track). Until it lands, no amount of synthesis work changes the felt product.
+2. **Supply** — enough trusted source-backed candidates that even a thin city composes a *rich* day. **The broad global reservoir and first reviewed-local-source bridge have landed; coverage and source quality remain the gating lever.** Next work is proactive place-source discovery/qualification, more structured official/editorial adapters and conservative entity resolution. No amount of extra synthesis substitutes for that work.
 3. **Live-source fit** — pulse feeds that are culturally relevant, not administrative. Athens's wired City-of-Athens events calendar returns HTTP 200 but mostly municipal council meetings (`Συνεδρίαση …`) → "same pulse". This is source selection + salience (pulse lane), not a wiring failure.
 
 Evidence from Athens (registered, thin): **26 verified catalog items, 4 provisional candidates, 0 templates.** Two consequences make the synthesis work invisible there: (a) Athens is a **registered** city, so the entire any-place stack (convergence / promotion gate / observability) is gated behind `noRecognizedCity` and **never runs for it**; (b) #293 daypart ordering is **inert for Athens** because its 26 catalog items carry no `route_roles` (only the 4 provisional candidates do). So the synthesis we shipped does not touch Athens's felt experience.

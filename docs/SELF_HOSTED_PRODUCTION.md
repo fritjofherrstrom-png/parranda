@@ -101,7 +101,7 @@ Manual runs use the same workflow and never deploy an uncommitted worktree.
   Public payloads cannot inject source endpoints or provider rows.
 - The optional Source Catalog is enabled only through host-owned environment
   configuration. Scout writes are forced to `review_needed`; only profiles with
-  a fresh approved runtime review can supplement event acquisition.
+  a fresh approved runtime review can supplement event or place acquisition.
 
 ## Optional geo Source Catalog
 
@@ -110,6 +110,7 @@ Set these host-owned values in `.env.production`:
 ```text
 PARRANDA_SOURCE_CATALOG=enabled
 PARRANDA_QUALIFIED_SOURCE_RUNTIME=disabled
+PARRANDA_REVIEWED_PLACE_SOURCES=enabled
 PARRANDA_SOURCE_CATALOG_PASSWORD=a-long-url-safe-secret
 PARRANDA_SOURCE_CATALOG_DATABASE_URL=postgresql://parranda:a-long-url-safe-secret@postgres:5432/parranda
 ```
@@ -163,6 +164,19 @@ npm run review:source-profile -- --approve reviewed-profile.json
 
 The command rejects unreviewed, expired, endpoint-swapped, adapter-swapped,
 unhealthy, social-only or otherwise invalid profiles. It is not an HTTP API.
+
+An approved profile may also carry a `runtime_review.place_sources` list. The
+first place adapter is deliberately narrow: `schema_org_place_html` or
+`schema_org_place_json`, exact HTTPS endpoint/adapter/source-identity binding,
+an `official` or `editorial` evidence family, compatible terms, healthy status,
+bounded item count and the profile's reviewed geographic bounds. It reads only
+JSON-LD factual atoms for a closed set of useful place types and requires exact
+coordinates; it does not geocode rows or ingest descriptions, ratings, images
+or generic `LocalBusiness` records. Cold reads warm the shared source cache and
+the request serves them on a later hit. A reviewed official source may supply a
+route candidate without being mislabeled as place-level human verification;
+editorial-only rows still need independent corroboration. Expiry, unknown
+fields, an off-origin redirect or a catalog outage all fail closed.
 
 ## Manual deployment and rollback
 
