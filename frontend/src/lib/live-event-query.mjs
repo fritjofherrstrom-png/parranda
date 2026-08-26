@@ -35,6 +35,13 @@ export function trustedDayAnchor(response) {
   );
 }
 
+export function trustedPlaceQuery(response) {
+  const query = response?.agnostic_route_output_experiment?.intake?.query;
+  if (typeof query !== "string") return null;
+  const normalized = query.trim().replace(/\s+/g, " ");
+  return normalized && normalized.length <= 200 ? normalized : null;
+}
+
 export function boundedRoutePoints(stops, limit = MAX_ROUTE_POINTS) {
   const boundedLimit = Math.max(2, Math.min(MAX_ROUTE_POINTS, Math.floor(Number(limit) || MAX_ROUTE_POINTS)));
   const points = [];
@@ -83,7 +90,9 @@ export function buildLiveEventQueryPayload({
   }
 
   const anchor = scope === "near_me" ? coordinate(nearMeCoords) : trustedDayAnchor(response);
-  return anchor ? { ...base, anchor } : null;
+  if (!anchor) return null;
+  const placeQuery = scope === "around_place" ? trustedPlaceQuery(response) : null;
+  return placeQuery ? { ...base, anchor, place_query: placeQuery } : { ...base, anchor };
 }
 
 export function acceptedLiveEventQuery(response) {

@@ -256,6 +256,31 @@ function classifyConfidences(rawCandidates, query = null) {
   if (!rawCandidates.length) return [];
   const sorted = [...dedupeSamePlace(rawCandidates)].sort((a, b) => (b.importance ?? -1) - (a.importance ?? -1));
 
+  // A geocoder's popularity-ish `importance` is not identity evidence. Small
+  // villages and districts can have a low score while still being an exact,
+  // structurally bounded result. Trust the provider-owned exact name + OSM ref
+  // + bounded place/admin structure enough to anchor at our maximum automatic
+  // level (`medium`). Multiple exact names remain medium together so intake
+  // fails honestly as ambiguous; no label substring or client field can trigger
+  // this path.
+  const normalizedQuery = normalizeNameForMatch(query);
+  const exactStructuralMatches = normalizedQuery
+    ? sorted.filter((candidate) => (
+        normalizeNameForMatch(candidate.name) === normalizedQuery &&
+        Boolean(candidate.osm_ref) &&
+        Boolean(candidate.admin_context) &&
+        ["settlement", "district", "municipality", "region"].includes(candidate.spatial_scope?.kind) &&
+        candidate.spatial_scope?.collection_mode !== "broad_anchor_only"
+      ))
+    : [];
+  if (exactStructuralMatches.length > 0) {
+    const exact = new Set(exactStructuralMatches);
+    return sorted.map((candidate) => ({
+      ...candidate,
+      confidence: exact.has(candidate) ? "medium" : "low",
+    }));
+  }
+
   if (sorted.length === 1) {
     const only = sorted[0];
     const conf = only.importance !== null && only.importance < JUNK_IMPORTANCE_FLOOR ? "low" : "medium";
@@ -282,7 +307,6 @@ function classifyConfidences(rawCandidates, query = null) {
   // keep the administrative/container result weak. Multiple exact-name matches
   // (for example distinct Springfields) remain ambiguous and fail closed in the
   // intake layer.
-  const normalizedQuery = normalizeNameForMatch(query);
   const exactNameMatches = normalizedQuery
     ? sorted.filter((candidate) => normalizeNameForMatch(candidate.name) === normalizedQuery)
     : [];

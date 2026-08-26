@@ -6,17 +6,19 @@ import {
   boundedRoutePoints,
   buildLiveEventQueryPayload,
   trustedDayAnchor,
+  trustedPlaceQuery,
 } from "../src/lib/live-event-query.mjs";
 
 const response = {
   agnostic_route_output_experiment: {
     source_status: { anchor: { lat: 55.605, lng: 13.003 } },
-    intake: { resolved: { lat: 1, lng: 2 } },
+    intake: { query: "  Kivik  ", resolved: { lat: 1, lng: 2 } },
   },
 };
 
 test("around_place uses the trusted server anchor and preserves preferences", () => {
   assert.deepEqual(trustedDayAnchor(response), { lat: 55.605, lng: 13.003 });
+  assert.equal(trustedPlaceQuery(response), "Kivik");
   assert.deepEqual(
     buildLiveEventQueryPayload({
       scope: "around_place",
@@ -29,6 +31,7 @@ test("around_place uses the trusted server anchor and preserves preferences", ()
       time: "this_week",
       preferences: ["culture", "nightlife"],
       anchor: { lat: 55.605, lng: 13.003 },
+      place_query: "Kivik",
     },
   );
 });

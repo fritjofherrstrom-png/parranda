@@ -47,7 +47,6 @@ const {
   resolveReviewedEventSourceProfileFeeds,
 } = require("./reviewed-event-source-profile");
 const {
-  MAX_COLLECTION_RADIUS_M,
   filterEventsForLiveScope,
 } = require("./live-event-query");
 const { classifyCulturalSalience } = require("../pulse-engine/cultural-salience");
@@ -69,6 +68,7 @@ const {
 } = require("./anchor-event-acquisition");
 
 const DEFAULT_RADIUS_M = 3000;
+const MAX_EVENT_COLLECTION_RADIUS_M = 25000;
 const MAX_PER_BUCKET = 6;
 const MAX_BROWSE_PER_BUCKET = 24;
 const SERENDIPITY_MIN_SALIENCE = 7;
@@ -745,7 +745,7 @@ async function collectAnchorEvents({
   placeContext = null,
 } = {}) {
   const effectiveRadiusM = Math.min(
-    MAX_COLLECTION_RADIUS_M,
+    MAX_EVENT_COLLECTION_RADIUS_M,
     Math.max(100, Math.round(radiusM || DEFAULT_RADIUS_M)),
   );
   const sourcePlan = buildScopedEventSourcePlan({
@@ -1267,7 +1267,7 @@ function eventCacheKey(
     .map(String)
     .sort()
     .join(",");
-  const radius = Math.min(MAX_COLLECTION_RADIUS_M, Math.max(100, Math.round(Number(radiusM) || DEFAULT_RADIUS_M)));
+  const radius = Math.min(MAX_EVENT_COLLECTION_RADIUS_M, Math.max(100, Math.round(Number(radiusM) || DEFAULT_RADIUS_M)));
   return `${lat},${lng}:${hour}:${radius}:${spatialScopeCacheKey(spatialScope)}:${sources}`;
 }
 
@@ -1400,7 +1400,7 @@ function resolveDefaultEventSupply(
       }
     }
     const effectiveRadiusM = Math.min(
-      MAX_COLLECTION_RADIUS_M,
+      MAX_EVENT_COLLECTION_RADIUS_M,
       Math.max(100, Math.round(Number(radiusM) || DEFAULT_RADIUS_M)),
     );
     const sourcePlan = buildScopedEventSourcePlan({

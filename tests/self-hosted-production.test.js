@@ -14,6 +14,13 @@ test("self-hosted production files keep one immutable deployment contract", () =
   assert.equal(validateSelfHostedStack(), true);
 });
 
+test("the production runtime includes CA certificates for trusted HTTPS source reads", () => {
+  const dockerfile = fs.readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
+  const runtimeStage = dockerfile.split(/FROM node:22-bookworm-slim AS runtime\s*/u)[1] || "";
+
+  assert.match(runtimeStage, /apt-get install[^\n]*ca-certificates/u);
+});
+
 test("self-hosted deployment script is valid bash", () => {
   execFileSync("bash", ["-n", path.join(ROOT, "scripts/deploy-self-hosted.sh")]);
 });

@@ -170,6 +170,27 @@ Required surfaces:
 - fit/lens reasons
 - missing roles/preferences
 
+## Trusted source-supply checkpoint — 2026-08
+
+The any-place path now has two complementary broad place suppliers rather than
+one public Overpass dependency:
+
+- OSM/Overpass remains the `map` family and can corroborate with Wikidata.
+- Overture Places supplies a bounded five-kilometre global `open_directory`
+  family through cached GeoParquet reads. It is filtered at confidence 0.95,
+  never contributes ratings or generic prose, and is counted as one family.
+- Compact exact settlements such as Kivik resolve from structural provider
+  identity rather than popularity. This is a generic small-place rule.
+- A resolver-attested small settlement searches approved Live sources locally
+  first and only then exposes source-backed happenings up to 25 km away with an
+  explicit distance. Client geometry cannot activate that fallback.
+
+This removes the “Overpass or nothing” blocker. It does not declare the source
+supply finished: directory-only candidates remain provisional, discovered
+event sources remain review/probation gated, and the next source work should
+improve independent local/editorial/official corroboration and entity resolution
+instead of adding more synthesis diagnostics.
+
 ## Immediate roadmap
 
 ### #244 Candidate Reservoir role selector v0

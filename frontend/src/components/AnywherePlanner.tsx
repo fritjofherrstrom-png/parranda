@@ -145,6 +145,16 @@ interface PulseEvent {
   source_label?: string;
   source_url?: string;
   timezone?: string;
+  live_proximity?: "nearby";
+  anchor_distance_km?: number;
+}
+
+function nearbyDistanceLabel(event: PulseEvent, lang: Lang): string | null {
+  if (event.live_proximity !== "nearby" || !Number.isFinite(event.anchor_distance_km)) return null;
+  const distance = Number(event.anchor_distance_km).toLocaleString(lang === "sv" ? "sv-SE" : "en-US", {
+    maximumFractionDigits: 1,
+  });
+  return lang === "sv" ? `${distance} km bort` : `${distance} km away`;
 }
 
 interface LiveSourceHealth {
@@ -2817,6 +2827,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                               <span className="text-sm text-parranda-ink/90">
                                 <span className="font-bold">{ev.title}</span>
                                 {ev.place && <span className="text-parranda-ink/60"> · {ev.place}</span>}
+                                {nearbyDistanceLabel(ev, lang) && <span className="font-semibold text-parranda-clay"> · {nearbyDistanceLabel(ev, lang)}</span>}
                                 {ev.source_url && (
                                   <span className="text-parranda-ink/50">
                                     {" · "}
@@ -2843,6 +2854,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                               <span className="text-sm text-parranda-ink/90">
                                 <span className="font-semibold">{ev.title}</span>
                                 {ev.place && <span className="text-parranda-ink/60"> · {ev.place}</span>}
+                                {nearbyDistanceLabel(ev, lang) && <span className="font-semibold text-parranda-clay"> · {nearbyDistanceLabel(ev, lang)}</span>}
                                 {ev.source_url && (
                                   <span className="text-parranda-ink/50">
                                     {" · "}
