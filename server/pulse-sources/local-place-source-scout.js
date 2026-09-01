@@ -5,6 +5,10 @@ const { createHash } = require("node:crypto");
 const {
   inspectSchemaOrgPlacePayload,
 } = require("../place-candidates/schema-org-place-source");
+const {
+  MAP_LINKED_PLACE_ADAPTER,
+  inspectMapLinkedPlacePayload,
+} = require("../place-candidates/map-linked-html-place-source");
 
 const MAX_PLACE_DISCOVERY_QUERIES = 8;
 const MIN_PLACE_LIST_ITEMS = 2;
@@ -69,14 +73,28 @@ function inspectPlaceSourcePage({
   const bbox = normalizeBounds(context.bounds) || boundsAroundAnchor(context.anchor);
   if (!endpoint || !bbox) return emptyInspection("place_source_input_invalid");
   const mediaType = String(contentType || "").split(";")[0].trim().toLowerCase();
-  const adapter = mediaType === "application/ld+json" || mediaType === "application/json"
+  let adapter = mediaType === "application/ld+json" || mediaType === "application/json"
     ? "schema_org_place_json"
     : "schema_org_place_html";
-  const summary = inspectSchemaOrgPlacePayload(body, {
+  let summary = inspectSchemaOrgPlacePayload(body, {
     adapter,
     bbox,
     sourceId: `scout-place-${stableHash(endpoint).slice(0, 20)}`,
   });
+  if (
+    adapter === "schema_org_place_html" &&
+    (summary.status !== "ok" || summary.accepted_place_count < MIN_PLACE_LIST_ITEMS)
+  ) {
+    const mapLinked = inspectMapLinkedPlacePayload(body, {
+      bbox,
+      endpoint,
+      sourceId: `scout-place-${stableHash(endpoint).slice(0, 20)}`,
+    });
+    if (mapLinked.status === "ok" && mapLinked.accepted_place_count >= MIN_PLACE_LIST_ITEMS) {
+      adapter = MAP_LINKED_PLACE_ADAPTER;
+      summary = mapLinked;
+    }
+  }
   if (summary.status !== "ok" || summary.accepted_place_count < MIN_PLACE_LIST_ITEMS) {
     return {
       ...emptyInspection(summary.status === "failed"
@@ -128,7 +146,8 @@ function buildPlaceManifestCandidate(candidate, { seed = {}, bbox = null } = {})
     !candidate ||
     candidate.status !== "viable_place_provider_probe" ||
     candidate.maps_to_existing_provider !== true ||
-    !["schema_org_place_html", "schema_org_place_json"].includes(candidate.adapter) ||
+    !["schema_org_place_html", "schema_org_place_json", MAP_LINKED_PLACE_ADAPTER]
+      .includes(candidate.adapter) ||
     !normalizeBounds(bbox)
   ) return null;
   return compact({

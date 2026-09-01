@@ -255,11 +255,14 @@ empty. Self-hosters can enable this worker seam with
 `PARRANDA_SOURCE_SEARCH_ENDPOINT`; it remains disabled by default.
 
 The scout may also propose a structured place-list source when a public HTTPS
-page exposes at least two stable, exact-coordinate schema.org places inside the
-trusted geographic scope. Those candidates and their rolling two-day probe
-counts stay in a dedicated review-only profile lane. They never enter the
-event graph and never become route supply until an operator binds the exact
-candidate through `runtime_review.place_sources`.
+page exposes at least two stable, exact-coordinate schema.org places or strict
+map-linked place cards inside the trusted geographic scope. A map-linked card
+must carry the name, a closed category, a same-origin detail identity and an
+exact coordinate map URL together; missing facts do not fall back to client or
+prose inference. Those candidates and their rolling two-day probe counts stay
+in a dedicated review-only profile lane. They never enter the event graph and
+never become route supply until an operator binds the exact candidate through
+`runtime_review.place_sources`.
 
 ## Bounded anchor acquisition v1
 

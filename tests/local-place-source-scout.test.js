@@ -39,6 +39,22 @@ function defaultPlaces() {
   ];
 }
 
+function mapLinkedPlaceList() {
+  return `
+    <ul>
+      <li class="poi-card">
+        <h3><a href="/places/harbour-museum">Harbour Museum</a></h3>
+        <span class="poi-category">Museum</span>
+        <a href="https://www.google.com/maps?q=55.5501,14.3501">Map</a>
+      </li>
+      <li class="poi-card">
+        <h3><a href="/places/cliff-park">Cliff Park</a></h3>
+        <span data-place-type="Parks and nature">Nature</span>
+        <a href="https://www.openstreetmap.org/?mlat=55.5601&amp;mlon=14.3601">Map</a>
+      </li>
+    </ul>`;
+}
+
 function context() {
   return {
     anchor: { lat: 55.55, lng: 14.35 },
@@ -103,6 +119,27 @@ test("two exact in-scope schema.org places become one review-only source candida
   assert.equal(result.manifest_candidate.status, "review-needed");
   assert.equal(result.manifest_candidate.runtime_policy, "review_required");
   assert.equal(result.manifest_candidate.review.robots_status, "review_at_activation");
+  assert.equal(result.manifest_candidate.activation_performed, undefined);
+});
+
+test("map-linked place cards enter the same review-only source lane", () => {
+  const result = inspectPlaceSourcePage({
+    seed: {
+      url: "https://guide.example/see-and-do",
+      label: "Official destination guide",
+      trust_tier: "official",
+      terms_status: "open_license",
+    },
+    body: mapLinkedPlaceList(),
+    contentType: "text/html",
+    context: context(),
+  });
+
+  assert.equal(result.candidate.adapter, "map_linked_place_html");
+  assert.equal(result.candidate.accepted_place_count, 2);
+  assert.equal(result.manifest_candidate.adapter, "map_linked_place_html");
+  assert.equal(result.manifest_candidate.status, "review-needed");
+  assert.equal(result.manifest_candidate.runtime_policy, "review_required");
   assert.equal(result.manifest_candidate.activation_performed, undefined);
 });
 

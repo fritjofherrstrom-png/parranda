@@ -5,6 +5,10 @@ const { createSourceCache } = require("./source-cache");
 const {
   resolveReviewedPlaceSourceProfileFeeds,
 } = require("./reviewed-place-source-profile");
+const {
+  MAP_LINKED_PLACE_ADAPTER,
+  extractMapLinkedPlaceRecords,
+} = require("./map-linked-html-place-source");
 
 const ENABLE_ENV_KEY = "PARRANDA_REVIEWED_PLACE_SOURCES";
 const DEFAULT_TIMEOUT_MS = 8_000;
@@ -118,21 +122,27 @@ async function collectReviewedPlaceFeedOutcome(feed, {
     const raw = await readBoundedText(response, boundedInteger(maxBytes, 1024, 4 * 1024 * 1024));
     if (!raw) return failed();
 
-    let nodes;
-    if (feed.adapter === "schema_org_place_json") {
-      try {
-        nodes = extractSchemaOrgPlaces(JSON.parse(raw));
-      } catch (_error) {
-        return failed();
-      }
+    let records;
+    if (feed.adapter === MAP_LINKED_PLACE_ADAPTER) {
+      records = extractMapLinkedPlaceRecords(raw, feed);
     } else {
-      const parsed = parseSchemaOrgPlacesFromHtml(raw);
-      if (!parsed.validScriptCount && parsed.invalidScriptCount) return failed();
-      nodes = parsed.places;
+      let nodes;
+      if (feed.adapter === "schema_org_place_json") {
+        try {
+          nodes = extractSchemaOrgPlaces(JSON.parse(raw));
+        } catch (_error) {
+          return failed();
+        }
+      } else {
+        const parsed = parseSchemaOrgPlacesFromHtml(raw);
+        if (!parsed.validScriptCount && parsed.invalidScriptCount) return failed();
+        nodes = parsed.places;
+      }
+      records = nodes
+        .map((place) => mapSchemaOrgPlaceToRecord(place, feed))
+        .filter(Boolean);
     }
-    const records = nodes
-      .map((place) => mapSchemaOrgPlaceToRecord(place, feed))
-      .filter(Boolean)
+    records = records
       .filter((record) => pointInBounds(record, feed.bbox))
       .slice(0, boundedInteger(feed.max_items ?? MAX_RUNTIME_RECORDS, 1, 100));
     return { status: records.length ? "ok" : "empty", records };
@@ -149,7 +159,7 @@ async function collectReviewedPlaceFeedOutcome(feed, {
  * counts leave this function: discovered place rows are never returned to the
  * scout, candidate reservoir, or request path.
  */
-async function probeSchemaOrgPlaceFeed(feed, options = {}) {
+async function probeReviewedPlaceFeed(feed, options = {}) {
   const outcome = await collectReviewedPlaceFeedOutcome(feed, {
     ...options,
     probeOnly: true,
@@ -161,6 +171,8 @@ async function probeSchemaOrgPlaceFeed(feed, options = {}) {
     distinct_place_type_count: new Set(records.map((record) => record.type)).size,
   };
 }
+
+const probeSchemaOrgPlaceFeed = probeReviewedPlaceFeed;
 
 /**
  * Inspect an already-fetched page without retaining its place rows. This is
@@ -383,7 +395,7 @@ function validFeed(feed) {
   return Boolean(
     feed &&
     typeof feed === "object" &&
-    ["schema_org_place_html", "schema_org_place_json"].includes(feed.adapter) &&
+    ["schema_org_place_html", "schema_org_place_json", MAP_LINKED_PLACE_ADAPTER].includes(feed.adapter) &&
     safeHttpsUrl(feed.endpoint) &&
     validBounds &&
     ["official", "editorial"].includes(feed.evidence_family),
@@ -396,7 +408,7 @@ function validProbeFeed(feed) {
     feed &&
     typeof feed === "object" &&
     boundedString(feed.id, 120) &&
-    ["schema_org_place_html", "schema_org_place_json"].includes(feed.adapter) &&
+    ["schema_org_place_html", "schema_org_place_json", MAP_LINKED_PLACE_ADAPTER].includes(feed.adapter) &&
     safeHttpsUrl(feed.endpoint) &&
     bbox.length === 4 &&
     bbox.every(Number.isFinite) &&
@@ -529,6 +541,7 @@ module.exports = {
   inspectSchemaOrgPlacePayload,
   mapSchemaOrgPlaceToRecord,
   parseSchemaOrgPlacesFromHtml,
+  probeReviewedPlaceFeed,
   probeSchemaOrgPlaceFeed,
   resolveDefaultReviewedPlaceSource,
 };

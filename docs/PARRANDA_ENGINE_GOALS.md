@@ -192,23 +192,26 @@ improve independent local/editorial/official corroboration and entity resolution
 instead of adding more synthesis diagnostics.
 
 The reviewed-place bridge now lets a fresh, geo-bounded Source Catalog profile
-feed an approved official/editorial schema.org place list into that same
-reservoir. It accepts only a closed type vocabulary plus exact source-owned
-coordinates and stable identities; prose, ratings, images, generic businesses,
-unknown adapters and off-origin redirects never enter. Official reviewed-source
-rows can route without pretending the individual place was human-verified;
-editorial-only rows remain display/corroboration evidence. This is generic for
-any approved geography.
+feed an approved official/editorial place list into that same reservoir. It
+supports schema.org JSON-LD plus a closed map-linked-card adapter that requires
+same-card name, category, same-origin detail identity and high-precision
+coordinates from a recognized map URL. It accepts only a closed type vocabulary
+plus exact source-owned coordinates and stable identities; prose, ratings,
+images, generic businesses, unknown facts/adapters and off-origin redirects
+never enter. Official reviewed-source rows can route without pretending the
+individual place was human-verified; editorial-only rows remain
+display/corroboration evidence. This is generic for any approved geography.
 
 The generic worker now proactively searches for local-language and English
 place-guide interfaces, follows bounded same-origin guide links, and recognizes
-only multi-item schema.org lists with stable identities plus exact in-scope
-coordinates. Exact endpoint/adapter/publisher/bounds candidates are re-probed
-on separate days and promoted only to `qualified_for_review`; no place source
-auto-activates or enters probation. This closes the discovery/qualification
-bridge, not coverage itself. The next source slices are additional structured
-official/editorial adapters, stronger actual source operations and conservative
-cross-provider aliases—not more route synthesis.
+only multi-item schema.org lists or map-linked cards with stable identities plus
+exact in-scope coordinates. Exact endpoint/adapter/publisher/bounds candidates
+are re-probed on separate days and promoted only to `qualified_for_review`; no
+place source auto-activates or enters probation. This closes one additional
+common list format, not coverage itself. The next source slices are bounded
+detail-page fan-out for list/detail guides, source operation across real
+geographies, Wix/entity-data extraction where exact coordinates exist, and
+conservative cross-provider aliases—not more route synthesis.
 
 ## Immediate roadmap
 

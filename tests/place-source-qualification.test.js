@@ -104,6 +104,36 @@ test("two healthy UTC-day probes qualify an exact place source for review withou
   assert.doesNotMatch(JSON.stringify(second), /must not persist|raw_records|secret/);
 });
 
+test("map-linked candidates preserve their exact adapter through qualification", async () => {
+  const adapters = [];
+  const mapCandidate = candidate({ adapter: "map_linked_place_html" });
+  const mapManifest = manifest({ adapter: "map_linked_place_html" });
+  const first = await qualifyDiscoveredPlaceSourceProfile({
+    profile: profile({ place_source_candidates: [mapCandidate] }),
+    manifests: [mapManifest],
+    now: new Date("2026-08-01T10:00:00Z"),
+    probe: async (feed) => {
+      adapters.push(feed.adapter);
+      return healthyProbe();
+    },
+  });
+  const second = await qualifyDiscoveredPlaceSourceProfile({
+    profile: profile({ place_source_candidates: [mapCandidate] }),
+    manifests: [mapManifest],
+    previousQualification: first.qualification,
+    now: new Date("2026-08-02T10:00:00Z"),
+    probe: async (feed) => {
+      adapters.push(feed.adapter);
+      return healthyProbe();
+    },
+  });
+
+  assert.deepEqual(adapters, ["map_linked_place_html", "map_linked_place_html"]);
+  assert.equal(second.qualification.status, "qualified_for_review");
+  assert.equal(second.qualification.candidates[0].review_candidate.adapter, "map_linked_place_html");
+  assert.deepEqual(second.profile.runtime_review.place_sources, []);
+});
+
 test("same-day probes replace evidence and cannot satisfy repeated-day qualification", async () => {
   const first = await qualifyDiscoveredPlaceSourceProfile({
     profile: profile(),

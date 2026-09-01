@@ -225,6 +225,63 @@ test("structured place sources enter the dedicated profile lane but remain revie
   assert.doesNotMatch(JSON.stringify(result), /raw_rows|must-not-leak/);
 });
 
+test("map-linked place sources survive compact profile output without activation", async () => {
+  const placeCandidate = {
+    id: "scout-place-map-guide",
+    candidate_kind: "place_list",
+    family: "official_place_guide",
+    source_label: "Regional map-linked guide",
+    url: "https://guide.example/places",
+    source_identity: "guide.example",
+    adapter: "map_linked_place_html",
+    status: "viable_place_provider_probe",
+    maps_to_existing_provider: true,
+    trust_tier: "official",
+    terms_status: "open_license",
+    source_health: "healthy",
+    runtime_policy: "review_needed",
+  };
+  const result = await discoverLocalEventSourcesForPlace({
+    placeQuery: "Test Place",
+    placeResolver: resolverFor("Test Place, Region", 55.6, 13, {
+      locality: "Test Place",
+      country_code: "se",
+    }),
+    openDataLoader: async () => loaded([{
+      name: "Official guide",
+      website: "https://guide.example/",
+      trust_tier: "official",
+    }]),
+    bounds: [12.8, 55.4, 13.3, 55.8],
+    sourceScout: async () => ({
+      status: "complete",
+      inspected_source_count: 1,
+      results: [],
+      manifest_candidates: [],
+      place_source_candidates: [placeCandidate],
+      place_manifest_candidates: [{
+        id: placeCandidate.id,
+        label: placeCandidate.source_label,
+        endpoint: placeCandidate.url,
+        adapter: placeCandidate.adapter,
+        bbox: [12.8, 55.4, 13.3, 55.8],
+        source_tier: "official",
+        source_identity: placeCandidate.source_identity,
+        max_items: 12,
+        status: "active",
+        runtime_policy: "bounded_refresh",
+        review: { terms_status: "open_license", robots_status: "allowed" },
+      }],
+    }),
+  });
+
+  assert.equal(result.source_profile.place_source_candidates[0].adapter, "map_linked_place_html");
+  assert.equal(result.place_manifest_candidates[0].adapter, "map_linked_place_html");
+  assert.equal(result.place_manifest_candidates[0].status, "review-needed");
+  assert.deepEqual(result.source_profile.runtime_review.place_sources, []);
+  assert.equal(result.activation_performed, false);
+});
+
 test("trusted administrative identity produces a generic regional source profile", async () => {
   let scoutInput = null;
   const result = await discoverLocalEventSourcesForPlace({

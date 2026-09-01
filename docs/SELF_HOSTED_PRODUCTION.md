@@ -174,13 +174,16 @@ The command rejects unreviewed, expired, endpoint-swapped, adapter-swapped,
 unhealthy, social-only or otherwise invalid profiles. It is not an HTTP API.
 
 An approved profile may also carry a `runtime_review.place_sources` list. The
-first place adapter is deliberately narrow: `schema_org_place_html` or
-`schema_org_place_json`, exact HTTPS endpoint/adapter/source-identity binding,
-an `official` or `editorial` evidence family, compatible terms, healthy status,
-bounded item count and the profile's reviewed geographic bounds. It reads only
-JSON-LD factual atoms for a closed set of useful place types and requires exact
-coordinates; it does not geocode rows or ingest descriptions, ratings, images
-or generic `LocalBusiness` records. Cold reads warm the shared source cache and
+place adapters are deliberately narrow: `schema_org_place_html`,
+`schema_org_place_json` or `map_linked_place_html`, exact HTTPS
+endpoint/adapter/source-identity binding, an `official` or `editorial` evidence
+family, compatible terms, healthy status, bounded item count and the profile's
+reviewed geographic bounds. They read only allowlisted factual atoms for a
+closed set of useful place types and require exact coordinates. The map-linked
+adapter additionally requires name, explicit closed category, same-origin
+detail identity and a recognized high-precision map URL in the same card. They
+do not follow detail pages, geocode rows or ingest descriptions, ratings,
+images or generic `LocalBusiness` records. Cold reads warm the shared source cache and
 the request serves them on a later hit. A reviewed official source may supply a
 route candidate without being mislabeled as place-level human verification;
 editorial-only rows still need independent corroboration. Expiry, unknown

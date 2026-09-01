@@ -1,7 +1,7 @@
 "use strict";
 
 const {
-  probeSchemaOrgPlaceFeed,
+  probeReviewedPlaceFeed,
 } = require("../place-candidates/schema-org-place-source");
 
 const QUALIFICATION_SCHEMA_VERSION = 1;
@@ -17,7 +17,7 @@ async function qualifyDiscoveredPlaceSourceProfile({
   previousQualification = null,
   now = new Date(),
   fetcher,
-  probe = probeSchemaOrgPlaceFeed,
+  probe = probeReviewedPlaceFeed,
   maxProbes = MAX_PROBES_PER_RUN,
   timeoutMs = DEFAULT_PROBE_TIMEOUT_MS,
 } = {}) {
@@ -320,7 +320,8 @@ function qualificationIdentity(value) {
 }
 
 function normalizeAdapter(value) {
-  return ["schema_org_place_html", "schema_org_place_json"].includes(value) ? value : null;
+  return ["schema_org_place_html", "schema_org_place_json", "map_linked_place_html"]
+    .includes(value) ? value : null;
 }
 
 function normalizeBounds(value) {
