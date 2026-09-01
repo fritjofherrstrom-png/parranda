@@ -143,6 +143,14 @@ within 30 days plus real accepted event yield may mark a candidate
 `qualified_for_review`. This never changes catalog status or creates an
 approved feed.
 
+The same schedule discovers and probes schema.org place-list candidates in a
+separate lane. It follows only bounded public/same-origin pages, requires exact
+coordinates inside the resolver-attested profile bounds, persists compact
+counts rather than place rows, and requires healthy evidence on two UTC days.
+`qualified_for_review` is not approval: place candidates have no probationary
+runtime lane and cannot reach the reservoir until a fresh operator review adds
+an exact `runtime_review.place_sources` binding.
+
 An operator may set `PARRANDA_QUALIFIED_SOURCE_RUNTIME=enabled` to let a fresh
 qualified candidate enter a bounded probation lane. The binding is revalidated
 against the current discovered endpoint, adapter, source identity, terms and

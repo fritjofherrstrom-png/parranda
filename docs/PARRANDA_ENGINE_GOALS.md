@@ -198,9 +198,17 @@ coordinates and stable identities; prose, ratings, images, generic businesses,
 unknown adapters and off-origin redirects never enter. Official reviewed-source
 rows can route without pretending the individual place was human-verified;
 editorial-only rows remain display/corroboration evidence. This is generic for
-any approved geography. The next gating slice is proactive discovery and
-qualification of place-list candidates, followed by additional structured
-adapters and conservative cross-provider aliases—not more route synthesis.
+any approved geography.
+
+The generic worker now proactively searches for local-language and English
+place-guide interfaces, follows bounded same-origin guide links, and recognizes
+only multi-item schema.org lists with stable identities plus exact in-scope
+coordinates. Exact endpoint/adapter/publisher/bounds candidates are re-probed
+on separate days and promoted only to `qualified_for_review`; no place source
+auto-activates or enters probation. This closes the discovery/qualification
+bridge, not coverage itself. The next source slices are additional structured
+official/editorial adapters, stronger actual source operations and conservative
+cross-provider aliases—not more route synthesis.
 
 ## Immediate roadmap
 

@@ -9,6 +9,7 @@ const {
   createReviewedPlaceSource,
   extractSchemaOrgPlaces,
   parseSchemaOrgPlacesFromHtml,
+  probeSchemaOrgPlaceFeed,
   resolveDefaultReviewedPlaceSource,
 } = require("../server/place-candidates/schema-org-place-source");
 
@@ -109,6 +110,40 @@ test("network, oversized, malformed and cross-origin redirect responses fail clo
     const records = await collectReviewedPlaceFeed(feed(), { fetcher, maxBytes: 1024 });
     assert.deepEqual(records, []);
   }
+});
+
+test("discovery probing reuses the bounded exact-endpoint parser but returns counts only", async () => {
+  const probeFeed = {
+    id: "unapproved-guide",
+    endpoint: "https://guide.example/places",
+    adapter: "schema_org_place_html",
+    bbox: [13, 55, 14, 56],
+  };
+  const result = await probeSchemaOrgPlaceFeed(probeFeed, {
+    fetcher: async () => response(html([
+      place(),
+      place({
+        "@id": "https://guide.example/places/park",
+        "@type": "Park",
+        name: "Local Park",
+      }),
+    ])),
+  });
+  assert.deepEqual(result, {
+    status: "ok",
+    accepted_place_count: 2,
+    distinct_place_type_count: 2,
+  });
+  assert.equal("records" in result, false);
+
+  assert.deepEqual(await probeSchemaOrgPlaceFeed({
+    ...probeFeed,
+    endpoint: "http://guide.example/places",
+  }, { fetcher: async () => response(html(place())) }), {
+    status: "failed",
+    accepted_place_count: 0,
+    distinct_place_type_count: 0,
+  });
 });
 
 test("runtime source warms off-path, then serves only records within 5km of the exact anchor", async () => {

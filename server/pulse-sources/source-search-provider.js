@@ -22,9 +22,10 @@ const DEFAULT_MAX_QUERIES = 6;
 const MAX_INITIAL_QUERIES = 10;
 const DEFAULT_EXPANSION_TRANCHE_SIZE = 4;
 const MAX_EXPANSION_TRANCHE_SIZE = 8;
-// The normal generator emits at most 18 queries. Twenty-four leaves room for
-// modest generic growth while remaining a true runaway guard.
-const DEFAULT_HARD_QUERY_LIMIT = 24;
+// Event and place-list discovery together emit at most 26 queries. Thirty
+// leaves a small safety margin while adaptive novelty still stops ordinary
+// runs well before the hard ceiling.
+const DEFAULT_HARD_QUERY_LIMIT = 30;
 const MAX_HARD_QUERY_LIMIT = 30;
 const MAX_EMPTY_EXPANSION_ROUNDS = 2;
 const DEFAULT_MAX_RESULTS_PER_QUERY = 5;

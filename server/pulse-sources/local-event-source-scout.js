@@ -24,6 +24,12 @@ const { hasEmbeddedProgramRscSignature } = require("./embedded-program-rsc-provi
 const {
   hasOfficialProgramArticleSignature,
 } = require("./official-program-article-provider");
+const {
+  buildLocalPlaceDiscoveryQueryPlan,
+  extractPlaceListPageLinks,
+  inspectPlaceSourcePage,
+  withPlaceManifestRobotsStatus,
+} = require("./local-place-source-scout");
 
 const DEFAULT_USER_AGENT =
   "Parranda-Source-Scout/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
@@ -117,6 +123,36 @@ function buildLocalEventDiscoveryQueryPlan({
 
 function buildLocalEventDiscoveryQueries(options = {}) {
   return buildLocalEventDiscoveryQueryPlan(options).map((item) => item.query);
+}
+
+function buildLocalSourceDiscoveryQueryPlan(options = {}) {
+  return interleaveDiscoveryQueryPlans(
+    buildLocalEventDiscoveryQueryPlan(options),
+    buildLocalPlaceDiscoveryQueryPlan(options),
+  );
+}
+
+function buildLocalSourceDiscoveryQueries(options = {}) {
+  return buildLocalSourceDiscoveryQueryPlan(options).map((item) => item.query);
+}
+
+// The search provider may stop after a bounded low-novelty prefix. Keep both
+// supply lanes represented from the first tranche so thin places do not spend
+// the entire search budget on event queries before place discovery begins.
+function interleaveDiscoveryQueryPlans(...plans) {
+  const queues = plans.map((plan) => [...(Array.isArray(plan) ? plan : [])]);
+  const out = [];
+  const seen = new Set();
+  while (queues.some((queue) => queue.length)) {
+    for (const queue of queues) {
+      let item = queue.shift();
+      while (item && seen.has(item.query)) item = queue.shift();
+      if (!item) continue;
+      seen.add(item.query);
+      out.push(item);
+    }
+  }
+  return out;
 }
 
 function uniqueQueryLabels(values) {
@@ -317,6 +353,13 @@ function inspectEventSourcePage({
     addCandidate("stable_html_needs_adapter", pageUrl);
   }
 
+  const placeInspection = inspectPlaceSourcePage({
+    seed: effectiveSeed,
+    body: source,
+    contentType,
+    context,
+  });
+
   return {
     source_url: pageUrl,
     source_identity: sourceIdentity(pageUrl),
@@ -328,11 +371,16 @@ function inspectEventSourcePage({
         .map((candidate) => buildReviewedManifestCandidate(candidate, { seed: effectiveSeed, context }))
         .filter(Boolean),
     ),
+    place_source_candidates: placeInspection.candidate ? [placeInspection.candidate] : [],
+    place_manifest_candidates: placeInspection.manifest_candidate
+      ? [placeInspection.manifest_candidate]
+      : [],
+    accepted_place_count: placeInspection.accepted_place_count,
     social_hints: dedupeSocialHints(socialHints),
     rss_interface_decisions: dedupeRssDecisions(rssDecisions),
     exploratory_interfaces: dedupeExploratoryInterfaces(exploratoryInterfaces),
     reasons:
-      candidates.length || socialHints.length
+      candidates.length || socialHints.length || placeInspection.candidate
         ? ["source_interfaces_detected"]
         : ["no_event_source_interface_detected"],
   };
@@ -360,12 +408,21 @@ async function scoutLocalEventSources({
   const normalizedSeeds = dedupeSeeds(seeds)
     .filter((seed) => isScoutablePublicUrl(seed.url))
     .slice(0, clampInteger(maxSeeds, 1, MAX_SEEDS));
-  const discoveryQueries = buildLocalEventDiscoveryQueries({
+  const discoveryQueryOptions = {
     place,
     intentHints,
     localDiscoveryTerms,
-  });
-  const context = { place, anchor, bounds, intentHints, localDiscoveryTerms };
+    localPlaceDiscoveryTerms: place.local_place_discovery_terms,
+  };
+  const discoveryQueries = buildLocalSourceDiscoveryQueries(discoveryQueryOptions);
+  const context = {
+    place,
+    anchor,
+    bounds,
+    intentHints,
+    localDiscoveryTerms,
+    localPlaceDiscoveryTerms: place.local_place_discovery_terms,
+  };
 
   if (typeof fetcher !== "function") {
     return {
@@ -375,6 +432,8 @@ async function scoutLocalEventSources({
       inspected_source_count: 0,
       results: [],
       manifest_candidates: [],
+      place_manifest_candidates: [],
+      place_source_candidates: [],
       social_hints: [],
     };
   }
@@ -415,6 +474,8 @@ async function scoutLocalEventSources({
         robots: compactRobots(robots),
         candidates: [],
         manifest_candidates: [],
+        place_source_candidates: [],
+        place_manifest_candidates: [],
         social_hints: [],
         reasons: ["robots_disallowed"],
       });
@@ -437,6 +498,8 @@ async function scoutLocalEventSources({
         robots: compactRobots(robots),
         candidates: [],
         manifest_candidates: [],
+        place_source_candidates: [],
+        place_manifest_candidates: [],
         social_hints: [],
         reasons: [page.reason],
       });
@@ -452,6 +515,10 @@ async function scoutLocalEventSources({
     const sourceResult = {
       ...inspection,
       manifest_candidates: withManifestRobotsStatus(inspection.manifest_candidates, robots),
+      place_manifest_candidates: withPlaceManifestRobotsStatus(
+        inspection.place_manifest_candidates,
+        robots,
+      ),
       status: "inspected",
       robots: compactRobots(robots),
       fetched_bytes: page.bytes,
@@ -461,21 +528,34 @@ async function scoutLocalEventSources({
     results.push(sourceResult);
 
     if (
-      sourceResult.manifest_candidates.length > 0 ||
+      (
+        sourceResult.manifest_candidates.length > 0 &&
+        sourceResult.place_manifest_candidates.length > 0
+      ) ||
       linkedPageAttempts >= linkedPageLimit ||
       perSeedLinkedPageLimit === 0
     ) {
       continue;
     }
 
-    const linkedPages = extractCalendarPageLinks({
+    const calendarLinks = sourceResult.manifest_candidates.length
+      ? []
+      : extractCalendarPageLinks({
       html: page.body,
       pageUrl: url,
       calendarLinkTerms: uniqueStrings([
         ...(Array.isArray(localDiscoveryTerms) ? localDiscoveryTerms : []),
         ...(Array.isArray(calendarLinkTerms) ? calendarLinkTerms : []),
       ]),
-    });
+        }).map((link) => ({ ...link, discovery_method: "same_origin_calendar_link" }));
+    const placeLinks = sourceResult.place_manifest_candidates.length
+      ? []
+      : extractPlaceListPageLinks({
+          links: extractHtmlLinks(page.body, url),
+          pageUrl: url,
+          localPlaceDiscoveryTerms: place.local_place_discovery_terms,
+        }).map((link) => ({ ...link, discovery_method: "same_origin_place_link" }));
+    const linkedPages = interleaveInterfaceLinks(calendarLinks, placeLinks);
     let seedLinkedPageAttempts = 0;
     for (const link of linkedPages) {
       if (
@@ -528,7 +608,7 @@ async function scoutLocalEventSources({
       const linkedSeed = {
         ...seed,
         url: link.url,
-        discovery_method: "same_origin_calendar_link",
+        discovery_method: link.discovery_method,
         discovered_from: url,
       };
       const linkedInspection = inspectEventSourcePage({
@@ -543,10 +623,14 @@ async function scoutLocalEventSources({
           linkedInspection.manifest_candidates,
           linkedRobots,
         ),
+        place_manifest_candidates: withPlaceManifestRobotsStatus(
+          linkedInspection.place_manifest_candidates,
+          linkedRobots,
+        ),
         status: "inspected",
         robots: compactRobots(linkedRobots),
         fetched_bytes: linkedPage.bytes,
-        discovery_method: "same_origin_calendar_link",
+        discovery_method: link.discovery_method,
         discovered_from: url,
         discovery_link_reasons: link.reasons,
       });
@@ -555,6 +639,12 @@ async function scoutLocalEventSources({
 
   const manifestCandidates = dedupeManifests(
     results.flatMap((result) => result.manifest_candidates || []),
+  );
+  const placeManifestCandidates = dedupeManifests(
+    results.flatMap((result) => result.place_manifest_candidates || []),
+  );
+  const placeSourceCandidates = dedupeCandidates(
+    results.flatMap((result) => result.place_source_candidates || []),
   );
   const socialHints = dedupeSocialHints(
     results.flatMap((result) => result.social_hints || []),
@@ -576,11 +666,13 @@ async function scoutLocalEventSources({
     ).length,
     linked_page_attempt_count: linkedPageAttempts,
     linked_source_count: results.filter(
-      (result) => result.discovery_method === "same_origin_calendar_link",
+      (result) => ["same_origin_calendar_link", "same_origin_place_link"].includes(result.discovery_method),
     ).length,
     ...rssInterfaceCounts(results),
     results,
     manifest_candidates: manifestCandidates,
+    place_manifest_candidates: placeManifestCandidates,
+    place_source_candidates: placeSourceCandidates,
     social_hints: socialHints,
     exploratory_interfaces: exploratoryInterfaces,
   };
@@ -819,6 +911,22 @@ function withManifestRobotsStatus(manifests, robots) {
       ...(robots?.reason ? { robots_reason: robots.reason } : {}),
     },
   }));
+}
+
+function interleaveInterfaceLinks(...lanes) {
+  const queues = lanes.map((lane) => [...(Array.isArray(lane) ? lane : [])]);
+  const out = [];
+  const seen = new Set();
+  while (queues.some((queue) => queue.length)) {
+    for (const queue of queues) {
+      let item = queue.shift();
+      while (item && seen.has(item.url)) item = queue.shift();
+      if (!item) continue;
+      seen.add(item.url);
+      out.push(item);
+    }
+  }
+  return out;
 }
 
 function extractHtmlLanguage(html) {
@@ -1616,6 +1724,8 @@ function emptyInspection(seed, reason) {
     detected: [],
     candidates: [],
     manifest_candidates: [],
+    place_source_candidates: [],
+    place_manifest_candidates: [],
     social_hints: [],
     reasons: [reason],
   };
@@ -1629,9 +1739,11 @@ function linkedPageResult({ seed, link, status, robots, reason }) {
     robots: compactRobots(robots),
     candidates: [],
     manifest_candidates: [],
+    place_source_candidates: [],
+    place_manifest_candidates: [],
     social_hints: [],
     reasons: [reason],
-    discovery_method: "same_origin_calendar_link",
+    discovery_method: firstString(link.discovery_method, "same_origin_calendar_link"),
     discovered_from: firstString(seed.url),
     discovery_link_reasons: link.reasons,
   };
@@ -1695,6 +1807,8 @@ function compact(value) {
 module.exports = {
   buildLocalEventDiscoveryQueryPlan,
   buildLocalEventDiscoveryQueries,
+  buildLocalSourceDiscoveryQueryPlan,
+  buildLocalSourceDiscoveryQueries,
   extractEventWebsiteSeeds,
   inspectEventSourcePage,
   extractDeclaredOpenLicense,

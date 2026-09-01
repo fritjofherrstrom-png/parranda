@@ -14,7 +14,7 @@ const { createHash } = require("node:crypto");
 
 const { resolveAgnosticIntake } = require("../planner/agnostic-place-intake");
 const {
-  buildLocalEventDiscoveryQueryPlan,
+  buildLocalSourceDiscoveryQueryPlan,
   extractEventWebsiteSeeds,
   isScoutablePublicUrl,
   normalizeHttpUrl,
@@ -43,6 +43,7 @@ async function discoverLocalEventSourcesForPlace({
   bounds = null,
   intentHints = [],
   localDiscoveryTerms = [],
+  localPlaceDiscoveryTerms = [],
   timeWindow = {},
   cache = null,
   scoutOptions = {},
@@ -76,13 +77,15 @@ async function discoverLocalEventSourcesForPlace({
     anchor: resolution.anchor,
     bounds: trustedBounds,
     localDiscoveryTerms,
+    localPlaceDiscoveryTerms,
   });
   const discoveryQueryOptions = {
     place,
     intentHints,
     localDiscoveryTerms,
+    localPlaceDiscoveryTerms,
   };
-  const discoveryQueryPlan = buildLocalEventDiscoveryQueryPlan(discoveryQueryOptions);
+  const discoveryQueryPlan = buildLocalSourceDiscoveryQueryPlan(discoveryQueryOptions);
   const discoveryQueries = discoveryQueryPlan.map((item) => item.query);
   const emptySourceProfile = buildSourceProfile({
     place,
@@ -220,6 +223,7 @@ async function discoverLocalEventSourcesForPlace({
     timeWindow,
     intentHints,
     sourceCandidates: sourceCandidatesForProfile(scouted),
+    placeSourceCandidates: placeSourceCandidatesForProfile(scouted),
   });
   return baseOutcome({
     status: normalizeScoutStatus(scouted?.status),
@@ -237,6 +241,7 @@ async function discoverLocalEventSourcesForPlace({
     seeds,
     scout,
     manifestCandidates: reviewOnlyManifests(scouted?.manifest_candidates),
+    placeManifestCandidates: reviewOnlyPlaceManifests(scouted?.place_manifest_candidates),
     sourceResults: compactSourceResults(scouted?.results),
     socialHints: compactSocialHints(scouted?.social_hints),
     exploratoryInterfaces: compactExploratoryInterfaces(scouted?.exploratory_interfaces),
@@ -255,6 +260,7 @@ function baseOutcome({
   seeds = [],
   scout = null,
   manifestCandidates = [],
+  placeManifestCandidates = [],
   sourceResults = [],
   socialHints = [],
   exploratoryInterfaces = [],
@@ -271,6 +277,7 @@ function baseOutcome({
     trusted_website_seeds: seeds,
     source_scout: scout,
     manifest_candidates: manifestCandidates,
+    place_manifest_candidates: placeManifestCandidates,
     source_results: sourceResults,
     social_hints: socialHints,
     // Uncertain feed interfaces. Retained so a poorly structured local web
@@ -288,6 +295,7 @@ function buildTrustedScoutPlace({
   anchor,
   bounds,
   localDiscoveryTerms,
+  localPlaceDiscoveryTerms,
 }) {
   const context = placeContext && typeof placeContext === "object" ? placeContext : {};
   const locale = discoveryLocaleForCountryCode(context.country_code);
@@ -309,6 +317,10 @@ function buildTrustedScoutPlace({
     local_discovery_terms: uniqueStrings([
       ...locale.local_discovery_terms,
       ...localDiscoveryTerms,
+    ]),
+    local_place_discovery_terms: uniqueStrings([
+      ...locale.local_place_discovery_terms,
+      ...localPlaceDiscoveryTerms,
     ]),
   };
 }
@@ -560,6 +572,7 @@ function buildSourceProfile({
   timeWindow = {},
   intentHints = [],
   sourceCandidates = [],
+  placeSourceCandidates = [],
 }) {
   const graph = buildLocalLiveSourceGraph({
     place,
@@ -577,6 +590,7 @@ function buildSourceProfile({
       reviewed_at: null,
       expires_at: null,
       feeds: [],
+      place_sources: [],
     },
     place_context: graph.place_context,
     time_window: graph.time_window,
@@ -586,6 +600,8 @@ function buildSourceProfile({
     source_families: graph.source_families,
     social_coverage: graph.social_coverage,
     acquisition_plan: graph.acquisition_plan,
+    place_source_candidates: (Array.isArray(placeSourceCandidates) ? placeSourceCandidates : [])
+      .slice(0, 24),
   };
 }
 
@@ -595,6 +611,47 @@ function sourceCandidatesForProfile(result) {
     .flatMap((source) => (Array.isArray(source?.candidates) ? source.candidates : []));
   const social = Array.isArray(result.social_hints) ? result.social_hints : [];
   return [...detected, ...social];
+}
+
+function placeSourceCandidatesForProfile(result) {
+  if (!result || typeof result !== "object") return [];
+  return (Array.isArray(result.place_source_candidates) ? result.place_source_candidates : [])
+    .filter((candidate) => candidate?.candidate_kind === "place_list")
+    .map(compactPlaceSourceCandidate)
+    .filter(Boolean)
+    .slice(0, 24);
+}
+
+function compactPlaceSourceCandidate(candidate) {
+  const id = publicString(candidate?.id);
+  const url = publicString(candidate?.url);
+  const adapter = ["schema_org_place_html", "schema_org_place_json"].includes(candidate?.adapter)
+    ? candidate.adapter
+    : null;
+  if (!id || !url || !adapter) return null;
+  return compactObject({
+    id,
+    candidate_kind: "place_list",
+    family: publicString(candidate?.family) || "structured_place_guide",
+    source_label: publicString(candidate?.source_label),
+    url,
+    source_identity: publicString(candidate?.source_identity),
+    discovery_method: publicString(candidate?.discovery_method),
+    adapter,
+    status: candidate?.status === "viable_place_provider_probe"
+      ? "viable_place_provider_probe"
+      : "rejected",
+    maps_to_existing_provider: candidate?.maps_to_existing_provider === true,
+    trust_tier: publicString(candidate?.trust_tier) || "unknown",
+    terms_status: publicString(candidate?.terms_status) || "unknown",
+    source_health: publicString(candidate?.source_health) || "unknown",
+    runtime_policy: "review_needed",
+    corroboration_required: candidate?.corroboration_required === true,
+    accepted_place_count: finiteCount(candidate?.accepted_place_count),
+    distinct_place_type_count: finiteCount(candidate?.distinct_place_type_count),
+    reasons: compactTokens(candidate?.reasons),
+    blockers: compactTokens(candidate?.blockers),
+  });
 }
 
 function sourceProfileKey(place, anchor) {
@@ -634,6 +691,9 @@ function compactScoutSummary(result) {
     failed_source_count: finiteCount(result.failed_source_count),
     linked_page_attempt_count: finiteCount(result.linked_page_attempt_count),
     linked_source_count: finiteCount(result.linked_source_count),
+    place_source_candidate_count: Array.isArray(result.place_source_candidates)
+      ? result.place_source_candidates.length
+      : 0,
   };
 }
 
@@ -651,6 +711,9 @@ function compactSourceResults(results) {
       ...(discoveredFrom ? { discovered_from: discoveredFrom } : {}),
       manifest_candidate_count: Array.isArray(result?.manifest_candidates)
         ? result.manifest_candidates.length
+        : 0,
+      place_manifest_candidate_count: Array.isArray(result?.place_manifest_candidates)
+        ? result.place_manifest_candidates.length
         : 0,
       exploratory_interface_count: Array.isArray(result?.exploratory_interfaces)
         ? result.exploratory_interfaces.length
@@ -709,6 +772,28 @@ function reviewOnlyManifests(manifests) {
     runtime_policy: "review_required",
     review: compactReview(manifest?.review),
   }));
+}
+
+function reviewOnlyPlaceManifests(manifests) {
+  return (Array.isArray(manifests) ? manifests : []).map((manifest) => ({
+    id: publicString(manifest?.id),
+    label: publicString(manifest?.label),
+    endpoint: publicString(manifest?.endpoint),
+    adapter: ["schema_org_place_html", "schema_org_place_json"].includes(manifest?.adapter)
+      ? manifest.adapter
+      : null,
+    format: publicString(manifest?.format),
+    bbox: normalizeBounds(manifest?.bbox),
+    license: publicString(manifest?.license),
+    source_tier: publicString(manifest?.source_tier),
+    source_family: publicString(manifest?.source_family),
+    source_identity: publicString(manifest?.source_identity),
+    priority: finiteCount(manifest?.priority),
+    max_items: Math.min(100, Math.max(1, finiteCount(manifest?.max_items))),
+    status: "review-needed",
+    runtime_policy: "review_required",
+    review: compactReview(manifest?.review),
+  })).filter((manifest) => manifest.id && manifest.endpoint && manifest.adapter && manifest.bbox);
 }
 
 function sanitizeScoutOptions(options) {
@@ -805,6 +890,14 @@ function uniqueStrings(values) {
 function finiteCount(value) {
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? Math.floor(number) : 0;
+}
+
+function compactObject(value) {
+  const output = {};
+  for (const [key, item] of Object.entries(value || {})) {
+    if (item != null) output[key] = item;
+  }
+  return output;
 }
 
 module.exports = {

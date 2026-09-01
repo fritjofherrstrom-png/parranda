@@ -149,6 +149,7 @@ test("trusted place records become bounded scout seeds and review-only manifests
       detected: ["ical"],
       reasons: ["source_interfaces_detected"],
       manifest_candidate_count: 1,
+      place_manifest_candidate_count: 0,
       exploratory_interface_count: 0,
       social_hint_count: 0,
     },
@@ -157,6 +158,71 @@ test("trusted place records become bounded scout seeds and review-only manifests
     JSON.stringify(result),
     /raw_private_payload|raw_html|raw_secret|must-not-leak/,
   );
+});
+
+test("structured place sources enter the dedicated profile lane but remain review-only", async () => {
+  const placeCandidate = {
+    id: "scout-place-regional-guide",
+    candidate_kind: "place_list",
+    family: "official_place_guide",
+    source_label: "Regional guide",
+    url: "https://guide.example/places",
+    source_identity: "guide.example",
+    adapter: "schema_org_place_html",
+    status: "viable_place_provider_probe",
+    maps_to_existing_provider: true,
+    trust_tier: "official",
+    terms_status: "open_license",
+    source_health: "healthy",
+    runtime_policy: "review_needed",
+    raw_rows: ["must-not-leak"],
+  };
+  const result = await discoverLocalEventSourcesForPlace({
+    placeQuery: "Test Place",
+    placeResolver: resolverFor("Test Place, Region", 55.6, 13, {
+      locality: "Test Place",
+      country_code: "se",
+    }),
+    openDataLoader: async () => loaded([{
+      name: "Official guide",
+      website: "https://guide.example/",
+      trust_tier: "official",
+    }]),
+    bounds: [12.8, 55.4, 13.3, 55.8],
+    sourceScout: async () => ({
+      status: "complete",
+      reasons: ["bounded_source_scout_complete"],
+      inspected_source_count: 1,
+      results: [],
+      manifest_candidates: [],
+      place_source_candidates: [placeCandidate],
+      place_manifest_candidates: [{
+        id: placeCandidate.id,
+        label: placeCandidate.source_label,
+        endpoint: placeCandidate.url,
+        adapter: placeCandidate.adapter,
+        bbox: [12.8, 55.4, 13.3, 55.8],
+        source_tier: "official",
+        source_identity: placeCandidate.source_identity,
+        status: "active",
+        runtime_policy: "bounded_refresh",
+        review: { terms_status: "open_license", robots_status: "allowed" },
+        raw_rows: ["must-not-leak"],
+      }],
+    }),
+  });
+
+  assert.ok(result.discovery_queries.some((query) => query.includes("sevärdheter")));
+  assert.equal(result.place_manifest_candidates.length, 1);
+  assert.equal(result.place_manifest_candidates[0].status, "review-needed");
+  assert.equal(result.place_manifest_candidates[0].runtime_policy, "review_required");
+  assert.equal(result.source_profile.place_source_candidates.length, 1);
+  assert.equal(result.source_profile.place_source_candidates[0].id, placeCandidate.id);
+  assert.equal(result.source_profile.place_source_candidates[0].url, placeCandidate.url);
+  assert.equal(result.source_profile.place_source_candidates[0].runtime_policy, "review_needed");
+  assert.deepEqual(result.source_profile.runtime_review.place_sources, []);
+  assert.equal(result.source_profile.place_source_qualification, undefined);
+  assert.doesNotMatch(JSON.stringify(result), /raw_rows|must-not-leak/);
 });
 
 test("trusted administrative identity produces a generic regional source profile", async () => {
@@ -263,6 +329,7 @@ test("trusted administrative identity produces a generic regional source profile
     reviewed_at: null,
     expires_at: null,
     feeds: [],
+    place_sources: [],
   });
   assert.equal(result.source_profile.place_context.label, "Stockholm, Sverige");
   assert.deepEqual(result.source_profile.place_context.region_terms, [

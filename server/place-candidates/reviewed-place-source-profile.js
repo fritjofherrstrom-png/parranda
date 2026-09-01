@@ -44,7 +44,7 @@ function placeFeedsFromReviewedSourceProfiles(profiles = [], { now = Date.now() 
     const bbox = normalizeBounds(profile?.place_context?.bounds);
     const profileKey = boundedString(profile?.profile_key, 240);
     if (!review || !bbox || !profileKey.startsWith("place-source-profile-v1:")) continue;
-    const candidates = candidateIndex(profile?.source_families);
+    const candidates = candidateIndex(profile);
     for (const row of Array.isArray(profile?.runtime_review?.place_sources)
       ? profile.runtime_review.place_sources
       : []) {
@@ -129,13 +129,19 @@ function validRuntimeReview(value, nowMs) {
   };
 }
 
-function candidateIndex(sourceFamilies) {
+function candidateIndex(profile) {
   const index = new Map();
-  for (const family of Array.isArray(sourceFamilies) ? sourceFamilies : []) {
+  for (const family of Array.isArray(profile?.source_families) ? profile.source_families : []) {
     for (const candidate of Array.isArray(family?.candidates) ? family.candidates : []) {
       const id = publicString(candidate?.id);
       if (id && !index.has(id)) index.set(id, candidate);
     }
+  }
+  for (const candidate of Array.isArray(profile?.place_source_candidates)
+    ? profile.place_source_candidates
+    : []) {
+    const id = publicString(candidate?.id);
+    if (id && !index.has(id)) index.set(id, candidate);
   }
   return index;
 }
