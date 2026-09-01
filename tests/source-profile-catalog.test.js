@@ -12,6 +12,7 @@ const {
   FAIL_SCOUT_TARGET_SQL,
   MAX_SCOUT_TARGETS,
   MAX_QUALIFICATION_BYTES,
+  PLACE_SOURCE_QUALIFICATION_SQL,
   SCOUT_REFRESH_MS,
   SCOUT_REPROBE_MIN_MS,
   SOURCE_QUALIFICATION_SQL,
@@ -379,6 +380,31 @@ test("qualification history is read only from review-needed profiles and stays b
   assert.equal(await rejectedCatalog.loadSourceQualification("place-source-profile-v1:schema"), null);
   assert.equal(await rejectedCatalog.loadSourceQualification("place-source-profile-v1:activation"), null);
   assert.equal(await rejectedCatalog.loadSourceQualification("place-source-profile-v1:oversize"), null);
+});
+
+test("place-source qualification history has a separate bounded review-only catalog lane", async () => {
+  const qualification = {
+    schema_version: 1,
+    status: "observing",
+    candidates: [],
+    activation_performed: false,
+  };
+  const calls = [];
+  const catalog = createSourceProfileCatalog({
+    now: () => NOW,
+    query: async (sql, values) => {
+      calls.push({ sql, values });
+      return { rows: [{ place_source_qualification: qualification }] };
+    },
+  });
+  assert.deepEqual(
+    await catalog.loadPlaceSourceQualification(sourceProfile().profile_key),
+    qualification,
+  );
+  assert.equal(calls[0].sql, PLACE_SOURCE_QUALIFICATION_SQL);
+  assert.match(PLACE_SOURCE_QUALIFICATION_SQL, /catalog_status = 'review_needed'/);
+  assert.equal(await catalog.loadPlaceSourceQualification("bad-key"), null);
+  assert.equal(calls.length, 1);
 });
 
 test("only resolver-attested demand enters the queue and broad scopes become local apertures", async () => {

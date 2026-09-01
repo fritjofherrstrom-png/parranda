@@ -61,6 +61,16 @@ test("a fresh operator review binds one exact place source", () => {
   assert.equal(feed.max_items, 30);
 });
 
+test("the reviewed bridge binds candidates from the dedicated place-source discovery lane", () => {
+  const value = profile();
+  value.place_source_candidates = value.source_families[0].candidates;
+  value.place_source_candidates[0].candidate_kind = "place_list";
+  value.source_families = [];
+  const feeds = placeFeedsFromReviewedSourceProfiles([value], { now: NOW });
+  assert.equal(feeds.length, 1);
+  assert.equal(feeds[0].endpoint, "https://guide.example/places");
+});
+
 test("discovery without approval never activates a place source", () => {
   const value = profile();
   value.runtime_review.status = "unreviewed";

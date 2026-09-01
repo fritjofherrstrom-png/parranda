@@ -241,10 +241,10 @@ create missing coverage or justify unbounded scraping.
 
 The background source-scout worker may optionally execute the already-bounded
 discovery-query plan through an operator-configured SearXNG JSON endpoint. The
-resolver-attested country context contributes a small local-language vocabulary
-so discovery is not English-only. Search runs outside the user request, is
-sequential and capped, and stores only public source-page seeds plus compact
-health. It does not collect event rows.
+resolver-attested country context contributes small local-language event and
+place-list vocabularies so discovery is not English-only. Search runs outside
+the user request, is sequential and capped, and stores only public source-page
+seeds plus compact health. It does not collect event or place rows.
 
 Every search result starts as `unknown_source_family` / `unknown` trust. It must
 still pass the existing public-URL, robots, terms, interface-detection, review,
@@ -253,6 +253,13 @@ claim that a place has no events merely because the bounded result set was
 empty. Self-hosters can enable this worker seam with
 `PARRANDA_SOURCE_SEARCH=enabled` and an operator-owned
 `PARRANDA_SOURCE_SEARCH_ENDPOINT`; it remains disabled by default.
+
+The scout may also propose a structured place-list source when a public HTTPS
+page exposes at least two stable, exact-coordinate schema.org places inside the
+trusted geographic scope. Those candidates and their rolling two-day probe
+counts stay in a dedicated review-only profile lane. They never enter the
+event graph and never become route supply until an operator binds the exact
+candidate through `runtime_review.place_sources`.
 
 ## Bounded anchor acquisition v1
 

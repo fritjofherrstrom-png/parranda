@@ -99,6 +99,40 @@ test("missing source-search wiring is explicit and health normalization drops un
   assert.doesNotMatch(JSON.stringify(normalized), /secret|token|hidden/);
 });
 
+test("place-source candidates and qualification contribute to the shared discovery health", () => {
+  const observing = buildSourceDiscoveryHealth({
+    result: discovery({
+      place_manifest_candidates: [{ id: "place-guide" }],
+      source_profile: {
+        source_qualification: { status: "unavailable", candidate_count: 0 },
+        place_source_qualification: { status: "observing", candidate_count: 1 },
+        place_source_candidates: [{ id: "place-guide" }],
+      },
+    }),
+    qualificationStatus: "unavailable",
+    placeQualificationStatus: "observing",
+    observedAt: NOW,
+  });
+  assert.equal(observing.status, "observing");
+  assert.equal(observing.qualification.candidate_count, 1);
+
+  const review = buildSourceDiscoveryHealth({
+    result: discovery({
+      source_profile: {
+        place_source_qualification: {
+          status: "qualified_for_review",
+          candidate_count: 1,
+          qualified_candidate_count: 1,
+        },
+      },
+    }),
+    placeQualificationStatus: "qualified_for_review",
+    observedAt: NOW,
+  });
+  assert.equal(review.status, "review_required");
+  assert.equal(review.qualification.qualified_candidate_count, 1);
+});
+
 test("adaptive breadth persists only compact yield and stop evidence", () => {
   const health = buildSourceDiscoveryHealth({
     result: discovery({

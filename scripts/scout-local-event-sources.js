@@ -28,7 +28,7 @@ const {
 } = require("../server/place-candidates/wikidata-source");
 
 const {
-  buildLocalEventDiscoveryQueries,
+  buildLocalSourceDiscoveryQueries,
   extractEventWebsiteSeeds,
   scoutLocalEventSources,
 } = require("../server/pulse-sources/local-event-source-scout");
@@ -41,6 +41,9 @@ const {
 const {
   qualifyDiscoveredSourceProfile,
 } = require("../server/pulse-sources/source-qualification");
+const {
+  qualifyDiscoveredPlaceSourceProfile,
+} = require("../server/pulse-sources/place-source-qualification");
 const {
   resolveDefaultSourceSearch,
 } = require("../server/pulse-sources/source-search-provider");
@@ -68,7 +71,7 @@ async function main(argv = process.argv.slice(2), options = {}) {
         status: "plan_only",
         live_network_used: false,
         place_query: parsed.place,
-        discovery_queries: buildLocalEventDiscoveryQueries({
+        discovery_queries: buildLocalSourceDiscoveryQueries({
           place: { label: parsed.place },
           intentHints: parsed.intentHints,
           localDiscoveryTerms: parsed.localDiscoveryTerms,
@@ -128,7 +131,7 @@ async function main(argv = process.argv.slice(2), options = {}) {
     writeJson(output, {
       status: "plan_only",
       live_network_used: false,
-      discovery_queries: buildLocalEventDiscoveryQueries(base),
+      discovery_queries: buildLocalSourceDiscoveryQueries(base),
       trusted_website_seeds: seeds,
       reasons: ["pass_--live_to_probe_reviewed_public_seeds"],
     });
@@ -280,6 +283,7 @@ function createOperatorRuntime(env = process.env) {
     sourceScout: scoutLocalEventSources,
     sourceSearch: resolveDefaultSourceSearch(env, { cache: sourceSearchCache }),
     sourceQualifier: qualifyDiscoveredSourceProfile,
+    placeSourceQualifier: qualifyDiscoveredPlaceSourceProfile,
     timezoneResolver: createWeatherTimezoneResolver(),
     scoutCache,
     sourceCatalog: resolveDefaultSourceProfileCatalog(env),

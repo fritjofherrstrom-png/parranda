@@ -229,6 +229,7 @@ test("existing JSON plan mode remains compatible and network-free", async (t) =>
   assert.equal(code, 0);
   assert.equal(result.status, "plan_only");
   assert.equal(result.live_network_used, false);
+  assert.ok(result.discovery_queries.includes("Test Region official tourism attractions"));
   assert.equal(result.trusted_website_seeds.length, 1);
   assert.equal(result.trusted_website_seeds[0].url, "https://venue.example/events");
 });

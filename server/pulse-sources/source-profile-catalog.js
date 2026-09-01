@@ -260,6 +260,14 @@ WHERE profile_key = $1
 LIMIT 1
 `;
 
+const PLACE_SOURCE_QUALIFICATION_SQL = `
+SELECT profile -> 'place_source_qualification' AS place_source_qualification
+FROM pulse_source_profiles
+WHERE profile_key = $1
+  AND catalog_status = 'review_needed'
+LIMIT 1
+`;
+
 const DISCOVERY_HEALTH_FOR_ANCHOR_SQL = `
 SELECT status, last_reason, discovery_health, updated_at
 FROM pulse_source_scout_targets
@@ -370,6 +378,17 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
     try {
       const result = await query(SOURCE_QUALIFICATION_SQL, [key]);
       return normalizeStoredQualification(result?.rows?.[0]?.source_qualification);
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  async function loadPlaceSourceQualification(profileKey) {
+    const key = publicString(profileKey);
+    if (!key?.startsWith("place-source-profile-v1:")) return null;
+    try {
+      const result = await query(PLACE_SOURCE_QUALIFICATION_SQL, [key]);
+      return normalizeStoredQualification(result?.rows?.[0]?.place_source_qualification);
     } catch (_error) {
       return null;
     }
@@ -505,6 +524,7 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
     listApprovedPlaceFeedsForAnchor,
     listQualifiedEventFeedsForAnchor,
     loadSourceQualification,
+    loadPlaceSourceQualification,
     getDiscoveryHealthForAnchor,
     recordScoutDemand,
     claimScoutTarget,
@@ -776,6 +796,7 @@ function enabled(value) {
 module.exports = {
   ACTIVE_PROFILES_FOR_ANCHOR_SQL,
   QUALIFIED_PROFILES_FOR_ANCHOR_SQL,
+  PLACE_SOURCE_QUALIFICATION_SQL,
   CLAIM_SCOUT_TARGET_SQL,
   COMPLETE_SCOUT_TARGET_SQL,
   CATALOG_DATABASE_ENV_KEY,

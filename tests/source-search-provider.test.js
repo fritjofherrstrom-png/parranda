@@ -7,6 +7,9 @@ const {
   createSearxngSourceSearch,
   resolveDefaultSourceSearch,
 } = require("../server/pulse-sources/source-search-provider");
+const {
+  buildLocalSourceDiscoveryQueryPlan,
+} = require("../server/pulse-sources/local-event-source-scout");
 
 function response(body, {
   status = 200,
@@ -35,6 +38,40 @@ test("source search is default-off and requires an operator endpoint", () => {
     PARRANDA_SOURCE_SEARCH: "disabled",
     PARRANDA_SOURCE_SEARCH_ENDPOINT: "http://searxng:8080/search",
   }), null);
+});
+
+test("the bounded initial search tranche cannot starve place-source discovery", async () => {
+  const requestedQueries = [];
+  const plan = buildLocalSourceDiscoveryQueryPlan({
+    place: {
+      name: "Northport",
+      local_discovery_terms: ["evenemang", "marknad"],
+      local_place_discovery_terms: ["sevärdheter", "besöksmål"],
+    },
+  });
+  const search = createSearxngSourceSearch({
+    delay: async () => {},
+    endpoint: "https://search.example/search",
+    maxQueries: 6,
+    hardQueryLimit: 6,
+    fetcher: async (url) => {
+      requestedQueries.push(new URL(url).searchParams.get("q"));
+      return response(JSON.stringify({ results: [] }), {
+        url: "https://search.example/search",
+      });
+    },
+  });
+
+  await search({
+    queries: plan.map((item) => item.query),
+    query_plan: plan,
+    place: { language_hints: ["sv"] },
+  });
+
+  assert.equal(requestedQueries.length, 6);
+  assert.ok(requestedQueries.some((query) => query.includes("evenemang")));
+  assert.ok(requestedQueries.some((query) => query.includes("sevärdheter")));
+  assert.ok(requestedQueries.some((query) => query.includes("official tourism attractions")));
 });
 
 test("SearXNG search stays bounded and returns only low-trust public seeds", async () => {

@@ -94,8 +94,10 @@ async function collectReviewedPlaceFeedOutcome(feed, {
   fetcher = typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   maxBytes = DEFAULT_MAX_BYTES,
+  probeOnly = false,
 } = {}) {
-  if (!validFeed(feed) || typeof fetcher !== "function") return failed();
+  const valid = probeOnly ? validProbeFeed(feed) : validFeed(feed);
+  if (!valid || typeof fetcher !== "function") return failed();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), boundedInteger(timeoutMs, 50, 30_000));
   try {
@@ -132,13 +134,83 @@ async function collectReviewedPlaceFeedOutcome(feed, {
       .map((place) => mapSchemaOrgPlaceToRecord(place, feed))
       .filter(Boolean)
       .filter((record) => pointInBounds(record, feed.bbox))
-      .slice(0, boundedInteger(feed.max_items, 1, 100));
+      .slice(0, boundedInteger(feed.max_items ?? MAX_RUNTIME_RECORDS, 1, 100));
     return { status: records.length ? "ok" : "empty", records };
   } catch (_error) {
     return failed();
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Probe an unapproved discovery candidate through the exact same bounded
+ * parser and network boundary as reviewed runtime sources. Only compact
+ * counts leave this function: discovered place rows are never returned to the
+ * scout, candidate reservoir, or request path.
+ */
+async function probeSchemaOrgPlaceFeed(feed, options = {}) {
+  const outcome = await collectReviewedPlaceFeedOutcome(feed, {
+    ...options,
+    probeOnly: true,
+  });
+  const records = Array.isArray(outcome.records) ? outcome.records : [];
+  return {
+    status: outcome.status,
+    accepted_place_count: records.length,
+    distinct_place_type_count: new Set(records.map((record) => record.type)).size,
+  };
+}
+
+/**
+ * Inspect an already-fetched page without retaining its place rows. This is
+ * used by background discovery to decide whether a page is a genuine
+ * structured place list rather than an individual venue page.
+ */
+function inspectSchemaOrgPlacePayload(raw, {
+  adapter = "schema_org_place_html",
+  bbox,
+  sourceId = "discovery-probe",
+  maxItems = 100,
+} = {}) {
+  if (!["schema_org_place_html", "schema_org_place_json"].includes(adapter)) {
+    return { status: "failed", accepted_place_count: 0, distinct_place_type_count: 0 };
+  }
+  let nodes;
+  if (adapter === "schema_org_place_json") {
+    try {
+      nodes = extractSchemaOrgPlaces(JSON.parse(String(raw || "")));
+    } catch (_error) {
+      return { status: "failed", accepted_place_count: 0, distinct_place_type_count: 0 };
+    }
+  } else {
+    const parsed = parseSchemaOrgPlacesFromHtml(raw);
+    if (!parsed.validScriptCount && parsed.invalidScriptCount) {
+      return { status: "failed", accepted_place_count: 0, distinct_place_type_count: 0 };
+    }
+    nodes = parsed.places;
+  }
+  const feed = {
+    id: boundedString(sourceId, 120) || "discovery-probe",
+    label: "Discovery probe",
+    endpoint: "https://discovery.invalid/places",
+    evidence_family: "official",
+    source_tier: "official",
+  };
+  const seen = new Set();
+  const records = [];
+  for (const node of nodes) {
+    const record = mapSchemaOrgPlaceToRecord(node, feed);
+    if (!record || !pointInBounds(record, bbox) || seen.has(record.id)) continue;
+    seen.add(record.id);
+    records.push(record);
+    if (records.length >= boundedInteger(maxItems, 1, 100)) break;
+  }
+  return {
+    status: records.length ? "ok" : "empty",
+    accepted_place_count: records.length,
+    distinct_place_type_count: new Set(records.map((record) => record.type)).size,
+  };
 }
 
 function extractSchemaOrgPlaces(payload) {
@@ -318,6 +390,21 @@ function validFeed(feed) {
   );
 }
 
+function validProbeFeed(feed) {
+  const bbox = Array.isArray(feed?.bbox) ? feed.bbox : [];
+  return Boolean(
+    feed &&
+    typeof feed === "object" &&
+    boundedString(feed.id, 120) &&
+    ["schema_org_place_html", "schema_org_place_json"].includes(feed.adapter) &&
+    safeHttpsUrl(feed.endpoint) &&
+    bbox.length === 4 &&
+    bbox.every(Number.isFinite) &&
+    bbox[0] >= -180 && bbox[2] <= 180 && bbox[1] >= -90 && bbox[3] <= 90 &&
+    bbox[0] <= bbox[2] && bbox[1] <= bbox[3]
+  );
+}
+
 function dedupeFeeds(feeds) {
   const seen = new Set();
   return (Array.isArray(feeds) ? feeds : []).filter((feed) => {
@@ -439,7 +526,9 @@ module.exports = {
   collectReviewedPlaceFeed,
   createReviewedPlaceSource,
   extractSchemaOrgPlaces,
+  inspectSchemaOrgPlacePayload,
   mapSchemaOrgPlaceToRecord,
   parseSchemaOrgPlacesFromHtml,
+  probeSchemaOrgPlaceFeed,
   resolveDefaultReviewedPlaceSource,
 };

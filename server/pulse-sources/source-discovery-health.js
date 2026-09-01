@@ -33,16 +33,28 @@ const QUALIFICATION_STATUSES = new Set([
   "not_run",
 ]);
 
-function buildSourceDiscoveryHealth({ result = {}, qualificationStatus = null, observedAt = new Date() } = {}) {
+function buildSourceDiscoveryHealth({
+  result = {},
+  qualificationStatus = null,
+  placeQualificationStatus = null,
+  observedAt = new Date(),
+} = {}) {
   const search = normalizeSearchStage(result.source_search);
   const scout = normalizeScoutStage(result.source_scout);
-  const qualification = normalizeQualificationStage(
-    result.source_profile?.source_qualification,
-    qualificationStatus,
+  const qualification = combineQualificationStages(
+    normalizeQualificationStage(
+      result.source_profile?.source_qualification,
+      qualificationStatus,
+    ),
+    normalizeQualificationStage(
+      result.source_profile?.place_source_qualification,
+      placeQualificationStatus,
+    ),
   );
   const candidateCount = Math.max(
     qualification.candidate_count,
-    countManifestCandidates(result.manifest_candidates),
+    countManifestCandidates(result.manifest_candidates) +
+      countManifestCandidates(result.place_manifest_candidates),
     countProfileCandidates(result.source_profile),
   );
   const status = classifyDiscoveryHealth({
@@ -191,13 +203,38 @@ function normalizeQualificationStage(value, fallbackStatus = null) {
   };
 }
 
+function combineQualificationStages(...stages) {
+  const normalized = stages.filter(Boolean);
+  const statuses = normalized.map((stage) => stage.status);
+  const status = statuses.includes("qualified_for_review")
+    ? "qualified_for_review"
+    : statuses.includes("observing")
+      ? "observing"
+      : statuses.includes("failed")
+        ? "failed"
+        : statuses.includes("unavailable")
+          ? "unavailable"
+          : "not_run";
+  return {
+    status,
+    candidate_count: normalized.reduce((sum, stage) => sum + stage.candidate_count, 0),
+    qualified_candidate_count: normalized.reduce(
+      (sum, stage) => sum + stage.qualified_candidate_count,
+      0,
+    ),
+  };
+}
+
 function countManifestCandidates(value) {
   return Array.isArray(value) ? value.length : 0;
 }
 
 function countProfileCandidates(profile) {
-  return (Array.isArray(profile?.source_families) ? profile.source_families : [])
+  const eventCount = (Array.isArray(profile?.source_families) ? profile.source_families : [])
     .reduce((sum, family) => sum + (Array.isArray(family?.candidates) ? family.candidates.length : 0), 0);
+  return eventCount + (Array.isArray(profile?.place_source_candidates)
+    ? profile.place_source_candidates.length
+    : 0);
 }
 
 function statusReason(status) {

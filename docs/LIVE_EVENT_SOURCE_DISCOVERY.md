@@ -212,9 +212,12 @@ new source host identities. Two expansion tranches with no new identity stop the
 run; broadly degraded tranches without trustworthy novelty stop immediately.
 Partial responses keep their useful results and may continue.
 
-The separate `PARRANDA_SOURCE_SEARCH_HARD_QUERY_LIMIT` defaults to 24. The normal
-generic query universe is at most 18, so this is a runaway safety ceiling rather
-than the expected stopping mechanism. `PARRANDA_SOURCE_SEARCH_EXPANSION_TRANCHE_SIZE`
+The separate `PARRANDA_SOURCE_SEARCH_HARD_QUERY_LIMIT` defaults to 30. The
+combined event and structured-place query universe is at most 26, so this is a
+runaway safety ceiling rather than the expected stopping mechanism.
+Event and place families are interleaved before the first tranche, so an early
+low-novelty stop cannot consume the whole run before place discovery begins.
+`PARRANDA_SOURCE_SEARCH_EXPANSION_TRANCHE_SIZE`
 defaults to 4. Seed selection takes one page from each source identity before a
 second page from any identity, preventing early same-domain duplicates from
 crowding out later sources.
@@ -260,6 +263,29 @@ source with mechanically compatible `open_license` or
 Pulse-only probation feed. Unknown terms still require operator review, and a
 probation feed is never route eligible. This reduces operator guesswork while
 preserving the stronger trusted review gate.
+
+The same worker now has a separate structured-place lane. Resolver-attested
+country context contributes bounded local-language place terms alongside the
+event vocabulary, and the scout may follow high-precision same-origin
+attractions/visitor-guide links. A page becomes a place-source candidate only
+when the existing schema.org place parser finds at least two stable,
+exact-coordinate records inside the trusted profile bounds and within the
+closed runtime place-type vocabulary. An individual venue page, generic
+`LocalBusiness`, prose, ratings, images, missing coordinates, out-of-bounds
+rows, restricted terms, unsafe URLs and robots-disallowed pages cannot produce
+a probeable manifest.
+
+Place candidates live in `source_profile.place_source_candidates` and their
+manifests in `place_manifest_candidates`; they do not enter event-family
+coverage. A separate `place_source_qualification` probes at most two exact
+endpoint/adapter/publisher/bounds bindings per worker cycle through the same
+bounded reviewed-place network and parser path. It retains counts only, merges
+at most one observation per UTC day, and requires two healthy days plus a
+current list of at least two accepted places before `qualified_for_review`.
+This verdict is review prioritization only: unlike event probation, there is no
+automatic place-source runtime lane. `runtime_review.place_sources` remains
+empty until an operator approves compatible terms, ownership/evidence family,
+health and expiry through the existing server-owned review boundary.
 
 ### Reviewed source-profile runtime bridge
 

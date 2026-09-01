@@ -267,6 +267,69 @@ test("worker carries prior probe evidence through the bounded qualifier without 
   assert.deepEqual(qualificationInput.manifests, [{ id: "candidate-one" }]);
 });
 
+test("worker persists place-source qualification separately and schedules its next proof", async () => {
+  const claimed = [target("places"), null];
+  const priorQualification = {
+    schema_version: 1,
+    status: "observing",
+    candidates: [],
+    activation_performed: false,
+  };
+  let qualificationInput = null;
+  let recordedProfile = null;
+  let completionOptions = null;
+  const catalog = {
+    claimScoutTarget: async () => claimed.shift(),
+    loadPlaceSourceQualification: async (key) => {
+      assert.equal(key, profile("places").profile_key);
+      return priorQualification;
+    },
+    recordDiscovery: async (value) => {
+      recordedProfile = value;
+      return { status: "recorded", profile_key: value.profile_key };
+    },
+    completeScoutTarget: async (_target, _reason, options) => {
+      completionOptions = options;
+      return { status: "completed" };
+    },
+    failScoutTarget: async () => { throw new Error("should not fail"); },
+  };
+  const result = await runScoutWorkerBatch({
+    catalog,
+    runtime: {
+      now: () => new Date("2026-08-01T23:59:00Z"),
+      placeSourceQualifier: async (input) => {
+        qualificationInput = input;
+        return {
+          profile: {
+            ...input.profile,
+            place_source_qualification: {
+              schema_version: 1,
+              status: "observing",
+              candidate_count: 1,
+              activation_performed: false,
+            },
+          },
+          qualification: { status: "observing" },
+        };
+      },
+    },
+    discover: async () => ({
+      status: "complete",
+      reasons: ["bounded_source_scout_complete"],
+      source_profile: profile("places"),
+      place_manifest_candidates: [{ id: "place-guide" }],
+    }),
+  });
+
+  assert.equal(result.results[0].place_qualification_status, "observing");
+  assert.equal(recordedProfile.place_source_qualification.activation_performed, false);
+  assert.equal(recordedProfile.runtime_review.status, "unreviewed");
+  assert.equal(qualificationInput.previousQualification, priorQualification);
+  assert.deepEqual(qualificationInput.manifests, [{ id: "place-guide" }]);
+  assert.equal(completionOptions.nextAttemptAt.toISOString(), "2026-08-02T00:05:00.000Z");
+});
+
 test("qualifier failure stays fail-soft and stores discovery without forged evidence", async () => {
   const claimed = [target(), null];
   let recordedProfile = null;

@@ -125,6 +125,7 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
 
   let profile = result.source_profile;
   let qualificationStatus = "not_run";
+  let placeQualificationStatus = "not_run";
   let qualificationNow = null;
   if (typeof runtime?.sourceQualifier === "function") {
     try {
@@ -158,9 +159,33 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
     }
   }
 
+  if (typeof runtime?.placeSourceQualifier === "function") {
+    try {
+      qualificationNow = qualificationNow || observedAt;
+      const previousQualification = typeof catalog.loadPlaceSourceQualification === "function"
+        ? await catalog.loadPlaceSourceQualification(profile.profile_key)
+        : null;
+      const qualified = await runtime.placeSourceQualifier({
+        profile,
+        manifests: result.place_manifest_candidates,
+        previousQualification,
+        anchor: target.anchor,
+        spatialScope: target.spatial_scope,
+        placeContext: target.place_context,
+        now: qualificationNow,
+        fetcher: runtime.fetcher,
+      });
+      if (qualified?.profile) profile = qualified.profile;
+      placeQualificationStatus = qualified?.qualification?.status || "unavailable";
+    } catch (_error) {
+      placeQualificationStatus = "failed";
+    }
+  }
+
   const discoveryHealth = buildSourceDiscoveryHealth({
     result: { ...result, source_profile: profile },
     qualificationStatus,
+    placeQualificationStatus,
     observedAt: qualificationNow || observedAt,
   });
   profile = { ...profile, discovery_health: discoveryHealth };
@@ -192,11 +217,12 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
       profile_key: recorded.profile_key,
       catalog_status: retried.status,
       qualification_status: qualificationStatus,
+      place_qualification_status: placeQualificationStatus,
       discovery_status: discoveryHealth.status,
       ...(retried.retry_at ? { retry_at: retried.retry_at } : {}),
     };
   }
-  const completionOptions = qualificationStatus === "observing"
+  const completionOptions = [qualificationStatus, placeQualificationStatus].includes("observing")
     ? { nextAttemptAt: nextQualificationProbeAt(qualificationNow), discoveryHealth }
     : { discoveryHealth };
   const completed = await catalog.completeScoutTarget(target, reason, completionOptions);
@@ -207,6 +233,7 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
     profile_key: recorded.profile_key,
     catalog_status: completed?.status || "failed",
     qualification_status: qualificationStatus,
+    place_qualification_status: placeQualificationStatus,
     discovery_status: discoveryHealth.status,
   };
 }
