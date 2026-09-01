@@ -295,6 +295,28 @@ test("place-only profiles can be approved and geo-read through the same catalog 
   assert.deepEqual(calls[1].values, [55.6, 13, NOW.toISOString()]);
 });
 
+test("the catalog preserves an approved map-linked place adapter", async () => {
+  const profile = placeSourceProfile();
+  profile.source_families[0].candidates[0].adapter = "map_linked_place_html";
+  profile.runtime_review.place_sources[0].adapter = "map_linked_place_html";
+  const catalog = createSourceProfileCatalog({
+    now: () => NOW,
+    query: async (sql, values) => {
+      if (sql === ACTIVE_PROFILES_FOR_ANCHOR_SQL) return { rows: [{ profile }] };
+      return { rows: [{ profile_key: values[0], catalog_status: values[1] }] };
+    },
+  });
+
+  const approved = await catalog.recordApprovedProfile(profile);
+  const feeds = await catalog.listApprovedPlaceFeedsForAnchor({
+    anchor: { lat: 55.6, lng: 13 },
+    now: NOW,
+  });
+  assert.equal(approved.catalog_status, "approved");
+  assert.equal(feeds.length, 1);
+  assert.equal(feeds[0].adapter, "map_linked_place_html");
+});
+
 test("geo reads expose only fresh qualified profiles as Pulse-only probation feeds", async () => {
   const calls = [];
   const catalog = createSourceProfileCatalog({

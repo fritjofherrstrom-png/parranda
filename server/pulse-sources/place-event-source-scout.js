@@ -625,7 +625,8 @@ function placeSourceCandidatesForProfile(result) {
 function compactPlaceSourceCandidate(candidate) {
   const id = publicString(candidate?.id);
   const url = publicString(candidate?.url);
-  const adapter = ["schema_org_place_html", "schema_org_place_json"].includes(candidate?.adapter)
+  const adapter = ["schema_org_place_html", "schema_org_place_json", "map_linked_place_html"]
+    .includes(candidate?.adapter)
     ? candidate.adapter
     : null;
   if (!id || !url || !adapter) return null;
@@ -779,7 +780,8 @@ function reviewOnlyPlaceManifests(manifests) {
     id: publicString(manifest?.id),
     label: publicString(manifest?.label),
     endpoint: publicString(manifest?.endpoint),
-    adapter: ["schema_org_place_html", "schema_org_place_json"].includes(manifest?.adapter)
+    adapter: ["schema_org_place_html", "schema_org_place_json", "map_linked_place_html"]
+      .includes(manifest?.adapter)
       ? manifest.adapter
       : null,
     format: publicString(manifest?.format),

@@ -268,12 +268,17 @@ The same worker now has a separate structured-place lane. Resolver-attested
 country context contributes bounded local-language place terms alongside the
 event vocabulary, and the scout may follow high-precision same-origin
 attractions/visitor-guide links. A page becomes a place-source candidate only
-when the existing schema.org place parser finds at least two stable,
+when a closed reviewed-place adapter finds at least two stable,
 exact-coordinate records inside the trusted profile bounds and within the
-closed runtime place-type vocabulary. An individual venue page, generic
-`LocalBusiness`, prose, ratings, images, missing coordinates, out-of-bounds
-rows, restricted terms, unsafe URLs and robots-disallowed pages cannot produce
-a probeable manifest.
+closed runtime place-type vocabulary. The supported formats are schema.org
+place JSON-LD and `map_linked_place_html`: repeated server-rendered cards where
+the same card contains an exact heading/detail identity, an explicit closed
+category and high-precision coordinates in a recognized Google, OpenStreetMap
+or Apple Maps link. The detail identity must be same-origin HTTPS. An
+individual venue page, generic `LocalBusiness`, prose, ratings, images,
+coordinate-looking text, missing/unknown card facts, out-of-bounds rows,
+restricted terms, unsafe URLs and robots-disallowed pages cannot produce a
+probeable manifest.
 
 Place candidates live in `source_profile.place_source_candidates` and their
 manifests in `place_manifest_candidates`; they do not enter event-family
@@ -286,6 +291,15 @@ This verdict is review prioritization only: unlike event probation, there is no
 automatic place-source runtime lane. `runtime_review.place_sources` remains
 empty until an operator approves compatible terms, ownership/evidence family,
 health and expiry through the existing server-owned review boundary.
+
+A live format audit on 2026-09-01 found that the map-linked adapter could
+extract seven bounded records across four closed place types from an official
+destination guide that the schema.org-only scout could not use. Other audited
+official guides exposed stable list/detail links but kept type or coordinates
+on detail pages, or exposed names without exact coordinates. Those remain
+honest misses: this adapter performs no detail-page fan-out, geocoding, fuzzy
+identity matching or city-specific fallback. Live audit rows were not committed
+as fixtures and no audited endpoint was activated by discovery.
 
 ### Reviewed source-profile runtime bridge
 

@@ -61,6 +61,16 @@ test("a fresh operator review binds one exact place source", () => {
   assert.equal(feed.max_items, 30);
 });
 
+test("a fresh review can bind the closed map-linked HTML adapter", () => {
+  const value = profile();
+  value.source_families[0].candidates[0].adapter = "map_linked_place_html";
+  value.runtime_review.place_sources[0].adapter = "map_linked_place_html";
+
+  const [feed] = placeFeedsFromReviewedSourceProfiles([value], { now: NOW });
+  assert.equal(feed.adapter, "map_linked_place_html");
+  assert.equal(feed.endpoint, "https://guide.example/places");
+});
+
 test("the reviewed bridge binds candidates from the dedicated place-source discovery lane", () => {
   const value = profile();
   value.place_source_candidates = value.source_families[0].candidates;

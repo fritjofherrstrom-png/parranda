@@ -11,6 +11,7 @@ const ADAPTER_MAP = Object.freeze({
   schema_org_place: "schema_org_place_html",
   schema_org_place_html: "schema_org_place_html",
   schema_org_place_json: "schema_org_place_json",
+  map_linked_place_html: "map_linked_place_html",
 });
 const RUNTIME_POLICIES = new Set(["active", "bounded_refresh"]);
 const TERMS_STATUSES = new Set(["open_license", "api_terms_compatible"]);
