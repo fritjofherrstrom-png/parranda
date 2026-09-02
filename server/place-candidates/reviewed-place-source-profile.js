@@ -19,7 +19,7 @@ const ADAPTER_MAP = Object.freeze({
 const PLACE_SOURCE_ADAPTER_CONTRACTS = Object.freeze({
   schema_org_place_html: "schema-org-place-html-v1",
   schema_org_place_json: "schema-org-place-json-v1",
-  map_linked_place_html: "map-linked-place-html-v1",
+  map_linked_place_html: "map-linked-place-html-v2",
 });
 const RUNTIME_POLICIES = new Set(["active", "bounded_refresh"]);
 const TERMS_STATUSES = new Set(["open_license", "api_terms_compatible"]);
@@ -83,6 +83,9 @@ function reviewedPlaceFeed({ row, candidate, bbox, profileKey, review }) {
   if (!candidateAdapter || candidateAdapter !== adapter) return null;
   const adapterContractRevision = placeSourceAdapterContract(adapter);
   if (!adapterContractRevision) return null;
+  // The operator approved one exact parser contract. Deriving today's
+  // contract at read time must never silently upgrade an older approval.
+  if (publicString(row.adapter_contract_revision) !== adapterContractRevision) return null;
 
   const runtimePolicy = publicString(row.runtime_policy).toLowerCase();
   const termsStatus = publicString(row.terms_status).toLowerCase();

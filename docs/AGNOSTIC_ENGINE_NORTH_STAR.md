@@ -137,6 +137,12 @@ The roadmap numbering below predates the merge order. The actual sequence was:
   types, stable source identities and exact coordinates from JSON-LD or from a
   same-card heading/category/detail/map tuple, cap bytes/items/radius, block
   off-origin redirects and warm the persistent cache outside the request path.
+  `map-linked-place-html-v2` treats only balanced semantic items or explicitly
+  card-marked elements as a card and requires a single unambiguous identity,
+  category and coordinate pair inside it. Wrapping sections and sibling card
+  fragments cannot be joined. The approved adapter-contract revision is checked
+  at profile read, worker claim and reservoir read, so v1 approvals, targets and
+  rows fail closed until rediscovery and explicit re-review.
   The rows join the existing external candidate reservoir; there is no parallel
   crawler or city branch. An official operator-reviewed source can pass route
   gates while remaining explicitly `human_verified:false`; editorial-only

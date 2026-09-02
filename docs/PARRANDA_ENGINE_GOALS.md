@@ -181,9 +181,12 @@ instead of adding more synthesis diagnostics.
 
 The reviewed-place bridge now lets a fresh, geo-bounded Source Catalog profile
 feed an approved official/editorial place list into that same reservoir. It
-supports schema.org JSON-LD plus a closed map-linked-card adapter that requires
-same-card name, category, same-origin detail identity and high-precision
-coordinates from a recognized map URL. It accepts only a closed type vocabulary
+supports schema.org JSON-LD plus a closed map-linked-card adapter whose v2
+contract accepts only balanced semantic item containers or explicitly
+card-marked DOM units. The name, one unambiguous category, one stable
+same-origin detail identity and one unambiguous high-precision coordinate pair
+must all belong to that unit; an outer list/section cannot combine sibling
+fragments. It accepts only a closed type vocabulary
 plus exact source-owned coordinates and stable identities; prose, ratings,
 images, generic businesses, unknown facts/adapters and off-origin redirects
 never enter. Official reviewed-source rows can route without pretending the
@@ -221,19 +224,16 @@ the old #244–#249 migration sequence as current work.
 
 Priorities now are:
 
-1. Harden `map_linked_place_html` so heading, category, identity and coordinates
-   must come from one verified DOM card; bump the adapter contract and require
-   re-review.
-2. Add bounded list→detail ingestion for a concrete official source shape:
+1. Add bounded list→detail ingestion for a concrete official source shape:
    same-origin links, capped fan-out, explicit terms/source policy, a versioned
    adapter contract and worker-owned persistence.
-3. Operate reviewed sources across a large unsupported place and a
+2. Operate reviewed sources across a large unsupported place and a
    smaller/regional place; measure coverage, refresh health and route quality.
-4. Improve conservative entity aliases/reconciliation as independent source
+3. Improve conservative entity aliases/reconciliation as independent source
    volume grows, without letting ratings or popularity become ranking power.
-5. Define explicit graduation criteria for experimental/legacy Planner paths:
+4. Define explicit graduation criteria for experimental/legacy Planner paths:
    readiness evidence, dogfood matrix, promotion decision and deletion target.
-6. Let time-sensitive events affect dayflow only through the existing bounded
+5. Let time-sensitive events affect dayflow only through the existing bounded
    eligibility, geometry and walking-validation boundary.
 
 ## Review rules

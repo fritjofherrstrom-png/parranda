@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
+  placeSourceAdapterContract,
   placeFeedsFromReviewedSourceProfiles,
   resolveReviewedPlaceSourceProfileFeeds,
 } = require("../server/place-candidates/reviewed-place-source-profile");
@@ -39,6 +40,7 @@ function profile() {
         label: "Regional place guide",
         endpoint: candidate.url,
         adapter: candidate.adapter,
+        adapter_contract_revision: "schema-org-place-html-v1",
         evidence_family: "official",
         source_tier: "official",
         source_identity: candidate.source_identity,
@@ -65,10 +67,22 @@ test("a fresh review can bind the closed map-linked HTML adapter", () => {
   const value = profile();
   value.source_families[0].candidates[0].adapter = "map_linked_place_html";
   value.runtime_review.place_sources[0].adapter = "map_linked_place_html";
+  value.runtime_review.place_sources[0].adapter_contract_revision = "map-linked-place-html-v2";
 
   const [feed] = placeFeedsFromReviewedSourceProfiles([value], { now: NOW });
   assert.equal(feed.adapter, "map_linked_place_html");
+  assert.equal(feed.adapter_contract_revision, "map-linked-place-html-v2");
   assert.equal(feed.endpoint, "https://guide.example/places");
+  assert.equal(placeSourceAdapterContract("map_linked_place_html"), "map-linked-place-html-v2");
+});
+
+test("an approval bound to the previous map-linked adapter contract fails closed", () => {
+  const value = profile();
+  value.source_families[0].candidates[0].adapter = "map_linked_place_html";
+  value.runtime_review.place_sources[0].adapter = "map_linked_place_html";
+  value.runtime_review.place_sources[0].adapter_contract_revision = "map-linked-place-html-v1";
+
+  assert.deepEqual(placeFeedsFromReviewedSourceProfiles([value], { now: NOW }), []);
 });
 
 test("the reviewed bridge binds candidates from the dedicated place-source discovery lane", () => {

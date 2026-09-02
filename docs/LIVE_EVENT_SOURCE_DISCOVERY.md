@@ -272,9 +272,11 @@ when a closed reviewed-place adapter finds at least two stable,
 exact-coordinate records inside the trusted profile bounds and within the
 closed runtime place-type vocabulary. The supported formats are schema.org
 place JSON-LD and `map_linked_place_html`: repeated server-rendered cards where
-the same card contains an exact heading/detail identity, an explicit closed
-category and high-precision coordinates in a recognized Google, OpenStreetMap
-or Apple Maps link. The detail identity must be same-origin HTTPS. An
+one balanced semantic item or explicitly card-marked DOM unit contains an
+exact heading/detail identity, one unambiguous explicit closed category and one
+unambiguous high-precision coordinate pair in a recognized Google,
+OpenStreetMap or Apple Maps link. Wrapping sections and sibling fragments are
+not card evidence. The detail identity must be same-origin HTTPS. An
 individual venue page, generic `LocalBusiness`, prose, ratings, images,
 coordinate-looking text, missing/unknown card facts, out-of-bounds rows,
 restricted terms, unsafe URLs and robots-disallowed pages cannot produce a
