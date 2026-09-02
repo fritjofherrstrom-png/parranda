@@ -32,7 +32,7 @@ test("review CLI requires an explicit operator for approval and supports bounded
   assert.deepEqual(parseArguments(["--approve", "decision.json"]).errors, ["missing_operator"]);
 });
 
-test("review CLI delegates a revision-bound decision and authenticated operator identity", async (t) => {
+test("review CLI delegates a revision-bound decision and explicit operator audit label", async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "parranda-profile-review-"));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const inputPath = path.join(directory, "reviewed.json");

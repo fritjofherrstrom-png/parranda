@@ -1,7 +1,8 @@
 # Parranda Engine Goals and Roadmap
 
-**Status:** Living product/engine alignment note  
-**Updated after:** #243 Experience Lens-scoring v1  
+**Status:** Current product/engine alignment note
+
+**Updated after:** #492 trusted place-source lifecycle
 **Related:** `docs/CANDIDATE_PREFERENCE_COVERAGE.md`, `docs/LOCAL_LIVE_INTELLIGENCE.md`, `docs/CITYPACK_INSTALLATION.md`
 
 ## Core thesis
@@ -20,25 +21,15 @@ The engine should source broadly, judge better, stay honest about confidence, an
 
 ## Current state
 
-The recent candidate-intelligence line has built the candidate spine from inspect-only foundations into a real decision substrate:
+The candidate spine is now a real shared decision substrate rather than an
+inspect-only foundation. Candidate-based Blitz, thin registered-city fill and
+any-place Planner composition consume gated source-backed places; the ordinary
+route engine composes eligible any-place supply. Broad OSM/Wikidata/Overture
+loaders and the revision-bound reviewed local-source reservoir supply it.
 
-- #231 made Your Day source-aware at the dayflow explanation layer.
-- #232 introduced Candidate Intelligence Spine primitives.
-- #233 added the experimental candidate-based Blitz next move.
-- #234 added external/open evidence provider v1.
-- #235 added source calibration v1 and agnostic confidence.
-- #236 exposed coordinate intake for Agnostic Blitz through `/api/blitz`.
-- #237 added the trusted OSM/Wikidata open-data loader seam.
-- #238 added entity safety / dedupe so curated and external duplicates become one canonical candidate.
-- #239 added coordinate/field reconciliation from merged external twins.
-- #240 added deterministic Athens / Malmö / Simrishamn Agnostic Blitz scenario evaluation.
-- #241 allowed thin recognized cities to receive open-data augmentation through `/api/blitz`.
-- #242 expanded generic intent vocabulary and OSM tag mapping.
-- #243 made experience lens affect candidate fit ranking, not just source calibration.
-
-The result is a much stronger Blitz candidate path: curated + external, gated, calibrated, deduped, reconciled, intent-mapped, lens-aware, and honest about confidence.
-
-The major remaining gap is that Planner / Your Day / route composition does not yet fully consume the same gated/calibrated/deduped/lens-aware candidate spine. The next strategic work should move candidate intelligence from single Blitz moves into composed dayflows.
+Rich citypacks remain curated-first, and Pulse keeps a separate signal/event
+path with a bounded route-interrupt boundary. The major remaining gap is supply
+breadth and quality across real geographies—not another Planner bridge.
 
 ## Product goals
 
@@ -49,17 +40,16 @@ Blitz, Planner, Pulse/live, and future Almanac objects should speak through comm
 Current status:
 
 - Blitz: strong.
-- Planner / Your Day: partial; rich citypacks still use legacy catalog/template
-  composition, but thin PREVIEW cities now let the reservoir's fit verdict drive
-  stop SELECTION for requested preferences (different preferences → different
-  `primary_route.main_stops`; a preference nothing satisfies is reported missing
-  instead of silently filled by an off-intent source pack). Rich-citypack
-  composition is deliberately untouched.
-- Pulse/live: source-provider foundations exist, but event/local-live candidates are not yet first-class in the candidate spine.
+- Planner / Your Day: source-backed any-place and thin-preview composition is
+  live behind reviewed boundaries; rich citypacks remain deliberately
+  curated/template-first.
+- Pulse/live: normalized source events feed gated Pulse surfaces and may affect
+  a route only through the explicit geometry/walking-validated interrupt
+  contract.
 
-Next step: extend reservoir-driven composition from preview-thin cities to the
-general Planner path (rich citypacks + agnostic), and make missing/partial
-preference coverage first-class in the route output contract.
+Next step: operate and broaden trustworthy supply, improve preference/ranking
+quality and deliberately graduate proven paths without flattening rich
+citypacks.
 
 ### 2. City packs are accelerators, not dependencies
 
@@ -131,7 +121,7 @@ The planner should preserve each role's provenance, confidence, covered preferen
 
 Parranda should understand local rhythm, not only local inventory.
 
-Future candidate objects should include not only stable places but also:
+The broader intelligence substrate includes stable places and can also include:
 
 - temporary events
 - recurring local patterns
@@ -143,16 +133,14 @@ Future candidate objects should include not only stable places but also:
 - local closure/custom rhythm signals
 - weather-sensitive options
 
-Do not jump straight into broad scraping. The correct sequence is still:
+Do not jump into unbounded request-time scraping. The shipped sequence is:
 
 ```txt
-Candidate Spine
--> opt-in Blitz candidate path
--> external/open evidence
--> Candidate Reservoir -> Planner bridge
--> local live/event candidates
--> this-week mode
--> saved Almanac integration
+trusted acquisition / reviewed discovery
+-> Candidate Spine and time-sensitive event contracts
+-> gated Blitz / Planner / Pulse consumers
+-> bounded route-event weave where eligible
+-> future saved Almanac integration
 ```
 
 ### 7. Trust remains visible
@@ -225,55 +213,28 @@ the worker lifecycle, while preserving the next supply priorities: operating
 more real sources, bounded list/detail fan-out, and conservative entity
 resolution.
 
-## Immediate roadmap
+## Current roadmap after #492
 
-### #244 Candidate Reservoir role selector v0
+The candidate reservoir, role selection, Planner bridges, event candidates,
+source qualification and operator approval lifecycle have shipped. Do not use
+the old #244–#249 migration sequence as current work.
 
-Build a small helper layer that lets planner/dayflow logic request role-based candidates from the existing candidate spine.
+Priorities now are:
 
-Scope:
-
-- helper/unit level first unless a tiny integration seam is obvious
-- deterministic tests only
-- no full planner rewrite
-- no live network
-- no persistent merge memory
-- no operator/admin surface
-
-Expected output shape:
-
-```txt
-role
-status: filled | partial | missing | fallback
-candidate
-origin: curated_catalog | external_open
-confidence
-provenance
-covered_preferences
-partial_preferences
-missing_preferences
-fit/lens reasons
-```
-
-### #245 Planner bridge integration behind flag
-
-Let a narrow planner/Your Day path consume role selector output. Keep legacy fallback. Add inspect output for filled/missing role slots.
-
-### #246 Dayflow honesty and route quality inspect
-
-Expose why a day is full, partial, sparse, or fallback-heavy. Track walking budget, area clustering, time-of-day fit, weather fit, energy/dagsform fit, and role coverage.
-
-### #247 Local live/event candidates v0
-
-Add first-class event candidates with time windows, freshness/expiry, source-family provenance, and preference coverage. Start with official/venue/trusted local sources, not broad scraping.
-
-### #248 Persistent merge/reconciliation memory v0
-
-Persist known curated/external merge decisions and recurring reconciliation outcomes once external volume justifies it.
-
-### #249 Operator conflict surface v0
-
-Expose coordinate conflicts, suspicious merges, and review queues through inspect/export/CLI before building any admin UI.
+1. Harden `map_linked_place_html` so heading, category, identity and coordinates
+   must come from one verified DOM card; bump the adapter contract and require
+   re-review.
+2. Add bounded list→detail ingestion for a concrete official source shape:
+   same-origin links, capped fan-out, explicit terms/source policy, a versioned
+   adapter contract and worker-owned persistence.
+3. Operate reviewed sources across a large unsupported place and a
+   smaller/regional place; measure coverage, refresh health and route quality.
+4. Improve conservative entity aliases/reconciliation as independent source
+   volume grows, without letting ratings or popularity become ranking power.
+5. Define explicit graduation criteria for experimental/legacy Planner paths:
+   readiness evidence, dogfood matrix, promotion decision and deletion target.
+6. Let time-sensitive events affect dayflow only through the existing bounded
+   eligibility, geometry and walking-validation boundary.
 
 ## Review rules
 

@@ -1,5 +1,9 @@
 # Agnostic Engine Notes
 
+**Status:** Historical design notes. The candidate reservoir and any-place
+composer described as future here have shipped. Use `docs/ARCHITECTURE.md` for
+the current runtime path and `docs/PARRANDA_ENGINE_GOALS.md` for current work.
+
 This document captures product and engine principles for making Parranda useful beyond fully hand-curated citypacks.
 
 Citypacks should remain an acceleration and quality layer. They should not be the hard boundary of the product. Parranda's core product promise is the engine: sourcing, weighing, combining, and presenting the right candidates for the right person, place, time, weather, energy level, and intent.

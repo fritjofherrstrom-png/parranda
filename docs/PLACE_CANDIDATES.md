@@ -1,11 +1,16 @@
 # PlaceCandidate Contract
 
-`PlaceCandidate` is the next engine foundation contract after `PulseSignal`.
-It gives Blitz and Planner one future shape for place-like records, regardless
-of where they came from.
+**Status:** Current data contract; migration notes updated after #492.
 
-This PR only defines the contract. It does not connect candidates to Planner,
-Blitz, route scoring, UI, sources, or public API responses.
+**Historical note:** The contract began as a shadow-only foundation. Candidate
+spine, Blitz and Planner consumers now exist; old shadow milestones are not
+current implementation instructions.
+
+`PlaceCandidate` is the shared normalized shape for place-like records,
+regardless of where they came from. Curated providers, external/open loaders,
+reviewed local sources and already-fetched event context can all feed the
+candidate spine, where evidence reduction, gates, fit and role selection decide
+what each surface may use.
 
 ## What It Represents
 
@@ -15,8 +20,8 @@ A `PlaceCandidate` can represent:
 - a Barcelona catalog stop
 - an official/live event venue
 - a generated or inferred place
-- a future map/search result
-- a future city-pack draft candidate
+- an external map/open-data result
+- a generated or citypack draft candidate
 - a structural routing anchor or area preset
 
 The key distinction is that not every candidate is a user-facing venue. A
@@ -73,8 +78,8 @@ Supported `candidate_kind` values:
 - `structural_anchor`: a routing helper, not a visible place.
 - `area_preset`: an area-level helper or preset.
 - `generated_place`: inferred/generated candidate that needs review.
-- `map_result`: candidate from a future map/search provider.
-- `draft_place`: future semi-automatic city-pack draft candidate.
+- `map_result`: candidate from an external map/search/open-data provider.
+- `draft_place`: generated or semi-automatic citypack draft candidate.
 
 `is_structural` is derived from `candidate_kind`. Structural candidates should
 not appear as normal search results, venue cards, or route `main_stops`.
@@ -102,47 +107,50 @@ Examples:
 
 - `{ kind: "city_catalog", id: "rome-catalog" }`
 - `{ kind: "live_event_feed", id: "barcelona-open-data-agenda" }`
-- `{ kind: "map_search", label: "future provider" }`
+- `{ kind: "map_search", label: "map provider" }`
+- `{ kind: "open_data", id: "reviewed-open-provider" }`
+- `{ kind: "open_geo_source", id: "bounded-geo-provider" }`
 - `{ kind: "generated", id: "draft-citypack-generator" }`
 - `{ kind: "routing_config", id: "barcelona-area-model" }`
 
 Provider-owned text remains provider-owned. Parranda-owned fields include
 `tags`, `vibes`, `time_fit`, `route_roles`, `confidence`, and trust decisions.
 
-Preferred v1 `source.kind` vocabulary:
+Current common `source.kind` vocabulary:
 
 - `city_catalog`: curated/manual city catalog entries.
 - `live_event_feed`: already-fetched official/live event records.
-- `map_search`: future external map/search results.
-- `generated`: future inferred or semi-automatic draft candidates.
+- `map_search`: external map/search results.
+- `open_data`: normalized open or reviewed source datasets.
+- `open_geo_source`: bounded geographic source-backed datasets.
+- `generated`: inferred or semi-automatic draft candidates.
 - `routing_config`: structural anchors and area presets from city routing config.
 
-The contract currently documents and tests this vocabulary but does not reject
-other `source.kind` strings. Strict validation should wait until the provider
-set is larger and real consumers prove the boundary.
+The runtime contract requires a bounded non-empty source kind but remains
+extensible. New values require a focused contract update that defines source
+ownership, family/tier/policy, attribution and promotion behavior; they must not
+be invented inside a candidate pack or public payload.
 
-## Migration Path
+## Current Runtime Path
 
-Shipped:
+```text
+trusted loaders / curated catalog / reviewed persistent reservoir
+  -> normalized PlaceCandidate records
+  -> entity resolution + evidence reduction
+  -> eligibility gates + fit + role selection
+  -> Blitz / registered-city fill / any-place sourceCandidates
+  -> route/dayflow composition
+```
 
-1. ✅ Wrap existing city catalog items as `PlaceCandidate[]` — done via
-   `CuratedCatalogProvider`.
-2. ✅ Add a `CuratedCatalogProvider` compatibility layer — shipped and
-   default-enabled in the registry.
-3. ✅ Pin provider async/context strategy before adding live-event candidates
-   — registry is synchronous; `LiveEventVenueProvider` consumes already-fetched
-   events from context and does not fetch external sources.
+The synchronous provider registry remains one compatibility and normalization
+layer; it is not the only source-acquisition path. Network and persistent
+acquisition happen in bounded upstream loaders/workers, never inside a public
+payload or an arbitrary provider call. Current work should extend this path
+rather than create a fourth candidate pipeline.
 
-Still ahead:
-
-4. Let Blitz consume candidates behind its current catalog behavior.
-5. Let Planner consume candidates behind its current route-template behavior.
-6. Enable `LiveEventVenueProvider` as a real engine consumer and add
-   generated/search providers, only after diagnostics prove the engine can
-   handle them safely.
-
-The contract exists so the future route engine can become provider-first
-without losing the safety and taste already present in curated city packs.
+Still open after #492: operate more reviewed sources, add bounded list/detail
+adapters for real source shapes, improve conservative aliases/entity resolution,
+and define promotion criteria for retiring legacy experimental paths.
 
 ## Current Compatibility Provider
 
@@ -163,8 +171,10 @@ helpers:
   `candidate_kind: "structural_anchor"`;
 - `district` items become `candidate_kind: "area_preset"`.
 
-This provider is a compatibility layer only. It does not change Planner, Blitz,
-route scoring, UI, public API responses, or data sources.
+This provider remains the compatibility bridge for curated citypack records.
+Those normalized records now participate in shared candidate reasoning where a
+surface has adopted the candidate spine; rich citypack behavior remains
+curated-first.
 
 ## Candidate Provider Registry
 
@@ -175,8 +185,9 @@ layer:
 CityConfig -> CandidateProviderRegistry -> PlaceCandidate[]
 ```
 
-The default registry currently enables only `CuratedCatalogProvider`. It can
-collect candidates for a city and return a diagnostic summary with:
+The default registry enables `CuratedCatalogProvider`; callers may add bounded
+provider specs for already-acquired context. It can collect candidates for a
+city and return a diagnostic summary with:
 
 - total candidates
 - real place count
@@ -185,16 +196,18 @@ collect candidates for a city and return a diagnostic summary with:
 - counts by trust tier
 - counts by provider
 
-This registry is intentionally internal. Planner, Blitz, route scoring, UI, and
-public API responses still use their existing paths until later migration PRs.
+The registry is internal, but its normalized candidates are consumed by the
+shared candidate pool and adopted Planner/Blitz paths. It must not be treated as
+diagnostics-only or as permission to duplicate acquisition inside a surface.
 
 ## Provider Async Strategy
 
 The registry stays synchronous for now.
 
-Future providers may need async data, but `CandidateProviderRegistry` should not
-fetch inside provider calls until there is a real engine consumer that needs an
-async boundary. The next live-event provider should be context-based:
+Fresh providers may need asynchronous acquisition, but
+`CandidateProviderRegistry` should still not fetch inside provider calls.
+Higher-level trusted loaders/workers acquire and cache data; context-based
+providers normalize it:
 
 ```text
 higher-level engine fetches live events -> context.events -> LiveEventVenueProvider -> PlaceCandidate[]
@@ -202,17 +215,14 @@ higher-level engine fetches live events -> context.events -> LiveEventVenueProvi
 
 That means `LiveEventVenueProvider` should convert already-fetched
 `context.events` into `event_venue` candidates. It should not call Open Data
-BCN, Turismo Roma, or any other provider directly. This keeps readiness checks
-cheap, deterministic, and safe while the candidate system is still internal.
-
-If a later Planner or Blitz migration needs providers to fetch their own data,
-the registry can become async in that PR with a real consumer and tests. Until
-then, readiness and collection remain sync by design.
+BCN, Turismo Roma, or any other provider directly. This keeps readiness checks and normalization deterministic while allowing
+network-backed supply through explicit server-owned seams. Change this boundary
+only through a reviewed contract with cancellation, bounds, cache and tests.
 
 ## Live Event Venue Provider
 
-`server/place-candidates/live-event-venue-provider.js` prepares official/live
-event venues as future candidate inputs:
+`server/place-candidates/live-event-venue-provider.js` normalizes official/live
+event venues as candidate inputs:
 
 ```text
 already-fetched context.events -> LiveEventVenueProvider -> event_venue PlaceCandidate[]
@@ -234,10 +244,9 @@ Missing venue labels are skipped rather than invented. Missing coordinates do
 not crash the provider; the candidate remains coordinate-less and should be
 treated as `needs_review` unless upstream context supplies stronger trust.
 
-The provider is available for future engine work but is not default-enabled in
-`CandidateProviderRegistry` yet. The default registry still contains only the
-curated catalog provider, so this PR does not change Planner, Blitz, routing,
-UI, public API responses, or readiness behavior.
+The provider is opt-in and context-based. Event route influence remains a
+separate eligibility decision: an event venue does not automatically become a
+Planner stop merely because it is a `PlaceCandidate`.
 
 ## Candidate Readiness Diagnostics
 
@@ -247,9 +256,9 @@ UI, public API responses, or readiness behavior.
 CityConfig -> CandidateProviderRegistry -> assessCityCandidateReadiness()
 ```
 
-It answers whether the current candidate pool looks safe enough for future
-engine consumption. V1 is deliberately conservative and uses only the current
-curated catalog provider.
+It answers whether a collected candidate pool looks safe enough for a surface.
+V1 remains a conservative compatibility diagnostic and must not be confused
+with the newer source-status, promotion and route-readiness gates.
 
 The readiness result includes:
 
@@ -275,6 +284,6 @@ Default v1 thresholds:
 - Structural anchors and area presets do not count as real places.
 - Coordinate coverage must be at least 80 percent of real places.
 
-These diagnostics do not change Planner, Blitz, routing, UI, or public API
-behavior. They exist so later PRs can decide when it is safe to consume
-candidate providers.
+These diagnostics do not themselves mutate Planner, Blitz, routing, UI, or
+public API behavior. Current consumers have separate explicit gates that decide
+when candidate output may affect a result.

@@ -67,8 +67,11 @@ independent publisher count. Different adapters from the same publisher or the
 same canonical event URL are not counted as independent confirmation.
 The Pulse engine may consume them as gated, salience-ranked context signals when
 they are source-backed, current/today/tonight, and at least medium confidence.
-They are still not route stops, route candidates, citypack candidates, or
-Planner mutations.
+They do not automatically become route stops, route candidates, citypack
+candidates, or Planner mutations. A separately route-eligible event may produce
+one bounded `pulse_route_interrupt_v1`; only the applied branch can alter stop
+structure, and only after geometry and the full walking order validate. A
+suggested interrupt leaves the route unchanged.
 
 For source acquisition and evaluation before a provider is wired, see
 [`LIVE_EVENT_SOURCE_DISCOVERY.md`](./LIVE_EVENT_SOURCE_DISCOVERY.md). That doc
@@ -101,10 +104,11 @@ and `disabled` descriptors stay inspectable metadata unless explicitly enabled.
 The registry rejects duplicate provider ids and skips providers whose descriptor
 city does not match the requested city. No cross-city fallback is allowed.
 
-## Non-goals for v1
+## Historical non-goals for registry v1
 
 - No full source registry UI.
-- No Planner, Blitz, route-engine, or citypack behavior changes.
+- The registry itself does not directly mutate Planner, Blitz or route-engine
+  output; later bounded consumers may use its gated normalized events.
 - No Barcelona/Rome/Athens special cases in the registry core.
 - No fuzzy title-only event identity. Fusion is occurrence-scoped and requires
   compatible time plus venue/geo evidence across unrelated providers.

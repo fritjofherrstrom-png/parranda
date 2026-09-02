@@ -1,6 +1,9 @@
 # Parranda — Product Strategy
 
-Working document. Anchor for PR decisions and AI handoffs. Update when product direction shifts, not when implementation details change.
+Working product-principles document. Anchor for product decisions and AI
+handoffs. Implementation tables and sprint references are historical snapshots;
+they must not override `docs/ARCHITECTURE.md` or the current roadmap in
+`docs/PARRANDA_ENGINE_GOALS.md`.
 
 ---
 

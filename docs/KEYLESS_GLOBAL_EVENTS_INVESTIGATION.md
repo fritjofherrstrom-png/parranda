@@ -1,5 +1,10 @@
 # Keyless global live-events: investigation record (2026-07-12)
 
+**Status:** Historical point-in-time investigation, not a current adapter
+contract. Later reviewed Sitevision, Wix, RSS-detail, stable HTML and programme
+article adapters supersede any broad “no per-site extraction” conclusion. Use
+`docs/LIVE_EVENT_SOURCE_DISCOVERY.md` for current source eligibility.
+
 **Question:** can Parranda get "what's on tonight / this week" for an ARBITRARY
 world coordinate from a source that needs no API key — so live events light up
 everywhere without a vendor dependency?

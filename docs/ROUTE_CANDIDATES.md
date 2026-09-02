@@ -1,15 +1,19 @@
 # RouteCandidate Contract
 
-`RouteCandidate` is the next engine foundation contract after
-`PlaceCandidate`. It describes a possible route before Planner, Blitz, or the
-UI turn that route into user-facing copy.
+**Status:** Compatibility and diagnostic contract; not the required centerline
+for new any-place composition.
 
-This PR only defines the contract. It does not connect route candidates to
-Planner, Blitz, route scoring, Pulse, UI, sources, or public API responses.
+**Current composition:** Source-backed `PlaceCandidate` records can reach the
+ordinary route engine through the candidate spine and `agnostic_compose`.
+
+`RouteCandidate` describes a possible route before user-facing formatting. The
+route-template adapter and shadow comparison remain useful compatibility tools,
+but new supply work should not build a parallel RouteCandidate pipeline around
+the engine's existing composer.
 
 ## Where It Fits
 
-The intended engine flow is:
+The original shadow flow was:
 
 ```text
 CandidateProviderRegistry -> PlaceCandidate[] -> RouteCandidate[] -> Planner / Blitz
@@ -154,24 +158,14 @@ future localized prose, such as:
 Keeping this structured lets Planner and Blitz explain the route later without
 embedding English or Swedish prose in the engine layer.
 
-## Migration Path
+## Current Role
 
-Recommended next steps:
-
-1. Keep the existing route engine behavior unchanged.
-2. Describe current route templates as `RouteCandidate` records for
-   diagnostics.
-3. Use the internal `inspect-route-candidates` tool to inspect current route
-   coverage before Planner or Blitz consume route candidates.
-4. Let Blitz consume route candidates behind its current behavior.
-5. Let Planner consume route candidates behind its current route-template
-   behavior.
-6. Move route construction from catalog/template-first to
-   candidate-provider-first only after diagnostics prove the boundary.
-
-The contract exists so future routing can become provider-first without losing
-the safety, trust metadata, and city-specific taste already present in curated
-city packs.
+The shadow adapter still protects route-template compatibility, identity and
+lineage. It is not a prerequisite for the current any-place path, which maps
+gated source-backed places into `sourceCandidates` and composes them through the
+ordinary route engine. Use RouteCandidate diagnostics when reviewing template
+parity or lineage; use the candidate spine, route engine and promotion gates
+for new route capability.
 
 ## Current Route Template Adapter
 
@@ -223,14 +217,14 @@ The gate fails if route templates and RouteCandidates drift apart, including:
 - stop count mismatches
 - warnings or limitations that downgrade readiness
 
-This gate must stay green before RouteCandidates are wired into Planner or
-Blitz. It is still diagnostics-only: it does not change routing behavior,
-Planner behavior, Blitz behavior, UI, or public API responses.
+This gate must stay green to preserve the route-template shadow contract. It is
+diagnostics-only and does not gate unrelated candidate-spine composition that
+already uses the route engine through a separate reviewed boundary.
 
 ## Shadow Planner Comparison
 
-`server/planner/route-candidate-shadow.js` is the first Planner integration
-bridge, but it is still diagnostics-only. It compares an existing Planner
+`server/planner/route-candidate-shadow.js` is a diagnostics-only compatibility
+bridge. It compares an existing Planner
 result against the RouteCandidate view by selected route/template id and
 reports:
 
@@ -243,9 +237,9 @@ reports:
 - selected-route readiness and mismatch reasons
 
 The helper must not mutate Planner output or add fields to the public Planner
-API response. Its job is to reveal whether current Planner routes can be
-represented by RouteCandidates before Planner or Blitz consume RouteCandidates
-directly.
+API response. Its job is to reveal whether template-backed Planner routes can
+still be represented by RouteCandidates; it is not the roadmap for source-backed
+composition.
 
 ## Route Identity And Lineage
 

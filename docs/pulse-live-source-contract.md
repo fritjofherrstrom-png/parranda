@@ -1,10 +1,19 @@
 # Pulse / Live Source Contract
 
-This contract defines how citypacks describe Pulse and Live sources before they emit real events or editorial signals.
+**Status:** Legacy city-service compatibility contract.
+
+This contract defines how citypacks describe Pulse and Live sources before they
+emit real events or editorial signals. It does not define the generic
+resolver/bounds-scoped Source Catalog lifecycle. For arbitrary-place discovery,
+qualification, source health and reviewed runtime activation, use
+`docs/LIVE_EVENT_SOURCE_DISCOVERY.md`.
 
 ## Core Principle
 
-City source wiring must be city-scoped, reviewable, and failure-safe. A city without active sources should return an honest noop/preview state, not another city's data.
+Legacy city source wiring must be city-scoped, reviewable, and failure-safe. A
+city without active sources should return an honest noop/preview state, not
+another city's data. Generic sources are instead bound to trusted place
+identity and geometry; they must not be forced into per-city adapters.
 
 ## Descriptor Shape
 
@@ -77,19 +86,24 @@ Every city live service must return a stable date-keyed object:
 
 Expected behavior:
 
-- Provider failure returns empty arrays for requested dates.
+- The compatibility projection may return empty arrays for requested dates,
+  but the provider/registry layer must retain an explicit `failed` or
+  `unavailable` source status; failure is not evidence of a healthy empty.
 - Invalid or missing date input returns `{}`.
 - Missing sources return honest noop.
 - Preview cities can stay empty without borrowing another city.
 - Source adapter failures should not break `/api/city-pulse` or route generation.
 
-## City Scope
+## Legacy City Scope
 
 Rome currently owns the active `turismo-roma-live` source. The root `server/live-events.js` implementation remains Rome/Turismo Roma-specific until a later adapter extraction.
 
 Barcelona owns its active Open Data BCN agenda source and keeps other Pulse/civic/venue descriptors candidate/review-only until those sources are wired. It must not call the Turismo Roma provider or emit fake Pulse/Live content.
 
-Future citypacks should provide their own source descriptors and adapters using this shared contract.
+Future citypack-only sources may provide their own descriptors and adapters
+through this compatibility contract. Arbitrary-place sources should use the
+generic geo Source Catalog and reviewed provider contracts instead of creating
+a city adapter merely to satisfy this file.
 
 ## Next Wiring Step
 

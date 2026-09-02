@@ -305,7 +305,8 @@ The decision document must name that exact `profile_key`, its returned
 place-source decisions (candidate id, evidence/source tier, terms, health,
 runtime policy and bounded item cap). It cannot supply or replace endpoint,
 adapter or publisher identity; those are derived again from the persisted
-discovery row. Apply it with the authenticated shell operator identity:
+discovery row. Apply it from an authenticated shell and provide an explicit
+operator audit label:
 
 ```sh
 npm run review:source-profile -- \
@@ -350,15 +351,17 @@ honest misses: this adapter performs no detail-page fan-out, geocoding, fuzzy
 identity matching or city-specific fallback. Live audit rows were not committed
 as fixtures and no audited endpoint was activated by discovery.
 
-### Reviewed source-profile runtime bridge
+### Reviewed event source-profile runtime bridge
 
-A place source profile may carry an explicit `runtime_review` after operator
-review and be supplied through the legacy trusted deployment variable
-`PARRANDA_REVIEWED_PLACE_SOURCE_PROFILES` or the Postgres-backed geo Source
-Catalog. Discovery output starts as `unreviewed` with no feeds, so a scout
-result can never activate itself.
+An event source profile may carry an explicit `runtime_review` after operator
+review and be supplied through the trusted deployment variable
+`PARRANDA_REVIEWED_EVENT_SOURCE_PROFILES`. Existing approved event profiles in
+the Postgres geo Source Catalog remain readable for compatibility, but the
+current revision-bound `review:source-profile` CLI approves place sources only;
+it does not create new event-feed approvals. Discovery output starts as
+`unreviewed` with no feeds, so a scout result can never activate itself.
 
-The runtime bridge accepts a reviewed feed only when:
+The event runtime bridge accepts a reviewed feed only when:
 
 - the approval is fresh and has a future expiry;
 - the row binds to an exact discovered candidate id, HTTPS endpoint, compatible
@@ -375,7 +378,28 @@ request's trusted server-resolved anchor; public request payload cannot provide
 a source registry or catalog connection. Once accepted, a profiled source
 enters the existing bounded cache, normalization, fusion, source-health,
 browse, and personalized-highlight path; it does not create a parallel event
-engine or alter a route/day anchor.
+engine. Profile acceptance alone never alters a route or day anchor. A
+normalized event may affect a route later only if it independently passes route
+eligibility and the bounded geometry/full-walking-validation interrupt contract.
+
+### Reviewed place-source reservoir bridge
+
+Place profiles use a separate trust boundary. Legacy operator-managed
+deployments may supply exact reviewed profiles through
+`PARRANDA_REVIEWED_PLACE_SOURCE_PROFILES`; those rows use the bounded place
+source cache. The Postgres-backed Source Catalog instead uses the revision-bound
+approval flow described above: approval creates refresh targets, the worker
+fetches the reviewed endpoint, and request handling reads only the persistent
+fresh reservoir.
+
+The place bridge accepts only exact discovered candidate, HTTPS endpoint,
+adapter-contract, source-identity and reviewed-bounds bindings. Terms, evidence
+family, source tier, health, runtime policy and expiry must pass the closed
+review contract. The request path cannot fetch a catalog source, inject a
+profile, or approve one. Official reviewed-source rows may pass route gates
+without claiming place-level human verification; editorial-only rows still
+need independent corroboration. Event feeds, event timing and Pulse eligibility
+do not participate in this place-source bridge.
 
 ## RSS/Atom event-interface eligibility
 
@@ -770,8 +794,9 @@ not become required for Pulse/live to work.
   limits.
 - Prefer fresh cache plus bounded refresh. Do not perform unbounded live
   scraping per user request.
-- Provider failures return empty results plus `source_status`; they do not crash
-  Pulse.
+- Provider failures return a bounded empty collection plus explicit failed or
+  unavailable `source_status`; they do not crash Pulse and are never classified
+  as a healthy empty.
 
 ## Fail-Soft Behavior
 

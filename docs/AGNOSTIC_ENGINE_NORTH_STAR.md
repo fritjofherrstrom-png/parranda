@@ -1,7 +1,8 @@
 # Agnostic Engine North Star
 
-**Status:** Living alignment note  
-**Created after:** #257 `feat(route): add inspect agnostic route candidate diagnostics`  
+**Status:** Current north star plus historical delivery record
+
+**Updated after:** #492 trusted place-source lifecycle
 **Related:** `docs/PARRANDA_ENGINE_GOALS.md`
 
 ## North star
@@ -35,7 +36,12 @@ Agnostic does **not** mean:
 
 Named cities and narrow intents may be used as fixtures only when they prove generic engine behavior. They are not the goal.
 
-## Current state after #257
+## Historical delivery record
+
+The milestone narrative below records how the architecture evolved from #257.
+It is retained for rationale and regression context, **not** as the current
+roadmap or as instructions to rebuild completed work. Current priorities live
+in `docs/PARRANDA_ENGINE_GOALS.md`.
 
 The diagnostic chain now exists:
 
@@ -232,9 +238,11 @@ Review agnostic/planner PRs in this order:
 7. Does it avoid fake ETA, walking-time, opening-hours, or route-quality claims?
 8. Does it keep citypacks as accelerators rather than dependencies?
 
-## Near-term roadmap
+## Historical milestone index
 
-The current direction should be:
+The index below preserves merge-order context. Status labels such as
+`IN PROGRESS` describe the point in time when this record was written and must
+not override the current roadmap in `docs/PARRANDA_ENGINE_GOALS.md`.
 
 ```txt
 #258 — DONE: agnostic engine north-star + CLAUDE.md / CODEX.md (alignment/memory)
@@ -270,7 +278,10 @@ The current direction should be:
 
 The numbers may shift, but the sequence should not drift back into endless diagnostics.
 
-## Required framing for #258
+## Historical prompt reference for #258
+
+The following framing is kept only to explain the promotion discipline used by
+that completed milestone. It is not a current task request.
 
 #258 must be a **Capability PR**, not another pure diagnostic PR.
 

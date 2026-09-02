@@ -100,9 +100,11 @@ Field meanings:
 - `candidate_kind`: **canonical value from `server/place-candidates/contract.js`.**
   One of: `real_place`, `event_venue`, `structural_anchor`, `area_preset`,
   `generated_place`, `map_result`, `draft_place`. Do not invent new values.
-- `source_kind`: **canonical value from `docs/PLACE_CANDIDATES.md` §Source
-  Boundary.** One of: `city_catalog`, `live_event_feed`, `map_search`,
-  `generated`, `routing_config`. Do not invent new values.
+- `source_kind`: an intake allowlist aligned with shipped runtime provenance.
+  Current values are `city_catalog`, `live_event_feed`, `map_search`,
+  `open_data`, `open_geo_source`, `generated`, and `routing_config`. This is not
+  a permanent closed engine vocabulary: a new source kind needs a focused
+  contract/validator update that defines ownership, trust and provenance.
 - `route_role`: one or more **intake-vocabulary** roles (see §Intake-only
   vocabulary below). Promotion maps these to runtime catalog roles.
 - `vibes`: subset of the **canonical Parranda vibes**: `slow`, `buzzy`,
@@ -222,11 +224,11 @@ intake-only — it never promotes candidates into the runtime catalog.
   `needs_research`.
 - **Do not promote inside a pack PR.** Pack PRs are docs-only. Promotion is
   a separate, explicit PR.
-- **Do not introduce new vibes, `candidate_kind`, or `source_kind` values.**
-  Those vocabularies are engine-wide and live in `script.js`,
-  `server/place-candidates/contract.js`, and `docs/PLACE_CANDIDATES.md`. If
-  you need a value that doesn't exist, that's a different PR against those
-  files.
+- **Do not invent new vibes or `candidate_kind` values inside a pack.** Those
+  are closed engine vocabularies. `source_kind` is an extensible provenance
+  vocabulary, but a pack cannot extend it silently: add the value to the
+  validator and current candidate contract in a focused, tested change that
+  explains source ownership, family/tier/policy and promotion behavior.
 - **City-specific tag dialect is allowed** in `tags` (Barcelona already uses
   `vintage`, `second_hand`, `lokalt`, etc.) but should be aligned with the
   city's existing catalog where possible. New shared tags need cross-city
