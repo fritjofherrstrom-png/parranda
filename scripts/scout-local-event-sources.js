@@ -275,6 +275,7 @@ function createOperatorRuntime(env = process.env) {
     ttlMs: Number(env.PARRANDA_SOURCE_SEARCH_CACHE_TTL_MS) || ttlMs,
   });
   return {
+    fetcher: typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null,
     placeResolver,
     openDataLoader:
       typeof osmLoader === "function" || typeof wikiLoader === "function"

@@ -213,6 +213,18 @@ detail-page fan-out for list/detail guides, source operation across real
 geographies, Wix/entity-data extraction where exact coordinates exist, and
 conservative cross-provider aliases—not more route synthesis.
 
+The remaining reviewed-place lifecycle gap is now closed. Source Catalog
+approval binds an operator decision to the exact server-derived discovery
+revision, persists an immutable audit row and worker target atomically, and is
+idempotent. The worker—not the Planner request—refreshes the approved endpoint
+into a persistent, freshness-bounded place reservoir. The composer consumes
+only records whose approval key and profile revision still match; expiry,
+unknown state and material rediscovery fail closed. This makes a newly approved
+generic local source capable of contributing a source-backed Planner stop after
+the worker lifecycle, while preserving the next supply priorities: operating
+more real sources, bounded list/detail fan-out, and conservative entity
+resolution.
+
 ## Immediate roadmap
 
 ### #244 Candidate Reservoir role selector v0

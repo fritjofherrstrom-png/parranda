@@ -266,6 +266,9 @@ function candidateOrigin(candidate) {
 
 function candidateProvenance(candidate, derived) {
   const curated = candidate.city_pack_owned === true;
+  const trustedSource = candidate.operator_reviewed_source === true && candidate.trusted_source
+    ? { ...candidate.trusted_source }
+    : null;
   return {
     provider_id: candidate.provider_id || (curated ? "curated-catalog" : null),
     source_family: candidate.source_family || (curated ? "catalog" : null),
@@ -278,6 +281,7 @@ function candidateProvenance(candidate, derived) {
     corroborated_by_external: Array.isArray(candidate.merged_from) && candidate.merged_from.length > 0,
     merged_from: Array.isArray(candidate.merged_from) ? candidate.merged_from : [],
     reconciliation: candidate.reconciliation || null,
+    ...(trustedSource ? { trusted_source: trustedSource } : {}),
   };
 }
 

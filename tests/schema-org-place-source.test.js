@@ -177,6 +177,58 @@ test("runtime source warms off-path, then serves only records within 5km of the 
   assert.equal(records[0].name, "Local Museum");
 });
 
+test("catalog-backed runtime consumes only fresh worker-persisted records and never request-fetches", async () => {
+  let fetchCount = 0;
+  let feedReadCount = 0;
+  const persisted = [{
+    id: "reviewed-place:reviewed-guide:persisted",
+    name: "Persisted Local Museum",
+    type: "museum",
+    lat: 55.5,
+    lng: 13.5,
+    freshness: "fresh",
+    operator_reviewed_source: true,
+    source_policy: "reviewed_profile_bounded_refresh",
+    source_profile_key: "place-source-profile-v1:test",
+    source_profile_revision: "sha256:profile",
+    source_observed_at: "2026-08-20T11:00:00.000Z",
+    sources: [{ provider: "reviewed-guide", family: "official", tier: "official" }],
+  }];
+  const source = createReviewedPlaceSource({
+    sourceCatalog: {
+      listFreshApprovedPlaceCandidatesForAnchor: async () => persisted,
+      listApprovedPlaceFeedsForAnchor: async () => {
+        feedReadCount += 1;
+        return [feed()];
+      },
+    },
+    env: {},
+    now: () => new Date("2026-08-20T12:00:00.000Z"),
+    fetcher: async () => {
+      fetchCount += 1;
+      return response(html(place()));
+    },
+  });
+
+  assert.deepEqual(await source.load({ lat: 55.5, lng: 13.5 }), persisted);
+  assert.equal(fetchCount, 0);
+  assert.equal(feedReadCount, 0);
+});
+
+test("persistent catalog records remain available without a network fetcher", async () => {
+  const persisted = [{ id: "persisted-one", name: "Persisted", lat: 55.5, lng: 13.5 }];
+  const source = createReviewedPlaceSource({
+    sourceCatalog: {
+      listFreshApprovedPlaceCandidatesForAnchor: async () => persisted,
+    },
+    env: {},
+    fetcher: null,
+    now: () => new Date("2026-08-20T12:00:00.000Z"),
+  });
+
+  assert.deepEqual(await source.load({ lat: 55.5, lng: 13.5 }), persisted);
+});
+
 test("default runtime wiring requires the server flag and a catalog or reviewed profile", () => {
   assert.equal(resolveDefaultReviewedPlaceSource({}, { fetcher: async () => response("") }), null);
   assert.equal(resolveDefaultReviewedPlaceSource({ PARRANDA_REVIEWED_PLACE_SOURCES: "enabled" }, {

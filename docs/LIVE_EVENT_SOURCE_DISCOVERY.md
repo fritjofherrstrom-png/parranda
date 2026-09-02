@@ -292,6 +292,55 @@ automatic place-source runtime lane. `runtime_review.place_sources` remains
 empty until an operator approves compatible terms, ownership/evidence family,
 health and expiry through the existing server-owned review boundary.
 
+Catalog approval is an authenticated operator operation, not an application
+request. From a server shell that already owns the catalog credential, inspect
+the server-derived review surface first:
+
+```sh
+npm run review:source-profile -- --inspect place-source-profile-v1:...
+```
+
+The decision document must name that exact `profile_key`, its returned
+`profile_revision`, an expiry no more than 90 days away, and one or more closed
+place-source decisions (candidate id, evidence/source tier, terms, health,
+runtime policy and bounded item cap). It cannot supply or replace endpoint,
+adapter or publisher identity; those are derived again from the persisted
+discovery row. Apply it with the authenticated shell operator identity:
+
+```sh
+npm run review:source-profile -- \
+  --approve /server-owned/path/source-decision.json \
+  --operator operator-id
+```
+
+The approval, normalized decision and configuration revision are persisted in
+`pulse_source_profile_approvals`. The profile update and creation of worker
+refresh targets are one conditional database statement. Reapplying the same
+decision is idempotent. A changed profile revision, stale decision, expired
+approval, unknown candidate or missing closed field fails closed; material
+rediscovery demotes an approved profile back to `review_needed` without letting
+its old reservoir remain active. There is no public approval endpoint and
+discovery/qualification still cannot approve itself.
+
+The source-scout worker owns active place acquisition after approval. It leases
+`pulse_source_place_refresh_targets`, fetches through the already-reviewed
+bounded adapter, writes compact observations to
+`pulse_source_place_fetch_observations`, and upserts exact place identities into
+`pulse_source_place_candidates`. Request handling reads only fresh persistent
+rows whose profile revision and approval key still match the current approved
+profile; it never fetches the reviewed endpoint. A transient refresh failure
+backs off and retains still-fresh rows, while expiry, approval drift or profile
+drift makes them unavailable. Route-stop provenance carries only the bounded
+profile/revision/approval/feed/adapter/observation/freshness chain, not raw
+loader configuration or review evidence.
+
+Migration `004-trusted-place-source-lifecycle.sql` is additive. Deployment
+rollback is therefore an image rollback: leave the new tables in place so audit
+history and reservoir rows are retained, and disable the affected catalog
+profile if its supply must be withdrawn. Do not drop the tables during an
+incident. Old images ignore them; a later roll-forward reuses the same audit
+and must still pass the current revision/expiry joins.
+
 A live format audit on 2026-09-01 found that the map-linked adapter could
 extract seven bounded records across four closed place types from an official
 destination guide that the schema.org-only scout could not use. Other audited
@@ -304,8 +353,8 @@ as fixtures and no audited endpoint was activated by discovery.
 ### Reviewed source-profile runtime bridge
 
 A place source profile may carry an explicit `runtime_review` after operator
-review and be supplied through the trusted deployment variable
-`PARRANDA_REVIEWED_EVENT_SOURCE_PROFILES` or the Postgres-backed geo Source
+review and be supplied through the legacy trusted deployment variable
+`PARRANDA_REVIEWED_PLACE_SOURCE_PROFILES` or the Postgres-backed geo Source
 Catalog. Discovery output starts as `unreviewed` with no feeds, so a scout
 result can never activate itself.
 

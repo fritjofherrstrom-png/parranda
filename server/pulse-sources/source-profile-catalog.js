@@ -2,7 +2,10 @@
 
 const { createHash, randomUUID } = require("node:crypto");
 const { eventFeedsFromReviewedSourceProfiles } = require("../place-candidates/reviewed-event-source-profile");
-const { placeFeedsFromReviewedSourceProfiles } = require("../place-candidates/reviewed-place-source-profile");
+const {
+  placeFeedsFromReviewedSourceProfiles,
+  placeSourceAdapterContract,
+} = require("../place-candidates/reviewed-place-source-profile");
 const {
   deriveLocalAnchorSpatialScope,
   sanitizeTrustedSpatialScope,
@@ -22,6 +25,10 @@ const MAX_SCOUT_TARGETS = 10_000;
 const SCOUT_LEASE_MS = 15 * 60 * 1000;
 const SCOUT_REPROBE_MIN_MS = 5 * 60 * 1000;
 const SCOUT_REFRESH_MS = 7 * 24 * 60 * 60 * 1000;
+const PLACE_SOURCE_REFRESH_MS = 6 * 60 * 60 * 1000;
+const PLACE_SOURCE_CANDIDATE_TTL_MS = 24 * 60 * 60 * 1000;
+const APPROVAL_CONTRACT_VERSION = "trusted-place-source-approval-v1";
+const MAX_APPROVAL_AGE_MS = 90 * 24 * 60 * 60 * 1000;
 
 const UPSERT_SCOUT_TARGET_SQL = `
 INSERT INTO pulse_source_scout_targets (
@@ -119,43 +126,6 @@ WHERE target_key = $1 AND status = 'leased' AND lease_token = $2
 RETURNING target_key, status
 `;
 
-const UPSERT_APPROVED_PROFILE_SQL = `
-INSERT INTO pulse_source_profiles (
-  profile_key,
-  catalog_status,
-  place_label,
-  anchor_lat,
-  anchor_lng,
-  bbox_west,
-  bbox_south,
-  bbox_east,
-  bbox_north,
-  profile,
-  discovered_at,
-  reviewed_at,
-  review_expires_at,
-  updated_at
-) VALUES (
-  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb,
-  $11::timestamptz, $12::timestamptz, $13::timestamptz, NOW()
-)
-ON CONFLICT (profile_key) DO UPDATE SET
-  catalog_status = EXCLUDED.catalog_status,
-  place_label = EXCLUDED.place_label,
-  anchor_lat = EXCLUDED.anchor_lat,
-  anchor_lng = EXCLUDED.anchor_lng,
-  bbox_west = EXCLUDED.bbox_west,
-  bbox_south = EXCLUDED.bbox_south,
-  bbox_east = EXCLUDED.bbox_east,
-  bbox_north = EXCLUDED.bbox_north,
-  profile = EXCLUDED.profile,
-  discovered_at = LEAST(pulse_source_profiles.discovered_at, EXCLUDED.discovered_at),
-  reviewed_at = EXCLUDED.reviewed_at,
-  review_expires_at = EXCLUDED.review_expires_at,
-  updated_at = NOW()
-RETURNING profile_key, catalog_status
-`;
-
 const UPSERT_DISCOVERY_PROFILE_SQL = `
 INSERT INTO pulse_source_profiles (
   profile_key,
@@ -171,56 +141,119 @@ INSERT INTO pulse_source_profiles (
   discovered_at,
   reviewed_at,
   review_expires_at,
+  profile_revision,
   updated_at
 ) VALUES (
   $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb,
-  $11::timestamptz, $12::timestamptz, $13::timestamptz, NOW()
+  $11::timestamptz, $12::timestamptz, $13::timestamptz, $14, NOW()
 )
 ON CONFLICT (profile_key) DO UPDATE SET
   catalog_status = CASE
     WHEN pulse_source_profiles.catalog_status = 'review_needed' THEN EXCLUDED.catalog_status
+    WHEN pulse_source_profiles.catalog_status = 'approved'
+      AND pulse_source_profiles.approved_profile_revision IS DISTINCT FROM EXCLUDED.profile_revision
+      THEN 'review_needed'
     ELSE pulse_source_profiles.catalog_status
   END,
   place_label = CASE
-    WHEN pulse_source_profiles.catalog_status = 'review_needed' THEN EXCLUDED.place_label
+    WHEN pulse_source_profiles.catalog_status = 'review_needed'
+      OR (pulse_source_profiles.catalog_status = 'approved'
+        AND pulse_source_profiles.approved_profile_revision IS DISTINCT FROM EXCLUDED.profile_revision)
+      THEN EXCLUDED.place_label
     ELSE pulse_source_profiles.place_label
   END,
   anchor_lat = CASE
-    WHEN pulse_source_profiles.catalog_status = 'review_needed' THEN EXCLUDED.anchor_lat
+    WHEN pulse_source_profiles.catalog_status = 'review_needed'
+      OR (pulse_source_profiles.catalog_status = 'approved'
+        AND pulse_source_profiles.approved_profile_revision IS DISTINCT FROM EXCLUDED.profile_revision)
+      THEN EXCLUDED.anchor_lat
     ELSE pulse_source_profiles.anchor_lat
   END,
   anchor_lng = CASE
-    WHEN pulse_source_profiles.catalog_status = 'review_needed' THEN EXCLUDED.anchor_lng
+    WHEN pulse_source_profiles.catalog_status = 'review_needed'
+      OR (pulse_source_profiles.catalog_status = 'approved'
+        AND pulse_source_profiles.approved_profile_revision IS DISTINCT FROM EXCLUDED.profile_revision)
+      THEN EXCLUDED.anchor_lng
     ELSE pulse_source_profiles.anchor_lng
   END,
   bbox_west = CASE
-    WHEN pulse_source_profiles.catalog_status = 'review_needed' THEN EXCLUDED.bbox_west
+    WHEN pulse_source_profiles.catalog_status = 'review_needed'
+      OR (pulse_source_profiles.catalog_status = 'approved'
+        AND pulse_source_profiles.approved_profile_revision IS DISTINCT FROM EXCLUDED.profile_revision)
+      THEN EXCLUDED.bbox_west
     ELSE pulse_source_profiles.bbox_west
   END,
   bbox_south = CASE
-    WHEN pulse_source_profiles.catalog_status = 'review_needed' THEN EXCLUDED.bbox_south
+    WHEN pulse_source_profiles.catalog_status = 'review_needed'
+      OR (pulse_source_profiles.catalog_status = 'approved'
+        AND pulse_source_profiles.approved_profile_revision IS DISTINCT FROM EXCLUDED.profile_revision)
+      THEN EXCLUDED.bbox_south
     ELSE pulse_source_profiles.bbox_south
   END,
   bbox_east = CASE
-    WHEN pulse_source_profiles.catalog_status = 'review_needed' THEN EXCLUDED.bbox_east
+    WHEN pulse_source_profiles.catalog_status = 'review_needed'
+      OR (pulse_source_profiles.catalog_status = 'approved'
+        AND pulse_source_profiles.approved_profile_revision IS DISTINCT FROM EXCLUDED.profile_revision)
+      THEN EXCLUDED.bbox_east
     ELSE pulse_source_profiles.bbox_east
   END,
   bbox_north = CASE
-    WHEN pulse_source_profiles.catalog_status = 'review_needed' THEN EXCLUDED.bbox_north
+    WHEN pulse_source_profiles.catalog_status = 'review_needed'
+      OR (pulse_source_profiles.catalog_status = 'approved'
+        AND pulse_source_profiles.approved_profile_revision IS DISTINCT FROM EXCLUDED.profile_revision)
+      THEN EXCLUDED.bbox_north
     ELSE pulse_source_profiles.bbox_north
   END,
   profile = CASE
-    WHEN pulse_source_profiles.catalog_status = 'review_needed' THEN EXCLUDED.profile
+    WHEN pulse_source_profiles.catalog_status = 'review_needed'
+      OR (pulse_source_profiles.catalog_status = 'approved'
+        AND pulse_source_profiles.approved_profile_revision IS DISTINCT FROM EXCLUDED.profile_revision)
+      THEN EXCLUDED.profile
     ELSE pulse_source_profiles.profile
+  END,
+  profile_revision = CASE
+    WHEN pulse_source_profiles.catalog_status IN ('review_needed', 'approved')
+      THEN EXCLUDED.profile_revision
+    ELSE pulse_source_profiles.profile_revision
   END,
   discovered_at = LEAST(pulse_source_profiles.discovered_at, EXCLUDED.discovered_at),
   reviewed_at = CASE
-    WHEN pulse_source_profiles.catalog_status = 'review_needed' THEN EXCLUDED.reviewed_at
+    WHEN pulse_source_profiles.catalog_status = 'review_needed'
+      OR (pulse_source_profiles.catalog_status = 'approved'
+        AND pulse_source_profiles.approved_profile_revision IS DISTINCT FROM EXCLUDED.profile_revision)
+      THEN NULL
     ELSE pulse_source_profiles.reviewed_at
   END,
   review_expires_at = CASE
-    WHEN pulse_source_profiles.catalog_status = 'review_needed' THEN EXCLUDED.review_expires_at
+    WHEN pulse_source_profiles.catalog_status = 'review_needed'
+      OR (pulse_source_profiles.catalog_status = 'approved'
+        AND pulse_source_profiles.approved_profile_revision IS DISTINCT FROM EXCLUDED.profile_revision)
+      THEN NULL
     ELSE pulse_source_profiles.review_expires_at
+  END,
+  approved_profile_revision = CASE
+    WHEN pulse_source_profiles.catalog_status = 'approved'
+      AND pulse_source_profiles.approved_profile_revision = EXCLUDED.profile_revision
+      THEN pulse_source_profiles.approved_profile_revision
+    ELSE NULL
+  END,
+  approval_key = CASE
+    WHEN pulse_source_profiles.catalog_status = 'approved'
+      AND pulse_source_profiles.approved_profile_revision = EXCLUDED.profile_revision
+      THEN pulse_source_profiles.approval_key
+    ELSE NULL
+  END,
+  approval_config_revision = CASE
+    WHEN pulse_source_profiles.catalog_status = 'approved'
+      AND pulse_source_profiles.approved_profile_revision = EXCLUDED.profile_revision
+      THEN pulse_source_profiles.approval_config_revision
+    ELSE NULL
+  END,
+  approved_by = CASE
+    WHEN pulse_source_profiles.catalog_status = 'approved'
+      AND pulse_source_profiles.approved_profile_revision = EXCLUDED.profile_revision
+      THEN pulse_source_profiles.approved_by
+    ELSE NULL
   END,
   updated_at = NOW()
 RETURNING profile_key, catalog_status
@@ -230,6 +263,9 @@ const ACTIVE_PROFILES_FOR_ANCHOR_SQL = `
 SELECT profile
 FROM pulse_source_profiles
 WHERE catalog_status = 'approved'
+  AND profile_revision IS NOT NULL
+  AND approved_profile_revision = profile_revision
+  AND approval_key IS NOT NULL
   AND review_expires_at > $3::timestamptz
   AND bbox_west <= $2
   AND bbox_east >= $2
@@ -237,6 +273,211 @@ WHERE catalog_status = 'approved'
   AND bbox_north >= $1
 ORDER BY reviewed_at DESC NULLS LAST, profile_key ASC
 LIMIT 64
+`;
+
+const PROFILE_FOR_REVIEW_SQL = `
+SELECT profile, catalog_status, profile_revision, approved_profile_revision,
+  approval_key, approval_config_revision, approved_by, reviewed_at, review_expires_at
+FROM pulse_source_profiles
+WHERE profile_key = $1
+LIMIT 1
+`;
+
+const APPLY_PROFILE_APPROVAL_SQL = `
+WITH approved AS (
+  UPDATE pulse_source_profiles
+  SET catalog_status = 'approved',
+      profile = $4::jsonb,
+      profile_revision = $2,
+      approved_profile_revision = $2,
+      approval_key = $3,
+      approval_config_revision = $5,
+      approved_by = $6,
+      reviewed_at = $7::timestamptz,
+      review_expires_at = $8::timestamptz,
+      updated_at = NOW()
+  WHERE profile_key = $1
+    AND catalog_status = 'review_needed'
+    AND profile = $9::jsonb
+    AND (profile_revision IS NULL OR profile_revision = $2)
+  RETURNING profile_key
+), audit AS (
+  INSERT INTO pulse_source_profile_approvals (
+    approval_key, profile_key, profile_revision, approval_config_revision,
+    approved_at, approved_by, expires_at, decision
+  )
+  SELECT $3, $1, $2, $5, $7::timestamptz, $6, $8::timestamptz, $10::jsonb
+  FROM approved
+  ON CONFLICT (approval_key) DO NOTHING
+  RETURNING approval_key
+), targets AS (
+  INSERT INTO pulse_source_place_refresh_targets (
+    profile_key, source_id, profile_revision, approval_key, feed,
+    status, attempt_count, next_attempt_at, lease_token, lease_until,
+    last_reason, last_completed_at, updated_at
+  )
+  SELECT $1, source_id, $2, $3, feed, 'pending', 0, $7::timestamptz,
+    NULL, NULL, NULL, NULL, NOW()
+  FROM approved,
+    jsonb_to_recordset($11::jsonb) AS source(source_id text, feed jsonb)
+  ON CONFLICT (profile_key, source_id) DO UPDATE SET
+    profile_revision = EXCLUDED.profile_revision,
+    approval_key = EXCLUDED.approval_key,
+    feed = EXCLUDED.feed,
+    status = 'pending',
+    attempt_count = 0,
+    next_attempt_at = EXCLUDED.next_attempt_at,
+    lease_token = NULL,
+    lease_until = NULL,
+    last_reason = NULL,
+    updated_at = NOW()
+  RETURNING source_id
+)
+SELECT approved.profile_key, $3::text AS approval_key,
+  (SELECT COUNT(*)::integer FROM targets) AS refresh_target_count
+FROM approved
+`;
+
+const CLAIM_PLACE_SOURCE_REFRESH_SQL = `
+WITH candidate AS (
+  SELECT target.profile_key, target.source_id
+  FROM pulse_source_place_refresh_targets AS target
+  JOIN pulse_source_profiles AS profile
+    ON profile.profile_key = target.profile_key
+   AND profile.catalog_status = 'approved'
+   AND profile.profile_revision = target.profile_revision
+   AND profile.approved_profile_revision = target.profile_revision
+   AND profile.approval_key = target.approval_key
+   AND profile.review_expires_at > $1::timestamptz
+  WHERE
+    (target.status IN ('pending', 'retry_wait', 'completed') AND target.next_attempt_at <= $1::timestamptz)
+    OR (target.status = 'leased' AND target.lease_until <= $1::timestamptz)
+  ORDER BY target.next_attempt_at ASC, target.profile_key ASC, target.source_id ASC
+  LIMIT 1
+  FOR UPDATE OF target SKIP LOCKED
+)
+UPDATE pulse_source_place_refresh_targets AS target
+SET status = 'leased', lease_token = $2, lease_until = $3::timestamptz,
+  attempt_count = target.attempt_count + 1, updated_at = NOW()
+FROM candidate
+WHERE target.profile_key = candidate.profile_key AND target.source_id = candidate.source_id
+RETURNING target.*
+`;
+
+const COMPLETE_PLACE_SOURCE_REFRESH_SQL = `
+WITH current_target AS (
+  SELECT target.*
+  FROM pulse_source_place_refresh_targets AS target
+  JOIN pulse_source_profiles AS profile
+    ON profile.profile_key = target.profile_key
+   AND profile.catalog_status = 'approved'
+   AND profile.profile_revision = target.profile_revision
+   AND profile.approved_profile_revision = target.profile_revision
+   AND profile.approval_key = target.approval_key
+   AND profile.review_expires_at > $5::timestamptz
+  WHERE target.profile_key = $1 AND target.source_id = $2
+    AND target.status = 'leased' AND target.lease_token = $3
+), observation AS (
+  INSERT INTO pulse_source_place_fetch_observations (
+    fetch_key, profile_key, source_id, profile_revision, approval_key,
+    adapter, source_identity, observed_at, status, candidate_count, reason
+  )
+  SELECT $4, target.profile_key, target.source_id, target.profile_revision,
+    target.approval_key, target.feed->>'adapter', target.feed->>'source_identity',
+    $5::timestamptz, $6, $7, $8
+  FROM current_target AS target
+  ON CONFLICT (fetch_key) DO NOTHING
+), upserted AS (
+  INSERT INTO pulse_source_place_candidates (
+    profile_key, source_id, candidate_key, profile_revision, approval_key,
+    adapter, source_identity, lat, lng, record, observed_at, expires_at, updated_at
+  )
+  SELECT target.profile_key, target.source_id, row.candidate_key,
+    target.profile_revision, target.approval_key, target.feed->>'adapter',
+    target.feed->>'source_identity', row.lat, row.lng, row.record,
+    row.observed_at, row.expires_at, NOW()
+  FROM current_target AS target,
+    jsonb_to_recordset($9::jsonb) AS row(
+      candidate_key text, lat double precision, lng double precision,
+      record jsonb, observed_at timestamptz, expires_at timestamptz
+    )
+  ON CONFLICT (profile_key, source_id, candidate_key) DO UPDATE SET
+    profile_revision = EXCLUDED.profile_revision,
+    approval_key = EXCLUDED.approval_key,
+    adapter = EXCLUDED.adapter,
+    source_identity = EXCLUDED.source_identity,
+    lat = EXCLUDED.lat,
+    lng = EXCLUDED.lng,
+    record = EXCLUDED.record,
+    observed_at = EXCLUDED.observed_at,
+    expires_at = EXCLUDED.expires_at,
+    updated_at = NOW()
+  RETURNING candidate_key
+), removed AS (
+  DELETE FROM pulse_source_place_candidates AS candidate
+  USING current_target AS target
+  WHERE candidate.profile_key = target.profile_key
+    AND candidate.source_id = target.source_id
+    AND candidate.candidate_key NOT IN (
+      SELECT row.candidate_key
+      FROM jsonb_to_recordset($9::jsonb) AS row(candidate_key text)
+    )
+  RETURNING candidate.candidate_key
+)
+UPDATE pulse_source_place_refresh_targets AS target
+SET status = 'completed', attempt_count = 0, next_attempt_at = $10::timestamptz,
+  lease_token = NULL, lease_until = NULL, last_reason = $8,
+  last_completed_at = $5::timestamptz, updated_at = NOW()
+FROM current_target
+WHERE target.profile_key = current_target.profile_key
+  AND target.source_id = current_target.source_id
+RETURNING target.profile_key, target.source_id,
+  (SELECT COUNT(*)::integer FROM upserted) AS candidate_count
+`;
+
+const FAIL_PLACE_SOURCE_REFRESH_SQL = `
+WITH current_target AS (
+  SELECT target.*
+  FROM pulse_source_place_refresh_targets AS target
+  WHERE target.profile_key = $1 AND target.source_id = $2
+    AND target.status = 'leased' AND target.lease_token = $3
+), observation AS (
+  INSERT INTO pulse_source_place_fetch_observations (
+    fetch_key, profile_key, source_id, profile_revision, approval_key,
+    adapter, source_identity, observed_at, status, candidate_count, reason
+  )
+  SELECT $4, target.profile_key, target.source_id, target.profile_revision,
+    target.approval_key, target.feed->>'adapter', target.feed->>'source_identity',
+    $5::timestamptz, 'failed', 0, $6
+  FROM current_target AS target
+  ON CONFLICT (fetch_key) DO NOTHING
+)
+UPDATE pulse_source_place_refresh_targets AS target
+SET status = 'retry_wait', next_attempt_at = $7::timestamptz,
+  lease_token = NULL, lease_until = NULL, last_reason = $6, updated_at = NOW()
+FROM current_target
+WHERE target.profile_key = current_target.profile_key
+  AND target.source_id = current_target.source_id
+RETURNING target.profile_key, target.source_id
+`;
+
+const FRESH_PLACE_CANDIDATES_FOR_ANCHOR_SQL = `
+SELECT candidate.record
+FROM pulse_source_place_candidates AS candidate
+JOIN pulse_source_profiles AS profile
+  ON profile.profile_key = candidate.profile_key
+ AND profile.catalog_status = 'approved'
+ AND profile.profile_revision = candidate.profile_revision
+ AND profile.approved_profile_revision = candidate.profile_revision
+ AND profile.approval_key = candidate.approval_key
+WHERE candidate.expires_at > $3::timestamptz
+  AND profile.review_expires_at > $3::timestamptz
+  AND profile.bbox_west <= $2
+  AND profile.bbox_east >= $2
+  AND profile.bbox_south <= $1
+  AND profile.bbox_north >= $1
+ORDER BY candidate.observed_at DESC, candidate.candidate_key ASC
+LIMIT 400
 `;
 
 const QUALIFIED_PROFILES_FOR_ANCHOR_SQL = `
@@ -296,6 +537,7 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
         status: "recorded",
         profile_key: publicString(row.profile_key) || normalized.profile.profile_key,
         catalog_status: publicString(row.catalog_status) || "review_needed",
+        profile_revision: normalized.profileRevision,
       };
     } catch (_error) {
       return { status: "failed", reason: "source_catalog_write_failed" };
@@ -303,22 +545,117 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
   }
 
   async function recordApprovedProfile(profile) {
-    const normalized = normalizeCatalogProfile(profile, {
-      forcedStatus: "approved",
-      now: now(),
-    });
-    if (!normalized) return { status: "rejected", reason: "invalid_reviewed_source_profile" };
+    return profile
+      ? { status: "rejected", reason: "operator_revision_bound_approval_required" }
+      : { status: "rejected", reason: "invalid_reviewed_source_profile" };
+  }
 
+  async function inspectProfileForReview(profileKey) {
+    const key = publicString(profileKey);
+    if (!key?.startsWith("place-source-profile-v1:")) {
+      return { status: "rejected", reason: "invalid_profile_key" };
+    }
     try {
-      const result = await query(UPSERT_APPROVED_PROFILE_SQL, catalogValues(normalized));
-      const row = result?.rows?.[0] || {};
+      const result = await query(PROFILE_FOR_REVIEW_SQL, [key]);
+      const row = result?.rows?.[0];
+      const profile = parseProfile(row?.profile);
+      if (!row || !profile) return { status: "not_found", reason: "source_profile_not_found" };
+      const revision = buildProfileReviewRevision(profile);
+      if (!revision) return { status: "rejected", reason: "invalid_source_profile" };
       return {
-        status: "recorded",
-        profile_key: publicString(row.profile_key) || normalized.profile.profile_key,
-        catalog_status: publicString(row.catalog_status) || "approved",
+        status: row.catalog_status === "review_needed" ? "reviewable" : "unavailable",
+        profile_key: key,
+        profile_revision: revision,
+        catalog_status: publicString(row.catalog_status),
+        place_context: reviewablePlaceContext(profile.place_context),
+        place_source_candidates: reviewablePlaceCandidates(profile),
+        ...(row.approval_key ? {
+          current_approval: {
+            approval_key: publicString(row.approval_key),
+            profile_revision: publicString(row.approved_profile_revision),
+            approval_config_revision: publicString(row.approval_config_revision),
+            approved_by: publicString(row.approved_by),
+            reviewed_at: normalizeDate(row.reviewed_at)?.toISOString() || null,
+            expires_at: normalizeDate(row.review_expires_at)?.toISOString() || null,
+          },
+        } : {}),
       };
     } catch (_error) {
-      return { status: "failed", reason: "source_catalog_write_failed" };
+      return { status: "failed", reason: "source_catalog_read_failed" };
+    }
+  }
+
+  async function approveProfile(decision, { operatorId } = {}) {
+    const key = publicString(decision?.profile_key);
+    if (!key?.startsWith("place-source-profile-v1:")) {
+      return { status: "rejected", reason: "invalid_profile_key" };
+    }
+    let row;
+    try {
+      const loaded = await query(PROFILE_FOR_REVIEW_SQL, [key]);
+      row = loaded?.rows?.[0];
+    } catch (_error) {
+      return { status: "failed", reason: "source_catalog_read_failed" };
+    }
+    const profile = parseProfile(row?.profile);
+    if (!row || !profile) return { status: "not_found", reason: "source_profile_not_found" };
+    const built = buildReviewedProfile(profile, decision, { operatorId, now: now() });
+    if (!built) return { status: "rejected", reason: "profile_revision_mismatch_or_invalid_review" };
+
+    if (row.catalog_status === "approved") {
+      if (
+        publicString(row.approval_key) === built.audit.approval_key &&
+        publicString(row.approved_profile_revision) === built.audit.profile_revision &&
+        publicString(row.approval_config_revision) === built.audit.approval_config_revision
+      ) {
+        return {
+          status: "recorded",
+          catalog_status: "approved",
+          profile_key: key,
+          profile_revision: built.audit.profile_revision,
+          approval_key: built.audit.approval_key,
+          approval_config_revision: built.audit.approval_config_revision,
+          idempotent: true,
+        };
+      }
+      return { status: "rejected", reason: "profile_already_approved" };
+    }
+    if (row.catalog_status !== "review_needed") {
+      return { status: "rejected", reason: "profile_not_reviewable" };
+    }
+
+    const feeds = placeFeedsFromReviewedSourceProfiles([built.profile], { now: built.audit.approved_at });
+    if (!feeds.length) return { status: "rejected", reason: "approved_place_source_unavailable" };
+    const refreshTargets = feeds.map((feed) => ({ source_id: feed.id, feed }));
+    try {
+      const applied = await query(APPLY_PROFILE_APPROVAL_SQL, [
+        key,
+        built.audit.profile_revision,
+        built.audit.approval_key,
+        JSON.stringify(built.profile),
+        built.audit.approval_config_revision,
+        built.audit.approved_by,
+        built.audit.approved_at,
+        built.audit.expires_at,
+        JSON.stringify(profile),
+        JSON.stringify(built.audit.decision),
+        JSON.stringify(refreshTargets),
+      ]);
+      if (!applied?.rows?.[0]) {
+        return { status: "rejected", reason: "profile_changed_during_approval" };
+      }
+      return {
+        status: "recorded",
+        catalog_status: "approved",
+        profile_key: key,
+        profile_revision: built.audit.profile_revision,
+        approval_key: built.audit.approval_key,
+        approval_config_revision: built.audit.approval_config_revision,
+        refresh_target_count: Number(applied.rows[0].refresh_target_count) || refreshTargets.length,
+        idempotent: false,
+      };
+    } catch (_error) {
+      return { status: "failed", reason: "source_profile_approval_write_failed" };
     }
   }
 
@@ -353,6 +690,30 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
       return placeFeedsFromReviewedSourceProfiles(profiles, { now: at });
     } catch (_error) {
       return [];
+    }
+  }
+
+  async function listFreshApprovedPlaceCandidatesForAnchor({ anchor, now: requestedNow = now() } = {}) {
+    const lat = finiteCoordinate(anchor?.lat, -90, 90);
+    const lng = finiteCoordinate(anchor?.lng, -180, 180);
+    const at = normalizeDate(requestedNow);
+    if (lat == null || lng == null || !at) return [];
+    try {
+      const result = await query(FRESH_PLACE_CANDIDATES_FOR_ANCHOR_SQL, [lat, lng, at.toISOString()]);
+      const records = (Array.isArray(result?.rows) ? result.rows : [])
+        .map((row) => parseProfile(row?.record))
+        .filter((record) =>
+          validPersistedPlaceRecord(record) &&
+          haversineKm(lat, lng, record.lat, record.lng) <= 5,
+        )
+        .slice(0, 100);
+      Object.defineProperty(records, "loader_status", { value: `loaded:${records.length}` });
+      return records;
+    } catch (_error) {
+      const records = [];
+      Object.defineProperty(records, "loader_status", { value: "error_failed_closed" });
+      Object.defineProperty(records, "loader_error", { value: "source_catalog_read_failed" });
+      return records;
     }
   }
 
@@ -517,11 +878,104 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
     }
   }
 
+  async function claimApprovedPlaceSourceRefresh() {
+    const claimedAt = normalizeDate(now());
+    if (!claimedAt) return null;
+    const leaseToken = randomUUID();
+    const leaseUntil = new Date(claimedAt.getTime() + SCOUT_LEASE_MS);
+    try {
+      const result = await query(CLAIM_PLACE_SOURCE_REFRESH_SQL, [
+        claimedAt.toISOString(),
+        leaseToken,
+        leaseUntil.toISOString(),
+      ]);
+      return normalizeClaimedPlaceSourceRefresh(result?.rows?.[0], leaseToken);
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  async function recordApprovedPlaceSourceOutcome(target, outcome = {}) {
+    const claimed = normalizeClaimedPlaceSourceRefresh(target, target?.lease_token);
+    const observedAt = normalizeDate(outcome.observed_at || now());
+    if (!claimed || !observedAt) {
+      return { status: "ignored", reason: "invalid_place_source_refresh_lease" };
+    }
+    const outcomeStatus = ["ok", "empty", "failed"].includes(outcome.status)
+      ? outcome.status
+      : "failed";
+    const reason = safeReason(outcome.reason, outcomeStatus === "failed" ? "source_fetch_failed" : "source_fetch_complete");
+    const fetchKey = `place-source-fetch-v1:${createHash("sha256")
+      .update(`${claimed.profile_key}|${claimed.source_id}|${claimed.profile_revision}|${observedAt.toISOString()}`)
+      .digest("hex").slice(0, 24)}`;
+
+    if (outcomeStatus === "failed") {
+      const retryAt = new Date(observedAt.getTime() + scoutRetryDelayMs(claimed.attempt_count));
+      try {
+        const failed = await query(FAIL_PLACE_SOURCE_REFRESH_SQL, [
+          claimed.profile_key,
+          claimed.source_id,
+          claimed.lease_token,
+          fetchKey,
+          observedAt.toISOString(),
+          reason,
+          retryAt.toISOString(),
+        ]);
+        return failed?.rows?.[0]
+          ? { status: "retry_wait", candidate_count: 0, retry_at: retryAt.toISOString() }
+          : { status: "ignored", reason: "place_source_refresh_lease_lost" };
+      } catch (_error) {
+        return { status: "failed", reason: "place_source_refresh_write_failed" };
+      }
+    }
+
+    const profileExpiry = normalizeDate(claimed.feed?.profile_expires_at);
+    const freshnessExpiry = new Date(observedAt.getTime() + PLACE_SOURCE_CANDIDATE_TTL_MS);
+    const expiresAt = profileExpiry && profileExpiry < freshnessExpiry ? profileExpiry : freshnessExpiry;
+    const normalizedRecords = (Array.isArray(outcome.records) ? outcome.records : [])
+      .map((record) => normalizePersistedPlaceRecord(record, {
+        target: claimed,
+        observedAt,
+        expiresAt,
+      }))
+      .filter(Boolean)
+      .slice(0, 100);
+    // A provider page may repeat the same stable identity. PostgreSQL cannot
+    // update one conflict target twice in the same INSERT, and repetition is
+    // not additional evidence, so collapse it before the atomic write.
+    const persisted = [...new Map(
+      normalizedRecords.map((record) => [record.candidate_key, record]),
+    ).values()];
+    const nextAttemptAt = new Date(observedAt.getTime() + PLACE_SOURCE_REFRESH_MS);
+    try {
+      const completed = await query(COMPLETE_PLACE_SOURCE_REFRESH_SQL, [
+        claimed.profile_key,
+        claimed.source_id,
+        claimed.lease_token,
+        fetchKey,
+        observedAt.toISOString(),
+        outcomeStatus,
+        persisted.length,
+        reason,
+        JSON.stringify(persisted),
+        nextAttemptAt.toISOString(),
+      ]);
+      return completed?.rows?.[0]
+        ? { status: "completed", candidate_count: persisted.length, next_attempt_at: nextAttemptAt.toISOString() }
+        : { status: "ignored", reason: "place_source_refresh_lease_lost" };
+    } catch (_error) {
+      return { status: "failed", reason: "place_source_refresh_write_failed" };
+    }
+  }
+
   return {
     recordDiscovery,
     recordApprovedProfile,
+    inspectProfileForReview,
+    approveProfile,
     listApprovedEventFeedsForAnchor,
     listApprovedPlaceFeedsForAnchor,
+    listFreshApprovedPlaceCandidatesForAnchor,
     listQualifiedEventFeedsForAnchor,
     loadSourceQualification,
     loadPlaceSourceQualification,
@@ -530,6 +984,8 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
     claimScoutTarget,
     completeScoutTarget,
     failScoutTarget,
+    claimApprovedPlaceSourceRefresh,
+    recordApprovedPlaceSourceOutcome,
   };
 }
 
@@ -585,6 +1041,8 @@ function normalizeCatalogProfile(profile, { forcedStatus, now } = {}) {
   const anchorLng = finiteCoordinate(place?.lng, -180, 180);
   const at = normalizeDate(now);
   if (!profileKey?.startsWith("place-source-profile-v1:") || !bounds || !at) return null;
+  const profileRevision = buildProfileReviewRevision(cloned);
+  if (!profileRevision) return null;
 
   if (forcedStatus === "review_needed") {
     cloned.runtime_review = {
@@ -616,6 +1074,7 @@ function normalizeCatalogProfile(profile, { forcedStatus, now } = {}) {
     discoveredAt: at.toISOString(),
     reviewedAt: normalizeDate(review.reviewed_at)?.toISOString() || null,
     reviewExpiresAt: normalizeDate(review.expires_at)?.toISOString() || null,
+    profileRevision,
   };
 }
 
@@ -634,7 +1093,315 @@ function catalogValues(normalized) {
     normalized.discoveredAt,
     normalized.reviewedAt,
     normalized.reviewExpiresAt,
+    normalized.profileRevision,
   ];
+}
+
+function buildProfileReviewRevision(profile) {
+  const parsed = parseProfile(profile);
+  const profileKey = publicString(parsed?.profile_key);
+  const placeContext = reviewablePlaceContext(parsed?.place_context);
+  if (!profileKey?.startsWith("place-source-profile-v1:") || !placeContext?.bounds) return null;
+  const candidates = reviewablePlaceCandidates(parsed);
+  const surface = {
+    contract_version: APPROVAL_CONTRACT_VERSION,
+    profile_key: profileKey,
+    place_context: placeContext,
+    place_source_candidates: candidates,
+  };
+  return `sha256:${createHash("sha256").update(stableJson(surface)).digest("hex")}`;
+}
+
+function buildReviewedProfile(profile, decision, { operatorId, now = new Date() } = {}) {
+  const parsed = parseProfile(profile);
+  const at = normalizeDate(now);
+  const operator = boundedString(operatorId, 160);
+  const key = publicString(parsed?.profile_key);
+  const expectedKey = publicString(decision?.profile_key);
+  const expectedRevision = publicString(decision?.expected_profile_revision);
+  const actualRevision = buildProfileReviewRevision(parsed);
+  const expiresAt = normalizeDate(decision?.expires_at);
+  if (
+    !parsed || !at || !operator || !key || key !== expectedKey ||
+    !actualRevision || expectedRevision !== actualRevision ||
+    decision?.schema_version !== 1 || !expiresAt || expiresAt <= at ||
+    expiresAt.getTime() - at.getTime() > MAX_APPROVAL_AGE_MS
+  ) return null;
+
+  const candidates = new Map(reviewablePlaceCandidates(parsed).map((candidate) => [candidate.id, candidate]));
+  const rows = Array.isArray(decision?.place_sources) ? decision.place_sources : [];
+  if (!rows.length || rows.length > 16) return null;
+  const placeSources = [];
+  const seen = new Set();
+  for (const row of rows) {
+    const candidateId = publicString(row?.candidate_id);
+    const candidate = candidates.get(candidateId);
+    if (!candidate || seen.has(candidateId)) return null;
+    seen.add(candidateId);
+    const id = safeMachineId(row?.id || candidateId);
+    const label = boundedString(row?.label || candidate.source_label, 160);
+    const evidenceFamily = closedToken(row?.evidence_family, ["official", "editorial"]);
+    const sourceTier = closedToken(row?.source_tier, ["official", "editorial", "curated"]);
+    const termsStatus = closedToken(row?.terms_status, ["open_license", "api_terms_compatible"]);
+    const sourceHealth = closedToken(row?.source_health, ["healthy"]);
+    const runtimePolicy = closedToken(row?.runtime_policy, ["active", "bounded_refresh"]);
+    if (!id || !label || !evidenceFamily || !sourceTier || !termsStatus || !sourceHealth || !runtimePolicy) {
+      return null;
+    }
+    placeSources.push(compact({
+      candidate_id: candidateId,
+      id,
+      label,
+      endpoint: candidate.url,
+      adapter: candidate.adapter,
+      adapter_contract_revision: candidate.adapter_contract_revision,
+      evidence_family: evidenceFamily,
+      source_tier: sourceTier,
+      source_identity: candidate.source_identity,
+      license: boundedString(row?.license, 160),
+      terms_status: termsStatus,
+      source_health: sourceHealth,
+      runtime_policy: runtimePolicy,
+      max_items: boundedInteger(row?.max_items, 1, 100) || 40,
+      priority: finiteNumber(row?.priority),
+    }));
+  }
+
+  const reviewedAt = at.toISOString();
+  const expiry = expiresAt.toISOString();
+  const approvedProfile = {
+    ...parsed,
+    runtime_review: {
+      status: "approved",
+      reviewed_at: reviewedAt,
+      expires_at: expiry,
+      feeds: [],
+      place_sources: placeSources,
+    },
+  };
+  const validatedFeeds = placeFeedsFromReviewedSourceProfiles([approvedProfile], { now: at });
+  if (validatedFeeds.length !== placeSources.length) return null;
+  const normalizedDecision = {
+    schema_version: 1,
+    contract_version: APPROVAL_CONTRACT_VERSION,
+    profile_key: key,
+    expected_profile_revision: actualRevision,
+    expires_at: expiry,
+    place_sources: placeSources.map((row) => ({
+      candidate_id: row.candidate_id,
+      id: row.id,
+      evidence_family: row.evidence_family,
+      source_tier: row.source_tier,
+      license: row.license,
+      terms_status: row.terms_status,
+      source_health: row.source_health,
+      runtime_policy: row.runtime_policy,
+      max_items: row.max_items,
+      priority: row.priority,
+    })),
+  };
+  const approvalConfigRevision = `sha256:${createHash("sha256")
+    .update(stableJson(normalizedDecision)).digest("hex")}`;
+  const approvalKey = `source-profile-approval-v1:${createHash("sha256")
+    .update(`${key}|${actualRevision}|${approvalConfigRevision}`).digest("hex").slice(0, 24)}`;
+  return {
+    profile: approvedProfile,
+    audit: {
+      approval_key: approvalKey,
+      profile_key: key,
+      profile_revision: actualRevision,
+      approval_config_revision: approvalConfigRevision,
+      approved_at: reviewedAt,
+      approved_by: operator,
+      expires_at: expiry,
+      decision: normalizedDecision,
+    },
+  };
+}
+
+function reviewablePlaceContext(value) {
+  const bounds = normalizeBounds(value?.bounds);
+  if (!bounds) return null;
+  return compact({
+    label: boundedString(value?.label, 160),
+    lat: finiteCoordinate(value?.lat, -90, 90),
+    lng: finiteCoordinate(value?.lng, -180, 180),
+    bounds,
+  });
+}
+
+function reviewablePlaceCandidates(profile) {
+  const candidates = [];
+  for (const family of Array.isArray(profile?.source_families) ? profile.source_families : []) {
+    for (const candidate of Array.isArray(family?.candidates) ? family.candidates : []) candidates.push(candidate);
+  }
+  for (const candidate of Array.isArray(profile?.place_source_candidates)
+    ? profile.place_source_candidates
+    : []) candidates.push(candidate);
+  const seen = new Set();
+  return candidates
+    .map((candidate) => compact({
+      id: boundedString(candidate?.id, 160),
+      source_label: boundedString(candidate?.source_label, 160),
+      url: safeHttpsUrl(candidate?.url),
+      status: closedToken(candidate?.status, [
+        "viable_provider_probe",
+        "needs_adapter_or_permission",
+        "viable_place_provider_probe",
+      ]),
+      adapter: closedToken(candidate?.adapter, [
+        "schema_org_place",
+        "schema_org_place_html",
+        "schema_org_place_json",
+        "map_linked_place_html",
+      ]),
+      adapter_contract_revision: placeSourceAdapterContract(candidate?.adapter),
+      maps_to_existing_provider: candidate?.maps_to_existing_provider === true,
+      trust_tier: boundedString(candidate?.trust_tier, 40),
+      source_identity: boundedString(candidate?.source_identity, 200),
+      candidate_kind: boundedString(candidate?.candidate_kind, 80),
+      corroboration_required: candidate?.corroboration_required === true,
+    }))
+    .filter((candidate) =>
+      candidate.id && candidate.url && candidate.status && candidate.adapter &&
+      candidate.maps_to_existing_provider === true && candidate.source_identity,
+    )
+    .filter((candidate) => {
+      if (seen.has(candidate.id)) return false;
+      seen.add(candidate.id);
+      return true;
+    })
+    .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function normalizeClaimedPlaceSourceRefresh(row, leaseToken) {
+  const profileKey = publicString(row?.profile_key);
+  const sourceId = safeMachineId(row?.source_id);
+  const profileRevision = publicString(row?.profile_revision);
+  const approvalKey = publicString(row?.approval_key);
+  const token = publicString(leaseToken || row?.lease_token);
+  const feed = parseProfile(row?.feed);
+  if (
+    !profileKey?.startsWith("place-source-profile-v1:") || !sourceId ||
+    !profileRevision?.startsWith("sha256:") ||
+    !approvalKey?.startsWith("source-profile-approval-v1:") || !token ||
+    !feed || feed.id !== sourceId || !safeHttpsUrl(feed.endpoint) ||
+    !closedToken(feed.adapter, ["schema_org_place_html", "schema_org_place_json", "map_linked_place_html"]) ||
+    feed.adapter_contract_revision !== placeSourceAdapterContract(feed.adapter) ||
+    !boundedString(feed.source_identity, 200)
+  ) return null;
+  return {
+    profile_key: profileKey,
+    source_id: sourceId,
+    profile_revision: profileRevision,
+    approval_key: approvalKey,
+    feed,
+    lease_token: token,
+    attempt_count: positiveInteger(row?.attempt_count) || 1,
+  };
+}
+
+function normalizePersistedPlaceRecord(record, { target, observedAt, expiresAt } = {}) {
+  const parsed = parseProfile(record);
+  const id = boundedString(parsed?.id, 240);
+  const lat = finiteCoordinate(parsed?.lat, -90, 90);
+  const lng = finiteCoordinate(parsed?.lng, -180, 180);
+  if (
+    !id || lat == null || lng == null || !normalizeDate(observedAt) ||
+    !normalizeDate(expiresAt) || parsed?.operator_reviewed_source !== true ||
+    parsed?.source_policy !== "reviewed_profile_bounded_refresh"
+  ) return null;
+  const enriched = {
+    ...parsed,
+    freshness: "fresh",
+    source_profile_key: target.profile_key,
+    source_profile_revision: target.profile_revision,
+    source_approval_key: target.approval_key,
+    source_feed_id: target.source_id,
+    source_adapter: target.feed.adapter,
+    source_adapter_contract_revision: target.feed.adapter_contract_revision,
+    source_identity: target.feed.source_identity,
+    source_observed_at: observedAt.toISOString(),
+    source_expires_at: expiresAt.toISOString(),
+  };
+  return {
+    candidate_key: id,
+    lat,
+    lng,
+    record: enriched,
+    observed_at: observedAt.toISOString(),
+    expires_at: expiresAt.toISOString(),
+  };
+}
+
+function validPersistedPlaceRecord(record) {
+  return Boolean(
+    record && typeof record === "object" &&
+    boundedString(record.id, 240) && boundedString(record.name, 160) &&
+    finiteCoordinate(record.lat, -90, 90) != null &&
+    finiteCoordinate(record.lng, -180, 180) != null &&
+    record.operator_reviewed_source === true &&
+    record.source_policy === "reviewed_profile_bounded_refresh" &&
+    publicString(record.source_profile_key)?.startsWith("place-source-profile-v1:") &&
+    publicString(record.source_profile_revision)?.startsWith("sha256:") &&
+    publicString(record.source_approval_key)?.startsWith("source-profile-approval-v1:") &&
+    safeMachineId(record.source_feed_id) &&
+    closedToken(record.source_adapter, ["schema_org_place_html", "schema_org_place_json", "map_linked_place_html"]) &&
+    record.source_adapter_contract_revision === placeSourceAdapterContract(record.source_adapter) &&
+    normalizeDate(record.source_observed_at) && normalizeDate(record.source_expires_at)
+  );
+}
+
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function compact(value) {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item != null && item !== ""));
+}
+
+function safeMachineId(value) {
+  const token = boundedString(value, 120);
+  return token && /^[a-z0-9][a-z0-9._:-]*$/i.test(token) ? token : null;
+}
+
+function safeHttpsUrl(value) {
+  try {
+    const url = new URL(publicString(value));
+    if (url.protocol !== "https:" || url.username || url.password) return null;
+    url.hash = "";
+    return url.toString();
+  } catch (_error) {
+    return null;
+  }
+}
+
+function closedToken(value, allowed) {
+  const token = publicString(value)?.toLowerCase();
+  return token && allowed.includes(token) ? token : null;
+}
+
+function boundedInteger(value, min, max) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(min, Math.min(max, Math.floor(number))) : null;
+}
+
+function finiteNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const radians = (degrees) => (degrees * Math.PI) / 180;
+  const dLat = radians(lat2 - lat1);
+  const dLng = radians(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(radians(lat1)) * Math.cos(radians(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 function normalizeBounds(value) {
@@ -744,7 +1511,7 @@ function scoutRetryDelayMs(attemptCount) {
 }
 
 function safeReason(value, fallback) {
-  const token = publicString(value).toLowerCase();
+  const token = publicString(value)?.toLowerCase() || "";
   return /^[a-z0-9_:-]{1,120}$/.test(token) ? token : fallback;
 }
 
@@ -794,7 +1561,10 @@ function enabled(value) {
 }
 
 module.exports = {
+  APPLY_PROFILE_APPROVAL_SQL,
   ACTIVE_PROFILES_FOR_ANCHOR_SQL,
+  APPROVAL_CONTRACT_VERSION,
+  CLAIM_PLACE_SOURCE_REFRESH_SQL,
   QUALIFIED_PROFILES_FOR_ANCHOR_SQL,
   PLACE_SOURCE_QUALIFICATION_SQL,
   CLAIM_SCOUT_TARGET_SQL,
@@ -802,6 +1572,9 @@ module.exports = {
   CATALOG_DATABASE_ENV_KEY,
   CATALOG_FLAG_ENV_KEY,
   DISCOVERY_HEALTH_FOR_ANCHOR_SQL,
+  COMPLETE_PLACE_SOURCE_REFRESH_SQL,
+  FAIL_PLACE_SOURCE_REFRESH_SQL,
+  FRESH_PLACE_CANDIDATES_FOR_ANCHOR_SQL,
   FAIL_SCOUT_TARGET_SQL,
   MAX_SCOUT_TARGETS,
   MAX_PROFILE_BYTES,
@@ -810,11 +1583,13 @@ module.exports = {
   SCOUT_REPROBE_MIN_MS,
   SCOUT_REFRESH_MS,
   SOURCE_QUALIFICATION_SQL,
-  UPSERT_APPROVED_PROFILE_SQL,
   UPSERT_DISCOVERY_PROFILE_SQL,
   UPSERT_SCOUT_TARGET_SQL,
+  PROFILE_FOR_REVIEW_SQL,
   createSourceProfileCatalog,
   boundedScoutRefreshAt,
+  buildProfileReviewRevision,
+  buildReviewedProfile,
   normalizeScoutDemand,
   resolveDefaultSourceProfileCatalog,
   scoutRetryDelayMs,

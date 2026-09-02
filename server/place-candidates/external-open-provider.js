@@ -147,6 +147,12 @@ function mapRecordToCandidate(cityConfig, record, observedAt, index) {
   // The shared gates only honor this bit for an official source under the exact
   // bounded reviewed-profile policy; arbitrary external rows cannot promote it.
   base.operator_reviewed_source = record.operator_reviewed_source === true;
+  // Keep a deliberately bounded, machine-readable chain back to the exact
+  // operator approval and worker observation. Raw loader configuration and
+  // approval evidence stay server-side; route output only needs enough to
+  // prove which immutable review and refresh admitted the stop.
+  const trustedSource = normalizeTrustedSourceProvenance(record);
+  if (trustedSource) base.trusted_source = trustedSource;
   // Chain signal (#272): carried verbatim from the loader record (OSM brand tag,
   // never name matching). Composition may prefer non-chain options; chains stay
   // valid sparse fallbacks.
@@ -167,6 +173,56 @@ function mapRecordToCandidate(cityConfig, record, observedAt, index) {
 function normalizeOperationalStatus(value) {
   const token = firstString(value).toLowerCase();
   return ["inactive", "source_indicated_active", "unknown"].includes(token) ? token : "";
+}
+
+function normalizeTrustedSourceProvenance(record) {
+  if (
+    record?.operator_reviewed_source !== true ||
+    record?.source_policy !== "reviewed_profile_bounded_refresh"
+  ) return null;
+  const profileKey = boundedMachineValue(record.source_profile_key, {
+    prefix: "place-source-profile-v1:",
+    max: 160,
+  });
+  const profileRevision = boundedMachineValue(record.source_profile_revision, {
+    prefix: "sha256:",
+    max: 80,
+  });
+  const approvalKey = boundedMachineValue(record.source_approval_key, {
+    prefix: "source-profile-approval-v1:",
+    max: 160,
+  });
+  const sourceId = boundedMachineValue(record.source_feed_id, { max: 120 });
+  const adapter = boundedMachineValue(record.source_adapter, { max: 80 });
+  const adapterContractRevision = boundedMachineValue(record.source_adapter_contract_revision, { max: 80 });
+  const observedAt = normalizedIso(record.source_observed_at);
+  const expiresAt = normalizedIso(record.source_expires_at);
+  if (
+    !profileKey || !profileRevision || !approvalKey || !sourceId || !adapter ||
+    !adapterContractRevision ||
+    !observedAt || !expiresAt || expiresAt <= observedAt
+  ) return null;
+  return {
+    profile_key: profileKey,
+    profile_revision: profileRevision,
+    approval_key: approvalKey,
+    source_id: sourceId,
+    adapter,
+    adapter_contract_revision: adapterContractRevision,
+    observed_at: observedAt,
+    expires_at: expiresAt,
+  };
+}
+
+function boundedMachineValue(value, { prefix = "", max = 120 } = {}) {
+  const token = firstString(value);
+  if (!token || token.length > max || (prefix && !token.startsWith(prefix))) return "";
+  return /^[A-Za-z0-9._:+-]+$/.test(token) ? token : "";
+}
+
+function normalizedIso(value) {
+  const date = new Date(firstString(value));
+  return Number.isFinite(date.getTime()) ? date.toISOString() : "";
 }
 
 function normalizeOperationalReasons(values) {

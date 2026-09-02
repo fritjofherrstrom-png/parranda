@@ -7,53 +7,79 @@ const {
   resolveDefaultSourceProfileCatalog,
 } = require("../server/pulse-sources/source-profile-catalog");
 
-const USAGE = "Usage: node scripts/review-source-profile.js --approve reviewed-profile.json\n";
+const USAGE = [
+  "Usage:",
+  "  node scripts/review-source-profile.js --inspect place-source-profile-v1:...",
+  "  node scripts/review-source-profile.js --approve decision.json --operator operator-id",
+  "",
+].join("\n");
 
 async function main(argv = process.argv.slice(2), options = {}) {
   const output = options.output || process.stdout;
   const errorOutput = options.errorOutput || process.stderr;
   const parsed = parseArguments(argv);
-  if (parsed.errors.length || !parsed.approvePath) {
-    errorOutput.write(USAGE);
-    return 1;
-  }
-
-  let profile;
-  try {
-    const document = JSON.parse(fs.readFileSync(path.resolve(parsed.approvePath), "utf8"));
-    profile = document?.source_profile || document;
-  } catch (_error) {
-    errorOutput.write("Could not read a valid reviewed source profile.\n");
+  if (parsed.errors.length || (!parsed.approvePath && !parsed.inspectProfileKey)) {
+    errorOutput.write(`${USAGE}\n`);
     return 1;
   }
 
   const catalog = options.catalog || resolveDefaultSourceProfileCatalog(options.env || process.env);
-  if (!catalog || typeof catalog.recordApprovedProfile !== "function") {
+  if (!catalog) {
     writeJson(output, { status: "unavailable", reason: "source_catalog_unavailable" });
     return 1;
   }
 
-  const result = await catalog.recordApprovedProfile(profile);
+  if (parsed.inspectProfileKey) {
+    if (typeof catalog.inspectProfileForReview !== "function") {
+      writeJson(output, { status: "unavailable", reason: "source_catalog_review_unavailable" });
+      return 1;
+    }
+    const result = await catalog.inspectProfileForReview(parsed.inspectProfileKey);
+    writeJson(output, result);
+    if (typeof catalog.close === "function") await catalog.close();
+    return result.status === "reviewable" ? 0 : 1;
+  }
+
+  let decision;
+  try {
+    decision = JSON.parse(fs.readFileSync(path.resolve(parsed.approvePath), "utf8"));
+  } catch (_error) {
+    errorOutput.write("Could not read a valid source approval decision.\n");
+    return 1;
+  }
+
+  if (typeof catalog.approveProfile !== "function") {
+    writeJson(output, { status: "unavailable", reason: "source_catalog_review_unavailable" });
+    return 1;
+  }
+
+  const result = await catalog.approveProfile(decision, { operatorId: parsed.operatorId });
   writeJson(output, result);
+  if (typeof catalog.close === "function") await catalog.close();
   return result.status === "recorded" && result.catalog_status === "approved" ? 0 : 1;
 }
 
 function parseArguments(argv = []) {
-  const parsed = { approvePath: null, errors: [] };
+  const parsed = { approvePath: null, inspectProfileKey: null, operatorId: null, errors: [] };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
-    if (argument === "--approve") {
+    if (["--approve", "--inspect", "--operator"].includes(argument)) {
       const value = argv[index + 1];
       if (typeof value !== "string" || !value.trim() || value.startsWith("--")) {
-        parsed.errors.push("missing_approve_path");
+        parsed.errors.push(`missing_${argument.slice(2)}`);
       } else {
-        parsed.approvePath = value.trim();
+        if (argument === "--approve") parsed.approvePath = value.trim();
+        if (argument === "--inspect") parsed.inspectProfileKey = value.trim();
+        if (argument === "--operator") parsed.operatorId = value.trim();
         index += 1;
       }
       continue;
     }
     parsed.errors.push("unknown_argument");
   }
+  if (parsed.approvePath && parsed.inspectProfileKey) parsed.errors.push("approve_inspect_conflict");
+  if (parsed.approvePath && !parsed.operatorId) parsed.errors.push("missing_operator");
+  if (parsed.inspectProfileKey && parsed.operatorId) parsed.errors.push("operator_without_approval");
   return parsed;
 }
 

@@ -10,6 +10,9 @@ const {
 const {
   buildSourceDiscoveryHealth,
 } = require("../server/pulse-sources/source-discovery-health");
+const {
+  collectReviewedPlaceFeedOutcome,
+} = require("../server/place-candidates/schema-org-place-source");
 
 const MAX_BATCH_SIZE = 5;
 const MIN_INTERVAL_MS = 30_000;
@@ -36,9 +39,76 @@ async function runScoutWorkerBatch({
     if (outcome.status === "completed") summary.completed += 1;
     else summary.failed += 1;
   }
-  if (!summary.claimed) summary.status = "idle";
+  if (typeof catalog.claimApprovedPlaceSourceRefresh === "function") {
+    const refreshTarget = await catalog.claimApprovedPlaceSourceRefresh();
+    if (refreshTarget) {
+      const refresh = await runApprovedPlaceSourceRefresh({
+        catalog,
+        runtime,
+        target: refreshTarget,
+        collect: runtime?.collectReviewedPlaceFeedOutcome,
+      });
+      summary.place_source_refresh = refresh;
+      if (!["completed", "idle"].includes(refresh.status)) summary.failed += 1;
+    }
+  }
+  if (!summary.claimed && !summary.place_source_refresh) summary.status = "idle";
   else if (summary.failed) summary.status = summary.completed ? "partial" : "failed";
   return summary;
+}
+
+async function runApprovedPlaceSourceRefresh({
+  catalog,
+  runtime = {},
+  target,
+  now = runtime?.now ? runtime.now() : new Date(),
+  collect = collectReviewedPlaceFeedOutcome,
+} = {}) {
+  if (!target || typeof catalog?.recordApprovedPlaceSourceOutcome !== "function") {
+    return { status: "unavailable", reason: "approved_place_source_refresh_unavailable" };
+  }
+  const observedAt = now instanceof Date ? new Date(now.getTime()) : new Date(now);
+  if (!Number.isFinite(observedAt.getTime()) || typeof collect !== "function") {
+    return { status: "failed", reason: "approved_place_source_refresh_invalid" };
+  }
+  let collected;
+  try {
+    collected = await collect(target.feed, {
+      fetcher: runtime?.fetcher,
+      timeoutMs: runtime?.placeSourceTimeoutMs,
+      maxBytes: runtime?.placeSourceMaxBytes,
+    });
+  } catch (_error) {
+    collected = { status: "failed", records: [] };
+  }
+  const status = ["ok", "empty"].includes(collected?.status) ? collected.status : "failed";
+  const records = status === "ok"
+    ? (Array.isArray(collected.records) ? collected.records : []).map((record) => ({
+        ...record,
+        source_profile_key: target.profile_key,
+        source_profile_revision: target.profile_revision,
+        source_approval_key: target.approval_key,
+        source_feed_id: target.source_id,
+        source_adapter: target.feed?.adapter,
+        source_adapter_contract_revision: target.feed?.adapter_contract_revision,
+        source_identity: target.feed?.source_identity,
+        source_observed_at: observedAt.toISOString(),
+      }))
+    : [];
+  const persisted = await catalog.recordApprovedPlaceSourceOutcome(target, {
+    status,
+    records,
+    observed_at: observedAt.toISOString(),
+    reason: status === "failed" ? "source_fetch_failed" : "source_fetch_complete",
+  });
+  return {
+    profile_key: target.profile_key,
+    source_id: target.source_id,
+    status: persisted?.status || "failed",
+    candidate_count: Number(persisted?.candidate_count) || 0,
+    ...(persisted?.retry_at ? { retry_at: persisted.retry_at } : {}),
+    ...(persisted?.reason ? { reason: persisted.reason } : {}),
+  };
 }
 
 async function scoutTarget({ target, catalog, runtime, discover }) {
@@ -421,6 +491,7 @@ module.exports = {
   main,
   parseArguments,
   runScoutWorkerBatch,
+  runApprovedPlaceSourceRefresh,
   scoutTarget,
   attachTrustedTimezone,
   nextQualificationProbeAt,

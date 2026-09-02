@@ -16,47 +16,75 @@ function capture() {
   };
 }
 
-test("review CLI accepts one explicit profile path", () => {
-  assert.deepEqual(parseArguments(["--approve", "profile.json"]), {
-    approvePath: "profile.json",
+test("review CLI requires an explicit operator for approval and supports bounded inspection", () => {
+  assert.deepEqual(parseArguments(["--approve", "decision.json", "--operator", "ops@example"]), {
+    approvePath: "decision.json",
+    inspectProfileKey: null,
+    operatorId: "ops@example",
     errors: [],
   });
-  assert.deepEqual(parseArguments(["profile.json"]), {
+  assert.deepEqual(parseArguments(["--inspect", "place-source-profile-v1:test"]), {
     approvePath: null,
-    errors: ["unknown_argument"],
+    inspectProfileKey: "place-source-profile-v1:test",
+    operatorId: null,
+    errors: [],
   });
+  assert.deepEqual(parseArguments(["--approve", "decision.json"]).errors, ["missing_operator"]);
 });
 
-test("review CLI delegates the complete reviewed profile to the trusted catalog", async (t) => {
+test("review CLI delegates a revision-bound decision and authenticated operator identity", async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "parranda-profile-review-"));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const inputPath = path.join(directory, "reviewed.json");
-  const profile = {
+  const decision = {
+    schema_version: 1,
     profile_key: "place-source-profile-v1:test",
-    runtime_review: { status: "approved" },
+    expected_profile_revision: "sha256:profile",
+    expires_at: "2026-09-01T00:00:00.000Z",
+    place_sources: [{ candidate_id: "candidate-one", terms_status: "open_license" }],
   };
-  fs.writeFileSync(inputPath, JSON.stringify({ source_profile: profile }));
+  fs.writeFileSync(inputPath, JSON.stringify(decision));
   const output = capture();
   let received = null;
 
-  const code = await main(["--approve", inputPath], {
+  const code = await main(["--approve", inputPath, "--operator", "ops@example"], {
     output: output.stream,
     errorOutput: capture().stream,
     catalog: {
-      async recordApprovedProfile(value) {
-        received = value;
+      async approveProfile(value, options) {
+        received = { value, options };
         return {
           status: "recorded",
           profile_key: value.profile_key,
           catalog_status: "approved",
+          profile_revision: value.expected_profile_revision,
         };
       },
     },
   });
 
   assert.equal(code, 0);
-  assert.deepEqual(received, profile);
+  assert.deepEqual(received, { value: decision, options: { operatorId: "ops@example" } });
   assert.equal(JSON.parse(output.value()).catalog_status, "approved");
+});
+
+test("review CLI inspection returns only the server-derived review bundle", async () => {
+  const output = capture();
+  const code = await main(["--inspect", "place-source-profile-v1:test"], {
+    output: output.stream,
+    errorOutput: capture().stream,
+    catalog: {
+      inspectProfileForReview: async (profileKey) => ({
+        status: "reviewable",
+        profile_key: profileKey,
+        profile_revision: "sha256:profile",
+        catalog_status: "review_needed",
+        place_source_candidates: [],
+      }),
+    },
+  });
+  assert.equal(code, 0);
+  assert.equal(JSON.parse(output.value()).profile_revision, "sha256:profile");
 });
 
 test("review CLI fails visibly when approval validation or catalog config fails", async (t) => {
@@ -66,7 +94,7 @@ test("review CLI fails visibly when approval validation or catalog config fails"
   fs.writeFileSync(inputPath, JSON.stringify({ profile_key: "invalid" }));
 
   const unavailableOutput = capture();
-  assert.equal(await main(["--approve", inputPath], {
+  assert.equal(await main(["--approve", inputPath, "--operator", "ops@example"], {
     output: unavailableOutput.stream,
     errorOutput: capture().stream,
     env: {},
@@ -74,15 +102,15 @@ test("review CLI fails visibly when approval validation or catalog config fails"
   assert.equal(JSON.parse(unavailableOutput.value()).reason, "source_catalog_unavailable");
 
   const rejectedOutput = capture();
-  assert.equal(await main(["--approve", inputPath], {
+  assert.equal(await main(["--approve", inputPath, "--operator", "ops@example"], {
     output: rejectedOutput.stream,
     errorOutput: capture().stream,
     catalog: {
-      recordApprovedProfile: async () => ({
+      approveProfile: async () => ({
         status: "rejected",
-        reason: "invalid_reviewed_source_profile",
+        reason: "profile_revision_mismatch",
       }),
     },
   }), 1);
-  assert.equal(JSON.parse(rejectedOutput.value()).reason, "invalid_reviewed_source_profile");
+  assert.equal(JSON.parse(rejectedOutput.value()).reason, "profile_revision_mismatch");
 });

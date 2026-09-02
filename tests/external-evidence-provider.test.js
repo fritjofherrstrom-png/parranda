@@ -179,6 +179,40 @@ test("reviewed place records preserve the server-only source policy without clai
   assert.equal(eligibility.gates.may_influence_routes, true);
 });
 
+test("reviewed worker records expose bounded approval provenance without raw loader metadata", () => {
+  const [candidate] = externalCandidates([{
+    id: "reviewed-provenance-1",
+    name: "Official Gallery",
+    type: "gallery",
+    lat: 41.9,
+    lng: 12.46,
+    operator_reviewed_source: true,
+    source_policy: "reviewed_profile_bounded_refresh",
+    source_profile_key: "place-source-profile-v1:rome",
+    source_profile_revision: `sha256:${"a".repeat(64)}`,
+    source_approval_key: "source-profile-approval-v1:approval123",
+    source_feed_id: "rome-official-guide",
+    source_adapter: "schema_org_place_json",
+    source_adapter_contract_revision: "schema-org-place-json-v1",
+    source_identity: "server-private-loader-identity",
+    source_observed_at: "2026-09-02T08:00:00Z",
+    source_expires_at: "2026-09-03T08:00:00Z",
+    sources: [{ provider: "rome-official-guide", family: "official", tier: "official" }],
+  }]);
+
+  assert.deepEqual(candidate.trusted_source, {
+    profile_key: "place-source-profile-v1:rome",
+    profile_revision: `sha256:${"a".repeat(64)}`,
+    approval_key: "source-profile-approval-v1:approval123",
+    source_id: "rome-official-guide",
+    adapter: "schema_org_place_json",
+    adapter_contract_revision: "schema-org-place-json-v1",
+    observed_at: "2026-09-02T08:00:00.000Z",
+    expires_at: "2026-09-03T08:00:00.000Z",
+  });
+  assert.equal(candidate.trusted_source.source_identity, undefined);
+});
+
 test("reviewed editorial evidence routes only after conservative merge with an independent map identity", () => {
   const candidates = externalCandidates([
     {

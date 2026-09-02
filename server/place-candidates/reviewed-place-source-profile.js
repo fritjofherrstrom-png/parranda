@@ -13,6 +13,14 @@ const ADAPTER_MAP = Object.freeze({
   schema_org_place_json: "schema_org_place_json",
   map_linked_place_html: "map_linked_place_html",
 });
+// Increment the matching value whenever an adapter's accepted input or output
+// contract materially changes. Catalog approval and persisted worker rows bind
+// to this value, so a parser change fails closed until rediscovery and review.
+const PLACE_SOURCE_ADAPTER_CONTRACTS = Object.freeze({
+  schema_org_place_html: "schema-org-place-html-v1",
+  schema_org_place_json: "schema-org-place-json-v1",
+  map_linked_place_html: "map-linked-place-html-v1",
+});
 const RUNTIME_POLICIES = new Set(["active", "bounded_refresh"]);
 const TERMS_STATUSES = new Set(["open_license", "api_terms_compatible"]);
 const EVIDENCE_FAMILIES = new Set(["official", "editorial"]);
@@ -73,6 +81,8 @@ function reviewedPlaceFeed({ row, candidate, bbox, profileKey, review }) {
   const candidateAdapter = ADAPTER_MAP[publicString(candidate.adapter)] || null;
   const adapter = ADAPTER_MAP[publicString(row.adapter)] || null;
   if (!candidateAdapter || candidateAdapter !== adapter) return null;
+  const adapterContractRevision = placeSourceAdapterContract(adapter);
+  if (!adapterContractRevision) return null;
 
   const runtimePolicy = publicString(row.runtime_policy).toLowerCase();
   const termsStatus = publicString(row.terms_status).toLowerCase();
@@ -99,6 +109,7 @@ function reviewedPlaceFeed({ row, candidate, bbox, profileKey, review }) {
     label,
     endpoint,
     adapter,
+    adapter_contract_revision: adapterContractRevision,
     bbox,
     license: boundedString(row.license, 160),
     source_tier: sourceTier,
@@ -114,6 +125,11 @@ function reviewedPlaceFeed({ row, candidate, bbox, profileKey, review }) {
     profile_reviewed_at: review.reviewed_at,
     profile_expires_at: review.expires_at,
   });
+}
+
+function placeSourceAdapterContract(adapter) {
+  const normalized = ADAPTER_MAP[publicString(adapter)] || null;
+  return normalized ? PLACE_SOURCE_ADAPTER_CONTRACTS[normalized] || null : null;
 }
 
 function validRuntimeReview(value, nowMs) {
@@ -215,6 +231,8 @@ function compact(value) {
 module.exports = {
   PROFILE_ENV_KEY,
   MAX_REVIEW_AGE_MS,
+  PLACE_SOURCE_ADAPTER_CONTRACTS,
+  placeSourceAdapterContract,
   placeFeedsFromReviewedSourceProfiles,
   resolveReviewedPlaceSourceProfileFeeds,
 };

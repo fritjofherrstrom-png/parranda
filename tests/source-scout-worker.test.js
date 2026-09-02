@@ -7,6 +7,7 @@ const {
   attachTrustedTimezone,
   nextQualificationProbeAt,
   parseArguments,
+  runApprovedPlaceSourceRefresh,
   runScoutWorkerBatch,
 } = require("../scripts/run-source-scout-worker");
 
@@ -79,6 +80,50 @@ test("worker CLI stays bounded and watch polling cannot be configured aggressive
   });
   assert.deepEqual(parseArguments(["--limit", "6"]).errors, ["invalid_limit"]);
   assert.deepEqual(parseArguments(["--interval-ms", "1000"]).errors, ["invalid_interval_ms"]);
+});
+
+test("worker refresh persists exact approved-profile provenance through the catalog", async () => {
+  const target = {
+    profile_key: "place-source-profile-v1:test",
+    profile_revision: "sha256:profile",
+    approval_key: "source-profile-approval-v1:test",
+    source_id: "reviewed-guide",
+    feed: {
+      id: "reviewed-guide",
+      endpoint: "https://guide.example/places",
+      adapter: "schema_org_place_html",
+      adapter_contract_revision: "schema-org-place-html-v1",
+      source_identity: "guide.example",
+    },
+    lease_token: "lease-one",
+    attempt_count: 1,
+  };
+  const calls = [];
+  const catalog = {
+    recordApprovedPlaceSourceOutcome: async (claimed, outcome) => {
+      calls.push({ claimed, outcome });
+      return { status: "completed", candidate_count: outcome.records.length };
+    },
+  };
+  const result = await runApprovedPlaceSourceRefresh({
+    catalog,
+    target,
+    now: new Date("2026-08-20T12:00:00.000Z"),
+    collect: async () => ({
+      status: "ok",
+      records: [{ id: "reviewed-place:reviewed-guide:one", name: "One" }],
+    }),
+  });
+  assert.equal(result.status, "completed");
+  assert.equal(calls[0].outcome.records[0].source_profile_key, target.profile_key);
+  assert.equal(calls[0].outcome.records[0].source_profile_revision, target.profile_revision);
+  assert.equal(calls[0].outcome.records[0].source_approval_key, target.approval_key);
+  assert.equal(calls[0].outcome.records[0].source_feed_id, target.source_id);
+  assert.equal(
+    calls[0].outcome.records[0].source_adapter_contract_revision,
+    target.feed.adapter_contract_revision,
+  );
+  assert.equal(calls[0].outcome.records[0].source_observed_at, "2026-08-20T12:00:00.000Z");
 });
 
 test("observing qualification schedules the next proof on a distinct UTC day", async () => {

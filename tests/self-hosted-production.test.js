@@ -55,6 +55,17 @@ test("self-hosted deployment migrates an explicitly enabled source catalog", () 
   assert.equal(fs.realpathSync(path.join(fixture.root, "current")), fs.realpathSync(fixture.newContract));
 });
 
+test("source catalog migration includes persistent approval audit and trusted place reservoir", () => {
+  const migration = fs.readFileSync(
+    path.join(ROOT, "migrations", "004-trusted-place-source-lifecycle.sql"),
+    "utf8",
+  );
+  assert.match(migration, /pulse_source_profile_approvals/);
+  assert.match(migration, /pulse_source_place_refresh_targets/);
+  assert.match(migration, /pulse_source_place_fetch_observations/);
+  assert.match(migration, /pulse_source_place_candidates/);
+});
+
 test("self-hosted deployment rejects an enabled catalog without database credentials", () => {
   const fixture = deploymentFixture();
   fs.appendFileSync(path.join(fixture.root, ".env.production"), "PARRANDA_SOURCE_CATALOG=enabled\n");
