@@ -19,7 +19,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { renderAndHydrate, hydrationComplaints } from "./helpers/hydration-harness.mjs";
+import { renderAndHydrate, hydrationComplaints, discoverIslands } from "./helpers/hydration-harness.mjs";
+import { buildSavedEntry, LAST_KEY, SAVED_KEY } from "../src/lib/anywhere-storage.mjs";
 
 /** The registry Express injects at serve time (server/app.js buildLandingCityRegistry). */
 const INJECTED_CITIES = {
@@ -123,6 +124,54 @@ test("a direct ?lang=sv load hydrates cleanly", async (t) => {
 // The planner itself.
 // --------------------------------------------------------------------------
 
+/**
+ * A saved day, built by the SAME helper the component saves through, so the
+ * fixture cannot drift into a shape the planner would never have written.
+ */
+const STORED_DAY = buildSavedEntry({
+  city: "barcelona",
+  place: "Barcelona",
+  label: "Barcelona",
+  dateIso: "2026-08-23",
+  savedAt: "2026-08-23T09:00:00.000Z",
+  classification: { kind: "curated_city", cityKey: "barcelona" },
+  inputs: { city: "barcelona", place: "Barcelona", selected: ["food", "culture"], walkKey: "balanced", dayOffset: 0 },
+  safeResponse: {
+    city: "barcelona",
+    city_label: "Barcelona",
+    days: [
+      {
+        date: "2026-08-23",
+        experimental_agnostic_route_applied: true,
+        primary_route: {
+          id: "__agnostic_compose__",
+          title: "A day in Barcelona",
+          summary: "s",
+          estimated_km: 3.9,
+          main_stops: [
+            {
+              id: "osm-node-1",
+              label: "La Plata",
+              lat: 41.3803,
+              lng: 2.1829,
+              type: "bar",
+              tags: [],
+              trust: { source_tier: "inferred", confidence: "low" },
+              provenance: { attribution: [{ provider_id: "osm", label: "osm" }] },
+            },
+          ],
+          map_route_points: [],
+          map_path_points: [],
+          legs: [],
+          confidence: "low",
+          trust_summary: { source_tiers: ["inferred"], confidence: "low" },
+        },
+        alternatives: [],
+      },
+    ],
+  },
+});
+
 test("the planner hydrates cleanly on a direct load", async (t) => {
   const h = await renderAndHydrate({
     entry: "components/AnywherePlanner.tsx",
@@ -134,15 +183,28 @@ test("the planner hydrates cleanly on a direct load", async (t) => {
   assert.deepEqual(hydrationComplaints(h), [], "the planner island must hydrate into the build's tree");
 });
 
-test("the planner hydrates cleanly for a returning visitor with saved days", async (t) => {
-  // Retention lives in localStorage, which the build cannot see. Reading it
-  // during render would reproduce exactly the landing's defect on the planner.
+test("the planner hydrates cleanly for a returning visitor with a stored day", async (t) => {
+  // Retention lives in localStorage, which the static build cannot see — the
+  // same class of value that broke the landing. The URL carries no ?place=, so
+  // this is the path that actually restores the stored day rather than
+  // composing a new one.
   const h = await renderAndHydrate({
     entry: "components/AnywherePlanner.tsx",
     props: { lang: "en" },
-    url: "http://localhost/anywhere?place=Barcelona&lang=en",
+    url: "http://localhost/anywhere?lang=en",
+    setupBrowser: (window) => {
+      window.localStorage.setItem(LAST_KEY, JSON.stringify(STORED_DAY));
+      window.localStorage.setItem(SAVED_KEY, JSON.stringify([STORED_DAY]));
+    },
   });
   t.after(() => h.cleanup());
+
+  // The scenario, proven rather than asserted by the test's name: the day was
+  // in the store at the instant hydration began.
+  const restored = JSON.parse(h.storageAtHydration.local[LAST_KEY]);
+  assert.equal(restored.id, STORED_DAY.id, "the stored day is present when hydration starts");
+  assert.ok(restored.safeResponse && restored.classification, "and it is a restorable entry, not a stub");
+  assert.equal(JSON.parse(h.storageAtHydration.local[SAVED_KEY]).length, 1, "the saved list is present too");
 
   assert.deepEqual(hydrationComplaints(h), [], "stored state must not leak into the hydrating render");
 });
@@ -162,27 +224,33 @@ test("the planner hydrates cleanly on a shared link", async (t) => {
 // The rule itself, so a future island cannot reintroduce this quietly.
 // --------------------------------------------------------------------------
 
-test("every island in the build hydrates into the tree the build shipped", async () => {
-  // The tests above name the islands and globals we already know about. This
-  // one discovers them: any component added under src/components is an island
-  // candidate, and it is hydrated with every serve-time global the server is
-  // known to inject.
+test("every island a page hydrates matches the tree the build shipped", async () => {
+  // The tests above name the islands and the globals we already know about.
+  // This one discovers them from the pages, so a new island is covered without
+  // anyone remembering to add it here.
   //
-  // A structural version of this rule — grep the source for an injected global
-  // read inside useMemo — was written first and silently passed while the
+  // Discovery is by `client:*` directive, NOT by listing src/components: an
+  // ordinary React leaf with required props is not an island, cannot be
+  // hydrated standalone, and must not start failing this the day someone adds
+  // one. The contract is "what a page mounts as an island", and that is exactly
+  // what is read.
+  //
+  // A structural version of the rule was tried first — grep the source for an
+  // injected global read inside useMemo — and it silently passed while the
   // landing was still broken, because `useMemo<CityRegistry>(` does not match
-  // `useMemo(`. A regex that can be defeated by a type argument is not a guard,
-  // so the rule is enforced by hydrating instead.
-  const { readdir } = await import("node:fs/promises");
-  const { fileURLToPath } = await import("node:url");
+  // `useMemo(`. A guard defeated by a type argument is not a guard, so the rule
+  // is enforced by hydrating instead.
+  const islands = await discoverIslands();
 
-  const dir = fileURLToPath(new URL("../src/components", import.meta.url));
-  const islands = (await readdir(dir)).filter((name) => name.endsWith(".tsx"));
-  assert.ok(islands.length >= 2, `expected the known islands, found ${islands.join(", ") || "none"}`);
+  assert.deepEqual(
+    islands.map((island) => island.entry).sort(),
+    ["components/AnywherePlanner.tsx", "components/LandingHero.tsx"],
+    "discovery drifted from the pages — a new island is uncovered, or a known one was renamed",
+  );
 
   for (const island of islands) {
     const h = await renderAndHydrate({
-      entry: `components/${island}`,
+      entry: island.entry,
       props: { lang: "en" },
       url: "http://localhost/?lang=en",
       // Everything the server injects, whether or not this island reads it.
@@ -196,7 +264,7 @@ test("every island in the build hydrates into the tree the build shipped", async
     assert.deepEqual(
       complaints,
       [],
-      `${island} renders a different tree on the client than the build prerendered`,
+      `${island.name} (client:${island.directive} in ${island.page}) renders a different tree on the client than the build prerendered`,
     );
   }
 });

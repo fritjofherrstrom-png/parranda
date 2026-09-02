@@ -105,9 +105,20 @@ let generation = 0;
  * @param {string} [params.url]      the URL the browser is on
  * @param {object} [params.injected] globals Express writes into the document
  *                                   BEFORE the island's module script runs
- * @returns {Promise<{serverHtml, clientHtml, recoverableErrors, consoleErrors, text, window, cleanup}>}
+ * @param {(window: Window) => void} [params.setupBrowser]
+ *        Browser state that exists BEFORE the island loads — stored days, an
+ *        anchor handed over in sessionStorage. Runs after the document exists
+ *        and before hydrateRoot, i.e. at the moment a returning visitor's
+ *        browser is actually in when the island starts.
+ * @returns {Promise<{serverHtml, clientHtml, recoverableErrors, consoleErrors, storageAtHydration, text, window, cleanup}>}
  */
-export async function renderAndHydrate({ entry, props = {}, url = "http://localhost/", injected = {} } = {}) {
+export async function renderAndHydrate({
+  entry,
+  props = {},
+  url = "http://localhost/",
+  injected = {},
+  setupBrowser = null,
+} = {}) {
   const modulePath = await bundleIsland(entry);
   generation += 1;
   // Astro stamps one identifier prefix on the island and hands the same one to
@@ -159,6 +170,24 @@ export async function renderAndHydrate({ entry, props = {}, url = "http://localh
     AbortController: window.AbortController,
   });
 
+  setupBrowser?.(window);
+
+  // Read back at the moment hydration starts, not when the test wrote it: a
+  // test that seeds browser state has to be able to prove the state was
+  // actually there, rather than that setItem was called somewhere.
+  const snapshot = (store) => {
+    const out = {};
+    for (let i = 0; i < store.length; i += 1) {
+      const key = store.key(i);
+      out[key] = store.getItem(key);
+    }
+    return out;
+  };
+  const storageAtHydration = {
+    local: snapshot(window.localStorage),
+    session: snapshot(window.sessionStorage),
+  };
+
   const recoverableErrors = [];
   const container = window.document.getElementById("root");
   let root;
@@ -183,6 +212,8 @@ export async function renderAndHydrate({ entry, props = {}, url = "http://localh
     clientHtml: container.innerHTML,
     recoverableErrors,
     consoleErrors,
+    /** What the browser's stores held when hydrateRoot was called. */
+    storageAtHydration,
     text: () => container.textContent || "",
     container,
     window,
@@ -195,6 +226,43 @@ export async function renderAndHydrate({ entry, props = {}, url = "http://localh
       dom.window.close();
     },
   };
+}
+
+/**
+ * The islands the built pages actually hydrate.
+ *
+ * An island is not "a .tsx file under src/components" — that is a directory
+ * listing, and it would start failing the day someone adds an ordinary leaf
+ * component with required props, which is not an island and cannot be hydrated
+ * standalone. An island is a component a PAGE mounts with a `client:*`
+ * directive, so that is what is read: the directive in the page, resolved
+ * through that page's own import.
+ *
+ * @returns {Promise<Array<{ name, entry, page, directive }>>} entries relative to src/
+ */
+export async function discoverIslands() {
+  const { readdir, readFile } = await import("node:fs/promises");
+  const pagesDir = resolve(SRC, "pages");
+  const pages = (await readdir(pagesDir)).filter((name) => name.endsWith(".astro"));
+
+  const found = new Map();
+  for (const page of pages) {
+    const source = await readFile(resolve(pagesDir, page), "utf8");
+    const imports = new Map();
+    for (const [, name, specifier] of source.matchAll(/import\s+(\w+)\s+from\s+["']([^"']+)["']/g)) {
+      imports.set(name, specifier);
+    }
+    for (const [, name, directive] of source.matchAll(/<([A-Z]\w*)\b[^>]*\bclient:(load|idle|visible|media|only)/g)) {
+      const specifier = imports.get(name);
+      if (!specifier) {
+        throw new Error(`${page} hydrates <${name}> but imports no such component`);
+      }
+      // "../components/LandingHero" -> "components/LandingHero.tsx"
+      const entry = `${specifier.replace(/^\.\.\//, "").replace(/\.[jt]sx?$/, "")}.tsx`;
+      found.set(entry, { name, entry, page, directive });
+    }
+  }
+  return [...found.values()];
 }
 
 /** Every hydration complaint React made, on either channel. */
