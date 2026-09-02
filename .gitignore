@@ -14,3 +14,5 @@ coverage/
 
 # Build artifact of the jsdom planner harness (regenerated per test run).
 frontend/tests/helpers/.planner-harness-bundle.mjs
+# Same, for the hydration harness — one bundle per island, named after its entry.
+frontend/tests/helpers/.hydration-*.mjs
