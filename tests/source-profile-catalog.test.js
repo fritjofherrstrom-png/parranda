@@ -6,6 +6,7 @@ const test = require("node:test");
 const {
   APPLY_PROFILE_APPROVAL_SQL,
   ACTIVE_PROFILES_FOR_ANCHOR_SQL,
+  CLAIM_PLACE_SOURCE_REFRESH_SQL,
   COMPLETE_PLACE_SOURCE_REFRESH_SQL,
   FAIL_PLACE_SOURCE_REFRESH_SQL,
   FRESH_PLACE_CANDIDATES_FOR_ANCHOR_SQL,
@@ -187,6 +188,7 @@ function placeSourceProfile() {
     label: candidate.source_label,
     endpoint: candidate.url,
     adapter: candidate.adapter,
+    adapter_contract_revision: "schema-org-place-html-v1",
     evidence_family: "official",
     source_tier: "official",
     source_identity: candidate.source_identity,
@@ -316,6 +318,41 @@ test("server builds approval only from an exact discovered candidate and bounded
   }, { operatorId: "ops@example", now: NOW }), null);
 });
 
+test("map-linked approval binds the v2 parser contract into the reviewed profile revision", () => {
+  const discovered = placeSourceProfile();
+  discovered.source_families[0].candidates[0].adapter = "map_linked_place_html";
+  discovered.runtime_review = {
+    status: "unreviewed",
+    reviewed_at: null,
+    expires_at: null,
+    feeds: [],
+    place_sources: [],
+  };
+  const revision = buildProfileReviewRevision(discovered);
+  const approved = buildReviewedProfile(discovered, {
+    schema_version: 1,
+    profile_key: discovered.profile_key,
+    expected_profile_revision: revision,
+    expires_at: "2026-08-25T00:00:00.000Z",
+    place_sources: [{
+      candidate_id: "regional-places",
+      id: "reviewed-regional-map-places",
+      label: "Regional map places",
+      evidence_family: "official",
+      source_tier: "official",
+      terms_status: "open_license",
+      source_health: "healthy",
+      runtime_policy: "bounded_refresh",
+    }],
+  }, { operatorId: "ops@example", now: NOW });
+
+  assert.equal(
+    approved.profile.runtime_review.place_sources[0].adapter_contract_revision,
+    "map-linked-place-html-v2",
+  );
+  assert.equal(approved.audit.profile_revision, revision);
+});
+
 test("geo reads return only profiles that still pass the shared review contract", async () => {
   const calls = [];
   const catalog = createSourceProfileCatalog({
@@ -368,6 +405,7 @@ test("the catalog preserves an approved map-linked place adapter", async () => {
   const profile = placeSourceProfile();
   profile.source_families[0].candidates[0].adapter = "map_linked_place_html";
   profile.runtime_review.place_sources[0].adapter = "map_linked_place_html";
+  profile.runtime_review.place_sources[0].adapter_contract_revision = "map-linked-place-html-v2";
   const catalog = createSourceProfileCatalog({
     now: () => NOW,
     query: async (sql, values) => {
@@ -501,11 +539,23 @@ test("persistent place reads require current approval, revision and freshness", 
     source_expires_at: "2026-07-31T09:00:00.000Z",
   };
   const calls = [];
+  const staleMapContract = {
+    ...valid,
+    id: "reviewed-place:guide:old-map-contract",
+    source_adapter: "map_linked_place_html",
+    source_adapter_contract_revision: "map-linked-place-html-v1",
+  };
   const catalog = createSourceProfileCatalog({
     now: () => NOW,
     query: async (sql, values) => {
       calls.push({ sql, values });
-      return { rows: [{ record: valid }, { record: { ...valid, source_approval_key: null } }] };
+      return {
+        rows: [
+          { record: valid },
+          { record: staleMapContract },
+          { record: { ...valid, source_approval_key: null } },
+        ],
+      };
     },
   });
 
@@ -518,6 +568,35 @@ test("persistent place reads require current approval, revision and freshness", 
   assert.match(calls[0].sql, /profile\.approved_profile_revision = candidate\.profile_revision/);
   assert.match(calls[0].sql, /profile\.approval_key = candidate\.approval_key/);
   assert.match(calls[0].sql, /candidate\.expires_at > \$3::timestamptz/);
+});
+
+test("the worker refuses a refresh target bound to the previous adapter contract", async () => {
+  const catalog = createSourceProfileCatalog({
+    now: () => NOW,
+    query: async (sql, values) => {
+      assert.equal(sql, CLAIM_PLACE_SOURCE_REFRESH_SQL);
+      assert.match(sql, /adapter_contract_revision' = ANY\(\$4::text\[\]\)/);
+      assert.ok(values[3].includes("map-linked-place-html-v2"));
+      assert.ok(!values[3].includes("map-linked-place-html-v1"));
+      return { rows: [{
+        profile_key: "place-source-profile-v1:test-region",
+        source_id: "regional-map-feed",
+        profile_revision: `sha256:${"a".repeat(64)}`,
+        approval_key: "source-profile-approval-v1:approval123",
+        feed: {
+          id: "regional-map-feed",
+          endpoint: "https://guide.example/places",
+          adapter: "map_linked_place_html",
+          adapter_contract_revision: "map-linked-place-html-v1",
+          source_identity: "guide.example",
+        },
+        lease_token: values[1],
+        attempt_count: 1,
+      }] };
+    },
+  });
+
+  assert.equal(await catalog.claimApprovedPlaceSourceRefresh(), null);
 });
 
 test("worker persistence is idempotent and catalog-owned while failures retain fresh rows", async () => {
@@ -1131,8 +1210,12 @@ test("migration runs the versioned SQL and always closes its pool", async () => 
   assert.deepEqual(calls[5], ["end"]);
 });
 
-test("discovery upsert cannot overwrite an approved, rejected or disabled row", () => {
+test("discovery demotes a drifted approval but preserves unchanged and terminal decisions", () => {
   assert.match(UPSERT_DISCOVERY_PROFILE_SQL, /WHEN pulse_source_profiles\.catalog_status = 'review_needed'/);
+  assert.match(
+    UPSERT_DISCOVERY_PROFILE_SQL,
+    /catalog_status = 'approved'[\s\S]*approved_profile_revision IS DISTINCT FROM EXCLUDED\.profile_revision[\s\S]*THEN 'review_needed'/,
+  );
   assert.match(UPSERT_DISCOVERY_PROFILE_SQL, /ELSE pulse_source_profiles\.catalog_status/);
 });
 

@@ -95,6 +95,80 @@ test("all four same-card facts are required and unknown evidence fails closed", 
   assert.deepEqual(records.map((record) => record.name), ["Harbour Museum"]);
 });
 
+test("a wrapping section cannot assemble one place from sibling card fragments", () => {
+  const source = `<main>
+    <section class="place-list">
+      <ul>
+        <li class="place-card">
+          <h2><a href="/places/old-church">Old Church</a></h2>
+        </li>
+        <li class="place-card">
+          <a class="map-link" href="https://maps.google.com/?loc=55.5001+13.5001">Map</a>
+          <p class="poi-category">Restaurants</p>
+        </li>
+      </ul>
+    </section>
+  </main>`;
+
+  assert.deepEqual(extractMapLinkedPlaceRecords(source, feed()), []);
+});
+
+test("article and explicitly card-marked section boundaries remain supported", () => {
+  const article = card({ name: "Article Museum", detail: "/places/article-museum" })
+    .replace(/^<li/, "<article")
+    .replace(/<\/li>$/, "</article>");
+  const section = card({
+    name: "Section Garden",
+    detail: "/places/section-garden",
+    category: "Gardens",
+    map: "https://maps.apple.com/?ll=55.5101,13.5101",
+  })
+    .replace(/^<li/, "<section")
+    .replace(/<\/li>$/, "</section>");
+
+  assert.deepEqual(
+    extractMapLinkedPlaceRecords(`<main>${article}${section}</main>`, feed())
+      .map((record) => [record.name, record.type]),
+    [["Article Museum", "museum"], ["Section Garden", "garden"]],
+  );
+});
+
+test("the structural card scan is bounded before record extraction", () => {
+  const publisherControlledPrefix = Array.from(
+    { length: 200 },
+    () => "<article></article>",
+  ).join("");
+
+  assert.deepEqual(
+    extractMapLinkedPlaceRecords(`${publisherControlledPrefix}${card()}`, feed()),
+    [],
+  );
+});
+
+test("ambiguous identities, categories or coordinates inside one card fail closed", () => {
+  const ambiguousHeadingIdentity = card().replace(
+    "</h2>",
+    `</h2><h3><a href="/places/other-museum">Other Museum</a></h3>`,
+  );
+  const ambiguousLinkedIdentity = card().replace(
+    "Harbour Museum</a>",
+    `Harbour Museum</a><a href="/places/other-museum">Other identity</a>`,
+  );
+  const ambiguousCategory = card().replace(
+    "</li>",
+    `<p class="poi-category">Restaurants</p></li>`,
+  );
+  const ambiguousCoordinates = card().replace(
+    "</li>",
+    `<a href="https://maps.apple.com/?ll=55.5201,13.5201">Other map</a></li>`,
+  );
+
+  assert.deepEqual(extractMapLinkedPlaceRecords(page(ambiguousHeadingIdentity), feed()), []);
+  assert.deepEqual(extractMapLinkedPlaceRecords(page(ambiguousLinkedIdentity), feed()), []);
+  assert.deepEqual(extractMapLinkedPlaceRecords(page(ambiguousCategory), feed()), []);
+  assert.deepEqual(extractMapLinkedPlaceRecords(page(ambiguousCoordinates), feed()), []);
+});
+
 test("coordinate-looking prose and executable payloads cannot create route evidence", () => {
   const source = page(`<li>
     <h2><a href="/places/prose-only">Prose only</a></h2>

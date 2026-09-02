@@ -3,6 +3,7 @@
 const { createHash, randomUUID } = require("node:crypto");
 const { eventFeedsFromReviewedSourceProfiles } = require("../place-candidates/reviewed-event-source-profile");
 const {
+  PLACE_SOURCE_ADAPTER_CONTRACTS,
   placeFeedsFromReviewedSourceProfiles,
   placeSourceAdapterContract,
 } = require("../place-candidates/reviewed-place-source-profile");
@@ -349,6 +350,7 @@ WITH candidate AS (
    AND profile.approved_profile_revision = target.profile_revision
    AND profile.approval_key = target.approval_key
    AND profile.review_expires_at > $1::timestamptz
+   AND target.feed->>'adapter_contract_revision' = ANY($4::text[])
   WHERE
     (target.status IN ('pending', 'retry_wait', 'completed') AND target.next_attempt_at <= $1::timestamptz)
     OR (target.status = 'leased' AND target.lease_until <= $1::timestamptz)
@@ -888,6 +890,7 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
         claimedAt.toISOString(),
         leaseToken,
         leaseUntil.toISOString(),
+        Object.values(PLACE_SOURCE_ADAPTER_CONTRACTS),
       ]);
       return normalizeClaimedPlaceSourceRefresh(result?.rows?.[0], leaseToken);
     } catch (_error) {

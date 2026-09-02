@@ -226,8 +226,13 @@ endpoint/adapter/source-identity binding, an `official` or `editorial` evidence
 family, compatible terms, healthy status, bounded item count and the profile's
 reviewed geographic bounds. They read only allowlisted factual atoms for a
 closed set of useful place types and require exact coordinates. The map-linked
-adapter additionally requires name, explicit closed category, same-origin
-detail identity and a recognized high-precision map URL in the same card. They
+adapter additionally requires name, one unambiguous explicit closed category,
+same-origin detail identity and one unambiguous high-precision map coordinate
+inside the same balanced semantic or explicitly card-marked DOM unit. An outer
+list/section cannot combine sibling fragments. The exact adapter-contract
+revision stored in the approval must match the running code; an adapter bump
+invalidates old feeds, worker targets and reservoir rows until rediscovery and
+explicit re-review. They
 do not follow detail pages, geocode rows or ingest descriptions, ratings,
 images or generic `LocalBusiness` records. Catalog-backed acquisition is owned
 by the worker, which writes freshness-bounded rows to PostgreSQL; Planner only

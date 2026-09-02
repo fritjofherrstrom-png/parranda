@@ -6,6 +6,11 @@ const MAP_LINKED_PLACE_ADAPTER = "map_linked_place_html";
 const MAX_CARD_BLOCKS = 200;
 const MAX_CARD_BYTES = 64 * 1024;
 const MAX_RECORDS = 100;
+const CARD_CONTAINER_TAGS = new Set(["li", "article", "section", "div"]);
+const VOID_TAGS = new Set([
+  "area", "base", "br", "col", "embed", "hr", "img", "input", "link",
+  "meta", "param", "source", "track", "wbr",
+]);
 
 // Deliberately exact and closed. Category prose is not classification
 // evidence; only a bounded label the publisher presents as the card's type is.
@@ -98,37 +103,114 @@ function placeAtomFromCard(block, endpoint) {
 }
 
 function extractCardBlocks(html) {
-  const blocks = [];
-  for (const tag of ["li", "section"]) {
-    const pattern = new RegExp(`<${tag}\\b[^>]*>[\\s\\S]*?<\\/${tag}\\s*>`, "gi");
-    let match;
-    while ((match = pattern.exec(html)) !== null && blocks.length < MAX_CARD_BLOCKS) {
-      const block = match[0];
-      if (
-        Buffer.byteLength(block, "utf8") <= MAX_CARD_BYTES &&
-        /(?:google\.[a-z]|openstreetmap\.org|maps\.apple\.com)/i.test(block)
-      ) blocks.push(block);
+  const containers = extractBalancedCardContainers(html)
+    .map((container) => ({ ...container, block: html.slice(container.start, container.end) }));
+  const evidenceContainers = containers.filter(({ block }) => hasPotentialPlaceEvidence(block));
+  return evidenceContainers
+    // A structural card inside another candidate container owns its facts.
+    // Never let an outer list/wrapper combine incomplete sibling cards.
+    .filter((container) => !evidenceContainers.some((other) =>
+      other !== container && other.start > container.start && other.end < container.end,
+    ))
+    .sort((left, right) => left.start - right.start)
+    .map((container) => container.block)
+    .filter((block) =>
+      Buffer.byteLength(block, "utf8") <= MAX_CARD_BYTES &&
+      /(?:google\.[a-z]|openstreetmap\.org|maps\.apple\.com)/i.test(block),
+    )
+    .slice(0, MAX_CARD_BLOCKS);
+}
+
+function hasPotentialPlaceEvidence(block) {
+  return /<h[2-4]\b|(?:google\.[a-z]|openstreetmap\.org|maps\.apple\.com)|data-(?:category|place-type)\s*=|class\s*=\s*(?:"[^"]*(?:category|place-type|poi-type)|'[^']*(?:category|place-type|poi-type))/i
+    .test(block);
+}
+
+/**
+ * Recover only balanced, explicitly card-shaped DOM units.
+ *
+ * `li` and `article` are item boundaries by HTML semantics. Generic `section`
+ * and `div` elements are accepted only when their own attributes identify a
+ * card/tile or a place/POI/listing item. A page-level `section.place-list`
+ * therefore cannot borrow a heading from one child and coordinates from
+ * another. Malformed or implicitly-closed containers are ignored.
+ */
+function extractBalancedCardContainers(html) {
+  const source = String(html || "");
+  const tagPattern = /<\/?[a-z][a-z0-9:-]*\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi;
+  const stack = [];
+  const containers = [];
+  let match;
+  while ((match = tagPattern.exec(source)) !== null) {
+    const token = match[0];
+    const parsed = token.match(/^<\s*(\/?)\s*([a-z][a-z0-9:-]*)\b/i);
+    if (!parsed) continue;
+    const closing = parsed[1] === "/";
+    const tag = parsed[2].toLowerCase();
+    if (closing) {
+      const openIndex = findOpenTag(stack, tag);
+      if (openIndex < 0) continue;
+      // Crossing/missing close tags make every intervening candidate boundary
+      // ambiguous, so discard them instead of letting regex recovery mix facts.
+      const removed = stack.splice(openIndex, stack.length - openIndex);
+      const opened = removed[0];
+      if (removed.length !== 1 || !opened || !isVerifiedCardContainer(opened.tag, opened.attributes)) continue;
+      const end = tagPattern.lastIndex;
+      if (end > opened.start && Buffer.byteLength(source.slice(opened.start, end), "utf8") <= MAX_CARD_BYTES) {
+        containers.push({ start: opened.start, end });
+        // The response body is byte-bounded by the worker, and the structural
+        // scan is independently item-bounded here. Do not retain or compare an
+        // unbounded number of publisher-controlled containers.
+        if (containers.length >= MAX_CARD_BLOCKS) break;
+      }
+      continue;
     }
-    if (blocks.length >= MAX_CARD_BLOCKS) break;
+    if (/\/\s*>$/.test(token) || VOID_TAGS.has(tag)) continue;
+    const attributes = token.slice(parsed[0].length, -1);
+    stack.push({ tag, attributes, start: match.index });
   }
-  return blocks;
+  return containers;
+}
+
+function findOpenTag(stack, tag) {
+  for (let index = stack.length - 1; index >= 0; index -= 1) {
+    if (stack[index].tag === tag) return index;
+  }
+  return -1;
+}
+
+function isVerifiedCardContainer(tag, attributes) {
+  if (!CARD_CONTAINER_TAGS.has(tag)) return false;
+  if (tag === "li" || tag === "article") return true;
+  const marker = normalizePhrase([
+    attributeValue(attributes, "class"),
+    attributeValue(attributes, "id"),
+    attributeValue(attributes, "data-component"),
+    attributeValue(attributes, "data-testid"),
+  ].filter(Boolean).join(" "));
+  if (!marker) return false;
+  const tokens = marker.split(" ");
+  if (tokens.includes("card") || tokens.includes("tile")) return true;
+  return /(?:^| )(?:place|poi|venue|listing) (?:item|result)(?: |$)/.test(marker);
 }
 
 function extractHeadingIdentity(block, endpoint) {
   const headings = /<h[2-4]\b[^>]*>([\s\S]*?)<\/h[2-4]\s*>/gi;
+  const identities = new Map();
   let match;
   while ((match = headings.exec(block)) !== null) {
     const name = boundedString(visibleText(match[1]), 160);
     if (!name) continue;
-    const links = extractAnchorUrls(match[1], endpoint);
-    const url = links.find((item) => item && new URL(item).origin === new URL(endpoint).origin);
-    if (url) return { name, url };
+    const urls = extractAnchorUrls(match[1], endpoint)
+      .filter((item) => item && new URL(item).origin === new URL(endpoint).origin);
+    for (const url of urls) identities.set(`${name}\n${url}`, { name, url });
   }
-  return null;
+  return identities.size === 1 ? [...identities.values()][0] : null;
 }
 
 function extractClosedCategory(block) {
   const starts = /<(p|span|div)\b([^>]*)>/gi;
+  const categories = new Set();
   let match;
   while ((match = starts.exec(block)) !== null) {
     const tag = match[1].toLowerCase();
@@ -140,7 +222,7 @@ function extractClosedCategory(block) {
         attributeValue(attributes, "data-place-type"),
       );
       const mapped = PLACE_CATEGORY_MAP[normalizePhrase(dataType)];
-      if (mapped) return mapped;
+      if (mapped) categories.add(mapped);
       continue;
     }
     const closeAt = block.toLowerCase().indexOf(`</${tag}`, starts.lastIndex);
@@ -148,17 +230,18 @@ function extractClosedCategory(block) {
     const mapped = PLACE_CATEGORY_MAP[normalizePhrase(visibleText(
       block.slice(starts.lastIndex, closeAt),
     ))];
-    if (mapped) return mapped;
+    if (mapped) categories.add(mapped);
   }
-  return null;
+  return categories.size === 1 ? [...categories][0] : null;
 }
 
 function extractPublishedMapCoordinates(block, endpoint) {
+  const coordinates = new Map();
   for (const url of extractAnchorUrls(block, endpoint)) {
     const parsed = coordinateMapUrl(url);
-    if (parsed) return parsed;
+    if (parsed) coordinates.set(`${parsed.lat},${parsed.lng}`, parsed);
   }
-  return null;
+  return coordinates.size === 1 ? [...coordinates.values()][0] : null;
 }
 
 function coordinateMapUrl(value) {
