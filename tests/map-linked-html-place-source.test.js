@@ -133,6 +133,18 @@ test("article and explicitly card-marked section boundaries remain supported", (
   );
 });
 
+test("the structural card scan is bounded before record extraction", () => {
+  const publisherControlledPrefix = Array.from(
+    { length: 200 },
+    () => "<article></article>",
+  ).join("");
+
+  assert.deepEqual(
+    extractMapLinkedPlaceRecords(`${publisherControlledPrefix}${card()}`, feed()),
+    [],
+  );
+});
+
 test("ambiguous identities, categories or coordinates inside one card fail closed", () => {
   const ambiguousHeadingIdentity = card().replace(
     "</h2>",

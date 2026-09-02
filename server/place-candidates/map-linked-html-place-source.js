@@ -158,6 +158,10 @@ function extractBalancedCardContainers(html) {
       const end = tagPattern.lastIndex;
       if (end > opened.start && Buffer.byteLength(source.slice(opened.start, end), "utf8") <= MAX_CARD_BYTES) {
         containers.push({ start: opened.start, end });
+        // The response body is byte-bounded by the worker, and the structural
+        // scan is independently item-bounded here. Do not retain or compare an
+        // unbounded number of publisher-controlled containers.
+        if (containers.length >= MAX_CARD_BLOCKS) break;
       }
       continue;
     }
