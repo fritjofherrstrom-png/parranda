@@ -21,6 +21,20 @@ declare global {
   }
 }
 
+/** No cities. A module constant, so the pre-hydration value is referentially stable. */
+const EMPTY_REGISTRY: CityRegistry = {};
+
+/**
+ * The city registry Express writes into the document before this island loads.
+ *
+ * Type-guarded: with the token unreplaced (astro dev, or a serve path that did
+ * not substitute it) the global is the literal string, which is not a registry.
+ */
+function injectedRegistry(): CityRegistry {
+  const injected = typeof window !== "undefined" ? window.__PARRANDA_CITIES__ : null;
+  return injected && typeof injected === "object" && !Array.isArray(injected) ? injected : EMPTY_REGISTRY;
+}
+
 export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang }) {
   const [lang, setLang] = useState<Lang>(initialLang);
   useEffect(() => {
@@ -36,10 +50,19 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
   const [locating, setLocating] = useState(false);
   const [geoDenied, setGeoDenied] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const registry = useMemo<CityRegistry>(() => {
-    // Type-guard: the serve-time token may be an unreplaced string in dev.
-    const injected = typeof window !== "undefined" ? window.__PARRANDA_CITIES__ : null;
-    return injected && typeof injected === "object" && !Array.isArray(injected) ? injected : {};
+  // The registry is injected by Express at serve time, so the STATIC BUILD
+  // cannot see it: prerendering finds no cities and emits no curated section,
+  // while the browser's first render would find two and emit one. Reading it
+  // during render therefore made the two trees disagree and React discarded the
+  // whole island (hydration error #418) on every landing view.
+  //
+  // So it is adopted AFTER hydration commits, exactly as `lang` above is: the
+  // first client render matches the build, and the cities arrive on the render
+  // right after. A value the build cannot see must never be read during the
+  // render React is comparing against it.
+  const [registry, setRegistry] = useState<CityRegistry>(EMPTY_REGISTRY);
+  useEffect(() => {
+    setRegistry(injectedRegistry());
   }, []);
 
   const t = (sv: string, en: string) => (lang === "en" ? en : sv);
