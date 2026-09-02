@@ -1,7 +1,13 @@
 # Parranda Architecture
 
-This document maps the engine direction behind Parranda. It should be read
-with `docs/CITY_ENGINE_PRINCIPLES.md` and `docs/PRODUCT_STRATEGY.md`.
+**Status:** Current architecture overview, refreshed after #492.
+
+**Canonical for:** candidate acquisition/composition boundaries and engine
+ownership. Historical migration plans must not override this document.
+
+This document maps the current engine direction behind Parranda. It should be
+read with `docs/CITY_ENGINE_PRINCIPLES.md`, `docs/PARRANDA_ENGINE_GOALS.md` and
+`docs/AGNOSTIC_ENGINE_NORTH_STAR.md`.
 
 The short version:
 
@@ -80,16 +86,18 @@ available. Current examples live in `server/pulse-engine/`:
 Future generic generators can add weather shifts, opening risk, crowd windows,
 or route-readiness hints, but only when backed by real inputs or clear rules.
 
-### City Source Adapters
+### Source Adapters And Acquisition
 
-Source adapters fetch and normalize external or official data for one city.
-They must be city-scoped and failure-safe.
+Source adapters fetch and normalize external or official data for a trusted
+place scope. Legacy adapters may be city-scoped; generic acquisition is bound
+to resolver-attested anchors/bounds and Source Catalog profiles. All adapters
+must be failure-safe.
 
 Examples:
 
 - Rome's Turismo Roma live source
 - Barcelona's Open Data BCN agenda source
-- future market, civic-center, venue, or official culture feeds
+- generic reviewed event/place adapters operated for arbitrary places
 
 Adapters preserve source-owned fields such as event title, venue, address,
 time, category, source URL, and source language. Parranda-owned fields such as
@@ -149,14 +157,11 @@ The catalog currently exposes:
 - `routeTemplates`
 - `findItemByName`
 
-Today, route generation and Blitz still read mostly from catalog items and route
-templates. Some catalog entries are real places, while others can be structural
-route anchors. Structural anchors may help routing but must not appear as normal
-venues or user-facing stops.
-
-This catalog-first model works for curated and preview cities, but it is not the
-final engine boundary. The next architecture step is to wrap catalog records as
-`PlaceCandidate[]`.
+Rich citypack routes remain catalog/template-aware. Catalog records are also
+wrapped as `PlaceCandidate[]`, and adopted Blitz/Planner paths can combine them
+with gated source-backed candidates. Some catalog entries are real places while
+others are structural route anchors; structural anchors may help routing but
+must never appear as normal venues or user-facing stops.
 
 ### City Services
 
@@ -226,10 +231,9 @@ hints and contextual nudges.
 
 ## Place Candidate System
 
-`PlaceCandidate` is the engine foundation contract that follows `PulseSignal`.
-It is the shared shape for place-like records consumed by future Blitz and
-Planner work, regardless of where they came from. The full shape, vocabulary,
-and provider strategy live in `docs/PLACE_CANDIDATES.md` and
+`PlaceCandidate` is the shared shape for place-like records consumed by adopted
+Blitz and Planner paths, regardless of where they came from. The full shape,
+vocabulary and provider strategy live in `docs/PLACE_CANDIDATES.md` and
 `server/place-candidates/contract.js`.
 
 ### PlaceCandidate
@@ -239,8 +243,8 @@ A `PlaceCandidate` represents:
 - a curated Rome or Barcelona catalog stop
 - an official/live event venue
 - a generated or inferred place
-- a future map/search result
-- a future semi-automatic city pack draft candidate
+- an external map/open-data result
+- a generated or semi-automatic citypack draft candidate
 - a structural routing anchor or area preset
 
 Shape:
@@ -293,14 +297,14 @@ CityConfig -> CandidateProviderRegistry -> PlaceCandidate[]
 ```
 
 The registry is synchronous by design. Providers do not fetch external data
-directly; when they need fresh inputs they read them from a context already
-filled by a higher-level engine. This keeps readiness checks cheap,
-deterministic, and safe while the candidate system is still internal. Async
-becomes an option only when a real Blitz or Planner consumer needs it, with
-that consumer's tests behind the switch.
+directly; bounded server-owned loaders and workers acquire/cache data and pass
+normalized context or datasets into the candidate spine. This keeps provider
+normalization deterministic without pretending the overall supply path is
+fixture-only.
 
-The default registry enables only `CuratedCatalogProvider`. Other providers are
-opt-in via custom `providerSpecs`.
+The default registry enables `CuratedCatalogProvider`. Callers can add opt-in
+context providers, while external/open and reviewed persistent supply enters
+through the shared candidate pool's trusted loader seam.
 
 ### Shipped Providers
 
@@ -318,11 +322,10 @@ opt-in via custom `providerSpecs`.
 ### Readiness Diagnostics
 
 `server/place-candidates/readiness.js` provides
-`assessCityCandidateReadiness()` — a sync, conservative check that summarizes
-the current candidate pool: totals, candidate kinds, trust tiers, coordinate
-coverage, and `can_support_blitz` / `can_support_planner` flags. It exists so
-later PRs can decide when it is safe to consume candidate providers; it does
-not currently change Planner, Blitz, routing, UI, or public API behavior.
+`assessCityCandidateReadiness()` — a sync, conservative compatibility check that
+summarizes totals, candidate kinds, trust tiers and coordinate coverage. Newer
+consumer paths also use source status, gates and promotion/readiness contracts;
+this helper is not the sole permission boundary.
 
 ## Future Contracts
 
@@ -351,9 +354,10 @@ This separates "how the engine reasons" from "how the UI explains the route."
 
 ### CandidateProvider
 
-`CandidateProvider` is the abstraction that supplies candidates to future
-Blitz and Planner. The registry interface is shipped (see Place Candidate
-System above). The provider roster below mixes shipped and future entries.
+`CandidateProvider` is one normalization abstraction that supplies candidates
+to the shared spine. The registry interface is shipped; network-backed supply
+may be acquired upstream and injected as a bounded dataset rather than fetched
+inside a provider.
 
 Provider roster:
 
@@ -362,9 +366,11 @@ Provider roster:
 - `RouteTemplateProvider` — shipped on the RouteCandidate side, not as a
   PlaceCandidate provider. It converts current route templates into
   `RouteCandidate[]` for diagnostics and shadow comparison.
-- `GeneratedCityPackProvider` — future.
-- `MapSearchProvider` — future.
-- `NearbyGenericProvider` — future.
+- external/open datasets — shipped through trusted loaders and the shared
+  external candidate provider;
+- reviewed place sources — shipped through revision-bound worker persistence;
+- generated citypack drafts and additional generic providers — optional future
+  extensions, not required parallel pipelines.
 
 Providers emit normalized candidates with trust metadata. The engine can score
 and combine candidates without knowing whether the source was a city pack,
@@ -399,8 +405,10 @@ It should answer:
 - Is a single stop or compact mini-route better?
 - What should be avoided because of repetition or weak timing?
 
-Today Blitz reads city catalog items directly. Future Blitz should read
-`PlaceCandidate[]` from providers.
+Legacy Blitz paths may still read city catalogs, while candidate-based and
+anywhere Blitz paths consume the shared candidate spine. New work should extend
+the shared gates and selectors rather than add another Blitz-only acquisition
+loop.
 
 ### Planner
 
@@ -414,9 +422,10 @@ It should answer:
   route?
 - Which alternatives are meaningfully different?
 
-Today Planner is catalog-first and template-aware. Future Planner should become
-candidate-provider-first, while curated route templates remain a high-quality
-provider rather than the only route foundation.
+Rich Planner remains curated-first and template-aware. Thin registered-city and
+any-place paths can consume source-backed candidates and compose through the
+ordinary route engine. Curated templates remain a high-quality accelerator,
+not the only route foundation.
 
 ### City Packs
 
@@ -426,29 +435,29 @@ They can provide better candidates, stronger route seeds, richer local truth,
 and sharper editorial language. The shared engines decide how to use those
 inputs.
 
-## Migration Path
+## Current Candidate And Signal Centerlines
 
-Shipped:
+```text
+resolver-attested place context
+  -> curated catalog + trusted broad loaders + approved local reservoir
+  -> PlaceCandidate normalization
+  -> entity resolution + evidence reduction
+  -> eligibility gates + fit + role coverage
+  -> Blitz: bounded next-move ranking
+  -> Planner: sourceCandidates / curated inputs
+       -> ordinary route engine (`agnostic_compose` where applicable)
+       -> walking, honesty and promotion gates
 
-1. ✅ Define `PlaceCandidate` — contract lives in
-   `server/place-candidates/contract.js`.
-2. ✅ Wrap current catalog items as `PlaceCandidate[]` — done via
-   `CuratedCatalogProvider`.
-3. ✅ Introduce candidate providers while keeping existing catalog behavior
-   behind a compatibility layer — synchronous provider registry with
-   `CuratedCatalogProvider` default-enabled, `LiveEventVenueProvider` opt-in,
-   and readiness diagnostics.
+reviewed event providers
+  -> normalized time-sensitive events + display/route eligibility
+  -> Pulse projections
+  -> optional bounded route interrupt after geometry/walking validation
+```
 
-Still ahead:
-
-4. Move the route engine from catalog-first to candidate-provider-first.
-5. Let Pulse route hints nudge Planner scoring without becoming forced stops.
-6. Add route-readiness diagnostics so each city can say what it can safely
-   support.
-7. Build semi-automatic city pack generation from normalized candidates and
-   review metadata.
-8. Expand city-packless mode using generic nearby, live, weather, timing, and
-   walking inputs.
+Current architecture work should improve supply, source operation, bounded
+adapters, entity resolution and deliberate promotion. It should not recreate
+the completed candidate migration or make diagnostics a permanent substitute
+for product capability.
 
 ## Guardrails
 
@@ -462,11 +471,10 @@ Still ahead:
 
 ## Current State Summary
 
-Rome is the richest curated reference city. Barcelona is a preview city with a
-real city skeleton, neighborhood model, catalog, route templates, and Open Data
-BCN live source, but it should still speak honestly about incomplete curated
-coverage.
-
-The system now has enough citypack structure to support more cities, enough
-Pulse architecture to show what a shared engine contract can look like, and a
-shipped `PlaceCandidate` system ready for future Blitz and Planner consumers.
+Parranda now has both rich curated citypack paths and a generic any-place path.
+The candidate spine is a real decision substrate: broad trusted loaders and
+operator-approved local source profiles can feed bounded source-backed places
+into the ordinary route engine, while citypacks remain curated-first
+accelerators. The remaining architecture work is supply breadth, source
+operation, conservative entity resolution, route/event quality and deliberate
+promotion—not another candidate or composer pipeline.

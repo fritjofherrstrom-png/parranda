@@ -160,20 +160,66 @@ cannot anchor or mutate a route. Approved/static sources retain precedence over
 the same endpoint. Leave the flag disabled when only manually approved sources
 should reach runtime.
 
-After editing the scout output's `source_profile.runtime_review` to bind exact
-candidates, reviewed endpoints, health, terms, timezone and an expiry, apply it
-through the trusted operator CLI:
+Do not edit and resubmit the discovered profile. The current approval path binds
+a bounded operator decision to the exact server-derived profile revision. First
+inspect the review surface from a shell that already owns the catalog
+credential:
 
 ```bash
 PARRANDA_SOURCE_CATALOG=enabled \
 PARRANDA_SOURCE_CATALOG_DATABASE_URL="$DATABASE_URL" \
-npm run review:source-profile -- --approve reviewed-profile.json
+npm run review:source-profile -- \
+  --inspect place-source-profile-v1:...
 ```
 
-The command rejects unreviewed, expired, endpoint-swapped, adapter-swapped,
-unhealthy, social-only or otherwise invalid profiles. It is not an HTTP API.
+Create a server-owned decision file using the returned `profile_key`, exact
+`profile_revision`, and candidate ids. A minimal place-source decision has this
+shape:
 
-An approved profile may also carry a `runtime_review.place_sources` list. The
+```json
+{
+  "schema_version": 1,
+  "profile_key": "place-source-profile-v1:...",
+  "expected_profile_revision": "sha256:...",
+  "expires_at": "2026-12-01T00:00:00.000Z",
+  "place_sources": [
+    {
+      "candidate_id": "reviewed-candidate-id",
+      "id": "runtime-source-id",
+      "evidence_family": "official",
+      "source_tier": "official",
+      "terms_status": "open_license",
+      "source_health": "healthy",
+      "runtime_policy": "bounded_refresh",
+      "max_items": 40,
+      "priority": 10
+    }
+  ]
+}
+```
+
+The decision cannot provide or replace endpoint, adapter, publisher identity or
+adapter-contract revision; the server derives those again from the persisted
+discovery row. Apply the decision with an explicit audit label for the operator
+acting through the authenticated server shell:
+
+```bash
+PARRANDA_SOURCE_CATALOG=enabled \
+PARRANDA_SOURCE_CATALOG_DATABASE_URL="$DATABASE_URL" \
+npm run review:source-profile -- \
+  --approve /server-owned/path/source-decision.json \
+  --operator operator-id
+```
+
+`--operator` is an audit label, not a substitute for shell/database access
+control. The command rejects a profile that is not `review_needed`, and rejects
+an expired, changed, endpoint-swapped, adapter-swapped, unhealthy, social-only
+or otherwise invalid decision. It is not an HTTP API. A successful approval
+creates revision-bound refresh targets;
+the background worker must complete a real fetch before the persistent place
+reservoir can supply Planner.
+
+The approved profile stores a derived `runtime_review.place_sources` list. The
 place adapters are deliberately narrow: `schema_org_place_html`,
 `schema_org_place_json` or `map_linked_place_html`, exact HTTPS
 endpoint/adapter/source-identity binding, an `official` or `editorial` evidence
@@ -183,11 +229,13 @@ closed set of useful place types and require exact coordinates. The map-linked
 adapter additionally requires name, explicit closed category, same-origin
 detail identity and a recognized high-precision map URL in the same card. They
 do not follow detail pages, geocode rows or ingest descriptions, ratings,
-images or generic `LocalBusiness` records. Cold reads warm the shared source cache and
-the request serves them on a later hit. A reviewed official source may supply a
-route candidate without being mislabeled as place-level human verification;
-editorial-only rows still need independent corroboration. Expiry, unknown
-fields, an off-origin redirect or a catalog outage all fail closed.
+images or generic `LocalBusiness` records. Catalog-backed acquisition is owned
+by the worker, which writes freshness-bounded rows to PostgreSQL; Planner only
+reads rows whose profile revision and approval key still match. A reviewed
+official source may supply a route candidate without being mislabeled as
+place-level human verification; editorial-only rows still need independent
+corroboration. Expiry, unknown fields, an off-origin redirect or a catalog
+outage all fail closed.
 
 ## Manual deployment and rollback
 

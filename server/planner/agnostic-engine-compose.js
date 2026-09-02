@@ -262,6 +262,7 @@ function toSourceCandidate({
       provider_id: provenance.provider_id || null,
       attribution,
       corroborated_by_external: provenance.corroborated_by_external === true,
+      ...(provenance.trusted_source ? { trusted_source: { ...provenance.trusted_source } } : {}),
       weatherTags: [],
     },
   };

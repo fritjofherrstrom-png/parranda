@@ -223,6 +223,17 @@ test("invalid source_kind → invalid_source_kind (catches catalog drift)", () =
   );
 });
 
+test("current runtime open source kinds are valid candidate-pack provenance", () => {
+  for (const sourceKind of ["open_data", "open_geo_source"]) {
+    const markdown = buildPackMarkdown({
+      candidates: [buildMinimalCandidate({ source_kind: sourceKind })],
+    });
+    const report = validateCandidatePack(markdown);
+    assert.notEqual(report.status, "blocked", sourceKind);
+    assert.equal(report.errors.length, 0, sourceKind);
+  }
+});
+
 test("invalid vibe → invalid_vibe", () => {
   const markdown = buildPackMarkdown({
     candidates: [buildMinimalCandidate({ vibes: "[serene, slow]" })],

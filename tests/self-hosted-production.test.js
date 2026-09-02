@@ -55,6 +55,44 @@ test("self-hosted deployment migrates an explicitly enabled source catalog", () 
   assert.equal(fs.realpathSync(path.join(fixture.root, "current")), fs.realpathSync(fixture.newContract));
 });
 
+test("source catalog migration includes persistent approval audit and trusted place reservoir", () => {
+  const migration = fs.readFileSync(
+    path.join(ROOT, "migrations", "004-trusted-place-source-lifecycle.sql"),
+    "utf8",
+  );
+  assert.match(migration, /pulse_source_profile_approvals/);
+  assert.match(migration, /pulse_source_place_refresh_targets/);
+  assert.match(migration, /pulse_source_place_fetch_observations/);
+  assert.match(migration, /pulse_source_place_candidates/);
+});
+
+test("self-hosted runbook documents revision-bound operator approval", () => {
+  const runbook = fs.readFileSync(
+    path.join(ROOT, "docs", "SELF_HOSTED_PRODUCTION.md"),
+    "utf8",
+  );
+  assert.match(runbook, /--inspect place-source-profile-v1:/);
+  assert.match(runbook, /expected_profile_revision/);
+  assert.match(runbook, /--approve \/server-owned\/path\/source-decision\.json/);
+  assert.match(runbook, /--operator operator-id/);
+  assert.doesNotMatch(runbook, /editing the scout output's `source_profile\.runtime_review`/);
+});
+
+test("source discovery docs keep event and place runtime bridges separate", () => {
+  const discovery = fs.readFileSync(
+    path.join(ROOT, "docs", "LIVE_EVENT_SOURCE_DISCOVERY.md"),
+    "utf8",
+  );
+  const eventBridge = discovery.split("### Reviewed event source-profile runtime bridge")[1]
+    ?.split("### Reviewed place-source reservoir bridge")[0] || "";
+  const placeBridge = discovery.split("### Reviewed place-source reservoir bridge")[1]
+    ?.split("## RSS/Atom event-interface eligibility")[0] || "";
+  assert.match(eventBridge, /PARRANDA_REVIEWED_EVENT_SOURCE_PROFILES/);
+  assert.doesNotMatch(eventBridge, /PARRANDA_REVIEWED_PLACE_SOURCE_PROFILES/);
+  assert.match(placeBridge, /PARRANDA_REVIEWED_PLACE_SOURCE_PROFILES/);
+  assert.doesNotMatch(placeBridge, /PARRANDA_EVENT_FEEDS/);
+});
+
 test("self-hosted deployment rejects an enabled catalog without database credentials", () => {
   const fixture = deploymentFixture();
   fs.appendFileSync(path.join(fixture.root, ".env.production"), "PARRANDA_SOURCE_CATALOG=enabled\n");

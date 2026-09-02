@@ -1,8 +1,21 @@
 # Candidate Intelligence Migration
 
-**Status:** Working design / migration plan  
+**Status:** Historical migration record; core migration has shipped
+
 **Scope:** Parranda engine architecture  
 **Purpose:** Turn the existing candidate infrastructure into a shared decision spine for Blitz and generated `Your Day` without creating a fourth pipeline or replacing the route engine in one risky jump.
+
+> This document preserves the staged reasoning that produced the candidate
+> spine. It is not the current implementation roadmap. The live architecture is
+> documented in `docs/ARCHITECTURE.md`; current priorities are in
+> `docs/PARRANDA_ENGINE_GOALS.md`.
+
+## Current state after #492
+
+The candidate spine, evidence reduction, gates, Blitz/Planner consumers,
+any-place engine composition, broad trusted loaders and revision-bound reviewed
+place-source reservoir have shipped. New work should extend those boundaries,
+not restart Steps 1–7 or build a separate Candidate Reservoir pipeline.
 
 ## Core finding
 
@@ -427,26 +440,12 @@ Does it reduce pipeline drift rather than adding another path?
 
 If the answer is no, it is probably not the right PR.
 
-## Immediate next PR direction
+## Superseded next-PR direction
 
-The next implementation should be ambitious but bounded:
-
-```txt
-feat(candidates): introduce candidate intelligence spine v1
-```
-
-Target scope:
-
-- evidence item model
-- evidence reducer
-- shared confidence normalization
-- derived confidence/evidence summary
-- first gate/fit/modifier vocabulary
-- tests
-- optional inspect stub if clean
-- no default product-output replacement
-
-This is not a timid step. It is the foundation that lets Parranda become agnostic without becoming generic.
+The original recommendation—introduce candidate intelligence spine v1—has been
+completed. Do not create it again. Follow the current roadmap for bounded
+source adapters, real-source operation, entity resolution and deliberate
+promotion of proven engine paths.
 
 ## Operating principle
 

@@ -48,21 +48,34 @@ function createReviewedPlaceSource({
   timeoutMs = DEFAULT_TIMEOUT_MS,
   maxBytes = DEFAULT_MAX_BYTES,
 } = {}) {
-  if (typeof fetcher !== "function") return null;
+  const persistentCatalog = typeof sourceCatalog?.listFreshApprovedPlaceCandidatesForAnchor === "function";
+  if (typeof fetcher !== "function" && !persistentCatalog) return null;
 
   return {
     async load(anchor = {}) {
       if (!validAnchor(anchor)) return [];
       const at = normalizeDate(now());
       if (!at) return [];
+      // Catalog-backed profiles are worker-owned. The request path consumes
+      // only the fresh, revision-bound persistent reservoir and never performs
+      // a source fetch merely because a user opened Planner.
+      const persistentRecords = persistentCatalog
+        ? await Promise.resolve(
+          sourceCatalog.listFreshApprovedPlaceCandidatesForAnchor({ anchor, now: at }),
+        ).catch(() => [])
+        : [];
+      const records = Array.isArray(persistentRecords) ? [...persistentRecords] : [];
       const direct = resolveReviewedPlaceSourceProfileFeeds(env, { now: at });
-      const catalogFeeds = typeof sourceCatalog?.listApprovedPlaceFeedsForAnchor === "function"
+      // Older injected catalog implementations may still expose only approved
+      // feeds. The real Postgres catalog always takes the persistent branch;
+      // never source-fetch its approved rows on a Planner request.
+      const catalogFeeds = !persistentCatalog && typeof sourceCatalog?.listApprovedPlaceFeedsForAnchor === "function"
         ? await Promise.resolve(sourceCatalog.listApprovedPlaceFeedsForAnchor({ anchor, now: at })).catch(() => [])
         : [];
       const feeds = dedupeFeeds([...direct, ...(Array.isArray(catalogFeeds) ? catalogFeeds : [])]);
-      const records = [];
       for (const feed of feeds) {
         if (records.length >= MAX_RUNTIME_RECORDS) break;
+        if (typeof fetcher !== "function") break;
         const key = cacheKey(feed);
         const cached = cache.peek(key);
         if (cached && Array.isArray(cached.records)) {
@@ -536,6 +549,7 @@ module.exports = {
   ENABLE_ENV_KEY,
   PLACE_TYPE_MAP,
   collectReviewedPlaceFeed,
+  collectReviewedPlaceFeedOutcome,
   createReviewedPlaceSource,
   extractSchemaOrgPlaces,
   inspectSchemaOrgPlacePayload,

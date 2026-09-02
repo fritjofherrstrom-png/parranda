@@ -1,7 +1,8 @@
 # Agnostic Engine North Star
 
-**Status:** Living alignment note  
-**Created after:** #257 `feat(route): add inspect agnostic route candidate diagnostics`  
+**Status:** Current north star plus historical delivery record
+
+**Updated after:** #492 trusted place-source lifecycle
 **Related:** `docs/PARRANDA_ENGINE_GOALS.md`
 
 ## North star
@@ -35,7 +36,12 @@ Agnostic does **not** mean:
 
 Named cities and narrow intents may be used as fixtures only when they prove generic engine behavior. They are not the goal.
 
-## Current state after #257
+## Historical delivery record
+
+The milestone narrative below records how the architecture evolved from #257.
+It is retained for rationale and regression context, **not** as the current
+roadmap or as instructions to rebuild completed work. Current priorities live
+in `docs/PARRANDA_ENGINE_GOALS.md`.
 
 The diagnostic chain now exists:
 
@@ -136,7 +142,13 @@ The roadmap numbering below predates the merge order. The actual sequence was:
   gates while remaining explicitly `human_verified:false`; editorial-only
   evidence still cannot self-promote. The scout discovers and qualifies both
   supported page shapes, but every candidate remains review-only until an
-  operator approves the exact binding. **Still missing:** detail-page fan-out,
+  operator approves the exact binding. The catalog lifecycle is now complete:
+  a server-shell operator approves an immutable discovery revision through a
+  bounded decision, the audit and refresh target persist atomically, the
+  background worker populates a persistent freshness-bounded reservoir, and
+  request composition reads only rows whose approval and profile revision are
+  still current. Material drift demotes the profile and fails closed; no public
+  payload or discovery worker can self-approve. **Still missing:** detail-page fan-out,
   exact coordinate recovery from other site formats, broader source operation,
   and conservative alias resolution beyond geo+name/hard ids.
 
@@ -151,7 +163,7 @@ Still missing before a true any-place Planner (now the next steps): stronger gen
 Audited 2026-06-19 from real Athens dogfooding (the felt experience was unchanged despite the convergence work). "Agnostic feel" has **three independent halves**; shipping one does not move the product on its own:
 
 1. **Synthesis** — compose an honest day from whatever candidates exist (route-engine `agnostic_compose` + daypart ordering #293 + readiness gate/observability #290/#292/#295). **Built and proven.** The #295 probe shows the engine path is promotion-`eligible` under adequate supply and `blocked` only by supply-driven caps. Deliberately gated/unpromoted per the guardrail.
-2. **Supply** — enough trusted source-backed candidates that even a thin city composes a *rich* day. **The broad global reservoir, reviewed-local-source bridge and proactive structured place-source discovery/qualification lane have landed; coverage and source quality remain the gating lever.** Schema.org and strict map-linked cards are supported. Next work is bounded list/detail adapters, operating reviewed sources across real geographies, and conservative entity resolution. No amount of extra synthesis substitutes for that work.
+2. **Supply** — enough trusted source-backed candidates that even a thin city composes a *rich* day. **The broad global reservoir, reviewed-local-source bridge, operator approval, persistent worker lifecycle and proactive structured place-source discovery/qualification lane have landed; coverage and source quality remain the gating lever.** Schema.org and strict map-linked cards are supported. Next work is bounded list/detail adapters, operating reviewed sources across real geographies, and conservative entity resolution. No amount of extra synthesis substitutes for that work.
 3. **Live-source fit** — pulse feeds that are culturally relevant, not administrative. Athens's wired City-of-Athens events calendar returns HTTP 200 but mostly municipal council meetings (`Συνεδρίαση …`) → "same pulse". This is source selection + salience (pulse lane), not a wiring failure.
 
 Evidence from Athens (registered, thin): **26 verified catalog items, 4 provisional candidates, 0 templates.** Two consequences make the synthesis work invisible there: (a) Athens is a **registered** city, so the entire any-place stack (convergence / promotion gate / observability) is gated behind `noRecognizedCity` and **never runs for it**; (b) #293 daypart ordering is **inert for Athens** because its 26 catalog items carry no `route_roles` (only the 4 provisional candidates do). So the synthesis we shipped does not touch Athens's felt experience.
@@ -226,9 +238,11 @@ Review agnostic/planner PRs in this order:
 7. Does it avoid fake ETA, walking-time, opening-hours, or route-quality claims?
 8. Does it keep citypacks as accelerators rather than dependencies?
 
-## Near-term roadmap
+## Historical milestone index
 
-The current direction should be:
+The index below preserves merge-order context. Status labels such as
+`IN PROGRESS` describe the point in time when this record was written and must
+not override the current roadmap in `docs/PARRANDA_ENGINE_GOALS.md`.
 
 ```txt
 #258 — DONE: agnostic engine north-star + CLAUDE.md / CODEX.md (alignment/memory)
@@ -259,12 +273,15 @@ The current direction should be:
 #convergence-2 — DONE: candidate-supply mapper + thin_usable/low promotion gate + app wiring behind PARRANDA_AGNOSTIC_ENGINE_COMPOSE. Persistent-capable Overpass/Nominatim cache and daypart composition are in place; legacy synthesizer remains staged for removal.
 #registered-reservoir — DONE: registered-but-thin citypacks can opt into the same source-backed candidate reservoir as supplemental fill behind explicit experiment/external flags. Curated citypack candidates remain the higher-trust spine; source-backed fill stays provisional, low-trust, attributed, and never citypack-owned.
 #live-program-articles — GENERIC CAPABILITY, DEPLOYMENT GATED: arbitrary-place source discovery can recognize strict factual programme sections on official/public articles, propose the reusable adapter for bounded qualification, and reuse the existing geo catalog, venue resolution, temporal truth, fusion, personalized Live ranking, and reviewed runtime bridge. A fixture-backed cold loop proves discovery through Live for unrelated places, but proactive production discovery still requires the source-catalog worker plus an explicitly configured operator-owned search endpoint. Search results remain low-trust; unknown ownership/terms stay review-required, mapless source-scoped evidence stays Pulse-only, and no named-place rule or default route behavior is added.
-#place-source-scout — GENERIC CAPABILITY, DEPLOYMENT GATED: the same resolver-attested worker now searches bounded local-language/English place-guide queries, follows same-origin guide links, recognizes multi-item exact-coordinate schema.org place lists and strict map-linked cards, and stores separate rolling qualification counts. Two healthy UTC days can mark the exact source `qualified_for_review`, never approved or runtime-active. Actual reservoir supply still requires operator-reviewed ownership, terms, health, evidence family and expiry through `runtime_review.place_sources`.
+#place-source-scout — GENERIC CAPABILITY, DEPLOYMENT GATED: the same resolver-attested worker now searches bounded local-language/English place-guide queries, follows same-origin guide links, recognizes multi-item exact-coordinate schema.org place lists and strict map-linked cards, and stores separate rolling qualification counts. Two healthy UTC days can mark the exact source `qualified_for_review`, never approved or runtime-active. Exact revision-bound operator approval now creates an audited worker target and a persistent fresh reservoir consumed by the ordinary composer; unapproved, expired or drifted profiles remain inactive.
 ```
 
 The numbers may shift, but the sequence should not drift back into endless diagnostics.
 
-## Required framing for #258
+## Historical prompt reference for #258
+
+The following framing is kept only to explain the promotion discipline used by
+that completed milestone. It is not a current task request.
 
 #258 must be a **Capability PR**, not another pure diagnostic PR.
 

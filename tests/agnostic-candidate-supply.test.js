@@ -74,6 +74,28 @@ test("joins selected picks back to rich candidates to recover source backing", (
   assert.equal(c.lng, 16.44);
 });
 
+test("revision-bound worker provenance survives the rich candidate to composer seam", () => {
+  const trustedSource = {
+    profile_key: "place-source-profile-v1:rome",
+    profile_revision: `sha256:${"a".repeat(64)}`,
+    approval_key: "source-profile-approval-v1:approval123",
+    source_id: "rome-official-guide",
+    adapter: "schema_org_place_json",
+    adapter_contract_revision: "schema-org-place-json-v1",
+    observed_at: "2026-09-02T08:00:00.000Z",
+    expires_at: "2026-09-03T08:00:00.000Z",
+  };
+  const rich = richCandidate({
+    provenance: { ...richCandidate().provenance, trusted_source: trustedSource },
+  });
+  const [candidate] = mapAdmittedSelectionToSourceCandidates({
+    selected: [selectedPick()],
+    plannerRoles: plannerRoles({ coffee_start: [rich] }),
+  });
+
+  assert.deepEqual(candidate.provenance.trusted_source, trustedSource);
+});
+
 test("reconstructs honest LOW trust — never curated or human-verified", () => {
   const result = mapAdmittedSelectionToSourceCandidates({
     selected: [selectedPick()],

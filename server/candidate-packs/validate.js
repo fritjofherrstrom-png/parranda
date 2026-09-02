@@ -32,6 +32,8 @@ const VALID_SOURCE_KINDS = new Set([
   "city_catalog",
   "live_event_feed",
   "map_search",
+  "open_data",
+  "open_geo_source",
   "generated",
   "routing_config",
 ]);

@@ -4,7 +4,11 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
+  APPLY_PROFILE_APPROVAL_SQL,
   ACTIVE_PROFILES_FOR_ANCHOR_SQL,
+  COMPLETE_PLACE_SOURCE_REFRESH_SQL,
+  FAIL_PLACE_SOURCE_REFRESH_SQL,
+  FRESH_PLACE_CANDIDATES_FOR_ANCHOR_SQL,
   QUALIFIED_PROFILES_FOR_ANCHOR_SQL,
   CLAIM_SCOUT_TARGET_SQL,
   COMPLETE_SCOUT_TARGET_SQL,
@@ -13,12 +17,15 @@ const {
   MAX_SCOUT_TARGETS,
   MAX_QUALIFICATION_BYTES,
   PLACE_SOURCE_QUALIFICATION_SQL,
+  PROFILE_FOR_REVIEW_SQL,
   SCOUT_REFRESH_MS,
   SCOUT_REPROBE_MIN_MS,
   SOURCE_QUALIFICATION_SQL,
   UPSERT_SCOUT_TARGET_SQL,
   UPSERT_DISCOVERY_PROFILE_SQL,
   boundedScoutRefreshAt,
+  buildProfileReviewRevision,
+  buildReviewedProfile,
   createSourceProfileCatalog,
   resolveDefaultSourceProfileCatalog,
 } = require("../server/pulse-sources/source-profile-catalog");
@@ -225,7 +232,7 @@ test("discovery writes only review-needed profiles and strips attempted activati
   assert.match(calls[0].sql, /ELSE pulse_source_profiles\.profile/);
 });
 
-test("only an already-valid reviewed profile can be stored as approved", async () => {
+test("legacy whole-profile approval is closed in favor of revision-bound operator approval", async () => {
   const calls = [];
   const catalog = createSourceProfileCatalog({
     now: () => NOW,
@@ -237,12 +244,76 @@ test("only an already-valid reviewed profile can be stored as approved", async (
 
   assert.deepEqual(await catalog.recordApprovedProfile(sourceProfile()), {
     status: "rejected",
-    reason: "invalid_reviewed_source_profile",
+    reason: "operator_revision_bound_approval_required",
   });
-  const approved = await catalog.recordApprovedProfile(sourceProfile({ approved: true }));
-  assert.equal(approved.status, "recorded");
-  assert.equal(approved.catalog_status, "approved");
-  assert.equal(calls.length, 1);
+  assert.deepEqual(await catalog.recordApprovedProfile(sourceProfile({ approved: true })), {
+    status: "rejected",
+    reason: "operator_revision_bound_approval_required",
+  });
+  assert.equal(calls.length, 0);
+});
+
+test("review revision binds material source configuration but ignores rolling qualification evidence", () => {
+  const original = placeSourceProfile();
+  original.runtime_review = {
+    status: "unreviewed",
+    reviewed_at: null,
+    expires_at: null,
+    feeds: [],
+    place_sources: [],
+  };
+  const revision = buildProfileReviewRevision(original);
+  const observationOnly = structuredClone(original);
+  observationOnly.discovery_health = { status: "observing", updated_at: "2026-08-20T12:00:00Z" };
+  observationOnly.place_source_qualification = { schema_version: 1, status: "observing", candidates: [] };
+  assert.equal(buildProfileReviewRevision(observationOnly), revision);
+
+  const changed = structuredClone(original);
+  changed.source_families[0].candidates[0].url = "https://guide.example/changed";
+  assert.notEqual(buildProfileReviewRevision(changed), revision);
+});
+
+test("server builds approval only from an exact discovered candidate and bounded review decision", () => {
+  const discovered = placeSourceProfile();
+  discovered.runtime_review = {
+    status: "unreviewed",
+    reviewed_at: null,
+    expires_at: null,
+    feeds: [],
+    place_sources: [],
+  };
+  const revision = buildProfileReviewRevision(discovered);
+  const approved = buildReviewedProfile(discovered, {
+    schema_version: 1,
+    profile_key: discovered.profile_key,
+    expected_profile_revision: revision,
+    expires_at: "2026-08-25T00:00:00.000Z",
+    place_sources: [{
+      candidate_id: "regional-places",
+      id: "reviewed-regional-places",
+      label: "Regional places",
+      evidence_family: "official",
+      source_tier: "official",
+      terms_status: "open_license",
+      source_health: "healthy",
+      runtime_policy: "bounded_refresh",
+    }],
+  }, { operatorId: "ops@example", now: NOW });
+  assert.equal(approved.profile.runtime_review.place_sources[0].endpoint, "https://guide.example/places");
+  assert.equal(approved.profile.runtime_review.place_sources[0].adapter, "schema_org_place_html");
+  assert.equal(approved.profile.runtime_review.place_sources[0].source_identity, "guide.example");
+  assert.equal(approved.audit.approved_by, "ops@example");
+  assert.equal(approved.audit.profile_revision, revision);
+
+  const stale = structuredClone(discovered);
+  stale.source_families[0].candidates[0].adapter = "map_linked_place_html";
+  assert.equal(buildReviewedProfile(stale, {
+    schema_version: 1,
+    profile_key: stale.profile_key,
+    expected_profile_revision: revision,
+    expires_at: "2026-08-25T00:00:00.000Z",
+    place_sources: [],
+  }, { operatorId: "ops@example", now: NOW }), null);
 });
 
 test("geo reads return only profiles that still pass the shared review contract", async () => {
@@ -271,7 +342,7 @@ test("geo reads return only profiles that still pass the shared review contract"
   assert.deepEqual(calls[0].values, [55.6, 13, NOW.toISOString()]);
 });
 
-test("place-only profiles can be approved and geo-read through the same catalog boundary", async () => {
+test("place-only approved profiles can be geo-read through the catalog boundary", async () => {
   const calls = [];
   const profile = placeSourceProfile();
   const catalog = createSourceProfileCatalog({
@@ -279,20 +350,18 @@ test("place-only profiles can be approved and geo-read through the same catalog 
     query: async (sql, values) => {
       calls.push({ sql, values });
       if (sql === ACTIVE_PROFILES_FOR_ANCHOR_SQL) return { rows: [{ profile }] };
-      return { rows: [{ profile_key: values[0], catalog_status: values[1] }] };
+      return { rows: [] };
     },
   });
 
-  const approved = await catalog.recordApprovedProfile(profile);
-  assert.equal(approved.status, "recorded");
   const feeds = await catalog.listApprovedPlaceFeedsForAnchor({
     anchor: { lat: 55.6, lng: 13 },
     now: NOW,
   });
   assert.equal(feeds.length, 1);
   assert.equal(feeds[0].id, "regional-place-feed");
-  assert.equal(calls[1].sql, ACTIVE_PROFILES_FOR_ANCHOR_SQL);
-  assert.deepEqual(calls[1].values, [55.6, 13, NOW.toISOString()]);
+  assert.equal(calls[0].sql, ACTIVE_PROFILES_FOR_ANCHOR_SQL);
+  assert.deepEqual(calls[0].values, [55.6, 13, NOW.toISOString()]);
 });
 
 test("the catalog preserves an approved map-linked place adapter", async () => {
@@ -303,18 +372,214 @@ test("the catalog preserves an approved map-linked place adapter", async () => {
     now: () => NOW,
     query: async (sql, values) => {
       if (sql === ACTIVE_PROFILES_FOR_ANCHOR_SQL) return { rows: [{ profile }] };
-      return { rows: [{ profile_key: values[0], catalog_status: values[1] }] };
+      return { rows: [] };
     },
   });
 
-  const approved = await catalog.recordApprovedProfile(profile);
   const feeds = await catalog.listApprovedPlaceFeedsForAnchor({
     anchor: { lat: 55.6, lng: 13 },
     now: NOW,
   });
-  assert.equal(approved.catalog_status, "approved");
   assert.equal(feeds.length, 1);
   assert.equal(feeds[0].adapter, "map_linked_place_html");
+});
+
+test("revision-bound approval persists audit and refresh targets in one conditional write", async () => {
+  const discovered = placeSourceProfile();
+  discovered.runtime_review = {
+    status: "unreviewed",
+    reviewed_at: null,
+    expires_at: null,
+    feeds: [],
+    place_sources: [],
+  };
+  const revision = buildProfileReviewRevision(discovered);
+  const calls = [];
+  const catalog = createSourceProfileCatalog({
+    now: () => NOW,
+    query: async (sql, values) => {
+      calls.push({ sql, values });
+      if (sql === PROFILE_FOR_REVIEW_SQL) {
+        return { rows: [{ profile: discovered, catalog_status: "review_needed", profile_revision: null }] };
+      }
+      if (sql === APPLY_PROFILE_APPROVAL_SQL) {
+        return { rows: [{ profile_key: discovered.profile_key, refresh_target_count: 1 }] };
+      }
+      return { rows: [] };
+    },
+  });
+  const result = await catalog.approveProfile({
+    schema_version: 1,
+    profile_key: discovered.profile_key,
+    expected_profile_revision: revision,
+    expires_at: "2026-08-25T00:00:00.000Z",
+    place_sources: [{
+      candidate_id: "regional-places",
+      id: "reviewed-regional-places",
+      label: "Regional places",
+      evidence_family: "official",
+      source_tier: "official",
+      terms_status: "open_license",
+      source_health: "healthy",
+      runtime_policy: "bounded_refresh",
+    }],
+  }, { operatorId: "ops@example" });
+  assert.equal(result.status, "recorded");
+  assert.equal(result.profile_revision, revision);
+  assert.equal(result.refresh_target_count, 1);
+  assert.equal(calls[1].sql, APPLY_PROFILE_APPROVAL_SQL);
+  assert.equal(JSON.parse(calls[1].values[10])[0].source_id, "reviewed-regional-places");
+});
+
+test("the same revision and approval decision is idempotent without another write", async () => {
+  const discovered = placeSourceProfile();
+  discovered.runtime_review = {
+    status: "unreviewed",
+    reviewed_at: null,
+    expires_at: null,
+    feeds: [],
+    place_sources: [],
+  };
+  const revision = buildProfileReviewRevision(discovered);
+  const decision = {
+    schema_version: 1,
+    profile_key: discovered.profile_key,
+    expected_profile_revision: revision,
+    expires_at: "2026-08-25T00:00:00.000Z",
+    place_sources: [{
+      candidate_id: "regional-places",
+      id: "reviewed-regional-places",
+      label: "Regional places",
+      evidence_family: "official",
+      source_tier: "official",
+      terms_status: "open_license",
+      source_health: "healthy",
+      runtime_policy: "bounded_refresh",
+    }],
+  };
+  const built = buildReviewedProfile(discovered, decision, { operatorId: "ops@example", now: NOW });
+  let writes = 0;
+  const catalog = createSourceProfileCatalog({
+    now: () => NOW,
+    query: async (sql) => {
+      if (sql === PROFILE_FOR_REVIEW_SQL) {
+        return { rows: [{
+          profile: built.profile,
+          catalog_status: "approved",
+          approval_key: built.audit.approval_key,
+          approved_profile_revision: revision,
+          approval_config_revision: built.audit.approval_config_revision,
+        }] };
+      }
+      writes += 1;
+      return { rows: [] };
+    },
+  });
+
+  const result = await catalog.approveProfile(decision, { operatorId: "ops@example" });
+  assert.equal(result.status, "recorded");
+  assert.equal(result.idempotent, true);
+  assert.equal(writes, 0);
+});
+
+test("persistent place reads require current approval, revision and freshness", async () => {
+  const valid = {
+    id: "reviewed-place:guide:one",
+    name: "One",
+    type: "museum",
+    lat: 55.6,
+    lng: 13,
+    operator_reviewed_source: true,
+    source_policy: "reviewed_profile_bounded_refresh",
+    source_profile_key: "place-source-profile-v1:test-region",
+    source_profile_revision: `sha256:${"a".repeat(64)}`,
+    source_approval_key: "source-profile-approval-v1:approval123",
+    source_feed_id: "regional-place-feed",
+    source_adapter: "schema_org_place_html",
+    source_adapter_contract_revision: "schema-org-place-html-v1",
+    source_observed_at: "2026-07-30T09:00:00.000Z",
+    source_expires_at: "2026-07-31T09:00:00.000Z",
+  };
+  const calls = [];
+  const catalog = createSourceProfileCatalog({
+    now: () => NOW,
+    query: async (sql, values) => {
+      calls.push({ sql, values });
+      return { rows: [{ record: valid }, { record: { ...valid, source_approval_key: null } }] };
+    },
+  });
+
+  const records = await catalog.listFreshApprovedPlaceCandidatesForAnchor({
+    anchor: { lat: 55.6, lng: 13 },
+    now: NOW,
+  });
+  assert.deepEqual(records, [valid]);
+  assert.equal(calls[0].sql, FRESH_PLACE_CANDIDATES_FOR_ANCHOR_SQL);
+  assert.match(calls[0].sql, /profile\.approved_profile_revision = candidate\.profile_revision/);
+  assert.match(calls[0].sql, /profile\.approval_key = candidate\.approval_key/);
+  assert.match(calls[0].sql, /candidate\.expires_at > \$3::timestamptz/);
+});
+
+test("worker persistence is idempotent and catalog-owned while failures retain fresh rows", async () => {
+  const target = {
+    profile_key: "place-source-profile-v1:test-region",
+    source_id: "regional-place-feed",
+    profile_revision: `sha256:${"a".repeat(64)}`,
+    approval_key: "source-profile-approval-v1:approval123",
+    feed: {
+      id: "regional-place-feed",
+      endpoint: "https://guide.example/places",
+      adapter: "schema_org_place_html",
+      adapter_contract_revision: "schema-org-place-html-v1",
+      source_identity: "guide.example",
+    },
+    lease_token: "lease-one",
+    attempt_count: 1,
+  };
+  const calls = [];
+  const catalog = createSourceProfileCatalog({
+    now: () => NOW,
+    query: async (sql, values) => {
+      calls.push({ sql, values });
+      return { rows: [{ profile_key: target.profile_key, source_id: target.source_id, candidate_count: 1 }] };
+    },
+  });
+  const record = {
+    id: "reviewed-place:guide:one",
+    name: "One",
+    type: "museum",
+    lat: 55.6,
+    lng: 13,
+    operator_reviewed_source: true,
+    source_policy: "reviewed_profile_bounded_refresh",
+  };
+  const completed = await catalog.recordApprovedPlaceSourceOutcome(target, {
+    status: "ok",
+    observed_at: NOW.toISOString(),
+    reason: "source_fetch_complete",
+    records: [record, record],
+  });
+  assert.equal(completed.status, "completed");
+  assert.equal(calls[0].sql, COMPLETE_PLACE_SOURCE_REFRESH_SQL);
+  assert.match(calls[0].sql, /ON CONFLICT \(profile_key, source_id, candidate_key\) DO UPDATE/);
+  const persisted = JSON.parse(calls[0].values[8]);
+  assert.equal(persisted.length, 1);
+  assert.equal(persisted[0].record.source_feed_id, target.source_id);
+  assert.equal(
+    persisted[0].record.source_adapter_contract_revision,
+    target.feed.adapter_contract_revision,
+  );
+  assert.equal(persisted[0].record.source_identity, target.feed.source_identity);
+
+  calls.length = 0;
+  const failed = await catalog.recordApprovedPlaceSourceOutcome(target, {
+    status: "failed",
+    observed_at: NOW.toISOString(),
+    reason: "source_fetch_failed",
+  });
+  assert.equal(failed.status, "retry_wait");
+  assert.equal(calls[0].sql, FAIL_PLACE_SOURCE_REFRESH_SQL);
+  assert.doesNotMatch(calls[0].sql, /DELETE FROM pulse_source_place_candidates/);
 });
 
 test("geo reads expose only fresh qualified profiles as Pulse-only probation feeds", async () => {
@@ -862,7 +1127,8 @@ test("migration runs the versioned SQL and always closes its pool", async () => 
   assert.match(calls[1][1], /CREATE TABLE IF NOT EXISTS pulse_source_profiles/);
   assert.match(calls[2][1], /CREATE TABLE IF NOT EXISTS pulse_source_scout_targets/);
   assert.match(calls[3][1], /ADD COLUMN IF NOT EXISTS discovery_health JSONB/);
-  assert.deepEqual(calls[4], ["end"]);
+  assert.match(calls[4][1], /pulse_source_profile_approvals/);
+  assert.deepEqual(calls[5], ["end"]);
 });
 
 test("discovery upsert cannot overwrite an approved, rejected or disabled row", () => {
