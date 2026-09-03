@@ -625,7 +625,12 @@ function placeSourceCandidatesForProfile(result) {
 function compactPlaceSourceCandidate(candidate) {
   const id = publicString(candidate?.id);
   const url = publicString(candidate?.url);
-  const adapter = ["schema_org_place_html", "schema_org_place_json", "map_linked_place_html"]
+  const adapter = [
+    "schema_org_place_html",
+    "schema_org_place_json",
+    "experience_card_place_list_detail_html",
+    "map_linked_place_html",
+  ]
     .includes(candidate?.adapter)
     ? candidate.adapter
     : null;
@@ -650,6 +655,7 @@ function compactPlaceSourceCandidate(candidate) {
     corroboration_required: candidate?.corroboration_required === true,
     accepted_place_count: finiteCount(candidate?.accepted_place_count),
     distinct_place_type_count: finiteCount(candidate?.distinct_place_type_count),
+    detail_link_count: finiteCount(candidate?.detail_link_count),
     reasons: compactTokens(candidate?.reasons),
     blockers: compactTokens(candidate?.blockers),
   });
@@ -780,7 +786,12 @@ function reviewOnlyPlaceManifests(manifests) {
     id: publicString(manifest?.id),
     label: publicString(manifest?.label),
     endpoint: publicString(manifest?.endpoint),
-    adapter: ["schema_org_place_html", "schema_org_place_json", "map_linked_place_html"]
+    adapter: [
+      "schema_org_place_html",
+      "schema_org_place_json",
+      "experience_card_place_list_detail_html",
+      "map_linked_place_html",
+    ]
       .includes(manifest?.adapter)
       ? manifest.adapter
       : null,

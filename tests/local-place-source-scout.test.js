@@ -22,6 +22,20 @@ function placeList(items = defaultPlaces()) {
   })}</script>`;
 }
 
+function placeListDetail() {
+  return `
+    <div class="vs-experience-card" data-title="harbour museum" data-categories="place-en" data-subcategories="museum-en">
+      <div class="vs-title">Harbour Museum</div>
+      <div class="vs-categories"><span class="vs-category primary">Activities</span><span class="vs-category">Museum</span></div>
+      <a href="/places/harbour-museum" class="vs-readmore">Read more</a>
+    </div>
+    <div class="vs-experience-card" data-title="cliff park" data-categories="place-en" data-subcategories="park-en">
+      <div class="vs-title">Cliff Park</div>
+      <div class="vs-categories"><span class="vs-category primary">Activities</span><span class="vs-category">Park</span></div>
+      <a href="/places/cliff-park" class="vs-readmore">Read more</a>
+    </div>`;
+}
+
 function defaultPlaces() {
   return [
     {
@@ -141,6 +155,27 @@ test("map-linked place cards enter the same review-only source lane", () => {
   assert.equal(result.manifest_candidate.status, "review-needed");
   assert.equal(result.manifest_candidate.runtime_policy, "review_required");
   assert.equal(result.manifest_candidate.activation_performed, undefined);
+});
+
+test("a same-origin verified experience-card list enters the bounded review-only adapter", () => {
+  const result = inspectPlaceSourcePage({
+    seed: {
+      url: "https://guide.example/see-and-do",
+      label: "Official destination guide",
+      trust_tier: "official",
+      terms_status: "open_license",
+    },
+    body: placeListDetail(),
+    contentType: "text/html",
+    context: context(),
+  });
+
+  assert.equal(result.candidate.adapter, "experience_card_place_list_detail_html");
+  assert.equal(result.candidate.accepted_place_count, 0);
+  assert.equal(result.candidate.detail_link_count, 2);
+  assert.equal(result.manifest_candidate.adapter, "experience_card_place_list_detail_html");
+  assert.equal(result.manifest_candidate.max_items, 2);
+  assert.equal(result.manifest_candidate.status, "review-needed");
 });
 
 test("individual venues, generic businesses and out-of-scope rows are not place-list sources", () => {

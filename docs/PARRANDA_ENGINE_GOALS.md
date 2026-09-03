@@ -195,14 +195,20 @@ display/corroboration evidence. This is generic for any approved geography.
 
 The generic worker now proactively searches for local-language and English
 place-guide interfaces, follows bounded same-origin guide links, and recognizes
-only multi-item schema.org lists or map-linked cards with stable identities plus
-exact in-scope coordinates. Exact endpoint/adapter/publisher/bounds candidates
+only multi-item schema.org lists, the closed experience-card list/detail shape,
+or map-linked cards with stable identities plus exact in-scope coordinates.
+Exact endpoint/adapter/publisher/bounds candidates
 are re-probed on separate days and promoted only to `qualified_for_review`; no
 place source auto-activates or enters probation. This closes one additional
-common list format, not coverage itself. The next source slices are bounded
-detail-page fan-out for list/detail guides, source operation across real
-geographies, Wix/entity-data extraction where exact coordinates exist, and
-conservative cross-provider aliases—not more route synthesis.
+common list format, not coverage itself. A second closed adapter handles the
+officially observed balanced `vs-experience-card` shape with at most 12 exact
+same-origin detail URLs, a shared timeout/four-megabyte ceiling and exact
+canonical/name/category/coordinate agreement per detail. It is a versioned DOM
+shape, not a publisher, city or hostname branch. The next source slices are
+source operation across real
+geographies, evidence-backed adapters for materially different shapes where
+exact coordinates exist, and conservative cross-provider aliases—not more
+route synthesis.
 
 The remaining reviewed-place lifecycle gap is now closed. Source Catalog
 approval binds an operator decision to the exact server-derived discovery
@@ -213,10 +219,9 @@ only records whose approval key and profile revision still match; expiry,
 unknown state and material rediscovery fail closed. This makes a newly approved
 generic local source capable of contributing a source-backed Planner stop after
 the worker lifecycle, while preserving the next supply priorities: operating
-more real sources, bounded list/detail fan-out, and conservative entity
-resolution.
+more real sources and conservative entity resolution.
 
-## Current roadmap after #492
+## Current roadmap
 
 The candidate reservoir, role selection, Planner bridges, event candidates,
 source qualification and operator approval lifecycle have shipped. Do not use
@@ -224,11 +229,11 @@ the old #244–#249 migration sequence as current work.
 
 Priorities now are:
 
-1. Add bounded list→detail ingestion for a concrete official source shape:
-   same-origin links, capped fan-out, explicit terms/source policy, a versioned
-   adapter contract and worker-owned persistence.
-2. Operate reviewed sources across a large unsupported place and a
-   smaller/regional place; measure coverage, refresh health and route quality.
+1. Operate the versioned bounded experience-card list→detail adapter across a large
+   unsupported place and a smaller/regional place through discovery,
+   separate-day qualification, operator review and persistent worker refresh.
+2. Measure those sources' coverage, refresh health and route contribution; add
+   another adapter only for a materially different observed official shape.
 3. Improve conservative entity aliases/reconciliation as independent source
    volume grows, without letting ratings or popularity become ranking power.
 4. Define explicit graduation criteria for experimental/legacy Planner paths:

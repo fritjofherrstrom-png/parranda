@@ -6,8 +6,13 @@ const test = require("node:test");
 const { createSourceCache } = require("../server/place-candidates/source-cache");
 const {
   collectReviewedPlaceFeed,
+  collectReviewedPlaceFeedOutcome,
   createReviewedPlaceSource,
+  EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER,
+  extractExperienceCardDetailPointers,
   extractSchemaOrgPlaces,
+  inspectExperienceCardPlaceListDetailPayload,
+  MAX_LIST_DETAIL_LINKS,
   parseSchemaOrgPlacesFromHtml,
   probeSchemaOrgPlaceFeed,
   resolveDefaultReviewedPlaceSource,
@@ -55,6 +60,49 @@ function response(body, overrides = {}) {
   };
 }
 
+function htmlResponse(body, url) {
+  return response(body, {
+    url,
+    headers: { get: (name) => String(name).toLowerCase() === "content-type" ? "text/html" : null },
+  });
+}
+
+function experienceCard({ url, name, type }) {
+  const slug = `${type.toLowerCase().replace(/\s+/g, "-")}-en`;
+  return `<div class="vs-experience-card" data-title="${name.toLowerCase()}" data-categories="place-en" data-subcategories="${slug}">
+    <div class="vs-content">
+      <div class="vs-title">${name}</div>
+      <div class="vs-categories"><span class="vs-category primary">Activities</span><span class="vs-category">${type}</span></div>
+      <a href="${url}" class="vs-readmore">Read more</a>
+    </div>
+  </div>`;
+}
+
+function experienceList(items) {
+  return `<html><body>${items.map(experienceCard).join("\n")}</body></html>`;
+}
+
+function experienceDetail({
+  url,
+  name,
+  type,
+  lat = 55.5001,
+  lng = 13.5001,
+  canonical = url,
+  heroName = name,
+  contentName = name,
+  extra = "",
+}) {
+  return `<html><head><link rel="canonical" href="${canonical}"></head><body>
+    <h1 class="postHerosection postHerosection__heroHeading">${heroName}</h1>
+    <div class="experience-meta-container">
+      <div class="experience-taxonomy"><span class="experience-category">Activities</span><span class="experience-subcategory">${type}</span></div>
+      <h2 class="experience-title">${contentName}</h2>
+      <div class="experience-map" data-lat="${lat}" data-lng="${lng}"></div>
+    </div>${extra}
+  </body></html>`;
+}
+
 test("JSON-LD extraction supports graph and ItemList envelopes but rejects generic businesses", () => {
   const payload = {
     "@graph": [
@@ -73,6 +121,195 @@ test("HTML extraction ignores prose and survives one malformed JSON-LD block", (
   assert.equal(parsed.invalidScriptCount, 1);
   assert.equal(parsed.validScriptCount, 1);
   assert.equal(parsed.places.length, 1);
+});
+
+test("list-detail inspection accepts only capped same-origin verified experience cards", () => {
+  const items = [
+    { url: "/places/one", name: "One Museum", type: "Museum" },
+    { url: "https://guide.example/places/two#section", name: "Two Park", type: "Park" },
+    { url: "https://other.example/places/three", name: "Foreign Park", type: "Park" },
+    { url: "http://guide.example/places/four", name: "Http Park", type: "Park" },
+    { url: "/places/one", name: "Duplicate Museum", type: "Museum" },
+    ...Array.from({ length: 20 }, (_, index) => ({
+      url: `/places/more-${index}`,
+      name: `More Museum ${index}`,
+      type: "Museum",
+    })),
+  ];
+  const parsed = inspectExperienceCardPlaceListDetailPayload(experienceList(items), {
+    endpoint: "https://guide.example/places",
+  });
+  assert.equal(parsed.status, "ok");
+  assert.equal(parsed.detail_link_count, MAX_LIST_DETAIL_LINKS);
+  assert.deepEqual(parsed.detail_pointers.slice(0, 2), [
+    { url: "https://guide.example/places/one", name: "One Museum", type: "museum" },
+    { url: "https://guide.example/places/two", name: "Two Park", type: "park" },
+  ]);
+  assert.deepEqual(extractExperienceCardDetailPointers("", {
+    endpoint: "https://guide.example/places",
+  }), []);
+});
+
+test("experience-card inspection never joins title, category and link across sibling cards", () => {
+  const source = `<div class="catalog-wrapper">
+    <div class="vs-experience-card" data-title="split museum" data-categories="place-en" data-subcategories="museum-en">
+      <div class="vs-title">Split Museum</div>
+    </div>
+    <div class="vs-experience-card" data-title="other park" data-categories="place-en" data-subcategories="park-en">
+      <div class="vs-categories"><span class="vs-category">Park</span></div>
+      <a href="/places/other" class="vs-readmore">Read more</a>
+    </div>
+  </div>`;
+  assert.deepEqual(inspectExperienceCardPlaceListDetailPayload(source, {
+    endpoint: "https://guide.example/places",
+  }), {
+    status: "empty",
+    detail_link_count: 0,
+    detail_pointers: [],
+    reason: "bounded_experience_card_list_not_detected",
+  });
+});
+
+test("bounded list-detail collection follows exact same-origin details under one byte budget", async () => {
+  const endpoint = "https://guide.example/places";
+  const bodies = new Map([
+    [endpoint, experienceList([
+      { url: "/places/museum", name: "Detail Museum", type: "Museum" },
+      { url: "/places/park", name: "Detail Park", type: "Park" },
+      { url: "https://other.example/places/foreign", name: "Foreign", type: "Park" },
+      { url: "/places/third", name: "Detail Cafe", type: "Cafe" },
+    ])],
+    ["https://guide.example/places/museum", experienceDetail({
+      url: "https://guide.example/places/museum", name: "Detail Museum", type: "Museum",
+    })],
+    ["https://guide.example/places/park", experienceDetail({
+      url: "https://guide.example/places/park", name: "Detail Park", type: "Park",
+    })],
+    ["https://guide.example/places/third", experienceDetail({
+      url: "https://guide.example/places/third", name: "Detail Cafe", type: "Cafe",
+    })],
+  ]);
+  const requests = [];
+  const records = await collectReviewedPlaceFeed(feed({
+    adapter: EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER,
+    max_items: 2,
+  }), {
+    fetcher: async (url, options) => {
+      requests.push({ url, options });
+      return htmlResponse(bodies.get(url), url);
+    },
+  });
+
+  assert.deepEqual(requests.map((request) => request.url), [
+    endpoint,
+    "https://guide.example/places/museum",
+    "https://guide.example/places/park",
+  ]);
+  assert.ok(requests.every((request) => request.options.redirect === "error"));
+  assert.ok(requests.every((request) => request.options.signal === requests[0].options.signal));
+  assert.deepEqual(records.map((record) => [record.name, record.type]), [
+    ["Detail Museum", "museum"],
+    ["Detail Park", "park"],
+  ]);
+  assert.ok(records.every((record) => record.sources[0].url.startsWith("https://guide.example/places/")));
+});
+
+test("list and details share one aggregate byte ceiling", async () => {
+  const endpoint = "https://guide.example/places";
+  const detailUrls = [`${endpoint}/one`, `${endpoint}/two`];
+  const listBody = experienceList(detailUrls.map((url, index) => ({
+    url,
+    name: `Detail ${index + 1}`,
+    type: "Museum",
+  })));
+  const baseDetails = detailUrls.map((url, index) => experienceDetail({
+    url,
+    name: `Detail ${index + 1}`,
+    type: "Museum",
+  }));
+  const byteCeiling = 2048;
+  const remaining = byteCeiling - Buffer.byteLength(listBody, "utf8");
+  const targetDetailBytes = Math.floor(remaining * 0.6);
+  const details = baseDetails.map((body) => {
+    const fillerLength = Math.max(0, targetDetailBytes - Buffer.byteLength(body, "utf8") - 7);
+    return `${body}<!--${"x".repeat(fillerLength)}-->`;
+  });
+  assert.ok(Buffer.byteLength(listBody, "utf8") + Buffer.byteLength(details[0], "utf8") <= byteCeiling);
+  assert.ok(
+    Buffer.byteLength(listBody, "utf8") +
+    Buffer.byteLength(details[0], "utf8") +
+    Buffer.byteLength(details[1], "utf8") > byteCeiling,
+  );
+  const bodies = new Map([[endpoint, listBody], ...detailUrls.map((url, index) => [url, details[index]])]);
+  const records = await collectReviewedPlaceFeed(feed({
+    adapter: EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER,
+    max_items: 2,
+  }), {
+    maxBytes: byteCeiling,
+    fetcher: async (url) => htmlResponse(bodies.get(url), url),
+  });
+
+  assert.deepEqual(records.map((record) => record.name), ["Detail 1"]);
+});
+
+test("list-detail rows fail closed on identity, entity, content-type and redirect drift", async () => {
+  const endpoint = "https://guide.example/places";
+  const urls = ["mismatch", "ambiguous", "wrong-type", "redirected"].map(
+    (slug) => `${endpoint}/${slug}`,
+  );
+  const bodies = new Map([
+    [endpoint, experienceList(urls.map((url, index) => ({
+      url,
+      name: `Detail ${index}`,
+      type: "Museum",
+    })))],
+    [urls[0], experienceDetail({
+      url: urls[0], name: "Detail 0", type: "Museum", canonical: `${endpoint}/someone-else`,
+    })],
+    [urls[1], experienceDetail({
+      url: urls[1], name: "Detail 1", type: "Museum", heroName: "Another identity",
+    })],
+    [urls[2], experienceDetail({ url: urls[2], name: "Detail 2", type: "Museum" })],
+    [urls[3], experienceDetail({ url: urls[3], name: "Detail 3", type: "Museum" })],
+  ]);
+  const outcome = await collectReviewedPlaceFeedOutcome(feed({
+    adapter: EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER,
+  }), {
+    fetcher: async (url) => {
+      if (url === urls[2]) {
+        return response(bodies.get(url), {
+          url,
+          headers: { get: () => "application/json" },
+        });
+      }
+      if (url === urls[3]) {
+        return htmlResponse(bodies.get(url), "https://guide.example/redirect-target");
+      }
+      return htmlResponse(bodies.get(url), url);
+    },
+  });
+  assert.deepEqual(outcome, { status: "empty", records: [] });
+});
+
+test("a list whose entire detail transport fails is failed, not a healthy empty source", async () => {
+  const endpoint = "https://guide.example/places";
+  const urls = [`${endpoint}/one`, `${endpoint}/two`];
+  const outcome = await collectReviewedPlaceFeedOutcome(feed({
+    adapter: EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER,
+    max_items: 2,
+  }), {
+    fetcher: async (url) => url === endpoint
+      ? htmlResponse(experienceList([
+          { url: urls[0], name: "One Museum", type: "Museum" },
+          { url: urls[1], name: "Two Park", type: "Park" },
+        ]), endpoint)
+      : response("{}", {
+          url,
+          headers: { get: () => "application/json" },
+        }),
+  });
+
+  assert.deepEqual(outcome, { status: "failed", records: [] });
 });
 
 test("collector emits only bounded factual route records with attribution", async () => {
@@ -213,6 +450,28 @@ test("catalog-backed runtime consumes only fresh worker-persisted records and ne
   assert.deepEqual(await source.load({ lat: 55.5, lng: 13.5 }), persisted);
   assert.equal(fetchCount, 0);
   assert.equal(feedReadCount, 0);
+});
+
+test("list-detail traversal is never warmed by the legacy request-path source bridge", async () => {
+  let fetchCount = 0;
+  const source = createReviewedPlaceSource({
+    sourceCatalog: {
+      listApprovedPlaceFeedsForAnchor: async () => [feed({
+        adapter: EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER,
+      })],
+    },
+    env: {},
+    cache: createSourceCache({ namespace: "list-detail-request-path-test", ttlMs: 60_000 }),
+    now: () => new Date("2026-08-20T12:00:00.000Z"),
+    fetcher: async () => {
+      fetchCount += 1;
+      return htmlResponse("", "https://guide.example/places");
+    },
+  });
+
+  assert.deepEqual(await source.load({ lat: 55.5, lng: 13.5 }), []);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(fetchCount, 0);
 });
 
 test("persistent catalog records remain available without a network fetcher", async () => {

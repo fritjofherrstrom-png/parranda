@@ -11,6 +11,7 @@ const ADAPTER_MAP = Object.freeze({
   schema_org_place: "schema_org_place_html",
   schema_org_place_html: "schema_org_place_html",
   schema_org_place_json: "schema_org_place_json",
+  experience_card_place_list_detail_html: "experience_card_place_list_detail_html",
   map_linked_place_html: "map_linked_place_html",
 });
 // Increment the matching value whenever an adapter's accepted input or output
@@ -19,6 +20,7 @@ const ADAPTER_MAP = Object.freeze({
 const PLACE_SOURCE_ADAPTER_CONTRACTS = Object.freeze({
   schema_org_place_html: "schema-org-place-html-v1",
   schema_org_place_json: "schema-org-place-json-v1",
+  experience_card_place_list_detail_html: "experience-card-place-list-detail-html-v1",
   map_linked_place_html: "map-linked-place-html-v2",
 });
 const RUNTIME_POLICIES = new Set(["active", "bounded_refresh"]);
@@ -119,7 +121,11 @@ function reviewedPlaceFeed({ row, candidate, bbox, profileKey, review }) {
     evidence_family: evidenceFamily,
     source_identity: sourceIdentity,
     priority: finitePriority(row.priority),
-    max_items: boundedInteger(row.max_items, 1, 100) || 40,
+    max_items: boundedInteger(
+      row.max_items,
+      1,
+      adapter === "experience_card_place_list_detail_html" ? 12 : 100,
+    ) || (adapter === "experience_card_place_list_detail_html" ? 12 : 40),
     status: "active",
     runtime_policy: runtimePolicy,
     terms_status: termsStatus,

@@ -1165,7 +1165,11 @@ function buildReviewedProfile(profile, decision, { operatorId, now = new Date() 
       terms_status: termsStatus,
       source_health: sourceHealth,
       runtime_policy: runtimePolicy,
-      max_items: boundedInteger(row?.max_items, 1, 100) || 40,
+      max_items: boundedInteger(
+        row?.max_items,
+        1,
+        candidate.adapter === "experience_card_place_list_detail_html" ? 12 : 100,
+      ) || (candidate.adapter === "experience_card_place_list_detail_html" ? 12 : 40),
       priority: finiteNumber(row?.priority),
     }));
   }
@@ -1256,6 +1260,7 @@ function reviewablePlaceCandidates(profile) {
         "schema_org_place",
         "schema_org_place_html",
         "schema_org_place_json",
+        "experience_card_place_list_detail_html",
         "map_linked_place_html",
       ]),
       adapter_contract_revision: placeSourceAdapterContract(candidate?.adapter),
@@ -1289,7 +1294,12 @@ function normalizeClaimedPlaceSourceRefresh(row, leaseToken) {
     !profileRevision?.startsWith("sha256:") ||
     !approvalKey?.startsWith("source-profile-approval-v1:") || !token ||
     !feed || feed.id !== sourceId || !safeHttpsUrl(feed.endpoint) ||
-    !closedToken(feed.adapter, ["schema_org_place_html", "schema_org_place_json", "map_linked_place_html"]) ||
+    !closedToken(feed.adapter, [
+      "schema_org_place_html",
+      "schema_org_place_json",
+      "experience_card_place_list_detail_html",
+      "map_linked_place_html",
+    ]) ||
     feed.adapter_contract_revision !== placeSourceAdapterContract(feed.adapter) ||
     !boundedString(feed.source_identity, 200)
   ) return null;
@@ -1349,7 +1359,12 @@ function validPersistedPlaceRecord(record) {
     publicString(record.source_profile_revision)?.startsWith("sha256:") &&
     publicString(record.source_approval_key)?.startsWith("source-profile-approval-v1:") &&
     safeMachineId(record.source_feed_id) &&
-    closedToken(record.source_adapter, ["schema_org_place_html", "schema_org_place_json", "map_linked_place_html"]) &&
+    closedToken(record.source_adapter, [
+      "schema_org_place_html",
+      "schema_org_place_json",
+      "experience_card_place_list_detail_html",
+      "map_linked_place_html",
+    ]) &&
     record.source_adapter_contract_revision === placeSourceAdapterContract(record.source_adapter) &&
     normalizeDate(record.source_observed_at) && normalizeDate(record.source_expires_at)
   );

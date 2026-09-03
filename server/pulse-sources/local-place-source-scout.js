@@ -4,6 +4,8 @@ const { createHash } = require("node:crypto");
 
 const {
   inspectSchemaOrgPlacePayload,
+  EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER,
+  inspectExperienceCardPlaceListDetailPayload,
 } = require("../place-candidates/schema-org-place-source");
 const {
   MAP_LINKED_PLACE_ADAPTER,
@@ -85,6 +87,20 @@ function inspectPlaceSourcePage({
     adapter === "schema_org_place_html" &&
     (summary.status !== "ok" || summary.accepted_place_count < MIN_PLACE_LIST_ITEMS)
   ) {
+    const listDetail = inspectExperienceCardPlaceListDetailPayload(body, { endpoint });
+    if (listDetail.status === "ok" && listDetail.detail_link_count >= MIN_PLACE_LIST_ITEMS) {
+      adapter = EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER;
+      summary = {
+        ...listDetail,
+        accepted_place_count: 0,
+        distinct_place_type_count: 0,
+      };
+    }
+  }
+  if (
+    adapter === "schema_org_place_html" &&
+    (summary.status !== "ok" || summary.accepted_place_count < MIN_PLACE_LIST_ITEMS)
+  ) {
     const mapLinked = inspectMapLinkedPlacePayload(body, {
       bbox,
       endpoint,
@@ -95,13 +111,17 @@ function inspectPlaceSourcePage({
       summary = mapLinked;
     }
   }
-  if (summary.status !== "ok" || summary.accepted_place_count < MIN_PLACE_LIST_ITEMS) {
+  const sourceShapeCount = adapter === EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER
+    ? summary.detail_link_count
+    : summary.accepted_place_count;
+  if (summary.status !== "ok" || sourceShapeCount < MIN_PLACE_LIST_ITEMS) {
     return {
       ...emptyInspection(summary.status === "failed"
         ? "place_source_payload_invalid"
         : "structured_place_list_not_detected"),
       accepted_place_count: summary.accepted_place_count,
       distinct_place_type_count: summary.distinct_place_type_count,
+      detail_link_count: summary.detail_link_count,
     };
   }
 
@@ -125,6 +145,7 @@ function inspectPlaceSourcePage({
     corroboration_required: false,
     accepted_place_count: summary.accepted_place_count,
     distinct_place_type_count: summary.distinct_place_type_count,
+    detail_link_count: summary.detail_link_count,
     reasons: ["structured_place_list_detected", "operator_review_required"],
     blockers: termsStatus === "restricted" ? ["terms_restricted"] : [],
   };
@@ -137,6 +158,7 @@ function inspectPlaceSourcePage({
     manifest_candidate: manifest,
     accepted_place_count: summary.accepted_place_count,
     distinct_place_type_count: summary.distinct_place_type_count,
+    detail_link_count: summary.detail_link_count,
     reasons: ["structured_place_source_detected"],
   };
 }
@@ -146,7 +168,12 @@ function buildPlaceManifestCandidate(candidate, { seed = {}, bbox = null } = {})
     !candidate ||
     candidate.status !== "viable_place_provider_probe" ||
     candidate.maps_to_existing_provider !== true ||
-    !["schema_org_place_html", "schema_org_place_json", MAP_LINKED_PLACE_ADAPTER]
+    ![
+      "schema_org_place_html",
+      "schema_org_place_json",
+      EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER,
+      MAP_LINKED_PLACE_ADAPTER,
+    ]
       .includes(candidate.adapter) ||
     !normalizeBounds(bbox)
   ) return null;
@@ -162,7 +189,13 @@ function buildPlaceManifestCandidate(candidate, { seed = {}, bbox = null } = {})
     source_family: candidate.family,
     source_identity: candidate.source_identity,
     priority: 100,
-    max_items: Math.min(100, Math.max(MIN_PLACE_LIST_ITEMS, candidate.accepted_place_count)),
+    max_items: Math.min(
+      candidate.adapter === EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER ? 12 : 100,
+      Math.max(
+        MIN_PLACE_LIST_ITEMS,
+        candidate.detail_link_count || candidate.accepted_place_count,
+      ),
+    ),
     status: "review-needed",
     runtime_policy: "review_required",
     review: {

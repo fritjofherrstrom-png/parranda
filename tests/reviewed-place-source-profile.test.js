@@ -76,6 +76,31 @@ test("a fresh review can bind the closed map-linked HTML adapter", () => {
   assert.equal(placeSourceAdapterContract("map_linked_place_html"), "map-linked-place-html-v2");
 });
 
+test("a fresh review can bind the bounded list-detail adapter contract", () => {
+  const value = profile();
+  value.source_families[0].candidates[0].adapter = "experience_card_place_list_detail_html";
+  value.runtime_review.place_sources[0].adapter = "experience_card_place_list_detail_html";
+  value.runtime_review.place_sources[0].adapter_contract_revision = "experience-card-place-list-detail-html-v1";
+
+  const [feed] = placeFeedsFromReviewedSourceProfiles([value], { now: NOW });
+  assert.equal(feed.adapter, "experience_card_place_list_detail_html");
+  assert.equal(feed.adapter_contract_revision, "experience-card-place-list-detail-html-v1");
+  assert.equal(feed.max_items, 12);
+  assert.equal(
+    placeSourceAdapterContract("experience_card_place_list_detail_html"),
+    "experience-card-place-list-detail-html-v1",
+  );
+});
+
+test("list-detail approvals fail closed on an unknown parser revision", () => {
+  const value = profile();
+  value.source_families[0].candidates[0].adapter = "experience_card_place_list_detail_html";
+  value.runtime_review.place_sources[0].adapter = "experience_card_place_list_detail_html";
+  value.runtime_review.place_sources[0].adapter_contract_revision = "experience-card-place-list-detail-html-v0";
+
+  assert.deepEqual(placeFeedsFromReviewedSourceProfiles([value], { now: NOW }), []);
+});
+
 test("an approval bound to the previous map-linked adapter contract fails closed", () => {
   const value = profile();
   value.source_families[0].candidates[0].adapter = "map_linked_place_html";

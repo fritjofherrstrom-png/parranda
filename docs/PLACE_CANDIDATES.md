@@ -148,9 +148,11 @@ acquisition happen in bounded upstream loaders/workers, never inside a public
 payload or an arbitrary provider call. Current work should extend this path
 rather than create a fourth candidate pipeline.
 
-Still open after #492: operate more reviewed sources, add bounded list/detail
-adapters for real source shapes, improve conservative aliases/entity resolution,
-and define promotion criteria for retiring legacy experimental paths.
+Still open after the first bounded experience-card list→detail adapter: operate
+reviewed sources across large unsupported and smaller/regional places, add only
+evidence-backed bounded adapters for materially different real source shapes,
+improve conservative aliases/entity resolution, and define promotion criteria
+for retiring legacy experimental paths.
 
 ## Current Compatibility Provider
 
