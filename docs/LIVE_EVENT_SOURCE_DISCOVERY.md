@@ -271,7 +271,8 @@ attractions/visitor-guide links. A page becomes a place-source candidate only
 when a closed reviewed-place adapter finds either at least two stable,
 exact-coordinate inline records or at least two bounded same-origin detail
 pointers. The supported formats are inline schema.org place JSON-LD,
-pointer-only schema.org `ItemList` pages, and `map_linked_place_html`: repeated
+the exact versioned `experience_card_place_list_detail_html` shape, and
+`map_linked_place_html`: repeated
 server-rendered cards where
 one balanced semantic item or explicitly card-marked DOM unit contains an
 exact heading/detail identity, one unambiguous explicit closed category and one
@@ -283,14 +284,19 @@ coordinate-looking text, missing/unknown card facts, out-of-bounds rows,
 restricted terms, unsafe URLs and robots-disallowed pages cannot produce a
 probeable manifest.
 
-The `schema-org-place-list-detail-html-v1` probe and approved refresh follow at
-most 12 exact same-origin HTTPS detail URLs, sequentially, under one aggregate
-timeout and byte budget. Each detail is accepted only when exactly one
-allowlisted schema.org Place node carries name, type, exact in-bounds
-coordinates and an identity equal to that detail URL. Discovery records only
-the bounded pointer count; qualification and approved collection perform the
-actual fetch. The approved worker persists accepted rows, while Planner reads
-only the revision-bound reservoir and never traverses details itself.
+The `experience-card-place-list-detail-html-v1` probe recognizes only balanced
+`vs-experience-card` units that bind an exact list title, allowlisted visible
+subcategory, matching machine subcategory and same-origin `vs-readmore` URL.
+Approved refresh follows at most 12 such URLs sequentially under one aggregate
+timeout and four-megabyte ceiling. Each detail is accepted only when its exact
+canonical URL, hero and content titles, allowlisted `experience-subcategory`
+and one published `experience-map` coordinate pair agree with the list card.
+This is the concrete DOM contract observed on an official regional destination
+catalog; it is not a hostname/city rule and unrelated card markup fails closed.
+Discovery records only the bounded pointer count; qualification and approved
+collection perform the actual fetch. The approved worker persists accepted
+rows, while Planner reads only the revision-bound reservoir and never traverses
+details itself.
 
 Place candidates live in `source_profile.place_source_candidates` and their
 manifests in `place_manifest_candidates`; they do not enter event-family

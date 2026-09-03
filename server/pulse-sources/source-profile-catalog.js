@@ -1168,8 +1168,8 @@ function buildReviewedProfile(profile, decision, { operatorId, now = new Date() 
       max_items: boundedInteger(
         row?.max_items,
         1,
-        candidate.adapter === "schema_org_place_list_detail_html" ? 12 : 100,
-      ) || (candidate.adapter === "schema_org_place_list_detail_html" ? 12 : 40),
+        candidate.adapter === "experience_card_place_list_detail_html" ? 12 : 100,
+      ) || (candidate.adapter === "experience_card_place_list_detail_html" ? 12 : 40),
       priority: finiteNumber(row?.priority),
     }));
   }
@@ -1260,7 +1260,7 @@ function reviewablePlaceCandidates(profile) {
         "schema_org_place",
         "schema_org_place_html",
         "schema_org_place_json",
-        "schema_org_place_list_detail_html",
+        "experience_card_place_list_detail_html",
         "map_linked_place_html",
       ]),
       adapter_contract_revision: placeSourceAdapterContract(candidate?.adapter),
@@ -1297,7 +1297,7 @@ function normalizeClaimedPlaceSourceRefresh(row, leaseToken) {
     !closedToken(feed.adapter, [
       "schema_org_place_html",
       "schema_org_place_json",
-      "schema_org_place_list_detail_html",
+      "experience_card_place_list_detail_html",
       "map_linked_place_html",
     ]) ||
     feed.adapter_contract_revision !== placeSourceAdapterContract(feed.adapter) ||
@@ -1362,7 +1362,7 @@ function validPersistedPlaceRecord(record) {
     closedToken(record.source_adapter, [
       "schema_org_place_html",
       "schema_org_place_json",
-      "schema_org_place_list_detail_html",
+      "experience_card_place_list_detail_html",
       "map_linked_place_html",
     ]) &&
     record.source_adapter_contract_revision === placeSourceAdapterContract(record.source_adapter) &&

@@ -628,7 +628,7 @@ function compactPlaceSourceCandidate(candidate) {
   const adapter = [
     "schema_org_place_html",
     "schema_org_place_json",
-    "schema_org_place_list_detail_html",
+    "experience_card_place_list_detail_html",
     "map_linked_place_html",
   ]
     .includes(candidate?.adapter)
@@ -789,7 +789,7 @@ function reviewOnlyPlaceManifests(manifests) {
     adapter: [
       "schema_org_place_html",
       "schema_org_place_json",
-      "schema_org_place_list_detail_html",
+      "experience_card_place_list_detail_html",
       "map_linked_place_html",
     ]
       .includes(manifest?.adapter)

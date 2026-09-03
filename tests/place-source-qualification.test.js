@@ -135,7 +135,7 @@ test("map-linked candidates preserve their exact adapter through qualification",
 });
 
 test("list-detail candidates preserve their exact bounded adapter through qualification", async () => {
-  const adapter = "schema_org_place_list_detail_html";
+  const adapter = "experience_card_place_list_detail_html";
   const listCandidate = candidate({ adapter });
   const listManifest = manifest({ adapter, max_items: 100 });
   const result = await qualifyDiscoveredPlaceSourceProfile({

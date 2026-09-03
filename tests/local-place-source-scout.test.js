@@ -22,12 +22,18 @@ function placeList(items = defaultPlaces()) {
   })}</script>`;
 }
 
-function placeListDetail(urls = ["/places/harbour-museum", "/places/cliff-park"]) {
-  return `<script type="application/ld+json">${JSON.stringify({
-    "@context": "https://schema.org",
-    "@type": "ItemList",
-    itemListElement: urls.map((url) => ({ "@type": "ListItem", item: url })),
-  })}</script>`;
+function placeListDetail() {
+  return `
+    <div class="vs-experience-card" data-title="harbour museum" data-categories="place-en" data-subcategories="museum-en">
+      <div class="vs-title">Harbour Museum</div>
+      <div class="vs-categories"><span class="vs-category primary">Activities</span><span class="vs-category">Museum</span></div>
+      <a href="/places/harbour-museum" class="vs-readmore">Read more</a>
+    </div>
+    <div class="vs-experience-card" data-title="cliff park" data-categories="place-en" data-subcategories="park-en">
+      <div class="vs-title">Cliff Park</div>
+      <div class="vs-categories"><span class="vs-category primary">Activities</span><span class="vs-category">Park</span></div>
+      <a href="/places/cliff-park" class="vs-readmore">Read more</a>
+    </div>`;
 }
 
 function defaultPlaces() {
@@ -151,7 +157,7 @@ test("map-linked place cards enter the same review-only source lane", () => {
   assert.equal(result.manifest_candidate.activation_performed, undefined);
 });
 
-test("a same-origin schema.org list of detail URLs enters the bounded review-only adapter", () => {
+test("a same-origin verified experience-card list enters the bounded review-only adapter", () => {
   const result = inspectPlaceSourcePage({
     seed: {
       url: "https://guide.example/see-and-do",
@@ -164,10 +170,10 @@ test("a same-origin schema.org list of detail URLs enters the bounded review-onl
     context: context(),
   });
 
-  assert.equal(result.candidate.adapter, "schema_org_place_list_detail_html");
+  assert.equal(result.candidate.adapter, "experience_card_place_list_detail_html");
   assert.equal(result.candidate.accepted_place_count, 0);
   assert.equal(result.candidate.detail_link_count, 2);
-  assert.equal(result.manifest_candidate.adapter, "schema_org_place_list_detail_html");
+  assert.equal(result.manifest_candidate.adapter, "experience_card_place_list_detail_html");
   assert.equal(result.manifest_candidate.max_items, 2);
   assert.equal(result.manifest_candidate.status, "review-needed");
 });

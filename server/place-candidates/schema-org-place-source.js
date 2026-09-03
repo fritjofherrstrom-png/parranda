@@ -7,6 +7,7 @@ const {
 } = require("./reviewed-place-source-profile");
 const {
   MAP_LINKED_PLACE_ADAPTER,
+  PLACE_CATEGORY_MAP,
   extractMapLinkedPlaceRecords,
 } = require("./map-linked-html-place-source");
 
@@ -17,8 +18,10 @@ const DEFAULT_RADIUS_KM = 5;
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
 const MAX_JSON_LD_NODES = 500;
 const MAX_RUNTIME_RECORDS = 100;
-const SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER = "schema_org_place_list_detail_html";
+const EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER = "experience_card_place_list_detail_html";
 const MAX_LIST_DETAIL_LINKS = 12;
+const MAX_EXPERIENCE_CARD_BLOCKS = 200;
+const DEFAULT_LIST_DETAIL_MAX_BYTES = 4 * 1024 * 1024;
 
 // Deliberately closed: generic Organization/LocalBusiness/Product records are
 // not place ideas. Every accepted schema type has an existing Parranda type.
@@ -81,7 +84,7 @@ function createReviewedPlaceSource({
         // List -> detail traversal is worker-owned. Unlike the legacy direct
         // profile bridge, it must never fan out because a Planner request
         // happened to miss an in-process cache entry.
-        if (feed.adapter === SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER) continue;
+        if (feed.adapter === EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER) continue;
         const key = cacheKey(feed);
         const cached = cache.peek(key);
         if (cached && Array.isArray(cached.records)) {
@@ -113,20 +116,25 @@ async function collectReviewedPlaceFeed(feed, options = {}) {
   return outcome.records;
 }
 
-async function collectReviewedPlaceFeedOutcome(feed, {
-  fetcher = typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null,
-  timeoutMs = DEFAULT_TIMEOUT_MS,
-  maxBytes = DEFAULT_MAX_BYTES,
-  probeOnly = false,
-} = {}) {
+async function collectReviewedPlaceFeedOutcome(feed, options = {}) {
+  const fetcher = options.fetcher === undefined
+    ? (typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null)
+    : options.fetcher;
+  const timeoutMs = options.timeoutMs === undefined ? DEFAULT_TIMEOUT_MS : options.timeoutMs;
+  const maxBytes = options.maxBytes === undefined
+    ? feed?.adapter === EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER
+      ? DEFAULT_LIST_DETAIL_MAX_BYTES
+      : DEFAULT_MAX_BYTES
+    : options.maxBytes;
+  const probeOnly = options.probeOnly === true;
   const valid = probeOnly ? validProbeFeed(feed) : validFeed(feed);
   if (!valid || typeof fetcher !== "function") return failed();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), boundedInteger(timeoutMs, 50, 30_000));
   try {
     const byteBudget = boundedInteger(maxBytes, 1024, 4 * 1024 * 1024);
-    if (feed.adapter === SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER) {
-      return collectSchemaOrgListDetailOutcome(feed, {
+    if (feed.adapter === EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER) {
+      return collectExperienceCardListDetailOutcome(feed, {
         fetcher,
         controller,
         byteBudget,
@@ -174,7 +182,7 @@ async function collectReviewedPlaceFeedOutcome(feed, {
   }
 }
 
-async function collectSchemaOrgListDetailOutcome(feed, {
+async function collectExperienceCardListDetailOutcome(feed, {
   fetcher,
   controller,
   byteBudget,
@@ -184,6 +192,7 @@ async function collectSchemaOrgListDetailOutcome(feed, {
     controller,
     maxBytes: byteBudget,
     accept: "text/html, application/xhtml+xml",
+    requireExactUrl: true,
   });
   if (!listDocument || !isHtmlResponse(listDocument.response)) return failed();
   let remainingBytes = byteBudget - Buffer.byteLength(listDocument.raw, "utf8");
@@ -191,7 +200,7 @@ async function collectSchemaOrgListDetailOutcome(feed, {
     MAX_LIST_DETAIL_LINKS,
     boundedInteger(feed.max_items ?? MAX_LIST_DETAIL_LINKS, 1, MAX_LIST_DETAIL_LINKS),
   );
-  const inspected = inspectSchemaOrgPlaceListDetailPayload(listDocument.raw, {
+  const inspected = inspectExperienceCardPlaceListDetailPayload(listDocument.raw, {
     endpoint: feed.endpoint,
     maxLinks: maxItems,
   });
@@ -199,22 +208,26 @@ async function collectSchemaOrgListDetailOutcome(feed, {
 
   const records = [];
   const seen = new Set();
-  for (const detailUrl of inspected.detail_urls) {
+  let validDetailDocumentCount = 0;
+  for (const pointer of inspected.detail_pointers) {
     if (records.length >= maxItems || remainingBytes < 1) break;
-    const detailDocument = await fetchReviewedDocument(detailUrl, {
+    const detailDocument = await fetchReviewedDocument(pointer.url, {
       fetcher,
       controller,
       maxBytes: remainingBytes,
       accept: "text/html, application/xhtml+xml",
       approvedOrigin: new URL(feed.endpoint).origin,
+      requireExactUrl: true,
     });
     if (!detailDocument || !isHtmlResponse(detailDocument.response)) continue;
+    validDetailDocumentCount += 1;
     remainingBytes -= Buffer.byteLength(detailDocument.raw, "utf8");
-    const record = recordFromExactSchemaOrgDetail(detailDocument.raw, detailUrl, feed);
+    const record = recordFromExactExperienceCardDetail(detailDocument.raw, pointer, feed);
     if (!record || !pointInBounds(record, feed.bbox) || seen.has(record.id)) continue;
     seen.add(record.id);
     records.push(record);
   }
+  if (!validDetailDocumentCount) return failed();
   return { status: records.length ? "ok" : "empty", records };
 }
 
@@ -224,6 +237,7 @@ async function fetchReviewedDocument(url, {
   maxBytes,
   accept,
   approvedOrigin = null,
+  requireExactUrl = false,
 } = {}) {
   const target = safeHttpsUrl(url);
   if (!target || typeof fetcher !== "function" || !controller || maxBytes < 1) return null;
@@ -238,7 +252,12 @@ async function fetchReviewedDocument(url, {
     redirect: "error",
     signal: controller.signal,
   });
-  if (!response || response.ok !== true || !sameOriginResponse(target, response)) return null;
+  if (
+    !response ||
+    response.ok !== true ||
+    !sameOriginResponse(target, response) ||
+    (requireExactUrl && !exactUrlResponse(target, response))
+  ) return null;
   const raw = await readBoundedText(response, maxBytes);
   return raw ? { raw, response } : null;
 }
@@ -315,95 +334,74 @@ function inspectSchemaOrgPlacePayload(raw, {
   };
 }
 
-function inspectSchemaOrgPlaceListDetailPayload(raw, {
+function inspectExperienceCardPlaceListDetailPayload(raw, {
   endpoint,
   maxLinks = MAX_LIST_DETAIL_LINKS,
 } = {}) {
   const sourceUrl = safeHttpsUrl(endpoint);
   if (!sourceUrl) return emptyListDetailInspection("invalid_endpoint");
-  const parsed = parseJsonLdPayloadsFromHtml(raw);
-  if (!parsed.validScriptCount && parsed.invalidScriptCount) {
-    return emptyListDetailInspection("invalid_json_ld");
-  }
-  const detailUrls = extractSchemaOrgItemListDetailUrls(parsed.payloads, {
+  const detailPointers = extractExperienceCardDetailPointers(raw, {
     endpoint: sourceUrl,
     maxLinks,
   });
-  if (detailUrls.length < 2) return emptyListDetailInspection("bounded_item_list_not_detected");
+  if (detailPointers.length < 2) {
+    return emptyListDetailInspection("bounded_experience_card_list_not_detected");
+  }
   return {
     status: "ok",
-    detail_link_count: detailUrls.length,
-    detail_urls: detailUrls,
+    detail_link_count: detailPointers.length,
+    detail_pointers: detailPointers,
   };
 }
 
-function extractSchemaOrgItemListDetailUrls(payloads, {
+function extractExperienceCardDetailPointers(raw, {
   endpoint,
   maxLinks = MAX_LIST_DETAIL_LINKS,
 } = {}) {
   const sourceUrl = safeHttpsUrl(endpoint);
   if (!sourceUrl) return [];
   const sourceOrigin = new URL(sourceUrl).origin;
-  const queue = Array.isArray(payloads) ? [...payloads] : [payloads];
+  const blocks = extractExperienceCardBlocks(stripExecutableMarkup(String(raw || "")));
   const found = [];
   const seen = new Set();
-  let visited = 0;
-  while (queue.length && visited < MAX_JSON_LD_NODES && found.length < maxLinks) {
-    const value = queue.shift();
-    visited += 1;
-    if (Array.isArray(value)) {
-      queue.push(...value.slice(0, Math.max(0, MAX_JSON_LD_NODES - visited - queue.length)));
-      continue;
-    }
-    if (!value || typeof value !== "object") continue;
-    if (schemaTypeIncludes(value, "itemlist")) {
-      for (const entry of Array.isArray(value.itemListElement) ? value.itemListElement : []) {
-        const item = entry && typeof entry === "object" && "item" in entry ? entry.item : entry;
-        // This adapter is only for pointer-only list pages. Inline Place
-        // objects belong to the single-fetch adapter and must not be
-        // reinterpreted as permission to crawl their identities.
-        if (
-          item && typeof item === "object" &&
-          (placeType(item) || localizedString(item.name) || extractCoordinates(item))
-        ) continue;
-        const identity = typeof item === "string"
-          ? item
-          : firstString(item?.url, item?.["@id"], entry?.url);
-        const detailUrl = resolveSameOriginHttpsUrl(identity, sourceUrl, sourceOrigin);
-        if (!detailUrl || detailUrl === sourceUrl || seen.has(detailUrl)) continue;
-        seen.add(detailUrl);
-        found.push(detailUrl);
-        if (found.length >= Math.min(MAX_LIST_DETAIL_LINKS, boundedInteger(maxLinks, 1, MAX_LIST_DETAIL_LINKS))) {
-          break;
-        }
-      }
-    }
-    for (const key of ["@graph", "items"]) {
-      if (Array.isArray(value[key])) {
-        queue.push(...value[key].slice(0, Math.max(0, MAX_JSON_LD_NODES - visited - queue.length)));
-      }
-    }
+  const limit = Math.min(MAX_LIST_DETAIL_LINKS, boundedInteger(maxLinks, 1, MAX_LIST_DETAIL_LINKS));
+  for (const block of blocks) {
+    const pointer = experienceCardPointer(block, sourceUrl, sourceOrigin);
+    if (!pointer || seen.has(pointer.url)) continue;
+    seen.add(pointer.url);
+    found.push(pointer);
+    if (found.length >= limit) break;
   }
   return found;
 }
 
-function recordFromExactSchemaOrgDetail(raw, detailUrl, feed) {
-  const exactUrl = safeHttpsUrl(detailUrl);
+function recordFromExactExperienceCardDetail(raw, pointer, feed) {
+  const exactUrl = safeHttpsUrl(pointer?.url);
   if (!exactUrl) return null;
-  const parsed = parseSchemaOrgPlacesFromHtml(raw);
-  if (!parsed.validScriptCount && parsed.invalidScriptCount) return null;
-  const matches = [];
-  for (const place of parsed.places) {
-    const identity = safeHttpsUrl(firstString(place?.url, place?.["@id"]));
-    if (identity !== exactUrl) continue;
-    const record = mapSchemaOrgPlaceToRecord(place, feed);
-    if (record) matches.push(record);
-  }
-  return matches.length === 1 ? matches[0] : null;
+  const source = stripExecutableMarkup(String(raw || ""));
+  const canonicalUrls = extractCanonicalUrls(source, exactUrl);
+  const heroNames = extractClassTexts(source, "postHerosection__heroHeading", "h1");
+  const contentNames = extractClassTexts(source, "experience-title", "h2");
+  const types = extractExperienceDetailTypes(source);
+  const coordinates = extractExperienceDetailCoordinates(source);
+  if (
+    canonicalUrls.length !== 1 || canonicalUrls[0] !== exactUrl ||
+    heroNames.length !== 1 || contentNames.length !== 1 ||
+    normalizePhrase(heroNames[0]) !== normalizePhrase(pointer.name) ||
+    normalizePhrase(contentNames[0]) !== normalizePhrase(pointer.name) ||
+    types.length !== 1 || types[0] !== pointer.type ||
+    coordinates.length !== 1
+  ) return null;
+  return mapPlaceAtomToRecord({
+    stableIdentity: exactUrl,
+    name: heroNames[0],
+    type: pointer.type,
+    ...coordinates[0],
+  }, feed);
 }
 
 function emptyListDetailInspection(reason) {
-  return { status: "empty", detail_link_count: 0, detail_urls: [], reason };
+  return { status: "empty", detail_link_count: 0, detail_pointers: [], reason };
 }
 
 function extractSchemaOrgPlaces(payload) {
@@ -470,8 +468,25 @@ function mapSchemaOrgPlaceToRecord(place, feed) {
   if (!type || !name || !coords) return null;
   const stableIdentity = boundedString(firstString(place.url, place["@id"], place.identifier), 2048);
   if (!stableIdentity) return null;
-  const website = safeHttpUrl(firstString(place.url, place["@id"]));
-  const openingHours = firstString(place.openingHours);
+  return mapPlaceAtomToRecord({
+    stableIdentity,
+    name,
+    type,
+    ...coords,
+    website: safeHttpUrl(firstString(place.url, place["@id"])),
+    openingHours: firstString(place.openingHours),
+  }, feed);
+}
+
+function mapPlaceAtomToRecord(atom, feed) {
+  const stableIdentity = boundedString(atom?.stableIdentity, 2048);
+  const name = boundedString(atom?.name, 160);
+  const type = PLACE_TYPE_MAP[String(atom?.type || "").replace(/[^a-z]/gi, "").toLowerCase()]
+    || (Object.values(PLACE_TYPE_MAP).includes(atom?.type) ? atom.type : null);
+  const lat = finiteCoordinate(atom?.lat, -90, 90);
+  const lng = finiteCoordinate(atom?.lng, -180, 180);
+  if (!stableIdentity || !name || !type || lat == null || lng == null) return null;
+  const website = safeHttpUrl(atom.website || stableIdentity);
   const digest = createHash("sha256")
     .update(`${feed.id}|${stableIdentity}`)
     .digest("hex")
@@ -480,10 +495,10 @@ function mapSchemaOrgPlaceToRecord(place, feed) {
     id: `reviewed-place:${feed.id}:${digest}`,
     name: boundedString(name, 160),
     type,
-    lat: coords.lat,
-    lng: coords.lng,
+    lat,
+    lng,
     website,
-    opening_hours: boundedString(openingHours, 512),
+    opening_hours: boundedString(atom.openingHours, 512),
     freshness: "fresh",
     operator_reviewed_source: true,
     source_policy: "reviewed_profile_bounded_refresh",
@@ -497,6 +512,220 @@ function mapSchemaOrgPlaceToRecord(place, feed) {
       freshness: "fresh",
     }],
   });
+}
+
+function extractExperienceCardBlocks(html) {
+  const source = String(html || "");
+  const tagPattern = /<\/?[a-z][a-z0-9:-]*\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi;
+  const stack = [];
+  const blocks = [];
+  let match;
+  while ((match = tagPattern.exec(source)) !== null) {
+    const token = match[0];
+    const parsed = token.match(/^<\s*(\/?)\s*([a-z][a-z0-9:-]*)\b/i);
+    if (!parsed) continue;
+    const closing = parsed[1] === "/";
+    const tag = parsed[2].toLowerCase();
+    if (closing) {
+      let openIndex = -1;
+      for (let index = stack.length - 1; index >= 0; index -= 1) {
+        if (stack[index].tag === tag) {
+          openIndex = index;
+          break;
+        }
+      }
+      if (openIndex < 0) continue;
+      const removed = stack.splice(openIndex, stack.length - openIndex);
+      const opened = removed[0];
+      if (removed.length !== 1 || !opened?.experienceCard) continue;
+      blocks.push(source.slice(opened.start, tagPattern.lastIndex));
+      if (blocks.length >= MAX_EXPERIENCE_CARD_BLOCKS) break;
+      continue;
+    }
+    if (/\/\s*>$/.test(token) || /^(?:area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)$/.test(tag)) {
+      continue;
+    }
+    const attributes = token.slice(parsed[0].length, -1);
+    stack.push({
+      tag,
+      start: match.index,
+      experienceCard: tag === "div" && classTokens(attributes).includes("vs-experience-card"),
+    });
+  }
+  return blocks;
+}
+
+function experienceCardPointer(block, endpoint, sourceOrigin) {
+  const root = String(block || "").match(/^<div\b([^>]*)>/i);
+  if (!root || !classTokens(root[1]).includes("vs-experience-card")) return null;
+  const titles = extractClassTexts(block, "vs-title", "div");
+  const links = extractClassAnchorUrls(block, "vs-readmore", endpoint)
+    .filter((url) => new URL(url).origin === sourceOrigin && url !== endpoint);
+  const types = extractExperienceListTypes(block);
+  const dataTitle = boundedString(decodeHtml(attributeValue(root[1], "data-title")), 160);
+  const subcategory = normalizeExperienceCategory(attributeValue(root[1], "data-subcategories"));
+  if (
+    titles.length !== 1 ||
+    links.length !== 1 ||
+    types.length !== 1 ||
+    !dataTitle || normalizePhrase(dataTitle) !== normalizePhrase(titles[0]) ||
+    !subcategory || subcategory !== types[0]
+  ) return null;
+  return { url: links[0], name: titles[0], type: types[0] };
+}
+
+function extractExperienceListTypes(block) {
+  const values = [];
+  const pattern = /<span\b([^>]*)>([\s\S]*?)<\/span\s*>/gi;
+  let match;
+  while ((match = pattern.exec(String(block || ""))) !== null) {
+    if (!classTokens(match[1]).includes("vs-category")) continue;
+    const type = normalizeExperienceCategory(visibleText(match[2]));
+    if (type) values.push(type);
+  }
+  return [...new Set(values)];
+}
+
+function extractExperienceDetailTypes(source) {
+  const values = [];
+  const pattern = /<span\b([^>]*)>([\s\S]*?)<\/span\s*>/gi;
+  let match;
+  while ((match = pattern.exec(String(source || ""))) !== null) {
+    if (!classTokens(match[1]).includes("experience-subcategory")) continue;
+    const type = normalizeExperienceCategory(visibleText(match[2]));
+    if (type) values.push(type);
+  }
+  return [...new Set(values)];
+}
+
+function extractExperienceDetailCoordinates(source) {
+  const values = new Map();
+  const pattern = /<div\b([^>]*)>/gi;
+  let match;
+  while ((match = pattern.exec(String(source || ""))) !== null) {
+    if (!classTokens(match[1]).includes("experience-map")) continue;
+    const lat = strictCoordinateAttribute(attributeValue(match[1], "data-lat"), -90, 90);
+    const lng = strictCoordinateAttribute(attributeValue(match[1], "data-lng"), -180, 180);
+    if (lat == null || lng == null) continue;
+    values.set(`${lat},${lng}`, { lat, lng });
+  }
+  return [...values.values()];
+}
+
+function extractCanonicalUrls(source, endpoint) {
+  const values = new Set();
+  const pattern = /<link\b([^>]*)>/gi;
+  let match;
+  while ((match = pattern.exec(String(source || ""))) !== null) {
+    if (!classlessTokenList(attributeValue(match[1], "rel")).includes("canonical")) continue;
+    const url = resolveSameOriginHttpsUrl(
+      attributeValue(match[1], "href"),
+      endpoint,
+      new URL(endpoint).origin,
+    );
+    if (url) values.add(url);
+  }
+  return [...values];
+}
+
+function extractClassTexts(source, expectedClass, tag) {
+  const values = [];
+  const input = String(source || "");
+  const pattern = new RegExp(`<${tag}\\b([^>]*)>`, "gi");
+  let match;
+  while ((match = pattern.exec(input)) !== null) {
+    if (!classTokens(match[1]).includes(expectedClass)) continue;
+    const closeAt = input.toLowerCase().indexOf(`</${tag}`, pattern.lastIndex);
+    if (closeAt < 0) continue;
+    const value = boundedString(visibleText(input.slice(pattern.lastIndex, closeAt)), 160);
+    if (value) values.push(value);
+  }
+  return values;
+}
+
+function extractClassAnchorUrls(source, expectedClass, endpoint) {
+  const values = [];
+  const pattern = /<a\b([^>]*)>/gi;
+  let match;
+  while ((match = pattern.exec(String(source || ""))) !== null) {
+    if (!classTokens(match[1]).includes(expectedClass)) continue;
+    const url = resolveSameOriginHttpsUrl(
+      attributeValue(match[1], "href"),
+      endpoint,
+      new URL(endpoint).origin,
+    );
+    if (url) values.push(url);
+  }
+  return [...new Set(values)];
+}
+
+function normalizeExperienceCategory(value) {
+  const normalized = normalizePhrase(value).replace(/ [a-z]{2}$/, "");
+  return PLACE_CATEGORY_MAP[normalized] || null;
+}
+
+function strictCoordinateAttribute(value, min, max) {
+  if (!/^-?\d{1,3}\.\d{3,}$/.test(String(value || ""))) return null;
+  return finiteCoordinate(Number(value), min, max);
+}
+
+function classTokens(attributes) {
+  return classlessTokenList(attributeValue(attributes, "class"));
+}
+
+function classlessTokenList(value) {
+  return String(value || "").trim().split(/\s+/).filter(Boolean);
+}
+
+function attributeValue(attributes, name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = String(attributes || "").match(
+    new RegExp(`\\b${escaped}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i"),
+  );
+  return firstString(match?.[1], match?.[2], match?.[3]);
+}
+
+function stripExecutableMarkup(value) {
+  return value
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<(script|style|template|noscript)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, " ");
+}
+
+function visibleText(value) {
+  return decodeHtml(String(value || "").replace(/<[^>]*>/g, " "))
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function decodeHtml(value) {
+  return String(value || "")
+    .replace(/&#(\d+);/g, (_all, digits) => safeCodePoint(Number(digits)))
+    .replace(/&#x([a-f0-9]+);/gi, (_all, digits) => safeCodePoint(Number.parseInt(digits, 16)))
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;|&#39;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">");
+}
+
+function safeCodePoint(value) {
+  try {
+    return Number.isInteger(value) && value >= 0 && value <= 0x10ffff
+      ? String.fromCodePoint(value)
+      : "";
+  } catch (_error) {
+    return "";
+  }
+}
+
+function normalizePhrase(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 function filterRecordsForAnchor(records, anchor, bbox) {
@@ -523,15 +752,6 @@ function placeType(place) {
   return null;
 }
 
-function schemaTypeIncludes(value, expected) {
-  const values = Array.isArray(value?.["@type"])
-    ? value["@type"]
-    : [value?.["@type"] || value?.type];
-  return values.some((item) =>
-    String(item || "").split(/[\/#:]/).pop().replace(/[^a-z]/gi, "").toLowerCase() === expected,
-  );
-}
-
 function extractCoordinates(place) {
   const geo = place?.geo || place?.location?.geo;
   const lat = finiteCoordinate(geo?.latitude ?? geo?.lat, -90, 90);
@@ -546,6 +766,15 @@ function isJsonLdScript(attributes) {
 }
 
 function sameOriginResponse(endpoint, response) {
+  if (!response.url) return response.redirected !== true;
+  try {
+    return new URL(response.url).origin === new URL(endpoint).origin;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function exactUrlResponse(endpoint, response) {
   if (!response.url) return response.redirected !== true;
   try {
     const expected = new URL(endpoint);
@@ -611,7 +840,7 @@ function validFeed(feed) {
     [
       "schema_org_place_html",
       "schema_org_place_json",
-      SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER,
+      EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER,
       MAP_LINKED_PLACE_ADAPTER,
     ].includes(feed.adapter) &&
     safeHttpsUrl(feed.endpoint) &&
@@ -629,7 +858,7 @@ function validProbeFeed(feed) {
     [
       "schema_org_place_html",
       "schema_org_place_json",
-      SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER,
+      EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER,
       MAP_LINKED_PLACE_ADAPTER,
     ].includes(feed.adapter) &&
     safeHttpsUrl(feed.endpoint) &&
@@ -768,15 +997,15 @@ function compact(value) {
 
 module.exports = {
   ENABLE_ENV_KEY,
+  EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER,
   MAX_LIST_DETAIL_LINKS,
   PLACE_TYPE_MAP,
-  SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER,
   collectReviewedPlaceFeed,
   collectReviewedPlaceFeedOutcome,
   createReviewedPlaceSource,
+  extractExperienceCardDetailPointers,
   extractSchemaOrgPlaces,
-  extractSchemaOrgItemListDetailUrls,
-  inspectSchemaOrgPlaceListDetailPayload,
+  inspectExperienceCardPlaceListDetailPayload,
   inspectSchemaOrgPlacePayload,
   mapSchemaOrgPlaceToRecord,
   parseSchemaOrgPlacesFromHtml,

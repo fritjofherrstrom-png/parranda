@@ -10,6 +10,7 @@ const {
   applyRobotsPolicy,
   buildLocalEventDiscoveryQueryPlan,
   buildLocalEventDiscoveryQueries,
+  DEFAULT_MAX_BYTES,
   extractEventWebsiteSeeds,
   extractCalendarPageLinks,
   fetchScoutPage,
@@ -17,6 +18,10 @@ const {
   isScoutablePublicUrl,
   scoutLocalEventSources,
 } = require("../server/pulse-sources/local-event-source-scout");
+
+test("default source inspection budget covers the observed bounded official catalog", () => {
+  assert.equal(DEFAULT_MAX_BYTES, 2 * 1024 * 1024);
+});
 
 function response(body, { status = 200, contentType = "text/html", length = null } = {}) {
   return {

@@ -355,7 +355,7 @@ test("map-linked approval binds the v2 parser contract into the reviewed profile
 
 test("list-detail approval binds its exact parser contract into worker refresh state", () => {
   const discovered = placeSourceProfile();
-  discovered.source_families[0].candidates[0].adapter = "schema_org_place_list_detail_html";
+  discovered.source_families[0].candidates[0].adapter = "experience_card_place_list_detail_html";
   discovered.runtime_review = {
     status: "unreviewed",
     reviewed_at: null,
@@ -383,7 +383,7 @@ test("list-detail approval binds its exact parser contract into worker refresh s
 
   assert.equal(
     approved.profile.runtime_review.place_sources[0].adapter_contract_revision,
-    "schema-org-place-list-detail-html-v1",
+    "experience-card-place-list-detail-html-v1",
   );
   assert.equal(approved.profile.runtime_review.place_sources[0].max_items, 12);
 });
@@ -583,8 +583,8 @@ test("persistent place reads require current approval, revision and freshness", 
   const staleListDetailContract = {
     ...valid,
     id: "reviewed-place:guide:old-list-detail-contract",
-    source_adapter: "schema_org_place_list_detail_html",
-    source_adapter_contract_revision: "schema-org-place-list-detail-html-v0",
+    source_adapter: "experience_card_place_list_detail_html",
+    source_adapter_contract_revision: "experience-card-place-list-detail-html-v0",
   };
   const catalog = createSourceProfileCatalog({
     now: () => NOW,
@@ -646,8 +646,8 @@ test("the worker refuses a list-detail target bound to an unknown contract", asy
     now: () => NOW,
     query: async (sql, values) => {
       assert.equal(sql, CLAIM_PLACE_SOURCE_REFRESH_SQL);
-      assert.ok(values[3].includes("schema-org-place-list-detail-html-v1"));
-      assert.ok(!values[3].includes("schema-org-place-list-detail-html-v0"));
+      assert.ok(values[3].includes("experience-card-place-list-detail-html-v1"));
+      assert.ok(!values[3].includes("experience-card-place-list-detail-html-v0"));
       return { rows: [{
         profile_key: "place-source-profile-v1:test-region",
         source_id: "regional-list-detail-feed",
@@ -656,8 +656,8 @@ test("the worker refuses a list-detail target bound to an unknown contract", asy
         feed: {
           id: "regional-list-detail-feed",
           endpoint: "https://guide.example/places",
-          adapter: "schema_org_place_list_detail_html",
-          adapter_contract_revision: "schema-org-place-list-detail-html-v0",
+          adapter: "experience_card_place_list_detail_html",
+          adapter_contract_revision: "experience-card-place-list-detail-html-v0",
           source_identity: "guide.example",
         },
         lease_token: values[1],

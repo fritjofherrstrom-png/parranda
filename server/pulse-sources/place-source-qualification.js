@@ -108,7 +108,7 @@ function bindManifestCandidate(manifest, candidate) {
     maxItems: clampInteger(
       manifest.max_items,
       1,
-      adapter === "schema_org_place_list_detail_html" ? 12 : 100,
+      adapter === "experience_card_place_list_detail_html" ? 12 : 100,
     ),
   };
 }
@@ -327,7 +327,7 @@ function normalizeAdapter(value) {
   return [
     "schema_org_place_html",
     "schema_org_place_json",
-    "schema_org_place_list_detail_html",
+    "experience_card_place_list_detail_html",
     "map_linked_place_html",
   ]
     .includes(value) ? value : null;

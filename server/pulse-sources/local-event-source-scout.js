@@ -39,7 +39,11 @@ const MAX_SEEDS = 30;
 // Modern server-rendered calendars can carry factual program data in a larger
 // HTML shell. Keep the probe bounded, but large enough to inspect a reviewed
 // public program before classifying it as unsupported.
-const DEFAULT_MAX_BYTES = 1024 * 1024;
+// The first implemented list -> detail source shape was observed on a 1.48 MB
+// server-rendered official destination catalog. Keep discovery capped at the
+// existing two-megabyte hard limit so that exact source is inspectable without
+// turning the scout into an unbounded crawler.
+const DEFAULT_MAX_BYTES = 2 * 1024 * 1024;
 const MAX_BYTES = 2 * 1024 * 1024;
 const DEFAULT_MAX_LINKED_PAGES_PER_SEED = 2;
 const MAX_LINKED_PAGES_PER_SEED = 4;

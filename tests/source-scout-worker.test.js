@@ -129,25 +129,21 @@ test("worker refresh persists exact approved-profile provenance through the cata
 test("worker owns bounded list-detail traversal and persists only exact detail records", async () => {
   const endpoint = "https://guide.example/places";
   const detailUrls = [`${endpoint}/museum`, `${endpoint}/park`];
-  const jsonLd = (payload) => `<script type="application/ld+json">${JSON.stringify(payload)}</script>`;
+  const card = (url, name, type) => `<div class="vs-experience-card" data-title="${name.toLowerCase()}" data-categories="place-en" data-subcategories="${type.toLowerCase()}-en">
+    <div class="vs-title">${name}</div>
+    <div class="vs-categories"><span class="vs-category primary">Activities</span><span class="vs-category">${type}</span></div>
+    <a href="${url}" class="vs-readmore">Read more</a>
+  </div>`;
+  const detail = (url, name, type, lat, lng) => `<html><head><link rel="canonical" href="${url}"></head><body>
+    <h1 class="postHerosection__heroHeading">${name}</h1>
+    <div class="experience-taxonomy"><span class="experience-subcategory">${type}</span></div>
+    <h2 class="experience-title">${name}</h2>
+    <div class="experience-map" data-lat="${lat}" data-lng="${lng}"></div>
+  </body></html>`;
   const bodies = new Map([
-    [endpoint, jsonLd({
-      "@context": "https://schema.org",
-      "@type": "ItemList",
-      itemListElement: detailUrls.map((url) => ({ "@type": "ListItem", item: url })),
-    })],
-    [detailUrls[0], jsonLd({
-      "@type": "Museum",
-      "@id": detailUrls[0],
-      name: "Worker Museum",
-      geo: { latitude: 55.5, longitude: 13.5 },
-    })],
-    [detailUrls[1], jsonLd({
-      "@type": "Park",
-      "@id": detailUrls[1],
-      name: "Worker Park",
-      geo: { latitude: 55.51, longitude: 13.51 },
-    })],
+    [endpoint, `${card(detailUrls[0], "Worker Museum", "Museum")}${card(detailUrls[1], "Worker Park", "Park")}`],
+    [detailUrls[0], detail(detailUrls[0], "Worker Museum", "Museum", 55.5001, 13.5001)],
+    [detailUrls[1], detail(detailUrls[1], "Worker Park", "Park", 55.5101, 13.5101)],
   ]);
   const target = {
     profile_key: "place-source-profile-v1:list-detail",
@@ -158,8 +154,8 @@ test("worker owns bounded list-detail traversal and persists only exact detail r
       id: "reviewed-list-detail",
       label: "Reviewed list detail",
       endpoint,
-      adapter: "schema_org_place_list_detail_html",
-      adapter_contract_revision: "schema-org-place-list-detail-html-v1",
+      adapter: "experience_card_place_list_detail_html",
+      adapter_contract_revision: "experience-card-place-list-detail-html-v1",
       bbox: [13, 55, 14, 56],
       evidence_family: "official",
       source_tier: "official",
@@ -199,7 +195,7 @@ test("worker owns bounded list-detail traversal and persists only exact detail r
   assert.deepEqual(fetched, [endpoint, ...detailUrls]);
   assert.deepEqual(writes[0].records.map((record) => record.name), ["Worker Museum", "Worker Park"]);
   assert.ok(writes[0].records.every(
-    (record) => record.source_adapter_contract_revision === "schema-org-place-list-detail-html-v1",
+    (record) => record.source_adapter_contract_revision === "experience-card-place-list-detail-html-v1",
   ));
 });
 

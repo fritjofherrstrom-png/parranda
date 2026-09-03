@@ -195,14 +195,17 @@ display/corroboration evidence. This is generic for any approved geography.
 
 The generic worker now proactively searches for local-language and English
 place-guide interfaces, follows bounded same-origin guide links, and recognizes
-only multi-item schema.org lists or map-linked cards with stable identities plus
-exact in-scope coordinates. Exact endpoint/adapter/publisher/bounds candidates
+only multi-item schema.org lists, the closed experience-card list/detail shape,
+or map-linked cards with stable identities plus exact in-scope coordinates.
+Exact endpoint/adapter/publisher/bounds candidates
 are re-probed on separate days and promoted only to `qualified_for_review`; no
 place source auto-activates or enters probation. This closes one additional
-common list format, not coverage itself. A second closed adapter handles
-pointer-only schema.org `ItemList` pages with at most 12 exact same-origin
-detail URLs, a shared timeout/byte budget and one identity-matching Place node
-per detail. The next source slices are source operation across real
+common list format, not coverage itself. A second closed adapter handles the
+officially observed balanced `vs-experience-card` shape with at most 12 exact
+same-origin detail URLs, a shared timeout/four-megabyte ceiling and exact
+canonical/name/category/coordinate agreement per detail. It is a versioned DOM
+shape, not a publisher, city or hostname branch. The next source slices are
+source operation across real
 geographies, evidence-backed adapters for materially different shapes where
 exact coordinates exist, and conservative cross-provider aliases—not more
 route synthesis.
@@ -226,7 +229,7 @@ the old #244–#249 migration sequence as current work.
 
 Priorities now are:
 
-1. Operate the versioned bounded schema.org list→detail adapter across a large
+1. Operate the versioned bounded experience-card list→detail adapter across a large
    unsupported place and a smaller/regional place through discovery,
    separate-day qualification, operator review and persistent worker refresh.
 2. Measure those sources' coverage, refresh health and route contribution; add

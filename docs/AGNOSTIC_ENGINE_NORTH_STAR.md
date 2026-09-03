@@ -133,7 +133,7 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 - **Reviewed local place-source bridge (2026-08).** A Source Catalog profile can
   now bind an exact, fresh, geo-bounded official/editorial place-list endpoint
   to the closed `schema_org_place_html`, `schema_org_place_json`,
-  `schema_org_place_list_detail_html` or `map_linked_place_html` adapter. The
+  `experience_card_place_list_detail_html` or `map_linked_place_html` adapter. The
   adapters extract only allowlisted place
   types, stable source identities and exact coordinates from JSON-LD or from a
   same-card heading/category/detail/map tuple, cap bytes/items/radius, block
@@ -145,13 +145,16 @@ The roadmap numbering below predates the merge order. The actual sequence was:
   fragments cannot be joined. The approved adapter-contract revision is checked
   at profile read, worker claim and reservoir read, so v1 approvals, targets and
   rows fail closed until rediscovery and explicit re-review.
-  `schema-org-place-list-detail-html-v1` is the only fan-out shape: a
-  pointer-only schema.org `ItemList` may name at most 12 exact same-origin
-  HTTPS detail URLs. One shared timeout and byte budget covers the list and
-  sequential details. A detail contributes only when exactly one allowlisted
-  Place node carries its own name, type, exact coordinates and an identity
-  equal to the fetched URL. The background worker owns traversal; Planner never
-  crawls on a request.
+  `experience-card-place-list-detail-html-v1` is the only fan-out shape. It is
+  the closed server-rendered card contract observed on an official regional
+  destination catalog: each balanced `vs-experience-card` must bind one title,
+  one allowlisted subcategory and one exact same-origin `vs-readmore` detail
+  identity. At most 12 details are fetched sequentially under one shared
+  timeout and four-megabyte ceiling. A detail contributes only when its exact
+  canonical URL, hero/content titles, allowlisted subcategory and one published
+  `experience-map` coordinate pair all agree with the list card. The CSS/DOM
+  contract is version-bound, not a hostname or city rule. The background worker
+  owns traversal; Planner never crawls on a request.
   The rows join the existing external candidate reservoir; there is no parallel
   crawler or city branch. An official operator-reviewed source can pass route
   gates while remaining explicitly `human_verified:false`; editorial-only

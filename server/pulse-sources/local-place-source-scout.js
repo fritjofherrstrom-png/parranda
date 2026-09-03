@@ -4,8 +4,8 @@ const { createHash } = require("node:crypto");
 
 const {
   inspectSchemaOrgPlacePayload,
-  inspectSchemaOrgPlaceListDetailPayload,
-  SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER,
+  EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER,
+  inspectExperienceCardPlaceListDetailPayload,
 } = require("../place-candidates/schema-org-place-source");
 const {
   MAP_LINKED_PLACE_ADAPTER,
@@ -87,9 +87,9 @@ function inspectPlaceSourcePage({
     adapter === "schema_org_place_html" &&
     (summary.status !== "ok" || summary.accepted_place_count < MIN_PLACE_LIST_ITEMS)
   ) {
-    const listDetail = inspectSchemaOrgPlaceListDetailPayload(body, { endpoint });
+    const listDetail = inspectExperienceCardPlaceListDetailPayload(body, { endpoint });
     if (listDetail.status === "ok" && listDetail.detail_link_count >= MIN_PLACE_LIST_ITEMS) {
-      adapter = SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER;
+      adapter = EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER;
       summary = {
         ...listDetail,
         accepted_place_count: 0,
@@ -111,7 +111,7 @@ function inspectPlaceSourcePage({
       summary = mapLinked;
     }
   }
-  const sourceShapeCount = adapter === SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER
+  const sourceShapeCount = adapter === EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER
     ? summary.detail_link_count
     : summary.accepted_place_count;
   if (summary.status !== "ok" || sourceShapeCount < MIN_PLACE_LIST_ITEMS) {
@@ -171,7 +171,7 @@ function buildPlaceManifestCandidate(candidate, { seed = {}, bbox = null } = {})
     ![
       "schema_org_place_html",
       "schema_org_place_json",
-      SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER,
+      EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER,
       MAP_LINKED_PLACE_ADAPTER,
     ]
       .includes(candidate.adapter) ||
@@ -190,7 +190,7 @@ function buildPlaceManifestCandidate(candidate, { seed = {}, bbox = null } = {})
     source_identity: candidate.source_identity,
     priority: 100,
     max_items: Math.min(
-      candidate.adapter === SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER ? 12 : 100,
+      candidate.adapter === EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER ? 12 : 100,
       Math.max(
         MIN_PLACE_LIST_ITEMS,
         candidate.detail_link_count || candidate.accepted_place_count,

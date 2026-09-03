@@ -6,15 +6,16 @@ const test = require("node:test");
 const { createSourceCache } = require("../server/place-candidates/source-cache");
 const {
   collectReviewedPlaceFeed,
+  collectReviewedPlaceFeedOutcome,
   createReviewedPlaceSource,
-  extractSchemaOrgItemListDetailUrls,
+  EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER,
+  extractExperienceCardDetailPointers,
   extractSchemaOrgPlaces,
-  inspectSchemaOrgPlaceListDetailPayload,
+  inspectExperienceCardPlaceListDetailPayload,
   MAX_LIST_DETAIL_LINKS,
   parseSchemaOrgPlacesFromHtml,
   probeSchemaOrgPlaceFeed,
   resolveDefaultReviewedPlaceSource,
-  SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER,
 } = require("../server/place-candidates/schema-org-place-source");
 
 function feed(overrides = {}) {
@@ -66,12 +67,40 @@ function htmlResponse(body, url) {
   });
 }
 
-function listDetailHtml(urls) {
-  return html({
-    "@context": "https://schema.org",
-    "@type": "ItemList",
-    itemListElement: urls.map((url) => ({ "@type": "ListItem", item: url })),
-  });
+function experienceCard({ url, name, type }) {
+  const slug = `${type.toLowerCase().replace(/\s+/g, "-")}-en`;
+  return `<div class="vs-experience-card" data-title="${name.toLowerCase()}" data-categories="place-en" data-subcategories="${slug}">
+    <div class="vs-content">
+      <div class="vs-title">${name}</div>
+      <div class="vs-categories"><span class="vs-category primary">Activities</span><span class="vs-category">${type}</span></div>
+      <a href="${url}" class="vs-readmore">Read more</a>
+    </div>
+  </div>`;
+}
+
+function experienceList(items) {
+  return `<html><body>${items.map(experienceCard).join("\n")}</body></html>`;
+}
+
+function experienceDetail({
+  url,
+  name,
+  type,
+  lat = 55.5001,
+  lng = 13.5001,
+  canonical = url,
+  heroName = name,
+  contentName = name,
+  extra = "",
+}) {
+  return `<html><head><link rel="canonical" href="${canonical}"></head><body>
+    <h1 class="postHerosection postHerosection__heroHeading">${heroName}</h1>
+    <div class="experience-meta-container">
+      <div class="experience-taxonomy"><span class="experience-category">Activities</span><span class="experience-subcategory">${type}</span></div>
+      <h2 class="experience-title">${contentName}</h2>
+      <div class="experience-map" data-lat="${lat}" data-lng="${lng}"></div>
+    </div>${extra}
+  </body></html>`;
 }
 
 test("JSON-LD extraction supports graph and ItemList envelopes but rejects generic businesses", () => {
@@ -94,56 +123,75 @@ test("HTML extraction ignores prose and survives one malformed JSON-LD block", (
   assert.equal(parsed.places.length, 1);
 });
 
-test("list-detail inspection accepts only a capped same-origin schema.org ItemList", () => {
-  const urls = [
-    "/places/one",
-    "https://guide.example/places/two#section",
-    "https://other.example/places/three",
-    "http://guide.example/places/four",
-    "/places/one",
-    ...Array.from({ length: 20 }, (_, index) => `/places/more-${index}`),
+test("list-detail inspection accepts only capped same-origin verified experience cards", () => {
+  const items = [
+    { url: "/places/one", name: "One Museum", type: "Museum" },
+    { url: "https://guide.example/places/two#section", name: "Two Park", type: "Park" },
+    { url: "https://other.example/places/three", name: "Foreign Park", type: "Park" },
+    { url: "http://guide.example/places/four", name: "Http Park", type: "Park" },
+    { url: "/places/one", name: "Duplicate Museum", type: "Museum" },
+    ...Array.from({ length: 20 }, (_, index) => ({
+      url: `/places/more-${index}`,
+      name: `More Museum ${index}`,
+      type: "Museum",
+    })),
   ];
-  const parsed = inspectSchemaOrgPlaceListDetailPayload(listDetailHtml(urls), {
+  const parsed = inspectExperienceCardPlaceListDetailPayload(experienceList(items), {
     endpoint: "https://guide.example/places",
   });
   assert.equal(parsed.status, "ok");
   assert.equal(parsed.detail_link_count, MAX_LIST_DETAIL_LINKS);
-  assert.deepEqual(parsed.detail_urls.slice(0, 2), [
-    "https://guide.example/places/one",
-    "https://guide.example/places/two",
+  assert.deepEqual(parsed.detail_pointers.slice(0, 2), [
+    { url: "https://guide.example/places/one", name: "One Museum", type: "museum" },
+    { url: "https://guide.example/places/two", name: "Two Park", type: "park" },
   ]);
-  assert.deepEqual(extractSchemaOrgItemListDetailUrls([], {
+  assert.deepEqual(extractExperienceCardDetailPointers("", {
     endpoint: "https://guide.example/places",
   }), []);
+});
+
+test("experience-card inspection never joins title, category and link across sibling cards", () => {
+  const source = `<div class="catalog-wrapper">
+    <div class="vs-experience-card" data-title="split museum" data-categories="place-en" data-subcategories="museum-en">
+      <div class="vs-title">Split Museum</div>
+    </div>
+    <div class="vs-experience-card" data-title="other park" data-categories="place-en" data-subcategories="park-en">
+      <div class="vs-categories"><span class="vs-category">Park</span></div>
+      <a href="/places/other" class="vs-readmore">Read more</a>
+    </div>
+  </div>`;
+  assert.deepEqual(inspectExperienceCardPlaceListDetailPayload(source, {
+    endpoint: "https://guide.example/places",
+  }), {
+    status: "empty",
+    detail_link_count: 0,
+    detail_pointers: [],
+    reason: "bounded_experience_card_list_not_detected",
+  });
 });
 
 test("bounded list-detail collection follows exact same-origin details under one byte budget", async () => {
   const endpoint = "https://guide.example/places";
   const bodies = new Map([
-    [endpoint, listDetailHtml([
-      "/places/museum",
-      "/places/park",
-      "https://other.example/places/foreign",
-      "/places/third",
+    [endpoint, experienceList([
+      { url: "/places/museum", name: "Detail Museum", type: "Museum" },
+      { url: "/places/park", name: "Detail Park", type: "Park" },
+      { url: "https://other.example/places/foreign", name: "Foreign", type: "Park" },
+      { url: "/places/third", name: "Detail Cafe", type: "Cafe" },
     ])],
-    ["https://guide.example/places/museum", html(place({
-      "@id": "https://guide.example/places/museum",
-      name: "Detail Museum",
-    }))],
-    ["https://guide.example/places/park", html(place({
-      "@type": "Park",
-      "@id": "https://guide.example/places/park",
-      name: "Detail Park",
-    }))],
-    ["https://guide.example/places/third", html(place({
-      "@type": "CafeOrCoffeeShop",
-      "@id": "https://guide.example/places/third",
-      name: "Detail Cafe",
-    }))],
+    ["https://guide.example/places/museum", experienceDetail({
+      url: "https://guide.example/places/museum", name: "Detail Museum", type: "Museum",
+    })],
+    ["https://guide.example/places/park", experienceDetail({
+      url: "https://guide.example/places/park", name: "Detail Park", type: "Park",
+    })],
+    ["https://guide.example/places/third", experienceDetail({
+      url: "https://guide.example/places/third", name: "Detail Cafe", type: "Cafe",
+    })],
   ]);
   const requests = [];
   const records = await collectReviewedPlaceFeed(feed({
-    adapter: SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER,
+    adapter: EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER,
     max_items: 2,
   }), {
     fetcher: async (url, options) => {
@@ -169,29 +217,35 @@ test("bounded list-detail collection follows exact same-origin details under one
 test("list and details share one aggregate byte ceiling", async () => {
   const endpoint = "https://guide.example/places";
   const detailUrls = [`${endpoint}/one`, `${endpoint}/two`];
-  const listBody = listDetailHtml(detailUrls);
-  const baseDetails = detailUrls.map((url, index) => html(place({
-    "@id": url,
+  const listBody = experienceList(detailUrls.map((url, index) => ({
+    url,
     name: `Detail ${index + 1}`,
+    type: "Museum",
   })));
-  const remaining = 1024 - Buffer.byteLength(listBody, "utf8");
+  const baseDetails = detailUrls.map((url, index) => experienceDetail({
+    url,
+    name: `Detail ${index + 1}`,
+    type: "Museum",
+  }));
+  const byteCeiling = 2048;
+  const remaining = byteCeiling - Buffer.byteLength(listBody, "utf8");
   const targetDetailBytes = Math.floor(remaining * 0.6);
   const details = baseDetails.map((body) => {
     const fillerLength = Math.max(0, targetDetailBytes - Buffer.byteLength(body, "utf8") - 7);
     return `${body}<!--${"x".repeat(fillerLength)}-->`;
   });
-  assert.ok(Buffer.byteLength(listBody, "utf8") + Buffer.byteLength(details[0], "utf8") <= 1024);
+  assert.ok(Buffer.byteLength(listBody, "utf8") + Buffer.byteLength(details[0], "utf8") <= byteCeiling);
   assert.ok(
     Buffer.byteLength(listBody, "utf8") +
     Buffer.byteLength(details[0], "utf8") +
-    Buffer.byteLength(details[1], "utf8") > 1024,
+    Buffer.byteLength(details[1], "utf8") > byteCeiling,
   );
   const bodies = new Map([[endpoint, listBody], ...detailUrls.map((url, index) => [url, details[index]])]);
   const records = await collectReviewedPlaceFeed(feed({
-    adapter: SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER,
+    adapter: EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER,
     max_items: 2,
   }), {
-    maxBytes: 1024,
+    maxBytes: byteCeiling,
     fetcher: async (url) => htmlResponse(bodies.get(url), url),
   });
 
@@ -204,17 +258,22 @@ test("list-detail rows fail closed on identity, entity, content-type and redirec
     (slug) => `${endpoint}/${slug}`,
   );
   const bodies = new Map([
-    [endpoint, listDetailHtml(urls)],
-    [urls[0], html(place({ "@id": `${endpoint}/someone-else` }))],
-    [urls[1], html([
-      place({ "@id": urls[1], name: "First identity" }),
-      place({ "@id": urls[1], name: "Second identity" }),
-    ])],
-    [urls[2], html(place({ "@id": urls[2] }))],
-    [urls[3], html(place({ "@id": urls[3] }))],
+    [endpoint, experienceList(urls.map((url, index) => ({
+      url,
+      name: `Detail ${index}`,
+      type: "Museum",
+    })))],
+    [urls[0], experienceDetail({
+      url: urls[0], name: "Detail 0", type: "Museum", canonical: `${endpoint}/someone-else`,
+    })],
+    [urls[1], experienceDetail({
+      url: urls[1], name: "Detail 1", type: "Museum", heroName: "Another identity",
+    })],
+    [urls[2], experienceDetail({ url: urls[2], name: "Detail 2", type: "Museum" })],
+    [urls[3], experienceDetail({ url: urls[3], name: "Detail 3", type: "Museum" })],
   ]);
-  const records = await collectReviewedPlaceFeed(feed({
-    adapter: SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER,
+  const outcome = await collectReviewedPlaceFeedOutcome(feed({
+    adapter: EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER,
   }), {
     fetcher: async (url) => {
       if (url === urls[2]) {
@@ -229,7 +288,28 @@ test("list-detail rows fail closed on identity, entity, content-type and redirec
       return htmlResponse(bodies.get(url), url);
     },
   });
-  assert.deepEqual(records, []);
+  assert.deepEqual(outcome, { status: "empty", records: [] });
+});
+
+test("a list whose entire detail transport fails is failed, not a healthy empty source", async () => {
+  const endpoint = "https://guide.example/places";
+  const urls = [`${endpoint}/one`, `${endpoint}/two`];
+  const outcome = await collectReviewedPlaceFeedOutcome(feed({
+    adapter: EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER,
+    max_items: 2,
+  }), {
+    fetcher: async (url) => url === endpoint
+      ? htmlResponse(experienceList([
+          { url: urls[0], name: "One Museum", type: "Museum" },
+          { url: urls[1], name: "Two Park", type: "Park" },
+        ]), endpoint)
+      : response("{}", {
+          url,
+          headers: { get: () => "application/json" },
+        }),
+  });
+
+  assert.deepEqual(outcome, { status: "failed", records: [] });
 });
 
 test("collector emits only bounded factual route records with attribution", async () => {
@@ -377,7 +457,7 @@ test("list-detail traversal is never warmed by the legacy request-path source br
   const source = createReviewedPlaceSource({
     sourceCatalog: {
       listApprovedPlaceFeedsForAnchor: async () => [feed({
-        adapter: SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER,
+        adapter: EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER,
       })],
     },
     env: {},
