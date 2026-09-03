@@ -58,15 +58,36 @@ const DEFAULT_OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
 // lever is the persistent disk cache (one slow load per place, then cached) + a
 // faster/self-hosted Overpass. A deploy that runs such mirrors lists them via
 // PARRANDA_OVERPASS_ENDPOINTS to get HA failover.
+//
+// Measured correction: when overpass-api.de became globally unreachable, the
+// disk cache did NOT carry a cold place — a cold cache plus a dead primary lost
+// the request outright. What actually kept days alive was a second SOURCE
+// (Overture), not a second Overpass mirror. Cross-source rescue is therefore
+// the primary robustness lever here; see composeOpenDataLoaders.
 const DEFAULT_OVERPASS_FALLBACKS = [];
 // Overpass (like Nominatim, see place-resolver.js) rejects requests without an
 // identifying User-Agent with HTTP 406 — without this header every live call
 // fails closed and the loader silently returns [].
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
-// A single-day walking loop ranges well beyond 1 km from the anchor; 1.5 km
-// reach catches the scenic/cultural/second-hand places that cluster outside a
-// tight centre without pulling in a different district. Generic — every city.
+// The aperture a day is collected from, when the caller says nothing about how
+// far the user wants to walk. It is a FLOOR, not the answer: see
+// budgetAwareRadiusKm below.
+//
+// This constant used to be the whole story, justified as "1.5 km reach catches
+// the scenic/cultural/second-hand places that cluster outside a tight centre".
+// Product QA across Stockholm, Malmö, Ystad and Kivik measured that claim and
+// it does not hold for a long day: a 9 km request drew from exactly the same
+// 1.5 km disc as a 4 km request, so candidate span could not exceed ~3 km,
+// `can_support_target` was false in 84 of 87 scenarios that reported it, and a
+// longer budget produced a longer route in ZERO of 60 comparable groups.
 const DEFAULT_RADIUS_KM = 1.5;
+// A day is a loop back to where it started, so the useful reach from the anchor
+// is roughly a quarter of the distance walked: span ~= 2 * radius ~= target / 2,
+// leaving the rest of the budget for the legs between stops. Below the default
+// this changes nothing (a short day keeps today's aperture); above it the disc
+// grows with the ask and stays inside the reviewed ceiling. Generic — derived
+// from the requested budget alone, never from a place.
+const RADIUS_PER_WALKING_KM = 0.25;
 const DEFAULT_LIMIT = 25;
 // How many raw elements to ask Overpass for before balancing down to the final
 // limit. Wider than the limit so scarce categories survive a dense centre;
@@ -258,11 +279,31 @@ function chooseExpansion(first, { baseRadiusKm, requestedIntents, origin = null,
   return null;
 }
 
+/**
+ * How far from the anchor to collect candidates for a day of `targetKm`.
+ *
+ * A day returns to where it began, so the reach that matters is about a quarter
+ * of the distance walked — that puts the candidate span at roughly half the
+ * budget and leaves the rest for the legs between stops. Never narrower than
+ * the default (a short day is unchanged) and never past the reviewed ceiling.
+ *
+ * Depends only on the requested budget: no place, no city, no source.
+ */
+function budgetAwareRadiusKm(walkingTargetBand, defaultRadiusKm = DEFAULT_RADIUS_KM) {
+  const targetKm = Number(walkingTargetBand?.targetKm);
+  if (!Number.isFinite(targetKm) || targetKm <= 0) return defaultRadiusKm;
+  return clamp(
+    Math.max(defaultRadiusKm, targetKm * RADIUS_PER_WALKING_KM),
+    0.1,
+    MAX_RADIUS_KM,
+  );
+}
+
 function createOpenDataLoader({
   fetcher = typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null,
   endpoint = null,
   endpoints = null,
-  radiusKm = DEFAULT_RADIUS_KM,
+  radiusKm = null,
   limit = DEFAULT_LIMIT,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   userAgent = DEFAULT_USER_AGENT,
@@ -272,7 +313,9 @@ function createOpenDataLoader({
   if (typeof fetcher !== "function") {
     return null; // honest fail closed: no fetcher → no loader
   }
-  const boundedRadiusKm = clamp(radiusKm, 0.1, MAX_RADIUS_KM);
+  // An operator/test that pins a radius keeps it exactly. Otherwise the aperture
+  // is derived per request from the walking budget the caller asked for.
+  const pinnedRadiusKm = Number.isFinite(radiusKm) ? clamp(radiusKm, 0.1, MAX_RADIUS_KM) : null;
   const boundedLimit = Math.max(1, Math.min(Math.floor(limit), MAX_LIMIT));
   const boundedTimeoutMs = Math.max(50, Math.floor(timeoutMs));
   const boundedStaleIfErrorMs = Math.max(0, Math.floor(Number(staleIfErrorMs) || 0));
@@ -411,8 +454,11 @@ function createOpenDataLoader({
     const normalizedRequestedIntents = normalizeRequestedIntents(requestedIntents);
     const normalizedWalkingTargetBand = normalizeWalkingTargetBand(walkingTargetBand);
     const origin = { lat, lng };
+    // The aperture this request is answered from. A pinned radius wins; else it
+    // follows the budget the caller actually asked for.
+    const requestRadiusKm = pinnedRadiusKm ?? budgetAwareRadiusKm(normalizedWalkingTargetBand);
 
-    const first = await fetchAtRadius(lat, lng, Math.round(boundedRadiusKm * 1000), {
+    const first = await fetchAtRadius(lat, lng, Math.round(requestRadiusKm * 1000), {
       walkingTargetBand: normalizedWalkingTargetBand,
     });
     const initialProfile = supplyProfile(first, normalizedRequestedIntents);
@@ -421,13 +467,13 @@ function createOpenDataLoader({
       walkingTargetBand: normalizedWalkingTargetBand,
     });
     const expansion = chooseExpansion(first, {
-      baseRadiusKm: boundedRadiusKm,
+      baseRadiusKm: requestRadiusKm,
       requestedIntents: normalizedRequestedIntents,
       origin,
       walkingTargetBand: normalizedWalkingTargetBand,
     });
     let selected = first;
-    let selectedRadiusKm = boundedRadiusKm;
+    let selectedRadiusKm = requestRadiusKm;
     let selectionReason = expansion
       ? "wider_supply_not_richer"
       : typeof first.loader_status === "string" && first.loader_status.startsWith("error")
@@ -442,7 +488,7 @@ function createOpenDataLoader({
       // A custom base can sit above the ordinary 3 km expansion target. In that
       // case use the regional ceiling rather than repeating the same query.
       const widerKm = Math.min(
-        expansion.radius_km > boundedRadiusKm ? expansion.radius_km : MAX_RADIUS_KM,
+        expansion.radius_km > requestRadiusKm ? expansion.radius_km : MAX_RADIUS_KM,
         MAX_RADIUS_KM,
       );
       const expansionQueryIntents = expansion.trigger === "requested_intent_gap"
@@ -470,12 +516,12 @@ function createOpenDataLoader({
       }
     }
     return withLoaderMetadata(selected, {
-      base_radius_km: boundedRadiusKm,
+      base_radius_km: requestRadiusKm,
       selected_radius_km: selectedRadiusKm,
       attempted_radius_km: expansion
-        ? Math.min(expansion.radius_km > boundedRadiusKm ? expansion.radius_km : MAX_RADIUS_KM, MAX_RADIUS_KM)
+        ? Math.min(expansion.radius_km > requestRadiusKm ? expansion.radius_km : MAX_RADIUS_KM, MAX_RADIUS_KM)
         : null,
-      expansion_applied: selectedRadiusKm > boundedRadiusKm,
+      expansion_applied: selectedRadiusKm > requestRadiusKm,
       expansion_trigger: expansion?.trigger || null,
       selection_reason: selectionReason,
       anchor_mode: normalizeAnchorMode(anchorMode),
@@ -608,7 +654,11 @@ function createOpenDataLoader({
     const normalizedRequestedIntents = normalizeRequestedIntents(requestedIntents);
     const normalizedWalkingTargetBand = normalizeWalkingTargetBand(request.walkingTargetBand);
     const targetKey = normalizedWalkingTargetBand ? normalizedWalkingTargetBand.targetKm : "none";
-    const key = `v7:${lat.toFixed(3)},${lng.toFixed(3)}:r${boundedRadiusKm}:l${boundedLimit}:m${normalizeAnchorMode(anchorMode)}:i${normalizedRequestedIntents.join(".") || "all"}:t${targetKey}:s${spatialScopeCacheKey(spatialScope)}`;
+    // v8 invalidates every row collected before the aperture followed the
+    // walking budget: a `t9` row cached under v7 was gathered from a 1.5 km
+    // disc, so reusing it would keep serving the narrow day this change fixes.
+    const effectiveRadiusKm = pinnedRadiusKm ?? budgetAwareRadiusKm(normalizedWalkingTargetBand);
+    const key = `v8:${lat.toFixed(3)},${lng.toFixed(3)}:r${effectiveRadiusKm}:l${boundedLimit}:m${normalizeAnchorMode(anchorMode)}:i${normalizedRequestedIntents.join(".") || "all"}:t${targetKey}:s${spatialScopeCacheKey(spatialScope)}`;
     const entry = await cache.get(
       key,
       async () => {
@@ -1186,12 +1236,28 @@ function composeOpenDataLoaders(osmLoader, wikiSource = null, overtureSource = n
         ? selectedCoords
         : { lat: request.lat, lng: request.lng };
     const osmRecords = Array.isArray(osm) ? osm : [];
+    // The primary carried nothing: either it errored outright or it came back
+    // empty. Both leave the day dependent on another source.
+    const primaryFailed =
+      osmRecords.length === 0 ||
+      (typeof osm?.loader_status === "string" && osm.loader_status.startsWith("error"));
     const backgroundRecords = [];
     for (const source of sources) {
       const sameAsPrimary =
         Number(wikiAnchor.lat).toFixed(6) === Number(primaryAnchor.lat).toFixed(6) &&
         Number(wikiAnchor.lng).toFixed(6) === Number(primaryAnchor.lng).toFixed(6);
-      const alreadyLoaded = sameAsPrimary ? eagerLoads.get(source) : null;
+      // Reusing the eager result avoids a duplicate read — but an eager source
+      // that missed its cache returned [] and started an out-of-band warm. When
+      // the primary ALSO failed, reusing that [] is what loses the whole day:
+      // nothing is left to answer with, even though the warm is landing right
+      // now and the very next request will succeed. Observed live with the
+      // primary provider globally unreachable — first request 0 records,
+      // second identical request 80. So in exactly that case, read the source
+      // again: on a warmed cache it now answers, and if it is still cold it
+      // returns [] as before and we fail closed just the same.
+      const eagerResult = sameAsPrimary ? eagerLoads.get(source) : null;
+      const eagerWasEmpty = Array.isArray(await eagerResult) && (await eagerResult).length === 0;
+      const alreadyLoaded = primaryFailed && eagerWasEmpty ? null : eagerResult;
       const loaded = await Promise.resolve(
         alreadyLoaded || (typeof source === "function" ? source(wikiAnchor) : source.load(wikiAnchor, request)),
       ).catch(() => []);
