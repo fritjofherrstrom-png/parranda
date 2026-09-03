@@ -132,17 +132,26 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 
 - **Reviewed local place-source bridge (2026-08).** A Source Catalog profile can
   now bind an exact, fresh, geo-bounded official/editorial place-list endpoint
-  to the closed `schema_org_place_html`, `schema_org_place_json` or
-  `map_linked_place_html` adapter. The adapters extract only allowlisted place
+  to the closed `schema_org_place_html`, `schema_org_place_json`,
+  `schema_org_place_list_detail_html` or `map_linked_place_html` adapter. The
+  adapters extract only allowlisted place
   types, stable source identities and exact coordinates from JSON-LD or from a
   same-card heading/category/detail/map tuple, cap bytes/items/radius, block
-  off-origin redirects and warm the persistent cache outside the request path.
+  off-origin redirects and acquire outside the request path into persistent
+  worker-owned storage.
   `map-linked-place-html-v2` treats only balanced semantic items or explicitly
   card-marked elements as a card and requires a single unambiguous identity,
   category and coordinate pair inside it. Wrapping sections and sibling card
   fragments cannot be joined. The approved adapter-contract revision is checked
   at profile read, worker claim and reservoir read, so v1 approvals, targets and
   rows fail closed until rediscovery and explicit re-review.
+  `schema-org-place-list-detail-html-v1` is the only fan-out shape: a
+  pointer-only schema.org `ItemList` may name at most 12 exact same-origin
+  HTTPS detail URLs. One shared timeout and byte budget covers the list and
+  sequential details. A detail contributes only when exactly one allowlisted
+  Place node carries its own name, type, exact coordinates and an identity
+  equal to the fetched URL. The background worker owns traversal; Planner never
+  crawls on a request.
   The rows join the existing external candidate reservoir; there is no parallel
   crawler or city branch. An official operator-reviewed source can pass route
   gates while remaining explicitly `human_verified:false`; editorial-only
@@ -154,9 +163,10 @@ The roadmap numbering below predates the merge order. The actual sequence was:
   background worker populates a persistent freshness-bounded reservoir, and
   request composition reads only rows whose approval and profile revision are
   still current. Material drift demotes the profile and fails closed; no public
-  payload or discovery worker can self-approve. **Still missing:** detail-page fan-out,
-  exact coordinate recovery from other site formats, broader source operation,
-  and conservative alias resolution beyond geo+name/hard ids.
+  payload or discovery worker can self-approve. **Still missing:** operating
+  approved sources across larger and smaller real geographies, exact coordinate
+  recovery from other bounded site formats, and conservative alias resolution
+  beyond geo+name/hard ids.
 
 - **Next Pulse consumption step:** normalized `time_sensitive_events` can now become gated Pulse signals through the shared Pulse quality/ranking/masthead path. Only source-backed, non-stale, current/today/tonight events with at least medium confidence are eligible; stale/future/source-thin rows stay out. Salience is generic (timing relevance, source confidence/tier, place/coordinate evidence, route-role hint, recurrence/specificity) so unusually relevant happenings can rise above passive context without city-specific hacks. These signals remain Pulse context only: they do not become route stops, route candidates, dayflow composition inputs, or Planner mutations in this step.
 
@@ -169,7 +179,7 @@ Still missing before a true any-place Planner (now the next steps): stronger gen
 Audited 2026-06-19 from real Athens dogfooding (the felt experience was unchanged despite the convergence work). "Agnostic feel" has **three independent halves**; shipping one does not move the product on its own:
 
 1. **Synthesis** — compose an honest day from whatever candidates exist (route-engine `agnostic_compose` + daypart ordering #293 + readiness gate/observability #290/#292/#295). **Built and proven.** The #295 probe shows the engine path is promotion-`eligible` under adequate supply and `blocked` only by supply-driven caps. Deliberately gated/unpromoted per the guardrail.
-2. **Supply** — enough trusted source-backed candidates that even a thin city composes a *rich* day. **The broad global reservoir, reviewed-local-source bridge, operator approval, persistent worker lifecycle and proactive structured place-source discovery/qualification lane have landed; coverage and source quality remain the gating lever.** Schema.org and strict map-linked cards are supported. Next work is bounded list/detail adapters, operating reviewed sources across real geographies, and conservative entity resolution. No amount of extra synthesis substitutes for that work.
+2. **Supply** — enough trusted source-backed candidates that even a thin city composes a *rich* day. **The broad global reservoir, reviewed-local-source bridge, operator approval, persistent worker lifecycle and proactive structured place-source discovery/qualification lane have landed; coverage and source quality remain the gating lever.** Inline Schema.org, bounded Schema.org list→detail and strict map-linked cards are supported. Next work is operating reviewed sources across real geographies and conservative entity resolution. No amount of extra synthesis substitutes for that work.
 3. **Live-source fit** — pulse feeds that are culturally relevant, not administrative. Athens's wired City-of-Athens events calendar returns HTTP 200 but mostly municipal council meetings (`Συνεδρίαση …`) → "same pulse". This is source selection + salience (pulse lane), not a wiring failure.
 
 Evidence from Athens (registered, thin): **26 verified catalog items, 4 provisional candidates, 0 templates.** Two consequences make the synthesis work invisible there: (a) Athens is a **registered** city, so the entire any-place stack (convergence / promotion gate / observability) is gated behind `noRecognizedCity` and **never runs for it**; (b) #293 daypart ordering is **inert for Athens** because its 26 catalog items carry no `route_roles` (only the 4 provisional candidates do). So the synthesis we shipped does not touch Athens's felt experience.

@@ -7,10 +7,14 @@ const { createSourceCache } = require("../server/place-candidates/source-cache")
 const {
   collectReviewedPlaceFeed,
   createReviewedPlaceSource,
+  extractSchemaOrgItemListDetailUrls,
   extractSchemaOrgPlaces,
+  inspectSchemaOrgPlaceListDetailPayload,
+  MAX_LIST_DETAIL_LINKS,
   parseSchemaOrgPlacesFromHtml,
   probeSchemaOrgPlaceFeed,
   resolveDefaultReviewedPlaceSource,
+  SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER,
 } = require("../server/place-candidates/schema-org-place-source");
 
 function feed(overrides = {}) {
@@ -55,6 +59,21 @@ function response(body, overrides = {}) {
   };
 }
 
+function htmlResponse(body, url) {
+  return response(body, {
+    url,
+    headers: { get: (name) => String(name).toLowerCase() === "content-type" ? "text/html" : null },
+  });
+}
+
+function listDetailHtml(urls) {
+  return html({
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    itemListElement: urls.map((url) => ({ "@type": "ListItem", item: url })),
+  });
+}
+
 test("JSON-LD extraction supports graph and ItemList envelopes but rejects generic businesses", () => {
   const payload = {
     "@graph": [
@@ -73,6 +92,144 @@ test("HTML extraction ignores prose and survives one malformed JSON-LD block", (
   assert.equal(parsed.invalidScriptCount, 1);
   assert.equal(parsed.validScriptCount, 1);
   assert.equal(parsed.places.length, 1);
+});
+
+test("list-detail inspection accepts only a capped same-origin schema.org ItemList", () => {
+  const urls = [
+    "/places/one",
+    "https://guide.example/places/two#section",
+    "https://other.example/places/three",
+    "http://guide.example/places/four",
+    "/places/one",
+    ...Array.from({ length: 20 }, (_, index) => `/places/more-${index}`),
+  ];
+  const parsed = inspectSchemaOrgPlaceListDetailPayload(listDetailHtml(urls), {
+    endpoint: "https://guide.example/places",
+  });
+  assert.equal(parsed.status, "ok");
+  assert.equal(parsed.detail_link_count, MAX_LIST_DETAIL_LINKS);
+  assert.deepEqual(parsed.detail_urls.slice(0, 2), [
+    "https://guide.example/places/one",
+    "https://guide.example/places/two",
+  ]);
+  assert.deepEqual(extractSchemaOrgItemListDetailUrls([], {
+    endpoint: "https://guide.example/places",
+  }), []);
+});
+
+test("bounded list-detail collection follows exact same-origin details under one byte budget", async () => {
+  const endpoint = "https://guide.example/places";
+  const bodies = new Map([
+    [endpoint, listDetailHtml([
+      "/places/museum",
+      "/places/park",
+      "https://other.example/places/foreign",
+      "/places/third",
+    ])],
+    ["https://guide.example/places/museum", html(place({
+      "@id": "https://guide.example/places/museum",
+      name: "Detail Museum",
+    }))],
+    ["https://guide.example/places/park", html(place({
+      "@type": "Park",
+      "@id": "https://guide.example/places/park",
+      name: "Detail Park",
+    }))],
+    ["https://guide.example/places/third", html(place({
+      "@type": "CafeOrCoffeeShop",
+      "@id": "https://guide.example/places/third",
+      name: "Detail Cafe",
+    }))],
+  ]);
+  const requests = [];
+  const records = await collectReviewedPlaceFeed(feed({
+    adapter: SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER,
+    max_items: 2,
+  }), {
+    fetcher: async (url, options) => {
+      requests.push({ url, options });
+      return htmlResponse(bodies.get(url), url);
+    },
+  });
+
+  assert.deepEqual(requests.map((request) => request.url), [
+    endpoint,
+    "https://guide.example/places/museum",
+    "https://guide.example/places/park",
+  ]);
+  assert.ok(requests.every((request) => request.options.redirect === "error"));
+  assert.ok(requests.every((request) => request.options.signal === requests[0].options.signal));
+  assert.deepEqual(records.map((record) => [record.name, record.type]), [
+    ["Detail Museum", "museum"],
+    ["Detail Park", "park"],
+  ]);
+  assert.ok(records.every((record) => record.sources[0].url.startsWith("https://guide.example/places/")));
+});
+
+test("list and details share one aggregate byte ceiling", async () => {
+  const endpoint = "https://guide.example/places";
+  const detailUrls = [`${endpoint}/one`, `${endpoint}/two`];
+  const listBody = listDetailHtml(detailUrls);
+  const baseDetails = detailUrls.map((url, index) => html(place({
+    "@id": url,
+    name: `Detail ${index + 1}`,
+  })));
+  const remaining = 1024 - Buffer.byteLength(listBody, "utf8");
+  const targetDetailBytes = Math.floor(remaining * 0.6);
+  const details = baseDetails.map((body) => {
+    const fillerLength = Math.max(0, targetDetailBytes - Buffer.byteLength(body, "utf8") - 7);
+    return `${body}<!--${"x".repeat(fillerLength)}-->`;
+  });
+  assert.ok(Buffer.byteLength(listBody, "utf8") + Buffer.byteLength(details[0], "utf8") <= 1024);
+  assert.ok(
+    Buffer.byteLength(listBody, "utf8") +
+    Buffer.byteLength(details[0], "utf8") +
+    Buffer.byteLength(details[1], "utf8") > 1024,
+  );
+  const bodies = new Map([[endpoint, listBody], ...detailUrls.map((url, index) => [url, details[index]])]);
+  const records = await collectReviewedPlaceFeed(feed({
+    adapter: SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER,
+    max_items: 2,
+  }), {
+    maxBytes: 1024,
+    fetcher: async (url) => htmlResponse(bodies.get(url), url),
+  });
+
+  assert.deepEqual(records.map((record) => record.name), ["Detail 1"]);
+});
+
+test("list-detail rows fail closed on identity, entity, content-type and redirect drift", async () => {
+  const endpoint = "https://guide.example/places";
+  const urls = ["mismatch", "ambiguous", "wrong-type", "redirected"].map(
+    (slug) => `${endpoint}/${slug}`,
+  );
+  const bodies = new Map([
+    [endpoint, listDetailHtml(urls)],
+    [urls[0], html(place({ "@id": `${endpoint}/someone-else` }))],
+    [urls[1], html([
+      place({ "@id": urls[1], name: "First identity" }),
+      place({ "@id": urls[1], name: "Second identity" }),
+    ])],
+    [urls[2], html(place({ "@id": urls[2] }))],
+    [urls[3], html(place({ "@id": urls[3] }))],
+  ]);
+  const records = await collectReviewedPlaceFeed(feed({
+    adapter: SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER,
+  }), {
+    fetcher: async (url) => {
+      if (url === urls[2]) {
+        return response(bodies.get(url), {
+          url,
+          headers: { get: () => "application/json" },
+        });
+      }
+      if (url === urls[3]) {
+        return htmlResponse(bodies.get(url), "https://guide.example/redirect-target");
+      }
+      return htmlResponse(bodies.get(url), url);
+    },
+  });
+  assert.deepEqual(records, []);
 });
 
 test("collector emits only bounded factual route records with attribution", async () => {
@@ -213,6 +370,28 @@ test("catalog-backed runtime consumes only fresh worker-persisted records and ne
   assert.deepEqual(await source.load({ lat: 55.5, lng: 13.5 }), persisted);
   assert.equal(fetchCount, 0);
   assert.equal(feedReadCount, 0);
+});
+
+test("list-detail traversal is never warmed by the legacy request-path source bridge", async () => {
+  let fetchCount = 0;
+  const source = createReviewedPlaceSource({
+    sourceCatalog: {
+      listApprovedPlaceFeedsForAnchor: async () => [feed({
+        adapter: SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER,
+      })],
+    },
+    env: {},
+    cache: createSourceCache({ namespace: "list-detail-request-path-test", ttlMs: 60_000 }),
+    now: () => new Date("2026-08-20T12:00:00.000Z"),
+    fetcher: async () => {
+      fetchCount += 1;
+      return htmlResponse("", "https://guide.example/places");
+    },
+  });
+
+  assert.deepEqual(await source.load({ lat: 55.5, lng: 13.5 }), []);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(fetchCount, 0);
 });
 
 test("persistent catalog records remain available without a network fetcher", async () => {

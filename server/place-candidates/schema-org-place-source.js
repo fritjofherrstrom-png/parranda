@@ -17,6 +17,8 @@ const DEFAULT_RADIUS_KM = 5;
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
 const MAX_JSON_LD_NODES = 500;
 const MAX_RUNTIME_RECORDS = 100;
+const SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER = "schema_org_place_list_detail_html";
+const MAX_LIST_DETAIL_LINKS = 12;
 
 // Deliberately closed: generic Organization/LocalBusiness/Product records are
 // not place ideas. Every accepted schema type has an existing Parranda type.
@@ -76,6 +78,10 @@ function createReviewedPlaceSource({
       for (const feed of feeds) {
         if (records.length >= MAX_RUNTIME_RECORDS) break;
         if (typeof fetcher !== "function") break;
+        // List -> detail traversal is worker-owned. Unlike the legacy direct
+        // profile bridge, it must never fan out because a Planner request
+        // happened to miss an in-process cache entry.
+        if (feed.adapter === SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER) continue;
         const key = cacheKey(feed);
         const cached = cache.peek(key);
         if (cached && Array.isArray(cached.records)) {
@@ -118,22 +124,24 @@ async function collectReviewedPlaceFeedOutcome(feed, {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), boundedInteger(timeoutMs, 50, 30_000));
   try {
-    const response = await fetcher(feed.endpoint, {
-      headers: {
-        "User-Agent": DEFAULT_USER_AGENT,
-        Accept: feed.adapter === "schema_org_place_json"
-          ? "application/ld+json, application/json"
-          : "text/html, application/xhtml+xml",
-      },
-      // The reviewed endpoint is exact. Do not let it turn one approved fetch
-      // into a request to an unreviewed host through an HTTP redirect.
-      redirect: "error",
-      signal: controller.signal,
+    const byteBudget = boundedInteger(maxBytes, 1024, 4 * 1024 * 1024);
+    if (feed.adapter === SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER) {
+      return collectSchemaOrgListDetailOutcome(feed, {
+        fetcher,
+        controller,
+        byteBudget,
+      });
+    }
+    const document = await fetchReviewedDocument(feed.endpoint, {
+      fetcher,
+      controller,
+      maxBytes: byteBudget,
+      accept: feed.adapter === "schema_org_place_json"
+        ? "application/ld+json, application/json"
+        : "text/html, application/xhtml+xml",
     });
-    if (!response || response.ok !== true) return failed();
-    if (!sameOriginResponse(feed.endpoint, response)) return failed();
-    const raw = await readBoundedText(response, boundedInteger(maxBytes, 1024, 4 * 1024 * 1024));
-    if (!raw) return failed();
+    if (!document) return failed();
+    const raw = document.raw;
 
     let records;
     if (feed.adapter === MAP_LINKED_PLACE_ADAPTER) {
@@ -164,6 +172,75 @@ async function collectReviewedPlaceFeedOutcome(feed, {
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function collectSchemaOrgListDetailOutcome(feed, {
+  fetcher,
+  controller,
+  byteBudget,
+} = {}) {
+  const listDocument = await fetchReviewedDocument(feed.endpoint, {
+    fetcher,
+    controller,
+    maxBytes: byteBudget,
+    accept: "text/html, application/xhtml+xml",
+  });
+  if (!listDocument || !isHtmlResponse(listDocument.response)) return failed();
+  let remainingBytes = byteBudget - Buffer.byteLength(listDocument.raw, "utf8");
+  const maxItems = Math.min(
+    MAX_LIST_DETAIL_LINKS,
+    boundedInteger(feed.max_items ?? MAX_LIST_DETAIL_LINKS, 1, MAX_LIST_DETAIL_LINKS),
+  );
+  const inspected = inspectSchemaOrgPlaceListDetailPayload(listDocument.raw, {
+    endpoint: feed.endpoint,
+    maxLinks: maxItems,
+  });
+  if (inspected.status !== "ok") return failed();
+
+  const records = [];
+  const seen = new Set();
+  for (const detailUrl of inspected.detail_urls) {
+    if (records.length >= maxItems || remainingBytes < 1) break;
+    const detailDocument = await fetchReviewedDocument(detailUrl, {
+      fetcher,
+      controller,
+      maxBytes: remainingBytes,
+      accept: "text/html, application/xhtml+xml",
+      approvedOrigin: new URL(feed.endpoint).origin,
+    });
+    if (!detailDocument || !isHtmlResponse(detailDocument.response)) continue;
+    remainingBytes -= Buffer.byteLength(detailDocument.raw, "utf8");
+    const record = recordFromExactSchemaOrgDetail(detailDocument.raw, detailUrl, feed);
+    if (!record || !pointInBounds(record, feed.bbox) || seen.has(record.id)) continue;
+    seen.add(record.id);
+    records.push(record);
+  }
+  return { status: records.length ? "ok" : "empty", records };
+}
+
+async function fetchReviewedDocument(url, {
+  fetcher,
+  controller,
+  maxBytes,
+  accept,
+  approvedOrigin = null,
+} = {}) {
+  const target = safeHttpsUrl(url);
+  if (!target || typeof fetcher !== "function" || !controller || maxBytes < 1) return null;
+  if (approvedOrigin && new URL(target).origin !== approvedOrigin) return null;
+  const response = await fetcher(target, {
+    headers: {
+      "User-Agent": DEFAULT_USER_AGENT,
+      Accept: accept,
+    },
+    // Each URL is exact. Do not let a reviewed fetch expand to an unreviewed
+    // host or path through an HTTP redirect.
+    redirect: "error",
+    signal: controller.signal,
+  });
+  if (!response || response.ok !== true || !sameOriginResponse(target, response)) return null;
+  const raw = await readBoundedText(response, maxBytes);
+  return raw ? { raw, response } : null;
 }
 
 /**
@@ -238,6 +315,97 @@ function inspectSchemaOrgPlacePayload(raw, {
   };
 }
 
+function inspectSchemaOrgPlaceListDetailPayload(raw, {
+  endpoint,
+  maxLinks = MAX_LIST_DETAIL_LINKS,
+} = {}) {
+  const sourceUrl = safeHttpsUrl(endpoint);
+  if (!sourceUrl) return emptyListDetailInspection("invalid_endpoint");
+  const parsed = parseJsonLdPayloadsFromHtml(raw);
+  if (!parsed.validScriptCount && parsed.invalidScriptCount) {
+    return emptyListDetailInspection("invalid_json_ld");
+  }
+  const detailUrls = extractSchemaOrgItemListDetailUrls(parsed.payloads, {
+    endpoint: sourceUrl,
+    maxLinks,
+  });
+  if (detailUrls.length < 2) return emptyListDetailInspection("bounded_item_list_not_detected");
+  return {
+    status: "ok",
+    detail_link_count: detailUrls.length,
+    detail_urls: detailUrls,
+  };
+}
+
+function extractSchemaOrgItemListDetailUrls(payloads, {
+  endpoint,
+  maxLinks = MAX_LIST_DETAIL_LINKS,
+} = {}) {
+  const sourceUrl = safeHttpsUrl(endpoint);
+  if (!sourceUrl) return [];
+  const sourceOrigin = new URL(sourceUrl).origin;
+  const queue = Array.isArray(payloads) ? [...payloads] : [payloads];
+  const found = [];
+  const seen = new Set();
+  let visited = 0;
+  while (queue.length && visited < MAX_JSON_LD_NODES && found.length < maxLinks) {
+    const value = queue.shift();
+    visited += 1;
+    if (Array.isArray(value)) {
+      queue.push(...value.slice(0, Math.max(0, MAX_JSON_LD_NODES - visited - queue.length)));
+      continue;
+    }
+    if (!value || typeof value !== "object") continue;
+    if (schemaTypeIncludes(value, "itemlist")) {
+      for (const entry of Array.isArray(value.itemListElement) ? value.itemListElement : []) {
+        const item = entry && typeof entry === "object" && "item" in entry ? entry.item : entry;
+        // This adapter is only for pointer-only list pages. Inline Place
+        // objects belong to the single-fetch adapter and must not be
+        // reinterpreted as permission to crawl their identities.
+        if (
+          item && typeof item === "object" &&
+          (placeType(item) || localizedString(item.name) || extractCoordinates(item))
+        ) continue;
+        const identity = typeof item === "string"
+          ? item
+          : firstString(item?.url, item?.["@id"], entry?.url);
+        const detailUrl = resolveSameOriginHttpsUrl(identity, sourceUrl, sourceOrigin);
+        if (!detailUrl || detailUrl === sourceUrl || seen.has(detailUrl)) continue;
+        seen.add(detailUrl);
+        found.push(detailUrl);
+        if (found.length >= Math.min(MAX_LIST_DETAIL_LINKS, boundedInteger(maxLinks, 1, MAX_LIST_DETAIL_LINKS))) {
+          break;
+        }
+      }
+    }
+    for (const key of ["@graph", "items"]) {
+      if (Array.isArray(value[key])) {
+        queue.push(...value[key].slice(0, Math.max(0, MAX_JSON_LD_NODES - visited - queue.length)));
+      }
+    }
+  }
+  return found;
+}
+
+function recordFromExactSchemaOrgDetail(raw, detailUrl, feed) {
+  const exactUrl = safeHttpsUrl(detailUrl);
+  if (!exactUrl) return null;
+  const parsed = parseSchemaOrgPlacesFromHtml(raw);
+  if (!parsed.validScriptCount && parsed.invalidScriptCount) return null;
+  const matches = [];
+  for (const place of parsed.places) {
+    const identity = safeHttpsUrl(firstString(place?.url, place?.["@id"]));
+    if (identity !== exactUrl) continue;
+    const record = mapSchemaOrgPlaceToRecord(place, feed);
+    if (record) matches.push(record);
+  }
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function emptyListDetailInspection(reason) {
+  return { status: "empty", detail_link_count: 0, detail_urls: [], reason };
+}
+
 function extractSchemaOrgPlaces(payload) {
   const queue = [payload];
   const places = [];
@@ -262,7 +430,18 @@ function extractSchemaOrgPlaces(payload) {
 }
 
 function parseSchemaOrgPlacesFromHtml(html) {
+  const parsed = parseJsonLdPayloadsFromHtml(html);
   const places = [];
+  for (const payload of parsed.payloads) places.push(...extractSchemaOrgPlaces(payload));
+  return {
+    places,
+    validScriptCount: parsed.validScriptCount,
+    invalidScriptCount: parsed.invalidScriptCount,
+  };
+}
+
+function parseJsonLdPayloadsFromHtml(html) {
+  const payloads = [];
   let validScriptCount = 0;
   let invalidScriptCount = 0;
   const scriptPattern = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
@@ -275,13 +454,13 @@ function parseSchemaOrgPlacesFromHtml(html) {
       .trim();
     if (!body) continue;
     try {
-      places.push(...extractSchemaOrgPlaces(JSON.parse(body)));
+      payloads.push(JSON.parse(body));
       validScriptCount += 1;
     } catch (_error) {
       invalidScriptCount += 1;
     }
   }
-  return { places, validScriptCount, invalidScriptCount };
+  return { payloads, validScriptCount, invalidScriptCount };
 }
 
 function mapSchemaOrgPlaceToRecord(place, feed) {
@@ -344,6 +523,15 @@ function placeType(place) {
   return null;
 }
 
+function schemaTypeIncludes(value, expected) {
+  const values = Array.isArray(value?.["@type"])
+    ? value["@type"]
+    : [value?.["@type"] || value?.type];
+  return values.some((item) =>
+    String(item || "").split(/[\/#:]/).pop().replace(/[^a-z]/gi, "").toLowerCase() === expected,
+  );
+}
+
 function extractCoordinates(place) {
   const geo = place?.geo || place?.location?.geo;
   const lat = finiteCoordinate(geo?.latitude ?? geo?.lat, -90, 90);
@@ -360,10 +548,22 @@ function isJsonLdScript(attributes) {
 function sameOriginResponse(endpoint, response) {
   if (!response.url) return response.redirected !== true;
   try {
-    return new URL(endpoint).origin === new URL(response.url).origin;
+    const expected = new URL(endpoint);
+    const actual = new URL(response.url);
+    expected.hash = "";
+    actual.hash = "";
+    return response.redirected !== true && expected.toString() === actual.toString();
   } catch (_error) {
     return false;
   }
+}
+
+function isHtmlResponse(response) {
+  const value = typeof response?.headers?.get === "function"
+    ? String(response.headers.get("content-type") || "").toLowerCase()
+    : "";
+  const mediaType = value.split(";")[0].trim();
+  return ["text/html", "application/xhtml+xml"].includes(mediaType);
 }
 
 async function readBoundedText(response, maxBytes) {
@@ -408,7 +608,12 @@ function validFeed(feed) {
   return Boolean(
     feed &&
     typeof feed === "object" &&
-    ["schema_org_place_html", "schema_org_place_json", MAP_LINKED_PLACE_ADAPTER].includes(feed.adapter) &&
+    [
+      "schema_org_place_html",
+      "schema_org_place_json",
+      SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER,
+      MAP_LINKED_PLACE_ADAPTER,
+    ].includes(feed.adapter) &&
     safeHttpsUrl(feed.endpoint) &&
     validBounds &&
     ["official", "editorial"].includes(feed.evidence_family),
@@ -421,7 +626,12 @@ function validProbeFeed(feed) {
     feed &&
     typeof feed === "object" &&
     boundedString(feed.id, 120) &&
-    ["schema_org_place_html", "schema_org_place_json", MAP_LINKED_PLACE_ADAPTER].includes(feed.adapter) &&
+    [
+      "schema_org_place_html",
+      "schema_org_place_json",
+      SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER,
+      MAP_LINKED_PLACE_ADAPTER,
+    ].includes(feed.adapter) &&
     safeHttpsUrl(feed.endpoint) &&
     bbox.length === 4 &&
     bbox.every(Number.isFinite) &&
@@ -519,6 +729,17 @@ function safeHttpsUrl(value) {
   return url && new URL(url).protocol === "https:" ? url : null;
 }
 
+function resolveSameOriginHttpsUrl(value, base, origin) {
+  try {
+    const url = new URL(firstString(value), base);
+    if (url.protocol !== "https:" || url.username || url.password || url.origin !== origin) return null;
+    url.hash = "";
+    return url.toString();
+  } catch (_error) {
+    return null;
+  }
+}
+
 function normalizeDate(value) {
   const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
   return Number.isFinite(date.getTime()) ? date : null;
@@ -547,11 +768,15 @@ function compact(value) {
 
 module.exports = {
   ENABLE_ENV_KEY,
+  MAX_LIST_DETAIL_LINKS,
   PLACE_TYPE_MAP,
+  SCHEMA_ORG_PLACE_LIST_DETAIL_ADAPTER,
   collectReviewedPlaceFeed,
   collectReviewedPlaceFeedOutcome,
   createReviewedPlaceSource,
   extractSchemaOrgPlaces,
+  extractSchemaOrgItemListDetailUrls,
+  inspectSchemaOrgPlaceListDetailPayload,
   inspectSchemaOrgPlacePayload,
   mapSchemaOrgPlaceToRecord,
   parseSchemaOrgPlacesFromHtml,

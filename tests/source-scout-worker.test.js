@@ -126,6 +126,83 @@ test("worker refresh persists exact approved-profile provenance through the cata
   assert.equal(calls[0].outcome.records[0].source_observed_at, "2026-08-20T12:00:00.000Z");
 });
 
+test("worker owns bounded list-detail traversal and persists only exact detail records", async () => {
+  const endpoint = "https://guide.example/places";
+  const detailUrls = [`${endpoint}/museum`, `${endpoint}/park`];
+  const jsonLd = (payload) => `<script type="application/ld+json">${JSON.stringify(payload)}</script>`;
+  const bodies = new Map([
+    [endpoint, jsonLd({
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      itemListElement: detailUrls.map((url) => ({ "@type": "ListItem", item: url })),
+    })],
+    [detailUrls[0], jsonLd({
+      "@type": "Museum",
+      "@id": detailUrls[0],
+      name: "Worker Museum",
+      geo: { latitude: 55.5, longitude: 13.5 },
+    })],
+    [detailUrls[1], jsonLd({
+      "@type": "Park",
+      "@id": detailUrls[1],
+      name: "Worker Park",
+      geo: { latitude: 55.51, longitude: 13.51 },
+    })],
+  ]);
+  const target = {
+    profile_key: "place-source-profile-v1:list-detail",
+    profile_revision: "sha256:list-detail-profile",
+    approval_key: "source-profile-approval-v1:list-detail",
+    source_id: "reviewed-list-detail",
+    feed: {
+      id: "reviewed-list-detail",
+      label: "Reviewed list detail",
+      endpoint,
+      adapter: "schema_org_place_list_detail_html",
+      adapter_contract_revision: "schema-org-place-list-detail-html-v1",
+      bbox: [13, 55, 14, 56],
+      evidence_family: "official",
+      source_tier: "official",
+      source_identity: "guide.example",
+      max_items: 2,
+    },
+    lease_token: "lease-list-detail",
+    attempt_count: 1,
+  };
+  const writes = [];
+  const fetched = [];
+  const result = await runApprovedPlaceSourceRefresh({
+    catalog: {
+      recordApprovedPlaceSourceOutcome: async (_claimed, outcome) => {
+        writes.push(outcome);
+        return { status: "completed", candidate_count: outcome.records.length };
+      },
+    },
+    target,
+    now: new Date("2026-08-20T12:00:00.000Z"),
+    runtime: {
+      fetcher: async (url) => {
+        fetched.push(url);
+        return {
+          ok: bodies.has(url),
+          status: bodies.has(url) ? 200 : 404,
+          url,
+          redirected: false,
+          headers: { get: (name) => String(name).toLowerCase() === "content-type" ? "text/html" : null },
+          text: async () => bodies.get(url) || "",
+        };
+      },
+    },
+  });
+
+  assert.equal(result.status, "completed");
+  assert.deepEqual(fetched, [endpoint, ...detailUrls]);
+  assert.deepEqual(writes[0].records.map((record) => record.name), ["Worker Museum", "Worker Park"]);
+  assert.ok(writes[0].records.every(
+    (record) => record.source_adapter_contract_revision === "schema-org-place-list-detail-html-v1",
+  ));
+});
+
 test("observing qualification schedules the next proof on a distinct UTC day", async () => {
   assert.equal(
     nextQualificationProbeAt(new Date("2026-08-01T23:59:00Z")).toISOString(),

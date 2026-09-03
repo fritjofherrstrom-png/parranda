@@ -105,7 +105,11 @@ function bindManifestCandidate(manifest, candidate) {
     sourceFamily: publicString(manifest.source_family) || publicString(candidate.family) || "structured_place_guide",
     termsStatus: publicString(manifest.review?.terms_status) || publicString(candidate.terms_status) || "unknown",
     license: safeHttpsUrl(manifest.license),
-    maxItems: clampInteger(manifest.max_items, 1, 100),
+    maxItems: clampInteger(
+      manifest.max_items,
+      1,
+      adapter === "schema_org_place_list_detail_html" ? 12 : 100,
+    ),
   };
 }
 
@@ -320,7 +324,12 @@ function qualificationIdentity(value) {
 }
 
 function normalizeAdapter(value) {
-  return ["schema_org_place_html", "schema_org_place_json", "map_linked_place_html"]
+  return [
+    "schema_org_place_html",
+    "schema_org_place_json",
+    "schema_org_place_list_detail_html",
+    "map_linked_place_html",
+  ]
     .includes(value) ? value : null;
 }
 

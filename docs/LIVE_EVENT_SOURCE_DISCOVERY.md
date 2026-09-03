@@ -268,10 +268,11 @@ The same worker now has a separate structured-place lane. Resolver-attested
 country context contributes bounded local-language place terms alongside the
 event vocabulary, and the scout may follow high-precision same-origin
 attractions/visitor-guide links. A page becomes a place-source candidate only
-when a closed reviewed-place adapter finds at least two stable,
-exact-coordinate records inside the trusted profile bounds and within the
-closed runtime place-type vocabulary. The supported formats are schema.org
-place JSON-LD and `map_linked_place_html`: repeated server-rendered cards where
+when a closed reviewed-place adapter finds either at least two stable,
+exact-coordinate inline records or at least two bounded same-origin detail
+pointers. The supported formats are inline schema.org place JSON-LD,
+pointer-only schema.org `ItemList` pages, and `map_linked_place_html`: repeated
+server-rendered cards where
 one balanced semantic item or explicitly card-marked DOM unit contains an
 exact heading/detail identity, one unambiguous explicit closed category and one
 unambiguous high-precision coordinate pair in a recognized Google,
@@ -281,6 +282,15 @@ individual venue page, generic `LocalBusiness`, prose, ratings, images,
 coordinate-looking text, missing/unknown card facts, out-of-bounds rows,
 restricted terms, unsafe URLs and robots-disallowed pages cannot produce a
 probeable manifest.
+
+The `schema-org-place-list-detail-html-v1` probe and approved refresh follow at
+most 12 exact same-origin HTTPS detail URLs, sequentially, under one aggregate
+timeout and byte budget. Each detail is accepted only when exactly one
+allowlisted schema.org Place node carries name, type, exact in-bounds
+coordinates and an identity equal to that detail URL. Discovery records only
+the bounded pointer count; qualification and approved collection perform the
+actual fetch. The approved worker persists accepted rows, while Planner reads
+only the revision-bound reservoir and never traverses details itself.
 
 Place candidates live in `source_profile.place_source_candidates` and their
 manifests in `place_manifest_candidates`; they do not enter event-family
@@ -348,10 +358,12 @@ A live format audit on 2026-09-01 found that the map-linked adapter could
 extract seven bounded records across four closed place types from an official
 destination guide that the schema.org-only scout could not use. Other audited
 official guides exposed stable list/detail links but kept type or coordinates
-on detail pages, or exposed names without exact coordinates. Those remain
-honest misses: this adapter performs no detail-page fan-out, geocoding, fuzzy
-identity matching or city-specific fallback. Live audit rows were not committed
-as fixtures and no audited endpoint was activated by discovery.
+on detail pages, or exposed names without exact coordinates. The closed
+schema.org pointer-list shape is now supported when the detail page itself
+provides an exact matching identity, allowlisted type and coordinates. Other
+list/detail shapes remain honest misses: no adapter geocodes, fuzzy-matches or
+uses a city-specific fallback. Live audit rows were not committed as fixtures
+and no audited endpoint was activated by discovery.
 
 ### Reviewed event source-profile runtime bridge
 

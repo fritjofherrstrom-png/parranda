@@ -221,7 +221,8 @@ reservoir can supply Planner.
 
 The approved profile stores a derived `runtime_review.place_sources` list. The
 place adapters are deliberately narrow: `schema_org_place_html`,
-`schema_org_place_json` or `map_linked_place_html`, exact HTTPS
+`schema_org_place_json`, `schema_org_place_list_detail_html` or
+`map_linked_place_html`, exact HTTPS
 endpoint/adapter/source-identity binding, an `official` or `editorial` evidence
 family, compatible terms, healthy status, bounded item count and the profile's
 reviewed geographic bounds. They read only allowlisted factual atoms for a
@@ -232,9 +233,13 @@ inside the same balanced semantic or explicitly card-marked DOM unit. An outer
 list/section cannot combine sibling fragments. The exact adapter-contract
 revision stored in the approval must match the running code; an adapter bump
 invalidates old feeds, worker targets and reservoir rows until rediscovery and
-explicit re-review. They
-do not follow detail pages, geocode rows or ingest descriptions, ratings,
-images or generic `LocalBusiness` records. Catalog-backed acquisition is owned
+explicit re-review. Only `schema-org-place-list-detail-html-v1` follows detail
+pages: it accepts a pointer-only schema.org `ItemList`, follows at most 12 exact
+same-origin HTTPS URLs sequentially under one total timeout/byte budget, and
+requires one unambiguous allowlisted Place node whose identity equals the
+fetched URL. It never follows links on the Planner request path. No adapter
+geocodes rows or ingests descriptions, ratings, images or generic
+`LocalBusiness` records. Catalog-backed acquisition is owned
 by the worker, which writes freshness-bounded rows to PostgreSQL; Planner only
 reads rows whose profile revision and approval key still match. A reviewed
 official source may supply a route candidate without being mislabeled as

@@ -353,6 +353,41 @@ test("map-linked approval binds the v2 parser contract into the reviewed profile
   assert.equal(approved.audit.profile_revision, revision);
 });
 
+test("list-detail approval binds its exact parser contract into worker refresh state", () => {
+  const discovered = placeSourceProfile();
+  discovered.source_families[0].candidates[0].adapter = "schema_org_place_list_detail_html";
+  discovered.runtime_review = {
+    status: "unreviewed",
+    reviewed_at: null,
+    expires_at: null,
+    feeds: [],
+    place_sources: [],
+  };
+  const revision = buildProfileReviewRevision(discovered);
+  const approved = buildReviewedProfile(discovered, {
+    schema_version: 1,
+    profile_key: discovered.profile_key,
+    expected_profile_revision: revision,
+    expires_at: "2026-08-25T00:00:00.000Z",
+    place_sources: [{
+      candidate_id: "regional-places",
+      id: "reviewed-regional-list-detail",
+      label: "Regional list detail",
+      evidence_family: "official",
+      source_tier: "official",
+      terms_status: "open_license",
+      source_health: "healthy",
+      runtime_policy: "bounded_refresh",
+    }],
+  }, { operatorId: "ops@example", now: NOW });
+
+  assert.equal(
+    approved.profile.runtime_review.place_sources[0].adapter_contract_revision,
+    "schema-org-place-list-detail-html-v1",
+  );
+  assert.equal(approved.profile.runtime_review.place_sources[0].max_items, 12);
+});
+
 test("geo reads return only profiles that still pass the shared review contract", async () => {
   const calls = [];
   const catalog = createSourceProfileCatalog({
@@ -545,6 +580,12 @@ test("persistent place reads require current approval, revision and freshness", 
     source_adapter: "map_linked_place_html",
     source_adapter_contract_revision: "map-linked-place-html-v1",
   };
+  const staleListDetailContract = {
+    ...valid,
+    id: "reviewed-place:guide:old-list-detail-contract",
+    source_adapter: "schema_org_place_list_detail_html",
+    source_adapter_contract_revision: "schema-org-place-list-detail-html-v0",
+  };
   const catalog = createSourceProfileCatalog({
     now: () => NOW,
     query: async (sql, values) => {
@@ -553,6 +594,7 @@ test("persistent place reads require current approval, revision and freshness", 
         rows: [
           { record: valid },
           { record: staleMapContract },
+          { record: staleListDetailContract },
           { record: { ...valid, source_approval_key: null } },
         ],
       };
@@ -588,6 +630,34 @@ test("the worker refuses a refresh target bound to the previous adapter contract
           endpoint: "https://guide.example/places",
           adapter: "map_linked_place_html",
           adapter_contract_revision: "map-linked-place-html-v1",
+          source_identity: "guide.example",
+        },
+        lease_token: values[1],
+        attempt_count: 1,
+      }] };
+    },
+  });
+
+  assert.equal(await catalog.claimApprovedPlaceSourceRefresh(), null);
+});
+
+test("the worker refuses a list-detail target bound to an unknown contract", async () => {
+  const catalog = createSourceProfileCatalog({
+    now: () => NOW,
+    query: async (sql, values) => {
+      assert.equal(sql, CLAIM_PLACE_SOURCE_REFRESH_SQL);
+      assert.ok(values[3].includes("schema-org-place-list-detail-html-v1"));
+      assert.ok(!values[3].includes("schema-org-place-list-detail-html-v0"));
+      return { rows: [{
+        profile_key: "place-source-profile-v1:test-region",
+        source_id: "regional-list-detail-feed",
+        profile_revision: `sha256:${"a".repeat(64)}`,
+        approval_key: "source-profile-approval-v1:approval123",
+        feed: {
+          id: "regional-list-detail-feed",
+          endpoint: "https://guide.example/places",
+          adapter: "schema_org_place_list_detail_html",
+          adapter_contract_revision: "schema-org-place-list-detail-html-v0",
           source_identity: "guide.example",
         },
         lease_token: values[1],

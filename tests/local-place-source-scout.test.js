@@ -22,6 +22,14 @@ function placeList(items = defaultPlaces()) {
   })}</script>`;
 }
 
+function placeListDetail(urls = ["/places/harbour-museum", "/places/cliff-park"]) {
+  return `<script type="application/ld+json">${JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    itemListElement: urls.map((url) => ({ "@type": "ListItem", item: url })),
+  })}</script>`;
+}
+
 function defaultPlaces() {
   return [
     {
@@ -141,6 +149,27 @@ test("map-linked place cards enter the same review-only source lane", () => {
   assert.equal(result.manifest_candidate.status, "review-needed");
   assert.equal(result.manifest_candidate.runtime_policy, "review_required");
   assert.equal(result.manifest_candidate.activation_performed, undefined);
+});
+
+test("a same-origin schema.org list of detail URLs enters the bounded review-only adapter", () => {
+  const result = inspectPlaceSourcePage({
+    seed: {
+      url: "https://guide.example/see-and-do",
+      label: "Official destination guide",
+      trust_tier: "official",
+      terms_status: "open_license",
+    },
+    body: placeListDetail(),
+    contentType: "text/html",
+    context: context(),
+  });
+
+  assert.equal(result.candidate.adapter, "schema_org_place_list_detail_html");
+  assert.equal(result.candidate.accepted_place_count, 0);
+  assert.equal(result.candidate.detail_link_count, 2);
+  assert.equal(result.manifest_candidate.adapter, "schema_org_place_list_detail_html");
+  assert.equal(result.manifest_candidate.max_items, 2);
+  assert.equal(result.manifest_candidate.status, "review-needed");
 });
 
 test("individual venues, generic businesses and out-of-scope rows are not place-list sources", () => {

@@ -134,6 +134,25 @@ test("map-linked candidates preserve their exact adapter through qualification",
   assert.deepEqual(second.profile.runtime_review.place_sources, []);
 });
 
+test("list-detail candidates preserve their exact bounded adapter through qualification", async () => {
+  const adapter = "schema_org_place_list_detail_html";
+  const listCandidate = candidate({ adapter });
+  const listManifest = manifest({ adapter, max_items: 100 });
+  const result = await qualifyDiscoveredPlaceSourceProfile({
+    profile: profile({ place_source_candidates: [listCandidate] }),
+    manifests: [listManifest],
+    now: new Date("2026-08-01T10:00:00Z"),
+    probe: async (feed) => {
+      assert.equal(feed.adapter, adapter);
+      assert.equal(feed.max_items, 12);
+      return healthyProbe();
+    },
+  });
+
+  assert.equal(result.qualification.candidates[0].review_candidate.adapter, adapter);
+  assert.deepEqual(result.profile.runtime_review.place_sources, []);
+});
+
 test("same-day probes replace evidence and cannot satisfy repeated-day qualification", async () => {
   const first = await qualifyDiscoveredPlaceSourceProfile({
     profile: profile(),
