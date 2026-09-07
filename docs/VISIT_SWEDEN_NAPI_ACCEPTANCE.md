@@ -84,3 +84,18 @@ composed request; a `readCached` peek is safe, a blind `load` retry is not.
 Do not describe a conflict-free textual merge as verified runtime integration.
 Before promotion, test the combined branch with OSM and NAPI both failing,
 assert one NAPI fetch per anchor, and retain the cache-only Overture rescue.
+
+Measured integration result: the merge tree combining NAPI commit
+`524769cfd13591c1f9bf2149246b0f32e9df563d` with #495 head
+`4d6c3c8bb762d15928f1966828ea82ae752d1f05` is text-conflict-free. Running the
+combined loader with deterministic failures produces **2 NAPI fetches, expected
+1**. The standalone NAPI regression passes. This is a confirmed integration
+defect, not provider degradation or live acceptance evidence.
+
+Handoff to Claude: restrict the eager-empty retry in #495 to descriptors that
+allow primary rescue, e.g. require `source.primaryRescue !== false` before
+discarding `eagerResult`, or explicitly use a cache-only peek. Preserve the
+Overture warm-cache rescue test. Run both the radius tests and
+`tests/visit-sweden-napi-source.test.js` against the combined result before
+claiming compatibility. Do not change radius/category behavior to hide the
+double request.
