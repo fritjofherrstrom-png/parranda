@@ -183,3 +183,81 @@ test("a healthy primary is not asked to re-read the secondary", async () => {
   await composed({ ...ANCHOR, requestedIntents: ["food"] });
   assert.equal(secondary.loadCount, 1, "one eager read, no rescue re-read when the primary is fine");
 });
+
+// --------------------------------------------------------------------------
+// 3. The rescue must not turn a bounded live source into two provider calls.
+// --------------------------------------------------------------------------
+
+/**
+ * A source shaped like the official NAPI descriptor: eager, but its `load()`
+ * performs a bounded LIVE request, so it declares `primaryRescue: false` and
+ * exposes a cache-only `readCached()` for paths that must not spend a request.
+ */
+function boundedLiveSource({ cached = [] } = {}) {
+  return {
+    eager: true,
+    primaryRescue: false,
+    liveCalls: 0,
+    cachedPeeks: 0,
+    load() {
+      this.liveCalls += 1;
+      return []; // the provider failed or had nothing for this anchor
+    },
+    readCached() {
+      this.cachedPeeks += 1;
+      return cached;
+    },
+  };
+}
+
+const failingPrimary = async () => {
+  const out = [];
+  out.loader_status = "error_failed_closed";
+  out.loader_error = "fetch_error";
+  return out;
+};
+
+test("a failed primary never costs a bounded live source a second request", async () => {
+  // Without this, the rescue re-read issues a second provider call inside one
+  // composition and breaks the source's single-attempt bound.
+  const napi = boundedLiveSource();
+  const composed = composeOpenDataLoaders(failingPrimary, null, napi);
+
+  await composed({ lat: 55.6061195, lng: 13.000622, requestedIntents: ["food", "museums"] });
+
+  assert.equal(napi.liveCalls, 1, "exactly one live provider request per composition");
+});
+
+test("a bounded live source can still rescue the day from its own cache", async () => {
+  // The rescue is not abandoned for these sources — it is served from the
+  // cache-only peek, which costs no network.
+  const rows = Array.from({ length: 6 }, (_, i) => place(`napi-${i}`, i));
+  const napi = boundedLiveSource({ cached: rows });
+  const composed = composeOpenDataLoaders(failingPrimary, null, napi);
+
+  const records = await composed({ lat: 55.6061195, lng: 13.000622, requestedIntents: ["food", "museums"] });
+
+  assert.equal(napi.liveCalls, 1, "still only one live request");
+  assert.equal(napi.cachedPeeks, 1, "the cache-only peek is what answers the rescue");
+  assert.equal(records.length, rows.length, "already-fetched official rows still save the day");
+});
+
+test("a bounded live source with no cache peek is skipped, not called twice", async () => {
+  const napi = { eager: true, primaryRescue: false, liveCalls: 0, load() { this.liveCalls += 1; return []; } };
+  const composed = composeOpenDataLoaders(failingPrimary, null, napi);
+
+  const records = await composed({ lat: 55.6061195, lng: 13.000622, requestedIntents: ["food"] });
+
+  assert.equal(napi.liveCalls, 1, "no second provider call when there is nothing to peek");
+  assert.equal(records.length, 0, "and nothing is invented");
+});
+
+test("a cache-only source is still re-read — the bound applies only to live sources", async () => {
+  // Guard against fixing the live case by disabling the rescue for everyone.
+  const secondary = eagerWarmingSource(Array.from({ length: 20 }, (_, i) => place(`overture-${i}`, i)));
+  const composed = composeOpenDataLoaders(failingPrimary, null, secondary);
+
+  const records = await composed({ lat: 59.3322005, lng: 18.0640284, requestedIntents: ["food", "museums"] });
+
+  assert.ok(records.length > 0, "the warm-cache rescue must survive the live-source bound");
+});

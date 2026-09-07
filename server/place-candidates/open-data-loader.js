@@ -1252,14 +1252,32 @@ function composeOpenDataLoaders(osmLoader, wikiSource = null, overtureSource = n
       // nothing is left to answer with, even though the warm is landing right
       // now and the very next request will succeed. Observed live with the
       // primary provider globally unreachable — first request 0 records,
-      // second identical request 80. So in exactly that case, read the source
-      // again: on a warmed cache it now answers, and if it is still cold it
-      // returns [] as before and we fail closed just the same.
+      // second identical request 80. So in exactly that case the source is
+      // consulted again.
+      //
+      // HOW it is consulted depends on what the source is, because "read it
+      // again" is free for one kind and a second network call for the other:
+      //
+      //   - a cache-only source (its eager read is a peek that warms out of
+      //     band) is simply re-read: on a warmed cache it now answers, and if
+      //     it is still cold it returns [] and we fail closed just the same;
+      //   - a source that declares `primaryRescue: false` performs a bounded
+      //     LIVE request in `load()`, so re-reading it would issue a second
+      //     provider call inside one composition and break its single-attempt
+      //     bound. It is offered its cache-only `readCached()` instead, which
+      //     still lets already-fetched official rows rescue the day at zero
+      //     network cost, and is skipped entirely when it has no such peek.
       const eagerResult = sameAsPrimary ? eagerLoads.get(source) : null;
-      const eagerWasEmpty = Array.isArray(await eagerResult) && (await eagerResult).length === 0;
-      const alreadyLoaded = primaryFailed && eagerWasEmpty ? null : eagerResult;
+      const eagerRecords = await Promise.resolve(eagerResult).catch(() => []);
+      const eagerWasEmpty = Array.isArray(eagerRecords) && eagerRecords.length === 0;
+      const rescue = primaryFailed && eagerWasEmpty;
+      const liveRescueBarred = rescue && source?.primaryRescue === false;
       const loaded = await Promise.resolve(
-        alreadyLoaded || (typeof source === "function" ? source(wikiAnchor) : source.load(wikiAnchor, request)),
+        liveRescueBarred
+          ? (typeof source.readCached === "function" ? source.readCached(wikiAnchor, request) : [])
+          : rescue
+            ? (typeof source === "function" ? source(wikiAnchor) : source.load(wikiAnchor, request))
+            : eagerResult || (typeof source === "function" ? source(wikiAnchor) : source.load(wikiAnchor, request)),
       ).catch(() => []);
       if (Array.isArray(loaded)) backgroundRecords.push(...loaded);
     }
