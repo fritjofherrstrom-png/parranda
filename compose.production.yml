@@ -17,6 +17,8 @@ services:
       PARRANDA_OPEN_DATA_LOADER: enabled
       PARRANDA_WIKIDATA_SOURCE: enabled
       PARRANDA_OVERTURE_SOURCE: enabled
+      # Opt in after deployed lifecycle acceptance; dev:full exercises it now.
+      PARRANDA_VISIT_SWEDEN_SOURCE: ${PARRANDA_VISIT_SWEDEN_SOURCE:-disabled}
       PARRANDA_REVIEWED_PLACE_SOURCES: enabled
       PARRANDA_WIKIDATA_LABEL_LANGS: ${PARRANDA_WIKIDATA_LABEL_LANGS:-en}
       PARRANDA_AGNOSTIC_ENGINE_COMPOSE: enabled

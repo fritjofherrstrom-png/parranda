@@ -32,6 +32,10 @@
 const { createSourceCache } = require("./source-cache");
 const { createWikidataSource } = require("./wikidata-source");
 const { createOvertureSource } = require("./overture-source");
+const {
+  createCachedVisitSwedenNapiSource,
+  createVisitSwedenNapiSource,
+} = require("./visit-sweden-napi-source");
 const { normalizeOpeningHours } = require("./opening-hours");
 const { normalizeUserIntents, matchCandidateToIntent } = require("../candidates/intent-vocabulary");
 const {
@@ -1123,8 +1127,33 @@ function resolveDefaultOpenDataLoader(env = process.env) {
     };
   }
 
-  if (!wikiSource && !overtureSource) return osmLoader;
-  return composeOpenDataLoaders(osmLoader, wikiSource, overtureSource);
+  // Official Swedish place supply through Visit Sweden's documented NAPI
+  // search endpoint. Unlike the slow bulk/catalog sources, one bounded bbox
+  // request is started alongside Overpass and cached persistently. It may add
+  // display ideas by itself, but it is deliberately not an early primary
+  // rescue: the normal merge must get a chance to corroborate exact identities
+  // across independent families before the shared route gates promote them.
+  const visitSwedenFlag = String(env?.PARRANDA_VISIT_SWEDEN_SOURCE || "").toLowerCase();
+  const visitSwedenEnabled = visitSwedenFlag === "enabled" || visitSwedenFlag === "1" || visitSwedenFlag === "true";
+  let visitSwedenSource = null;
+  if (visitSwedenEnabled) {
+    const visitSwedenRaw = createVisitSwedenNapiSource({
+      radiusKm: Number(env?.PARRANDA_VISIT_SWEDEN_RADIUS_KM) || undefined,
+      limit: Number(env?.PARRANDA_VISIT_SWEDEN_LIMIT) || undefined,
+    });
+    const visitSwedenCache = createSourceCache({
+      namespace: "visit-sweden-napi-v1",
+      dir: env?.PARRANDA_CACHE_DIR || null,
+      ttlMs: Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : undefined,
+    });
+    visitSwedenSource = createCachedVisitSwedenNapiSource({
+      source: visitSwedenRaw,
+      cache: visitSwedenCache,
+    });
+  }
+
+  if (!wikiSource && !overtureSource && !visitSwedenSource) return osmLoader;
+  return composeOpenDataLoaders(osmLoader, wikiSource, overtureSource, visitSwedenSource);
 }
 
 // Compose the OSM loader (returns a `withLoaderStatus` array) with bounded
@@ -1132,15 +1161,15 @@ function resolveDefaultOpenDataLoader(env = process.env) {
 // cluster anchors every other source to the SAME place. A legacy function gets
 // only the anchor; a descriptor's `load(anchor, request)` may also use bounded
 // private request context (for example requested intents).
-function composeOpenDataLoaders(osmLoader, wikiSource = null, overtureSource = null) {
+function composeOpenDataLoaders(osmLoader, wikiSource = null, overtureSource = null, visitSwedenSource = null) {
   return async function loadComposedOpenData(request = {}) {
-    const sources = [wikiSource, overtureSource].filter(Boolean);
+    const sources = [wikiSource, overtureSource, visitSwedenSource].filter(Boolean);
     const primaryAnchor = { lat: request.lat, lng: request.lng };
-    // Eager cache-only sources are read before waiting on the live primary. On
-    // a miss their wrapper starts an out-of-band warm and returns []; on a hit a
-    // sufficiently varied global directory can satisfy this request immediately
-    // while Overpass continues in the background. This is the latency rescue,
-    // not just a second source that still waits behind a 30-second outage.
+    // Eager sources are started before waiting on the live primary. Cache-only
+    // bulk sources warm out-of-band; bounded APIs may finish concurrently. Only
+    // sources allowed to be a primary rescue participate in the early-return
+    // profile. This is the latency rescue, not just a second source that still
+    // waits behind a 30-second outage.
     const eagerLoads = new Map();
     for (const source of sources.filter((candidate) => candidate?.eager === true)) {
       eagerLoads.set(
@@ -1151,13 +1180,21 @@ function composeOpenDataLoaders(osmLoader, wikiSource = null, overtureSource = n
     const osmPromise = Promise.resolve(osmLoader(request))
       .catch(() => withLoaderStatus([], "error_failed_closed", "osm_threw"));
     const eagerRecords = [];
-    for (const pending of eagerLoads.values()) {
+    for (const [source, pending] of eagerLoads) {
+      if (source.primaryRescue === false) continue;
       const loaded = await pending;
       if (Array.isArray(loaded)) eagerRecords.push(...loaded);
     }
     const requestedIntents = normalizeRequestedIntents(request.requestedIntents);
     const eagerProfile = supplyProfile(eagerRecords, requestedIntents);
     if (eagerProfile.record_count >= THIN_RECORD_COUNT && eagerProfile.category_count >= THIN_CATEGORY_COUNT) {
+      // Cached official evidence must accompany the fast directory path too,
+      // so the downstream identity merge can corroborate it. A cold official
+      // request keeps warming without adding network latency to this rescue.
+      for (const source of sources.filter((item) => item.primaryRescue === false)) {
+        const cached = typeof source.readCached === "function" ? source.readCached(primaryAnchor) : [];
+        if (Array.isArray(cached)) eagerRecords.push(...cached);
+      }
       // Keep the primary promise observed so a background failure can never
       // become an unhandled rejection. Its own loader/cache side effects remain
       // useful for later cross-source corroboration.
@@ -1165,7 +1202,7 @@ function composeOpenDataLoaders(osmLoader, wikiSource = null, overtureSource = n
       return withLoaderMetadata(
         withLoaderStatus(eagerRecords, `loaded:${eagerRecords.length}`, null),
         {
-          selected_profile: eagerProfile,
+          selected_profile: supplyProfile(eagerRecords, requestedIntents),
           selected_day_capacity: dayCapacityProfile(eagerRecords, {
             origin: primaryAnchor,
             walkingTargetBand: request.walkingTargetBand,
