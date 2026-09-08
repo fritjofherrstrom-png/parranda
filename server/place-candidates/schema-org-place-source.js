@@ -10,6 +10,10 @@ const {
   PLACE_CATEGORY_MAP,
   extractMapLinkedPlaceRecords,
 } = require("./map-linked-html-place-source");
+const {
+  SIMPLEVIEW_EUROPE_PLACE_ADAPTER,
+  collectSimpleviewEuropePlaceFeed,
+} = require("./simpleview-europe-place-detail-source");
 
 const ENABLE_ENV_KEY = "PARRANDA_REVIEWED_PLACE_SOURCES";
 const DEFAULT_TIMEOUT_MS = 8_000;
@@ -84,7 +88,8 @@ function createReviewedPlaceSource({
         // List -> detail traversal is worker-owned. Unlike the legacy direct
         // profile bridge, it must never fan out because a Planner request
         // happened to miss an in-process cache entry.
-        if (feed.adapter === EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER) continue;
+        if ([EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER, SIMPLEVIEW_EUROPE_PLACE_ADAPTER]
+          .includes(feed.adapter)) continue;
         const key = cacheKey(feed);
         const cached = cache.peek(key);
         if (cached && Array.isArray(cached.records)) {
@@ -117,6 +122,15 @@ async function collectReviewedPlaceFeed(feed, options = {}) {
 }
 
 async function collectReviewedPlaceFeedOutcome(feed, options = {}) {
+  // Preserve the adapter's DNS-pinned HTTPS default. Substituting global fetch
+  // here would resolve the hostname a second time after validation.
+  if (feed?.adapter === SIMPLEVIEW_EUROPE_PLACE_ADAPTER) {
+    return collectSimpleviewEuropePlaceFeed(feed, {
+      ...(options.fetcher !== undefined ? { fetcher: options.fetcher } : {}),
+      probeOnly: options.probeOnly === true,
+      ...(options.resolveHost ? { resolveHost: options.resolveHost } : {}),
+    });
+  }
   const fetcher = options.fetcher === undefined
     ? (typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null)
     : options.fetcher;
@@ -842,6 +856,7 @@ function validFeed(feed) {
       "schema_org_place_json",
       EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER,
       MAP_LINKED_PLACE_ADAPTER,
+      SIMPLEVIEW_EUROPE_PLACE_ADAPTER,
     ].includes(feed.adapter) &&
     safeHttpsUrl(feed.endpoint) &&
     validBounds &&
@@ -860,6 +875,7 @@ function validProbeFeed(feed) {
       "schema_org_place_json",
       EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER,
       MAP_LINKED_PLACE_ADAPTER,
+      SIMPLEVIEW_EUROPE_PLACE_ADAPTER,
     ].includes(feed.adapter) &&
     safeHttpsUrl(feed.endpoint) &&
     bbox.length === 4 &&

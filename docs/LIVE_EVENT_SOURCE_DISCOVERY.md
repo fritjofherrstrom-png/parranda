@@ -297,6 +297,18 @@ Discovery records only the bounded pointer count; qualification and approved
 collection perform the actual fetch. The approved worker persists accepted
 rows, while Planner reads only the revision-bound reservoir and never traverses
 details itself.
+The dedicated `simpleview_europe_product_detail_html` contract recognizes a
+separate closed shape: one exact query-free list endpoint with `ol.productList`, at
+most twenty `li.prodTypeATTR` records, identity in
+`h2.ProductName > a.ProductDetail`, explicit category in `div.type > p`, and a
+canonical same-origin detail URL ending `-p<digits>`. Detail fetches remain under
+that reviewed path and must yield HTML with exactly one closed schema.org place
+scope (`LocalBusiness` or a category-compatible subtype) containing matching
+name, canonical URL and nested `PostalAddress`; category remains bound to the
+exact list item. The page must also contain one high-precision
+`og:latitude`/`og:longitude` pair. A NewMind location object is only an agreement
+check. Missing, conflicting or cross-scope facts reject the detail; facts are
+never assembled across unrelated blocks.
 
 Place candidates live in `source_profile.place_source_candidates` and their
 manifests in `place_manifest_candidates`; they do not enter event-family
@@ -371,6 +383,30 @@ list/detail shapes remain honest misses: no adapter geocodes, fuzzy-matches or
 uses a city-specific fallback. Live audit rows were not committed as fixtures
 and no audited endpoint was activated by discovery.
 
+### Simpleview Europe list→detail evidence and terms gate
+
+The closed shape was structurally checked against two official destination
+sites in the same CMS family: [Visit Plymouth attractions](https://www.visitplymouth.co.uk/things-to-do/attractions)
+and [Visit Isle of Wight attractions](https://www.visitisleofwight.co.uk/things-to-do/attractions),
+with factual detail atoms confirmed on examples such as
+[National Marine Aquarium](https://www.visitplymouth.co.uk/things-to-do/national-marine-aquarium-p126153)
+and [Monkey Haven](https://www.visitisleofwight.co.uk/things-to-do/monkey-haven-p610621).
+These pages are premise evidence, not production fixtures or approval.
+
+Both sources remain `permission_required`.
+Operational verdict: **NOT PERMITTED** without written permission or a
+separately licensed feed. Structural fixtures are not real lifecycle acceptance.
+[Visit Plymouth's terms](https://www.visitplymouth.co.uk/information/terms-and-conditions)
+prohibit copying/downloading/transmitting/reproducing site material, while
+[Visit Isle of Wight's terms](https://www.visitisleofwight.co.uk/information/terms-and-conditions)
+limit extracts and prohibit inclusion in an electronic retrieval system without
+prior written permission. Their clean list/detail paths are not generally
+robots-disallowed, but robots allowance is not a license. Discovery may record
+the closed shape and the permission blocker; neither source may be approved,
+persistently fetched, or route-used without written permission or a separately
+licensed feed. Deterministic minimal fixtures prove parser/worker behavior
+without copying live page bodies.
+
 ### Reviewed event source-profile runtime bridge
 
 An event source profile may carry an explicit `runtime_review` after operator
@@ -416,7 +452,9 @@ The place bridge accepts only exact discovered candidate, HTTPS endpoint,
 adapter-contract, source-identity and reviewed-bounds bindings. Terms, evidence
 family, source tier, health, runtime policy and expiry must pass the closed
 review contract. The request path cannot fetch a catalog source, inject a
-profile, or approve one. Official reviewed-source rows may pass route gates
+profile, approve one, or trigger list→detail fan-out. For the Simpleview contract
+the server additionally owns the exact list/link/detail/body/aggregate/time
+limits recorded in the revision and approval. Official reviewed-source rows may pass route gates
 without claiming place-level human verification; editorial-only rows still
 need independent corroboration. Event feeds, event timing and Pulse eligibility
 do not participate in this place-source bridge.

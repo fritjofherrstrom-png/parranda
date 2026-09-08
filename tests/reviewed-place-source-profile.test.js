@@ -5,6 +5,7 @@ const test = require("node:test");
 
 const {
   placeSourceAdapterContract,
+  placeSourceOperationalLimits,
   placeFeedsFromReviewedSourceProfiles,
   resolveReviewedPlaceSourceProfileFeeds,
 } = require("../server/place-candidates/reviewed-place-source-profile");
@@ -108,6 +109,71 @@ test("an approval bound to the previous map-linked adapter contract fails closed
   value.runtime_review.place_sources[0].adapter_contract_revision = "map-linked-place-html-v1";
 
   assert.deepEqual(placeFeedsFromReviewedSourceProfiles([value], { now: NOW }), []);
+});
+
+test("a licensed review binds the closed Simpleview list-detail contract and server-owned limits", () => {
+  const value = profile();
+  value.source_families[0].candidates[0].adapter = "simpleview_europe_product_detail_html";
+  value.runtime_review.place_sources[0].adapter = "simpleview_europe_product_detail_html";
+  value.runtime_review.place_sources[0].adapter_contract_revision = "simpleview-europe-product-detail-html-v2";
+  Object.assign(value.runtime_review.place_sources[0], placeSourceOperationalLimits("simpleview_europe_product_detail_html"));
+
+  const [feed] = placeFeedsFromReviewedSourceProfiles([value], { now: NOW });
+  assert.equal(feed.adapter, "simpleview_europe_product_detail_html");
+  assert.equal(feed.adapter_contract_revision, "simpleview-europe-product-detail-html-v2");
+  assert.equal(feed.max_details, 20);
+  assert.equal(feed.max_links, 20);
+  assert.equal(placeSourceAdapterContract(feed.adapter), "simpleview-europe-product-detail-html-v2");
+
+  value.runtime_review.place_sources[0].adapter_contract_revision = "simpleview-europe-product-detail-html-v1";
+  assert.deepEqual(placeFeedsFromReviewedSourceProfiles([value], { now: NOW }), []);
+});
+
+test("missing or altered Simpleview approval budgets fail closed", () => {
+  const adapter = "simpleview_europe_product_detail_html";
+  const limits = placeSourceOperationalLimits(adapter);
+  for (const key of Object.keys(limits)) {
+    for (const missing of [true, false]) {
+      const value = profile();
+      value.source_families[0].candidates[0].adapter = adapter;
+      const row = value.runtime_review.place_sources[0];
+      Object.assign(row, limits, { adapter, adapter_contract_revision: placeSourceAdapterContract(adapter) });
+      if (missing) delete row[key];
+      else row[key] += 1;
+      assert.deepEqual(placeFeedsFromReviewedSourceProfiles([value], { now: NOW }), [], `${key}: missing=${missing}`);
+    }
+  }
+});
+
+test("permission-required Simpleview sources cannot activate through the reviewed bridge", () => {
+  const value = profile();
+  value.source_families[0].candidates[0].adapter = "simpleview_europe_product_detail_html";
+  value.runtime_review.place_sources[0].adapter = "simpleview_europe_product_detail_html";
+  value.runtime_review.place_sources[0].adapter_contract_revision = "simpleview-europe-product-detail-html-v2";
+  Object.assign(value.runtime_review.place_sources[0], placeSourceOperationalLimits("simpleview_europe_product_detail_html"));
+  value.runtime_review.place_sources[0].terms_status = "permission_required";
+  assert.deepEqual(placeFeedsFromReviewedSourceProfiles([value], { now: NOW }), []);
+});
+
+test("Simpleview approval rejects pagination endpoints and source-identity drift", () => {
+  for (const mutate of [
+    (value) => {
+      value.source_families[0].candidates[0].url = "https://guide.example/places?page=2";
+      value.runtime_review.place_sources[0].endpoint = "https://guide.example/places?page=2";
+    },
+    (value) => {
+      value.source_families[0].candidates[0].source_identity = "other.example";
+      value.runtime_review.place_sources[0].source_identity = "other.example";
+    },
+  ]) {
+    const value = profile();
+    value.source_families[0].candidates[0].adapter = "simpleview_europe_product_detail_html";
+    value.runtime_review.place_sources[0].adapter = "simpleview_europe_product_detail_html";
+    value.runtime_review.place_sources[0].adapter_contract_revision = "simpleview-europe-product-detail-html-v2";
+    Object.assign(value.runtime_review.place_sources[0], placeSourceOperationalLimits("simpleview_europe_product_detail_html"));
+    mutate(value);
+    assert.deepEqual(placeFeedsFromReviewedSourceProfiles([value], { now: NOW }), []);
+  }
 });
 
 test("the reviewed bridge binds candidates from the dedicated place-source discovery lane", () => {

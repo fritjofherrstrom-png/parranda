@@ -1,6 +1,6 @@
 # PlaceCandidate Contract
 
-**Status:** Current data contract; migration notes updated after #492.
+**Status:** Current data contract; source notes include bounded list→detail ingestion.
 
 **Historical note:** The contract began as a shadow-only foundation. Candidate
 spine, Blitz and Planner consumers now exist; old shadow milestones are not
@@ -153,6 +153,14 @@ reviewed sources across large unsupported and smaller/regional places, add only
 evidence-backed bounded adapters for materially different real source shapes,
 improve conservative aliases/entity resolution, and define promotion criteria
 for retiring legacy experimental paths.
+The reviewed reservoir now includes one closed, worker-only Simpleview Europe
+list→detail adapter. It follows at most twenty canonical same-origin detail links
+from one exact reviewed endpoint under revision-bound byte/time limits and emits
+only scoped factual atoms with exact list/detail provenance. It is not a general
+crawler, does not geocode, and cannot run on a Planner request. Still open:
+operate permission-compatible reviewed sources, add other independently reviewed
+source shapes, improve conservative aliases/entity resolution, and define
+promotion criteria for retiring legacy experimental paths.
 
 ## Current Compatibility Provider
 

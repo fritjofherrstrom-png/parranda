@@ -388,6 +388,71 @@ test("list-detail approval binds its exact parser contract into worker refresh s
   assert.equal(approved.profile.runtime_review.place_sources[0].max_items, 12);
 });
 
+test("Simpleview approval binds the list-detail contract and permission-required decisions fail closed", () => {
+  const discovered = placeSourceProfile();
+  discovered.source_families[0].candidates[0].adapter = "simpleview_europe_product_detail_html";
+  discovered.runtime_review = { status: "unreviewed", reviewed_at: null, expires_at: null, feeds: [], place_sources: [] };
+  const revision = buildProfileReviewRevision(discovered);
+  assert.ok(revision?.startsWith("sha256:"));
+  const decision = (termsStatus) => ({
+    schema_version: 1,
+    profile_key: discovered.profile_key,
+    expected_profile_revision: revision,
+    expires_at: "2026-08-25T00:00:00.000Z",
+    place_sources: [{
+      candidate_id: "regional-places",
+      id: "reviewed-regional-list-detail",
+      label: "Regional list detail",
+      evidence_family: "official",
+      source_tier: "official",
+      terms_status: termsStatus,
+      source_health: "healthy",
+      runtime_policy: "bounded_refresh",
+    }],
+  });
+  const approved = buildReviewedProfile(discovered, decision("open_license"), { operatorId: "ops@example", now: NOW });
+  assert.equal(approved.profile.runtime_review.place_sources[0].adapter_contract_revision, "simpleview-europe-product-detail-html-v2");
+  assert.deepEqual(
+    {
+      max_items: approved.audit.decision.place_sources[0].max_items,
+      max_links: approved.audit.decision.place_sources[0].max_links,
+      max_details: approved.audit.decision.place_sources[0].max_details,
+      max_list_bytes: approved.audit.decision.place_sources[0].max_list_bytes,
+      max_detail_bytes: approved.audit.decision.place_sources[0].max_detail_bytes,
+      max_total_bytes: approved.audit.decision.place_sources[0].max_total_bytes,
+      request_timeout_ms: approved.audit.decision.place_sources[0].request_timeout_ms,
+      max_total_ms: approved.audit.decision.place_sources[0].max_total_ms,
+    },
+    {
+      max_items: 20,
+      max_links: 20,
+      max_details: 20,
+      max_list_bytes: 262_144,
+      max_detail_bytes: 65_536,
+      max_total_bytes: 1_048_576,
+      request_timeout_ms: 8_000,
+      max_total_ms: 30_000,
+    },
+  );
+  assert.equal(buildReviewedProfile(discovered, decision("permission_required"), { operatorId: "ops@example", now: NOW }), null);
+
+  const permissionBlocked = placeSourceProfile();
+  permissionBlocked.source_families[0].candidates[0].adapter = "simpleview_europe_product_detail_html";
+  permissionBlocked.source_families[0].candidates[0].status = "needs_adapter_or_permission";
+  permissionBlocked.source_families[0].candidates[0].terms_status = "permission_required";
+  permissionBlocked.runtime_review = { status: "unreviewed", reviewed_at: null, expires_at: null, feeds: [], place_sources: [] };
+  const blockedRevision = buildProfileReviewRevision(permissionBlocked);
+  const claimedLicensed = {
+    ...decision("open_license"),
+    expected_profile_revision: blockedRevision,
+  };
+  assert.equal(buildReviewedProfile(permissionBlocked, claimedLicensed, { operatorId: "ops@example", now: NOW }), null);
+
+  const termsChanged = structuredClone(permissionBlocked);
+  termsChanged.source_families[0].candidates[0].terms_status = "open_license";
+  assert.notEqual(buildProfileReviewRevision(termsChanged), blockedRevision);
+});
+
 test("geo reads return only profiles that still pass the shared review contract", async () => {
   const calls = [];
   const catalog = createSourceProfileCatalog({
@@ -586,6 +651,17 @@ test("persistent place reads require current approval, revision and freshness", 
     source_adapter: "experience_card_place_list_detail_html",
     source_adapter_contract_revision: "experience-card-place-list-detail-html-v0",
   };
+  const validSimpleview = {
+    ...valid,
+    id: "reviewed-place:guide:simpleview",
+    source_adapter: "simpleview_europe_product_detail_html",
+    source_adapter_contract_revision: "simpleview-europe-product-detail-html-v2",
+  };
+  const staleSimpleviewContract = {
+    ...validSimpleview,
+    id: "reviewed-place:guide:old-simpleview-contract",
+    source_adapter_contract_revision: "simpleview-europe-product-detail-html-v1",
+  };
   const catalog = createSourceProfileCatalog({
     now: () => NOW,
     query: async (sql, values) => {
@@ -593,8 +669,10 @@ test("persistent place reads require current approval, revision and freshness", 
       return {
         rows: [
           { record: valid },
+          { record: validSimpleview },
           { record: staleMapContract },
           { record: staleListDetailContract },
+          { record: staleSimpleviewContract },
           { record: { ...valid, source_approval_key: null } },
         ],
       };
@@ -605,7 +683,7 @@ test("persistent place reads require current approval, revision and freshness", 
     anchor: { lat: 55.6, lng: 13 },
     now: NOW,
   });
-  assert.deepEqual(records, [valid]);
+  assert.deepEqual(records, [valid, validSimpleview]);
   assert.equal(calls[0].sql, FRESH_PLACE_CANDIDATES_FOR_ANCHOR_SQL);
   assert.match(calls[0].sql, /profile\.approved_profile_revision = candidate\.profile_revision/);
   assert.match(calls[0].sql, /profile\.approval_key = candidate\.approval_key/);
@@ -667,6 +745,53 @@ test("the worker refuses a list-detail target bound to an unknown contract", asy
   });
 
   assert.equal(await catalog.claimApprovedPlaceSourceRefresh(), null);
+});
+
+test("Simpleview refresh targets require the current contract and exact approved limits", async () => {
+  const baseFeed = {
+    id: "regional-simpleview-feed",
+    endpoint: "https://guide.example/things-to-do/attractions",
+    adapter: "simpleview_europe_product_detail_html",
+    adapter_contract_revision: "simpleview-europe-product-detail-html-v2",
+    source_identity: "guide.example",
+    terms_status: "open_license",
+    source_health: "healthy",
+    runtime_policy: "bounded_refresh",
+    max_items: 20,
+    max_links: 20,
+    max_details: 20,
+    max_list_bytes: 262_144,
+    max_detail_bytes: 65_536,
+    max_total_bytes: 1_048_576,
+    request_timeout_ms: 8_000,
+    max_total_ms: 30_000,
+  };
+  async function claim(feed) {
+    const catalog = createSourceProfileCatalog({
+      now: () => NOW,
+      query: async (_sql, values) => ({ rows: [{
+        profile_key: "place-source-profile-v1:test-region",
+        source_id: baseFeed.id,
+        profile_revision: `sha256:${"a".repeat(64)}`,
+        approval_key: "source-profile-approval-v1:approval123",
+        feed,
+        approved_feed: baseFeed,
+        lease_token: values[1],
+        attempt_count: 1,
+      }] }),
+    });
+    return catalog.claimApprovedPlaceSourceRefresh();
+  }
+
+  assert.equal((await claim(baseFeed)).feed.max_total_bytes, 1_048_576);
+  assert.equal(await claim({ ...baseFeed, adapter_contract_revision: "simpleview-europe-product-detail-html-v1" }), null);
+  assert.equal(await claim({ ...baseFeed, max_details: 19 }), null);
+  for (const changed of [
+    { endpoint: "https://guide.example/other" },
+    { bbox: [-180, -90, 180, 90] },
+    { terms_status: "permission_required" },
+    { source_identity: "other.example" },
+  ]) assert.equal(await claim({ ...baseFeed, ...changed }), null);
 });
 
 test("worker persistence is idempotent and catalog-owned while failures retain fresh rows", async () => {

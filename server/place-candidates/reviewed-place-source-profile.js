@@ -1,5 +1,11 @@
 "use strict";
 
+const {
+  SIMPLEVIEW_EUROPE_PLACE_ADAPTER,
+  SIMPLEVIEW_EUROPE_PLACE_CONTRACT,
+  SIMPLEVIEW_EUROPE_PLACE_LIMITS,
+} = require("./simpleview-europe-place-detail-source");
+
 const PROFILE_ENV_KEY = "PARRANDA_REVIEWED_PLACE_SOURCE_PROFILES";
 const MAX_REVIEW_AGE_MS = 90 * 24 * 60 * 60 * 1000;
 const REVIEWABLE_DISCOVERY_STATUSES = new Set([
@@ -13,6 +19,7 @@ const ADAPTER_MAP = Object.freeze({
   schema_org_place_json: "schema_org_place_json",
   experience_card_place_list_detail_html: "experience_card_place_list_detail_html",
   map_linked_place_html: "map_linked_place_html",
+  [SIMPLEVIEW_EUROPE_PLACE_ADAPTER]: SIMPLEVIEW_EUROPE_PLACE_ADAPTER,
 });
 // Increment the matching value whenever an adapter's accepted input or output
 // contract materially changes. Catalog approval and persisted worker rows bind
@@ -22,6 +29,7 @@ const PLACE_SOURCE_ADAPTER_CONTRACTS = Object.freeze({
   schema_org_place_json: "schema-org-place-json-v1",
   experience_card_place_list_detail_html: "experience-card-place-list-detail-html-v1",
   map_linked_place_html: "map-linked-place-html-v2",
+  [SIMPLEVIEW_EUROPE_PLACE_ADAPTER]: SIMPLEVIEW_EUROPE_PLACE_CONTRACT,
 });
 const RUNTIME_POLICIES = new Set(["active", "bounded_refresh"]);
 const TERMS_STATUSES = new Set(["open_license", "api_terms_compatible"]);
@@ -108,6 +116,14 @@ function reviewedPlaceFeed({ row, candidate, bbox, profileKey, review }) {
     publicString(candidate.source_identity) &&
     sourceIdentity.toLowerCase() !== publicString(candidate.source_identity).toLowerCase()
   ) return null;
+  if (adapter === SIMPLEVIEW_EUROPE_PLACE_ADAPTER) {
+    const endpointUrl = new URL(endpoint);
+    if (
+      endpointUrl.search ||
+      !Object.entries(SIMPLEVIEW_EUROPE_PLACE_LIMITS).every(([key, limit]) => row[key] === limit) ||
+      normalizedHostname(sourceIdentity) !== normalizedHostname(endpointUrl.hostname)
+    ) return null;
+  }
 
   return compact({
     id,
@@ -126,6 +142,7 @@ function reviewedPlaceFeed({ row, candidate, bbox, profileKey, review }) {
       1,
       adapter === "experience_card_place_list_detail_html" ? 12 : 100,
     ) || (adapter === "experience_card_place_list_detail_html" ? 12 : 40),
+    ...placeSourceOperationalLimits(adapter),
     status: "active",
     runtime_policy: runtimePolicy,
     terms_status: termsStatus,
@@ -139,6 +156,17 @@ function reviewedPlaceFeed({ row, candidate, bbox, profileKey, review }) {
 function placeSourceAdapterContract(adapter) {
   const normalized = ADAPTER_MAP[publicString(adapter)] || null;
   return normalized ? PLACE_SOURCE_ADAPTER_CONTRACTS[normalized] || null : null;
+}
+
+function placeSourceOperationalLimits(adapter) {
+  const normalized = ADAPTER_MAP[publicString(adapter)] || null;
+  return normalized === SIMPLEVIEW_EUROPE_PLACE_ADAPTER
+    ? { ...SIMPLEVIEW_EUROPE_PLACE_LIMITS }
+    : {};
+}
+
+function normalizedHostname(value) {
+  return String(value || "").trim().toLowerCase().replace(/^www\./, "");
 }
 
 function validRuntimeReview(value, nowMs) {
@@ -242,6 +270,7 @@ module.exports = {
   MAX_REVIEW_AGE_MS,
   PLACE_SOURCE_ADAPTER_CONTRACTS,
   placeSourceAdapterContract,
+  placeSourceOperationalLimits,
   placeFeedsFromReviewedSourceProfiles,
   resolveReviewedPlaceSourceProfileFeeds,
 };
