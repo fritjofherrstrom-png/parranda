@@ -2,7 +2,7 @@
 
 **Status:** Current north star plus historical delivery record
 
-**Updated after:** #492 trusted place-source lifecycle
+**Updated after:** bounded Simpleview Europe list→detail place-source slice
 **Related:** `docs/PARRANDA_ENGINE_GOALS.md`
 
 ## North star
@@ -135,8 +135,13 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 - **Reviewed local place-source bridge (2026-08).** A Source Catalog profile can
   now bind an exact, fresh, geo-bounded official/editorial place-list endpoint
   to the closed `schema_org_place_html`, `schema_org_place_json`,
-  `experience_card_place_list_detail_html` or `map_linked_place_html` adapter. The
-  adapters extract only allowlisted place
+  `experience_card_place_list_detail_html`, `map_linked_place_html`, or the dedicated
+  `simpleview_europe_product_detail_html` list→detail contract. The single-page
+  Simpleview shape accepts at most twenty canonical same-origin `-p<digits>`
+  detail links and binds list, detail, aggregate-byte, timeout and total-work
+  limits into the reviewed revision. Only the background worker may perform
+  that fan-out; request composition consumes fresh persisted rows and never
+  crawls it. The adapters extract only allowlisted place
   types, stable source identities and exact coordinates from JSON-LD or from a
   same-card heading/category/detail/map tuple, cap bytes/items/radius, block
   off-origin redirects and acquire outside the request path into persistent
@@ -147,7 +152,7 @@ The roadmap numbering below predates the merge order. The actual sequence was:
   fragments cannot be joined. The approved adapter-contract revision is checked
   at profile read, worker claim and reservoir read, so v1 approvals, targets and
   rows fail closed until rediscovery and explicit re-review.
-  `experience-card-place-list-detail-html-v1` is the only fan-out shape. It is
+  `experience-card-place-list-detail-html-v1` remains a separate fan-out shape. It is
   the closed server-rendered card contract observed on an official regional
   destination catalog: each balanced `vs-experience-card` must bind one title,
   one allowlisted subcategory and one exact same-origin `vs-readmore` detail
@@ -172,6 +177,10 @@ The roadmap numbering below predates the merge order. The actual sequence was:
   approved sources across larger and smaller real geographies, exact coordinate
   recovery from other bounded site formats, and conservative alias resolution
   beyond geo+name/hard ids.
+  Restrictive terms remain a hard gate even when robots permits the paths.
+  Simpleview v2 adds parsed DOM/microdata ownership, pinned public-IP HTTPS and
+  immutable audit-bound worker targets. Unpublished v1 approvals/targets/rows
+  fail closed; #494 experience-card revisions remain unchanged.
 
 - **Next Pulse consumption step:** normalized `time_sensitive_events` can now become gated Pulse signals through the shared Pulse quality/ranking/masthead path. Only source-backed, non-stale, current/today/tonight events with at least medium confidence are eligible; stale/future/source-thin rows stay out. Salience is generic (timing relevance, source confidence/tier, place/coordinate evidence, route-role hint, recurrence/specificity) so unusually relevant happenings can rise above passive context without city-specific hacks. These signals remain Pulse context only: they do not become route stops, route candidates, dayflow composition inputs, or Planner mutations in this step.
 
@@ -184,7 +193,7 @@ Still missing before a true any-place Planner (now the next steps): stronger gen
 Audited 2026-06-19 from real Athens dogfooding (the felt experience was unchanged despite the convergence work). "Agnostic feel" has **three independent halves**; shipping one does not move the product on its own:
 
 1. **Synthesis** — compose an honest day from whatever candidates exist (route-engine `agnostic_compose` + daypart ordering #293 + readiness gate/observability #290/#292/#295). **Built and proven.** The #295 probe shows the engine path is promotion-`eligible` under adequate supply and `blocked` only by supply-driven caps. Deliberately gated/unpromoted per the guardrail.
-2. **Supply** — enough trusted source-backed candidates that even a thin city composes a *rich* day. **The broad global reservoir, reviewed-local-source bridge, operator approval, persistent worker lifecycle and proactive structured place-source discovery/qualification lane have landed; coverage and source quality remain the gating lever.** Inline Schema.org, bounded Schema.org list→detail and strict map-linked cards are supported. Next work is operating reviewed sources across real geographies and conservative entity resolution. No amount of extra synthesis substitutes for that work.
+2. **Supply** — enough trusted source-backed candidates that even a thin city composes a *rich* day. **The broad global reservoir, reviewed-local-source bridge, operator approval, persistent worker lifecycle and proactive structured place-source discovery/qualification lane have landed; coverage and source quality remain the gating lever.** Inline Schema.org, strict map-linked cards, bounded experience-card list→detail and the separate Simpleview Europe contract are supported. Next work is permission-compatible source operation across real geographies and conservative entity resolution. No amount of extra synthesis substitutes for that work.
 3. **Live-source fit** — pulse feeds that are culturally relevant, not administrative. Athens's wired City-of-Athens events calendar returns HTTP 200 but mostly municipal council meetings (`Συνεδρίαση …`) → "same pulse". This is source selection + salience (pulse lane), not a wiring failure.
 
 Evidence from Athens (registered, thin): **26 verified catalog items, 4 provisional candidates, 0 templates.** Two consequences make the synthesis work invisible there: (a) Athens is a **registered** city, so the entire any-place stack (convergence / promotion gate / observability) is gated behind `noRecognizedCity` and **never runs for it**; (b) #293 daypart ordering is **inert for Athens** because its 26 catalog items carry no `route_roles` (only the 4 provisional candidates do). So the synthesis we shipped does not touch Athens's felt experience.

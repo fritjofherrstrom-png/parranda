@@ -6,6 +6,7 @@ const {
   PLACE_SOURCE_ADAPTER_CONTRACTS,
   placeFeedsFromReviewedSourceProfiles,
   placeSourceAdapterContract,
+  placeSourceOperationalLimits,
 } = require("../place-candidates/reviewed-place-source-profile");
 const {
   deriveLocalAnchorSpatialScope,
@@ -341,7 +342,8 @@ FROM approved
 
 const CLAIM_PLACE_SOURCE_REFRESH_SQL = `
 WITH candidate AS (
-  SELECT target.profile_key, target.source_id
+  SELECT target.profile_key, target.source_id,
+    approval.decision->'place_feed_bindings'->target.source_id AS approved_feed
   FROM pulse_source_place_refresh_targets AS target
   JOIN pulse_source_profiles AS profile
     ON profile.profile_key = target.profile_key
@@ -351,9 +353,16 @@ WITH candidate AS (
    AND profile.approval_key = target.approval_key
    AND profile.review_expires_at > $1::timestamptz
    AND target.feed->>'adapter_contract_revision' = ANY($4::text[])
+  LEFT JOIN pulse_source_profile_approvals AS approval
+    ON approval.approval_key = target.approval_key
+   AND approval.profile_revision = target.profile_revision
+   AND approval.approval_config_revision = profile.approval_config_revision
   WHERE
-    (target.status IN ('pending', 'retry_wait', 'completed') AND target.next_attempt_at <= $1::timestamptz)
-    OR (target.status = 'leased' AND target.lease_until <= $1::timestamptz)
+    ((target.status IN ('pending', 'retry_wait', 'completed') AND target.next_attempt_at <= $1::timestamptz)
+    OR (target.status = 'leased' AND target.lease_until <= $1::timestamptz))
+    AND ((target.feed->>'adapter' <> 'simpleview_europe_product_detail_html'
+        AND approval.decision->'place_feed_bindings' IS NULL)
+      OR target.feed - 'profile_reviewed_at' = approval.decision->'place_feed_bindings'->target.source_id)
   ORDER BY target.next_attempt_at ASC, target.profile_key ASC, target.source_id ASC
   LIMIT 1
   FOR UPDATE OF target SKIP LOCKED
@@ -363,7 +372,7 @@ SET status = 'leased', lease_token = $2, lease_until = $3::timestamptz,
   attempt_count = target.attempt_count + 1, updated_at = NOW()
 FROM candidate
 WHERE target.profile_key = candidate.profile_key AND target.source_id = candidate.source_id
-RETURNING target.*
+RETURNING target.*, candidate.approved_feed
 `;
 
 const COMPLETE_PLACE_SOURCE_REFRESH_SQL = `
@@ -377,8 +386,15 @@ WITH current_target AS (
    AND profile.approved_profile_revision = target.profile_revision
    AND profile.approval_key = target.approval_key
    AND profile.review_expires_at > $5::timestamptz
+  LEFT JOIN pulse_source_profile_approvals AS approval
+    ON approval.approval_key = target.approval_key
+   AND approval.profile_revision = target.profile_revision
+   AND approval.approval_config_revision = profile.approval_config_revision
   WHERE target.profile_key = $1 AND target.source_id = $2
     AND target.status = 'leased' AND target.lease_token = $3
+    AND ((target.feed->>'adapter' <> 'simpleview_europe_product_detail_html'
+        AND approval.decision->'place_feed_bindings' IS NULL)
+      OR target.feed - 'profile_reviewed_at' = approval.decision->'place_feed_bindings'->target.source_id)
 ), observation AS (
   INSERT INTO pulse_source_place_fetch_observations (
     fetch_key, profile_key, source_id, profile_revision, approval_key,
@@ -1146,9 +1162,20 @@ function buildReviewedProfile(profile, decision, { operatorId, now = new Date() 
     const evidenceFamily = closedToken(row?.evidence_family, ["official", "editorial"]);
     const sourceTier = closedToken(row?.source_tier, ["official", "editorial", "curated"]);
     const termsStatus = closedToken(row?.terms_status, ["open_license", "api_terms_compatible"]);
+    const candidateTermsStatus = closedToken(candidate.terms_status, [
+      "open_license",
+      "api_terms_compatible",
+      "permission_required",
+      "restricted",
+      "unknown",
+    ]);
     const sourceHealth = closedToken(row?.source_health, ["healthy"]);
     const runtimePolicy = closedToken(row?.runtime_policy, ["active", "bounded_refresh"]);
-    if (!id || !label || !evidenceFamily || !sourceTier || !termsStatus || !sourceHealth || !runtimePolicy) {
+    if (
+      !id || !label || !evidenceFamily || !sourceTier || !termsStatus ||
+      (candidate.adapter === "simpleview_europe_product_detail_html" && candidateTermsStatus !== termsStatus) ||
+      !sourceHealth || !runtimePolicy
+    ) {
       return null;
     }
     placeSources.push(compact({
@@ -1170,6 +1197,7 @@ function buildReviewedProfile(profile, decision, { operatorId, now = new Date() 
         1,
         candidate.adapter === "experience_card_place_list_detail_html" ? 12 : 100,
       ) || (candidate.adapter === "experience_card_place_list_detail_html" ? 12 : 40),
+      ...placeSourceOperationalLimits(candidate.adapter),
       priority: finiteNumber(row?.priority),
     }));
   }
@@ -1204,9 +1232,15 @@ function buildReviewedProfile(profile, decision, { operatorId, now = new Date() 
       source_health: row.source_health,
       runtime_policy: row.runtime_policy,
       max_items: row.max_items,
+      ...placeSourceOperationalLimits(row.adapter),
       priority: row.priority,
     })),
   };
+  // A new approval containing Simpleview binds every selected feed. Otherwise
+  // changing both a target's adapter and source id could evade the new guard.
+  if (validatedFeeds.some((feed) => feed.adapter === "simpleview_europe_product_detail_html")) normalizedDecision.place_feed_bindings = Object.fromEntries(
+    validatedFeeds.map((feed) => [feed.id, placeFeedBinding(feed)]),
+  );
   const approvalConfigRevision = `sha256:${createHash("sha256")
     .update(stableJson(normalizedDecision)).digest("hex")}`;
   const approvalKey = `source-profile-approval-v1:${createHash("sha256")
@@ -1262,11 +1296,20 @@ function reviewablePlaceCandidates(profile) {
         "schema_org_place_json",
         "experience_card_place_list_detail_html",
         "map_linked_place_html",
+        "simpleview_europe_product_detail_html",
       ]),
       adapter_contract_revision: placeSourceAdapterContract(candidate?.adapter),
+      ...placeSourceOperationalLimits(candidate?.adapter),
       maps_to_existing_provider: candidate?.maps_to_existing_provider === true,
       trust_tier: boundedString(candidate?.trust_tier, 40),
       source_identity: boundedString(candidate?.source_identity, 200),
+      ...(candidate?.adapter === "simpleview_europe_product_detail_html" ? { terms_status: closedToken(candidate?.terms_status, [
+        "open_license",
+        "api_terms_compatible",
+        "permission_required",
+        "restricted",
+        "unknown",
+      ]) } : {}),
       candidate_kind: boundedString(candidate?.candidate_kind, 80),
       corroboration_required: candidate?.corroboration_required === true,
     }))
@@ -1289,6 +1332,7 @@ function normalizeClaimedPlaceSourceRefresh(row, leaseToken) {
   const approvalKey = publicString(row?.approval_key);
   const token = publicString(leaseToken || row?.lease_token);
   const feed = parseProfile(row?.feed);
+  const approvedFeed = parseProfile(row?.approved_feed);
   if (
     !profileKey?.startsWith("place-source-profile-v1:") || !sourceId ||
     !profileRevision?.startsWith("sha256:") ||
@@ -1299,8 +1343,12 @@ function normalizeClaimedPlaceSourceRefresh(row, leaseToken) {
       "schema_org_place_json",
       "experience_card_place_list_detail_html",
       "map_linked_place_html",
+      "simpleview_europe_product_detail_html",
     ]) ||
     feed.adapter_contract_revision !== placeSourceAdapterContract(feed.adapter) ||
+    !operationalLimitsMatch(feed.adapter, feed) ||
+    ((approvedFeed || feed.adapter === "simpleview_europe_product_detail_html") &&
+      (!approvedFeed || stableJson(placeFeedBinding(feed)) !== stableJson(approvedFeed))) ||
     !boundedString(feed.source_identity, 200)
   ) return null;
   return {
@@ -1309,6 +1357,7 @@ function normalizeClaimedPlaceSourceRefresh(row, leaseToken) {
     profile_revision: profileRevision,
     approval_key: approvalKey,
     feed,
+    ...(approvedFeed ? { approved_feed: approvedFeed } : {}),
     lease_token: token,
     attempt_count: positiveInteger(row?.attempt_count) || 1,
   };
@@ -1364,10 +1413,23 @@ function validPersistedPlaceRecord(record) {
       "schema_org_place_json",
       "experience_card_place_list_detail_html",
       "map_linked_place_html",
+      "simpleview_europe_product_detail_html",
     ]) &&
     record.source_adapter_contract_revision === placeSourceAdapterContract(record.source_adapter) &&
     normalizeDate(record.source_observed_at) && normalizeDate(record.source_expires_at)
   );
+}
+
+function operationalLimitsMatch(adapter, feed) {
+  return Object.entries(placeSourceOperationalLimits(adapter))
+    .every(([key, value]) => feed?.[key] === value);
+}
+
+function placeFeedBinding(feed) {
+  // Approval time is audit metadata, not acquisition configuration. Keeping it
+  // out preserves idempotence when the same decision is submitted later.
+  const { profile_reviewed_at: _reviewedAt, ...binding } = feed;
+  return binding;
 }
 
 function stableJson(value) {
@@ -1608,6 +1670,7 @@ module.exports = {
   boundedScoutRefreshAt,
   buildProfileReviewRevision,
   buildReviewedProfile,
+  normalizeClaimedPlaceSourceRefresh,
   normalizeScoutDemand,
   resolveDefaultSourceProfileCatalog,
   scoutRetryDelayMs,

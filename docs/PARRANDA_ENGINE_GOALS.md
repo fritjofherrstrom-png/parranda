@@ -2,8 +2,8 @@
 
 **Status:** Current product/engine alignment note
 
-**Updated after:** #494 bounded list→detail source contract and the current
-Visit Sweden NAPI place-supply slice
+**Updated after:** #495 budget-aware supply, #497 reviewed Simpleview Europe
+and the Visit Sweden NAPI place-supply slice
 **Related:** `docs/CANDIDATE_PREFERENCE_COVERAGE.md`, `docs/LOCAL_LIVE_INTELLIGENCE.md`, `docs/CITYPACK_INSTALLATION.md`
 
 ## Core thesis
@@ -189,7 +189,7 @@ instead of adding more synthesis diagnostics.
 
 The reviewed-place bridge now lets a fresh, geo-bounded Source Catalog profile
 feed an approved official/editorial place list into that same reservoir. It
-supports schema.org JSON-LD plus a closed map-linked-card adapter whose v2
+supports schema.org JSON-LD and a closed map-linked-card adapter whose v2
 contract accepts only balanced semantic item containers or explicitly
 card-marked DOM units. The name, one unambiguous category, one stable
 same-origin detail identity and one unambiguous high-precision coordinate pair
@@ -201,14 +201,27 @@ never enter. Official reviewed-source rows can route without pretending the
 individual place was human-verified; editorial-only rows remain
 display/corroboration evidence. This is generic for any approved geography.
 
+The dedicated `simpleview_europe_product_detail_html` adapter adds one closed
+list→detail shape without becoming a general crawler: one exact query-free
+`ol.productList` endpoint, same-origin `li.prodTypeATTR` records, identity from
+`h2.ProductName > a.ProductDetail`, explicit `div.type > p`, and at most twenty
+canonical detail URLs ending `-p<digits>`. Detail facts must resolve inside one
+closed schema.org place scope (`LocalBusiness` or a category-compatible subtype)
+with one canonical identity, nested
+`PostalAddress`, and one high-precision page coordinate pair. The worker owns
+all fan-out under revision-bound link/detail/byte/time limits; Planner reads
+only fresh persisted rows. Permission-requiring sites may prove structure in
+discovery but cannot be approved, refreshed or routed without a compatible
+license or written permission.
+
 The generic worker now proactively searches for local-language and English
 place-guide interfaces, follows bounded same-origin guide links, and recognizes
-only multi-item schema.org lists, the closed experience-card list/detail shape,
+only multi-item schema.org lists, the closed experience-card and Simpleview list/detail shapes,
 or map-linked cards with stable identities plus exact in-scope coordinates.
 Exact endpoint/adapter/publisher/bounds candidates
 are re-probed on separate days and promoted only to `qualified_for_review`; no
 place source auto-activates or enters probation. This closes one additional
-common list format, not coverage itself. A second closed adapter handles the
+common list format, not coverage itself. The independent experience-card adapter handles the
 officially observed balanced `vs-experience-card` shape with at most 12 exact
 same-origin detail URLs, a shared timeout/four-megabyte ceiling and exact
 canonical/name/category/coordinate agreement per detail. It is a versioned DOM
@@ -227,7 +240,7 @@ only records whose approval key and profile revision still match; expiry,
 unknown state and material rediscovery fail closed. This makes a newly approved
 generic local source capable of contributing a source-backed Planner stop after
 the worker lifecycle, while preserving the next supply priorities: operating
-more real sources and conservative entity resolution.
+licensed real sources and conservative entity resolution.
 
 ## Current roadmap
 
@@ -237,12 +250,16 @@ the old #244–#249 migration sequence as current work.
 
 Priorities now are:
 
-1. Operate the versioned bounded experience-card list→detail adapter and the
-   independent official NAPI source across a large unsupported place and a
-   smaller/regional place through their real persistent lifecycles.
-2. Measure coverage, refresh health, exact-identity merges and real route
-   contribution. A single official NAPI row may remain a visible idea but may
-   not self-promote without an operator-reviewed profile or independent family.
+1. Obtain permission or select a genuinely compatible licensed source using the
+   applicable closed list→detail contract; never infer permission from robots allowance.
+2. Operate reviewed experience-card and, when permitted, Simpleview sources,
+   alongside the independent official NAPI source, across a large unsupported
+   place and a smaller/regional place through their real persistent lifecycles.
+   The reviewed adapters require discovery, separate-day qualification,
+   operator review and persistent worker refresh. Measure coverage, refresh
+   health, exact-identity merges and real route contribution. A single official
+   NAPI row may remain a visible idea but may not self-promote without an
+   operator-reviewed profile or independent family.
 3. Improve conservative entity aliases/reconciliation as independent source
    volume grows, without letting ratings or popularity become ranking power.
 4. Define explicit graduation criteria for experimental/legacy Planner paths:

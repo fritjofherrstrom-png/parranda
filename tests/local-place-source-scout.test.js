@@ -69,6 +69,19 @@ function mapLinkedPlaceList() {
     </ul>`;
 }
 
+function simpleviewPlaceList() {
+  return `<ol class="productList">
+    <li class="Item p126153 prodTypeATTR cat_aquarium">
+      <h2 class="ProductName"><a class="ProductDetail" href="/things-to-do/harbour-aquarium-p126153">Harbour Aquarium</a></h2>
+      <div class="type"><h3>Type:</h3><p>Aquarium</p></div>
+    </li>
+    <li class="Item p432253 prodTypeATTR cat_museum">
+      <h2 class="ProductName"><a class="ProductDetail" href="/things-to-do/city-museum-p432253">City Museum</a></h2>
+      <div class="type"><h3>Type:</h3><p>Museum</p></div>
+    </li>
+  </ol>`;
+}
+
 function context() {
   return {
     anchor: { lat: 55.55, lng: 14.35 },
@@ -176,6 +189,41 @@ test("a same-origin verified experience-card list enters the bounded review-only
   assert.equal(result.manifest_candidate.adapter, "experience_card_place_list_detail_html");
   assert.equal(result.manifest_candidate.max_items, 2);
   assert.equal(result.manifest_candidate.status, "review-needed");
+});
+
+test("Simpleview list-detail discovery stays permission-blocked until compatible terms exist", () => {
+  const blocked = inspectPlaceSourcePage({
+    seed: {
+      url: "https://guide.example/things-to-do/attractions",
+      label: "Official destination guide",
+      family: "official_tourism_guide",
+      trust_tier: "official",
+      terms_status: "permission_required",
+    },
+    body: simpleviewPlaceList(),
+    context: context(),
+  });
+  assert.equal(blocked.candidate.adapter, "simpleview_europe_product_detail_html");
+  assert.equal(blocked.candidate.status, "needs_adapter_or_permission");
+  assert.equal(blocked.candidate.maps_to_existing_provider, true);
+  assert.equal(blocked.manifest_candidate, null);
+  assert.ok(blocked.candidate.reasons.includes("permission_required_before_runtime"));
+
+  const licensed = inspectPlaceSourcePage({
+    seed: {
+      url: "https://guide.example/things-to-do/attractions",
+      label: "Licensed destination guide",
+      family: "official_tourism_guide",
+      trust_tier: "official",
+      terms_status: "open_license",
+    },
+    body: simpleviewPlaceList(),
+    context: context(),
+  });
+  assert.equal(licensed.candidate.status, "viable_place_provider_probe");
+  assert.equal(licensed.manifest_candidate.adapter, "simpleview_europe_product_detail_html");
+  assert.equal(licensed.manifest_candidate.max_details, 20);
+  assert.equal(licensed.manifest_candidate.max_links, 20);
 });
 
 test("individual venues, generic businesses and out-of-scope rows are not place-list sources", () => {

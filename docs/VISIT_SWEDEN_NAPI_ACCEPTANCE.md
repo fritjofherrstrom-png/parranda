@@ -1,8 +1,10 @@
 # Visit Sweden NAPI: implementation evidence and outstanding acceptance
 
-Date: 2026-09-07. Branch: `codex/visit-sweden-napi`, based on
-`141f96946415997dfb42d22f5a5ed908848f254b` (#494). This is a bounded API
-source, not a new crawler or the reviewed HTML source worker.
+Updated: 2026-09-08. Branch: `codex/visit-sweden-napi`, synchronized with
+`6ad1eb7159b1577d7ce0c1bbf0d59f35fe3fd786` (main after #495 and #497).
+This is a bounded API source, not a new crawler or the reviewed HTML source
+worker. HTTP observations below were recorded on 2026-09-07 before that sync;
+they have not been rerun against the updated branch.
 
 ## Actual local HTTP observations
 
@@ -57,8 +59,12 @@ introduced. The provider bbox is an envelope, not exact national borders.
   boundaries, source corroboration gates, request concurrency, healthy empty
   caching, failure retries, revision/settings-separated cache identity,
   cross-instance disk reads and the warm Overture fast path.
-- Full local server/frontend test run passed; TypeScript, frontend build,
-  dist drift and self-hosted configuration validation passed.
+- After synchronization with main on 2026-09-08, the combined focused source
+  suite passed 168/168. `npm test` discovered 2,777 tests: 2,776 passed, zero
+  failed and one explicitly skipped PostgreSQL integration test, which CI runs
+  separately against its disposable database. Separate frontend tests passed
+  239/239; TypeScript, frontend build, dist drift and self-hosted validation
+  passed. These local results do not stand in for CI on the pushed revision.
 - Production defaults stay disabled. `dev:full` enables the source. There
   has been no production or Pi deployment of this branch.
 - Pi/browser acceptance: NOT OBSERVED. Desktop/mobile rendering, actual
@@ -71,31 +77,24 @@ introduced. The provider bbox is an envelope, not exact national borders.
 - A provider outage in later QA must be classified INCONCLUSIVE / NOT
   OBSERVED, not reported as proof that the integration is correct or broken.
 
-## Coordination with radius PR #495
+## Integration with merged #495 and #497
 
-Claude owns the walking-budget aperture/expansion change. This branch owns
-the bounded NAPI source. Both touch `open-data-loader.js`.
-When integrating, distinguish a cache-only source reread after failed OSM
-from a second network fetch. #495's eager-empty retry was written for cache
-wrappers; retrying NAPI's `load` after a failed NAPI request would perform
-another HTTP request. Preserve the single-attempt bound per anchor per
-composed request; a `readCached` peek is safe, a blind `load` retry is not.
+#495 merged as `493a480a7baefcefbf622bad5504d0687f110271`; #497 merged as
+`6ad1eb7159b1577d7ce0c1bbf0d59f35fe3fd786`. Both are included in this branch.
+The only merge conflict was the roadmap document; both the NAPI API/cache
+track and the separately reviewed HTML-source worker track are retained.
 
-Do not describe a conflict-free textual merge as verified runtime integration.
-Before promotion, test the combined branch with OSM and NAPI both failing,
-assert one NAPI fetch per anchor, and retain the cache-only Overture rescue.
+The previously observed double-fetch defect is resolved by #495's reviewed
+head `f456ecb32805de5beac82e04b052b442cd154427`. When primary acquisition fails,
+a source declaring `primaryRescue: false` is offered only its `readCached()`
+peek. NAPI therefore cannot spend a second live request in the same composition,
+while existing cached official evidence can still contribute. Cache-only
+Overture rereads retain their existing behavior. The earlier reproduction
+applied to #495 head `4d6c3c8bb762d15928f1966828ea82ae752d1f05`, not the merged
+implementation; it is no longer an outstanding integration blocker.
 
-Measured integration result: the merge tree combining NAPI commit
-`524769cfd13591c1f9bf2149246b0f32e9df563d` with #495 head
-`4d6c3c8bb762d15928f1966828ea82ae752d1f05` is text-conflict-free. Running the
-combined loader with deterministic failures produces **2 NAPI fetches, expected
-1**. The standalone NAPI regression passes. This is a confirmed integration
-defect, not provider degradation or live acceptance evidence.
-
-Handoff to Claude: restrict the eager-empty retry in #495 to descriptors that
-allow primary rescue, e.g. require `source.primaryRescue !== false` before
-discarding `eagerResult`, or explicitly use a cache-only peek. Preserve the
-Overture warm-cache rescue test. Run both the radius tests and
-`tests/visit-sweden-napi-source.test.js` against the combined result before
-claiming compatibility. Do not change radius/category behavior to hide the
-double request.
+Regression coverage in `tests/budget-aware-candidate-supply.test.js` and
+`tests/visit-sweden-napi-source.test.js` verifies the single NAPI live attempt,
+cache-only rescue and unchanged Overture rescue. Source acquisition and trust
+gates remain separate: API/cache tests do not exercise the reviewed HTML
+source's approval and worker lifecycle.

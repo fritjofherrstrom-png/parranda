@@ -474,6 +474,45 @@ test("list-detail traversal is never warmed by the legacy request-path source br
   assert.equal(fetchCount, 0);
 });
 
+test("legacy request-time feed wiring cannot fetch the list-detail adapter", async () => {
+  let fetchCount = 0;
+  const listDetailFeed = {
+    id: "list-detail-guide",
+    label: "Licensed guide",
+    endpoint: "https://8.8.8.8/things-to-do/attractions",
+    adapter: "simpleview_europe_product_detail_html",
+    adapter_contract_revision: "simpleview-europe-product-detail-html-v2",
+    bbox: [13, 55, 14, 56],
+    evidence_family: "official",
+    source_tier: "official",
+    source_identity: "8.8.8.8",
+    terms_status: "open_license",
+    source_health: "healthy",
+    runtime_policy: "bounded_refresh",
+    max_items: 20,
+    max_links: 20,
+    max_details: 20,
+    max_list_bytes: 262_144,
+    max_detail_bytes: 65_536,
+    max_total_bytes: 1_048_576,
+    request_timeout_ms: 8_000,
+    max_total_ms: 30_000,
+  };
+  const source = createReviewedPlaceSource({
+    sourceCatalog: { listApprovedPlaceFeedsForAnchor: async () => [listDetailFeed] },
+    env: {},
+    cache: createSourceCache({ namespace: "no-request-list-detail", ttlMs: 60_000 }),
+    now: () => new Date("2026-08-20T12:00:00.000Z"),
+    fetcher: async () => {
+      fetchCount += 1;
+      throw new Error("list-detail fetch must remain worker-owned");
+    },
+  });
+  assert.deepEqual(await source.load({ lat: 55.5, lng: 13.5 }), []);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(fetchCount, 0);
+});
+
 test("persistent catalog records remain available without a network fetcher", async () => {
   const persisted = [{ id: "persisted-one", name: "Persisted", lat: 55.5, lng: 13.5 }];
   const source = createReviewedPlaceSource({
