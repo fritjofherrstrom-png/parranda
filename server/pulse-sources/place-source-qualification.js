@@ -3,6 +3,7 @@
 const {
   probeReviewedPlaceFeed,
 } = require("../place-candidates/schema-org-place-source");
+const { placeSourceAdapterContract, placeSourceOperationalLimits } = require("../place-candidates/reviewed-place-source-profile");
 
 const QUALIFICATION_SCHEMA_VERSION = 1;
 const MAX_PROBES_PER_RUN = 2;
@@ -17,6 +18,7 @@ async function qualifyDiscoveredPlaceSourceProfile({
   previousQualification = null,
   now = new Date(),
   fetcher,
+  simpleviewFetcher,
   probe = probeReviewedPlaceFeed,
   maxProbes = MAX_PROBES_PER_RUN,
   timeoutMs = DEFAULT_PROBE_TIMEOUT_MS,
@@ -51,6 +53,7 @@ async function qualifyDiscoveredPlaceSourceProfile({
   const observations = await Promise.all(selected.map((binding) => probeBinding(binding, {
     observedAt,
     fetcher,
+    simpleviewFetcher,
     probe,
     timeoutMs,
   })));
@@ -113,10 +116,10 @@ function bindManifestCandidate(manifest, candidate) {
   };
 }
 
-async function probeBinding(binding, { observedAt, fetcher, probe, timeoutMs }) {
+async function probeBinding(binding, { observedAt, fetcher, simpleviewFetcher, probe, timeoutMs }) {
   try {
     const result = await probe(reviewCandidate(binding), {
-      fetcher,
+      fetcher: binding.adapter === "simpleview_europe_product_detail_html" ? simpleviewFetcher : fetcher,
       timeoutMs: clampInteger(timeoutMs, 1_000, DEFAULT_PROBE_TIMEOUT_MS),
     });
     const successful = ["ok", "empty"].includes(result?.status);
@@ -261,12 +264,18 @@ function reviewCandidate(binding) {
     endpoint: binding.endpoint,
     adapter: binding.adapter,
     bbox: binding.bbox,
+    ...(binding.adapter === "simpleview_europe_product_detail_html" ? {
+      adapter_contract_revision: placeSourceAdapterContract(binding.adapter),
+      evidence_family: binding.sourceTier === "official" ? "official" : "editorial",
+      ...placeSourceOperationalLimits(binding.adapter),
+    } : {}),
     license: binding.license,
     source_tier: binding.sourceTier,
     source_family: binding.sourceFamily,
     source_identity: binding.sourceIdentity,
     terms_status: binding.termsStatus,
-    max_items: binding.maxItems,
+    max_items: binding.adapter === "simpleview_europe_product_detail_html"
+      ? placeSourceOperationalLimits(binding.adapter).max_items : binding.maxItems,
     status: "review-needed",
     runtime_policy: "review_required",
   });
@@ -329,6 +338,7 @@ function normalizeAdapter(value) {
     "schema_org_place_json",
     "experience_card_place_list_detail_html",
     "map_linked_place_html",
+    "simpleview_europe_product_detail_html",
   ]
     .includes(value) ? value : null;
 }

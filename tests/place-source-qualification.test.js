@@ -153,6 +153,30 @@ test("list-detail candidates preserve their exact bounded adapter through qualif
   assert.deepEqual(result.profile.runtime_review.place_sources, []);
 });
 
+test("licensed Simpleview candidates preserve the list-detail adapter through qualification", async () => {
+  const feeds = [];
+  const listDetailCandidate = candidate({ adapter: "simpleview_europe_product_detail_html" });
+  const listDetailManifest = manifest({ adapter: "simpleview_europe_product_detail_html" });
+  const first = await qualifyDiscoveredPlaceSourceProfile({
+    profile: profile({ place_source_candidates: [listDetailCandidate] }),
+    manifests: [listDetailManifest],
+    now: new Date("2026-08-01T10:00:00Z"),
+    probe: async (value) => { feeds.push(value); return healthyProbe(); },
+  });
+  const second = await qualifyDiscoveredPlaceSourceProfile({
+    profile: profile({ place_source_candidates: [listDetailCandidate] }),
+    manifests: [listDetailManifest],
+    previousQualification: first.qualification,
+    now: new Date("2026-08-02T10:00:00Z"),
+    probe: async (value) => { feeds.push(value); return healthyProbe(); },
+  });
+  assert.deepEqual(feeds.map((value) => value.adapter), ["simpleview_europe_product_detail_html", "simpleview_europe_product_detail_html"]);
+  assert.equal(feeds[0].adapter_contract_revision, "simpleview-europe-product-detail-html-v2");
+  assert.equal(feeds[0].evidence_family, "official");
+  assert.equal(second.qualification.status, "qualified_for_review");
+  assert.equal(second.qualification.candidates[0].review_candidate.adapter, "simpleview_europe_product_detail_html");
+});
+
 test("same-day probes replace evidence and cannot satisfy repeated-day qualification", async () => {
   const first = await qualifyDiscoveredPlaceSourceProfile({
     profile: profile(),

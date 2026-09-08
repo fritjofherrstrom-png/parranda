@@ -11,6 +11,11 @@ const {
   MAP_LINKED_PLACE_ADAPTER,
   inspectMapLinkedPlacePayload,
 } = require("../place-candidates/map-linked-html-place-source");
+const {
+  MAX_DETAILS: SIMPLEVIEW_MAX_DETAILS,
+  SIMPLEVIEW_EUROPE_PLACE_ADAPTER,
+  inspectSimpleviewEuropePlaceList,
+} = require("../place-candidates/simpleview-europe-place-detail-source");
 
 const MAX_PLACE_DISCOVERY_QUERIES = 8;
 const MIN_PLACE_LIST_ITEMS = 2;
@@ -111,7 +116,27 @@ function inspectPlaceSourcePage({
       summary = mapLinked;
     }
   }
-  const sourceShapeCount = adapter === EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER
+  if (
+    adapter === "schema_org_place_html" &&
+    (summary.status !== "ok" || summary.accepted_place_count < MIN_PLACE_LIST_ITEMS)
+  ) {
+    const simpleview = inspectSimpleviewEuropePlaceList(body, {
+      endpoint,
+      termsStatus: normalizeTermsStatus(seed.terms_status),
+      maxLinks: SIMPLEVIEW_MAX_DETAILS,
+    });
+    if (simpleview.status === "ok" && simpleview.detail_link_count >= MIN_PLACE_LIST_ITEMS) {
+      adapter = SIMPLEVIEW_EUROPE_PLACE_ADAPTER;
+      summary = {
+        status: "ok",
+        accepted_place_count: simpleview.detail_link_count,
+        distinct_place_type_count: simpleview.distinct_place_type_count,
+        detail_link_count: simpleview.detail_link_count,
+      };
+    }
+  }
+  const sourceShapeCount = [EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER, SIMPLEVIEW_EUROPE_PLACE_ADAPTER]
+    .includes(adapter)
     ? summary.detail_link_count
     : summary.accepted_place_count;
   if (summary.status !== "ok" || sourceShapeCount < MIN_PLACE_LIST_ITEMS) {
@@ -127,6 +152,8 @@ function inspectPlaceSourcePage({
 
   const sourceIdentity = new URL(endpoint).hostname.toLowerCase().replace(/^www\./, "");
   const termsStatus = normalizeTermsStatus(seed.terms_status);
+  const permissionBlocked = adapter === SIMPLEVIEW_EUROPE_PLACE_ADAPTER &&
+    !["open_license", "api_terms_compatible"].includes(termsStatus);
   const candidate = {
     id: `scout-place-${stableHash(`${adapter}:${endpoint}`)}`,
     candidate_kind: "place_list",
@@ -136,7 +163,9 @@ function inspectPlaceSourcePage({
     source_identity: sourceIdentity,
     discovery_method: firstString(seed.discovery_method, "reviewed_website_probe"),
     adapter,
-    status: termsStatus === "restricted" ? "rejected" : "viable_place_provider_probe",
+    status: termsStatus === "restricted"
+      ? "rejected"
+      : permissionBlocked ? "needs_adapter_or_permission" : "viable_place_provider_probe",
     maps_to_existing_provider: true,
     trust_tier: normalizePlaceTrustTier(seed.trust_tier),
     terms_status: termsStatus,
@@ -146,7 +175,11 @@ function inspectPlaceSourcePage({
     accepted_place_count: summary.accepted_place_count,
     distinct_place_type_count: summary.distinct_place_type_count,
     detail_link_count: summary.detail_link_count,
-    reasons: ["structured_place_list_detected", "operator_review_required"],
+    reasons: [
+      "structured_place_list_detected",
+      "operator_review_required",
+      ...(permissionBlocked ? ["permission_required_before_runtime"] : []),
+    ],
     blockers: termsStatus === "restricted" ? ["terms_restricted"] : [],
   };
   const manifest = candidate.status === "rejected"
@@ -173,6 +206,7 @@ function buildPlaceManifestCandidate(candidate, { seed = {}, bbox = null } = {})
       "schema_org_place_json",
       EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER,
       MAP_LINKED_PLACE_ADAPTER,
+      SIMPLEVIEW_EUROPE_PLACE_ADAPTER,
     ]
       .includes(candidate.adapter) ||
     !normalizeBounds(bbox)
@@ -190,12 +224,18 @@ function buildPlaceManifestCandidate(candidate, { seed = {}, bbox = null } = {})
     source_identity: candidate.source_identity,
     priority: 100,
     max_items: Math.min(
-      candidate.adapter === EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER ? 12 : 100,
+      candidate.adapter === EXPERIENCE_CARD_PLACE_LIST_DETAIL_ADAPTER
+        ? 12
+        : candidate.adapter === SIMPLEVIEW_EUROPE_PLACE_ADAPTER ? SIMPLEVIEW_MAX_DETAILS : 100,
       Math.max(
         MIN_PLACE_LIST_ITEMS,
         candidate.detail_link_count || candidate.accepted_place_count,
       ),
     ),
+    ...(candidate.adapter === SIMPLEVIEW_EUROPE_PLACE_ADAPTER ? {
+      max_links: SIMPLEVIEW_MAX_DETAILS,
+      max_details: SIMPLEVIEW_MAX_DETAILS,
+    } : {}),
     status: "review-needed",
     runtime_policy: "review_required",
     review: {

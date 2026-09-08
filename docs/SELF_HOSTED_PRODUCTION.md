@@ -200,7 +200,9 @@ shape:
 
 The decision cannot provide or replace endpoint, adapter, publisher identity or
 adapter-contract revision; the server derives those again from the persisted
-discovery row. Apply the decision with an explicit audit label for the operator
+discovery row. For the Simpleview list→detail contract the server also overrides
+and binds the fixed item/link/detail/body/aggregate/time limits; a decision-file
+`max_items` value cannot widen them. Apply the decision with an explicit audit label for the operator
 acting through the authenticated server shell:
 
 ```bash
@@ -221,8 +223,9 @@ reservoir can supply Planner.
 
 The approved profile stores a derived `runtime_review.place_sources` list. The
 place adapters are deliberately narrow: `schema_org_place_html`,
-`schema_org_place_json`, `experience_card_place_list_detail_html` or
-`map_linked_place_html`, exact HTTPS
+`schema_org_place_json`, `experience_card_place_list_detail_html`,
+`map_linked_place_html`, or the dedicated
+`simpleview_europe_product_detail_html`, exact HTTPS
 endpoint/adapter/source-identity binding, an `official` or `editorial` evidence
 family, compatible terms, healthy status, bounded item count and the profile's
 reviewed geographic bounds. They read only allowlisted factual atoms for a
@@ -233,21 +236,40 @@ inside the same balanced semantic or explicitly card-marked DOM unit. An outer
 list/section cannot combine sibling fragments. The exact adapter-contract
 revision stored in the approval must match the running code; an adapter bump
 invalidates old feeds, worker targets and reservoir rows until rediscovery and
-explicit re-review. Only `experience-card-place-list-detail-html-v1` follows
-detail pages: it accepts the closed balanced `vs-experience-card` list shape,
-follows at most 12 exact same-origin HTTPS URLs sequentially under one total
+explicit re-review. `experience-card-place-list-detail-html-v1` follows
+detail pages from the closed balanced `vs-experience-card` list shape,
+with at most 12 exact same-origin HTTPS URLs sequentially under one total
 timeout and four-megabyte ceiling, and requires exact canonical identity,
 matching hero/content names, one matching allowlisted subcategory and one
 published `experience-map` coordinate pair on each detail. The contract is
 bound to that DOM shape, not a city or hostname. It never follows links on the
-Planner request path. No adapter
-geocodes rows or ingests descriptions, ratings, images or generic
-`LocalBusiness` records. Catalog-backed acquisition is owned
+Planner request path. The separate Simpleview v2 adapter follows one
+query-free list endpoint, at most twenty canonical same-origin links under the
+reviewed path, 256 KiB list body, 64 KiB per detail, 1 MiB aggregate, 8-second
+per-request timeout and 30-second total work. It accepts one scoped closed
+schema.org place identity/address object, the exact list-bound category, plus
+exact page coordinates.
+Its `simpleview-europe-product-detail-html-v2` contract uses a bounded HTML DOM
+parser: comments, inert content, nested entities and external microdata itemrefs
+cannot lend facts to the selected place. HTTPS uses a validated, pinned DNS
+address, not the generic worker fetcher; every resolved address must be public.
+The immutable approval decision binds the complete normalized acquisition feed
+(excluding audit time). SQL claim/completion and the worker validate this
+binding, including geographic bounds, terms and all operational budgets.
+Unpublished Simpleview v1 approvals and reservoir records fail closed and need
+rediscovery/re-review. Existing experience-card revisions remain unchanged.
+The inline schema.org and map-linked adapters do not follow detail pages.
+No adapter geocodes rows or ingests descriptions, ratings or images. Simpleview
+accepts a `LocalBusiness` scope only when its exact identity, address and
+coordinates agree with the closed list category; generic businesses without
+that category-bound identity are not route evidence.
+Catalog-backed acquisition is owned
 by the worker, which writes freshness-bounded rows to PostgreSQL; Planner only
 reads rows whose profile revision and approval key still match. A reviewed
 official source may supply a route candidate without being mislabeled as
 place-level human verification; editorial-only rows still need independent
-corroboration. Expiry, unknown fields, an off-origin redirect or a catalog
+corroboration. Planner and legacy request-time warm paths cannot run the
+list→detail adapter. Expiry, unknown fields, an off-origin redirect or a catalog
 outage all fail closed.
 
 ## Manual deployment and rollback

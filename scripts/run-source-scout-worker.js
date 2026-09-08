@@ -13,6 +13,7 @@ const {
 const {
   collectReviewedPlaceFeedOutcome,
 } = require("../server/place-candidates/schema-org-place-source");
+const { normalizeClaimedPlaceSourceRefresh } = require("../server/pulse-sources/source-profile-catalog");
 
 const MAX_BATCH_SIZE = 5;
 const MIN_INTERVAL_MS = 30_000;
@@ -67,6 +68,10 @@ async function runApprovedPlaceSourceRefresh({
   if (!target || typeof catalog?.recordApprovedPlaceSourceOutcome !== "function") {
     return { status: "unavailable", reason: "approved_place_source_refresh_unavailable" };
   }
+  if ((target.approved_feed || target.feed?.adapter === "simpleview_europe_product_detail_html") &&
+    !normalizeClaimedPlaceSourceRefresh(target, target.lease_token)) {
+    return { status: "failed", reason: "approved_place_source_refresh_invalid" };
+  }
   const observedAt = now instanceof Date ? new Date(now.getTime()) : new Date(now);
   if (!Number.isFinite(observedAt.getTime()) || typeof collect !== "function") {
     return { status: "failed", reason: "approved_place_source_refresh_invalid" };
@@ -74,7 +79,9 @@ async function runApprovedPlaceSourceRefresh({
   let collected;
   try {
     collected = await collect(target.feed, {
-      fetcher: runtime?.fetcher,
+      fetcher: target.feed?.adapter === "simpleview_europe_product_detail_html"
+        ? runtime?.simpleviewFetcher : runtime?.fetcher,
+      resolveHost: runtime?.resolveHost,
       timeoutMs: runtime?.placeSourceTimeoutMs,
       maxBytes: runtime?.placeSourceMaxBytes,
     });
@@ -244,6 +251,7 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
         placeContext: target.place_context,
         now: qualificationNow,
         fetcher: runtime.fetcher,
+        simpleviewFetcher: runtime.simpleviewFetcher,
       });
       if (qualified?.profile) profile = qualified.profile;
       placeQualificationStatus = qualified?.qualification?.status || "unavailable";

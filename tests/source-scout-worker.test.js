@@ -199,6 +199,96 @@ test("worker owns bounded list-detail traversal and persists only exact detail r
   ));
 });
 
+test("worker performs the bounded Simpleview fetch and preserves list-detail provenance", async () => {
+  const listUrl = "https://guide.example/things-to-do/attractions";
+  const detailUrl = "https://guide.example/things-to-do/harbour-aquarium-p126153";
+  const target = {
+    profile_key: "place-source-profile-v1:simpleview",
+    profile_revision: `sha256:${"a".repeat(64)}`,
+    approval_key: "source-profile-approval-v1:simpleview",
+    source_id: "reviewed-simpleview",
+    feed: {
+      id: "reviewed-simpleview",
+      label: "Licensed official guide",
+      endpoint: listUrl,
+      adapter: "simpleview_europe_product_detail_html",
+      adapter_contract_revision: "simpleview-europe-product-detail-html-v2",
+      bbox: [-4.3, 50.2, -3.9, 50.5],
+      evidence_family: "official",
+      source_tier: "official",
+      source_identity: "guide.example",
+      terms_status: "open_license",
+      source_health: "healthy",
+      runtime_policy: "bounded_refresh",
+      max_items: 20,
+      max_links: 20,
+      max_details: 20,
+      max_list_bytes: 262_144,
+      max_detail_bytes: 65_536,
+      max_total_bytes: 1_048_576,
+      request_timeout_ms: 8_000,
+      max_total_ms: 30_000,
+    },
+    lease_token: "lease-simpleview",
+    attempt_count: 1,
+  };
+  target.approved_feed = structuredClone(target.feed);
+  const list = `<ol class="productList"><li class="prodTypeATTR">
+    <h2 class="ProductName"><a class="ProductDetail" href="${detailUrl}">Harbour Aquarium</a></h2>
+    <div class="type"><p>Aquarium</p></div>
+  </li></ol>`;
+  const detail = `<html itemscope itemtype="https://schema.org/LocalBusiness"><head>
+    <meta property="og:latitude" content="50.3668518066406">
+    <meta property="og:longitude" content="-4.13050985336304"></head><body>
+    <h1 itemprop="name">Harbour Aquarium</h1><meta itemprop="url" content="${detailUrl}">
+    <span class="category">Aquarium</span>
+    <div itemprop="address" itemscope itemtype="https://schema.org/PostalAddress">
+      <meta itemprop="streetAddress" content="Rope Walk">
+      <meta itemprop="addressLocality" content="Plymouth">
+    </div></body></html>`;
+  const requested = [];
+  let persisted = null;
+  const result = await runApprovedPlaceSourceRefresh({
+    target,
+    now: new Date("2026-08-20T12:00:00.000Z"),
+    runtime: {
+      resolveHost: async () => [{ address: "8.8.8.8", family: 4 }],
+      simpleviewFetcher: async (url) => {
+        requested.push(url);
+        const body = new TextEncoder().encode(url === listUrl ? list : detail);
+        return {
+          ok: true,
+          status: 200,
+          url,
+          headers: { get: () => "text/html; charset=utf-8" },
+          body: { getReader: () => {
+            let sent = false;
+            return {
+              read: async () => sent ? { done: true } : (sent = true, { done: false, value: body }),
+              cancel: async () => {},
+            };
+          } },
+        };
+      },
+    },
+    catalog: {
+      recordApprovedPlaceSourceOutcome: async (_claimed, outcome) => {
+        persisted = outcome.records;
+        return { status: "completed", candidate_count: outcome.records.length };
+      },
+    },
+  });
+  assert.equal(result.status, "completed");
+  assert.deepEqual(requested, [listUrl, detailUrl]);
+  assert.deepEqual(persisted[0].source_provenance, {
+    list_source_id: "reviewed-simpleview",
+    list_url: listUrl,
+    detail_url: detailUrl,
+  });
+  assert.equal(persisted[0].source_adapter_contract_revision, "simpleview-europe-product-detail-html-v2");
+  assert.doesNotMatch(JSON.stringify(persisted[0]), /<html|productList/);
+});
+
 test("observing qualification schedules the next proof on a distinct UTC day", async () => {
   assert.equal(
     nextQualificationProbeAt(new Date("2026-08-01T23:59:00Z")).toISOString(),

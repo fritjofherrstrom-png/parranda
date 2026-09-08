@@ -89,3 +89,9 @@ jobs:
           docker compose --profile source-catalog -f compose.production.yml up --detach postgres
           docker compose --profile source-catalog -f compose.production.yml run --rm source-catalog-migrate
           docker compose --profile source-catalog -f compose.production.yml run --rm source-scout-worker node scripts/run-source-scout-worker.js --limit 1
+          # Exercise the actual SQL lifecycle in an isolated, self-cleaning
+          # schema. Synthetic HTML only; this is not provider acceptance.
+          docker compose --profile source-catalog -f compose.production.yml run --rm \
+            -v "$PWD/tests/simpleview-catalog-postgres.test.js:/app/tests/simpleview-catalog-postgres.test.js:ro" \
+            -e PARRANDA_TEST_DATABASE_URL="$PARRANDA_SOURCE_CATALOG_DATABASE_URL" \
+            source-scout-worker node --test tests/simpleview-catalog-postgres.test.js
