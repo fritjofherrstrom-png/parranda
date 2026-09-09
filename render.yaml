@@ -50,6 +50,12 @@ services:
       # request and rescue cold locations when public Overpass is unavailable.
       - key: PARRANDA_OVERTURE_SOURCE
         value: enabled
+      # Official structured place supply from Visit Sweden's National API.
+      # One Sweden-bounded coordinate query runs alongside Overpass and enters
+      # the same persistent candidate cache; place text is never sent.
+      # Opt in only after deployed lifecycle acceptance.
+      - key: PARRANDA_VISIT_SWEDEN_SOURCE
+        value: disabled
       # Operator-reviewed local official/editorial place lists may supplement
       # the same candidate reservoir through bounded schema.org JSON-LD. With
       # no reviewed profile configured this is a no-op; discovery alone never

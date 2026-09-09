@@ -59,7 +59,7 @@ const GENERIC_NAME_TOKENS = new Set([
 // viewpoint with similar names from merging.
 const CATEGORY_BUCKETS = {
   viewpoint: "scenic", "rooftop-bar": "scenic", promenade: "scenic", park: "scenic",
-  garden: "scenic", bridge: "scenic", castle: "scenic", landmark: "scenic",
+  garden: "scenic", bridge: "scenic", castle: "scenic", landmark: "scenic", "historic-site": "scenic",
   restaurant: "food", pizza: "food", "street-food": "food", bakery: "food",
   trattoria: "food", cafe: "food", "café": "food",
   bar: "bars", "wine-bar": "bars", "cocktail-bar": "bars",
@@ -160,6 +160,7 @@ function matchIdentity(a, b) {
     }
     return no("wikidata_match_but_geo_far");
   }
+  if (wa && wb && wa !== wb) return no("conflicting_wikidata_ids");
 
   // Category compatibility gate.
   const bucketA = CATEGORY_BUCKETS[String(a.type || "").toLowerCase()] || null;
@@ -185,6 +186,13 @@ function matchIdentity(a, b) {
 
   const sim = nameSimilarity(a.label, b.label);
   const distinctiveOverlap = intersectionSize(distinctA, distinctB);
+
+  // Extra distinctive words can identify a neighbouring branch or annex.
+  // Category-word aliases remain useful, but partial overlap must not transfer
+  // official corroboration between two different venues.
+  if (distinctiveOverlap !== distinctA.size || distinctiveOverlap !== distinctB.size) {
+    return no("distinctive_name_conflict", { distance_m: round(dist), name_similarity: round2(sim) });
+  }
 
   if (dist <= GEO_MERGE_M && sim >= NAME_SIM_MIN && distinctiveOverlap >= 1) {
     return yes("geo_name", { distance_m: round(dist), name_similarity: round2(sim), distinctive_overlap: distinctiveOverlap });
@@ -330,7 +338,7 @@ function distinctiveTokens(value) {
   const tokens = nameTokens(value);
   const out = new Set();
   for (const token of tokens) {
-    if (!GENERIC_NAME_TOKENS.has(token) && token.length > 1) out.add(token);
+    if (!GENERIC_NAME_TOKENS.has(token) && (token.length > 1 || /^\d+$/.test(token))) out.add(token);
   }
   return out;
 }
@@ -389,8 +397,13 @@ function wikidataIdOf(candidate) {
   const evidence = Array.isArray(candidate.evidence) ? candidate.evidence : [];
   for (const item of evidence) {
     const url = item.source_ref?.url || "";
-    const match = String(url).match(/wikidata\.org\/wiki\/(Q\d+)/i);
-    if (match) return match[1];
+    try {
+      const parsed = new URL(url);
+      if (!["https:", "http:"].includes(parsed.protocol) || parsed.username || parsed.password ||
+          !["www.wikidata.org", "wikidata.org"].includes(parsed.hostname) || parsed.search || parsed.hash) continue;
+      const match = parsed.pathname.match(/^\/wiki\/(Q\d+)$/);
+      if (match) return match[1];
+    } catch (_error) { /* not an exact entity reference */ }
   }
   return null;
 }

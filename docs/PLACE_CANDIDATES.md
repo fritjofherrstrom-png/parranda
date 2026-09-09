@@ -210,6 +210,75 @@ The registry is internal, but its normalized candidates are consumed by the
 shared candidate pool and adopted Planner/Blitz paths. It must not be treated as
 diagnostics-only or as permission to duplicate acquisition inside a surface.
 
+## Official NAPI Place Acquisition
+
+`server/place-candidates/visit-sweden-napi-source.js` is a higher-level trusted
+loader for Visit Sweden's public National API. It is not a registry provider
+and it does not trust public request fields. For a server-owned coordinate
+anchor inside the provider's Swedish coverage it performs one bounded Solr
+predicate-range query and normalizes only exact JSON-LD `Place` and
+`FoodEstablishment` entities:
+
+```text
+trusted anchor -> bounded NAPI bbox -> strict records -> external/open provider -> shared gates
+```
+
+An exact metadata identity, one entity, one joined coordinate node, an
+in-radius point and a closed structured category are mandatory. Names are
+localized labels, never category evidence; generic stores are not classified
+from their names. Prose, media, ratings and raw loader fields are dropped.
+Healthy results and healthy empties use the persistent-capable source cache,
+while errors fail closed and remain retryable.
+
+The `visit-sweden-napi-solr-v2` cache contract preserves explicit
+`CafeOrCoffeeShop`, `BarOrPub`, `Bakery` and `Restaurant` additional types;
+an unqualified `FoodEstablishment` remains a broad food/restaurant fallback,
+never an inferred café or nightlife claim. Bakery remains a supporting fika
+match; its category alone does not establish coffee service. Unknown/contradictory explicit
+categories, repeated entry identities and ambiguous preferred-language names
+are rejected. Other namespace prefixes are allowed, but JSON-LD term/context
+remapping is not. Cached evidence retains the successful acquisition timestamp;
+fresh cache does not mean verified opening hours or publisher freshness.
+
+The shared entity matcher requires compatible category buckets, nearby
+coordinates and matching distinctive name tokens (including branch numbers),
+or a geographically plausible hard identity. Partial name overlap, conflicting
+Wikidata IDs and lookalike Wikidata URLs cannot create corroboration. The
+historic-site bucket also prevents borrowing evidence from adjacent businesses.
+Aliases and same-name colocated entities still require further identity work.
+
+Acquisition is opt-in with `PARRANDA_VISIT_SWEDEN_SOURCE=enabled` and also
+requires `PARRANDA_OPEN_DATA_LOADER`. `dev:full` enables it; production Compose
+and Render keep it disabled pending deployed acceptance. Set
+`PARRANDA_CACHE_DIR` to persistent storage for cross-restart caching. Radius
+and row-limit settings can reduce, never exceed, five kilometres and 100 rows.
+The request/body deadline is at most five seconds and the body cap is two MiB.
+If primary regional scouting moves the chosen anchor after NAPI started, only
+the new anchor's cache may be read in that composition; no second live API
+request is allowed and old-anchor rows cannot fill the new cluster.
+Each source instance permits at most two concurrent live requests across cold
+anchors. Same-key requests coalesce through the cache; overload returns a
+retryable failure without queuing or caching a false empty result. This is a
+per-instance limit, not a distributed quota across web replicas.
+
+Source policy: use the documented public API and `public:true` records, retain
+Visit Sweden entry attribution, and copy only factual identity/category/geo
+fields. Do not infer a dataset license from the API documentation's own footer
+license. References: [Visit Sweden API](https://docs.visitsweden.com/en/api/),
+[National API reuse information](https://corporate.visitsweden.com/nationellt-api/)
+and [EntryStore predicate search](https://entrystore.org/kb/search/).
+
+This adapter is a cached bounded API loader, not the Source Catalog's reviewed
+HTML list→detail worker lifecycle. Its cache persistence test does not prove
+worker-owned discovery, review, approval or reservoir refresh. Those remain
+separate acceptance requirements for the reviewed source adapters.
+
+The source contributes one `official` evidence family. That tier does not make
+an unreviewed place route-capable: normal promotion still requires a fresh
+operator-reviewed source binding or an exact merge with another independent
+family. The coverage bbox is a provider capability boundary, not a city pack or
+named-location exception.
+
 ## Provider Async Strategy
 
 The registry stays synchronous for now.

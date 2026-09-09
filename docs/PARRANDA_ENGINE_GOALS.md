@@ -2,7 +2,8 @@
 
 **Status:** Current product/engine alignment note
 
-**Updated after:** bounded Simpleview Europe list→detail place-source slice
+**Updated after:** #495 budget-aware supply, #497 reviewed Simpleview Europe
+and the Visit Sweden NAPI place-supply slice
 **Related:** `docs/CANDIDATE_PREFERENCE_COVERAGE.md`, `docs/LOCAL_LIVE_INTELLIGENCE.md`, `docs/CITYPACK_INSTALLATION.md`
 
 ## Core thesis
@@ -25,7 +26,8 @@ The candidate spine is now a real shared decision substrate rather than an
 inspect-only foundation. Candidate-based Blitz, thin registered-city fill and
 any-place Planner composition consume gated source-backed places; the ordinary
 route engine composes eligible any-place supply. Broad OSM/Wikidata/Overture
-loaders and the revision-bound reviewed local-source reservoir supply it.
+loaders, Sweden-bounded official NAPI supply and the revision-bound reviewed
+local-source reservoir supply it.
 
 Rich citypacks remain curated-first, and Pulse keeps a separate signal/event
 path with a bounded route-interrupt boundary. The major remaining gap is supply
@@ -167,6 +169,12 @@ one public Overpass dependency:
 - Overture Places supplies a bounded five-kilometre global `open_directory`
   family through cached GeoParquet reads. It is filtered at confidence 0.95,
   never contributes ratings or generic prose, and is counted as one family.
+- Visit Sweden's National API supplies a separate official family inside its
+  declared Swedish provider coverage. Parranda makes one cached, hard-capped
+  coordinate query for exact `Place` and `FoodEstablishment` JSON-LD records;
+  public place text is never sent. Exact entry/metadata identity, a same-graph
+  coordinate join and a closed category map are required. Descriptions,
+  images, ratings, unknown types and generic shops never enter the reservoir.
 - Compact exact settlements such as Kivik resolve from structural provider
   identity rather than popularity. This is a generic small-place rule.
 - A resolver-attested small settlement searches approved Live sources locally
@@ -244,10 +252,14 @@ Priorities now are:
 
 1. Obtain permission or select a genuinely compatible licensed source using the
    applicable closed list→detail contract; never infer permission from robots allowance.
-2. Operate reviewed experience-card and, when permitted, Simpleview sources
-   across a large unsupported place and a smaller/regional place through
-   discovery, separate-day qualification, operator review and persistent worker
-   refresh. Measure coverage, refresh health and real route contribution.
+2. Operate reviewed experience-card and, when permitted, Simpleview sources,
+   alongside the independent official NAPI source, across a large unsupported
+   place and a smaller/regional place through their real persistent lifecycles.
+   The reviewed adapters require discovery, separate-day qualification,
+   operator review and persistent worker refresh. Measure coverage, refresh
+   health, exact-identity merges and real route contribution. A single official
+   NAPI row may remain a visible idea but may not self-promote without an
+   operator-reviewed profile or independent family.
 3. Improve conservative entity aliases/reconciliation as independent source
    volume grows, without letting ratings or popularity become ranking power.
 4. Define explicit graduation criteria for experimental/legacy Planner paths:

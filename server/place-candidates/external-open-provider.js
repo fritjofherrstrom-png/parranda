@@ -257,9 +257,12 @@ function buildEvidence(record, sources, hasCoords, type, observedAt) {
       label: firstString(source.provider, source.label) || undefined,
     };
     const freshness = firstString(source.freshness, record.freshness, "fresh");
+    // A cache hit is not a new source observation. Sources with acquisition
+    // timestamps retain them when mapped for a later Planner request.
+    const sourceObservedAt = normalizedIso(source.observed_at) || observedAt;
 
     evidence.push(
-      createEvidence({ claim_type: "existence", value: true, ...ref, observed_at: observedAt, freshness }),
+      createEvidence({ claim_type: "existence", value: true, ...ref, observed_at: sourceObservedAt, freshness }),
     );
     if (hasCoords) {
       evidence.push(
@@ -267,13 +270,13 @@ function buildEvidence(record, sources, hasCoords, type, observedAt) {
           claim_type: "location",
           value: { lat: record.lat, lng: record.lng },
           ...ref,
-          observed_at: observedAt,
+          observed_at: sourceObservedAt,
           freshness,
         }),
       );
     }
     evidence.push(
-      createEvidence({ claim_type: "category", value: type, ...ref, observed_at: observedAt, freshness }),
+      createEvidence({ claim_type: "category", value: type, ...ref, observed_at: sourceObservedAt, freshness }),
     );
   }
 
