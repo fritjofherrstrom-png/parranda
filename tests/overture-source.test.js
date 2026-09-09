@@ -59,10 +59,27 @@ test("category mapping covers local food, culture, nature, markets and second ha
   assert.equal(categoryMapping("national_park").type, "park");
   assert.equal(categoryMapping("farmers_market").type, "market");
   assert.equal(categoryMapping("antique_store").type, "vintage-shop");
-  assert.equal(categoryMapping("home_goods_store", ["antique_store"]).type, "vintage-shop");
+  assert.equal(categoryMapping("home_goods_store", ["antique_store"]), null, "unsupported primary categories fail closed");
   assert.equal(categoryMapping("pharmacy"), null);
   assert.equal(categoryMapping("shopping_mall"), null);
   assert.equal(categoryMapping("tourist_attraction"), null, "generic attraction labels are not route evidence");
+});
+
+test("an unsupported primary category cannot borrow a route meaning from an alternate facet", () => {
+  assert.equal(
+    categoryMapping("playground", ["sports_and_recreation_venue", "park"]),
+    null,
+    "a playground must not become green space merely because park is an alternate facet",
+  );
+  assert.equal(
+    mapOvertureRow(row({
+      name: "Indoor activity fixture",
+      category: "playground",
+      alternate: ["sports_and_recreation_venue", "park"],
+    })),
+    null,
+    "unsupported primary meaning fails closed before it reaches route selection",
+  );
 });
 
 test("drops low-confidence, closed, unlocated, unnamed and unsupported rows", () => {
@@ -73,6 +90,17 @@ test("drops low-confidence, closed, unlocated, unnamed and unsupported rows", ()
   assert.equal(mapOvertureRow(row({ category: "pharmacy", alternate: [] })), null);
   assert.equal(mapOvertureRow(row({ licenses: [] })), null);
   assert.equal(mapOvertureRow(row({ licenses: ["future-unreviewed-license"] })), null);
+});
+
+test("primary-only deliberately loses legitimate alternate recall rather than inventing route evidence", () => {
+  assert.equal(mapOvertureRow(row({ category: "bookstore", alternate: ["coffee_shop"] })), null,
+    "a real bookstore/cafe may be useful, but this adapter has no display-only facet contract");
+  const cafe = mapOvertureRow(row({ category: "coffee_shop", alternate: ["bookstore", "park"] }));
+  assert.equal(cafe.type, "cafe");
+  assert.deepEqual(cafe.tags, ["fika", "coffee"], "alternate facets cannot silently add exact culture/green");
+  for (const category of [null, undefined, "", "unknown_category"]) {
+    assert.equal(mapOvertureRow(row({ category, alternate: ["park"] })), null);
+  }
 });
 
 test("preserves the closed per-row Overture license set without raw source metadata", () => {
@@ -99,6 +127,9 @@ test("the GeoParquet query is release-validated, bbox-bounded, filtered and capp
   assert.match(sql, /bbox\.xmin BETWEEN/);
   assert.match(sql, /confidence >= 0\.950/);
   assert.match(sql, /regexp_matches/);
+  assert.match(sql, /categories\.primary AS category/);
+  assert.doesNotMatch(sql, /categories\.alternate|list_has_any|list_filter/,
+    "acquisition must not spend its bounded row budget on alternate-only matches");
   assert.match(sql, /source -> source\.license/);
   assert.match(sql, /LIMIT 600$/);
   assert.equal(buildOvertureQuery({ release: "latest; DROP TABLE x", lat: 1, lng: 1 }), null);

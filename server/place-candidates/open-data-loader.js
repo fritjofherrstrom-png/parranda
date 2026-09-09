@@ -1152,9 +1152,10 @@ function resolveDefaultOpenDataLoader(env = process.env) {
       minConfidence: Number(env?.PARRANDA_OVERTURE_MIN_CONFIDENCE) || undefined,
     });
     const overtureCache = createSourceCache({
-      // v2 invalidates rows cached before per-record Overture licenses were
-      // selected from the source schema; those rows cannot be relabeled safely.
-      namespace: "overture-v2",
+      // v3 invalidates rows whose unsupported primary category previously
+      // borrowed route meaning from an alternate facet. Cached v2 rows cannot
+      // be reclassified safely because raw provider taxonomy is not retained.
+      namespace: "overture-v3",
       dir: env?.PARRANDA_CACHE_DIR || null,
       ttlMs: Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : undefined,
     });
