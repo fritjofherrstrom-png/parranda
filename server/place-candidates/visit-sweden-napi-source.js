@@ -23,13 +23,14 @@ const { createHash } = require("node:crypto");
 
 const VISIT_SWEDEN_NAPI_SEARCH_ENDPOINT = "https://data.visitsweden.com/store/search";
 const VISIT_SWEDEN_NAPI_ATTRIBUTION_URL = "https://docs.visitsweden.com/en/api/";
-const VISIT_SWEDEN_NAPI_CONTRACT_REVISION = "visit-sweden-napi-solr-v1";
+const VISIT_SWEDEN_NAPI_CONTRACT_REVISION = "visit-sweden-napi-solr-v2";
 const DEFAULT_RADIUS_KM = 5;
 const MAX_RADIUS_KM = 5;
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 100;
 const DEFAULT_TIMEOUT_MS = 5_000;
 const DEFAULT_MAX_BYTES = 2 * 1024 * 1024;
+const MAX_CONCURRENT_REQUESTS = 2;
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
 // Provider coverage, not a city special-case. Anchors outside this conservative
 // Sweden envelope never contact NAPI.
@@ -52,6 +53,13 @@ const PLACE_ADDITIONAL_TYPE_MAP = new Map([
   ["LandmarksOrHistoricalBuildings", { type: "historic-site", tags: ["historic", "landmark"] }],
 ]);
 
+const FOOD_ADDITIONAL_TYPE_MAP = new Map([
+  ["Restaurant", { type: "restaurant", tags: ["mat"] }],
+  ["CafeOrCoffeeShop", { type: "cafe", tags: ["kaffe", "fika"] }],
+  ["Bakery", { type: "bakery", tags: ["bakverk"] }],
+  ["BarOrPub", { type: "bar", tags: ["nattliv"] }],
+]);
+
 function predicateHash(uri) {
   return createHash("md5").update(uri).digest("hex").slice(0, 8);
 }
@@ -63,15 +71,22 @@ function createVisitSwedenNapiSource({
   timeoutMs = DEFAULT_TIMEOUT_MS,
   maxBytes = DEFAULT_MAX_BYTES,
   userAgent = DEFAULT_USER_AGENT,
+  now = () => Date.now(),
 } = {}) {
   const radius = clamp(radiusKm, 0.1, MAX_RADIUS_KM, DEFAULT_RADIUS_KM);
   const rowLimit = integer(limit, 1, MAX_LIMIT, DEFAULT_LIMIT);
   const deadline = integer(timeoutMs, 50, DEFAULT_TIMEOUT_MS, DEFAULT_TIMEOUT_MS);
   const byteLimit = integer(maxBytes, 1024, DEFAULT_MAX_BYTES, DEFAULT_MAX_BYTES);
+  let activeRequests = 0;
 
   async function collectOutcome(anchor = {}) {
     const request = buildVisitSwedenSearchRequest({ ...anchor, radiusKm: radius, limit: rowLimit });
     if (!request || typeof fetcher !== "function") return failed();
+    // Different cold anchors must not create unbounded provider/Pi fan-out.
+    // No queue: overload degrades immediately and is never cached as empty.
+    // Same-key requests coalesce in the persistent cache before this boundary.
+    if (activeRequests >= MAX_CONCURRENT_REQUESTS) return failed();
+    activeRequests += 1;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), deadline);
     try {
@@ -95,15 +110,20 @@ function createVisitSwedenNapiSource({
       }
       const parsed = parseSearchPayload(payload, request);
       if (!parsed) return failed();
+      const observedAt = new Date(now()).toISOString();
       return {
         status: parsed.length ? "ok" : "empty",
-        records: parsed.slice(0, rowLimit),
+        records: parsed.slice(0, rowLimit).map(record => ({
+          ...record,
+          sources: record.sources.map(source => ({ ...source, observed_at: observedAt })),
+        })),
         contract_revision: VISIT_SWEDEN_NAPI_CONTRACT_REVISION,
       };
     } catch (_error) {
       return failed();
     } finally {
       clearTimeout(timer);
+      activeRequests -= 1;
     }
   }
 
@@ -193,7 +213,16 @@ function parseSearchPayload(payload, request) {
   const children = payload.resource?.children;
   if (!Array.isArray(children) || children.length > request.limit || children.length > MAX_LIMIT) return null;
   const records = [];
+  const identityCounts = new Map();
   for (const child of children) {
+    const key = `${exactDigits(child?.contextId)}:${exactDigits(child?.entryId)}`;
+    identityCounts.set(key, (identityCounts.get(key) || 0) + 1);
+  }
+  for (const child of children) {
+    // A repeated entry may disagree about its entity facts. Do not pick a
+    // convenient version or let repetition inflate the candidate supply.
+    const key = `${exactDigits(child?.contextId)}:${exactDigits(child?.entryId)}`;
+    if (identityCounts.get(key) !== 1) continue;
     const record = mapVisitSwedenEntry(child, request);
     if (record) records.push(record);
   }
@@ -212,7 +241,14 @@ function mapVisitSwedenEntry(entry, request) {
   const metadata = entry.metadata;
   const metadataUrl = `https://data.visitsweden.com/store/${contextId}/metadata/${entryId}`;
   if (!metadata || metadata["@id"] !== metadataUrl) return null;
-  if (metadata["@context"]?.schema !== "http://schema.org/") return null;
+  const context = metadata["@context"];
+  // Other simple namespace prefixes are harmless. Term remapping, keyword
+  // aliases and scoped contexts require full JSON-LD expansion and are outside
+  // this closed contract; accepting them would change the meaning of our joins.
+  if (!context || Array.isArray(context) || context.schema !== "http://schema.org/" ||
+      Object.entries(context).some(([key, value]) =>
+        !/^[A-Za-z][A-Za-z0-9_-]*$/.test(key) || typeof value !== "string" ||
+        !/^https?:\/\/[^\s]+$/.test(value))) return null;
   const graph = metadata["@graph"];
   if (!Array.isArray(graph) || graph.length < 2 || graph.length > 40) return null;
   const ids = graph.map((node) => node?.["@id"]);
@@ -249,7 +285,9 @@ function mapVisitSwedenEntry(entry, request) {
   if (!pointInRequest(lat, lng, request)) return null;
 
   const mapping = isFood
-    ? { type: "restaurant", tags: ["mat"] }
+    ? (root["schema:additionalType"] == null
+      ? { type: "restaurant", tags: ["mat"] }
+      : exactMapping(root["schema:additionalType"], FOOD_ADDITIONAL_TYPE_MAP))
     : exactPlaceMapping(root["schema:additionalType"]);
   if (!mapping) return null;
   const website = safeHttpId(root["schema:url"]);
@@ -277,13 +315,18 @@ function mapVisitSwedenEntry(entry, request) {
 }
 
 function exactPlaceMapping(value) {
+  return exactMapping(value, PLACE_ADDITIONAL_TYPE_MAP);
+}
+
+function exactMapping(value, vocabulary) {
   const values = Array.isArray(value) ? value : [value];
   const mappings = [];
   for (const item of values) {
     const id = exactId(item);
     const type = exactSchemaTerm(id);
-    const mapping = PLACE_ADDITIONAL_TYPE_MAP.get(type);
-    if (mapping) mappings.push(mapping);
+    const mapping = vocabulary.get(type);
+    if (!mapping) return null;
+    mappings.push(mapping);
   }
   const distinct = [...new Map(mappings.map((mapping) => [mapping.type, mapping])).values()];
   return distinct.length === 1 ? distinct[0] : null;
@@ -309,8 +352,9 @@ function localizedName(value) {
     .map((item) => ({ value: item["@value"].trim(), language: String(item["@language"] || "").toLowerCase() }))
     .filter((item) => item.value && item.value.length <= 160 && !/[\u0000-\u001f\u007f]/.test(item.value));
   for (const language of ["sv", "en", ""]) {
-    const match = atoms.find((item) => item.language === language);
-    if (match) return match.value;
+    const matches = [...new Set(atoms.filter(item => item.language === language).map(item => item.value))];
+    if (matches.length > 1) return null;
+    if (matches.length === 1) return matches[0];
   }
   return null;
 }

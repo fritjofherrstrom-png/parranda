@@ -230,12 +230,36 @@ from their names. Prose, media, ratings and raw loader fields are dropped.
 Healthy results and healthy empties use the persistent-capable source cache,
 while errors fail closed and remain retryable.
 
+The `visit-sweden-napi-solr-v2` cache contract preserves explicit
+`CafeOrCoffeeShop`, `BarOrPub`, `Bakery` and `Restaurant` additional types;
+an unqualified `FoodEstablishment` remains a broad food/restaurant fallback,
+never an inferred café or nightlife claim. Bakery remains a supporting fika
+match; its category alone does not establish coffee service. Unknown/contradictory explicit
+categories, repeated entry identities and ambiguous preferred-language names
+are rejected. Other namespace prefixes are allowed, but JSON-LD term/context
+remapping is not. Cached evidence retains the successful acquisition timestamp;
+fresh cache does not mean verified opening hours or publisher freshness.
+
+The shared entity matcher requires compatible category buckets, nearby
+coordinates and matching distinctive name tokens (including branch numbers),
+or a geographically plausible hard identity. Partial name overlap, conflicting
+Wikidata IDs and lookalike Wikidata URLs cannot create corroboration. The
+historic-site bucket also prevents borrowing evidence from adjacent businesses.
+Aliases and same-name colocated entities still require further identity work.
+
 Acquisition is opt-in with `PARRANDA_VISIT_SWEDEN_SOURCE=enabled` and also
 requires `PARRANDA_OPEN_DATA_LOADER`. `dev:full` enables it; production Compose
 and Render keep it disabled pending deployed acceptance. Set
 `PARRANDA_CACHE_DIR` to persistent storage for cross-restart caching. Radius
 and row-limit settings can reduce, never exceed, five kilometres and 100 rows.
 The request/body deadline is at most five seconds and the body cap is two MiB.
+If primary regional scouting moves the chosen anchor after NAPI started, only
+the new anchor's cache may be read in that composition; no second live API
+request is allowed and old-anchor rows cannot fill the new cluster.
+Each source instance permits at most two concurrent live requests across cold
+anchors. Same-key requests coalesce through the cache; overload returns a
+retryable failure without queuing or caching a false empty result. This is a
+per-instance limit, not a distributed quota across web replicas.
 
 Source policy: use the documented public API and `public:true` records, retain
 Visit Sweden entry attribution, and copy only factual identity/category/geo

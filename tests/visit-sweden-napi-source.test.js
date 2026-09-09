@@ -22,6 +22,7 @@ const { resolveCandidateIdentity } = require("../server/candidates/entity-resolu
 const { reduceEvidence } = require("../server/candidates/evidence-reducer");
 const { evaluateCandidateGates, targetFromPlaceCandidate } = require("../server/candidates/gates");
 const { createSourceCache } = require("../server/place-candidates/source-cache");
+const { matchCandidateToIntent } = require("../server/candidates/intent-vocabulary");
 
 const ANCHOR = Object.freeze({ lat: 55.6827, lng: 14.2340 });
 
@@ -119,6 +120,7 @@ test("source shape contains no named-place or label/category inference branch", 
 
 test("maps exact Place and FoodEstablishment graphs but discards provider prose and media", async () => {
   const source = createVisitSwedenNapiSource({
+    now: () => Date.parse("2026-09-09T00:00:00Z"),
     fetcher: async (_url, options) => {
       assert.equal(options.method, "GET");
       assert.equal(options.redirect, "error");
@@ -153,6 +155,7 @@ test("maps exact Place and FoodEstablishment graphs but discards provider prose 
     tier: "official",
     url: "https://data.visitsweden.com/store/201/metadata/55",
     freshness: "fresh",
+    observed_at: "2026-09-09T00:00:00.000Z",
   }]);
   for (const forbidden of ["description", "abstract", "image", "rating", "metadata", "raw"]) {
     assert.equal(forbidden in historicSite, false);
@@ -386,4 +389,117 @@ test("timeout covers the response body and oversized streams cancel before parsi
       signal.addEventListener("abort", () => controller.error(new Error("aborted")), {once:true});
     } }), { headers: { "content-type": "application/json" } }) });
   assert.equal((await slow.collectOutcome(ANCHOR)).status, "failed");
+});
+
+test("structured food subtypes retain fika and evening intent without headline inference", () => {
+  const request = buildVisitSwedenSearchRequest(ANCHOR);
+  for (const [subtype, type, tag] of [
+    ["CafeOrCoffeeShop", "cafe", "kaffe"],
+    ["BarOrPub", "bar", "nattliv"],
+    ["Bakery", "bakery", "bakverk"],
+    ["Restaurant", "restaurant", "mat"],
+  ]) {
+    const row = mapVisitSwedenEntry(entry({ rootType: "schema:FoodEstablishment", additionalType: `schema:${subtype}` }), request);
+    assert.equal(row.type, type);
+    assert.ok(row.tags.includes(tag));
+  }
+  assert.equal(mapVisitSwedenEntry(entry({ rootType: "schema:FoodEstablishment", additionalType: ["schema:Restaurant", "schema:BarOrPub"] }), request), null);
+  assert.equal(mapVisitSwedenEntry(entry({ rootType: "schema:FoodEstablishment", additionalType: "schema:Hotel" }), request), null);
+  const cafe = mapVisitSwedenEntry(entry({ rootType: "schema:FoodEstablishment", additionalType: "schema:CafeOrCoffeeShop" }), request);
+  const bakery = mapVisitSwedenEntry(entry({ rootType: "schema:FoodEstablishment", additionalType: "schema:Bakery" }), request);
+  assert.equal(matchCandidateToIntent(cafe, "coffee").level, "strong");
+  assert.equal(matchCandidateToIntent(bakery, "coffee").level, "weak", "bakery alone does not prove coffee service");
+});
+
+test("JSON-LD term overrides cannot turn unrelated data into official place claims", () => {
+  const request = buildVisitSwedenSearchRequest(ANCHOR);
+  for (const override of [{ "schema:geo": "http://example.org/centre" }, { "schema:name": { "@id": "http://example.org/headline" } }]) {
+    const row = entry();
+    Object.assign(row.metadata["@context"], override);
+    assert.equal(mapVisitSwedenEntry(row, request), null);
+  }
+});
+
+test("duplicate entry identities are quarantined instead of inflating supply or arbitrarily choosing facts", async () => {
+  const source = createVisitSwedenNapiSource({ fetcher: async () => jsonResponse(payload([
+    entry(), entry({ name: "Different business", lat: 55.683 }), entry({ entryId: "56" }),
+  ])) });
+  const rows = await source(ANCHOR);
+  assert.deepEqual(rows.map(row => row.id), ["visit-sweden-napi-201-56"]);
+});
+
+test("regional anchor movement uses only cached official records and spends no second live request", async () => {
+  let calls = 0;
+  const moved = { lat: 55.71, lng: 14.3 };
+  const source = createVisitSwedenNapiSource({ fetcher: async () => { calls++; return jsonResponse(payload([entry()])); } });
+  const cached = createCachedVisitSwedenNapiSource({ source, cache: createSourceCache() });
+  const primary = Object.assign([{ id: "regional-place", lat: moved.lat, lng: moved.lng }], {
+    loader_metadata: { regional_scout: { selected_anchor_coords: moved } },
+  });
+  const loader = composeOpenDataLoaders(async () => primary, null, null, cached);
+  const result = await loader(ANCHOR);
+  assert.equal(calls, 1);
+  assert.deepEqual(Array.from(result).map(row => row.id), ["regional-place"]);
+});
+
+test("cached evidence keeps acquisition time and expired evidence cannot rescue after an outage", async () => {
+  let now = Date.parse("2026-09-09T00:00:00Z");
+  let calls = 0;
+  let failed = false;
+  const source = createVisitSwedenNapiSource({ now: () => now, fetcher: async () => {
+    calls++;
+    if (failed) throw new Error("offline");
+    return jsonResponse(payload([entry()]));
+  } });
+  const cache = createSourceCache({ ttlMs: 1000, now: () => now });
+  const cached = createCachedVisitSwedenNapiSource({ source, cache });
+  await cached.load(ANCHOR);
+  now += 900;
+  const [record] = cached.readCached(ANCHOR);
+  const candidate = mapRecordToCandidate({ key: "unknown" }, record, new Date(now).toISOString(), 0);
+  assert.ok(candidate.evidence.every(item => item.observed_at === "2026-09-09T00:00:00.000Z"));
+  assert.equal(calls, 1);
+  now += 101;
+  failed = true;
+  assert.deepEqual(cached.readCached(ANCHOR), []);
+  assert.deepEqual(await cached.load(ANCHOR), []);
+  assert.deepEqual(cached.readCached(ANCHOR), []);
+  assert.equal(calls, 2);
+});
+
+test("unrelated JSON-LD namespace prefixes are harmless but name ambiguity is not", () => {
+  const request = buildVisitSwedenSearchRequest(ANCHOR);
+  const row = entry();
+  row.metadata["@context"].dcterms = "http://purl.org/dc/terms/";
+  assert.ok(mapVisitSwedenEntry(row, request));
+  row.metadata["@graph"][0]["schema:name"] = [
+    { "@language": "sv", "@value": "North Pier" },
+    { "@language": "sv", "@value": "North Pier Annex" },
+  ];
+  assert.equal(mapVisitSwedenEntry(row, request), null);
+});
+
+test("parallel cold anchors have a fixed live concurrency ceiling and overload remains retryable", async () => {
+  const releases = [];
+  let calls = 0;
+  const source = createVisitSwedenNapiSource({ fetcher: async () => {
+    calls++;
+    await new Promise(resolve => releases.push(resolve));
+    return jsonResponse(payload([]));
+  } });
+  const cached = createCachedVisitSwedenNapiSource({ source, cache: createSourceCache() });
+  const first = cached.load(ANCHOR);
+  const duplicate = cached.load(ANCHOR);
+  const second = cached.load({ lat: 56, lng: 14 });
+  const overloaded = cached.load({ lat: 57, lng: 14 });
+  await new Promise(resolve => setImmediate(resolve));
+  const countAtCapacity = calls;
+  for (const release of releases) release();
+  await Promise.all([first, duplicate, second, overloaded]);
+  assert.equal(countAtCapacity, 2, "same-key calls coalesce; a third live window is refused");
+  const retry = cached.load({ lat: 57, lng: 14 });
+  await new Promise(resolve => setImmediate(resolve));
+  releases.at(-1)();
+  await retry;
+  assert.equal(calls, 3, "overload did not become a cached empty result");
 });

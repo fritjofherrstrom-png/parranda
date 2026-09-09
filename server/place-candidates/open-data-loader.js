@@ -1308,7 +1308,11 @@ function composeOpenDataLoaders(osmLoader, wikiSource = null, overtureSource = n
       const eagerRecords = await Promise.resolve(eagerResult).catch(() => []);
       const eagerWasEmpty = Array.isArray(eagerRecords) && eagerRecords.length === 0;
       const rescue = primaryFailed && eagerWasEmpty;
-      const liveRescueBarred = rescue && source?.primaryRescue === false;
+      // An eager bounded API has already spent this composition's live budget
+      // at the original anchor. A regional move may read the selected anchor's
+      // cache, but must not acquire a second coordinate window or mix clusters.
+      const liveRescueBarred = source?.primaryRescue === false &&
+        (rescue || (!sameAsPrimary && eagerLoads.has(source)));
       const loaded = await Promise.resolve(
         liveRescueBarred
           ? (typeof source.readCached === "function" ? source.readCached(wikiAnchor, request) : [])

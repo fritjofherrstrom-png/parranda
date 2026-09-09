@@ -199,3 +199,25 @@ test("resolveCandidateIdentity does not mutate its inputs", () => {
   assert.equal(cur.evidence, undefined);
   assert.equal(cur.merged_from, undefined);
 });
+
+test("near-name branches do not borrow corroboration from a neighbouring place", () => {
+  const a = external({ id: "map-place", label: "North Pier Gallery", type: "gallery", evidence: [] });
+  const b = external({ id: "official-place", label: "North Pier Gallery Annex", type: "gallery", evidence: [] });
+  assert.equal(matchIdentity(a, b).same, false);
+  assert.equal(matchIdentity(a, { ...b, label: "North Pier" }).same, true, "category-word aliases still match");
+  assert.equal(matchIdentity({ ...a, label: "Pier 1" }, { ...b, label: "Pier 2" }).same, false);
+});
+
+test("a historic site and adjacent restaurant cannot corroborate each other", () => {
+  const a = external({ label: "North Pier", type: "historic-site", evidence: [] });
+  const b = external({ label: "North Pier", type: "restaurant", evidence: [] });
+  assert.equal(matchIdentity(a, b).same, false);
+  assert.equal(matchIdentity(a, { ...b, type: "castle" }).same, true);
+});
+
+test("conflicting explicit entities and lookalike Wikidata URLs never establish shared identity", () => {
+  assert.equal(matchIdentity(external({ wikidata: "Q1" }), external({ wikidata: "Q2" })).same, false);
+  for (const url of ["https://notwikidata.org/wiki/Q42", "https://example.org/wikidata.org/wiki/Q42", "https://www.wikidata.org/wiki/Q42/other"]) {
+    assert.equal(wikidataIdOf(external({ evidence: [{ source_ref: { url } }] })), null);
+  }
+});
