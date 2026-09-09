@@ -59,10 +59,27 @@ test("category mapping covers local food, culture, nature, markets and second ha
   assert.equal(categoryMapping("national_park").type, "park");
   assert.equal(categoryMapping("farmers_market").type, "market");
   assert.equal(categoryMapping("antique_store").type, "vintage-shop");
-  assert.equal(categoryMapping("home_goods_store", ["antique_store"]).type, "vintage-shop");
+  assert.equal(categoryMapping("home_goods_store", ["antique_store"]), null, "unsupported primary categories fail closed");
   assert.equal(categoryMapping("pharmacy"), null);
   assert.equal(categoryMapping("shopping_mall"), null);
   assert.equal(categoryMapping("tourist_attraction"), null, "generic attraction labels are not route evidence");
+});
+
+test("an unsupported primary category cannot borrow a route meaning from an alternate facet", () => {
+  assert.equal(
+    categoryMapping("playground", ["sports_and_recreation_venue", "park"]),
+    null,
+    "a playground must not become green space merely because park is an alternate facet",
+  );
+  assert.equal(
+    mapOvertureRow(row({
+      name: "Indoor activity fixture",
+      category: "playground",
+      alternate: ["sports_and_recreation_venue", "park"],
+    })),
+    null,
+    "unsupported primary meaning fails closed before it reaches route selection",
+  );
 });
 
 test("drops low-confidence, closed, unlocated, unnamed and unsupported rows", () => {

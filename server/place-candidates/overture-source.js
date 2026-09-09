@@ -46,9 +46,12 @@ const OVERTURE_PLACE_LICENSES = Object.freeze([
   "CDLA-Permissive-2.0",
 ]);
 
-// Broad enough for SQL pushdown, while the exact mapper below remains the
-// authority. Keeping this in the query avoids downloading hundreds of nearby
-// pharmacies, offices and generic shops only to discard them in JavaScript.
+// Broad enough for SQL pushdown, while the exact primary-category mapper below
+// remains the authority. Alternate facets are deliberately not searched: an
+// unsupported primary meaning must not borrow an unrelated routable meaning
+// from a secondary facet (for example an indoor playground tagged as a park).
+// Keeping this in the query avoids downloading hundreds of nearby pharmacies,
+// offices and generic shops only to discard them in JavaScript.
 const TRAVEL_CATEGORY_SQL_PATTERN = [
   "restaurant", "cafe", "coffee", "bakery", "tea_room", "ice_cream", "dessert",
   "bar", "pub", "nightclub", "beer_garden", "brewery", "winery", "distillery",
@@ -124,7 +127,7 @@ function normalizeCategory(value) {
   return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
 }
 
-function categoryMapping(primary, alternates = []) {
+function categoryMapping(primary) {
   const mapOne = (category) => {
     const exact = EXACT_TYPE_MAP.get(category);
     if (exact) return exact;
@@ -139,16 +142,10 @@ function categoryMapping(primary, alternates = []) {
     if (category.endsWith("_market")) return { type: "market", tags: ["market"] };
     return null;
   };
-  // Overture declares `primary` as the canonical category. It must win before
-  // an alternate (for example restaurant + bakery) so Parranda does not turn a
-  // pizzeria into a café merely because one secondary facet matched exactly.
-  const primaryMapping = mapOne(normalizeCategory(primary));
-  if (primaryMapping) return primaryMapping;
-  for (const alternate of Array.isArray(alternates) ? alternates : []) {
-    const alternateMapping = mapOne(normalizeCategory(alternate));
-    if (alternateMapping) return alternateMapping;
-  }
-  return null;
+  // Overture declares `primary` as the canonical category. Secondary facets
+  // can be broader, venue-adjacent or simply wrong for the user's intent; they
+  // are useful discovery hints but are not sufficient route-category evidence.
+  return mapOne(normalizeCategory(primary));
 }
 
 function firstHttpUrl(values) {
@@ -194,7 +191,7 @@ function mapOvertureRow(row, { minConfidence = DEFAULT_MIN_CONFIDENCE } = {}) {
   if (!Number.isFinite(confidence) || confidence < minConfidence) return null;
   const operational = normalizeOperationalStatus(row.operating_status);
   if (operational.status === "inactive") return null;
-  const mapping = categoryMapping(row.category, row.alternate);
+  const mapping = categoryMapping(row.category);
   if (!mapping) return null;
   // Places is a multi-license dataset and each row's `sources` atoms own the
   // applicable license. Keep only the closed official set selected in SQL;
@@ -246,7 +243,6 @@ function buildOvertureQuery({ release, lat, lng, radiusKm = DEFAULT_RADIUS_KM, r
   return `SELECT id,
   names.primary AS name,
   categories.primary AS category,
-  categories.alternate AS alternate,
   confidence,
   operating_status,
   websites,
@@ -259,7 +255,7 @@ WHERE bbox.ymin BETWEEN ${latMin.toFixed(7)} AND ${latMax.toFixed(7)}
   AND ${longitudeClause(lng, lngDelta)}
   AND confidence >= ${confidence.toFixed(3)}
   AND (operating_status IS NULL OR lower(operating_status) NOT LIKE '%closed%')
-  AND regexp_matches(lower(coalesce(categories.primary, '') || ' ' || coalesce(array_to_string(categories.alternate, ' '), '')), '${TRAVEL_CATEGORY_SQL_PATTERN}')
+  AND regexp_matches(lower(coalesce(categories.primary, '')), '${TRAVEL_CATEGORY_SQL_PATTERN}')
 ORDER BY pow(bbox.ymin - ${lat.toFixed(7)}, 2) + pow((bbox.xmin - ${lng.toFixed(7)}) * ${Math.cos((lat * Math.PI) / 180).toFixed(7)}, 2)
 LIMIT ${limit}`;
 }

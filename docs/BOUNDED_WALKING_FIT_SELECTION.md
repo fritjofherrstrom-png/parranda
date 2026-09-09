@@ -105,6 +105,16 @@ Existing suites cover geometry, commitments, promotion and time/date behavior.
 Synthetic long-detour comparator tests prove refusal logic, not real islands,
 barriers or live walking-router recovery.
 
+Exact-head field QA also exposed a source-category safety boundary: Overture's
+canonical `playground` category for an indoor play venue carried `park` only as
+an alternate facet. The old adapter allowed that secondary facet to relabel the
+record as exact `green`, and the new distance search made the latent error visible
+as a selected stop. Overture route mapping now accepts only its canonical primary
+category; unsupported primary meanings fail closed instead of borrowing a route
+role from alternates. The persistent cache namespace moves from v2 to v3 because
+normalized cached rows do not retain enough raw taxonomy to be reclassified.
+This is category-contract hardening, not a place/name/city exception.
+
 ## Evidence and remaining work
 
 Local implementation evidence is under
