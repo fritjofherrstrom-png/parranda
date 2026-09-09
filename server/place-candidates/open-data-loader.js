@@ -1152,10 +1152,10 @@ function resolveDefaultOpenDataLoader(env = process.env) {
       minConfidence: Number(env?.PARRANDA_OVERTURE_MIN_CONFIDENCE) || undefined,
     });
     const overtureCache = createSourceCache({
-      // v3 invalidates rows whose unsupported primary category previously
-      // borrowed route meaning from an alternate facet. Cached v2 rows cannot
-      // be reclassified safely because raw provider taxonomy is not retained.
-      namespace: "overture-v3",
+      // v4 binds rows to validated taxonomy.primary/hierarchy and the closed
+      // semantic map. v2/v3 normalized rows lack the raw fields needed to prove
+      // this contract; never reclassify or fall back to those cached rows.
+      namespace: "overture-v4",
       dir: env?.PARRANDA_CACHE_DIR || null,
       ttlMs: Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : undefined,
     });

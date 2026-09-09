@@ -117,6 +117,11 @@ This is category-contract hardening, not a place/name/city exception.
 
 ### Deliberate recall tradeoff and taxonomy follow-up
 
+The migration requested below has since been implemented in
+`OVERTURE_TAXONOMY_COMPATIBILITY.md`, with its own v4 cache and QA requirements.
+The v3 and legacy-field descriptions here record the exact #498 acceptance
+boundary; they are not the current adapter contract or a fresh QA claim.
+
 Primary-only is Parranda's bounded route-category policy, not a claim that
 Overture alternates are invalid. The [official taxonomy schema](https://docs.overturemaps.org/schema/reference/places/types/taxonomy/)
 defines alternates as additional categories on other branches; a bookstore

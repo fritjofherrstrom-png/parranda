@@ -21,6 +21,8 @@ function row(overrides = {}) {
     id: ID,
     name: "Buhres på Kivik",
     category: "seafood_restaurant",
+    category_hierarchy: overrides.category === undefined
+      ? ["food_and_drink", "restaurant", "seafood_restaurant"] : [overrides.category],
     alternate: ["restaurant"],
     confidence: 0.998,
     operating_status: "open",
@@ -126,8 +128,9 @@ test("the GeoParquet query is release-validated, bbox-bounded, filtered and capp
   assert.match(sql, /bbox\.ymin BETWEEN/);
   assert.match(sql, /bbox\.xmin BETWEEN/);
   assert.match(sql, /confidence >= 0\.950/);
-  assert.match(sql, /regexp_matches/);
-  assert.match(sql, /categories\.primary AS category/);
+  assert.match(sql, /taxonomy\.primary IN/);
+  assert.match(sql, /taxonomy\.primary AS category/);
+  assert.match(sql, /taxonomy\.hierarchy AS category_hierarchy/);
   assert.doesNotMatch(sql, /categories\.alternate|list_has_any|list_filter/,
     "acquisition must not spend its bounded row budget on alternate-only matches");
   assert.match(sql, /source -> source\.license/);
