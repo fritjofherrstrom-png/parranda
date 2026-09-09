@@ -121,9 +121,25 @@ Local implementation evidence is under
 `/Users/fritjof/Documents/parranda-qa-evidence/walking-fit-selection-20260909/`:
 `before.json`, `after.json`, `replay.cjs` and gate logs. Archived source inputs
 come from `20260909T104603Z-pr496-final-qa/caches/fee5/` on the QA archive.
-Reconstruction and deterministic endpoint tests are **INVALID ACCEPTANCE** for
-new Pi/browser/provider claims. New exact-head Pi/browser behavior is **NOT
-OBSERVED** until Sol runs it independently with authorization.
+
+Authorized Pi/browser QA is preserved under
+`/Users/fritjof/Documents/parranda-qa-evidence/20260909T162433Z-pr498-walking-fit-final-qa/`.
+Both web and worker ran the same immutable image and health reported the tested
+SHA. The first executable head improved Strängnäs 0.2→1.5 km and Göteborg-west
+0.8→1.7 km while leaving an already-in-band Växjö coordinate case at 2.6 km.
+Desktop and mobile Planner views rendered the route, map, expanded source facts
+and Keep/Add controls without console errors. Provider cold-start failures remain
+**INCONCLUSIVE / NOT OBSERVED**, not product failures; direct/offline traces remain
+**INVALID ACCEPTANCE** for live-provider claims.
+
+The same run found the alternate-category defect above. After fail-closed
+hardening, a live cold-to-warm Overture v3 cycle omitted the unsupported indoor
+playground and retained the canonical `garden` record. On identical normalized
+safe input, main produced 1.7 km with Galleri Avanti + Kolding Lejepark; bounded
+selection produced 4.8 km with Galleri Avanti + Geografisk Have. A separate
+browser-origin typed Kolding run rendered a conservative 2.8 km culture/green
+day on desktop and mobile. This verifies a useful selection effect without
+claiming that every target is met or every source category is complete.
 
 Remaining limits: single swaps cannot solve multi-role tradeoffs; a radial
 proposal can miss a better geometry; heuristic routing cannot prove barriers;
