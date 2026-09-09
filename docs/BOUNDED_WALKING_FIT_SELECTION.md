@@ -115,6 +115,45 @@ role from alternates. The persistent cache namespace moves from v2 to v3 because
 normalized cached rows do not retain enough raw taxonomy to be reclassified.
 This is category-contract hardening, not a place/name/city exception.
 
+### Deliberate recall tradeoff and taxonomy follow-up
+
+Primary-only is Parranda's bounded route-category policy, not a claim that
+Overture alternates are invalid. The [official taxonomy schema](https://docs.overturemaps.org/schema/reference/places/types/taxonomy/)
+defines alternates as additional categories on other branches; a bookstore
+that also serves coffee can be legitimate. This adapter currently drops the
+whole row when its primary is unsupported. Supported primaries survive, but
+alternate facets contribute neither extra intent nor extra source families.
+
+That is a conscious recall loss. Retaining alternate-only rows as ordinary
+typed candidates, or weakening them to partial intent, would still allow them
+to reach experimental route admission. A future display-only facet contract
+could retain useful ideas without Add, route roles, capacity credit or exact
+intent credit. Promotion would require independent evidence for both the same
+entity and the particular category claim; one source mentioning two facets is
+not two independent families. The observed alternate-dependent rows therefore
+measure lost recall, not proven false categories. A lake with an alternate
+beach is not necessarily wrong; it demonstrates missing supported semantics.
+
+The [official Places guide](https://docs.overturemaps.org/guides/places/) checked
+on 2026-09-09 announces removal of legacy `categories` in the September 2026
+release. This adapter still projects `categories.primary` and resolves the
+latest release; after removal its query will fail closed, losing Overture
+supply after cached rows expire. This is an urgent, separate compatibility PR:
+migrate acquisition and normalization to `taxonomy.primary`, validate agreement
+with the last `taxonomy.hierarchy` element, and use a reviewed closed
+route-semantic map. Do not simply use `basic_category` or a supported ancestor;
+the guide's park/playground hierarchy can recreate the exact-green defect.
+Handle malformed, unknown and conflicting shapes explicitly, and test
+taxonomy-only SQL, supported subtypes, alternate-only records and the negative
+playground case. Keep provider budgets, licensing and trust gates unchanged.
+
+The v3 cache namespace is sufficient for this primary-only change: fresh
+loader instances cannot read v2 rows, which lack raw taxonomy needed for safe
+reclassification. Tests exercise the factory with both on-disk namespaces.
+Every consuming process must run the new build; v3 is not a taxonomy migration
+or a forever-valid schema contract. The taxonomy PR must version its own cache
+boundary and prove cold/warm behavior separately.
+
 ## Evidence and remaining work
 
 Local implementation evidence is under
@@ -125,21 +164,32 @@ come from `20260909T104603Z-pr496-final-qa/caches/fee5/` on the QA archive.
 Authorized Pi/browser QA is preserved under
 `/Users/fritjof/Documents/parranda-qa-evidence/20260909T162433Z-pr498-walking-fit-final-qa/`.
 Both web and worker ran the same immutable image and health reported the tested
-SHA. The first executable head improved Strängnäs 0.2→1.5 km and Göteborg-west
-0.8→1.7 km while leaving an already-in-band Växjö coordinate case at 2.6 km.
-Desktop and mobile Planner views rendered the route, map, expanded source facts
-and Keep/Add controls without console errors. Provider cold-start failures remain
+SHA. The first executable head `0476a19` gave indicative observations of
+Strängnäs 0.2→1.5 km and Göteborg-west 0.8→1.7 km; both remained far below
+target. The stored package has no paired final-head baselines for those cases,
+nor for the reported Växjö coordinate no-op, so they are not final-head A/B
+proof. Göteborg 1.4 km is a regression/smoke observation, not a paired effect
+proof. Desktop and mobile Planner views rendered routes, maps, expanded source
+facts and Keep/Add controls without console errors. Provider cold-start failures remain
 **INCONCLUSIVE / NOT OBSERVED**, not product failures; direct/offline traces remain
 **INVALID ACCEPTANCE** for live-provider claims.
 
 The same run found the alternate-category defect above. After fail-closed
 hardening, a live cold-to-warm Overture v3 cycle omitted the unsupported indoor
-playground and retained the canonical `garden` record. On identical normalized
-safe input, main produced 1.7 km with Galleri Avanti + Kolding Lejepark; bounded
-selection produced 4.8 km with Galleri Avanti + Geografisk Have. A separate
-browser-origin typed Kolding run rendered a conservative 2.8 km culture/green
-day on desktop and mobile. This verifies a useful selection effect without
-claiming that every target is met or every source category is complete.
+playground and retained the canonical `garden` record. The strongest controlled
+staging/API A/B is Kolding: four relevant Overture-v3 cache files are
+byte-identical between base `aeef952` and final head `4d9ff1d`; base produced
+1.7 km with Galleri Avanti + Kolding Lejepark, while the final produced 4.8 km
+with Galleri Avanti + Geografisk Have. Both retained exact museums + green and
+the final was within the requested band. This is heuristic geometry, not
+street-network/barrier validation. The separate browser-origin typed Kolding
+run rendered a conservative 2.8 km culture/green day on desktop and mobile;
+it is corroborating browser evidence, not a second controlled A/B.
+
+The top-level `city_label: "Rom"` in the Kolding responses is a pre-existing
+response/fallback bug also present before #498; route title/start/end correctly
+identify Kolding. It is not caused by walking-fit and is tracked as a separate
+small fix, not expanded here.
 
 Remaining limits: single swaps cannot solve multi-role tradeoffs; a radial
 proposal can miss a better geometry; heuristic routing cannot prove barriers;
