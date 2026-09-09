@@ -30,8 +30,11 @@ loaders, Sweden-bounded official NAPI supply and the revision-bound reviewed
 local-source reservoir supply it.
 
 Rich citypacks remain curated-first, and Pulse keeps a separate signal/event
-path with a bounded route-interrupt boundary. The major remaining gap is supply
-breadth and quality across real geographies—not another Planner bridge.
+path with a bounded route-interrupt boundary. Supply breadth and quality remain
+major gaps, but supplied candidates can also be lost at role/combination cuts.
+Bounded same-role walking-fit selection now tests comparable alternatives through
+the existing engine; see `BOUNDED_WALKING_FIT_SELECTION.md`. This is not another
+Planner bridge or a declaration that synthesis is finished.
 
 ## Product goals
 
@@ -228,8 +231,8 @@ canonical/name/category/coordinate agreement per detail. It is a versioned DOM
 shape, not a publisher, city or hostname branch. The next source slices are
 source operation across real
 geographies, evidence-backed adapters for materially different shapes where
-exact coordinates exist, and conservative cross-provider aliases—not more
-route synthesis.
+exact coordinates exist, and conservative cross-provider aliases. Those supply
+priorities do not veto a reproduced selection defect in already available supply.
 
 The remaining reviewed-place lifecycle gap is now closed. Source Catalog
 approval binds an operator decision to the exact server-derived discovery
@@ -250,6 +253,10 @@ the old #244–#249 migration sequence as current work.
 
 Priorities now are:
 
+0. Independently validate bounded same-role walking-fit selection across real
+   geographies. Measure preference fidelity, route coherence, heuristic distance
+   limitations and Pi cost, not just kilometres or candidate counts. Keep honest
+   short days when comparable trusted alternatives cannot satisfy the target.
 1. Obtain permission or select a genuinely compatible licensed source using the
    applicable closed list→detail contract; never infer permission from robots allowance.
 2. Operate reviewed experience-card and, when permitted, Simpleview sources,

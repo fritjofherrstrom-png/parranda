@@ -14,6 +14,7 @@ const {
   rankEligible,
 } = require("../candidates/candidate-pool");
 const { plannerUsableOptionsForRole } = require("./candidate-combination");
+const { retainWalkingFitAlternatives } = require("./walking-fit-selection");
 const { scoreCandidateFit } = require("../candidates/fit-scorer");
 const { calibrateSource } = require("../candidates/source-calibration");
 const { normalizeWalkingTargetBand } = require("../place-candidates/day-capacity");
@@ -208,6 +209,18 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
       })
     : [];
   const availabilitySummary = candidatePool.availability_summary || null;
+  // Separate from extra-depth capacity candidates: same-role substitutions may
+  // use the same provisional admission as the selected role, never add breadth.
+  const walkingFitCandidates = helpers.walkingFitSelection === true && localFeelActive && pinnedIds.size === 0
+    ? retainWalkingFitAlternatives({
+        roles,
+        candidatesByRole: Object.fromEntries(roles.filter(role => role.requested).map(({role}) =>
+          [role, roleEntries[role].filter(entry => entry.candidate_status !== 'fallback')
+            .map(entry => formatRoleCandidate(entry, role, roleEntries, activeRoleSpec))])),
+        origin: candidatePool.context.origin,
+        band: normalizeWalkingTargetBand(helpers.walkingTargetBand),
+      })
+    : [];
 
   return {
     city: cityConfig.key,
@@ -224,6 +237,8 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
     // verbatim, and this is internal bookkeeping about the ranked tail — not
     // something the public payload should carry.
     commitment_rescuable_ids: [...new Set(rescuableByRole)],
+    // Private sibling; never append these to public role lists or Add supply.
+    ...(walkingFitCandidates.length ? { walking_fit_candidates: walkingFitCandidates } : {}),
     summary: summarizeRoles(roles),
     pipeline_summary: {
       identity_resolved_candidate_count: candidatePool.allCandidates.length,

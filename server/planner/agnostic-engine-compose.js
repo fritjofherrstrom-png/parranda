@@ -563,10 +563,36 @@ function mapAdmittedSelectionToSourceCandidates({
   return out;
 }
 
+// At most three one-for-one alternatives, with the same reservoir size. This
+// does not relax role-depth gates or change the published commitment contract.
+function buildWalkingFitReservoirs({sourceCandidates, plannerRoles, origin, walkingKmTarget}) {
+  const { comparableRoleReplacement, proposalCost, MAX_WALKING_FIT_TRIALS, MAX_WALKING_FIT_RESERVOIR } = require('./walking-fit-selection');
+  const band = resolveAgnosticWalkingTargetBand(walkingKmTarget);
+  if (!band || sourceCandidates.length < 2 || sourceCandidates.length > MAX_WALKING_FIT_RESERVOIR) return [];
+  const richIndex = buildRichCandidateIndex(plannerRoles);
+  const ids = new Set(sourceCandidates.map(c => c.id));
+  const options = [];
+  for (const base of sourceCandidates.filter(c => c.reservoir_selected)) {
+    const rich = richIndex.get(`${base.role}::${base.id}`);
+    for (const next of plannerRoles?.walking_fit_candidates || []) {
+      if (next.role !== base.role || ids.has(next.candidate_id) || !finiteCoords(next.coordinates) ||
+          !comparableRoleReplacement(rich,next)) continue;
+      const replacement = toSourceCandidate({pick:{candidate_id:next.candidate_id},rich:next,
+        coords:next.coordinates,city:base.city,role:base.role,reservoirSelected:true,
+        requestedIntents:plannerRoles.requested_preferences});
+      options.push({cost:proposalCost(next.coordinates,origin,band),key:`${base.id}:${next.candidate_id}`,
+        records:sourceCandidates.map(c => c.id === base.id ? replacement : c)});
+    }
+  }
+  return options.sort((a,b)=>a.cost-b.cost || a.key.localeCompare(b.key))
+    .slice(0,MAX_WALKING_FIT_TRIALS).map(option=>option.records);
+}
+
 module.exports = {
   AGNOSTIC_ENGINE_CITY_KEY,
   buildAgnosticEngineCityConfig,
   buildAgnosticNoopServices,
   mapAdmittedSelectionToSourceCandidates,
   mapPlannerReservoirToSourceCandidates,
+  buildWalkingFitReservoirs,
 };

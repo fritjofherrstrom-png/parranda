@@ -2,7 +2,7 @@
 
 **Status:** Current north star plus historical delivery record
 
-**Updated after:** bounded Simpleview Europe list→detail place-source slice
+**Updated after:** bounded same-role walking-fit selection
 **Related:** `docs/PARRANDA_ENGINE_GOALS.md`
 
 ## North star
@@ -198,7 +198,16 @@ Audited 2026-06-19 from real Athens dogfooding (the felt experience was unchange
 
 Evidence from Athens (registered, thin): **26 verified catalog items, 4 provisional candidates, 0 templates.** Two consequences make the synthesis work invisible there: (a) Athens is a **registered** city, so the entire any-place stack (convergence / promotion gate / observability) is gated behind `noRecognizedCity` and **never runs for it**; (b) #293 daypart ordering is **inert for Athens** because its 26 catalog items carry no `route_roles` (only the 4 provisional candidates do). So the synthesis we shipped does not touch Athens's felt experience.
 
-**Implication (anti-drift):** the synthesis engine is **ready and starved**. The bottleneck to "Parranda feels agnostic" is **supply** and **source-fit**, not more synthesis. Do not keep building synthesis expecting the product to change — it will not until supply lands. Ownership split: **supply → Codex (gating)**, **source-fit → pulse lane**, **synthesis → ready, awaiting supply + a deliberate promotion**.
+**Historical implication, superseded as a universal rule:** this checkpoint
+described the engine as “ready and starved.” Supply and source-fit remain major
+bottlenecks, but later preserved-source reconstruction and RED/GREEN tests show
+that role truncation and provisional-depth boundaries can discard useful
+same-role choices before route geometry is evaluated. The existing engine now
+compares at most three one-for-one substitutions for short unpinned, event-free
+days, preserving admission and contextual quality. See
+`BOUNDED_WALKING_FIT_SELECTION.md` for limits and evidence. This is deliberate
+selection refinement, not a parallel composer or weaker source gate. Treat
+synthesis readiness as something to verify against real supply, not a veto.
 
 ## Anti-drift rule
 

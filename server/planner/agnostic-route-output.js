@@ -56,9 +56,11 @@ const { EXCLUDED_LOADED_IDS } = require("./excluded-candidates");
 const { weaveEveningEventRouteStop } = require("../candidates/event-route-stop-weave");
 const { generateAgnosticRecommendations } = require("../route-engine");
 const { projectRouteToSelectedStopChain } = require("./route-public-geometry");
+const { replacementKeepsOtherStops } = require("./walking-fit-selection");
 const {
   buildAgnosticEngineCityConfig,
   mapPlannerReservoirToSourceCandidates,
+  buildWalkingFitReservoirs,
 } = require("./agnostic-engine-compose");
 
 // A route needs at least an ordered pair of geocoded, stable-id stops. Fewer
@@ -994,6 +996,7 @@ async function composeAgnosticRouteOutput({
     ...availabilityHelpers,
     ...(candidateReachPolicy ? { candidateReachPolicy } : {}),
     walkingTargetBand: resolveAgnosticWalkingTargetBand(walkingKmTarget),
+    walkingFitSelection: synthesizeVia === "engine",
     experimentalAdmitCandidate: admitExperimentalInferredExternalCandidate,
   };
   const selectionHelpers = trustedTimeAppliesToRequestedDate
@@ -1480,6 +1483,36 @@ async function composeAgnosticRouteViaEngine({
         repairApplied = true;
       }
     }
+    // A small same-role substitution search can use useful candidates lost at
+    // top-N/role-depth cuts, without adding any lower-trust stops. Deliberately
+    // leave commitment settling and event routing on their existing lifecycle;
+    // this adds no repeated pin search or extra event-provider calls.
+    if (!pinnedStopIds?.length && distanceMode !== 'no_limit' &&
+        !eveningEventStructure?.district_day?.evening_event &&
+        shouldTryCapacityRepair(route, walkingKmTarget)) {
+      const variants = buildWalkingFitReservoirs({sourceCandidates,plannerRoles,origin,walkingKmTarget});
+      const selectionBaseRoute = route;
+      const sourceIds = new Set(sourceCandidates.map(candidate => candidate.id));
+      for (const candidates of variants) {
+        const trialIds = new Set(candidates.map(candidate => candidate.id));
+        const removedId = sourceCandidates.find(candidate => !trialIds.has(candidate.id))?.id;
+        const addedId = candidates.find(candidate => !sourceIds.has(candidate.id))?.id;
+        const trialAnchoring = anchored && Number.isInteger(currentTimeBandRank)
+          ? anchorSourceCandidatesToCurrentBand(candidates,currentTimeBandRank,[])
+          : {anchored:false,candidates};
+        if (anchored && !trialAnchoring.anchored) continue;
+        const trialDay = await runEngine(trialAnchoring.candidates, []);
+        const trialRoute = trialDay?.primary_route;
+        if (replacementKeepsOtherStops(selectionBaseRoute,trialRoute,removedId,addedId) &&
+            shouldUseCapacityRepair({baseRoute:route,repairedRoute:trialRoute,walkingKmTarget,preferences}) &&
+            preservesReplacementQuality(route,trialRoute,preferences)) {
+          day = trialDay;
+          route = trialRoute;
+          repairApplied = true;
+        }
+        if (!shouldTryCapacityRepair(route,walkingKmTarget)) break;
+      }
+    }
     // The event weave is part of what gets EMITTED, and it extends the route by
     // up to MAX_EVENT_LEG_KM. Settling against the pre-weave geometry therefore
     // judged a route the response would not carry: a day settled just inside
@@ -1751,6 +1784,15 @@ function routePreferenceCoverage(route, preferences) {
     supported: exact + partial,
     missing: Math.max(0, requested.length - exact - partial),
   };
+}
+
+function preservesReplacementQuality(baseRoute, nextRoute, preferences) {
+  const warnings = new Set(baseRoute?.route_quality_warnings || []);
+  if ((nextRoute?.route_quality_warnings || []).some(warning => !warnings.has(warning))) return false;
+  const {intents=[],unmapped=[]} = normalizeUserIntents(preferences || []);
+  const rank = (route,intent) => (route?.main_stops || []).reduce((best,stop) => Math.max(best,
+    stop.covered_preferences?.includes(intent) ? 2 : stop.partial_preferences?.includes(intent) ? 1 : 0),0);
+  return [...intents,...unmapped].every(intent => rank(nextRoute,intent) >= rank(baseRoute,intent));
 }
 
 function sanitizeAgnosticEngineDay({ day, placeLabel, lang, anchorMode = "unknown" }) {
