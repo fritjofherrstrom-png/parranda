@@ -54,6 +54,36 @@ Food primaries newly named without `_restaurant` (such as steakhouse or brasseri
 can now survive the same explicit map. No rating, quality, popularity or opening
 hours claim is inferred from that classification.
 
+### Semantic continuity audit after initial migration
+
+Every exact label supported by the pre-migration adapter was compared with the
+pinned current primary table. The initial closed map missed three direct current
+continuations and two safe explicit descendants:
+
+| Current primary | Reviewed Parranda meaning | Decision |
+| --- | --- | --- |
+| `scenic_viewpoint` | viewpoint / exact views | accepts the current scenic-viewpoint concept |
+| `dance_club` | bar / exact nightlife | accepts a dance venue, replacing dead `nightclub` vocabulary |
+| `second_hand_clothing_store` | vintage-shop / exact second hand | accepts a direct current second-hand retail primary |
+| `community_garden` | garden / exact green | explicitly accepted because its own primary means a garden |
+| `state_park` | park / exact green + nature | explicitly accepted because its own primary means a state park |
+
+This is not descendant inference. `playground`, `dog_park`, `water_park`,
+`amusement_park` and unknown park/garden siblings remain rejected even when
+their hierarchy contains park or garden. The production SQL and JavaScript
+mapper are generated from and tested against the same exported closed set.
+
+The following unreachable legacy labels were removed from the current-taxonomy
+map: `viewpoint`, `nightclub`, `arts_centre`, `arts_center`, `observation_deck`,
+`promenade`, `fortress`, `swimming_area`, `farm_shop`, `vintage_store`,
+`thrift_store` and `charity_shop`. The pinned table defines none as a current
+primary. Where the concept remains safe, a current explicit primary now owns it:
+`scenic_viewpoint`, `dance_club`, `second_hand_store`,
+`second_hand_clothing_store`, `antique_store`, `flea_market`, `lookout`, `fort`,
+`beach`, `farm`, `market`, `marina` or `pier`. These are not aliases: no removed
+label is rewritten at runtime, and gaps such as an arts centre or promenade are
+allowed to remain gaps until an explicit current primary is reviewed.
+
 ## Cache and runtime ownership
 
 Normalized cache namespace is **overture-v4**. v2/v3 rows lack hierarchy facts

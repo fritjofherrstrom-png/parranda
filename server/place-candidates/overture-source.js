@@ -55,7 +55,7 @@ const EXACT_TYPE_MAP = new Map([
   ["dessert_shop", { type: "cafe", tags: ["fika"] }],
   ["bar", { type: "bar", tags: ["nattliv"] }],
   ["pub", { type: "bar", tags: ["nattliv"] }],
-  ["nightclub", { type: "bar", tags: ["nattliv"] }],
+  ["dance_club", { type: "bar", tags: ["nattliv"] }],
   ["beer_garden", { type: "bar", tags: ["nattliv", "öl"] }],
   ["brewery", { type: "bar", tags: ["nattliv", "öl"] }],
   ["winery", { type: "bar", tags: ["vin"] }],
@@ -65,37 +65,30 @@ const EXACT_TYPE_MAP = new Map([
   ["modern_art_museum", { type: "museum", tags: ["kultur", "museum"] }],
   ["history_museum", { type: "museum", tags: ["kultur", "museum"] }],
   ["art_gallery", { type: "gallery", tags: ["kultur"] }],
-  ["arts_centre", { type: "gallery", tags: ["kultur"] }],
-  ["arts_center", { type: "gallery", tags: ["kultur"] }],
   ["park", { type: "park", tags: ["park", "green"] }],
   ["national_park", { type: "park", tags: ["park", "green", "nature"] }],
+  ["state_park", { type: "park", tags: ["park", "green", "nature"] }],
   ["nature_reserve", { type: "park", tags: ["park", "green", "nature"] }],
   ["garden", { type: "garden", tags: ["garden", "green"] }],
   ["botanical_garden", { type: "garden", tags: ["garden", "green"] }],
-  ["viewpoint", { type: "viewpoint", tags: ["utsikt"] }],
+  ["community_garden", { type: "garden", tags: ["garden", "green"] }],
+  ["scenic_viewpoint", { type: "viewpoint", tags: ["utsikt"] }],
   ["lookout", { type: "viewpoint", tags: ["utsikt"] }],
-  ["observation_deck", { type: "viewpoint", tags: ["utsikt"] }],
-  ["promenade", { type: "promenade", tags: ["waterfront"] }],
   ["marina", { type: "promenade", tags: ["waterfront", "coast"] }],
   ["pier", { type: "promenade", tags: ["waterfront", "coast"] }],
   ["castle", { type: "castle", tags: ["historic", "landmark"] }],
   ["fort", { type: "historic-site", tags: ["historic", "landmark"] }],
-  ["fortress", { type: "historic-site", tags: ["historic", "landmark"] }],
   ["historic_site", { type: "historic-site", tags: ["historic", "landmark"] }],
   ["monument", { type: "monument", tags: ["historic", "landmark"] }],
   ["lighthouse", { type: "lighthouse", tags: ["historic", "coast"] }],
   ["beach", { type: "beach", tags: ["coast", "bathing"] }],
-  ["swimming_area", { type: "beach", tags: ["bathing"] }],
   ["farmers_market", { type: "market", tags: ["market", "lokalt"] }],
   ["flea_market", { type: "market", tags: ["market", "loppis"] }],
   ["market", { type: "market", tags: ["market"] }],
   ["farm", { type: "market", tags: ["lokalt"] }],
-  ["farm_shop", { type: "market", tags: ["market", "lokalt"] }],
   ["antique_store", { type: "vintage-shop", tags: ["vintage", "antique"] }],
-  ["vintage_store", { type: "vintage-shop", tags: ["vintage", "second_hand"] }],
-  ["thrift_store", { type: "vintage-shop", tags: ["second_hand"] }],
   ["second_hand_store", { type: "vintage-shop", tags: ["second_hand"] }],
-  ["charity_shop", { type: "vintage-shop", tags: ["second_hand", "charity"] }],
+  ["second_hand_clothing_store", { type: "vintage-shop", tags: ["second_hand"] }],
 ]);
 
 // Reviewed PRIMARY labels from Overture's 2026-03-04 taxonomy table, pinned in
@@ -192,7 +185,8 @@ const MAX_CATEGORY_LENGTH = 100;
 const MAX_HIERARCHY_DEPTH = 16;
 // Same closed map at acquisition and normalization: alternate-only or unsupported
 // rows cannot crowd safe primary matches out of the 600-row acquisition budget.
-const TRAVEL_PRIMARY_SQL = [...EXACT_TYPE_MAP.keys()].map((label) => `'${label}'`).join(", ");
+const OVERTURE_ROUTE_PRIMARY_CATEGORIES = Object.freeze([...EXACT_TYPE_MAP.keys()]);
+const TRAVEL_PRIMARY_SQL = OVERTURE_ROUTE_PRIMARY_CATEGORIES.map((label) => `'${label}'`).join(", ");
 
 function clamp(value, min, max, fallback) {
   const number = Number(value);
@@ -482,6 +476,7 @@ module.exports = {
   DEFAULT_MIN_CONFIDENCE,
   QUERY_ROW_LIMIT,
   OVERTURE_PLACE_LICENSES,
+  OVERTURE_ROUTE_PRIMARY_CATEGORIES,
   categoryMapping,
   normalizeOvertureLicenses,
   mapOvertureRow,

@@ -6,7 +6,13 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { DuckDBInstance } = require("@duckdb/node-api");
-const { buildOvertureQuery, mapOvertureRow, categoryMapping, createOvertureSource } = require("../server/place-candidates/overture-source");
+const {
+  OVERTURE_ROUTE_PRIMARY_CATEGORIES,
+  buildOvertureQuery,
+  mapOvertureRow,
+  categoryMapping,
+  createOvertureSource,
+} = require("../server/place-candidates/overture-source");
 
 function row(primary = "coffee_shop", hierarchy = ["food_and_drink", "non_alcoholic_beverage_venue", primary]) {
   return {
@@ -47,6 +53,45 @@ test("closed primary mapping distinguishes food and non-alcoholic bars from nigh
   assert.equal(categoryMapping("scandinavian_restaurant")?.type, "restaurant");
   assert.equal(categoryMapping("science_museum")?.type, "museum");
   assert.equal(categoryMapping("public_market")?.type, "market");
+});
+
+test("reviewed current primary leaves preserve scenic, nightlife and second-hand continuity", () => {
+  assert.deepEqual(categoryMapping("scenic_viewpoint"), { type: "viewpoint", tags: ["utsikt"] });
+  assert.deepEqual(categoryMapping("dance_club"), { type: "bar", tags: ["nattliv"] });
+  assert.deepEqual(categoryMapping("second_hand_clothing_store"), { type: "vintage-shop", tags: ["second_hand"] });
+  const cases = [
+    ["scenic_viewpoint", ["geographic_entities", "scenic_viewpoint"], "viewpoint", "utsikt"],
+    ["dance_club", ["arts_and_entertainment", "nightlife_venue", "dance_club"], "bar", "nattliv"],
+    ["second_hand_clothing_store", ["shopping", "second_hand_store", "second_hand_clothing_store"], "vintage-shop", "second_hand"],
+  ];
+  for (const [primary, hierarchy, type, tag] of cases) {
+    const mapped = mapOvertureRow(row(primary, hierarchy));
+    assert.equal(mapped.type, type);
+    assert.ok(mapped.tags.includes(tag));
+  }
+});
+
+test("park and garden descendants are admitted explicitly, never by their ancestor", () => {
+  assert.deepEqual(categoryMapping("community_garden"), { type: "garden", tags: ["garden", "green"] });
+  assert.deepEqual(categoryMapping("state_park"), { type: "park", tags: ["park", "green", "nature"] });
+  assert.equal(mapOvertureRow(row("community_garden", ["geographic_entities", "built_feature", "garden", "community_garden"])).type, "garden");
+  assert.equal(mapOvertureRow(row("state_park", ["sports_and_recreation", "park", "state_park"])).type, "park");
+  for (const primary of ["playground", "dog_park", "water_park", "amusement_park", "future_garden"]) {
+    assert.equal(categoryMapping(primary), null, primary);
+  }
+});
+
+test("production SQL and JavaScript expose exactly the same closed current-primary set", () => {
+  assert.ok(Array.isArray(OVERTURE_ROUTE_PRIMARY_CATEGORIES));
+  const sql = buildOvertureQuery({ release: "2026-08-19.0", lat: 40, lng: 12 });
+  const sqlValues = [...sql.matchAll(/'([a-z][a-z0-9_]*)'/g)]
+    .map((match) => match[1])
+    .filter((value) => value !== "closed");
+  assert.deepEqual(sqlValues, OVERTURE_ROUTE_PRIMARY_CATEGORIES);
+  assert.ok(OVERTURE_ROUTE_PRIMARY_CATEGORIES.every((primary) => categoryMapping(primary)));
+  for (const deadLegacy of ["viewpoint", "nightclub", "arts_centre", "arts_center", "observation_deck", "promenade", "fortress", "swimming_area", "farm_shop", "vintage_store", "thrift_store", "charity_shop"]) {
+    assert.equal(OVERTURE_ROUTE_PRIMARY_CATEGORIES.includes(deadLegacy), false, deadLegacy);
+  }
 });
 
 test("production SQL executes against taxonomy-only Parquet and ignores conflicting legacy columns", async (t) => {
