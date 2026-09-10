@@ -10,6 +10,7 @@
  *   unavailable    → honest empty state (never a crash)
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { fetchPlannerLifecycle } from '../lib/planner-lifecycle.mjs';
 import "leaflet/dist/leaflet.css";
 import {
   buildAnywherePayload,
@@ -388,6 +389,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [walkKey, setWalkKey] = useState("balanced");
   const [phase, setPhase] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [loadingStage, setLoadingStage] = useState(0);
+  const [supplyPending, setSupplyPending] = useState(false);
   const [classification, setClassification] = useState<AnywhereClassification | null>(null);
   const [safeResponse, setSafeResponse] = useState<any>(null);
   // The day on screen was composed for an earlier request and a newer one is in
@@ -544,6 +546,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     // is stale however new the request itself was.
     const intentId = intentSequenceRef.current;
     activeRequestRef.current = controller;
+    setSupplyPending(false);
     // A valid day for the SAME anchor is held on screen while the next one
     // composes, instead of being destroyed for the 5-20 s the compose takes.
     const nextAnchorKey = anchorKey(anchor);
@@ -617,18 +620,19 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         excludedCandidateIds: excludedOverride ?? scopedLedger.excludedIds,
         pinnedCandidateIds: sentPinIds,
       });
-      const response = await fetch(`/api/route-recommendations?lang=${langOverride ?? lang}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+      const { response, body } = await fetchPlannerLifecycle(`/api/route-recommendations?lang=${langOverride ?? lang}`, {
+        payload,
         signal: controller.signal,
+        onPending: () => {
+          if (requestId === requestSequenceRef.current && intentId === intentSequenceRef.current) setSupplyPending(true);
+        },
       });
-      const body = await response.json();
       if (
         controller.signal.aborted ||
         requestId !== requestSequenceRef.current ||
         intentId !== intentSequenceRef.current
       ) return;
+      setSupplyPending(false);
       const refusal = composeServiceRefusal(response.status, body);
       if (refusal) {
         setServiceRefusal(refusal);
@@ -727,6 +731,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       // exhausted — is the pure, unit-tested planComposeFollowup; this block
       // only owns the timer and state.
       const followup = planComposeFollowup({
+        supplyLifecycleComplete: true,
         composed: cls.status === "composed",
         structureOnly: cls.status === "structure_only",
         hasStructure: Boolean(safe?.place_structure),
@@ -772,7 +777,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         setPhase("error");
       }
     } finally {
-      if (activeRequestRef.current === controller) activeRequestRef.current = null;
+      if (activeRequestRef.current === controller) {
+        activeRequestRef.current = null;
+        setSupplyPending(false);
+      }
     }
   }
 
@@ -1536,7 +1544,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         <form onSubmit={plan} className="flex flex-col gap-2 sm:flex-row">
           <input
             value={place}
-            onChange={(e) => setPlace(e.target.value)}
+            onChange={(e) => { invalidateCommitmentIntent(); setPlace(e.target.value); }}
             placeholder={t("Var som helst — Lyon, Tbilisi, Kyoto …", "Anywhere — Lyon, Tbilisi, Kyoto …")}
             aria-label={t("Plats", "Place")}
             className="min-h-14 w-full flex-1 rounded-parranda border border-parranda-ink/16 bg-parranda-ink/6 px-5 text-parranda-ink outline-none focus:border-parranda-ember"
@@ -1595,7 +1603,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                     type="button"
                     key={pref.key}
                     aria-pressed={active}
-                    onClick={() => setSelected((cur) => (active ? cur.filter((k) => k !== pref.key) : [...cur, pref.key]))}
+                    onClick={() => { invalidateCommitmentIntent(); setSelected((cur) => (active ? cur.filter((k) => k !== pref.key) : [...cur, pref.key])); }}
                     className={
                       "inline-flex min-h-11 items-center rounded-full border px-4 text-[13px] transition " +
                       (active
@@ -1619,7 +1627,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                   type="button"
                   key={offset}
                   aria-pressed={dayOffset === offset}
-                  onClick={() => setDayOffset(offset)}
+                  onClick={() => { if (dayOffset !== offset) { invalidateCommitmentIntent(); setDayOffset(offset); } }}
                   className={
                     "inline-flex min-h-11 items-center px-[18px] text-[13px] transition " +
                     (dayOffset === offset ? "bg-parranda-ember/16 font-bold text-parranda-ink" : "text-parranda-ink/65")
@@ -1639,7 +1647,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                   type="button"
                   key={preset.key}
                   aria-pressed={walkKey === preset.key}
-                  onClick={() => setWalkKey(preset.key)}
+                  onClick={() => { if (walkKey !== preset.key) { invalidateCommitmentIntent(); setWalkKey(preset.key); } }}
                   className={
                     "inline-flex min-h-11 items-center px-4 text-[13px] transition " +
                     (walkKey === preset.key ? "bg-parranda-ember/16 font-bold text-parranda-ink" : "text-parranda-ink/65")
@@ -1789,9 +1797,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
       {phase === "loading" && !staleNotice && (
         <p className="text-sm text-parranda-ink/70" aria-live="polite">
-          {loadingStage === 0 && t("Hittar platsen …", "Finding the place …")}
-          {loadingStage === 1 && t("Läser kartan och letar efter riktiga platser …", "Reading the map and looking for real places …")}
-          {loadingStage === 2 &&
+          {supplyPending && t("Hämtar källbelagda platser för din dag. Planen fortsätter automatiskt — du behöver inte försöka igen.", "Fetching source-backed places for your day. Your plan will continue automatically — no need to try again.")}
+          {!supplyPending && loadingStage === 0 && t("Hittar platsen …", "Finding the place …")}
+          {!supplyPending && loadingStage === 1 && t("Läser kartan och letar efter riktiga platser …", "Reading the map and looking for real places …")}
+          {!supplyPending && loadingStage === 2 &&
             t(
               "Komponerar dagen genom områdena — platser utan full kurering kan ta lite längre …",
               "Composing the day across the areas — places without full curation can take a little longer …",

@@ -6,6 +6,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { planComposeFollowup, LIVE_REFRESH_DELAYS_MS } from "../src/lib/compose-followup.mjs";
 
+test('server supply lifecycle replaces speculative one-shot composition; Live stays separate', () => {
+  assert.equal(planComposeFollowup({ supplyLifecycleComplete: true, structureOnly: true, transientSourceRetry: true }).schedule, false);
+  assert.equal(planComposeFollowup({ supplyLifecycleComplete: true, composed: true, livePending: true }).schedule, true);
+});
+
 test("a settled compose with structure and no live pending schedules nothing", () => {
   const plan = planComposeFollowup({ composed: true, hasStructure: true });
   assert.deepEqual(plan, {

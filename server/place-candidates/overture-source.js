@@ -21,8 +21,7 @@
  *   - injectable release/query seams keep tests deterministic and offline.
  */
 
-const nodeFs = require("node:fs");
-const nodePath = require("node:path");
+const { createBoundedOvertureQuery } = require('./bounded-overture-query');
 const { normalizeUserIntents, matchCandidateToIntent } = require("../candidates/intent-vocabulary");
 
 const OVERTURE_STAC_ROOT = "https://stac.overturemaps.org/";
@@ -360,37 +359,7 @@ async function resolveLatestOvertureRelease({
 }
 
 function createDuckDbQueryRows({ cacheDir = null } = {}) {
-  let connectionPromise = null;
-  async function connection() {
-    if (!connectionPromise) {
-      connectionPromise = (async () => {
-        const { DuckDBInstance } = require("@duckdb/node-api");
-        const instance = await DuckDBInstance.create(":memory:");
-        const conn = await instance.connect();
-        if (cacheDir) {
-          const extensionDir = nodePath.join(cacheDir, "duckdb-extensions");
-          try {
-            nodeFs.mkdirSync(extensionDir, { recursive: true });
-            await conn.run(`SET extension_directory='${extensionDir.replace(/'/g, "''")}'`);
-          } catch (_error) {
-            // A read-only deploy may still use DuckDB's default extension cache.
-          }
-        }
-        await conn.run("INSTALL httpfs; LOAD httpfs; SET s3_region='us-west-2'");
-        return conn;
-      })().catch((error) => {
-        connectionPromise = null;
-        throw error;
-      });
-    }
-    return connectionPromise;
-  }
-  return async function queryRows(sql) {
-    if (typeof sql !== "string" || !sql) return [];
-    const conn = await connection();
-    const reader = await conn.runAndReadAll(sql);
-    return reader.getRowObjectsJson();
-  };
+  return createBoundedOvertureQuery({ cacheDir });
 }
 
 function distanceKm(a, b) {
@@ -451,7 +420,7 @@ function createOvertureSource({
         radiusKm: boundedRadius,
         minConfidence: boundedConfidence,
       });
-      if (!query) return [];
+      if (!query) throw new Error('overture_release_unavailable');
       const rows = await executeQuery(query);
       const records = [];
       const seen = new Set();
@@ -463,7 +432,9 @@ function createOvertureSource({
       }
       return selectRecords(records, { anchor: { lat, lng }, requestedIntents, limit: boundedLimit });
     } catch (_error) {
-      return [];
+      const failed = [];
+      Object.defineProperty(failed, 'source_error', { value: 'fetch_error' });
+      return failed;
     }
   };
 }
