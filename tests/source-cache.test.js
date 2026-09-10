@@ -289,7 +289,7 @@ test("an uncached loader (no cache option) is byte-for-byte the prior behavior",
 
 // --- deploy wiring ---------------------------------------------------------
 
-test("the deployed Overture loader reads v3 after restart, never legacy alternate-derived v2 rows", async (t) => {
+test("the deployed Overture loader reads v4 after restart, never legacy v2/v3 rows", async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "parranda-overture-revision-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   // No provider acceptance: deterministic failure at the real factory's fetch seam.
@@ -297,13 +297,14 @@ test("the deployed Overture loader reads v3 after restart, never legacy alternat
   const key = "41.900,12.500:all";
   const legacy = [{ id: "legacy-alternate", type: "park", lat: 41.9, lng: 12.5 }];
   await createSourceCache({ namespace: "overture-v2", dir }).get(key, async () => legacy);
+  await createSourceCache({ namespace: "overture-v3", dir }).get(key, async () => legacy);
   const env = {
     PARRANDA_OPEN_DATA_LOADER: "enabled", PARRANDA_OVERTURE_SOURCE: "enabled",
     PARRANDA_CACHE_DIR: dir, PARRANDA_OVERPASS_ENDPOINTS: "https://example.org/overpass",
   };
   assert.equal((await resolveDefaultOpenDataLoader(env)({ lat: 41.9, lng: 12.5 })).length, 0);
   const current = [{ id: "current-primary", type: "garden", lat: 41.9, lng: 12.5 }];
-  await createSourceCache({ namespace: "overture-v3", dir }).get(key, async () => current);
+  await createSourceCache({ namespace: "overture-v4", dir }).get(key, async () => current);
   const records = await resolveDefaultOpenDataLoader(env)({ lat: 41.9, lng: 12.5 });
   assert.deepEqual(records.map((record) => record.id), ["current-primary"]);
   assert.deepEqual(createSourceCache({ namespace: "overture-v2", dir }).peek(key), legacy,

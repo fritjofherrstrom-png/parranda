@@ -172,6 +172,10 @@ one public Overpass dependency:
 - Overture Places supplies a bounded five-kilometre global `open_directory`
   family through cached GeoParquet reads. It is filtered at confidence 0.95,
   never contributes ratings or generic prose, and is counted as one family.
+  Acquisition uses validated `taxonomy.primary`/`hierarchy` and an explicit
+  primary route map, not legacy categories, basic-category rollups or alternate
+  facets. The v4 cache excludes older normalized semantics. See
+  `OVERTURE_TAXONOMY_COMPATIBILITY.md` for the recall tradeoff and pending field QA.
 - Visit Sweden's National API supplies a separate official family inside its
   declared Swedish provider coverage. Parranda makes one cached, hard-capped
   coordinate query for exact `Place` and `FoodEstablishment` JSON-LD records;

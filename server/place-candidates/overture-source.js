@@ -46,22 +46,6 @@ const OVERTURE_PLACE_LICENSES = Object.freeze([
   "CDLA-Permissive-2.0",
 ]);
 
-// Broad enough for SQL pushdown, while the exact primary-category mapper below
-// remains the authority. Alternate facets are deliberately not searched: an
-// unsupported primary meaning must not borrow an unrelated routable meaning
-// from a secondary facet (for example an indoor playground tagged as a park).
-// Keeping this in the query avoids downloading hundreds of nearby pharmacies,
-// offices and generic shops only to discard them in JavaScript.
-const TRAVEL_CATEGORY_SQL_PATTERN = [
-  "restaurant", "cafe", "coffee", "bakery", "tea_room", "ice_cream", "dessert",
-  "bar", "pub", "nightclub", "beer_garden", "brewery", "winery", "distillery",
-  "museum", "gallery", "arts_centre", "arts_center",
-  "park", "garden", "nature_reserve", "national_park", "viewpoint", "lookout",
-  "observation", "promenade", "marina", "pier", "castle", "fort", "historic_site",
-  "monument", "lighthouse", "beach", "swimming", "market", "farm", "antique",
-  "vintage", "thrift", "second_hand", "charity_shop",
-].join("|");
-
 const EXACT_TYPE_MAP = new Map([
   ["cafe", { type: "cafe", tags: ["fika"] }],
   ["coffee_shop", { type: "cafe", tags: ["fika", "coffee"] }],
@@ -71,7 +55,7 @@ const EXACT_TYPE_MAP = new Map([
   ["dessert_shop", { type: "cafe", tags: ["fika"] }],
   ["bar", { type: "bar", tags: ["nattliv"] }],
   ["pub", { type: "bar", tags: ["nattliv"] }],
-  ["nightclub", { type: "bar", tags: ["nattliv"] }],
+  ["dance_club", { type: "bar", tags: ["nattliv"] }],
   ["beer_garden", { type: "bar", tags: ["nattliv", "öl"] }],
   ["brewery", { type: "bar", tags: ["nattliv", "öl"] }],
   ["winery", { type: "bar", tags: ["vin"] }],
@@ -81,38 +65,128 @@ const EXACT_TYPE_MAP = new Map([
   ["modern_art_museum", { type: "museum", tags: ["kultur", "museum"] }],
   ["history_museum", { type: "museum", tags: ["kultur", "museum"] }],
   ["art_gallery", { type: "gallery", tags: ["kultur"] }],
-  ["arts_centre", { type: "gallery", tags: ["kultur"] }],
-  ["arts_center", { type: "gallery", tags: ["kultur"] }],
   ["park", { type: "park", tags: ["park", "green"] }],
   ["national_park", { type: "park", tags: ["park", "green", "nature"] }],
+  ["state_park", { type: "park", tags: ["park", "green", "nature"] }],
   ["nature_reserve", { type: "park", tags: ["park", "green", "nature"] }],
   ["garden", { type: "garden", tags: ["garden", "green"] }],
   ["botanical_garden", { type: "garden", tags: ["garden", "green"] }],
-  ["viewpoint", { type: "viewpoint", tags: ["utsikt"] }],
+  ["community_garden", { type: "garden", tags: ["garden", "green"] }],
+  ["scenic_viewpoint", { type: "viewpoint", tags: ["utsikt"] }],
   ["lookout", { type: "viewpoint", tags: ["utsikt"] }],
-  ["observation_deck", { type: "viewpoint", tags: ["utsikt"] }],
-  ["promenade", { type: "promenade", tags: ["waterfront"] }],
   ["marina", { type: "promenade", tags: ["waterfront", "coast"] }],
   ["pier", { type: "promenade", tags: ["waterfront", "coast"] }],
   ["castle", { type: "castle", tags: ["historic", "landmark"] }],
   ["fort", { type: "historic-site", tags: ["historic", "landmark"] }],
-  ["fortress", { type: "historic-site", tags: ["historic", "landmark"] }],
   ["historic_site", { type: "historic-site", tags: ["historic", "landmark"] }],
   ["monument", { type: "monument", tags: ["historic", "landmark"] }],
   ["lighthouse", { type: "lighthouse", tags: ["historic", "coast"] }],
   ["beach", { type: "beach", tags: ["coast", "bathing"] }],
-  ["swimming_area", { type: "beach", tags: ["bathing"] }],
   ["farmers_market", { type: "market", tags: ["market", "lokalt"] }],
   ["flea_market", { type: "market", tags: ["market", "loppis"] }],
   ["market", { type: "market", tags: ["market"] }],
   ["farm", { type: "market", tags: ["lokalt"] }],
-  ["farm_shop", { type: "market", tags: ["market", "lokalt"] }],
   ["antique_store", { type: "vintage-shop", tags: ["vintage", "antique"] }],
-  ["vintage_store", { type: "vintage-shop", tags: ["vintage", "second_hand"] }],
-  ["thrift_store", { type: "vintage-shop", tags: ["second_hand"] }],
   ["second_hand_store", { type: "vintage-shop", tags: ["second_hand"] }],
-  ["charity_shop", { type: "vintage-shop", tags: ["second_hand", "charity"] }],
+  ["second_hand_clothing_store", { type: "vintage-shop", tags: ["second_hand"] }],
 ]);
+
+// Reviewed PRIMARY labels from Overture's 2026-03-04 taxonomy table, pinned in
+// docs/OVERTURE_TAXONOMY_COMPATIBILITY.md. These explicit sets replace suffix
+// inference: salad_bar is food, milk_bar is not nightlife, and an unknown future
+// *_museum / *_market cannot acquire a role. No runtime ancestor roll-up occurs.
+// Cuisine names are provider category identifiers, never place/city branches.
+const PRIMARY_CATEGORY_GROUPS = [
+  ["restaurant", ["mat"], `
+    restaurant african_restaurant east_african_restaurant eritrean_restaurant
+    ethiopian_restaurant somalian_restaurant north_african_restaurant algerian_restaurant
+    egyptian_restaurant moroccan_restaurant southern_african_restaurant south_african_restaurant
+    west_african_restaurant ghanaian_restaurant nigerian_restaurant senegalese_restaurant
+    asian_restaurant central_asian_restaurant afghani_restaurant kazakhstani_restaurant
+    uzbek_restaurant east_asian_restaurant chinese_restaurant baozi_restaurant
+    beijing_restaurant cantonese_restaurant dim_sum_restaurant dongbei_restaurant
+    fujian_restaurant hunan_restaurant indo_chinese_restaurant jiangsu_restaurant
+    shandong_restaurant shanghainese_restaurant sichuan_restaurant xinjiang_restaurant
+    japanese_restaurant sushi_restaurant korean_restaurant mongolian_restaurant
+    taiwanese_restaurant ramen_restaurant south_asian_restaurant bangladeshi_restaurant
+    himalayan_restaurant nepalese_restaurant indian_restaurant bengali_restaurant
+    chettinad_restaurant gujarati_restaurant hyderabadi_restaurant north_indian_restaurant
+    punjabi_restaurant rajasthani_restaurant south_indian_restaurant pakistani_restaurant
+    sri_lankan_restaurant tibetan_restaurant southeast_asian_restaurant burmese_restaurant
+    cambodian_restaurant filipino_restaurant indonesian_restaurant sundanese_restaurant
+    laotian_restaurant malaysian_restaurant nasi_restaurant singaporean_restaurant
+    thai_restaurant vietnamese_restaurant wok_restaurant bar_and_grill_restaurant
+    breakfast_and_brunch_restaurant pancake_house waffle_restaurant buffet_restaurant
+    cafeteria comfort_food_restaurant diy_foods_restaurant dumpling_restaurant
+    european_restaurant central_european_restaurant austrian_restaurant czech_restaurant
+    german_restaurant fischbrotchen_restaurant hungarian_restaurant polish_restaurant
+    schnitzel_restaurant slovakian_restaurant swiss_restaurant eastern_european_restaurant
+    belarusian_restaurant bulgarian_restaurant lithuanian_restaurant romanian_restaurant
+    russian_restaurant tatar_restaurant serbo_croatian_restaurant ukrainian_restaurant
+    iberian_restaurant portuguese_restaurant spanish_restaurant basque_restaurant
+    catalan_restaurant mediterranean_restaurant greek_restaurant italian_restaurant
+    piadina_restaurant pizza_restaurant maltese_restaurant scandinavian_restaurant
+    danish_restaurant finnish_restaurant icelandic_restaurant norwegian_restaurant
+    swedish_restaurant western_european_restaurant belgian_restaurant british_restaurant
+    dutch_restaurant french_restaurant brasserie irish_restaurant scottish_restaurant
+    welsh_restaurant haute_cuisine_restaurant international_fusion_restaurant
+    asian_fusion_restaurant latin_fusion_restaurant pan_asian_restaurant
+    latin_american_restaurant caribbean_restaurant cuban_restaurant dominican_restaurant
+    haitian_restaurant jamaican_restaurant puerto_rican_restaurant trinidadian_restaurant
+    central_american_restaurant belizean_restaurant costa_rican_restaurant
+    guatemalan_restaurant honduran_restaurant nicaraguan_restaurant panamanian_restaurant
+    salvadoran_restaurant empanada_restaurant mexican_restaurant south_american_restaurant
+    argentine_restaurant bolivian_restaurant brazilian_restaurant chilean_restaurant
+    colombian_restaurant ecuadorian_restaurant paraguayan_restaurant peruvian_restaurant
+    surinamese_restaurant uruguayan_restaurant venezuelan_restaurant taco_restaurant
+    texmex_restaurant meat_restaurant barbecue_restaurant burger_restaurant
+    cheesesteak_restaurant chicken_restaurant chicken_wings_restaurant curry_sausage_restaurant
+    hot_dog_restaurant meatball_restaurant rotisserie_chicken_restaurant steakhouse
+    venison_restaurant wild_game_meats_restaurant middle_eastern_restaurant arabian_restaurant
+    armenian_restaurant azerbaijani_restaurant falafel_restaurant georgian_restaurant
+    israeli_restaurant kofta_restaurant kurdish_restaurant lebanese_restaurant
+    palestinian_restaurant persian_restaurant syrian_restaurant turkish_restaurant
+    doner_kebab_restaurant turkmen_restaurant yemenite_restaurant north_american_restaurant
+    american_restaurant cajun_and_creole_restaurant southern_american_restaurant
+    canadian_restaurant poutinerie_restaurant pacific_rim_restaurant australian_restaurant
+    melanesian_restaurant fijian_restaurant micronesian_restaurant guamanian_restaurant
+    new_zealand_restaurant polynesian_restaurant hawaiian_restaurant poke_restaurant
+    pop_up_restaurant salad_bar seafood_restaurant fish_and_chips_restaurant fish_restaurant
+    soul_food soup_restaurant special_diet_restaurant acai_bowls gluten_free_restaurant
+    halal_restaurant health_food_restaurant jewish_restaurant kosher_restaurant
+    live_and_raw_food_restaurant molecular_gastronomy_restaurant vegan_restaurant
+    vegetarian_restaurant supper_club theme_restaurant wrap_restaurant
+    fast_food_restaurant fondue_restaurant tapas_bar
+  `],
+  ["museum", ["kultur", "museum"], `
+    museum art_museum asian_art_museum cartooning_museum contemporary_art_museum
+    costume_museum decorative_arts_museum design_museum modern_art_museum
+    photography_museum textile_museum aviation_museum childrens_museum history_museum
+    civilization_museum community_museum military_museum national_museum science_museum
+    computer_museum sports_museum state_museum
+  `],
+  ["bar", ["nattliv"], `
+    bar bar_tabac beach_bar beer_bar champagne_bar cigar_bar cocktail_bar dive_bar
+    drive_thru_bar gay_bar hookah_bar hotel_bar piano_bar pub irish_pub sake_bar
+    speakeasy sports_bar tiki_bar vermouth_bar whiskey_bar wine_bar
+  `],
+  ["market", ["market"], `
+    seafood_market health_market holiday_market night_market public_market flower_market
+  `],
+];
+for (const [type, tags, labels] of PRIMARY_CATEGORY_GROUPS) {
+  for (const label of labels.trim().split(/\s+/)) {
+    if (!EXACT_TYPE_MAP.has(label)) EXACT_TYPE_MAP.set(label, { type, tags });
+  }
+}
+
+const CATEGORY_TOKEN = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
+const MAX_CATEGORY_LENGTH = 100;
+const MAX_HIERARCHY_DEPTH = 16;
+// Same closed map at acquisition and normalization: alternate-only or unsupported
+// rows cannot crowd safe primary matches out of the 600-row acquisition budget.
+const OVERTURE_ROUTE_PRIMARY_CATEGORIES = Object.freeze([...EXACT_TYPE_MAP.keys()]);
+const TRAVEL_PRIMARY_SQL = OVERTURE_ROUTE_PRIMARY_CATEGORIES.map((label) => `'${label}'`).join(", ");
 
 function clamp(value, min, max, fallback) {
   const number = Number(value);
@@ -123,29 +197,19 @@ function validCoordinate(lat, lng) {
   return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
 }
 
-function normalizeCategory(value) {
-  return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+function validCategory(value) {
+  return typeof value === "string" && value.length <= MAX_CATEGORY_LENGTH && CATEGORY_TOKEN.test(value);
 }
 
 function categoryMapping(primary) {
-  const mapOne = (category) => {
-    const exact = EXACT_TYPE_MAP.get(category);
-    if (exact) return exact;
-    // Restaurant taxonomies are intentionally open-ended (regional cuisines,
-    // seafood, pancakes, farm-to-table…). The suffix is still category
-    // evidence, not name inference.
-    if (category.endsWith("_restaurant") || category === "restaurant") {
-      return { type: "restaurant", tags: ["mat"] };
-    }
-    if (category.endsWith("_bar")) return { type: "bar", tags: ["nattliv"] };
-    if (category.endsWith("_museum")) return { type: "museum", tags: ["kultur", "museum"] };
-    if (category.endsWith("_market")) return { type: "market", tags: ["market"] };
-    return null;
-  };
-  // Overture declares `primary` as the canonical category. Secondary facets
-  // can be broader, venue-adjacent or simply wrong for the user's intent; they
-  // are useful discovery hints but are not sufficient route-category evidence.
-  return mapOne(normalizeCategory(primary));
+  return validCategory(primary) ? EXACT_TYPE_MAP.get(primary) || null : null;
+}
+
+function validPrimaryHierarchy(primary, hierarchy) {
+  return validCategory(primary) && Array.isArray(hierarchy)
+    && hierarchy.length >= 1 && hierarchy.length <= MAX_HIERARCHY_DEPTH
+    && hierarchy.every(validCategory) && new Set(hierarchy).size === hierarchy.length
+    && hierarchy[hierarchy.length - 1] === primary;
 }
 
 function firstHttpUrl(values) {
@@ -191,6 +255,9 @@ function mapOvertureRow(row, { minConfidence = DEFAULT_MIN_CONFIDENCE } = {}) {
   if (!Number.isFinite(confidence) || confidence < minConfidence) return null;
   const operational = normalizeOperationalStatus(row.operating_status);
   if (operational.status === "inactive") return null;
+  // Both aliases are projected from the SAME new taxonomy struct. No fallback
+  // to legacy categories, a basic icon category, ancestors or alternate facets.
+  if (!validPrimaryHierarchy(row.category, row.category_hierarchy)) return null;
   const mapping = categoryMapping(row.category);
   if (!mapping) return null;
   // Places is a multi-license dataset and each row's `sources` atoms own the
@@ -242,7 +309,8 @@ function buildOvertureQuery({ release, lat, lng, radiusKm = DEFAULT_RADIUS_KM, r
   const path = `${OVERTURE_S3_ROOT}/${release}/theme=places/type=place/*`;
   return `SELECT id,
   names.primary AS name,
-  categories.primary AS category,
+  taxonomy.primary AS category,
+  taxonomy.hierarchy AS category_hierarchy,
   confidence,
   operating_status,
   websites,
@@ -255,7 +323,9 @@ WHERE bbox.ymin BETWEEN ${latMin.toFixed(7)} AND ${latMax.toFixed(7)}
   AND ${longitudeClause(lng, lngDelta)}
   AND confidence >= ${confidence.toFixed(3)}
   AND (operating_status IS NULL OR lower(operating_status) NOT LIKE '%closed%')
-  AND regexp_matches(lower(coalesce(categories.primary, '')), '${TRAVEL_CATEGORY_SQL_PATTERN}')
+  AND taxonomy.primary IN (${TRAVEL_PRIMARY_SQL})
+  AND len(taxonomy.hierarchy) BETWEEN 1 AND ${MAX_HIERARCHY_DEPTH}
+  AND taxonomy.primary = list_extract(taxonomy.hierarchy, -1)
 ORDER BY pow(bbox.ymin - ${lat.toFixed(7)}, 2) + pow((bbox.xmin - ${lng.toFixed(7)}) * ${Math.cos((lat * Math.PI) / 180).toFixed(7)}, 2)
 LIMIT ${limit}`;
 }
@@ -406,6 +476,7 @@ module.exports = {
   DEFAULT_MIN_CONFIDENCE,
   QUERY_ROW_LIMIT,
   OVERTURE_PLACE_LICENSES,
+  OVERTURE_ROUTE_PRIMARY_CATEGORIES,
   categoryMapping,
   normalizeOvertureLicenses,
   mapOvertureRow,

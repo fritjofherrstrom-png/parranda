@@ -38,6 +38,12 @@ Named cities and narrow intents may be used as fixtures only when they prove gen
 
 ## Historical delivery record
 
+Current Overture compatibility: `taxonomy.primary` and `taxonomy.hierarchy`
+replace deprecated category acquisition, with closed primary semantics and a v4
+cache boundary. Alternates/basic-category ancestors cannot supply route intent.
+See `OVERTURE_TAXONOMY_COMPATIBILITY.md`; historical field results below do not
+constitute acceptance of this newer normalizer.
+
 The milestone narrative below records how the architecture evolved from #257.
 It is retained for rationale and regression context, **not** as the current
 roadmap or as instructions to rebuild completed work. Current priorities live
