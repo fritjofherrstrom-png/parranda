@@ -32,6 +32,9 @@ For each case:
    not proof of a selection improvement. Preserve heuristic-geometry caveats.
 5. While cold pending, change preferences/budget/date; also change place. Prove
    the old wait cancels and a delayed old response cannot overwrite the new day.
+   The waiting announcement must disappear immediately, before debounce. Drive a
+   terminal deadline once and verify the visible retry starts exactly one new
+   execution from current inputs without polling the expired token.
    Expand route/source cards and exercise Keep/Not-this on eligible published
    identities. Record desktop/mobile loading, map, cards and final state.
 6. Include at least one actual failed provider attempt. The run must terminate
@@ -41,7 +44,10 @@ For each case:
 7. Sample and capture peak web cgroup resource use **including the native child**,
    worker, child count and memory. Check 45 s termination, one native child per
    process, 60 s user deadline, 20-read ceiling and busy handling for concurrent
-   distinct windows. Do not mistake DuckDB's 128 MB setting for total RSS.
+   distinct windows. Confirm the per-child temporary directory is capped at
+   64 MiB and removed after both success and SIGKILL. Exercise a late child event
+   without allowing a second concurrent query. Do not mistake DuckDB's 128 MB
+   setting for total RSS.
 
 Preserve raw request/responses, source/network and console evidence, screenshots
 or trace, cache comparison, resource logs and restored health/image/config hashes.

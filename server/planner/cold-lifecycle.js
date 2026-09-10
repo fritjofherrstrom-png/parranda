@@ -19,8 +19,19 @@ const failure = error => ({ status: 503, body: { error, days: [] } });
 function createPlannerLifecycle({ deadlineMs = DEADLINE_MS, maxActive = MAX_ACTIVE } = {}) {
   const jobs = new Map();
   let active = 0;
+  function remove(token) {
+    const job = jobs.get(token);
+    if (job?.cleanup) clearTimeout(job.cleanup);
+    jobs.delete(token);
+  }
   function sweep() {
-    for (const [token, job] of jobs) if (Date.now() >= job.expiresAt) jobs.delete(token);
+    for (const [token, job] of jobs) if (Date.now() >= job.expiresAt) remove(token);
+  }
+  function evictOldestCompleted() {
+    for (const [token, job] of jobs) {
+      if (job.result) { remove(token); return true; }
+    }
+    return false;
   }
   function read(token, countPoll = true) {
     sweep();
@@ -41,24 +52,26 @@ function createPlannerLifecycle({ deadlineMs = DEADLINE_MS, maxActive = MAX_ACTI
   }
   function cancel(token) {
     const job = jobs.get(token);
-    if (job) { job.controller.abort(); jobs.delete(token); }
+    if (job) { job.controller.abort(); remove(token); }
   }
   async function start(run, { signal } = {}) {
     sweep();
-    if (active >= maxActive || jobs.size >= MAX_RETAINED) {
+    if (active >= maxActive) {
       return { status: 429, body: { error: 'busy', retry_after_seconds: 5 } };
     }
+    while (jobs.size >= MAX_RETAINED && evictOldestCompleted()) {}
+    if (jobs.size >= MAX_RETAINED) return { status: 429, body: { error: 'busy', retry_after_seconds: 5 } };
     const token = randomBytes(24).toString('hex');
     const controller = new AbortController();
     const deadline = Date.now() + Math.min(DEADLINE_MS, deadlineMs);
-    const job = { controller, deadline, expiresAt: deadline + RETENTION_MS, result: null, polls: 0 };
+    const job = { controller, deadline, expiresAt: deadline + RETENTION_MS, result: null, polls: 0, cleanup: null };
     jobs.set(token, job);
-    const cleanup = setTimeout(() => jobs.delete(token), Math.max(1, job.expiresAt - Date.now()));
-    cleanup.unref?.();
+    job.cleanup = setTimeout(() => remove(token), Math.max(1, job.expiresAt - Date.now()));
+    job.cleanup.unref?.();
     active++;
     let wake;
     const first = new Promise(resolve => { wake = resolve; });
-    const abandon = () => { controller.abort(); jobs.delete(token); wake(); };
+    const abandon = () => { controller.abort(); remove(token); wake(); };
     signal?.addEventListener('abort', abandon, { once: true });
     if (signal?.aborted) abandon();
     const timer = setTimeout(() => {
@@ -87,7 +100,7 @@ function createPlannerLifecycle({ deadlineMs = DEADLINE_MS, maxActive = MAX_ACTI
     await first;
     signal?.removeEventListener('abort', abandon);
     const result = read(token, false);
-    if (result.status !== 202) jobs.delete(token); // direct warm/error response needs no retention
+    if (result.status !== 202) remove(token); // direct warm/error response needs no retention
     return result;
   }
   return { start, read, cancel };

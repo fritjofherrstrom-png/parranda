@@ -442,6 +442,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [adjustOpen, setAdjustOpen] = useState(false);
   const recomposeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestSequenceRef = useRef(0);
+  const retryGenerationRef = useRef(0);
+  const retryInFlightRef = useRef(false);
   // The user's INTENT generation, as distinct from the request generation
   // above. Intent changes the instant they click; a request does not leave for
   // another 400ms, and one already in flight is answering an older intent.
@@ -509,6 +511,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   }, [phase]);
 
   type Anchor = { city?: string; place?: string; coords?: { lat: number; lng: number } };
+  const lastRequestedAnchorRef = useRef<Anchor | null>(null);
 
   async function execute(
     anchor: Anchor,
@@ -534,6 +537,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       pollAttempt?: number;
     } = {},
   ) {
+    lastRequestedAnchorRef.current = anchor;
     if (!silent && pollTimerRef.current) {
       clearTimeout(pollTimerRef.current);
       pollTimerRef.current = null;
@@ -1452,6 +1456,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // exclude and pin unable to contradict each other: the newest action wins.
   const invalidateCommitmentIntent = () => {
     intentSequenceRef.current += 1;
+    retryGenerationRef.current += 1;
+    retryInFlightRef.current = false;
     if (recomposeTimerRef.current) {
       clearTimeout(recomposeTimerRef.current);
       recomposeTimerRef.current = null;
@@ -1462,7 +1468,26 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     }
     activeRequestRef.current?.abort();
     activeRequestRef.current = null;
+    setSupplyPending(false);
     setUpgradePending(false);
+  };
+  const retryPlan = () => {
+    if (retryInFlightRef.current) return;
+    const anchor = lastRequestedAnchorRef.current;
+    if (!anchor) return;
+    if (recomposeTimerRef.current) {
+      clearTimeout(recomposeTimerRef.current);
+      recomposeTimerRef.current = null;
+    }
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    const retryGeneration = ++retryGenerationRef.current;
+    retryInFlightRef.current = true;
+    execute(anchor).catch(() => {}).finally(() => {
+      if (retryGenerationRef.current === retryGeneration) retryInFlightRef.current = false;
+    });
   };
   const commit = (identity: string, kind: "exclude" | "pin", commitLabel: string) => {
     if (!identity || commitments[identity]?.kind === kind) return;
@@ -1837,9 +1862,16 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       )}
 
       {phase === "error" && staleNotice !== "update_failed" && (
-        <p className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4 text-sm text-parranda-ink/80">
-          {t("Motorn svarar inte just nu. Försök igen om en stund.", "The engine isn't answering right now. Try again shortly.")}
-        </p>
+        <div className="flex flex-col items-start gap-3 rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4 text-sm text-parranda-ink/80" role="alert">
+          <p>{t("Motorn svarar inte just nu.", "The engine isn't answering right now.")}</p>
+          <button
+            type="button"
+            onClick={retryPlan}
+            className="inline-flex min-h-11 items-center rounded-parranda-btn bg-parranda-terracotta px-4 font-bold text-white transition hover:brightness-110"
+          >
+            {t("Försök bygga dagen igen", "Try building the day again")}
+          </button>
+        </div>
       )}
 
       {phase === "done" && serviceRefusal && (
@@ -1898,12 +1930,21 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               </span>
             )}
             {staleNotice === "update_failed" && (
-              <span
-                aria-live="polite"
-                className="inline-flex items-center gap-1.5 rounded-full bg-parranda-ember/12 px-2.5 py-0.5 text-[11px] font-semibold text-parranda-clay"
-              >
-                {t("Kunde inte uppdatera — visar din förra dag", "Couldn't update — showing your previous day")}
-              </span>
+              <>
+                <span
+                  aria-live="polite"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-parranda-ember/12 px-2.5 py-0.5 text-[11px] font-semibold text-parranda-clay"
+                >
+                  {t("Kunde inte uppdatera — visar din förra dag", "Couldn't update — showing your previous day")}
+                </span>
+                <button
+                  type="button"
+                  onClick={retryPlan}
+                  className="inline-flex min-h-11 items-center rounded-full border border-parranda-ember/40 px-3 text-xs font-bold text-parranda-clay transition hover:border-parranda-ember"
+                >
+                  {t("Försök uppdatera igen", "Try updating again")}
+                </button>
+              </>
             )}
           </div>
           <h2 className="font-display text-4xl font-semibold leading-none text-parranda-ink sm:text-5xl">

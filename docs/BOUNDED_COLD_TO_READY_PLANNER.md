@@ -42,11 +42,11 @@ The compatible API path without `Prefer` continues to return a single response.
 | --- | --- |
 | User action | One composition; at most 20 status reads, 3 s spacing, 60 s total client/server deadline |
 | Server work | At most 2 active lifecycle executions per process, including after HTTP 202; no queue |
-| Retained results | At most 32 entries, at most 2 MiB each; removed by 60 s after the original deadline |
+| Retained results | At most 32 entries, at most 2 MiB each; removed by 60 s after the original deadline, with the oldest completed result evicted first when new work needs the bounded slot |
 | Token | Random 192-bit bearer capability; memory only, never URL/localStorage; no-store responses; restart/expiry returns 410 |
 | Cancellation | DELETE status token, component unmount or input edit; original HTTP disconnect also abandons waiting before token delivery |
-| Native Overture work | At most 1 child process per parent process; distinct concurrent queries refused without queue; SIGKILL after 45 s including initialization and body reads |
-| DuckDB settings | 128 MB engine memory limit, one thread, 64 MiB Node heap; 10 s HTTP timeout, zero HTTP retries; these are not a claim about total RSS |
+| Native Overture work | At most 1 child process per parent process with child-owned slot release; distinct concurrent queries refused without queue; SIGKILL after 45 s including initialization and body reads |
+| DuckDB settings | 128 MB engine memory limit, one thread, 64 MiB Node heap, dedicated per-child temp directory capped at 64 MiB and removed by the parent after close; 10 s HTTP timeout, zero HTTP retries; these are not a claim about total RSS |
 | Release lookup | Existing 5 s timeout, followed by the 45 s native bound: at most 50 s for this source attempt |
 | Overture acquisition | Existing 5 km radius, 600 raw query rows, default 80 / maximum 100 normalized records; at most 2 MiB child result IPC; unchanged taxonomy, confidence and license gates |
 | Other providers | Existing Overpass, resolver, NAPI and reviewed-source bounds; no new acquisition endpoint, crawler, source approval or provider retry |
@@ -86,6 +86,11 @@ automatically. No percentages, guaranteed route or fabricated ETA are displayed.
 The original date, language, anchor, preferences, budget and commitments remain
 captured by the same execution. Changes invalidate the old intent immediately,
 before the debounce; both request and intent generations reject late bodies.
+Invalidation also removes the old waiting announcement immediately. A terminal
+deadline renders an explicit retry action, both with an empty screen and while a
+previous day is retained; it starts one new execution from the current
+authoritative inputs, consumes any pending adjustment debounce, ignores repeated
+activation and never resumes or polls the expired token.
 
 The server lifecycle replaces speculative structure/error one-shot refreshes.
 The separate bounded Live refresh policy remains for a published day's pending

@@ -74,6 +74,23 @@ test('server also enforces the poll ceiling; a client cannot extend the lifecycl
   work.resolve();
 });
 
+test('completed retained results yield to new work instead of creating false busy', async () => {
+  const jobs = createPlannerLifecycle();
+  let oldestToken;
+  for (let i = 0; i < 32; i++) {
+    const first = await jobs.start(async context => {
+      context.warming();
+      return { status: 200, body: { days: [{ id: i }] } };
+    });
+    if (i === 0) oldestToken = first.body.planner_lifecycle.token;
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(jobs.read(first.body.planner_lifecycle.token).status, 200);
+  }
+  const next = await jobs.start(async () => ({ status: 200, body: { days: [] } }));
+  assert.equal(next.status, 200);
+  assert.equal(jobs.read(oldestToken).status, 410);
+});
+
 test('healthy empty acquisition caches absence; failed acquisition never poisons the cache', async () => {
   let calls = 0;
   const cache = createSourceCache();
