@@ -14,7 +14,8 @@ function createBoundedOvertureQuery({
   timeoutMs = QUERY_TIMEOUT_MS,
   tempRoot = os.tmpdir(),
 } = {}) {
-  return sql => new Promise((resolve, reject) => {
+  return (sql, { signal } = {}) => new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new Error('overture_cancelled'));
     if (activeChild) return reject(new Error('overture_busy'));
     let tempDir;
     let child;
@@ -44,11 +45,14 @@ function createBoundedOvertureQuery({
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
       try { child.kill('SIGKILL'); } catch (_) {}
       // Keep the slot until OS process exit, including after timeout.
       if (error) reject(error); else resolve(rows);
     };
+    const abort = () => finish(new Error('overture_cancelled'));
     timer = setTimeout(() => finish(new Error('overture_timeout')), Math.min(QUERY_TIMEOUT_MS, timeoutMs));
+    signal?.addEventListener('abort', abort, { once: true });
     child.on('error', error => finish(error));
     child.once('close', () => {
       release();

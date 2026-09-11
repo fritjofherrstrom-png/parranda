@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createPlannerLifecycle } = require('../server/planner/cold-lifecycle');
+const { createPlannerLifecycle, lifecycleLoader } = require('../server/planner/cold-lifecycle');
 const { createBackgroundSource, SOURCE_COMPLETION } = require('../server/place-candidates/background-source');
 const { createSourceCache } = require('../server/place-candidates/source-cache');
 const { composeOpenDataLoaders } = require('../server/place-candidates/open-data-loader');
@@ -18,6 +18,33 @@ test('cold source shares one acquisition, exposes pending privately, and serves 
   assert.deepEqual(await b[SOURCE_COMPLETION], [{ id: 'trusted' }]);
   assert.deepEqual(source.load({}), [{ id: 'trusted' }]);
   assert.equal(calls, 1);
+});
+
+test('a shared background producer stops only after every lifecycle consumer cancels', async () => {
+  const first = new AbortController();
+  const second = new AbortController();
+  let providerAborted = false;
+  const source = createBackgroundSource({
+    cache: createSourceCache(),
+    keyFor: () => 'shared-anchor',
+    load: (anchor) => new Promise((_resolve, reject) => {
+      anchor.signal.addEventListener('abort', () => {
+        providerAborted = true;
+        reject(new Error('provider_cancelled'));
+      }, { once: true });
+    }),
+  });
+  const a = source.load({ lat: 1, lng: 2 }, { signal: first.signal });
+  const b = source.load({ lat: 1, lng: 2 }, { signal: second.signal });
+
+  first.abort();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(providerAborted, false, 'the second lifecycle still owns the shared work');
+
+  second.abort();
+  await a[SOURCE_COMPLETION];
+  assert.equal(providerAborted, true);
+  assert.equal(await b[SOURCE_COMPLETION].then(value => value.source_error), 'fetch_error');
 });
 
 test('pending polls continue the same server execution; neither token nor public fields supply candidates', async () => {
@@ -63,6 +90,36 @@ test('pending work still occupies capacity after the first HTTP response', async
   jobs.cancel(first.body.planner_lifecycle.token);
   assert.equal((await jobs.start(() => assert.fail('still running'))).status, 429);
   work.resolve();
+});
+
+test('cancelling the lifecycle aborts its sole background producer and never caches late work', async () => {
+  const cache = createSourceCache();
+  let providerAborted = false;
+  const source = createBackgroundSource({
+    cache,
+    keyFor: () => 'cancelled-anchor',
+    load: (anchor) => new Promise((_resolve, reject) => {
+      anchor.signal.addEventListener('abort', () => {
+        providerAborted = true;
+        reject(new Error('provider_cancelled'));
+      }, { once: true });
+    }),
+  });
+  const jobs = createPlannerLifecycle({ maxActive: 1 });
+  const first = await jobs.start(async context => {
+    const load = lifecycleLoader(request => source.load(request, request), context);
+    await load({ lat: 1, lng: 2 });
+    return { status: 200, body: { days: [{ id: 'must-not-publish' }] } };
+  });
+  assert.equal(first.status, 202);
+
+  jobs.cancel(first.body.planner_lifecycle.token);
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.equal(providerAborted, true);
+  assert.equal(cache.peek('cancelled-anchor'), null);
+  const recovered = await jobs.start(async () => ({ status: 200, body: { days: [] } }));
+  assert.equal(recovered.status, 200);
 });
 
 test('server also enforces the poll ceiling; a client cannot extend the lifecycle', async () => {

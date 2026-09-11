@@ -27,6 +27,27 @@ test('native acquisition terminates on deadline, refuses concurrent work, then r
   assert.deepEqual(await next, [{ id: 'real' }]);
   assert.equal(spawned, 2);
 });
+test('lifecycle cancellation kills the native child and recovers its slot after exit', async () => {
+  const first = childFixture();
+  const second = childFixture();
+  let spawned = 0;
+  const query = createBoundedOvertureQuery({
+    timeoutMs: 1000,
+    spawn: () => ++spawned === 1 ? first : second,
+  });
+  const controller = new AbortController();
+  const cancelled = query('SELECT cancelled', { signal: controller.signal });
+
+  controller.abort();
+  await assert.rejects(cancelled, /overture_cancelled/);
+  assert.deepEqual(first.kills, ['SIGKILL']);
+  await new Promise(resolve => setImmediate(resolve));
+
+  const recovered = query('SELECT recovered');
+  second.emit('message', { rows: [{ id: 'recovered' }] });
+  assert.deepEqual(await recovered, [{ id: 'recovered' }]);
+  assert.equal(spawned, 2);
+});
 test('child error, malformed response and spawn failure fail closed without leaking a slot', async () => {
   await assert.rejects(createBoundedOvertureQuery({ spawn: () => { throw new Error('spawn refused'); } })('sql'), /spawn refused/);
   const child = childFixture();
@@ -52,6 +73,29 @@ test('deadline kills an actual operating-system child, not only an abandoned pro
   }
   assert.deepEqual(fs.readdirSync(tempRoot), []);
   fs.rmSync(tempRoot, { recursive: true, force: true });
+});
+
+test('lifecycle cancellation kills an actual operating-system child and removes its temp directory', async t => {
+  const { spawn } = require('node:child_process');
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'parranda-overture-cancel-'));
+  t.after(() => fs.rmSync(tempRoot, { recursive: true, force: true }));
+  let child;
+  let exited;
+  const query = createBoundedOvertureQuery({ timeoutMs: 10000, tempRoot, spawn: () => {
+    child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
+    exited = new Promise(resolve => child.once('exit', (code, signal) => resolve({ code, signal })));
+    return child;
+  } });
+  const controller = new AbortController();
+  const result = query('unused synthetic query', { signal: controller.signal });
+  controller.abort();
+
+  await assert.rejects(result, /overture_cancelled/);
+  assert.deepEqual(await exited, { code: null, signal: 'SIGKILL' });
+  for (let i = 0; i < 20 && fs.readdirSync(tempRoot).length; i++) {
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  assert.deepEqual(fs.readdirSync(tempRoot), []);
 });
 
 test('a stale child event cannot release the slot owned by a newer child', async () => {

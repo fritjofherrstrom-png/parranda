@@ -57,6 +57,31 @@ test('changed intent aborts polling and cancels the server token', async () => {
   assert.deepEqual(methods, ['POST', 'DELETE']);
 });
 
+test('navigation can synchronously claim the token cancellation exactly once', async () => {
+  const controller = new AbortController();
+  const calls = [];
+  let cancelActiveLifecycle;
+  await assert.rejects(fetchPlannerLifecycle('/api/route-recommendations', {
+    payload: {},
+    signal: controller.signal,
+    onCancellationReady: cancel => {
+      cancelActiveLifecycle = cancel;
+      cancel();
+      cancel();
+    },
+    wait: async () => assert.fail('explicit cancellation stops before polling'),
+    fetcher: async (url, init) => {
+      calls.push({ url, method: init.method, keepalive: init.keepalive === true });
+      return response(pending, 202);
+    },
+  }));
+  assert.equal(typeof cancelActiveLifecycle, 'function');
+  assert.deepEqual(calls, [
+    { url: '/api/route-recommendations', method: 'POST', keepalive: false },
+    { url: '/api/planner-status', method: 'DELETE', keepalive: true },
+  ]);
+});
+
 test('the final partial interval can still deliver a ready day within the fixed deadline', async () => {
   let time = 0; let calls = 0; const delays = [];
   const result = await fetchPlannerLifecycle('/api/route-recommendations', {

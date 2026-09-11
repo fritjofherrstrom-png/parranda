@@ -455,6 +455,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // to be allowed on screen.
   const intentSequenceRef = useRef(0);
   const activeRequestRef = useRef<AbortController | null>(null);
+  const activeLifecycleCancelRef = useRef<(() => void) | null>(null);
   const blitzRequestRef = useRef<AbortController | null>(null);
   const blitzRequestSequenceRef = useRef(0);
   const skipFirstAdjustRef = useRef(true);
@@ -627,6 +628,17 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       const { response, body } = await fetchPlannerLifecycle(`/api/route-recommendations?lang=${langOverride ?? lang}`, {
         payload,
         signal: controller.signal,
+        onCancellationReady: (cancel) => {
+          if (
+            controller.signal.aborted ||
+            requestId !== requestSequenceRef.current ||
+            intentId !== intentSequenceRef.current
+          ) {
+            cancel();
+            return;
+          }
+          activeLifecycleCancelRef.current = cancel;
+        },
         onPending: () => {
           if (requestId === requestSequenceRef.current && intentId === intentSequenceRef.current) setSupplyPending(true);
         },
@@ -783,16 +795,35 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     } finally {
       if (activeRequestRef.current === controller) {
         activeRequestRef.current = null;
+        activeLifecycleCancelRef.current = null;
         setSupplyPending(false);
       }
     }
   }
 
-  useEffect(() => () => {
-    if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+  const cancelActivePlannerForNavigation = () => {
+    const cancelLifecycle = activeLifecycleCancelRef.current;
+    activeLifecycleCancelRef.current = null;
+    // The lifecycle cancellation must be initiated synchronously before the
+    // browser tears down this document. The AbortController remains the local
+    // stale-result guard; cancelLifecycle owns the server/provider boundary.
+    cancelLifecycle?.();
     activeRequestRef.current?.abort();
-    blitzRequestRef.current?.abort();
-    liveQueryAbortRef.current?.abort();
+    activeRequestRef.current = null;
+  };
+
+  useEffect(() => {
+    // pagehide covers address-bar/direct navigation and browser back/forward,
+    // including bfcache transitions. Change place calls the same function at
+    // click time so its DELETE starts before the link's default navigation.
+    window.addEventListener("pagehide", cancelActivePlannerForNavigation);
+    return () => {
+      window.removeEventListener("pagehide", cancelActivePlannerForNavigation);
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+      cancelActivePlannerForNavigation();
+      blitzRequestRef.current?.abort();
+      liveQueryAbortRef.current?.abort();
+    };
   }, []);
 
   // Show a stored day WITHOUT re-fetching. A restored day is a snapshot (events /
@@ -1555,6 +1586,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           </span>
           <a
             href={`/?lang=${lang}`}
+            onClick={(event) => {
+              if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+                cancelActivePlannerForNavigation();
+              }
+            }}
             aria-label={t("Byt plats", "Change place")}
             className="inline-flex min-h-11 shrink-0 items-center rounded-full bg-parranda-ink/10 px-3.5 text-xs font-bold text-parranda-ink/80 transition hover:bg-parranda-ink/15"
           >

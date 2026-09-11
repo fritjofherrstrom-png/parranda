@@ -12,7 +12,8 @@ function pause(ms, signal) {
 
 // Serialize once. Polls carry only a server token, never a replacement plan.
 export async function fetchPlannerLifecycle(url, {
-  payload, signal, onPending = () => {}, fetcher = fetch, wait = pause, now = Date.now,
+  payload, signal, onPending = () => {}, onCancellationReady = () => {},
+  fetcher = fetch, wait = pause, now = Date.now,
 }) {
   const controller = new AbortController();
   const abort = () => controller.abort();
@@ -22,6 +23,22 @@ export async function fetchPlannerLifecycle(url, {
   const timer = setTimeout(abort, MAX_WAIT_MS);
   let token = null;
   let complete = false;
+  let cancellationSent = false;
+  const cancel = () => {
+    if (!token || complete || cancellationSent) return;
+    cancellationSent = true;
+    // Start the same-origin keepalive request while the document is still
+    // alive. Waiting for an aborted request's finally block is too late during
+    // navigation: the page can disappear before that microtask runs.
+    try {
+      Promise.resolve(fetcher('/api/planner-status', {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }), keepalive: true,
+      })).catch(() => {});
+    } catch {}
+    controller.abort();
+  };
+  let cancellationPublished = false;
   try {
     controller.signal.throwIfAborted();
     let response = await fetcher(url, {
@@ -40,6 +57,10 @@ export async function fetchPlannerLifecycle(url, {
           !Number.isInteger(pending.max_polls) || pending.max_polls < 1 ||
           (token && token !== pending.token)) throw new Error('invalid_planner_lifecycle');
       token = pending.token;
+      if (!cancellationPublished) {
+        cancellationPublished = true;
+        onCancellationReady(cancel);
+      }
       deadline = Math.min(deadline, now() + pending.remaining_ms);
       const remaining = deadline - now();
       if (polls >= Math.min(MAX_POLLS, pending.max_polls) || remaining <= 500) throw new Error('supply_wait_expired');
@@ -63,12 +84,6 @@ export async function fetchPlannerLifecycle(url, {
   } finally {
     clearTimeout(timer);
     signal.removeEventListener('abort', abort);
-    if (token && !complete) {
-      // Best effort on edit/navigation. The server deadline remains enforced.
-      Promise.resolve(fetcher('/api/planner-status', {
-        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }), keepalive: true,
-      })).catch(() => {});
-    }
+    cancel();
   }
 }

@@ -44,8 +44,8 @@ The compatible API path without `Prefer` continues to return a single response.
 | Server work | At most 2 active lifecycle executions per process, including after HTTP 202; no queue |
 | Retained results | At most 32 entries, at most 2 MiB each; removed by 60 s after the original deadline, with the oldest completed result evicted first when new work needs the bounded slot |
 | Token | Random 192-bit bearer capability; memory only, never URL/localStorage; no-store responses; restart/expiry returns 410 |
-| Cancellation | DELETE status token, component unmount or input edit; original HTTP disconnect also abandons waiting before token delivery |
-| Native Overture work | At most 1 child process per parent process with child-owned slot release; distinct concurrent queries refused without queue; SIGKILL after 45 s including initialization and body reads |
+| Cancellation | Exactly one same-origin keepalive DELETE for a known status token on input edit, component unmount, Change place, direct navigation or browser history navigation; original HTTP disconnect also abandons waiting before token delivery |
+| Native Overture work | At most 1 child process per parent process with child-owned slot release; distinct concurrent queries refused without queue; SIGKILL on lifecycle cancellation or after 45 s including initialization and body reads |
 | DuckDB settings | 128 MB engine memory limit, one thread, 64 MiB Node heap, dedicated per-child temp directory capped at 64 MiB and removed by the parent after close; 10 s HTTP timeout, zero HTTP retries; these are not a claim about total RSS |
 | Release lookup | Existing 5 s timeout, followed by the 45 s native bound: at most 50 s for this source attempt |
 | Overture acquisition | Existing 5 km radius, 600 raw query rows, default 80 / maximum 100 normalized records; at most 2 MiB child result IPC; unchanged taxonomy, confidence and license gates |
@@ -60,9 +60,12 @@ from HTTP completion and enforcing termination; they do **not** establish that
 boundary on the frozen head before release. GeoParquet transfer has no new
 aggregate byte guarantee; bounded time/rows/radius are not a byte cap.
 
-Cancellation stops the waiting composition from publishing. A shared acquisition
-may finish populating its cache for another active user, within its own source
-deadline. The server retains an active slot until the execution actually exits.
+Cancellation stops the waiting composition from publishing. A sole background
+producer is aborted and cannot populate its cache after cancellation. A shared
+same-window acquisition continues only while another active consumer still owns
+it, within its own source deadline. The canceled execution returns its lifecycle
+slot when it exits; the native slot remains owned until the child has actually
+closed.
 There is no cross-process job sharing or durable job resume: multi-replica routing
 needs affinity or a future shared lifecycle store; unknown tokens fail closed.
 Persistent source caches continue to survive restarts independently of jobs.
@@ -91,6 +94,9 @@ deadline renders an explicit retry action, both with an empty screen and while a
 previous day is retained; it starts one new execution from the current
 authoritative inputs, consumes any pending adjustment debounce, ignores repeated
 activation and never resumes or polls the expired token.
+Change place initiates cancellation before its link navigation. `pagehide` owns
+the equivalent boundary for direct navigation and browser back/forward, rather
+than relying on a React unmount that a document navigation does not perform.
 
 The server lifecycle replaces speculative structure/error one-shot refreshes.
 The separate bounded Live refresh policy remains for a published day's pending
@@ -104,7 +110,8 @@ Deterministic tests exercise the real HTTP handler and real mounted Planner:
 legacy cold loss, pending to route, failure to honest no-day, no-anchor finality,
 one resolver/acquisition, cache-only warm response, preserved independent supply,
 private pending evidence, bounded polls, deadline/cancel/late-result handling,
-and an actual OS child terminated by the deadline. These tests use controlled
+and an actual OS child terminated by both deadline and lifecycle cancellation.
+These tests use controlled
 source records; they are not real-provider/Pi/browser acceptance.
 
 No deployment or rotating geographic acceptance has been performed for this PR.

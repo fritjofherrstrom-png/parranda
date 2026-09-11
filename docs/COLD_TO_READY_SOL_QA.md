@@ -30,8 +30,13 @@ For each case:
    map-tile work separately. Compare candidate identities/families/eligibility
    and final stops, covered/missing preferences and walking fit. Attribution is
    not proof of a selection improvement. Preserve heuristic-geometry caveats.
-5. While cold pending, change preferences/budget/date; also change place. Prove
-   the old wait cancels and a delayed old response cannot overwrite the new day.
+5. While cold pending, change preferences/budget/date; also use Change place,
+   direct navigation, and browser back/forward. For every known lifecycle token,
+   prove exactly one keepalive DELETE begins before navigation accepts the next
+   request. Prove the old wait cancels, its sole source cache is not written, its
+   native child exits, and both lifecycle slots plus the native slot recover.
+   A shared same-window producer may continue only when another active lifecycle
+   still owns it. A delayed old response must not overwrite the new day.
    The waiting announcement must disappear immediately, before debounce. Drive a
    terminal deadline once and verify the visible retry starts exactly one new
    execution from current inputs without polling the expired token.

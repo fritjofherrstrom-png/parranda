@@ -115,7 +115,7 @@ function lifecycleLoader(loader, context) {
     context.signal.throwIfAborted();
     const key = JSON.stringify(request);
     if (!loads.has(key)) loads.set(key, (async () => {
-      let records = await loader({ ...request, preferCachedSupply: true });
+      let records = await loader({ ...request, preferCachedSupply: true, signal: context.signal });
       if (records?.[SOURCE_COMPLETION]) {
         context.warming();
         records = await new Promise((resolve, reject) => {

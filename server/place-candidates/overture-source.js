@@ -333,9 +333,13 @@ async function resolveLatestOvertureRelease({
   fetcher = typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null,
   endpoint = OVERTURE_STAC_ROOT,
   timeoutMs = DEFAULT_STAC_TIMEOUT_MS,
+  signal = null,
 } = {}) {
   if (typeof fetcher !== "function") return null;
   const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal?.addEventListener('abort', abort, { once: true });
+  if (signal?.aborted) controller.abort();
   const timer = setTimeout(() => controller.abort(), Math.max(100, Math.floor(Number(timeoutMs) || DEFAULT_STAC_TIMEOUT_MS)));
   try {
     const response = await fetcher(endpoint, {
@@ -355,6 +359,7 @@ async function resolveLatestOvertureRelease({
     return null;
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener('abort', abort);
   }
 }
 
@@ -409,10 +414,10 @@ function createOvertureSource({
   const boundedRadius = clamp(radiusKm, 0.1, MAX_RADIUS_KM, DEFAULT_RADIUS_KM);
   const boundedLimit = Math.max(1, Math.min(Math.floor(Number(limit) || DEFAULT_LIMIT), MAX_LIMIT));
   const boundedConfidence = clamp(minConfidence, 0.5, 1, DEFAULT_MIN_CONFIDENCE);
-  return async function loadOvertureAround({ lat, lng, requestedIntents = [] } = {}) {
+  return async function loadOvertureAround({ lat, lng, requestedIntents = [], signal } = {}) {
     if (!validCoordinate(lat, lng)) return [];
     try {
-      const release = await releaseResolver();
+      const release = await releaseResolver({ signal });
       const query = buildOvertureQuery({
         release,
         lat,
@@ -421,7 +426,7 @@ function createOvertureSource({
         minConfidence: boundedConfidence,
       });
       if (!query) throw new Error('overture_release_unavailable');
-      const rows = await executeQuery(query);
+      const rows = await executeQuery(query, { signal });
       const records = [];
       const seen = new Set();
       for (const row of Array.isArray(rows) ? rows : []) {

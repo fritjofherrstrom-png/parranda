@@ -99,6 +99,7 @@ export function createDeferredFetch() {
       method: String(init?.method || 'GET').toUpperCase(),
       headers: init?.headers || {},
       body,
+      keepalive: init?.keepalive === true,
       ...settle,
       aborted: false,
     };
