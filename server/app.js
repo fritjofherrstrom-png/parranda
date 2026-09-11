@@ -44,6 +44,7 @@ const {
   summarizePinnedOutcome,
 } = require("./planner/pinned-candidates");
 const { parseRequestedDates } = require("./planner/requested-dates");
+const { createPlannerLifecycle, lifecycleLoader } = require('./planner/cold-lifecycle');
 const { attributeToWithheldDay } = require("./planner/pin-refusal-reasons");
 const {
   markCommitmentEligibility,
@@ -1869,7 +1870,17 @@ function buildApp({
     }
   });
 
-  app.post("/api/route-recommendations", async (request, response) => {
+  const plannerLifecycle = createPlannerLifecycle();
+  app.post('/api/planner-status', (request, response) => {
+    const result = plannerLifecycle.read(request.body?.token);
+    response.set('Cache-Control', 'no-store').status(result.status).json(result.body);
+  });
+  app.delete('/api/planner-status', (request, response) => {
+    plannerLifecycle.cancel(request.body?.token);
+    response.set('Cache-Control', 'no-store').status(204).end();
+  });
+
+  async function recommendRoutes(request, response, lifecycle = null) {
     try {
       // Bound the request BEFORE any work: every date runs the whole
       // recommendation flow once, so an unbounded list is a public work
@@ -1909,7 +1920,10 @@ function buildApp({
       const excludedCandidateIds = parseExcludedCandidateIds(
         request.body?.excluded_candidate_ids ?? request.body?.excludedCandidateIds,
       );
-      const scopedOpenDataLoader = withoutExcludedCandidates(openDataLoader, excludedCandidateIds);
+      const scopedOpenDataLoader = withoutExcludedCandidates(
+        lifecycle ? lifecycleLoader(openDataLoader, lifecycle) : openDataLoader,
+        excludedCandidateIds,
+      );
       // Ledger v2: "keep this one". Selection-only — a pin can name a candidate
       // the server already loaded and gated, never introduce one.
       const pinnedCandidateIds = parsePinnedCandidateIds(
@@ -2275,6 +2289,7 @@ function buildApp({
       }
       // (the place_structure sidecar is built below, AFTER live events are
       // collected, so a genuine tonight-event can be woven into the day)
+      lifecycle?.signal.throwIfAborted();
 
       // ANY-PLACE LIVE EVENTS: what is happening near the trusted anchor tonight /
       // this week, from a bounded set of approved source families. Env-gated +
@@ -2499,6 +2514,28 @@ function buildApp({
         detail: error.message,
       });
     }
+  }
+
+  app.post('/api/route-recommendations', async (request, response) => {
+    if (request.get('Prefer') !== 'respond-async') return recommendRoutes(request, response);
+    // Snapshot the original request once. No status request can replace its
+    // preferences, normalized date, language or server-resolved anchor.
+    const frozen = { body: structuredClone(request.body), query: structuredClone(request.query) };
+    const transport = new AbortController();
+    const onClose = () => { if (!response.writableEnded) transport.abort(); };
+    response.once('close', onClose);
+    const result = await plannerLifecycle.start(async lifecycle => {
+      let status = 200;
+      let body;
+      await recommendRoutes(frozen, {
+        status(value) { status = value; return this; },
+        json(value) { body = value; },
+      }, lifecycle);
+      return { status, body };
+    }, { signal: transport.signal });
+    response.removeListener('close', onClose);
+    if (response.destroyed) return;
+    response.set('Cache-Control', 'no-store').status(result.status).json(result.body);
   });
 
   app.post("/api/blitz", async (request, response) => {

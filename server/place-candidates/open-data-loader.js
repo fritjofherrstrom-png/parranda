@@ -30,6 +30,7 @@
  */
 
 const { createSourceCache } = require("./source-cache");
+const { createBackgroundSource, SOURCE_COMPLETION } = require("./background-source");
 const { createWikidataSource } = require("./wikidata-source");
 const { createOvertureSource } = require("./overture-source");
 const {
@@ -650,7 +651,7 @@ function createOpenDataLoader({
   // query; the cache coalesces concurrent identical lookups and (when file-backed)
   // survives across requests. Only non-error results are stored, so a transient
   // outage is never frozen in.
-  return async function cachedLoadOpenDataAround(request = {}) {
+  const cachedLoader = async function cachedLoadOpenDataAround(request = {}) {
     const { lat, lng, requestedIntents = [], anchorMode = "unknown", spatialScope = null } = request;
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
       return loadOpenDataAround(request);
@@ -663,7 +664,7 @@ function createOpenDataLoader({
     // disc, so reusing it would keep serving the narrow day this change fixes.
     const effectiveRadiusKm = pinnedRadiusKm ?? budgetAwareRadiusKm(normalizedWalkingTargetBand);
     const key = `v8:${lat.toFixed(3)},${lng.toFixed(3)}:r${effectiveRadiusKm}:l${boundedLimit}:m${normalizeAnchorMode(anchorMode)}:i${normalizedRequestedIntents.join(".") || "all"}:t${targetKey}:s${spatialScopeCacheKey(spatialScope)}`;
-    const entry = await cache.get(
+    const entry = request.cacheOnly === true ? cache.peek(key) : await cache.get(
       key,
       async () => {
         const result = await loadOpenDataAround(request);
@@ -697,11 +698,14 @@ function createOpenDataLoader({
         },
       },
     );
+    if (!entry) return withLoaderStatus([], 'loaded:0', null);
     return withLoaderMetadata(
       withLoaderStatus(entry.records, entry.status, entry.error),
       entry.metadata || null,
     );
   };
+  cachedLoader.readCached = (anchor, request = {}) => cachedLoader({ ...request, ...anchor, cacheOnly: true });
+  return cachedLoader;
 }
 
 function buildOverpassQuery({ lat, lng, radiusM, limit, mappings = OSM_TAG_MAP }) {
@@ -1133,6 +1137,8 @@ function resolveDefaultOpenDataLoader(env = process.env) {
         wikiCache.warm(key, () => wikiRaw({ lat, lng }), storeNonEmpty);
         return [];
       };
+      wikiSource.readCached = ({ lat, lng } = {}) => Number.isFinite(lat) && Number.isFinite(lng)
+        ? wikiCache.peek(`${lat.toFixed(3)},${lng.toFixed(3)}`) || [] : [];
     }
   }
 
@@ -1159,23 +1165,15 @@ function resolveDefaultOpenDataLoader(env = process.env) {
       dir: env?.PARRANDA_CACHE_DIR || null,
       ttlMs: Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : undefined,
     });
-    overtureSource = {
-      eager: true,
-      load(anchor = {}, request = {}) {
+    overtureSource = createBackgroundSource({
+      cache: overtureCache,
+      keyFor(anchor = {}, request = {}) {
         const { lat, lng } = anchor;
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];
         const requestedIntents = normalizeRequestedIntents(request.requestedIntents);
-        const key = `${lat.toFixed(3)},${lng.toFixed(3)}:${requestedIntents.join("+") || "all"}`;
-        const cached = overtureCache.peek(key);
-        if (cached) return cached;
-        overtureCache.warm(
-          key,
-          () => overtureRaw({ lat, lng, requestedIntents }),
-          storeNonEmpty,
-        );
-        return [];
+        return `${Number(lat).toFixed(3)},${Number(lng).toFixed(3)}:${requestedIntents.join("+") || "all"}`;
       },
-    };
+      load: (anchor, request = {}) => overtureRaw({ ...anchor, requestedIntents: normalizeRequestedIntents(request.requestedIntents) }),
+    });
   }
 
   // Official Swedish place supply through Visit Sweden's documented NAPI
@@ -1216,6 +1214,29 @@ function composeOpenDataLoaders(osmLoader, wikiSource = null, overtureSource = n
   return async function loadComposedOpenData(request = {}) {
     const sources = [wikiSource, overtureSource, visitSwedenSource].filter(Boolean);
     const primaryAnchor = { lat: request.lat, lng: request.lng };
+    const requestedIntents = normalizeRequestedIntents(request.requestedIntents);
+    // The lifecycle's warm path reads existing evidence, including cached NAPI
+    // corroboration, without launching refreshes just to render an adequate day.
+    // This is private server context, never copied from the public payload.
+    if (request.preferCachedSupply === true) {
+      const primaryCached = typeof osmLoader.readCached === 'function'
+        ? await osmLoader.readCached(primaryAnchor, request) : [];
+      const selected = primaryCached?.loader_metadata?.regional_scout?.selected_anchor_coords;
+      const sameAnchor = !selected || (selected.lat === primaryAnchor.lat && selected.lng === primaryAnchor.lng);
+      const cachedGroups = await Promise.all(sources.map(source => typeof source.readCached === 'function'
+        ? source.readCached(primaryAnchor, request) : []));
+      const cached = [...primaryCached, ...cachedGroups.flat()];
+      const rescue = [...primaryCached, ...cachedGroups.filter((_, index) => sources[index].primaryRescue !== false).flat()];
+      const profile = supplyProfile(rescue, requestedIntents);
+      if (sameAnchor && profile.record_count >= THIN_RECORD_COUNT && profile.category_count >= THIN_CATEGORY_COUNT) {
+        return withLoaderMetadata(withLoaderStatus(cached, `loaded:${cached.length}`, null), {
+          ...primaryCached.loader_metadata,
+          selected_profile: supplyProfile(cached, requestedIntents),
+          selected_day_capacity: dayCapacityProfile(cached, { origin: primaryAnchor, walkingTargetBand: request.walkingTargetBand }),
+          primary_collection: 'cached_supply',
+        });
+      }
+    }
     // Eager sources are started before waiting on the live primary. Cache-only
     // bulk sources warm out-of-band; bounded APIs may finish concurrently. Only
     // sources allowed to be a primary rescue participate in the early-return
@@ -1236,7 +1257,6 @@ function composeOpenDataLoaders(osmLoader, wikiSource = null, overtureSource = n
       const loaded = await pending;
       if (Array.isArray(loaded)) eagerRecords.push(...loaded);
     }
-    const requestedIntents = normalizeRequestedIntents(request.requestedIntents);
     const eagerProfile = supplyProfile(eagerRecords, requestedIntents);
     if (eagerProfile.record_count >= THIN_RECORD_COUNT && eagerProfile.category_count >= THIN_CATEGORY_COUNT) {
       // Cached official evidence must accompany the fast directory path too,
@@ -1280,6 +1300,7 @@ function composeOpenDataLoaders(osmLoader, wikiSource = null, overtureSource = n
       osmRecords.length === 0 ||
       (typeof osm?.loader_status === "string" && osm.loader_status.startsWith("error"));
     const backgroundRecords = [];
+    const completions = [];
     for (const source of sources) {
       const sameAsPrimary =
         Number(wikiAnchor.lat).toFixed(6) === Number(primaryAnchor.lat).toFixed(6) &&
@@ -1307,6 +1328,14 @@ function composeOpenDataLoaders(osmLoader, wikiSource = null, overtureSource = n
       //     network cost, and is skipped entirely when it has no such peek.
       const eagerResult = sameAsPrimary ? eagerLoads.get(source) : null;
       const eagerRecords = await Promise.resolve(eagerResult).catch(() => []);
+      // Retain the original acquisition even if it settled between reads. A
+      // failed acquisition must not silently be started again by rescue.
+      if (sameAsPrimary && eagerRecords?.[SOURCE_COMPLETION]) {
+        const ready = typeof source.readCached === 'function' ? await source.readCached(wikiAnchor, request) : [];
+        if (ready.length) { backgroundRecords.push(...ready); continue; }
+        completions.push(eagerRecords[SOURCE_COMPLETION]);
+        continue;
+      }
       const eagerWasEmpty = Array.isArray(eagerRecords) && eagerRecords.length === 0;
       const rescue = primaryFailed && eagerWasEmpty;
       // An eager bounded API has already spent this composition's live budget
@@ -1322,7 +1351,9 @@ function composeOpenDataLoaders(osmLoader, wikiSource = null, overtureSource = n
             : eagerResult || (typeof source === "function" ? source(wikiAnchor) : source.load(wikiAnchor, request)),
       ).catch(() => []);
       if (Array.isArray(loaded)) backgroundRecords.push(...loaded);
+      if (loaded?.[SOURCE_COMPLETION]) completions.push(loaded[SOURCE_COMPLETION]);
     }
+    if (osm?.[SOURCE_COMPLETION]) completions.push(osm[SOURCE_COMPLETION]);
     const records = [...osmRecords, ...backgroundRecords];
     const status = records.length > 0 ? `loaded:${records.length}` : (osm.loader_status || "loaded:0");
     const metadata = osm.loader_metadata
@@ -1335,10 +1366,28 @@ function composeOpenDataLoaders(osmLoader, wikiSource = null, overtureSource = n
           }),
         }
       : null;
-    return withLoaderMetadata(
+    const result = withLoaderMetadata(
       withLoaderStatus(records, status, osm.loader_error || null),
       metadata,
     );
+    if (completions.length) {
+      // Keep already acquired rows; wait once for the original source jobs.
+      // Rebuild metadata from those rows, never by re-entering a live loader.
+      const completion = Promise.all(completions).then(groups => {
+        const settled = [...records, ...groups.flatMap(rows => Array.isArray(rows) ? rows : [])];
+        const unique = [...new Map(settled.map(row => [row.id, row])).values()];
+        const failed = groups.some(rows => rows?.source_error || rows?.loader_status === 'error_failed_closed');
+        return withLoaderMetadata(withLoaderStatus(unique,
+          unique.length ? `loaded:${unique.length}` : failed ? 'error_failed_closed' : status,
+          unique.length ? null : failed ? 'fetch_error' : osm.loader_error || null), {
+          ...metadata,
+          selected_profile: supplyProfile(unique, requestedIntents),
+          selected_day_capacity: dayCapacityProfile(unique, { origin: wikiAnchor, walkingTargetBand: request.walkingTargetBand }),
+        });
+      });
+      Object.defineProperty(result, SOURCE_COMPLETION, { value: completion });
+    }
+    return result;
   };
 }
 

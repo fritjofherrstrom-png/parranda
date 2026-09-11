@@ -183,6 +183,114 @@ async function click(h, button) {
   });
 }
 
+test('cold Planner renders an honest wait then the real day after one submission', async t => {
+  const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' });
+  t.after(() => h.unmount());
+  await h.clock.advance(500);
+  const initial = h.fetchMock.pending()[0];
+  const frozenInput = structuredClone(initial.body);
+  const token = 'a'.repeat(48);
+  await h.fetchMock.respond(initial, { planner_lifecycle: {
+    version: 1, state: 'warm_pending', token, retry_after_ms: 3000, remaining_ms: 50000, max_polls: 20,
+  } }, 202);
+  assert.match(h.text(), /plan will continue automatically/i);
+  assert.ok(!h.text().includes('Place a'));
+  await h.clock.advance(3000);
+  const poll = h.fetchMock.pending().find(call => call.url === '/api/planner-status');
+  assert.deepEqual(poll.body, { token });
+  await h.fetchMock.respond(poll, composedDay(['a', 'b']));
+  assert.match(h.text(), /Place a/);
+  assert.doesNotMatch(h.text(), /plan will continue automatically/i);
+  await h.clock.advance(10000);
+  assert.equal(h.fetchMock.calls.filter(call => call.url.includes('route-recommendations')).length, 1);
+  assert.deepEqual(initial.body, frozenInput);
+});
+
+test('an adjustment cancels cold polling immediately, before debounce, and ignores a late body', async t => {
+  const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' });
+  t.after(() => h.unmount());
+  await h.clock.advance(500);
+  const initial = h.fetchMock.pending()[0];
+  await h.fetchMock.respond(initial, { planner_lifecycle: {
+    version: 1, state: 'warm_pending', token: 'b'.repeat(48), retry_after_ms: 3000, remaining_ms: 50000, max_polls: 20,
+  } }, 202);
+  await h.clock.advance(3000);
+  const poll = h.fetchMock.pending().find(call => call.url === '/api/planner-status');
+  await h.fetchMock.respond(poll, composedDay(['old-a', 'old-b']), 200, { deferBody: true });
+  await click(h, buttonMatching(h, /Adjust/));
+  await click(h, buttonMatching(h, /Tomorrow/));
+  assert.doesNotMatch(h.text(), /plan will continue automatically/i, 'cancelled waiting copy disappears before debounce');
+  await h.fetchMock.releaseBody(poll);
+  assert.doesNotMatch(h.text(), /Place old-a/);
+  await h.clock.advance(400);
+  const next = h.fetchMock.pending().filter(call => call.url.includes('route-recommendations')).at(-1);
+  assert.ok(next);
+  assert.notDeepEqual(next.body.dates, initial.body.dates);
+  await h.fetchMock.respond(next, composedDay(['new-a', 'new-b']));
+  assert.match(h.text(), /Place new-a/);
+});
+
+test('a terminal cold timeout offers one explicit retry with the current inputs', async t => {
+  const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' });
+  t.after(() => h.unmount());
+  await h.clock.advance(500);
+  const initial = h.fetchMock.pending()[0];
+  const token = 'c'.repeat(48);
+  await h.fetchMock.respond(initial, { planner_lifecycle: {
+    version: 1, state: 'warm_pending', token, retry_after_ms: 3000, remaining_ms: 500, max_polls: 20,
+  } }, 202);
+  await h.clock.advance(50);
+  assert.match(h.text(), /engine isn't answering/i);
+  await click(h, buttonMatching(h, /Adjust/));
+  await click(h, buttonMatching(h, /Tomorrow/));
+  await click(h, buttonMatching(h, /^Coffee$/));
+  await click(h, buttonMatching(h, /^Short/));
+  const retry = buttonMatching(h, /try building the day again/i);
+  assert.ok(retry, 'terminal timeout provides a real retry action');
+  const oldStatusCalls = h.fetchMock.calls.filter(call => call.url === '/api/planner-status' && call.method === 'POST').length;
+  const routeCallsBefore = h.fetchMock.calls.filter(call => call.url.includes('route-recommendations')).length;
+  await h.act(() => {
+    retry.dispatchEvent(new h.window.Event('click', { bubbles: true }));
+    retry.dispatchEvent(new h.window.Event('click', { bubbles: true }));
+  });
+  const next = h.fetchMock.pending().filter(call => call.url.includes('route-recommendations')).at(-1);
+  assert.ok(next, 'retry starts one new planner execution');
+  assert.notDeepEqual(next.body.dates, initial.body.dates);
+  assert.ok(next.body.preferences.includes('fika'));
+  assert.notEqual(next.body.walking_km_target, initial.body.walking_km_target);
+  assert.equal(h.fetchMock.calls.filter(call => call.url.includes('route-recommendations')).length, routeCallsBefore + 1);
+  await h.clock.advance(400);
+  assert.equal(h.fetchMock.calls.filter(call => call.url.includes('route-recommendations')).length, routeCallsBefore + 1, 'retry consumes the pending debounce');
+  assert.equal(h.fetchMock.calls.filter(call => call.url === '/api/planner-status' && call.method === 'POST').length, oldStatusCalls);
+  const cancellation = h.fetchMock.calls.find(call => call.url === '/api/planner-status' && call.method === 'DELETE');
+  assert.deepEqual(cancellation?.body, { token });
+  await h.fetchMock.respond(next, composedDay(['retry-a', 'retry-b']));
+  assert.match(h.text(), /Place retry-a/);
+});
+
+test('a timed-out update keeps the old day and offers an explicit update retry', async t => {
+  const h = await plannerWithDay(['a', 'b']);
+  t.after(() => h.unmount());
+  await click(h, buttonMatching(h, /Adjust/));
+  await click(h, buttonMatching(h, /Tomorrow/));
+  await h.clock.advance(400);
+  const update = h.fetchMock.pending().filter(call => call.url.includes('route-recommendations')).at(-1);
+  const changedDates = [...update.body.dates];
+  await h.fetchMock.respond(update, { planner_lifecycle: {
+    version: 1, state: 'warm_pending', token: 'd'.repeat(48), retry_after_ms: 3000, remaining_ms: 500, max_polls: 20,
+  } }, 202);
+  await h.clock.advance(50);
+  assert.match(h.text(), /Couldn't update — showing your previous day/);
+  assert.match(h.text(), /Place a/);
+  const retry = buttonMatching(h, /try updating again/i);
+  assert.ok(retry, 'a held day also has a direct recovery action');
+  await click(h, retry);
+  const next = h.fetchMock.pending().filter(call => call.url.includes('route-recommendations')).at(-1);
+  assert.deepEqual(next.body.dates, changedDates);
+  await h.fetchMock.respond(next, composedDay(['fresh-a', 'fresh-b']));
+  assert.match(h.text(), /Place fresh-a/);
+});
+
 /** Open a stop's disclosure and press Keep. */
 async function keepFirstStop(h) {
   const disclosure = [...h.container.querySelectorAll("button")].find((b) =>
