@@ -390,6 +390,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [phase, setPhase] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [loadingStage, setLoadingStage] = useState(0);
   const [supplyPending, setSupplyPending] = useState(false);
+  const [navigationInterrupted, setNavigationInterrupted] = useState(false);
   const [classification, setClassification] = useState<AnywhereClassification | null>(null);
   const [safeResponse, setSafeResponse] = useState<any>(null);
   // The day on screen was composed for an earlier request and a newer one is in
@@ -456,6 +457,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const intentSequenceRef = useRef(0);
   const activeRequestRef = useRef<AbortController | null>(null);
   const activeLifecycleCancelRef = useRef<(() => void) | null>(null);
+  const navigationSuspendedRef = useRef(false);
+  const interruptedPlannerRef = useRef(false);
   const blitzRequestRef = useRef<AbortController | null>(null);
   const blitzRequestSequenceRef = useRef(0);
   const skipFirstAdjustRef = useRef(true);
@@ -538,6 +541,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       pollAttempt?: number;
     } = {},
   ) {
+    if (navigationSuspendedRef.current) return;
     lastRequestedAnchorRef.current = anchor;
     if (!silent && pollTimerRef.current) {
       clearTimeout(pollTimerRef.current);
@@ -552,6 +556,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     const intentId = intentSequenceRef.current;
     activeRequestRef.current = controller;
     setSupplyPending(false);
+    setNavigationInterrupted(false);
     // A valid day for the SAME anchor is held on screen while the next one
     // composes, instead of being destroyed for the 5-20 s the compose takes.
     const nextAnchorKey = anchorKey(anchor);
@@ -802,6 +807,18 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   }
 
   const cancelActivePlannerForNavigation = () => {
+    navigationSuspendedRef.current = true;
+    interruptedPlannerRef.current ||= Boolean(activeRequestRef.current || recomposeTimerRef.current);
+    requestSequenceRef.current += 1;
+    intentSequenceRef.current += 1;
+    retryGenerationRef.current += 1;
+    retryInFlightRef.current = false;
+    // BFCache freezes timers rather than unmounting React. Neither an old
+    // adjustment nor a scheduled Live composition may wake on return.
+    if (recomposeTimerRef.current) clearTimeout(recomposeTimerRef.current);
+    recomposeTimerRef.current = null;
+    if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    pollTimerRef.current = null;
     const cancelLifecycle = activeLifecycleCancelRef.current;
     activeLifecycleCancelRef.current = null;
     // The lifecycle cancellation must be initiated synchronously before the
@@ -817,8 +834,23 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     // including bfcache transitions. Change place calls the same function at
     // click time so its DELETE starts before the link's default navigation.
     window.addEventListener("pagehide", cancelActivePlannerForNavigation);
+    const resumeFromHistory = (event: PageTransitionEvent) => {
+      if (!event.persisted || !navigationSuspendedRef.current) return;
+      navigationSuspendedRef.current = false;
+      setSupplyPending(false);
+      setUpgradePending(false);
+      if (interruptedPlannerRef.current) {
+        interruptedPlannerRef.current = false;
+        // The old execution was cancelled, not paused on the server. Keep the
+        // day and editable inputs, but require one explicit current-input retry.
+        setNavigationInterrupted(true);
+        setPhase("error");
+      }
+    };
+    window.addEventListener("pageshow", resumeFromHistory);
     return () => {
       window.removeEventListener("pagehide", cancelActivePlannerForNavigation);
+      window.removeEventListener("pageshow", resumeFromHistory);
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
       cancelActivePlannerForNavigation();
       blitzRequestRef.current?.abort();
@@ -829,6 +861,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // Show a stored day WITHOUT re-fetching. A restored day is a snapshot (events /
   // "today" may be stale), so restoredAt is set and the UI labels it + offers rebuild.
   function restoreEntry(entry: SavedEntry) {
+    setNavigationInterrupted(false);
     const i = entry.inputs;
     if (i) {
       setCityKey(typeof i.city === "string" && i.city.trim() ? i.city.trim() : null);
@@ -1103,9 +1136,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       skipFirstAdjustRef.current = false;
       return;
     }
-    if (!hasAnchor || phase === "idle" || restoredAt) return;
+    if (navigationSuspendedRef.current || !hasAnchor || phase === "idle" || restoredAt) return;
     if (recomposeTimerRef.current) clearTimeout(recomposeTimerRef.current);
     recomposeTimerRef.current = setTimeout(() => {
+      recomposeTimerRef.current = null;
       resolveAndRun().catch(() => {});
     }, 400);
     return () => {
@@ -1899,13 +1933,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
       {phase === "error" && staleNotice !== "update_failed" && (
         <div className="flex flex-col items-start gap-3 rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4 text-sm text-parranda-ink/80" role="alert">
-          <p>{t("Motorn svarar inte just nu.", "The engine isn't answering right now.")}</p>
+          <p>{navigationInterrupted
+            ? t("Planeringen pausades när du lämnade sidan. Dina val finns kvar.", "Planning paused when you left. Your choices are still here.")
+            : t("Motorn svarar inte just nu.", "The engine isn't answering right now.")}</p>
           <button
             type="button"
             onClick={retryPlan}
             className="inline-flex min-h-11 items-center rounded-parranda-btn bg-parranda-terracotta px-4 font-bold text-white transition hover:brightness-110"
           >
-            {t("Försök bygga dagen igen", "Try building the day again")}
+            {navigationInterrupted ? t("Fortsätt planera", "Continue planning") : t("Försök bygga dagen igen", "Try building the day again")}
           </button>
         </div>
       )}
@@ -1971,14 +2007,16 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                   aria-live="polite"
                   className="inline-flex items-center gap-1.5 rounded-full bg-parranda-ember/12 px-2.5 py-0.5 text-[11px] font-semibold text-parranda-clay"
                 >
-                  {t("Kunde inte uppdatera — visar din förra dag", "Couldn't update — showing your previous day")}
+                  {navigationInterrupted
+                    ? t("Planeringen pausades när du lämnade sidan — visar din förra dag", "Planning paused when you left — showing your previous day")
+                    : t("Kunde inte uppdatera — visar din förra dag", "Couldn't update — showing your previous day")}
                 </span>
                 <button
                   type="button"
                   onClick={retryPlan}
                   className="inline-flex min-h-11 items-center rounded-full border border-parranda-ember/40 px-3 text-xs font-bold text-parranda-clay transition hover:border-parranda-ember"
                 >
-                  {t("Försök uppdatera igen", "Try updating again")}
+                  {navigationInterrupted ? t("Fortsätt planera", "Continue planning") : t("Försök uppdatera igen", "Try updating again")}
                 </button>
               </>
             )}

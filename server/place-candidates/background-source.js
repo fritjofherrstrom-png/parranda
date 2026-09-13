@@ -3,7 +3,10 @@
 // Process-private completion evidence. A public JSON payload cannot create it.
 const SOURCE_COMPLETION = Symbol('trustedSourceCompletion');
 
-function createBackgroundSource({ cache, keyFor, load }) {
+function createBackgroundSource({
+  cache, keyFor, load, eager = true, waitForCompletion = true,
+  shouldStore = value => Array.isArray(value) && !value.source_error,
+}) {
   const operations = new Map();
   const failedValue = () => {
     const failed = [];
@@ -33,9 +36,10 @@ function createBackgroundSource({ cache, keyFor, load }) {
     return pending;
   };
   const source = {
-    eager: true,
+    eager,
     readCached(anchor, request) { return cache.peek(keyFor(anchor, request)) || []; },
     load(anchor, request) {
+      if (request?.signal?.aborted) return failedValue();
       const key = keyFor(anchor, request);
       const cached = cache.peek(key);
       if (cached) return cached;
@@ -56,7 +60,8 @@ function createBackgroundSource({ cache, keyFor, load }) {
           ? { ...anchor, signal: controller.signal }
           : anchor;
         operation.completion = cache.get(key, () => load(producerAnchor, producerRequest), {
-          shouldStore: value => !controller.signal.aborted && Array.isArray(value) && !value.source_error,
+          signal: controller.signal,
+          shouldStore: value => !controller.signal.aborted && shouldStore(value),
         }).catch(() => failedValue()).finally(() => {
           operation.settled = true;
           for (const [signal, release] of operation.consumers) {
@@ -68,7 +73,9 @@ function createBackgroundSource({ cache, keyFor, load }) {
       } else {
         attachConsumer(operation, request?.signal);
       }
-      return pendingValue(operation.completion);
+      // Optional corroboration has the same consumer ownership but must not
+      // extend a composition's wait for primary supply.
+      return waitForCompletion ? pendingValue(operation.completion) : [];
     },
   };
   return source;

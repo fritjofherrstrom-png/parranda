@@ -101,11 +101,14 @@ function createSourceCache(options = {}) {
    * @param {() => Promise<any>} producer  computes the value on a miss
    * @param {{
    *   shouldStore?: (value:any) => boolean,
+   *   signal?: AbortSignal, // producer ownership, not an individual shared consumer
    *   staleIfErrorMs?: number,
    *   onStale?: (value:any, info:object) => any
    * }} [opts]
    */
   async function get(key, producer, opts = {}) {
+    const signal = opts.signal;
+    signal?.throwIfAborted();
     const shouldStore = typeof opts.shouldStore === "function" ? opts.shouldStore : () => true;
     const staleIfErrorMs = Math.max(0, Math.floor(Number(opts.staleIfErrorMs) || 0));
     const onStale = typeof opts.onStale === "function" ? opts.onStale : (value) => value;
@@ -135,7 +138,7 @@ function createSourceCache(options = {}) {
     const promise = (async () => {
       try {
         const value = await producer();
-        if (shouldStore(value)) {
+        if (!signal?.aborted && shouldStore(value)) {
           const entry = { value, expiresAt: now() + boundedTtlMs };
           mem.set(key, entry);
           writeFile(key, entry);
@@ -162,10 +165,18 @@ function createSourceCache(options = {}) {
     })();
 
     inFlight.set(key, promise);
+    // An abandoned producer no longer owns this key. A new consumer must not
+    // inherit its pending body; late cleanup must not delete the new producer.
+    const release = () => {
+      if (inFlight.get(key) === promise) inFlight.delete(key);
+    };
+    signal?.addEventListener('abort', release, { once: true });
+    if (signal?.aborted) release();
     try {
       return await promise;
     } finally {
-      inFlight.delete(key);
+      signal?.removeEventListener('abort', release);
+      release();
     }
   }
 

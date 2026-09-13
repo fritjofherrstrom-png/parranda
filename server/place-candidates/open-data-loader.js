@@ -1117,7 +1117,6 @@ function resolveDefaultOpenDataLoader(env = process.env) {
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
-  const storeNonEmpty = { shouldStore: (value) => Array.isArray(value) && value.length > 0 };
   let wikiSource = null;
   if (wikiEnabled) {
     const wikiRaw = createWikidataSource({ labelLanguages });
@@ -1127,18 +1126,18 @@ function resolveDefaultOpenDataLoader(env = process.env) {
         dir: env?.PARRANDA_CACHE_DIR || null,
         ttlMs: Number.isFinite(ttlMs) && ttlMs > 0 ? ttlMs : undefined,
       });
-      wikiSource = ({ lat, lng } = {}) => {
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];
-        const key = `${lat.toFixed(3)},${lng.toFixed(3)}`;
-        const cached = wikiCache.peek(key);
-        if (cached) return cached;
-        // WDQS cold queries are slow (~10-20s) and must NOT block the route. On
-        // a cache miss, warm out-of-band and serve the other sources this time.
-        wikiCache.warm(key, () => wikiRaw({ lat, lng }), storeNonEmpty);
-        return [];
-      };
-      wikiSource.readCached = ({ lat, lng } = {}) => Number.isFinite(lat) && Number.isFinite(lng)
-        ? wikiCache.peek(`${lat.toFixed(3)},${lng.toFixed(3)}`) || [] : [];
+      wikiSource = createBackgroundSource({
+        cache: wikiCache,
+        keyFor: ({ lat, lng } = {}) => `${Number(lat).toFixed(3)},${Number(lng).toFixed(3)}`,
+        load: wikiRaw,
+        // Start only after the primary has selected its regional cluster.
+        // Wikidata remains optional, non-blocking corroboration. Its producer
+        // is nevertheless owned by the active lifecycle consumers and aborted
+        // when the last one leaves, just like primary background supply.
+        eager: false,
+        waitForCompletion: false,
+        shouldStore: value => Array.isArray(value) && value.length > 0,
+      });
     }
   }
 

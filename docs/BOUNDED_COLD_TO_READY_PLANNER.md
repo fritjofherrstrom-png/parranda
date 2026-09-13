@@ -70,6 +70,17 @@ There is no cross-process job sharing or durable job resume: multi-replica routi
 needs affinity or a future shared lifecycle store; unknown tokens fail closed.
 Persistent source caches continue to survive restarts independently of jobs.
 
+Wikidata uses this same consumer ownership even though its optional
+corroboration does not extend the composition's wait. It starts only after
+Overpass selects the applicable regional cluster. A lifecycle signal owns a
+share of the producer; the producer's separate signal reaches fetch and body
+reading, and cache storage rechecks it. Canceling the last owner prevents both
+memory and disk writes. A replacement request does not join a canceled promise,
+and late cleanup cannot release that replacement's cache slot. A concurrent
+legacy request without a lifecycle signal retains its existing bounded warm.
+Wikidata's 30 s timeout, radius/record limits, six-hour default cache TTL,
+nonempty-only storage and independent trust requirements are unchanged.
+
 Fresh adequate cached supply takes a read-only fast path. It retains cached OSM,
 Wikidata and NAPI evidence rather than discarding independent corroboration.
 An OSM regional sub-anchor cannot be mixed with a different original window.
@@ -97,6 +108,14 @@ activation and never resumes or polls the expired token.
 Change place initiates cancellation before its link navigation. `pagehide` owns
 the equivalent boundary for direct navigation and browser back/forward, rather
 than relying on a React unmount that a document navigation does not perform.
+Navigation also clears the adjustment debounce and scheduled Live follow-up and
+invalidates request/intent generations. A real `pageshow.persisted` return
+clears the canceled wait. If work was interrupted, the screen explains that
+planning paused when the person left and offers **Continue planning**. It keeps
+the previous valid day, anchor, current inputs and commitments. That button
+starts one new execution from those inputs; restoration itself never composes
+or polls the canceled token. A completed day returns unchanged. This is an
+explicit fresh execution, not a claim that server work survived navigation.
 
 The server lifecycle replaces speculative structure/error one-shot refreshes.
 The separate bounded Live refresh policy remains for a published day's pending
@@ -114,6 +133,40 @@ and an actual OS child terminated by both deadline and lifecycle cancellation.
 These tests use controlled
 source records; they are not real-provider/Pi/browser acceptance.
 
-No deployment or rotating geographic acceptance has been performed for this PR.
-See [the Sol handoff](COLD_TO_READY_SOL_QA.md). Keep release acceptance open until
-that run measures the final head and classifies its results honestly.
+## Cancellation follow-up evidence — 2026-09-13
+
+Pi/browser acceptance occurred on earlier heads, including the cancellation
+follow-up on `9ebc023429300e6f738aabea5c1220cdaa15eadd`. Its preserved package is
+`20260913T154039Z-pr500-cancellation-resume-share.tar.gz`; all 20 files listed in
+its manifest verify. Staging restoration is attested in that package. Those
+runs are historical evidence, not runtime acceptance of the newer correction.
+
+The Pärnu capture records DELETE 204 at `15:51:27.861Z`, followed by
+`wikidata/58.387_24.503.json` at `15:51:28.293462Z`, before the Tartu POST at
+`15:51:28.597Z`. This is about 432 ms after the response (386 ms after the
+capture's later `cancelAt` timestamp). The producer was the Planner's Wikidata
+cache, not the worker's separately named source-scout cache. Code inspection
+confirmed that the old factory discarded the lifecycle signal, used unowned
+`cache.warm`, and stored any nonempty result. The raw source also listened only
+to its own timeout. There was no storage-level asynchronous queue that explained
+away this late write: `writeFileSync` and `renameSync` execute synchronously.
+The correction preserves the cancellation contract rather than allowing that
+write after the last owner cancels.
+
+The same head canceled navigation correctly but nulled `activeRequestRef`
+before `finally` could clear `supplyPending`; `catch` correctly rejected the
+aborted result but left `phase` loading. No `pageshow` handler repaired that
+state, and document navigation did not clear the debounce/Live timers. Mounted
+component regressions reproduce and correct this flow, including a late poll
+body, retained day, pending edit, repeated return, explicit retry and a completed
+day. Provider tests use the real configured Wikidata factory with controlled
+network responses and temporary disk cache, proving last-owner abort, safe
+shared ownership, and canceled/replacement producer races. These are synthetic
+tests; they do not establish actual browser bfcache or provider acceptance.
+
+The captured ordinary history navigation did **not** observe
+`pageshow.persisted === true`; actual bfcache restoration remains **NOT OBSERVED**.
+The Overture process timings from Change place/direct navigation remain useful
+historical evidence; this correction adds no process telemetry or token logging.
+See [the narrow follow-up handoff](COLD_TO_READY_SOL_QA.md). Keep the PR draft
+until the remaining runtime checks are classified on the corrected head.

@@ -1,5 +1,45 @@
 # Sol: final-head cold-to-ready acceptance
 
+## Narrow follow-up after the 2026-09-13 cancellation review
+
+The broad cohort and navigation QA already ran on earlier heads. For the new
+Wikidata/bfcache correction, perform only the checks below on the exact frozen
+image. Preserve/restore staging as before; keep the PR draft. No broad new
+geographic cohort or required winning place is needed.
+
+1. In a disposable cold cache, observe an outstanding Wikidata place query
+   during `warm_pending`, then Change place. Capture the DELETE 204, provider
+   termination and cache state. A sole-owner query must not write its canceled
+   window after DELETE. Prefer provider request timing over cache mtime alone;
+   resolver, worker and replacement-anchor cache files have different owners.
+2. Start two simultaneous lifecycles sharing that window. Cancel one while the
+   other remains active: one provider fetch may finish and cache for the owner
+   that remains. Also cancel both while it is still outstanding; the last
+   cancellation must abort it. Confirm lifecycle capacity recovery. If a warm
+   cache/provider timing prevents exercising outstanding work, report that case
+   NOT OBSERVED rather than inferring success.
+3. Exercise actual back/forward restoration with `pageshow.persisted === true`
+   recorded. Do it while cold pending with no day, and while updating a retained
+   day (include an edit still inside debounce). On return, no stuck wait/busy
+   announcement, old status poll, resumed debounce or automatic composition.
+   Current choices and the valid earlier day must survive. **Continue planning**
+   must send one new request, even on rapid double activation, using those
+   choices and never the old token. A completed day should return without a
+   retry notice or network composition. If the browser does an ordinary reload,
+   label bfcache NOT OBSERVED; synthetic PageTransitionEvent tests are not proof
+   of a real browser cache restoration.
+4. Retain a Change place/direct-navigation smoke check for one DELETE and no
+   stale result. Reuse prior Overture evidence unless a concrete regression
+   calls for new process correlation. If correlation is needed, use a separate
+   diagnostic ID, never lifecycle bearer tokens in general logs.
+
+Export raw request timing, response/cache identity, page transition events,
+screenshots of restored UI, and restored image/health/config evidence. Separate
+VERIFIED, FAILED, INCONCLUSIVE / NOT OBSERVED and INVALID ACCEPTANCE. The code
+regressions in this patch are synthetic and add no new Pi/browser evidence.
+
+## Original broad acceptance plan (historical scope; do not repeat for this patch)
+
 Choose the cohort only after the PR head is frozen and its CI passes. Verify the
 exact SHA before testing. Preserve earlier evidence and staging image/config/cache;
 use a new timestamped directory and isolated cache. Deploy one immutable image

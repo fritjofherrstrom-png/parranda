@@ -36,9 +36,8 @@ const MAX_LIMIT = 60;
 const MAX_RADIUS_KM = 5;
 // WDQS can be slow on a COLD query for an area (~10-30s) and fast once warm
 // (~300ms). This source runs OUT OF BAND (background cache warm, never in the
-// request path — see open-data-loader composition), so a generous budget is
-// fine: it lets the cold query finish and populate the cache instead of being
-// aborted, after which every repeat visit is an instant cache hit.
+// request path — see open-data-loader composition). This is an upper bound:
+// cancellation of the last owning consumer aborts fetch and body reading early.
 const DEFAULT_TIMEOUT_MS = 30000;
 
 // Curated P31/P279* root classes → Parranda type. Each TARGET type is one the
@@ -208,13 +207,15 @@ function createWikidataSource({
   const boundedTimeoutMs = Math.max(50, Math.floor(timeoutMs));
   const labelLangs = dedupeLanguages(labelLanguages);
 
-  return async function loadWikidataAround({ lat, lng } = {}) {
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];
+  return async function loadWikidataAround({ lat, lng, signal } = {}) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || signal?.aborted) return [];
 
     const query = buildWikidataQuery({ lat, lng, radiusKm: boundedRadiusKm, limit: boundedLimit, labelLangs });
     const url = `${endpoint}?format=json&query=${encodeURIComponent(query)}`;
 
     const controller = new AbortController();
+    const abort = () => controller.abort();
+    signal?.addEventListener('abort', abort, { once: true });
     const timer = setTimeout(() => controller.abort(), boundedTimeoutMs);
     try {
       const response = await fetcher(url, {
@@ -229,12 +230,13 @@ function createWikidataSource({
       } catch (_error) {
         return [];
       }
-      return mapWikidataResponse(payload, boundedLimit);
+      return controller.signal.aborted ? [] : mapWikidataResponse(payload, boundedLimit);
     } catch (_error) {
       void classifyFetchError(_error);
       return []; // fail closed: never throw, never hallucinate
     } finally {
       clearTimeout(timer);
+      signal?.removeEventListener('abort', abort);
     }
   };
 }
