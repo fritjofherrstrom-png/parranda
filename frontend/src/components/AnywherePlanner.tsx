@@ -2049,6 +2049,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               <span>{dayLimitationNote}</span>
             </p>
           )}
+          {primaryRoute?.routing_source === "valhalla_pedestrian" && primaryRoute?.walking_geometry?.kind === "pedestrian_network" && (
+            <p className="text-[12px] leading-relaxed text-parranda-ink/65">
+              {t("Beräknade gångvägar · Valhalla / ", "Calculated walking paths · Valhalla / ")}
+              <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="underline">© OpenStreetMap</a>
+              {t(". Kartunderlag, inte bekräftad framkomlighet eller realtidsnavigation. Anslutningen till entrén kan saknas.",
+                ". Map data, not confirmed access or live navigation. The connection to the entrance may be unmapped.")}
+            </p>
+          )}
           {structure?.provenance === "agnostic_anchor" && (
             <p className="flex items-start gap-2 text-[13px] leading-relaxed text-parranda-ink/65">
               <span aria-hidden="true" className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-parranda-glow" />

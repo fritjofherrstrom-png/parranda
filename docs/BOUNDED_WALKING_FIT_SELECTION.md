@@ -1,5 +1,10 @@
 # Bounded same-role walking-fit selection
 
+The zero-routing-acquisition contract below describes the default heuristic
+path. An explicit operator opt-in can now measure at most four final chains
+and refine the same bounded engine proposals using pedestrian-network costs;
+see `NETWORK_WALKING_SELECTION.md`. Default-off behavior remains unchanged.
+
 ## Product contract
 
 Trusted supply can be present yet lost before the engine sees a useful choice.

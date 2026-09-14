@@ -7292,6 +7292,7 @@ module.exports = {
   buildLiveEventStopCandidates,
   annotateLiveEventsForRoutes,
   buildRouteTrustSummary,
+  buildLegMetrics,
   formatMainStop,
   budgetScore,
   kmScore,

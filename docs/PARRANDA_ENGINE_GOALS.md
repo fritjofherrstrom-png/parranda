@@ -257,13 +257,15 @@ the old #244–#249 migration sequence as current work.
 
 Priorities now are:
 
-0. Deliver a coherent cold first Planner journey through the bounded server-owned
+0. Preserve the coherent cold first Planner journey through the bounded server-owned
    lifecycle in `BOUNDED_COLD_TO_READY_PLANNER.md`. One submission waits honestly
    for already-started source acquisition and receives the final day without a
-   manual retry. Validate the frozen head across a rotating unsupported cohort;
+   manual retry. #500 has merged after its scoped runtime acceptance;
    source failures remain final, and supply/trust/walking gates remain authoritative.
-   Next route work is street-network/barrier-aware walking geometry, followed by
-   conservative entity corroboration and richer days where trusted supply permits.
+   The next operator-gated route capability is now bounded pedestrian-network
+   selection (`NETWORK_WALKING_SELECTION.md`). Validate that frozen head against
+   real graph barriers before activation. Conservative entity corroboration and
+   richer days remain next where trusted supply permits.
 1. Obtain permission or select a genuinely compatible licensed source using the
    applicable closed list→detail contract; never infer permission from robots allowance.
 2. Operate reviewed experience-card and, when permitted, Simpleview sources,

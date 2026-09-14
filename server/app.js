@@ -53,6 +53,7 @@ const {
 const { buildEngineReadinessVerdict } = require("./planner/agnostic-engine-readiness");
 const { reconcileAgnosticConstraintNegotiation } = require("./planner/agnostic-constraint-negotiation");
 const { resolveAgnosticWalkingTargetBand } = require("./planner/agnostic-walking-target");
+const { resolveNetworkWalkingProvider } = require('./valhalla-walking');
 const { resolveAgnosticIntake, parsePlaceQuery } = require("./planner/agnostic-place-intake");
 const { collectPlaceCandidatesForCity } = require("./place-candidates/provider-registry");
 const {
@@ -1483,6 +1484,7 @@ function buildApp({
   reviewedPlaceSource,
   walkingRouter = null,
   walkingConfig = null,
+  networkWalkingProvider = resolveNetworkWalkingProvider(),
   weatherProvider = null,
   clock = null,
   // NEW-frontend /anywhere takeover (contract-gated): the flag decides serving,
@@ -2388,6 +2390,8 @@ function buildApp({
         anchorMode: intake.mode,
         spatialScope,
         synthesizeVia: useEngineCompose ? "engine" : "legacy",
+        networkWalkingProvider,
+        signal: lifecycle?.signal,
       });
       experiment.intake = intake;
 
