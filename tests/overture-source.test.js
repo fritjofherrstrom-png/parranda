@@ -149,6 +149,26 @@ test("latest release resolution accepts the bounded STAC field and fails closed"
   assert.equal(await resolveLatestOvertureRelease({ fetcher: async () => { throw new Error("offline"); } }), null);
 });
 
+test("source acquisition carries the lifecycle signal through release lookup and native query", async () => {
+  const controller = new AbortController();
+  let releaseSignal;
+  let querySignal;
+  const source = createOvertureSource({
+    releaseResolver: async options => {
+      releaseSignal = options.signal;
+      return "2026-08-19.0";
+    },
+    queryRows: async (_sql, options) => {
+      querySignal = options.signal;
+      return [];
+    },
+  });
+
+  await source({ lat: 55.68, lng: 12.57, signal: controller.signal });
+  assert.equal(releaseSignal, controller.signal);
+  assert.equal(querySignal, controller.signal);
+});
+
 test("source uses injected release/query seams, filters precisely and honors requested intent", async () => {
   let capturedSql = null;
   const source = createOvertureSource({

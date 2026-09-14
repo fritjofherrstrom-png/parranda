@@ -94,7 +94,15 @@ export function createDeferredFetch() {
       settle = { resolveResponse, rejectResponse };
     });
     const body = init?.body ? JSON.parse(init.body) : null;
-    const call = { url: String(url), body, ...settle, aborted: false };
+    const call = {
+      url: String(url),
+      method: String(init?.method || 'GET').toUpperCase(),
+      headers: init?.headers || {},
+      body,
+      keepalive: init?.keepalive === true,
+      ...settle,
+      aborted: false,
+    };
     if (init?.signal) {
       init.signal.addEventListener("abort", () => {
         call.aborted = true;

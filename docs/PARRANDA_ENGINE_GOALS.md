@@ -257,10 +257,13 @@ the old #244–#249 migration sequence as current work.
 
 Priorities now are:
 
-0. Independently validate bounded same-role walking-fit selection across real
-   geographies. Measure preference fidelity, route coherence, heuristic distance
-   limitations and Pi cost, not just kilometres or candidate counts. Keep honest
-   short days when comparable trusted alternatives cannot satisfy the target.
+0. Deliver a coherent cold first Planner journey through the bounded server-owned
+   lifecycle in `BOUNDED_COLD_TO_READY_PLANNER.md`. One submission waits honestly
+   for already-started source acquisition and receives the final day without a
+   manual retry. Validate the frozen head across a rotating unsupported cohort;
+   source failures remain final, and supply/trust/walking gates remain authoritative.
+   Next route work is street-network/barrier-aware walking geometry, followed by
+   conservative entity corroboration and richer days where trusted supply permits.
 1. Obtain permission or select a genuinely compatible licensed source using the
    applicable closed list→detail contract; never infer permission from robots allowance.
 2. Operate reviewed experience-card and, when permitted, Simpleview sources,

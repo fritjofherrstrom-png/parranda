@@ -33,6 +33,7 @@ export const LIVE_REFRESH_DELAYS_MS = [9000, 12000, 18000, 24000];
  *             upgradePending: boolean, liveRefreshExhausted: boolean }}
  */
 export function planComposeFollowup({
+  supplyLifecycleComplete = false,
   composed = false,
   structureOnly = false,
   hasStructure = false,
@@ -44,7 +45,7 @@ export function planComposeFollowup({
 } = {}) {
   const needsStructureUpgrade = structureOnly || (composed && !hasStructure);
   const canRefreshLive = livePending && pollAttempt < delays.length;
-  const canRunOneShotUpgrade = !silent && (needsStructureUpgrade || transientSourceRetry);
+  const canRunOneShotUpgrade = !supplyLifecycleComplete && !silent && (needsStructureUpgrade || transientSourceRetry);
   // Exhaustion is a fact about the LIVE ladder alone — it can be true while a
   // one-shot upgrade still schedules (the upgrade won't refresh live again:
   // its follow-up runs with the ladder already spent).

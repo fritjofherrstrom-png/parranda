@@ -21,8 +21,7 @@
  *   - injectable release/query seams keep tests deterministic and offline.
  */
 
-const nodeFs = require("node:fs");
-const nodePath = require("node:path");
+const { createBoundedOvertureQuery } = require('./bounded-overture-query');
 const { normalizeUserIntents, matchCandidateToIntent } = require("../candidates/intent-vocabulary");
 
 const OVERTURE_STAC_ROOT = "https://stac.overturemaps.org/";
@@ -334,9 +333,13 @@ async function resolveLatestOvertureRelease({
   fetcher = typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null,
   endpoint = OVERTURE_STAC_ROOT,
   timeoutMs = DEFAULT_STAC_TIMEOUT_MS,
+  signal = null,
 } = {}) {
   if (typeof fetcher !== "function") return null;
   const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal?.addEventListener('abort', abort, { once: true });
+  if (signal?.aborted) controller.abort();
   const timer = setTimeout(() => controller.abort(), Math.max(100, Math.floor(Number(timeoutMs) || DEFAULT_STAC_TIMEOUT_MS)));
   try {
     const response = await fetcher(endpoint, {
@@ -356,41 +359,12 @@ async function resolveLatestOvertureRelease({
     return null;
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener('abort', abort);
   }
 }
 
 function createDuckDbQueryRows({ cacheDir = null } = {}) {
-  let connectionPromise = null;
-  async function connection() {
-    if (!connectionPromise) {
-      connectionPromise = (async () => {
-        const { DuckDBInstance } = require("@duckdb/node-api");
-        const instance = await DuckDBInstance.create(":memory:");
-        const conn = await instance.connect();
-        if (cacheDir) {
-          const extensionDir = nodePath.join(cacheDir, "duckdb-extensions");
-          try {
-            nodeFs.mkdirSync(extensionDir, { recursive: true });
-            await conn.run(`SET extension_directory='${extensionDir.replace(/'/g, "''")}'`);
-          } catch (_error) {
-            // A read-only deploy may still use DuckDB's default extension cache.
-          }
-        }
-        await conn.run("INSTALL httpfs; LOAD httpfs; SET s3_region='us-west-2'");
-        return conn;
-      })().catch((error) => {
-        connectionPromise = null;
-        throw error;
-      });
-    }
-    return connectionPromise;
-  }
-  return async function queryRows(sql) {
-    if (typeof sql !== "string" || !sql) return [];
-    const conn = await connection();
-    const reader = await conn.runAndReadAll(sql);
-    return reader.getRowObjectsJson();
-  };
+  return createBoundedOvertureQuery({ cacheDir });
 }
 
 function distanceKm(a, b) {
@@ -440,10 +414,10 @@ function createOvertureSource({
   const boundedRadius = clamp(radiusKm, 0.1, MAX_RADIUS_KM, DEFAULT_RADIUS_KM);
   const boundedLimit = Math.max(1, Math.min(Math.floor(Number(limit) || DEFAULT_LIMIT), MAX_LIMIT));
   const boundedConfidence = clamp(minConfidence, 0.5, 1, DEFAULT_MIN_CONFIDENCE);
-  return async function loadOvertureAround({ lat, lng, requestedIntents = [] } = {}) {
+  return async function loadOvertureAround({ lat, lng, requestedIntents = [], signal } = {}) {
     if (!validCoordinate(lat, lng)) return [];
     try {
-      const release = await releaseResolver();
+      const release = await releaseResolver({ signal });
       const query = buildOvertureQuery({
         release,
         lat,
@@ -451,8 +425,8 @@ function createOvertureSource({
         radiusKm: boundedRadius,
         minConfidence: boundedConfidence,
       });
-      if (!query) return [];
-      const rows = await executeQuery(query);
+      if (!query) throw new Error('overture_release_unavailable');
+      const rows = await executeQuery(query, { signal });
       const records = [];
       const seen = new Set();
       for (const row of Array.isArray(rows) ? rows : []) {
@@ -463,7 +437,9 @@ function createOvertureSource({
       }
       return selectRecords(records, { anchor: { lat, lng }, requestedIntents, limit: boundedLimit });
     } catch (_error) {
-      return [];
+      const failed = [];
+      Object.defineProperty(failed, 'source_error', { value: 'fetch_error' });
+      return failed;
     }
   };
 }

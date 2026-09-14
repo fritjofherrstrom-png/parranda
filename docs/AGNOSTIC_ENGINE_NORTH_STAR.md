@@ -38,6 +38,13 @@ Named cities and narrow intents may be used as fixtures only when they prove gen
 
 ## Historical delivery record
 
+Current cold first-visit capability: the modern Planner uses a bounded server
+lifecycle to continue its original plan when source acquisition is outstanding.
+One server execution owns the normalized request and trusted anchor; browser
+polling reads only its status/result and cannot inject or reacquire supply.
+See `BOUNDED_COLD_TO_READY_PLANNER.md` for budgets, cancellation and the pending
+rotating Pi acceptance. A manual reload is no longer the intended delivery path.
+
 Current Overture compatibility: `taxonomy.primary` and `taxonomy.hierarchy`
 replace deprecated category acquisition, with closed primary semantics and a v4
 cache boundary. Alternates/basic-category ancestors cannot supply route intent.
