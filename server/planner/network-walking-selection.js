@@ -129,6 +129,13 @@ function applyNetworkGeometry(route, result, lang) {
 
 // One bounded final choice over the engine's own days, not a second composer.
 // Every compared distance comes from the same pedestrian provider/session.
+function networkWalkingFailureBlocker(result) {
+  if (result?.status !== "unavailable") return null;
+  return ["provider_unavailable", "busy", "invalid_configuration"].includes(result.reason)
+    ? `network_walking_${result.reason}`
+    : null;
+}
+
 async function selectNetworkWalkingDay({
   day,
   alternatives,
@@ -137,6 +144,7 @@ async function selectNetworkWalkingDay({
   walkingKmTarget,
   distanceMode,
   lang,
+  onUnavailable,
 }) {
   const band =
     distanceMode === "no_limit"
@@ -151,6 +159,7 @@ async function selectNetworkWalkingDay({
     !band ? 0 : Math.abs(route.estimated_km - band.targetKm);
   let best = null;
   let attempts = 0;
+  let operationalBlocker = null;
   const seen = new Set();
   async function consider(candidate) {
     signal?.throwIfAborted();
@@ -164,6 +173,8 @@ async function selectNetworkWalkingDay({
     attempts++;
     const result = await session.route(route.map_route_points);
     signal?.throwIfAborted();
+    operationalBlocker = networkWalkingFailureBlocker(result);
+    if (operationalBlocker) return;
     const measured = applyNetworkGeometry(route, result, lang);
     if (
       measured &&
@@ -174,16 +185,18 @@ async function selectNetworkWalkingDay({
       best = { ...candidate, primary_route: measured };
   }
   await consider(day);
-  if (!fits(best?.primary_route)) {
+  if (!operationalBlocker && !fits(best?.primary_route)) {
     for await (const candidate of alternatives()) {
       await consider(candidate);
-      if (attempts >= 4 || fits(best?.primary_route)) break;
+      if (operationalBlocker || attempts >= 4 || fits(best?.primary_route)) break;
     }
   }
+  if (!best && operationalBlocker) onUnavailable?.(operationalBlocker);
   return best;
 }
 
 module.exports = {
+  networkWalkingFailureBlocker,
   sameQualityReplacement,
   applyNetworkGeometry,
   selectNetworkWalkingDay,

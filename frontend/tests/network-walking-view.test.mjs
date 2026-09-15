@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { mountPlanner } from "./helpers/planner-harness.mjs";
 
-test("mounted Planner distinguishes network estimates with fixed attribution, never raw provider copy", async () => {
+for (const lang of ["en", "sv"]) test(`mounted Planner formats network minutes in rows and details (${lang}) with fixed attribution`, async () => {
   const h = await mountPlanner({
-    url: "http://localhost/anywhere?place=Example&lang=en",
+    url: `http://localhost/anywhere?place=Example&lang=${lang}`,
   });
   try {
     await h.clock.advance(500);
@@ -34,7 +34,7 @@ test("mounted Planner distinguishes network estimates with fixed attribution, ne
               trust: { source_tier: "inferred", confidence: "low" },
               provenance: { attribution: [] },
             })),
-            legs: [],
+            legs: [{ from_label: "one", to_label: "two", distance_km: 1.022, estimated_walk_minutes: 12.355366666666667 }],
             map_route_points: [],
             map_path_points: [],
             confidence: "low",
@@ -46,8 +46,15 @@ test("mounted Planner distinguishes network estimates with fixed attribution, ne
     };
     await h.fetchMock.respond(first, day);
     await h.clock.advance(50);
-    assert.match(h.text(), /Calculated walking paths/);
-    assert.match(h.text(), /not confirmed access or live navigation/);
+    assert.match(h.text(), lang === "en" ? /Calculated walking paths/ : /Beräknade gångvägar/);
+    assert.match(h.text(), lang === "en" ? /not confirmed access or live navigation/ : /inte bekräftad framkomlighet/);
+    assert.match(h.text(), /≈ 12 min/);
+    assert.doesNotMatch(h.text(), /12\.355/);
+    const stop = [...h.container.querySelectorAll("button")].find(b => b.textContent.includes("two"));
+    assert.ok(stop);
+    await h.act(() => stop.click());
+    assert.equal((h.text().match(/≈ 12 min/g) || []).length, 2, "row and expanded details share the presentation");
+    assert.equal(day.days[0].primary_route.legs[0].estimated_walk_minutes, 12.355366666666667, "raw measurement stays intact");
     assert.doesNotMatch(h.text(), /DO NOT RENDER/);
     const attribution = [...h.container.querySelectorAll("a")].find(
       (a) => a.textContent === "© OpenStreetMap",

@@ -15,7 +15,7 @@ const LIMITS = Object.freeze({
   cacheBytes: 4 * 1024 * 1024,
   snapMetres: 100,
 });
-const unavailable = () => ({ status: "unavailable" });
+const unavailable = (reason = "route_rejected") => ({ status: "unavailable", reason });
 const finitePoint = (p) =>
   p &&
   Number.isFinite(p.lat) &&
@@ -170,7 +170,6 @@ async function readJson(response, signal) {
     .trim()
     .toLowerCase();
   if (
-    !response.ok ||
     type !== "application/json" ||
     Number(response.headers.get("content-length")) > LIMITS.responseBytes ||
     !response.body
@@ -273,7 +272,17 @@ function createValhallaWalkingProvider({
         });
         if (response.redirected || (response.url && response.url !== url)) {
           await response.body?.cancel();
-          return unavailable();
+          return unavailable("provider_unavailable");
+        }
+        if (!response.ok) {
+          // Only a recognized no-route reply is evidence about this chain.
+          // Never expose upstream messages, URLs or credentials.
+          if (response.status === 400) {
+            const error = await readJson(response, controller.signal);
+            return unavailable(error?.error_code === 442 ? "route_rejected" : "provider_unavailable");
+          }
+          await response.body?.cancel();
+          return unavailable(response.status === 429 ? "busy" : "provider_unavailable");
         }
         const result = normalizeTrip(
           await readJson(response, controller.signal),
@@ -283,7 +292,7 @@ function createValhallaWalkingProvider({
         if (result.status === "ok") cacheWrite(key, result);
         return result;
       })
-      .catch(() => unavailable())
+      .catch(() => unavailable("provider_unavailable"))
       .finally(() => {
         clearTimeout(timer);
         active--;
@@ -298,7 +307,7 @@ function createValhallaWalkingProvider({
     if (hit) return hit;
     let job = jobs.get(key);
     if (!job) {
-      if (active >= LIMITS.concurrency) return unavailable();
+      if (active >= LIMITS.concurrency) return unavailable("busy");
       job = start(key, points);
     }
     job.owners++;
@@ -327,17 +336,17 @@ function createValhallaWalkingProvider({
         async route(points) {
           signal?.throwIfAborted();
           if (started === null) started = now();
+          if (!url) return unavailable("invalid_configuration");
           if (
-            !url ||
             !Array.isArray(points) ||
             points.length < 2 ||
             points.length > LIMITS.points ||
-            !points.every(finitePoint) ||
-            ++calls > LIMITS.requests
+            !points.every(finitePoint)
           )
             return unavailable();
+          if (++calls > LIMITS.requests) return unavailable("busy");
           const remaining = LIMITS.totalMs - (now() - started);
-          if (remaining <= 0) return unavailable();
+          if (remaining <= 0) return unavailable("provider_unavailable");
           const controller = new AbortController(),
             timer = setTimeout(() => controller.abort(), remaining);
           const combined = signal
@@ -348,7 +357,7 @@ function createValhallaWalkingProvider({
             return await consume(key, points, combined);
           } catch (error) {
             signal?.throwIfAborted();
-            return unavailable();
+            return unavailable("provider_unavailable");
           } finally {
             clearTimeout(timer);
           }

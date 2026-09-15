@@ -127,9 +127,13 @@ test("a landed verdict replaces the held day atomically", () => {
   //
   // Asserted as an ORDER of statements rather than one long regex, so a
   // clarifying comment between two of them cannot fail the test.
+  // A routing failure can now publish an empty error view without replacing
+  // a day. Inspect the successful swap, not that earlier failure branch.
+  const swapStart = component.indexOf("// Atomic replacement.");
+  assert.ok(swapStart >= 0);
   const block = component.slice(
-    component.indexOf("setClassification(cls);"),
-    component.indexOf('setPhase("done");', component.indexOf("setClassification(cls);")),
+    swapStart,
+    component.indexOf('setPhase("done");', swapStart),
   );
   const order = [
     "setClassification(cls);",

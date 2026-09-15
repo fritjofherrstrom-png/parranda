@@ -62,6 +62,39 @@ changed geometry only, and explain interest/preference/trust preservation.
   or routing temp-disk growth is expected. Cache limits are per web process;
   remote graph-server resources are separate and must be identified.
 
+## Revision and harness gates
+
+The interrupted `0399d99` run is partial historical evidence, not acceptance for
+any corrected head. Its Pi observer buffers the complete upstream body, has an
+independent timeout and does not propagate downstream disconnect upstream.
+Do not use that proxy to prove native provider body/socket cancellation or
+unmodified streaming/resource limits. Preserve its logs; replace measurement
+with passive observation or independently verified transparent instrumentation.
+
+Before a rerun, isolate the QA target from public tunnels and unrelated traffic.
+Verify that no other browser/agent owns the browser context. Pin source-cache
+manifests only after background acquisition has quiesced; source changes during
+an off/on pair invalidate selection causality. A matching response hash without
+the corresponding raw response does not prove geometry or rendered output.
+
+Add focused failure regressions before expensive provider QA:
+- Initial provider 503/timeout/capacity failure must not select another identity
+  as if the initial route had a measured detour. No new unmeasured day is shown.
+- Distinguish temporary provider/capacity messages from generic geometry
+  rejection and invalid operator setup; do not blame source quality.
+- Cold failure and retained-day failure both use an explicit normal-lifecycle
+  retry for retryable errors; rapid double activation yields one new request.
+- A failed revision leaves the previous day visible and clearly old, not labeled
+  as satisfying newly requested preferences. No automatic retry storm.
+- Fractional minutes are human-formatted in every visible leg/detail view;
+  underlying distances/minutes retain precision and target/cap checks.
+- Routing health reports configuration only, never claims live graph readiness;
+  invalid enabled configuration is diagnosed without exposing the endpoint.
+
+Synthetic faults can prove these contract/UI paths, but never substitute for
+live graph/barrier or provider transport acceptance. Clearly label fixture,
+real-browser-with-fixtures, and live-provider evidence separately.
+
 ## Finish
 
 Restore previous image/config/state and prove health/mounts. Preserve a

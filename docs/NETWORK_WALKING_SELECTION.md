@@ -123,6 +123,52 @@ reports `network_walking_unavailable`. Existing UI retention keeps an earlier
 day. A measured success can still be returned if a later comparison fails.
 Provider failure is not proof of poor places or source supply.
 
+### Failure-aware selection and recovery
+
+A transient failure while measuring the initial chain is not evidence that a
+different stop is preferable. Transport/server failures, routing capacity and
+invalid operator configuration are distinguished from a rejected route or
+geometry. If the initial measurement fails for those operational reasons, the
+new day is withheld without trying a different identity. This is not permission
+to publish an unmeasured heuristic baseline as a network result. A previously
+published day may remain visible while the UI explains that the requested
+revision could not be verified. A successful measured candidate still survives
+a later failed comparison; cancellation of the actual owning lifecycle still
+aborts work rather than becoming an alternative-selection signal.
+
+The public failure retains `network_walking_unavailable`, with only bounded,
+non-sensitive cause tokens where known: `network_walking_provider_unavailable`,
+`network_walking_busy`, or `network_walking_invalid_configuration`. Generic
+failure means the walk could not be verified; it must not always be described
+as an offline provider, since invalid geometry and safety limits also reject a
+route. Temporary provider/capacity failures offer an explicit single-flight
+retry through the normal Planner lifecycle, not an automatic retry storm.
+
+The two-live-job limit is unchanged and applies to distinct cold routing jobs,
+not to the third user: cache hits and shared active chains do not consume an
+additional slot. No queue is introduced. Startup/configuration diagnostics must
+be sanitized; no endpoint credentials or provider response text are public.
+`/api/health` exposes `network_walking_config` (`disabled`, `ready`, or
+`misconfigured`) and `network_walking_config_scope: "configuration_only"`.
+Here `ready` means URL configuration passed validation, **not** that the graph
+is reachable, covers the selected place, or proves current pedestrian access.
+Liveness does not probe the external provider. The self-hosted validator rejects
+an enabled but missing/invalid endpoint using the same runtime URL policy.
+
+Raw network measurements retain their precision for costing and validation.
+Minute labels are formatted for people, consistently across cards and details.
+Rounded leg labels need not sum exactly to the rounded approximate total; UI
+rounding must not change walking-target classification or safety checks.
+
+### Deliberately unchanged product policies
+
+The soft target remains symmetric: a comparable longer day can improve an
+under-target proposal, but an already in-band result does not chase distance.
+No asymmetric target policy is introduced by the QA fixes. Already woven events
+keep their existing measured caps; retrying a previously rejected event weave
+on an alternative is not part of this change. Neither policy is silently
+expanded to satisfy a fixture or a named destination.
+
 ## Operational limits and next proof
 
 This PR does not install a world graph on the Pi or provision a paid router.

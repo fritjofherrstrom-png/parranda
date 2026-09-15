@@ -57,7 +57,7 @@ const { weaveEveningEventRouteStop } = require("../candidates/event-route-stop-w
 const { generateAgnosticRecommendations } = require("../route-engine");
 const { projectRouteToSelectedStopChain } = require("./route-public-geometry");
 const { replacementKeepsOtherStops } = require("./walking-fit-selection");
-const { sameQualityReplacement, applyNetworkGeometry, selectNetworkWalkingDay } = require('./network-walking-selection');
+const { sameQualityReplacement, applyNetworkGeometry, selectNetworkWalkingDay, networkWalkingFailureBlocker } = require('./network-walking-selection');
 const {
   buildAgnosticEngineCityConfig,
   mapPlannerReservoirToSourceCandidates,
@@ -1592,6 +1592,7 @@ async function composeAgnosticRouteViaEngine({
   // compares actual pedestrian costs before publication. Pins/event days are
   // measured too, but do not reopen their independently bounded choice loop.
   let networkUnavailable = false;
+  let networkBlocker = null;
   if (networkWalkingProvider && finalized.route) {
     const baseDay = finalized.day;
     const session = networkWalkingProvider.session({signal});
@@ -1617,7 +1618,8 @@ async function composeAgnosticRouteViaEngine({
       }
     }
     const measured = await selectNetworkWalkingDay({day:baseDay,alternatives,session,
-      signal,walkingKmTarget,distanceMode,lang});
+      signal,walkingKmTarget,distanceMode,lang,
+      onUnavailable: blocker => { networkBlocker = blocker; }});
     // Keep the existing commitment rule: when an unpinned day already exceeds
     // the target, a pin may keep (but not increase) that distance. Compare the
     // two NETWORK results; an unknown/unhonoured pin cannot create a new cap.
@@ -1628,6 +1630,7 @@ async function composeAgnosticRouteViaEngine({
       const reference = pinlessFinalized?.route;
       const referenceTruth = reference ? await session.route(reference.map_route_points) : null;
       signal?.throwIfAborted();
+      networkBlocker = networkWalkingFailureBlocker(referenceTruth);
       const referenceRoute = reference ? applyNetworkGeometry(reference,referenceTruth,lang) : null;
       pinOverBudget = !withinBudget({withPins:{route:measured.primary_route},
         baseline:{route:referenceRoute},ceilingKm:band.ceilingKm});
@@ -1687,7 +1690,7 @@ async function composeAgnosticRouteViaEngine({
     const thinEligibility = {
       ...eligibility,
       eligible: false,
-      blockers: dedupe([...(eligibility.blockers || []), networkUnavailable ? 'network_walking_unavailable' : 'agnostic_compose_too_thin']),
+      blockers: dedupe([...(eligibility.blockers || []), networkUnavailable ? 'network_walking_unavailable' : 'agnostic_compose_too_thin', ...(networkBlocker ? [networkBlocker] : [])]),
     };
     const experiment = buildExperimentBlock({
       routeMutation: false,

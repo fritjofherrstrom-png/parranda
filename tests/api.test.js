@@ -4313,6 +4313,8 @@ test("health identifies the running share build without exposing untrusted value
     assert.equal(response.status, 200);
     assert.deepEqual(JSON.parse(response.body), {
       ok: true,
+      network_walking_config: "disabled",
+      network_walking_config_scope: "configuration_only",
       runtime_profile: "share",
       build_sha: "abcdef123456",
     });

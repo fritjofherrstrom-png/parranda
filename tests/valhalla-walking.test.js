@@ -84,6 +84,32 @@ test("default off; invalid operator configuration does not enable a public demo"
       false,
     );
 });
+test("adapter failures expose only sanitized operational or route rejection reasons", async () => {
+  const cases = [
+    [create(async () => { throw Error("secret endpoint credentials"); }), "provider_unavailable"],
+    [create(async () => response({ error: "private upstream" }, { status: 503 })), "provider_unavailable"],
+    [create(async () => response({}, { status: 429 })), "busy"],
+    [create(async () => response(), { endpoint: "https://user:secret@test/route" }), "invalid_configuration"],
+    [create(async () => response({ error_code: 442, error: "private no route" }, { status: 400 })), "route_rejected"],
+    [create(async () => response({})), "route_rejected"],
+  ];
+  for (const [provider, reason] of cases) {
+    assert.deepEqual(await provider.session().route(points), { status: "unavailable", reason });
+  }
+});
+
+test("session deadlines and exhausted call budgets are operational failures", async () => {
+  let now = 0;
+  const p = create(async () => response(), { now: () => now });
+  const s = p.session();
+  assert.equal((await s.route(points)).status, "ok");
+  now = LIMITS.totalMs + 1;
+  assert.deepEqual(await s.route(points), { status: "unavailable", reason: "provider_unavailable" });
+  const capped = p.session();
+  for (let i = 0; i < LIMITS.requests; i++) await capped.route(points);
+  assert.deepEqual(await capped.route(points), { status: "unavailable", reason: "busy" });
+});
+
 test("pedestrian-only request sends coordinates, not names, request tokens or preferences", async () => {
   const calls = [];
   const p = create(async (url, options) => {
@@ -284,6 +310,7 @@ test("global acquisition slots have no unbounded waiting queue; a session makes 
     .session()
     .route(points.map((p) => ({ ...p, lng: p.lng + 0.002 })));
   assert.equal(third.status, "unavailable");
+  assert.equal(third.reason, "busy");
   assert.equal(controllers.length, 2);
   cancel.abort();
   await Promise.all([first, second]);
@@ -302,7 +329,9 @@ test("request deadline covers an outstanding streamed body, not just response he
       ),
   );
   const start = performance.now();
-  assert.equal((await p.session().route(points)).status, "unavailable");
+  assert.deepEqual(await p.session().route(points), {
+    status: "unavailable", reason: "provider_unavailable",
+  });
   assert.equal(cancelled, true);
   assert.ok(performance.now() - start < LIMITS.requestMs + 2000);
 });

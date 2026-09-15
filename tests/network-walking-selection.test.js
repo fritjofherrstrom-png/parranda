@@ -65,6 +65,71 @@ function provider(cost, calls) {
     }),
   };
 }
+// Synthetic graph costs and polyline6, validated by the real adapter. No live graph.
+function nativeProvider(failFirst = false) {
+  const { createValhallaWalkingProvider } = require("../server/valhalla-walking");
+  const { distanceKm } = require("../server/planner/candidate-reach-policy");
+  const calls = [];
+  function encode(points) {
+    let previous = [0, 0];
+    return points.map(p => {
+      const next = [Math.round(p.lat * 1e6), Math.round(p.lng * 1e6)];
+      const delta = next.map((v, i) => v - previous[i]);
+      previous = next;
+      return delta.map(n => {
+        let v = n < 0 ? ~(n << 1) : n << 1, text = "";
+        while (v >= 32) {
+          text += String.fromCharCode((32 | (v & 31)) + 63);
+          v >>>= 5;
+        }
+        return text + String.fromCharCode(v + 63);
+      }).join("");
+    }).join("");
+  }
+  const instance = createValhallaWalkingProvider({
+    endpoint: "https://private-routing.example.test/route",
+    fetcher: async (_url, options) => {
+      const points = JSON.parse(options.body).locations.map(p => ({ lat: p.lat, lng: p.lon }));
+      const status = failFirst && calls.length === 0 ? 503 : 200;
+      calls.push({ status, points });
+      const legs = points.slice(1).map((p, i) => {
+        const length = distanceKm(points[i], p);
+        return {
+          summary: { length, time: length * 720, has_ferry: false },
+          maneuvers: [{ travel_mode: "pedestrian", ferry: false }],
+          shape: encode([points[i], p]),
+        };
+      });
+      return new Response(JSON.stringify(status === 503 ? { error: "private upstream failure" } : {
+        trip: {
+          status: 0, units: "kilometers", legs,
+          summary: {
+            length: legs.reduce((sum, leg) => sum + leg.summary.length, 0),
+            time: legs.reduce((sum, leg) => sum + leg.summary.time, 0),
+            has_ferry: false,
+          },
+        },
+      }), { status, headers: { "content-type": "application/json" } });
+    },
+  });
+  return { instance, calls };
+}
+
+test("real adapter 503 then healthy alternatives cannot change the composer's chosen identity", async () => {
+  const healthy = nativeProvider();
+  const control = await compose({ networkWalkingProvider: healthy.instance });
+  assert.equal(control.result.days[0].primary_route.routing_source, "valhalla_pedestrian");
+  assert.ok(control.result.days[0].primary_route.main_stops.some(s => s.id === "other-kitchen"));
+  const failure = nativeProvider(true);
+  const result = await compose({ networkWalkingProvider: failure.instance });
+  assert.equal(result.result.days.length, 0);
+  assert.deepEqual(failure.calls.map(c => c.status), [503]);
+  assert.deepEqual(result.experiment.eligibility.blockers.filter(b => b.startsWith("network_walking_")),
+    ["network_walking_unavailable", "network_walking_provider_unavailable"]);
+  // The next response really is usable: its availability must not justify a new identity.
+  assert.equal((await failure.instance.session().route(healthy.calls[0].points)).status, "ok");
+});
+
 test("network detour changes the chosen same-role identity, not merely the map decoration", async () => {
   const before = await compose();
   assert.ok(
@@ -112,6 +177,61 @@ test("unreachable chains never come back as heuristic network successes", async 
     ),
   );
 });
+test("initial operational failure withholds the new day without measuring another identity", async () => {
+  for (const reason of ["provider_unavailable", "busy", "invalid_configuration"]) {
+    const calls = [];
+    const fallback = provider(() => 4.5, calls).session();
+    let attempts = 0;
+    const result = await compose({ networkWalkingProvider: {
+      session: () => ({ route: async (points) => {
+        if (++attempts === 1) return { status: "unavailable", reason };
+        return fallback.route(points);
+      } }),
+    } });
+    assert.equal(result.result.days.length, 0, reason);
+    assert.equal(attempts, 1, "an outage must not choose an unrelated alternative");
+    assert.deepEqual(result.experiment.eligibility.blockers.filter(b => b.startsWith("network_walking_")),
+      ["network_walking_unavailable", `network_walking_${reason}`]);
+  }
+});
+
+test("a measured best survives a later operational comparison failure", async () => {
+  const calls = [];
+  const good = provider(() => 12, calls).session();
+  let attempts = 0;
+  const result = await compose({ networkWalkingProvider: {
+    session: () => ({ route: points => ++attempts === 1
+      ? good.route(points)
+      : { status: "unavailable", reason: "provider_unavailable" } }),
+  } });
+  assert.equal(attempts, 2);
+  const route = result.result.days[0].primary_route;
+  assert.equal(route.routing_source, "valhalla_pedestrian");
+  assert.equal(route.estimated_km, 12);
+  assert.deepEqual(route.map_route_points, calls[0]);
+  assert.equal(result.experiment.eligibility.blockers.some(b => b.startsWith("network_walking_")), false);
+});
+
+test("route rejection may try a comparable alternative without blaming the provider", async () => {
+  let attempts = 0;
+  const good = provider(() => 4.5, []).session();
+  const result = await compose({ networkWalkingProvider: {
+    session: () => ({ route: points => ++attempts === 1
+      ? { status: "unavailable", reason: "route_rejected" }
+      : good.route(points) }),
+  } });
+  assert.equal(attempts, 2);
+  assert.equal(result.result.days[0].primary_route.estimated_km, 4.5);
+  for (const reason of ["route_rejected", "secret endpoint credentials"]) {
+    const rejected = await compose({ networkWalkingProvider: {
+      session: () => ({ route: async () => ({ status: "unavailable", reason }) }),
+    } });
+    assert.deepEqual(rejected.experiment.eligibility.blockers.filter(b => b.startsWith("network_walking_")),
+      ["network_walking_unavailable"]);
+    assert.equal(JSON.stringify(rejected).includes("secret endpoint credentials"), false);
+  }
+});
+
 test("already fitting network route does not spend queries chasing more distance", async () => {
   const calls = [];
   const result = await compose({
@@ -178,6 +298,22 @@ test("a pin is not blamed when the measured baseline is already equally long", a
     networkWalkingProvider: provider(() => 12, []),
   });
   assert.equal(result.result.days[0]?.primary_route.estimated_km, 12);
+});
+
+test("operational failure of the pinless affordability reference exposes the safe cause", async () => {
+  let attempts = 0;
+  const measured = provider(() => 12, []).session();
+  const result = await compose({
+    pinnedStopIds: ["other-kitchen"],
+    networkWalkingProvider: { session: () => ({ route: points => {
+      if (++attempts === 1) return measured.route(points);
+      return { status: "unavailable", reason: "provider_unavailable" };
+    } }) },
+  });
+  assert.equal(attempts, 2);
+  assert.equal(result.result.days.length, 0);
+  assert.deepEqual(result.experiment.eligibility.blockers.filter(b => b.startsWith("network_walking_")),
+    ["network_walking_unavailable", "network_walking_provider_unavailable"]);
 });
 
 test("an unknown pin cannot impose a new walking ceiling on the day", async () => {

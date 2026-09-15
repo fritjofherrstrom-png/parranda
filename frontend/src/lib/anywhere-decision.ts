@@ -20,10 +20,10 @@ export interface AnywhereClassification {
   /** Qualifying readiness caps the server attached when it promoted a day that
    *  is real but smaller or less certain than ideal. Empty for a full day. */
   limitations?: string[];
-  /** Set on "unavailable" when the resolved place's trusted loader found real
-   *  places — just too few for a reliable day. Never set on unresolved places
-   *  or loader failures, so honest-absence copy stays the default. */
-  unavailableReason?: "sparse_supply";
+  /** Closed absence causes. sparse_supply means trusted places are too few;
+   *  network_walking_* means the enabled final walk was not verified and can
+   *  also accompany structure_only. Neither invents an unresolved anchor. */
+  unavailableReason?: "sparse_supply" | "network_walking_unavailable" | "network_walking_provider_unavailable" | "network_walking_busy" | "network_walking_invalid_configuration";
   realPlaceCount?: number;
 }
 
