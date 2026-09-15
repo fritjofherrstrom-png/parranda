@@ -49,7 +49,7 @@ const { buildDayflowContext } = require("./dayflow-context");
 const { calibrateAgnosticRouteReadiness } = require("./agnostic-route-readiness-calibration");
 const { buildAgnosticConstraintNegotiation } = require("./agnostic-constraint-negotiation");
 const { resolveAgnosticWalkingTargetBand } = require("./agnostic-walking-target");
-const { settlePinsWithinWalkingBudget } = require("./pin-walking-budget");
+const { settlePinsWithinWalkingBudget, withinBudget } = require("./pin-walking-budget");
 const { classifyUnhonouredPins } = require("./pin-refusal-reasons");
 const { collectCommitmentUpstreamEligibleIds } = require("./commitment-eligibility");
 const { EXCLUDED_LOADED_IDS } = require("./excluded-candidates");
@@ -57,6 +57,7 @@ const { weaveEveningEventRouteStop } = require("../candidates/event-route-stop-w
 const { generateAgnosticRecommendations } = require("../route-engine");
 const { projectRouteToSelectedStopChain } = require("./route-public-geometry");
 const { replacementKeepsOtherStops } = require("./walking-fit-selection");
+const { sameQualityReplacement, applyNetworkGeometry, selectNetworkWalkingDay, networkWalkingFailureBlocker } = require('./network-walking-selection');
 const {
   buildAgnosticEngineCityConfig,
   mapPlannerReservoirToSourceCandidates,
@@ -889,6 +890,8 @@ async function composeAgnosticRouteOutput({
   // are unchanged). The legacy synthesizer is staged for removal once the engine
   // path is proven in production.
   synthesizeVia = "legacy",
+  networkWalkingProvider = null,
+  signal = null,
 }) {
   const agnosticLabel = safeAgnosticPlaceLabel(placeLabel);
   const agnosticContext = buildAgnosticCityContext({
@@ -1171,6 +1174,8 @@ async function composeAgnosticRouteOutput({
       loadedCandidateIds,
       walkingRouter,
       walkingConfig,
+      networkWalkingProvider,
+      signal,
       eveningEventStructure,
       timezone: contextBlock?.time?.timezone || timezone,
       lang,
@@ -1376,6 +1381,8 @@ async function composeAgnosticRouteViaEngine({
   anchorMode = "unknown",
   microBaseSummary = null,
   placeLabel,
+  networkWalkingProvider = null,
+  signal = null,
 }) {
   const sourceCandidates = Array.isArray(suppliedSourceCandidates)
     ? suppliedSourceCandidates
@@ -1401,6 +1408,9 @@ async function composeAgnosticRouteViaEngine({
     ? anchorSourceCandidatesToCurrentBand(sourceCandidates, currentTimeBandRank, pinnedStopIds)
     : { anchored: false, candidates: sourceCandidates, trimmedDayparts: [] };
 
+  const composedDays = [];
+  let pinlessFinalized = null;
+
   async function runEngine(candidates, pins = pinnedStopIds) {
     const engineCityConfig = buildAgnosticEngineCityConfig({
       anchor: origin,
@@ -1422,7 +1432,7 @@ async function composeAgnosticRouteViaEngine({
       lang,
       pinnedStopIds: Array.isArray(pins) ? pins : [],
     });
-    return sanitizeAgnosticEngineDay({
+    const day = sanitizeAgnosticEngineDay({
       day: (engineResult && Array.isArray(engineResult.days) && engineResult.days[0]) || null,
       // Route PROSE uses the attested label or neutral fallback — never the
       // "Nearby" geometry placeholder from the coordinates-only config.
@@ -1430,11 +1440,15 @@ async function composeAgnosticRouteViaEngine({
       lang,
       anchorMode,
     });
+    if (networkWalkingProvider && composedDays.length < 8 && day?.primary_route) composedDays.push(day);
+    return day;
   }
 
-  // ONE finalisation pipeline, used for every candidate pin set and for the
-  // published day alike: compose, the engine's own ordering and bridge
-  // insertion, then capacity repair. Judging a pin on anything less than this
+  // Shared proposal finalisation for each pin set: engine ordering, bridge
+  // insertion and capacity repair. The opt-in network gate below additionally
+  // measures both the selected proposal and its pin-less reference before
+  // publication; neither may inherit heuristic affordability. Judging a pin on
+  // an unordered candidate array instead of the composed proposal
   // measures a route that is never published — the previous guard scored an
   // unordered array before bridge insertion, so it could refuse a pin the
   // finished route would have absorbed and accept one that ended over the
@@ -1520,7 +1534,7 @@ async function composeAgnosticRouteViaEngine({
     // reconciled afterwards. So the weave runs here, and what this function
     // returns is the day as it will actually be sent.
     const weave = await applyEveningEventWeave({ day, route });
-    return {
+    const finalized = {
       day: weave.day,
       route: weave.route,
       anchored,
@@ -1528,6 +1542,8 @@ async function composeAgnosticRouteViaEngine({
       repairApplied,
       weave: weave.outcome,
     };
+    if (!pins?.length) pinlessFinalized = finalized;
+    return finalized;
   }
 
   /**
@@ -1572,6 +1588,66 @@ async function composeAgnosticRouteViaEngine({
       distanceMode,
     });
   }
+  // Heuristics still bound the cheap proposal search. The opt-in final gate
+  // compares actual pedestrian costs before publication. Pins/event days are
+  // measured too, but do not reopen their independently bounded choice loop.
+  let networkUnavailable = false;
+  let networkBlocker = null;
+  if (networkWalkingProvider && finalized.route) {
+    const baseDay = finalized.day;
+    const session = networkWalkingProvider.session({signal});
+    async function* alternatives() {
+      if (requestedPins.length || finalized.weave?.applied || distanceMode === 'no_limit') return;
+      const usable = day => sameQualityReplacement(baseDay.primary_route,day?.primary_route,plannerRoles) &&
+        preservesReplacementQuality(baseDay.primary_route,day.primary_route,preferences);
+      for (const day of [...composedDays]) {
+        const keepsTimeAnchor = !finalized.anchored || (day.primary_route.main_stops || []).every(stop => {
+          const rank = timeBandRank(daypartForRole(stop.role));
+          return rank === null || rank >= currentTimeBandRank;
+        });
+        if (keepsTimeAnchor && usable(day)) yield day;
+      }
+      for (const candidates of buildWalkingFitReservoirs({sourceCandidates,plannerRoles,origin,walkingKmTarget})) {
+        const anchored = finalized.anchored && Number.isInteger(currentTimeBandRank)
+          ? anchorSourceCandidatesToCurrentBand(candidates,currentTimeBandRank,[])
+          : {anchored:false,candidates};
+        if (finalized.anchored && !anchored.anchored) continue;
+        signal?.throwIfAborted();
+        const day = await runEngine(anchored.candidates,[]);
+        if (usable(day)) yield day;
+      }
+    }
+    const measured = await selectNetworkWalkingDay({day:baseDay,alternatives,session,
+      signal,walkingKmTarget,distanceMode,lang,
+      onUnavailable: blocker => { networkBlocker = blocker; }});
+    // Keep the existing commitment rule: when an unpinned day already exceeds
+    // the target, a pin may keep (but not increase) that distance. Compare the
+    // two NETWORK results; an unknown/unhonoured pin cannot create a new cap.
+    const band = distanceMode === 'no_limit' ? null : resolveAgnosticWalkingTargetBand(walkingKmTarget);
+    const hasHonouredPin = measured?.primary_route.main_stops.some(stop=>requestedPins.includes(stop.id));
+    let pinOverBudget = false;
+    if (hasHonouredPin && band && measured.primary_route.estimated_km > band.ceilingKm) {
+      const reference = pinlessFinalized?.route;
+      const referenceTruth = reference ? await session.route(reference.map_route_points) : null;
+      signal?.throwIfAborted();
+      networkBlocker = networkWalkingFailureBlocker(referenceTruth);
+      const referenceRoute = reference ? applyNetworkGeometry(reference,referenceTruth,lang) : null;
+      pinOverBudget = !withinBudget({withPins:{route:measured.primary_route},
+        baseline:{route:referenceRoute},ceilingKm:band.ceilingKm});
+    }
+    networkUnavailable = !measured || Boolean(pinOverBudget);
+    finalized = {...finalized,day:networkUnavailable ? null : measured,
+      route:networkUnavailable ? null : measured.primary_route};
+    if (!networkUnavailable && finalized.weave?.applied) {
+      const eventLeg = measured.primary_route.live_event_stop;
+      const weave = deepClone(finalized.weave);
+      weave.placeStructure.district_day.evening_event.route_leg_km = eventLeg.leg_km;
+      weave.placeStructure.district_day.evening_event.route_leg_minutes = eventLeg.leg_minutes;
+      weave.interrupt.walking_impact.leg_km = eventLeg.leg_km;
+      weave.interrupt.walking_impact.leg_minutes = eventLeg.leg_minutes;
+      finalized.weave = weave;
+    }
+  }
   let engineDay = finalized.day;
   let engineRoute = finalized.route;
   let anchoredToLocalTime = finalized.anchored;
@@ -1614,7 +1690,7 @@ async function composeAgnosticRouteViaEngine({
     const thinEligibility = {
       ...eligibility,
       eligible: false,
-      blockers: dedupe([...(eligibility.blockers || []), "agnostic_compose_too_thin"]),
+      blockers: dedupe([...(eligibility.blockers || []), networkUnavailable ? 'network_walking_unavailable' : 'agnostic_compose_too_thin', ...(networkBlocker ? [networkBlocker] : [])]),
     };
     const experiment = buildExperimentBlock({
       routeMutation: false,

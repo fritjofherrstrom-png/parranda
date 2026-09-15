@@ -53,6 +53,7 @@ const {
 const { buildEngineReadinessVerdict } = require("./planner/agnostic-engine-readiness");
 const { reconcileAgnosticConstraintNegotiation } = require("./planner/agnostic-constraint-negotiation");
 const { resolveAgnosticWalkingTargetBand } = require("./planner/agnostic-walking-target");
+const { resolveNetworkWalkingProvider } = require('./valhalla-walking');
 const { resolveAgnosticIntake, parsePlaceQuery } = require("./planner/agnostic-place-intake");
 const { collectPlaceCandidatesForCity } = require("./place-candidates/provider-registry");
 const {
@@ -1483,6 +1484,7 @@ function buildApp({
   reviewedPlaceSource,
   walkingRouter = null,
   walkingConfig = null,
+  networkWalkingProvider = resolveNetworkWalkingProvider(),
   weatherProvider = null,
   clock = null,
   // NEW-frontend /anywhere takeover (contract-gated): the flag decides serving,
@@ -1490,6 +1492,12 @@ function buildApp({
   // values (env flag + the frontend workspace's build output).
   anywhereV2Dir = path.join(appRoot, "frontend", "dist"),
 } = {}) {
+  const networkWalkingConfig = networkWalkingProvider == null
+    ? "disabled"
+    : networkWalkingProvider.configured === true ? "ready" : "misconfigured";
+  if (networkWalkingConfig === "misconfigured") {
+    console.warn("[network walking] misconfigured; enabled routing remains fail-closed. Check PARRANDA_VALHALLA_ROUTE_URL.");
+  }
   // Event venue recovery reuses the same trusted, rate-limited server resolver
   // as freeform place intake. Explicit test injections still win, including
   // `null`; no public payload can provide either seam.
@@ -1589,6 +1597,9 @@ function buildApp({
       : null;
     response.json({
       ok: true,
+      // Configuration only: no live graph, reachability or coverage assertion.
+      network_walking_config: networkWalkingConfig,
+      network_walking_config_scope: "configuration_only",
       runtime_profile: process.env.PARRANDA_RUNTIME_PROFILE || "default",
       build_sha: buildSha,
     });
@@ -2388,6 +2399,8 @@ function buildApp({
         anchorMode: intake.mode,
         spatialScope,
         synthesizeVia: useEngineCompose ? "engine" : "legacy",
+        networkWalkingProvider,
+        signal: lifecycle?.signal,
       });
       experiment.intake = intake;
 

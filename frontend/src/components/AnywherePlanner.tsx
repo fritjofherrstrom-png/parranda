@@ -41,6 +41,7 @@ import {
   routePreferenceCoverage,
   routeTimeAnchoring,
   walkingDistanceLabel,
+  walkingMinutesLabel,
 } from "../lib/route-context-view.mjs";
 import {
   splitRouteStops,
@@ -426,6 +427,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // held over, not even for a second.
   const displayedAnchorKeyRef = useRef<string | null>(null);
   const [serviceRefusal, setServiceRefusal] = useState<ComposeServiceRefusal | null>(null);
+  const [walkingFailure, setWalkingFailure] = useState<string | null>(null);
   // Memory-only copy of the trusted coordinate anchor used for this response.
   // It frames the consumer Maps route but is never persisted or put in a URL.
   const [routeAnchorCoords, setRouteAnchorCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -593,7 +595,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         displayedAnchorKeyRef.current = null;
       }
       setServiceRefusal(null);
-      setMapDrawn(false);
+      setWalkingFailure(null);
+      // A retained day keeps the same map and draw-effect inputs. Resetting
+      // its ready state would leave a permanent loader if the revision fails.
+      if (!retention.keepPrevious) setMapDrawn(false);
       setExpandedStopKey(null);
       setExpandedCandidateKey(null);
       setLiveSheetScope("around_place");
@@ -681,6 +686,20 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       const safe = anchor.city
         ? safeCuratedCityResponse(body, cls)
         : decision.safeResponseFor(body, cls);
+      if ("unavailableReason" in cls && cls.unavailableReason?.startsWith("network_walking_")) {
+        setWalkingFailure(cls.unavailableReason);
+        setUpgradePending(false);
+        if (retention.keepPrevious || (silent && decision.isComposedStatus(classification?.status ?? "unavailable"))) {
+          setDayIsStale(true);
+          setPhase("error");
+        } else {
+          setClassification(cls);
+          setSafeResponse(safe);
+          setPhase("done");
+        }
+        return; // Only explicit user retry; never a source/live follow-up.
+      }
+      setWalkingFailure(null);
       const authoritativePlace = anchor.city ? cls.placeLabel : anchor.place;
       if (anchor.city && authoritativePlace) setPlace(authoritativePlace);
       // Atomic replacement. If the new verdict is structure_only/unavailable,
@@ -1810,7 +1829,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                   <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-parranda-ink/65">
                     {move.kind === "live_event" && <span>{t("Live-händelse", "Live event")}</span>}
                     {timing && <span>{timing}</span>}
-                    {Number.isFinite(move.walking_minutes) && <span>{move.walking_minutes} {t("min till fots", "min walk")}</span>}
+                    {Number.isFinite(move.walking_minutes) && <span>{walkingMinutesLabel(move.walking_minutes)} {t("till fots", "walk")}</span>}
                     {move.source.label && <span>{move.source.label}</span>}
                   </div>
                 </div>
@@ -1931,7 +1950,24 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </section>
       )}
 
-      {phase === "error" && staleNotice !== "update_failed" && (
+      {walkingFailure && phase !== "loading" && (
+        <div role="status" className="flex flex-col items-start gap-3 rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4 text-sm text-parranda-ink/80">
+          <p>{walkingFailure === "network_walking_invalid_configuration"
+            ? t("Gångvägstjänstens konfiguration behöver rättas av operatören. Ingen ny dag har publicerats.", "The walking service configuration needs to be corrected by the operator. No new day has been published.")
+            : walkingFailure === "network_walking_busy"
+              ? t("Gångvägstjänsten är upptagen. Försök igen om en stund.", "The walking service is busy. Try again shortly.")
+              : walkingFailure === "network_walking_provider_unavailable"
+                ? t("Gångvägstjänsten är inte tillgänglig just nu. Försök igen om en stund.", "The walking service is unavailable right now. Try again shortly.")
+                : t("Parranda kunde inte verifiera gångvägen. Ingen ny dag har publicerats.", "Parranda could not verify the walking route. No new day has been published.")}</p>
+          {walkingFailure !== "network_walking_invalid_configuration" && staleNotice !== "update_failed" && (
+            <button type="button" onClick={retryPlan} className="inline-flex min-h-11 items-center rounded-parranda-btn bg-parranda-terracotta px-4 font-bold text-white transition hover:brightness-110">
+              {t("Försök bygga dagen igen", "Try building the day again")}
+            </button>
+          )}
+        </div>
+      )}
+
+      {phase === "error" && !walkingFailure && staleNotice !== "update_failed" && (
         <div className="flex flex-col items-start gap-3 rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4 text-sm text-parranda-ink/80" role="alert">
           <p>{navigationInterrupted
             ? t("Planeringen pausades när du lämnade sidan. Dina val finns kvar.", "Planning paused when you left. Your choices are still here.")
@@ -1960,7 +1996,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </p>
       )}
 
-      {phase === "done" && classification?.status === "unavailable" && (
+      {phase === "done" && !walkingFailure && classification?.status === "unavailable" && (
         !upgradePending &&
         <p className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4 text-sm text-parranda-ink/80">
           {/* Two honestly different absences: a place Parranda couldn't
@@ -2011,13 +2047,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                     ? t("Planeringen pausades när du lämnade sidan — visar din förra dag", "Planning paused when you left — showing your previous day")
                     : t("Kunde inte uppdatera — visar din förra dag", "Couldn't update — showing your previous day")}
                 </span>
-                <button
+                {walkingFailure !== "network_walking_invalid_configuration" && <button
                   type="button"
                   onClick={retryPlan}
                   className="inline-flex min-h-11 items-center rounded-full border border-parranda-ember/40 px-3 text-xs font-bold text-parranda-clay transition hover:border-parranda-ember"
                 >
                   {navigationInterrupted ? t("Fortsätt planera", "Continue planning") : t("Försök uppdatera igen", "Try updating again")}
-                </button>
+                </button>}
               </>
             )}
           </div>
@@ -2033,7 +2069,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             )}
           </h2>
           <p className="text-[13px] text-parranda-ink/65">
-            {dayOffset === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow")}
+            {(dayIsStale ? lastEntryRef.current?.inputs?.dayOffset ?? dayOffset : dayOffset) === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow")}
             {Number.isFinite(primaryRoute?.estimated_km)
               ? ` · ≈ ${walkingDistanceLabel(primaryRoute.estimated_km, lang)} ${t("till fots", "on foot")}`
               : ""}
@@ -2047,6 +2083,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             <p className="flex items-start gap-2 text-[13px] leading-relaxed text-parranda-ink/65">
               <span aria-hidden="true" className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-parranda-ink/30" />
               <span>{dayLimitationNote}</span>
+            </p>
+          )}
+          {primaryRoute?.routing_source === "valhalla_pedestrian" && primaryRoute?.walking_geometry?.kind === "pedestrian_network" && (
+            <p className="text-[12px] leading-relaxed text-parranda-ink/65">
+              {t("Beräknade gångvägar · Valhalla / ", "Calculated walking paths · Valhalla / ")}
+              <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="underline">© OpenStreetMap</a>
+              {t(". Kartunderlag, inte bekräftad framkomlighet eller realtidsnavigation. Anslutningen till entrén kan saknas.",
+                ". Map data, not confirmed access or live navigation. The connection to the entrance may be unmapped.")}
             </p>
           )}
           {structure?.provenance === "agnostic_anchor" && (
@@ -2216,7 +2260,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                   )}
                   {leg && (leg.minutes != null || leg.km != null) && (
                     <span className="ml-4 border-l border-dashed border-parranda-ink/25 py-1.5 pl-5 text-xs text-parranda-ink/55">
-                      ↓ {leg.minutes != null ? `${leg.minutes} min` : ""}
+                      ↓ {leg.minutes != null ? walkingMinutesLabel(leg.minutes) : ""}
                       {leg.minutes != null && leg.km != null ? " · " : ""}
                       {leg.km != null ? walkingDistanceLabel(leg.km, lang) : ""}
                     </span>
@@ -2259,7 +2303,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                       <div className="flex flex-col gap-1.5 text-xs text-parranda-ink/65">
                         {leg && (leg.minutes != null || leg.km != null) && (
                           <span>
-                            {leg.minutes != null ? `${leg.minutes} min` : ""}
+                            {leg.minutes != null ? walkingMinutesLabel(leg.minutes) : ""}
                             {leg.minutes != null && leg.km != null ? " · " : ""}
                             {leg.km != null ? walkingDistanceLabel(leg.km, lang) : ""}
                             {prevName ? ` ${t("till fots från", "walk from")} ${prevName}` : ` ${t("till fots", "on foot")}`}
@@ -2519,7 +2563,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">
               {t("Kandidater nära platsen", "Candidates near this place")}
             </p>
-            {classification?.status === "structure_only" && (
+            {classification?.status === "structure_only" && !walkingFailure && (
               <p className="mt-1 text-sm text-parranda-ink/70">
                 {t(
                   "Parranda hittade platskandidater, men inte en tillräckligt stark rutt ännu.",

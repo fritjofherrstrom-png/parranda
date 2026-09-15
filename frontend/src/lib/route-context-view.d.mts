@@ -46,6 +46,7 @@ export declare function buildRouteContextSuggestions(
 ): RouteContextSuggestion[];
 
 export declare function walkingDistanceLabel(km: number | null | undefined, lang?: "sv" | "en"): string;
+export declare function walkingMinutesLabel(minutes: number | null | undefined): string;
 
 export interface RoutePreferenceCoverage {
   has_coverage_evidence: boolean;
