@@ -596,7 +596,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       }
       setServiceRefusal(null);
       setWalkingFailure(null);
-      setMapDrawn(false);
+      // A retained day keeps the same map and draw-effect inputs. Resetting
+      // its ready state would leave a permanent loader if the revision fails.
+      if (!retention.keepPrevious) setMapDrawn(false);
       setExpandedStopKey(null);
       setExpandedCandidateKey(null);
       setLiveSheetScope("around_place");

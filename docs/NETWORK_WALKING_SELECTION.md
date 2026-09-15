@@ -143,6 +143,8 @@ failure means the walk could not be verified; it must not always be described
 as an offline provider, since invalid geometry and safety limits also reject a
 route. Temporary provider/capacity failures offer an explicit single-flight
 retry through the normal Planner lifecycle, not an automatic retry storm.
+Retaining a previous day also retains its drawn-map readiness; an unsuccessful
+revision must not leave a permanent map-loading message over the unchanged map.
 
 The two-live-job limit is unchanged and applies to distinct cold routing jobs,
 not to the third user: cache hits and shared active chains do not consume an

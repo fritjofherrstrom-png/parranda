@@ -20,6 +20,8 @@ for (const retained of [false, true]) test(`walking failure offers single-flight
   t.after(() => h.unmount()); await h.clock.advance(500);
   if (retained) {
     await h.fetchMock.respond(calls(h)[0], day);
+    await h.clock.advance(50);
+    assert.doesNotMatch(h.text(), /Drawing the map/);
     await click(h, /Adjust/); await click(h, /Second hand/); await h.clock.advance(500);
   }
   await h.fetchMock.respond(calls(h).at(-1), failure('network_walking_provider_unavailable'));
@@ -28,6 +30,7 @@ for (const retained of [false, true]) test(`walking failure offers single-flight
   if (retained) {
     assert.match(h.text(), /Trusted museum/);
     assert.match(h.text(), /previous day/);
+    assert.doesNotMatch(h.text(), /Drawing the map/, 'the unchanged drawn map must not return to a waiting state');
     assert.equal(h.readStorage('parranda:anywhere:last').inputs.selected.includes('second_hand'), false);
   } else {
     await click(h, /Adjust/); await click(h, /Second hand/);
