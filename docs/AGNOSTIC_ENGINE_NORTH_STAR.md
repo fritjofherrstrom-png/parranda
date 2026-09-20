@@ -55,6 +55,12 @@ user-facing selection flow; this change addresses clear dominant matches only.
 
 ## Historical delivery record
 
+An operator-enabled pedestrian-network final gate can now compare bounded,
+equally trusted engine proposals and publish one consistent set of path/leg/
+distance fields. It remains default-off pending real graph/Pi acceptance; see
+`NETWORK_WALKING_SELECTION.md`. This is selection refinement, not a new composer
+or proof of current access. The historical heuristic claims below stay historical.
+
 Current cold first-visit capability: the modern Planner uses a bounded server
 lifecycle to continue its original plan when source acquisition is outstanding.
 One server execution owns the normalized request and trusted anchor; browser

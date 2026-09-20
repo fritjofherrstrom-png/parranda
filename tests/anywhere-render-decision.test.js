@@ -14,6 +14,21 @@ const {
   shouldRetryTransientSource,
 } = require("../anywhere-render-decision");
 
+test("walking failure takes precedence over scarcity, including structure-only results", () => {
+  for (const reason of ["network_walking_unavailable", "network_walking_provider_unavailable", "network_walking_busy", "network_walking_invalid_configuration"]) {
+    for (const structure of [undefined, agnosticStructure()]) {
+      const response = { days: [{ primary_route: {} }], place_structure: structure,
+        agnostic_route_output_experiment: { intake: { status: "resolved" }, candidate_readiness: { real_place_count: 2 },
+          source_status: { status: "error_failed_closed" },
+          eligibility: { blockers: ["insufficient_geocoded_candidates", "network_walking_unavailable", reason] } } };
+      const cls = classifyAnywhereResult(response);
+      assert.equal(cls.unavailableReason, reason);
+      assert.equal(shouldRetryTransientSource(response, cls), false);
+      assert.deepEqual(safeResponseFor(response, cls).days, []);
+    }
+  }
+});
+
 const agnosticStructure = (areaCount = 2) => ({
   provenance: "agnostic_anchor",
   area_count: areaCount,
