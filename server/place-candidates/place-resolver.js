@@ -61,8 +61,8 @@ const MAX_QUERY_LEN = 200;
 const REVERSE_ZOOM = 10;
 
 // Conservative confidence thresholds (tunable). Importance is OSM's popularity-ish
-// score; we use it ONLY to reject clearly-junk single matches and to detect
-// genuine near-ties — never to inflate confidence above "medium".
+// score; we use it to reject clearly-junk single matches and distinguish a
+// clear leader from genuine near-ties — never to exceed "medium" confidence.
 const JUNK_IMPORTANCE_FLOOR = 0.2;
 const AMBIGUITY_MARGIN = 0.1;
 
@@ -260,9 +260,9 @@ function classifyConfidences(rawCandidates, query = null) {
   // villages and districts can have a low score while still being an exact,
   // structurally bounded result. Trust the provider-owned exact name + OSM ref
   // + bounded place/admin structure enough to anchor at our maximum automatic
-  // level (`medium`). Multiple exact names remain medium together so intake
-  // fails honestly as ambiguous; no label substring or client field can trigger
-  // this path.
+  // level (`medium`). Multiple exact names stay ambiguous unless comparable
+  // provider importance establishes one clear leader; no label substring or
+  // client field can trigger this path.
   const normalizedQuery = normalizeNameForMatch(query);
   const exactStructuralMatches = normalizedQuery
     ? sorted.filter((candidate) => (
@@ -274,7 +274,18 @@ function classifyConfidences(rawCandidates, query = null) {
       ))
     : [];
   if (exactStructuralMatches.length > 0) {
-    const exact = new Set(exactStructuralMatches);
+    // Already importance-sorted after dedupe. Compare exact identities only:
+    // a surrounding administrative container must not manufacture a near-tie.
+    // Missing scores cannot establish dominance, nor can junk-floor leaders.
+    const [leader, runnerUp] = exactStructuralMatches;
+    const dominant = runnerUp &&
+      exactStructuralMatches.every((candidate) => candidate.importance !== null) &&
+      leader.importance >= JUNK_IMPORTANCE_FLOOR &&
+      // Decimal boundary scores can round to a gap just above the margin.
+      // Require a lead beyond floating-point noise before weakening a rival.
+      leader.importance - runnerUp.importance > AMBIGUITY_MARGIN +
+        Number.EPSILON * Math.max(1, Math.abs(leader.importance), Math.abs(runnerUp.importance));
+    const exact = new Set(dominant ? [leader] : exactStructuralMatches);
     return sorted.map((candidate) => ({
       ...candidate,
       confidence: exact.has(candidate) ? "medium" : "low",
@@ -406,7 +417,7 @@ function createNominatimPlaceResolver({
     .digest("hex")
     .slice(0, 16);
   const cache = sourceCache || createSourceCache({
-    namespace: "place-resolver-nominatim-v2",
+    namespace: "place-resolver-nominatim-v3",
     ttlMs: cacheTtlMs,
     dir: cacheDir,
     now,
@@ -531,7 +542,7 @@ function createNominatimPlaceResolver({
     // An invalid configured endpoint fails closed without ever calling fetch.
     if (!endpointValid) return [];
     const queryIdentity = createHash("sha256").update(query.toLowerCase()).digest("hex");
-    const key = `v2:${endpointIdentity}:${queryIdentity}`;
+    const key = `v3:${endpointIdentity}:${queryIdentity}`;
     const result = await cache.get(
       key,
       () => enqueueProviderTask(() => fetchAndMapQueued(query)),
