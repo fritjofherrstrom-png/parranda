@@ -36,6 +36,23 @@ Agnostic does **not** mean:
 
 Named cities and narrow intents may be used as fixtures only when they prove generic engine behavior. They are not the goal.
 
+## Dominant exact-name place resolution
+
+The Nominatim resolver compares provider importance only after exact name, OSM
+identity, administrative context and bounded spatial structure are established.
+When multiple exact structural matches exist, one becomes the sole `medium`
+anchor only if every competitor has a finite importance, the leader is at least
+0.2, and its lead over the next exact match is strictly greater than 0.1.
+These reuse the existing junk floor and ambiguity margin; importance is not a
+probability, population estimate, route-quality score or human verification.
+There is no city list or country/language preference. Close ties, missing scores
+and low-scored competing settlements remain ambiguous. A sole exact small
+settlement still anchors even below the popularity floor. Qualified queries are
+sent intact to the provider; explicit coordinates still take precedence.
+The resolver's v3 cache namespace/key prevents old v2 ambiguity decisions from
+surviving this semantic change. Truly ambiguous names still need a better
+user-facing selection flow; this change addresses clear dominant matches only.
+
 ## Historical delivery record
 
 Current cold first-visit capability: the modern Planner uses a bounded server
@@ -141,7 +158,7 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 
 - **Independent official Swedish place supply (2026-09).** `server/place-candidates/visit-sweden-napi-source.js` uses Visit Sweden's documented public NAPI/EntryStore search shape behind `PARRANDA_VISIT_SWEDEN_SOURCE`. It sends one `public:true` Solr query for exact schema.org `Place`/`FoodEstablishment` records inside a five-kilometre latitude/longitude predicate window, capped at 100 rows, five seconds and two MiB. The provider boundary is a conservative Sweden bbox, never a list of cities; anchors outside it do not fetch. Accepted rows require matching numeric context/entry identity, exact metadata URL, one stable JSON-LD entity, one same-graph `GeoCoordinates` join, an in-circle point and a closed structured category. Free-text descriptions, images, ratings, generic stores, ambiguous categories and raw metadata are discarded. The request starts alongside Overpass and healthy results (including honest empty results) enter the persistent source cache; transport failures do not. Its `official` family is independent evidence, not an automatic claim of quality: a NAPI-only candidate can be displayed but cannot influence routes unless the existing gates see an exact operator-reviewed source policy or real cross-family corroboration. This adds country-wide provider breadth, not city-specific behavior, global coverage or cross-provider alias resolution.
 
-- **Generic small-place anchoring and nearby events.** Small places no longer fail because Nominatim's popularity-like `importance` is low: one exact provider name with an OSM identity, trusted admin context and bounded settlement/district/region structure may anchor at `medium`; two exact distant names remain ambiguous. Live `around_place` now forwards only the original place query, re-resolves it server-side and, for a resolver-attested compact settlement only, collects up to 25 km when the local three-kilometre bucket is empty. Nearby events carry an exact distance and `live_proximity:nearby`; `near_me`, route corridors, broad bounds and client-supplied scope fields never expand.
+- **Generic small-place anchoring and nearby events.** Small places no longer fail because Nominatim's popularity-like `importance` is low: one exact provider name with an OSM identity, trusted admin context and bounded settlement/district/region structure may anchor at `medium`; competing exact distant names remain ambiguous unless the dominant exact-name policy above establishes one clear leader. Live `around_place` now forwards only the original place query, re-resolves it server-side and, for a resolver-attested compact settlement only, collects up to 25 km when the local three-kilometre bucket is empty. Nearby events carry an exact distance and `live_proximity:nearby`; `near_me`, route corridors, broad bounds and client-supplied scope fields never expand.
 
 **Still honest/missing:** Overture alone is inferred low-trust supply and NAPI alone is one official family, not proof that a place is “the best”; OSM/Wikidata/curated corroboration and preference/route fit remain the promotion currency. The event scout still discovers and qualifies event sources in the background only; it does not feed stable place candidates, and unreviewed source profiles do not become trusted route inputs. A location with no approved/probationary event source still reports uncovered. Cross-provider aliases remain a separate entity-resolution problem.
 
