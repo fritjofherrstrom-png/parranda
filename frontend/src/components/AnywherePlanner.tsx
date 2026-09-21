@@ -33,7 +33,7 @@ import {
   buildLiveEventQueryPayload,
   type LiveEventScope,
 } from "../lib/live-event-query.mjs";
-import { mapsPlaceUrl, mapsWalkingRouteUrl, primaryRouteStops } from "../lib/maps-links.mjs";
+import { mapsPlaceUrl, mapsWalkingRouteUrls, primaryRouteStops } from "../lib/maps-links.mjs";
 import { routeMarkerPresentation } from "../lib/route-map-presentation.mjs";
 import { selectedDayHoursLabel } from "../lib/selected-day-hours.mjs";
 import {
@@ -1354,20 +1354,26 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     }
   }
   const eveningEvent: any = day?.evening_event ?? null;
-  // A single "open the whole day in Google Maps" walking route across every
-  // coord-bearing primary-route stop, in the exact order the API returned.
-  // Near-me plans preserve the engine's loop from/to the user's trusted anchor;
-  // typed-place plans retain the existing first-stop -> last-stop contract.
-  const routeUrl = useMemo(
-    () => mapsWalkingRouteUrl(
+  // Portable walking links across every primary-route stop in published order.
+  // Long days use consecutive parts so mobile Maps never silently loses stops.
+  // Include the published start/end: these legs already contribute to the
+  // displayed distance and map. Never substitute a typed discovery anchor.
+  // Explicit near-me coordinates retain their original loop ownership.
+  const publishedPoints = Array.isArray(primaryRoute?.map_route_points) ? primaryRoute.map_route_points : [];
+  const publishedStart = publishedPoints[0]?.role === "start" ? publishedPoints[0] : null;
+  const publishedEnd = publishedPoints.at(-1)?.role === "end" ? publishedPoints.at(-1) : null;
+  const routeOrigin = routeAnchorCoords ?? publishedStart;
+  const routeDestination = routeAnchorCoords ?? publishedEnd;
+  const routeUrls = useMemo(
+    () => mapsWalkingRouteUrls(
       routeStops,
-      routeAnchorCoords ? { origin: routeAnchorCoords, destination: routeAnchorCoords } : undefined,
+      { origin: routeOrigin, destination: routeDestination },
     ),
-    [routeStops, routeAnchorCoords],
+    [routeStops, routeOrigin, routeDestination],
   );
   // District composition deliberately sees a broader candidate universe than
   // the route. Keep only a tiny, proximity-bounded, deduped slice as optional
-  // discovery context; these candidates never enter routeStops or routeUrl.
+  // discovery context; these candidates never enter routeStops or routeUrls.
   const routeContextSuggestions = useMemo(
     () => buildRouteContextSuggestions(routeStops, day?.areas, { limit: 3, maxDistanceKm: 1.5 }),
     [routeStops, day?.areas],
@@ -2093,18 +2099,41 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               </button>
             </p>
           )}
-          <div className="mt-1 flex gap-2">
-            {routeUrl && (
+          {(routeOrigin || routeDestination) && (
+            <p className="text-xs text-parranda-ink/65">
+              {routeOrigin && `${t("Start", "Start")}: ${routeAnchorCoords ? t("din valda position", "your chosen location") : String(publishedStart?.label || t("kartans startpunkt", "map start point"))}`}
+              {routeOrigin && routeDestination ? " · " : ""}
+              {routeDestination && `${t("Slut", "Finish")}: ${routeAnchorCoords ? t("din valda position", "your chosen location") : String(publishedEnd?.label || t("kartans slutpunkt", "map end point"))}`}
+            </p>
+          )}
+          <p className="text-xs leading-relaxed text-parranda-ink/65">
+            {t("Avstånd och gångtider är uppskattningar. Google Maps beräknar gångvägen när du öppnar rutten.", "Distances and walking times are estimates. Google Maps calculates the walking path when you open the route.")}
+          </p>
+          {routeUrls.length > 1 && (
+            <p className="text-xs leading-relaxed text-parranda-ink/65">
+              {t("Rutten är uppdelad för att alla stopp ska följa med även på mobil. Öppna delarna i ordning; nästa del börjar där den förra slutar.", "The route is split to include every stop on mobile too. Open the parts in order; each starts where the previous part ends.")}
+            </p>
+          )}
+          {routeUrls.length === 0 && (
+            <p className="text-xs text-parranda-ink/65">
+              {t("Hela rutten kan inte öppnas i Maps. Öppna platserna var för sig där kartlänk finns.", "The whole route cannot be opened in Maps. Open places individually where a map link is available.")}
+            </p>
+          )}
+          <div className="mt-1 flex flex-wrap gap-2">
+            {routeUrls.map((routeUrl, part) => (
               <a
+                key={routeUrl + part}
                 href={routeUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex min-h-12 flex-1 items-center justify-center rounded-parranda-btn bg-parranda-terracotta px-5 text-sm font-bold text-white shadow-sm transition hover:brightness-110 sm:flex-none sm:px-6"
+                className="inline-flex min-h-12 flex-1 basis-full items-center justify-center rounded-parranda-btn bg-parranda-terracotta px-5 text-sm font-bold text-white shadow-sm transition hover:brightness-110 sm:basis-auto sm:flex-none sm:px-6"
               >
-                {t("Öppna rutten i Maps", "Open route in Maps")}
+                {routeUrls.length === 1
+                  ? t("Öppna rutten i Maps", "Open route in Maps")
+                  : t(`Öppna del ${part + 1} av ${routeUrls.length} i Maps`, `Open part ${part + 1} of ${routeUrls.length} in Maps`)}
                 <span aria-hidden="true" className="ml-2">↗</span>
               </a>
-            )}
+            ))}
             <button
               type="button"
               onClick={saveDay}

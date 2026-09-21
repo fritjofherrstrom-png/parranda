@@ -28,6 +28,14 @@ export declare function mapsWalkingRouteUrl(
   },
 ): string | null;
 
+export declare function mapsWalkingRouteUrls(
+  stops: Array<{ lat?: number; lng?: number }> | null | undefined,
+  options?: {
+    origin?: { lat?: number; lng?: number } | null;
+    destination?: { lat?: number; lng?: number } | null;
+  },
+): string[];
+
 export declare function dayStops(
   day: { areas?: Array<{ stops?: MapStop[] }> } | null | undefined,
 ): MapStop[];

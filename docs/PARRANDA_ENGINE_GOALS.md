@@ -251,6 +251,12 @@ licensed real sources and conservative entity resolution.
 
 ## Current roadmap
 
+The existing navigation handoff remains useful while network-aware selection is
+developed: modern Planner exports the published start, all stops and finish to
+Google Maps walking links, split into mobile-safe parts without dropping stops.
+Distances/times remain explicitly estimated; external Maps navigation does not
+validate Parranda's internal route selection. See `GOOGLE_MAPS_WALKING_HANDOFF.md`.
+
 The candidate reservoir, role selection, Planner bridges, event candidates,
 source qualification and operator approval lifecycle have shipped. Do not use
 the old #244–#249 migration sequence as current work.
