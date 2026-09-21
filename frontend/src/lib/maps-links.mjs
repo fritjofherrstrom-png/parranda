@@ -45,48 +45,24 @@ function uniqueText(values) {
   });
 }
 
-// The consumer Maps directions URL supports a limited number of waypoints, so a
-// long day is sampled down (keeping first + last) rather than truncated.
-const MAX_WAYPOINTS = 8; // origin + 8 waypoints + destination = 10 stops
+// Google documents at most three intermediate waypoints on mobile browsers.
+// Use that portable limit on every device; never sample away published stops.
+// https://developers.google.com/maps/documentation/urls/get-started#directions-action
+const MAX_WAYPOINTS = 3;
 
 function validCoord(value) {
-  return value && Number.isFinite(value.lat) && Number.isFinite(value.lng);
+  return value && Number.isFinite(value.lat) && Math.abs(value.lat) <= 90
+    && Number.isFinite(value.lng) && Math.abs(value.lng) <= 180;
 }
 
 function sameCoord(a, b) {
   return validCoord(a) && validCoord(b) && a.lat === b.lat && a.lng === b.lng;
 }
 
-function sampleWaypoints(points) {
-  if (points.length <= MAX_WAYPOINTS) return points;
-  const first = points[0];
-  const last = points[points.length - 1];
-  const middle = points.slice(1, -1);
-  const middleLimit = MAX_WAYPOINTS - 2;
-  const step = middle.length / middleLimit;
-  const sampled = Array.from({ length: middleLimit }, (_, index) => middle[Math.floor(index * step)]);
-  return [first, ...sampled, last];
-}
-
-// A walking-directions URL across the day's stops in visit order. A trusted
-// explicit origin/destination may frame the stop sequence (near-me uses the
-// same anchor for both), while the default path remains first stop -> last stop.
-export function mapsWalkingRouteUrl(stops, options = {}) {
-  const pts = (Array.isArray(stops) ? stops : []).filter(
-    (s) => validCoord(s),
-  );
-  const explicitOrigin = validCoord(options.origin) ? options.origin : null;
-  const explicitDestination = validCoord(options.destination) ? options.destination : null;
-  if ((!explicitOrigin || !explicitDestination) && pts.length < 2) return null;
-  if (explicitOrigin && explicitDestination && pts.length < 1) return null;
-
-  const origin = explicitOrigin ?? pts[0];
-  const destination = explicitDestination ?? pts[pts.length - 1];
-  const stopWaypoints = pts.slice(explicitOrigin ? 0 : 1, explicitDestination ? pts.length : -1);
-  const waypoints = sampleWaypoints(
-    stopWaypoints.filter((point) => !sameCoord(point, origin) && !sameCoord(point, destination)),
-  );
-  if (sameCoord(origin, destination) && waypoints.length === 0) return null;
+function walkingUrl(points) {
+  const origin = points[0];
+  const destination = points[points.length - 1];
+  const waypoints = points.slice(1, -1);
   const params = new URLSearchParams();
   params.set("api", "1");
   params.set("origin", `${origin.lat},${origin.lng}`);
@@ -94,6 +70,34 @@ export function mapsWalkingRouteUrl(stops, options = {}) {
   if (waypoints.length) params.set("waypoints", waypoints.map((w) => `${w.lat},${w.lng}`).join("|"));
   params.set("travelmode", "walking");
   return `${MAPS}/dir/?${params.toString()}`;
+}
+
+// Every published stop must be locatable. Parts share their boundary point and
+// preserve intermediate revisits and woven events. Adjacent identical points
+// need no walking leg. A typed-place discovery anchor is not an implicit start;
+// callers pass the published near-me anchor explicitly when appropriate.
+export function mapsWalkingRouteUrls(stops, options = {}) {
+  if (!Array.isArray(stops) || stops.length === 0 || !stops.every(validCoord)) return [];
+  if (options.origin != null && !validCoord(options.origin)) return [];
+  if (options.destination != null && !validCoord(options.destination)) return [];
+  const sequence = [
+    ...(options.origin ? [options.origin] : []),
+    ...stops,
+    ...(options.destination ? [options.destination] : []),
+  ];
+  const points = sequence.filter((point, i) => i === 0 || !sameCoord(point, sequence[i - 1]));
+  const urls = [];
+  for (let i = 0; i < points.length - 1; i += MAX_WAYPOINTS + 1) {
+    urls.push(walkingUrl(points.slice(i, i + MAX_WAYPOINTS + 2)));
+  }
+  return urls;
+}
+
+// Compatibility helper for callers that can present exactly one link. Never
+// return a partial route under a whole-route label.
+export function mapsWalkingRouteUrl(stops, options = {}) {
+  const urls = mapsWalkingRouteUrls(stops, options);
+  return urls.length === 1 ? urls[0] : null;
 }
 
 // All day stops in visit order (districts flattened, order preserved).

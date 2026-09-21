@@ -200,7 +200,7 @@ async function buildComponent() {
 /**
  * @returns {Promise<{ window, document, clock, fetchMock, container, unmount, act }>}
  */
-export async function mountPlanner({ url = "http://localhost/anywhere?lang=en", storage = {} } = {}) {
+export async function mountPlanner({ url = "http://localhost/anywhere?lang=en", storage = {}, sessionStorage = {} } = {}) {
   const code = await buildComponent();
   bundleGeneration += 1;
 
@@ -212,6 +212,9 @@ export async function mountPlanner({ url = "http://localhost/anywhere?lang=en", 
 
   for (const [key, value] of Object.entries(storage)) {
     window.localStorage.setItem(key, JSON.stringify(value));
+  }
+  for (const [key, value] of Object.entries(sessionStorage)) {
+    window.sessionStorage.setItem(key, JSON.stringify(value));
   }
 
   // The decision module is a global side-effect script in the server bundle.
@@ -313,4 +316,3 @@ export async function mountPlanner({ url = "http://localhost/anywhere?lang=en", 
     },
   };
 }
-

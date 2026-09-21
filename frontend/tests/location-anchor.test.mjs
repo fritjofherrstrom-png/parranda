@@ -78,7 +78,9 @@ test("the planner consumes the handoff and never re-prompts on arrival", () => {
 
 test("the trusted anchor stays memory-only and frames Maps without entering persistence", () => {
   assert.match(plannerSource, /setRouteAnchorCoords\(anchor\.coords \?\? null\)/);
-  assert.match(plannerSource, /origin: routeAnchorCoords, destination: routeAnchorCoords/);
+  assert.match(plannerSource, /routeOrigin = routeAnchorCoords \?\? publishedStart/);
+  assert.match(plannerSource, /routeDestination = routeAnchorCoords \?\? publishedEnd/);
+  assert.match(plannerSource, /origin: routeOrigin, destination: routeDestination/);
   assert.doesNotMatch(plannerSource, /inputs:\s*\{[^}]*routeAnchorCoords/);
   assert.doesNotMatch(plannerSource, /writeLS\([^)]*routeAnchorCoords/);
 });

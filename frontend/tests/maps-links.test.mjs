@@ -6,6 +6,44 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mapsPlaceUrl, mapsWalkingRouteUrl, dayStops, primaryRouteStops } from "../src/lib/maps-links.mjs";
+import * as maps from "../src/lib/maps-links.mjs";
+
+function coordinatesInLink(link) {
+  const params = new URL(link).searchParams;
+  assert.equal(params.get('api'), '1');
+  assert.equal(params.get('travelmode'), 'walking');
+  const waypoints = params.get('waypoints')?.split('|') ?? [];
+  assert.ok(waypoints.length <= 3, 'each part fits the mobile-browser waypoint limit');
+  return [params.get('origin'), ...waypoints, params.get('destination')];
+}
+
+test('a long walking handoff preserves every stop in mobile-safe parts with shared endpoints', () => {
+  const stops = Array.from({ length: 20 }, (_, i) => ({ lat: 50 + i / 100, lng: 10 + i / 100 }));
+  const links = maps.mapsWalkingRouteUrls(stops);
+  const points = links.flatMap((link, i) => coordinatesInLink(link).slice(i ? 1 : 0));
+  assert.deepEqual(points, stops.map(s => `${s.lat},${s.lng}`));
+  assert.equal(mapsWalkingRouteUrl(stops), null, 'a single URL must not silently drop stops');
+});
+
+test('segmentation preserves a near-me loop, woven stop and intermediate revisits', () => {
+  const anchor = { lat: 50, lng: 10 };
+  const stops = [
+    { lat: 50.01, lng: 10.01 }, anchor,
+    { lat: 50.02, lng: 10.02, candidate_kind: 'live_event' },
+    { lat: 50.03, lng: 10.03 }, { lat: 50.04, lng: 10.04 },
+  ];
+  const links = maps.mapsWalkingRouteUrls(stops, { origin: anchor, destination: anchor });
+  assert.deepEqual(links.flatMap((link, i) => coordinatesInLink(link).slice(i ? 1 : 0)),
+    [anchor, ...stops, anchor].map(s => `${s.lat},${s.lng}`));
+});
+
+test('an incomplete or invalid route cannot be presented as a complete Maps handoff', () => {
+  for (const invalid of [{}, { lat: 91, lng: 10 }, { lat: 50, lng: 181 }, { lat: NaN, lng: 10 }]) {
+    const stops = [{ lat: 50, lng: 10 }, invalid, { lat: 50.1, lng: 10.1 }];
+    assert.equal(mapsWalkingRouteUrl(stops), null);
+    assert.deepEqual(maps.mapsWalkingRouteUrls(stops), []);
+  }
+});
 
 test("mapsPlaceUrl searches for a named real place in context and keeps a coordinate fallback", () => {
   const named = new URL(
@@ -89,25 +127,18 @@ test("an anchored one-stop route stays useful while empty or anchor-only routes 
   assert.equal(mapsWalkingRouteUrl([anchor], { origin: anchor, destination: anchor }), null);
 });
 
-test("a long day samples down to <= 8 waypoints but keeps first + last", () => {
-  const stops = Array.from({ length: 20 }, (_, i) => ({ lat: i, lng: i }));
-  const u = new URL(mapsWalkingRouteUrl(stops));
-  assert.equal(u.searchParams.get("origin"), "0,0");
-  assert.equal(u.searchParams.get("destination"), "19,19");
-  const waypoints = u.searchParams.get("waypoints").split("|");
-  assert.ok(waypoints.length <= 8, "waypoints capped for the consumer Maps URL");
+test("five points fit one portable link; six split with no gaps", () => {
+  const stops = Array.from({ length: 6 }, (_, i) => ({ lat: i, lng: i }));
+  assert.deepEqual(coordinatesInLink(mapsWalkingRouteUrl(stops.slice(0, 5))), ['0,0', '1,1', '2,2', '3,3', '4,4']);
+  const links = maps.mapsWalkingRouteUrls(stops);
+  assert.equal(links.length, 2);
+  assert.deepEqual(coordinatesInLink(links[1]), ['4,4', '5,5']);
 });
 
-test("an anchored long day also respects the consumer waypoint cap", () => {
-  const stops = Array.from({ length: 20 }, (_, i) => ({ lat: 59 + i / 100, lng: 18 + i / 100 }));
-  const anchor = { lat: 59.3293, lng: 18.0686 };
-  const u = new URL(mapsWalkingRouteUrl(stops, { origin: anchor, destination: anchor }));
-  assert.equal(u.searchParams.get("origin"), "59.3293,18.0686");
-  assert.equal(u.searchParams.get("destination"), "59.3293,18.0686");
-  const waypoints = u.searchParams.get("waypoints").split("|");
-  assert.ok(waypoints.length <= 8);
-  assert.equal(waypoints[0], "59,18");
-  assert.equal(waypoints[waypoints.length - 1], "59.19,18.19");
+test("adjacent shared coordinates add no leg but nonadjacent return visits survive", () => {
+  const a = { lat: 1, lng: 1 }, b = { lat: 2, lng: 2 };
+  assert.deepEqual(coordinatesInLink(mapsWalkingRouteUrl([a, a, b, a], { origin: a, destination: a })), ['1,1', '2,2', '1,1']);
+  assert.deepEqual(maps.mapsWalkingRouteUrls([a, b], { origin: { lat: 91, lng: 0 } }), []);
 });
 
 test("dayStops flattens districts in visit order, coordless stops included as-is for filtering downstream", () => {
