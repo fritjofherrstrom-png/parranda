@@ -213,7 +213,9 @@ function mapLocalizedEventApiRecord(record, { timezone, sourceLanguage } = {}) {
     if (normalizeSourceEventDate(occurrence?.date) !== startsOn) return null;
     const scheduledStart = normalizeClock(occurrence.start_time);
     const scheduledEnd = normalizeClock(occurrence.end_time);
-    if ((occurrence.start_time != null && !scheduledStart) ||
+    if ((record.start_time != null && !localStart) ||
+        (record.end_time != null && !localEnd) ||
+        (occurrence.start_time != null && !scheduledStart) ||
         (occurrence.end_time != null && !scheduledEnd)) return null;
     if ((localStart && scheduledStart && localStart !== scheduledStart) ||
         (localEnd && scheduledEnd && localEnd !== scheduledEnd)) return null;
@@ -327,7 +329,7 @@ function normalizeCoordinates(location) {
 }
 
 function normalizeClock(value) {
-  const match = String(value || "").trim().match(/^(\d{2}):(\d{2})(?::\d{2})?$/);
+  const match = String(value || "").trim().match(/^(\d{2}):(\d{2})(?::([0-5]\d))?$/);
   if (!match || Number(match[1]) > 23 || Number(match[2]) > 59) return null;
   return `${match[1]}:${match[2]}`;
 }

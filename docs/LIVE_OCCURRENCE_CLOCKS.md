@@ -16,6 +16,13 @@ ranking change or public-payload trust is introduced. Date-only records and
 existing range semantics remain unchanged. Complex schedules and partially
 specified clocks are not newly supported by this patch.
 
+Review hardening also validates optional seconds (`00`–`59`) before the
+existing minute-precision projection. In a singleton schedule, a malformed
+non-null clock in either the envelope or occurrence rejects the record; a valid
+scheduled clock must not silently hide an invalid flat clock. Null/missing
+clocks remain distinct from malformed values. This closes a legacy clock
+parser weakness exposed by the newly supported schedule path.
+
 The persistent event cache is `agnostic-events-v4`: v3 normalized all-day
 results must not mask the correction. The existing 20-minute TTL, one bounded
 page (configured 100 records in the observed source, adapter max 200), reviewed
