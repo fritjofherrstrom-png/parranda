@@ -108,6 +108,60 @@ test("provider collection is bounded and returns explicit healthy outcomes", asy
   assert.equal(new URL(buildEventsUrl(ENDPOINT, 12)).searchParams.get("size"), "12");
 });
 
+test("one explicit scheduled occurrence retains its source-local clock instead of becoming all-day", () => {
+  const event = mapLocalizedEventApiRecord(fixtureRecord({
+    schedule: { range: null, dates: [{ date: "2026-07-20", start_time: "18:00", end_time: "23:00" }] },
+  }), { timezone: TIMEZONE, sourceLanguage: "sv" });
+  assert.equal(event.starts_at, "2026-07-20T16:00:00.000Z");
+  assert.equal(event.ends_at, "2026-07-20T21:00:00.000Z");
+  assert.equal(event.time_window.kind, "continuous");
+  assert.equal(event.id, "event-1");
+  assert.equal(event.source_url, "https://organizer.example/evening");
+});
+
+test("a scheduled occurrence uses the reviewed timezone, including winter offset", () => {
+  const event = mapLocalizedEventApiRecord(fixtureRecord({
+    start_date: "2026-12-20", end_date: "2026-12-20",
+    schedule: { range: null, dates: [{ date: "2026-12-20", start_time: "18:00", end_time: "23:00" }] },
+  }), { timezone: TIMEZONE, sourceLanguage: "sv" });
+  assert.equal(event.starts_at, "2026-12-20T17:00:00.000Z");
+});
+
+test("single-day schedules fail closed on conflicting dates, clocks or multiple sessions", () => {
+  for (const overrides of [
+    { schedule: { range: null, dates: [{ date: "2026-07-21", start_time: "18:00", end_time: "23:00" }] } },
+    { schedule: { range: null, dates: [{ date: "2026-07-20", start_time: "25:00", end_time: "23:00" }] } },
+    { schedule: { range: null, dates: [{ date: "2026-07-20", start_time: "23:00", end_time: "01:00" }] } },
+    { start_time: "19:00", schedule: { range: null, dates: [{ date: "2026-07-20", start_time: "18:00", end_time: "23:00" }] } },
+    { schedule: { range: null, dates: [{ date: "2026-07-20", start_time: "18:00", end_time: "19:00" }, { date: "2026-07-20", start_time: "21:00", end_time: "23:00" }] } },
+  ]) assert.equal(mapLocalizedEventApiRecord(fixtureRecord(overrides), { timezone: TIMEZONE, sourceLanguage: "sv" }), null);
+});
+
+test("a singleton schedule rejects malformed clocks instead of repairing or hiding them", () => {
+  const schedule = { range: null, dates: [{ date: "2026-07-20", start_time: "18:00", end_time: "23:00" }] };
+  for (const field of ["start_time", "end_time"]) {
+    for (const invalid of ["18:00:60", "18:00:99", "25:00", "18:60", "invalid", ""]) {
+      const occurrence = { ...schedule.dates[0], [field]: invalid };
+      assert.equal(mapLocalizedEventApiRecord(fixtureRecord({
+        schedule: { range: null, dates: [occurrence] },
+      }), { timezone: TIMEZONE, sourceLanguage: "sv" }), null, `scheduled ${field}: ${invalid}`);
+      assert.equal(mapLocalizedEventApiRecord(fixtureRecord({
+        [field]: invalid, schedule,
+      }), { timezone: TIMEZONE, sourceLanguage: "sv" }), null, `flat ${field}: ${invalid}`);
+    }
+  }
+  const valid = mapLocalizedEventApiRecord(fixtureRecord({
+    start_time: "18:00:00", end_time: "23:00:00", schedule,
+  }), { timezone: TIMEZONE, sourceLanguage: "sv" });
+  assert.equal(valid.starts_at, "2026-07-20T16:00:00.000Z");
+  assert.equal(valid.ends_at, "2026-07-20T21:00:00.000Z");
+  const lastSecond = mapLocalizedEventApiRecord(fixtureRecord({
+    schedule: { range: null, dates: [{ date: "2026-07-20", start_time: "18:00:59", end_time: "23:00:59" }] },
+  }), { timezone: TIMEZONE, sourceLanguage: "sv" });
+  assert.equal(lastSecond.starts_at, valid.starts_at, "valid seconds keep the existing minute precision");
+  assert.equal(lastSecond.ends_at, valid.ends_at);
+});
+
 test("provider fails closed on cross-origin response URLs and hanging response bodies", async () => {
   const redirected = createLocalizedEventsApiProvider({
     endpoint: ENDPOINT,

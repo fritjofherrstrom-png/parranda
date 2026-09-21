@@ -380,6 +380,35 @@ test("a bounded all-day occurrence is valid this-week evidence without becoming 
   assert.equal(out.acquisition.source_health.result, "events_found");
 });
 
+test("scheduled API clocks reach today's Live bucket, dedupe, and expire after their real end", async () => {
+  const registry = [{
+    id: "scheduled-api", label: "Official calendar", adapter: "localized_events_api",
+    endpoint: "https://events.example/api/events/", bbox: [24.8, 60.0, 25.1, 60.3],
+    timezone: "Europe/Helsinki", source_language: "en", source_tier: "official",
+    confidence: "medium", source_family: "official_tourism_open_api",
+    source_identity: "events.example", license: "CC-BY 4.0", status: "active",
+  }];
+  const row = {
+    id: "scheduled-gig", title: { en: "Evening concert" },
+    external_website_url: "https://organizer.example/concert", venue_name: "Quay stage",
+    location: { latitude: 60.171, longitude: 24.941 },
+    start_date: "2026-06-28", end_date: "2026-06-28",
+    schedule: { range: null, dates: [{ date: "2026-06-28", start_time: "19:00", end_time: "21:00" }] },
+    categories: [{ title: "Music", slug: "music" }],
+  };
+  const collect = (now) => collectAnchorEvents({ anchor: HELSINKI, now, registry,
+    fetcher: async (url) => ({ ok: true, url: String(url), text: async () => JSON.stringify({ results: [row, row] }) }),
+  });
+  const before = await collect(NOW);
+  assert.equal(before.tonight.length, 1);
+  assert.equal(before.tonight[0].starts_at, "2026-06-28T16:00:00.000Z");
+  assert.equal(before.tonight[0].source_url, row.external_website_url);
+  assert.deepEqual(before.this_week, []);
+  const after = await collect("2026-06-28T18:01:00Z");
+  assert.deepEqual(after.tonight, []);
+  assert.deepEqual(after.this_week, []);
+});
+
 test("trusted venue resolution can recover one source-backed mapless occurrence", async () => {
   const registry = [{
     id: "localized-api",

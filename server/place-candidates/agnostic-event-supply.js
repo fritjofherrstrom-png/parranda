@@ -1323,7 +1323,9 @@ function firstString(...values) {
 
 const EVENT_CACHE_TTL_MS = 20 * 60 * 1000; // 20 min — time-sensitive, but reusable
 const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a route
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v3";
+// v4 excludes results normalized before single-occurrence schedule clocks
+// were preserved; those rows otherwise survive as misleading all-day events.
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v4";
 
 function shouldCacheEventSupplyResult(result) {
   if (!result || result.coverage !== "covered") return false;
