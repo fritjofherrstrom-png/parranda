@@ -108,6 +108,35 @@ test("provider collection is bounded and returns explicit healthy outcomes", asy
   assert.equal(new URL(buildEventsUrl(ENDPOINT, 12)).searchParams.get("size"), "12");
 });
 
+test("one explicit scheduled occurrence retains its source-local clock instead of becoming all-day", () => {
+  const event = mapLocalizedEventApiRecord(fixtureRecord({
+    schedule: { range: null, dates: [{ date: "2026-07-20", start_time: "18:00", end_time: "23:00" }] },
+  }), { timezone: TIMEZONE, sourceLanguage: "sv" });
+  assert.equal(event.starts_at, "2026-07-20T16:00:00.000Z");
+  assert.equal(event.ends_at, "2026-07-20T21:00:00.000Z");
+  assert.equal(event.time_window.kind, "continuous");
+  assert.equal(event.id, "event-1");
+  assert.equal(event.source_url, "https://organizer.example/evening");
+});
+
+test("a scheduled occurrence uses the reviewed timezone, including winter offset", () => {
+  const event = mapLocalizedEventApiRecord(fixtureRecord({
+    start_date: "2026-12-20", end_date: "2026-12-20",
+    schedule: { range: null, dates: [{ date: "2026-12-20", start_time: "18:00", end_time: "23:00" }] },
+  }), { timezone: TIMEZONE, sourceLanguage: "sv" });
+  assert.equal(event.starts_at, "2026-12-20T17:00:00.000Z");
+});
+
+test("single-day schedules fail closed on conflicting dates, clocks or multiple sessions", () => {
+  for (const overrides of [
+    { schedule: { range: null, dates: [{ date: "2026-07-21", start_time: "18:00", end_time: "23:00" }] } },
+    { schedule: { range: null, dates: [{ date: "2026-07-20", start_time: "25:00", end_time: "23:00" }] } },
+    { schedule: { range: null, dates: [{ date: "2026-07-20", start_time: "23:00", end_time: "01:00" }] } },
+    { start_time: "19:00", schedule: { range: null, dates: [{ date: "2026-07-20", start_time: "18:00", end_time: "23:00" }] } },
+    { schedule: { range: null, dates: [{ date: "2026-07-20", start_time: "18:00", end_time: "19:00" }, { date: "2026-07-20", start_time: "21:00", end_time: "23:00" }] } },
+  ]) assert.equal(mapLocalizedEventApiRecord(fixtureRecord(overrides), { timezone: TIMEZONE, sourceLanguage: "sv" }), null);
+});
+
 test("provider fails closed on cross-origin response URLs and hanging response bodies", async () => {
   const redirected = createLocalizedEventsApiProvider({
     endpoint: ENDPOINT,

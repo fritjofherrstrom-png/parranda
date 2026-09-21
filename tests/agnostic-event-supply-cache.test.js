@@ -253,6 +253,13 @@ test("one neutral warm cache reranks for different preferences without refetchin
     assert.equal(culture.tonight[0].id, "a-concert");
     assert.equal(secondHand.tonight[0].id, "z-loppis");
     assert.equal(fetchCount, 1, "preference changes rerank cached evidence instead of recollecting providers");
+    assert.ok(fs.existsSync(path.join(cacheDir, "agnostic-events-v4")), "persist normalized v4 semantics separately from old all-day results");
+    const restarted = resolveDefaultEventSupply({
+      PARRANDA_AGNOSTIC_EVENTS: "enabled", PARRANDA_EVENT_FEEDS: FEEDS_ENV,
+      PARRANDA_CACHE_DIR: cacheDir,
+    });
+    assert.deepEqual(await restarted({ ...request, preferences: ["culture"] }), culture);
+    assert.equal(fetchCount, 1, "a fresh supply instance reads the persisted result without acquisition");
   } finally {
     global.fetch = ORIGINAL_FETCH;
     fs.rmSync(cacheDir, { recursive: true, force: true });

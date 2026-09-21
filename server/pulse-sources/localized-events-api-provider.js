@@ -197,10 +197,30 @@ function mapLocalizedEventApiRecord(record, { timezone, sourceLanguage } = {}) {
   const title = localizedString(record.title, sourceLanguage);
   const startsOn = normalizeSourceEventDate(record.start_date);
   const endsOn = normalizeSourceEventDate(record.end_date) || startsOn;
-  const localStart = normalizeClock(record.start_time);
-  const localEnd = normalizeClock(record.end_time);
+  let localStart = normalizeClock(record.start_time);
+  let localEnd = normalizeClock(record.end_time);
   const coordinates = normalizeCoordinates(record.location);
   if (!id || !title || !startsOn) return null;
+
+  // The reviewed wire shape also carries clocks inside schedule.dates. Only
+  // one unambiguous same-day occurrence is translated here: never borrow a
+  // clock from another date, bridge multiple sessions, or guess an overnight
+  // end date. Recurring/range schedules retain their existing date semantics.
+  if (startsOn === endsOn && record.schedule?.range == null &&
+      Array.isArray(record.schedule?.dates) && record.schedule.dates.length) {
+    if (record.schedule.dates.length !== 1) return null;
+    const occurrence = record.schedule.dates[0];
+    if (normalizeSourceEventDate(occurrence?.date) !== startsOn) return null;
+    const scheduledStart = normalizeClock(occurrence.start_time);
+    const scheduledEnd = normalizeClock(occurrence.end_time);
+    if ((occurrence.start_time != null && !scheduledStart) ||
+        (occurrence.end_time != null && !scheduledEnd)) return null;
+    if ((localStart && scheduledStart && localStart !== scheduledStart) ||
+        (localEnd && scheduledEnd && localEnd !== scheduledEnd)) return null;
+    localStart = scheduledStart || localStart;
+    localEnd = scheduledEnd || localEnd;
+    if (localStart && localEnd && localEnd <= localStart) return null;
+  }
 
   const time = normalizeEventTime({
     startsOn,
@@ -209,6 +229,8 @@ function mapLocalizedEventApiRecord(record, { timezone, sourceLanguage } = {}) {
     localEnd,
     timezone,
   });
+  if (startsOn === endsOn && localStart && localEnd &&
+      time.time_window.kind !== "continuous") return null;
   return compact({
     id,
     title,
