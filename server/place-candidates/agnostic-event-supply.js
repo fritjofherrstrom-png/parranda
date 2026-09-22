@@ -52,6 +52,7 @@ const {
 const { classifyCulturalSalience } = require("../pulse-engine/cultural-salience");
 const { resolveEventVenueGeometry } = require("./event-venue-resolution");
 const { spatialScopeCacheKey } = require("./spatial-scope");
+const { selectedDateBucket, sourceWindowStart } = require("./event-calendar-date");
 const {
   normalizeSourceDiscoveryHealth,
   pendingSourceDiscoveryHealth,
@@ -621,11 +622,16 @@ function eventRankingScore(view) {
   return Number(view?.salience_score || 0) + Number(view?.preference_score || 0);
 }
 
-function rankCollectedEventsForPreferences(collected, preferences = [], scope = null) {
+function rankCollectedEventsForPreferences(collected, preferences = [], scope = null, now = null) {
   if (!collected || typeof collected !== "object") return collected;
   const pool = collected._rankable_events;
-  const tonightPool = Array.isArray(pool?.tonight) ? pool.tonight : collected.tonight;
-  const thisWeekPool = Array.isArray(pool?.this_week) ? pool.this_week : collected.this_week;
+  let tonightPool = Array.isArray(pool?.tonight) ? pool.tonight : collected.tonight;
+  let thisWeekPool = Array.isArray(pool?.this_week) ? pool.this_week : collected.this_week;
+  if (collected.selected_date && now) {
+    const events = [...(tonightPool || []), ...(thisWeekPool || [])];
+    tonightPool = events.filter(event => selectedDateBucket(event, collected.selected_date, now) === "tonight");
+    thisWeekPool = events.filter(event => selectedDateBucket(event, collected.selected_date, now) === "this_week");
+  }
   const { _rankable_events: _internalPool, ...publicResult } = collected;
   const tonightSurface = buildEventBucketSurface(
     filterEventsForLiveScope(tonightPool, scope),
@@ -637,6 +643,7 @@ function rankCollectedEventsForPreferences(collected, preferences = [], scope = 
   );
   const tonight = tonightSurface.highlights;
   const thisWeek = thisWeekSurface.highlights;
+  const projectedCount = (tonightPool?.length || 0) + (thisWeekPool?.length || 0);
   const acquisition = publicResult.acquisition && typeof publicResult.acquisition === "object"
     ? {
         ...publicResult.acquisition,
@@ -644,6 +651,11 @@ function rankCollectedEventsForPreferences(collected, preferences = [], scope = 
           ? {
               source_health: {
                 ...publicResult.acquisition.source_health,
+                ...(collected.selected_date && now ? {
+                  accepted_event_count: projectedCount,
+                  result: projectedCount > 0 ? "events_found" : publicResult.acquisition.source_health.responding_source_count > 0 ? "empty" : "unknown",
+                  reasons: (publicResult.acquisition.source_health.reasons || []).filter(reason => reason !== "bounded_events_found" || projectedCount > 0),
+                } : {}),
                 surfaced_event_count: tonight.length + thisWeek.length,
               },
             }
@@ -730,6 +742,7 @@ async function collectAnchorEvents({
   sourceAnchors = [],
   now = null,
   date = null,
+  selectedDate = null,
   preferences = [],
   scope = null,
   registry,
@@ -766,6 +779,7 @@ async function collectAnchorEvents({
   if (sourcePlan.length === 0) {
     return {
       coverage: "uncovered",
+      ...(selectedDate ? { selected_date: selectedDate } : {}),
       feed: null,
       feeds: [],
       tonight: [],
@@ -775,9 +789,11 @@ async function collectAnchorEvents({
     };
   }
 
-  const nowDate = now ? new Date(now) : null;
-  // Window each source from NOW forward so a late-evening request does not spend
-  // its bounded page on already-past rows. All selected sources run concurrently;
+  const nowDate = now ? new Date(now) : selectedDate ? new Date() : null;
+  // Window date-aware sources from the selected local day, never before NOW.
+  // Normalization/approval still use the real clock. Sources without a date
+  // filter retain their bounded page; final event-calendar gates are authoritative.
+  // All selected sources run concurrently;
   // the slowest timeout is the upper bound, not source_count × timeout.
   const startParam = date || (nowDate ? nowDate.toISOString() : null);
   const collectedSources = await Promise.all(
@@ -786,7 +802,8 @@ async function collectAnchorEvents({
         source,
         anchor,
         nowDate,
-        startParam,
+        startParam: selectedDate ? sourceWindowStart(selectedDate, source.timezone, nowDate) : startParam,
+        selectedDate,
         fetcher,
         radiusM: effectiveRadiusM,
         timeoutMs,
@@ -860,7 +877,11 @@ async function collectAnchorEvents({
           : isEphemeralHappening(event, nowDate),
     });
     if (!view) continue;
-    if (TONIGHT_TIMING.has(event.timing_relevance)) {
+    if (selectedDate) {
+      const bucket = selectedDateBucket(view, selectedDate, nowDate);
+      if (bucket === "tonight") tonight.push(view);
+      else if (bucket === "this_week") thisWeek.push(view);
+    } else if (TONIGHT_TIMING.has(event.timing_relevance)) {
       tonight.push(view);
     } else if (
       (event.timing_relevance === "future" || event.time_window?.kind === "all_day") &&
@@ -889,6 +910,7 @@ async function collectAnchorEvents({
   });
   return {
     coverage: "covered",
+    ...(selectedDate ? { selected_date: selectedDate } : {}),
     feed: feeds[0] || null,
     feeds,
     tonight: rankedTonight,
@@ -1006,6 +1028,7 @@ async function collectEventSource({
   anchor,
   nowDate,
   startParam,
+  selectedDate,
   fetcher,
   radiusM,
   timeoutMs,
@@ -1018,6 +1041,13 @@ async function collectEventSource({
       anchor,
       radiusKm: Math.max(1, Math.round(radiusM / 1000)),
       windowDays: THIS_WEEK_HORIZON_DAYS,
+      // The global feed carries event-level (not region-level) timezones. One
+      // bounded page covers the possible UTC envelope; final calendar gates
+      // use each event's source timezone, never this acquisition padding.
+      ...(selectedDate ? {
+        windowStart: new Date(Math.max(new Date(`${selectedDate}T00:00:00Z`).getTime() - 14 * 3600000, nowDate.getTime())),
+        windowDays: 9,
+      } : {}),
       now: nowDate || undefined,
       fetcher: fetcher || undefined,
       timeoutMs: Math.max(1000, Math.floor(timeoutMs) || 15000),
@@ -1259,6 +1289,7 @@ function eventCacheKey(
   sourceIds = [],
   radiusM = DEFAULT_RADIUS_M,
   spatialScope = null,
+  selectedDate = null,
 ) {
   const lat = Number(anchor.lat).toFixed(2);
   const lng = Number(anchor.lng).toFixed(2);
@@ -1268,7 +1299,7 @@ function eventCacheKey(
     .sort()
     .join(",");
   const radius = Math.min(MAX_EVENT_COLLECTION_RADIUS_M, Math.max(100, Math.round(Number(radiusM) || DEFAULT_RADIUS_M)));
-  return `${lat},${lng}:${hour}:${radius}:${spatialScopeCacheKey(spatialScope)}:${sources}`;
+  return `${lat},${lng}:${hour}:${radius}:${spatialScopeCacheKey(spatialScope)}:${sources}:${selectedDate || "current"}`;
 }
 
 function sourceIdentityForUrl(value) {
@@ -1323,9 +1354,8 @@ function firstString(...values) {
 
 const EVENT_CACHE_TTL_MS = 20 * 60 * 1000; // 20 min — time-sensitive, but reusable
 const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a route
-// v4 excludes results normalized before single-occurrence schedule clocks
-// were preserved; those rows otherwise survive as misleading all-day events.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v4";
+// v5 separates selected-calendar-day results from older now-only buckets.
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v5";
 
 function shouldCacheEventSupplyResult(result) {
   if (!result || result.coverage !== "covered") return false;
@@ -1374,6 +1404,7 @@ function resolveDefaultEventSupply(
     placeContext = null,
     spatialScope = null,
     now,
+    selectedDate = null,
     preferences = [],
     radiusM,
     scope = null,
@@ -1437,6 +1468,7 @@ function resolveDefaultEventSupply(
     if (sourcePlan.length === 0) {
       return {
         coverage: "uncovered",
+        ...(selectedDate ? { selected_date: selectedDate } : {}),
         feed: null,
         feeds: [],
         tonight: [],
@@ -1458,14 +1490,16 @@ function resolveDefaultEventSupply(
       sourcePlan.map((source) => source.id),
       effectiveRadiusM,
       spatialScope,
+      selectedDate,
     );
     const cached = cache.peek(key);
-    if (cached) return rankCollectedEventsForPreferences(cached, preferences, scope);
+    if (cached) return rankCollectedEventsForPreferences(cached, preferences, scope, now);
     // Cold: warm out-of-band (long timeout, fire-and-forget), serve honest pending.
     cache.warm(key, () => collectEvents({
       anchor,
       sourceAnchors,
       now,
+      selectedDate,
       registry: requestRegistry,
       radiusM: effectiveRadiusM,
       timeoutMs: WARM_TIMEOUT_MS,
@@ -1480,6 +1514,7 @@ function resolveDefaultEventSupply(
     });
     return {
       coverage: "covered",
+      ...(selectedDate ? { selected_date: selectedDate } : {}),
       feed: descriptors[0] || null,
       feeds: descriptors,
       tonight: [],

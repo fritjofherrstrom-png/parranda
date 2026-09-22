@@ -117,6 +117,20 @@ test("without a key the same anchors return honest absence — never invented ev
   assert.deepEqual(out.tonight, []);
 });
 
+test('selected-day global acquisition stays one capped page with an offset-safe UTC envelope', async () => {
+  const calls = [];
+  const result = await collectAnchorEvents({ anchor: NEW_YORK, now: NOW,
+    selectedDate: '2026-07-09', globalKey: 'test-key', registry: [],
+    fetcher: fetcherFor(discoveryPayload({ lat: NEW_YORK.lat, lng: NEW_YORK.lng, timezone: 'America/New_York' }), calls) });
+  assert.equal(calls.length, 1);
+  const query = new URL(calls[0]).searchParams;
+  assert.equal(query.get('startDateTime'), '2026-07-08T10:00:00Z');
+  assert.equal(query.get('endDateTime'), '2026-07-17T10:00:00Z');
+  assert.equal(Number(query.get('size')), 40);
+  assert.deepEqual(result.tonight.map(x => x.id), ['tm-gig2']);
+  assert.equal(result.tonight[0].timing_relevance, 'future');
+});
+
 test("a municipal open feed and global provider are both collected when available", async () => {
   const HELSINKI = { lat: 60.17, lng: 24.94 };
   const log = [];

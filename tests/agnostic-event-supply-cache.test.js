@@ -240,7 +240,7 @@ test("one neutral warm cache reranks for different preferences without refetchin
       PARRANDA_EVENT_FEEDS: FEEDS_ENV,
       PARRANDA_CACHE_DIR: cacheDir,
     });
-    const request = { anchor: { lat: 60.17, lng: 24.94 }, now: "2026-06-28T12:00:00Z" };
+    const request = { anchor: { lat: 60.17, lng: 24.94 }, now: "2026-06-28T12:00:00Z", selectedDate: "2026-06-28" };
     const cold = await supply({ ...request, preferences: ["culture"] });
     assert.equal(cold.pending, true);
     let culture = cold;
@@ -253,13 +253,26 @@ test("one neutral warm cache reranks for different preferences without refetchin
     assert.equal(culture.tonight[0].id, "a-concert");
     assert.equal(secondHand.tonight[0].id, "z-loppis");
     assert.equal(fetchCount, 1, "preference changes rerank cached evidence instead of recollecting providers");
-    assert.ok(fs.existsSync(path.join(cacheDir, "agnostic-events-v4")), "persist normalized v4 semantics separately from old all-day results");
+    assert.ok(fs.existsSync(path.join(cacheDir, "agnostic-events-v5")), "persist selected-date semantics separately from old now-only results");
     const restarted = resolveDefaultEventSupply({
       PARRANDA_AGNOSTIC_EVENTS: "enabled", PARRANDA_EVENT_FEEDS: FEEDS_ENV,
       PARRANDA_CACHE_DIR: cacheDir,
     });
     assert.deepEqual(await restarted({ ...request, preferences: ["culture"] }), culture);
     assert.equal(fetchCount, 1, "a fresh supply instance reads the persisted result without acquisition");
+    const tomorrowRequest = { ...request, selectedDate: '2026-06-29' };
+    assert.equal((await restarted(tomorrowRequest)).pending, true, 'another date cannot consume today cache');
+    let tomorrow;
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+      tomorrow = await restarted(tomorrowRequest);
+      if (!tomorrow.pending) break;
+    }
+    assert.equal(tomorrow.pending, undefined);
+    assert.equal(tomorrow.selected_date, '2026-06-29');
+    assert.deepEqual(tomorrow.tonight, []);
+    assert.equal(fetchCount, 2, 'exactly one independent acquisition per date');
+    assert.deepEqual((await restarted({ ...request, preferences: ['culture'] })).tonight, culture.tonight, 'tomorrow never overwrites today');
   } finally {
     global.fetch = ORIGINAL_FETCH;
     fs.rmSync(cacheDir, { recursive: true, force: true });

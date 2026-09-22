@@ -31,6 +31,7 @@ import {
   acceptedLiveEventQuery,
   boundedRoutePoints,
   buildLiveEventQueryPayload,
+  liveDateLabel,
   type LiveEventScope,
 } from "../lib/live-event-query.mjs";
 import { mapsPlaceUrl, mapsWalkingRouteUrls, primaryRouteStops } from "../lib/maps-links.mjs";
@@ -176,6 +177,7 @@ interface LiveSourceHealth {
 }
 
 interface LiveEvents {
+  selected_date?: string;
   coverage?: string;
   pending?: boolean;
   feed?: { label?: string; license?: string } | null;
@@ -1219,6 +1221,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const structure: PlaceStructure | null = safeResponse?.place_structure ?? null;
   const day = structure?.district_day;
   const liveEvents: LiveEvents | null = safeResponse?.live_events ?? null;
+  const liveDayLabel = liveDateLabel(liveEvents?.selected_date, lang);
   const routeStops = useMemo(() => primaryRouteStops(safeResponse), [safeResponse]);
   const hasPrimaryRoute = routeStops.length > 0;
   const mapsPlaceContext = mode === "typed" ? classification?.placeLabel || typedPlaceLabel : null;
@@ -1282,6 +1285,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   );
 
   async function requestLiveSheetScope(nextScope: LiveEventScope) {
+    const queryIntentId = intentSequenceRef.current;
     setLiveQueryGeoHint(null);
     let nearMeCoords: { lat: number; lng: number } | null = null;
     if (nextScope === "near_me") {
@@ -1298,6 +1302,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       }
     }
 
+    if (queryIntentId !== intentSequenceRef.current) return;
     const payload = buildLiveEventQueryPayload({
       scope: nextScope,
       time: liveSheetTime === "week" ? "this_week" : "tonight",
@@ -1333,6 +1338,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           signal: controller.signal,
         });
         const body = await response.json();
+        if (controller.signal.aborted || queryIntentId !== intentSequenceRef.current) return;
         const accepted = response.ok ? acceptedLiveEventQuery(body) : null;
         if (!accepted) throw new Error("live_event_query_contract_rejected");
         setLiveQueryEvents(accepted as LiveEvents);
@@ -1527,6 +1533,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // exclude and pin unable to contradict each other: the newest action wins.
   const invalidateCommitmentIntent = () => {
     intentSequenceRef.current += 1;
+    liveQueryAbortRef.current?.abort();
+    liveQueryAbortRef.current = null;
+    setLiveQueryPending(false);
+    setLiveQueryEvents(null);
     retryGenerationRef.current += 1;
     retryInFlightRef.current = false;
     if (recomposeTimerRef.current) {
@@ -2396,7 +2406,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                   )}
                   {stop?.starts_at && (
                     <span className="rounded-full border border-parranda-accent bg-parranda-accent/15 px-2 py-0.5 text-xs font-bold text-parranda-accent">
-                      {eventTiming(stop, lang)}
+                      {eventTiming(stop, lang, undefined, liveEvents?.selected_date)}
                     </span>
                   )}
                 </p>
@@ -2678,10 +2688,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               route-extension presentation above. */}
           <p className="text-xs font-semibold uppercase tracking-wider text-parranda-ink/60">
             {mode === "near_me"
-              ? t("Just nu nära dig", "Now near you")
+              ? t("Live nära dig", "Live near you")
               : anchorLabel
-                ? t(`Just nu i ${anchorLabel}`, `Now in ${anchorLabel}`)
-                : t("Just nu här", "Now here")}
+                ? t(`Live i ${anchorLabel}`, `Live in ${anchorLabel}`)
+                : t("Live här", "Live here")}
+            {liveEvents?.selected_date ? ` · ${liveDayLabel}` : ""}
           </p>
 
           {showDay && dayflow?.weather?.headline && (
@@ -2720,7 +2731,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           )}
           {pulseState === "soft_empty" && (
             <p className="mt-2 text-sm text-parranda-ink/70">
-              {t("Inga listade händelser just nu — lugnt i kalendern.", "Nothing listed right now — a quiet calendar.")}
+              {t("Inga listade händelser för perioden — lugnt i kalendern.", "Nothing listed for this period — a quiet calendar.")}
             </p>
           )}
           {pulseState === "rejected_empty" && (
@@ -2739,12 +2750,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
           {pulseBuckets.tonight.length > 0 && (
             <div className="mt-3">
-              <p className="text-sm font-semibold text-parranda-ink">{t("Idag", "Today")}</p>
+              <p className="text-sm font-semibold text-parranda-ink">{liveDayLabel}</p>
               <ul className="mt-1 flex flex-col gap-1.5">
                 {pulseBuckets.tonight.slice(0, 4).map((ev: PulseEvent, i: number) => (
                   <li key={ev.id ?? i} className="text-sm text-parranda-ink/85">
                     <span className="font-medium">{ev.title}</span>
-                    {eventTiming(ev, lang) && <span className="text-parranda-ink/60"> · {eventTiming(ev, lang)}</span>}
+                    {eventTiming(ev, lang, undefined, liveEvents?.selected_date) && <span className="text-parranda-ink/60"> · {eventTiming(ev, lang, undefined, liveEvents?.selected_date)}</span>}
                     {ev.place && <span className="text-parranda-ink/60"> · {ev.place}</span>}
                     {ev.source_url && (
                       <span className="text-parranda-ink/50">
@@ -2764,7 +2775,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               from copy. */}
           {pulseBuckets.thisWeek.length > 0 && (
             <p className="mt-3 border-t border-parranda-ink/10 pt-3 text-sm text-parranda-ink/70">
-              <span className="font-semibold text-parranda-ink">{t("Senare i veckan", "Later this week")}</span>
+              <span className="font-semibold text-parranda-ink">{t("Följande 7 dagar", "Following 7 days")}</span>
               {" · "}
               {pulseBuckets.thisWeek.length}{" "}
               {pulseBuckets.thisWeek.length === 1 ? t("händelse listad", "more listed") : t("händelser listade", "more listed")}
@@ -2927,7 +2938,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                         (liveSheetTime === key ? "bg-parranda-ember/16 font-bold text-parranda-ink" : "text-parranda-ink/65")
                       }
                     >
-                      {key === "tonight" ? t("Idag", "Today") : t("Denna vecka", "This week")}
+                      {key === "tonight" ? liveDayLabel : t("Följande 7 dagar", "Following 7 days")}
                     </button>
                   ))}
                 </div>
@@ -2936,7 +2947,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               {/* The ACTIVE scope×time cell — heading, list or honest emptiness. */}
               <div className="mt-4 flex flex-col gap-2.5 border-t border-parranda-ink/10 pt-4">
                 <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-parranda-ink/55">
-                  {liveSheetTime === "tonight" ? t("Idag", "Today") : t("Senare i veckan", "Later this week")} · {scopePhrase}
+                  {liveSheetTime === "tonight" ? liveDayLabel : t("Följande 7 dagar", "Following 7 days")} · {scopePhrase}
                 </p>
                 {liveSheetScope !== "near_me" && liveSheetTime === "tonight" && split.woven.length > 0 && (
                   <p className="text-xs text-parranda-ink/60">
@@ -2976,7 +2987,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                         <ul className="flex flex-col gap-2.5">
                           {sheetEvents.map((ev: PulseEvent, i: number) => (
                             <li key={ev.id ?? i} className="flex items-baseline gap-3">
-                              <span className="min-w-[44px] shrink-0 text-xs font-extrabold text-parranda-clay">{eventTiming(ev, lang)}</span>
+                              <span className="min-w-[44px] shrink-0 text-xs font-extrabold text-parranda-clay">{eventTiming(ev, lang, undefined, sheetLiveEvents?.selected_date)}</span>
                               <span className="text-sm text-parranda-ink/90">
                                 <span className="font-bold">{ev.title}</span>
                                 {ev.place && <span className="text-parranda-ink/60"> · {ev.place}</span>}
@@ -3003,7 +3014,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                         <ul className="flex flex-col gap-2.5 border-t border-parranda-ink/10 pb-2 pt-3">
                           {sheetMoreEvents.map((ev: PulseEvent, i: number) => (
                             <li key={ev.id ?? i} className="flex items-baseline gap-3">
-                              <span className="min-w-[44px] shrink-0 text-xs font-extrabold text-parranda-clay">{eventTiming(ev, lang)}</span>
+                              <span className="min-w-[44px] shrink-0 text-xs font-extrabold text-parranda-clay">{eventTiming(ev, lang, undefined, sheetLiveEvents?.selected_date)}</span>
                               <span className="text-sm text-parranda-ink/90">
                                 <span className="font-semibold">{ev.title}</span>
                                 {ev.place && <span className="text-parranda-ink/60"> · {ev.place}</span>}
@@ -3027,16 +3038,16 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                   <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
                     <p className="text-sm leading-relaxed text-parranda-ink/80">
                       {liveSheetTime === "tonight"
-                        ? t(`Inget verifierat idag ${scopePhrase}.`, `Nothing verified today ${scopePhrase}.`)
-                        : t(`Inget listat senare i veckan ${scopePhrase}.`, `Nothing listed later this week ${scopePhrase}.`)}
+                        ? t(`Inget verifierat ${liveDayLabel} ${scopePhrase}.`, `Nothing verified ${liveDayLabel} ${scopePhrase}.`)
+                        : t(`Inget listat under följande 7 dagar ${scopePhrase}.`, `Nothing listed in the following 7 days ${scopePhrase}.`)}
                       {liveSheetTime === "tonight" && sheetBuckets.thisWeek.length > 0 && (
                         <strong className="text-parranda-ink">
                           {" "}
                           {sheetBuckets.thisWeek.length === 1
-                            ? t("1 händelse är listad senare i veckan.", "One event is listed later this week.")
+                            ? t("1 händelse är listad under följande 7 dagar.", "One event is listed in the following 7 days.")
                             : t(
-                                `${sheetBuckets.thisWeek.length} händelser är listade senare i veckan.`,
-                                `${sheetBuckets.thisWeek.length} events are listed later this week.`,
+                                `${sheetBuckets.thisWeek.length} händelser är listade under följande 7 dagar.`,
+                                `${sheetBuckets.thisWeek.length} events are listed in the following 7 days.`,
                               )}
                         </strong>
                       )}
@@ -3047,7 +3058,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                         onClick={() => setLiveSheetTime("week")}
                         className="mt-3 inline-flex min-h-11 items-center rounded-parranda-btn border border-parranda-ember/50 bg-parranda-ember/10 px-4 text-[13px] font-bold text-parranda-clay"
                       >
-                        {t("Visa veckan", "Show this week")}
+                        {t("Visa följande dagar", "Show following days")}
                       </button>
                     )}
                     {liveSheetTime === "week" && sheetBuckets.tonight.length > 0 && (
@@ -3056,7 +3067,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                         onClick={() => setLiveSheetTime("tonight")}
                         className="mt-3 inline-flex min-h-11 items-center rounded-parranda-btn border border-parranda-ember/50 bg-parranda-ember/10 px-4 text-[13px] font-bold text-parranda-clay"
                       >
-                        {t("Visa idag", "Show today")}
+                        {liveDayLabel}
                       </button>
                     )}
                   </div>

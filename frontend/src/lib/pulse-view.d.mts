@@ -55,6 +55,7 @@ export declare function eventTiming(
     | undefined,
   lang: "sv" | "en",
   now?: Date,
+  selectedDate?: string | null,
 ): string;
 
 export declare function pulseHealthState(

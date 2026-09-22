@@ -251,6 +251,13 @@ licensed real sources and conservative entity resolution.
 
 ## Current roadmap
 
+Live correctness precedes further ranking: the frozen Planner date must reach
+source collection, date-scoped persistent caching, source-local calendar gates
+and every Live scope query. See `LIVE_SELECTED_DATE.md` for the selected-day
+contract and bounded recall limitations. Next prove multi-source reconciliation
+and useful preference/proximity selection across differing approved source
+situations; one successful calendar is not universal Live coverage.
+
 The existing navigation handoff remains useful while network-aware selection is
 developed: modern Planner exports the published start, all stops and finish to
 Google Maps walking links, split into mobile-safe parts without dropping stops.

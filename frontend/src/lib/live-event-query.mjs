@@ -12,6 +12,19 @@ export const LIVE_EVENT_TIMES = ["tonight", "this_week"];
 
 const MAX_ROUTE_POINTS = 24;
 const MAX_PREFERENCES = 12;
+export function liveSelectedDate(response) {
+  const value = response?.live_events?.selected_date;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value ? value : null;
+}
+
+export function liveDateLabel(date, lang) {
+  const valid = liveSelectedDate({ live_events: { selected_date: date } });
+  return valid ? new Date(`${valid}T00:00:00Z`).toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE", {
+    weekday: "short", day: "numeric", month: "short", timeZone: "UTC",
+  }) : (lang === "en" ? "Today" : "Idag");
+}
 const SOURCE_HEALTH_COUNTS = [
   "selected_source_count",
   "responding_source_count",
@@ -81,6 +94,7 @@ export function buildLiveEventQueryPayload({
   const base = {
     scope,
     time,
+    ...(liveSelectedDate(response) ? { selected_date: liveSelectedDate(response) } : {}),
     preferences: normalizePreferences(preferences),
   };
 

@@ -111,7 +111,7 @@ export function clothingAdvice(observed, lang) {
  *
  * `now` is injectable so tests never depend on the real clock.
  */
-export function eventTiming(ev, lang, now = new Date()) {
+export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
   if (!ev || typeof ev !== "object") return "";
   const en = lang === "en";
   const locale = en ? "en-GB" : "sv-SE";
@@ -156,6 +156,18 @@ export function eventTiming(ev, lang, now = new Date()) {
   const nowDate = now instanceof Date ? now : new Date(now);
   const nowValid = !Number.isNaN(nowDate.getTime());
   const endValid = endsAt && !Number.isNaN(endsAt.getTime());
+  if (selectedDate && timezone && nowValid) {
+    try {
+      const today = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(nowDate);
+      if (selectedDate !== today) {
+        const opts = { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: timezone };
+        const startLabel = date.toLocaleString(locale, opts);
+        return endValid ? `${startLabel} – ${endsAt.toLocaleString(locale, opts)}` : startLabel;
+      }
+    } catch {
+      return ""; // no viewer-timezone substitution for an unresolvable venue date
+    }
+  }
   if (nowValid && endValid && date.getTime() <= nowDate.getTime() && endsAt.getTime() > nowDate.getTime()) {
     const onNow = en ? "on now" : "pågår nu";
     try {

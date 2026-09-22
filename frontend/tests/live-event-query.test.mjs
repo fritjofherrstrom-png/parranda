@@ -16,6 +16,17 @@ const response = {
   },
 };
 
+test("all Live scopes preserve the server-confirmed selected date instead of recomputing today", () => {
+  const dated = { ...response, live_events: { selected_date: "2026-06-29" } };
+  for (const scope of ["around_place", "near_route", "near_me"]) {
+    const payload = buildLiveEventQueryPayload({ scope, response: dated,
+      routeStops: [{ lat: 55.6, lng: 13 }, { lat: 55.61, lng: 13.01 }],
+      nearMeCoords: { lat: 55.6, lng: 13 },
+    });
+    assert.equal(payload.selected_date, "2026-06-29");
+  }
+});
+
 test("around_place uses the trusted server anchor and preserves preferences", () => {
   assert.deepEqual(trustedDayAnchor(response), { lat: 55.605, lng: 13.003 });
   assert.equal(trustedPlaceQuery(response), "Kivik");
