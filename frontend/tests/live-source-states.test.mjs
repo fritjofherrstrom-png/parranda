@@ -93,6 +93,46 @@ test('a responding empty calendar is stated as what the sources list, not as a q
   assert.doesNotMatch(h.text(), /quiet calendar|couldn't fetch|couldn't verify/);
 });
 
+// Observed in the #506 Pi review (Malmö): the municipal source returned 18 rows,
+// every one was rejected and the festival source failed. Rows are not hits.
+const ROWS_REJECTED_ONE_FAILED = { status: 'partial', result: 'empty', selected_source_count: 2,
+  responding_source_count: 1, event_bearing_source_count: 1, failed_source_count: 1,
+  raw_event_count: 18, normalized_event_count: 18, rejected_event_count: 18,
+  accepted_event_count: 0, surfaced_event_count: 0,
+  reasons: ['source_failures_present', 'all_event_evidence_rejected'] };
+
+test('returned rows that were all rejected are never shown as source hits', async (t) => {
+  const h = await composed(live(ROWS_REJECTED_ONE_FAILED));
+  t.after(() => h.unmount());
+  assert.ok(h.text().includes('Parranda could only fetch 1 of 2 event sources just now, and no events could be confirmed.'), h.text());
+  await click(h, button(h, /Explore live/));
+  const query = h.fetchMock.pending().find((call) => call.url.includes('/api/live-events'));
+  assert.ok(query);
+  await h.fetchMock.respond(query, queryBody(live(ROWS_REJECTED_ONE_FAILED)));
+  const sheet = sheetText(h);
+  assert.ok(sheet.includes('Parranda could only fetch 1 of 2 event sources just now'), sheet);
+  assert.match(sheet, /Source health: 1\/2 responded/);
+  assert.doesNotMatch(sheet, /with events/);
+});
+
+test('accepted events that surfaced keep the per-source hit count', async (t) => {
+  const surfaced = live({ status: 'healthy', result: 'events_found', selected_source_count: 1,
+    responding_source_count: 1, event_bearing_source_count: 1, raw_event_count: 3,
+    normalized_event_count: 3, accepted_event_count: 1, surfaced_event_count: 1,
+    reasons: ['bounded_events_found'] }, {
+    feeds: [{ id: 'calendar', label: 'Official calendar', status: 'ok' }],
+    tonight: [{ id: 'concert', title: 'Harbour concert', timezone: 'Europe/Stockholm',
+      starts_at: '2026-09-25T17:00:00Z', source_label: 'Official calendar',
+      source_url: 'https://calendar.example/concert' }],
+  });
+  const h = await composed(surfaced);
+  t.after(() => h.unmount());
+  await click(h, button(h, /See all live/));
+  const sheet = sheetText(h);
+  assert.match(sheet, /Harbour concert/);
+  assert.match(sheet, /Source health: 1\/1 responded · 1 with events/);
+});
+
 test('while waiting, the Live sheet does not print responded counts that read as a failure', async (t) => {
   const h = await composed(live(PENDING, { pending: true, feeds: [{ id: 'calendar', label: 'Official calendar', status: 'pending' }] }));
   t.after(() => h.unmount());

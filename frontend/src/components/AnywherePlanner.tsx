@@ -3128,7 +3128,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 {sheetSourceHealth && Number.isInteger(sheetSourceHealth.selected_source_count) &&
                   !liveQueryPending && sheetPulseState !== "pending" && (
                   <p className="text-xs text-parranda-ink/50">
-                    {t("Källstatus", "Source health")}: {sheetSourceHealth.responding_source_count ?? 0}/{sheetSourceHealth.selected_source_count ?? 0} {t("svarade", "responded")} · {sheetSourceHealth.event_bearing_source_count ?? 0} {t("med träffar", "with events")}
+                    {t("Källstatus", "Source health")}: {sheetSourceHealth.responding_source_count ?? 0}/{sheetSourceHealth.selected_source_count ?? 0} {t("svarade", "responded")}
+                    {/* Returned rows are not hits: every row can still be
+                        rejected by date, geometry or trust gates. Name hits
+                        only when accepted events actually surfaced. */}
+                    {(sheetSourceHealth.accepted_event_count ?? 0) > 0 && (sheetSourceHealth.surfaced_event_count ?? 0) > 0 &&
+                      ` · ${sheetSourceHealth.event_bearing_source_count ?? 0} ${t("med träffar", "with events")}`}
                   </p>
                 )}
                 {sheetSources && (

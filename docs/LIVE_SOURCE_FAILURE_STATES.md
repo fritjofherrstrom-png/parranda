@@ -45,6 +45,9 @@ observation limit”). This change does not claim that was the same failing sour
   never written to the `agnostic-events-v6` cache and never consulted when a
   cached result exists.
 - Waiting never prints “0/N svarade”; counts describe finished collections.
+- “· N med träffar” appears only when accepted events actually surfaced. A source
+  that returned rows is not a hit: every row can still be rejected by the date,
+  geometry or trust gates.
 
 ## Unchanged bounds and gates
 
@@ -103,8 +106,17 @@ Screenshots and their provenance are in
 | Healthy empty (replay), desktop, panel | ![before](evidence/live-source-failure-states/stockholm-empty-desktop-panel-before.jpg) | ![after](evidence/live-source-failure-states/stockholm-empty-desktop-panel-after.jpg) |
 
 **Pi:** the public Pi tunnel was blocked by this sandbox's egress allowlist (curl,
-Node fetch and WebFetch). Pi `build_sha` is **NOT VERIFIED**; Pi and real-provider
-Live QA are **NOT OBSERVED**.
+Node fetch and WebFetch). The patch author therefore has **no** Pi or real-provider
+observation of its own.
+
+**Independent Pi review of `1a89f9b` (reported on #506, not re-observed here):**
+an isolated localhost runtime on the Pi reported that exact head, used real
+approved sources for 25 September and ran no deploy. Stockholm went `pending` → `healthy/events_found` (1/1)
+after ~5 s. Malmö finished as `partial/empty` after ~10 s: 1/2 responded, and the
+festival source returned `source_payload_invalid`. The mobile Planner journey
+ended on the 1-of-2 sentence and the Live sheet stopped waiting. The review also
+found “Källstatus: 1/2 svarade · 1 med träffar” while `accepted_event_count` was 0
+(18 municipal rows, all rejected). The sub-count rule above corrects that.
 
 ## Remaining Live journey gaps (not changed here)
 
@@ -117,6 +129,9 @@ Live QA are **NOT OBSERVED**.
 - On narrow screens a selected-day timed card repeats the date twice
   (“fre 25 sep. 19:00 – fre 25 sep. 21:00”), and the timing column squeezes the
   title into a narrow strip.
+- Reported by the independent Pi review: in Simrishamn, three recurring municipal
+  entries were shown as “dagligen” on a selected Friday that was wrong for them.
+  This is not a regression of this change, and it remains open.
 
 ## Exact-head QA handoff (Sol)
 
