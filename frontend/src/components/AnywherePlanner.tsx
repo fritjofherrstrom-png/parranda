@@ -51,6 +51,7 @@ import {
   clothingAdvice,
   pulseSourceLine,
   eventTiming,
+  liveSourceFailure,
   pulseHealthState,
   type PulseTimeWindow,
 } from "../lib/pulse-view.mjs";
@@ -1272,6 +1273,31 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     () => (liveRefreshExhausted && liveEvents?.pending ? "unavailable" : pulseHealthState(liveEvents, pulseBuckets)),
     [liveEvents, pulseBuckets, liveRefreshExhausted],
   );
+  const liveFailure = useMemo(() => liveSourceFailure(liveEvents, pulseBuckets), [liveEvents, pulseBuckets]);
+  // A failed source is neither "still loading" nor an empty calendar: say
+  // which share of the selected sources could not be fetched.
+  const liveFailureSentence = (failure: { selected: number; responding: number }) => {
+    const notEvidence = t(
+      "Det betyder inte att inget händer — försök igen om en stund.",
+      "That doesn't mean nothing is on — try again shortly.",
+    );
+    if (failure.responding > 0) {
+      return t(
+        `Parranda kunde bara hämta ${failure.responding} av ${failure.selected} evenemangskällor just nu, och inga händelser kunde bekräftas. ${notEvidence}`,
+        `Parranda could only fetch ${failure.responding} of ${failure.selected} event sources just now, and no events could be confirmed. ${notEvidence}`,
+      );
+    }
+    if (failure.selected === 1) {
+      return t(
+        `Parranda kunde inte hämta evenemangskällan just nu, så inga händelser kan visas. ${notEvidence}`,
+        `Parranda couldn't fetch the event source just now, so no events can be shown. ${notEvidence}`,
+      );
+    }
+    return t(
+      `Parranda kunde inte hämta någon av de ${failure.selected} evenemangskällorna just nu, så inga händelser kan visas. ${notEvidence}`,
+      `Parranda couldn't fetch any of the ${failure.selected} event sources just now, so no events can be shown. ${notEvidence}`,
+    );
+  };
   const clothing = useMemo(
     () => clothingAdvice(dayflow?.weather?.provenance?.observed, lang),
     [dayflow, lang],
@@ -1290,6 +1316,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     () => pulseHealthState(sheetLiveEvents, sheetBuckets),
     [sheetLiveEvents, sheetBuckets],
   );
+  const sheetFailure = useMemo(() => liveSourceFailure(sheetLiveEvents, sheetBuckets), [sheetLiveEvents, sheetBuckets]);
   const sheetSources = useMemo(() => pulseSourceLine(sheetLiveEvents), [sheetLiveEvents]);
   const sheetSourceHealth = sheetLiveEvents?.acquisition?.source_health ?? null;
   const routeScopeAvailable = boundedRoutePoints(routeStops).length >= 2;
@@ -2744,7 +2771,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           )}
           {pulseState === "soft_empty" && (
             <p className="mt-2 text-sm text-parranda-ink/70">
-              {t("Inga listade händelser för perioden — lugnt i kalendern.", "Nothing listed for this period — a quiet calendar.")}
+              {t("Källorna svarade men listar inga händelser för perioden.", "The sources responded but list no events for this period.")}
             </p>
           )}
           {pulseState === "rejected_empty" && (
@@ -2757,7 +2784,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           )}
           {pulseState === "unavailable" && (
             <p className="mt-2 text-sm text-parranda-ink/70">
-              {t("Parranda kunde inte verifiera händelser just nu — försök igen om en stund.", "Parranda couldn't verify events right now — try again shortly.")}
+              {liveFailure
+                ? liveFailureSentence(liveFailure)
+                : t("Parranda kunde inte verifiera händelser just nu — försök igen om en stund.", "Parranda couldn't verify events right now — try again shortly.")}
             </p>
           )}
 
@@ -2990,6 +3019,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                       )}
                     </p>
                   </div>
+                ) : sheetFailure ? (
+                  <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
+                    <p className="text-sm leading-relaxed text-parranda-ink/80">{liveFailureSentence(sheetFailure)}</p>
+                  </div>
                 ) : sheetEvents.length > 0 || sheetMoreEvents.length > 0 ? (
                   <div className="flex flex-col gap-3">
                     {sheetEvents.length > 0 && (
@@ -3090,7 +3123,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                     {t("Alla källor kunde inte nås just nu — listan kan vara ofullständig.", "Some sources couldn't be reached right now — the list may be incomplete.")}
                   </p>
                 )}
-                {sheetSourceHealth && Number.isInteger(sheetSourceHealth.selected_source_count) && (
+                {/* Counts describe a finished collection; while waiting, "0/1
+                    responded" would read as a failure that has not happened. */}
+                {sheetSourceHealth && Number.isInteger(sheetSourceHealth.selected_source_count) &&
+                  !liveQueryPending && sheetPulseState !== "pending" && (
                   <p className="text-xs text-parranda-ink/50">
                     {t("Källstatus", "Source health")}: {sheetSourceHealth.responding_source_count ?? 0}/{sheetSourceHealth.selected_source_count ?? 0} {t("svarade", "responded")} · {sheetSourceHealth.event_bearing_source_count ?? 0} {t("med träffar", "with events")}
                   </p>
