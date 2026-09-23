@@ -1,7 +1,12 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { scoreEventPreferenceFit } = require("../server/pulse-engine/event-preference-fit");
+const {
+  COMPOUND_CUE_HEADS,
+  EVENT_INTENT_CUES,
+  MIN_COMPOUND_MODIFIER_LENGTH,
+  scoreEventPreferenceFit,
+} = require("../server/pulse-engine/event-preference-fit");
 
 test("structured provider semantics match canonical planner preferences", () => {
   const fit = scoreEventPreferenceFit(
@@ -79,6 +84,128 @@ test("source and publisher labels never mint preference relevance", () => {
   assert.equal(fit.level, "none");
   assert.equal(fit.score, 0);
   assert.deepEqual(fit.matched_preferences, []);
+});
+
+test("a closed compound matches through its curated head", () => {
+  // The reviewed Live fixture: a music-tagged "kvällskonsert" was ranked as if
+  // it had nothing to do with culture.
+  const fixture = scoreEventPreferenceFit(
+    { title: "Fixture: kvällskonsert", tags: ["music", "Music"] },
+    ["food", "culture", "views"],
+  );
+  assert.equal(fixture.level, "strong");
+  assert.deepEqual(fixture.matched_preferences, ["museums"]);
+  assert.deepEqual(fixture.missing_preferences, ["food", "scenic"]);
+  assert.deepEqual(fixture.reasons, ["preference_museums_compound_cue"]);
+  assert.equal(fixture.score, 3);
+
+  for (const title of ["Jazzkonsert på kajen", "Sommarutställning"]) {
+    const fit = scoreEventPreferenceFit({ title }, ["culture"]);
+    assert.deepEqual(fit.matched_preferences, ["museums"], title);
+  }
+
+  // A head shared by several intents keeps that meaning in a compound too.
+  const evening = scoreEventPreferenceFit({ title: "Kvällskonsert" }, ["culture", "nightlife"]);
+  assert.deepEqual(evening.matched_preferences, ["museums", "bars"]);
+});
+
+test("compound heads cover the closed-compound languages the cue list already speaks", () => {
+  const cases = [
+    ["Barnloppis i parken", "second_hand", "second_hand"],
+    ["Kinderflohmarkt", "second_hand", "second_hand"],
+    ["Julekoncert i kirken", "culture", "museums"],
+    ["Weihnachtskonzert", "culture", "museums"],
+    ["Kesäkonsertti", "culture", "museums"],
+    ["Taidenäyttely", "culture", "museums"],
+    ["Kunstausstellung", "culture", "museums"],
+    ["Jazzfestival", "culture", "museums"],
+    ["Sommarteater", "culture", "museums"],
+    ["Freilichttheater", "culture", "museums"],
+    ["Kammarmusik", "culture", "museums"],
+    ["Kvällsöppet på Sjöfartsmuseum", "culture", "museums"],
+    ["Visning av skolträdgård", "green", "green"],
+  ];
+  for (const [title, preference, canonical] of cases) {
+    const fit = scoreEventPreferenceFit({ title }, [preference]);
+    assert.equal(fit.level, "strong", `${title} should strongly match ${preference}`);
+    assert.deepEqual(fit.matched_preferences, [canonical], title);
+    assert.deepEqual(fit.reasons, [`preference_${canonical}_compound_cue`], title);
+  }
+
+  // A partial cue stays partial when it ends a compound.
+  const walk = scoreEventPreferenceFit({ title: "Kvällspromenad" }, ["green"]);
+  assert.equal(walk.level, "partial");
+  assert.deepEqual(walk.partial_preferences, ["green"]);
+  assert.deepEqual(walk.reasons, ["preference_green_compound_adjacent"]);
+});
+
+test("whole-word evidence keeps its reason and structured compounds match too", () => {
+  const whole = scoreEventPreferenceFit({ title: "Konsert på kajen" }, ["culture"]);
+  assert.deepEqual(whole.reasons, ["preference_museums_cue"]);
+
+  const both = scoreEventPreferenceFit({ title: "Jazzkonsert och konsert" }, ["culture"]);
+  assert.deepEqual(both.reasons, ["preference_museums_cue"], "a whole-word match is the stronger evidence");
+
+  const tagged = scoreEventPreferenceFit({ title: "Saturday programme", tags: ["Barnteater"] }, ["culture"]);
+  assert.deepEqual(tagged.matched_preferences, ["museums"]);
+  assert.deepEqual(tagged.reasons, ["preference_museums_compound_cue"]);
+});
+
+test("false friends of rejected heads never mint relevance", () => {
+  // Each title ends a word in a cue that is deliberately NOT a compound head,
+  // because the word means something else.
+  const cases = [
+    ["Flyktinginvandring – seminarium", ["green"]],
+    ["Einwanderung und Arbeit", ["green"]],
+    ["Arbetsmarknad och integration", ["food", "second_hand", "markets"]],
+    ["Supermarkt-Eröffnung", ["food", "second_hand", "markets"]],
+    ["Fransk kokkonst", ["culture"]],
+    ["Framtidsutsikt för stadskärnan", ["views"]],
+    ["Vanföreställning eller verklighet", ["culture"]],
+    ["Manifest för staden", ["nightlife"]],
+    ["Anskaffe nytt utstyr", ["fika"]],
+    ["Specifika behov", ["fika"]],
+    ["Incontro sulla manodopera", ["culture"]],
+    ["Disconcert", ["culture", "nightlife"]],
+  ];
+  for (const [title, preferences] of cases) {
+    const fit = scoreEventPreferenceFit({ title }, preferences);
+    assert.equal(fit.level, "none", `${title} must not match ${preferences.join("/")}`);
+    assert.equal(fit.score, 0, title);
+    assert.deepEqual(fit.reasons, [], title);
+  }
+});
+
+test("a compound needs a real modifier and must end in its head", () => {
+  const boundary = scoreEventPreferenceFit({ title: "Julkonsert" }, ["culture"]);
+  assert.equal(boundary.level, "strong", "a three-letter modifier qualifies");
+
+  for (const title of [
+    "Ölfestival", // a two-letter modifier is too short to trust
+    "Julkonserten", // inflected forms are not stemmed
+    "Konserthuset öppnar", // the head must be the final element
+  ]) {
+    assert.equal(scoreEventPreferenceFit({ title }, ["culture"]).level, "none", title);
+  }
+});
+
+test("compound heads are existing single-word cues, at least five letters long", () => {
+  const cueWords = new Set(
+    Object.values(EVENT_INTENT_CUES)
+      .flatMap((cues) => [...cues.strong, ...cues.partial])
+      .map((cue) => cue.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()),
+  );
+  for (const head of COMPOUND_CUE_HEADS) {
+    assert.match(head, /^[a-z]{5,}$/, `${head} is a normalized word of at least five letters`);
+    assert.ok(cueWords.has(head), `${head} adds no meaning beyond an existing cue`);
+  }
+  assert.ok(MIN_COMPOUND_MODIFIER_LENGTH >= 3);
+  for (const rejected of [
+    "vandring", "wanderung", "marknad", "markt", "konst", "utsikt", "forestallning",
+    "kaffe", "fika", "fest", "opera", "concert", "dans", "bio", "bad", "strand",
+  ]) {
+    assert.equal(COMPOUND_CUE_HEADS.has(rejected), false, `${rejected} stays whole-word only`);
+  }
 });
 
 test("no requested preferences is byte-neutral ranking context", () => {

@@ -80,6 +80,40 @@ const EVENT_INTENT_CUES = Object.freeze({
   },
 });
 
+// Closed-compound heads. Swedish, Norwegian, Danish, German, Dutch and Finnish
+// write compounds as one word with the defining element last: a
+// "kvällskonsert" is a konsert and a "sommarutställning" an utställning.
+// Whole-word matching misses that ordinary way of titling a happening, so a cue
+// listed here may also match as the final element of a longer word. The set is
+// curated, not derived. Each head is already a cue above (compounds add no new
+// meaning), has at least five letters, and has no false friend that could
+// plausibly title a happening: a word that ends in the head without being a
+// kind of it. That rule keeps these whole-word only: vandring/wanderung
+// (flykting|invandring, Ein|wanderung: migration), marknad/markt
+// (arbets|marknad, Super|markt), konst (kok|konst), utsikt (framtids|utsikt),
+// föreställning (van|föreställning), kaffe (Norwegian an|skaffe), fest
+// (mani|fest), opera (Italian manodopera, labour) and English concert
+// (dis|concert). Inflected forms ("konserten") are not matched either; this is
+// not a stemmer.
+const COMPOUND_CUE_HEADS = new Set([
+  "konsert", "koncert", "konzert", "konsertti",
+  "utstallning", "ausstellung", "nayttely",
+  "teater", "theater", "musik", "museum", "festival",
+  "loppis", "flohmarkt",
+  "tradgard", "promenad",
+]);
+// The part before the head must be a real modifier, not a short prefix such as
+// "in"/"ut" or a stray letter.
+const MIN_COMPOUND_MODIFIER_LENGTH = 3;
+
+// Cues normalized once, each list with the compound heads it may use.
+const MATCHABLE_CUES = Object.freeze(Object.fromEntries(
+  Object.entries(EVENT_INTENT_CUES).map(([intent, cues]) => [intent, {
+    strong: matchableCues(cues.strong),
+    partial: matchableCues(cues.partial),
+  }]),
+));
+
 const ROLE_INTENTS = Object.freeze({
   market_stop: ["markets"],
   culture_stop: ["museums"],
@@ -117,16 +151,18 @@ function scoreEventPreferenceFit(event, preferences = []) {
       continue;
     }
 
-    const cues = EVENT_INTENT_CUES[intent];
+    const cues = MATCHABLE_CUES[intent];
     if (!cues) continue;
-    if (hasCue(structuredText, cues.strong) || hasCue(titleText, cues.strong)) {
+    const strong = cueMatch([structuredText, titleText], cues.strong);
+    if (strong) {
       matched.push(intent);
-      reasons.push(`preference_${intent}_cue`);
+      reasons.push(strong === "compound" ? `preference_${intent}_compound_cue` : `preference_${intent}_cue`);
       continue;
     }
-    if (hasCue(structuredText, cues.partial) || hasCue(titleText, cues.partial)) {
+    const adjacent = cueMatch([structuredText, titleText], cues.partial);
+    if (adjacent) {
       partial.push(intent);
-      reasons.push(`preference_${intent}_adjacent`);
+      reasons.push(adjacent === "compound" ? `preference_${intent}_compound_adjacent` : `preference_${intent}_adjacent`);
     }
   }
 
@@ -156,10 +192,32 @@ function eventSemanticAtoms(event) {
     .filter(Boolean);
 }
 
-function hasCue(haystack, cues = []) {
+function matchableCues(cues = []) {
+  const words = cues.map(normalizeSearchText).filter(Boolean);
+  return { words, heads: words.filter((cue) => COMPOUND_CUE_HEADS.has(cue)) };
+}
+
+// "word" when a cue matches whole words, "compound" when only a curated head
+// ends a longer word, otherwise null. Whole-word evidence wins.
+function cueMatch(haystacks, { words, heads }) {
+  if (haystacks.some((haystack) => hasCue(haystack, words))) return "word";
+  if (heads.length && haystacks.some((haystack) => hasCompoundCue(haystack, heads))) return "compound";
+  return null;
+}
+
+function hasCue(haystack, words) {
   if (!haystack) return false;
   const padded = ` ${haystack} `;
-  return cues.some((cue) => padded.includes(` ${normalizeSearchText(cue)} `));
+  return words.some((cue) => padded.includes(` ${cue} `));
+}
+
+function hasCompoundCue(haystack, heads) {
+  if (!haystack) return false;
+  return haystack.split(" ").some((word) => heads.some((head) => endsCompound(word, head)));
+}
+
+function endsCompound(word, head) {
+  return word.length - head.length >= MIN_COMPOUND_MODIFIER_LENGTH && word.endsWith(head);
 }
 
 function normalizeRole(value) {
@@ -189,7 +247,9 @@ function emptyFit() {
 }
 
 module.exports = {
+  COMPOUND_CUE_HEADS,
   EVENT_INTENT_CUES,
   MAX_PREFERENCE_SCORE,
+  MIN_COMPOUND_MODIFIER_LENGTH,
   scoreEventPreferenceFit,
 };

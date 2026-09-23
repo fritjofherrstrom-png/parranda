@@ -323,6 +323,30 @@ timing, geometry and display gates as every other event; weak or civic/admin
 noise cannot use the slot. The displaced preference match remains available in
 the capped browse list, and the rule never changes route composition.
 
+Title and tag cues also match closed compounds. Swedish, Norwegian, Danish,
+German, Dutch and Finnish write "kvällskonsert", "Sommarutställning" or
+"Kinderflohmarkt" as one word with the defining element last, so a curated set
+of cue heads (concert, exhibition, theatre, music, museum, festival, flea
+market, garden and walk words) may end a longer word. Each head is an existing
+cue, at least five letters long, preceded by a modifier of at least three
+letters, and free of false friends that could title a happening. That is why
+migration (`invandring`, `Einwanderung`), labour market (`arbetsmarknad`),
+supermarket (`Supermarkt`), cookery (`kokkonst`), prospects (`framtidsutsikt`),
+delusion (`vanföreställning`), procurement (`anskaffe`) and `manodopera` never
+match walks, markets, culture, views or fika. Inflected forms are not stemmed.
+A compound match scores like its whole-word head and is recorded as
+`preference_<intent>_compound_cue` or `_compound_adjacent`.
+
+The Live sheet claims only the relevance the server established for the
+user's current picks. "Highlights for your picks" lists just the rows the
+server matched to a pick the user still holds, each with a "Matches: …" line
+from `matched_preferences`. Every other highlight sits under "Other local
+highlights" (or a neutral "Highlights" when nothing matched): a partial fit
+reads "A looser match for: …", and the reserved discovery row reads "A local
+discovery beyond your picks" only while every current pick was part of the
+ranking that chose it. A row without such evidence gets no reason line; the
+client never reads titles to invent one.
+
 ## Pulse route interrupt contract
 
 The top route-eligible evening event can produce one bounded

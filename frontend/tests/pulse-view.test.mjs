@@ -15,6 +15,8 @@ import {
   pulseSourceLine,
   eventTiming,
   pulseHealthState,
+  liveEventRelevance,
+  liveHighlightGroups,
 } from "../src/lib/pulse-view.mjs";
 
 const CORE_A = { id: "a", label: "Museet", type: "museum" };
@@ -217,4 +219,73 @@ test("future selected-day Live does not describe an overlapping run as on now", 
   assert.doesNotMatch(label, /on now/);
   assert.match(label, /Sun/);
   assert.match(label, /Tue/, "the actual spanning source interval remains visible");
+});
+
+// Live relevance is read from the server's per-row fit, in canonical intents
+// ("museums", "scenic"), and spoken in the Planner's chip keys.
+const RANKED_FOR = ["food", "museums", "scenic"];
+const PICKS = ["food", "culture", "views"];
+const fit = (id, preference_match, extra = {}) => ({
+  id,
+  preference_match,
+  requested_preferences: RANKED_FOR,
+  matched_preferences: [],
+  partial_preferences: [],
+  ...extra,
+});
+
+test("Live relevance repeats only what the server established for the current picks", () => {
+  assert.deepEqual(
+    liveEventRelevance(fit("m", "strong", { matched_preferences: ["scenic", "museums"] }), PICKS),
+    { kind: "match", preferences: ["culture", "views"] },
+    "chip vocabulary, in the user's pick order",
+  );
+  assert.deepEqual(
+    liveEventRelevance(fit("p", "partial", { partial_preferences: ["food"] }), PICKS),
+    { kind: "looser_match", preferences: ["food"] },
+  );
+  assert.deepEqual(
+    liveEventRelevance(fit("d", "none", { highlight_reason: "local_serendipity" }), PICKS),
+    { kind: "local_discovery", preferences: [] },
+  );
+  assert.equal(liveEventRelevance(fit("n", "none"), PICKS), null, "no match means no reason, never an invented one");
+});
+
+test("Live relevance never guesses from titles, missing fit, or an inconsistent level", () => {
+  assert.equal(liveEventRelevance({ id: "t", title: "Jazz concert and culture night" }, PICKS), null);
+  assert.equal(liveEventRelevance(fit("x", "none", { matched_preferences: ["museums"] }), PICKS), null);
+  assert.equal(liveEventRelevance(fit("y", "strong", { matched_preferences: ["museums"] }), []), null, "no picks, no claim");
+  assert.equal(liveEventRelevance(null, PICKS), null);
+});
+
+test("a ranking for other picks keeps only claims that are still true", () => {
+  const match = fit("m", "strong", { matched_preferences: ["museums"] });
+  assert.equal(liveEventRelevance(match, ["food"]), null, "a match to a pick the user dropped is not claimed");
+  assert.deepEqual(liveEventRelevance(match, ["culture", "nightlife"]), { kind: "match", preferences: ["culture"] });
+
+  const discovery = fit("d", "none", { highlight_reason: "local_serendipity" });
+  assert.deepEqual(liveEventRelevance(discovery, ["culture"]), { kind: "local_discovery", preferences: [] });
+  assert.equal(
+    liveEventRelevance(discovery, ["culture", "nightlife"]),
+    null,
+    "the server never checked the new pick, so 'beyond your picks' is not established",
+  );
+});
+
+test("Live highlights split into server matches and other rows, keeping server order", () => {
+  const rows = [
+    fit("plain", "none"),
+    fit("match-1", "strong", { matched_preferences: ["museums"] }),
+    fit("looser", "partial", { partial_preferences: ["food"] }),
+    fit("match-2", "strong", { matched_preferences: ["food"] }),
+    fit("discovery", "none", { highlight_reason: "local_serendipity" }),
+  ];
+  const groups = liveHighlightGroups(rows, PICKS);
+  assert.deepEqual(groups.picks.map((row) => row.id), ["match-1", "match-2"]);
+  assert.deepEqual(groups.other.map((row) => row.id), ["plain", "looser", "discovery"]);
+  assert.ok([...groups.picks, ...groups.other].every((row) => rows.includes(row)), "a partition, never new rows");
+
+  assert.deepEqual(liveHighlightGroups(rows, []).picks, [], "without picks nothing is presented as a pick");
+  assert.equal(liveHighlightGroups(rows, []).other.length, rows.length);
+  assert.deepEqual(liveHighlightGroups(null, PICKS), { picks: [], other: [] });
 });
