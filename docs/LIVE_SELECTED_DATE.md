@@ -55,7 +55,10 @@ delays (1.5, 3, 5 seconds), not an unbounded poll.
 Date-unaware feeds still expose only their bounded source page. Empty means no
 accepted result from the available evidence, **not** proof nothing happens that
 day. Date-window filtering cannot create missing future inventory. Source
-failures remain partial/unavailable, never a claimed quiet calendar.
+failures remain partial/unavailable, never a claimed quiet calendar. A finished
+failed refresh is now answered as that failure (held two minutes in memory,
+then retried) instead of as another `pending`; see
+`LIVE_SOURCE_FAILURE_STATES.md`.
 
 Fusion, independent-family trust, preference ranking, geometry and route-event
 weave gates are not weakened. A Live card is not automatically a route stop.

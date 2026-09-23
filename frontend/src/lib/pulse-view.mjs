@@ -220,6 +220,24 @@ export function pulseHealthState(liveEvents, buckets) {
 }
 
 /**
+ * A FINISHED collection that shows nothing because selected sources failed.
+ * Nothing shown is then no evidence that nothing is on, so the UI must say a
+ * source failed — not that the calendar is quiet, and not that it is still
+ * loading. Null while pending, when every source responded, or when accepted
+ * events are shown (the partial note covers that). Counts are the server's.
+ */
+export function liveSourceFailure(liveEvents, buckets) {
+  if (!liveEvents || liveEvents.coverage !== "covered" || liveEvents.pending) return null;
+  const health = liveEvents.acquisition && liveEvents.acquisition.source_health;
+  if (!health || (health.status !== "unavailable" && health.status !== "partial")) return null;
+  if (buckets && (buckets.tonight.length > 0 || buckets.thisWeek.length > 0)) return null;
+  const selected = Number.isInteger(health.selected_source_count) ? health.selected_source_count : 0;
+  const responding = Number.isInteger(health.responding_source_count) ? health.responding_source_count : 0;
+  if (selected <= 0 || responding < 0 || responding >= selected) return null;
+  return { selected, responding };
+}
+
+/**
  * Source attribution for the Pulse section. Prefers the plural `feeds[]`
  * (multi-source acquisition) over the backward-compatible singular `feed`, so
  * no event silently inherits a wrong single-feed label. Returns null when no

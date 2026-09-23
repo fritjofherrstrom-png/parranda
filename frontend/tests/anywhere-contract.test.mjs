@@ -208,9 +208,11 @@ test("Pulse section: place-titled, dedup-aware, honest states, no jargon", () =>
   // Quiet reference for the woven event — a line, never a second full card.
   assert.match(anywherePlannerSource, /Ingår i dagens rutt/);
   assert.match(anywherePlannerSource, /Included in today's route/);
-  // Honest soft-empty state (covered, warm, nothing on).
-  assert.match(anywherePlannerSource, /Inga listade händelser för perioden/);
-  assert.match(anywherePlannerSource, /Nothing listed for this period/);
+  // Honest soft-empty state (covered, warm, every source responded, nothing
+  // listed). It states what the sources list — never that the place is quiet.
+  assert.match(anywherePlannerSource, /Källorna svarade men listar inga händelser för perioden/);
+  assert.match(anywherePlannerSource, /The sources responded but list no events for this period/);
+  assert.doesNotMatch(anywherePlannerSource, /lugnt i kalendern|Nothing listed for this period — a quiet calendar/);
   // Ambient clothing guidance is derived from the trusted observation and
   // hidden without data (clothing && ...); attribution via the plural feeds line.
   assert.match(anywherePlannerSource, /clothingAdvice\(dayflow\?\.weather\?\.provenance\?\.observed/);

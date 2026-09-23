@@ -15,6 +15,7 @@ import {
   pulseSourceLine,
   eventSourceLink,
   eventTiming,
+  liveSourceFailure,
   pulseHealthState,
 } from "../src/lib/pulse-view.mjs";
 
@@ -206,6 +207,28 @@ test("pulseHealthState maps acquisition health to honest UI states — no raw to
   assert.equal(pulseHealthState(covered({ status: "healthy", result: "events_found", reasons: [] }), some), "ok");
   // Legacy response without acquisition: empty-but-covered stays honest soft-empty.
   assert.equal(pulseHealthState({ coverage: "covered" }, empty), "soft_empty");
+});
+
+test("liveSourceFailure reports a finished source failure only — never waiting, empty or shown events", () => {
+  const empty = { tonight: [], thisWeek: [] };
+  const some = { tonight: [], thisWeek: [{ id: "e1" }] };
+  const covered = (health, extra = {}) => ({ coverage: "covered", acquisition: { source_health: health }, ...extra });
+  const failed = { status: "unavailable", result: "unknown", selected_source_count: 2, responding_source_count: 0 };
+  const partial = { status: "partial", result: "empty", selected_source_count: 3, responding_source_count: 1 };
+
+  assert.deepEqual(liveSourceFailure(covered(failed), empty), { selected: 2, responding: 0 });
+  assert.deepEqual(liveSourceFailure(covered(partial), empty), { selected: 3, responding: 1 });
+  assert.equal(liveSourceFailure(covered(failed, { pending: true }), empty), null, "waiting is not a failure");
+  assert.equal(liveSourceFailure(covered({ ...partial, result: "events_found" }), some), null, "shown events keep the partial note");
+  assert.equal(
+    liveSourceFailure(covered({ status: "healthy", result: "empty", selected_source_count: 1, responding_source_count: 1 }), empty),
+    null,
+    "every source responded: an empty answer, not a failure",
+  );
+  assert.equal(liveSourceFailure(covered({ ...failed, selected_source_count: 0 }), empty), null, "no counts, no claim");
+  assert.equal(liveSourceFailure({ coverage: "unavailable", acquisition: { source_health: failed } }, empty), null);
+  assert.equal(liveSourceFailure({ coverage: "uncovered" }, empty), null);
+  assert.equal(liveSourceFailure(null, empty), null);
 });
 
 test("an ONGOING continuous run says it is on now — never its past start weekday", () => {
