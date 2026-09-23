@@ -98,12 +98,19 @@ cards are unchanged.
 Screenshots and their provenance are in
 [`evidence/live-source-failure-states/`](evidence/live-source-failure-states/README.md):
 
-| | Before (`1be68a5`) | After |
+| | Before (`1be68a5`) | After (`be19354`) |
 | --- | --- | --- |
 | Stockholm, mobile, Live panel at +20 s | ![before](evidence/live-source-failure-states/stockholm-failed-mobile-panel-20s-before.jpg) | ![after](evidence/live-source-failure-states/stockholm-failed-mobile-panel-20s-after.jpg) |
 | Stockholm, mobile, Live sheet settled | ![before](evidence/live-source-failure-states/stockholm-failed-mobile-sheet-before.jpg) | ![after](evidence/live-source-failure-states/stockholm-failed-mobile-sheet-after.jpg) |
 | Malmö partial (replay), desktop, panel at +20 s | ![before](evidence/live-source-failure-states/malmo-partial-desktop-panel-20s-before.jpg) | ![after](evidence/live-source-failure-states/malmo-partial-desktop-panel-20s-after.jpg) |
 | Healthy empty (replay), desktop, panel | ![before](evidence/live-source-failure-states/stockholm-empty-desktop-panel-before.jpg) | ![after](evidence/live-source-failure-states/stockholm-empty-desktop-panel-after.jpg) |
+
+Review case (rows returned, all rejected, one failed source; replay), desktop
+Live sheet. `1a89f9b` still said “1 med träffar”; `be19354` does not:
+
+| Review before (`1a89f9b`) | After (`be19354`) |
+| --- | --- |
+| ![review before](evidence/live-source-failure-states/malmo-rejected-rows-desktop-sheet-review-before.jpg) | ![review after](evidence/live-source-failure-states/malmo-rejected-rows-desktop-sheet-review-after.jpg) |
 
 **Pi:** the public Pi tunnel was blocked by this sandbox's egress allowlist (curl,
 Node fetch and WebFetch). The patch author therefore has **no** Pi or real-provider
