@@ -210,3 +210,11 @@ test("the ongoing rule never touches the daily / all_day / unresolved branches",
   assert.match(eventTiming(allDay, "en", now), /Sun/);
   assert.equal(eventTiming({}, "en", now), "");
 });
+
+test("future selected-day Live does not describe an overlapping run as on now", () => {
+  const event = { timezone: "Europe/Helsinki", starts_at: "2026-07-19T14:00:00Z", ends_at: "2026-07-21T15:00:00Z" };
+  const label = eventTiming(event, "en", new Date("2026-07-19T18:00:00Z"), "2026-07-20");
+  assert.doesNotMatch(label, /on now/);
+  assert.match(label, /Sun/);
+  assert.match(label, /Tue/, "the actual spanning source interval remains visible");
+});

@@ -2310,6 +2310,7 @@ function buildApp({
             placeLabel: intake?.resolved?.label || null,
             spatialScope,
             now: eventsNow,
+            selectedDate: resolveSelectedRouteDate(payload, baselineBody, cityConfig),
             // Preferences may reorder only the already trusted, normalized
             // event pool. They never become event evidence or relax time/geo
             // gates inside the supply.

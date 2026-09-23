@@ -4,6 +4,8 @@ export type LiveEventTime = "tonight" | "this_week";
 export declare const LIVE_EVENT_QUERY_CONTRACT: "live_event_query_v1";
 export declare const LIVE_EVENT_SCOPES: LiveEventScope[];
 export declare const LIVE_EVENT_TIMES: LiveEventTime[];
+export declare function liveSelectedDate(response: unknown): string | null;
+export declare function liveDateLabel(date: string | null | undefined, lang: string): string;
 
 export declare function trustedDayAnchor(response: unknown): { lat: number; lng: number } | null;
 export declare function trustedPlaceQuery(response: unknown): string | null;
@@ -22,6 +24,7 @@ export declare function buildLiveEventQueryPayload(options?: {
   | {
       scope: LiveEventScope;
       time: LiveEventTime;
+      selected_date?: string;
       preferences: string[];
       anchor?: { lat: number; lng: number };
       place_query?: string;

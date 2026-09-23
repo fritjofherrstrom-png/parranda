@@ -241,6 +241,9 @@ export async function mountPlanner({ url = "http://localhost/anywhere?lang=en", 
   };
   install("window", window);
   install("document", window.document);
+  install("HTMLElement", window.HTMLElement);
+  install("requestAnimationFrame", callback => window.setTimeout(callback, 16));
+  install("cancelAnimationFrame", id => window.clearTimeout(id));
   install("navigator", window.navigator);
   install("localStorage", window.localStorage);
   install("fetch", window.fetch);

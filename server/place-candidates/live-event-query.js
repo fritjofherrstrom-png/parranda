@@ -2,6 +2,7 @@
 
 const { haversineKm } = require("../candidates/area-intelligence");
 const { resolveAgnosticIntake } = require("../planner/agnostic-place-intake");
+const { normalizeSourceEventDate } = require("../pulse-sources/source-event-time");
 const {
   normalizeSourceDiscoveryHealth,
 } = require("../pulse-sources/source-discovery-health");
@@ -96,6 +97,7 @@ function publicQueryShape(query) {
   return {
     scope: query.scope.kind,
     time: query.time,
+    ...(query.selectedDate ? { selected_date: query.selectedDate } : {}),
     radius_m: query.scope.radius_m,
     route_point_count: query.scope.kind === "near_route" ? query.scope.points.length : 0,
     preferences: query.preferences,
@@ -112,6 +114,8 @@ function normalizeLiveEventQuery(payload = {}) {
     return { error: "invalid_live_event_time_window" };
   }
   const preferences = normalizePreferences(payload.preferences);
+  const selectedDate = normalizeSourceEventDate(payload.selected_date);
+  if (payload.selected_date != null && !selectedDate) return { error: "invalid_live_event_date" };
 
   if (scopeKind === "near_route") {
     if (!Array.isArray(payload.route_points) || payload.route_points.length < 2) {
@@ -132,6 +136,7 @@ function normalizeLiveEventQuery(payload = {}) {
     }
     const query = {
       time,
+      selectedDate,
       preferences,
       collection_anchor: collectionAnchor,
       collection_radius_m: collectionRadiusM,
@@ -150,6 +155,7 @@ function normalizeLiveEventQuery(payload = {}) {
   const radiusM = scopeKind === "near_me" ? NEAR_ME_RADIUS_M : AROUND_PLACE_RADIUS_M;
   const query = {
     time,
+    selectedDate,
     preferences,
     collection_anchor: anchor,
     collection_radius_m: radiusM,
@@ -281,6 +287,7 @@ function shapeCollectedLiveEvents(collected, { scope = null } = {}) {
   if (discoveryHealth) acquisition.discovery_health = discoveryHealth;
   return {
     coverage: collected.coverage,
+    ...(normalizeSourceEventDate(collected.selected_date) ? { selected_date: collected.selected_date } : {}),
     feed: collected.feed || null,
     ...(Array.isArray(collected.feeds) ? { feeds: collected.feeds } : {}),
     acquisition,
@@ -368,7 +375,9 @@ function liveEventQueryBody(normalized, liveEvents) {
     query,
     route_mutation: false,
     day_anchor_mutation: false,
-    live_events: liveEvents,
+    live_events: normalized.value?.selectedDate
+      ? { ...liveEvents, selected_date: normalized.value.selectedDate }
+      : liveEvents,
   };
 }
 
@@ -429,6 +438,7 @@ async function executeLiveEventQuery({ payload, eventSupply, now, placeResolver 
       radiusM: query.collection_radius_m,
       scope: query.scope,
       now,
+      selectedDate: query.selectedDate,
       preferences: query.preferences,
       ...(attested ? {
         placeLabel: attested.placeLabel,

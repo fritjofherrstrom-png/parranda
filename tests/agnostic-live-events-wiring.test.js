@@ -53,7 +53,8 @@ async function withServer(eventSupply, run) {
 const HELSINKI_BODY = { lat: 60.17, lng: 24.94, dates: ["2026-06-28"], preferences: ["food"], include_external_candidates: 1 };
 
 test("a covered anchor carries live_events (tonight + this_week) on the agnostic response", async () => {
-  const supply = async ({ anchor, preferences }) => {
+  const supply = async ({ anchor, preferences, selectedDate }) => {
+    assert.equal(selectedDate, "2026-06-28", "the frozen Planner date reaches Live acquisition");
     assert.ok(anchor && Number.isFinite(anchor.lat), "supply receives the trusted anchor");
     assert.deepEqual(preferences, ["food"], "planner preferences reach ranking but not source trust");
     return {

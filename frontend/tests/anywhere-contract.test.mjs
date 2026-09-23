@@ -197,9 +197,9 @@ test("route/Pulse hierarchy: a woven event is a route EXTENSION with exactly one
 
 test("Pulse section: place-titled, dedup-aware, honest states, no jargon", () => {
   // Editorial heading carries the place (or near-you mode).
-  assert.match(anywherePlannerSource, /Just nu i \$\{anchorLabel\}/);
-  assert.match(anywherePlannerSource, /Now in \$\{anchorLabel\}/);
-  assert.match(anywherePlannerSource, /t\("Just nu nära dig", "Now near you"\)/);
+  assert.match(anywherePlannerSource, /Live i \$\{anchorLabel\}/);
+  assert.match(anywherePlannerSource, /Live in \$\{anchorLabel\}/);
+  assert.match(anywherePlannerSource, /t\("Live nära dig", "Live near you"\)/);
   // Events render from the deduped buckets (woven event_ids excluded), never
   // straight from liveEvents arrays.
   assert.match(anywherePlannerSource, /pulseBuckets\.tonight/);
@@ -209,8 +209,8 @@ test("Pulse section: place-titled, dedup-aware, honest states, no jargon", () =>
   assert.match(anywherePlannerSource, /Ingår i dagens rutt/);
   assert.match(anywherePlannerSource, /Included in today's route/);
   // Honest soft-empty state (covered, warm, nothing on).
-  assert.match(anywherePlannerSource, /Inga listade händelser just nu/);
-  assert.match(anywherePlannerSource, /Nothing listed right now/);
+  assert.match(anywherePlannerSource, /Inga listade händelser för perioden/);
+  assert.match(anywherePlannerSource, /Nothing listed for this period/);
   // Ambient clothing guidance is derived from the trusted observation and
   // hidden without data (clothing && ...); attribution via the plural feeds line.
   assert.match(anywherePlannerSource, /clothingAdvice\(dayflow\?\.weather\?\.provenance\?\.observed/);
@@ -460,7 +460,7 @@ test("the Live sheet explores events only — it never touches the day's anchor 
   assert.match(anywherePlannerSource, /e\.key !== "Tab"/);
   assert.match(anywherePlannerSource, /liveSheetTriggerRef\.current/);
   // TIME is a real axis over the scoped live_events buckets; the legacy
-  // `tonight` key is displayed as Today because it contains now/today/tonight.
+  // `tonight` key displays the server-selected calendar day, not always Today.
   // The sheet renders the active bucket in full (the card keeps its capped
   // preview).
   assert.match(anywherePlannerSource, /\[liveSheetTime, setLiveSheetTime\] = useState/);
@@ -496,13 +496,12 @@ test("the Live sheet explores events only — it never touches the day's anchor 
   assert.match(anywherePlannerSource, /day's place and route are unchanged/);
   // Empty copy names the ACTIVE scope×time cell, and counts come from the
   // buckets, never from copy.
-  // The legacy backend key `tonight` contains now/today/tonight, so the visible
-  // label is the honest broader "Today" rather than claiming every row is evening.
-  assert.match(anywherePlannerSource, /Inget verifierat idag \$\{scopePhrase\}/);
-  assert.match(anywherePlannerSource, /Nothing verified today \$\{scopePhrase\}/);
+  // The legacy key carries the selected day; do not label tomorrow as Today.
+  assert.match(anywherePlannerSource, /Inget verifierat \$\{liveDayLabel\} \$\{scopePhrase\}/);
+  assert.match(anywherePlannerSource, /Nothing verified \$\{liveDayLabel\} \$\{scopePhrase\}/);
   assert.doesNotMatch(anywherePlannerSource, /t\("Ikväll", "Tonight"\)/);
-  assert.match(anywherePlannerSource, /Inget listat senare i veckan \$\{scopePhrase\}/);
-  assert.match(anywherePlannerSource, /t\("Visa veckan", "Show this week"\)/);
+  assert.match(anywherePlannerSource, /Inget listat under följande 7 dagar \$\{scopePhrase\}/);
+  assert.match(anywherePlannerSource, /t\("Visa följande dagar", "Show following days"\)/);
   assert.match(anywherePlannerSource, /sheetBuckets\.thisWeek\.length\}/);
   assert.match(anywherePlannerSource, /sheetSourceHealth\.responding_source_count/);
   assert.match(anywherePlannerSource, /sheetSourceHealth\.event_bearing_source_count/);

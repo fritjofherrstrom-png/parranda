@@ -111,6 +111,8 @@ function createTicketmasterProvider({
   radiusKm = DEFAULT_RADIUS_KM,
   windowDays = 7,
   now = null,
+  windowStart = null,
+  windowEnd = null,
   fetcher = typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   pageSize = DEFAULT_PAGE_SIZE,
@@ -129,14 +131,15 @@ function createTicketmasterProvider({
             return emptyCollection("unavailable", "source_fetch_unavailable");
           }
           const nowDate = now ? new Date(now) : new Date();
+          const acquisitionStart = windowStart ? new Date(windowStart) : nowDate;
           const url = buildDiscoveryUrl({
             endpoint,
             key,
             anchor,
             radiusKm,
             pageSize,
-            startDateTime: tmDateTime(nowDate),
-            endDateTime: tmDateTime(new Date(nowDate.getTime() + windowDays * 24 * 60 * 60 * 1000)),
+            startDateTime: tmDateTime(acquisitionStart),
+            endDateTime: tmDateTime(windowEnd || new Date(acquisitionStart.getTime() + windowDays * 24 * 60 * 60 * 1000)),
           });
           const controller = typeof AbortController === "function" ? new AbortController() : null;
           const timer = controller ? setTimeout(() => controller.abort(), Math.max(1000, timeoutMs)) : null;
