@@ -61,6 +61,7 @@ Fusion, independent-family trust, preference ranking, geometry and route-event
 weave gates are not weakened. A Live card is not automatically a route stop.
 This PR does not establish universal multi-source coverage or resolve every
 source/organizer disagreement, recurring schedule gap or generic homepage link.
+Generic homepage links are now labelled as such; see `LIVE_SOURCE_LINKS.md`.
 
 ## Independent review corrections
 

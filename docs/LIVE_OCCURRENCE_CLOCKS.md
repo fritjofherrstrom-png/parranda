@@ -82,7 +82,9 @@ Live acceptance. Next priority is carrying the frozen Planner date through the
 Live request, source-local occurrence filtering, cache identity and visible
 labels, without manipulating freshness/approval clocks. Do that before smarter
 ranking. Other gaps include repeated schedules, broad calendar ranges, generic
-organizer homepages rather than detail URLs, and source-time conflicts.
+organizer homepages rather than detail URLs, and source-time conflicts. Links
+now name their destination host and label a site root as a homepage
+(`LIVE_SOURCE_LINKS.md`); a detail URL is still not supplied where none exists.
 
 On the exact PR head, Sol should independently verify:
 
