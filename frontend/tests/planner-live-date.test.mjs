@@ -29,6 +29,30 @@ async function click(h, control) {
   await h.act(() => control.dispatchEvent(new h.window.Event('click', { bubbles: true })));
 }
 
+for (const deferBody of [false, true]) test(`new day invalidates held-day Live results (deferred body: ${deferBody})`, async t => {
+  const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' });
+  t.after(() => h.unmount());
+  await h.clock.advance(500);
+  await h.fetchMock.respond(h.fetchMock.pending()[0], day('2026-06-28'));
+  await h.clock.advance(50);
+  await click(h, button(h, /Adjust/));
+  await click(h, button(h, /^Tomorrow$/));
+  await click(h, button(h, /See all live/));
+  await h.clock.advance(500);
+  const compose = h.fetchMock.pending().find(c => c.url.includes('/api/route-recommendations'));
+  assert.ok(compose);
+  await click(h, button(h, /^Near the route$/));
+  const query = h.fetchMock.pending().find(c => c.url.includes('/api/live-events'));
+  assert.ok(query);
+  assert.equal(query.body.selected_date, '2026-06-28');
+  await h.fetchMock.respond(query, { contract: 'live_event_query_v1', route_mutation: false,
+    day_anchor_mutation: false, live_events: live('2026-06-28', 'OLD DAY late event') }, 200, { deferBody });
+  await h.fetchMock.respond(compose, day('2026-06-29'));
+  if (deferBody) await h.act(() => query.releaseBody());
+  assert.doesNotMatch(h.text(), /OLD DAY late event/);
+  if (deferBody) assert.equal(query.aborted, true);
+});
+
 test('Live sheet uses the published calendar date and rejects a late body after date edit', async t => {
   const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' });
   t.after(() => h.unmount());

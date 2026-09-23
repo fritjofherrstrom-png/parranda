@@ -112,6 +112,7 @@ function createTicketmasterProvider({
   windowDays = 7,
   now = null,
   windowStart = null,
+  windowEnd = null,
   fetcher = typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   pageSize = DEFAULT_PAGE_SIZE,
@@ -138,7 +139,7 @@ function createTicketmasterProvider({
             radiusKm,
             pageSize,
             startDateTime: tmDateTime(acquisitionStart),
-            endDateTime: tmDateTime(new Date(acquisitionStart.getTime() + windowDays * 24 * 60 * 60 * 1000)),
+            endDateTime: tmDateTime(windowEnd || new Date(acquisitionStart.getTime() + windowDays * 24 * 60 * 60 * 1000)),
           });
           const controller = typeof AbortController === "function" ? new AbortController() : null;
           const timer = controller ? setTimeout(() => controller.abort(), Math.max(1000, timeoutMs)) : null;

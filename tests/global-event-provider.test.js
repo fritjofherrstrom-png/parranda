@@ -125,10 +125,26 @@ test('selected-day global acquisition stays one capped page with an offset-safe 
   assert.equal(calls.length, 1);
   const query = new URL(calls[0]).searchParams;
   assert.equal(query.get('startDateTime'), '2026-07-08T10:00:00Z');
-  assert.equal(query.get('endDateTime'), '2026-07-17T10:00:00Z');
+  assert.equal(query.get('endDateTime'), '2026-07-17T12:00:00Z');
   assert.equal(Number(query.get('size')), 40);
   assert.deepEqual(result.tonight.map(x => x.id), ['tm-gig2']);
   assert.equal(result.tonight[0].timing_relevance, 'future');
+});
+
+test('global acquisition includes the last local evening in negative UTC offsets', async () => {
+  const anchor = { lat: -14.275, lng: -170.703 };
+  const event = discoveryPayload({ ...anchor, timezone: 'Pacific/Pago_Pago' })._embedded.events[0];
+  event.dates.start.dateTime = '2026-07-17T10:30:00Z'; // July 16 23:30, selected date + 7
+  let calls = 0;
+  const out = await collectAnchorEvents({ anchor, now: NOW, selectedDate: '2026-07-09', globalKey: 'test-key', registry: [],
+    fetcher: async url => {
+      calls += 1;
+      const q = new URL(url).searchParams;
+      const included = event.dates.start.dateTime >= q.get('startDateTime') && event.dates.start.dateTime <= q.get('endDateTime');
+      return { ok: true, json: async () => ({ _embedded: { events: included ? [event] : [] } }) };
+    } });
+  assert.equal(calls, 1);
+  assert.deepEqual(out.this_week.map(e => e.id), ['tm-gig1']);
 });
 
 test("a municipal open feed and global provider are both collected when available", async () => {

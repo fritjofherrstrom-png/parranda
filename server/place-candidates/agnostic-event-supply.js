@@ -629,8 +629,13 @@ function rankCollectedEventsForPreferences(collected, preferences = [], scope = 
   let thisWeekPool = Array.isArray(pool?.this_week) ? pool.this_week : collected.this_week;
   if (collected.selected_date && now) {
     const events = [...(tonightPool || []), ...(thisWeekPool || [])];
-    tonightPool = events.filter(event => selectedDateBucket(event, collected.selected_date, now) === "tonight");
-    thisWeekPool = events.filter(event => selectedDateBucket(event, collected.selected_date, now) === "this_week");
+    tonightPool = [];
+    thisWeekPool = [];
+    for (const event of events) {
+      const bucket = selectedDateBucket(event, collected.selected_date, now);
+      if (bucket === "tonight") tonightPool.push(event);
+      else if (bucket === "this_week") thisWeekPool.push(event);
+    }
   }
   const { _rankable_events: _internalPool, ...publicResult } = collected;
   const tonightSurface = buildEventBucketSurface(
@@ -1046,7 +1051,8 @@ async function collectEventSource({
       // use each event's source timezone, never this acquisition padding.
       ...(selectedDate ? {
         windowStart: new Date(Math.max(new Date(`${selectedDate}T00:00:00Z`).getTime() - 14 * 3600000, nowDate.getTime())),
-        windowDays: 9,
+        // Upper bound is independent: end of day +7 even at UTC-12.
+        windowEnd: new Date(new Date(`${selectedDate}T00:00:00Z`).getTime() + (8 * 24 + 12) * 3600000),
       } : {}),
       now: nowDate || undefined,
       fetcher: fetcher || undefined,
@@ -1354,8 +1360,8 @@ function firstString(...values) {
 
 const EVENT_CACHE_TTL_MS = 20 * 60 * 1000; // 20 min — time-sensitive, but reusable
 const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a route
-// v5 separates selected-calendar-day results from older now-only buckets.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v5";
+// v6 excludes v5 pools truncated by midnight-gap and global-window bugs.
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v6";
 
 function shouldCacheEventSupplyResult(result) {
   if (!result || result.coverage !== "covered") return false;

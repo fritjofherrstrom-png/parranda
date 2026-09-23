@@ -26,8 +26,9 @@ queries had no date field. A tomorrow plan therefore browsed today's events.
 - Ended/stale evidence cannot be revived by a future date. Date-only records
   without a timezone expire at least once their date is past everywhere; this
   conservative bound does not assign a venue timezone.
-- The v5 persistent cache key contains the selected date. v4 now-only results
-  cannot be reused. Warm reads recheck temporal eligibility against real time
+- The v6 persistent cache key contains the selected date. v4 now-only results
+  and v5 pools truncated by midnight-gap/acquisition-window defects cannot be
+  reused. Warm reads recheck temporal eligibility against real time
   and update result/count fields, without fetching solely to rerank.
 - Editing Planner intent immediately aborts an outstanding Live query. A late
   body cannot replace the newer intent, including during the compose debounce.
@@ -40,9 +41,11 @@ No new source, approval, provider key, worker or crawler. Existing source plan:
 at most four sources, at most three local. Twenty-minute event TTL; background
 warm timeout remains 30 seconds per provider (not a new global deadline).
 One global Ticketmaster page remains capped at 40 records. For selected dates
-its acquisition envelope is nine UTC days beginning no earlier than actual now
-or selected midnight minus 14 hours; final source-local date filtering removes
-padding. This covers timezone offsets, not nine days of displayed inventory.
+its acquisition envelope begins no earlier than actual now or selected midnight
+minus 14 hours, and ends independently at selected midnight plus eight days
+plus 12 hours. This covers the selected day and seven following days across
+UTC+14 to UTC-12; final source-local date filtering removes padding.
+One page and the 40-record cap are unchanged.
 Existing local adapter item/detail/byte limits remain unchanged; e.g. the
 reviewed Stockholm API page is capped at 100 and municipal detail fan-out is
 bounded by its existing descriptor. Six highlights and at most 24 additional
@@ -58,6 +61,30 @@ Fusion, independent-family trust, preference ranking, geometry and route-event
 weave gates are not weakened. A Live card is not automatically a route stop.
 This PR does not establish universal multi-source coverage or resolve every
 source/organizer disagreement, recurring schedule gap or generic homepage link.
+
+## Independent review corrections
+
+Review of `75b2340` found and reproduced four defects, now covered by regressions:
+
+- A Live scope request started while a previous day was held during composition
+  could publish its old-date body under the replacement day's heading. Requests
+  now belong to the exact published response as well as the input intent;
+  replacement clears both completed scope results and outstanding requests.
+- Warm projection evaluated every bucket twice and repeatedly normalized local
+  midnights across eight days. Projection now computes one bucket per event and
+  jumps directly to its possible date overlap; a bounded operation-count test
+  guards against repeating this expensive work for every horizon day.
+- Continuous intervals on a day whose midnight is skipped by DST were lost.
+  Calendar overlap now uses actual endpoint instants, including exclusive ends;
+  regressions cover Santiago, Havana and an entirely skipped Apia date.
+- A nine-day global UTC envelope missed late events on the last local day in
+  negative offsets. Independent lower/upper bounds preserve that day without
+  adding pages or increasing the record cap. A query-respecting provider fixture
+  catches this, unlike a fixture that returns records outside the request window.
+
+These are deterministic correctness checks, not live DST/provider acceptance.
+The correcting reviewer is also the patch author; final corrective changes still
+need a separate focused review before merge.
 
 ## Evidence and independent QA
 
@@ -83,7 +110,7 @@ Sol should independently verify the frozen PR head before merge:
 3. Check a source-local midnight/DST boundary with deterministic fixtures;
    classify unobserved real timing boundaries honestly.
 4. Warm two dates, restart the real process with the same cache, repeat both
-   requests and compare identities/buckets. No v4 result may satisfy v5.
+   requests and compare identities/buckets. No v4/v5 result may satisfy v6.
 5. Change date while Live is in flight; old results must not overwrite it.
 6. Check both narrow and wide viewport, explicit date/unknown-time copy, and
    distinct pending/empty/partial/unavailable states. Do not seed fake events.

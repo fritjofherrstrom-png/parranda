@@ -253,7 +253,7 @@ test("one neutral warm cache reranks for different preferences without refetchin
     assert.equal(culture.tonight[0].id, "a-concert");
     assert.equal(secondHand.tonight[0].id, "z-loppis");
     assert.equal(fetchCount, 1, "preference changes rerank cached evidence instead of recollecting providers");
-    assert.ok(fs.existsSync(path.join(cacheDir, "agnostic-events-v5")), "persist selected-date semantics separately from old now-only results");
+    assert.ok(fs.existsSync(path.join(cacheDir, "agnostic-events-v6")), "persist selected-date semantics separately from old now-only results");
     const restarted = resolveDefaultEventSupply({
       PARRANDA_AGNOSTIC_EVENTS: "enabled", PARRANDA_EVENT_FEEDS: FEEDS_ENV,
       PARRANDA_CACHE_DIR: cacheDir,

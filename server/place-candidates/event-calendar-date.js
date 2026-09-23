@@ -48,15 +48,57 @@ function eventOccursOnDate(event, date, now) {
   if (!event.ends_at) return localCalendarDate(start, timezone) === date;
   const end = new Date(event.ends_at);
   if (!Number.isFinite(end.getTime()) || end <= start || end <= instant) return false;
-  const dayStart = normalizeSourceEventDateTime(`${date}T00:00:00`, { timezone });
-  const dayEnd = normalizeSourceEventDateTime(`${addCalendarDays(date, 1)}T00:00:00`, { timezone });
-  return Boolean(dayStart && dayEnd && start < new Date(dayEnd) && end > new Date(dayStart));
+  return intervalOverlapsDates(start.getTime(), end.getTime(), date, date, timezone);
+}
+
+// Compare the dates of actual instants, not manufactured local midnights:
+// midnight can be skipped or repeated. The last included millisecond preserves
+// exclusive source ends without inventing a duration. A spanning interval may
+// cross an entirely skipped calendar date; locate its first real instant before
+// accepting that date. Ordinary same-day events need only endpoint formatting.
+function intervalOverlapsDates(start, end, firstDate, lastDate, timezone) {
+  const startDate = localCalendarDate(start, timezone);
+  const endDate = localCalendarDate(end - 1, timezone);
+  if (!startDate || !endDate || startDate > lastDate || endDate < firstDate) return false;
+  if (startDate >= firstDate || endDate <= lastDate) return true;
+  let low = start;
+  let high = end - 1;
+  while (low < high) {
+    const middle = low + Math.floor((high - low) / 2);
+    if (localCalendarDate(middle, timezone) < firstDate) low = middle + 1;
+    else high = middle;
+  }
+  return localCalendarDate(low, timezone) <= lastDate;
 }
 
 function selectedDateBucket(event, selectedDate, now) {
-  if (eventOccursOnDate(event, selectedDate, now)) return "tonight";
-  for (let offset = 1; offset <= 7; offset += 1) {
-    if (eventOccursOnDate(event, addCalendarDays(selectedDate, offset), now)) return "this_week";
+  if (!normalizeSourceEventDate(selectedDate)) return null;
+  const window = event?.time_window;
+  const timezone = normalizeIanaTimezone(event?.timezone || window?.timezone);
+  const instant = new Date(now);
+  if (!Number.isFinite(instant.getTime()) || event?.freshness === "stale" || event?.timing_relevance === "stale") return null;
+  let first;
+  let last;
+  if (window?.kind === "all_day" || window?.kind === "daily") {
+    first = normalizeSourceEventDate(event.starts_on || window.starts_on);
+    last = normalizeSourceEventDate(event.ends_on || window.ends_on) || first;
+  } else {
+    if (!timezone || !event?.starts_at) return null;
+    const start = new Date(event.starts_at);
+    const end = event.ends_at ? new Date(event.ends_at) : null;
+    if (!Number.isFinite(start.getTime()) || (end && (!Number.isFinite(end.getTime()) || end <= start || end <= instant))) return null;
+    first = localCalendarDate(start, timezone);
+    last = end ? localCalendarDate(new Date(end.getTime() - 1), timezone) : first;
+  }
+  if (!first || !last) return null;
+  const today = localCalendarDate(instant, timezone || "Etc/GMT+12");
+  const horizon = addCalendarDays(selectedDate, 7);
+  // Jump straight to the first possible overlap. Most records need one check,
+  // not eight expensive timezone conversions for every warm-cache read.
+  let date = [selectedDate, first, today].filter(Boolean).sort().at(-1);
+  const finalDate = last < horizon ? last : horizon;
+  for (; date && date <= finalDate; date = addCalendarDays(date, 1)) {
+    if (eventOccursOnDate(event, date, instant)) return date === selectedDate ? "tonight" : "this_week";
   }
   return null;
 }

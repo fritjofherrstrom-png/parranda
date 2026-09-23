@@ -26,6 +26,23 @@ test('tomorrow is its own Live day; today is not relabelled or admitted', async 
   assert.equal(out.tonight[0].timing_relevance, 'future', 'selection must not rewrite the real clock');
 });
 
+test('bounded warm projection does not repeat timezone work for every horizon day', () => {
+  const events = Array.from({ length: 40 }, (_, i) => ({ id: `concert-${i}`, title: `Concert ${i}`,
+    timezone: 'Europe/Helsinki', starts_at: '2026-07-05T15:00:00Z', ends_at: '2026-07-05T19:00:00Z' }));
+  const original = Intl.DateTimeFormat;
+  let formats = 0;
+  Intl.DateTimeFormat = new Proxy(original, { construct(target, args) {
+    formats += 1;
+    return Reflect.construct(target, args);
+  } });
+  try {
+    const result = rankCollectedEventsForPreferences({ selected_date: '2026-06-28', coverage: 'covered',
+      tonight: [], this_week: events }, [], null, now);
+    assert.equal(result.this_week.length, 6);
+    assert.ok(formats <= 600, `bounded projection constructed ${formats} timezone formatters`);
+  } finally { Intl.DateTimeFormat = original; }
+});
+
 test('the cache isolates selected dates even at the same anchor and acquisition hour', () => {
   assert.notEqual(eventCacheKey(anchor, now, ['official'], 3000, null, '2026-06-28'),
     eventCacheKey(anchor, now, ['official'], 3000, null, '2026-06-29'));
@@ -40,6 +57,20 @@ test('calendar overlap uses source timezone, exclusive end boundaries and DST-lo
   assert.equal(eventOccursOnDate({ ...ev, freshness: 'stale' }, '2026-06-29', now), false);
   assert.equal(sourceWindowStart('2026-03-29', 'Europe/Stockholm', '2026-03-28T12:00:00Z'), '2026-03-28T23:00:00.000Z');
   assert.equal(sourceWindowStart('2026-03-30', 'Europe/Stockholm', '2026-03-28T12:00:00Z'), '2026-03-29T22:00:00.000Z');
+});
+
+test('continuous intervals survive skipped and repeated local midnights', () => {
+  const before = '2026-09-01T12:00:00Z';
+  const daytime = { timezone: 'America/Santiago', starts_at: '2026-09-06T15:00:00Z', ends_at: '2026-09-06T17:00:00Z' };
+  assert.equal(eventOccursOnDate(daytime, '2026-09-06', before), true);
+  const overnight = { ...daytime, starts_at: '2026-09-06T03:30:00Z', ends_at: '2026-09-06T04:30:00Z' };
+  assert.equal(eventOccursOnDate(overnight, '2026-09-05', before), true);
+  assert.equal(eventOccursOnDate(overnight, '2026-09-06', before), true);
+  assert.equal(eventOccursOnDate({ ...overnight, ends_at: '2026-09-06T04:00:00Z' }, '2026-09-06', before), false);
+  const fold = { timezone: 'America/Havana', starts_at: '2026-11-01T05:15:00Z', ends_at: '2026-11-01T06:00:00Z' };
+  assert.equal(eventOccursOnDate(fold, '2026-11-01', before), true);
+  const skippedDay = { timezone: 'Pacific/Apia', starts_at: '2011-12-29T22:00:00Z', ends_at: '2011-12-30T22:00:00Z' };
+  assert.equal(eventOccursOnDate(skippedDay, '2011-12-30', '2011-12-28T00:00:00Z'), false);
 });
 
 test('daily and date-only facts stay calendar-based; current-day closed hours cannot revive tomorrow', () => {

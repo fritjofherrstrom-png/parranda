@@ -495,6 +495,19 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const liveSheetDialogRef = useRef<HTMLDivElement | null>(null);
   const liveSheetCloseRef = useRef<HTMLButtonElement | null>(null);
   const liveQueryAbortRef = useRef<AbortController | null>(null);
+  const liveResponseRef = useRef(safeResponse);
+  liveResponseRef.current = safeResponse;
+  // A scope request belongs to the published day it was built from. Intent
+  // cancellation alone misses queries opened while the previous day is held.
+  useEffect(() => {
+    liveQueryAbortRef.current?.abort();
+    liveQueryAbortRef.current = null;
+    setLiveQueryEvents(null);
+    setLiveQueryPending(false);
+    setLiveQueryError(null);
+    setLiveQueryGeoHint(null);
+    setLiveSheetScope("around_place");
+  }, [safeResponse]);
   const lastEntryRef = useRef<SavedEntry | null>(null); // the latest composed day, for "save"
 
   const t = (sv: string, en: string) => (lang === "en" ? en : sv);
@@ -1302,7 +1315,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       }
     }
 
-    if (queryIntentId !== intentSequenceRef.current) return;
+    if (queryIntentId !== intentSequenceRef.current || safeResponse !== liveResponseRef.current) return;
     const payload = buildLiveEventQueryPayload({
       scope: nextScope,
       time: liveSheetTime === "week" ? "this_week" : "tonight",
@@ -1338,7 +1351,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           signal: controller.signal,
         });
         const body = await response.json();
-        if (controller.signal.aborted || queryIntentId !== intentSequenceRef.current) return;
+        if (controller.signal.aborted || queryIntentId !== intentSequenceRef.current || safeResponse !== liveResponseRef.current) return;
         const accepted = response.ok ? acceptedLiveEventQuery(body) : null;
         if (!accepted) throw new Error("live_event_query_contract_rejected");
         setLiveQueryEvents(accepted as LiveEvents);
