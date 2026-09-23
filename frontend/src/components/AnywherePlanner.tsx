@@ -50,8 +50,10 @@ import {
   pulseBrowseBuckets,
   clothingAdvice,
   pulseSourceLine,
+  eventSourceLink,
   eventTiming,
   pulseHealthState,
+  type EventSourceLinkKind,
   type PulseTimeWindow,
 } from "../lib/pulse-view.mjs";
 import { planComposeFollowup } from "../lib/compose-followup.mjs";
@@ -128,7 +130,10 @@ interface PlaceStructure {
       title?: string | null;
       starts_at?: string | null;
       place?: string | null;
+      source_label?: string | null;
       source_url?: string | null;
+      source_link_kind?: EventSourceLinkKind | null;
+      source_link_host?: string | null;
       woven_into_route?: boolean;
       route_leg_km?: number | null;
     } | null;
@@ -144,8 +149,12 @@ interface PulseEvent {
   ends_on?: string;
   time_window?: PulseTimeWindow | null;
   place?: string;
+  /** The reviewed feed that listed the event — attribution, not the link's destination. */
   source_label?: string;
   source_url?: string;
+  /** Server classification of where `source_url` leads (site root or other page). */
+  source_link_kind?: EventSourceLinkKind | null;
+  source_link_host?: string | null;
   timezone?: string;
   live_proximity?: "nearby";
   anchor_distance_km?: number;
@@ -157,6 +166,29 @@ function nearbyDistanceLabel(event: PulseEvent, lang: Lang): string | null {
     maximumFractionDigits: 1,
   });
   return lang === "sv" ? `${distance} km bort` : `${distance} km away`;
+}
+
+// A Live row's source, as two separate facts: the feed that listed the event
+// ("via …", attribution) and where the link leads (its destination host; a site
+// root says it is only a homepage). The feed label is never the link text.
+function liveEventSource(event: PulseEvent, lang: Lang) {
+  const link = eventSourceLink(event, lang);
+  const listedBy = String(event.source_label || "").trim();
+  if (!event.source_url || (!listedBy && !link)) return null;
+  return (
+    <span className="text-parranda-ink/50">
+      {listedBy && <>{" · "}via {listedBy}</>}
+      {link && (
+        <>
+          {" · "}
+          <a href={link.href} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 min-w-11 items-center underline underline-offset-2 hover:text-parranda-accent">
+            {link.text}
+            <span aria-hidden="true">&nbsp;↗</span>
+          </a>
+        </>
+      )}
+    </span>
+  );
 }
 
 interface LiveSourceHealth {
@@ -1832,6 +1864,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               typedPlaceLabel || undefined,
             );
             const secondary = blitzResult.live_option || blitzResult.backup;
+            // A Live move's link names where it leads; the listing feed stays in
+            // the meta line. A place move keeps its attribution link unchanged.
+            const liveSourceLink = move.kind === "live_event"
+              ? eventSourceLink(
+                  { source_url: move.source.url, source_link_kind: move.source.link_kind, source_link_host: move.source.link_host },
+                  lang,
+                )
+              : null;
             return (
               <div className="mt-2 flex flex-col gap-3">
                 <div>
@@ -1852,11 +1892,18 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                       {t("Öppna i Maps ↗", "Open in Maps ↗")}
                     </a>
                   )}
-                  {move.source.url && (
-                    <a href={move.source.url} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center rounded-parranda-btn border border-parranda-ink/16 px-4 text-sm font-bold text-parranda-ink/75">
-                      {t("Källa ↗", "Source ↗")}
-                    </a>
-                  )}
+                  {move.kind === "live_event"
+                    ? liveSourceLink && (
+                        <a href={liveSourceLink.href} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center rounded-parranda-btn border border-parranda-ink/16 px-4 text-sm font-bold text-parranda-ink/75">
+                          {liveSourceLink.text}
+                          <span aria-hidden="true">&nbsp;↗</span>
+                        </a>
+                      )
+                    : move.source.url && (
+                        <a href={move.source.url} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center rounded-parranda-btn border border-parranda-ink/16 px-4 text-sm font-bold text-parranda-ink/75">
+                          {t("Källa ↗", "Source ↗")}
+                        </a>
+                      )}
                 </div>
                 {secondary && (
                   <p className="border-t border-parranda-ink/10 pt-2 text-xs text-parranda-ink/60">
@@ -2399,8 +2446,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             const legKm = Number.isFinite(eveningEvent?.route_leg_km) ? eveningEvent.route_leg_km : leg?.km;
             const pin = mapsPlaceUrl(stop, mapsPlaceContext);
             const venue = String(eveningEvent?.place || "").trim();
+            // Attribution (the listing feed) and destination (where the link
+            // leads) stay separate facts; the stop's own source wins, as before.
             const sourceLabel = String(stop?.source?.label || eveningEvent?.source_label || "").trim();
-            const sourceUrl = stop?.source?.url || eveningEvent?.source_url || null;
+            const sourceLink = stop?.source?.url
+              ? eventSourceLink(
+                  { source_url: stop.source.url, source_link_kind: stop.source.link_kind, source_link_host: stop.source.link_host },
+                  lang,
+                )
+              : eventSourceLink(eveningEvent, lang);
             const routeNumber = routeStops.indexOf(stop) + 1;
             return (
               <div key={stop?.id} className="mt-3 rounded-parranda border border-parranda-ember/50 bg-gradient-to-br from-parranda-terracotta/15 to-parranda-glow/5 p-4">
@@ -2432,15 +2486,15 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                     )}
                   </p>
                 )}
-                {sourceLabel && (
+                {(sourceLabel || sourceLink) && (
                   <p className="mt-1 text-xs text-parranda-ink/55">
-                    {t("Källa", "Source")}:{" "}
-                    {sourceUrl ? (
-                      <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 min-w-11 items-center underline underline-offset-2 hover:text-parranda-accent">
-                        {sourceLabel}
+                    {sourceLabel && <>{t("Källa", "Source")}: {sourceLabel}</>}
+                    {sourceLabel && sourceLink && " · "}
+                    {sourceLink && (
+                      <a href={sourceLink.href} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 min-w-11 items-center underline underline-offset-2 hover:text-parranda-accent">
+                        {sourceLink.text}
+                        <span aria-hidden="true">&nbsp;↗</span>
                       </a>
-                    ) : (
-                      sourceLabel
                     )}
                   </p>
                 )}
@@ -2770,14 +2824,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                     <span className="font-medium">{ev.title}</span>
                     {eventTiming(ev, lang, undefined, liveEvents?.selected_date) && <span className="text-parranda-ink/60"> · {eventTiming(ev, lang, undefined, liveEvents?.selected_date)}</span>}
                     {ev.place && <span className="text-parranda-ink/60"> · {ev.place}</span>}
-                    {ev.source_url && (
-                      <span className="text-parranda-ink/50">
-                        {" · "}
-                        <a href={ev.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 min-w-11 items-center underline underline-offset-2 hover:text-parranda-accent">
-                          {ev.source_label || t("Källa", "Source")}
-                        </a>
-                      </span>
-                    )}
+                    {liveEventSource(ev, lang)}
                   </li>
                 ))}
               </ul>
@@ -3005,14 +3052,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                                 <span className="font-bold">{ev.title}</span>
                                 {ev.place && <span className="text-parranda-ink/60"> · {ev.place}</span>}
                                 {nearbyDistanceLabel(ev, lang) && <span className="font-semibold text-parranda-clay"> · {nearbyDistanceLabel(ev, lang)}</span>}
-                                {ev.source_url && (
-                                  <span className="text-parranda-ink/50">
-                                    {" · "}
-                                    <a href={ev.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 min-w-11 items-center underline underline-offset-2 hover:text-parranda-accent">
-                                      {ev.source_label || t("Källa", "Source")}
-                                    </a>
-                                  </span>
-                                )}
+                                {liveEventSource(ev, lang)}
                               </span>
                             </li>
                           ))}
@@ -3032,14 +3072,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                                 <span className="font-semibold">{ev.title}</span>
                                 {ev.place && <span className="text-parranda-ink/60"> · {ev.place}</span>}
                                 {nearbyDistanceLabel(ev, lang) && <span className="font-semibold text-parranda-clay"> · {nearbyDistanceLabel(ev, lang)}</span>}
-                                {ev.source_url && (
-                                  <span className="text-parranda-ink/50">
-                                    {" · "}
-                                    <a href={ev.source_url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 min-w-11 items-center underline underline-offset-2 hover:text-parranda-accent">
-                                      {ev.source_label || t("Källa", "Source")}
-                                    </a>
-                                  </span>
-                                )}
+                                {liveEventSource(ev, lang)}
                               </span>
                             </li>
                           ))}

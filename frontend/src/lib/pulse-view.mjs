@@ -241,3 +241,31 @@ export function pulseSourceLine(liveEvents) {
   }
   return parts.length ? parts.join(" · ") : null;
 }
+
+/**
+ * Where a Live event's source link leads, in words. The feed label says who
+ * LISTED the event (attribution); it is never the link text, because the URL is
+ * source-owned and may open another site — an organizer's, and possibly only
+ * its start page. The link names its destination host, and a site root says it
+ * is a homepage rather than the event's page.
+ *
+ * Reads only the server's conservative classification
+ * (server/pulse-sources/event-source-link.js); nothing is classified or rewritten
+ * here. No classification — an unusable URL, or a day saved before the field
+ * existed — means no link rather than a guess.
+ */
+export function eventSourceLink(ev, lang) {
+  const href = typeof ev?.source_url === "string" ? ev.source_url : "";
+  const host = typeof ev?.source_link_host === "string" ? ev.source_link_host.trim() : "";
+  const kind = ev?.source_link_kind;
+  if (!/^https?:\/\//i.test(href.trim()) || !host || (kind !== "page" && kind !== "site_home")) return null;
+  const en = lang === "en";
+  return {
+    href,
+    host,
+    kind,
+    text: kind === "site_home"
+      ? en ? `Homepage: ${host} (not the event page)` : `Startsida: ${host} (inte evenemangssidan)`
+      : host,
+  };
+}

@@ -36,6 +36,10 @@ const {
 } = require("../pulse-sources/official-program-article-provider");
 const { normalizeTimeSensitiveSourceEvent } = require("../pulse-sources/time-sensitive-event");
 const {
+  classifyEventSourceLink,
+  withEventSourceLink,
+} = require("../pulse-sources/event-source-link");
+const {
   datePartsInTimezone,
   normalizeIanaTimezone,
   normalizeSourceEventDate,
@@ -461,6 +465,7 @@ function toEventView(event, feed, { eventTimezone = null, routeEligible = null }
   // a city hack. Cultural cue wins ambiguity; neutral is unchanged.
   const cultural = classifyCulturalSalience(event);
   const score = Number(Math.min(salience.score * cultural.weight, 10).toFixed(2));
+  const sourceUrl = event.source_url || event.provenance?.source_url || null;
   return {
     id: event.id || null,
     title,
@@ -474,8 +479,12 @@ function toEventView(event, feed, { eventTimezone = null, routeEligible = null }
     address: event.address || null,
     lat: Number.isFinite(event.lat) ? event.lat : null,
     lng: Number.isFinite(event.lng) ? event.lng : null,
+    // The label is the reviewed feed that LISTED the event; the URL is
+    // source-owned and may lead elsewhere (an organizer's site, possibly only
+    // its start page). The link classification says where it leads.
     source_label: event.source_label || event.provenance?.source_label || feed.label || null,
-    source_url: event.source_url || event.provenance?.source_url || null,
+    source_url: sourceUrl,
+    ...classifyEventSourceLink(sourceUrl),
     license: event.provenance?.license || feed.license || null,
     trust_level: event.confidence || null,
     cultural_tier: cultural.tier,
@@ -512,7 +521,9 @@ function rankEventViews(views, preferences = []) {
   return dedupeViews(
     views
     .filter(Boolean)
-    .map((view) => withEventPreferenceFit(view, preferences))
+    // Every served row, fresh or from a pool cached before the link
+    // classification existed, carries it — derived from its own source_url.
+    .map((view) => withEventPreferenceFit(withEventSourceLink(view), preferences))
     .sort(
       (a, b) =>
         eventRankingScore(b) - eventRankingScore(a) ||

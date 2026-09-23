@@ -21,10 +21,15 @@ function sourceLabel(value) {
 
 function attribution(move) {
   if (move?.kind === "live_event") {
+    // The label is the feed that listed the event; `link_*` is the server's
+    // account of where `url` actually leads (see pulse-view eventSourceLink).
+    const linkKind = move?.source?.link_kind;
     return {
       label: sourceLabel(move?.source?.label),
       url: text(move?.source?.url),
       source_kind: text(move?.source?.type) || "live_event",
+      link_kind: linkKind === "page" || linkKind === "site_home" ? linkKind : null,
+      link_host: text(move?.source?.link_host),
     };
   }
   const rows = Array.isArray(move?.provenance?.attribution)
@@ -35,6 +40,8 @@ function attribution(move) {
     label: sourceLabel(row?.label),
     url: text(row?.url),
     source_kind: text(move?.provenance?.source_family) || text(move?.origin),
+    link_kind: null,
+    link_host: null,
   };
 }
 
