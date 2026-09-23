@@ -104,12 +104,13 @@ test("a closed compound matches through its curated head", () => {
     assert.deepEqual(fit.matched_preferences, ["museums"], title);
   }
 
-  // A head shared by several intents keeps that meaning in a compound too.
+  // A cultural concert compound alone does not establish a nightlife event.
   const evening = scoreEventPreferenceFit({ title: "Kvällskonsert" }, ["culture", "nightlife"]);
-  assert.deepEqual(evening.matched_preferences, ["museums", "bars"]);
+  assert.deepEqual(evening.matched_preferences, ["museums"]);
+  assert.deepEqual(evening.missing_preferences, ["bars"]);
 });
 
-test("compound heads cover the closed-compound languages the cue list already speaks", () => {
+test("closed compounds and reviewed exact forms cover the cue languages safely", () => {
   const cases = [
     ["Barnloppis i parken", "second_hand", "second_hand"],
     ["Kinderflohmarkt", "second_hand", "second_hand"],
@@ -129,7 +130,9 @@ test("compound heads cover the closed-compound languages the cue list already sp
     const fit = scoreEventPreferenceFit({ title }, [preference]);
     assert.equal(fit.level, "strong", `${title} should strongly match ${preference}`);
     assert.deepEqual(fit.matched_preferences, [canonical], title);
-    assert.deepEqual(fit.reasons, [`preference_${canonical}_compound_cue`], title);
+    const exact = ["Sommarteater", "Freilichttheater", "Kammarmusik"]
+      .some((cue) => title.toLowerCase().includes(cue.toLowerCase()));
+    assert.deepEqual(fit.reasons, [`preference_${canonical}_${exact ? "cue" : "compound_cue"}`], title);
   }
 
   // A partial cue stays partial when it ends a compound.
@@ -137,6 +140,29 @@ test("compound heads cover the closed-compound languages the cue list already sp
   assert.equal(walk.level, "partial");
   assert.deepEqual(walk.partial_preferences, ["green"]);
   assert.deepEqual(walk.reasons, ["preference_green_compound_adjacent"]);
+});
+
+test("an incidental or metaphorical suffix does not become a cultural event", () => {
+  for (const title of [
+    "Bakgrundsmusik vid budgetmöte",
+    "Kriegstheater 1914–1918: ein historischer Vortrag",
+  ]) {
+    const fit = scoreEventPreferenceFit({ title }, ["culture"]);
+    assert.equal(fit.level, "none", title);
+    assert.equal(fit.score, 0, title);
+  }
+  for (const title of ["Sommarteater", "Freilichttheater", "Kammarmusik"]) {
+    assert.equal(scoreEventPreferenceFit({ title }, ["culture"]).level, "strong", title);
+  }
+});
+
+test("a daytime family concert is culture, not a new nightlife match", () => {
+  const fit = scoreEventPreferenceFit({ title: "Familjekonsert kl 11" }, ["culture", "nightlife"]);
+  assert.deepEqual(fit.matched_preferences, ["museums"]);
+  assert.deepEqual(fit.missing_preferences, ["bars"]);
+  assert.deepEqual(fit.reasons, ["preference_museums_compound_cue"]);
+  const liveMusic = scoreEventPreferenceFit({ title: "Livemusik kl 21" }, ["nightlife"]);
+  assert.deepEqual(liveMusic.matched_preferences, ["bars"], "explicit live music still counts");
 });
 
 test("whole-word evidence keeps its reason and structured compounds match too", () => {
@@ -148,7 +174,7 @@ test("whole-word evidence keeps its reason and structured compounds match too", 
 
   const tagged = scoreEventPreferenceFit({ title: "Saturday programme", tags: ["Barnteater"] }, ["culture"]);
   assert.deepEqual(tagged.matched_preferences, ["museums"]);
-  assert.deepEqual(tagged.reasons, ["preference_museums_compound_cue"]);
+  assert.deepEqual(tagged.reasons, ["preference_museums_cue"]);
 });
 
 test("false friends of rejected heads never mint relevance", () => {

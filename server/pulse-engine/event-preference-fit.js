@@ -25,6 +25,7 @@ const EVENT_INTENT_CUES = Object.freeze({
       "theater", "exhibition", "gallery", "museum", "vernissage", "screening", "cinema",
       "festival", "workshop", "reading", "book launch", "jazz", "comedy", "art", "culture",
       "konsert", "utstallning", "forestallning", "teater", "musik", "konst", "dans", "bio",
+      "sommarteater", "barnteater", "freilichttheater", "kammarmusik",
       "konsertti", "nayttely", "taide", "concerto", "mostra", "concierto", "exposicion",
       "spectacle", "ausstellung", "konzert", "koncert", "vystava", "divadlo",
       "συναυλια", "εκθεση", "φεστιβαλ", "παρασταση", "θεατρο", "μουσικη", "τεχνη",
@@ -92,13 +93,14 @@ const EVENT_INTENT_CUES = Object.freeze({
 // (flykting|invandring, Ein|wanderung: migration), marknad/markt
 // (arbets|marknad, Super|markt), konst (kok|konst), utsikt (framtids|utsikt),
 // föreställning (van|föreställning), kaffe (Norwegian an|skaffe), fest
-// (mani|fest), opera (Italian manodopera, labour) and English concert
-// (dis|concert). Inflected forms ("konserten") are not matched either; this is
-// not a stemmer.
+// (mani|fest), opera (Italian manodopera, labour), English concert
+// (dis|concert), musik (bakgrund|musik at an unrelated meeting), and
+// teater/theater (Kriegstheater: theatre of war). Only reviewed, exact
+// cultural compounds for these ambiguous heads appear in the cue list.
 const COMPOUND_CUE_HEADS = new Set([
   "konsert", "koncert", "konzert", "konsertti",
   "utstallning", "ausstellung", "nayttely",
-  "teater", "theater", "musik", "museum", "festival",
+  "museum", "festival",
   "loppis", "flohmarkt",
   "tradgard", "promenad",
 ]);
@@ -109,8 +111,8 @@ const MIN_COMPOUND_MODIFIER_LENGTH = 3;
 // Cues normalized once, each list with the compound heads it may use.
 const MATCHABLE_CUES = Object.freeze(Object.fromEntries(
   Object.entries(EVENT_INTENT_CUES).map(([intent, cues]) => [intent, {
-    strong: matchableCues(cues.strong),
-    partial: matchableCues(cues.partial),
+    strong: matchableCues(cues.strong, intent),
+    partial: matchableCues(cues.partial, intent),
   }]),
 ));
 
@@ -192,9 +194,12 @@ function eventSemanticAtoms(event) {
     .filter(Boolean);
 }
 
-function matchableCues(cues = []) {
+function matchableCues(cues = [], intent = "") {
   const words = cues.map(normalizeSearchText).filter(Boolean);
-  return { words, heads: words.filter((cue) => COMPOUND_CUE_HEADS.has(cue)) };
+  // A bare concert is already a nightlife cue. Extending that cue to every
+  // compound would call a daytime family concert nightlife without evidence.
+  // Keep nightlife whole-word/explicit until a narrower compound rule exists.
+  return { words, heads: intent === "bars" ? [] : words.filter((cue) => COMPOUND_CUE_HEADS.has(cue)) };
 }
 
 // "word" when a cue matches whole words, "compound" when only a curated head
