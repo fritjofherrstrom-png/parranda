@@ -9,7 +9,8 @@ localized-events API adapter links the organizer's `external_website_url`. The
 #504 record (`LIVE_OCCURRENCE_CLOCKS.md`) shows a card labelled Visit Stockholm
 opening debaser.se. When that URL is a site root, nothing distinguished it from
 an exact event page. The route-woven event (“Källa: *feed as link*”) and the
-Blitz Live move (a generic “Källa ↗” button) had the same flaw.
+Blitz Live move (a generic “Källa ↗” button) had the same flaw. The #506 Live
+journey review recorded the gap in `LIVE_SOURCE_FAILURE_STATES.md`.
 
 Links now name their destination host, and a site root says it is a homepage.
 The feed stays visible as attribution, separate from the link.

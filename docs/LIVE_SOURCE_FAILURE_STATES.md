@@ -127,10 +127,12 @@ found “Källstatus: 1/2 svarade · 1 med träffar” while `accepted_event_cou
 
 ## Remaining Live journey gaps (not changed here)
 
-- A card's link text is the feed label (“Visit Stockholm”) while the localized
-  API adapter links the organizer's `external_website_url`. The #504 record already
-  shows a card labelled Visit Stockholm opening debaser.se. A site root is rendered
-  exactly like an exact event page; nothing marks it as a generic homepage.
+- Since addressed in `LIVE_SOURCE_LINKS.md`: a card's link text was the feed label
+  (“Visit Stockholm”) while the localized API adapter links the organizer's
+  `external_website_url` (the #504 record shows a card labelled Visit Stockholm
+  opening debaser.se), and a site root rendered exactly like an exact event page.
+  Links now name their destination host and label a site root as a homepage; a
+  detail URL is still not supplied where the feed has none.
 - The sheet heading “Höjdpunkter för dina val” also covers rows with
   `preference_match: "none"`; cards show no per-row reason.
 - On narrow screens a selected-day timed card repeats the date twice
@@ -156,7 +158,8 @@ found “Källstatus: 1/2 svarade · 1 med träffar” while `accepted_event_cou
    and partial-with-events keeps events plus the incompleteness note. A source
    whose returned rows were all rejected shows “k/N svarade” without “med
    träffar” (the Malmö review case). Check both viewports.
-5. Open two real card links; record event page vs homepage (known gap above).
+5. Open two real card links; record the link text, the exact URL and whether an
+   event page or a homepage opened (link labelling: `LIVE_SOURCE_LINKS.md`).
 6. Report VERIFIED / FAILED / NOT OBSERVED / INVALID ACCEPTANCE separately.
    Replay/fixture runs are never live evidence.
 
