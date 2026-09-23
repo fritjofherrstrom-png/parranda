@@ -153,8 +153,9 @@ found “Källstatus: 1/2 svarade · 1 med träffar” while `accepted_event_cou
    (count provider requests), then recovers to cards or holds the failure again.
 4. Regressions: a healthy Stockholm (Visit Stockholm API) day still shows cards
    for today/tomorrow. A responding empty source shows the new empty sentence,
-   and partial-with-events keeps events plus the incompleteness note. Check both
-   viewports.
+   and partial-with-events keeps events plus the incompleteness note. A source
+   whose returned rows were all rejected shows “k/N svarade” without “med
+   träffar” (the Malmö review case). Check both viewports.
 5. Open two real card links; record event page vs homepage (known gap above).
 6. Report VERIFIED / FAILED / NOT OBSERVED / INVALID ACCEPTANCE separately.
    Replay/fixture runs are never live evidence.
