@@ -177,13 +177,13 @@ function liveEventSource(event: PulseEvent, lang: Lang) {
   if (!event.source_url || (!listedBy && !link)) return null;
   return (
     <span className="text-parranda-ink/50">
-      {listedBy && <>{" · "}via {listedBy}</>}
+      {listedBy && <>{" · "}via&nbsp;{listedBy}</>}
       {link && (
         <>
           {" · "}
           <a href={link.href} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 min-w-11 items-center underline underline-offset-2 hover:text-parranda-accent">
-            {link.text}
-            <span aria-hidden="true">&nbsp;↗</span>
+            {/* One flow, so a wrapped homepage label keeps its arrow after the last word. */}
+            <span>{link.text}<span aria-hidden="true">&nbsp;↗</span></span>
           </a>
         </>
       )}
@@ -1895,8 +1895,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                   {move.kind === "live_event"
                     ? liveSourceLink && (
                         <a href={liveSourceLink.href} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center rounded-parranda-btn border border-parranda-ink/16 px-4 text-sm font-bold text-parranda-ink/75">
-                          {liveSourceLink.text}
-                          <span aria-hidden="true">&nbsp;↗</span>
+                          <span>{liveSourceLink.text}<span aria-hidden="true">&nbsp;↗</span></span>
                         </a>
                       )
                     : move.source.url && (
@@ -2492,8 +2491,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                     {sourceLabel && sourceLink && " · "}
                     {sourceLink && (
                       <a href={sourceLink.href} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 min-w-11 items-center underline underline-offset-2 hover:text-parranda-accent">
-                        {sourceLink.text}
-                        <span aria-hidden="true">&nbsp;↗</span>
+                        <span>{sourceLink.text}<span aria-hidden="true">&nbsp;↗</span></span>
                       </a>
                     )}
                   </p>

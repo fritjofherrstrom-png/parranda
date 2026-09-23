@@ -84,7 +84,7 @@ const linkText = (anchor) => anchor.textContent.replace(/\s*↗$/, '');
 // "Live in your route" block.
 const livePanel = (h) => [...h.container.querySelectorAll('section')]
   .find((section) => /^Live (i|in) Testville/.test(section.querySelector('p')?.textContent || ''));
-const occurrences = (text, needle) => text.split(needle).length - 1;
+const occurrences = (text, pattern) => (text.match(pattern) || []).length;
 
 function assertHonestRows(root, { homepage, page, lang = 'en' }) {
   const [home] = anchorsTo(root, HOME.source_url);
@@ -112,7 +112,7 @@ test('Live panel and Live sheet say where each link leads; the feed stays attrib
   assert.ok(panel, 'Live panel renders');
   assertHonestRows(panel, { homepage: 'Homepage: museum.example.com (not the event page)', page: 'venue.example' });
   // Each row still names the feed that listed it — as text, beside the link.
-  assert.equal(occurrences(panel.textContent, `via ${FEED}`), 4);
+  assert.equal(occurrences(panel.textContent, /via\sVisit Example/g), 4);
   assert.match(panel.textContent, /Source: Visit Example · CC-BY 4\.0/);
 
   await click(h, button(h, /See all live/));
