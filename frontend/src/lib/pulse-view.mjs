@@ -63,6 +63,78 @@ export function pulseBrowseBuckets(liveEvents, wovenIds) {
   };
 }
 
+// Server intents in the Planner's chip vocabulary (the same aliases route
+// coverage uses in route-context-view.mjs).
+const PLANNER_INTENT_ALIASES = Object.freeze({
+  scenic: "views",
+  museums: "culture",
+  coffee: "fika",
+  bars: "nightlife",
+  vintage: "second_hand",
+});
+
+function plannerPreferenceKeys(values) {
+  const keys = [];
+  for (const value of Array.isArray(values) ? values : []) {
+    if (typeof value !== "string" || !value.trim()) continue;
+    const key = PLANNER_INTENT_ALIASES[value.trim()] || value.trim();
+    if (!keys.includes(key)) keys.push(key);
+  }
+  return keys;
+}
+
+/**
+ * Why a Live row is shown, limited to what the SERVER established for the
+ * user's current picks. Titles are never re-read here.
+ *   match           → the server matched the row to these current picks
+ *   looser_match    → only an adjacent (partial) server match to these picks
+ *   local_discovery → the one highlight slot the server reserved for a strong
+ *                     local happening outside the picks it ranked for; claimed
+ *                     only while every current pick was part of that ranking
+ *   null            → no claim: no picks, no server fit, or none still current
+ * Preferences come back in the user's pick order and chip vocabulary.
+ */
+export function liveEventRelevance(ev, selectedPreferences) {
+  if (!ev || typeof ev !== "object") return null;
+  const selected = plannerPreferenceKeys(selectedPreferences);
+  if (!selected.length) return null;
+  const current = (values) => {
+    const keys = plannerPreferenceKeys(values);
+    return selected.filter((key) => keys.includes(key));
+  };
+  const level = ev.preference_match;
+  const matched = level === "strong" ? current(ev.matched_preferences) : [];
+  if (matched.length) return { kind: "match", preferences: matched };
+  const looser = level === "strong" || level === "partial" ? current(ev.partial_preferences) : [];
+  if (looser.length) return { kind: "looser_match", preferences: looser };
+  const rankedFor = plannerPreferenceKeys(ev.requested_preferences);
+  if (
+    ev.highlight_reason === "local_serendipity" &&
+    level === "none" &&
+    selected.every((key) => rankedFor.includes(key))
+  ) {
+    return { kind: "local_discovery", preferences: [] };
+  }
+  return null;
+}
+
+/**
+ * Split Live highlights into the rows the server matched to the current picks
+ * and every other row, keeping the server's rank order inside each group. Only
+ * a full match earns the picks group; looser matches and the discovery slot
+ * stay with the other highlights and carry their own per-row reason.
+ */
+export function liveHighlightGroups(events, selectedPreferences) {
+  const picks = [];
+  const other = [];
+  for (const ev of Array.isArray(events) ? events : []) {
+    if (!ev || typeof ev !== "object") continue;
+    if (liveEventRelevance(ev, selectedPreferences)?.kind === "match") picks.push(ev);
+    else other.push(ev);
+  }
+  return { picks, other };
+}
+
 /**
  * Clothing guidance derived from the TRUSTED weather observation the day already
  * carries (dayflow_context.weather.provenance.observed). Same product rules as

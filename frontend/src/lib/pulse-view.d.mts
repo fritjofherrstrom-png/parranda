@@ -41,6 +41,29 @@ export declare function pulseBrowseBuckets<E extends object>(
   wovenIds?: Set<string>,
 ): { tonight: E[]; thisWeek: E[] };
 
+export interface LiveEventRelevance {
+  kind: "match" | "looser_match" | "local_discovery";
+  preferences: string[];
+}
+
+export interface LiveEventFit {
+  preference_match?: string;
+  requested_preferences?: string[];
+  matched_preferences?: string[];
+  partial_preferences?: string[];
+  highlight_reason?: string;
+}
+
+export declare function liveEventRelevance(
+  ev: LiveEventFit | null | undefined,
+  selectedPreferences: readonly string[] | null | undefined,
+): LiveEventRelevance | null;
+
+export declare function liveHighlightGroups<E extends LiveEventFit>(
+  events: readonly E[] | null | undefined,
+  selectedPreferences: readonly string[] | null | undefined,
+): { picks: E[]; other: E[] };
+
 export declare function eventTiming(
   ev:
     | {
