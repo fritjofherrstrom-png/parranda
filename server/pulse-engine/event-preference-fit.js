@@ -84,28 +84,46 @@ const EVENT_INTENT_CUES = Object.freeze({
 // Closed-compound heads. Swedish, Norwegian, Danish, German, Dutch and Finnish
 // write compounds as one word with the defining element last: a
 // "kvällskonsert" is a konsert and a "sommarutställning" an utställning.
-// Whole-word matching misses that ordinary way of titling a happening, so a cue
-// listed here may also match as the final element of a longer word. The set is
-// curated, not derived. Each head is already a cue above (compounds add no new
-// meaning), has at least five letters, and has no false friend that could
-// plausibly title a happening: a word that ends in the head without being a
-// kind of it. That rule keeps these whole-word only: vandring/wanderung
-// (flykting|invandring, Ein|wanderung: migration), marknad/markt
-// (arbets|marknad, Super|markt), konst (kok|konst), utsikt (framtids|utsikt),
-// föreställning (van|föreställning), kaffe (Norwegian an|skaffe), fest
-// (mani|fest), opera (Italian manodopera, labour), English concert
-// (dis|concert), musik (bakgrund|musik at an unrelated meeting), and
-// teater/theater (Kriegstheater: theatre of war). Only reviewed, exact
-// cultural compounds for these ambiguous heads appear in the cue list.
-const COMPOUND_CUE_HEADS = new Set([
+// Whole-word matching misses that ordinary way of titling a happening, so a
+// head listed here may also match as the final element of a longer word. Each
+// head is already a cue above (compounds add no new meaning) and has at least
+// five letters. Inflected forms ("konserten") are not matched; this is not a
+// stemmer.
+//
+// Open heads name one kind of happening whatever precedes them: any
+// "…museum" is a museum and any "…loppis" a flea market.
+const OPEN_COMPOUND_HEADS = normalizedSet(["museum", "festival", "loppis", "flohmarkt", "promenad"]);
+// Framed heads keep an everyday sense that a subject modifier can switch to: a
+// "Kriegstheater" is a theatre of war, "bakgrundsmusik" incidental sound, a
+// "hundutställning" a dog show, a "fågelkonsert" birdsong and
+// "Rechnungsausstellung" the issuing of an invoice. They match only when the
+// whole modifier is one of the short, explicit framing words below, each
+// verified by a real compound in tests/event-preference-fit.test.js. A word
+// missing from the list costs a match and never mints one.
+const FRAMED_COMPOUND_HEADS = normalizedSet([
   "konsert", "koncert", "konzert", "konsertti",
-  "utstallning", "ausstellung", "nayttely",
-  "museum", "festival",
-  "loppis", "flohmarkt",
-  "tradgard", "promenad",
+  "utställning", "ausstellung", "näyttely",
+  "teater", "theater", "musik",
 ]);
-// The part before the head must be a real modifier, not a short prefix such as
-// "in"/"ut" or a stray letter.
+const FRAMING_MODIFIERS = normalizedSet([
+  // when
+  "kvälls", "lunch", "sommar", "sommer", "vår", "jul", "jule", "advents", "weihnachts", "kesä",
+  // for whom
+  "barn", "familje", "børne", "kinder",
+  // where it is staged
+  "kyrk", "kyrko", "kirchen", "frilufts", "freilicht", "kammar", "kammer",
+  // art form or medium
+  "jazz", "orgel", "dock", "konst", "kunst", "taide", "foto",
+]);
+// Other cue words never act as heads, because their compounds routinely mean
+// something else: vandring/wanderung (flykting|invandring, Ein|wanderung:
+// migration), marknad/markt (arbets|marknad, Super|markt), konst (kok|konst),
+// utsikt (framtids|utsikt), föreställning (van|föreställning), trädgård
+// (Finland-Swedish barn|trädgård: kindergarten), kaffe (Norwegian an|skaffe),
+// fest (mani|fest), opera (Italian manodopera) and English concert
+// (dis|concert).
+// An open head still needs a real modifier, not a short prefix such as "in"/"ut"
+// or a stray letter.
 const MIN_COMPOUND_MODIFIER_LENGTH = 3;
 
 // Cues normalized once, each list with the compound heads it may use.
@@ -194,19 +212,28 @@ function eventSemanticAtoms(event) {
     .filter(Boolean);
 }
 
+function normalizedSet(values) {
+  return new Set(values.map(normalizeSearchText));
+}
+
 function matchableCues(cues = [], intent = "") {
   const words = cues.map(normalizeSearchText).filter(Boolean);
   // A bare concert is already a nightlife cue. Extending that cue to every
   // compound would call a daytime family concert nightlife without evidence.
   // Keep nightlife whole-word/explicit until a narrower compound rule exists.
-  return { words, heads: intent === "bars" ? [] : words.filter((cue) => COMPOUND_CUE_HEADS.has(cue)) };
+  if (intent === "bars") return { words, openHeads: [], framedHeads: [] };
+  return {
+    words,
+    openHeads: words.filter((cue) => OPEN_COMPOUND_HEADS.has(cue)),
+    framedHeads: words.filter((cue) => FRAMED_COMPOUND_HEADS.has(cue)),
+  };
 }
 
 // "word" when a cue matches whole words, "compound" when only a curated head
 // ends a longer word, otherwise null. Whole-word evidence wins.
-function cueMatch(haystacks, { words, heads }) {
-  if (haystacks.some((haystack) => hasCue(haystack, words))) return "word";
-  if (heads.length && haystacks.some((haystack) => hasCompoundCue(haystack, heads))) return "compound";
+function cueMatch(haystacks, cues) {
+  if (haystacks.some((haystack) => hasCue(haystack, cues.words))) return "word";
+  if (haystacks.some((haystack) => hasCompoundCue(haystack, cues))) return "compound";
   return null;
 }
 
@@ -216,13 +243,20 @@ function hasCue(haystack, words) {
   return words.some((cue) => padded.includes(` ${cue} `));
 }
 
-function hasCompoundCue(haystack, heads) {
-  if (!haystack) return false;
-  return haystack.split(" ").some((word) => heads.some((head) => endsCompound(word, head)));
+function hasCompoundCue(haystack, { openHeads, framedHeads }) {
+  if (!haystack || openHeads.length + framedHeads.length === 0) return false;
+  return haystack.split(" ").some((word) =>
+    openHeads.some((head) => endsOpenCompound(word, head)) ||
+    framedHeads.some((head) => endsFramedCompound(word, head)));
 }
 
-function endsCompound(word, head) {
+function endsOpenCompound(word, head) {
   return word.length - head.length >= MIN_COMPOUND_MODIFIER_LENGTH && word.endsWith(head);
+}
+
+function endsFramedCompound(word, head) {
+  return word.length > head.length && word.endsWith(head) &&
+    FRAMING_MODIFIERS.has(word.slice(0, word.length - head.length));
 }
 
 function normalizeRole(value) {
@@ -252,9 +286,11 @@ function emptyFit() {
 }
 
 module.exports = {
-  COMPOUND_CUE_HEADS,
   EVENT_INTENT_CUES,
+  FRAMED_COMPOUND_HEADS,
+  FRAMING_MODIFIERS,
   MAX_PREFERENCE_SCORE,
   MIN_COMPOUND_MODIFIER_LENGTH,
+  OPEN_COMPOUND_HEADS,
   scoreEventPreferenceFit,
 };

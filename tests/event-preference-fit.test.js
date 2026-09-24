@@ -2,11 +2,15 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
-  COMPOUND_CUE_HEADS,
   EVENT_INTENT_CUES,
+  FRAMED_COMPOUND_HEADS,
+  FRAMING_MODIFIERS,
   MIN_COMPOUND_MODIFIER_LENGTH,
+  OPEN_COMPOUND_HEADS,
   scoreEventPreferenceFit,
 } = require("../server/pulse-engine/event-preference-fit");
+
+const normalize = (value) => value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 test("structured provider semantics match canonical planner preferences", () => {
   const fit = scoreEventPreferenceFit(
@@ -124,7 +128,6 @@ test("closed compounds and reviewed exact forms cover the cue languages safely",
     ["Freilichttheater", "culture", "museums"],
     ["Kammarmusik", "culture", "museums"],
     ["Kvällsöppet på Sjöfartsmuseum", "culture", "museums"],
-    ["Visning av skolträdgård", "green", "green"],
   ];
   for (const [title, preference, canonical] of cases) {
     const fit = scoreEventPreferenceFit({ title }, [preference]);
@@ -165,6 +168,107 @@ test("a daytime family concert is culture, not a new nightlife match", () => {
   assert.deepEqual(liveMusic.matched_preferences, ["bars"], "explicit live music still counts");
 });
 
+test("a subject modifier never gives a framed head a strong score or a match reason", () => {
+  // The seven false hits found on 2e2675d, plus the two from the #508 review
+  // and two more of the same kind.
+  const cases = [
+    ["Nationell hundutställning", "culture"], // a dog show
+    ["Veteranbilsutställning på torget", "culture"], // a car show
+    ["Koiranäyttely", "culture"], // Finnish dog show
+    ["Rechnungsausstellung: Schulung", "culture"], // issuing invoices
+    ["Fågelkonsert i gryningen", "culture"], // birdsong
+    ["Hupkonzert gegen Fluglärm", "culture"], // a honking protest
+    ["Barnträdgård Solstrålen: föräldramöte", "green"], // Finland-Swedish kindergarten
+    ["Kriegstheater 1914–1918: ein historischer Vortrag", "culture"], // theatre of war
+    ["Bakgrundsmusik vid budgetmöte", "culture"], // incidental sound
+    ["Affentheater im Rathaus", "culture"], // a farce, a fuss
+    ["Hissmusik och kaffe", "culture"],
+  ];
+  for (const [title, preference] of cases) {
+    const fit = scoreEventPreferenceFit({ title }, [preference]);
+    assert.equal(fit.level, "none", `${title} must not match ${preference}`);
+    assert.equal(fit.score, 0, title);
+    assert.deepEqual(fit.reasons, [], title);
+  }
+});
+
+test("the three legitimate new compound matches stay", () => {
+  const cases = [
+    ["Bakluckeloppis", "markets", "strong", "preference_markets_compound_cue"],
+    ["Matfestival", "culture", "strong", "preference_museums_compound_cue"],
+    ["Fotopromenad", "green", "partial", "preference_green_compound_adjacent"],
+  ];
+  for (const [title, preference, level, reason] of cases) {
+    const fit = scoreEventPreferenceFit({ title }, [preference]);
+    assert.equal(fit.level, level, title);
+    assert.deepEqual(fit.reasons, [reason], title);
+  }
+});
+
+test("every framing modifier is verified by a real compound", () => {
+  const verified = [
+    ["kvälls", "Fixture: kvällskonsert"],
+    ["lunch", "Lunchkonsert"],
+    ["sommar", "Sommarutställning"],
+    ["sommer", "Sommerkonzert im Park"],
+    ["vår", "Vårkonsert med kören"],
+    ["jul", "Julkonsert"],
+    ["jule", "Julekoncert i kirken"],
+    ["advents", "Adventskonsert"],
+    ["weihnachts", "Weihnachtskonzert"],
+    ["kesä", "Kesäkonsertti"],
+    ["barn", "Barnkonsert"],
+    ["familje", "Familjekonsert kl 11"],
+    ["børne", "Børneteater"],
+    ["kinder", "Kindertheater"],
+    ["kyrk", "Kyrkkonsert"],
+    ["kyrko", "Kyrkomusik"],
+    ["kirchen", "Kirchenkonzert"],
+    ["frilufts", "Friluftsteater"],
+    ["freilicht", "Freilichtkonzert"],
+    ["kammar", "Kammarkonsert"],
+    ["kammer", "Kammermusik"],
+    ["jazz", "Jazzkonsert på kajen"],
+    ["orgel", "Orgelkonsert"],
+    ["dock", "Dockteater"],
+    ["konst", "Konstutställning"],
+    ["kunst", "Kunstausstellung"],
+    ["taide", "Taidenäyttely"],
+    ["foto", "Fotoutställning"],
+  ];
+  for (const [, title] of verified) {
+    assert.deepEqual(scoreEventPreferenceFit({ title }, ["culture"]).reasons, ["preference_museums_compound_cue"], title);
+  }
+  assert.deepEqual(
+    verified.map(([modifier]) => normalize(modifier)).sort(),
+    [...FRAMING_MODIFIERS].sort(),
+    "the list holds exactly the verified modifiers",
+  );
+});
+
+test("the short framing list deliberately misses these reasonable compounds", () => {
+  // Measured against 2e2675d, where concert, exhibition and garden heads were
+  // open: these legitimate titles matched there and do not match now. Adding a
+  // verified modifier moves a title from here to the table above.
+  const culture = [
+    "Luciakonsert", "Nyårskonsert", "Midsommarkonsert", "Höstkonsert", "Välgörenhetskonsert",
+    "Skolkonsert", "Pianokonsert", "Rockkonsert", "Popkonsert", "Gospelkonsert", "Operakonsert",
+    "Körkonsert", "Utomhuskonsert", "Abendkonzert", "Benefizkonzert", "Neujahrskonzert",
+    "Frühlingskonzert", "Klavierkonzert", "Chorkonzert", "Kirkekoncert", "Kveldskonsert",
+    "Joulukonsertti", "Kirkkokonsertti", "Urkukonsertti", "Lastenkonsertti", "Iltakonsertti",
+    "Separatutställning", "Samlingsutställning", "Jubileumsutställning", "Vandringsutställning",
+    "Höstutställning", "Grafikutställning", "Keramikutställning", "Textilutställning",
+    "Skulpturutställning", "Sonderausstellung", "Dauerausstellung", "Wanderausstellung",
+    "Valokuvanäyttely",
+  ];
+  for (const title of culture) {
+    assert.equal(scoreEventPreferenceFit({ title }, ["culture"]).level, "none", title);
+  }
+  for (const title of ["Skolträdgård", "Köksträdgård", "Kryddträdgård"]) {
+    assert.equal(scoreEventPreferenceFit({ title }, ["green"]).level, "none", title);
+  }
+});
+
 test("whole-word evidence keeps its reason and structured compounds match too", () => {
   const whole = scoreEventPreferenceFit({ title: "Konsert på kajen" }, ["culture"]);
   assert.deepEqual(whole.reasons, ["preference_museums_cue"]);
@@ -202,9 +306,9 @@ test("false friends of rejected heads never mint relevance", () => {
   }
 });
 
-test("a compound needs a real modifier and must end in its head", () => {
-  const boundary = scoreEventPreferenceFit({ title: "Julkonsert" }, ["culture"]);
-  assert.equal(boundary.level, "strong", "a three-letter modifier qualifies");
+test("an open head needs a real modifier and every compound must end in its head", () => {
+  const boundary = scoreEventPreferenceFit({ title: "Bokloppis" }, ["second_hand"]);
+  assert.equal(boundary.level, "strong", "a three-letter modifier qualifies for an open head");
 
   for (const title of [
     "Ölfestival", // a two-letter modifier is too short to trust
@@ -215,22 +319,27 @@ test("a compound needs a real modifier and must end in its head", () => {
   }
 });
 
-test("compound heads are existing single-word cues, at least five letters long", () => {
+test("compound heads are existing cues and framing modifiers are whole words", () => {
   const cueWords = new Set(
     Object.values(EVENT_INTENT_CUES)
       .flatMap((cues) => [...cues.strong, ...cues.partial])
-      .map((cue) => cue.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()),
+      .map(normalize),
   );
-  for (const head of COMPOUND_CUE_HEADS) {
+  for (const head of [...OPEN_COMPOUND_HEADS, ...FRAMED_COMPOUND_HEADS]) {
     assert.match(head, /^[a-z]{5,}$/, `${head} is a normalized word of at least five letters`);
     assert.ok(cueWords.has(head), `${head} adds no meaning beyond an existing cue`);
+    assert.equal(OPEN_COMPOUND_HEADS.has(head) && FRAMED_COMPOUND_HEADS.has(head), false, head);
+  }
+  for (const modifier of FRAMING_MODIFIERS) {
+    assert.match(modifier, /^\p{L}{3,}$/u, `${modifier} is one normalized word of at least three letters`);
   }
   assert.ok(MIN_COMPOUND_MODIFIER_LENGTH >= 3);
   for (const rejected of [
-    "vandring", "wanderung", "marknad", "markt", "konst", "utsikt", "forestallning",
+    "vandring", "wanderung", "marknad", "markt", "konst", "utsikt", "forestallning", "tradgard",
     "kaffe", "fika", "fest", "opera", "concert", "dans", "bio", "bad", "strand",
   ]) {
-    assert.equal(COMPOUND_CUE_HEADS.has(rejected), false, `${rejected} stays whole-word only`);
+    assert.equal(OPEN_COMPOUND_HEADS.has(rejected) || FRAMED_COMPOUND_HEADS.has(rejected), false,
+      `${rejected} never acts as a head`);
   }
 });
 

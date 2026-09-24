@@ -325,27 +325,47 @@ the capped browse list, and the rule never changes route composition.
 
 Title and tag cues also match selected closed compounds. Swedish, Norwegian,
 Danish, German, Dutch and Finnish write "kvällskonsert", "Sommarutställning" or
-"Kinderflohmarkt" as one word with the defining element last, so a curated
-set of cue heads (concert, exhibition, museum, festival, flea market, garden
-and walk words) may end a longer word. Each head is an existing cue, at least
-five letters long, preceded by a modifier of at least three letters. Ambiguous
-heads stay whole-word only: `musik` can be background music at an unrelated
-meeting, while `teater`/`theater` can refer to a theatre of war. Reviewed exact
-cues such as `Kammarmusik`, `Sommarteater` and `Freilichttheater` preserve those
-clear cultural cases. Nightlife does not inherit compound concert or music
-cues: `Familjekonsert kl 11` alone does not attest nightlife. Existing explicit
-`livemusik` and whole-word `konsert` cues still work as before. False friends
-such as migration (`invandring`, `Einwanderung`), labour market
+"Kinderflohmarkt" as one word with the defining element last, so a curated cue
+head may end a longer word. Every head is an existing cue of at least five
+letters. Inflected forms are not stemmed.
+
+- Open heads (museum, festival, flea market and walk words) name one kind of
+  happening whatever precedes them. Any modifier of at least three letters
+  counts.
+- Framed heads (concert, exhibition, theatre and music words) also have an
+  everyday sense that a subject can switch to. `Kriegstheater` is a theatre of
+  war, `bakgrundsmusik` incidental sound, `hundutställning` a dog show and
+  `fågelkonsert` birdsong. These heads count only when the whole modifier is
+  one of a short, explicit list of framing words: when it happens, for whom,
+  where it is staged, or in which art form. Every word on the list is verified
+  by a real compound in `tests/event-preference-fit.test.js`. A missing word
+  costs a match and never mints one.
+- Reviewed exact cues (`Sommarteater`, `Barnteater`, `Freilichttheater`,
+  `Kammarmusik`) remain whole-word cues.
+
+The short list deliberately misses some reasonable compounds that open heads
+used to catch. Examples are `Luciakonsert`, `Välgörenhetskonsert`,
+`Pianokonsert`, `Joulukonsertti`, `Jubileumsutställning`, `Sonderausstellung`
+and garden words such as `Köksträdgård`. The test file lists them all. A new
+framing word is added only together with a verified compound.
+
+Nightlife does not inherit compound cues: `Familjekonsert kl 11` alone does not
+attest nightlife, while explicit `livemusik` and whole-word `konsert` still
+count.
+
+Words whose compounds routinely mean something else never act as heads. These
+include migration (`invandring`, `Einwanderung`), labour market
 (`arbetsmarknad`), supermarket (`Supermarkt`), cookery (`kokkonst`), prospects
-(`framtidsutsikt`), delusion (`vanföreställning`), procurement (`anskaffe`) and
-`manodopera` never match walks, markets, culture, views or fika. Inflected
-forms are not stemmed. A compound match scores like its whole-word head and
-is recorded as `preference_<intent>_compound_cue` or `_compound_adjacent`.
+(`framtidsutsikt`), delusion (`vanföreställning`), kindergarten
+(`barnträdgård`), procurement (`anskaffe`) and `manodopera`. A compound match
+scores like its whole-word head and is recorded as
+`preference_<intent>_compound_cue` or `_compound_adjacent`.
 
 The Live sheet claims only the relevance the server established for the
 user's current picks. "Highlights for your picks" lists just the rows the
 server matched to a pick the user still holds, each with a "Matches: …" line
-from `matched_preferences`. Every other highlight sits under "Other local
+from `matched_preferences` that names the pick exactly as its chip reads (for
+example "Matchar: Mat & dryck"). Every other highlight sits under "Other local
 highlights" (or a neutral "Highlights" when nothing matched): a partial fit
 reads "A looser match for: …", and the reserved discovery row reads "A local
 discovery beyond your picks" only while every current pick was part of the

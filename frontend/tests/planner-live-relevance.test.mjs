@@ -20,11 +20,11 @@ function row(id, title, salience, extra = {}) {
     source_url: `https://calendar.example/${id}`, salience_score: salience, cultural_tier: 'neutral',
     tags: [], ...extra };
 }
-function serverLiveEvents(rows) {
+function serverLiveEvents(rows, picks = PICKS) {
   return shapeCollectedLiveEvents(rankCollectedEventsForPreferences({
     coverage: 'covered', tonight: [], this_week: [], acquisition: { source_health: HEALTHY },
     _rankable_events: { tonight: rows, this_week: [] },
-  }, PICKS));
+  }, picks));
 }
 function day(liveEvents) {
   return { days: [{ experimental_agnostic_route_applied: true, primary_route: {
@@ -40,12 +40,13 @@ async function click(h, control) {
   assert.ok(control, 'control exists');
   await h.act(() => control.dispatchEvent(new h.window.Event('click', { bubbles: true })));
 }
-async function composedPlanner(t, liveEvents) {
-  const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' });
+async function composedPlanner(t, liveEvents, { lang = 'en', picks = PICKS } = {}) {
+  const prefs = picks === PICKS ? '' : `&prefs=${picks.join(',')}`;
+  const h = await mountPlanner({ url: `http://localhost/anywhere?place=Testville${prefs}&lang=${lang}` });
   t.after(() => h.unmount());
   await h.clock.advance(500);
   const compose = h.fetchMock.pending()[0];
-  assert.deepEqual(compose.body.preferences, PICKS, 'Live was ranked for the picks on screen');
+  assert.deepEqual(compose.body.preferences, picks, 'Live was ranked for the picks on screen');
   await h.fetchMock.respond(compose, day(liveEvents));
   await h.clock.advance(50);
   return h;
@@ -91,12 +92,12 @@ test('the Live sheet claims picks only for server matches and labels every other
 
   const other = rowsUnder(h, 'Other local highlights');
   assert.equal(other.length, 2);
-  assert.match(other[0], /Saturday market.*A looser match for: Food$/);
+  assert.match(other[0], /Saturday market.*A looser match for: Food & drink$/, 'the pick is named as its chip reads');
   assert.match(other[1], /Night swim at the harbour.*A local discovery beyond your picks$/);
 
   const more = [...sheet(h).querySelectorAll('details li')].map(li => li.textContent);
   assert.equal(more.length, 2);
-  assert.match(more[0], /Street food tasting.*Matches: Food$/);
+  assert.match(more[0], /Street food tasting.*Matches: Food & drink$/);
   assert.match(more[1], /Library open house · Venue h-library · Official calendar$/, 'no server reason, no line');
 });
 
@@ -126,4 +127,48 @@ test('a pick added before the day recomposes is never claimed from the older ran
   const other = rowsUnder(h, 'Other local highlights');
   assert.match(other[1], /Night swim at the harbour · Venue g-swim · Official calendar$/,
     '"beyond your picks" is not established for a pick the server never checked');
+});
+
+test('Swedish reason lines name each pick exactly as its chip reads', async t => {
+  const h = await composedPlanner(t, serverLiveEvents(ROWS), { lang: 'sv' });
+  await click(h, button(h, /Se allt live/));
+
+  assert.match(rowsUnder(h, 'Höjdpunkter för dina val')[0], /Fixture: kvällskonsert.*Matchar: Kultur$/);
+  const other = rowsUnder(h, 'Andra lokala höjdpunkter');
+  assert.match(other[0], /Saturday market.*Lösare träff för: Mat & dryck$/);
+  assert.match(other[1], /Night swim at the harbour.*Lokal upptäckt utanför dina val$/);
+});
+
+test('the known subject-compound false hits show no match reason anywhere in Live', async t => {
+  const picks = ['food', 'culture', 'views', 'green'];
+  const falseHits = [
+    'Nationell hundutställning',
+    'Veteranbilsutställning på torget',
+    'Koiranäyttely',
+    'Rechnungsausstellung: Schulung',
+    'Fågelkonsert i gryningen',
+    'Hupkonzert gegen Fluglärm',
+    'Barnträdgård Solstrålen: föräldramöte',
+  ];
+  const liveEvents = serverLiveEvents([
+    row('a-evening-concert', 'Fixture: kvällskonsert', 5),
+    ...falseHits.map((title, index) => row(`z-false-${index}`, title, 5)),
+  ], picks);
+  for (const event of [...liveEvents.tonight, ...liveEvents.browse.tonight.more].filter(e => falseHits.includes(e.title))) {
+    assert.equal(event.preference_match, 'none', event.title);
+    assert.equal(event.preference_score, 0, event.title);
+  }
+
+  const h = await composedPlanner(t, liveEvents, { lang: 'sv', picks });
+  await click(h, button(h, /Se allt live/));
+
+  const picked = rowsUnder(h, 'Höjdpunkter för dina val');
+  assert.equal(picked.length, 1);
+  assert.match(picked[0], /Fixture: kvällskonsert.*Matchar: Kultur$/);
+  const rows = [...sheet(h).querySelectorAll('li')].map(li => li.textContent);
+  for (const title of falseHits) {
+    const text = rows.find(line => line.includes(title));
+    assert.ok(text, `${title} is still listed`);
+    assert.doesNotMatch(text, /Matchar|Lösare träff|Lokal upptäckt/, `${title} carries no reason`);
+  }
 });

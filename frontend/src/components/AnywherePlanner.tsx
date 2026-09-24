@@ -305,7 +305,8 @@ function partialPreferenceLabels(stop: any, selected: string[], lang: Lang): str
 /**
  * WHY a Live row is shown, in the user's language. The kind and the picks come
  * from the server's fit (`liveEventRelevance`); nothing here reads the title or
- * guesses. A row without an established reason gets no line at all.
+ * guesses. A row without an established reason gets no line at all. Picks are
+ * named exactly as their chips read.
  */
 function liveRelevanceSentence(
   relevance: LiveEventRelevance | null,
@@ -313,7 +314,12 @@ function liveRelevanceSentence(
   t: (sv: string, en: string) => string,
 ): string | null {
   if (!relevance) return null;
-  const picks = relevance.preferences.map((key) => label(INTENT_LABELS, key, lang)).join(", ");
+  const picks = relevance.preferences
+    .map((key) => {
+      const chip = ANYWHERE_PREFERENCES.find((pref) => pref.key === key);
+      return chip ? (lang === "en" ? chip.en : chip.sv) : label(INTENT_LABELS, key, lang);
+    })
+    .join(", ");
   switch (relevance.kind) {
     case "match":
       return t(`Matchar: ${picks}`, `Matches: ${picks}`);
