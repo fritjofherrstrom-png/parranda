@@ -119,12 +119,30 @@ test("multi-day records claim only the sessions their schedule lists", () => {
     outsideSpan: { dates: [session("2026-07-30")] },
     clockConflict: { dates: [session("2026-07-21"), session("2026-07-23", "19:00")] },
     mixedClocks: { dates: [session("2026-07-21"), { date: "2026-07-23" }] },
+    // One session's end must never become another session's end.
+    partlyMissingEnd: { dates: [session("2026-07-21"), session("2026-07-23", "18:00", null)] },
+    splitClocks: { dates: [session("2026-07-21", "18:00", null), session("2026-07-23", null, "21:00")] },
     overnight: { dates: [session("2026-07-21", "22:00", "02:00")] },
     malformedClock: { dates: [session("2026-07-21", "25:00")] },
     overProcessingBound: { dates: Array.from({ length: 401 }, () => session("2026-07-21")) },
   })) {
     assert.equal(map({ schedule }).kind, "period", name);
   }
+  // A clock the record itself states is shared by every listed session...
+  assert.deepEqual(
+    map({ end_time: "21:00", schedule: { dates: [session("2026-07-21"), session("2026-07-23", "18:00", null)] } }),
+    {
+      kind: "occurrences",
+      dates: ["2026-07-21", "2026-07-23"],
+      starts_on: "2026-07-21",
+      ends_on: "2026-07-23",
+      local_start: "18:00",
+      local_end: "21:00",
+      timezone: TIMEZONE,
+    },
+  );
+  // ...but a valid listed clock must not hide a malformed record clock.
+  assert.equal(map({ start_time: "25:00", schedule: { dates: [session("2026-07-23")] } }).kind, "period");
   // More than 60 listed days that are not every day of the span stay a period.
   const everyOtherDay = Array.from({ length: 61 }, (_, index) =>
     session(new Date(Date.UTC(2026, 5, 1 + index * 2)).toISOString().slice(0, 10)));

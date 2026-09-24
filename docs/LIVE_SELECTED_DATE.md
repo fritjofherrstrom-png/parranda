@@ -130,10 +130,12 @@ The other three `daily` producers follow the same rule. The grammar lives in
 - **Public-events API** (`localized_events_api`): a multi-day record claims only
   the sessions its `schedule.dates` lists inside the record's span with one
   shared clock. Listing every day of the span is a daily statement (read up to
-  400 entries). Listings outside the span, with conflicting, malformed, overnight
-  or partly missing clocks, or more than 60 non-consecutive dates become a
-  period. A clocked span without listings is a period. A date-only span without
-  listings stays all-day. `schedule.range` is not interpreted.
+  400 entries). These listings become a period: dates outside the span,
+  conflicting, malformed or overnight clocks, a start or end that only some
+  sessions state (one session's clock is never lent to another unless the record
+  states it), more than 60 non-consecutive dates, or a malformed record clock
+  beside the listing. A clocked span without listings is a period. A date-only
+  span without listings stays all-day. `schedule.range` is not interpreted.
 - **Wix sitemap** (`wix_event_sitemap`): the "När" and "Öppettider"/"Tid" labels
   are read around the parsed range:
   - A stated daily phrase makes the window `daily`.

@@ -229,7 +229,14 @@ function mapLocalizedEventApiRecord(record, { timezone, sourceLanguage } = {}) {
 
   const time = startsOn === endsOn
     ? normalizeEventTime({ startsOn, endsOn, localStart, localEnd, timezone })
-    : rangeEventTime(record.schedule, { startsOn, endsOn, localStart, localEnd, timezone });
+    : rangeEventTime(record.schedule, {
+      startsOn,
+      endsOn,
+      localStart,
+      localEnd,
+      malformedClock: (record.start_time != null && !localStart) || (record.end_time != null && !localEnd),
+      timezone,
+    });
   if (startsOn === endsOn && localStart && localEnd &&
       time.time_window.kind !== "continuous") return null;
   return compact({
@@ -282,8 +289,8 @@ function normalizeEventTime({ startsOn, endsOn, localStart, localEnd, timezone }
 // days (every day listed is a daily statement). Unusable listings, and a
 // clocked span without listings, keep period semantics. The schedule.range
 // object is not interpreted: a date-only span without listings stays all-day.
-function rangeEventTime(schedule, { startsOn, endsOn, localStart, localEnd, timezone }) {
-  const listed = listedScheduleSessions(schedule, { startsOn, endsOn, localStart, localEnd });
+function rangeEventTime(schedule, { startsOn, endsOn, localStart, localEnd, malformedClock, timezone }) {
+  const listed = listedScheduleSessions(schedule, { startsOn, endsOn, localStart, localEnd, malformedClock });
   const start = listed?.localStart || localStart;
   const end = listed?.localEnd || localEnd;
   if (listed?.dates) {
@@ -330,17 +337,20 @@ function rangeEventTime(schedule, { startsOn, endsOn, localStart, localEnd, time
 // Returns null when no sessions are listed, { dates, localStart, localEnd } for
 // a usable listing, and { unusable: true } when listed sessions exist but fall
 // outside the span, disagree on their clock, carry malformed or overnight
-// clocks, or exceed the processing bound. A usable listing longer than the
-// occurrence bound still counts when it names every day of the span.
-function listedScheduleSessions(schedule, { startsOn, endsOn, localStart, localEnd }) {
+// clocks, or exceed the processing bound. A malformed record clock makes the
+// listing unusable too: a valid listed clock must not hide it. A usable listing
+// longer than the occurrence bound still counts when it names every day of the
+// span.
+function listedScheduleSessions(schedule, { startsOn, endsOn, localStart, localEnd, malformedClock }) {
   const entries = schedule?.dates;
   if (!Array.isArray(entries) || entries.length === 0) return null;
   const unusable = { unusable: true };
-  if (entries.length > MAX_LISTED_SCHEDULE_ENTRIES) return unusable;
+  if (malformedClock || entries.length > MAX_LISTED_SCHEDULE_ENTRIES) return unusable;
   const dates = new Set();
   let start = localStart;
   let end = localEnd;
-  let clocked = 0;
+  let starts = 0;
+  let ends = 0;
   for (const entry of entries) {
     const date = normalizeSourceEventDate(entry?.date);
     if (!date || date < startsOn || date > endsOn) return unusable;
@@ -350,11 +360,14 @@ function listedScheduleSessions(schedule, { startsOn, endsOn, localStart, localE
     if ((entryStart && start && entryStart !== start) || (entryEnd && end && entryEnd !== end)) return unusable;
     start = start || entryStart;
     end = end || entryEnd;
-    if (entryStart || entryEnd) clocked += 1;
+    if (entryStart) starts += 1;
+    if (entryEnd) ends += 1;
     dates.add(date);
   }
-  // Sessions with and without a clock share no clock unless the record states one.
-  if (clocked > 0 && clocked < entries.length && !localStart && !localEnd) return unusable;
+  // A start or end only some sessions state is not their shared clock unless
+  // the record states it: never lend one session's clock to another.
+  if ((starts > 0 && starts < entries.length && !localStart) ||
+      (ends > 0 && ends < entries.length && !localEnd)) return unusable;
   if (start && end && end <= start) return unusable;
   return { dates: [...dates].sort(), localStart: start, localEnd: end };
 }
