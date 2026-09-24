@@ -55,6 +55,9 @@ import {
   liveSourceFailure,
   pulseHealthState,
   type EventSourceLinkKind,
+  liveEventRelevance,
+  liveHighlightGroups,
+  type LiveEventRelevance,
   type PulseTimeWindow,
 } from "../lib/pulse-view.mjs";
 import { planComposeFollowup } from "../lib/compose-followup.mjs";
@@ -159,6 +162,12 @@ interface PulseEvent {
   timezone?: string;
   live_proximity?: "nearby";
   anchor_distance_km?: number;
+  // The server's preference fit for this row, in canonical intents.
+  preference_match?: string;
+  requested_preferences?: string[];
+  matched_preferences?: string[];
+  partial_preferences?: string[];
+  highlight_reason?: string;
 }
 
 function nearbyDistanceLabel(event: PulseEvent, lang: Lang): string | null {
@@ -323,6 +332,36 @@ function partialPreferenceLabels(stop: any, selected: string[], lang: Lang): str
       .filter((value: string) => requested.has(value))
       .map((value: string) => label(INTENT_LABELS, value, lang));
   return [...new Set<string>(labels)];
+}
+
+/**
+ * WHY a Live row is shown, in the user's language. The kind and the picks come
+ * from the server's fit (`liveEventRelevance`); nothing here reads the title or
+ * guesses. A row without an established reason gets no line at all. Picks are
+ * named exactly as their chips read.
+ */
+function liveRelevanceSentence(
+  relevance: LiveEventRelevance | null,
+  lang: Lang,
+  t: (sv: string, en: string) => string,
+): string | null {
+  if (!relevance) return null;
+  const picks = relevance.preferences
+    .map((key) => {
+      const chip = ANYWHERE_PREFERENCES.find((pref) => pref.key === key);
+      return chip ? (lang === "en" ? chip.en : chip.sv) : label(INTENT_LABELS, key, lang);
+    })
+    .join(", ");
+  switch (relevance.kind) {
+    case "match":
+      return t(`Matchar: ${picks}`, `Matches: ${picks}`);
+    case "looser_match":
+      return t(`Lösare träff för: ${picks}`, `A looser match for: ${picks}`);
+    case "local_discovery":
+      return t("Lokal upptäckt utanför dina val", "A local discovery beyond your picks");
+    default:
+      return null;
+  }
 }
 
 // Event timing renders through the pure `eventTiming` formatter (pulse-view.mjs),
@@ -2909,6 +2948,25 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {liveSheetOpen && (() => {
         const sheetEvents: PulseEvent[] = liveSheetTime === "tonight" ? sheetBuckets.tonight : sheetBuckets.thisWeek;
         const sheetMoreEvents: PulseEvent[] = liveSheetTime === "tonight" ? sheetBrowseBuckets.tonight : sheetBrowseBuckets.thisWeek;
+        // Relevance is claimed only where the server established it for the
+        // current picks: matched rows get the picks heading, every other row
+        // (the reserved local discovery included) is listed as "other".
+        const highlightGroups = liveHighlightGroups(sheetEvents, selected);
+        const sheetRow = (ev: PulseEvent, i: number, titleClassName: string) => {
+          const relevance = liveRelevanceSentence(liveEventRelevance(ev, selected), lang, t);
+          return (
+            <li key={ev.id ?? i} className="flex items-baseline gap-3">
+              <span className="min-w-[44px] shrink-0 text-xs font-extrabold text-parranda-clay">{eventTiming(ev, lang, undefined, sheetLiveEvents?.selected_date)}</span>
+              <span className="text-sm text-parranda-ink/90">
+                <span className={titleClassName}>{ev.title}</span>
+                {ev.place && <span className="text-parranda-ink/60"> · {ev.place}</span>}
+                {nearbyDistanceLabel(ev, lang) && <span className="font-semibold text-parranda-clay"> · {nearbyDistanceLabel(ev, lang)}</span>}
+                {liveEventSource(ev, lang)}
+                {relevance && <span className="mt-0.5 block text-xs text-parranda-ink/55">{relevance}</span>}
+              </span>
+            </li>
+          );
+        };
         const scopePhrase =
           liveSheetScope === "near_route"
             ? t("nära rutten", "near the route")
@@ -3070,23 +3128,21 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                   </div>
                 ) : sheetEvents.length > 0 || sheetMoreEvents.length > 0 ? (
                   <div className="flex flex-col gap-3">
-                    {sheetEvents.length > 0 && (
+                    {highlightGroups.picks.length > 0 && (
+                      <>
+                        <p className="text-xs font-bold text-parranda-ink/65">{t("Höjdpunkter för dina val", "Highlights for your picks")}</p>
+                        <ul className="flex flex-col gap-2.5">
+                          {highlightGroups.picks.map((ev: PulseEvent, i: number) => sheetRow(ev, i, "font-bold"))}
+                        </ul>
+                      </>
+                    )}
+                    {highlightGroups.other.length > 0 && (
                       <>
                         <p className="text-xs font-bold text-parranda-ink/65">
-                          {selected.length > 0 ? t("Höjdpunkter för dina val", "Highlights for your picks") : t("Höjdpunkter", "Highlights")}
+                          {highlightGroups.picks.length > 0 ? t("Andra lokala höjdpunkter", "Other local highlights") : t("Höjdpunkter", "Highlights")}
                         </p>
                         <ul className="flex flex-col gap-2.5">
-                          {sheetEvents.map((ev: PulseEvent, i: number) => (
-                            <li key={ev.id ?? i} className="flex items-baseline gap-3">
-                              <span className="min-w-[44px] shrink-0 text-xs font-extrabold text-parranda-clay">{eventTiming(ev, lang, undefined, sheetLiveEvents?.selected_date)}</span>
-                              <span className="text-sm text-parranda-ink/90">
-                                <span className="font-bold">{ev.title}</span>
-                                {ev.place && <span className="text-parranda-ink/60"> · {ev.place}</span>}
-                                {nearbyDistanceLabel(ev, lang) && <span className="font-semibold text-parranda-clay"> · {nearbyDistanceLabel(ev, lang)}</span>}
-                                {liveEventSource(ev, lang)}
-                              </span>
-                            </li>
-                          ))}
+                          {highlightGroups.other.map((ev: PulseEvent, i: number) => sheetRow(ev, i, "font-bold"))}
                         </ul>
                       </>
                     )}
@@ -3096,17 +3152,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                           {t(`Visa ${sheetMoreEvents.length} fler händelser`, `Show ${sheetMoreEvents.length} more events`)}
                         </summary>
                         <ul className="flex flex-col gap-2.5 border-t border-parranda-ink/10 pb-2 pt-3">
-                          {sheetMoreEvents.map((ev: PulseEvent, i: number) => (
-                            <li key={ev.id ?? i} className="flex items-baseline gap-3">
-                              <span className="min-w-[44px] shrink-0 text-xs font-extrabold text-parranda-clay">{eventTiming(ev, lang, undefined, sheetLiveEvents?.selected_date)}</span>
-                              <span className="text-sm text-parranda-ink/90">
-                                <span className="font-semibold">{ev.title}</span>
-                                {ev.place && <span className="text-parranda-ink/60"> · {ev.place}</span>}
-                                {nearbyDistanceLabel(ev, lang) && <span className="font-semibold text-parranda-clay"> · {nearbyDistanceLabel(ev, lang)}</span>}
-                                {liveEventSource(ev, lang)}
-                              </span>
-                            </li>
-                          ))}
+                          {sheetMoreEvents.map((ev: PulseEvent, i: number) => sheetRow(ev, i, "font-semibold"))}
                         </ul>
                       </details>
                     )}

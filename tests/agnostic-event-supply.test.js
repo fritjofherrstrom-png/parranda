@@ -681,6 +681,35 @@ test("preferences rerank the accepted event pool without another source collecti
   assert.deepEqual(culture.tonight[0].matched_preferences, ["museums"]);
 });
 
+test("a closed-compound title earns the same Live lift as its whole-word head", () => {
+  const row = (id, title, salience, tags = []) => ({
+    id,
+    title,
+    starts_at: "2026-06-28T18:00:00Z",
+    salience_score: salience,
+    cultural_tier: "neutral",
+    tags,
+  });
+  const ranked = rankCollectedEventsForPreferences({
+    coverage: "covered",
+    tonight: [],
+    this_week: [],
+    _rankable_events: {
+      tonight: [
+        row("busier-unrelated", "Stadsdagen", 5),
+        row("compound", "Fixture: kvällskonsert", 4, ["music", "Music"]),
+      ],
+      this_week: [],
+    },
+  }, ["food", "culture", "views"]);
+
+  assert.deepEqual(ranked.tonight.map((event) => event.id), ["compound", "busier-unrelated"]);
+  assert.equal(ranked.tonight[0].preference_match, "strong");
+  assert.deepEqual(ranked.tonight[0].matched_preferences, ["museums"]);
+  assert.deepEqual(ranked.tonight[0].preference_reasons, ["preference_museums_compound_cue"]);
+  assert.equal(ranked.tonight[1].preference_match, "none");
+});
+
 test("Live keeps six ranked highlights and exposes the remaining accepted events separately", () => {
   const views = Array.from({ length: 30 }, (_, index) => ({
     id: `event-${String(index).padStart(2, "0")}`,
