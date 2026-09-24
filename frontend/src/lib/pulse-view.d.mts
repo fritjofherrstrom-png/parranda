@@ -93,6 +93,20 @@ export declare function pulseHealthState(
   buckets: { tonight: unknown[]; thisWeek: unknown[] } | null | undefined,
 ): "hidden" | "uncovered" | "pending" | "unavailable" | "partial" | "ok" | "rejected_empty" | "soft_empty";
 
+export declare function liveSourceFailure(
+  liveEvents:
+    | {
+        coverage?: string;
+        pending?: boolean;
+        acquisition?: {
+          source_health?: { status?: string; selected_source_count?: number; responding_source_count?: number } | null;
+        } | null;
+      }
+    | null
+    | undefined,
+  buckets: { tonight: unknown[]; thisWeek: unknown[] } | null | undefined,
+): { selected: number; responding: number } | null;
+
 export declare function clothingAdvice(
   observed: { max_temp?: number; condition?: string; precipitation_probability_max?: number } | null | undefined,
   lang: "sv" | "en",

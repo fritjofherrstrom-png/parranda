@@ -1363,6 +1363,12 @@ const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a 
 // v6 excludes v5 pools truncated by midnight-gap and global-window bugs.
 const EVENT_CACHE_NAMESPACE = "agnostic-events-v6";
 
+// A failed refresh is a finished answer, not "still loading". It is held for a
+// short, bounded time so reads report the failure; afterwards the next read
+// retries the providers. In memory only: a failure is never persisted.
+const FAILED_REFRESH_HOLD_MS = 2 * 60 * 1000;
+const MAX_FAILED_REFRESH_HOLDS = 256;
+
 function shouldCacheEventSupplyResult(result) {
   if (!result || result.coverage !== "covered") return false;
   const health = result.acquisition && result.acquisition.source_health;
@@ -1374,12 +1380,78 @@ function shouldCacheEventSupplyResult(result) {
   return health.status === "healthy" && health.result === "empty";
 }
 
+// Exactly the covered outcomes the event cache refuses because a source failed.
+function isFailedEventRefresh(result) {
+  if (!result || result.coverage !== "covered" || shouldCacheEventSupplyResult(result)) return false;
+  const status = result.acquisition?.source_health?.status;
+  return status === "unavailable" || status === "partial";
+}
+
+function createFailedRefreshHold({
+  holdMs = FAILED_REFRESH_HOLD_MS,
+  maxEntries = MAX_FAILED_REFRESH_HOLDS,
+  clock = () => Date.now(),
+} = {}) {
+  const entries = new Map();
+  return {
+    read(key) {
+      const entry = entries.get(key);
+      if (!entry) return null;
+      if (entry.expiresAt > clock()) return entry.value;
+      entries.delete(key);
+      return null;
+    },
+    remember(key, value) {
+      entries.delete(key);
+      entries.set(key, { value, expiresAt: clock() + holdMs });
+      while (entries.size > maxEntries) entries.delete(entries.keys().next().value);
+    },
+    forget(key) {
+      entries.delete(key);
+    },
+  };
+}
+
+// The honest outcome of a collection that threw instead of reporting per-source
+// status: every planned source counts as failed. Nothing is invented.
+function failedEventCollection({ sourcePlan, selectedDate, radiusM }) {
+  const collections = sourcePlan.map((source) => ({
+    source,
+    raw: [],
+    status: "failed",
+    reason: "source_collect_failed",
+  }));
+  const feeds = collections.map(compactSourceStatus);
+  return {
+    coverage: "covered",
+    ...(selectedDate ? { selected_date: selectedDate } : {}),
+    feed: feeds[0] || null,
+    feeds,
+    tonight: [],
+    this_week: [],
+    browse: emptyEventBrowse(),
+    acquisition: {
+      mode: "bounded_multi_source",
+      radius_m: radiusM,
+      source_cap: DEFAULT_MAX_SOURCES,
+      selected_source_count: sourcePlan.length,
+      normalized_event_count: 0,
+      fused_event_count: 0,
+      rejected_event_count: 0,
+      rejection_summary: [],
+      source_health: buildAnchorEventSourceHealth(collections),
+    },
+  };
+}
+
 /**
  * Default event supply: env-gated + BACKGROUND-WARMED. Selected sources can be
  * slow and high-variance, so they must NEVER be fetched inline on the route. On a
  * cold anchor we kick one bounded concurrent warm and return honest `pending`;
  * once warm, the next visit serves the cached fused result. Even a valid empty
  * result is cached so "nothing on" never becomes an unbounded refresh loop.
+ * A refresh that failed is held briefly and served as that failure, so a
+ * failing source is reported as failed instead of as another `pending`.
  */
 function resolveDefaultEventSupply(
   env = process.env,
@@ -1388,6 +1460,7 @@ function resolveDefaultEventSupply(
     sourceCatalog = null,
     eventCache = null,
     collectEvents = collectAnchorEvents,
+    failedRefreshClock,
   } = {},
 ) {
   const flag = String((env && env.PARRANDA_AGNOSTIC_EVENTS) || "").trim().toLowerCase();
@@ -1403,6 +1476,7 @@ function resolveDefaultEventSupply(
     ttlMs: EVENT_CACHE_TTL_MS,
     dir: (env && env.PARRANDA_CACHE_DIR) || null,
   });
+  const failedRefreshes = createFailedRefreshHold({ clock: failedRefreshClock });
   return async ({
     anchor,
     sourceAnchors = [],
@@ -1500,22 +1574,40 @@ function resolveDefaultEventSupply(
     );
     const cached = cache.peek(key);
     if (cached) return rankCollectedEventsForPreferences(cached, preferences, scope, now);
+    const failed = failedRefreshes.read(key);
+    if (failed) return rankCollectedEventsForPreferences(failed, preferences, scope, now);
     // Cold: warm out-of-band (long timeout, fire-and-forget), serve honest pending.
-    cache.warm(key, () => collectEvents({
-      anchor,
-      sourceAnchors,
-      now,
-      selectedDate,
-      registry: requestRegistry,
-      radiusM: effectiveRadiusM,
-      timeoutMs: WARM_TIMEOUT_MS,
-      globalKey,
-      venueResolver,
-      spatialScope,
-      placeContext,
-    }), {
+    cache.warm(key, async () => {
+      let collected;
+      try {
+        collected = await collectEvents({
+          anchor,
+          sourceAnchors,
+          now,
+          selectedDate,
+          registry: requestRegistry,
+          radiusM: effectiveRadiusM,
+          timeoutMs: WARM_TIMEOUT_MS,
+          globalKey,
+          venueResolver,
+          spatialScope,
+          placeContext,
+        });
+      } catch (error) {
+        failedRefreshes.remember(key, failedEventCollection({
+          sourcePlan,
+          selectedDate,
+          radiusM: effectiveRadiusM,
+        }));
+        throw error;
+      }
+      if (isFailedEventRefresh(collected)) failedRefreshes.remember(key, collected);
+      else failedRefreshes.forget(key);
+      return collected;
+    }, {
       // A proven healthy empty result is cacheable so a quiet calendar does not
-      // cause refresh loops. Empty results with source failures stay retryable.
+      // cause refresh loops. Empty results with source failures are never
+      // cached: they are only held briefly above, then retried.
       shouldStore: shouldCacheEventSupplyResult,
     });
     return {
@@ -1601,6 +1693,8 @@ module.exports = {
   applyReviewedSourceTrust,
   buildScopedEventSourcePlan,
   collectAnchorEvents,
+  FAILED_REFRESH_HOLD_MS,
+  isFailedEventRefresh,
   shouldCacheEventSupplyResult,
   resolveDefaultEventSupply,
   resolveEventFeedRegistry,
