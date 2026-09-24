@@ -60,7 +60,7 @@ test("localized API mapper preserves language, source facts, geometry, and an al
   assert.deepEqual(event.tags, ["music", "Music"]);
 });
 
-test("same-day local times use the reviewed timezone while ranges keep daily windows", () => {
+test("same-day local times use the reviewed timezone; a clocked range without listed sessions is a period", () => {
   const sameDay = mapLocalizedEventApiRecord(fixtureRecord({
     start_time: "18:00:00",
     end_time: "21:00:00",
@@ -75,15 +75,63 @@ test("same-day local times use the reviewed timezone while ranges keep daily win
     start_time: "10:00:00",
     end_time: "17:00:00",
   }), { timezone: TIMEZONE, sourceLanguage: "sv" });
+  // The record states a span and a clock, not that every day carries a session.
   assert.deepEqual(range.time_window, {
-    kind: "daily",
+    kind: "period",
     starts_on: "2026-07-20",
     ends_on: "2026-07-22",
     local_start: "10:00",
     local_end: "17:00",
     timezone: TIMEZONE,
   });
-  assert.equal(range.starts_at, undefined, "a daily range must not become one continuous interval");
+  assert.equal(range.starts_at, undefined, "a range must not become one continuous interval");
+});
+
+test("multi-day records claim only the sessions their schedule lists", () => {
+  // 20–26 July 2026; 23 July is a Thursday.
+  const map = (overrides) => mapLocalizedEventApiRecord(fixtureRecord({
+    end_date: "2026-07-26",
+    ...overrides,
+  }), { timezone: TIMEZONE, sourceLanguage: "sv" }).time_window;
+  const session = (date, start_time = "18:00", end_time = "21:00") => ({ date, start_time, end_time });
+  const week = ["20", "21", "22", "23", "24", "25", "26"].map((day) => `2026-07-${day}`);
+
+  assert.deepEqual(map({ schedule: { range: null, dates: [session("2026-07-23")] } }), {
+    kind: "occurrences",
+    dates: ["2026-07-23"],
+    starts_on: "2026-07-23",
+    ends_on: "2026-07-23",
+    local_start: "18:00",
+    local_end: "21:00",
+    timezone: TIMEZONE,
+  });
+  assert.deepEqual(
+    map({ schedule: { range: {}, dates: [session("2026-07-23"), session("2026-07-21")] } }).dates,
+    ["2026-07-21", "2026-07-23"],
+  );
+  // Listing every day of the span is itself a daily statement.
+  assert.equal(map({ schedule: { dates: week.map((date) => session(date, "10:00", "17:00")) } }).kind, "daily");
+  assert.equal(map({ schedule: { dates: week.map((date) => ({ date })) } }).kind, "all_day");
+  assert.deepEqual(map({ schedule: { dates: [{ date: "2026-07-21" }, { date: "2026-07-25" }] } }).dates,
+    ["2026-07-21", "2026-07-25"], "date-only listings are date facts on the listed days only");
+
+  for (const [name, schedule] of Object.entries({
+    outsideSpan: { dates: [session("2026-07-30")] },
+    clockConflict: { dates: [session("2026-07-21"), session("2026-07-23", "19:00")] },
+    mixedClocks: { dates: [session("2026-07-21"), { date: "2026-07-23" }] },
+    overnight: { dates: [session("2026-07-21", "22:00", "02:00")] },
+    malformedClock: { dates: [session("2026-07-21", "25:00")] },
+    overProcessingBound: { dates: Array.from({ length: 401 }, () => session("2026-07-21")) },
+  })) {
+    assert.equal(map({ schedule }).kind, "period", name);
+  }
+  // More than 60 listed days that are not every day of the span stay a period.
+  const everyOtherDay = Array.from({ length: 61 }, (_, index) =>
+    session(new Date(Date.UTC(2026, 5, 1 + index * 2)).toISOString().slice(0, 10)));
+  assert.equal(map({ end_date: "2026-09-30", schedule: { dates: everyOtherDay } }).kind, "period");
+  // No listing: a clocked span is a period; a date-only span stays all-day facts.
+  assert.equal(map({ start_time: "10:00", end_time: "17:00" }).kind, "period");
+  assert.equal(map({ schedule: { range: { any: "shape" }, dates: [] } }).kind, "all_day");
 });
 
 test("provider collection is bounded and returns explicit healthy outcomes", async () => {

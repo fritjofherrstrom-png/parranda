@@ -491,14 +491,14 @@ test("a longer reviewed daily window may inform Pulse without becoming a route e
   assert.equal(view.route_eligible, false);
 });
 
-test("provider collection surfaces a longer daily window as Pulse-only", async () => {
+function seasonalExhibitionCollection(schedule) {
   const registry = [feed("seasonal-calendar", {
     adapter: "localized_events_api",
     endpoint: "https://seasonal-calendar.example/events/",
     timezone: "Europe/Stockholm",
     source_language: "en",
   })];
-  const out = await collectAnchorEvents({
+  return collectAnchorEvents({
     anchor: ANCHOR,
     now: NOW,
     registry,
@@ -519,18 +519,42 @@ test("provider collection surfaces a longer daily window as Pulse-only", async (
           end_date: "2026-09-15",
           start_time: "10:00",
           end_time: "17:00",
+          ...(schedule ? { schedule } : {}),
           categories: [{ title: "Exhibitions", slug: "exhibitions", subcategories: [] }],
         }],
       }),
     }),
   });
+}
+
+test("provider collection surfaces a long clocked range as a Pulse-only period, never tonight", async () => {
+  // A span and opening clock do not state that every day carries a session.
+  const out = await seasonalExhibitionCollection(null);
+
+  assert.equal(out.tonight.length, 0);
+  assert.equal(out.this_week.length, 1);
+  assert.equal(out.this_week[0].id, "summer-exhibition");
+  assert.equal(out.this_week[0].time_window.kind, "period");
+  assert.equal(out.this_week[0].pulse_display_eligible, true);
+  assert.equal(out.this_week[0].route_eligible, false);
+  assert.equal(out.acquisition.source_health.accepted_event_count, 1);
+  assert.equal(out.acquisition.rejection_summary.some((row) => row.reason === "not_ephemeral_happening"), false);
+});
+
+test("provider collection surfaces a longer stated daily window as Pulse-only", async () => {
+  // Listing every day of the span is the source stating daily sessions.
+  const dates = [];
+  for (let day = Date.UTC(2026, 5, 1); day <= Date.UTC(2026, 8, 15); day += 24 * 60 * 60 * 1000) {
+    dates.push({ date: new Date(day).toISOString().slice(0, 10), start_time: "10:00", end_time: "17:00" });
+  }
+  const out = await seasonalExhibitionCollection({ range: null, dates });
 
   assert.equal(out.tonight.length, 1);
   assert.equal(out.tonight[0].id, "summer-exhibition");
+  assert.equal(out.tonight[0].time_window.kind, "daily");
   assert.equal(out.tonight[0].pulse_display_eligible, true);
   assert.equal(out.tonight[0].route_eligible, false);
   assert.equal(out.acquisition.source_health.accepted_event_count, 1);
-  assert.equal(out.acquisition.rejection_summary.some((row) => row.reason === "not_ephemeral_happening"), false);
 });
 
 test("coordinate-less daily evidence may corroborate matching geometry but never survives alone", () => {

@@ -83,6 +83,8 @@ Live request, source-local occurrence filtering, cache identity and visible
 labels, without manipulating freshness/approval clocks. Do that before smarter
 ranking. Other gaps include repeated schedules, broad calendar ranges, generic
 organizer homepages rather than detail URLs, and source-time conflicts.
+(Later: multi-day records now claim only the sessions `schedule.dates` lists;
+see *Recurring calendar entries* in `LIVE_SELECTED_DATE.md`.)
 
 On the exact PR head, Sol should independently verify:
 

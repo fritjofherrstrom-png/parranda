@@ -1107,6 +1107,9 @@ stable-HTML source family, not as permission to call Wix's private CMS APIs.
   Editorial descriptions and images are not copied;
 - date ranges preserve both their first and final day; an unresolved range
   remains timing-unknown rather than silently collapsing to day one;
+- a range with a clock is `daily` only when the "När"/"Öppettider" labels state
+  daily sessions. Weekday rules inside the range and explicit date lists become
+  `occurrences`; anything else is a `period` (see `LIVE_SELECTED_DATE.md`);
 - stale and unparseable detail rows do not consume the accepted-event limit,
   but collection always stops at the reviewed total detail budget. Parser
   failure is reported separately from a legitimate empty/current-free source;
@@ -1141,7 +1144,9 @@ publisher or place:
 - article introductions, ticket/practical sections, descriptions, images, and
   unrelated clock mentions are excluded;
 - date-only rows remain honest all-day evidence and use a separate cap, while
-  multi-day daily windows remain daily rather than becoming continuous nights;
+  a multi-day row with a clock (its own range or a dated span heading) is `daily`
+  only when the row states daily sessions before its clock, and otherwise a
+  `period`. It is never a continuous night or every day of the span;
 - floating local times require a trusted IANA timezone, ambiguous DST folds fail
   closed, and no geometry is inferred from the page;
 - fetches retain one timeout through body parsing, enforce byte and redirect

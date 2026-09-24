@@ -34,6 +34,7 @@ function extractOfficialProgramArticle(html, options = {}) {
       dateRange: row.date_range,
       time: row.time,
       timezone,
+      statesDaily: row.states_daily === true,
     });
     if (!timing) continue;
     if (timing.time_window?.kind === "all_day") allDayEventCount += 1;

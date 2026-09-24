@@ -124,10 +124,47 @@ The correction is generic; there is no municipality, city or hostname rule:
   occurrence only on a stated evening. Listed occurrences keep the 14-day span
   bound for route eligibility that daily windows already had.
 
+The other three `daily` producers follow the same rule. The grammar lives in
+`server/pulse-sources/source-recurrence.js` and is shared, not copied:
+
+- **Public-events API** (`localized_events_api`): a multi-day record claims only
+  the sessions its `schedule.dates` lists inside the record's span with one
+  shared clock. Listing every day of the span is a daily statement (read up to
+  400 entries). Listings outside the span, with conflicting, malformed, overnight
+  or partly missing clocks, or more than 60 non-consecutive dates become a
+  period. A clocked span without listings is a period. A date-only span without
+  listings stays all-day. `schedule.range` is not interpreted.
+- **Wix sitemap** (`wix_event_sitemap`): the "När" and "Öppettider"/"Tid" labels
+  are read around the parsed range:
+  - A stated daily phrase makes the window `daily`.
+  - Weekdays in the time label ("Tis–sön 11.00–17.00"), and plural or "varje"
+    weekdays in the date label, become occurrences inside the range. A
+    singular weekday before a date only names that date.
+  - Two or more explicit dates ("15 juli, 22 juli", "15 och 22 juli") name
+    exactly those days. They were previously read as the range from the first
+    to the second date.
+  - Unknown words beside weekday evidence become a period. So do different
+    clocks for different days, which also drop the clock.
+  - Without recurrence words, a clocked range is a period and a date-only range
+    stays all-day.
+  - Clocked periods and occurrences take the timed detail quota that the
+    replaced daily rows used.
+- **Official programme articles** (`official_program_article`): a row with a
+  clock and a multi-day range is `daily` only when the row states daily sessions
+  in its own words before the first clock. The range may be the row's own or a
+  dated heading such as a festival span above timed rows. Apart from the date,
+  those words must be exactly one closed daily phrase in the programme
+  languages (sv, en, es, ca, fr, it, de, pt or nl). Title words after the clock
+  never count, and a stated phrase is removed from the title. Every other such
+  row is a period. Incidental fix in the same title cleanup: clock prefixes
+  such as "at", "a" or "h" are whole words only. Before, titles lost their
+  first letters ("Harbour concert" became "arbour concert").
+
 Deliberate behaviour change: a source that publishes a range and one clock
 without saying "daily" (for example a summer programme "20 juli – 7 augusti,
-10–17") no longer appears under a selected day. It appears among the following
-days as a period. The source did not state that every day carries a session.
+10–17", or an API exhibition with only start/end dates and opening clocks) no
+longer appears under a selected day. It appears among the following days as a
+period. The source did not state that every day carries a session.
 
 Evidence, labelled honestly: deterministic regressions only. They cover the
 adapter (listed dates, weekday rules, stated daily, unreadable and truncated
@@ -140,6 +177,13 @@ egress policy denied the calendar host. The fixture therefore follows the
 adapter's existing anchor contract and the reviewed defect's described shape.
 Fixtures are not provider or Pi acceptance.
 
+For the other three adapters, per-adapter tests and one end-to-end test each
+select days through `collectAnchorEvents`. These fail on `82e28db`, the head
+with only the Sitevision fix, and pass after. The reviewed public-events API
+and Wix hosts were also denied by the session's egress policy. Their fixtures
+follow the adapters' existing wire and DOM contracts, not observed real
+records.
+
 Pi or Sol should verify the frozen head:
 
 1. In the same reviewed geography, select the same Friday. The three entries
@@ -151,16 +195,21 @@ Pi or Sol should verify the frozen head:
 3. Select one stated occurrence date. The entry must appear under that day with
    the stated clock.
 4. Warm v7, restart with the same cache and repeat. No v6 pool may satisfy v7.
+5. For the reviewed public-events API and Wix sources, pick one multi-day entry
+   each. Compare its source schedule or opening hours with the Live kind
+   (`occurrences`, `period` or `daily`) and the day it appears under.
 
 Remaining gaps:
 
-- The localized events API, Wix sitemap and official programme article
-  adapters still map a multi-day range with one clock to `daily` without reading
-  a recurrence statement. Each needs the same source-statement check against
-  its real shapes.
+- The public-events API's `schedule.range` object is not interpreted; its real
+  shape was not observed.
+- Programme rows with weekday rules ("Tuesdays") and daily statements made only
+  in a dated heading stay periods.
+- Pre-existing and unchanged here: the Wix clock parser reads "7:00 pm" as
+  07:00.
 - Date-only ranges without recurrence evidence remain all-day date facts under
   the existing contract.
-- Recurrence phrased outside the closed grammar degrades to a period rather
+- Recurrence phrased outside the closed grammars degrades to a period rather
   than being guessed.
 
 ## Independent review corrections
