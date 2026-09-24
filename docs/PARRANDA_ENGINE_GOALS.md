@@ -254,7 +254,10 @@ licensed real sources and conservative entity resolution.
 Live correctness precedes further ranking: the frozen Planner date must reach
 source collection, date-scoped persistent caching, source-local calendar gates
 and every Live scope query. See `LIVE_SELECTED_DATE.md` for the selected-day
-contract and bounded recall limitations. Next prove multi-source reconciliation
+contract and bounded recall limitations. Bounded acquisition budgets must be
+spent on the requested period: the trusted venue lookups now serve the selected
+day first, and rows on other days are counted apart from rejected evidence
+(`LIVE_PERIOD_VENUE_BUDGET.md`). Next prove multi-source reconciliation
 and useful preference/proximity selection across differing approved source
 situations; one successful calendar is not universal Live coverage.
 

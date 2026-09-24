@@ -16,6 +16,11 @@ a source that had already failed was presented as an endless refresh.
 English copy mirrors the Swedish. Every count comes from the server's
 `source_health`; the client estimates nothing.
 
+Rows a responding source lists only for other days are a credible empty answer
+(`no_events_in_requested_period`, counted in `out_of_period_event_count`), not
+rejected evidence. `all_event_evidence_rejected` covers rows inside the
+requested period only. See `LIVE_PERIOD_VENUE_BUDGET.md`.
+
 ## Root cause
 
 A failed or partial-empty refresh is correctly never stored in the persistent

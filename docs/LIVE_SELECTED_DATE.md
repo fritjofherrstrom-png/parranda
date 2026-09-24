@@ -54,7 +54,10 @@ delays (1.5, 3, 5 seconds), not an unbounded poll.
 
 Date-unaware feeds still expose only their bounded source page. Empty means no
 accepted result from the available evidence, **not** proof nothing happens that
-day. Date-window filtering cannot create missing future inventory. Source
+day. Within that page, rows outside the selected day and the following seven
+days are counted in `out_of_period_event_count` before the trust gates. Only
+rows inside the period may use the four trusted venue lookups, the selected
+day's first; see `LIVE_PERIOD_VENUE_BUDGET.md`. Date-window filtering cannot create missing future inventory. Source
 failures remain partial/unavailable, never a claimed quiet calendar. A finished
 failed refresh is now answered as that failure (held two minutes in memory,
 then retried) instead of as another `pending`; see
