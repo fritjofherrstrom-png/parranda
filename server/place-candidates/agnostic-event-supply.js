@@ -52,7 +52,11 @@ const {
 const { classifyCulturalSalience } = require("../pulse-engine/cultural-salience");
 const { resolveEventVenueGeometry } = require("./event-venue-resolution");
 const { spatialScopeCacheKey } = require("./spatial-scope");
-const { selectedDateBucket, sourceWindowStart } = require("./event-calendar-date");
+const {
+  listedOccurrenceDates,
+  selectedDateBucket,
+  sourceWindowStart,
+} = require("./event-calendar-date");
 const {
   normalizeSourceDiscoveryHealth,
   pendingSourceDiscoveryHealth,
@@ -367,7 +371,10 @@ function withinHorizonDays(startsAtIso, now, days) {
 }
 
 function withinEventHorizon(event, now, days) {
-  if (event?.starts_at) return withinHorizonDays(event.starts_at, now, days);
+  const kind = event?.time_window?.kind;
+  if (event?.starts_at && kind !== "occurrences" && kind !== "period") {
+    return withinHorizonDays(event.starts_at, now, days);
+  }
   const timezone = normalizeIanaTimezone(event?.timezone || event?.time_window?.timezone);
   const localNow = now && timezone ? datePartsInTimezone(now, timezone) : null;
   const startsOn = normalizeSourceEventDate(event?.starts_on || event?.time_window?.starts_on);
@@ -375,6 +382,11 @@ function withinEventHorizon(event, now, days) {
   if (!localNow || !startsOn || !endsOn) return false;
   const today = `${localNow.year}-${String(localNow.month).padStart(2, "0")}-${String(localNow.day).padStart(2, "0")}`;
   const horizon = addDateOnlyDays(today, days);
+  // Listed occurrences are inside the horizon only through a stated date, not
+  // because their first and last dates happen to straddle it.
+  if (kind === "occurrences") {
+    return Boolean(horizon && listedOccurrenceDates(event.time_window).some((date) => date >= today && date <= horizon));
+  }
   return Boolean(horizon && startsOn <= horizon && endsOn >= today);
 }
 
@@ -386,6 +398,15 @@ function withinEventHorizon(event, now, days) {
 // exercise (they inject payloads, not query params).
 function isEphemeralHappening(event, now) {
   const window = event?.time_window;
+  // A range without stated session days cannot anchor a route on any date.
+  if (window?.kind === "period") return false;
+  if (window?.kind === "occurrences") {
+    const dates = listedOccurrenceDates(window);
+    if (!dates.length || !validOccurrenceClocks(event)) return false;
+    // Same span bound as a daily window: a long recurring series stays Pulse
+    // context even though each listed session is a real occurrence.
+    return boundedDateOnlyRange(dates[0], dates[dates.length - 1], MAX_HAPPENING_DAYS);
+  }
   if (window?.kind === "daily") {
     const startsOn = normalizeSourceEventDate(event.starts_on || window.starts_on);
     const endsOn = normalizeSourceEventDate(event.ends_on || window.ends_on) || startsOn;
@@ -420,6 +441,21 @@ function isEphemeralHappening(event, now) {
 // happening limit; only explicit daily windows get the wider display bound.
 function isPulseDisplayEvent(event, now) {
   const window = event?.time_window;
+  // Explicit listed sessions are displayable on their own dates; the bounded
+  // list, not the span between first and last date, is their limit.
+  if (window?.kind === "occurrences") {
+    return listedOccurrenceDates(window).length > 0 && validOccurrenceClocks(event);
+  }
+  // A period is shown only as its source range, within the daily display bound.
+  if (window?.kind === "period") {
+    const startsOn = normalizeSourceEventDate(event.starts_on || window.starts_on);
+    const endsOn = normalizeSourceEventDate(event.ends_on || window.ends_on) || startsOn;
+    if (!startsOn || !endsOn) return false;
+    if ((window.local_start && !validLocalClock(window.local_start)) || (window.local_end && !validLocalClock(window.local_end))) {
+      return false;
+    }
+    return boundedDateOnlyRange(startsOn, endsOn, MAX_PULSE_DAILY_RANGE_DAYS);
+  }
   if (window?.kind !== "daily") return isEphemeralHappening(event, now);
   const startsOn = normalizeSourceEventDate(event.starts_on || window.starts_on);
   const endsOn = normalizeSourceEventDate(event.ends_on || window.ends_on) || startsOn;
@@ -889,7 +925,9 @@ async function collectAnchorEvents({
     } else if (TONIGHT_TIMING.has(event.timing_relevance)) {
       tonight.push(view);
     } else if (
-      (event.timing_relevance === "future" || event.time_window?.kind === "all_day") &&
+      (event.timing_relevance === "future" ||
+        event.time_window?.kind === "all_day" ||
+        (["occurrences", "period"].includes(event.time_window?.kind) && event.timing_relevance !== "stale")) &&
       withinEventHorizon(event, nowDate, THIS_WEEK_HORIZON_DAYS)
     ) {
       thisWeek.push(view);
@@ -980,6 +1018,15 @@ function validLocalClock(value) {
   const match = String(value || "").match(/^(\d{2}):(\d{2})(?::\d{2})?$/);
   if (!match) return false;
   return Number(match[1]) <= 23 && Number(match[2]) <= 59;
+}
+
+// Date-only occurrence listings are date facts. A clocked listing needs the
+// reviewed venue timezone before any session can be placed on a real day.
+function validOccurrenceClocks(event) {
+  const window = event?.time_window;
+  if (!window?.local_start && !window?.local_end) return true;
+  if (!normalizeIanaTimezone(event.timezone || window.timezone) || !validLocalClock(window.local_start)) return false;
+  return !window.local_end || validLocalClock(window.local_end);
 }
 
 function applyReviewedSourceTrust(rawEvent = {}, source = {}) {
@@ -1361,7 +1408,8 @@ function firstString(...values) {
 const EVENT_CACHE_TTL_MS = 20 * 60 * 1000; // 20 min — time-sensitive, but reusable
 const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a route
 // v6 excludes v5 pools truncated by midnight-gap and global-window bugs.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v6";
+// v7 excludes recurring ranges that v6 normalized as every-day daily windows.
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v7";
 
 // A failed refresh is a finished answer, not "still loading". It is held for a
 // short, bounded time so reads report the failure; afterwards the next read

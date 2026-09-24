@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { collectAnchorEvents, eventCacheKey, rankCollectedEventsForPreferences } = require('../server/place-candidates/agnostic-event-supply');
 const { executeLiveEventQuery } = require('../server/place-candidates/live-event-query');
-const { eventOccursOnDate, sourceWindowStart } = require('../server/place-candidates/event-calendar-date');
+const { eventOccursOnDate, selectedDateBucket, sourceWindowStart } = require('../server/place-candidates/event-calendar-date');
 
 const anchor = { lat: 60.17, lng: 24.94 };
 const now = '2026-06-28T12:00:00Z';
@@ -110,4 +110,43 @@ test('Live API passes only a valid date, retaining its real clock and ignoring p
   for (const selected_date of ['2026-02-30', 'tomorrow', {}, '2026-06-29T00:00:00Z']) {
     assert.equal((await executeLiveEventQuery({ payload: { anchor, selected_date }, now })).status, 400);
   }
+});
+
+// 9 July 2026 is a Thursday; 10 July is a Friday.
+const thursdaySeries = { timezone: 'Europe/Stockholm', starts_on: '2026-06-25', ends_on: '2026-07-16',
+  time_window: { kind: 'occurrences', dates: ['2026-06-25', '2026-07-02', '2026-07-09', '2026-07-16'],
+    starts_on: '2026-06-25', ends_on: '2026-07-16', local_start: '18:00', local_end: '21:00', timezone: 'Europe/Stockholm' } };
+const beforeSeries = '2026-07-08T10:00:00Z';
+
+test('listed occurrences reach a selected day only on a stated date', () => {
+  assert.equal(eventOccursOnDate(thursdaySeries, '2026-07-09', beforeSeries), true);
+  assert.equal(eventOccursOnDate(thursdaySeries, '2026-07-10', beforeSeries), false, 'a Friday inside the range is not a stated date');
+  assert.equal(selectedDateBucket(thursdaySeries, '2026-07-09', beforeSeries), 'tonight');
+  assert.equal(selectedDateBucket(thursdaySeries, '2026-07-10', beforeSeries), 'this_week', 'next stated Thursday is inside the following days');
+  assert.equal(selectedDateBucket(thursdaySeries, '2026-07-17', beforeSeries), null, 'no stated date remains');
+  // A listed session that already ended does not stay on today's list.
+  const afterSession = '2026-07-09T19:30:00Z'; // 21:30 in Stockholm
+  assert.equal(eventOccursOnDate(thursdaySeries, '2026-07-09', afterSession), false);
+  assert.equal(selectedDateBucket(thursdaySeries, '2026-07-09', afterSession), 'this_week');
+
+  const dateOnly = { time_window: { kind: 'occurrences', dates: ['2026-07-09'] } };
+  assert.equal(eventOccursOnDate(dateOnly, '2026-07-09', beforeSeries), true, 'listed date facts need no invented hours');
+  assert.equal(eventOccursOnDate(dateOnly, '2026-07-10', beforeSeries), false);
+  const startOnly = { timezone: 'Europe/Stockholm', time_window: { kind: 'occurrences', dates: ['2026-07-09'], local_start: '19:00' } };
+  assert.equal(eventOccursOnDate(startOnly, '2026-07-09', beforeSeries), true);
+  assert.equal(eventOccursOnDate({ ...startOnly, timezone: undefined }, '2026-07-09', beforeSeries), false,
+    'a clocked listing needs the reviewed venue timezone');
+});
+
+test('a period never claims the selected day, only following days it overlaps', () => {
+  const period = { timezone: 'Europe/Stockholm', starts_on: '2026-06-25', ends_on: '2026-07-16',
+    time_window: { kind: 'period', starts_on: '2026-06-25', ends_on: '2026-07-16', local_start: '18:00', local_end: '21:00' } };
+  for (const date of ['2026-06-25', '2026-07-09', '2026-07-10', '2026-07-16']) {
+    assert.equal(eventOccursOnDate(period, date, '2026-06-20T10:00:00Z'), false, date);
+  }
+  assert.equal(selectedDateBucket(period, '2026-07-10', beforeSeries), 'this_week');
+  assert.equal(selectedDateBucket(period, '2026-06-20', '2026-06-19T10:00:00Z'), 'this_week', 'starts inside the following days');
+  assert.equal(selectedDateBucket(period, '2026-07-16', beforeSeries), null, 'overlapping only the selected day claims nothing');
+  assert.equal(selectedDateBucket(period, '2026-07-20', beforeSeries), null);
+  assert.equal(selectedDateBucket({ ...period, timing_relevance: 'stale' }, '2026-07-10', beforeSeries), null);
 });

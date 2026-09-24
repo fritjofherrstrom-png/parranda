@@ -103,8 +103,14 @@ export function clothingAdvice(observed, lang) {
  *                window is UNDERWAY the start weekday is no longer the truth
  *                (a run that began Thursday reads as a Thursday event in a
  *                "tonight" list), so an ongoing window says so instead
+ *   occurrences→ the stated source date this row is about (the selected day, or
+ *                the next listed date whose session has not ended) + its local
+ *                clock — a listed series is never described as daily
+ *   period     → the source's own date range and local clock plus "days per
+ *                source": the source has not said which days carry a session
  *   daily      → "dagligen HH–HH" from local_start/local_end (already local —
- *                never re-converted through a timezone)
+ *                never re-converted through a timezone); only sources that
+ *                state every-day sessions produce this kind
  *   all_day    → local date or date range from starts_on/ends_on, formatted in
  *                UTC so a date-only value never shifts across midnight
  *   unresolved → "" (timing copy is omitted, never invented)
@@ -117,22 +123,48 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
   const locale = en ? "en-GB" : "sv-SE";
   const win = ev.time_window && typeof ev.time_window === "object" ? ev.time_window : null;
   const kind = win && typeof win.kind === "string" ? win.kind : null;
+  const day = (iso) => {
+    const d = new Date(`${iso}T00:00:00Z`);
+    if (Number.isNaN(d.getTime())) return null;
+    // Date-only values are LOCAL dates — format the parts in UTC so the label
+    // can never slide into the neighbouring day for any viewer.
+    return d.toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+  };
+  const clockRange = win && win.local_start && win.local_end ? `${win.local_start}–${win.local_end}` : (win && (win.local_start || win.local_end)) || "";
+
+  if (kind === "occurrences") {
+    const nowDate = now instanceof Date ? now : new Date(now);
+    const venueNow = venueLocalNow(nowDate, ev.timezone || win.timezone || null);
+    const reference = selectedDate || venueNow?.date || null;
+    // A session already over today is no longer the row's occurrence.
+    const endedToday = (date) =>
+      Boolean(venueNow && date === venueNow.date && win.local_start && win.local_end &&
+        win.local_end > win.local_start && venueNow.clock >= win.local_end);
+    const dates = listedDates(win.dates);
+    const next = dates.find((date) => (!reference || date >= reference) && !endedToday(date));
+    const label = next ? day(next) : null;
+    if (!label) return "";
+    return clockRange ? `${label} ${clockRange}` : label;
+  }
+
+  if (kind === "period") {
+    const startsOn = win.starts_on || ev.starts_on || null;
+    const endsOn = win.ends_on || ev.ends_on || startsOn;
+    const start = startsOn ? day(startsOn) : null;
+    if (!start) return "";
+    const end = endsOn && endsOn !== startsOn ? day(endsOn) : null;
+    return [end ? `${start} – ${end}` : start, clockRange, en ? "days per source" : "dagar enligt källan"]
+      .filter(Boolean)
+      .join(" · ");
+  }
 
   if (kind === "daily" && (win.local_start || win.local_end)) {
-    const range = win.local_start && win.local_end ? `${win.local_start}–${win.local_end}` : win.local_start || win.local_end;
-    return `${en ? "daily" : "dagligen"} ${range}`;
+    return `${en ? "daily" : "dagligen"} ${clockRange}`;
   }
 
   if (kind === "all_day" || (!kind && !ev.starts_at && (win?.starts_on || ev.starts_on))) {
     const startsOn = (win && win.starts_on) || ev.starts_on || null;
     const endsOn = (win && win.ends_on) || ev.ends_on || startsOn;
-    const day = (iso) => {
-      const d = new Date(`${iso}T00:00:00Z`);
-      if (Number.isNaN(d.getTime())) return null;
-      // Date-only values are LOCAL dates — format the parts in UTC so the label
-      // can never slide into the neighbouring day for any viewer.
-      return d.toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
-    };
     const start = startsOn ? day(startsOn) : null;
     if (!start) return "";
     if (!endsOn || endsOn === startsOn) return start;
@@ -188,6 +220,33 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
     return date.toLocaleString(locale, opts);
   } catch {
     return "";
+  }
+}
+
+function listedDates(values) {
+  if (!Array.isArray(values)) return [];
+  const valid = values.filter((value) => {
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const date = new Date(`${value}T00:00:00Z`);
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  });
+  return [...new Set(valid)].sort();
+}
+
+// Venue-local calendar date and clock for `now`; null without a usable venue
+// timezone (never the viewer's timezone).
+function venueLocalNow(nowDate, timezone) {
+  if (!timezone || Number.isNaN(nowDate.getTime())) return null;
+  try {
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat("en-CA", {
+        timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+      }).formatToParts(nowDate).map((part) => [part.type, part.value]),
+    );
+    return { date: `${parts.year}-${parts.month}-${parts.day}`, clock: `${parts.hour}:${parts.minute}` };
+  } catch {
+    return null;
   }
 }
 

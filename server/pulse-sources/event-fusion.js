@@ -338,13 +338,21 @@ function temporalOccurrencesCompatible(left, right, { allowBothMissing = false }
     const leftSignature = dailyTemporalSignature(left);
     return Boolean(leftSignature && leftSignature === dailyTemporalSignature(right));
   }
+  if (leftKind === "occurrences") {
+    const leftSignature = occurrencesTemporalSignature(left);
+    return Boolean(leftSignature && leftSignature === occurrencesTemporalSignature(right));
+  }
+  if (leftKind === "period") {
+    const leftSignature = periodTemporalSignature(left);
+    return Boolean(leftSignature && leftSignature === periodTemporalSignature(right));
+  }
   const leftSignature = allDayTemporalSignature(left);
   return Boolean(leftSignature && leftSignature === allDayTemporalSignature(right));
 }
 
 function temporalKind(event) {
   const declared = nonEmpty(event?.time_window?.kind).toLowerCase();
-  if (["continuous", "daily", "all_day"].includes(declared)) return declared;
+  if (["continuous", "daily", "all_day", "occurrences", "period"].includes(declared)) return declared;
   if (parseTimestamp(event?.starts_at) != null) return "continuous";
   if (dateOnly(event?.starts_on)) return "all_day";
   return "unknown";
@@ -377,6 +385,33 @@ function allDayTemporalSignature(event) {
   const startsOn = dateOnly(event?.starts_on || event?.time_window?.starts_on);
   const endsOn = dateOnly(event?.ends_on || event?.time_window?.ends_on);
   return startsOn && endsOn ? `${startsOn}|${endsOn}` : "";
+}
+
+// Listed occurrences describe the same happening only when every stated date
+// and the shared local clock agree; a partial overlap is not the same series.
+function occurrencesTemporalSignature(event) {
+  const window = event?.time_window;
+  const dates = Array.isArray(window?.dates) ? window.dates.map(dateOnly) : [];
+  if (!dates.length || dates.some((date) => !date)) return "";
+  return [
+    [...new Set(dates)].sort().join(","),
+    localClock(window.local_start),
+    localClock(window.local_end),
+    nonEmpty(event?.timezone || window.timezone),
+  ].join("|");
+}
+
+function periodTemporalSignature(event) {
+  const startsOn = dateOnly(event?.starts_on || event?.time_window?.starts_on);
+  const endsOn = dateOnly(event?.ends_on || event?.time_window?.ends_on);
+  if (!startsOn || !endsOn) return "";
+  return [
+    startsOn,
+    endsOn,
+    localClock(event?.time_window?.local_start),
+    localClock(event?.time_window?.local_end),
+    nonEmpty(event?.timezone || event?.time_window?.timezone),
+  ].join("|");
 }
 
 function dateSpread(values) {
@@ -489,6 +524,8 @@ function temporalSortKey(event) {
       dateOnly(event.ends_on || event.time_window?.ends_on),
     ].join("|");
   }
+  if (kind === "occurrences") return `${kind}|${occurrencesTemporalSignature(event)}`;
+  if (kind === "period") return `${kind}|${periodTemporalSignature(event)}`;
   return "unknown";
 }
 

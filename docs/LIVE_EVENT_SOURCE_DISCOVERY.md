@@ -735,10 +735,14 @@ silently interpreted as server-local or UTC time.
 Local calendar dates are not UTC instants. Date-only/all-day sources preserve
 `starts_on` / `ends_on`, while actual instants use `starts_at` / `ends_at`.
 Ambiguous daylight-saving folds also stay unresolved unless the source supplies
-an explicit offset. A multi-day listing with daily opening hours uses an
-explicit `time_window.kind: "daily"` with local start/end clocks; it must not be
-flattened into one continuous interval across nights. Truly continuous
-multi-day events may still use one bounded instant interval. Date-only rows are
+an explicit offset. A multi-day listing whose source states daily opening hours
+uses an explicit `time_window.kind: "daily"` with local start/end clocks; it
+must not be flattened into one continuous interval across nights. A range with
+one clock but no daily statement is not daily: source-listed dates (or a weekday
+rule inside an explicit bounded range) become `occurrences`, and unstated or
+unreadable days keep `period` semantics that never claim a specific date (see
+`LIVE_SELECTED_DATE.md`). Truly continuous multi-day events may still use one
+bounded instant interval. Date-only rows are
 valid inspectable and fusable source facts, but remain ineligible for
 current-time route promotion because they do not establish a daypart.
 
@@ -1066,6 +1070,11 @@ every Sitevision website is trusted or safe to collect.
   concurrency, and request time;
 - the adapter extracts factual atoms only: title, source URL, local date/time,
   venue/address, coordinates when published, and recurrence text;
+- a date range with a clock becomes `daily` only when the source states daily
+  sessions. The bounded "Återkommande tillfällen" section is read with a closed
+  grammar: listed dates, or weekdays inside the stated range, become explicit
+  `occurrences`. Anything unreadable, contradictory, open-ended or truncated
+  stays a `period` that never claims a specific day;
 - local clock times require a reviewed IANA timezone and otherwise remain
   timing-unknown rather than being treated as UTC;
 - one failed detail page does not erase usable listing evidence, while listing

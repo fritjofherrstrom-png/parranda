@@ -45,7 +45,11 @@ that may matter because of **when** they happen, not just where they are:
 - source identity: `source_url`, `source_label`, `source_type`, `source_tier`
 - place context: `city`, `place_context`, `area`, optional `lat` / `lng`
 - timing: `starts_at`, `ends_at`, optional `time_window`, `recurrence`,
-  `last_checked`, `freshness`
+  `last_checked`, `freshness`. `time_window.kind` is `continuous`, `all_day`,
+  `daily` (only when the source states every-day sessions), `occurrences`
+  (at most 60 stated source-local dates) or `period` (a source range whose
+  session days are not stated; it never claims a specific date). A declared
+  unknown kind normalizes to `period`
 - trust: canonical `confidence`, `provenance`
 - planning hints: `tags`, `intents`, optional `route_role_hint`
 - `timing_relevance`: `now`, `today`, `tonight`, `future`, `stale`, or

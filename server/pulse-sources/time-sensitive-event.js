@@ -8,6 +8,11 @@ const {
 
 const VALID_TIMING_RELEVANCE = new Set(["now", "today", "tonight", "future", "stale", "unknown"]);
 const EVENING_START_HOUR = 17;
+// Listed source-local occurrence dates are explicit evidence, never an
+// expansion rule. A longer list fails closed to period semantics instead of
+// being truncated into a partial schedule.
+const MAX_OCCURRENCE_DATES = 60;
+const TIME_WINDOW_KINDS = new Set(["daily", "continuous", "all_day", "occurrences", "period"]);
 
 function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
   if (!rawEvent || typeof rawEvent !== "object" || Array.isArray(rawEvent)) {
@@ -138,6 +143,12 @@ function normalizeTimingRelevance(explicit, facts = {}) {
   if (timeWindow?.kind === "daily") {
     return dailyWindowTimingRelevance(timeWindow, { now, timezone: facts.timezone });
   }
+  if (timeWindow?.kind === "occurrences") {
+    return occurrencesTimingRelevance(timeWindow, { now, timezone: facts.timezone });
+  }
+  if (timeWindow?.kind === "period") {
+    return periodTimingRelevance(timeWindow, { now, timezone: facts.timezone });
+  }
   if (timeWindow?.kind === "all_day") {
     return "unknown";
   }
@@ -247,6 +258,38 @@ function normalizeTimeWindow(value, facts = {}) {
         ends_on: windowEndsOn || windowStartsOn,
       });
     }
+    const dates = kind === "occurrences" ? normalizeOccurrenceDates(value.dates) : null;
+    if (dates) {
+      return compactObject({
+        kind,
+        label: firstString(value.label),
+        dates,
+        starts_on: dates[0],
+        ends_on: dates[dates.length - 1],
+        local_start: localStart,
+        local_end: localEnd,
+        timezone,
+        spans_midnight: localStart && localEnd
+          ? clockMinutes(localEnd) < clockMinutes(localStart) || undefined
+          : undefined,
+      });
+    }
+    // A source range whose occurrence days are not stated (or an unusable
+    // occurrence list) keeps period semantics: it can be shown with the source
+    // range, but it never claims a specific calendar date. Without any stated
+    // date there is no window; explicit instants remain on the event itself.
+    if (kind === "period" || kind === "occurrences") {
+      if (!windowStartsOn) return null;
+      return compactObject({
+        kind: "period",
+        label: firstString(value.label),
+        starts_on: windowStartsOn,
+        ends_on: windowEndsOn || windowStartsOn,
+        local_start: localStart,
+        local_end: localEnd,
+        timezone,
+      });
+    }
     return compactObject({
       kind: kind || "continuous",
       label: firstString(value.label),
@@ -277,10 +320,56 @@ function normalizeTimeWindow(value, facts = {}) {
 
 function normalizeTimeWindowKind(value, window = {}) {
   const raw = firstString(value).toLowerCase();
-  if (["daily", "continuous", "all_day"].includes(raw)) return raw;
+  if (TIME_WINDOW_KINDS.has(raw)) return raw;
+  // An undeclared kind may still be inferred, but a declared unknown kind (for
+  // example a recurrence rule) must never widen into every date of a range.
+  if (raw) return "period";
   if (window.local_start || window.starts_at_local || window.start_time) return "daily";
   if (window.starts_on || window.start_date) return "all_day";
   return null;
+}
+
+function normalizeOccurrenceDates(values) {
+  if (!Array.isArray(values) || values.length === 0 || values.length > MAX_OCCURRENCE_DATES) return null;
+  const dates = values.map((value) => normalizeSourceEventDate(value));
+  if (dates.some((date) => !date)) return null;
+  return [...new Set(dates)].sort();
+}
+
+function occurrencesTimingRelevance(window, { now, timezone } = {}) {
+  const trustedTimezone = normalizeIanaTimezone(timezone || window.timezone);
+  const localNow = now && trustedTimezone ? datePartsInTimezone(now, trustedTimezone) : null;
+  const dates = normalizeOccurrenceDates(window.dates);
+  if (!localNow || !dates) return "unknown";
+  const today = dateKey(localNow);
+  const upcoming = dates.filter((date) => date >= today);
+  if (upcoming.length === 0) return "stale";
+  if (upcoming[0] !== today) return "future";
+
+  // Today is a listed occurrence. Date-only listings stay date facts, like
+  // all-day rows; a clocked session is judged against its own local window.
+  const localStart = normalizeLocalClock(window.local_start);
+  const localEnd = normalizeLocalClock(window.local_end);
+  if (!localStart || !localEnd) return "unknown";
+  if (window.spans_midnight || clockMinutes(localEnd) <= clockMinutes(localStart)) return "unknown";
+  const nowMinutes = localNow.hour * 60 + localNow.minute;
+  const startMinutes = clockMinutes(localStart);
+  if (nowMinutes >= startMinutes && nowMinutes <= clockMinutes(localEnd)) return "now";
+  if (nowMinutes < startMinutes) return startMinutes >= EVENING_START_HOUR * 60 ? "tonight" : "today";
+  return upcoming.length > 1 ? "future" : "stale";
+}
+
+// Period rows never become now/today/tonight: the source has not said which
+// days inside its range carry a session.
+function periodTimingRelevance(window, { now, timezone } = {}) {
+  const trustedTimezone = normalizeIanaTimezone(timezone || window.timezone);
+  const localNow = now && trustedTimezone ? datePartsInTimezone(now, trustedTimezone) : null;
+  const startsOn = normalizeDateOnly(window.starts_on);
+  const endsOn = normalizeDateOnly(window.ends_on, startsOn);
+  if (!localNow || !startsOn || !endsOn) return "unknown";
+  const today = dateKey(localNow);
+  if (today > endsOn) return "stale";
+  return today < startsOn ? "future" : "unknown";
 }
 
 function dailyWindowTimingRelevance(window, { now, timezone } = {}) {
@@ -434,6 +523,8 @@ function compactObject(value) {
 }
 
 module.exports = {
+  MAX_OCCURRENCE_DATES,
+  normalizeOccurrenceDates,
   normalizeTimeSensitiveSourceEvent,
   normalizeTimingRelevance,
 };

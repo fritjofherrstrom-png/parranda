@@ -4,6 +4,7 @@ const {
   normalizeSourceEventDate, normalizeSourceEventDateTime,
   normalizeIanaTimezone, datePartsInTimezone,
 } = require("../pulse-sources/source-event-time");
+const { normalizeOccurrenceDates } = require("../pulse-sources/time-sensitive-event");
 
 function addCalendarDays(date, days) {
   if (!normalizeSourceEventDate(date)) return null;
@@ -30,16 +31,24 @@ function eventOccursOnDate(event, date, now) {
   const today = localCalendarDate(instant, timezone || "Etc/GMT+12");
   if (today && date < today) return false;
 
+  // A source range without stated occurrence days never claims a date.
+  if (window?.kind === "period") return false;
+  if (window?.kind === "occurrences") {
+    if (!listedOccurrenceDates(window).includes(date)) return false;
+    if (!window.local_start && !window.local_end) return true; // listed date facts
+    if (!timezone || !window.local_start) return false;
+    // Start-only listings match their stated day, with no invented duration.
+    if (!window.local_end) return Boolean(normalizeSourceEventDateTime(`${date}T${window.local_start}`, { timezone }));
+    return localSessionStillOpen(window, date, timezone, instant);
+  }
+
   if (window?.kind === "all_day" || window?.kind === "daily") {
     const start = normalizeSourceEventDate(event.starts_on || window.starts_on);
     const end = normalizeSourceEventDate(event.ends_on || window.ends_on) || start;
     if (!start || !end || start > date || end < date) return false;
     if (window.kind === "all_day") return true; // date facts, never invented hours
     if (!timezone || !window.local_start || !window.local_end) return false;
-    const endDate = window.local_end <= window.local_start ? addCalendarDays(date, 1) : date;
-    const startsAt = normalizeSourceEventDateTime(`${date}T${window.local_start}`, { timezone });
-    const endsAt = normalizeSourceEventDateTime(`${endDate}T${window.local_end}`, { timezone });
-    return Boolean(startsAt && endsAt && new Date(endsAt) > instant && new Date(endsAt) > new Date(startsAt));
+    return localSessionStillOpen(window, date, timezone, instant);
   }
 
   if (!timezone) return false; // no browser/UTC guess for the venue's calendar
@@ -49,6 +58,17 @@ function eventOccursOnDate(event, date, now) {
   const end = new Date(event.ends_at);
   if (!Number.isFinite(end.getTime()) || end <= start || end <= instant) return false;
   return intervalOverlapsDates(start.getTime(), end.getTime(), date, date, timezone);
+}
+
+function localSessionStillOpen(window, date, timezone, instant) {
+  const endDate = window.local_end <= window.local_start ? addCalendarDays(date, 1) : date;
+  const startsAt = normalizeSourceEventDateTime(`${date}T${window.local_start}`, { timezone });
+  const endsAt = normalizeSourceEventDateTime(`${endDate}T${window.local_end}`, { timezone });
+  return Boolean(startsAt && endsAt && new Date(endsAt) > instant && new Date(endsAt) > new Date(startsAt));
+}
+
+function listedOccurrenceDates(window) {
+  return window?.kind === "occurrences" ? normalizeOccurrenceDates(window.dates) || [] : [];
 }
 
 // Compare the dates of actual instants, not manufactured local midnights:
@@ -77,6 +97,24 @@ function selectedDateBucket(event, selectedDate, now) {
   const timezone = normalizeIanaTimezone(event?.timezone || window?.timezone);
   const instant = new Date(now);
   if (!Number.isFinite(instant.getTime()) || event?.freshness === "stale" || event?.timing_relevance === "stale") return null;
+  const today = localCalendarDate(instant, timezone || "Etc/GMT+12");
+  const horizon = addCalendarDays(selectedDate, 7);
+  if (window?.kind === "occurrences") {
+    const from = [selectedDate, today].filter(Boolean).sort().at(-1);
+    for (const date of listedOccurrenceDates(window)) {
+      if (date < from || date > horizon) continue;
+      if (eventOccursOnDate(event, date, instant)) return date === selectedDate ? "tonight" : "this_week";
+    }
+    return null;
+  }
+  if (window?.kind === "period") {
+    // Never the selected day: the source has not said that day carries a
+    // session. The range may still be listed among the following days.
+    const start = normalizeSourceEventDate(event.starts_on || window.starts_on);
+    const end = normalizeSourceEventDate(event.ends_on || window.ends_on) || start;
+    const from = [addCalendarDays(selectedDate, 1), today].filter(Boolean).sort().at(-1);
+    return start && end && start <= end && start <= horizon && end >= from ? "this_week" : null;
+  }
   let first;
   let last;
   if (window?.kind === "all_day" || window?.kind === "daily") {
@@ -91,8 +129,6 @@ function selectedDateBucket(event, selectedDate, now) {
     last = end ? localCalendarDate(new Date(end.getTime() - 1), timezone) : first;
   }
   if (!first || !last) return null;
-  const today = localCalendarDate(instant, timezone || "Etc/GMT+12");
-  const horizon = addCalendarDays(selectedDate, 7);
   // Jump straight to the first possible overlap. Most records need one check,
   // not eight expensive timezone conversions for every warm-cache read.
   let date = [selectedDate, first, today].filter(Boolean).sort().at(-1);
@@ -114,4 +150,6 @@ function sourceWindowStart(selectedDate, timezone, now) {
   return new Date(start) < new Date(now) ? new Date(now).toISOString() : start;
 }
 
-module.exports = { addCalendarDays, localCalendarDate, eventOccursOnDate, selectedDateBucket, sourceWindowStart };
+module.exports = {
+  addCalendarDays, localCalendarDate, eventOccursOnDate, listedOccurrenceDates, selectedDateBucket, sourceWindowStart,
+};

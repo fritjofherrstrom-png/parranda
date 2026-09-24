@@ -352,3 +352,42 @@ test("no district_day → returned unchanged (never throws)", () => {
   assert.equal(weaveEveningEvent(null, liveEvents([])), null);
   assert.deepEqual(weaveEveningEvent({ foo: 1 }, liveEvents([{ id: "e", lat: 1, lng: 2 }])), { foo: 1 });
 });
+
+test("listed occurrences materialize only on a stated evening; periods never do", () => {
+  // 9 and 16 July 2026 are Thursdays; 10 July is a Friday.
+  const series = {
+    id: "thursday-series",
+    title: "Summer evening on the square",
+    starts_on: "2026-07-09",
+    ends_on: "2026-07-16",
+    timezone: "Europe/Stockholm",
+    time_window: {
+      kind: "occurrences",
+      dates: ["2026-07-09", "2026-07-16"],
+      starts_on: "2026-07-09",
+      ends_on: "2026-07-16",
+      local_start: "18:00",
+      local_end: "21:00",
+      timezone: "Europe/Stockholm",
+    },
+  };
+  const thursday = eventOccurrenceForDate(series, "2026-07-09");
+  assert.equal(thursday.starts_at, "2026-07-09T16:00:00.000Z");
+  assert.equal(thursday.ends_at, "2026-07-09T19:00:00.000Z");
+  assert.equal(thursday.occurrence_date, "2026-07-09");
+  assert.equal(eventOccurrenceForDate(series, "2026-07-10"), null, "an unlisted Friday is never an evening anchor");
+
+  const period = {
+    ...series,
+    time_window: {
+      kind: "period",
+      starts_on: "2026-07-09",
+      ends_on: "2026-07-16",
+      local_start: "18:00",
+      local_end: "21:00",
+      timezone: "Europe/Stockholm",
+    },
+  };
+  assert.equal(eventOccurrenceForDate(period, "2026-07-09"), null);
+  assert.equal(eventOccurrenceForDate(period, "2026-07-10"), null);
+});

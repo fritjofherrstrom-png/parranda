@@ -3,11 +3,14 @@
 // — no index signatures required, no `any` at the component boundary.
 
 export interface PulseTimeWindow {
+  /** "continuous" | "daily" | "all_day" | "occurrences" | "period" */
   kind?: string;
   starts_at?: string | null;
   ends_at?: string | null;
   starts_on?: string | null;
   ends_on?: string | null;
+  /** Stated source-local occurrence dates (kind "occurrences" only). */
+  dates?: string[] | null;
   local_start?: string | null;
   local_end?: string | null;
   timezone?: string | null;
