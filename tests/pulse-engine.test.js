@@ -15,6 +15,7 @@ const cityRhythmGenerator = require("../server/pulse-engine/generators/city-rhyt
 const romeCity = require("../server/cities/rome");
 const barcelonaCity = require("../server/cities/barcelona");
 const athensCity = require("../server/cities/athens");
+const { withQuietCityFeeds } = require("./helpers/quiet-city-feeds");
 
 const fakeCity = {
   key: "test-city",
@@ -491,7 +492,7 @@ test("Rome keeps curated Pulse while also receiving shared computed rhythm", asy
   );
 });
 
-test("Barcelona and Athens can use computed rhythm without city editorial Pulse", async () => {
+test("Barcelona and Athens can use computed rhythm without city editorial Pulse", withQuietCityFeeds(async () => {
   for (const city of [barcelonaCity, athensCity]) {
     const result = await buildCityPulse(quietCityServices(city), {
       date: "2026-05-20",
@@ -510,4 +511,4 @@ test("Barcelona and Athens can use computed rhythm without city editorial Pulse"
       `${city.key} should not need city-specific editorial Pulse`,
     );
   }
-});
+}));

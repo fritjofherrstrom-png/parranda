@@ -199,10 +199,21 @@ test("global provider distinguishes unavailable, failed, and healthy-empty colle
 });
 
 test("default supply: key present → ANY anchor is covered (pending then cached); no key → unchanged behavior", async () => {
-  const supply = resolveDefaultEventSupply({
-    PARRANDA_AGNOSTIC_EVENTS: "enabled",
-    PARRANDA_TICKETMASTER_KEY: "test-key",
-  });
+  const supply = resolveDefaultEventSupply(
+    {
+      PARRANDA_AGNOSTIC_EVENTS: "enabled",
+      PARRANDA_TICKETMASTER_KEY: "test-key",
+    },
+    {
+      // The cold call warms in the background; feed that warm the fixture
+      // instead of the live Discovery API.
+      collectEvents: (args) =>
+        collectAnchorEvents({
+          ...args,
+          fetcher: fetcherFor(discoveryPayload({ lat: NEW_YORK.lat, lng: NEW_YORK.lng, timezone: "America/New_York" })),
+        }),
+    },
+  );
   const first = await supply({ anchor: NEW_YORK, now: NOW });
   assert.equal(first.coverage, "covered", "global family makes any coordinate covered");
   assert.equal(first.feed.id, GLOBAL_FEED_DESCRIPTOR.id);

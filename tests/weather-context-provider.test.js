@@ -11,6 +11,7 @@ const {
 } = require("../server/pulse-sources");
 const { GENERIC_PROVIDER_CITY } = require("../server/pulse-sources/provider-registry");
 const { resetWeatherCache } = require("../server/weather");
+const { withQuietCityFeeds } = require("./helpers/quiet-city-feeds");
 
 const romeCity = require("../server/cities/rome");
 const barcelonaCity = require("../server/cities/barcelona");
@@ -144,7 +145,7 @@ test("interpretWeatherForDayflow localizes copy for sv and en", () => {
 
 // --- Generic across cities ---------------------------------------------------
 
-test("weather provider is generic: same provider produces signals for Rome, Barcelona, and Athens", async () => {
+test("weather provider is generic: same provider produces signals for Rome, Barcelona, and Athens", withQuietCityFeeds(async () => {
   for (const city of [romeCity, barcelonaCity, athensCity]) {
     const pulse = await buildCityPulse(cityWithWeather(city, HEAT), {
       date: DATE,
@@ -157,7 +158,7 @@ test("weather provider is generic: same provider produces signals for Rome, Barc
     assert.match(weatherSignals[0].title, /heat/i);
     assert.equal(weatherSignals[0].trust_level, "verified");
   }
-});
+}));
 
 test("weather provider descriptor carries no city-specific branching", () => {
   // The same provider object, collected for different cities, binds to each.
@@ -324,7 +325,7 @@ test("ranked weather signal preserves compact source provenance without raw payl
 
 // --- Weather never becomes events / place candidates / nearby / routes -------
 
-test("weather signal display gate keeps it as Pulse context only", async () => {
+test("weather signal display gate keeps it as Pulse context only", withQuietCityFeeds(async () => {
   const pulse = await buildCityPulse(cityWithWeather(barcelonaCity, RAIN), {
     date: DATE,
     now: NOW,
@@ -340,7 +341,7 @@ test("weather signal display gate keeps it as Pulse context only", async () => {
   assert.equal(row.display_gate.may_show_as_nearby, false);
   assert.equal(row.display_gate.may_influence_routes, false);
   assert.equal(row.display_gate.may_show_in_live_list, false);
-});
+}));
 
 test("weather provider produces no events (only signals)", async () => {
   const result = await collectPulseSourcesForCity(
@@ -399,7 +400,7 @@ test("weather provider failure is fail-safe and does not break Pulse", async () 
 
 // --- Inspect signal summary ---------------------------------------------------
 
-test("inspect mode exposes a capped signal summary without raw payloads", async () => {
+test("inspect mode exposes a capped signal summary without raw payloads", withQuietCityFeeds(async () => {
   const pulse = await buildCityPulse(cityWithWeather(athensCity, WIND), {
     date: DATE,
     now: NOW,
@@ -418,7 +419,7 @@ test("inspect mode exposes a capped signal summary without raw payloads", async 
   // No raw provider payload fields leak through.
   assert.equal(row.raw, undefined);
   assert.equal(row.payload, undefined);
-});
+}));
 
 test("buildSourceProviderInspect caps signal rows at the documented limit", () => {
   const manySignals = Array.from({ length: 25 }, (_unused, index) => ({
