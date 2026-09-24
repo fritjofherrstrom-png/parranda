@@ -216,7 +216,13 @@ function summarizeRejections(rejected = []) {
 
 function buildAnchorEventSourceHealth(
   collections = [],
-  { acceptedEventCount = 0, surfacedEventCount = acceptedEventCount, normalizedEventCount = 0, rejected = [] } = {},
+  {
+    acceptedEventCount = 0,
+    surfacedEventCount = acceptedEventCount,
+    normalizedEventCount = 0,
+    outOfPeriodEventCount = 0,
+    rejected = [],
+  } = {},
 ) {
   const rows = Array.isArray(collections) ? collections : [];
   const statusCounts = { ok: 0, empty: 0, failed: 0, unavailable: 0 };
@@ -240,6 +246,7 @@ function buildAnchorEventSourceHealth(
   const accepted = Math.max(0, Math.floor(Number(acceptedEventCount) || 0));
   const surfaced = Math.max(0, Math.floor(Number(surfacedEventCount) || 0));
   const normalized = Math.max(0, Math.floor(Number(normalizedEventCount) || 0));
+  const outOfPeriod = Math.max(0, Math.floor(Number(outOfPeriodEventCount) || 0));
   const rejectionCount = Array.isArray(rejected) ? rejected.length : 0;
   let result = "unknown";
   if (accepted > 0) result = "events_found";
@@ -255,7 +262,13 @@ function buildAnchorEventSourceHealth(
   if (result === "empty" && rawEventCount > 0 && normalized === 0) {
     reasons.push("all_event_rows_failed_normalization");
   } else if (result === "empty" && normalized > 0 && rejectionCount > 0) {
+    // Evidence inside the requested period existed and every row of it failed
+    // a date-independent gate (geometry, fusion or display).
     reasons.push("all_event_evidence_rejected");
+  } else if (result === "empty" && normalized > 0 && outOfPeriod > 0) {
+    // The sources listed rows, but none on the requested day or the following
+    // seven days. That is an answer about the period, not rejected evidence.
+    reasons.push("no_events_in_requested_period");
   } else if (result === "empty" && normalized > 0) {
     reasons.push("no_routeable_timed_events");
   }
@@ -271,6 +284,7 @@ function buildAnchorEventSourceHealth(
     unavailable_source_count: statusCounts.unavailable,
     raw_event_count: rawEventCount,
     normalized_event_count: normalized,
+    out_of_period_event_count: outOfPeriod,
     accepted_event_count: accepted,
     surfaced_event_count: surfaced,
     rejected_event_count: rejectionCount,
