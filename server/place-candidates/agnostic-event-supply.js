@@ -663,6 +663,9 @@ function rankCollectedEventsForPreferences(collected, preferences = [], scope = 
   const pool = collected._rankable_events;
   let tonightPool = Array.isArray(pool?.tonight) ? pool.tonight : collected.tonight;
   let thisWeekPool = Array.isArray(pool?.this_week) ? pool.this_week : collected.this_week;
+  // Rows accepted at collection whose occurrence has since ended now lie
+  // outside the requested period, and are counted as such.
+  let endedSinceCollection = 0;
   if (collected.selected_date && now) {
     const events = [...(tonightPool || []), ...(thisWeekPool || [])];
     tonightPool = [];
@@ -671,6 +674,7 @@ function rankCollectedEventsForPreferences(collected, preferences = [], scope = 
       const bucket = selectedDateBucket(event, collected.selected_date, now);
       if (bucket === "tonight") tonightPool.push(event);
       else if (bucket === "this_week") thisWeekPool.push(event);
+      else endedSinceCollection += 1;
     }
   }
   const { _rankable_events: _internalPool, ...publicResult } = collected;
@@ -685,18 +689,37 @@ function rankCollectedEventsForPreferences(collected, preferences = [], scope = 
   const tonight = tonightSurface.highlights;
   const thisWeek = thisWeekSurface.highlights;
   const projectedCount = (tonightPool?.length || 0) + (thisWeekPool?.length || 0);
-  const acquisition = publicResult.acquisition && typeof publicResult.acquisition === "object"
+  const projected = Boolean(collected.selected_date && now);
+  const baseAcquisition = publicResult.acquisition && typeof publicResult.acquisition === "object"
+    ? publicResult.acquisition
+    : null;
+  const baseHealth = baseAcquisition?.source_health && typeof baseAcquisition.source_health === "object"
+    ? baseAcquisition.source_health
+    : null;
+  const outOfPeriodCount = (Number(baseAcquisition?.out_of_period_event_count) || 0) + endedSinceCollection;
+  let projectedHealth = {};
+  if (projected && baseHealth) {
+    const reasons = (baseHealth.reasons || []).filter(reason => reason !== "bounded_events_found" || projectedCount > 0);
+    if (projectedCount === 0 && endedSinceCollection > 0 && baseHealth.responding_source_count > 0 &&
+        !reasons.includes("no_events_in_requested_period")) {
+      reasons.push("no_events_in_requested_period");
+    }
+    projectedHealth = {
+      accepted_event_count: projectedCount,
+      out_of_period_event_count: (Number(baseHealth.out_of_period_event_count) || 0) + endedSinceCollection,
+      result: projectedCount > 0 ? "events_found" : baseHealth.responding_source_count > 0 ? "empty" : "unknown",
+      reasons,
+    };
+  }
+  const acquisition = baseAcquisition
     ? {
-        ...publicResult.acquisition,
-        ...(publicResult.acquisition.source_health && typeof publicResult.acquisition.source_health === "object"
+        ...baseAcquisition,
+        ...(projected ? { out_of_period_event_count: outOfPeriodCount } : {}),
+        ...(baseHealth
           ? {
               source_health: {
-                ...publicResult.acquisition.source_health,
-                ...(collected.selected_date && now ? {
-                  accepted_event_count: projectedCount,
-                  result: projectedCount > 0 ? "events_found" : publicResult.acquisition.source_health.responding_source_count > 0 ? "empty" : "unknown",
-                  reasons: (publicResult.acquisition.source_health.reasons || []).filter(reason => reason !== "bounded_events_found" || projectedCount > 0),
-                } : {}),
+                ...baseHealth,
+                ...projectedHealth,
                 surfaced_event_count: tonight.length + thisWeek.length,
               },
             }
@@ -868,11 +891,27 @@ async function collectAnchorEvents({
     }
   }
 
+  // Only rows that can appear in the requested Live period may use the
+  // bounded venue budget or reach the trust gates. A row on another day is
+  // counted as outside the period: it is neither rejected evidence nor a
+  // reason to spend a lookup the selected day then lacks. The final bucket
+  // assignment below stays authoritative. Without a clock nothing is excluded.
+  const periodRank = new Map();
+  let outOfPeriodCount = 0;
+  for (const event of normalizedEvidence) {
+    const bucket = nowDate ? liveEventPeriodBucket(event, { selectedDate, nowDate }) : "this_week";
+    if (bucket) periodRank.set(event, bucket === "tonight" ? 0 : 1);
+    else outOfPeriodCount += 1;
+  }
+  const inPeriodEvidence = normalizedEvidence.filter((event) => periodRank.has(event));
+
   // A bounded server-owned resolver may recover source-backed venue geometry.
   // Public payload cannot inject this seam; ambiguous, weak or out-of-radius
   // results remain mapless and are rejected by the unchanged fusion gate below.
+  // The requested day's rows are looked up before the following days'.
   const venueResolution = await resolveEventVenueGeometry(
-    normalizedEvidence.slice().sort(compareVenueResolutionPriority),
+    inPeriodEvidence.slice().sort((left, right) =>
+      periodRank.get(left) - periodRank.get(right) || compareVenueResolutionPriority(left, right)),
     {
       resolver: venueResolver,
       anchor,
@@ -885,7 +924,8 @@ async function collectAnchorEvents({
 
   // Explicit outside-radius rows are rejected before fusion. A mapless row can
   // only survive when another source describes the same occurrence with trusted
-  // coordinates, after which the fused occurrence is bounded again.
+  // coordinates, after which the fused occurrence is bounded again. Every row
+  // reaching this gate lies inside the requested period.
   const bounded = fuseAndBoundEventEvidence(venueResolution.events, {
     anchor,
     radiusM: effectiveRadiusM,
@@ -918,20 +958,10 @@ async function collectAnchorEvents({
           : isEphemeralHappening(event, nowDate),
     });
     if (!view) continue;
-    if (selectedDate) {
-      const bucket = selectedDateBucket(view, selectedDate, nowDate);
-      if (bucket === "tonight") tonight.push(view);
-      else if (bucket === "this_week") thisWeek.push(view);
-    } else if (TONIGHT_TIMING.has(event.timing_relevance)) {
-      tonight.push(view);
-    } else if (
-      (event.timing_relevance === "future" ||
-        event.time_window?.kind === "all_day" ||
-        (["occurrences", "period"].includes(event.time_window?.kind) && event.timing_relevance !== "stale")) &&
-      withinEventHorizon(event, nowDate, THIS_WEEK_HORIZON_DAYS)
-    ) {
-      thisWeek.push(view);
-    }
+    const bucket = liveEventPeriodBucket(selectedDate ? view : event, { selectedDate, nowDate });
+    if (bucket === "tonight") tonight.push(view);
+    else if (bucket === "this_week") thisWeek.push(view);
+    else outOfPeriodCount += 1;
   }
 
   const tonightSurface = buildEventBucketSurface(
@@ -949,6 +979,7 @@ async function collectAnchorEvents({
     acceptedEventCount: tonight.length + thisWeek.length,
     surfacedEventCount: rankedTonight.length + rankedThisWeek.length,
     normalizedEventCount: normalizedEvidence.length,
+    outOfPeriodEventCount: outOfPeriodCount,
     rejected,
   });
   return {
@@ -973,6 +1004,7 @@ async function collectAnchorEvents({
       source_cap: Math.max(1, Math.min(Number(maxSources) || DEFAULT_MAX_SOURCES, DEFAULT_MAX_SOURCES)),
       selected_source_count: sourcePlan.length,
       normalized_event_count: normalizedEvidence.length,
+      out_of_period_event_count: outOfPeriodCount,
       fused_event_count: bounded.fused_count,
       rejected_event_count: rejected.length,
       rejection_summary: summarizeRejections(rejected),
@@ -981,6 +1013,23 @@ async function collectAnchorEvents({
       geometry_scope: bounded.geometry_scope,
     },
   };
+}
+
+// The Live period a row belongs to: the selected (or current) day, the
+// following seven days, or neither. One definition decides the venue budget,
+// the out-of-period count and the final buckets.
+function liveEventPeriodBucket(event, { selectedDate = null, nowDate = null } = {}) {
+  if (selectedDate) return selectedDateBucket(event, selectedDate, nowDate);
+  if (TONIGHT_TIMING.has(event?.timing_relevance)) return "tonight";
+  if (
+    (event?.timing_relevance === "future" ||
+      event?.time_window?.kind === "all_day" ||
+      (["occurrences", "period"].includes(event?.time_window?.kind) && event?.timing_relevance !== "stale")) &&
+    withinEventHorizon(event, nowDate, THIS_WEEK_HORIZON_DAYS)
+  ) {
+    return "this_week";
+  }
+  return null;
 }
 
 function boundedDateOnlyRange(startsOn, endsOn, maxDays = MAX_HAPPENING_DAYS) {
@@ -1303,6 +1352,7 @@ function emptyAcquisition(radiusM, discoveryHealth = null) {
     source_cap: DEFAULT_MAX_SOURCES,
     selected_source_count: 0,
     normalized_event_count: 0,
+    out_of_period_event_count: 0,
     fused_event_count: 0,
     rejected_event_count: 0,
     rejection_summary: [],
@@ -1484,6 +1534,7 @@ function failedEventCollection({ sourcePlan, selectedDate, radiusM }) {
       source_cap: DEFAULT_MAX_SOURCES,
       selected_source_count: sourcePlan.length,
       normalized_event_count: 0,
+      out_of_period_event_count: 0,
       fused_event_count: 0,
       rejected_event_count: 0,
       rejection_summary: [],
@@ -1673,6 +1724,7 @@ function resolveDefaultEventSupply(
         source_cap: DEFAULT_MAX_SOURCES,
         selected_source_count: sourcePlan.length,
         normalized_event_count: 0,
+        out_of_period_event_count: 0,
         fused_event_count: 0,
         rejected_event_count: 0,
         rejection_summary: [],
@@ -1687,6 +1739,7 @@ function resolveDefaultEventSupply(
           unavailable_source_count: 0,
           raw_event_count: 0,
           normalized_event_count: 0,
+          out_of_period_event_count: 0,
           accepted_event_count: 0,
           surfaced_event_count: 0,
           rejected_event_count: 0,
