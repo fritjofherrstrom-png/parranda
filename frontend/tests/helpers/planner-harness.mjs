@@ -13,7 +13,7 @@
  * through.
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { JSDOM } from "jsdom";
@@ -153,7 +153,9 @@ let bundleGeneration = 0;
  */
 async function buildComponent() {
   if (cachedModulePath) return cachedModulePath;
-  const outfile = resolve(HERE, ".planner-harness-bundle.mjs");
+  // node:test runs test files in separate processes. A shared outfile lets a
+  // concurrent esbuild truncate a module while another process imports it.
+  const outfile = resolve(HERE, `.planner-harness-bundle.${process.pid}.mjs`);
   const stubLeaflet = {
     name: "stub-leaflet",
     setup(build) {
@@ -194,6 +196,7 @@ async function buildComponent() {
     logLevel: "silent",
   });
   cachedModulePath = outfile;
+  process.once("exit", () => rmSync(outfile, { force: true }));
   return outfile;
 }
 
