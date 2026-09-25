@@ -139,8 +139,6 @@ found “Källstatus: 1/2 svarade · 1 med träffar” while `accepted_event_cou
   opening debaser.se), and a site root rendered exactly like an exact event page.
   Links now name their destination host and label a site root as a homepage; a
   detail URL is still not supplied where the feed has none.
-- The sheet heading “Höjdpunkter för dina val” also covers rows with
-  `preference_match: "none"`; cards show no per-row reason.
 - On narrow screens a selected-day timed card repeats the date twice
   (“fre 25 sep. 19:00 – fre 25 sep. 21:00”), and the timing column squeezes the
   title into a narrow strip.
