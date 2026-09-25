@@ -172,7 +172,11 @@ function extractLinkedEvents(payload) {
 // Pure — exported for tests.
 function mapLinkedEventToRaw(event) {
   if (!isObject(event)) return null;
-  const coords = extractCoordinates(event.location);
+  const virtualOnly = isVirtualOnlyLocation(event.location);
+  const municipalityOnly = !virtualOnly && isMunicipalityOnlyLocation(event.location);
+  const coords = virtualOnly || municipalityOnly
+    ? { lat: null, lng: null }
+    : extractCoordinates(event.location);
   const sourceUrl = preferredLocalized(event.info_url) || firstString(event["@id"]);
   return compact({
     id: firstString(event.id, event["@id"]),
@@ -181,6 +185,7 @@ function mapLinkedEventToRaw(event) {
     ends_at: firstString(event.end_time, event.endTime),
     source_url: sourceUrl,
     place_context: event.location ? preferredLocalized(event.location.name) : null,
+    source_location_scope: virtualOnly ? "virtual" : municipalityOnly ? "municipality" : null,
     lat: coords.lat,
     lng: coords.lng,
     tags: keywordList(event.keywords),
@@ -200,6 +205,35 @@ function linkedEventProvenance(event, { sourceUrl } = {}) {
     attribution,
     license: firstString(event.license_label, event.license) || "CC-BY 4.0",
   });
+}
+
+function isVirtualOnlyLocation(location) {
+  if (!isObject(location)) return false;
+  const id = firstString(location.id) || "";
+  // Linked Events explicitly identifies its online-only placeholder as a
+  // place, complete with a misleading city-centre Point.
+  return /(?:^|[:/])internet$/i.test(id) &&
+    localizedValues(location.name).includes("internet") &&
+    !preferredLocalized(location.street_address);
+}
+
+function isMunicipalityOnlyLocation(location) {
+  if (!isObject(location) || !Array.isArray(location.divisions)) return false;
+  if (preferredLocalized(location.street_address)) return false;
+  const names = localizedValues(location.name);
+  if (!names.length) return false;
+  return location.divisions.some((division) =>
+    division?.type === "muni" &&
+    localizedValues(division.name).some((name) => names.includes(name)),
+  );
+}
+
+function localizedValues(value) {
+  if (typeof value === "string") return value.trim() ? [value.trim().toLocaleLowerCase()] : [];
+  if (!isObject(value)) return [];
+  return Object.values(value)
+    .filter((name) => typeof name === "string" && name.trim())
+    .map((name) => name.trim().toLocaleLowerCase());
 }
 
 function extractCoordinates(location) {
