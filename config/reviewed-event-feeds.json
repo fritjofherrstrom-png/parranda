@@ -97,5 +97,24 @@
     "runtime_policy": "bounded_refresh",
     "reviewed_at": "2026-08-11",
     "review_scope": "official public server-rendered program atoms with source attribution; no editorial descriptions or images"
+  },
+  {
+    "id": "helsinki-region-linked-events",
+    "label": "Linked Events Helsinki API",
+    "adapter": "linked_events",
+    "endpoint": "https://api.hel.fi/linkedevents/v1/event/",
+    "bbox": [24.4, 60.1, 25.5, 60.5],
+    "timezone": "Europe/Helsinki",
+    "source_language": "fi",
+    "source_tier": "official",
+    "confidence": "medium",
+    "source_family": "official_municipal_api",
+    "source_identity": "api.hel.fi",
+    "license": "CC-BY 4.0",
+    "status": "active",
+    "source_scoped_pulse": true,
+    "runtime_policy": "bounded_refresh",
+    "reviewed_at": "2026-09-25",
+    "review_scope": "public Linked Events factual atoms with location and source attribution; excludes descriptions and images"
   }
 ]
