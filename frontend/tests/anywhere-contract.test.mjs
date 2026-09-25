@@ -14,10 +14,12 @@ import { buildAnywherePayload, ANYWHERE_PREFERENCES, WALK_PRESETS, isoDateFromOf
 import { LIVE_REFRESH_DELAYS_MS } from "../src/lib/compose-followup.mjs";
 import { routePreferenceCoverage } from "../src/lib/route-context-view.mjs";
 import { limitationNote } from "../src/lib/day-limitations.mjs";
+import { componentSource, plannerSurfaceSource } from "./helpers/planner-source.mjs";
 
 const require = createRequire(import.meta.url);
 const decision = require("../../anywhere-render-decision.js");
-const anywherePlannerSource = readFileSync(new URL("../src/components/AnywherePlanner.tsx", import.meta.url), "utf8");
+// The planner surface: the orchestrator plus the pieces it renders (see the helper).
+const anywherePlannerSource = plannerSurfaceSource();
 const anywhereStyles = readFileSync(new URL("../src/styles/tailwind.css", import.meta.url), "utf8");
 
 test("payload carries the freeform place + the three agnostic flags, never a city key", () => {
@@ -53,7 +55,7 @@ test("the modern planner owns curated city links and sends their citypack identi
 });
 
 test("curated mode hides actions whose current APIs would silently lose citypack identity", () => {
-  assert.match(anywherePlannerSource, /\{!cityKey && \([\s\S]{0,120}onClick=\{blitz\}/);
+  assert.match(anywherePlannerSource, /!cityKey && \(\s*<div[^>]*>\s*<button\s+type="button"\s+onClick=\{blitz\}/);
   assert.match(anywherePlannerSource, /!cityKey && hasRealId/);
   assert.match(anywherePlannerSource, /!cityKey && candidateId/);
 });
@@ -262,8 +264,18 @@ test("map hierarchy mirrors route authority instead of numbering two competing p
   // Candidates are NEVER sequenced: the no-route branch draws plain dots only —
   // no numbered markers, no connecting arc (only the route branch may polyline).
   assert.doesNotMatch(anywherePlannerSource, /district-map-marker/);
-  const noRouteBranch = anywherePlannerSource.split("} else {")[1] ?? "";
+  const routeMapSource = componentSource("planner/RouteMap.tsx");
+  const noRouteBranch = routeMapSource.split("} else {")[1] ?? "";
+  assert.match(noRouteBranch, /No route exists: these are CANDIDATES/, "the no-route branch is the one inspected");
   assert.doesNotMatch(noRouteBranch.slice(0, 1200), /polyline|divIcon/);
+  // Optional detour dots join the map only while their list is open, so no
+  // mark on the map is left without its explanation.
+  assert.match(routeMapSource, /if \(showContext\) \{\s*routeContextSuggestions\.forEach/);
+  assert.match(componentSource("AnywherePlanner.tsx"), /showContext=\{detoursOpen\}/);
+  // A line joining the stops' own coordinates is drawn as a sketch (dotted),
+  // never as a street path Parranda did not compute.
+  assert.match(routeMapSource, /sketch\s*\?\s*\{[^}]*dashArray/);
+  assert.match(componentSource("AnywherePlanner.tsx"), /routePathIsSketch\(primaryRoute\?\.map_path_points, routeStops\.length\)/);
 });
 
 test("map controls preserve provider attribution space", () => {
@@ -328,7 +340,7 @@ test("secondary candidates disclose in Parranda before offering an explicit Maps
 
   const detourSurface = anywherePlannerSource
     .split("{routeContextSuggestions.map((stop, index) => {")[1]
-    ?.split("{routeCoverage.has_coverage_evidence")[0] ?? "";
+    ?.split("Without a primary route")[0] ?? "";
   const structureSurface = anywherePlannerSource
     .split("{(day?.areas ?? []).map((area, index) => (")[1]
     ?.split("{/* The evening event is NOT presented here")[0] ?? "";
@@ -491,13 +503,15 @@ test("the Live sheet explores events only — it never touches the day's anchor 
   assert.match(anywherePlannerSource, /LIVE_QUERY_REFRESH_DELAYS_MS = \[1500, 3000, 5000\]/);
   assert.match(anywherePlannerSource, /attempt <= LIVE_QUERY_REFRESH_DELAYS_MS\.length/);
   assert.match(anywherePlannerSource, /sheetPulseState === "pending"/);
-  const sheetBlock = anywherePlannerSource.split("THE LIVE SHEET")[1] ?? "";
-  assert.ok(sheetBlock.length > 0, "live sheet block present");
-  assert.doesNotMatch(
-    sheetBlock,
-    /resolveAndRun|execute\(|setSafeResponse|setClassification|setPlace|setMode|storeAnchorCoords|consumeAnchorCoords/,
-    "the sheet must not recompose, replace route data or move the day anchor",
-  );
+  const dayMutators = /resolveAndRun|execute\(|setSafeResponse|setClassification|setPlace|setMode|storeAnchorCoords|consumeAnchorCoords|setSelected|setCommitments/;
+  const sheetBlock = componentSource("planner/LiveSheet.tsx");
+  assert.match(sheetBlock, /THE LIVE SHEET/, "live sheet component present");
+  assert.doesNotMatch(sheetBlock, dayMutators, "the sheet must not recompose, replace route data or move the day anchor");
+  // ...and the planner hands it nothing that could: read-only data plus the
+  // scope, time and close callbacks.
+  const sheetElement = componentSource("AnywherePlanner.tsx").split("<LiveSheet")[1]?.split("/>")[0] ?? "";
+  assert.ok(sheetElement.length > 0, "the planner renders the Live sheet");
+  assert.doesNotMatch(sheetElement, dayMutators, "no prop of the sheet can recompose or move the day");
   assert.match(anywherePlannerSource, /day's place and route are unchanged/);
   // Empty copy names the ACTIVE scope×time cell, and counts come from the
   // buckets, never from copy.

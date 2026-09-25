@@ -268,3 +268,41 @@ test("every island a page hydrates matches the tree the build shipped", async ()
     );
   }
 });
+
+// --------------------------------------------------------------------------
+// The landing's way back to the last day.
+// --------------------------------------------------------------------------
+
+test("a returning visitor can continue their last day from the landing", async (t) => {
+  // Retention lives in localStorage, which the build cannot see — so the link
+  // arrives after hydration, like the registry, and never costs a mismatch.
+  const h = await renderAndHydrate({
+    entry: "components/LandingHero.tsx",
+    props: { lang: "en" },
+    url: "http://localhost/?lang=en",
+    injected: { __PARRANDA_CITIES__: INJECTED_CITIES },
+    setupBrowser: (window) => {
+      window.localStorage.setItem(LAST_KEY, JSON.stringify(STORED_DAY));
+    },
+  });
+  t.after(() => h.cleanup());
+
+  assert.deepEqual(hydrationComplaints(h), [], "the stored day is adopted after hydration, never during it");
+  const link = [...h.window.document.querySelectorAll("a")].find((a) => /Continue/.test(a.textContent));
+  assert.ok(link, "the last day is offered");
+  // The planner restores the stored day on its own when no place is given.
+  assert.equal(link.getAttribute("href"), "/anywhere?lang=en");
+  assert.match(link.textContent, /A day in Barcelona/);
+});
+
+test("a first visit offers nothing to continue", async (t) => {
+  const h = await renderAndHydrate({
+    entry: "components/LandingHero.tsx",
+    props: { lang: "en" },
+    url: "http://localhost/?lang=en",
+    injected: { __PARRANDA_CITIES__: INJECTED_CITIES },
+  });
+  t.after(() => h.cleanup());
+
+  assert.ok(![...h.window.document.querySelectorAll("a")].some((a) => /Continue/.test(a.textContent)));
+});

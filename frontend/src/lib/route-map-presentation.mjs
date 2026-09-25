@@ -54,6 +54,28 @@ function connectedComponents(stops, collisionDistanceKm) {
 }
 
 /**
+ * Is the published route line only a sketch of the stop order?
+ *
+ * A walking router that follows streets returns more geometry than the route's
+ * own waypoints; the heuristic estimate returns exactly the waypoints (at most
+ * the stops plus a published start and end), joined by straight lines that can
+ * cross water, parks and buildings. Drawing those like a street path would claim
+ * a walking line Parranda never computed, so the map draws a sketch dotted.
+ *
+ * Structural only: the answer comes from point counts, never from a place,
+ * provider name or label. Anything unreadable counts as a sketch — the
+ * conservative reading.
+ */
+export function routePathIsSketch(pathPoints, stopCount) {
+  const points = Array.isArray(pathPoints)
+    ? pathPoints.filter((point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lng))
+    : [];
+  const stops = Number.isInteger(stopCount) && stopCount > 0 ? stopCount : 0;
+  if (points.length < 2) return true;
+  return points.length <= stops + 2;
+}
+
+/**
  * Produces display-only offsets for route marker badges that would otherwise
  * overlap at ordinary city zoom levels. Geographic coordinates remain the
  * marker anchors and route geometry remains authoritative.
