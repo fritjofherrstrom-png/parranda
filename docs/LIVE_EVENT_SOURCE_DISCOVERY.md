@@ -1069,7 +1069,22 @@ every Sitevision website is trusted or safe to collect.
 - collection caps listing rows, detail-page requests, response size,
   concurrency, and request time;
 - the adapter extracts factual atoms only: title, source URL, local date/time,
-  venue/address, coordinates when published, and recurrence text;
+  venue/address, event-bound coordinates, and recurrence text;
+- a venue pin must belong to the listed event, never to the page it sits on.
+  An event showcase's registered state supplies it only when its portlet is a
+  registered `se.soleil.eventShowcase`, its id is the listing URL's `id`, its
+  title is the listed title, the listed day is one of its occasions, every
+  occasion names the same venue and exactly one coordinate is given for that
+  venue; any contradicting or unreadable state of that event yields no pin.
+  A detail page without event state may use its one Google Maps link when an
+  `<h1>` is the listed title, the stated date range holds the listed day and
+  exactly one "Evenemangsplats" is named. Maps in the site frame (header,
+  navigation, footer, `contentinfo`) or after the main content never count, a
+  second map in the content leaves the venue ambiguous, and a map coordinate
+  that detail pages claim for differently named venues is dropped as a
+  site-wide map. State of unrelated apps (cookie consent, feedback) changes nothing. A
+  row without a bound pin keeps its other detail facts and relies on the
+  bounded venue resolver;
 - a date range with a clock becomes `daily` only when the source states daily
   sessions. The bounded "Återkommande tillfällen" section is read with a closed
   grammar: listed dates, or weekdays inside the stated range, become explicit
