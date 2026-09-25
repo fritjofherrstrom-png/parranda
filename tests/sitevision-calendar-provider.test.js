@@ -67,16 +67,16 @@ function soleilListingHtml(rows = [soleilArticle()]) {
   `;
 }
 
-function detailHtml(dateText = "25 juni–16 juli, 18.00–21.00") {
+function detailHtml(dateText = "25 juni–16 juli, 18.00–21.00", title = "Summer market") {
   return `
-    <h1>Summer market</h1>
+    <h1>${title}</h1>
     <span id="Datumochtid">Date and time</span>
     <p>${dateText}</p>
     <span id="Aterkommandetillfallen">Recurring occasions</span>
     <p>Every Thursday</p>
     <p><strong>Evenemangsplats:</strong><br>Town museum</p>
     <p><strong>Adress:</strong><br>Example street 1</p>
-    <a href="https://www.google.com/maps/@55.556437,14.347752,200m">Map</a>
+    <a href="https://www.google.com/maps/@55.556437,14.347752,200m" aria-label="Map to Town museum">Map</a>
   `;
 }
 
@@ -85,6 +85,217 @@ function detailHtml(dateText = "25 juni–16 juli, 18.00–21.00") {
 // observable from the development session; this fixture follows the adapter's
 // existing anchor contract with the reviewed defect's shape: an explicit range,
 // one clock range and an "Återkommande tillfällen" section.
+function showcase(html, key = "12.portlet") {
+  return `<div class="sv-se-soleil-eventShowcase" data-cid="${key}"></div>${html}
+    <script>AppRegistry.registerApp({portletId:'${key}',webAppId:'se.soleil.eventShowcase',requiredLibs:{}});</script>`;
+}
+
+test("event-owned Sitevision state supplies its matching venue coordinates", () => {
+  const html = showcase(`<script>AppRegistry.registerInitialState('12.portlet',${JSON.stringify({
+    id: "event-1", title: "Town event",
+    metadata: {
+      dateRange: { date: "2026-09-25" },
+      occasions: [{ date: "2026-09-25", location: "Town hall" }],
+      locations: [{ name: "Town hall", adress: "Main street 4", coordinate: "55.562664, 12.974810" }],
+    },
+  })});</script>`);
+  const event = extractSitevisionEventDetail(html, {
+    sourceUrl: "https://municipality.example/event?id=event-1",
+    expectedDate: "2026-09-25", expectedTitle: "Town event",
+  });
+  assert.equal(event.place_context, "Town hall");
+  assert.equal(event.address, "Main street 4");
+  assert.equal(event.lat, 55.562664);
+  assert.equal(event.lng, 12.974810);
+});
+
+test("invalid event state cannot borrow a page-global map coordinate", () => {
+  const html = `<script>AppRegistry.registerInitialState('12.portlet',${JSON.stringify({
+    id: "other-event", title: "Different event",
+    metadata: { occasions: [{ date: "2026-09-25", location: "Gallery" }],
+      locations: [{ name: "Gallery", coordinate: "55.601, 13.001" }] },
+  })});</script><a href="https://www.google.com/maps/@55.605,13.003,200m">City map</a>`;
+  const event = extractSitevisionEventDetail(html, {
+    sourceUrl: "https://municipality.example/event?id=event-1",
+    expectedDate: "2026-09-25", expectedTitle: "Town event",
+  });
+  assert.equal(event.lat, undefined);
+  assert.equal(event.lng, undefined);
+});
+
+test("Sitevision location state must identify the listed event title", () => {
+  const html = `<script>AppRegistry.registerInitialState('12.portlet',${JSON.stringify({
+    id: "event-1", title: "Different event",
+    metadata: { dateRange: { date: "2026-09-25" }, occasions: [{ date: "2026-09-25", location: "Town hall" }],
+      locations: [{ name: "Town hall", coordinate: "55.562664, 12.974810" }] },
+  })});</script>`;
+  const event = extractSitevisionEventDetail(html, {
+    sourceUrl: "https://municipality.example/event?id=event-1",
+    expectedDate: "2026-09-25", expectedTitle: "Town event",
+  });
+  assert.equal(event.lat, undefined);
+  assert.equal(event.lng, undefined);
+});
+
+test("Sitevision event state refuses unrelated pages and changing venues", () => {
+  const state = (id, occasions, coordinate = "55.562664, 12.974810") =>
+    `<script>AppRegistry.registerInitialState('12.portlet',${JSON.stringify({
+      id, title: "Town event",
+      metadata: { dateRange: { date: "2026-09-25" }, occasions, locations: [
+        { name: "Town hall", coordinate }, { name: "Gallery", coordinate: "55.601, 13.001" },
+      ] },
+    })});</script>`;
+  const options = { sourceUrl: "https://municipality.example/event?id=event-1", expectedDate: "2026-09-25", expectedTitle: "Town event" };
+  for (const page of [
+    state("other-event", [{ date: "2026-09-25", location: "Town hall" }]),
+    state("event-1", [{ date: "2026-09-26", location: "Town hall" }]),
+    state("event-1", [{ date: "2026-09-25", location: "Town hall" }, { date: "2026-09-26", location: "Gallery" }]),
+    state("event-1", [{ date: "2026-09-25", location: "Town hall" }], "not a point"),
+  ]) {
+    const result = extractSitevisionEventDetail(page, options);
+    assert.equal(result.lat, undefined);
+    assert.equal(result.lng, undefined);
+  }
+});
+
+test("conflicting matching Sitevision states do not choose the first pin", () => {
+  const state = (coordinate) => `<script>AppRegistry.registerInitialState('12.portlet',${JSON.stringify({
+    id: "event-1", title: "Town event",
+    metadata: { dateRange: { date: "2026-09-25" }, occasions: [{ date: "2026-09-25", location: "Town hall" }],
+      locations: [{ name: "Town hall", coordinate }] },
+  })});</script>`;
+  const event = extractSitevisionEventDetail(
+    state("55.562664, 12.974810") + state("55.601, 13.001"),
+    { sourceUrl: "https://municipality.example/event?id=event-1",
+      expectedDate: "2026-09-25", expectedTitle: "Town event" },
+  );
+  assert.equal(event.lat, undefined);
+  assert.equal(event.lng, undefined);
+});
+
+test("valid and incomplete same-event states cannot yield a pin", () => {
+  const state = (locations) => showcase(`<script>AppRegistry.registerInitialState('12.portlet',${JSON.stringify({
+    id: "event-1", title: "Town event", metadata: {
+      dateRange: { date: "2026-09-25" },
+      occasions: [{ date: "2026-09-25", location: "Town hall" }], locations,
+    },
+  })});</script>`);
+  const valid = state([{ name: "Town hall", coordinate: "55.562664, 12.974810" }]);
+  const invalid = state([{ name: "Town hall", coordinate: "not a point" }]);
+  const options = { sourceUrl: "https://municipality.example/event?id=event-1",
+    expectedTitle: "Town event", expectedDate: "2026-09-25" };
+  assert.equal(extractSitevisionEventDetail(valid + invalid, options).lat, undefined);
+  assert.equal(extractSitevisionEventDetail(invalid + valid, options).lat, undefined);
+});
+
+test("contradictory state date range rejects its otherwise matching pin", () => {
+  const html = showcase(`<script>AppRegistry.registerInitialState('12.portlet',${JSON.stringify({
+    id: "event-1", title: "Town event", metadata: {
+      dateRange: { date: "2026-09-26" },
+      occasions: [{ date: "2026-09-25", location: "Town hall" }],
+      locations: [{ name: "Town hall", coordinate: "55.562664, 12.974810" }],
+    },
+  })});</script>`);
+  assert.equal(extractSitevisionEventDetail(html, {
+    sourceUrl: "https://municipality.example/event?id=event-1",
+    expectedTitle: "Town event", expectedDate: "2026-09-25",
+  }).lat, undefined);
+});
+
+test("malformed event showcase state vetoes a second valid state", () => {
+  const good = showcase(`<script>AppRegistry.registerInitialState('12.portlet',${JSON.stringify({
+    id: "event-1", title: "Town event", metadata: {
+      dateRange: { date: "2026-09-25" },
+      occasions: [{ date: "2026-09-25", location: "Town hall" }],
+      locations: [{ name: "Town hall", coordinate: "55.562664, 12.974810" }],
+    },
+  })});</script>`);
+  const bad = `<script>AppRegistry.registerInitialState('12.portlet',{"id":"event-1","metadata":{"occasions":[</script>`;
+  assert.equal(extractSitevisionEventDetail(good + bad, {
+    sourceUrl: "https://municipality.example/event?id=event-1",
+    expectedTitle: "Town event", expectedDate: "2026-09-25",
+  }).lat, undefined);
+});
+
+test("unparseable event-like state cannot borrow a page-global map", () => {
+  const html = `<script>AppRegistry.registerInitialState('12.portlet',{"id":"event-1","metadata":{"occasions":[{"date":"2026-09-25"}],"locations":[</script>
+    <a href="https://www.google.com/maps/@55.605,13.003,200m">City map</a>`;
+  const event = extractSitevisionEventDetail(html, {
+    sourceUrl: "https://municipality.example/event?id=event-1",
+    expectedDate: "2026-09-25", expectedTitle: "Town event",
+  });
+  assert.equal(event.lat, undefined);
+  assert.equal(event.lng, undefined);
+});
+
+test("matching metadata in a non-event registry state cannot create a pin", () => {
+  const html = `<script>AppRegistry.registerInitialState('12.other-widget',${JSON.stringify({
+    id: "event-1", title: "Town event",
+    metadata: { occasions: [{ date: "2026-09-25", location: "Town hall" }],
+      locations: [{ name: "Town hall", coordinate: "55.562664, 12.974810" }] },
+  })});</script>`;
+  const event = extractSitevisionEventDetail(html, {
+    sourceUrl: "https://municipality.example/event?id=event-1",
+    expectedDate: "2026-09-25", expectedTitle: "Town event",
+  });
+  assert.equal(event.lat, undefined);
+  assert.equal(event.lng, undefined);
+});
+
+test("event state missing locations cannot borrow a page-global map", () => {
+  const html = `<script>AppRegistry.registerInitialState('12.portlet',${JSON.stringify({
+    id: "event-1", title: "Town event",
+    metadata: { dateRange: { date: "2026-09-25" },
+      occasions: [{ date: "2026-09-25", location: "Town hall" }] },
+  })});</script><a href="https://www.google.com/maps/@55.605,13.003,200m">City map</a>`;
+  const event = extractSitevisionEventDetail(html, {
+    sourceUrl: "https://municipality.example/event?id=event-1",
+    expectedDate: "2026-09-25", expectedTitle: "Town event",
+  });
+  assert.equal(event.lat, undefined);
+  assert.equal(event.lng, undefined);
+});
+
+test("complete event-looking state outside the event showcase cannot create a pin", () => {
+  const html = `<div class="sv-custom-module" data-cid="12.other-widget"></div>
+    <script>AppRegistry.registerInitialState('12.other-widget',${JSON.stringify({
+      id: "event-1", title: "Town event",
+      metadata: { dateRange: { date: "2026-09-25" },
+        occasions: [{ date: "2026-09-25", location: "Town hall" }],
+        locations: [{ name: "Town hall", coordinate: "55.562664, 12.974810" }] },
+    })});</script>`;
+  const event = extractSitevisionEventDetail(html, {
+    sourceUrl: "https://municipality.example/event?id=event-1",
+    expectedDate: "2026-09-25", expectedTitle: "Town event",
+  });
+  assert.equal(event.lat, undefined);
+  assert.equal(event.lng, undefined);
+});
+
+test("legacy map links require a matching event heading and venue label", () => {
+  const page = `<h1>Different event</h1><span id="Datumochtid"></span><p>15 juli, 18.00–21.00</p>
+    <p><strong>Evenemangsplats:</strong><br>Town museum</p>
+    <a href="https://www.google.com/maps/@55.556437,14.347752,200m" aria-label="Map to Town museum">Map</a>`;
+  const event = extractSitevisionEventDetail(page, {
+    sourceUrl: "https://municipality.example/events/summer-market",
+    expectedTitle: "Summer market", expectedDate: "2026-07-15", timezone: "Europe/Stockholm",
+  });
+  assert.equal(event.lat, undefined);
+  assert.equal(event.lng, undefined);
+});
+
+test("unlabelled or competing maps cannot borrow a legacy event venue", () => {
+  const page = `<h1>Summer market</h1><span id="Datumochtid"></span><p>15 juli, 18.00–21.00</p>
+    <p><strong>Evenemangsplats:</strong><br>Town museum</p>
+    <a href="https://www.google.com/maps/@55.556437,14.347752,200m">Map</a>`;
+  const options = { sourceUrl: "https://municipality.example/events/summer-market",
+    expectedTitle: "Summer market", expectedDate: "2026-07-15", timezone: "Europe/Stockholm" };
+  assert.equal(extractSitevisionEventDetail(page, options).lat, undefined);
+  const named = page.replace('>Map</a>', ' aria-label="Map to Town museum">Map</a>');
+  const withCityMap = `${named}<a href="https://www.google.com/maps/@55.605,13.003,200m">City map</a>`;
+  assert.equal(extractSitevisionEventDetail(withCityMap, options).lat, undefined);
+});
+
 function recurringDetailHtml({
   timing = "25 juni–16 juli, 18.00–21.00",
   recurrence,
@@ -101,7 +312,7 @@ function recurringDetailHtml({
     <div class="sv-text-portlet" id="svid12_6f">
       <p class="normal"><strong>Evenemangsplats:</strong><br>Stortorget</p>
     </div>
-    <a href="https://www.google.com/maps/@55.556437,14.347752,200m">Karta</a>
+    <a href="https://www.google.com/maps/@55.556437,14.347752,200m" aria-label="Karta till Stortorget">Karta</a>
   `;
 }
 
@@ -239,6 +450,7 @@ test("Sitevision date-only ranges stay local all-day facts", () => {
 
 test("extracts bounded detail facts including recurrence and coordinates", () => {
   const detail = extractSitevisionEventDetail(detailHtml(), {
+    expectedTitle: "Summer market", sourceUrl: "https://municipality.example/events/summer-market",
     expectedDate: "2026-07-15",
     timezone: "Europe/Stockholm",
   });
@@ -417,7 +629,7 @@ test("provider bounds detail fetches and keeps listing rows when detail enrichme
     fetcher: async (url) => {
       calls.push(String(url));
       if (String(url).endsWith("/calendar")) return textResponse(listingHtml(rows));
-      if (String(url).endsWith("/events/one")) return textResponse(detailHtml());
+      if (String(url).endsWith("/events/one")) return textResponse(detailHtml(undefined, "One"));
       throw new Error("temporary detail failure");
     },
   });

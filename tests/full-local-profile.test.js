@@ -157,7 +157,7 @@ test("Malmö's reviewed calendar produces bounded source-backed events through t
           <span id="Datumochtid">Datum och tid</span><p>28 juli, 18.00–20.00</p>
           <p><strong>Evenemangsplats:</strong><br>Folkets Park</p>
           <p><strong>Adress:</strong><br>Amiralsgatan 35</p>
-          <a href="https://www.google.com/maps/@55.5933696,13.0138606,200m">Map</a>
+          <a href="https://www.google.com/maps/@55.5933696,13.0138606,200m" aria-label="Map to Folkets Park">Map</a>
         `);
       }
       throw new Error(`unexpected fixture URL: ${url}`);
@@ -198,7 +198,7 @@ test("both reviewed manifests collect normalized evidence through their generic 
         <span id="Datumochtid">Datum och tid</span><p>16 juli, 18.00–21.00</p>
         <p><strong>Evenemangsplats:</strong><br>Town museum</p>
         <p><strong>Adress:</strong><br>Museum street 1</p>
-        <a href="https://www.google.com/maps/@55.556437,14.347752,200m">Map</a>
+        <a href="https://www.google.com/maps/@55.556437,14.347752,200m" aria-label="Map to Town museum">Map</a>
       `);
     }
     if (value === "https://www.visitystadosterlen.se/sitemap.xml") {
