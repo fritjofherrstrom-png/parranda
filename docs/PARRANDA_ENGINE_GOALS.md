@@ -260,7 +260,9 @@ budgets must serve the requested period first: trusted venue lookups prioritize
 the selected day, while rows on other days are counted separately from rejected
 evidence (`LIVE_PERIOD_VENUE_BUDGET.md`). Next prove multi-source reconciliation
 and useful preference/proximity selection across differing approved source
-situations; one successful calendar is not universal Live coverage.
+situations; one successful calendar is not universal Live coverage. Live links
+name their destination host and call a site root a homepage, keeping the listing
+feed as attribution (`LIVE_SOURCE_LINKS.md`).
 
 The existing navigation handoff remains useful while network-aware selection is
 developed: modern Planner exports the published start, all stops and finish to

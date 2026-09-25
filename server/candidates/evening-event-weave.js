@@ -15,6 +15,7 @@
  */
 
 const { haversineKm } = require("./area-intelligence");
+const { classifyEventSourceLink } = require("../pulse-sources/event-source-link");
 const {
   datePartsInTimezone,
   normalizeIanaTimezone,
@@ -215,6 +216,7 @@ function weaveEveningEvent(placeStructure, liveEvents, { selectedDate = null } =
     place: event.place || null,
     source_label: event.source_label || null,
     source_url: event.source_url || null,
+    ...classifyEventSourceLink(event.source_url),
     license: event.license || null,
     cultural_tier: event.cultural_tier || null,
     salience_score: Number.isFinite(event.salience_score) ? event.salience_score : null,

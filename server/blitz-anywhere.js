@@ -22,6 +22,7 @@ const {
   shapeCollectedLiveEvents,
   unavailableLiveEvents,
 } = require("./place-candidates/live-event-query");
+const { classifyEventSourceLink } = require("./pulse-sources/event-source-link");
 
 const CONTRACT = "anywhere_contextual_blitz_v1";
 const MAX_IMMEDIATE_EVENT_KM = 2;
@@ -136,6 +137,7 @@ function isTrustedLiveOption(event) {
 function formatLiveMove(event, anchor, instant) {
   const distanceKm = eventDistance(anchor, event);
   const startMinutes = eventStartMinutes(event, instant);
+  const sourceLink = classifyEventSourceLink(event.source_url);
   return {
     kind: "live_event",
     candidate_id: event.id ? `live-event:${event.id}` : null,
@@ -159,6 +161,9 @@ function formatLiveMove(event, anchor, instant) {
       label: event.source_label || null,
       url: event.source_url || null,
       type: event.source_type || null,
+      // Where `url` leads — the listing feed's label is not its destination.
+      link_kind: sourceLink.source_link_kind,
+      link_host: sourceLink.source_link_host,
     },
     reasons: uniqueTokens([
       String(event.timing_relevance || "").toLowerCase() === "now" ? "event_happening_now" : "event_starting_soon",

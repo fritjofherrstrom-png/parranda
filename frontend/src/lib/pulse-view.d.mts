@@ -124,3 +124,17 @@ export declare function pulseSourceLine(
     | null
     | undefined,
 ): string | null;
+
+export type EventSourceLinkKind = "page" | "site_home";
+
+export declare function eventSourceLink(
+  ev:
+    | {
+        source_url?: string | null;
+        source_link_kind?: string | null;
+        source_link_host?: string | null;
+      }
+    | null
+    | undefined,
+  lang: "sv" | "en",
+): { href: string; host: string; kind: EventSourceLinkKind; text: string } | null;

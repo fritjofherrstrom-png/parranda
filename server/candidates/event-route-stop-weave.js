@@ -31,6 +31,7 @@
  */
 
 const { validateAgnosticWalkingOrder } = require("../planner/agnostic-route-walking-validation");
+const { classifyEventSourceLink } = require("../pulse-sources/event-source-link");
 
 // A woven evening stop must be a short hop from where the day already ends —
 // beyond this the event stays an anchor (real, sourced, but with no walk claim).
@@ -125,6 +126,7 @@ async function weaveEveningEventRouteStop({ result, placeStructure, walkingRoute
   const nextResult = deepClone(result);
   const nextDay = nextResult.days[0];
   const nextRoute = nextDay.primary_route;
+  const sourceLink = classifyEventSourceLink(event.source_url);
 
   nextRoute.main_stops.push({
     id: `live-event-${event.id || "tonight"}`,
@@ -149,7 +151,15 @@ async function weaveEveningEventRouteStop({ result, placeStructure, walkingRoute
     anchor_weight: 1,
     trust: { source_tier: "official", confidence: "medium", human_verified: false, freshness: "fresh" },
     provisional: false,
-    source: { kind: "live_event_feed", label: event.source_label || null, url: event.source_url || null },
+    // `label` is the feed that listed the event; `link_*` says where `url`
+    // actually leads (see pulse-sources/event-source-link).
+    source: {
+      kind: "live_event_feed",
+      label: event.source_label || null,
+      url: event.source_url || null,
+      link_kind: sourceLink.source_link_kind,
+      link_host: sourceLink.source_link_host,
+    },
     provenance: {
       why_included: "Genuine selected-day event near the day's end — woven as the evening stop after walking validation.",
       attribution: [{ label: event.source_label || null, url: event.source_url || null, license: event.license || null }],
@@ -246,6 +256,7 @@ function buildPulseRouteInterrupt({ status, event, lastStop, legKm, legMinutes }
       timezone: event.timezone || null,
       source_label: event.source_label || null,
       source_url: event.source_url || null,
+      ...classifyEventSourceLink(event.source_url),
     },
     walking_impact: {
       from_stop_id: lastStop.id || null,
