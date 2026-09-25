@@ -764,6 +764,10 @@ function buildAgnosticPublicResult({
   publicResult.city = requestedCity || null;
   publicResult.requested_city = requestedCity || null;
   publicResult.city_fallback_used = Boolean(requestedCity && cityFallbackUsed);
+  // The baseline's display label names the FALLBACK city, never the requested
+  // place — on this path no recognized city exists to name. (It went unnoticed
+  // while the only fallback label was Swedish "Rom", which no "rome" check saw.)
+  publicResult.city_label = null;
   publicResult.resolved_home_base = null;
   publicResult.resolved_start = null;
   publicResult.resolved_end = null;

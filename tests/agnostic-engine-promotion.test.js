@@ -380,6 +380,9 @@ test(
     assert.deepEqual(r.body.days[0].date_signals, []);
     assert.equal(r.body.city, null);
     assert.equal(r.body.readiness, null);
+    // Named explicitly: the fallback's display label once survived this scrub
+    // unseen, because in Swedish it is "Rom" and no "rome" check could see it.
+    assert.equal(r.body.city_label, null);
     assert.equal(JSON.stringify(r.body).toLowerCase().includes("rome"), false);
   }),
 );
