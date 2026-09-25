@@ -16,7 +16,7 @@
     "share:latest": "node scripts/share-latest.js",
     "validate:self-hosted": "node scripts/validate-self-hosted-stack.js",
     "start": "node server.js",
-    "test": "node --test",
+    "test": "node --require ./tests/helpers/no-live-network.js --test",
     "build:frontend": "npm --prefix frontend run build",
     "check:frontend": "npm --prefix frontend run check",
     "test:frontend": "npm --prefix frontend run test",

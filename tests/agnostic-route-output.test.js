@@ -67,6 +67,14 @@ const SUN_AUTO_TZ = {
   },
 };
 
+// Reach and micro-base selection tests pin trusted weather to "unavailable".
+// Without an injected provider they called live Open-Meteo, or silently reused
+// weather an earlier test had cached for the same coordinates, so their input
+// depended on the network and on test order.
+async function noTrustedWeather() {
+  return null;
+}
+
 function eveningClock() {
   return new Date("2026-05-25T17:30:00Z");
 }
@@ -2095,6 +2103,7 @@ test("unit: wider discovery cannot turn a remote cluster into a near-me walking 
     openDataLoader: makeLoader(remote),
     preferences: ["food", "coffee", "scenic"],
     date: DATE,
+    weatherProvider: noTrustedWeather,
     anchorMode: "coordinates",
   });
   assert.equal(exact.experiment.route_mutation, false);
@@ -2108,6 +2117,7 @@ test("unit: wider discovery cannot turn a remote cluster into a near-me walking 
     openDataLoader: makeLoader(remote),
     preferences: ["food", "coffee", "scenic"],
     date: DATE,
+    weatherProvider: noTrustedWeather,
     anchorMode: "place",
   });
   assert.equal(area.experiment.route_mutation, false, "missing scope cannot silently grant regional reach");
@@ -2120,6 +2130,7 @@ test("unit: wider discovery cannot turn a remote cluster into a near-me walking 
     openDataLoader: makeLoader(remote),
     preferences: ["food", "coffee", "scenic"],
     date: DATE,
+    weatherProvider: noTrustedWeather,
     anchorMode: "place",
     spatialScope: {
       kind: "settlement",
@@ -2157,6 +2168,7 @@ test("unit: wider discovery cannot turn a remote cluster into a near-me walking 
     openDataLoader: makeLoader(mixed),
     preferences: ["food", "coffee", "scenic"],
     date: DATE,
+    weatherProvider: noTrustedWeather,
     anchorMode: "place",
     spatialScope: {
       kind: "settlement",
@@ -2179,6 +2191,7 @@ test("unit: wider discovery cannot turn a remote cluster into a near-me walking 
     openDataLoader: makeLoader(remote),
     preferences: ["food", "coffee", "scenic"],
     date: DATE,
+    weatherProvider: noTrustedWeather,
     anchorMode: "place",
     spatialScope: {
       kind: "region",
@@ -2201,6 +2214,7 @@ test("unit: a typed place may compose around one bounded walkable micro-base", a
     openDataLoader: makeLoader(compactCluster),
     preferences: ["food", "coffee", "scenic"],
     date: DATE,
+    weatherProvider: noTrustedWeather,
     anchorMode: "coordinates",
   });
   assert.equal(exact.experiment.route_mutation, false, "explicit coordinates remain a hard origin");
@@ -2213,6 +2227,7 @@ test("unit: a typed place may compose around one bounded walkable micro-base", a
     openDataLoader: makeLoader(compactCluster),
     preferences: ["food", "coffee", "scenic"],
     date: DATE,
+    weatherProvider: noTrustedWeather,
     anchorMode: "place",
   });
   assert.equal(place.experiment.route_mutation, true);
@@ -2241,6 +2256,7 @@ test("unit: engine synthesis uses the selected micro-base without exposing inter
     openDataLoader: makeLoader(compactCluster),
     preferences: ["food", "coffee", "scenic"],
     date: DATE,
+    weatherProvider: noTrustedWeather,
     anchorMode: "place",
     placeLabel: "A region",
     synthesizeVia: "engine",

@@ -116,6 +116,13 @@ Om mobilen inte når adressen:
 npm test
 ```
 
+Sviten körs offline: `npm test` laddar `tests/helpers/no-live-network.js`, som
+stoppar varje anrop till en extern värd och fäller testfilen som gjorde det.
+Tester använder fixtures eller injicerade fetchers i stället för livekällor. Tester
+som verkligen behöver en riktig tjänst (i dag DuckDB-barnprocessen, som laddar
+ner tillägget `httpfs`) hoppas över om du inte kör
+`PARRANDA_TEST_LIVE_NETWORK=enabled npm test`.
+
 CI kör samma grundsvit på GitHub för pull requests och pushes till `main`.
 
 ## Dela med andra utvecklare

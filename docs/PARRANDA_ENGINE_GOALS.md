@@ -298,7 +298,7 @@ Priorities now are:
 
 1. Prefer implementation over strategy docs when the next step is already known.
 2. Keep PRs small enough to review.
-3. Use deterministic tests; no live network in test suites.
+3. Use deterministic tests; no live network in test suites. `npm test` enforces this with `tests/helpers/no-live-network.js`; a test that genuinely needs a real service is gated behind `PARRANDA_TEST_LIVE_NETWORK=enabled`.
 4. Do not hardcode Athens, Malmö, Simrishamn, Rome, or Barcelona behavior unless the PR is explicitly citypack content. Use those cities as fixtures for generic engine behavior.
 5. Preserve curated-first when fit is comparable, but allow external candidates to fill genuine gaps.
 6. Never let popularity/review volume become ranking power.

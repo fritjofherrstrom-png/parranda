@@ -6,6 +6,12 @@ const os = require('node:os');
 const path = require('node:path');
 const { createBoundedOvertureQuery } = require('../server/place-candidates/bounded-overture-query');
 
+// The real DuckDB child installs the httpfs extension from DuckDB's extension
+// repository before every query, so the two tests that run it need live
+// network. They run only on explicit opt-in; the rest of this file is offline.
+const NEEDS_EXTENSION_DOWNLOAD = process.env.PARRANDA_TEST_LIVE_NETWORK !== 'enabled'
+  && 'set PARRANDA_TEST_LIVE_NETWORK=enabled: the DuckDB child downloads the httpfs extension';
+
 function childFixture() {
   const child = new EventEmitter(); child.kills = []; child.sent = [];
   child.send = (value, cb) => { child.sent.push(value); cb?.(); };
@@ -132,7 +138,7 @@ test('a stale child event cannot release the slot owned by a newer child', async
   assert.equal(spawned, 2);
 });
 
-test('real child uses bounded temporary disk and parent removes its private directory', async t => {
+test('real child uses bounded temporary disk and parent removes its private directory', { skip: NEEDS_EXTENSION_DOWNLOAD }, async t => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'parranda-overture-test-'));
   t.after(() => fs.rmSync(tempRoot, { recursive: true, force: true }));
   const query = createBoundedOvertureQuery({ timeoutMs: 10000, tempRoot });
@@ -147,7 +153,7 @@ test('real child uses bounded temporary disk and parent removes its private dire
   assert.deepEqual(fs.readdirSync(tempRoot), []);
 });
 
-test('an unusable extension cache falls back without disabling the bounded query', async () => {
+test('an unusable extension cache falls back without disabling the bounded query', { skip: NEEDS_EXTENSION_DOWNLOAD }, async () => {
   const query = createBoundedOvertureQuery({ cacheDir: '/dev/null', timeoutMs: 10000 });
   assert.deepEqual(await query('SELECT 1 AS id'), [{ id: 1 }]);
 });
