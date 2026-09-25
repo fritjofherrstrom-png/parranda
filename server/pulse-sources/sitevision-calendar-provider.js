@@ -255,15 +255,24 @@ function extractSitevisionEventDetail(html, options = {}) {
   const address = htmlToText(
     firstMatch(source, /(?:Adress|Besöksadress):\s*<\/strong>\s*<br\s*\/?>\s*([^<]+)/i),
   );
-  const coordinates = extractCoordinates(source);
+  const eventLocation = extractEventOwnedLocation(source, options);
+  const compatibleLocation = !venue || !eventLocation.place_context ||
+    venue.toLocaleLowerCase("sv-SE") === eventLocation.place_context.toLocaleLowerCase("sv-SE");
+  const location = compatibleLocation ? eventLocation : {};
+  // The legacy path accepts only a single map link explicitly labelled with
+  // this detail page's named venue, never a free-floating page map.
+  const coordinates = location.lat != null ? location :
+    eventLocation.event_state_present ? {} : extractEventBoundMapCoordinates(source, {
+      ...options, venue, timingText,
+    });
   return compact({
     starts_at: timing.starts_at,
     ends_at: timing.ends_at,
     starts_on: timing.starts_on,
     ends_on: timing.ends_on,
     time_window: timing.time_window,
-    place_context: venue,
-    address,
+    place_context: venue || location.place_context,
+    address: address || location.address,
     lat: coordinates.lat,
     lng: coordinates.lng,
     // Source text for inspection only; the parsed timing above is the fact.
@@ -291,6 +300,8 @@ async function enrichFromDetailPages(events, fetcher, options = {}) {
       const detail = extractSitevisionEventDetail(html, {
         ...options,
         expectedDate: event.listing_date,
+        expectedTitle: event.title,
+        sourceUrl: event.source_url,
       });
       // Detail timing is stronger evidence than the listing row. Replace the
       // timing atoms together so a listing instant cannot survive beside a
@@ -509,6 +520,125 @@ function parseTimeRange(value) {
   const start = validTimeParts(Number(match[1]), Number(match[2]));
   const end = match[3] ? validTimeParts(Number(match[3]), Number(match[4])) : null;
   return start && (!match[3] || end) ? { start, end } : null;
+}
+
+function hasEventShowcaseRegistration(html, key) {
+  const source = String(html || "");
+  if (!Array.from(source.matchAll(/\bdata-cid=["']([^"']+)["']/g))
+    .some((match) => match[1] === key)) return false;
+  return Array.from(source.matchAll(/AppRegistry\.registerApp\(\{([^;]{0,2500})\}\);/g))
+    .some((match) => {
+      const app = match[1];
+      return /\bwebAppId\s*:\s*['"]se\.soleil\.eventShowcase['"]/.test(app) &&
+        Array.from(app.matchAll(/\bportletId\s*:\s*['"]([^'"]+)['"]/g))
+          .some((portlet) => portlet[1] === key);
+    });
+}
+
+function extractEventOwnedLocation(html, options = {}) {
+  let eventId;
+  try { eventId = new URL(options.sourceUrl).searchParams.get("id"); } catch (_error) { /* Legacy URLs may omit an id. */ }
+  if (!options.expectedDate) return { event_state_present: true };
+  const source = String(html || "");
+  if (!eventId) return { event_state_present: /AppRegistry\.registerInitialState\s*\(/.test(source) };
+  let eventStatePresent = false;
+  let matchedLocation = null;
+  let matchingStates = 0;
+  let validStates = 0;
+  let malformedShowcase = false;
+  const starts = source.matchAll(/AppRegistry\.registerInitialState\(\s*['"]([^'"]+)['"]\s*,\s*/g);
+  for (const start of starts) {
+    eventStatePresent = true;
+    const showcase = hasEventShowcaseRegistration(source, start[1]);
+    const from = start.index + start[0].length;
+    if (source[from] !== "{") {
+      if (showcase) malformedShowcase = true;
+      continue;
+    }
+    const scriptEnd = source.indexOf("</script", from);
+    const fragment = source.slice(from, Math.min(
+      scriptEnd < 0 ? source.length : scriptEnd, from + 200000,
+    ));
+    // Even a truncated event state is evidence that an unrelated map link
+    // cannot safely substitute for this event's own venue geometry.
+    if (/"metadata"\s*:/.test(fragment) && /"occasions"\s*:/.test(fragment)) {
+      eventStatePresent = true;
+    }
+    let depth = 0;
+    let parsed = false;
+    let quoted = false;
+    let escaped = false;
+    for (let index = from; index < from + fragment.length; index += 1) {
+      const char = source[index];
+      if (quoted) {
+        if (escaped) escaped = false;
+        else if (char === "\\") escaped = true;
+        else if (char === '"') quoted = false;
+      } else if (char === '"') quoted = true;
+      else if (char === "{") depth += 1;
+      else if (char === "}" && --depth === 0) {
+        let state;
+        try { state = JSON.parse(source.slice(from, index + 1)); } catch (_error) {
+          if (showcase) malformedShowcase = true;
+          break;
+        }
+        if (state?.id && Array.isArray(state.metadata?.occasions)) eventStatePresent = true;
+        parsed = true;
+        if (showcase && state?.id === eventId) matchingStates += 1;
+        if (!showcase || state?.id !== eventId || !options.expectedTitle ||
+            !validDateKey(state.metadata?.dateRange?.date) ||
+            !Array.isArray(state.metadata?.occasions) ||
+            !state.metadata.occasions.some((item) => item?.date === state.metadata.dateRange.date) ||
+            htmlToText(state.title).toLocaleLowerCase("sv-SE") !==
+              htmlToText(options.expectedTitle).toLocaleLowerCase("sv-SE")) break;
+        const occasions = state.metadata?.occasions;
+        const locations = state.metadata?.locations;
+        if (!Array.isArray(occasions) || !occasions.some((item) => item?.date === options.expectedDate)) break;
+        const names = [...new Set(occasions.map((item) => item?.location).filter(Boolean))];
+        if (names.length !== 1 || occasions.some((item) => !item?.location)) break;
+        const matches = Array.isArray(locations) ? locations.filter((item) => item?.name === names[0]) : [];
+        if (matches.length !== 1) break;
+        const location = matches[0];
+        const match = String(location.coordinate || "").match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+        if (!match) break;
+        const point = coordinates(Number(match[1]), Number(match[2]));
+        if (point.lat == null) break;
+        const candidate = { ...point, event_state_present: true, place_context: names[0],
+          address: location.adress || location.address || null };
+        if (matchedLocation && (matchedLocation.lat !== candidate.lat ||
+            matchedLocation.lng !== candidate.lng ||
+            matchedLocation.place_context !== candidate.place_context)) {
+          return { event_state_present: true };
+        }
+        validStates += 1;
+        matchedLocation = candidate;
+        break;
+      }
+    }
+    if (!parsed && showcase) malformedShowcase = true;
+  }
+  return malformedShowcase || matchingStates > validStates ? { event_state_present: true } :
+    matchedLocation || (eventStatePresent ? { event_state_present: true } : {});
+}
+
+function extractEventBoundMapCoordinates(html, options = {}) {
+  const { expectedTitle, expectedDate, venue, timingText } = options;
+  if (!expectedTitle || !validDateKey(expectedDate) || !venue) return {};
+  const headings = Array.from(String(html).matchAll(/<h1\b[^>]*>([\s\S]*?)<\/h1\s*>/gi));
+  if (headings.length !== 1 ||
+      htmlToText(headings[0][1]).toLocaleLowerCase("sv-SE") !==
+        htmlToText(expectedTitle).toLocaleLowerCase("sv-SE")) return {};
+  const date = parseDateRange(String(timingText || "").toLocaleLowerCase("sv-SE").replace(/[–—]/g, "-"), inferYear(expectedDate));
+  if (!date?.start || expectedDate < dateKey(date.start) ||
+      expectedDate > dateKey(date.end || date.start)) return {};
+  const maps = Array.from(String(html).matchAll(/<a\b([^>]*\bhref=["']([^"']+)["'][^>]*)>([\s\S]*?)<\/a\s*>/gi))
+    .filter((match) => /(?:google\.[^/]+\/maps\/|[?&]center=)/i.test(decodeUrlText(decodeHtml(match[2]))));
+  if (maps.length !== 1) return {};
+  const label = htmlToText(firstMatch(maps[0][1], /\baria-label=["']([^"']+)["']/i));
+  const expectedVenue = htmlToText(venue).toLocaleLowerCase("sv-SE");
+  if (!label || ![ `map to ${expectedVenue}`, `karta till ${expectedVenue}` ]
+    .includes(label.toLocaleLowerCase("sv-SE"))) return {};
+  return extractCoordinates(maps[0][2]);
 }
 
 function extractCoordinates(value) {
