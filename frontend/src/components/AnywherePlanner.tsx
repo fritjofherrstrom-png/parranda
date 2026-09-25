@@ -1341,8 +1341,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     [liveEvents, routeStops],
   );
   const pulseState = useMemo(
-    () => (liveRefreshExhausted && liveEvents?.pending ? "unavailable" : pulseHealthState(liveEvents, pulseBuckets)),
-    [liveEvents, pulseBuckets, liveRefreshExhausted],
+    () => (liveRefreshExhausted && liveEvents?.pending ? "unavailable" : pulseHealthState(liveEvents, pulseBuckets, split.woven)),
+    [liveEvents, pulseBuckets, split.woven, liveRefreshExhausted],
   );
   const liveFailure = useMemo(() => liveSourceFailure(liveEvents, pulseBuckets), [liveEvents, pulseBuckets]);
   // A failed source is neither "still loading" nor an empty calendar: say
@@ -2912,7 +2912,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               type="button"
               ref={liveSheetTriggerRef}
               onClick={() => {
-                setLiveSheetTime(pulseBuckets.tonight.length > 0 ? "tonight" : "week");
+                setLiveSheetTime(pulseBuckets.tonight.length > 0 || split.woven.length > 0 ? "tonight" : "week");
                 setLiveSheetOpen(true);
                 // "Couldn't verify" + an available anchor: opening the sheet IS
                 // the "check again" — fire a fresh around-place query (its own
@@ -3160,9 +3160,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 ) : (
                   <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
                     <p className="text-sm leading-relaxed text-parranda-ink/80">
-                      {liveSheetTime === "tonight"
-                        ? t(`Inget verifierat ${liveDayLabel} ${scopePhrase}.`, `Nothing verified ${liveDayLabel} ${scopePhrase}.`)
-                        : t(`Inget listat under följande 7 dagar ${scopePhrase}.`, `Nothing listed in the following 7 days ${scopePhrase}.`)}
+                      {liveSheetTime === "tonight" && liveSheetScope !== "near_me" && split.woven.length > 0
+                        ? t("Inga ytterligare verifierade händelser listade här.", "No additional verified events listed here.")
+                        : liveSheetTime === "tonight"
+                          ? t(`Inget verifierat ${liveDayLabel} ${scopePhrase}.`, `Nothing verified ${liveDayLabel} ${scopePhrase}.`)
+                          : t(`Inget listat under följande 7 dagar ${scopePhrase}.`, `Nothing listed in the following 7 days ${scopePhrase}.`)}
                       {liveSheetTime === "tonight" && sheetBuckets.thisWeek.length > 0 && (
                         <strong className="text-parranda-ink">
                           {" "}
