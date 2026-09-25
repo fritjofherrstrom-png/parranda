@@ -83,8 +83,10 @@ Live request, source-local occurrence filtering, cache identity and visible
 labels, without manipulating freshness/approval clocks. Do that before smarter
 ranking. Other gaps include repeated schedules, broad calendar ranges, generic
 organizer homepages rather than detail URLs, and source-time conflicts.
-(Later: multi-day records now claim only the sessions `schedule.dates` lists;
-see *Recurring calendar entries* in `LIVE_SELECTED_DATE.md`.)
+Multi-day records now claim only sessions supported by their source schedule;
+see *Recurring calendar entries* in `LIVE_SELECTED_DATE.md`. Links name their
+destination host and label a site root as a homepage (`LIVE_SOURCE_LINKS.md`);
+a detail URL is still not supplied where none exists.
 
 On the exact PR head, Sol should independently verify:
 

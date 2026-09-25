@@ -98,7 +98,8 @@ test('the Live sheet claims picks only for server matches and labels every other
   const more = [...sheet(h).querySelectorAll('details li')].map(li => li.textContent);
   assert.equal(more.length, 2);
   assert.match(more[0], /Street food tasting.*Matches: Food & drink$/);
-  assert.match(more[1], /Library open house · Venue h-library · Official calendar$/, 'no server reason, no line');
+  assert.match(more[1], /Library open house · Venue h-library · via\sOfficial calendar · calendar\.example/, 'source remains attribution and link names its destination');
+  assert.doesNotMatch(more[1], /Matches:|looser match|local discovery/, 'no server reason, no relevance line');
 });
 
 test('without a server match the sheet makes no claim about the picks', async t => {
@@ -125,7 +126,8 @@ test('a pick added before the day recomposes is never claimed from the older ran
   assert.match(picks[0], /Fixture: kvällskonsert.*Matches: Culture$/, 'a match to a pick still held stays true');
   assert.doesNotMatch(sheet(h).textContent, /Nightlife/, 'the server never ranked for the new pick');
   const other = rowsUnder(h, 'Other local highlights');
-  assert.match(other[1], /Night swim at the harbour · Venue g-swim · Official calendar$/,
+  assert.match(other[1], /Night swim at the harbour · Venue g-swim · via\sOfficial calendar · calendar\.example/);
+  assert.doesNotMatch(other[1], /beyond your picks|Matches:|looser match/,
     '"beyond your picks" is not established for a pick the server never checked');
 });
 

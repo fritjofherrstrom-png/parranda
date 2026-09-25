@@ -13,6 +13,7 @@ import {
   pulseBrowseBuckets,
   clothingAdvice,
   pulseSourceLine,
+  eventSourceLink,
   eventTiming,
   liveSourceFailure,
   pulseHealthState,
@@ -104,6 +105,48 @@ test("source attribution prefers plural feeds, dedupes labels, and hides when un
     }),
     "A · B · CC0",
   );
+});
+
+test("a Live source link names its destination host, never the listing feed's label", () => {
+  const ev = {
+    source_label: "Visit Example",
+    source_url: "https://venue.example/events/late-show",
+    source_link_kind: "page",
+    source_link_host: "venue.example",
+  };
+  for (const lang of ["sv", "en"]) {
+    assert.deepEqual(eventSourceLink(ev, lang), {
+      href: "https://venue.example/events/late-show",
+      host: "venue.example",
+      kind: "page",
+      text: "venue.example",
+    });
+  }
+});
+
+test("a site-root source link says it is a homepage, not the event page — in both languages", () => {
+  const ev = {
+    source_label: "Visit Example",
+    source_url: "https://museum.example.com/",
+    source_link_kind: "site_home",
+    source_link_host: "museum.example.com",
+  };
+  assert.equal(eventSourceLink(ev, "sv").text, "Startsida: museum.example.com (inte evenemangssidan)");
+  assert.equal(eventSourceLink(ev, "en").text, "Homepage: museum.example.com (not the event page)");
+  assert.equal(eventSourceLink(ev, "en").href, "https://museum.example.com/", "the URL is passed through unchanged");
+});
+
+test("without the server's classification there is no link — the client never guesses", () => {
+  const url = "https://museum.example.com/";
+  // A day saved before the classification existed.
+  assert.equal(eventSourceLink({ source_label: "Visit Example", source_url: url }, "en"), null);
+  // Missing host, unknown kind, or a non-http(s) URL whatever the payload claims.
+  assert.equal(eventSourceLink({ source_url: url, source_link_kind: "site_home" }, "en"), null);
+  assert.equal(eventSourceLink({ source_url: url, source_link_kind: "event_page", source_link_host: "museum.example.com" }, "en"), null);
+  assert.equal(eventSourceLink({ source_url: "javascript:alert(1)", source_link_kind: "page", source_link_host: "x" }, "en"), null);
+  assert.equal(eventSourceLink({ source_url: "/events/1", source_link_kind: "page", source_link_host: "x" }, "en"), null);
+  assert.equal(eventSourceLink({ source_link_kind: "page", source_link_host: "x" }, "en"), null);
+  assert.equal(eventSourceLink(null, "en"), null);
 });
 
 test("eventTiming: continuous instants render venue-local, never the viewer's clock", () => {

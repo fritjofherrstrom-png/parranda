@@ -16,7 +16,14 @@ export interface BlitzMoveView {
   time_window: Record<string, unknown> | null;
   covered_preferences: string[];
   partial_preferences: string[];
-  source: { label: string | null; url: string | null; source_kind: string | null };
+  source: {
+    label: string | null;
+    url: string | null;
+    source_kind: string | null;
+    /** Live moves only: where `url` leads, per the server's classification. */
+    link_kind: "page" | "site_home" | null;
+    link_host: string | null;
+  };
 }
 
 export interface AnywhereBlitzView {

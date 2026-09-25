@@ -83,8 +83,9 @@ then retried) instead of as another `pending`; see
 Fusion, independent-family trust, preference ranking, geometry and route-event
 weave gates are not weakened. A Live card is not automatically a route stop.
 This does not establish universal multi-source coverage or resolve every
-source/organizer disagreement or generic homepage link. Recurring schedules are
-resolved only where a reviewed adapter can read the source's own statement; see
+source/organizer disagreement. Generic homepage links are now labelled as
+such (`LIVE_SOURCE_LINKS.md`). Recurring schedules are resolved only where a
+reviewed adapter can read the source's own statement; see
 *Recurring calendar entries*.
 
 ## Recurring calendar entries

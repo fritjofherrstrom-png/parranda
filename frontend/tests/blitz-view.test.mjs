@@ -67,6 +67,34 @@ test("Blitz view keeps trusted Live timing and removes duplicate Live alternativ
   assert.equal(view.live_option, null);
 });
 
+test("a Blitz Live move keeps the listing feed and where its link leads as separate facts", () => {
+  const live = (source) => ({
+    kind: "live_event",
+    event_id: "event-home",
+    title: "Harbour concert",
+    source,
+  });
+  const view = anywhereBlitzView({
+    contract: "anywhere_contextual_blitz_v1",
+    status: "available",
+    best_move: live({
+      label: "Visit Example",
+      url: "https://museum.example.com/",
+      type: "official",
+      link_kind: "site_home",
+      link_host: "museum.example.com",
+    }),
+    live_option: { ...live({ label: "Visit Example", url: "https://x.example/e", link_kind: "event_page", link_host: "x.example" }), event_id: "other" },
+  });
+
+  assert.equal(view.best.source.label, "Visit Example");
+  assert.equal(view.best.source.url, "https://museum.example.com/");
+  assert.equal(view.best.source.link_kind, "site_home");
+  assert.equal(view.best.source.link_host, "museum.example.com");
+  // Only the server's two kinds pass; anything else is no classification.
+  assert.equal(view.live_option.source.link_kind, null);
+});
+
 test("Blitz view expands known provider ids without inventing unknown attribution", () => {
   const response = {
     contract: "anywhere_contextual_blitz_v1",
