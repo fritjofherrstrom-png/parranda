@@ -328,7 +328,7 @@ function venueLocalNow(nowDate, timezone) {
  * succeeded. Raw backend reason tokens never leak: this maps them to a small
  * state enum the UI turns into product copy.
  */
-export function pulseHealthState(liveEvents, buckets) {
+export function pulseHealthState(liveEvents, buckets, wovenStops = []) {
   if (!liveEvents) return "hidden";
   if (liveEvents.coverage === "uncovered") return "uncovered";
   if (liveEvents.coverage !== "covered") return "hidden";
@@ -338,7 +338,10 @@ export function pulseHealthState(liveEvents, buckets) {
   const status = health && typeof health.status === "string" ? health.status : null;
   const result = health && typeof health.result === "string" ? health.result : null;
   const reasons = Array.isArray(health && health.reasons) ? health.reasons : [];
-  const empty = !buckets || (buckets.tonight.length === 0 && buckets.thisWeek.length === 0);
+  // The route owns the woven event's full card, but it is still a verified
+  // event. Hiding that duplicate must not turn the Live panel into "none".
+  const empty = (!buckets || (buckets.tonight.length === 0 && buckets.thisWeek.length === 0)) &&
+    !(Array.isArray(wovenStops) && wovenStops.some((stop) => stop?.is_live_event === true));
 
   if (status === "unavailable") return "unavailable";
   if (status === "partial") return empty ? "unavailable" : "partial";
