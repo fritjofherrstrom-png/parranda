@@ -244,6 +244,59 @@ test("future selected-day Live does not describe an overlapping run as on now", 
   assert.match(label, /Tue/, "the actual spanning source interval remains visible");
 });
 
+// 9 and 16 July 2026 are Thursdays; 10 July is a Friday.
+const THURSDAY_SERIES = {
+  timezone: "Europe/Stockholm",
+  time_window: {
+    kind: "occurrences",
+    dates: ["2026-07-16", "2026-07-09"],
+    starts_on: "2026-07-09",
+    ends_on: "2026-07-16",
+    local_start: "18:00",
+    local_end: "21:00",
+    timezone: "Europe/Stockholm",
+  },
+};
+
+test("eventTiming: listed occurrences name the stated date they are about — never daily", () => {
+  const before = new Date("2026-07-08T10:00:00Z");
+  const labels = [
+    eventTiming(THURSDAY_SERIES, "sv", before, "2026-07-09"),
+    eventTiming(THURSDAY_SERIES, "en", before, "2026-07-09"),
+    // A selected Friday lists the series only among the following days: its
+    // label is the next stated Thursday, never the Friday.
+    eventTiming(THURSDAY_SERIES, "sv", before, "2026-07-10"),
+  ];
+  assert.deepEqual(labels, ["tors 9 juli 18:00–21:00", "Thu 9 Jul 18:00–21:00", "tors 16 juli 18:00–21:00"]);
+  for (const label of labels) assert.doesNotMatch(label, /dagligen|daily/);
+
+  // Without a selected date the venue-local today anchors the label, and a
+  // session already over today gives way to the next stated date.
+  assert.equal(eventTiming(THURSDAY_SERIES, "en", new Date("2026-07-09T12:00:00Z")), "Thu 9 Jul 18:00–21:00");
+  assert.equal(eventTiming(THURSDAY_SERIES, "en", new Date("2026-07-09T19:30:00Z")), "Thu 16 Jul 18:00–21:00");
+  assert.equal(eventTiming(THURSDAY_SERIES, "en", before, "2026-07-17"), "", "no stated date left → omitted, never invented");
+  assert.equal(
+    eventTiming({ time_window: { kind: "occurrences", dates: ["2026-07-18"] } }, "sv", before, "2026-07-18"),
+    "lör 18 juli",
+    "date-only listings stay dates without invented hours",
+  );
+});
+
+test("eventTiming: a period shows the source range and clock, never daily and never one day", () => {
+  const before = new Date("2026-07-08T10:00:00Z");
+  const period = {
+    timezone: "Europe/Stockholm",
+    time_window: { kind: "period", starts_on: "2026-06-25", ends_on: "2026-07-16", local_start: "18:00", local_end: "21:00" },
+  };
+  assert.equal(eventTiming(period, "sv", before, "2026-07-10"), "tors 25 juni – tors 16 juli · 18:00–21:00 · dagar enligt källan");
+  assert.equal(eventTiming(period, "en", before, "2026-07-10"), "Thu 25 Jun – Thu 16 Jul · 18:00–21:00 · days per source");
+  assert.equal(
+    eventTiming({ time_window: { kind: "period", starts_on: "2026-06-25", ends_on: "2026-07-16" } }, "sv", before),
+    "tors 25 juni – tors 16 juli · dagar enligt källan",
+  );
+  assert.equal(eventTiming({ time_window: { kind: "period" } }, "en", before), "", "no stated range → omitted");
+});
+
 // Live relevance is read from the server's per-row fit, in canonical intents
 // ("museums", "scenic"), and spoken in the Planner's chip keys.
 const RANKED_FOR = ["food", "museums", "scenic"];

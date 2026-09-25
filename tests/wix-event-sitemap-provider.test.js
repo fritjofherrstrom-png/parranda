@@ -141,8 +141,26 @@ test("local Wix clock remains unresolved without a reviewed timezone", () => {
   assert.equal(event.starts_at, undefined);
 });
 
-test("multi-day daily windows never collapse into a continuous interval", () => {
-  const range = parseWixEventTiming("15 juli - 17 juli", "10:00 - 17:00", {
+test("a multi-day range with one clock is a period unless the labels state daily sessions", () => {
+  const unstated = parseWixEventTiming("15 juli - 17 juli", "10:00 - 17:00", {
+    collectionDate: "2026-07-15",
+    timezone: "Europe/Stockholm",
+  });
+  assert.equal(unstated.starts_at, undefined, "a range must not become one continuous interval");
+  assert.equal(unstated.ends_at, undefined);
+  assert.equal(unstated.starts_on, "2026-07-15");
+  assert.equal(unstated.ends_on, "2026-07-17");
+  assert.deepEqual(unstated.time_window, {
+    kind: "period",
+    starts_on: "2026-07-15",
+    ends_on: "2026-07-17",
+    local_start: "10:00",
+    local_end: "17:00",
+    timezone: "Europe/Stockholm",
+    label: "15 juli - 17 juli · 10:00 - 17:00",
+  });
+
+  const range = parseWixEventTiming("15 juli - 17 juli", "Dagligen 10:00 - 17:00", {
     collectionDate: "2026-07-15",
     timezone: "Europe/Stockholm",
   });
@@ -159,7 +177,7 @@ test("multi-day daily windows never collapse into a continuous interval", () => 
     local_start: "10:00",
     local_end: "17:00",
     timezone: "Europe/Stockholm",
-    label: "15 juli - 17 juli · 10:00 - 17:00",
+    label: "15 juli - 17 juli · Dagligen 10:00 - 17:00",
   });
 
   const betweenOpenings = normalizeTimeSensitiveSourceEvent({
@@ -184,13 +202,17 @@ test("multi-day daily windows never collapse into a continuous interval", () => 
   });
   assert.equal(duringOpening.timing_relevance, "now");
 
-  const englishRange = parseWixEventTiming("July 15 - July 17", "10:00 - 17:00", {
+  const englishRange = parseWixEventTiming("July 15 - July 17", "Daily 10:00 - 17:00", {
     collectionDate: "2026-07-15",
     timezone: "Europe/Stockholm",
   });
   assert.equal(englishRange.starts_on, "2026-07-15");
   assert.equal(englishRange.ends_on, "2026-07-17");
   assert.equal(englishRange.time_window.kind, "daily");
+  assert.equal(parseWixEventTiming("July 15 - July 17", "10:00 - 17:00", {
+    collectionDate: "2026-07-15",
+    timezone: "Europe/Stockholm",
+  }).time_window.kind, "period");
 
   const unresolved = parseWixEventTiming("15 juli - senare", "10:00 - 17:00", {
     collectionDate: "2026-07-15",
@@ -209,7 +231,59 @@ test("multi-day daily windows never collapse into a continuous interval", () => 
   assert.equal(ongoing.starts_on, "2026-07-14");
   assert.equal(ongoing.ends_on, "2026-07-17");
   assert.equal(ongoing.ends_at, undefined);
-  assert.equal(ongoing.time_window.kind, "daily");
+  assert.equal(ongoing.time_window.kind, "period");
+});
+
+test("Wix labels state which days of a range carry a session", () => {
+  const timing = (date, time) => parseWixEventTiming(date, time, {
+    collectionDate: "2026-07-15",
+    timezone: "Europe/Stockholm",
+  }).time_window;
+  // 2 July 2026 is a Thursday.
+  const thursdays = ["2026-07-02", "2026-07-09", "2026-07-16", "2026-07-23", "2026-07-30",
+    "2026-08-06", "2026-08-13", "2026-08-20", "2026-08-27"];
+  for (const date of ["Torsdagar 2 juli - 27 augusti", "Varje torsdag 2 juli - 27 augusti"]) {
+    const window = timing(date, "19:00 - 21:00");
+    assert.equal(window.kind, "occurrences", date);
+    assert.deepEqual(window.dates, thursdays, date);
+    assert.equal(window.local_start, "19:00");
+  }
+  // Opening hours restricted to weekdays: Tuesday to Sunday, never Mondays.
+  for (const time of ["Tis–sön 11.00–17.00", "Tisdag - söndag 11:00 - 17:00"]) {
+    const window = timing("1 juli - 31 augusti", time);
+    assert.equal(window.kind, "occurrences", time);
+    assert.equal(window.dates.length, 53, time);
+    assert.ok(window.dates.every((date) => new Date(`${date}T00:00:00Z`).getUTCDay() !== 1), time);
+  }
+  // Date-only weekday rules stay date facts on the stated days.
+  assert.equal(timing("1 juni - 31 augusti", "Lördagar").dates.length, 13);
+  // Singular weekdays before the range endpoints only name those dates.
+  assert.equal(timing("torsdag 2 juli - torsdag 27 augusti", "19:00 - 21:00").kind, "period");
+
+  for (const time of ["Mån–fre 10.00–16.00, lör 10.00–14.00", "10.00–12.00, 14.00–16.00"]) {
+    const conflicting = timing("1 juli - 31 augusti", time);
+    assert.equal(conflicting.kind, "period", time);
+    assert.equal(conflicting.local_start, undefined, `${time}: different clocks, so no single clock is shown`);
+  }
+  assert.equal(timing("1 juli - 31 augusti", "Dagligen utom måndagar 11-17").kind, "period");
+  assert.equal(timing("15 juli - 17 juli", "Tider meddelas").kind, "all_day",
+    "no recurrence evidence keeps date-only range facts");
+});
+
+test("an explicit Wix date list names exactly its dates, never the range between them", () => {
+  const options = { collectionDate: "2026-07-15", timezone: "Europe/Stockholm" };
+  for (const date of ["15 juli, 22 juli", "15 och 22 juli", "onsdag 15 juli och onsdag 22 juli"]) {
+    const listed = parseWixEventTiming(date, "19:00 - 21:00", options);
+    assert.equal(listed.time_window.kind, "occurrences", date);
+    assert.deepEqual(listed.time_window.dates, ["2026-07-15", "2026-07-22"], date);
+    assert.equal(listed.starts_on, "2026-07-15");
+    assert.equal(listed.ends_on, "2026-07-22");
+    assert.equal(listed.starts_at, undefined, date);
+  }
+  // A weekday rule beside a list is not one readable session clock.
+  assert.equal(parseWixEventTiming("15 juli, 22 juli", "Torsdagar 19:00", options).time_window.kind, "period");
+  // A single stated date keeps its continuous occurrence.
+  assert.equal(parseWixEventTiming("onsdag 15 juli", "19:00 - 21:00", options).time_window.kind, "continuous");
 });
 
 test("organizer contact text is not promoted as a venue address", () => {

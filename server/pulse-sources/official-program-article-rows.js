@@ -15,7 +15,9 @@ const {
 const {
   parseDateRange,
   parseTimeRange,
+  statesDailySessions,
   stripDateAndTime,
+  stripLeadingDailyPhrase,
 } = require("./official-program-article-time");
 
 const MIN_TIMED_ROWS_FOR_SIGNATURE = 2;
@@ -55,8 +57,9 @@ function collectOfficialProgramRows(html) {
       if (!isEventRowBlock(block, pageYear)) continue;
 
       const dateRange = explicitDate || currentDate;
-      const title = eventTitleFromRow(block.text);
       const time = parseTimeRange(block.text);
+      const statesDaily = statesDailySessions(block.text, time);
+      const title = eventTitleFromRow(block.text, { statesDaily });
       if (!dateRange || !title || !currentVenue) continue;
 
       candidateRowCount += 1;
@@ -66,6 +69,7 @@ function collectOfficialProgramRows(html) {
         title,
         date_range: dateRange,
         time,
+        states_daily: statesDaily,
         venue: currentVenue,
         program_marker: marker.text,
       });
@@ -84,20 +88,28 @@ function collectOfficialProgramRows(html) {
   };
 }
 
-function eventTitleFromRow(value) {
+function eventTitleFromRow(value, { statesDaily = false } = {}) {
   let text = htmlToText(value);
   if (!text) return null;
-  text = stripDateAndTime(text.replace(/^\s*[•·▪◦*-]+\s*/, ""))
-    .replace(/^\s*(?:at|a les|a las|a|h|kl\.?|klo)\s*/i, "")
-    .replace(/^\s*[:;,\-–—]+\s*/, "")
-    .replace(/[\s:;,\-–—]+$/, "")
-    .trim();
+  text = cleanTitleEdges(stripDateAndTime(text.replace(/^\s*[•·▪◦*-]+\s*/, "")));
+  // A stated daily phrase is timing, not title; so is a clock prefix after it.
+  if (statesDaily) text = cleanTitleEdges(stripLeadingDailyPhrase(text));
   if (isStopMarker(text)) return null;
   const headline = text.split(/\s*:\s*/, 1)[0].trim();
   if (headline.length >= 3 && headline.length <= 180) text = headline;
   if (text.length > 240) text = text.slice(0, 240).replace(/\s+\S*$/, "").trim();
   if (text.length < 3 || isProgramMarker(text) || isStopMarker(text)) return null;
   return text;
+}
+
+// Clock prefixes ("at", "a les", "kl.") are whole words only: a title such as
+// "Harbour concert" or "Artisan market" keeps its first letter.
+function cleanTitleEdges(value) {
+  return String(value || "")
+    .replace(/^\s*(?:at|a les|a las|a|h|kl\.?|klo)(?=\s|$)\s*/i, "")
+    .replace(/^\s*[:;,\-–—]+\s*/, "")
+    .replace(/[\s:;,\-–—]+$/, "")
+    .trim();
 }
 
 function inferPageYear(blocks) {

@@ -324,3 +324,98 @@ test("normalizeTimingRelevance handles invalid or missing time honestly", () => 
   assert.equal(normalizeTimingRelevance("future", {}), "future");
   assert.equal(normalizeTimingRelevance("made_up", { now: new Date(NOW) }), "unknown");
 });
+
+test("listed occurrences are judged only on their stated dates", () => {
+  // 9 and 16 July 2026 are Thursdays; 10 July is a Friday.
+  const series = event({
+    starts_at: null,
+    ends_at: null,
+    starts_on: "2026-07-09",
+    ends_on: "2026-07-16",
+    time_window: {
+      kind: "occurrences",
+      dates: ["2026-07-16", "2026-07-09", "2026-07-09"],
+      local_start: "18:00",
+      local_end: "21:00",
+    },
+  });
+  const at = (now) => normalizeTimeSensitiveSourceEvent(series, { now, timezone: "Europe/Stockholm" });
+
+  assert.deepEqual(at("2026-07-08T12:00:00.000Z").time_window, {
+    kind: "occurrences",
+    dates: ["2026-07-09", "2026-07-16"],
+    starts_on: "2026-07-09",
+    ends_on: "2026-07-16",
+    local_start: "18:00",
+    local_end: "21:00",
+    timezone: "Europe/Stockholm",
+  });
+  assert.equal(at("2026-07-08T12:00:00.000Z").timing_relevance, "future");
+  assert.equal(at("2026-07-09T14:00:00.000Z").timing_relevance, "tonight");
+  assert.equal(at("2026-07-09T17:00:00.000Z").timing_relevance, "now");
+  assert.equal(at("2026-07-10T17:00:00.000Z").timing_relevance, "future", "an unlisted Friday is never tonight");
+  assert.equal(at("2026-07-16T20:00:00.000Z").timing_relevance, "stale");
+  assert.equal(at("2026-07-16T20:00:00.000Z").freshness, "stale");
+});
+
+test("unusable occurrence lists fail closed to period semantics instead of being truncated", () => {
+  const sixtyOne = Array.from({ length: 61 }, (_, index) =>
+    new Date(Date.UTC(2026, 6, 1 + index)).toISOString().slice(0, 10));
+  for (const dates of [sixtyOne, ["2026-07-09", "2026-02-30"], [], "2026-07-09"]) {
+    const normalized = normalizeTimeSensitiveSourceEvent(event({
+      starts_at: null,
+      ends_at: null,
+      starts_on: "2026-07-01",
+      ends_on: "2026-08-30",
+      time_window: { kind: "occurrences", dates, local_start: "18:00", local_end: "21:00" },
+    }), { now: "2026-07-09T12:00:00.000Z", timezone: "Europe/Stockholm" });
+    assert.equal(normalized.time_window.kind, "period");
+    assert.equal(normalized.time_window.starts_on, "2026-07-01");
+    assert.equal(normalized.time_window.ends_on, "2026-08-30");
+    assert.equal(normalized.timing_relevance, "unknown");
+  }
+});
+
+test("period windows never become now, today or tonight", () => {
+  const period = event({
+    starts_at: null,
+    ends_at: null,
+    starts_on: "2026-07-01",
+    ends_on: "2026-07-31",
+    time_window: { kind: "period", local_start: "18:00", local_end: "21:00" },
+  });
+  const at = (now) => normalizeTimeSensitiveSourceEvent(period, { now, timezone: "Europe/Stockholm" });
+
+  assert.deepEqual(at("2026-07-09T17:00:00.000Z").time_window, {
+    kind: "period",
+    starts_on: "2026-07-01",
+    ends_on: "2026-07-31",
+    local_start: "18:00",
+    local_end: "21:00",
+    timezone: "Europe/Stockholm",
+  });
+  assert.equal(at("2026-07-09T17:00:00.000Z").timing_relevance, "unknown");
+  assert.equal(at("2026-06-20T17:00:00.000Z").timing_relevance, "future");
+  assert.equal(at("2026-08-02T17:00:00.000Z").timing_relevance, "stale");
+});
+
+test("a declared but unknown recurrence kind never widens into a daily window", () => {
+  const declared = normalizeTimeSensitiveSourceEvent(event({
+    starts_at: null,
+    ends_at: null,
+    starts_on: "2026-07-01",
+    ends_on: "2026-07-31",
+    time_window: { kind: "weekly", local_start: "18:00", local_end: "21:00" },
+  }), { now: "2026-07-09T17:00:00.000Z", timezone: "Europe/Stockholm" });
+  assert.equal(declared.time_window.kind, "period");
+
+  // An undeclared window keeps the existing daily inference from its clocks.
+  const undeclared = normalizeTimeSensitiveSourceEvent(event({
+    starts_at: null,
+    ends_at: null,
+    starts_on: "2026-07-01",
+    ends_on: "2026-07-31",
+    time_window: { local_start: "18:00", local_end: "21:00" },
+  }), { now: "2026-07-09T17:00:00.000Z", timezone: "Europe/Stockholm" });
+  assert.equal(undeclared.time_window.kind, "daily");
+});

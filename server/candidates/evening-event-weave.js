@@ -21,6 +21,7 @@ const {
   normalizeSourceEventDate,
   normalizeSourceEventDateTime,
 } = require("../pulse-sources/source-event-time");
+const { listedOccurrenceDates } = require("../place-candidates/event-calendar-date");
 
 const EVENING_START_MINUTES = 17 * 60;
 
@@ -95,23 +96,26 @@ function restoreEventRanking(highlights, more) {
 
 function materializeDailyOccurrence(event, selectedDate) {
   const window = event?.time_window;
-  const timezone = normalizeIanaTimezone(event?.timezone || window?.timezone);
   const startsOn = normalizeSourceEventDate(event?.starts_on || window?.starts_on);
   const endsOn = normalizeSourceEventDate(event?.ends_on || window?.ends_on) || startsOn;
-  const startMinutes = clockMinutes(window?.local_start);
-  const endMinutes = clockMinutes(window?.local_end);
-  if (
-    window?.kind !== "daily" ||
-    !timezone ||
-    !startsOn ||
-    !endsOn ||
-    selectedDate < startsOn ||
-    selectedDate > endsOn ||
-    startMinutes == null ||
-    startMinutes < EVENING_START_MINUTES
-  ) {
+  if (window?.kind !== "daily" || !startsOn || !endsOn || selectedDate < startsOn || selectedDate > endsOn) {
     return null;
   }
+  return materializeLocalSession(event, selectedDate);
+}
+
+// A listed occurrence is an evening session only on one of its stated dates.
+function materializeListedOccurrence(event, selectedDate) {
+  if (!listedOccurrenceDates(event?.time_window).includes(selectedDate)) return null;
+  return materializeLocalSession(event, selectedDate);
+}
+
+function materializeLocalSession(event, selectedDate) {
+  const window = event?.time_window;
+  const timezone = normalizeIanaTimezone(event?.timezone || window?.timezone);
+  const startMinutes = clockMinutes(window?.local_start);
+  const endMinutes = clockMinutes(window?.local_end);
+  if (!timezone || startMinutes == null || startMinutes < EVENING_START_MINUTES) return null;
 
   const localStartsAt = localDateTime(selectedDate, window.local_start);
   const startsAt = normalizeSourceEventDateTime(localStartsAt, { timezone });
@@ -160,8 +164,11 @@ function materializeContinuousOccurrence(event, selectedDate) {
 function eventOccurrenceForDate(event, selectedDate) {
   const date = normalizeSourceEventDate(selectedDate);
   if (!event || !date) return null;
-  if (event.time_window?.kind === "daily") return materializeDailyOccurrence(event, date);
-  if (event.time_window?.kind === "all_day") return null;
+  const kind = event.time_window?.kind;
+  if (kind === "daily") return materializeDailyOccurrence(event, date);
+  if (kind === "occurrences") return materializeListedOccurrence(event, date);
+  // Date facts and source ranges without stated session days are not evening anchors.
+  if (kind === "all_day" || kind === "period") return null;
   return materializeContinuousOccurrence(event, date);
 }
 

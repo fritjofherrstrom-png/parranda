@@ -42,8 +42,8 @@ observation limit”). This change does not claim that was the same failing sour
 - A collection that throws is held as every planned source failed
   (`source_collect_failed`). Nothing is invented.
 - Holds are process-local, capped at 256 keys (oldest evicted), never persisted,
-  never written to the `agnostic-events-v6` cache and never consulted when a
-  cached result exists.
+  never written to the persistent event cache and never consulted when a cached
+  result exists.
 - Waiting never prints “0/N svarade”; counts describe finished collections.
 - “· N med träffar” appears only when accepted events actually surfaced. A source
   that returned rows is not a hit: every row can still be rejected by the date,
@@ -52,7 +52,8 @@ observation limit”). This change does not claim that was the same failing sour
 ## Unchanged bounds and gates
 
 No new source, provider call, fetch path, key, approval, worker, crawler or
-city rule. Event cache TTL (20 min), `agnostic-events-v6`, the 30 s warm timeout
+city rule. Event cache TTL (20 min), `agnostic-events-v6` (a later
+recurring-entry change moved it to v7; see `LIVE_SELECTED_DATE.md`), the 30 s warm timeout
 per provider, Live sheet retries (1.5/3/5 s) and the Planner follow-up ladder
 are unchanged. The ladder now simply ends when the failure is known. Trust,
 fusion, date, geometry and route-weave gates are untouched; the route and day
@@ -138,7 +139,10 @@ found “Källstatus: 1/2 svarade · 1 med träffar” while `accepted_event_cou
   title into a narrow strip.
 - Reported by the independent Pi review: in Simrishamn, three recurring municipal
   entries were shown as “dagligen” on a selected Friday that was wrong for them.
-  This is not a regression of this change, and it remains open.
+  This was not a regression of this change. A later generic fix limits recurring
+  entries to the days their source states and is covered by fixtures only; see
+  *Recurring calendar entries* in `LIVE_SELECTED_DATE.md`. Verification against
+  the real sources remains open.
 
 ## Exact-head QA handoff (Sol)
 

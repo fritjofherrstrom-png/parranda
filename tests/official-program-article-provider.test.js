@@ -154,7 +154,7 @@ test("the same adapter recognizes an unrelated heading-date plus timed-row progr
   assert.ok(parsed.events.every((event) => event.place_context === "Harbour stage"));
 });
 
-test("multi-day daily windows stay daily and all-day rows never consume the timed quota", async () => {
+test("multi-day rows without a stated daily schedule are periods; all-day rows never consume the timed quota", async () => {
   const html = [
     "<h1>Summer programme 2026</h1>",
     "<h2>Programme at Civic Garden</h2>",
@@ -170,8 +170,9 @@ test("multi-day daily windows stay daily and all-day rows never consume the time
     timezone: "Europe/Paris",
     sourceLanguage: "en",
   });
+  // The row states a span and a clock, not that every day carries a session.
   assert.deepEqual(parsed.events[0].time_window, {
-    kind: "daily",
+    kind: "period",
     starts_on: "2026-07-10",
     ends_on: "2026-07-12",
     local_start: "10:00",
@@ -192,8 +193,80 @@ test("multi-day daily windows stay daily and all-day rows never consume the time
     "Makers market",
     "Community picnic",
   ]);
-  assert.equal(collected.time_sensitive_events[0].time_window.kind, "daily");
+  assert.equal(collected.time_sensitive_events[0].time_window.kind, "period");
   assert.equal(collected.time_sensitive_events[1].time_window.kind, "all_day");
+});
+
+function gardenProgramme(rows, lang = "en") {
+  return [
+    `<html lang="${lang}"><body>`,
+    "<h1>Summer programme 2026</h1>",
+    "<h2>Programme at Civic Garden</h2>",
+    "<ul>",
+    ...rows.map((row) => `<li>${row}</li>`),
+    "</ul>",
+    "</body></html>",
+  ].join("");
+}
+
+function programmeEvents(html, sourceLanguage = "en") {
+  return extractOfficialProgramArticle(html, {
+    sourceUrl: "https://city.example/program",
+    timezone: "Europe/Paris",
+    sourceLanguage,
+  }).events.map((event) => [event.title, event.time_window?.kind]);
+}
+
+test("a programme row states daily sessions only in its own timing words", () => {
+  for (const [lang, row, title] of [
+    ["en", "10-12 July daily 10:00-17:00 Makers market", "Makers market"],
+    ["en", "10-12 July, every day at 10:00 Makers market", "Makers market"],
+    ["sv", "10-12 juli, dagligen 10.00-17.00: Hantverksmarknad", "Hantverksmarknad"],
+    ["es", "10-12 julio, todos los días 10:00 Mercado", "Mercado"],
+    ["fr", "10-12 juillet, tous les jours 10.00 Marché", "Marché"],
+    ["ca", "10-12 d’agost, cada dia (10.00h): Mercat", "Mercat"],
+    ["de", "10-12 Juli täglich 10:00 Markt", "Markt"],
+  ]) {
+    const [first] = programmeEvents(gardenProgramme([row, "14 July 18:00 Evening concert", "15 July 19:00 Film night"], lang), lang);
+    assert.deepEqual(first, [title, "daily"], row);
+  }
+  // A title after the clock never states the schedule; exceptions are not daily.
+  for (const row of [
+    "10-12 July 10:00-17:00 Daily Show",
+    "10-12 July, every day except Sunday 10:00 Makers market",
+    "10-12 July Tuesdays 10:00 Makers market",
+  ]) {
+    const [first] = programmeEvents(gardenProgramme([row, "14 July 18:00 Evening concert", "15 July 19:00 Film night"]));
+    assert.equal(first[1], "period", row);
+  }
+});
+
+test("timed rows under a dated span heading are periods, never every day of the span", () => {
+  const html = [
+    '<html lang="en"><body>',
+    "<h1>Harbour festival 2026</h1>",
+    "<h2>Programme at Harbour stage</h2>",
+    "<h3>10-12 July</h3>",
+    "<ul><li>18:00 Opening concert</li><li>20:00 Night market</li></ul>",
+    "<h3>13 July</h3>",
+    "<ul><li>19:00 Closing show</li></ul>",
+    "</body></html>",
+  ].join("");
+  assert.deepEqual(programmeEvents(html), [
+    ["Opening concert", "period"],
+    ["Night market", "period"],
+    ["Closing show", "continuous"],
+  ]);
+});
+
+test("programme titles keep their first letter", () => {
+  // Clock prefixes such as "at", "a les" or "h" are whole words, never the
+  // opening letters of a title.
+  assert.deepEqual(programmeEvents(gardenProgramme([
+    "14 July 18:00 Harbour concert",
+    "15 July 19:00 Artisan market",
+    "16 July at 20:00 Atlas show",
+  ])).map(([title]) => title), ["Harbour concert", "Artisan market", "Atlas show"]);
 });
 
 test("weak prose, missing runtime trust prerequisites, and cross-origin redirects fail closed", async () => {

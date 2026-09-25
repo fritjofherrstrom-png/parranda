@@ -410,3 +410,62 @@ test("provider registry fuses independent event families and exposes compact ins
   assert.equal(normalizedDescriptor.publisherId, "city-publisher");
   assert.equal(normalizedDescriptor.sourceFamily, "official_city_calendar");
 });
+
+test("listed occurrences and periods fuse only with the same kind and the same stated days", () => {
+  const listedWindow = {
+    kind: "occurrences",
+    dates: ["2026-07-09", "2026-07-16"],
+    starts_on: "2026-07-09",
+    ends_on: "2026-07-16",
+    local_start: "18:00",
+    local_end: "21:00",
+    timezone: "Europe/Stockholm",
+  };
+  const official = normalizedEvent({
+    id: "series-city",
+    starts_at: null,
+    ends_at: null,
+    starts_on: "2026-07-09",
+    ends_on: "2026-07-16",
+    timezone: "Europe/Stockholm",
+    time_window: listedWindow,
+  });
+  const venue = normalizedEvent({
+    ...official,
+    id: "series-venue",
+    source_provider_id: "venue-calendar",
+    source_identity: "venue.example",
+    source_url: "https://venue.example/series",
+  });
+  const partial = {
+    ...venue,
+    id: "series-partial",
+    source_identity: "other.example",
+    source_url: "https://other.example/series",
+    time_window: { ...listedWindow, dates: ["2026-07-09"] },
+  };
+  assert.equal(eventsRepresentSameOccurrence(official, venue), true);
+  assert.equal(eventsRepresentSameOccurrence(official, partial), false, "a partial date overlap is not the same series");
+  const [fused] = fuseTimeSensitiveEvents([venue, official]);
+  assert.equal(fused.fusion_status, "corroborated");
+  assert.deepEqual(fused.time_window.dates, ["2026-07-09", "2026-07-16"]);
+
+  const period = normalizedEvent({
+    id: "range-city",
+    starts_at: null,
+    ends_at: null,
+    starts_on: "2026-07-09",
+    ends_on: "2026-07-16",
+    time_window: { kind: "period", starts_on: "2026-07-09", ends_on: "2026-07-16" },
+  });
+  const allDay = {
+    ...period,
+    id: "range-venue",
+    source_provider_id: "venue-calendar",
+    source_identity: "venue.example",
+    source_url: "https://venue.example/range",
+    time_window: { kind: "all_day", starts_on: "2026-07-09", ends_on: "2026-07-16" },
+  };
+  assert.equal(eventsRepresentSameOccurrence(period, allDay), false, "unstated days never merge into every-day date facts");
+  assert.equal(eventsRepresentSameOccurrence(period, { ...allDay, time_window: period.time_window }), true);
+});

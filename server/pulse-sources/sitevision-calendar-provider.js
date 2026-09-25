@@ -14,6 +14,11 @@ const {
   normalizeIanaTimezone,
   normalizeSourceEventDateTime,
 } = require("./source-event-time");
+const {
+  MONTHS,
+  resolveSchedulePattern,
+  statesDailyOccurrence,
+} = require("./source-recurrence");
 
 const SITEVISION_CALENDAR_PROVIDER_ID = "generic-sitevision-calendar";
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
@@ -25,29 +30,9 @@ const MAX_LIMIT = 80;
 const DEFAULT_DETAIL_LIMIT = 6;
 const MAX_DETAIL_LIMIT = 12;
 const DEFAULT_DETAIL_CONCURRENCY = 2;
-
-const MONTHS = Object.freeze({
-  januari: 1,
-  january: 1,
-  februari: 2,
-  february: 2,
-  mars: 3,
-  march: 3,
-  april: 4,
-  maj: 5,
-  may: 5,
-  juni: 6,
-  june: 6,
-  juli: 7,
-  july: 7,
-  augusti: 8,
-  august: 8,
-  september: 9,
-  oktober: 10,
-  october: 10,
-  november: 11,
-  december: 12,
-});
+const RECURRENCE_SECTION_MAX_CHARS = 8000;
+const RECURRENCE_TEXT_MAX_CHARS = 1000;
+const TIMING_FIELDS = ["starts_at", "ends_at", "starts_on", "ends_on", "time_window"];
 
 function buildDescriptor(options = {}) {
   const descriptor = {
@@ -212,9 +197,12 @@ function extractSitevisionCalendarEvents(html, options = {}) {
       extractSitevisionTimingText(article) ||
       extractSoleilTimingText(article) ||
       htmlToText(article);
+    // A listing row has no recurrence section: a range with a clock stays a
+    // period until its detail page states which days carry a session.
     const timing = parseSitevisionDateTime(timingText, {
       ...options,
       fallbackDate: listingDate,
+      recurrence: null,
     });
     if (isBeforeCollectionDate(timing.end_date_key || timing.date_key, options.date)) continue;
     const venue = htmlToText(
@@ -250,10 +238,16 @@ function extractSitevisionCalendarEvents(html, options = {}) {
 function extractSitevisionEventDetail(html, options = {}) {
   const source = String(html || "");
   const timingText = textAfterMarker(source, "Datumochtid");
-  const recurrence = textAfterMarker(source, "Aterkommandetillfallen");
+  const recurrenceSection = sectionTextAfterMarker(source, "Aterkommandetillfallen");
+  const recurrence = recurrenceSection?.text || null;
   const timing = parseSitevisionDateTime(timingText, {
     ...options,
     expectedDate: options.expectedDate,
+    recurrence,
+    // A recurrence section without readable text, or one cut by the byte bound
+    // (it may hide later dates), cannot be read as a complete occurrence list.
+    recurrencePresent: Boolean(recurrenceSection),
+    recurrenceComplete: recurrenceSection?.complete === true,
   });
   const venue = htmlToText(
     firstMatch(source, /Evenemangsplats:\s*<\/strong>\s*<br\s*\/?>\s*([^<]+)/i),
@@ -272,7 +266,8 @@ function extractSitevisionEventDetail(html, options = {}) {
     address,
     lat: coordinates.lat,
     lng: coordinates.lng,
-    recurrence: recurrence || null,
+    // Source text for inspection only; the parsed timing above is the fact.
+    recurrence: recurrence ? recurrence.slice(0, RECURRENCE_TEXT_MAX_CHARS) : null,
   }) || {};
 }
 
@@ -297,18 +292,16 @@ async function enrichFromDetailPages(events, fetcher, options = {}) {
         ...options,
         expectedDate: event.listing_date,
       });
-      for (const key of [
-        "starts_at",
-        "ends_at",
-        "starts_on",
-        "ends_on",
-        "time_window",
-        "place_context",
-        "address",
-        "lat",
-        "lng",
-        "recurrence",
-      ]) {
+      // Detail timing is stronger evidence than the listing row. Replace the
+      // timing atoms together so a listing instant cannot survive beside a
+      // detail period or occurrence list and contradict it downstream.
+      if (detail.time_window) {
+        for (const key of TIMING_FIELDS) {
+          if (detail[key] != null && detail[key] !== "") event[key] = detail[key];
+          else delete event[key];
+        }
+      }
+      for (const key of ["place_context", "address", "lat", "lng", "recurrence"]) {
         if (detail[key] != null && detail[key] !== "") event[key] = detail[key];
       }
     } catch (_error) {
@@ -336,10 +329,66 @@ function parseSitevisionDateTime(value, options = {}) {
         : null);
   if (!range?.start) return { label };
 
-  const time = parseTimeRange(normalized);
   const timezone = normalizeIanaTimezone(options.timezone);
+  const pattern = resolveSchedulePattern(options.recurrence, {
+    range,
+    explicitRange: Boolean(explicitRange),
+    time: parseTimeRange(normalized),
+    statesDaily: statesDailyOccurrence(label),
+    present: options.recurrencePresent === true,
+    complete: options.recurrenceComplete !== false,
+  });
+  const time = pattern.time;
   const startDateKey = dateKey(range.start);
   const endDateKey = dateKey(range.end || range.start);
+  const multiDay = endDateKey !== startDateKey;
+  const localStart = localClock(time?.start);
+  const localEnd = localClock(time?.end);
+
+  if (pattern.mode === "listed") {
+    const first = pattern.dates[0];
+    const last = pattern.dates[pattern.dates.length - 1];
+    return compact({
+      starts_on: first,
+      ends_on: last,
+      date_key: first,
+      end_date_key: last !== first ? last : null,
+      time_window: compact({
+        kind: "occurrences",
+        dates: pattern.dates,
+        starts_on: first,
+        ends_on: last,
+        local_start: localStart,
+        local_end: localEnd,
+        timezone,
+        label,
+      }),
+      label,
+    }) || {};
+  }
+
+  // A multi-day range is not a daily schedule unless the source says so. With
+  // a session clock, or with a recurrence the source did not make readable,
+  // the range keeps period semantics: shown as a range, never as a given day.
+  if (multiDay && pattern.mode !== "daily" && (time || pattern.mode === "unresolved")) {
+    return compact({
+      starts_on: startDateKey,
+      ends_on: endDateKey,
+      date_key: startDateKey,
+      end_date_key: endDateKey,
+      time_window: compact({
+        kind: "period",
+        starts_on: startDateKey,
+        ends_on: endDateKey,
+        local_start: localStart,
+        local_end: localEnd,
+        timezone,
+        label,
+      }),
+      label,
+    }) || {};
+  }
+
   if (!time) {
     return {
       starts_on: startDateKey,
@@ -356,14 +405,12 @@ function parseSitevisionDateTime(value, options = {}) {
     };
   }
 
-  const localStart = localClock(time.start);
-  const localEnd = localClock(time.end);
-  if (endDateKey !== startDateKey || !timezone) {
+  if (multiDay) {
     return compact({
       starts_on: startDateKey,
       ends_on: endDateKey,
       date_key: startDateKey,
-      end_date_key: endDateKey !== startDateKey ? endDateKey : null,
+      end_date_key: endDateKey,
       time_window: compact({
         kind: "daily",
         starts_on: startDateKey,
@@ -371,6 +418,26 @@ function parseSitevisionDateTime(value, options = {}) {
         local_start: localStart,
         local_end: localEnd,
         timezone,
+        label,
+      }),
+      label,
+    }) || {};
+  }
+
+  // One stated date with a local clock but no reviewed timezone is still one
+  // listed occurrence; it can never become a daily schedule.
+  if (!timezone) {
+    return compact({
+      starts_on: startDateKey,
+      ends_on: startDateKey,
+      date_key: startDateKey,
+      time_window: compact({
+        kind: "occurrences",
+        dates: [startDateKey],
+        starts_on: startDateKey,
+        ends_on: startDateKey,
+        local_start: localStart,
+        local_end: localEnd,
         label,
       }),
       label,
@@ -519,6 +586,49 @@ function textAfterMarker(html, markerId) {
   if (!marker) return null;
   const tail = String(html).slice(marker.index, marker.index + 3000);
   return htmlToText(firstMatch(tail, /<p\b[^>]*>([\s\S]*?)<\/p>/i));
+}
+
+// A detail section runs from its heading anchor to the next heading, heading
+// anchor, bold field label ("Evenemangsplats:") or landmark. Sitevision portlet
+// wrapper ids ("svid…") are layout, not section boundaries, and bold text that
+// is not a label (such as a highlighted date) stays inside the section. The
+// section is complete only when that boundary (or the end of the page) lies
+// inside the byte bound.
+const SECTION_BOUNDARY =
+  /<h[1-6]\b|<[a-z][^>]*\sid=["'](?!svid)[^"']*["']|<strong\b[^>]*>[^<]{1,60}:\s*<\/strong>|<\/(?:section|article|main|body)\b|<(?:script|style|form|footer|nav)\b/i;
+const HEADING_LIKE_TAGS = new Set(["h1", "h2", "h3", "h4", "h5", "h6", "span", "strong", "b", "a", "p", "dt", "label"]);
+
+// Returns null only when the page has no such section. A section that exists
+// but has no readable text is still recurrence evidence (`text: null`).
+function sectionTextAfterMarker(html, markerId) {
+  const source = String(html || "");
+  const marker = new RegExp(`\\sid=["']${markerId}["']`, "i").exec(source);
+  if (!marker) return null;
+  const openEnd = source.indexOf(">", marker.index);
+  if (openEnd < 0) return null;
+  const bounded = source.slice(openEnd + 1, openEnd + 1 + RECURRENCE_SECTION_MAX_CHARS);
+  const reachedPageEnd = openEnd + 1 + RECURRENCE_SECTION_MAX_CHARS >= source.length;
+  // The anchor element's own heading text is not part of its section: skip a
+  // heading-like anchor element whole, or a wrapper's leading heading.
+  const markerTag = /<([a-z][a-z0-9]*)\b[^<]*$/i.exec(source.slice(0, marker.index))?.[1]?.toLowerCase();
+  let tail = bounded;
+  if (HEADING_LIKE_TAGS.has(markerTag)) {
+    const close = new RegExp(`</${markerTag}\\s*>`, "i").exec(tail);
+    if (close) tail = tail.slice(close.index + close[0].length);
+  }
+  tail = tail.replace(/^\s*<h[1-6]\b[^>]*>[\s\S]*?<\/h[1-6]\s*>/i, "");
+  const end = tail.search(SECTION_BOUNDARY);
+  const lines = decodeHtml(
+    (end >= 0 ? tail.slice(0, end) : tail)
+      .replace(/<!--[\s\S]*?-->/g, " ")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(?:p|li|div|dd|dt|tr)\s*>/gi, "\n")
+      .replace(/<[^>]+>/g, " "),
+  )
+    .split("\n")
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  return { text: lines.length ? lines.join("; ") : null, complete: end >= 0 || reachedPageEnd };
 }
 
 function translationStatus(language) {

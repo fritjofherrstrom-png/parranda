@@ -16,6 +16,7 @@ const {
   normalizeSourceEventDate,
   normalizeSourceEventDateTime,
 } = require("./source-event-time");
+const { MAX_OCCURRENCE_DATES } = require("./time-sensitive-event");
 
 const LOCALIZED_EVENTS_API_PROVIDER_ID = "generic-localized-events-api";
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
@@ -24,6 +25,8 @@ const DEFAULT_LIMIT = 80;
 const MAX_LIMIT = 200;
 const DEFAULT_MAX_BYTES = 2 * 1024 * 1024;
 const MAX_BYTES = 5 * 1024 * 1024;
+// Processing bound for one record's listed sessions; a longer list is not read.
+const MAX_LISTED_SCHEDULE_ENTRIES = 400;
 
 function buildDescriptor(options = {}) {
   const descriptor = {
@@ -224,13 +227,16 @@ function mapLocalizedEventApiRecord(record, { timezone, sourceLanguage } = {}) {
     if (localStart && localEnd && localEnd <= localStart) return null;
   }
 
-  const time = normalizeEventTime({
-    startsOn,
-    endsOn,
-    localStart,
-    localEnd,
-    timezone,
-  });
+  const time = startsOn === endsOn
+    ? normalizeEventTime({ startsOn, endsOn, localStart, localEnd, timezone })
+    : rangeEventTime(record.schedule, {
+      startsOn,
+      endsOn,
+      localStart,
+      localEnd,
+      malformedClock: (record.start_time != null && !localStart) || (record.end_time != null && !localEnd),
+      timezone,
+    });
   if (startsOn === endsOn && localStart && localEnd &&
       time.time_window.kind !== "continuous") return null;
   return compact({
@@ -273,21 +279,101 @@ function normalizeEventTime({ startsOn, endsOn, localStart, localEnd, timezone }
       };
     }
   }
-  if (localStart && localEnd) {
+  return {
+    time_window: { kind: "all_day", starts_on: startsOn, ends_on: endsOn },
+  };
+}
+
+// A multi-day record states its span, not that every day of it carries a
+// session. Sessions listed in schedule.dates inside the span are the stated
+// days (every day listed is a daily statement). Unusable listings, and a
+// clocked span without listings, keep period semantics. The schedule.range
+// object is not interpreted: a date-only span without listings stays all-day.
+function rangeEventTime(schedule, { startsOn, endsOn, localStart, localEnd, malformedClock, timezone }) {
+  const listed = listedScheduleSessions(schedule, { startsOn, endsOn, localStart, localEnd, malformedClock });
+  const start = listed?.localStart || localStart;
+  const end = listed?.localEnd || localEnd;
+  if (listed?.dates) {
+    const everyDay = listed.dates.length === calendarDaysBetween(startsOn, endsOn) + 1;
+    if (everyDay && !start && !end) {
+      return { time_window: { kind: "all_day", starts_on: startsOn, ends_on: endsOn } };
+    }
+    if (everyDay && start && end) {
+      return {
+        time_window: compact({ kind: "daily", starts_on: startsOn, ends_on: endsOn, local_start: start, local_end: end, timezone }),
+      };
+    }
+    if (listed.dates.length <= MAX_OCCURRENCE_DATES) {
+      return {
+        time_window: compact({
+          kind: "occurrences",
+          dates: listed.dates,
+          starts_on: listed.dates[0],
+          ends_on: listed.dates[listed.dates.length - 1],
+          local_start: start,
+          local_end: end,
+          timezone,
+        }),
+      };
+    }
+  }
+  if (listed || localStart || localEnd) {
     return {
-      time_window: {
-        kind: "daily",
+      time_window: compact({
+        kind: "period",
         starts_on: startsOn,
         ends_on: endsOn,
-        local_start: localStart,
-        local_end: localEnd,
+        local_start: start,
+        local_end: end,
         timezone,
-      },
+      }),
     };
   }
   return {
     time_window: { kind: "all_day", starts_on: startsOn, ends_on: endsOn },
   };
+}
+
+// Returns null when no sessions are listed, { dates, localStart, localEnd } for
+// a usable listing, and { unusable: true } when listed sessions exist but fall
+// outside the span, disagree on their clock, carry malformed or overnight
+// clocks, or exceed the processing bound. A malformed record clock makes the
+// listing unusable too: a valid listed clock must not hide it. A usable listing
+// longer than the occurrence bound still counts when it names every day of the
+// span.
+function listedScheduleSessions(schedule, { startsOn, endsOn, localStart, localEnd, malformedClock }) {
+  const entries = schedule?.dates;
+  if (!Array.isArray(entries) || entries.length === 0) return null;
+  const unusable = { unusable: true };
+  if (malformedClock || entries.length > MAX_LISTED_SCHEDULE_ENTRIES) return unusable;
+  const dates = new Set();
+  let start = localStart;
+  let end = localEnd;
+  let starts = 0;
+  let ends = 0;
+  for (const entry of entries) {
+    const date = normalizeSourceEventDate(entry?.date);
+    if (!date || date < startsOn || date > endsOn) return unusable;
+    const entryStart = normalizeClock(entry.start_time);
+    const entryEnd = normalizeClock(entry.end_time);
+    if ((entry.start_time != null && !entryStart) || (entry.end_time != null && !entryEnd)) return unusable;
+    if ((entryStart && start && entryStart !== start) || (entryEnd && end && entryEnd !== end)) return unusable;
+    start = start || entryStart;
+    end = end || entryEnd;
+    if (entryStart) starts += 1;
+    if (entryEnd) ends += 1;
+    dates.add(date);
+  }
+  // A start or end only some sessions state is not their shared clock unless
+  // the record states it: never lend one session's clock to another.
+  if ((starts > 0 && starts < entries.length && !localStart) ||
+      (ends > 0 && ends < entries.length && !localEnd)) return unusable;
+  if (start && end && end <= start) return unusable;
+  return { dates: [...dates].sort(), localStart: start, localEnd: end };
+}
+
+function calendarDaysBetween(first, last) {
+  return Math.round((Date.parse(`${last}T00:00:00Z`) - Date.parse(`${first}T00:00:00Z`)) / (24 * 60 * 60 * 1000));
 }
 
 function categoryTags(categories) {

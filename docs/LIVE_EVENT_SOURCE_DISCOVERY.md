@@ -735,10 +735,14 @@ silently interpreted as server-local or UTC time.
 Local calendar dates are not UTC instants. Date-only/all-day sources preserve
 `starts_on` / `ends_on`, while actual instants use `starts_at` / `ends_at`.
 Ambiguous daylight-saving folds also stay unresolved unless the source supplies
-an explicit offset. A multi-day listing with daily opening hours uses an
-explicit `time_window.kind: "daily"` with local start/end clocks; it must not be
-flattened into one continuous interval across nights. Truly continuous
-multi-day events may still use one bounded instant interval. Date-only rows are
+an explicit offset. A multi-day listing whose source states daily opening hours
+uses an explicit `time_window.kind: "daily"` with local start/end clocks; it
+must not be flattened into one continuous interval across nights. A range with
+one clock but no daily statement is not daily: source-listed dates (or a weekday
+rule inside an explicit bounded range) become `occurrences`, and unstated or
+unreadable days keep `period` semantics that never claim a specific date (see
+`LIVE_SELECTED_DATE.md`). Truly continuous multi-day events may still use one
+bounded instant interval. Date-only rows are
 valid inspectable and fusable source facts, but remain ineligible for
 current-time route promotion because they do not establish a daypart.
 
@@ -1066,6 +1070,11 @@ every Sitevision website is trusted or safe to collect.
   concurrency, and request time;
 - the adapter extracts factual atoms only: title, source URL, local date/time,
   venue/address, coordinates when published, and recurrence text;
+- a date range with a clock becomes `daily` only when the source states daily
+  sessions. The bounded "Återkommande tillfällen" section is read with a closed
+  grammar: listed dates, or weekdays inside the stated range, become explicit
+  `occurrences`. Anything unreadable, contradictory, open-ended or truncated
+  stays a `period` that never claims a specific day;
 - local clock times require a reviewed IANA timezone and otherwise remain
   timing-unknown rather than being treated as UTC;
 - one failed detail page does not erase usable listing evidence, while listing
@@ -1098,6 +1107,9 @@ stable-HTML source family, not as permission to call Wix's private CMS APIs.
   Editorial descriptions and images are not copied;
 - date ranges preserve both their first and final day; an unresolved range
   remains timing-unknown rather than silently collapsing to day one;
+- a range with a clock is `daily` only when the "När"/"Öppettider" labels state
+  daily sessions. Weekday rules inside the range and explicit date lists become
+  `occurrences`; anything else is a `period` (see `LIVE_SELECTED_DATE.md`);
 - stale and unparseable detail rows do not consume the accepted-event limit,
   but collection always stops at the reviewed total detail budget. Parser
   failure is reported separately from a legitimate empty/current-free source;
@@ -1132,7 +1144,9 @@ publisher or place:
 - article introductions, ticket/practical sections, descriptions, images, and
   unrelated clock mentions are excluded;
 - date-only rows remain honest all-day evidence and use a separate cap, while
-  multi-day daily windows remain daily rather than becoming continuous nights;
+  a multi-day row with a clock (its own range or a dated span heading) is `daily`
+  only when the row states daily sessions before its clock, and otherwise a
+  `period`. It is never a continuous night or every day of the span;
 - floating local times require a trusted IANA timezone, ambiguous DST folds fail
   closed, and no geometry is inferred from the page;
 - fetches retain one timeout through body parsing, enforce byte and redirect

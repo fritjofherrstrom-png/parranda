@@ -14,6 +14,12 @@ const {
   normalizeIanaTimezone,
   normalizeSourceEventDateTime,
 } = require("./source-event-time");
+const {
+  listedDatesFromText,
+  mergeClocks,
+  readLabelledStatement,
+  resolveLabelledSchedule,
+} = require("./source-recurrence");
 
 const WIX_EVENT_SITEMAP_PROVIDER_ID = "generic-wix-event-sitemap";
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
@@ -348,14 +354,63 @@ function parseWixEventTiming(dateValue, timeValue, options = {}) {
   const dateLabel = htmlToText(dateValue);
   const timeLabel = htmlToText(timeValue);
   const label = [dateLabel, timeLabel].filter(Boolean).join(" · ") || null;
-  const dateRange = parseLocalizedDateRange(
-    dateLabel,
-    options.collectionDate || options.sitemapLastmod,
-  );
+  const timezone = normalizeIanaTimezone(options.timezone);
+  const reference = options.collectionDate || options.sitemapLastmod;
+  // Two or more explicit dates name exactly those days, never the range
+  // between the first and the second.
+  const list = listedDatesFromText(dateLabel, reference);
+  if (list) return listedDateTiming(list, { timeLabel, label, timezone });
+
+  const dateRange = parseLocalizedDateRange(dateLabel, reference);
   if (!dateRange || dateRange.unresolved) return compact({ label }) || {};
   const dateKey = toDateKey(dateRange.start);
   const endDateKey = toDateKey(dateRange.end);
-  const time = parseTimeRange(timeLabel);
+  const isMultiDay = endDateKey !== dateKey;
+  // A range with one session clock is daily only when the labels say so;
+  // weekday rules inside the range become the stated occurrences.
+  const pattern = isMultiDay
+    ? resolveLabelledSchedule({ dateText: dateLabel, timeText: timeLabel, range: dateRange, time: parseTimeRange(timeLabel) })
+    : { mode: "none", time: parseTimeRange(timeLabel) };
+  const time = pattern.time;
+  if (pattern.mode === "listed") {
+    const first = pattern.dates[0];
+    const last = pattern.dates[pattern.dates.length - 1];
+    return compact({
+      starts_on: first,
+      ends_on: last,
+      date_key: first,
+      end_date_key: last !== first ? last : null,
+      time_window: compact({
+        kind: "occurrences",
+        dates: pattern.dates,
+        starts_on: first,
+        ends_on: last,
+        local_start: localClock(time?.start),
+        local_end: localClock(time?.end),
+        timezone,
+        label,
+      }),
+      label,
+    }) || {};
+  }
+  if (isMultiDay && pattern.mode !== "daily" && (time || pattern.mode === "unresolved")) {
+    return compact({
+      starts_on: dateKey,
+      ends_on: endDateKey,
+      date_key: dateKey,
+      end_date_key: endDateKey,
+      time_window: compact({
+        kind: "period",
+        starts_on: dateKey,
+        ends_on: endDateKey,
+        local_start: localClock(time?.start),
+        local_end: localClock(time?.end),
+        timezone,
+        label,
+      }),
+      label,
+    }) || {};
+  }
   if (!time) {
     return compact({
       starts_on: dateKey,
@@ -371,11 +426,10 @@ function parseWixEventTiming(dateValue, timeValue, options = {}) {
       label,
     }) || {};
   }
-  const timezone = normalizeIanaTimezone(options.timezone);
   const localStart = localClock(time.start);
   const localEnd = localClock(time.end);
-  const isMultiDay = endDateKey !== dateKey;
   if (isMultiDay) {
+    // Reached only when the labels state every-day sessions.
     return compact({
       starts_on: dateKey,
       ends_on: endDateKey,
@@ -393,13 +447,16 @@ function parseWixEventTiming(dateValue, timeValue, options = {}) {
       label,
     }) || {};
   }
+  // One stated date with a local clock but no reviewed timezone is still one
+  // listed occurrence; it can never become a daily schedule.
   if (!timezone) {
     return compact({
       starts_on: dateKey,
       ends_on: endDateKey,
       date_key: dateKey,
       time_window: {
-        kind: "daily",
+        kind: "occurrences",
+        dates: [dateKey],
         starts_on: dateKey,
         ends_on: endDateKey,
         local_start: localStart,
@@ -432,6 +489,36 @@ function parseWixEventTiming(dateValue, timeValue, options = {}) {
       ends_at: endsAt,
       label,
     },
+    label,
+  }) || {};
+}
+
+// The session-time label may only carry clocks for a listed set of dates. Any
+// weekday rule, daily word or unknown text beside the list is not a readable
+// single session clock, so the listed span keeps period semantics.
+function listedDateTiming(list, { timeLabel, label, timezone }) {
+  const statement = readLabelledStatement(null, timeLabel);
+  const clock = mergeClocks(null, [...list.clocks, ...statement.clocks]);
+  const first = list.dates[0];
+  const last = list.dates[list.dates.length - 1];
+  const readable = !statement.unknown && !statement.daily && !statement.weekdays.size && clock !== undefined;
+  return compact({
+    starts_on: first,
+    ends_on: last,
+    date_key: first,
+    end_date_key: last !== first ? last : null,
+    time_window: compact(readable
+      ? {
+        kind: "occurrences",
+        dates: list.dates,
+        starts_on: first,
+        ends_on: last,
+        local_start: localClock(clock?.start),
+        local_end: localClock(clock?.end),
+        timezone,
+        label,
+      }
+      : { kind: "period", starts_on: first, ends_on: last, timezone, label }),
     label,
   }) || {};
 }
@@ -914,18 +1001,22 @@ function minutesOfDay(time) {
   return time.hour * 60 + time.minute;
 }
 
+// Clocked daily windows, listed sessions and periods take the timed quota the
+// former daily rows used; date-only facts never consume it.
 function wixTimingKind(event) {
   if (event?.starts_at) return "timed";
   const window = event?.time_window;
+  const clocked = Boolean(window?.local_start || window?.local_end);
+  if (["daily", "occurrences", "period"].includes(window?.kind) && clocked) {
+    return event.starts_on &&
+      window.local_start &&
+      (window.kind !== "daily" || window.local_end) &&
+      normalizeIanaTimezone(window.timezone)
+      ? "timed"
+      : null;
+  }
   if (
-    window?.kind === "daily" &&
-    event.starts_on &&
-    window.local_start &&
-    window.local_end &&
-    normalizeIanaTimezone(window.timezone)
-  ) return "timed";
-  if (
-    window?.kind === "all_day" &&
+    ["all_day", "occurrences", "period"].includes(window?.kind) &&
     event.starts_on &&
     event.ends_on
   ) return "all_day";

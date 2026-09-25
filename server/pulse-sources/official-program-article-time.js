@@ -20,6 +20,61 @@ const MONTHS = Object.freeze({
   december: 12, dec: 12, december: 12, decembre: 12, décembre: 12, diciembre: 12, desembre: 12, dezembro: 12, dicembre: 12, dezember: 12,
 });
 
+const WEEKDAY_WORDS = new Set(("monday tuesday wednesday thursday friday saturday sunday " +
+  "mandag tisdag onsdag torsdag fredag lordag sondag lunes martes miercoles jueves viernes sabado domingo " +
+  "dilluns dimarts dimecres dijous divendres dissabte diumenge lundi mardi mercredi jeudi vendredi samedi dimanche")
+  .split(" "));
+// Words that only join or introduce a date or clock ("del 12 al 14 de julio",
+// "t.o.m.", "kl."). They never change which days a row states.
+const DATE_CONNECTOR_WORDS = new Set(("to till t o m tom au al a del de des du d from fran until fins hasta " +
+  "bis vom zum tot van dal the of den el le la les los las kl klo at h um om alle as ore")
+  .split(" "));
+// Folded phrases stating every-day sessions in the programme languages.
+const DAILY_SESSION_PHRASES = new Set([
+  "dagligen", "varje dag", "alla dagar",
+  "daily", "every day", "everyday",
+  "diariamente", "todos los dias", "cada dia",
+  "diariament", "tots els dies",
+  "tous les jours", "chaque jour", "quotidiennement",
+  "tutti i giorni", "ogni giorno", "giornalmente",
+  "taglich", "jeden tag", "todos os dias",
+  "dagelijks", "elke dag",
+]);
+const FOLDED_MONTHS = new Set(Object.keys(MONTHS).map(fold));
+
+// A row states daily sessions only when the words before its first clock are,
+// apart from the date itself, exactly one daily phrase. Title words after the
+// clock ("Daily show") never count; anything else keeps period semantics.
+function statesDailySessions(value, time) {
+  if (!time?.start) return false;
+  const words = fold(String(value || "").slice(0, time.start.startIndex))
+    .replace(/\bd'/g, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .split(" ")
+    .filter(Boolean);
+  const isDateWord = (word) => /^\d{1,4}$/.test(word) || FOLDED_MONTHS.has(word) ||
+    WEEKDAY_WORDS.has(word) || DATE_CONNECTOR_WORDS.has(word);
+  for (const phrase of DAILY_SESSION_PHRASES) {
+    const phraseWords = phrase.split(" ");
+    for (let index = 0; index + phraseWords.length <= words.length; index += 1) {
+      if (!phraseWords.every((word, offset) => words[index + offset] === word)) continue;
+      const rest = [...words.slice(0, index), ...words.slice(index + phraseWords.length)];
+      if (rest.every(isDateWord)) return true;
+    }
+  }
+  return false;
+}
+
+// A stated daily phrase opens the row's remaining text; it is timing, not title.
+function stripLeadingDailyPhrase(value) {
+  const words = String(value || "").trim().split(/\s+/);
+  for (let count = 3; count >= 1; count -= 1) {
+    const phrase = fold(words.slice(0, count).join(" ")).replace(/[^\p{L}\p{N} ]+/gu, "").trim();
+    if (DAILY_SESSION_PHRASES.has(phrase)) return words.slice(count).join(" ").replace(/^[\s:;,\-–—]+/, "");
+  }
+  return String(value || "");
+}
+
 function parseDateRange(value, fallbackYear) {
   const text = fold(value).replace(/[–—]/g, "-");
   // Historical years elsewhere in prose cannot override the page year. Only
@@ -67,7 +122,7 @@ function parseTimeRange(value) {
   return { start: matches[0], end: isExplicitRange ? matches[1] : null };
 }
 
-function buildEventTiming({ dateRange, time, timezone }) {
+function buildEventTiming({ dateRange, time, timezone, statesDaily = false }) {
   const startsOn = dateKey(dateRange.start);
   const endsOn = dateKey(dateRange.end || dateRange.start);
   if (!startsOn || !endsOn) return null;
@@ -80,12 +135,14 @@ function buildEventTiming({ dateRange, time, timezone }) {
   }
   const localStart = localClock(time.start);
   const localEnd = time.end ? localClock(time.end) : null;
+  // A span with one clock (a row's own range, or a dated heading such as a
+  // festival span above timed rows) does not say which days carry the session.
   if (startsOn !== endsOn) {
     return compact({
       starts_on: startsOn,
       ends_on: endsOn,
       time_window: compact({
-        kind: "daily",
+        kind: statesDaily ? "daily" : "period",
         starts_on: startsOn,
         ends_on: endsOn,
         local_start: localStart,
@@ -196,5 +253,7 @@ module.exports = {
   normalizeDateKey,
   parseDateRange,
   parseTimeRange,
+  statesDailySessions,
   stripDateAndTime,
+  stripLeadingDailyPhrase,
 };
