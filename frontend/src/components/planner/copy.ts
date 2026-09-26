@@ -39,7 +39,9 @@ export const INTENT_LABELS: LabelMap = {
   vintage: { sv: "Second hand", en: "Vintage" },
 };
 
-// Per-stop TYPE chips ("what is this place") — the engine's vocabulary, localized.
+// Per-stop TYPE chips ("what is this place") — every kind the open-data sources
+// and the curated catalogs publish, localized. A kind this build has no words
+// for renders no chip (typeLabel): a raw engine token is never product copy.
 export const TYPE_LABELS: LabelMap = {
   museum: { sv: "Museum", en: "Museum" },
   gallery: { sv: "Galleri", en: "Gallery" },
@@ -55,7 +57,36 @@ export const TYPE_LABELS: LabelMap = {
   beach: { sv: "Strand", en: "Beach" },
   promenade: { sv: "Promenad", en: "Promenade" },
   castle: { sv: "Slott", en: "Castle" },
+  "historic-site": { sv: "Historisk plats", en: "Historic site" },
+  monument: { sv: "Monument", en: "Monument" },
+  lighthouse: { sv: "Fyr", en: "Lighthouse" },
+  bakery: { sv: "Bageri", en: "Bakery" },
+  shop: { sv: "Butik", en: "Shop" },
+  bookshop: { sv: "Bokhandel", en: "Bookshop" },
+  church: { sv: "Kyrka", en: "Church" },
+  bridge: { sv: "Bro", en: "Bridge" },
+  square: { sv: "Torg", en: "Square" },
+  street: { sv: "Gata", en: "Street" },
+  landmark: { sv: "Sevärdhet", en: "Landmark" },
+  cemetery: { sv: "Kyrkogård", en: "Cemetery" },
+  library: { sv: "Bibliotek", en: "Library" },
+  theatre: { sv: "Teater", en: "Theatre" },
+  cinema: { sv: "Bio", en: "Cinema" },
+  music: { sv: "Livemusik", en: "Live music" },
+  "cultural-venue": { sv: "Kulturscen", en: "Cultural venue" },
+  event_market: { sv: "Marknad", en: "Market" },
+  "wine-bar": { sv: "Vinbar", en: "Wine bar" },
+  "cocktail-bar": { sv: "Cocktailbar", en: "Cocktail bar" },
+  "rooftop-bar": { sv: "Takbar", en: "Rooftop bar" },
+  "cafe-bar": { sv: "Café & bar", en: "Café & bar" },
+  pizza: { sv: "Pizzeria", en: "Pizzeria" },
+  taverna: { sv: "Taverna", en: "Taverna" },
 };
+
+/** A stop's type chip, or "" when this build has no words for the kind. */
+export function typeLabel(key: string | null | undefined, lang: Lang): string {
+  return (key && TYPE_LABELS[key]?.[lang]) || "";
+}
 
 export function label(map: LabelMap, key: string | null | undefined, lang: Lang): string {
   if (!key) return "";

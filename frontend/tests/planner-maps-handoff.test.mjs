@@ -29,8 +29,17 @@ test('Planner presents consecutive parts and estimate copy, excluding display-on
   await h.fetchMock.respond(h.fetchMock.pending()[0], body);
   const routeLinks = links(h);
   assert.equal(routeLinks.length, 2);
-  assert.match(routeLinks[0].textContent, /Open part 1 of 2 in Maps/);
-  assert.match(routeLinks[1].textContent, /Open part 2 of 2 in Maps/);
+  // One walk in named stretches: where each part starts and ends, and how many
+  // stops it reaches — never an unexplained "part 2".
+  assert.match(h.text(), /The walk in Maps · 2 parts/);
+  assert.match(routeLinks[0].textContent, /Part 1 in Google Maps: Published stop 1 → Published stop 5/);
+  assert.match(routeLinks[0].textContent, /5 stops/);
+  assert.match(routeLinks[1].textContent, /Part 2 in Google Maps: Published stop 5 → Published stop 6/);
+  assert.match(routeLinks[1].textContent, /1 stop\b/);
+  // Only the first stretch is the primary action; the next is its continuation.
+  assert.match(routeLinks[0].className, /bg-parranda-terracotta/);
+  assert.doesNotMatch(routeLinks[1].className, /bg-parranda-terracotta/);
+  assert.equal(routeLinks[0].closest('ol'), routeLinks[1].closest('ol'), 'the parts are one ordered list');
   const first = new URL(routeLinks[0].href).searchParams;
   const last = new URL(routeLinks[1].href).searchParams;
   assert.equal(first.get('origin'), '50,10');
@@ -38,7 +47,7 @@ test('Planner presents consecutive parts and estimate copy, excluding display-on
   assert.equal(last.get('destination'), '50.005,10');
   assert.ok(routeLinks.every(link => !decodeURIComponent(link.href).includes('10.001')));
   assert.match(h.text(), /Distances and walking times are estimates/);
-  assert.match(h.text(), /Open the parts in order/);
+  assert.match(h.text(), /Take them in order/);
 });
 
 test('Planner keeps the explicit coordinate anchor at both ends of a multipart day', async t => {
@@ -54,6 +63,8 @@ test('Planner keeps the explicit coordinate anchor at both ends of a multipart d
   const routeLinks = links(h);
   assert.equal(new URL(routeLinks[0].href).searchParams.get('origin'), '50.01,10.02');
   assert.equal(new URL(routeLinks.at(-1).href).searchParams.get('destination'), '50.01,10.02');
+  assert.match(routeLinks[0].textContent, /Your position → /, 'the walk starts from the reader, by name');
+  assert.match(routeLinks.at(-1).textContent, / → Your position/);
 });
 
 test('a short complete route retains one Maps action', async t => {
@@ -63,7 +74,7 @@ test('a short complete route retains one Maps action', async t => {
   await h.fetchMock.respond(h.fetchMock.pending()[0], response(stops.slice(0, 2)));
   assert.equal(links(h).length, 1);
   assert.match(links(h)[0].textContent, /Open route in Maps/);
-  assert.doesNotMatch(h.text(), /Open the parts in order/);
+  assert.doesNotMatch(h.text(), /Take them in order/);
 });
 
 test('incomplete route shows an explicit individual-place fallback', async t => {
@@ -91,4 +102,7 @@ test('published start and end accompany the exact stops instead of shortening th
   assert.equal(new URL(routeLinks.at(-1).href).searchParams.get('destination'), '50.02,10');
   assert.match(h.text(), /Published start/);
   assert.match(h.text(), /Published end/);
+  // The final stretch reaches no new stop: it says so instead of counting zero.
+  assert.match(routeLinks.at(-1).textContent, /Published stop 4 → Published end/);
+  assert.match(routeLinks.at(-1).textContent, /The last stretch/);
 });

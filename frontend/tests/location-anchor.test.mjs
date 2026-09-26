@@ -73,7 +73,16 @@ test("the landing chooses the anchor once — coords never enter the URL", () =>
 test("the planner consumes the handoff and never re-prompts on arrival", () => {
   assert.match(plannerSource, /get\("anchor"\) === "near"/);
   assert.match(plannerSource, /consumeAnchorCoords\(\)/);
-  assert.match(plannerSource, /execute\(\{ coords \}, \{\}\)/);
+  assert.match(plannerSource, /if \(coords\) execute\(\{ coords \}, arrivalInputs\)/);
+  // Asking for the position again is only ever the answer to an explicit tap.
+  assert.equal(plannerSource.match(/requestPosition\(/g)?.length, 1, "one place asks for the position");
+  assert.match(plannerSource, /async function useLocationAgain\(\) \{[\s\S]{0,300}await requestPosition\(\)/);
+  assert.match(plannerSource, /onClick=\{useLocationAgain\}/);
+});
+
+test("a language switch hands a near-me position over in storage, never in the URL", () => {
+  assert.match(plannerSource, /target === "language" && mode === "near_me"[\s\S]{0,200}storeAnchorCoords\(coords\)/);
+  assert.doesNotMatch(plannerSource, /query\.set\("(lat|lng|coords)"/, "coordinates must never be a URL param");
 });
 
 test("the trusted anchor stays memory-only and frames Maps without entering persistence", () => {

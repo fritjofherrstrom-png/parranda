@@ -55,7 +55,7 @@ test("the modern planner owns curated city links and sends their citypack identi
 });
 
 test("curated mode hides actions whose current APIs would silently lose citypack identity", () => {
-  assert.match(anywherePlannerSource, /!cityKey && \(\s*<div[^>]*>\s*<button\s+type="button"\s+onClick=\{blitz\}/);
+  assert.match(anywherePlannerSource, /!cityKey && !serviceRefusal && !anchorUnresolved && \(\s*<div[^>]*>\s*<button\s+type="button"\s+onClick=\{blitz\}/);
   assert.match(anywherePlannerSource, /!cityKey && hasRealId/);
   assert.match(anywherePlannerSource, /!cityKey && candidateId/);
 });
@@ -170,7 +170,7 @@ test("the surface renders the engine's TRUSTWORTHY richness — and never the co
   assert.match(anywherePlannerSource, /primaryRoute\?\.estimated_km/);
   assert.match(anywherePlannerSource, /estimated_walk_minutes/);
   assert.match(anywherePlannerSource, /map_path_points/);
-  assert.match(anywherePlannerSource, /TYPE_LABELS, stop\.type/);
+  assert.match(anywherePlannerSource, /typeLabel\(stop\?\.type, lang\)/);
   assert.match(anywherePlannerSource, /DAYPART_LABELS, stop\.daypart/);
   // NEVER rendered: fields that can carry baseline-city phrasing or placeholder
   // labels on the agnostic path (verified live: date_signals said "i Rom" for a
@@ -190,7 +190,7 @@ test("route/Pulse hierarchy: a woven event is a route EXTENSION with exactly one
   assert.match(anywherePlannerSource, /Tillagt till dagens rutt/);
   assert.match(anywherePlannerSource, /Added to today's route/);
   // ...stays in the complete Google Maps route (FULL stop order, not the split)...
-  assert.match(anywherePlannerSource, /mapsWalkingRouteUrls\([\s\S]{0,80}routeStops,[\s\S]{0,180}origin: routeOrigin/);
+  assert.match(anywherePlannerSource, /mapsWalkingRouteParts\([\s\S]{0,80}routeStops,[\s\S]{0,180}origin: routeOrigin/);
   // ...and the old duplicated presentations are gone (the "And tonight" card and
   // the woven-claim line no longer exist anywhere).
   assert.doesNotMatch(anywherePlannerSource, /Och ikväll|And tonight/);

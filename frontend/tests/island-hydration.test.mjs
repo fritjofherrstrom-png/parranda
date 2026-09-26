@@ -68,7 +68,7 @@ test("the landing still shows the curated cities after hydration", async (t) => 
   t.after(() => h.cleanup());
 
   const text = h.text();
-  assert.match(text, /Extra curated/, "the curated section is rendered");
+  assert.match(text, /Hand-picked in/, "the curated section is rendered");
   assert.match(text, /Barcelona/, "Barcelona is offered");
   assert.match(text, /Rom/, "Rome is offered");
   // status: "preview" is searchable by name but never advertised as a chip.
@@ -86,7 +86,7 @@ test("the landing hydrates cleanly when no registry was injected at all", async 
   t.after(() => h.cleanup());
 
   assert.deepEqual(hydrationComplaints(h), [], "an absent registry must not mismatch either");
-  assert.ok(!/Extra curated/.test(h.text()), "and nothing curated is claimed");
+  assert.ok(!/Hand-picked in/.test(h.text()), "and nothing curated is claimed");
 });
 
 test("the landing hydrates cleanly when the token was left unreplaced", async (t) => {

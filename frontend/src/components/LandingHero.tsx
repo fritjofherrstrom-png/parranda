@@ -165,7 +165,7 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
     <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-5 py-6 sm:px-8 sm:py-7">
       <AppBar lang={lang} homeLabel={t("Parranda — till startsidan", "Parranda — home")} languageLabel={t("Språk", "Language")} />
 
-      <main className="flex flex-1 flex-col justify-center gap-8 py-12">
+      <main className="flex flex-1 flex-col justify-center gap-6 py-8 sm:gap-8 sm:py-12">
         <header className="flex flex-col gap-3.5">
           <h1 className="font-display text-6xl font-semibold leading-[0.95] text-parranda-ink sm:text-7xl">
             {t("Nästa ", "Next ")}
@@ -182,11 +182,13 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
               {t("Skriv en stad eller plats", "Type a city or place")}
             </label>
             {/* The field shows focus on its rounded frame, so the input inside
-                does not draw a second, square ring. */}
+                does not draw a second, square ring. After a blocked position the
+                frame is highlighted with the SAME ring (at full strength), never
+                an extra outline around it. */}
             <div
               className={
                 "flex min-h-14 flex-1 items-center gap-3 rounded-parranda border bg-parranda-ink/6 px-5 transition focus-within:border-parranda-ember focus-within:ring-2 focus-within:ring-parranda-glow/70 " +
-                (geoDenied ? "border-parranda-glow outline outline-2 outline-offset-2 outline-parranda-glow" : "border-parranda-ink/16")
+                (geoDenied ? "border-parranda-glow ring-2 ring-parranda-glow" : "border-parranda-ink/16")
               }
             >
               <SearchIcon className="h-5 w-5 text-parranda-ink/45" />
@@ -195,7 +197,7 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
                 ref={inputRef}
                 value={value}
                 onChange={onChange}
-                placeholder={t("Var som helst — Lyon, Tbilisi, Kyoto …", "Anywhere — Lyon, Tbilisi, Kyoto …")}
+                placeholder={t("T.ex. Lyon eller Kyoto", "e.g. Lyon or Kyoto")}
                 autoComplete="off"
                 autoFocus
                 className="min-w-0 flex-1 bg-transparent text-lg text-parranda-ink outline-none placeholder:text-parranda-ink/45 focus-visible:outline-none"
@@ -220,7 +222,7 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
               {locating ? t("Hämtar position …", "Getting location …") : t("Använd min position", "Use my location")}
             </button>
             <span className="text-[13px] text-parranda-ink/65">
-              {t("Din position blir dagens ankare — hela dagen planeras runt den.", "Your position becomes the day's anchor — the whole day is planned around it.")}
+              {t("Hela dagen planeras runt din position.", "The day is planned around where you are.")}
             </span>
           </div>
 
@@ -234,20 +236,25 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
           )}
         </div>
 
+        {/* Cities with a hand-picked catalog. The label says what a visitor
+            gets (places someone chose), not how it is made, and sits on its
+            own line so the chips share one row even at 320 px. */}
         {curated.length > 0 && (
-          <section className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-parranda-glow">
-              {t("Extra kurerat", "Extra curated")}
+          <section className="flex flex-col gap-2" aria-labelledby="landingCurated">
+            <p id="landingCurated" className="text-xs font-extrabold uppercase tracking-[0.16em] text-parranda-glow">
+              {t("Handplockat i", "Hand-picked in")}
             </p>
-            {curated.map((city) => (
-              <a
-                key={city.key}
-                href={curatedCityHref(city, lang) ?? "/anywhere"}
-                className="inline-flex min-h-11 items-center rounded-full border border-parranda-ink/16 px-4 text-sm font-semibold text-parranda-ink transition hover:border-parranda-ember"
-              >
-                {city.label}
-              </a>
-            ))}
+            <div className="flex flex-wrap gap-2">
+              {curated.map((city) => (
+                <a
+                  key={city.key}
+                  href={curatedCityHref(city, lang) ?? "/anywhere"}
+                  className="inline-flex min-h-11 items-center rounded-full border border-parranda-ink/16 px-4 text-sm font-semibold text-parranda-ink transition hover:border-parranda-ember"
+                >
+                  {city.label}
+                </a>
+              ))}
+            </div>
           </section>
         )}
 

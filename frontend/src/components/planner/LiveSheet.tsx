@@ -30,6 +30,7 @@ export default function LiveSheet({
   lang,
   t,
   anchorLabel,
+  anchorIsPosition = false,
   selected,
   liveDayLabel,
   liveSheetTime,
@@ -58,6 +59,8 @@ export default function LiveSheet({
   lang: Lang;
   t: Translate;
   anchorLabel: string;
+  /** A near-me day without an attested place name: phrase it as the reader's position. */
+  anchorIsPosition?: boolean;
   selected: string[];
   liveDayLabel: string;
   liveSheetTime: "tonight" | "week";
@@ -112,7 +115,9 @@ export default function LiveSheet({
       ? t("nära rutten", "near the route")
       : liveSheetScope === "near_me"
         ? t("nära dig", "near you")
-        : t(`runt ${anchorLabel}`, `around ${anchorLabel}`);
+        : anchorIsPosition
+          ? t("runt din position", "around your position")
+          : t(`runt ${anchorLabel}`, `around ${anchorLabel}`);
 
   return (
     <div className="fixed inset-0 z-[1100]">
@@ -130,7 +135,7 @@ export default function LiveSheet({
         </div>
         <div className="mt-3 flex items-center justify-between gap-3">
           <h3 className="font-display text-3xl font-semibold leading-none text-parranda-ink">
-            {liveSheetScope === "near_me" ? (
+            {liveSheetScope === "near_me" || anchorIsPosition ? (
               <>
                 Live <em className="text-parranda-ember">{t("nära dig", "near you")}</em>
               </>
@@ -164,7 +169,7 @@ export default function LiveSheet({
               onClick={() => requestLiveSheetScope("around_place")}
               className={scopeChip(liveSheetScope === "around_place")}
             >
-              {t(`Runt ${anchorLabel}`, `Around ${anchorLabel}`)}
+              {anchorIsPosition ? t("Runt din position", "Around your position") : t(`Runt ${anchorLabel}`, `Around ${anchorLabel}`)}
             </button>
             <button
               type="button"

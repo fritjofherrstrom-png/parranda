@@ -99,8 +99,9 @@ surfaces are now DELETED, not just demoted:
 
 ## Modern curated planner entry (2026-08-26)
 
-The landing no longer sends its own “Extra curated” links, or an exact
-registered-city search, into the legacy `/:city` shell. Rome and Barcelona now
+The landing no longer sends its own curated-city links (then labelled “Extra
+curated”, now “Hand-picked in”), or an exact registered-city search, into the
+legacy `/:city` shell. Rome and Barcelona now
 open the promoted `/anywhere` React planner with both a display label and the
 exact server-owned `city` key. The planner sends that key to the existing
 `/api/route-recommendations` recognized-city path, so the modern surface renders

@@ -6,8 +6,9 @@ Planner (`frontend/dist` served by `server.js`), 2026-09-25.
 
 - “Before” = `ceee59e7b4dac36b7c8832a2dee0146179d02932` (bundles
   `AnywherePlanner.C8gJE29g.js`, `LandingHero.DrbyItES.js`).
-- “After” = this change (bundles `AnywherePlanner.UuSLtA61.js`,
-  `LandingHero.BA5OpxWN.js`).
+- “After” = this change (bundles `AnywherePlanner.DYtvY6Ns.js`,
+  `LandingHero.2FOKyCvV.js`), re-captured after the review follow-up (see
+  “Review follow-up” below).
 
 Both sides were opened at `/anywhere?place=Malmö&planner=open` (and `/` for the
 landing) with the same fixture, modelled on the Malmö day in the review
@@ -45,3 +46,22 @@ What to look for:
   visible action under Live instead of a link inside Adjust.
 - **Candidates only** — the map before the lists; “None of these candidates
   cover: Views” instead of “No district covered”.
+
+## Review follow-up
+
+An independent review of this PR in a real browser against the PR-head server
+(providers blocked by the capture environment, so no real-provider outcome was
+observed) found problems in what the first version of this change shipped or
+claimed. The follow-up fixes them; the “after” images above were re-captured:
+
+- **Landing** — “Hand-picked in” on its own line above the city chips (it said
+  “Extra curated” beside them, and wrapped “Rome” alone at 320 px); a
+  placeholder that fits a 320 px field (“e.g. Lyon or Kyoto”).
+- **Day header** — Blitz names the place it reads (“One next move in Malmö”);
+  “near you” is kept for a position anchor.
+
+Not visible in these fixtures, and covered by tests instead: the language
+switch carrying adjustments made after load and handing a near-me position to
+the next page; a Swedish near-me day asking in Swedish (“En dag nära dig”); the
+split Maps handoff as a named sequence; type chips for every published kind;
+Blitz withheld after an unresolved place or a capacity refusal.

@@ -28,6 +28,33 @@ export declare function mapsWalkingRouteUrl(
   },
 ): string | null;
 
+export interface RoutePoint {
+  lat?: number;
+  lng?: number;
+  label?: string | null;
+  name?: string | null;
+}
+
+export type RouteEnd =
+  | { kind: "origin" | "destination"; point: RoutePoint }
+  | { kind: "stop"; point: RoutePoint; index: number };
+
+export interface WalkingRoutePart {
+  url: string;
+  from: RouteEnd;
+  to: RouteEnd;
+  /** Indexes into `stops` of the stops this part newly reaches. */
+  stopIndexes: number[];
+}
+
+export declare function mapsWalkingRouteParts(
+  stops: RoutePoint[] | null | undefined,
+  options?: {
+    origin?: RoutePoint | null;
+    destination?: RoutePoint | null;
+  },
+): WalkingRoutePart[];
+
 export declare function mapsWalkingRouteUrls(
   stops: Array<{ lat?: number; lng?: number }> | null | undefined,
   options?: {

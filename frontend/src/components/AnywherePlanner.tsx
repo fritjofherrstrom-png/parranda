@@ -33,7 +33,7 @@ import {
   liveDateLabel,
   type LiveEventScope,
 } from "../lib/live-event-query.mjs";
-import { mapsPlaceUrl, mapsWalkingRouteUrls, primaryRouteStops } from "../lib/maps-links.mjs";
+import { mapsPlaceUrl, mapsWalkingRouteParts, primaryRouteStops, type RouteEnd } from "../lib/maps-links.mjs";
 import { routePathIsSketch } from "../lib/route-map-presentation.mjs";
 import { selectedDayHoursLabel } from "../lib/selected-day-hours.mjs";
 import {
@@ -56,8 +56,8 @@ import {
 } from "../lib/pulse-view.mjs";
 import { planComposeFollowup } from "../lib/compose-followup.mjs";
 import { composeServiceRefusal, type ComposeServiceRefusal } from "../lib/compose-service-refusal.mjs";
-import { buildShareUrl, decodeShareParams } from "../lib/anywhere-share.mjs";
-import { consumeAnchorCoords } from "../lib/location-anchor.mjs";
+import { buildShareUrl, decodeShareParams, encodeShareParams } from "../lib/anywhere-share.mjs";
+import { consumeAnchorCoords, requestPosition, storeAnchorCoords } from "../lib/location-anchor.mjs";
 import {
   buildSavedEntry,
   upsertSaved,
@@ -96,10 +96,10 @@ import {
   DAYPART_LABELS,
   HOURS_RELEVANT_TYPES,
   INTENT_LABELS,
-  TYPE_LABELS,
   label,
   partialPreferenceLabels,
   pickLabel,
+  typeLabel,
   unkeptReasonSentence,
   type Lang,
 } from "./planner/copy";
@@ -174,6 +174,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [cityKey, setCityKey] = useState<string | null>(null);
   const [mode, setMode] = useState<"typed" | "near_me">("typed"); // start context
   const [geoHint, setGeoHint] = useState<string | null>(null);
+  const [relocating, setRelocating] = useState(false); // near-me: position asked again
+  const [relocateDenied, setRelocateDenied] = useState(false);
   const [selected, setSelected] = useState<string[]>(["food", "culture", "views"]);
   const [dayOffset, setDayOffset] = useState<0 | 1>(0); // today / tomorrow
   const [walkKey, setWalkKey] = useState("balanced");
@@ -471,9 +473,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       }
       if (!response.ok) throw new Error(`compose_http_${response.status}`);
       const decision = anywhereDecision();
-      // With a coords anchor there is no typed text — the label falls back to a
-      // neutral "your position" (the engine's resolved label wins when present).
-      const fallbackLabel = anchor.place ?? t("din position", "your position");
+      // With a coords anchor there is no typed text and no label to fall back
+      // on: the engine's resolved label wins when present, and otherwise the
+      // page names the position itself, in the language it is showing now
+      // ("A day near you"). A label baked in here would keep the language of
+      // the render that sent the request.
+      const fallbackLabel = anchor.place ?? "";
+      const requestLang = langOverride ?? lang;
       const cls = anchor.city
         ? classifyCuratedCityResult(body, { city: anchor.city, label: fallbackLabel })
         : decision.classifyAnywhereResult(body, { place: fallbackLabel });
@@ -514,7 +520,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         const entry = buildSavedEntry({
           city: anchor.city ?? null,
           place: authoritativePlace,
-          label: authoritativePlace || t("Min position", "My position"),
+          label: authoritativePlace || (requestLang === "en" ? "My position" : "Min position"),
           dateIso: effectiveDateIso,
           savedAt: new Date().toISOString(),
           safeResponse: safe,
@@ -766,19 +772,27 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       ).catch(() => {});
       return;
     }
-    // The landing chose a LOCATION anchor: coordinates were handed off via
-    // sessionStorage (never the URL). The permission was already granted there,
-    // so compose directly around the coords — never re-prompt on arrival.
+    // The landing (or a language switch) chose a LOCATION anchor: coordinates
+    // were handed off via sessionStorage (never the URL). The permission was
+    // already granted, so compose directly around the coords — never re-prompt
+    // on arrival. The rest of the day's inputs, and the language, come from the
+    // URL like any other day: this render still speaks the build's default
+    // language, so the request must not take it from here.
     if (new URLSearchParams(window.location.search).get("anchor") === "near") {
-      const coords = consumeAnchorCoords();
-      if (coords) {
-        setMode("near_me");
-        execute({ coords }, {}).catch(() => {});
-        return;
-      }
-      // Stored coords missing/expired (e.g. a reload consumed them): stay honest,
-      // show the near-me start context so the user can re-share position.
       setMode("near_me");
+      if (shared.preferences.length) setSelected(shared.preferences);
+      setDayOffset(shared.dayOffset);
+      setWalkKey(shared.walkKey);
+      const coords = consumeAnchorCoords();
+      const arrivalInputs = {
+        langOverride: shared.lang ?? undefined,
+        preferencesOverride: shared.preferences.length ? shared.preferences : undefined,
+        dayOffsetOverride: shared.dayOffset,
+        walkKeyOverride: shared.walkKey,
+      };
+      if (coords) execute({ coords }, arrivalInputs).catch(() => {});
+      // Stored coords missing/expired (e.g. a reload consumed them): stay honest,
+      // and offer to share the position again (useLocationAgain).
       return;
     }
     const last = readLS<SavedEntry | null>(LAST_KEY, null);
@@ -926,6 +940,52 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // position it captured). Everything after that is adjustment.
   const hasAnchor = mode === "near_me" || Boolean(place.trim());
 
+  // The language links reopen the day as it is NOW, adjustments included,
+  // through the same encoder a shared link uses. A position never enters the
+  // URL: a near-me day is handed to the next page in storage instead
+  // (leavePlanner), exactly as the landing handed it here. A near-me snapshot
+  // with no position in memory keeps the default link, which restores it.
+  const nearMeCoords = lastRequestedAnchorRef.current?.coords ?? routeAnchorCoords;
+  const languageHref = hasAnchor && (mode !== "near_me" || nearMeCoords)
+    ? (option: Lang) => {
+        const query = new URLSearchParams(
+          encodeShareParams(
+            mode === "near_me"
+              ? { preferences: selected, dayOffset, walkKey, lang: option }
+              : { city: cityKey, place, preferences: selected, dayOffset, walkKey, lang: option },
+          ),
+        );
+        if (mode === "near_me") query.set("anchor", "near");
+        return `?${query.toString()}`;
+      }
+    : undefined;
+
+  const leavePlanner = (target: "home" | "language") => {
+    if (target === "language" && mode === "near_me") {
+      const coords = nearMeCoords;
+      if (coords) storeAnchorCoords(coords);
+    }
+    cancelActivePlannerForNavigation();
+  };
+
+  // A near-me page without a position (a reload consumed it) asks again only on
+  // an explicit tap, the same consent the landing asked for.
+  async function useLocationAgain() {
+    if (relocating) return;
+    setRelocating(true);
+    setRelocateDenied(false);
+    let coords: { lat: number; lng: number };
+    try {
+      coords = await requestPosition();
+    } catch {
+      setRelocating(false);
+      setRelocateDenied(true);
+      return;
+    }
+    setRelocating(false);
+    execute({ coords }, {}).catch(() => {});
+  }
+
   // AUTO-RECOMPOSE: adjustments never need a submit. A settled change (400 ms)
   // starts a latest-request-wins compose. Skipped before the first
   // compose and while showing a restored snapshot, so nothing fires unasked.
@@ -999,6 +1059,16 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     mode === "near_me"
       ? primaryLocality(classification?.placeLabel) || t("Nära dig", "Near you")
       : primaryLocality(classification?.placeLabel) || typedPlaceLabel;
+  // A near-me day without an attested label is about the reader's own
+  // position, so sentences say "near you" rather than naming a place.
+  const anchorIsPosition = mode === "near_me" && !primaryLocality(classification?.placeLabel);
+  const placeName = primaryLocality(classification?.placeLabel) || typedPlaceLabel;
+  // A typed place with no trusted anchor (unresolved, ambiguous, or a resolver
+  // that could not be reached): nothing downstream — Blitz included — has a
+  // place to read, so the page says so instead of offering it.
+  const intakeStatus = safeResponse?.agnostic_route_output_experiment?.intake?.status ?? null;
+  const anchorUnresolved =
+    mode === "typed" && !cityKey && classification?.status === "unavailable" && intakeStatus !== "resolved";
   const walkLabel = (() => {
     const preset = WALK_PRESETS.find((p: { key: string }) => p.key === walkKey);
     return preset ? (lang === "en" ? preset.en : preset.sv) : "";
@@ -1185,13 +1255,23 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const publishedEnd = publishedPoints.at(-1)?.role === "end" ? publishedPoints.at(-1) : null;
   const routeOrigin = routeAnchorCoords ?? publishedStart;
   const routeDestination = routeAnchorCoords ?? publishedEnd;
-  const routeUrls = useMemo(
-    () => mapsWalkingRouteUrls(
+  const routeParts = useMemo(
+    () => mapsWalkingRouteParts(
       routeStops,
       { origin: routeOrigin, destination: routeDestination },
     ),
     [routeStops, routeOrigin, routeDestination],
   );
+  const routeUrls = routeParts.map((part) => part.url);
+  // A split route is one walk in consecutive stretches, so each part is named
+  // by where it starts and ends — never just "part 2", which reads like an
+  // alternative to part 1.
+  const routeEndLabel = (end: RouteEnd) =>
+    end.kind === "stop"
+      ? String(end.point.label || end.point.name || "").trim() || t(`Stopp ${end.index + 1}`, `Stop ${end.index + 1}`)
+      : routeAnchorCoords
+        ? t("Din position", "Your position")
+        : String(end.point.label || "").trim() || (end.kind === "origin" ? t("Start", "Start") : t("Slut", "Finish"));
   // District composition deliberately sees a broader candidate universe than
   // the route. Keep only a tiny, proximity-bounded, deduped slice as optional
   // discovery context; these candidates never enter routeStops or routeUrls.
@@ -1213,6 +1293,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const showDay =
     classification?.status === "composed" || classification?.status === "composed_limited";
   const showStructure = showDay || classification?.status === "structure_only";
+  // A day is on screen — the only case where "your day stays as it is" is true.
+  const dayOnScreen = showDay && routeStops.length > 0;
   const dayLimitations = classification?.limitations ?? [];
   // "updating" while the next verdict computes, "update_failed" if it never
   // arrived. Either way the day on screen is explicitly not current.
@@ -1351,7 +1433,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         lang={lang}
         homeLabel={t("Parranda — till startsidan", "Parranda — home")}
         languageLabel={t("Språk", "Language")}
-        onNavigate={cancelActivePlannerForNavigation}
+        onNavigate={leavePlanner}
+        languageHref={languageHref}
       />
 
       {/* THE DAY'S STARTING POINT — where (chosen once on the landing) and how
@@ -1513,7 +1596,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             <input
               value={place}
               onChange={(e) => { invalidateCommitmentIntent(); setPlace(e.target.value); }}
-              placeholder={t("Var som helst — Lyon, Tbilisi, Kyoto …", "Anywhere — Lyon, Tbilisi, Kyoto …")}
+              placeholder={t("T.ex. Lyon eller Kyoto", "e.g. Lyon or Kyoto")}
               aria-label={t("Plats", "Place")}
               className="min-h-14 w-full flex-1 rounded-parranda border border-parranda-ink/16 bg-parranda-ink/6 px-5 text-parranda-ink outline-none transition placeholder:text-parranda-ink/45 focus:border-parranda-ember"
             />
@@ -1524,6 +1607,34 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               {t("Bygg min dag", "Build my day")}
             </button>
           </form>
+        </div>
+      )}
+
+      {/* A near-me page whose position did not survive (reload, an old tab):
+          say so, and let the same explicit tap share it again rather than
+          leaving an anchor card with nothing under it. */}
+      {mode === "near_me" && phase === "idle" && !classification && (
+        <div className={`flex flex-col items-start gap-3 ${noticeCard}`}>
+          <p>
+            {t(
+              "Din position följer inte med när sidan laddas om. Dela den igen så byggs dagen runt den.",
+              "Your position isn't kept when the page reloads. Share it again and the day is built around it.",
+            )}
+          </p>
+          <button
+            type="button"
+            onClick={useLocationAgain}
+            disabled={relocating}
+            className="inline-flex min-h-11 items-center gap-2 rounded-parranda-btn bg-parranda-terracotta px-4 font-bold text-white transition hover:brightness-110 disabled:opacity-60"
+          >
+            <LocationIcon className="h-4 w-4" />
+            {relocating ? t("Hämtar position …", "Getting location …") : t("Använd min position", "Use my location")}
+          </button>
+          {relocateDenied && (
+            <p className="text-[13px] text-parranda-ink/65" aria-live="polite">
+              {t("Positionen blockerades — byt till en stad eller plats i stället.", "Location was blocked — choose a city or place instead.")}
+            </p>
+          )}
         </div>
       )}
 
@@ -1638,25 +1749,46 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
       {phase === "done" && classification?.status === "unavailable" && (
         !upgradePending &&
-        <p className={noticeCard}>
-          {/* Two honestly different absences: a place Parranda couldn't
-              understand, and a resolved place whose trusted sources hold real
-              places — just too few for a reliable day. The count comes from
-              the classifier's trusted-loader evidence, never from copy. The
-              label follows the pill rule: primary locality, not the resolver's
-              full admin chain. */}
-          {classification.unavailableReason === "sparse_supply" && classification.realPlaceCount ? (
-            t(
-              `Parranda hittade ${classification.realPlaceCount === 1 ? "1 riktig plats" : `${classification.realPlaceCount} riktiga platser`} nära ${primaryLocality(classification.placeLabel) || place}, men inte tillräckligt för en pålitlig dag ännu — inget hittas på.`,
-              `Parranda found ${classification.realPlaceCount === 1 ? "1 real place" : `${classification.realPlaceCount} real places`} near ${primaryLocality(classification.placeLabel) || place}, but not enough for a reliable day yet — nothing is invented in its place.`,
-            )
-          ) : (
-            t(
-              `Parranda kunde inte komponera en dag för ${primaryLocality(classification.placeLabel) || place} ännu — inget hittas på, inget fejkas.`,
-              `Parranda couldn't compose a day for ${primaryLocality(classification.placeLabel) || place} yet — nothing is invented in its place.`,
-            )
+        <div className={`flex flex-col items-start gap-3 ${noticeCard}`}>
+          {/* Three honestly different absences: a typed place Parranda could
+              not pin down (nothing to compose around — say that, and how to
+              fix it), a resolved place whose trusted sources hold real places
+              but too few for a reliable day, and a resolved place that did not
+              compose. The count comes from the classifier's trusted-loader
+              evidence, never from copy. The label follows the pill rule:
+              primary locality, not the resolver's full admin chain. */}
+          <p>
+            {anchorUnresolved ? (
+              t(
+                `Parranda kunde inte hitta ”${typedPlaceLabel}” just nu. Prova en annan stavning eller lägg till land eller region — inget hittas på.`,
+                `Parranda couldn't pin down “${typedPlaceLabel}” right now. Try another spelling or add a country or region — nothing is invented in its place.`,
+              )
+            ) : classification.unavailableReason === "sparse_supply" && classification.realPlaceCount ? (
+              t(
+                `Parranda hittade ${classification.realPlaceCount === 1 ? "1 riktig plats" : `${classification.realPlaceCount} riktiga platser`} ${anchorIsPosition ? "nära dig" : `nära ${placeName}`}, men inte tillräckligt för en pålitlig dag ännu — inget hittas på.`,
+                `Parranda found ${classification.realPlaceCount === 1 ? "1 real place" : `${classification.realPlaceCount} real places`} ${anchorIsPosition ? "near you" : `near ${placeName}`}, but not enough for a reliable day yet — nothing is invented in its place.`,
+              )
+            ) : (
+              t(
+                `Parranda kunde inte komponera en dag ${anchorIsPosition ? "nära dig" : `för ${placeName}`} ännu — inget hittas på, inget fejkas.`,
+                `Parranda couldn't compose a day ${anchorIsPosition ? "near you" : `for ${placeName}`} yet — nothing is invented in its place.`,
+              )
+            )}
+          </p>
+          {anchorUnresolved && (
+            <a
+              href={`/?lang=${lang}`}
+              onClick={(event) => {
+                if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+                  cancelActivePlannerForNavigation();
+                }
+              }}
+              className="inline-flex min-h-11 items-center rounded-parranda-btn border border-parranda-ink/16 px-4 font-bold text-parranda-ink/85 transition hover:border-parranda-ember"
+            >
+              {t("Välj en annan plats", "Choose another place")}
+            </a>
           )}
-        </p>
+        </div>
       )}
 
       {/* THE DAY HEADER (design handoff §3): title, honest counts, what the day
@@ -1797,21 +1929,76 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               </button>
             </p>
           )}
+          {/* THE WALK IN MAPS. One link when Maps can take the whole walk. When
+              it can't (Maps takes a few stops per link), a numbered sequence of
+              named stretches: only the first is the primary action, the rest
+              are the next steps of the same walk — never alternatives to it. */}
+          {routeParts.length > 1 && (
+            <div className="mt-1 flex flex-col gap-2">
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-parranda-ink/60">
+                {t(`Promenaden i Maps · ${routeParts.length} delar`, `The walk in Maps · ${routeParts.length} parts`)}
+              </p>
+              <ol className="flex flex-col gap-2">
+                {routeParts.map((part, index) => {
+                  const newStops = part.stopIndexes.length;
+                  const first = index === 0;
+                  return (
+                    <li key={part.url}>
+                      <a
+                        href={part.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={
+                          "flex min-h-12 items-center gap-3 rounded-parranda-btn px-4 py-2 text-left text-sm transition " +
+                          (first
+                            ? "bg-parranda-terracotta font-bold text-white shadow-sm hover:brightness-110"
+                            : "border border-parranda-ink/16 font-semibold text-parranda-ink/85 hover:border-parranda-ember")
+                        }
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={
+                            "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-extrabold " +
+                            (first ? "bg-white/20" : "bg-parranda-ink/10")
+                          }
+                        >
+                          {index + 1}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="sr-only">{t(`Del ${index + 1} i Google Maps: `, `Part ${index + 1} in Google Maps: `)}</span>
+                          {routeEndLabel(part.from)} → {routeEndLabel(part.to)}
+                          <span className={"block text-xs font-medium " + (first ? "text-white/80" : "text-parranda-ink/55")}>
+                            {newStops > 0
+                              ? t(`${newStops} stopp`, `${newStops} ${newStops === 1 ? "stop" : "stops"}`)
+                              : t("Sista biten", "The last stretch")}
+                          </span>
+                        </span>
+                        <ExternalIcon />
+                      </a>
+                    </li>
+                  );
+                })}
+              </ol>
+              <p className="text-xs leading-relaxed text-parranda-ink/65">
+                {t(
+                  "Google Maps tar bara några stopp per länk, så promenaden öppnas i delar. Ta dem i ordning — varje del börjar där den förra slutar.",
+                  "Google Maps takes only a few stops per link, so the walk opens in parts. Take them in order — each part starts where the previous one ends.",
+                )}
+              </p>
+            </div>
+          )}
           <div className="mt-1 flex flex-wrap gap-2">
-            {routeUrls.map((routeUrl, part) => (
+            {routeParts.length === 1 && (
               <a
-                key={routeUrl + part}
-                href={routeUrl}
+                href={routeUrls[0]}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex min-h-12 flex-1 basis-full items-center justify-center gap-2 rounded-parranda-btn bg-parranda-terracotta px-5 text-sm font-bold text-white shadow-sm transition hover:brightness-110 sm:basis-auto sm:flex-none sm:px-6"
               >
-                {routeUrls.length === 1
-                  ? t("Öppna rutten i Maps", "Open route in Maps")
-                  : t(`Öppna del ${part + 1} av ${routeUrls.length} i Maps`, `Open part ${part + 1} of ${routeUrls.length} in Maps`)}
+                {t("Öppna rutten i Maps", "Open route in Maps")}
                 <ExternalIcon />
               </a>
-            ))}
+            )}
             <button
               type="button"
               onClick={saveDay}
@@ -1834,16 +2021,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               </button>
             )}
           </div>
-          {(routeOrigin || routeDestination) && (
+          {/* A split walk already names its start and finish in the sequence. */}
+          {routeParts.length <= 1 && (routeOrigin || routeDestination) && (
             <p className="text-xs text-parranda-ink/65">
               {routeOrigin && `${t("Start", "Start")}: ${routeAnchorCoords ? t("din valda position", "your chosen location") : String(publishedStart?.label || t("kartans startpunkt", "map start point"))}`}
               {routeOrigin && routeDestination ? " · " : ""}
               {routeDestination && `${t("Slut", "Finish")}: ${routeAnchorCoords ? t("din valda position", "your chosen location") : String(publishedEnd?.label || t("kartans slutpunkt", "map end point"))}`}
-            </p>
-          )}
-          {routeUrls.length > 1 && (
-            <p className="text-xs leading-relaxed text-parranda-ink/65">
-              {t("Rutten är uppdelad för att alla stopp ska följa med även på mobil. Öppna delarna i ordning; nästa del börjar där den förra slutar.", "The route is split to include every stop on mobile too. Open the parts in order; each starts where the previous part ends.")}
             </p>
           )}
           {routeUrls.length === 0 && (
@@ -1971,9 +2154,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                     </span>
                     <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-parranda-ink">
                       <span className="font-bold">{name}</span>
-                      {stop?.type && (
+                      {typeLabel(stop?.type, lang) && (
                         <span className="rounded-full border border-parranda-ink/15 bg-parranda-ink/10 px-2 py-0.5 text-xs text-parranda-ink/75">
-                          {label(TYPE_LABELS, stop.type, lang)}
+                          {typeLabel(stop?.type, lang)}
                         </span>
                       )}
                       {kept && (
@@ -2530,8 +2713,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {/* BLITZ — one trusted next move beside the day, in the same "now" zone
           as Live. It reads the anchor and picks but never re-composes the day,
           and it stays out of curated mode, whose server-owned city identity
-          the Blitz contract cannot carry yet. */}
-      {phase === "done" && hasAnchor && !cityKey && (
+          the Blitz contract cannot carry yet. It is not offered where it cannot
+          answer: a typed place with no trusted anchor, or a server that has
+          just refused work. Its copy says "near you" only when the anchor IS
+          the reader's position, and promises the day stays as it is only when
+          there is a day on screen. */}
+      {phase === "done" && hasAnchor && !cityKey && !serviceRefusal && !anchorUnresolved && (
         <div className="flex flex-col gap-3">
           <button
             type="button"
@@ -2544,7 +2731,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           </button>
           {blitzPhase === "idle" && (
             <p className="-mt-1 text-center text-xs text-parranda-ink/50">
-              {t("Ett nästa drag nära dig, just nu — din dag ändras inte.", "One next move near you, right now — your day stays as it is.")}
+              {mode === "near_me"
+                ? t("Ett nästa drag nära dig, just nu", "One next move near you, right now")
+                : t(`Ett nästa drag i ${anchorLabel}, just nu`, `One next move in ${anchorLabel}, right now`)}
+              {dayOnScreen ? t(" — din dag ändras inte.", " — your day stays as it is.") : "."}
             </p>
           )}
           {blitzPhase !== "idle" && (
@@ -2562,12 +2752,19 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               )}
               {blitzPhase === "error" && (
                 <p className="mt-2 text-sm text-parranda-ink/75">
-                  {t("Blitz kunde inte läsa läget just nu. Din plan är oförändrad.", "Blitz could not read the moment right now. Your day is unchanged.")}
+                  {t("Blitz kunde inte läsa läget just nu.", "Blitz could not read the moment right now.")}
+                  {dayOnScreen ? t(" Din plan är oförändrad.", " Your day is unchanged.") : ""}
                 </p>
               )}
               {blitzPhase === "done" && blitzResult?.state === "blocked" && (
                 <p className="mt-2 text-sm text-parranda-ink/75">
-                  {t("Inget tillräckligt pålitligt nästa drag hittades nära dig just nu. Din plan är oförändrad.", "No sufficiently reliable next move was found nearby right now. Your day is unchanged.")}
+                  {mode === "near_me"
+                    ? t("Inget tillräckligt pålitligt nästa drag hittades nära dig just nu.", "No sufficiently reliable next move was found near you right now.")
+                    : t(
+                        `Inget tillräckligt pålitligt nästa drag hittades i ${anchorLabel} just nu.`,
+                        `No sufficiently reliable next move was found in ${anchorLabel} right now.`,
+                      )}
+                  {dayOnScreen ? t(" Din plan är oförändrad.", " Your day is unchanged.") : ""}
                 </p>
               )}
               {blitzPhase === "done" && blitzResult?.state === "available" && blitzResult.best && (() => {
@@ -2598,7 +2795,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                       </div>
                     </div>
                     <p className="text-xs text-parranda-ink/55">
-                      {t("Ett källstött nästa drag utifrån platsen, tiden och dina val. Det ändrar inte dagens rutt.", "A source-backed next move from your place, time and picks. It does not change today's route.")}
+                      {dayOnScreen
+                        ? t("Ett källstött nästa drag utifrån platsen, tiden och dina val. Det ändrar inte dagens rutt.", "A source-backed next move from your place, time and picks. It does not change today's route.")
+                        : t("Ett källstött nästa drag utifrån platsen, tiden och dina val.", "A source-backed next move from your place, time and picks.")}
                     </p>
                     <div className="flex flex-wrap gap-2">
                       {mapsUrl && (
@@ -2622,7 +2821,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                     </div>
                     {secondary && (
                       <p className="border-t border-parranda-ink/10 pt-2 text-xs text-parranda-ink/60">
-                        {secondary.kind === "live_event" ? t("Senare nära dig: ", "Later nearby: ") : t("Annars nära dig: ", "Otherwise nearby: ")}
+                        {secondary.kind === "live_event" ? t("Senare i närheten: ", "Later nearby: ") : t("Annars i närheten: ", "Otherwise nearby: ")}
                         <span className="font-semibold text-parranda-ink/80">{secondary.title}</span>
                       </p>
                     )}
@@ -2670,6 +2869,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           lang={lang}
           t={t}
           anchorLabel={anchorLabel}
+          anchorIsPosition={anchorIsPosition}
           selected={selected}
           liveDayLabel={liveDayLabel}
           liveSheetTime={liveSheetTime}

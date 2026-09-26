@@ -85,11 +85,16 @@ cost with almost no product traffic.
 | Route line | Solid straight segments across water and buildings | Dotted when it only joins the stops' own coordinates, with a caption | Honest geometry: it is an order, not a street path |
 | Detour dots | Always on the map, unexplained | Only while the detour list is open | No mark without its explanation |
 | Woven live event | Its walk shown only inside the card | Same walk connector as every other stop | One visual grammar for the route |
-| Blitz | Small link inside the collapsed Adjust panel | Visible action in the "now" zone below Live | A product pillar should be discoverable, and it belongs with "now" |
+| Blitz | Small link inside the collapsed Adjust panel | Visible action in the "now" zone below Live, offered only where it can answer (not after an unresolved place or a capacity refusal); its copy says "near you" only for a position anchor | A product pillar should be discoverable, and it belongs with "now" — but never as the answer to a failure it shares |
 | Saved days | Above the day, pushing it down | Last on the page | Navigation after content |
-| Language switch | Landing only | App bar on both pages; keeps the day's inputs | Consistent frame; switching language re-opens the same day |
+| Language switch | Landing only | App bar on both pages; reopens the day as it is on screen, adjustments included; a near-me day hands its position over in storage | Consistent frame; switching language re-opens the same day |
+| Near-me day | Asked in the build's default language; titled "A day in your position" | Asks in the page's language; "A day near you"; a page without a position offers to share it again | A label is the page's words, not the request's |
+| Split Maps handoff | Two identical "Open part N of M in Maps" buttons before the map | A numbered sequence named by where each stretch starts and ends; only the first is primary | Part 2 is the next step of the same walk, not an alternative to part 1 |
+| Unresolved place | "Couldn't compose a day for X" and a Blitz button | "Couldn't pin down X" with how to fix it and a way back | Say which absence it is; offer the step that can work |
+| Stop type chip | Raw engine token ("shop", "church") for any unmapped kind | Every kind the sources publish is labelled; an unknown kind shows no chip | A raw token is never product copy |
 | Curated chip | "Rom" on the English landing, and "A day in Rom" | Label follows the request language | Server-owned display label per language |
-| Landing search | Two focus rings (square inside rounded) | One ring on the field | Visual noise |
+| Curated section | "Extra curated" beside the chips | "Hand-picked in" on its own line above them | Say what a visitor gets, and keep the chips on one row at 320 px |
+| Landing search | Two focus rings (square inside rounded); a placeholder cut off at 320 px | One ring on the field, also after a blocked position; "e.g. Lyon or Kyoto" | Visual noise; text that fits |
 | Returning visitor | No way back to the last day from the landing | "Continue · A day in …" | The planner already restores it; the landing now offers it |
 
 ### Principles for future surfaces
@@ -108,6 +113,9 @@ cost with almost no product traffic.
    name; the inline SVG set in `components/shared/icons.tsx` replaces Unicode
    glyphs that render differently on every platform.
 6. **Mobile first, 44 px targets, one focus contract.**
+7. **Say only what is true in this state.** "Near you" only when the anchor is
+   the reader's position; "your day stays as it is" only when a day is on
+   screen; an action is offered only where it can answer.
 
 ## 3. Architecture observations and direction
 
