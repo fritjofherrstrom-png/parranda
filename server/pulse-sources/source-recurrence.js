@@ -61,6 +61,8 @@ const WEEKDAYS = Object.freeze(Object.fromEntries([
   ...plural.map((word) => [word, Object.freeze({ day, plural: true })]),
 ])));
 const DAILY_WORDS = new Set(["dagligen", "daily", "everyday"]);
+// "Varannan" (every other week) is not one of these: it does not say which
+// weeks, and the range start is no evidence of the phase. It stays unknown.
 const EVERY_WORDS = new Set(["varje", "every", "alla", "each"]);
 const JOIN_WORDS = new Set(["och", "samt", "and"]);
 // Words that never change which days are meant ("kl 18.00", "på torsdagar").
@@ -77,7 +79,8 @@ function resolveSchedulePattern(recurrenceText, { range, explicitRange, time, st
   // recurs; it must not fall back to every-day date facts.
   if (!text && present) return { mode: "unresolved", time };
   if (!text) return { mode: statesDaily && multiDay ? "daily" : "none", time };
-  const statement = complete ? parseScheduleStatement(text) : null;
+  // A recurrence section may open with the template lead-in; a date label may not.
+  const statement = complete ? parseScheduleStatement(text, { leadIn: true }) : null;
   const everyDay = Boolean(statement?.daily || statement?.weekdays?.size === 7);
   // A stated "daily" line contradicted by a narrower recurrence is not daily.
   if (!statement || (statesDaily && !everyDay)) return { mode: "unresolved", time };
@@ -148,8 +151,10 @@ function statesDailyOccurrence(label) {
 // Closed grammar over the recurrence text: either one daily statement, one set
 // of weekdays (with ranges such as "mån–fre"), or one list of dates (optionally
 // prefixed by their weekday, or sharing a month: "2, 9 och 16 juli"). Clocks may
-// accompany any of them. Every other word fails the whole statement.
-function parseScheduleStatement(value) {
+// accompany any of them. Every other word fails the whole statement. With
+// `leadIn`, the first token may be the template lead-in. It states no days, so
+// the rest must still be one complete statement.
+function parseScheduleStatement(value, { leadIn = false } = {}) {
   const tokens = tokenizeSchedule(value);
   if (!tokens || tokens.length === 0) return null;
   const clocks = [];
@@ -165,6 +170,7 @@ function parseScheduleStatement(value) {
     else if (token.type === "daily") daily = true;
     else if (token.type === "every") every = true;
     else if (token.type === "join" || token.type === "filler") continue;
+    else if (token.type === "lead_in" && leadIn && index === 0) continue;
     else if (token.type === "day") pendingDays.push(token);
     else if (token.type === "date") {
       for (const day of pendingDays) {
@@ -299,6 +305,11 @@ function matchScheduleToken(text, index) {
   if (match) return { length: 1, token: { type: "dash" } };
   match = at(/(?:varje\s+dag|alla\s+dagar|every\s+day)(?![a-zåäö])/y);
   if (match) return { length: match[0].length, token: { type: "daily" } };
+  // The lead-in Sitevision's "Återkommande tillfällen" template prints before
+  // the rule ("Detta evenemang äger rum varje måndag och torsdag"). It is read
+  // only as this whole phrase: none of its words is filler on its own.
+  match = at(/detta\s+evenemang\s+äger\s+rum(?![a-zåäöé])/y);
+  if (match) return { length: match[0].length, token: { type: "lead_in" } };
   // Month-first dates ("July 16", "July 16, 2026"); never a clock such as "16.00".
   match = at(/([a-z]+)\s+(\d{1,2})(?:,?\s+(\d{4}))?(?![\d.:a-zåäö])/y);
   if (match && Object.hasOwn(MONTHS, match[1])) {
