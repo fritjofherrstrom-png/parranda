@@ -1,0 +1,161 @@
+{
+  "selected_date": "2026-09-26",
+  "fetched": "2026-09-26 on a self-hosted probe; HTTP 200 for every page",
+  "reduction": "Only what the adapter reads is kept; see README.md.",
+  "sources": [
+    {
+      "name": "simrishamn",
+      "reviewed_manifest": "simrishamn-municipal-calendar",
+      "listing": {
+        "url": "https://www.simrishamn.se/evenemangskalender",
+        "fetched_at": "2026-09-26T11:19:21.447886+00:00",
+        "source_sha256": "bedda4c019eaa4d60779db3a7b769f925a71ee691dfb6b1193da5f2ce0fb18a0",
+        "file": "simrishamn-listing.html",
+        "sha256": "b76f1a2be8ccc58cab697b4f6140285c3576c489a2a0972efd2e84809ed85b22"
+      },
+      "details": [
+        {
+          "index": 0,
+          "url": "https://www.simrishamn.se/evenemangskalender/arkiv/motesplats-rosenborg-september",
+          "fetched_at": "2026-09-26T11:19:21.809504+00:00",
+          "source_sha256": "36fc703dc5f5369293b7a9b23b321a7c6601130222ea31b5e01807c1d75c6b4d",
+          "file": "simrishamn-0.html",
+          "sha256": "769ebf9d235bcfc5be96e610cf89157da14d8e567862818a191b4b7688fdd451"
+        },
+        {
+          "index": 1,
+          "url": "https://www.simrishamn.se/evenemangskalender/arkiv/i-love-you-two-med-circus-i-love-you",
+          "fetched_at": "2026-09-26T11:19:22.007286+00:00",
+          "source_sha256": "b85b88b16aaf26b527c52409cf084186a5943977a9e03d4f70760cd4e92045d6",
+          "file": "simrishamn-1.html",
+          "sha256": "da61e901373842c80dac751f4895db685d9ae1571c52408d8112257f1bf00ad6"
+        },
+        {
+          "index": 2,
+          "url": "https://www.simrishamn.se/evenemangskalender/arkiv/ta-hand-om-dig-beredskapsdagen-2026",
+          "fetched_at": "2026-09-26T11:19:21.822187+00:00",
+          "source_sha256": "a5df6a90a7af4ca10c3a31bc74b1333fff66a1ef3446a2dbc439bdc2989f64a4",
+          "file": "simrishamn-2.html",
+          "sha256": "3ed1358cc612c60e64ec02ef0ce7a8b577af628bfa6dace5a627776b40bb690e"
+        },
+        {
+          "index": 3,
+          "url": "https://www.simrishamn.se/evenemangskalender/arkiv/curatorvisning-av-utstallningen-pre-drom---pa-vag",
+          "fetched_at": "2026-09-26T11:19:21.869682+00:00",
+          "source_sha256": "49916358f57482162203423bf696e8efc558b4711438011e57fdc336cd68cba5",
+          "file": "simrishamn-3.html",
+          "sha256": "eeff1bb7b78c5293fe8a0ef2addf1d5238cb08642add66904afdc9a85b6b35e2"
+        },
+        {
+          "index": 4,
+          "url": "https://www.simrishamn.se/evenemangskalender/arkiv/samtalskafe-for-gemenskap",
+          "fetched_at": "2026-09-26T11:19:22.046560+00:00",
+          "source_sha256": "6bed6912450b11da174b02ee273e9ef46386dca82ca7ba9e44e05e4ca75ac82f",
+          "file": "simrishamn-4.html",
+          "sha256": "12cd95e539ceac465998fdf6536bc5544f70aeed1228e18112cf4dcb6d645a5a"
+        },
+        {
+          "index": 5,
+          "url": "https://www.simrishamn.se/evenemangskalender/arkiv/benka-di-lappa--laga-tillsammans",
+          "fetched_at": "2026-09-26T11:19:22.176320+00:00",
+          "source_sha256": "1cfc6c1b4d3bd5026390d481530664ee78e9d874a0e6632cbab3508732d9ee47",
+          "file": "simrishamn-5.html",
+          "sha256": "7ad17948875a5bc0fca67b4ea2be8f8d33b6e9a435f1185fd203ea78ca714466"
+        },
+        {
+          "index": 6,
+          "url": "https://www.simrishamn.se/evenemangskalender/arkiv/tisdagshang",
+          "fetched_at": "2026-09-26T11:19:22.208970+00:00",
+          "source_sha256": "400298c176fde668eec0f88e580aa086add4f71f44e013e920540b9d43425ab4",
+          "file": "simrishamn-6.html",
+          "sha256": "cf9eaa8f8ae66952796148aa69300941cfe455708455eba2a881eebe74586ee3"
+        },
+        {
+          "index": 7,
+          "url": "https://www.simrishamn.se/evenemangskalender/arkiv/sumo-robot-med-waynes-industrier---simrishamns-space-for-unga-makers",
+          "fetched_at": "2026-09-26T11:19:22.354807+00:00",
+          "source_sha256": "50dd076ccb876d59442fc325eefa9fb2ee205d168ffd821cfa421fc4c0a5743e",
+          "file": "simrishamn-7.html",
+          "sha256": "4c2e1015b174c68a1906624ec0b728ab4c8beed04b9d0b6064066d3035ae1e5d"
+        }
+      ]
+    },
+    {
+      "name": "malmo",
+      "reviewed_manifest": "malmo-municipal-calendar",
+      "listing": {
+        "url": "https://malmo.se/evenemangskalender",
+        "fetched_at": "2026-09-26T11:19:25.767248+00:00",
+        "source_sha256": "086caeaaae7442f0a2ff810e8b42a1c01ebccbd4b49f79f7d124db6ff446bd27",
+        "file": "malmo-listing.html",
+        "sha256": "a724f90ed41f993e662d695dddf26f786e8b626f8c08c50c13da1b8343b6bc3d"
+      },
+      "details": [
+        {
+          "index": 0,
+          "url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.10eee8271a03338b25d191&title=Kortfilm-och-workshop-f%C3%B6r-barn-med-Malm%C3%B6-Arab-Film-Festival",
+          "fetched_at": "2026-09-26T11:19:26.468734+00:00",
+          "source_sha256": "dd63585115f63be4509e94110c9b50a0a74da9b3a304b1ff89a79932d4009408",
+          "file": "malmo-0.html",
+          "sha256": "9909151bf5dece12b6827c1bc055391431f256a40de56b6423f4693e95900c57"
+        },
+        {
+          "index": 1,
+          "url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.4968b1201a03e2e597725e6&title=Workshop-f%C3%B6r-barn%3A-Kom-och-m%C3%A5la-konstiga-l%C3%B6v",
+          "fetched_at": "2026-09-26T11:19:26.463813+00:00",
+          "source_sha256": "d6d1d29c29e3555a1432f25fcfad4f8f73e158c93d9a5d7c4c906be884bbf7af",
+          "file": "malmo-1.html",
+          "sha256": "2cdd8c252ae61b06ea65f38d520a02673b93c831b9d09e1d1a14eaabd59d13d6"
+        },
+        {
+          "index": 2,
+          "url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.4968b1201a03e2e5977e26&title=Workshop%3A-Batikm%C3%A5leri-med-Luna-Gil",
+          "fetched_at": "2026-09-26T11:19:26.466697+00:00",
+          "source_sha256": "24529d929f0708d9dcf716f992456dbfb5abb16529e78bc143a8cbb326caf18b",
+          "file": "malmo-2.html",
+          "sha256": "10fe7534a6db00a68997aa9b3d4a6e1156a37378b12d7c0cc0eb885c7c7cfa8c"
+        },
+        {
+          "index": 3,
+          "url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.5544db6919ed4ce6f5f47b0&title=Bokklubb%3A-Eternally-Yours-av-Anika-Hussain-",
+          "fetched_at": "2026-09-26T11:19:26.480746+00:00",
+          "source_sha256": "956d34c4ac0696ed97287931e1c3a076922a0fe9f3500c3cd6d58019e070588d",
+          "file": "malmo-3.html",
+          "sha256": "42dc1e0f87ddbbb1eb09671b4f042d7ce2f027e77d448d90c1f04584ca95d567"
+        },
+        {
+          "index": 4,
+          "url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.4968b1201a03e2e5977895&title=Konsert%3A-Audi-Memento",
+          "fetched_at": "2026-09-26T11:19:26.956690+00:00",
+          "source_sha256": "b24c33089ebba533dfea4e69427976e8c9fd811e17916e0c2b6f56942bd26065",
+          "file": "malmo-4.html",
+          "sha256": "a1e70ce746d670ed3df8854f34bb3b059de58703fa11a133c87c28a8cd357f1e"
+        },
+        {
+          "index": 5,
+          "url": "https://www.skanesdansteater.se/danslordag-ar-grus",
+          "fetched_at": "2026-09-26T11:19:38.706516+00:00",
+          "source_sha256": "e8b2ca175209e8f30faf8d7351f3822c7aa9b585561d5e89124b08f7ee175f79",
+          "stored": false,
+          "reason": "organizer's own site, outside the reviewed source"
+        },
+        {
+          "index": 6,
+          "url": "https://secure.tickster.com/sv/9zlthxrkjnj274j/products",
+          "fetched_at": "2026-09-26T11:19:39.185163+00:00",
+          "source_sha256": "74cd5087ee92f325a01fb75d1a7800f60e792c3e1559e3e336033d280e570e18",
+          "stored": false,
+          "reason": "organizer's own site, outside the reviewed source"
+        },
+        {
+          "index": 7,
+          "url": "https://victoria.se/sv/program/stockholm-jazz-orchestra-coltrane",
+          "fetched_at": "2026-09-26T11:19:39.649706+00:00",
+          "source_sha256": "dd3a12760bfd54845e54b279fe897a72470c74f1d70e19a43ef004090a6f9fc0",
+          "stored": false,
+          "reason": "organizer's own site, outside the reviewed source"
+        }
+      ]
+    }
+  ]
+}
