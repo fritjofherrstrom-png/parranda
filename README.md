@@ -123,6 +123,12 @@ som verkligen behöver en riktig tjänst (i dag DuckDB-barnprocessen, som laddar
 ner tillägget `httpfs`) hoppas över om du inte kör
 `PARRANDA_TEST_LIVE_NETWORK=enabled npm test`.
 
+`tests/pulse-contrast.test.js` mäter Pulse-kontrasten i stadsskalet i en riktig
+Chromium. Utan webbläsare hoppas den över lokalt; installera Google Chrome, kör
+`npx playwright-core install chromium` eller peka ut en med
+`PARRANDA_TEST_CHROMIUM=/sökväg/till/chrome`. I CI, där GitHub-runnern har
+Chrome, fäller den i stället för att hoppa över.
+
 CI kör samma grundsvit på GitHub för pull requests och pushes till `main`.
 
 ## Dela med andra utvecklare
