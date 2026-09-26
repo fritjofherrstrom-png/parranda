@@ -1,0 +1,1194 @@
+{
+  "roots": {
+    "main": "/home/hermes/parranda-scout/releases/ceee59e7b4dac36b7c8832a2dee0146179d02932",
+    "pr518": "/home/hermes/parranda-jean-sitevision",
+    "pr521": "/tmp/parranda-521-real-head"
+  },
+  "date": "2026-09-26",
+  "output": [
+    {
+      "name": "simrishamn",
+      "date": "2026-09-26",
+      "sourceRows": [
+        {
+          "title": "Mötesplats Rosenborg September",
+          "date": "2026-09-01",
+          "venue": "Stibyborgsgatan 10, Gärsnäs",
+          "url": "https://www.simrishamn.se/evenemangskalender/arkiv/motesplats-rosenborg-september"
+        },
+        {
+          "title": "I love you two med Circus I love you",
+          "date": "2026-09-26",
+          "url": "https://www.simrishamn.se/evenemangskalender/arkiv/i-love-you-two-med-circus-i-love-you"
+        },
+        {
+          "title": "Ta hand om dig! Beredskapsdagen 2026",
+          "date": "2026-09-26",
+          "venue": "Österlens museum",
+          "url": "https://www.simrishamn.se/evenemangskalender/arkiv/ta-hand-om-dig-beredskapsdagen-2026"
+        },
+        {
+          "title": "Curatorvisning av utställningen PRE DROM – På väg",
+          "date": "2026-09-26",
+          "url": "https://www.simrishamn.se/evenemangskalender/arkiv/curatorvisning-av-utstallningen-pre-drom---pa-vag"
+        },
+        {
+          "title": "Samtalskafé för gemenskap",
+          "date": "2026-09-28",
+          "venue": "Simrishamns bibliotek",
+          "url": "https://www.simrishamn.se/evenemangskalender/arkiv/samtalskafe-for-gemenskap"
+        },
+        {
+          "title": "Bénka-dí: Lappa & laga tillsammans",
+          "date": "2026-09-28",
+          "venue": "Ungdomens hus Bénka-dí",
+          "url": "https://www.simrishamn.se/evenemangskalender/arkiv/benka-di-lappa--laga-tillsammans"
+        },
+        {
+          "title": "Tisdagshäng",
+          "date": "2026-09-29",
+          "venue": "Simrishamns bibliotek",
+          "url": "https://www.simrishamn.se/evenemangskalender/arkiv/tisdagshang"
+        },
+        {
+          "title": "SUMO Robot med Waynes Industrier – Simrishamns space för unga makers",
+          "date": "2026-09-29",
+          "venue": "Simrishamns bibliotek",
+          "url": "https://www.simrishamn.se/evenemangskalender/arkiv/sumo-robot-med-waynes-industrier---simrishamns-space-for-unga-makers"
+        }
+      ],
+      "versions": {
+        "main": {
+          "direct": [
+            {
+              "index": 0,
+              "title": "Mötesplats Rosenborg September",
+              "listing_date": "2026-09-01",
+              "listing_venue": "Stibyborgsgatan 10, Gärsnäs",
+              "lat": null,
+              "lng": null,
+              "detail_venue": null,
+              "address": null,
+              "starts_on": "2026-09-01",
+              "ends_on": "2026-09-30"
+            },
+            {
+              "index": 1,
+              "title": "I love you two med Circus I love you",
+              "listing_date": "2026-09-26",
+              "lat": null,
+              "lng": null,
+              "detail_venue": null,
+              "address": null,
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26"
+            },
+            {
+              "index": 2,
+              "title": "Ta hand om dig! Beredskapsdagen 2026",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Österlens museum",
+              "lat": 55.556437,
+              "lng": 14.347752,
+              "detail_venue": "Österlens museum",
+              "address": "Storgatan 24",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26"
+            },
+            {
+              "index": 3,
+              "title": "Curatorvisning av utställningen PRE DROM – På väg",
+              "listing_date": "2026-09-26",
+              "lat": null,
+              "lng": null,
+              "detail_venue": null,
+              "address": null,
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26"
+            },
+            {
+              "index": 4,
+              "title": "Samtalskafé för gemenskap",
+              "listing_date": "2026-09-28",
+              "listing_venue": "Simrishamns bibliotek",
+              "lat": 55.554923,
+              "lng": 14.352681,
+              "detail_venue": "Simrishamns bibliotek",
+              "address": "Järnvägsgatan 2",
+              "starts_on": "2026-09-07",
+              "ends_on": "2026-12-17"
+            },
+            {
+              "index": 5,
+              "title": "Bénka-dí: Lappa & laga tillsammans",
+              "listing_date": "2026-09-28",
+              "listing_venue": "Ungdomens hus Bénka-dí",
+              "lat": 55.554994,
+              "lng": 14.352311,
+              "detail_venue": "Ungdomens hus Bénka-dí",
+              "address": "Järnvägsgatan 2",
+              "starts_on": "2026-08-24",
+              "ends_on": "2026-12-07"
+            },
+            {
+              "index": 6,
+              "title": "Tisdagshäng",
+              "listing_date": "2026-09-29",
+              "listing_venue": "Simrishamns bibliotek",
+              "lat": 55.554923,
+              "lng": 14.352681,
+              "detail_venue": "Simrishamns bibliotek",
+              "address": "Järnvägsgatan 2",
+              "starts_on": "2026-09-08",
+              "ends_on": "2026-11-17"
+            },
+            {
+              "index": 7,
+              "title": "SUMO Robot med Waynes Industrier – Simrishamns space för unga makers",
+              "listing_date": "2026-09-29",
+              "listing_venue": "Simrishamns bibliotek",
+              "lat": 55.554923,
+              "lng": 14.352681,
+              "detail_venue": "Simrishamns bibliotek",
+              "address": "Järnvägsgatan 2",
+              "starts_on": "2026-09-15",
+              "ends_on": "2026-12-08"
+            }
+          ],
+          "detailPins": 5,
+          "collectionStatus": {
+            "status": "ok",
+            "reason": null,
+            "event_rows": 8
+          },
+          "providerEvents": [
+            {
+              "title": "Mötesplats Rosenborg September",
+              "starts_on": "2026-09-01",
+              "ends_on": "2026-09-30",
+              "place_context": "Stibyborgsgatan 10, Gärsnäs",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://www.simrishamn.se/evenemangskalender/arkiv/motesplats-rosenborg-september"
+            },
+            {
+              "title": "I love you two med Circus I love you",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://www.simrishamn.se/evenemangskalender/arkiv/i-love-you-two-med-circus-i-love-you"
+            },
+            {
+              "title": "Ta hand om dig! Beredskapsdagen 2026",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Österlens museum",
+              "lat": 55.556437,
+              "lng": 14.347752,
+              "source_url": "https://www.simrishamn.se/evenemangskalender/arkiv/ta-hand-om-dig-beredskapsdagen-2026"
+            },
+            {
+              "title": "Curatorvisning av utställningen PRE DROM – På väg",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://www.simrishamn.se/evenemangskalender/arkiv/curatorvisning-av-utstallningen-pre-drom---pa-vag"
+            },
+            {
+              "title": "Samtalskafé för gemenskap",
+              "starts_on": "2026-09-07",
+              "ends_on": "2026-12-17",
+              "place_context": "Simrishamns bibliotek",
+              "lat": 55.554923,
+              "lng": 14.352681,
+              "source_url": "https://www.simrishamn.se/evenemangskalender/arkiv/samtalskafe-for-gemenskap"
+            },
+            {
+              "title": "Bénka-dí: Lappa & laga tillsammans",
+              "starts_on": "2026-08-24",
+              "ends_on": "2026-12-07",
+              "place_context": "Ungdomens hus Bénka-dí",
+              "lat": 55.554994,
+              "lng": 14.352311,
+              "source_url": "https://www.simrishamn.se/evenemangskalender/arkiv/benka-di-lappa--laga-tillsammans"
+            },
+            {
+              "title": "Tisdagshäng",
+              "starts_on": "2026-09-08",
+              "ends_on": "2026-11-17",
+              "place_context": "Simrishamns bibliotek",
+              "lat": 55.554923,
+              "lng": 14.352681,
+              "source_url": "https://www.simrishamn.se/evenemangskalender/arkiv/tisdagshang"
+            },
+            {
+              "title": "SUMO Robot med Waynes Industrier – Simrishamns space för unga makers",
+              "starts_on": "2026-09-15",
+              "ends_on": "2026-12-08",
+              "place_context": "Simrishamns bibliotek",
+              "lat": 55.554923,
+              "lng": 14.352681,
+              "source_url": "https://www.simrishamn.se/evenemangskalender/arkiv/sumo-robot-med-waynes-industrier---simrishamns-space-for-unga-makers"
+            }
+          ],
+          "providerPins": 5
+        },
+        "pr518": {
+          "direct": [
+            {
+              "index": 0,
+              "title": "Mötesplats Rosenborg September",
+              "listing_date": "2026-09-01",
+              "listing_venue": "Stibyborgsgatan 10, Gärsnäs",
+              "lat": null,
+              "lng": null,
+              "detail_venue": null,
+              "address": null,
+              "starts_on": "2026-09-01",
+              "ends_on": "2026-09-30"
+            },
+            {
+              "index": 1,
+              "title": "I love you two med Circus I love you",
+              "listing_date": "2026-09-26",
+              "lat": null,
+              "lng": null,
+              "detail_venue": null,
+              "address": null,
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26"
+            },
+            {
+              "index": 2,
+              "title": "Ta hand om dig! Beredskapsdagen 2026",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Österlens museum",
+              "lat": null,
+              "lng": null,
+              "detail_venue": "Österlens museum",
+              "address": "Storgatan 24",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26"
+            },
+            {
+              "index": 3,
+              "title": "Curatorvisning av utställningen PRE DROM – På väg",
+              "listing_date": "2026-09-26",
+              "lat": null,
+              "lng": null,
+              "detail_venue": null,
+              "address": null,
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26"
+            },
+            {
+              "index": 4,
+              "title": "Samtalskafé för gemenskap",
+              "listing_date": "2026-09-28",
+              "listing_venue": "Simrishamns bibliotek",
+              "lat": null,
+              "lng": null,
+              "detail_venue": "Simrishamns bibliotek",
+              "address": "Järnvägsgatan 2",
+              "starts_on": "2026-09-07",
+              "ends_on": "2026-12-17"
+            },
+            {
+              "index": 5,
+              "title": "Bénka-dí: Lappa & laga tillsammans",
+              "listing_date": "2026-09-28",
+              "listing_venue": "Ungdomens hus Bénka-dí",
+              "lat": null,
+              "lng": null,
+              "detail_venue": "Ungdomens hus Bénka-dí",
+              "address": "Järnvägsgatan 2",
+              "starts_on": "2026-08-24",
+              "ends_on": "2026-12-07"
+            },
+            {
+              "index": 6,
+              "title": "Tisdagshäng",
+              "listing_date": "2026-09-29",
+              "listing_venue": "Simrishamns bibliotek",
+              "lat": null,
+              "lng": null,
+              "detail_venue": "Simrishamns bibliotek",
+              "address": "Järnvägsgatan 2",
+              "starts_on": "2026-09-08",
+              "ends_on": "2026-11-17"
+            },
+            {
+              "index": 7,
+              "title": "SUMO Robot med Waynes Industrier – Simrishamns space för unga makers",
+              "listing_date": "2026-09-29",
+              "listing_venue": "Simrishamns bibliotek",
+              "lat": null,
+              "lng": null,
+              "detail_venue": "Simrishamns bibliotek",
+              "address": "Järnvägsgatan 2",
+              "starts_on": "2026-09-15",
+              "ends_on": "2026-12-08"
+            }
+          ],
+          "detailPins": 0,
+          "collectionStatus": {
+            "status": "ok",
+            "reason": null,
+            "event_rows": 8
+          },
+          "providerEvents": [
+            {
+              "title": "Mötesplats Rosenborg September",
+              "starts_on": "2026-09-01",
+              "ends_on": "2026-09-30",
+              "place_context": "Stibyborgsgatan 10, Gärsnäs",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://www.simrishamn.se/evenemangskalender/arkiv/motesplats-rosenborg-september"
+            },
+            {
+              "title": "I love you two med Circus I love you",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://www.simrishamn.se/evenemangskalender/arkiv/i-love-you-two-med-circus-i-love-you"
+            },
+            {
+              "title": "Ta hand om dig! Beredskapsdagen 2026",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Österlens museum",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://www.simrishamn.se/evenemangskalender/arkiv/ta-hand-om-dig-beredskapsdagen-2026"
+            },
+            {
+              "title": "Curatorvisning av utställningen PRE DROM – På väg",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://www.simrishamn.se/evenemangskalender/arkiv/curatorvisning-av-utstallningen-pre-drom---pa-vag"
+            },
+            {
+              "title": "Samtalskafé för gemenskap",
+              "starts_on": "2026-09-07",
+              "ends_on": "2026-12-17",
+              "place_context": "Simrishamns bibliotek",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://www.simrishamn.se/evenemangskalender/arkiv/samtalskafe-for-gemenskap"
+            },
+            {
+              "title": "Bénka-dí: Lappa & laga tillsammans",
+              "starts_on": "2026-08-24",
+              "ends_on": "2026-12-07",
+              "place_context": "Ungdomens hus Bénka-dí",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://www.simrishamn.se/evenemangskalender/arkiv/benka-di-lappa--laga-tillsammans"
+            },
+            {
+              "title": "Tisdagshäng",
+              "starts_on": "2026-09-08",
+              "ends_on": "2026-11-17",
+              "place_context": "Simrishamns bibliotek",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://www.simrishamn.se/evenemangskalender/arkiv/tisdagshang"
+            },
+            {
+              "title": "SUMO Robot med Waynes Industrier – Simrishamns space för unga makers",
+              "starts_on": "2026-09-15",
+              "ends_on": "2026-12-08",
+              "place_context": "Simrishamns bibliotek",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://www.simrishamn.se/evenemangskalender/arkiv/sumo-robot-med-waynes-industrier---simrishamns-space-for-unga-makers"
+            }
+          ],
+          "providerPins": 0
+        },
+        "pr521": {
+          "direct": [
+            {
+              "index": 0,
+              "title": "Mötesplats Rosenborg September",
+              "listing_date": "2026-09-01",
+              "listing_venue": "Stibyborgsgatan 10, Gärsnäs",
+              "lat": null,
+              "lng": null,
+              "detail_venue": null,
+              "address": null,
+              "starts_on": "2026-09-01",
+              "ends_on": "2026-09-30"
+            },
+            {
+              "index": 1,
+              "title": "I love you two med Circus I love you",
+              "listing_date": "2026-09-26",
+              "lat": null,
+              "lng": null,
+              "detail_venue": null,
+              "address": null,
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26"
+            },
+            {
+              "index": 2,
+              "title": "Ta hand om dig! Beredskapsdagen 2026",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Österlens museum",
+              "lat": 55.556437,
+              "lng": 14.347752,
+              "detail_venue": "Österlens museum",
+              "address": "Storgatan 24",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26"
+            },
+            {
+              "index": 3,
+              "title": "Curatorvisning av utställningen PRE DROM – På väg",
+              "listing_date": "2026-09-26",
+              "lat": null,
+              "lng": null,
+              "detail_venue": null,
+              "address": null,
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26"
+            },
+            {
+              "index": 4,
+              "title": "Samtalskafé för gemenskap",
+              "listing_date": "2026-09-28",
+              "listing_venue": "Simrishamns bibliotek",
+              "lat": 55.554923,
+              "lng": 14.352681,
+              "detail_venue": "Simrishamns bibliotek",
+              "address": "Järnvägsgatan 2",
+              "starts_on": "2026-09-07",
+              "ends_on": "2026-12-17"
+            },
+            {
+              "index": 5,
+              "title": "Bénka-dí: Lappa & laga tillsammans",
+              "listing_date": "2026-09-28",
+              "listing_venue": "Ungdomens hus Bénka-dí",
+              "lat": 55.554994,
+              "lng": 14.352311,
+              "detail_venue": "Ungdomens hus Bénka-dí",
+              "address": "Järnvägsgatan 2",
+              "starts_on": "2026-08-24",
+              "ends_on": "2026-12-07"
+            },
+            {
+              "index": 6,
+              "title": "Tisdagshäng",
+              "listing_date": "2026-09-29",
+              "listing_venue": "Simrishamns bibliotek",
+              "lat": 55.554923,
+              "lng": 14.352681,
+              "detail_venue": "Simrishamns bibliotek",
+              "address": "Järnvägsgatan 2",
+              "starts_on": "2026-09-08",
+              "ends_on": "2026-11-17"
+            },
+            {
+              "index": 7,
+              "title": "SUMO Robot med Waynes Industrier – Simrishamns space för unga makers",
+              "listing_date": "2026-09-29",
+              "listing_venue": "Simrishamns bibliotek",
+              "lat": 55.554923,
+              "lng": 14.352681,
+              "detail_venue": "Simrishamns bibliotek",
+              "address": "Järnvägsgatan 2",
+              "starts_on": "2026-09-15",
+              "ends_on": "2026-12-08"
+            }
+          ],
+          "detailPins": 5,
+          "collectionStatus": {
+            "status": "ok",
+            "reason": null,
+            "event_rows": 8
+          },
+          "providerEvents": [
+            {
+              "title": "Mötesplats Rosenborg September",
+              "starts_on": "2026-09-01",
+              "ends_on": "2026-09-30",
+              "place_context": "Stibyborgsgatan 10, Gärsnäs",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://www.simrishamn.se/evenemangskalender/arkiv/motesplats-rosenborg-september"
+            },
+            {
+              "title": "I love you two med Circus I love you",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://www.simrishamn.se/evenemangskalender/arkiv/i-love-you-two-med-circus-i-love-you"
+            },
+            {
+              "title": "Ta hand om dig! Beredskapsdagen 2026",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Österlens museum",
+              "lat": 55.556437,
+              "lng": 14.347752,
+              "source_url": "https://www.simrishamn.se/evenemangskalender/arkiv/ta-hand-om-dig-beredskapsdagen-2026"
+            },
+            {
+              "title": "Curatorvisning av utställningen PRE DROM – På väg",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://www.simrishamn.se/evenemangskalender/arkiv/curatorvisning-av-utstallningen-pre-drom---pa-vag"
+            },
+            {
+              "title": "Samtalskafé för gemenskap",
+              "starts_on": "2026-09-07",
+              "ends_on": "2026-12-17",
+              "place_context": "Simrishamns bibliotek",
+              "lat": 55.554923,
+              "lng": 14.352681,
+              "source_url": "https://www.simrishamn.se/evenemangskalender/arkiv/samtalskafe-for-gemenskap"
+            },
+            {
+              "title": "Bénka-dí: Lappa & laga tillsammans",
+              "starts_on": "2026-08-24",
+              "ends_on": "2026-12-07",
+              "place_context": "Ungdomens hus Bénka-dí",
+              "lat": 55.554994,
+              "lng": 14.352311,
+              "source_url": "https://www.simrishamn.se/evenemangskalender/arkiv/benka-di-lappa--laga-tillsammans"
+            },
+            {
+              "title": "Tisdagshäng",
+              "starts_on": "2026-09-08",
+              "ends_on": "2026-11-17",
+              "place_context": "Simrishamns bibliotek",
+              "lat": 55.554923,
+              "lng": 14.352681,
+              "source_url": "https://www.simrishamn.se/evenemangskalender/arkiv/tisdagshang"
+            },
+            {
+              "title": "SUMO Robot med Waynes Industrier – Simrishamns space för unga makers",
+              "starts_on": "2026-09-15",
+              "ends_on": "2026-12-08",
+              "place_context": "Simrishamns bibliotek",
+              "lat": 55.554923,
+              "lng": 14.352681,
+              "source_url": "https://www.simrishamn.se/evenemangskalender/arkiv/sumo-robot-med-waynes-industrier---simrishamns-space-for-unga-makers"
+            }
+          ],
+          "providerPins": 5
+        }
+      }
+    },
+    {
+      "name": "malmo",
+      "date": "2026-09-26",
+      "sourceRows": [
+        {
+          "title": "Kortfilm och workshop för barn med Malmö Arab Film Festival",
+          "date": "2026-09-26",
+          "venue": "Oxiebiblioteket",
+          "url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.10eee8271a03338b25d191&title=Kortfilm-och-workshop-f%C3%B6r-barn-med-Malm%C3%B6-Arab-Film-Festival"
+        },
+        {
+          "title": "Workshop för barn: Kom och måla konstiga löv",
+          "date": "2026-09-26",
+          "venue": "Folkets Park",
+          "url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.4968b1201a03e2e597725e6&title=Workshop-f%C3%B6r-barn%3A-Kom-och-m%C3%A5la-konstiga-l%C3%B6v"
+        },
+        {
+          "title": "Workshop: Batikmåleri med Luna Gil",
+          "date": "2026-09-26",
+          "venue": "Folkets Park",
+          "url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.4968b1201a03e2e5977e26&title=Workshop%3A-Batikm%C3%A5leri-med-Luna-Gil"
+        },
+        {
+          "title": "Bokklubb: Eternally Yours av Anika Hussain",
+          "date": "2026-09-26",
+          "venue": "Kulturhyllan",
+          "url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.5544db6919ed4ce6f5f47b0&title=Bokklubb%3A-Eternally-Yours-av-Anika-Hussain-"
+        },
+        {
+          "title": "Konsert: Audi Memento",
+          "date": "2026-09-26",
+          "venue": "Folkets Park",
+          "url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.4968b1201a03e2e5977895&title=Konsert%3A-Audi-Memento"
+        },
+        {
+          "title": "Danslördag: Är : Grus",
+          "date": "2026-09-26",
+          "venue": "Skånes Dansteater",
+          "url": "https://www.skanesdansteater.se/danslordag-ar-grus"
+        },
+        {
+          "title": "Oktoberfest - Mit Skånsk Gefühl",
+          "date": "2026-09-26",
+          "venue": "Slagthuset",
+          "url": "https://secure.tickster.com/sv/9zlthxrkjnj274j/products"
+        },
+        {
+          "title": "Stockholm Jazz Orchestra: Spelar John Coltrane",
+          "date": "2026-09-26",
+          "venue": "Victoriateatern",
+          "url": "https://victoria.se/sv/program/stockholm-jazz-orchestra-coltrane"
+        }
+      ],
+      "versions": {
+        "main": {
+          "direct": [
+            {
+              "index": 0,
+              "title": "Kortfilm och workshop för barn med Malmö Arab Film Festival",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Oxiebiblioteket",
+              "lat": null,
+              "lng": null,
+              "detail_venue": null,
+              "address": null,
+              "starts_on": null,
+              "ends_on": null
+            },
+            {
+              "index": 1,
+              "title": "Workshop för barn: Kom och måla konstiga löv",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Folkets Park",
+              "lat": null,
+              "lng": null,
+              "detail_venue": null,
+              "address": null,
+              "starts_on": null,
+              "ends_on": null
+            },
+            {
+              "index": 2,
+              "title": "Workshop: Batikmåleri med Luna Gil",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Folkets Park",
+              "lat": null,
+              "lng": null,
+              "detail_venue": null,
+              "address": null,
+              "starts_on": null,
+              "ends_on": null
+            },
+            {
+              "index": 3,
+              "title": "Bokklubb: Eternally Yours av Anika Hussain",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Kulturhyllan",
+              "lat": null,
+              "lng": null,
+              "detail_venue": null,
+              "address": null,
+              "starts_on": null,
+              "ends_on": null
+            },
+            {
+              "index": 4,
+              "title": "Konsert: Audi Memento",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Folkets Park",
+              "lat": null,
+              "lng": null,
+              "detail_venue": null,
+              "address": null,
+              "starts_on": null,
+              "ends_on": null
+            },
+            {
+              "index": 5,
+              "title": "Danslördag: Är : Grus",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Skånes Dansteater",
+              "lat": null,
+              "lng": null,
+              "detail_venue": null,
+              "address": null,
+              "starts_on": null,
+              "ends_on": null
+            },
+            {
+              "index": 6,
+              "title": "Oktoberfest - Mit Skånsk Gefühl",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Slagthuset",
+              "lat": null,
+              "lng": null,
+              "detail_venue": null,
+              "address": null,
+              "starts_on": null,
+              "ends_on": null
+            },
+            {
+              "index": 7,
+              "title": "Stockholm Jazz Orchestra: Spelar John Coltrane",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Victoriateatern",
+              "lat": null,
+              "lng": null,
+              "detail_venue": null,
+              "address": null,
+              "starts_on": null,
+              "ends_on": null
+            }
+          ],
+          "detailPins": 0,
+          "collectionStatus": {
+            "status": "ok",
+            "reason": null,
+            "event_rows": 8
+          },
+          "providerEvents": [
+            {
+              "title": "Kortfilm och workshop för barn med Malmö Arab Film Festival",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Oxiebiblioteket",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.10eee8271a03338b25d191&title=Kortfilm-och-workshop-f%C3%B6r-barn-med-Malm%C3%B6-Arab-Film-Festival"
+            },
+            {
+              "title": "Workshop för barn: Kom och måla konstiga löv",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Folkets Park",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.4968b1201a03e2e597725e6&title=Workshop-f%C3%B6r-barn%3A-Kom-och-m%C3%A5la-konstiga-l%C3%B6v"
+            },
+            {
+              "title": "Workshop: Batikmåleri med Luna Gil",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Folkets Park",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.4968b1201a03e2e5977e26&title=Workshop%3A-Batikm%C3%A5leri-med-Luna-Gil"
+            },
+            {
+              "title": "Bokklubb: Eternally Yours av Anika Hussain",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Kulturhyllan",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.5544db6919ed4ce6f5f47b0&title=Bokklubb%3A-Eternally-Yours-av-Anika-Hussain-"
+            },
+            {
+              "title": "Konsert: Audi Memento",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Folkets Park",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.4968b1201a03e2e5977895&title=Konsert%3A-Audi-Memento"
+            },
+            {
+              "title": "Danslördag: Är : Grus",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Skånes Dansteater",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://www.skanesdansteater.se/danslordag-ar-grus"
+            },
+            {
+              "title": "Oktoberfest - Mit Skånsk Gefühl",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Slagthuset",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://secure.tickster.com/sv/9zlthxrkjnj274j/products"
+            },
+            {
+              "title": "Stockholm Jazz Orchestra: Spelar John Coltrane",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Victoriateatern",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://victoria.se/sv/program/stockholm-jazz-orchestra-coltrane"
+            }
+          ],
+          "providerPins": 0
+        },
+        "pr518": {
+          "direct": [
+            {
+              "index": 0,
+              "title": "Kortfilm och workshop för barn med Malmö Arab Film Festival",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Oxiebiblioteket",
+              "lat": 55.53989365335112,
+              "lng": 13.096661728525344,
+              "detail_venue": "Oxiebiblioteket",
+              "address": "Lertegelvägen 128, 238 30 Oxie",
+              "starts_on": null,
+              "ends_on": null
+            },
+            {
+              "index": 1,
+              "title": "Workshop för barn: Kom och måla konstiga löv",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Folkets Park",
+              "lat": 55.59330012820435,
+              "lng": 13.014476913261015,
+              "detail_venue": "Folkets Park",
+              "address": null,
+              "starts_on": null,
+              "ends_on": null
+            },
+            {
+              "index": 2,
+              "title": "Workshop: Batikmåleri med Luna Gil",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Folkets Park",
+              "lat": 55.59330012820435,
+              "lng": 13.014476913261015,
+              "detail_venue": "Folkets Park",
+              "address": null,
+              "starts_on": null,
+              "ends_on": null
+            },
+            {
+              "index": 3,
+              "title": "Bokklubb: Eternally Yours av Anika Hussain",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Kulturhyllan",
+              "lat": 55.56266437760612,
+              "lng": 12.974810603835078,
+              "detail_venue": "Kulturhyllan",
+              "address": "Hyllie Boulevard 21, 215 32 Malmö",
+              "starts_on": null,
+              "ends_on": null
+            },
+            {
+              "index": 4,
+              "title": "Konsert: Audi Memento",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Folkets Park",
+              "lat": 55.59330012820435,
+              "lng": 13.014476913261015,
+              "detail_venue": "Folkets Park",
+              "address": null,
+              "starts_on": null,
+              "ends_on": null
+            },
+            {
+              "index": 5,
+              "title": "Danslördag: Är : Grus",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Skånes Dansteater",
+              "lat": null,
+              "lng": null,
+              "detail_venue": null,
+              "address": null,
+              "starts_on": null,
+              "ends_on": null
+            },
+            {
+              "index": 6,
+              "title": "Oktoberfest - Mit Skånsk Gefühl",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Slagthuset",
+              "lat": null,
+              "lng": null,
+              "detail_venue": null,
+              "address": null,
+              "starts_on": null,
+              "ends_on": null
+            },
+            {
+              "index": 7,
+              "title": "Stockholm Jazz Orchestra: Spelar John Coltrane",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Victoriateatern",
+              "lat": null,
+              "lng": null,
+              "detail_venue": null,
+              "address": null,
+              "starts_on": null,
+              "ends_on": null
+            }
+          ],
+          "detailPins": 5,
+          "collectionStatus": {
+            "status": "ok",
+            "reason": null,
+            "event_rows": 8
+          },
+          "providerEvents": [
+            {
+              "title": "Kortfilm och workshop för barn med Malmö Arab Film Festival",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Oxiebiblioteket",
+              "lat": 55.53989365335112,
+              "lng": 13.096661728525344,
+              "source_url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.10eee8271a03338b25d191&title=Kortfilm-och-workshop-f%C3%B6r-barn-med-Malm%C3%B6-Arab-Film-Festival"
+            },
+            {
+              "title": "Workshop för barn: Kom och måla konstiga löv",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Folkets Park",
+              "lat": 55.59330012820435,
+              "lng": 13.014476913261015,
+              "source_url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.4968b1201a03e2e597725e6&title=Workshop-f%C3%B6r-barn%3A-Kom-och-m%C3%A5la-konstiga-l%C3%B6v"
+            },
+            {
+              "title": "Workshop: Batikmåleri med Luna Gil",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Folkets Park",
+              "lat": 55.59330012820435,
+              "lng": 13.014476913261015,
+              "source_url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.4968b1201a03e2e5977e26&title=Workshop%3A-Batikm%C3%A5leri-med-Luna-Gil"
+            },
+            {
+              "title": "Bokklubb: Eternally Yours av Anika Hussain",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Kulturhyllan",
+              "lat": 55.56266437760612,
+              "lng": 12.974810603835078,
+              "source_url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.5544db6919ed4ce6f5f47b0&title=Bokklubb%3A-Eternally-Yours-av-Anika-Hussain-"
+            },
+            {
+              "title": "Konsert: Audi Memento",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Folkets Park",
+              "lat": 55.59330012820435,
+              "lng": 13.014476913261015,
+              "source_url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.4968b1201a03e2e5977895&title=Konsert%3A-Audi-Memento"
+            },
+            {
+              "title": "Danslördag: Är : Grus",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Skånes Dansteater",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://www.skanesdansteater.se/danslordag-ar-grus"
+            },
+            {
+              "title": "Oktoberfest - Mit Skånsk Gefühl",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Slagthuset",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://secure.tickster.com/sv/9zlthxrkjnj274j/products"
+            },
+            {
+              "title": "Stockholm Jazz Orchestra: Spelar John Coltrane",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Victoriateatern",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://victoria.se/sv/program/stockholm-jazz-orchestra-coltrane"
+            }
+          ],
+          "providerPins": 5
+        },
+        "pr521": {
+          "direct": [
+            {
+              "index": 0,
+              "title": "Kortfilm och workshop för barn med Malmö Arab Film Festival",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Oxiebiblioteket",
+              "lat": 55.53989365335112,
+              "lng": 13.096661728525344,
+              "detail_venue": "Oxiebiblioteket",
+              "address": "Lertegelvägen 128, 238 30 Oxie",
+              "starts_on": null,
+              "ends_on": null
+            },
+            {
+              "index": 1,
+              "title": "Workshop för barn: Kom och måla konstiga löv",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Folkets Park",
+              "lat": 55.59330012820435,
+              "lng": 13.014476913261015,
+              "detail_venue": "Folkets Park",
+              "address": null,
+              "starts_on": null,
+              "ends_on": null
+            },
+            {
+              "index": 2,
+              "title": "Workshop: Batikmåleri med Luna Gil",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Folkets Park",
+              "lat": 55.59330012820435,
+              "lng": 13.014476913261015,
+              "detail_venue": "Folkets Park",
+              "address": null,
+              "starts_on": null,
+              "ends_on": null
+            },
+            {
+              "index": 3,
+              "title": "Bokklubb: Eternally Yours av Anika Hussain",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Kulturhyllan",
+              "lat": 55.56266437760612,
+              "lng": 12.974810603835078,
+              "detail_venue": "Kulturhyllan",
+              "address": "Hyllie Boulevard 21, 215 32 Malmö",
+              "starts_on": null,
+              "ends_on": null
+            },
+            {
+              "index": 4,
+              "title": "Konsert: Audi Memento",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Folkets Park",
+              "lat": 55.59330012820435,
+              "lng": 13.014476913261015,
+              "detail_venue": "Folkets Park",
+              "address": null,
+              "starts_on": null,
+              "ends_on": null
+            },
+            {
+              "index": 5,
+              "title": "Danslördag: Är : Grus",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Skånes Dansteater",
+              "lat": null,
+              "lng": null,
+              "detail_venue": null,
+              "address": null,
+              "starts_on": null,
+              "ends_on": null
+            },
+            {
+              "index": 6,
+              "title": "Oktoberfest - Mit Skånsk Gefühl",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Slagthuset",
+              "lat": null,
+              "lng": null,
+              "detail_venue": null,
+              "address": null,
+              "starts_on": null,
+              "ends_on": null
+            },
+            {
+              "index": 7,
+              "title": "Stockholm Jazz Orchestra: Spelar John Coltrane",
+              "listing_date": "2026-09-26",
+              "listing_venue": "Victoriateatern",
+              "lat": null,
+              "lng": null,
+              "detail_venue": null,
+              "address": null,
+              "starts_on": null,
+              "ends_on": null
+            }
+          ],
+          "detailPins": 5,
+          "collectionStatus": {
+            "status": "ok",
+            "reason": null,
+            "event_rows": 8
+          },
+          "providerEvents": [
+            {
+              "title": "Kortfilm och workshop för barn med Malmö Arab Film Festival",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Oxiebiblioteket",
+              "lat": 55.53989365335112,
+              "lng": 13.096661728525344,
+              "source_url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.10eee8271a03338b25d191&title=Kortfilm-och-workshop-f%C3%B6r-barn-med-Malm%C3%B6-Arab-Film-Festival"
+            },
+            {
+              "title": "Workshop för barn: Kom och måla konstiga löv",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Folkets Park",
+              "lat": 55.59330012820435,
+              "lng": 13.014476913261015,
+              "source_url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.4968b1201a03e2e597725e6&title=Workshop-f%C3%B6r-barn%3A-Kom-och-m%C3%A5la-konstiga-l%C3%B6v"
+            },
+            {
+              "title": "Workshop: Batikmåleri med Luna Gil",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Folkets Park",
+              "lat": 55.59330012820435,
+              "lng": 13.014476913261015,
+              "source_url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.4968b1201a03e2e5977e26&title=Workshop%3A-Batikm%C3%A5leri-med-Luna-Gil"
+            },
+            {
+              "title": "Bokklubb: Eternally Yours av Anika Hussain",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Kulturhyllan",
+              "lat": 55.56266437760612,
+              "lng": 12.974810603835078,
+              "source_url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.5544db6919ed4ce6f5f47b0&title=Bokklubb%3A-Eternally-Yours-av-Anika-Hussain-"
+            },
+            {
+              "title": "Konsert: Audi Memento",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Folkets Park",
+              "lat": 55.59330012820435,
+              "lng": 13.014476913261015,
+              "source_url": "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.4968b1201a03e2e5977895&title=Konsert%3A-Audi-Memento"
+            },
+            {
+              "title": "Danslördag: Är : Grus",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Skånes Dansteater",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://www.skanesdansteater.se/danslordag-ar-grus"
+            },
+            {
+              "title": "Oktoberfest - Mit Skånsk Gefühl",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Slagthuset",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://secure.tickster.com/sv/9zlthxrkjnj274j/products"
+            },
+            {
+              "title": "Stockholm Jazz Orchestra: Spelar John Coltrane",
+              "starts_on": "2026-09-26",
+              "ends_on": "2026-09-26",
+              "place_context": "Victoriateatern",
+              "lat": null,
+              "lng": null,
+              "source_url": "https://victoria.se/sv/program/stockholm-jazz-orchestra-coltrane"
+            }
+          ],
+          "providerPins": 5
+        }
+      }
+    }
+  ]
+}

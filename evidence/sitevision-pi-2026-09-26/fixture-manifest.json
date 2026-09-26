@@ -1,0 +1,110 @@
+[
+  {
+    "file": "malmo-0.html",
+    "source_sha256": "dd63585115f63be4509e94110c9b50a0a74da9b3a304b1ff89a79932d4009408",
+    "minimal_sha256": "d1aefb954732f159e561b155951c9ae50b91f85447af5558a07605772c42bedf",
+    "derived": true
+  },
+  {
+    "file": "malmo-1.html",
+    "source_sha256": "d6d1d29c29e3555a1432f25fcfad4f8f73e158c93d9a5d7c4c906be884bbf7af",
+    "minimal_sha256": "60cbb7227222099fab083e13c5fa48410cf89702a16d7d5c13ae9ca5db8e547d",
+    "derived": true
+  },
+  {
+    "file": "malmo-2.html",
+    "source_sha256": "24529d929f0708d9dcf716f992456dbfb5abb16529e78bc143a8cbb326caf18b",
+    "minimal_sha256": "91f9fe962302835f98466513cd64117f7d1ad010cd35cfc2c3174a63ba489f7e",
+    "derived": true
+  },
+  {
+    "file": "malmo-3.html",
+    "source_sha256": "956d34c4ac0696ed97287931e1c3a076922a0fe9f3500c3cd6d58019e070588d",
+    "minimal_sha256": "ae60eb1539ed13fed36860a32d01199cd44f50959a225ff44ba5f81a7bdd1837",
+    "derived": true
+  },
+  {
+    "file": "malmo-4.html",
+    "source_sha256": "b24c33089ebba533dfea4e69427976e8c9fd811e17916e0c2b6f56942bd26065",
+    "minimal_sha256": "b08ebd3026c17dc9948d0df2214fdb9fcb9289e93cce20f1354def6826965dd1",
+    "derived": true
+  },
+  {
+    "file": "malmo-5.html",
+    "source_sha256": "e8b2ca175209e8f30faf8d7351f3822c7aa9b585561d5e89124b08f7ee175f79",
+    "minimal_sha256": "31cd0a9f02c3a347b3e13871f51e2430bd851218c74a4cede3a55aa73c452ec5",
+    "derived": true
+  },
+  {
+    "file": "malmo-6.html",
+    "source_sha256": "74cd5087ee92f325a01fb75d1a7800f60e792c3e1559e3e336033d280e570e18",
+    "minimal_sha256": "e8de1d75fffb7a86da30c715e2ae44ec625141d9286f3b209f9096646ae8cb73",
+    "derived": true
+  },
+  {
+    "file": "malmo-7.html",
+    "source_sha256": "dd3a12760bfd54845e54b279fe897a72470c74f1d70e19a43ef004090a6f9fc0",
+    "minimal_sha256": "6d985ff658d58bc8ca46da4ffc726c69b609f8a7d29d37fe819f709ac13b50ba",
+    "derived": true
+  },
+  {
+    "file": "malmo-listing.html",
+    "source_sha256": "086caeaaae7442f0a2ff810e8b42a1c01ebccbd4b49f79f7d124db6ff446bd27",
+    "minimal_sha256": "82df2542924cd37ec9e8dce93425c8d2bd9d846b06de03bed1f50f5eb441f7c1",
+    "derived": true
+  },
+  {
+    "file": "simrishamn-0.html",
+    "source_sha256": "36fc703dc5f5369293b7a9b23b321a7c6601130222ea31b5e01807c1d75c6b4d",
+    "minimal_sha256": "a4575f7bedc3d9684cd1570ba0d78f0e98013264e55cba151ac3fa68a4d98f4d",
+    "derived": true
+  },
+  {
+    "file": "simrishamn-1.html",
+    "source_sha256": "b85b88b16aaf26b527c52409cf084186a5943977a9e03d4f70760cd4e92045d6",
+    "minimal_sha256": "024c8854a4c7dc9e4a0eaf58d780badee053cef084f41bbce46dd32fa791ccfb",
+    "derived": true
+  },
+  {
+    "file": "simrishamn-2.html",
+    "source_sha256": "a5df6a90a7af4ca10c3a31bc74b1333fff66a1ef3446a2dbc439bdc2989f64a4",
+    "minimal_sha256": "3fdf4e4132219b29282bd2384cd64f48faaf9a3867ab0952dd9b6422beb19738",
+    "derived": true
+  },
+  {
+    "file": "simrishamn-3.html",
+    "source_sha256": "49916358f57482162203423bf696e8efc558b4711438011e57fdc336cd68cba5",
+    "minimal_sha256": "dbf1e7e0ebcc8f1da420803d896adb2b583167718c1ad8d238560f757b491d54",
+    "derived": true
+  },
+  {
+    "file": "simrishamn-4.html",
+    "source_sha256": "6bed6912450b11da174b02ee273e9ef46386dca82ca7ba9e44e05e4ca75ac82f",
+    "minimal_sha256": "5354d696f8119d4edb66e6ee003ab183091d97ca8b1b78de6470cc18ff01a053",
+    "derived": true
+  },
+  {
+    "file": "simrishamn-5.html",
+    "source_sha256": "1cfc6c1b4d3bd5026390d481530664ee78e9d874a0e6632cbab3508732d9ee47",
+    "minimal_sha256": "15481ae6f4609748fe003a2e5e8c5248c88c4ab0a1addd109e09b87890ff8c76",
+    "derived": true
+  },
+  {
+    "file": "simrishamn-6.html",
+    "source_sha256": "400298c176fde668eec0f88e580aa086add4f71f44e013e920540b9d43425ab4",
+    "minimal_sha256": "08cb71d1a372b400ada2c27067b2c3e095607ff074e9e8b34170961b2432fa00",
+    "derived": true
+  },
+  {
+    "file": "simrishamn-7.html",
+    "source_sha256": "50dd076ccb876d59442fc325eefa9fb2ee205d168ffd821cfa421fc4c0a5743e",
+    "minimal_sha256": "42f62f03caf20f51c751e18fd9ad23848fe28d0e68dcc862a691d393faa48950",
+    "derived": true
+  },
+  {
+    "file": "simrishamn-listing.html",
+    "source_sha256": "bedda4c019eaa4d60779db3a7b769f925a71ee691dfb6b1193da5f2ce0fb18a0",
+    "minimal_sha256": "1b9ef7b1d85f81330d3ddd444f583fb1cb7dbfad12f7033dbb20adcff6e95a82",
+    "derived": true
+  }
+]
