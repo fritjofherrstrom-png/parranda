@@ -150,8 +150,16 @@ function materializeContinuousOccurrence(event, selectedDate) {
   if (!starts || dateKeyFromParts(starts) !== selectedDate) return null;
   const timing = String(event.timing_relevance || "").toLowerCase();
   if (timing === "stale") return null;
-  if (starts.hour * 60 + starts.minute < EVENING_START_MINUTES && timing !== "now") return null;
   const ends = event.ends_at ? datePartsInTimezone(event.ends_at, timezone) : null;
+  // A session that started before the evening is an evening anchor only while
+  // it is running and still runs after the evening starts. A daytime session
+  // that happens to be running when the day is composed stays a Live row.
+  if (
+    starts.hour * 60 + starts.minute < EVENING_START_MINUTES &&
+    (timing !== "now" || !runsIntoEvening(ends, selectedDate))
+  ) {
+    return null;
+  }
   return {
     ...event,
     starts_on: selectedDate,
@@ -160,6 +168,15 @@ function materializeContinuousOccurrence(event, selectedDate) {
     timing_relevance: timing === "now" ? "now" : "tonight",
     occurrence_date: selectedDate,
   };
+}
+
+// Venue-local end parts of a session starting on `selectedDate`. An unstated
+// end is not evidence that the session reaches the evening.
+function runsIntoEvening(ends, selectedDate) {
+  const endDate = dateKeyFromParts(ends);
+  if (!endDate) return false;
+  if (endDate > selectedDate) return true;
+  return endDate === selectedDate && ends.hour * 60 + ends.minute > EVENING_START_MINUTES;
 }
 
 function eventOccurrenceForDate(event, selectedDate) {

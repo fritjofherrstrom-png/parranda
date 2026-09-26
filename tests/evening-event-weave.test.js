@@ -391,3 +391,81 @@ test("listed occurrences materialize only on a stated evening; periods never do"
   assert.equal(eventOccurrenceForDate(period, "2026-07-09"), null);
   assert.equal(eventOccurrenceForDate(period, "2026-07-10"), null);
 });
+
+// Malmö's official calendar as captured on 2026-09-26: two sessions at Folkets
+// Park, the day composed at 13:19 local while the workshop was running.
+function capturedFolketsPark() {
+  const shared = {
+    timezone: "Europe/Stockholm",
+    source_label: "Malmö stads evenemangskalender",
+    lat: 55.5933,
+    lng: 13.0145,
+    cultural_tier: "cultural",
+  };
+  return {
+    workshop: {
+      ...shared,
+      id: "workshop",
+      title: "Workshop för barn: Kom och måla konstiga löv",
+      starts_at: "2026-09-26T11:00:00.000Z",
+      ends_at: "2026-09-26T14:00:00.000Z",
+      timing_relevance: "now",
+      source_url: "https://malmo.se/event?id=workshop",
+    },
+    concert: {
+      ...shared,
+      id: "concert",
+      title: "Konsert: Audi Memento",
+      starts_at: "2026-09-26T18:00:00.000Z",
+      ends_at: "2026-09-26T18:30:00.000Z",
+      timing_relevance: "tonight",
+      source_url: "https://malmo.se/event?id=concert",
+    },
+  };
+}
+
+test("a daytime session running when the day is composed is not the evening anchor", () => {
+  const { workshop, concert } = capturedFolketsPark();
+  assert.equal(eventOccurrenceForDate(workshop, "2026-09-26"), null, "13:00–16:00 ends before the evening");
+  // Simrishamn, same capture: "Ta hand om dig! Beredskapsdagen 2026", 11.00–14.00.
+  assert.equal(eventOccurrenceForDate({
+    ...workshop,
+    starts_at: "2026-09-26T09:00:00.000Z",
+    ends_at: "2026-09-26T12:00:00.000Z",
+  }, "2026-09-26"), null);
+
+  // Ranked first, the running workshop must not displace the evening concert.
+  const out = weaveEveningEvent(dayWithDistricts(), liveEvents([workshop, concert]), {
+    selectedDate: "2026-09-26",
+  });
+  assert.equal(out.district_day.evening_event.id, "concert");
+  assert.equal(out.district_day.evening_event.starts_at, "2026-09-26T18:00:00.000Z");
+});
+
+test("a running session is still the evening anchor while it runs into the evening", () => {
+  const { workshop } = capturedFolketsPark();
+  const intoEvening = eventOccurrenceForDate({
+    ...workshop,
+    starts_at: "2026-09-26T14:00:00.000Z",
+    ends_at: "2026-09-26T20:00:00.000Z",
+  }, "2026-09-26");
+  assert.equal(intoEvening.occurrence_date, "2026-09-26");
+  assert.equal(intoEvening.timing_relevance, "now");
+  const pastMidnight = eventOccurrenceForDate({
+    ...workshop,
+    starts_at: "2026-09-26T14:00:00.000Z",
+    ends_at: "2026-09-26T23:30:00.000Z",
+  }, "2026-09-26");
+  assert.equal(pastMidnight.occurrence_date, "2026-09-26", "16:00–01:30 runs through the evening");
+  assert.equal(eventOccurrenceForDate({
+    ...workshop,
+    starts_at: "2026-09-26T13:00:00.000Z",
+    ends_at: "2026-09-26T15:00:00.000Z",
+  }, "2026-09-26"), null, "a session ending exactly at 17:00 is not an evening session");
+});
+
+test("a running session without a stated end is not assumed to reach the evening", () => {
+  const { workshop } = capturedFolketsPark();
+  const { ends_at: _end, ...openEnded } = workshop;
+  assert.equal(eventOccurrenceForDate(openEnded, "2026-09-26"), null);
+});
