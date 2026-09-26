@@ -76,226 +76,269 @@ function detailHtml(dateText = "25 juni–16 juli, 18.00–21.00", title = "Summ
     <p>Every Thursday</p>
     <p><strong>Evenemangsplats:</strong><br>Town museum</p>
     <p><strong>Adress:</strong><br>Example street 1</p>
-    <a href="https://www.google.com/maps/@55.556437,14.347752,200m" aria-label="Map to Town museum">Map</a>
+    <a href="https://www.google.com/maps/@55.556437,14.347752,200m">Map</a>
   `;
 }
+
+// A Soleil event showcase: a registered eventShowcase portlet whose server
+// state carries the event's occasions and named venues.
+const SHOWCASE_OPTIONS = {
+  sourceUrl: "https://municipality.example/event?id=event-1",
+  expectedDate: "2026-09-25",
+  expectedTitle: "Town event",
+};
+
+function showcaseState(fields = {}, metadata = {}) {
+  return {
+    id: "event-1",
+    title: "Town event",
+    ...fields,
+    metadata: {
+      dateRange: { date: "2026-09-25" },
+      occasions: [{ date: "2026-09-25", location: "Town hall" }],
+      locations: [{ name: "Town hall", adress: "Main street 4", coordinate: "55.562664, 12.974810" }],
+      ...metadata,
+    },
+  };
+}
+
+function registeredState(state, key = "12.portlet") {
+  return `<script>AppRegistry.registerInitialState('${key}',${JSON.stringify(state)});</script>`;
+}
+
+function showcase(html, key = "12.portlet") {
+  return `<div class="sv-se-soleil-eventShowcase" data-cid="${key}"></div>${html}
+    <script>AppRegistry.registerApp({portletId:'${key}',webAppId:'se.soleil.eventShowcase',requiredLibs:{}});</script>`;
+}
+
+function showcasePage(...states) {
+  return showcase(states.map((state) => registeredState(state)).join(""));
+}
+
+test("event-owned Sitevision state supplies its matching venue coordinates", () => {
+  const event = extractSitevisionEventDetail(showcasePage(showcaseState()), SHOWCASE_OPTIONS);
+  assert.equal(event.place_context, "Town hall");
+  assert.equal(event.address, "Main street 4");
+  assert.equal(event.lat, 55.562664);
+  assert.equal(event.lng, 12.974810);
+  assert.equal(event.coordinate_source, "event_state");
+});
+
+test("every Sitevision state binding must hold before a venue pin", () => {
+  const pages = {
+    "state only": (state) => showcasePage(state),
+    "beside the page's venue field": (state) =>
+      `<p><strong>Evenemangsplats:</strong><br>Town hall</p>${showcasePage(state)}`,
+  };
+  const cases = {
+    "another event id": showcaseState({ id: "event-2" }),
+    "another title": showcaseState({ title: "Different event" }),
+    "no title": showcaseState({ title: undefined }),
+    "an empty title": showcaseState({ title: "" }),
+    "the listed day among no occasion": showcaseState({}, {
+      dateRange: { date: "2026-09-26" },
+      occasions: [{ date: "2026-09-26", location: "Town hall" }],
+    }),
+    "a date range outside its occasions": showcaseState({}, { dateRange: { date: "2026-09-26" } }),
+    "a venue that changes between occasions": showcaseState({}, {
+      occasions: [{ date: "2026-09-25", location: "Town hall" }, { date: "2026-09-26", location: "Gallery" }],
+      locations: [
+        { name: "Town hall", coordinate: "55.562664, 12.974810" },
+        { name: "Gallery", coordinate: "55.601, 13.001" },
+      ],
+    }),
+    "an occasion without a venue": showcaseState({}, {
+      occasions: [{ date: "2026-09-25", location: "Town hall" }, { date: "2026-09-26" }],
+    }),
+    "a venue that is not text": showcaseState({}, {
+      occasions: [{ date: "2026-09-25", location: 7 }],
+      locations: [{ name: 7, coordinate: "55.562664, 12.974810" }],
+    }),
+    "a venue listed twice": showcaseState({}, {
+      locations: [
+        { name: "Town hall", coordinate: "55.562664, 12.974810" },
+        { name: "Town hall", coordinate: "55.601, 13.001" },
+      ],
+    }),
+    "a coordinate that is not a point": showcaseState({}, {
+      locations: [{ name: "Town hall", coordinate: "not a point" }],
+    }),
+  };
+  for (const [variant, page] of Object.entries(pages)) {
+    assert.equal(extractSitevisionEventDetail(page(showcaseState()), SHOWCASE_OPTIONS).lat, 55.562664, variant);
+    for (const [reason, state] of Object.entries(cases)) {
+      const event = extractSitevisionEventDetail(page(state), SHOWCASE_OPTIONS);
+      assert.equal(event.lat, undefined, `${variant}: ${reason}`);
+      assert.equal(event.lng, undefined, `${variant}: ${reason}`);
+      assert.equal(
+        event.place_context,
+        variant === "state only" ? undefined : "Town hall",
+        `${variant}: ${reason} keeps only the page's own venue`,
+      );
+    }
+  }
+});
+
+test("conflicting or incomplete states of one event do not choose a pin", () => {
+  const moved = showcaseState({}, { locations: [{ name: "Town hall", coordinate: "55.601, 13.001" }] });
+  const incomplete = showcaseState({}, { locations: [{ name: "Town hall", coordinate: "not a point" }] });
+  assert.equal(
+    extractSitevisionEventDetail(showcasePage(showcaseState(), showcaseState()), SHOWCASE_OPTIONS).lat,
+    55.562664,
+    "agreeing states keep the pin",
+  );
+  for (const html of [
+    showcasePage(showcaseState(), moved),
+    showcasePage(moved, showcaseState()),
+    showcasePage(showcaseState(), incomplete),
+    showcasePage(incomplete, showcaseState()),
+  ]) {
+    assert.equal(extractSitevisionEventDetail(html, SHOWCASE_OPTIONS).lat, undefined);
+  }
+});
+
+test("malformed event showcase state vetoes a second valid state", () => {
+  const bad = `<script>AppRegistry.registerInitialState('12.portlet',{"id":"event-1","metadata":{"occasions":[</script>`;
+  assert.equal(extractSitevisionEventDetail(showcasePage(showcaseState()) + bad, SHOWCASE_OPTIONS).lat, undefined);
+});
+
+test("the page's venue field must name the state's venue", () => {
+  const page = (venue) => `<p><strong>Evenemangsplats:</strong><br>${venue}</p>${showcasePage(showcaseState())}`;
+  assert.equal(extractSitevisionEventDetail(page("Town  HALL"), SHOWCASE_OPTIONS).lat, 55.562664);
+  const other = extractSitevisionEventDetail(page("Gallery"), SHOWCASE_OPTIONS);
+  assert.equal(other.lat, undefined);
+  assert.equal(other.place_context, "Gallery");
+});
+
+test("only a registered event showcase can supply a state pin", () => {
+  const state = registeredState(showcaseState(), "12.widget");
+  assert.equal(extractSitevisionEventDetail(showcase(state, "12.widget"), SHOWCASE_OPTIONS).lat, 55.562664);
+  const cases = {
+    "no app registration": `<div class="sv-custom-module" data-cid="12.widget"></div>${state}`,
+    "another app": `<div data-cid="12.widget"></div>${state}
+      <script>AppRegistry.registerApp({portletId:'12.widget',webAppId:'se.example.share',requiredLibs:{}});</script>`,
+    "a showcase registration running into the next app": `<div data-cid="12.widget"></div>${state}
+      <script>AppRegistry.registerApp({portletId:'12.a',webAppId:'se.soleil.eventShowcase',requiredLibs:{}})
+      AppRegistry.registerApp({portletId:'12.widget',webAppId:'se.example.share',requiredLibs:{}});</script>`,
+  };
+  for (const [reason, html] of Object.entries(cases)) {
+    assert.equal(extractSitevisionEventDetail(html, SHOWCASE_OPTIONS).lat, undefined, reason);
+  }
+});
+
+// A Sitevision detail page without event state: its own title heading, date
+// and venue field, with one Google Maps link and no accessibility label.
+const LEGACY_OPTIONS = {
+  sourceUrl: "https://municipality.example/events/town-event",
+  expectedDate: "2026-09-25",
+  expectedTitle: "Town event",
+  timezone: "Europe/Stockholm",
+};
+
+function legacyPage({
+  heading = "<h1>Town event</h1>",
+  date = "25 september, 18.00–20.00",
+  venue = "<p><strong>Evenemangsplats:</strong><br>Gallery</p>",
+  map = '<a href="https://www.google.com/maps/@55.601,13.001,17z">Karta</a>',
+} = {}) {
+  return `${heading}<span id="Datumochtid">Datum och tid</span><p>${date}</p>${venue}${map}`;
+}
+
+test("a detail page bound to its listing row supplies its one map link", () => {
+  const unrelatedApps = `
+    <script>AppRegistry.registerInitialState('12.cookies',{"consent":{"necessary":true}});</script>
+    <script>AppRegistry.registerInitialState('12.feedback',{"pageId":"4.1","question":"Hittade du det du sökte?"});</script>`;
+  for (const options of [LEGACY_OPTIONS, SHOWCASE_OPTIONS]) {
+    const event = extractSitevisionEventDetail(legacyPage() + unrelatedApps, options);
+    assert.equal(event.place_context, "Gallery");
+    assert.equal(event.lat, 55.601);
+    assert.equal(event.lng, 13.001);
+    assert.equal(event.coordinate_source, "map_link");
+  }
+  const logo = legacyPage({ heading: '<h1 class="logo"><img alt="Kommun"></h1><h1>Town event</h1>' });
+  assert.equal(extractSitevisionEventDetail(logo, LEGACY_OPTIONS).lat, 55.601, "a logo heading beside the title");
+});
+
+test("event-owned state keeps even a bound page map from standing in for its venue", () => {
+  const cases = {
+    "another event's state": registeredState(showcaseState({ id: "event-2", title: "Different event" })),
+    "a state without venues": registeredState(showcaseState({}, { locations: undefined })),
+    "an unreadable event state":
+      `<script>AppRegistry.registerInitialState('12.portlet',{"id":"event-1","metadata":{"occasions":[{"date":"2026-09-25"}],"locations":[</script>`,
+    "a state registered under a variable":
+      `<script>var key='12.portlet';AppRegistry.registerInitialState(key,${JSON.stringify(showcaseState())});</script>`,
+    "an event showcase app": showcase(""),
+  };
+  for (const options of [LEGACY_OPTIONS, SHOWCASE_OPTIONS]) {
+    assert.equal(extractSitevisionEventDetail(legacyPage(), options).lat, 55.601);
+    for (const [reason, state] of Object.entries(cases)) {
+      const event = extractSitevisionEventDetail(legacyPage() + state, options);
+      assert.equal(event.lat, undefined, reason);
+      assert.equal(event.place_context, "Gallery", reason);
+    }
+  }
+});
+
+test("a legacy map pin needs the listing row's title, day and one venue", () => {
+  const cases = {
+    "another title heading": legacyPage({ heading: "<h1>Different event</h1>" }),
+    "the title outside any h1": legacyPage({ heading: '<h1 class="logo"><img alt="Kommun"></h1><h2>Town event</h2>' }),
+    "an empty h1": legacyPage({ heading: "<h1></h1>" }),
+    "the listed day outside the stated range": legacyPage({ date: "26 september, 18.00–20.00" }),
+    "no readable date": legacyPage({ date: "Varje torsdag, 18.00–20.00" }),
+    "two venue fields": legacyPage({
+      venue: "<p><strong>Evenemangsplats:</strong><br>Gallery</p><p><strong>Evenemangsplats:</strong><br>Harbour</p>",
+    }),
+    "no venue field": legacyPage({ venue: "" }),
+    "an empty venue field": legacyPage({ venue: "<p><strong>Evenemangsplats:</strong><br></p>" }),
+  };
+  for (const [reason, html] of Object.entries(cases)) {
+    const event = extractSitevisionEventDetail(html, LEGACY_OPTIONS);
+    assert.equal(event.lat, undefined, reason);
+    assert.equal(event.lng, undefined, reason);
+  }
+});
+
+test("the site frame and competing maps never supply a legacy venue pin", () => {
+  const body = legacyPage({ map: "" });
+  const eventMap = '<a href="https://www.google.com/maps/@55.601,13.001,17z">Karta</a>';
+  const siteMap = '<a href="https://www.google.com/maps/@55.605,13.003,17z">Hitta hit</a>';
+  // Each part of the site frame on its own, so none relies on another's boundary.
+  const frame = {
+    header: (content, site) => `<header><nav><a href="/">Start</a></nav>${site}</header>${content}`,
+    footer: (content, site) => `${content}<footer><p><strong>Besöksadress:</strong><br>Stortorget 1</p>${site}</footer>`,
+    contentinfo: (content, site) => `${content}<div class="sv-layout" role="contentinfo"><div>${site}</div></div>`,
+    "after main": (content, site) => `<main>${content}</main><div class="sv-layout">${site}</div>`,
+  };
+  for (const [place, page] of Object.entries(frame)) {
+    assert.equal(
+      extractSitevisionEventDetail(page(body + eventMap, ""), LEGACY_OPTIONS).lat,
+      55.601,
+      `${place}: the event's own map`,
+    );
+    assert.equal(
+      extractSitevisionEventDetail(page(body + eventMap, siteMap), LEGACY_OPTIONS).lat,
+      55.601,
+      `${place}: a site map there never competes with the event's map`,
+    );
+    assert.equal(
+      extractSitevisionEventDetail(page(body, siteMap), LEGACY_OPTIONS).lat,
+      undefined,
+      `${place}: a site map there never stands in for the event's map`,
+    );
+  }
+  assert.equal(
+    extractSitevisionEventDetail(`<main>${body}${eventMap}${siteMap}</main>`, LEGACY_OPTIONS).lat,
+    undefined,
+    "two maps in the content leave the venue ambiguous",
+  );
+});
 
 // Sitevision detail pages expose one heading anchor per section, wrapped in
 // portlets whose layout ids start with "svid". The real reviewed pages were not
 // observable from the development session; this fixture follows the adapter's
 // existing anchor contract with the reviewed defect's shape: an explicit range,
 // one clock range and an "Återkommande tillfällen" section.
-function showcase(html, key = "12.portlet") {
-  return `<div class="sv-se-soleil-eventShowcase" data-cid="${key}"></div>${html}
-    <script>AppRegistry.registerApp({portletId:'${key}',webAppId:'se.soleil.eventShowcase',requiredLibs:{}});</script>`;
-}
-
-test("event-owned Sitevision state supplies its matching venue coordinates", () => {
-  const html = showcase(`<script>AppRegistry.registerInitialState('12.portlet',${JSON.stringify({
-    id: "event-1", title: "Town event",
-    metadata: {
-      dateRange: { date: "2026-09-25" },
-      occasions: [{ date: "2026-09-25", location: "Town hall" }],
-      locations: [{ name: "Town hall", adress: "Main street 4", coordinate: "55.562664, 12.974810" }],
-    },
-  })});</script>`);
-  const event = extractSitevisionEventDetail(html, {
-    sourceUrl: "https://municipality.example/event?id=event-1",
-    expectedDate: "2026-09-25", expectedTitle: "Town event",
-  });
-  assert.equal(event.place_context, "Town hall");
-  assert.equal(event.address, "Main street 4");
-  assert.equal(event.lat, 55.562664);
-  assert.equal(event.lng, 12.974810);
-});
-
-test("invalid event state cannot borrow a page-global map coordinate", () => {
-  const html = `<script>AppRegistry.registerInitialState('12.portlet',${JSON.stringify({
-    id: "other-event", title: "Different event",
-    metadata: { occasions: [{ date: "2026-09-25", location: "Gallery" }],
-      locations: [{ name: "Gallery", coordinate: "55.601, 13.001" }] },
-  })});</script><a href="https://www.google.com/maps/@55.605,13.003,200m">City map</a>`;
-  const event = extractSitevisionEventDetail(html, {
-    sourceUrl: "https://municipality.example/event?id=event-1",
-    expectedDate: "2026-09-25", expectedTitle: "Town event",
-  });
-  assert.equal(event.lat, undefined);
-  assert.equal(event.lng, undefined);
-});
-
-test("Sitevision location state must identify the listed event title", () => {
-  const html = `<script>AppRegistry.registerInitialState('12.portlet',${JSON.stringify({
-    id: "event-1", title: "Different event",
-    metadata: { dateRange: { date: "2026-09-25" }, occasions: [{ date: "2026-09-25", location: "Town hall" }],
-      locations: [{ name: "Town hall", coordinate: "55.562664, 12.974810" }] },
-  })});</script>`;
-  const event = extractSitevisionEventDetail(html, {
-    sourceUrl: "https://municipality.example/event?id=event-1",
-    expectedDate: "2026-09-25", expectedTitle: "Town event",
-  });
-  assert.equal(event.lat, undefined);
-  assert.equal(event.lng, undefined);
-});
-
-test("Sitevision event state refuses unrelated pages and changing venues", () => {
-  const state = (id, occasions, coordinate = "55.562664, 12.974810") =>
-    `<script>AppRegistry.registerInitialState('12.portlet',${JSON.stringify({
-      id, title: "Town event",
-      metadata: { dateRange: { date: "2026-09-25" }, occasions, locations: [
-        { name: "Town hall", coordinate }, { name: "Gallery", coordinate: "55.601, 13.001" },
-      ] },
-    })});</script>`;
-  const options = { sourceUrl: "https://municipality.example/event?id=event-1", expectedDate: "2026-09-25", expectedTitle: "Town event" };
-  for (const page of [
-    state("other-event", [{ date: "2026-09-25", location: "Town hall" }]),
-    state("event-1", [{ date: "2026-09-26", location: "Town hall" }]),
-    state("event-1", [{ date: "2026-09-25", location: "Town hall" }, { date: "2026-09-26", location: "Gallery" }]),
-    state("event-1", [{ date: "2026-09-25", location: "Town hall" }], "not a point"),
-  ]) {
-    const result = extractSitevisionEventDetail(page, options);
-    assert.equal(result.lat, undefined);
-    assert.equal(result.lng, undefined);
-  }
-});
-
-test("conflicting matching Sitevision states do not choose the first pin", () => {
-  const state = (coordinate) => `<script>AppRegistry.registerInitialState('12.portlet',${JSON.stringify({
-    id: "event-1", title: "Town event",
-    metadata: { dateRange: { date: "2026-09-25" }, occasions: [{ date: "2026-09-25", location: "Town hall" }],
-      locations: [{ name: "Town hall", coordinate }] },
-  })});</script>`;
-  const event = extractSitevisionEventDetail(
-    state("55.562664, 12.974810") + state("55.601, 13.001"),
-    { sourceUrl: "https://municipality.example/event?id=event-1",
-      expectedDate: "2026-09-25", expectedTitle: "Town event" },
-  );
-  assert.equal(event.lat, undefined);
-  assert.equal(event.lng, undefined);
-});
-
-test("valid and incomplete same-event states cannot yield a pin", () => {
-  const state = (locations) => showcase(`<script>AppRegistry.registerInitialState('12.portlet',${JSON.stringify({
-    id: "event-1", title: "Town event", metadata: {
-      dateRange: { date: "2026-09-25" },
-      occasions: [{ date: "2026-09-25", location: "Town hall" }], locations,
-    },
-  })});</script>`);
-  const valid = state([{ name: "Town hall", coordinate: "55.562664, 12.974810" }]);
-  const invalid = state([{ name: "Town hall", coordinate: "not a point" }]);
-  const options = { sourceUrl: "https://municipality.example/event?id=event-1",
-    expectedTitle: "Town event", expectedDate: "2026-09-25" };
-  assert.equal(extractSitevisionEventDetail(valid + invalid, options).lat, undefined);
-  assert.equal(extractSitevisionEventDetail(invalid + valid, options).lat, undefined);
-});
-
-test("contradictory state date range rejects its otherwise matching pin", () => {
-  const html = showcase(`<script>AppRegistry.registerInitialState('12.portlet',${JSON.stringify({
-    id: "event-1", title: "Town event", metadata: {
-      dateRange: { date: "2026-09-26" },
-      occasions: [{ date: "2026-09-25", location: "Town hall" }],
-      locations: [{ name: "Town hall", coordinate: "55.562664, 12.974810" }],
-    },
-  })});</script>`);
-  assert.equal(extractSitevisionEventDetail(html, {
-    sourceUrl: "https://municipality.example/event?id=event-1",
-    expectedTitle: "Town event", expectedDate: "2026-09-25",
-  }).lat, undefined);
-});
-
-test("malformed event showcase state vetoes a second valid state", () => {
-  const good = showcase(`<script>AppRegistry.registerInitialState('12.portlet',${JSON.stringify({
-    id: "event-1", title: "Town event", metadata: {
-      dateRange: { date: "2026-09-25" },
-      occasions: [{ date: "2026-09-25", location: "Town hall" }],
-      locations: [{ name: "Town hall", coordinate: "55.562664, 12.974810" }],
-    },
-  })});</script>`);
-  const bad = `<script>AppRegistry.registerInitialState('12.portlet',{"id":"event-1","metadata":{"occasions":[</script>`;
-  assert.equal(extractSitevisionEventDetail(good + bad, {
-    sourceUrl: "https://municipality.example/event?id=event-1",
-    expectedTitle: "Town event", expectedDate: "2026-09-25",
-  }).lat, undefined);
-});
-
-test("unparseable event-like state cannot borrow a page-global map", () => {
-  const html = `<script>AppRegistry.registerInitialState('12.portlet',{"id":"event-1","metadata":{"occasions":[{"date":"2026-09-25"}],"locations":[</script>
-    <a href="https://www.google.com/maps/@55.605,13.003,200m">City map</a>`;
-  const event = extractSitevisionEventDetail(html, {
-    sourceUrl: "https://municipality.example/event?id=event-1",
-    expectedDate: "2026-09-25", expectedTitle: "Town event",
-  });
-  assert.equal(event.lat, undefined);
-  assert.equal(event.lng, undefined);
-});
-
-test("matching metadata in a non-event registry state cannot create a pin", () => {
-  const html = `<script>AppRegistry.registerInitialState('12.other-widget',${JSON.stringify({
-    id: "event-1", title: "Town event",
-    metadata: { occasions: [{ date: "2026-09-25", location: "Town hall" }],
-      locations: [{ name: "Town hall", coordinate: "55.562664, 12.974810" }] },
-  })});</script>`;
-  const event = extractSitevisionEventDetail(html, {
-    sourceUrl: "https://municipality.example/event?id=event-1",
-    expectedDate: "2026-09-25", expectedTitle: "Town event",
-  });
-  assert.equal(event.lat, undefined);
-  assert.equal(event.lng, undefined);
-});
-
-test("event state missing locations cannot borrow a page-global map", () => {
-  const html = `<script>AppRegistry.registerInitialState('12.portlet',${JSON.stringify({
-    id: "event-1", title: "Town event",
-    metadata: { dateRange: { date: "2026-09-25" },
-      occasions: [{ date: "2026-09-25", location: "Town hall" }] },
-  })});</script><a href="https://www.google.com/maps/@55.605,13.003,200m">City map</a>`;
-  const event = extractSitevisionEventDetail(html, {
-    sourceUrl: "https://municipality.example/event?id=event-1",
-    expectedDate: "2026-09-25", expectedTitle: "Town event",
-  });
-  assert.equal(event.lat, undefined);
-  assert.equal(event.lng, undefined);
-});
-
-test("complete event-looking state outside the event showcase cannot create a pin", () => {
-  const html = `<div class="sv-custom-module" data-cid="12.other-widget"></div>
-    <script>AppRegistry.registerInitialState('12.other-widget',${JSON.stringify({
-      id: "event-1", title: "Town event",
-      metadata: { dateRange: { date: "2026-09-25" },
-        occasions: [{ date: "2026-09-25", location: "Town hall" }],
-        locations: [{ name: "Town hall", coordinate: "55.562664, 12.974810" }] },
-    })});</script>`;
-  const event = extractSitevisionEventDetail(html, {
-    sourceUrl: "https://municipality.example/event?id=event-1",
-    expectedDate: "2026-09-25", expectedTitle: "Town event",
-  });
-  assert.equal(event.lat, undefined);
-  assert.equal(event.lng, undefined);
-});
-
-test("legacy map links require a matching event heading and venue label", () => {
-  const page = `<h1>Different event</h1><span id="Datumochtid"></span><p>15 juli, 18.00–21.00</p>
-    <p><strong>Evenemangsplats:</strong><br>Town museum</p>
-    <a href="https://www.google.com/maps/@55.556437,14.347752,200m" aria-label="Map to Town museum">Map</a>`;
-  const event = extractSitevisionEventDetail(page, {
-    sourceUrl: "https://municipality.example/events/summer-market",
-    expectedTitle: "Summer market", expectedDate: "2026-07-15", timezone: "Europe/Stockholm",
-  });
-  assert.equal(event.lat, undefined);
-  assert.equal(event.lng, undefined);
-});
-
-test("unlabelled or competing maps cannot borrow a legacy event venue", () => {
-  const page = `<h1>Summer market</h1><span id="Datumochtid"></span><p>15 juli, 18.00–21.00</p>
-    <p><strong>Evenemangsplats:</strong><br>Town museum</p>
-    <a href="https://www.google.com/maps/@55.556437,14.347752,200m">Map</a>`;
-  const options = { sourceUrl: "https://municipality.example/events/summer-market",
-    expectedTitle: "Summer market", expectedDate: "2026-07-15", timezone: "Europe/Stockholm" };
-  assert.equal(extractSitevisionEventDetail(page, options).lat, undefined);
-  const named = page.replace('>Map</a>', ' aria-label="Map to Town museum">Map</a>');
-  const withCityMap = `${named}<a href="https://www.google.com/maps/@55.605,13.003,200m">City map</a>`;
-  assert.equal(extractSitevisionEventDetail(withCityMap, options).lat, undefined);
-});
-
 function recurringDetailHtml({
   timing = "25 juni–16 juli, 18.00–21.00",
   recurrence,
@@ -312,7 +355,7 @@ function recurringDetailHtml({
     <div class="sv-text-portlet" id="svid12_6f">
       <p class="normal"><strong>Evenemangsplats:</strong><br>Stortorget</p>
     </div>
-    <a href="https://www.google.com/maps/@55.556437,14.347752,200m" aria-label="Karta till Stortorget">Karta</a>
+    <a href="https://www.google.com/maps/@55.556437,14.347752,200m">Karta</a>
   `;
 }
 
@@ -661,6 +704,90 @@ test("provider bounds detail fetches and keeps listing rows when detail enrichme
   assert.deepEqual(enriched.time_window.dates, THURSDAYS);
   const listingOnly = result.time_sensitive_events.find((event) => event.title === "Two");
   assert.equal(listingOnly.time_window.kind, "continuous", "a failed detail keeps the listing row");
+});
+
+function detailPageProvider(rows, details) {
+  return createSitevisionCalendarProvider({
+    endpoint: "https://municipality.example/calendar",
+    status: "active",
+    timezone: "Europe/Stockholm",
+    fetcher: async (url) => {
+      const path = new URL(String(url)).pathname;
+      if (path === "/calendar") return textResponse(listingHtml(rows));
+      if (details[path]) return textResponse(details[path]);
+      throw new Error(`unexpected fixture URL: ${url}`);
+    },
+  });
+}
+
+test("a detail page that cannot bind a pin still supplies its other facts", async () => {
+  const provider = detailPageProvider([
+    eventArticle({ slug: "logo", title: "Summer market", date: "16 juli" }),
+    eventArticle({ slug: "state?id=event-1", title: "Harbour market", date: "16 juli" }),
+  ], {
+    "/events/logo": detailHtml(undefined, "Summer market")
+      .replace("<h1>Summer market</h1>", '<h1 class="logo"><img alt="Kommun"></h1>'),
+    "/events/state": detailHtml(undefined, "Harbour market") + showcasePage(showcaseState({ title: undefined })),
+  });
+  const result = await provider.create(city).collect({ date: "2026-07-16" });
+
+  assert.equal(result.time_sensitive_events.length, 2);
+  for (const event of result.time_sensitive_events) {
+    assert.equal(event.time_window.kind, "occurrences", event.title);
+    assert.deepEqual(event.time_window.dates, THURSDAYS, event.title);
+    assert.equal(event.recurrence, "Every Thursday", event.title);
+    assert.equal(event.place_context, "Town museum", event.title);
+    assert.equal(event.address, "Example street 1", event.title);
+    assert.equal(event.lat, undefined, event.title);
+  }
+});
+
+test("a coordinate that detail pages claim for different venues is dropped", async () => {
+  const page = (title, venue, point) => `<h1>${title}</h1>
+    <span id="Datumochtid">Datum och tid</span><p>15 juli, 18.00–21.00</p>
+    <p><strong>Evenemangsplats:</strong><br>${venue}</p>
+    <a href="https://www.google.com/maps/@${point},17z">Karta</a>`;
+  const provider = detailPageProvider(
+    ["one", "two", "three", "four"].map((slug) => eventArticle({ slug, title: slug })),
+    {
+      "/events/one": page("one", "Town museum", "55.605,13.003"),
+      "/events/two": page("two", "Harbour", "55.605,13.003"),
+      "/events/three": page("three", "Gallery", "55.601,13.001"),
+      "/events/four": page("four", "Gallery", "55.601,13.001"),
+    },
+  );
+  const result = await provider.create(city).collect({ date: "2026-07-15" });
+
+  assert.deepEqual(
+    Object.fromEntries(result.time_sensitive_events.map((event) => [event.title, event.lat ?? null])),
+    { one: null, two: null, three: 55.601, four: 55.601 },
+  );
+  assert.deepEqual(
+    result.time_sensitive_events.map((event) => event.place_context),
+    ["Town museum", "Harbour", "Gallery", "Gallery"],
+  );
+});
+
+test("event-state venues that share a building point keep their pins", async () => {
+  const page = (id, title, venue) => showcasePage(showcaseState({ id, title }, {
+    dateRange: { date: "2026-07-15" },
+    occasions: [{ date: "2026-07-15", location: venue }],
+    locations: [{ name: venue, coordinate: "55.601, 13.001" }],
+  }));
+  const provider = detailPageProvider([
+    eventArticle({ slug: "big?id=big", title: "Big hall concert" }),
+    eventArticle({ slug: "small?id=small", title: "Small hall talk" }),
+  ], {
+    "/events/big": page("big", "Big hall concert", "Big hall"),
+    "/events/small": page("small", "Small hall talk", "Small hall"),
+  });
+  const result = await provider.create(city).collect({ date: "2026-07-15" });
+
+  assert.deepEqual(
+    result.time_sensitive_events.map((event) => [event.place_context, event.lat]),
+    [["Big hall", 55.601], ["Small hall", 55.601]],
+  );
+  assert.ok(result.time_sensitive_events.every((event) => !("coordinate_source" in event)));
 });
 
 test("candidate Sitevision providers stay default-off until explicitly enabled", async () => {
