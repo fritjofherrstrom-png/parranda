@@ -439,7 +439,7 @@ test("restoring a snapshot cancels the compose that would have overwritten it", 
   t.after(() => h.unmount());
 
   // Save the day so there is something to restore.
-  await click(h, buttonMatching(h, /^☆$/));
+  await click(h, h.container.querySelector('button[aria-label="Save this day"]'));
   await h.clock.advance(50);
 
   // Start a recompose and leave it in flight.
@@ -467,7 +467,7 @@ test("restoring drops the ledger rather than inheriting it", async (t) => {
   const h = await plannerWithDay(["a", "b", "c"]);
   t.after(() => h.unmount());
 
-  await click(h, buttonMatching(h, /^☆$/));
+  await click(h, h.container.querySelector('button[aria-label="Save this day"]'));
   await h.clock.advance(50);
   await keepFirstStop(h);
   assert.match(h.text(), KEPT_LEDGER, "a commitment is held");

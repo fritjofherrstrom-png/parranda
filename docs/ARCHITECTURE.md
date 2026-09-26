@@ -23,18 +23,24 @@ from Simrishamn to Rio de Janeiro.
 
 ## Product Spine
 
-The product flow is:
+The product flow of the modern surface is:
 
 ```text
-Landing -> City Page -> Pulse -> Blitz -> Planner
+Landing -> Your day (Planner) -> Now (Live + Blitz)
 ```
 
-- `Landing` helps the user enter a city or global mode.
-- `City Page` frames the current city state: curated, preview, internal, or
-  fallback.
-- `Pulse` decides what matters now.
-- `Blitz` decides the next best move.
-- `Planner` builds the fuller day.
+- `Landing` chooses the day's anchor once: a typed place, a curated city, or
+  the user's position.
+- `Your day` (`/anywhere`) is the Planner result: what the day contains, what
+  it did for the user's picks, how much to trust it, and the ordered route.
+- `Now` sits under the day on the same page. `Live` is the user-facing name of
+  Pulse (what matters now: weather, events); `Blitz` offers one next move.
+  Neither changes the day.
+
+The legacy flow `Landing -> City Page -> Pulse -> Blitz -> Planner` still
+serves direct `/:city` links, but the landing no longer routes into it. See
+`docs/APP_ARCHITECTURE_AND_HIERARCHY.md` for the page hierarchy and the
+retirement path.
 
 These surfaces should feel like one product across cities. A city can have more
 or less data, but it should not become a different app with different sections,

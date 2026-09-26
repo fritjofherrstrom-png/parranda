@@ -72,6 +72,36 @@ test("GET / serves the new landing unconditionally with lang + injected registry
   }
 });
 
+function injectedRegistry(body) {
+  const match = String(body).match(/window\.__PARRANDA_CITIES__ = (\{[\s\S]*?\});<\/script>/);
+  assert.ok(match, "registry JSON is injected");
+  return JSON.parse(match[1]);
+}
+
+test("the injected registry labels each city in the landing's language and finds either name", async () => {
+  const dist = makeDist();
+  try {
+    await withServer({ anywhereV2Dir: dist }, async (server) => {
+      const english = injectedRegistry((await get(server, "/?lang=en")).body);
+      const swedish = injectedRegistry((await get(server, "/?lang=sv")).body);
+      const defaultLang = injectedRegistry((await get(server, "/")).body);
+
+      // The chip on the English landing used to read "Rom".
+      assert.equal(english.rome.label, "Rome");
+      assert.equal(defaultLang.rome.label, "Rome", "English is the default language");
+      assert.equal(swedish.rome.label, "Rom");
+      // Typing either name resolves the same city, on either page.
+      for (const registry of [english, swedish]) {
+        assert.equal(registry.rom.key, "rome");
+        assert.equal(registry.rome.key, "rome");
+      }
+      assert.equal(english.barcelona.label, "Barcelona");
+    });
+  } finally {
+    fs.rmSync(dist, { recursive: true, force: true });
+  }
+});
+
 test("a missing landing build fails LOUDLY (503) — never a silently wrong page", async () => {
   const dist = makeDist({ withLanding: false });
   try {

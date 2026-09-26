@@ -28,7 +28,7 @@ test("a registered city or exact alias keeps citypack curation on the modern pla
   assert.equal(curatedCityHref(REGISTRY.rome, "en"), "/anywhere?city=rome&place=Rome&planner=open&lang=en");
 });
 
-test("the frontpage Extra curated chips cannot link back into a legacy city shell", () => {
+test("the frontpage hand-picked city chips cannot link back into a legacy city shell", () => {
   assert.match(landingSource, /href=\{curatedCityHref\(city, lang\)/);
   assert.doesNotMatch(landingSource, /href=\{`\/\$\{city\.key\}/);
 });

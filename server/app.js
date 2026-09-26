@@ -1243,17 +1243,24 @@ function getLandingSearchCities() {
   });
 }
 
-function buildLandingCityRegistry() {
+function buildLandingCityRegistry(lang = "en") {
   const entries = {};
   getLandingSearchCities().forEach((cityConfig) => {
     const entry = {
       key: cityConfig.key,
-      label: cityConfig.label,
+      // The chip, the inline completion and the planner hand-off all show this
+      // label, so it speaks the page's language ("Rome" on the English landing,
+      // "Rom" on the Swedish one).
+      label: resolveDisplayLabel(cityConfig, "", lang),
       status: cityConfig.visibility || "public",
       center: { lat: cityConfig.center.lat, lng: cityConfig.center.lng },
     };
     entries[cityConfig.key] = entry;
-    entries[cityConfig.label.toLowerCase()] = entry;
+    // Either language's name finds the city, whichever page it is typed on.
+    [cityConfig.label, getCitySearchLabel(cityConfig)].forEach((name) => {
+      const alias = String(name || "").trim().toLowerCase();
+      if (alias) entries[alias] = entry;
+    });
     if (cityConfig.key === "rome") {
       entries["rome"] = entry;
       entries["roma"] = entry;
@@ -1530,7 +1537,7 @@ function buildApp({
     response.type("html").send(
       renderLandingV2Shell(fs.readFileSync(landingV2Html, "utf8"), {
         lang: request.query?.lang,
-        registryJson: serializeInlineJson(buildLandingCityRegistry()),
+        registryJson: serializeInlineJson(buildLandingCityRegistry(normalizeLanguage(request.query?.lang))),
       }),
     );
   });
@@ -2180,7 +2187,10 @@ function buildApp({
         }
         baselineBody = {
           ...result,
-          city_label: cityConfig.label,
+          // The modern planner titles the day with this label, so it speaks the
+          // request's language ("A day in Rome", "En dag i Rom") — the same rule
+          // the city shells use.
+          city_label: resolveDisplayLabel(cityConfig, "", lang),
           requested_city: requestedCity,
           city_fallback_used: cityFallbackUsed,
           ...(previewEngineStatus ? { preview_engine: previewEngineStatus } : {}),

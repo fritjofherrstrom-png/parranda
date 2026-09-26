@@ -9,6 +9,11 @@ export interface RouteMarkerPresentation {
   clustered: boolean;
 }
 
+export function routePathIsSketch(
+  pathPoints: RouteMapPoint[] | null | undefined,
+  stopCount: number | null | undefined,
+): boolean;
+
 export function routeMarkerPresentation(
   stops: RouteMapPoint[] | null | undefined,
   options?: { collisionDistanceKm?: number; radiusPx?: number },
