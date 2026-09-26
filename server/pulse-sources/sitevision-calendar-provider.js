@@ -19,6 +19,7 @@ const {
   resolveSchedulePattern,
   statesDailyOccurrence,
 } = require("./source-recurrence");
+const { MAX_OCCURRENCE_DATES } = require("./time-sensitive-event");
 
 const SITEVISION_CALENDAR_PROVIDER_ID = "generic-sitevision-calendar";
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
@@ -283,6 +284,11 @@ function extractSitevisionEventDetail(html, options = {}) {
     lng: point.lng,
     // Which bound evidence placed the pin; the provider keeps it off the event.
     coordinate_source: point.lat != null ? point.source : null,
+    // Session times the bound event state states; the provider uses them only
+    // for a listing row that states no clock of its own.
+    state_timing: eventStateTiming(eventLocation.occasions, {
+      timezone: normalizeIanaTimezone(options.timezone),
+    }),
     // Source text for inspection only; the parsed timing above is the fact.
     recurrence: recurrence ? recurrence.slice(0, RECURRENCE_TEXT_MAX_CHARS) : null,
   }) || {};
@@ -315,9 +321,14 @@ async function enrichFromDetailPages(events, fetcher, options = {}) {
       // Detail timing is stronger evidence than the listing row. Replace the
       // timing atoms together so a listing instant cannot survive beside a
       // detail period or occurrence list and contradict it downstream.
-      if (detail.time_window) {
+      // A listing row that states only its day (or days) is not an all-day
+      // session when the event's own state gives the occasions a clock.
+      const timing = detail.time_window
+        ? detail
+        : detail.state_timing && statesNoClock(event) ? detail.state_timing : null;
+      if (timing) {
         for (const key of TIMING_FIELDS) {
-          if (detail[key] != null && detail[key] !== "") event[key] = detail[key];
+          if (timing[key] != null && timing[key] !== "") event[key] = timing[key];
           else delete event[key];
         }
       }
@@ -330,6 +341,10 @@ async function enrichFromDetailPages(events, fetcher, options = {}) {
     }
   });
   dropSharedPageCoordinates(mapPinned);
+}
+
+function statesNoClock(event) {
+  return !event.starts_at && (!event.time_window || event.time_window.kind === "all_day");
 }
 
 // One map-link coordinate claimed for differently named venues is a site-wide
@@ -582,6 +597,10 @@ function extractEventOwnedLocation(html, options = {}) {
   let eventState = /\bwebAppId\s*:\s*['"]se\.soleil\.eventShowcase['"]/.test(source);
   let vetoed = false;
   let matched = null;
+  // The occasions bound to the listed event, kept apart from the venue: a
+  // state that names no single mappable venue can still state session times.
+  let occasions = null;
+  let occasionsVetoed = false;
   const starts = source.matchAll(
     /AppRegistry\.registerInitialState\(\s*(?:(['"])([^'"]+)\1|[^,()\s]*)\s*,\s*/g,
   );
@@ -590,7 +609,10 @@ function extractEventOwnedLocation(html, options = {}) {
     const { state, fragment } = readRegisteredState(source, start.index + start[0].length);
     if (!state) {
       // A malformed or truncated event state is still the page's own claim.
-      if (showcase) vetoed = true;
+      if (showcase) {
+        vetoed = true;
+        occasionsVetoed = true;
+      }
       if (showcase || (/"metadata"\s*:/.test(fragment) && /"occasions"\s*:/.test(fragment))) {
         eventState = true;
       }
@@ -606,8 +628,18 @@ function extractEventOwnedLocation(html, options = {}) {
     } else {
       matched = candidate;
     }
+    // ...and the same occasions.
+    const stated = boundShowcaseOccasions(state, binding);
+    if (!stated || (occasions && JSON.stringify(occasions) !== JSON.stringify(stated))) {
+      occasionsVetoed = true;
+    } else {
+      occasions = stated;
+    }
   }
-  return !vetoed && matched ? { ...matched, event_state: true } : { event_state: eventState };
+  const boundOccasions = !occasionsVetoed && occasions ? { occasions } : {};
+  return !vetoed && matched
+    ? { ...matched, event_state: true, ...boundOccasions }
+    : { event_state: eventState, ...boundOccasions };
 }
 
 // The JSON object registered at `from`, read within its own script element.
@@ -643,13 +675,10 @@ function readRegisteredState(source, from) {
 // The venue a showcase state binds to the listed event: its title, a
 // self-consistent date range, the listed day among its occasions, one named
 // venue for every occasion and exactly one coordinate for that venue.
-function boundShowcaseLocation(state, { expectedDate, expectedTitle }) {
-  const metadata = state.metadata || {};
-  const occasions = Array.isArray(metadata.occasions) ? metadata.occasions : [];
-  const rangeDate = validDateKey(metadata.dateRange?.date);
-  if (!expectedTitle || comparableText(state.title) !== expectedTitle ||
-      !rangeDate || !occasions.some((item) => item?.date === rangeDate) ||
-      !expectedDate || !occasions.some((item) => item?.date === expectedDate)) return null;
+function boundShowcaseLocation(state, binding) {
+  if (!bindsListedEvent(state, binding)) return null;
+  const metadata = state.metadata;
+  const occasions = metadata.occasions;
   const names = [...new Set(occasions.map((item) => item?.location))];
   if (names.length !== 1 || !htmlToText(names[0])) return null;
   const matches = Array.isArray(metadata.locations)
@@ -665,6 +694,86 @@ function boundShowcaseLocation(state, { expectedDate, expectedTitle }) {
     place_context: htmlToText(names[0]),
     address: firstString(matches[0].adress, matches[0].address),
   };
+}
+
+// A showcase state describes the listed event when its title is the listed
+// title, its date range is one of its own occasions and the listed day is one
+// of its occasions.
+function bindsListedEvent(state, { expectedDate, expectedTitle }) {
+  const metadata = state?.metadata || {};
+  const occasions = Array.isArray(metadata.occasions) ? metadata.occasions : [];
+  const rangeDate = validDateKey(metadata.dateRange?.date);
+  return Boolean(expectedTitle && comparableText(state.title) === expectedTitle &&
+    rangeDate && occasions.some((item) => item?.date === rangeDate) &&
+    expectedDate && occasions.some((item) => item?.date === expectedDate));
+}
+
+// The occasions a bound showcase state lists, each with the clock it states
+// ("18:00 – 20:00"), if any. An unreadable date or clock fails them all.
+function boundShowcaseOccasions(state, binding) {
+  if (!bindsListedEvent(state, binding)) return null;
+  const occasions = [];
+  for (const item of state.metadata.occasions) {
+    const date = validDateKey(item?.date);
+    const clockText = typeof item?.time === "string" ? htmlToText(item.time) : null;
+    const time = clockText ? parseTimeRange(clockText.replace(/[–—]/g, "-")) : null;
+    if (!date || (clockText && !time)) return null;
+    occasions.push({ date, time, label: htmlToText(item.formatted) || date, clock: clockText });
+  }
+  return occasions;
+}
+
+// The session times a bound event state states. One clock shared by every
+// occasion gives the dated session(s). Occasions whose clocks differ, or of
+// which only some state a clock, are not one session time: the stated days
+// become a period that never claims a day. Occasions without any clock say
+// nothing about the session time.
+function eventStateTiming(occasions, { timezone } = {}) {
+  if (!Array.isArray(occasions) || !occasions.some((item) => item.time)) return null;
+  const dates = [...new Set(occasions.map((item) => item.date))].sort();
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+  const label = occasions.map((item) => [item.label, item.clock].filter(Boolean).join(" ")).join("; ")
+    .slice(0, RECURRENCE_TEXT_MAX_CHARS);
+  const clocks = new Set(occasions.map((item) =>
+    item.time ? `${localClock(item.time.start)}-${localClock(item.time.end) || ""}` : ""));
+  if (clocks.size !== 1 || dates.length > MAX_OCCURRENCE_DATES) {
+    return compact({
+      starts_on: first,
+      ends_on: last,
+      time_window: compact({ kind: "period", starts_on: first, ends_on: last, timezone, label }),
+    });
+  }
+  const time = occasions[0].time;
+  if (dates.length === 1 && timezone) {
+    const day = datePartsFromKey(first);
+    const startsAt = normalizeSourceEventDateTime(localDateTime(day, time.start), { timezone });
+    const endDay = time.end && minutesOfDay(time.end) < minutesOfDay(time.start) ? addDays(day, 1) : day;
+    const endsAt = time.end
+      ? normalizeSourceEventDateTime(localDateTime(endDay, time.end), { timezone })
+      : null;
+    return compact({
+      starts_at: startsAt,
+      ends_at: endsAt,
+      starts_on: first,
+      ends_on: first,
+      time_window: compact({ kind: "continuous", starts_at: startsAt, ends_at: endsAt, label }),
+    });
+  }
+  return compact({
+    starts_on: first,
+    ends_on: last,
+    time_window: compact({
+      kind: "occurrences",
+      dates,
+      starts_on: first,
+      ends_on: last,
+      local_start: localClock(time.start),
+      local_end: localClock(time.end),
+      timezone,
+      label,
+    }),
+  });
 }
 
 // The site frame (header, navigation, footer) repeats on every page: its map,

@@ -12,7 +12,10 @@ const path = require("node:path");
 const test = require("node:test");
 
 const { buildFullDevEnvironment } = require("../scripts/dev-full");
-const { createSitevisionCalendarProvider } = require("../server/pulse-sources/sitevision-calendar-provider");
+const {
+  createSitevisionCalendarProvider,
+  extractSitevisionEventDetail,
+} = require("../server/pulse-sources/sitevision-calendar-provider");
 const {
   collectAnchorEvents,
   resolveEventFeedRegistry,
@@ -167,3 +170,111 @@ function datesOn(from, to, weekdays) {
   }
   return dates;
 }
+
+// Malmö's listing prints a session clock in its own "Tid" spans; a row without
+// them is a date-only listing, as for the captured exhibitions. This variant of
+// the captured listing drops only the concert row's two "Tid" spans, so the
+// captured event state (occasion 26 September, 20:00 – 20:30) is the only clock.
+function malmoListingWithoutConcertClock() {
+  const source = MANIFEST.sources.find((row) => row.name === "malmo");
+  const listing = fs.readFileSync(path.join(DIR, source.listing.file), "utf8");
+  const clock = /(id=5\.4968b1201a03e2e5977895[\s\S]*?<span class="dates-kempox">26 september<\/span>)\s*<span class="sr-only dates-kempox">Tid<\/span>\s*<span class="dates-kempox">20:00 – 20:30<\/span>/;
+  assert.match(listing, clock);
+  return listing.replace(clock, "$1");
+}
+
+function malmoWithDateOnlyConcert(overrides = {}) {
+  const { source, fetcher } = capturedSource("malmo");
+  const listing = malmoListingWithoutConcertClock();
+  return {
+    source,
+    fetcher: async (url) => {
+      if (String(url) === source.listing.url) return { ok: true, status: 200, text: async () => listing };
+      if (overrides[String(url)] != null) return { ok: true, status: 200, text: async () => overrides[String(url)] };
+      return fetcher(url);
+    },
+  };
+}
+
+async function malmoRows(fetcher, listingUrl) {
+  const provider = createSitevisionCalendarProvider({
+    endpoint: listingUrl,
+    status: "active",
+    timezone: "Europe/Stockholm",
+    limit: 8,
+    detailLimit: 8,
+    fetcher,
+  });
+  return (await provider.create({ key: "malmo" }).collect({ date: MANIFEST.selected_date })).time_sensitive_events;
+}
+
+test("an event-bound occasion clock replaces a date-only listing day", async () => {
+  const { source, fetcher } = malmoWithDateOnlyConcert();
+  const concert = (await malmoRows(fetcher, source.listing.url)).find((row) => row.title === "Konsert: Audi Memento");
+  assert.equal(concert.time_window.kind, "continuous");
+  assert.equal(concert.starts_at, "2026-09-26T18:00:00.000Z");
+  assert.equal(concert.ends_at, "2026-09-26T18:30:00.000Z");
+});
+
+test("a date-only listing row bound to a clocked occasion leaves Live when the session ends", async () => {
+  const { fetcher } = malmoWithDateOnlyConcert();
+  const env = buildFullDevEnvironment({}, { cacheDir: os.tmpdir() });
+  const registry = resolveEventFeedRegistry(env).filter((source) => source.id === "malmo-municipal-calendar");
+  const live = (now) => collectAnchorEvents({
+    anchor: { lat: 55.605, lng: 13.0038 },
+    now,
+    selectedDate: MANIFEST.selected_date,
+    registry,
+    fetcher,
+  });
+  const titles = (result) => result.tonight.map((event) => event.title);
+  // 19:00 local: the 20:00 session is still ahead.
+  assert.ok(titles(await live("2026-09-26T17:00:00.000Z")).includes("Konsert: Audi Memento"));
+  // 21:00 local: the session ended at 20:30 and is not listed as today's.
+  assert.ok(!titles(await live("2026-09-26T19:00:00.000Z")).includes("Konsert: Audi Memento"));
+});
+
+test("the reported Malmö kulturskola occasion keeps its 18:00 – 20:00 clock", async () => {
+  // Values reported from a saved detail page that is not in this repository
+  // (id 5.4968b1201a03e2e5977230d); only the captured concert page's markup is
+  // reused. This pins the adapter's reading of such a state, not a replayed
+  // outcome for that page.
+  const url = "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.4968b1201a03e2e5977230d";
+  const concertPage = fs.readFileSync(path.join(DIR, "malmo-4.html"), "utf8");
+  const state = {
+    id: "5.4968b1201a03e2e5977230d",
+    title: "Elevutställning på Malmö kulturskola",
+    metadata: {
+      dateRange: { date: "2026-09-26", time: "18:00 – 20:00", formatted: "26 september" },
+      occasions: [{ date: "2026-09-26", time: "18:00 – 20:00", formatted: "26 september", location: "Malmö Kulturskola", room: "Lilla galleriet" }],
+    },
+  };
+  const page = concertPage
+    .replace(/<title>[^<]*<\/title>/, `<title>${state.title}</title>`)
+    .replace(/<h1([^>]*)>[^<]*<\/h1>/, `<h1$1>${state.title}</h1>`)
+    .replace(/AppRegistry\.registerInitialState\('([^']+)',\{"id":"5\.4968b1201a03e2e5977895"[\s\S]*?\}\);<\/script>/, (_match, key) =>
+      `AppRegistry.registerInitialState('${key}',${JSON.stringify(state)});</script>`);
+  assert.ok(page.includes(state.id), "the state was replaced");
+  const detail = extractSitevisionEventDetail(page, {
+    timezone: "Europe/Stockholm",
+    expectedDate: "2026-09-26",
+    expectedTitle: state.title,
+    sourceUrl: url,
+  });
+  assert.equal(detail.state_timing.time_window.kind, "continuous");
+  assert.equal(detail.state_timing.starts_at, "2026-09-26T16:00:00.000Z");
+  assert.equal(detail.state_timing.ends_at, "2026-09-26T18:00:00.000Z");
+});
+
+test("occasions with different clocks never make a date-only row an all-day fact", async () => {
+  const concertUrl = MANIFEST.sources.find((row) => row.name === "malmo").details[4].url;
+  const page = fs.readFileSync(path.join(DIR, "malmo-4.html"), "utf8").replace(
+    /"occasions":\[\{"date":"2026-09-26","time":"20:00 – 20:30"/,
+    '"occasions":[{"date":"2026-09-27","time":"18:00 – 19:00","formatted":"27 september","location":"Folkets Park"},{"date":"2026-09-26","time":"20:00 – 20:30"',
+  );
+  assert.ok(page.includes('"date":"2026-09-27"'), "a second occasion was added");
+  const { source, fetcher } = malmoWithDateOnlyConcert({ [concertUrl]: page });
+  const concert = (await malmoRows(fetcher, source.listing.url)).find((row) => row.title === "Konsert: Audi Memento");
+  assert.equal(concert.time_window.kind, "period");
+  assert.deepEqual([concert.starts_on, concert.ends_on], ["2026-09-26", "2026-09-27"]);
+});

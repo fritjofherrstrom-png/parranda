@@ -1085,6 +1085,14 @@ every Sitevision website is trusted or safe to collect.
   site-wide map. State of unrelated apps (cookie consent, feedback) changes nothing. A
   row without a bound pin keeps its other detail facts and relies on the
   bounded venue resolver;
+- the same bound showcase state (listed id, title and day) gives a listing row
+  that states only its day or days the session clock of its occasions
+  ("18:00 – 20:00"), so it is not an all-day fact and leaves Live when the
+  session ends. One clock shared by every occasion gives the dated session or
+  occurrences; occasions whose clocks differ, or of which only some state a
+  clock, give a `period` that never claims a day. A listing row with its own
+  clock keeps it, and a row whose detail page is beyond the detail limit keeps
+  its listing timing;
 - a date range with a clock becomes `daily` only when the source states daily
   sessions. The bounded "Återkommande tillfällen" section is read with a closed
   grammar: listed dates, or weekdays inside the stated range, become explicit
