@@ -37,6 +37,12 @@ queries had no date field. A tomorrow plan therefore browsed today's events.
   evening anchor, never route-eligible. It may be listed among the following
   seven days it overlaps, labelled with the source range, the clock and
   "dagar enligt källan" / "days per source" — never "dagligen".
+- A selected-day row anchors the route's evening only when it reaches that
+  evening in the venue's clock: it starts at or after 17:00, or it is already
+  running when the day is composed (`now`) and its stated end is after 17:00.
+  `now` describes the composition clock, not the evening, so a daytime row
+  that closes earlier, or a start-only row that begins earlier, stays in Live.
+  The route-stop weave refuses such a row too (`event_not_in_evening`).
 - Ended/stale evidence cannot be revived by a future date. Date-only records
   without a timezone expire at least once their date is past everywhere; this
   conservative bound does not assign a venue timezone.
