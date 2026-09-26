@@ -78,6 +78,11 @@ test("the planner consumes the handoff and never re-prompts on arrival", () => {
   assert.equal(plannerSource.match(/requestPosition\(/g)?.length, 1, "one place asks for the position");
   assert.match(plannerSource, /async function useLocationAgain\(\) \{[\s\S]{0,300}await requestPosition\(\)/);
   assert.match(plannerSource, /onClick=\{useLocationAgain\}/);
+  // Recomposing a near-me day (an adjustment, a rebuild) reuses the chosen
+  // position; it never asks the browser in the background.
+  const resolveAndRun = plannerSource.split("async function resolveAndRun(")[1]?.split("async function plan(")[0] ?? "";
+  assert.ok(resolveAndRun.length > 0, "resolveAndRun is present");
+  assert.doesNotMatch(resolveAndRun, /currentPosition\(|requestPosition\(|geolocation/);
 });
 
 test("a language switch hands a near-me position over in storage, never in the URL", () => {

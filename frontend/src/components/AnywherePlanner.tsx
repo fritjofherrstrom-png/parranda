@@ -173,9 +173,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [place, setPlace] = useState("");
   const [cityKey, setCityKey] = useState<string | null>(null);
   const [mode, setMode] = useState<"typed" | "near_me">("typed"); // start context
-  const [geoHint, setGeoHint] = useState<string | null>(null);
   const [relocating, setRelocating] = useState(false); // near-me: position asked again
   const [relocateDenied, setRelocateDenied] = useState(false);
+  const [positionNeeded, setPositionNeeded] = useState(false); // near-me: no position in memory
+
   const [selected, setSelected] = useState<string[]>(["food", "culture", "views"]);
   const [dayOffset, setDayOffset] = useState<0 | 1>(0); // today / tomorrow
   const [walkKey, setWalkKey] = useState("balanced");
@@ -253,6 +254,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const blitzRequestRef = useRef<AbortController | null>(null);
   const blitzRequestSequenceRef = useRef(0);
   const skipFirstAdjustRef = useRef(true);
+  // Arriving through a share or language link adopts the link's inputs into
+  // state. That adoption is not an adjustment: the arrival compose already
+  // carries those inputs, so the one re-run it causes is skipped.
+  const adoptedInputsRef = useRef(false);
   // Result-screen chrome (design handoff §3): the map can expand in place, and
   // detours are collapsed by default — optional ideas must never read as part
   // of the route.
@@ -525,7 +530,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           savedAt: new Date().toISOString(),
           safeResponse: safe,
           classification: cls,
-          inputs: { city: anchor.city ?? null, place: authoritativePlace ?? null, mode, dayOffset: effectiveDayOffset, walkKey: effectiveWalkKey, selected: prefs },
+          // The mode is the anchor's, not this render's: an arrival composes
+          // from the first render, before the near-me mode it set has landed.
+          inputs: { city: anchor.city ?? null, place: authoritativePlace ?? null, mode: anchor.coords ? "near_me" : "typed", dayOffset: effectiveDayOffset, walkKey: effectiveWalkKey, selected: prefs },
           // Frozen from the SAME request that produced this day: the ledger it
           // carried and the verdict that came back. Recorded here rather than
           // at save time, because by then the live ledger may have moved on
@@ -739,6 +746,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     }
     setDayIsStale(false);
     setRouteAnchorCoords(null);
+    setPositionNeeded(false);
     setPhase("done");
     setRestoredAt(entry.savedAt);
   }
@@ -755,12 +763,28 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     // so it auto-plans exactly what the sharer saw — composed fresh for the opener.
     const allowedPrefs = ANYWHERE_PREFERENCES.map((p: { key: string }) => p.key);
     const shared = decodeShareParams(window.location.search, allowedPrefs);
+    // Only values that differ are set (the same picks in a new array are not a
+    // change), and only then is the re-run they cause marked as the arrival's.
+    const adoptLinkInputs = () => {
+      let changed = false;
+      if (shared.preferences.length && shared.preferences.join(",") !== selected.join(",")) {
+        setSelected(shared.preferences);
+        changed = true;
+      }
+      if (shared.dayOffset !== dayOffset) {
+        setDayOffset(shared.dayOffset);
+        changed = true;
+      }
+      if (shared.walkKey !== walkKey) {
+        setWalkKey(shared.walkKey);
+        changed = true;
+      }
+      if (changed) adoptedInputsRef.current = true;
+    };
     if (shared.place) {
       setPlace(shared.place);
       setCityKey(shared.city || null);
-      if (shared.preferences.length) setSelected(shared.preferences);
-      setDayOffset(shared.dayOffset);
-      setWalkKey(shared.walkKey);
+      adoptLinkInputs();
       execute(
         { city: shared.city || undefined, place: shared.place },
         {
@@ -780,9 +804,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     // language, so the request must not take it from here.
     if (new URLSearchParams(window.location.search).get("anchor") === "near") {
       setMode("near_me");
-      if (shared.preferences.length) setSelected(shared.preferences);
-      setDayOffset(shared.dayOffset);
-      setWalkKey(shared.walkKey);
+      adoptLinkInputs();
       const coords = consumeAnchorCoords();
       const arrivalInputs = {
         langOverride: shared.lang ?? undefined,
@@ -866,21 +888,16 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
   // Resolve the anchor (typed place or the user's real position) and compose.
   async function resolveAndRun(opts: { preferencesOverride?: string[] } = {}) {
-    setGeoHint(null);
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     if (mode === "near_me") {
-      try {
-        const coords = await currentPosition();
-        await execute({ coords }, opts);
-      } catch {
-        setGeoHint(
-          t(
-            "Platsdelning nekades eller misslyckades — skriv en stad i stället.",
-            "Location sharing was denied or failed — type a city instead.",
-          ),
-        );
-        setMode("typed");
-      }
+      // The position was chosen once, explicitly — on the landing or with "Use
+      // my location" — and adjustments or a rebuild reuse it. The browser is
+      // asked again only from that explicit tap (useLocationAgain), never in
+      // the background, where it could raise a prompt nobody asked for and a
+      // refusal would take the day with it.
+      const coords = lastRequestedAnchorRef.current?.coords ?? routeAnchorCoords;
+      if (coords) await execute({ coords }, opts);
+      else setPositionNeeded(true);
       return;
     }
     const trimmed = place.trim();
@@ -983,6 +1000,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       return;
     }
     setRelocating(false);
+    setPositionNeeded(false);
     execute({ coords }, {}).catch(() => {});
   }
 
@@ -992,6 +1010,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   useEffect(() => {
     if (skipFirstAdjustRef.current) {
       skipFirstAdjustRef.current = false;
+      return;
+    }
+    if (adoptedInputsRef.current) {
+      adoptedInputsRef.current = false;
       return;
     }
     if (navigationSuspendedRef.current || !hasAnchor || phase === "idle" || restoredAt) return;
@@ -1062,7 +1084,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // A near-me day without an attested label is about the reader's own
   // position, so sentences say "near you" rather than naming a place.
   const anchorIsPosition = mode === "near_me" && !primaryLocality(classification?.placeLabel);
-  const placeName = primaryLocality(classification?.placeLabel) || typedPlaceLabel;
+  const placeName = primaryLocality(classification?.placeLabel) || typedPlaceLabel || t("den här platsen", "this place");
   // A typed place with no trusted anchor (unresolved, ambiguous, or a resolver
   // that could not be reached): nothing downstream — Blitz included — has a
   // place to read, so the page says so instead of offering it.
@@ -1610,10 +1632,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </div>
       )}
 
-      {/* A near-me page whose position did not survive (reload, an old tab):
-          say so, and let the same explicit tap share it again rather than
-          leaving an anchor card with nothing under it. */}
-      {mode === "near_me" && phase === "idle" && !classification && (
+      {/* A near-me page whose position did not survive (reload, an old tab, a
+          rebuild of a restored day): say so, and let the same explicit tap
+          share it again rather than asking in the background. */}
+      {mode === "near_me" && ((phase === "idle" && !classification) || positionNeeded) && (
         <div className={`flex flex-col items-start gap-3 ${noticeCard}`}>
           <p>
             {t(
@@ -1637,8 +1659,6 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           )}
         </div>
       )}
-
-      {geoHint && <p className="text-sm text-parranda-ink/70">{geoHint}</p>}
 
       {/* The ledger is stated where the user can always see it — including when
           dismissing left no day at all, which is exactly when a way back

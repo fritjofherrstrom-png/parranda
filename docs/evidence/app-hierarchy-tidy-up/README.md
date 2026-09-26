@@ -8,7 +8,9 @@ Planner (`frontend/dist` served by `server.js`), 2026-09-25.
   `AnywherePlanner.C8gJE29g.js`, `LandingHero.DrbyItES.js`).
 - “After” = this change (bundles `AnywherePlanner.DYtvY6Ns.js`,
   `LandingHero.2FOKyCvV.js`), re-captured after the review follow-up (see
-  “Review follow-up” below).
+  “Review follow-up” below). The acceptance follow-up after it
+  (`AnywherePlanner.DFHG29Vd.js`) changes what happens on arrival and when a
+  near-me day recomposes, not these views, so they were not re-captured.
 
 Both sides were opened at `/anywhere?place=Malmö&planner=open` (and `/` for the
 landing) with the same fixture, modelled on the Malmö day in the review
@@ -65,3 +67,24 @@ switch carrying adjustments made after load and handing a near-me position to
 the next page; a Swedish near-me day asking in Swedish (“En dag nära dig”); the
 split Maps handoff as a named sequence; type chips for every published kind;
 Blitz withheld after an unresolved place or a capacity refusal.
+
+## Acceptance follow-up
+
+The acceptance run on the review follow-up reproduced two faults in a real
+browser, both behaviour rather than pixels:
+
+- Opening a share or language link composed the day twice — once for the
+  link's settings, then again when adopting them tripped the adjustment
+  re-run. Now one arrival makes one compose; a real change in Adjust still
+  recomposes.
+- A language switch on a near-me day asked the browser for the position again,
+  in the background (every adjustment took the same path). With the standing
+  permission gone, the refusal replaced the day with the form for a typed
+  place and “couldn't compose a day for  yet”, with no place in it. Now the
+  position the user chose is reused; the browser is asked only from the
+  explicit “Use my location” tap, and a restored near-me day stays a near-me
+  day instead of “A day in ” with no place.
+
+Evidence is `frontend/tests/planner-arrival-once.test.mjs` and a real-browser
+count of compose and geolocation calls per navigation (simulated position;
+providers blocked, so no real-provider or Live outcome was observed).
