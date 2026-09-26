@@ -19,3 +19,10 @@ stylesheet differed.
 
 **Replay fixtures, not live evidence** for the chips and the empty state.
 Teaser, chips and empty state are DPR 2; the tall edition is DPR 1.
+
+| 390 px | Before | After |
+| --- | --- | --- |
+| Teaser | ![teaser before](mobile-teaser-before.jpg) | ![teaser after](mobile-teaser-after.jpg) |
+| Edition | ![edition before](mobile-edition-before.jpg) | ![edition after](mobile-edition-after.jpg) |
+| One chip per signal type | ![chips before](mobile-chips-before.jpg) | ![chips after](mobile-chips-after.jpg) |
+| Empty state | ![empty state before](mobile-empty-before.jpg) | ![empty state after](mobile-empty-after.jpg) |
