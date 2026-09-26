@@ -546,6 +546,10 @@ test("recurring detail dates become explicit occurrences, never a daily range", 
     highlightedDates: `<p><strong>25 juni</strong>, <strong>2 juli</strong>, <strong>9 juli</strong>, <strong>16 juli</strong></p>`,
     weekdayRule: `<p class="normal">Varje torsdag</p>`,
     pluralWeekday: `<p class="normal">Torsdagar kl. 18.00–21.00</p>`,
+    // The template lead-in on its own line, as real Sitevision pages print it.
+    leadIn: `<p class="small-text">Detta evenemang äger rum
+      varje torsdag
+    </p>`,
   };
   for (const [shape, recurrence] of Object.entries(shapes)) {
     const detail = extractSitevisionEventDetail(recurringDetailHtml({ recurrence }), {
@@ -603,6 +607,8 @@ test("weekday rules expand only inside an explicit bounded range", () => {
 test("unreadable, contradictory or truncated recurrence keeps honest period semantics", () => {
   const cases = {
     alternateWeeks: "<p>Varannan torsdag</p>",
+    leadInAlternateWeeks: "<p>Detta evenemang äger rum\n varannan\n torsdag\n</p>",
+    leadInAlone: "<p>Detta evenemang äger rum</p>",
     exception: "<p>Dagligen utom måndag</p>",
     wrongWeekday: "<p>fredag 25 juni</p>",
     outsideRange: "<p>2 juli, 23 juli</p>",
