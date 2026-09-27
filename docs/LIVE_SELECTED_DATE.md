@@ -113,11 +113,7 @@ The correction is generic; there is no municipality, city or hostname rule:
   weekday prefixes validated against the date, a shared month as in "2, 9 och
   16 juli", or ISO dates). Clocks may accompany any of them, with "kl" allowed.
   Any other word, such as "varannan", "utom" or numeric "2/7", fails the whole
-  statement. The one exception is the fixed lead-in "Detta evenemang äger rum"
-  that the captured Simrishamn template prints before its rule ("Detta
-  evenemang äger rum; varje måndag och torsdag"): it states no days, so it is
-  read past, only at the start of the statement. "…; varannan tisdag" still
-  fails, so no alternate-week phase is taken from the range's first date.
+  statement.
 - The result becomes `period` when a listed date falls outside the stated range,
   clocks conflict, a weekday rule is open-ended or spans more than 120 days, the
   list exceeds 60 dates, or a stated "dagligen" is contradicted. One explicitly

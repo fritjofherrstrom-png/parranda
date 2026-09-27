@@ -65,12 +65,6 @@ const EVERY_WORDS = new Set(["varje", "every", "alla", "each"]);
 const JOIN_WORDS = new Set(["och", "samt", "and"]);
 // Words that never change which days are meant ("kl 18.00", "på torsdagar").
 const FILLER_WORDS = new Set(["kl", "klockan", "at", "på", "on", "den"]);
-// A fixed lead-in some calendars print before the rule itself ("Detta evenemang
-// äger rum; varje måndag"). It says nothing about which days, so this exact
-// phrase is read past, and only at the start of a statement. Everything after
-// it meets the same closed grammar: "varannan tisdag" names no weeks and stays
-// unresolved.
-const RULE_LEAD_IN = /^\s*detta\s+evenemang\s+äger\s+rum(?![a-zåäö])/;
 
 // Decide which days a stated range actually carries a session. `daily` needs a
 // source statement; listed dates and weekday rules become explicit bounded
@@ -156,7 +150,7 @@ function statesDailyOccurrence(label) {
 // prefixed by their weekday, or sharing a month: "2, 9 och 16 juli"). Clocks may
 // accompany any of them. Every other word fails the whole statement.
 function parseScheduleStatement(value) {
-  const tokens = tokenizeSchedule(String(value || "").toLocaleLowerCase("sv-SE").replace(RULE_LEAD_IN, ""));
+  const tokens = tokenizeSchedule(value);
   if (!tokens || tokens.length === 0) return null;
   const clocks = [];
   const dates = [];

@@ -546,8 +546,6 @@ test("recurring detail dates become explicit occurrences, never a daily range", 
     highlightedDates: `<p><strong>25 juni</strong>, <strong>2 juli</strong>, <strong>9 juli</strong>, <strong>16 juli</strong></p>`,
     weekdayRule: `<p class="normal">Varje torsdag</p>`,
     pluralWeekday: `<p class="normal">Torsdagar kl. 18.00–21.00</p>`,
-    // The captured Simrishamn template prints the rule after a fixed lead-in.
-    leadIn: `<p class="normal">Detta evenemang äger rum</p><p class="normal">varje torsdag</p>`,
   };
   for (const [shape, recurrence] of Object.entries(shapes)) {
     const detail = extractSitevisionEventDetail(recurringDetailHtml({ recurrence }), {
@@ -611,11 +609,6 @@ test("unreadable, contradictory or truncated recurrence keeps honest period sema
     clockConflict: "<p>Torsdagar kl. 17.00–20.00</p>",
     numericDates: "<p>2/7, 9/7</p>",
     prose: "<p>Se programmet för aktuella datum.</p>",
-    // The lead-in states no days itself, is read only at the start, and does not
-    // make an alternate-week rule readable.
-    leadInOnly: "<p>Detta evenemang äger rum</p>",
-    leadInAlternateWeeks: "<p>Detta evenemang äger rum</p><p>varannan torsdag</p>",
-    leadInAfterRule: "<p>Varje torsdag</p><p>detta evenemang äger rum</p>",
   };
   for (const [name, recurrence] of Object.entries(cases)) {
     const detail = extractSitevisionEventDetail(recurringDetailHtml({ recurrence }), {

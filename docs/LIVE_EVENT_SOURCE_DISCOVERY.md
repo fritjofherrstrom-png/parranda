@@ -1096,10 +1096,8 @@ every Sitevision website is trusted or safe to collect.
 - a date range with a clock becomes `daily` only when the source states daily
   sessions. The bounded "Återkommande tillfällen" section is read with a closed
   grammar: listed dates, or weekdays inside the stated range, become explicit
-  `occurrences`, also after the template's fixed lead-in "Detta evenemang äger
-  rum". Anything unreadable, contradictory, open-ended or truncated, including
-  an alternate-week rule such as "varannan tisdag", stays a `period` that never
-  claims a specific day;
+  `occurrences`. Anything unreadable, contradictory, open-ended or truncated
+  stays a `period` that never claims a specific day;
 - local clock times require a reviewed IANA timezone and otherwise remain
   timing-unknown rather than being treated as UTC;
 - one failed detail page does not erase usable listing evidence, while listing
