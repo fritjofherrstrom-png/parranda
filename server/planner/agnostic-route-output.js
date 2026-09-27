@@ -207,6 +207,13 @@ function sanitizeLoaderCollectionMetadata(value) {
     initial_day_capacity: capacity(value.initial_day_capacity),
     selected_day_capacity: capacity(value.selected_day_capacity),
     cache: sanitizeLoaderCacheSummary(value.cache),
+    // How the primary map source took part: `cached_supply` (answered from its
+    // cache) or `background_refresh` (still outstanding at the bounded wait, so
+    // the day was composed from other sources while it refreshes). Absent when
+    // the primary was awaited live.
+    primary_collection: ["cached_supply", "background_refresh"].includes(value.primary_collection)
+      ? value.primary_collection
+      : null,
     spatial_scope: sanitizeSpatialScopeSummary(value.spatial_scope),
     regional_scout: sanitizeRegionalScout(value.regional_scout),
   };

@@ -174,8 +174,11 @@ one public Overpass dependency:
   never contributes ratings or generic prose, and is counted as one family.
   Acquisition uses validated `taxonomy.primary`/`hierarchy` and an explicit
   primary route map, not legacy categories, basic-category rollups or alternate
-  facets. The v4 cache excludes older normalized semantics. See
-  `OVERTURE_TAXONOMY_COMPATIBILITY.md` for the recall tradeoff and pending field QA.
+  facets. See `OVERTURE_TAXONOMY_COMPATIBILITY.md` for the recall tradeoff and
+  pending field QA. The query samples the whole window by walking-reach ring
+  and route type, not the 600 places nearest the anchor, and each request
+  selects from that cached `overture-v5` sample by its own walking budget
+  (`DENSE_CENTRE_SUPPLY.md`).
 - Visit Sweden's National API supplies a separate official family inside its
   declared Swedish provider coverage. Parranda makes one cached, hard-capped
   coordinate query for exact `Place` and `FoodEstablishment` JSON-LD records;

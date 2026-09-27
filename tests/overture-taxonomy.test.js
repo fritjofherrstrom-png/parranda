@@ -84,10 +84,16 @@ test("park and garden descendants are admitted explicitly, never by their ancest
 test("production SQL and JavaScript expose exactly the same closed current-primary set", () => {
   assert.ok(Array.isArray(OVERTURE_ROUTE_PRIMARY_CATEGORIES));
   const sql = buildOvertureQuery({ release: "2026-08-19.0", lat: 40, lng: 12 });
-  const sqlValues = [...sql.matchAll(/'([a-z][a-z0-9_]*)'/g)]
-    .map((match) => match[1])
-    .filter((value) => value !== "closed");
-  assert.deepEqual(sqlValues, OVERTURE_ROUTE_PRIMARY_CATEGORIES);
+  const quoted = (text) => [...text.matchAll(/'([a-z][a-z0-9_-]*)'/g)].map((match) => match[1]);
+  const inList = sql.match(/taxonomy\.primary IN \(([^)]*)\)/);
+  assert.ok(inList, "acquisition keeps one closed IN filter on the new taxonomy primary");
+  assert.deepEqual(quoted(inList[1]), OVERTURE_ROUTE_PRIMARY_CATEGORIES);
+  // The stratification CASE repeats the same closed set, each label mapped to
+  // exactly the route type the JavaScript mapper assigns. No other label.
+  const branches = [...sql.matchAll(/WHEN category IN \(([^)]*)\) THEN '([a-z-]+)'/g)];
+  const stratified = branches.flatMap(([, labels, type]) => quoted(labels).map((label) => [label, type]));
+  assert.deepEqual(stratified.map(([label]) => label).sort(), [...OVERTURE_ROUTE_PRIMARY_CATEGORIES].sort());
+  for (const [label, type] of stratified) assert.equal(categoryMapping(label).type, type, label);
   assert.ok(OVERTURE_ROUTE_PRIMARY_CATEGORIES.every((primary) => categoryMapping(primary)));
   for (const deadLegacy of ["viewpoint", "nightclub", "arts_centre", "arts_center", "observation_deck", "promenade", "fortress", "swimming_area", "farm_shop", "vintage_store", "thrift_store", "charity_shop"]) {
     assert.equal(OVERTURE_ROUTE_PRIMARY_CATEGORIES.includes(deadLegacy), false, deadLegacy);

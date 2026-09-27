@@ -31,6 +31,7 @@ const test = require("node:test");
 const {
   createOpenDataLoader,
   composeOpenDataLoaders,
+  mapOverpassResponse,
   DEFAULT_RADIUS_KM,
   MAX_RADIUS_KM,
 } = require("../server/place-candidates/open-data-loader");
@@ -99,6 +100,27 @@ test("an explicit radius option still wins over the budget", async () => {
   const run = radiusRecordingFetcher();
   await createOpenDataLoader({ fetcher: run.fetcher, radiusKm: 0.4 })({ ...ANCHOR, walkingTargetBand: band(9) });
   assert.equal(run.radii[0], 0.4, "an operator-pinned radius is not overridden by the budget");
+});
+
+test("with a walking budget each category's cut spans the walkable disc, not the nearest few hundred metres", () => {
+  // Overpass answers from the whole budget aperture; the loader then keeps a
+  // bounded cut. In a dense centre a nearest-first cut keeps only the core.
+  const northKm = (km) => ANCHOR.lat + km / 110.574;
+  const elements = [];
+  for (let i = 0; i < 40; i += 1) {
+    const km = 0.05 + i * 0.1;
+    elements.push({ type: "node", id: 1000 + i, lat: northKm(km), lon: ANCHOR.lng, tags: { name: `Kitchen ${i}`, amenity: "restaurant" } });
+    elements.push({ type: "node", id: 2000 + i, lat: northKm(km), lon: ANCHOR.lng + 0.001, tags: { name: `Coffee ${i}`, amenity: "cafe" } });
+  }
+  const reachOf = (records) => records.map((record) => (record.lat - ANCHOR.lat) * 110.574);
+  const nearby = reachOf(mapOverpassResponse({ elements }, 10, { origin: ANCHOR }));
+  assert.ok(Math.max(...nearby) < 0.5, "no budget keeps today's proximity order for nearby surfaces");
+
+  const day = reachOf(mapOverpassResponse({ elements }, 10, { origin: ANCHOR, walkingTargetBand: band(9) }));
+  for (const [innerKm, outerKm] of [[0, 0.5], [0.5, 1], [1, 1.5], [1.5, 2.25]]) {
+    assert.ok(day.some((km) => km >= innerKm && km < outerKm), `a 9 km cut keeps records ${innerKm}-${outerKm} km out`);
+  }
+  assert.equal(day.length, 10, "the record budget is unchanged");
 });
 
 // --------------------------------------------------------------------------

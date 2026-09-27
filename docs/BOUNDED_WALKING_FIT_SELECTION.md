@@ -9,6 +9,13 @@ specific preference coverage or contextual quality. This is not a second compose
 a larger acquisition radius, extra provisional stop depth, or a claim that every
 walking target is feasible. NAPI stays default-off and is not needed for this fix.
 
+Walking-fit can only substitute places that reached the reservoir. The field
+shortfalls below were later traced upstream of it — a nearest-600 directory
+window, a nearest-25 Overpass cut and warm background sources answering for a
+map source nobody asked — and a single requested intent could not form any day
+from single-source supply. Those losses and their separate, bounded contract
+changes are in `DENSE_CENTRE_SUPPLY.md`; this mechanism is unchanged.
+
 The existing provisional admission remains provisional. A single official-family
 record still cannot self-promote. No source thresholds, licensing, approvals,
 identity resolution, public Add eligibility or default experiment flags change.
@@ -118,7 +125,8 @@ This is category-contract hardening, not a place/name/city exception.
 ### Deliberate recall tradeoff and taxonomy follow-up
 
 The migration requested below has since been implemented in
-`OVERTURE_TAXONOMY_COMPATIBILITY.md`, with its own v4 cache and QA requirements.
+`OVERTURE_TAXONOMY_COMPATIBILITY.md`, with its own v4 cache and QA requirements
+(the cache is now `overture-v5`, see `DENSE_CENTRE_SUPPLY.md`).
 The v3 and legacy-field descriptions here record the exact #498 acceptance
 boundary; they are not the current adapter contract or a fresh QA claim.
 

@@ -86,7 +86,10 @@ allowed to remain gaps until an explicit current primary is reviewed.
 
 ## Cache and runtime ownership
 
-Normalized cache namespace is **overture-v4**. v2/v3 rows lack hierarchy facts
+Normalized cache namespace was **overture-v4** for this change and is now
+**overture-v5** (`DENSE_CENTRE_SUPPLY.md`): v5 stores one stratified sample per
+anchor window instead of an 80-record nearest-window selection per preference
+set, and keeps every taxonomy guard below. v2/v3 rows lack hierarchy facts
 and may contain categories admitted by old suffix semantics. A fresh process
 must refetch rather than read, rewrite or reclassify those old normalized rows.
 Old files remain intact. Deploy every consuming process from the same exact
@@ -102,7 +105,9 @@ particular, v3 is never a stale-if-error fallback.
 
 Budgets remain: radius default/max 5 km; SQL <=600 rows; normalized output
 default 80/max100; default existence-confidence threshold .95; STAC timeout
-5 seconds. The existing operator threshold override is unchanged. Hierarchy
+5 seconds. Since `overture-v5` the 600 rows are stratified by walking-reach
+ring and route type rather than nearest-first, and the 80 are selected per
+request from that cached sample. The existing operator threshold override is unchanged. Hierarchy
 projection is bounded to <=16 elements before mapping and validated again in JS.
 One STAC resolution and one data query per source warm; no schema fallback query.
 TTL remains the shared source-cache default (six hours) or existing operator
@@ -135,6 +140,9 @@ The #498 Kolding 1.7→4.8 evidence belongs to the prior executable normalizatio
 not to this new taxonomy head. Do not transfer it as exact-head evidence.
 
 ## Sol exact-head QA brief
+
+Historical brief for the taxonomy head; its v4 references predate the current
+`overture-v5` sample (`DENSE_CENTRE_SUPPLY.md` has the current brief).
 
 Keep this PR unmerged until review. When separately authorized to stage:
 
