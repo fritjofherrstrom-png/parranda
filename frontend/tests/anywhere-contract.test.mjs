@@ -382,9 +382,11 @@ test("compact planner and map controls keep a 44px mobile touch target", () => {
     anywherePlannerSource,
     /aria-expanded=\{false\}[\s\S]{0,180}min-h-11/,
   );
+  // The map's expand control is an icon: a 44×44 target named in both
+  // languages, so it covers no more of the map than a thumb needs.
   assert.match(
     anywherePlannerSource,
-    /aria-expanded=\{mapExpanded\}[\s\S]{0,180}min-h-11/,
+    /aria-expanded=\{mapExpanded\}\s*aria-label=\{mapExpanded \? t\("Förminska kartan", "Shrink map"\) : t\("Förstora kartan", "Expand map"\)\}[\s\S]{0,260}min-h-11 min-w-11/,
   );
   assert.match(anywhereStyles, /\.leaflet-control-zoom a\s*\{[\s\S]*width: 44px !important;/);
   assert.match(anywhereStyles, /\.leaflet-control-zoom a\s*\{[\s\S]*height: 44px !important;/);
