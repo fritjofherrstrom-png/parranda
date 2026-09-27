@@ -78,6 +78,19 @@ function reconcileAgnosticConstraintNegotiation({
   });
 }
 
+/**
+ * The band verdict for the route as PUBLISHED, for the route itself
+ * (`walking_target_fit`), so a client need not read experiment internals. The
+ * same shape as the negotiation's `walking` verdict, without a validation
+ * status. A `no_limit` request asked for no band.
+ */
+function describePublishedWalkingTarget({ route = null, walkingKmTarget = null, distanceMode = null } = {}) {
+  return describeAgnosticWalkingTarget({
+    estimatedKm: route?.estimated_km,
+    targetKm: distanceMode === "no_limit" ? null : walkingKmTarget,
+  });
+}
+
 function formatNegotiation({
   routePresent,
   requested,
@@ -180,5 +193,6 @@ function firstFinite(...values) {
 
 module.exports = {
   buildAgnosticConstraintNegotiation,
+  describePublishedWalkingTarget,
   reconcileAgnosticConstraintNegotiation,
 };

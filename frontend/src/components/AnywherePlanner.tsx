@@ -43,6 +43,7 @@ import {
   routeTimeAnchoring,
   walkingDistanceLabel,
 } from "../lib/route-context-view.mjs";
+import { walkingTargetNotes } from "../lib/walking-target-note.mjs";
 import {
   splitRouteStops,
   wovenEventIds,
@@ -1503,6 +1504,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // "this is a full-day arc, not now" vs "anchored to now, earlier dayparts
   // trimmed". Unknown/absent → no line, never a guess.
   const timeAnchoring = useMemo(() => routeTimeAnchoring(primaryRoute), [primaryRoute]);
+  // What the day did with the walking length the user chose, and an evening
+  // event it did not take — from stable published fields. Empty in the band.
+  const walkingNotes = useMemo(
+    () => walkingTargetNotes({ route: primaryRoute, interrupt: safeResponse?.pulse_route_interrupt ?? null, lang }),
+    [primaryRoute, safeResponse, lang],
+  );
 
   // The map follows the same authority hierarchy as the copy. A composed day
   // gets numbered primary-route markers and a solid route. Optional context is
@@ -2184,6 +2191,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             {` · ${split.core.length} ${split.core.length === 1 ? t("stopp", "stop") : t("stopp", "stops")}`}
             {split.woven.length > 0 ? ` + ${split.woven.length} live${lang === "en" ? " event" : "-event"}` : ""}
           </p>
+          {walkingNotes.map((note) => (
+            <p key={note} className="text-[13px] leading-relaxed text-parranda-ink/65">{note}</p>
+          ))}
           {dayLimitationNote && (
             <p className="flex items-start gap-2 text-[13px] leading-relaxed text-parranda-ink/65">
               <span aria-hidden="true" className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-parranda-ink/30" />

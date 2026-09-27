@@ -11,6 +11,7 @@ export interface WalkPreset {
   km: number;
   sv: string;
   en: string;
+  name: { sv: string; en: string };
 }
 
 export declare const WALK_PRESETS: WalkPreset[];

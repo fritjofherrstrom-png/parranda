@@ -3,6 +3,7 @@ const test = require("node:test");
 
 const {
   buildAgnosticConstraintNegotiation,
+  describePublishedWalkingTarget,
   reconcileAgnosticConstraintNegotiation,
 } = require("../server/planner/agnostic-constraint-negotiation");
 const {
@@ -137,4 +138,22 @@ test("a walking-validated event extension reconciles distance without changing p
   assert.equal(reconciled.walking.estimated_km, 4.4);
   assert.equal(reconciled.walking.status, "within_requested_band");
   assert.deepEqual(reconciled.preference_coverage, initial.preference_coverage);
+});
+
+test("the published route's band verdict reads the route itself, and no_limit asks for no band", () => {
+  const route = { estimated_km: 9.2 };
+  assert.deepEqual(describePublishedWalkingTarget({ route, walkingKmTarget: 6 }), {
+    status: "longer_than_requested_band",
+    target_km: 6,
+    estimated_km: 9.2,
+    target_floor_km: 3.6,
+    target_ceiling_km: 7.1,
+  });
+  assert.equal(
+    describePublishedWalkingTarget({ route, walkingKmTarget: 6, distanceMode: "no_limit" }).status,
+    "not_requested",
+    "a user who asked for no limit is never told the day is too long",
+  );
+  assert.equal(describePublishedWalkingTarget({ route: { estimated_km: 5.8 }, walkingKmTarget: 6 }).status, "within_requested_band");
+  assert.equal(describePublishedWalkingTarget({ route: {}, walkingKmTarget: 6 }).status, "unavailable");
 });

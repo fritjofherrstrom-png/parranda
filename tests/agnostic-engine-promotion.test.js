@@ -546,6 +546,132 @@ test("a distant tonight-event stays an anchor: no walk claimed, route unextended
 });
 
 // --------------------------------------------------------------------------
+// The requested walking target binds the evening weave. The weave is an
+// automatic extension, so it may not carry a day past the requested band; the
+// event then stays an anchor with a suggestion that says what it would cost.
+// --------------------------------------------------------------------------
+
+/**
+ * Three roles in three directions, so the engine composes a real ~6 km day for
+ * a "~6 km" request: a loop through food-0, cafe-0, view-1 and view-0 that
+ * walks 1.4 km back to the start from view-0.
+ */
+function spreadDayFixture() {
+  const recs = [];
+  const specs = [
+    ["food", "restaurant", ["mat"], 0.01, 0],
+    ["cafe", "cafe", ["fika"], 0, 0.013],
+    ["view", "viewpoint", ["utsikt"], -0.01, 0.004],
+  ];
+  for (const [prefix, type, tags, dLat, dLng] of specs) {
+    for (let i = 0; i < 4; i += 1) {
+      recs.push(externalRecord(`${prefix}-${i}`, `${prefix} ${i}`, type, 41.9 + dLat + i * 0.0006, 12.49 + dLng + i * 0.0006, tags));
+    }
+  }
+  return recs;
+}
+
+async function composeWithEvent({ event, body, engine = true }) {
+  global.fetch = mockStableWeatherFetch();
+  const server = buildApp({
+    openDataLoader: makeLoader(spreadDayFixture()),
+    eventSupply: eventSupplyWith(event),
+  }).listen(0);
+  try {
+    return await requestJson(server, {
+      path: `/api/route-recommendations?lang=en&${FLAG}${engine ? `&${ENGINE}` : ""}`,
+      body: agnosticBody(body),
+    });
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    global.fetch = ORIGINAL_FETCH;
+  }
+}
+
+test("a tonight-event is not woven past the requested walking band", async () => {
+  // 2.4 km south of view-0: inside the 2.5 km evening hop, but replacing the
+  // 1.4 km walk back with it makes the 6.3 km day 7.3 km — past 7.08.
+  const r = await composeWithEvent({ event: tonightEventAt(12.494, { lat: 41.8723 }), body: { walking_km_target: 6 } });
+  const exp = r.body.agnostic_route_output_experiment;
+  assert.equal(exp.promotion.promote, true);
+  const route = r.body.days[0].primary_route;
+  assert.ok(!route.main_stops.some((stop) => stop.is_live_event), "the event is not woven");
+  assert.equal(route.live_event_stop, undefined);
+  assert.equal(route.route_shape, "loop", "the walk back to the start is still claimed");
+
+  // Offered instead, with what taking it would cost.
+  const interrupt = r.body.pulse_route_interrupt;
+  assert.equal(interrupt.status, "suggested");
+  assert.equal(interrupt.route_mutation, false);
+  assert.deepEqual(interrupt.reasons, ["exceeds_requested_walking_target"]);
+  assert.equal(interrupt.walking_impact.leg_km, 2.4);
+  assert.equal(interrupt.walking_impact.base_estimated_km, route.estimated_km);
+  assert.ok(interrupt.walking_impact.estimated_km > 7.08, `would be ${interrupt.walking_impact.estimated_km} km`);
+  assert.equal(interrupt.walking_impact.walking_target_km, 6);
+  const evening = r.body.place_structure.district_day.evening_event;
+  assert.equal(evening.id, "ev-tonight", "the anchor card remains");
+  assert.ok(!evening.woven_into_route);
+
+  // Every surface describes the day that was published.
+  const expected = { status: "within_requested_band", target_km: 6, estimated_km: route.estimated_km };
+  const negotiation = exp.constraint_negotiation.walking;
+  assert.deepEqual(
+    { status: negotiation.status, target_km: negotiation.target_km, estimated_km: negotiation.estimated_km },
+    expected,
+  );
+  assert.equal(exp.constraint_negotiation.tradeoffs.includes("walking_longer_than_requested_band"), false);
+  assert.deepEqual(
+    route.walking_target_fit,
+    { ...expected, target_floor_km: 3.6, target_ceiling_km: 7.1 },
+    "a stable route-level verdict, so the Planner need not read experiment internals",
+  );
+});
+
+test("a loop that takes a nearby event still ends at it, with the extra distance attributed", async () => {
+  // 1.0 km south of view-0: the event replaces the 1.4 km walk back.
+  const r = await composeWithEvent({ event: tonightEventAt(12.494, { lat: 41.8826 }), body: { walking_km_target: 6 } });
+  const route = r.body.days[0].primary_route;
+  const last = route.main_stops[route.main_stops.length - 1];
+  assert.equal(last.is_live_event, true);
+  assert.equal(route.route_shape, "open");
+  assert.equal(r.body.pulse_route_interrupt.status, "applied");
+  const stop = route.live_event_stop;
+  assert.equal(stop.event_id, "ev-tonight");
+  assert.equal(stop.leg_km, 1);
+  assert.equal(stop.removed_closing_leg_km, 1.4);
+  assert.ok(Number.isFinite(stop.base_estimated_km));
+  assert.equal(
+    Number((stop.base_estimated_km - stop.removed_closing_leg_km + stop.leg_km).toFixed(1)),
+    route.estimated_km,
+    "published distance = the day before, minus the walk back it replaced, plus the walk to the event",
+  );
+  const walking = r.body.agnostic_route_output_experiment.constraint_negotiation.walking;
+  assert.equal(walking.status, "within_requested_band");
+  assert.equal(walking.estimated_km, route.estimated_km);
+  assert.equal(route.walking_target_fit.status, "within_requested_band");
+  assert.equal(route.walking_target_fit.estimated_km, route.estimated_km);
+});
+
+test("the legacy synthesizer's weave honours the requested walking band too", async () => {
+  // The legacy day is open (cafe-0, view-0, food-0) at 4.3 km. An event 1 km
+  // beyond food-0 fits "~6 km" but not "~4 km" (ceiling 4.72).
+  const event = tonightEventAt(12.49, { lat: 41.9174 });
+  const short = await composeWithEvent({ event, engine: false, body: { walking_km_target: 4 } });
+  const shortRoute = short.body.days[0].primary_route;
+  assert.equal(short.body.agnostic_route_output_experiment.route_mutation, true);
+  assert.ok(!shortRoute.main_stops.some((stop) => stop.is_live_event));
+  assert.ok(shortRoute.estimated_km <= 4.72, `published ${shortRoute.estimated_km} km`);
+  assert.equal(short.body.pulse_route_interrupt.status, "suggested");
+  assert.deepEqual(short.body.pulse_route_interrupt.reasons, ["exceeds_requested_walking_target"]);
+  assert.equal(shortRoute.walking_target_fit.status, "within_requested_band");
+
+  const balanced = await composeWithEvent({ event, engine: false, body: { walking_km_target: 6 } });
+  const balancedRoute = balanced.body.days[0].primary_route;
+  assert.equal(balancedRoute.main_stops.at(-1).is_live_event, true, "control: the same event fits a ~6 km day");
+  assert.equal(balanced.body.pulse_route_interrupt.status, "applied");
+});
+
+// --------------------------------------------------------------------------
 // NEGATIVE CONTROLS for the graded gate. Publishing limited days must not
 // become publishing every day.
 // --------------------------------------------------------------------------
@@ -1127,7 +1253,9 @@ test(
 // --------------------------------------------------------------------------
 // The route that gets EMITTED is the one a commitment has to be affordable
 // against — including the evening-event weave, which extends it by up to
-// MAX_EVENT_LEG_KM after composition.
+// MAX_EVENT_LEG_KM after composition. The weave itself may not carry a day
+// past the requested band, so when a pin and the event do not both fit, the
+// pin the user asked for is kept and the unrequested event is offered instead.
 // --------------------------------------------------------------------------
 
 /**
@@ -1164,7 +1292,7 @@ function wovenBudgetLoader() {
 }
 
 test(
-  "a pin is judged against the woven route, not the route before the weave",
+  "a pin outranks the evening weave, and the emitted route still respects the ceiling",
   async () => {
     global.fetch = mockStableWeatherFetch();
     const server = buildApp({
@@ -1199,13 +1327,22 @@ test(
         route.estimated_km <= 4.72,
         `the EMITTED route must respect the ceiling, got ${route.estimated_km}`,
       );
+      assert.equal(route.walking_target_fit.estimated_km, route.estimated_km);
+      assert.equal(route.walking_target_fit.status, "within_requested_band");
+
+      // The pinned day fits on its own; with the event it would not. The
+      // commitment the user made wins over the extension nobody asked for —
+      // before the band bound the weave, the event won and the pin was shed.
       assert.deepEqual(verdict, {
         requested_count: 1,
-        honored_count: 0,
-        unhonored_count: 1,
-        unhonored: [{ id: "mid-far", reason: "walking_budget" }],
+        honored_count: 1,
+        unhonored_count: 0,
+        unhonored: [],
       });
-      assert.ok(!stopIdsOf(pinned).includes("mid-far"));
+      assert.ok(stopIdsOf(pinned).includes("mid-far"));
+      assert.ok(!route.main_stops.some((stop) => stop.is_live_event), "the event yields");
+      assert.equal(pinned.body.pulse_route_interrupt.status, "suggested");
+      assert.deepEqual(pinned.body.pulse_route_interrupt.reasons, ["exceeds_requested_walking_target"]);
     } finally {
       await new Promise((resolve) => server.close(resolve));
       global.fetch = ORIGINAL_FETCH;

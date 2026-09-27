@@ -51,7 +51,7 @@ const {
   publishedEligibleIds,
 } = require("./planner/commitment-eligibility");
 const { buildEngineReadinessVerdict } = require("./planner/agnostic-engine-readiness");
-const { reconcileAgnosticConstraintNegotiation } = require("./planner/agnostic-constraint-negotiation");
+const { describePublishedWalkingTarget, reconcileAgnosticConstraintNegotiation } = require("./planner/agnostic-constraint-negotiation");
 const { resolveAgnosticWalkingTargetBand } = require("./planner/agnostic-walking-target");
 const { resolveAgnosticIntake, parsePlaceQuery } = require("./planner/agnostic-place-intake");
 const { collectPlaceCandidatesForCity } = require("./place-candidates/provider-registry");
@@ -616,10 +616,17 @@ function isAgnosticRouteOutputExperimentRequested(request) {
 // or failed gate returns the inputs unchanged — the anchor card remains and no
 // walk is claimed. The module itself refuses non-agnostic days, so a fallback
 // city's route can never receive the typed place's event.
-async function weaveEventStopFailSoft({ result, placeStructure, walkingRouter, walkingConfig }) {
+async function weaveEventStopFailSoft({ result, placeStructure, walkingRouter, walkingConfig, walkingKmTarget, distanceMode }) {
   try {
     const { weaveEveningEventRouteStop } = require("./candidates/event-route-stop-weave");
-    return await weaveEveningEventRouteStop({ result, placeStructure, walkingRouter, walkingConfig });
+    return await weaveEveningEventRouteStop({
+      result,
+      placeStructure,
+      walkingRouter,
+      walkingConfig,
+      walkingKmTarget,
+      distanceMode,
+    });
   } catch (_error) {
     return { result, placeStructure, applied: false, blockers: ["weave_error"] };
   }
@@ -634,6 +641,21 @@ function reconcileConstraintAfterEventWeave({ experiment, woven, walkingKmTarget
     walkingKmTarget,
     walkingValidated: true,
   });
+}
+
+// How the PUBLISHED any-place day sits in the requested walking band, on the
+// route itself — a stable field, so the Planner can say "longer than ~6 km"
+// without reading experiment internals. Stamped after the last weave, so it
+// describes the route the client receives.
+function publishWalkingTargetFit({ result, walkingKmTarget, distanceMode }) {
+  const day = result?.days?.[0];
+  const route = day?.primary_route;
+  const agnosticDay =
+    day?.experimental_agnostic_route_applied === true ||
+    day?.experimental_agnostic_day === true ||
+    day?.source === "agnostic_route_output_experiment";
+  if (!route || !agnosticDay) return;
+  route.walking_target_fit = describePublishedWalkingTarget({ route, walkingKmTarget, distanceMode });
 }
 
 function isAgnosticEngineComposeRequested(request) {
@@ -2458,11 +2480,18 @@ function buildApp({
           placeStructure: wovenPlaceStructure,
           walkingRouter,
           walkingConfig,
+          walkingKmTarget: payload.walkingKmTarget,
+          distanceMode: payload.distanceMode,
         });
         reconcileConstraintAfterEventWeave({
           experiment,
           woven: engineWoven,
           walkingKmTarget: payload.walkingKmTarget,
+        });
+        publishWalkingTargetFit({
+          result: engineWoven.result,
+          walkingKmTarget: payload.walkingKmTarget,
+          distanceMode: payload.distanceMode,
         });
         // The eligibility verdict belongs to the candidate context that was
         // actually PUBLISHED. When the gate withholds the engine's day, the
@@ -2496,11 +2525,18 @@ function buildApp({
         placeStructure: wovenPlaceStructure,
         walkingRouter,
         walkingConfig,
+        walkingKmTarget: payload.walkingKmTarget,
+        distanceMode: payload.distanceMode,
       });
       reconcileConstraintAfterEventWeave({
         experiment,
         woven: legacyWoven,
         walkingKmTarget: payload.walkingKmTarget,
+      });
+      publishWalkingTargetFit({
+        result: legacyWoven.result,
+        walkingKmTarget: payload.walkingKmTarget,
+        distanceMode: payload.distanceMode,
       });
       response.json({
         ...legacyWoven.result,

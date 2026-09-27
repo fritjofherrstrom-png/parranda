@@ -45,10 +45,11 @@ export function freezeComposeDateIso({ dayOffset = 0, dateIsoOverride = null, no
 }
 
 // Walking-length presets → the same walking_km_target the production planner sends.
+// `name` is the preset on its own, for sentences such as "longer than Balanced".
 export const WALK_PRESETS = [
-  { key: "short", km: 4, sv: "Kort · ~4 km", en: "Short · ~4 km" },
-  { key: "balanced", km: 6, sv: "Lagom · ~6 km", en: "Balanced · ~6 km" },
-  { key: "long", km: 9, sv: "Lång · ~9 km", en: "Long · ~9 km" },
+  { key: "short", km: 4, sv: "Kort · ~4 km", en: "Short · ~4 km", name: { sv: "Kort", en: "Short" } },
+  { key: "balanced", km: 6, sv: "Lagom · ~6 km", en: "Balanced · ~6 km", name: { sv: "Lagom", en: "Balanced" } },
+  { key: "long", km: 9, sv: "Lång · ~9 km", en: "Long · ~9 km", name: { sv: "Lång", en: "Long" } },
 ];
 
 export function buildAnywherePayload({

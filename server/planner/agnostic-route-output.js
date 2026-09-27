@@ -1546,6 +1546,9 @@ async function composeAgnosticRouteViaEngine({
         placeStructure: eveningEventStructure,
         walkingRouter: typeof walkingRouter === "function" ? walkingRouter : undefined,
         walkingConfig: walkingConfig || undefined,
+        // The weave may not carry the day out of the band this request asked for.
+        walkingKmTarget,
+        distanceMode,
       });
     } catch (_error) {
       return { day, route, outcome: null };

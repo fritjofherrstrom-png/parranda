@@ -19,6 +19,12 @@
  *     (validateAgnosticWalkingOrder) in the supplied order — no reordering, no
  *     optimizing — and the new leg must be a short evening hop
  *     (<= MAX_EVENT_LEG_KM), not a trek.
+ *   - The weave is an extension nobody asked for, so it may not carry the day
+ *     out of the requested walking band: with a walking target, the day as it
+ *     would be published must stay within the band's ceiling (the product band
+ *     of agnostic-walking-target) — or, when the day was already past it
+ *     before the weave, must not grow. Otherwise the event stays an anchor and
+ *     a `suggested` interrupt states what taking it would cost.
  *   - The walk claim stays truthful: on a loop route the closing walk back to
  *     the start is REPLACED by the walk to the event (the evening ends at the
  *     event, so the day no longer claims a return leg) and the shape becomes
@@ -31,6 +37,7 @@
  */
 
 const { validateAgnosticWalkingOrder } = require("../planner/agnostic-route-walking-validation");
+const { describeAgnosticWalkingTarget, resolveAgnosticWalkingTargetBand } = require("../planner/agnostic-walking-target");
 const { classifyEventSourceLink } = require("../pulse-sources/event-source-link");
 
 // A woven evening stop must be a short hop from where the day already ends —
@@ -54,15 +61,30 @@ function round1(n) {
   return Number(n.toFixed(1));
 }
 
+function roundOrNull(n) {
+  return Number.isFinite(n) ? round1(n) : null;
+}
+
 function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
 /**
+ * @param {object} params
+ * @param {number|null} [params.walkingKmTarget] the request's walking target;
+ *   absent means no band to protect (the evening-hop limit still applies)
+ * @param {string|null} [params.distanceMode] "no_limit" asks for no ceiling
  * @returns {Promise<{result: object, placeStructure: object|null, applied: boolean, blockers: string[], interrupt?: object}>}
  *   `result`/`placeStructure` are the inputs when not applied, clones when applied.
  */
-async function weaveEveningEventRouteStop({ result, placeStructure, walkingRouter, walkingConfig } = {}) {
+async function weaveEveningEventRouteStop({
+  result,
+  placeStructure,
+  walkingRouter,
+  walkingConfig,
+  walkingKmTarget = null,
+  distanceMode = null,
+} = {}) {
   const unchanged = (blockers, interrupt = null) => ({
     result,
     placeStructure,
@@ -115,10 +137,25 @@ async function weaveEveningEventRouteStop({ result, placeStructure, walkingRoute
   const legKm = Number(eventLeg && eventLeg.distance_km);
   const legMinutes = Number(eventLeg && eventLeg.estimated_walk_minutes);
   if (!Number.isFinite(legKm) || !Number.isFinite(legMinutes)) return unchanged(["event_leg_unmeasurable"]);
+  const impact = measureEventExtension({
+    route,
+    coordStops,
+    lastStop,
+    legKm,
+    legMinutes,
+    validatedKm: validation.checks && validation.checks.total_walk_km,
+    targetKm: distanceMode === "no_limit" ? null : walkingKmTarget,
+  });
   if (legKm > MAX_EVENT_LEG_KM) {
     return unchanged(
       ["event_leg_too_long"],
-      buildPulseRouteInterrupt({ status: "suggested", event, lastStop, legKm, legMinutes }),
+      buildPulseRouteInterrupt({ status: "suggested", reason: "outside_auto_weave_limit", event, impact }),
+    );
+  }
+  if (impact.exceedsWalkingTarget) {
+    return unchanged(
+      ["event_exceeds_walking_target"],
+      buildPulseRouteInterrupt({ status: "suggested", reason: "exceeds_requested_walking_target", event, impact }),
     );
   }
 
@@ -169,17 +206,7 @@ async function weaveEveningEventRouteStop({ result, placeStructure, walkingRoute
   // The evening now ends at the event: on a loop, the closing walk back to the
   // start anchor is no longer part of the day's claim — replace it.
   const routeLegs = Array.isArray(nextRoute.legs) ? nextRoute.legs : [];
-  const closing = routeLegs[routeLegs.length - 1];
-  const stopLabels = new Set(coordStops.map((s) => String(s.label)));
-  let removedKm = 0;
-  if (
-    closing &&
-    String(closing.from_label) === String(lastStop.label) &&
-    !stopLabels.has(String(closing.to_label))
-  ) {
-    removedKm = Number.isFinite(closing.distance_km) ? closing.distance_km : 0;
-    routeLegs.pop();
-  }
+  if (impact.replacesClosingLeg) routeLegs.pop();
   routeLegs.push({
     from_label: lastStop.label,
     to_label: eventLabel,
@@ -188,9 +215,7 @@ async function weaveEveningEventRouteStop({ result, placeStructure, walkingRoute
   });
   nextRoute.legs = routeLegs;
 
-  if (Number.isFinite(nextRoute.estimated_km)) {
-    nextRoute.estimated_km = round1(Math.max(0, nextRoute.estimated_km - removedKm + legKm));
-  }
+  if (impact.wovenKm !== null) nextRoute.estimated_km = impact.wovenKm;
   const legKms = routeLegs.map((l) => Number(l.distance_km)).filter(Number.isFinite);
   if (legKms.length) nextRoute.longest_leg_km = round1(Math.max(...legKms));
   const legMins = routeLegs.map((l) => Number(l.estimated_walk_minutes)).filter(Number.isFinite);
@@ -216,6 +241,10 @@ async function weaveEveningEventRouteStop({ result, placeStructure, walkingRoute
     event_id: event.id || null,
     leg_km: round1(legKm),
     leg_minutes: Math.round(legMinutes),
+    // The day before the weave and the walk back it replaced, so the published
+    // distance is attributable: base - removed closing leg + leg.
+    base_estimated_km: roundOrNull(impact.baseKm),
+    removed_closing_leg_km: round1(impact.removedKm),
   };
 
   const nextStructure = deepClone(placeStructure);
@@ -231,11 +260,55 @@ async function weaveEveningEventRouteStop({ result, placeStructure, walkingRoute
     placeStructure: nextStructure,
     applied: true,
     blockers: [],
-    interrupt: buildPulseRouteInterrupt({ status: "applied", event, lastStop, legKm, legMinutes }),
+    interrupt: buildPulseRouteInterrupt({ status: "applied", event, impact }),
   };
 }
 
-function buildPulseRouteInterrupt({ status, event, lastStop, legKm, legMinutes }) {
+/**
+ * The day as it would be PUBLISHED with the event, measured the way the apply
+ * step writes it: the route's own estimate, minus a closing walk back that the
+ * evening no longer claims, plus the new leg. The walking validator cannot say
+ * this — it measures stop-to-stop legs and never sees the walk from the start
+ * to the first stop — so the requested band is judged here.
+ *
+ * The band is the product band (0.6–1.18× the target) that the published
+ * walking verdict and pin settling use, not the validator's wider composition
+ * tolerance: an extension nobody asked for must never be what moves a day out
+ * of the requested band. A day already past the ceiling before the weave was
+ * not made so by it, so the event may join only when ending there does not
+ * lengthen the day — the same rule a pin meets.
+ */
+function measureEventExtension({ route, coordStops, lastStop, legKm, legMinutes, validatedKm, targetKm }) {
+  const routeLegs = Array.isArray(route.legs) ? route.legs : [];
+  const closing = routeLegs[routeLegs.length - 1];
+  const stopLabels = new Set(coordStops.map((s) => String(s.label)));
+  const replacesClosingLeg = Boolean(
+    closing &&
+      String(closing.from_label) === String(lastStop.label) &&
+      !stopLabels.has(String(closing.to_label)),
+  );
+  const removedKm = replacesClosingLeg && Number.isFinite(closing.distance_km) ? closing.distance_km : 0;
+  const baseKm = Number.isFinite(route.estimated_km) ? route.estimated_km : null;
+  const wovenKm = baseKm === null ? null : round1(Math.max(0, baseKm - removedKm + legKm));
+  const band = resolveAgnosticWalkingTargetBand(targetKm);
+  // A route that publishes no distance is judged by its validated stop order.
+  const measuredKm = wovenKm ?? (Number.isFinite(validatedKm) ? validatedKm : null);
+  const allowedKm = band ? Math.max(band.ceilingKm, baseKm ?? 0) : null;
+  return {
+    fromStop: lastStop,
+    legKm,
+    legMinutes,
+    replacesClosingLeg,
+    baseKm,
+    removedKm,
+    wovenKm,
+    walkingTarget: describeAgnosticWalkingTarget({ estimatedKm: wovenKm, targetKm }),
+    exceedsWalkingTarget: allowedKm !== null && measuredKm !== null && measuredKm > allowedKm,
+  };
+}
+
+function buildPulseRouteInterrupt({ status, reason = null, event, impact }) {
+  const { fromStop: lastStop, legKm, legMinutes } = impact;
   const applied = status === "applied";
   return {
     contract: "pulse_route_interrupt_v1",
@@ -264,8 +337,15 @@ function buildPulseRouteInterrupt({ status, event, lastStop, legKm, legMinutes }
       leg_km: round1(legKm),
       leg_minutes: Math.round(legMinutes),
       auto_weave_limit_km: MAX_EVENT_LEG_KM,
+      // The whole day without and with the event — as published (applied) or
+      // as it would be (suggested) — and where the latter sits in the band.
+      base_estimated_km: roundOrNull(impact.baseKm),
+      removed_closing_leg_km: round1(impact.removedKm),
+      estimated_km: impact.wovenKm,
+      walking_target_km: impact.walkingTarget.target_km,
+      walking_target_status: impact.walkingTarget.status,
     },
-    reasons: [applied ? "walking_validated_evening_extension" : "outside_auto_weave_limit"],
+    reasons: [applied ? "walking_validated_evening_extension" : reason],
   };
 }
 

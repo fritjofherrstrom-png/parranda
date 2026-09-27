@@ -220,3 +220,168 @@ test("the same event already in the route is not woven twice", async () => {
   assert.equal(woven.applied, false);
   assert.ok(woven.blockers.includes("event_already_in_route"));
 });
+
+// ---------------------------------------------------------------------------
+// The requested walking target. The weave is an automatic extension nobody
+// asked for, so it may not carry the published day past the requested band.
+// ---------------------------------------------------------------------------
+
+// ~2.4 km (heuristic) east of stop C: inside the evening-hop limit.
+const EDGE_EVENT = { ...NEAR_EVENT, lng: 12.5335 };
+
+// A 6.8 km open day that ends at C: no closing leg for the event to replace.
+function openRoute() {
+  return {
+    route_shape: "open",
+    estimated_km: 6.8,
+    main_stops: [
+      { id: "a", label: "A", lat: 41.905, lng: 12.45, daypart: "midday" },
+      { id: "b", label: "B", lat: 41.9, lng: 12.48, daypart: "midday" },
+      { id: "c", label: "C", lat: 41.9, lng: 12.51, daypart: "afternoon" },
+    ],
+    legs: [
+      { from_label: "Nearby", to_label: "A", distance_km: 0.7, estimated_walk_minutes: 8 },
+      { from_label: "A", to_label: "B", distance_km: 3.1, estimated_walk_minutes: 37 },
+      { from_label: "B", to_label: "C", distance_km: 3.0, estimated_walk_minutes: 36 },
+    ],
+  };
+}
+
+// A 6.8 km loop whose 3.4 km walk back to the start the event replaces.
+function longLoopRoute() {
+  const route = loopRoute();
+  route.estimated_km = 6.8;
+  route.legs = [
+    { from_label: "Nearby", to_label: "A", distance_km: 0.3, estimated_walk_minutes: 4 },
+    { from_label: "A", to_label: "B", distance_km: 1.9, estimated_walk_minutes: 23 },
+    { from_label: "B", to_label: "C", distance_km: 1.2, estimated_walk_minutes: 14 },
+    { from_label: "C", to_label: "Nearby", distance_km: 3.4, estimated_walk_minutes: 41 },
+  ];
+  return route;
+}
+
+test("an event that would carry the day past the requested walking band stays a suggestion", async () => {
+  const result = agnosticResult(openRoute());
+  const placeStructure = structureWith(EDGE_EVENT);
+  const woven = await weaveEveningEventRouteStop({ result, placeStructure, walkingKmTarget: 6 });
+
+  // 6.8 + 2.4 = 9.2 km against a "~6 km" request: the band's ceiling is 7.08.
+  assert.equal(woven.applied, false);
+  assert.deepEqual(woven.blockers, ["event_exceeds_walking_target"]);
+  assert.equal(woven.result, result, "the route is returned unchanged, by reference");
+  assert.equal(woven.placeStructure, placeStructure, "the anchor card stays, without a walk claim");
+
+  // The event is still offered, with what taking it would cost.
+  const interrupt = woven.interrupt;
+  assert.equal(interrupt.status, "suggested");
+  assert.equal(interrupt.route_mutation, false);
+  assert.equal(interrupt.requires_user_action, true);
+  assert.deepEqual(interrupt.reasons, ["exceeds_requested_walking_target"]);
+  assert.equal(interrupt.walking_impact.leg_km, 2.4);
+  assert.equal(interrupt.walking_impact.base_estimated_km, 6.8);
+  assert.equal(interrupt.walking_impact.removed_closing_leg_km, 0);
+  assert.equal(interrupt.walking_impact.estimated_km, 9.2);
+  assert.equal(interrupt.walking_impact.walking_target_km, 6);
+  assert.equal(interrupt.walking_impact.walking_target_status, "longer_than_requested_band");
+});
+
+test("the same event is woven when the extended day fits the requested band", async () => {
+  // A "~9 km" request has room for it (ceiling 10.62).
+  const woven = await weaveEveningEventRouteStop({
+    result: agnosticResult(openRoute()),
+    placeStructure: structureWith(EDGE_EVENT),
+    walkingKmTarget: 9,
+  });
+  assert.equal(woven.applied, true, `blockers: ${woven.blockers}`);
+  const route = woven.result.days[0].primary_route;
+  assert.equal(route.estimated_km, 9.2);
+  assert.equal(woven.interrupt.status, "applied");
+  assert.equal(woven.interrupt.walking_impact.walking_target_status, "within_requested_band");
+});
+
+test("the woven stop records the day before the weave, so the extra distance is attributable", async () => {
+  const woven = await weaveEveningEventRouteStop({
+    result: agnosticResult(openRoute()),
+    placeStructure: structureWith(EDGE_EVENT),
+    walkingKmTarget: 9,
+  });
+  const route = woven.result.days[0].primary_route;
+  assert.deepEqual(route.live_event_stop, {
+    event_id: "ev-tonight",
+    leg_km: 2.4,
+    leg_minutes: 29,
+    base_estimated_km: 6.8,
+    removed_closing_leg_km: 0,
+  });
+  // Nothing was replaced on an open day: the whole leg is added distance.
+  const stop = route.live_event_stop;
+  assert.equal(Number((stop.base_estimated_km - stop.removed_closing_leg_km + stop.leg_km).toFixed(1)), route.estimated_km);
+});
+
+test("a loop whose closing walk the event replaces is unaffected by the target", async () => {
+  const woven = await weaveEveningEventRouteStop({
+    result: agnosticResult(longLoopRoute()),
+    placeStructure: structureWith(EDGE_EVENT),
+    walkingKmTarget: 6,
+  });
+  // 6.8 - 3.4 (the walk back is no longer claimed) + 2.4 = 5.8 km.
+  assert.equal(woven.applied, true, `blockers: ${woven.blockers}`);
+  const route = woven.result.days[0].primary_route;
+  assert.equal(route.estimated_km, 5.8);
+  assert.equal(route.route_shape, "open");
+  assert.equal(route.live_event_stop.base_estimated_km, 6.8);
+  assert.equal(route.live_event_stop.removed_closing_leg_km, 3.4);
+  assert.equal(route.live_event_stop.leg_km, 2.4);
+});
+
+test("a day already past the band may take the event only when that does not lengthen it", async () => {
+  // "~4 km" asks for at most 4.72. The loop is 6.8 km before any event: the
+  // weave did not cause that, and ending at the event shortens it to 5.8.
+  const shortening = await weaveEveningEventRouteStop({
+    result: agnosticResult(longLoopRoute()),
+    placeStructure: structureWith(EDGE_EVENT),
+    walkingKmTarget: 4,
+  });
+  assert.equal(shortening.applied, true, `blockers: ${shortening.blockers}`);
+  assert.equal(shortening.result.days[0].primary_route.estimated_km, 5.8);
+
+  // The open 6.8 km day would grow to 9.2 km: refused.
+  const lengthening = await weaveEveningEventRouteStop({
+    result: agnosticResult(openRoute()),
+    placeStructure: structureWith(EDGE_EVENT),
+    walkingKmTarget: 4,
+  });
+  assert.equal(lengthening.applied, false);
+  assert.deepEqual(lengthening.blockers, ["event_exceeds_walking_target"]);
+  assert.equal(lengthening.interrupt.status, "suggested");
+});
+
+test("no_limit and a missing target keep the evening-hop limit as the only distance gate", async () => {
+  const unlimited = await weaveEveningEventRouteStop({
+    result: agnosticResult(openRoute()),
+    placeStructure: structureWith(EDGE_EVENT),
+    walkingKmTarget: 6,
+    distanceMode: "no_limit",
+  });
+  assert.equal(unlimited.applied, true, "a user who asked for no limit is not given one");
+  assert.equal(unlimited.result.days[0].primary_route.estimated_km, 9.2);
+  assert.equal(unlimited.interrupt.walking_impact.walking_target_status, "not_requested");
+
+  const untargeted = await weaveEveningEventRouteStop({
+    result: agnosticResult(openRoute()),
+    placeStructure: structureWith(EDGE_EVENT),
+  });
+  assert.equal(untargeted.applied, true);
+});
+
+test("an event beyond the evening hop is still refused first, whatever the target", async () => {
+  const far = { ...NEAR_EVENT, lng: 12.546 };
+  const woven = await weaveEveningEventRouteStop({
+    result: agnosticResult(openRoute()),
+    placeStructure: structureWith(far),
+    walkingKmTarget: 6,
+  });
+  assert.deepEqual(woven.blockers, ["event_leg_too_long"]);
+  assert.deepEqual(woven.interrupt.reasons, ["outside_auto_weave_limit"]);
+  assert.equal(woven.interrupt.walking_impact.base_estimated_km, 6.8);
+});
