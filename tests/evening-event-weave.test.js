@@ -413,6 +413,57 @@ test("a first-ranked daytime event on now does not displace a genuine evening ev
   assert.equal(out.district_day.evening_event.starts_at, "2026-09-26T17:00:00.000Z");
 });
 
+// Rows as the Sitevision adapter reads them from the Malmö and Simrishamn
+// calendar pages captured on 26 September 2026 at 13:19 local, while the
+// workshop and Beredskapsdagen were running.
+const CAPTURED_WORKSHOP = selectedDayEvent({
+  id: "malmo-workshop",
+  title: "Workshop för barn: Kom och måla konstiga löv",
+  starts_at: "2026-09-26T11:00:00.000Z",
+  ends_at: "2026-09-26T14:00:00.000Z",
+  timing_relevance: "now",
+  source_url: "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.4968b1201a03e2e597725e6",
+  lat: 55.59330012820435,
+  lng: 13.014476913261015,
+});
+
+const CAPTURED_CONCERT = selectedDayEvent({
+  id: "malmo-concert",
+  title: "Konsert: Audi Memento",
+  starts_at: "2026-09-26T18:00:00.000Z",
+  ends_at: "2026-09-26T18:30:00.000Z",
+  timing_relevance: "tonight",
+  source_url: "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.4968b1201a03e2e5977895",
+  lat: 55.59330012820435,
+  lng: 13.014476913261015,
+});
+
+const CAPTURED_BEREDSKAPSDAGEN = selectedDayEvent({
+  id: "simrishamn-beredskapsdagen",
+  title: "Ta hand om dig! Beredskapsdagen 2026",
+  starts_at: "2026-09-26T09:00:00.000Z",
+  ends_at: "2026-09-26T12:00:00.000Z",
+  timing_relevance: "now",
+  source_url: "https://www.simrishamn.se/evenemangskalender/arkiv/ta-hand-om-dig-beredskapsdagen-2026",
+  lat: 55.556437,
+  lng: 14.347752,
+});
+
+test("captured 26 September: a running daytime session does not displace the evening concert", () => {
+  // Malmö, Folkets Park: the workshop runs 13:00–16:00, the concert 20:00–20:30.
+  assert.equal(eventOccurrenceForDate(CAPTURED_WORKSHOP, "2026-09-26"), null);
+  // Simrishamn, Österlens museum: Beredskapsdagen runs 11:00–14:00.
+  assert.equal(eventOccurrenceForDate(CAPTURED_BEREDSKAPSDAGEN, "2026-09-26"), null);
+
+  const out = weaveEveningEvent(
+    dayWithDistricts(),
+    liveEvents([CAPTURED_WORKSHOP, CAPTURED_CONCERT]),
+    { selectedDate: "2026-09-26" },
+  );
+  assert.equal(out.district_day.evening_event.id, "malmo-concert");
+  assert.equal(out.district_day.evening_event.starts_at, "2026-09-26T18:00:00.000Z");
+});
+
 test("no geocoded tonight-event → the day is returned UNCHANGED (no fabricated happening)", () => {
   const base = dayWithDistricts();
   const out = weaveEveningEvent(base, liveEvents([{ id: "e2", title: "No coords", salience_score: 8 }]));
