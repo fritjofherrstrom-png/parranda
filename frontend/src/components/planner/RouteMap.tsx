@@ -16,6 +16,11 @@
  * The view never puts a stop under the map's own controls (route-map-fit.mjs):
  * the zoom buttons, the attribution and the expand button are measured, and
  * every marker's disc is kept clear of them at the position it is drawn at.
+ *
+ * A tap on a stop's number opens that stop. Each stop is drawn twice at the
+ * same place: its disc and number in Leaflet's marker pane, and its 44px touch
+ * target in a pane beneath every disc. Where one stop's target reaches over a
+ * neighbour's disc, the disc stays on top and takes the tap.
  */
 import { useEffect, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
@@ -34,10 +39,14 @@ const ROUTE_COLOR = "#b6582f";
 const MARKER_RADIUS = 15;
 const DOT_RADIUS = 7;
 // Every footprint stays this far inside the map edge (so a marker's whole 44px
-// target stays on the map) and this far from any control.
+// icon and target stay on the map) and this far from any control.
 const EDGE_GAP = 7;
 const CONTROL_GAP = 4;
 const FIT_MAX_ZOOM = 15;
+// The route stops' touch targets: above the route line and the dots (overlay
+// pane, 400), beneath every stop's disc (marker pane, 600).
+const TARGET_PANE = "routeTargetPane";
+const TARGET_PANE_Z_INDEX = "550";
 
 function safeTooltip(name: string): string {
   const safe = document.createElement("div");
@@ -146,6 +155,7 @@ export default function RouteMap({
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
           maxZoom: 19,
         }).addTo(map);
+        map.createPane(TARGET_PANE).style.zIndex = TARGET_PANE_Z_INDEX;
         leafletRef.current = { L, map, layer: L.layerGroup().addTo(map) };
       }
       const { map, layer } = leafletRef.current;
@@ -178,21 +188,40 @@ export default function RouteMap({
           if (!Number.isFinite(stop?.lat) || !Number.isFinite(stop?.lng)) return;
           const presentation = markerPresentation[index];
           const eventClass = stop.is_live_event === true ? " route-map-marker--event" : "";
-          const clusteredClass = presentation?.clustered ? " route-map-marker-shell--clustered" : "";
           const shiftX = Number(presentation?.shift_x_px) || 0;
           const shiftY = Number(presentation?.shift_y_px) || 0;
           // Fitted where it is drawn: a clustered marker sits beside its coordinate.
           marks.push({ lat: stop.lat, lng: stop.lng, radius: MARKER_RADIUS, offsetX: shiftX, offsetY: shiftY });
-          const icon = L.divIcon({
-            className: `route-map-marker-shell${clusteredClass}`,
-            html: `<span class="route-map-marker${eventClass}" style="--route-marker-x:${shiftX}px;--route-marker-y:${shiftY}px">${index + 1}</span>`,
-            iconSize: [72, 72],
-            iconAnchor: [36, 36],
+          // The disc and its touch target are each a 44px icon drawn where the
+          // disc is: the display offset lives in the anchor. Neither covers more
+          // than that box, and Leaflet's pan on focus asks only for it, which
+          // the fit already keeps on the map: a tap never moves the map.
+          const iconAnchor: [number, number] = [22 - shiftX, 22 - shiftY];
+          // A clustered stop is drawn beside its coordinate; a dot marks the coordinate.
+          const origin = presentation?.clustered
+            ? `<span class="route-map-marker-origin" style="--route-marker-x:${shiftX}px;--route-marker-y:${shiftY}px"></span>`
+            : "";
+          const disc = L.marker([stop.lat, stop.lng], {
+            icon: L.divIcon({
+              className: "route-map-marker-shell",
+              html: `<span class="route-map-marker${eventClass}">${index + 1}</span>${origin}`,
+              iconSize: [44, 44],
+              iconAnchor,
+            }),
+            zIndexOffset: 1200 + index,
           });
-          const marker = L.marker([stop.lat, stop.lng], { icon, zIndexOffset: 1200 + index });
+          const target = L.marker([stop.lat, stop.lng], {
+            icon: L.divIcon({ className: "route-map-target", iconSize: [44, 44], iconAnchor }),
+            pane: TARGET_PANE,
+            // The disc is the stop's one keyboard stop.
+            keyboard: false,
+            zIndexOffset: 1200 + index,
+          });
+          // One stop, one name, whichever of the two takes the tap or hover.
+          const stopLayers = L.featureGroup([target, disc]);
           const markerName = String(stop.label || stop.name || "").trim();
-          if (markerName) marker.bindTooltip(safeTooltip(markerName));
-          layer.addLayer(marker);
+          if (markerName) stopLayers.bindTooltip(safeTooltip(markerName));
+          layer.addLayer(stopLayers);
         });
 
         if (showContext) {
