@@ -127,10 +127,12 @@ CI kör samma grundsvit på GitHub för pull requests och pushes till `main`.
 
 `tests/route-map-controls.test.js` kontrollerar i en riktig Chromium att ingen
 ruttmarkör hamnar under kartans egna kontroller (zoom, attribution,
-förstoringsknappen). Utan webbläsare hoppas den över lokalt; installera Google
-Chrome, kör `npx playwright-core install chromium` eller peka ut en med
+förstoringsknappen), och `tests/route-map-tap-targets.test.js` att ett tryck
+eller en hovring på en markörs nummer öppnar just det stoppet. Utan webbläsare
+hoppas de över lokalt; installera Google Chrome, kör
+`npx playwright-core install chromium` eller peka ut en med
 `PARRANDA_TEST_CHROMIUM=/sökväg/till/chrome`. I CI, där GitHub-runnern har
-Chrome, fäller den i stället för att hoppa över.
+Chrome, fäller de i stället för att hoppa över.
 
 ## Dela med andra utvecklare
 
