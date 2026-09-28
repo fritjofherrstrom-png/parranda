@@ -33,6 +33,7 @@ const { resolveAgnosticWalkingTargetBand } = require("./agnostic-walking-target"
 
 const AGNOSTIC_ENGINE_CITY_KEY = "agnostic-engine-area";
 const MAX_CAPACITY_FRONTIER_CANDIDATES = 2;
+const SOURCE_CATEGORIES = new Set(["antiques", "charity", "vintage", "second_hand"]);
 
 // Honest no-op services. The engine reaches city services for pulse/weather/
 // signals/live/geocode; an any-place context has no curated source for any of
@@ -239,6 +240,9 @@ function toSourceCandidate({
       kind: "open_geo_source",
       label: firstSource.label || provenance.source_family || "open data",
       url: firstSource.url || null,
+      // What the source's own category says the place is, where the route
+      // type is broader than that (see sourceCategoryOf in role-selector).
+      ...(SOURCE_CATEGORIES.has(rich?.source_category) ? { category: rich.source_category } : {}),
     },
     trust: {
       source_tier: provenance.source_tier || "inferred",
