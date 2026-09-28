@@ -14,9 +14,10 @@
  * corner, the Live stop last in every one, and checks every marker's visible
  * disc against the expand button, the zoom bar and the attribution at 320, 390
  * and 1280px: collapsed, expanded and collapsed again, since the day is fitted
- * again after each transition. The expanded map must show the day at least as
- * close as the collapsed one. Presentation only: the fixture's stops are drawn
- * as given.
+ * again after each transition. A disc below the fold is scrolled into view
+ * before its centre is hit-tested, and a centre that cannot be hit-tested
+ * fails. The expanded map must show the day at least as close as the collapsed
+ * one. Presentation only: the fixture's stops are drawn as given.
  *
  * /api/route-recommendations is answered inside the browser from a fixture and
  * every other host, map tiles included, is refused, so no provider or live
@@ -215,7 +216,8 @@ async function openDay({ browser, origin }, { width, stops }) {
 }
 
 // Runs in the page: every marker's visible disc (the 44px marker's ::before)
-// against the map and each control, by geometry and by hit test.
+// against the map and each control, by geometry and by hit test. It may scroll
+// the page.
 function measureMap(expandNames) {
   const frame = document.querySelector('section[aria-label="Rutten"] .leaflet-container').parentElement;
   const box = (element) => {
@@ -264,13 +266,33 @@ function measureMap(expandNames) {
         })})`);
       }
     }
-    const hit = document.elementFromPoint((disc.left + disc.right) / 2, (disc.top + disc.bottom) / 2);
+    return { marker, name, disc };
+  });
+  // A tap on each disc's centre, once all geometry above is read (scrolling
+  // moves everything). elementFromPoint sees only the viewport, and the
+  // expanded map reaches below the fold, so a disc outside it is scrolled into
+  // view first. A centre that still cannot be hit-tested is a check that did
+  // not run: it fails.
+  for (const { marker, name } of discs) {
+    const centre = () => {
+      const rect = marker.getBoundingClientRect();
+      return { x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2 };
+    };
+    let { x, y } = centre();
+    if (y < 0 || y >= innerHeight) {
+      window.scrollBy(0, y - innerHeight / 2);
+      ({ x, y } = centre());
+    }
+    const hit = x >= 0 && x < innerWidth && y >= 0 && y < innerHeight ? document.elementFromPoint(x, y) : null;
+    if (!hit) {
+      problems.push(`${name}'s centre could not be hit-tested: it is outside the viewport`);
+      continue;
+    }
     const hitControl = Object.entries(controls).find(([, element]) => element && element.contains(hit));
     if (hitControl) problems.push(`a tap on ${name}'s centre hits ${hitControl[0]}`);
-    return disc;
-  });
-  const xs = discs.map((disc) => (disc.left + disc.right) / 2);
-  const ys = discs.map((disc) => (disc.top + disc.bottom) / 2);
+  }
+  const xs = discs.map(({ disc }) => (disc.left + disc.right) / 2);
+  const ys = discs.map(({ disc }) => (disc.top + disc.bottom) / 2);
   return {
     markers: discs.length,
     height: Math.round(map.bottom - map.top),
