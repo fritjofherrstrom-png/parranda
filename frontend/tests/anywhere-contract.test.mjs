@@ -398,7 +398,7 @@ test("compact planner and map controls keep a 44px mobile touch target", () => {
   assert.match(anywhereStyles, /\.route-map-marker\s*\{[\s\S]*height: 44px;/);
 });
 
-test("a route stop's number is its own tap target", () => {
+test("a route stop's visible number is its own tap target", () => {
   const routeMapSource = componentSource("planner/RouteMap.tsx");
   // The touch targets have a pane of their own beneath every stop's disc (the
   // marker pane is 600): no stop's target reaches over a neighbour's number.

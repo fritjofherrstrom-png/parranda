@@ -17,10 +17,12 @@
  * the zoom buttons, the attribution and the expand button are measured, and
  * every marker's disc is kept clear of them at the position it is drawn at.
  *
- * A tap on a stop's number opens that stop. Each stop is drawn twice at the
- * same place: its disc and number in Leaflet's marker pane, and its 44px touch
- * target in a pane beneath every disc. Where one stop's target reaches over a
- * neighbour's disc, the disc stays on top and takes the tap.
+ * A tap on a stop's visible number opens that stop. Each stop is drawn twice at
+ * the same place: its disc and number in Leaflet's marker pane, and its 44px
+ * touch target in a pane beneath every disc. Where one stop's target reaches
+ * over a neighbour's disc, the disc stays on top and takes the tap. (A dense
+ * day on a small map can still draw a disc over another stop's number, which
+ * then cannot be tapped at all: #531.)
  */
 import { useEffect, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";

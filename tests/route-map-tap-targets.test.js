@@ -1,7 +1,7 @@
 "use strict";
 
 /**
- * A tap on a route stop's number opens that stop.
+ * A tap on a route stop's visible number opens that stop.
  *
  * Each numbered marker was a transparent 72px Leaflet icon, so that a clustered
  * stop's disc could be drawn up to 36px beside its coordinate, and Leaflet
@@ -16,7 +16,7 @@
  * marker pane, and its touch target in a pane beneath every disc.
  *
  * This opens the real Planner in Chromium at 320, 390 and 1280px, collapsed and
- * expanded, and checks every marker:
+ * expanded, and checks every marker whose number is visible:
  *   - the element at the centre of its disc is its own disc;
  *   - hovering its number, and tapping it on a touch screen, opens its own
  *     stop's name and no other, and the taps leave the map where it was (a
@@ -27,12 +27,23 @@
  *     its name. (On a touch screen Chromium moves a tap beside a disc onto the
  *     nearest element it thinks tappable: the disc itself, a neighbour, or a
  *     map control. That is the browser's guess, not this page's hit test.)
+ *
+ * A number whose centre is drawn under another stop's disc is not visible, and
+ * cannot be tapped at all: a tap there opens the stop drawn on top, which is
+ * what a person sees. That is how a dense day is drawn on a small map, not how
+ * a marker takes a tap, and it is tracked, as blocking, in #531. The test holds
+ * that boundary both ways: a hidden number in a view #531 does not list fails,
+ * and so does a listed view that no longer hides one (the entry then goes, and
+ * the test becomes strict there).
+ *
  * The days are the ones that reproduced the fault (the diagonal day, both
- * corners), every corner, and a clustered pair drawn beside its coordinates.
- * On all of them no disc is drawn over another stop's number, and that is
- * asserted as well: a number hidden under another disc cannot be tapped at all.
- * (The clustered north-east day in route-map-controls.test.js does hide numbers
- * on a phone. That is how the day is drawn, not how a marker takes a tap.)
+ * corners), every corner, a clustered pair drawn beside its coordinates, and
+ * route-map-controls.test.js's clustered north-east corner, which hides numbers
+ * on a collapsed phone map.
+ *
+ * Not evidence of keyboard access to the markers, nor of any real phone or of
+ * iOS Safari: those are separate boundaries. This is headless Chromium with a
+ * mouse and emulated touch.
  *
  * /api/route-recommendations is answered inside the browser from a fixture and
  * every other host, map tiles included, is refused, so no provider or live
@@ -122,7 +133,25 @@ const DAYS = {
     stop("d", 55.5996, 13.006),
     liveStop(55.6, 13.02),
   ],
+  // The dense day: the Live stop 80 m from stop d in the north-east corner. On
+  // a collapsed phone map it is fitted far out, and discs cover numbers.
+  "clustered north-east corner": [
+    stop("a", 55.595, 12.99),
+    stop("b", 55.598, 12.998),
+    stop("c", 55.601, 13.004),
+    stop("d", 55.6055, 13.0165),
+    liveStop(55.6062, 13.0178),
+  ],
 };
+
+// The views in which a stop's number is drawn under another stop's disc today,
+// and so cannot be seen or tapped: tracked, and blocking, in #531. Each view
+// listed must still hide a number; every other view must hide none.
+const HIDDEN_NUMBERS_ISSUE = "https://github.com/fritjofherrstrom-png/parranda/issues/531";
+const HIDDEN_NUMBER_VIEWS = new Set([
+  "clustered north-east corner at 320px, collapsed",
+  "clustered north-east corner at 390px, collapsed",
+]);
 
 function composedDay(stops) {
   return {
@@ -235,8 +264,8 @@ async function openDay({ browser, origin }, { width, stops }) {
 // --- in the page ---------------------------------------------------------
 
 // Runs in the page. Brings the whole map into view (elementFromPoint sees only
-// the viewport), then checks every marker's disc (the 44px marker's ::before)
-// against the other discs, and what a tap on it, and around it, would hit.
+// the viewport), then finds the numbers drawn under another disc, and checks
+// what a tap on each visible number, and around its disc, would hit.
 function measureMarkers() {
   const container = document.querySelector('section[aria-label="Rutten"] .leaflet-container');
   container.scrollIntoView({ block: "center" });
@@ -256,8 +285,13 @@ function measureMarkers() {
       radius: (rect.right - rect.left) / 2 - inset,
       // The stop's touch target is the same 44px box, drawn in the pane beneath.
       half: (rect.right - rect.left) / 2,
+      // Leaflet stacks markers by this: the higher one is drawn on top.
+      z: Number(element.closest(".leaflet-marker-icon").style.zIndex) || 0,
     };
   });
+  // A number is hidden when its centre lies under a disc drawn above it.
+  const coveredBy = (marker) =>
+    markers.filter((other) => other.z > marker.z && Math.hypot(marker.x - other.x, marker.y - other.y) < other.radius);
   const controls = [...frame.querySelectorAll(".leaflet-control, [data-map-control]")].map((element) => element.getBoundingClientRect());
   const centredOn = (element) => {
     const rect = element.getBoundingClientRect();
@@ -288,11 +322,10 @@ function measureMarkers() {
 
   let targetsChecked = 0;
   const measured = markers.map((marker) => {
-    for (const other of markers) {
-      if (other !== marker && Math.hypot(marker.x - other.x, marker.y - other.y) < other.radius) {
-        problems.push(`${marker.name}'s number is drawn under ${other.name}'s disc`);
-      }
-    }
+    const hiddenUnder = coveredBy(marker).map((other) => other.name);
+    // Out of this test's scope, and reported to it: see #531.
+    if (hiddenUnder.length) return { name: marker.name, x: marker.x, y: marker.y, hiddenUnder, aside: null };
+
     const hit = hitAt(marker.x, marker.y);
     if (hit.owner !== marker || hit.what !== "disc") problems.push(`a tap on ${marker.name}'s number hits ${describe(hit)}`);
 
@@ -304,7 +337,7 @@ function measureMarkers() {
       const aside = hitAt(marker.x + dx, marker.y + dy);
       if (aside.owner !== marker) problems.push(`a tap ${dx},${dy}px from ${marker.name}'s centre hits ${describe(aside)}`);
     }
-    return { name: marker.name, x: marker.x, y: marker.y, aside: around[0] ?? null };
+    return { name: marker.name, x: marker.x, y: marker.y, hiddenUnder, aside: around[0] ?? null };
   });
   if (!targetsChecked) problems.push("no marker's 44px target was clear of its neighbours and the controls to check");
   return { markers: measured, problems };
@@ -376,6 +409,7 @@ async function nameOpenedByTap(page, x, y) {
   return record ? named((await record.jsonValue()).opened) : "nothing (no click arrived)";
 }
 
+// Checks one view; returns what failed, and the numbers it found hidden.
 async function checkMarkers(page, stops, where) {
   const { markers, problems } = await page.evaluate(measureMarkers);
   const found = problems.map((problem) => `${where}: ${problem}`);
@@ -384,20 +418,22 @@ async function checkMarkers(page, stops, where) {
   const expect = (name, action, opened) => {
     if (opened !== labels.get(name)) found.push(`${where}: ${action} opens ${opened}, not ${labels.get(name)}`);
   };
+  const visible = markers.filter(({ hiddenUnder }) => !hiddenUnder.length);
+  const hidden = markers.filter(({ hiddenUnder }) => hiddenUnder.length).map(({ name, hiddenUnder }) => ({ name, hiddenUnder }));
 
-  // With the mouse: every number, then every 44px target beside its disc. One
-  // stop after another, so each hover has to close the name before it.
-  for (const { name, x, y } of markers) {
+  // With the mouse: every visible number, then every 44px target beside its
+  // disc. One stop after another, so each hover has to close the name before it.
+  for (const { name, x, y } of visible) {
     expect(name, `hovering ${name}'s number`, await nameOpenedByHover(page, x, y));
   }
-  for (const { name, x, y, aside } of markers) {
+  for (const { name, x, y, aside } of visible) {
     if (aside) expect(name, `hovering ${name}'s 44px target`, await nameOpenedByHover(page, x + aside[0], y + aside[1]));
   }
 
-  // With the touch screen: every number. The mouse waits off the map, so that
-  // it closes the last name and opens none while the touch screen taps.
+  // With the touch screen: every visible number. The mouse waits off the map,
+  // so that it closes the last name and opens none while the touch screen taps.
   await page.mouse.move(1, 1);
-  for (const { name, x, y } of markers) {
+  for (const { name, x, y } of visible) {
     // Leaflet counts two touch taps within 200ms of Date.now() as a double tap
     // and zooms in. The clock is fixed, so move it on as a person's taps would.
     await moveClockOn(page);
@@ -416,27 +452,51 @@ async function checkMarkers(page, stops, where) {
     }),
   );
   if (moved >= 1) found.push(`${where}: tapping the numbers moved the map ${Math.round(moved)}px`);
-  return found;
+  return { found, hidden };
 }
 
 for (const width of WIDTHS) {
-  test(`a tap on a route stop's number opens that stop at ${width}px, collapsed and expanded`, { timeout: 180_000 }, async (t) => {
+  test(`route stop numbers on the map at ${width}px, collapsed and expanded`, { timeout: 180_000 }, async (t) => {
     const current = await openRuntime(t);
     if (!current) return;
     const problems = [];
+    const hiddenByView = new Map();
     for (const [dayName, stops] of Object.entries(DAYS)) {
       const { context, page, route, pageErrors } = await openDay(current, { width, stops });
       try {
         await page.evaluate(recordTaps);
-        problems.push(...(await checkMarkers(page, stops, `${dayName} at ${width}px, collapsed`)));
-        await route.getByRole("button", { name: "Förstora kartan" }).click();
-        await page.waitForTimeout(SETTLE_MS);
-        problems.push(...(await checkMarkers(page, stops, `${dayName} at ${width}px, expanded`)));
+        for (const state of ["collapsed", "expanded"]) {
+          if (state === "expanded") {
+            await route.getByRole("button", { name: "Förstora kartan" }).click();
+            await page.waitForTimeout(SETTLE_MS);
+          }
+          const where = `${dayName} at ${width}px, ${state}`;
+          const { found, hidden } = await checkMarkers(page, stops, where);
+          problems.push(...found);
+          hiddenByView.set(where, hidden);
+        }
         if (pageErrors.length) problems.push(`${dayName} at ${width}px: the Planner threw: ${pageErrors.join("; ")}`);
       } finally {
         await context.close();
       }
     }
-    assert.deepEqual(problems, [], `route stops that do not take their own tap:\n${problems.join("\n")}`);
+
+    await t.test("a tap or hover on every visible number opens that stop", () => {
+      assert.deepEqual(problems, [], `visible route stop numbers that do not open their own stop:\n${problems.join("\n")}`);
+    });
+
+    await t.test("numbers are hidden only in the views #531 tracks", (st) => {
+      const outside = [];
+      for (const [where, hidden] of hiddenByView) {
+        const list = hidden.map(({ name, hiddenUnder }) => `${name} under ${hiddenUnder.join(", ")}`).join("; ");
+        if (HIDDEN_NUMBER_VIEWS.has(where)) {
+          if (hidden.length) st.diagnostic(`${where}: hidden, not tappable (${HIDDEN_NUMBERS_ISSUE}): ${list}`);
+          else outside.push(`${where}: no number is hidden any more; take the view off the list and update ${HIDDEN_NUMBERS_ISSUE}`);
+        } else if (hidden.length) {
+          outside.push(`${where}: ${list}`);
+        }
+      }
+      assert.deepEqual(outside, [], `hidden route stop numbers outside ${HIDDEN_NUMBERS_ISSUE}'s views:\n${outside.join("\n")}`);
+    });
   });
 }
