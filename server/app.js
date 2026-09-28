@@ -646,7 +646,9 @@ function reconcileConstraintAfterEventWeave({ experiment, woven, walkingKmTarget
 // How the PUBLISHED any-place day sits in the requested walking band, on the
 // route itself — a stable field, so the Planner can say "longer than ~6 km"
 // without reading experiment internals. Stamped after the last weave, so it
-// describes the route the client receives.
+// describes the route the client receives. days[0] is the whole publication:
+// the API publishes one day per request (planner/requested-dates.js), as the
+// weave, the route mutation and the fallback scrub on this path also assume.
 function publishWalkingTargetFit({ result, walkingKmTarget, distanceMode }) {
   const day = result?.days?.[0];
   const route = day?.primary_route;

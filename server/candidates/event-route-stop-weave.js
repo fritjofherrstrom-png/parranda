@@ -19,12 +19,13 @@
  *     (validateAgnosticWalkingOrder) in the supplied order — no reordering, no
  *     optimizing — and the new leg must be a short evening hop
  *     (<= MAX_EVENT_LEG_KM), not a trek.
- *   - The weave is an extension nobody asked for, so it may not carry the day
- *     out of the requested walking band: with a walking target, the day as it
- *     would be published must stay within the band's ceiling (the product band
- *     of agnostic-walking-target) — or, when the day was already past it
- *     before the weave, must not grow. Otherwise the event stays an anchor and
- *     a `suggested` interrupt states what taking it would cost.
+ *   - The weave is an extension nobody asked for, so it may never cause or
+ *     worsen an overrun of the requested walking band: with a walking target,
+ *     the day as it would be published must stay within the band's ceiling
+ *     (the product band of agnostic-walking-target) — or, when the composer
+ *     already made the day longer than that, must not grow. Otherwise the
+ *     event stays an anchor and a `suggested` interrupt states what taking it
+ *     would cost. The band bounds this weave, not the composed day.
  *   - The walk claim stays truthful: on a loop route the closing walk back to
  *     the start is REPLACED by the walk to the event (the evening ends at the
  *     event, so the day no longer claims a return leg) and the shape becomes

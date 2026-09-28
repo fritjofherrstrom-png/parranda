@@ -298,9 +298,10 @@ Priorities now are:
 4. Define explicit graduation criteria for experimental/legacy Planner paths:
    readiness evidence, dogfood matrix, promotion decision and deletion target.
 5. Let time-sensitive events affect dayflow only through the existing bounded
-   eligibility, geometry and walking-validation boundary, inside the walking
-   band the user chose; an event outside it is suggested, never silently woven
-   (`LOCAL_LIVE_INTELLIGENCE.md`, *Pulse route interrupt contract*).
+   eligibility, geometry and walking-validation boundary. An event may not
+   cause or worsen an overrun of the walking band the user chose; such an event
+   is suggested, never silently woven (`LOCAL_LIVE_INTELLIGENCE.md`, *Pulse
+   route interrupt contract*).
 
 ## Review rules
 

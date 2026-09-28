@@ -571,11 +571,11 @@ function spreadDayFixture() {
   return recs;
 }
 
-async function composeWithEvent({ event, body, engine = true }) {
+async function composeWithEvent({ event = null, body, engine = true }) {
   global.fetch = mockStableWeatherFetch();
   const server = buildApp({
     openDataLoader: makeLoader(spreadDayFixture()),
-    eventSupply: eventSupplyWith(event),
+    ...(event ? { eventSupply: eventSupplyWith(event) } : {}),
   }).listen(0);
   try {
     return await requestJson(server, {
@@ -669,6 +669,62 @@ test("the legacy synthesizer's weave honours the requested walking band too", as
   const balancedRoute = balanced.body.days[0].primary_route;
   assert.equal(balancedRoute.main_stops.at(-1).is_live_event, true, "control: the same event fits a ~6 km day");
   assert.equal(balanced.body.pulse_route_interrupt.status, "applied");
+});
+
+// The band binds the WEAVE, not the composer. A day the supply already makes
+// longer than requested is still published, and says so; the weave may keep or
+// shorten it but never cause or worsen the overrun.
+test("a day already past the band is still published, and the weave may keep or shorten it but never lengthen it", async () => {
+  // "~3 km" allows at most 3.54 km, but this supply's nearest coherent loop is
+  // 4.3 km (cafe-0, view-0, 1.4 km back to the start) before any event.
+  const plain = await composeWithEvent({ body: { walking_km_target: 3 } });
+  const plainRoute = plain.body.days[0].primary_route;
+  assert.equal(plain.body.agnostic_route_output_experiment.promotion.promote, true, "the long day is published");
+  assert.equal(plainRoute.estimated_km, 4.3);
+  assert.equal(plainRoute.walking_target_fit.status, "longer_than_requested_band", "and does not pretend to fit");
+
+  // Ending at an event 1 km beyond view-0 replaces the 1.4 km walk back. The
+  // 3.9 km result is still past the ceiling but shorter than the day without
+  // the event, so the weave neither caused nor worsened the overrun.
+  const shortening = await composeWithEvent({ event: tonightEventAt(12.494, { lat: 41.8826 }), body: { walking_km_target: 3 } });
+  const shortened = shortening.body.days[0].primary_route;
+  assert.equal(shortened.main_stops.at(-1).is_live_event, true, "the event is woven under the exception");
+  assert.equal(shortened.estimated_km, 3.9);
+  assert.equal(shortened.live_event_stop.base_estimated_km, 4.3);
+  assert.equal(shortened.live_event_stop.removed_closing_leg_km, 1.4);
+  assert.equal(shortened.walking_target_fit.status, "longer_than_requested_band", "still reported as long");
+  assert.equal(shortening.body.pulse_route_interrupt.status, "applied");
+  assert.equal(shortening.body.pulse_route_interrupt.walking_impact.walking_target_status, "longer_than_requested_band");
+
+  // An event 2.4 km beyond view-0 would make the day 5.3 km: worse than
+  // without it. Refused, and the day that was already long is published as is.
+  const lengthening = await composeWithEvent({ event: tonightEventAt(12.494, { lat: 41.8723 }), body: { walking_km_target: 3 } });
+  const kept = lengthening.body.days[0].primary_route;
+  assert.ok(!kept.main_stops.some((stop) => stop.is_live_event), "the event may not worsen the overrun");
+  assert.equal(kept.estimated_km, 4.3);
+  assert.equal(kept.walking_target_fit.status, "longer_than_requested_band");
+  assert.deepEqual(lengthening.body.pulse_route_interrupt.reasons, ["exceeds_requested_walking_target"]);
+  assert.equal(lengthening.body.pulse_route_interrupt.walking_impact.estimated_km, 5.3);
+});
+
+// walking_target_fit is stamped on days[0] only. That is complete because the
+// public contract is one day per request (planner/requested-dates.js): a
+// date-less request publishes one synthesized day, and a second distinct date
+// is refused before any composition. Widening that contract must revisit every
+// days[0] assumption on this path (the weave, the mutation, the scrub, this).
+test("walking_target_fit describes the one day the API publishes; a second date is refused", async () => {
+  for (const dates of [undefined, [DATE]]) {
+    const r = await composeWithEvent({ body: { walking_km_target: 6, dates } });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.days.length, 1, `dates=${JSON.stringify(dates)} publishes exactly one day`);
+    const route = r.body.days[0].primary_route;
+    assert.equal(route.walking_target_fit.estimated_km, route.estimated_km);
+    assert.equal(route.walking_target_fit.target_km, 6);
+  }
+  const twoDays = await composeWithEvent({ body: { walking_km_target: 6, dates: [DATE, "2026-05-26"] } });
+  assert.equal(twoDays.status, 400);
+  assert.equal(twoDays.body.error, "too_many_dates");
+  assert.equal("days" in twoDays.body, false, "no day is published, so none can go unstamped");
 });
 
 // --------------------------------------------------------------------------

@@ -377,9 +377,10 @@ client never reads titles to invent one.
 The top route-eligible evening event can produce one bounded
 `pulse_route_interrupt_v1` result after the day already exists. A short extension
 inside the existing 2.5 km auto-weave limit is marked `applied` only after the
-full stop order passes walking validation and the extended day stays inside the
-requested walking band. A longer extension, or one the band refuses, that still
-passes the engine's independent leg/day safety budgets is marked `suggested`:
+full stop order passes walking validation and the weave neither causes nor
+worsens an overrun of the requested walking band. A longer extension, or one
+the band refuses, that still passes the engine's independent leg/day safety
+budgets is marked `suggested`:
 the route, stop order, and geographic anchor remain unchanged until a
 user-facing consumer explicitly asks to recompose.
 
@@ -394,14 +395,19 @@ would be published passes the ceiling, the event is refused as
 already past the ceiling before the weave may take the event if ending there
 does not lengthen it, as when the event replaces a loop's walk back to the
 start. A `no_limit` request has no band. When a pin and the event do not both
-fit, the pin the user asked for is kept and the event is suggested.
+fit, the pin the user asked for is kept and the event is suggested. The band
+binds the weave, not the composer: a day the available places already make
+longer than requested is still published, reported as
+`longer_than_requested_band`, and may take the event only on those terms.
 
 The suggestion's `walking_impact` carries the leg, the day before and with the
 event (`base_estimated_km`, `removed_closing_leg_km`, `estimated_km`) and the
 band verdict (`walking_target_km`, `walking_target_status`). A woven stop keeps
 `base_estimated_km` and `removed_closing_leg_km` on `live_event_stop`, so its
-distance can be attributed, and every published any-place route carries
-`walking_target_fit`, the band verdict for the day as published. The modern
+distance can be attributed, and the published any-place day carries
+`walking_target_fit`, the band verdict for the day as published. The API
+publishes one day per request (`server/planner/requested-dates.js`); a second
+distinct date is refused before composition. The modern
 Planner reads these stable fields to say beside the day's distance when a day
 falls outside the band and which evening event was left out, at what cost. It
 does not offer to add the event yet. Events whose geometry cannot be
