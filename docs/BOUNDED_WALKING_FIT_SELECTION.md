@@ -72,10 +72,15 @@ not a license to acquire or activate a source.
 - Try at most **three** alternative reservoirs sequentially. Each replaces
   **one** selected identity, keeps the other IDs and reservoir size, and rechecks
   comparability against the actual original winner.
-- Only original reservoirs of **two through six** records qualify. This bounds
-  the multiplied engine ordering work; larger reservoirs keep existing behavior.
-  Trials use the existing engine, stop-order bounds and walking estimator, not
-  another optimizer. There is no new hard wall-clock deadline or Pi latency SLA.
+- Only original reservoirs of **two through seven** records qualify. This
+  admits the observed six-to-seven support-place transition without turning
+  walking-fit off when one more candidate arrives. At eight or more records
+  this search still skips; the engine's exhaustive stop-order ceiling is eight,
+  and the same three-trial cap remains. This removes one discontinuity, **not**
+  a general monotonicity guarantee or evidence that any particular longer day
+  is visitable. Trials use the existing engine, stop-order bounds and walking
+  estimator, not another optimizer. There is no new hard wall-clock deadline
+  or Pi latency SLA.
 - **Zero additional acquisition, weather, event or routing-provider requests**:
   normalized sources/context are reused; this engine's any-place config uses
   no-op services and heuristic walking. Do not call it street-network validation.

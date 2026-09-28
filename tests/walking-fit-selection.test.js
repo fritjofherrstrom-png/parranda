@@ -143,7 +143,12 @@ test('variant proposals have a fixed trial/reservoir ceiling and replace exactly
   const variants=buildWalkingFitReservoirs({sourceCandidates,plannerRoles,origin,walkingKmTarget:6});
   assert.equal(variants.length,3);
   for(const variant of variants){assert.equal(variant.length,2);assert.equal(variant[1].id,'b');assert.notEqual(variant[0].id,'a');}
-  assert.deepEqual(buildWalkingFitReservoirs({sourceCandidates:[...sourceCandidates,...Array.from({length:5},(_,i)=>({id:'extra'+i}))],plannerRoles,origin,walkingKmTarget:6}),[]);
+  const seven=[...sourceCandidates,...Array.from({length:5},(_,i)=>({id:'extra'+i}))];
+  const sevenVariants=buildWalkingFitReservoirs({sourceCandidates:seven,plannerRoles,origin,walkingKmTarget:6});
+  assert.equal(sevenVariants.length,3,'one more support place must not disable the bounded search');
+  assert.ok(sevenVariants.every(variant=>variant.length===7 && variant.slice(1).every((candidate,index)=>candidate.id===seven[index+1].id)));
+  assert.deepEqual(buildWalkingFitReservoirs({sourceCandidates:[...seven,{id:'extra5'}],plannerRoles,origin,walkingKmTarget:6}),[],
+    'the expanded search remains capped above seven records');
 });
 
 test('engine re-selection cannot sacrifice another published place during a comparable substitution', ()=>{
