@@ -274,7 +274,8 @@ function toSourceCandidate({
  * candidate per selected role adds geometric choice. A selected winner may use
  * the explicit experimental-admission seam, but role-depth extras must clear
  * the shared gates; coverage and local-feel tiers remain shared with Candidate
- * Combination.
+ * Combination. The one exception is a single-place requested spine, which may
+ * take one more place of the same role (see appendSecondSpinePlace).
  */
 function mapPlannerReservoirToSourceCandidates({
   selected = [],
@@ -459,6 +460,18 @@ function mapPlannerReservoirToSourceCandidates({
     }
   }
 
+  // A single requested intent must not be structurally unable to form a day
+  // from single-source supply while two intents can: a two-intent day already
+  // publishes one experimentally admitted place per requested role, two in
+  // all. When nothing else joined a one-place requested spine, that same role
+  // may add its next planner-usable place — one, under the same shared gates,
+  // availability and local-feel/operational tiers the combination used. The
+  // spine never grows beyond two experimental places this way, and any lower
+  // trust stays labelled on the stop and capped in readiness.
+  if (out.length === 1 && selectedPicks.length === 1) {
+    appendSecondSpinePlace({ out, seen, spine: selectedPicks[0], plannerRoles, richIndex, city, requestedIntents });
+  }
+
   if (includeCapacityFrontier) {
     appendWalkingCapacityFrontier({
       out,
@@ -473,6 +486,35 @@ function mapPlannerReservoirToSourceCandidates({
   }
 
   return out;
+}
+
+function appendSecondSpinePlace({ out, seen, spine, plannerRoles, richIndex, city, requestedIntents }) {
+  const role = spine?.role;
+  const roleEntry = (Array.isArray(plannerRoles?.roles) ? plannerRoles.roles : [])
+    .find((entry) => entry?.role === role);
+  if (!role || !roleEntry) return;
+  // Excluding the places already in the reservoir lets the shared trust-tier
+  // primitive offer the role's next option, including an experimentally
+  // admitted one once no other gate-passing option remains.
+  const remaining = {
+    ...roleEntry,
+    candidates: (Array.isArray(roleEntry.candidates) ? roleEntry.candidates : [])
+      .filter((candidate) => candidate?.candidate_id && !seen.has(candidate.candidate_id)),
+  };
+  const rich = plannerUsableOptionsForRole(remaining).find((candidate) => finiteCoords(candidate.coordinates));
+  if (!rich) return;
+  const coords = finiteCoords(rich.coordinates);
+  seen.add(rich.candidate_id);
+  out.push(
+    toSourceCandidate({
+      pick: { role, candidate_id: rich.candidate_id, coordinates: coords },
+      rich: richIndex.get(`${role}::${rich.candidate_id}`) || rich,
+      coords,
+      city,
+      role,
+      requestedIntents,
+    }),
+  );
 }
 
 // The role selector is the single owner of capacity-frontier choice because it

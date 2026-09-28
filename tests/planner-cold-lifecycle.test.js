@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { createPlannerLifecycle, lifecycleLoader } = require('../server/planner/cold-lifecycle');
 const { createBackgroundSource, SOURCE_COMPLETION } = require('../server/place-candidates/background-source');
 const { createSourceCache } = require('../server/place-candidates/source-cache');
-const { composeOpenDataLoaders } = require('../server/place-candidates/open-data-loader');
+const { composeOpenDataLoaders, createOpenDataLoader } = require('../server/place-candidates/open-data-loader');
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 
 test('cold source shares one acquisition, exposes pending privately, and serves warm without work', async () => {
@@ -168,6 +168,52 @@ test('warm supply preserves cached independent families without any live load', 
   assert.equal(result.length, 17);
   assert.ok(result.some(row => row.id === 'osm-cultural'));
   assert.ok(result.some(row => row.id === 'official-1'));
+});
+
+test('the cached fast path acquires instead of answering when cached evidence misses a requested intent', async () => {
+  // A cached Overpass answer for this exact request plus varied rows, but no
+  // second-hand place: answering from cache would never ask the cold directory.
+  const cached = Array.from({ length: 13 }, (_, i) => ({ id: `osm-${i}`, type: ['museum', 'park', 'restaurant'][i % 3], lat: 1, lng: 2 + i / 1000 }));
+  let primaryReads = 0;
+  const primary = () => { primaryReads++; return cached; };
+  primary.readCached = () => cached;
+  let directoryLoads = 0;
+  const directory = { eager: true, load: () => { directoryLoads++; return []; }, readCached: () => [] };
+  const result = await composeOpenDataLoaders(primary, null, directory)({
+    lat: 1, lng: 2, requestedIntents: ['second_hand'], preferCachedSupply: true,
+  });
+  assert.equal(directoryLoads, 1, 'the cold directory is asked for the missing intent');
+  assert.equal(primaryReads, 1, 'the primary is re-read once (a cache hit for the real Overpass loader)');
+  assert.equal(result.length, 13);
+});
+
+test('the cached fast path acquires when the cached reservoir cannot span the requested walk', async () => {
+  const cached = Array.from({ length: 13 }, (_, i) => ({ id: `osm-${i}`, type: ['museum', 'park', 'restaurant'][i % 3], lat: 1, lng: 2 }));
+  const primary = () => cached;
+  primary.readCached = () => cached;
+  let directoryLoads = 0;
+  const directory = { eager: true, load: () => { directoryLoads++; return []; }, readCached: () => [] };
+  await composeOpenDataLoaders(primary, null, directory)({
+    lat: 1, lng: 2, preferCachedSupply: true,
+    walkingTargetBand: { targetKm: 9, floorKm: 5.4, ceilingKm: 10.62 },
+  });
+  assert.equal(directoryLoads, 1, 'a single-point reservoir cannot answer a 9 km request from cache');
+});
+
+test('cached background rows alone never answer for a primary whose cache has no entry', async () => {
+  // Warm Wikidata-like corroboration (three categories) beside a cold Overpass
+  // cache: the read-only path must not return the background rows alone.
+  const background = Array.from({ length: 16 }, (_, i) => ({ id: `wikidata-${i}`, type: ['museum', 'park', 'market'][i % 3], lat: 1, lng: 2 }));
+  let overpassCalls = 0;
+  const primary = createOpenDataLoader({
+    fetcher: async () => { overpassCalls++; return { ok: true, json: async () => ({ elements: [] }) }; },
+    cache: createSourceCache(),
+  });
+  const wikidata = { eager: false, load: () => background, readCached: () => background };
+  const result = await composeOpenDataLoaders(primary, wikidata)({ lat: 1, lng: 2, preferCachedSupply: true });
+  assert.ok(overpassCalls > 0, 'the map source was actually asked');
+  assert.equal(result.length, 16, 'and the background rows still join the composition');
+  assert.notEqual(result.loader_metadata?.primary_collection, 'cached_supply');
 });
 
 test('legacy rescue still observes an acquisition completed while the primary was running', async () => {

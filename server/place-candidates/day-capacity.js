@@ -1,6 +1,32 @@
 const MIN_DAY_CAPACITY_RECORDS = 3;
 const MIN_DAY_CAPACITY_CATEGORIES = 3;
 const MIN_CAPACITY_SPAN_IMPROVEMENT_KM = 0.3;
+// The aperture a day is collected from, when the caller says nothing about how
+// far the user wants to walk. It is a FLOOR, not the answer: see
+// budgetAwareRadiusKm below.
+//
+// This constant used to be the whole story, justified as "1.5 km reach catches
+// the scenic/cultural/second-hand places that cluster outside a tight centre".
+// Product QA across Stockholm, Malmö, Ystad and Kivik measured that claim and
+// it does not hold for a long day: a 9 km request drew from exactly the same
+// 1.5 km disc as a 4 km request, so candidate span could not exceed ~3 km,
+// `can_support_target` was false in 84 of 87 scenarios that reported it, and a
+// longer budget produced a longer route in ZERO of 60 comparable groups.
+const DEFAULT_WALKING_REACH_KM = 1.5;
+// A day is a loop back to where it started, so the useful reach from the anchor
+// is roughly a quarter of the distance walked: span ~= 2 * radius ~= target / 2,
+// leaving the rest of the budget for the legs between stops. Below the default
+// this changes nothing (a short day keeps today's aperture); above it the disc
+// grows with the ask and stays inside the reviewed ceiling. Generic — derived
+// from the requested budget alone, never from a place.
+const WALKING_REACH_PER_TARGET_KM = 0.25;
+const MAX_WALKING_REACH_KM = 5.0;
+// Distance rings (km from the anchor) that describe the walkable disc for every
+// sampled source. They are walking-reach thresholds shared by every request,
+// never places: thirds of the default 1.5 km reach resolve the near-anchor,
+// 2.25 km and 3 km are the reach of a 9 km and a 12 km (maximum) day — 3 km is
+// also the exact-anchor candidate reach — and the last ring is open-ended.
+const WALKING_REACH_RING_EDGES_KM = Object.freeze([0.5, 1, 1.5, 2.25, 3]);
 
 // Parranda type -> coarse candidate family. Kept next to the capacity logic so
 // source balancing and day-capacity checks share one vocabulary.
@@ -153,6 +179,73 @@ function dedupeCapacityRecords(records) {
   return output;
 }
 
+/**
+ * How far from the anchor to collect candidates for a day of `targetKm`.
+ *
+ * A day returns to where it began, so the reach that matters is about a quarter
+ * of the distance walked — that puts the candidate span at roughly half the
+ * budget and leaves the rest for the legs between stops. Never narrower than
+ * the default (a short day is unchanged) and never past the reviewed ceiling.
+ *
+ * Depends only on the requested budget: no place, no city, no source. Every
+ * place source that samples a walkable disc (Overpass, the Overture directory)
+ * shares this one definition so their samples describe the same disc.
+ */
+function budgetAwareRadiusKm(walkingTargetBand, defaultRadiusKm = DEFAULT_WALKING_REACH_KM) {
+  const targetKm = Number(walkingTargetBand?.targetKm);
+  if (!Number.isFinite(targetKm) || targetKm <= 0) return defaultRadiusKm;
+  const reachKm = Math.max(defaultRadiusKm, targetKm * WALKING_REACH_PER_TARGET_KM);
+  return Math.max(0.1, Math.min(MAX_WALKING_REACH_KM, reachKm));
+}
+
+function walkingReachRing(distanceKmValue) {
+  const index = WALKING_REACH_RING_EDGES_KM.findIndex((edge) => distanceKmValue < edge);
+  return index < 0 ? WALKING_REACH_RING_EDGES_KM.length : index;
+}
+
+/**
+ * Order candidate records across the walkable disc instead of nearest-first.
+ *
+ * Items are grouped by (distance ring, stratum) and taken by weighted
+ * round-robin: the k-th item of a group is worth (k + 1) / weight. Rings inside
+ * the walking reach weigh 1, the next ring out 0.5 and anything farther 0.25,
+ * so a longer day draws deeper into the disc while a short day stays near and
+ * still keeps a frontier. `compare` orders items inside a group; `weightOf`
+ * may favour whole groups (for example a requested intent). A sampled source
+ * that keeps only the nearest N records describes a few hundred metres of a
+ * dense centre, whatever budget was asked for. Pure and deterministic.
+ */
+function interleaveAcrossWalkingReach(items, {
+  walkingTargetBand,
+  ringOf,
+  stratumOf = () => "",
+  weightOf = () => 1,
+  compare,
+}) {
+  const reachKm = budgetAwareRadiusKm(walkingTargetBand);
+  const innerKm = (ring) => (ring <= 0 ? 0 : WALKING_REACH_RING_EDGES_KM[ring - 1]);
+  const ringWeight = (ring) => {
+    if (innerKm(ring) < reachKm) return 1;
+    return innerKm(ring - 1) < reachKm ? 0.5 : 0.25;
+  };
+  const groups = new Map();
+  for (const item of Array.isArray(items) ? items : []) {
+    const ring = ringOf(item);
+    const key = `${ring}|${stratumOf(item)}`;
+    if (!groups.has(key)) groups.set(key, { ring, members: [] });
+    groups.get(key).members.push(item);
+  }
+  const prioritized = [];
+  for (const { ring, members } of groups.values()) {
+    members.sort(compare);
+    const weight = ringWeight(ring) * weightOf(members);
+    members.forEach((item, rank) => prioritized.push({ item, ring, priority: (rank + 1) / weight }));
+  }
+  return prioritized
+    .sort((left, right) => left.priority - right.priority || left.ring - right.ring || compare(left.item, right.item))
+    .map(({ item }) => item);
+}
+
 function normalizeWalkingTargetBand(value) {
   if (!value || typeof value !== "object") return null;
   const targetKm = Number(value.targetKm);
@@ -186,6 +279,12 @@ function roundKm(value) {
 module.exports = {
   TYPE_CATEGORY,
   MIN_CAPACITY_SPAN_IMPROVEMENT_KM,
+  DEFAULT_WALKING_REACH_KM,
+  MAX_WALKING_REACH_KM,
+  WALKING_REACH_RING_EDGES_KM,
+  budgetAwareRadiusKm,
+  walkingReachRing,
+  interleaveAcrossWalkingReach,
   dayCapacityProfile,
   normalizeWalkingTargetBand,
   preserveCapacityFrontier,

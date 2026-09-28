@@ -5,9 +5,10 @@ const { plannerUsableOptionsForRole } = require('./candidate-combination');
 
 const MAX_ROLE_ALTERNATIVES = 2;
 const MAX_WALKING_FIT_TRIALS = 3;
-// Thin-day refinement only. Larger reservoirs already have combinatorial
-// ordering cost; do not multiply their search or the pin-settling lifecycle.
-const MAX_WALKING_FIT_RESERVOIR = 6;
+// Bounded by the engine's eight-stop exhaustive-ordering ceiling, with room
+// for one additional support place in the observed six-to-seven cliff. Keep
+// the three-trial cap; larger reservoirs still skip this expensive search.
+const MAX_WALKING_FIT_RESERVOIR = 7;
 const STATUS = { partial: 1, filled: 2 };
 const CONFIDENCE = { low: 1, medium: 2, high: 3 };
 const includesAll = (values, required) => required.every(value => values.includes(value));

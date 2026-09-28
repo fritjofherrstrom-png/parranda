@@ -326,12 +326,23 @@ test("official cache survives a new cache instance and accompanies the fast dire
     id: `directory-${index}`, name: `Place ${index}`, type: ["museum", "restaurant", "park"][index % 3],
     lat: ANCHOR.lat, lng: ANCHOR.lng,
   }));
-  const loader = composeOpenDataLoaders(async () => [], null,
-    { eager: true, load: () => directory }, restarted);
+  // The directory answers alone only while the primary is still outstanding at
+  // the bounded wait; the cached official row must accompany that path.
+  const outstanding = new Promise(() => {});
+  const loader = composeOpenDataLoaders(() => outstanding, null,
+    { eager: true, load: () => directory }, restarted, { primaryWaitMs: 5 });
   const result = await loader(ANCHOR);
   assert.equal(result.length, 13);
   assert.ok(result.some((record) => record.id === "visit-sweden-napi-201-55"));
   assert.equal(result.loader_metadata.selected_profile.record_count, 13);
+  assert.equal(result.loader_metadata.primary_collection, "background_refresh");
+  // A primary that answers — here with a healthy empty result — is merged, not
+  // pre-empted; the official row still reaches the composition.
+  const answered = await composeOpenDataLoaders(async () => [], null,
+    { eager: true, load: () => directory }, restarted)(ANCHOR);
+  assert.equal(answered.length, 13);
+  assert.ok(answered.some((record) => record.id === "visit-sweden-napi-201-55"));
+  assert.equal(calls, 1, "neither path spends another live official request");
 });
 
 test("a failed primary and failed NAPI request never cause a second live fetch in the same composition", async () => {

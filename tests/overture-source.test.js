@@ -13,6 +13,7 @@ const {
 } = require("../server/place-candidates/overture-source");
 const { composeOpenDataLoaders } = require("../server/place-candidates/open-data-loader");
 const { mapRecordToCandidate } = require("../server/place-candidates/external-open-provider");
+const fx = require("./helpers/dense-centre-fixture");
 
 const ID = "06d8f8c3-fb2b-4680-a518-8df6bf53c0b9";
 
@@ -212,11 +213,53 @@ test("composed loader can serve cached Overture supply when Overpass failed", as
   assert.equal(records.loader_error, "timeout_or_abort", "the rescued result must retain the primary outage fact");
 });
 
-test("a varied cached Overture reservoir returns without waiting behind live Overpass", async () => {
+test("a varied cached Overture reservoir rescues an outstanding Overpass within the bounded wait, spread across the walkable disc", async (t) => {
+  // Synthetic dense centre through the real production SQL: the rescue must be
+  // quick AND useful. A reservoir clustered within a few hundred metres (the
+  // old nearest-600 window) returned fast but could not describe a 9 km day.
+  const places = fx.generatePlaces();
+  const dense = await fx.createOvertureQueryRows(places);
+  t.after(() => dense.close());
+  const request = {
+    ...fx.ANCHOR,
+    requestedIntents: ["food", "museums"],
+    walkingTargetBand: fx.walkingBand(9),
+  };
+  const overtureRecords = await createOvertureSource({
+    queryRows: dense.queryRows,
+    releaseResolver: async () => "2026-08-19.0",
+  })(request);
   let releasePrimary;
   const primary = new Promise((resolve) => { releasePrimary = resolve; });
+  const loader = composeOpenDataLoaders(
+    async () => primary,
+    null,
+    { eager: true, load: () => overtureRecords },
+    null,
+    { primaryWaitMs: 20 },
+  );
+
+  const started = Date.now();
+  const result = await Promise.race([
+    loader(request),
+    new Promise((_, reject) => setTimeout(() => reject(new Error("waited_for_overpass")), 1000)),
+  ]);
+  assert.ok(Date.now() - started < 1000, "an outage costs the bounded wait, never the Overpass deadline");
+  assert.equal(result.length, overtureRecords.length);
+  assert.equal(result.loader_metadata.primary_collection, "background_refresh");
+  const distances = result.map((record) => fx.distanceKm(fx.ANCHOR, record));
+  assert.ok(Math.max(...distances) >= 2, `the rescued reservoir reaches the day's reach (${Math.max(...distances).toFixed(2)} km)`);
+  for (const [innerKm, outerKm] of [[0, 0.5], [0.5, 1], [1, 1.5], [1.5, 2.25]]) {
+    assert.ok(distances.some((km) => km >= innerKm && km < outerKm), `records ${innerKm}-${outerKm} km out`);
+  }
+  assert.ok(result.loader_metadata.selected_day_capacity.candidate_span_km >= 3,
+    `span ${result.loader_metadata.selected_day_capacity.candidate_span_km} km`);
+  releasePrimary([]);
+});
+
+test("a warm directory never pre-empts a map primary that answers within the bounded wait", async () => {
   const types = ["restaurant", "cafe", "museum"];
-  const overtureRecords = Array.from({ length: 12 }, (_, index) => ({
+  const directory = Array.from({ length: 12 }, (_, index) => ({
     id: `overture-fast-${index}`,
     name: `Local ${index}`,
     type: types[index % types.length],
@@ -225,17 +268,15 @@ test("a varied cached Overture reservoir returns without waiting behind live Ove
     tags: [],
     sources: [{ provider: "overture", family: "open_directory", tier: "inferred" }],
   }));
+  const osm = Object.assign([{ id: "osm-node-1", name: "Mapped park", type: "park", lat: 55.681, lng: 14.231, tags: ["park"],
+    sources: [{ provider: "osm", family: "map", tier: "inferred" }] }], { loader_status: "loaded:1" });
   const loader = composeOpenDataLoaders(
-    async () => primary,
+    () => new Promise((resolve) => setTimeout(() => resolve(osm), 30)),
     null,
-    { eager: true, load: () => overtureRecords },
+    { eager: true, load: () => directory },
   );
-
-  const result = await Promise.race([
-    loader({ lat: 55.68, lng: 14.23 }),
-    new Promise((_, reject) => setTimeout(() => reject(new Error("waited_for_overpass")), 50)),
-  ]);
-  assert.equal(result.length, 12);
-  assert.equal(result.loader_metadata.primary_collection, "background_refresh");
-  releasePrimary([]);
+  const result = await loader({ lat: 55.68, lng: 14.23 });
+  assert.equal(result.length, 13, "the healthy primary's rows and the directory are merged");
+  assert.ok(result.some((record) => record.id === "osm-node-1"));
+  assert.notEqual(result.loader_metadata?.primary_collection, "background_refresh");
 });

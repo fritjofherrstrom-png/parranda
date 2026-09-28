@@ -65,7 +65,13 @@ test('legacy cold loss versus one-submission pending→trusted route; no re-reso
   const warm = await request({ ...input, ...anchor, place: undefined });
   assert.equal(warm.status, 200);
   assert.ok(warm.body.days[0].primary_route);
-  assert.deepEqual(counts(), warmBefore, 'warm coordinate request performs no source or resolver network work');
+  // A warm directory no longer answers for a map primary that has no cached
+  // answer: this uncached primary is asked once, within the bounded wait, and
+  // its failure is rescued from the directory. Nothing else is repeated. (A
+  // primary whose own cache answers still costs no live work at all; see
+  // planner-cold-lifecycle "warm supply preserves cached independent families".)
+  assert.deepEqual(counts(), { ...warmBefore, primary: warmBefore.primary + 1 },
+    'warm coordinate request repeats no resolver or directory work');
 });
 
 test('provider failure ends honestly and cannot become another live attempt through rescue', async t => {
