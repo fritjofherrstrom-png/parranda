@@ -36,6 +36,7 @@ import {
 import { mapsPlaceUrl, mapsWalkingRouteParts, primaryRouteStops, type RouteEnd } from "../lib/maps-links.mjs";
 import { routePathIsSketch } from "../lib/route-map-presentation.mjs";
 import { selectedDayHoursLabel } from "../lib/selected-day-hours.mjs";
+import { stopHoursUnknown, stopTypeLabel } from "../lib/stop-card-facts.mjs";
 import {
   buildRouteContextSuggestions,
   routePreferenceCoverage,
@@ -2145,7 +2146,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               const prevName = routeNumber > 1 ? String((split.core[i - 1] as any)?.label || (split.core[i - 1] as any)?.name || "").trim() : "";
               const hoursLabel = selectedDayHoursLabel(stop?.selected_day_hours, lang);
               const partialLabels = partialPreferenceLabels(stop, selected, lang);
-              const hoursRelevant = HOURS_RELEVANT_TYPES.has(String(stop?.type || ""));
+              const stopKindLabel = stop?.type === "vintage-shop"
+                ? stopTypeLabel(stop, lang)
+                : typeLabel(stop?.type, lang);
+              const hoursUnknown = stopHoursUnknown(stop);
               const sourceLabel = String(stop?.source?.label || "").trim();
               return (
                 <li key={stopKey} className="flex flex-col">
@@ -2174,9 +2178,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                     </span>
                     <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-parranda-ink">
                       <span className="font-bold">{name}</span>
-                      {typeLabel(stop?.type, lang) && (
+                      {stopKindLabel && (
                         <span className="rounded-full border border-parranda-ink/15 bg-parranda-ink/10 px-2 py-0.5 text-xs text-parranda-ink/75">
-                          {typeLabel(stop?.type, lang)}
+                          {stopKindLabel}
                         </span>
                       )}
                       {kept && (
@@ -2184,6 +2188,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                           <KeepIcon className="h-3 w-3" />
                           {t("Behålls", "Kept")}
                         </span>
+                      )}
+                      {/* Visitability stays visible without expanding: a place
+                          whose source gives no hours for the chosen day says so
+                          here instead of reading as a confirmed visit. */}
+                      {hoursUnknown && (
+                        <span className="text-xs text-parranda-ink/55">{t("Öppettider okända", "Hours unknown")}</span>
                       )}
                     </span>
                     <ChevronRightIcon
@@ -2205,7 +2215,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                           </span>
                         )}
                         {hoursLabel && <span>{hoursLabel}</span>}
-                        {!hoursLabel && hoursRelevant && (
+                        {hoursUnknown && (
                           <span>{t("Källtider saknas för den valda dagen", "Source hours unavailable for the selected day")}</span>
                         )}
                         {stop?.address && <span>{stop.address}</span>}

@@ -170,7 +170,14 @@ test("the surface renders the engine's TRUSTWORTHY richness — and never the co
   assert.match(anywherePlannerSource, /primaryRoute\?\.estimated_km/);
   assert.match(anywherePlannerSource, /estimated_walk_minutes/);
   assert.match(anywherePlannerSource, /map_path_points/);
+  // Curated/known engine kinds use #519's closed translated copy; only the
+  // second-hand route kind uses #532's source-owned subtype.
+  assert.match(anywherePlannerSource, /stop\?\.type === "vintage-shop"/);
+  assert.match(anywherePlannerSource, /stopTypeLabel\(stop, lang\)/);
   assert.match(anywherePlannerSource, /typeLabel\(stop\?\.type, lang\)/);
+  assert.match(anywherePlannerSource, /\{stopKindLabel\}/);
+  // Unknown opening hours are visible on the stop row, not only when expanded.
+  assert.match(anywherePlannerSource, /hoursUnknown && \(\s*<span className="text-xs text-parranda-ink\/55">\{t\("Öppettider okända", "Hours unknown"\)\}/);
   assert.match(anywherePlannerSource, /DAYPART_LABELS, stop\.daypart/);
   // NEVER rendered: fields that can carry baseline-city phrasing or placeholder
   // labels on the agnostic path (verified live: date_signals said "i Rom" for a

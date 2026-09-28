@@ -585,6 +585,21 @@ function candidateStatusForRole({ fit, gates, spec, experimentalAdmission = null
   return "missing";
 }
 
+// A broad route type can hide what the source itself says a place is: the
+// `vintage-shop` role type holds antiques halls, charity shops, vintage shops
+// and every other kind of second-hand trade. Name the narrower category only
+// from the tags the loader derived from the source's own category (OSM `shop`,
+// Overture taxonomy), from a closed set, and never from a name. Anything else
+// is the broad, honest "second hand"; it is never presented as vintage.
+function sourceCategoryOf(candidate) {
+  if (String(candidate?.type || "") !== "vintage-shop") return null;
+  const tags = new Set(Array.isArray(candidate.tags) ? candidate.tags.map((tag) => String(tag).toLowerCase()) : []);
+  if (tags.has("antique")) return "antiques";
+  if (tags.has("charity")) return "charity";
+  if (tags.has("vintage")) return "vintage";
+  return "second_hand";
+}
+
 function formatRoleCandidate(entry, role, roleEntries, roleSpec = ROLE_SPEC) {
   const { candidate, derived, fit, gates, calibration, candidate_status, experimental_admission, availability, operational } = entry;
   const provenance = candidateProvenance(candidate, derived);
@@ -611,6 +626,7 @@ function formatRoleCandidate(entry, role, roleEntries, roleSpec = ROLE_SPEC) {
           local_feel_reasons: entry.local_feel_reasons || [],
           chain: entry.candidate.chain === true,
           brand: typeof entry.candidate.brand === "string" ? entry.candidate.brand : null,
+          ...(sourceCategoryOf(entry.candidate) ? { source_category: sourceCategoryOf(entry.candidate) } : {}),
         }
       : {}),
     experimental_admission: sanitizeExperimentalAdmission(experimental_admission),
