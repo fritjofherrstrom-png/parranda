@@ -165,6 +165,18 @@ function normalizeAnchorMode(value) {
   return ["coordinates", "place"].includes(String(value)) ? String(value) : "unknown";
 }
 
+const PRIMARY_COLLECTIONS = new Set([
+  "cached_supply",
+  "first_pass_while_expanding",
+  "neighbouring_budget_cache",
+  "background_refresh",
+]);
+const PRIMARY_COLLECTION_REASONS = new Set([
+  "primary_outstanding_at_wait_bound",
+  "primary_failed",
+  "no_answered_map_evidence",
+]);
+
 function sanitizeLoaderCollectionMetadata(value) {
   if (!value || typeof value !== "object") return null;
   const profile = (input) => {
@@ -207,13 +219,22 @@ function sanitizeLoaderCollectionMetadata(value) {
     initial_day_capacity: capacity(value.initial_day_capacity),
     selected_day_capacity: capacity(value.selected_day_capacity),
     cache: sanitizeLoaderCacheSummary(value.cache),
-    // How the primary map source took part: `cached_supply` (answered from its
-    // cache) or `background_refresh` (still outstanding at the bounded wait, so
-    // the day was composed from other sources while it refreshes). Absent when
-    // the primary was awaited live.
-    primary_collection: ["cached_supply", "background_refresh"].includes(value.primary_collection)
+    // How the primary map source took part. Absent when it was awaited live.
+    //   cached_supply              answered from this request's own cache entry
+    //   first_pass_while_expanding its first pass answered; only the wider
+    //                              query was outstanding at the bounded wait
+    //   neighbouring_budget_cache  this anchor's fresh answer for another
+    //                              walking budget (`primary_collection_target_km`)
+    //                              while this budget's was outstanding or failed
+    //   background_refresh         no answered map evidence at the bounded wait;
+    //                              other families composed the day
+    primary_collection: PRIMARY_COLLECTIONS.has(value.primary_collection)
       ? value.primary_collection
       : null,
+    primary_collection_reason: PRIMARY_COLLECTION_REASONS.has(value.primary_collection_reason)
+      ? value.primary_collection_reason
+      : null,
+    primary_collection_target_km: finiteOrNull(value.primary_collection_target_km),
     spatial_scope: sanitizeSpatialScopeSummary(value.spatial_scope),
     regional_scout: sanitizeRegionalScout(value.regional_scout),
   };

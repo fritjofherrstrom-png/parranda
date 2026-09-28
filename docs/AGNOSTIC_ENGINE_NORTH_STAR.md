@@ -74,10 +74,15 @@ nearest the anchor. The directory query is stratified by walking-reach ring and
 route type and each request selects from it by its own budget; Overpass's
 bounded cut is interleaved across the same rings for budgeted requests. Warm
 background rows (directory or Wikidata) never answer for a map source that was
-not asked, and a warm directory waits at most 10 s for a live primary. A single
-requested intent may form a two-place day from single-source supply, at the
-same trust budget a two-intent day has. See `DENSE_CENTRE_SUPPLY.md`; offline
-replay is synthetic and live acceptance is NOT OBSERVED.
+not asked, and a warm directory waits at most 10 s for a live primary. A map
+answer still outstanding at that bound, or one that failed, does not cost the day
+the map evidence the process already holds for the anchor: an answered first
+pass or a fresh answer for another walking budget is kept and labelled, with no
+extra provider call. A single requested intent may form a two-place day from
+single-source supply, at the same trust budget a two-intent day has. See
+`DENSE_CENTRE_SUPPLY.md`; offline replay is synthetic and live acceptance is NOT
+OBSERVED. Known separate limit: for a single requested intent the composer can
+still build a more compact Lång day than its Lagom day from the same evidence.
 
 The milestone narrative below records how the architecture evolved from #257.
 It is retained for rationale and regression context, **not** as the current
@@ -357,7 +362,7 @@ not override the current roadmap in `docs/PARRANDA_ENGINE_GOALS.md`.
 #convergence-2 — DONE: candidate-supply mapper + thin_usable/low promotion gate + app wiring behind PARRANDA_AGNOSTIC_ENGINE_COMPOSE. Persistent-capable Overpass/Nominatim cache and daypart composition are in place; legacy synthesizer remains staged for removal.
 #registered-reservoir — DONE: registered-but-thin citypacks can opt into the same source-backed candidate reservoir as supplemental fill behind explicit experiment/external flags. Curated citypack candidates remain the higher-trust spine; source-backed fill stays provisional, low-trust, attributed, and never citypack-owned.
 #live-program-articles — GENERIC CAPABILITY, DEPLOYMENT GATED: arbitrary-place source discovery can recognize strict factual programme sections on official/public articles, propose the reusable adapter for bounded qualification, and reuse the existing geo catalog, venue resolution, temporal truth, fusion, personalized Live ranking, and reviewed runtime bridge. A fixture-backed cold loop proves discovery through Live for unrelated places, but proactive production discovery still requires the source-catalog worker plus an explicitly configured operator-owned search endpoint. Search results remain low-trust; unknown ownership/terms stay review-required, mapless source-scoped evidence stays Pulse-only, and no named-place rule or default route behavior is added.
-#dense-centre-supply — IN REVIEW: stratified walking-disc sampling (Overture v5 per-anchor sample, budget-aware selection, Overpass cut interleave), no background-only fast path or directory pre-emption of a live primary (10 s bound), and two-place single-intent days from single-source supply. Synthetic replay only; live acceptance NOT OBSERVED.
+#dense-centre-supply — IN REVIEW: stratified walking-disc sampling (Overture v5 per-anchor sample, budget-aware selection, Overpass cut interleave), no background-only fast path or directory pre-emption of a live primary (10 s bound), map evidence kept across a walking-budget switch at that bound (answered first pass or same-anchor neighbouring-budget answer, labelled), and two-place single-intent days from single-source supply. Pi acceptance FAILED on 52c23d7 (bounded-wait race on Lagom → Lång); the follow-up head keeps the map family across the switch. Synthetic replay only; live acceptance of the follow-up NOT OBSERVED.
 #place-source-scout — GENERIC CAPABILITY, DEPLOYMENT GATED: the same resolver-attested worker now searches bounded local-language/English place-guide queries, follows same-origin guide links, recognizes multi-item exact-coordinate schema.org place lists and strict map-linked cards, and stores separate rolling qualification counts. Two healthy UTC days can mark the exact source `qualified_for_review`, never approved or runtime-active. Exact revision-bound operator approval now creates an audited worker target and a persistent fresh reservoir consumed by the ordinary composer; unapproved, expired or drifted profiles remain inactive.
 ```
 

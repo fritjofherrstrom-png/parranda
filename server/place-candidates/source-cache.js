@@ -201,12 +201,20 @@ function createSourceCache(options = {}) {
     Promise.resolve(get(key, producer, opts)).catch(() => {});
   }
 
+  // Store a value the caller already holds (for example a small index that
+  // points at entries stored through `get`). Same TTL and backing as `get`.
+  function set(key, value) {
+    const entry = { value, expiresAt: now() + boundedTtlMs };
+    mem.set(key, entry);
+    writeFile(key, entry);
+  }
+
   function clear() {
     mem.clear();
     inFlight.clear();
   }
 
-  return { get, peek, warm, clear, namespace, ttlMs: boundedTtlMs, fileBacked: Boolean(fileDir) };
+  return { get, peek, warm, set, clear, namespace, ttlMs: boundedTtlMs, fileBacked: Boolean(fileDir) };
 }
 
 module.exports = { createSourceCache, DEFAULT_TTL_MS };

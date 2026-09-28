@@ -107,16 +107,20 @@ const THIN_CATEGORY_COUNT = 3; // fewer distinct place types than a real day nee
 const SEVERELY_THIN_RECORD_COUNT = 5;
 const REGIONAL_CLUSTER_RADIUS_KM = 3;
 // How long a varied directory reservoir (Overture) waits for the live primary
-// before it may answer alone. A healthy Overpass answer — a cache hit is
-// immediate — must merge with the directory: it carries the walking-budget
-// aperture and the second provenance family that corroborates directory rows.
-// Only a failed primary, or one still outstanding after this bound, leaves the
-// directory to rescue the day; the primary keeps warming its own cache. This is
-// a latency ceiling for the outage path, not a measured Overpass percentile.
+// before the day is composed without that live answer. A healthy Overpass
+// answer — a cache hit is immediate — must merge with the directory: it
+// carries the walking-budget aperture and the second provenance family that
+// corroborates directory rows. A primary still outstanding at this bound keeps
+// warming its own cache, and the day keeps the best map evidence this anchor
+// already holds (see `composeOpenDataLoaders`). This is a latency ceiling for
+// the slow/outage path, not a measured Overpass percentile.
 const DIRECTORY_PRIMARY_WAIT_MS = 10000;
 // Process-private marker: a cache-only primary read found no entry at all, as
 // opposed to a cached (possibly genuinely empty) Overpass answer.
 const PRIMARY_CACHE_MISS = Symbol("primaryCacheMiss");
+// How many walking budgets per anchor, mode, intent set and scope the loader
+// remembers as neighbours of each other (Kort/Lagom/Lång plus one custom).
+const MAX_REMEMBERED_BUDGETS = 4;
 
 const LOADER_SUPPORTED_INTENTS = new Set([
   "scenic",
@@ -433,7 +437,7 @@ function createOpenDataLoader({
     requestedIntents = [],
     anchorMode = "unknown",
     walkingTargetBand = null,
-  } = {}) {
+  } = {}, { onAnsweredPass = null } = {}) {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return withLoaderStatus([], "loaded:0", null);
 
     const normalizedRequestedIntents = normalizeRequestedIntents(requestedIntents);
@@ -482,6 +486,28 @@ function createOpenDataLoader({
             ...initialProfile.requested_intents_missing,
           ]
         : [];
+      // The first pass has answered; only its wider query is outstanding. A
+      // composition that has to answer at its bounded wait may keep this map
+      // evidence instead of dropping the family (a copy, labelled as such).
+      if (typeof onAnsweredPass === "function" && first.length > 0 &&
+          !String(first.loader_status || "").startsWith("error")) {
+        onAnsweredPass(withLoaderMetadata(withLoaderStatus([...first], first.loader_status, null), {
+          base_radius_km: requestRadiusKm,
+          selected_radius_km: requestRadiusKm,
+          attempted_radius_km: widerKm,
+          expansion_applied: false,
+          expansion_trigger: expansion.trigger,
+          selection_reason: "expansion_outstanding",
+          anchor_mode: normalizeAnchorMode(anchorMode),
+          requested_intents: normalizedRequestedIntents,
+          expansion_query_intents: expansionQueryIntents,
+          initial_profile: initialProfile,
+          selected_profile: initialProfile,
+          walking_target: normalizedWalkingTargetBand,
+          initial_day_capacity: initialDayCapacity,
+          selected_day_capacity: initialDayCapacity,
+        }));
+      }
       const wider = await fetchAtRadius(lat, lng, Math.round(widerKm * 1000), {
         queryIntents: expansionQueryIntents,
         walkingTargetBand: normalizedWalkingTargetBand,
@@ -525,8 +551,8 @@ function createOpenDataLoader({
     });
   };
 
-  const loadOpenDataAround = async function loadOpenDataAround(request = {}) {
-    const primary = await loadPrimaryOpenDataAround(request);
+  const loadOpenDataAround = async function loadOpenDataAround(request = {}, { onAnsweredPass = null } = {}) {
+    const primary = await loadPrimaryOpenDataAround(request, { onAnsweredPass });
     const anchorMode = normalizeAnchorMode(request.anchorMode);
     const scope = anchorMode === "place" ? sanitizeTrustedSpatialScope(request.spatialScope) : null;
     const primaryMetadata = primary.loader_metadata || null;
@@ -571,6 +597,13 @@ function createOpenDataLoader({
       });
     }
 
+    // The primary anchor has answered; only the regional scout is outstanding.
+    if (typeof onAnsweredPass === "function" && primary.length > 0) {
+      onAnsweredPass(withLoaderMetadata(
+        withLoaderStatus([...primary], primary.loader_status, primary.loader_error),
+        { ...baseMetadata, selection_reason: "regional_scout_outstanding" },
+      ));
+    }
     const regional = await fetchAcrossAnchors(secondaryAnchors, REGIONAL_CLUSTER_RADIUS_KM * 1000);
     const requestedIntents = normalizeRequestedIntents(request.requestedIntents);
     let selected = primary;
@@ -621,8 +654,98 @@ function createOpenDataLoader({
     });
   };
 
+  // One request's identity: the ~110 m anchor bucket plus everything that
+  // shaped its query. v8 invalidates every row collected before the aperture
+  // followed the walking budget: a `t9` row cached under v7 was gathered from
+  // a 1.5 km disc, so reusing it would keep serving the narrow day this fixes.
+  // `budgetsKey` is the same identity without the walking budget: requests
+  // that differ only in Kort/Lagom/Lång share it.
+  function requestIdentity(request) {
+    const band = normalizeWalkingTargetBand(request.walkingTargetBand);
+    const radiusKm = pinnedRadiusKm ?? budgetAwareRadiusKm(band);
+    const anchorKey = `${request.lat.toFixed(3)},${request.lng.toFixed(3)}`;
+    const shape = `l${boundedLimit}:m${normalizeAnchorMode(request.anchorMode)}:i${normalizeRequestedIntents(request.requestedIntents).join(".") || "all"}`;
+    const scopeKey = spatialScopeCacheKey(request.spatialScope ?? null);
+    return {
+      key: `v8:${anchorKey}:r${radiusKm}:${shape}:t${band ? band.targetKm : "none"}:s${scopeKey}`,
+      budgetsKey: `v8-budgets:${anchorKey}:${shape}:s${scopeKey}`,
+      radiusKm,
+      targetKm: band ? band.targetKm : null,
+    };
+  }
+
+  // Answered passes of loads still in flight (a first pass whose wider query,
+  // or a primary whose regional scout, is outstanding), by request identity.
+  // Process-private; cleared when the load settles and its answer is cached.
+  const answeredPasses = new Map();
+  async function loadTracked(request, key) {
+    const holder = { records: null };
+    try {
+      return await loadOpenDataAround(request, {
+        onAnsweredPass: (records) => {
+          holder.records = records;
+          answeredPasses.set(key, holder);
+        },
+      });
+    } finally {
+      if (answeredPasses.get(key) === holder) answeredPasses.delete(key);
+    }
+  }
+  const hasAnchor = (request) => Number.isFinite(request?.lat) && Number.isFinite(request?.lng);
+  const readProgress = (anchor, request = {}) => {
+    const merged = { ...request, ...anchor };
+    return hasAnchor(merged) ? answeredPasses.get(requestIdentity(merged).key)?.records || null : null;
+  };
+
   if (!cache || typeof cache.get !== "function") {
-    return loadOpenDataAround;
+    const trackedLoader = (request = {}) =>
+      hasAnchor(request) ? loadTracked(request, requestIdentity(request).key) : loadOpenDataAround(request);
+    trackedLoader.readProgress = readProgress;
+    return trackedLoader;
+  }
+
+  // Which walking budgets this anchor, mode, intent set and scope have a
+  // stored answer for, most recent first. Only pointers: the answers stay in
+  // their own entries and keep their own expiry.
+  const canIndexBudgets = typeof cache.set === "function" && typeof cache.peek === "function";
+  function rememberBudget(identity) {
+    if (!canIndexBudgets) return;
+    const previous = cache.peek(identity.budgetsKey);
+    cache.set(identity.budgetsKey, [
+      { key: identity.key, target_km: identity.targetKm, radius_km: identity.radiusKm },
+      ...(Array.isArray(previous) ? previous : []).filter((entry) => entry?.key !== identity.key),
+    ].slice(0, MAX_REMEMBERED_BUDGETS));
+  }
+
+  // The same anchor's fresh map answer for another walking budget, or null. A
+  // budget switch (Lagom → Lång) changes the query key, but not the place or
+  // the trust of an answer this process already verified and stored: when the
+  // new budget's own answer is outstanding or failed, this is map evidence a
+  // composition can keep instead of dropping the family. It never asks the
+  // provider, never serves an expired or failed entry, and never crosses to a
+  // regional cluster. The nearest aperture wins, then the nearest budget.
+  function readNeighbouring(anchor, request = {}) {
+    const merged = { ...request, ...anchor };
+    if (!canIndexBudgets || !hasAnchor(merged)) return null;
+    const own = requestIdentity(merged);
+    const budgets = cache.peek(own.budgetsKey);
+    if (!Array.isArray(budgets)) return null;
+    const distance = (a, b) => (Number.isFinite(a) && Number.isFinite(b) ? Math.abs(a - b) : Number.POSITIVE_INFINITY);
+    const best = budgets
+      .filter((entry) => typeof entry?.key === "string" && entry.key !== own.key)
+      .map((entry) => ({ entry, value: cache.peek(entry.key) }))
+      .filter(({ value }) =>
+        Array.isArray(value?.records) && value.records.length > 0 &&
+        typeof value.status === "string" && !value.status.startsWith("error") &&
+        [undefined, null, "primary"].includes(value.metadata?.regional_scout?.selected_anchor))
+      .sort((a, b) =>
+        distance(a.entry.radius_km, own.radiusKm) - distance(b.entry.radius_km, own.radiusKm) ||
+        distance(a.entry.target_km, own.targetKm) - distance(b.entry.target_km, own.targetKm))[0];
+    if (!best) return null;
+    return withLoaderMetadata(withLoaderStatus([...best.value.records], best.value.status, null), {
+      ...(best.value.metadata && typeof best.value.metadata === "object" ? best.value.metadata : {}),
+      primary_collection_target_km: Number.isFinite(best.entry.target_km) ? best.entry.target_km : null,
+    });
   }
 
   // Cached loader: repeat/concurrent lookups for the same anchor must not re-hit
@@ -632,22 +755,17 @@ function createOpenDataLoader({
   // survives across requests. Only non-error results are stored, so a transient
   // outage is never frozen in.
   const cachedLoader = async function cachedLoadOpenDataAround(request = {}) {
-    const { lat, lng, requestedIntents = [], anchorMode = "unknown", spatialScope = null } = request;
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    if (!hasAnchor(request)) {
       return loadOpenDataAround(request);
     }
-    const normalizedRequestedIntents = normalizeRequestedIntents(requestedIntents);
-    const normalizedWalkingTargetBand = normalizeWalkingTargetBand(request.walkingTargetBand);
-    const targetKey = normalizedWalkingTargetBand ? normalizedWalkingTargetBand.targetKm : "none";
-    // v8 invalidates every row collected before the aperture followed the
-    // walking budget: a `t9` row cached under v7 was gathered from a 1.5 km
-    // disc, so reusing it would keep serving the narrow day this change fixes.
-    const effectiveRadiusKm = pinnedRadiusKm ?? budgetAwareRadiusKm(normalizedWalkingTargetBand);
-    const key = `v8:${lat.toFixed(3)},${lng.toFixed(3)}:r${effectiveRadiusKm}:l${boundedLimit}:m${normalizeAnchorMode(anchorMode)}:i${normalizedRequestedIntents.join(".") || "all"}:t${targetKey}:s${spatialScopeCacheKey(spatialScope)}`;
+    const identity = requestIdentity(request);
+    const key = identity.key;
+    let produced = false;
     const entry = request.cacheOnly === true ? cache.peek(key) : await cache.get(
       key,
       async () => {
-        const result = await loadOpenDataAround(request);
+        const result = await loadTracked(request, key);
+        produced = true;
         return {
           records: Array.from(result),
           status: result.loader_status,
@@ -683,12 +801,21 @@ function createOpenDataLoader({
       Object.defineProperty(miss, PRIMARY_CACHE_MISS, { value: true });
       return miss;
     }
+    // A fresh, stored, non-empty answer becomes findable by the same anchor's
+    // other walking budgets. A stale fallback or a failure never does.
+    if (produced && Array.isArray(entry.records) && entry.records.length > 0 &&
+        typeof entry.status === "string" && !entry.status.startsWith("error") &&
+        entry.error !== "stale_cache_refresh_failed") {
+      rememberBudget(identity);
+    }
     return withLoaderMetadata(
       withLoaderStatus(entry.records, entry.status, entry.error),
       entry.metadata || null,
     );
   };
   cachedLoader.readCached = (anchor, request = {}) => cachedLoader({ ...request, ...anchor, cacheOnly: true });
+  cachedLoader.readProgress = readProgress;
+  cachedLoader.readNeighbouring = readNeighbouring;
   return cachedLoader;
 }
 
@@ -1322,29 +1449,51 @@ function composeOpenDataLoaders(
     // A varied directory is a rescue, not a substitute: give the primary a
     // bounded chance to answer first. If it settles — with rows or a failure —
     // the ordinary merge below keeps both families (and still rescues a
-    // failed primary from the directory). Only a primary still outstanding at
-    // the bound leaves the directory to answer alone.
+    // failed primary). A primary still outstanding at the bound keeps running
+    // and caches its answer for the next request; this composition answers
+    // now, without asking any provider again.
     if (eagerAdequate && !(await settleWithin(osmPromise, primaryWaitMs)).settled) {
-      // Cached official evidence must accompany the fast directory path too,
-      // so the downstream identity merge can corroborate it. A cold official
-      // request keeps warming without adding network latency to this rescue.
-      for (const source of sources.filter((item) => item.primaryRescue === false)) {
-        const cached = typeof source.readCached === "function" ? source.readCached(primaryAnchor) : [];
-        if (Array.isArray(cached)) eagerRecords.push(...cached);
-      }
       // Keep the primary promise observed so a background failure can never
-      // become an unhandled rejection. Its own loader/cache side effects remain
-      // useful for later cross-source corroboration.
+      // become an unhandled rejection.
       osmPromise.catch(() => {});
+      // Keep the best map evidence this anchor already holds instead of
+      // dropping the family: this request's own answered first pass (only its
+      // wider query is outstanding), else the same anchor's fresh answer for
+      // another walking budget (a Kort/Lagom/Lång switch). Both are reads of
+      // this process's cache. Only when neither exists does the day go without
+      // the map family, and the metadata says why.
+      const answered = typeof osmLoader.readProgress === "function"
+        ? osmLoader.readProgress(primaryAnchor, request) : null;
+      const neighbour = answered?.length || typeof osmLoader.readNeighbouring !== "function"
+        ? null : osmLoader.readNeighbouring(primaryAnchor, request);
+      const mapEvidence = answered?.length ? answered : neighbour?.length ? neighbour : null;
+      // Every other source adds what it already holds for this anchor at zero
+      // network cost — cached Wikidata corroboration and cached official
+      // evidence — so the downstream identity merge can still corroborate.
+      // Cold ones keep warming without adding latency here.
+      const held = [];
+      for (const source of sources) {
+        if (source?.eager === true && source.primaryRescue !== false) continue; // already in the rescue
+        const cached = typeof source?.readCached === "function"
+          ? await Promise.resolve(source.readCached(primaryAnchor, request)).catch(() => []) : [];
+        if (Array.isArray(cached)) held.push(...cached);
+      }
+      const records = [...(mapEvidence || []), ...eagerRecords, ...held];
       return withLoaderMetadata(
-        withLoaderStatus(eagerRecords, `loaded:${eagerRecords.length}`, null),
+        withLoaderStatus(records, `loaded:${records.length}`, null),
         {
-          selected_profile: supplyProfile(eagerRecords, requestedIntents),
-          selected_day_capacity: dayCapacityProfile(eagerRecords, {
+          ...(mapEvidence?.loader_metadata || {}),
+          selected_profile: supplyProfile(records, requestedIntents),
+          selected_day_capacity: dayCapacityProfile(records, {
             origin: primaryAnchor,
             walkingTargetBand: request.walkingTargetBand,
           }),
-          primary_collection: "background_refresh",
+          primary_collection: answered?.length
+            ? "first_pass_while_expanding"
+            : neighbour?.length ? "neighbouring_budget_cache" : "background_refresh",
+          primary_collection_reason: mapEvidence
+            ? "primary_outstanding_at_wait_bound"
+            : "no_answered_map_evidence",
         },
       );
     }
@@ -1362,9 +1511,16 @@ function composeOpenDataLoaders(
     const osmRecords = Array.isArray(osm) ? osm : [];
     // The primary carried nothing: either it errored outright or it came back
     // empty. Both leave the day dependent on another source.
-    const primaryFailed =
-      osmRecords.length === 0 ||
-      (typeof osm?.loader_status === "string" && osm.loader_status.startsWith("error"));
+    const primaryErrored = typeof osm?.loader_status === "string" && osm.loader_status.startsWith("error");
+    const primaryFailed = osmRecords.length === 0 || primaryErrored;
+    // The requested budget's own map answer failed (for example a 504) while
+    // this anchor holds a fresh answer for another walking budget: keep that
+    // map evidence, labelled, instead of leaving the day to other families.
+    // The failure itself stays visible as `loader_error`. A genuine empty
+    // answer is an answer and is not replaced.
+    const neighbour = primaryErrored && typeof osmLoader.readNeighbouring === "function"
+      ? osmLoader.readNeighbouring(primaryAnchor, request) : null;
+    const mapRecords = neighbour?.length ? neighbour : osmRecords;
     const backgroundRecords = [];
     const completions = [];
     for (const source of sources) {
@@ -1420,11 +1576,18 @@ function composeOpenDataLoaders(
       if (loaded?.[SOURCE_COMPLETION]) completions.push(loaded[SOURCE_COMPLETION]);
     }
     if (osm?.[SOURCE_COMPLETION]) completions.push(osm[SOURCE_COMPLETION]);
-    const records = [...osmRecords, ...backgroundRecords];
+    const records = [...mapRecords, ...backgroundRecords];
     const status = records.length > 0 ? `loaded:${records.length}` : (osm.loader_status || "loaded:0");
-    const metadata = osm.loader_metadata
+    const mapMetadata = neighbour?.length
       ? {
-          ...osm.loader_metadata,
+          ...neighbour.loader_metadata,
+          primary_collection: "neighbouring_budget_cache",
+          primary_collection_reason: "primary_failed",
+        }
+      : osm.loader_metadata;
+    const metadata = mapMetadata
+      ? {
+          ...mapMetadata,
           selected_profile: supplyProfile(records, requestedIntents),
           selected_day_capacity: dayCapacityProfile(records, {
             origin: wikiAnchor,

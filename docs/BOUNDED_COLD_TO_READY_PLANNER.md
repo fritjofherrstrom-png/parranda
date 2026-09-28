@@ -97,9 +97,19 @@ weather/Live/map tiles or a cold typed-place resolver perform zero network work.
 
 On that acquisition path a varied warm directory waits at most 10 s for the
 live primary. A primary that settles — with rows or a failure — is merged as
-usual (and a failed primary is still rescued by the directory); only a primary
-still outstanding at the bound leaves the directory to answer alone, reported
-as `collection.primary_collection: "background_refresh"`.
+usual (and a failed primary is still rescued by the directory). A primary still
+outstanding at the bound keeps running and caches its answer for the next
+request; this composition keeps the best map evidence the process already holds
+for the anchor: the request's own answered first pass while its wider query
+runs (`first_pass_while_expanding`), else a fresh stored answer for the same
+anchor, preferences, mode and scope at another walking budget
+(`neighbouring_budget_cache`, with `primary_collection_target_km`). The same
+neighbouring answer backs a request whose own map answer failed (reason
+`primary_failed`, the `loader_error` stays visible). Cached Wikidata and NAPI
+rows join at zero network cost. Only without any of these does the day go
+without the map family (`background_refresh`, reason
+`no_answered_map_evidence`). None of this asks a provider again; see
+`DENSE_CENTRE_SUPPLY.md` for the Pi race that required it.
 
 An empty successful Overture result is cacheable absence; a failed source is not
 cached as success. In-flight cache coalescing reuses the producer for the same

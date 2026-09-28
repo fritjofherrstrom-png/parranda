@@ -1,6 +1,9 @@
 # Dense-centre supply: sampling the walkable disc
 
-Status: implemented on this branch; live-provider acceptance is **NOT OBSERVED**.
+Status: implemented on this branch. Independent Pi acceptance **FAILED** on
+`52c23d7` (a bounded-wait race on Lagom → Lång, below); the follow-up keeps the
+map family across that switch. Live-provider acceptance of the follow-up is
+**NOT OBSERVED**.
 Related: `BOUNDED_WALKING_FIT_SELECTION.md`, `BOUNDED_COLD_TO_READY_PLANNER.md`,
 `OVERTURE_TAXONOMY_COMPATIBILITY.md`, `VISIT_SWEDEN_NAPI_ACCEPTANCE.md`.
 
@@ -41,6 +44,32 @@ Independent Pi traces on the public head `0234d2b` (2026-09-27, Göteborg,
 The traces therefore do **not** show the directory's 600-row window losing
 Göteborg second-hand supply. That window is a separate, dense-centre mechanism
 shown here only in synthetic replay (below).
+
+### Pi acceptance of `52c23d7`: the bounded wait raced a successful provider
+
+Paired runs of the public image and `52c23d7` (fresh cloned catalogues, same
+staging environment and worker, `Prefer: respond-async`) failed on a walking-
+budget switch:
+
+- Göteborg centre coordinates, `second_hand`, 2026-09-28 (clean pair): warm
+  6 km published 4 stops / 5.8 km from `loaded:121` (`cached_supply`; pool
+  113 → role surface 27 → engine 4). Changing only the budget to 9 km, the
+  9 km Overpass request returned HTTP 200 **10.876 s** after it started, about
+  0.9 s after the 10 s bound. The published day was already directory-only:
+  `loaded:80`, `background_refresh`, 2 stops / 5.6 km.
+- Same coordinates, no preferences: 6 km 4 stops / 4.1 km; 9 km
+  `background_refresh`, `loaded:80`, `can_support_target: false`, 2 stops /
+  2.4 km, below the 5.4 km floor.
+- Göteborg typed, `second_hand`: a warm repeat's first Overpass pass answered
+  HTTP 200 in 4.0 s, but only its wider expansion was outstanding at the bound
+  (it later returned 504), and the answered first pass was not used.
+
+Cause: at the bound the composition used only the eager directory and cached
+NAPI rows. It dropped (a) the same anchor's fresh map answer for the other
+walking budget — the one that had just published the four-stop day — and
+(b) cached Wikidata corroboration, which is not an eager source. Directory-only
+rows are single-family and experimental, so the day could hold at most two of
+them. The provider was healthy; the map answer only missed the bound.
 
 ## Mechanisms and changes
 
@@ -100,10 +129,55 @@ answered. This covers warm Wikidata (trace 1) and a warm directory alike.
 
 On acquisition, a varied warm directory waits at most 10 s
 (`DIRECTORY_PRIMARY_WAIT_MS`) for the live primary. A primary that settles —
-rows or failure — is merged as usual, so a failed primary is still rescued; only
-one still outstanding at the bound lets the directory answer alone, reported as
-`source_status.collection.primary_collection: "background_refresh"`. The bound is
-a latency ceiling for the outage path, not a measured Overpass percentile.
+rows or failure — is merged as usual, so a failed primary is still rescued. The
+bound is a latency ceiling for the slow/outage path, not a measured Overpass
+percentile, and it is unchanged.
+
+### 3b. A walking-budget switch keeps the map evidence it already has
+
+A primary still outstanding at the bound keeps running and caches its answer;
+the composition answers now, with the best map evidence this process already
+holds for the anchor, in this order:
+
+1. **This request's own answered first pass** while only its one wider query
+   (or regional scout) is outstanding — `first_pass_while_expanding`.
+2. **A fresh stored answer for the same anchor bucket, preferences, anchor
+   mode, scope and limit at another walking budget** — a Kort/Lagom/Lång switch
+   changes the Overpass key, not the place or the trust of an answer already
+   verified and stored. The nearest aperture wins, then the nearest budget;
+   `neighbouring_budget_cache` with `primary_collection_target_km`.
+3. Otherwise no map evidence: `background_refresh`, reason
+   `no_answered_map_evidence`.
+
+Every other source then adds what it holds for the anchor at zero network cost:
+the eager directory selection for this budget, cached Wikidata corroboration
+and cached NAPI rows. When the request's own Overpass answer **fails** (for
+example HTTP 504) and a neighbouring-budget answer exists, that answer backs
+the day the same way (reason `primary_failed`) and the failure stays visible as
+`loader_error`. A genuine empty answer is an answer and is never replaced.
+
+Bounds. A neighbouring answer is only ever an entry the loader itself stored:
+fresh (inside the cache TTL; an expired or stale-if-error value never
+qualifies), non-empty, non-error, never a selected regional cluster, and never a
+different preference set, anchor mode, spatial scope or limit. The loader keeps
+a pointer list of at most four budgets per such group, written only after a
+successful fetch. The answered first pass lives in process memory only while
+its load is in flight. `source_status.collection` carries
+`primary_collection`, `primary_collection_reason` and
+`primary_collection_target_km`, and readiness adds a matching
+`primary_collection_*` reason (not a cap: every record keeps its own trust).
+
+Latency, provider cost and 504. Latency is unchanged: at most the same 10 s
+bound, then an immediate answer. Provider cost is unchanged: zero additional
+Overpass, Overture, Wikidata or NAPI calls; the outstanding Overpass request
+completes in the background and the next request is served from its own
+cached answer (`cached_supply`). HTTP 504 for the new budget: with a fresh
+neighbouring answer, that map evidence plus the other families
+(`neighbouring_budget_cache`, `primary_failed`, `loader_error: http_non_200`);
+without one, the directory rescue as before. An expansion that returns 504
+after a successful first pass leaves the first pass as that key's stored
+answer. The stale-if-error fallback for the request's own key is unchanged
+and takes precedence.
 
 ### 4. One requested intent may form a two-place day
 
@@ -147,7 +221,46 @@ other two are controls: a short day stays near and a no-budget request stays
 proximity-first, and a genuinely compact world reports
 `shorter_than_requested_band` with `can_support_target: false`.
 
+`tests/walking-budget-switch.test.js` replays the Pi race on the same world:
+warm 6 km, then only the budget changes to 9 km while the 9 km Overpass answer
+arrives just after the (scaled) bound. Nine of its eleven tests fail on
+`52c23d7`; the two controls (map answer inside the bound; no map answer for any
+budget) pass on both.
+
+| Same anchor, date and cache state | `52c23d7` | this head |
+| --- | --- | --- |
+| No preferences, warm 6 km | 4 stops / 4.9 km, 121 records (`cached_supply`) | same |
+| No preferences, 9 km, map answer late | 2 stops / 2.6 km, 80 records, directory only (`background_refresh`) | 6 stops / 6.0 km, 121 records, all map-corroborated (`neighbouring_budget_cache`) |
+| No preferences, 9 km, map answer in time (control) | 6 stops / 6.0 km | same |
+| `second_hand`, warm 6 km | 4 stops / 3.7 km, map-corroborated | same |
+| `second_hand`, 9 km, map answer late | 2 stops / 5.4 km, directory only | 5 stops / 2.8 km, map-corroborated, `shorter_than_requested_band` |
+
+At the loader, the switch on `52c23d7` lost 25 map and 16 Wikidata records
+(and re-selected 12 directory rows); this head loses none outside the
+directory's own re-selection.
+
 ## Known limits and follow-ups
+
+- **Composition can make a Lång day more compact than a Lagom day.** The
+  healthy-map control above separates this from the wait: in the synthetic
+  world a `second_hand` 9 km day with its own, in-time map answer is 4 stops /
+  2.6 km against the 6 km day's 4 stops / 3.7 km, on `52c23d7` and this head
+  alike (the no-preference and food+culture controls reach the band); the
+  selection code involved is unchanged from `main`. The
+  engine reservoir takes each unrequested role's leading option — here all
+  within about 1 km of the anchor — while the capacity frontier is only built
+  when the public role surface is compressed, and that surface spanned 4.2 km.
+  Offered a far same-role candidate, the engine still chose the nearer one.
+  Two bounded prototypes (frontier judged on the engine reservoir; one shorter-
+  preset engine trial) each fixed one case and changed another, so they are not
+  in this change: stop depth versus walk length on a long budget needs its own
+  explicit contract and acceptance. Until then such a day is reported as
+  `shorter_than_requested_band`, and that tradeoff is still not visible in the
+  Planner UI.
+- A neighbouring-budget answer was collected for its own aperture (for 6 km,
+  a 1.5 km disc against 2.25 km for 9 km). It keeps the map family and its
+  corroboration across the switch, but a live 9 km answer can reach farther;
+  the next request after it lands uses it.
 
 - **Source quality is not solved.** Pi QA found Uppsala Auktionskammare
   (`osm-node-11690508038`) published as a second-hand shop at an OSM address the
@@ -172,9 +285,18 @@ proximity-first, and a genuinely compact world reports
    relevant second-hand stops, or report exactly why not.
 2. Cold candidate cache with a real Overpass failure: expect a directory-only
    two-stop second-hand day, labelled single-source.
-3. Lagom → Lång and an identical repeat: the map family stays in the reservoir
-   (`source_status.status` count, attribution), no second GeoParquet query.
-4. Dense typed/coordinate cases (Göteborg, Stockholm, Karlstad) and a
+3. Lagom → Lång and an identical repeat, same anchor/date/preferences/cache
+   state, including a 9 km Overpass answer just after 10 s: the map family stays
+   in the reservoir (`source_status.status` count, stop attribution),
+   `primary_collection` names how (`neighbouring_budget_cache` or
+   `first_pass_while_expanding`), no second GeoParquet query, and the next
+   request uses the 9 km answer itself. Record published stops and km against
+   the 6 km day; a shorter single-intent walk is the separate composition limit
+   above and must be reported as `shorter_than_requested_band`.
+4. A 9 km Overpass 504 after a warm 6 km: the 6 km map answer backs the day
+   with `loader_error: http_non_200`; with no map answer for any budget, the
+   directory rescue as before.
+5. Dense typed/coordinate cases (Göteborg, Stockholm, Karlstad, Berlin) and a
    small-town control across 4/6/9 km: record published km, stops, corroborated
    stops and walking status against main on the same cache state.
-5. Provider degradation stays INCONCLUSIVE; synthetic replay is not acceptance.
+6. Provider degradation stays INCONCLUSIVE; synthetic replay is not acceptance.
