@@ -168,7 +168,11 @@ test("the surface renders the engine's TRUSTWORTHY richness — and never the co
   assert.match(anywherePlannerSource, /primaryRoute\?\.estimated_km/);
   assert.match(anywherePlannerSource, /estimated_walk_minutes/);
   assert.match(anywherePlannerSource, /map_path_points/);
-  assert.match(anywherePlannerSource, /TYPE_LABELS, stop\.type/);
+  // The type chip is the shared stop-card fact (stop-card-facts.mjs), which
+  // names a second-hand stop's source category instead of calling it vintage.
+  assert.match(anywherePlannerSource, /stopTypeLabel\(stop, lang\)/);
+  // Unknown opening hours are visible on the stop row, not only when expanded.
+  assert.match(anywherePlannerSource, /hoursUnknown && \(\s*<span className="text-xs text-parranda-ink\/55">\{t\("Öppettider okända", "Hours unknown"\)\}/);
   assert.match(anywherePlannerSource, /DAYPART_LABELS, stop\.daypart/);
   // NEVER rendered: fields that can carry baseline-city phrasing or placeholder
   // labels on the agnostic path (verified live: date_signals said "i Rom" for a

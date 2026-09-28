@@ -37,6 +37,7 @@ import {
 import { mapsPlaceUrl, mapsWalkingRouteUrls, primaryRouteStops } from "../lib/maps-links.mjs";
 import { routeMarkerPresentation } from "../lib/route-map-presentation.mjs";
 import { selectedDayHoursLabel } from "../lib/selected-day-hours.mjs";
+import { stopHoursUnknown, stopTypeLabel } from "../lib/stop-card-facts.mjs";
 import {
   buildRouteContextSuggestions,
   routePreferenceCoverage,
@@ -278,25 +279,7 @@ const INTENT_LABELS: Record<string, { sv: string; en: string }> = {
   coffee: { sv: "Fika", en: "Coffee" },
   bars: { sv: "Bar", en: "Bars" },
   swimming: { sv: "Bad", en: "Swimming" },
-  vintage: { sv: "Second hand", en: "Vintage" },
-};
-
-// Per-stop TYPE chips ("what is this place") — the engine's vocabulary, localized.
-const TYPE_LABELS: Record<string, { sv: string; en: string }> = {
-  museum: { sv: "Museum", en: "Museum" },
-  gallery: { sv: "Galleri", en: "Gallery" },
-  park: { sv: "Park", en: "Park" },
-  garden: { sv: "Trädgård", en: "Garden" },
-  restaurant: { sv: "Restaurang", en: "Restaurant" },
-  cafe: { sv: "Café", en: "Café" },
-  bar: { sv: "Bar", en: "Bar" },
-  viewpoint: { sv: "Utsikt", en: "Viewpoint" },
-  market: { sv: "Marknad", en: "Market" },
-  "vintage-shop": { sv: "Second hand", en: "Vintage" },
-  "street-food": { sv: "Street food", en: "Street food" },
-  beach: { sv: "Strand", en: "Beach" },
-  promenade: { sv: "Promenad", en: "Promenade" },
-  castle: { sv: "Slott", en: "Castle" },
+  vintage: { sv: "Second hand", en: "Second hand" },
 };
 
 function label(map: Record<string, { sv: string; en: string }>, key: string | null | undefined, lang: Lang): string {
@@ -311,18 +294,6 @@ const PLANNER_INTENT_ALIASES: Record<string, string> = {
   bars: "nightlife",
   vintage: "second_hand",
 };
-
-const HOURS_RELEVANT_TYPES = new Set([
-  "museum",
-  "gallery",
-  "restaurant",
-  "cafe",
-  "bar",
-  "market",
-  "vintage-shop",
-  "street-food",
-  "castle",
-]);
 
 function partialPreferenceLabels(stop: any, selected: string[], lang: Lang): string[] {
   const requested = new Set(selected.map((value) => PLANNER_INTENT_ALIASES[value] || value));
@@ -2371,7 +2342,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               const prevName = routeNumber > 1 ? String((split.core[i - 1] as any)?.label || (split.core[i - 1] as any)?.name || "").trim() : "";
               const hoursLabel = selectedDayHoursLabel(stop?.selected_day_hours, lang);
               const partialLabels = partialPreferenceLabels(stop, selected, lang);
-              const hoursRelevant = HOURS_RELEVANT_TYPES.has(String(stop?.type || ""));
+              const hoursUnknown = stopHoursUnknown(stop);
               const sourceLabel = String(stop?.source?.label || "").trim();
               return (
                 <li key={stopKey} className="flex flex-col">
@@ -2402,8 +2373,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                       <span className="font-bold">{name}</span>
                       {stop?.type && (
                         <span className="rounded-full border border-parranda-ink/15 bg-parranda-ink/10 px-2 py-0.5 text-xs text-parranda-ink/75">
-                          {label(TYPE_LABELS, stop.type, lang)}
+                          {stopTypeLabel(stop, lang)}
                         </span>
+                      )}
+                      {/* Visitability stays visible without expanding: a place
+                          whose source gives no hours for the chosen day says so
+                          here instead of reading as a confirmed visit. */}
+                      {hoursUnknown && (
+                        <span className="text-xs text-parranda-ink/55">{t("Öppettider okända", "Hours unknown")}</span>
                       )}
                     </span>
                     <span
@@ -2430,7 +2407,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                           </span>
                         )}
                         {hoursLabel && <span>{hoursLabel}</span>}
-                        {!hoursLabel && hoursRelevant && (
+                        {hoursUnknown && (
                           <span>{t("Källtider saknas för den valda dagen", "Source hours unavailable for the selected day")}</span>
                         )}
                         {stop?.address && <span>{stop.address}</span>}
