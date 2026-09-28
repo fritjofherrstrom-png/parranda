@@ -61,8 +61,9 @@ function controllableOverpass() {
   const fetcher = async (url, options = {}) => {
     const query = decodeURIComponent(String(options.body || "").replace(/^data=/, ""));
     const radiusM = Number(/around:([\d.]+)/.exec(query)?.[1]);
-    const { delayMs = 0, status = 200 } = state.policy(radiusM) || {};
+    const { delayMs = 0, status = 200, waitFor } = state.policy(radiusM) || {};
     state.calls.push({ radiusM, delayMs, status, query });
+    if (waitFor) await waitFor;
     if (delayMs) await sleep(delayMs);
     if (status !== 200) return { ok: false, status, json: async () => ({}) };
     return evaluator.fetcher(url, options);
@@ -248,25 +249,41 @@ test("which evidence the switch loses: every map and Wikidata record of the 6 km
   const loader = await createSupply({ overpass });
   const request = (targetKm) => loaderRequest(targetKm, { preferCachedSupply: true });
   await loader(request(6));
-  await sleep(50);
-  const lagom = await loader(request(6));
+  let lagom;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    lagom = await loader(request(6));
+    if (familyCounts(lagom).open_directory) break;
+    await sleep(100);
+  }
+  assert.ok(familyCounts(lagom).open_directory,
+    "precondition: the asynchronous directory sample is warm before testing its bounded rescue");
   assert.equal(lagom.loader_metadata?.primary_collection, "cached_supply");
-  overpass.state.policy = () => ({ delayMs: LATE_MS, status: 200 });
-  const lang = await loader(request(9));
-  const langIds = new Set(lang.map((record) => record.id));
-  const lost = lagom.filter((record) => !langIds.has(record.id));
-  t.diagnostic(`6 km reservoir by family: ${JSON.stringify(familyCounts(lagom))} (${lagom.length})`);
-  t.diagnostic(`9 km reservoir by family: ${JSON.stringify(familyCounts(lang))} (${lang.length}), ${lang.loader_metadata?.primary_collection}`);
-  t.diagnostic(`lost on the switch by family: ${JSON.stringify(familyCounts(lost))} (${lost.length})`);
-  const lostFamilies = Object.keys(familyCounts(lost)).sort();
-  assert.deepEqual(
-    lostFamilies.filter((family) => family !== "open_directory"),
-    [],
-    `records lost on the switch by family: ${lostFamilies.join(", ")} (${lost.length} records)`,
-  );
-  // The directory itself re-selects for the longer reach; it is not a loss of evidence.
-  assert.ok(lang.some((record) => familiesOf(record).has("map")));
-  assert.ok(lang.some((record) => familiesOf(record).has("open_knowledge")));
+  // Keep the new budget's real emulator response pending until after the
+  // assertion. A timer alone can settle before the bound under full-suite load.
+  let release;
+  const pending = new Promise((resolve) => { release = resolve; });
+  overpass.state.policy = () => ({ waitFor: pending, status: 200 });
+  try {
+    const lang = await loader(request(9));
+    assert.equal(lang.loader_metadata?.primary_collection, "neighbouring_budget_cache",
+      "compare identities only when the new budget is still pending");
+    const langIds = new Set(lang.map((record) => record.id));
+    const lost = lagom.filter((record) => !langIds.has(record.id));
+    t.diagnostic(`6 km reservoir by family: ${JSON.stringify(familyCounts(lagom))} (${lagom.length})`);
+    t.diagnostic(`9 km reservoir by family: ${JSON.stringify(familyCounts(lang))} (${lang.length}), ${lang.loader_metadata?.primary_collection}`);
+    t.diagnostic(`lost on the switch by family: ${JSON.stringify(familyCounts(lost))} (${lost.length})`);
+    const lostFamilies = Object.keys(familyCounts(lost)).sort();
+    assert.deepEqual(
+      lostFamilies.filter((family) => family !== "open_directory"),
+      [],
+      `records lost on the switch by family: ${lostFamilies.join(", ")} (${lost.length} records)`,
+    );
+    // The directory itself re-selects for the longer reach; it is not a loss of evidence.
+    assert.ok(lang.some((record) => familiesOf(record).has("map")));
+    assert.ok(lang.some((record) => familiesOf(record).has("open_knowledge")));
+  } finally {
+    release();
+  }
 });
 
 test("a map source that answers within the bound separates the wait from composition", async (t) => {
