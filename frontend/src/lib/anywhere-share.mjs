@@ -16,7 +16,7 @@ export function encodeShareParams({ city, place, preferences = [], dayOffset = 0
   params.set("planner", "open");
   if (Array.isArray(preferences) && preferences.length) params.set("prefs", preferences.join(","));
   if (dayOffset === 1) params.set("day", "1");
-  if (walkKey && walkKey !== "balanced") params.set("km", walkKey);
+  if (walkKey && walkKey !== "balanced") params.set("rhythm", walkKey);
   params.set("lang", lang === "sv" ? "sv" : "en");
   return params.toString();
 }
@@ -37,8 +37,12 @@ export function decodeShareParams(search, allowedPrefKeys = null) {
   const rawPrefs = (params.get("prefs") || "").split(",").map((s) => s.trim()).filter(Boolean);
   const preferences = allowedPrefKeys ? rawPrefs.filter((k) => allowedPrefKeys.includes(k)) : rawPrefs;
   const dayOffset = params.get("day") === "1" ? 1 : 0;
-  const kmRaw = params.get("km");
-  const walkKey = kmRaw === "short" || kmRaw === "long" ? kmRaw : "balanced";
+  const rhythmRaw = params.get("rhythm");
+  // Old kilometer links remain readable as intent, but never restore a km target.
+  const legacy = params.get("km");
+  const walkKey = ["calm", "balanced", "full", "free"].includes(rhythmRaw)
+    ? rhythmRaw
+    : legacy === "short" ? "calm" : legacy === "long" ? "full" : "balanced";
   const langRaw = params.get("lang");
   const lang = langRaw === "sv" ? "sv" : langRaw === "en" ? "en" : null;
   return { city, place, preferences, dayOffset, walkKey, lang };

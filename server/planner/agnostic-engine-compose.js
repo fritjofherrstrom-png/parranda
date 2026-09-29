@@ -618,13 +618,14 @@ function buildWalkingFitReservoirs({sourceCandidates, plannerRoles, origin, walk
   const richIndex = buildRichCandidateIndex(plannerRoles);
   const ids = new Set(sourceCandidates.map(c => c.id));
   const options = [];
-  for (const base of sourceCandidates.filter(c => c.reservoir_selected)) {
+  for (const base of sourceCandidates.filter(c => c.reservoir_selected || c.reservoir_support)) {
     const rich = richIndex.get(`${base.role}::${base.id}`);
     for (const next of plannerRoles?.walking_fit_candidates || []) {
       if (next.role !== base.role || ids.has(next.candidate_id) || !finiteCoords(next.coordinates) ||
           !comparableRoleReplacement(rich,next)) continue;
       const replacement = toSourceCandidate({pick:{candidate_id:next.candidate_id},rich:next,
-        coords:next.coordinates,city:base.city,role:base.role,reservoirSelected:true,
+        coords:next.coordinates,city:base.city,role:base.role,
+        reservoirSelected:base.reservoir_selected === true,reservoirSupport:base.reservoir_support === true,
         requestedIntents:plannerRoles.requested_preferences});
       options.push({cost:proposalCost(next.coordinates,origin,band),key:`${base.id}:${next.candidate_id}`,
         records:sourceCandidates.map(c => c.id === base.id ? replacement : c)});

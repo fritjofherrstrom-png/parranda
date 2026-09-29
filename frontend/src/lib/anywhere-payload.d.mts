@@ -6,14 +6,13 @@ export interface AnywherePreference {
 
 export declare const ANYWHERE_PREFERENCES: AnywherePreference[];
 
-export interface WalkPreset {
-  key: string;
-  km: number;
+export interface DayRhythm {
+  key: "calm" | "balanced" | "full" | "free";
   sv: string;
   en: string;
 }
 
-export declare const WALK_PRESETS: WalkPreset[];
+export declare const DAY_RHYTHMS: DayRhythm[];
 
 export declare function isoDateFromOffset(offsetDays?: number, from?: Date): string;
 export declare function freezeComposeDateIso(options?: {
@@ -28,7 +27,7 @@ export declare function buildAnywherePayload(options?: {
   coords?: { lat: number; lng: number } | null;
   dates?: string[];
   preferences?: string[];
-  walkingKmTarget?: number;
+  dayRhythm?: "calm" | "balanced" | "full" | "free";
   excludedCandidateIds?: string[];
   pinnedCandidateIds?: string[];
 }): {
@@ -43,8 +42,8 @@ export declare function buildAnywherePayload(options?: {
   home_base: { type: string; label: string };
   start: { type: string; label: string };
   end: { type: string; label: string };
-  walking_km_target: number;
-  leg_pacing: string;
+  day_rhythm: string;
+  leg_pacing?: string;
   preferences: string[];
   distance_mode: string;
   budget_tier: string;

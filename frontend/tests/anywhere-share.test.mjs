@@ -4,16 +4,24 @@
  */
 
 import test from "node:test";
+
+test("a shared free-rhythm day restores the same non-kilometer contract", () => {
+  const qs = encodeShareParams({ place: "Porto", walkKey: "free", lang: "sv" });
+  assert.match(qs, /rhythm=free/);
+  assert.ok(!qs.includes("km="));
+  assert.equal(decodeShareParams(qs).walkKey, "free");
+});
+
 import assert from "node:assert/strict";
 import { encodeShareParams, buildShareUrl, decodeShareParams } from "../src/lib/anywhere-share.mjs";
 
 test("encode → decode round-trips the day inputs", () => {
-  const inputs = { place: "Lyon", preferences: ["food", "views"], dayOffset: 1, walkKey: "long", lang: "sv" };
+  const inputs = { place: "Lyon", preferences: ["food", "views"], dayOffset: 1, walkKey: "full", lang: "sv" };
   const decoded = decodeShareParams(encodeShareParams(inputs));
   assert.equal(decoded.place, "Lyon");
   assert.deepEqual(decoded.preferences, ["food", "views"]);
   assert.equal(decoded.dayOffset, 1);
-  assert.equal(decoded.walkKey, "long");
+  assert.equal(decoded.walkKey, "full");
   assert.equal(decoded.lang, "sv");
 });
 

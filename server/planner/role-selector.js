@@ -133,6 +133,7 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
   const roleEntries = {};
   for (const [role, spec] of Object.entries(activeRoleSpec)) {
     roleEntries[role] = buildRankedEntriesForRole(spec, roleCandidatePool, localFeelActive);
+    if (localFeelActive) roleEntries[role] = suppressConflictingMapPins(roleEntries[role]);
   }
   if (localFeelActive) {
     applyReservoirChainFallbackPolicy(roleEntries);
@@ -214,7 +215,7 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
   const walkingFitCandidates = helpers.walkingFitSelection === true && localFeelActive && pinnedIds.size === 0
     ? retainWalkingFitAlternatives({
         roles,
-        candidatesByRole: Object.fromEntries(roles.filter(role => role.requested).map(({role}) =>
+        candidatesByRole: Object.fromEntries(roles.filter(role => role.requested || role.slot === 'anchor' || role.slot === 'stop').map(({role}) =>
           [role, roleEntries[role].filter(entry => entry.candidate_status !== 'fallback')
             .map(entry => formatRoleCandidate(entry, role, roleEntries, activeRoleSpec))])),
         origin: candidatePool.context.origin,
@@ -553,7 +554,7 @@ function buildRankedEntriesForRole(spec, candidatePool, localFeelActive = false)
     }
     return [...groups.entries()]
       .sort(([a], [b]) => compareRankKey(a, b))
-      .flatMap(([, group]) => rankEligible(group));
+      .flatMap(([, group]) => promoteAddressedSibling(rankEligible(group)));
   };
 
   return [
@@ -562,6 +563,50 @@ function buildRankedEntriesForRole(spec, candidatePool, localFeelActive = false)
     ...rankByLocalFeel(byStatus.partialAdmitted),
     ...rankByLocalFeel(byStatus.fallback),
   ];
+}
+
+// Two map pins with the same exact name can be far enough apart to resist
+// identity merging, yet close enough that the weaker pin may send a visitor to
+// the wrong storefront. Keep both identities in the eligible pool (they may be
+// separate branches), but fail closed for routing on an addressless, web-less
+// map pin when a same-type namesake within 2 km has both source-owned address
+// and website. Two independently addressed branches remain separate options.
+// This is a source-evidence preference, NOT operator verification.
+function suppressConflictingMapPins(entries) {
+  const normalized = entry => String(entry.candidate?.label || '').normalize('NFC').trim().toLocaleLowerCase();
+  const mapped = entry => entry.candidate?.candidate_origin === 'external_open' &&
+    entry.candidate?.source_family === 'map';
+  const located = entry => Boolean(entry.candidate?.source_address?.street &&
+    entry.candidate?.source_address?.house_number && entry.candidate?.website);
+  return entries.filter(entry => {
+    const c = entry.candidate;
+    if (!mapped(entry) || c.source_address || c.website || !normalized(entry) ||
+        !Number.isFinite(c.lat) || !Number.isFinite(c.lng)) return true;
+    return !entries.some(other => other !== entry && mapped(other) && located(other) &&
+      other.candidate.type === c.type && normalized(other) === normalized(entry) &&
+      Number.isFinite(other.candidate.lat) && Number.isFinite(other.candidate.lng) &&
+      distanceKm({lat:c.lat,lng:c.lng},{lat:other.candidate.lat,lng:other.candidate.lng}) <= 2);
+  });
+}
+
+function promoteAddressedSibling(ranked) {
+  // Source-owned address + website is stronger location evidence than a
+  // nearby addressless map point with the same exact name and role. Do not
+  // merge, reject, or claim operator verification: distinct branches remain.
+  const out = [...ranked];
+  const name = entry => String(entry.candidate?.label || '').normalize('NFC').trim().toLocaleLowerCase();
+  const sourced = entry => Boolean(entry.candidate?.website &&
+    entry.candidate?.source_address?.street && entry.candidate?.source_address?.house_number);
+  for (let i = 0; i < out.length; i++) {
+    if (sourced(out[i]) || !name(out[i])) continue;
+    const matching = out.findIndex((entry,j) => j > i && sourced(entry) &&
+      entry.candidate?.type === out[i].candidate?.type && name(entry) === name(out[i]));
+    if (matching > i) {
+      const [betterLocated] = out.splice(matching,1);
+      out.splice(i,0,betterLocated);
+    }
+  }
+  return out;
 }
 
 function candidateStatusForRole({ fit, gates, spec, experimentalAdmission = null }) {

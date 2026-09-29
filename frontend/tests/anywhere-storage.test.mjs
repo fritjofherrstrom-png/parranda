@@ -4,6 +4,15 @@
  */
 
 import test from "node:test";
+
+test("new rhythm snapshots cannot overwrite legacy kilometer snapshots", () => {
+  const base = { place: "Lyon", dateIso: "2026-09-29", selected: ["food"] };
+  const old = `${base.place}::${base.dateIso}::food::walk=balanced`;
+  const fresh = savedEntryId({ ...base, walkKey: "balanced" });
+  assert.notEqual(fresh, old);
+  assert.notEqual(savedEntryId({ ...base, walkKey: "free" }), fresh);
+});
+
 import assert from "node:assert/strict";
 import {
   buildSavedEntry,
