@@ -35,6 +35,20 @@ test('a same-admission requested-role replacement uses a feasible walk without a
   t.diagnostic(`before: 0.6 km / 2 stops; after: ${route.estimated_km} km / ${route.main_stops.length} stops`);
 });
 
+test('unrequested support roles retain comparable walking-fit alternatives without adding provisional breadth', ()=>{
+  const {retainWalkingFitAlternatives}=require('../server/planner/walking-fit-selection');
+  const candidate=(id,lat)=>({candidate_id:id,planner_usable:true,candidate_status:'filled',
+    confidence:'medium',origin:'external_open',local_feel_rank:0,
+    operational_viability:{rank:1},covered_preferences:['museums'],partial_preferences:[],
+    coordinates:{lat,lng:origin.lng}});
+  const near=candidate('near-museum',origin.lat+.001);
+  const far=candidate('far-museum',origin.lat+.022);
+  const roles=[{role:'culture_stop',slot:'stop',requested:false,candidates:[near]}];
+  const alternatives=retainWalkingFitAlternatives({roles,candidatesByRole:{culture_stop:[near,far]},
+    origin,band:{targetKm:6,floorKm:3.6,ceilingKm:7.08}});
+  assert.deepEqual(alternatives.map(option=>option.candidate_id),['far-museum']);
+});
+
 test('untrusted, unavailable, out-of-reach and wrong-intent tails cannot buy walking fit', async()=>{
   for(const mutation of [
     row=>({...row,sources:[]}),
@@ -149,6 +163,23 @@ test('variant proposals have a fixed trial/reservoir ceiling and replace exactly
   assert.ok(sevenVariants.every(variant=>variant.length===7 && variant.slice(1).every((candidate,index)=>candidate.id===seven[index+1].id)));
   assert.deepEqual(buildWalkingFitReservoirs({sourceCandidates:[...seven,{id:'extra5'}],plannerRoles,origin,walkingKmTarget:6}),[],
     'the expanded search remains capped above seven records');
+});
+
+test('bounded variants may replace an already-selected support stop with a comparable support place', ()=>{
+  const {buildWalkingFitReservoirs}=require('../server/planner/agnostic-engine-compose');
+  const make=(id,lat)=>({candidate_id:id,label:id,planner_usable:true,candidate_status:'filled',
+    confidence:'medium',origin:'external_open',coordinates:{lat,lng:origin.lng},
+    local_feel_rank:0,operational_viability:{rank:1},covered_preferences:['museums'],partial_preferences:[]});
+  const near=make('near',origin.lat+.001);
+  const far=make('far',origin.lat+.022);
+  const sourceCandidates=[{id:'meal',role:'food_anchor',city:'test',reservoir_selected:true},
+    {id:'near',role:'culture_stop',city:'test',reservoir_support:true}];
+  const plannerRoles={requested_preferences:['food'],roles:[{role:'culture_stop',candidates:[near]}],
+    walking_fit_candidates:[{role:'culture_stop',...far}]};
+  const variants=buildWalkingFitReservoirs({sourceCandidates,plannerRoles,origin,walkingKmTarget:6});
+  assert.equal(variants.length,1);
+  assert.deepEqual(variants[0].map(candidate=>candidate.id),['meal','far']);
+  assert.equal(variants[0][1].reservoir_support,true);
 });
 
 test('engine re-selection cannot sacrifice another published place during a comparable substitution', ()=>{

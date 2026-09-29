@@ -14,7 +14,7 @@ import { fetchPlannerLifecycle } from '../lib/planner-lifecycle.mjs';
 import {
   buildAnywherePayload,
   ANYWHERE_PREFERENCES,
-  WALK_PRESETS,
+  DAY_RHYTHMS,
   freezeComposeDateIso,
 } from "../lib/anywhere-payload.mjs";
 import { anywhereBlitzView, type AnywhereBlitzView } from "../lib/blitz-view.mjs";
@@ -66,6 +66,7 @@ import {
   LAST_KEY,
   SAVED_KEY,
   savedEntryId,
+  normalizeSavedWalkKey,
   type SavedEntry,
 } from "../lib/anywhere-storage.mjs";
 import {
@@ -416,7 +417,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         dayOffset: effectiveDayOffset,
         dateIsoOverride,
       });
-      const preset = WALK_PRESETS.find((p: { key: string }) => p.key === effectiveWalkKey) ?? WALK_PRESETS[1];
+      const rhythm = DAY_RHYTHMS.find((p: { key: string }) => p.key === effectiveWalkKey) ?? DAY_RHYTHMS[1];
       // Frozen here, beside the request that carries them: whatever the ledger
       // does while this is in flight, THIS is what the answer will have
       // answered. Labels travel with the ids so the verdict can name a place
@@ -433,7 +434,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         coords: anchor.coords ?? null,
         dates: [effectiveDateIso],
         preferences: preferencesOverride ?? selected,
-        walkingKmTarget: preset.km,
+        dayRhythm: rhythm.key,
         excludedCandidateIds: excludedOverride ?? scopedLedger.excludedIds,
         pinnedCandidateIds: sentPinIds,
       });
@@ -681,7 +682,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       if (typeof i.place === "string") setPlace(i.place);
       if (i.mode === "typed" || i.mode === "near_me") setMode(i.mode);
       if (i.dayOffset === 0 || i.dayOffset === 1) setDayOffset(i.dayOffset);
-      if (typeof i.walkKey === "string") setWalkKey(i.walkKey);
+      if (typeof i.walkKey === "string") setWalkKey(normalizeSavedWalkKey(i.walkKey));
       if (Array.isArray(i.selected)) setSelected(i.selected);
     }
     // A restored snapshot is a NEW authoritative generation, so everything
@@ -1093,7 +1094,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const anchorUnresolved =
     mode === "typed" && !cityKey && classification?.status === "unavailable" && intakeStatus !== "resolved";
   const walkLabel = (() => {
-    const preset = WALK_PRESETS.find((p: { key: string }) => p.key === walkKey);
+    const preset = DAY_RHYTHMS.find((p: { key: string }) => p.key === walkKey);
     return preset ? (lang === "en" ? preset.en : preset.sv) : "";
   })();
   const moodLabel = ANYWHERE_PREFERENCES.filter((p: { key: string }) => selected.includes(p.key))
@@ -1497,7 +1498,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             <div className="flex min-h-12 items-center gap-2.5 border-t border-parranda-ink/10 py-1.5 pl-4 pr-1.5">
               <span className="min-w-0 flex-1 text-[13px] leading-snug text-parranda-ink/65">
                 <strong className="font-bold text-parranda-ink">{moodLabel || t("Inga val", "No moods")}</strong>
-                {` · ${t("Gångmål", "Walking target")}: ${walkLabel}`}
+                {` · ${t("Dagens rytm", "Day rhythm")}: ${walkLabel}`}
               </span>
               <button
                 type="button"
@@ -1575,28 +1576,22 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               </div>
 
               <div className="flex flex-col gap-2 border-t border-parranda-ink/10 pt-4">
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-parranda-glow">{t("Gånglängd", "Walking")}</p>
-                {/* Name over distance, so a narrow screen never breaks "~6 km"
-                    across two lines inside a segment. */}
-                <div className="grid grid-cols-3 overflow-hidden rounded-parranda-btn border border-parranda-ink/14 sm:max-w-sm" role="group" aria-label={t("Gånglängd", "Walking length")}>
-                  {WALK_PRESETS.map((preset: { key: string; km: number; sv: string; en: string }) => {
-                    const [presetName, presetDistance] = (lang === "en" ? preset.en : preset.sv).split(" · ");
-                    return (
-                      <button
-                        type="button"
-                        key={preset.key}
-                        aria-pressed={walkKey === preset.key}
-                        onClick={() => { if (walkKey !== preset.key) { invalidateCommitmentIntent(); setWalkKey(preset.key); } }}
-                        className={
-                          "flex min-h-12 flex-col items-center justify-center px-2 py-1.5 text-[13px] leading-tight transition " +
-                          (walkKey === preset.key ? "bg-parranda-ember/16 font-bold text-parranda-ink" : "text-parranda-ink/65 hover:text-parranda-ink")
-                        }
-                      >
-                        <span>{presetName}</span>
-                        {presetDistance && <span className="text-[11px] font-medium text-parranda-ink/55">{presetDistance}</span>}
-                      </button>
-                    );
-                  })}
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-parranda-glow">{t("Dagens rytm", "Day rhythm")}</p>
+                <div className="grid grid-cols-2 overflow-hidden rounded-parranda-btn border border-parranda-ink/14 sm:max-w-sm" role="group" aria-label={t("Dagens rytm", "Day rhythm")}>
+                  {DAY_RHYTHMS.map((preset: { key: string; sv: string; en: string }) => (
+                    <button
+                      type="button"
+                      key={preset.key}
+                      aria-pressed={walkKey === preset.key}
+                      onClick={() => { if (walkKey !== preset.key) { invalidateCommitmentIntent(); setWalkKey(preset.key); } }}
+                      className={
+                        "min-h-12 px-2 py-1.5 text-[13px] leading-tight transition " +
+                        (walkKey === preset.key ? "bg-parranda-ember/16 font-bold text-parranda-ink" : "text-parranda-ink/65 hover:text-parranda-ink")
+                      }
+                    >
+                      {lang === "en" ? preset.en : preset.sv}
+                    </button>
+                  ))}
                 </div>
               </div>
 

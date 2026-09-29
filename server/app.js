@@ -1904,6 +1904,8 @@ function buildApp({
       const preferences = Array.isArray(request.body?.preferences)
         ? request.body.preferences
         : [];
+      const requestedRhythm = ["calm", "balanced", "full", "free"].includes(request.body?.day_rhythm)
+        ? request.body.day_rhythm : null;
       const payload = {
         city,
         dates: requestedDates.dates,
@@ -1914,7 +1916,7 @@ function buildApp({
         legPacing: request.body?.leg_pacing || "balanced",
         preferences,
         optimizerMode: request.body?.optimizer_mode || null,
-        distanceMode: request.body?.distance_mode || "soft_target",
+        distanceMode: requestedRhythm ? "no_limit" : request.body?.distance_mode || "soft_target",
         budgetTier: request.body?.budget_tier || "standard",
         modifier: request.body?.modifier || null,
         lang,
@@ -2382,7 +2384,8 @@ function buildApp({
         lang,
         walkingRouter,
         walkingConfig,
-        walkingKmTarget: payload.walkingKmTarget,
+        walkingKmTarget: requestedRhythm ? null : payload.walkingKmTarget,
+        dayRhythm: requestedRhythm,
         distanceMode: payload.distanceMode,
         // So the authoritative finalisation can weave the same evening event
         // the response will carry, rather than settling on a route that is
@@ -2472,7 +2475,7 @@ function buildApp({
         reconcileConstraintAfterEventWeave({
           experiment,
           woven: engineWoven,
-          walkingKmTarget: payload.walkingKmTarget,
+          walkingKmTarget: requestedRhythm ? null : payload.walkingKmTarget,
         });
         // The eligibility verdict belongs to the candidate context that was
         // actually PUBLISHED. When the gate withholds the engine's day, the

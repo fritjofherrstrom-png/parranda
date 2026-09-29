@@ -1110,6 +1110,11 @@ function mapOsmElement(element) {
   const brandName = typeof tags.brand === "string" && tags.brand.trim() ? tags.brand.trim() : null;
   const brandWikidata = typeof tags["brand:wikidata"] === "string" && tags["brand:wikidata"].trim();
   const website = firstHttpUrl(tags.website, tags["contact:website"]);
+  const street = typeof tags['addr:street'] === 'string' ? tags['addr:street'].trim() : '';
+  const houseNumber = typeof tags['addr:housenumber'] === 'string' ? tags['addr:housenumber'].trim() : '';
+  const sourceAddress = street && houseNumber && street.length <= 120 && houseNumber.length <= 24 &&
+    !/[\r\n]/.test(street + houseNumber)
+    ? { street, house_number: houseNumber } : null;
   const openingHours = normalizeOpeningHours(tags.opening_hours);
   const operational = extractOsmOperationalMetadata(tags, { website, openingHours });
 
@@ -1129,6 +1134,7 @@ function mapOsmElement(element) {
     // The website may seed bounded source discovery; opening hours may only
     // exclude a candidate when trusted local-time evaluation proves no overlap.
     ...(website ? { website } : {}),
+    ...(sourceAddress ? { source_address: sourceAddress } : {}),
     ...(openingHours ? { opening_hours: openingHours } : {}),
   };
 }

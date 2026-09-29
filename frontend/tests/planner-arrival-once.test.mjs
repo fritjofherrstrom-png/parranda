@@ -84,7 +84,8 @@ test("a link that carries the day's inputs composes exactly once for them", asyn
   await h.clock.advance(500);
   const calls = composeCalls(h);
   assert.equal(calls.length, 1, "the arrival compose");
-  assert.equal(calls[0].body.walking_km_target, 9);
+  assert.equal(calls[0].body.day_rhythm, "full", "a legacy km=long link restores rhythm intent");
+  assert.ok(!("walking_km_target" in calls[0].body));
   assert.deepEqual(calls[0].body.preferences, ["food", "culture"]);
   await h.fetchMock.respond(calls[0], composedDay());
   await h.clock.advance(2000);
@@ -112,11 +113,12 @@ for (const [arrival, url, picks] of [
     await h.clock.advance(50);
 
     await click(h, button(h, /^Adjust/));
-    await click(h, button(h, /^Short/));
+    await click(h, button(h, /^Easy/));
     await h.clock.advance(450);
     const calls = composeCalls(h);
     assert.equal(calls.length, 2, "one recompose for the change");
-    assert.equal(calls[1].body.walking_km_target, 4);
+    assert.equal(calls[1].body.day_rhythm, "calm");
+    assert.ok(!("walking_km_target" in calls[1].body));
     assert.deepEqual(calls[1].body.preferences, picks, "the arrival's picks stay");
   });
 }
@@ -134,7 +136,8 @@ for (const permission of ["deny", "prompt"]) {
     assert.equal(calls.length, 1);
     assert.equal(calls[0].url, "/api/route-recommendations?lang=sv");
     assert.deepEqual([calls[0].body.lat, calls[0].body.lng], [55.6, 13]);
-    assert.equal(calls[0].body.walking_km_target, 9);
+    assert.equal(calls[0].body.day_rhythm, "full");
+    assert.ok(!("walking_km_target" in calls[0].body));
     await h.fetchMock.respond(calls[0], composedDay());
     await h.clock.advance(2000);
 
@@ -156,12 +159,13 @@ test("adjusting a near-me day reuses the chosen position and asks no one", async
   await h.clock.advance(50);
 
   await click(h, button(h, /^Adjust/));
-  await click(h, button(h, /^Long/));
+  await click(h, button(h, /^Full/));
   await h.clock.advance(450);
   const calls = composeCalls(h);
   assert.equal(calls.length, 2, "the adjustment recomposes");
   assert.deepEqual([calls[1].body.lat, calls[1].body.lng], [55.6, 13], "around the same position");
-  assert.equal(calls[1].body.walking_km_target, 9);
+  assert.equal(calls[1].body.day_rhythm, "full");
+  assert.ok(!("walking_km_target" in calls[1].body));
   assert.equal(asked.count, 0);
 });
 

@@ -44,11 +44,12 @@ export function freezeComposeDateIso({ dayOffset = 0, dateIsoOverride = null, no
     : isoDateFromOffset(dayOffset, now);
 }
 
-// Walking-length presets → the same walking_km_target the production planner sends.
-export const WALK_PRESETS = [
-  { key: "short", km: 4, sv: "Kort · ~4 km", en: "Short · ~4 km" },
-  { key: "balanced", km: 6, sv: "Lagom · ~6 km", en: "Balanced · ~6 km" },
-  { key: "long", km: 9, sv: "Lång · ~9 km", en: "Long · ~9 km" },
+// Day density, not a walking-distance goal. Distance is measured afterwards.
+export const DAY_RHYTHMS = [
+  { key: "calm", sv: "Lugn", en: "Easy" },
+  { key: "balanced", sv: "Lagom", en: "Balanced" },
+  { key: "full", sv: "Fylld", en: "Full" },
+  { key: "free", sv: "Spelar ingen roll", en: "No preference" },
 ];
 
 export function buildAnywherePayload({
@@ -57,7 +58,7 @@ export function buildAnywherePayload({
   coords,
   dates,
   preferences = [],
-  walkingKmTarget = 6,
+  dayRhythm = "balanced",
   excludedCandidateIds = [],
   pinnedCandidateIds = [],
 } = {}) {
@@ -72,16 +73,17 @@ export function buildAnywherePayload({
     : coords && Number.isFinite(coords.lat) && Number.isFinite(coords.lng)
       ? { lat: coords.lat, lng: coords.lng }
       : { place, place_query: place };
+  const rhythm = DAY_RHYTHMS.some(({ key }) => key === dayRhythm) ? dayRhythm : "balanced";
   return {
     ...anchor,
     dates,
     home_base: autoPoint,
     start: autoPoint,
     end: autoPoint,
-    walking_km_target: walkingKmTarget,
-    leg_pacing: "balanced",
+    day_rhythm: rhythm,
+    ...(rhythm === "free" ? {} : { leg_pacing: "balanced" }),
     preferences,
-    distance_mode: "soft_target",
+    distance_mode: "no_limit",
     budget_tier: "standard",
     ...(!cityKey
       ? {

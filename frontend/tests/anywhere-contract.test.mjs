@@ -10,7 +10,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
-import { buildAnywherePayload, ANYWHERE_PREFERENCES, WALK_PRESETS, isoDateFromOffset } from "../src/lib/anywhere-payload.mjs";
+import { buildAnywherePayload, ANYWHERE_PREFERENCES, DAY_RHYTHMS, isoDateFromOffset } from "../src/lib/anywhere-payload.mjs";
 import { LIVE_REFRESH_DELAYS_MS } from "../src/lib/compose-followup.mjs";
 import { routePreferenceCoverage } from "../src/lib/route-context-view.mjs";
 import { limitationNote } from "../src/lib/day-limitations.mjs";
@@ -60,10 +60,17 @@ test("curated mode hides actions whose current APIs would silently lose citypack
   assert.match(anywherePlannerSource, /!cityKey && candidateId/);
 });
 
-test("planner depth: walking presets map to walking_km_target; tomorrow is a real date", () => {
-  const preset = WALK_PRESETS.find((p) => p.key === "long");
-  const payload = buildAnywherePayload({ place: "Lyon", dates: ["2026-07-03"], walkingKmTarget: preset.km });
-  assert.equal(payload.walking_km_target, 9, "the long preset reaches the engine's walking target");
+test("day rhythm carries no kilometer goal while preserving real date math", () => {
+  assert.deepEqual(DAY_RHYTHMS.map((p) => p.key), ["calm", "balanced", "full", "free"]);
+  for (const rhythm of DAY_RHYTHMS) {
+    const payload = buildAnywherePayload({ place: "Lyon", dates: ["2026-07-03"], dayRhythm: rhythm.key });
+    assert.ok(!("walking_km_target" in payload));
+    assert.equal(payload.day_rhythm, rhythm.key);
+    assert.equal(payload.distance_mode, "no_limit");
+    if (rhythm.key === "free") assert.ok(!("leg_pacing" in payload));
+  }
+  assert.match(anywherePlannerSource, /t\("Dagens rytm", "Day rhythm"\)/);
+  assert.match(anywherePlannerSource, /dayRhythm: rhythm\.key/);
   // Deterministic date math (injectable base, no real clock in tests).
   assert.equal(isoDateFromOffset(0, new Date("2026-07-02T12:00:00Z")), "2026-07-02");
   assert.equal(isoDateFromOffset(1, new Date("2026-07-02T12:00:00Z")), "2026-07-03");
@@ -428,7 +435,7 @@ test("adjustments collapse to a summary and re-compose themselves — no submit 
   // ...expanding gives the grouped panel...
   assert.match(anywherePlannerSource, /t\("Känsla", "Mood"\)/);
   assert.match(anywherePlannerSource, /t\("När", "When"\)/);
-  assert.match(anywherePlannerSource, /t\("Gånglängd", "Walking"\)/);
+  assert.match(anywherePlannerSource, /t\("Dagens rytm", "Day rhythm"\)/);
   // ...and a settled change re-composes on its own (debounced), so the only
   // submit left in the component is the no-anchor fallback input.
   assert.match(anywherePlannerSource, /recomposeTimerRef\.current = setTimeout\(/);

@@ -907,6 +907,7 @@ async function composeAgnosticRouteOutput({
   eveningEventStructure = null,
   walkingBudget = null,
   walkingKmTarget = null,
+  dayRhythm = null,
   // #262 — trusted context seams. Public payload weather is NEVER trusted; the
   // weather/time context comes only from these server-injected sources.
   weatherProvider = null,
@@ -1197,6 +1198,7 @@ async function composeAgnosticRouteOutput({
       ctx,
       baselineResult,
       walkingKmTarget: Number.isFinite(walkingKmTarget) ? walkingKmTarget : undefined,
+      dayRhythm,
       distanceMode,
       preferences,
       pinnedStopIds,
@@ -1394,6 +1396,7 @@ async function composeAgnosticRouteViaEngine({
   contextBlock,
   baselineResult,
   walkingKmTarget,
+  dayRhythm = null,
   distanceMode = null,
   preferences,
   pinnedStopIds,
@@ -1441,7 +1444,9 @@ async function composeAgnosticRouteViaEngine({
       todayIsoDate: agnosticContext.todayIsoDate,
       label: safeAgnosticPlaceLabel(placeLabel) || agnosticContext.label,
       key: agnosticContext.key,
-      dayProfile: (Number.isFinite(walkingKmTarget) ? walkingKmTarget : 6) <= 4 ? "light" : "peak",
+      dayProfile: dayRhythm === 'calm' ? 'light' : dayRhythm === 'balanced' ? 'variation' :
+        dayRhythm === 'full' || dayRhythm === 'free' ? 'peak' :
+        (Number.isFinite(walkingKmTarget) ? walkingKmTarget : 6) <= 4 ? 'light' : 'peak',
     });
     const engineResult = await generateAgnosticRecommendations({
       cityConfig: engineCityConfig,

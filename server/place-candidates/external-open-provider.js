@@ -160,6 +160,14 @@ function mapRecordToCandidate(cityConfig, record, observedAt, index) {
   base.brand = typeof record.brand === "string" && record.brand.trim() ? record.brand.trim() : null;
   const website = safeHttpUrl(record.website);
   if (website) base.website = website;
+  const sourceAddress = record.source_address;
+  if (sourceAddress && typeof sourceAddress.street === 'string' &&
+      typeof sourceAddress.house_number === 'string' &&
+      sourceAddress.street.trim().length <= 120 && sourceAddress.house_number.trim().length <= 24 &&
+      sourceAddress.street.trim() && sourceAddress.house_number.trim() &&
+      !/[\r\n]/.test(sourceAddress.street + sourceAddress.house_number)) {
+    base.source_address = {street:sourceAddress.street.trim(),house_number:sourceAddress.house_number.trim()};
+  }
   const openingHours = normalizeOpeningHours(record.opening_hours);
   if (openingHours) base.opening_hours = openingHours;
   const operationalStatus = normalizeOperationalStatus(record.operational_status);

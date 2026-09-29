@@ -22,10 +22,11 @@ function prefsKey(prefs) {
 }
 
 export const DEFAULT_SAVED_WALK_KEY = "balanced";
-const SAVED_WALK_KEYS = new Set(["short", DEFAULT_SAVED_WALK_KEY, "long"]);
+const SAVED_WALK_KEYS = new Set(["calm", DEFAULT_SAVED_WALK_KEY, "full", "free"]);
 
 export function normalizeSavedWalkKey(value) {
-  return SAVED_WALK_KEYS.has(value) ? value : DEFAULT_SAVED_WALK_KEY;
+  return SAVED_WALK_KEYS.has(value) ? value :
+    value === "short" ? "calm" : value === "long" ? "full" : DEFAULT_SAVED_WALK_KEY;
 }
 
 /**
@@ -40,7 +41,7 @@ export function savedEntryId({ city, place, dateIso, selected, walkKey } = {}) {
   const c = String(city || "").trim().toLowerCase();
   const p = (place || "").trim();
   const anchor = c ? `city:${c}` : p || "pos";
-  return `${anchor}::${dateIso || ""}::${prefsKey(selected)}::walk=${normalizeSavedWalkKey(walkKey)}`;
+  return `${anchor}::${dateIso || ""}::${prefsKey(selected)}::rhythm=${normalizeSavedWalkKey(walkKey)}`;
 }
 
 export function buildSavedEntry({

@@ -6873,6 +6873,7 @@ async function generateRecommendations({
   budgetTier = "standard",
   modifier = null,
   distanceMode = "soft_target",
+  dayRhythm = null,
   legPacing = "balanced",
   lang = "sv",
   includeLiveEvents = false,
@@ -7012,6 +7013,9 @@ async function generateRecommendations({
           : null;
         const primaryDayProfile = agnosticDayProfile
           ? normalizeDayProfile(agnosticDayProfile)
+          : dayRhythm === "calm" ? "light"
+          : dayRhythm === "balanced" ? "variation"
+          : dayRhythm === "full" || dayRhythm === "free" ? "peak"
           : choosePrimaryDayProfile({
               dateIndex,
               totalDates: normalizedDates.length,

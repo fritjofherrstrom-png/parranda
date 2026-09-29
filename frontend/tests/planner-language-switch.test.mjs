@@ -63,13 +63,14 @@ test("the language link carries the adjustments made after the page loaded", asy
   await h.clock.advance(50);
 
   await click(h, button(h, /^Adjust/));
-  await click(h, button(h, /^Long/));
+  await click(h, button(h, /^Full/));
   await click(h, button(h, /^Tomorrow$/));
   await click(h, button(h, /Views/));
 
   const params = new URLSearchParams(languageLink(h, "SV").getAttribute("href"));
   assert.equal(params.get("place"), "Testville");
-  assert.equal(params.get("km"), "long", "the walking length chosen on the page");
+  assert.equal(params.get("rhythm"), "full", "the rhythm chosen on the page");
+  assert.equal(params.has("km"), false, "new links do not encode a kilometer goal");
   assert.equal(params.get("day"), "1", "the day chosen on the page");
   assert.equal(params.get("prefs"), "food,culture", "the picks as they are now");
   assert.equal(params.get("lang"), "sv");
