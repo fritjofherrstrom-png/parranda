@@ -37,6 +37,7 @@ import { mapsPlaceUrl, mapsWalkingRouteParts, primaryRouteStops, type RouteEnd }
 import { routePathIsSketch } from "../lib/route-map-presentation.mjs";
 import { selectedDayHoursLabel } from "../lib/selected-day-hours.mjs";
 import { stopHoursUnknown, stopTypeLabel } from "../lib/stop-card-facts.mjs";
+import { walkingTargetNote } from "../lib/walking-target-note.mjs";
 import {
   buildRouteContextSuggestions,
   routePreferenceCoverage,
@@ -1116,6 +1117,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // localized). The day-signal/title/summary fields are NOT rendered on this
   // surface: they can carry baseline-city phrasing and placeholder labels.
   const primaryRoute: any = safeResponse?.days?.[0]?.primary_route ?? null;
+  const walkingNote = !cityKey && primaryRoute
+    ? walkingTargetNote(safeResponse?.agnostic_route_output_experiment?.constraint_negotiation, lang)
+    : "";
   const dayflow: any = safeResponse?.days?.[0]?.dayflow_context ?? null;
   const legForStop = (stop: any): { km: number | null; minutes: number | null } | null => {
     if (!Array.isArray(primaryRoute?.legs)) return null;
@@ -1899,6 +1903,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 </li>
               ))}
             </ul>
+          )}
+          {walkingNote && (
+            <p className="rounded-parranda border border-parranda-ember/35 bg-parranda-ember/10 p-3 text-[13px] leading-relaxed text-parranda-ink">
+              {walkingNote}
+            </p>
           )}
           {sourceBackedDay && (
             <p className="flex items-start gap-2 text-[13px] leading-relaxed text-parranda-ink/70">
