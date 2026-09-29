@@ -38,7 +38,7 @@ export function decodeShareParams(search, allowedPrefKeys = null) {
   const preferences = allowedPrefKeys ? rawPrefs.filter((k) => allowedPrefKeys.includes(k)) : rawPrefs;
   const dayOffset = params.get("day") === "1" ? 1 : 0;
   const kmRaw = params.get("km");
-  const walkKey = kmRaw === "short" || kmRaw === "long" ? kmRaw : "balanced";
+  const walkKey = kmRaw === "short" || kmRaw === "long" || kmRaw === "free" ? kmRaw : "balanced";
   const langRaw = params.get("lang");
   const lang = langRaw === "sv" ? "sv" : langRaw === "en" ? "en" : null;
   return { city, place, preferences, dayOffset, walkKey, lang };

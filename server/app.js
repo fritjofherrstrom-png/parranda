@@ -2472,7 +2472,7 @@ function buildApp({
         reconcileConstraintAfterEventWeave({
           experiment,
           woven: engineWoven,
-          walkingKmTarget: payload.walkingKmTarget,
+          walkingKmTarget: payload.distanceMode === "no_limit" ? null : payload.walkingKmTarget,
         });
         // The eligibility verdict belongs to the candidate context that was
         // actually PUBLISHED. When the gate withholds the engine's day, the
@@ -2510,7 +2510,7 @@ function buildApp({
       reconcileConstraintAfterEventWeave({
         experiment,
         woven: legacyWoven,
-        walkingKmTarget: payload.walkingKmTarget,
+        walkingKmTarget: payload.distanceMode === "no_limit" ? null : payload.walkingKmTarget,
       });
       response.json({
         ...legacyWoven.result,

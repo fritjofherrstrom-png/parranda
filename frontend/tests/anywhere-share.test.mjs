@@ -35,6 +35,11 @@ test("defaults are omitted from the URL and restored on decode", () => {
   assert.equal(decoded.walkKey, "balanced");
 });
 
+test("a shared free walk remains free after opening the link", () => {
+  const decoded = decodeShareParams(encodeShareParams({ place: "Göteborg", walkKey: "free", lang: "sv" }));
+  assert.equal(decoded.walkKey, "free");
+});
+
 test("buildShareUrl produces an /anywhere link on the given origin", () => {
   const url = buildShareUrl("https://parranda.app/", { place: "Kyoto", lang: "en" });
   assert.match(url, /^https:\/\/parranda\.app\/anywhere\?/);

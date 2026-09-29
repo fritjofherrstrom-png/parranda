@@ -1245,6 +1245,12 @@ test(
       unlimited.body.agnostic_route_output_experiment.pinned_candidates.honored_count,
       1,
     );
+    assert.equal(
+      unlimited.body.agnostic_route_output_experiment.constraint_negotiation.walking.status,
+      "not_requested",
+      "the internal reach hint must not be reported as a user's walking target",
+    );
+    assert.equal(unlimited.body.agnostic_route_output_experiment.constraint_negotiation.walking.target_km, null);
   }),
 );
 

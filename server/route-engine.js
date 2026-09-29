@@ -5444,7 +5444,9 @@ function buildRouteFromTemplate(
       start,
       end,
       shape,
-      targetKm,
+      // no_limit uses targetKm elsewhere as a search/reach hint, never as a
+      // walking goal or ceiling in whole-day candidate selection.
+      targetKm: distanceMode === "no_limit" ? null : targetKm,
       allowExpansion: true,
     });
     if (constrained.selected.length) selectedStops = constrained.selected;

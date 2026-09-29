@@ -329,6 +329,42 @@ test("walking target is a fit band, so equally useful days do not collapse to th
   assert.ok(result.diagnostics.estimated_km >= result.diagnostics.target_floor_km);
 });
 
+test("a longer target retains the farther equally relevant day when neither option reaches its band", () => {
+  const anchor = { lat: 57.7089, lng: 11.9746 };
+  const food = candidate("food", { ...anchor, role: "food_anchor", covered: ["food"], spine: true });
+  const near = candidate("near-vintage", {
+    lat: 57.717,
+    lng: anchor.lng,
+    role: "vintage_second_hand_option",
+    covered: ["second_hand"],
+    type: "second_hand",
+  });
+  const farther = candidate("farther-vintage", {
+    lat: 57.725,
+    lng: anchor.lng,
+    role: "vintage_second_hand_option",
+    covered: ["second_hand"],
+    type: "second_hand",
+  });
+  // The near shop also carries a generic culture role. That extra breadth must
+  // not make a 9 km request choose a shorter day when both days cover the same
+  // requested intents and neither reaches the 9 km band.
+  near.routeRoles.push("culture_stop");
+  const input = {
+    rankedCandidates: [ranked(food), ranked(near, 40), ranked(farther, 5)],
+    desiredCount: 2,
+    requestedPreferences: ["food", "second_hand"],
+    start: anchor,
+    shape: "loop",
+  };
+
+  const six = selectAgnosticCandidateSet({ ...input, targetKm: 6 });
+  const nine = selectAgnosticCandidateSet({ ...input, targetKm: 9 });
+  assert.deepEqual(six.selected.map((item) => item.id).sort(), ["farther-vintage", "food"]);
+  assert.deepEqual(nine.selected.map((item) => item.id).sort(), ["farther-vintage", "food"]);
+  assert.ok(nine.diagnostics.estimated_km >= six.diagnostics.estimated_km);
+});
+
 test("an equally useful independent family beats a duplicate family with a higher individual score", () => {
   const anchor = { lat: 50.0755, lng: 14.4378 };
   const food = candidate("food", {

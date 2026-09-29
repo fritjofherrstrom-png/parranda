@@ -11,6 +11,9 @@ export interface WalkPreset {
   km: number;
   sv: string;
   en: string;
+  detailSv: string;
+  detailEn: string;
+  distanceMode: "soft_target" | "no_limit";
 }
 
 export declare const WALK_PRESETS: WalkPreset[];
@@ -29,6 +32,7 @@ export declare function buildAnywherePayload(options?: {
   dates?: string[];
   preferences?: string[];
   walkingKmTarget?: number;
+  distanceMode?: "soft_target" | "no_limit";
   excludedCandidateIds?: string[];
   pinnedCandidateIds?: string[];
 }): {

@@ -72,6 +72,21 @@ test("planner depth: walking presets map to walking_km_target; tomorrow is a rea
   assert.equal(isoDateFromOffset(1, new Date("2026-07-31T12:00:00Z")), "2026-08-01");
 });
 
+test("free walking is a distinct no-limit request, while the default still targets six kilometres", () => {
+  const free = WALK_PRESETS.find((preset) => preset.key === "free");
+  const flexible = buildAnywherePayload({
+    place: "Göteborg",
+    dates: ["2026-10-03"],
+    walkingKmTarget: free.km,
+    distanceMode: free.distanceMode,
+  });
+  assert.equal(flexible.distance_mode, "no_limit");
+  assert.equal(flexible.walking_km_target, 9, "internal source reach remains bounded for acquisition");
+  const defaultDay = buildAnywherePayload({ place: "Göteborg", dates: ["2026-10-03"] });
+  assert.equal(defaultDay.distance_mode, "soft_target");
+  assert.equal(defaultDay.walking_km_target, 6);
+});
+
 test("a composed short walk visibly explains the published target tradeoff", () => {
   const verdict = { route_present: true, walking: {
     status: "shorter_than_requested_band", target_km: 9, estimated_km: 4.5,
@@ -439,7 +454,7 @@ test("adjustments collapse to a summary and re-compose themselves — no submit 
   // ...expanding gives the grouped panel...
   assert.match(anywherePlannerSource, /t\("Känsla", "Mood"\)/);
   assert.match(anywherePlannerSource, /t\("När", "When"\)/);
-  assert.match(anywherePlannerSource, /t\("Gånglängd", "Walking"\)/);
+  assert.match(anywherePlannerSource, /t\("Hur långt vill du gå\?", "How far would you like to walk\?"\)/);
   // ...and a settled change re-composes on its own (debounced), so the only
   // submit left in the component is the no-anchor fallback input.
   assert.match(anywherePlannerSource, /recomposeTimerRef\.current = setTimeout\(/);

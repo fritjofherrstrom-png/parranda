@@ -1155,7 +1155,7 @@ async function composeAgnosticRouteOutput({
       context: contextBlock,
       requestedDate: effectiveDate,
       plannerRoles,
-      walkingKmTarget,
+      walkingKmTarget: distanceMode === "no_limit" ? null : walkingKmTarget,
     });
     experiment.context = contextBlock;
     return {
@@ -1309,7 +1309,7 @@ async function composeAgnosticRouteOutput({
       context: contextBlock,
       requestedDate: effectiveDate,
       plannerRoles,
-      walkingKmTarget,
+      walkingKmTarget: distanceMode === "no_limit" ? null : walkingKmTarget,
     });
     experiment.walking_validation = walkingSummary;
     experiment.route_ordering = sanitizeRouteOrdering(routeOrdering);
@@ -1363,7 +1363,7 @@ async function composeAgnosticRouteOutput({
     dayflowContextPresent,
     requestedDate: effectiveDate,
     plannerRoles,
-    walkingKmTarget,
+    walkingKmTarget: distanceMode === "no_limit" ? null : walkingKmTarget,
   });
   experiment.walking_validation = walkingSummary;
   experiment.route_ordering = sanitizeRouteOrdering(routeOrdering);
@@ -1658,7 +1658,7 @@ async function composeAgnosticRouteViaEngine({
       context: contextBlock,
       requestedDate: effectiveDate,
       plannerRoles,
-      walkingKmTarget,
+      walkingKmTarget: distanceMode === "no_limit" ? null : walkingKmTarget,
     });
     experiment.context = contextBlock;
     experiment.synthesized_via = "agnostic_compose_engine";
@@ -1704,7 +1704,7 @@ async function composeAgnosticRouteViaEngine({
     dayflowContextPresent,
     requestedDate: effectiveDate,
     plannerRoles,
-    walkingKmTarget,
+    walkingKmTarget: distanceMode === "no_limit" ? null : walkingKmTarget,
   });
   experiment.walking_validation = walkingSummary;
   experiment.route_ordering = routeOrdering;

@@ -435,6 +435,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         dates: [effectiveDateIso],
         preferences: preferencesOverride ?? selected,
         walkingKmTarget: preset.km,
+        distanceMode: preset.distanceMode,
         excludedCandidateIds: excludedOverride ?? scopedLedger.excludedIds,
         pinnedCandidateIds: sentPinIds,
       });
@@ -1095,7 +1096,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     mode === "typed" && !cityKey && classification?.status === "unavailable" && intakeStatus !== "resolved";
   const walkLabel = (() => {
     const preset = WALK_PRESETS.find((p: { key: string }) => p.key === walkKey);
-    return preset ? (lang === "en" ? preset.en : preset.sv) : "";
+    if (!preset) return "";
+    const title = lang === "en" ? preset.en : preset.sv;
+    return preset.key === "free" ? title : `${title} · ${lang === "en" ? preset.detailEn : preset.detailSv}`;
   })();
   const moodLabel = ANYWHERE_PREFERENCES.filter((p: { key: string }) => selected.includes(p.key))
     .map((p: { sv: string; en: string }) => (lang === "en" ? p.en : p.sv))
@@ -1501,7 +1504,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             <div className="flex min-h-12 items-center gap-2.5 border-t border-parranda-ink/10 py-1.5 pl-4 pr-1.5">
               <span className="min-w-0 flex-1 text-[13px] leading-snug text-parranda-ink/65">
                 <strong className="font-bold text-parranda-ink">{moodLabel || t("Inga val", "No moods")}</strong>
-                {` · ${t("Gångmål", "Walking target")}: ${walkLabel}`}
+                {` · ${t("Promenad", "Walking")}: ${walkLabel}`}
               </span>
               <button
                 type="button"
@@ -1579,29 +1582,31 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               </div>
 
               <div className="flex flex-col gap-2 border-t border-parranda-ink/10 pt-4">
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-parranda-glow">{t("Gånglängd", "Walking")}</p>
-                {/* Name over distance, so a narrow screen never breaks "~6 km"
-                    across two lines inside a segment. */}
-                <div className="grid grid-cols-3 overflow-hidden rounded-parranda-btn border border-parranda-ink/14 sm:max-w-sm" role="group" aria-label={t("Gånglängd", "Walking length")}>
-                  {WALK_PRESETS.map((preset: { key: string; km: number; sv: string; en: string }) => {
-                    const [presetName, presetDistance] = (lang === "en" ? preset.en : preset.sv).split(" · ");
-                    return (
-                      <button
-                        type="button"
-                        key={preset.key}
-                        aria-pressed={walkKey === preset.key}
-                        onClick={() => { if (walkKey !== preset.key) { invalidateCommitmentIntent(); setWalkKey(preset.key); } }}
-                        className={
-                          "flex min-h-12 flex-col items-center justify-center px-2 py-1.5 text-[13px] leading-tight transition " +
-                          (walkKey === preset.key ? "bg-parranda-ember/16 font-bold text-parranda-ink" : "text-parranda-ink/65 hover:text-parranda-ink")
-                        }
-                      >
-                        <span>{presetName}</span>
-                        {presetDistance && <span className="text-[11px] font-medium text-parranda-ink/55">{presetDistance}</span>}
-                      </button>
-                    );
-                  })}
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-parranda-glow">{t("Hur långt vill du gå?", "How far would you like to walk?")}</p>
+                <div className="grid w-full max-w-md grid-cols-2 gap-2" role="group" aria-label={t("Promenadens längd", "Walking distance")}>
+                  {WALK_PRESETS.map((preset) => (
+                    <button
+                      type="button"
+                      key={preset.key}
+                      aria-pressed={walkKey === preset.key}
+                      onClick={() => { if (walkKey !== preset.key) { invalidateCommitmentIntent(); setWalkKey(preset.key); } }}
+                      className={
+                        "flex min-h-16 flex-col justify-center rounded-2xl border px-4 py-2 text-left transition " +
+                        (walkKey === preset.key
+                          ? "border-parranda-ember bg-parranda-ember/12 text-parranda-ink"
+                          : "border-parranda-ink/14 text-parranda-ink/70 hover:border-parranda-ink/35")
+                      }
+                    >
+                      <span className="text-[13px] font-bold">{lang === "en" ? preset.en : preset.sv}</span>
+                      <span className="text-[11px]">{lang === "en" ? preset.detailEn : preset.detailSv}</span>
+                    </button>
+                  ))}
                 </div>
+                {walkKey === "free" && (
+                  <p className="text-[11px] text-parranda-ink/60">
+                    {t("Inget gångmål i kilometer. Vi väljer fortfarande en sammanhängande dag och visar den faktiska sträckan.", "No kilometre target. We still choose a coherent day and show its actual distance.")}
+                  </p>
+                )}
               </div>
 
               <p className="text-[11px] text-parranda-ink/50">

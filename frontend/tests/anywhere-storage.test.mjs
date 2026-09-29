@@ -41,6 +41,7 @@ test("walking preset is part of saved-day identity and normalizes fail-closed", 
   assert.equal(savedEntryId({ ...base, walkKey: "unknown" }), balanced, "unknown presets cannot mint identities");
   assert.notEqual(savedEntryId({ ...base, walkKey: "short" }), balanced);
   assert.notEqual(savedEntryId({ ...base, walkKey: "long" }), balanced);
+  assert.notEqual(savedEntryId({ ...base, walkKey: "free" }), balanced);
 
   const short = buildSavedEntry({
     ...base,

@@ -290,6 +290,10 @@ function scoreSet(diagnostics) {
     diagnostics.daypart_count,
     diagnostics.within_target_band ? 1 : 0,
     diagnostics.bounded_exact_hits,
+    // The band bit alone ties every under-filled set. Keep the degree of
+    // shortfall ahead of incidental role breadth, while exact requested
+    // coverage, daypart rhythm and walking safety remain stronger constraints.
+    -diagnostics.under_target_km,
     diagnostics.role_count,
     diagnostics.unique_family_count,
     diagnostics.local_quality,
@@ -298,7 +302,6 @@ function scoreSet(diagnostics) {
     -diagnostics.duplicate_family_count,
     -diagnostics.chain_count,
     -diagnostics.over_budget_km,
-    -diagnostics.under_target_km,
     -diagnostics.target_distance_km,
     -diagnostics.longest_leg_km,
     diagnostics.individual_score,

@@ -22,7 +22,7 @@ function prefsKey(prefs) {
 }
 
 export const DEFAULT_SAVED_WALK_KEY = "balanced";
-const SAVED_WALK_KEYS = new Set(["short", DEFAULT_SAVED_WALK_KEY, "long"]);
+const SAVED_WALK_KEYS = new Set(["short", DEFAULT_SAVED_WALK_KEY, "long", "free"]);
 
 export function normalizeSavedWalkKey(value) {
   return SAVED_WALK_KEYS.has(value) ? value : DEFAULT_SAVED_WALK_KEY;

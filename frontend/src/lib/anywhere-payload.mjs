@@ -46,9 +46,12 @@ export function freezeComposeDateIso({ dayOffset = 0, dateIsoOverride = null, no
 
 // Walking-length presets → the same walking_km_target the production planner sends.
 export const WALK_PRESETS = [
-  { key: "short", km: 4, sv: "Kort · ~4 km", en: "Short · ~4 km" },
-  { key: "balanced", km: 6, sv: "Lagom · ~6 km", en: "Balanced · ~6 km" },
-  { key: "long", km: 9, sv: "Lång · ~9 km", en: "Long · ~9 km" },
+  { key: "short", km: 4, sv: "Kort", en: "Short", detailSv: "cirka 4 km", detailEn: "about 4 km", distanceMode: "soft_target" },
+  { key: "balanced", km: 6, sv: "Medel", en: "Medium", detailSv: "cirka 6 km", detailEn: "about 6 km", distanceMode: "soft_target" },
+  { key: "long", km: 9, sv: "Lång", en: "Long", detailSv: "cirka 9 km", detailEn: "about 9 km", distanceMode: "soft_target" },
+  // The numeric value is an internal discovery/reach hint. With no_limit it is
+  // neither a requested walking goal nor a user-agreed distance ceiling.
+  { key: "free", km: 9, sv: "Fritt", en: "Flexible", detailSv: "Låt platserna styra", detailEn: "Let the places lead", distanceMode: "no_limit" },
 ];
 
 export function buildAnywherePayload({
@@ -58,6 +61,7 @@ export function buildAnywherePayload({
   dates,
   preferences = [],
   walkingKmTarget = 6,
+  distanceMode = "soft_target",
   excludedCandidateIds = [],
   pinnedCandidateIds = [],
 } = {}) {
@@ -81,7 +85,7 @@ export function buildAnywherePayload({
     walking_km_target: walkingKmTarget,
     leg_pacing: "balanced",
     preferences,
-    distance_mode: "soft_target",
+    distance_mode: distanceMode === "no_limit" ? "no_limit" : "soft_target",
     budget_tier: "standard",
     ...(!cityKey
       ? {
