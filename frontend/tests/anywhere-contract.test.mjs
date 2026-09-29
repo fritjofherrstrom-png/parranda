@@ -14,6 +14,7 @@ import { buildAnywherePayload, ANYWHERE_PREFERENCES, WALK_PRESETS, isoDateFromOf
 import { LIVE_REFRESH_DELAYS_MS } from "../src/lib/compose-followup.mjs";
 import { routePreferenceCoverage } from "../src/lib/route-context-view.mjs";
 import { limitationNote } from "../src/lib/day-limitations.mjs";
+import { walkingTargetNote } from "../src/lib/walking-target-note.mjs";
 
 const require = createRequire(import.meta.url);
 const decision = require("../../anywhere-render-decision.js");
@@ -67,6 +68,16 @@ test("planner depth: walking presets map to walking_km_target; tomorrow is a rea
   assert.equal(isoDateFromOffset(1, new Date("2026-07-02T12:00:00Z")), "2026-07-03");
   // Month rollover stays correct.
   assert.equal(isoDateFromOffset(1, new Date("2026-07-31T12:00:00Z")), "2026-08-01");
+});
+
+test("a composed short walk visibly explains the published target tradeoff", () => {
+  const verdict = { route_present: true, walking: {
+    status: "shorter_than_requested_band", target_km: 9, estimated_km: 4.5,
+    target_floor_km: 5.4,
+  } };
+  assert.match(walkingTargetNote(verdict, "sv"), /kortare dag/);
+  assert.match(anywherePlannerSource, /walkingTargetNote\(safeResponse\?\.agnostic_route_output_experiment\?\.constraint_negotiation, lang\)/);
+  assert.match(anywherePlannerSource, /\{walkingNote && \(/);
 });
 
 test("start context: a coords anchor ('near me now') sends top-level lat/lng and NO place text", () => {

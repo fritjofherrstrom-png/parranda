@@ -110,6 +110,13 @@ a quality-warning token. Existing 60–118% band and honest short-route reportin
 remain. Exclusions are applied before alternatives are retained; pins are not
 re-searched. Existing promotion and refusal-snapshot ownership remain in force.
 
+The modern planner reads the server's finished `constraint_negotiation.walking`
+verdict. When a published route is below the selected band's floor, it shows the
+chosen target, actual estimated walk and floor in the day itself and says that
+a longer visitable route is unconfirmed. This is a disclosure, not evidence that
+the selector exhausted every possible ordering or that a previous day's stops
+remain visitable after a budget change.
+
 Tests cover negative trust/official-only/closed/out-of-reach/wrong-intent tails,
 context-tier comparisons, corroboration, determinism, provider-call counts,
 public route publication and exclusion, and non-leakage of the private list.
