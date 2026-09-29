@@ -63,11 +63,12 @@ test("reviewed local profile selects two independent event publishers around Sim
       "visit-stockholm-open-api",
       "malmo-municipal-calendar",
       "malmofestivalen-program",
+      "helsinki-region-linked-events",
     ],
   );
-  assert.equal(new Set(feeds.map((feed) => feed.source_identity)).size, 5);
+  assert.equal(new Set(feeds.map((feed) => feed.source_identity)).size, feeds.length);
   assert.ok(feeds.every((feed) => feed.status === "active"));
-  assert.ok(feeds.every((feed) => feed.timezone === "Europe/Stockholm"));
+  assert.ok(feeds.every((feed) => feed.timezone === (feed.id === "helsinki-region-linked-events" ? "Europe/Helsinki" : "Europe/Stockholm")));
   assert.equal(feeds.find((feed) => feed.adapter === "wix_event_sitemap")?.event_path_prefix, "/evenemang-1/");
 
   const env = buildFullDevEnvironment({}, { cacheDir: os.tmpdir() });
@@ -85,6 +86,66 @@ test("reviewed local profile selects two independent event publishers around Sim
     plan.map((source) => source.kind),
     ["sitevision_calendar", "wix_event_sitemap"],
   );
+});
+
+test("reviewed open regional events API covers nearby anchors without becoming a global or city-coded fallback", async () => {
+  const env = buildFullDevEnvironment({}, { cacheDir: os.tmpdir() });
+  const registry = resolveEventFeedRegistry(env);
+  const anchor = { lat: 60.1699, lng: 24.9384 };
+  const plan = buildAnchorEventSourcePlan({ anchor, registry });
+  assert.deepEqual(plan.map((source) => source.id), ["helsinki-region-linked-events"]);
+  assert.equal(plan[0].kind, "linked_events");
+  assert.equal(plan[0].license, "CC-BY 4.0");
+  assert.deepEqual(buildAnchorEventSourcePlan({ anchor: { lat: 60.2055, lng: 24.6559 }, registry }).map((s) => s.id), ["helsinki-region-linked-events"]);
+  assert.equal(buildAnchorEventSourcePlan({ anchor: { lat: 55.7029, lng: 13.1929 }, registry }).length, 0);
+  let requestedUrl;
+  const result = await collectAnchorEvents({
+    anchor, now: "2026-09-25T10:00:00Z", selectedDate: "2026-09-25", registry,
+    venueResolver: async () => { throw new Error("municipality centroid must not be resolved as a venue"); },
+    fetcher: async (url) => {
+      requestedUrl = String(url);
+      return { ok: true, json: async () => ({ data: [{
+        id: "public-gig", name: { en: "Harbour concert" },
+        data_source: "helsinki", publisher: "City of Helsinki", keywords: [],
+        start_time: "2026-09-25T17:00:00Z", end_time: "2026-09-25T19:00:00Z",
+        info_url: { en: "https://events.hel.fi/public-gig" },
+        location: { name: { en: "Harbour Hall" }, position: { coordinates: [24.94, 60.17] } },
+      }, {
+        id: "city-festival", name: { en: "Gallery programme" },
+        data_source: "helsinki", publisher: "City of Helsinki", keywords: [],
+        start_time: "2026-09-25T16:00:00Z", end_time: "2026-09-25T20:00:00Z",
+        info_url: { en: "https://events.hel.fi/city-festival" },
+        location: { name: { en: "Helsinki" }, street_address: null,
+          divisions: [{ type: "muni", name: { en: "Helsinki" } }],
+          position: { coordinates: [24.9375, 60.170833] } },
+      }, {
+        id: "online-class", name: { en: "Online workshop" },
+        data_source: "helsinki", publisher: "City of Helsinki", keywords: [],
+        start_time: "2026-09-25T17:00:00Z", end_time: "2026-09-25T19:00:00Z",
+        location: { id: "helsinki:internet", name: { en: "Internet" },
+          description: { en: "Event only on the internet." },
+          position: { coordinates: [24.941486, 60.170576] } },
+      }] }) };
+    },
+  });
+  const query = new URL(requestedUrl);
+  assert.equal(query.hostname, "api.hel.fi");
+  assert.equal(query.searchParams.get("start"), "2026-09-25T10:00:00.000Z");
+  assert.equal(query.searchParams.get("include"), "location");
+  assert.equal(query.searchParams.get("dwithin_metres"), "3000");
+  assert.equal(result.acquisition.source_health.accepted_event_count, 2, JSON.stringify({ feeds: result.feeds, acquisition: result.acquisition }));
+  assert.deepEqual(result.tonight.map((event) => event.title).sort(), ["Gallery programme", "Harbour concert"]);
+  const concert = result.tonight.find((event) => event.title === "Harbour concert");
+  const programme = result.tonight.find((event) => event.title === "Gallery programme");
+  assert.equal(concert.route_eligible, true);
+  assert.equal(concert.license, "CC-BY 4.0");
+  assert.equal(programme.route_eligible, false);
+  assert.equal(programme.source_scope_verified, true);
+  assert.equal(programme.geographic_relevance, "source_scope");
+  assert.equal(programme.lat, null);
+  assert.equal(programme.lng, null);
+  assert.equal(result.acquisition.venue_resolution.attempted_count, 0);
+  assert.ok(result.acquisition.rejection_summary.some((row) => row.reason === "virtual_event_not_local" && row.count === 1));
 });
 
 test("reviewed local profile selects the official Stockholm API without a city branch", () => {

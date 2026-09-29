@@ -136,6 +136,14 @@ function fuseAndBoundEventEvidence(
 
   for (const event of Array.isArray(events) ? events : []) {
     if (!event || typeof event !== "object") continue;
+    if (event.source_location_scope === "virtual") {
+      rejected.push({
+        id: stableEventId(event),
+        source_provider_id: event.source_provider_id || null,
+        reason: "virtual_event_not_local",
+      });
+      continue;
+    }
     if (!hasCoordinates(event)) {
       fusable.push(event);
       continue;
