@@ -11,6 +11,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
+const { weaveEveningEvent } = require("../server/candidates/evening-event-weave");
 const { weaveEveningEventRouteStop, MAX_EVENT_LEG_KM } = require("../server/candidates/event-route-stop-weave");
 
 // ~0.9 km east of stop C (at 41.9,12.51): a genuine evening hop.
@@ -188,6 +189,81 @@ test("a selected-day occurrence cannot be woven into a different route date", as
   });
   assert.equal(woven.applied, false);
   assert.ok(woven.blockers.includes("event_date_mismatch"));
+});
+
+// 12 July 2026 in Europe/Stockholm is UTC+2: the evening begins at 15:00Z.
+const MORNING_MARKET = {
+  ...NEAR_EVENT,
+  id: "ev-market",
+  title: "Morning market",
+  starts_at: "2026-07-12T08:00:00Z",
+  ends_at: "2026-07-12T13:00:00Z",
+  time_window: { kind: "continuous" },
+  timing_relevance: "now",
+  cultural_tier: "cultural",
+  salience_score: 7,
+  source_url: "https://example.org/ev-market",
+};
+
+test("a daytime event that closes before the evening is never woven as the evening stop", async () => {
+  const result = agnosticResult();
+  const placeStructure = structureWith(MORNING_MARKET);
+  const woven = await weaveEveningEventRouteStop({ result, placeStructure });
+  assert.equal(woven.applied, false);
+  assert.deepEqual(woven.blockers, ["event_not_in_evening"]);
+  assert.equal(woven.result, result, "unchanged input returned by reference");
+  assert.equal(woven.placeStructure, placeStructure);
+  assert.equal(woven.interrupt, undefined);
+
+  // Refused before walking is measured: even a far daytime event produces no
+  // suggestion to recompose the evening around it.
+  const far = await weaveEveningEventRouteStop({ result, placeStructure: structureWith({ ...MORNING_MARKET, lng: 12.546 }) });
+  assert.deepEqual(far.blockers, ["event_not_in_evening"]);
+  assert.equal(far.interrupt, undefined);
+
+  // A start-only daytime row states no duration that reaches the evening.
+  const startOnly = await weaveEveningEventRouteStop({ result, placeStructure: structureWith({ ...MORNING_MARKET, ends_at: null }) });
+  assert.deepEqual(startOnly.blockers, ["event_not_in_evening"]);
+});
+
+test("an event on now that lasts past 17:00 local is woven as the evening stop", async () => {
+  const running = { ...MORNING_MARKET, id: "ev-running", starts_at: "2026-07-12T12:00:00Z", ends_at: "2026-07-12T19:00:00Z" };
+  const woven = await weaveEveningEventRouteStop({ result: agnosticResult(), placeStructure: structureWith(running) });
+  assert.equal(woven.applied, true, `blockers: ${woven.blockers}`);
+  const last = woven.result.days[0].primary_route.main_stops.at(-1);
+  assert.equal(last.event_id, "ev-running");
+  assert.equal(last.daypart, "evening");
+  assert.equal(last.ends_at, "2026-07-12T19:00:00Z");
+});
+
+test("a first-ranked daytime event on now loses the woven evening stop to the evening event", async () => {
+  const jazz = {
+    ...MORNING_MARKET,
+    id: "ev-jazz",
+    title: "Jazz på kajen",
+    starts_at: NEAR_EVENT.starts_at,
+    ends_at: NEAR_EVENT.ends_at,
+    timing_relevance: "tonight",
+    salience_score: 6,
+    source_url: NEAR_EVENT.source_url,
+  };
+  const placeStructure = weaveEveningEvent(
+    { provenance: "agnostic_anchor", district_day: { areas: [] } },
+    { tonight: [MORNING_MARKET, jazz], this_week: [], browse: {} },
+    { selectedDate: "2026-07-12" },
+  );
+  const woven = await weaveEveningEventRouteStop({ result: agnosticResult(), placeStructure });
+  assert.equal(woven.applied, true, `blockers: ${woven.blockers}`);
+  const stops = woven.result.days[0].primary_route.main_stops;
+  assert.deepEqual(stops.filter((s) => s.is_live_event).map((s) => s.event_id), ["ev-jazz"]);
+  assert.equal(stops.at(-1).daypart, "evening");
+  assert.equal(woven.placeStructure.district_day.evening_event.id, "ev-jazz");
+});
+
+test("a row without a trusted venue clock is left to the anchor gate", async () => {
+  const clockless = { ...NEAR_EVENT, timezone: null, time_window: null, occurrence_date: null };
+  const woven = await weaveEveningEventRouteStop({ result: agnosticResult(), placeStructure: structureWith(clockless) });
+  assert.equal(woven.applied, true, `blockers: ${woven.blockers}`);
 });
 
 test("no geocoded evening event, coordless stops, or missing route → unchanged", async () => {

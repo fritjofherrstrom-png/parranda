@@ -15,6 +15,10 @@
  *   - Only a day the agnostic engine actually produced is touched (the day-level
  *     markers, the same signal anywhere-render-decision trusts). A fallback
  *     city's route NEVER gets the typed place's event.
+ *   - The stop is labelled `daypart: "evening"`, so an event whose stated window
+ *     closes before the evening of its day is refused — before any walk or
+ *     interrupt is claimed. Routes carry daypart bands, not clock arrival
+ *     times, so this label, not an invented ETA, is the timing claim checked.
  *   - The extended stop order re-runs the EXISTING walking validator
  *     (validateAgnosticWalkingOrder) in the supplied order — no reordering, no
  *     optimizing — and the new leg must be a short evening hop
@@ -32,6 +36,7 @@
 
 const { validateAgnosticWalkingOrder } = require("../planner/agnostic-route-walking-validation");
 const { classifyEventSourceLink } = require("../pulse-sources/event-source-link");
+const { eventReachesEvening } = require("./evening-event-weave");
 
 // A woven evening stop must be a short hop from where the day already ends —
 // beyond this the event stays an anchor (real, sourced, but with no walk claim).
@@ -78,6 +83,11 @@ async function weaveEveningEventRouteStop({ result, placeStructure, walkingRoute
   if (!event || !finiteCoord(event) || !(event.title || event.id)) return unchanged(["no_geocoded_evening_event"]);
   if (event.occurrence_date && day.date && event.occurrence_date !== day.date) {
     return unchanged(["event_date_mismatch"]);
+  }
+  // A row with no trusted venue clock cannot be judged here (null) and stays
+  // with the anchor gate, which requires that clock for every selected day.
+  if (eventReachesEvening(event, event.occurrence_date) === false) {
+    return unchanged(["event_not_in_evening"]);
   }
   if (!route || !Array.isArray(route.main_stops)) return unchanged(["no_route"]);
 

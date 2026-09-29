@@ -385,6 +385,17 @@ validated produce no suggestion. The compact interrupt preserves event timing,
 source attribution, and measured walking impact; public payload fields cannot
 mint one.
 
+The woven stop is labelled `daypart: "evening"`, so the weave first checks that
+claim: an event whose stated window ends at or before 17:00 local on its day,
+or a start-only event that begins earlier, is refused as `event_not_in_evening`
+with no stop and no suggestion. A row without a trusted venue clock is left to
+the selected-day anchor gate, which requires one. The weave deliberately does
+not compare the event's end with an estimated arrival at the last stop: routes
+carry daypart bands, not scheduled clock times, and such an estimate would need
+invented dwell times and, for a future day, an invented start. A same-day event
+that ends while a day composed late is still walking towards it is therefore
+not caught yet.
+
 ## Product bar
 
 Parranda should eventually feel like:
