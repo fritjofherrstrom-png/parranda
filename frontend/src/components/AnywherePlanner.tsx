@@ -1139,8 +1139,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     [liveEvents, routeStops],
   );
   const pulseState = useMemo(
-    () => (liveRefreshExhausted && liveEvents?.pending ? "unavailable" : pulseHealthState(liveEvents, pulseBuckets)),
-    [liveEvents, pulseBuckets, liveRefreshExhausted],
+    () => (liveRefreshExhausted && liveEvents?.pending ? "unavailable" : pulseHealthState(liveEvents, pulseBuckets, split.woven)),
+    [liveEvents, pulseBuckets, split.woven, liveRefreshExhausted],
   );
   const liveFailure = useMemo(() => liveSourceFailure(liveEvents, pulseBuckets), [liveEvents, pulseBuckets]);
   // A failed source is neither "still loading" nor an empty calendar: say
@@ -1182,8 +1182,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     [sheetLiveEvents, routeStops],
   );
   const sheetPulseState = useMemo(
-    () => pulseHealthState(sheetLiveEvents, sheetBuckets),
-    [sheetLiveEvents, sheetBuckets],
+    () => pulseHealthState(sheetLiveEvents, sheetBuckets, split.woven),
+    [sheetLiveEvents, sheetBuckets, split.woven],
   );
   const sheetFailure = useMemo(() => liveSourceFailure(sheetLiveEvents, sheetBuckets), [sheetLiveEvents, sheetBuckets]);
   const sheetSources = useMemo(() => pulseSourceLine(sheetLiveEvents), [sheetLiveEvents]);
@@ -2704,7 +2704,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               type="button"
               ref={liveSheetTriggerRef}
               onClick={() => {
-                setLiveSheetTime(pulseBuckets.tonight.length > 0 ? "tonight" : "week");
+                setLiveSheetTime(pulseBuckets.tonight.length > 0 || split.woven.length > 0 ? "tonight" : "week");
                 setLiveSheetOpen(true);
                 // "Couldn't verify" + an available anchor: opening the sheet IS
                 // the "check again" — fire a fresh around-place query (its own

@@ -710,6 +710,19 @@ test("a closed-compound title earns the same Live lift as its whole-word head", 
   assert.equal(ranked.tonight[1].preference_match, "none");
 });
 
+test("distinct stated sessions at one venue remain separate Live recommendations", () => {
+  const row = (id, starts_at) => ({ id, title: "Harbour jazz", place: "The Hall",
+    starts_at, salience_score: 5, cultural_tier: "cultural" });
+  const ranked = rankCollectedEventsForPreferences({ coverage: "covered", tonight: [], this_week: [],
+    _rankable_events: { tonight: [
+      row("early", "2026-09-25T18:00:00Z"),
+      row("late", "2026-09-25T20:00:00Z"),
+      row("early-copy", "2026-09-25T18:00:00Z"),
+    ], this_week: [] } }, []);
+  assert.deepEqual(ranked.tonight.map((event) => event.id), ["early", "late"]);
+  assert.equal(ranked.browse.tonight.ranked_event_count, 2);
+});
+
 test("Live keeps six ranked highlights and exposes the remaining accepted events separately", () => {
   const views = Array.from({ length: 30 }, (_, index) => ({
     id: `event-${String(index).padStart(2, "0")}`,

@@ -133,6 +133,27 @@ test('accepted events that surfaced keep the per-source hit count', async (t) =>
   assert.match(sheet, /Source health: 1\/1 responded · 1 with events/);
 });
 
+test('a route-woven event is not described as no verified events in the Live sheet', async (t) => {
+  const event = { id: 'concert', title: 'Harbour concert', timezone: 'Europe/Stockholm',
+    starts_at: '2026-09-25T17:00:00Z', source_label: 'Official calendar' };
+  const result = day(live({ status: 'healthy', result: 'events_found', selected_source_count: 1,
+    responding_source_count: 1, accepted_event_count: 1, surfaced_event_count: 1 },
+  { tonight: [event] }));
+  result.days[0].primary_route.main_stops.push({ id: 'live-concert', event_id: 'concert', is_live_event: true,
+    label: 'Harbour concert', lat: 60.174, lng: 24.946 });
+  const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' });
+  t.after(() => h.unmount());
+  await h.clock.advance(500);
+  await h.fetchMock.respond(h.fetchMock.pending()[0], result);
+  await h.clock.advance(50);
+  assert.match(h.text(), /Harbour concert · Included in today's route/);
+  assert.doesNotMatch(h.text(), /The sources responded but list no events/);
+  await click(h, button(h, /Explore live/));
+  const sheet = sheetText(h);
+  assert.match(sheet, /Harbour concert · Included in today's route/);
+  assert.doesNotMatch(sheet, /Nothing verified/);
+});
+
 test('while waiting, the Live sheet does not print responded counts that read as a failure', async (t) => {
   const h = await composed(live(PENDING, { pending: true, feeds: [{ id: 'calendar', label: 'Official calendar', status: 'pending' }] }));
   t.after(() => h.unmount());

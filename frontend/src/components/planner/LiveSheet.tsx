@@ -287,9 +287,11 @@ export default function LiveSheet({
           ) : (
             <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
               <p className="text-sm leading-relaxed text-parranda-ink/80">
-                {liveSheetTime === "tonight"
-                  ? t(`Inget verifierat ${liveDayLabel} ${scopePhrase}.`, `Nothing verified ${liveDayLabel} ${scopePhrase}.`)
-                  : t(`Inget listat under följande 7 dagar ${scopePhrase}.`, `Nothing listed in the following 7 days ${scopePhrase}.`)}
+                {liveSheetTime === "tonight" && liveSheetScope !== "near_me" && wovenNames.length > 0
+                  ? t("Inga ytterligare verifierade händelser listade här.", "No additional verified events listed here.")
+                  : liveSheetTime === "tonight"
+                    ? t(`Inget verifierat ${liveDayLabel} ${scopePhrase}.`, `Nothing verified ${liveDayLabel} ${scopePhrase}.`)
+                    : t(`Inget listat under följande 7 dagar ${scopePhrase}.`, `Nothing listed in the following 7 days ${scopePhrase}.`)}
                 {liveSheetTime === "tonight" && sheetBuckets.thisWeek.length > 0 && (
                   <strong className="text-parranda-ink">
                     {" "}

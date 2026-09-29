@@ -470,19 +470,24 @@ function isPulseDisplayEvent(event, now) {
   return boundedDateOnlyRange(startsOn, endsOn, MAX_PULSE_DAILY_RANGE_DAYS);
 }
 
-// Collapse duplicate occurrences (recurring series surface the same title/venue
-// repeatedly) — keep the first (already salience-ranked) per id, then per
-// title+venue.
+// Collapse the same occurrence across sources, not every session in a series.
+// Different source-stated starts prove distinct sessions; an unknown start does
+// not prove that and remains conservatively deduped by title + venue.
 function dedupeViews(views) {
-  const seen = new Set();
+  const seenIds = new Set();
+  const byTitleVenue = new Map();
   const out = [];
-  for (const v of views) {
-    const key = eventViewIdentity(v);
-    const titleKey = `${(v.title || "").toLowerCase()}|${v.place || ""}`;
-    if (seen.has(key) || seen.has(titleKey)) continue;
-    seen.add(key);
-    seen.add(titleKey);
-    out.push(v);
+  for (const view of views) {
+    const id = view.id == null ? null : String(view.id);
+    if (id && seenIds.has(id)) continue;
+    const titleVenue = `${String(view.title || "").toLowerCase()}|${view.place || ""}`;
+    const start = view.starts_at || view.starts_on || view.time_window?.starts_at || view.time_window?.starts_on || null;
+    const seenStarts = byTitleVenue.get(titleVenue) || [];
+    if (seenStarts.some((previous) => !previous || !start || previous === start)) continue;
+    if (id) seenIds.add(id);
+    seenStarts.push(start);
+    byTitleVenue.set(titleVenue, seenStarts);
+    out.push(view);
   }
   return out;
 }
