@@ -114,6 +114,16 @@ The correction is generic; there is no municipality, city or hostname rule:
   16 juli", or ISO dates). Clocks may accompany any of them, with "kl" allowed.
   Any other word, such as "varannan", "utom" or numeric "2/7", fails the whole
   statement.
+- A recurrence section may open with one closed lead-in, "Detta evenemang äger
+  rum", which the Sitevision template prints before the rule. It is read only
+  as that whole phrase and only as the first words. It states no days: the rest
+  must be one complete statement, so the lead-in alone stays a period. Its
+  words elsewhere, the phrase in mid-statement, and the phrase in a date or
+  time label still fail. This is a grammar rule, not a host or municipality
+  condition.
+- "Varannan" (every other week) stays a period with or without the lead-in:
+  the text does not say which weeks, and the range start is no evidence of the
+  phase.
 - The result becomes `period` when a listed date falls outside the stated range,
   clocks conflict, a weekday rule is open-ended or spans more than 120 days, the
   list exceeds 60 dates, or a stated "dagligen" is contradicted. One explicitly
@@ -183,6 +193,19 @@ egress policy denied the calendar host. The fixture therefore follows the
 adapter's existing anchor contract and the reviewed defect's described shape.
 Fixtures are not provider or Pi acceptance.
 
+Real pages were captured later, on 2026-09-26
+(`tests/fixtures/sitevision-2026-09-26/`). Four recurring rows state their rule
+after the lead-in, for example "Detta evenemang äger rum varje måndag och
+torsdag". Before the lead-in was read, all four stayed periods. Now the three
+weekly rules become occurrences inside their stated ranges (70–105 days, within
+the 120-day bound), and the "varannan tisdag" row stays a period. With selected
+day 2026-09-26, the weekly rows list their stated days among the following
+seven days. With Monday 2026-09-28, the two Monday rows appear under the
+selected day and the period row does not. All four remain
+`route_eligible: false`: each series spans more than the 14-day happening
+bound, so it is Live context, not a route stop. A captured snapshot is evidence
+for its day, not Pi acceptance.
+
 For the other three adapters, per-adapter tests and one end-to-end test each
 select days through `collectAnchorEvents`. These fail on `82e28db`, the head
 with only the Sitevision fix, and pass after. The reviewed public-events API
@@ -217,6 +240,10 @@ Remaining gaps:
   the existing contract.
 - Recurrence phrased outside the closed grammars degrades to a period rather
   than being guessed.
+- Every-other-week rules ("varannan tisdag") stay periods: the source does not
+  say which weeks.
+- Only the observed Swedish lead-in is read. Other template wording, such as an
+  English page's, stays a period until real pages show it.
 
 ## Independent review corrections
 
