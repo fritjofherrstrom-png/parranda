@@ -1637,6 +1637,8 @@ test("one rhythm interest can compose across the wider local aperture without a 
     opening_hours: "Mo-Su off" });
   records.push(externalRecord("off-theme", "Unrequested Museum", "museum", 41.935, 12.49, ["kultur"]));
   const server = buildApp({ openDataLoader: makeLoader(records),
+    weatherProvider: async () => ({ condition: "sun", maxTemp: 20,
+      timezone_resolution: { timezone: "Europe/Rome", timezone_source: "weather_provider_auto", utc_offset_seconds: 7200 } }),
     clock: () => new Date("2026-09-30T08:00:00Z") }).listen(0);
   try {
     for (const dayRhythm of ["calm", "balanced", "full", "free"]) {

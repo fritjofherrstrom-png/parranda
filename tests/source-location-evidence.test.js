@@ -27,7 +27,7 @@ test('OSM source-owned street and number survive candidate ingestion without bec
 
 test('a free-rhythm composed day has no kilometer-fit verdict and keeps its measured walk',async()=>{
   const {composeAgnosticRouteOutput}=require('../server/planner/agnostic-route-output');
-  const rows=[shop(1,55.4298,13.8214,{'addr:street':'Main','addr:housenumber':'1',website:'https://example.test/one',opening_hours:'Mo-Fr 11:00-18:00'}),
+  const rows=[shop(20,55.434,13.826,{name:'Another Reuse Shop',website:'https://example.test/two',opening_hours:'Mo-Fr 11:00-18:00'}),shop(1,55.4298,13.8214,{'addr:street':'Main','addr:housenumber':'1',website:'https://example.test/one',opening_hours:'Mo-Fr 11:00-18:00'}),
     ...[10,11,12].map((id,index)=>mapOsmElement({type:'node',id,lat:55.43+index*.002,lon:13.82+index*.003,tags:{name:`Place ${id}`,wikidata:`Q10${id}`,tourism:index===0?'museum':undefined,amenity:index===1?'restaurant':'cafe'}}))];
   const output=await composeAgnosticRouteOutput({coords:origin,baselineResult:{days:[]},externalRequested:true,
     openDataLoader:async()=>rows,preferences:['second_hand'],date,todayIsoDate:()=> '2026-09-29',
@@ -42,7 +42,7 @@ test('a free-rhythm composed day has no kilometer-fit verdict and keeps its meas
 
 test('calm rhythm shapes day density without a kilometer target',async()=>{
   const {composeAgnosticRouteOutput}=require('../server/planner/agnostic-route-output');
-  const rows=[shop(1,55.4298,13.8214,{'addr:street':'Main','addr:housenumber':'1',website:'https://example.test/one',opening_hours:'Mo-Fr 11:00-18:00'}),
+  const rows=[shop(20,55.434,13.826,{name:'Another Reuse Shop',website:'https://example.test/two',opening_hours:'Mo-Fr 11:00-18:00'}),shop(1,55.4298,13.8214,{'addr:street':'Main','addr:housenumber':'1',website:'https://example.test/one',opening_hours:'Mo-Fr 11:00-18:00'}),
     ...[10,11,12].map((id,index)=>mapOsmElement({type:'node',id,lat:55.43+index*.002,lon:13.82+index*.003,tags:{name:`Place ${id}`,wikidata:`Q10${id}`,tourism:index===0?'museum':undefined,amenity:index===1?'restaurant':'cafe'}}))];
   const output=await composeAgnosticRouteOutput({coords:origin,baselineResult:{days:[]},externalRequested:true,
     openDataLoader:async()=>rows,preferences:['second_hand'],date,todayIsoDate:()=> '2026-09-29',
@@ -73,7 +73,7 @@ test('the published day does not route to an addressless namesake when a stronge
     {id:13,lat:55.431,lon:13.822,tags:{name:'Cafe',amenity:'cafe',wikidata:'Q10013'}},
   ].map(element=>mapOsmElement({type:'node',...element}));
   const result=await composeAgnosticRouteOutput({coords:origin,baselineResult:{days:[]},externalRequested:true,
-    openDataLoader:async()=>[old,addressed,...support],preferences:['second_hand'],date,
+    openDataLoader:async()=>[old,addressed,shop(20,55.434,13.826,{name:'Another Reuse Shop',website:'https://example.test/two',opening_hours:'Mo-Fr 11:00-18:00'}),...support],preferences:['second_hand'],date,
     todayIsoDate:()=> '2026-09-29',weatherProvider:async()=>null,walkingKmTarget:6,
     anchorMode:'coordinates',distanceMode:'soft_target',synthesizeVia:'engine'});
   const stops=result.result.days[0]?.primary_route?.main_stops || [];
