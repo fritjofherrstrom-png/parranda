@@ -27,6 +27,7 @@
 
 const { normalizePlaceCandidate, validatePlaceCandidate } = require("./contract");
 const { normalizeOpeningHours } = require("./opening-hours");
+const { normalizeSourceNameAliases } = require("./source-name-aliases");
 const { createEvidence, SOURCE_FAMILIES } = require("../candidates/evidence");
 
 const EXTERNAL_OPEN_PROVIDER_META = Object.freeze({
@@ -160,6 +161,8 @@ function mapRecordToCandidate(cityConfig, record, observedAt, index) {
   base.brand = typeof record.brand === "string" && record.brand.trim() ? record.brand.trim() : null;
   const website = safeHttpUrl(record.website);
   if (website) base.website = website;
+  const sourceNameAliases = normalizeSourceNameAliases(record.source_name_aliases);
+  if (sourceNameAliases.length) base.source_name_aliases = sourceNameAliases;
   const sourceAddress = record.source_address;
   if (sourceAddress && typeof sourceAddress.street === 'string' &&
       typeof sourceAddress.house_number === 'string' &&
