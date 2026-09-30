@@ -32,6 +32,7 @@
 const { createSourceCache } = require("./source-cache");
 const { createBackgroundSource, SOURCE_COMPLETION } = require("./background-source");
 const { createWikidataSource } = require("./wikidata-source");
+const { normalizeSourceNameAliases } = require("./source-name-aliases");
 const { createOvertureSource } = require("./overture-source");
 const {
   createCachedVisitSwedenNapiSource,
@@ -1116,6 +1117,10 @@ function mapOsmElement(element) {
     !/[\r\n]/.test(street + houseNumber)
     ? { street, house_number: houseNumber } : null;
   const openingHours = normalizeOpeningHours(tags.opening_hours);
+  const sourceNameAliases = normalizeSourceNameAliases(
+    [tags.alt_name, tags.official_name].filter((value) => typeof value === "string")
+      .flatMap((value) => value.split(";")),
+  ).filter((value) => value !== name);
   const operational = extractOsmOperationalMetadata(tags, { website, openingHours });
 
   return {
@@ -1135,6 +1140,7 @@ function mapOsmElement(element) {
     // exclude a candidate when trusted local-time evaluation proves no overlap.
     ...(website ? { website } : {}),
     ...(sourceAddress ? { source_address: sourceAddress } : {}),
+    ...(sourceNameAliases.length ? { source_name_aliases: sourceNameAliases } : {}),
     ...(openingHours ? { opening_hours: openingHours } : {}),
   };
 }
