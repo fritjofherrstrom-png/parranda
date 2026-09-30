@@ -343,7 +343,7 @@ export function pulseHealthState(liveEvents, buckets, wovenStops = []) {
   const empty = (!buckets || (buckets.tonight.length === 0 && buckets.thisWeek.length === 0)) &&
     !(Array.isArray(wovenStops) && wovenStops.some((stop) => stop?.is_live_event === true));
 
-  if (status === "unavailable") return "unavailable";
+  if (status === "unavailable") return empty ? "unavailable" : "partial";
   if (status === "partial") return empty ? "unavailable" : "partial";
   if (!empty) return "ok";
   // Empty with healthy (or unknown legacy) collection: distinguish a genuinely

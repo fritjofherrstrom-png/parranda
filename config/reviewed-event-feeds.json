@@ -4,7 +4,12 @@
     "label": "Simrishamns kommuns evenemangskalender",
     "adapter": "sitevision_calendar",
     "endpoint": "https://www.simrishamn.se/evenemangskalender",
-    "bbox": [13.75, 55.35, 14.65, 55.85],
+    "bbox": [
+      13.75,
+      55.35,
+      14.65,
+      55.85
+    ],
     "timezone": "Europe/Stockholm",
     "source_language": "sv",
     "source_tier": "official",
@@ -23,7 +28,12 @@
     "label": "Visit Ystad Österlen",
     "adapter": "wix_event_sitemap",
     "endpoint": "https://www.visitystadosterlen.se/sitemap.xml",
-    "bbox": [13.5, 55.3, 14.7, 55.85],
+    "bbox": [
+      13.5,
+      55.3,
+      14.7,
+      55.85
+    ],
     "timezone": "Europe/Stockholm",
     "source_language": "sv",
     "source_tier": "verified",
@@ -44,16 +54,25 @@
     "label": "Visit Stockholm",
     "adapter": "localized_events_api",
     "endpoint": "https://api.visitstockholm.com/api/public-v1/events/",
-    "bbox": [17.6, 59.15, 18.45, 59.6],
+    "bbox": [
+      17.6,
+      59.15,
+      18.45,
+      59.6
+    ],
     "timezone": "Europe/Stockholm",
     "source_language": "sv",
-    "supported_languages": ["sv", "en"],
+    "supported_languages": [
+      "sv",
+      "en"
+    ],
     "source_tier": "official",
     "confidence": "medium",
     "source_family": "official_tourism_open_api",
     "source_identity": "visitstockholm.com",
     "license": "CC-BY 4.0",
     "page_size": 100,
+    "max_pages": 10,
     "status": "active",
     "runtime_policy": "bounded_refresh",
     "reviewed_at": "2026-07-20",
@@ -64,7 +83,12 @@
     "label": "Malmö stads evenemangskalender",
     "adapter": "sitevision_calendar",
     "endpoint": "https://malmo.se/evenemangskalender",
-    "bbox": [12.7171426, 55.4805867, 13.151762, 55.6797699],
+    "bbox": [
+      12.7171426,
+      55.4805867,
+      13.151762,
+      55.6797699
+    ],
     "timezone": "Europe/Stockholm",
     "source_language": "sv",
     "source_tier": "official",
@@ -79,31 +103,16 @@
     "review_scope": "official public calendar factual event atoms with source attribution; no editorial descriptions or images"
   },
   {
-    "id": "malmofestivalen-program",
-    "label": "Malmöfestivalens officiella program",
-    "adapter": "embedded_program_rsc",
-    "endpoint": "https://www.malmofestivalen.se/program",
-    "bbox": [12.7171426, 55.4805867, 13.151762, 55.6797699],
-    "timezone": "Europe/Stockholm",
-    "source_language": "sv",
-    "source_tier": "official",
-    "confidence": "medium",
-    "source_family": "official_municipal_calendar",
-    "source_identity": "malmofestivalen.se",
-    "event_path_prefix": "/program/",
-    "page_size": 250,
-    "horizon_days": 7,
-    "status": "active",
-    "runtime_policy": "bounded_refresh",
-    "reviewed_at": "2026-08-11",
-    "review_scope": "official public server-rendered program atoms with source attribution; no editorial descriptions or images"
-  },
-  {
     "id": "helsinki-region-linked-events",
     "label": "Linked Events Helsinki API",
     "adapter": "linked_events",
     "endpoint": "https://api.hel.fi/linkedevents/v1/event/",
-    "bbox": [24.4, 60.1, 25.5, 60.5],
+    "bbox": [
+      24.4,
+      60.1,
+      25.5,
+      60.5
+    ],
     "timezone": "Europe/Helsinki",
     "source_language": "fi",
     "source_tier": "official",

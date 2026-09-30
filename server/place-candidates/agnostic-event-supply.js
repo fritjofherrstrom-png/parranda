@@ -2,6 +2,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { createHash } = require("node:crypto");
 
 /**
  * Agnostic live-event supply — "what's alive near here, right now".
@@ -254,6 +255,9 @@ function normalizeEventFeedRow(f, index = 0) {
     sitemap_limit: Number.isFinite(Number(f.sitemap_limit))
       ? Math.max(1, Math.floor(Number(f.sitemap_limit)))
       : null,
+    max_pages: Number.isFinite(Number(f.max_pages))
+      ? Math.max(1, Math.min(10, Math.floor(Number(f.max_pages))))
+      : 10,
     page_size: Number.isFinite(Number(f.page_size))
       ? Math.max(1, Math.floor(Number(f.page_size)))
       : null,
@@ -823,10 +827,12 @@ async function collectAnchorEvents({
   now = null,
   date = null,
   selectedDate = null,
+  time = "tonight",
   preferences = [],
   scope = null,
   registry,
   fetcher,
+  sourceCollectionCache = null,
   radiusM,
   timeoutMs = 15000,
   globalKey = null,
@@ -885,6 +891,7 @@ async function collectAnchorEvents({
         startParam: selectedDate ? sourceWindowStart(selectedDate, source.timezone, nowDate) : startParam,
         selectedDate,
         fetcher,
+        sourceCollectionCache,
         radiusM: effectiveRadiusM,
         timeoutMs,
         globalKey,
@@ -916,7 +923,7 @@ async function collectAnchorEvents({
   let outOfPeriodCount = 0;
   for (const event of normalizedEvidence) {
     const bucket = nowDate ? liveEventPeriodBucket(event, { selectedDate, nowDate }) : "this_week";
-    if (bucket) periodRank.set(event, bucket === "tonight" ? 0 : 1);
+    if (bucket) periodRank.set(event, bucket === (time === "this_week" ? "this_week" : "tonight") ? 0 : 1);
     else outOfPeriodCount += 1;
   }
   const inPeriodEvidence = normalizedEvidence.filter((event) => periodRank.has(event));
@@ -924,7 +931,7 @@ async function collectAnchorEvents({
   // A bounded server-owned resolver may recover source-backed venue geometry.
   // Public payload cannot inject this seam; ambiguous, weak or out-of-radius
   // results remain mapless and are rejected by the unchanged fusion gate below.
-  // The requested day's rows are looked up before the following days'.
+  // The active Live time bucket gets first use of the bounded lookup budget.
   const venueResolution = await resolveEventVenueGeometry(
     inPeriodEvidence.slice().sort((left, right) =>
       periodRank.get(left) - periodRank.get(right) || compareVenueResolutionPriority(left, right)),
@@ -1147,6 +1154,7 @@ async function collectEventSource({
   startParam,
   selectedDate,
   fetcher,
+  sourceCollectionCache,
   radiusM,
   timeoutMs,
   globalKey,
@@ -1185,7 +1193,17 @@ async function collectEventSource({
   }
 
   try {
-    const collected = await provider.create({ key: null }).collect({ date: startParam });
+    const collect = () => provider.create({ key: null }).collect({ date: startParam });
+    // This reviewed API has no request-time geographic/date filter. Cache its
+    // bounded source snapshot once; each Live view still applies its own clock,
+    // trusted geometry and period gates. Different locations/time tabs should
+    // not download the same nine pages again. Full descriptor binds revisions.
+    const snapshotKey = createHash("sha256").update(JSON.stringify(source)).digest("hex");
+    const collected = source.adapter === "localized_events_api" && sourceCollectionCache
+      ? await sourceCollectionCache.get(snapshotKey, collect, {
+          shouldStore: value => ["ok", "empty"].includes(value?.collection_status?.status),
+        })
+      : await collect();
     const raw = Array.isArray(collected && collected.time_sensitive_events) ? collected.time_sensitive_events : [];
     const outcome = normalizeDirectCollectionOutcome(collected?.collection_status, raw.length);
     return {
@@ -1289,6 +1307,7 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs 
       sourceLanguage: source.source_language || undefined,
       supportedLanguages: source.supported_languages || undefined,
       limit: source.page_size || undefined,
+      maxPages: source.max_pages || 10,
     });
   }
   if (adapter === "embedded_program_rsc") {
@@ -1400,8 +1419,9 @@ function normalizeDirectCollectionOutcome(outcome, eventRows) {
  * `({anchor, now, preferences}) => Promise<result>`
  * bound to the env-resolved registry, using global fetch.
  */
-// Coarse cache key: ~1 km anchor bucket + hour bucket (events are time-sensitive,
-// so the window must not be stale, but a fresh request a minute later must hit).
+// Coordinate-bounded pools cannot be shared across kilometre-wide cells: an
+// event rejected near the first cell edge may be nearby at the other edge.
+// Use metre precision plus hour/period/radius; hash to avoid disk-name truncation.
 function eventCacheKey(
   anchor,
   now,
@@ -1409,16 +1429,18 @@ function eventCacheKey(
   radiusM = DEFAULT_RADIUS_M,
   spatialScope = null,
   selectedDate = null,
+  time = "tonight",
 ) {
-  const lat = Number(anchor.lat).toFixed(2);
-  const lng = Number(anchor.lng).toFixed(2);
+  const lat = Number(anchor.lat).toFixed(5);
+  const lng = Number(anchor.lng).toFixed(5);
   const hour = (now ? new Date(now) : new Date(0)).toISOString().slice(0, 13);
   const sources = (Array.isArray(sourceIds) ? sourceIds : [])
     .map(String)
     .sort()
     .join(",");
   const radius = Math.min(MAX_EVENT_COLLECTION_RADIUS_M, Math.max(100, Math.round(Number(radiusM) || DEFAULT_RADIUS_M)));
-  return `${lat},${lng}:${hour}:${radius}:${spatialScopeCacheKey(spatialScope)}:${sources}:${selectedDate || "current"}`;
+  return createHash("sha256").update(JSON.stringify([lat, lng, hour, radius,
+    spatialScopeCacheKey(spatialScope), sources, selectedDate || "current", time])).digest("hex");
 }
 
 function sourceIdentityForUrl(value) {
@@ -1475,7 +1497,8 @@ const EVENT_CACHE_TTL_MS = 20 * 60 * 1000; // 20 min — time-sensitive, but reu
 const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a route
 // v6 excludes v5 pools truncated by midnight-gap and global-window bugs.
 // v7 excludes recurring ranges that v6 normalized as every-day daily windows.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v7";
+// v8 refreshes partial first-page pools and separates active-period lookup budgets.
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v8";
 
 // A failed refresh is a finished answer, not "still loading". It is held for a
 // short, bounded time so reads report the failure; afterwards the next read
@@ -1591,6 +1614,10 @@ function resolveDefaultEventSupply(
     ttlMs: EVENT_CACHE_TTL_MS,
     dir: (env && env.PARRANDA_CACHE_DIR) || null,
   });
+  const sourceCollectionCache = createSourceCache({
+    namespace: "agnostic-event-source-v1", ttlMs: EVENT_CACHE_TTL_MS,
+    dir: (env && env.PARRANDA_CACHE_DIR) || null,
+  });
   const failedRefreshes = createFailedRefreshHold({ clock: failedRefreshClock });
   return async ({
     anchor,
@@ -1600,6 +1627,7 @@ function resolveDefaultEventSupply(
     spatialScope = null,
     now,
     selectedDate = null,
+    time = "tonight",
     preferences = [],
     radiusM,
     scope = null,
@@ -1686,6 +1714,7 @@ function resolveDefaultEventSupply(
       effectiveRadiusM,
       spatialScope,
       selectedDate,
+      time,
     );
     const cached = cache.peek(key);
     if (cached) return rankCollectedEventsForPreferences(cached, preferences, scope, now);
@@ -1700,9 +1729,11 @@ function resolveDefaultEventSupply(
           sourceAnchors,
           now,
           selectedDate,
+          time,
           registry: requestRegistry,
           radiusM: effectiveRadiusM,
           timeoutMs: WARM_TIMEOUT_MS,
+          sourceCollectionCache,
           globalKey,
           venueResolver,
           spatialScope,

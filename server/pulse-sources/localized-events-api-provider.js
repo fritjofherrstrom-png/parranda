@@ -109,31 +109,45 @@ function createLocalizedEventsApiProvider(providerOptions = {}) {
           } catch (_error) {
             return emptyCollection("unavailable", "source_endpoint_unavailable");
           }
-          const payloadResult = await fetchBoundedJson(fetcher, url, providerOptions);
-          if (!payloadResult.ok) return emptyCollection("failed", payloadResult.reason);
-
-          const records = Array.isArray(payloadResult.payload?.results)
-            ? payloadResult.payload.results
-            : null;
-          if (!records) return emptyCollection("failed", "source_payload_invalid");
-
-          const rows = records
-            .slice(0, limit)
-            .map((record) => mapLocalizedEventApiRecord(record, {
-              timezone,
-              sourceLanguage,
-            }))
-            .filter(Boolean);
-          if (records.length > 0 && rows.length === 0) {
-            return emptyCollection("failed", "source_payload_invalid");
+          // Read only numbered pages of the reviewed endpoint. Never follow a
+          // provider-supplied URL. One shared time/byte/row budget owns all pages.
+          const maxPages = clampInteger(providerOptions.maxPages, 1, 10, 10);
+          const deadline = Date.now() + clampInteger(providerOptions.timeoutMs, 50, 60000, DEFAULT_TIMEOUT_MS);
+          let remainingBytes = clampInteger(providerOptions.maxBytes, 1024, MAX_BYTES, MAX_BYTES);
+          const rows = [];
+          const seen = new Set();
+          let failure = null;
+          for (let page = 1; page <= maxPages; page += 1) {
+            if (Date.now() >= deadline) { failure = "source_timeout"; break; }
+            const pageUrl = new URL(url);
+            pageUrl.searchParams.set("page", String(page));
+            const payloadResult = await fetchBoundedJson(fetcher, pageUrl.toString(), {
+              ...providerOptions, timeoutMs: Math.max(50, deadline - Date.now()), maxBytes: remainingBytes,
+            });
+            if (!payloadResult.ok) { failure = payloadResult.reason; break; }
+            remainingBytes -= payloadResult.bytes;
+            const records = payloadResult.payload?.results;
+            if (!Array.isArray(records) || records.length > limit) {
+              failure = "source_payload_invalid"; break;
+            }
+            const mapped = records.map(record => mapLocalizedEventApiRecord(record, { timezone, sourceLanguage })).filter(Boolean);
+            if (records.length > 0 && mapped.length === 0) { failure = "source_payload_invalid"; break; }
+            for (const row of mapped) {
+              if (!seen.has(row.id)) { seen.add(row.id); rows.push(row); }
+            }
+            const next = payloadResult.payload.next;
+            if (next == null) break;
+            if (next !== page + 1) { failure = "source_payload_invalid"; break; }
+            if (page === maxPages) { failure = "source_collection_truncated"; break; }
+            if (remainingBytes < 1024) { failure = "source_collection_truncated"; break; }
           }
 
           return {
             events: [],
             signals: [],
             time_sensitive_events: rows,
-            collection_status: buildProviderCollectionOutcome(rows.length ? "ok" : "empty", {
-              reason: rows.length ? null : "source_empty",
+            collection_status: buildProviderCollectionOutcome(failure ? "failed" : rows.length ? "ok" : "empty", {
+              reason: failure || (rows.length ? null : "source_empty"),
               eventRows: rows.length,
             }),
           };
@@ -179,7 +193,7 @@ async function fetchBoundedJson(fetcher, url, options = {}) {
     if (Buffer.byteLength(String(text || ""), "utf8") > maxBytes) {
       return { ok: false, reason: "source_payload_invalid" };
     }
-    return { ok: true, payload: JSON.parse(String(text || "")) };
+    return { ok: true, payload: JSON.parse(String(text || "")), bytes: Buffer.byteLength(String(text || ""), "utf8") };
   } catch (error) {
     return {
       ok: false,

@@ -204,6 +204,7 @@ test("pulseHealthState maps acquisition health to honest UI states — no raw to
     "listings existed but none reliable enough",
   );
   assert.equal(pulseHealthState(covered({ status: "unavailable", result: "unknown", reasons: [] }), empty), "unavailable");
+  assert.equal(pulseHealthState(covered({ status: "unavailable", result: "events_found", reasons: [] }), some), "partial", "a later-page failure preserves accepted events with an incompleteness note");
   assert.equal(pulseHealthState(covered({ status: "partial", result: "events_found", reasons: [] }), some), "partial", "accepted events + a discreet incompleteness note");
   assert.equal(pulseHealthState(covered({ status: "partial", result: "empty", reasons: [] }), empty), "unavailable", "partial with nothing shown reads as could-not-verify");
   assert.equal(pulseHealthState(covered({ status: "healthy", result: "events_found", reasons: [] }), some), "ok");

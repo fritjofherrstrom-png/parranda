@@ -77,3 +77,71 @@ test('Live sheet uses the published calendar date and rejects a late body after 
   await click(h, button(h, /See all live/));
   assert.doesNotMatch(h.text(), /STALE query event/);
 });
+
+test('switching Live time re-queries the selected period and cancels an older response', async t => {
+  const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' });
+  t.after(() => h.unmount());
+  await h.clock.advance(500);
+  await h.fetchMock.respond(h.fetchMock.pending()[0], day('2026-06-29'));
+  await h.clock.advance(50);
+  await click(h, button(h, /See all live/));
+  await click(h, button(h, /^Following 7 days$/));
+  const week = h.fetchMock.pending().find(c => c.url.includes('/api/live-events'));
+  assert.equal(week.body.time, 'this_week');
+  assert.equal(week.body.selected_date, '2026-06-29');
+  const sheet = h.container.querySelector('[role="dialog"]');
+  const selectedDay = [...sheet.querySelectorAll('button')].find(b => /29 Jun/.test(b.textContent));
+  await click(h, selectedDay);
+  assert.equal(week.aborted, true);
+  const today = h.fetchMock.pending().find(c => c.url.includes('/api/live-events'));
+  assert.equal(today.body.time, 'tonight');
+  await h.fetchMock.respond(today, { contract: 'live_event_query_v1', route_mutation: false,
+    day_anchor_mutation: false, live_events: live('2026-06-29', 'Fresh current-day result') });
+  assert.match(sheet.textContent, /Fresh current-day result/);
+});
+
+test('cold Live continues beyond ten seconds and replaces pending with events automatically', async t => {
+  const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' });
+  t.after(() => h.unmount());
+  await h.clock.advance(500);
+  await h.fetchMock.respond(h.fetchMock.pending()[0], day('2026-06-29'));
+  await h.clock.advance(50);
+  await click(h, button(h, /See all live/));
+  await click(h, button(h, /^Near the route$/));
+  for (const delay of [1500, 3000, 5000, 5000]) {
+    const query = h.fetchMock.pending().find(c => c.url.includes('/api/live-events'));
+    assert.ok(query, 'refresh is still active');
+    await h.fetchMock.respond(query, { contract: 'live_event_query_v1', route_mutation: false,
+      day_anchor_mutation: false, live_events: { ...live('2026-06-29'), tonight: [], pending: true } });
+    await h.clock.advance(delay);
+  }
+  const ready = h.fetchMock.pending().find(c => c.url.includes('/api/live-events'));
+  assert.ok(ready, 'the old ten-second cutoff no longer strands the view');
+  await h.fetchMock.respond(ready, { contract: 'live_event_query_v1', route_mutation: false,
+    day_anchor_mutation: false, live_events: live('2026-06-29', 'Slow calendar concert') });
+  assert.match(h.container.querySelector('[role="dialog"]').textContent, /Slow calendar concert/);
+});
+
+test('changing time near me reuses this Live location and keeps the Planner anchor intact', async t => {
+  const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' });
+  t.after(() => h.unmount());
+  let permissions = 0;
+  Object.defineProperty(h.window.navigator, 'geolocation', { configurable: true, value: {
+    getCurrentPosition(success) { permissions += 1; success({ coords: { latitude: 60.18, longitude: 24.95 } }); },
+  } });
+  await h.clock.advance(500);
+  await h.fetchMock.respond(h.fetchMock.pending()[0], day('2026-06-29'));
+  await h.clock.advance(50);
+  await click(h, button(h, /See all live/));
+  await click(h, button(h, /Near me$/));
+  const near = h.fetchMock.pending().find(c => c.url.includes('/api/live-events'));
+  assert.equal(near.body.scope, 'near_me');
+  await h.fetchMock.respond(near, { contract: 'live_event_query_v1', route_mutation: false,
+    day_anchor_mutation: false, live_events: live('2026-06-29') });
+  await click(h, button(h, /^Following 7 days$/));
+  const week = h.fetchMock.pending().find(c => c.url.includes('/api/live-events'));
+  assert.equal(week.body.time, 'this_week');
+  assert.deepEqual(week.body.anchor, { lat: 60.18, lng: 24.95 });
+  assert.equal(permissions, 1);
+  assert.equal(h.fetchMock.calls.filter(c => c.url.includes('/api/route-recommendations')).length, 1);
+});

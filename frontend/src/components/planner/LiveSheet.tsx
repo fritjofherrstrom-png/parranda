@@ -35,6 +35,7 @@ export default function LiveSheet({
   liveDayLabel,
   liveSheetTime,
   setLiveSheetTime,
+  onRetry,
   liveSheetScope,
   requestLiveSheetScope,
   aroundPlaceScopeAvailable,
@@ -65,6 +66,7 @@ export default function LiveSheet({
   liveDayLabel: string;
   liveSheetTime: "tonight" | "week";
   setLiveSheetTime: (time: "tonight" | "week") => void;
+  onRetry: () => void;
   liveSheetScope: LiveEventScope;
   requestLiveSheetScope: (scope: LiveEventScope) => void;
   aroundPlaceScopeAvailable: boolean;
@@ -244,8 +246,8 @@ export default function LiveSheet({
             <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
               <p className="text-sm leading-relaxed text-parranda-ink/75">
                 {t(
-                  "Kalendrarna uppdateras fortfarande — prova området igen om en stund.",
-                  "The calendars are still updating — try this area again shortly.",
+                  "Kalendrarna uppdateras fortfarande. Försök igen för att fortsätta hämtningen.",
+                  "The calendars are still updating. Try again to continue checking.",
                 )}
               </p>
             </div>
@@ -323,6 +325,12 @@ export default function LiveSheet({
                 </button>
               )}
             </div>
+          )}
+          {(liveQueryError || (!liveQueryPending && sheetPulseState === "pending")) && (
+            <button type="button" onClick={onRetry}
+              className="inline-flex min-h-11 items-center self-start rounded-full border border-parranda-ember/50 px-4 text-sm font-bold text-parranda-clay">
+              {t("Försök igen", "Try again")}
+            </button>
           )}
           {sheetPulseState === "partial" && (
             <p className="text-xs text-parranda-ink/55">

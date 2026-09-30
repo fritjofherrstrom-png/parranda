@@ -441,6 +441,7 @@ async function executeLiveEventQuery({ payload, eventSupply, now, placeResolver 
       scope: query.scope,
       now,
       selectedDate: query.selectedDate,
+      time: query.time,
       preferences: query.preferences,
       ...(attested ? {
         placeLabel: attested.placeLabel,

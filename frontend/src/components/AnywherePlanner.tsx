@@ -124,7 +124,7 @@ function writeLS(key: string, value: unknown): void {
   }
 }
 
-const LIVE_QUERY_REFRESH_DELAYS_MS = [1500, 3000, 5000] as const;
+const LIVE_QUERY_REFRESH_DELAYS_MS = [1500, 3000, 5000, ...Array<number>(22).fill(5000)] as const;
 
 function waitForLiveQueryRetry(delayMs: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -289,6 +289,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const liveSheetDialogRef = useRef<HTMLDivElement | null>(null);
   const liveSheetCloseRef = useRef<HTMLButtonElement | null>(null);
   const liveQueryAbortRef = useRef<AbortController | null>(null);
+  const liveNearMeCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
   const liveResponseRef = useRef(safeResponse);
   liveResponseRef.current = safeResponse;
   // A scope request belongs to the published day it was built from. Intent
@@ -300,6 +301,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setLiveQueryPending(false);
     setLiveQueryError(null);
     setLiveQueryGeoHint(null);
+    liveNearMeCoordsRef.current = null;
     setLiveSheetScope("around_place");
   }, [safeResponse]);
   const lastEntryRef = useRef<SavedEntry | null>(null); // the latest composed day, for "save"
@@ -404,6 +406,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setServiceRefusal(null);
       setExpandedStopKey(null);
       setExpandedCandidateKey(null);
+      liveNearMeCoordsRef.current = null;
       setLiveSheetScope("around_place");
       setLiveQueryEvents(null);
       setLiveQueryPending(false);
@@ -1033,7 +1036,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // The Live sheet behaves like a modal: focus enters it, stays inside while it
   // is open, returns to the trigger on close, and the page behind does not scroll.
   useEffect(() => {
-    if (!liveSheetOpen) return;
+    if (!liveSheetOpen) {
+      liveQueryAbortRef.current?.abort();
+      return;
+    }
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -1193,49 +1199,49 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     buildLiveEventQueryPayload({ scope: "around_place", response: safeResponse }),
   );
 
-  async function requestLiveSheetScope(nextScope: LiveEventScope) {
+  function requestLiveSheetTime(nextTime: "tonight" | "week") {
+    setLiveSheetTime(nextTime);
+    requestLiveSheetScope(liveSheetScope, nextTime, true).catch(() => {});
+  }
+
+  async function requestLiveSheetScope(
+    nextScope: LiveEventScope,
+    nextTime = liveSheetTime,
+    reuseLocation = false,
+  ) {
     const queryIntentId = intentSequenceRef.current;
-    setLiveQueryGeoHint(null);
-    let nearMeCoords: { lat: number; lng: number } | null = null;
-    if (nextScope === "near_me") {
-      try {
-        nearMeCoords = await currentPosition();
-      } catch {
-        setLiveQueryGeoHint(
-          t(
-            "Platsdelning nekades — dagens plats och rutt är oförändrade.",
-            "Location sharing was denied — the day's place and route are unchanged.",
-          ),
-        );
-        return;
-      }
-    }
-
-    if (queryIntentId !== intentSequenceRef.current || safeResponse !== liveResponseRef.current) return;
-    const payload = buildLiveEventQueryPayload({
-      scope: nextScope,
-      time: liveSheetTime === "week" ? "this_week" : "tonight",
-      preferences: selected,
-      response: safeResponse,
-      routeStops,
-      nearMeCoords,
-    });
-    if (!payload) {
-      setLiveQueryError(
-        nextScope === "near_route"
-          ? t("En färdig rutt behövs för att söka längs rutten.", "A composed route is needed to search near the route.")
-          : t("Platsens betrodda ankare saknas.", "The trusted place anchor is unavailable."),
-      );
-      return;
-    }
-
     liveQueryAbortRef.current?.abort();
     const controller = new AbortController();
     liveQueryAbortRef.current = controller;
-    setLiveSheetScope(nextScope);
+    setLiveQueryGeoHint(null);
     setLiveQueryPending(true);
     setLiveQueryError(null);
     try {
+      let nearMeCoords: { lat: number; lng: number } | null = null;
+      if (nextScope === "near_me") {
+        try {
+          nearMeCoords = reuseLocation ? liveNearMeCoordsRef.current : null;
+          nearMeCoords ??= await currentPosition();
+        } catch {
+          if (!controller.signal.aborted) setLiveQueryGeoHint(
+            t("Din plats kunde inte hämtas. Tillåt platsdelning och försök igen.",
+              "Your location couldn't be obtained. Allow location sharing and try again."),
+          );
+          return;
+        }
+      }
+      if (controller.signal.aborted || queryIntentId !== intentSequenceRef.current || safeResponse !== liveResponseRef.current) return;
+      const payload = buildLiveEventQueryPayload({
+        scope: nextScope,
+        time: nextTime === "week" ? "this_week" : "tonight",
+        preferences: selected,
+        response: safeResponse,
+        routeStops,
+        nearMeCoords,
+      });
+      if (!payload) throw new Error("live_event_anchor_unavailable");
+      if (nearMeCoords) liveNearMeCoordsRef.current = nearMeCoords;
+      setLiveSheetScope(nextScope);
       for (let attempt = 0; attempt <= LIVE_QUERY_REFRESH_DELAYS_MS.length; attempt += 1) {
         if (attempt > 0) {
           await waitForLiveQueryRetry(LIVE_QUERY_REFRESH_DELAYS_MS[attempt - 1], controller.signal);
@@ -1255,12 +1261,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       }
     } catch {
       if (controller.signal.aborted) return;
-      setLiveQueryError(
-        t(
-          "Live-vyn kunde inte uppdateras — dagens plats och rutt är oförändrade.",
-          "The Live view couldn't update — the day's place and route are unchanged.",
-        ),
-      );
+      setLiveQueryError(t("Live-vyn kunde inte uppdateras. Försök igen.", "The Live view couldn't update. Try again."));
     } finally {
       if (liveQueryAbortRef.current === controller) {
         liveQueryAbortRef.current = null;
@@ -2710,13 +2711,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               type="button"
               ref={liveSheetTriggerRef}
               onClick={() => {
-                setLiveSheetTime(pulseBuckets.tonight.length > 0 || split.woven.length > 0 ? "tonight" : "week");
+                const nextTime = pulseBuckets.tonight.length > 0 || split.woven.length > 0 ? "tonight" : "week";
+                setLiveSheetTime(nextTime);
                 setLiveSheetOpen(true);
                 // "Couldn't verify" + an available anchor: opening the sheet IS
                 // the "check again" — fire a fresh around-place query (its own
                 // bounded retries) instead of showing the same stale emptiness.
-                if (pulseState === "unavailable" && aroundPlaceScopeAvailable && !liveQueryPending) {
-                  requestLiveSheetScope("around_place").catch(() => {});
+                if ((pulseState === "unavailable" || pulseState === "pending" || liveQueryEvents?.pending) && aroundPlaceScopeAvailable && !liveQueryPending) {
+                  requestLiveSheetScope("around_place", nextTime).catch(() => {});
                 }
               }}
               className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-parranda-btn border border-parranda-ember/50 bg-parranda-ember/10 text-[13px] font-bold text-parranda-clay transition hover:bg-parranda-ember/15"
@@ -2904,7 +2906,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           selected={selected}
           liveDayLabel={liveDayLabel}
           liveSheetTime={liveSheetTime}
-          setLiveSheetTime={setLiveSheetTime}
+          setLiveSheetTime={requestLiveSheetTime}
+          onRetry={() => { requestLiveSheetScope(liveSheetScope, liveSheetTime, true).catch(() => {}); }}
           liveSheetScope={liveSheetScope}
           requestLiveSheetScope={(scope) => { requestLiveSheetScope(scope).catch(() => {}); }}
           aroundPlaceScopeAvailable={aroundPlaceScopeAvailable}
