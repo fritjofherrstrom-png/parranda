@@ -112,9 +112,15 @@ Om mobilen inte når adressen:
 
 ## Testa innan du delar
 
+I en ny arbetskopia behövs båda låsta beroendemängderna; root-sviten inkluderar även frontendens komponentharness.
+
 ```bash
+npm ci
+npm --prefix frontend ci
 npm test
 ```
+
+Varje testfil har en generös tidsgräns på 600 sekunder. En fastnad fil ger icke-noll exitkod och `not ok`, aldrig automatisk skip eller PASS. Detta är inte en total tidsgräns för hela sviten. Små lokala Parquet-fixturer använder en DuckDB-tråd och 128 MB hanterad minnesbudget (inte ett hårt RSS-tak); accepterade SQL-frågor dräneras före asynkron stängning.
 
 Sviten körs offline: `npm test` laddar `tests/helpers/no-live-network.js`, som
 stoppar varje anrop till en extern värd och fäller testfilen som gjorde det.

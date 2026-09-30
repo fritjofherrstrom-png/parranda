@@ -29,7 +29,7 @@ const {
   createOvertureBackgroundSource,
 } = require("../server/place-candidates/open-data-loader");
 const { createSourceCache } = require("../server/place-candidates/source-cache");
-const { createBackgroundSource } = require("../server/place-candidates/background-source");
+const { SOURCE_COMPLETION, createBackgroundSource } = require("../server/place-candidates/background-source");
 const { deriveSecondaryAnchors } = require("../server/place-candidates/spatial-scope");
 const { buildApp } = require("../server/app");
 const { mockStableWeatherFetch } = require("./helpers/planner-reservoir-compare");
@@ -46,8 +46,8 @@ before(async () => {
   global.fetch = mockStableWeatherFetch();
 });
 
-after(() => {
-  directoryRows?.close();
+after(async () => {
+  await directoryRows?.close();
   global.fetch = ORIGINAL_FETCH;
 });
 
@@ -97,7 +97,15 @@ async function createSupply({ overpass, overpassCache = createSourceCache({ name
     cache: createSourceCache({ namespace: "budget-switch-directory" }),
   });
   const osm = createOpenDataLoader({ fetcher: overpass.fetcher, cache: overpassCache });
-  return composeOpenDataLoaders(osm, wikidata, directory, null, { primaryWaitMs: BOUND_MS });
+  const loader = composeOpenDataLoaders(osm, wikidata, directory, null, { primaryWaitMs: BOUND_MS });
+  // Test-only synchronization: wait for the real SQL source completion rather
+  // than guessing that a native query finished within a sleep under suite load.
+  loader.waitForDirectory = async (request) => {
+    const rows = directory.load(request, request);
+    return rows[SOURCE_COMPLETION] ? await rows[SOURCE_COMPLETION] : rows;
+  };
+  loader.waitForPrimary = (request) => osm(request);
+  return loader;
 }
 
 function planBody(preferences, walkingKm) {
@@ -117,6 +125,7 @@ async function planWithLifecycle(server, body) {
   const post = (path, payload, headers = {}) => new Promise((resolve, reject) => {
     const data = JSON.stringify(payload);
     const request = http.request({
+      agent: false, // Isolate lifecycle probes from stale shared keep-alive sockets.
       hostname: "127.0.0.1",
       port: server.address().port,
       path,
@@ -249,12 +258,8 @@ test("which evidence the switch loses: every map and Wikidata record of the 6 km
   const loader = await createSupply({ overpass });
   const request = (targetKm) => loaderRequest(targetKm, { preferCachedSupply: true });
   await loader(request(6));
-  let lagom;
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    lagom = await loader(request(6));
-    if (familyCounts(lagom).open_directory) break;
-    await sleep(100);
-  }
+  await loader.waitForDirectory(request(6));
+  const lagom = await loader(request(6));
   assert.ok(familyCounts(lagom).open_directory,
     "precondition: the asynchronous directory sample is warm before testing its bounded rescue");
   assert.equal(lagom.loader_metadata?.primary_collection, "cached_supply");
@@ -335,28 +340,32 @@ test("second hand: Lagom → Lång keeps map-backed second-hand depth and report
 
 test("a first Overpass pass that answered is kept when only its wider expansion is still pending", async () => {
   const overpass = controllableOverpass();
-  // First pass on time; the wider expansion is late and then fails (504).
-  overpass.state.policy = (radiusM) => (radiusM > 1500 ? { delayMs: LATE_MS, status: 504 } : { delayMs: 0, status: 200 });
   const loader = await createSupply({ overpass });
   const request = loaderRequest(6, { requestedIntents: ["second_hand"] });
-  // Warm the directory without warming this Overpass key.
-  await loader({ ...request, walkingTargetBand: fx.walkingBand(4), requestedIntents: ["food"] });
-  await sleep(LATE_MS * 3);
+  const warmRequest = { ...request, walkingTargetBand: fx.walkingBand(4), requestedIntents: ["food"] };
+  await loader(warmRequest);
+  await loader.waitForDirectory(warmRequest);
+  let releaseExpansion;
+  const expansionGate = new Promise(resolve => { releaseExpansion = resolve; });
+  overpass.state.policy = radiusM => radiusM > 1500
+    ? { waitFor: expansionGate, status: 504 } : { delayMs: 0, status: 200 };
   const callsBefore = overpass.state.calls.length;
-  const records = await loader(request);
-  assert.ok(overpass.state.calls.length > callsBefore, "the requested key went to Overpass");
-  assert.equal(records.loader_metadata?.primary_collection, "first_pass_while_expanding");
-  assert.equal(records.loader_metadata?.primary_collection_reason, "primary_outstanding_at_wait_bound");
-  assert.equal(records.loader_metadata?.selection_reason, "expansion_outstanding");
-  assert.ok(records.some((record) => familiesOf(record).has("map")), "the answered first pass is in the reservoir");
-
-  // The expansion's 504 does not discard the first pass: it becomes this
-  // key's stored answer, and the next request asks no provider.
-  await sleep(LATE_MS * 3);
+  try {
+    const records = await loader(request);
+    assert.ok(overpass.state.calls.length > callsBefore, "the requested key went to Overpass");
+    assert.equal(records.loader_metadata?.primary_collection, "first_pass_while_expanding");
+    assert.equal(records.loader_metadata?.primary_collection_reason, "primary_outstanding_at_wait_bound");
+    assert.equal(records.loader_metadata?.selection_reason, "expansion_outstanding");
+    assert.ok(records.some(record => familiesOf(record).has("map")), "the answered first pass is in the reservoir");
+  } finally {
+    releaseExpansion();
+    await loader.waitForPrimary(request);
+  }
+  // Observe actual completion, not a sleep: the 504 retains the first pass.
   const callsAfter = overpass.state.calls.length;
   const again = await loader({ ...request, preferCachedSupply: true });
   assert.equal(overpass.state.calls.length, callsAfter);
-  assert.ok(again.some((record) => familiesOf(record).has("map")));
+  assert.ok(again.some(record => familiesOf(record).has("map")));
 });
 
 test("a 504 for the new budget keeps the same anchor's cached map answer for another budget", async () => {
