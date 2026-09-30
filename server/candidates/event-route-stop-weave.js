@@ -40,6 +40,8 @@ const { eventReachesEvening } = require("./evening-event-weave");
 
 // A woven evening stop must be a short hop from where the day already ends —
 // beyond this the event stays an anchor (real, sourced, but with no walk claim).
+const { matchesPreferenceFocus } = require("../planner/preference-focus");
+
 const MAX_EVENT_LEG_KM = 2.5;
 
 function isAgnosticDay(day) {
@@ -67,7 +69,7 @@ function deepClone(value) {
  * @returns {Promise<{result: object, placeStructure: object|null, applied: boolean, blockers: string[], interrupt?: object}>}
  *   `result`/`placeStructure` are the inputs when not applied, clones when applied.
  */
-async function weaveEveningEventRouteStop({ result, placeStructure, walkingRouter, walkingConfig } = {}) {
+async function weaveEveningEventRouteStop({ result, placeStructure, walkingRouter, walkingConfig, requestedPreferences = [] } = {}) {
   const unchanged = (blockers, interrupt = null) => ({
     result,
     placeStructure,
@@ -90,6 +92,10 @@ async function weaveEveningEventRouteStop({ result, placeStructure, walkingRoute
     return unchanged(["event_not_in_evening"]);
   }
   if (!route || !Array.isArray(route.main_stops)) return unchanged(["no_route"]);
+
+  // An unclassified event remains a separate Live suggestion. Timing and
+  // proximity alone do not authorize adding a new interest to the main day.
+  if (!matchesPreferenceFocus(event, requestedPreferences)) return unchanged(["event_outside_preference_focus"]);
 
   const coordStops = route.main_stops.filter(finiteCoord);
   if (coordStops.length < 2 || coordStops.length !== route.main_stops.length) {

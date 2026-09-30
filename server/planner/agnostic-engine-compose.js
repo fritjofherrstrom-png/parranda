@@ -31,6 +31,9 @@ const { normalizeSelectedDayHoursFact } = require("../place-candidates/opening-h
 const { plannerUsableOptionsForRole } = require("./candidate-combination");
 const { resolveAgnosticWalkingTargetBand } = require("./agnostic-walking-target");
 
+const { normalizeUserIntents } = require("../candidates/intent-vocabulary");
+const { matchesPreferenceFocus } = require("./preference-focus");
+
 const AGNOSTIC_ENGINE_CITY_KEY = "agnostic-engine-area";
 const MAX_CAPACITY_FRONTIER_CANDIDATES = 2;
 const SOURCE_CATEGORIES = new Set(["antiques", "charity", "vintage", "second_hand"]);
@@ -287,6 +290,7 @@ function mapPlannerReservoirToSourceCandidates({
   city = AGNOSTIC_ENGINE_CITY_KEY,
   limit = 8,
   perRole = 2,
+  dayRhythm = null,
   walkingKmTarget = null,
   includeCapacityFrontier = true,
   pinnedIds = [],
@@ -347,7 +351,10 @@ function mapPlannerReservoirToSourceCandidates({
 
   const selectedRoles = new Set(selectedPicks.map((pick) => pick?.role).filter(Boolean));
   const boundedLimit = Math.max(out.length, Math.min(12, Math.max(1, Math.trunc(Number(limit) || 8))));
-  const boundedPerRole = Math.min(3, Math.max(1, Math.trunc(Number(perRole) || 2)));
+  const focusedRhythm = Boolean(dayRhythm) && normalizeUserIntents(requestedIntents || []).intents.length === 1;
+  // Preserve safe same-interest depth instead of spending the reservoir on
+  // unrequested roles. Experimental depth retains its existing two-place cap.
+  const boundedPerRole = focusedRhythm ? 5 : Math.min(3, Math.max(1, Math.trunc(Number(perRole) || 2)));
 
   for (const roleEntry of Array.isArray(plannerRoles?.roles) ? plannerRoles.roles : []) {
     const role = roleEntry?.role;
@@ -381,14 +388,9 @@ function mapPlannerReservoirToSourceCandidates({
     if (out.length >= boundedLimit) break;
   }
 
-  // A target-role combination answers "what best matches the request", not
-  // "what makes a complete day". A single selected intent therefore often
-  // yields only one candidate family (for example two restaurants), which the
-  // honest promotion gate correctly rejects as a thin day. Give the route
-  // engine bounded breadth from the SAME planner-safe reservoir: one candidate
-  // from each unrequested anchor/stop role. The engine still owns geometry,
-  // distance, ordering and final selection; fallback/option candidates never
-  // enter through this seam, and sparse contexts remain sparse.
+  // Additional roles may add depth only within the requested intent union.
+  // Unrequested interests are not automatic day filler. With no preferences,
+  // the existing diverse-day behaviour remains available.
   const supportRoles = (Array.isArray(plannerRoles?.roles) ? plannerRoles.roles : []).filter(
     (roleEntry) =>
       roleEntry &&
@@ -400,7 +402,8 @@ function mapPlannerReservoirToSourceCandidates({
   for (const roleEntry of supportRoles) {
     if (out.length >= boundedLimit) break;
     const role = roleEntry.role;
-    const options = plannerUsableOptionsForRole(roleEntry);
+    const options = plannerUsableOptionsForRole(roleEntry)
+      .filter((candidate) => matchesPreferenceFocus(candidate, requestedIntents, pinnedIds));
     const rich = options.find(
       (candidate) =>
         candidate?.candidate_id &&
@@ -464,6 +467,11 @@ function mapPlannerReservoirToSourceCandidates({
     }
   }
 
+  const focused = out.filter((candidate) => matchesPreferenceFocus(candidate, requestedIntents, pinnedIds));
+  out.splice(0, out.length, ...focused);
+  seen.clear();
+  for (const candidate of out) seen.add(candidate.id);
+
   // A single requested intent must not be structurally unable to form a day
   // from single-source supply while two intents can: a two-intent day already
   // publishes one experimentally admitted place per requested role, two in
@@ -472,8 +480,8 @@ function mapPlannerReservoirToSourceCandidates({
   // availability and local-feel/operational tiers the combination used. The
   // spine never grows beyond two experimental places this way, and any lower
   // trust stays labelled on the stop and capped in readiness.
-  if (out.length === 1 && selectedPicks.length === 1) {
-    appendSecondSpinePlace({ out, seen, spine: selectedPicks[0], plannerRoles, richIndex, city, requestedIntents });
+  if (out.length === 1 && selectedPicks.some((pick) => pick.candidate_id === out[0].id)) {
+    appendSecondSpinePlace({ out, seen, spine: selectedPicks.find((pick) => pick.candidate_id === out[0].id), plannerRoles, richIndex, city, requestedIntents });
   }
 
   if (includeCapacityFrontier) {
@@ -489,7 +497,7 @@ function mapPlannerReservoirToSourceCandidates({
     });
   }
 
-  return out;
+  return out.filter((candidate) => matchesPreferenceFocus(candidate, requestedIntents, pinnedIds));
 }
 
 function appendSecondSpinePlace({ out, seen, spine, plannerRoles, richIndex, city, requestedIntents }) {
@@ -548,6 +556,7 @@ function appendWalkingCapacityFrontier({
     const role = rich?.role;
     if (
       !id || !coords || !role || seen.has(id) ||
+      !matchesPreferenceFocus(rich, requestedIntents) ||
       isExperimentallyAdmitted(rich) || isExplicitlyUnavailable(rich) || rich.chain === true
     ) continue;
     seen.add(id);

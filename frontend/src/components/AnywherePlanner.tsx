@@ -1791,6 +1791,12 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               )
             )}
           </p>
+          {!anchorUnresolved && selected.length > 0 && (
+            <p>{t(
+              "Vi kunde inte bekräfta en gångbar dag med dina val. Andra intressen läggs inte till automatiskt. Du kan ändra datum, dagens rytm eller själv välja fler intressen.",
+              "We could not confirm a walkable day with your choices. Other interests are not added automatically. You can change the date, day rhythm or choose more interests yourself.",
+            )}</p>
+          )}
           {anchorUnresolved && (
             <a
               href={`/?lang=${lang}`}

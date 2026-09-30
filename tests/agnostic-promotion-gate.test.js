@@ -318,3 +318,16 @@ test("coverage outranks the unresolved-role fallback when both are present", () 
   assert.equal(verdict.promote, true);
   assert.deepEqual(verdict.unmet_requested_intents, []);
 });
+
+
+test("a single hit cannot authorize off-intent primary stops at publication", () => {
+  const params = { calibration: calibration(), strongAnchor: true, requestedIntents: ["second_hand"],
+    preferenceCoverage: { requested_preferences: ["second_hand"], covered_preferences: ["second_hand"], missing_preferences: [] },
+    primaryStops: [{ id: "shop", covered_preferences: ["second_hand"] }, { id: "museum", covered_preferences: [] }] };
+  const blocked = classifyPromotionReadiness(params);
+  assert.equal(blocked.promote, false);
+  assert.ok(blocked.reasons.includes("off_intent_primary_stop"));
+  assert.equal(classifyPromotionReadiness({ ...params, primaryStops: params.primaryStops.slice(0, 1) }).promote, true);
+  assert.equal(classifyPromotionReadiness({ ...params, pinnedIds: ["museum"] }).promote, true,
+    "an explicit keep action differs from unsolicited padding");
+});

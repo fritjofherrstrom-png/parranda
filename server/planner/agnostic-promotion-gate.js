@@ -41,6 +41,8 @@
  * Pure / side-effect free.
  */
 
+const { matchesPreferenceFocus } = require("./preference-focus");
+
 const { intentsForRole } = require("./role-selector");
 
 // A status/level pair outside these means calibration never saw a usable route
@@ -86,6 +88,8 @@ function classifyPromotionReadiness({
   unresolvedRoles = [],
   requestedIntents = [],
   preferenceCoverage = null,
+  primaryStops = null,
+  pinnedIds = [],
 } = {}) {
   if (!calibration || typeof calibration !== "object") {
     return verdict({ reasons: ["no_calibration"], disqualifying: ["capped_by_non_promotable"] });
@@ -120,6 +124,12 @@ function classifyPromotionReadiness({
   if (calibration.inputs && calibration.inputs.walking_valid === false) {
     reasons.push("walking_contract_unvalidated");
     disqualifying.push("capped_by_non_promotable");
+  }
+
+  if (Array.isArray(primaryStops) && primaryStops.some((stop) =>
+    !matchesPreferenceFocus(stop, requestedIntents, pinnedIds))) {
+    reasons.push("off_intent_primary_stop");
+    disqualifying.push("capped_by_preference_focus_mismatch");
   }
 
   const intent = requestedIntentVerdict({ preferenceCoverage, unresolvedRoles, requestedIntents });

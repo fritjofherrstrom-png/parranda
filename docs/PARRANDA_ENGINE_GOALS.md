@@ -315,3 +315,31 @@ Priorities now are:
 8. Inspect output should explain why something won and what was missing.
 9. City packs should improve the experience, not become a hard dependency.
 10. The product bar is not “a result exists”; it is “the result feels like Parranda rather than a generic map app.”
+
+## Explicit preference focus (2026-09)
+
+For modern any-place composition, explicit preferences constrain primary
+experiences to their union; one matching stop does not authorize unrelated
+food, culture, park or coffee filler. Assessed partial fits remain labeled as
+partial. No preferences retains the varied-day behaviour. A separately pinned
+place is an explicit user choice and retains the existing trust/walking gates.
+
+Apply this constraint to reservoir depth/support/frontier, complete-set choice,
+geometry repairs and publication. Unclassified Live events remain separate
+suggestions when preferences are selected; timing/proximity alone cannot turn
+them into matching primary experiences. Source trust and availability are not
+relaxed to fill a walk target. Publish a shorter focused day when viable;
+otherwise explain that no walkable day matching the choices was confirmed and
+let the user change date/rhythm/interests. Missing requested coverage stays
+visible. This evolves the old “one intent hit plus bounded day support” rule.
+
+Dagens rytm sends no kilometre goal. For a single intent, rhythm composition can
+consider source-backed places across the bounded five-kilometre local provider
+aperture instead of discarding everything beyond three kilometres. A trusted
+remaining local-day window under four hours keeps the narrower proposal scope;
+unknown time is not claimed verified. This aperture is neither a route target
+nor permission to bypass opening-hours, trust or final walking validation.
+Up to five shared-gate same-role choices survive to composition; the existing
+two-place experimental-depth limit remains. Rhythm controls density, measured
+walking distance is an output, and legacy kilometre requests remain API-only
+compatibility tests.

@@ -982,7 +982,9 @@ async function composeAgnosticRouteOutput({
       })
     : null;
 
+  const focusedRhythm = Boolean(dayRhythm) && normalizeUserIntents(preferences).intents.length === 1;
   const rolePayload = {
+    ...(focusedRhythm ? { limitPerRole: 5 } : {}),
     city: agnosticContext.key,
     date: effectiveDate,
     preferences: Array.isArray(preferences) ? preferences : [],
@@ -1023,7 +1025,7 @@ async function composeAgnosticRouteOutput({
         },
       }
     : {};
-  const candidateReachPolicy = resolveAgnosticCandidateReachPolicy({ anchorMode, spatialScope });
+  const candidateReachPolicy = resolveAgnosticCandidateReachPolicy({ anchorMode, spatialScope, dayRhythm, preferences, availabilityWindow });
   const selectionBaseHelpers = {
     ...helpers,
     ...availabilityHelpers,
@@ -1075,6 +1077,7 @@ async function composeAgnosticRouteOutput({
         plannerRoles,
         city: agnosticContext.key,
         walkingKmTarget,
+        dayRhythm,
         includeCapacityFrontier: false,
         pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
       })
@@ -1085,6 +1088,7 @@ async function composeAgnosticRouteOutput({
         plannerRoles,
         city: agnosticContext.key,
         walkingKmTarget,
+        dayRhythm,
         includeCapacityFrontier: true,
         // The repaired route can REPLACE the base one, so the capacity
         // reservoir has to be able to honour the same commitments. Without the
@@ -1419,6 +1423,7 @@ async function composeAgnosticRouteViaEngine({
         plannerRoles,
         city: agnosticContext.key,
         walkingKmTarget,
+        dayRhythm,
         includeCapacityFrontier: false,
         pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
       });
@@ -1429,6 +1434,7 @@ async function composeAgnosticRouteViaEngine({
         plannerRoles,
         city: agnosticContext.key,
         walkingKmTarget,
+        dayRhythm,
         includeCapacityFrontier: true,
         pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
       });
@@ -1581,6 +1587,7 @@ async function composeAgnosticRouteViaEngine({
       woven = await weaveEveningEventRouteStop({
         result: { days: [{ ...day, experimental_agnostic_route_applied: true, primary_route: route }] },
         placeStructure: eveningEventStructure,
+        requestedPreferences: preferences,
         walkingRouter: typeof walkingRouter === "function" ? walkingRouter : undefined,
         walkingConfig: walkingConfig || undefined,
       });

@@ -616,10 +616,10 @@ function isAgnosticRouteOutputExperimentRequested(request) {
 // or failed gate returns the inputs unchanged — the anchor card remains and no
 // walk is claimed. The module itself refuses non-agnostic days, so a fallback
 // city's route can never receive the typed place's event.
-async function weaveEventStopFailSoft({ result, placeStructure, walkingRouter, walkingConfig }) {
+async function weaveEventStopFailSoft({ result, placeStructure, walkingRouter, walkingConfig, requestedPreferences = [] }) {
   try {
     const { weaveEveningEventRouteStop } = require("./candidates/event-route-stop-weave");
-    return await weaveEveningEventRouteStop({ result, placeStructure, walkingRouter, walkingConfig });
+    return await weaveEveningEventRouteStop({ result, placeStructure, walkingRouter, walkingConfig, requestedPreferences });
   } catch (_error) {
     return { result, placeStructure, applied: false, blockers: ["weave_error"] };
   }
@@ -2265,7 +2265,7 @@ function buildApp({
             requestedIntents: Array.isArray(preferences) ? preferences : [],
             anchorMode: intake.mode,
             spatialScope,
-            walkingTargetBand: resolveAgnosticWalkingTargetBand(payload.walkingKmTarget),
+            walkingTargetBand: requestedRhythm ? null : resolveAgnosticWalkingTargetBand(payload.walkingKmTarget),
           });
           const structureCandidates = (Array.isArray(records) ? records : []).filter(
             (c) => c && Number.isFinite(c.lat) && Number.isFinite(c.lng),
@@ -2426,6 +2426,8 @@ function buildApp({
           unresolvedRoles: experiment.experimental_route?.unresolved_roles,
           requestedIntents: normalizeUserIntents(preferences).intents,
           preferenceCoverage: experiment.constraint_negotiation?.preference_coverage,
+          primaryStops: experimentResult?.days?.[0]?.primary_route?.main_stops,
+          pinnedIds: pinnedCandidateIds,
         });
         experiment.promotion = promotion;
         // Bounded, count-only echo so an operator can see the day was composed
@@ -2468,6 +2470,7 @@ function buildApp({
           publicResult,
         }) ?? await weaveEventStopFailSoft({
           result: publicResult,
+          requestedPreferences: preferences,
           placeStructure: wovenPlaceStructure,
           walkingRouter,
           walkingConfig,

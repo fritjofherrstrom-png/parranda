@@ -12,6 +12,8 @@ const { daypartSlotForRole } = require("./agnostic-route-ordering");
 const { resolveAgnosticWalkingTargetBand } = require("./agnostic-walking-target");
 const { normalizeUserIntents } = require("../candidates/intent-vocabulary");
 
+const { matchesPreferenceFocus } = require("./preference-focus");
+
 const DEFAULT_POOL_LIMIT = 12;
 const MAX_SET_SIZE = 6;
 const MAX_REPAIR_ADDITIONS = 2;
@@ -35,7 +37,7 @@ function selectAgnosticCandidateSet({
 } = {}) {
   const preferences = normalizePreferences(requestedPreferences);
   const rankedPool = uniqueRankedCandidates(rankedCandidates)
-    .filter(({ item }) => finitePoint(item))
+    .filter(({ item }) => finitePoint(item) && matchesPreferenceFocus(item, preferences))
     .sort(compareRankedCandidates);
   const pool = buildEvaluationPool(
     rankedPool,

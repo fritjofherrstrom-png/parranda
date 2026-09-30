@@ -194,7 +194,8 @@ test("Athens swimming + trusted external loader: source-backed gap is now CONSUM
   // match (the loader's swimming beach — a gap the curated Athens catalog lacks)
   // into the actual route. It is therefore no longer an unconsumed gap; the
   // combination↔route comparison now reports overlap and aligns.
-  const loader = makeLoader([externalRecord("ath-beach", "Kavouri Beach", "beach", 37.82, 23.78, ["coast"])]);
+  const loader = makeLoader([externalRecord("ath-beach", "Source swim A", "beach", 37.978, 23.73, ["coast"]),
+    externalRecord("ath-beach-2", "Source swim B", "beach", 37.979, 23.731, ["coast"])]);
   const s = await runScenario("athens", ["swimming"], { openDataLoader: loader, extra: { include_external_candidates: 1 } });
   assert.ok(s.selected_origins.includes("external_open"), "trusted external candidate should be selected");
   assert.equal(s.overlap_count, 1, "preview route now consumes the external candidate");

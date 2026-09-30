@@ -38,7 +38,7 @@ function ranked(item, score = 10) {
   return { item, score };
 }
 
-test("urban set keeps requested spine and adds a new daypart instead of another same-role top score", () => {
+test("urban set deepens requested interests instead of adding an unrequested daypart", () => {
   const center = { lat: 59.3293, lng: 18.0686 };
   const food = candidate("food", { ...center, role: "food_anchor", covered: ["food"], spine: true });
   const culture = candidate("culture", { lat: 59.331, lng: 18.067, role: "culture_stop", covered: ["culture"], spine: true });
@@ -55,10 +55,10 @@ test("urban set keeps requested spine and adds a new daypart instead of another 
     targetKm: 6,
   });
 
-  assert.deepEqual(result.selected.map((entry) => entry.id).sort(), ["coffee", "culture", "food", "view"]);
+  assert.deepEqual(result.selected.map((entry) => entry.id).sort(), ["culture", "food", "food-2", "view"]);
   assert.equal(result.diagnostics.exact_preference_count, 3);
   assert.equal(result.diagnostics.spine_role_count, 3);
-  assert.equal(result.diagnostics.daypart_count, 3);
+  assert.equal(result.diagnostics.daypart_count, 2);
 });
 
 test("whole-day selection compares UI aliases with canonical candidate-spine intents", () => {
@@ -150,19 +150,19 @@ test("local independent candidate beats a marginally closer chain without a city
   const chain = candidate("chain-coffee", {
     lat: 48.857,
     lng: 2.3524,
-    role: "coffee_fika_stop",
+    role: "coffee_fika_stop", covered: ["coffee"],
     chain: true,
   });
   const independent = candidate("independent-coffee", {
     lat: 48.859,
     lng: 2.354,
-    role: "coffee_fika_stop",
+    role: "coffee_fika_stop", covered: ["coffee"],
   });
 
   const result = selectAgnosticCandidateSet({
     rankedCandidates: [ranked(spine), ranked(chain, 25), ranked(independent, 5)],
     desiredCount: 2,
-    requestedPreferences: ["culture"],
+    requestedPreferences: ["culture", "fika"],
     start: anchor,
     shape: "loop",
     targetKm: 4,
@@ -200,13 +200,13 @@ test("regional sparse set accepts a farther candidate when it adds genuinely mis
 test("equally relevant support stays compact around a different urban anchor", () => {
   const anchor = { lat: 50.0755, lng: 14.4378 };
   const spine = candidate("bar", { ...anchor, role: "evening_bar_option", covered: ["bars"], spine: true });
-  const nearPark = candidate("near-park", { lat: 50.078, lng: 14.439, role: "green_walk_stop" });
-  const farPark = candidate("far-park", { lat: 50.14, lng: 14.52, role: "green_walk_stop" });
+  const nearPark = candidate("near-park", { lat: 50.078, lng: 14.439, role: "green_walk_stop", covered: ["green"] });
+  const farPark = candidate("far-park", { lat: 50.14, lng: 14.52, role: "green_walk_stop", covered: ["green"] });
 
   const result = selectAgnosticCandidateSet({
     rankedCandidates: [ranked(spine), ranked(farPark, 50), ranked(nearPark, 2)],
     desiredCount: 2,
-    requestedPreferences: ["bars"],
+    requestedPreferences: ["bars", "green"],
     start: anchor,
     shape: "loop",
     targetKm: 4,
@@ -403,6 +403,7 @@ test("day-value repair adds a distinct useful stop when the fixed set under-fill
     lng: 2.3522,
     role: "coffee_fika_stop",
     type: "cafe",
+    partial: ["food"],
   });
 
   const result = selectAgnosticCandidateSet({

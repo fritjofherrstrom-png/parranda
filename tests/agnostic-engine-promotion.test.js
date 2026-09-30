@@ -230,9 +230,9 @@ test(
     });
     const exp = r.body.agnostic_route_output_experiment;
     assert.equal(exp.route_mutation, true);
-    assert.equal(exp.promotion.promote, true, "safe support turns the green spine into a minimum complete day");
+    assert.equal(exp.promotion.promote, true, "a focused two-stop green day is publishable");
     const stops = r.body.days[0].primary_route.main_stops;
-    assert.equal(stops.length, 3);
+    assert.equal(stops.length, 2);
     assert.equal(
       stops.filter((stop) => stop.role === "green_walk_stop").length,
       2,
@@ -272,7 +272,7 @@ test(
 );
 
 test(
-  "single-interest route bounds requested low-trust depth and unrequested support",
+  "single-interest route preserves focus and bounds requested low-trust depth",
   withServer(makeLoader(mixedTrustSingleInterestFixture({ lat: 41.9, lng: 12.49 })), async (server) => {
     const r = await requestJson(server, {
       path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
@@ -283,24 +283,11 @@ test(
     assert.equal(exp.promotion.promote, true);
 
     const stops = r.body.days[0].primary_route.main_stops;
-    const support = stops.filter((stop) => !stop.covered_preferences.includes("food"));
-    const lowTrustSupport = support.filter((stop) => stop.trust?.confidence === "low");
-    const lowTrustRequested = stops.filter(
-      (stop) => stop.covered_preferences.includes("food") && stop.trust?.confidence === "low",
-    );
-    assert.ok(
-      support.some((stop) => stop.trust?.confidence === "medium"),
-      "corroborated support is admitted before any experimental bridge",
-    );
-    assert.ok(lowTrustSupport.length <= 1, "at most one unrequested low-trust bridge may reach the route");
-    assert.ok(
-      lowTrustRequested.length <= 1,
-      "one admitted candidate may represent the requested role but cannot multiply its depth",
-    );
-    assert.ok(
-      stops.filter((stop) => stop.covered_preferences.includes("food")).length >= 1,
-      "the requested role remains represented",
-    );
+    assert.ok(stops.length >= 2, "the existing two-place requested spine stays useful");
+    assert.ok(stops.every((stop) => stop.covered_preferences.includes("food") ||
+      stop.partial_preferences.includes("food")), "every main stop serves the chosen intent");
+    assert.ok(stops.filter((stop) => stop.trust?.confidence === "low").length <= 2,
+      "focus does not relax the existing bound on experimentally admitted depth");
   }),
 );
 
@@ -470,7 +457,7 @@ test("a walkable tonight-event is woven into the promoted route as its last stop
   try {
     const r = await requestJson(server, {
       path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
-      body: agnosticBody(),
+      body: agnosticBody({ preferences: [] }),
     });
     assert.equal(r.body.agnostic_route_output_experiment.promotion.promote, true);
     const route = r.body.days[0].primary_route;
@@ -531,7 +518,7 @@ test("a distant tonight-event stays an anchor: no walk claimed, route unextended
   try {
     const r = await requestJson(server, {
       path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
-      body: agnosticBody(),
+      body: agnosticBody({ preferences: [] }),
     });
     const route = r.body.days[0].primary_route;
     assert.ok(!route.main_stops.some((s) => s.is_live_event), "no event stop fabricated for a non-walkable event");
@@ -620,8 +607,9 @@ test(
     assert.equal(serialized.includes("Cafe 0"), false, "the dismissed place must not appear anywhere");
     assert.equal(serialized.includes("cafe-0"), false, "not by id either");
 
-    // The rest of the day is untouched and still real.
-    assert.ok(serialized.includes("Food 0"));
+    // Only one matching place remains: do not manufacture a day with the museum.
+    assert.equal(r.body.agnostic_route_output_experiment.promotion.promote, false);
+    assert.equal(r.body.days?.[0]?.primary_route, undefined);
     // And the request is honestly echoed as a count, never as the ids.
     assert.deepEqual(r.body.agnostic_route_output_experiment.excluded_candidates, { requested_count: 1 });
   }),
@@ -814,7 +802,7 @@ test(
     const r = await requestJson(server, {
       path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
       body: agnosticBody({
-        preferences: ["food", "coffee"],
+        preferences: ["food", "coffee", "culture"],
         excluded_candidate_ids: ["cafe-0"],
         pinned_candidate_ids: ["cafe-0", "ghost-cafe"],
       }),
@@ -1178,7 +1166,7 @@ test(
       const plain = await requestJson(server, {
         path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
         method: "POST",
-        body: walkBudgetBody(),
+        body: walkBudgetBody({ preferences: [] }),
       });
       const baseline = plain.body.days[0].primary_route;
       assert.ok(
@@ -1189,7 +1177,7 @@ test(
       const pinned = await requestJson(server, {
         path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
         method: "POST",
-        body: walkBudgetBody({ pinned_candidate_ids: ["mid-far"] }),
+        body: walkBudgetBody({ preferences: [], pinned_candidate_ids: ["mid-far"] }),
       });
       const route = pinned.body.days[0].primary_route;
       const verdict = pinned.body.agnostic_route_output_experiment.pinned_candidates;
@@ -1590,3 +1578,79 @@ test(
     }
   }),
 );
+
+// Public route regression: UI aliases, pairs, repeated requests and modern
+// rhythms must obey the same intent union after every compose pass.
+test("explicit preferences constrain published primary experiences across day rhythms", withServer(
+  makeLoader([
+    ...broadIntentFixture({ lat: 41.9, lng: 12.49 }),
+    ...greenFixtureNear({ lat: 41.9, lng: 12.49 }),
+    ...Array.from({ length: 6 }, (_, i) => externalRecord(`vintage-${i}`, `Vintage ${i}`,
+      "vintage-shop", 41.902 + i * 0.0003, 12.49, ["second_hand"])),
+  ]), async (server) => {
+    const { normalizeUserIntents } = require("../server/candidates/intent-vocabulary");
+    const { buildAnywherePayload } = await import("../frontend/src/lib/anywhere-payload.mjs");
+    for (const preferences of [["second_hand"], ["food"], ["culture"], ["views"], ["fika"],
+      ["nightlife"], ["green"], ["second_hand", "fika"], ["culture", "green"]]) {
+      const requested = normalizeUserIntents(preferences).intents;
+      for (const dayRhythm of ["calm", "balanced", "balanced", "full", "free"]) {
+        const response = await requestJson(server, {
+          path: `/api/route-recommendations?lang=en&${FLAG}&${ENGINE}`,
+          body: buildAnywherePayload({ coords: { lat: 41.9, lng: 12.49 }, dates: [DATE], preferences, dayRhythm }),
+        });
+        const label = `${preferences.join("+")} ${dayRhythm}`;
+        const stops = response.body.days?.[0]?.primary_route?.main_stops || [];
+        assert.equal(response.body.agnostic_route_output_experiment.promotion.promote, true, label);
+        assert.ok(stops.length >= 2, `${label}: real focused day, not blanket refusal`);
+        assert.ok(stops.every((stop) => [...stop.covered_preferences, ...stop.partial_preferences]
+          .some((intent) => requested.includes(intent))), `${label}: no unsolicited primary stop`);
+        for (const intent of requested) assert.ok(stops.some((stop) =>
+          stop.covered_preferences.includes(intent)), `${label}: supplied requested intent represented`);
+      }
+    }
+  },
+));
+
+test("an unclassified evening event stays in Live instead of overriding explicit focus", async () => {
+  global.fetch = mockStableWeatherFetch();
+  const server = buildApp({ openDataLoader: makeLoader(fixtureNear({ lat: 41.9, lng: 12.49 })),
+    eventSupply: eventSupplyWith(tonightEventAt(12.5)) }).listen(0);
+  try {
+    const r = await requestJson(server, { path: `/api/route-recommendations?${FLAG}&${ENGINE}`,
+      body: agnosticBody({ preferences: ["fika"] }) });
+    assert.equal(r.body.agnostic_route_output_experiment.promotion.promote, true);
+    const stops = r.body.days[0].primary_route.main_stops;
+    assert.ok(stops.every((stop) => stop.covered_preferences.includes("coffee")));
+    assert.ok(stops.every((stop) => !stop.is_live_event));
+    assert.equal(r.body.place_structure.district_day.evening_event.id, "ev-tonight");
+  } finally { await new Promise((resolve) => server.close(resolve)); global.fetch = ORIGINAL_FETCH; }
+});
+
+test("one rhythm interest can compose across the wider local aperture without a kilometre goal", async () => {
+  const { buildAnywherePayload } = await import("../frontend/src/lib/anywhere-payload.mjs");
+  global.fetch = mockStableWeatherFetch();
+  const records = [0, 0.01, 0.028, 0.035, 0.039].map((offset, i) => ({
+    ...externalRecord(`reuse-${i}`, `Reuse ${i}`, "vintage-shop", 41.9 + offset, 12.49, ["second_hand"]),
+    opening_hours: "Mo-Su 09:00-19:00",
+  }));
+  records.push({ ...externalRecord("closed-reuse", "Closed Reuse", "vintage-shop", 41.936, 12.491, ["second_hand"]),
+    opening_hours: "Mo-Su off" });
+  records.push(externalRecord("off-theme", "Unrequested Museum", "museum", 41.935, 12.49, ["kultur"]));
+  const server = buildApp({ openDataLoader: makeLoader(records),
+    clock: () => new Date("2026-09-30T08:00:00Z") }).listen(0);
+  try {
+    for (const dayRhythm of ["calm", "balanced", "full", "free"]) {
+      const payload = buildAnywherePayload({ coords: { lat:41.9,lng:12.49 }, dates:["2026-10-01"], preferences:["second_hand"], dayRhythm });
+      assert.equal(payload.walking_km_target, undefined);
+      const r = await requestJson(server, { path:`/api/route-recommendations?${FLAG}&${ENGINE}`, body:payload });
+      const route = r.body.days?.[0]?.primary_route;
+      assert.ok(route, dayRhythm);
+      assert.ok(route.main_stops.length >= 4, `${dayRhythm}: safe requested depth survives`);
+      assert.ok(route.main_stops.some((stop) => stop.lat > 41.93), `${dayRhythm}: not cut at3km`);
+      assert.ok(route.main_stops.every((stop) => stop.covered_preferences.includes("second_hand")));
+      assert.ok(route.main_stops.every((stop) => stop.id !== "closed-reuse"));
+      assert.ok(Number.isFinite(route.estimated_km));
+      assert.equal(r.body.agnostic_route_output_experiment.constraint_negotiation.walking.target_km, null);
+    }
+  } finally { await new Promise(resolve => server.close(resolve)); global.fetch=ORIGINAL_FETCH; }
+});

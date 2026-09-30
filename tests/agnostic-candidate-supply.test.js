@@ -514,7 +514,7 @@ test("a single-place requested spine gains exactly one same-role place, never mo
   assert.deepEqual(twoPlaceSpine.map((entry) => entry.id), ["food-low-a", "culture-low-a"]);
 });
 
-test("single requested role gains bounded planner-safe day support without false preference coverage", () => {
+test("single requested role keeps depth and rejects unrequested day filler", () => {
   const make = (id, role, type, covered) => richCandidate({
     candidate_id: id,
     label: id,
@@ -555,13 +555,8 @@ test("single requested role gains bounded planner-safe day support without false
     plannerRoles: roles,
   });
 
-  assert.deepEqual(result.map((entry) => entry.id), ["food-a", "food-b", "view-a", "coffee-a"]);
-  assert.deepEqual(result.map((entry) => entry.reservoir_support), [false, false, true, true]);
-  assert.equal(result.some((entry) => entry.id === "bar-a"), false, "unrequested option roles do not pad the day");
-  assert.deepEqual(result.find((entry) => entry.id === "view-a").tags, ["scenic"]);
-  assert.deepEqual(result.find((entry) => entry.id === "view-a").covered_preferences, []);
-  assert.deepEqual(result.find((entry) => entry.id === "view-a").missing_preferences, ["food"]);
-  assert.deepEqual(result.find((entry) => entry.id === "food-a").covered_preferences, ["food"]);
+  assert.deepEqual(result.map((entry) => entry.id), ["food-a", "food-b"]);
+  assert.ok(result.every((entry) => entry.covered_preferences.includes("food")));
 });
 
 test("a proven-closed supporting stop cannot re-enter after role selection", () => {
@@ -603,7 +598,7 @@ test("a proven-closed supporting stop cannot re-enter after role selection", () 
   assert.deepEqual(result.map((entry) => entry.id), ["food-a"]);
 });
 
-test("unrequested day support admits at most one experimental bridge after gate-passing support", () => {
+test("unrequested safe and experimental support cannot dilute an explicit choice", () => {
   const requestedFood = richCandidate({
     candidate_id: "requested-food",
     type: "restaurant",
@@ -666,11 +661,8 @@ test("unrequested day support admits at most one experimental bridge after gate-
     plannerRoles: roles,
   });
 
-  assert.deepEqual(result.map((entry) => entry.id), ["requested-food", "safe-view", "admitted-coffee"]);
-  assert.equal(result[0].reservoir_selected, true, "requested experimental admission remains available");
-  assert.equal(result[1].reservoir_support, true, "gate-passing support remains available");
-  assert.equal(result[2].reservoir_support, true, "one bounded experimental bridge may complete the thin day");
-  assert.equal(result.some((entry) => entry.id === "admitted-market"), false);
+  assert.deepEqual(result.map((entry) => entry.id), ["requested-food"]);
+  assert.equal(result[0].reservoir_selected, true);
 });
 
 test("unrequested experimental candidates cannot create support without a gate-passing spine", () => {
@@ -742,7 +734,7 @@ test("local independent support beats a chain in the same role", () => {
   });
   const roles = {
     city: "agnostic-engine-area",
-    requested_preferences: ["food"],
+    requested_preferences: ["food", "coffee"],
     roles: [
       { role: "food_anchor", slot: "anchor", requested: true, candidates: [food] },
       {

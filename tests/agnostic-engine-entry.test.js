@@ -150,7 +150,7 @@ test("any-place config with source-backed candidates composes through agnostic_c
   });
 });
 
-test("strict single-interest agnostic route keeps its matches and adds safe day support", async () => {
+test("strict single-interest agnostic route keeps only its matching main stops", async () => {
   const sourceCandidates = [
     sourceCandidate({
       id: "vintage-1",
@@ -212,16 +212,16 @@ test("strict single-interest agnostic route keeps its matches and adds safe day 
   const route = result.days[0].primary_route;
 
   assert.ok(route, "the safe reservoir can form a minimum complete day");
-  assert.equal(route.main_stops.length, 3);
+  assert.equal(route.main_stops.length, 2);
   const ids = route.main_stops.map((stop) => stop.id);
   assert.ok(ids.includes("vintage-1"));
   assert.ok(ids.includes("vintage-2"));
   assert.equal(
     route.main_stops.filter((stop) => stop.tags.includes("second_hand")).length,
     2,
-    "strict intent matches remain the route majority",
+    "strict intent governs the entire primary route",
   );
-  assert.ok(ids.includes("support-view") || ids.includes("support-cafe"));
+  assert.ok(!ids.includes("support-view") && !ids.includes("support-cafe"));
 });
 
 test("fewer than two viable candidates degrades to an honest null route, never invented", async () => {

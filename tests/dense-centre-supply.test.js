@@ -246,7 +246,9 @@ test("with a healthy map source and a warm directory, a 9 km dense-centre day re
   const route = publishedRoute(body);
   assert.ok(overpass.stats.calls > 0, "the map primary was asked");
   assert.ok(route.estimated_km >= 5.4, `9 km day reached ${route.estimated_km} km`);
-  assert.ok(route.main_stops.length >= 4, `${route.main_stops.length} stops`);
+  assert.ok(route.main_stops.length >= 3, `${route.main_stops.length} focused stops`);
+  assert.ok(route.main_stops.every((stop) => [...(stop.covered_preferences || []), ...(stop.partial_preferences || [])]
+    .some((intent) => ["food", "museums"].includes(intent))), "walking depth cannot use unrequested filler");
   assert.ok(
     route.main_stops.some((stop) => stop.provenance?.corroborated_by_external === true ||
       new Set((stop.provenance?.attribution || []).map((item) => item.source_family)).size >= 2),

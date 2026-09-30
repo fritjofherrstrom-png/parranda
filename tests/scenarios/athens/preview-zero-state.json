@@ -14,12 +14,12 @@
         "anchor_zone": "Gazi & Kerameikos",
         "routing_source": "agnostic_compose",
         "uses_provisional_sources": true,
-        "provisional_stop_count": 3,
-        "credibility_tier": "low",
-        "estimated_km": 6.1,
-        "longest_leg_km": 1.3,
-        "longest_leg_minutes": 16,
-        "average_leg_minutes": 10,
+        "provisional_stop_count": 2,
+        "credibility_tier": "medium",
+        "estimated_km": 7.4,
+        "longest_leg_km": 2.1,
+        "longest_leg_minutes": 25,
+        "average_leg_minutes": 15,
         "stops": [
           {
             "label": "Ama Lachei stis Nefelis",
@@ -37,8 +37,8 @@
             "live": false
           },
           {
-            "label": "Kilo Shop",
-            "area": "monastiraki-psyrri",
+            "label": "Filopappou Hill",
+            "area": "koukaki-makrygianni",
             "live": false,
             "provisional": true,
             "source_tier": "inferred",
@@ -47,14 +47,6 @@
           {
             "label": "Pnyx",
             "area": "koukaki-makrygianni",
-            "live": false,
-            "provisional": true,
-            "source_tier": "inferred",
-            "confidence": "needs_review"
-          },
-          {
-            "label": "Palaiopoleion ton Athinon",
-            "area": "monastiraki-psyrri",
             "live": false,
             "provisional": true,
             "source_tier": "inferred",
@@ -82,27 +74,21 @@
           },
           {
             "from": "Klimataria",
-            "to": "Kilo Shop",
-            "km": 0.6,
-            "minutes": 7
+            "to": "Filopappou Hill",
+            "km": 2.1,
+            "minutes": 25
           },
           {
-            "from": "Kilo Shop",
+            "from": "Filopappou Hill",
             "to": "Pnyx",
-            "km": 0.8,
-            "minutes": 10
+            "km": 0.7,
+            "minutes": 8
           },
           {
             "from": "Pnyx",
-            "to": "Palaiopoleion ton Athinon",
-            "km": 0.8,
-            "minutes": 10
-          },
-          {
-            "from": "Palaiopoleion ton Athinon",
             "to": "Athens",
-            "km": 1.1,
-            "minutes": 13
+            "km": 1.8,
+            "minutes": 22
           }
         ]
       },
