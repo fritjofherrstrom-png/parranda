@@ -28,6 +28,8 @@ Det här repot är alpha-versionen för att snabbt kunna visa produkten, få ska
 
 Se `docs/CITY_ENGINE_PRINCIPLES.md`, `docs/ARCHITECTURE.md` och `docs/PRODUCT_STRATEGY.md` för principerna bakom city packs och city-packless Parranda.
 
+Framtida produktarbete finns i [Product TODO](docs/PRODUCT_TODO.md), inklusive ett uppskjutet shuffle-val för alternativa dagsstopp.
+
 ## Stack
 
 - Frontend: `index.html`, `landing.html`, `script.js`, `landing.js`, `planner-trust.js`, `styles.css`
