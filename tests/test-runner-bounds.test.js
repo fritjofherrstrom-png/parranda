@@ -24,7 +24,9 @@ test("suite bounds a stuck test file and reports failure rather than skipping it
     const guard = path.resolve(__dirname, "helpers/file-deadline.js");
     // Allow runner startup under full-suite load. An outer kill is a failure,
     // never evidence that the guard works. TAP is explicit on both Node 22/24.
-    const result = spawnSync(process.execPath, ["--require", guard, "--test", "--test-reporter=tap", "--test-timeout=200", file], { encoding: "utf8", timeout: 30000, env });
+    // Give the built-in timeout a later deadline so this probe specifically
+    // observes the file guard instead of racing Node 22's parent cancellation.
+    const result = spawnSync(process.execPath, ["--require", guard, "--test", "--test-reporter=tap", "--test-timeout=5000", file], { encoding: "utf8", timeout: 30000, env });
     assert.ifError(result.error);
     assert.equal(result.signal, null, "the file guard terminates the stuck child before the outer safety timeout");
     assert.equal(result.status, 1, result.stdout + result.stderr);
