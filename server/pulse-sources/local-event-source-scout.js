@@ -88,7 +88,7 @@ function buildLocalEventDiscoveryQueryPlan({
   // Intent narrows ranking later; it must not erase the generic calendar
   // discovery baseline. Local-language terms lead the bounded budget, while
   // generic terms remain present for sites that expose English interfaces.
-  const terms = uniqueStrings([
+  const ordinaryTerms = uniqueStrings([
     suppliedTerms[0],
     "events",
     suppliedTerms[1],
@@ -97,6 +97,13 @@ function buildLocalEventDiscoveryQueryPlan({
     "festival",
     ...suppliedTerms.slice(3),
   ]).slice(0, 8);
+  const rhythmTerms = uniqueStrings(place.local_rhythm_discovery_terms).slice(0, 2);
+  // Keep the locality's small festivities and holiday calendar searchable even
+  // when ordinary calendar/intent terms already fill their eight-term budget.
+  // Insert early, and always bind these terms to the locality, never a country.
+  const terms = uniqueStrings([
+    ...ordinaryTerms.slice(0, 3), ...rhythmTerms, ...ordinaryTerms.slice(3),
+  ]);
   if (!labels.length || !terms.length) return [];
 
   const plan = [];
@@ -107,7 +114,8 @@ function buildLocalEventDiscoveryQueryPlan({
   // query space instead of inheriting whichever nested loop happened to lead.
   for (let depth = 0; depth < labels.length; depth += 1) {
     for (let termIndex = 0; termIndex < terms.length; termIndex += 1) {
-      const label = labels[(termIndex + depth) % labels.length];
+      const isRhythm = rhythmTerms.includes(terms[termIndex]);
+      const label = isRhythm ? labels[0] : labels[(termIndex + depth) % labels.length];
       const term = terms[termIndex];
       const query = `${label.value} ${term}`;
       const key = query.toLocaleLowerCase("en-US");
@@ -115,7 +123,7 @@ function buildLocalEventDiscoveryQueryPlan({
       seen.add(key);
       plan.push({
         query,
-        query_family: discoveryQueryFamily(term),
+        query_family: isRhythm ? "local_rhythm" : discoveryQueryFamily(term),
         term_key: stableHash(term).slice(0, 12),
         label_scope: label.scope,
       });

@@ -78,7 +78,7 @@ const {
 } = require("./anchor-event-acquisition");
 
 const DEFAULT_RADIUS_M = 3000;
-const MAX_EVENT_COLLECTION_RADIUS_M = 25000;
+const MAX_EVENT_COLLECTION_RADIUS_M = 40000;
 const MAX_PER_BUCKET = 6;
 const MAX_BROWSE_PER_BUCKET = 24;
 const SERENDIPITY_MIN_SALIENCE = 7;
@@ -764,6 +764,7 @@ function buildScopedEventSourcePlan({
   maxSources = DEFAULT_MAX_SOURCES,
   maxLocalSources = DEFAULT_MAX_LOCAL_SOURCES,
   now,
+  sourceBounds = null,
 } = {}) {
   const sourceCap = Math.max(1, Math.min(Number(maxSources) || DEFAULT_MAX_SOURCES, DEFAULT_MAX_SOURCES));
   const reserveGlobal = globalEnabled && globalSource ? 1 : 0;
@@ -789,6 +790,7 @@ function buildScopedEventSourcePlan({
       globalEnabled: false,
       maxSources: DEFAULT_MAX_SOURCES,
       maxLocalSources: DEFAULT_MAX_LOCAL_SOURCES,
+      coverageBounds: sourceBounds,
     });
     for (const source of localSources) {
       const identity = String(source.id || source.endpoint || source.base || "");
@@ -841,6 +843,7 @@ async function collectAnchorEvents({
   venueResolver = null,
   venueResolutionLimit = 4,
   spatialScope = null,
+  sourceBounds = null,
   placeContext = null,
 } = {}) {
   const effectiveRadiusM = Math.min(
@@ -856,6 +859,7 @@ async function collectAnchorEvents({
     globalEnabled: Boolean(globalKey),
     maxSources,
     maxLocalSources,
+    sourceBounds,
     // The same server-owned instant the rest of this collection reasons with.
     // Without it this plan expired qualifications against the real clock while
     // the caller's plan used the injected one, so one request could hold two
@@ -1625,6 +1629,7 @@ function resolveDefaultEventSupply(
     placeLabel = null,
     placeContext = null,
     spatialScope = null,
+    discoverySpatialScope = null,
     now,
     selectedDate = null,
     time = "tonight",
@@ -1633,6 +1638,14 @@ function resolveDefaultEventSupply(
     scope = null,
   } = {}) => {
     const requestRegistry = [...registry];
+    if (scope?.kind === "in_place" && sourceCatalog && typeof sourceCatalog.listApprovedEventFeedsForScope === "function") {
+      try {
+        const areaFeeds = await sourceCatalog.listApprovedEventFeedsForScope({ spatialScope: scope.trusted_place_scope, now });
+        appendUniqueEventFeeds(requestRegistry, areaFeeds);
+      } catch (_error) {
+        // Local file feeds and ordinary anchor reads remain usable.
+      }
+    }
     if (sourceCatalog && typeof sourceCatalog.listApprovedEventFeedsForAnchor === "function") {
       try {
         const catalogFeeds = await sourceCatalog.listApprovedEventFeedsForAnchor({ anchor, now });
@@ -1663,6 +1676,7 @@ function resolveDefaultEventSupply(
       anchor,
       sourceAnchors,
       registry: requestRegistry,
+      sourceBounds: scope?.kind === "in_place" ? scope.trusted_place_scope?.bounds : null,
       now,
       globalSource: GLOBAL_FEED_DESCRIPTOR,
       globalEnabled: Boolean(globalKey),
@@ -1673,8 +1687,10 @@ function resolveDefaultEventSupply(
     if (!hasApprovedLocalSource) {
       discoveryHealth = await resolveUncoveredDiscoveryHealth(sourceCatalog, anchor);
     }
+    const complementaryDiscoveryNeeded = localSourceMixNeedsDiscovery(sourcePlan) &&
+      placeContext && (discoverySpatialScope || spatialScope);
     if (
-      !hasApprovedLocalSource &&
+      (!hasApprovedLocalSource || complementaryDiscoveryNeeded) &&
       sourceCatalog &&
       typeof sourceCatalog.recordScoutDemand === "function"
     ) {
@@ -1684,7 +1700,7 @@ function resolveDefaultEventSupply(
         anchor,
         placeLabel,
         placeContext,
-        spatialScope,
+        spatialScope: discoverySpatialScope || spatialScope,
       });
       if (!discoveryHealth) discoveryHealth = demandHealth;
     }
@@ -1734,6 +1750,7 @@ function resolveDefaultEventSupply(
           radiusM: effectiveRadiusM,
           timeoutMs: WARM_TIMEOUT_MS,
           sourceCollectionCache,
+          sourceBounds: scope?.kind === "in_place" ? scope.trusted_place_scope?.bounds : null,
           globalKey,
           venueResolver,
           spatialScope,
@@ -1818,6 +1835,25 @@ async function resolveUncoveredDiscoveryHealth(sourceCatalog, anchor) {
     "environment_not_wired",
     "source_discovery_environment_not_wired",
   );
+}
+
+function localSourceMixNeedsDiscovery(sourcePlan) {
+  const local = sourcePlan.filter((source) => source?.kind !== "global");
+  const publishers = new Set();
+  const families = new Set();
+  for (const source of local) {
+    let publisher = source.source_identity;
+    if (!publisher) {
+      try { publisher = new URL(source.endpoint || source.base).hostname; } catch { publisher = null; }
+    }
+    if (publisher) publishers.add(String(publisher).trim().toLowerCase().replace(/^www\./, ""));
+    const family = source.source_family || source.family;
+    if (family && family !== "unknown_source_family") families.add(String(family).trim().toLowerCase());
+  }
+  // A single answering calendar is useful supply, but is not a broad local
+  // source mix. The catalog's stable target/backoff prevents redundant crawls;
+  // this bounded write keeps discovery alive alongside existing calendar reads.
+  return publishers.size < 2 || families.size < 2;
 }
 
 async function recordUncoveredScoutDemand(sourceCatalog, demand) {

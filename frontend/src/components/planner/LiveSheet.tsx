@@ -39,6 +39,7 @@ export default function LiveSheet({
   liveSheetScope,
   requestLiveSheetScope,
   aroundPlaceScopeAvailable,
+  inPlaceScopeAvailable,
   routeScopeAvailable,
   liveQueryPending,
   liveQueryGeoHint,
@@ -70,6 +71,7 @@ export default function LiveSheet({
   liveSheetScope: LiveEventScope;
   requestLiveSheetScope: (scope: LiveEventScope) => void;
   aroundPlaceScopeAvailable: boolean;
+  inPlaceScopeAvailable: boolean;
   routeScopeAvailable: boolean;
   liveQueryPending: boolean;
   liveQueryGeoHint: string | null;
@@ -117,6 +119,8 @@ export default function LiveSheet({
       ? t("nära rutten", "near the route")
       : liveSheetScope === "near_me"
         ? t("nära dig", "near you")
+        : liveSheetScope === "in_place"
+          ? t(`i hela området kring ${anchorLabel}`, `across the area around ${anchorLabel}`)
         : anchorIsPosition
           ? t("runt din position", "around your position")
           : t(`runt ${anchorLabel}`, `around ${anchorLabel}`);
@@ -175,6 +179,15 @@ export default function LiveSheet({
             </button>
             <button
               type="button"
+              aria-pressed={liveSheetScope === "in_place"}
+              disabled={!inPlaceScopeAvailable || liveQueryPending}
+              onClick={() => requestLiveSheetScope("in_place")}
+              className={scopeChip(liveSheetScope === "in_place")}
+            >
+              {t("Hela området", "Whole area")}
+            </button>
+            <button
+              type="button"
               aria-pressed={liveSheetScope === "near_route"}
               disabled={!routeScopeAvailable || liveQueryPending}
               onClick={() => requestLiveSheetScope("near_route")}
@@ -199,6 +212,7 @@ export default function LiveSheet({
             </p>
           )}
           {liveQueryGeoHint && <p className="text-xs text-parranda-ink/65">{liveQueryGeoHint}</p>}
+          {liveSheetScope === "in_place" && <p className="text-xs text-parranda-ink/65">{t("Söker inom platsens kartområde. Händelser längre bort visas med avstånd.", "Searches the place's map area. Events farther away show their distance.")}</p>}
         </div>
 
         {/* WHEN — a real axis over the live_events buckets. */}

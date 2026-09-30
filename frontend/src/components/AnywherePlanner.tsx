@@ -1198,6 +1198,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const aroundPlaceScopeAvailable = Boolean(
     buildLiveEventQueryPayload({ scope: "around_place", response: safeResponse }),
   );
+  const inPlaceScopeAvailable = Boolean(buildLiveEventQueryPayload({ scope: "in_place", response: safeResponse }));
 
   function requestLiveSheetTime(nextTime: "tonight" | "week") {
     setLiveSheetTime(nextTime);
@@ -1254,14 +1255,17 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         });
         const body = await response.json();
         if (controller.signal.aborted || queryIntentId !== intentSequenceRef.current || safeResponse !== liveResponseRef.current) return;
+        if (!response.ok && body?.error === "place_scope_unavailable") throw new Error("place_scope_unavailable");
         const accepted = response.ok ? acceptedLiveEventQuery(body) : null;
         if (!accepted) throw new Error("live_event_query_contract_rejected");
         setLiveQueryEvents(accepted as LiveEvents);
         if (!(accepted as LiveEvents).pending) break;
       }
-    } catch {
+    } catch (error) {
       if (controller.signal.aborted) return;
-      setLiveQueryError(t("Live-vyn kunde inte uppdateras. Försök igen.", "The Live view couldn't update. Try again."));
+      setLiveQueryError(error instanceof Error && error.message === "place_scope_unavailable"
+        ? t("Hela områdets gränser kunde inte bekräftas. Välj Runt platsen eller Nära mig.", "The full area's boundaries couldn't be confirmed. Choose Around the place or Near me.")
+        : t("Live-vyn kunde inte uppdateras. Försök igen.", "The Live view couldn't update. Try again."));
     } finally {
       if (liveQueryAbortRef.current === controller) {
         liveQueryAbortRef.current = null;
@@ -2911,6 +2915,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           liveSheetScope={liveSheetScope}
           requestLiveSheetScope={(scope) => { requestLiveSheetScope(scope).catch(() => {}); }}
           aroundPlaceScopeAvailable={aroundPlaceScopeAvailable}
+          inPlaceScopeAvailable={inPlaceScopeAvailable}
           routeScopeAvailable={routeScopeAvailable}
           liveQueryPending={liveQueryPending}
           liveQueryGeoHint={liveQueryGeoHint}

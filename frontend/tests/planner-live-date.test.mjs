@@ -29,6 +29,31 @@ async function click(h, control) {
   await h.act(() => control.dispatchEvent(new h.window.Event('click', { bubbles: true })));
 }
 
+test('whole-area Live sends the published place and shows a farther event without changing the day', async t => {
+  const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' });
+  t.after(() => h.unmount());
+  await h.clock.advance(500);
+  const published = day('2026-06-29');
+  published.agnostic_route_output_experiment.intake = { query: 'Testville' };
+  await h.fetchMock.respond(h.fetchMock.pending()[0], published);
+  await h.clock.advance(50);
+  await click(h, button(h, /See all live/));
+  const composeCount = h.fetchMock.calls.filter(c => c.url.includes('/api/route-recommendations')).length;
+  await click(h, button(h, /^Whole area$/));
+  const query = h.fetchMock.pending().find(c => c.url.includes('/api/live-events'));
+  assert.equal(query.body.scope, 'in_place');
+  assert.equal(query.body.place_query, 'Testville');
+  assert.equal(query.body.selected_date, '2026-06-29');
+  const events = live('2026-06-29', 'Neighbourhood village festa');
+  events.tonight[0].live_proximity = 'in_place';
+  events.tonight[0].anchor_distance_km = 8.4;
+  await h.fetchMock.respond(query, { contract: 'live_event_query_v1', route_mutation: false, day_anchor_mutation: false, live_events: events });
+  const sheet = h.container.querySelector('[role="dialog"]');
+  assert.match(sheet.textContent, /Neighbourhood village festa/);
+  assert.match(sheet.textContent, /8.4 km away/);
+  assert.equal(h.fetchMock.calls.filter(c => c.url.includes('/api/route-recommendations')).length, composeCount);
+});
+
 for (const deferBody of [false, true]) test(`new day invalidates held-day Live results (deferred body: ${deferBody})`, async t => {
   const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' });
   t.after(() => h.unmount());
