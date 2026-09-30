@@ -43,3 +43,16 @@ found unknown opening hours allowing a shop ordinarily closed on the selected
 Thursday. Göteborg/Berlin also lacked complete route evidence. Neither this
 map integration nor passing fixture tests resolves those supply/visitability
 gaps. No public deployment or main merge is implied by this candidate.
+
+The candidate also integrates #539 at
+`b42abfd1cd322abace2dc2af3fdbeda3a5c69da0`. Current source-owned aliases can
+corroborate a storefront only with matching address and website, compatible
+category and nearby coordinates; ambiguous aliases cannot collapse different
+stores. Source-supplied opening hours and explicit closure evidence survive
+entity resolution. Public payloads cannot inject these identity facts.
+
+This removes a demonstrated identity loss in the deterministic API regression
+(two stops before, four after). It does not fetch missing addresses or opening
+hours, and that fixture is not evidence of a richer real-source day. In
+particular, shops with unknown hours still need independent visitability
+checks. The combined head needs its own tests and exact-image Pi readback.
