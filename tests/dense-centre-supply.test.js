@@ -47,8 +47,8 @@ before(async () => {
   global.fetch = mockStableWeatherFetch();
 });
 
-after(() => {
-  dense?.close();
+after(async () => {
+  await dense?.close();
   global.fetch = ORIGINAL_FETCH;
 });
 
@@ -272,7 +272,7 @@ test("a genuinely compact world cannot reach the floor and the day says why inst
     assert.equal(capacity.can_support_target, false, "the reservoir itself reports it cannot span the band");
     assert.ok(capacity.candidate_span_km < capacity.target_floor_km);
   } finally {
-    compact.close();
+    await compact.close();
   }
 });
 

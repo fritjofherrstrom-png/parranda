@@ -135,7 +135,8 @@ async function createOvertureQueryRows(places) {
     lat: place.directoryLat,
     lng: place.directoryLng,
   })).join("\n"));
-  const instance = await DuckDBInstance.create(":memory:");
+  // Parallel test fixtures must not allocate host-sized native resources.
+  const instance = await DuckDBInstance.create(":memory:", { threads: "1", memory_limit: "128MB" });
   const conn = await instance.connect();
   const file = path.join(dir, "places.parquet");
   await conn.run(`COPY (SELECT id,
@@ -147,16 +148,28 @@ async function createOvertureQueryRows(places) {
       {'xmin': lng::DOUBLE, 'ymin': lat::DOUBLE} AS bbox
     FROM read_json_auto('${rowsFile}')) TO '${file}' (FORMAT PARQUET)`);
   const stats = { queries: 0 };
+  let tail = Promise.resolve();
+  let closing = false;
+  let closePromise = null;
   return {
     stats,
     queryRows: async (sql) => {
+      if (closing) throw new Error("fixture is closed");
       stats.queries += 1;
-      return (await conn.runAndReadAll(sql.replace(/s3:\/\/[^']+/, file))).getRowObjectsJson();
+      const query = tail.then(async () => (await conn.runAndReadAll(sql.replace(/s3:\/\/[^']+/, file))).getRowObjectsJson());
+      // A rejected query must not poison later accepted queries or drain cleanup.
+      tail = query.then(() => undefined, () => undefined);
+      return query;
     },
     close() {
-      conn.closeSync();
-      instance.closeSync();
-      fs.rmSync(dir, { recursive: true, force: true });
+      if (closePromise) return closePromise;
+      closing = true;
+      closePromise = tail.then(() => {
+        conn.closeSync();
+        instance.closeSync();
+        fs.rmSync(dir, { recursive: true, force: true });
+      });
+      return closePromise;
     },
   };
 }
