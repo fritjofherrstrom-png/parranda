@@ -131,7 +131,11 @@ components/
   AnywherePlanner.tsx      orchestrator: requests, generations, ledger, render
   shared/AppBar.tsx        wordmark + language (both islands)
   shared/icons.tsx         inline SVG set
-  planner/RouteMap.tsx     Leaflet; owns its instance; route vs candidate modes
+  planner/RouteMap.tsx     Leaflet; owns its instance; route vs candidate modes;
+                           keeps every stop clear of the map's own controls
+                           (lib/route-map-fit.mjs); a tap on a stop's visible
+                           number is that stop's (44 px targets beneath every
+                           disc; numbers drawn under another disc: #531)
   planner/LiveSheet.tsx    Live explorer; receives read-only data + 3 callbacks
   planner/LiveEventSource.tsx  "via feed · destination" line, shared
   planner/copy.ts          vocabulary maps and server-reason sentences

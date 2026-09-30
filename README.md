@@ -131,6 +131,17 @@ ner tillägget `httpfs`) hoppas över om du inte kör
 
 CI kör samma grundsvit på GitHub för pull requests och pushes till `main`.
 
+`tests/route-map-controls.test.js` kontrollerar i en riktig Chromium att ingen
+ruttmarkör hamnar under kartans egna kontroller (zoom, attribution,
+förstoringsknappen), och `tests/route-map-tap-targets.test.js` att ett tryck
+eller en hovring på en markörs synliga nummer öppnar just det stoppet. Nummer
+som ritas under en annan markör kan inte tryckas alls; de följs, som blockerande,
+i #531, och testet fäller om de dyker upp någon annanstans. Utan webbläsare
+hoppas de över lokalt; installera Google Chrome, kör
+`npx playwright-core install chromium` eller peka ut en med
+`PARRANDA_TEST_CHROMIUM=/sökväg/till/chrome`. I CI, där GitHub-runnern har
+Chrome, fäller de i stället för att hoppa över.
+
 ## Dela med andra utvecklare
 
 Det enklaste alpha-flödet är:

@@ -18,3 +18,8 @@ export function routeMarkerPresentation(
   stops: RouteMapPoint[] | null | undefined,
   options?: { collisionDistanceKm?: number; radiusPx?: number },
 ): RouteMarkerPresentation[];
+
+export function screenMarkerPresentation(
+  points: Array<{ x: number; y: number }>,
+  options: { width: number; height: number; keepouts?: Array<{ left: number; top: number; right: number; bottom: number }>; radius?: number; gap?: number },
+): RouteMarkerPresentation[] | null;

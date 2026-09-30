@@ -123,3 +123,42 @@ export function routeMarkerPresentation(stops, options = {}) {
 
   return result;
 }
+
+/** Place badge footprints in screen space; never mutate geographic anchors. */
+export function screenMarkerPresentation(points, { width, height, keepouts = [], radius = 22, gap = 4 } = {}) {
+  if (!Array.isArray(points) || !Array.isArray(keepouts) || points.length > 200) return null;
+  if (![width, height, radius, gap].every(Number.isFinite) || radius <= 0 || gap < 0 || width < radius * 2 || height < radius * 2) return null;
+  const placed = [];
+  const result = [];
+  const boxes = keepouts.filter(b => b && [b.left, b.top, b.right, b.bottom].every(Number.isFinite) && b.right > b.left && b.bottom > b.top);
+  let checked = 0;
+  const safe = (x, y) => ++checked <= 20000 && x >= radius + 2 && x <= width - radius - 2 && y >= radius + 2 && y <= height - radius - 2
+    && boxes.every(b => x + radius + gap <= b.left || x - radius - gap >= b.right || y + radius + gap <= b.top || y - radius - gap >= b.bottom)
+    && placed.every(p => Math.hypot(x - p.x, y - p.y) >= radius * 2 + gap);
+  for (const point of points) {
+    if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return null;
+    const x = Math.max(radius + 2, Math.min(width - radius - 2, point.x));
+    const y = Math.max(radius + 2, Math.min(height - radius - 2, point.y));
+    let chosen = safe(x, y) ? { x, y } : null;
+    // Bounded square spiral: deterministic, local displacement first, then the
+    // rest of the container. No labels, city names or route distances involved.
+    const step = 6;
+    const rings = Math.min(64, Math.ceil(Math.max(width, height) / step));
+    for (let ring = 1; !chosen && ring <= rings && checked < 20000; ring++) {
+      const candidates = [];
+      for (let k = -ring; k <= ring; k++) {
+        candidates.push([ring, k], [-ring, k], [k, ring], [k, -ring]);
+      }
+      candidates.sort((a, b) => a[0] ** 2 + a[1] ** 2 - b[0] ** 2 - b[1] ** 2);
+      for (const [dx, dy] of candidates) {
+        if (safe(x + dx * step, y + dy * step)) { chosen = { x: x + dx * step, y: y + dy * step }; break; }
+      }
+    }
+    if (!chosen) return null; // Do not silently claim an impossible layout fits.
+    placed.push(chosen);
+    const shift_x_px = chosen.x - point.x;
+    const shift_y_px = chosen.y - point.y;
+    result.push({ shift_x_px, shift_y_px, clustered: Math.abs(shift_x_px) > 0.5 || Math.abs(shift_y_px) > 0.5 });
+  }
+  return result;
+}
