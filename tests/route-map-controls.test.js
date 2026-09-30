@@ -37,8 +37,9 @@ const { buildApp } = require("../server/app");
 const FIXTURE_DATE = "2026-09-27";
 const FIXED_NOW = new Date(`${FIXTURE_DATE}T10:00:00Z`);
 const WIDTHS = [320, 390, 1280];
-// The Tailwind transition is 150ms and the Planner re-fits on transitionend,
-// or after 400ms if none comes; wait past both before measuring.
+// The usual Tailwind transition is 150ms; allow it and the observed resize fit
+// to settle before measuring. The delayed-transition regression below also
+// exercises a transition that outlasts the former 400ms fallback.
 const SETTLE_MS = 600;
 
 const CHROMIUM_LAUNCHES = [
@@ -363,6 +364,34 @@ test("the expanded map shows a phone's day closer than the collapsed one", { tim
       expanded.spread > collapsed.spread * 1.5,
       `expected the day drawn larger once expanded: ${Math.round(collapsed.spread)}px → ${Math.round(expanded.spread)}px`,
     );
+  } finally {
+    await context.close();
+  }
+});
+
+test("a delayed shrink refits to the rendered mobile size after the old timer bound", { timeout: 120_000 }, async (t) => {
+  const current = await openRuntime(t);
+  if (!current) return;
+  const stops = DAYS["north-east corner (the Live stop)"];
+  const { context, page, route } = await openDay(current, { width: 320, stops });
+  try {
+    await page.evaluate(() => {
+      document.querySelector('section[aria-label="Rutten"] .leaflet-container').parentElement.style.transitionDuration = "1200ms";
+    });
+    const original = await page.evaluate(measureMap, EXPAND_NAMES);
+    for (const name of ["Förstora kartan", "Förminska kartan"]) {
+      await route.getByRole("button", { name }).click();
+      // Controlled CSS duration, not a wait for provider completion. This must
+      // expose the former timer fitting before the final rendered height.
+      await page.waitForTimeout(1600);
+      const measured = await page.evaluate(measureMap, EXPAND_NAMES);
+      assert.equal(measured.markers, stops.length);
+      assert.deepEqual(measured.problems, [], name);
+      if (name === "Förminska kartan") {
+        assert.equal(measured.height, original.height);
+        assert.ok(Math.abs(measured.spread - original.spread) <= 1, "shrinking restores the complete collapsed fit");
+      }
+    }
   } finally {
     await context.close();
   }

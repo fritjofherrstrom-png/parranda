@@ -58,8 +58,8 @@ const { buildApp } = require("../server/app");
 const FIXTURE_DATE = "2026-09-27";
 const FIXED_NOW = Date.parse(`${FIXTURE_DATE}T10:00:00Z`);
 const WIDTHS = [320, 390, 1280];
-// The Tailwind transition is 150ms and the Planner re-fits on transitionend,
-// or after 400ms if none comes; wait past both before measuring.
+// The usual Tailwind transition is 150ms; allow it and the observed resize fit
+// to settle before measuring.
 const SETTLE_MS = 600;
 
 const CHROMIUM_LAUNCHES = [

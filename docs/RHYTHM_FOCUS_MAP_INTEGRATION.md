@@ -27,7 +27,16 @@ responses and reject external hosts, so they verify presentation rather than
 provider coverage, shop availability or a real walking day. Chromium absence
 fails CI; a local skip must be reported as NOT OBSERVED. CI installs Chromium
 explicitly. Native fixtures still drain accepted queries before closing, and
-a stalled test file fails at the runner timeout.
+a stalled test file fails at the runner timeout. A separate unreferenced file
+deadline also exits a leaked-handle child with status 1: Node 24 can report a
+timed-out test without terminating its still-active process. The probe covers
+an unresolved test, a completed test leaking a handle and a clean completed
+file. No forced successful exit is used.
+
+Combined-suite verification exposed a resize race at 320 px: a delayed shrink
+could finish after the old one-shot timer had fitted the expanded size.
+ResizeObserver now refits the actual rendered container; a controlled 1200 ms
+transition regression checks the full day after expansion and shrink.
 
 Real-source acceptance remains separate. In particular, the prior #536 run
 found unknown opening hours allowing a shop ordinarily closed on the selected

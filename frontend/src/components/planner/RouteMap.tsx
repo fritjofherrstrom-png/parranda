@@ -304,33 +304,36 @@ export default function RouteMap({
     };
   }, [areas, primaryRoute, hasPrimaryRoute, routeStops, routeContextSuggestions, showContext, sketch]);
 
-  // Leaflet does not observe container resizes. Once the expand/shrink
-  // transition has settled, tell it the size changed and fit the day again:
-  // the larger map shows the day larger, and the smaller one keeps every stop
-  // clear of the controls instead of cropping the larger view.
-  const fittedExpanded = useRef(mapExpanded);
+  // Observe the actual container size. A fixed timer can fire before a delayed
+  // CSS transition has finished; treating it as the final fit then leaves the
+  // collapsed map with the expanded map's coordinates. ResizeObserver follows
+  // every rendered size, and transitionend also requests the final fit.
   useEffect(() => {
-    if (fittedExpanded.current === mapExpanded) return;
-    fittedExpanded.current = mapExpanded;
     const frame = frameRef.current;
-    let settled = false;
-    const settle = () => {
-      if (settled) return;
-      settled = true;
-      leafletRef.current?.map.invalidateSize();
+    const container = mapRef.current;
+    let animationFrame = 0;
+    const refit = () => {
+      animationFrame = 0;
+      leafletRef.current?.map.invalidateSize({ pan: false });
       fitToControls(leafletRef.current, frameRef.current, mapRef.current, marksRef.current);
       layoutRef.current();
     };
+    const schedule = () => {
+      if (!animationFrame) animationFrame = requestAnimationFrame(refit);
+    };
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
+    if (container) observer?.observe(container);
     const onTransitionEnd = (event: TransitionEvent) => {
-      if (event.target === frame && event.propertyName === "height") settle();
+      if (event.target === frame && event.propertyName === "height") schedule();
     };
     frame?.addEventListener("transitionend", onTransitionEnd);
-    // No transitionend comes when the transition is skipped or cut short.
-    const fallback = setTimeout(settle, 400);
+    window.addEventListener("resize", schedule);
+    schedule(); // also covers an instant expansion without a transition
     return () => {
-      settled = true;
+      observer?.disconnect();
       frame?.removeEventListener("transitionend", onTransitionEnd);
-      clearTimeout(fallback);
+      window.removeEventListener("resize", schedule);
+      if (animationFrame) cancelAnimationFrame(animationFrame);
     };
   }, [mapExpanded]);
 
