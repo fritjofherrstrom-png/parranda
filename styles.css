@@ -1867,7 +1867,7 @@ body.is-planner-entry .planner-mode-button.is-active {
   position: absolute;
   top: 0;
   transform: translateX(-50%);
-  color: rgba(247, 239, 229, 0.48);
+  color: rgba(247, 239, 229, 0.7);
   font-size: 0.72rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -1990,7 +1990,7 @@ body.is-planner-entry .planner-mode-button.is-active {
 }
 
 .pulse-entry-when {
-  color: rgba(247, 239, 229, 0.44);
+  color: rgba(247, 239, 229, 0.64);
   font-size: 0.74rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -2007,7 +2007,10 @@ body.is-planner-entry .planner-mode-button.is-active {
   text-transform: uppercase;
   font-weight: 600;
   background: rgba(215, 160, 77, 0.18);
-  color: var(--accent-deep, #b87a2e);
+  /* Fallback for every signal type without its own rule below. Chips only
+     render on the dark Pulse edition, so this must be a light colour and
+     never the city-overridable --accent-deep (dark in every city palette). */
+  color: #f0c47a;
   border: 1px solid rgba(215, 160, 77, 0.42);
 }
 
@@ -2017,9 +2020,16 @@ body.is-planner-entry .planner-mode-button.is-active {
   border-color: rgba(240, 196, 122, 0.5);
 }
 
+/* Violet, as on the Blitz evening_window chip, lightened for the dark bg. */
+.pulse-entry-signal-evening_window {
+  background: rgba(151, 110, 196, 0.2);
+  color: #cbb4e8;
+  border-color: rgba(151, 110, 196, 0.5);
+}
+
 .pulse-entry-signal-crowd_warning {
   background: rgba(214, 102, 80, 0.18);
-  color: #d66650;
+  color: #f29a86;
   border-color: rgba(214, 102, 80, 0.45);
 }
 
@@ -2050,7 +2060,7 @@ body.is-planner-entry .planner-mode-button.is-active {
 }
 
 .pulse-entry-when-past {
-  color: rgba(247, 239, 229, 0.32);
+  color: rgba(247, 239, 229, 0.58);
 }
 
 .pulse-entry-title,
@@ -2165,7 +2175,9 @@ body.is-planner-entry .planner-mode-button.is-active {
   line-height: 1.35;
 }
 
-.pulse-empty-state {
+/* Doubled class: the generic .empty-state rule (white card) comes later in
+   this file and would otherwise put cream text on a white background. */
+.empty-state.pulse-empty-state {
   background: rgba(247, 239, 229, 0.04);
   border-color: rgba(247, 239, 229, 0.18);
   padding: 14px 16px;
@@ -6247,7 +6259,7 @@ body.is-printing-guide #routeGuideDrawer {
 
 .city-pulse-teaser.is-pre-plan .city-pulse-edition-label,
 .city-pulse-teaser.is-pre-plan .city-pulse-live-label {
-  color: rgba(36, 25, 20, 0.48);
+  color: var(--muted);
 }
 
 .city-pulse-teaser.is-pre-plan .ghost-button {
@@ -8012,10 +8024,13 @@ body.is-printing-guide #routeGuideDrawer {
   flex-shrink: 0;
 }
 
+/* The meta line (e.g. the missing-weather note) wraps below the value on
+   narrow screens instead of running past the edition's clipped edge. */
 .city-pulse-ambient-text {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 6px;
+  gap: 2px 6px;
   min-width: 0;
 }
 
@@ -8028,7 +8043,6 @@ body.is-printing-guide #routeGuideDrawer {
 .city-pulse-ambient-meta {
   font: 500 0.8rem/1.2 var(--font-sans, "Manrope", sans-serif);
   color: var(--pulse-muted);
-  white-space: nowrap;
 }
 
 /* --- TODAY PANEL --------------------------------------------------------- */
@@ -8354,7 +8368,7 @@ body.is-printing-guide #routeGuideDrawer {
   background: transparent;
   font: 600 0.74rem/1 var(--font-sans, "Manrope", sans-serif);
   letter-spacing: 0.08em;
-  color: rgba(255, 247, 239, 0.36);
+  color: var(--pulse-muted);
   cursor: pointer;
   transition: color 180ms ease;
   white-space: nowrap;
@@ -8371,7 +8385,7 @@ body.is-printing-guide #routeGuideDrawer {
 }
 
 .pulse-entry.is-expanded .pulse-entry-expand-toggle {
-  color: rgba(255, 247, 239, 0.5);
+  color: rgba(255, 247, 239, 0.82);
 }
 
 .pulse-entry.is-expanded .pulse-entry-expand-toggle::after {
