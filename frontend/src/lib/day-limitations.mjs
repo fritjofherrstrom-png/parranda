@@ -124,14 +124,18 @@ export function limitationNote(limitations, stopCount, t) {
  *
  * @param {string[]} limitations  qualifying caps from the server
  * @param {(sv: string, en: string) => string} t  the caller's language picker
- * @param {{ statedElsewhere?: string[] }} [options]  caps another line on the
+ * @param {{ statedElsewhere?: string[], sourceCompletion?: {status?: string}|null }} [options]  caps another line on the
  *        page already states in full; they are not repeated here
  * @returns {string} short sentences, or "" when there is nothing to add
  */
-export function contextNote(limitations, t, { statedElsewhere = [] } = {}) {
+export function contextNote(limitations, t, { statedElsewhere = [], sourceCompletion = null } = {}) {
   const skip = new Set(Array.isArray(statedElsewhere) ? statedElsewhere : []);
   const keys = CONTEXT_LIMITATIONS.filter((key) => !skip.has(key));
-  return sentencesFor(keys, limitations, phrases(null), t, CONTEXT_LIMITATIONS.length);
+  const note = sentencesFor(keys, limitations, phrases(null), t, CONTEXT_LIMITATIONS.length);
+  const partial = sourceCompletion?.status === 'partial'
+    ? sentence(t('Dagen bygger på de källor som hunnit svara; fler platser kan saknas', 'The day uses the sources that have answered; more places may be missing'))
+    : '';
+  return [partial, note].filter(Boolean).join(' ');
 }
 
 function sentence(text) {

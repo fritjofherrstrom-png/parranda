@@ -26,12 +26,17 @@ const STATUS_RANK = Object.freeze({
   source_indicated_active: 1,
   unknown: 2,
   inactive: 3,
+  non_visitable: 3,
 });
 
 function evaluateOperationalViability({ candidate = {}, derived = {} } = {}) {
   const explicitStatus = normalizeStatus(candidate.operational_status);
   const explicitReasons = normalizeReasons(candidate.operational_reasons);
   const operationalType = OPERATIONAL_PLACE_TYPES.has(normalizeType(candidate.type));
+
+  if (candidate.operator_visit_evidence?.status === 'non_shopping_visit') {
+    return result('non_visitable', false, ['operator_visit_function_not_shopping'], operationalType);
+  }
 
   if (explicitStatus === "inactive" || (operationalType && isExplicitlyClosedSchedule(candidate.opening_hours))) {
     return result(

@@ -236,6 +236,22 @@ function sanitizeLoaderCollectionMetadata(value) {
       : null,
     primary_collection_target_km: finiteOrNull(value.primary_collection_target_km),
     spatial_scope: sanitizeSpatialScopeSummary(value.spatial_scope),
+    source_completion: value.source_completion && ['partial', 'complete'].includes(value.source_completion.status) ? {
+      status: value.source_completion.status,
+      reason: safeToken(value.source_completion.reason),
+      pending: finiteOrNull(value.source_completion.pending),
+      completed: finiteOrNull(value.source_completion.completed),
+      failed: finiteOrNull(value.source_completion.failed),
+    } : null,
+    operator_evidence: value.operator_evidence && typeof value.operator_evidence === 'object' ? {
+      attempted: finiteOrNull(value.operator_evidence.attempted),
+      confirmed: finiteOrNull(value.operator_evidence.confirmed),
+      excluded: finiteOrNull(value.operator_evidence.excluded),
+      candidates: (Array.isArray(value.operator_evidence.candidates) ? value.operator_evidence.candidates : []).slice(0, 4).map(item => ({
+        id: typeof item.id === 'string' ? item.id.slice(0, 160) : null,
+        status: ['confirmed_storefront', 'non_shopping_visit', 'unresolved', 'not_observed'].includes(item.status) ? item.status : null,
+      })),
+    } : null,
     regional_scout: sanitizeRegionalScout(value.regional_scout),
   };
 }

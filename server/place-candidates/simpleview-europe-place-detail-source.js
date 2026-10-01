@@ -541,6 +541,8 @@ module.exports = {
   SIMPLEVIEW_EUROPE_PLACE_LIMITS,
   collectSimpleviewEuropePlaceFeed,
   createPinnedLookup,
+  publicAddressesForUrl,
+  pinnedHttpsFetch,
   extractDetailRecord,
   extractSimpleviewEuropeListItems,
   inspectSimpleviewEuropePlaceList,

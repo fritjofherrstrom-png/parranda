@@ -7,5 +7,5 @@ export function limitationNote(
 export function contextNote(
   limitations: string[] | null | undefined,
   t: (sv: string, en: string) => string,
-  options?: { statedElsewhere?: string[] },
+  options?: { statedElsewhere?: string[]; sourceCompletion?: { status?: string } | null },
 ): string;

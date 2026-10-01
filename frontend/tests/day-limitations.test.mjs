@@ -6,6 +6,13 @@ import { contextNote, limitationNote } from "../src/lib/day-limitations.mjs";
 const en = (_sv, enText) => enText;
 const sv = (svText) => svText;
 
+test('partial acquisition is explained without claiming completeness or a later automatic day change', () => {
+  assert.match(contextNote([], en, { sourceCompletion: { status: 'partial', pending: 1 } }), /sources that have answered; more places may be missing/);
+  assert.match(contextNote([], sv, { sourceCompletion: { status: 'partial' } }), /källor som hunnit svara/);
+  assert.equal(contextNote([], en, { sourceCompletion: { status: 'complete' } }), '');
+  assert.equal(contextNote([], en), '');
+});
+
 test("a thin day names the number of stops it can stand behind", () => {
   assert.equal(limitationNote(["capped_by_thin_day"], 2, en), "A shorter day — 2 stops we can stand behind.");
   assert.equal(limitationNote(["capped_by_thin_day"], 1, en), "A shorter day — 1 stop we can stand behind.");

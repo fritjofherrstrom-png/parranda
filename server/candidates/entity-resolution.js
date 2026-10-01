@@ -323,7 +323,10 @@ function reconcileFields(canonical, duplicate) {
 
   // Corroboration cannot launder a source's explicit closure/lifecycle veto.
   const duplicateOperational = evaluateOperationalViability({ candidate: duplicate });
-  if (!duplicateOperational.route_eligible) {
+  if (duplicate.operator_visit_evidence?.status === 'non_shopping_visit') {
+    patch.operator_visit_evidence = duplicate.operator_visit_evidence;
+    filled.push('operator_visit_evidence');
+  } else if (!duplicateOperational.route_eligible) {
     patch.operational_status = "inactive";
     patch.operational_reasons = [...new Set([
       ...(Array.isArray(canonical.operational_reasons) ? canonical.operational_reasons : []),

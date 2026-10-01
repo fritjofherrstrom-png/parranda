@@ -1426,6 +1426,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // the trust line names the source-backed places, the map caption the
   // estimates. What is left sits with the map, not under the title.
   const dayContextNote = contextNote(dayLimitations, t, {
+    sourceCompletion: safeResponse?.agnostic_route_output_experiment?.source_status?.collection?.source_completion,
     statedElsewhere: sourceBackedDay
       ? ["capped_by_external_only_sources", "capped_by_heuristic_walking"]
       : ["capped_by_heuristic_walking"],

@@ -102,7 +102,7 @@ function buildEligibleCandidatePool(cityConfig, payload = {}, helpers = {}) {
         id: candidate.id,
         label: candidate.label,
         origin: candidateOrigin(candidate),
-        reason: "operational_place_inactive",
+        reason: operational.reasons[0] || "operational_place_inactive",
       });
       continue;
     }

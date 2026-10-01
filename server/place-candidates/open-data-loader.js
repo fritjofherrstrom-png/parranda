@@ -30,7 +30,7 @@
  */
 
 const { createSourceCache } = require("./source-cache");
-const { createBackgroundSource, SOURCE_COMPLETION } = require("./background-source");
+const { createBackgroundSource, SOURCE_COMPLETION, SOURCE_SNAPSHOT } = require("./background-source");
 const { createWikidataSource } = require("./wikidata-source");
 const { normalizeSourceNameAliases } = require("./source-name-aliases");
 const { createOvertureSource } = require("./overture-source");
@@ -1334,8 +1334,11 @@ function resolveDefaultOpenDataLoader(env = process.env) {
     });
   }
 
-  if (!wikiSource && !overtureSource && !visitSwedenSource) return osmLoader;
-  return composeOpenDataLoaders(osmLoader, wikiSource, overtureSource, visitSwedenSource);
+  const loader = !wikiSource && !overtureSource && !visitSwedenSource
+    ? osmLoader : composeOpenDataLoaders(osmLoader, wikiSource, overtureSource, visitSwedenSource);
+  const { createOperatorVisitEnricher } = require('./operator-visit-evidence');
+  loader.enrich = createOperatorVisitEnricher({ env });
+  return loader;
 }
 
 // Overture caches one stratified sample per anchor window; every request then
@@ -1395,7 +1398,7 @@ function composeOpenDataLoaders(
   visitSwedenSource = null,
   { primaryWaitMs = DIRECTORY_PRIMARY_WAIT_MS } = {},
 ) {
-  return async function loadComposedOpenData(request = {}) {
+  const composedLoader = async function loadComposedOpenData(request = {}) {
     const sources = [wikiSource, overtureSource, visitSwedenSource].filter(Boolean);
     const primaryAnchor = { lat: request.lat, lng: request.lng };
     const requestedIntents = normalizeRequestedIntents(request.requestedIntents);
@@ -1614,7 +1617,9 @@ function composeOpenDataLoaders(
     if (completions.length) {
       // Keep already acquired rows; wait once for the original source jobs.
       // Rebuild metadata from those rows, never by re-entering a live loader.
-      const completion = Promise.all(completions).then(groups => {
+      const finished = new Map();
+      const snapshot = () => {
+        const groups = [...finished.values()];
         const settled = [...records, ...groups.flatMap(rows => Array.isArray(rows) ? rows : [])];
         const unique = [...new Map(settled.map(row => [row.id, row])).values()];
         const failed = groups.some(rows => rows?.source_error || rows?.loader_status === 'error_failed_closed');
@@ -1622,14 +1627,27 @@ function composeOpenDataLoaders(
           unique.length ? `loaded:${unique.length}` : failed ? 'error_failed_closed' : status,
           unique.length ? null : failed ? 'fetch_error' : osm.loader_error || null), {
           ...metadata,
+          source_completion: {
+            status: finished.size === completions.length ? 'complete' : 'partial',
+            completed: finished.size, pending: completions.length - finished.size,
+            failed: groups.filter(rows => rows?.source_error || rows?.loader_status === 'error_failed_closed').length,
+          },
           selected_profile: supplyProfile(unique, requestedIntents),
           selected_day_capacity: dayCapacityProfile(unique, { origin: wikiAnchor, walkingTargetBand: request.walkingTargetBand }),
         });
-      });
+      };
+      const completion = Promise.all(completions.map((work, index) => Promise.resolve(work).then(rows => {
+        finished.set(index, rows);
+      }))).then(snapshot);
+      Object.defineProperty(result, SOURCE_SNAPSHOT, { value: snapshot });
       Object.defineProperty(result, SOURCE_COMPLETION, { value: completion });
     }
     return result;
   };
+  // The app may compose the primary with the reviewed-source bridge again.
+  // Preserve its private post-acquisition check through that composition.
+  if (typeof osmLoader.enrich === 'function') composedLoader.enrich = osmLoader.enrich;
+  return composedLoader;
 }
 
 function clamp(value, min, max) {

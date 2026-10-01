@@ -1961,7 +1961,17 @@ function buildApp({
       // experiment can preserve it for comparison. When the flag is absent this
       // is returned verbatim — identical behavior to before #259.
       let baselineBody;
-      if (cityFallbackUsed) {
+      if (useAgnosticRouteExperiment && requestedRhythm) {
+        // A modern any-place request has no applicable citypack baseline.
+        // Generating the implicit default city here used unrelated providers
+        // and spent the cold lifecycle before local acquisition even started.
+        baselineBody = {
+          city: requestedCity || null, days: [],
+          resolved_home_base: null, resolved_start: null, resolved_end: null,
+          requested_city: requestedCity, city_fallback_used: cityFallbackUsed,
+          baseline_skipped: 'no_applicable_citypack',
+        };
+      } else if (cityFallbackUsed) {
         baselineBody = {
           city: requestedCity,
           days: [],

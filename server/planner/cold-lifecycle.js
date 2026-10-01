@@ -1,10 +1,12 @@
 "use strict";
 
 const { randomBytes } = require('node:crypto');
-const { SOURCE_COMPLETION } = require('../place-candidates/background-source');
+const { SOURCE_COMPLETION, SOURCE_SNAPSHOT } = require('../place-candidates/background-source');
 
 const DEADLINE_MS = 60000;
 const POLL_MS = 3000;
+const PARTIAL_WAIT_MS = 8000;
+const COMPOSITION_RESERVE_MS = 15000;
 const MAX_POLLS = 20;
 const MAX_ACTIVE = 2;
 const MAX_RETAINED = 32;
@@ -84,6 +86,7 @@ function createPlannerLifecycle({ deadlineMs = DEADLINE_MS, maxActive = MAX_ACTI
       controller.signal.throwIfAborted();
       return run({
         signal: controller.signal,
+        deadline,
         warming() { if (!controller.signal.aborted) wake(); },
       });
     }).then(result => {
@@ -108,7 +111,7 @@ function createPlannerLifecycle({ deadlineMs = DEADLINE_MS, maxActive = MAX_ACTI
 
 // One memoized trusted supply snapshot for both structure and composer. Await
 // only evidence attached by a server source, never status strings in JSON.
-function lifecycleLoader(loader, context) {
+function lifecycleLoader(loader, context, { partialWaitMs = PARTIAL_WAIT_MS, reserveMs = COMPOSITION_RESERVE_MS } = {}) {
   if (typeof loader !== 'function') return loader;
   const loads = new Map();
   return request => {
@@ -118,14 +121,39 @@ function lifecycleLoader(loader, context) {
       let records = await loader({ ...request, preferCachedSupply: true, signal: context.signal });
       if (records?.[SOURCE_COMPLETION]) {
         context.warming();
+        const initial = records;
+        const remaining = Number.isFinite(context.deadline) ? context.deadline - Date.now() - reserveMs : partialWaitMs;
+        const waitMs = Math.max(0, Math.min(partialWaitMs, remaining));
         records = await new Promise((resolve, reject) => {
-          const abort = () => reject(new Error('planner_cancelled'));
+          let timer;
+          const cleanup = () => { clearTimeout(timer); context.signal.removeEventListener('abort', abort); };
+          const abort = () => { cleanup(); reject(new Error('planner_cancelled')); };
+          const done = value => { cleanup(); resolve(value); };
           if (context.signal.aborted) return abort();
           context.signal.addEventListener('abort', abort, { once: true });
-          Promise.resolve(records[SOURCE_COMPLETION]).then(resolve, reject)
-            .finally(() => context.signal.removeEventListener('abort', abort));
+          timer = setTimeout(() => {
+            // Only a source-owned symbol can supply a newer partial snapshot.
+            const value = typeof initial[SOURCE_SNAPSHOT] === 'function' ? initial[SOURCE_SNAPSHOT]() : initial;
+            const snapshot = [...(Array.isArray(value) ? value : [])];
+            for (const name of ['loader_status', 'loader_error']) {
+              if (value[name] !== undefined) Object.defineProperty(snapshot, name, { value: value[name] });
+            }
+            Object.defineProperty(snapshot, 'loader_metadata', { value: {
+              ...(value.loader_metadata || {}),
+              source_completion: { ...(value.loader_metadata?.source_completion || {}), status: 'partial', reason: 'bounded_lifecycle_snapshot' },
+            } });
+            done(snapshot);
+          }, waitMs);
+          Promise.resolve(initial[SOURCE_COMPLETION]).then(done, error => {
+            cleanup(); reject(error);
+          });
         });
       }
+      context.signal.throwIfAborted();
+      // The enrichment seam belongs to the real server loader, never payload.
+      if (typeof loader.enrich === 'function') records = await loader.enrich(records, {
+        ...request, signal: context.signal, deadline: context.deadline,
+      });
       context.signal.throwIfAborted();
       return records;
     })());
@@ -133,4 +161,4 @@ function lifecycleLoader(loader, context) {
   };
 }
 
-module.exports = { createPlannerLifecycle, lifecycleLoader, DEADLINE_MS, POLL_MS, MAX_POLLS };
+module.exports = { createPlannerLifecycle, lifecycleLoader, DEADLINE_MS, POLL_MS, MAX_POLLS, PARTIAL_WAIT_MS, COMPOSITION_RESERVE_MS };
