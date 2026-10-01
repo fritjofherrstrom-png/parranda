@@ -1620,7 +1620,11 @@ function composeOpenDataLoaders(
       const finished = new Map();
       const snapshot = () => {
         const groups = [...finished.values()];
-        const settled = [...records, ...groups.flatMap(rows => Array.isArray(rows) ? rows : [])];
+        // Reviewed-source composition can wrap an already composed primary.
+        // Read its private progress too: awaiting its all-sources completion
+        // again would otherwise hide individually finished source jobs.
+        const primarySnapshot = typeof osm?.[SOURCE_SNAPSHOT] === 'function' ? osm[SOURCE_SNAPSHOT]() : [];
+        const settled = [...records, ...(Array.isArray(primarySnapshot) ? primarySnapshot : []), ...groups.flatMap(rows => Array.isArray(rows) ? rows : [])];
         const unique = [...new Map(settled.map(row => [row.id, row])).values()];
         const failed = groups.some(rows => rows?.source_error || rows?.loader_status === 'error_failed_closed');
         return withLoaderMetadata(withLoaderStatus(unique,
