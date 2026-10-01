@@ -6,6 +6,7 @@ const COLLECTION_REASON_TOKENS = new Set([
   "collection_outcome_missing",
   "provider_failed",
   "source_collect_failed",
+  "source_collection_truncated",
   "source_credentials_unavailable",
   "source_empty",
   "source_endpoint_unavailable",

@@ -528,11 +528,11 @@ test("the Live sheet explores events only — it never touches the day's anchor 
   assert.match(anywherePlannerSource, /requestLiveSheetScope\("around_place"\)/);
   assert.match(anywherePlannerSource, /requestLiveSheetScope\("near_route"\)/);
   assert.match(anywherePlannerSource, /requestLiveSheetScope\("near_me"\)/);
-  assert.match(anywherePlannerSource, /time: liveSheetTime === "week" \? "this_week" : "tonight"/);
+  assert.match(anywherePlannerSource, /time: nextTime === "week" \? "this_week" : "tonight"/);
   assert.match(anywherePlannerSource, /preferences: selected/);
   assert.match(anywherePlannerSource, /response: safeResponse/);
   assert.match(anywherePlannerSource, /routeStops/);
-  assert.match(anywherePlannerSource, /LIVE_QUERY_REFRESH_DELAYS_MS = \[1500, 3000, 5000\]/);
+  assert.match(anywherePlannerSource, /LIVE_QUERY_REFRESH_DELAYS_MS = \[1500, 3000, 5000,/);
   assert.match(anywherePlannerSource, /attempt <= LIVE_QUERY_REFRESH_DELAYS_MS\.length/);
   assert.match(anywherePlannerSource, /sheetPulseState === "pending"/);
   const dayMutators = /resolveAndRun|execute\(|setSafeResponse|setClassification|setPlace|setMode|storeAnchorCoords|consumeAnchorCoords|setSelected|setCommitments/;
@@ -544,7 +544,7 @@ test("the Live sheet explores events only — it never touches the day's anchor 
   const sheetElement = componentSource("AnywherePlanner.tsx").split("<LiveSheet")[1]?.split("/>")[0] ?? "";
   assert.ok(sheetElement.length > 0, "the planner renders the Live sheet");
   assert.doesNotMatch(sheetElement, dayMutators, "no prop of the sheet can recompose or move the day");
-  assert.match(anywherePlannerSource, /day's place and route are unchanged/);
+  assert.match(anywherePlannerSource, /Din plats kunde inte hämtas/);
   // Empty copy names the ACTIVE scope×time cell, and counts come from the
   // buckets, never from copy.
   // The legacy key carries the selected day; do not label tomorrow as Today.

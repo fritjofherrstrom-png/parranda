@@ -322,6 +322,7 @@ function buildTrustedScoutPlace({
       ...locale.local_place_discovery_terms,
       ...localPlaceDiscoveryTerms,
     ]),
+    local_rhythm_discovery_terms: locale.local_rhythm_discovery_terms,
   };
 }
 

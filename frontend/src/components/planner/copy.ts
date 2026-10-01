@@ -159,7 +159,7 @@ export function nearbyDistanceLabel(
   event: { live_proximity?: string; anchor_distance_km?: number },
   lang: Lang,
 ): string | null {
-  if (event.live_proximity !== "nearby" || !Number.isFinite(event.anchor_distance_km)) return null;
+  if (!["nearby", "in_place"].includes(event.live_proximity ?? "") || !Number.isFinite(event.anchor_distance_km)) return null;
   const distance = Number(event.anchor_distance_km).toLocaleString(lang === "sv" ? "sv-SE" : "en-US", {
     maximumFractionDigits: 1,
   });

@@ -62,7 +62,6 @@ test("reviewed local profile selects two independent event publishers around Sim
       "visit-ystad-osterlen-calendar",
       "visit-stockholm-open-api",
       "malmo-municipal-calendar",
-      "malmofestivalen-program",
       "helsinki-region-linked-events",
     ],
   );
@@ -162,7 +161,7 @@ test("reviewed local profile selects the official Stockholm API without a city b
   assert.equal(plan[0].license, "CC-BY 4.0");
 });
 
-test("reviewed local profile selects Malmö's independent official calendars by bounds, not city code", () => {
+test("reviewed local profile selects Malmö's current calendar and excludes the obsolete summer program", () => {
   const env = buildFullDevEnvironment({}, { cacheDir: os.tmpdir() });
   const registry = resolveEventFeedRegistry(env);
   const malmoPlan = buildAnchorEventSourcePlan({
@@ -176,15 +175,13 @@ test("reviewed local profile selects Malmö's independent official calendars by 
 
   assert.deepEqual(malmoPlan.map((source) => source.id), [
     "malmo-municipal-calendar",
-    "malmofestivalen-program",
   ]);
   assert.deepEqual(malmoPlan.map((source) => source.kind), [
     "sitevision_calendar",
-    "embedded_program_rsc",
   ]);
   assert.ok(malmoPlan.every((source) => source.source_tier === "official"));
   assert.equal(
-    lundPlan.some((source) => ["malmo-municipal-calendar", "malmofestivalen-program"].includes(source.id)),
+    lundPlan.some((source) => source.id === "malmo-municipal-calendar"),
     false,
   );
 });

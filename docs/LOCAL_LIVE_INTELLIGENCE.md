@@ -290,6 +290,16 @@ telemetry, not to weaken the anchor or geometry gates.
 
 ## Runtime source-health snapshot
 
+Place-driven discovery and an explicit Whole-area Live view now complement this
+bounded acquisition. Large places and trusted reverse-coordinate context can
+record discovery demand; one approved calendar alone does not suppress requests
+for complementary local source families. Discovery geometry is separate from
+the ordinary local event gate. A dedicated locality-bound vocabulary lane covers
+small festivities and holidays across 47 European country contexts. See
+`EUROPE_LOCAL_LIVE_DISCOVERY.md` for behaviour, real-source evidence, operational
+requirements and remaining coverage limits. Search vocabulary does not attest
+an event, holiday occurrence or closure.
+
 The bounded acquisition path now distinguishes provider outcomes before it
 interprets event absence:
 

@@ -284,3 +284,67 @@ test("invalid payload rows are failed rather than reported as proven empty", asy
   assert.equal(malformedResult.collection_status.status, "failed");
   assert.equal(malformedResult.collection_status.reason, "source_payload_invalid");
 });
+
+test("reviewed pagination reads later pages, deduplicates identities and never follows supplied URLs", async () => {
+  const urls = [];
+  const provider = createLocalizedEventsApiProvider({ endpoint: ENDPOINT, timezone: TIMEZONE,
+    sourceLanguage: "sv", limit: 2, maxPages: 3,
+    fetcher: async url => {
+      urls.push(url);
+      const page = Number(new URL(url).searchParams.get("page"));
+      return jsonResponse(url, page === 1
+        ? { results: [fixtureRecord()], next: 2 }
+        : { results: [fixtureRecord(), fixtureRecord({ id: "tomorrow", start_date: "2026-07-21", end_date: "2026-07-21" })], next: null });
+    } });
+  const result = await provider.create({}).collect({});
+  assert.equal(result.collection_status.status, "ok");
+  assert.deepEqual(result.time_sensitive_events.map(row => row.id), ["event-1", "tomorrow"]);
+  assert.equal(urls.length, 2);
+  assert.ok(urls.every(url => new URL(url).origin === new URL(ENDPOINT).origin));
+
+  const hostile = createLocalizedEventsApiProvider({ endpoint: ENDPOINT, timezone: TIMEZONE, maxPages: 3,
+    fetcher: async url => jsonResponse(url, { results: [fixtureRecord()], next: "https://private.example/secrets" }) });
+  const refused = await hostile.create({}).collect({});
+  assert.equal(refused.collection_status.status, "failed");
+  assert.equal(refused.collection_status.reason, "source_payload_invalid");
+  assert.equal(refused.time_sensitive_events.length, 1, "already read evidence remains usable");
+});
+
+test("a failed or truncated later page preserves evidence and reports incomplete acquisition", async () => {
+  for (const mode of ["failure", "cap"]) {
+    let calls = 0;
+    const provider = createLocalizedEventsApiProvider({ endpoint: ENDPOINT, timezone: TIMEZONE, maxPages: mode === "cap" ? 1 : 3,
+      fetcher: async url => {
+        calls += 1;
+        return calls === 1 ? jsonResponse(url, { results: [fixtureRecord()], next: 2 }) : { ok: false, status: 503 };
+      } });
+    const result = await provider.create({}).collect({});
+    assert.equal(result.time_sensitive_events.length, 1);
+    assert.equal(result.collection_status.status, "failed");
+    assert.equal(result.collection_status.reason, mode === "cap" ? "source_collection_truncated" : "source_http_503");
+    assert.equal(calls, mode === "cap" ? 1 : 2);
+  }
+});
+
+test("source snapshots coalesce across Live locations and periods while each view stays bounded", async () => {
+  const { createSourceCache } = require("../server/place-candidates/source-cache");
+  const { collectAnchorEvents } = require("../server/place-candidates/agnostic-event-supply");
+  const sourceCollectionCache = createSourceCache();
+  let requests = 0;
+  const source = { id: "reviewed", label: "Calendar", adapter: "localized_events_api", endpoint: ENDPOINT,
+    bbox: [17, 59, 19, 60], timezone: TIMEZONE, source_language: "sv", source_tier: "official", confidence: "medium", status: "active" };
+  const input = { now: "2026-07-20T08:00:00Z", registry: [source], sourceCollectionCache,
+    fetcher: async url => { requests += 1; return jsonResponse(url, { results: [fixtureRecord()], next: null }); } };
+  const [local, far] = await Promise.all([
+    collectAnchorEvents({ ...input, anchor: { lat: 59.331, lng: 18.071 }, selectedDate: "2026-07-20" }),
+    collectAnchorEvents({ ...input, anchor: { lat: 59.7, lng: 18.071 }, selectedDate: "2026-07-20", time: "this_week" }),
+  ]);
+  assert.equal(requests, 1, "concurrent views read the same approved snapshot");
+  assert.equal(local.tonight.length, 1);
+  assert.equal(far.tonight.length, 0, "a shared source never overrides proximity");
+  const tomorrow = await collectAnchorEvents({ ...input, anchor: { lat: 59.331, lng: 18.071 }, selectedDate: "2026-07-21" });
+  assert.equal(requests, 1);
+  assert.equal(tomorrow.tonight.length, 0, "a shared source never overrides the calendar date");
+  await collectAnchorEvents({ ...input, anchor: { lat: 59.331, lng: 18.071 }, registry: [{ ...source, endpoint: ENDPOINT + "new/" }] });
+  assert.equal(requests, 2, "a changed source descriptor cannot reuse the old snapshot");
+});

@@ -160,7 +160,7 @@ test('while waiting, the Live sheet does not print responded counts that read as
   assert.match(h.text(), /Checking the calendars — updates automatically in a moment\./);
   await click(h, button(h, /Explore live/));
   const sheet = sheetText(h);
-  assert.match(sheet, /The calendars are still updating/);
+  assert.match(sheet, /Refreshing verified sources for this area/);
   assert.doesNotMatch(sheet, /Source health: 0\/1 responded/);
   assert.doesNotMatch(sheet, /couldn't fetch/);
 });
