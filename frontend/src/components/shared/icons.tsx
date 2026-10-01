@@ -145,6 +145,16 @@ export function PlusIcon({ className }: IconProps) {
   );
 }
 
+/** "Undo" — put the previous day back. */
+export function UndoIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <path d="M9 14 4 9l5-5" />
+      <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+    </Icon>
+  );
+}
+
 export function MinusIcon({ className }: IconProps) {
   return (
     <Icon className={className}>

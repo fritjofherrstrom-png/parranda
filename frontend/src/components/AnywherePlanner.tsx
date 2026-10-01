@@ -19,6 +19,7 @@ import {
 } from "../lib/anywhere-payload.mjs";
 import { anywhereBlitzView, type AnywhereBlitzView } from "../lib/blitz-view.mjs";
 import { contextNote, limitationNote } from "../lib/day-limitations.mjs";
+import { dayChangeSegments, describeDayChange, type DayChange } from "../lib/day-change.mjs";
 import {
   anchorKey,
   planRecomposeRetention,
@@ -90,6 +91,7 @@ import {
   PlusIcon,
   ShareIcon,
   StarIcon,
+  UndoIcon,
 } from "./shared/icons";
 import RouteMap from "./planner/RouteMap";
 import LiveSheet from "./planner/LiveSheet";
@@ -160,6 +162,26 @@ function waitForLiveQueryRetry(delayMs: number, signal: AbortSignal): Promise<vo
  * became ineligible after it was added can still be withdrawn from the card it
  * was added on.
  */
+// The inputs an adjustment is made of, as one comparable value.
+function adjustmentSignature(
+  selected: string[],
+  dayOffset: 0 | 1,
+  walkKey: string,
+  commitments: Record<string, { kind: "exclude" | "pin"; label: string }>,
+): string {
+  const ledger = Object.keys(commitments)
+    .sort()
+    .map((id) => [id, commitments[id]?.kind ?? null]);
+  return JSON.stringify([selected, dayOffset, walkKey, ledger]);
+}
+
+// Only a composed day can be undone back to; a structure view or a refusal
+// is not a day anyone would ask to have back.
+function isUndoableDay(entry: SavedEntry | null): entry is SavedEntry {
+  const status = entry?.classification?.status;
+  return status === "composed" || status === "composed_limited";
+}
+
 function canCommitTo(stop: { commitment_eligible?: unknown } | null | undefined): boolean {
   return stop?.commitment_eligible === true;
 }
@@ -230,6 +252,19 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const [liveRefreshExhausted, setLiveRefreshExhausted] = useState(false);
   const [savedDays, setSavedDays] = useState<SavedEntry[]>([]);
   const [restoredAt, setRestoredAt] = useState<string | null>(null); // set when showing a SNAPSHOT
+  // What the last adjustment changed, beside the day it replaced. An adjustment
+  // recomposes on its own, so the replacement is never silent: it says what
+  // moved, and the day before it can be put back with one tap until the next
+  // change, a new place or a saved day takes over.
+  const [dayChange, setDayChange] = useState<{ previous: SavedEntry; summary: DayChange } | null>(null);
+  // The day on screen when an adjustment left for the server — the one "Undo"
+  // returns to. Taken from the live day, never from a request still in flight,
+  // and only while the anchor it belongs to is the one being recomposed.
+  const undoBaselineRef = useRef<{ entry: SavedEntry; anchorKey: string | null } | null>(null);
+  // Undo installs the previous inputs without composing. This is the input
+  // signature it installed, so the auto-recompose effect recognises its own
+  // echo instead of composing the day it just put back.
+  const undoEchoRef = useRef<string | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
   // Adjustments are collapsed into a one-line summary by default (design
   // handoff §2): past the landing there is no second form and no submit — the
@@ -398,6 +433,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setUpgradePending(false);
       setPhase("loading");
       setDayIsStale(retention.keepPrevious);
+      // The last account described the day this request is replacing; it is
+      // not true of whatever comes back.
+      setDayChange(null);
       if (!retention.keepPrevious) {
         setClassification(null);
         setSafeResponse(null);
@@ -467,6 +505,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       setSupplyPending(false);
       const refusal = composeServiceRefusal(response.status, body);
       if (refusal) {
+        undoBaselineRef.current = null;
+        setDayChange(null);
         setServiceRefusal(refusal);
         setClassification(null);
         setSafeResponse(null);
@@ -563,6 +603,24 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         lastEntryRef.current = entry;
         writeLS(LAST_KEY, entry);
         if (!silent) setRestoredAt(null);
+        if (!silent) {
+          // Only an adjustment leaves a baseline behind, and only for the place
+          // it was made in: an arrival, a rebuild or a new place has nothing to
+          // undo back to.
+          const baseline = undoBaselineRef.current;
+          undoBaselineRef.current = null;
+          setDayChange(
+            baseline && baseline.anchorKey !== null && baseline.anchorKey === anchorKey(anchor)
+              ? { previous: baseline.entry, summary: describeDayChange(baseline.entry, entry) }
+              : null,
+          );
+        } else {
+          // A silent follow-up refines the same inputs' day; the account keeps
+          // describing the day actually on screen.
+          setDayChange((current) =>
+            current ? { previous: current.previous, summary: describeDayChange(current.previous, entry) } : current,
+          );
+        }
       }
       // Bounded silent re-asks cover cold-start honesty gaps. The POLICY —
       // which composes re-ask, with what delay, and when the live ladder is
@@ -679,6 +737,10 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // "today" may be stale), so restoredAt is set and the UI labels it + offers rebuild.
   function restoreEntry(entry: SavedEntry) {
     setNavigationInterrupted(false);
+    // A saved day is its own generation: nothing from before it can be undone
+    // back onto it.
+    undoBaselineRef.current = null;
+    setDayChange(null);
     const i = entry.inputs;
     if (i) {
       setCityKey(typeof i.city === "string" && i.city.trim() ? i.city.trim() : null);
@@ -754,6 +816,65 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setPositionNeeded(false);
     setPhase("done");
     setRestoredAt(entry.savedAt);
+  }
+
+  // UNDO: put back the day the last adjustment replaced, with the inputs and the
+  // commitment ledger it was composed under, WITHOUT composing. Recomposing
+  // would ask the question again and could answer it differently (warmer
+  // caches, newer Live rows); the user asked for the day they had. That day is
+  // the same session's live result from moments ago, not a saved snapshot, so
+  // it is not labelled as one and adjusting it keeps recomposing as usual.
+  function undoDayChange() {
+    const change = dayChange;
+    if (!change) return;
+    const previous = change.previous;
+    setDayChange(null);
+    undoBaselineRef.current = null;
+    setNavigationInterrupted(false);
+    // Everything newer stops first, exactly as for a restored day: no
+    // debounce, follow-up or response in flight may land on top of it.
+    if (recomposeTimerRef.current) {
+      clearTimeout(recomposeTimerRef.current);
+      recomposeTimerRef.current = null;
+    }
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    activeRequestRef.current?.abort();
+    activeRequestRef.current = null;
+    requestSequenceRef.current += 1;
+    intentSequenceRef.current += 1;
+    setUpgradePending(false);
+    setSupplyPending(false);
+
+    const inputs = previous.inputs ?? {};
+    const nextSelected = Array.isArray(inputs.selected) ? inputs.selected : selected;
+    const nextDayOffset: 0 | 1 = inputs.dayOffset === 0 || inputs.dayOffset === 1 ? inputs.dayOffset : dayOffset;
+    const nextWalkKey = typeof inputs.walkKey === "string" ? inputs.walkKey : walkKey;
+    // The ledger the previous day answered, from its own frozen record. Undo is
+    // only offered for the anchor on screen, so that record belongs here.
+    const dayAnchorKey = displayedAnchorKeyRef.current;
+    const ledger = readCommitmentSnapshot(previous.commitments, { anchorKey: dayAnchorKey, dayKey: previous.id });
+    const nextCommitments = ledger.applies ? { ...ledger.entries } : {};
+    undoEchoRef.current = adjustmentSignature(nextSelected, nextDayOffset, nextWalkKey, nextCommitments);
+    setSelected(nextSelected);
+    setDayOffset(nextDayOffset);
+    setWalkKey(nextWalkKey);
+    commitmentAnchorKeyRef.current = ledger.applies ? dayAnchorKey : null;
+    setCommitments(nextCommitments);
+    setAppliedPins(ledger.applies ? ledger.appliedPins : []);
+    setAppliedRefusals(ledger.applies ? ledger.refusals : []);
+
+    lastEntryRef.current = previous;
+    writeLS(LAST_KEY, previous);
+    setClassification(previous.classification);
+    setSafeResponse(previous.safeResponse);
+    setDayIsStale(false);
+    setServiceRefusal(null);
+    setExpandedStopKey(null);
+    setExpandedCandidateKey(null);
+    setPhase("done");
   }
 
   // Arriving with ?place= (e.g. from the landing search) composes the day
@@ -1013,6 +1134,11 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // starts a latest-request-wins compose. Skipped before the first
   // compose and while showing a restored snapshot, so nothing fires unasked.
   useEffect(() => {
+    // Undo put these exact inputs back together with the day that answered
+    // them; composing them again is not an adjustment. Read once, whatever
+    // happens next, so a stale echo can never swallow a later change.
+    const undoEcho = undoEchoRef.current;
+    undoEchoRef.current = null;
     if (skipFirstAdjustRef.current) {
       skipFirstAdjustRef.current = false;
       return;
@@ -1021,10 +1147,18 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       adoptedInputsRef.current = false;
       return;
     }
+    if (undoEcho !== null && undoEcho === adjustmentSignature(selected, dayOffset, walkKey, commitments)) return;
     if (navigationSuspendedRef.current || !hasAnchor || phase === "idle" || restoredAt) return;
     if (recomposeTimerRef.current) clearTimeout(recomposeTimerRef.current);
     recomposeTimerRef.current = setTimeout(() => {
       recomposeTimerRef.current = null;
+      // The day this adjustment replaces is the one on screen as it leaves.
+      // A request still in flight has not replaced it yet, so a quick second
+      // change keeps the same day to return to.
+      const onScreen = lastEntryRef.current;
+      undoBaselineRef.current = isUndoableDay(onScreen)
+        ? { entry: onScreen, anchorKey: displayedAnchorKeyRef.current }
+        : null;
       resolveAndRun().catch(() => {});
     }, 400);
     return () => {
@@ -1449,6 +1583,24 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       })
     : [];
   const dayWord = dayOffset === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow");
+  const dayChangeLine = useMemo(
+    () =>
+      dayChange
+        ? dayChangeSegments(dayChange.summary, {
+            lang,
+            // The preset's name without its distance ("Lagom", not "Lagom · ~6 km"):
+            // the distances the day actually walks follow in the same line.
+            walkLabel: (key) => {
+              const preset = WALK_PRESETS.find((p: { key: string }) => p.key === key);
+              return preset ? String(lang === "en" ? preset.en : preset.sv).split(" · ")[0] : key;
+            },
+            pickLabel: (key) => pickLabel(key, lang),
+            dayLabel: (offset) => (offset === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow")),
+          })
+        : [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [dayChange, lang],
+  );
   // A woven live event belongs to the day on screen, which may be tomorrow's.
   const includedInRoute = dayOffset === 0
     ? t("Ingår i dagens rutt", "Included in today's route")
@@ -1816,6 +1968,31 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               {t("Välj en annan plats", "Choose another place")}
             </a>
           )}
+        </div>
+      )}
+
+      {/* WHAT THE LAST ADJUSTMENT CHANGED. An adjustment recomposes on its
+          own, so the replacement says what moved — or that nothing did — and
+          offers the day before it back. It sits beside the controls it
+          answers, and it is gone as soon as it stops being true. */}
+      {dayChange && phase === "done" && !dayIsStale && dayChangeLine.length > 0 && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-parranda border border-parranda-ink/12 bg-parranda-ink/5 px-4 py-2.5"
+        >
+          <p className="min-w-0 flex-1 text-[13px] leading-snug text-parranda-ink/75">
+            <span className="font-bold text-parranda-ink/90">{t("Ändrat", "Changed")}: </span>
+            {dayChangeLine.join(" · ")}
+          </p>
+          <button
+            type="button"
+            onClick={undoDayChange}
+            aria-label={t("Ångra ändringen", "Undo this change")}
+            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-parranda-ink/20 px-3.5 text-xs font-bold text-parranda-ink/85 transition hover:border-parranda-ember"
+          >
+            <UndoIcon className="h-3.5 w-3.5" />
+            {t("Ångra", "Undo")}
+          </button>
         </div>
       )}
 
