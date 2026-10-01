@@ -61,11 +61,15 @@ One server execution owns the normalized request and trusted anchor; browser
 polling reads only its status/result and cannot inject or reacquire supply.
 Modern rhythm any-place requests do not acquire an irrelevant default-city
 baseline before local supply. Within the same 60-second client lifecycle, the
-trusted loader may freeze already acquired rows after at most eight seconds of
-additional completion wait, leaving a composition reserve. A private source
-snapshot includes independently finished jobs; late jobs cannot mutate the
-published day. The collection explicitly reports partial completion. This does
-not upgrade evidence, drop trust/availability gates, or extend the timeout.
+trusted loader checks independently acquired rows after eight seconds of
+additional completion wait. A nonempty snapshot with strong matches for each
+requested interest may enter composition early; it must still pass the normal
+trust and availability gates. Empty or irrelevant snapshots keep waiting for
+outstanding sources within the original acquisition budget, leaving the fixed
+15-second composition reserve. A private source snapshot includes independently
+finished jobs; late jobs cannot mutate the published day. The collection
+explicitly reports partial completion. This does not upgrade evidence, drop
+trust/availability gates, or extend the timeout.
 
 A bounded existing-operator website check can corroborate an already mapped
 storefront only when a single semantic card owns the exact mapped street/house,

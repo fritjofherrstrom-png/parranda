@@ -57,3 +57,26 @@ test('consumer cancellation is terminal even when partial supply exists',async t
  const load=lifecycleLoader(async()=>rows,{signal:controller.signal,warming(){}},{partialWaitMs:100});
  const pending=load({});await flush();controller.abort();await assert.rejects(pending,/planner_cancelled/);work.resolve([]);
 });
+test('empty partial supply does not terminate a cold request before another real source completes inside the original budget',async t=>{
+ t.mock.timers.enable({apis:['setTimeout','Date'],now:0});const work=deferred(),rows=[];Object.defineProperty(rows,SOURCE_COMPLETION,{value:work.promise});let finished=false,reads=0;
+ const load=lifecycleLoader(async()=>{reads++;return rows},{signal:new AbortController().signal,deadline:250,warming(){}},{partialWaitMs:50,reserveMs:50});
+ const pending=load({requestedIntents:['second_hand']}).then(v=>{finished=true;return v});await flush();t.mock.timers.tick(50);await flush();assert.equal(finished,false);
+ work.resolve([{id:'late-shop',type:'vintage-shop',tags:['second_hand']}]);const result=await pending;
+ assert.equal(result[0].id,'late-shop');assert.equal(reads,1);
+});
+test('irrelevant completed rows do not end a focused day while a source-owned relevant snapshot can still arrive',async t=>{
+ t.mock.timers.enable({apis:['setTimeout','Date'],now:0});const work=deferred(),rows=[{id:'park',type:'park'}];let snapshot=rows,finished=false;
+ Object.defineProperty(rows,SOURCE_COMPLETION,{value:work.promise});Object.defineProperty(rows,SOURCE_SNAPSHOT,{value:()=>snapshot});
+ const load=lifecycleLoader(async()=>rows,{signal:new AbortController().signal,deadline:250,warming(){}},{partialWaitMs:50,reserveMs:50});
+ const pending=load({requestedIntents:['second_hand','fika']}).then(v=>{finished=true;return v});await flush();t.mock.timers.tick(50);await flush();assert.equal(finished,false);
+ snapshot=[...rows,{id:'shop',type:'vintage-shop',tags:['second_hand']}];t.mock.timers.tick(50);await flush();assert.equal(finished,false,'fika is still missing');
+ snapshot=[...snapshot,{id:'cafe',type:'cafe',tags:['fika']}];t.mock.timers.tick(50);const result=await pending;
+ assert.equal(result.length,3);assert.equal(result.loader_metadata.source_completion.status,'partial');work.resolve(snapshot);
+});
+test('empty-source waiting still leaves the fixed composition reserve and late completion cannot mutate the snapshot',async t=>{
+ t.mock.timers.enable({apis:['setTimeout','Date'],now:0});const work=deferred(),rows=[];Object.defineProperty(rows,SOURCE_COMPLETION,{value:work.promise});let finished=false;
+ const load=lifecycleLoader(async()=>rows,{signal:new AbortController().signal,deadline:200,warming(){}},{partialWaitMs:100,reserveMs:50});
+ const pending=load({requestedIntents:['second_hand']}).then(v=>{finished=true;return v});await flush();t.mock.timers.tick(100);await flush();assert.equal(finished,false);
+ t.mock.timers.tick(50);const result=await pending;assert.equal(Date.now(),150);assert.equal(result.length,0);
+ work.resolve([{id:'too-late'}]);await flush();assert.equal(result.length,0);
+});

@@ -2,6 +2,7 @@
 
 const { randomBytes } = require('node:crypto');
 const { SOURCE_COMPLETION, SOURCE_SNAPSHOT } = require('../place-candidates/background-source');
+const { normalizeUserIntents, matchCandidateToIntent } = require('../candidates/intent-vocabulary');
 
 const DEADLINE_MS = 60000;
 const POLL_MS = 3000;
@@ -131,9 +132,21 @@ function lifecycleLoader(loader, context, { partialWaitMs = PARTIAL_WAIT_MS, res
           const done = value => { cleanup(); resolve(value); };
           if (context.signal.aborted) return abort();
           context.signal.addEventListener('abort', abort, { once: true });
-          timer = setTimeout(() => {
+          const takeSnapshot = () => {
             // Only a source-owned symbol can supply a newer partial snapshot.
             const value = typeof initial[SOURCE_SNAPSHOT] === 'function' ? initial[SOURCE_SNAPSHOT]() : initial;
+            const intents = normalizeUserIntents(request.requestedIntents || []).intents;
+            const relevant = Array.isArray(value) && value.length > 0 && intents.every(intent =>
+              value.some(record => matchCandidateToIntent(record, intent).level === 'strong'));
+            const remaining = Number.isFinite(context.deadline)
+              ? context.deadline - Date.now() - reserveMs : 0;
+            // A failed fast source is not proof that the whole day lacks
+            // supply. Keep the original execution alive for outstanding real
+            // sources when no relevant partial exists, within the SAME budget.
+            if (!relevant && remaining > 0) {
+              timer = setTimeout(takeSnapshot, Math.min(partialWaitMs, remaining));
+              return;
+            }
             const snapshot = [...(Array.isArray(value) ? value : [])];
             for (const name of ['loader_status', 'loader_error']) {
               if (value[name] !== undefined) Object.defineProperty(snapshot, name, { value: value[name] });
@@ -143,7 +156,8 @@ function lifecycleLoader(loader, context, { partialWaitMs = PARTIAL_WAIT_MS, res
               source_completion: { ...(value.loader_metadata?.source_completion || {}), status: 'partial', reason: 'bounded_lifecycle_snapshot' },
             } });
             done(snapshot);
-          }, waitMs);
+          };
+          timer = setTimeout(takeSnapshot, waitMs);
           Promise.resolve(initial[SOURCE_COMPLETION]).then(done, error => {
             cleanup(); reject(error);
           });
