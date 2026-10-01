@@ -66,6 +66,52 @@ function identityNames(html) {
   }
   return result;
 }
+// Negative evidence only: a complete, unambiguous weekly statement at the
+// operator's sole mapped branch can disprove a visit on an explicitly closed
+// weekday. It cannot corroborate existence, coordinates, or an open window.
+function closedWeekdayEvidence(main, record, exactIdentity, url) {
+  if (!exactIdentity || !main) return null;
+  const branchLinks=[];
+  walk(main,n=>{
+    if(n.tagName!=='a')return;
+    try {
+      const link=new URL(attr(n,'href'));
+      if(link.protocol==='https:' && /^(maps\.)?google\.[a-z.]+$/i.test(link.hostname) && link.searchParams.get('daddr'))branchLinks.push(link.searchParams.get('daddr'));
+    } catch {}
+  });
+  const addressWords=value=>String(value).normalize('NFKD').replace(/\p{M}/gu,'').toLowerCase().replace(/[^a-z0-9]/g,' ').replace(/\s+/g,' ').trim();
+  const addresses=[...new Set(branchLinks.map(addressWords))];
+  if(addresses.length!==1)return null;
+  if(record.source_address?.street && record.source_address?.house_number && !(addresses[0]+' ').startsWith(addressWords(record.source_address.street+' '+record.source_address.house_number)+' '))return null;
+  const schedules=[];
+  walk(main,n=>{
+    if(n.tagName!=='p' || !visible(n))return;
+    const value=text(n).normalize('NFKD').replace(/\p{M}/gu,'').toLowerCase();
+    if(/appointment|tidsbokning|overenskommelse/.test(value))return;
+    const pattern=new RegExp(`\\b(${DAY})\\s*[, :]*\\s*(closed|stangt|\\d{1,2}[.:]\\d{2}\\s*[-–—]\\s*\\d{1,2}[.:]\\d{2})(?=\\s|$)`,'g');
+    const assertions=[...value.matchAll(pattern)];
+    if(assertions.length!==7 || new Set(assertions.map(m=>DAYS[m[1]])).size!==7)return;
+    let scope=n.parentNode;
+    while(scope && scope!==main) {
+      if(['div','section','article','li'].includes(scope.tagName) && text(scope).length<4000) {
+        let ownsBranch=false;walk(scope,child=>{if(child.tagName==='a' && branchLinks.some(address=>{try{return new URL(attr(child,'href')).searchParams.get('daddr')===address}catch{return false}}))ownsBranch=true});
+        if(ownsBranch)break;
+      }
+      scope=scope.parentNode;
+    }
+    if(!scope || scope===main)return;
+    if(assertions.some(m=>!['closed','stangt'].includes(m[2])&&!parseHours(m[1]+' '+m[2])))return;
+    const closed=assertions.filter(m=>['closed','stangt'].includes(m[2])).map(m=>DAYS[m[1]]);
+    if(closed.length)schedules.push(closed);
+  });
+  if(schedules.length!==1)return null;
+  return {status:'closed_weekdays',source_url:url,closed_weekdays:schedules[0],visit_function:'shopping_schedule',scope:'sole_operator_branch'};
+}
+function operatorClosureForWindow(candidate, {weekday}={}) {
+  const fact=candidate?.operator_visit_evidence;
+  if(fact?.status!=='closed_weekdays' || !Number.isInteger(weekday) || weekday<0 || weekday>6 || !fact.closed_weekdays?.includes(['Su','Mo','Tu','We','Th','Fr','Sa'][weekday]))return null;
+  return {status:'closed_for_window',eligible:false,reason:'operator_closed_for_query_day',selected_day_hours:{status:'closed',all_day:false,windows:[]}};
+}
 function parseOperatorVisitEvidence(html, record, url) {
   const document=parse(String(html)); const units=[];walk(document,n=>{if(visible(n)&&n.tagName)units.push(n)});
   const descriptions=units.filter(n=>n.tagName==='meta' && ['description','og:description'].includes(attr(n,'name')||attr(n,'property'))).map(n=>attr(n,'content'));
@@ -100,6 +146,8 @@ function parseOperatorVisitEvidence(html, record, url) {
   const main=units.find(n=>n.tagName==='main') || units.find(n=>n.tagName==='body');
   const content=text(main || document);
   const exactIdentity=identityNames(html).some(name=>fold(name)===fold(record.name));
+  const closure=closedWeekdayEvidence(main,record,operatorNames.some(name=>fold(name)===fold(record.name)),url);
+  if(closure)return closure;
   // Closed purpose vocabulary. Valuation/intake at an auction office is not
   // an antique-shopping visit, even when the business itself remains active.
   const valuation=/\b(värdering|valuation)\b/i.test(content), intake=/\b(inlämning|intake)\b/i.test(content);
@@ -139,10 +187,10 @@ function contactLink(html, root) {
 
 function createOperatorVisitEnricher({
   env=process.env,fetcher=pinnedHttpsFetch,resolveHost=dns.lookup,now=()=>Date.now(),
-  cache=createSourceCache({namespace:'operator-visit-evidence-v2',dir:env.PARRANDA_CACHE_DIR,ttlMs:6*60*60*1000}),
+  cache=createSourceCache({namespace:'operator-visit-evidence-v3',dir:env.PARRANDA_CACHE_DIR,ttlMs:6*60*60*1000}),
   maxMs=TOTAL_MS,
 }={}) {
-  async function read(url, signal, deadline, outcomes) {
+  async function read(url, signal, deadline, outcomes, canonicalHop=false) {
     const remaining=deadline-now();if(remaining<=0 || signal?.aborted)return null;
     const addresses=await publicAddressesForUrl(url,url,resolveHost,Math.min(remaining,1500));if(!addresses || deadline-now()<=0 || signal?.aborted)return null;
     const controller=new AbortController();const abort=()=>controller.abort();signal?.addEventListener('abort',abort,{once:true});
@@ -150,13 +198,23 @@ function createOperatorVisitEnricher({
     try {
       const response=await fetcher(url,{redirect:'manual',signal:controller.signal,validatedAddresses:addresses,headers:{'User-Agent':'Parranda/1.0 (bounded operator fact check)',Accept:'text/html'}});
       outcomes.push({url,status:response.status,elapsed_ms:now()-started});
+      if([301,302,307,308].includes(response.status) && !canonicalHop) {
+        let target;
+        try{target=new URL(response.headers?.get?.('location'),url)}catch{}
+        const original=new URL(url);
+        await response.body?.cancel?.();
+        // Only the operator's exact www/apex alias, same HTTPS path, no query,
+        // credentials, port or second redirect. DNS is validated/pinned again.
+        if(target && target.protocol==='https:' && !target.username && !target.password && !target.port && !target.search && !target.hash && target.pathname===original.pathname && target.hostname!==original.hostname && target.hostname.replace(/^www\./,'')===original.hostname.replace(/^www\./,''))return read(target.toString(),signal,deadline,outcomes,true);
+        return null;
+      }
       if(response.status!==200 || (response.url&&response.url!==url) || !/^(text\/html|application\/xhtml\+xml)/i.test(response.headers?.get?.('content-type')||'')) {await response.body?.cancel?.();return null}
       const declared=Number(response.headers?.get?.('content-length'));if(declared>MAX_BYTES){await response.body?.cancel?.();return null;}
       const reader=response.body?.getReader?.();if(!reader)return null;
       let size=0;const chunks=[];
       try {for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>MAX_BYTES){await reader.cancel();return null}chunks.push(Buffer.from(value));}}finally{reader.releaseLock()}
       if(controller.signal.aborted||now()>deadline)return null;
-      return Buffer.concat(chunks).toString('utf8');
+      return {html:Buffer.concat(chunks).toString('utf8'),url};
     } catch {outcomes.push({url,status:'unavailable',elapsed_ms:now()-started});return null;}
     finally {clearTimeout(timer);signal?.removeEventListener('abort',abort)}
   }
@@ -177,11 +235,11 @@ function createOperatorVisitEnricher({
         const record=targets[cursor++],url=sourceUrl(record.website);
         const key=createHash('sha256').update(JSON.stringify([url,record.name,record.source_address||null])).digest('hex');
         const fact=await cache.get(key,async()=>{
-          const html=await page(url);if(!html)return null;
-          let fact=parseOperatorVisitEvidence(html,record,url);
+          const initial=await page(url);if(!initial)return null;
+          let fact=parseOperatorVisitEvidence(initial.html,record,initial.url);
           if(fact.status==='unresolved') {
-            const link=contactLink(html,url);
-            if(link&&link!==url){const next=await page(link);if(next)fact=parseOperatorVisitEvidence(next,record,link)}
+            const link=contactLink(initial.html,initial.url);
+            if(link&&link!==initial.url){const next=await page(link);if(next)fact=parseOperatorVisitEvidence(next.html,record,next.url)}
           }
           return {...fact,observed_at:new Date(now()).toISOString()};
         },{signal:context.signal,shouldStore:v=>!!v && v.status!=='unresolved'}).catch(()=>null);
@@ -194,7 +252,7 @@ function createOperatorVisitEnricher({
         .find(({record:other,fact:f})=>f?.status==='non_shopping_visit' && fold(other.name)===fold(record.name) &&
           sourceUrl(other.website)===sourceUrl(record.website))?.fact;
       if(!fact||fact.status==='unresolved')return record;
-      if(fact.status==='non_shopping_visit')return {...record,operator_visit_evidence:fact};
+      if(['non_shopping_visit','closed_weekdays'].includes(fact.status))return {...record,operator_visit_evidence:fact};
       return {...record,opening_hours:fact.opening_hours,operator_visit_evidence:fact,
         sources:[...(record.sources||[]),{provider:'operator-website',family:'official',tier:'official',url:fact.source_url,observed_at:fact.observed_at}],
       };
@@ -202,10 +260,10 @@ function createOperatorVisitEnricher({
     for(const name of ['loader_status','loader_error'])if(records[name]!==undefined)Object.defineProperty(output,name,{value:records[name]});
     Object.defineProperty(output,'loader_metadata',{value:{...(records.loader_metadata||{}),operator_evidence:{
       attempted:targets.length,confirmed:[...facts.values()].filter(f=>f?.status==='confirmed_storefront').length,
-      excluded:[...facts.values()].filter(f=>f?.status==='non_shopping_visit').length,
+      excluded:[...facts.values()].filter(f=>['non_shopping_visit','closed_weekdays'].includes(f?.status)).length,
       outcomes, candidates:targets.map(t=>({id:t.id,status:facts.get(t.id)?.status||'not_observed'})),
     }}});
     return output;
   };
 }
-module.exports={createOperatorVisitEnricher,parseOperatorVisitEvidence,parseHours,contactLink,sourceUrl};
+module.exports={createOperatorVisitEnricher,parseOperatorVisitEvidence,parseHours,contactLink,sourceUrl,operatorClosureForWindow};

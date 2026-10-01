@@ -326,6 +326,10 @@ function reconcileFields(canonical, duplicate) {
   if (duplicate.operator_visit_evidence?.status === 'non_shopping_visit') {
     patch.operator_visit_evidence = duplicate.operator_visit_evidence;
     filled.push('operator_visit_evidence');
+  } else if (duplicate.operator_visit_evidence?.status === 'closed_weekdays' && canonical.operator_visit_evidence?.status !== 'non_shopping_visit') {
+    const other=canonical.operator_visit_evidence?.status==='closed_weekdays'?canonical.operator_visit_evidence.closed_weekdays:[];
+    patch.operator_visit_evidence={...duplicate.operator_visit_evidence,closed_weekdays:[...new Set([...(other||[]),...(duplicate.operator_visit_evidence.closed_weekdays||[])])]};
+    filled.push('operator_visit_evidence');
   } else if (!duplicateOperational.route_eligible) {
     patch.operational_status = "inactive";
     patch.operational_reasons = [...new Set([

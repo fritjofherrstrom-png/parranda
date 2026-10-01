@@ -66,3 +66,16 @@ test('independently supported operator storefronts reach a focused full day thro
     await new Promise(resolve => server.close(resolve));
   }
 });
+
+test('a source-owned closed weekday is excluded before role selection despite stale mapped open hours', async()=>{
+ const rows=['Closed','Open','Spare'].map((name,i)=>({id:'schedule-'+i,name:name+' Reuse',type:'vintage-shop',tags:['second_hand'],lat:55.6+i*0.001,lng:13,website:`https://${name.toLowerCase()}.example/`,opening_hours:'Mo-Su 10:00-20:00',sources:[{provider:'osm',family:'map',tier:'inferred',url:`https://www.openstreetmap.org/node/${i+20}`}]}));
+ const loader=async()=>rows;
+ loader.enrich=createOperatorVisitEnricher({cache:createSourceCache(),resolveHost:async()=>[{address:'93.184.216.34',family:4}],fetcher:async url=>new Response(url===rows[0].website?`<script type="application/ld+json">{"@type":"WebSite","name":"Closed Reuse"}</script><main><section><p>Monday, Closed Tuesday, Closed Wednesday, Closed Thursday, Closed Friday, 12:00-18:00 Saturday, 12:00-16:00 Sunday, Closed</p><p>Other times by appointment.</p><a href="https://maps.google.com?daddr=Oak%20Street%2014">Directions</a></section></main>`:'<main>Facts not observed</main>',{headers:{'Content-Type':'text/html'}})});
+ const server=buildApp({openDataLoader:composeOpenDataLoaders(loader,async()=>[]),reviewedPlaceSource:null,eventSupply:null,clock:()=>new Date('2026-10-01T09:00:00Z'),weatherProvider:async()=>({condition:'sun',maxTemp:18,timezone_resolution:{timezone:'Europe/Stockholm',timezone_source:'weather_provider_auto',utc_offset_seconds:7200}})}).listen(0);
+ try {
+  const result=await request(server,{lat:55.6,lng:13,dates:['2026-10-08'],preferences:['second_hand'],day_rhythm:'full',distance_mode:'no_limit',experimental_agnostic_route_output:1,include_external_candidates:1,agnostic_engine_compose:1});
+  const stops=result.body.days?.[0]?.primary_route?.main_stops||[];
+  assert.equal(result.status,200);assert.equal(stops.length,2);assert.ok(stops.every(s=>s.label!=='Closed Reuse'));
+  assert.ok(stops.every(s=>s.covered_preferences.includes('second_hand')));
+ } finally {await new Promise(resolve=>server.close(resolve))}
+});

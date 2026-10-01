@@ -178,7 +178,7 @@ function mapRecordToCandidate(cityConfig, record, observedAt, index) {
   const operationalReasons = normalizeOperationalReasons(record.operational_reasons);
   if (operationalReasons.length) base.operational_reasons = operationalReasons;
 
-  if (record.operator_visit_evidence && ['confirmed_storefront', 'non_shopping_visit'].includes(record.operator_visit_evidence.status)) {
+  if (record.operator_visit_evidence && ['confirmed_storefront', 'non_shopping_visit', 'closed_weekdays'].includes(record.operator_visit_evidence.status)) {
     base.operator_visit_evidence = record.operator_visit_evidence;
   }
   return validatePlaceCandidate(base, `externalOpenCandidate[${index}]`);

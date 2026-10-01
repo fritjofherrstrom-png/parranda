@@ -72,10 +72,17 @@ storefront only when a single semantic card owns the exact mapped street/house,
 a closed Second hand/antiques statement, shopping function and parsed hours.
 It checks at most four source-owned websites, one same-origin contact/store
 hop, two requests concurrently, six seconds overall, DNS-pinned public HTTPS,
-and 512 KiB per response. It never discovers new places or follows payload URLs.
+and 512 KiB per response. A single HTTPS www/apex canonical redirect may be
+followed only at the identical path, after a second public-DNS validation and
+pin; unrelated redirects remain blocked. It never discovers new places or
+follows payload URLs.
 An exactly identified valuation/intake office is excluded as a shopping target
 without pretending the business closed. Unknown facts remain unknown; three
 candidates without an operator website cannot be promoted by this mechanism.
+An exact operator identity and one bounded sole-branch weekly statement can
+also veto explicitly closed weekdays, including unbooked appointment-only
+exceptions. That negative fact does not certify other weekdays, missing
+addresses or existence, and survives duplicate reconciliation.
 Official operator plus map evidence still passes the unchanged shared gates;
 no extra stop count or rhythm override is introduced.
 

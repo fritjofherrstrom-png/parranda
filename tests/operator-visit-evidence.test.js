@@ -85,3 +85,43 @@ test('private DNS, redirects, absent facts and oversized bodies fail closed with
   assert.deepEqual(row,record);
  }
 });
+
+const weeklyClosure = `<script type="application/ld+json">{"@type":"WebSite","name":"Juniper Reuse"}</script><main><section><p>Oak Street 14</p><p>Monday, Closed<br>Tuesday, Closed<br>Wednesday, Closed<br>Thursday, Closed<br>Friday, 12:00-18:00<br>Saturday, 12:00-16:00<br>Sunday, Closed</p><p>Beyond that, available by appointment.</p><a href="https://maps.google.com?daddr=Oak%20Street%2014">Get directions</a></section></main>`;
+test('explicit closed weekdays veto that day without inventing open windows or corroborating a missing address', async()=>{
+ const {operatorClosureForWindow}=require('../server/place-candidates/operator-visit-evidence');
+ const missing={...record,source_address:undefined,opening_hours:'Mo-Su 10:00-20:00'};
+ const fact=parseOperatorVisitEvidence(weeklyClosure,missing,record.website);
+ assert.equal(fact.status,'closed_weekdays');assert.deepEqual(fact.closed_weekdays,['Mo','Tu','We','Th','Su']);
+ assert.equal(operatorClosureForWindow({operator_visit_evidence:fact},{weekday:4}).eligible,false);
+ assert.equal(operatorClosureForWindow({operator_visit_evidence:fact},{weekday:5}),null);
+ assert.equal(operatorClosureForWindow({operator_visit_evidence:fact},{weekday:null}),null);
+ const enrich=createOperatorVisitEnricher({cache:createSourceCache(),resolveHost:dns,fetcher:async()=>response(weeklyClosure)});
+ const [enriched]=await enrich([missing]);
+ assert.deepEqual(enriched.sources,missing.sources);assert.equal(enriched.opening_hours,missing.opening_hours);
+ const candidate=createExternalOpenProvider({key:'test'},{dataset:[enriched]}).listCandidates()[0];
+ assert.equal(operatorClosureForWindow(candidate,{weekday:4}).eligible,false);
+ const plain={...candidate,id:'duplicate',operator_visit_evidence:undefined};
+ for(const input of [[plain,candidate],[candidate,plain]])assert.equal(operatorClosureForWindow(resolveCandidateIdentity(input).candidates[0],{weekday:4}).eligible,false);
+});
+test('ambiguous branches, different identity, conflicting address or incomplete weekday statements cannot supply closure',()=>{
+ for(const html of [weeklyClosure.replace('"Juniper Reuse"','"Other Reuse"'),weeklyClosure.replace('Sunday, Closed','Sunday, Unknown'),weeklyClosure.replace('Friday, 12:00-18:00','Friday, 18:00-12:00'),weeklyClosure.replace('</section>','<a href="https://maps.google.com?daddr=Other%20Street%204">Get directions</a></section>'),weeklyClosure.replace('</section>',weeklyClosure.match(/<p>Monday.*?<\/p>/)[0]+'</section>')])assert.equal(parseOperatorVisitEvidence(html,record,record.website).status,'unresolved');
+ assert.equal(parseOperatorVisitEvidence(weeklyClosure.replaceAll('Street 14','Street 140').replace('Street%2014','Street%20140'),record,record.website).status,'unresolved');
+});
+test('one canonical www/apex hop is pinned again and preserves the final source URL, other redirects still fail closed',async()=>{
+ const urls=[],hosts=[];
+ const enriched=await createOperatorVisitEnricher({cache:createSourceCache(),resolveHost:async host=>{hosts.push(host);return dns()},fetcher:async url=>{
+  urls.push(url);return url.includes('//www.')?new Response('',{status:301,headers:{location:'https://juniper.example/'}}):response(weeklyClosure);
+ }})([{...record,website:'https://www.juniper.example/'}]);
+ assert.deepEqual(urls,['https://www.juniper.example/','https://juniper.example/']);assert.deepEqual(hosts,['www.juniper.example','juniper.example']);
+ assert.equal(enriched[0].operator_visit_evidence.source_url,'https://juniper.example/');
+ for(const location of ['http://juniper.example/','https://juniper.example/other','https://juniper.example/?secret=1','https://www.juniper.example/']) {
+  let calls=0;const [row]=await createOperatorVisitEnricher({cache:createSourceCache(),resolveHost:dns,fetcher:async()=>{calls++;return new Response('',{status:301,headers:{location}})}})([{...record,website:'https://www.juniper.example/'}]);assert.equal(calls,1);assert.equal(row.operator_visit_evidence,undefined);
+ }
+});
+test('canonical redirect cannot escape DNS pinning or consume a second redirect', async()=>{
+ for(const blockedDns of [true,false]){
+  let calls=0;
+  const [row]=await createOperatorVisitEnricher({cache:createSourceCache(),resolveHost:async host=>blockedDns&&host==='juniper.example'?[{address:'127.0.0.1',family:4}]:dns(),fetcher:async url=>{calls++;return new Response('',{status:301,headers:{location:url.includes('//www.')?'https://juniper.example/':'https://www.juniper.example/'}})}})([{...record,website:'https://www.juniper.example/'}]);
+  assert.equal(row.operator_visit_evidence,undefined);assert.equal(calls,blockedDns?1:2);
+ }
+});

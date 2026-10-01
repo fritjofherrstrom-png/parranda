@@ -42,6 +42,7 @@ const {
   normalizeSelectedDayHoursFact,
 } = require("../place-candidates/opening-hours");
 const { validateAgnosticWalkingOrder } = require("./agnostic-route-walking-validation");
+const { operatorClosureForWindow } = require('../place-candidates/operator-visit-evidence');
 const { buildAgnosticRouteOrdering, daypartForRole, timeBandRank } = require("./agnostic-route-ordering");
 const { resolveWalkableMicroBase } = require("./walkable-micro-base");
 const { resolveAgnosticContext, collectInfluenceReasons } = require("./agnostic-route-context");
@@ -249,7 +250,7 @@ function sanitizeLoaderCollectionMetadata(value) {
       excluded: finiteOrNull(value.operator_evidence.excluded),
       candidates: (Array.isArray(value.operator_evidence.candidates) ? value.operator_evidence.candidates : []).slice(0, 4).map(item => ({
         id: typeof item.id === 'string' ? item.id.slice(0, 160) : null,
-        status: ['confirmed_storefront', 'non_shopping_visit', 'unresolved', 'not_observed'].includes(item.status) ? item.status : null,
+        status: ['confirmed_storefront', 'non_shopping_visit', 'closed_weekdays', 'unresolved', 'not_observed'].includes(item.status) ? item.status : null,
       })),
     } : null,
     regional_scout: sanitizeRegionalScout(value.regional_scout),
@@ -1032,6 +1033,8 @@ async function composeAgnosticRouteOutput({
   const availabilityHelpers = availabilityWindow
     ? {
         evaluateCandidateAvailability: ({ candidate }) => {
+          const closure=operatorClosureForWindow(candidate,availabilityWindow);
+          if(closure)return closure;
           if (typeof candidate?.opening_hours !== "string") return null;
           const availability = evaluateOpeningHoursForWindow(candidate.opening_hours, availabilityWindow);
           const selectedDayHours = buildSelectedDayHoursFact(candidate.opening_hours, availabilityWindow);
