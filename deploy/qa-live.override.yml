@@ -1,0 +1,12 @@
+# Use with compose.production.yml and the separate project parranda-qa-live.
+# Start named services explicitly; the production Caddy service is unnecessary.
+services:
+  web:
+    container_name: parranda-qa-live-web
+    ports:
+      - "127.0.0.1:18508:8000"
+    environment:
+      PARRANDA_NEW_LANDING: enabled
+      # This QA endpoint is bound exclusively to localhost. Allow bounded Live
+      # polling to be verified without the production reverse-proxy rate gate.
+      PARRANDA_PUBLIC_GUARD: disabled
