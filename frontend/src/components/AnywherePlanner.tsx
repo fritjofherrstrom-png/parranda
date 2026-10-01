@@ -1590,7 +1590,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             lang,
             // Name the rhythm input; measured distance describes the resulting day.
             walkLabel: (key) => {
-          const preset = DAY_RHYTHMS.find((p: { key: string }) => p.key === key);
+              const preset = DAY_RHYTHMS.find((p: { key: string }) => p.key === key);
               return preset ? String(lang === "en" ? preset.en : preset.sv).split(" · ")[0] : key;
             },
             pickLabel: (key) => pickLabel(key, lang),
