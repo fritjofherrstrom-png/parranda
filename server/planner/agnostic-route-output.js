@@ -679,30 +679,40 @@ function anchorAdaptedBodyToCurrentBand(adaptedBody, currentRank) {
   };
 }
 
-// Engine-compose equivalent of #276. Trim the trusted source reservoir BEFORE
-// route composition so geometry, legs, and walking truth are recomputed over the
-// actual time-appropriate stops. If fewer than two candidates remain, keep the
-// full reservoir and let the shared honesty fields explain that the full-day arc
-// precedes local time rather than fabricating a thin route.
-function anchorSourceCandidatesToCurrentBand(sourceCandidates, currentRank, pinnedIds = []) {
+// Anchor BEFORE composition so ordering and geometry use the actual reservoir.
+// A role's usual daypart is only a heuristic: a requested experience with
+// source-supported availability in the remaining day can move to the current
+// band. Unknown hours keep the existing heuristic. With fewer than two retained
+// candidates, keep the full arc and its explicit not-anchored caveat.
+function anchorSourceCandidatesToCurrentBand(sourceCandidates, currentRank, pinnedIds = [], preferences = []) {
   const candidates = Array.isArray(sourceCandidates) ? sourceCandidates : [];
+  const requested = normalizeUserIntents(preferences).intents;
+  const currentBand = ["morning", "midday", "afternoon", "evening"][currentRank];
   // An explicit "keep this" outranks the typical-timing heuristic. Trimming a
   // pinned place because its role usually happens earlier in the day would drop
   // exactly what the user asked to keep.
   const pins = new Set(Array.isArray(pinnedIds) ? pinnedIds : []);
   const kept = [];
   const trimmedDayparts = [];
+  let retimed = false;
   for (const candidate of candidates) {
     const role = candidate?.role || (Array.isArray(candidate?.route_roles) ? candidate.route_roles[0] : null);
     const daypart = daypartForRole(role || null);
     const rank = timeBandRank(daypart);
-    if (rank !== null && rank < currentRank && !pins.has(String(candidate?.id ?? ""))) {
+    const sourceAvailable = candidate?.availability?.eligible === true &&
+      candidate.availability.status === "available_in_window";
+    const requestedExperience = Array.isArray(candidate?.covered_preferences) &&
+      requested.some(intent => candidate.covered_preferences.includes(intent));
+    if (rank !== null && rank < currentRank && currentBand && sourceAvailable && requestedExperience) {
+      kept.push({ ...candidate, anchored_daypart: currentBand });
+      retimed = true;
+    } else if (rank !== null && rank < currentRank && !pins.has(String(candidate?.id ?? ""))) {
       if (!trimmedDayparts.includes(daypart)) trimmedDayparts.push(daypart);
     } else {
       kept.push(candidate);
     }
   }
-  if (kept.length < 2 || kept.length === candidates.length) {
+  if (kept.length < 2 || (kept.length === candidates.length && !retimed)) {
     return { anchored: false, candidates, trimmedDayparts: [] };
   }
   return { anchored: true, candidates: kept, trimmedDayparts };
@@ -1458,7 +1468,7 @@ async function composeAgnosticRouteViaEngine({
         pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
       });
   const timeAnchoring = Number.isInteger(currentTimeBandRank)
-    ? anchorSourceCandidatesToCurrentBand(sourceCandidates, currentTimeBandRank, pinnedStopIds)
+    ? anchorSourceCandidatesToCurrentBand(sourceCandidates, currentTimeBandRank, pinnedStopIds, preferences)
     : { anchored: false, candidates: sourceCandidates, trimmedDayparts: [] };
 
   async function runEngine(candidates, pins = pinnedStopIds) {
@@ -1522,7 +1532,7 @@ async function composeAgnosticRouteViaEngine({
       shouldTryCapacityRepair(route, walkingKmTarget)
     ) {
       let capacityAnchoring = anchored && Number.isInteger(currentTimeBandRank)
-        ? anchorSourceCandidatesToCurrentBand(capacitySourceCandidates, currentTimeBandRank, pins)
+        ? anchorSourceCandidatesToCurrentBand(capacitySourceCandidates, currentTimeBandRank, pins, preferences)
         : { anchored: false, candidates: capacitySourceCandidates, trimmedDayparts: [] };
       let repairedDay = await runEngine(capacityAnchoring.candidates, pins);
       let repairedRoute = repairedDay?.primary_route || null;
@@ -1560,7 +1570,7 @@ async function composeAgnosticRouteViaEngine({
         const removedId = sourceCandidates.find(candidate => !trialIds.has(candidate.id))?.id;
         const addedId = candidates.find(candidate => !sourceIds.has(candidate.id))?.id;
         const trialAnchoring = anchored && Number.isInteger(currentTimeBandRank)
-          ? anchorSourceCandidatesToCurrentBand(candidates,currentTimeBandRank,[])
+          ? anchorSourceCandidatesToCurrentBand(candidates,currentTimeBandRank,[],preferences)
           : {anchored:false,candidates};
         if (anchored && !trialAnchoring.anchored) continue;
         const trialDay = await runEngine(trialAnchoring.candidates, []);

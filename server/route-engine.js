@@ -175,6 +175,7 @@ function buildProvisionalComposeStops() {
       provenance: candidate.provenance || null,
       role: candidate.role || null,
       routeRoles: Array.isArray(candidate.route_roles) ? [...candidate.route_roles] : [],
+      anchoredDaypart: candidate.anchored_daypart || null,
       candidateStatus: candidate.candidate_status || null,
       plannerUsable: candidate.planner_usable === true,
       candidateOrigin: candidate.origin || null,
@@ -4445,6 +4446,11 @@ function refineStopOrder(selectedStops, start, geometryFor) {
 // the ordering layer and never depends on the provisional-stop mapper carrying
 // role data (that mapper is owned elsewhere).
 function composeStopDaypartSlot(stop, roleById = null) {
+  // Only the trusted any-place reservoir sets this after checking selected
+  // intent and source availability. Use the same band for ordering and labels;
+  // retaining a midday cafe must not publish an already-past morning visit.
+  const anchoredSlot = SLOT_DAYPART.indexOf(stop?.anchoredDaypart);
+  if (anchoredSlot >= 0) return anchoredSlot;
   let roles = Array.isArray(stop?.route_roles) && stop.route_roles.length ? stop.route_roles : null;
   if (!roles && roleById && stop?.id != null) {
     const looked = roleById.get(stop.id);

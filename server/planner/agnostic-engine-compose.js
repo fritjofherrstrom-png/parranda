@@ -239,6 +239,13 @@ function toSourceCandidate({
       : [],
     reconciliation: rich?.reconciliation || null,
     ...(selectedDayHours ? { selected_day_hours: selectedDayHours } : {}),
+    // Keep the server's remaining-day availability verdict separate from the
+    // public selected-day hours fact. Typical role timing cannot override an
+    // explicitly requested experience supported by this verdict.
+    ...(rich?.availability ? { availability: {
+      eligible: rich.availability.eligible === true,
+      status: rich.availability.status,
+    } } : {}),
     source: {
       kind: "open_geo_source",
       label: firstSource.label || provenance.source_family || "open data",
