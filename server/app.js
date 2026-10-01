@@ -1913,6 +1913,7 @@ function buildApp({
         start: request.body?.start,
         end: request.body?.end,
         walkingKmTarget: Number(request.body?.walking_km_target || 8),
+        dayRhythm: requestedRhythm,
         legPacing: request.body?.leg_pacing || "balanced",
         preferences,
         optimizerMode: request.body?.optimizer_mode || null,

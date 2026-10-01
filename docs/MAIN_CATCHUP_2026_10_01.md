@@ -51,6 +51,12 @@ Integrationen av #527 avslöjade en verklig kompatibilitetsmiss: dess nya
 `DAY_RHYTHMS`; mounted UI-tester kontrollerar både besked/ångra och att nya
 anrop skickar dagsrytm och `no_limit`, utan `walking_km_target`.
 
+Slutgranskningen hittade också att API:t inte skickade `day_rhythm` vidare till
+citypack-motorn: både Lugn och Fylld gav samma peak-dag. Kandidaten skickar nu
+den normaliserade rytmen även i den vägen. Ett API-regressionstest reproducerar
+felet före fixen och kontrollerar faktisk profil/stoppdensitet för alla fyra
+rytmer efter fixen. Äldre anrop utan rytm behåller motorns null/default-väg.
+
 ## WIP `796ceb1` är synlig och måste bedömas i slutdiffen
 
 Commiten är 22 filer, 329 tillagda och 52 borttagna rader. Den ingår redan i
@@ -128,9 +134,11 @@ kodversion, inte produktacceptans. Anslutning från lokal miljö är
 
 ## Status för denna kandidat
 
-Källintegration, medlemskontroll, frontend-typecheck, committed-dist-kontroll
-och self-hosted-kontrakt är verifierade lokalt. Samlad fullsvit körs; dess
-slutresultat och kandidatens GitHub-CI läggs i integrations-PR:ens beskrivning.
+Källintegration och medlemskontroll är verifierade. Den tidigare headen
+`f15ef47` hade helt grön CI. Citypack-API-fixen ger en ny head som behöver egen
+CI och blir Hermes runtime-mål. Aktuellt fullständigt SHA, CI-resultat och
+överlämning finns i integrations-PR #543:s beskrivning; använd inte en äldre
+handoff-head som acceptans för senare kod.
 Exakt-head runtime-acceptans är ännu inte utförd. Main-merge, PR-stängningar
 och publicering/deploy av en runtime är inte utförda.
 
