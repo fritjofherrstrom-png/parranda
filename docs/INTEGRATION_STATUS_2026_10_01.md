@@ -74,8 +74,9 @@ Local validation of the fix:
   Node 24.19.0; three regressions first failed on the unmodified #538 code.
 - Full Node 24 suite: 3,213 tests, 3,201 PASS, zero FAIL, 12 SKIP (403.45s).
   Nine browser cases initially skipped because automatic Chromium discovery
-  missed `/usr/bin/chromium`; the browser suites are rerun with that explicit
-  executable. Two live DuckDB extension-download tests and the disposable
+  missed `/usr/bin/chromium`; explicit reruns PASS: 15 browser tests, zero FAIL
+  or SKIP, including the 110-view legibility harness. Two live DuckDB
+  extension-download tests and the disposable
   PostgreSQL integration remain opt-in.
 - Frontend typecheck, production build and committed-build drift check PASS.
 - Self-hosted production contract validation PASS.
