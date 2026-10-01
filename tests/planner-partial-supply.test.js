@@ -73,10 +73,11 @@ test('irrelevant completed rows do not end a focused day while a source-owned re
  snapshot=[...snapshot,{id:'cafe',type:'cafe',tags:['fika']}];t.mock.timers.tick(50);const result=await pending;
  assert.equal(result.length,3);assert.equal(result.loader_metadata.source_completion.status,'partial');work.resolve(snapshot);
 });
-test('empty-source waiting still leaves the fixed composition reserve and late completion cannot mutate the snapshot',async t=>{
+test('empty-source waiting uses the full source budget and completion after that bound cannot mutate the snapshot',async t=>{
  t.mock.timers.enable({apis:['setTimeout','Date'],now:0});const work=deferred(),rows=[];Object.defineProperty(rows,SOURCE_COMPLETION,{value:work.promise});let finished=false;
  const load=lifecycleLoader(async()=>rows,{signal:new AbortController().signal,deadline:200,warming(){}},{partialWaitMs:100,reserveMs:50});
  const pending=load({requestedIntents:['second_hand']}).then(v=>{finished=true;return v});await flush();t.mock.timers.tick(100);await flush();assert.equal(finished,false);
- t.mock.timers.tick(50);const result=await pending;assert.equal(Date.now(),150);assert.equal(result.length,0);
+ t.mock.timers.tick(50);await flush();assert.equal(finished,false,'no supply exists to spend the composition reserve on');
+ t.mock.timers.tick(50);const result=await pending;assert.equal(Date.now(),200);assert.equal(result.length,0);
  work.resolve([{id:'too-late'}]);await flush();assert.equal(result.length,0);
 });
