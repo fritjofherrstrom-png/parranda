@@ -86,8 +86,8 @@ async function arrive(t, response = composedDay(["a", "b"], 1.2)) {
   return h;
 }
 
-async function adjustWalk(h, name) {
-  if (!buttonNamed(h, /^Long/)) await click(h, buttonNamed(h, /^Adjust/));
+async function adjustRhythm(h, name) {
+  if (!buttonNamed(h, /^Full/)) await click(h, buttonNamed(h, /^Adjust/));
   await click(h, buttonNamed(h, name));
   await h.clock.advance(450);
 }
@@ -100,32 +100,34 @@ test("arrival offers nothing to undo", async (t) => {
 
 test("an adjustment says what it changed in the day", async (t) => {
   const h = await arrive(t);
-  await adjustWalk(h, /^Long/);
+  await adjustRhythm(h, /^Full/);
   const calls = composeCalls(h);
   assert.equal(calls.length, 2, "one recompose for the change");
-  assert.equal(calls[1].body.walking_km_target, 9);
+  assert.equal(calls[1].body.day_rhythm, "full");
+  assert.equal(calls[1].body.walking_km_target, undefined);
+  assert.equal(calls[1].body.distance_mode, "no_limit");
   assert.equal(changeNote(h), null, "nothing is claimed while the new day is on its way");
 
   await h.fetchMock.respond(calls[1], composedDay(["a", "c", "d"], 4.8));
   await h.clock.advance(50);
   assert.equal(
     changeNote(h),
-    "Changed: Balanced → Long · 1.2 km → 4.8 km · +2 stops: Place c, Place d · −1: Place b",
+    "Changed: Balanced → Full · 1.2 km → 4.8 km · +2 stops: Place c, Place d · −1: Place b",
   );
   assert.ok(buttonNamed(h, /^Undo this change$/));
 });
 
 test("a change that leaves the day as it was says so", async (t) => {
   const h = await arrive(t);
-  await adjustWalk(h, /^Long/);
+  await adjustRhythm(h, /^Full/);
   await h.fetchMock.respond(composeCalls(h)[1], composedDay(["a", "b"], 1.2));
   await h.clock.advance(50);
-  assert.equal(changeNote(h), "Changed: Balanced → Long · same stops and distance");
+  assert.equal(changeNote(h), "Changed: Balanced → Full · same stops and distance");
 });
 
 test("undo puts the previous day and its inputs back without composing", async (t) => {
   const h = await arrive(t);
-  await adjustWalk(h, /^Long/);
+  await adjustRhythm(h, /^Full/);
   await h.fetchMock.respond(composeCalls(h)[1], composedDay(["a", "c", "d"], 4.8));
   await h.clock.advance(50);
   assert.deepEqual(routeStopNames(h).slice(0, 3), ["Place a", "Place c", "Place d"]);
@@ -137,28 +139,28 @@ test("undo puts the previous day and its inputs back without composing", async (
   assert.deepEqual(routeStopNames(h).slice(0, 2), ["Place a", "Place b"]);
   assert.doesNotMatch(h.text(), /Place c/);
   assert.match(h.text(), /≈ 1\.2 km on foot/);
-  assert.equal(buttonNamed(h, /^Balanced/).getAttribute("aria-pressed"), "true", "the walk it was composed for is back");
+  assert.equal(buttonNamed(h, /^Balanced/).getAttribute("aria-pressed"), "true", "the rhythm it was composed for is back");
   assert.equal(changeNote(h), null, "the account went with the change it described");
   assert.doesNotMatch(h.text(), /Saved day/, "the day put back is not a saved snapshot");
 
   // The echo is spent on the undo itself: the next real change recomposes.
-  await adjustWalk(h, /^Short/);
+  await adjustRhythm(h, /^Easy/);
   assert.equal(composeCalls(h).length, 3);
-  assert.equal(composeCalls(h)[2].body.walking_km_target, 4);
+  assert.equal(composeCalls(h)[2].body.day_rhythm, "calm");
 });
 
 test("undo returns to the day on screen, not to a request still in flight", async (t) => {
   const h = await arrive(t);
-  await adjustWalk(h, /^Long/);
+  await adjustRhythm(h, /^Full/);
   // A second change before the first answer lands: the day to return to is
   // still the arrival's.
-  await adjustWalk(h, /^Short/);
+  await adjustRhythm(h, /^Easy/);
   const calls = composeCalls(h);
   assert.equal(calls.length, 3);
   assert.ok(calls[1].aborted, "the older request gave way");
   await h.fetchMock.respond(calls[2], composedDay(["e"], 0.6));
   await h.clock.advance(50);
-  assert.match(changeNote(h), /^Changed: Balanced → Short · 1\.2 km → 0\.6 km/);
+  assert.match(changeNote(h), /^Changed: Balanced → Easy · 1\.2 km → 0\.6 km/);
 
   await click(h, buttonNamed(h, /^Undo this change$/));
   await h.clock.advance(1000);
@@ -187,17 +189,17 @@ test("a dismissed stop comes back with its day, and the ledger forgets the dismi
   assert.doesNotMatch(h.text(), /place dismissed/, "the restored day was composed with no dismissal");
 
   // The next compose carries the ledger the restored day answered: nothing.
-  await adjustWalk(h, /^Long/);
+  await adjustRhythm(h, /^Full/);
   assert.equal(composeCalls(h).length, 3);
   assert.equal(composeCalls(h)[2].body.excluded_candidate_ids, undefined);
 });
 
 test("a change that leaves no route says so and offers the day back", async (t) => {
   const h = await arrive(t);
-  await adjustWalk(h, /^Long/);
+  await adjustRhythm(h, /^Full/);
   await h.fetchMock.respond(composeCalls(h)[1], structureOnly());
   await h.clock.advance(50);
-  assert.match(changeNote(h), /^Changed: Balanced → Long · no route for this choice/);
+  assert.match(changeNote(h), /^Changed: Balanced → Full · no route for this choice/);
   await click(h, buttonNamed(h, /^Undo this change$/));
   await h.clock.advance(1000);
   assert.deepEqual(routeStopNames(h).slice(0, 2), ["Place a", "Place b"]);

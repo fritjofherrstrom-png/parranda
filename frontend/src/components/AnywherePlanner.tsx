@@ -1588,10 +1588,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       dayChange
         ? dayChangeSegments(dayChange.summary, {
             lang,
-            // The preset's name without its distance ("Lagom", not "Lagom · ~6 km"):
-            // the distances the day actually walks follow in the same line.
+            // Name the rhythm input; measured distance describes the resulting day.
             walkLabel: (key) => {
-              const preset = WALK_PRESETS.find((p: { key: string }) => p.key === key);
+          const preset = DAY_RHYTHMS.find((p: { key: string }) => p.key === key);
               return preset ? String(lang === "en" ? preset.en : preset.sv).split(" · ")[0] : key;
             },
             pickLabel: (key) => pickLabel(key, lang),

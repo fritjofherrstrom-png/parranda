@@ -14,28 +14,28 @@ function entry({ stops = [], km = null, walkKey = "balanced", dayOffset = 0, sel
 const stop = (id, label) => ({ id, label });
 const labels = (lang) => ({
   lang,
-  walkLabel: (key) => ({ short: lang === "sv" ? "Kort" : "Short", balanced: lang === "sv" ? "Lagom" : "Balanced", long: lang === "sv" ? "Lång" : "Long" })[key] ?? key,
+  walkLabel: (key) => ({ calm: lang === "sv" ? "Lugn" : "Easy", balanced: lang === "sv" ? "Lagom" : "Balanced", full: lang === "sv" ? "Fylld" : "Full" })[key] ?? key,
   pickLabel: (key) => ({ food: "Food & drink", culture: "Culture", views: "Views" })[key] ?? key,
   dayLabel: (offset) => (offset === 0 ? (lang === "sv" ? "Idag" : "Today") : lang === "sv" ? "Imorgon" : "Tomorrow"),
 });
 
-test("a longer walk that changes the route names the inputs, the distance and the stops", () => {
+test("a fuller day that changes the route names the inputs, the distance and the stops", () => {
   const change = describeDayChange(
     entry({ stops: [stop("a", "Place a"), stop("b", "Place b")], km: 1.2 }),
-    entry({ stops: [stop("a", "Place a"), stop("c", "Place c"), stop("d", "Place d")], km: 4.8, walkKey: "long" }),
+    entry({ stops: [stop("a", "Place a"), stop("c", "Place c"), stop("d", "Place d")], km: 4.8, walkKey: "full" }),
   );
   assert.deepEqual(change.stops.added, ["Place c", "Place d"]);
   assert.deepEqual(change.stops.removed, ["Place b"]);
   assert.equal(change.stops.kept, 1);
   assert.equal(change.routeChanged, true);
   assert.deepEqual(dayChangeSegments(change, labels("en")), [
-    "Balanced → Long",
+    "Balanced → Full",
     "1.2 km → 4.8 km",
     "+2 stops: Place c, Place d",
     "−1: Place b",
   ]);
   assert.deepEqual(dayChangeSegments(change, labels("sv")), [
-    "Lagom → Lång",
+    "Lagom → Fylld",
     "1,2 km → 4,8 km",
     "+2 stopp: Place c, Place d",
     "−1: Place b",
@@ -44,9 +44,9 @@ test("a longer walk that changes the route names the inputs, the distance and th
 
 test("a change that leaves the day as it was says so instead of staying silent", () => {
   const stops = [stop("a", "Place a"), stop("b", "Place b")];
-  const change = describeDayChange(entry({ stops, km: 0.4 }), entry({ stops, km: 0.4, walkKey: "long" }));
+  const change = describeDayChange(entry({ stops, km: 0.4 }), entry({ stops, km: 0.4, walkKey: "full" }));
   assert.equal(change.routeChanged, false);
-  assert.deepEqual(dayChangeSegments(change, labels("sv")), ["Lagom → Lång", "samma stopp och sträcka"]);
+  assert.deepEqual(dayChangeSegments(change, labels("sv")), ["Lagom → Fylld", "samma stopp och sträcka"]);
 });
 
 test("stops are matched by id, so a renamed label is not a new stop", () => {
