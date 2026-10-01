@@ -138,8 +138,12 @@ function lifecycleLoader(loader, context, { partialWaitMs = PARTIAL_WAIT_MS, res
             const intents = normalizeUserIntents(request.requestedIntents || []).intents;
             const relevant = Array.isArray(value) && value.length > 0 && intents.every(intent =>
               value.some(record => matchCandidateToIntent(record, intent).level === 'strong'));
+            // Reserve composition time only when there is supply to compose.
+            // Finalizing an empty snapshot at the reserve boundary discards
+            // the original acquisition even if usable rows arrive before the
+            // hard deadline. Keep awaiting that same work, never reacquire it.
             const remaining = Number.isFinite(context.deadline)
-              ? context.deadline - Date.now() - reserveMs : 0;
+              ? context.deadline - Date.now() - (value?.length ? reserveMs : 0) : 0;
             // A failed fast source is not proof that the whole day lacks
             // supply. Keep the original execution alive for outstanding real
             // sources when no relevant partial exists, within the SAME budget.

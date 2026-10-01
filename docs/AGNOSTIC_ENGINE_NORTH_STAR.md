@@ -64,9 +64,13 @@ baseline before local supply. Within the same 60-second client lifecycle, the
 trusted loader checks independently acquired rows after eight seconds of
 additional completion wait. A nonempty snapshot with strong matches for each
 requested interest may enter composition early; it must still pass the normal
-trust and availability gates. Empty or irrelevant snapshots keep waiting for
-outstanding sources within the original acquisition budget, leaving the fixed
-15-second composition reserve. A private source snapshot includes independently
+trust and availability gates. Nonempty but irrelevant snapshots keep waiting
+until the 15-second composition reserve. An entirely empty snapshot has nothing
+to compose, so it keeps awaiting the same outstanding acquisition within the
+original 60-second deadline instead of publishing an empty result at the
+reserve boundary. The hard deadline still aborts outstanding work; later supply
+must pass the normal gates and finish composition within that same budget.
+A private source snapshot includes independently
 finished jobs; late jobs cannot mutate the published day. The collection
 explicitly reports partial completion. This does not upgrade evidence, drop
 trust/availability gates, or extend the timeout.

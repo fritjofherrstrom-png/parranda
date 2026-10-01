@@ -1,5 +1,36 @@
 # Main catch-up: beslut och genomförandesekvens
 
+## Exakt-head QA och avgränsad providerfix
+
+Hermes verifierade `8de0a6ac46c8fbe9afaa52d73fafb2093d4b3b4d` med samma
+image för QA-web/worker och grön CI. [Grundrapporten](https://github.com/fritjofherrstrom-png/parranda/pull/543#issuecomment-5936114912)
+och [råsvaren](https://github.com/fritjofherrstrom-png/parranda/pull/543#issuecomment-5936570780)
+visar verkliga uteblivna dagsleveranser: Malmö har complete/failed=1, medan
+Ystad har partial/bounded_lifecycle_snapshot/pending=1. API200 är inte en
+upstream-status. De avgränsade [loggfönstren](https://github.com/fritjofherrstrom-png/parranda/pull/543#issuecomment-5937039654)
+är tomma; Malmös specifika provider-/native-fel kan inte fastställas därifrån.
+
+Ystads [cache-readback](https://github.com/fritjofherrstrom-png/parranda/pull/543#issuecomment-5937079123)
+visar 78 Overture-poster, inklusive fyra vintagebutiker, skrivna 45,985 s efter
+requeststart och före sista statuspoll. Inget senare koordinatstyrt Ystad-anrop
+finns i den sparade tidslinjen. En kontrollerad offline-jämförelse med main
+reproducerar att kandidaten avslutar en tom snapshot vid 45 s medan main
+fortsätter vänta på samma källa. Cachefilen saknar request-ID och snapshotens
+skapandetid är inte uppmätt, men detta ger konkret stöd för tappat sent utbud.
+
+Providerfixen reserverar därför kompositionstid bara när snapshoten har rader.
+Tomt underlag fortsätter invänta den redan startade hämtningen inom samma
+60-sekundersbudget. Inga extra provideranrop införs; deadline, cancellation,
+trust/availability-gates och den publicerade dagens oföränderlighet kvarstår.
+Nya regressionsfall fallerade före fixen och verifierar sen supply, hard
+deadline/abort samt att icke tomt partiellt underlag behåller reserven.
+
+#543 förblir draft. Fixen behöver egen exakt-head CI och ett riktat
+runtime-fall för sen supply; tidigare QA gäller fortfarande endast `8de0a6a`.
+Fika under verkliga återstående öppettider samt terminal Live Hela området/
+Nära mig och period/cache-jämförelse återstår. Uppsala, Göteborg, Rome och
+redan passerade mobilfall ska inte göras om som bred QA.
+
 ## Källan för integrationen
 
 GitHub/main och de publicerade PR-headarna är källan för denna kandidat.

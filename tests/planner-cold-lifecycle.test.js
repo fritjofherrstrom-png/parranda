@@ -227,3 +227,93 @@ test('legacy rescue still observes an acquisition completed while the primary wa
   assert.equal(result.loader_status, 'loaded:1');
   assert.equal(result[0].id, 'arrived');
 });
+
+// Control source completion time, not the clock of a provider-backed QA run.
+const flushCompletion = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
+async function pendingSupplyReplay({ primaryRows = [] } = {}) {
+  const work = deferred();
+  const cache = createSourceCache();
+  let primaryCalls = 0, acquisitions = 0, providerAborted = false;
+  const source = createBackgroundSource({ cache, keyFor: () => 'late-window', load: anchor => {
+    acquisitions++;
+    return new Promise((resolve, reject) => {
+      anchor.signal.addEventListener('abort', () => {
+        providerAborted = true;
+        reject(new Error('provider_cancelled'));
+      }, { once: true });
+      work.promise.then(resolve, reject);
+    });
+  } });
+  const primary = () => {
+    primaryCalls++;
+    return Object.assign([...primaryRows], {
+      loader_status: primaryRows.length ? `loaded:${primaryRows.length}` : 'error_failed_closed',
+      loader_error: primaryRows.length ? null : 'http_non_200',
+    });
+  };
+  // Include the reviewed-source wrapper used in the deployed app.
+  const loader = composeOpenDataLoaders(composeOpenDataLoaders(primary, null, source), { load: async () => [] });
+  const jobs = createPlannerLifecycle();
+  const first = await jobs.start(async context => {
+    const load = lifecycleLoader(loader, context);
+    const rows = await load({ lat: 1, lng: 2, requestedIntents: ['second_hand'] });
+    return { status: 200, body: { ids: rows.map(row => row.id), collection: rows.loader_metadata } };
+  });
+  return { work, cache, jobs, token: first.body.planner_lifecycle.token,
+    counts: () => ({ primaryCalls, acquisitions, providerAborted }) };
+}
+
+test('empty supply keeps its original acquisition past the composition reserve and consumes late cached rows', async t => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 0 });
+  const { work, cache, jobs, token, counts } = await pendingSupplyReplay();
+  for (const advance of [8000, 8000, 8000, 8000, 8000, 5000]) {
+    t.mock.timers.tick(advance); await flushCompletion();
+  }
+  assert.equal(jobs.read(token).status, 202, 'an empty 45s snapshot must not finalize the plan');
+  t.mock.timers.tick(1000);
+  work.resolve([1, 2, 3].map(i => ({ id: `late-${i}`, type: 'vintage-shop', lat: 1 + i / 1000, lng: 2, tags: ['second_hand'] })));
+  await flushCompletion();
+  assert.equal(cache.peek('late-window').length, 3, 'original acquisition has actually completed and cached supply');
+  const final = jobs.read(token);
+  assert.equal(final.status, 200);
+  assert.deepEqual(final.body.ids, ['late-1', 'late-2', 'late-3']);
+  assert.equal(final.body.collection.source_completion.status, 'complete');
+  assert.equal(final.body.collection.source_completion.pending, 0);
+  assert.deepEqual(counts(), { primaryCalls: 1, acquisitions: 1, providerAborted: false });
+});
+
+test('empty supply still stops at the original 60s deadline and cancels its pending producer', async t => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 0 });
+  const { work, cache, jobs, token, counts } = await pendingSupplyReplay();
+  for (const advance of [8000, 8000, 8000, 8000, 8000, 5000]) {
+    t.mock.timers.tick(advance); await flushCompletion();
+  }
+  assert.equal(jobs.read(token).status, 202);
+  t.mock.timers.tick(15000); await flushCompletion();
+  assert.equal(jobs.read(token).status, 503);
+  assert.equal(jobs.read(token).body.error, 'supply_wait_expired');
+  assert.deepEqual(counts(), { primaryCalls: 1, acquisitions: 1, providerAborted: true });
+  work.resolve([{ id: 'too-late', type: 'vintage-shop', lat: 1, lng: 2 }]);
+  await flushCompletion();
+  assert.equal(cache.peek('late-window'), null);
+  assert.equal(jobs.read(token).body.error, 'supply_wait_expired', 'late rows cannot replace an expired plan');
+});
+
+test('nonempty partial supply retains the composition reserve even when a requested interest is missing', async t => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 0 });
+  const { work, jobs, token, counts } = await pendingSupplyReplay({ primaryRows: [
+    { id: 'held-museum', type: 'museum', lat: 1, lng: 2 },
+    { id: 'held-park', type: 'park', lat: 1.001, lng: 2 },
+  ] });
+  for (const advance of [8000, 8000, 8000, 8000, 8000, 5000]) {
+    t.mock.timers.tick(advance); await flushCompletion();
+  }
+  const final = jobs.read(token);
+  assert.equal(final.status, 200);
+  assert.deepEqual(final.body.ids, ['held-museum', 'held-park']);
+  assert.equal(final.body.collection.source_completion.reason, 'bounded_lifecycle_snapshot');
+  assert.equal(final.body.collection.source_completion.pending, 1);
+  work.resolve([]); await flushCompletion();
+  assert.equal(jobs.read(token).body.collection.source_completion.pending, 1, 'published partial result stays immutable');
+  assert.equal(counts().acquisitions, 1);
+});
