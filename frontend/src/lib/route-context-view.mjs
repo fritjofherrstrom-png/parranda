@@ -147,6 +147,13 @@ export function buildRouteContextSuggestions(routeStops, areas, options = {}) {
   );
 }
 
+// Presentation only: retain provider precision for route costs and safety caps.
+export function walkingMinutesLabel(minutes) {
+  if (!Number.isFinite(minutes) || minutes < 0) return "";
+  if (minutes > 0 && minutes < 1) return "<1 min";
+  return `≈ ${Math.round(minutes)} min`;
+}
+
 export function walkingDistanceLabel(km, lang = "en") {
   if (!Number.isFinite(km) || km < 0) return "";
   if (km < 0.1) return lang === "sv" ? "< 0,1 km" : "< 0.1 km";

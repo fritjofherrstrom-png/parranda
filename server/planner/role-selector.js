@@ -220,6 +220,7 @@ function selectPlannerRoleCandidates(cityConfig, payload = {}, helpers = {}) {
             .map(entry => formatRoleCandidate(entry, role, roleEntries, activeRoleSpec))])),
         origin: candidatePool.context.origin,
         band: normalizeWalkingTargetBand(helpers.walkingTargetBand),
+        networkSelection: helpers.networkWalkingSelection === true,
       })
     : [];
 

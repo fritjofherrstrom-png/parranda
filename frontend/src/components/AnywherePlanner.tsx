@@ -43,6 +43,7 @@ import {
   routePreferenceCoverage,
   routeTimeAnchoring,
   walkingDistanceLabel,
+  walkingMinutesLabel,
 } from "../lib/route-context-view.mjs";
 import {
   splitRouteStops,
@@ -243,6 +244,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // held over, not even for a second.
   const displayedAnchorKeyRef = useRef<string | null>(null);
   const [serviceRefusal, setServiceRefusal] = useState<ComposeServiceRefusal | null>(null);
+  const [walkingFailure, setWalkingFailure] = useState<string | null>(null);
   // Memory-only copy of the trusted coordinate anchor used for this response.
   // It frames the consumer Maps route but is never persisted or put in a URL.
   const [routeAnchorCoords, setRouteAnchorCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -443,6 +445,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       }
       setServiceRefusal(null);
       setExpandedStopKey(null);
+      setWalkingFailure(null);
       setExpandedCandidateKey(null);
       liveNearMeCoordsRef.current = null;
       setLiveSheetScope("around_place");
@@ -536,6 +539,20 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       const safe = anchor.city
         ? safeCuratedCityResponse(body, cls)
         : decision.safeResponseFor(body, cls);
+      if ("unavailableReason" in cls && cls.unavailableReason?.startsWith("network_walking_")) {
+        setWalkingFailure(cls.unavailableReason);
+        setUpgradePending(false);
+        if (retention.keepPrevious || (silent && decision.isComposedStatus(classification?.status ?? "unavailable"))) {
+          setDayIsStale(true);
+          setPhase("error");
+        } else {
+          setClassification(cls);
+          setSafeResponse(safe);
+          setPhase("done");
+        }
+        return; // A provider failure is not source failure or a new day's verdict.
+      }
+      setWalkingFailure(null);
       const authoritativePlace = anchor.city ? cls.placeLabel : anchor.place;
       if (anchor.city && authoritativePlace) setPlace(authoritativePlace);
       // Atomic replacement. If the new verdict is structure_only/unavailable,
@@ -737,6 +754,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // "today" may be stale), so restoredAt is set and the UI labels it + offers rebuild.
   function restoreEntry(entry: SavedEntry) {
     setNavigationInterrupted(false);
+    setWalkingFailure(null);
     // A saved day is its own generation: nothing from before it can be undone
     // back onto it.
     undoBaselineRef.current = null;
@@ -872,6 +890,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setSafeResponse(previous.safeResponse);
     setDayIsStale(false);
     setServiceRefusal(null);
+    setWalkingFailure(null);
     setExpandedStopKey(null);
     setExpandedCandidateKey(null);
     setPhase("done");
@@ -1582,7 +1601,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         return [];
       })
     : [];
-  const dayWord = dayOffset === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow");
+  const displayedDayOffset = dayIsStale ? lastEntryRef.current?.inputs?.dayOffset ?? dayOffset : dayOffset;
+  const dayWord = displayedDayOffset === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow");
   const dayChangeLine = useMemo(
     () =>
       dayChange
@@ -1605,7 +1625,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     ? t("Ingår i dagens rutt", "Included in today's route")
     : t("Ingår i morgondagens rutt", "Included in tomorrow's route");
   const legLabel = (leg: { km: number | null; minutes: number | null }) =>
-    `${leg.minutes != null ? `${leg.minutes} min` : ""}${leg.minutes != null && leg.km != null ? " · " : ""}${leg.km != null ? walkingDistanceLabel(leg.km, lang) : ""}`;
+    `${leg.minutes != null ? walkingMinutesLabel(leg.minutes) : ""}${leg.minutes != null && leg.km != null ? " · " : ""}${leg.km != null ? walkingDistanceLabel(leg.km, lang) : ""}`;
   const noticeCard = "rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4 text-sm leading-relaxed text-parranda-ink/80";
 
   return (
@@ -1891,7 +1911,24 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </div>
       )}
 
-      {phase === "error" && staleNotice !== "update_failed" && (
+      {walkingFailure && phase !== "loading" && (
+        <div role="status" className={`flex flex-col items-start gap-3 ${noticeCard}`}>
+          <p>{walkingFailure === "network_walking_invalid_configuration"
+            ? t("Gångvägstjänstens konfiguration behöver rättas av operatören. Ingen ny dag har publicerats.", "The walking service configuration needs to be corrected by the operator. No new day has been published.")
+            : walkingFailure === "network_walking_busy"
+              ? t("Gångvägstjänsten är upptagen. Försök igen om en stund.", "The walking service is busy. Try again shortly.")
+              : walkingFailure === "network_walking_provider_unavailable"
+                ? t("Gångvägstjänsten är inte tillgänglig just nu. Försök igen om en stund.", "The walking service is unavailable right now. Try again shortly.")
+                : t("Parranda kunde inte verifiera gångvägen. Ingen ny dag har publicerats.", "Parranda could not verify the walking route. No new day has been published.")}</p>
+          {walkingFailure !== "network_walking_invalid_configuration" && staleNotice !== "update_failed" && (
+            <button type="button" onClick={retryPlan} className="inline-flex min-h-11 items-center rounded-parranda-btn bg-parranda-terracotta px-4 font-bold text-white transition hover:brightness-110">
+              {t("Försök bygga dagen igen", "Try building the day again")}
+            </button>
+          )}
+        </div>
+      )}
+
+      {phase === "error" && !walkingFailure && staleNotice !== "update_failed" && (
         <div className={`flex flex-col items-start gap-3 ${noticeCard}`} role="alert">
           <p>{navigationInterrupted
             ? t("Planeringen pausades när du lämnade sidan. Dina val finns kvar.", "Planning paused when you left. Your choices are still here.")
@@ -1920,7 +1957,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </p>
       )}
 
-      {phase === "done" && classification?.status === "unavailable" && (
+      {phase === "done" && !walkingFailure && classification?.status === "unavailable" && (
         !upgradePending &&
         <div className={`flex flex-col items-start gap-3 ${noticeCard}`}>
           {/* Three honestly different absences: a typed place Parranda could
@@ -2023,13 +2060,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                     ? t("Planeringen pausades när du lämnade sidan — visar din förra dag", "Planning paused when you left — showing your previous day")
                     : t("Kunde inte uppdatera — visar din förra dag", "Couldn't update — showing your previous day")}
                 </span>
-                <button
+                {walkingFailure !== "network_walking_invalid_configuration" && <button
                   type="button"
                   onClick={retryPlan}
                   className="inline-flex min-h-11 items-center rounded-full border border-parranda-ember/40 px-3 text-xs font-bold text-parranda-clay transition hover:border-parranda-ember"
                 >
                   {navigationInterrupted ? t("Fortsätt planera", "Continue planning") : t("Försök uppdatera igen", "Try updating again")}
-                </button>
+                </button>}
               </>
             )}
           </div>
@@ -2055,6 +2092,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             {` · ${split.core.length} ${split.core.length === 1 ? t("stopp", "stop") : t("stopp", "stops")}`}
             {split.woven.length > 0 ? ` + ${split.woven.length} live${lang === "en" ? " event" : "-event"}` : ""}
           </p>
+          {primaryRoute?.routing_source === "valhalla_pedestrian" && primaryRoute?.walking_geometry?.kind === "pedestrian_network" && (
+            <p className="text-[12px] leading-relaxed text-parranda-ink/65">
+              {t("Beräknade gångvägar · Valhalla / ", "Calculated walking paths · Valhalla / ")}
+              <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="underline">© OpenStreetMap</a>
+              {t(". Kartunderlag, inte bekräftad framkomlighet eller realtidsnavigation. Anslutningen till entrén kan saknas.",
+                ". Map data, not confirmed access or live navigation. The connection to the entrance may be unmapped.")}
+            </p>
+          )}
           {/* What the day did for each pick, in the pick's own words. A pick
               the route only partly covers, or does not cover, says so here
               rather than at the foot of the page. */}
@@ -2338,7 +2383,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 <li key={stopKey} className="flex flex-col">
                   {leg && (leg.minutes != null || leg.km != null) && (
                     <span className="ml-4 border-l border-dashed border-parranda-ink/25 py-2 pl-6 text-xs text-parranda-ink/55">
-                      {leg.minutes != null ? `${leg.minutes} min` : ""}
+                      {leg.minutes != null ? walkingMinutesLabel(leg.minutes) : ""}
                       {leg.minutes != null && leg.km != null ? " · " : ""}
                       {leg.km != null ? walkingDistanceLabel(leg.km, lang) : ""}
                     </span>
@@ -2658,7 +2703,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-parranda-ink/60">
               {t("Kandidater nära platsen", "Candidates near this place")}
             </p>
-            {classification?.status === "structure_only" && (
+            {classification?.status === "structure_only" && !walkingFailure && (
               <p className="mt-1 text-sm text-parranda-ink/75">
                 {t(
                   "Parranda hittade platskandidater, men inte en tillräckligt stark rutt ännu.",
@@ -2932,7 +2977,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           just refused work. Its copy says "near you" only when the anchor IS
           the reader's position, and promises the day stays as it is only when
           there is a day on screen. */}
-      {phase === "done" && hasAnchor && !cityKey && !serviceRefusal && !anchorUnresolved && (
+      {phase === "done" && hasAnchor && !walkingFailure && !cityKey && !serviceRefusal && !anchorUnresolved && (
         <div className="flex flex-col gap-3">
           <button
             type="button"

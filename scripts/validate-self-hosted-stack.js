@@ -2,6 +2,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { resolveNetworkWalkingProvider } = require("../server/valhalla-walking");
 
 const ROOT = path.resolve(__dirname, "..");
 
@@ -17,7 +18,12 @@ function rejectText(value, pattern, message) {
   if (pattern.test(value)) throw new Error(message);
 }
 
-function validateSelfHostedStack() {
+function validateSelfHostedStack(env = process.env) {
+  // Reuse the runtime URL policy without probing upstream or disclosing input.
+  const networkWalkingProvider = resolveNetworkWalkingProvider(env);
+  if (networkWalkingProvider && networkWalkingProvider.configured !== true) {
+    throw new Error("network_walking_misconfigured");
+  }
   const dockerfile = read("Dockerfile");
   const compose = read("compose.production.yml");
   const caddy = read("deploy/Caddyfile");
