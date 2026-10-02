@@ -55,6 +55,13 @@ user-facing selection flow; this change addresses clear dominant matches only.
 
 ## Historical delivery record
 
+Place corroboration checks name/coordinate matches against the complete source
+set before merging. If an unidentified row matches multiple incompatible
+Wikidata identities, source order cannot lend its evidence to either entity.
+Unknown-name duplicates can still dedupe; the ambiguity survives canonical
+switches. A unique match or explicit shared entity retains normal corroboration.
+This preserves the existing Planner/Blitz trust gates without new acquisition.
+
 Current cold first-visit capability: the modern Planner uses a bounded server
 lifecycle to continue its original plan when source acquisition is outstanding.
 One server execution owns the normalized request and trusted anchor; browser

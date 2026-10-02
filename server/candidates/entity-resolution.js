@@ -77,20 +77,27 @@ function resolveCandidateIdentity(candidates, { now = null } = {}) {
   // Curated first so externals merge INTO curated, deterministically.
   const ordered = [...input].sort((a, b) => curatedRank(b) - curatedRank(a));
 
-  // New aliases must be unambiguous across the complete input, not merely the
-  // already-seen prefix. Otherwise source order could choose a conflicting entity.
-  const aliasAmbiguityCount = (candidate) => {
+  // Check the complete input, not just the already-seen prefix: a name/geo
+  // match must not choose between two incompatible explicit place identities.
+  const ambiguityOf = (candidate) => {
     const absorbedIds = new Set([candidate.id,
       ...(Array.isArray(candidate.merged_from) ? candidate.merged_from : []).map((record) => record.id)]);
     const matches = ordered.filter((other) => !absorbedIds.has(other.id))
-      .map((other) => matchIdentity(candidate, other)).filter((verdict) => verdict.same);
-    return matches.length > 1 && matches.some((verdict) =>
-      verdict.confidence === "source_alias_store_identity") ? matches.length : 0;
+      .map((other) => ({ other, verdict: matchIdentity(candidate, other) }))
+      .filter(({ verdict }) => verdict.same);
+    const entities = new Set(matches.map(({ other }) => wikidataIdOf(other)).filter(Boolean));
+    return {
+      aliases: matches.length > 1 && matches.some(({ verdict }) =>
+        verdict.confidence === "source_alias_store_identity") ? matches.length : 0,
+      entities: entities.size > 1 ? entities.size : 0,
+    };
   };
   const ambiguousAliases = new Map();
+  const conflictingEntities = new Map();
   for (const candidate of ordered) {
-    const count = aliasAmbiguityCount(candidate);
-    if (count) ambiguousAliases.set(candidate, count);
+    const ambiguity = ambiguityOf(candidate);
+    if (ambiguity.aliases) ambiguousAliases.set(candidate, ambiguity.aliases);
+    if (ambiguity.entities) conflictingEntities.set(candidate, ambiguity.entities);
   }
 
   const survivors = [];
@@ -98,31 +105,43 @@ function resolveCandidateIdentity(candidates, { now = null } = {}) {
   let ambiguousKept = 0;
 
   for (const candidate of ordered) {
+    const entityAmbiguous = conflictingEntities.has(candidate);
     if (ambiguousAliases.has(candidate)) {
-      survivors.push({ candidate, aliasAmbiguous: true });
+      survivors.push({ candidate, aliasAmbiguous: true, entityAmbiguous });
       ambiguousKept += 1;
       merges.push({ duplicate_id: candidate.id, into_id: null,
         decision: "kept_separate_ambiguous", reason: "source_alias_matched_multiple",
         match_count: ambiguousAliases.get(candidate) });
       continue;
     }
+    if (entityAmbiguous) {
+      ambiguousKept += 1;
+      merges.push({ duplicate_id: candidate.id, into_id: null,
+        decision: "kept_separate_ambiguous", reason: "matched_conflicting_entities",
+        match_count: conflictingEntities.get(candidate) });
+    }
     const matchIndexes = [];
     for (let i = 0; i < survivors.length; i += 1) {
       const verdict = matchIdentity(survivors[i].candidate, candidate);
       if (verdict.confidence === "source_alias_store_identity" &&
           survivors[i].aliasAmbiguous) continue;
+      // Unknown-name twins may still dedupe. They cannot transfer evidence to
+      // one known entity until an authoritative shared ID resolves the choice.
+      if (verdict.confidence !== "hard_wikidata" &&
+          ((entityAmbiguous && wikidataIdOf(survivors[i].candidate)) ||
+           (survivors[i].entityAmbiguous && wikidataIdOf(candidate)))) continue;
       if (verdict.same) matchIndexes.push({ i, verdict });
     }
 
     if (matchIndexes.length === 0) {
-      survivors.push({ candidate });
+      survivors.push({ candidate, entityAmbiguous });
       continue;
     }
 
     if (matchIndexes.length > 1) {
       // Matches more than one existing place → ambiguous. Keep separate rather
       // than guess which one it belongs to.
-      survivors.push({ candidate });
+      survivors.push({ candidate, entityAmbiguous });
       ambiguousKept += 1;
       merges.push({
         duplicate_id: candidate.id,
@@ -139,13 +158,17 @@ function resolveCandidateIdentity(candidates, { now = null } = {}) {
     const canonical = chooseCanonical(existing, candidate);
     const duplicate = canonical === existing ? candidate : existing;
     const reconciliation = reconcileFields(canonical, duplicate);
-    // Alias ambiguity belongs to the survivor, not its replaceable canonical object.
-    survivors[i] = { ...survivors[i], candidate: mergeInto(canonical, duplicate, { now }) };
+    // Ambiguity belongs to the survivor, not its replaceable canonical object.
+    survivors[i] = { ...survivors[i],
+      entityAmbiguous: survivors[i].entityAmbiguous || entityAmbiguous,
+      candidate: mergeInto(canonical, duplicate, { now }) };
     // Reconciliation can unlock aliases (notably by filling coordinates). Check
     // the full original universe again, excluding the identity already absorbed.
     // Once blocked, aliases stay blocked even through later canonical switches.
     if (!survivors[i].aliasAmbiguous) {
-      const count = aliasAmbiguityCount(survivors[i].candidate);
+      const ambiguity = ambiguityOf(survivors[i].candidate);
+      if (ambiguity.entities) survivors[i].entityAmbiguous = true;
+      const count = ambiguity.aliases;
       if (count) {
         survivors[i].aliasAmbiguous = true;
         ambiguousKept += 1;
