@@ -1,7 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { routeMarkerPresentation } from "../src/lib/route-map-presentation.mjs";
+import { routeMarkerPresentation, routePathIsSketch } from "../src/lib/route-map-presentation.mjs";
+
+test("a path made only of the route's own waypoints is a sketch, not a street line", () => {
+  const stops = [
+    { lat: 55.6042, lng: 13.0035 },
+    { lat: 55.6071, lng: 12.9998 },
+    { lat: 55.601, lng: 12.9935 },
+  ];
+  // The heuristic router returns exactly the waypoints.
+  assert.equal(routePathIsSketch(stops, 3), true);
+  // A published start and end are waypoints too.
+  assert.equal(routePathIsSketch([{ lat: 55.6, lng: 13 }, ...stops, { lat: 55.6, lng: 13 }], 3), true);
+  // Street geometry carries the turns between the stops.
+  const streets = [];
+  for (let i = 0; i < 12; i += 1) streets.push({ lat: 55.6 + i * 0.0005, lng: 13 - i * 0.0004 });
+  assert.equal(routePathIsSketch(streets, 3), false);
+});
+
+test("an unreadable or missing path reads as a sketch — never as street geometry", () => {
+  assert.equal(routePathIsSketch(null, 3), true);
+  assert.equal(routePathIsSketch([], 0), true);
+  assert.equal(routePathIsSketch([{ lat: 1, lng: 2 }], 1), true);
+  assert.equal(routePathIsSketch([{ lat: "x", lng: 2 }, { lat: null, lng: 3 }, { lat: 1, lng: 2 }], 1), true);
+});
 
 test("far-apart route markers stay on their exact visual anchor", () => {
   assert.deepEqual(

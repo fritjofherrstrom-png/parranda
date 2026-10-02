@@ -72,6 +72,30 @@ test("prefers en→sv→fi for localized name, falls back to any present languag
   assert.equal(mapLinkedEventToRaw(event({ name: { sv: "På svenska", fi: "x" } })).title, "På svenska");
 });
 
+test("a municipality centroid is not a verified event venue coordinate", () => {
+  const raw = mapLinkedEventToRaw(event({ location: {
+    name: { en: "Helsinki", fi: "Helsinki" },
+    position: { type: "Point", coordinates: [24.9375, 60.170833] },
+    street_address: null,
+    divisions: [{ type: "muni", name: { en: "Helsinki", fi: "Helsinki" } }],
+  } }));
+  assert.equal(raw.place_context, "Helsinki");
+  assert.equal(raw.source_location_scope, "municipality");
+  assert.equal(raw.lat, undefined);
+  assert.equal(raw.lng, undefined);
+});
+
+test("an explicitly virtual Linked Events place never becomes a walking stop", () => {
+  const raw = mapLinkedEventToRaw(event({ location: {
+    id: "helsinki:internet", name: { en: "Internet" },
+    description: { en: "Event only on the internet." },
+    position: { type: "Point", coordinates: [24.941486, 60.170576] },
+  } }));
+  assert.equal(raw.source_location_scope, "virtual");
+  assert.equal(raw.lat, undefined);
+  assert.equal(raw.lng, undefined);
+});
+
 test("missing/!point location maps to no coordinates (normalizer decides)", () => {
   assert.equal(mapLinkedEventToRaw(event({ location: { name: { en: "TBA" } } })).lat, undefined);
   assert.equal(mapLinkedEventToRaw(event({ location: null })).lng, undefined);

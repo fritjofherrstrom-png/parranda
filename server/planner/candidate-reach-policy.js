@@ -3,12 +3,27 @@
 const { sanitizeTrustedSpatialScope } = require("../place-candidates/spatial-scope");
 const { REACHABLE_ORIGIN_KM } = require("./candidate-combination");
 
-const REACH_POLICY_NAMES = new Set(["exact_anchor", "local_place_anchor"]);
+const { normalizeUserIntents } = require("../candidates/intent-vocabulary");
 
-// A city/district lookup describes a local walking day. Broader reach is earned
-// only by resolver-attested municipality/region scope; missing scope never
-// silently grants regional freedom.
-function resolveAgnosticCandidateReachPolicy({ anchorMode, spatialScope } = {}) {
+const REACH_POLICY_NAMES = new Set(["exact_anchor", "local_place_anchor", "focused_day"]);
+
+// A city/district lookup describes a local walking day. A focused rhythm day
+// may widen that local aperture; regional reach still requires resolver-attested
+// municipality/region scope.
+function resolveAgnosticCandidateReachPolicy({ anchorMode, spatialScope, dayRhythm, preferences = [], availabilityWindow = null } = {}) {
+  // A focused rhythm day can use the provider's wider local aperture, not an
+  // inferred 6/8/9 km route target. This is a bounded proposal radius; source
+  // availability and the final walking contract still decide what is usable.
+  // With trusted same-day context, do not expand when even a conservative
+  // out-and-back plus two short visits would consume the remaining window.
+  const remainingMinutes = availabilityWindow
+    ? availabilityWindow.endMinute - availabilityWindow.startMinute : null;
+  const hasTimeForWiderDay = remainingMinutes === null || remainingMinutes >= 240;
+  if (["calm", "balanced", "full", "free"].includes(dayRhythm) &&
+      normalizeUserIntents(preferences).intents.length === 1 && hasTimeForWiderDay &&
+      ["coordinates", "place"].includes(anchorMode)) {
+    return { policy: "focused_day", max_origin_distance_km: 5, scope_kind: null };
+  }
   if (anchorMode === "coordinates") {
     return {
       policy: "exact_anchor",

@@ -3,11 +3,12 @@
 const { haversineKm } = require("../candidates/area-intelligence");
 const { resolveAgnosticIntake } = require("../planner/agnostic-place-intake");
 const { normalizeSourceEventDate } = require("../pulse-sources/source-event-time");
+const { pointWithinTrustedSpatialScope } = require("./spatial-scope");
 const {
   normalizeSourceDiscoveryHealth,
 } = require("../pulse-sources/source-discovery-health");
 
-const LIVE_EVENT_SCOPES = new Set(["around_place", "near_route", "near_me"]);
+const LIVE_EVENT_SCOPES = new Set(["around_place", "in_place", "near_route", "near_me"]);
 const LIVE_EVENT_TIME_WINDOWS = new Set(["tonight", "this_week"]);
 const LIVE_EVENT_QUERY_CONTRACT = "live_event_query_v1";
 const AROUND_PLACE_RADIUS_M = 3000;
@@ -19,6 +20,7 @@ const MAX_COLLECTION_RADIUS_M = 10000;
 // events when its local 3 km bucket is empty. This never applies to near_me,
 // route corridors, untrusted coordinates or broad city/region bounds.
 const NEARBY_SETTLEMENT_RADIUS_M = 25000;
+const MAX_PLACE_COLLECTION_RADIUS_M = 40000;
 const MAX_PLACE_QUERY_LENGTH = 200;
 const MAX_ATTESTED_ANCHOR_DRIFT_KM = 1;
 const MAX_PREFERENCES = 12;
@@ -167,10 +169,11 @@ function normalizeLiveEventQuery(payload = {}) {
       radius_m: radiusM,
     },
   };
-  if (scopeKind === "around_place" && typeof payload.place_query === "string") {
+  if (["around_place", "in_place"].includes(scopeKind) && typeof payload.place_query === "string") {
     const placeQuery = payload.place_query.trim().replace(/\s+/g, " ");
     if (placeQuery && placeQuery.length <= MAX_PLACE_QUERY_LENGTH) query.place_query = placeQuery;
   }
+  if (scopeKind === "in_place" && !query.place_query) return { error: "in_place_requires_place_query" };
   return { value: query, public: publicQueryShape(query) };
 }
 
@@ -209,6 +212,11 @@ function eventDistanceKm(event, scope) {
 }
 
 function eventMatchesLiveScope(event, scope) {
+  if (scope?.kind === "in_place") {
+    const distanceKm = eventDistanceKm(event, scope);
+    return pointWithinTrustedSpatialScope(event, scope.trusted_place_scope) &&
+      Number.isFinite(distanceKm) && distanceKm * 1000 <= scope.radius_m;
+  }
   if (
     event?.source_scope_verified === true &&
     event?.geographic_relevance === "source_scope"
@@ -226,7 +234,12 @@ function eventMatchesLiveScope(event, scope) {
 function filterEventsForLiveScope(events, scope) {
   if (!scope) return Array.isArray(events) ? events : [];
   const input = Array.isArray(events) ? events : [];
-  const local = input.filter((event) => eventMatchesLiveScope(event, scope));
+  const local = input.filter((event) => eventMatchesLiveScope(event, scope)).map((event) => {
+    if (scope.kind !== "in_place") return event;
+    const distanceKm = eventDistanceKm(event, scope);
+    return { ...event, live_proximity: distanceKm * 1000 > AROUND_PLACE_RADIUS_M ? "in_place" : "local",
+      anchor_distance_km: Number(distanceKm.toFixed(2)) };
+  });
   const fallbackRadiusM = Number(scope?.trusted_nearby_fallback_m || 0);
   if (local.length > 0 || scope?.kind !== "around_place" || fallbackRadiusM <= Number(scope.radius_m || 0)) {
     return local;
@@ -367,8 +380,9 @@ function liveEventQueryBody(normalized, liveEvents) {
     // Describe the server-owned collection scope, not whether this particular
     // response happened to contain a nearby row. Pending and honest-empty
     // responses still searched the regional fallback.
-    discovery_scope: nearbyFallbackM ? "regional_nearby" : "local",
+    discovery_scope: normalized.value?.scope?.kind === "in_place" ? "resolved_area" : nearbyFallbackM ? "regional_nearby" : "local",
   };
+  if (normalized.value?.scope?.kind === "in_place") query.radius_m = normalized.value.scope.radius_m;
   if (nearbyFallbackM) {
     query.nearby_fallback_radius_m = nearbyFallbackM;
   }
@@ -383,14 +397,12 @@ function liveEventQueryBody(normalized, liveEvents) {
   };
 }
 
-async function attestSmallSettlementScope(query, placeResolver, placeLanguage) {
-  if (
-    query?.scope?.kind !== "around_place" ||
-    !query.place_query ||
-    typeof placeResolver !== "function"
-  ) return null;
+async function attestLivePlaceContext(query, placeResolver, placeLanguage) {
+  if (query?.scope?.kind === "near_route" || typeof placeResolver !== "function") return null;
+  const reverseOnly = !query.place_query;
+  if (reverseOnly && typeof placeResolver.resolveCoordinates !== "function") return null;
   const resolved = await resolveAgnosticIntake({
-    placeQuery: query.place_query,
+    ...(reverseOnly ? { coords: query.collection_anchor } : { placeQuery: query.place_query }),
     placeResolver,
     placeLanguage,
   });
@@ -400,15 +412,13 @@ async function attestSmallSettlementScope(query, placeResolver, placeLanguage) {
   if (
     !Number.isFinite(driftKm) ||
     driftKm > MAX_ATTESTED_ANCHOR_DRIFT_KM ||
-    scope.kind !== "settlement" ||
-    scope.collection_mode !== "local_anchor" ||
-    !Number.isFinite(scope.diagonal_km) ||
-    scope.diagonal_km > 15
+    !pointWithinTrustedSpatialScope(query.collection_anchor, scope)
   ) return null;
   return {
     placeContext: resolved.placeContext,
     spatialScope: scope,
     placeLabel: resolved.intake?.resolved?.label || null,
+    smallSettlement: !reverseOnly && scope.kind === "settlement" && scope.collection_mode === "local_anchor" && scope.diagonal_km <= 15,
   };
 }
 
@@ -426,8 +436,25 @@ async function executeLiveEventQuery({ payload, eventSupply, now, placeResolver 
 
   const query = normalized.value;
   try {
-    const attested = await attestSmallSettlementScope(query, placeResolver, placeLanguage).catch(() => null);
-    if (attested) {
+    const attested = await attestLivePlaceContext(query, placeResolver, placeLanguage).catch(() => null);
+    if (query.scope.kind === "in_place") {
+      const scope = attested?.spatialScope;
+      if (!scope || !["settlement", "district", "municipality"].includes(scope.kind) || scope.collection_mode === "broad_anchor_only") {
+        return { status: 400, body: { error: "place_scope_unavailable" } };
+      }
+      const b = scope.bounds;
+      const corners = [
+        { lat: b.south, lng: b.west }, { lat: b.south, lng: b.east },
+        { lat: b.north, lng: b.west }, { lat: b.north, lng: b.east },
+      ];
+      const radiusM = Math.ceil(Math.max(...corners.map((point) => haversineKm(query.collection_anchor, point))) * 1000);
+      if (radiusM > MAX_PLACE_COLLECTION_RADIUS_M) return { status: 400, body: { error: "place_scope_unavailable" } };
+      query.collection_radius_m = Math.max(100, radiusM);
+      query.scope = { ...query.scope, radius_m: query.collection_radius_m, trusted_place_scope: scope };
+      // Sample source coverage within the resolved area; provider fan-out keeps
+      // its existing cap and events still need exact in-area coordinates.
+      query.source_anchors = [query.collection_anchor, ...corners];
+    } else if (query.scope.kind === "around_place" && attested?.smallSettlement) {
       query.collection_radius_m = NEARBY_SETTLEMENT_RADIUS_M;
       query.scope = {
         ...query.scope,
@@ -441,11 +468,13 @@ async function executeLiveEventQuery({ payload, eventSupply, now, placeResolver 
       scope: query.scope,
       now,
       selectedDate: query.selectedDate,
+      time: query.time,
       preferences: query.preferences,
       ...(attested ? {
         placeLabel: attested.placeLabel,
         placeContext: attested.placeContext,
-        spatialScope: attested.spatialScope,
+        discoverySpatialScope: attested.spatialScope,
+        ...(attested.smallSettlement && query.scope.kind === "around_place" ? { spatialScope: attested.spatialScope } : {}),
       } : {}),
     });
     const liveEvents = shapeCollectedLiveEvents(collected, { scope: query.scope });

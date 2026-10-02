@@ -71,6 +71,9 @@ function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
     source_family: firstString(rawEvent.source_family, rawEvent.sourceFamily, rawEvent.source?.family),
     city: firstString(rawEvent.city, options.city),
     place_context: firstString(rawEvent.place_context, rawEvent.place, rawEvent.venue),
+    // A municipality or virtual service is not a walkable event venue.
+    source_location_scope: ["municipality", "virtual"].includes(rawEvent.source_location_scope)
+      ? rawEvent.source_location_scope : null,
     address: firstString(rawEvent.address, rawEvent.venue_address, rawEvent.location_address),
     lat: coordinates.lat,
     lng: coordinates.lng,

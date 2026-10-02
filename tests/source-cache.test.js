@@ -289,26 +289,34 @@ test("an uncached loader (no cache option) is byte-for-byte the prior behavior",
 
 // --- deploy wiring ---------------------------------------------------------
 
-test("the deployed Overture loader reads v4 after restart, never legacy v2/v3 rows", async (t) => {
+test("the deployed Overture loader reads its v5 anchor sample after restart, never legacy v2/v3/v4 rows", async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "parranda-overture-revision-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   // No provider acceptance: deterministic failure at the real factory's fetch seam.
   t.mock.method(globalThis, "fetch", async () => ({ ok: false, status: 503 }));
-  const key = "41.900,12.500:all";
+  // v2-v4 keyed a per-preference selection; v4's was an 80-row nearest window.
+  const legacyKey = "41.900,12.500:all";
   const legacy = [{ id: "legacy-alternate", type: "park", lat: 41.9, lng: 12.5 }];
-  await createSourceCache({ namespace: "overture-v2", dir }).get(key, async () => legacy);
-  await createSourceCache({ namespace: "overture-v3", dir }).get(key, async () => legacy);
+  for (const namespace of ["overture-v2", "overture-v3", "overture-v4"]) {
+    await createSourceCache({ namespace, dir }).get(legacyKey, async () => legacy);
+  }
   const env = {
     PARRANDA_OPEN_DATA_LOADER: "enabled", PARRANDA_OVERTURE_SOURCE: "enabled",
     PARRANDA_CACHE_DIR: dir, PARRANDA_OVERPASS_ENDPOINTS: "https://example.org/overpass",
   };
   assert.equal((await resolveDefaultOpenDataLoader(env)({ lat: 41.9, lng: 12.5 })).length, 0);
+  // v5 caches one stratified sample per anchor window (default 5 km, 0.95 floor);
+  // every request, whatever its preferences, re-selects from it.
   const current = [{ id: "current-primary", type: "garden", lat: 41.9, lng: 12.5 }];
-  await createSourceCache({ namespace: "overture-v4", dir }).get(key, async () => current);
-  const records = await resolveDefaultOpenDataLoader(env)({ lat: 41.9, lng: 12.5 });
-  assert.deepEqual(records.map((record) => record.id), ["current-primary"]);
-  assert.deepEqual(createSourceCache({ namespace: "overture-v2", dir }).peek(key), legacy,
-    "the boundary leaves old evidence intact; it does not rewrite or reclassify it");
+  await createSourceCache({ namespace: "overture-v5", dir }).get("41.900,12.500:r5:c0.95", async () => current);
+  for (const requestedIntents of [[], ["green"], ["food", "museums"]]) {
+    const records = await resolveDefaultOpenDataLoader(env)({ lat: 41.9, lng: 12.5, requestedIntents });
+    assert.deepEqual(records.map((record) => record.id), ["current-primary"], requestedIntents.join("+"));
+  }
+  for (const namespace of ["overture-v2", "overture-v4"]) {
+    assert.deepEqual(createSourceCache({ namespace, dir }).peek(legacyKey), legacy,
+      "the boundary leaves old evidence intact; it does not rewrite or reclassify it");
+  }
 });
 
 test("resolveDefaultOpenDataLoader stays null when the flag is unset, and returns a loader when enabled", () => {

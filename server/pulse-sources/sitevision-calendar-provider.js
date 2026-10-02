@@ -19,6 +19,7 @@ const {
   resolveSchedulePattern,
   statesDailyOccurrence,
 } = require("./source-recurrence");
+const { MAX_OCCURRENCE_DATES } = require("./time-sensitive-event");
 
 const SITEVISION_CALENDAR_PROVIDER_ID = "generic-sitevision-calendar";
 const DEFAULT_USER_AGENT = "Parranda/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
@@ -32,6 +33,7 @@ const MAX_DETAIL_LIMIT = 12;
 const DEFAULT_DETAIL_CONCURRENCY = 2;
 const RECURRENCE_SECTION_MAX_CHARS = 8000;
 const RECURRENCE_TEXT_MAX_CHARS = 1000;
+const REGISTERED_STATE_MAX_CHARS = 200000;
 const TIMING_FIELDS = ["starts_at", "ends_at", "starts_on", "ends_on", "time_window"];
 
 function buildDescriptor(options = {}) {
@@ -255,17 +257,38 @@ function extractSitevisionEventDetail(html, options = {}) {
   const address = htmlToText(
     firstMatch(source, /(?:Adress|Besöksadress):\s*<\/strong>\s*<br\s*\/?>\s*([^<]+)/i),
   );
-  const coordinates = extractCoordinates(source);
+  const eventLocation = extractEventOwnedLocation(source, options);
+  // The page's own venue field and the event state must name the same venue.
+  const statedVenue = comparableText(venue);
+  const location = eventLocation.lat != null &&
+    (!statedVenue || statedVenue === comparableText(eventLocation.place_context))
+    ? eventLocation
+    : {};
+  // Event-owned state, valid or not, is the page's own venue claim: a page map
+  // never stands in for it. Without such state, only the one map link of a
+  // detail page bound to this listing row may supply the pin.
+  const point = location.lat != null
+    ? { ...location, source: "event_state" }
+    : eventLocation.event_state
+      ? {}
+      : { ...extractEventBoundMapCoordinates(source, { ...options, venue, timingText }), source: "map_link" };
   return compact({
     starts_at: timing.starts_at,
     ends_at: timing.ends_at,
     starts_on: timing.starts_on,
     ends_on: timing.ends_on,
     time_window: timing.time_window,
-    place_context: venue,
-    address,
-    lat: coordinates.lat,
-    lng: coordinates.lng,
+    place_context: venue || location.place_context,
+    address: address || location.address,
+    lat: point.lat,
+    lng: point.lng,
+    // Which bound evidence placed the pin; the provider keeps it off the event.
+    coordinate_source: point.lat != null ? point.source : null,
+    // Session times the bound event state states; the provider uses them only
+    // for a listing row that states no clock of its own.
+    state_timing: eventStateTiming(eventLocation.occasions, {
+      timezone: normalizeIanaTimezone(options.timezone),
+    }),
     // Source text for inspection only; the parsed timing above is the fact.
     recurrence: recurrence ? recurrence.slice(0, RECURRENCE_TEXT_MAX_CHARS) : null,
   }) || {};
@@ -284,6 +307,7 @@ async function enrichFromDetailPages(events, fetcher, options = {}) {
     4,
     DEFAULT_DETAIL_CONCURRENCY,
   );
+  const mapPinned = [];
   await mapWithConcurrency(events.slice(0, detailLimit), concurrency, async (event) => {
     if (!event?.source_url) return;
     try {
@@ -291,23 +315,54 @@ async function enrichFromDetailPages(events, fetcher, options = {}) {
       const detail = extractSitevisionEventDetail(html, {
         ...options,
         expectedDate: event.listing_date,
+        expectedTitle: event.title,
+        sourceUrl: event.source_url,
       });
       // Detail timing is stronger evidence than the listing row. Replace the
       // timing atoms together so a listing instant cannot survive beside a
       // detail period or occurrence list and contradict it downstream.
-      if (detail.time_window) {
+      // A listing row that states only its day (or days) is not an all-day
+      // session when the event's own state gives the occasions a clock.
+      const timing = detail.time_window
+        ? detail
+        : detail.state_timing && statesNoClock(event) ? detail.state_timing : null;
+      if (timing) {
         for (const key of TIMING_FIELDS) {
-          if (detail[key] != null && detail[key] !== "") event[key] = detail[key];
+          if (timing[key] != null && timing[key] !== "") event[key] = timing[key];
           else delete event[key];
         }
       }
       for (const key of ["place_context", "address", "lat", "lng", "recurrence"]) {
         if (detail[key] != null && detail[key] !== "") event[key] = detail[key];
       }
+      if (detail.coordinate_source === "map_link") mapPinned.push(event);
     } catch (_error) {
       // A detail page is enrichment only. The bounded listing result remains.
     }
   });
+  dropSharedPageCoordinates(mapPinned);
+}
+
+function statesNoClock(event) {
+  return !event.starts_at && (!event.time_window || event.time_window.kind === "all_day");
+}
+
+// One map-link coordinate claimed for differently named venues is a site-wide
+// map (a footer "Hitta hit" link without page landmarks), not any of those
+// events' venue: none of them keeps it.
+function dropSharedPageCoordinates(events) {
+  const venues = new Map();
+  for (const event of events) {
+    const point = `${event.lat},${event.lng}`;
+    if (!venues.has(point)) venues.set(point, new Set());
+    venues.get(point).add(comparableText(event.place_context));
+  }
+  for (const event of events) {
+    if (venues.get(`${event.lat},${event.lng}`).size > 1) {
+      delete event.lat;
+      delete event.lng;
+    }
+  }
 }
 
 function parseSitevisionDateTime(value, options = {}) {
@@ -509,6 +564,260 @@ function parseTimeRange(value) {
   const start = validTimeParts(Number(match[1]), Number(match[2]));
   const end = match[3] ? validTimeParts(Number(match[3]), Number(match[4])) : null;
   return start && (!match[3] || end) ? { start, end } : null;
+}
+
+function hasEventShowcaseRegistration(html, key) {
+  const source = String(html || "");
+  if (!Array.from(source.matchAll(/\bdata-cid=["']([^"']+)["']/g))
+    .some((match) => match[1] === key)) return false;
+  // One registration never reads into the next app's call.
+  return Array.from(source.matchAll(/AppRegistry\.registerApp\(\{((?:(?!AppRegistry\.)[^;]){0,2500})\}\);/g))
+    .some((match) => {
+      const app = match[1];
+      return /\bwebAppId\s*:\s*['"]se\.soleil\.eventShowcase['"]/.test(app) &&
+        Array.from(app.matchAll(/\bportletId\s*:\s*['"]([^'"]+)['"]/g))
+          .some((portlet) => portlet[1] === key);
+    });
+}
+
+// Sitevision WebApps register server state with
+// AppRegistry.registerInitialState(key, {...}). Only a registered event
+// showcase's state for the listed event can supply a venue pin. Any
+// event-shaped state, readable or not, still keeps a page map from standing in
+// for the event's own venue. States of unrelated apps (cookie consent,
+// feedback, sharing) are neither.
+function extractEventOwnedLocation(html, options = {}) {
+  const source = String(html || "");
+  let eventId = null;
+  try { eventId = new URL(options.sourceUrl).searchParams.get("id"); } catch (_error) { /* Legacy URLs may omit an id. */ }
+  const binding = {
+    expectedDate: validDateKey(options.expectedDate),
+    expectedTitle: comparableText(options.expectedTitle),
+  };
+  let eventState = /\bwebAppId\s*:\s*['"]se\.soleil\.eventShowcase['"]/.test(source);
+  let vetoed = false;
+  let matched = null;
+  // The occasions bound to the listed event, kept apart from the venue: a
+  // state that names no single mappable venue can still state session times.
+  let occasions = null;
+  let occasionsVetoed = false;
+  const starts = source.matchAll(
+    /AppRegistry\.registerInitialState\(\s*(?:(['"])([^'"]+)\1|[^,()\s]*)\s*,\s*/g,
+  );
+  for (const start of starts) {
+    const showcase = Boolean(start[2]) && hasEventShowcaseRegistration(source, start[2]);
+    const { state, fragment } = readRegisteredState(source, start.index + start[0].length);
+    if (!state) {
+      // A malformed or truncated event state is still the page's own claim.
+      if (showcase) {
+        vetoed = true;
+        occasionsVetoed = true;
+      }
+      if (showcase || (/"metadata"\s*:/.test(fragment) && /"occasions"\s*:/.test(fragment))) {
+        eventState = true;
+      }
+      continue;
+    }
+    if (showcase || (state.id && Array.isArray(state.metadata?.occasions))) eventState = true;
+    if (!showcase || !eventId || state.id !== eventId) continue;
+    // Every showcase state of this event must bind the same venue.
+    const candidate = boundShowcaseLocation(state, binding);
+    if (!candidate || (matched && (matched.lat !== candidate.lat ||
+        matched.lng !== candidate.lng || matched.place_context !== candidate.place_context))) {
+      vetoed = true;
+    } else {
+      matched = candidate;
+    }
+    // ...and the same occasions.
+    const stated = boundShowcaseOccasions(state, binding);
+    if (!stated || (occasions && JSON.stringify(occasions) !== JSON.stringify(stated))) {
+      occasionsVetoed = true;
+    } else {
+      occasions = stated;
+    }
+  }
+  const boundOccasions = !occasionsVetoed && occasions ? { occasions } : {};
+  return !vetoed && matched
+    ? { ...matched, event_state: true, ...boundOccasions }
+    : { event_state: eventState, ...boundOccasions };
+}
+
+// The JSON object registered at `from`, read within its own script element.
+function readRegisteredState(source, from) {
+  if (source[from] !== "{") return { state: null, fragment: "" };
+  const scriptEnd = source.indexOf("</script", from);
+  const fragment = source.slice(from, Math.min(
+    scriptEnd < 0 ? source.length : scriptEnd, from + REGISTERED_STATE_MAX_CHARS,
+  ));
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  for (let index = 0; index < fragment.length; index += 1) {
+    const char = fragment[index];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') quoted = false;
+    } else if (char === '"') quoted = true;
+    else if (char === "{") depth += 1;
+    else if (char === "}" && --depth === 0) {
+      try {
+        const state = JSON.parse(fragment.slice(0, index + 1));
+        return { state: state && typeof state === "object" && !Array.isArray(state) ? state : null, fragment };
+      } catch (_error) {
+        return { state: null, fragment };
+      }
+    }
+  }
+  return { state: null, fragment };
+}
+
+// The venue a showcase state binds to the listed event: its title, a
+// self-consistent date range, the listed day among its occasions, one named
+// venue for every occasion and exactly one coordinate for that venue.
+function boundShowcaseLocation(state, binding) {
+  if (!bindsListedEvent(state, binding)) return null;
+  const metadata = state.metadata;
+  const occasions = metadata.occasions;
+  const names = [...new Set(occasions.map((item) => item?.location))];
+  if (names.length !== 1 || !htmlToText(names[0])) return null;
+  const matches = Array.isArray(metadata.locations)
+    ? metadata.locations.filter((item) => item?.name === names[0])
+    : [];
+  if (matches.length !== 1) return null;
+  const parts = String(matches[0].coordinate || "")
+    .match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+  const point = parts ? coordinates(Number(parts[1]), Number(parts[2])) : {};
+  if (point.lat == null) return null;
+  return {
+    ...point,
+    place_context: htmlToText(names[0]),
+    address: firstString(matches[0].adress, matches[0].address),
+  };
+}
+
+// A showcase state describes the listed event when its title is the listed
+// title, its date range is one of its own occasions and the listed day is one
+// of its occasions.
+function bindsListedEvent(state, { expectedDate, expectedTitle }) {
+  const metadata = state?.metadata || {};
+  const occasions = Array.isArray(metadata.occasions) ? metadata.occasions : [];
+  const rangeDate = validDateKey(metadata.dateRange?.date);
+  return Boolean(expectedTitle && comparableText(state.title) === expectedTitle &&
+    rangeDate && occasions.some((item) => item?.date === rangeDate) &&
+    expectedDate && occasions.some((item) => item?.date === expectedDate));
+}
+
+// The occasions a bound showcase state lists, each with the clock it states
+// ("18:00 – 20:00"), if any. An unreadable date or clock fails them all.
+function boundShowcaseOccasions(state, binding) {
+  if (!bindsListedEvent(state, binding)) return null;
+  const occasions = [];
+  for (const item of state.metadata.occasions) {
+    const date = validDateKey(item?.date);
+    const clockText = typeof item?.time === "string" ? htmlToText(item.time) : null;
+    const time = clockText ? parseTimeRange(clockText.replace(/[–—]/g, "-")) : null;
+    if (!date || (clockText && !time)) return null;
+    occasions.push({ date, time, label: htmlToText(item.formatted) || date, clock: clockText });
+  }
+  return occasions;
+}
+
+// The session times a bound event state states. One clock shared by every
+// occasion gives the dated session(s). Occasions whose clocks differ, or of
+// which only some state a clock, are not one session time: the stated days
+// become a period that never claims a day. Occasions without any clock say
+// nothing about the session time.
+function eventStateTiming(occasions, { timezone } = {}) {
+  if (!Array.isArray(occasions) || !occasions.some((item) => item.time)) return null;
+  const dates = [...new Set(occasions.map((item) => item.date))].sort();
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+  const label = occasions.map((item) => [item.label, item.clock].filter(Boolean).join(" ")).join("; ")
+    .slice(0, RECURRENCE_TEXT_MAX_CHARS);
+  const clocks = new Set(occasions.map((item) =>
+    item.time ? `${localClock(item.time.start)}-${localClock(item.time.end) || ""}` : ""));
+  if (clocks.size !== 1 || dates.length > MAX_OCCURRENCE_DATES) {
+    return compact({
+      starts_on: first,
+      ends_on: last,
+      time_window: compact({ kind: "period", starts_on: first, ends_on: last, timezone, label }),
+    });
+  }
+  const time = occasions[0].time;
+  if (dates.length === 1 && timezone) {
+    const day = datePartsFromKey(first);
+    const startsAt = normalizeSourceEventDateTime(localDateTime(day, time.start), { timezone });
+    const endDay = time.end && minutesOfDay(time.end) < minutesOfDay(time.start) ? addDays(day, 1) : day;
+    const endsAt = time.end
+      ? normalizeSourceEventDateTime(localDateTime(endDay, time.end), { timezone })
+      : null;
+    return compact({
+      starts_at: startsAt,
+      ends_at: endsAt,
+      starts_on: first,
+      ends_on: first,
+      time_window: compact({ kind: "continuous", starts_at: startsAt, ends_at: endsAt, label }),
+    });
+  }
+  return compact({
+    starts_on: first,
+    ends_on: last,
+    time_window: compact({
+      kind: "occurrences",
+      dates,
+      starts_on: first,
+      ends_on: last,
+      local_start: localClock(time.start),
+      local_end: localClock(time.end),
+      timezone,
+      label,
+    }),
+  });
+}
+
+// The site frame (header, navigation, footer) repeats on every page: its map,
+// such as a footer "Hitta hit" link, is the publisher's own, never one event's
+// venue.
+const SITE_FRAME = /<(header|nav|footer)\b|<([a-z][a-z0-9]*)\b[^>]*\brole=["'](?:banner|navigation|contentinfo)["']/gi;
+
+// Without event state, a detail page may supply a pin only from its one map
+// link, and only while the page is bound to the listing row: an <h1> is the
+// listed title, the stated date range holds the listed day and exactly one
+// venue is named. A map inside the site frame or after the main content is
+// never that link, and a second one in the content leaves the venue ambiguous.
+function extractEventBoundMapCoordinates(html, options = {}) {
+  const { expectedDate, venue, timingText } = options;
+  const title = comparableText(options.expectedTitle);
+  const source = String(html || "");
+  if (!title || !validDateKey(expectedDate) || !comparableText(venue)) return {};
+  if (!Array.from(source.matchAll(/<h1\b[^>]*>([\s\S]*?)<\/h1\s*>/gi))
+    .some((heading) => comparableText(heading[1]) === title)) return {};
+  const date = parseDateRange(
+    String(timingText || "").toLocaleLowerCase("sv-SE").replace(/[–—]/g, "-"),
+    inferYear(expectedDate),
+  );
+  if (!date?.start || expectedDate < dateKey(date.start) ||
+      expectedDate > dateKey(date.end || date.start)) return {};
+  if ((source.match(/Evenemangsplats:\s*<\/strong>/gi) || []).length !== 1) return {};
+  const maps = Array.from(source.matchAll(/<a\b[^>]*\bhref=["']([^"']+)["']/gi))
+    .filter((match) => /(?:google\.[^/]+\/maps\/|[?&]center=)/i.test(decodeUrlText(decodeHtml(match[1]))))
+    .filter((match) => !insideSiteFrame(source, match.index));
+  if (maps.length !== 1) return {};
+  return extractCoordinates(maps[0][1]);
+}
+
+function insideSiteFrame(html, index) {
+  const before = html.slice(0, index);
+  if (/<\/main\s*>/i.test(before)) return true;
+  for (const match of before.matchAll(SITE_FRAME)) {
+    const tag = (match[1] || match[2]).toLowerCase();
+    const scope = before.slice(match.index);
+    const opened = scope.match(new RegExp(`<${tag}\\b`, "gi")).length;
+    const closed = (scope.match(new RegExp(`</${tag}\\s*>`, "gi")) || []).length;
+    if (opened > closed) return true;
+  }
+  return false;
 }
 
 function extractCoordinates(value) {
@@ -759,6 +1068,14 @@ function htmlToText(value) {
       .replace(/<br\s*\/?>/gi, " ")
       .replace(/<[^>]+>/g, " "),
   ).replace(/\s+/g, " ").trim() || null;
+}
+
+// Text compared across a listing, its detail markup and registered state:
+// markup-free, whitespace-collapsed, composed and case-folded. Missing text
+// never matches anything.
+function comparableText(value) {
+  const text = htmlToText(value);
+  return text ? text.normalize("NFC").toLocaleLowerCase("sv-SE") : null;
 }
 
 function decodeHtml(value) {

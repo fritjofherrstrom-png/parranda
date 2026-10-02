@@ -19,6 +19,8 @@ const { buildDayflowContext } = require("./planner/dayflow-context");
 const { daypartSlotForRole, SLOT_DAYPART } = require("./planner/agnostic-route-ordering");
 const { selectAgnosticCandidateSet } = require("./planner/agnostic-candidate-set");
 
+const { matchesPreferenceFocus, preferenceFit } = require("./planner/preference-focus");
+
 const defaultCityConfig = getCityConfig("rome");
 
 // Canonical trust for a verified catalog route stop. Curated catalogs (Rome,
@@ -173,11 +175,11 @@ function buildProvisionalComposeStops() {
       provenance: candidate.provenance || null,
       role: candidate.role || null,
       routeRoles: Array.isArray(candidate.route_roles) ? [...candidate.route_roles] : [],
+      anchoredDaypart: candidate.anchored_daypart || null,
       candidateStatus: candidate.candidate_status || null,
       plannerUsable: candidate.planner_usable === true,
       candidateOrigin: candidate.origin || null,
-      coveredPreferences: Array.isArray(candidate.covered_preferences) ? [...candidate.covered_preferences] : [],
-      partialPreferences: Array.isArray(candidate.partial_preferences) ? [...candidate.partial_preferences] : [],
+      ...preferenceFit(candidate),
       missingPreferences: Array.isArray(candidate.missing_preferences) ? [...candidate.missing_preferences] : [],
       fitReasons: Array.isArray(candidate.fit_reasons) ? [...candidate.fit_reasons] : [],
       lensReasons: Array.isArray(candidate.lens_reasons) ? [...candidate.lens_reasons] : [],
@@ -4444,6 +4446,11 @@ function refineStopOrder(selectedStops, start, geometryFor) {
 // the ordering layer and never depends on the provisional-stop mapper carrying
 // role data (that mapper is owned elsewhere).
 function composeStopDaypartSlot(stop, roleById = null) {
+  // Only the trusted any-place reservoir sets this after checking selected
+  // intent and source availability. Use the same band for ordering and labels;
+  // retaining a midday cafe must not publish an already-past morning visit.
+  const anchoredSlot = SLOT_DAYPART.indexOf(stop?.anchoredDaypart);
+  if (anchoredSlot >= 0) return anchoredSlot;
   let roles = Array.isArray(stop?.route_roles) && stop.route_roles.length ? stop.route_roles : null;
   if (!roles && roleById && stop?.id != null) {
     const looked = roleById.get(stop.id);
@@ -5245,7 +5252,10 @@ function buildRouteFromTemplate(
     liveEvents,
     options,
   );
+  const withinFocus = (item) => template.id !== AGNOSTIC_COMPOSE_TEMPLATE_ID ||
+    matchesPreferenceFocus(item, preferences, options.pinnedStopIds || []);
   const sortedPool = rawPool
+    .filter(withinFocus)
     .map((item, index) => ({
       item,
       score: scoreStopCandidate({
@@ -5289,33 +5299,6 @@ function buildRouteFromTemplate(
 
   if (!selectedStops.length) {
     selectedStops = sortedPool.slice(0, Math.min(rawPool.length, 3)).map((entry) => entry.item);
-  }
-
-  // A strict single-interest request (currently most visible for second hand)
-  // can yield one or two strong matching stops even though the agnostic
-  // reservoir also contains safe day-support candidates. Returning only the
-  // strict family makes an otherwise useful any-place day fail the thin-day
-  // promotion gate. Complete ONLY the agnostic-compose route to the minimum
-  // three-stop day from its already planner-gated reservoir. Registered-city
-  // templates keep their strict behavior byte-identical; sparse pools still
-  // remain sparse, and the requested candidates always stay in the route.
-  if (
-    template.id === AGNOSTIC_COMPOSE_TEMPLATE_ID &&
-    strictTags.length &&
-    selectedStops.length > 0 &&
-    selectedStops.length < Math.min(3, rawPool.length)
-  ) {
-    const selectedIds = new Set(selectedStops.map((stop) => stop.id));
-    const supportCount = Math.min(3, rawPool.length) - selectedStops.length;
-    const support = sortedPool
-      .filter(
-        (entry) =>
-          !selectedIds.has(entry.item.id) &&
-          !itemMatchesStrictPreference(entry.item, strictTags),
-      )
-      .slice(0, supportCount)
-      .map((entry) => entry.item);
-    selectedStops = [...selectedStops, ...support];
   }
 
   // Preview-city beta: verified curated items always rank first (the higher-trust
@@ -5391,7 +5374,7 @@ function buildRouteFromTemplate(
   // nowhere else. Agnostic path only; registered-city templates are unchanged.
   const pinnableStops =
     template.id === AGNOSTIC_COMPOSE_TEMPLATE_ID
-      ? [...sortedPool.map((entry) => entry.item), ...buildProvisionalComposeStops()]
+      ? [...sortedPool.map((entry) => entry.item), ...buildProvisionalComposeStops().filter(withinFocus)]
       : sortedPool.map((entry) => entry.item);
   selectedStops = applyPinnedSelection(selectedStops, pinnableStops, options.pinnedStopIds);
 
@@ -5447,7 +5430,7 @@ function buildRouteFromTemplate(
       targetKm,
       allowExpansion: true,
     });
-    if (constrained.selected.length) selectedStops = constrained.selected;
+    selectedStops = constrained.selected;
   }
 
   // selectAgnosticCandidateSet is the authoritative chooser on this path and
@@ -5520,7 +5503,9 @@ function buildRouteFromTemplate(
     preferences,
     options.weekday || null,
   );
-  const finalOrderedStops = rebalancedStops;
+  const finalOrderedStops = rebalancedStops.every(withinFocus)
+    ? rebalancedStops
+    : rebalancedStops.filter(withinFocus);
   const finalGeometry =
     finalOrderedStops === composeOrderedStops
       ? composeGeometry
@@ -6873,6 +6858,7 @@ async function generateRecommendations({
   budgetTier = "standard",
   modifier = null,
   distanceMode = "soft_target",
+  dayRhythm = null,
   legPacing = "balanced",
   lang = "sv",
   includeLiveEvents = false,
@@ -7012,6 +6998,9 @@ async function generateRecommendations({
           : null;
         const primaryDayProfile = agnosticDayProfile
           ? normalizeDayProfile(agnosticDayProfile)
+          : dayRhythm === "calm" ? "light"
+          : dayRhythm === "balanced" ? "variation"
+          : dayRhythm === "full" || dayRhythm === "free" ? "peak"
           : choosePrimaryDayProfile({
               dateIndex,
               totalDates: normalizedDates.length,

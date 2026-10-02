@@ -243,3 +243,16 @@ test("an in-period row that fails trusted geometry is still reported as rejected
   assert.ok(health.reasons.includes("all_event_evidence_rejected"));
   assert.ok(!health.reasons.includes("no_events_in_requested_period"));
 });
+
+test("a week query spends its limited venue lookups on following days first", async () => {
+  const { resolver, venues } = recordingResolver();
+  const out = await collectAnchorEvents({
+    anchor: ANCHOR, now: NOW, selectedDate: TODAY, time: "this_week",
+    registry: [SOURCE], venueResolver: resolver,
+    fetcher: fetcherFor([...TODAYS_ROWS,
+      mapless("week", "Kammarmusik", TOMORROW, "Kapellet", { start: "19:00", end: "20:30" })]),
+  });
+  assert.equal(venues[0], "Kapellet");
+  assert.equal(venues.length, 4, "the lookup cap stays bounded");
+  assert.deepEqual(out.this_week.map(event => event.id), ["week"]);
+});

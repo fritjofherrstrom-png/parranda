@@ -7,7 +7,7 @@
  */
 
 export const LIVE_EVENT_QUERY_CONTRACT = "live_event_query_v1";
-export const LIVE_EVENT_SCOPES = ["around_place", "near_route", "near_me"];
+export const LIVE_EVENT_SCOPES = ["around_place", "in_place", "near_route", "near_me"];
 export const LIVE_EVENT_TIMES = ["tonight", "this_week"];
 
 const MAX_ROUTE_POINTS = 24;
@@ -105,7 +105,8 @@ export function buildLiveEventQueryPayload({
 
   const anchor = scope === "near_me" ? coordinate(nearMeCoords) : trustedDayAnchor(response);
   if (!anchor) return null;
-  const placeQuery = scope === "around_place" ? trustedPlaceQuery(response) : null;
+  const placeQuery = ["around_place", "in_place"].includes(scope) ? trustedPlaceQuery(response) : null;
+  if (scope === "in_place" && !placeQuery) return null;
   return placeQuery ? { ...base, anchor, place_query: placeQuery } : { ...base, anchor };
 }
 

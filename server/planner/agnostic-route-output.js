@@ -42,6 +42,7 @@ const {
   normalizeSelectedDayHoursFact,
 } = require("../place-candidates/opening-hours");
 const { validateAgnosticWalkingOrder } = require("./agnostic-route-walking-validation");
+const { operatorClosureForWindow } = require('../place-candidates/operator-visit-evidence');
 const { buildAgnosticRouteOrdering, daypartForRole, timeBandRank } = require("./agnostic-route-ordering");
 const { resolveWalkableMicroBase } = require("./walkable-micro-base");
 const { resolveAgnosticContext, collectInfluenceReasons } = require("./agnostic-route-context");
@@ -165,6 +166,18 @@ function normalizeAnchorMode(value) {
   return ["coordinates", "place"].includes(String(value)) ? String(value) : "unknown";
 }
 
+const PRIMARY_COLLECTIONS = new Set([
+  "cached_supply",
+  "first_pass_while_expanding",
+  "neighbouring_budget_cache",
+  "background_refresh",
+]);
+const PRIMARY_COLLECTION_REASONS = new Set([
+  "primary_outstanding_at_wait_bound",
+  "primary_failed",
+  "no_answered_map_evidence",
+]);
+
 function sanitizeLoaderCollectionMetadata(value) {
   if (!value || typeof value !== "object") return null;
   const profile = (input) => {
@@ -207,7 +220,39 @@ function sanitizeLoaderCollectionMetadata(value) {
     initial_day_capacity: capacity(value.initial_day_capacity),
     selected_day_capacity: capacity(value.selected_day_capacity),
     cache: sanitizeLoaderCacheSummary(value.cache),
+    // How the primary map source took part. Absent when it was awaited live.
+    //   cached_supply              answered from this request's own cache entry
+    //   first_pass_while_expanding its first pass answered; only the wider
+    //                              query was outstanding at the bounded wait
+    //   neighbouring_budget_cache  this anchor's fresh answer for another
+    //                              walking budget (`primary_collection_target_km`)
+    //                              while this budget's was outstanding or failed
+    //   background_refresh         no answered map evidence at the bounded wait;
+    //                              other families composed the day
+    primary_collection: PRIMARY_COLLECTIONS.has(value.primary_collection)
+      ? value.primary_collection
+      : null,
+    primary_collection_reason: PRIMARY_COLLECTION_REASONS.has(value.primary_collection_reason)
+      ? value.primary_collection_reason
+      : null,
+    primary_collection_target_km: finiteOrNull(value.primary_collection_target_km),
     spatial_scope: sanitizeSpatialScopeSummary(value.spatial_scope),
+    source_completion: value.source_completion && ['partial', 'complete'].includes(value.source_completion.status) ? {
+      status: value.source_completion.status,
+      reason: safeToken(value.source_completion.reason),
+      pending: finiteOrNull(value.source_completion.pending),
+      completed: finiteOrNull(value.source_completion.completed),
+      failed: finiteOrNull(value.source_completion.failed),
+    } : null,
+    operator_evidence: value.operator_evidence && typeof value.operator_evidence === 'object' ? {
+      attempted: finiteOrNull(value.operator_evidence.attempted),
+      confirmed: finiteOrNull(value.operator_evidence.confirmed),
+      excluded: finiteOrNull(value.operator_evidence.excluded),
+      candidates: (Array.isArray(value.operator_evidence.candidates) ? value.operator_evidence.candidates : []).slice(0, 4).map(item => ({
+        id: typeof item.id === 'string' ? item.id.slice(0, 160) : null,
+        status: ['confirmed_storefront', 'non_shopping_visit', 'closed_weekdays', 'unresolved', 'not_observed'].includes(item.status) ? item.status : null,
+      })),
+    } : null,
     regional_scout: sanitizeRegionalScout(value.regional_scout),
   };
 }
@@ -634,30 +679,40 @@ function anchorAdaptedBodyToCurrentBand(adaptedBody, currentRank) {
   };
 }
 
-// Engine-compose equivalent of #276. Trim the trusted source reservoir BEFORE
-// route composition so geometry, legs, and walking truth are recomputed over the
-// actual time-appropriate stops. If fewer than two candidates remain, keep the
-// full reservoir and let the shared honesty fields explain that the full-day arc
-// precedes local time rather than fabricating a thin route.
-function anchorSourceCandidatesToCurrentBand(sourceCandidates, currentRank, pinnedIds = []) {
+// Anchor BEFORE composition so ordering and geometry use the actual reservoir.
+// A role's usual daypart is only a heuristic: a requested experience with
+// source-supported availability in the remaining day can move to the current
+// band. Unknown hours keep the existing heuristic. With fewer than two retained
+// candidates, keep the full arc and its explicit not-anchored caveat.
+function anchorSourceCandidatesToCurrentBand(sourceCandidates, currentRank, pinnedIds = [], preferences = []) {
   const candidates = Array.isArray(sourceCandidates) ? sourceCandidates : [];
+  const requested = normalizeUserIntents(preferences).intents;
+  const currentBand = ["morning", "midday", "afternoon", "evening"][currentRank];
   // An explicit "keep this" outranks the typical-timing heuristic. Trimming a
   // pinned place because its role usually happens earlier in the day would drop
   // exactly what the user asked to keep.
   const pins = new Set(Array.isArray(pinnedIds) ? pinnedIds : []);
   const kept = [];
   const trimmedDayparts = [];
+  let retimed = false;
   for (const candidate of candidates) {
     const role = candidate?.role || (Array.isArray(candidate?.route_roles) ? candidate.route_roles[0] : null);
     const daypart = daypartForRole(role || null);
     const rank = timeBandRank(daypart);
-    if (rank !== null && rank < currentRank && !pins.has(String(candidate?.id ?? ""))) {
+    const sourceAvailable = candidate?.availability?.eligible === true &&
+      candidate.availability.status === "available_in_window";
+    const requestedExperience = Array.isArray(candidate?.covered_preferences) &&
+      requested.some(intent => candidate.covered_preferences.includes(intent));
+    if (rank !== null && rank < currentRank && currentBand && sourceAvailable && requestedExperience) {
+      kept.push({ ...candidate, anchored_daypart: currentBand });
+      retimed = true;
+    } else if (rank !== null && rank < currentRank && !pins.has(String(candidate?.id ?? ""))) {
       if (!trimmedDayparts.includes(daypart)) trimmedDayparts.push(daypart);
     } else {
       kept.push(candidate);
     }
   }
-  if (kept.length < 2 || kept.length === candidates.length) {
+  if (kept.length < 2 || (kept.length === candidates.length && !retimed)) {
     return { anchored: false, candidates, trimmedDayparts: [] };
   }
   return { anchored: true, candidates: kept, trimmedDayparts };
@@ -764,6 +819,10 @@ function buildAgnosticPublicResult({
   publicResult.city = requestedCity || null;
   publicResult.requested_city = requestedCity || null;
   publicResult.city_fallback_used = Boolean(requestedCity && cityFallbackUsed);
+  // The baseline's display label names the FALLBACK city, never the requested
+  // place — on this path no recognized city exists to name. (It went unnoticed
+  // while the only fallback label was Swedish "Rom", which no "rome" check saw.)
+  publicResult.city_label = null;
   publicResult.resolved_home_base = null;
   publicResult.resolved_start = null;
   publicResult.resolved_end = null;
@@ -875,6 +934,7 @@ async function composeAgnosticRouteOutput({
   eveningEventStructure = null,
   walkingBudget = null,
   walkingKmTarget = null,
+  dayRhythm = null,
   // #262 — trusted context seams. Public payload weather is NEVER trusted; the
   // weather/time context comes only from these server-injected sources.
   weatherProvider = null,
@@ -949,7 +1009,9 @@ async function composeAgnosticRouteOutput({
       })
     : null;
 
+  const focusedRhythm = Boolean(dayRhythm) && normalizeUserIntents(preferences).intents.length === 1;
   const rolePayload = {
+    ...(focusedRhythm ? { limitPerRole: 5 } : {}),
     city: agnosticContext.key,
     date: effectiveDate,
     preferences: Array.isArray(preferences) ? preferences : [],
@@ -981,6 +1043,8 @@ async function composeAgnosticRouteOutput({
   const availabilityHelpers = availabilityWindow
     ? {
         evaluateCandidateAvailability: ({ candidate }) => {
+          const closure=operatorClosureForWindow(candidate,availabilityWindow);
+          if(closure)return closure;
           if (typeof candidate?.opening_hours !== "string") return null;
           const availability = evaluateOpeningHoursForWindow(candidate.opening_hours, availabilityWindow);
           const selectedDayHours = buildSelectedDayHoursFact(candidate.opening_hours, availabilityWindow);
@@ -990,7 +1054,7 @@ async function composeAgnosticRouteOutput({
         },
       }
     : {};
-  const candidateReachPolicy = resolveAgnosticCandidateReachPolicy({ anchorMode, spatialScope });
+  const candidateReachPolicy = resolveAgnosticCandidateReachPolicy({ anchorMode, spatialScope, dayRhythm, preferences, availabilityWindow });
   const selectionBaseHelpers = {
     ...helpers,
     ...availabilityHelpers,
@@ -1042,6 +1106,7 @@ async function composeAgnosticRouteOutput({
         plannerRoles,
         city: agnosticContext.key,
         walkingKmTarget,
+        dayRhythm,
         includeCapacityFrontier: false,
         pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
       })
@@ -1052,6 +1117,7 @@ async function composeAgnosticRouteOutput({
         plannerRoles,
         city: agnosticContext.key,
         walkingKmTarget,
+        dayRhythm,
         includeCapacityFrontier: true,
         // The repaired route can REPLACE the base one, so the capacity
         // reservoir has to be able to honour the same commitments. Without the
@@ -1165,6 +1231,7 @@ async function composeAgnosticRouteOutput({
       ctx,
       baselineResult,
       walkingKmTarget: Number.isFinite(walkingKmTarget) ? walkingKmTarget : undefined,
+      dayRhythm,
       distanceMode,
       preferences,
       pinnedStopIds,
@@ -1362,6 +1429,7 @@ async function composeAgnosticRouteViaEngine({
   contextBlock,
   baselineResult,
   walkingKmTarget,
+  dayRhythm = null,
   distanceMode = null,
   preferences,
   pinnedStopIds,
@@ -1384,6 +1452,7 @@ async function composeAgnosticRouteViaEngine({
         plannerRoles,
         city: agnosticContext.key,
         walkingKmTarget,
+        dayRhythm,
         includeCapacityFrontier: false,
         pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
       });
@@ -1394,11 +1463,12 @@ async function composeAgnosticRouteViaEngine({
         plannerRoles,
         city: agnosticContext.key,
         walkingKmTarget,
+        dayRhythm,
         includeCapacityFrontier: true,
         pinnedIds: Array.isArray(pinnedStopIds) ? pinnedStopIds : [],
       });
   const timeAnchoring = Number.isInteger(currentTimeBandRank)
-    ? anchorSourceCandidatesToCurrentBand(sourceCandidates, currentTimeBandRank, pinnedStopIds)
+    ? anchorSourceCandidatesToCurrentBand(sourceCandidates, currentTimeBandRank, pinnedStopIds, preferences)
     : { anchored: false, candidates: sourceCandidates, trimmedDayparts: [] };
 
   async function runEngine(candidates, pins = pinnedStopIds) {
@@ -1409,7 +1479,9 @@ async function composeAgnosticRouteViaEngine({
       todayIsoDate: agnosticContext.todayIsoDate,
       label: safeAgnosticPlaceLabel(placeLabel) || agnosticContext.label,
       key: agnosticContext.key,
-      dayProfile: (Number.isFinite(walkingKmTarget) ? walkingKmTarget : 6) <= 4 ? "light" : "peak",
+      dayProfile: dayRhythm === 'calm' ? 'light' : dayRhythm === 'balanced' ? 'variation' :
+        dayRhythm === 'full' || dayRhythm === 'free' ? 'peak' :
+        (Number.isFinite(walkingKmTarget) ? walkingKmTarget : 6) <= 4 ? 'light' : 'peak',
     });
     const engineResult = await generateAgnosticRecommendations({
       cityConfig: engineCityConfig,
@@ -1460,7 +1532,7 @@ async function composeAgnosticRouteViaEngine({
       shouldTryCapacityRepair(route, walkingKmTarget)
     ) {
       let capacityAnchoring = anchored && Number.isInteger(currentTimeBandRank)
-        ? anchorSourceCandidatesToCurrentBand(capacitySourceCandidates, currentTimeBandRank, pins)
+        ? anchorSourceCandidatesToCurrentBand(capacitySourceCandidates, currentTimeBandRank, pins, preferences)
         : { anchored: false, candidates: capacitySourceCandidates, trimmedDayparts: [] };
       let repairedDay = await runEngine(capacityAnchoring.candidates, pins);
       let repairedRoute = repairedDay?.primary_route || null;
@@ -1498,7 +1570,7 @@ async function composeAgnosticRouteViaEngine({
         const removedId = sourceCandidates.find(candidate => !trialIds.has(candidate.id))?.id;
         const addedId = candidates.find(candidate => !sourceIds.has(candidate.id))?.id;
         const trialAnchoring = anchored && Number.isInteger(currentTimeBandRank)
-          ? anchorSourceCandidatesToCurrentBand(candidates,currentTimeBandRank,[])
+          ? anchorSourceCandidatesToCurrentBand(candidates,currentTimeBandRank,[],preferences)
           : {anchored:false,candidates};
         if (anchored && !trialAnchoring.anchored) continue;
         const trialDay = await runEngine(trialAnchoring.candidates, []);
@@ -1544,6 +1616,7 @@ async function composeAgnosticRouteViaEngine({
       woven = await weaveEveningEventRouteStop({
         result: { days: [{ ...day, experimental_agnostic_route_applied: true, primary_route: route }] },
         placeStructure: eveningEventStructure,
+        requestedPreferences: preferences,
         walkingRouter: typeof walkingRouter === "function" ? walkingRouter : undefined,
         walkingConfig: walkingConfig || undefined,
       });

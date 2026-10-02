@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
+import { plannerSurfaceSource } from "./helpers/planner-source.mjs";
 import { fileURLToPath } from "node:url";
 
 import { buildAnywherePayload } from "../src/lib/anywhere-payload.mjs";
@@ -303,7 +304,7 @@ test("a commitment with no stored label still gets its own sentence", () => {
   assert.equal(out.count, 1);
   assert.deepEqual(out.labels, [], "no invented name");
   assert.deepEqual(out.reasons, [{ id: "osm-node-2", label: "", reason: null }]);
-  assert.match(component, /A place you kept/, "and the copy has a neutral stand-in");
+  assert.match(plannerSurfaceSource(), /A place you kept/, "and the copy has a neutral stand-in");
 });
 
 // --------------------------------------------------------------------------

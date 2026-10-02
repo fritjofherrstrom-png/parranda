@@ -35,22 +35,35 @@
   box-shadow: 0 1px 6px rgba(58, 33, 20, 0.35);
 }
 
+/* A route stop is drawn twice at the same place (RouteMap.tsx), both as 44px
+   Leaflet icons anchored where its disc is drawn: the disc and number in
+   Leaflet's marker pane, and a clear touch target (`.route-map-target`) in a
+   pane beneath every disc. */
 .route-map-marker-shell {
   overflow: visible;
   border: 0;
   background: transparent;
 }
 
-.route-map-marker-shell--clustered::after {
+/* On the disc's side only the visible pin takes a tap (`.route-map-marker::before`):
+   the icon's clear corners would cover a close neighbour's number, which the
+   target beneath cannot. More specific than Leaflet's
+   `.leaflet-marker-icon.leaflet-interactive`, whatever the order. */
+.leaflet-container .leaflet-marker-icon.route-map-marker-shell {
+  pointer-events: none;
+}
+
+/* A clustered stop's disc is drawn beside its coordinate; this dot marks the
+   coordinate. */
+.route-map-marker-origin {
   position: absolute;
-  left: 50%;
-  top: 50%;
+  left: calc(50% - var(--route-marker-x, 0px));
+  top: calc(50% - var(--route-marker-y, 0px));
   width: 7px;
   height: 7px;
   border: 1.5px solid #fffaf3;
   border-radius: 999px;
   background: rgb(var(--p-color-accent));
-  content: "";
   transform: translate(-50%, -50%);
   box-shadow: 0 1px 4px rgba(58, 33, 20, 0.35);
 }
@@ -70,12 +83,9 @@
   font-size: 0.85rem;
   font-weight: 700;
   box-shadow: none;
-  transform: translate(
-    calc(-50% + var(--route-marker-x, 0px)),
-    calc(-50% + var(--route-marker-y, 0px))
-  );
+  transform: translate(-50%, -50%);
   /* The number is anonymous inline content; isolation keeps it above the
-     smaller visual pin while the full 44px marker remains clickable. */
+     smaller visual pin. */
   isolation: isolate;
 }
 
@@ -88,6 +98,8 @@
   box-shadow: 0 2px 8px rgba(58, 33, 20, 0.48);
   content: "";
   z-index: -1;
+  /* The pin takes the tap on the number too: the number itself does not. */
+  pointer-events: auto;
 }
 
 .route-map-marker--event::before {

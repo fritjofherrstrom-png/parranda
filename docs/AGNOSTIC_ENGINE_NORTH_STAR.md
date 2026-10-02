@@ -2,7 +2,7 @@
 
 **Status:** Current north star plus historical delivery record
 
-**Updated after:** bounded same-role walking-fit selection
+**Updated after:** dense-centre supply sampling (`DENSE_CENTRE_SUPPLY.md`)
 **Related:** `docs/PARRANDA_ENGINE_GOALS.md`
 
 ## North star
@@ -59,14 +59,65 @@ Current cold first-visit capability: the modern Planner uses a bounded server
 lifecycle to continue its original plan when source acquisition is outstanding.
 One server execution owns the normalized request and trusted anchor; browser
 polling reads only its status/result and cannot inject or reacquire supply.
+Modern rhythm any-place requests do not acquire an irrelevant default-city
+baseline before local supply. Within the same 60-second client lifecycle, the
+trusted loader checks independently acquired rows after eight seconds of
+additional completion wait. A nonempty snapshot with strong matches for each
+requested interest may enter composition early; it must still pass the normal
+trust and availability gates. Nonempty but irrelevant snapshots keep waiting
+until the 15-second composition reserve. An entirely empty snapshot has nothing
+to compose, so it keeps awaiting the same outstanding acquisition within the
+original 60-second deadline instead of publishing an empty result at the
+reserve boundary. The hard deadline still aborts outstanding work; later supply
+must pass the normal gates and finish composition within that same budget.
+A private source snapshot includes independently
+finished jobs; late jobs cannot mutate the published day. The collection
+explicitly reports partial completion. This does not upgrade evidence, drop
+trust/availability gates, or extend the timeout.
+
+A bounded existing-operator website check can corroborate an already mapped
+storefront only when a single semantic card owns the exact mapped street/house,
+a closed Second hand/antiques statement, shopping function and parsed hours.
+It checks at most four source-owned websites, one same-origin contact/store
+hop, two requests concurrently, six seconds overall, DNS-pinned public HTTPS,
+and 512 KiB per response. A single HTTPS www/apex canonical redirect may be
+followed only at the identical path, after a second public-DNS validation and
+pin; unrelated redirects remain blocked. It never discovers new places or
+follows payload URLs.
+An exactly identified valuation/intake office is excluded as a shopping target
+without pretending the business closed. Unknown facts remain unknown; three
+candidates without an operator website cannot be promoted by this mechanism.
+An exact operator identity and one bounded sole-branch weekly statement can
+also veto explicitly closed weekdays, including unbooked appointment-only
+exceptions. That negative fact does not certify other weekdays, missing
+addresses or existence, and survives duplicate reconciliation.
+Official operator plus map evidence still passes the unchanged shared gates;
+no extra stop count or rhythm override is introduced.
+
 See `BOUNDED_COLD_TO_READY_PLANNER.md` for budgets, cancellation and the pending
 rotating Pi acceptance. A manual reload is no longer the intended delivery path.
 
 Current Overture compatibility: `taxonomy.primary` and `taxonomy.hierarchy`
-replace deprecated category acquisition, with closed primary semantics and a v4
-cache boundary. Alternates/basic-category ancestors cannot supply route intent.
+replace deprecated category acquisition, with closed primary semantics.
+Alternates/basic-category ancestors cannot supply route intent.
 See `OVERTURE_TAXONOMY_COMPATIBILITY.md`; historical field results below do not
-constitute acceptance of this newer normalizer.
+constitute acceptance of this newer normalizer. The cache boundary is now
+`overture-v5`: one stratified sample per anchor window (see below).
+
+Current dense-centre supply: sources sample the walkable disc, not the places
+nearest the anchor. The directory query is stratified by walking-reach ring and
+route type and each request selects from it by its own budget; Overpass's
+bounded cut is interleaved across the same rings for budgeted requests. Warm
+background rows (directory or Wikidata) never answer for a map source that was
+not asked, and a warm directory waits at most 10 s for a live primary. A map
+answer still outstanding at that bound, or one that failed, does not cost the day
+the map evidence the process already holds for the anchor: an answered first
+pass or a fresh answer for another walking budget is kept and labelled, with no
+extra provider call. A single requested intent may form a two-place day from
+single-source supply, at the same trust budget a two-intent day has. See
+`DENSE_CENTRE_SUPPLY.md`; offline replay is synthetic and live acceptance is NOT
+OBSERVED. Known separate limit: for a single requested intent the composer can
+still build a more compact Lång day than its Lagom day from the same evidence.
 
 The milestone narrative below records how the architecture evolved from #257.
 It is retained for rationale and regression context, **not** as the current
@@ -141,6 +192,7 @@ The roadmap numbering below predates the merge order. The actual sequence was:
 - **#281** adds a **thin-day readiness cap**: a produced route with two or fewer stops now reads `thin_usable` (cap `capped_by_thin_day`, reason `thin_day_few_stops`), never `usable`, even with strong sources and full context. Closes the #276 review note — a time-anchored evening day trims to food + bar and used to overstate as `usable`/`medium`. Generic and deterministic (stop-count only); flag-gated calibration, default Planner / citypack untouched.
 
 - **Trusted opening-hours eligibility** keeps source-backed places that are provably unavailable out of the agnostic one-day candidate reservoir. Bounded OSM `opening_hours` facts remain source-owned and may affect selection only when the request has a trusted local timezone and clock. The v1 evaluator supports a conservative subset of weekly clock ranges, overnight windows, explicit closed days, and `24/7`; unsupported or precedence-sensitive syntax fails open as `unknown`. It checks whether a place overlaps the remaining local day (or the full requested future day), not an exact scheduled stop slot. A selected route stop may expose only the normalized local windows for that selected day (`selected_day_hours`), capped and stripped of raw syntax; it never claims “open now”, and unsupported/unknown schedules stay silent.
+- **Honest stop kind and visitability.** A broad route type can hide what a place is: `vintage-shop` holds antiques halls, charity shops, vintage shops and used-games shops alike. A stop names a narrower kind only when its source's own category says so (`source.category`: `antiques`, `charity`, `vintage`; otherwise the broad `second_hand`), derived from the loader's source-category tags — never from a name — and a second-hand stop is never presented as vintage unless its source says vintage. A stop whose kind depends on opening hours and whose source gives no hours for the selected day says "hours unknown" on the stop row itself; hours are never inferred from a name, a website or a category.
 
 - **#282** wires the **first concrete time-sensitive event source**: a generic, feed-agnostic **schema.org/Event provider** behind the #280 bridge. It normalizes any schema.org/Event JSON-LD feed (envelope-tolerant: bare / array / `@graph` / `items`) into the #279 contract — id, title, startDate/endDate, geo lat/lng, per-event url, multilingual name, cancelled→stale. Env-gated default-off (`PARRANDA_SCHEMA_ORG_EVENT_SOURCE`, mirrors the loader/resolver), fail-soft on every error path, carries a display `license_label`. Proven against fixtures + the registry; **not yet consumed** by Pulse/dayflow/routes (later gated step). The chosen live target is Visit Sweden (CC-BY 4.0, covers Skåne/Österlen) once API access is configured; the generic schema.org shape means any other Event feed plugs in by config. Decision-probe ruled out social platforms (ToS) and kept OSM/Wikidata as enrichment, not event sources.
 
@@ -238,6 +290,10 @@ days, preserving admission and contextual quality. See
 `BOUNDED_WALKING_FIT_SELECTION.md` for limits and evidence. This is deliberate
 selection refinement, not a parallel composer or weaker source gate. Treat
 synthesis readiness as something to verify against real supply, not a veto.
+The next losses were upstream of that search: nearest-N source samples, cached
+background rows answering for an unasked map source, and single-intent days
+with no second place. `DENSE_CENTRE_SUPPLY.md` records those mechanisms, the
+bounded changes and what the Göteborg traces do and do not prove.
 
 ## Anti-drift rule
 
@@ -342,6 +398,7 @@ not override the current roadmap in `docs/PARRANDA_ENGINE_GOALS.md`.
 #convergence-2 — DONE: candidate-supply mapper + thin_usable/low promotion gate + app wiring behind PARRANDA_AGNOSTIC_ENGINE_COMPOSE. Persistent-capable Overpass/Nominatim cache and daypart composition are in place; legacy synthesizer remains staged for removal.
 #registered-reservoir — DONE: registered-but-thin citypacks can opt into the same source-backed candidate reservoir as supplemental fill behind explicit experiment/external flags. Curated citypack candidates remain the higher-trust spine; source-backed fill stays provisional, low-trust, attributed, and never citypack-owned.
 #live-program-articles — GENERIC CAPABILITY, DEPLOYMENT GATED: arbitrary-place source discovery can recognize strict factual programme sections on official/public articles, propose the reusable adapter for bounded qualification, and reuse the existing geo catalog, venue resolution, temporal truth, fusion, personalized Live ranking, and reviewed runtime bridge. A fixture-backed cold loop proves discovery through Live for unrelated places, but proactive production discovery still requires the source-catalog worker plus an explicitly configured operator-owned search endpoint. Search results remain low-trust; unknown ownership/terms stay review-required, mapless source-scoped evidence stays Pulse-only, and no named-place rule or default route behavior is added.
+#dense-centre-supply — IN REVIEW: stratified walking-disc sampling (Overture v5 per-anchor sample, budget-aware selection, Overpass cut interleave), no background-only fast path or directory pre-emption of a live primary (10 s bound), map evidence kept across a walking-budget switch at that bound (answered first pass or same-anchor neighbouring-budget answer, labelled), and two-place single-intent days from single-source supply. Pi acceptance FAILED on 52c23d7 (bounded-wait race on Lagom → Lång); the follow-up head keeps the map family across the switch. Synthetic replay only; live acceptance of the follow-up NOT OBSERVED.
 #place-source-scout — GENERIC CAPABILITY, DEPLOYMENT GATED: the same resolver-attested worker now searches bounded local-language/English place-guide queries, follows same-origin guide links, recognizes multi-item exact-coordinate schema.org place lists and strict map-linked cards, and stores separate rolling qualification counts. Two healthy UTC days can mark the exact source `qualified_for_review`, never approved or runtime-active. Exact revision-bound operator approval now creates an audited worker target and a persistent fresh reservoir consumed by the ordinary composer; unapproved, expired or drifted profiles remain inactive.
 ```
 
@@ -394,3 +451,31 @@ coordinate-only context
 ```
 
 Likewise, narrow fixtures such as coast/swimming should not become product strategy. They may be used as test fixtures only when they prove generic engine behavior.
+
+## Explicit preference focus (2026-09)
+
+For modern any-place composition, explicit preferences constrain primary
+experiences to their union; one matching stop does not authorize unrelated
+food, culture, park or coffee filler. Assessed partial fits remain labeled as
+partial. No preferences retains the varied-day behaviour. A separately pinned
+place is an explicit user choice and retains the existing trust/walking gates.
+
+Apply this constraint to reservoir depth/support/frontier, complete-set choice,
+geometry repairs and publication. Unclassified Live events remain separate
+suggestions when preferences are selected; timing/proximity alone cannot turn
+them into matching primary experiences. Source trust and availability are not
+relaxed to fill a walk target. Publish a shorter focused day when viable;
+otherwise explain that no walkable day matching the choices was confirmed and
+let the user change date/rhythm/interests. Missing requested coverage stays
+visible. This evolves the old “one intent hit plus bounded day support” rule.
+
+Dagens rytm sends no kilometre goal. For a single intent, rhythm composition can
+consider source-backed places across the bounded five-kilometre local provider
+aperture instead of discarding everything beyond three kilometres. A trusted
+remaining local-day window under four hours keeps the narrower proposal scope;
+unknown time is not claimed verified. This aperture is neither a route target
+nor permission to bypass opening-hours, trust or final walking validation.
+Up to five shared-gate same-role choices survive to composition; the existing
+two-place experimental-depth limit remains. Rhythm controls density, measured
+walking distance is an output, and legacy kilometre requests remain API-only
+compatibility tests.

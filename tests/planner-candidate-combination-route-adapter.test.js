@@ -283,7 +283,8 @@ test("Athens swimming + trusted external loader: adapter shows the gap is now co
   // composition), so the adapter observes OVERLAP with the route — the candidate
   // is already consumed, not an open gap to forward to A/B scoring. The adapter
   // stays strictly diagnostic; it just reports a different, honest state.
-  const loader = makeLoader([externalRecord("ath-beach", "Kavouri Beach", "beach", 37.82, 23.78, ["coast"])]);
+  const loader = makeLoader([externalRecord("ath-beach", "Source swim A", "beach", 37.978, 23.73, ["coast"]),
+    externalRecord("ath-beach-2", "Source swim B", "beach", 37.979, 23.731, ["coast"])]);
   const { inspected } = await compareInspectVsDefault({
     openDataLoader: loader,
     body: routeBody("athens", ["swimming"], { include_external_candidates: 1 }),

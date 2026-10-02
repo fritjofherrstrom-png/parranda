@@ -266,7 +266,7 @@ test("restoring still cancels a compose that would have overwritten it", async (
   const h = await plannerWithDay();
   t.after(() => h.unmount());
 
-  await click(h, buttonMatching(h, /^☆$/));
+  await click(h, h.container.querySelector('button[aria-label="Save this day"]'));
   await h.clock.advance(50);
   await keepFirstStop(h);
   await h.clock.advance(500);

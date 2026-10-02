@@ -23,6 +23,7 @@ function buildAnchorEventSourcePlan({
   maxSources = DEFAULT_MAX_SOURCES,
   maxLocalSources = DEFAULT_MAX_LOCAL_SOURCES,
   now,
+  coverageBounds = null,
 } = {}) {
   if (!hasCoordinates(anchor)) return [];
 
@@ -32,6 +33,7 @@ function buildAnchorEventSourcePlan({
     // several rows from one publisher cannot hide an independent source.
     limit: Array.isArray(registry) ? registry.length : 0,
     now,
+    coverageBounds,
   });
   const reserveGlobal = globalEnabled && globalSource && (cap > 1 || availableLocalSources.length === 0) ? 1 : 0;
   const localCap = Math.min(
@@ -52,13 +54,13 @@ function buildAnchorEventSourcePlan({
   return sources.slice(0, cap);
 }
 
-function resolveEventFeedsForAnchor(anchor, registry = [], { limit = DEFAULT_MAX_LOCAL_SOURCES, now } = {}) {
+function resolveEventFeedsForAnchor(anchor, registry = [], { limit = DEFAULT_MAX_LOCAL_SOURCES, now, coverageBounds = null } = {}) {
   if (!hasCoordinates(anchor)) return [];
   const cap = Number.isFinite(Number(limit)) ? Math.max(0, Math.floor(Number(limit))) : DEFAULT_MAX_LOCAL_SOURCES;
   const nowMs = resolveNowMs(now);
   const seen = new Set();
   return (Array.isArray(registry) ? registry : [])
-    .filter((feed) => sourceRuntimeEnabled(feed, nowMs) && feedCoversAnchor(feed, anchor))
+    .filter((feed) => sourceRuntimeEnabled(feed, nowMs) && (feedCoversAnchor(feed, anchor) || feedIntersectsBounds(feed, coverageBounds)))
     .slice()
     .sort(compareFeeds)
     .filter((feed) => {
@@ -136,6 +138,14 @@ function fuseAndBoundEventEvidence(
 
   for (const event of Array.isArray(events) ? events : []) {
     if (!event || typeof event !== "object") continue;
+    if (event.source_location_scope === "virtual") {
+      rejected.push({
+        id: stableEventId(event),
+        source_provider_id: event.source_provider_id || null,
+        reason: "virtual_event_not_local",
+      });
+      continue;
+    }
     if (!hasCoordinates(event)) {
       fusable.push(event);
       continue;
@@ -298,6 +308,15 @@ function feedCoversAnchor(feed, anchor) {
   const [west, south, east, north] = bbox;
   if (west > east || south > north) return false;
   return anchor.lng >= west && anchor.lng <= east && anchor.lat >= south && anchor.lat <= north;
+}
+
+// Bounds here are an internal resolver-owned seam. No request field is read.
+function feedIntersectsBounds(feed, bounds) {
+  if (!bounds || !Array.isArray(feed?.bbox) || feed.bbox.length !== 4) return false;
+  const [west, south, east, north] = feed.bbox.map(Number);
+  const values = [west, south, east, north, bounds.west, bounds.south, bounds.east, bounds.north];
+  if (!values.every(Number.isFinite) || west >= east || south >= north || bounds.west >= bounds.east || bounds.south >= bounds.north) return false;
+  return west <= bounds.east && east >= bounds.west && south <= bounds.north && north >= bounds.south;
 }
 
 function sourceRuntimeEnabled(feed, nowMs) {

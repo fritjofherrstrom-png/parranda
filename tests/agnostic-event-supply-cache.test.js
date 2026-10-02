@@ -62,10 +62,12 @@ test("an uncovered anchor returns honest absence immediately (no warm, no pendin
   assert.deepEqual(out.tonight, []);
 });
 
-test("eventCacheKey is deterministic and buckets by ~1 km + hour", () => {
+test("eventCacheKey reuses the same anchor within an hour without sharing bounded geometry", () => {
   const k1 = eventCacheKey({ lat: 60.1699, lng: 24.9384 }, "2026-06-28T18:30:00Z");
   const k2 = eventCacheKey({ lat: 60.1701, lng: 24.9388 }, "2026-06-28T18:55:00Z");
-  assert.equal(k1, k2, "nearby anchor + same hour → same key (cache reuse)");
+  assert.notEqual(k1, k2, "nearby anchors have different bounded evidence pools");
+  assert.equal(k1, eventCacheKey({ lat: 60.1699, lng: 24.9384 }, "2026-06-28T18:55:00Z"));
+  assert.notEqual(k1, eventCacheKey({ lat: 60.1699, lng: 24.9384 }, "2026-06-28T18:30:00Z", [], 3000, null, null, "this_week"));
   const k3 = eventCacheKey({ lat: 60.1699, lng: 24.9384 }, "2026-06-28T19:30:00Z");
   assert.notEqual(k1, k3, "a different hour → different key (freshness)");
 });
@@ -253,7 +255,7 @@ test("one neutral warm cache reranks for different preferences without refetchin
     assert.equal(culture.tonight[0].id, "a-concert");
     assert.equal(secondHand.tonight[0].id, "z-loppis");
     assert.equal(fetchCount, 1, "preference changes rerank cached evidence instead of recollecting providers");
-    assert.ok(fs.existsSync(path.join(cacheDir, "agnostic-events-v7")), "persist selected-date semantics separately from old now-only results");
+    assert.ok(fs.existsSync(path.join(cacheDir, "agnostic-events-v8")), "persist selected-date semantics separately from old now-only results");
     assert.ok(!fs.existsSync(path.join(cacheDir, "agnostic-events-v6")), "v6 pools that widened recurring ranges into daily windows are never read or written");
     const restarted = resolveDefaultEventSupply({
       PARRANDA_AGNOSTIC_EVENTS: "enabled", PARRANDA_EVENT_FEEDS: FEEDS_ENV,
@@ -278,4 +280,21 @@ test("one neutral warm cache reranks for different preferences without refetchin
     global.fetch = ORIGINAL_FETCH;
     fs.rmSync(cacheDir, { recursive: true, force: true });
   }
+});
+
+test("switching active period starts a distinct warm and forwards its lookup priority", async () => {
+  const calls = [];
+  const supply = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: "enabled", PARRANDA_EVENT_FEEDS: FEEDS_ENV }, {
+    collectEvents: async input => {
+      calls.push(input.time);
+      return { coverage: "covered", tonight: [], this_week: [],
+        acquisition: { source_health: { status: "healthy", result: "empty" } } };
+    },
+  });
+  const input = { anchor: { lat: 60.17, lng: 24.94 }, now: "2026-06-28T18:30:00Z", selectedDate: "2026-06-28" };
+  await supply({ ...input, time: "tonight" });
+  await new Promise(resolve => setImmediate(resolve));
+  await supply({ ...input, time: "this_week" });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(calls, ["tonight", "this_week"]);
 });

@@ -48,7 +48,7 @@ The compatible API path without `Prefer` continues to return a single response.
 | Native Overture work | At most 1 child process per parent process with child-owned slot release; distinct concurrent queries refused without queue; SIGKILL on lifecycle cancellation or after 45 s including initialization and body reads |
 | DuckDB settings | 128 MB engine memory limit, one thread, 64 MiB Node heap, dedicated per-child temp directory capped at 64 MiB and removed by the parent after close; 10 s HTTP timeout, zero HTTP retries; these are not a claim about total RSS |
 | Release lookup | Existing 5 s timeout, followed by the 45 s native bound: at most 50 s for this source attempt |
-| Overture acquisition | Existing 5 km radius, 600 raw query rows, default 80 / maximum 100 normalized records; at most 2 MiB child result IPC; unchanged taxonomy, confidence and license gates |
+| Overture acquisition | Existing 5 km radius and 600 raw query rows, now one stratified sample per anchor window (walking-reach rings x route type) cached as normalized rows; each request selects default 80 / maximum 100 records from it by preferences and walking budget; at most 2 MiB child result IPC; unchanged taxonomy, confidence and license gates (`DENSE_CENTRE_SUPPLY.md`) |
 | Other providers | Existing Overpass, resolver, NAPI and reviewed-source bounds; no new acquisition endpoint, crawler, source approval or provider retry |
 
 The 60 s user ceiling is a conservative product budget, not a measured cold-load
@@ -84,14 +84,38 @@ nonempty-only storage and independent trust requirements are unchanged.
 Fresh adequate cached supply takes a read-only fast path. It retains cached OSM,
 Wikidata and NAPI evidence rather than discarding independent corroboration.
 An OSM regional sub-anchor cannot be mixed with a different original window.
-Missing/thin cached supply still uses the existing bounded acquisition path.
-This source-cache guarantee does not claim that optional weather/Live/map tiles
-or a cold typed-place resolver perform zero network work.
+The fast path requires the Overpass cache itself to have answered this exact
+request (a cached empty answer counts) and the cached evidence to answer it: no
+requested intent missing and no reservoir that provably cannot span the
+walking band. Warm background rows alone — Wikidata or the directory — never
+stand in for a map source nobody asked; an independent Pi trace of a public
+typed-place request showed warm Wikidata answering a cold Overpass key and a
+cold directory with a no-day result in 5 ms. Anything else uses the existing
+bounded acquisition path, which re-reads every cache and fetches only what has
+not answered. This source-cache guarantee does not claim that optional
+weather/Live/map tiles or a cold typed-place resolver perform zero network work.
+
+On that acquisition path a varied warm directory waits at most 10 s for the
+live primary. A primary that settles — with rows or a failure — is merged as
+usual (and a failed primary is still rescued by the directory). A primary still
+outstanding at the bound keeps running and caches its answer for the next
+request; this composition keeps the best map evidence the process already holds
+for the anchor: the request's own answered first pass while its wider query
+runs (`first_pass_while_expanding`), else a fresh stored answer for the same
+anchor, preferences, mode and scope at another walking budget
+(`neighbouring_budget_cache`, with `primary_collection_target_km`). The same
+neighbouring answer backs a request whose own map answer failed (reason
+`primary_failed`, the `loader_error` stays visible). Cached Wikidata and NAPI
+rows join at zero network cost. Only without any of these does the day go
+without the map family (`background_refresh`, reason
+`no_answered_map_evidence`). None of this asks a provider again; see
+`DENSE_CENTRE_SUPPLY.md` for the Pi race that required it.
 
 An empty successful Overture result is cacheable absence; a failed source is not
 cached as success. In-flight cache coalescing reuses the producer for the same
 window. Rescue can read the result, but cannot restart the original pending job.
-Legacy cache v4 semantics and all primary-only taxonomy guards remain intact.
+Cache namespace `overture-v5` and all primary-only taxonomy guards apply;
+v2-v4 normalized rows are never read.
 
 ## Browser behavior
 

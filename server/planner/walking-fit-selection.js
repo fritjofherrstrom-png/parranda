@@ -5,9 +5,10 @@ const { plannerUsableOptionsForRole } = require('./candidate-combination');
 
 const MAX_ROLE_ALTERNATIVES = 2;
 const MAX_WALKING_FIT_TRIALS = 3;
-// Thin-day refinement only. Larger reservoirs already have combinatorial
-// ordering cost; do not multiply their search or the pin-settling lifecycle.
-const MAX_WALKING_FIT_RESERVOIR = 6;
+// Bounded by the engine's eight-stop exhaustive-ordering ceiling, with room
+// for one additional support place in the observed six-to-seven cliff. Keep
+// the three-trial cap; larger reservoirs still skip this expensive search.
+const MAX_WALKING_FIT_RESERVOIR = 7;
 const STATUS = { partial: 1, filled: 2 };
 const CONFIDENCE = { low: 1, medium: 2, high: 3 };
 const includesAll = (values, required) => required.every(value => values.includes(value));
@@ -40,11 +41,13 @@ function comparableRoleReplacement(base, next) {
 // is a cheap proposal order, not walking evidence; the engine validates trials.
 function retainWalkingFitAlternatives({ roles, candidatesByRole, origin, band }) {
   if (!band || !Number.isFinite(origin?.lat) || !Number.isFinite(origin?.lng)) return [];
-  return roles.filter(role => role.requested).flatMap(role => {
+  return roles.filter(role => role.requested || role.slot === 'anchor' || role.slot === 'stop').flatMap(role => {
     const surfaced = plannerUsableOptionsForRole(role);
     if (!surfaced.length) return [];
+    const surfacedIds = new Set(surfaced.map(candidate => candidate.candidate_id));
     const eligible = plannerUsableOptionsForRole({candidates: candidatesByRole[role.role] || []});
-    return eligible.filter(next => surfaced.some(base => comparableRoleReplacement(base, next)))
+    return eligible.filter(next => (role.requested || !surfacedIds.has(next.candidate_id)) &&
+      surfaced.some(base => comparableRoleReplacement(base, next)))
       .sort((a,b) => proposalCost(a.coordinates,origin,band) - proposalCost(b.coordinates,origin,band) ||
         String(a.candidate_id).localeCompare(String(b.candidate_id)))
       .slice(0,MAX_ROLE_ALTERNATIVES).map(candidate => ({role:role.role,...candidate}));

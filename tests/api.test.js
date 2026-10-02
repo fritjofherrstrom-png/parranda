@@ -2084,7 +2084,9 @@ test("POST /api/route-recommendations exponerar anchor_weight på main_stops fö
 
     assert.equal(response.status, 200);
     assert.equal(response.body.city, "rome");
-    assert.equal(response.body.city_label, "Rom", "modern planner gets the server-owned display label");
+    // English is the default language, so the planner titles the day "A day in
+    // Rome" — never the Swedish "Rom" (see the ?lang=sv test below).
+    assert.equal(response.body.city_label, "Rome", "modern planner gets the server-owned display label");
     assert.equal(response.body.requested_city, "rome");
     assert.equal(response.body.city_fallback_used, false);
     const stops = response.body.days[0].primary_route.main_stops;
@@ -2104,6 +2106,44 @@ test("POST /api/route-recommendations exponerar anchor_weight på main_stops fö
       numericAnchors.length > 0,
       "expected at least one Rome stop to carry a numeric anchor_weight from the catalog",
     );
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("POST /api/route-recommendations?lang=sv names the recognized city in Swedish", async () => {
+  global.fetch = async (url) => {
+    const parsed = new URL(String(url));
+
+    if (parsed.hostname === "api.open-meteo.com") {
+      return mockJsonResponse({
+        daily: {
+          time: ["2026-04-20"],
+          weathercode: [0],
+          temperature_2m_max: [22],
+        },
+      });
+    }
+
+    throw new Error(`Unexpected fetch during city_label test: ${url}`);
+  };
+
+  const server = buildApp().listen(0);
+
+  try {
+    const response = await requestJson(server, {
+      method: "POST",
+      path: "/api/route-recommendations?lang=sv",
+      body: {
+        city: "rome",
+        dates: ["2026-04-20"],
+        preferences: ["mat"],
+      },
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(response.body.city, "rome");
+    assert.equal(response.body.city_label, "Rom", "the Swedish planner reads 'En dag i Rom'");
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

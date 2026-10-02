@@ -94,6 +94,7 @@ export declare function pulseHealthState(
     | null
     | undefined,
   buckets: { tonight: unknown[]; thisWeek: unknown[] } | null | undefined,
+  wovenStops?: object[],
 ): "hidden" | "uncovered" | "pending" | "unavailable" | "partial" | "ok" | "rejected_empty" | "soft_empty";
 
 export declare function liveSourceFailure(

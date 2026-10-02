@@ -19,10 +19,24 @@
  *   - no review scores, free-text descriptions or raw provider payloads;
  *   - fail closed on STAC, DuckDB, S3, schema or mapping errors;
  *   - injectable release/query seams keep tests deterministic and offline.
+ *
+ * Sampling posture: the 600 query rows are a stratified sample of the whole
+ * window — fixed walking-reach distance rings x route type — not the 600 rows
+ * nearest the anchor. In a dense centre the nearest 600 travel places lie
+ * within a few hundred metres, so a nearest-N window cannot describe a 6-9 km
+ * day however it is selected afterwards. The sample is independent of
+ * preferences and walking budget; `select` then chooses the bounded output for
+ * one request, weighted towards that request's walking reach.
  */
 
 const { createBoundedOvertureQuery } = require('./bounded-overture-query');
 const { normalizeUserIntents, matchCandidateToIntent } = require("../candidates/intent-vocabulary");
+const {
+  WALKING_REACH_RING_EDGES_KM,
+  interleaveAcrossWalkingReach,
+  normalizeWalkingTargetBand,
+  walkingReachRing,
+} = require("./day-capacity");
 
 const OVERTURE_STAC_ROOT = "https://stac.overturemaps.org/";
 const OVERTURE_ATTRIBUTION_URL = "https://overturemaps.org/";
@@ -38,6 +52,8 @@ const QUERY_ROW_LIMIT = 600;
 // closed on that measured tail; it still never becomes ranking/popularity.
 const DEFAULT_MIN_CONFIDENCE = 0.95;
 const DEFAULT_STAC_TIMEOUT_MS = 5000;
+const KM_PER_DEGREE_LAT = 110.574;
+const KM_PER_DEGREE_LNG_AT_EQUATOR = 111.32;
 const RELEASE_PATTERN = /^\d{4}-\d{2}-\d{2}\.\d+$/;
 const OVERTURE_PLACE_LICENSES = Object.freeze([
   "Apache-2.0",
@@ -186,6 +202,16 @@ const MAX_HIERARCHY_DEPTH = 16;
 // rows cannot crowd safe primary matches out of the 600-row acquisition budget.
 const OVERTURE_ROUTE_PRIMARY_CATEGORIES = Object.freeze([...EXACT_TYPE_MAP.keys()]);
 const TRAVEL_PRIMARY_SQL = OVERTURE_ROUTE_PRIMARY_CATEGORIES.map((label) => `'${label}'`).join(", ");
+// The same closed map, grouped by Parranda route type, stratifies the sample:
+// a dense restaurant quarter cannot spend the row budget of museums or parks.
+const ROUTE_TYPE_PRIMARIES = new Map();
+for (const [label, { type }] of EXACT_TYPE_MAP) {
+  if (!ROUTE_TYPE_PRIMARIES.has(type)) ROUTE_TYPE_PRIMARIES.set(type, []);
+  ROUTE_TYPE_PRIMARIES.get(type).push(label);
+}
+const ROUTE_TYPE_SQL = `CASE ${[...ROUTE_TYPE_PRIMARIES]
+  .map(([type, labels]) => `WHEN category IN (${labels.map((label) => `'${label}'`).join(", ")}) THEN '${type}'`)
+  .join(" ")} END`;
 
 function clamp(value, min, max, fallback) {
   const number = Number(value);
@@ -296,36 +322,81 @@ function longitudeClause(lng, delta) {
   return `bbox.xmin BETWEEN ${min.toFixed(7)} AND ${max.toFixed(7)}`;
 }
 
+function kmPerDegreeLng(lat) {
+  return KM_PER_DEGREE_LNG_AT_EQUATOR * Math.max(0.01, Math.abs(Math.cos((lat * Math.PI) / 180)));
+}
+
+// The same planar distance the SQL computes, so JavaScript assigns a record to
+// the ring the query sampled it from. Longitude differences wrap at +/-180.
+function sampleDistanceKm(anchor, point) {
+  const dLat = (point.lat - anchor.lat) * KM_PER_DEGREE_LAT;
+  const dLng = ((((point.lng - anchor.lng) + 540) % 360) - 180) * kmPerDegreeLng(anchor.lat);
+  return Math.sqrt(dLat ** 2 + dLng ** 2);
+}
+
 function buildOvertureQuery({ release, lat, lng, radiusKm = DEFAULT_RADIUS_KM, rowLimit = QUERY_ROW_LIMIT, minConfidence = DEFAULT_MIN_CONFIDENCE } = {}) {
   if (!RELEASE_PATTERN.test(String(release || "")) || !validCoordinate(lat, lng)) return null;
   const radius = clamp(radiusKm, 0.1, MAX_RADIUS_KM, DEFAULT_RADIUS_KM);
   const limit = Math.max(1, Math.min(Math.floor(Number(rowLimit) || QUERY_ROW_LIMIT), QUERY_ROW_LIMIT));
   const confidence = clamp(minConfidence, 0.5, 1, DEFAULT_MIN_CONFIDENCE);
-  const latDelta = radius / 110.574;
-  const lngDelta = radius / (111.32 * Math.max(0.01, Math.abs(Math.cos((lat * Math.PI) / 180))));
+  const lngKm = kmPerDegreeLng(lat);
+  const latDelta = radius / KM_PER_DEGREE_LAT;
+  const lngDelta = radius / lngKm;
   const latMin = Math.max(-90, lat - latDelta);
   const latMax = Math.min(90, lat + latDelta);
   const path = `${OVERTURE_S3_ROOT}/${release}/theme=places/type=place/*`;
-  return `SELECT id,
-  names.primary AS name,
-  taxonomy.primary AS category,
-  taxonomy.hierarchy AS category_hierarchy,
+  const distance = `sqrt(pow((bbox.ymin - ${lat.toFixed(7)}) * ${KM_PER_DEGREE_LAT}, 2)`
+    + ` + pow(((((bbox.xmin - ${lng.toFixed(7)}) + 540) % 360) - 180) * ${lngKm.toFixed(7)}, 2))`;
+  // The shared walking-reach rings (day-capacity.js); the last runs to the edge.
+  const ring = `CASE ${WALKING_REACH_RING_EDGES_KM.map((edge, index) => `WHEN distance_km < ${edge} THEN ${index}`).join(" ")}`
+    + ` ELSE ${WALKING_REACH_RING_EDGES_KM.length} END`;
+  // Stratified, not nearest-N: every (distance ring, route type) stratum offers
+  // its nearest non-chain rows first, and the final order interleaves strata by
+  // rank so the row budget is shared fairly across the whole walkable window.
+  return `WITH window_rows AS (
+  SELECT id,
+    names.primary AS name,
+    taxonomy.primary AS category,
+    taxonomy.hierarchy AS category_hierarchy,
+    confidence,
+    operating_status,
+    websites,
+    brand.names.primary AS brand,
+    sources,
+    bbox.xmin AS lng,
+    bbox.ymin AS lat,
+    ${distance} AS distance_km
+  FROM read_parquet('${path}', hive_partitioning=1)
+  WHERE bbox.ymin BETWEEN ${latMin.toFixed(7)} AND ${latMax.toFixed(7)}
+    AND ${longitudeClause(lng, lngDelta)}
+    AND confidence >= ${confidence.toFixed(3)}
+    AND (operating_status IS NULL OR lower(operating_status) NOT LIKE '%closed%')
+    AND taxonomy.primary IN (${TRAVEL_PRIMARY_SQL})
+    AND len(taxonomy.hierarchy) BETWEEN 1 AND ${MAX_HIERARCHY_DEPTH}
+    AND taxonomy.primary = list_extract(taxonomy.hierarchy, -1)
+), strata AS (
+  SELECT *, ${ring} AS reach_ring, ${ROUTE_TYPE_SQL} AS route_type
+  FROM window_rows
+  WHERE distance_km <= ${radius.toFixed(3)}
+), ranked AS (
+  SELECT *, row_number() OVER (
+    PARTITION BY reach_ring, route_type ORDER BY brand IS NOT NULL, distance_km, id
+  ) AS stratum_rank
+  FROM strata
+)
+SELECT id,
+  name,
+  category,
+  category_hierarchy,
   confidence,
   operating_status,
   websites,
-  brand.names.primary AS brand,
+  brand,
   list_distinct(list_transform(sources, source -> source.license)) AS licenses,
-  bbox.xmin AS lng,
-  bbox.ymin AS lat
-FROM read_parquet('${path}', hive_partitioning=1)
-WHERE bbox.ymin BETWEEN ${latMin.toFixed(7)} AND ${latMax.toFixed(7)}
-  AND ${longitudeClause(lng, lngDelta)}
-  AND confidence >= ${confidence.toFixed(3)}
-  AND (operating_status IS NULL OR lower(operating_status) NOT LIKE '%closed%')
-  AND taxonomy.primary IN (${TRAVEL_PRIMARY_SQL})
-  AND len(taxonomy.hierarchy) BETWEEN 1 AND ${MAX_HIERARCHY_DEPTH}
-  AND taxonomy.primary = list_extract(taxonomy.hierarchy, -1)
-ORDER BY pow(bbox.ymin - ${lat.toFixed(7)}, 2) + pow((bbox.xmin - ${lng.toFixed(7)}) * ${Math.cos((lat * Math.PI) / 180).toFixed(7)}, 2)
+  lng,
+  lat
+FROM ranked
+ORDER BY stratum_rank, reach_ring, route_type, distance_km, id
 LIMIT ${limit}`;
 }
 
@@ -377,27 +448,68 @@ function distanceKm(a, b) {
   return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
-function selectRecords(records, { anchor, requestedIntents = [], limit = DEFAULT_LIMIT } = {}) {
-  const intents = normalizeUserIntents(requestedIntents).intents;
-  const ranked = [...records].sort((left, right) => {
-    const leftFit = intents.reduce((sum, intent) => sum + matchCandidateToIntent(left, intent).strength, 0);
-    const rightFit = intents.reduce((sum, intent) => sum + matchCandidateToIntent(right, intent).strength, 0);
-    return rightFit - leftFit || distanceKm(anchor, left) - distanceKm(anchor, right) || String(left.id).localeCompare(String(right.id));
+function intentMatch(record, intents) {
+  let fit = 0;
+  let level = "none";
+  for (const intent of intents) {
+    const match = matchCandidateToIntent(record, intent);
+    fit += match.strength;
+    if (match.level === "strong" || (match.level === "weak" && level === "none")) level = match.level;
+  }
+  return { fit, level };
+}
+
+// Budget-aware fill for one request: (sample ring, route type) strata across
+// the walkable disc. Requested intents weigh double (strong) or 1.5x
+// (adjacent); within a stratum: intent fit, then non-chain, then proximity.
+function spreadAcrossWalkingReach(entries, { band }) {
+  return interleaveAcrossWalkingReach(entries, {
+    walkingTargetBand: band,
+    ringOf: (entry) => entry.ring,
+    stratumOf: (entry) => entry.record.type,
+    weightOf: (members) => (members.some((entry) => entry.level === "strong")
+      ? 2
+      : members.some((entry) => entry.level === "weak") ? 1.5 : 1),
+    compare: (left, right) =>
+      right.fit - left.fit ||
+      Number(left.record.chain === true) - Number(right.record.chain === true) ||
+      left.distance - right.distance ||
+      String(left.record.id).localeCompare(String(right.record.id)),
   });
+}
+
+function selectRecords(records, { anchor, requestedIntents = [], walkingTargetBand = null, limit = DEFAULT_LIMIT } = {}) {
+  const intents = normalizeUserIntents(requestedIntents).intents;
+  const entries = records.map((record) => ({
+    record,
+    ...intentMatch(record, intents),
+    distance: distanceKm(anchor, record),
+    ring: walkingReachRing(sampleDistanceKm(anchor, record)),
+  }));
+  const ranked = [...entries].sort((left, right) =>
+    right.fit - left.fit ||
+    left.distance - right.distance ||
+    String(left.record.id).localeCompare(String(right.record.id)));
   // Seed one member of each engine type before filling by fit/proximity. Dense
   // restaurant supply must not crowd every park, museum or local market out.
   const selected = [];
+  const taken = new Set();
   const seenTypes = new Set();
-  for (const record of ranked) {
-    if (seenTypes.has(record.type)) continue;
-    seenTypes.add(record.type);
-    selected.push(record);
+  for (const entry of ranked) {
     if (selected.length >= limit) return selected;
+    if (seenTypes.has(entry.record.type)) continue;
+    seenTypes.add(entry.record.type);
+    taken.add(entry);
+    selected.push(entry.record);
   }
-  for (const record of ranked) {
-    if (selected.includes(record)) continue;
-    selected.push(record);
+  // Without a walking budget the directory stays proximity-first (nearby
+  // surfaces such as Blitz). With one, the fill follows the day's reach.
+  const band = normalizeWalkingTargetBand(walkingTargetBand);
+  const remaining = ranked.filter((entry) => !taken.has(entry));
+  const fill = band ? spreadAcrossWalkingReach(remaining, { band }) : remaining;
+  for (const entry of fill) {
     if (selected.length >= limit) break;
+    selected.push(entry.record);
   }
   return selected;
 }
@@ -414,7 +526,11 @@ function createOvertureSource({
   const boundedRadius = clamp(radiusKm, 0.1, MAX_RADIUS_KM, DEFAULT_RADIUS_KM);
   const boundedLimit = Math.max(1, Math.min(Math.floor(Number(limit) || DEFAULT_LIMIT), MAX_LIMIT));
   const boundedConfidence = clamp(minConfidence, 0.5, 1, DEFAULT_MIN_CONFIDENCE);
-  return async function loadOvertureAround({ lat, lng, requestedIntents = [], signal } = {}) {
+
+  // One bounded, stratified sample of the whole window. It depends only on the
+  // anchor and the source's own caps, so it can be cached once and re-selected
+  // for any preference set or walking budget without another S3 query.
+  async function acquire({ lat, lng, signal } = {}) {
     if (!validCoordinate(lat, lng)) return [];
     try {
       const release = await releaseResolver({ signal });
@@ -435,13 +551,35 @@ function createOvertureSource({
         seen.add(record.id);
         records.push(record);
       }
-      return selectRecords(records, { anchor: { lat, lng }, requestedIntents, limit: boundedLimit });
+      return records;
     } catch (_error) {
       const failed = [];
       Object.defineProperty(failed, 'source_error', { value: 'fetch_error' });
       return failed;
     }
+  }
+
+  // The bounded output for one request. A failed acquisition stays failed.
+  function select(records, { lat, lng, requestedIntents = [], walkingTargetBand = null } = {}) {
+    if (!Array.isArray(records) || records.source_error) return records;
+    if (!validCoordinate(lat, lng)) return [];
+    return selectRecords(records, {
+      anchor: { lat, lng },
+      requestedIntents,
+      walkingTargetBand,
+      limit: boundedLimit,
+    });
+  }
+
+  const loadOvertureAround = async function loadOvertureAround(request = {}) {
+    return select(await acquire(request), request);
   };
+  loadOvertureAround.acquire = acquire;
+  loadOvertureAround.select = select;
+  // Everything besides the anchor that shapes the cached sample. The ring and
+  // stratum layout itself is versioned by the cache namespace.
+  loadOvertureAround.sampleKey = `r${boundedRadius}:c${boundedConfidence}`;
+  return loadOvertureAround;
 }
 
 module.exports = {

@@ -6,6 +6,7 @@ const test = require("node:test");
 const {
   APPLY_PROFILE_APPROVAL_SQL,
   ACTIVE_PROFILES_FOR_ANCHOR_SQL,
+  ACTIVE_EVENT_PROFILES_FOR_SCOPE_SQL,
   CLAIM_PLACE_SOURCE_REFRESH_SQL,
   COMPLETE_PLACE_SOURCE_REFRESH_SQL,
   FAIL_PLACE_SOURCE_REFRESH_SQL,
@@ -477,6 +478,24 @@ test("geo reads return only profiles that still pass the shared review contract"
   assert.equal(feeds[0].id, "regional-events-feed");
   assert.equal(calls[0].sql, ACTIVE_PROFILES_FOR_ANCHOR_SQL);
   assert.deepEqual(calls[0].values, [55.6, 13, NOW.toISOString()]);
+});
+
+test("area event reads retain approval and expiry gates while selecting intersecting profile bounds", async () => {
+  const calls = [];
+  const catalog = createSourceProfileCatalog({ now: () => NOW, query: async (sql, values) => {
+    calls.push({ sql, values });
+    return { rows: [{ profile: sourceProfile({ approved: true }) }, { profile: sourceProfile({ approved: true, expiresAt: "2026-07-29T00:00:00.000Z" }) }] };
+  } });
+  const scope = { source: "resolver_bounds", kind: "settlement", bounds: { south: 55.5, north: 55.7, west: 12.8, east: 13.2 } };
+  const feeds = await catalog.listApprovedEventFeedsForScope({ spatialScope: scope, now: NOW });
+  assert.equal(feeds.length, 1);
+  assert.equal(calls[0].sql, ACTIVE_EVENT_PROFILES_FOR_SCOPE_SQL);
+  assert.deepEqual(calls[0].values, [12.8, 55.5, 13.2, 55.7, NOW.toISOString()]);
+  assert.match(calls[0].sql, /approved_profile_revision = profile_revision/);
+  assert.match(calls[0].sql, /approval_key IS NOT NULL/);
+  assert.match(calls[0].sql, /LIMIT 64/);
+  assert.deepEqual(await catalog.listApprovedEventFeedsForScope({ spatialScope: { ...scope, kind: "region" } }), []);
+  assert.equal(calls.length, 1, "broad regional requests do not read city source profiles");
 });
 
 test("place-only approved profiles can be geo-read through the catalog boundary", async () => {
@@ -1327,7 +1346,7 @@ test("uncovered Live preserves a stored observing discovery state", async () => 
   assert.ok(result.acquisition.source_health.reasons.includes("source_discovery_observing"));
 });
 
-test("an approved local source suppresses redundant scout demand", async () => {
+test("one approved calendar keeps useful supply while requesting complementary local discovery", async () => {
   let demandCount = 0;
   const supply = resolveDefaultEventSupply({
     PARRANDA_AGNOSTIC_EVENTS: "enabled",
@@ -1351,7 +1370,7 @@ test("an approved local source suppresses redundant scout demand", async () => {
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.equal(result.coverage, "covered");
-  assert.equal(demandCount, 0);
+  assert.equal(demandCount, 1);
 });
 
 test("catalog outage preserves trusted static feed behavior", async () => {

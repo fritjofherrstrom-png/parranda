@@ -511,6 +511,22 @@ ORDER BY updated_at DESC, profile_key ASC
 LIMIT 64
 `;
 
+const ACTIVE_EVENT_PROFILES_FOR_SCOPE_SQL = `
+SELECT profile
+FROM pulse_source_profiles
+WHERE catalog_status = 'approved'
+  AND profile_revision IS NOT NULL
+  AND approval_key IS NOT NULL
+  AND review_expires_at > $5::timestamptz
+  AND approved_profile_revision = profile_revision
+  AND bbox_west <= $3
+  AND bbox_east >= $1
+  AND bbox_south <= $4
+  AND bbox_north >= $2
+ORDER BY reviewed_at DESC NULLS LAST, profile_key ASC
+LIMIT 64
+`;
+
 const SOURCE_QUALIFICATION_SQL = `
 SELECT profile -> 'source_qualification' AS source_qualification
 FROM pulse_source_profiles
@@ -706,6 +722,24 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
         .map((row) => parseProfile(row?.profile))
         .filter(Boolean);
       return placeFeedsFromReviewedSourceProfiles(profiles, { now: at });
+    } catch (_error) {
+      return [];
+    }
+  }
+
+  async function listApprovedEventFeedsForScope({ spatialScope, now: requestedNow = now() } = {}) {
+    const scope = sanitizeTrustedSpatialScope(spatialScope);
+    const at = normalizeDate(requestedNow);
+    if (!scope || !at || !["settlement", "district", "municipality"].includes(scope.kind) || scope.collection_mode === "broad_anchor_only") return [];
+    const b = scope.bounds;
+    try {
+      const result = await query(ACTIVE_EVENT_PROFILES_FOR_SCOPE_SQL, [b.west, b.south, b.east, b.north, at.toISOString()]);
+      const profiles = (Array.isArray(result?.rows) ? result.rows : []).slice(0, 64)
+        .map((row) => parseProfile(row?.profile)).filter(Boolean);
+      return eventFeedsFromReviewedSourceProfiles(profiles, { now: at }).filter((feed) => {
+        const [west, south, east, north] = feed.bbox;
+        return west <= b.east && east >= b.west && south <= b.north && north >= b.south;
+      });
     } catch (_error) {
       return [];
     }
@@ -993,6 +1027,7 @@ function createSourceProfileCatalog({ query, now = () => new Date() } = {}) {
     inspectProfileForReview,
     approveProfile,
     listApprovedEventFeedsForAnchor,
+    listApprovedEventFeedsForScope,
     listApprovedPlaceFeedsForAnchor,
     listFreshApprovedPlaceCandidatesForAnchor,
     listQualifiedEventFeedsForAnchor,
@@ -1646,6 +1681,7 @@ module.exports = {
   APPROVAL_CONTRACT_VERSION,
   CLAIM_PLACE_SOURCE_REFRESH_SQL,
   QUALIFIED_PROFILES_FOR_ANCHOR_SQL,
+  ACTIVE_EVENT_PROFILES_FOR_SCOPE_SQL,
   PLACE_SOURCE_QUALIFICATION_SQL,
   CLAIM_SCOUT_TARGET_SQL,
   COMPLETE_SCOUT_TARGET_SQL,

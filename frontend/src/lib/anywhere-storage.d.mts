@@ -2,7 +2,7 @@ export declare const LAST_KEY: string;
 export declare const SAVED_KEY: string;
 export declare const SAVED_CAP: number;
 export declare const DEFAULT_SAVED_WALK_KEY: "balanced";
-export declare function normalizeSavedWalkKey(value?: unknown): "short" | "balanced" | "long";
+export declare function normalizeSavedWalkKey(value?: unknown): "calm" | "balanced" | "full" | "free";
 
 import type { CommitmentSnapshot } from "./commitment-snapshot.mjs";
 

@@ -244,7 +244,7 @@ test('a terminal cold timeout offers one explicit retry with the current inputs'
   await click(h, buttonMatching(h, /Adjust/));
   await click(h, buttonMatching(h, /Tomorrow/));
   await click(h, buttonMatching(h, /^Coffee$/));
-  await click(h, buttonMatching(h, /^Short/));
+  await click(h, buttonMatching(h, /^Easy$/));
   const retry = buttonMatching(h, /try building the day again/i);
   assert.ok(retry, 'terminal timeout provides a real retry action');
   const oldStatusCalls = h.fetchMock.calls.filter(call => call.url === '/api/planner-status' && call.method === 'POST').length;
@@ -257,7 +257,8 @@ test('a terminal cold timeout offers one explicit retry with the current inputs'
   assert.ok(next, 'retry starts one new planner execution');
   assert.notDeepEqual(next.body.dates, initial.body.dates);
   assert.ok(next.body.preferences.includes('fika'));
-  assert.notEqual(next.body.walking_km_target, initial.body.walking_km_target);
+  assert.equal(next.body.day_rhythm, 'calm');
+  assert.ok(!('walking_km_target' in next.body));
   assert.equal(h.fetchMock.calls.filter(call => call.url.includes('route-recommendations')).length, routeCallsBefore + 1);
   await h.clock.advance(400);
   assert.equal(h.fetchMock.calls.filter(call => call.url.includes('route-recommendations')).length, routeCallsBefore + 1, 'retry consumes the pending debounce');
@@ -439,7 +440,7 @@ test("restoring a snapshot cancels the compose that would have overwritten it", 
   t.after(() => h.unmount());
 
   // Save the day so there is something to restore.
-  await click(h, buttonMatching(h, /^☆$/));
+  await click(h, h.container.querySelector('button[aria-label="Save this day"]'));
   await h.clock.advance(50);
 
   // Start a recompose and leave it in flight.
@@ -467,7 +468,7 @@ test("restoring drops the ledger rather than inheriting it", async (t) => {
   const h = await plannerWithDay(["a", "b", "c"]);
   t.after(() => h.unmount());
 
-  await click(h, buttonMatching(h, /^☆$/));
+  await click(h, h.container.querySelector('button[aria-label="Save this day"]'));
   await h.clock.advance(50);
   await keepFirstStop(h);
   assert.match(h.text(), KEPT_LEDGER, "a commitment is held");

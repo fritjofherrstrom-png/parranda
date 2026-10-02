@@ -30,6 +30,12 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --prefix frontend
 
+      # Map acceptance exercises real Chromium with fixture API responses and
+      # refuses external hosts. Install it explicitly rather than depending on
+      # the runner's changing preinstalled Chrome inventory.
+      - name: Install Chromium for map acceptance
+        run: npx --no-install playwright-core install --with-deps chromium
+
       - name: Run tests
         run: npm test
 

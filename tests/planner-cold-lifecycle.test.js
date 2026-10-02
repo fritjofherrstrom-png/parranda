@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { createPlannerLifecycle, lifecycleLoader } = require('../server/planner/cold-lifecycle');
 const { createBackgroundSource, SOURCE_COMPLETION } = require('../server/place-candidates/background-source');
 const { createSourceCache } = require('../server/place-candidates/source-cache');
-const { composeOpenDataLoaders } = require('../server/place-candidates/open-data-loader');
+const { composeOpenDataLoaders, createOpenDataLoader } = require('../server/place-candidates/open-data-loader');
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 
 test('cold source shares one acquisition, exposes pending privately, and serves warm without work', async () => {
@@ -170,6 +170,52 @@ test('warm supply preserves cached independent families without any live load', 
   assert.ok(result.some(row => row.id === 'official-1'));
 });
 
+test('the cached fast path acquires instead of answering when cached evidence misses a requested intent', async () => {
+  // A cached Overpass answer for this exact request plus varied rows, but no
+  // second-hand place: answering from cache would never ask the cold directory.
+  const cached = Array.from({ length: 13 }, (_, i) => ({ id: `osm-${i}`, type: ['museum', 'park', 'restaurant'][i % 3], lat: 1, lng: 2 + i / 1000 }));
+  let primaryReads = 0;
+  const primary = () => { primaryReads++; return cached; };
+  primary.readCached = () => cached;
+  let directoryLoads = 0;
+  const directory = { eager: true, load: () => { directoryLoads++; return []; }, readCached: () => [] };
+  const result = await composeOpenDataLoaders(primary, null, directory)({
+    lat: 1, lng: 2, requestedIntents: ['second_hand'], preferCachedSupply: true,
+  });
+  assert.equal(directoryLoads, 1, 'the cold directory is asked for the missing intent');
+  assert.equal(primaryReads, 1, 'the primary is re-read once (a cache hit for the real Overpass loader)');
+  assert.equal(result.length, 13);
+});
+
+test('the cached fast path acquires when the cached reservoir cannot span the requested walk', async () => {
+  const cached = Array.from({ length: 13 }, (_, i) => ({ id: `osm-${i}`, type: ['museum', 'park', 'restaurant'][i % 3], lat: 1, lng: 2 }));
+  const primary = () => cached;
+  primary.readCached = () => cached;
+  let directoryLoads = 0;
+  const directory = { eager: true, load: () => { directoryLoads++; return []; }, readCached: () => [] };
+  await composeOpenDataLoaders(primary, null, directory)({
+    lat: 1, lng: 2, preferCachedSupply: true,
+    walkingTargetBand: { targetKm: 9, floorKm: 5.4, ceilingKm: 10.62 },
+  });
+  assert.equal(directoryLoads, 1, 'a single-point reservoir cannot answer a 9 km request from cache');
+});
+
+test('cached background rows alone never answer for a primary whose cache has no entry', async () => {
+  // Warm Wikidata-like corroboration (three categories) beside a cold Overpass
+  // cache: the read-only path must not return the background rows alone.
+  const background = Array.from({ length: 16 }, (_, i) => ({ id: `wikidata-${i}`, type: ['museum', 'park', 'market'][i % 3], lat: 1, lng: 2 }));
+  let overpassCalls = 0;
+  const primary = createOpenDataLoader({
+    fetcher: async () => { overpassCalls++; return { ok: true, json: async () => ({ elements: [] }) }; },
+    cache: createSourceCache(),
+  });
+  const wikidata = { eager: false, load: () => background, readCached: () => background };
+  const result = await composeOpenDataLoaders(primary, wikidata)({ lat: 1, lng: 2, preferCachedSupply: true });
+  assert.ok(overpassCalls > 0, 'the map source was actually asked');
+  assert.equal(result.length, 16, 'and the background rows still join the composition');
+  assert.notEqual(result.loader_metadata?.primary_collection, 'cached_supply');
+});
+
 test('legacy rescue still observes an acquisition completed while the primary was running', async () => {
   const work = deferred(); const primary = deferred();
   const source = createBackgroundSource({ cache: createSourceCache(), keyFor: () => 'one', load: () => work.promise });
@@ -180,4 +226,94 @@ test('legacy rescue still observes an acquisition completed while the primary wa
   const result = await resultPromise;
   assert.equal(result.loader_status, 'loaded:1');
   assert.equal(result[0].id, 'arrived');
+});
+
+// Control source completion time, not the clock of a provider-backed QA run.
+const flushCompletion = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
+async function pendingSupplyReplay({ primaryRows = [] } = {}) {
+  const work = deferred();
+  const cache = createSourceCache();
+  let primaryCalls = 0, acquisitions = 0, providerAborted = false;
+  const source = createBackgroundSource({ cache, keyFor: () => 'late-window', load: anchor => {
+    acquisitions++;
+    return new Promise((resolve, reject) => {
+      anchor.signal.addEventListener('abort', () => {
+        providerAborted = true;
+        reject(new Error('provider_cancelled'));
+      }, { once: true });
+      work.promise.then(resolve, reject);
+    });
+  } });
+  const primary = () => {
+    primaryCalls++;
+    return Object.assign([...primaryRows], {
+      loader_status: primaryRows.length ? `loaded:${primaryRows.length}` : 'error_failed_closed',
+      loader_error: primaryRows.length ? null : 'http_non_200',
+    });
+  };
+  // Include the reviewed-source wrapper used in the deployed app.
+  const loader = composeOpenDataLoaders(composeOpenDataLoaders(primary, null, source), { load: async () => [] });
+  const jobs = createPlannerLifecycle();
+  const first = await jobs.start(async context => {
+    const load = lifecycleLoader(loader, context);
+    const rows = await load({ lat: 1, lng: 2, requestedIntents: ['second_hand'] });
+    return { status: 200, body: { ids: rows.map(row => row.id), collection: rows.loader_metadata } };
+  });
+  return { work, cache, jobs, token: first.body.planner_lifecycle.token,
+    counts: () => ({ primaryCalls, acquisitions, providerAborted }) };
+}
+
+test('empty supply keeps its original acquisition past the composition reserve and consumes late cached rows', async t => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 0 });
+  const { work, cache, jobs, token, counts } = await pendingSupplyReplay();
+  for (const advance of [8000, 8000, 8000, 8000, 8000, 5000]) {
+    t.mock.timers.tick(advance); await flushCompletion();
+  }
+  assert.equal(jobs.read(token).status, 202, 'an empty 45s snapshot must not finalize the plan');
+  t.mock.timers.tick(1000);
+  work.resolve([1, 2, 3].map(i => ({ id: `late-${i}`, type: 'vintage-shop', lat: 1 + i / 1000, lng: 2, tags: ['second_hand'] })));
+  await flushCompletion();
+  assert.equal(cache.peek('late-window').length, 3, 'original acquisition has actually completed and cached supply');
+  const final = jobs.read(token);
+  assert.equal(final.status, 200);
+  assert.deepEqual(final.body.ids, ['late-1', 'late-2', 'late-3']);
+  assert.equal(final.body.collection.source_completion.status, 'complete');
+  assert.equal(final.body.collection.source_completion.pending, 0);
+  assert.deepEqual(counts(), { primaryCalls: 1, acquisitions: 1, providerAborted: false });
+});
+
+test('empty supply still stops at the original 60s deadline and cancels its pending producer', async t => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 0 });
+  const { work, cache, jobs, token, counts } = await pendingSupplyReplay();
+  for (const advance of [8000, 8000, 8000, 8000, 8000, 5000]) {
+    t.mock.timers.tick(advance); await flushCompletion();
+  }
+  assert.equal(jobs.read(token).status, 202);
+  t.mock.timers.tick(15000); await flushCompletion();
+  assert.equal(jobs.read(token).status, 503);
+  assert.equal(jobs.read(token).body.error, 'supply_wait_expired');
+  assert.deepEqual(counts(), { primaryCalls: 1, acquisitions: 1, providerAborted: true });
+  work.resolve([{ id: 'too-late', type: 'vintage-shop', lat: 1, lng: 2 }]);
+  await flushCompletion();
+  assert.equal(cache.peek('late-window'), null);
+  assert.equal(jobs.read(token).body.error, 'supply_wait_expired', 'late rows cannot replace an expired plan');
+});
+
+test('nonempty partial supply retains the composition reserve even when a requested interest is missing', async t => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 0 });
+  const { work, jobs, token, counts } = await pendingSupplyReplay({ primaryRows: [
+    { id: 'held-museum', type: 'museum', lat: 1, lng: 2 },
+    { id: 'held-park', type: 'park', lat: 1.001, lng: 2 },
+  ] });
+  for (const advance of [8000, 8000, 8000, 8000, 8000, 5000]) {
+    t.mock.timers.tick(advance); await flushCompletion();
+  }
+  const final = jobs.read(token);
+  assert.equal(final.status, 200);
+  assert.deepEqual(final.body.ids, ['held-museum', 'held-park']);
+  assert.equal(final.body.collection.source_completion.reason, 'bounded_lifecycle_snapshot');
+  assert.equal(final.body.collection.source_completion.pending, 1);
+  work.resolve([]); await flushCompletion();
+  assert.equal(jobs.read(token).body.collection.source_completion.pending, 1, 'published partial result stays immutable');
+  assert.equal(counts().acquisitions, 1);
 });

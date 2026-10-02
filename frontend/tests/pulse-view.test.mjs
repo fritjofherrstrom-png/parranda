@@ -204,11 +204,23 @@ test("pulseHealthState maps acquisition health to honest UI states — no raw to
     "listings existed but none reliable enough",
   );
   assert.equal(pulseHealthState(covered({ status: "unavailable", result: "unknown", reasons: [] }), empty), "unavailable");
+  assert.equal(pulseHealthState(covered({ status: "unavailable", result: "events_found", reasons: [] }), some), "partial", "a later-page failure preserves accepted events with an incompleteness note");
   assert.equal(pulseHealthState(covered({ status: "partial", result: "events_found", reasons: [] }), some), "partial", "accepted events + a discreet incompleteness note");
   assert.equal(pulseHealthState(covered({ status: "partial", result: "empty", reasons: [] }), empty), "unavailable", "partial with nothing shown reads as could-not-verify");
   assert.equal(pulseHealthState(covered({ status: "healthy", result: "events_found", reasons: [] }), some), "ok");
   // Legacy response without acquisition: empty-but-covered stays honest soft-empty.
   assert.equal(pulseHealthState({ coverage: "covered" }, empty), "soft_empty");
+});
+
+test("a route-woven event cannot turn the Live panel into an empty-calendar claim", () => {
+  const empty = { tonight: [], thisWeek: [] };
+  const routeEvent = [WOVEN];
+  const healthy = { coverage: "covered", tonight: [{ id: "ev1" }], acquisition: { source_health: { status: "healthy", result: "events_found", reasons: [] } } };
+  const filtered = pulseEventBuckets(healthy, wovenEventIds(routeEvent));
+  assert.deepEqual(filtered.tonight, [], "the route owns the event's only full card");
+  assert.equal(pulseHealthState(healthy, filtered, routeEvent), "ok");
+  assert.equal(pulseHealthState({ ...healthy, acquisition: { source_health: { status: "partial", result: "events_found", reasons: [] } } }, filtered, routeEvent), "partial");
+  assert.equal(pulseHealthState(healthy, empty, []), "soft_empty", "a route without a woven event cannot suppress true emptiness");
 });
 
 test("liveSourceFailure reports a finished source failure only — never waiting, empty or shown events", () => {

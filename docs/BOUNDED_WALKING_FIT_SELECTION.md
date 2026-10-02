@@ -9,6 +9,13 @@ specific preference coverage or contextual quality. This is not a second compose
 a larger acquisition radius, extra provisional stop depth, or a claim that every
 walking target is feasible. NAPI stays default-off and is not needed for this fix.
 
+Walking-fit can only substitute places that reached the reservoir. The field
+shortfalls below were later traced upstream of it — a nearest-600 directory
+window, a nearest-25 Overpass cut and warm background sources answering for a
+map source nobody asked — and a single requested intent could not form any day
+from single-source supply. Those losses and their separate, bounded contract
+changes are in `DENSE_CENTRE_SUPPLY.md`; this mechanism is unchanged.
+
 The existing provisional admission remains provisional. A single official-family
 record still cannot self-promote. No source thresholds, licensing, approvals,
 identity resolution, public Add eligibility or default experiment flags change.
@@ -65,10 +72,15 @@ not a license to acquire or activate a source.
 - Try at most **three** alternative reservoirs sequentially. Each replaces
   **one** selected identity, keeps the other IDs and reservoir size, and rechecks
   comparability against the actual original winner.
-- Only original reservoirs of **two through six** records qualify. This bounds
-  the multiplied engine ordering work; larger reservoirs keep existing behavior.
-  Trials use the existing engine, stop-order bounds and walking estimator, not
-  another optimizer. There is no new hard wall-clock deadline or Pi latency SLA.
+- Only original reservoirs of **two through seven** records qualify. This
+  admits the observed six-to-seven support-place transition without turning
+  walking-fit off when one more candidate arrives. At eight or more records
+  this search still skips; the engine's exhaustive stop-order ceiling is eight,
+  and the same three-trial cap remains. This removes one discontinuity, **not**
+  a general monotonicity guarantee or evidence that any particular longer day
+  is visitable. Trials use the existing engine, stop-order bounds and walking
+  estimator, not another optimizer. There is no new hard wall-clock deadline
+  or Pi latency SLA.
 - **Zero additional acquisition, weather, event or routing-provider requests**:
   normalized sources/context are reused; this engine's any-place config uses
   no-op services and heuristic walking. Do not call it street-network validation.
@@ -98,6 +110,13 @@ a quality-warning token. Existing 60–118% band and honest short-route reportin
 remain. Exclusions are applied before alternatives are retained; pins are not
 re-searched. Existing promotion and refusal-snapshot ownership remain in force.
 
+The modern planner reads the server's finished `constraint_negotiation.walking`
+verdict. When a published route is below the selected band's floor, it shows the
+chosen target, actual estimated walk and floor in the day itself and says that
+a longer visitable route is unconfirmed. This is a disclosure, not evidence that
+the selector exhausted every possible ordering or that a previous day's stops
+remain visitable after a budget change.
+
 Tests cover negative trust/official-only/closed/out-of-reach/wrong-intent tails,
 context-tier comparisons, corroboration, determinism, provider-call counts,
 public route publication and exclusion, and non-leakage of the private list.
@@ -118,7 +137,8 @@ This is category-contract hardening, not a place/name/city exception.
 ### Deliberate recall tradeoff and taxonomy follow-up
 
 The migration requested below has since been implemented in
-`OVERTURE_TAXONOMY_COMPATIBILITY.md`, with its own v4 cache and QA requirements.
+`OVERTURE_TAXONOMY_COMPATIBILITY.md`, with its own v4 cache and QA requirements
+(the cache is now `overture-v5`, see `DENSE_CENTRE_SUPPLY.md`).
 The v3 and legacy-field descriptions here record the exact #498 acceptance
 boundary; they are not the current adapter contract or a fresh QA claim.
 

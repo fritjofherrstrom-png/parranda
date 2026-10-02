@@ -1069,12 +1069,37 @@ every Sitevision website is trusted or safe to collect.
 - collection caps listing rows, detail-page requests, response size,
   concurrency, and request time;
 - the adapter extracts factual atoms only: title, source URL, local date/time,
-  venue/address, coordinates when published, and recurrence text;
+  venue/address, event-bound coordinates, and recurrence text;
+- a venue pin must belong to the listed event, never to the page it sits on.
+  An event showcase's registered state supplies it only when its portlet is a
+  registered `se.soleil.eventShowcase`, its id is the listing URL's `id`, its
+  title is the listed title, the listed day is one of its occasions, every
+  occasion names the same venue and exactly one coordinate is given for that
+  venue; any contradicting or unreadable state of that event yields no pin.
+  A detail page without event state may use its one Google Maps link when an
+  `<h1>` is the listed title, the stated date range holds the listed day and
+  exactly one "Evenemangsplats" is named. Maps in the site frame (header,
+  navigation, footer, `contentinfo`) or after the main content never count, a
+  second map in the content leaves the venue ambiguous, and a map coordinate
+  that detail pages claim for differently named venues is dropped as a
+  site-wide map. State of unrelated apps (cookie consent, feedback) changes nothing. A
+  row without a bound pin keeps its other detail facts and relies on the
+  bounded venue resolver;
+- the same bound showcase state (listed id, title and day) gives a listing row
+  that states only its day or days the session clock of its occasions
+  ("18:00 – 20:00"), so it is not an all-day fact and leaves Live when the
+  session ends. One clock shared by every occasion gives the dated session or
+  occurrences; occasions whose clocks differ, or of which only some state a
+  clock, give a `period` that never claims a day. A listing row with its own
+  clock keeps it, and a row whose detail page is beyond the detail limit keeps
+  its listing timing;
 - a date range with a clock becomes `daily` only when the source states daily
   sessions. The bounded "Återkommande tillfällen" section is read with a closed
   grammar: listed dates, or weekdays inside the stated range, become explicit
-  `occurrences`. Anything unreadable, contradictory, open-ended or truncated
-  stays a `period` that never claims a specific day;
+  `occurrences`. The section may open with the template lead-in "Detta
+  evenemang äger rum", which states no days itself. Anything unreadable,
+  contradictory, open-ended or truncated, and every-other-week rules
+  ("varannan tisdag"), stays a `period` that never claims a specific day;
 - local clock times require a reviewed IANA timezone and otherwise remain
   timing-unknown rather than being treated as UTC;
 - one failed detail page does not erase usable listing evidence, while listing

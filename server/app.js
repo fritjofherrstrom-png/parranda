@@ -616,10 +616,10 @@ function isAgnosticRouteOutputExperimentRequested(request) {
 // or failed gate returns the inputs unchanged — the anchor card remains and no
 // walk is claimed. The module itself refuses non-agnostic days, so a fallback
 // city's route can never receive the typed place's event.
-async function weaveEventStopFailSoft({ result, placeStructure, walkingRouter, walkingConfig }) {
+async function weaveEventStopFailSoft({ result, placeStructure, walkingRouter, walkingConfig, requestedPreferences = [] }) {
   try {
     const { weaveEveningEventRouteStop } = require("./candidates/event-route-stop-weave");
-    return await weaveEveningEventRouteStop({ result, placeStructure, walkingRouter, walkingConfig });
+    return await weaveEveningEventRouteStop({ result, placeStructure, walkingRouter, walkingConfig, requestedPreferences });
   } catch (_error) {
     return { result, placeStructure, applied: false, blockers: ["weave_error"] };
   }
@@ -1243,17 +1243,24 @@ function getLandingSearchCities() {
   });
 }
 
-function buildLandingCityRegistry() {
+function buildLandingCityRegistry(lang = "en") {
   const entries = {};
   getLandingSearchCities().forEach((cityConfig) => {
     const entry = {
       key: cityConfig.key,
-      label: cityConfig.label,
+      // The chip, the inline completion and the planner hand-off all show this
+      // label, so it speaks the page's language ("Rome" on the English landing,
+      // "Rom" on the Swedish one).
+      label: resolveDisplayLabel(cityConfig, "", lang),
       status: cityConfig.visibility || "public",
       center: { lat: cityConfig.center.lat, lng: cityConfig.center.lng },
     };
     entries[cityConfig.key] = entry;
-    entries[cityConfig.label.toLowerCase()] = entry;
+    // Either language's name finds the city, whichever page it is typed on.
+    [cityConfig.label, getCitySearchLabel(cityConfig)].forEach((name) => {
+      const alias = String(name || "").trim().toLowerCase();
+      if (alias) entries[alias] = entry;
+    });
     if (cityConfig.key === "rome") {
       entries["rome"] = entry;
       entries["roma"] = entry;
@@ -1530,7 +1537,7 @@ function buildApp({
     response.type("html").send(
       renderLandingV2Shell(fs.readFileSync(landingV2Html, "utf8"), {
         lang: request.query?.lang,
-        registryJson: serializeInlineJson(buildLandingCityRegistry()),
+        registryJson: serializeInlineJson(buildLandingCityRegistry(normalizeLanguage(request.query?.lang))),
       }),
     );
   });
@@ -1897,6 +1904,8 @@ function buildApp({
       const preferences = Array.isArray(request.body?.preferences)
         ? request.body.preferences
         : [];
+      const requestedRhythm = ["calm", "balanced", "full", "free"].includes(request.body?.day_rhythm)
+        ? request.body.day_rhythm : null;
       const payload = {
         city,
         dates: requestedDates.dates,
@@ -1904,10 +1913,11 @@ function buildApp({
         start: request.body?.start,
         end: request.body?.end,
         walkingKmTarget: Number(request.body?.walking_km_target || 8),
+        dayRhythm: requestedRhythm,
         legPacing: request.body?.leg_pacing || "balanced",
         preferences,
         optimizerMode: request.body?.optimizer_mode || null,
-        distanceMode: request.body?.distance_mode || "soft_target",
+        distanceMode: requestedRhythm ? "no_limit" : request.body?.distance_mode || "soft_target",
         budgetTier: request.body?.budget_tier || "standard",
         modifier: request.body?.modifier || null,
         lang,
@@ -1952,7 +1962,17 @@ function buildApp({
       // experiment can preserve it for comparison. When the flag is absent this
       // is returned verbatim — identical behavior to before #259.
       let baselineBody;
-      if (cityFallbackUsed) {
+      if (useAgnosticRouteExperiment && requestedRhythm) {
+        // A modern any-place request has no applicable citypack baseline.
+        // Generating the implicit default city here used unrelated providers
+        // and spent the cold lifecycle before local acquisition even started.
+        baselineBody = {
+          city: requestedCity || null, days: [],
+          resolved_home_base: null, resolved_start: null, resolved_end: null,
+          requested_city: requestedCity, city_fallback_used: cityFallbackUsed,
+          baseline_skipped: 'no_applicable_citypack',
+        };
+      } else if (cityFallbackUsed) {
         baselineBody = {
           city: requestedCity,
           days: [],
@@ -2180,7 +2200,10 @@ function buildApp({
         }
         baselineBody = {
           ...result,
-          city_label: cityConfig.label,
+          // The modern planner titles the day with this label, so it speaks the
+          // request's language ("A day in Rome", "En dag i Rom") — the same rule
+          // the city shells use.
+          city_label: resolveDisplayLabel(cityConfig, "", lang),
           requested_city: requestedCity,
           city_fallback_used: cityFallbackUsed,
           ...(previewEngineStatus ? { preview_engine: previewEngineStatus } : {}),
@@ -2253,7 +2276,7 @@ function buildApp({
             requestedIntents: Array.isArray(preferences) ? preferences : [],
             anchorMode: intake.mode,
             spatialScope,
-            walkingTargetBand: resolveAgnosticWalkingTargetBand(payload.walkingKmTarget),
+            walkingTargetBand: requestedRhythm ? null : resolveAgnosticWalkingTargetBand(payload.walkingKmTarget),
           });
           const structureCandidates = (Array.isArray(records) ? records : []).filter(
             (c) => c && Number.isFinite(c.lat) && Number.isFinite(c.lng),
@@ -2372,7 +2395,8 @@ function buildApp({
         lang,
         walkingRouter,
         walkingConfig,
-        walkingKmTarget: payload.walkingKmTarget,
+        walkingKmTarget: requestedRhythm ? null : payload.walkingKmTarget,
+        dayRhythm: requestedRhythm,
         distanceMode: payload.distanceMode,
         // So the authoritative finalisation can weave the same evening event
         // the response will carry, rather than settling on a route that is
@@ -2413,6 +2437,8 @@ function buildApp({
           unresolvedRoles: experiment.experimental_route?.unresolved_roles,
           requestedIntents: normalizeUserIntents(preferences).intents,
           preferenceCoverage: experiment.constraint_negotiation?.preference_coverage,
+          primaryStops: experimentResult?.days?.[0]?.primary_route?.main_stops,
+          pinnedIds: pinnedCandidateIds,
         });
         experiment.promotion = promotion;
         // Bounded, count-only echo so an operator can see the day was composed
@@ -2455,6 +2481,7 @@ function buildApp({
           publicResult,
         }) ?? await weaveEventStopFailSoft({
           result: publicResult,
+          requestedPreferences: preferences,
           placeStructure: wovenPlaceStructure,
           walkingRouter,
           walkingConfig,
@@ -2462,7 +2489,7 @@ function buildApp({
         reconcileConstraintAfterEventWeave({
           experiment,
           woven: engineWoven,
-          walkingKmTarget: payload.walkingKmTarget,
+          walkingKmTarget: requestedRhythm ? null : payload.walkingKmTarget,
         });
         // The eligibility verdict belongs to the candidate context that was
         // actually PUBLISHED. When the gate withholds the engine's day, the

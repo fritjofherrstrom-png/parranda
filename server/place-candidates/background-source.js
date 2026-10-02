@@ -2,6 +2,7 @@
 
 // Process-private completion evidence. A public JSON payload cannot create it.
 const SOURCE_COMPLETION = Symbol('trustedSourceCompletion');
+const SOURCE_SNAPSHOT = Symbol('trustedSourceSnapshot');
 
 function createBackgroundSource({
   cache, keyFor, load, eager = true, waitForCompletion = true,
@@ -81,4 +82,4 @@ function createBackgroundSource({
   return source;
 }
 
-module.exports = { SOURCE_COMPLETION, createBackgroundSource };
+module.exports = { SOURCE_COMPLETION, SOURCE_SNAPSHOT, createBackgroundSource };

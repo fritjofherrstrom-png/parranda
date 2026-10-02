@@ -290,6 +290,16 @@ telemetry, not to weaken the anchor or geometry gates.
 
 ## Runtime source-health snapshot
 
+Place-driven discovery and an explicit Whole-area Live view now complement this
+bounded acquisition. Large places and trusted reverse-coordinate context can
+record discovery demand; one approved calendar alone does not suppress requests
+for complementary local source families. Discovery geometry is separate from
+the ordinary local event gate. A dedicated locality-bound vocabulary lane covers
+small festivities and holidays across 47 European country contexts. See
+`EUROPE_LOCAL_LIVE_DISCOVERY.md` for behaviour, real-source evidence, operational
+requirements and remaining coverage limits. Search vocabulary does not attest
+an event, holiday occurrence or closure.
+
 The bounded acquisition path now distinguishes provider outcomes before it
 interprets event absence:
 
@@ -384,6 +394,17 @@ consumer explicitly asks to recompose. Events whose geometry cannot be
 validated produce no suggestion. The compact interrupt preserves event timing,
 source attribution, and measured walking impact; public payload fields cannot
 mint one.
+
+The woven stop is labelled `daypart: "evening"`, so the weave first checks that
+claim: an event whose stated window ends at or before 17:00 local on its day,
+or a start-only event that begins earlier, is refused as `event_not_in_evening`
+with no stop and no suggestion. A row without a trusted venue clock is left to
+the selected-day anchor gate, which requires one. The weave deliberately does
+not compare the event's end with an estimated arrival at the last stop: routes
+carry daypart bands, not scheduled clock times, and such an estimate would need
+invented dwell times and, for a future day, an invented start. A same-day event
+that ends while a day composed late is still walking towards it is therefore
+not caught yet.
 
 ## Product bar
 

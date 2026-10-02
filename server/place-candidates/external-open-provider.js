@@ -27,6 +27,7 @@
 
 const { normalizePlaceCandidate, validatePlaceCandidate } = require("./contract");
 const { normalizeOpeningHours } = require("./opening-hours");
+const { normalizeSourceNameAliases } = require("./source-name-aliases");
 const { createEvidence, SOURCE_FAMILIES } = require("../candidates/evidence");
 
 const EXTERNAL_OPEN_PROVIDER_META = Object.freeze({
@@ -160,6 +161,16 @@ function mapRecordToCandidate(cityConfig, record, observedAt, index) {
   base.brand = typeof record.brand === "string" && record.brand.trim() ? record.brand.trim() : null;
   const website = safeHttpUrl(record.website);
   if (website) base.website = website;
+  const sourceNameAliases = normalizeSourceNameAliases(record.source_name_aliases);
+  if (sourceNameAliases.length) base.source_name_aliases = sourceNameAliases;
+  const sourceAddress = record.source_address;
+  if (sourceAddress && typeof sourceAddress.street === 'string' &&
+      typeof sourceAddress.house_number === 'string' &&
+      sourceAddress.street.trim().length <= 120 && sourceAddress.house_number.trim().length <= 24 &&
+      sourceAddress.street.trim() && sourceAddress.house_number.trim() &&
+      !/[\r\n]/.test(sourceAddress.street + sourceAddress.house_number)) {
+    base.source_address = {street:sourceAddress.street.trim(),house_number:sourceAddress.house_number.trim()};
+  }
   const openingHours = normalizeOpeningHours(record.opening_hours);
   if (openingHours) base.opening_hours = openingHours;
   const operationalStatus = normalizeOperationalStatus(record.operational_status);
@@ -167,6 +178,9 @@ function mapRecordToCandidate(cityConfig, record, observedAt, index) {
   const operationalReasons = normalizeOperationalReasons(record.operational_reasons);
   if (operationalReasons.length) base.operational_reasons = operationalReasons;
 
+  if (record.operator_visit_evidence && ['confirmed_storefront', 'non_shopping_visit', 'closed_weekdays'].includes(record.operator_visit_evidence.status)) {
+    base.operator_visit_evidence = record.operator_visit_evidence;
+  }
   return validatePlaceCandidate(base, `externalOpenCandidate[${index}]`);
 }
 

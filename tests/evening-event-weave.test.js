@@ -334,6 +334,136 @@ test("daytime daily windows and all-day rows remain Pulse-only, not evening rout
   assert.equal(allDay, null);
 });
 
+// 26 September 2026 in Europe/Stockholm is UTC+2, so 08:00Z is 10:00 local and
+// the evening begins at 15:00Z. "now" is the composition clock's verdict.
+function selectedDayEvent(overrides) {
+  return {
+    timezone: "Europe/Stockholm",
+    time_window: { kind: "continuous" },
+    source_label: "Official calendar",
+    lat: 60.189,
+    lng: 24.979,
+    cultural_tier: "cultural",
+    ...overrides,
+  };
+}
+
+const MORNING_MARKET = selectedDayEvent({
+  id: "morning-market",
+  title: "Autumn market",
+  starts_at: "2026-09-26T08:00:00.000Z",
+  ends_at: "2026-09-26T13:00:00.000Z",
+  timing_relevance: "now",
+  source_url: "https://x/morning-market",
+  salience_score: 7,
+});
+
+const EVENING_JAZZ = selectedDayEvent({
+  id: "evening-jazz",
+  title: "Jazz evening",
+  starts_at: "2026-09-26T17:00:00.000Z",
+  ends_at: "2026-09-26T19:00:00.000Z",
+  timing_relevance: "tonight",
+  source_url: "https://x/evening-jazz",
+  salience_score: 6,
+});
+
+test("a daytime event on now that closes before the evening is not an evening anchor", () => {
+  assert.equal(eventOccurrenceForDate(MORNING_MARKET, "2026-09-26"), null);
+  const base = dayWithDistricts();
+  const out = weaveEveningEvent(base, liveEvents([MORNING_MARKET]), { selectedDate: "2026-09-26" });
+  assert.equal(out.district_day.evening_event, undefined);
+  assert.deepEqual(out, base);
+
+  // The end is exclusive, and a start-only row states no duration that could
+  // carry it into the evening.
+  const endsAtEvening = { ...MORNING_MARKET, ends_at: "2026-09-26T15:00:00.000Z" };
+  const startOnly = { ...MORNING_MARKET, ends_at: undefined };
+  assert.equal(eventOccurrenceForDate(endsAtEvening, "2026-09-26"), null);
+  assert.equal(eventOccurrenceForDate(startOnly, "2026-09-26"), null);
+});
+
+test("an event on now that is still running at 17:00 local can anchor the evening", () => {
+  const festival = selectedDayEvent({
+    id: "harbour-festival",
+    title: "Harbour festival",
+    starts_at: "2026-09-26T12:00:00.000Z",
+    ends_at: "2026-09-26T19:00:00.000Z",
+    timing_relevance: "now",
+    source_url: "https://x/harbour-festival",
+  });
+  const occurrence = eventOccurrenceForDate(festival, "2026-09-26");
+  assert.equal(occurrence.timing_relevance, "now");
+  assert.equal(occurrence.occurrence_date, "2026-09-26");
+  const overnight = { ...festival, ends_at: "2026-09-27T09:00:00.000Z" };
+  assert.equal(eventOccurrenceForDate(overnight, "2026-09-26").ends_on, "2026-09-27");
+
+  const out = weaveEveningEvent(dayWithDistricts(), liveEvents([festival]), { selectedDate: "2026-09-26" });
+  assert.equal(out.district_day.evening_event.id, "harbour-festival");
+  assert.equal(out.district_day.evening_event.ends_at, "2026-09-26T19:00:00.000Z");
+});
+
+test("a first-ranked daytime event on now does not displace a genuine evening event", () => {
+  const out = weaveEveningEvent(
+    dayWithDistricts(),
+    liveEvents([MORNING_MARKET, EVENING_JAZZ]),
+    { selectedDate: "2026-09-26" },
+  );
+  assert.equal(out.district_day.evening_event.id, "evening-jazz");
+  assert.equal(out.district_day.evening_event.starts_at, "2026-09-26T17:00:00.000Z");
+});
+
+// Rows as the Sitevision adapter reads them from the Malmö and Simrishamn
+// calendar pages captured on 26 September 2026 at 13:19 local, while the
+// workshop and Beredskapsdagen were running.
+const CAPTURED_WORKSHOP = selectedDayEvent({
+  id: "malmo-workshop",
+  title: "Workshop för barn: Kom och måla konstiga löv",
+  starts_at: "2026-09-26T11:00:00.000Z",
+  ends_at: "2026-09-26T14:00:00.000Z",
+  timing_relevance: "now",
+  source_url: "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.4968b1201a03e2e597725e6",
+  lat: 55.59330012820435,
+  lng: 13.014476913261015,
+});
+
+const CAPTURED_CONCERT = selectedDayEvent({
+  id: "malmo-concert",
+  title: "Konsert: Audi Memento",
+  starts_at: "2026-09-26T18:00:00.000Z",
+  ends_at: "2026-09-26T18:30:00.000Z",
+  timing_relevance: "tonight",
+  source_url: "https://malmo.se/Uppleva-och-gora/Evenemang/Evenemang-i-Malmo/Evenemangssida.html?id=5.4968b1201a03e2e5977895",
+  lat: 55.59330012820435,
+  lng: 13.014476913261015,
+});
+
+const CAPTURED_BEREDSKAPSDAGEN = selectedDayEvent({
+  id: "simrishamn-beredskapsdagen",
+  title: "Ta hand om dig! Beredskapsdagen 2026",
+  starts_at: "2026-09-26T09:00:00.000Z",
+  ends_at: "2026-09-26T12:00:00.000Z",
+  timing_relevance: "now",
+  source_url: "https://www.simrishamn.se/evenemangskalender/arkiv/ta-hand-om-dig-beredskapsdagen-2026",
+  lat: 55.556437,
+  lng: 14.347752,
+});
+
+test("captured 26 September: a running daytime session does not displace the evening concert", () => {
+  // Malmö, Folkets Park: the workshop runs 13:00–16:00, the concert 20:00–20:30.
+  assert.equal(eventOccurrenceForDate(CAPTURED_WORKSHOP, "2026-09-26"), null);
+  // Simrishamn, Österlens museum: Beredskapsdagen runs 11:00–14:00.
+  assert.equal(eventOccurrenceForDate(CAPTURED_BEREDSKAPSDAGEN, "2026-09-26"), null);
+
+  const out = weaveEveningEvent(
+    dayWithDistricts(),
+    liveEvents([CAPTURED_WORKSHOP, CAPTURED_CONCERT]),
+    { selectedDate: "2026-09-26" },
+  );
+  assert.equal(out.district_day.evening_event.id, "malmo-concert");
+  assert.equal(out.district_day.evening_event.starts_at, "2026-09-26T18:00:00.000Z");
+});
+
 test("no geocoded tonight-event → the day is returned UNCHANGED (no fabricated happening)", () => {
   const base = dayWithDistricts();
   const out = weaveEveningEvent(base, liveEvents([{ id: "e2", title: "No coords", salience_score: 8 }]));

@@ -24,7 +24,8 @@ const {
 } = require("../pulse-sources/source-event-time");
 const { listedOccurrenceDates } = require("../place-candidates/event-calendar-date");
 
-const EVENING_START_MINUTES = 17 * 60;
+const EVENING_START_HOUR = 17;
+const EVENING_START_MINUTES = EVENING_START_HOUR * 60;
 
 function dateKeyFromParts(parts) {
   if (!parts) return null;
@@ -151,6 +152,9 @@ function materializeContinuousOccurrence(event, selectedDate) {
   const timing = String(event.timing_relevance || "").toLowerCase();
   if (timing === "stale") return null;
   if (starts.hour * 60 + starts.minute < EVENING_START_MINUTES && timing !== "now") return null;
+  // "now" describes the clock the day was composed at, not the evening: a
+  // morning market that is on at 10:00 but closes at 15:00 stays in Live.
+  if (!eventReachesEvening(event, selectedDate)) return null;
   const ends = event.ends_at ? datePartsInTimezone(event.ends_at, timezone) : null;
   return {
     ...event,
@@ -160,6 +164,24 @@ function materializeContinuousOccurrence(event, selectedDate) {
     timing_relevance: timing === "now" ? "now" : "tonight",
     occurrence_date: selectedDate,
   };
+}
+
+// Whether a timed row is still running when the evening of `date` (default: its
+// own local start date) begins in the venue's clock: it starts then or later,
+// or its stated end falls after that moment. A start-only row that begins
+// earlier states no duration, so it is never assumed to last into the evening.
+// Null when there is no trusted venue timezone or start instant to judge by.
+function eventReachesEvening(event, date = null) {
+  const timezone = normalizeIanaTimezone(event?.timezone || event?.time_window?.timezone);
+  const startsAt = Date.parse(event?.starts_at);
+  if (!timezone || !Number.isFinite(startsAt)) return null;
+  const day = normalizeSourceEventDate(date) || dateKeyFromParts(datePartsInTimezone(startsAt, timezone));
+  const eveningStart = day
+    ? normalizeSourceEventDateTime(localDateTime(day, `${EVENING_START_HOUR}:00`), { timezone })
+    : null;
+  const eveningStartsAt = Date.parse(eveningStart);
+  if (!Number.isFinite(eveningStartsAt)) return null;
+  return startsAt >= eveningStartsAt || Date.parse(event.ends_at) > eveningStartsAt;
 }
 
 function eventOccurrenceForDate(event, selectedDate) {
@@ -266,6 +288,7 @@ function isEligibleEveningAnchor(event) {
 
 module.exports = {
   eventOccurrenceForDate,
+  eventReachesEvening,
   isEligibleEveningAnchor,
   weaveEveningEvent,
 };

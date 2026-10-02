@@ -33,6 +33,12 @@ const CAP_TOKENS = {
   staleCandidateCache: "capped_by_stale_candidate_cache",
 };
 
+const PARTIAL_PRIMARY_COLLECTIONS = new Set([
+  "first_pass_while_expanding",
+  "neighbouring_budget_cache",
+  "background_refresh",
+]);
+
 // A produced route with this few stops is a minimal day, not a full one — even
 // with strong sources and context it should read thin_usable, never usable.
 // (#281: closes the #276 review note — a time-anchored evening day trims to
@@ -93,6 +99,7 @@ function calibrateAgnosticRouteReadiness({
     stale_candidate_cache: sourceStatus?.collection?.cache?.served_stale === true,
     stale_candidate_cache_age_seconds: finiteOrNull(sourceStatus?.collection?.cache?.stale_age_seconds),
     stale_candidate_refresh_reason: sourceStatus?.collection?.cache?.refresh_reason || null,
+    primary_collection: sourceStatus?.collection?.primary_collection || null,
     requested_date: typeof requestedDate === "string" ? requestedDate : null,
     current_local_date:
       typeof contextTime.now === "string" && /^\d{4}-\d{2}-\d{2}T/.test(contextTime.now)
@@ -201,6 +208,13 @@ function calibrateAgnosticRouteReadiness({
   if (inputs.stale_candidate_cache) {
     reasons.push("stale_candidate_cache_used");
     caps.push(CAP_TOKENS.staleCandidateCache);
+  }
+  // The day was composed without this budget's complete live map answer: say
+  // which map evidence it used instead. Every record is still source-backed
+  // and gated as usual, so this is a reason, not a cap; the walking band and
+  // stop provenance already show what the day actually covers.
+  if (PARTIAL_PRIMARY_COLLECTIONS.has(inputs.primary_collection)) {
+    reasons.push(`primary_collection_${inputs.primary_collection}`);
   }
   if (inputs.can_support_planner === false) {
     reasons.push("below_planner_candidate_threshold");

@@ -28,6 +28,8 @@ Det här repot är alpha-versionen för att snabbt kunna visa produkten, få ska
 
 Se `docs/CITY_ENGINE_PRINCIPLES.md`, `docs/ARCHITECTURE.md` och `docs/PRODUCT_STRATEGY.md` för principerna bakom city packs och city-packless Parranda.
 
+Framtida produktarbete finns i [Product TODO](docs/PRODUCT_TODO.md), inklusive ett uppskjutet shuffle-val för alternativa dagsstopp.
+
 ## Stack
 
 - Frontend: `index.html`, `landing.html`, `script.js`, `landing.js`, `planner-trust.js`, `styles.css`
@@ -112,9 +114,15 @@ Om mobilen inte når adressen:
 
 ## Testa innan du delar
 
+I en ny arbetskopia behövs båda låsta beroendemängderna; root-sviten inkluderar även frontendens komponentharness.
+
 ```bash
+npm ci
+npm --prefix frontend ci
 npm test
 ```
+
+Varje testfil har en generös tidsgräns på 600 sekunder. En fastnad fil ger icke-noll exitkod och `not ok`, aldrig automatisk skip eller PASS. Detta är inte en total tidsgräns för hela sviten. Små lokala Parquet-fixturer använder en DuckDB-tråd och 128 MB hanterad minnesbudget (inte ett hårt RSS-tak); accepterade SQL-frågor dräneras före asynkron stängning.
 
 Sviten körs offline: `npm test` laddar `tests/helpers/no-live-network.js`, som
 stoppar varje anrop till en extern värd och fäller testfilen som gjorde det.
@@ -123,7 +131,24 @@ som verkligen behöver en riktig tjänst (i dag DuckDB-barnprocessen, som laddar
 ner tillägget `httpfs`) hoppas över om du inte kör
 `PARRANDA_TEST_LIVE_NETWORK=enabled npm test`.
 
+`tests/pulse-contrast.test.js` mäter Pulse-kontrasten i stadsskalet i en riktig
+Chromium. Utan webbläsare hoppas den över lokalt; installera Google Chrome, kör
+`npx playwright-core install chromium` eller peka ut en med
+`PARRANDA_TEST_CHROMIUM=/sökväg/till/chrome`. I CI, där GitHub-runnern har
+Chrome, fäller den i stället för att hoppa över.
+
 CI kör samma grundsvit på GitHub för pull requests och pushes till `main`.
+
+`tests/route-map-controls.test.js` kontrollerar i en riktig Chromium att ingen
+ruttmarkör hamnar under kartans egna kontroller (zoom, attribution,
+förstoringsknappen), och `tests/route-map-tap-targets.test.js` att ett tryck
+eller en hovring på en markörs synliga nummer öppnar just det stoppet. Nummer
+som ritas under en annan markör kan inte tryckas alls; de följs, som blockerande,
+i #531, och testet fäller om de dyker upp någon annanstans. Utan webbläsare
+hoppas de över lokalt; installera Google Chrome, kör
+`npx playwright-core install chromium` eller peka ut en med
+`PARRANDA_TEST_CHROMIUM=/sökväg/till/chrome`. I CI, där GitHub-runnern har
+Chrome, fäller de i stället för att hoppa över.
 
 ## Dela med andra utvecklare
 

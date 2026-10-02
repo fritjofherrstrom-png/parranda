@@ -15,6 +15,10 @@
  *   - Only a day the agnostic engine actually produced is touched (the day-level
  *     markers, the same signal anywhere-render-decision trusts). A fallback
  *     city's route NEVER gets the typed place's event.
+ *   - The stop is labelled `daypart: "evening"`, so an event whose stated window
+ *     closes before the evening of its day is refused — before any walk or
+ *     interrupt is claimed. Routes carry daypart bands, not clock arrival
+ *     times, so this label, not an invented ETA, is the timing claim checked.
  *   - The extended stop order re-runs the EXISTING walking validator
  *     (validateAgnosticWalkingOrder) in the supplied order — no reordering, no
  *     optimizing — and the new leg must be a short evening hop
@@ -32,9 +36,12 @@
 
 const { validateAgnosticWalkingOrder } = require("../planner/agnostic-route-walking-validation");
 const { classifyEventSourceLink } = require("../pulse-sources/event-source-link");
+const { eventReachesEvening } = require("./evening-event-weave");
 
 // A woven evening stop must be a short hop from where the day already ends —
 // beyond this the event stays an anchor (real, sourced, but with no walk claim).
+const { matchesPreferenceFocus } = require("../planner/preference-focus");
+
 const MAX_EVENT_LEG_KM = 2.5;
 
 function isAgnosticDay(day) {
@@ -62,7 +69,7 @@ function deepClone(value) {
  * @returns {Promise<{result: object, placeStructure: object|null, applied: boolean, blockers: string[], interrupt?: object}>}
  *   `result`/`placeStructure` are the inputs when not applied, clones when applied.
  */
-async function weaveEveningEventRouteStop({ result, placeStructure, walkingRouter, walkingConfig } = {}) {
+async function weaveEveningEventRouteStop({ result, placeStructure, walkingRouter, walkingConfig, requestedPreferences = [] } = {}) {
   const unchanged = (blockers, interrupt = null) => ({
     result,
     placeStructure,
@@ -79,7 +86,16 @@ async function weaveEveningEventRouteStop({ result, placeStructure, walkingRoute
   if (event.occurrence_date && day.date && event.occurrence_date !== day.date) {
     return unchanged(["event_date_mismatch"]);
   }
+  // A row with no trusted venue clock cannot be judged here (null) and stays
+  // with the anchor gate, which requires that clock for every selected day.
+  if (eventReachesEvening(event, event.occurrence_date) === false) {
+    return unchanged(["event_not_in_evening"]);
+  }
   if (!route || !Array.isArray(route.main_stops)) return unchanged(["no_route"]);
+
+  // An unclassified event remains a separate Live suggestion. Timing and
+  // proximity alone do not authorize adding a new interest to the main day.
+  if (!matchesPreferenceFocus(event, requestedPreferences)) return unchanged(["event_outside_preference_focus"]);
 
   const coordStops = route.main_stops.filter(finiteCoord);
   if (coordStops.length < 2 || coordStops.length !== route.main_stops.length) {

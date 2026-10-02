@@ -27,6 +27,9 @@
  */
 
 const { deriveEvidenceFromPlaceCandidate } = require("./evidence");
+const { normalizeSourceNameAliases } = require("../place-candidates/source-name-aliases");
+const { normalizeOpeningHours } = require("../place-candidates/opening-hours");
+const { evaluateOperationalViability } = require("../place-candidates/operational-viability");
 
 // Thresholds — intentionally tight. Tune up (looser) only with evidence.
 const GEO_MERGE_M = 75; // close enough to be the same place, with a name match
@@ -74,14 +77,40 @@ function resolveCandidateIdentity(candidates, { now = null } = {}) {
   // Curated first so externals merge INTO curated, deterministically.
   const ordered = [...input].sort((a, b) => curatedRank(b) - curatedRank(a));
 
+  // New aliases must be unambiguous across the complete input, not merely the
+  // already-seen prefix. Otherwise source order could choose a conflicting entity.
+  const aliasAmbiguityCount = (candidate) => {
+    const absorbedIds = new Set([candidate.id,
+      ...(Array.isArray(candidate.merged_from) ? candidate.merged_from : []).map((record) => record.id)]);
+    const matches = ordered.filter((other) => !absorbedIds.has(other.id))
+      .map((other) => matchIdentity(candidate, other)).filter((verdict) => verdict.same);
+    return matches.length > 1 && matches.some((verdict) =>
+      verdict.confidence === "source_alias_store_identity") ? matches.length : 0;
+  };
+  const ambiguousAliases = new Map();
+  for (const candidate of ordered) {
+    const count = aliasAmbiguityCount(candidate);
+    if (count) ambiguousAliases.set(candidate, count);
+  }
+
   const survivors = [];
   const merges = [];
   let ambiguousKept = 0;
 
   for (const candidate of ordered) {
+    if (ambiguousAliases.has(candidate)) {
+      survivors.push({ candidate, aliasAmbiguous: true });
+      ambiguousKept += 1;
+      merges.push({ duplicate_id: candidate.id, into_id: null,
+        decision: "kept_separate_ambiguous", reason: "source_alias_matched_multiple",
+        match_count: ambiguousAliases.get(candidate) });
+      continue;
+    }
     const matchIndexes = [];
     for (let i = 0; i < survivors.length; i += 1) {
       const verdict = matchIdentity(survivors[i].candidate, candidate);
+      if (verdict.confidence === "source_alias_store_identity" &&
+          survivors[i].aliasAmbiguous) continue;
       if (verdict.same) matchIndexes.push({ i, verdict });
     }
 
@@ -110,7 +139,21 @@ function resolveCandidateIdentity(candidates, { now = null } = {}) {
     const canonical = chooseCanonical(existing, candidate);
     const duplicate = canonical === existing ? candidate : existing;
     const reconciliation = reconcileFields(canonical, duplicate);
-    survivors[i] = { candidate: mergeInto(canonical, duplicate, { now }) };
+    // Alias ambiguity belongs to the survivor, not its replaceable canonical object.
+    survivors[i] = { ...survivors[i], candidate: mergeInto(canonical, duplicate, { now }) };
+    // Reconciliation can unlock aliases (notably by filling coordinates). Check
+    // the full original universe again, excluding the identity already absorbed.
+    // Once blocked, aliases stay blocked even through later canonical switches.
+    if (!survivors[i].aliasAmbiguous) {
+      const count = aliasAmbiguityCount(survivors[i].candidate);
+      if (count) {
+        survivors[i].aliasAmbiguous = true;
+        ambiguousKept += 1;
+        merges.push({ duplicate_id: survivors[i].candidate.id, into_id: null,
+          decision: "kept_separate_ambiguous", reason: "source_alias_matched_multiple",
+          match_count: count });
+      }
+    }
     merges.push({
       duplicate_id: duplicate.id,
       duplicate_origin: originOf(duplicate),
@@ -173,6 +216,21 @@ function matchIdentity(a, b) {
   // identity, so we keep them separate.
   if (dist === null) return no("no_coordinates_to_confirm");
 
+  // A current source-owned alternative name may identify the same storefront.
+  // Never infer aliases by removing branch words, prefix matching or a city list.
+  // Even an exact website (including a chain root) needs an independent full
+  // street/house-number match. Unknown categories and co-location are not enough.
+  if (dist <= GEO_TIGHT_M && bucketA && bucketA === bucketB &&
+      distinctiveTokens(a.label).size > 0 && distinctiveTokens(b.label).size > 0 &&
+      explicitSourceAliasMatches(a, b) && sameStoreWebsiteAndAddress(a, b)) {
+    const hoursA = normalizeOpeningHours(a.opening_hours);
+    const hoursB = normalizeOpeningHours(b.opening_hours);
+    if (hoursA && hoursB && hoursA !== hoursB) return no("source_alias_conflicting_hours");
+    return yes("source_alias_store_identity", {
+      distance_m: round(dist), source_name_alias: true, website: true, source_address: true,
+    });
+  }
+
   const distinctA = distinctiveTokens(a.label);
   const distinctB = distinctiveTokens(b.label);
 
@@ -222,6 +280,7 @@ function mergeInto(canonical, duplicate, { now = null } = {}) {
 
   const mergedFrom = [
     ...(Array.isArray(canonical.merged_from) ? canonical.merged_from : []),
+    ...(Array.isArray(duplicate.merged_from) ? duplicate.merged_from : []),
     {
       id: duplicate.id,
       origin: originOf(duplicate),
@@ -261,6 +320,35 @@ function reconcileFields(canonical, duplicate) {
   const patch = {};
   const filled = [];
   const conflicts = [];
+
+  // Corroboration cannot launder a source's explicit closure/lifecycle veto.
+  const duplicateOperational = evaluateOperationalViability({ candidate: duplicate });
+  if (duplicate.operator_visit_evidence?.status === 'non_shopping_visit') {
+    patch.operator_visit_evidence = duplicate.operator_visit_evidence;
+    filled.push('operator_visit_evidence');
+  } else if (duplicate.operator_visit_evidence?.status === 'closed_weekdays' && canonical.operator_visit_evidence?.status !== 'non_shopping_visit') {
+    const other=canonical.operator_visit_evidence?.status==='closed_weekdays'?canonical.operator_visit_evidence.closed_weekdays:[];
+    patch.operator_visit_evidence={...duplicate.operator_visit_evidence,closed_weekdays:[...new Set([...(other||[]),...(duplicate.operator_visit_evidence.closed_weekdays||[])])]};
+    filled.push('operator_visit_evidence');
+  } else if (!duplicateOperational.route_eligible) {
+    patch.operational_status = "inactive";
+    patch.operational_reasons = [...new Set([
+      ...(Array.isArray(canonical.operational_reasons) ? canonical.operational_reasons : []),
+      ...(Array.isArray(duplicate.operational_reasons) ? duplicate.operational_reasons : []),
+      ...duplicateOperational.reasons,
+    ])];
+    if (canonical.operational_status !== "inactive") filled.push("operational_status");
+  }
+
+  // Identity enrichment must not erase the only source-owned schedule merely
+  // because a directory id wins the deterministic canonical tie-break.
+  if (!normalizeOpeningHours(canonical.opening_hours)) {
+    const hours = normalizeOpeningHours(duplicate.opening_hours);
+    if (hours) {
+      patch.opening_hours = hours;
+      filled.push("opening_hours");
+    }
+  }
 
   const canHas = hasCoords(canonical);
   const dupHas = hasCoords(duplicate);
@@ -388,6 +476,40 @@ function toRad(deg) {
 }
 
 // --- identity helpers ------------------------------------------------------
+
+function explicitSourceAliasMatches(a, b) {
+  const matches = (source, target) => {
+    const targetName = normalizeName(target.label);
+    if (!targetName || distinctiveTokens(target.label).size === 0) return false;
+    return normalizeSourceNameAliases(source.source_name_aliases)
+      .some((alias) => normalizeName(alias) === targetName);
+  };
+  return matches(a, b) || matches(b, a);
+}
+
+function sameStoreWebsiteAndAddress(a, b) {
+  const websiteKey = (value) => {
+    if (typeof value !== "string" || value.length > 2048) return null;
+    try {
+      const url = new URL(value);
+      if (!["https:", "http:"].includes(url.protocol) || url.username || url.password ||
+          url.search || url.hash || url.port) return null;
+      return url.hostname.toLowerCase().replace(/^www\./, "") + url.pathname.replace(/\/$/, "");
+    } catch (_error) { return null; }
+  };
+  const addressKey = (value) => {
+    if (!value || typeof value.street !== "string" || typeof value.house_number !== "string" ||
+        value.street.length > 120 || value.house_number.length > 24 ||
+        /[\r\n]/.test(value.street + value.house_number)) return null;
+    const street = normalizeName(value.street);
+    const house = value.house_number.trim().toLowerCase();
+    return street && house ? `${street}|${house}` : null;
+  };
+  const website = websiteKey(a.website);
+  const address = addressKey(a.source_address);
+  return Boolean(website && address && website === websiteKey(b.website) &&
+    address === addressKey(b.source_address));
+}
 
 function wikidataIdOf(candidate) {
   const direct = String(candidate.wikidata || candidate.wikidata_id || "").trim();

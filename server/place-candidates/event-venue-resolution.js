@@ -12,7 +12,7 @@ const MAX_RESOLUTION_LIMIT = 8;
 const MAX_QUERY_LENGTH = 200;
 
 function buildEventVenueQuery(event, { placeContext = null } = {}) {
-  if (!event || typeof event !== "object") return null;
+  if (!event || typeof event !== "object" || ["municipality", "virtual"].includes(event.source_location_scope)) return null;
   const sourceParts = uniqueStrings([
     event.address,
     event.place_context,

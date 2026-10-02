@@ -1,4 +1,4 @@
-export type LiveEventScope = "around_place" | "near_route" | "near_me";
+export type LiveEventScope = "around_place" | "in_place" | "near_route" | "near_me";
 export type LiveEventTime = "tonight" | "this_week";
 
 export declare const LIVE_EVENT_QUERY_CONTRACT: "live_event_query_v1";

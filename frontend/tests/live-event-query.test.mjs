@@ -18,13 +18,21 @@ const response = {
 
 test("all Live scopes preserve the server-confirmed selected date instead of recomputing today", () => {
   const dated = { ...response, live_events: { selected_date: "2026-06-29" } };
-  for (const scope of ["around_place", "near_route", "near_me"]) {
+  for (const scope of ["around_place", "in_place", "near_route", "near_me"]) {
     const payload = buildLiveEventQueryPayload({ scope, response: dated,
       routeStops: [{ lat: 55.6, lng: 13 }, { lat: 55.61, lng: 13.01 }],
       nearMeCoords: { lat: 55.6, lng: 13 },
     });
     assert.equal(payload.selected_date, "2026-06-29");
   }
+});
+
+test("whole-area Live requires the published place query and sends no client boundaries", () => {
+  const payload = buildLiveEventQueryPayload({ scope: "in_place", response });
+  assert.equal(payload.place_query, "Kivik");
+  assert.deepEqual(payload.anchor, { lat: 55.605, lng: 13.003 });
+  assert.equal("spatial_scope" in payload, false);
+  assert.equal(buildLiveEventQueryPayload({ scope: "in_place", response: { agnostic_route_output_experiment: { source_status: response.agnostic_route_output_experiment.source_status } } }), null);
 });
 
 test("around_place uses the trusted server anchor and preserves preferences", () => {

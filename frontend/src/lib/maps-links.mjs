@@ -76,21 +76,38 @@ function walkingUrl(points) {
 // preserve intermediate revisits and woven events. Adjacent identical points
 // need no walking leg. A typed-place discovery anchor is not an implicit start;
 // callers pass the published near-me anchor explicitly when appropriate.
-export function mapsWalkingRouteUrls(stops, options = {}) {
+//
+// Each part says where it starts and ends — `{ kind: "origin" | "stop" |
+// "destination", point, index? }`, with `index` into `stops` — and which stops
+// it newly reaches (`stopIndexes`; a boundary stop belongs to the part that
+// arrives at it), so a caller can name a part instead of numbering it.
+export function mapsWalkingRouteParts(stops, options = {}) {
   if (!Array.isArray(stops) || stops.length === 0 || !stops.every(validCoord)) return [];
   if (options.origin != null && !validCoord(options.origin)) return [];
   if (options.destination != null && !validCoord(options.destination)) return [];
   const sequence = [
-    ...(options.origin ? [options.origin] : []),
-    ...stops,
-    ...(options.destination ? [options.destination] : []),
+    ...(options.origin ? [{ kind: "origin", point: options.origin }] : []),
+    ...stops.map((point, index) => ({ kind: "stop", point, index })),
+    ...(options.destination ? [{ kind: "destination", point: options.destination }] : []),
   ];
-  const points = sequence.filter((point, i) => i === 0 || !sameCoord(point, sequence[i - 1]));
-  const urls = [];
-  for (let i = 0; i < points.length - 1; i += MAX_WAYPOINTS + 1) {
-    urls.push(walkingUrl(points.slice(i, i + MAX_WAYPOINTS + 2)));
+  const entries = sequence.filter((entry, i) => i === 0 || !sameCoord(entry.point, sequence[i - 1].point));
+  const parts = [];
+  for (let i = 0; i < entries.length - 1; i += MAX_WAYPOINTS + 1) {
+    const slice = entries.slice(i, i + MAX_WAYPOINTS + 2);
+    parts.push({
+      url: walkingUrl(slice.map((entry) => entry.point)),
+      from: slice[0],
+      to: slice[slice.length - 1],
+      stopIndexes: slice
+        .filter((entry, k) => entry.kind === "stop" && !(i > 0 && k === 0))
+        .map((entry) => entry.index),
+    });
   }
-  return urls;
+  return parts;
+}
+
+export function mapsWalkingRouteUrls(stops, options = {}) {
+  return mapsWalkingRouteParts(stops, options).map((part) => part.url);
 }
 
 // Compatibility helper for callers that can present exactly one link. Never

@@ -211,7 +211,11 @@ test("API: Athens swimming + trusted loader → source-backed beach now composes
   // lacks) into the actual preview route. What used to surface only as an
   // inspect-only candidate GAP beside an unchanged route is now genuinely filled,
   // so the diagnostic correctly reports overlap + inspect_only instead of a gap.
-  const loader = makeLoader([externalRecord("ath-beach", "Kavouri Beach", "beach", 37.82, 23.78, ["coast"])]);
+  // Two matching source places can form a focused day without city filler.
+  const loader = makeLoader([
+    externalRecord("ath-beach", "Source swim A", "beach", 37.978, 23.73, ["coast"]),
+    externalRecord("ath-beach-2", "Source swim B", "beach", 37.979, 23.731, ["coast"]),
+  ]);
   await withServer(loader, async (server) => {
     const body = routeBody("athens", ["swimming"], { include_external_candidates: 1 });
     const def = await post(server, "", body);
@@ -277,7 +281,11 @@ test("API: inspect=route_output,agnostic_route_candidate attaches only requested
 });
 
 test("API: serialized sidecar contains no banned route-claim vocabulary", async () => {
-  const loader = makeLoader([externalRecord("ath-beach", "Kavouri Beach", "beach", 37.82, 23.78, ["coast"])]);
+  // Two matching source places can form a focused day without city filler.
+  const loader = makeLoader([
+    externalRecord("ath-beach", "Source swim A", "beach", 37.978, 23.73, ["coast"]),
+    externalRecord("ath-beach-2", "Source swim B", "beach", 37.979, 23.731, ["coast"]),
+  ]);
   await withServer(loader, async (server) => {
     const r = await post(server, `${FLAG}&include_external_candidates=1`, routeBody("athens", ["swimming"], { include_external_candidates: 1 }));
     const json = JSON.stringify(r.agnostic_route_candidate).toLowerCase();

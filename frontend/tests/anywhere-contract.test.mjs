@@ -10,14 +10,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
-import { buildAnywherePayload, ANYWHERE_PREFERENCES, WALK_PRESETS, isoDateFromOffset } from "../src/lib/anywhere-payload.mjs";
+import { buildAnywherePayload, ANYWHERE_PREFERENCES, DAY_RHYTHMS, isoDateFromOffset } from "../src/lib/anywhere-payload.mjs";
 import { LIVE_REFRESH_DELAYS_MS } from "../src/lib/compose-followup.mjs";
 import { routePreferenceCoverage } from "../src/lib/route-context-view.mjs";
 import { limitationNote } from "../src/lib/day-limitations.mjs";
+import { componentSource, plannerSurfaceSource } from "./helpers/planner-source.mjs";
 
 const require = createRequire(import.meta.url);
 const decision = require("../../anywhere-render-decision.js");
-const anywherePlannerSource = readFileSync(new URL("../src/components/AnywherePlanner.tsx", import.meta.url), "utf8");
+// The planner surface: the orchestrator plus the pieces it renders (see the helper).
+const anywherePlannerSource = plannerSurfaceSource();
 const anywhereStyles = readFileSync(new URL("../src/styles/tailwind.css", import.meta.url), "utf8");
 
 test("payload carries the freeform place + the three agnostic flags, never a city key", () => {
@@ -53,15 +55,22 @@ test("the modern planner owns curated city links and sends their citypack identi
 });
 
 test("curated mode hides actions whose current APIs would silently lose citypack identity", () => {
-  assert.match(anywherePlannerSource, /\{!cityKey && \([\s\S]{0,120}onClick=\{blitz\}/);
+  assert.match(anywherePlannerSource, /!cityKey && !serviceRefusal && !anchorUnresolved && \(\s*<div[^>]*>\s*<button\s+type="button"\s+onClick=\{blitz\}/);
   assert.match(anywherePlannerSource, /!cityKey && hasRealId/);
   assert.match(anywherePlannerSource, /!cityKey && candidateId/);
 });
 
-test("planner depth: walking presets map to walking_km_target; tomorrow is a real date", () => {
-  const preset = WALK_PRESETS.find((p) => p.key === "long");
-  const payload = buildAnywherePayload({ place: "Lyon", dates: ["2026-07-03"], walkingKmTarget: preset.km });
-  assert.equal(payload.walking_km_target, 9, "the long preset reaches the engine's walking target");
+test("day rhythm carries no kilometer goal while preserving real date math", () => {
+  assert.deepEqual(DAY_RHYTHMS.map((p) => p.key), ["calm", "balanced", "full", "free"]);
+  for (const rhythm of DAY_RHYTHMS) {
+    const payload = buildAnywherePayload({ place: "Lyon", dates: ["2026-07-03"], dayRhythm: rhythm.key });
+    assert.ok(!("walking_km_target" in payload));
+    assert.equal(payload.day_rhythm, rhythm.key);
+    assert.equal(payload.distance_mode, "no_limit");
+    if (rhythm.key === "free") assert.ok(!("leg_pacing" in payload));
+  }
+  assert.match(anywherePlannerSource, /t\("Dagens rytm", "Day rhythm"\)/);
+  assert.match(anywherePlannerSource, /dayRhythm: rhythm\.key/);
   // Deterministic date math (injectable base, no real clock in tests).
   assert.equal(isoDateFromOffset(0, new Date("2026-07-02T12:00:00Z")), "2026-07-02");
   assert.equal(isoDateFromOffset(1, new Date("2026-07-02T12:00:00Z")), "2026-07-03");
@@ -168,7 +177,14 @@ test("the surface renders the engine's TRUSTWORTHY richness — and never the co
   assert.match(anywherePlannerSource, /primaryRoute\?\.estimated_km/);
   assert.match(anywherePlannerSource, /estimated_walk_minutes/);
   assert.match(anywherePlannerSource, /map_path_points/);
-  assert.match(anywherePlannerSource, /TYPE_LABELS, stop\.type/);
+  // Curated/known engine kinds use #519's closed translated copy; only the
+  // second-hand route kind uses #532's source-owned subtype.
+  assert.match(anywherePlannerSource, /stop\?\.type === "vintage-shop"/);
+  assert.match(anywherePlannerSource, /stopTypeLabel\(stop, lang\)/);
+  assert.match(anywherePlannerSource, /typeLabel\(stop\?\.type, lang\)/);
+  assert.match(anywherePlannerSource, /\{stopKindLabel\}/);
+  // Unknown opening hours are visible on the stop row, not only when expanded.
+  assert.match(anywherePlannerSource, /hoursUnknown && \(\s*<span className="text-xs text-parranda-ink\/55">\{t\("Öppettider okända", "Hours unknown"\)\}/);
   assert.match(anywherePlannerSource, /DAYPART_LABELS, stop\.daypart/);
   // NEVER rendered: fields that can carry baseline-city phrasing or placeholder
   // labels on the agnostic path (verified live: date_signals said "i Rom" for a
@@ -188,7 +204,7 @@ test("route/Pulse hierarchy: a woven event is a route EXTENSION with exactly one
   assert.match(anywherePlannerSource, /Tillagt till dagens rutt/);
   assert.match(anywherePlannerSource, /Added to today's route/);
   // ...stays in the complete Google Maps route (FULL stop order, not the split)...
-  assert.match(anywherePlannerSource, /mapsWalkingRouteUrls\([\s\S]{0,80}routeStops,[\s\S]{0,180}origin: routeOrigin/);
+  assert.match(anywherePlannerSource, /mapsWalkingRouteParts\([\s\S]{0,80}routeStops,[\s\S]{0,180}origin: routeOrigin/);
   // ...and the old duplicated presentations are gone (the "And tonight" card and
   // the woven-claim line no longer exist anywhere).
   assert.doesNotMatch(anywherePlannerSource, /Och ikväll|And tonight/);
@@ -255,15 +271,25 @@ test("route result has one authoritative route and keeps broader candidates seco
 
 test("map hierarchy mirrors route authority instead of numbering two competing plans", () => {
   assert.match(anywherePlannerSource, /routeMarkerPresentation\(routeStops\)/);
-  assert.match(anywherePlannerSource, /className: `route-map-marker-shell/);
+  assert.match(anywherePlannerSource, /className: "route-map-marker-shell"/);
   assert.match(anywherePlannerSource, /--route-marker-x:\$\{shiftX\}px/);
   assert.match(anywherePlannerSource, /routeContextSuggestions\.forEach/);
   assert.match(anywherePlannerSource, /if \(hasPrimaryRoute\)/);
   // Candidates are NEVER sequenced: the no-route branch draws plain dots only —
   // no numbered markers, no connecting arc (only the route branch may polyline).
   assert.doesNotMatch(anywherePlannerSource, /district-map-marker/);
-  const noRouteBranch = anywherePlannerSource.split("} else {")[1] ?? "";
+  const routeMapSource = componentSource("planner/RouteMap.tsx");
+  const noRouteBranch = routeMapSource.split("} else {")[1] ?? "";
+  assert.match(noRouteBranch, /No route exists: these are CANDIDATES/, "the no-route branch is the one inspected");
   assert.doesNotMatch(noRouteBranch.slice(0, 1200), /polyline|divIcon/);
+  // Optional detour dots join the map only while their list is open, so no
+  // mark on the map is left without its explanation.
+  assert.match(routeMapSource, /if \(showContext\) \{\s*routeContextSuggestions\.forEach/);
+  assert.match(componentSource("AnywherePlanner.tsx"), /showContext=\{detoursOpen\}/);
+  // A line joining the stops' own coordinates is drawn as a sketch (dotted),
+  // never as a street path Parranda did not compute.
+  assert.match(routeMapSource, /sketch\s*\?\s*\{[^}]*dashArray/);
+  assert.match(componentSource("AnywherePlanner.tsx"), /routePathIsSketch\(primaryRoute\?\.map_path_points, routeStops\.length\)/);
 });
 
 test("map controls preserve provider attribution space", () => {
@@ -328,7 +354,7 @@ test("secondary candidates disclose in Parranda before offering an explicit Maps
 
   const detourSurface = anywherePlannerSource
     .split("{routeContextSuggestions.map((stop, index) => {")[1]
-    ?.split("{routeCoverage.has_coverage_evidence")[0] ?? "";
+    ?.split("Without a primary route")[0] ?? "";
   const structureSurface = anywherePlannerSource
     .split("{(day?.areas ?? []).map((area, index) => (")[1]
     ?.split("{/* The evening event is NOT presented here")[0] ?? "";
@@ -370,16 +396,34 @@ test("compact planner and map controls keep a 44px mobile touch target", () => {
     anywherePlannerSource,
     /aria-expanded=\{false\}[\s\S]{0,180}min-h-11/,
   );
+  // The map's expand control is an icon: a 44×44 target named in both
+  // languages, so it covers no more of the map than a thumb needs.
   assert.match(
     anywherePlannerSource,
-    /aria-expanded=\{mapExpanded\}[\s\S]{0,180}min-h-11/,
+    /aria-expanded=\{mapExpanded\}\s*aria-label=\{mapExpanded \? t\("Förminska kartan", "Shrink map"\) : t\("Förstora kartan", "Expand map"\)\}[\s\S]{0,260}min-h-11 min-w-11/,
   );
   assert.match(anywhereStyles, /\.leaflet-control-zoom a\s*\{[\s\S]*width: 44px !important;/);
   assert.match(anywhereStyles, /\.leaflet-control-zoom a\s*\{[\s\S]*height: 44px !important;/);
-  assert.match(anywherePlannerSource, /iconSize: \[72, 72\]/);
-  assert.match(anywherePlannerSource, /iconAnchor: \[36, 36\]/);
+  // A route stop's disc and its touch target are 44px icons, anchored where the
+  // disc is drawn (beside its coordinate when clustered).
+  assert.match(anywherePlannerSource, /const iconAnchor: \[number, number\] = \[22 - shiftX, 22 - shiftY\]/);
+  assert.equal(componentSource("planner/RouteMap.tsx").match(/iconSize: \[44, 44\],?\s*iconAnchor[,\s]/g)?.length, 2);
   assert.match(anywhereStyles, /\.route-map-marker\s*\{[\s\S]*width: 44px;/);
   assert.match(anywhereStyles, /\.route-map-marker\s*\{[\s\S]*height: 44px;/);
+});
+
+test("a route stop's visible number is its own tap target", () => {
+  const routeMapSource = componentSource("planner/RouteMap.tsx");
+  // The touch targets have a pane of their own beneath every stop's disc (the
+  // marker pane is 600): no stop's target reaches over a neighbour's number.
+  assert.match(routeMapSource, /map\.createPane\(TARGET_PANE\)\.style\.zIndex = TARGET_PANE_Z_INDEX/);
+  assert.ok(Number(routeMapSource.match(/const TARGET_PANE_Z_INDEX = "(\d+)"/)?.[1]) < 600);
+  assert.match(routeMapSource, /className: "route-map-target"[\s\S]{0,120}pane: TARGET_PANE,[\s\S]{0,80}keyboard: false/);
+  // On the disc's side only the visible pin takes a tap, never the icon box.
+  assert.match(anywhereStyles, /\.leaflet-container \.leaflet-marker-icon\.route-map-marker-shell\s*\{\s*pointer-events: none;/);
+  assert.match(anywhereStyles, /\.route-map-marker::before\s*\{[^}]*pointer-events: auto;/);
+  // The disc and its target open one name.
+  assert.match(routeMapSource, /L\.featureGroup\(\[target, disc\]\)[\s\S]{0,120}stopLayers\.bindTooltip/);
 });
 
 test("route, saved-day, Blitz, and source actions keep a 44px mobile touch target", () => {
@@ -409,7 +453,7 @@ test("adjustments collapse to a summary and re-compose themselves — no submit 
   // ...expanding gives the grouped panel...
   assert.match(anywherePlannerSource, /t\("Känsla", "Mood"\)/);
   assert.match(anywherePlannerSource, /t\("När", "When"\)/);
-  assert.match(anywherePlannerSource, /t\("Gånglängd", "Walking"\)/);
+  assert.match(anywherePlannerSource, /t\("Dagens rytm", "Day rhythm"\)/);
   // ...and a settled change re-composes on its own (debounced), so the only
   // submit left in the component is the no-anchor fallback input.
   assert.match(anywherePlannerSource, /recomposeTimerRef\.current = setTimeout\(/);
@@ -484,21 +528,23 @@ test("the Live sheet explores events only — it never touches the day's anchor 
   assert.match(anywherePlannerSource, /requestLiveSheetScope\("around_place"\)/);
   assert.match(anywherePlannerSource, /requestLiveSheetScope\("near_route"\)/);
   assert.match(anywherePlannerSource, /requestLiveSheetScope\("near_me"\)/);
-  assert.match(anywherePlannerSource, /time: liveSheetTime === "week" \? "this_week" : "tonight"/);
+  assert.match(anywherePlannerSource, /time: nextTime === "week" \? "this_week" : "tonight"/);
   assert.match(anywherePlannerSource, /preferences: selected/);
   assert.match(anywherePlannerSource, /response: safeResponse/);
   assert.match(anywherePlannerSource, /routeStops/);
-  assert.match(anywherePlannerSource, /LIVE_QUERY_REFRESH_DELAYS_MS = \[1500, 3000, 5000\]/);
+  assert.match(anywherePlannerSource, /LIVE_QUERY_REFRESH_DELAYS_MS = \[1500, 3000, 5000,/);
   assert.match(anywherePlannerSource, /attempt <= LIVE_QUERY_REFRESH_DELAYS_MS\.length/);
   assert.match(anywherePlannerSource, /sheetPulseState === "pending"/);
-  const sheetBlock = anywherePlannerSource.split("THE LIVE SHEET")[1] ?? "";
-  assert.ok(sheetBlock.length > 0, "live sheet block present");
-  assert.doesNotMatch(
-    sheetBlock,
-    /resolveAndRun|execute\(|setSafeResponse|setClassification|setPlace|setMode|storeAnchorCoords|consumeAnchorCoords/,
-    "the sheet must not recompose, replace route data or move the day anchor",
-  );
-  assert.match(anywherePlannerSource, /day's place and route are unchanged/);
+  const dayMutators = /resolveAndRun|execute\(|setSafeResponse|setClassification|setPlace|setMode|storeAnchorCoords|consumeAnchorCoords|setSelected|setCommitments/;
+  const sheetBlock = componentSource("planner/LiveSheet.tsx");
+  assert.match(sheetBlock, /THE LIVE SHEET/, "live sheet component present");
+  assert.doesNotMatch(sheetBlock, dayMutators, "the sheet must not recompose, replace route data or move the day anchor");
+  // ...and the planner hands it nothing that could: read-only data plus the
+  // scope, time and close callbacks.
+  const sheetElement = componentSource("AnywherePlanner.tsx").split("<LiveSheet")[1]?.split("/>")[0] ?? "";
+  assert.ok(sheetElement.length > 0, "the planner renders the Live sheet");
+  assert.doesNotMatch(sheetElement, dayMutators, "no prop of the sheet can recompose or move the day");
+  assert.match(anywherePlannerSource, /Din plats kunde inte hämtas/);
   // Empty copy names the ACTIVE scope×time cell, and counts come from the
   // buckets, never from copy.
   // The legacy key carries the selected day; do not label tomorrow as Today.
