@@ -39,8 +39,10 @@ function comparableRoleReplacement(base, next) {
 
 // Inspect only the already reached/eligible role pool. A loop's radial reach
 // is a cheap proposal order, not walking evidence; the engine validates trials.
-function retainWalkingFitAlternatives({ roles, candidatesByRole, origin, band }) {
-  if (!band || !Number.isFinite(origin?.lat) || !Number.isFinite(origin?.lng)) return [];
+function retainWalkingFitAlternatives({ roles, candidatesByRole, origin, band, networkSelection = false }) {
+  if ((!band && !networkSelection) || !Number.isFinite(origin?.lat) || !Number.isFinite(origin?.lng)) return [];
+  const cost = candidate => networkSelection
+    ? distanceKm(origin, candidate.coordinates) : proposalCost(candidate.coordinates, origin, band);
   return roles.filter(role => role.requested || role.slot === 'anchor' || role.slot === 'stop').flatMap(role => {
     const surfaced = plannerUsableOptionsForRole(role);
     if (!surfaced.length) return [];
@@ -48,7 +50,7 @@ function retainWalkingFitAlternatives({ roles, candidatesByRole, origin, band })
     const eligible = plannerUsableOptionsForRole({candidates: candidatesByRole[role.role] || []});
     return eligible.filter(next => (role.requested || !surfacedIds.has(next.candidate_id)) &&
       surfaced.some(base => comparableRoleReplacement(base, next)))
-      .sort((a,b) => proposalCost(a.coordinates,origin,band) - proposalCost(b.coordinates,origin,band) ||
+      .sort((a,b) => cost(a) - cost(b) ||
         String(a.candidate_id).localeCompare(String(b.candidate_id)))
       .slice(0,MAX_ROLE_ALTERNATIVES).map(candidate => ({role:role.role,...candidate}));
   });

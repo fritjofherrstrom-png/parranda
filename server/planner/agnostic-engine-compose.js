@@ -33,6 +33,7 @@ const { resolveAgnosticWalkingTargetBand } = require("./agnostic-walking-target"
 
 const { normalizeUserIntents } = require("../candidates/intent-vocabulary");
 const { matchesPreferenceFocus } = require("./preference-focus");
+const { distanceKm } = require("./candidate-reach-policy");
 
 const AGNOSTIC_ENGINE_CITY_KEY = "agnostic-engine-area";
 const MAX_CAPACITY_FRONTIER_CANDIDATES = 2;
@@ -627,24 +628,39 @@ function mapAdmittedSelectionToSourceCandidates({
 
 // At most three one-for-one alternatives, with the same reservoir size. This
 // does not relax role-depth gates or change the published commitment contract.
-function buildWalkingFitReservoirs({sourceCandidates, plannerRoles, origin, walkingKmTarget}) {
+function buildWalkingFitReservoirs({sourceCandidates, plannerRoles, origin, walkingKmTarget,
+  networkSelection = false, selectedStopIds = []}) {
   const { comparableRoleReplacement, proposalCost, MAX_WALKING_FIT_TRIALS, MAX_WALKING_FIT_RESERVOIR } = require('./walking-fit-selection');
   const band = resolveAgnosticWalkingTargetBand(walkingKmTarget);
-  if (!band || sourceCandidates.length < 2 || sourceCandidates.length > MAX_WALKING_FIT_RESERVOIR) return [];
+  if ((!band && !networkSelection) || sourceCandidates.length < 2 || sourceCandidates.length > MAX_WALKING_FIT_RESERVOIR) return [];
   const richIndex = buildRichCandidateIndex(plannerRoles);
   const ids = new Set(sourceCandidates.map(c => c.id));
+  const selected = new Set(selectedStopIds);
+  // A rhythm day has no distance band. Its existing unused role choices are
+  // valid proposals too; never remove another actual stop to try one of them.
+  const alternatives = [...(plannerRoles?.walking_fit_candidates || []),
+    ...(networkSelection ? (plannerRoles?.roles || []).flatMap(role =>
+      (role.candidates || []).map(candidate => ({ ...candidate, role: role.role }))) : [])];
+  const seen = new Set();
   const options = [];
-  for (const base of sourceCandidates.filter(c => c.reservoir_selected || c.reservoir_support)) {
+  for (const base of sourceCandidates.filter(c => (c.reservoir_selected || c.reservoir_support) &&
+    (!networkSelection || selected.has(c.id)))) {
     const rich = richIndex.get(`${base.role}::${base.id}`);
-    for (const next of plannerRoles?.walking_fit_candidates || []) {
-      if (next.role !== base.role || ids.has(next.candidate_id) || !finiteCoords(next.coordinates) ||
+    for (const next of alternatives) {
+      const key = `${base.id}:${next.candidate_id}`;
+      if (next.role !== base.role || (networkSelection ? selected.has(next.candidate_id) : ids.has(next.candidate_id)) ||
+          seen.has(key) || !finiteCoords(next.coordinates) ||
           !comparableRoleReplacement(rich,next)) continue;
+      seen.add(key);
       const replacement = toSourceCandidate({pick:{candidate_id:next.candidate_id},rich:next,
         coords:next.coordinates,city:base.city,role:base.role,
         reservoirSelected:base.reservoir_selected === true,reservoirSupport:base.reservoir_support === true,
         requestedIntents:plannerRoles.requested_preferences});
-      options.push({cost:proposalCost(next.coordinates,origin,band),key:`${base.id}:${next.candidate_id}`,
-        records:sourceCandidates.map(c => c.id === base.id ? replacement : c)});
+      options.push({cost:networkSelection
+        ? distanceKm(origin,next.coordinates) : proposalCost(next.coordinates,origin,band),key,
+        records:networkSelection && ids.has(next.candidate_id)
+          ? sourceCandidates.filter(c => c.id !== base.id)
+          : sourceCandidates.map(c => c.id === base.id ? replacement : c)});
     }
   }
   return options.sort((a,b)=>a.cost-b.cost || a.key.localeCompare(b.key))

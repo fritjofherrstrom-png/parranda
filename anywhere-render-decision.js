@@ -162,6 +162,17 @@
       placeLabel: resolvePlaceLabel(response, place),
       limitations: limitations,
     };
+    if (!composed) {
+      var experiment = response && response.agnostic_route_output_experiment;
+      var reasons = ["network_walking_invalid_configuration", "network_walking_busy", "network_walking_provider_unavailable", "network_walking_unavailable"];
+      for (var r = 0; experiment && r < reasons.length; r += 1) {
+        if (anyTokenPresent(experiment.readiness_blockers, [reasons[r]]) ||
+            anyTokenPresent(experiment.eligibility && experiment.eligibility.blockers, [reasons[r]])) {
+          classification.unavailableReason = reasons[r];
+          return classification;
+        }
+      }
+    }
     if (status === "unavailable") {
       var sparse = sparseSupplyEvidence(response);
       if (sparse) {
@@ -200,7 +211,8 @@
    */
   function shouldRetryTransientSource(response, classification) {
     var cls = classification || classifyAnywhereResult(response);
-    if (!response || cls.status !== "unavailable") return false;
+    if (!response || cls.status !== "unavailable" ||
+        String(cls.unavailableReason || "").indexOf("network_walking_") === 0) return false;
     var experiment = response.agnostic_route_output_experiment;
     var intake = experiment && experiment.intake;
     var sourceStatus = experiment && experiment.source_status;
