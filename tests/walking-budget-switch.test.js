@@ -35,7 +35,6 @@ const { buildApp } = require("../server/app");
 const { mockStableWeatherFetch } = require("./helpers/planner-reservoir-compare");
 
 const BOUND_MS = 60;
-const LATE_MS = 180; // "just after the bound", scaled like the bound itself
 const ORIGINAL_FETCH = global.fetch;
 let places;
 let directoryRows;
@@ -69,6 +68,26 @@ function controllableOverpass() {
     return evaluator.fetcher(url, options);
   };
   return { fetcher, state };
+}
+
+// "Just after the bound", without racing a timer against it: every Overpass
+// answer is held until `release()`, so it is still outstanding when the day is
+// composed however loaded the process is. `settled()` then waits for that same
+// load (its first pass and any expansion) to finish and be stored. Joining it
+// must never repeat a query, which a different cache key would.
+function lateAnswer(overpass) {
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  const from = overpass.state.calls.length;
+  overpass.state.policy = () => ({ waitFor: held, status: 200 });
+  return {
+    release,
+    async settled(loader, request) {
+      await loader.waitForPrimary(request);
+      const queries = overpass.state.calls.slice(from).map((call) => call.query);
+      assert.equal(new Set(queries).size, queries.length, "joined the composition's own load; no query was asked twice");
+    },
+  };
 }
 
 // Production wiring: cached Overpass, warm non-blocking Wikidata-like
@@ -212,16 +231,22 @@ test("Lagom → Lång keeps the published map-backed day when the 9 km map answe
   const loader = await createSupply({ overpass });
   await withPlanner(loader, async (server) => {
     await planWithLifecycle(server, planBody([], 6)); // cold: warms every source
-    await sleep(50);
+    await loader.waitForDirectory(loaderRequest(6));
     const lagom = summarize(await planWithLifecycle(server, planBody([], 6)));
     t.diagnostic(`Lagom 6 km: ${JSON.stringify(lagom)}`);
     assert.equal(lagom.collection, "cached_supply", "the warm 6 km day is served from its own cached map answer");
     assert.ok(lagom.stops >= 4 && lagom.mapStops >= 1, "precondition: a published map-backed day of four or more stops");
 
-    // Only the budget changes. The 9 km Overpass answer is late, not absent.
-    overpass.state.policy = () => ({ delayMs: LATE_MS, status: 200 });
+    // Only the budget changes. The 9 km Overpass answer is late, not absent:
+    // it is held until the day has been composed, then released.
+    const late = lateAnswer(overpass);
     const callsBefore = overpass.state.calls.length;
-    const lang = summarize(await planWithLifecycle(server, planBody([], 9)));
+    let lang;
+    try {
+      lang = summarize(await planWithLifecycle(server, planBody([], 9)));
+    } finally {
+      late.release();
+    }
     t.diagnostic(`Lång 9 km, map answer late: ${JSON.stringify(lang)}`);
     assert.ok(lang.loaded >= lagom.loaded,
       `no source family may vanish on a budget switch (${lagom.loaded} -> ${lang.loaded} records)`);
@@ -241,7 +266,7 @@ test("Lagom → Lång keeps the published map-backed day when the 9 km map answe
 
     // The late answer was not wasted: it completes in the background and the
     // next request is served from the 9 km answer itself.
-    await sleep(LATE_MS * 3);
+    await late.settled(loader, loaderRequest(9));
     overpass.state.policy = () => ({ delayMs: 0, status: 200 });
     const callsAfterSwitch = overpass.state.calls.length;
     const settled = summarize(await planWithLifecycle(server, planBody([], 9)));
@@ -296,7 +321,7 @@ test("a map source that answers within the bound separates the wait from composi
   const loader = await createSupply({ overpass });
   await withPlanner(loader, async (server) => {
     await planWithLifecycle(server, planBody([], 6));
-    await sleep(50);
+    await loader.waitForDirectory(loaderRequest(6));
     const lagom = summarize(await planWithLifecycle(server, planBody([], 6)));
     // Same switch, but the 9 km answer is on time: nothing to fall back on.
     const lang = summarize(await planWithLifecycle(server, planBody([], 9)));
@@ -322,10 +347,16 @@ test("second hand: Lagom → Lång keeps map-backed second-hand depth and report
   const loader = await createSupply({ overpass });
   await withPlanner(loader, async (server) => {
     await planWithLifecycle(server, planBody(["second_hand"], 6));
-    await sleep(50);
+    await loader.waitForDirectory(loaderRequest(6, { requestedIntents: ["second_hand"] }));
     const lagom = summarize(await planWithLifecycle(server, planBody(["second_hand"], 6)));
-    overpass.state.policy = () => ({ delayMs: LATE_MS, status: 200 });
-    const lang = summarize(await planWithLifecycle(server, planBody(["second_hand"], 9)));
+    const late = lateAnswer(overpass);
+    let lang;
+    try {
+      lang = summarize(await planWithLifecycle(server, planBody(["second_hand"], 9)));
+    } finally {
+      late.release();
+    }
+    await late.settled(loader, loaderRequest(9, { requestedIntents: ["second_hand"] }));
     t.diagnostic(`second hand, Lagom 6 km: ${JSON.stringify(lagom)}`);
     t.diagnostic(`second hand, Lång 9 km, map answer late: ${JSON.stringify(lang)}`);
     assert.ok(lagom.covered.includes("second_hand") && lagom.mapStops >= 1, "precondition: a map-backed second-hand day");
@@ -387,8 +418,8 @@ test("with no map answer for any budget the directory still rescues, and says so
   overpass.state.policy = () => ({ delayMs: 0, status: 504 });
   const loader = await createSupply({ overpass });
   const request = loaderRequest(9);
-  await loader({ ...request, walkingTargetBand: fx.walkingBand(4) }); // warms the directory only
-  await sleep(50);
+  await loader({ ...request, walkingTargetBand: fx.walkingBand(4) }); // starts warming the directory only
+  await loader.waitForDirectory(request);
   const records = await loader(request);
   assert.ok(records.length > 0, "the outage rescue still answers");
   assert.ok(records.every((record) => !familiesOf(record).has("map")));
