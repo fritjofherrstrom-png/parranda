@@ -1,5 +1,15 @@
 # Main catch-up: beslut och genomförandesekvens
 
+> **Historiskt underlag från integrationsarbetet den 1 oktober.**
+> [#543](https://github.com/fritjofherrstrom-png/parranda/pull/543) landades
+> den 2 oktober med merge-commit `98fd53ec0a846045044f52be1fbd5fa917bdda6e`;
+> kandidat `a3dcebcc42883b270e013beea4fcab766e72df57`. Samtliga 22 inkluderade
+> PR-headar är ancestors till landad main. Nyare SHA-bunden Ystad/Live-QA
+> och det avslutade fika-provet finns på PR:n. Fika och cacheidentitet är
+> INCONCLUSIVE och accepterade som dokumenterade observationsgränser,
+> inte runtime-PASS. Följ inte nedanstående gamla draft-/QA-beställningar
+> som aktuella nästa steg. Läs aktuell GitHub-status och `AGENTS.md`.
+
 ## Exakt-head QA och avgränsad providerfix
 
 Hermes verifierade `8de0a6ac46c8fbe9afaa52d73fafb2093d4b3b4d` med samma

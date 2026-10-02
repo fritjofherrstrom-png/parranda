@@ -1,5 +1,8 @@
 # Parranda Codex Project Context
 
+Shared ownership, QA handoff and landing rules for Codex and Hermes are in
+[`AGENTS.md`](AGENTS.md). Apply them alongside the product contracts below.
+
 ## North star
 
 Parranda's agnostic goal is not a specific city, fixture, or narrow intent.
