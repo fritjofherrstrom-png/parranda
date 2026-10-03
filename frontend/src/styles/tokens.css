@@ -1,114 +1,102 @@
+/* Parranda — "Linje" tokens.
+ *
+ * The day is a line through the city: stops are stations, walks are segments,
+ * a woven live event is a transfer. Colours are split by ROLE and stored as
+ * space-separated RGB channels so Tailwind's opacity modifiers keep working
+ * (tailwind.css maps each one to a --color-parranda-* theme colour).
+ *
+ * Two themes follow the day's rhythm: `day` (light) and `night` (dark). The
+ * shell's inline script (layouts/Shell.astro) picks one before first paint —
+ * the reader's own choice if they made one, otherwise the local clock — and
+ * writes it to <html data-theme>. Nothing React renders depends on it, so the
+ * static build and the hydrated tree never disagree.
+ *
+ * Roles (contrast against the theme's paper):
+ *   ink         text and strokes                       day 15.6:1 · night 16.7:1
+ *   paper       the ground
+ *   terracotta  FILLED primary action, white text       5.2:1 in both themes
+ *   ember       the route line, stations, live dot      graphic, ≥3:1
+ *   clay        accent TEXT                             day 5.3:1 · night 8.9:1
+ *   glow        eyebrows and honesty notes              day 5.2:1 · night 11.9:1
+ *   live        Live: events, the Live card, transfers  day 6.6:1 · night 8.4:1
+ * Secondary text never goes below 65% ink (≥4.5:1 in the light theme).
+ */
 :root {
-  /* Handoff palette (Parranda — final design handoff).
-     Accent is split by ROLE: terracotta = filled primary action (#FFF text,
-     5.0:1 — the retired #C95B34 measured 4.18:1); ember = lines / live dot /
-     hover; clay = accent TEXT on dark (terracotta is never text on dark); glow
-     = eyebrows / honesty. Secondary text never below 65% ink on paper. */
-  --p-color-ink: 246 239 227; /* #F6EFE3 */
-  --p-color-paper: 23 18 15; /* #17120F */
-  --p-color-terracotta: 185 78 43; /* #B94E2B — primary action */
-  --p-color-ember: 224 122 78; /* #E07A4E — lines, live dot */
-  --p-color-clay: 232 161 132; /* #E8A184 — accent text on dark */
-  --p-color-glow: 252 194 126; /* #FCC27E — eyebrows, honesty */
+  color-scheme: light;
+  --p-color-ink: 22 20 17; /* #161411 */
+  --p-color-paper: 238 236 231; /* #EEECE7 */
+  --p-color-terracotta: 199 56 26; /* #C7381A */
+  --p-color-ember: 232 67 29; /* #E8431D */
+  --p-color-clay: 178 50 24; /* #B23218 */
+  --p-color-glow: 138 86 0; /* #8A5600 */
+  --p-color-live: 35 66 200; /* #2342C8 */
+  --p-color-on-live: 255 255 255;
   --p-color-accent: var(--p-color-ember); /* legacy alias → ember */
-  --p-radius-card: 16px;
+  --p-map-tiles: grayscale(1) contrast(0.92) brightness(1.04);
+  --p-radius-card: 18px;
   --p-radius-button: 14px;
-  --p-font-display: "Cormorant Garamond";
-  --p-font-body: Manrope;
+  --p-font-display: "Archivo";
+  --p-font-body: "Archivo";
+  --p-font-mono: "IBM Plex Mono";
+}
+
+:root[data-theme="night"] {
+  color-scheme: dark;
+  --p-color-ink: 243 240 234; /* #F3F0EA */
+  --p-color-paper: 17 16 18; /* #111012 */
+  --p-color-terracotta: 199 56 26; /* #C7381A */
+  --p-color-ember: 255 91 46; /* #FF5B2E */
+  --p-color-clay: 255 149 115; /* #FF9573 */
+  --p-color-glow: 255 194 102; /* #FFC266 */
+  --p-color-live: 147 168 255; /* #93A8FF */
+  --p-color-on-live: 17 16 18;
+  --p-map-tiles: grayscale(1) invert(1) brightness(0.82) contrast(0.92);
+}
+
+/* Before the shell script runs (or without it), follow the system. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    color-scheme: dark;
+    --p-color-ink: 243 240 234;
+    --p-color-paper: 17 16 18;
+    --p-color-ember: 255 91 46;
+    --p-color-clay: 255 149 115;
+    --p-color-glow: 255 194 102;
+    --p-color-live: 147 168 255;
+    --p-color-on-live: 17 16 18;
+    --p-map-tiles: grayscale(1) invert(1) brightness(0.82) contrast(0.92);
+  }
 }
 
 * {
   box-sizing: border-box;
 }
 
+html {
+  background: rgb(var(--p-color-paper));
+}
+
 body {
   min-height: 100vh;
   margin: 0;
-  font-family: var(--p-font-body), system-ui, sans-serif;
+  font-family: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
   color: rgb(var(--p-color-ink));
-  background:
-    radial-gradient(circle at 20% 20%, rgb(var(--p-color-accent) / 0.22), transparent 30rem),
-    radial-gradient(circle at 80% 0%, rgb(var(--p-color-glow) / 0.18), transparent 26rem),
-    rgb(var(--p-color-paper));
+  background: rgb(var(--p-color-paper));
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  /* Full-bleed lines (the landing's station line) run past the content
+     column; clip, never scroll sideways. `clip` keeps sticky working. */
+  overflow-x: clip;
 }
 
-.foundation-shell {
-  width: min(960px, calc(100vw - 32px));
-  margin: 0 auto;
-  padding: 96px 0;
+/* The theme switch draws both glyphs; the theme decides which one shows, so the
+   button needs no theme state to render. */
+[data-theme-glyph="night"] {
+  display: none;
 }
-
-.eyebrow {
-  margin: 0 0 18px;
-  color: rgb(var(--p-color-glow));
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+:root[data-theme="night"] [data-theme-glyph="day"] {
+  display: none;
 }
-
-h1,
-h2,
-p {
-  margin-top: 0;
-}
-
-h1 {
-  max-width: 760px;
-  margin-bottom: 22px;
-  font-family: var(--p-font-display), system-ui, sans-serif;
-  font-size: clamp(3rem, 8vw, 7rem);
-  line-height: 0.9;
-  letter-spacing: -0.08em;
-}
-
-.lede {
-  max-width: 700px;
-  color: rgb(var(--p-color-ink) / 0.74);
-  font-size: clamp(1.1rem, 2vw, 1.35rem);
-  line-height: 1.55;
-}
-
-.contract-card {
-  margin-top: 44px;
-  padding: clamp(24px, 4vw, 38px);
-  border: 1px solid rgb(var(--p-color-ink) / 0.14);
-  border-radius: var(--p-radius-card);
-  background: rgb(var(--p-color-ink) / 0.06);
-  box-shadow: 0 24px 80px rgb(0 0 0 / 0.26);
-}
-
-.contract-card h2 {
-  margin-bottom: 18px;
-  font-size: 1rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.contract-card ul {
-  display: grid;
-  gap: 12px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.contract-card li {
-  padding-left: 1.4rem;
-  color: rgb(var(--p-color-ink) / 0.82);
-  line-height: 1.45;
-  position: relative;
-}
-
-.contract-card li::before {
-  content: '•';
-  position: absolute;
-  left: 0;
-  color: rgb(var(--p-color-accent));
-}
-
-.footnote {
-  margin-top: 24px;
-  color: rgb(var(--p-color-ink) / 0.58);
-  font-size: 0.92rem;
+:root[data-theme="night"] [data-theme-glyph="night"] {
+  display: inline;
 }

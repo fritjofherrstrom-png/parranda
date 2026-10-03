@@ -4,6 +4,8 @@ import test from "node:test";
 
 import { anywhereBlitzView } from "../src/lib/blitz-view.mjs";
 
+import { plannerSurfaceSource } from "./helpers/planner-source.mjs";
+
 const plannerSource = readFileSync(new URL("../src/components/AnywherePlanner.tsx", import.meta.url), "utf8");
 
 test("Blitz view preserves one source-backed place without route or inspect internals", () => {
@@ -143,5 +145,5 @@ test("product Blitz calls the trusted contract without re-composing or mutating 
   assert.match(body, /routeAnchorCoords/);
   assert.doesNotMatch(body, /setSelected|resolveAndRun|execute\(/);
   assert.doesNotMatch(plannerSource, /chooseBlitzPreferences/);
-  assert.match(plannerSource, /It does not change today's route/);
+  assert.match(plannerSurfaceSource(), /It does not change today's route/);
 });

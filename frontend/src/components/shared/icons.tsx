@@ -190,3 +190,33 @@ export function HalfCircleIcon({ className }: IconProps) {
     </Icon>
   );
 }
+
+/** A walker — the walk between two stops. */
+export function WalkIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <circle cx="13" cy="4.5" r="1.8" />
+      <path d="m9 21 3-6.5 3 3V21" />
+      <path d="M7.5 12 10 8.5l4 1 2.5 3" />
+    </Icon>
+  );
+}
+
+/** The day theme. */
+export function SunIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4" />
+    </Icon>
+  );
+}
+
+/** The night theme. */
+export function MoonIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />
+    </Icon>
+  );
+}

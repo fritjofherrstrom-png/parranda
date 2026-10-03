@@ -1,0 +1,55 @@
+---
+// The one document shell both islands share: fonts, tokens, Tailwind and the
+// theme choice. Express mutates the built HTML at serve time (the request-time
+// `<html lang>`, the landing's city registry), so the opening tag stays exactly
+// `<html lang="en">` — server/app.js replaces that literal.
+//
+// THEME. "Linje" follows the day: the light theme by day and the dark one in
+// the evening, from the reader's own clock — unless they chose one with the
+// app bar's switch (kept in localStorage). The choice is written to
+// <html data-theme> before first paint; React never renders it, so hydration
+// cannot disagree with the static build.
+import "../styles/tokens.css";
+import "../styles/tailwind.css";
+
+interface Props {
+  title: string;
+  description: string;
+}
+const { title, description } = Astro.props;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <script is:inline>
+      (function () {
+        var theme = null;
+        try {
+          var stored = window.localStorage.getItem("parranda:theme");
+          if (stored === "day" || stored === "night") theme = stored;
+        } catch (e) {}
+        if (!theme) {
+          var hour = new Date().getHours();
+          theme = hour >= 6 && hour < 18 ? "day" : "night";
+        }
+        document.documentElement.setAttribute("data-theme", theme);
+      })();
+    </script>
+    <meta name="theme-color" content="#EEECE7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#111012" media="(prefers-color-scheme: dark)" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=IBM+Plex+Mono:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <slot name="head" />
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

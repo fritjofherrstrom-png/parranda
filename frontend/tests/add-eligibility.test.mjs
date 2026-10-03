@@ -219,13 +219,12 @@ test("Keep on a stop already in the published route is untouched", async (t) => 
 // The structural invariant the behavioural tests cannot see.
 // --------------------------------------------------------------------------
 
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { plannerSurfaceSource } from "./helpers/planner-source.mjs";
 
-const component = readFileSync(
-  fileURLToPath(new URL("../src/components/AnywherePlanner.tsx", import.meta.url)),
-  "utf8",
-);
+// The planner surface: the orchestrator first (which owns every request, race
+// guard and ledger write), then the pieces it renders (components/planner/*,
+// components/shared/*), where the controls now live.
+const component = plannerSurfaceSource();
 
 test("the client reads the server field and derives nothing of its own", () => {
   // Only an explicit true is permission — not truthiness, which would let a

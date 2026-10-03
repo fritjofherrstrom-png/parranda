@@ -31,7 +31,10 @@ import { CollapseIcon, ExpandIcon } from "../shared/icons";
 import type { DistrictArea } from "./types";
 import type { Translate } from "./copy";
 
-const ROUTE_COLOR = "#b6582f";
+// The line's colour comes from the theme (tailwind.css: `.route-map-line` and
+// the dot classes read the role tokens), so a day/night switch recolours a
+// drawn map without redrawing it. This value is only the SVG fallback.
+const ROUTE_COLOR = "#e8431d";
 
 // Footprints the fit keeps clear of the controls, in px. A route marker's
 // visible disc is 30px (tailwind.css: the 44px `.route-map-marker`, its
@@ -197,8 +200,8 @@ export default function RouteMap({
             L.polyline(
               routePath,
               sketch
-                ? { color: ROUTE_COLOR, weight: 3.5, opacity: 0.9, dashArray: "1 9", lineCap: "round" }
-                : { color: ROUTE_COLOR, weight: 4, opacity: 0.92 },
+                ? { className: "route-map-line", color: ROUTE_COLOR, weight: 5, opacity: 0.95, dashArray: "1 11", lineCap: "round" }
+                : { className: "route-map-line", color: ROUTE_COLOR, weight: 5, opacity: 0.95 },
             ),
           );
           routePath.forEach(([lat, lng]: [number, number]) => marks.push({ lat, lng, avoidControls: false }));
@@ -266,6 +269,7 @@ export default function RouteMap({
             if (!Number.isFinite(stop.lat) || !Number.isFinite(stop.lng)) return;
             marks.push({ lat: stop.lat!, lng: stop.lng!, radius: DOT_RADIUS });
             const dot = L.circleMarker([stop.lat!, stop.lng!], {
+              className: "route-map-dot",
               radius: 5,
               color: ROUTE_COLOR,
               weight: 1.5,
@@ -286,7 +290,7 @@ export default function RouteMap({
           (area.stops ?? []).forEach((stop) => {
             if (!Number.isFinite(stop?.lat) || !Number.isFinite(stop?.lng)) return;
             marks.push({ lat: stop.lat, lng: stop.lng, radius: DOT_RADIUS });
-            const dot = L.circleMarker([stop.lat, stop.lng], { radius: 5, color: ROUTE_COLOR, weight: 2, fillColor: "#fffaf3", fillOpacity: 0.95 });
+            const dot = L.circleMarker([stop.lat, stop.lng], { className: "route-map-candidate", radius: 5, color: ROUTE_COLOR, weight: 2, fillColor: "#fffaf3", fillOpacity: 0.95 });
             if (stop.name) dot.bindTooltip(safeTooltip(stop.name));
             layer.addLayer(dot);
           });
@@ -352,7 +356,7 @@ export default function RouteMap({
       {/* Screen layout keeps each numbered touch footprint independently visible. */}
       <div ref={mapRef} className="h-full w-full" />
       {!mapDrawn && (
-        <div className="absolute inset-0 flex items-center justify-center bg-parranda-ink/10 text-sm text-parranda-ink/60">
+        <div className="absolute inset-0 flex items-center justify-center bg-parranda-ink/10 text-sm text-parranda-ink/68">
           {t("Ritar kartan …", "Drawing the map …")}
         </div>
       )}
@@ -365,13 +369,13 @@ export default function RouteMap({
           aria-expanded={mapExpanded}
           aria-label={mapExpanded ? t("Förminska kartan", "Shrink map") : t("Förstora kartan", "Expand map")}
           data-map-control=""
-          className="absolute right-2.5 top-2.5 z-[1001] inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-parranda-ink/20 bg-parranda-paper/90 text-parranda-ink/85 shadow-sm backdrop-blur-sm transition hover:border-parranda-ember"
+          className="absolute right-2.5 top-2.5 z-1001 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-parranda-ink/20 bg-parranda-paper/90 text-parranda-ink/85 shadow-xs backdrop-blur-xs transition hover:border-parranda-ember"
         >
           {mapExpanded ? <CollapseIcon className="h-5 w-5" /> : <ExpandIcon className="h-5 w-5" />}
         </button>
       )}
     </div>
-    {layoutCrowded && <p role="status" className="mt-1 text-xs text-parranda-ink/65">{t("Kartan är trång — förstora eller zooma för att skilja alla stoppnummer åt.", "The map is crowded — expand or zoom to separate all stop numbers.")}</p>}
+    {layoutCrowded && <p role="status" className="mt-1 text-xs text-parranda-ink/68">{t("Kartan är trång — förstora eller zooma för att skilja alla stoppnummer åt.", "The map is crowded — expand or zoom to separate all stop numbers.")}</p>}
     </>
   );
 }

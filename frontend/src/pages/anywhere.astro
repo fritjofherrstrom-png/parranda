@@ -2,32 +2,16 @@
 // The any-city planner — the new frontend's first production-capable surface.
 // The shell is intentionally BARE: all copy lives in the island. Express owns
 // the request-time <html lang> contract for /anywhere because static Astro
-// output cannot read query params directly. Served in production behind
-// PARRANDA_NEW_ANYWHERE (see docs/FRONTEND_MIGRATION_CONTRACT.md).
-import "../styles/tokens.css";
-import "../styles/tailwind.css";
+// output cannot read query params directly.
+import Shell from "../layouts/Shell.astro";
 import AnywherePlanner from "../components/AnywherePlanner";
 ---
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Manrope:wght@400;500;600;700;800&display=swap"
-      rel="stylesheet"
-    />
-    <title>Parranda — any city</title>
-    <meta
-      name="description"
-      content="Type any city. Parranda builds a day with the right rhythm, neighborhoods and timing — extra curated in Barcelona and Rome."
-    />
-  </head>
-  <body>
-    <main class="mx-auto flex w-full max-w-2xl flex-col px-4 pb-16 pt-5 sm:px-6 sm:pt-7">
-      <AnywherePlanner client:load />
-    </main>
-  </body>
-</html>
+<Shell
+  title="Parranda — any city"
+  description="Type any city. Parranda builds a day with the right rhythm, neighborhoods and timing — extra curated in Barcelona and Rome."
+>
+  <main class="mx-auto flex w-full max-w-2xl flex-col px-4 pb-16 pt-3 sm:px-6 lg:max-w-[88rem] lg:px-8">
+    <AnywherePlanner client:load />
+  </main>
+</Shell>

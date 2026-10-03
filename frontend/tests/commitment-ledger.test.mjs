@@ -1,15 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
 import { plannerSurfaceSource } from "./helpers/planner-source.mjs";
-import { fileURLToPath } from "node:url";
 
 import { buildAnywherePayload } from "../src/lib/anywhere-payload.mjs";
 
-const component = readFileSync(
-  fileURLToPath(new URL("../src/components/AnywherePlanner.tsx", import.meta.url)),
-  "utf8",
-);
+// The planner surface: the orchestrator first (which owns every request, race
+// guard and ledger write), then the pieces it renders (components/planner/*,
+// components/shared/*), where the controls now live.
+const component = plannerSurfaceSource();
 
 test("an empty ledger leaves the request contract untouched", () => {
   const bare = buildAnywherePayload({ place: "Somewhere", dates: ["2026-08-22"] });

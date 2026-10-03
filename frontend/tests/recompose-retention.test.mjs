@@ -98,13 +98,12 @@ test("a held day is always labelled, and only while it is actually not current",
 // (Same source-contract technique the scout suite uses for city-agnosticism.)
 // --------------------------------------------------------------------------
 
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { plannerSurfaceSource } from "./helpers/planner-source.mjs";
 
-const component = readFileSync(
-  fileURLToPath(new URL("../src/components/AnywherePlanner.tsx", import.meta.url)),
-  "utf8",
-);
+// The planner surface: the orchestrator first (which owns every request, race
+// guard and ledger write), then the pieces it renders (components/planner/*,
+// components/shared/*), where the controls now live.
+const component = plannerSurfaceSource();
 
 test("the compose teardown only clears the day when retention says so", () => {
   // The bug this slice fixes: an UNCONDITIONAL clear before the fetch.
