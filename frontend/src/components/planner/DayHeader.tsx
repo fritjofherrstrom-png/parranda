@@ -149,16 +149,26 @@ export default function DayHeader({
           </>
         )}
       </h2>
+      {/* Each fact wraps as a unit: "5 STOPS" never splits across lines. */}
       <p className="type-data text-xs text-parranda-ink/72">
-        {dayWord}
-        {Number.isFinite(primaryRoute?.estimated_km)
-          ? ` · ≈ ${walkingDistanceLabel(primaryRoute.estimated_km, lang)} ${t("till fots", "on foot")}`
-          : ""}
-        {Number.isFinite(primaryRoute?.longest_leg_km)
-          ? ` · ${t("längsta sträcka", "longest stretch")} ${walkingDistanceLabel(primaryRoute.longest_leg_km, lang)}`
-          : ""}
-        {` · ${coreCount} ${coreCount === 1 ? t("stopp", "stop") : t("stopp", "stops")}`}
-        {wovenCount > 0 ? ` + ${wovenCount} live${lang === "en" ? " event" : "-event"}` : ""}
+        <span className="whitespace-nowrap">{dayWord}</span>
+        {Number.isFinite(primaryRoute?.estimated_km) && (
+          <>
+            {" · "}
+            <span className="whitespace-nowrap">{`≈ ${walkingDistanceLabel(primaryRoute.estimated_km, lang)} ${t("till fots", "on foot")}`}</span>
+          </>
+        )}
+        {Number.isFinite(primaryRoute?.longest_leg_km) && (
+          <>
+            {" · "}
+            <span className="whitespace-nowrap">{`${t("längsta sträcka", "longest stretch")} ${walkingDistanceLabel(primaryRoute.longest_leg_km, lang)}`}</span>
+          </>
+        )}
+        {" · "}
+        <span className="whitespace-nowrap">
+          {`${coreCount} ${coreCount === 1 ? t("stopp", "stop") : t("stopp", "stops")}`}
+          {wovenCount > 0 ? ` + ${wovenCount} live${lang === "en" ? " event" : "-event"}` : ""}
+        </span>
       </p>
       {/* What the day did for each pick, in the pick's own words. A pick
           the route only partly covers, or does not cover, says so here
