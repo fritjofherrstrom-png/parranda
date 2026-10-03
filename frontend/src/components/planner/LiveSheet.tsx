@@ -340,7 +340,7 @@ export default function LiveSheet({
               )}
             </div>
           )}
-          {(liveQueryError || (!liveQueryPending && sheetPulseState === "pending")) && (
+          {(liveQueryError || (!liveQueryPending && (sheetPulseState === "pending" || sheetPulseState === "unavailable"))) && (
             <button type="button" onClick={onRetry}
               className="inline-flex min-h-11 items-center self-start rounded-full border border-parranda-ember/50 px-4 text-sm font-bold text-parranda-clay">
               {t("Försök igen", "Try again")}

@@ -931,13 +931,15 @@ async function collectAnchorEvents({
     else outOfPeriodCount += 1;
   }
   const inPeriodEvidence = normalizedEvidence.filter((event) => periodRank.has(event));
+  const displayableEvidence = inPeriodEvidence.filter((event) => isPulseDisplayEvent(event, nowDate));
+  const nonDisplayableEvidence = inPeriodEvidence.filter((event) => !isPulseDisplayEvent(event, nowDate));
 
   // A bounded server-owned resolver may recover source-backed venue geometry.
   // Public payload cannot inject this seam; ambiguous, weak or out-of-radius
   // results remain mapless and are rejected by the unchanged fusion gate below.
   // The active Live time bucket gets first use of the bounded lookup budget.
   const venueResolution = await resolveEventVenueGeometry(
-    inPeriodEvidence.slice().sort((left, right) =>
+    displayableEvidence.slice().sort((left, right) =>
       periodRank.get(left) - periodRank.get(right) || compareVenueResolutionPriority(left, right)),
     {
       resolver: venueResolver,
@@ -953,7 +955,9 @@ async function collectAnchorEvents({
   // only survive when another source describes the same occurrence with trusted
   // coordinates, after which the fused occurrence is bounded again. Every row
   // reaching this gate lies inside the requested period.
-  const bounded = fuseAndBoundEventEvidence(venueResolution.events, {
+  // Non-displayable rows still reach the existing rejection gates and counts,
+  // but cannot spend a venue lookup that a real happening needs.
+  const bounded = fuseAndBoundEventEvidence([...venueResolution.events, ...nonDisplayableEvidence], {
     anchor,
     radiusM: effectiveRadiusM,
     spatialScope,
@@ -1501,8 +1505,8 @@ const EVENT_CACHE_TTL_MS = 20 * 60 * 1000; // 20 min — time-sensitive, but reu
 const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a route
 // v6 excludes v5 pools truncated by midnight-gap and global-window bugs.
 // v7 excludes recurring ranges that v6 normalized as every-day daily windows.
-// v8 refreshes partial first-page pools and separates active-period lookup budgets.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v8";
+// v9 prevents non-displayable listings from exhausting the bounded venue budget.
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v9";
 
 // A failed refresh is a finished answer, not "still loading". It is held for a
 // short, bounded time so reads report the failure; afterwards the next read

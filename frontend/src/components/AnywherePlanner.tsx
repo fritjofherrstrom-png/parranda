@@ -324,6 +324,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const liveSheetDialogRef = useRef<HTMLDivElement | null>(null);
   const liveSheetCloseRef = useRef<HTMLButtonElement | null>(null);
   const liveQueryAbortRef = useRef<AbortController | null>(null);
+  const liveSheetOpenedRef = useRef(false);
   const liveNearMeCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
   const liveResponseRef = useRef(safeResponse);
   liveResponseRef.current = safeResponse;
@@ -336,6 +337,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     setLiveQueryPending(false);
     setLiveQueryError(null);
     setLiveQueryGeoHint(null);
+    liveSheetOpenedRef.current = false;
     liveNearMeCoordsRef.current = null;
     setLiveSheetScope("around_place");
   }, [safeResponse]);
@@ -2892,14 +2894,22 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               type="button"
               ref={liveSheetTriggerRef}
               onClick={() => {
-                const nextTime = pulseBuckets.tonight.length > 0 || split.woven.length > 0 ? "tonight" : "week";
+                // Reopening resumes the cell the reader selected. Reapplying
+                // the day's default period would relabel another query's rows
+                // and a pending route/GPS query would restart around the place.
+                const reopening = liveSheetOpenedRef.current;
+                const nextTime = reopening ? liveSheetTime
+                  : pulseBuckets.tonight.length > 0 || split.woven.length > 0 ? "tonight" : "week";
+                const nextScope = reopening ? liveSheetScope : "around_place";
+                liveSheetOpenedRef.current = true;
                 setLiveSheetTime(nextTime);
                 setLiveSheetOpen(true);
                 // "Couldn't verify" + an available anchor: opening the sheet IS
                 // the "check again" — fire a fresh around-place query (its own
                 // bounded retries) instead of showing the same stale emptiness.
-                if ((pulseState === "unavailable" || pulseState === "pending" || liveQueryEvents?.pending) && aroundPlaceScopeAvailable && !liveQueryPending) {
-                  requestLiveSheetScope("around_place", nextTime).catch(() => {});
+                if ((reopening || pulseState === "unavailable" || pulseState === "pending") &&
+                    (nextScope !== "around_place" || aroundPlaceScopeAvailable) && !liveQueryPending) {
+                  requestLiveSheetScope(nextScope, nextTime, true).catch(() => {});
                 }
               }}
               className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-parranda-btn border border-parranda-ember/50 bg-parranda-ember/10 text-[13px] font-bold text-parranda-clay transition hover:bg-parranda-ember/15"

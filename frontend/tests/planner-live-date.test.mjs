@@ -167,6 +167,14 @@ test('changing time near me reuses this Live location and keeps the Planner anch
   const week = h.fetchMock.pending().find(c => c.url.includes('/api/live-events'));
   assert.equal(week.body.time, 'this_week');
   assert.deepEqual(week.body.anchor, { lat: 60.18, lng: 24.95 });
+  await h.fetchMock.respond(week, { contract: 'live_event_query_v1', route_mutation: false,
+    day_anchor_mutation: false, live_events: live('2026-06-29') });
+  await click(h, h.container.querySelector('[role="dialog"] button[aria-label="Close live"]'));
+  await click(h, button(h, /See all live/));
+  const reopened = h.fetchMock.pending().find(c => c.url.includes('/api/live-events'));
+  assert.equal(reopened.body.scope, 'near_me');
+  assert.equal(reopened.body.time, 'this_week');
+  assert.deepEqual(reopened.body.anchor, { lat: 60.18, lng: 24.95 });
   assert.equal(permissions, 1);
   assert.equal(h.fetchMock.calls.filter(c => c.url.includes('/api/route-recommendations')).length, 1);
 });
