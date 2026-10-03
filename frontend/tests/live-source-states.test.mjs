@@ -164,3 +164,69 @@ test('while waiting, the Live sheet does not print responded counts that read as
   assert.doesNotMatch(sheet, /Source health: 0\/1 responded/);
   assert.doesNotMatch(sheet, /couldn't fetch/);
 });
+
+for (const health of [FAILED, PARTIAL_EMPTY]) test(`a terminal ${health.status} source result offers a working retry in the current Live cell`, async (t) => {
+  const h = await composed(live(health));
+  t.after(() => h.unmount());
+  await click(h, button(h, /Explore live/));
+  const initial = h.fetchMock.pending().find((call) => call.url.includes('/api/live-events'));
+  await h.fetchMock.respond(initial, queryBody(live(health)));
+  const composeCount = h.fetchMock.calls.filter((call) => call.url.includes('/api/route-recommendations')).length;
+  const retry = [...h.container.querySelector('[role="dialog"]').querySelectorAll('button')]
+    .find((control) => /^Try again$/.test(control.textContent));
+  assert.ok(retry, 'a finished source failure has a retry action, not only advice to try again');
+  await click(h, retry);
+  const next = h.fetchMock.pending().find((call) => call.url.includes('/api/live-events'));
+  assert.deepEqual(next.body, initial.body, 'retry retains the selected scope, period, preferences and date');
+  await h.fetchMock.respond(next, queryBody(live(HEALTHY_EMPTY)));
+  assert.doesNotMatch(sheetText(h), /couldn't fetch|could only fetch/);
+  assert.equal(h.fetchMock.calls.filter((call) => call.url.includes('/api/route-recommendations')).length, composeCount);
+});
+
+test('reopening Live keeps the queried period and route scope instead of relabelling old results', async (t) => {
+  const today = { id: 'today', title: 'Selected-day concert', starts_at: '2026-09-25T18:00:00Z' };
+  const h = await composed(live(HEALTHY_EMPTY, { tonight: [today] }));
+  t.after(() => h.unmount());
+  await click(h, button(h, /See all live/));
+  await click(h, button(h, /^Near the route$/));
+  await h.fetchMock.respond(h.fetchMock.pending().find((call) => call.url.includes('/api/live-events')),
+    queryBody(live(HEALTHY_EMPTY, { tonight: [today] })));
+  await click(h, button(h, /^Following 7 days$/));
+  const weekQuery = h.fetchMock.pending().find((call) => call.url.includes('/api/live-events'));
+  assert.equal(weekQuery.body.scope, 'near_route');
+  assert.equal(weekQuery.body.time, 'this_week');
+  const following = { id: 'following', title: 'Following-day market', starts_at: '2026-09-26T18:00:00Z' };
+  await h.fetchMock.respond(weekQuery, queryBody(live(HEALTHY_EMPTY, { this_week: [following] })));
+  assert.match(sheetText(h), /Following-day market/);
+  await click(h, h.container.querySelector('[role="dialog"] button[aria-label="Close live"]'));
+  await click(h, button(h, /See all live/));
+  const reopened = h.fetchMock.pending().find((call) => call.url.includes('/api/live-events'));
+  assert.ok(reopened, 'reopening refreshes the selected cell');
+  assert.equal(reopened.body.time, 'this_week');
+  assert.equal(reopened.body.scope, 'near_route');
+  await h.fetchMock.respond(reopened, queryBody(live(HEALTHY_EMPTY, { this_week: [following] })));
+  const sheet = h.container.querySelector('[role="dialog"]');
+  assert.match(sheetText(h), /Following-day market/);
+  assert.equal([...sheet.querySelectorAll('button')].find((b) => /^Following 7 days$/.test(b.textContent)).getAttribute('aria-pressed'), 'true');
+  assert.equal([...sheet.querySelectorAll('button')].find((b) => /^Near the route$/.test(b.textContent)).getAttribute('aria-pressed'), 'true');
+});
+
+test('reopening an interrupted Live refresh retries its route scope and period', async (t) => {
+  const today = { id: 'today', title: 'Selected-day concert', starts_at: '2026-09-25T18:00:00Z' };
+  const h = await composed(live(HEALTHY_EMPTY, { tonight: [today] }));
+  t.after(() => h.unmount());
+  await click(h, button(h, /See all live/));
+  await click(h, button(h, /^Near the route$/));
+  await h.fetchMock.respond(h.fetchMock.pending().find((call) => call.url.includes('/api/live-events')),
+    queryBody(live(HEALTHY_EMPTY, { tonight: [today] })));
+  await click(h, button(h, /^Following 7 days$/));
+  await h.fetchMock.respond(h.fetchMock.pending().find((call) => call.url.includes('/api/live-events')),
+    queryBody(live(PENDING, { pending: true })));
+  await click(h, h.container.querySelector('[role="dialog"] button[aria-label="Close live"]'));
+  await click(h, button(h, /See all live/));
+  const query = h.fetchMock.pending().find((call) => call.url.includes('/api/live-events'));
+  assert.ok(query, 'reopening resumes the interrupted query');
+  assert.equal(query.body.scope, 'near_route');
+  assert.equal(query.body.time, 'this_week');
+  assert.equal(query.body.selected_date, '2026-09-25');
+});

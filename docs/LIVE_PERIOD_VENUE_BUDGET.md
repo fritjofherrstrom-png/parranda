@@ -26,6 +26,13 @@ The assignment uses the same bucket function as the final gate.
 
 - Only rows inside the period may use the unchanged four-lookup budget, and the
   requested day's rows are looked up first.
+- Within that period, a row must also pass the existing Live display-time gate
+  before spending a venue lookup. Permanent or malformed listings otherwise
+  exhausted the budget and were discarded afterward while real events remained
+  mapless. Rejected rows retain their existing fusion/display rejection
+  accounting; source trust, geometry and route gates are unchanged. Result-cache
+  namespace `agnostic-events-v9` avoids serving pools built with the old budget
+  allocation without deleting any operator cache.
 - Rows outside the period never reach the geometry, fusion or display gates.
   They are counted in `out_of_period_event_count`, never as rejected evidence.
 - When nothing is accepted and rows were only outside the period, source health

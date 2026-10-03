@@ -177,6 +177,32 @@ test("in-period rows beyond the unchanged lookup cap are still rejected as maple
   assert.equal(out.acquisition.source_health.result, "events_found");
 });
 
+test("listings that cannot be displayed in Live do not exhaust the venue budget before real events", async () => {
+  const permanent = Array.from({ length: 4 }, (_, index) => mapless(
+    `permanent-${index}`, `Permanent listing ${index}`, "2001-01-01", `Permanent venue ${index}`,
+    { start: "09:00", end: "21:00", endDate: "2030-12-31" },
+  ));
+  const { resolver, venues } = recordingResolver();
+  const out = await collectAnchorEvents({
+    anchor: ANCHOR, now: NOW, selectedDate: TODAY,
+    registry: [{ ...SOURCE, adapter: "linked_events", base: ENDPOINT }],
+    fetcher: async () => ({ ok: true, json: async () => ({ data: [...permanent, ...TODAYS_ROWS].map(row => ({
+      id: row.id, name: { en: row.title.sv },
+      start_time: `${row.start_date}T${row.start_time}:00Z`,
+      end_time: `${row.end_date}T${row.end_time}:00Z`,
+      info_url: { en: row.external_website_url },
+      location: { name: { en: row.venue_name }, street_address: { en: row.address } },
+    })) }) }), venueResolver: resolver,
+  });
+  assert.deepEqual(venues.sort(), ["Biblioteket", "Hamnscenen", "Kyrkan", "Stortorget"]);
+  assert.equal(out.acquisition.venue_resolution.attempted_count, 4, "the existing lookup limit is unchanged");
+  assert.deepEqual(out.tonight.map(e => e.id).sort(), ["t1", "t2", "t3", "t4"]);
+  assert.equal(out.acquisition.source_health.normalized_event_count, 8);
+  assert.equal(out.acquisition.source_health.accepted_event_count, 4);
+  assert.equal(out.acquisition.source_health.rejected_event_count, 4, "invalid rows remain in rejection accounting");
+  assert.equal(out.acquisition.source_health.out_of_period_event_count, 0);
+});
+
 test("without a selected date, rows beyond the Live horizon do not take a listed row's lookup", async () => {
   const later = "2026-10-20";
   const records = [
