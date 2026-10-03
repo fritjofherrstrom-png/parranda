@@ -14,17 +14,20 @@
  *   - daypart headings come from stop.daypart only, never by reordering;
  *   - detours are collapsed, dashed, and explicitly not the route.
  */
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { lineProgress } from "../../lib/line-progress.mjs";
 import { eventSourceLink, eventTiming } from "../../lib/pulse-view.mjs";
 import { mapsPlaceUrl } from "../../lib/maps-links.mjs";
 import { selectedDayHoursLabel } from "../../lib/selected-day-hours.mjs";
 import { stopHoursUnknown, stopTypeLabel } from "../../lib/stop-card-facts.mjs";
 import { walkingDistanceLabel, type RouteContextSuggestion } from "../../lib/route-context-view.mjs";
 import {
+  CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   ExternalIcon,
   KeepIcon,
+  LocationIcon,
   MinusIcon,
   PlusIcon,
   WalkIcon,
@@ -32,6 +35,7 @@ import {
 import { buttonClass, Eyebrow } from "../shared/ui";
 import { DAYPART_LABELS, label, partialPreferenceLabels, typeLabel, type Lang, type Translate } from "./copy";
 import { canCommitTo, type Commitments } from "./commitments";
+import { useFollowPosition } from "./useFollowPosition";
 
 type Leg = { km: number | null; minutes: number | null };
 
@@ -97,6 +101,43 @@ export default function StopLine({
     `${leg.minutes != null ? `${leg.minutes} min` : ""}${leg.minutes != null && leg.km != null ? " · " : ""}${leg.km != null ? walkingDistanceLabel(leg.km, lang) : ""}`;
   const lastCoreIndex = split.core.length - 1;
 
+  // OPENING HOURS, SAID ONCE. When no source gives hours for any stop on the
+  // chosen day, one line above the line says so; repeating it on every
+  // station made it louder than the places themselves. A day where only some
+  // stops lack hours still marks exactly those stops.
+  const hoursUnknownEverywhere = split.core.length > 1 && split.core.every((stop: any) => stopHoursUnknown(stop));
+
+  // "YOU ARE HERE". Today only, and only after an explicit tap: the reader's
+  // live position is read against the stations in route order. Stations
+  // behind the reader are muted, the next one is marked. The position never
+  // leaves this component, and nothing about the day changes.
+  const [following, setFollowing] = useState(false);
+  const follow = useFollowPosition(following);
+  const canFollow = follow.supported && dayOffset === 0;
+  const progress = following && follow.state.status === "tracking"
+    ? lineProgress(split.core, follow.state.position)
+    : null;
+  const currentIndex = progress?.state === "at" ? progress.index : progress?.state === "toward" ? progress.next : null;
+  const coreName = (index: number) => String(split.core[index]?.label || split.core[index]?.name || "").trim();
+  const followStatus = !following
+    ? null
+    : follow.state.status === "locating"
+      ? t("Hämtar din position …", "Finding your position …")
+      : follow.state.status === "denied"
+        ? t("Positionen blockerades. Tillåt platsdelning för att följa dagen.", "Location was blocked. Allow location sharing to follow the day.")
+        : follow.state.status === "unavailable"
+          ? t("Din position kunde inte hämtas just nu.", "Your position couldn't be found right now.")
+          : progress?.state === "at"
+            ? t(`Du är vid ${coreName(progress.index)}`, `You're at ${coreName(progress.index)}`)
+            : progress?.state === "toward"
+              ? t(
+                  `Nästa: ${coreName(progress.next)} · ${walkingDistanceLabel(progress.toNextKm, "sv")} bort`,
+                  `Next: ${coreName(progress.next)} · ${walkingDistanceLabel(progress.toNextKm, "en")} away`,
+                )
+              : progress?.state === "off"
+                ? t("Du är inte nära rutten just nu.", "You're not near the route right now.")
+                : null;
+
   return (
     <section
       aria-label={t("Rutten", "The route")}
@@ -111,7 +152,36 @@ export default function StopLine({
         {dayContextNote && ` ${dayContextNote}`}
       </p>
 
-      <Eyebrow className="mb-1 mt-6">{t("Stoppen i ordning", "The stops, in order")}</Eyebrow>
+      <div className="mb-1 mt-6 flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <Eyebrow>{t("Stoppen i ordning", "The stops, in order")}</Eyebrow>
+        {canFollow && (
+          <button
+            type="button"
+            aria-pressed={following}
+            onClick={() => setFollowing((cur) => !cur)}
+            className={
+              "inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-[13px] font-bold transition " +
+              (following
+                ? "bg-parranda-ink text-parranda-paper"
+                : "border-[1.5px] border-parranda-ink/20 text-parranda-ink hover:border-parranda-ink/50")
+            }
+          >
+            <LocationIcon className={"h-4 w-4 " + (following ? "" : "text-parranda-ember")} />
+            {following ? t("Sluta följa", "Stop following") : t("Följ dagen", "Follow the day")}
+          </button>
+        )}
+      </div>
+      {followStatus && (
+        <p className="mb-1 text-[13px] font-semibold text-parranda-ink" aria-live="polite">{followStatus}</p>
+      )}
+      {hoursUnknownEverywhere && (
+        <p className="mb-1 text-xs leading-relaxed text-parranda-ink/72">
+          {t(
+            "Källorna anger inga öppettider för dagens stopp den valda dagen — kolla innan du går.",
+            "The sources give no opening hours for today's stops on the chosen day — check before you go.",
+          )}
+        </p>
+      )}
       {/* Core stops only, grouped under daypart headings taken from
           stop.daypart — only groups that exist render, and the engine's
           order is never changed to force a grouping. The walk INTO a stop
@@ -148,11 +218,17 @@ export default function StopLine({
             : typeLabel(stop?.type, lang);
           const hoursUnknown = stopHoursUnknown(stop);
           const sourceLabel = String(stop?.source?.label || "").trim();
+          const behind = currentIndex != null && i < currentIndex;
+          const isCurrent = currentIndex === i;
           const station = expanded
             ? "border-parranda-ink bg-parranda-terracotta text-white"
-            : i === lastCoreIndex && split.woven.length === 0
-              ? "border-parranda-ink bg-parranda-ink text-parranda-paper"
-              : "border-parranda-ink bg-parranda-paper text-parranda-ink";
+            : isCurrent
+              ? "border-parranda-ember bg-parranda-paper text-parranda-ink"
+              : behind
+                ? "border-parranda-ink/35 bg-parranda-paper text-parranda-ink/68"
+                : i === lastCoreIndex && split.woven.length === 0
+                  ? "border-parranda-ink bg-parranda-ink text-parranda-paper"
+                  : "border-parranda-ink bg-parranda-paper text-parranda-ink";
           return (
             <li key={stopKey} className="flex flex-col">
               {leg && (leg.minutes != null || leg.km != null) && (
@@ -180,10 +256,21 @@ export default function StopLine({
                 className="group flex min-h-14 w-full items-center gap-3 rounded-parranda-btn py-1.5 pr-1 text-left transition hover:bg-parranda-ink/5"
               >
                 <span className={`type-data relative z-[1] flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-4 text-sm font-semibold transition ${station}`}>
-                  {routeNumber}
+                  {isCurrent && (
+                    <span aria-hidden="true" className="absolute -inset-2 rounded-full border-2 border-parranda-ember motion-safe:animate-ping" />
+                  )}
+                  {behind ? <CheckIcon className="h-4 w-4" /> : routeNumber}
+                  {behind && <span className="sr-only">{routeNumber}</span>}
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="text-[17px] font-extrabold leading-tight text-parranda-ink">{name}</span>
+                  <span className={"flex flex-wrap items-center gap-x-2 text-[17px] font-extrabold leading-tight " + (behind ? "text-parranda-ink/68" : "text-parranda-ink")}>
+                    {name}
+                    {isCurrent && (
+                      <span className="type-eyebrow rounded-full bg-parranda-terracotta px-2 py-0.5 text-[10px] text-white">
+                        {progress?.state === "at" ? t("Du är här", "You're here") : t("Nästa", "Next")}
+                      </span>
+                    )}
+                  </span>
                   <span className="type-data flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-parranda-ink/68">
                     {stopKindLabel && <span>{stopKindLabel}</span>}
                     {kept && (
@@ -196,7 +283,7 @@ export default function StopLine({
                     {/* Visitability stays visible without expanding: a place
                         whose source gives no hours for the chosen day says so
                         here instead of reading as a confirmed visit. */}
-                    {hoursUnknown && (
+                    {hoursUnknown && !hoursUnknownEverywhere && (
                       <span className="text-xs text-parranda-ink/68">{(stopKindLabel || kept) && <span aria-hidden="true">· </span>}{t("Öppettider okända", "Hours unknown")}</span>
                     )}
                   </span>
