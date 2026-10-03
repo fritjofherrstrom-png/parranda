@@ -172,6 +172,11 @@ name. Steps 1 and 2 (the day view-model and the hooks split) remain the next
 work. The same change moved the frontend to Tailwind 4 and Astro 7; see
 `frontend/README.md` for the stack and the design tokens.
 
+The landing no longer lists hand-picked cities (October 2026). The list read
+as a menu of the only places Parranda works, which is the opposite of the
+any-place product. The city registry still drives inline completion and
+routes an exact registered name to its citypack.
+
 **Source-text pins make refactors expensive.** Many contract tests assert that
 exact source strings exist (`assert.match(source, /…/)`). They caught real
 regressions, but this tidy-up had to re-point a dozen of them. Suggested rule:

@@ -6,11 +6,15 @@
  *     the planner via sessionStorage, never the URL).
  * A registered city routes to the modern planner with its server-owned citypack
  * identity; anything else goes to freeform any-city intake. The registry is injected by
- * the server at serve time (a city is data, never code). No fake-live teaser,
- * no static Blitz cards — the surface promises only what it does.
+ * the server at serve time (a city is data, never code). It powers the inline
+ * completion and the routing only: the landing advertises no list of cities
+ * (the hand-picked city stations were removed in October 2026 — they read as a
+ * menu of the only places Parranda works, which is the opposite of the
+ * product). No fake-live teaser, no static Blitz cards — the surface promises
+ * only what it does.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
-import { curatedCityHref, routeForInput, inlineCompletion, type CityRegistry } from "../lib/landing-routing.mjs";
+import { useEffect, useRef, useState } from "react";
+import { routeForInput, inlineCompletion, type CityRegistry } from "../lib/landing-routing.mjs";
 import { storeAnchorCoords, requestPosition } from "../lib/location-anchor.mjs";
 import { LAST_KEY } from "../lib/anywhere-storage.mjs";
 import { liveDateLabel } from "../lib/live-event-query.mjs";
@@ -147,20 +151,6 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
     }
   }
 
-  const curated = useMemo(() => {
-    const seen = new Set<string>();
-    const out: Array<{ key: string; label: string; status?: string }> = [];
-    for (const entry of Object.values(registry)) {
-      if (!entry || !entry.key || seen.has(entry.key)) continue;
-      // Only publicly presentable curated cities get a chip (preview/internal
-      // cities stay searchable-by-name but are not advertised).
-      if (entry.status !== "public" && entry.status !== "beta") continue;
-      seen.add(entry.key);
-      out.push(entry);
-    }
-    return out.sort((a, b) => a.label.localeCompare(b.label));
-  }, [registry]);
-
   return (
     <div className="mx-auto flex min-h-svh w-full max-w-6xl flex-col px-4 pt-3 sm:px-8 sm:pt-5">
       <AppBar lang={lang} homeLabel={t("Parranda — till startsidan", "Parranda — home")} languageLabel={t("Språk", "Language")} />
@@ -255,33 +245,6 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
           </a>
         )}
       </main>
-
-      {/* Cities with a hand-picked catalog, drawn as stations on one line. The
-          label says what a visitor gets (places someone chose), not how it is
-          made, and sits on its own line above the stations. */}
-      {curated.length > 0 && (
-        <section className="flex flex-col gap-3 pb-10" aria-labelledby="landingCurated">
-          <p id="landingCurated" className="type-eyebrow text-parranda-glow">
-            {t("Handplockat i", "Hand-picked in")}
-          </p>
-          <div className="relative">
-            <span aria-hidden="true" className="absolute left-1/2 top-[1.15rem] h-1.5 w-screen -translate-x-1/2 bg-parranda-ember sm:h-2" />
-            <ul className="relative flex flex-wrap gap-x-10 gap-y-4 sm:gap-x-24">
-              {curated.map((city) => (
-                <li key={city.key}>
-                  <a
-                    href={curatedCityHref(city, lang) ?? "/anywhere"}
-                    className="group flex min-h-11 flex-col items-start gap-2 text-parranda-ink transition hover:text-parranda-clay"
-                  >
-                    <span aria-hidden="true" className="h-[2.4rem] w-[2.4rem] rounded-full border-[5px] border-parranda-ink bg-parranda-paper transition group-hover:bg-parranda-ember sm:border-[6px]" />
-                    <span className="type-title text-lg sm:text-2xl">{city.label}</span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-      )}
 
       <footer className="type-data flex items-center justify-between border-t-[1.5px] border-parranda-ink/14 py-4 text-[11px] text-parranda-ink/68">
         <span>Parranda</span>
