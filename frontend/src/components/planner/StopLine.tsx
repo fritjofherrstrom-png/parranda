@@ -146,13 +146,13 @@ export default function StopLine({
       {map && <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/4 p-4 sm:p-5">{map}</div>}
       {/* The route's evidence, stated beside it: what the line is, what the
           numbers are, and how the day was assembled. */}
-      <p className="mt-2.5 text-xs leading-relaxed text-parranda-ink/68">
+      <p className="mt-3 text-xs leading-relaxed text-parranda-ink/68">
         {routeLineIsSketch && t("Den prickade linjen visar stoppens ordning, inte gatorna. ", "The dotted line shows the order of the stops, not the streets. ")}
         {t("Avstånd och gångtider är uppskattningar. Google Maps beräknar gångvägen när du öppnar rutten.", "Distances and walking times are estimates. Google Maps calculates the walking path when you open the route.")}
         {dayContextNote && ` ${dayContextNote}`}
       </p>
 
-      <div className="mb-1 mt-6 flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+      <div className="mb-2 mt-10 flex min-h-11 flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <Eyebrow>{t("Stoppen i ordning", "The stops, in order")}</Eyebrow>
         {canFollow && (
           <button
@@ -232,7 +232,7 @@ export default function StopLine({
           return (
             <li key={stopKey} className="flex flex-col">
               {leg && (leg.minutes != null || leg.km != null) && (
-                <span className="type-data flex min-h-8 items-center gap-2 pl-14 text-[11px] text-parranda-ink/68">
+                <span className="type-data flex min-h-10 items-center gap-2 pl-14 text-[11px] text-parranda-ink/68">
                   <WalkIcon className="h-3.5 w-3.5" />
                   {leg.minutes != null ? `${leg.minutes} min` : ""}
                   {leg.minutes != null && leg.km != null ? " · " : ""}
@@ -240,7 +240,7 @@ export default function StopLine({
                 </span>
               )}
               {daypartHeading && (
-                <p className="type-eyebrow relative mb-0.5 mt-3 flex min-h-6 items-center pl-14 text-parranda-glow">
+                <p className="type-eyebrow relative mb-1 mt-6 flex min-h-6 items-center pl-14 text-parranda-glow">
                   <span aria-hidden="true" className="absolute left-3.5 top-1/2 h-1 w-4 -translate-y-1/2 rounded-full bg-parranda-ink" />
                   {daypartHeading}
                 </p>
@@ -253,7 +253,7 @@ export default function StopLine({
                 aria-expanded={expanded}
                 aria-controls={panelId}
                 onClick={() => setExpandedStopKey(expanded ? null : stopKey)}
-                className="group flex min-h-14 w-full items-center gap-3 rounded-parranda-btn py-1.5 pr-1 text-left transition hover:bg-parranda-ink/5"
+                className="group flex min-h-16 w-full items-center gap-3.5 rounded-parranda-btn py-2 pr-1 text-left transition hover:bg-parranda-ink/5"
               >
                 <span className={`type-data relative z-[1] flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-4 text-sm font-semibold transition ${station}`}>
                   {isCurrent && (
@@ -469,7 +469,7 @@ export default function StopLine({
           must never read as part of the route, and the caption stays visible
           even while collapsed. Their dots join the map only while open. */}
       {routeContextSuggestions.length > 0 && (
-        <div className="mt-6 flex flex-col gap-2">
+        <div className="mt-10 flex flex-col gap-2.5">
           <button
             type="button"
             aria-expanded={detoursOpen}

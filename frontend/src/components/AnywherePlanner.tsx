@@ -1639,8 +1639,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     <div
       className={
         splitLayout
-          ? "grid w-full grid-cols-[minmax(0,34rem)_minmax(0,1fr)] items-start gap-x-10 gap-y-6 xl:grid-cols-[minmax(0,36rem)_minmax(0,1fr)] xl:gap-x-14"
-          : "mx-auto flex w-full max-w-2xl flex-col gap-6"
+          ? "grid w-full grid-cols-[minmax(0,34rem)_minmax(0,1fr)] items-start gap-x-10 gap-y-8 xl:grid-cols-[minmax(0,36rem)_minmax(0,1fr)] xl:gap-x-14"
+          : "mx-auto flex w-full max-w-2xl flex-col gap-8"
       }
     >
       <div className={splitLayout ? "col-span-full" : ""}>
@@ -1653,7 +1653,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         />
       </div>
 
-      <div className="flex min-w-0 flex-col gap-6">
+      <div className="flex min-w-0 flex-col gap-10 sm:gap-12">
       {hasAnchor && (
         <AnchorCard
           t={t}

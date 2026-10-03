@@ -104,7 +104,7 @@ export default function DayHeader({
   publishedEnd: any;
 }) {
   return (
-    <header className="@container flex flex-col gap-3.5" aria-busy={staleNotice === "updating"}>
+    <header className="@container flex flex-col gap-5" aria-busy={staleNotice === "updating"}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <Eyebrow tone="glow" line>{t("Din dag", "Your day")}</Eyebrow>
         {/* The day on screen is deliberately still here, and deliberately
@@ -174,7 +174,7 @@ export default function DayHeader({
           the route only partly covers, or does not cover, says so here
           rather than at the foot of the page. */}
       {pickCoverage.length > 0 && (
-        <ul className="flex flex-wrap gap-1.5" aria-label={t("Dina val i dagen", "Your picks in this day")}>
+        <ul className="flex flex-wrap gap-2" aria-label={t("Dina val i dagen", "Your picks in this day")}>
           {pickCoverage.map(({ key, state }) => (
             <li
               key={key}
@@ -229,7 +229,7 @@ export default function DayHeader({
           named stretches: only the first is the primary action, the rest
           are the next steps of the same walk — never alternatives to it. */}
       {routeParts.length > 1 && (
-        <div className="mt-1 flex flex-col gap-2">
+        <div className="mt-3 flex flex-col gap-2.5">
           <Eyebrow>
             {t(`Promenaden i Maps · ${routeParts.length} delar`, `The walk in Maps · ${routeParts.length} parts`)}
           </Eyebrow>
@@ -282,7 +282,7 @@ export default function DayHeader({
           </p>
         </div>
       )}
-      <div className="mt-1 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+      <div className="mt-1 grid grid-cols-2 gap-2.5 sm:flex sm:flex-wrap">
         {routeParts.length === 1 && (
           <a
             href={routeUrls[0]}

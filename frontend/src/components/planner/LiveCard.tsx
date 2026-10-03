@@ -61,7 +61,7 @@ export default function LiveCard({
 }) {
   return (
     <section
-      className="rounded-parranda border-[1.5px] border-parranda-live/35 bg-parranda-live/8 p-4 sm:p-5"
+      className="rounded-parranda border-[1.5px] border-parranda-live/35 bg-parranda-live/8 p-5 sm:p-6"
     >
       <Eyebrow tone="live" dot>
         {mode === "near_me"
