@@ -10,6 +10,9 @@ export interface DayRhythm {
   key: "calm" | "balanced" | "full" | "free";
   sv: string;
   en: string;
+  /** What the engine does with this rhythm, in each language. */
+  noteSv: string;
+  noteEn: string;
 }
 
 export declare const DAY_RHYTHMS: DayRhythm[];
