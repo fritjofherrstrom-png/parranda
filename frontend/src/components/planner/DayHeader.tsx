@@ -7,7 +7,7 @@
  * (mono), and the city name carries the route colour. Every honesty line keeps
  * the September rule — one fact, one place, beside what it qualifies.
  */
-import type { ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { RouteEnd, WalkingRoutePart } from "../../lib/maps-links.mjs";
 import { walkingDistanceLabel } from "../../lib/route-context-view.mjs";
 import { CheckIcon, ExternalIcon, HalfCircleIcon, MinusIcon, ShareIcon, StarIcon } from "../shared/icons";
@@ -19,14 +19,91 @@ type PickCoverage = { key: string; state: "covered" | "partial" | "missing" };
 
 /**
  * The place name is set like a station sign: as large as the column allows for
- * ITS length, so "Rome" and "Barcelona" both fill one line instead of the
- * longer one breaking mid-word. The header is a size container; a capital in
- * the wide display cut is about 0.92em, and the size stays between 2rem and
- * 4.75rem. Only a name too long even at 2rem wraps (anywhere, as a last resort).
+ * ITS longest word, so "Rome", "Malmö" and "Barcelona" each fill one line and
+ * no word ever breaks mid-way. The static render starts from an estimate (the
+ * header is a size container; a capital in the wide display cut is roughly one
+ * em). Once mounted, the real width of the longest word is measured and the
+ * size is fitted to the column, between 2rem and 4.75rem; it refits when the
+ * column or the fonts change. Only a word too long even at 2rem may break
+ * (anywhere, as a last resort). Line height stays at 1 so the marks on Å, Ö
+ * and É never touch the line above (a little room above the first line too).
  */
-function signSize(text: string): { fontSize: string } {
+const SIGN_MIN_PX = 32;
+const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+const SIGN_MAX_PX = 76;
+
+function signEstimate(text: string): string {
   const longestWord = Math.max(1, ...String(text).split(/\s+/).map((word) => word.length));
-  return { fontSize: `clamp(2rem, calc(100cqi / ${(longestWord * 0.92).toFixed(2)}), 4.75rem)` };
+  return `clamp(2rem, calc(100cqi / ${(longestWord * 1.02).toFixed(2)}), 4.75rem)`;
+}
+
+export function PlaceSign({ text }: { text: string }) {
+  const ref = useRef<HTMLElement | null>(null);
+  const [fitted, setFitted] = useState<{ text: string; px: number; breakable: boolean } | null>(null);
+  const words = String(text).split(/\s+/).filter(Boolean);
+
+  useClientLayoutEffect(() => {
+    const sign = ref.current;
+    if (!sign || typeof window === "undefined") return;
+    let frame = 0;
+    const fit = () => {
+      const column = sign.clientWidth;
+      const current = parseFloat(window.getComputedStyle(sign).fontSize);
+      // Measure each word unwrapped in a hidden probe, so the measurement does
+      // not depend on whether the last fit allowed breaking.
+      const probe = document.createElement("span");
+      probe.setAttribute("aria-hidden", "true");
+      probe.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;left:0;top:0;";
+      sign.appendChild(probe);
+      let widest = 0;
+      for (const word of words) {
+        probe.textContent = word;
+        widest = Math.max(widest, probe.getBoundingClientRect().width);
+      }
+      sign.removeChild(probe);
+      if (!column || !current || !widest) return;
+      const emWidth = widest / current;
+      const ideal = Math.floor((column / emWidth) * 0.98);
+      const px = Math.max(SIGN_MIN_PX, Math.min(SIGN_MAX_PX, ideal));
+      const breakable = ideal < SIGN_MIN_PX;
+      setFitted((prev) => (prev && prev.text === text && prev.px === px && prev.breakable === breakable ? prev : { text, px, breakable }));
+    };
+    // Coalesce bursts of resize notifications into one fit per frame.
+    const later = typeof window.requestAnimationFrame === "function"
+      ? (fn: () => void) => window.requestAnimationFrame(fn)
+      : (fn: () => void) => window.setTimeout(fn, 16);
+    const cancel = typeof window.cancelAnimationFrame === "function"
+      ? (id: number) => window.cancelAnimationFrame(id)
+      : (id: number) => window.clearTimeout(id);
+    const schedule = () => {
+      cancel(frame);
+      frame = later(fit);
+    };
+    fit();
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
+    observer?.observe(sign);
+    document.fonts?.ready?.then(schedule).catch(() => {});
+    return () => {
+      cancel(frame);
+      observer?.disconnect();
+    };
+  }, [text]); // eslint-disable-line react-hooks/exhaustive-deps -- words derive from text
+
+  const fit = fitted && fitted.text === text ? fitted : null;
+  return (
+    <em
+      ref={ref}
+      className={"type-display block not-italic text-parranda-ember" + (fit?.breakable ? " [overflow-wrap:anywhere]" : "")}
+      style={{ fontSize: fit ? `${fit.px}px` : signEstimate(text), lineHeight: 1, paddingTop: "0.08em" }}
+    >
+      {words.map((word, index) => (
+        <span key={index}>
+          {index > 0 ? " " : null}
+          <span data-sign-word="" className={fit?.breakable ? "" : "whitespace-nowrap"}>{word}</span>
+        </span>
+      ))}
+    </em>
+  );
 }
 
 function Note({ children }: { children: ReactNode }) {
@@ -141,11 +218,11 @@ export default function DayHeader({
       <h2 className="type-title text-[2.5rem] text-parranda-ink sm:text-5xl lg:text-[3.25rem]">
         {mode === "near_me" && !placeLabel ? (
           <>
-            {t("En dag", "A day")} <em className="type-display block not-italic text-parranda-ember" style={signSize(t("nära dig", "near you"))}>{t("nära dig", "near you")}</em>
+            {t("En dag", "A day")} <PlaceSign text={t("nära dig", "near you")} />
           </>
         ) : (
           <>
-            {t("En dag i", "A day in")} <em className="type-display block not-italic text-parranda-ember [overflow-wrap:anywhere]" style={signSize(anchorLabel)}>{anchorLabel}</em>
+            {t("En dag i", "A day in")} <PlaceSign text={anchorLabel} />
           </>
         )}
       </h2>
