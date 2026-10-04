@@ -101,3 +101,34 @@ test("following ends when the chosen day is no longer today", async (t) => {
   assert.deepEqual(watches, [40], "back on today, following waits for a new tap");
   assert.ok(button(/^Follow the day$/), "the follow control is offered again");
 });
+
+test("each stop's kind is a compact badge under the name, apart from its hours", async (t) => {
+  const h = await mountPlanner({ url: "http://localhost/anywhere?place=Testville&lang=en" });
+  t.after(() => h.unmount());
+  await h.clock.advance(500);
+  await h.fetchMock.respond(h.fetchMock.pending()[0], day(["restaurant", "gallery", "park"]));
+  const route = h.container.querySelector('section[aria-label="The route"]');
+  const badges = [...route.querySelectorAll("[data-stop-category]")];
+  assert.deepEqual(badges.map((b) => [b.dataset.stopCategory, b.textContent]), [
+    ["food", "Restaurant"],
+    ["culture", "Gallery"],
+    ["nature", "Park"],
+  ]);
+  for (const badge of badges) {
+    assert.equal(badge.closest("button")?.getAttribute("aria-expanded"), "false", "the badge sits inside the one row disclosure");
+    assert.equal(badge.querySelector("button, a"), null, "the badge is information, not a control");
+    assert.doesNotMatch(badge.textContent, /Hours unknown/, "hours never read as part of the category");
+  }
+  // The restaurant and gallery have no hours (the park needs none): the status
+  // sits beside the badge, not inside it.
+  assert.equal(route.textContent.match(/Hours unknown/g)?.length, 2);
+});
+
+test("a kind this build has no words for shows no badge", async (t) => {
+  const h = await mountPlanner({ url: "http://localhost/anywhere?place=Testville&lang=sv" });
+  t.after(() => h.unmount());
+  await h.clock.advance(500);
+  await h.fetchMock.respond(h.fetchMock.pending()[0], day(["museum", "not-a-known-kind", "park"]));
+  const route = h.container.querySelector('section[aria-label="Rutten"]');
+  assert.deepEqual([...route.querySelectorAll("[data-stop-category]")].map((b) => b.textContent), ["Museum", "Park"]);
+});

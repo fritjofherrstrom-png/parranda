@@ -20,16 +20,24 @@ import { eventSourceLink, eventTiming } from "../../lib/pulse-view.mjs";
 import { mapsPlaceUrl } from "../../lib/maps-links.mjs";
 import { selectedDayHoursLabel } from "../../lib/selected-day-hours.mjs";
 import { stopHoursUnknown, stopTypeLabel } from "../../lib/stop-card-facts.mjs";
+import { stopCategoryFamily, type StopCategoryFamily } from "../../lib/stop-category.mjs";
 import { walkingDistanceLabel, type RouteContextSuggestion } from "../../lib/route-context-view.mjs";
 import {
   CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  ClockIcon,
+  CultureIcon,
+  DrinkIcon,
   ExternalIcon,
+  FoodIcon,
   KeepIcon,
   LocationIcon,
   MinusIcon,
+  NatureIcon,
   PlusIcon,
+  ShopIcon,
+  SightIcon,
   WalkIcon,
 } from "../shared/icons";
 import { buttonClass, Eyebrow } from "../shared/ui";
@@ -38,6 +46,35 @@ import { canCommitTo, type Commitments } from "./commitments";
 import { useFollowPosition } from "./useFollowPosition";
 
 type Leg = { km: number | null; minutes: number | null };
+
+const CATEGORY_ICONS: Record<StopCategoryFamily, (props: { className?: string }) => ReactNode> = {
+  food: FoodIcon,
+  drink: DrinkIcon,
+  culture: CultureIcon,
+  nature: NatureIcon,
+  sight: SightIcon,
+  shop: ShopIcon,
+};
+
+/** A stop's kind as a compact badge: the family's symbol and the kind's own
+ *  words, on a quiet tint. Same shape for every category; an unknown family
+ *  shows the words alone. */
+function StopCategory({ type, label, muted }: { type: unknown; label: string; muted: boolean }) {
+  const family = stopCategoryFamily(type);
+  const Symbol = family ? CATEGORY_ICONS[family] : null;
+  return (
+    <span
+      data-stop-category={family || "other"}
+      className={
+        "inline-flex max-w-full items-center gap-1.5 rounded-full bg-parranda-ink/[0.07] py-1 pl-2 pr-2.5 text-xs font-semibold leading-none " +
+        (muted ? "text-parranda-ink/68" : "text-parranda-ink")
+      }
+    >
+      {Symbol && <Symbol className="h-3.5 w-3.5 text-parranda-ink/72" />}
+      <span className="truncate">{label}</span>
+    </span>
+  );
+}
 
 export default function StopLine({
   t,
@@ -279,22 +316,32 @@ export default function StopLine({
                       </span>
                     )}
                   </span>
-                  <span className="type-data flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-parranda-ink/68">
-                    {stopKindLabel && <span>{stopKindLabel}</span>}
-                    {kept && (
-                      <span className="inline-flex items-center gap-1 font-semibold text-parranda-clay">
-                        {stopKindLabel && <span aria-hidden="true" className="text-parranda-ink/68">·</span>}
-                        <KeepIcon className="h-3 w-3" />
-                        {t("Behålls", "Kept")}
-                      </span>
-                    )}
-                    {/* Visitability stays visible without expanding: a place
-                        whose source gives no hours for the chosen day says so
-                        here instead of reading as a confirmed visit. */}
-                    {hoursUnknown && !hoursUnknownEverywhere && (
-                      <span className="text-xs text-parranda-ink/68">{(stopKindLabel || kept) && <span aria-hidden="true">· </span>}{t("Öppettider okända", "Hours unknown")}</span>
-                    )}
-                  </span>
+                  {/* What kind of place, at a glance: a compact category
+                      badge under the name (symbol + the stop's own kind).
+                      It is information, not a control — the whole row stays
+                      the one disclosure. "Kept" and the hours status sit
+                      beside it as plain text, so "Hours unknown" never reads
+                      as part of the category. */}
+                  {(stopKindLabel || kept || (hoursUnknown && !hoursUnknownEverywhere)) && (
+                    <span className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+                      {stopKindLabel && <StopCategory type={stop?.type} label={stopKindLabel} muted={behind} />}
+                      {kept && (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-parranda-clay">
+                          <KeepIcon className="h-3 w-3" />
+                          {t("Behålls", "Kept")}
+                        </span>
+                      )}
+                      {/* Visitability stays visible without expanding: a place
+                          whose source gives no hours for the chosen day says so
+                          here instead of reading as a confirmed visit. */}
+                      {hoursUnknown && !hoursUnknownEverywhere && (
+                        <span className="inline-flex items-center gap-1 text-xs text-parranda-ink/68">
+                          <ClockIcon className="h-3 w-3" />
+                          {t("Öppettider okända", "Hours unknown")}
+                        </span>
+                      )}
+                    </span>
+                  )}
                 </span>
                 <ChevronRightIcon
                   className={"h-4 w-4 shrink-0 transition " + (expanded ? "rotate-90 text-parranda-ember" : "text-parranda-ink/68 group-hover:text-parranda-ink")}
