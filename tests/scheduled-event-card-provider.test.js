@@ -122,6 +122,46 @@ test("review: line and block boundaries cannot manufacture an explicit year", as
   assert.equal(extractScheduledEventCards(cards.replaceAll("4 oktober 2026", "<em>4</em> oktober <strong>2026</strong>"), { sourceUrl: endpoint }).recognized, true);
 });
 
+for (const tag of ["figure", "address", "fieldset"]) {
+  const listing = cards.replaceAll("4 oktober 2026", `4 oktober <${tag}>20</${tag}><${tag}>26</${tag}>`);
+  test(`review #5: ${tag} boundaries cannot manufacture a parser year`, () => {
+    const parsed = extractScheduledEventCards(listing, { sourceUrl: endpoint });
+    assert.equal(parsed.recognized, false);
+    assert.deepEqual(parsed.cards, []);
+  });
+  test(`review #5: ${tag} boundaries cannot supply fabricated provider occurrences`, async () => {
+    const calls = [];
+    const result = await collect({ fetcher: fetchPages({ listing, calls }) });
+    assert.equal(result.collection_status.status, "failed");
+    assert.equal(result.collection_status.reason, "source_payload_invalid");
+    assert.deepEqual(result.time_sensitive_events, []);
+    assert.deepEqual(calls, ["https://destination.example/robots.txt", endpoint], "no fabricated date can trigger detail requests");
+  });
+}
+
+test("non-phrasing and unknown containers separate year fragments conservatively", () => {
+  for (const tag of ["figcaption", "details", "custom-container"]) {
+    const listing = cards.replaceAll("4 oktober 2026", `4 oktober <${tag}>20</${tag}><${tag}>26</${tag}>`);
+    assert.equal(extractScheduledEventCards(listing, { sourceUrl: endpoint }).recognized, false, tag);
+  }
+});
+
+test("legitimate inline emphasis retains complete dates through the actual provider", async () => {
+  for (const label of ["<em>4</em> oktober <strong>2026</strong>", "4 oktober <span>20<strong>26</strong></span>"]) {
+    const listing = cards.replaceAll("4 oktober 2026", label);
+    assert.equal(extractScheduledEventCards(listing, { sourceUrl: endpoint }).recognized, true);
+    const result = await collect({ fetcher: fetchPages({ listing }) });
+    assert.equal(result.collection_status.status, "ok");
+    assert.equal(result.time_sensitive_events.length, 2);
+    for (const event of result.time_sensitive_events) {
+      assert.equal(event.starts_on, "2026-10-04");
+      assert.equal(event.country, "BE");
+      assert.equal(event.starts_at, undefined);
+      assert.equal(event.lat, undefined);
+    }
+  }
+});
+
 test("review: a detail DOM-budget error invalidates partial rows and qualification evidence", async () => {
   const second = secondDetail + "<i></i>".repeat(25000);
   for (const tail of ["<i></i>".repeat(25000), "<i hidden></i>".repeat(25000),

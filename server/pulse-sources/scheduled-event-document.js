@@ -3,8 +3,12 @@
 const { parse } = require("parse5");
 
 const INERT = new Set(["script", "style", "template", "noscript", "svg"]);
-const TEXT_BOUNDARIES = new Set(["br", "hr", "div", "p", "section", "header", "footer", "main", "aside", "nav",
-  "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "dl", "dt", "dd", "table", "tr", "td", "th", "pre", "blockquote"]);
+// Only supported textual inline elements can continue an adjacent token.
+// Block, line-break, replaced and unknown elements delimit text by default;
+// a partial block list would silently join years across omitted containers.
+const INLINE_TEXT = new Set(["a", "abbr", "b", "bdi", "bdo", "cite", "code", "data", "del", "dfn", "em", "i",
+  "ins", "kbd", "label", "mark", "q", "ruby", "rp", "rt", "rtc", "s", "samp", "small", "span", "strong",
+  "sub", "sup", "time", "u", "var"]);
 
 // Reject the whole document on exhaustion, including valid cards before the
 // oversized tail. Iterative inspection avoids recursive subtree rescans.
@@ -50,7 +54,7 @@ function boundedDocument(html) {
       const parent = stack[stack.length - 1];
       // Keep line/block token boundaries without splitting legitimate inline
       // emphasis. In particular, 20<br>26 must never become the year 2026.
-      const text = TEXT_BOUNDARIES.has(node.tagName) ? ` ${frame.text} ` : frame.text;
+      const text = node.tagName && !INLINE_TEXT.has(node.tagName) ? ` ${frame.text} ` : frame.text;
       parent.overflow ||= frame.overflow || parent.text.length + text.length > 4096;
       parent.text = (parent.text + text).slice(0, 4096);
     }

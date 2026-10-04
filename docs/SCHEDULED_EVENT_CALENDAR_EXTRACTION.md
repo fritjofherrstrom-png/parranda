@@ -65,8 +65,12 @@ route eligibility. `near_me` excludes it; no distance is fabricated.
   200 event articles; iterative ownership/text summaries, inert/hidden content
   excluded, including hidden nodes' own attributes. Excluded nodes still count
   against inspection limits. Line breaks and block boundaries separate text
-  tokens, so `20<br>26` cannot manufacture an explicit year; inline emphasis
-  remains supported. Any exhausted document budget rejects the whole document.
+  tokens, so `20<br>26` cannot manufacture an explicit year. Only supported
+  textual inline elements continue adjacent tokens; other visible elements
+  (including `figure`, `address`, `fieldset` and unknown containers) delimit
+  them by default. This uses HTML element semantics, not computed CSS layout.
+  Legitimate inline emphasis remains supported. Any exhausted document budget
+  rejects the whole document.
 - Network/robots/redirect/budget failures discard partial rows and produce a
   failed collection. An unrecognized payload or current cards with no safely
   joined venue is a parse failure, not a healthy empty calendar. A recognized
@@ -118,6 +122,14 @@ Corrections and regression controls remain in this same PR. Review findings do
 not establish that the captured real pages contain those synthetic failures.
 Corrected-head CI and renewed independent review belong in the PR handoff;
 the original green CI is evidence only for the original head.
+Independent re-review of `3c3e7e9f711ed9425cd88a21518a11207802dbda`
+confirmed the exact six original reproductions but found original #5 incomplete:
+the partial block-element list still joined year fragments across `figure`,
+`address` and `fieldset`. Their separate parser/provider regressions reproduce
+the failure before the follow-up correction. The follow-up replaces that
+partial list with a closed inline-text continuation contract, retains inline
+and captured-source positives, and stays in the same #550 with renewed CI and
+independent review pending on its new frozen head.
 
 Bounded public HTTP 200 reads on 2026-10-04, without following redirects:
 
