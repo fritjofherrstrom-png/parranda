@@ -40,6 +40,14 @@ test("venue query uses only compact source-owned location atoms", () => {
   );
   assert.equal(buildEventVenueQuery(event({ address: "Market Hall", place_context: "Market Hall" })), "Market Hall, Example City");
   assert.equal(buildEventVenueQuery({ title: "No venue" }), null);
+  assert.equal(buildEventVenueQuery({ title: "No venue", country: "BE" }), null, "country alone is not a venue");
+});
+
+test("source country is retained within the query budget without foreign anchor context", () => {
+  const placeContext = { country: "France", region: "Île-de-France" };
+  assert.equal(buildEventVenueQuery(event({ country: "BE" }), { placeContext }), "Square 1, BE, Market Hall, Example City");
+  assert.equal(buildEventVenueQuery(event({ address: "x".repeat(198), country: "BE", place_context: null, city: null }), { placeContext }), null,
+    "an oversized source query must fail closed rather than silently lose its country");
 });
 
 test("one trusted in-radius match adds compact derived geometry", async () => {

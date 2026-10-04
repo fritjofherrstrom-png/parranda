@@ -20,6 +20,7 @@ const {
   classifyRssEventInterface,
 } = require("./rss-event-interface");
 const { hasSitevisionCalendarSignature } = require("./sitevision-calendar-provider");
+const { extractScheduledEventCards } = require("./scheduled-event-card-normalizer");
 const { hasEmbeddedProgramRscSignature } = require("./embedded-program-rsc-provider");
 const {
   hasOfficialProgramArticleSignature,
@@ -64,6 +65,7 @@ const MANIFEST_ADAPTERS = new Set([
   "wix_event_sitemap",
   "embedded_program_rsc",
   "official_program_article",
+  "scheduled_event_cards",
 ]);
 
 function buildLocalEventDiscoveryQueryPlan({
@@ -361,7 +363,12 @@ function inspectEventSourcePage({
     });
   } else if (hasCompatibleVenueCalendarSignature(source)) {
     addCandidate("html_venue_calendar", pageUrl);
-  } else if (hasGenericEventListingSignature(source)) {
+  } else if (extractScheduledEventCards(source, { sourceUrl: pageUrl }).recognized) {
+    addCandidate("scheduled_event_cards", pageUrl);
+  } else if (
+    hasGenericEventListingSignature(source) ||
+    hasScheduledEventCardListing(source, pageUrl)
+  ) {
     addCandidate("stable_html_needs_adapter", pageUrl);
   }
 
@@ -849,6 +856,15 @@ function buildDetectedCandidate({
       notes: "official_program_section_atoms_require_manifest_review",
     };
   }
+  if (kind === "scheduled_event_cards") {
+    return {
+      ...common,
+      adapter: "scheduled_event_cards",
+      extraction_tier: "stable_html_calendar",
+      extractable: baseExtractable({ end: true, venue: true, venue_geocodable: true, stable_html: true }),
+      notes: "explicit_single_dates_require_same_identity_contact_details_and_permission",
+    };
+  }
   return {
     ...common,
     adapter: "needs_adapter",
@@ -874,6 +890,7 @@ function buildReviewedManifestCandidate(candidate, { seed = {}, context = {} } =
     wix_event_sitemap: "wix_event_sitemap",
     embedded_program_rsc: "embedded_program_rsc",
     official_program_article: "official_program_article",
+    scheduled_event_cards: "scheduled_event_cards",
   };
   const adapter = adapterMap[candidate.adapter];
   if (!MANIFEST_ADAPTERS.has(adapter)) return null;
@@ -1368,6 +1385,100 @@ function hasWixEventSitemapSignature(html, pageUrl) {
     firstMatch(source, /<meta\b[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i),
   ].filter(Boolean).join(" ");
   return /(?:event|events|evenemang|kalender|calendar)/i.test(pageSignals);
+}
+
+// Discovery only: textual Drupal schedule fields do not establish parsed event
+// times, venue facts or an adapter contract. Keep these in the existing
+// needs-adapter lane, not RSS evidence, manifests or qualification bindings.
+function hasScheduledEventCardListing(html, pageUrl) {
+  if (!/\bnode--type-event\b/.test(html)) return false;
+  const { parse } = require("parse5");
+  let root;
+  let origin;
+  try {
+    root = parse(html);
+    origin = new URL(pageUrl).origin;
+  } catch (_error) {
+    return false;
+  }
+  const identities = new Set();
+  const inertTags = new Set(["script", "style", "template", "noscript"]);
+  const maxNodes = 20000;
+  const maxDepth = 256;
+  const maxCharacters = 1000000;
+  let nodes = 0;
+  let characters = 0;
+  // One postorder pass, with constant-sized text summaries, not recursive
+  // subtree text()/heading walks. Joining text nodes with spaces cannot create
+  // date tokens across nodes, so year/day/nonblank flags preserve that evidence.
+  const frame = (node) => ({ node, entered: false, next: 0, year: false, day: false, nonblank: false });
+  const stack = [frame(root)];
+  while (stack.length) {
+    const current = stack[stack.length - 1];
+    const node = current.node;
+    if (!current.entered) {
+      if (++nodes > maxNodes || stack.length > maxDepth) return false;
+      current.entered = true;
+      current.inert = inertTags.has(node.tagName);
+      current.article = node.tagName === "article";
+      const parent = stack[stack.length - 2];
+      current.card = current.article ? null : parent?.card;
+      current.heading = !current.article && Boolean(parent?.heading);
+      let classes = "";
+      for (const attr of node.attrs || []) {
+        characters += attr.name.length + attr.value.length;
+        if (characters > maxCharacters) return false;
+        if (attr.name === "class") classes = attr.value;
+        if (attr.name === "href") current.href = attr.value;
+      }
+      const classNames = classes.split(/\s+/);
+      if (!current.inert && current.article && classNames.includes("node--type-event")) {
+        current.card = { scheduled: false, links: new Set() };
+        current.ownsCard = true;
+      }
+      current.schedule = !current.ownsCard && classNames.includes("field--name-field-schedule");
+      current.heading ||= /^h[1-6]$/.test(node.tagName || "");
+      characters += (node.value || node.data || "").length;
+      if (characters > maxCharacters) return false;
+      if (node.nodeName === "#text") {
+        current.year = /\b20\d{2}\b/.test(node.value);
+        current.day = /\b(?:[1-9]|[12]\d|3[01])\b/.test(node.value);
+        current.nonblank = Boolean(node.value.trim());
+      }
+    }
+    const children = current.inert ? [] : node.childNodes || [];
+    if (current.next < children.length) {
+      // Push only the next child: even a very wide document cannot allocate
+      // an unbounded pending-work stack before the node budget is checked.
+      stack.push(frame(children[current.next++]));
+      continue;
+    }
+    if (!current.inert && current.card) {
+      // Date-only text is interface evidence, never a startDate/recurrence.
+      if (current.schedule && current.year && current.day) current.card.scheduled = true;
+      if (node.tagName === "a" && current.heading && current.nonblank) {
+        const href = current.href;
+        if (href && !href.startsWith("#")) {
+          const url = normalizeHttpUrl(absolutizeUrl(href, pageUrl));
+          if (url && url !== pageUrl && new URL(url).origin === origin) current.card.links.add(url);
+        }
+      }
+      if (current.ownsCard && current.card.scheduled && current.card.links.size === 1) {
+        identities.add(current.card.links.values().next().value);
+      }
+    }
+    stack.pop();
+    const parent = stack[stack.length - 1];
+    // Nested articles may qualify independently, but none of their text,
+    // schedules or headings belongs to the surrounding card.
+    if (parent && !current.inert && !current.article) {
+      parent.year ||= current.year;
+      parent.day ||= current.day;
+      parent.nonblank ||= current.nonblank;
+    }
+  }
+  // Do not accept early: budget exhaustion invalidates partial evidence.
+  return identities.size >= 2;
 }
 
 function hasGenericEventListingSignature(html) {

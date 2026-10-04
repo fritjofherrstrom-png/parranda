@@ -20,7 +20,11 @@ function buildEventVenueQuery(event, { placeContext = null } = {}) {
     event.city,
   ]);
   if (sourceParts.length === 0) return null;
-  const contextParts = event.city
+  const country = uniqueStrings([event.country])[0];
+  if (country) sourceParts.splice(1, 0, country);
+  // A published country must not be replaced by an unrelated anchor's region
+  // or country. Keep it in the bounded query even after event normalization.
+  const contextParts = country ? [] : event.city
     ? [placeContext?.region, placeContext?.country]
     : [
         placeContext?.locality,
