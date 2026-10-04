@@ -25,6 +25,7 @@ const ADAPTER_MAP = Object.freeze({
   official_program_article: "official_program_article",
   official_article_program: "official_program_article",
   public_program_article: "official_program_article",
+  scheduled_event_cards: "scheduled_event_cards",
 });
 
 const RUNTIME_POLICIES = new Set(["active", "bounded_refresh"]);
@@ -40,6 +41,7 @@ const TIMEZONE_REQUIRED_ADAPTERS = new Set([
   "wix_event_sitemap",
   "embedded_program_rsc",
   "official_program_article",
+  "scheduled_event_cards",
 ]);
 
 /**

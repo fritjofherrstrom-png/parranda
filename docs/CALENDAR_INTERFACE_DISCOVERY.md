@@ -1,5 +1,11 @@
 # Calendar interface discovery: evidenced boundary
 
+This document records #548's discovery-only boundary. The separately reviewed
+extraction continuation is documented in
+[SCHEDULED_EVENT_CALENDAR_EXTRACTION.md](SCHEDULED_EVENT_CALENDAR_EXTRACTION.md);
+it supports a narrow explicit-date/contact/location contract while retaining
+the unsupported-interface fallback below.
+
 **Outcome:** retain a dated Drupal event-card listing as `needs_adapter`, rather
 than silently dropping its interface. **Not solved:** extraction,
 `no_probeable_source_candidates`, qualification or Live coverage. No manifests,

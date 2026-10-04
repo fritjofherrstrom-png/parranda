@@ -32,6 +32,7 @@ const { createSitevisionCalendarProvider } = require("../pulse-sources/sitevisio
 const { createWixEventSitemapProvider } = require("../pulse-sources/wix-event-sitemap-provider");
 const { createLocalizedEventsApiProvider } = require("../pulse-sources/localized-events-api-provider");
 const { createEmbeddedProgramRscProvider } = require("../pulse-sources/embedded-program-rsc-provider");
+const { createScheduledEventCardProvider } = require("../pulse-sources/scheduled-event-card-provider");
 const {
   createOfficialProgramArticleProvider,
 } = require("../pulse-sources/official-program-article-provider");
@@ -110,6 +111,7 @@ const LOCAL_EVENT_ADAPTERS = new Set([
   "localized_events_api",
   "embedded_program_rsc",
   "official_program_article",
+  "scheduled_event_cards",
 ]);
 
 // A single open municipal feed, kept as a NAMED FIXTURE — not a product default.
@@ -1329,6 +1331,18 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs 
       sourceFamily: source.source_family || undefined,
       detailPathPrefix: source.event_path_prefix || undefined,
       limit: source.page_size || undefined,
+      horizonDays: source.horizon_days || undefined,
+    });
+  }
+  if (adapter === "scheduled_event_cards") {
+    return createScheduledEventCardProvider({
+      ...common,
+      status: "active",
+      timezone: source.timezone || undefined,
+      sourceLanguage: source.source_language || undefined,
+      sourceTier: source.source_tier || undefined,
+      confidence: source.confidence || undefined,
+      detailLimit: source.detail_limit || undefined,
       horizonDays: source.horizon_days || undefined,
     });
   }

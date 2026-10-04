@@ -14,8 +14,8 @@ const seed = { url: "https://destination.example/nl/agenda/evenementen", family:
 const context = { anchor: { lat: 51.05, lng: 3.72 }, bounds: [3.5, 50.9, 3.9, 51.2] };
 function inspect(body) { return inspectEventSourcePage({ seed, html: body, context }); }
 
-test("scheduled event cards without datetime survive discovery as unsupported, never qualified", async () => {
-  const result = inspect(html);
+test("unsupported schedule ranges survive discovery, never qualified", async () => {
+  const result = inspect(html.replaceAll("4 oktober 2026", "4 oktober 2026 tot 5 oktober 2026"));
   assert.deepEqual(result.detected, ["stable_html_needs_adapter"]);
   assert.equal(result.candidates.length, 1);
   const candidate = result.candidates[0];

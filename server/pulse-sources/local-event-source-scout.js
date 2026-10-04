@@ -20,6 +20,7 @@ const {
   classifyRssEventInterface,
 } = require("./rss-event-interface");
 const { hasSitevisionCalendarSignature } = require("./sitevision-calendar-provider");
+const { extractScheduledEventCards } = require("./scheduled-event-card-normalizer");
 const { hasEmbeddedProgramRscSignature } = require("./embedded-program-rsc-provider");
 const {
   hasOfficialProgramArticleSignature,
@@ -64,6 +65,7 @@ const MANIFEST_ADAPTERS = new Set([
   "wix_event_sitemap",
   "embedded_program_rsc",
   "official_program_article",
+  "scheduled_event_cards",
 ]);
 
 function buildLocalEventDiscoveryQueryPlan({
@@ -361,6 +363,8 @@ function inspectEventSourcePage({
     });
   } else if (hasCompatibleVenueCalendarSignature(source)) {
     addCandidate("html_venue_calendar", pageUrl);
+  } else if (extractScheduledEventCards(source, { sourceUrl: pageUrl }).recognized) {
+    addCandidate("scheduled_event_cards", pageUrl);
   } else if (
     hasGenericEventListingSignature(source) ||
     hasScheduledEventCardListing(source, pageUrl)
@@ -852,6 +856,15 @@ function buildDetectedCandidate({
       notes: "official_program_section_atoms_require_manifest_review",
     };
   }
+  if (kind === "scheduled_event_cards") {
+    return {
+      ...common,
+      adapter: "scheduled_event_cards",
+      extraction_tier: "stable_html_calendar",
+      extractable: baseExtractable({ end: true, venue: true, venue_geocodable: true, stable_html: true }),
+      notes: "explicit_single_dates_require_same_identity_contact_details_and_permission",
+    };
+  }
   return {
     ...common,
     adapter: "needs_adapter",
@@ -877,6 +890,7 @@ function buildReviewedManifestCandidate(candidate, { seed = {}, context = {} } =
     wix_event_sitemap: "wix_event_sitemap",
     embedded_program_rsc: "embedded_program_rsc",
     official_program_article: "official_program_article",
+    scheduled_event_cards: "scheduled_event_cards",
   };
   const adapter = adapterMap[candidate.adapter];
   if (!MANIFEST_ADAPTERS.has(adapter)) return null;

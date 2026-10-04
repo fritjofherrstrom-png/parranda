@@ -16,6 +16,8 @@ const COLLECTION_REASON_TOKENS = new Set([
   "source_language_unavailable",
   "source_language_unsupported",
   "source_payload_invalid",
+  "source_robots_disallowed",
+  "source_robots_unavailable",
   "source_redirect_cross_origin",
   "source_redirect_invalid",
   "source_redirect_limit",
