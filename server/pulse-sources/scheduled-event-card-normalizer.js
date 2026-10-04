@@ -59,14 +59,38 @@ function extractScheduledEventCards(html, { sourceUrl } = {}) {
 }
 
 function extractScheduledEventContact(html, card) {
+  return inspectScheduledEventContact(html, card).contact || null;
+}
+
+function inspectScheduledEventContact(html, card) {
   const doc = boundedDocument(html);
-  if (!doc) return null;
+  if (!doc) return { status: "failed", reason: "source_payload_invalid" };
+  const contact = contactFromDocument(doc, card);
+  return { status: contact ? "ok" : "unsupported", contact };
+}
+
+function contactFromDocument(doc, card) {
   const canonical = doc.nodes.filter((node) => node.tagName === "link" && attribute(node, "rel").split(/\s+/).includes("canonical"));
   if (canonical.length !== 1 || sameOriginUrl(attribute(canonical[0], "href"), card.url) !== card.url) return null;
   const titles = doc.nodes.filter((node) => node.tagName === "h1");
   if (titles.length !== 1 || doc.texts.get(titles[0]) !== card.title) return null;
   const events = doc.nodes.filter((node) => node.tagName === "article" && hasClass(node, "node--type-event") && hasClass(node, "node--view-mode-full"));
   if (events.length !== 1) return null;
+  const eventNodes = doc.nodes.filter((node) => doc.articleOwners.get(node) === events[0]);
+  const eventTitles = eventNodes.filter((node) => /^h[1-6]$/.test(node.tagName) && hasClass(node, "node--title"));
+  // The shell is necessary but cannot override an article's explicit identity.
+  // Some supported full articles have no repeated title/permalink at all.
+  if (eventTitles.some((node) => doc.texts.get(node) !== card.title)) return null;
+  const eventLinks = eventNodes.filter((node) => node.tagName === "a" &&
+    (attribute(node, "rel").split(/\s+/).includes("bookmark") || eventTitles.some((heading) => within(node, heading))));
+  if (eventLinks.some((node) => sameOriginUrl(attribute(node, "href"), card.url) !== card.url)) return null;
+  const schedules = eventNodes.filter((node) => hasClass(node, "field--name-field-schedule"));
+  // Opaque opening-hours widgets are not occurrence dates. When the detail
+  // does publish an exact supported occurrence, it must agree with the list.
+  if (schedules.some((node) => {
+    const date = explicitSingleDate(doc.texts.get(node));
+    return date && date !== card.date;
+  })) return null;
   const fields = doc.nodes.filter((node) => hasClass(node, "field--name-field-contact") && ownedBy(node, events[0]));
   if (fields.length !== 1) return null;
   const contacts = doc.nodes.filter((node) => node.tagName === "article" && hasClass(node, "node--type-contact") && ownedBy(node, fields[0]));
@@ -81,6 +105,9 @@ function extractScheduledEventContact(html, card) {
   const street = part("streetAddress");
   const city = part("addressLocality");
   const postalCode = part("postalCode");
+  const countryNodes = own.filter((node) => attribute(node, "property") === "addressCountry");
+  const publishedCountry = countryNodes.length === 1 ? doc.texts.get(countryNodes[0]) : null;
+  if (countryNodes.length > 1 || (countryNodes.length && (!publishedCountry || publishedCountry.length > 80))) return null;
   if (!street || !city || street.length > 120 || city.length > 80 || (postalCode && postalCode.length > 20)) return null;
   // A contact can be a publisher's office. Require the event's own geographic
   // field to explicitly route to this exact postal address before calling it
@@ -88,15 +115,20 @@ function extractScheduledEventContact(html, card) {
   const locations = doc.nodes.filter((node) => hasClass(node, "field--name-field-geofield") && ownedBy(node, events[0]));
   if (locations.length !== 1) return null;
   const routes = doc.nodes.filter((node) => node.tagName === "a" && hasClass(node, "button--map-route-link") && ownedBy(node, events[0]) && within(node, locations[0]));
-  if (routes.length !== 1 || !routeMatchesAddress(attribute(routes[0], "href"), { street, postalCode, city })) return null;
-  const address = [street, postalCode, city].filter(Boolean).join(", ");
+  if (routes.length !== 1) return null;
+  const route = routeAddressEvidence(attribute(routes[0], "href"), { street, postalCode, city });
+  if (!route) return null;
+  const language = attribute(doc.nodes.find((node) => node.tagName === "html"), "lang");
+  const country = agreeingCountry(publishedCountry, route.country, language);
+  if (country === false) return null;
+  const address = [street, postalCode, city, country].filter(Boolean).join(", ");
   if (address.length > 200) return null;
   const headings = doc.nodes.filter((node) => /^h[1-6]$/.test(node.tagName) && ownedBy(node, contacts[0]));
   const venue = headings.length === 1 ? doc.texts.get(headings[0]) : null;
-  return { address, city, place_context: venue && venue.length <= 120 ? venue : street };
+  return { address, city, ...(country ? { country } : {}), place_context: venue && venue.length <= 120 ? venue : street };
 }
 
-function routeMatchesAddress(href, { street, postalCode, city }) {
+function routeAddressEvidence(href, { street, postalCode, city }) {
   try {
     const url = new URL(href);
     if (url.protocol !== "https:" || url.hostname !== "www.google.com" || url.pathname !== "/maps/dir/" || url.username || url.password || url.searchParams.get("api") !== "1") return false;
@@ -104,8 +136,29 @@ function routeMatchesAddress(href, { street, postalCode, city }) {
     const normalize = (value) => cleanText(value).normalize("NFC").toLowerCase().replace(/,\s*/g, " ");
     const expected = normalize([street, postalCode, city].filter(Boolean).join(" "));
     const destination = normalize(url.searchParams.get("destination"));
-    return destination === expected || (destination.startsWith(`${expected} `) && /^[a-z]{2}$/.test(destination.slice(expected.length + 1)));
+    if (destination === expected) return { country: null };
+    if (!destination.startsWith(`${expected} `)) return null;
+    const country = destination.slice(expected.length + 1);
+    return /^[a-z]{2}$/.test(country) ? { country: country.toUpperCase() } : null;
   } catch (_) { return false; }
+}
+
+function agreeingCountry(published, route, language) {
+  if (!published) return route;
+  if (/^[a-z]{2}$/i.test(published)) {
+    const code = published.toUpperCase();
+    return !route || code === route ? code : false;
+  }
+  if (!route) return published;
+  // A source-language country name may agree with an explicit route code.
+  // Unsupported names fail closed; neither hostname nor timezone supplies it.
+  for (const locale of [language, "en"].filter(Boolean)) {
+    try {
+      const name = new Intl.DisplayNames([locale], { type: "region", fallback: "none" }).of(route);
+      if (cleanText(name).normalize("NFC").toLowerCase() === published.normalize("NFC").toLowerCase()) return route;
+    } catch (_) { /* Invalid source language is not country evidence. */ }
+  }
+  return false;
 }
 
 function scheduledCardEvent(card, contact, { timezone, sourceLanguage, listingUrl }) {
@@ -121,4 +174,4 @@ function scheduledCardEvent(card, contact, { timezone, sourceLanguage, listingUr
   };
 }
 
-module.exports = { extractScheduledEventCards, extractScheduledEventContact, scheduledCardEvent };
+module.exports = { extractScheduledEventCards, extractScheduledEventContact, inspectScheduledEventContact, scheduledCardEvent };

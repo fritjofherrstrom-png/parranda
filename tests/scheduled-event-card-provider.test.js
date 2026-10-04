@@ -10,6 +10,7 @@ const { inspectEventSourcePage } = require("../server/pulse-sources/local-event-
 const { qualifyDiscoveredSourceProfile, eventFeedsFromQualifiedSourceProfiles } = require("../server/pulse-sources/source-qualification");
 const { normalizeTimeSensitiveSourceEvent } = require("../server/pulse-sources/time-sensitive-event");
 const { collectAnchorEvents } = require("../server/place-candidates/agnostic-event-supply");
+const { buildEventVenueQuery } = require("../server/place-candidates/event-venue-resolution");
 
 const cards = fs.readFileSync(path.join(__dirname, "fixtures/drupal-scheduled-event-cards.html"), "utf8");
 const contact = fs.readFileSync(path.join(__dirname, "fixtures/drupal-scheduled-event-contact.html"), "utf8");
@@ -35,6 +36,118 @@ function collect(overrides = {}, context = { now: "2026-10-04T09:00:00Z" }) {
   return createScheduledEventCardProvider({ ...options, fetcher: fetchPages(), ...overrides }).create({ key: "anywhere" }).collect(context);
 }
 
+function eventField(html, field) {
+  return html.replace('<article class="node node--type-event node--view-mode-full">',
+    `<article class="node node--type-event node--view-mode-full">${field}`);
+}
+function withCountry(html, country) {
+  return html.replace('typeof="PostalAddress">', `typeof="PostalAddress"><span property="addressCountry">${country}</span>`);
+}
+
+test("review: an event article cannot borrow matching page-shell identity for another event", async () => {
+  for (const identity of [
+    '<h2 class="node--title"><a href="/nl/agenda/biomarkt">Biomarkt</a></h2>',
+    '<h2 class="node--title"><a href="/nl/agenda/biomarkt">Bloemenmarkt</a></h2>',
+    '<h2 class="node--title">Biomarkt</h2>',
+    '<a rel="bookmark" href="/nl/agenda/biomarkt">Details</a>',
+  ]) {
+    const html = eventField(detail, identity);
+    assert.equal(extractScheduledEventContact(html, card), null);
+    assert.equal((await collect({ detailLimit: 1, fetcher: fetchPages({ first: html }) })).time_sensitive_events.length, 0);
+  }
+  assert.ok(extractScheduledEventContact(eventField(detail,
+    '<h2 class="node--title"><a href="/nl/agenda/bloemenmarkt">Bloe<em>men</em>markt</a></h2>'), card));
+});
+
+test("review: an explicit detail date must agree with its listing occurrence", async () => {
+  const html = eventField(detail, '<div class="field--name-field-schedule">5 oktober 2026</div>');
+  assert.equal(extractScheduledEventContact(html, card), null);
+  assert.equal((await collect({ detailLimit: 1, fetcher: fetchPages({ first: html }) })).time_sensitive_events.length, 0);
+  assert.ok(extractScheduledEventContact(eventField(detail, '<div class="field--name-field-schedule">4 oktober 2026</div>'), card));
+  assert.ok(extractScheduledEventContact(detail, card), "absence of a detail occurrence is supported");
+});
+
+test("review: published address and directions countries must agree", async () => {
+  for (const country of ["US", "NL"]) {
+    const html = withCountry(detail, "BE").replace("destination=Kouter+9000+Gent+BE", `destination=Kouter+9000+Gent+${country}`);
+    assert.equal(extractScheduledEventContact(html, card), null);
+    assert.equal((await collect({ detailLimit: 1, fetcher: fetchPages({ first: html }) })).time_sensitive_events.length, 0);
+  }
+});
+
+test("review: the source country survives normalization and overrides unrelated lookup context", async () => {
+  const result = await collect({ detailLimit: 1, fetcher: fetchPages({ first: withCountry(detail, "BE") }) });
+  assert.equal(result.collection_status.status, "ok");
+  const event = normalizeTimeSensitiveSourceEvent(result.time_sensitive_events[0], { timezone: options.timezone, now: "2026-10-04T09:00:00Z" });
+  assert.equal(event.country, "BE");
+  const query = buildEventVenueQuery(event, { placeContext: { country: "France", region: "Île-de-France" } });
+  assert.match(query, /\bBE\b/);
+  assert.doesNotMatch(query, /France/);
+  const input = discovery();
+  const queries = [];
+  const supplied = await collectAnchorEvents({ anchor: input.anchor, now: "2026-10-04T09:00:00Z",
+    registry: [{ ...input.manifests[0], status: "active", runtime_policy: "bounded_refresh", terms_status: "open_license", source_scoped_pulse: true }],
+    placeContext: { country: "France", region: "Île-de-France" }, fetcher: fetchPages(),
+    venueResolver: async (value) => { queries.push(value); return []; } });
+  assert.ok(queries.length > 0);
+  assert.ok(queries.every((value) => /\bBE\b/.test(value) && !/France/.test(value)));
+  const suppliedEvents = [...supplied.tonight, ...supplied.this_week];
+  assert.equal(suppliedEvents.length, 2);
+  assert.ok(suppliedEvents.every((value) => value.address.endsWith(", BE")));
+});
+
+test("published countries are optional facts, with names compared only in the page's language", () => {
+  assert.equal(extractScheduledEventContact(`<html lang="nl">${withCountry(detail, "België")}</html>`, card).country, "BE");
+  assert.equal(extractScheduledEventContact(withCountry(detail, "Netherlands"), card), null);
+  assert.equal(extractScheduledEventContact(withCountry(withCountry(detail, "BE"), "NL"), card), null);
+  const noRouteCountry = detail.replace("destination=Kouter+9000+Gent+BE", "destination=Kouter+9000+Gent");
+  assert.equal(extractScheduledEventContact(noRouteCountry, card).country, undefined, "country is never inferred from the host or timezone");
+  assert.equal(extractScheduledEventContact(withCountry(noRouteCountry, "BE"), card).country, "BE");
+});
+
+test("review: a directly hidden route link is not venue evidence", async () => {
+  for (const hidden of ["hidden", 'aria-hidden="true"']) {
+    const html = detail.replace('class="button--map-route-link"', `${hidden} class="button--map-route-link"`);
+    assert.equal(extractScheduledEventContact(html, card), null);
+    assert.equal((await collect({ detailLimit: 1, fetcher: fetchPages({ first: html }) })).time_sensitive_events.length, 0);
+  }
+});
+
+test("review: line and block boundaries cannot manufacture an explicit year", async () => {
+  for (const label of ["4 oktober 20<br>26", "4 oktober <div>20</div><div>26</div>"]) {
+    const listing = cards.replaceAll("4 oktober 2026", label);
+    assert.equal(extractScheduledEventCards(listing, { sourceUrl: endpoint }).recognized, false);
+    assert.equal((await collect({ fetcher: fetchPages({ listing }) })).time_sensitive_events.length, 0);
+  }
+  assert.equal(extractScheduledEventCards(cards.replaceAll("4 oktober 2026", "<em>4</em> oktober <strong>2026</strong>"), { sourceUrl: endpoint }).recognized, true);
+});
+
+test("review: a detail DOM-budget error invalidates partial rows and qualification evidence", async () => {
+  const second = secondDetail + "<i></i>".repeat(25000);
+  for (const tail of ["<i></i>".repeat(25000), "<i hidden></i>".repeat(25000),
+    "<div>".repeat(1000) + "x" + "</div>".repeat(1000), "x".repeat(1100000)]) {
+    const result = await collect({ fetcher: fetchPages({ second: secondDetail + tail }) });
+    assert.equal(result.collection_status.status, "failed");
+    assert.equal(result.collection_status.reason, "source_payload_invalid");
+    assert.equal(result.time_sensitive_events.length, 0);
+  }
+  const qualified = await qualifyDiscoveredSourceProfile({ ...discovery(), now: "2026-10-04T09:00:00Z", fetcher: fetchPages({ second }),
+    venueResolver: () => assert.fail("an invalid collection cannot reach geocoding") });
+  const observation = qualified.qualification.candidates[0].observations[0];
+  assert.notEqual(observation.status, "healthy", "existing aggregate health may label a failed sole source unavailable");
+  assert.ok(observation.reasons.includes("source_failures_present"));
+  assert.equal(observation.normalized_event_count, 0);
+  assert.equal(observation.accepted_event_count, 0);
+  assert.equal(qualified.qualification.candidates[0].healthy_probe_count, 0);
+  assert.equal(qualified.qualification.candidates[0].event_bearing_probe_count, 0);
+});
+
+test("an inspected but unsupported detail remains distinct from a failed inspection", async () => {
+  const result = await collect({ fetcher: fetchPages({ second: secondDetail.replaceAll("PostalAddress", "Organization") }) });
+  assert.equal(result.collection_status.status, "ok");
+  assert.equal(result.time_sensitive_events.length, 1);
+});
+
 test("real dated cards and their event-owned contact address yield factual occurrences on an unrelated host", async () => {
   const calls = [];
   const result = await collect({ fetcher: fetchPages({ calls }) });
@@ -43,7 +156,8 @@ test("real dated cards and their event-owned contact address yield factual occur
   assert.equal(calls.length, 4, "robots, list, and two explicitly identified details only");
   const event = result.time_sensitive_events[0];
   assert.equal(event.title, "Bloemenmarkt");
-  assert.equal(event.address, "Kouter, 9000, Gent");
+  assert.equal(event.address, "Kouter, 9000, Gent, BE");
+  assert.equal(event.country, "BE", "directions publish the country even without a separate addressCountry field");
   assert.equal(event.source_url, card.url);
   assert.equal(event.provenance.source_page, endpoint);
   assert.deepEqual(event.time_window.dates, ["2026-10-04"]);
@@ -83,7 +197,7 @@ test("detail identity and semantic ownership prevent unrelated contacts and map 
   ];
   for (const html of variants) assert.equal(extractScheduledEventContact(html, card), null);
   const geometry = '<script type="application/json">{"leaflet":{"features":[{"lat":51.05,"lon":3.72,"entity_id":"other"}]}}</script>';
-  assert.deepEqual(extractScheduledEventContact(detail + geometry, card), { address: "Kouter, 9000, Gent", city: "Gent", place_context: "Bloemenmarkt Kouter" });
+  assert.deepEqual(extractScheduledEventContact(detail + geometry, card), { address: "Kouter, 9000, Gent, BE", city: "Gent", country: "BE", place_context: "Bloemenmarkt Kouter" });
 });
 
 test("stale cards and unknown recurrence are not expanded into this week", async () => {

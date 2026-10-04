@@ -3,6 +3,8 @@
 const { parse } = require("parse5");
 
 const INERT = new Set(["script", "style", "template", "noscript", "svg"]);
+const TEXT_BOUNDARIES = new Set(["br", "hr", "div", "p", "section", "header", "footer", "main", "aside", "nav",
+  "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "dl", "dt", "dd", "table", "tr", "td", "th", "pre", "blockquote"]);
 
 // Reject the whole document on exhaustion, including valid cards before the
 // oversized tail. Iterative inspection avoids recursive subtree rescans.
@@ -15,21 +17,26 @@ function boundedDocument(html) {
   const texts = new Map();
   const articleOwners = new Map();
   let characters = 0;
+  let inspected = 0;
   while (stack.length) {
     const frame = stack[stack.length - 1];
     const node = frame.node;
+    const inert = INERT.has(node.tagName) || (node.attrs || []).some((attr) =>
+      attr.name === "hidden" || (attr.name === "aria-hidden" && attr.value.toLowerCase() === "true"),
+    );
     if (frame.next === 0) {
-      if (nodes.length >= 20000 || frame.depth > 256) return null;
-      nodes.push(node);
-      articleOwners.set(node, frame.articleOwner || null);
+      if (++inspected > 20000 || frame.depth > 256) return null;
+      // Inert nodes themselves cannot supply attributes/links as evidence.
+      // They still consume the inspection budget even without descendants.
+      if (!inert) {
+        nodes.push(node);
+        articleOwners.set(node, frame.articleOwner || null);
+      }
       characters += (node.value || node.data || "").length;
       for (const attr of node.attrs || []) characters += attr.name.length + attr.value.length;
       if (characters > 1000000) return null;
       frame.text = node.nodeName === "#text" ? node.value : "";
     }
-    const inert = INERT.has(node.tagName) || (node.attrs || []).some((attr) =>
-      attr.name === "hidden" || (attr.name === "aria-hidden" && attr.value === "true"),
-    );
     const children = inert ? [] : node.childNodes || [];
     if (frame.next < children.length) {
       stack.push({ node: children[frame.next++], depth: frame.depth + 1, next: 0,
@@ -41,8 +48,11 @@ function boundedDocument(html) {
     // An article never lends its facts to a containing article or field.
     if (stack.length && node.tagName !== "article" && !inert) {
       const parent = stack[stack.length - 1];
-      parent.overflow ||= frame.overflow || parent.text.length + frame.text.length > 4096;
-      parent.text = (parent.text + frame.text).slice(0, 4096);
+      // Keep line/block token boundaries without splitting legitimate inline
+      // emphasis. In particular, 20<br>26 must never become the year 2026.
+      const text = TEXT_BOUNDARIES.has(node.tagName) ? ` ${frame.text} ` : frame.text;
+      parent.overflow ||= frame.overflow || parent.text.length + text.length > 4096;
+      parent.text = (parent.text + text).slice(0, 4096);
     }
   }
   return { root, nodes, texts, articleOwners };

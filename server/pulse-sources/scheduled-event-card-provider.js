@@ -4,7 +4,7 @@ const { GENERIC_PROVIDER_CITY } = require("./provider-registry");
 const { buildProviderCollectionOutcome } = require("./provider-collection-outcome");
 const { normalizeIanaTimezone, datePartsInTimezone, normalizeSourceEventDate } = require("./source-event-time");
 const { sameOriginUrl } = require("./scheduled-event-document");
-const { extractScheduledEventCards, extractScheduledEventContact, scheduledCardEvent } = require("./scheduled-event-card-normalizer");
+const { extractScheduledEventCards, inspectScheduledEventContact, scheduledCardEvent } = require("./scheduled-event-card-normalizer");
 
 const USER_AGENT = "Parranda-Source-Scout/1.0 (+https://github.com/fritjofherrstrom-png/parranda)";
 
@@ -18,7 +18,7 @@ function createScheduledEventCardProvider(options = {}) {
     sourceUrl: options.endpoint, supportedLanguages: language ? [language] : [],
     trust: { source_tier: options.sourceTier || "inferred", confidence: options.confidence || "low", human_verified: false, freshness: "fresh" },
     cachePolicy: { kind: "memory", ttlSeconds: 1200 },
-    sourceOwnedFields: ["title", "starts_on", "ends_on", "time_window", "address", "city", "place_context", "source_url"],
+    sourceOwnedFields: ["title", "starts_on", "ends_on", "time_window", "address", "city", "country", "place_context", "source_url"],
     parrandaOwnedFields: ["intents", "route_role_hint"],
   };
   return { descriptor, create(cityConfig, context = {}) {
@@ -108,8 +108,9 @@ async function collectBounded({ endpoint, fetcher, signal, date, timezone, langu
   // This is an explicitly bounded sample, not exhaustive calendar coverage.
   for (const card of current.slice(0, clamp(options.detailLimit, 1, 8, 4))) {
     const detail = await request(card.url);
-    const contact = extractScheduledEventContact(detail.body, card);
-    if (contact) rows.push(scheduledCardEvent(card, contact, { timezone, sourceLanguage: language, listingUrl: listing.url }));
+    const inspection = inspectScheduledEventContact(detail.body, card);
+    if (inspection.status === "failed") throw failure(inspection.reason);
+    if (inspection.contact) rows.push(scheduledCardEvent(card, inspection.contact, { timezone, sourceLanguage: language, listingUrl: listing.url }));
   }
   return collection(rows, rows.length ? "ok" : "failed", rows.length ? null : "source_payload_invalid");
 }

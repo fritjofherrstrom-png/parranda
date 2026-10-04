@@ -20,10 +20,21 @@ Conflicting facts for a detail identity are rejected.
 The list supplies an explicit occurrence date. A same-origin detail must bind
 that identity through its canonical URL and matching page title, contain one
 full event article, and publish one event-owned contact with a structured
-postal address. **Contact information alone is insufficient:** the event's own
+postal address. Any article-owned explicit title/permalink must also agree;
+the page shell cannot override a contradictory event article. An exact
+supported date in the detail's own schedule must agree with the listed date.
+An absent occurrence or opaque opening-hours widget supplies no detail date.
+**Contact information alone is insufficient:** the event's own
 geographic field must contain one Google Maps directions API link explicitly
 routing to that same street, postal code and locality. That standard URL is
-parsed as evidence; it is never fetched. An unrelated office address, related
+parsed as evidence; it is never fetched. Explicit address and directions
+countries must agree. Country codes and agreeing country names in the page's
+language (or English) are retained; unsupported name/code comparisons reject
+the contact. A country published by either agreeing address or directions is
+preserved in the address and normalized event, and prevents an unrelated
+anchor region/country from being added to the venue query. Without either
+country fact, none is inferred from the hostname or timezone.
+An unrelated office address, related
 article, Leaflet map center, or separate contact marker cannot supply a venue
 or coordinates. The committed detail fixture is a structural excerpt from the
 real page retaining the contact/location relationship.
@@ -52,11 +63,20 @@ route eligibility. `near_me` excludes it; no distance is fabricated.
   no detail fetches. This is a bounded sample, not exhaustive calendar coverage.
 - DOM budgets: 20,000 inspected nodes, depth 256, 1,000,000 inspected characters,
   200 event articles; iterative ownership/text summaries, inert/hidden content
-  excluded. Any exhausted document budget rejects the whole document.
+  excluded, including hidden nodes' own attributes. Excluded nodes still count
+  against inspection limits. Line breaks and block boundaries separate text
+  tokens, so `20<br>26` cannot manufacture an explicit year; inline emphasis
+  remains supported. Any exhausted document budget rejects the whole document.
 - Network/robots/redirect/budget failures discard partial rows and produce a
   failed collection. An unrecognized payload or current cards with no safely
   joined venue is a parse failure, not a healthy empty calendar. A recognized
   calendar with no date in the requested window is honestly empty.
+  A detail inspection reports budget failure separately from an inspected but
+  unsupported contact. A later detail budget failure discards earlier valid
+  rows; it cannot produce healthy partial qualification evidence. Existing
+  aggregate health labels a failed sole source `unavailable`, with
+  `source_failures_present`, zero normalized/accepted events and zero healthy
+  or event-bearing probes.
 
 ## Qualification and operations
 
@@ -88,6 +108,17 @@ trusted/ambiguous venue resolution and mapless near-me exclusion. Synthetic
 distinct-day qualification tests verify state transitions; they do not claim
 two days of real worker observations.
 
+Independent review of frozen `a93b33769054aec8744e4fffae952c0054de7b96`
+identified six synthetic blockers, reproduced before implementation changes:
+article identity, detail date, conflicting/lost country, directly hidden route,
+fabricated year across a line/block boundary, and hidden detail budget failure.
+The initial added tests produced seven failures (country conflict and country
+passthrough tested separately), with all 18 original/positive controls passing.
+Corrections and regression controls remain in this same PR. Review findings do
+not establish that the captured real pages contain those synthetic failures.
+Corrected-head CI and renewed independent review belong in the PR handoff;
+the original green CI is evidence only for the original head.
+
 Bounded public HTTP 200 reads on 2026-10-04, without following redirects:
 
 | URL path on `https://visit.gent.be` | Saved UTC | Bytes | SHA-256 |
@@ -106,6 +137,9 @@ geocoding, deployed-worker qualification, public search stability or broad
 European Live coverage.** No catalog writes or runtime changes were performed.
 Workspace raw files and provenance/replay records are in `/tmp/parranda-*`;
 the URL/hash record above and committed structural fixtures are durable.
+The correction replays the same hash-verified captures offline and still
+produces those two rows, now retaining the published `BE` country in each
+address. No new public reads or runtime changes are required for that replay.
 
 ## Handoff and smallest runtime QA
 
