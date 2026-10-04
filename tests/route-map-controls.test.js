@@ -3,7 +3,7 @@
 /**
  * Route markers never sit under the map's own controls.
  *
- * On a phone the Planner's map is a strip about 190px tall with Leaflet's zoom
+ * On a phone the Planner's map is a strip about 190px tall with the map's zoom
  * bar in the top-left corner, the attribution along the bottom and the expand
  * button in the top-right corner. A fit that padded the day by one symmetric
  * margin put the day's outermost stop under a control: at 390px the woven Live
@@ -226,22 +226,22 @@ async function openDay({ browser, origin }, { width, stops }) {
 // the page.
 function measureMap({ expandNames, sideMap = false }) {
   const frame = document.querySelector(
-    sideMap ? 'aside[aria-label="Karta över dagen"] .leaflet-container' : 'section[aria-label="Rutten"] .leaflet-container',
+    sideMap ? 'aside[aria-label="Karta över dagen"] .maplibregl-map' : 'section[aria-label="Rutten"] .maplibregl-map',
   ).parentElement;
   const box = (element) => {
     const rect = element.getBoundingClientRect();
     return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
   };
   const round = (b) => `x ${Math.round(b.left)}-${Math.round(b.right)}, y ${Math.round(b.top)}-${Math.round(b.bottom)}`;
-  const map = box(frame.querySelector(".leaflet-container"));
+  const map = box(frame.querySelector(".maplibregl-map"));
   // Found by its accessible name, whether that is a label or visible text.
   const expand = [...frame.querySelectorAll("button")].find((button) =>
     expandNames.includes((button.getAttribute("aria-label") || button.textContent || "").trim()),
   );
   const controls = {
     ...(sideMap ? {} : { "the expand button": expand }),
-    "the zoom bar": frame.querySelector(".leaflet-control-zoom"),
-    "the attribution": frame.querySelector(".leaflet-control-attribution"),
+    "the zoom bar": frame.querySelector(".maplibregl-ctrl-group"),
+    "the attribution": frame.querySelector(".maplibregl-ctrl-attrib"),
   };
   const problems = Object.entries(controls)
     .filter(([, element]) => !element || !(element.getBoundingClientRect().width > 0))
@@ -417,7 +417,7 @@ test("a delayed shrink refits to the rendered mobile size after the old timer bo
   const { context, page, route } = await openDay(current, { width: 320, stops });
   try {
     await page.evaluate(() => {
-      document.querySelector('section[aria-label="Rutten"] .leaflet-container').parentElement.style.transitionDuration = "1200ms";
+      document.querySelector('section[aria-label="Rutten"] .maplibregl-map').parentElement.style.transitionDuration = "1200ms";
     });
     const original = await page.evaluate(measureMap, { expandNames: EXPAND_NAMES });
     for (const name of ["Förstora kartan", "Förminska kartan"]) {

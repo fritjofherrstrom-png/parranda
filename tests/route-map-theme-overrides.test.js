@@ -1,8 +1,8 @@
 'use strict';
-// Leaflet's stylesheet is lazy-loaded with the map, so in the built surface it
-// can arrive after Parranda's. The theme overrides for the map chrome must win
-// regardless: this loads Leaflet's CSS last (the losing order) in real Chromium
-// and reads the computed colours in both themes.
+// MapLibre's stylesheet ships with the map code, so in the built surface it can
+// arrive after Parranda's. The theme overrides for the map chrome must win
+// regardless: this loads MapLibre's CSS last (the losing order) in real
+// Chromium and reads the computed colours in both themes.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -14,22 +14,24 @@ const root = path.resolve(__dirname, '..');
 const frontend = path.join(root, 'frontend');
 
 const page = theme => `<!doctype html><html data-theme="${theme}"><head>
-<link rel="stylesheet" href="/tailwind.css"><link rel="stylesheet" href="/leaflet.css"></head><body>
-<div class="leaflet-container" id="map" style="width:300px;height:200px;position:relative">
-  <div class="leaflet-control-container">
-    <div class="leaflet-bar leaflet-control"><a id="zoom" class="leaflet-control-zoom-in" href="#">+</a></div>
-    <div class="leaflet-control-attribution leaflet-control"><a id="attribution" href="#">OpenStreetMap</a></div>
+<link rel="stylesheet" href="/tailwind.css"><link rel="stylesheet" href="/maplibre.css"></head><body>
+<div class="route-map-frame" style="position:relative;width:300px;height:200px">
+  <div class="maplibregl-map" id="map" style="width:300px;height:200px">
+    <div class="maplibregl-control-container">
+      <div class="maplibregl-ctrl-top-left"><div class="maplibregl-ctrl maplibregl-ctrl-group"><button id="zoom" class="maplibregl-ctrl-zoom-in" type="button"><span id="zoomIcon" class="maplibregl-ctrl-icon"></span></button></div></div>
+      <div class="maplibregl-ctrl-bottom-right"><div class="maplibregl-ctrl maplibregl-ctrl-attrib"><div class="maplibregl-ctrl-attrib-inner"><a id="attribution" href="#">OpenStreetMap</a></div></div></div>
+    </div>
   </div>
-  <div class="leaflet-pane leaflet-tooltip-pane"><div id="tooltip" class="leaflet-tooltip leaflet-tooltip-top">Stop 1</div></div>
+  <div id="tooltip" class="route-map-tooltip route-map-tooltip--right" style="left:20px;top:40px">Stop 1</div>
 </div></body></html>`;
 
-test('map chrome follows the theme even when Leaflet CSS loads last', { timeout: 120000 }, async t => {
+test('map chrome follows the theme even when the MapLibre CSS loads last', { timeout: 120000 }, async t => {
   const temp = await fs.mkdtemp(path.join(frontend, '.map-theme-'));
   let browser, server;
   try {
     await fs.writeFile(path.join(temp, 'input.css'), `@import ${JSON.stringify(path.join(frontend, 'src/styles/tokens.css'))};\n@import ${JSON.stringify(path.join(frontend, 'src/styles/tailwind.css'))};\n@source not ${JSON.stringify(path.join(frontend, 'src'))};\n`);
     execFileSync(process.execPath, [path.join(frontend, 'node_modules/@tailwindcss/cli/dist/index.mjs'), '-i', path.join(temp, 'input.css'), '-o', path.join(temp, 'tailwind.css')], { cwd: frontend, stdio: 'pipe' });
-    await fs.copyFile(path.join(frontend, 'node_modules/leaflet/dist/leaflet.css'), path.join(temp, 'leaflet.css'));
+    await fs.copyFile(path.join(frontend, 'node_modules/maplibre-gl/dist/maplibre-gl.css'), path.join(temp, 'maplibre.css'));
     server = http.createServer(async (req, res) => {
       try {
         const url = new URL(req.url, 'http://x');
@@ -60,20 +62,20 @@ test('map chrome follows the theme even when Leaflet CSS loads last', { timeout:
           paper: token('--p-color-paper'),
           container: getComputedStyle(document.getElementById('map')).backgroundColor,
           attribution: style('attribution').color,
-          zoomBackground: style('zoom').backgroundColor,
-          zoomColor: style('zoom').color,
+          group: getComputedStyle(document.querySelector('.maplibregl-ctrl-group')).backgroundColor,
+          zoomGlyph: style('zoomIcon').backgroundColor,
+          zoomSize: [style('zoom').width, style('zoom').height],
           tooltipBackground: style('tooltip').backgroundColor,
           tooltipColor: style('tooltip').color,
-          tooltipArrow: getComputedStyle(document.getElementById('tooltip'), '::before').borderTopColor,
         };
       });
       assert.equal(seen.container, seen.paper, `${theme}: map background is paper`);
-      assert.equal(seen.attribution, seen.ink, `${theme}: attribution links are ink, not Leaflet blue`);
-      assert.equal(seen.zoomBackground, seen.paper, `${theme}: zoom control is paper`);
-      assert.equal(seen.zoomColor, seen.ink, `${theme}: zoom glyph is ink`);
-      assert.equal(seen.tooltipBackground, seen.ink, `${theme}: tooltip is ink, not Leaflet white`);
-      assert.equal(seen.tooltipColor, seen.paper, `${theme}: tooltip text is paper`);
-      assert.equal(seen.tooltipArrow, seen.ink, `${theme}: tooltip arrow matches the tooltip`);
+      assert.equal(seen.attribution, seen.ink, `${theme}: attribution links are ink, not MapLibre grey`);
+      assert.equal(seen.group, seen.paper, `${theme}: zoom control is paper, not MapLibre white`);
+      assert.equal(seen.zoomGlyph, seen.ink, `${theme}: zoom glyph is ink`);
+      assert.deepEqual(seen.zoomSize, ['44px', '44px'], `${theme}: zoom buttons are a thumb's size`);
+      assert.equal(seen.tooltipBackground, seen.ink, `${theme}: a stop's name is ink`);
+      assert.equal(seen.tooltipColor, seen.paper, `${theme}: its text is paper`);
     }
   } finally {
     await browser?.close();

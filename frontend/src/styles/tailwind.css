@@ -81,71 +81,83 @@
   text-transform: uppercase;
 }
 
-/* Leaflet's own stylesheet is lazy-loaded with the map, so it can arrive
-   after this one. Every override below is one step more specific than the
-   Leaflet rule it replaces, so it wins whichever loads last.
+/* MapLibre's own stylesheet is lazy-loaded with the map, so it can arrive after
+   this one. Every override below is one class more specific than the MapLibre
+   rule it replaces (`.route-map-frame …`), so it wins whichever loads last.
 
-   OSM tiles, toned to the theme: greyscale by day, inverted greyscale at night.
-   The route is the only colour on the map. Same provider, same attribution —
-   only a filter on the tile pane (markers and the line are other panes). */
-:root .leaflet-container {
+   The basemap itself is drawn in the theme's palette (route-map-style.mjs);
+   these rules only dress the controls in the same paper and ink. */
+.route-map-frame .maplibregl-map {
   background: rgb(var(--p-color-paper));
   font-family: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
 }
-.leaflet-tile-pane {
-  filter: var(--p-map-tiles);
-}
-.leaflet-container .leaflet-control-attribution {
-  background: rgb(var(--p-color-paper) / 0.85) !important;
+.route-map-frame .maplibregl-ctrl-attrib {
+  background: rgb(var(--p-color-paper) / 0.85);
   color: rgb(var(--p-color-ink) / 0.75);
+  font-size: 10px;
+  line-height: 1.35;
+  padding: 1px 6px;
+  border-radius: 6px 0 0 0;
+  max-width: calc(100% - 20px);
 }
-.leaflet-container .leaflet-control-attribution a {
+.route-map-frame .maplibregl-ctrl-bottom-right .maplibregl-ctrl {
+  margin: 0;
+}
+.route-map-frame .maplibregl-ctrl-attrib a {
   color: rgb(var(--p-color-ink));
 }
-.leaflet-container .leaflet-bar a {
+.route-map-frame .maplibregl-ctrl-group {
   background: rgb(var(--p-color-paper));
-  color: rgb(var(--p-color-ink));
-  border-color: rgb(var(--p-color-ink) / 0.14);
+  border: 1px solid rgb(var(--p-color-ink) / 0.14);
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.18);
+  overflow: hidden;
 }
-.leaflet-container .leaflet-bar a:hover,
-.leaflet-container .leaflet-bar a:focus {
+.route-map-frame .maplibregl-ctrl-group button + button {
+  border-top: 1px solid rgb(var(--p-color-ink) / 0.14);
+}
+.route-map-frame .maplibregl-ctrl-group button:hover,
+.route-map-frame .maplibregl-ctrl-group button:focus-visible {
   background: rgb(var(--p-color-ink) / 0.08);
 }
-/* Route geometry, coloured by role. CSS outranks the SVG attributes Leaflet
-   writes, so these follow the theme live. */
-.route-map-line {
-  stroke: rgb(var(--p-color-ember));
+/* The zoom glyphs are drawn in the theme's ink, not MapLibre's fixed grey. */
+.route-map-frame .maplibregl-ctrl button.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon,
+.route-map-frame .maplibregl-ctrl button.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon {
+  background: rgb(var(--p-color-ink));
+  -webkit-mask: var(--route-map-zoom-glyph) center / 18px 18px no-repeat;
+  mask: var(--route-map-zoom-glyph) center / 18px 18px no-repeat;
 }
-.route-map-dot {
-  stroke: rgb(var(--p-color-ember));
-  fill: rgb(var(--p-color-paper));
+.route-map-frame .maplibregl-ctrl button.maplibregl-ctrl-zoom-in {
+  --route-map-zoom-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 4v16M4 12h16' stroke='black' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E");
 }
-.route-map-candidate {
-  stroke: rgb(var(--p-color-ink));
-  fill: rgb(var(--p-color-paper));
+.route-map-frame .maplibregl-ctrl button.maplibregl-ctrl-zoom-out {
+  --route-map-zoom-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M4 12h16' stroke='black' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E");
 }
-
-.leaflet-container .leaflet-tooltip {
-  border: 0;
+/* The stop's name, opened from its marker. */
+.route-map-tooltip {
+  position: absolute;
+  z-index: 3000;
+  padding: 6px 10px;
   border-radius: 10px;
   background: rgb(var(--p-color-ink));
   color: rgb(var(--p-color-paper));
   font-family: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
+  font-size: 13px;
   font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+  max-width: 70vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
   box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
+  pointer-events: none;
+  transform: translate(22px, -50%);
 }
-.leaflet-container .leaflet-tooltip-top::before {
-  border-top-color: rgb(var(--p-color-ink));
+.route-map-tooltip--left {
+  transform: translate(calc(-100% - 22px), -50%);
 }
-.leaflet-container .leaflet-tooltip-bottom::before {
-  border-bottom-color: rgb(var(--p-color-ink));
-}
-.leaflet-container .leaflet-tooltip-left::before {
-  border-left-color: rgb(var(--p-color-ink));
-}
-.leaflet-container .leaflet-tooltip-right::before {
-  border-right-color: rgb(var(--p-color-ink));
-}
+/* The route line and dots are map layers, coloured from these same role
+   tokens by RouteMap.tsx (applyTheme) and recoloured on a theme switch. */
 
 /* Tailwind's reset leaves keyboard focus dependent on browser defaults, which
    are not visible against Parranda's dark surface in every browser. Keep the
@@ -188,21 +200,29 @@
 }
 
 /* A route stop is drawn twice at the same place (RouteMap.tsx), both as 44px
-   Leaflet icons anchored where its disc is drawn: the disc and number in
-   Leaflet's marker pane, and a clear touch target (`.route-map-target`) in a
-   pane beneath every disc. */
-.route-map-marker-shell {
+   MapLibre markers where its disc is drawn: a clear touch target
+   (`.route-map-target`) beneath every disc, and the disc with its number
+   above all targets. */
+.route-map-marker-shell,
+.route-map-target {
+  width: 44px;
+  height: 44px;
   overflow: visible;
   border: 0;
   background: transparent;
 }
+.route-map-frame .maplibregl-marker.route-map-target {
+  cursor: pointer;
+}
 
 /* On the disc's side only the visible pin takes a tap (`.route-map-marker::before`):
-   the icon's clear corners would cover a close neighbour's number, which the
-   target beneath cannot. More specific than Leaflet's
-   `.leaflet-marker-icon.leaflet-interactive`, whatever the order. */
-.leaflet-container .leaflet-marker-icon.route-map-marker-shell {
+   the marker's clear corners would cover a close neighbour's number, which the
+   target beneath cannot. */
+.route-map-frame .maplibregl-marker.route-map-marker-shell {
   pointer-events: none;
+}
+.route-map-marker-origin[hidden] {
+  display: none;
 }
 
 /* A clustered stop's disc is drawn beside its coordinate; this dot marks the
@@ -268,10 +288,9 @@
   color: rgb(var(--p-color-on-live));
 }
 
-/* Leaflet defaults to 30px controls. Keep map zoom usable with a thumb without
+/* MapLibre defaults to 29px controls. Keep map zoom usable with a thumb without
    changing the route/map contract or hiding the provider attribution. */
-.leaflet-control-zoom a {
-  width: 44px !important;
-  height: 44px !important;
-  line-height: 44px !important;
+.route-map-frame .maplibregl-ctrl-group button {
+  width: 44px;
+  height: 44px;
 }

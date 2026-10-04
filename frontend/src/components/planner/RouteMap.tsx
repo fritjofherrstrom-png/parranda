@@ -10,8 +10,16 @@
  *   - without a route (candidates only) there is no connecting line and no
  *     sequence number at all — nothing may read as an order never claimed.
  *
- * Each mounted map owns exactly one Leaflet instance and releases it with the
- * element, so a new day always draws into a live container.
+ * The renderer is MapLibre GL over OpenFreeMap vector tiles, drawn in Linje's
+ * own day and night palettes (route-map-style.mjs). Each mounted map owns
+ * exactly one MapLibre instance and releases it with the element, so a new day
+ * always draws into a live container. A theme switch recolours the drawn map in
+ * place: the route, markers and view stay.
+ *
+ * If the browser cannot draw it (no WebGL2, a lost graphics context) or the
+ * tile provider is unreachable, the day is untouched: no map is drawn, or the
+ * route draws over plain paper, and one line says so. Nothing retries on its
+ * own.
  *
  * The view never puts a stop under the map's own controls (route-map-fit.mjs):
  * the zoom buttons, the attribution and the expand button are measured, and
@@ -23,44 +31,83 @@
  * Stops, their order, route geometry and the Maps handoff remain unchanged.
  */
 import { useEffect, useRef, useState } from "react";
-import "leaflet/dist/leaflet.css";
+import "maplibre-gl/dist/maplibre-gl.css";
 import { routeMarkerPresentation, screenMarkerPresentation } from "../../lib/route-map-presentation.mjs";
 import { controlAwareView, type FitMark, type MapBox } from "../../lib/route-map-fit.mjs";
+import { BASEMAP_PROVIDER, basemapPaint, basemapStyle, type BasemapTheme } from "../../lib/route-map-style.mjs";
 import type { RouteContextSuggestion } from "../../lib/route-context-view.mjs";
 import { CollapseIcon, ExpandIcon } from "../shared/icons";
 import type { DistrictArea } from "./types";
 import type { Translate } from "./copy";
 
-// The line's colour comes from the theme (tailwind.css: `.route-map-line` and
-// the dot classes read the role tokens), so a day/night switch recolours a
-// drawn map without redrawing it. This value is only the SVG fallback.
-const ROUTE_COLOR = "#e8431d";
-
 // Footprints the fit keeps clear of the controls, in px. A route marker's
 // visible disc is 30px (tailwind.css: the 44px `.route-map-marker`, its
-// `::before` inset 7px); a dot is a circleMarker of radius 5 plus its stroke.
+// `::before` inset 7px); a dot is a circle of radius 5 plus its stroke.
 const MARKER_RADIUS = 15;
 const DOT_RADIUS = 7;
 // Every footprint stays this far inside the map edge (so a marker's whole 44px
 // icon and target stay on the map) and this far from any control.
 const EDGE_GAP = 7;
 const CONTROL_GAP = 4;
-const FIT_MAX_ZOOM = 15;
-// The route stops' touch targets: above the route line and the dots (overlay
-// pane, 400), beneath every stop's disc (marker pane, 600).
-const TARGET_PANE = "routeTargetPane";
-const TARGET_PANE_Z_INDEX = "550";
+// MapLibre's world is 512px at zoom 0 (Leaflet's was 256), so zoom 14 here is
+// the scale Leaflet called 15: the same closest view of a day.
+const TILE_SIZE = 512;
+const FIT_MAX_ZOOM = 14;
 
-function safeTooltip(name: string): string {
-  const safe = document.createElement("div");
-  safe.textContent = name;
-  return safe.innerHTML;
+const ROUTE_SOURCE = "parranda-route";
+const CONTEXT_SOURCE = "parranda-context";
+const CANDIDATE_SOURCE = "parranda-candidates";
+
+type MapLibre = typeof import("maplibre-gl");
+type Tip = { name: string; x: number; y: number; direction: "left" | "right" } | null;
+
+let maplibreModule: Promise<MapLibre> | null = null;
+/** MapLibre and its worker, loaded once and only when a map is drawn. */
+function loadMapLibre(): Promise<MapLibre> {
+  maplibreModule ??= Promise.all([
+    import("maplibre-gl"),
+    import("maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url"),
+  ]).then(([mod, worker]) => {
+    mod.setWorkerUrl(worker.default);
+    return mod;
+  });
+  return maplibreModule;
 }
 
-/** The controls laid over the map — Leaflet's own and Parranda's — relative to the map container. */
+function currentTheme(): BasemapTheme {
+  const root = document.documentElement;
+  const set = root.getAttribute("data-theme");
+  if (set === "day" || set === "night") return set;
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "night" : "day";
+}
+
+/** A Linje role colour as CSS rgb(), read from the theme tokens. */
+function roleColour(token: string, fallback: string): string {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+  return value ? `rgb(${value.split(/\s+/).join(", ")})` : fallback;
+}
+
+// Web Mercator in MapLibre's world pixels, for the control-aware fit.
+function project(mark: { lat: number; lng: number }, zoom: number) {
+  const world = TILE_SIZE * 2 ** zoom;
+  const sin = Math.min(Math.max(Math.sin((mark.lat * Math.PI) / 180), -0.9999), 0.9999);
+  return {
+    x: ((mark.lng + 180) / 360) * world,
+    y: (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * world,
+  };
+}
+function unproject(point: { x: number; y: number }, zoom: number) {
+  const world = TILE_SIZE * 2 ** zoom;
+  const lng = (point.x / world) * 360 - 180;
+  const n = Math.PI - (2 * Math.PI * point.y) / world;
+  const lat = (180 / Math.PI) * Math.atan(Math.sinh(n));
+  return { lat, lng };
+}
+
+/** The controls laid over the map — MapLibre's own and Parranda's — relative to the map container. */
 function controlBoxes(frame: HTMLElement, container: HTMLElement): MapBox[] {
   const origin = container.getBoundingClientRect();
-  return Array.from(frame.querySelectorAll<HTMLElement>(".leaflet-control, [data-map-control]"), (control) => {
+  return Array.from(frame.querySelectorAll<HTMLElement>(".maplibregl-ctrl, [data-map-control]"), (control) => {
     const box = control.getBoundingClientRect();
     return {
       left: box.left - origin.left,
@@ -75,31 +122,42 @@ function controlBoxes(frame: HTMLElement, container: HTMLElement): MapBox[] {
  * Show every mark at the closest zoom where no marker sits under a control. If
  * no such view exists (the map is too small to read), fall back to a plain fit.
  */
-function fitToControls(
-  leaflet: { L: any; map: any } | null,
-  frame: HTMLElement | null,
-  container: HTMLElement | null,
-  marks: FitMark[],
-) {
-  if (!leaflet || !frame || !container || !marks.length) return;
-  const { L, map } = leaflet;
-  const size = map.getSize();
+function fitToControls(map: any, frame: HTMLElement | null, container: HTMLElement | null, marks: FitMark[]) {
+  if (!map || !frame || !container || !marks.length) return;
+  const width = container.clientWidth;
+  const height = container.clientHeight;
   const view = controlAwareView({
     marks,
-    width: size?.x,
-    height: size?.y,
+    width,
+    height,
     keepouts: controlBoxes(frame, container),
     edge: EDGE_GAP,
     gap: CONTROL_GAP,
     maxZoom: FIT_MAX_ZOOM,
-    project: (mark, zoom) => map.project(L.latLng(mark.lat, mark.lng), zoom),
-    unproject: (point, zoom) => map.unproject(L.point(point.x, point.y), zoom),
+    project,
+    unproject,
   });
-  // Not animated: Leaflet ignores a new view while a zoom animation runs, and
-  // the fit after an expand or shrink must never be dropped.
-  if (view) map.setView([view.center.lat, view.center.lng], view.zoom, { animate: false });
-  else map.fitBounds(marks.map((mark) => [mark.lat, mark.lng]), { padding: [36, 36], maxZoom: FIT_MAX_ZOOM });
+  if (view) {
+    map.jumpTo({ center: [view.center.lng, view.center.lat], zoom: view.zoom });
+    return;
+  }
+  const lngs = marks.map((mark) => mark.lng);
+  const lats = marks.map((mark) => mark.lat);
+  map.fitBounds(
+    [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
+    { padding: 36, maxZoom: FIT_MAX_ZOOM, animate: false },
+  );
 }
+
+const emptyCollection = { type: "FeatureCollection", features: [] as any[] };
+const pointCollection = (points: Array<{ lat: number; lng: number; name?: string | null }>) => ({
+  type: "FeatureCollection",
+  features: points.map((point) => ({
+    type: "Feature",
+    properties: { name: String(point.name || "").trim() },
+    geometry: { type: "Point", coordinates: [point.lng, point.lat] },
+  })),
+});
 
 export default function RouteMap({
   hasPrimaryRoute,
@@ -131,23 +189,51 @@ export default function RouteMap({
 }) {
   const frameRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<HTMLDivElement | null>(null);
-  const leafletRef = useRef<{ L: any; map: any; layer: any } | null>(null);
+  const instanceRef = useRef<{ ml: MapLibre; map: any; ready: Promise<void>; markers: any[] } | null>(null);
   // What the view has to show, kept for the re-fit after expand/shrink.
   const marksRef = useRef<FitMark[]>([]);
   const [mapDrawn, setMapDrawn] = useState(false);
+  const [mapFailed, setMapFailed] = useState(false);
+  const [tilesFailed, setTilesFailed] = useState(false);
   const [layoutCrowded, setLayoutCrowded] = useState(false);
-  const badgesRef = useRef<Array<{ lat: number; lng: number; move: (x: number, y: number, direction: "left" | "right") => void }>>([]);
+  const [tip, setTip] = useState<Tip>(null);
+  const badgesRef = useRef<Array<{ lat: number; lng: number; name: string; move: (x: number, y: number, direction: "left" | "right") => void }>>([]);
   const layoutRef = useRef<() => void>(() => {});
+  const refitRef = useRef<() => void>(() => {});
   layoutRef.current = () => {
-    const leaflet = leafletRef.current;
+    const instance = instanceRef.current;
     if (!badgesRef.current.length) { setLayoutCrowded(false); return; }
-    if (!leaflet || !frameRef.current || !mapRef.current) return;
-    const size = leaflet.map.getSize();
-    const points = badgesRef.current.map(b => leaflet.map.latLngToContainerPoint([b.lat, b.lng]));
-    const offsets = screenMarkerPresentation(points, { width: size.x, height: size.y, keepouts: controlBoxes(frameRef.current, mapRef.current) });
+    if (!instance || !frameRef.current || !mapRef.current) return;
+    const { map } = instance;
+    const width = mapRef.current.clientWidth;
+    const height = mapRef.current.clientHeight;
+    const points = badgesRef.current.map((b) => map.project([b.lng, b.lat]));
+    const offsets = screenMarkerPresentation(points, { width, height, keepouts: controlBoxes(frameRef.current, mapRef.current) });
     setLayoutCrowded(offsets === null);
     offsets?.forEach((offset, i) => badgesRef.current[i].move(offset.shift_x_px, offset.shift_y_px,
-      points[i].x + offset.shift_x_px < size.x / 2 ? "right" : "left"));
+      points[i].x + offset.shift_x_px < width / 2 ? "right" : "left"));
+  };
+  // The open name follows its marker while the map moves.
+  const tipAnchorRef = useRef<{ index: number } | null>(null);
+
+  // Theme: recolour the basemap and the route in place.
+  const applyTheme = (map: any) => {
+    const theme = currentTheme();
+    for (const [layer, property, colour] of basemapPaint(theme)) {
+      if (map.getLayer(layer)) map.setPaintProperty(layer, property, colour);
+    }
+    const ember = roleColour("--p-color-ember", "#e8431d");
+    const paper = roleColour("--p-color-paper", "#eeece7");
+    const ink = roleColour("--p-color-ink", "#161411");
+    if (map.getLayer("route-line")) map.setPaintProperty("route-line", "line-color", ember);
+    if (map.getLayer("context-dots")) {
+      map.setPaintProperty("context-dots", "circle-stroke-color", ember);
+      map.setPaintProperty("context-dots", "circle-color", paper);
+    }
+    if (map.getLayer("candidate-dots")) {
+      map.setPaintProperty("candidate-dots", "circle-stroke-color", ink);
+      map.setPaintProperty("candidate-dots", "circle-color", paper);
+    }
   };
 
   useEffect(() => {
@@ -159,35 +245,128 @@ export default function RouteMap({
       const drawableRouteStops = routeStops.filter(
         (stop: any) => stop && Number.isFinite(stop.lat) && Number.isFinite(stop.lng),
       );
-      if (!mapRef.current || (hasPrimaryRoute ? !drawableRouteStops.length : !drawableAreas.length)) {
+      const clearDrawn = () => {
+        instanceRef.current?.markers.forEach((marker) => marker.remove());
+        if (instanceRef.current) instanceRef.current.markers = [];
         badgesRef.current = [];
+        tipAnchorRef.current = null;
+        setTip(null);
+      };
+      if (!mapRef.current || (hasPrimaryRoute ? !drawableRouteStops.length : !drawableAreas.length)) {
+        clearDrawn();
         marksRef.current = [];
-        leafletRef.current?.layer.clearLayers();
+        const map = instanceRef.current?.map;
+        for (const source of [ROUTE_SOURCE, CONTEXT_SOURCE, CANDIDATE_SOURCE]) map?.getSource(source)?.setData(emptyCollection);
         setLayoutCrowded(false);
         setMapDrawn(true); // nothing to draw — clear the placeholder
         return;
       }
-      const L = (await import("leaflet")).default;
+      let ml: MapLibre;
+      try {
+        ml = await loadMapLibre();
+      } catch {
+        if (!cancelled) { setMapFailed(true); setMapDrawn(true); }
+        return;
+      }
       if (cancelled || !mapRef.current) return;
 
-      if (!leafletRef.current) {
-        const map = L.map(mapRef.current, { zoomControl: true, scrollWheelZoom: false }).setView([30, 10], 2);
-        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-          maxZoom: 19,
-        }).addTo(map);
-        map.createPane(TARGET_PANE).style.zIndex = TARGET_PANE_Z_INDEX;
-        leafletRef.current = { L, map, layer: L.layerGroup().addTo(map) };
-        map.on("zoomend moveend resize", () => layoutRef.current());
+      if (!instanceRef.current) {
+        let map: any;
+        try {
+          map = new ml.Map({
+            container: mapRef.current,
+            style: basemapStyle(currentTheme()),
+            center: [10, 30],
+            zoom: 1,
+            attributionControl: false,
+            scrollZoom: false,
+            dragRotate: false,
+            pitchWithRotate: false,
+            touchPitch: false,
+            maxPitch: 0,
+            renderWorldCopies: false,
+            fadeDuration: 0,
+          });
+        } catch {
+          // No WebGL2, or the GPU refused: the day stays, the map does not.
+          setMapFailed(true);
+          setMapDrawn(true);
+          return;
+        }
+        map.touchZoomRotate?.disableRotation?.();
+        map.addControl(new ml.NavigationControl({ showCompass: false }), "top-left");
+        // The attribution is set from the start (not when the tiles answer), so
+        // its size is known to the first fit and it stays even when they fail.
+        map.addControl(new ml.AttributionControl({ compact: false, customAttribution: BASEMAP_PROVIDER.attribution }), "bottom-right");
+        // A control that changes size (the attribution's font arriving, say)
+        // asks for a new fit, so no stop is left under it.
+        const controlObserver = typeof ResizeObserver === "function" ? new ResizeObserver(() => refitRef.current()) : null;
+        mapRef.current.querySelectorAll(".maplibregl-ctrl").forEach((control) => controlObserver?.observe(control));
+        map.once("remove", () => controlObserver?.disconnect());
+        // Tile or glyph failures are the provider's: the route still draws
+        // over paper, and one line says the background is missing. Logged
+        // nowhere else, retried by nobody.
+        map.on("error", (event: any) => {
+          if (event?.sourceId === "openmaptiles" || /tile|glyph|font|pbf|openfreemap/i.test(String(event?.error?.message || ""))) {
+            setTilesFailed(true);
+          }
+        });
+        map.getCanvas?.()?.addEventListener?.("webglcontextlost", () => setMapFailed(true));
+        const ready = new Promise<void>((resolve) => {
+          if (map.isStyleLoaded?.()) resolve();
+          else map.once("style.load", () => resolve());
+        }).then(() => {
+          map.addSource(ROUTE_SOURCE, { type: "geojson", data: emptyCollection });
+          map.addSource(CONTEXT_SOURCE, { type: "geojson", data: emptyCollection });
+          map.addSource(CANDIDATE_SOURCE, { type: "geojson", data: emptyCollection });
+          map.addLayer({ id: "route-line", type: "line", source: ROUTE_SOURCE, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-width": 5, "line-opacity": 0.95 } });
+          map.addLayer({ id: "context-dots", type: "circle", source: CONTEXT_SOURCE, paint: { "circle-radius": 5, "circle-stroke-width": 1.5, "circle-opacity": 0.6, "circle-stroke-opacity": 0.75 } });
+          map.addLayer({ id: "candidate-dots", type: "circle", source: CANDIDATE_SOURCE, paint: { "circle-radius": 5, "circle-stroke-width": 2 } });
+          applyTheme(map);
+        });
+        for (const layer of ["context-dots", "candidate-dots"]) {
+          map.on("mousemove", layer, (event: any) => {
+            const feature = event.features?.[0];
+            const name = String(feature?.properties?.name || "");
+            if (!name) return;
+            const point = map.project(feature.geometry.coordinates);
+            tipAnchorRef.current = null;
+            setTip({ name, x: point.x, y: point.y, direction: point.x < map.getContainer().clientWidth / 2 ? "right" : "left" });
+          });
+          map.on("mouseleave", layer, () => setTip(null));
+        }
+        // Numbers stay on the map while it moves (a drag, its inertia, a zoom):
+        // laid out again once per frame, and once more when it settles.
+        let layoutFrame = 0;
+        const layoutSoon = () => {
+          if (!layoutFrame) layoutFrame = requestAnimationFrame(() => { layoutFrame = 0; layoutRef.current(); });
+        };
+        map.on("move", layoutSoon);
+        map.on("moveend", () => layoutRef.current());
+        map.on("zoomend", () => layoutRef.current());
+        map.on("resize", () => layoutRef.current());
+        map.once("remove", () => { if (layoutFrame) cancelAnimationFrame(layoutFrame); });
+        map.on("move", () => {
+          const anchor = tipAnchorRef.current;
+          const badge = anchor ? badgesRef.current[anchor.index] : null;
+          if (!badge) return;
+          const point = map.project([badge.lng, badge.lat]);
+          setTip((current) => (current ? { ...current, x: point.x, y: point.y } : current));
+        });
+        instanceRef.current = { ml, map, ready, markers: [] };
       }
-      const { map, layer } = leafletRef.current;
-      badgesRef.current = [];
+      const { map, ready } = instanceRef.current;
+      await ready;
+      if (cancelled) return;
+      clearDrawn();
       setLayoutCrowded(false);
-      layer.clearLayers();
 
       // Everything the view must show. The route line's own points only have
       // to stay on the map; stops and dots must also stay clear of the controls.
       const marks: FitMark[] = [];
+      let routeLine: any = emptyCollection;
+      let contextDots: any = emptyCollection;
+      let candidateDots: any = emptyCollection;
       if (hasPrimaryRoute) {
         const enginePath: Array<[number, number]> = (Array.isArray(primaryRoute?.map_path_points) ? primaryRoute.map_path_points : [])
           .filter((point: any) => point && Number.isFinite(point.lat) && Number.isFinite(point.lng))
@@ -196,14 +375,7 @@ export default function RouteMap({
           ? enginePath
           : drawableRouteStops.map((stop: any) => [stop.lat, stop.lng] as [number, number]);
         if (routePath.length > 1) {
-          layer.addLayer(
-            L.polyline(
-              routePath,
-              sketch
-                ? { className: "route-map-line", color: ROUTE_COLOR, weight: 5, opacity: 0.95, dashArray: "1 11", lineCap: "round" }
-                : { className: "route-map-line", color: ROUTE_COLOR, weight: 5, opacity: 0.95 },
-            ),
-          );
+          routeLine = { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: routePath.map(([lat, lng]) => [lng, lat]) } };
           routePath.forEach(([lat, lng]: [number, number]) => marks.push({ lat, lng, avoidControls: false }));
         }
 
@@ -216,97 +388,129 @@ export default function RouteMap({
           const shiftY = Number(presentation?.shift_y_px) || 0;
           // Fitted where it is drawn: a clustered marker sits beside its coordinate.
           marks.push({ lat: stop.lat, lng: stop.lng, radius: MARKER_RADIUS, offsetX: shiftX, offsetY: shiftY });
-          // The disc and its touch target are each a 44px icon drawn where the
-          // disc is: the display offset lives in the anchor. Neither covers more
-          // than that box, and Leaflet's pan on focus asks only for it, which
-          // the fit already keeps on the map: a tap never moves the map.
-          const iconAnchor: [number, number] = [22 - shiftX, 22 - shiftY];
-          // A clustered stop is drawn beside its coordinate; a dot marks the coordinate.
-          const origin = presentation?.clustered
-            ? `<span class="route-map-marker-origin" style="--route-marker-x:${shiftX}px;--route-marker-y:${shiftY}px"></span>`
-            : "";
-          const disc = L.marker([stop.lat, stop.lng], {
-            icon: L.divIcon({
-              className: "route-map-marker-shell",
-              html: `<span class="route-map-marker${eventClass}">${index + 1}</span>${origin}`,
-              iconSize: [44, 44],
-              iconAnchor,
-            }),
-            zIndexOffset: 1200 + index,
-            autoPanOnFocus: false,
-          });
-          const target = L.marker([stop.lat, stop.lng], {
-            icon: L.divIcon({ className: "route-map-target", iconSize: [44, 44], iconAnchor }),
-            pane: TARGET_PANE,
-            // The disc is the stop's one keyboard stop.
-            keyboard: false,
-            zIndexOffset: 1200 + index,
-          });
-          // One stop, one name, whichever of the two takes the tap or hover.
-          const stopLayers = L.featureGroup([target, disc]);
           const markerName = String(stop.label || stop.name || "").trim();
-          if (markerName) stopLayers.bindTooltip(safeTooltip(markerName));
-          layer.addLayer(stopLayers);
-          let lastX = NaN;
-          let lastY = NaN;
-          let lastDirection = "";
-          badgesRef.current.push({ lat: stop.lat, lng: stop.lng, move: (x, y, direction) => {
-            if (x === lastX && y === lastY && direction === lastDirection) return;
-            lastX = x; lastY = y;
-            lastDirection = direction;
-            const shifted = Math.abs(x) > 0.5 || Math.abs(y) > 0.5;
-            const dot = shifted ? `<span class="route-map-marker-origin" style="--route-marker-x:${x}px;--route-marker-y:${y}px"></span>` : "";
-            const anchor: [number, number] = [22 - x, 22 - y];
-            disc.setIcon(L.divIcon({ className: "route-map-marker-shell", html: `<span class="route-map-marker${eventClass}">${index + 1}</span>${dot}`, iconSize: [44, 44], iconAnchor: anchor, tooltipAnchor: [x, y] }));
-            target.setIcon(L.divIcon({ className: "route-map-target", iconSize: [44, 44], iconAnchor: anchor, tooltipAnchor: [x, y] }));
-            const tooltip = stopLayers.getTooltip();
-            if (tooltip) { tooltip.options.direction = direction; tooltip.update(); }
-          } });
+          const badgeIndex = badgesRef.current.length;
+          const open = () => {
+            if (!markerName) return;
+            const badge = badgesRef.current[badgeIndex];
+            const point = map.project([stop.lng, stop.lat]);
+            tipAnchorRef.current = { index: badgeIndex };
+            setTip({ name: markerName, x: point.x + (badge as any).x, y: point.y + (badge as any).y, direction: (badge as any).direction });
+          };
+          const close = () => {
+            if (tipAnchorRef.current?.index === badgeIndex) tipAnchorRef.current = null;
+            setTip((current) => (current?.name === markerName ? null : current));
+          };
+          // Two 44px elements where the disc is drawn: the touch target beneath
+          // every disc, and the disc with its number above all targets. Only
+          // the disc's visible pin takes a tap on the disc's side.
+          const target = document.createElement("div");
+          target.className = "route-map-target";
+          target.addEventListener("mouseenter", open);
+          target.addEventListener("mouseleave", close);
+          target.addEventListener("click", open);
+          const shell = document.createElement("div");
+          shell.className = "route-map-marker-shell";
+          shell.style.zIndex = String(1200 + index);
+          shell.tabIndex = 0;
+          shell.setAttribute("role", "button");
+          if (markerName) shell.setAttribute("aria-label", `${index + 1}. ${markerName}`);
+          const disc = document.createElement("span");
+          disc.className = `route-map-marker${eventClass}`;
+          disc.textContent = String(index + 1);
+          const origin = document.createElement("span");
+          origin.className = "route-map-marker-origin";
+          origin.hidden = !presentation?.clustered;
+          origin.style.setProperty("--route-marker-x", `${shiftX}px`);
+          origin.style.setProperty("--route-marker-y", `${shiftY}px`);
+          shell.append(disc, origin);
+          disc.addEventListener("mouseenter", open);
+          disc.addEventListener("mouseleave", close);
+          disc.addEventListener("click", open);
+          shell.addEventListener("focus", open);
+          shell.addEventListener("blur", close);
+          const targetMarker = new ml.Marker({ element: target, anchor: "center", offset: [shiftX, shiftY] }).setLngLat([stop.lng, stop.lat]).addTo(map);
+          const discMarker = new ml.Marker({ element: shell, anchor: "center", offset: [shiftX, shiftY] }).setLngLat([stop.lng, stop.lat]).addTo(map);
+          // MapLibre sets its own stacking; targets stay beneath every disc.
+          target.style.zIndex = "1";
+          shell.style.zIndex = String(1200 + index);
+          instanceRef.current!.markers.push(targetMarker, discMarker);
+          let last = "";
+          const badge: any = {
+            lat: stop.lat,
+            lng: stop.lng,
+            name: markerName,
+            x: shiftX,
+            y: shiftY,
+            direction: "right",
+            move: (x: number, y: number, direction: "left" | "right") => {
+              const key = `${x}:${y}:${direction}`;
+              if (key === last) return;
+              last = key;
+              badge.x = x; badge.y = y; badge.direction = direction;
+              const shifted = Math.abs(x) > 0.5 || Math.abs(y) > 0.5;
+              origin.hidden = !shifted;
+              origin.style.setProperty("--route-marker-x", `${x}px`);
+              origin.style.setProperty("--route-marker-y", `${y}px`);
+              targetMarker.setOffset([x, y]);
+              discMarker.setOffset([x, y]);
+              if (tipAnchorRef.current?.index === badgeIndex) {
+                const point = map.project([stop.lng, stop.lat]);
+                setTip((current) => (current ? { ...current, x: point.x + x, y: point.y + y, direction } : current));
+              }
+            },
+          };
+          badgesRef.current.push(badge);
         });
 
         if (showContext) {
-          routeContextSuggestions.forEach((stop) => {
-            if (!Number.isFinite(stop.lat) || !Number.isFinite(stop.lng)) return;
-            marks.push({ lat: stop.lat!, lng: stop.lng!, radius: DOT_RADIUS });
-            const dot = L.circleMarker([stop.lat!, stop.lng!], {
-              className: "route-map-dot",
-              radius: 5,
-              color: ROUTE_COLOR,
-              weight: 1.5,
-              fillColor: "#fffaf3",
-              fillOpacity: 0.25,
-              opacity: 0.7,
-            });
-            if (stop.name) dot.bindTooltip(safeTooltip(stop.name));
-            layer.addLayer(dot);
-          });
+          const shown = routeContextSuggestions.filter((stop) => Number.isFinite(stop.lat) && Number.isFinite(stop.lng));
+          shown.forEach((stop) => marks.push({ lat: stop.lat!, lng: stop.lng!, radius: DOT_RADIUS }));
+          contextDots = pointCollection(shown.map((stop) => ({ lat: stop.lat!, lng: stop.lng!, name: stop.name })));
         }
       } else {
         // No route exists: these are CANDIDATES, not an itinerary. No connecting
-        // arc, no sequence numbers — plain dots only, so nothing on the map can
+        // line, no sequence numbers — plain dots only, so nothing on the map can
         // be mistaken for a walking order Parranda never claimed.
+        const dots: Array<{ lat: number; lng: number; name?: string | null }> = [];
         drawableAreas.forEach((area) => {
           marks.push({ lat: area.center!.lat, lng: area.center!.lng, avoidControls: false });
           (area.stops ?? []).forEach((stop) => {
             if (!Number.isFinite(stop?.lat) || !Number.isFinite(stop?.lng)) return;
             marks.push({ lat: stop.lat, lng: stop.lng, radius: DOT_RADIUS });
-            const dot = L.circleMarker([stop.lat, stop.lng], { className: "route-map-candidate", radius: 5, color: ROUTE_COLOR, weight: 2, fillColor: "#fffaf3", fillOpacity: 0.95 });
-            if (stop.name) dot.bindTooltip(safeTooltip(stop.name));
-            layer.addLayer(dot);
+            dots.push({ lat: stop.lat, lng: stop.lng, name: stop.name });
           });
         });
+        candidateDots = pointCollection(dots);
       }
+      map.getSource(ROUTE_SOURCE)?.setData(routeLine);
+      map.getSource(CONTEXT_SOURCE)?.setData(contextDots);
+      map.getSource(CANDIDATE_SOURCE)?.setData(candidateDots);
+      // Dotted when the line only joins the stops' own coordinates.
+      map.setPaintProperty("route-line", "line-dasharray", sketch ? [0.2, 2.2] : null);
       marksRef.current = marks;
-      map.invalidateSize();
-      fitToControls(leafletRef.current, frameRef.current, mapRef.current, marks);
+      map.resize();
+      fitToControls(map, frameRef.current, mapRef.current, marks);
       layoutRef.current();
       setMapDrawn(true);
     }
-    draw();
+    draw().catch(() => {
+      if (!cancelled) { setMapFailed(true); setMapDrawn(true); }
+    });
     return () => {
       cancelled = true;
     };
   }, [areas, primaryRoute, hasPrimaryRoute, routeStops, routeContextSuggestions, showContext, sketch]);
+
+  // Follow the page's theme without redrawing the day.
+  useEffect(() => {
+    const root = document.documentElement;
+    const observer = typeof MutationObserver === "function"
+      ? new MutationObserver(() => { const map = instanceRef.current?.map; if (map?.getLayer?.("route-line")) applyTheme(map); })
+      : null;
+    observer?.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer?.disconnect();
+  }, []);
 
   // Observe the actual container size. A fixed timer can fire before a delayed
   // CSS transition has finished; treating it as the final fit then leaves the
@@ -318,13 +522,16 @@ export default function RouteMap({
     let animationFrame = 0;
     const refit = () => {
       animationFrame = 0;
-      leafletRef.current?.map.invalidateSize({ pan: false });
-      fitToControls(leafletRef.current, frameRef.current, mapRef.current, marksRef.current);
+      const map = instanceRef.current?.map;
+      if (!map) return;
+      map.resize();
+      fitToControls(map, frameRef.current, mapRef.current, marksRef.current);
       layoutRef.current();
     };
     const schedule = () => {
       if (!animationFrame) animationFrame = requestAnimationFrame(refit);
     };
+    refitRef.current = schedule;
     const observer = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
     if (container) observer?.observe(container);
     const onTransitionEnd = (event: TransitionEvent) => {
@@ -344,17 +551,38 @@ export default function RouteMap({
   // The instance belongs to this element: release it with the element.
   useEffect(
     () => () => {
-      leafletRef.current?.map.remove();
-      leafletRef.current = null;
+      instanceRef.current?.markers.forEach((marker) => marker.remove());
+      instanceRef.current?.map.remove();
+      instanceRef.current = null;
     },
     [],
   );
 
+  if (mapFailed) {
+    return (
+      <p role="status" className="rounded-parranda border border-parranda-ink/10 px-4 py-3 text-sm text-parranda-ink/72">
+        {t(
+          "Kartan kan inte visas i den här webbläsaren. Stoppen och Maps-rutten fungerar som vanligt.",
+          "The map can't be shown in this browser. The stops and the Maps route work as usual.",
+        )}
+      </p>
+    );
+  }
+
   return (
     <>
-    <div ref={frameRef} className={`relative w-full overflow-hidden rounded-parranda border border-parranda-ink/10 transition-all ${heightClass}`}>
+    <div ref={frameRef} data-route-map="" className={`route-map-frame relative w-full overflow-hidden rounded-parranda border border-parranda-ink/10 transition-all ${heightClass}`}>
       {/* Screen layout keeps each numbered touch footprint independently visible. */}
       <div ref={mapRef} className="h-full w-full" />
+      {tip && (
+        <div
+          role="tooltip"
+          className={`route-map-tooltip route-map-tooltip--${tip.direction}`}
+          style={{ left: `${tip.x}px`, top: `${tip.y}px` }}
+        >
+          {tip.name}
+        </div>
+      )}
       {!mapDrawn && (
         <div className="absolute inset-0 flex items-center justify-center bg-parranda-ink/10 text-sm text-parranda-ink/68">
           {t("Ritar kartan …", "Drawing the map …")}
@@ -375,6 +603,11 @@ export default function RouteMap({
         </button>
       )}
     </div>
+    {tilesFailed && (
+      <p role="status" className="mt-1 text-xs text-parranda-ink/68">
+        {t("Kartbakgrunden kunde inte hämtas — rutten och stoppen visas ändå.", "The map background couldn't be loaded — the route and stops are still shown.")}
+      </p>
+    )}
     {layoutCrowded && <p role="status" className="mt-1 text-xs text-parranda-ink/68">{t("Kartan är trång — förstora eller zooma för att skilja alla stoppnummer åt.", "The map is crowded — expand or zoom to separate all stop numbers.")}</p>}
     </>
   );

@@ -38,10 +38,10 @@ const bundles = new Map();
 async function bundleIsland(entry) {
   if (bundles.has(entry)) return bundles.get(entry);
   const outfile = resolve(HERE, `.hydration-${entry.replace(/[^\w]/g, "_")}.mjs`);
-  const stubLeaflet = {
+  const stubMap = {
     name: "stub-leaflet",
     setup(build) {
-      build.onResolve({ filter: /^leaflet(\/.*)?$/ }, (args) => ({ path: args.path, namespace: "stub" }));
+      build.onResolve({ filter: /^(leaflet|maplibre-gl)(\/.*)?$/ }, (args) => ({ path: args.path, namespace: "stub" }));
       build.onLoad({ filter: /.*/, namespace: "stub" }, () => ({
         contents: `
           const chain = new Proxy(function () {}, {
@@ -56,6 +56,11 @@ async function bundleIsland(entry) {
           export const polyline = chain;
           export const divIcon = chain;
           export const latLngBounds = chain;
+          export const Map = chain;
+          export const Marker = chain;
+          export const NavigationControl = chain;
+          export const AttributionControl = chain;
+          export const setWorkerUrl = chain;
           export const circleMarker = chain;
           export const layerGroup = chain;
         `,
@@ -74,7 +79,7 @@ async function bundleIsland(entry) {
     jsx: "automatic",
     target: "es2022",
     external: ["react", "react-dom", "react-dom/client", "react-dom/server", "react/jsx-runtime"],
-    plugins: [stubLeaflet],
+    plugins: [stubMap],
     logLevel: "silent",
   });
   bundles.set(entry, outfile);

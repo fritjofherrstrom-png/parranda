@@ -1,0 +1,1 @@
+var e=`/_astro/maplibre-gl-worker-MfjJLauD.js`;export{e as default};

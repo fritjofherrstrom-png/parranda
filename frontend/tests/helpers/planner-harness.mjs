@@ -148,7 +148,7 @@ let bundleGeneration = 0;
 /**
  * Bundle the component once into a real ES module on disk, so the test imports
  * it the way the browser would. React stays external so the component and the
- * test renderer share one instance; leaflet is stubbed because the map effect
+ * test renderer share one instance; the map library (MapLibre) is stubbed because the map effect
  * needs a real container it will never have here.
  */
 async function buildComponent() {
@@ -156,11 +156,11 @@ async function buildComponent() {
   // node:test runs test files in separate processes. A shared outfile lets a
   // concurrent esbuild truncate a module while another process imports it.
   const outfile = resolve(HERE, `.planner-harness-bundle.${process.pid}.mjs`);
-  const stubLeaflet = {
+  const stubMap = {
     name: "stub-leaflet",
     setup(build) {
-      build.onResolve({ filter: /^leaflet(\/.*)?$/ }, (args) => ({ path: args.path, namespace: "stub" }));
-      // A self-returning proxy: leaflet's API is chainable and the map effect
+      build.onResolve({ filter: /^(leaflet|maplibre-gl)(\/.*)?$/ }, (args) => ({ path: args.path, namespace: "stub" }));
+      // A self-returning proxy: the map API is chainable and the map effect
       // walks a lot of it. Nothing here is asserted on — the map is simply not
       // what these tests are about, and a real one needs layout jsdom has not
       // got.
@@ -178,6 +178,11 @@ async function buildComponent() {
           export const polyline = chain;
           export const divIcon = chain;
           export const latLngBounds = chain;
+          export const Map = chain;
+          export const Marker = chain;
+          export const NavigationControl = chain;
+          export const AttributionControl = chain;
+          export const setWorkerUrl = chain;
         `,
         loader: "js",
       }));
@@ -192,7 +197,7 @@ async function buildComponent() {
     jsx: "automatic",
     target: "es2022",
     external: ["react", "react-dom", "react-dom/client", "react/jsx-runtime"],
-    plugins: [stubLeaflet],
+    plugins: [stubMap],
     logLevel: "silent",
   });
   cachedModulePath = outfile;

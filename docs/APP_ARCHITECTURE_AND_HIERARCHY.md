@@ -131,7 +131,7 @@ components/
   AnywherePlanner.tsx      orchestrator: requests, generations, ledger, render
   shared/AppBar.tsx        wordmark + language (both islands)
   shared/icons.tsx         inline SVG set
-  planner/RouteMap.tsx     Leaflet; owns its instance; route vs candidate modes;
+  planner/RouteMap.tsx     MapLibre (lib/route-map-style.mjs); owns its instance; route vs candidate modes;
                            keeps every stop clear of the map's own controls
                            (lib/route-map-fit.mjs); a tap on a stop's visible
                            number is that stop's (44 px targets beneath every
