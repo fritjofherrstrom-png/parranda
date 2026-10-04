@@ -314,3 +314,18 @@ source demand but cannot enumerate unknown source pages in the background. That
 is an environment-not-wired state, not a healthy-empty verdict for the place.
 The endpoint and its cache/rate policy remain an operator responsibility; the
 public request path never accepts a search endpoint or source URL.
+
+The production worker also forwards these existing bounded search controls
+from the operator's `.env.production` (defaults remain unchanged):
+
+```bash
+PARRANDA_SOURCE_SEARCH_TIMEOUT_MS=7000
+PARRANDA_SOURCE_SEARCH_PACE_MS=250
+```
+
+Choose a timeout longer than the metasearch service's own engine timeout plus
+response overhead; for an eight-second provider budget, a 15000 ms caller
+budget avoids premature cancellation. Increase pacing (for example 1000 ms)
+when engines throttle. These settings do not overcome CAPTCHA or upstream
+rate limits, change query safety ceilings, approve sources or prove event
+coverage. Check actual query outcomes and engine health before expanding QA.
