@@ -278,16 +278,18 @@ function measureMap({ expandNames, sideMap = false }) {
   });
   // A tap on each disc's centre, once all geometry above is read (scrolling
   // moves everything). elementFromPoint sees only the viewport, and the
-  // expanded map reaches below the fold, so a disc outside it is scrolled into
-  // view first. A centre that still cannot be hit-tested is a check that did
-  // not run: it fails.
+  // expanded map reaches below the fold, so a disc that is not wholly inside
+  // the viewport is scrolled to its middle first. "Wholly", not "centre
+  // inside": elementFromPoint hit-tests whole pixels, so a centre in the last
+  // fractional row (y 843.8 of 844) is outside it and returns null. A centre
+  // that still cannot be hit-tested is a check that did not run: it fails.
   for (const { marker, name } of discs) {
     const centre = () => {
       const rect = marker.getBoundingClientRect();
-      return { x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2 };
+      return { x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2, top: rect.top, bottom: rect.bottom };
     };
-    let { x, y } = centre();
-    if (y < 0 || y >= innerHeight) {
+    let { x, y, top, bottom } = centre();
+    if (top < 0 || bottom > innerHeight) {
       window.scrollBy(0, y - innerHeight / 2);
       ({ x, y } = centre());
     }
@@ -311,6 +313,33 @@ function measureMap({ expandNames, sideMap = false }) {
 }
 
 const EXPAND_NAMES = ["Förstora kartan", "Förminska kartan"];
+
+// The hit test itself, at the edge that failed in CI (run 37232695990): a
+// marker whose centre lies in the viewport's last fractional pixel row. The
+// day's layout decides where the map falls, so the page is nudged until marker
+// 1's centre sits 0.2px above the fold, exactly; the check must still reach it.
+test("a marker centred in the viewport's last fractional pixel row is still hit-tested", { timeout: 120_000 }, async (t) => {
+  const current = await openRuntime(t);
+  if (!current) return;
+  const { context, page } = await openDay(current, { width: 390, stops: DAYS["diagonal, Live stop north-east"] });
+  try {
+    const centreY = () => page.evaluate(() => {
+      const rect = document.querySelector('section[aria-label="Rutten"] .route-map-marker').getBoundingClientRect();
+      return { y: (rect.top + rect.bottom) / 2, innerHeight, scrollY };
+    });
+    const start = await centreY();
+    assert.equal(start.scrollY, 0);
+    // Move the whole day down (or up) by the difference, keeping layout intact.
+    const shift = start.innerHeight - 0.2 - start.y;
+    await page.addStyleTag({ content: `main { position: relative; top: ${shift}px; }` });
+    const placed = await centreY();
+    assert.ok(placed.y < placed.innerHeight && placed.y > placed.innerHeight - 1, `marker 1 centre at ${placed.y} of ${placed.innerHeight}`);
+    const measured = await page.evaluate(measureMap, { expandNames: EXPAND_NAMES });
+    assert.deepEqual(measured.problems.filter((p) => /could not be hit-tested/.test(p)), []);
+  } finally {
+    await context.close();
+  }
+});
 
 for (const width of WIDTHS) {
   test(`route markers stay clear of the map controls at ${width}px, collapsed and expanded`, { timeout: 180_000 }, async (t) => {
