@@ -52,3 +52,52 @@ test("following the day asks for the position only on a tap, and keeps it nowher
   assert.match(line, /const canFollow = follow\.supported && dayOffset === 0;/);
   assert.match(line, /aria-pressed=\{following\}/);
 });
+
+test("following ends when the chosen day is no longer today", async (t) => {
+  const h = await mountPlanner({ url: "http://localhost/anywhere?place=Testville&lang=en" });
+  t.after(() => h.unmount());
+  const watches = [];
+  const clears = [];
+  Object.defineProperty(h.window.navigator, "geolocation", {
+    configurable: true,
+    value: {
+      watchPosition(onPosition) {
+        const id = 40 + watches.length;
+        watches.push(id);
+        onPosition({ coords: { latitude: 50, longitude: 10 } });
+        return id;
+      },
+      clearWatch(id) { clears.push(id); },
+    },
+  });
+  await h.clock.advance(500);
+  await h.fetchMock.respond(h.fetchMock.pending()[0], day(["museum", "park", "park"]));
+  await h.clock.advance(50);
+  const button = (pattern) => [...h.container.querySelectorAll("button")].find((b) => pattern.test(b.textContent));
+  const click = (control) => {
+    assert.ok(control, "control exists");
+    return h.act(() => control.dispatchEvent(new h.window.Event("click", { bubbles: true })));
+  };
+
+  await click(button(/^Follow the day$/));
+  assert.deepEqual(watches, [40]);
+  assert.match(h.text(), /You're at Published stop 1/);
+
+  await click(button(/Adjust/));
+  await click(button(/^Tomorrow$/));
+  assert.deepEqual(clears, [40], "the watch ends as soon as the day is not today");
+  await h.clock.advance(500);
+  const compose = h.fetchMock.pending().find((c) => c.url.includes("/api/route-recommendations"));
+  assert.ok(compose, "tomorrow is composed");
+  await h.fetchMock.respond(compose, day(["museum", "park", "park"]));
+  assert.deepEqual(watches, [40], "no new watch for tomorrow");
+  assert.doesNotMatch(h.text(), /You're at|Stop following|Follow the day/);
+
+  if (!button(/^Today$/)) await click(button(/Adjust/));
+  await click(button(/^Today$/));
+  await h.clock.advance(500);
+  const back = h.fetchMock.pending().find((c) => c.url.includes("/api/route-recommendations"));
+  if (back) await h.fetchMock.respond(back, day(["museum", "park", "park"]));
+  assert.deepEqual(watches, [40], "back on today, following waits for a new tap");
+  assert.ok(button(/^Follow the day$/), "the follow control is offered again");
+});

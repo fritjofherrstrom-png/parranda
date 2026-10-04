@@ -14,7 +14,7 @@
  *   - daypart headings come from stop.daypart only, never by reordering;
  *   - detours are collapsed, dashed, and explicitly not the route.
  */
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { lineProgress } from "../../lib/line-progress.mjs";
 import { eventSourceLink, eventTiming } from "../../lib/pulse-view.mjs";
 import { mapsPlaceUrl } from "../../lib/maps-links.mjs";
@@ -111,7 +111,15 @@ export default function StopLine({
   // live position is read against the stations in route order. Stations
   // behind the reader are muted, the next one is marked. The position never
   // leaves this component, and nothing about the day changes.
-  const [following, setFollowing] = useState(false);
+  // Following belongs to today's line. When the chosen day stops being today,
+  // the watch ends in the same render (`following` is derived, not just
+  // reset by the effect) and the choice is cleared, so returning to today
+  // asks for a new tap rather than resuming location on its own.
+  const [followRequested, setFollowRequested] = useState(false);
+  const following = followRequested && dayOffset === 0;
+  useEffect(() => {
+    if (dayOffset !== 0) setFollowRequested(false);
+  }, [dayOffset]);
   const follow = useFollowPosition(following);
   const canFollow = follow.supported && dayOffset === 0;
   const progress = following && follow.state.status === "tracking"
@@ -158,7 +166,7 @@ export default function StopLine({
           <button
             type="button"
             aria-pressed={following}
-            onClick={() => setFollowing((cur) => !cur)}
+            onClick={() => setFollowRequested((cur) => !cur)}
             className={
               "inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-[13px] font-bold transition " +
               (following

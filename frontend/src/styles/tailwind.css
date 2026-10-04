@@ -81,10 +81,14 @@
   text-transform: uppercase;
 }
 
-/* OSM tiles, toned to the theme: greyscale by day, inverted greyscale at night.
+/* Leaflet's own stylesheet is lazy-loaded with the map, so it can arrive
+   after this one. Every override below is one step more specific than the
+   Leaflet rule it replaces, so it wins whichever loads last.
+
+   OSM tiles, toned to the theme: greyscale by day, inverted greyscale at night.
    The route is the only colour on the map. Same provider, same attribution —
    only a filter on the tile pane (markers and the line are other panes). */
-.leaflet-container {
+:root .leaflet-container {
   background: rgb(var(--p-color-paper));
   font-family: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
 }
@@ -95,7 +99,7 @@
   background: rgb(var(--p-color-paper) / 0.85) !important;
   color: rgb(var(--p-color-ink) / 0.75);
 }
-.leaflet-control-attribution a {
+.leaflet-container .leaflet-control-attribution a {
   color: rgb(var(--p-color-ink));
 }
 .leaflet-container .leaflet-bar a {
@@ -103,7 +107,8 @@
   color: rgb(var(--p-color-ink));
   border-color: rgb(var(--p-color-ink) / 0.14);
 }
-.leaflet-container .leaflet-bar a:hover {
+.leaflet-container .leaflet-bar a:hover,
+.leaflet-container .leaflet-bar a:focus {
   background: rgb(var(--p-color-ink) / 0.08);
 }
 /* Route geometry, coloured by role. CSS outranks the SVG attributes Leaflet
@@ -120,7 +125,7 @@
   fill: rgb(var(--p-color-paper));
 }
 
-.leaflet-tooltip {
+.leaflet-container .leaflet-tooltip {
   border: 0;
   border-radius: 10px;
   background: rgb(var(--p-color-ink));
@@ -129,16 +134,16 @@
   font-weight: 700;
   box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
 }
-.leaflet-tooltip-top::before {
+.leaflet-container .leaflet-tooltip-top::before {
   border-top-color: rgb(var(--p-color-ink));
 }
-.leaflet-tooltip-bottom::before {
+.leaflet-container .leaflet-tooltip-bottom::before {
   border-bottom-color: rgb(var(--p-color-ink));
 }
-.leaflet-tooltip-left::before {
+.leaflet-container .leaflet-tooltip-left::before {
   border-left-color: rgb(var(--p-color-ink));
 }
-.leaflet-tooltip-right::before {
+.leaflet-container .leaflet-tooltip-right::before {
   border-right-color: rgb(var(--p-color-ink));
 }
 

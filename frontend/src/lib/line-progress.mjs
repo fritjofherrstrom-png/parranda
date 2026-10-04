@@ -37,11 +37,20 @@ export function distanceKm(a, b) {
  * The closest point on segment a→b to p, in a local flat projection (fine at
  * walking scale). Returns the segment parameter t in [0, 1] and the distance.
  */
+/** `lng` moved by whole turns to within 180° of `ref`, so a segment that
+ *  crosses the antimeridian stays short instead of wrapping the globe. */
+function unwrapLng(lng, ref) {
+  let delta = lng - ref;
+  while (delta > 180) delta -= 360;
+  while (delta < -180) delta += 360;
+  return ref + delta;
+}
+
 function projectOnSegment(p, a, b) {
   const kx = Math.cos(((a.lat + b.lat) / 2) * (Math.PI / 180));
   const ax = a.lng * kx, ay = a.lat;
-  const bx = b.lng * kx, by = b.lat;
-  const px = p.lng * kx, py = p.lat;
+  const bx = unwrapLng(b.lng, a.lng) * kx, by = b.lat;
+  const px = unwrapLng(p.lng, a.lng) * kx, py = p.lat;
   const dx = bx - ax, dy = by - ay;
   const lengthSq = dx * dx + dy * dy;
   const raw = lengthSq === 0 ? 0 : ((px - ax) * dx + (py - ay) * dy) / lengthSq;

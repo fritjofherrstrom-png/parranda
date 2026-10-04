@@ -48,6 +48,21 @@ test("stops without coordinates keep their place in the order", () => {
   assert.equal(p.next, 2, "the index is the stop's own position in the route");
 });
 
+test("a segment across the antimeridian stays short", () => {
+  const across = [
+    { lat: 0, lng: 179.99 },
+    { lat: 0, lng: -179.99 },
+  ];
+  const middle = lineProgress(across, { lat: 0, lng: 180 });
+  assert.equal(middle.state, "toward");
+  assert.equal(middle.next, 1, "half way across, the station ahead is next");
+  assert.deepEqual(
+    lineProgress(across, { lat: 0, lng: 0 }),
+    { state: "off" },
+    "the far side of the globe is not on a line two kilometres long",
+  );
+});
+
 test("nothing to measure is no answer", () => {
   assert.equal(lineProgress(LINE, null), null);
   assert.equal(lineProgress([], { lat: 1, lng: 1 }), null);
