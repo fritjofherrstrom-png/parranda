@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mountPlanner } from './helpers/planner-harness.mjs';
+import { LAST_KEY } from '../src/lib/anywhere-storage.mjs';
 
 // Mounted component with controlled transport. It proves how the Planner reads
 // the server's source-health contract (tests/live-failed-refresh.test.js); it
@@ -120,6 +121,17 @@ const EMPTY_STATES = [
   },
 ];
 
+for (const status of ['failed', 'unavailable']) EMPTY_STATES.push({
+  name: `API coverage unavailable (${status})`,
+  events: live({ status, result: 'unavailable',
+    failed_source_count: status === 'failed' ? 1 : 0,
+    unavailable_source_count: status === 'unavailable' ? 1 : 0,
+    reasons: [status === 'failed' ? 'event_supply_failed' : 'event_supply_not_configured'] },
+  { coverage: 'unavailable', feeds: [] }),
+  en: "Parranda couldn't verify events right now — try again shortly.",
+  sv: 'Parranda kunde inte verifiera händelser just nu — försök igen om en stund.',
+});
+
 for (const state of EMPTY_STATES) for (const lang of ['en', 'sv']) {
   test(`the ${lang} Live sheet distinguishes ${state.name} from an empty calendar`, async (t) => {
     const h = await composed(state.events, lang);
@@ -136,7 +148,7 @@ for (const state of EMPTY_STATES) for (const lang of ['en', 'sv']) {
     assert.doesNotMatch(sheet, /Nothing listed|Nothing verified|Inget listat|Inget verifierat|The sources responded but list no events|Källorna svarade men listar inga/);
     assert.doesNotMatch(sheet, /with events|med träffar/);
     assert.equal(h.fetchMock.calls.filter((call) => call.url.includes('/api/route-recommendations')).length, composeCount);
-    if (state.name.startsWith('unavailable')) {
+    if (state.events.acquisition.source_health.result === 'unavailable' || state.name.startsWith('unavailable')) {
       assert.ok([...h.container.querySelector('[role="dialog"]').querySelectorAll('button')]
         .some((control) => /^(Try again|Försök igen)$/.test(control.textContent)), 'verification failure keeps its retry');
     }
@@ -151,6 +163,57 @@ for (const state of EMPTY_STATES) for (const lang of ['en', 'sv']) {
     assert.equal(h.fetchMock.calls.filter((call) => call.url.includes('/api/route-recommendations')).length, composeCount);
   });
 }
+
+for (const lang of ['en', 'sv']) for (const status of ['failed', 'unavailable']) {
+  test(`${lang} API ${status} retry preserves the day and both Live periods`, async (t) => {
+    const state = EMPTY_STATES.find((s) => s.name === `API coverage unavailable (${status})`);
+    const h = await composed(state.events, lang);
+    t.after(() => h.unmount());
+    const savedDay = h.readStorage(LAST_KEY);
+    assert.ok(savedDay, 'a published day exists before Live exploration');
+    const maps = () => [...h.container.querySelectorAll('a')]
+      .map((a) => a.getAttribute('href')).filter((href) => href?.includes('google.com/maps'));
+    const routeLinks = maps();
+    assert.ok(routeLinks.length, 'the published route has a navigation handoff');
+    const composeCount = h.fetchMock.calls.filter((call) => call.url.includes('/api/route-recommendations')).length;
+    await click(h, button(h, /Explore live|Utforska live/));
+    let query = h.fetchMock.pending().find((call) => call.url.includes('/api/live-events'));
+    assert.ok(query);
+    assert.equal(query.body.time, 'this_week');
+    for (const period of ['this_week', 'tonight']) {
+      if (period === 'tonight') {
+        await click(h, button(h, lang === 'en' ? /^Fri 25 Sept$/ : /^fre 25 sep\.$/));
+        query = h.fetchMock.pending().find((call) => call.url.includes('/api/live-events'));
+      }
+      assert.equal(query.body.time, period);
+      await h.fetchMock.respond(query, queryBody(state.events));
+      assert.ok(sheetText(h).includes(state[lang]));
+      assert.doesNotMatch(sheetText(h), /Nothing listed|Inget listat|event_supply_/);
+      const payload = structuredClone(query.body);
+      await click(h, button(h, /^(Try again|Försök igen)$/));
+      query = h.fetchMock.pending().find((call) => call.url.includes('/api/live-events'));
+      assert.deepEqual(query.body, payload);
+      await h.fetchMock.respond(query, queryBody(state.events));
+      assert.ok(sheetText(h).includes(state[lang]));
+      assert.deepEqual(h.readStorage(LAST_KEY), savedDay, 'Live cannot replace the published day/anchor snapshot');
+      assert.deepEqual(maps(), routeLinks, 'published route navigation stays unchanged');
+    }
+    await h.clock.advance(120000);
+    assert.equal(h.fetchMock.calls.filter((call) => call.url.includes('/api/route-recommendations')).length, composeCount);
+  });
+}
+
+test('API unavailable is visible in the panel even without an around-place query anchor', async (t) => {
+  const state = EMPTY_STATES.find((s) => s.name === 'API coverage unavailable (failed)');
+  const response = day(state.events);
+  delete response.agnostic_route_output_experiment.source_status;
+  const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' });
+  t.after(() => h.unmount());
+  await h.clock.advance(500);
+  await h.fetchMock.respond(h.fetchMock.pending()[0], response);
+  await h.clock.advance(50);
+  assert.ok(h.text().includes(state.en), 'unavailable coverage itself keeps the Live panel visible');
+});
 
 test('a genuinely empty selected period preserves events in the other period', async (t) => {
   const following = { id: 'following', title: 'Following-day concert', starts_at: '2026-09-26T17:00:00Z',

@@ -331,6 +331,9 @@ function venueLocalNow(nowDate, timezone) {
 export function pulseHealthState(liveEvents, buckets, wovenStops = []) {
   if (!liveEvents) return "hidden";
   if (liveEvents.coverage === "uncovered") return "uncovered";
+  // The query endpoint can finish without a usable supply result. This is a
+  // verification failure, not a hidden view or evidence of an empty calendar.
+  if (liveEvents.coverage === "unavailable") return "unavailable";
   if (liveEvents.coverage !== "covered") return "hidden";
   if (liveEvents.pending) return "pending";
 
