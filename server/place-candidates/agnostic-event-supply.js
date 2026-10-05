@@ -38,6 +38,7 @@ const {
 } = require("../pulse-sources/official-program-article-provider");
 const { createQuotedEventProvider } = require("../pulse-sources/quoted-event-provider");
 const { resolveDefaultEventReader } = require("../pulse-sources/quoted-event-reader");
+const { createDatatourismeEventProvider, datatourismeFeedForContext } = require("../pulse-sources/datatourisme-event-provider");
 const { normalizeTimeSensitiveSourceEvent } = require("../pulse-sources/time-sensitive-event");
 const {
   classifyEventSourceLink,
@@ -115,6 +116,7 @@ const LOCAL_EVENT_ADAPTERS = new Set([
   "official_program_article",
   "scheduled_event_cards",
   "quoted_public_document",
+  "datatourisme",
 ]);
 
 // A single open municipal feed, kept as a NAMED FIXTURE — not a product default.
@@ -842,6 +844,7 @@ async function collectAnchorEvents({
   fetcher,
   sourceCollectionCache = null,
   eventReader = null,
+  datatourismeKey = null,
   radiusM,
   timeoutMs = 15000,
   globalKey = null,
@@ -904,6 +907,7 @@ async function collectAnchorEvents({
         fetcher,
         sourceCollectionCache,
         eventReader,
+        datatourismeKey,
         radiusM: effectiveRadiusM,
         timeoutMs,
         globalKey,
@@ -918,7 +922,7 @@ async function collectAnchorEvents({
       const enriched = applyReviewedSourceTrust(rawEvent, source);
       const normalized = normalizeTimeSensitiveSourceEvent(enriched, {
         ...(nowDate ? { now: nowDate } : {}),
-        timezone: source.timezone || undefined,
+        timezone: rawEvent.timezone || source.timezone || undefined,
       });
       if (!normalized) continue;
       if (rawEvent.timezone) normalized.timezone = rawEvent.timezone;
@@ -1174,6 +1178,7 @@ async function collectEventSource({
   fetcher,
   sourceCollectionCache,
   eventReader,
+  datatourismeKey,
   radiusM,
   timeoutMs,
   globalKey,
@@ -1205,6 +1210,7 @@ async function collectEventSource({
       radiusM,
       timeoutMs,
       eventReader,
+      datatourismeKey,
     });
   }
 
@@ -1214,12 +1220,12 @@ async function collectEventSource({
 
   try {
     const collect = () => provider.create({ key: null }).collect({ date: startParam });
-    // This reviewed API has no request-time geographic/date filter. Cache its
-    // bounded source snapshot once; each Live view still applies its own clock,
-    // trusted geometry and period gates. Different locations/time tabs should
-    // not download the same nine pages again. Full descriptor binds revisions.
-    const snapshotKey = createHash("sha256").update(JSON.stringify(source)).digest("hex");
-    const collected = source.adapter === "localized_events_api" && sourceCollectionCache
+    // Share bounded source snapshots across the two Live period controls.
+    // DATAtourisme also binds its date-window/geographic query to the snapshot.
+    // The local API has no date/geometry filter. Final gates remain per view.
+    const snapshotKey = createHash("sha256").update(JSON.stringify(source.adapter === "datatourisme"
+      ? { source, anchor, radiusM, date: String(startParam || "").slice(0, 10) } : source)).digest("hex");
+    const collected = ["localized_events_api", "datatourisme"].includes(source.adapter) && sourceCollectionCache
       ? await sourceCollectionCache.get(snapshotKey, collect, {
           shouldStore: value => ["ok", "empty"].includes(value?.collection_status?.status),
         })
@@ -1237,7 +1243,7 @@ async function collectEventSource({
   }
 }
 
-function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs, eventReader } = {}) {
+function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs, eventReader, datatourismeKey } = {}) {
   const adapter = normalizeLocalEventAdapter(source?.adapter || source?.kind);
   if (!adapter) return null;
   const endpoint = firstString(source.endpoint, source.base);
@@ -1250,6 +1256,10 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
     sourceUrl: firstString(source.source_url, endpoint),
     license: source.license,
   };
+
+  if (adapter === "datatourisme") {
+    return createDatatourismeEventProvider({ key: datatourismeKey, anchor, fetcher: fetcher || undefined, radiusM, timeoutMs });
+  }
 
   if (adapter === "quoted_public_document") {
     return createQuotedEventProvider({ ...common, eventReader, timezone: source.timezone, sourceLanguage: source.source_language });
@@ -1533,7 +1543,8 @@ const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a 
 // v6 excludes v5 pools truncated by midnight-gap and global-window bugs.
 // v7 excludes recurring ranges that v6 normalized as every-day daily windows.
 // v9 prevents non-displayable listings from exhausting the bounded venue budget.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v9";
+// v10 applies source-owned event timezones during normalization, not afterward.
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v10";
 
 // A failed refresh is a finished answer, not "still loading". It is held for a
 // short, bounded time so reads report the failure; afterwards the next read
@@ -1641,6 +1652,7 @@ function resolveDefaultEventSupply(
   if (!["enabled", "1", "true", "on", "yes"].includes(flag)) return null;
   const registry = resolveEventFeedRegistry(env);
   const globalKey = resolveGlobalEventKey(env);
+  const datatourismeKey = String(env?.PARRANDA_DATATOURISME_KEY || "").trim() || null;
   // Machine-qualified sources are part of ordinary Live supply. Operators can
   // explicitly disable this lane; a per-source human approval is not required.
   const qualifiedRuntimeEnabled = !["disabled", "0", "false", "off", "no"].includes(
@@ -1706,6 +1718,10 @@ function resolveDefaultEventSupply(
       MAX_EVENT_COLLECTION_RADIUS_M,
       Math.max(100, Math.round(Number(radiusM) || DEFAULT_RADIUS_M)),
     );
+    // placeContext is attested by the server resolver; public Live payloads
+    // cannot activate a country layer or provide its credentials/endpoint.
+    const nationalFeed = datatourismeFeedForContext({ anchor, placeContext, radiusM: effectiveRadiusM });
+    if (nationalFeed) appendUniqueEventFeeds(requestRegistry, [nationalFeed]);
     const sourcePlan = buildScopedEventSourcePlan({
       anchor,
       sourceAnchors,
@@ -1716,7 +1732,7 @@ function resolveDefaultEventSupply(
       globalEnabled: Boolean(globalKey),
       now,
     });
-    const hasApprovedLocalSource = sourcePlan.some((source) => source?.kind !== "global");
+    const hasApprovedLocalSource = sourcePlan.some((source) => source?.kind !== "global" && source?.source_family !== "national_open");
     let discoveryHealth = null;
     if (!hasApprovedLocalSource) {
       discoveryHealth = await resolveUncoveredDiscoveryHealth(sourceCatalog, anchor);
@@ -1785,6 +1801,7 @@ function resolveDefaultEventSupply(
           timeoutMs: WARM_TIMEOUT_MS,
           sourceCollectionCache,
           eventReader,
+          datatourismeKey,
           sourceBounds: scope?.kind === "in_place" ? scope.trusted_place_scope?.bounds : null,
           globalKey,
           venueResolver,
@@ -1873,7 +1890,7 @@ async function resolveUncoveredDiscoveryHealth(sourceCatalog, anchor) {
 }
 
 function localSourceMixNeedsDiscovery(sourcePlan) {
-  const local = sourcePlan.filter((source) => source?.kind !== "global");
+  const local = sourcePlan.filter((source) => source?.kind !== "global" && source?.source_family !== "national_open");
   const publishers = new Set();
   const families = new Set();
   for (const source of local) {

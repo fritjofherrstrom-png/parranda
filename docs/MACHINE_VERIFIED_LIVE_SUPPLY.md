@@ -76,17 +76,50 @@ contracts; never by named-city rules or user-supplied provider URLs.
 | OpenHolidays | [Public and school holiday API](https://www.openholidaysapi.org/en/) for its supported countries/subdivisions, not all EU places or local festivals. [Data licence](https://github.com/openpotato/openholidaysapi.data) is ODbL; the service code's licence is separate. Apply subdivision/group scope honestly. |
 | OSM weekly markets | [Mapped marketplaces and schedules](https://wiki.openstreetmap.org/wiki/Tag:amenity=marketplace) can supply source-backed recurring occurrences. Require explicit supported weekday/time facts and real venue geometry; no invented schedule or assumption that a mapped permanent hall is a weekly market. Preserve OSM attribution and recurrence uncertainty. |
 
+DATAtourisme is now integrated into the ordinary background-warmed Live source
+plan when the server resolver attests `country_code: fr`. The layer does not need
+per-commune approval or a Source Catalog entry. Its private
+`PARRANDA_DATATOURISME_KEY` is sent only as `X-API-Key` to the fixed HTTPS API.
+Missing credentials are an unavailable source, not healthy empty coverage.
+National source selection does not suppress demand for genuinely local sources.
+
+The adapter requests source-owned identity, date periods, geometry, publisher
+and update fields, filtering overlapping date periods and sorting by end date
+under the documented API filter/sort contract. One acquisition reads at most two pages of 80 POIs, 24 periods
+per POI, 160 resulting event atoms, two MB total and 30 seconds. Pagination URLs from the response are never
+followed. A truncated/partly invalid collection retains valid facts with explicit
+failure health; it never claims to have read the whole calendar. Successful
+coordinate/date-window-bounded snapshots share the existing source cache across Live period
+views. Date/scope/ranking gates remain the shared ones.
+
+Venue clocks are derived offline at actual source geometry with pinned
+`geo-tz@8.1.9` and its full timezone boundary dataset, rather than assigning a
+single timezone to France. Ambiguous/ocean lookup results and ambiguous DST
+clock times fail. The [library contract](https://github.com/evansiroky/node-geo-tz)
+describes the underlying OSM-derived boundary data and its accuracy limits.
+The package adds approximately 74 MB of unpacked server dependencies, including
+its three distributed datasets; it is not included in the browser build.
+
+Each displayed row keeps its exact resource URI and publisher/update credit
+under Licence Ouverte. This resource URL is not represented as an event page.
+Single-date clocked sessions use real instants; date-only facts stay all-day.
+Ranges/complex recurrence stay period context without invented session days.
+The initial national layer remains Pulse-only and does not become a route stop.
+The source API's availability and breadth are not verified runtime coverage:
+no DATAtourisme event request has been made in this workstream.
+
 ## Delivery state and remaining landing condition
 
 Implemented in this worktree: default automatic machine-qualified event supply,
 the quoted document reader/provider and scout/qualification/Live integration,
-bounded PDF/OCR input, server credential wiring, and corrected current policy
+bounded PDF/OCR input, DATAtourisme country-layer acquisition and Live integration,
+server credential wiring, and corrected current policy
 documents. Network-disabled tests cover original-language evidence, invented
 atom rejection, failures/cache, PDF input and association-news → qualification
 → visible Live with credits/evidence and no route promotion.
 
-Remaining work for the full goal: implement and verify national/recurring
-provider integration through the ordinary supply chain, finish adversarial /
+Remaining work for the full goal: implement and verify festivos.io, OpenHolidays
+and OSM recurring-provider integration through the ordinary supply chain, finish adversarial /
 operational review of document inputs, obtain exact-head CI, and record actual
 deployment wiring / runtime observation limits. The goal is **not complete**.
 No model/provider live fetch, migration, merge or deployment has been performed
