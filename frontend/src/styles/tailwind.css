@@ -91,7 +91,7 @@
   background: rgb(var(--p-color-paper));
   font-family: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
 }
-.route-map-frame .maplibregl-ctrl-attrib {
+.route-map-frame .maplibregl-ctrl.maplibregl-ctrl-attrib {
   background: rgb(var(--p-color-paper) / 0.85);
   color: rgb(var(--p-color-ink) / 0.75);
   font-size: 10px;
