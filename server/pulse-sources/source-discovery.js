@@ -297,7 +297,8 @@ function mapsToExistingProvider(adapter) {
     adapter === "sitevision_calendar" ||
     adapter === "wix_event_sitemap" ||
     adapter === "embedded_program_rsc" ||
-    adapter === "official_program_article"
+    adapter === "official_program_article" ||
+    adapter === "scheduled_event_cards"
   );
 }
 
