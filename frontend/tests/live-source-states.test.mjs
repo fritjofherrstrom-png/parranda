@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
+const capturedUncovered = JSON.parse(readFileSync(new URL('./fixtures/captured-uncovered-live.json', import.meta.url)));
+// Exact Live response bodies from integration-549-1ebf3be-20261005T013305Z/
+// browser-responses.json (SHA256 40c47acd6af950635357ee5165cfa5de7bdd3e806379e2bedef233e82180d03e).
+// Replaying captured transport is deterministic UI regression, not provider acceptance.
 import { mountPlanner } from './helpers/planner-harness.mjs';
 
 // Mounted component with controlled transport. It proves how the Planner reads
@@ -51,14 +56,47 @@ async function click(h, control) {
   assert.ok(control, 'control exists');
   await h.act(() => control.dispatchEvent(new h.window.Event('click', { bubbles: true })));
 }
-async function composed(liveEvents) {
-  const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' });
+async function composed(liveEvents, lang = 'en') {
+  const h = await mountPlanner({ url: `http://localhost/anywhere?place=Testville&lang=${lang}` });
   await h.clock.advance(500);
   await h.fetchMock.respond(h.fetchMock.pending()[0], day(liveEvents));
   await h.clock.advance(50);
   return h;
 }
 const sheetText = (h) => h.container.querySelector('[role="dialog"]')?.textContent || '';
+
+for (const lang of ['en', 'sv']) test(`captured uncovered Live distinguishes missing coverage in ${lang}`, async t => {
+  const h = await composed(capturedUncovered[0].live_events, lang);
+  t.after(() => h.unmount());
+  await click(h, button(h, /Explore live|Utforska live/));
+  for (const response of capturedUncovered) {
+    if (response.query.time === 'this_week') await click(h, button(h, /^(Following 7 days|Följande 7 dagar)$/));
+    const query = h.fetchMock.pending().find(call => call.url.includes('/api/live-events'));
+    if (query) await h.fetchMock.respond(query, response);
+    else {
+      await click(h, button(h, /^(Around Testville|Runt Testville)$/));
+      await h.fetchMock.respond(h.fetchMock.pending().find(call => call.url.includes('/api/live-events')), response);
+    }
+    assert.match(sheetText(h), lang === 'en' ? /No verified calendar coverage for this area yet/ : /Verifierad kalendertäckning saknas för det här området/);
+    assert.doesNotMatch(sheetText(h), /Nothing verified|Nothing listed|Inget verifierat|Inget listat|0\/0|no_approved_sources/);
+  }
+  assert.equal(h.fetchMock.calls.filter(call => call.url.includes('/api/route-recommendations')).length, 1);
+});
+
+for (const lang of ['en', 'sv']) for (const health of [
+  { status: 'unavailable', result: 'unknown' },
+  { status: 'unknown', result: 'unknown' },
+]) test(`Live ${health.status} without selected sources stays unknown in ${lang}`, async t => {
+  const events = live(health, { feeds: [] });
+  const h = await composed(events, lang);
+  t.after(() => h.unmount());
+  await click(h, button(h, /Explore live|Utforska live/));
+  const query = h.fetchMock.pending().find(call => call.url.includes('/api/live-events'));
+  if (query) await h.fetchMock.respond(query, queryBody(events));
+  assert.match(sheetText(h), lang === 'en' ? /Live information is unavailable right now/ : /Live-information är inte tillgänglig just nu/);
+  assert.doesNotMatch(sheetText(h), /Nothing verified|Nothing listed|Inget verifierat|Inget listat|0\/0/);
+  assert.ok(button(h, /^(Try again|Försök igen)$/));
+});
 
 const SINGLE_FAILURE = "Parranda couldn't fetch the event source just now, so no events can be shown. That doesn't mean nothing is on — try again shortly.";
 

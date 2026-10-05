@@ -256,6 +256,15 @@ export default function LiveSheet({
             <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
               <p className="text-sm leading-relaxed text-parranda-ink/80">{liveQueryError}</p>
             </div>
+          ) : sheetPulseState === "uncovered" ? (
+            <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
+              <p className="text-sm leading-relaxed text-parranda-ink/80">
+                {t(
+                  "Verifierad kalendertäckning saknas för det här området. Vi vet därför inte vad som händer här — det betyder inte att inget är på gång.",
+                  "No verified calendar coverage for this area yet. We don't know what's on here — that doesn't mean nothing is happening.",
+                )}
+              </p>
+            </div>
           ) : sheetPulseState === "pending" ? (
             <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
               <p className="text-sm leading-relaxed text-parranda-ink/75">
@@ -268,6 +277,15 @@ export default function LiveSheet({
           ) : sheetFailure ? (
             <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
               <p className="text-sm leading-relaxed text-parranda-ink/80">{liveFailureSentence(sheetFailure)}</p>
+            </div>
+          ) : sheetPulseState === "unavailable" || sheetPulseState === "hidden" ? (
+            <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
+              <p className="text-sm leading-relaxed text-parranda-ink/80">
+                {t(
+                  "Live-information är inte tillgänglig just nu. Vi vet därför inte vad som händer här — det betyder inte att inget är på gång.",
+                  "Live information is unavailable right now. We don't know what's on here — that doesn't mean nothing is happening.",
+                )}
+              </p>
             </div>
           ) : sheetEvents.length > 0 || sheetMoreEvents.length > 0 ? (
             <div className="flex flex-col gap-3">
@@ -354,7 +372,7 @@ export default function LiveSheet({
           {/* Counts describe a finished collection; while waiting, "0/1
               responded" would read as a failure that has not happened. */}
           {sheetSourceHealth && Number.isInteger(sheetSourceHealth.selected_source_count) &&
-            !liveQueryPending && sheetPulseState !== "pending" && (
+            !liveQueryPending && sheetPulseState !== "pending" && sheetPulseState !== "uncovered" && (sheetSourceHealth.selected_source_count ?? 0) > 0 && (
             <p className="text-xs text-parranda-ink/68">
               {t("Källstatus", "Source health")}: {sheetSourceHealth.responding_source_count ?? 0}/{sheetSourceHealth.selected_source_count ?? 0} {t("svarade", "responded")}
               {/* Returned rows are not hits: every row can still be
