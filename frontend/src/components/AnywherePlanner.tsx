@@ -2041,7 +2041,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       )}
 
       {phase === "done" &&
-        ((liveEvents && (liveEvents.coverage === "covered" || liveEvents.coverage === "uncovered")) ||
+        ((liveEvents && ["covered", "uncovered", "unavailable"].includes(liveEvents.coverage ?? "")) ||
           (showDay && dayflow?.weather?.headline) ||
           aroundPlaceScopeAvailable) && (
         <LiveCard

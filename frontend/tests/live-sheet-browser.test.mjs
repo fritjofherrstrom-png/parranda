@@ -80,7 +80,7 @@ test('native mounted LiveSheet distinguishes captured uncovered and healthy cont
       assert.equal(await page.evaluate(() => window.sheetState), 'uncovered');
     }
     const empty = await render(events({ status:'healthy', result:'empty', selected_source_count:1, responding_source_count:1 }), lang, time);
-    assert.match(empty, falseEmpty);
+    assert.match(empty, /The sources responded but list no events for this period|Källorna svarade men listar inga händelser för perioden/);
     assert.match(empty, /1\/1/);
     assert.doesNotMatch(empty, unknown);
     const pending = await render({ ...events({status:'pending', result:'pending', selected_source_count:1}), pending:true },lang,time);
