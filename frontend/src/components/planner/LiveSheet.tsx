@@ -321,11 +321,18 @@ export default function LiveSheet({
           ) : (
             <div className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
               <p className="text-sm leading-relaxed text-parranda-ink/80">
-                {liveSheetTime === "tonight" && liveSheetScope !== "near_me" && wovenNames.length > 0
-                  ? t("Inga ytterligare verifierade händelser listade här.", "No additional verified events listed here.")
-                  : liveSheetTime === "tonight"
-                    ? t(`Inget verifierat ${liveDayLabel} ${scopePhrase}.`, `Nothing verified ${liveDayLabel} ${scopePhrase}.`)
-                    : t(`Inget listat under följande 7 dagar ${scopePhrase}.`, `Nothing listed in the following 7 days ${scopePhrase}.`)}
+                {/* An empty display is not proof of an empty calendar. Use the
+                    same collection states as the Live card before describing
+                    a genuinely empty selected period. */}
+                {sheetPulseState === "rejected_empty"
+                    ? t("Det fanns listningar, men inga var pålitliga eller aktuella nog att visa.", "Listings existed, but none were reliable or current enough to show.")
+                    : sheetPulseState === "soft_empty"
+                        ? t("Källorna svarade men listar inga händelser för perioden.", "The sources responded but list no events for this period.")
+                        : liveSheetTime === "tonight" && liveSheetScope !== "near_me" && wovenNames.length > 0
+                          ? t("Inga ytterligare verifierade händelser listade här.", "No additional verified events listed here.")
+                          : liveSheetTime === "tonight"
+                            ? t(`Inget verifierat ${liveDayLabel} ${scopePhrase}.`, `Nothing verified ${liveDayLabel} ${scopePhrase}.`)
+                            : t(`Inget listat under följande 7 dagar ${scopePhrase}.`, `Nothing listed in the following 7 days ${scopePhrase}.`)}
                 {liveSheetTime === "tonight" && sheetBuckets.thisWeek.length > 0 && (
                   <strong className="text-parranda-ink">
                     {" "}
