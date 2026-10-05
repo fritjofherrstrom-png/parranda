@@ -1011,7 +1011,7 @@ async function composeAgnosticRouteOutput({
 
   const focusedRhythm = Boolean(dayRhythm) && normalizeUserIntents(preferences).intents.length === 1;
   const rolePayload = {
-    ...(focusedRhythm ? { limitPerRole: 5 } : {}),
+    ...(focusedRhythm ? { limitPerRole: 6 } : {}),
     city: agnosticContext.key,
     date: effectiveDate,
     preferences: Array.isArray(preferences) ? preferences : [],

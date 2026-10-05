@@ -74,7 +74,7 @@ function localFeelReasons(spec, candidate) {
 const ROLE_ORDER = Object.freeze(Object.keys(ROLE_SPEC));
 const STATUS_RANK = Object.freeze({ missing: 0, fallback: 1, partial: 2, filled: 3 });
 const DEFAULT_LIMIT_PER_ROLE = 3;
-const MAX_LIMIT_PER_ROLE = 5;
+const MAX_LIMIT_PER_ROLE = 6;
 // Once the trusted reservoir can cover several different planner roles with
 // non-chain places, a chain-only role is no longer a genuine sparse-context
 // fallback. Keep it inspectable, but do not auto-compose it into the day.
