@@ -111,16 +111,45 @@ no DATAtourisme event request has been made in this workstream.
 
 ## Delivery state and remaining landing condition
 
+OSM marketplace schedules now reuse the deployment's existing cached map loader
+in that same background Live acquisition. No additional Overpass client, place
+supplier or discovery layer is created. The map layer does not satisfy the local
+calendar/source-mix requirement and cannot suppress local source scouting.
+It is the existing loader's bounded place sample/aperture (normally 1.5 km,
+with its ordinary expansion ceiling of 5 km), not exhaustive coverage of a
+larger Live area. Existing local calendars take precedence under the shared
+source budget; this optional layer has lower priority.
+
+Only named, active `amenity=marketplace` objects with their exact OSM identity,
+real coordinates and explicit supported weekday/clock rules can contribute.
+Tagged indoor/market halls, all-week or bare daily hours, seasonal/holiday
+exceptions, overlapping selectors and overnight/24:00 syntax are not projected.
+Supported sessions are projected into a bounded ten-day calendar envelope,
+then checked by the ordinary venue-timezone, selected-date and geography gates.
+These rows remain low-trust Pulse context: the shared card/sheet source component
+labels them in EN/SV as recurring schedules with an unconfirmed occurrence,
+preserves the exact OSM object link and contributor/ODbL credit, and cannot
+automatically turn them into route stops. Projection does not prove that a
+particular market will actually happen or has not been cancelled.
+
+Acquisition inspects at most 500 place rows and retains at most 160 schedule
+rows, with a 30-second reader deadline. Duplicate objects are deduplicated;
+missing loaders, failed/stale map answers, timeout and truncation do not claim a
+healthy empty calendar. Successful snapshots share the existing source cache
+between Live period controls. No actual OSM/provider acquisition has been run
+in this workstream; all new tests use offline fixture data.
+
 Implemented in this worktree: default automatic machine-qualified event supply,
 the quoted document reader/provider and scout/qualification/Live integration,
 bounded PDF/OCR input, DATAtourisme country-layer acquisition and Live integration,
+OSM recurring-market schedules and shared uncertainty presentation,
 server credential wiring, and corrected current policy
 documents. Network-disabled tests cover original-language evidence, invented
 atom rejection, failures/cache, PDF input and association-news → qualification
 → visible Live with credits/evidence and no route promotion.
 
-Remaining work for the full goal: implement and verify festivos.io, OpenHolidays
-and OSM recurring-provider integration through the ordinary supply chain, finish adversarial /
+Remaining work for the full goal: implement and verify festivos.io and OpenHolidays
+through the ordinary supply chain, finish adversarial /
 operational review of document inputs, obtain exact-head CI, and record actual
 deployment wiring / runtime observation limits. The goal is **not complete**.
 No model/provider live fetch, migration, merge or deployment has been performed

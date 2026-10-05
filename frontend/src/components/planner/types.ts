@@ -58,6 +58,7 @@ export interface PulseEvent {
   starts_on?: string;
   ends_on?: string;
   time_window?: PulseTimeWindow | null;
+  recurrence?: { rule?: string; occurrence_status?: "unconfirmed" } | null;
   place?: string;
   /** The reviewed feed that listed the event — attribution, not the link's destination. */
   source_label?: string;

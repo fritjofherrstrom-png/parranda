@@ -39,6 +39,7 @@ const {
 const { createQuotedEventProvider } = require("../pulse-sources/quoted-event-provider");
 const { resolveDefaultEventReader } = require("../pulse-sources/quoted-event-reader");
 const { createDatatourismeEventProvider, datatourismeFeedForContext } = require("../pulse-sources/datatourisme-event-provider");
+const { createOsmMarketEventProvider, osmMarketFeedForAnchor } = require("../pulse-sources/osm-market-event-provider");
 const { normalizeTimeSensitiveSourceEvent } = require("../pulse-sources/time-sensitive-event");
 const {
   classifyEventSourceLink,
@@ -117,6 +118,7 @@ const LOCAL_EVENT_ADAPTERS = new Set([
   "scheduled_event_cards",
   "quoted_public_document",
   "datatourisme",
+  "osm_market_schedules",
 ]);
 
 // A single open municipal feed, kept as a NAMED FIXTURE — not a product default.
@@ -526,6 +528,7 @@ function toEventView(event, feed, { eventTimezone = null, routeEligible = null }
     starts_on: event.starts_on || null,
     ends_on: event.ends_on || null,
     time_window: event.time_window || null,
+    recurrence: event.recurrence || null,
     timing_relevance: event.timing_relevance || null,
     place: event.place_context || event.area || null,
     address: event.address || null,
@@ -845,6 +848,7 @@ async function collectAnchorEvents({
   sourceCollectionCache = null,
   eventReader = null,
   datatourismeKey = null,
+  marketLoader = null,
   radiusM,
   timeoutMs = 15000,
   globalKey = null,
@@ -908,6 +912,7 @@ async function collectAnchorEvents({
         sourceCollectionCache,
         eventReader,
         datatourismeKey,
+        marketLoader,
         radiusM: effectiveRadiusM,
         timeoutMs,
         globalKey,
@@ -1179,6 +1184,7 @@ async function collectEventSource({
   sourceCollectionCache,
   eventReader,
   datatourismeKey,
+  marketLoader,
   radiusM,
   timeoutMs,
   globalKey,
@@ -1211,6 +1217,7 @@ async function collectEventSource({
       timeoutMs,
       eventReader,
       datatourismeKey,
+      marketLoader,
     });
   }
 
@@ -1223,9 +1230,9 @@ async function collectEventSource({
     // Share bounded source snapshots across the two Live period controls.
     // DATAtourisme also binds its date-window/geographic query to the snapshot.
     // The local API has no date/geometry filter. Final gates remain per view.
-    const snapshotKey = createHash("sha256").update(JSON.stringify(source.adapter === "datatourisme"
+    const snapshotKey = createHash("sha256").update(JSON.stringify(["datatourisme", "osm_market_schedules"].includes(source.adapter)
       ? { source, anchor, radiusM, date: String(startParam || "").slice(0, 10) } : source)).digest("hex");
-    const collected = ["localized_events_api", "datatourisme"].includes(source.adapter) && sourceCollectionCache
+    const collected = ["localized_events_api", "datatourisme", "osm_market_schedules"].includes(source.adapter) && sourceCollectionCache
       ? await sourceCollectionCache.get(snapshotKey, collect, {
           shouldStore: value => ["ok", "empty"].includes(value?.collection_status?.status),
         })
@@ -1243,7 +1250,7 @@ async function collectEventSource({
   }
 }
 
-function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs, eventReader, datatourismeKey } = {}) {
+function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs, eventReader, datatourismeKey, marketLoader } = {}) {
   const adapter = normalizeLocalEventAdapter(source?.adapter || source?.kind);
   if (!adapter) return null;
   const endpoint = firstString(source.endpoint, source.base);
@@ -1259,6 +1266,9 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs,
 
   if (adapter === "datatourisme") {
     return createDatatourismeEventProvider({ key: datatourismeKey, anchor, fetcher: fetcher || undefined, radiusM, timeoutMs });
+  }
+  if (adapter === "osm_market_schedules") {
+    return createOsmMarketEventProvider({ anchor, loader: marketLoader, radiusM, timeoutMs });
   }
 
   if (adapter === "quoted_public_document") {
@@ -1646,6 +1656,7 @@ function resolveDefaultEventSupply(
     collectEvents = collectAnchorEvents,
     failedRefreshClock,
     eventReader = resolveDefaultEventReader(env),
+    marketLoader = null,
   } = {},
 ) {
   const flag = String((env && env.PARRANDA_AGNOSTIC_EVENTS) || "").trim().toLowerCase();
@@ -1722,6 +1733,10 @@ function resolveDefaultEventSupply(
     // cannot activate a country layer or provide its credentials/endpoint.
     const nationalFeed = datatourismeFeedForContext({ anchor, placeContext, radiusM: effectiveRadiusM });
     if (nationalFeed) appendUniqueEventFeeds(requestRegistry, [nationalFeed]);
+    if (typeof marketLoader === "function") {
+      const marketFeed = osmMarketFeedForAnchor(anchor);
+      if (marketFeed) appendUniqueEventFeeds(requestRegistry, [marketFeed]);
+    }
     const sourcePlan = buildScopedEventSourcePlan({
       anchor,
       sourceAnchors,
@@ -1732,7 +1747,7 @@ function resolveDefaultEventSupply(
       globalEnabled: Boolean(globalKey),
       now,
     });
-    const hasApprovedLocalSource = sourcePlan.some((source) => source?.kind !== "global" && source?.source_family !== "national_open");
+    const hasApprovedLocalSource = sourcePlan.some((source) => source?.kind !== "global" && !["national_open", "recurring_map"].includes(source?.source_family));
     let discoveryHealth = null;
     if (!hasApprovedLocalSource) {
       discoveryHealth = await resolveUncoveredDiscoveryHealth(sourceCatalog, anchor);
@@ -1802,6 +1817,7 @@ function resolveDefaultEventSupply(
           sourceCollectionCache,
           eventReader,
           datatourismeKey,
+          marketLoader,
           sourceBounds: scope?.kind === "in_place" ? scope.trusted_place_scope?.bounds : null,
           globalKey,
           venueResolver,
@@ -1890,7 +1906,7 @@ async function resolveUncoveredDiscoveryHealth(sourceCatalog, anchor) {
 }
 
 function localSourceMixNeedsDiscovery(sourcePlan) {
-  const local = sourcePlan.filter((source) => source?.kind !== "global" && source?.source_family !== "national_open");
+  const local = sourcePlan.filter((source) => source?.kind !== "global" && !["national_open", "recurring_map"].includes(source?.source_family));
   const publishers = new Set();
   const families = new Set();
   for (const source of local) {

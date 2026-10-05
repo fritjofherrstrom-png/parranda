@@ -439,6 +439,7 @@ function normalizeRecurrence(value) {
       rule: firstString(value.rule),
       label: firstString(value.label),
       timezone: firstString(value.timezone),
+      occurrence_status: value.occurrence_status === "unconfirmed" ? "unconfirmed" : undefined,
     });
   }
   return null;

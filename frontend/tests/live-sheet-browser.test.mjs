@@ -100,9 +100,21 @@ test('native mounted LiveSheet distinguishes captured uncovered and healthy cont
     const failed = await render(events({status:'unavailable',result:'unknown',selected_source_count:1,responding_source_count:0}),lang,time);
     assert.match(failed,/Selected-source failure preserved/);
     const populated = events({status:'healthy',result:'events_found',selected_source_count:1,responding_source_count:1});
-    populated[time === 'week' ? 'this_week' : 'tonight'] = [{id:'event',title:'Deterministic calendar event'}];
+    populated.selected_date = '2026-07-20';
+    populated[time === 'week' ? 'this_week' : 'tonight'] = [{id:'event',title:'Deterministic calendar event',
+      source_label:'OpenStreetMap', source_url:'https://www.openstreetmap.org/node/42',
+      source_link_kind:'page',source_link_host:'openstreetmap.org',
+      sources:[{attribution:'© OpenStreetMap contributors — ODbL'}],
+      recurrence:{rule:'Mo,Th 09:00-13:00',occurrence_status:'unconfirmed'},
+      timezone:'Europe/Paris', time_window:{kind:'occurrences',dates:['2026-07-20','2026-07-23'],local_start:'09:00',local_end:'13:00'},
+    }];
     const shown = await render(populated,lang,time);
     assert.match(shown,/Deterministic calendar event/);
+    assert.ok(shown.includes('09:00–13:00'), 'the source-local occurrence clock remains visible');
     assert.doesNotMatch(shown,falseEmpty);
+    assert.ok(shown.includes(lang === 'en' ? 'Recurring schedule — occurrence unconfirmed'
+      : 'Återkommande schema — tillfället är inte bekräftat'));
+    assert.ok(shown.includes('© OpenStreetMap contributors — ODbL'));
+    assert.equal(await page.locator('a[href="https://www.openstreetmap.org/node/42"]').count(),1);
   }
 });

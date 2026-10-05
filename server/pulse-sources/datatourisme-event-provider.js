@@ -7,6 +7,7 @@ const { readBoundedText, DEFAULT_USER_AGENT } = require("./local-event-source-sc
 const { normalizeIanaTimezone, normalizeSourceEventDate, normalizeSourceEventDateTime } = require("./source-event-time");
 const { haversineKm } = require("../candidates/area-intelligence");
 const { addCalendarDays } = require("../place-candidates/event-calendar-date");
+const { coordinateTimezone } = require("./coordinate-timezone");
 
 const ENDPOINT = "https://api.datatourisme.fr/v1/entertainmentAndEvent";
 const LICENSE = "Licence Ouverte";
@@ -32,13 +33,6 @@ function datatourismeFeedForContext({ anchor, placeContext, radiusM = 3000 } = {
     // Initial national supply is display-only; no automatic route weaving.
     pulse_only: true,
   };
-}
-
-function coordinateTimezone(lat, lng) {
-  // Server-owned offline boundary data, evaluated at actual provider geometry.
-  // No guessed country timezone, weather fetch or public timezone hint.
-  const zones = require("geo-tz/all").find(lat, lng);
-  return zones.length === 1 && !zones[0].startsWith("Etc/") ? normalizeIanaTimezone(zones[0]) : null;
 }
 
 function createDatatourismeEventProvider({ key, anchor, radiusM = 3000,

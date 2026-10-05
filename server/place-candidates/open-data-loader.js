@@ -1142,6 +1142,10 @@ function mapOsmElement(element) {
     ...(sourceAddress ? { source_address: sourceAddress } : {}),
     ...(sourceNameAliases.length ? { source_name_aliases: sourceNameAliases } : {}),
     ...(openingHours ? { opening_hours: openingHours } : {}),
+    ...(tags.amenity === "marketplace" ? {
+      osm_marketplace: true,
+      osm_market_hall: tags.building === "marketplace" || tags.indoor === "yes",
+    } : {}),
   };
 }
 
@@ -1338,6 +1342,9 @@ function resolveDefaultOpenDataLoader(env = process.env) {
     ? osmLoader : composeOpenDataLoaders(osmLoader, wikiSource, overtureSource, visitSwedenSource);
   const { createOperatorVisitEnricher } = require('./operator-visit-evidence');
   loader.enrich = createOperatorVisitEnricher({ env });
+  // The Live schedule reader reuses this same cached map acquisition without
+  // starting the independent knowledge/directory/official place suppliers.
+  Object.defineProperty(loader, "loadOsmPlaces", { value: osmLoader });
   return loader;
 }
 

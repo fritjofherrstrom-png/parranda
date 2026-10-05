@@ -16,9 +16,13 @@ export function liveEventSource(event: PulseEvent, lang: Lang) {
   const credits = [...new Set((Array.isArray(event.sources) ? event.sources : [])
     .map((source) => typeof source?.attribution === "string" ? source.attribution.trim() : "")
     .filter(Boolean))];
-  if (!listedBy && !link && !credits.length) return null;
+  const recurring = event.recurrence?.occurrence_status === "unconfirmed";
+  if (!listedBy && !link && !credits.length && !recurring) return null;
   return (
     <span className="text-parranda-ink/68">
+      {recurring && <> · {lang === "en"
+        ? "Recurring schedule — occurrence unconfirmed"
+        : "Återkommande schema — tillfället är inte bekräftat"}</>}
       {listedBy && <>{" · "}via&nbsp;{listedBy}</>}
       {credits.length > 0 && <>{" · "}{credits.join(" · ")}</>}
       {link && (

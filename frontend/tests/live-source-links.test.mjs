@@ -92,7 +92,7 @@ for (const lang of ['en', 'sv']) test(`${lang} Live credits survive without URLs
   const credited = (event) => ({ ...event, sources: [
     { attribution: `  ${credit}  ` }, { attribution: credit },
     { attribution: 'Another publisher' }, { attribution: ' ' }, { attribution: null },
-  ] });
+  ], recurrence: { rule: 'Mo,Th 09:00-13:00', occurrence_status: 'unconfirmed' } });
   const home = credited(HOME);
   const json = credited(liveEvent('json', 'JSON source', 'https://api.example/events/42/?format=json', ['page', 'api.example']));
   const noUrl = credited({ id: 'no-url', title: 'Credit without URL', source_label: FEED });
@@ -106,6 +106,9 @@ for (const lang of ['en', 'sv']) test(`${lang} Live credits survive without URLs
   const h = await composed(lang, response);
   t.after(() => h.unmount());
   const assertCredits = (root, count) => {
+    const recurrence = lang === 'en' ? 'Recurring schedule — occurrence unconfirmed'
+      : 'Återkommande schema — tillfället är inte bekräftat';
+    assert.equal(root.textContent.split(recurrence).length - 1, count, 'card and both sheet periods retain recurrence uncertainty');
     assert.equal(root.textContent.split(credit).length - 1, count, 'each row shows a deduplicated source credit');
     assert.equal(root.textContent.split('Another publisher').length - 1, count);
     assert.equal(root.querySelectorAll('img').length, 0, 'credits are text, not HTML');
