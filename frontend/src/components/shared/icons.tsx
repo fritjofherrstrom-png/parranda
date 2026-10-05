@@ -220,3 +220,74 @@ export function MoonIcon({ className }: IconProps) {
     </Icon>
   );
 }
+
+/* Category symbols — one small mark per family of place, drawn in the same
+   stroke as the rest of the set. They accompany the category text, never
+   replace it. */
+
+/** Food: a plate with knife and fork. */
+export function FoodIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <path d="M7 3v7a2 2 0 0 0 2 2v9M11 3v7a2 2 0 0 1-2 2M9 3v6" />
+      <path d="M17 21V3c-2 1.5-3 4-3 7v3h3" />
+    </Icon>
+  );
+}
+
+/** Drink: a glass. */
+export function DrinkIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <path d="M6 3h12l-1.5 8a4.5 4.5 0 0 1-9 0L6 3ZM12 15.5V21M8.5 21h7M6.5 7h11" />
+    </Icon>
+  );
+}
+
+/** Culture: a columned building. */
+export function CultureIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <path d="m3.5 9 8.5-5 8.5 5M5 9v9M9.5 9v9M14.5 9v9M19 9v9M3.5 21h17M4 18h16" />
+    </Icon>
+  );
+}
+
+/** Nature: a leaf. */
+export function NatureIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <path d="M5 19.5C5 10.5 10.5 4.5 19.5 4.5c0 9-6 15-14.5 15Z" />
+      <path d="M5 19.5 13 11.5" />
+    </Icon>
+  );
+}
+
+/** Sight: an eye — something to look at. */
+export function SightIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" />
+      <circle cx="12" cy="12" r="2.8" />
+    </Icon>
+  );
+}
+
+/** Shop: a bag. */
+export function ShopIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <path d="M5 8h14l-1 12.5H6L5 8ZM9 8V6.5a3 3 0 0 1 6 0V8" />
+    </Icon>
+  );
+}
+
+/** Opening hours: a clock. */
+export function ClockIcon({ className }: IconProps) {
+  return (
+    <Icon className={className}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" />
+    </Icon>
+  );
+}
