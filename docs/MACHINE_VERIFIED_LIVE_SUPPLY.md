@@ -1,10 +1,11 @@
 # Machine-verified Live supply
 
 Owner: Codex. Target: `codex/machine-verified-live-supply`, based on GitHub main
-`3b8653b23258b839b21824c6c59dcf8ba0471c9f`. Work began from main
+`cf2430102414c7cd85b61b1a3930f5d5d9ff1a62`. Work began from main
 `23160134cd73af166d67057a14c72c4bf8585946` and was rebased after #555
-landed with #556 included. That landing occurred outside this workstream; its
-visual/runtime acceptance is not inferred here.
+landed with #556 included. The later main #558 was merged into this branch on
+2026-10-06 without conflicts. Both GitHub landings occurred outside this
+workstream; their visual/runtime acceptance is not inferred here.
 
 ## Activation contract
 
