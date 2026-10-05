@@ -447,6 +447,42 @@ async function checkMarkers(page, stops, where) {
   return { found, hidden };
 }
 
+test('coordinate origin dots never paint over relocated station discs', { timeout: 180_000 }, async t => {
+  const current = await openRuntime(t);
+  if (!current) return;
+  const problems = [];
+  for (const width of WIDTHS) {
+    for (const [dayName, stops] of Object.entries(DAYS)) {
+      const { context, page, route } = await openDay(current, { width, stops });
+      try {
+        for (const state of width >= 1024 ? ['desktop'] : ['collapsed', 'expanded']) {
+          if (state === 'expanded') {
+            await route.getByRole('button', { name: 'Förstora kartan' }).click();
+            await page.waitForTimeout(SETTLE_MS);
+          }
+          const seen = await route.evaluate(frame => {
+            const centre = element => {
+              const r = element.getBoundingClientRect();
+              return { x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2, radius: r.width / 2 };
+            };
+            const discs = [...frame.querySelectorAll('.route-map-marker')].map(el => ({
+              ...centre(el), radius: el.classList.contains('route-map-marker--event') ? 17.5 : 15,
+              number: el.textContent,
+            }));
+            const origins = [...frame.querySelectorAll('.route-map-marker-origin:not([hidden])')].map(centre);
+            return { discs, origins, overlaps: origins.flatMap((origin, i) => discs.filter(disc =>
+              Math.hypot(origin.x - disc.x, origin.y - disc.y) < origin.radius + disc.radius + 2
+            ).map(disc => ({ origin: i, station: disc.number, distance: Math.hypot(origin.x - disc.x, origin.y - disc.y) }))) };
+          });
+          if (seen.overlaps.length) problems.push({ dayName, width, state, ...seen });
+        }
+      } finally { await context.close(); }
+    }
+  }
+  console.log(JSON.stringify({ originDotCollisions: problems }));
+  assert.deepEqual(problems, [], 'visible coordinate dots must be clear of every station disc, including their own');
+});
+
 for (const width of WIDTHS) {
   test(`route stop numbers on the map at ${width}px, collapsed and expanded`, { timeout: 180_000 }, async (t) => {
     const current = await openRuntime(t);
