@@ -117,8 +117,9 @@ supplier or discovery layer is created. The map layer does not satisfy the local
 calendar/source-mix requirement and cannot suppress local source scouting.
 It is the existing loader's bounded place sample/aperture (normally 1.5 km,
 with its ordinary expansion ceiling of 5 km), not exhaustive coverage of a
-larger Live area. Existing local calendars take precedence under the shared
-source budget; this optional layer has lower priority.
+larger Live area. The shared priority/publisher-diversity budget remains in
+charge; this optional layer uses priority 200 after ordinary calendars' default
+100. Three independent ordinary calendars can fill the budget before OSM.
 
 Only named, active `amenity=marketplace` objects with their exact OSM identity,
 real coordinates and explicit supported weekday/clock rules can contribute.

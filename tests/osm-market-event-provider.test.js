@@ -7,6 +7,7 @@ const { mapOsmElement, resolveDefaultOpenDataLoader } = require("../server/place
 const { collectAnchorEvents, resolveDefaultEventSupply } = require("../server/place-candidates/agnostic-event-supply");
 const { createSourceCache } = require("../server/place-candidates/source-cache");
 const { executeLiveEventQuery } = require("../server/place-candidates/live-event-query");
+const { buildAnchorEventSourcePlan } = require("../server/place-candidates/anchor-event-acquisition");
 
 const ANCHOR = { lat: 48.1173, lng: -1.6778 };
 const NOW = "2026-07-20T06:00:00Z";
@@ -30,6 +31,16 @@ test("OSM mapping preserves marketplace versus indoor hall facts and the existin
   assert.equal(resolveDefaultOpenDataLoader({}), null);
   const loader = resolveDefaultOpenDataLoader({ PARRANDA_OPEN_DATA_LOADER: "enabled" });
   assert.equal(loader.loadOsmPlaces, loader, "ordinary OSM-only deployment shares its actual cached loader");
+});
+
+test("the shared source budget selects three independent ordinary calendars before OSM schedules", () => {
+  const market = osmMarketFeedForAnchor(ANCHOR);
+  const calendars = Array.from({ length: 3 }, (_, index) => ({ id: `local-${index}`,
+    endpoint: `https://calendar-${index}.example/events`, bbox: market.bbox, source_identity: `publisher-${index}` }));
+  const selected = buildAnchorEventSourcePlan({ anchor: ANCHOR, registry: [market, ...calendars] });
+  assert.deepEqual(selected.map(source => source.id).sort(), calendars.map(source => source.id));
+  const supplemental = buildAnchorEventSourcePlan({ anchor: ANCHOR, registry: [market, calendars[0]] });
+  assert.deepEqual(supplemental.map(source => source.id), [calendars[0].id, market.id]);
 });
 
 test("source weekdays project only stated dates, preserve local clocks/geometry/credits and remain unconfirmed", () => {

@@ -17,7 +17,7 @@ function osmMarketFeedForAnchor(anchor) {
   return { id: "osm-market-schedules", label: "OpenStreetMap", adapter: "osm_market_schedules",
     endpoint: "https://www.openstreetmap.org/", bbox: [-180, -90, 180, 90],
     source_identity: "openstreetmap.org", source_family: "recurring_map", source_tier: "inferred",
-    confidence: "low", license: LICENSE, priority: -10, status: "active",
+    confidence: "low", license: LICENSE, priority: 200, status: "active",
     runtime_policy: "bounded_refresh", pulse_only: true };
 }
 
