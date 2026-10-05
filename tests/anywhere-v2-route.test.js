@@ -4,8 +4,8 @@
  * /anywhere route ownership after the old-stack retirement
  * (docs/FRONTEND_MIGRATION_CONTRACT.md "Retired surfaces"): the new frontend is
  * the SOLE owner — no flags, no fallback shell. A missing build fails loudly
- * (503), never silently serves a wrong page. /labs/anywhere is an unconditional
- * redirect that preserves its inputs.
+ * (503) for planner intent, never silently serves a wrong page. No-intent
+ * /anywhere and /labs/anywhere redirect directly home; legacy intent survives.
  */
 
 const assert = require("node:assert/strict");
@@ -69,7 +69,7 @@ test("/anywhere serves the new frontend unconditionally — no flag, request-tim
   }
 });
 
-test("/labs/anywhere is an unconditional redirect that preserves place/planner/lang", async () => {
+test("/labs/anywhere preserves planner intent and sends bare entry directly home", async () => {
   const dist = makeDist();
   try {
     await withServer({ anywhereV2Dir: dist }, async (server) => {
@@ -79,7 +79,7 @@ test("/labs/anywhere is an unconditional redirect that preserves place/planner/l
 
       const bare = await get(server, "/labs/anywhere");
       assert.equal(bare.status, 302);
-      assert.equal(bare.headers.location, "/anywhere?lang=en");
+      assert.equal(bare.headers.location, "/?lang=en");
     });
   } finally {
     fs.rmSync(dist, { recursive: true, force: true });
@@ -90,7 +90,7 @@ test("a missing build fails LOUDLY (503) — never a silently wrong page", async
   const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), "parranda-anywhere-empty-"));
   try {
     await withServer({ anywhereV2Dir: emptyDir }, async (server) => {
-      const page = await get(server, "/anywhere");
+      const page = await get(server, "/anywhere?place=Lyon");
       assert.equal(page.status, 503);
       assert.match(page.body, /Frontend build missing/);
       assert.doesNotMatch(page.body, /__PARRANDA_CITY__/, "no city-shell masquerading as the planner");

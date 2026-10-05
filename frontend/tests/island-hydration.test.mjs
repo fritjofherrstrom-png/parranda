@@ -190,7 +190,7 @@ test("the planner hydrates cleanly for a returning visitor with a stored day", a
   const h = await renderAndHydrate({
     entry: "components/AnywherePlanner.tsx",
     props: { lang: "en" },
-    url: "http://localhost/anywhere?lang=en",
+    url: "http://localhost/anywhere?restore=last&lang=en",
     setupBrowser: (window) => {
       window.localStorage.setItem(LAST_KEY, JSON.stringify(STORED_DAY));
       window.localStorage.setItem(SAVED_KEY, JSON.stringify([STORED_DAY]));
@@ -290,7 +290,7 @@ test("a returning visitor can continue their last day from the landing", async (
   const link = [...h.window.document.querySelectorAll("a")].find((a) => /Continue/.test(a.textContent));
   assert.ok(link, "the last day is offered");
   // The planner restores the stored day on its own when no place is given.
-  assert.equal(link.getAttribute("href"), "/anywhere?lang=en");
+  assert.equal(link.getAttribute("href"), "/anywhere?restore=last&lang=en");
   assert.match(link.textContent, /A day in Barcelona/);
 });
 

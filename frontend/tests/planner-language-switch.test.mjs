@@ -128,12 +128,12 @@ test("a restored near-me snapshot, with no position in memory, switches language
   assert.ok(stored, "the composed near-me day was kept for a reload");
   await first.unmount();
 
-  const h = await mountPlanner({ url: "http://localhost/anywhere?lang=en", storage: { "parranda:anywhere:last": stored } });
+  const h = await mountPlanner({ url: "http://localhost/anywhere?restore=last&lang=en", storage: { "parranda:anywhere:last": stored } });
   t.after(() => h.unmount());
   h.document.addEventListener("click", (event) => event.preventDefault());
   await h.clock.advance(50);
   assert.match(h.text(), /Saved day/, "the snapshot is on screen");
-  assert.equal(languageLink(h, "SV").getAttribute("href"), "?lang=sv", "nothing to hand over: the snapshot restores itself");
+  assert.equal(languageLink(h, "SV").getAttribute("href"), "?restore=last&lang=sv", "nothing to hand over: explicitly restore the snapshot");
   await click(h, languageLink(h, "SV"));
   assert.equal(h.window.sessionStorage.getItem(COORDS_KEY), null);
 });
