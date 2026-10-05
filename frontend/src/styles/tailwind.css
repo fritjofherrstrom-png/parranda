@@ -1,21 +1,172 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* Tailwind 4, CSS-first: no tailwind.config, no PostCSS. The theme maps the
+   role tokens in tokens.css onto utilities. `inline` makes each utility read
+   the token itself (rgb(var(--p-color-ink))), so a theme switch on <html>
+   re-colours everything without a rebuild — and opacity modifiers
+   (text-parranda-ink/65) still work through color-mix. */
+@theme inline {
+  --color-parranda-ink: rgb(var(--p-color-ink));
+  --color-parranda-paper: rgb(var(--p-color-paper));
+  --color-parranda-accent: rgb(var(--p-color-accent));
+  --color-parranda-terracotta: rgb(var(--p-color-terracotta));
+  --color-parranda-ember: rgb(var(--p-color-ember));
+  --color-parranda-clay: rgb(var(--p-color-clay));
+  --color-parranda-glow: rgb(var(--p-color-glow));
+  --color-parranda-live: rgb(var(--p-color-live));
+  --color-parranda-on-live: rgb(var(--p-color-on-live));
+
+  --radius-parranda: var(--p-radius-card);
+  --radius-parranda-btn: var(--p-radius-button);
+
+  --font-display: var(--p-font-display), "Helvetica Neue", Arial, sans-serif;
+  --font-body: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
+  --font-mono: var(--p-font-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+@layer base {
+  /* Tailwind 4 defaults borders to currentColor; Parranda's hairlines are ink
+     at low strength in both themes. */
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: rgb(var(--p-color-ink) / 0.14);
+  }
+
+  /* Tailwind 4 gives buttons the default cursor; every Parranda button is an
+     action. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+}
+
+/* "Linje" type roles. The display face is Archivo on its width axis — wide and
+   heavy like wayfinding signage; data (times, distances, counts, eyebrows) is
+   set in the mono so numbers line up and read as facts. */
+@utility type-display {
+  font-family: var(--p-font-display), "Helvetica Neue", Arial, sans-serif;
+  font-weight: 900;
+  font-stretch: 125%;
+  letter-spacing: -0.02em;
+  line-height: 0.9;
+  text-transform: uppercase;
+}
+
+@utility type-title {
+  font-family: var(--p-font-display), "Helvetica Neue", Arial, sans-serif;
+  font-weight: 900;
+  font-stretch: 112%;
+  letter-spacing: -0.01em;
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+
+@utility type-eyebrow {
+  font-family: var(--p-font-mono), ui-monospace, Menlo, monospace;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+@utility type-data {
+  font-family: var(--p-font-mono), ui-monospace, Menlo, monospace;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+}
+
+/* Leaflet's own stylesheet is lazy-loaded with the map, so it can arrive
+   after this one. Every override below is one step more specific than the
+   Leaflet rule it replaces, so it wins whichever loads last.
+
+   OSM tiles, toned to the theme: greyscale by day, inverted greyscale at night.
+   The route is the only colour on the map. Same provider, same attribution —
+   only a filter on the tile pane (markers and the line are other panes). */
+:root .leaflet-container {
+  background: rgb(var(--p-color-paper));
+  font-family: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
+}
+.leaflet-tile-pane {
+  filter: var(--p-map-tiles);
+}
+.leaflet-container .leaflet-control-attribution {
+  background: rgb(var(--p-color-paper) / 0.85) !important;
+  color: rgb(var(--p-color-ink) / 0.75);
+}
+.leaflet-container .leaflet-control-attribution a {
+  color: rgb(var(--p-color-ink));
+}
+.leaflet-container .leaflet-bar a {
+  background: rgb(var(--p-color-paper));
+  color: rgb(var(--p-color-ink));
+  border-color: rgb(var(--p-color-ink) / 0.14);
+}
+.leaflet-container .leaflet-bar a:hover,
+.leaflet-container .leaflet-bar a:focus {
+  background: rgb(var(--p-color-ink) / 0.08);
+}
+/* Route geometry, coloured by role. CSS outranks the SVG attributes Leaflet
+   writes, so these follow the theme live. */
+.route-map-line {
+  stroke: rgb(var(--p-color-ember));
+}
+.route-map-dot {
+  stroke: rgb(var(--p-color-ember));
+  fill: rgb(var(--p-color-paper));
+}
+.route-map-candidate {
+  stroke: rgb(var(--p-color-ink));
+  fill: rgb(var(--p-color-paper));
+}
+
+.leaflet-container .leaflet-tooltip {
+  border: 0;
+  border-radius: 10px;
+  background: rgb(var(--p-color-ink));
+  color: rgb(var(--p-color-paper));
+  font-family: var(--p-font-body), "Helvetica Neue", Arial, sans-serif;
+  font-weight: 700;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
+}
+.leaflet-container .leaflet-tooltip-top::before {
+  border-top-color: rgb(var(--p-color-ink));
+}
+.leaflet-container .leaflet-tooltip-bottom::before {
+  border-bottom-color: rgb(var(--p-color-ink));
+}
+.leaflet-container .leaflet-tooltip-left::before {
+  border-left-color: rgb(var(--p-color-ink));
+}
+.leaflet-container .leaflet-tooltip-right::before {
+  border-right-color: rgb(var(--p-color-ink));
+}
 
 /* Tailwind's reset leaves keyboard focus dependent on browser defaults, which
    are not visible against Parranda's dark surface in every browser. Keep the
    indicator modality-aware so pointer interactions stay visually quiet while
-   every keyboard-reachable control gets the same high-contrast contract. */
-:where(
-  a[href],
-  button,
-  input,
-  select,
-  textarea,
-  [tabindex]:not([tabindex="-1"])
-):focus-visible {
-  outline: 3px solid rgb(var(--p-color-glow));
-  outline-offset: 3px;
+   every keyboard-reachable control gets the same high-contrast contract.
+   It lives in the base layer so a control that draws focus on its own frame
+   (the landing search: `focus-visible:outline-hidden`) can still opt out —
+   Tailwind 4 puts utilities in a cascade layer, and unlayered CSS would beat
+   every one of them. */
+@layer base {
+  :where(
+    a[href],
+    button,
+    input,
+    select,
+    textarea,
+    [tabindex]:not([tabindex="-1"])
+  ):focus-visible {
+    outline: 3px solid rgb(var(--p-color-glow));
+    outline-offset: 3px;
+  }
 }
 
 /* Numbered map markers. A composed route owns the stronger marker; district
@@ -27,12 +178,13 @@
   width: 28px;
   height: 28px;
   border-radius: 999px;
-  background: rgb(var(--p-color-accent));
-  color: #fff;
-  font-size: 0.85rem;
-  font-weight: 700;
-  border: 2px solid #fffaf3;
-  box-shadow: 0 1px 6px rgba(58, 33, 20, 0.35);
+  background: rgb(var(--p-color-paper));
+  color: rgb(var(--p-color-ink));
+  font-family: var(--p-font-mono), ui-monospace, Menlo, monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 3px solid rgb(var(--p-color-ink));
+  box-shadow: 0 1px 6px rgb(0 0 0 / 0.25);
 }
 
 /* A route stop is drawn twice at the same place (RouteMap.tsx), both as 44px
@@ -61,11 +213,11 @@
   top: calc(50% - var(--route-marker-y, 0px));
   width: 7px;
   height: 7px;
-  border: 1.5px solid #fffaf3;
+  border: 1.5px solid rgb(var(--p-color-paper));
   border-radius: 999px;
-  background: rgb(var(--p-color-accent));
+  background: rgb(var(--p-color-ink));
   transform: translate(-50%, -50%);
-  box-shadow: 0 1px 4px rgba(58, 33, 20, 0.35);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
 }
 
 .route-map-marker {
@@ -79,9 +231,10 @@
   height: 44px;
   border: 0;
   background: transparent;
-  color: #fff;
-  font-size: 0.85rem;
-  font-weight: 700;
+  color: rgb(var(--p-color-ink));
+  font-family: var(--p-font-mono), ui-monospace, Menlo, monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
   box-shadow: none;
   transform: translate(-50%, -50%);
   /* The number is anonymous inline content; isolation keeps it above the
@@ -92,22 +245,27 @@
 .route-map-marker::before {
   position: absolute;
   inset: 7px;
-  border: 2px solid #fffaf3;
+  /* A station: paper disc, ink ring, ink number — the same mark as the stop
+     list, so map and list read as one line. */
+  border: 3px solid rgb(var(--p-color-ink));
   border-radius: 999px;
-  background: rgb(var(--p-color-accent));
-  box-shadow: 0 2px 8px rgba(58, 33, 20, 0.48);
+  background: rgb(var(--p-color-paper));
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.28);
   content: "";
   z-index: -1;
   /* The pin takes the tap on the number too: the number itself does not. */
   pointer-events: auto;
 }
 
+/* A woven live event is a transfer: the Live colour, ringed in paper. */
 .route-map-marker--event::before {
-  background: rgb(var(--p-color-glow));
+  border-color: rgb(var(--p-color-paper));
+  background: rgb(var(--p-color-live));
+  box-shadow: 0 0 0 2.5px rgb(var(--p-color-live)), 0 2px 8px rgb(0 0 0 / 0.28);
 }
 
 .route-map-marker--event {
-  color: rgb(var(--p-color-ink));
+  color: rgb(var(--p-color-on-live));
 }
 
 /* Leaflet defaults to 30px controls. Keep map zoom usable with a thumb without

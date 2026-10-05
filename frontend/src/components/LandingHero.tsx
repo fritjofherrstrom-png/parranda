@@ -6,11 +6,15 @@
  *     the planner via sessionStorage, never the URL).
  * A registered city routes to the modern planner with its server-owned citypack
  * identity; anything else goes to freeform any-city intake. The registry is injected by
- * the server at serve time (a city is data, never code). No fake-live teaser,
- * no static Blitz cards — the surface promises only what it does.
+ * the server at serve time (a city is data, never code). It powers the inline
+ * completion and the routing only: the landing advertises no list of cities
+ * (the hand-picked city stations were removed in October 2026 — they read as a
+ * menu of the only places Parranda works, which is the opposite of the
+ * product). No fake-live teaser, no static Blitz cards — the surface promises
+ * only what it does.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
-import { curatedCityHref, routeForInput, inlineCompletion, type CityRegistry } from "../lib/landing-routing.mjs";
+import { useEffect, useRef, useState } from "react";
+import { routeForInput, inlineCompletion, type CityRegistry } from "../lib/landing-routing.mjs";
 import { storeAnchorCoords, requestPosition } from "../lib/location-anchor.mjs";
 import { LAST_KEY } from "../lib/anywhere-storage.mjs";
 import { liveDateLabel } from "../lib/live-event-query.mjs";
@@ -147,51 +151,40 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
     }
   }
 
-  const curated = useMemo(() => {
-    const seen = new Set<string>();
-    const out: Array<{ key: string; label: string; status?: string }> = [];
-    for (const entry of Object.values(registry)) {
-      if (!entry || !entry.key || seen.has(entry.key)) continue;
-      // Only publicly presentable curated cities get a chip (preview/internal
-      // cities stay searchable-by-name but are not advertised).
-      if (entry.status !== "public" && entry.status !== "beta") continue;
-      seen.add(entry.key);
-      out.push(entry);
-    }
-    return out.sort((a, b) => a.label.localeCompare(b.label));
-  }, [registry]);
-
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-5 py-6 sm:px-8 sm:py-7">
+    <div className="mx-auto flex min-h-svh w-full max-w-6xl flex-col px-4 pt-3 sm:px-8 sm:pt-5">
       <AppBar lang={lang} homeLabel={t("Parranda — till startsidan", "Parranda — home")} languageLabel={t("Språk", "Language")} />
 
-      <main className="flex flex-1 flex-col justify-center gap-6 py-8 sm:gap-8 sm:py-12">
-        <header className="flex flex-col gap-3.5">
-          <h1 className="font-display text-6xl font-semibold leading-[0.95] text-parranda-ink sm:text-7xl">
+      <main className="flex flex-1 flex-col justify-center gap-7 py-10 sm:gap-9 sm:py-16">
+        <header className="flex flex-col gap-4">
+          {/* Signage, not a slogan: the question the whole product answers. */}
+          <h1 className="type-display text-[4rem] leading-[0.86] text-parranda-ink min-[400px]:text-[4.5rem] sm:text-[7rem] lg:text-[10rem]">
             {t("Nästa ", "Next ")}
-            <em className="not-italic text-parranda-ember">{t("stopp?", "stop?")}</em>
+            <br className="sm:hidden" />
+            {t("stopp", "stop")}
+            <em className="not-italic text-parranda-ember">?</em>
           </h1>
-          <p className="max-w-prose text-lg leading-relaxed text-parranda-ink/75">
+          <p className="max-w-md text-lg leading-relaxed text-parranda-ink/75 sm:text-xl">
             {t("Skriv en stad eller plats — eller använd din position.", "Type a city or place — or use your location.")}
           </p>
         </header>
 
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3.5">
           <form onSubmit={submit} className="flex flex-col gap-2 sm:flex-row">
             <label htmlFor="landingCity" className="sr-only">
               {t("Skriv en stad eller plats", "Type a city or place")}
             </label>
-            {/* The field shows focus on its rounded frame, so the input inside
-                does not draw a second, square ring. After a blocked position the
-                frame is highlighted with the SAME ring (at full strength), never
-                an extra outline around it. */}
+            {/* The field shows focus on its frame, so the input inside does
+                not draw a second, square ring. After a blocked position the
+                frame is highlighted with the SAME ring (at full strength),
+                never an extra outline around it. */}
             <div
               className={
-                "flex min-h-14 flex-1 items-center gap-3 rounded-parranda border bg-parranda-ink/6 px-5 transition focus-within:border-parranda-ember focus-within:ring-2 focus-within:ring-parranda-glow/70 " +
-                (geoDenied ? "border-parranda-glow ring-2 ring-parranda-glow" : "border-parranda-ink/16")
+                "flex min-h-[3.75rem] flex-1 items-center gap-3 rounded-parranda border-2 bg-parranda-ink/4 px-5 transition focus-within:border-parranda-ember focus-within:ring-3 focus-within:ring-parranda-glow/60 sm:min-h-16 " +
+                (geoDenied ? "border-parranda-glow ring-3 ring-parranda-glow" : "border-parranda-ink")
               }
             >
-              <SearchIcon className="h-5 w-5 text-parranda-ink/45" />
+              <SearchIcon className="h-5 w-5 text-parranda-ink/68" />
               <input
                 id="landingCity"
                 ref={inputRef}
@@ -200,12 +193,12 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
                 placeholder={t("T.ex. Lyon eller Kyoto", "e.g. Lyon or Kyoto")}
                 autoComplete="off"
                 autoFocus
-                className="min-w-0 flex-1 bg-transparent text-lg text-parranda-ink outline-none placeholder:text-parranda-ink/45 focus-visible:outline-none"
+                className="min-w-0 flex-1 bg-transparent text-lg text-parranda-ink outline-hidden placeholder:text-parranda-ink/68 focus-visible:outline-hidden sm:text-xl"
               />
             </div>
             <button
               type="submit"
-              className="min-h-14 whitespace-nowrap rounded-parranda bg-parranda-terracotta px-7 text-base font-bold text-white shadow-sm transition hover:brightness-110"
+              className="min-h-[3.75rem] whitespace-nowrap rounded-parranda bg-parranda-terracotta px-8 text-[17px] font-extrabold text-white transition [font-stretch:110%] hover:brightness-110 sm:min-h-16 sm:text-lg"
             >
               {t("Bygg min dag", "Build my day")}
             </button>
@@ -216,18 +209,18 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
               type="button"
               onClick={useLocation}
               disabled={locating}
-              className="inline-flex min-h-12 items-center gap-2 rounded-full border border-parranda-ember/50 bg-parranda-ember/8 px-5 text-[15px] font-bold text-parranda-clay transition hover:bg-parranda-ember/15 disabled:opacity-60"
+              className="inline-flex min-h-12 items-center gap-2 rounded-full border-[1.5px] border-parranda-ink/22 px-5 text-[15px] font-bold text-parranda-ink transition hover:border-parranda-ink/55 disabled:opacity-60"
             >
-              <LocationIcon className="h-4 w-4" />
+              <LocationIcon className="h-4 w-4 text-parranda-ember" />
               {locating ? t("Hämtar position …", "Getting location …") : t("Använd min position", "Use my location")}
             </button>
-            <span className="text-[13px] text-parranda-ink/65">
+            <span className="text-[13px] text-parranda-ink/68">
               {t("Hela dagen planeras runt din position.", "The day is planned around where you are.")}
             </span>
           </div>
 
           {geoDenied && (
-            <p className="text-[13px] leading-relaxed text-parranda-ink/65" aria-live="polite">
+            <p className="text-[13px] leading-relaxed text-parranda-ink/72" aria-live="polite">
               {t(
                 "Positionen blockerades — inga problem. Skriv en stad eller plats i stället.",
                 "Location was blocked — no problem. Type a city or place instead.",
@@ -236,49 +229,26 @@ export default function LandingHero({ lang: initialLang = "en" }: { lang?: Lang 
           )}
         </div>
 
-        {/* Cities with a hand-picked catalog. The label says what a visitor
-            gets (places someone chose), not how it is made, and sits on its
-            own line so the chips share one row even at 320 px. */}
-        {curated.length > 0 && (
-          <section className="flex flex-col gap-2" aria-labelledby="landingCurated">
-            <p id="landingCurated" className="text-xs font-extrabold uppercase tracking-[0.16em] text-parranda-glow">
-              {t("Handplockat i", "Hand-picked in")}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {curated.map((city) => (
-                <a
-                  key={city.key}
-                  href={curatedCityHref(city, lang) ?? "/anywhere"}
-                  className="inline-flex min-h-11 items-center rounded-full border border-parranda-ink/16 px-4 text-sm font-semibold text-parranda-ink transition hover:border-parranda-ember"
-                >
-                  {city.label}
-                </a>
-              ))}
-            </div>
-          </section>
-        )}
-
         {/* A returning visitor's last day is one tap away; the planner restores
             it as a labelled snapshot and offers a fresh rebuild. */}
         {resume && (
           <a
             href={`/anywhere?lang=${lang}`}
-            className="group inline-flex min-h-12 items-center gap-2 self-start rounded-parranda-btn border border-parranda-ink/12 bg-parranda-ink/[0.04] px-4 text-sm text-parranda-ink/75 transition hover:border-parranda-ember hover:text-parranda-ink"
+            className="group flex min-h-14 items-center gap-3 self-stretch rounded-parranda-btn bg-parranda-ink px-4 text-sm text-parranda-paper transition hover:brightness-125 sm:self-start"
           >
-            <span>
-              <span className="font-bold text-parranda-ink">{t("Fortsätt", "Continue")}</span>
-              {" · "}
+            <span className="type-eyebrow text-parranda-paper/72">{t("Fortsätt", "Continue")}<span className="sr-only"> · </span></span>
+            <span className="min-w-0 flex-1">
               {resume.place ? t(`En dag i ${resume.place}`, `A day in ${resume.place}`) : t("Din senaste dag", "Your last day")}
-              {resume.dateIso ? ` · ${liveDateLabel(resume.dateIso, lang)}` : ""}
+              {resume.dateIso ? <span className="text-parranda-paper/72"> · {liveDateLabel(resume.dateIso, lang)}</span> : ""}
             </span>
-            <ChevronRightIcon className="h-4 w-4 text-parranda-ember transition group-hover:translate-x-0.5" />
+            <ChevronRightIcon className="h-4 w-4 transition group-hover:translate-x-0.5" />
           </a>
         )}
       </main>
 
-      <footer className="flex items-center justify-between border-t border-parranda-ink/10 pt-4 text-sm text-parranda-ink/50">
+      <footer className="type-data flex items-center justify-between border-t-[1.5px] border-parranda-ink/14 py-4 text-[11px] text-parranda-ink/68">
         <span>Parranda</span>
-        <em className="font-display text-[15px]">{t("din rutt, din stad", "your route, your city")}</em>
+        <span>{t("din rutt, din stad", "your route, your city")}</span>
       </footer>
     </div>
   );

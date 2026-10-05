@@ -243,7 +243,11 @@ async function openDay({ browser, origin }, { width, stops }) {
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.clock.setFixedTime(FIXED_NOW);
   await page.goto(`${origin}/anywhere?place=Testville&lang=sv`);
-  const route = page.getByRole("region", { name: "Rutten" });
+  // Phones draw the map inside the route section; from 64rem the planner puts
+  // the same map beside the day, sticky, with no expand control.
+  const route = width >= 1024
+    ? page.getByRole("complementary", { name: "Karta över dagen" })
+    : page.getByRole("region", { name: "Rutten" });
   await route.locator(".route-map-marker").nth(stops.length - 1).waitFor();
   await route.getByText("Ritar kartan …").waitFor({ state: "detached" });
   return { context, page, route, pageErrors };
@@ -255,7 +259,7 @@ async function openDay({ browser, origin }, { width, stops }) {
 // the viewport), then finds the numbers drawn under another disc, and checks
 // what a tap on each visible number, and around its disc, would hit.
 function measureMarkers() {
-  const container = document.querySelector('section[aria-label="Rutten"] .leaflet-container');
+  const container = document.querySelector('section[aria-label="Rutten"] .leaflet-container, aside[aria-label="Karta över dagen"] .leaflet-container');
   container.scrollIntoView({ block: "center" });
   const frame = container.parentElement;
   const map = container.getBoundingClientRect();
@@ -333,7 +337,7 @@ function measureMarkers() {
 
 // Runs in the page: where each marker's disc is now.
 function markerCentres() {
-  return [...document.querySelectorAll('section[aria-label="Rutten"] .route-map-marker')].map((element) => {
+  return [...document.querySelectorAll('section[aria-label="Rutten"] .route-map-marker, aside[aria-label="Karta över dagen"] .route-map-marker')].map((element) => {
     const rect = element.getBoundingClientRect();
     return { name: `marker ${element.textContent.trim()}`, x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2 };
   });
@@ -353,7 +357,7 @@ function openNames() {
 // mouse right after a tap (the test parks it off the map), which closes the
 // name again; a phone has no mouse to go back to. What counts is what opened.
 function recordTaps() {
-  const pane = document.querySelector('section[aria-label="Rutten"] .leaflet-tooltip-pane');
+  const pane = document.querySelector('section[aria-label="Rutten"] .leaflet-tooltip-pane, aside[aria-label="Karta över dagen"] .leaflet-tooltip-pane');
   window.tapRecord = { clicked: false, opened: [] };
   new MutationObserver(() => {
     for (const tooltip of pane.querySelectorAll(".leaflet-tooltip")) {
@@ -453,7 +457,7 @@ for (const width of WIDTHS) {
       const { context, page, route, pageErrors } = await openDay(current, { width, stops });
       try {
         await page.evaluate(recordTaps);
-        for (const state of ["collapsed", "expanded"]) {
+        for (const state of width >= 1024 ? ["beside the day"] : ["collapsed", "expanded"]) {
           if (state === "expanded") {
             await route.getByRole("button", { name: "Förstora kartan" }).click();
             await page.waitForTimeout(SETTLE_MS);

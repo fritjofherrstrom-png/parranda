@@ -37,10 +37,13 @@ test('every number is legible and opens its own stop at 320/390/1280, collapsed/
   let browser,server;
   try {
     const entry=path.join(temp,'entry.tsx');
-    await fs.writeFile(entry,`import React from 'react'; import {createRoot} from 'react-dom/client'; import RouteMap from '../src/components/planner/RouteMap'; import '../src/styles/tailwind.css';
+    await fs.writeFile(entry,`import React from 'react'; import {createRoot} from 'react-dom/client'; import RouteMap from '../src/components/planner/RouteMap';
 function Harness(){const [expanded,setExpanded]=React.useState(false);const [stops,setStops]=React.useState([]);window.setDay=setStops;return <section aria-label="Rutten"><RouteMap hasPrimaryRoute={true} routeStops={stops} primaryRoute={{map_path_points:stops}} areas={[]} routeContextSuggestions={[]} showContext={false} sketch={true} mapExpanded={expanded} onToggleExpanded={()=>setExpanded(!expanded)} heightClass={expanded?'h-[420px]':'h-[190px]'} t={(sv)=>sv}/></section>} createRoot(document.getElementById('root')).render(<Harness/>);`);
     await require(path.join(frontend,'node_modules/esbuild')).build({entryPoints:[entry],bundle:true,outdir:temp,format:'iife',jsx:'automatic',loader:{'.png':'dataurl'},logLevel:'silent'});
-    execFileSync(process.execPath,[path.join(frontend,'node_modules/tailwindcss/lib/cli.js'),'-i',path.join(frontend,'src/styles/tailwind.css'),'-o',path.join(temp,'tailwind.css'),'--content',`${entry},${frontend}/src/components/planner/RouteMap.tsx`],{cwd:frontend,stdio:'pipe'});
+    // Production Tailwind (v4, CSS-first): the real tokens and stylesheet, scanned
+    // over the harness and the real RouteMap only.
+    await fs.writeFile(path.join(temp,'input.css'),`@import ${JSON.stringify(path.join(frontend,'src/styles/tokens.css'))};\n@import ${JSON.stringify(path.join(frontend,'src/styles/tailwind.css'))};\n@source not ${JSON.stringify(path.join(frontend,'src'))};\n@source ${JSON.stringify(entry)};\n@source ${JSON.stringify(path.join(frontend,'src/components/planner/RouteMap.tsx'))};\n`);
+    execFileSync(process.execPath,[path.join(frontend,'node_modules/@tailwindcss/cli/dist/index.mjs'),'-i',path.join(temp,'input.css'),'-o',path.join(temp,'tailwind.css')],{cwd:frontend,stdio:'pipe'});
     server=http.createServer(async(req,res)=>{try{const file=req.url==='/'?null:path.join(temp,path.basename(req.url)); res.setHeader('Content-Type',req.url.endsWith('.js')?'application/javascript':req.url.endsWith('.css')?'text/css':'text/html');res.end(file?await fs.readFile(file):'<meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/entry.css"><link rel="stylesheet" href="/tailwind.css"><div id="root" style="margin:12px"></div><script src="/entry.js"></script>');}catch{res.statusCode=404;res.end();}}).listen(0,'127.0.0.1');
     await new Promise(r=>server.once('listening',r));
     const origin=`http://127.0.0.1:${server.address().port}`;

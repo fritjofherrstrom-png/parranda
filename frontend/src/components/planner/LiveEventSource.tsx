@@ -15,7 +15,7 @@ export function liveEventSource(event: PulseEvent, lang: Lang) {
   const listedBy = String(event.source_label || "").trim();
   if (!event.source_url || (!listedBy && !link)) return null;
   return (
-    <span className="text-parranda-ink/50">
+    <span className="text-parranda-ink/68">
       {listedBy && <>{" · "}via&nbsp;{listedBy}</>}
       {link && (
         <>

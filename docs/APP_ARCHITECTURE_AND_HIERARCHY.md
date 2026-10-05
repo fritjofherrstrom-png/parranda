@@ -163,6 +163,20 @@ Proposed next steps, in order:
    chips, segmented controls and notice cards; a handful of primitives in
    `components/ui/` would make the design system explicit.
 
+**October 2026 ("Linje" redesign):** steps 3 and 4 are done for the markup.
+The planner renders `AnchorCard`, `DayHeader`, `StopLine`, `CandidateAreas`,
+`LiveCard`, `BlitzCard` and `SavedDays` from `components/planner/`, with
+primitives in `components/shared/ui.tsx`; the orchestrator keeps every
+request, race guard and ledger write and hands the pieces its own functions by
+name. Steps 1 and 2 (the day view-model and the hooks split) remain the next
+work. The same change moved the frontend to Tailwind 4 and Astro 7; see
+`frontend/README.md` for the stack and the design tokens.
+
+The landing no longer lists hand-picked cities (October 2026). The list read
+as a menu of the only places Parranda works, which is the opposite of the
+any-place product. The city registry still drives inline completion and
+routes an exact registered name to its citypack.
+
 **Source-text pins make refactors expensive.** Many contract tests assert that
 exact source strings exist (`assert.match(source, /…/)`). They caught real
 regressions, but this tidy-up had to re-point a dozen of them. Suggested rule:

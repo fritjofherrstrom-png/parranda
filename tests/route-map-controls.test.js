@@ -210,7 +210,12 @@ async function openDay({ browser, origin }, { width, stops }) {
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.clock.setFixedTime(FIXED_NOW);
   await page.goto(`${origin}/anywhere?place=Testville&lang=sv`);
-  const route = page.getByRole("region", { name: "Rutten" });
+  // Phones draw the map inside the route section; from 64rem the planner puts
+  // the same map beside the day, sticky, at the window's height, with no
+  // expand control (there is nothing left to expand into).
+  const route = width >= 1024
+    ? page.getByRole("complementary", { name: "Karta över dagen" })
+    : page.getByRole("region", { name: "Rutten" });
   await route.locator(".route-map-marker").nth(stops.length - 1).waitFor();
   await route.getByText("Ritar kartan …").waitFor({ state: "detached" });
   return { context, page, route, pageErrors };
@@ -219,8 +224,10 @@ async function openDay({ browser, origin }, { width, stops }) {
 // Runs in the page: every marker's visible disc (the 44px marker's ::before)
 // against the map and each control, by geometry and by hit test. It may scroll
 // the page.
-function measureMap(expandNames) {
-  const frame = document.querySelector('section[aria-label="Rutten"] .leaflet-container').parentElement;
+function measureMap({ expandNames, sideMap = false }) {
+  const frame = document.querySelector(
+    sideMap ? 'aside[aria-label="Karta över dagen"] .leaflet-container' : 'section[aria-label="Rutten"] .leaflet-container',
+  ).parentElement;
   const box = (element) => {
     const rect = element.getBoundingClientRect();
     return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
@@ -232,7 +239,7 @@ function measureMap(expandNames) {
     expandNames.includes((button.getAttribute("aria-label") || button.textContent || "").trim()),
   );
   const controls = {
-    "the expand button": expand,
+    ...(sideMap ? {} : { "the expand button": expand }),
     "the zoom bar": frame.querySelector(".leaflet-control-zoom"),
     "the attribution": frame.querySelector(".leaflet-control-attribution"),
   };
@@ -271,16 +278,18 @@ function measureMap(expandNames) {
   });
   // A tap on each disc's centre, once all geometry above is read (scrolling
   // moves everything). elementFromPoint sees only the viewport, and the
-  // expanded map reaches below the fold, so a disc outside it is scrolled into
-  // view first. A centre that still cannot be hit-tested is a check that did
-  // not run: it fails.
+  // expanded map reaches below the fold, so a disc that is not wholly inside
+  // the viewport is scrolled to its middle first. "Wholly", not "centre
+  // inside": elementFromPoint hit-tests whole pixels, so a centre in the last
+  // fractional row (y 843.8 of 844) is outside it and returns null. A centre
+  // that still cannot be hit-tested is a check that did not run: it fails.
   for (const { marker, name } of discs) {
     const centre = () => {
       const rect = marker.getBoundingClientRect();
-      return { x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2 };
+      return { x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2, top: rect.top, bottom: rect.bottom };
     };
-    let { x, y } = centre();
-    if (y < 0 || y >= innerHeight) {
+    let { x, y, top, bottom } = centre();
+    if (top < 0 || bottom > innerHeight) {
       window.scrollBy(0, y - innerHeight / 2);
       ({ x, y } = centre());
     }
@@ -305,25 +314,57 @@ function measureMap(expandNames) {
 
 const EXPAND_NAMES = ["Förstora kartan", "Förminska kartan"];
 
+// The hit test itself, at the edge that failed in CI (run 37232695990): a
+// marker whose centre lies in the viewport's last fractional pixel row. The
+// day's layout decides where the map falls, so the page is nudged until marker
+// 1's centre sits 0.2px above the fold, exactly; the check must still reach it.
+test("a marker centred in the viewport's last fractional pixel row is still hit-tested", { timeout: 120_000 }, async (t) => {
+  const current = await openRuntime(t);
+  if (!current) return;
+  const { context, page } = await openDay(current, { width: 390, stops: DAYS["diagonal, Live stop north-east"] });
+  try {
+    const centreY = () => page.evaluate(() => {
+      const rect = document.querySelector('section[aria-label="Rutten"] .route-map-marker').getBoundingClientRect();
+      return { y: (rect.top + rect.bottom) / 2, innerHeight, scrollY };
+    });
+    const start = await centreY();
+    assert.equal(start.scrollY, 0);
+    // Move the whole day down (or up) by the difference, keeping layout intact.
+    const shift = start.innerHeight - 0.2 - start.y;
+    await page.addStyleTag({ content: `main { position: relative; top: ${shift}px; }` });
+    const placed = await centreY();
+    assert.ok(placed.y < placed.innerHeight && placed.y > placed.innerHeight - 1, `marker 1 centre at ${placed.y} of ${placed.innerHeight}`);
+    const measured = await page.evaluate(measureMap, { expandNames: EXPAND_NAMES });
+    assert.deepEqual(measured.problems.filter((p) => /could not be hit-tested/.test(p)), []);
+  } finally {
+    await context.close();
+  }
+});
+
 for (const width of WIDTHS) {
   test(`route markers stay clear of the map controls at ${width}px, collapsed and expanded`, { timeout: 180_000 }, async (t) => {
     const current = await openRuntime(t);
     if (!current) return;
     const problems = [];
+    const sideMap = width >= 1024;
     for (const [dayName, stops] of Object.entries(DAYS)) {
       const { context, page, route, pageErrors } = await openDay(current, { width, stops });
       try {
         const states = {};
-        for (const state of ["collapsed", "expanded", "collapsed again"]) {
+        for (const state of sideMap ? ["collapsed"] : ["collapsed", "expanded", "collapsed again"]) {
           if (state !== "collapsed") {
             await route.getByRole("button", { name: state === "expanded" ? "Förstora kartan" : "Förminska kartan" }).click();
             await page.waitForTimeout(SETTLE_MS);
           }
-          const measured = await page.evaluate(measureMap, EXPAND_NAMES);
+          const measured = await page.evaluate(measureMap, { expandNames: EXPAND_NAMES, sideMap });
           states[state] = measured;
           const where = `${dayName} at ${width}px, ${state}`;
           if (measured.markers !== stops.length) problems.push(`${where}: ${measured.markers} of ${stops.length} markers drawn`);
           problems.push(...measured.problems.map((problem) => `${where}: ${problem}`));
+        }
+        if (sideMap) {
+          if (pageErrors.length) problems.push(`${dayName} at ${width}px: the Planner threw: ${pageErrors.join("; ")}`);
+          continue;
         }
         const { collapsed, expanded } = states;
         const collapsedAgain = states["collapsed again"];
@@ -355,10 +396,10 @@ test("the expanded map shows a phone's day closer than the collapsed one", { tim
   if (!current) return;
   const { context, page, route } = await openDay(current, { width: 320, stops: DAYS["diagonal, Live stop north-east"] });
   try {
-    const collapsed = await page.evaluate(measureMap, EXPAND_NAMES);
+    const collapsed = await page.evaluate(measureMap, { expandNames: EXPAND_NAMES });
     await route.getByRole("button", { name: "Förstora kartan" }).click();
     await page.waitForTimeout(SETTLE_MS);
-    const expanded = await page.evaluate(measureMap, EXPAND_NAMES);
+    const expanded = await page.evaluate(measureMap, { expandNames: EXPAND_NAMES });
     // A 192px strip holds this day a zoom level further out than the 384px map.
     assert.ok(
       expanded.spread > collapsed.spread * 1.5,
@@ -378,13 +419,13 @@ test("a delayed shrink refits to the rendered mobile size after the old timer bo
     await page.evaluate(() => {
       document.querySelector('section[aria-label="Rutten"] .leaflet-container').parentElement.style.transitionDuration = "1200ms";
     });
-    const original = await page.evaluate(measureMap, EXPAND_NAMES);
+    const original = await page.evaluate(measureMap, { expandNames: EXPAND_NAMES });
     for (const name of ["Förstora kartan", "Förminska kartan"]) {
       await route.getByRole("button", { name }).click();
       // Controlled CSS duration, not a wait for provider completion. This must
       // expose the former timer fitting before the final rendered height.
       await page.waitForTimeout(1600);
-      const measured = await page.evaluate(measureMap, EXPAND_NAMES);
+      const measured = await page.evaluate(measureMap, { expandNames: EXPAND_NAMES });
       assert.equal(measured.markers, stops.length);
       assert.deepEqual(measured.problems, [], name);
       if (name === "Förminska kartan") {
