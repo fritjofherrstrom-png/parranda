@@ -59,12 +59,22 @@ Two themes follow the day: `day` (light) from 06 to 18 local time, `night`
 otherwise. The reader can switch in the app bar; the choice is kept in
 `localStorage` (`parranda:theme`). `layouts/Shell.astro` writes
 `<html data-theme>` before first paint, and nothing React renders depends on it,
-so hydration never disagrees with the static build. Map tiles are the same OSM
-tiles, toned per theme with a CSS filter; the route is the only colour on the
-map.
+so hydration never disagrees with the static build.
+
+The map is MapLibre GL (pinned, 6.12.0) over OpenFreeMap's vector tiles
+(OpenMapTiles schema, OpenStreetMap data). Its style is built in
+`lib/route-map-style.mjs`: real day and night palettes from the Linje tokens, no
+icons or POIs, town names only when zoomed out, so the day's stops are the only
+points and the route the only colour. A theme switch recolours the drawn map in
+place. MapLibre 6 needs WebGL2; without it (or after a lost graphics context)
+the map becomes one status line and the day stays whole. When the tiles cannot
+be fetched the route still draws over paper. The worker is bundled by Vite
+(`?worker&url`); a future CSP needs `worker-src 'self'` and `connect-src` for
+tiles.openfreemap.org. OpenFreeMap is free with no stated limits, which is not an
+SLA; self-hosting tiles (PMTiles) is a separate decision.
 
 On screens from 64rem the planner splits: the day on the left, the map sticky
-beside it. It is one Leaflet map either way, mounted where it is shown.
+beside it. It is one map either way, mounted where it is shown.
 
 The honesty classifier is shared with the server tests from the repository root
 (`anywhere-render-decision.js`).

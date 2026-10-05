@@ -1,6 +1,6 @@
 /**
  * Whether a CSS media query matches, for layout decisions CSS alone cannot make
- * (moving the one Leaflet map beside the day on wide screens).
+ * (moving the one map beside the day on wide screens).
  *
  * Built on useSyncExternalStore with a server snapshot of `false`: the static
  * build and the first client render agree (narrow), and React re-renders with

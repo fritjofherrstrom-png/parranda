@@ -1614,7 +1614,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
   // LAYOUT. Phones read one column: the day, its map, its line, then "now".
   // Wide screens keep the day on the left and give the map the rest of the
-  // window, sticky beside it — one Leaflet map either way, mounted where it is
+  // window, sticky beside it — one map instance either way, mounted where it is
   // shown (the static build and the first client render are the phone layout).
   const wideScreen = useMediaQuery("(min-width: 64rem)");
   const dayWithRoute = showDay && routeStops.length > 0;
