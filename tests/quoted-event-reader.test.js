@@ -90,6 +90,17 @@ test("failed model requests, refusals and invented evidence do not become health
   }
 });
 
+test("a page licence declaration cannot override an explicit source restriction", async () => {
+  let reads = 0;
+  const scout = await scoutLocalEventSources({ seeds: [{ url: sourceUrl, terms_status: "restricted" }],
+    anchor: { lat: 55.6, lng: 13 }, maxLinkedPages: 0,
+    eventReader: async () => { reads++; throw new Error("must not read restricted source"); },
+    fetcher: async (url) => new Response(url.endsWith("robots.txt") ? "User-agent: *\nAllow: /" :
+      '<link rel="license" href="https://creativecommons.org/licenses/by/4.0/"><link rel="alternate" type="text/calendar" href="/events.ics">'),
+  });
+  assert.equal(reads, 0); assert.deepEqual(scout.manifest_candidates, []);
+});
+
 test("unlicensed association news becomes Live supply after two machine probes, with quotes and no route promotion", async () => {
   const read = createQuotedEventReader({ apiKey: "test", fetcher: async () => apiResponse([extraction()]) });
   const fetcher = async (url) => new Response(url.endsWith("/robots.txt") ? "User-agent: *\nAllow: /" : `<html lang="sv"><p>${extraction().excerpt}</p></html>`, { headers: { "content-type": "text/html" } });

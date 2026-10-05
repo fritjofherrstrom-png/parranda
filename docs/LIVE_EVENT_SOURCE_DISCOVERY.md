@@ -260,8 +260,10 @@ probe cannot manufacture readiness. This verdict never changes
 `runtime_review` or creates a human approval. Machine-qualified event supply is
 enabled by default (`PARRANDA_QUALIFIED_SOURCE_RUNTIME=disabled` opts out). A
 repeatedly healthy exact source enters short-lived, low-confidence, Pulse-only
-probation automatically. Ordinary adapters retain `open_license` /
-`api_terms_compatible` requirements. The main quoted document reader can instead
+probation automatically. An actual `robots_status=allowed` binding also permits
+verified structured event atoms with unknown rights, without a licence claim
+and without source-scope geometry fallback. Missing permission metadata is not
+a universal human-approval gate. The main quoted document reader can use
 use `public_factual_evidence`: exact short quotes and deterministic date/time
 checks, factual atoms only, no open licence claim. Explicit restrictions and
 permission-required sources remain blocked. A probation feed is never route

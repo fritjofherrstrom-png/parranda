@@ -55,6 +55,12 @@ const FIXTURES = [
     anchor: { lat: 40.2033, lng: -8.4103 },
     timezone: "Europe/Lisbon",
   },
+  {
+    place: "Kelso", countryCode: "gb", language: "en", discoveryTerm: "events",
+    title: "Evening concert in the square", expectedAdapter: "ical",
+    expectedAccepted: 1, expectedSurfaced: 1, anchor: { lat: 55.599, lng: -2.434 },
+    timezone: "Europe/London", omitLicense: true,
+  },
 ];
 
 function loaded(records = []) {
@@ -95,7 +101,7 @@ function sourcePage(fixture) {
   }
   return [
     `<html lang="${fixture.language}"><head>`,
-    '<link rel="license" href="https://creativecommons.org/licenses/by/4.0/">',
+    fixture.omitLicense ? "" : '<link rel="license" href="https://creativecommons.org/licenses/by/4.0/">',
     '<link rel="alternate" type="text/calendar" href="/events.ics">',
     "</head><body><h1>Local calendar</h1></body></html>",
   ].join("");
@@ -299,7 +305,7 @@ async function runColdLoop(fixture) {
   assert.equal(qualifiedFeeds.length, 1);
   assert.equal(qualifiedFeeds[0].runtime_trust, "qualified_probationary");
   assert.equal(qualifiedFeeds[0].pulse_only, true);
-  assert.equal(qualifiedFeeds[0].license, "https://creativecommons.org/licenses/by/4.0/");
+  assert.equal(qualifiedFeeds[0].license, fixture.omitLicense ? undefined : "https://creativecommons.org/licenses/by/4.0/");
 
   const warming = await supply(request);
   assert.equal(warming.pending, true);
@@ -347,7 +353,7 @@ test("cold source discovery reaches low-trust Live across unrelated places and l
         : result.sourceUrl,
     );
     assert.equal(candidate.adapter, fixture.expectedAdapter);
-    assert.equal(candidate.terms_status, "open_license");
+    assert.equal(candidate.terms_status, fixture.omitLicense ? "unknown" : "open_license");
     assert.equal(qualification.status, "qualified_for_review");
     assert.equal(qualification.candidates[0].healthy_probe_count, 2);
     assert.equal(qualification.candidates[0].event_bearing_probe_count, 2);
@@ -356,7 +362,7 @@ test("cold source discovery reaches low-trust Live across unrelated places and l
       `${fixture.place} should surface the collected occurrence: ${JSON.stringify(result.live)}`,
     );
     assert.equal(event.route_eligible, false);
-    assert.equal(event.license, "https://creativecommons.org/licenses/by/4.0/");
+    assert.equal(event.license, fixture.omitLicense ? null : "https://creativecommons.org/licenses/by/4.0/");
     assert.ok(event.salience_score >= 7);
     assert.equal(result.live.acquisition.source_health.accepted_event_count, fixture.expectedAccepted);
     assert.equal(result.live.acquisition.source_health.surfaced_event_count, fixture.expectedSurfaced);

@@ -242,7 +242,8 @@ function inspectEventSourcePage({
 
   const source = String(html || "");
   const links = extractHtmlLinks(source, pageUrl);
-  const declaredLicense = extractDeclaredOpenLicense(links);
+  const declaredLicense = ["restricted", "permission_required"].includes(seed.terms_status)
+    ? null : extractDeclaredOpenLicense(links);
   const effectiveSeed = {
     ...seed,
     source_language: firstString(seed.source_language, extractHtmlLanguage(source)),

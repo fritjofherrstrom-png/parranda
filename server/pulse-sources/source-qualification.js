@@ -128,6 +128,7 @@ function bindManifestCandidate(manifest, candidate, { qualifiedRuntime = false }
     sourceLanguage: publicString(manifest.source_language) || publicString(candidate.source_language),
     sourceTier: publicString(manifest.source_tier) || publicString(candidate.trust_tier) || "unknown",
     termsStatus: publicString(manifest.review?.terms_status) || publicString(candidate.terms_status) || "unknown",
+    robotsStatus: publicString(manifest.review?.robots_status) || publicString(manifest.robots_status) || "unknown",
     timezone: publicString(manifest.timezone),
     timezoneOffset: publicString(manifest.timezone_offset),
     eventPathPrefix: publicString(manifest.event_path_prefix),
@@ -222,7 +223,9 @@ function buildCandidateQualification({ binding, observation, previous, observedA
   const latest = observations[0];
   const reasons = [];
   if (!previousMatches && previous) reasons.push("qualification_history_reset");
-  if (binding.termsStatus !== "open_license" && binding.termsStatus !== "api_terms_compatible") {
+  if (binding.termsStatus === "unknown" && binding.robotsStatus === "allowed") {
+    reasons.push("public_factual_publication", "rights_not_claimed");
+  } else if (!PROBATIONARY_TERMS_STATUSES.has(binding.termsStatus)) {
     reasons.push("terms_review_required");
   }
   if (!latest) reasons.push("source_probe_evidence_required");
@@ -288,7 +291,8 @@ function eventFeedsFromQualifiedSourceProfiles(
       if (
         !binding ||
         qualificationIdentity(state) !== qualificationIdentity(binding) ||
-        !PROBATIONARY_TERMS_STATUSES.has(binding.termsStatus) ||
+        !(PROBATIONARY_TERMS_STATUSES.has(binding.termsStatus) ||
+          (binding.termsStatus === "unknown" && binding.robotsStatus === "allowed")) ||
         (binding.termsStatus === "public_factual_evidence" && binding.adapter !== "quoted_public_document")
       ) continue;
       const latest = (Array.isArray(state.observations) ? state.observations : [])
@@ -311,7 +315,7 @@ function eventFeedsFromQualifiedSourceProfiles(
         source_health: "qualified_probationary",
         runtime_trust: "qualified_probationary",
         pulse_only: true,
-        source_scoped_pulse: true,
+        source_scoped_pulse: binding.termsStatus !== "unknown",
         profile_key: profileKey,
         profile_qualified_at: latest.observed_at,
         profile_expires_at: expiresAt,
@@ -408,10 +412,11 @@ function sourceRowForBinding(binding) {
     confidence: "low",
     source_family: binding.sourceFamily,
     source_identity: binding.sourceIdentity,
-    license: binding.license,
+    license: binding.termsStatus === "unknown" ? null : binding.license,
     status: "active",
     runtime_policy: "bounded_refresh",
     terms_status: binding.termsStatus,
+    robots_status: binding.robotsStatus,
     source_scoped_pulse: bindingAllowsSourceScopedPulse(binding),
   });
 }

@@ -55,8 +55,12 @@ evidence of document reading, not an ownership or trust upgrade.
 `public_factual_evidence` permits these verified event atoms without inventing
 an open licence. It applies only to the quote-verifying reader. It is not a
 permission bypass for arbitrary adapters; explicit restricted / permission-
-required terms and robots exclusions remain blockers. Structured calendar feeds
-continue to require compatible API terms or an open licence. Display keeps the
+required terms and robots exclusions remain blockers. Structured public event
+atoms can also publish automatically with unknown rights after the actual robots
+allowance, exact binding and repeated event probes are verified. Such feeds keep
+rights unknown, clear speculative provider licence defaults and require actual
+venue geometry rather than source-scope fallback. This removes the universal
+manual licence-proof prerequisite; it does not grant rights to prose or media. Display keeps the
 actual URL and destination classification, with no URL recovery.
 
 ## Generic national and recurring layers

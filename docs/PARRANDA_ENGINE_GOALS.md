@@ -17,8 +17,11 @@ model coordinates, ownership promotion or translated quotation is evidence.
 PDF text extraction / independent OCR supplies document text; OCR uncertainty
 or unverifiable quotes fail honestly. Public factual extraction need not pretend
 the publisher granted an open licence. `public_factual_evidence` is restricted to
-the quoted reader; explicit restricted / permission-required terms and robots
-exclusions remain blockers. Never label unknown rights as open data.
+the quoted reader. Structured public event atoms can also enter probation with
+unknown rights when actual robots allowance and repeated event verification are
+present; an open licence is not a universal activation prerequisite. Explicit
+restricted / permission-required terms and robots exclusions remain blockers.
+Never label unknown rights as open data.
 
 Country-wide provider layers are legitimate generic supply, not region hacks:
 DATAtourisme, festivos.io, OpenHolidays and source-backed OSM weekly schedules

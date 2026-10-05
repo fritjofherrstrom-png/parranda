@@ -24,7 +24,9 @@ or popularity service, and a directory-only place remains provisional.
 
 The stack includes an optional Postgres-backed geo Source Catalog and bounded
 source-scout worker. It persists discovered source profiles as review-needed
-records and lets the web runtime read only fresh, operator-approved profiles.
+records and lets the web runtime read fresh approved sources and machine-
+qualified event probation sources. Stable place sources retain their separate
+operator-approval gate.
 It is disabled by default. Public requests may record a deduplicated demand for
 a resolver-attested bounded place, but never perform or wait for discovery.
 

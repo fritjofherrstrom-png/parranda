@@ -260,7 +260,7 @@ test("fresh qualification can become a low-trust Pulse-only probation feed", asy
   assert.equal(second.qualification.activation_performed, false, "probation is not source approval");
 });
 
-test("a repeatedly proven reviewed-adapter candidate may enter probation only with compatible terms", async () => {
+test("a repeatedly proven adapter can publish factual atoms with unknown rights and verified robots, without a licence claim", async () => {
   const candidateOverrides = {
     url: "https://civic.example/news/program",
     adapter: "official_program_article",
@@ -306,9 +306,16 @@ test("a repeatedly proven reviewed-adapter candidate may enter probation only wi
   const unclear = structuredClone(second.profile);
   unclear.source_families[0].candidates[0].terms_status = "unknown";
   unclear.source_qualification.candidates[0].runtime_candidate.terms_status = "unknown";
-  assert.deepEqual(eventFeedsFromQualifiedSourceProfiles([unclear], {
+  const publicFacts = eventFeedsFromQualifiedSourceProfiles([unclear], {
     now: "2026-08-10T10:00:00Z",
-  }), []);
+  });
+  assert.equal(publicFacts.length, 1);
+  assert.equal(publicFacts[0].license, undefined);
+  assert.equal(publicFacts[0].pulse_only, true);
+  assert.equal(publicFacts[0].source_scoped_pulse, false);
+  assert.equal(publicFacts[0].terms_status, "unknown");
+  unclear.source_qualification.candidates[0].runtime_candidate.robots_status = "unknown";
+  assert.deepEqual(eventFeedsFromQualifiedSourceProfiles([unclear], { now: "2026-08-10T10:00:00Z" }), []);
 });
 
 test("probation rejects stale, drifted, unclear-terms and activated qualification data", async () => {

@@ -1129,6 +1129,8 @@ function applyReviewedSourceTrust(rawEvent = {}, source = {}) {
 
   return {
     ...rawEvent,
+    ...(source.runtime_trust === "qualified_probationary" && source.terms_status === "unknown"
+      ? { provenance: { ...(rawEvent.provenance || {}), license: null } } : {}),
     // Trust and ownership are reviewed descriptor facts. Provider rows may
     // lower per-event confidence, but may never upgrade or relabel the source.
     // That includes the DISPLAY label: the reviewed row's label ("Helsinki
