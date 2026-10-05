@@ -128,7 +128,7 @@ function buildAgnosticEngineCityConfig({
     sourceCandidates: usableCandidates,
     // Server-owned any-place depth policy. This sits on the constructed config,
     // not the public request payload, so callers cannot promote their own route.
-    __agnosticDayProfile: dayProfile === "light" || dayProfile === "peak" ? dayProfile : null,
+    __agnosticDayProfile: ["light", "variation", "peak"].includes(dayProfile) ? dayProfile : null,
     services: buildAgnosticNoopServices(),
   };
 }
@@ -361,7 +361,7 @@ function mapPlannerReservoirToSourceCandidates({
   const focusedRhythm = Boolean(dayRhythm) && normalizeUserIntents(requestedIntents || []).intents.length === 1;
   // Preserve safe same-interest depth instead of spending the reservoir on
   // unrequested roles. Experimental depth retains its existing two-place cap.
-  const boundedPerRole = focusedRhythm ? 5 : Math.min(3, Math.max(1, Math.trunc(Number(perRole) || 2)));
+  const boundedPerRole = focusedRhythm ? 6 : Math.min(3, Math.max(1, Math.trunc(Number(perRole) || 2)));
 
   for (const roleEntry of Array.isArray(plannerRoles?.roles) ? plannerRoles.roles : []) {
     const role = roleEntry?.role;
