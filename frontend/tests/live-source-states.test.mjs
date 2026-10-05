@@ -51,8 +51,8 @@ async function click(h, control) {
   assert.ok(control, 'control exists');
   await h.act(() => control.dispatchEvent(new h.window.Event('click', { bubbles: true })));
 }
-async function composed(liveEvents) {
-  const h = await mountPlanner({ url: 'http://localhost/anywhere?place=Testville&lang=en' });
+async function composed(liveEvents, lang = 'en') {
+  const h = await mountPlanner({ url: `http://localhost/anywhere?place=Testville&lang=${lang}` });
   await h.clock.advance(500);
   await h.fetchMock.respond(h.fetchMock.pending()[0], day(liveEvents));
   await h.clock.advance(50);
@@ -91,6 +91,90 @@ test('a responding empty calendar is stated as what the sources list, not as a q
   t.after(() => h.unmount());
   assert.ok(h.text().includes('The sources responded but list no events for this period.'), h.text());
   assert.doesNotMatch(h.text(), /quiet calendar|couldn't fetch|couldn't verify/);
+  await click(h, button(h, /Explore live/));
+  assert.match(sheetText(h), /The sources responded but list no events for this period\./);
+  assert.doesNotMatch(sheetText(h), /Nothing listed|couldn't verify|Listings existed/);
+});
+
+const EMPTY_STATES = [
+  {
+    name: 'uncovered',
+    events: live({ status: 'uncovered', result: 'unknown' }, { coverage: 'uncovered', feeds: [] }),
+    en: "No live-events feed reaches this place yet — Parranda won't invent one.",
+    sv: 'Ingen live-eventkälla täcker den här platsen än — Parranda hittar inte på en.',
+  },
+  {
+    name: 'healthy but every listing rejected',
+    events: live({ status: 'healthy', result: 'empty', selected_source_count: 1,
+      responding_source_count: 1, raw_event_count: 4, normalized_event_count: 4,
+      rejected_event_count: 4, reasons: ['all_event_evidence_rejected'] },
+    { feeds: [{ id: 'calendar', label: 'Official calendar', status: 'empty' }] }),
+    en: 'Listings existed, but none were reliable or current enough to show.',
+    sv: 'Det fanns listningar, men inga var pålitliga eller aktuella nog att visa.',
+  },
+  {
+    name: 'unavailable without source-failure counts',
+    events: live({ status: 'unavailable', result: 'unknown' }, { feeds: [] }),
+    en: "Parranda couldn't verify events right now — try again shortly.",
+    sv: 'Parranda kunde inte verifiera händelser just nu — försök igen om en stund.',
+  },
+];
+
+for (const state of EMPTY_STATES) for (const lang of ['en', 'sv']) {
+  test(`the ${lang} Live sheet distinguishes ${state.name} from an empty calendar`, async (t) => {
+    const h = await composed(state.events, lang);
+    t.after(() => h.unmount());
+    assert.ok(h.text().includes(state[lang]), h.text());
+    const composeCount = h.fetchMock.calls.filter((call) => call.url.includes('/api/route-recommendations')).length;
+    await click(h, button(h, /Explore live|Utforska live/));
+    // Opening an unavailable cell uses the existing query; release its result
+    // rather than asserting the intermediate loading presentation.
+    const query = h.fetchMock.pending().find((call) => call.url.includes('/api/live-events'));
+    if (query) await h.fetchMock.respond(query, queryBody(state.events));
+    const sheet = sheetText(h);
+    assert.ok(sheet.includes(state[lang]), sheet);
+    assert.doesNotMatch(sheet, /Nothing listed|Nothing verified|Inget listat|Inget verifierat|The sources responded but list no events|Källorna svarade men listar inga/);
+    assert.doesNotMatch(sheet, /with events|med träffar/);
+    assert.equal(h.fetchMock.calls.filter((call) => call.url.includes('/api/route-recommendations')).length, composeCount);
+    if (state.name.startsWith('unavailable')) {
+      assert.ok([...h.container.querySelector('[role="dialog"]').querySelectorAll('button')]
+        .some((control) => /^(Try again|Försök igen)$/.test(control.textContent)), 'verification failure keeps its retry');
+    }
+    await click(h, button(h, lang === 'en' ? /^Fri 25 Sept$/ : /^fre 25 sep\.$/));
+    const selectedDayQuery = h.fetchMock.pending().find((call) => call.url.includes('/api/live-events'));
+    assert.ok(selectedDayQuery);
+    assert.equal(selectedDayQuery.body.time, 'tonight');
+    assert.equal(selectedDayQuery.body.selected_date, '2026-09-25');
+    await h.fetchMock.respond(selectedDayQuery, queryBody(state.events));
+    assert.ok(sheetText(h).includes(state[lang]), sheetText(h));
+    assert.doesNotMatch(sheetText(h), /Nothing verified|Inget verifierat|The sources responded but list no events|Källorna svarade men listar inga/);
+    assert.equal(h.fetchMock.calls.filter((call) => call.url.includes('/api/route-recommendations')).length, composeCount);
+  });
+}
+
+test('a genuinely empty selected period preserves events in the other period', async (t) => {
+  const following = { id: 'following', title: 'Following-day concert', starts_at: '2026-09-26T17:00:00Z',
+    timezone: 'Europe/Stockholm' };
+  const h = await composed(live({ status: 'healthy', result: 'events_found', selected_source_count: 1,
+    responding_source_count: 1, accepted_event_count: 1, surfaced_event_count: 1 },
+  { this_week: [following], feeds: [{ id: 'calendar', label: 'Official calendar', status: 'ok' }] }));
+  t.after(() => h.unmount());
+  await click(h, button(h, /See all live/));
+  assert.match(sheetText(h), /Following-day concert/);
+  await click(h, button(h, /^Fri 25 Sept$/));
+  const query = h.fetchMock.pending().find((call) => call.url.includes('/api/live-events'));
+  assert.ok(query);
+  await h.fetchMock.respond(query, queryBody(live({ status: 'healthy', result: 'events_found',
+    selected_source_count: 1, responding_source_count: 1, accepted_event_count: 1, surfaced_event_count: 1 },
+  { this_week: [following], feeds: [{ id: 'calendar', label: 'Official calendar', status: 'ok' }] })));
+  assert.match(sheetText(h), /Nothing verified Fri 25 Sept around Testville/);
+  assert.match(sheetText(h), /One event is listed in the following 7 days\./);
+  assert.doesNotMatch(sheetText(h), /The sources responded but list no events|Listings existed|couldn't verify/);
+  await click(h, button(h, /^Show following days$/));
+  await h.fetchMock.respond(h.fetchMock.pending().find((call) => call.url.includes('/api/live-events')),
+    queryBody(live({ status: 'healthy', result: 'events_found', selected_source_count: 1,
+      responding_source_count: 1, accepted_event_count: 1, surfaced_event_count: 1 }, { this_week: [following] })));
+  assert.match(sheetText(h), /Following-day concert/);
 });
 
 // Observed in the #506 Pi review (Malmö): the municipal source returned 18 rows,
