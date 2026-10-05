@@ -55,7 +55,9 @@ test("the modern planner owns curated city links and sends their citypack identi
 });
 
 test("curated mode hides actions whose current APIs would silently lose citypack identity", () => {
-  assert.match(anywherePlannerSource, /!cityKey && !serviceRefusal && !anchorUnresolved && \(\s*<div[^>]*>\s*<button\s+type="button"\s+onClick=\{blitz\}/);
+  // Blitz is offered only outside curated mode, and the offer is one button.
+  assert.match(componentSource("AnywherePlanner.tsx"), /!cityKey && !serviceRefusal && !anchorUnresolved && \(\s*<BlitzCard\b[\s\S]{0,240}blitz=\{blitz\}/);
+  assert.match(componentSource("planner/BlitzCard.tsx"), /<div[^>]*>\s*<button\s+type="button"\s+onClick=\{blitz\}/);
   assert.match(anywherePlannerSource, /!cityKey && hasRealId/);
   assert.match(anywherePlannerSource, /!cityKey && candidateId/);
 });
@@ -184,7 +186,9 @@ test("the surface renders the engine's TRUSTWORTHY richness — and never the co
   assert.match(anywherePlannerSource, /typeLabel\(stop\?\.type, lang\)/);
   assert.match(anywherePlannerSource, /\{stopKindLabel\}/);
   // Unknown opening hours are visible on the stop row, not only when expanded.
-  assert.match(anywherePlannerSource, /hoursUnknown && \(\s*<span className="text-xs text-parranda-ink\/55">\{t\("Öppettider okända", "Hours unknown"\)\}/);
+  // Said once when it holds for every stop; otherwise on exactly the stops it holds for.
+  assert.match(anywherePlannerSource, /hoursUnknown && !hoursUnknownEverywhere && \(\s*<span className="inline-flex items-center gap-1 text-xs text-parranda-ink\/68">[\s\S]{0,120}\{t\("Öppettider okända", "Hours unknown"\)\}/);
+  assert.match(anywherePlannerSource, /hoursUnknownEverywhere = split\.core\.length > 1 && split\.core\.every\(\(stop: any\) => stopHoursUnknown\(stop\)\)/);
   assert.match(anywherePlannerSource, /DAYPART_LABELS, stop\.daypart/);
   // NEVER rendered: fields that can carry baseline-city phrasing or placeholder
   // labels on the agnostic path (verified live: date_signals said "i Rom" for a
@@ -271,9 +275,9 @@ test("route result has one authoritative route and keeps broader candidates seco
 
 test("map hierarchy mirrors route authority instead of numbering two competing plans", () => {
   assert.match(anywherePlannerSource, /routeMarkerPresentation\(routeStops\)/);
-  assert.match(anywherePlannerSource, /className: "route-map-marker-shell"/);
-  assert.match(anywherePlannerSource, /--route-marker-x:\$\{shiftX\}px/);
-  assert.match(anywherePlannerSource, /routeContextSuggestions\.forEach/);
+  assert.match(anywherePlannerSource, /shell\.className = "route-map-marker-shell"/);
+  assert.match(anywherePlannerSource, /origin\.style\.setProperty\("--route-marker-x", `\$\{shiftX\}px`\)/);
+  assert.match(anywherePlannerSource, /routeContextSuggestions\.filter/);
   assert.match(anywherePlannerSource, /if \(hasPrimaryRoute\)/);
   // Candidates are NEVER sequenced: the no-route branch draws plain dots only —
   // no numbered markers, no connecting arc (only the route branch may polyline).
@@ -281,14 +285,14 @@ test("map hierarchy mirrors route authority instead of numbering two competing p
   const routeMapSource = componentSource("planner/RouteMap.tsx");
   const noRouteBranch = routeMapSource.split("} else {")[1] ?? "";
   assert.match(noRouteBranch, /No route exists: these are CANDIDATES/, "the no-route branch is the one inspected");
-  assert.doesNotMatch(noRouteBranch.slice(0, 1200), /polyline|divIcon/);
+  assert.doesNotMatch(noRouteBranch.slice(0, 1200), /LineString|Marker\(|route-map-marker/);
   // Optional detour dots join the map only while their list is open, so no
   // mark on the map is left without its explanation.
-  assert.match(routeMapSource, /if \(showContext\) \{\s*routeContextSuggestions\.forEach/);
+  assert.match(routeMapSource, /if \(showContext\) \{\s*const shown = routeContextSuggestions\.filter/);
   assert.match(componentSource("AnywherePlanner.tsx"), /showContext=\{detoursOpen\}/);
   // A line joining the stops' own coordinates is drawn as a sketch (dotted),
   // never as a street path Parranda did not compute.
-  assert.match(routeMapSource, /sketch\s*\?\s*\{[^}]*dashArray/);
+  assert.match(routeMapSource, /"line-dasharray", sketch \? \[[\d., ]+\] : null/);
   assert.match(componentSource("AnywherePlanner.tsx"), /routePathIsSketch\(primaryRoute\?\.map_path_points, routeStops\.length\)/);
 });
 
@@ -402,28 +406,31 @@ test("compact planner and map controls keep a 44px mobile touch target", () => {
     anywherePlannerSource,
     /aria-expanded=\{mapExpanded\}\s*aria-label=\{mapExpanded \? t\("Förminska kartan", "Shrink map"\) : t\("Förstora kartan", "Expand map"\)\}[\s\S]{0,260}min-h-11 min-w-11/,
   );
-  assert.match(anywhereStyles, /\.leaflet-control-zoom a\s*\{[\s\S]*width: 44px !important;/);
-  assert.match(anywhereStyles, /\.leaflet-control-zoom a\s*\{[\s\S]*height: 44px !important;/);
-  // A route stop's disc and its touch target are 44px icons, anchored where the
-  // disc is drawn (beside its coordinate when clustered).
-  assert.match(anywherePlannerSource, /const iconAnchor: \[number, number\] = \[22 - shiftX, 22 - shiftY\]/);
-  assert.equal(componentSource("planner/RouteMap.tsx").match(/iconSize: \[44, 44\],?\s*iconAnchor[,\s]/g)?.length, 2);
+  assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-ctrl-group button\s*\{[\s\S]*width: 44px;/);
+  assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-ctrl-group button\s*\{[\s\S]*height: 44px;/);
+  // A route stop's disc and its touch target are 44px markers, both drawn where
+  // the disc is (beside its coordinate when clustered).
+  const routeMapSource = componentSource("planner/RouteMap.tsx");
+  assert.match(routeMapSource, /new ml\.Marker\(\{ element: target, anchor: "center", offset: \[shiftX, shiftY\] \}\)/);
+  assert.match(routeMapSource, /new ml\.Marker\(\{ element: shell, anchor: "center", offset: \[shiftX, shiftY\] \}\)/);
+  assert.match(anywhereStyles, /\.route-map-marker-shell,\s*\.route-map-target\s*\{[^}]*width: 44px;[^}]*height: 44px;/);
   assert.match(anywhereStyles, /\.route-map-marker\s*\{[\s\S]*width: 44px;/);
   assert.match(anywhereStyles, /\.route-map-marker\s*\{[\s\S]*height: 44px;/);
 });
 
 test("a route stop's visible number is its own tap target", () => {
   const routeMapSource = componentSource("planner/RouteMap.tsx");
-  // The touch targets have a pane of their own beneath every stop's disc (the
-  // marker pane is 600): no stop's target reaches over a neighbour's number.
-  assert.match(routeMapSource, /map\.createPane\(TARGET_PANE\)\.style\.zIndex = TARGET_PANE_Z_INDEX/);
-  assert.ok(Number(routeMapSource.match(/const TARGET_PANE_Z_INDEX = "(\d+)"/)?.[1]) < 600);
-  assert.match(routeMapSource, /className: "route-map-target"[\s\S]{0,120}pane: TARGET_PANE,[\s\S]{0,80}keyboard: false/);
-  // On the disc's side only the visible pin takes a tap, never the icon box.
-  assert.match(anywhereStyles, /\.leaflet-container \.leaflet-marker-icon\.route-map-marker-shell\s*\{\s*pointer-events: none;/);
+  // The touch targets sit beneath every stop's disc: no stop's target reaches
+  // over a neighbour's number. The target is no keyboard stop; the disc is.
+  assert.match(routeMapSource, /target\.style\.zIndex = "1";\s*shell\.style\.zIndex = String\(1200 \+ index\);/);
+  assert.match(routeMapSource, /shell\.tabIndex = 0;/);
+  assert.doesNotMatch(routeMapSource, /target\.tabIndex/);
+  // On the disc's side only the visible pin takes a tap, never the marker box.
+  assert.match(anywhereStyles, /\.route-map-frame \.maplibregl-marker\.route-map-marker-shell\s*\{\s*pointer-events: none;/);
   assert.match(anywhereStyles, /\.route-map-marker::before\s*\{[^}]*pointer-events: auto;/);
   // The disc and its target open one name.
-  assert.match(routeMapSource, /L\.featureGroup\(\[target, disc\]\)[\s\S]{0,120}stopLayers\.bindTooltip/);
+  assert.match(routeMapSource, /target\.addEventListener\("mouseenter", open\);[\s\S]{0,200}target\.addEventListener\("click", open\);/);
+  assert.match(routeMapSource, /disc\.addEventListener\("mouseenter", open\);[\s\S]{0,200}disc\.addEventListener\("click", open\);/);
 });
 
 test("route, saved-day, Blitz, and source actions keep a 44px mobile touch target", () => {

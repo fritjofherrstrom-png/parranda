@@ -3,8 +3,8 @@
 /**
  * A tap on a route stop's visible number opens that stop.
  *
- * Each numbered marker was a transparent 72px Leaflet icon, so that a clustered
- * stop's disc could be drawn up to 36px beside its coordinate, and Leaflet
+ * Each numbered marker was once a transparent 72px map icon, so that a clustered
+ * stop's disc could be drawn up to 36px beside its coordinate, and the map
  * stacks markers by screen y. The lower of two stops drawn about 40px apart
  * covered its neighbour's number: at 390px a tap or hover on stop 3 opened
  * stop 2's name. Leaving only the 44px box around each disc tappable is not
@@ -12,15 +12,15 @@
  * apart, and a neighbour's 44px box still covered a visible number.
  *
  * Now a stop is drawn twice at the same place (RouteMap.tsx), both as 44px
- * icons anchored where its disc is drawn: its disc and number in Leaflet's
- * marker pane, and its touch target in a pane beneath every disc.
+ * markers where its disc is drawn: its disc and number stacked above every
+ * stop's touch target, and its touch target beneath every disc.
  *
  * This opens the real Planner in Chromium at 320, 390 and 1280px, collapsed and
  * expanded, and checks every marker whose number is visible:
  *   - the element at the centre of its disc is its own disc;
  *   - hovering its number, and tapping it on a touch screen, opens its own
  *     stop's name and no other, and the taps leave the map where it was (a
- *     tapped marker takes the focus, and Leaflet pans a focused marker's whole
+ *     tapped marker takes the focus, and a map that pans a focused marker's whole
  *     icon into view: the 72px icon moved the map up to 12px);
  *   - around its disc, wherever no other stop and no map control is drawn, the
  *     element under the pointer is its 44px target, and hovering there opens
@@ -243,7 +243,11 @@ async function openDay({ browser, origin }, { width, stops }) {
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.clock.setFixedTime(FIXED_NOW);
   await page.goto(`${origin}/anywhere?place=Testville&lang=sv`);
-  const route = page.getByRole("region", { name: "Rutten" });
+  // Phones draw the map inside the route section; from 64rem the planner puts
+  // the same map beside the day, sticky, with no expand control.
+  const route = width >= 1024
+    ? page.getByRole("complementary", { name: "Karta över dagen" })
+    : page.getByRole("region", { name: "Rutten" });
   await route.locator(".route-map-marker").nth(stops.length - 1).waitFor();
   await route.getByText("Ritar kartan …").waitFor({ state: "detached" });
   return { context, page, route, pageErrors };
@@ -255,7 +259,7 @@ async function openDay({ browser, origin }, { width, stops }) {
 // the viewport), then finds the numbers drawn under another disc, and checks
 // what a tap on each visible number, and around its disc, would hit.
 function measureMarkers() {
-  const container = document.querySelector('section[aria-label="Rutten"] .leaflet-container');
+  const container = document.querySelector('section[aria-label="Rutten"] .maplibregl-map, aside[aria-label="Karta över dagen"] .maplibregl-map');
   container.scrollIntoView({ block: "center" });
   const frame = container.parentElement;
   const map = container.getBoundingClientRect();
@@ -273,14 +277,14 @@ function measureMarkers() {
       radius: (rect.right - rect.left) / 2 - inset,
       // The stop's touch target is the same 44px box, drawn in the pane beneath.
       half: (rect.right - rect.left) / 2,
-      // Leaflet stacks markers by this: the higher one is drawn on top.
-      z: Number(element.closest(".leaflet-marker-icon").style.zIndex) || 0,
+      // Discs stack by this: the higher one is drawn on top.
+      z: Number(element.closest(".maplibregl-marker").style.zIndex) || 0,
     };
   });
   // A number is hidden when its centre lies under a disc drawn above it.
   const coveredBy = (marker) =>
     markers.filter((other) => other.z > marker.z && Math.hypot(marker.x - other.x, marker.y - other.y) < other.radius);
-  const controls = [...frame.querySelectorAll(".leaflet-control, [data-map-control]")].map((element) => element.getBoundingClientRect());
+  const controls = [...frame.querySelectorAll(".maplibregl-ctrl, [data-map-control]")].map((element) => element.getBoundingClientRect());
   const centredOn = (element) => {
     const rect = element.getBoundingClientRect();
     const x = (rect.left + rect.right) / 2;
@@ -296,7 +300,7 @@ function measureMarkers() {
     if (target) return { owner: centredOn(target), what: "touch target" };
     const icon = element?.closest(".route-map-marker-shell");
     if (icon) return { owner: markers.find((marker) => icon.contains(marker.element)), what: "icon" };
-    if (element?.closest(".leaflet-control, [data-map-control]")) return { owner: null, what: "a map control" };
+    if (element?.closest(".maplibregl-ctrl, [data-map-control]")) return { owner: null, what: "a map control" };
     return { owner: null, what: element ? `<${element.tagName.toLowerCase()} class="${element.className}">` : "nothing" };
   };
   const describe = ({ owner, what }) =>
@@ -333,16 +337,16 @@ function measureMarkers() {
 
 // Runs in the page: where each marker's disc is now.
 function markerCentres() {
-  return [...document.querySelectorAll('section[aria-label="Rutten"] .route-map-marker')].map((element) => {
+  return [...document.querySelectorAll('section[aria-label="Rutten"] .route-map-marker, aside[aria-label="Karta över dagen"] .route-map-marker')].map((element) => {
     const rect = element.getBoundingClientRect();
     return { name: `marker ${element.textContent.trim()}`, x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2 };
   });
 }
 
-// Runs in the page: the names Leaflet has open, or null. A closed tooltip
-// fades out at opacity 0 before it is removed.
+// Runs in the page: the names the map has open, or null. A closed name is
+// removed.
 function openNames() {
-  const names = [...document.querySelectorAll(".leaflet-tooltip-pane .leaflet-tooltip")]
+  const names = [...document.querySelectorAll("[data-route-map] .route-map-tooltip")]
     .filter((tooltip) => tooltip.style.opacity !== "0")
     .map((tooltip) => tooltip.textContent.trim());
   return names.length ? names : null;
@@ -353,10 +357,10 @@ function openNames() {
 // mouse right after a tap (the test parks it off the map), which closes the
 // name again; a phone has no mouse to go back to. What counts is what opened.
 function recordTaps() {
-  const pane = document.querySelector('section[aria-label="Rutten"] .leaflet-tooltip-pane');
+  const pane = document.querySelector('section[aria-label="Rutten"] [data-route-map], aside[aria-label="Karta över dagen"] [data-route-map]');
   window.tapRecord = { clicked: false, opened: [] };
   new MutationObserver(() => {
-    for (const tooltip of pane.querySelectorAll(".leaflet-tooltip")) {
+    for (const tooltip of pane.querySelectorAll(".route-map-tooltip")) {
       if (tooltip.style.opacity !== "0") window.tapRecord.opened.push(tooltip.textContent.trim());
     }
   }).observe(pane, { childList: true, subtree: true, attributes: true, attributeFilter: ["style"] });
@@ -364,7 +368,7 @@ function recordTaps() {
     window.tapRecord.clicked = true;
   }, true);
   // The test taps one stop after another within milliseconds, which Chromium
-  // reads as a double tap, and Leaflet zooms the map in on one. A person
+  // reads as a double tap, and the map zooms in on one. A person
   // tapping the next stop does not; keep every tap a single tap.
   document.addEventListener("dblclick", (event) => event.stopPropagation(), true);
 }
@@ -390,7 +394,7 @@ async function nameOpenedByTap(page, x, y) {
     window.tapRecord = { clicked: false, opened: [] };
   });
   await page.touchscreen.tap(x, y);
-  // Polled on the next frame, after Leaflet has handled the click.
+  // Polled on the next frame, after the map has handled the click.
   const record = await page
     .waitForFunction(() => window.tapRecord.clicked && window.tapRecord, null, { timeout: 2_000 })
     .catch(() => null);
@@ -422,13 +426,13 @@ async function checkMarkers(page, stops, where) {
   // so that it closes the last name and opens none while the touch screen taps.
   await page.mouse.move(1, 1);
   for (const { name, x, y } of visible) {
-    // Leaflet counts two touch taps within 200ms of Date.now() as a double tap
+    // A map counts two quick touch taps as a double tap
     // and zooms in. The clock is fixed, so move it on as a person's taps would.
     await moveClockOn(page);
     expect(name, `tapping ${name}'s number`, await nameOpenedByTap(page, x, y));
   }
 
-  // A tapped marker takes the focus, and Leaflet pans a focused marker's icon
+  // A tapped marker takes the focus, and a map may pan a focused marker's icon
   // into view. The icons are the 44px boxes the fit keeps on the map, so no tap
   // may move it. (The pan runs on the page's clock: move it on, then look.)
   await moveClockOn(page);
@@ -453,7 +457,7 @@ for (const width of WIDTHS) {
       const { context, page, route, pageErrors } = await openDay(current, { width, stops });
       try {
         await page.evaluate(recordTaps);
-        for (const state of ["collapsed", "expanded"]) {
+        for (const state of width >= 1024 ? ["beside the day"] : ["collapsed", "expanded"]) {
           if (state === "expanded") {
             await route.getByRole("button", { name: "Förstora kartan" }).click();
             await page.waitForTimeout(SETTLE_MS);

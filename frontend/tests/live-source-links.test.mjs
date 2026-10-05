@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mountPlanner } from './helpers/planner-harness.mjs';
+import { LAST_KEY } from '../src/lib/anywhere-storage.mjs';
 
 // Mounted Planner with controlled transport and fixture URLs. It proves how
 // every Live surface renders the server's link classification
@@ -66,10 +67,10 @@ function composedDay() {
   agnostic_route_output_experiment: { promotion: { promote: true }, source_status: { anchor: { lat: 60.17, lng: 24.94 } } } };
 }
 
-async function composed(lang = 'en') {
+async function composed(lang = 'en', response = composedDay()) {
   const h = await mountPlanner({ url: `http://localhost/anywhere?place=Testville&lang=${lang}` });
   await h.clock.advance(500);
-  await h.fetchMock.respond(h.fetchMock.pending()[0], composedDay());
+  await h.fetchMock.respond(h.fetchMock.pending()[0], response);
   await h.clock.advance(50);
   return h;
 }
@@ -85,6 +86,60 @@ const linkText = (anchor) => anchor.textContent.replace(/\s*↗$/, '');
 const livePanel = (h) => [...h.container.querySelectorAll('section')]
   .find((section) => /^Live (i|in) Testville/.test(section.querySelector('p')?.textContent || ''));
 const occurrences = (text, pattern) => (text.match(pattern) || []).length;
+
+for (const lang of ['en', 'sv']) test(`${lang} Live credits survive without URLs and stay escaped in both periods`, async (t) => {
+  const credit = '<img src=x onerror=alert(1)> & Source owner';
+  const credited = (event) => ({ ...event, sources: [
+    { attribution: `  ${credit}  ` }, { attribution: credit },
+    { attribution: 'Another publisher' }, { attribution: ' ' }, { attribution: null },
+  ] });
+  const home = credited(HOME);
+  const json = credited(liveEvent('json', 'JSON source', 'https://api.example/events/42/?format=json', ['page', 'api.example']));
+  const noUrl = credited({ id: 'no-url', title: 'Credit without URL', source_label: FEED });
+  const creditOnly = credited({ id: 'credit-only', title: 'Credit without feed or URL' });
+  const events = { ...liveEvents(), selected_date: '2026-09-25',
+    tonight: [home, json, noUrl, creditOnly], this_week: [home, json, noUrl, creditOnly],
+    browse: { tonight: { more: [credited(LOCALE_ROOT)] }, this_week: { more: [credited(LOCALE_ROOT)] } },
+  };
+  const response = composedDay();
+  response.live_events = events;
+  const h = await composed(lang, response);
+  t.after(() => h.unmount());
+  const assertCredits = (root, count) => {
+    assert.equal(root.textContent.split(credit).length - 1, count, 'each row shows a deduplicated source credit');
+    assert.equal(root.textContent.split('Another publisher').length - 1, count);
+    assert.equal(root.querySelectorAll('img').length, 0, 'credits are text, not HTML');
+    assert.ok(root.innerHTML.includes('&lt;img'), 'React escapes supplied credit text');
+    assert.equal(anchorsTo(root, json.source_url)[0].getAttribute('href'), json.source_url);
+    assert.equal(linkText(anchorsTo(root, json.source_url)[0]), 'api.example', 'JSON is only labelled by its host');
+    assert.equal(linkText(anchorsTo(root, HOME.source_url)[0]), lang === 'en'
+      ? 'Homepage: museum.example.com (not the event page)'
+      : 'Startsida: museum.example.com (inte evenemangssidan)');
+    assert.match(root.textContent, /Visit Example · CC-BY 4\.0/);
+    const noUrlRow = [...root.querySelectorAll('li')].find((row) => row.textContent.includes(noUrl.title));
+    assert.match(noUrlRow.textContent, /via\sVisit Example/);
+    assert.equal(noUrlRow.querySelectorAll('a').length, 0);
+  };
+  assertCredits(livePanel(h), 4);
+  const savedDay = h.readStorage(LAST_KEY);
+  assert.ok(savedDay, 'a published day exists before Live exploration');
+  const composeCount = h.fetchMock.calls.filter((call) => call.url.includes('/api/route-recommendations')).length;
+  await click(h, button(h, /See all live|Se allt live/));
+  for (const period of ['this_week', 'tonight']) {
+    await click(h, button(h, period === 'this_week'
+      ? /^(Following 7 days|Följande 7 dagar)$/ : /^(Fri 25 Sept|fre 25 sep\.)$/));
+    const query = h.fetchMock.pending().find((call) => call.url.includes('/api/live-events'));
+    assert.equal(query.body.time, period);
+    await h.fetchMock.respond(query, { contract: 'live_event_query_v1', route_mutation: false,
+      day_anchor_mutation: false, live_events: events });
+    const sheet = h.container.querySelector('[role="dialog"]');
+    sheet.querySelector('details').open = true;
+    assertCredits(sheet, 5);
+    assert.deepEqual(h.readStorage(LAST_KEY), savedDay);
+  }
+  await h.clock.advance(120000);
+  assert.equal(h.fetchMock.calls.filter((call) => call.url.includes('/api/route-recommendations')).length, composeCount);
+});
 
 function assertHonestRows(root, { homepage, page, lang = 'en' }) {
   const [home] = anchorsTo(root, HOME.source_url);

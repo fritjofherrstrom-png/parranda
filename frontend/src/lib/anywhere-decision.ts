@@ -1,11 +1,15 @@
 /**
  * Typed bridge to the SHARED honesty module at the repo root
- * (anywhere-render-decision.js). One honesty rule for both apps — the UMD
- * attaches to globalThis when no CommonJS `module` exists (Vite/browser), and
- * node tests require() it directly.
+ * (anywhere-render-decision.js). One honesty rule for both apps.
+ *
+ * The module is UMD: it exports through `module.exports` when a CommonJS
+ * `module` exists and attaches to globalThis otherwise. Which branch a bundler
+ * takes is the bundler's business — Vite 8 (Rolldown) wraps it as CommonJS, so
+ * a bare side-effect import no longer leaves a global behind — so the bridge
+ * reads the module's own export first and the global only as a fallback.
  */
-// @ts-ignore — UMD side-effect module outside the workspace root (fs.allow: '..')
-import "../../../anywhere-render-decision.js";
+// @ts-ignore — UMD module outside the workspace root (fs.allow: '..')
+import * as sharedDecisionModule from "../../../anywhere-render-decision.js";
 
 export type AnywhereStatus =
   | "composed"
@@ -34,8 +38,13 @@ interface AnywhereDecisionApi {
   shouldRetryTransientSource(response: unknown, classification?: AnywhereClassification): boolean;
 }
 
+function isDecisionApi(value: unknown): value is AnywhereDecisionApi {
+  return Boolean(value) && typeof (value as AnywhereDecisionApi).classifyAnywhereResult === "function";
+}
+
 export function anywhereDecision(): AnywhereDecisionApi {
-  const api = (globalThis as any).AnywhereRenderDecision;
+  const moduleExport = (sharedDecisionModule as any)?.default ?? sharedDecisionModule;
+  const api = isDecisionApi(moduleExport) ? moduleExport : (globalThis as any).AnywhereRenderDecision;
   if (!api) throw new Error("anywhere-render-decision failed to load");
   return api as AnywhereDecisionApi;
 }

@@ -1,9 +1,9 @@
 /**
  * Where the planner's map puts the day, so that no route marker sits under the
- * map's own controls: Leaflet's zoom buttons and attribution, and the expand
+ * map's own controls: the zoom buttons and attribution, and the expand
  * button Parranda lays over the map.
  *
- * Leaflet's fitBounds pads the bounds by one rectangle and centres them. It
+ * A plain fitBounds pads the bounds by one rectangle and centres them. It
  * knows nothing about what sits in the map's corners, nor about the display
  * offset a clustered marker is drawn with (route-map-presentation.mjs), so on a
  * phone a day's outermost stop could land under a control. This chooses the
@@ -22,7 +22,7 @@
  *
  * Presentation only: which marks exist, their order and their coordinates are
  * the caller's. Pure: the caller measures the container and the controls and
- * passes the map's own projection, so nothing here touches Leaflet or the DOM.
+ * passes the map's own projection, so nothing here touches the map library or the DOM.
  */
 
 const SIDES = ["left", "top", "right", "bottom"];

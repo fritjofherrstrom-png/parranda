@@ -134,7 +134,9 @@ export function screenMarkerPresentation(points, { width, height, keepouts = [],
   let checked = 0;
   const safe = (x, y) => ++checked <= 20000 && x >= radius + 2 && x <= width - radius - 2 && y >= radius + 2 && y <= height - radius - 2
     && boxes.every(b => x + radius + gap <= b.left || x - radius - gap >= b.right || y + radius + gap <= b.top || y - radius - gap >= b.bottom)
-    && placed.every(p => Math.hypot(x - p.x, y - p.y) >= radius * 2 + gap);
+    // Hit targets are 44px squares, not the smaller circular station discs.
+    // Euclidean centre spacing permits diagonally overlapping target corners.
+    && placed.every(p => Math.abs(x - p.x) >= radius * 2 + gap || Math.abs(y - p.y) >= radius * 2 + gap);
   for (const point of points) {
     if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return null;
     const x = Math.max(radius + 2, Math.min(width - radius - 2, point.x));

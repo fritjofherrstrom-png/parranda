@@ -45,11 +45,14 @@ export function freezeComposeDateIso({ dayOffset = 0, dateIsoOverride = null, no
 }
 
 // Day density, not a walking-distance goal. Distance is measured afterwards.
+// Three steps of one scale (calm < balanced < full) and "free", which is not a
+// fourth step: the reader leaves the choice to Parranda. Each `note` says what
+// the engine does with it — today it builds a "free" day like a full one.
 export const DAY_RHYTHMS = [
-  { key: "calm", sv: "Lugn", en: "Easy" },
-  { key: "balanced", sv: "Lagom", en: "Balanced" },
-  { key: "full", sv: "Fylld", en: "Full" },
-  { key: "free", sv: "Spelar ingen roll", en: "No preference" },
+  { key: "calm", sv: "Lugn", en: "Easy", noteSv: "Färre stopp, mer tid på varje plats.", noteEn: "Fewer stops, more time at each place." },
+  { key: "balanced", sv: "Lagom", en: "Balanced", noteSv: "Några stopp med luft emellan.", noteEn: "A few stops with room in between." },
+  { key: "full", sv: "Fylld", en: "Full", noteSv: "Så många stopp som dagen rymmer.", noteEn: "As many stops as the day holds." },
+  { key: "free", sv: "Parranda väljer", en: "Parranda chooses", noteSv: "Inget eget val — dagen byggs då som Fylld.", noteEn: "No choice of your own — the day is then built like Full." },
 ];
 
 export function buildAnywherePayload({

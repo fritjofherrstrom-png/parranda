@@ -55,10 +55,10 @@ test("the landing hydrates cleanly with the city registry the server injects", a
   );
 });
 
-test("the landing still shows the curated cities after hydration", async (t) => {
-  // The fix must not buy silence by dropping the feature: the chips are the
-  // point of the registry. They arrive after hydration commits rather than
-  // during it.
+test("the landing advertises no list of cities, even with a registry", async (t) => {
+  // The registry drives completion and routing only. A visible city list read
+  // as "these are the only places Parranda works" — the opposite of the
+  // product — so the landing offers one field, not a menu.
   const h = await renderAndHydrate({
     entry: "components/LandingHero.tsx",
     props: { lang: "en" },
@@ -67,12 +67,11 @@ test("the landing still shows the curated cities after hydration", async (t) => 
   });
   t.after(() => h.cleanup());
 
+  assert.deepEqual(hydrationComplaints(h), [], "adopting the registry after hydration stays clean");
   const text = h.text();
-  assert.match(text, /Hand-picked in/, "the curated section is rendered");
-  assert.match(text, /Barcelona/, "Barcelona is offered");
-  assert.match(text, /Rom/, "Rome is offered");
-  // status: "preview" is searchable by name but never advertised as a chip.
-  assert.ok(!/Athens/.test(text), "a non-public city is still not advertised");
+  assert.ok(!/Hand-picked in/.test(text), "no curated section");
+  assert.ok(!/Barcelona|Rome|Athens/.test(text), "no city is advertised by name");
+  assert.equal(h.window.document.querySelectorAll('a[href*="city="]').length, 0, "no curated city links");
 });
 
 test("the landing hydrates cleanly when no registry was injected at all", async (t) => {

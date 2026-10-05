@@ -1,5 +1,5 @@
 'use strict';
-// Isolated presentation harness: real RouteMap, React, Leaflet and production
+// Isolated presentation harness: real RouteMap, React, MapLibre and production
 // Tailwind in Chromium. No Planner motor, API, providers or committed dist.
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -37,10 +37,18 @@ test('every number is legible and opens its own stop at 320/390/1280, collapsed/
   let browser,server;
   try {
     const entry=path.join(temp,'entry.tsx');
-    await fs.writeFile(entry,`import React from 'react'; import {createRoot} from 'react-dom/client'; import RouteMap from '../src/components/planner/RouteMap'; import '../src/styles/tailwind.css';
+    await fs.writeFile(entry,`import React from 'react'; import {createRoot} from 'react-dom/client'; import RouteMap from '../src/components/planner/RouteMap';
 function Harness(){const [expanded,setExpanded]=React.useState(false);const [stops,setStops]=React.useState([]);window.setDay=setStops;return <section aria-label="Rutten"><RouteMap hasPrimaryRoute={true} routeStops={stops} primaryRoute={{map_path_points:stops}} areas={[]} routeContextSuggestions={[]} showContext={false} sketch={true} mapExpanded={expanded} onToggleExpanded={()=>setExpanded(!expanded)} heightClass={expanded?'h-[420px]':'h-[190px]'} t={(sv)=>sv}/></section>} createRoot(document.getElementById('root')).render(<Harness/>);`);
-    await require(path.join(frontend,'node_modules/esbuild')).build({entryPoints:[entry],bundle:true,outdir:temp,format:'iife',jsx:'automatic',loader:{'.png':'dataurl'},logLevel:'silent'});
-    execFileSync(process.execPath,[path.join(frontend,'node_modules/tailwindcss/lib/cli.js'),'-i',path.join(frontend,'src/styles/tailwind.css'),'-o',path.join(temp,'tailwind.css'),'--content',`${entry},${frontend}/src/components/planner/RouteMap.tsx`],{cwd:frontend,stdio:'pipe'});
+    // MapLibre's worker is a bundler import (`?worker&url`, Vite): built here
+    // as one file and served beside the harness.
+    const esbuild=require(path.join(frontend,'node_modules/esbuild'));
+    await esbuild.build({entryPoints:[path.join(frontend,'node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs')],bundle:true,outfile:path.join(temp,'maplibre-worker.js'),format:'esm',logLevel:'silent'});
+    const workerUrl={name:'worker-url',setup(build){build.onResolve({filter:/\?worker&url$/},()=>({path:'worker-url',namespace:'worker-url'}));build.onLoad({filter:/.*/,namespace:'worker-url'},()=>({contents:'export default "/maplibre-worker.js"',loader:'js'}));}};
+    await esbuild.build({entryPoints:[entry],bundle:true,outdir:temp,format:'iife',jsx:'automatic',loader:{'.png':'dataurl'},plugins:[workerUrl],logLevel:'silent'});
+    // Production Tailwind (v4, CSS-first): the real tokens and stylesheet, scanned
+    // over the harness and the real RouteMap only.
+    await fs.writeFile(path.join(temp,'input.css'),`@import ${JSON.stringify(path.join(frontend,'src/styles/tokens.css'))};\n@import ${JSON.stringify(path.join(frontend,'src/styles/tailwind.css'))};\n@source not ${JSON.stringify(path.join(frontend,'src'))};\n@source ${JSON.stringify(entry)};\n@source ${JSON.stringify(path.join(frontend,'src/components/planner/RouteMap.tsx'))};\n`);
+    execFileSync(process.execPath,[path.join(frontend,'node_modules/@tailwindcss/cli/dist/index.mjs'),'-i',path.join(temp,'input.css'),'-o',path.join(temp,'tailwind.css')],{cwd:frontend,stdio:'pipe'});
     server=http.createServer(async(req,res)=>{try{const file=req.url==='/'?null:path.join(temp,path.basename(req.url)); res.setHeader('Content-Type',req.url.endsWith('.js')?'application/javascript':req.url.endsWith('.css')?'text/css':'text/html');res.end(file?await fs.readFile(file):'<meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/entry.css"><link rel="stylesheet" href="/tailwind.css"><div id="root" style="margin:12px"></div><script src="/entry.js"></script>');}catch{res.statusCode=404;res.end();}}).listen(0,'127.0.0.1');
     await new Promise(r=>server.once('listening',r));
     const origin=`http://127.0.0.1:${server.address().port}`;
@@ -68,7 +76,7 @@ function Harness(){const [expanded,setExpanded]=React.useState(false);const [sto
       await page.evaluate(() => {
         window.mapTapRecord = { clicked: false, opened: [] };
         new MutationObserver(() => {
-          for (const tip of document.querySelectorAll('.leaflet-tooltip')) {
+          for (const tip of document.querySelectorAll('.route-map-tooltip')) {
             if (tip.style.opacity !== '0') window.mapTapRecord.opened.push(tip.textContent.trim());
           }
         }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
@@ -84,9 +92,9 @@ function Harness(){const [expanded,setExpanded]=React.useState(false);const [sto
           await page.waitForTimeout(450);
           const where=`${day.name}-${width}-${expanded?'expanded':'collapsed'}`;
           const measured=await page.evaluate(()=>{
-            const container=document.querySelector('.leaflet-container');container.scrollIntoView({block:'center'});
+            const container=document.querySelector('.maplibregl-map');container.scrollIntoView({block:'center'});
             const map=container.getBoundingClientRect();
-            const controls=[...container.parentElement.querySelectorAll('.leaflet-control,button')].map(e=>e.getBoundingClientRect());
+            const controls=[...container.parentElement.querySelectorAll('.maplibregl-ctrl,button')].map(e=>e.getBoundingClientRect());
             const markers=[...document.querySelectorAll('.route-map-marker')].map(e=>{const r=e.getBoundingClientRect();return {number:e.textContent,x:(r.left+r.right)/2,y:(r.top+r.bottom)/2};});
             const issues=[];
             for(const m of markers){
@@ -105,7 +113,7 @@ function Harness(){const [expanded,setExpanded]=React.useState(false);const [sto
           for(const m of measured.markers){
             await page.mouse.move(1,1);await page.waitForTimeout(60);
             await page.mouse.move(m.x,m.y);
-            await page.waitForFunction(label=>{const names=[...document.querySelectorAll('.leaflet-tooltip')].filter(e=>e.style.opacity!=='0').map(e=>e.textContent);return names.length>0&&names.every(n=>n===label)},`Stop ${m.number}`,{timeout:2000});
+            await page.waitForFunction(label=>{const names=[...document.querySelectorAll('.route-map-tooltip')].filter(e=>e.style.opacity!=='0').map(e=>e.textContent);return names.length>0&&names.every(n=>n===label)},`Stop ${m.number}`,{timeout:2000});
             await page.mouse.move(1,1);await page.waitForTimeout(250);
             await page.evaluate(() => { window.mapTapRecord = { clicked: false, opened: [] }; });
             await page.touchscreen.tap(m.x,m.y);
@@ -122,9 +130,9 @@ function Harness(){const [expanded,setExpanded]=React.useState(false);const [sto
         await page.evaluate(stops => window.setDay(stops), days[5].stops);
         await page.waitForTimeout(700);
         for (const action of ['zoom', 'pan']) {
-          if (action === 'zoom') await page.locator('.leaflet-control-zoom-in').click();
+          if (action === 'zoom') await page.locator('.maplibregl-ctrl-zoom-in').click();
           else {
-            const box = await page.locator('.leaflet-container').boundingBox();
+            const box = await page.locator('.maplibregl-map').boundingBox();
             await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
             await page.mouse.down(); await page.mouse.move(box.x + box.width / 2 - 180, box.y + box.height / 2, { steps: 8 }); await page.mouse.up();
           }
@@ -132,10 +140,10 @@ function Harness(){const [expanded,setExpanded]=React.useState(false);const [sto
           const markers = await page.locator('.route-map-marker').evaluateAll(es => es.map(e => { const r=e.getBoundingClientRect();return {number:e.textContent,x:r.left+r.width/2,y:r.top+r.height/2}; }));
           for (const m of markers) {
             await page.mouse.move(m.x,m.y);
-            await page.waitForFunction(label => [...document.querySelectorAll('.leaflet-tooltip')].some(e => e.style.opacity !== '0' && e.textContent === label), `Stop ${m.number}`, { timeout: 2000 });
+            await page.waitForFunction(label => [...document.querySelectorAll('.route-map-tooltip')].some(e => e.style.opacity !== '0' && e.textContent === label), `Stop ${m.number}`, { timeout: 2000 });
             const clips = await page.evaluate(() => {
-              const box=document.querySelector('.leaflet-container').getBoundingClientRect();
-              return [...document.querySelectorAll('.leaflet-tooltip')].filter(e=>e.style.opacity!=='0').map(e=>{const r=e.getBoundingClientRect();return r.left<box.left||r.right>box.right||r.top<box.top||r.bottom>box.bottom;});
+              const box=document.querySelector('.maplibregl-map').getBoundingClientRect();
+              return [...document.querySelectorAll('.route-map-tooltip')].filter(e=>e.style.opacity!=='0').map(e=>{const r=e.getBoundingClientRect();return r.left<box.left||r.right>box.right||r.top<box.top||r.bottom>box.bottom;});
             });
             if (!clips.length || clips.some(c=>c)) await page.screenshot({path:path.join(proof,`lifecycle-${action}-${m.number}-failure.png`)});
             assert.ok(clips.length > 0 && clips.every(c=>!c), `${action}: visible number ${m.number} must reveal an on-map name`);

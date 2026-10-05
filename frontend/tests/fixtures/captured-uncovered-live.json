@@ -1,0 +1,380 @@
+[
+  {
+    "contract": "live_event_query_v1",
+    "query": {
+      "scope": "around_place",
+      "time": "tonight",
+      "selected_date": "2026-10-05",
+      "radius_m": 3000,
+      "route_point_count": 0,
+      "preferences": [
+        "food",
+        "culture",
+        "views"
+      ],
+      "discovery_scope": "local"
+    },
+    "route_mutation": false,
+    "day_anchor_mutation": false,
+    "live_events": {
+      "coverage": "uncovered",
+      "selected_date": "2026-10-05",
+      "feed": null,
+      "feeds": [],
+      "acquisition": {
+        "mode": "bounded_multi_source",
+        "radius_m": 3000,
+        "source_cap": 4,
+        "selected_source_count": 0,
+        "normalized_event_count": 0,
+        "out_of_period_event_count": 0,
+        "fused_event_count": 0,
+        "rejected_event_count": 0,
+        "rejection_summary": [],
+        "source_health": {
+          "status": "uncovered",
+          "result": "unknown",
+          "selected_source_count": 0,
+          "responding_source_count": 0,
+          "event_bearing_source_count": 0,
+          "empty_source_count": 0,
+          "failed_source_count": 0,
+          "unavailable_source_count": 0,
+          "raw_event_count": 0,
+          "normalized_event_count": 0,
+          "out_of_period_event_count": 0,
+          "accepted_event_count": 0,
+          "surfaced_event_count": 0,
+          "rejected_event_count": 0,
+          "reasons": [
+            "no_approved_sources",
+            "bounded_source_scout_complete",
+            "source_search_partial",
+            "source_discovery_review_required"
+          ]
+        },
+        "discovery_health": {
+          "contract": "source_discovery_health_v1",
+          "status": "review_required",
+          "search": {
+            "status": "partial",
+            "generated_query_count": 24,
+            "skipped_query_count": 14,
+            "expansion_round_count": 1,
+            "novel_source_identity_count": 7,
+            "stop_reason": "provider_health_degraded",
+            "represented_query_families": [],
+            "query_tranches": [
+              {
+                "query_count": 6,
+                "novel_source_identity_count": 7,
+                "untrustworthy_query_count": 4
+              },
+              {
+                "query_count": 4,
+                "novel_source_identity_count": 0,
+                "untrustworthy_query_count": 4
+              }
+            ],
+            "queried_count": 10,
+            "responding_query_count": 2,
+            "failed_query_count": 8,
+            "degraded_query_count": 0,
+            "result_count": 10,
+            "seed_count": 9,
+            "retry_recommended": false
+          },
+          "scout": {
+            "status": "complete",
+            "inspected_source_count": 20,
+            "blocked_source_count": 1,
+            "failed_source_count": 3
+          },
+          "qualification": {
+            "status": "unavailable",
+            "candidate_count": 14,
+            "qualified_candidate_count": 0
+          },
+          "reasons": [
+            "bounded_source_scout_complete",
+            "source_search_partial",
+            "source_discovery_review_required"
+          ],
+          "observed_at": "2026-10-04T14:53:36.163Z"
+        }
+      },
+      "tonight": [],
+      "this_week": [],
+      "browse": {
+        "contract": "live_event_browse_v1",
+        "max_rows_per_bucket": 24,
+        "tonight": {
+          "ranked_event_count": 0,
+          "highlight_count": 0,
+          "more_count": 0,
+          "hidden_count": 0,
+          "more": []
+        },
+        "this_week": {
+          "ranked_event_count": 0,
+          "highlight_count": 0,
+          "more_count": 0,
+          "hidden_count": 0,
+          "more": []
+        }
+      }
+    }
+  },
+  {
+    "contract": "live_event_query_v1",
+    "query": {
+      "scope": "around_place",
+      "time": "this_week",
+      "selected_date": "2026-10-05",
+      "radius_m": 3000,
+      "route_point_count": 0,
+      "preferences": [
+        "food",
+        "culture",
+        "views"
+      ],
+      "discovery_scope": "local"
+    },
+    "route_mutation": false,
+    "day_anchor_mutation": false,
+    "live_events": {
+      "coverage": "uncovered",
+      "selected_date": "2026-10-05",
+      "feed": null,
+      "feeds": [],
+      "acquisition": {
+        "mode": "bounded_multi_source",
+        "radius_m": 3000,
+        "source_cap": 4,
+        "selected_source_count": 0,
+        "normalized_event_count": 0,
+        "out_of_period_event_count": 0,
+        "fused_event_count": 0,
+        "rejected_event_count": 0,
+        "rejection_summary": [],
+        "source_health": {
+          "status": "uncovered",
+          "result": "unknown",
+          "selected_source_count": 0,
+          "responding_source_count": 0,
+          "event_bearing_source_count": 0,
+          "empty_source_count": 0,
+          "failed_source_count": 0,
+          "unavailable_source_count": 0,
+          "raw_event_count": 0,
+          "normalized_event_count": 0,
+          "out_of_period_event_count": 0,
+          "accepted_event_count": 0,
+          "surfaced_event_count": 0,
+          "rejected_event_count": 0,
+          "reasons": [
+            "no_approved_sources",
+            "bounded_source_scout_complete",
+            "source_search_partial",
+            "source_discovery_review_required"
+          ]
+        },
+        "discovery_health": {
+          "contract": "source_discovery_health_v1",
+          "status": "review_required",
+          "search": {
+            "status": "partial",
+            "generated_query_count": 24,
+            "skipped_query_count": 14,
+            "expansion_round_count": 1,
+            "novel_source_identity_count": 7,
+            "stop_reason": "provider_health_degraded",
+            "represented_query_families": [],
+            "query_tranches": [
+              {
+                "query_count": 6,
+                "novel_source_identity_count": 7,
+                "untrustworthy_query_count": 4
+              },
+              {
+                "query_count": 4,
+                "novel_source_identity_count": 0,
+                "untrustworthy_query_count": 4
+              }
+            ],
+            "queried_count": 10,
+            "responding_query_count": 2,
+            "failed_query_count": 8,
+            "degraded_query_count": 0,
+            "result_count": 10,
+            "seed_count": 9,
+            "retry_recommended": false
+          },
+          "scout": {
+            "status": "complete",
+            "inspected_source_count": 20,
+            "blocked_source_count": 1,
+            "failed_source_count": 3
+          },
+          "qualification": {
+            "status": "unavailable",
+            "candidate_count": 14,
+            "qualified_candidate_count": 0
+          },
+          "reasons": [
+            "bounded_source_scout_complete",
+            "source_search_partial",
+            "source_discovery_review_required"
+          ],
+          "observed_at": "2026-10-04T14:53:36.163Z"
+        }
+      },
+      "tonight": [],
+      "this_week": [],
+      "browse": {
+        "contract": "live_event_browse_v1",
+        "max_rows_per_bucket": 24,
+        "tonight": {
+          "ranked_event_count": 0,
+          "highlight_count": 0,
+          "more_count": 0,
+          "hidden_count": 0,
+          "more": []
+        },
+        "this_week": {
+          "ranked_event_count": 0,
+          "highlight_count": 0,
+          "more_count": 0,
+          "hidden_count": 0,
+          "more": []
+        }
+      }
+    }
+  },
+  {
+    "contract": "live_event_query_v1",
+    "query": {
+      "scope": "near_me",
+      "time": "this_week",
+      "selected_date": "2026-10-05",
+      "radius_m": 2000,
+      "route_point_count": 0,
+      "preferences": [
+        "food",
+        "culture",
+        "views"
+      ],
+      "discovery_scope": "local"
+    },
+    "route_mutation": false,
+    "day_anchor_mutation": false,
+    "live_events": {
+      "coverage": "uncovered",
+      "selected_date": "2026-10-05",
+      "feed": null,
+      "feeds": [],
+      "acquisition": {
+        "mode": "bounded_multi_source",
+        "radius_m": 2000,
+        "source_cap": 4,
+        "selected_source_count": 0,
+        "normalized_event_count": 0,
+        "out_of_period_event_count": 0,
+        "fused_event_count": 0,
+        "rejected_event_count": 0,
+        "rejection_summary": [],
+        "source_health": {
+          "status": "uncovered",
+          "result": "unknown",
+          "selected_source_count": 0,
+          "responding_source_count": 0,
+          "event_bearing_source_count": 0,
+          "empty_source_count": 0,
+          "failed_source_count": 0,
+          "unavailable_source_count": 0,
+          "raw_event_count": 0,
+          "normalized_event_count": 0,
+          "out_of_period_event_count": 0,
+          "accepted_event_count": 0,
+          "surfaced_event_count": 0,
+          "rejected_event_count": 0,
+          "reasons": [
+            "no_approved_sources",
+            "bounded_source_scout_complete",
+            "source_search_partial",
+            "source_discovery_review_required"
+          ]
+        },
+        "discovery_health": {
+          "contract": "source_discovery_health_v1",
+          "status": "review_required",
+          "search": {
+            "status": "partial",
+            "generated_query_count": 24,
+            "skipped_query_count": 14,
+            "expansion_round_count": 1,
+            "novel_source_identity_count": 7,
+            "stop_reason": "provider_health_degraded",
+            "represented_query_families": [],
+            "query_tranches": [
+              {
+                "query_count": 6,
+                "novel_source_identity_count": 7,
+                "untrustworthy_query_count": 4
+              },
+              {
+                "query_count": 4,
+                "novel_source_identity_count": 0,
+                "untrustworthy_query_count": 4
+              }
+            ],
+            "queried_count": 10,
+            "responding_query_count": 2,
+            "failed_query_count": 8,
+            "degraded_query_count": 0,
+            "result_count": 10,
+            "seed_count": 9,
+            "retry_recommended": false
+          },
+          "scout": {
+            "status": "complete",
+            "inspected_source_count": 20,
+            "blocked_source_count": 1,
+            "failed_source_count": 3
+          },
+          "qualification": {
+            "status": "unavailable",
+            "candidate_count": 14,
+            "qualified_candidate_count": 0
+          },
+          "reasons": [
+            "bounded_source_scout_complete",
+            "source_search_partial",
+            "source_discovery_review_required"
+          ],
+          "observed_at": "2026-10-04T14:53:36.163Z"
+        }
+      },
+      "tonight": [],
+      "this_week": [],
+      "browse": {
+        "contract": "live_event_browse_v1",
+        "max_rows_per_bucket": 24,
+        "tonight": {
+          "ranked_event_count": 0,
+          "highlight_count": 0,
+          "more_count": 0,
+          "hidden_count": 0,
+          "more": []
+        },
+        "this_week": {
+          "ranked_event_count": 0,
+          "highlight_count": 0,
+          "more_count": 0,
+          "hidden_count": 0,
+          "more": []
+        }
+      }
+    }
+  }
+]

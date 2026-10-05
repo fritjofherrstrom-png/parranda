@@ -61,6 +61,8 @@ export interface PulseEvent {
   place?: string;
   /** The reviewed feed that listed the event — attribution, not the link's destination. */
   source_label?: string;
+  /** Credits supplied by the event's sources, independently of its link. */
+  sources?: Array<{ attribution?: string | null }>;
   source_url?: string;
   /** Server classification of where `source_url` leads (site root or other page). */
   source_link_kind?: EventSourceLinkKind | null;

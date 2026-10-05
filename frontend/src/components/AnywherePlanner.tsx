@@ -34,15 +34,12 @@ import {
   liveDateLabel,
   type LiveEventScope,
 } from "../lib/live-event-query.mjs";
-import { mapsPlaceUrl, mapsWalkingRouteParts, primaryRouteStops, type RouteEnd } from "../lib/maps-links.mjs";
+import { mapsWalkingRouteParts, primaryRouteStops, type RouteEnd } from "../lib/maps-links.mjs";
 import { routePathIsSketch } from "../lib/route-map-presentation.mjs";
-import { selectedDayHoursLabel } from "../lib/selected-day-hours.mjs";
-import { stopHoursUnknown, stopTypeLabel } from "../lib/stop-card-facts.mjs";
 import {
   buildRouteContextSuggestions,
   routePreferenceCoverage,
   routeTimeAnchoring,
-  walkingDistanceLabel,
 } from "../lib/route-context-view.mjs";
 import {
   splitRouteStops,
@@ -51,8 +48,6 @@ import {
   pulseBrowseBuckets,
   clothingAdvice,
   pulseSourceLine,
-  eventSourceLink,
-  eventTiming,
   liveSourceFailure,
   pulseHealthState,
 } from "../lib/pulse-view.mjs";
@@ -77,37 +72,20 @@ import {
 import { anywhereDecision, type AnywhereClassification } from "../lib/anywhere-decision";
 import { classifyCuratedCityResult, safeCuratedCityResponse } from "../lib/curated-city-decision.mjs";
 import AppBar from "./shared/AppBar";
-import {
-  BoltIcon,
-  CheckIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-  CloseIcon,
-  ExternalIcon,
-  HalfCircleIcon,
-  KeepIcon,
-  LocationIcon,
-  MinusIcon,
-  PlusIcon,
-  ShareIcon,
-  StarIcon,
-  UndoIcon,
-} from "./shared/icons";
+import { KeepIcon, LocationIcon, MinusIcon, UndoIcon } from "./shared/icons";
+import { buttonClass, noticeCard } from "./shared/ui";
+import { useMediaQuery } from "./shared/useMediaQuery";
+import AnchorCard from "./planner/AnchorCard";
+import BlitzCard from "./planner/BlitzCard";
+import CandidateAreas from "./planner/CandidateAreas";
+import DayHeader from "./planner/DayHeader";
+import LiveCard from "./planner/LiveCard";
 import RouteMap from "./planner/RouteMap";
 import LiveSheet from "./planner/LiveSheet";
-import { liveEventSource } from "./planner/LiveEventSource";
-import {
-  DAYPART_LABELS,
-  HOURS_RELEVANT_TYPES,
-  INTENT_LABELS,
-  label,
-  partialPreferenceLabels,
-  pickLabel,
-  typeLabel,
-  unkeptReasonSentence,
-  type Lang,
-} from "./planner/copy";
-import type { LiveEvents, PlaceStructure, PulseEvent } from "./planner/types";
+import SavedDays from "./planner/SavedDays";
+import StopLine from "./planner/StopLine";
+import { pickLabel, unkeptReasonSentence, type Lang } from "./planner/copy";
+import type { LiveEvents, PlaceStructure } from "./planner/types";
 
 function readLS<T>(key: string, fallback: T): T {
   try {
@@ -180,10 +158,6 @@ function adjustmentSignature(
 function isUndoableDay(entry: SavedEntry | null): entry is SavedEntry {
   const status = entry?.classification?.status;
   return status === "composed" || status === "composed_limited";
-}
-
-function canCommitTo(stop: { commitment_eligible?: unknown } | null | undefined): boolean {
-  return stop?.commitment_eligible === true;
 }
 
 export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: Lang }) {
@@ -1606,168 +1580,107 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   const includedInRoute = dayOffset === 0
     ? t("Ingår i dagens rutt", "Included in today's route")
     : t("Ingår i morgondagens rutt", "Included in tomorrow's route");
-  const legLabel = (leg: { km: number | null; minutes: number | null }) =>
-    `${leg.minutes != null ? `${leg.minutes} min` : ""}${leg.minutes != null && leg.km != null ? " · " : ""}${leg.km != null ? walkingDistanceLabel(leg.km, lang) : ""}`;
-  const noticeCard = "rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4 text-sm leading-relaxed text-parranda-ink/80";
+  // AnchorCard's three adjustments. Each one recomposes on its own, so each
+  // first invalidates whatever is in flight for the old intent.
+  const toggleMood = (key: string) => {
+    invalidateCommitmentIntent();
+    setSelected((cur) => (cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key]));
+  };
+  const chooseDay = (offset: 0 | 1) => {
+    if (dayOffset !== offset) { invalidateCommitmentIntent(); setDayOffset(offset); }
+  };
+  const chooseRhythm = (key: string) => {
+    if (walkKey !== key) { invalidateCommitmentIntent(); setWalkKey(key); }
+  };
+  const openLiveSheet = () => {
+    // Reopening resumes the cell the reader selected. Reapplying
+    // the day's default period would relabel another query's rows
+    // and a pending route/GPS query would restart around the place.
+    const reopening = liveSheetOpenedRef.current;
+    const nextTime = reopening ? liveSheetTime
+      : pulseBuckets.tonight.length > 0 || split.woven.length > 0 ? "tonight" : "week";
+    const nextScope = reopening ? liveSheetScope : "around_place";
+    liveSheetOpenedRef.current = true;
+    setLiveSheetTime(nextTime);
+    setLiveSheetOpen(true);
+    // "Couldn't verify" + an available anchor: opening the sheet IS
+    // the "check again" — fire a fresh around-place query (its own
+    // bounded retries) instead of showing the same stale emptiness.
+    if ((reopening || pulseState === "unavailable" || pulseState === "pending") &&
+        (nextScope !== "around_place" || aroundPlaceScopeAvailable) && !liveQueryPending) {
+      requestLiveSheetScope(nextScope, nextTime, true).catch(() => {});
+    }
+  };
+
+  // LAYOUT. Phones read one column: the day, its map, its line, then "now".
+  // Wide screens keep the day on the left and give the map the rest of the
+  // window, sticky beside it — one map instance either way, mounted where it is
+  // shown (the static build and the first client render are the phone layout).
+  const wideScreen = useMediaQuery("(min-width: 64rem)");
+  const dayWithRoute = showDay && routeStops.length > 0;
+  const splitLayout = wideScreen && dayWithRoute;
+  const routeMap = dayWithRoute ? (
+    <RouteMap
+      hasPrimaryRoute={hasPrimaryRoute}
+      routeStops={routeStops}
+      primaryRoute={primaryRoute}
+      areas={day?.areas}
+      routeContextSuggestions={routeContextSuggestions}
+      showContext={detoursOpen}
+      sketch={routeLineIsSketch}
+      mapExpanded={splitLayout ? undefined : mapExpanded}
+      onToggleExpanded={splitLayout ? undefined : () => setMapExpanded((cur) => !cur)}
+      heightClass={splitLayout ? "h-full" : mapExpanded ? "h-96 sm:h-112" : "h-48 sm:h-60"}
+      t={t}
+    />
+  ) : null;
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-      <AppBar
-        lang={lang}
-        homeLabel={t("Parranda — till startsidan", "Parranda — home")}
-        languageLabel={t("Språk", "Language")}
-        onNavigate={leavePlanner}
-        languageHref={languageHref}
-      />
+    <div
+      className={
+        splitLayout
+          ? "grid w-full grid-cols-[minmax(0,34rem)_minmax(0,1fr)] items-start gap-x-10 gap-y-8 xl:grid-cols-[minmax(0,36rem)_minmax(0,1fr)] xl:gap-x-14"
+          : "mx-auto flex w-full max-w-2xl flex-col gap-8"
+      }
+    >
+      <div className={splitLayout ? "col-span-full" : ""}>
+        <AppBar
+          lang={lang}
+          homeLabel={t("Parranda — till startsidan", "Parranda — home")}
+          languageLabel={t("Språk", "Language")}
+          onNavigate={leavePlanner}
+          languageHref={languageHref}
+        />
+      </div>
 
-      {/* THE DAY'S STARTING POINT — where (chosen once on the landing) and how
-          (picks, walking), in one card. "Change" goes back to the landing; it
-          is never a second form here. */}
+      <div className="flex min-w-0 flex-col gap-10 sm:gap-12">
       {hasAnchor && (
-        <section
-          aria-label={t("Dagens utgångspunkt", "Your day's starting point")}
-          className="overflow-hidden rounded-parranda border border-parranda-ink/12 bg-parranda-ink/[0.045]"
-        >
-          <div className="flex min-h-14 items-center gap-2.5 py-1.5 pl-4 pr-1.5">
-            <LocationIcon className="h-4 w-4 text-parranda-ember" />
-            <span className="min-w-0 flex-1 truncate text-[15px] font-bold text-parranda-ink">
-              {anchorLabel}
-              <span className="font-medium text-parranda-ink/65">
-                {" · "}
-                {dayOffset === 0 ? t("idag", "today") : t("imorgon", "tomorrow")}
-              </span>
-            </span>
-            <a
-              href={`/?lang=${lang}`}
-              onClick={(event) => {
-                if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
-                  cancelActivePlannerForNavigation();
-                }
-              }}
-              aria-label={t("Byt plats", "Change place")}
-              className="inline-flex min-h-11 shrink-0 items-center rounded-full bg-parranda-ink/10 px-4 text-xs font-bold text-parranda-ink/80 transition hover:bg-parranda-ink/15"
-            >
-              {t("Byt", "Change")}
-            </a>
-          </div>
-
-          {/* ADJUSTMENTS — collapsed to one line by default; expanding reveals the
-              grouped panel. Every change re-composes on its own (no submit). */}
-          {!adjustOpen && (
-            <div className="flex min-h-12 items-center gap-2.5 border-t border-parranda-ink/10 py-1.5 pl-4 pr-1.5">
-              <span className="min-w-0 flex-1 text-[13px] leading-snug text-parranda-ink/65">
-                <strong className="font-bold text-parranda-ink">{moodLabel || t("Inga val", "No moods")}</strong>
-                {` · ${t("Dagens rytm", "Day rhythm")}: ${walkLabel}`}
-              </span>
-              <button
-                type="button"
-                aria-expanded={false}
-                onClick={() => setAdjustOpen(true)}
-                className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-parranda-ink/16 px-3.5 text-xs font-bold text-parranda-ink/80 transition hover:border-parranda-ember"
-              >
-                {t("Justera", "Adjust")}
-                <ChevronDownIcon className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          )}
-
-          {adjustOpen && (
-            <div className="flex flex-col gap-4 border-t border-parranda-ink/10 p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-extrabold uppercase tracking-[0.16em] text-parranda-ink/65">
-                  {t("Justera dagen", "Adjust the day")}
-                </span>
-                <button
-                  type="button"
-                  aria-expanded={true}
-                  onClick={() => setAdjustOpen(false)}
-                  className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-parranda-ink/16 px-3.5 text-xs font-bold text-parranda-ink/80 transition hover:border-parranda-ember"
-                >
-                  {t("Klar", "Done")}
-                  <ChevronDownIcon className="h-3.5 w-3.5 rotate-180" />
-                </button>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-parranda-glow">{t("Känsla", "Mood")}</p>
-                <div className="flex flex-wrap gap-2">
-                  {ANYWHERE_PREFERENCES.map((pref: { key: string; sv: string; en: string }) => {
-                    const active = selected.includes(pref.key);
-                    return (
-                      <button
-                        type="button"
-                        key={pref.key}
-                        aria-pressed={active}
-                        onClick={() => { invalidateCommitmentIntent(); setSelected((cur) => (active ? cur.filter((k) => k !== pref.key) : [...cur, pref.key])); }}
-                        className={
-                          "inline-flex min-h-11 items-center gap-1.5 rounded-full border px-4 text-[13px] transition " +
-                          (active
-                            ? "border-parranda-ember/55 bg-parranda-ember/12 font-bold text-parranda-ink"
-                            : "border-parranda-ink/14 text-parranda-ink/65 hover:border-parranda-ink/30")
-                        }
-                      >
-                        {active && <CheckIcon className="h-3.5 w-3.5 text-parranda-ember" />}
-                        {lang === "en" ? pref.en : pref.sv}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2 border-t border-parranda-ink/10 pt-4">
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-parranda-glow">{t("När", "When")}</p>
-                <div className="inline-flex self-start overflow-hidden rounded-full border border-parranda-ink/14" role="group" aria-label={t("Vilken dag", "Which day")}>
-                  {([0, 1] as const).map((offset) => (
-                    <button
-                      type="button"
-                      key={offset}
-                      aria-pressed={dayOffset === offset}
-                      onClick={() => { if (dayOffset !== offset) { invalidateCommitmentIntent(); setDayOffset(offset); } }}
-                      className={
-                        "inline-flex min-h-11 items-center px-[18px] text-[13px] transition " +
-                        (dayOffset === offset ? "bg-parranda-ember/16 font-bold text-parranda-ink" : "text-parranda-ink/65 hover:text-parranda-ink")
-                      }
-                    >
-                      {offset === 0 ? t("Idag", "Today") : t("Imorgon", "Tomorrow")}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2 border-t border-parranda-ink/10 pt-4">
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-parranda-glow">{t("Dagens rytm", "Day rhythm")}</p>
-                <div className="grid grid-cols-2 overflow-hidden rounded-parranda-btn border border-parranda-ink/14 sm:max-w-sm" role="group" aria-label={t("Dagens rytm", "Day rhythm")}>
-                  {DAY_RHYTHMS.map((preset: { key: string; sv: string; en: string }) => (
-                    <button
-                      type="button"
-                      key={preset.key}
-                      aria-pressed={walkKey === preset.key}
-                      onClick={() => { if (walkKey !== preset.key) { invalidateCommitmentIntent(); setWalkKey(preset.key); } }}
-                      className={
-                        "min-h-12 px-2 py-1.5 text-[13px] leading-tight transition " +
-                        (walkKey === preset.key ? "bg-parranda-ember/16 font-bold text-parranda-ink" : "text-parranda-ink/65 hover:text-parranda-ink")
-                      }
-                    >
-                      {lang === "en" ? preset.en : preset.sv}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <p className="text-[11px] text-parranda-ink/50">
-                {t("Ändringar gäller av sig själva — dagen komponeras om medan du justerar.", "Changes apply on their own — the day recomposes as you adjust.")}
-              </p>
-            </div>
-          )}
-        </section>
+        <AnchorCard
+          t={t}
+          lang={lang}
+          anchorLabel={anchorLabel}
+          dayOffset={dayOffset}
+          moodLabel={moodLabel}
+          walkLabel={walkLabel}
+          adjustOpen={adjustOpen}
+          setAdjustOpen={setAdjustOpen}
+          preferences={ANYWHERE_PREFERENCES}
+          selected={selected}
+          onToggleMood={toggleMood}
+          onSetDay={chooseDay}
+          rhythms={DAY_RHYTHMS}
+          walkKey={walkKey}
+          onSetRhythm={chooseRhythm}
+          onChangePlace={cancelActivePlannerForNavigation}
+        />
       )}
 
       {/* No anchor (someone opened /anywhere directly): offer the one input that
           sets it, then never again. */}
       {!hasAnchor && (
-        <div className="flex flex-col gap-4 pt-6">
-          <h1 className="font-display text-5xl font-semibold leading-[0.95] text-parranda-ink">
-            {t("Planera en dag", "Plan a day")} <em className="text-parranda-ember">{t("var som helst", "anywhere")}</em>
+        <div className="flex flex-col gap-5 pt-8">
+          <h1 className="type-display text-6xl text-parranda-ink sm:text-7xl">
+            {t("Planera en dag", "Plan a day")} <em className="block not-italic text-parranda-ember">{t("var som helst", "anywhere")}</em>
           </h1>
           <form onSubmit={plan} className="flex flex-col gap-2 sm:flex-row">
             <input
@@ -1775,12 +1688,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               onChange={(e) => { invalidateCommitmentIntent(); setPlace(e.target.value); }}
               placeholder={t("T.ex. Lyon eller Kyoto", "e.g. Lyon or Kyoto")}
               aria-label={t("Plats", "Place")}
-              className="min-h-14 w-full flex-1 rounded-parranda border border-parranda-ink/16 bg-parranda-ink/6 px-5 text-parranda-ink outline-none transition placeholder:text-parranda-ink/45 focus:border-parranda-ember"
+              className="min-h-14 w-full flex-1 rounded-parranda border-2 border-parranda-ink bg-parranda-ink/4 px-5 text-lg text-parranda-ink outline-hidden transition placeholder:text-parranda-ink/68 focus:border-parranda-ember"
             />
-            <button
-              type="submit"
-              className="min-h-14 whitespace-nowrap rounded-parranda bg-parranda-terracotta px-6 font-bold text-white shadow-sm transition hover:brightness-110"
-            >
+            <button type="submit" className={buttonClass("primary", "min-h-14 whitespace-nowrap px-6 text-base")}>
               {t("Bygg min dag", "Build my day")}
             </button>
           </form>
@@ -1802,13 +1712,13 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
             type="button"
             onClick={useLocationAgain}
             disabled={relocating}
-            className="inline-flex min-h-11 items-center gap-2 rounded-parranda-btn bg-parranda-terracotta px-4 font-bold text-white transition hover:brightness-110 disabled:opacity-60"
+            className={buttonClass("primary", "min-h-11 px-4 text-sm")}
           >
             <LocationIcon className="h-4 w-4" />
             {relocating ? t("Hämtar position …", "Getting location …") : t("Använd min position", "Use my location")}
           </button>
           {relocateDenied && (
-            <p className="text-[13px] text-parranda-ink/65" aria-live="polite">
+            <p className="text-[13px] text-parranda-ink/72" aria-live="polite">
               {t("Positionen blockerades — byt till en stad eller plats i stället.", "Location was blocked — choose a city or place instead.")}
             </p>
           )}
@@ -1820,7 +1730,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           matters most. Hiding it behind a collapsed panel made the dismissal
           effectively irreversible. */}
       {(excludedCount > 0 || pinnedCount > 0) && (
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-parranda-ink/60" role="status">
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-parranda-ink/72" role="status">
           {pinnedCount > 0 && (
             <span className="inline-flex items-center gap-1.5">
               <KeepIcon className="h-3.5 w-3.5 text-parranda-ember" />
@@ -1840,7 +1750,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           <button
             type="button"
             onClick={clearCommitments}
-            className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-parranda-clay"
+            className="inline-flex min-h-11 items-center font-semibold text-parranda-ink underline underline-offset-2 hover:text-parranda-clay"
           >
             {t("Börja om utan mina val", "Start over without my choices")}
           </button>
@@ -1852,7 +1762,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           screen is the evidence. Silently dropping it would let the ledger
           claim something the day does not show. */}
       {unkept.count > 0 && (
-        <div className="flex flex-col gap-1.5 rounded-parranda border border-parranda-glow/25 bg-parranda-glow/[0.06] px-4 py-3 text-[13px] text-parranda-ink/80" role="status">
+        <div className="flex flex-col gap-1.5 rounded-parranda border-[1.5px] border-parranda-glow/40 bg-parranda-glow/8 px-4 py-3 text-[13px] text-parranda-ink/85" role="status">
           {unkept.reasons.map((entry: { id: string; label: string; reason: string | null }) => (
             <p key={entry.id}>{unkeptReasonSentence(entry, t)}</p>
           ))}
@@ -1861,8 +1771,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
 
       {phase === "loading" && !staleNotice && (
         <div className="flex flex-col gap-5">
-          <p className="flex items-center gap-2.5 text-sm text-parranda-ink/70" aria-live="polite">
-            <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-parranda-glow motion-safe:animate-pulse" />
+          <p className="flex items-center gap-2.5 text-sm text-parranda-ink/75" aria-live="polite">
+            <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-parranda-ember motion-safe:animate-pulse" />
             <span>
               {supplyPending && t("Hämtar källbelagda platser för din dag. Planen fortsätter automatiskt — du behöver inte försöka igen.", "Fetching source-backed places for your day. Your plan will continue automatically — no need to try again.")}
               {!supplyPending && loadingStage === 0 && t("Hittar platsen …", "Finding the place …")}
@@ -1874,18 +1784,20 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                 )}
             </span>
           </p>
-          {/* The shape of the day that is coming, so it lands without a jump.
-              Decorative only: it carries no place, number or claim. */}
+          {/* The shape of the day that is coming — a line with empty
+              stations — so it lands without a jump. Decorative only: it
+              carries no place, number or claim. */}
           <div aria-hidden="true" className="flex flex-col gap-3 motion-safe:animate-pulse">
             <span className="h-3 w-20 rounded-full bg-parranda-ink/10" />
             <span className="h-10 w-3/4 rounded-parranda-btn bg-parranda-ink/10" />
+            <span className="h-14 w-2/3 rounded-parranda-btn bg-parranda-ink/10" />
             <span className="h-3 w-1/2 rounded-full bg-parranda-ink/10" />
-            <div className="mt-2 flex flex-col gap-3 rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4">
-              <span className="h-44 rounded-parranda bg-parranda-ink/10" />
+            <span className="mt-2 h-56 rounded-parranda bg-parranda-ink/8" />
+            <div className="relative mt-2 flex flex-col gap-5 before:absolute before:bottom-5 before:left-[19px] before:top-5 before:w-1.5 before:rounded-full before:bg-parranda-ink/10 before:content-['']">
               {[0, 1, 2].map((row) => (
                 <span key={row} className="flex items-center gap-3">
-                  <span className="h-8 w-8 rounded-full bg-parranda-ink/10" />
-                  <span className="h-3.5 flex-1 rounded-full bg-parranda-ink/10" />
+                  <span className="relative h-11 w-11 rounded-full border-4 border-parranda-ink/12 bg-parranda-paper" />
+                  <span className="h-4 flex-1 rounded-full bg-parranda-ink/10" />
                 </span>
               ))}
             </div>
@@ -1898,11 +1810,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
           <p>{navigationInterrupted
             ? t("Planeringen pausades när du lämnade sidan. Dina val finns kvar.", "Planning paused when you left. Your choices are still here.")
             : t("Motorn svarar inte just nu.", "The engine isn't answering right now.")}</p>
-          <button
-            type="button"
-            onClick={retryPlan}
-            className="inline-flex min-h-11 items-center rounded-parranda-btn bg-parranda-terracotta px-4 font-bold text-white transition hover:brightness-110"
-          >
+          <button type="button" onClick={retryPlan} className={buttonClass("primary", "min-h-11 px-4 text-sm")}>
             {navigationInterrupted ? t("Fortsätt planera", "Continue planning") : t("Försök bygga dagen igen", "Try building the day again")}
           </button>
         </div>
@@ -1932,7 +1840,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               compose. The count comes from the classifier's trusted-loader
               evidence, never from copy. The label follows the pill rule:
               primary locality, not the resolver's full admin chain. */}
-          <p>
+          <p className="text-[15px] text-parranda-ink">
             {anchorUnresolved ? (
               t(
                 `Parranda kunde inte hitta ”${typedPlaceLabel}” just nu. Prova en annan stavning eller lägg till land eller region — inget hittas på.`,
@@ -1964,7 +1872,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
                   cancelActivePlannerForNavigation();
                 }
               }}
-              className="inline-flex min-h-11 items-center rounded-parranda-btn border border-parranda-ink/16 px-4 font-bold text-parranda-ink/85 transition hover:border-parranda-ember"
+              className={buttonClass("secondary", "min-h-11 px-4 text-sm")}
             >
               {t("Välj en annan plats", "Choose another place")}
             </a>
@@ -1979,17 +1887,17 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       {dayChange && phase === "done" && !dayIsStale && dayChangeLine.length > 0 && (
         <div
           role="status"
-          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-parranda border border-parranda-ink/12 bg-parranda-ink/5 px-4 py-2.5"
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-parranda border-[1.5px] border-parranda-ink/12 bg-parranda-ink/4 px-4 py-2.5"
         >
           <p className="min-w-0 flex-1 text-[13px] leading-snug text-parranda-ink/75">
-            <span className="font-bold text-parranda-ink/90">{t("Ändrat", "Changed")}: </span>
+            <span className="font-bold text-parranda-ink">{t("Ändrat", "Changed")}: </span>
             {dayChangeLine.join(" · ")}
           </p>
           <button
             type="button"
             onClick={undoDayChange}
             aria-label={t("Ångra ändringen", "Undo this change")}
-            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-parranda-ink/20 px-3.5 text-xs font-bold text-parranda-ink/85 transition hover:border-parranda-ember"
+            className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border-[1.5px] border-parranda-ink/20 px-3.5 text-xs font-bold text-parranda-ink transition hover:border-parranda-ink/50"
           >
             <UndoIcon className="h-3.5 w-3.5" />
             {t("Ångra", "Undo")}
@@ -1997,260 +1905,50 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </div>
       )}
 
-      {/* THE DAY HEADER (design handoff §3): title, honest counts, what the day
-          did for each pick, provenance, and the day-level actions. The
-          timeline below binds to primary_route only. */}
-      {showDay && routeStops.length > 0 && (
-        <header className="flex flex-col gap-3" aria-busy={staleNotice === "updating"}>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-parranda-glow">{t("Din dag", "Your day")}</p>
-            {/* The day on screen is deliberately still here, and deliberately
-                marked as not current. Never a silent swap. */}
-            {staleNotice === "updating" && (
-              <span
-                aria-live="polite"
-                className="inline-flex items-center gap-1.5 rounded-full bg-parranda-ink/10 px-2.5 py-0.5 text-[11px] font-semibold text-parranda-ink/70"
-              >
-                <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-parranda-glow motion-safe:animate-pulse" />
-                {t("Uppdaterar dagen …", "Updating your day …")}
-              </span>
-            )}
-            {staleNotice === "update_failed" && (
-              <>
-                <span
-                  aria-live="polite"
-                  className="inline-flex items-center gap-1.5 rounded-full bg-parranda-ember/12 px-2.5 py-0.5 text-[11px] font-semibold text-parranda-clay"
-                >
-                  {navigationInterrupted
-                    ? t("Planeringen pausades när du lämnade sidan — visar din förra dag", "Planning paused when you left — showing your previous day")
-                    : t("Kunde inte uppdatera — visar din förra dag", "Couldn't update — showing your previous day")}
-                </span>
-                <button
-                  type="button"
-                  onClick={retryPlan}
-                  className="inline-flex min-h-11 items-center rounded-full border border-parranda-ember/40 px-3 text-xs font-bold text-parranda-clay transition hover:border-parranda-ember"
-                >
-                  {navigationInterrupted ? t("Fortsätt planera", "Continue planning") : t("Försök uppdatera igen", "Try updating again")}
-                </button>
-              </>
-            )}
-          </div>
-          <h2 className="font-display text-[2.75rem] font-semibold leading-[0.95] text-parranda-ink sm:text-6xl">
-            {mode === "near_me" && !classification?.placeLabel ? (
-              <>
-                {t("En dag", "A day")} <em className="text-parranda-ember">{t("nära dig", "near you")}</em>
-              </>
-            ) : (
-              <>
-                {t("En dag i", "A day in")} <em className="text-parranda-ember">{anchorLabel}</em>
-              </>
-            )}
-          </h2>
-          <p className="text-[13px] text-parranda-ink/65">
-            {dayWord}
-            {Number.isFinite(primaryRoute?.estimated_km)
-              ? ` · ≈ ${walkingDistanceLabel(primaryRoute.estimated_km, lang)} ${t("till fots", "on foot")}`
-              : ""}
-            {Number.isFinite(primaryRoute?.longest_leg_km)
-              ? ` · ${t("längsta sträcka", "longest stretch")} ${walkingDistanceLabel(primaryRoute.longest_leg_km, lang)}`
-              : ""}
-            {` · ${split.core.length} ${split.core.length === 1 ? t("stopp", "stop") : t("stopp", "stops")}`}
-            {split.woven.length > 0 ? ` + ${split.woven.length} live${lang === "en" ? " event" : "-event"}` : ""}
-          </p>
-          {/* What the day did for each pick, in the pick's own words. A pick
-              the route only partly covers, or does not cover, says so here
-              rather than at the foot of the page. */}
-          {pickCoverage.length > 0 && (
-            <ul className="flex flex-wrap gap-1.5" aria-label={t("Dina val i dagen", "Your picks in this day")}>
-              {pickCoverage.map(({ key, state }) => (
-                <li
-                  key={key}
-                  className={
-                    "inline-flex min-h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs " +
-                    (state === "covered"
-                      ? "border-parranda-ember/45 bg-parranda-ember/10 font-semibold text-parranda-ink"
-                      : state === "partial"
-                        ? "border-parranda-ink/18 text-parranda-ink/75"
-                        : "border-dashed border-parranda-ink/18 text-parranda-ink/55")
-                  }
-                >
-                  {state === "covered" && <CheckIcon className="h-3 w-3 text-parranda-ember" />}
-                  {state === "partial" && <HalfCircleIcon className="h-3 w-3 text-parranda-glow" />}
-                  {state === "missing" && <MinusIcon className="h-3 w-3" />}
-                  <span>{pickLabel(key, lang)}</span>
-                  {state === "covered" && <span className="sr-only">{t(" — med i dagen", " — in this day")}</span>}
-                  {state === "partial" && <span className="text-parranda-ink/55">{t(" · delvis", " · partly")}</span>}
-                  {state === "missing" && <span>{t(" · inte med", " · not in this day")}</span>}
-                </li>
-              ))}
-            </ul>
-          )}
-          {sourceBackedDay && (
-            <p className="flex items-start gap-2 text-[13px] leading-relaxed text-parranda-ink/70">
-              <span aria-hidden="true" className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-parranda-glow" />
-              <span>
-                {t(
-                  "Byggd från källstödda platser — Parranda har inte full kurering här ännu",
-                  "Built from source-backed places — Parranda does not have full curation here yet",
-                )}
-              </span>
-            </p>
-          )}
-          {dayLimitationNote && (
-            <p className="flex items-start gap-2 text-[13px] leading-relaxed text-parranda-ink/70">
-              <span aria-hidden="true" className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-parranda-glow" />
-              <span>{dayLimitationNote}</span>
-            </p>
-          )}
-          {/* Time-anchoring truth (#429): say when the arc is not anchored to
-              the local clock — a today request at 22:00 must not read as a
-              doable midday plan. Quietly note the trimmed variant too. */}
-          {timeAnchoring === "full_arc_not_now" && (
-            <p className="flex items-start gap-2 text-[13px] leading-relaxed text-parranda-ink/70">
-              <span aria-hidden="true" className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-parranda-glow" />
-              <span>
-                {t(
-                  "En hel dags båge — inte förankrad till klockan just nu",
-                  "A full-day arc — not anchored to right now",
-                )}
-              </span>
-            </p>
-          )}
-          {timeAnchoring === "anchored_trimmed" && (
-            <p className="flex items-start gap-2 text-[13px] leading-relaxed text-parranda-ink/70">
-              <span aria-hidden="true" className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-parranda-glow" />
-              <span>
-                {t(
-                  "Förankrad till nu — tidigare dagdelar borttagna",
-                  "Anchored to now — earlier dayparts trimmed",
-                )}
-              </span>
-            </p>
-          )}
-          {restoredAt && (
-            <p className="text-xs text-parranda-ink/60">
-              {t("Sparad dag", "Saved day")} · {new Date(restoredAt).toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE")} —{" "}
-              <button type="button" onClick={() => resolveAndRun()} className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-parranda-clay">
-                {t("bygg om för färska events", "rebuild for fresh events")}
-              </button>
-            </p>
-          )}
-          {/* THE WALK IN MAPS. One link when Maps can take the whole walk. When
-              it can't (Maps takes a few stops per link), a numbered sequence of
-              named stretches: only the first is the primary action, the rest
-              are the next steps of the same walk — never alternatives to it. */}
-          {routeParts.length > 1 && (
-            <div className="mt-1 flex flex-col gap-2">
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-parranda-ink/60">
-                {t(`Promenaden i Maps · ${routeParts.length} delar`, `The walk in Maps · ${routeParts.length} parts`)}
-              </p>
-              <ol className="flex flex-col gap-2">
-                {routeParts.map((part, index) => {
-                  const newStops = part.stopIndexes.length;
-                  const first = index === 0;
-                  return (
-                    <li key={part.url}>
-                      <a
-                        href={part.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={
-                          "flex min-h-12 items-center gap-3 rounded-parranda-btn px-4 py-2 text-left text-sm transition " +
-                          (first
-                            ? "bg-parranda-terracotta font-bold text-white shadow-sm hover:brightness-110"
-                            : "border border-parranda-ink/16 font-semibold text-parranda-ink/85 hover:border-parranda-ember")
-                        }
-                      >
-                        <span
-                          aria-hidden="true"
-                          className={
-                            "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-extrabold " +
-                            (first ? "bg-white/20" : "bg-parranda-ink/10")
-                          }
-                        >
-                          {index + 1}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="sr-only">{t(`Del ${index + 1} i Google Maps: `, `Part ${index + 1} in Google Maps: `)}</span>
-                          {routeEndLabel(part.from)} → {routeEndLabel(part.to)}
-                          <span className={"block text-xs font-medium " + (first ? "text-white/80" : "text-parranda-ink/55")}>
-                            {newStops > 0
-                              ? t(`${newStops} stopp`, `${newStops} ${newStops === 1 ? "stop" : "stops"}`)
-                              : t("Sista biten", "The last stretch")}
-                          </span>
-                        </span>
-                        <ExternalIcon />
-                      </a>
-                    </li>
-                  );
-                })}
-              </ol>
-              <p className="text-xs leading-relaxed text-parranda-ink/65">
-                {t(
-                  "Google Maps tar bara några stopp per länk, så promenaden öppnas i delar. Ta dem i ordning — varje del börjar där den förra slutar.",
-                  "Google Maps takes only a few stops per link, so the walk opens in parts. Take them in order — each part starts where the previous one ends.",
-                )}
-              </p>
-            </div>
-          )}
-          <div className="mt-1 flex flex-wrap gap-2">
-            {routeParts.length === 1 && (
-              <a
-                href={routeUrls[0]}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex min-h-12 flex-1 basis-full items-center justify-center gap-2 rounded-parranda-btn bg-parranda-terracotta px-5 text-sm font-bold text-white shadow-sm transition hover:brightness-110 sm:basis-auto sm:flex-none sm:px-6"
-              >
-                {t("Öppna rutten i Maps", "Open route in Maps")}
-                <ExternalIcon />
-              </a>
-            )}
-            <button
-              type="button"
-              onClick={saveDay}
-              disabled={isSaved}
-              aria-label={isSaved ? t("Dagen är sparad", "Day is saved") : t("Spara dagen", "Save this day")}
-              className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-parranda-btn border border-parranda-ink/16 px-4 text-sm font-bold text-parranda-ink/85 transition hover:border-parranda-ember disabled:border-parranda-ember/40 disabled:text-parranda-clay sm:flex-none"
-            >
-              <StarIcon filled={isSaved} />
-              {isSaved ? t("Sparad", "Saved") : t("Spara", "Save")}
-            </button>
-            {canShare && (
-              <button
-                type="button"
-                onClick={shareDay}
-                aria-label={t("Dela dagen", "Share this day")}
-                className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-parranda-btn border border-parranda-ink/16 px-4 text-sm font-bold text-parranda-ink/85 transition hover:border-parranda-ember sm:flex-none"
-              >
-                {shareCopied ? <CheckIcon className="h-4 w-4 text-parranda-ember" /> : <ShareIcon />}
-                {shareCopied ? t("Länk kopierad", "Link copied") : t("Dela", "Share")}
-              </button>
-            )}
-          </div>
-          {/* A split walk already names its start and finish in the sequence. */}
-          {routeParts.length <= 1 && (routeOrigin || routeDestination) && (
-            <p className="text-xs text-parranda-ink/65">
-              {routeOrigin && `${t("Start", "Start")}: ${routeAnchorCoords ? t("din valda position", "your chosen location") : String(publishedStart?.label || t("kartans startpunkt", "map start point"))}`}
-              {routeOrigin && routeDestination ? " · " : ""}
-              {routeDestination && `${t("Slut", "Finish")}: ${routeAnchorCoords ? t("din valda position", "your chosen location") : String(publishedEnd?.label || t("kartans slutpunkt", "map end point"))}`}
-            </p>
-          )}
-          {routeUrls.length === 0 && (
-            <p className="text-xs text-parranda-ink/65">
-              {t("Hela rutten kan inte öppnas i Maps. Öppna platserna var för sig där kartlänk finns.", "The whole route cannot be opened in Maps. Open places individually where a map link is available.")}
-            </p>
-          )}
-        </header>
+      {dayWithRoute && (
+        <DayHeader
+          t={t}
+          lang={lang}
+          staleNotice={staleNotice}
+          navigationInterrupted={navigationInterrupted}
+          retryPlan={retryPlan}
+          mode={mode}
+          placeLabel={classification?.placeLabel}
+          anchorLabel={anchorLabel}
+          dayWord={dayWord}
+          primaryRoute={primaryRoute}
+          coreCount={split.core.length}
+          wovenCount={split.woven.length}
+          pickCoverage={pickCoverage}
+          sourceBackedDay={sourceBackedDay}
+          dayLimitationNote={dayLimitationNote}
+          timeAnchoring={timeAnchoring}
+          restoredAt={restoredAt}
+          resolveAndRun={() => resolveAndRun()}
+          routeParts={routeParts}
+          routeUrls={routeUrls}
+          routeEndLabel={routeEndLabel}
+          saveDay={saveDay}
+          isSaved={isSaved}
+          canShare={canShare}
+          shareDay={shareDay}
+          shareCopied={shareCopied}
+          routeOrigin={routeOrigin}
+          routeDestination={routeDestination}
+          routeAnchorCoords={routeAnchorCoords}
+          publishedStart={publishedStart}
+          publishedEnd={publishedEnd}
+        />
       )}
 
       {/* Without a composed day, this card carries provenance only. Save/share
           remain route actions: offering them here would call an unsequenced
           candidate surface a day. */}
       {showStructure && structure && !(showDay && routeStops.length > 0) && (
-        <section className="rounded-parranda border border-parranda-glow/25 bg-parranda-glow/[0.06] p-4">
+        <section className="rounded-parranda border-[1.5px] border-parranda-glow/40 bg-parranda-glow/8 p-4">
           <div className="min-w-0 flex-1">
             {structure.provenance === "agnostic_anchor" && (
-              <p className="text-sm font-semibold text-parranda-clay">
+              <p className="text-sm font-bold text-parranda-clay">
                 {t(
                   "Källstödda platskandidater — inte en komponerad rutt ännu",
                   "Source-backed place candidates — not a composed route yet",
@@ -2258,9 +1956,9 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
               </p>
             )}
             {restoredAt && (
-              <p className="mt-1 text-xs text-parranda-ink/60">
+              <p className="mt-1 text-xs text-parranda-ink/68">
                 {t("Sparad dag", "Saved day")} · {new Date(restoredAt).toLocaleDateString(lang === "en" ? "en-GB" : "sv-SE")} —{" "}
-                <button type="button" onClick={() => resolveAndRun()} className="inline-flex min-h-11 items-center underline underline-offset-2 hover:text-parranda-clay">
+                <button type="button" onClick={() => resolveAndRun()} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2 hover:text-parranda-clay">
                   {t("bygg om för färska events", "rebuild for fresh events")}
                 </button>
               </p>
@@ -2278,811 +1976,124 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         </p>
       )}
 
-      {showDay && routeStops.length > 0 && (
-        <section
-          aria-label={t("Rutten", "The route")}
-          className={`${staleNotice === "updating" ? "opacity-60 motion-safe:transition-opacity" : ""} rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4 shadow-sm sm:p-5`}
-        >
-          {/* Map first (design handoff §3) — it orients the whole timeline and
-              can expand in place. */}
-          <RouteMap
-            hasPrimaryRoute={hasPrimaryRoute}
-            routeStops={routeStops}
-            primaryRoute={primaryRoute}
-            areas={day?.areas}
-            routeContextSuggestions={routeContextSuggestions}
-            showContext={detoursOpen}
-            sketch={routeLineIsSketch}
-            mapExpanded={mapExpanded}
-            onToggleExpanded={() => setMapExpanded((cur) => !cur)}
-            heightClass={mapExpanded ? "h-96 sm:h-[28rem]" : "h-48 sm:h-60"}
-            t={t}
-          />
-          {/* The route's evidence, stated beside it: what the line is, what the
-              numbers are, and how the day was assembled. */}
-          <p className="mt-2.5 text-xs leading-relaxed text-parranda-ink/55">
-            {routeLineIsSketch && t("Den prickade linjen visar stoppens ordning, inte gatorna. ", "The dotted line shows the order of the stops, not the streets. ")}
-            {t("Avstånd och gångtider är uppskattningar. Google Maps beräknar gångvägen när du öppnar rutten.", "Distances and walking times are estimates. Google Maps calculates the walking path when you open the route.")}
-            {dayContextNote && ` ${dayContextNote}`}
-          </p>
-          {/* Core stops only, grouped under daypart headings taken from
-              stop.daypart — only groups that exist render, and the engine's
-              order is never changed to force a grouping. The walk INTO a stop
-              comes before its daypart heading, so a heading always opens the
-              part of the day it names. A woven live event is NOT an ordinary
-              POI — it renders once below, as an attached route extension. */}
-          <ol className="mt-4 flex flex-col" aria-label={t("Stoppen i ordning", "The stops, in order")}>
-            {split.core.map((stop: any, i: number) => {
-              const name = String(stop?.label || stop?.name || "").trim();
-              if (!name) return null;
-              const routeNumber = routeStops.indexOf(stop) + 1;
-              const leg = routeNumber === 1 ? null : legForStop(stop);
-              const pin = mapsPlaceUrl(stop, mapsPlaceContext);
-              const daypart = String(stop?.daypart || "");
-              const previousDaypart = i > 0 ? String((split.core[i - 1] as any)?.daypart || "") : "";
-              const daypartHeading = daypart && daypart !== previousDaypart ? label(DAYPART_LABELS, stop.daypart, lang) : null;
-              const realId = String(stop?.id ?? stop?.place_id ?? stop?.candidate_id ?? "").trim();
-              const hasRealId = realId.length > 0;
-              const stopIdentity = hasRealId ? realId : String(i);
-              const stopKey = `${stopIdentity}:${i}`;
-              const panelId = `route-stop-panel-${i}`;
-              const expanded = expandedStopKey === stopKey;
-              const kept = commitments[stopIdentity]?.kind === "pin";
-              const prevName = routeNumber > 1 ? String((split.core[i - 1] as any)?.label || (split.core[i - 1] as any)?.name || "").trim() : "";
-              const hoursLabel = selectedDayHoursLabel(stop?.selected_day_hours, lang);
-              const partialLabels = partialPreferenceLabels(stop, selected, lang);
-              const stopKindLabel = stop?.type === "vintage-shop"
-                ? stopTypeLabel(stop, lang)
-                : typeLabel(stop?.type, lang);
-              const hoursUnknown = stopHoursUnknown(stop);
-              const sourceLabel = String(stop?.source?.label || "").trim();
-              return (
-                <li key={stopKey} className="flex flex-col">
-                  {leg && (leg.minutes != null || leg.km != null) && (
-                    <span className="ml-4 border-l border-dashed border-parranda-ink/25 py-2 pl-6 text-xs text-parranda-ink/55">
-                      {leg.minutes != null ? `${leg.minutes} min` : ""}
-                      {leg.minutes != null && leg.km != null ? " · " : ""}
-                      {leg.km != null ? walkingDistanceLabel(leg.km, lang) : ""}
-                    </span>
-                  )}
-                  {daypartHeading && (
-                    <p className="mb-1 mt-2 pl-11 text-[10px] font-extrabold uppercase tracking-[0.2em] text-parranda-glow">{daypartHeading}</p>
-                  )}
-                  {/* The stop row is a DISCLOSURE, not an external link: tapping
-                      it opens an inline panel instead of ejecting to Google Maps.
-                      The Maps jump becomes a deliberate action inside the panel. */}
-                  <button
-                    type="button"
-                    aria-expanded={expanded}
-                    aria-controls={panelId}
-                    onClick={() => setExpandedStopKey(expanded ? null : stopKey)}
-                    className="flex min-h-12 w-full items-center gap-3 rounded-parranda-btn py-1.5 pr-1 text-left transition hover:bg-parranda-ink/[0.04]"
-                  >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-parranda-ember/55 bg-parranda-terracotta/20 text-[13px] font-extrabold text-parranda-clay">
-                      {routeNumber}
-                    </span>
-                    <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-parranda-ink">
-                      <span className="font-bold">{name}</span>
-                      {stopKindLabel && (
-                        <span className="rounded-full border border-parranda-ink/15 bg-parranda-ink/10 px-2 py-0.5 text-xs text-parranda-ink/75">
-                          {stopKindLabel}
-                        </span>
-                      )}
-                      {kept && (
-                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-parranda-clay">
-                          <KeepIcon className="h-3 w-3" />
-                          {t("Behålls", "Kept")}
-                        </span>
-                      )}
-                      {/* Visitability stays visible without expanding: a place
-                          whose source gives no hours for the chosen day says so
-                          here instead of reading as a confirmed visit. */}
-                      {hoursUnknown && (
-                        <span className="text-xs text-parranda-ink/55">{t("Öppettider okända", "Hours unknown")}</span>
-                      )}
-                    </span>
-                    <ChevronRightIcon
-                      className={"h-4 w-4 shrink-0 transition " + (expanded ? "rotate-90 text-parranda-ember" : "text-parranda-ink/40")}
-                    />
-                  </button>
-                  {expanded && (
-                    <div
-                      id={panelId}
-                      className="mb-2 ml-11 mt-1 flex flex-col rounded-parranda border border-parranda-ember/35 bg-parranda-ink/[0.03] p-4"
-                    >
-                      {/* Facts only. The schedule row is a bounded source fact
-                          for the selected local day, never an "open now" claim. */}
-                      <div className="flex flex-col gap-1.5 text-xs text-parranda-ink/65">
-                        {leg && (leg.minutes != null || leg.km != null) && (
-                          <span>
-                            {legLabel(leg)}
-                            {prevName ? ` ${t("till fots från", "walk from")} ${prevName}` : ` ${t("till fots", "on foot")}`}
-                          </span>
-                        )}
-                        {hoursLabel && <span>{hoursLabel}</span>}
-                        {hoursUnknown && (
-                          <span>{t("Källtider saknas för den valda dagen", "Source hours unavailable for the selected day")}</span>
-                        )}
-                        {stop?.address && <span>{stop.address}</span>}
-                      </div>
-                      {partialLabels.length > 0 && (
-                        <p className="mt-2 text-xs text-parranda-ink/50">
-                          {t("Lösare träff för:", "A looser match for:")} {partialLabels.join(", ")}
-                        </p>
-                      )}
-                      {stop?.candidate_status === "partial" && (
-                        <p className="mt-2 text-xs text-parranda-ink/50">
-                          {sourceLabel
-                            ? t(`Källstöd: ${sourceLabel} · underlaget är fortfarande provisoriskt`, `Source-backed by ${sourceLabel} · evidence is still provisional`)
-                            : t("Källunderlaget är fortfarande provisoriskt", "Source evidence is still provisional")}
-                        </p>
-                      )}
-                      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                        {pin && (
-                          <a
-                            href={pin}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-parranda-btn bg-parranda-terracotta px-4 text-sm font-bold text-white transition hover:brightness-110 sm:w-auto sm:px-5"
-                          >
-                            {t("Öppna i Maps", "Open in Maps")}
-                            <ExternalIcon />
-                          </a>
-                        )}
-                        {/* Two verbs, both anchored to a real candidate id.
-                            Keep says "whatever else changes, this stays";
-                            dismiss removes it from consideration. They are
-                            mutually exclusive by construction — the ledger
-                            holds one commitment per candidate — so a kept stop
-                            offers release rather than the opposite verb. */}
-                        {!cityKey && hasRealId && (commitments[stopIdentity]?.kind === "pin" ? (
-                          <button
-                            type="button"
-                            onClick={() => releaseCommitment(stopIdentity)}
-                            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-parranda-btn border border-parranda-ember/45 bg-parranda-ember/10 px-4 text-sm font-semibold text-parranda-ink transition hover:border-parranda-ember sm:px-5"
-                          >
-                            <KeepIcon className="h-4 w-4 text-parranda-ember" />
-                            {t("Behålls — släpp", "Kept — release")}
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => keepStop(stopIdentity, name)}
-                            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-parranda-btn border border-parranda-ink/20 px-4 text-sm font-semibold text-parranda-ink/80 transition hover:border-parranda-ember hover:text-parranda-ink sm:px-5"
-                          >
-                            <KeepIcon className="h-4 w-4" />
-                            {t("Behåll den här", "Keep this one")}
-                          </button>
-                        ))}
-                        {!cityKey && hasRealId && commitments[stopIdentity]?.kind !== "pin" && (
-                          <button
-                            type="button"
-                            onClick={() => dismissStop(stopIdentity, name)}
-                            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-parranda-btn border border-parranda-ink/20 px-4 text-sm font-semibold text-parranda-ink/80 transition hover:border-parranda-ink/40 hover:text-parranda-ink sm:px-5"
-                          >
-                            <MinusIcon className="h-4 w-4" />
-                            {t("Inte den här", "Not this one")}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ol>
-          {/* Route extension: the walking-validated evening event. One full
-              presentation — attached to the route it genuinely extends (it stays
-              in the Google Maps route via the untouched full stop order). */}
-          {split.woven.map((stop: any) => {
-            const name = String(stop?.label || stop?.name || "").trim();
-            if (!name) return null;
-            const leg = legForStop(stop);
-            const legShown = Boolean(leg && (leg.minutes != null || leg.km != null));
-            const legKm = Number.isFinite(eveningEvent?.route_leg_km) ? eveningEvent.route_leg_km : leg?.km;
-            const pin = mapsPlaceUrl(stop, mapsPlaceContext);
-            const venue = String(eveningEvent?.place || "").trim();
-            // Attribution (the listing feed) and destination (where the link
-            // leads) stay separate facts; the stop's own source wins, as before.
-            const sourceLabel = String(stop?.source?.label || eveningEvent?.source_label || "").trim();
-            const sourceLink = stop?.source?.url
-              ? eventSourceLink(
-                  { source_url: stop.source.url, source_link_kind: stop.source.link_kind, source_link_host: stop.source.link_host },
-                  lang,
-                )
-              : eventSourceLink(eveningEvent, lang);
-            const routeNumber = routeStops.indexOf(stop) + 1;
-            return (
-              <div key={stop?.id} className="flex flex-col">
-                {legShown && leg && (
-                  <span className="ml-4 border-l border-dashed border-parranda-ember/40 py-2 pl-6 text-xs text-parranda-ink/55">
-                    {legLabel(leg)}
-                  </span>
-                )}
-                <div className={`${legShown ? "" : "mt-3 "}rounded-parranda border border-parranda-ember/50 bg-gradient-to-br from-parranda-terracotta/15 to-parranda-glow/5 p-4`}>
-                  <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-parranda-clay">
-                    <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-parranda-ember motion-safe:animate-pulse" />
-                    {t("Live i din rutt", "Live in your route")}
-                  </p>
-                  <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold text-parranda-ink">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-parranda-terracotta text-[13px] font-extrabold text-white">{routeNumber}</span>
-                    {pin ? (
-                      <a href={pin} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 min-w-11 items-center gap-1.5 text-[15px] font-bold transition hover:text-parranda-clay">
-                        {name}
-                        <ExternalIcon className="h-3.5 w-3.5 text-parranda-ink/50" />
-                      </a>
-                    ) : (
-                      <span className="text-[15px] font-bold">{name}</span>
-                    )}
-                    {stop?.starts_at && (
-                      <span className="rounded-full border border-parranda-accent bg-parranda-accent/15 px-2 py-0.5 text-xs font-bold text-parranda-clay">
-                        {eventTiming(stop, lang, undefined, liveEvents?.selected_date)}
-                      </span>
-                    )}
-                  </p>
-                  {venue && venue !== name && <p className="mt-0.5 text-xs text-parranda-ink/70">{venue}</p>}
-                  <p className="mt-1 text-xs text-parranda-ink/70">
-                    {dayOffset === 0
-                      ? t("Tillagt till dagens rutt", "Added to today's route")
-                      : t("Tillagt till morgondagens rutt", "Added to tomorrow's route")}
-                    {!legShown && Number.isFinite(legKm)
-                      ? t(
-                          ` · ${walkingDistanceLabel(legKm, "sv")} från föregående stopp`,
-                          ` · ${walkingDistanceLabel(legKm, "en")} from the previous stop`,
-                        )
-                      : ""}
-                  </p>
-                  {(sourceLabel || sourceLink) && (
-                    <p className="mt-1 text-xs text-parranda-ink/55">
-                      {sourceLabel && <>{t("Källa", "Source")}: {sourceLabel}</>}
-                      {sourceLabel && sourceLink && " · "}
-                      {sourceLink && (
-                        <a href={sourceLink.href} target="_blank" rel="noopener noreferrer" className="-my-3 inline-flex min-h-11 min-w-11 items-center underline decoration-parranda-ink/30 underline-offset-2 hover:text-parranda-clay">
-                          <span>{sourceLink.text}<span aria-hidden="true">&nbsp;↗</span></span>
-                        </a>
-                      )}
-                    </p>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-
-          {/* Detours — collapsed by default (design handoff §3): optional ideas
-              must never read as part of the route, and the caption stays visible
-              even while collapsed. Their dots join the map only while open. */}
-          {routeContextSuggestions.length > 0 && (
-            <div className="mt-5 border-t border-parranda-ink/10 pt-4">
-              <button
-                type="button"
-                aria-expanded={detoursOpen}
-                onClick={() => setDetoursOpen((cur) => !cur)}
-                className="flex min-h-12 w-full items-center justify-between gap-3 rounded-parranda-btn border border-dashed border-parranda-ink/20 px-4 text-left text-[13px] font-bold text-parranda-ink/80 transition hover:border-parranda-ink/35"
-              >
-                <span>
-                  {routeContextSuggestions.length}{" "}
-                  {routeContextSuggestions.length === 1
-                    ? t("idé nära din rutt", "detour idea near your route")
-                    : t("idéer nära din rutt", "detour ideas near your route")}
-                </span>
-                <ChevronDownIcon className={"h-4 w-4 shrink-0 transition " + (detoursOpen ? "rotate-180" : "")} />
-              </button>
-              <p className="mt-2 text-xs text-parranda-ink/60">
-                {t(
-                  "Valfria idéer från platsunderlaget — de ingår inte i dagens stopp eller Maps-rutten.",
-                  "Optional ideas from the place evidence — they are not part of this day's stops or the Maps route.",
-                )}
-              </p>
-              {detoursOpen && (
-                <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {routeContextSuggestions.map((stop, index) => {
-                    const name = String(stop.name || stop.label || "").trim();
-                    if (!name) return null;
-                    const url = mapsPlaceUrl(
-                      { ...stop, lat: stop.lat ?? undefined, lng: stop.lng ?? undefined },
-                      mapsPlaceContext,
-                    );
-                    const candidateKey = `detour:${stop.id || stop.candidate_id || stop.place_id || index}`;
-                    // Same id shape the composed stops use, so a pin resolves
-                    // against the very candidates the server already loaded.
-                    const candidateId = String(stop?.id ?? stop?.place_id ?? stop?.candidate_id ?? "").trim();
-                    const candidatePanelId = `candidate-panel-detour-${index}`;
-                    const expanded = expandedCandidateKey === candidateKey;
-                    return (
-                      <li key={stop.id || stop.candidate_id || stop.place_id || name} className="rounded-parranda border border-dashed border-parranda-ink/20 px-3.5 py-1.5">
-                        <button
-                          type="button"
-                          aria-expanded={expanded}
-                          aria-controls={candidatePanelId}
-                          onClick={() => setExpandedCandidateKey(expanded ? null : candidateKey)}
-                          className="flex min-h-11 w-full items-center justify-between gap-3 text-left text-sm font-semibold text-parranda-ink transition hover:text-parranda-clay"
-                        >
-                          <span>{name}</span>
-                          {expanded ? <MinusIcon className="h-4 w-4 shrink-0 text-parranda-ember" /> : <PlusIcon className="h-4 w-4 shrink-0 text-parranda-ink/50" />}
-                        </button>
-                        <p className="pb-1.5 text-xs text-parranda-ink/55">
-                          {walkingDistanceLabel(stop.distance_km, lang)} {t("från", "from")} {stop.route_stop_name}
-                        </p>
-                        {expanded && (
-                          <div id={candidatePanelId} className="mb-1.5 mt-1 border-t border-parranda-ink/10 pt-3">
-                            {url && (
-                              <a
-                                href={url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-parranda-btn bg-parranda-terracotta px-4 text-sm font-bold text-white transition hover:brightness-110"
-                              >
-                                {t("Öppna platsen i Maps", "Open place in Maps")}
-                                <ExternalIcon />
-                              </a>
-                            )}
-                            {/* Add is the same commitment as Keep, reached from
-                                a candidate the day did not choose. The server
-                                still has to resolve it against its own loaded
-                                pool — an unhonoured pin is reported, not faked. */}
-                            {!cityKey && candidateId && (commitments[candidateId]?.kind === "pin" || canCommitTo(stop)) && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    commitments[candidateId]?.kind === "pin"
-                                      ? releaseCommitment(candidateId)
-                                      : commit(candidateId, "pin", name)
-                                  }
-                                  className={`mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-parranda-btn border px-4 text-sm font-semibold transition ${
-                                    commitments[candidateId]?.kind === "pin"
-                                      ? "border-parranda-ember/45 bg-parranda-ember/10 text-parranda-ink hover:border-parranda-ember"
-                                      : "border-parranda-ink/20 text-parranda-ink/80 hover:border-parranda-ember hover:text-parranda-ink"
-                                  }`}
-                                >
-                                  <KeepIcon className="h-4 w-4 text-parranda-ember" />
-                                  {commitments[candidateId]?.kind === "pin"
-                                    ? t("Med i dagen — släpp", "In my day — release")
-                                    : t("Lägg till i min dag", "Add to my day")}
-                                </button>
-                            )}
-                          </div>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-          )}
-        </section>
+      {dayWithRoute && (
+        <StopLine
+          t={t}
+          lang={lang}
+          map={splitLayout ? null : routeMap}
+          stale={staleNotice === "updating"}
+          routeLineIsSketch={routeLineIsSketch}
+          dayContextNote={dayContextNote}
+          split={split}
+          routeStops={routeStops}
+          legForStop={legForStop}
+          mapsPlaceContext={mapsPlaceContext}
+          expandedStopKey={expandedStopKey}
+          setExpandedStopKey={setExpandedStopKey}
+          expandedCandidateKey={expandedCandidateKey}
+          setExpandedCandidateKey={setExpandedCandidateKey}
+          commitments={commitments}
+          cityKey={cityKey}
+          selected={selected}
+          releaseCommitment={releaseCommitment}
+          keepStop={keepStop}
+          dismissStop={dismissStop}
+          commit={commit}
+          eveningEvent={eveningEvent}
+          selectedDate={liveEvents?.selected_date}
+          dayOffset={dayOffset}
+          routeContextSuggestions={routeContextSuggestions}
+          detoursOpen={detoursOpen}
+          setDetoursOpen={setDetoursOpen}
+        />
       )}
 
       {/* Without a primary route, the broader place structure remains useful —
           but it is explicitly candidates, never a second itinerary. */}
       {showStructure && structure && !hasPrimaryRoute && (
-        <section className="flex flex-col gap-4 rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4 shadow-sm sm:p-5">
-          <div>
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-parranda-ink/60">
-              {t("Kandidater nära platsen", "Candidates near this place")}
-            </p>
-            {classification?.status === "structure_only" && (
-              <p className="mt-1 text-sm text-parranda-ink/75">
-                {t(
-                  "Parranda hittade platskandidater, men inte en tillräckligt stark rutt ännu.",
-                  "Parranda found place candidates, but not a reliable route yet.",
-                )}
-              </p>
-            )}
-          </div>
-
-          <RouteMap
-            hasPrimaryRoute={false}
-            routeStops={routeStops}
-            primaryRoute={primaryRoute}
-            areas={day?.areas}
-            routeContextSuggestions={routeContextSuggestions}
-            showContext={false}
-            sketch={false}
-            heightClass="h-64 sm:h-72"
-            t={t}
-          />
-
-          {/* Candidate CLUSTERS, deliberately unnumbered and unsequenced: no rank
-              badges, no daypart headings, no inter-cluster walking legs — those
-              read as an itinerary, and only primary_route.main_stops is a route. */}
-          <ul className="flex flex-col gap-3">
-            {(day?.areas ?? []).map((area, index) => (
-              <li key={index} className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/[0.06] p-4">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {(area.covers ?? []).map((axis) => (
-                    <span key={axis} className="rounded-full border border-parranda-accent/30 bg-parranda-accent/10 px-2.5 py-0.5 text-xs font-semibold text-parranda-ink">
-                      {label(INTENT_LABELS, axis, lang)}
-                    </span>
-                  ))}
-                  <span className="ml-auto text-xs text-parranda-ink/60">
-                    {(area.stop_ids?.length ?? area.stops?.length ?? 0)} {t("träffar", "places")}
-                  </span>
-                </div>
-                {Array.isArray(area.stops) && area.stops.length > 0 ? (
-                  <ul className="mt-2 flex flex-col gap-1 text-sm text-parranda-ink">
-                    {area.stops.map((stop, si) => {
-                      const url = mapsPlaceUrl(stop, mapsPlaceContext);
-                      const name = (stop.name || area.stop_names?.[si] || "").trim();
-                      if (!name) return null;
-                      const candidateKey = `cluster:${index}:${stop.id || stop.candidate_id || stop.place_id || si}`;
-                      const candidateId = String(stop?.id ?? stop?.place_id ?? stop?.candidate_id ?? "").trim();
-                      const candidatePanelId = `candidate-panel-cluster-${index}-${si}`;
-                      const expanded = expandedCandidateKey === candidateKey;
-                      const facts = [...new Set([stop.address, stop.area].map((value) => String(value || "").trim()).filter(Boolean))];
-                      return (
-                        <li key={stop.id ?? si} className="rounded-parranda-btn border border-parranda-ink/10 px-3 py-1">
-                          <button
-                            type="button"
-                            aria-expanded={expanded}
-                            aria-controls={candidatePanelId}
-                            onClick={() => setExpandedCandidateKey(expanded ? null : candidateKey)}
-                            className="flex min-h-11 w-full items-center justify-between gap-3 text-left font-semibold transition hover:text-parranda-clay"
-                          >
-                            <span>{name}</span>
-                            {expanded ? <MinusIcon className="h-4 w-4 shrink-0 text-parranda-ember" /> : <PlusIcon className="h-4 w-4 shrink-0 text-parranda-ink/50" />}
-                          </button>
-                          {expanded && (
-                            <div id={candidatePanelId} className="border-t border-parranda-ink/10 pb-2 pt-2">
-                              {facts.length > 0 && <p className="text-xs text-parranda-ink/60">{facts.join(" · ")}</p>}
-                              {url && (
-                                <a
-                                  href={url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-parranda-btn bg-parranda-terracotta px-4 text-sm font-bold text-white transition hover:brightness-110 sm:w-auto"
-                                >
-                                  {t("Öppna platsen i Maps", "Open place in Maps")}
-                                  <ExternalIcon />
-                                </a>
-                              )}
-                              {!cityKey && candidateId && (commitments[candidateId]?.kind === "pin" || canCommitTo(stop)) && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  commitments[candidateId]?.kind === "pin"
-                                    ? releaseCommitment(candidateId)
-                                    : commit(candidateId, "pin", name)
-                                }
-                                className={`mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-parranda-btn border px-4 text-sm font-semibold transition sm:w-auto ${
-                                  commitments[candidateId]?.kind === "pin"
-                                    ? "border-parranda-ember/45 bg-parranda-ember/10 text-parranda-ink hover:border-parranda-ember"
-                                    : "border-parranda-ink/20 text-parranda-ink/80 hover:border-parranda-ember hover:text-parranda-ink"
-                                }`}
-                              >
-                                <KeepIcon className="h-4 w-4 text-parranda-ember" />
-                                {commitments[candidateId]?.kind === "pin"
-                                  ? t("Med i dagen — släpp", "In my day — release")
-                                  : t("Lägg till i min dag", "Add to my day")}
-                              </button>
-                            )}
-                            </div>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                ) : (area.stop_names ?? []).length > 0 ? (
-                  <p className="mt-2 text-sm text-parranda-ink">{(area.stop_names ?? []).join(" · ")}</p>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-
-          {/* The evening event is NOT presented here: a woven event renders once,
-              as the route extension in "Dagens rutt"; a non-woven anchor event
-              surfaces in the Pulse section's tonight bucket. */}
-
-          {(day?.missing_intents ?? []).length > 0 && (
-            <p className="text-sm text-parranda-ink/65">
-              {t("Ingen av kandidaterna täcker:", "None of these candidates cover:")} {(day?.missing_intents ?? []).map((k) => label(INTENT_LABELS, k, lang)).join(", ")}
-            </p>
-          )}
-        </section>
+        <CandidateAreas
+          t={t}
+          lang={lang}
+          structureOnly={classification?.status === "structure_only"}
+          areas={day?.areas ?? []}
+          missingIntents={day?.missing_intents ?? []}
+          mapsPlaceContext={mapsPlaceContext}
+          expandedCandidateKey={expandedCandidateKey}
+          setExpandedCandidateKey={setExpandedCandidateKey}
+          commitments={commitments}
+          cityKey={cityKey}
+          releaseCommitment={releaseCommitment}
+          commit={commit}
+          map={
+            <RouteMap
+              hasPrimaryRoute={false}
+              routeStops={routeStops}
+              primaryRoute={primaryRoute}
+              areas={day?.areas}
+              routeContextSuggestions={routeContextSuggestions}
+              showContext={false}
+              sketch={false}
+              heightClass="h-64 sm:h-72"
+              t={t}
+            />
+          }
+        />
       )}
 
       {phase === "done" &&
-        ((liveEvents && (liveEvents.coverage === "covered" || liveEvents.coverage === "uncovered")) ||
+        ((liveEvents && ["covered", "uncovered", "unavailable"].includes(liveEvents.coverage ?? "")) ||
           (showDay && dayflow?.weather?.headline) ||
           aroundPlaceScopeAvailable) && (
-        <section className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/5 p-4 shadow-sm sm:p-5">
-          {/* PULSE — the city's now-context: weather read, rhythm advice, current
-              events. Renders independently of route composition (live_events
-              survives a blocked compose), so a failed route never hides trusted
-              context; and the trusted weather read shows even when no event
-              source exists. Woven events are excluded here — they own the
-              route-extension presentation above. */}
-          <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-parranda-glow">
-            {mode === "near_me"
-              ? t("Live nära dig", "Live near you")
-              : anchorLabel
-                ? t(`Live i ${anchorLabel}`, `Live in ${anchorLabel}`)
-                : t("Live här", "Live here")}
-            {liveEvents?.selected_date ? ` · ${liveDayLabel}` : ""}
-          </p>
-
-          {((showDay && dayflow?.weather?.headline) || clothing) && (
-            <div className="mt-3 flex flex-col gap-1 rounded-parranda-btn bg-parranda-ink/[0.05] px-3.5 py-3">
-              {showDay && dayflow?.weather?.headline && (
-                <p className="text-sm font-semibold text-parranda-ink">
-                  {dayflow.weather.headline}
-                  {dayflow.weather.pitch ? <span className="font-medium text-parranda-ink/80"> — {dayflow.weather.pitch}</span> : null}
-                </p>
-              )}
-              {clothing && (
-                <p className="text-sm text-parranda-ink">
-                  <span className="font-semibold">{clothing.headline}</span>
-                  <span className="text-parranda-ink/70"> — {clothing.advice}</span>
-                </p>
-              )}
-            </div>
-          )}
-
-          {split.woven.length > 0 && (
-            <p className="mt-3 text-xs text-parranda-ink/60">
-              {split.woven
-                .map((s: any) => String(s?.label || s?.name || "").trim())
-                .filter(Boolean)
-                .map((n: string) => `${n} · ${includedInRoute}`)
-                .join(" · ")}
-            </p>
-          )}
-
-          {/* Honest source-health states — coverage only says sources exist HERE;
-              pulseHealthState says whether collection actually succeeded. Raw
-              backend reason tokens never reach product copy. */}
-          {pulseState === "uncovered" && (
-            <p className="mt-3 text-sm text-parranda-ink/70">
-              {t("Ingen live-eventkälla täcker den här platsen än — Parranda hittar inte på en.", "No live-events feed reaches this place yet — Parranda won't invent one.")}
-            </p>
-          )}
-          {pulseState === "pending" && (
-            <p className="mt-3 text-sm text-parranda-ink/70">{t("Kollar kalendrarna — uppdateras automatiskt strax.", "Checking the calendars — updates automatically in a moment.")}</p>
-          )}
-          {pulseState === "soft_empty" && (
-            <p className="mt-3 text-sm text-parranda-ink/70">
-              {t("Källorna svarade men listar inga händelser för perioden.", "The sources responded but list no events for this period.")}
-            </p>
-          )}
-          {pulseState === "rejected_empty" && (
-            <p className="mt-3 text-sm text-parranda-ink/70">
-              {t(
-                "Det fanns listningar, men inga var pålitliga eller aktuella nog att visa.",
-                "Listings existed, but none were reliable or current enough to show.",
-              )}
-            </p>
-          )}
-          {pulseState === "unavailable" && (
-            <p className="mt-3 text-sm text-parranda-ink/70">
-              {liveFailure
-                ? liveFailureSentence(liveFailure)
-                : t("Parranda kunde inte verifiera händelser just nu — försök igen om en stund.", "Parranda couldn't verify events right now — try again shortly.")}
-            </p>
-          )}
-
-          {pulseBuckets.tonight.length > 0 && (
-            <div className="mt-4">
-              <p className="text-sm font-semibold text-parranda-ink">{liveDayLabel}</p>
-              <ul className="mt-2 flex flex-col gap-3">
-                {pulseBuckets.tonight.slice(0, 4).map((ev: PulseEvent, i: number) => (
-                  <li key={ev.id ?? i} className="flex items-baseline gap-3 text-sm leading-relaxed text-parranda-ink/85">
-                    <span className="min-w-[52px] shrink-0 text-xs font-extrabold tabular-nums text-parranda-clay">
-                      {eventTiming(ev, lang, undefined, liveEvents?.selected_date)}
-                    </span>
-                    <span>
-                      <span className="font-semibold text-parranda-ink">{ev.title}</span>
-                      {ev.place && <span className="text-parranda-ink/60"> · {ev.place}</span>}
-                      {liveEventSource(ev, lang)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {/* The card keeps a one-line summary for the week — the full list
-              lives in the Live sheet. The count comes from the bucket, never
-              from copy. */}
-          {pulseBuckets.thisWeek.length > 0 && (
-            <p className="mt-4 border-t border-parranda-ink/10 pt-3 text-sm text-parranda-ink/70">
-              <span className="font-semibold text-parranda-ink">{t("Följande 7 dagar", "Following 7 days")}</span>
-              {" · "}
-              {pulseBuckets.thisWeek.length}{" "}
-              {pulseBuckets.thisWeek.length === 1 ? t("händelse listad", "more listed") : t("händelser listade", "more listed")}
-            </p>
-          )}
-          {(pulseBuckets.tonight.length > 0 || pulseBuckets.thisWeek.length > 0 || aroundPlaceScopeAvailable) && (
-            <button
-              type="button"
-              ref={liveSheetTriggerRef}
-              onClick={() => {
-                // Reopening resumes the cell the reader selected. Reapplying
-                // the day's default period would relabel another query's rows
-                // and a pending route/GPS query would restart around the place.
-                const reopening = liveSheetOpenedRef.current;
-                const nextTime = reopening ? liveSheetTime
-                  : pulseBuckets.tonight.length > 0 || split.woven.length > 0 ? "tonight" : "week";
-                const nextScope = reopening ? liveSheetScope : "around_place";
-                liveSheetOpenedRef.current = true;
-                setLiveSheetTime(nextTime);
-                setLiveSheetOpen(true);
-                // "Couldn't verify" + an available anchor: opening the sheet IS
-                // the "check again" — fire a fresh around-place query (its own
-                // bounded retries) instead of showing the same stale emptiness.
-                if ((reopening || pulseState === "unavailable" || pulseState === "pending") &&
-                    (nextScope !== "around_place" || aroundPlaceScopeAvailable) && !liveQueryPending) {
-                  requestLiveSheetScope(nextScope, nextTime, true).catch(() => {});
-                }
-              }}
-              className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-parranda-btn border border-parranda-ember/50 bg-parranda-ember/10 text-[13px] font-bold text-parranda-clay transition hover:bg-parranda-ember/15"
-            >
-              {pulseBuckets.tonight.length > 0 || pulseBuckets.thisWeek.length > 0
-                ? t("Se allt live", "See all live")
-                : t("Utforska live", "Explore live")}
-              <ChevronRightIcon className="h-4 w-4" />
-            </button>
-          )}
-          {pulseState === "partial" && (
-            <p className="mt-2 text-xs text-parranda-ink/55">
-              {t("Alla källor kunde inte nås just nu — listan kan vara ofullständig.", "Some sources couldn't be reached right now — the list may be incomplete.")}
-            </p>
-          )}
-
-          {pulseSources && (
-            <p className="mt-3 text-xs text-parranda-ink/50">
-              {t("Källa", "Source")}: {pulseSources}
-            </p>
-          )}
-        </section>
+        <LiveCard
+          t={t}
+          lang={lang}
+          mode={mode}
+          anchorLabel={anchorLabel}
+          liveEvents={liveEvents}
+          liveDayLabel={liveDayLabel}
+          showDay={showDay}
+          dayflow={dayflow}
+          clothing={clothing}
+          wovenNames={split.woven.map((s: any) => String(s?.label || s?.name || "").trim()).filter(Boolean)}
+          includedInRoute={includedInRoute}
+          pulseState={pulseState}
+          liveFailure={liveFailure}
+          liveFailureSentence={liveFailureSentence}
+          pulseBuckets={pulseBuckets}
+          showExplore={pulseBuckets.tonight.length > 0 || pulseBuckets.thisWeek.length > 0 || aroundPlaceScopeAvailable}
+          pulseSources={pulseSources}
+          liveSheetTriggerRef={liveSheetTriggerRef}
+          openLiveSheet={openLiveSheet}
+        />
       )}
 
-      {/* BLITZ — one trusted next move beside the day, in the same "now" zone
-          as Live. It reads the anchor and picks but never re-composes the day,
-          and it stays out of curated mode, whose server-owned city identity
-          the Blitz contract cannot carry yet. It is not offered where it cannot
-          answer: a typed place with no trusted anchor, or a server that has
-          just refused work. Its copy says "near you" only when the anchor IS
-          the reader's position, and promises the day stays as it is only when
-          there is a day on screen. */}
+      {/* BLITZ — offered only where it can answer: an anchor, not curated mode
+          (whose server-owned city identity the Blitz contract cannot carry
+          yet), not after a refusal, not for a typed place with no trusted
+          anchor. */}
       {phase === "done" && hasAnchor && !cityKey && !serviceRefusal && !anchorUnresolved && (
-        <div className="flex flex-col gap-3">
-          <button
-            type="button"
-            onClick={blitz}
-            disabled={blitzPhase === "loading"}
-            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-parranda-btn border border-parranda-ink/16 bg-parranda-ink/[0.04] px-4 text-sm font-bold text-parranda-ink/85 transition hover:border-parranda-ember disabled:opacity-60"
-          >
-            <BoltIcon className="h-4 w-4 text-parranda-glow" />
-            {blitzPhase === "loading" ? t("Läser läget …", "Reading the moment …") : t("Blitz just nu", "Blitz right now")}
-          </button>
-          {blitzPhase === "idle" && (
-            <p className="-mt-1 text-center text-xs text-parranda-ink/50">
-              {mode === "near_me"
-                ? t("Ett nästa drag nära dig, just nu", "One next move near you, right now")
-                : t(`Ett nästa drag i ${anchorLabel}, just nu`, `One next move in ${anchorLabel}, right now`)}
-              {dayOnScreen ? t(" — din dag ändras inte.", " — your day stays as it is.") : "."}
-            </p>
-          )}
-          {blitzPhase !== "idle" && (
-            <section className="rounded-parranda border border-parranda-ember/35 bg-gradient-to-br from-parranda-terracotta/12 to-parranda-glow/5 p-4" aria-live="polite">
-              <div className="flex items-center gap-2">
-                <BoltIcon className="h-3.5 w-3.5 text-parranda-glow" />
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-parranda-glow">
-                  {t("Blitz just nu", "Blitz right now")}
-                </p>
-              </div>
-              {blitzPhase === "loading" && (
-                <p className="mt-2 text-sm text-parranda-ink/70">
-                  {t("Läser tiden, platsen och vad som händer nära dig …", "Reading the time, place and what is happening nearby …")}
-                </p>
-              )}
-              {blitzPhase === "error" && (
-                <p className="mt-2 text-sm text-parranda-ink/75">
-                  {t("Blitz kunde inte läsa läget just nu.", "Blitz could not read the moment right now.")}
-                  {dayOnScreen ? t(" Din plan är oförändrad.", " Your day is unchanged.") : ""}
-                </p>
-              )}
-              {blitzPhase === "done" && blitzResult?.state === "blocked" && (
-                <p className="mt-2 text-sm text-parranda-ink/75">
-                  {mode === "near_me"
-                    ? t("Inget tillräckligt pålitligt nästa drag hittades nära dig just nu.", "No sufficiently reliable next move was found near you right now.")
-                    : t(
-                        `Inget tillräckligt pålitligt nästa drag hittades i ${anchorLabel} just nu.`,
-                        `No sufficiently reliable next move was found in ${anchorLabel} right now.`,
-                      )}
-                  {dayOnScreen ? t(" Din plan är oförändrad.", " Your day is unchanged.") : ""}
-                </p>
-              )}
-              {blitzPhase === "done" && blitzResult?.state === "available" && blitzResult.best && (() => {
-                const move = blitzResult.best;
-                const timing = move.kind === "live_event" ? eventTiming(move, lang) : "";
-                const mapsUrl = mapsPlaceUrl(
-                  { name: move.title, lat: move.lat ?? undefined, lng: move.lng ?? undefined },
-                  typedPlaceLabel || undefined,
-                );
-                const secondary = blitzResult.live_option || blitzResult.backup;
-                // A Live move's link names where it leads; the listing feed stays in
-                // the meta line. A place move keeps its attribution link unchanged.
-                const liveSourceLink = move.kind === "live_event"
-                  ? eventSourceLink(
-                      { source_url: move.source.url, source_link_kind: move.source.link_kind, source_link_host: move.source.link_host },
-                      lang,
-                    )
-                  : null;
-                return (
-                  <div className="mt-2 flex flex-col gap-3">
-                    <div>
-                      <p className="font-display text-2xl leading-tight text-parranda-ink">{move.title}</p>
-                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-parranda-ink/65">
-                        {move.kind === "live_event" && <span>{t("Live-händelse", "Live event")}</span>}
-                        {timing && <span>{timing}</span>}
-                        {Number.isFinite(move.walking_minutes) && <span>{move.walking_minutes} {t("min till fots", "min walk")}</span>}
-                        {move.source.label && <span>{move.source.label}</span>}
-                      </div>
-                    </div>
-                    <p className="text-xs text-parranda-ink/55">
-                      {dayOnScreen
-                        ? t("Ett källstött nästa drag utifrån platsen, tiden och dina val. Det ändrar inte dagens rutt.", "A source-backed next move from your place, time and picks. It does not change today's route.")
-                        : t("Ett källstött nästa drag utifrån platsen, tiden och dina val.", "A source-backed next move from your place, time and picks.")}
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {mapsUrl && (
-                        <a href={mapsUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-parranda-btn bg-parranda-terracotta px-4 text-sm font-bold text-white transition hover:brightness-110">
-                          {t("Öppna i Maps", "Open in Maps")}
-                          <ExternalIcon />
-                        </a>
-                      )}
-                      {move.kind === "live_event"
-                        ? liveSourceLink && (
-                            <a href={liveSourceLink.href} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center rounded-parranda-btn border border-parranda-ink/16 px-4 text-sm font-bold text-parranda-ink/75">
-                              <span>{liveSourceLink.text}<span aria-hidden="true">&nbsp;↗</span></span>
-                            </a>
-                          )
-                        : move.source.url && (
-                            <a href={move.source.url} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-parranda-btn border border-parranda-ink/16 px-4 text-sm font-bold text-parranda-ink/75">
-                              {t("Källa", "Source")}
-                              <ExternalIcon />
-                            </a>
-                          )}
-                    </div>
-                    {secondary && (
-                      <p className="border-t border-parranda-ink/10 pt-2 text-xs text-parranda-ink/60">
-                        {secondary.kind === "live_event" ? t("Senare i närheten: ", "Later nearby: ") : t("Annars i närheten: ", "Otherwise nearby: ")}
-                        <span className="font-semibold text-parranda-ink/80">{secondary.title}</span>
-                      </p>
-                    )}
-                  </div>
-                );
-              })()}
-            </section>
-          )}
-        </div>
+        <BlitzCard
+          t={t}
+          lang={lang}
+          mode={mode}
+          anchorLabel={anchorLabel}
+          dayOnScreen={dayOnScreen}
+          blitz={blitz}
+          blitzPhase={blitzPhase}
+          blitzResult={blitzResult}
+          typedPlaceLabel={typedPlaceLabel}
+        />
       )}
 
       {savedDays.length > 0 && (
-        <section className="rounded-parranda border border-parranda-ink/10 bg-parranda-ink/[0.03] px-4 py-3">
-          <p className="py-1 text-[11px] font-extrabold uppercase tracking-[0.16em] text-parranda-ink/60">{t("Sparade dagar", "Saved days")}</p>
-          <ul className="flex flex-col">
-            {savedDays.map((entry) => (
-              <li key={entry.id} className="flex items-center gap-2 border-t border-parranda-ink/[0.08] first:border-t-0">
-                <button
-                  type="button"
-                  onClick={() => restoreEntry(entry)}
-                  className="inline-flex min-h-11 flex-1 items-center text-left text-sm text-parranda-ink transition hover:text-parranda-clay"
-                >
-                  <span className="font-semibold">{entry.label}</span>
-                  {entry.dateIso && <span className="text-parranda-ink/60"> · {liveDateLabel(entry.dateIso, lang)}</span>}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => removeSavedDay(entry.id)}
-                  aria-label={t("Ta bort", "Remove")}
-                  className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full text-parranda-ink/40 transition hover:text-parranda-clay"
-                >
-                  <CloseIcon />
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
+        <SavedDays t={t} lang={lang} savedDays={savedDays} restoreEntry={restoreEntry} removeSavedDay={removeSavedDay} />
+      )}
+      </div>
+
+      {splitLayout && (
+        <aside aria-label={t("Karta över dagen", "Map of the day")} className="sticky top-4 h-[calc(100dvh-2rem)] min-h-[30rem]">
+          {routeMap}
+        </aside>
       )}
 
       {/* THE LIVE SHEET (§3B) — explores the live_events buckets only. It never

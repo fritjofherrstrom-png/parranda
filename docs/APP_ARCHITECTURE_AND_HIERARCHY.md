@@ -131,7 +131,7 @@ components/
   AnywherePlanner.tsx      orchestrator: requests, generations, ledger, render
   shared/AppBar.tsx        wordmark + language (both islands)
   shared/icons.tsx         inline SVG set
-  planner/RouteMap.tsx     Leaflet; owns its instance; route vs candidate modes;
+  planner/RouteMap.tsx     MapLibre (lib/route-map-style.mjs); owns its instance; route vs candidate modes;
                            keeps every stop clear of the map's own controls
                            (lib/route-map-fit.mjs); a tap on a stop's visible
                            number is that stop's (44 px targets beneath every
@@ -162,6 +162,20 @@ Proposed next steps, in order:
 4. **Small UI primitives.** The same long class strings recur for eyebrows,
    chips, segmented controls and notice cards; a handful of primitives in
    `components/ui/` would make the design system explicit.
+
+**October 2026 ("Linje" redesign):** steps 3 and 4 are done for the markup.
+The planner renders `AnchorCard`, `DayHeader`, `StopLine`, `CandidateAreas`,
+`LiveCard`, `BlitzCard` and `SavedDays` from `components/planner/`, with
+primitives in `components/shared/ui.tsx`; the orchestrator keeps every
+request, race guard and ledger write and hands the pieces its own functions by
+name. Steps 1 and 2 (the day view-model and the hooks split) remain the next
+work. The same change moved the frontend to Tailwind 4 and Astro 7; see
+`frontend/README.md` for the stack and the design tokens.
+
+The landing no longer lists hand-picked cities (October 2026). The list read
+as a menu of the only places Parranda works, which is the opposite of the
+any-place product. The city registry still drives inline completion and
+routes an exact registered name to its citypack.
 
 **Source-text pins make refactors expensive.** Many contract tests assert that
 exact source strings exist (`assert.match(source, /…/)`). They caught real

@@ -13,10 +13,14 @@ import type { PulseEvent } from "./types";
 export function liveEventSource(event: PulseEvent, lang: Lang) {
   const link = eventSourceLink(event, lang);
   const listedBy = String(event.source_label || "").trim();
-  if (!event.source_url || (!listedBy && !link)) return null;
+  const credits = [...new Set((Array.isArray(event.sources) ? event.sources : [])
+    .map((source) => typeof source?.attribution === "string" ? source.attribution.trim() : "")
+    .filter(Boolean))];
+  if (!listedBy && !link && !credits.length) return null;
   return (
-    <span className="text-parranda-ink/50">
+    <span className="text-parranda-ink/68">
       {listedBy && <>{" · "}via&nbsp;{listedBy}</>}
+      {credits.length > 0 && <>{" · "}{credits.join(" · ")}</>}
       {link && (
         <>
           {" · "}
