@@ -197,7 +197,7 @@ export default function RouteMap({
   const [tilesFailed, setTilesFailed] = useState(false);
   const [layoutCrowded, setLayoutCrowded] = useState(false);
   const [tip, setTip] = useState<Tip>(null);
-  const badgesRef = useRef<Array<{ lat: number; lng: number; name: string; move: (x: number, y: number, direction: "left" | "right") => void }>>([]);
+  const badgesRef = useRef<Array<{ lat: number; lng: number; name: string; move: (x: number, y: number, direction: "left" | "right") => void; showOrigin: (visible: boolean) => void }>>([]);
   const layoutRef = useRef<() => void>(() => {});
   const refitRef = useRef<() => void>(() => {});
   layoutRef.current = () => {
@@ -212,6 +212,16 @@ export default function RouteMap({
     setLayoutCrowded(offsets === null);
     offsets?.forEach((offset, i) => badgesRef.current[i].move(offset.shift_x_px, offset.shift_y_px,
       points[i].x + offset.shift_x_px < width / 2 ? "right" : "left"));
+    // Origin dots are optional coordinate hints, never relocated coordinates.
+    // Suppress a hint when it would paint over any station (including its own).
+    if (offsets) badgesRef.current.forEach((badge, i) => badge.showOrigin(
+      (Math.abs(offsets[i].shift_x_px) > 0.5 || Math.abs(offsets[i].shift_y_px) > 0.5)
+      && points.every((point, j) => Math.hypot(
+        points[i].x - point.x - offsets[j].shift_x_px,
+        points[i].y - point.y - offsets[j].shift_y_px,
+      ) >= 26),
+    ));
+    else badgesRef.current.forEach((badge) => badge.showOrigin(false));
   };
   // The open name follows its marker while the map moves.
   const tipAnchorRef = useRef<{ index: number } | null>(null);
@@ -443,6 +453,7 @@ export default function RouteMap({
             x: shiftX,
             y: shiftY,
             direction: "right",
+            showOrigin: (visible: boolean) => { origin.hidden = !visible; },
             move: (x: number, y: number, direction: "left" | "right") => {
               const key = `${x}:${y}:${direction}`;
               if (key === last) return;

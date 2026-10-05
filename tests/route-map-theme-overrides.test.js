@@ -52,7 +52,7 @@ test('map chrome follows the theme even when the MapLibre CSS loads last', { tim
       t.skip('Chromium unavailable; set PARRANDA_TEST_CHROMIUM to run the map theme check'); return;
     }
     const tab = await browser.newPage();
-    for (const theme of ['day', 'night']) {
+    for (const theme of ['night', 'day']) {
       await tab.goto(`${origin}/?theme=${theme}`);
       const seen = await tab.evaluate(() => {
         const token = name => `rgb(${getComputedStyle(document.documentElement).getPropertyValue(name).trim().split(/\s+/).join(', ')})`;
@@ -62,6 +62,9 @@ test('map chrome follows the theme even when the MapLibre CSS loads last', { tim
           paper: token('--p-color-paper'),
           container: getComputedStyle(document.getElementById('map')).backgroundColor,
           attribution: style('attribution').color,
+          attributionBackground: getComputedStyle(document.querySelector('.maplibregl-ctrl-attrib')).backgroundColor,
+          expectedAttributionBackground: `rgba(${getComputedStyle(document.documentElement).getPropertyValue('--p-color-paper').trim().split(/\s+/).join(', ')}, 0.85)`,
+          attributionRules: [...document.styleSheets].flatMap(sheet => [...sheet.cssRules].filter(rule => rule.selectorText && document.querySelector('.maplibregl-ctrl-attrib').matches(rule.selectorText)).map(rule => rule.cssText)),
           group: getComputedStyle(document.querySelector('.maplibregl-ctrl-group')).backgroundColor,
           zoomGlyph: style('zoomIcon').backgroundColor,
           zoomSize: [style('zoom').width, style('zoom').height],
@@ -69,6 +72,8 @@ test('map chrome follows the theme even when the MapLibre CSS loads last', { tim
           tooltipColor: style('tooltip').color,
         };
       });
+      console.log(JSON.stringify({ theme, ...seen }));
+      assert.equal(seen.attributionBackground, seen.expectedAttributionBackground, `${theme}: attribution background is themed paper, not translucent white`);
       assert.equal(seen.container, seen.paper, `${theme}: map background is paper`);
       assert.equal(seen.attribution, seen.ink, `${theme}: attribution links are ink, not MapLibre grey`);
       assert.equal(seen.group, seen.paper, `${theme}: zoom control is paper, not MapLibre white`);
