@@ -51,6 +51,13 @@ async function compareRhythms(rows) {
 
 test('modern rhythm changes actual composed density with sufficient shared-gate supply', async () => {
   const routes = await compareRhythms(supply());
+  assert.deepEqual(Object.fromEntries(Object.entries(routes).map(([rhythm, route]) =>
+    [rhythm, { profile: route.day_profile, stops: route.main_stops.length }])), {
+    calm: { profile: 'light', stops: 4 },
+    balanced: { profile: 'variation', stops: 5 },
+    full: { profile: 'peak', stops: 6 },
+    free: { profile: 'peak', stops: 6 },
+  });
   assert.ok(routes.calm.main_stops.length < routes.balanced.main_stops.length,
     'calm must not be refilled toward an unrequested walking target');
   assert.ok(routes.balanced.main_stops.length < routes.full.main_stops.length,

@@ -221,6 +221,7 @@ export default function RouteMap({
         points[i].y - point.y - offsets[j].shift_y_px,
       ) >= 26),
     ));
+    else badgesRef.current.forEach((badge) => badge.showOrigin(false));
   };
   // The open name follows its marker while the map moves.
   const tipAnchorRef = useRef<{ index: number } | null>(null);
