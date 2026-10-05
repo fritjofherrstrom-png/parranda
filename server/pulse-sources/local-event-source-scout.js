@@ -10,6 +10,7 @@
  * never runs in the user request path.
  */
 
+const { documentText } = require("./quoted-event-reader");
 const { createHash } = require("node:crypto");
 
 const { evaluateLiveEventSourceCandidate } = require("./source-discovery");
@@ -66,6 +67,7 @@ const MANIFEST_ADAPTERS = new Set([
   "embedded_program_rsc",
   "official_program_article",
   "scheduled_event_cards",
+  "quoted_public_document",
 ]);
 
 function buildLocalEventDiscoveryQueryPlan({
@@ -423,7 +425,37 @@ async function scoutLocalEventSources({
   timeoutMs = DEFAULT_TIMEOUT_MS,
   userAgent = DEFAULT_USER_AGENT,
   cache = null,
+  eventReader = null,
+  maxReaderDocuments = 2,
 } = {}) {
+  let readerDocuments = 0;
+  async function inspectDocument(options) {
+    const inspection = inspectEventSourcePage(options);
+    if (typeof eventReader !== "function" || readerDocuments >= Math.min(4, Math.max(0, maxReaderDocuments)) ||
+      ["restricted", "permission_required"].includes(options.seed.terms_status) || isSocialEventUrl(options.seed.url)) return inspection;
+    readerDocuments += 1;
+    const language = firstString(options.seed.source_language, extractHtmlLanguage(options.html), context.place?.source_language, "en");
+    let read;
+    try {
+      const { extractPublicEventDocument } = require("./public-event-document");
+      const document = await extractPublicEventDocument({ body: options.html, binary_base64: options.binary_base64, content_type: options.contentType || undefined }, { language });
+      read = await eventReader({ text: document.text, sourceUrl: options.seed.url, language });
+    }
+    catch (_error) { return inspection; }
+    if (read?.status !== "ok" || !read.events?.length) return inspection;
+    const declaredLicense = extractDeclaredOpenLicense(extractHtmlLinks(options.html, options.seed.url));
+    const readerSeed = { ...options.seed, ...(declaredLicense ? { license: declaredLicense, terms_status: "open_license" } : {}) };
+    const candidate = evaluateLiveEventSourceCandidate({
+      ...buildDetectedCandidate({ kind: "quoted_public_document", endpoint: options.seed.url, pageUrl: options.seed.url, seed: readerSeed, context }),
+      adapter: "quoted_public_document", source_language: language, event_language: language,
+      terms_status: ["open_license", "api_terms_compatible"].includes(readerSeed.terms_status) ? readerSeed.terms_status : "public_factual_evidence",
+      notes: "exact_document_quotes_verified; factual_atoms_only; no_open_license_claim",
+    });
+    const manifest = buildReviewedManifestCandidate(candidate, { seed: readerSeed, context });
+    if (!manifest) return inspection;
+    return { ...inspection, candidates: [candidate, ...inspection.candidates],
+      manifest_candidates: [manifest, ...inspection.manifest_candidates], reasons: ["quoted_event_facts_verified"] };
+  }
   const normalizedSeeds = dedupeSeeds(seeds)
     .filter((seed) => isScoutablePublicUrl(seed.url))
     .slice(0, clampInteger(maxSeeds, 1, MAX_SEEDS));
@@ -525,9 +557,10 @@ async function scoutLocalEventSources({
       continue;
     }
 
-    const inspection = inspectEventSourcePage({
+    const inspection = await inspectDocument({
       seed,
       html: page.body,
+      binary_base64: page.binary_base64,
       contentType: page.content_type,
       context,
     });
@@ -630,9 +663,10 @@ async function scoutLocalEventSources({
         discovery_method: link.discovery_method,
         discovered_from: url,
       };
-      const linkedInspection = inspectEventSourcePage({
+      const linkedInspection = await inspectDocument({
         seed: linkedSeed,
         html: linkedPage.body,
+        binary_base64: linkedPage.binary_base64,
         contentType: linkedPage.content_type,
         context,
       });
@@ -891,6 +925,7 @@ function buildReviewedManifestCandidate(candidate, { seed = {}, context = {} } =
     embedded_program_rsc: "embedded_program_rsc",
     official_program_article: "official_program_article",
     scheduled_event_cards: "scheduled_event_cards",
+    quoted_public_document: "quoted_public_document",
   };
   const adapter = adapterMap[candidate.adapter];
   if (!MANIFEST_ADAPTERS.has(adapter)) return null;
@@ -1154,6 +1189,12 @@ async function fetchScoutPage({
       return { status: "blocked", reason: "source_payload_too_large" };
     }
     phase = "body";
+    const contentType = response.headers?.get?.("content-type") || "";
+    if (/^(application\/pdf|image\/(png|jpeg|webp))/i.test(contentType)) {
+      const binary = await readBoundedBytes(response, boundedBytes);
+      if (!binary) return { status: "blocked", reason: "source_payload_too_large" };
+      return { status: "ok", body: "", binary_base64: binary.toString("base64"), bytes: binary.length, content_type: contentType };
+    }
     const body = await readBoundedText(response, boundedBytes);
     if (body == null) {
       return { status: "blocked", reason: "source_payload_too_large" };
@@ -1175,6 +1216,23 @@ async function fetchScoutPage({
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function readBoundedBytes(response, maxBytes) {
+  if (response.body && typeof response.body.getReader === "function") {
+    const reader = response.body.getReader();
+    const parts = []; let bytes = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value?.byteLength || 0;
+      if (bytes > maxBytes) { await reader.cancel().catch(() => {}); return null; }
+      parts.push(Buffer.from(value));
+    }
+    return Buffer.concat(parts);
+  }
+  const bytes = Buffer.from(await response.arrayBuffer());
+  return bytes.length <= maxBytes ? bytes : null;
 }
 
 async function readBoundedText(response, maxBytes) {
@@ -1941,6 +1999,7 @@ module.exports = {
   parseRobotsGroups,
   fetchScoutPage,
   readBoundedText,
+  readBoundedBytes,
   extractHtmlLinks,
   extractCalendarPageLinks,
   isScoutablePublicUrl,

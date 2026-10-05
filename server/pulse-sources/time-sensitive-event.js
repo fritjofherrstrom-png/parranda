@@ -221,6 +221,12 @@ function normalizeProvenance(value, { sourceUrl, sourceLabel } = {}) {
       retrieved_at: firstString(value.retrieved_at, value.checked_at),
       attribution: firstString(value.attribution),
       license: firstString(value.license),
+      extraction_method: value.extraction_method === "quoted_model_reader" ? value.extraction_method : null,
+      document_sha256: /^[a-f0-9]{64}$/.test(value.document_sha256 || "") ? value.document_sha256 : null,
+      evidence: value.extraction_method === "quoted_model_reader" && Array.isArray(value.evidence)
+        ? value.evidence.slice(0, 4).filter((item) => ["title", "date", "time", "place"].includes(item?.field) &&
+          typeof item.quote === "string" && item.quote.length <= 300 && item.source_url === sourceUrl)
+          .map((item) => ({ field: item.field, quote: item.quote, source_url: sourceUrl })) : null,
     });
   }
   if (sourceUrl || sourceLabel) {

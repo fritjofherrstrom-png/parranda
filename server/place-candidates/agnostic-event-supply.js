@@ -36,6 +36,8 @@ const { createScheduledEventCardProvider } = require("../pulse-sources/scheduled
 const {
   createOfficialProgramArticleProvider,
 } = require("../pulse-sources/official-program-article-provider");
+const { createQuotedEventProvider } = require("../pulse-sources/quoted-event-provider");
+const { resolveDefaultEventReader } = require("../pulse-sources/quoted-event-reader");
 const { normalizeTimeSensitiveSourceEvent } = require("../pulse-sources/time-sensitive-event");
 const {
   classifyEventSourceLink,
@@ -112,6 +114,7 @@ const LOCAL_EVENT_ADAPTERS = new Set([
   "embedded_program_rsc",
   "official_program_article",
   "scheduled_event_cards",
+  "quoted_public_document",
 ]);
 
 // A single open municipal feed, kept as a NAMED FIXTURE — not a product default.
@@ -548,6 +551,7 @@ function toEventView(event, feed, { eventTimezone = null, routeEligible = null }
       ? event.independent_source_count
       : 1,
     sources: Array.isArray(event.sources) ? event.sources : [],
+    evidence: Array.isArray(event.provenance?.evidence) ? event.provenance.evidence : [],
     venue_resolution: event.venue_resolution || null,
     pulse_display_eligible: true,
     route_eligible: routeEligible == null
@@ -837,6 +841,7 @@ async function collectAnchorEvents({
   registry,
   fetcher,
   sourceCollectionCache = null,
+  eventReader = null,
   radiusM,
   timeoutMs = 15000,
   globalKey = null,
@@ -898,6 +903,7 @@ async function collectAnchorEvents({
         selectedDate,
         fetcher,
         sourceCollectionCache,
+        eventReader,
         radiusM: effectiveRadiusM,
         timeoutMs,
         globalKey,
@@ -1165,6 +1171,7 @@ async function collectEventSource({
   selectedDate,
   fetcher,
   sourceCollectionCache,
+  eventReader,
   radiusM,
   timeoutMs,
   globalKey,
@@ -1195,6 +1202,7 @@ async function collectEventSource({
       fetcher,
       radiusM,
       timeoutMs,
+      eventReader,
     });
   }
 
@@ -1227,7 +1235,7 @@ async function collectEventSource({
   }
 }
 
-function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs } = {}) {
+function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs, eventReader } = {}) {
   const adapter = normalizeLocalEventAdapter(source?.adapter || source?.kind);
   if (!adapter) return null;
   const endpoint = firstString(source.endpoint, source.base);
@@ -1241,6 +1249,9 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs 
     license: source.license,
   };
 
+  if (adapter === "quoted_public_document") {
+    return createQuotedEventProvider({ ...common, eventReader, timezone: source.timezone, sourceLanguage: source.source_language });
+  }
   if (adapter === "linked_events") {
     return createLinkedEventsProvider({
       ...common,
@@ -1621,13 +1632,16 @@ function resolveDefaultEventSupply(
     eventCache = null,
     collectEvents = collectAnchorEvents,
     failedRefreshClock,
+    eventReader = resolveDefaultEventReader(env),
   } = {},
 ) {
   const flag = String((env && env.PARRANDA_AGNOSTIC_EVENTS) || "").trim().toLowerCase();
   if (!["enabled", "1", "true", "on", "yes"].includes(flag)) return null;
   const registry = resolveEventFeedRegistry(env);
   const globalKey = resolveGlobalEventKey(env);
-  const qualifiedRuntimeEnabled = ["enabled", "1", "true", "on", "yes"].includes(
+  // Machine-qualified sources are part of ordinary Live supply. Operators can
+  // explicitly disable this lane; a per-source human approval is not required.
+  const qualifiedRuntimeEnabled = !["disabled", "0", "false", "off", "no"].includes(
     String((env && env.PARRANDA_QUALIFIED_SOURCE_RUNTIME) || "").trim().toLowerCase(),
   );
   const cache = eventCache || createSourceCache({
@@ -1768,6 +1782,7 @@ function resolveDefaultEventSupply(
           radiusM: effectiveRadiusM,
           timeoutMs: WARM_TIMEOUT_MS,
           sourceCollectionCache,
+          eventReader,
           sourceBounds: scope?.kind === "in_place" ? scope.trusted_place_scope?.bounds : null,
           globalKey,
           venueResolver,

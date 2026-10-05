@@ -12,7 +12,7 @@ const MAX_OBSERVATION_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const DEFAULT_PROBE_TIMEOUT_MS = 10_000;
 const QUALIFIED_RUNTIME_MAX_AGE_MS = 8 * 24 * 60 * 60 * 1000;
 const PROBEABLE_STATUSES = new Set(["viable_provider_probe"]);
-const PROBATIONARY_TERMS_STATUSES = new Set(["open_license", "api_terms_compatible"]);
+const PROBATIONARY_TERMS_STATUSES = new Set(["open_license", "api_terms_compatible", "public_factual_evidence"]);
 
 async function qualifyDiscoveredSourceProfile({
   profile,
@@ -24,6 +24,7 @@ async function qualifyDiscoveredSourceProfile({
   now = new Date(),
   fetcher,
   venueResolver = null,
+  eventReader = null,
   collectEvents = collectAnchorEvents,
   maxProbes = MAX_PROBES_PER_RUN,
   timeoutMs = DEFAULT_PROBE_TIMEOUT_MS,
@@ -61,6 +62,7 @@ async function qualifyDiscoveredSourceProfile({
     fetcher,
     venueResolver,
     collectEvents,
+    eventReader,
     timeoutMs,
   })));
 
@@ -143,6 +145,7 @@ async function probeBinding(binding, {
   fetcher,
   venueResolver,
   collectEvents,
+  eventReader,
   timeoutMs,
 }) {
   try {
@@ -158,6 +161,7 @@ async function probeBinding(binding, {
       spatialScope,
       placeContext,
       venueResolver,
+      eventReader,
     });
     return observationFromCollection(binding, result, observedAt);
   } catch (_error) {
@@ -284,7 +288,8 @@ function eventFeedsFromQualifiedSourceProfiles(
       if (
         !binding ||
         qualificationIdentity(state) !== qualificationIdentity(binding) ||
-        !PROBATIONARY_TERMS_STATUSES.has(binding.termsStatus)
+        !PROBATIONARY_TERMS_STATUSES.has(binding.termsStatus) ||
+        (binding.termsStatus === "public_factual_evidence" && binding.adapter !== "quoted_public_document")
       ) continue;
       const latest = (Array.isArray(state.observations) ? state.observations : [])
         .map((item) => normalizeObservation(item, {

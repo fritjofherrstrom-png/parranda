@@ -1147,7 +1147,7 @@ test("default catalog is explicit server config and never connects while disable
   await catalog.close();
 });
 
-test("qualified-source runtime is one global opt-in and stays Pulse-only", async () => {
+test("machine-qualified sources participate by default, with an explicit opt-out, and stay Pulse-only", async () => {
   let qualifiedReads = 0;
   let warmed = 0;
   const qualifiedFeed = {
@@ -1179,7 +1179,7 @@ test("qualified-source runtime is one global opt-in and stays Pulse-only", async
   };
   const eventCache = { peek: () => null, warm: () => { warmed += 1; } };
 
-  const disabled = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: "enabled" }, {
+  const disabled = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: "enabled", PARRANDA_QUALIFIED_SOURCE_RUNTIME: "disabled" }, {
     sourceCatalog,
     eventCache,
   });
@@ -1188,7 +1188,6 @@ test("qualified-source runtime is one global opt-in and stays Pulse-only", async
 
   const enabled = resolveDefaultEventSupply({
     PARRANDA_AGNOSTIC_EVENTS: "enabled",
-    PARRANDA_QUALIFIED_SOURCE_RUNTIME: "enabled",
   }, { sourceCatalog, eventCache });
   const result = await enabled({ anchor: { lat: 55.6, lng: 13 }, now: NOW });
   assert.equal(result.coverage, "covered");

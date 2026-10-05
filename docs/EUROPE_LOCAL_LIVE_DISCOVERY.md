@@ -71,7 +71,9 @@ and `PARRANDA_SOURCE_SEARCH_ENDPOINT` in the existing self-hosted catalog profil
 Search returns untrusted seeds. Existing public-URL, robots, terms, interface,
 qualification and review gates govern whether they may become event supply.
 Ticketmaster's global family separately requires its configured credential.
-There is no automatic activation of unknown websites or source-owned public text.
+Discovered event websites may enter Live automatically after exact machine
+qualification. The quoted document reader accepts only verified factual atoms
+with source evidence; discovery or arbitrary public text alone is insufficient.
 
 This cloud workspace has no configured runtime credentials, identities or VPN
 connection to the user's local preview at port 18508. That preview has not been

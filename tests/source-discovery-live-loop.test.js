@@ -252,7 +252,6 @@ async function runColdLoop(fixture) {
   };
   const env = {
     PARRANDA_AGNOSTIC_EVENTS: "enabled",
-    PARRANDA_QUALIFIED_SOURCE_RUNTIME: "enabled",
   };
   const supply = resolveDefaultEventSupply(env, {
     sourceCatalog: catalog,
