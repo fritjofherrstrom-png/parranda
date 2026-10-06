@@ -60,12 +60,25 @@ test('availability later in the remaining day retains fika without claiming open
   assert.equal(cafe.open_now, undefined);
 });
 
-for (const [label, hours] of [['already closed', 'Th 08:00-12:00'], ['closed day', 'Th off'],
-  ['unknown', null], ['unsupported', 'Th by appointment']]) {
+for (const [label, hours] of [['already closed', 'Th 08:00-12:00'], ['closed day', 'Th off']]) {
   test(`today does not retime ${label} fika using a typical morning role`, async () => {
     const route = await day({ hours, extra: { availability: { eligible: true, status: 'available_in_window' },
       sourceCandidates: [{ id: 'cafe', anchored_daypart: 'midday' }] } });
     assert.equal(route.main_stops.some(stop => stop.id === 'cafe'), false);
+  });
+}
+
+for (const [label, hours] of [['unknown', null], ['unsupported', 'Th by appointment']]) {
+  test(`today retains requested ${label} fika in an unanchored full day without trusting public availability claims`, async () => {
+    const route = await day({ hours, extra: { availability: { eligible: true, status: 'available_in_window' },
+      sourceCandidates: [{ id: 'cafe', anchored_daypart: 'midday' }] } });
+    const cafe = route.main_stops.find(stop => stop.id === 'cafe');
+    assert.ok(cafe);
+    assert.equal(cafe.daypart, 'morning', 'unknown hours cannot certify a current-time retiming');
+    assert.equal(cafe.open_now, undefined);
+    assert.equal(cafe.selected_day_hours?.windows?.length ?? 0, 0);
+    assert.equal(route.anchored_to_local_time, false);
+    assert.equal(route.current_local_time_band, 'midday', 'observed local context remains separate from an anchored arc');
   });
 }
 
