@@ -73,6 +73,7 @@ function buildEligibleCandidatePool(cityConfig, payload = {}, helpers = {}) {
   const providerSpecs = buildProviderSpecs({
     externalEnabled,
     externalOptions: helpers.external_provider || null,
+    curatedCandidates: helpers.curated_candidates,
     now: nowContext.date,
   });
   const collection = collectPlaceCandidatesForCity(cityConfig, { providerSpecs });
@@ -222,8 +223,10 @@ function sourcePriority(entry) {
   return existence + influence;
 }
 
-function buildProviderSpecs({ externalEnabled, externalOptions, now }) {
-  const specs = [...DEFAULT_PROVIDER_SPECS];
+function buildProviderSpecs({ externalEnabled, externalOptions, curatedCandidates, now }) {
+  const specs = DEFAULT_PROVIDER_SPECS.map(spec => Array.isArray(curatedCandidates) && spec.id === "curated-catalog"
+    ? { ...spec, create: () => ({ listCandidates: () => curatedCandidates }) }
+    : spec);
   if (!externalEnabled) {
     return specs;
   }

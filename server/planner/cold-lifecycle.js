@@ -112,7 +112,7 @@ function createPlannerLifecycle({ deadlineMs = DEADLINE_MS, maxActive = MAX_ACTI
 
 // One memoized trusted supply snapshot for both structure and composer. Await
 // only evidence attached by a server source, never status strings in JSON.
-function lifecycleLoader(loader, context, { partialWaitMs = PARTIAL_WAIT_MS, reserveMs = COMPOSITION_RESERVE_MS } = {}) {
+function lifecycleLoader(loader, context, { partialWaitMs = PARTIAL_WAIT_MS, reserveMs = COMPOSITION_RESERVE_MS, independentSupply = [] } = {}) {
   if (typeof loader !== 'function') return loader;
   const loads = new Map();
   return request => {
@@ -136,14 +136,15 @@ function lifecycleLoader(loader, context, { partialWaitMs = PARTIAL_WAIT_MS, res
             // Only a source-owned symbol can supply a newer partial snapshot.
             const value = typeof initial[SOURCE_SNAPSHOT] === 'function' ? initial[SOURCE_SNAPSHOT]() : initial;
             const intents = normalizeUserIntents(request.requestedIntents || []).intents;
-            const relevant = Array.isArray(value) && value.length > 0 && intents.every(intent =>
-              value.some(record => matchCandidateToIntent(record, intent).level === 'strong'));
+            const available = [...(Array.isArray(value) ? value : []), ...independentSupply];
+            const relevant = available.length > 0 && intents.every(intent =>
+              available.some(record => matchCandidateToIntent(record, intent).level === 'strong'));
             // Reserve composition time only when there is supply to compose.
             // Finalizing an empty snapshot at the reserve boundary discards
             // the original acquisition even if usable rows arrive before the
             // hard deadline. Keep awaiting that same work, never reacquire it.
             const remaining = Number.isFinite(context.deadline)
-              ? context.deadline - Date.now() - (value?.length ? reserveMs : 0) : 0;
+              ? context.deadline - Date.now() - (available.length ? reserveMs : 0) : 0;
             // A failed fast source is not proof that the whole day lacks
             // supply. Keep the original execution alive for outstanding real
             // sources when no relevant partial exists, within the SAME budget.

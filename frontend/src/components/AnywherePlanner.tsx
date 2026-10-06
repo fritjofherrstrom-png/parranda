@@ -1550,7 +1550,8 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
   // The route line joins the stops' own coordinates unless the route carries
   // walking geometry; the map draws that sketch dotted and the caption says so.
   const routeLineIsSketch = routePathIsSketch(primaryRoute?.map_path_points, routeStops.length);
-  const sourceBackedDay = structure?.provenance === "agnostic_anchor";
+  const sourceBackedDay = structure?.provenance === "agnostic_anchor"
+    && primaryRoute?.trust_summary?.human_verified !== true;
   // How the day was assembled, minus what another line already says in full:
   // the trust line names the source-backed places, the map caption the
   // estimates. What is left sits with the map, not under the title.

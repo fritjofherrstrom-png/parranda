@@ -1629,26 +1629,28 @@ test("an unclassified evening event stays in Live instead of overriding explicit
 test("one rhythm interest can compose across the wider local aperture without a kilometre goal", async () => {
   const { buildAnywherePayload } = await import("../frontend/src/lib/anywhere-payload.mjs");
   global.fetch = mockStableWeatherFetch();
+  // Keep this source-depth fixture outside registered catalogs; nearby curated
+  // acceleration has its own geographic tests.
   const records = [0, 0.01, 0.028, 0.035, 0.039].map((offset, i) => ({
-    ...externalRecord(`reuse-${i}`, `Reuse ${i}`, "vintage-shop", 41.9 + offset, 12.49, ["second_hand"]),
+    ...externalRecord(`reuse-${i}`, `Reuse ${i}`, "vintage-shop", 48.5 + offset, 8.5, ["second_hand"]),
     opening_hours: "Mo-Su 09:00-19:00",
   }));
-  records.push({ ...externalRecord("closed-reuse", "Closed Reuse", "vintage-shop", 41.936, 12.491, ["second_hand"]),
+  records.push({ ...externalRecord("closed-reuse", "Closed Reuse", "vintage-shop", 48.536, 8.501, ["second_hand"]),
     opening_hours: "Mo-Su off" });
-  records.push(externalRecord("off-theme", "Unrequested Museum", "museum", 41.935, 12.49, ["kultur"]));
+  records.push(externalRecord("off-theme", "Unrequested Museum", "museum", 48.535, 8.5, ["kultur"]));
   const server = buildApp({ openDataLoader: makeLoader(records),
     weatherProvider: async () => ({ condition: "sun", maxTemp: 20,
       timezone_resolution: { timezone: "Europe/Rome", timezone_source: "weather_provider_auto", utc_offset_seconds: 7200 } }),
     clock: () => new Date("2026-09-30T08:00:00Z") }).listen(0);
   try {
     for (const dayRhythm of ["calm", "balanced", "full", "free"]) {
-      const payload = buildAnywherePayload({ coords: { lat:41.9,lng:12.49 }, dates:["2026-10-01"], preferences:["second_hand"], dayRhythm });
+      const payload = buildAnywherePayload({ coords: { lat:48.5,lng:8.5 }, dates:["2026-10-01"], preferences:["second_hand"], dayRhythm });
       assert.equal(payload.walking_km_target, undefined);
       const r = await requestJson(server, { path:`/api/route-recommendations?${FLAG}&${ENGINE}`, body:payload });
       const route = r.body.days?.[0]?.primary_route;
       assert.ok(route, dayRhythm);
       assert.ok(route.main_stops.length >= 4, `${dayRhythm}: safe requested depth survives`);
-      assert.ok(route.main_stops.some((stop) => stop.lat > 41.93), `${dayRhythm}: not cut at3km`);
+      assert.ok(route.main_stops.some((stop) => stop.lat > 48.53), `${dayRhythm}: not cut at3km`);
       assert.ok(route.main_stops.every((stop) => stop.covered_preferences.includes("second_hand")));
       assert.ok(route.main_stops.every((stop) => stop.id !== "closed-reuse"));
       assert.ok(Number.isFinite(route.estimated_km));

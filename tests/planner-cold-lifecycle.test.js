@@ -317,3 +317,20 @@ test('nonempty partial supply retains the composition reserve even when a reques
   assert.equal(jobs.read(token).body.collection.source_completion.pending, 1, 'published partial result stays immutable');
   assert.equal(counts().acquisitions, 1);
 });
+
+test('independent server catalog supply can finish the bounded wait without converting external absence to success', async () => {
+  const work = deferred();
+  const controller = new AbortController();
+  const initial = Object.assign([], { loader_status: 'error_failed_closed', loader_error: 'fixture_outage' });
+  Object.defineProperty(initial, SOURCE_COMPLETION, { value: work.promise });
+  let calls = 0;
+  const loader = lifecycleLoader(async () => { calls++; return initial; }, {
+    signal: controller.signal, deadline: Date.now() + 1000, warming() {},
+  }, { partialWaitMs: 5, reserveMs: 100, independentSupply: [{ type: 'cafe', tags: ['coffee'] }] });
+  const result = await loader({ lat: 1, lng: 2, requestedIntents: ['coffee'] });
+  assert.equal(calls, 1);
+  assert.equal(result.length, 0, 'catalog rows do not masquerade as external loader evidence');
+  assert.equal(result.loader_status, 'error_failed_closed');
+  assert.equal(result.loader_metadata.source_completion.status, 'partial');
+  work.resolve([]);
+});

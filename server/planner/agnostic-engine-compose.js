@@ -213,7 +213,7 @@ function toSourceCandidate({
     type: (rich && rich.type) || "place",
     candidate_kind: "draft_place",
     is_structural: false,
-    city_pack_owned: false,
+    city_pack_owned: rich?.origin === "curated_catalog",
     lat: coords.lat,
     lng: coords.lng,
     area: null,
@@ -247,7 +247,7 @@ function toSourceCandidate({
       status: rich.availability.status,
     } } : {}),
     source: {
-      kind: "open_geo_source",
+      kind: rich?.origin === "curated_catalog" ? "city_catalog" : "open_geo_source",
       label: firstSource.label || provenance.source_family || "open data",
       url: firstSource.url || null,
       // What the source's own category says the place is, where the route
@@ -272,7 +272,7 @@ function toSourceCandidate({
       ? rich.operational_viability.rank
       : null,
     provenance: {
-      why_included: "Source-backed candidate admitted to the agnostic route.",
+      why_included: rich?.origin === "curated_catalog" ? "Nearby curated catalog candidate admitted to the shared route engine." : "Source-backed candidate admitted to the agnostic route.",
       provider_id: provenance.provider_id || null,
       attribution,
       corroborated_by_external: provenance.corroborated_by_external === true,

@@ -244,3 +244,11 @@ test("a day planned for tomorrow never calls its route today's", async (t) => {
   assert.match(h.text(), /Quay concert · Included in tomorrow's route/);
   assert.doesNotMatch(h.text(), /today's route/);
 });
+
+test('a nearby curated day does not claim Parranda lacks full curation', async t => {
+  const body = composedDay();
+  body.days[0].primary_route.trust_summary = { human_verified: true, source_tiers: ['curated'] };
+  const h = await plannerWith(t, body);
+  assert.doesNotMatch(header(h).textContent, /does not have full curation here yet/);
+  assert.match(routeCard(h).textContent, /Distances and walking times are estimates/);
+});
