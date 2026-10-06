@@ -24,11 +24,16 @@ function createQuotedEventProvider(options = {}) {
       const result = await options.eventReader({ text: document.text,
         sourceUrl: options.endpoint, language: options.sourceLanguage || "en" });
       if (result?.status !== "ok") return empty(result?.status === "unavailable" ? "unavailable" : "failed", "event_reader_failed");
-      const rows = (result.events || []).map((event) => ({ ...event, timezone,
+      const events = result.events || [];
+      const rows = events.map((event) => ({ ...event, timezone,
         ...(event.local_start ? { starts_at: normalizeSourceEventDateTime(event.local_start, { timezone }) } : {}),
       })).filter((event) => !event.local_start || event.starts_at);
+      // An exact quoted clock can still be ambiguous/nonexistent at a DST
+      // transition. Retain valid rows, but never call that loss healthy empty.
+      const unresolvedClocks = rows.length !== events.length;
       return { events: [], signals: [], time_sensitive_events: rows,
-        collection_status: buildProviderCollectionOutcome(rows.length ? "ok" : "empty", { eventRows: rows.length }) };
+        collection_status: buildProviderCollectionOutcome(unresolvedClocks ? "failed" : rows.length ? "ok" : "empty",
+          { eventRows: rows.length, reason: unresolvedClocks ? "source_payload_invalid" : null }) };
     } }; },
   };
 }
