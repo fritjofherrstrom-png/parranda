@@ -181,8 +181,11 @@ test("a resolved but route-blocked place still records independent Live source d
 
     assert.equal(res.agnostic_route_output_experiment.route_mutation, false);
     assert.ok(res.agnostic_route_output_experiment.readiness_blockers.includes("no_trusted_loader"));
-    assert.equal(res.live_events.coverage, "uncovered");
-    assert.equal(res.live_events.acquisition.discovery_health.status, "pending");
+    assert.equal(res.live_events.coverage, "covered", "the trusted country adds a supplemental calendar descriptor");
+    assert.equal(res.live_events.pending, true, "selection is not successful calendar acquisition");
+    assert.equal(res.live_events.acquisition.source_health.status, "pending");
+    assert.equal(res.live_events.feeds.length, 1);
+    assert.equal(res.live_events.feeds[0].family, "calendar_open");
     assert.deepEqual(demand.anchor, { lat: 58.1, lng: 12.2 });
     assert.equal(demand.placeLabel, "Northport, Testland");
     assert.equal(demand.placeContext.locality, "Northport");

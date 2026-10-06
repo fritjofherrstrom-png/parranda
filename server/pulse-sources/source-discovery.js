@@ -130,6 +130,7 @@ const TRUST_SCORE = Object.freeze({
 const TERMS_SCORE = Object.freeze({
   open_license: 3,
   api_terms_compatible: 2,
+  public_factual_evidence: 2,
   permission_required: 1,
   unknown: 0,
   restricted: -2,
@@ -298,6 +299,7 @@ function mapsToExistingProvider(adapter) {
     adapter === "wix_event_sitemap" ||
     adapter === "embedded_program_rsc" ||
     adapter === "official_program_article" ||
+    adapter === "quoted_public_document" ||
     adapter === "scheduled_event_cards"
   );
 }

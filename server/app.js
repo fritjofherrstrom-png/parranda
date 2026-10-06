@@ -1507,6 +1507,7 @@ function buildApp({
     eventSupply = resolveDefaultEventSupply(process.env, {
       venueResolver: placeResolver,
       sourceCatalog,
+      marketLoader: openDataLoader?.loadOsmPlaces || null,
     });
   }
   if (reviewedPlaceSource === undefined) {

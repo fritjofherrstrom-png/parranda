@@ -55,6 +55,13 @@ function fuseTimeSensitiveEvents(events = []) {
 
 function eventsRepresentSameOccurrence(left, right) {
   if (!left || !right) return false;
+  // A shared bulletin/API URL or holiday title cannot turn admin date facts
+  // into corroborated venue events, or merge two differently scoped holidays.
+  if (left.calendar_fact || right.calendar_fact) {
+    if (!left.calendar_fact || !right.calendar_fact
+      || JSON.stringify(left.calendar_fact) !== JSON.stringify(right.calendar_fact)
+      || normalizedText(left.title) !== normalizedText(right.title)) return false;
+  }
   if (normalizedText(left.city) && normalizedText(right.city) && normalizedText(left.city) !== normalizedText(right.city)) {
     return false;
   }
@@ -97,6 +104,7 @@ function buildFusedEvent(members) {
     "area",
     "time_window",
     "recurrence",
+    "calendar_fact",
     "route_role_hint",
     "timezone",
     "source_language",
@@ -500,7 +508,7 @@ function buildFusionId(events) {
     temporalSortKey(primary),
     normalizedPlace(primary),
     finiteCoordinates(primary) ? `${Number(primary.lat).toFixed(4)},${Number(primary.lng).toFixed(4)}` : "",
-  ].join("|");
+  ].concat(primary.calendar_fact ? [JSON.stringify(primary.calendar_fact)] : []).join("|");
   return `event-fusion-${crypto.createHash("sha256").update(raw).digest("hex").slice(0, 16)}`;
 }
 

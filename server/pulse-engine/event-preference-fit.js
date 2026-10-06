@@ -147,6 +147,9 @@ const ROLE_INTENTS = Object.freeze({
 });
 
 function scoreEventPreferenceFit(event, preferences = []) {
+  // A holiday's name does not prove a venue programme matching the user's
+  // culture/food/nightlife picks, even if it contains "festival" or "market".
+  if (event?.calendar_fact?.kind === "public_holiday") event = null;
   const requested = normalizeUserIntents(Array.isArray(preferences) ? preferences : []).intents;
   if (requested.length === 0) {
     return emptyFit();

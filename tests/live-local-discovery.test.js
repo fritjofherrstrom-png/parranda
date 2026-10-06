@@ -19,16 +19,17 @@ function resolverRow(overrides = {}) {
 const payload = (scope = "around_place") => ({ scope, anchor, place_query: "Harbour City", selected_date: "2026-09-30", time: "this_week" });
 const collection = (events = []) => ({ coverage: "covered", tonight: [], this_week: events, acquisition: { source_health: { status: "healthy", result: "events_found" } } });
 
-test("an uncovered large settlement queues resolver-owned discovery without widening the local event gate", async () => {
+test("a calendar-only large settlement queues local discovery without widening the event gate", async () => {
   let demand;
   let supplied;
   const supply = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: "enabled" }, { sourceCatalog: {
     listApprovedEventFeedsForAnchor: async () => [],
     recordScoutDemand: async (value) => { demand = value; return { status: "recorded" }; },
-  } });
+  }, eventCache: { peek: () => null, warm: () => {} } });
   const result = await executeLiveEventQuery({ payload: { ...payload(), place_context: { country_code: "xx" }, spatial_scope: { kind: "region" } },
     now, placeResolver: async () => [resolverRow()], eventSupply: async (input) => { supplied = input; return supply(input); } });
   assert.equal(result.status, 200);
+  assert.equal(result.body.live_events.pending, true, "country calendar selection remains pending, without fixture network acquisition");
   assert.equal(result.body.live_events.acquisition.discovery_health.status, "pending");
   assert.equal(demand.placeContext.country_code, "at");
   assert.equal(demand.placeLabel, resolverRow().label);

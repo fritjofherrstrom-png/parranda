@@ -2,6 +2,9 @@
 
 const COLLECTION_STATUSES = new Set(["ok", "empty", "failed", "unavailable"]);
 const COLLECTION_REASON_TOKENS = new Set([
+  "calendar_admin_join_unavailable",
+  "calendar_country_unsupported",
+  "calendar_scope_unresolved",
   "collection_context_unavailable",
   "collection_outcome_missing",
   "provider_failed",

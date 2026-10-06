@@ -36,6 +36,11 @@ const { createScheduledEventCardProvider } = require("../pulse-sources/scheduled
 const {
   createOfficialProgramArticleProvider,
 } = require("../pulse-sources/official-program-article-provider");
+const { createQuotedEventProvider } = require("../pulse-sources/quoted-event-provider");
+const { resolveDefaultEventReader } = require("../pulse-sources/quoted-event-reader");
+const { createDatatourismeEventProvider, datatourismeFeedForContext } = require("../pulse-sources/datatourisme-event-provider");
+const { createOsmMarketEventProvider, osmMarketFeedForAnchor } = require("../pulse-sources/osm-market-event-provider");
+const { createPublicHolidayEventProvider, publicHolidayFeedForContext } = require("../pulse-sources/public-holiday-event-provider");
 const { normalizeTimeSensitiveSourceEvent } = require("../pulse-sources/time-sensitive-event");
 const {
   classifyEventSourceLink,
@@ -112,6 +117,10 @@ const LOCAL_EVENT_ADAPTERS = new Set([
   "embedded_program_rsc",
   "official_program_article",
   "scheduled_event_cards",
+  "quoted_public_document",
+  "datatourisme",
+  "osm_market_schedules",
+  "public_holidays",
 ]);
 
 // A single open municipal feed, kept as a NAMED FIXTURE — not a product default.
@@ -486,7 +495,7 @@ function dedupeViews(views) {
   for (const view of views) {
     const id = view.id == null ? null : String(view.id);
     if (id && seenIds.has(id)) continue;
-    const titleVenue = `${String(view.title || "").toLowerCase()}|${view.place || ""}`;
+    const titleVenue = `${String(view.title || "").toLowerCase()}|${view.place || ""}${view.calendar_fact ? `|${JSON.stringify(view.calendar_fact)}` : ""}`;
     const start = view.starts_at || view.starts_on || view.time_window?.starts_at || view.time_window?.starts_on || null;
     const seenStarts = byTitleVenue.get(titleVenue) || [];
     if (seenStarts.some((previous) => !previous || !start || previous === start)) continue;
@@ -510,7 +519,7 @@ function toEventView(event, feed, { eventTimezone = null, routeEligible = null }
   // classifier lifts notable culture (concerts, festivals, exhibitions, workshops)
   // and demotes civic/admin notices (council/committee meetings) — generic, never
   // a city hack. Cultural cue wins ambiguity; neutral is unchanged.
-  const cultural = classifyCulturalSalience(event);
+  const cultural = event.calendar_fact ? { tier: "neutral", weight: 0.25 } : classifyCulturalSalience(event);
   const score = Number(Math.min(salience.score * cultural.weight, 10).toFixed(2));
   const sourceUrl = event.source_url || event.provenance?.source_url || null;
   return {
@@ -521,6 +530,8 @@ function toEventView(event, feed, { eventTimezone = null, routeEligible = null }
     starts_on: event.starts_on || null,
     ends_on: event.ends_on || null,
     time_window: event.time_window || null,
+    recurrence: event.recurrence || null,
+    calendar_fact: event.calendar_fact || null,
     timing_relevance: event.timing_relevance || null,
     place: event.place_context || event.area || null,
     address: event.address || null,
@@ -548,9 +559,10 @@ function toEventView(event, feed, { eventTimezone = null, routeEligible = null }
       ? event.independent_source_count
       : 1,
     sources: Array.isArray(event.sources) ? event.sources : [],
+    evidence: Array.isArray(event.provenance?.evidence) ? event.provenance.evidence : [],
     venue_resolution: event.venue_resolution || null,
     pulse_display_eligible: true,
-    route_eligible: routeEligible == null
+    route_eligible: event.calendar_fact ? false : routeEligible == null
       ? isEphemeralHappening(event, null)
       : Boolean(routeEligible),
     geometry_status: event.geometry_status || (Number.isFinite(event.lat) && Number.isFinite(event.lng)
@@ -837,6 +849,10 @@ async function collectAnchorEvents({
   registry,
   fetcher,
   sourceCollectionCache = null,
+  eventReader = null,
+  datatourismeKey = null,
+  marketLoader = null,
+  calendarReferenceCache = null,
   radiusM,
   timeoutMs = 15000,
   globalKey = null,
@@ -898,6 +914,11 @@ async function collectAnchorEvents({
         selectedDate,
         fetcher,
         sourceCollectionCache,
+        eventReader,
+        datatourismeKey,
+        marketLoader,
+        placeContext,
+        calendarReferenceCache,
         radiusM: effectiveRadiusM,
         timeoutMs,
         globalKey,
@@ -912,7 +933,7 @@ async function collectAnchorEvents({
       const enriched = applyReviewedSourceTrust(rawEvent, source);
       const normalized = normalizeTimeSensitiveSourceEvent(enriched, {
         ...(nowDate ? { now: nowDate } : {}),
-        timezone: source.timezone || undefined,
+        timezone: rawEvent.timezone || source.timezone || undefined,
       });
       if (!normalized) continue;
       if (rawEvent.timezone) normalized.timezone = rawEvent.timezone;
@@ -941,7 +962,7 @@ async function collectAnchorEvents({
   // results remain mapless and are rejected by the unchanged fusion gate below.
   // The active Live time bucket gets first use of the bounded lookup budget.
   const venueResolution = await resolveEventVenueGeometry(
-    displayableEvidence.slice().sort((left, right) =>
+    displayableEvidence.filter(event => !event.calendar_fact).sort((left, right) =>
       periodRank.get(left) - periodRank.get(right) || compareVenueResolutionPriority(left, right)),
     {
       resolver: venueResolver,
@@ -959,7 +980,7 @@ async function collectAnchorEvents({
   // reaching this gate lies inside the requested period.
   // Non-displayable rows still reach the existing rejection gates and counts,
   // but cannot spend a venue lookup that a real happening needs.
-  const bounded = fuseAndBoundEventEvidence([...venueResolution.events, ...nonDisplayableEvidence], {
+  const bounded = fuseAndBoundEventEvidence([...venueResolution.events, ...displayableEvidence.filter(event => event.calendar_fact), ...nonDisplayableEvidence], {
     anchor,
     radiusM: effectiveRadiusM,
     spatialScope,
@@ -1123,6 +1144,8 @@ function applyReviewedSourceTrust(rawEvent = {}, source = {}) {
 
   return {
     ...rawEvent,
+    ...(source.runtime_trust === "qualified_probationary" && source.terms_status === "unknown"
+      ? { provenance: { ...(rawEvent.provenance || {}), license: null } } : {}),
     // Trust and ownership are reviewed descriptor facts. Provider rows may
     // lower per-event confidence, but may never upgrade or relabel the source.
     // That includes the DISPLAY label: the reviewed row's label ("Helsinki
@@ -1165,6 +1188,11 @@ async function collectEventSource({
   selectedDate,
   fetcher,
   sourceCollectionCache,
+  eventReader,
+  datatourismeKey,
+  marketLoader,
+  placeContext,
+  calendarReferenceCache,
   radiusM,
   timeoutMs,
   globalKey,
@@ -1195,6 +1223,11 @@ async function collectEventSource({
       fetcher,
       radiusM,
       timeoutMs,
+      eventReader,
+      datatourismeKey,
+      marketLoader,
+      placeContext,
+      calendarReferenceCache,
     });
   }
 
@@ -1204,12 +1237,12 @@ async function collectEventSource({
 
   try {
     const collect = () => provider.create({ key: null }).collect({ date: startParam });
-    // This reviewed API has no request-time geographic/date filter. Cache its
-    // bounded source snapshot once; each Live view still applies its own clock,
-    // trusted geometry and period gates. Different locations/time tabs should
-    // not download the same nine pages again. Full descriptor binds revisions.
-    const snapshotKey = createHash("sha256").update(JSON.stringify(source)).digest("hex");
-    const collected = source.adapter === "localized_events_api" && sourceCollectionCache
+    // Share bounded source snapshots across the two Live period controls.
+    // DATAtourisme also binds its date-window/geographic query to the snapshot.
+    // The local API has no date/geometry filter. Final gates remain per view.
+    const snapshotKey = createHash("sha256").update(JSON.stringify(["datatourisme", "osm_market_schedules", "public_holidays"].includes(source.adapter)
+      ? { source, anchor, radiusM, placeContext: source.adapter === "public_holidays" ? placeContext : null, date: String(startParam || "").slice(0, 10) } : source)).digest("hex");
+    const collected = ["localized_events_api", "datatourisme", "osm_market_schedules", "public_holidays"].includes(source.adapter) && sourceCollectionCache
       ? await sourceCollectionCache.get(snapshotKey, collect, {
           shouldStore: value => ["ok", "empty"].includes(value?.collection_status?.status),
         })
@@ -1227,7 +1260,7 @@ async function collectEventSource({
   }
 }
 
-function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs } = {}) {
+function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs, eventReader, datatourismeKey, marketLoader, placeContext, calendarReferenceCache } = {}) {
   const adapter = normalizeLocalEventAdapter(source?.adapter || source?.kind);
   if (!adapter) return null;
   const endpoint = firstString(source.endpoint, source.base);
@@ -1241,6 +1274,19 @@ function createLocalEventProvider(source, { anchor, fetcher, radiusM, timeoutMs 
     license: source.license,
   };
 
+  if (adapter === "datatourisme") {
+    return createDatatourismeEventProvider({ key: datatourismeKey, anchor, fetcher: fetcher || undefined, radiusM, timeoutMs });
+  }
+  if (adapter === "public_holidays") {
+    return createPublicHolidayEventProvider({ anchor, placeContext, referenceCache: calendarReferenceCache || undefined, fetcher: fetcher || undefined, timeoutMs });
+  }
+  if (adapter === "osm_market_schedules") {
+    return createOsmMarketEventProvider({ anchor, loader: marketLoader, radiusM, timeoutMs });
+  }
+
+  if (adapter === "quoted_public_document") {
+    return createQuotedEventProvider({ ...common, eventReader, timezone: source.timezone, sourceLanguage: source.source_language });
+  }
   if (adapter === "linked_events") {
     return createLinkedEventsProvider({
       ...common,
@@ -1520,7 +1566,8 @@ const WARM_TIMEOUT_MS = 30000; // out-of-band, so a long timeout never blocks a 
 // v6 excludes v5 pools truncated by midnight-gap and global-window bugs.
 // v7 excludes recurring ranges that v6 normalized as every-day daily windows.
 // v9 prevents non-displayable listings from exhausting the bounded venue budget.
-const EVENT_CACHE_NAMESPACE = "agnostic-events-v9";
+// v10 applies source-owned event timezones during normalization, not afterward.
+const EVENT_CACHE_NAMESPACE = "agnostic-events-v10";
 
 // A failed refresh is a finished answer, not "still loading". It is held for a
 // short, bounded time so reads report the failure; afterwards the next read
@@ -1621,13 +1668,18 @@ function resolveDefaultEventSupply(
     eventCache = null,
     collectEvents = collectAnchorEvents,
     failedRefreshClock,
+    eventReader = resolveDefaultEventReader(env),
+    marketLoader = null,
   } = {},
 ) {
   const flag = String((env && env.PARRANDA_AGNOSTIC_EVENTS) || "").trim().toLowerCase();
   if (!["enabled", "1", "true", "on", "yes"].includes(flag)) return null;
   const registry = resolveEventFeedRegistry(env);
   const globalKey = resolveGlobalEventKey(env);
-  const qualifiedRuntimeEnabled = ["enabled", "1", "true", "on", "yes"].includes(
+  const datatourismeKey = String(env?.PARRANDA_DATATOURISME_KEY || "").trim() || null;
+  // Machine-qualified sources are part of ordinary Live supply. Operators can
+  // explicitly disable this lane; a per-source human approval is not required.
+  const qualifiedRuntimeEnabled = !["disabled", "0", "false", "off", "no"].includes(
     String((env && env.PARRANDA_QUALIFIED_SOURCE_RUNTIME) || "").trim().toLowerCase(),
   );
   const cache = eventCache || createSourceCache({
@@ -1638,6 +1690,10 @@ function resolveDefaultEventSupply(
   });
   const sourceCollectionCache = createSourceCache({
     namespace: "agnostic-event-source-v1", ttlMs: EVENT_CACHE_TTL_MS,
+    dir: (env && env.PARRANDA_CACHE_DIR) || null,
+  });
+  const calendarReferenceCache = createSourceCache({
+    namespace: "public-holiday-reference-v1", ttlMs: 86400000,
     dir: (env && env.PARRANDA_CACHE_DIR) || null,
   });
   const failedRefreshes = createFailedRefreshHold({ clock: failedRefreshClock });
@@ -1690,6 +1746,16 @@ function resolveDefaultEventSupply(
       MAX_EVENT_COLLECTION_RADIUS_M,
       Math.max(100, Math.round(Number(radiusM) || DEFAULT_RADIUS_M)),
     );
+    // placeContext is attested by the server resolver; public Live payloads
+    // cannot activate a country layer or provide its credentials/endpoint.
+    const nationalFeed = datatourismeFeedForContext({ anchor, placeContext, radiusM: effectiveRadiusM });
+    if (nationalFeed) appendUniqueEventFeeds(requestRegistry, [nationalFeed]);
+    const calendarFeed = publicHolidayFeedForContext({ anchor, placeContext, scope });
+    if (calendarFeed) appendUniqueEventFeeds(requestRegistry, [calendarFeed]);
+    if (typeof marketLoader === "function") {
+      const marketFeed = osmMarketFeedForAnchor(anchor);
+      if (marketFeed) appendUniqueEventFeeds(requestRegistry, [marketFeed]);
+    }
     const sourcePlan = buildScopedEventSourcePlan({
       anchor,
       sourceAnchors,
@@ -1700,7 +1766,7 @@ function resolveDefaultEventSupply(
       globalEnabled: Boolean(globalKey),
       now,
     });
-    const hasApprovedLocalSource = sourcePlan.some((source) => source?.kind !== "global");
+    const hasApprovedLocalSource = sourcePlan.some((source) => source?.kind !== "global" && !["national_open", "recurring_map", "calendar_open"].includes(source?.source_family));
     let discoveryHealth = null;
     if (!hasApprovedLocalSource) {
       discoveryHealth = await resolveUncoveredDiscoveryHealth(sourceCatalog, anchor);
@@ -1750,10 +1816,16 @@ function resolveDefaultEventSupply(
       selectedDate,
       time,
     );
+    // A broad calendar does not erase the existing local-discovery outcome.
+    // Keep its current status alongside collection health, including cached
+    // views, without allowing one to claim the other's successful coverage.
+    const withDiscoveryHealth = collected => discoveryHealth ? {
+      ...collected, acquisition: { ...collected.acquisition, discovery_health: discoveryHealth },
+    } : collected;
     const cached = cache.peek(key);
-    if (cached) return rankCollectedEventsForPreferences(cached, preferences, scope, now);
+    if (cached) return rankCollectedEventsForPreferences(withDiscoveryHealth(cached), preferences, scope, now);
     const failed = failedRefreshes.read(key);
-    if (failed) return rankCollectedEventsForPreferences(failed, preferences, scope, now);
+    if (failed) return rankCollectedEventsForPreferences(withDiscoveryHealth(failed), preferences, scope, now);
     // Cold: warm out-of-band (long timeout, fire-and-forget), serve honest pending.
     cache.warm(key, async () => {
       let collected;
@@ -1768,6 +1840,10 @@ function resolveDefaultEventSupply(
           radiusM: effectiveRadiusM,
           timeoutMs: WARM_TIMEOUT_MS,
           sourceCollectionCache,
+          eventReader,
+          datatourismeKey,
+          marketLoader,
+          calendarReferenceCache,
           sourceBounds: scope?.kind === "in_place" ? scope.trusted_place_scope?.bounds : null,
           globalKey,
           venueResolver,
@@ -1784,7 +1860,7 @@ function resolveDefaultEventSupply(
       }
       if (isFailedEventRefresh(collected)) failedRefreshes.remember(key, collected);
       else failedRefreshes.forget(key);
-      return collected;
+      return withDiscoveryHealth(collected);
     }, {
       // A proven healthy empty result is cacheable so a quiet calendar does not
       // cause refresh loops. Empty results with source failures are never
@@ -1801,6 +1877,7 @@ function resolveDefaultEventSupply(
       browse: emptyEventBrowse(),
       pending: true,
       acquisition: {
+        ...(discoveryHealth ? { discovery_health: discoveryHealth } : {}),
         mode: "bounded_multi_source",
         radius_m: effectiveRadiusM,
         source_cap: DEFAULT_MAX_SOURCES,
@@ -1856,7 +1933,7 @@ async function resolveUncoveredDiscoveryHealth(sourceCatalog, anchor) {
 }
 
 function localSourceMixNeedsDiscovery(sourcePlan) {
-  const local = sourcePlan.filter((source) => source?.kind !== "global");
+  const local = sourcePlan.filter((source) => source?.kind !== "global" && !["national_open", "recurring_map", "calendar_open"].includes(source?.source_family));
   const publishers = new Set();
   const families = new Set();
   for (const source of local) {

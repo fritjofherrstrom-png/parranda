@@ -219,6 +219,14 @@ export function eventTiming(ev, lang, now = new Date(), selectedDate = null) {
     return clockRange ? `${label} ${clockRange}` : label;
   }
 
+  if (ev.calendar_fact?.kind === "public_holiday") {
+    const startsOn = win?.starts_on || ev.starts_on || null;
+    const endsOn = win?.ends_on || ev.ends_on || startsOn;
+    const start = startsOn ? day(startsOn) : null;
+    const end = endsOn && endsOn !== startsOn ? day(endsOn) : null;
+    return start ? (end ? `${start} – ${end}` : start) : "";
+  }
+
   if (kind === "period") {
     const startsOn = win.starts_on || ev.starts_on || null;
     const endsOn = win.ends_on || ev.ends_on || startsOn;

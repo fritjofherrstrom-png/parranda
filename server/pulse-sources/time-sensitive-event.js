@@ -57,6 +57,8 @@ function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
     timingRelevance,
   });
   const coordinates = normalizeCoordinates(rawEvent);
+  const calendarFact = normalizeCalendarFact(rawEvent.calendar_fact);
+  if (rawEvent.calendar_fact != null && !calendarFact) return null;
 
   return compactObject({
     id: firstString(rawEvent.id, rawEvent.source_event_id, rawEvent.provider_id, sourceUrl),
@@ -73,11 +75,13 @@ function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
     country: firstString(rawEvent.country),
     place_context: firstString(rawEvent.place_context, rawEvent.place, rawEvent.venue),
     // A municipality or virtual service is not a walkable event venue.
-    source_location_scope: ["municipality", "virtual"].includes(rawEvent.source_location_scope)
+    source_location_scope: calendarFact
+      ? ({ national: "country", regional: "region", local: "municipality" })[calendarFact.scope]
+      : ["municipality", "virtual"].includes(rawEvent.source_location_scope)
       ? rawEvent.source_location_scope : null,
     address: firstString(rawEvent.address, rawEvent.venue_address, rawEvent.location_address),
-    lat: coordinates.lat,
-    lng: coordinates.lng,
+    lat: calendarFact ? null : coordinates.lat,
+    lng: calendarFact ? null : coordinates.lng,
     area: firstString(rawEvent.area, rawEvent.neighborhood, rawEvent.district),
     starts_at: startsAt ? startsAt.toISOString() : null,
     ends_at: endsAt ? endsAt.toISOString() : null,
@@ -85,6 +89,7 @@ function normalizeTimeSensitiveSourceEvent(rawEvent, options = {}) {
     ends_on: endsOn,
     time_window: timeWindow,
     recurrence: normalizeRecurrence(rawEvent.recurrence),
+    calendar_fact: calendarFact,
     freshness: firstString(rawEvent.freshness) || (timingRelevance === "stale" ? "stale" : null),
     last_checked: lastChecked ? lastChecked.toISOString() : null,
     confidence,
@@ -213,6 +218,16 @@ function timingReasons(timingRelevance, facts = {}) {
   return reasons;
 }
 
+function normalizeCalendarFact(value) {
+  if (value?.kind !== "public_holiday" || !["national", "regional", "local"].includes(value.scope)
+    || !/^[A-Z]{2}$/.test(value.country_code || "") || typeof value.area !== "string"
+    || !value.area.trim() || value.area.length > 500 || !["full_day", "half_day"].includes(value.temporal_scope)
+    || !Array.isArray(value.flags) || value.flags.length > 4
+    || value.flags.some(flag => !["Recommended", "Provisional", "OneTime", "Exception"].includes(flag))) return null;
+  return { kind: "public_holiday", scope: value.scope, country_code: value.country_code,
+    area: value.area.trim(), temporal_scope: value.temporal_scope, flags: [...new Set(value.flags)] };
+}
+
 function normalizeProvenance(value, { sourceUrl, sourceLabel } = {}) {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     return compactObject({
@@ -221,6 +236,12 @@ function normalizeProvenance(value, { sourceUrl, sourceLabel } = {}) {
       retrieved_at: firstString(value.retrieved_at, value.checked_at),
       attribution: firstString(value.attribution),
       license: firstString(value.license),
+      extraction_method: value.extraction_method === "quoted_model_reader" ? value.extraction_method : null,
+      document_sha256: /^[a-f0-9]{64}$/.test(value.document_sha256 || "") ? value.document_sha256 : null,
+      evidence: value.extraction_method === "quoted_model_reader" && Array.isArray(value.evidence)
+        ? value.evidence.slice(0, 4).filter((item) => ["title", "date", "time", "place"].includes(item?.field) &&
+          typeof item.quote === "string" && item.quote.length <= 300 && item.source_url === sourceUrl)
+          .map((item) => ({ field: item.field, quote: item.quote, source_url: sourceUrl })) : null,
     });
   }
   if (sourceUrl || sourceLabel) {
@@ -433,6 +454,7 @@ function normalizeRecurrence(value) {
       rule: firstString(value.rule),
       label: firstString(value.label),
       timezone: firstString(value.timezone),
+      occurrence_status: value.occurrence_status === "unconfirmed" ? "unconfirmed" : undefined,
     });
   }
   return null;
