@@ -1816,10 +1816,16 @@ function resolveDefaultEventSupply(
       selectedDate,
       time,
     );
+    // A broad calendar does not erase the existing local-discovery outcome.
+    // Keep its current status alongside collection health, including cached
+    // views, without allowing one to claim the other's successful coverage.
+    const withDiscoveryHealth = collected => discoveryHealth ? {
+      ...collected, acquisition: { ...collected.acquisition, discovery_health: discoveryHealth },
+    } : collected;
     const cached = cache.peek(key);
-    if (cached) return rankCollectedEventsForPreferences(cached, preferences, scope, now);
+    if (cached) return rankCollectedEventsForPreferences(withDiscoveryHealth(cached), preferences, scope, now);
     const failed = failedRefreshes.read(key);
-    if (failed) return rankCollectedEventsForPreferences(failed, preferences, scope, now);
+    if (failed) return rankCollectedEventsForPreferences(withDiscoveryHealth(failed), preferences, scope, now);
     // Cold: warm out-of-band (long timeout, fire-and-forget), serve honest pending.
     cache.warm(key, async () => {
       let collected;
@@ -1854,7 +1860,7 @@ function resolveDefaultEventSupply(
       }
       if (isFailedEventRefresh(collected)) failedRefreshes.remember(key, collected);
       else failedRefreshes.forget(key);
-      return collected;
+      return withDiscoveryHealth(collected);
     }, {
       // A proven healthy empty result is cacheable so a quiet calendar does not
       // cause refresh loops. Empty results with source failures are never
@@ -1871,6 +1877,7 @@ function resolveDefaultEventSupply(
       browse: emptyEventBrowse(),
       pending: true,
       acquisition: {
+        ...(discoveryHealth ? { discovery_health: discoveryHealth } : {}),
         mode: "bounded_multi_source",
         radius_m: effectiveRadiusM,
         source_cap: DEFAULT_MAX_SOURCES,

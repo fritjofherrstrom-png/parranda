@@ -170,6 +170,10 @@ test("OpenHolidays unknown/contradictory timing, scope, language and excessive p
   }
   assert.equal((await collect({ placeContext: FR, fetcher: transport({ context: FR,
     holidays: Array.from({ length: 161 }, (_, index) => holiday({ id: String(index) })) }) })).collection_status.status, "failed");
+  const repeatedReferences = holiday({ nationwide: false, regionalScope: "Regional",
+    subdivisions: Array.from({ length: 5001 }, () => ({ code: "FR.TR" })) });
+  const bounded = await collect({ placeContext: FR, fetcher: transport({ context: FR, holidays: [repeatedReferences] }) });
+  assert.equal(bounded.collection_status.reason, "source_payload_invalid", "a small response cannot evade the administrative work cap");
 });
 
 test("empty, HTTP/year failure, redirects, timeout, byte bounds and failed metadata cache remain distinct", async () => {
@@ -242,7 +246,7 @@ for (const lang of ["en", "sv"]) test(`${lang} period/retry reuses calendar snap
   const calls = [], work = []; let demands = 0;
   const supply = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: "enabled" }, {
     eventCache: createSourceCache({ namespace: `calendar-fixture-${lang}`, ttlMs: 60000 }),
-    sourceCatalog: { recordScoutDemand: async () => { demands++; return { status: "recorded" }; } },
+    sourceCatalog: { recordScoutDemand: async () => { demands++; return { status: "recorded", target_status: "pending" }; } },
     collectEvents: options => { const promise = collectAnchorEvents({ ...options, fetcher: transport({ calls }) }); work.push(promise); return promise; },
   });
   const day = { selected_date: "2026-07-20", route: ["a", "b"] }, before = JSON.stringify(day);
@@ -261,6 +265,7 @@ for (const lang of ["en", "sv"]) test(`${lang} period/retry reuses calendar snap
     const response = await query();
     const warm = response.body.live_events;
     assert.equal(warm.tonight[0].calendar_fact.scope, "local");
+    assert.equal(warm.acquisition.discovery_health.status, "pending", "cached calendar health cannot erase local discovery status");
     assert.equal((await query()).body.live_events.tonight[0].source_url, festivo().source.url);
     assert.equal(warm.selected_date, day.selected_date);
     assert.equal(response.body.query.time, time);

@@ -155,6 +155,11 @@ for festivos), four MB total, 160 result rows and a 30-second deadline. Municipa
 calendars are capped at 64 entries per year; country/subdivision metadata also
 have structural/count/depth caps. Failed metadata/snapshots are not persisted
 as healthy empty calendars.
+Subdivision references are indexed once per collection and capped at 5,000 per
+holiday (groups at 200, flags at four); record processing yields to the deadline.
+The existing local discovery-health field survives calendar pending, cached and
+failed answers, so broad-source collection never erases an independent pending,
+observing or unavailable local-scout outcome.
 
 Calendar facts are date/admin context: normalization removes venue coordinates,
 they spend no venue lookup budget, cannot fuse with venue programmes or differently

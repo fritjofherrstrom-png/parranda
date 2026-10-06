@@ -39,6 +39,8 @@ function createPublicHolidayEventProvider({ anchor, placeContext, fetcher = glob
     const reference = normalizeSourceEventDate(String(date || new Date().toISOString()).slice(0, 10));
     const timezone = coordinates(anchor) ? normalizeIanaTimezone(timezoneResolver(anchor.lat, anchor.lng)) : null;
     if (!country || !reference || !timezone) return result([], "unavailable", "collection_context_unavailable");
+    if (country === "ES" && (!(placeContext.municipality || placeContext.locality)
+      || !(placeContext.county || placeContext.region))) return result([], "unavailable", "calendar_admin_join_unavailable");
     if (typeof fetcher !== "function") return result([], "unavailable", "source_fetch_unavailable");
     const from = addCalendarDays(reference, -1), to = addCalendarDays(reference, 8);
     const controller = new AbortController();
@@ -83,14 +85,19 @@ function createPublicHolidayEventProvider({ anchor, placeContext, fetcher = glob
         const subdivisions = await metadata(`openholidays-subdivisions-${country}`,
           `${OPEN}/Subdivisions?countryIsoCode=${country}`, validSubdivisions);
         const matched = matchSubdivisions(subdivisions, placeContext);
+        const subdivisionByCode = new Map(flattenSubdivisions(subdivisions).map(value => [value.code, value]));
         const url = `${OPEN}/PublicHolidays?countryIsoCode=${country}&validFrom=${from}&validTo=${to}`;
         const holidays = await json(url);
         if (!Array.isArray(holidays) || holidays.length > MAX_ROWS) throw failure("source_payload_invalid");
         for (const holiday of holidays) {
-          const mapped = mapOpenHoliday(holiday, { country: supported[0], matched, subdivisions, timezone, sourceUrl: url });
+          controller.signal.throwIfAborted();
+          const mapped = mapOpenHoliday(holiday, { country: supported[0], matched, subdivisionByCode, timezone, sourceUrl: url });
           if (mapped === null) throw failure("source_payload_invalid");
           if (mapped === "unresolved") { unresolved = true; continue; }
           if (mapped && mapped.ends_on >= from && mapped.starts_on <= to) rows.push(mapped);
+          // Yield between bounded records so a dense administrative projection
+          // cannot prevent the collection deadline from running.
+          await new Promise(resolve => setImmediate(resolve));
         }
       }
       const unique = [...new Map(rows.map(row => [row.id, row])).values()];
@@ -136,7 +143,7 @@ function mapFestivosHoliday(holiday, { municipality, attribution, timezone } = {
     provenance: { source_url: url, source_label: "festivos.io", license: "CC-BY-4.0", attribution: credit } };
 }
 
-function mapOpenHoliday(holiday, { country, matched, subdivisions, timezone, sourceUrl } = {}) {
+function mapOpenHoliday(holiday, { country, matched, subdivisions, subdivisionByCode, timezone, sourceUrl } = {}) {
   const start = normalizeSourceEventDate(holiday?.startDate), end = normalizeSourceEventDate(holiday?.endDate);
   const scope = ({ National: "national", Regional: "regional", Local: "local" })[holiday?.regionalScope];
   const temporal = ({ FullDay: "full_day", HalfDay: "half_day" })[holiday?.temporalScope];
@@ -144,7 +151,9 @@ function mapOpenHoliday(holiday, { country, matched, subdivisions, timezone, sou
   if (!text(holiday?.id, 100) || !start || !end || end < start || !scope || !temporal || !name
     || holiday.type !== "Public" || typeof holiday.nationwide !== "boolean"
     || !Array.isArray(holiday.subdivisions) || !Array.isArray(holiday.groups)
-    || !Array.isArray(holiday.tags) || holiday.tags.some(tag => !["Recommended", "Provisional", "OneTime", "Exception"].includes(tag))) return null;
+    || holiday.subdivisions.length > 5000 || holiday.groups.length > 200
+    || !Array.isArray(holiday.tags) || holiday.tags.length > 4
+    || holiday.tags.some(tag => !["Recommended", "Provisional", "OneTime", "Exception"].includes(tag))) return null;
   // Subgroup applicability is not proved by a geographic/country join.
   if (holiday.groups.length) return "unresolved";
   let area;
@@ -153,15 +162,15 @@ function mapOpenHoliday(holiday, { country, matched, subdivisions, timezone, sou
     area = localizedName(country.name, country.officialLanguages)?.text || country.isoCode;
   } else {
     if (scope === "national" || !holiday.subdivisions.length) return null;
-    const flat = flattenSubdivisions(subdivisions);
-    if (holiday.subdivisions.some(value => !text(value?.code, 80) || !flat.some(item => item.code === value.code))) return null;
-    const applicable = holiday.subdivisions.filter(value => matched.has(value.code));
+    const byCode = subdivisionByCode || new Map(flattenSubdivisions(subdivisions).map(value => [value.code, value]));
+    if (holiday.subdivisions.some(value => !text(value?.code, 80) || !byCode.has(value.code))) return null;
+    const applicable = [...new Set(holiday.subdivisions.map(value => value.code))].filter(code => matched.has(code));
     if (!applicable.length) {
-      const possiblyLocal = holiday.subdivisions.some(value => flat.find(item => item.code === value.code)
+      const possiblyLocal = holiday.subdivisions.some(value => byCode.get(value.code)
         .ancestors.some(code => matched.has(code)));
       return !matched.size || possiblyLocal ? "unresolved" : false;
     }
-    const narrowest = applicable.map(value => flat.find(item => item.code === value.code))
+    const narrowest = applicable.map(code => byCode.get(code))
       .sort((left, right) => right.ancestors.length - left.ancestors.length || left.code.localeCompare(right.code))[0];
     area = localizedName(narrowest.name, country.officialLanguages).text;
   }

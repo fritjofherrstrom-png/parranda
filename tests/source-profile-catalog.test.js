@@ -1276,7 +1276,7 @@ test("approved catalog feeds supplement runtime acquisition without changing sta
   assert.equal(warmed, 1);
 });
 
-test("an uncovered trusted place confirms demand before reporting discovery pending", async () => {
+test("a calendar-only trusted place confirms local demand before reporting discovery pending", async () => {
   let demand = null;
   const supply = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: "enabled" }, {
     sourceCatalog: {
@@ -1296,9 +1296,9 @@ test("an uncovered trusted place confirms demand before reporting discovery pend
     spatialScope: input.spatialScope,
     now: NOW,
   });
-  assert.equal(result.coverage, "uncovered");
+  assert.equal(result.coverage, "covered", "supplemental country calendar selection is independent of local discovery");
   assert.equal(result.acquisition.discovery_health.status, "pending");
-  assert.ok(result.acquisition.source_health.reasons.includes("source_discovery_pending"));
+  assert.ok(result.acquisition.source_health.reasons.includes("background_refresh_pending"));
   assert.deepEqual(demand, input);
 });
 
@@ -1320,7 +1320,7 @@ test("an unaccepted scout demand is unavailable rather than falsely pending", as
   assert.deepEqual(result.acquisition.discovery_health.reasons, ["source_discovery_demand_rejected"]);
 });
 
-test("uncovered Live preserves a stored observing discovery state", async () => {
+test("calendar-only Live preserves a stored observing local discovery state", async () => {
   const supply = resolveDefaultEventSupply({ PARRANDA_AGNOSTIC_EVENTS: "enabled" }, {
     sourceCatalog: {
       listApprovedEventFeedsForAnchor: async () => [],
@@ -1339,10 +1339,10 @@ test("uncovered Live preserves a stored observing discovery state", async () => 
   const input = scoutDemand();
   const result = await supply({ anchor: input.anchor, ...input, now: NOW });
 
-  assert.equal(result.coverage, "uncovered");
+  assert.equal(result.coverage, "covered");
   assert.equal(result.acquisition.discovery_health.status, "observing");
   assert.equal(result.acquisition.discovery_health.qualification.candidate_count, 1);
-  assert.ok(result.acquisition.source_health.reasons.includes("source_discovery_observing"));
+  assert.ok(result.acquisition.source_health.reasons.includes("background_refresh_pending"));
 });
 
 test("one approved calendar keeps useful supply while requesting complementary local discovery", async () => {

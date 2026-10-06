@@ -290,16 +290,15 @@ async function runColdLoop(fixture) {
 
   const cold = await supply(request);
   await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(cold.coverage, "covered", "generic country calendars are selected independently of local discovery");
+  assert.equal(cold.pending, true);
+  assert.ok(cold.feeds.some(feed => feed.family === "calendar_open"));
+  await eventCache.waitForWarm();
+  const countryOnly = await supply(request);
+  assert.deepEqual(countryOnly.tonight, [], "a selected or unavailable broad calendar fabricates no local events");
   if (fixture.countryCode === "fr") {
-    assert.equal(cold.coverage, "covered", "the generic national layer is selected independently of local discovery");
-    assert.equal(cold.pending, true);
-    assert.deepEqual(cold.feeds.map(feed => feed.id), ["datatourisme-fr"]);
-    await eventCache.waitForWarm();
-    const nationalOnly = await supply(request);
-    assert.equal(nationalOnly.feeds[0].reason, "source_credentials_unavailable");
-    assert.deepEqual(nationalOnly.tonight, [], "missing national credentials must not fabricate local coverage or events");
-  } else {
-    assert.equal(cold.coverage, "uncovered");
+    assert.ok(cold.feeds.some(feed => feed.id === "datatourisme-fr"));
+    assert.equal(countryOnly.feeds.find(feed => feed.id === "datatourisme-fr").reason, "source_credentials_unavailable");
   }
 
   const first = await runScoutWorkerBatch({ catalog, runtime, limit: 1 });
