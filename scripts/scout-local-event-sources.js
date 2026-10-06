@@ -203,6 +203,17 @@ function parseArguments(argv = []) {
 }
 
 function createOperatorRuntime(env = process.env) {
+  const { resolveDefaultEventReader } = require("../server/pulse-sources/quoted-event-reader");
+  const eventReader = resolveDefaultEventReader(env);
+  const { fetchPublicEventDocument } = require("../server/pulse-sources/public-event-document");
+  const { readBoundedText } = require("../server/pulse-sources/local-event-source-scout");
+  const fetcher = async (url, options) => {
+    const response = await fetchPublicEventDocument(url, options);
+    let pendingText;
+    const text = () => pendingText || (pendingText = readBoundedText(response, 2 * 1024 * 1024)
+      .then((value) => { if (value == null) throw new Error("source_payload_too_large"); return value; }));
+    return { ...response, text, json: async () => JSON.parse(await text()) };
+  };
   const cacheDir = env.PARRANDA_CACHE_DIR || null;
   const configuredTtlMs = Number(env.PARRANDA_SOURCE_CACHE_TTL_MS);
   const ttlMs =
@@ -275,13 +286,15 @@ function createOperatorRuntime(env = process.env) {
     ttlMs: Number(env.PARRANDA_SOURCE_SEARCH_CACHE_TTL_MS) || ttlMs,
   });
   return {
-    fetcher: typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : null,
+    fetcher,
     placeResolver,
     openDataLoader:
       typeof osmLoader === "function" || typeof wikiLoader === "function"
         ? composeOperatorLoaders(osmLoader, wikiLoader)
         : null,
     sourceScout: scoutLocalEventSources,
+    eventReader,
+    scoutOptions: { eventReader },
     sourceSearch: resolveDefaultSourceSearch(env, { cache: sourceSearchCache }),
     sourceQualifier: qualifyDiscoveredSourceProfile,
     placeSourceQualifier: qualifyDiscoveredPlaceSourceProfile,

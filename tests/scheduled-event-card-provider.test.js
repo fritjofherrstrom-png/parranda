@@ -370,7 +370,7 @@ test("discovery probes through the real provider, trusted address resolver and q
   assert.deepEqual(eventFeedsFromQualifiedSourceProfiles([result.profile], { now: "2026-10-04T09:00:00Z" }), []);
 });
 
-test("unclear terms and identity drift cannot supply qualified runtime feeds", async () => {
+test("one probe, unresolved venue and identity drift cannot supply qualified runtime feeds", async () => {
   for (const { terms, resolver } of [
     { terms: "unknown", resolver: async () => [{ lat: 51.05, lng: 3.72, confidence: "medium" }] },
     { terms: "open_license", resolver: async () => [] },
@@ -401,8 +401,8 @@ test("unresolved and ambiguous addresses stay mapless and are excluded from near
   }
 });
 
-test("two real-provider observations qualify only compatible terms, remaining low-trust Pulse-only without approval", async () => {
-  for (const terms of ["open_license", "unknown"]) {
+test("two fixture-provider observations allow factual publication with unknown rights while explicit restrictions block", async () => {
+  for (const terms of ["open_license", "unknown", "restricted", "permission_required"]) {
     const input = discovery(terms);
     const venueResolver = async () => [{ lat: 51.05, lng: 3.72, confidence: "medium" }];
     const first = await qualifyDiscoveredSourceProfile({ ...input, now: "2026-10-04T09:00:00Z", fetcher: fetchPages(), venueResolver });
@@ -410,13 +410,18 @@ test("two real-provider observations qualify only compatible terms, remaining lo
       fetcher: fetchPages({ listing: cards.replaceAll("4 oktober 2026", "5 oktober 2026") }), venueResolver });
     assert.equal(second.qualification.activation_performed, false);
     const feeds = eventFeedsFromQualifiedSourceProfiles([second.profile], { now: "2026-10-05T10:00:00Z" });
-    if (terms === "unknown") assert.deepEqual(feeds, []);
+    if (["restricted", "permission_required"].includes(terms)) assert.deepEqual(feeds, []);
     else {
       assert.equal(feeds.length, 1);
       assert.equal(feeds[0].adapter, "scheduled_event_cards");
       assert.equal(feeds[0].confidence, "low");
       assert.equal(feeds[0].pulse_only, true);
       assert.equal(feeds[0].status, "probationary");
+      if (terms === "unknown") {
+        assert.equal(feeds[0].terms_status, "unknown");
+        assert.equal(feeds[0].license == null, true, "do not invent an open licence");
+        assert.equal(feeds[0].source_scoped_pulse, false, "unknown rights require actual venue geometry");
+      }
     }
   }
 });

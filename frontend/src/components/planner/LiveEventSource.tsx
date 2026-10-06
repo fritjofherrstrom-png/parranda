@@ -16,9 +16,23 @@ export function liveEventSource(event: PulseEvent, lang: Lang) {
   const credits = [...new Set((Array.isArray(event.sources) ? event.sources : [])
     .map((source) => typeof source?.attribution === "string" ? source.attribution.trim() : "")
     .filter(Boolean))];
-  if (!listedBy && !link && !credits.length) return null;
+  const recurring = event.recurrence?.occurrence_status === "unconfirmed";
+  const holiday = event.calendar_fact?.kind === "public_holiday" ? event.calendar_fact : null;
+  const holidayFlags = Array.isArray(holiday?.flags) ? holiday.flags : [];
+  const scope = holiday && (lang === "en"
+    ? { national: "National", regional: "Regional", local: "Local" }
+    : { national: "Nationell", regional: "Regional", local: "Lokal" })[holiday.scope];
+  if (!listedBy && !link && !credits.length && !recurring && !holiday) return null;
   return (
     <span className="text-parranda-ink/68">
+      {holiday && <> · {scope} {lang === "en" ? "public holiday — programme not verified" : "helgdag — program inte verifierat"}
+        {holiday.temporal_scope === "half_day" && <> · {lang === "en" ? "Half day — time unspecified" : "Halvdag — tid saknas"}</>}
+        {holidayFlags.includes("Recommended") && <> · {lang === "en" ? "Recommended by source" : "Rekommenderad enligt källan"}</>}
+        {holidayFlags.includes("Provisional") && <> · {lang === "en" ? "Provisional date" : "Preliminärt datum"}</>}
+      </>}
+      {recurring && <> · {lang === "en"
+        ? "Recurring schedule — occurrence unconfirmed"
+        : "Återkommande schema — tillfället är inte bekräftat"}</>}
       {listedBy && <>{" · "}via&nbsp;{listedBy}</>}
       {credits.length > 0 && <>{" · "}{credits.join(" · ")}</>}
       {link && (

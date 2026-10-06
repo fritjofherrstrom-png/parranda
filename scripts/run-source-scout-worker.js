@@ -228,6 +228,7 @@ async function scoutTarget({ target, catalog, runtime, discover }) {
         now: qualificationNow,
         fetcher: runtime.fetcher,
         venueResolver: runtime.placeResolver,
+        eventReader: runtime.eventReader,
       });
       if (qualified?.profile) profile = qualified.profile;
       qualificationStatus = qualified?.qualification?.status || "unavailable";

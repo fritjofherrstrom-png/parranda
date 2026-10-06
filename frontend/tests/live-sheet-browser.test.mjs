@@ -59,6 +59,39 @@ async function browserHarness(t) {
 const unknown = /Live information is unavailable right now|Live-information är inte tillgänglig just nu/;
 const falseEmpty = /Nothing verified|Nothing listed|Inget verifierat|Inget listat/;
 
+test('native mounted calendar layout retains escaped credit, admin scope and half-day flags in sv/en and both periods', async t => {
+  const { page, render } = await browserHarness(t);
+  const url = 'https://api.example/PublicHolidays?countryIsoCode=XX&validFrom=2026-07-20';
+  const credit = '<img src=x onerror=alert(1)> & OpenHolidays API — ODbL';
+  const row = { id: 'calendar-fact', title: 'Source holiday title', place: 'Trusted region', starts_on: '2026-07-20',
+    ends_on: '2026-07-20', time_window: { kind: 'period', starts_on: '2026-07-20', ends_on: '2026-07-20' },
+    calendar_fact: { kind: 'public_holiday', scope: 'regional', country_code: 'XX', area: 'Trusted region',
+      temporal_scope: 'half_day', flags: ['Recommended', 'Provisional'] }, source_label: 'OpenHolidays API',
+    source_url: url, source_link_kind: 'page', source_link_host: 'api.example',
+    sources: [{attribution:credit},{attribution:credit}], lat:null,lng:null,route_eligible:false };
+  const withoutUrl = { ...row, id:'no-url', title:'Holiday without source URL', source_url:null, source_link_kind:null, source_link_host:null };
+  const events = { coverage:'covered',selected_date:'2026-07-20',tonight:[row,withoutUrl],this_week:[row,withoutUrl],
+    acquisition:{source_health:{status:'healthy',result:'events_found',selected_source_count:1,responding_source_count:1}} };
+  for (const lang of ['en','sv']) for (const time of ['tonight','week']) {
+    const shown = await render(events,lang,time);
+    assert.match(shown,/Source holiday title/);
+    assert.match(shown,/20 jul/i);
+    assert.match(shown,/Trusted region/);
+    assert.match(shown,lang === 'en' ? /Regional public holiday — programme not verified/ : /Regional helgdag — program inte verifierat/);
+    assert.match(shown,lang === 'en' ? /Half day — time unspecified/ : /Halvdag — tid saknas/);
+    assert.match(shown,lang === 'en' ? /Recommended by source/ : /Rekommenderad enligt källan/);
+    assert.match(shown,lang === 'en' ? /Provisional date/ : /Preliminärt datum/);
+    assert.equal(shown.split(credit).length - 1,2);
+    assert.equal(await page.locator('img').count(),0);
+    const anchors = page.locator('a');
+    assert.equal(await anchors.count(),1);
+    assert.equal(await anchors.getAttribute('href'),url);
+    assert.equal((await anchors.innerText()).replace(/\s*↗$/, ''),'api.example');
+    const dialog = await page.locator('[role="dialog"]').boundingBox();
+    assert.ok(dialog.width <= 390,'dialog stays within the narrow fixture viewport');
+  }
+});
+
 test('native mounted LiveSheet never calls hidden knowledge an empty calendar', async t => {
   const { render } = await browserHarness(t);
   for (const lang of ['en', 'sv']) for (const events of [null, { coverage: 'unknown', tonight: [], this_week: [] }]) {
@@ -100,9 +133,21 @@ test('native mounted LiveSheet distinguishes captured uncovered and healthy cont
     const failed = await render(events({status:'unavailable',result:'unknown',selected_source_count:1,responding_source_count:0}),lang,time);
     assert.match(failed,/Selected-source failure preserved/);
     const populated = events({status:'healthy',result:'events_found',selected_source_count:1,responding_source_count:1});
-    populated[time === 'week' ? 'this_week' : 'tonight'] = [{id:'event',title:'Deterministic calendar event'}];
+    populated.selected_date = '2026-07-20';
+    populated[time === 'week' ? 'this_week' : 'tonight'] = [{id:'event',title:'Deterministic calendar event',
+      source_label:'OpenStreetMap', source_url:'https://www.openstreetmap.org/node/42',
+      source_link_kind:'page',source_link_host:'openstreetmap.org',
+      sources:[{attribution:'© OpenStreetMap contributors — ODbL'}],
+      recurrence:{rule:'Mo,Th 09:00-13:00',occurrence_status:'unconfirmed'},
+      timezone:'Europe/Paris', time_window:{kind:'occurrences',dates:['2026-07-20','2026-07-23'],local_start:'09:00',local_end:'13:00'},
+    }];
     const shown = await render(populated,lang,time);
     assert.match(shown,/Deterministic calendar event/);
+    assert.ok(shown.includes('09:00–13:00'), 'the source-local occurrence clock remains visible');
     assert.doesNotMatch(shown,falseEmpty);
+    assert.ok(shown.includes(lang === 'en' ? 'Recurring schedule — occurrence unconfirmed'
+      : 'Återkommande schema — tillfället är inte bekräftat'));
+    assert.ok(shown.includes('© OpenStreetMap contributors — ODbL'));
+    assert.equal(await page.locator('a[href="https://www.openstreetmap.org/node/42"]').count(),1);
   }
 });

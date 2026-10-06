@@ -93,7 +93,8 @@ candidate evaluation:
   `PARRANDA_CACHE_DIR` makes repeat operator runs persistent, while failures are
   not cached and may recover on the next bounded run;
 - discovered machine-readable interfaces become review-needed manifest
-  candidates only. They never become active runtime providers automatically;
+  candidates. Fresh repeatedly healthy exact bindings subsequently enter
+  the ordinary Live probation lane automatically; discovery alone is insufficient;
 - RSS/Atom feeds can now produce review-needed manifests for a bounded generic
   detail adapter, but only when the interface is plausibly an *event* interface
   (see "RSS/Atom event-interface eligibility"). The feed is only an index:
@@ -234,8 +235,8 @@ claims otherwise. Re-running discovery cannot overwrite an approved, rejected,
 or disabled profile. After terms, ownership, timezone, geography, and parser
 output have been reviewed, an operator may approve the exact profile or retain
 the existing versioned `PARRANDA_EVENT_FEEDS` path. User requests never perform
-this discovery crawl; they consume only approved, cache-backed sources through
-bounded acquisition.
+this discovery crawl; they consume reviewed sources and fresh machine-qualified
+probation sources through the same cache-backed bounded acquisition.
 
 The background worker also performs a bounded post-scout qualification pass for
 manifest candidates that bind exactly to the discovered HTTPS endpoint,
@@ -256,13 +257,17 @@ never persisted. One healthy probe remains `observing`. A source becomes
 within 30 days and at least one accepted current event. Healthy-empty results,
 same-day retries, stale history, parser/geometry rejection, and a latest failed
 probe cannot manufacture readiness. This verdict never changes
-`runtime_review` or approves terms. When the separate
-`PARRANDA_QUALIFIED_SOURCE_RUNTIME` gate is enabled, a repeatedly healthy exact
-source with mechanically compatible `open_license` or
-`api_terms_compatible` terms may enter a short-lived, low-confidence,
-Pulse-only probation feed. Unknown terms still require operator review, and a
-probation feed is never route eligible. This reduces operator guesswork while
-preserving the stronger trusted review gate.
+`runtime_review` or creates a human approval. Machine-qualified event supply is
+enabled by default (`PARRANDA_QUALIFIED_SOURCE_RUNTIME=disabled` opts out). A
+repeatedly healthy exact source enters short-lived, low-confidence, Pulse-only
+probation automatically. An actual `robots_status=allowed` binding also permits
+verified structured event atoms with unknown rights, without a licence claim
+and without source-scope geometry fallback. Missing permission metadata is not
+a universal human-approval gate. The main quoted document reader can use
+use `public_factual_evidence`: exact short quotes and deterministic date/time
+checks, factual atoms only, no open licence claim. Explicit restrictions and
+permission-required sources remain blocked. A probation feed is never route
+eligible. The place-reservoir lane below keeps its separate approval contract.
 
 The same worker now has a separate structured-place lane. Resolver-attested
 country context contributes bounded local-language place terms alongside the
