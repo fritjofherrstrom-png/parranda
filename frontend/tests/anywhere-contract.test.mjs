@@ -461,12 +461,12 @@ test("adjustments collapse to a summary and re-compose themselves — no submit 
   assert.match(anywherePlannerSource, /t\("Känsla", "Mood"\)/);
   assert.match(anywherePlannerSource, /t\("När", "When"\)/);
   assert.match(anywherePlannerSource, /t\("Dagens rytm", "Day rhythm"\)/);
-  // ...and a settled change re-composes on its own (debounced), so the only
-  // submit left in the component is the no-anchor fallback input.
+  // ...and a settled change re-composes on its own (debounced).
+  // Root owns the only place-entry submit, including no-anchor fallback.
   assert.match(anywherePlannerSource, /recomposeTimerRef\.current = setTimeout\(/);
   assert.match(anywherePlannerSource, /\}, 400\);/);
   assert.match(anywherePlannerSource, /Changes apply on their own/);
-  assert.equal((anywherePlannerSource.match(/type="submit"/g) || []).length, 1, "exactly one submit: the no-anchor fallback");
+  assert.equal((anywherePlannerSource.match(/type="submit"/g) || []).length, 0, "no second entry submit, even without an anchor");
 });
 
 test("saving a live day does not freeze its adjustment controls as a restored snapshot", () => {

@@ -11,6 +11,7 @@ COPY frontend/package.json frontend/package-lock.json ./frontend/
 RUN npm ci --prefix frontend
 
 COPY anywhere-render-decision.js ./
+COPY planner-entry.js planner-entry.d.ts ./
 COPY frontend ./frontend
 RUN npm run check:frontend && npm run build:frontend
 
@@ -60,6 +61,7 @@ COPY --chown=node:node \
     dogfood.js \
     dogfood-render.js \
     anywhere-render-decision.js \
+    planner-entry.js \
     ./
 
 USER node

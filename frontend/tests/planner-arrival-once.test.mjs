@@ -179,7 +179,7 @@ test("a restored near-me day asks for the position only on the explicit tap", as
   const stored = first.readStorage(LAST_KEY);
   await first.unmount();
 
-  const h = await mount(t, "http://localhost/anywhere?lang=en", { storage: { [LAST_KEY]: stored } });
+  const h = await mount(t, "http://localhost/anywhere?restore=last&lang=en", { storage: { [LAST_KEY]: stored } });
   const asked = geolocation(h, "grant");
   await h.clock.advance(50);
   assert.match(h.text(), /Saved day/, "the snapshot is on screen");

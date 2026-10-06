@@ -1562,17 +1562,23 @@ function buildApp({
   // masquerading as the planner).
   const anywhereV2Html = path.join(anywhereV2Dir, "anywhere", "index.html");
 
-  // /labs/anywhere — the retired alpha doorway's URL. Old links keep working:
-  // one canonical surface, unconditional redirect with the inputs preserved.
+  // Root owns entry. Retain planner deep links, including the GPS storage
+  // handoff and explicitly requested local snapshots. Never infer intent from
+  // planner=open, preferences, or arbitrary query presence.
+  const { readPlannerEntry } = require("../planner-entry");
+  const entryParams = (request) => new URLSearchParams(request.originalUrl.split("?").slice(1).join("?"));
+  const landingHref = (params) => `/?lang=${normalizeLanguage(params.get("lang"))}`;
   app.get("/labs/anywhere", (request, response) => {
-    const place = typeof request.query?.place === "string" ? request.query.place : "";
-    const params = new URLSearchParams();
-    if (place) params.set("place", place);
-    if (String(request.query?.planner || "") === "open") params.set("planner", "open");
-    params.set("lang", normalizeLanguage(request.query?.lang));
-    response.redirect(302, `/anywhere?${params.toString()}`);
+    const params = entryParams(request);
+    const query = request.originalUrl.includes("?") ? request.originalUrl.slice(request.originalUrl.indexOf("?")) : "";
+    response.redirect(302, readPlannerEntry(params).hasIntent ? `/anywhere${query}` : landingHref(params));
   });
   app.get("/anywhere", (request, response) => {
+    const params = entryParams(request);
+    if (!readPlannerEntry(params).hasIntent) {
+      response.redirect(302, landingHref(params));
+      return;
+    }
     if (!fs.existsSync(anywhereV2Html)) {
       response.status(503).type("text/plain").send("Frontend build missing (frontend/dist). Run: npm --prefix frontend run build");
       return;

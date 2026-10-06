@@ -53,6 +53,7 @@ import {
 } from "../lib/pulse-view.mjs";
 import { planComposeFollowup } from "../lib/compose-followup.mjs";
 import { composeServiceRefusal, type ComposeServiceRefusal } from "../lib/compose-service-refusal.mjs";
+import plannerEntry from "../../../planner-entry.js";
 import { buildShareUrl, decodeShareParams, encodeShareParams } from "../lib/anywhere-share.mjs";
 import { consumeAnchorCoords, requestPosition, storeAnchorCoords } from "../lib/location-anchor.mjs";
 import {
@@ -865,6 +866,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
     // so it auto-plans exactly what the sharer saw — composed fresh for the opener.
     const allowedPrefs = ANYWHERE_PREFERENCES.map((p: { key: string }) => p.key);
     const shared = decodeShareParams(window.location.search, allowedPrefs);
+    const entry = plannerEntry.readPlannerEntry(window.location.search);
     // Only values that differ are set (the same picks in a new array are not a
     // change), and only then is the re-run they cause marked as the arrival's.
     const adoptLinkInputs = () => {
@@ -883,7 +885,19 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
       }
       if (changed) adoptedInputsRef.current = true;
     };
-    if (shared.place) {
+    if (entry.coords) {
+      setMode("near_me");
+      adoptLinkInputs();
+      execute({ coords: entry.coords }, {
+        langOverride: shared.lang ?? undefined,
+        preferencesOverride: shared.preferences.length ? shared.preferences : undefined,
+        dayOffsetOverride: shared.dayOffset,
+        walkKeyOverride: shared.walkKey,
+      }).catch(() => {});
+      return;
+    }
+    if (entry.place) {
+      shared.place = entry.place;
       setPlace(shared.place);
       setCityKey(shared.city || null);
       adoptLinkInputs();
@@ -1077,7 +1091,7 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         if (mode === "near_me") query.set("anchor", "near");
         return `?${query.toString()}`;
       }
-    : undefined;
+    : (option: Lang) => `?restore=last&lang=${option}`;
 
   const leavePlanner = (target: "home" | "language") => {
     if (target === "language" && mode === "near_me") {
@@ -1675,25 +1689,14 @@ export default function AnywherePlanner({ lang: initialLang = "en" }: { lang?: L
         />
       )}
 
-      {/* No anchor (someone opened /anywhere directly): offer the one input that
-          sets it, then never again. */}
+      {/* Static hydration and unavailable snapshots must not become another
+          place-entry step. Root is the only place picker. */}
       {!hasAnchor && (
-        <div className="flex flex-col gap-5 pt-8">
-          <h1 className="type-display text-6xl text-parranda-ink sm:text-7xl">
-            {t("Planera en dag", "Plan a day")} <em className="block not-italic text-parranda-ember">{t("var som helst", "anywhere")}</em>
-          </h1>
-          <form onSubmit={plan} className="flex flex-col gap-2 sm:flex-row">
-            <input
-              value={place}
-              onChange={(e) => { invalidateCommitmentIntent(); setPlace(e.target.value); }}
-              placeholder={t("T.ex. Lyon eller Kyoto", "e.g. Lyon or Kyoto")}
-              aria-label={t("Plats", "Place")}
-              className="min-h-14 w-full flex-1 rounded-parranda border-2 border-parranda-ink bg-parranda-ink/4 px-5 text-lg text-parranda-ink outline-hidden transition placeholder:text-parranda-ink/68 focus:border-parranda-ember"
-            />
-            <button type="submit" className={buttonClass("primary", "min-h-14 whitespace-nowrap px-6 text-base")}>
-              {t("Bygg min dag", "Build my day")}
-            </button>
-          </form>
+        <div className="flex flex-col items-start gap-3 pt-8" role="status">
+          <p>{t("Förbereder din dag. Om ingen sparad dag finns, välj en plats på startsidan.", "Preparing your day. If no saved day is available, choose a place on the home page.")}</p>
+          <a href={`/?lang=${lang}`} onClick={() => leavePlanner("home")} className={buttonClass("secondary", "min-h-11 px-4 text-sm")}>
+            {t("Till startsidan", "Go to home")}
+          </a>
         </div>
       )}
 

@@ -85,9 +85,15 @@ surfaces are now DELETED, not just demoted:
 
 - The old server-rendered landing (`renderLandingShell`) and its client
   (`landing.js`) are removed. **GET / is owned solely by the new frontend.**
-- The `/labs/anywhere` alpha shell (`renderAnywhereShell`) is removed. The URL
-  remains as an **unconditional 302 → `/anywhere`** with place/planner/lang
-  preserved, so old links keep working.
+- The `/labs/anywhere` alpha shell (`renderAnywhereShell`) is removed. Legacy
+  planner links redirect directly to `/anywhere`, preserving their query inputs.
+  Without planner intent, both `/labs/anywhere` and `/anywhere` (including their
+  trailing-slash variants) redirect directly to `/?lang=en|sv`. **Root's Next stop
+  landing is the only place-entry surface**; the planner has no fallback form.
+  Intent is nonempty valid place text, valid lat/lng, the consented `anchor=near`
+  sessionStorage handoff, or explicit `restore=last` for a local saved snapshot.
+  Language/preferences or `planner=open` alone do not imply intent. Snapshot
+  resume/language links carry `restore=last`; an absent snapshot offers home.
 - The opt-out env flags `PARRANDA_NEW_LANDING` / `PARRANDA_NEW_ANYWHERE` are
   gone with the fallback they selected. **Rollback is now `git revert`**, not an
   env var.
